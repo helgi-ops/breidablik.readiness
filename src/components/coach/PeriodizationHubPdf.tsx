@@ -16,6 +16,10 @@ import type { MatchAxes, MatchUnitAbs, CalendarBlock, CalType, CalDay, MesoPlan,
 type Lang = "EN" | "IS";
 
 export type HubBaselineRow = { label: Bi; players: number; distanceM: number | null; hsrM: number | null; maxKmh: number | null; playerLoad: number | null; accel: number | null; decel: number | null; isTeam: boolean };
+/** One MD-relative demand bucket (a phase or a single MD-day) — the season demand split by where the
+ *  session sits in the microcycle. relPl = Player Load vs the whole-squad season average (±%). */
+export type HubMdRow = { label: Bi; sessions: number; distanceM: number | null; hsrM: number | null; playerLoad: number | null; accel: number | null; decel: number | null; relPl: number | null };
+export type HubMdDemand = { phases: HubMdRow[]; days: HubMdRow[] };
 export type HubPlayerRow = { name: string; position: string | null; masKmh: number | null; matchUnitLoad: number | null; matchUnitHsr: number | null; nNearFull: number; matchUnitConf?: "high" | "medium" | "low" | null; valdCap: number | null; gaps: number };
 export type HubBlockRow = { phase: Bi; goal: Bi; goalKey?: string; start: string; end: string; weeks: number; isDeload: boolean; deloadWeekStart?: string | null; tmr: number | null; volumeTargetPct: number | null; flag: Bi | null };
 export type HubPlayerBlock = { name: string; position: string | null; note: Bi; block: CalendarBlock };
@@ -27,6 +31,8 @@ export type PeriodizationHubPayload = {
   phases: Array<{ label: Bi; start: string; end: string; weeks: number; matches: number; rationale: Bi }>;
   congested: Array<{ weekStart: string; matches: number }>;
   baselines: HubBaselineRow[];
+  /** MD-relative demand profile (whole squad) — the season demand split by MD-day (phases + per-day). */
+  mdDemand?: HubMdDemand | null;
   teamAxes: MatchAxes | null;
   blocks: HubBlockRow[];
   /** The scheduled block as the demo-format Mon–Sun calendar (rest days, deload-as-last-week, IMA per
@@ -91,6 +97,7 @@ const s = StyleSheet.create({
 const L = {
   EN: { title: "periodization — full plan", prepared: "Prepared for the coaching staff · MicroPulse", tag: "Recommended from the team's own data — the coach decides and overrides",
     macro: "Season map (macro)", tier: "Data tier", congested: "Congested weeks (2+ matches)", demands: "Squad demands — baseline by position", axes: "Three axes vs the match (whole squad)",
+    mdTitle: "Demands by MD-day (whole squad)", mdLead: "The season average blends every day of the week — here the same demand is split by where the session sits vs the match (MD-4/-3 load, MD-1 primer, MD+1 recovery).", mdPhase: "Phase", mdDay: "MD", mdSess: "Sess.", mdPctPl: "% PL", mdFoot: "MD-day = the session's distance from the nearest match · each bucket needs ≥3 sessions · % PL vs the squad season average · match day excluded (training demand).",
     running: "Running (Locomotive) — training UNDER-reaches", mech: "Mechanical / IMA — training OVER-shoots", metric: "Metric", match: "Match", ceil: "Tr. ceiling",
     meso: "Meso blocks", block: "The scheduled block", players: "Players — individualisation", pos: "Pos", mas: "MAS", munit: "Match unit", vald: "VALD cap", gaps: "Gaps", week: "Week", deload: "Deload", overload: "overload", weekly: "weekly",
     preTitle: "Pre-season start + ramp (team)", preLead: "Week 1 = controlled re-entry (a fraction of a match), ramping to the pre-season build. The match is the unit.", preAnchor: "anchor", preConf: "confidence", preKpi: "Week-1 KPI targets", preSess: "/session",
@@ -99,6 +106,7 @@ const L = {
     foot: "Descriptive planning — never sets the readiness colour, never overrides the daily decision. Targets scale from the team's / player's own match unit (median of near-full matches) and each MD day's %-of-match shape; a data-anchored starting point, not a norm to obey (Little & Buchheit). No single \"% of match\" — mechanical over-shoots, HSR/sprint fall short (Figueiredo). Never stack HSR + mechanical the same day. Cites: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021 · Impellizzeri 2020 (ACWR contested)." },
   IS: { title: "tímabilsskipulag — heildaráætlun", prepared: "Unnið fyrir þjálfarateymið · MicroPulse", tag: "Ráðlagt út frá eigin gögnum liðsins — þjálfarinn ákveður og hnekkir",
     macro: "Tímabils-kort (makró)", tier: "Gagnastig", congested: "Þéttar vikur (2+ leikir)", demands: "Kröfur liðs — grunnlína eftir stöðu", axes: "Þrír ásar gagnvart leik (allt liðið)",
+    mdTitle: "Kröfur eftir MD-degi (allt liðið)", mdLead: "Árs-meðaltalið blandar saman öllum dögum vikunnar — hér er sama krafan sundurliðuð eftir því hvar æfingin situr gagnvart leiknum (MD-4/-3 álag, MD-1 undirbúningur, MD+1 endurheimt).", mdPhase: "Fasi", mdDay: "MD", mdSess: "Æf.", mdPctPl: "% PL", mdFoot: "MD-dagur = fjarlægð æfingar frá næsta leik · hver flokkur þarf ≥3 æfingar · % PL vs árs-meðaltal liðsins · leikdagur ekki talinn (æfingakrafa).",
     running: "Hlaup (Locomotive) — æfing NÆR EKKI", mech: "Vélrænt / IMA — æfing FER YFIR", metric: "Mæling", match: "Leikur", ceil: "Æf.þak",
     meso: "Mesó lotur", block: "Skipulagða lotan", players: "Leikmenn — einstaklingsmiðun", pos: "Staða", mas: "MAS", munit: "Leikviðmið", vald: "VALD þak", gaps: "Vantar", week: "Vika", deload: "Niðurtröppun", overload: "álag", weekly: "vikumark",
     preTitle: "Undirbúningur — byrjun + stigmögnun (lið)", preLead: "Vika 1 = stýrð endurkoma (brot úr leik), stigmagnast upp að undirbúnings-marki. Leikurinn er einingin.", preAnchor: "grunnur", preConf: "vissa", preKpi: "KPI-mörk viku 1", preSess: "/æfingu",
@@ -178,9 +186,37 @@ function AxisTable({ axis, t, bi }: { axis: MatchAxes["running"]; t: { metric: s
   );
 }
 
+/** MD-relative demand rows — phases or per-MD-day, same columns. relPl tinted red (over season) / green (under). */
+function MdTable({ rows, head, t, bi }: { rows: HubMdRow[]; head: string; t: { mdSess: string; mdPctPl: string }; bi: (b: Bi) => string }) {
+  return (
+    <View style={{ marginTop: 4 }}>
+      <View style={s.th}>
+        <Text style={[s.thc, { flex: 1 }]}>{head}</Text>
+        <Text style={[s.thc, { width: 34, textAlign: "right" }]}>{t.mdSess}</Text>
+        <Text style={[s.thc, { width: 46, textAlign: "right" }]}>Dist</Text>
+        <Text style={[s.thc, { width: 46, textAlign: "right" }]}>HSR</Text>
+        <Text style={[s.thc, { width: 40, textAlign: "right" }]}>PL</Text>
+        <Text style={[s.thc, { width: 44, textAlign: "right" }]}>{t.mdPctPl}</Text>
+        <Text style={[s.thc, { width: 56, textAlign: "right" }]}>Acc/Dec</Text>
+      </View>
+      {rows.map((r, i) => (
+        <View key={i} style={s.row}>
+          <Text style={{ flex: 1, fontFamily: "Helvetica-Bold" }}>{bi(r.label)}</Text>
+          <Text style={{ width: 34, textAlign: "right", color: MUTE }}>{r.sessions}</Text>
+          <Text style={{ width: 46, textAlign: "right" }}>{km(r.distanceM)}</Text>
+          <Text style={{ width: 46, textAlign: "right" }}>{r.hsrM == null ? "–" : `${Math.round(r.hsrM)}m`}</Text>
+          <Text style={{ width: 40, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{r.playerLoad == null ? "–" : Math.round(r.playerLoad)}</Text>
+          <Text style={{ width: 44, textAlign: "right", color: r.relPl == null ? MUTE : r.relPl > 0 ? RED : GREEN }}>{r.relPl == null ? "–" : `${r.relPl > 0 ? "+" : ""}${r.relPl}%`}</Text>
+          <Text style={{ width: 56, textAlign: "right" }}>{r.accel ?? "–"}/{r.decel ?? "–"}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lang }) {
   const t = L[lang]; const bi = (b: Bi) => (lang === "IS" ? b.is : b.en);
-  const { tier, phases, congested, baselines, teamAxes, blocks, block, playerBlocks, players, teamUnit } = payload;
+  const { tier, phases, congested, baselines, mdDemand, teamAxes, blocks, block, playerBlocks, players, teamUnit } = payload;
   // #4 — align the detailed block's label/dates/goal to the season-map block that actually contains its start.
   const mapBlock = block ? blocks.find((b) => b.start <= block.startDate && block.startDate < b.end) ?? null : null;
   const nfmt = (n: number | null) => (n == null ? "—" : n.toLocaleString("en-US"));
@@ -263,6 +299,17 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
             </View>
           ))}
         </View>
+
+        {/* DEMANDS BY MD-DAY (whole squad) — the microcycle shape of the season demand (phases + per-day) */}
+        {mdDemand && mdDemand.phases.length > 0 && (
+          <View style={s.section} wrap={false}>
+            <Text style={s.h2}>{t.mdTitle}</Text>
+            <Text style={s.p}>{t.mdLead}</Text>
+            <MdTable rows={mdDemand.phases} head={t.mdPhase} t={t} bi={bi} />
+            {mdDemand.days.length > 0 && <View style={{ marginTop: 6 }}><MdTable rows={mdDemand.days} head={t.mdDay} t={t} bi={bi} /></View>}
+            <Text style={[s.small, { marginTop: 3 }]}>{t.mdFoot}</Text>
+          </View>
+        )}
 
         {/* THREE AXES (whole squad) */}
         {teamAxes && (

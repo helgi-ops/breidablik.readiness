@@ -764,11 +764,19 @@ export default function PeriodizationHubPage() {
         };
       }
     }
+    // MD-relative demand profile (whole squad) for the PDF — the same split the Demands tab shows, printed.
+    const seasonPl = tb?.playerLoad ?? null;
+    const mdRow = (bk: MdDemandBucket) => { const a = bk.avg; return {
+      label: bk.label, sessions: a.sessions, distanceM: a.distanceM, hsrM: a.hsrM, playerLoad: a.playerLoad, accel: a.accel, decel: a.decel,
+      relPl: a.playerLoad == null || seasonPl == null || seasonPl === 0 ? null : Math.round((a.playerLoad / seasonPl) * 100) - 100 }; };
+    const mdDemand = plan.teamBaseline?.md && plan.teamBaseline.md.phases.length > 0
+      ? { phases: plan.teamBaseline.md.phases.map(mdRow), days: plan.teamBaseline.md.days.map(mdRow) }
+      : null;
     await downloadPeriodizationHubPdf({
       teamName: plan.teamName, seasonYear: plan.seasonYear, generatedAt: new Date().toISOString(), teamUnit,
       tier: plan.tier ? { label: plan.tier.label, loadSource: plan.tier.loadSource, confidence: plan.tier.confidence } : null,
       phases: plan.phases.map((ph) => ({ label: ph.label, start: ph.start, end: ph.end, weeks: ph.weeks, matches: ph.matches, rationale: ph.rationale })),
-      congested: plan.congested ?? [], baselines, teamAxes: plan.teamBaseline?.axes ?? null, blocks,
+      congested: plan.congested ?? [], baselines, mdDemand, teamAxes: plan.teamBaseline?.axes ?? null, blocks,
       block: calBlock, playerBlocks, mesoPlan, players, preseasonStart,
     }, is ? "IS" : "EN");
   }
