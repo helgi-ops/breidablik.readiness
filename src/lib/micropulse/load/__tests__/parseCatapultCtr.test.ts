@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { parseCatapultCtr } from "../parseCatapultCtr";
+import { parseCatapultCtr, peakFixedWindows } from "../parseCatapultCtr";
 
 /**
  * Trimmed OpenField "Activity Report → CSV" fixture (3 athletes, 1 Session period).
@@ -98,6 +98,58 @@ test("MII Accel/Decel interval columns parse into accel + decel peak windows", (
   const dec = p.rows[0].peaks.find((w) => w.metric === "decel");
   assert.ok(acc && acc.value === 8 && acc.windowMin === 1);
   assert.ok(dec && dec.value === 11 && dec.windowMin === 1);
+});
+
+/** Fixture with fixed-time interval rows at 1 / 3 / 5-min — bare AND half-prefixed —
+ *  carrying V5/V6 (HSR) and high-intensity IMA Accel/Decel/CoD (Left+Right) counts. */
+function fixedBinMatrix(): string[][] {
+  const header = [
+    "Player Name", "Period Name", "Period Number", "Total Distance", "Total Player Load", "Total Duration",
+    "Velocity Band 5 Average Distance (Session)", "Velocity Band 6 Average Distance (Session)",
+    "IMA Accel High", "IMA Decel High", "IMA CoD Left High", "IMA CoD Right High",
+    "MII Player Load Interval 1", "MII Player Load Interval 1 Start Time", "MII Player Load Interval 1 End Time",
+  ];
+  // v5,v6 → HSR = v5+v6; acc/dec High counts; cod High = codL+codR.
+  const bin = (name: string, v5: number, v6: number, acc: number, dec: number, codL: number, codR: number, dur: string) =>
+    ["Aron G.", name, "0", "1000", "60", dur, String(v5), String(v6),
+      String(acc), String(dec), String(codL), String(codR), "20", "1756062800", "1756062860"];
+  return [
+    ["Unix Start Time", "1756062187"], header,
+    bin("Fyrri halfleikur - 0-1", 30, 10, 3, 2, 1, 1, "60"),   // 1-min: HSR 40, acc 3, dec 2, cod 2
+    bin("Fyrri halfleikur - 1-2", 50, 15, 5, 4, 2, 1, "60"),   // 1-min: HSR 65, acc 5, dec 4, cod 3 ← peaks
+    bin("Fyrri halfleikur - 0-3", 90, 30, 8, 9, 3, 2, "180"),  // 3-min: HSR 120, acc 8, dec 9, cod 5 ← peaks
+    bin("0-5", 100, 40, 11, 12, 4, 3, "300"),                  // 5-min: HSR 140, acc 11, dec 12, cod 7 ← peaks
+    bin("5-10", 60, 20, 6, 5, 1, 1, "300"),                    // 5-min: lower
+    bin("Category 1 1", 200, 100, 99, 99, 50, 50, "0"),        // not a trailing range → ignored
+  ];
+}
+
+test("peakFixedWindows returns HSR + accel + decel + CoD peaks per window length, prefix-tolerant", () => {
+  const peaks = peakFixedWindows(parseCatapultCtr(fixedBinMatrix()).rows);
+  const get = (metric: string, win: number) => peaks.find((x) => x.metric === metric && x.windowMin === win);
+  // HSR (V5+V6)
+  assert.equal(get("hsr", 1)!.value, 65);
+  assert.equal(get("hsr", 1)!.fromLabel, "Fyrri halfleikur - 1-2");
+  assert.equal(get("hsr", 3)!.value, 120);
+  assert.equal(get("hsr", 5)!.value, 140);
+  // Accel / Decel High counts
+  assert.equal(get("accel", 1)!.value, 5);
+  assert.equal(get("decel", 3)!.value, 9);
+  assert.equal(get("accel", 5)!.value, 11);
+  // CoD High = Left + Right
+  assert.equal(get("cod", 1)!.value, 3);
+  assert.equal(get("cod", 5)!.value, 7);
+});
+
+test("peakFixedWindows keeps HSR gated but still emits IMA peaks when the band-5 edge is non-standard", () => {
+  const peaks = peakFixedWindows(parseCatapultCtr(fixedBinMatrix(), { hsrBand5EdgeKmh: 18.0 }).rows);
+  assert.equal(peaks.some((x) => x.metric === "hsr"), false); // HSR gated off
+  assert.equal(peaks.some((x) => x.metric === "accel"), true); // counts are threshold-free
+  assert.equal(peaks.some((x) => x.metric === "cod"), true);
+});
+
+test("peakFixedWindows is empty for a Session-only export (no fixed-time bins)", () => {
+  assert.deepEqual(peakFixedWindows(parseCatapultCtr(activityReportMatrix()).rows), []);
 });
 
 test("still rejects a genuinely non-CTR file", () => {
