@@ -29,6 +29,12 @@ export type CatapultDailyLoadRow = {
   // Optional: only the daily-load normalizer populates them; other constructors of this row omit them.
   jumps?: number | null;
   impacts?: number | null;
+  // Titan indoor Movement Profile — minutes spent at each activity level (raw_payload_json.movement_profile).
+  // Optional: only the daily-load normalizer carries them from Titan rows; absent on GPS/Catapult rows.
+  settledMin?: number | null;
+  lowActiveMin?: number | null;
+  midActiveMin?: number | null;
+  highActiveMin?: number | null;
 };
 
 export type CatapultExternalLoadBaseline = {

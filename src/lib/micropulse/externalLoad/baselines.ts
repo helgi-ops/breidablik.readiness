@@ -87,6 +87,9 @@ export function normalizeCatapultDailyLoadRow(row: RawExternalLoadRow): Catapult
   const date = typeof row.date === "string" ? row.date : null;
   if (!playerId || !date) return null;
 
+  // Titan indoor Movement Profile — minutes per activity level, stored in raw_payload_json.movement_profile.
+  const mp = (row as { raw_payload_json?: { movement_profile?: { settled?: number; low?: number; mid?: number; high?: number } | null } | null }).raw_payload_json?.movement_profile ?? null;
+
   return {
     playerId,
     teamId: typeof row.team_id === "string" ? row.team_id : typeof row.teamId === "string" ? row.teamId : null,
@@ -112,6 +115,10 @@ export function normalizeCatapultDailyLoadRow(row: RawExternalLoadRow): Catapult
     imaTotal: asNumber(row.ima_total ?? row.imaTotal),
     jumps: asNumber(row.jumps),
     impacts: asNumber(row.impacts),
+    settledMin: asNumber(mp?.settled),
+    lowActiveMin: asNumber(mp?.low),
+    midActiveMin: asNumber(mp?.mid),
+    highActiveMin: asNumber(mp?.high),
   };
 }
 

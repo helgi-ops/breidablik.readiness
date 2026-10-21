@@ -16,6 +16,10 @@ export type CatapultMetricKey =
   | "totalPlayerLoad"
   | "jumps"
   | "impacts"
+  | "settledMin"
+  | "lowActiveMin"
+  | "midActiveMin"
+  | "highActiveMin"
   | "avgHeartRate"
   | "maxHeartRate"
   | "minHeartRate"
@@ -173,6 +177,37 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
     acwrSupported: true,
     aliases: ["impacts"],
   },
+  // Titan indoor Movement Profile — minutes per activity level (from raw_payload_json.movement_profile,
+  // carried onto the normalized row as settledMin/lowActiveMin/midActiveMin/highActiveMin). Hidden on GPS
+  // teams by the tile filter (shown only when > 0).
+  {
+    key: "settledMin",
+    label: "Settled (min)",
+    digits: 0,
+    acwrSupported: true,
+    aliases: ["settledMin", "settled_min", "settled"],
+  },
+  {
+    key: "lowActiveMin",
+    label: "Low intensity (min)",
+    digits: 0,
+    acwrSupported: true,
+    aliases: ["lowActiveMin", "low_active_min", "low_intensity_min", "low"],
+  },
+  {
+    key: "midActiveMin",
+    label: "Mid intensity (min)",
+    digits: 0,
+    acwrSupported: true,
+    aliases: ["midActiveMin", "mid_active_min", "mid_intensity_min", "mid"],
+  },
+  {
+    key: "highActiveMin",
+    label: "High intensity (min)",
+    digits: 0,
+    acwrSupported: true,
+    aliases: ["highActiveMin", "high_active_min", "high_intensity_min", "high"],
+  },
   {
     key: "avgHeartRate",
     label: "Avg HR (bpm)",
@@ -290,6 +325,11 @@ export function getDefaultCatapultTodayVsTeamMetricKeys(): CatapultMetricKey[] {
     // Indoor IMU (Titan) — hidden on GPS teams by the tile filter (shown only when > 0).
     "jumps",
     "impacts",
+    // Titan Movement Profile durations — hidden on GPS teams by the tile filter.
+    "settledMin",
+    "lowActiveMin",
+    "midActiveMin",
+    "highActiveMin",
   ];
 }
 
@@ -307,6 +347,11 @@ export function getDefaultCatapultWeeklyLoadMetricKeys(): CatapultMetricKey[] {
     // Indoor IMU (Titan) — hidden on GPS teams by the tile filter (shown only when > 0).
     "jumps",
     "impacts",
+    // Titan Movement Profile durations — hidden on GPS teams by the tile filter.
+    "settledMin",
+    "lowActiveMin",
+    "midActiveMin",
+    "highActiveMin",
   ];
 }
 
