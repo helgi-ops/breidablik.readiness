@@ -4375,12 +4375,19 @@ export default function PlayerClient() {
   const [teamPlanTier, setTeamPlanTier] = useState<"FREE" | "PRO" | "ELITE">("FREE");
   const [clubThemeColor, setClubThemeColor] = useState<string | null>(null);
 
+  // Titan (indoor IMU) team → its "Player Load" is the IMU Load Index; relabel the tile so it reads
+  // the same as the movement card ("Load Index") instead of the GPS term "Total Player Load".
+  const isTitanLoad = useMemo(
+    () => catapultToday?.source === "titan" || catapultHistory.some((r) => r.source === "titan"),
+    [catapultToday, catapultHistory],
+  );
+
   const todayVsTeamMetrics = useMemo(() => {
     return getDefaultCatapultTodayVsTeamMetricKeys().map((key) => {
       const definition = getCatapultMetricDefinition(key);
       return {
         key,
-        label: definition.label,
+        label: isTitanLoad && key === "totalPlayerLoad" ? "Load Index" : definition.label,
         digits: definition.digits ?? 0,
         value: getCatapultMetricValue(catapultToday as unknown as Record<string, unknown> | null, key),
         teamAverage: computeCatapultMetricAverage(
@@ -4389,7 +4396,7 @@ export default function PlayerClient() {
         ),
       };
     });
-  }, [catapultTeamToday, catapultToday]);
+  }, [catapultTeamToday, catapultToday, isTitanLoad]);
 
   const weeklyLoadMetrics = useMemo(() => {
     const refDate = sanitizeDay(null); // today
@@ -4402,7 +4409,7 @@ export default function PlayerClient() {
       );
       return {
         key,
-        label: definition.label,
+        label: isTitanLoad && key === "totalPlayerLoad" ? "Load Index" : definition.label,
         digits: definition.digits ?? 0,
         acwrSupported: !!definition.acwrSupported,
         weekly: {
@@ -4412,7 +4419,7 @@ export default function PlayerClient() {
         },
       };
     });
-  }, [catapultHistory]);
+  }, [catapultHistory, isTitanLoad]);
 
   useEffect(() => {
     const load = () => setAdminConfigSnapshot(loadAdminConfigSnapshotFromStorage());

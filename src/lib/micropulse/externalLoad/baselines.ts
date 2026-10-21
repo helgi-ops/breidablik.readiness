@@ -94,6 +94,7 @@ export function normalizeCatapultDailyLoadRow(row: RawExternalLoadRow): Catapult
     playerId,
     teamId: typeof row.team_id === "string" ? row.team_id : typeof row.teamId === "string" ? row.teamId : null,
     date,
+    source: typeof row.source === "string" ? row.source : null,
     totalDistance: asNumber(row.total_distance ?? row.totalDistance),
     hirDist: asNumber(row.hir_dist ?? row.hirDist),
     maxVelocity: asNumber(row.max_vel ?? row.max_velocity ?? row.maxVelocity),

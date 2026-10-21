@@ -5,6 +5,9 @@ export type CatapultDailyLoadRow = {
   playerId: string;
   teamId: string | null;
   date: string;
+  /** Provider of the row ("catapult" | "manual" | "titan" | …) — lets a surface relabel indoor-IMU
+   *  metrics (e.g. Titan's Player Load reads as "Load Index"). Optional: only the normalizer sets it. */
+  source?: string | null;
   totalDistance: number | null;
   hirDist: number | null;
   maxVelocity: number | null;
