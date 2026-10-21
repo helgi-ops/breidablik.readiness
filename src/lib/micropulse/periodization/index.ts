@@ -124,6 +124,20 @@ export function teamAverages(rows: SessionRow[], direction: TeamAverages["direct
   };
 }
 
+// ───────────────────── MD-RELATIVE DEMAND PROFILE (microcycle shape, not a season blend) ─────────────────────
+// A season average hides the microcycle: MD-4/-3 are the LOADING days (highest demand), MD-2 moderate,
+// MD-1 a primer (lightest), MD+1/+2 recovery. Splitting the same Dist/HSR/PL/Acc-Dec by where the session
+// sits relative to the nearest match (nearestOffset) tells the coach what each day of the week actually
+// asks — the phase view summarises (Load / Sharpen / Recover), the per-day view is the detail. Descriptive.
+export type MdDemandBucket = { key: string; label: Bi; offsets: number[]; avg: TeamAverages };
+export type MdDemandProfile = { phases: MdDemandBucket[]; days: MdDemandBucket[] };
+
+/** MD-relative day label from a match-day offset: -4 → "MD-4", +1 → "MD+1", 0 → "MD". */
+export function mdOffsetLabel(off: number): Bi {
+  const s = off < 0 ? `MD${off}` : off > 0 ? `MD+${off}` : "MD";
+  return { en: s, is: s };
+}
+
 // ───────────────────── THREE AXES vs the MATCH (Figueiredo dimension-specific) ─────────────────────
 // Relative to match, a NORMAL microcycle over-shoots the mechanical axis (accel 131–166%, decel
 // 108–134%) and UNDER-shoots running (HSR 36–61%, sprint 57–71%) — so there is no single "% of match".

@@ -7,8 +7,9 @@ import {
   valdVolumeCap, strengthDefaultForBlock, teamAverages, positionGroup, dataTier,
   classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch,
   type SeasonPhase, type MesoBlock, type WeekLoad, type IntervalZone, type VbtRead, type DataGap,
+  mdOffsetLabel,
   type ValdCap, type StrengthDefault, type TeamAverages, type SessionRow, type Bi, type TierRead, type MatchWeekType, type MatchAxes,
-  type PlayerMatchRow, type MatchUnit, type WeekTargetPlan,
+  type PlayerMatchRow, type MatchUnit, type WeekTargetPlan, type MdDemandBucket, type MdDemandProfile,
 } from "./index";
 import { computePeakMovementSignature, sumClocks } from "@/lib/micropulse/peakMovementSignature";
 import type { ClockGrid } from "@/lib/micropulse/directionalSignature";
@@ -26,7 +27,10 @@ export type PlayerPeriodization = {
   matchUnit: MatchUnit; weekTargets: { preseason: WeekTargetPlan; inseason: WeekTargetPlan; current: "preseason" | "inseason" };
   recentMinutesAvg: number | null; // mean match minutes over the last ~11 weeks — the minutes-based load trim
 };
-export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages; axes: MatchAxes };
+export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages; axes: MatchAxes; md: MdDemandProfile };
+/** A loaded session row carrying the fields the loader needs after the roster loads: the player, the IMA
+ *  clock (for direction) and the DATE (to bucket the session by its MD-relative offset). */
+type RawSession = SessionRow & { pid: string | null; clock: ClockGrid | null; date: string };
 export type PeriodizationPlan = {
   seasonYear: number; generatedAt: string; teamName: string;
   phases: SeasonPhase[]; blocks: MesoBlock[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline;
@@ -69,7 +73,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   let dataStart: string | null = null, dataEnd: string | null = null;
   let hasGps = false, hasIma = false;
   // Keep each session with its player_id + clock so we can bucket by position AFTER the roster loads.
-  const rawSessions: Array<SessionRow & { pid: string | null; clock: ClockGrid | null }> = [];
+  const rawSessions: RawSession[] = [];
   const gpsLoad: Array<{ date: string; load: number }> = []; // per-session external load (Player Load)
   const gpsLoadByPid: Array<{ date: string; load: number; pid: string }> = []; // same, keyed by player → per-position curve
   // Per-player match rows (near-full-match unit) — keyed by player, filled from match-date GPS rows below.
@@ -85,7 +89,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     const strideHi = strideHiParts.length ? strideHiParts.reduce((a, b) => a + b, 0) : null;
     const hsr = v5 != null || v6 != null ? (v5 ?? 0) + (v6 ?? 0) : null;
     rawSessions.push({
-      isMatch: matchDates.has(r.date),
+      isMatch: matchDates.has(r.date), date: r.date,
       distanceM: num(r.total_distance), hsrM: hsr, sprintM: v6,
       maxKmh: num(r.max_velocity), playerLoad: num(r.player_load), plPerMin: num(r.player_load_per_minute),
       accel: num(r.ima_accel), decel: num(r.ima_decel), pid: r.player_id, clock: r.ima_clock_gen2 ?? null,
@@ -168,7 +172,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   // own test falls back to HIS position's average, not the whole team's.
   const pidGroup = new Map<string, { key: number; label: Bi }>();
   for (const p of players) pidGroup.set(p.id, positionGroup(p.position));
-  const groups = new Map<number, { label: Bi; rows: SessionRow[]; clocks: Array<ClockGrid | null>; players: Set<string> }>();
+  const groups = new Map<number, { label: Bi; rows: RawSession[]; clocks: Array<ClockGrid | null>; players: Set<string> }>();
   for (const s of rawSessions) {
     const g = (s.pid && pidGroup.get(s.pid)) || positionGroup(null);
     const bucket = groups.get(g.key) ?? { label: g.label, rows: [], clocks: [], players: new Set<string>() };
@@ -177,6 +181,29 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     if (s.pid) bucket.players.add(s.pid);
     groups.set(g.key, bucket);
   }
+  // MD-relative demand profile — the SAME Dist/HSR/PL/Acc-Dec, but split by where each session sits in the
+  // microcycle (nearestOffset) instead of blended across the season. Phases summarise (Load MD-4/-3, Sharpen
+  // MD-2/-1, Recover MD+1/+2); the per-day view is the detail. Each bucket needs ≥3 sessions to show (thin
+  // days are hidden, not guessed). The match day (offset 0) is excluded — this is TRAINING demand.
+  const mdBucket = (rows: RawSession[], key: string, label: Bi, offs: number[]): MdDemandBucket | null => {
+    const want = new Set(offs);
+    const rs = rows.filter((r) => { const o = nearestOffset(Date.parse(r.date)); return o != null && want.has(o); });
+    if (rs.length < 3) return null;
+    const avg = teamAverages(rs, null);
+    avg.players = new Set(rs.map((r) => r.pid).filter(Boolean)).size;
+    return { key, label, offsets: offs, avg };
+  };
+  const mdProfileFor = (rows: RawSession[]): MdDemandProfile => {
+    const phases = [
+      mdBucket(rows, "load", { en: "Load", is: "Álag" }, [-6, -5, -4, -3]),
+      mdBucket(rows, "sharpen", { en: "Sharpen", is: "Skerpa" }, [-2, -1]),
+      mdBucket(rows, "recover", { en: "Recover", is: "Endurheimt" }, [1, 2]),
+    ].filter((x): x is MdDemandBucket => x != null);
+    const present = [...new Set(rows.map((r) => nearestOffset(Date.parse(r.date))).filter((o): o is number => o != null && o !== 0 && o >= -6 && o <= 2))].sort((a, b) => a - b);
+    const days = present.map((o) => mdBucket(rows, `d${o}`, mdOffsetLabel(o), [o])).filter((x): x is MdDemandBucket => x != null);
+    return { phases, days };
+  };
+
   const positionBaselines = [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([key, b]) => {
     let direction: TeamAverages["direction"] = null;
     const summed = sumClocks(b.clocks);
@@ -189,7 +216,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     }
     const avg = teamAverages(b.rows, direction);
     avg.players = b.players.size;
-    return { key, label: b.label, avg, axes: matchAxisTargets(avg) };
+    return { key, label: b.label, avg, axes: matchAxisTargets(avg), md: mdProfileFor(b.rows) };
   });
 
   // Whole-SQUAD baseline (all positions together) — the "Team" option the coach can read alongside the
@@ -205,7 +232,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   }
   const teamAvg = teamAverages(rawSessions, teamDirection);
   teamAvg.players = new Set(rawSessions.map((s) => s.pid).filter(Boolean)).size;
-  const teamBaseline = { key: -1, label: { en: "Team (whole squad)", is: "Lið (allt liðið)" } as Bi, avg: teamAvg, axes: matchAxisTargets(teamAvg) };
+  const teamBaseline = { key: -1, label: { en: "Team (whole squad)", is: "Lið (allt liðið)" } as Bi, avg: teamAvg, axes: matchAxisTargets(teamAvg), md: mdProfileFor(rawSessions) };
 
   // Per-position weekly load curves (GPS clubs) — the same weekly bars as the team curve, but grouped by
   // position, so the coach can read the build-up/taper for one line. Team stays the default (whole squad).

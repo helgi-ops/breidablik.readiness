@@ -52,7 +52,9 @@ type TeamAvg = { sessions: number; players: number; distanceM: number | null; hs
 type AxisMetric = { metric: Bi; matchValue: string; trainingCeiling: string; band: string };
 type Axis = { axis: "running" | "mechanical" | "internal"; label: Bi; matchNote: Bi; metrics: AxisMetric[]; flag: Bi | null };
 type MatchAxes = { running: Axis; mechanical: Axis; internal: Axis; hsrDeficit: Bi | null; mechNeglect: Bi | null; capabilities: Bi[] };
-type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes };
+type MdDemandBucket = { key: string; label: Bi; offsets: number[]; avg: TeamAvg };
+type MdDemandProfile = { phases: MdDemandBucket[]; days: MdDemandBucket[] };
+type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes; md: MdDemandProfile };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
 type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[] };
@@ -140,7 +142,8 @@ export default function PeriodizationHubPage() {
   const nextPreStartRef = React.useRef(nextPreStart); nextPreStartRef.current = nextPreStart;
   const didPopulateWindow = React.useRef(false);
   const [friendly, setFriendly] = React.useState("");    // pre-season friendly date to add (MD anchor)
-  const [mdPosKey, setMdPosKey] = React.useState<number | null>(null); // position selector for the three-axes card
+  const [mdPosKey, setMdPosKey] = React.useState<number | null>(null); // position selector for the three-axes + MD-demand cards
+  const [mdDaysOpen, setMdDaysOpen] = React.useState(false); // "Show MD-day detail" toggle under the microcycle-demand phases
   // Meso plan-ahead editor state.
   const [blkStart, setBlkStart] = React.useState(() => new Date().toISOString().slice(0, 10));
   const [blkWeeks, setBlkWeeks] = React.useState(4);
@@ -1395,6 +1398,88 @@ export default function PeriodizationHubPage() {
                   </table>
                 </div>
                 <p className="mt-1 text-[9px] text-slate-400">{is ? "Vegalengd/HSR/PL = meðaltal per session · Hám. = km/klst · IMA-slá: 🔵 fram / ⚪ hlið / 🟡 aftur. Lýsandi — aldrei readiness-liturinn." : "Distance/HSR/PL = mean per session · Max = km/h · IMA bar: 🔵 fwd / ⚪ lat / 🟡 back. Descriptive — never the readiness colour."}</p>
+              </section>
+            );
+          })()}
+
+          {/* MD-RELATIVE DEMANDS — the microcycle shape, not a season blend. Layered: phases (verdict) →
+              per-MD-day detail behind a toggle. The season table above is the fallback default; this says
+              what each DAY of the week actually asks (MD-4/-3 load, MD-1 primer, MD+1 recovery). */}
+          {(plan.positionBaselines ?? []).some((b) => (b.md?.phases.length ?? 0) > 0) && (() => {
+            const rows = [plan.teamBaseline, ...plan.positionBaselines].filter((b) => b && b.avg.sessions > 0 && (b.md?.phases.length ?? 0) > 0);
+            if (rows.length === 0) return null;
+            const pos = rows.find((b) => b.key === mdPosKey) ?? rows[0];
+            const season = pos.avg;
+            const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${Math.round(m)}m`);
+            const PHASE_META: Record<string, { color: string; sub: { en: string; is: string } }> = {
+              load: { color: "#a83e28", sub: { en: "MD-4 / MD-3 — the loading days", is: "MD-4 / MD-3 — álagsdagarnir" } },
+              sharpen: { color: "#de9328", sub: { en: "MD-2 / MD-1 — sharpen + primer", is: "MD-2 / MD-1 — skerpa + undirbúningur" } },
+              recover: { color: "#1c7a4a", sub: { en: "MD+1 / MD+2 — recovery", is: "MD+1 / MD+2 — endurheimt" } },
+            };
+            const relPl = (pl: number | null) => (pl == null || season.playerLoad == null || season.playerLoad === 0 ? null : Math.round((pl / season.playerLoad) * 100) - 100);
+            return (
+              <section className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-sm font-semibold text-slate-900">{is ? "Kröfur yfir míkró-sveifluna (eftir MD-degi)" : "Demands across the microcycle (by MD-day)"}</h2>
+                  <select value={pos.key} onChange={(e) => setMdPosKey(Number(e.target.value))} className="ml-auto rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
+                    {rows.map((b) => <option key={b.key} value={b.key}>{is ? b.label.is : b.label.en}</option>)}
+                  </select>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">{is ? "Árs-meðaltalið að ofan blandar saman öllum dögum vikunnar. Hér er sama Dist/HSR/PL/Acc-Dec sundurliðað eftir því HVAR æfingin situr gagnvart leiknum — svo álagsdagur og léttur dagur renni ekki saman í eina tölu." : "The season average above blends every day of the week together. Here the same Dist/HSR/PL/Acc-Dec is split by WHERE the session sits relative to the match — so a loading day and a light day don't collapse into one number."}</p>
+                {/* Phases — the verdict read */}
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {pos.md.phases.map((ph) => { const a = ph.avg; const meta = PHASE_META[ph.key]; const rp = relPl(a.playerLoad); return (
+                    <div key={ph.key} className="rounded-lg border border-slate-200 p-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: meta?.color }} />
+                        <span className="text-[12px] font-semibold text-slate-900">{is ? ph.label.is : ph.label.en}</span>
+                        {rp != null && <span className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums" style={{ background: `${meta?.color}1a`, color: meta?.color }} title={is ? "PL á þessum dögum vs árs-meðaltal" : "PL on these days vs the season average"}>{rp > 0 ? "+" : ""}{rp}% PL</span>}
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-slate-400">{is ? meta?.sub.is : meta?.sub.en} · {a.sessions} {is ? "æf." : "sess."}</div>
+                      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+                        <div className="flex justify-between"><span className="text-slate-500">{is ? "Vegal." : "Dist"}</span><span className="font-semibold tabular-nums text-slate-800">{km(a.distanceM)}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-500">PL</span><span className="font-semibold tabular-nums text-slate-800">{a.playerLoad == null ? "–" : Math.round(a.playerLoad)}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-500">HSR</span><span className="font-semibold tabular-nums text-slate-800">{a.hsrM == null ? "–" : `${Math.round(a.hsrM)}m`}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-500">Acc/Dec</span><span className="font-semibold tabular-nums text-slate-800">{a.accel ?? "–"}/{a.decel ?? "–"}</span></div>
+                      </div>
+                    </div>
+                  ); })}
+                </div>
+                {/* Per-MD-day detail — the S&C drill-down behind a toggle (explainability: 0→1 phases, 2 raw days) */}
+                {pos.md.days.length > 0 && (
+                  <button type="button" onClick={() => setMdDaysOpen((v) => !v)} className="mt-2.5 text-[11px] font-semibold text-[#2740e6]">
+                    {mdDaysOpen ? (is ? "Fela MD-dag sundurliðun" : "Hide MD-day detail") : (is ? `Sýna MD-dag sundurliðun (${pos.md.days.length})` : `Show MD-day detail (${pos.md.days.length})`)}
+                  </button>
+                )}
+                {mdDaysOpen && pos.md.days.length > 0 && (
+                  <div className="mt-2 overflow-x-auto">
+                    <table className="w-full text-[12px]">
+                      <thead><tr className="text-left text-[9px] uppercase tracking-wide text-slate-400">
+                        <th className="py-1 pr-2 font-medium">MD</th>
+                        <th className="py-1 pr-2 text-right font-medium">{is ? "Æf." : "Sess."}</th>
+                        <th className="py-1 pr-2 text-right font-medium">{is ? "Vegal." : "Dist"}</th>
+                        <th className="py-1 pr-2 text-right font-medium">HSR</th>
+                        <th className="py-1 pr-2 text-right font-medium">PL</th>
+                        <th className="py-1 pr-2 text-right font-medium">{is ? "% PL" : "% PL"}</th>
+                        <th className="py-1 pl-2 text-right font-medium">Acc/Dec</th>
+                      </tr></thead>
+                      <tbody>
+                        {pos.md.days.map((d) => { const a = d.avg; const rp = relPl(a.playerLoad); return (
+                          <tr key={d.key} className="border-t border-slate-100">
+                            <td className="py-1 pr-2 font-semibold text-slate-800">{is ? d.label.is : d.label.en}</td>
+                            <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{a.sessions}</td>
+                            <td className="py-1 pr-2 text-right tabular-nums">{km(a.distanceM)}</td>
+                            <td className="py-1 pr-2 text-right tabular-nums">{a.hsrM == null ? "–" : `${Math.round(a.hsrM)}m`}</td>
+                            <td className="py-1 pr-2 text-right tabular-nums font-semibold">{a.playerLoad == null ? "–" : Math.round(a.playerLoad)}</td>
+                            <td className={`py-1 pr-2 text-right tabular-nums ${rp == null ? "text-slate-300" : rp > 0 ? "text-[#a83e28]" : "text-[#1c7a4a]"}`}>{rp == null ? "–" : `${rp > 0 ? "+" : ""}${rp}%`}</td>
+                            <td className="py-1 pl-2 text-right tabular-nums">{a.accel ?? "–"}/{a.decel ?? "–"}</td>
+                          </tr>
+                        ); })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <p className="mt-2 text-[9px] text-slate-400">{is ? "MD-dagur = fjarlægð æfingar frá næsta leik (±dagar). Hver flokkur þarf ≥3 æfingar til að birtast. % PL = vs árs-meðaltal stöðunnar. Leikdagur ekki talinn (þetta er æfingakrafa). Lýsandi — aldrei readiness-liturinn." : "MD-day = the session's distance from the nearest match (±days). Each bucket needs ≥3 sessions to show. % PL = vs the position's season average. The match day is excluded (this is training demand). Descriptive — never the readiness colour."}</p>
               </section>
             );
           })()}
