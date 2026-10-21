@@ -69,6 +69,7 @@ export async function ingestTitanRows(sb: SupabaseClient, teamId: string, incomi
   const byNorm = new Map<string, string>();
   const byToken = new Map<string, string>();
   const ambiguousToken = new Set<string>();
+  const rosterTokens: Array<{ id: string; tokens: string[] }> = [];
   for (const p of (roster ?? []) as Array<{ id: string; full_name: string | null }>) {
     const full = (p.full_name ?? "").trim();
     if (!full) continue;
@@ -76,6 +77,7 @@ export async function ingestTitanRows(sb: SupabaseClient, teamId: string, incomi
     const tk = tokenKey(full);
     if (byToken.has(tk) && byToken.get(tk) !== String(p.id)) ambiguousToken.add(tk);
     else byToken.set(tk, String(p.id));
+    rosterTokens.push({ id: String(p.id), tokens: tk.split(" ").filter(Boolean) });
   }
   const resolveOne = (name: string): string | null => {
     const exact = byNorm.get(normName(name));
@@ -84,12 +86,27 @@ export async function ingestTitanRows(sb: SupabaseClient, teamId: string, incomi
     if (ambiguousToken.has(tk)) return null; // two players share these words → don't guess
     return byToken.get(tk) ?? null;
   };
+  // Last-resort SUBSET match: one name's tokens fully contain the other's (both ≥2 tokens) — catches an
+  // export carrying an extra token (e.g. a smashed username, a middle name present on one side only), or a
+  // roster entry missing a middle name. Only commits when EXACTLY ONE roster player qualifies (never guess).
+  const subsetResolve = (name: string): string | null => {
+    const ex = tokenKey(name).split(" ").filter(Boolean);
+    if (ex.length < 2) return null;
+    const exSet = new Set(ex);
+    const hits = rosterTokens.filter((r) =>
+      r.tokens.length >= 2 && (r.tokens.every((t) => exSet.has(t)) || ex.every((t) => r.tokens.includes(t))),
+    );
+    return hits.length === 1 ? hits[0].id : null;
+  };
   const resolve = (name: string): string | null => {
     const direct = resolveOne(name);
     if (direct) return direct;
-    // Fallback: strip a leading Titan/Hudl username token and retry.
+    // Fallback 1: strip a leading Titan/Hudl username token and retry the exact/token match.
     const stripped = stripLeadingUsername(name);
-    return stripped !== name ? resolveOne(stripped) : null;
+    const viaStrip = stripped !== name ? resolveOne(stripped) : null;
+    if (viaStrip) return viaStrip;
+    // Fallback 2: a unique subset match (handles leftover extra/missing tokens on either side).
+    return subsetResolve(name);
   };
 
   const unmatched = new Set<string>();
