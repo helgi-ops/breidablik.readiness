@@ -22,6 +22,7 @@ export const dynamic = "force-dynamic";
 import * as React from "react";
 import { useEffect, useMemo, useState, Suspense } from "react";
 import nextDynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { pdf } from "@react-pdf/renderer";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -29,7 +30,7 @@ import { positionGroup, positionGroupsForSport } from "@/lib/micropulse/position
 import PlayerStrengthSessionCard from "@/components/coach/PlayerStrengthSessionCard";
 import StrengthSessionPdf, { type StrengthSessionPdfData } from "@/components/coach/StrengthSessionPdf";
 import { useLang } from "@/lib/lang";
-import type { StrengthSession, MdContext } from "@/lib/micropulse/strengthProgramming/types";
+import type { StrengthSession, MdContext, PlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/types";
 import type { PaletteSlot, PaletteSlots } from "@/lib/micropulse/strengthProgramming/palette";
 import { readinessDowngrade, STRUCTURE_LABEL, STRUCTURE_SCHEME, STRUCTURE_DEMAND, STRUCTURE_FAMILY, STRUCTURE_ISO_MODE, type StructureKey, type MdStructures } from "@/lib/micropulse/strengthProgramming/structures";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
@@ -45,6 +46,16 @@ const TrainingProgrammeBody = nextDynamic(() => import("../training-programme/pa
 });
 
 type PlayerRow = { id: string; full_name: string; position: string | null };
+
+/** Today's per-player read for the list (from the same per-player route the team PDF uses). */
+type DaySum = { verdict: PlayerStrengthSnapshot["verdict"]; injury: PlayerStrengthSnapshot["injuryStatus"]; dose: "full" | "light" | "skip"; lift: string | null };
+const DOSE_META = {
+  full: { en: "Full", is: "Full", tileEn: "Full session", tileIs: "Full æfing", subEn: "Decision: full", subIs: "Ákvörðun: full", dot: "#1c7a4a", bg: "rgba(28,122,74,0.1)", c: "#15603a" },
+  light: { en: "Lighter", is: "Létt", tileEn: "Lighter", tileIs: "Létt", subEn: "Modified / reduced — one rung down", subIs: "Breytt / minnkað — eitt þrep niður", dot: "#de9328", bg: "rgba(222,147,40,0.16)", c: "#7a5210" },
+  skip: { en: "Skip", is: "Sleppt", tileEn: "Skip", tileIs: "Sleppa", subEn: "Off-day, injury or recovery", subIs: "Frí, meiðsli eða endurheimt", dot: "#a83e28", bg: "rgba(168,62,40,0.1)", c: "#8a3220" },
+} as const;
+// Shared grid for the list header + rows: player · decision · dose · main exercise · emphasis · chevron.
+const ROW_COLS = "grid-cols-[minmax(150px,1.3fr)_minmax(120px,0.9fr)_minmax(80px,0.6fr)_minmax(180px,1.6fr)_minmax(150px,1.2fr)_auto]";
 
 /** One eligible library exercise for a palette slot (from the endpoint). */
 type SlotOption = { id: string; nameEN: string; nameIS: string; unilateral: boolean };
@@ -116,7 +127,7 @@ export default function CoachStrengthPage() {
   const [savingAuto, setSavingAuto] = useState(false);
   // Team strength palette — the per-slot exercise pool the individualised / auto
   // build draws from (the coach enters the standard session by hand).
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [setupTab, setSetupTab] = useState<"palette" | "structure">("palette");
   const [paletteSlots, setPaletteSlots] = useState<PaletteSlots>({});
   const [slotOptions, setSlotOptions] = useState<SlotOptionGroup[]>([]);
   const [savingPalette, setSavingPalette] = useState(false);
@@ -291,6 +302,75 @@ export default function CoachStrengthPage() {
   // the week_plans-derived MD. Shown honestly in the send UI (never pdfMdContext).
   const sendMdLabel = sendMdOverride === "AUTO" ? (autoMd ?? t("Auto", "Sjálfvalið")) : sendMdOverride;
   const sendMdMismatch = sendMdOverride !== "AUTO" && autoMd != null && sendMdOverride !== autoMd;
+
+  // Inside the Strength Training Intelligence hub the hub owns the page title — don't repeat it.
+  const pathname = usePathname();
+  const inHub = (pathname ?? "").startsWith("/coach/strength-hub");
+  const todayLabel = new Date().toLocaleDateString(lang === "IS" ? "is-IS" : "en-GB", { weekday: "long", day: "numeric", month: "short" });
+  const paletteCount = Object.values(paletteSlots).reduce((n, ids) => n + (ids?.length ?? 0), 0);
+
+  // TODAY'S READ PER PLAYER — fetched with the same per-player route the team PDF uses (4 at a time),
+  // for the send day + mode + block in force, so each row shows the decision, dose and main exercise
+  // without opening it. The decision is the load engine's (snapshot.verdict) — never the readiness colour.
+  const [daySum, setDaySum] = useState<Record<string, DaySum | "loading" | "error">>({});
+  const [doseFilter, setDoseFilter] = useState<"full" | "light" | "skip" | null>(null);
+  const blockKeyForSum = strengthPhase?.currentBlock?.goalKey ?? null;
+  const blockPhaseForSum = strengthPhase?.currentBlock?.blockPhase ?? null;
+  useEffect(() => {
+    if (tab !== "send" || players.length === 0) return;
+    let alive = true;
+    (async () => {
+      const sb = getSupabaseClient();
+      const { data: sess } = await sb.auth.getSession();
+      const token = sess?.session?.access_token;
+      if (!token || !alive) return;
+      const q = new URLSearchParams();
+      if (sendMdOverride !== "AUTO") q.set("md", sendMdOverride.replace("MD-", ""));
+      if (blockKeyForSum) { q.set("block", blockKeyForSum); if (blockPhaseForSum) q.set("phase", blockPhaseForSum); }
+      if (sendMode === "standard") q.set("mode", "standard");
+      const qs = q.toString() ? `?${q}` : "";
+      setDaySum(Object.fromEntries(players.map((p) => [p.id, "loading" as const])));
+      const queue = [...players];
+      const worker = async () => {
+        while (alive && queue.length) {
+          const p = queue.shift()!;
+          let val: DaySum | "error" = "error";
+          try {
+            const res = await fetch(`/api/coach/player/${p.id}/strength-session${qs}`, { headers: { Authorization: `Bearer ${token}` } });
+            if (res.ok) {
+              const j = await res.json();
+              const snap = (j.snapshot ?? null) as PlayerStrengthSnapshot | null;
+              const session = (j.session ?? null) as StrengthSession | null;
+              const exCount = session ? session.blocks.reduce((n, b) => n + b.exercises.length, 0) : 0;
+              const verdict = snap?.verdict ?? null;
+              const injury = snap?.injuryStatus ?? null;
+              const dose: DaySum["dose"] = !session || exCount === 0 || injury === "injured" || verdict === "RECOVERY" || verdict === "HOLD"
+                ? "skip" : verdict === "MODIFIED" || verdict === "REDUCED" ? "light" : "full";
+              const main = session?.blocks.find((b) => b.type === "COMPOUND" || b.type === "FRENCH_CONTRAST") ?? session?.blocks.find((b) => b.type !== "PREP" && b.type !== "MOBILITY") ?? null;
+              const ex = main?.exercises[0] ?? null;
+              val = { verdict, injury, dose, lift: dose === "skip" || !ex ? null : `${lang === "IS" ? ex.nameIS : ex.nameEN}${session ? ` · ${session.durationMin} ${lang === "IS" ? "mín" : "min"}` : ""}` };
+            }
+          } catch { /* row shows "–" */ }
+          if (alive) setDaySum((prev) => ({ ...prev, [p.id]: val }));
+        }
+      };
+      await Promise.all([worker(), worker(), worker(), worker()]);
+    })();
+    return () => { alive = false; };
+  }, [tab, players, sendMdOverride, sendMode, blockKeyForSum, blockPhaseForSum, lang]);
+  const sumValues = Object.values(daySum);
+  const sumLoading = players.length > 0 && (sumValues.length === 0 || sumValues.some((v) => v === "loading"));
+  const doseCounts = { full: 0, light: 0, skip: 0 };
+  for (const v of sumValues) if (v && v !== "loading" && v !== "error") doseCounts[v.dose]++;
+  const visibleRows = doseFilter ? filtered.filter((p) => { const d = daySum[p.id]; return d && d !== "loading" && d !== "error" && d.dose === doseFilter; }) : filtered;
+  const decisionOf = (d: DaySum): { label: string; c: string } =>
+    d.injury === "injured" || d.injury === "rehabilitation" ? { label: t("Injury / rehab", "Meiðsli / endurhæfing"), c: "#a83e28" }
+    : d.verdict === "FULL" ? { label: t("Full", "Full"), c: "#1c7a4a" }
+    : d.verdict === "MODIFIED" ? { label: t("Modified", "Breytt"), c: "#de9328" }
+    : d.verdict === "REDUCED" ? { label: t("Reduced", "Minnkað"), c: "#de9328" }
+    : d.verdict === "RECOVERY" ? { label: t("Recovery", "Endurheimt"), c: "#a83e28" }
+    : d.verdict === "HOLD" ? { label: t("Hold", "Hlé"), c: "#a83e28" }
+    : { label: t("No data today", "Engin gögn í dag"), c: "#94a3b8" };
 
   // Recipients for the bulk send: resolve the group selection to a concrete subset of players.
   const posGroups = useMemo(() => positionGroupsForSport(null), []);
@@ -513,109 +593,33 @@ export default function CoachStrengthPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl p-4 md:p-6">
-      {/* Tabs: today's send + the MD-periodised week planner (folded in). */}
-      <div className="mb-4 flex gap-1 border-b border-slate-200" role="tablist" aria-label={t("Strength planning", "Styrktarskipulag")}>
-        {([["send", t("Today / Send", "Í dag / Senda")], ["week", t("Week planner", "Vikuáætlun")]] as const).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={tab === key}
-            onClick={() => selectTab(key)}
-            className={`-mb-px rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
-              tab === key ? "border-[#2740e6] text-[#2740e6]" : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "week" ? (
-        <Suspense fallback={<div className="p-8 text-sm text-slate-500">{t("Loading…", "Hleð…")}</div>}>
-          <TrainingProgrammeBody />
-        </Suspense>
-      ) : (
-      <>
-      <div className="mb-4">
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <Link href="/coach" className="hover:text-slate-900">
-            {t("Coach", "Þjálfari")}
-          </Link>
-          <span>→</span>
-          <span className="text-slate-900 font-medium">{t("Strength", "Styrktaræfing")}</span>
-        </div>
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
-            {t("Daily session", "Æfing dagsins")}
-          </h1>
+    <div className="mx-auto max-w-6xl space-y-4 p-4 md:p-6" style={{ color: "#14181c" }}>
+      {/* 1 — DAY BAR: what today is + where it comes from, and the Today / Week switch */}
+      <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+          <div className="min-w-0 flex-1">
+            {!inHub && <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">{t("Daily session", "Æfing dagsins")}</h1>}
+            <div className="text-[18px] font-bold text-slate-900">{todayLabel} · {sendMdLabel}</div>
+            <div className="text-[12px] text-slate-500">{sendMdOverride === "AUTO" ? t("Auto — from this week's plan", "Sjálfvirkt úr vikuáætlun") : t("Manual day override", "Handvirk yfirskrift á degi")}</div>
+          </div>
           <CoachTutorialButton slug="strength-build" />
+          <div className="inline-flex overflow-hidden rounded-lg border border-slate-300" role="tablist" aria-label={t("Strength planning", "Styrktarskipulag")}>
+            {([["send", t("Today", "Í dag")], ["week", t("Week planner", "Vikuáætlun")]] as const).map(([key, label]) => (
+              <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => selectTab(key)}
+                className={`h-10 px-4 text-[13px] font-semibold ${tab === key ? "bg-slate-900 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-        <p className="mt-2 text-sm text-slate-700 leading-relaxed max-w-3xl">
-          {t(
-            "Per-player strength sessions tuned to today's readiness and the microcycle. " +
-            "Pick a player to see their prescribed session and the adaptation rationale.",
-            "Sérstilltar styrktaræfingar fyrir hvern leikmann, byggðar á readiness dagsins og " +
-            "míkró-lotunni. Veldu leikmann til að sjá prescribed session og skýringar.",
-          )}
-        </p>
-        <details className="group mt-3 rounded-md border border-indigo-200 bg-indigo-50/60 text-xs text-indigo-900">
-          <summary className="flex cursor-pointer select-none items-center gap-1.5 p-2.5 font-semibold list-none [&::-webkit-details-marker]:hidden">
-            <span className="text-indigo-400 transition-transform group-open:rotate-90">▸</span>
-            {t("Why micro-dose by default?", "Hvers vegna micro-dose sjálfgefið?")}
-          </summary>
-          <p className="px-2.5 pb-2.5 leading-relaxed">
-            {t(
-              "15-20 min sessions 3-5×/week beat 60 min 2×/week for in-season teams (Rønnestad 2023) — " +
-              "they preserve strength + power without next-day fatigue carryover and fit congested calendars. " +
-              "It's the default; switch any block to traditional (concentrated lift days) in Training principles when the week allows.",
-              "15-20 mín æfingar 3-5×/viku slá 60 mín 2×/viku á keppnistímabili (Rønnestad 2023) — " +
-              "þær halda styrk og krafti án þreytu daginn eftir og henta þéttri leikjadagskrá. " +
-              "Þetta er sjálfgefið; skiptu hvaða blokk sem er yfir á hefðbundið (einbeittir lyftidagar) í Þjálfunarprinsipp þegar vikan leyfir.",
-            )}
-          </p>
-        </details>
-
-        {/* Players missing the CMJ peak force DSI needs → prompt a new CMJ force-plate test. Descriptive. */}
-        {(() => {
-          const need = Object.values(emphasisByPlayer)
-            .filter((e) => e.dsiCoverage === "imtp_only" || e.dsiCoverage === "none")
-            .map((e) => ({ name: e.name ?? "—", alsoImtp: e.dsiCoverage === "none" }))
-            .sort((a, b) => a.name.localeCompare(b.name));
-          if (!need.length) return null;
-          return (
-            <details className="group mt-3 rounded-md border border-amber-300 bg-amber-50 text-xs text-amber-900">
-              <summary className="flex cursor-pointer select-none items-center gap-1.5 p-3 font-semibold list-none [&::-webkit-details-marker]:hidden">
-                <span className="text-amber-500 transition-transform group-open:rotate-90">▸</span>
-                {t(
-                  `⚠ ${need.length} player${need.length === 1 ? "" : "s"} need a new CMJ test for DSI`,
-                  `⚠ ${need.length} leikm${need.length === 1 ? "aður" : "enn"} þurfa nýja CMJ-mælingu fyrir DSI`,
-                )}
-              </summary>
-              <div className="px-3 pb-3">
-                <p className="text-[11px] text-amber-800">
-                  {t(
-                    "Their CMJ has no peak (concentric) force on record — DSI (CMJ ÷ IMTP) can't compute. A fresh CMJ force-plate test with the full metric set captures it.",
-                    "CMJ þeirra er án peak (concentric) krafts — DSI (CMJ ÷ IMTP) reiknast ekki. Ný CMJ-kraftplötumæling með fullu mælingasetti nær honum.",
-                  )}
-                </p>
-                <p className="mt-1 text-[11px] text-amber-900">
-                  {need.map((n) => `${n.name}${n.alsoImtp ? " (+IMTP)" : ""}`).join(" · ")}
-                </p>
-              </div>
-            </details>
-          );
-        })()}
-
         {/* Season-phase + in-season-mode context — ties this per-day builder to the Periodization Hub.
             Collapsible: the summary shows phase + current block at a glance; the full scheme, the
             change-per-block link and the preview toggle live inside the expand to save vertical space. */}
         {strengthPhase && (
-          <details className="group mt-3 rounded-md border border-[#7a5cc4]/25 bg-[#7a5cc4]/5 text-xs text-slate-700">
+          <details className="group mt-3 rounded-lg border border-[#7a5cc4]/25 bg-[#7a5cc4]/5 text-xs text-slate-700">
             <summary className="flex cursor-pointer select-none items-center gap-2 p-3 list-none [&::-webkit-details-marker]:hidden">
               <span className="text-[#7a5cc4]/60 transition-transform group-open:rotate-90">▸</span>
-              <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{t("phase", "fasi")}</span>
+              <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{t("phase", "fasi")}</span>
               <span className="min-w-0 flex-1 truncate">
                 <span className="font-semibold text-slate-900">{lang === "IS" ? strengthPhase.phaseGoal.is : strengthPhase.phaseGoal.en}</span>
                 {strengthPhase.currentBlock && (
@@ -631,14 +635,14 @@ export default function CoachStrengthPage() {
             {/* MESO — the current block's strength scheme (the Periodization Hub's block lane, here). */}
             {strengthPhase.currentBlock && (
               <span className="w-full border-t border-[#7a5cc4]/15 pt-2 mt-1">
-                <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{t("This block", "Þessi blokk")}</span>
+                <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{t("This block", "Þessi blokk")}</span>
                 <span className="ml-2 font-semibold text-slate-900">{lang === "IS" ? strengthPhase.currentBlock.phaseLabel.is : strengthPhase.currentBlock.phaseLabel.en}</span>
                 <span className="mx-1.5 text-slate-300">→</span>
                 <span className="font-semibold text-[#7a5cc4]">{lang === "IS" ? strengthPhase.currentBlock.quality.is : strengthPhase.currentBlock.quality.en}</span>
-                <span className="mx-1.5 text-slate-400">·</span>
+                <span className="mx-1.5 text-slate-500">·</span>
                 <span className="font-medium text-slate-700">{lang === "IS" ? strengthPhase.currentBlock.pct1rm.is : strengthPhase.currentBlock.pct1rm.en}</span>
                 <span className="block text-slate-600">{lang === "IS" ? strengthPhase.currentBlock.scheme.is : strengthPhase.currentBlock.scheme.en}</span>
-                <span className="mt-0.5 block text-[9px] text-slate-400">
+                <span className="mt-0.5 block text-[11px] text-slate-500">
                   {strengthPhase.currentBlock.cite}
                   <span className="mx-1">·</span>
                   <Link href="/coach/periodization-hub?tab=season" className="font-semibold text-[#2740e6] hover:underline">{t("Block map →", "Blokka-kort →")}</Link>
@@ -663,7 +667,7 @@ export default function CoachStrengthPage() {
                 />
                 <span>
                   {t("Preview next pre-season emphasis", "Forskoða áherslu fyrir næsta undirbúning")}
-                  <span className="ml-1 text-slate-400">{t("— show each player's starting emphasis as a plan (not in effect yet).", "— sýnir upphafsáherslu hvers leikmanns sem áætlun (ekki virkt enn).")}</span>
+                  <span className="ml-1 text-slate-500">{t("— show each player's starting emphasis as a plan (not in effect yet).", "— sýnir upphafsáherslu hvers leikmanns sem áætlun (ekki virkt enn).")}</span>
                 </span>
               </label>
             )}
@@ -676,61 +680,41 @@ export default function CoachStrengthPage() {
           </div>
           </details>
         )}
-      </div>
+      </section>
 
-      <div className="mb-3 flex flex-wrap items-center gap-3">
-        <input
-          type="text"
-          placeholder={t("Search players…", "Leita að leikmönnum…")}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-md rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-        <div className="ml-auto flex items-center gap-2 text-xs">
-          <label className="text-slate-600">{t("PDF context:", "PDF samhengi:")}</label>
-          <select
-            value={pdfMdContext}
-            onChange={(e) => setPdfMdContext(e.target.value as MdContext | "AUTO")}
-            className="rounded border border-slate-300 bg-white px-2 py-1"
-          >
-            <option value="AUTO">{t("Auto", "Sjálfvalið")}</option>
-            <option value="MD-5">MD-5</option>
-            <option value="MD-4">MD-4</option>
-            <option value="MD-3">MD-3</option>
-            <option value="MD-2">MD-2</option>
-            <option value="MD-1">MD-1</option>
-            <option value="MD+1">MD+1</option>
-            <option value="MD+2">MD+2</option>
-            <option value="MD+3">MD+3</option>
-            <option value="MD+4">MD+4</option>
-          </select>
-          <button
-            type="button"
-            onClick={buildAndDownloadPdf}
-            disabled={pdfBuilding || players.length === 0}
-            className={`rounded-md px-3 py-1.5 font-semibold transition ${
-              pdfBuilding || players.length === 0
-                ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                : "bg-indigo-600 text-white hover:bg-indigo-700"
-            }`}
-            title={t(
-              "Build a PDF with one page per player — print for the whiteboard or email to players.",
-              "Búa til PDF með einni síðu per leikmann — prenta á whiteboard eða senda á leikmenn.",
-            )}
-          >
-            {pdfBuilding
-              ? t("Building…", "Byggi…")
-              : t(`Download team PDF (${players.length})`, `Sækja team PDF (${players.length})`)}
-          </button>
+      {tab === "week" ? (
+        <Suspense fallback={<div className="p-8 text-sm text-slate-500">{t("Loading…", "Hleð…")}</div>}>
+          <TrainingProgrammeBody />
+        </Suspense>
+      ) : (
+      <>
+      {/* 2 — VERDICT + how the squad splits today (click a tile to filter the list) */}
+      <section className="space-y-3">
+        <p className="text-[17px] font-bold text-slate-900">
+          {sumLoading
+            ? t("Building today's sessions…", "Sæki æfingar dagsins…")
+            : t(`Today (${sendMdLabel}): ${doseCounts.full} get the full session, ${doseCounts.light} a lighter one, ${doseCounts.skip} skip.`, `Í dag (${sendMdLabel}): ${doseCounts.full} fá fulla æfingu, ${doseCounts.light} létta og ${doseCounts.skip} sleppa.`)}
+          {bulkResult ? <span className="text-emerald-700"> {t(`Sent to ${bulkResult.sent}.`, `Sent á ${bulkResult.sent}.`)}</span> : null}
+        </p>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-2.5" role="group" aria-label={t("Filter by dose", "Sía eftir skammti")}>
+          {(["full", "light", "skip"] as const).map((k) => {
+            const m = DOSE_META[k]; const on = doseFilter === k;
+            return (
+              <button key={k} type="button" aria-pressed={on} onClick={() => setDoseFilter(on ? null : k)}
+                className={`rounded-xl bg-white px-4 py-3 text-left ${on ? "border-2 border-slate-900" : "border border-slate-200 hover:border-slate-300"}`}>
+                <span className="flex items-center gap-2 text-[12px] font-semibold text-slate-700"><span className="h-2.5 w-2.5 rounded-full" style={{ background: m.dot }} />{t(m.tileEn, m.tileIs)}</span>
+                <span className="mt-0.5 block text-[24px] font-bold text-slate-900">{sumLoading ? "…" : doseCounts[k]}</span>
+                <span className="block text-[12px] text-slate-500">{t(m.subEn, m.subIs)}</span>
+              </button>
+            );
+          })}
         </div>
-      </div>
+      </section>
 
-      {/* Bulk send-to-all panel */}
-      <div className="mb-4 rounded-md border-2 border-indigo-200 bg-white p-3">
-        {/* Session mode — team default (overridable per send). Both modes honour
-            week-setup (MD) + readiness; "standard" skips the per-player screen
-            corrective + deficit-ledger emphases + F-V driver. */}
-        <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
+      {/* 3 — SEND: the day's one action */}
+      <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+        <h2 className="text-[15px] font-bold text-slate-900">{t("Send today's session", "Senda æfingu dagsins")}</h2>
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
           <span className="text-sm font-semibold text-slate-800">{t("Session mode:", "Æfingahamur:")}</span>
           <div className="inline-flex overflow-hidden rounded-lg border border-slate-300 shadow-sm">
             {(["individualised", "standard"] as const).map((m) => (
@@ -758,14 +742,14 @@ export default function CoachStrengthPage() {
           {/* What each mode does — both shown so the choice is clear before clicking;
               the active one is emphasised. */}
           <div className="w-full space-y-1 text-[11px] leading-snug">
-            <div className={sendMode === "individualised" ? "text-slate-700" : "text-slate-400"}>
+            <div className={sendMode === "individualised" ? "text-slate-700" : "text-slate-500"}>
               <span className="font-semibold text-slate-800">{t("Individualised", "Einstaklingsmiðað")}:</span>{" "}
               {t(
                 "each player gets their OWN session — tuned to readiness + MD, plus their movement-screen corrective and deficit-ledger emphases, built from your team exercise palette.",
                 "hver leikmaður fær SÍNA eigin æfingu — stillt að readiness + MD, ásamt skimunar-corrective og halla-áherslum, byggð úr æfingasafni liðsins.",
               )}
             </div>
-            <div className={sendMode === "standard" ? "text-slate-700" : "text-slate-400"}>
+            <div className={sendMode === "standard" ? "text-slate-700" : "text-slate-500"}>
               <span className="font-semibold text-slate-800">{t("Standard", "Staðlað")}:</span>{" "}
               {t(
                 "everyone gets the SAME session — your team's active Custom Programme for the day (still readiness/MD-tuned). Without one, players get a generic built-in template and the team palette isn't applied.",
@@ -813,233 +797,8 @@ export default function CoachStrengthPage() {
               )}
             </span>
           </label>
-          {/* Team exercise palette — feeds the individualised / auto build only. */}
-          <div className="mt-1 w-full">
-            <button
-              type="button"
-              onClick={() => setPaletteOpen((o) => !o)}
-              className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-700 hover:underline"
-            >
-              <span className={`inline-block transition-transform ${paletteOpen ? "rotate-90" : ""}`}>▸</span>
-              {t("Team exercise palette", "Æfingasafn liðsins")}
-              <span className="font-normal text-slate-500">
-                {(() => {
-                  const n = Object.values(paletteSlots).reduce((s, ids) => s + (ids?.length ?? 0), 0);
-                  return n > 0
-                    ? t(`(${n} chosen — used by individualised sends)`, `(${n} valdar — notaðar í einstaklingsmiðaðar sendingar)`)
-                    : t("(none chosen — the built-in default is used)", "(ekkert valið — sjálfgefna sniðmátið er notað)");
-                })()}
-              </span>
-            </button>
-            {paletteOpen && (
-              <div className="mt-2 rounded-md border border-slate-200 bg-slate-50/70 p-3">
-                <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
-                  {t(
-                    "Pick the power/explosive and strength exercises the individualised (and auto) session may prescribe — the system builds each player's session from THIS pool. Pick both a unilateral and a bilateral lower-body option: the engine chooses between them per player from their symmetry. Leave a slot empty to fall back to the built-in default. This pool drives the individualised build; Standard mode instead delivers your Custom Programme (or the built-in MD template).",
-                    "Veldu afl-/sprengikrafts- og styrktaræfingarnar sem einstaklingsmiðaða (og sjálfvirka) æfingin má nota — kerfið byggir æfingu hvers leikmanns úr ÞESSU safni. Veldu bæði einhliða og tvíhliða valkost fyrir neðri líkama: kerfið velur á milli þeirra fyrir hvern leikmann út frá symmetríu hans. Skildu reit eftir tóman til að nota sjálfgefna sniðmátið. Þetta safn drífur einstaklingsmiðuðu uppbygginguna; Staðlaði hátturinn afhendir þess í stað æfingakerfið þitt (eða innbyggt MD-sniðmát).",
-                  )}
-                </p>
-                <div className="space-y-3">
-                  {slotOptions.map((grp) => {
-                    const chosen = new Set(paletteSlots[grp.slot] ?? []);
-                    return (
-                      <div key={grp.slot}>
-                        <div className="mb-1 text-[11px] font-semibold text-slate-700">
-                          {t(grp.label.en, grp.label.is)}
-                          <span className="ml-1 font-normal text-slate-400">{chosen.size > 0 ? `· ${chosen.size}` : ""}</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {grp.options.map((opt) => {
-                            const on = chosen.has(opt.id);
-                            return (
-                              <button
-                                key={opt.id}
-                                type="button"
-                                onClick={() => togglePaletteExercise(grp.slot, opt.id)}
-                                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
-                                  on
-                                    ? "border-indigo-600 bg-indigo-600 text-white"
-                                    : "border-slate-300 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50"
-                                }`}
-                              >
-                                {t(opt.nameEN, opt.nameIS)}
-                              </button>
-                            );
-                          })}
-                          {grp.options.length === 0 && (
-                            <span className="text-[11px] text-slate-400">{t("No library exercises for this slot.", "Engar æfingar í safninu fyrir þennan reit.")}</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-3 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={savePalette}
-                    disabled={savingPalette}
-                    className="rounded-md bg-indigo-700 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
-                  >
-                    {savingPalette ? t("Saving…", "Vista…") : t("Save palette", "Vista safn")}
-                  </button>
-                  {paletteSaved && <span className="text-[11px] font-medium text-emerald-700">{t("✓ Saved", "✓ Vistað")}</span>}
-                </div>
-
-                {/* Per-MD training structure (method) — ties a method to each strength/power day. */}
-                {structureOptions.length > 0 && (
-                  <div className="mt-4 border-t border-slate-200 pt-3">
-                    <div className="mb-1 text-[11px] font-semibold text-slate-700">{t("Session structure per MD day", "Uppsetning æfingar per MD-dag")}</div>
-                    <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
-                      {t(
-                        "Tie a training method to each day — the individualised (and auto) session lays that method out from your palette. MD-5 / MD-4 are the development days (strength & power); MD-3 adds power; MD-2 / MD-1 offer velocity/explosive methods (power contrast, potentiation cluster) that stay light + fast near the match. The recovery side rebuilds progressively: MD+1 adapts to each player's match minutes automatically (60+ min → protective isometrics for the legs plus fresh upper-body strength; under 30 min or a DNP → a real strength session for the missed load) — so a method you set on MD+1 applies ONLY to players who didn't play; anyone who played keeps the mandatory recovery. MD+2 (moderate), MD+3 (fuller) and MD+4 (full development) add a rebuild session only when you choose a method (Default = rest). A low-fatigue \"Yielding isometric\" (hold) option — best for muscle/tissue — is available on the development and rebuild days. Leave a day on Default to keep its built-in structure.",
-                        "Tengdu æfingaaðferð við hvern dag — einstaklingsmiðaða (og sjálfvirka) æfingin raðar þeirri aðferð úr palette-inu þínu. MD-5 / MD-4 eru þróunardagarnir (styrkur & afl); MD-3 bætir við afli; MD-2 / MD-1 bjóða hraða-/sprengikrafts-aðferðir (afl-contrast, potentiation cluster) sem haldast léttar + hraðar nálægt leik. Batahliðin byggist upp stig af stigi: MD+1 aðlagast leikmínútum hvers leikmanns sjálfkrafa (60+ mín → verndandi ísómetría fyrir fæturna auk óþreytts efri-líkama styrks; undir 30 mín eða DNP → alvöru styrktaræfing fyrir álagið sem tapaðist) — svo aðferð sem þú setur á MD+1 á AÐEINS við leikmenn sem spiluðu ekki; allir sem spiluðu halda skyldu-endurheimtinni. MD+2 (hóflegt), MD+3 (fyllra) og MD+4 (full þróun) bæta við æfingu aðeins þegar þú velur aðferð (Sjálfgefið = hvíld). Létt \"Yielding ísómetría\" (hald) — best fyrir vöðva/vef — er í boði á þróunar- og bata-dögunum. Skildu dag eftir á Sjálfgefið til að halda innbyggðu uppsetningunni.",
-                      )}
-                    </p>
-                    <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
-                      {strengthPhase?.inSeasonMode === "traditional"
-                        ? t(
-                            "This block is set to TRADITIONAL — concentrate the week onto 1–4 lift days and mark the others \"Off / rest\". An Off day delivers no strength session (the player simply has no lift that day). Pick your lift days below and set the rest to Off.",
-                            "Þessi blokk er stillt á HEFÐBUNDIÐ — einbeittu vikunni á 1–4 lyftidaga og merktu hina \"Off / hvíld\". Off-dagur skilar engri styrktaræfingu (leikmaður fær einfaldlega enga lyftu þann dag). Veldu lyftidagana hér að neðan og settu hina á Off.",
-                          )
-                        : t(
-                            "This block is MICRO-DOSE — strength spread across the MD week (the default). Set a method on the days you want; you can still mark any day \"Off / rest\" to skip its session. Switch a block to Traditional on the Training principles tab.",
-                            "Þessi blokk er MICRO-DOSE — styrkur dreifður yfir MD-vikuna (sjálfgefið). Settu aðferð á dagana sem þú vilt; þú getur samt merkt hvaða dag sem er \"Off / hvíld\" til að sleppa æfingu hans. Skiptu blokk yfir á Hefðbundið á Þjálfunarprinsipp flipanum.",
-                          )}
-                    </p>
-                    <div className="space-y-2">
-                      {structureOptions.map((grp) => {
-                        const md = grp.md as MdContext;
-                        const current = mdStructures[grp.md as keyof MdStructures] ?? "";
-                        const isRest = current === "rest";
-                        const label = (k: StructureKey) => t(STRUCTURE_LABEL[k]?.en ?? k, STRUCTURE_LABEL[k]?.is ?? k);
-                        const scheme = (k: StructureKey) => t(STRUCTURE_SCHEME[k]?.en ?? "", STRUCTURE_SCHEME[k]?.is ?? "");
-                        // The method actually scheduled = the coach's pick, else the day's default.
-                        // A day marked Off ("rest") has no scheduled method.
-                        const effective = isRest ? null : ((current || grp.defaultKey) as StructureKey | null);
-                        const yellowStep = effective ? readinessDowngrade(effective, md) : null;
-                        return (
-                          <div key={grp.md}>
-                            <div className="flex items-center gap-2">
-                              <span className="w-12 shrink-0 text-[12px] font-semibold text-slate-700">{grp.md}</span>
-                              <select
-                                value={current}
-                                onChange={(e) => setStructure(grp.md, e.target.value as StructureKey | "rest" | "")}
-                                className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-[12px]"
-                              >
-                                <option value="">
-                                  {t("Default", "Sjálfgefið")}
-                                  {grp.defaultKey ? ` — ${label(grp.defaultKey)}` : ""}
-                                  {grp.defaultKey && scheme(grp.defaultKey) ? `  ·  ${scheme(grp.defaultKey)}` : ""}
-                                </option>
-                                {grp.options.map((o) => (
-                                  <option key={o.key} value={o.key}>
-                                    {label(o.key)}{o.key === grp.defaultKey ? t(" (default)", " (sjálfgefið)") : ""}
-                                    {scheme(o.key) ? `  ·  ${scheme(o.key)}` : ""}
-                                  </option>
-                                ))}
-                                <option value="rest">{t("Off / rest — no session this day", "Off / hvíld — engin æfing þennan dag")}</option>
-                              </select>
-                            </div>
-                            {/* Traffic-light preview of the selected method: green keeps it,
-                                yellow steps one rung down (same family), red is recovery. */}
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-14 text-[11px]">
-                              {isRest ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-500"><span aria-hidden>⏸</span>{t("Off — no strength session this day", "Off — engin styrktaræfing þennan dag")}</span>
-                              ) : effective ? (
-                                <>
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-800"><span aria-hidden>🟢</span>{label(effective)}</span>
-                                  {STRUCTURE_ISO_MODE[effective] && (
-                                    <span
-                                      title={ISO_MODE_CITATION}
-                                      className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${ISO_MODE_LABELS[STRUCTURE_ISO_MODE[effective]!].color}`}
-                                    >
-                                      {ISO_MODE_LABELS[STRUCTURE_ISO_MODE[effective]!][lang === "IS" ? "IS" : "EN"]}
-                                    </span>
-                                  )}
-                                  <span className="text-slate-400">→</span>
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-800"><span aria-hidden>🟡</span>{yellowStep ? label(yellowStep) : t("same · sets −1", "sama · sett −1")}</span>
-                                  <span className="text-slate-400">→</span>
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 font-medium text-rose-800"><span aria-hidden>🔴</span>{t("recovery", "endurheimt")}</span>
-                                  {(() => {
-                                    const fam = STRUCTURE_FAMILY[effective];
-                                    const ladder = grp.options
-                                      .map((o) => o.key)
-                                      .filter((k) => STRUCTURE_FAMILY[k] === fam)
-                                      .sort((a, b) => STRUCTURE_DEMAND[b] - STRUCTURE_DEMAND[a]);
-                                    if (ladder.length < 2) return null;
-                                    return (
-                                      <button type="button" onClick={() => setLadderOpenMd(ladderOpenMd === grp.md ? null : grp.md)} className="ml-1 font-medium text-indigo-700 hover:underline">
-                                        {ladderOpenMd === grp.md ? t("hide ladder", "fela stiga") : t("show ladder", "sýna stiga")}
-                                      </button>
-                                    );
-                                  })()}
-                                </>
-                              ) : (
-                                <span className="text-slate-400">{t("Fixed taper template · yellow trims sets only", "Fast taper-sniðmát · gult lækkar aðeins sett")}</span>
-                              )}
-                            </div>
-                            {/* Reps/sets scheme of the selected method — so a coach who doesn't
-                                know the protocol by name sees what it prescribes. */}
-                            {!isRest && effective && scheme(effective) ? (
-                              <div className="mt-0.5 pl-14 text-[11px] text-slate-500">
-                                <span className="font-medium text-slate-400">{t("Scheme", "Skema")}:</span> {scheme(effective)}
-                              </div>
-                            ) : null}
-                            {/* Full family ladder for this day (educational — yellow moves ONE rung). */}
-                            {effective && ladderOpenMd === grp.md && (() => {
-                              const fam = STRUCTURE_FAMILY[effective];
-                              const ladder = grp.options
-                                .map((o) => o.key)
-                                .filter((k) => STRUCTURE_FAMILY[k] === fam)
-                                .sort((a, b) => STRUCTURE_DEMAND[b] - STRUCTURE_DEMAND[a]);
-                              return (
-                                <div className="mt-1.5 ml-14 rounded-md border border-slate-200 bg-white p-2.5">
-                                  <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                    {t(`${fam === "strength" ? "Strength" : "Velocity"} family — heaviest → lightest`, `${fam === "strength" ? "Styrktar" : "Hraða"}-fjölskylda — þyngst → léttast`)}
-                                  </div>
-                                  <div className="flex flex-col gap-1">
-                                    {ladder.map((k, i) => {
-                                      const isSel = k === effective;
-                                      const isYellow = k === yellowStep;
-                                      return (
-                                        <div key={k} className="flex items-center gap-2 text-[11px]">
-                                          <span className="w-3 text-slate-300">{i > 0 ? "↓" : ""}</span>
-                                          <span className={`rounded px-1.5 py-0.5 ${isSel ? "bg-emerald-100 font-semibold text-emerald-900" : isYellow ? "bg-amber-100 font-medium text-amber-900" : "text-slate-600"}`}>
-                                            {label(k)}
-                                          </span>
-                                          {scheme(k) ? <span className="text-[10px] text-slate-400">{scheme(k)}</span> : null}
-                                          {isSel ? <span className="text-[10px] text-emerald-700">🟢 {t("selected", "valið")}</span> : null}
-                                          {isYellow ? <span className="text-[10px] text-amber-700">🟡 {t("yellow lands here", "gult lendir hér")}</span> : null}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                  <div className="mt-1.5 text-[10px] text-slate-400">{t("A green player keeps the selected method; a yellow player moves exactly one rung down.", "Grænn leikmaður heldur völdu aðferðinni; gulur færist nákvæmlega eitt þrep niður.")}</div>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-2 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={saveStructures}
-                        disabled={savingStructures}
-                        className="rounded-md bg-indigo-700 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
-                      >
-                        {savingStructures ? t("Saving…", "Vista…") : t("Save structures", "Vista uppsetningar")}
-                      </button>
-                      {structuresSaved && <span className="text-[11px] font-medium text-emerald-700">{t("✓ Saved", "✓ Vistað")}</span>}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
         </div>
+        <div className="mt-3">
         {/* Live-send MD — its OWN control, Auto by default (this week's plan).
             Separate from the PDF-context dropdown above. */}
         <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
@@ -1139,7 +898,7 @@ export default function CoachStrengthPage() {
                 "Optional team-wide note (e.g. 'Run this after the field session today').",
                 "Valfrjáls liðs-athugasemd (t.d. 'Keyrðu þetta eftir velli æfinguna í dag').",
               )}
-              className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <div className="flex gap-2">
               <button
@@ -1176,36 +935,362 @@ export default function CoachStrengthPage() {
             )}
           </div>
         )}
-      </div>
+        </div>
+      </section>
 
+      {/* 4 — TEAM SET-UP: the exercise palette + the per-MD structure (feeds individualised / auto sends) */}
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 pt-4 sm:px-5">
+          <h2 className="text-[15px] font-bold text-slate-900">{t("Team set-up", "Uppsetning liðsins")}</h2>
+          <span className="text-[12px] text-slate-500">{t("Used by individualised (and auto) sends. Standard delivers the Custom Programme.", "Notað þegar sent er einstaklingsmiðað (og sjálfvirkt). Staðlað sendir Sérsniðna æfingakerfið.")}</span>
+        </div>
+        <div role="tablist" aria-label={t("Team set-up", "Uppsetning liðsins")} className="mt-2 flex gap-0.5 border-b border-slate-200 px-3">
+          {([["palette", `${t("Exercise palette", "Æfingasafn")} (${paletteCount})`], ["structure", t("Structure per MD day", "Uppsetning per MD-dag")]] as const).map(([k, label]) => (
+            <button key={k} type="button" role="tab" aria-selected={setupTab === k} onClick={() => setSetupTab(k)}
+              className={`h-11 px-3.5 text-[13px] font-bold ${setupTab === k ? "text-[#2740e6] shadow-[inset_0_-2px_0_#2740e6]" : "text-slate-700 hover:text-slate-900"}`}>{label}</button>
+          ))}
+        </div>
+        <div className="p-4 sm:p-5">
+          {setupTab === "palette" ? (
+            <>
+                <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
+                  {t(
+                    "Pick the power/explosive and strength exercises the individualised (and auto) session may prescribe — the system builds each player's session from THIS pool. Pick both a unilateral and a bilateral lower-body option: the engine chooses between them per player from their symmetry. Leave a slot empty to fall back to the built-in default. This pool drives the individualised build; Standard mode instead delivers your Custom Programme (or the built-in MD template).",
+                    "Veldu afl-/sprengikrafts- og styrktaræfingarnar sem einstaklingsmiðaða (og sjálfvirka) æfingin má nota — kerfið byggir æfingu hvers leikmanns úr ÞESSU safni. Veldu bæði einhliða og tvíhliða valkost fyrir neðri líkama: kerfið velur á milli þeirra fyrir hvern leikmann út frá symmetríu hans. Skildu reit eftir tóman til að nota sjálfgefna sniðmátið. Þetta safn drífur einstaklingsmiðuðu uppbygginguna; Staðlaði hátturinn afhendir þess í stað æfingakerfið þitt (eða innbyggt MD-sniðmát).",
+                  )}
+                </p>
+                <div className="space-y-3">
+                  {slotOptions.map((grp) => {
+                    const chosen = new Set(paletteSlots[grp.slot] ?? []);
+                    return (
+                      <div key={grp.slot}>
+                        <div className="mb-1.5 text-[13px] font-bold text-slate-900">
+                          {t(grp.label.en, grp.label.is)}
+                          <span className="ml-1 font-normal text-slate-500">{chosen.size > 0 ? `· ${chosen.size}` : ""}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {grp.options.map((opt) => {
+                            const on = chosen.has(opt.id);
+                            return (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => togglePaletteExercise(grp.slot, opt.id)}
+                                className={`min-h-9 rounded-full border px-3 py-1.5 text-[13px] font-semibold transition ${
+                                  on
+                                    ? "border-[#2740e6] bg-[#2740e6] text-white"
+                                    : "border-slate-300 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50"
+                                }`}
+                              >
+                                {t(opt.nameEN, opt.nameIS)}
+                              </button>
+                            );
+                          })}
+                          {grp.options.length === 0 && (
+                            <span className="text-[11px] text-slate-500">{t("No library exercises for this slot.", "Engar æfingar í safninu fyrir þennan reit.")}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={savePalette}
+                    disabled={savingPalette}
+                    className="rounded-md bg-indigo-700 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
+                  >
+                    {savingPalette ? t("Saving…", "Vista…") : t("Save palette", "Vista safn")}
+                  </button>
+                  {paletteSaved && <span className="text-[11px] font-medium text-emerald-700">{t("✓ Saved", "✓ Vistað")}</span>}
+                </div>
+            </>
+          ) : structureOptions.length > 0 ? (
+            <>
+                {structureOptions.length > 0 && (
+                  <div>
+                    <div className="mb-1 text-[11px] font-semibold text-slate-700">{t("Session structure per MD day", "Uppsetning æfingar per MD-dag")}</div>
+                    <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
+                      {t(
+                        "Tie a training method to each day — the individualised (and auto) session lays that method out from your palette. MD-5 / MD-4 are the development days (strength & power); MD-3 adds power; MD-2 / MD-1 offer velocity/explosive methods (power contrast, potentiation cluster) that stay light + fast near the match. The recovery side rebuilds progressively: MD+1 adapts to each player's match minutes automatically (60+ min → protective isometrics for the legs plus fresh upper-body strength; under 30 min or a DNP → a real strength session for the missed load) — so a method you set on MD+1 applies ONLY to players who didn't play; anyone who played keeps the mandatory recovery. MD+2 (moderate), MD+3 (fuller) and MD+4 (full development) add a rebuild session only when you choose a method (Default = rest). A low-fatigue \"Yielding isometric\" (hold) option — best for muscle/tissue — is available on the development and rebuild days. Leave a day on Default to keep its built-in structure.",
+                        "Tengdu æfingaaðferð við hvern dag — einstaklingsmiðaða (og sjálfvirka) æfingin raðar þeirri aðferð úr palette-inu þínu. MD-5 / MD-4 eru þróunardagarnir (styrkur & afl); MD-3 bætir við afli; MD-2 / MD-1 bjóða hraða-/sprengikrafts-aðferðir (afl-contrast, potentiation cluster) sem haldast léttar + hraðar nálægt leik. Batahliðin byggist upp stig af stigi: MD+1 aðlagast leikmínútum hvers leikmanns sjálfkrafa (60+ mín → verndandi ísómetría fyrir fæturna auk óþreytts efri-líkama styrks; undir 30 mín eða DNP → alvöru styrktaræfing fyrir álagið sem tapaðist) — svo aðferð sem þú setur á MD+1 á AÐEINS við leikmenn sem spiluðu ekki; allir sem spiluðu halda skyldu-endurheimtinni. MD+2 (hóflegt), MD+3 (fyllra) og MD+4 (full þróun) bæta við æfingu aðeins þegar þú velur aðferð (Sjálfgefið = hvíld). Létt \"Yielding ísómetría\" (hald) — best fyrir vöðva/vef — er í boði á þróunar- og bata-dögunum. Skildu dag eftir á Sjálfgefið til að halda innbyggðu uppsetningunni.",
+                      )}
+                    </p>
+                    <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
+                      {strengthPhase?.inSeasonMode === "traditional"
+                        ? t(
+                            "This block is set to TRADITIONAL — concentrate the week onto 1–4 lift days and mark the others \"Off / rest\". An Off day delivers no strength session (the player simply has no lift that day). Pick your lift days below and set the rest to Off.",
+                            "Þessi blokk er stillt á HEFÐBUNDIÐ — einbeittu vikunni á 1–4 lyftidaga og merktu hina \"Off / hvíld\". Off-dagur skilar engri styrktaræfingu (leikmaður fær einfaldlega enga lyftu þann dag). Veldu lyftidagana hér að neðan og settu hina á Off.",
+                          )
+                        : t(
+                            "This block is MICRO-DOSE — strength spread across the MD week (the default). Set a method on the days you want; you can still mark any day \"Off / rest\" to skip its session. Switch a block to Traditional on the Training principles tab.",
+                            "Þessi blokk er MICRO-DOSE — styrkur dreifður yfir MD-vikuna (sjálfgefið). Settu aðferð á dagana sem þú vilt; þú getur samt merkt hvaða dag sem er \"Off / hvíld\" til að sleppa æfingu hans. Skiptu blokk yfir á Hefðbundið á Þjálfunarprinsipp flipanum.",
+                          )}
+                    </p>
+                    <div className="space-y-2">
+                      {structureOptions.map((grp) => {
+                        const md = grp.md as MdContext;
+                        const current = mdStructures[grp.md as keyof MdStructures] ?? "";
+                        const isRest = current === "rest";
+                        const label = (k: StructureKey) => t(STRUCTURE_LABEL[k]?.en ?? k, STRUCTURE_LABEL[k]?.is ?? k);
+                        const scheme = (k: StructureKey) => t(STRUCTURE_SCHEME[k]?.en ?? "", STRUCTURE_SCHEME[k]?.is ?? "");
+                        // The method actually scheduled = the coach's pick, else the day's default.
+                        // A day marked Off ("rest") has no scheduled method.
+                        const effective = isRest ? null : ((current || grp.defaultKey) as StructureKey | null);
+                        const yellowStep = effective ? readinessDowngrade(effective, md) : null;
+                        return (
+                          <div key={grp.md}>
+                            <div className="flex items-center gap-2">
+                              <span className="w-12 shrink-0 text-[12px] font-semibold text-slate-700">{grp.md}</span>
+                              <select
+                                value={current}
+                                onChange={(e) => setStructure(grp.md, e.target.value as StructureKey | "rest" | "")}
+                                className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-[12px]"
+                              >
+                                <option value="">
+                                  {t("Default", "Sjálfgefið")}
+                                  {grp.defaultKey ? ` — ${label(grp.defaultKey)}` : ""}
+                                  {grp.defaultKey && scheme(grp.defaultKey) ? `  ·  ${scheme(grp.defaultKey)}` : ""}
+                                </option>
+                                {grp.options.map((o) => (
+                                  <option key={o.key} value={o.key}>
+                                    {label(o.key)}{o.key === grp.defaultKey ? t(" (default)", " (sjálfgefið)") : ""}
+                                    {scheme(o.key) ? `  ·  ${scheme(o.key)}` : ""}
+                                  </option>
+                                ))}
+                                <option value="rest">{t("Off / rest — no session this day", "Off / hvíld — engin æfing þennan dag")}</option>
+                              </select>
+                            </div>
+                            {/* Traffic-light preview of the selected method: green keeps it,
+                                yellow steps one rung down (same family), red is recovery. */}
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-14 text-[11px]">
+                              {isRest ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-500"><span aria-hidden>⏸</span>{t("Off — no strength session this day", "Off — engin styrktaræfing þennan dag")}</span>
+                              ) : effective ? (
+                                <>
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-800"><span aria-hidden>🟢</span>{label(effective)}</span>
+                                  {STRUCTURE_ISO_MODE[effective] && (
+                                    <span
+                                      title={ISO_MODE_CITATION}
+                                      className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${ISO_MODE_LABELS[STRUCTURE_ISO_MODE[effective]!].color}`}
+                                    >
+                                      {ISO_MODE_LABELS[STRUCTURE_ISO_MODE[effective]!][lang === "IS" ? "IS" : "EN"]}
+                                    </span>
+                                  )}
+                                  <span className="text-slate-500">→</span>
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-800"><span aria-hidden>🟡</span>{yellowStep ? label(yellowStep) : t("same · sets −1", "sama · sett −1")}</span>
+                                  <span className="text-slate-500">→</span>
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 font-medium text-rose-800"><span aria-hidden>🔴</span>{t("recovery", "endurheimt")}</span>
+                                  {(() => {
+                                    const fam = STRUCTURE_FAMILY[effective];
+                                    const ladder = grp.options
+                                      .map((o) => o.key)
+                                      .filter((k) => STRUCTURE_FAMILY[k] === fam)
+                                      .sort((a, b) => STRUCTURE_DEMAND[b] - STRUCTURE_DEMAND[a]);
+                                    if (ladder.length < 2) return null;
+                                    return (
+                                      <button type="button" onClick={() => setLadderOpenMd(ladderOpenMd === grp.md ? null : grp.md)} className="ml-1 font-medium text-indigo-700 hover:underline">
+                                        {ladderOpenMd === grp.md ? t("hide ladder", "fela stiga") : t("show ladder", "sýna stiga")}
+                                      </button>
+                                    );
+                                  })()}
+                                </>
+                              ) : (
+                                <span className="text-slate-500">{t("Fixed taper template · yellow trims sets only", "Fast taper-sniðmát · gult lækkar aðeins sett")}</span>
+                              )}
+                            </div>
+                            {/* Reps/sets scheme of the selected method — so a coach who doesn't
+                                know the protocol by name sees what it prescribes. */}
+                            {!isRest && effective && scheme(effective) ? (
+                              <div className="mt-0.5 pl-14 text-[11px] text-slate-500">
+                                <span className="font-medium text-slate-500">{t("Scheme", "Skema")}:</span> {scheme(effective)}
+                              </div>
+                            ) : null}
+                            {/* Full family ladder for this day (educational — yellow moves ONE rung). */}
+                            {effective && ladderOpenMd === grp.md && (() => {
+                              const fam = STRUCTURE_FAMILY[effective];
+                              const ladder = grp.options
+                                .map((o) => o.key)
+                                .filter((k) => STRUCTURE_FAMILY[k] === fam)
+                                .sort((a, b) => STRUCTURE_DEMAND[b] - STRUCTURE_DEMAND[a]);
+                              return (
+                                <div className="mt-1.5 ml-14 rounded-md border border-slate-200 bg-white p-2.5">
+                                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                    {t(`${fam === "strength" ? "Strength" : "Velocity"} family — heaviest → lightest`, `${fam === "strength" ? "Styrktar" : "Hraða"}-fjölskylda — þyngst → léttast`)}
+                                  </div>
+                                  <div className="flex flex-col gap-1">
+                                    {ladder.map((k, i) => {
+                                      const isSel = k === effective;
+                                      const isYellow = k === yellowStep;
+                                      return (
+                                        <div key={k} className="flex items-center gap-2 text-[11px]">
+                                          <span className="w-3 text-slate-300">{i > 0 ? "↓" : ""}</span>
+                                          <span className={`rounded px-1.5 py-0.5 ${isSel ? "bg-emerald-100 font-semibold text-emerald-900" : isYellow ? "bg-amber-100 font-medium text-amber-900" : "text-slate-600"}`}>
+                                            {label(k)}
+                                          </span>
+                                          {scheme(k) ? <span className="text-[11px] text-slate-500">{scheme(k)}</span> : null}
+                                          {isSel ? <span className="text-[11px] text-emerald-700">🟢 {t("selected", "valið")}</span> : null}
+                                          {isYellow ? <span className="text-[11px] text-amber-700">🟡 {t("yellow lands here", "gult lendir hér")}</span> : null}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  <div className="mt-1.5 text-[11px] text-slate-500">{t("A green player keeps the selected method; a yellow player moves exactly one rung down.", "Grænn leikmaður heldur völdu aðferðinni; gulur færist nákvæmlega eitt þrep niður.")}</div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={saveStructures}
+                        disabled={savingStructures}
+                        className="rounded-md bg-indigo-700 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
+                      >
+                        {savingStructures ? t("Saving…", "Vista…") : t("Save structures", "Vista uppsetningar")}
+                      </button>
+                      {structuresSaved && <span className="text-[11px] font-medium text-emerald-700">{t("✓ Saved", "✓ Vistað")}</span>}
+                    </div>
+                  </div>
+                )}
+            </>
+          ) : <p className="text-[13px] text-slate-500">{t("Loading the per-MD structure…", "Hleð uppsetningu per MD-dag…")}</p>}
+        </div>
+      </section>
+
+      {/* 5 — PLAYERS: today's decision, dose and main exercise visible without opening a row */}
+      <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-[15px] font-bold text-slate-900">{t("Players", "Leikmenn")}</h2>
+          {doseFilter && <button type="button" onClick={() => setDoseFilter(null)} className="rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-semibold text-slate-700 hover:bg-slate-200">{t(DOSE_META[doseFilter].tileEn, DOSE_META[doseFilter].tileIs)} ✕</button>}
+        </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          placeholder={t("Search players…", "Leita að leikmönnum…")}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full max-w-md rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+        <div className="ml-auto flex items-center gap-2 text-xs">
+          <label className="text-slate-600">{t("PDF context:", "PDF samhengi:")}</label>
+          <select
+            value={pdfMdContext}
+            onChange={(e) => setPdfMdContext(e.target.value as MdContext | "AUTO")}
+            className="rounded border border-slate-300 bg-white px-2 py-1"
+          >
+            <option value="AUTO">{t("Auto", "Sjálfvalið")}</option>
+            <option value="MD-5">MD-5</option>
+            <option value="MD-4">MD-4</option>
+            <option value="MD-3">MD-3</option>
+            <option value="MD-2">MD-2</option>
+            <option value="MD-1">MD-1</option>
+            <option value="MD+1">MD+1</option>
+            <option value="MD+2">MD+2</option>
+            <option value="MD+3">MD+3</option>
+            <option value="MD+4">MD+4</option>
+          </select>
+          <button
+            type="button"
+            onClick={buildAndDownloadPdf}
+            disabled={pdfBuilding || players.length === 0}
+            className={`rounded-md px-3 py-1.5 font-semibold transition ${
+              pdfBuilding || players.length === 0
+                ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                : "bg-indigo-600 text-white hover:bg-indigo-700"
+            }`}
+            title={t(
+              "Build a PDF with one page per player — print for the whiteboard or email to players.",
+              "Búa til PDF með einni síðu per leikmann — prenta á whiteboard eða senda á leikmenn.",
+            )}
+          >
+            {pdfBuilding
+              ? t("Building…", "Byggi…")
+              : t(`Download team PDF (${players.length})`, `Sækja team PDF (${players.length})`)}
+          </button>
+        </div>
+      </div>
+        {/* Players missing the CMJ peak force DSI needs → prompt a new CMJ force-plate test. Descriptive. */}
+        {(() => {
+          const need = Object.values(emphasisByPlayer)
+            .filter((e) => e.dsiCoverage === "imtp_only" || e.dsiCoverage === "none")
+            .map((e) => ({ name: e.name ?? "—", alsoImtp: e.dsiCoverage === "none" }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+          if (!need.length) return null;
+          return (
+            <details className="group mt-3 rounded-md border border-amber-300 bg-amber-50 text-xs text-amber-900">
+              <summary className="flex cursor-pointer select-none items-center gap-1.5 p-3 font-semibold list-none [&::-webkit-details-marker]:hidden">
+                <span className="text-amber-500 transition-transform group-open:rotate-90">▸</span>
+                {t(
+                  `⚠ ${need.length} player${need.length === 1 ? "" : "s"} need a new CMJ test for DSI`,
+                  `⚠ ${need.length} leikm${need.length === 1 ? "aður" : "enn"} þurfa nýja CMJ-mælingu fyrir DSI`,
+                )}
+              </summary>
+              <div className="px-3 pb-3">
+                <p className="text-[11px] text-amber-800">
+                  {t(
+                    "Their CMJ has no peak (concentric) force on record — DSI (CMJ ÷ IMTP) can't compute. A fresh CMJ force-plate test with the full metric set captures it.",
+                    "CMJ þeirra er án peak (concentric) krafts — DSI (CMJ ÷ IMTP) reiknast ekki. Ný CMJ-kraftplötumæling með fullu mælingasetti nær honum.",
+                  )}
+                </p>
+                <p className="mt-1 text-[11px] text-amber-900">
+                  {need.map((n) => `${n.name}${n.alsoImtp ? " (+IMTP)" : ""}`).join(" · ")}
+                </p>
+              </div>
+            </details>
+          );
+        })()}
       {loading ? (
         <div className="space-y-2">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="h-12 rounded bg-slate-100 animate-pulse" />
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : visibleRows.length === 0 ? (
         <div className="rounded-md border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">
           {search
             ? t("No players match your search.", "Engir leikmenn passa við leitina.")
             : t("No active players on your team yet.", "Engir virkir leikmenn í þínu liði.")}
         </div>
       ) : (
-        <ul className="space-y-2">
-          {filtered.map((p) => {
+        <div className="overflow-x-auto">
+        <div className="min-w-[860px]">
+        <div className={`grid ${ROW_COLS} gap-3 px-3 pb-1.5 text-[11px] font-semibold text-slate-500`}>
+          <span>{t("Player", "Leikmaður")}</span><span>{t("Today's decision", "Ákvörðun dagsins")}</span><span>{t("Dose", "Skammtur")}</span><span>{t("Main exercise", "Aðalæfing")}</span><span>{t("Emphasis", "Áhersla")}</span><span />
+        </div>
+        <ul className="space-y-1.5">
+          {visibleRows.map((p) => {
             const isExpanded = expandedId === p.id;
             return (
               <li
                 key={p.id}
-                className="rounded-md border border-slate-200 bg-white overflow-hidden"
+                className="overflow-hidden rounded-lg border border-slate-200 bg-white"
               >
                 <button
                   type="button"
                   onClick={() => setExpandedId(isExpanded ? null : p.id)}
-                  className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-slate-50 transition"
+                  className={`grid w-full ${ROW_COLS} items-center gap-3 px-3 py-2.5 text-left transition hover:bg-slate-50`}
                 >
-                  <span className="flex items-center gap-2">
-                    <span className="font-medium text-slate-900">{p.full_name}</span>
+                  <span className="truncate font-semibold text-slate-900">{p.full_name}</span>
+                  {(() => {
+                    const d = daySum[p.id];
+                    if (!d || d === "loading") return <span className="text-[12px] text-slate-500">…</span>;
+                    if (d === "error") return <span className="text-[12px] text-slate-500">–</span>;
+                    const v = decisionOf(d);
+                    return <span className="inline-flex items-center gap-1.5 text-[13px] text-slate-800" title={t("From the load decision engine — not the readiness colour.", "Úr álags-ákvörðunarvélinni — ekki readiness-liturinn.")}><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: v.c }} />{v.label}</span>;
+                  })()}
+                  {(() => {
+                    const d = daySum[p.id];
+                    if (!d || d === "loading" || d === "error") return <span />;
+                    const m = DOSE_META[d.dose];
+                    return <span className="w-fit rounded-full px-2.5 py-0.5 text-[12px] font-bold" style={{ background: m.bg, color: m.c }}>{t(m.en, m.is)}</span>;
+                  })()}
+                  <span className="truncate text-[13px] text-slate-700">{(() => { const d = daySum[p.id]; return d && d !== "loading" && d !== "error" ? (d.lift ?? "—") : ""; })()}</span>
+                  <span className="flex flex-wrap items-center gap-1.5">
                     {emphasisByPlayer[p.id]?.dsi && (() => {
                       const d = emphasisByPlayer[p.id]!.dsi!;
                       const TL: Record<string, string> = { ballistic: "ballistic", concurrent: "concurrent", max_strength: t("max-strength", "hámarksstyrkur") };
@@ -1252,9 +1337,28 @@ export default function CoachStrengthPage() {
             );
           })}
         </ul>
+        </div>
+        </div>
       )}
+      </section>
 
-      <div className="mt-6 text-[10px] text-slate-400 leading-relaxed">
+        <details className="group mt-3 rounded-md border border-indigo-200 bg-indigo-50/60 text-xs text-indigo-900">
+          <summary className="flex cursor-pointer select-none items-center gap-1.5 p-2.5 font-semibold list-none [&::-webkit-details-marker]:hidden">
+            <span className="text-indigo-400 transition-transform group-open:rotate-90">▸</span>
+            {t("Why micro-dose by default?", "Hvers vegna micro-dose sjálfgefið?")}
+          </summary>
+          <p className="px-2.5 pb-2.5 leading-relaxed">
+            {t(
+              "15-20 min sessions 3-5×/week beat 60 min 2×/week for in-season teams (Rønnestad 2023) — " +
+              "they preserve strength + power without next-day fatigue carryover and fit congested calendars. " +
+              "It's the default; switch any block to traditional (concentrated lift days) in Training principles when the week allows.",
+              "15-20 mín æfingar 3-5×/viku slá 60 mín 2×/viku á keppnistímabili (Rønnestad 2023) — " +
+              "þær halda styrk og krafti án þreytu daginn eftir og henta þéttri leikjadagskrá. " +
+              "Þetta er sjálfgefið; skiptu hvaða blokk sem er yfir á hefðbundið (einbeittir lyftidagar) í Þjálfunarprinsipp þegar vikan leyfir.",
+            )}
+          </p>
+        </details>
+      <div className="text-[11px] text-slate-500 leading-relaxed">
         <p>
           {t(
             "Evidence: Rønnestad 2023 (microdosing), van Dyk 2019 (Nordic), " +
@@ -1266,6 +1370,7 @@ export default function CoachStrengthPage() {
           )}
         </p>
       </div>
+
       </>
       )}
     </div>

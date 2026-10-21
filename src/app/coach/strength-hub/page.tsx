@@ -106,7 +106,7 @@ function Hub() {
                 aria-selected={on}
                 onClick={() => pick(t)}
                 className={`-mb-px rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
-                  on ? "border-violet-500 text-violet-700" : "border-transparent text-slate-500 hover:text-slate-800"
+                  on ? "border-[#2740e6] font-semibold text-[#2740e6]" : "border-transparent text-slate-600 hover:text-slate-900"
                 }`}
               >
                 {isEN ? TAB_LABEL[t].EN : TAB_LABEL[t].IS}

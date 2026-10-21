@@ -181,6 +181,7 @@ export default function PeriodizationHubPage() {
   const [testAddDate, setTestAddDate] = React.useState<string>(() => new Date().toISOString().slice(0, 10));
   const [testShowAll, setTestShowAll] = React.useState(false); // Testing tab: show every block, not just the next three
   const [testFocus, setTestFocus] = React.useState<string | null>(null); // Testing tab: block (start ISO) clicked on the strip
+  const [plSub, setPlSub] = React.useState(0); // Players tab: which player section is open (block / build-up / values / data)
 
   const authHeader = React.useCallback(async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`, [supabase]);
 
@@ -1364,191 +1365,239 @@ export default function PeriodizationHubPage() {
           })()}
 
           {/* SQUAD DEMANDS tab */}
-          {tab === "demands" && (<div className="space-y-4">
-          {/* SQUAD BASELINE PER POSITION — GPS + IMA averages from the data that exists (the "squad default") */}
-          {(plan.positionBaselines ?? []).some((b) => b.avg.sessions > 0) && (() => {
-            const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${Math.round(m)}m`);
-            const rows = plan.positionBaselines.filter((b) => b.avg.sessions > 0);
-            return (
-              <section className="rounded-xl border border-slate-200 bg-white p-4">
-                <h2 className="text-sm font-semibold text-slate-900">{is ? "Grunnlína eftir stöðu (GPS + IMA)" : "Baseline by position (GPS + IMA)"}</h2>
-                <p className="mt-1 text-[11px] text-slate-500">{is ? "Meðaltal per æfingu/leik yfir tímabilið úr raungögnum, eftir stöðu — peak-kröfur eru staða-sértækar (Ju). „Sjálfgefna gildið“ sem einstaklings-viðmið falla á er HANS staða, ekki allt liðið." : "Average per session over the season, from the real data, by position — peak demands are position-specific (Ju). The \"default\" a player falls back to is HIS position, not the whole team."}</p>
-                <div className="mt-2 overflow-x-auto">
-                  <table className="w-full text-[12px]">
-                    <thead><tr className="text-left text-[9px] uppercase tracking-wide text-slate-400">
-                      <th className="py-1 pr-2 font-medium">{is ? "Staða" : "Position"}</th>
-                      <th className="py-1 pr-2 text-right font-medium">{is ? "Vegal." : "Dist"}</th>
-                      <th className="py-1 pr-2 text-right font-medium">HSR</th>
-                      <th className="py-1 pr-2 text-right font-medium">{is ? "Hám." : "Max"}</th>
-                      <th className="py-1 pr-2 text-right font-medium">PL</th>
-                      <th className="py-1 pr-2 text-right font-medium">Acc/Dec</th>
-                      <th className="py-1 pl-2 font-medium">{is ? "IMA fram/hlið/aftur" : "IMA fwd/lat/back"}</th>
-                    </tr></thead>
-                    <tbody>
-                      {[...(plan.teamBaseline && plan.teamBaseline.avg.sessions > 0 ? [plan.teamBaseline] : []), ...rows].map((b) => { const a = b.avg; const isTeam = b.key === -1; return (
-                        <tr key={b.key} className={isTeam ? "border-t-2 border-slate-300 bg-slate-50/70" : "border-t border-slate-100"}>
-                          <td className={`py-1 pr-2 ${isTeam ? "font-bold text-slate-900" : "font-medium text-slate-800"}`}>{is ? b.label.is : b.label.en} <span className="text-[9px] font-normal text-slate-400">({a.players})</span></td>
-                          <td className={`py-1 pr-2 text-right tabular-nums ${isTeam ? "font-semibold" : ""}`}>{km(a.distanceM)}</td>
-                          <td className={`py-1 pr-2 text-right tabular-nums ${isTeam ? "font-semibold" : ""}`}>{a.hsrM == null ? "–" : `${Math.round(a.hsrM)}m`}</td>
-                          <td className={`py-1 pr-2 text-right tabular-nums ${isTeam ? "font-semibold" : ""}`}>{a.maxKmh == null ? "–" : a.maxKmh}</td>
-                          <td className={`py-1 pr-2 text-right tabular-nums ${isTeam ? "font-semibold" : ""}`}>{a.playerLoad == null ? "–" : Math.round(a.playerLoad)}</td>
-                          <td className={`py-1 pr-2 text-right tabular-nums ${isTeam ? "font-semibold" : ""}`}>{a.accel ?? "–"}/{a.decel ?? "–"}</td>
-                          <td className="py-1 pl-2">
-                            {a.direction ? (
-                              <span className="inline-flex h-2 w-24 overflow-hidden rounded-full align-middle" title={`${Math.round(a.direction.forward * 100)}/${Math.round(a.direction.lateral * 100)}/${Math.round(a.direction.backward * 100)}`}>
-                                <span className="bg-[#2740e6]" style={{ width: `${a.direction.forward * 100}%` }} /><span className="bg-slate-400" style={{ width: `${a.direction.lateral * 100}%` }} /><span className="bg-amber-500" style={{ width: `${a.direction.backward * 100}%` }} />
-                              </span>
-                            ) : <span className="text-slate-300">–</span>}
-                          </td>
-                        </tr>
-                      ); })}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="mt-1 text-[9px] text-slate-400">{is ? "Vegalengd/HSR/PL = meðaltal per session · Hám. = km/klst · IMA-slá: 🔵 fram / ⚪ hlið / 🟡 aftur. Lýsandi — aldrei readiness-liturinn." : "Distance/HSR/PL = mean per session · Max = km/h · IMA bar: 🔵 fwd / ⚪ lat / 🟡 back. Descriptive — never the readiness colour."}</p>
-              </section>
-            );
-          })()}
-
-          {/* MD-RELATIVE DEMANDS — the microcycle shape, not a season blend. Layered: phases (verdict) →
-              per-MD-day detail behind a toggle. The season table above is the fallback default; this says
-              what each DAY of the week actually asks (MD-4/-3 load, MD-1 primer, MD+1 recovery). */}
-          {(plan.positionBaselines ?? []).some((b) => (b.md?.phases.length ?? 0) > 0) && (() => {
-            const rows = [plan.teamBaseline, ...plan.positionBaselines].filter((b) => b && b.avg.sessions > 0 && (b.md?.phases.length ?? 0) > 0);
-            if (rows.length === 0) return null;
+          {tab === "demands" && (() => {
+            // ONE position picker drives the whole tab (verdict → three axes → week shape → raw baselines).
+            const rows = [plan.teamBaseline, ...(plan.positionBaselines ?? [])].filter((b) => b && b.avg.sessions > 0);
+            if (rows.length === 0) {
+              return <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5"><p className="text-[13px] text-slate-600">{is ? "Engin æfingagögn enn — kröfurnar birtast þegar GPS/álagsgögn eru komin inn." : "No training data yet — the demands appear once GPS/load data is in."}</p></section>;
+            }
             const pos = rows.find((b) => b.key === mdPosKey) ?? rows[0];
+            const posName = is ? pos.label.is : pos.label.en;
+            const ax = pos.axes;
             const season = pos.avg;
-            const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${Math.round(m)}m`);
-            const PHASE_META: Record<string, { color: string; sub: { en: string; is: string } }> = {
+            const card = "rounded-xl border border-slate-200 bg-white p-4 sm:p-5";
+            const h2 = "text-[15px] font-bold text-slate-900";
+            const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
+            const relPl = (pl: number | null) => (pl == null || season.playerLoad == null || season.playerLoad === 0 ? null : Math.round((pl / season.playerLoad) * 100) - 100);
+            const AXIS_COLOR: Record<string, string> = { running: "#2740e6", mechanical: "#a83e28", internal: "#1c7a4a" };
+            const WARN = { background: "rgba(168,62,40,0.1)", color: "#8a3220" }, NEUTRAL = { background: "#f1f5f9", color: "#334155" };
+            const hasMatch = (a: { metrics: Array<{ matchValue: string }> }) => a.metrics.some((m) => m.matchValue !== "–");
+            const axisBadge = (a: typeof ax.running): { t: Bi; s: React.CSSProperties } =>
+              a.axis === "running" ? (!hasMatch(a) ? { t: { en: "No match data", is: "Engin leikgögn" }, s: NEUTRAL } : ax.hsrDeficit ? { t: { en: "Well under match", is: "Langt undir leik" }, s: WARN } : { t: { en: "Under match (normal)", is: "Undir leik (eðlilegt)" }, s: NEUTRAL })
+              : a.axis === "mechanical" ? (!hasMatch(a) ? { t: { en: "No match data", is: "Engin leikgögn" }, s: NEUTRAL } : ax.mechNeglect ? { t: { en: "Lagging", is: "Dregst aftur úr" }, s: WARN } : { t: { en: "Over match (normal)", is: "Yfir leik (eðlilegt)" }, s: NEUTRAL })
+              : { t: { en: "Gates the day", is: "Stýrir deginum" }, s: NEUTRAL };
+            const axisList = [ax.running, ax.mechanical, ax.internal].filter((a) => a.axis !== "internal" || a.metrics.length > 0); // internal shows only when it carries metrics (as before)
+            // Level 0 — one sentence from the engine's own flags (no new judgement).
+            const verdict = ax.hsrDeficit && ax.mechNeglect
+              ? (is ? `${posName}: hlaupaálag á æfingum er langt undir leik og vélræni ásinn dregst líka aftur úr.` : `${posName}: training running load is well under the match and the mechanical axis lags too.`)
+              : ax.hsrDeficit
+                ? (is ? `${posName}: hlaupaálag á æfingum er langt undir leik — háhraði er halla-ásinn.` : `${posName}: training running load is well under the match — HSR is the deficit axis.`)
+                : ax.mechNeglect
+                  ? (is ? `${posName}: hlaup er hlaðið en vélræni ásinn (hröðun/hemlun) dregst aftur úr.` : `${posName}: running is loaded but the mechanical axis (accel/decel) lags behind.`)
+                  : (is ? `${posName}: æfingar fylgja venjulegu mynstri — undir leik í hlaupi, yfir leik í hröðun/hemlun.` : `${posName}: training follows the normal pattern — under the match on running, over it on accel/decel.`);
+            // The week's shape — PL by MD-day relative to the position's season average.
+            const mdOff = (label: string) => { const m = /MD([+-]\d+)/.exec(label); return m ? Number(m[1]) : 0; };
+            const mdColor = (off: number) => (off === -4 || off === -3 ? "#a83e28" : off === -2 || off === -1 ? "#de9328" : off > 0 ? "#1c7a4a" : "#94a3b8");
+            const days = (pos.md?.days ?? []).map((d) => ({ d, off: mdOff(d.label.en), rp: relPl(d.avg.playerLoad) }));
+            const maxPct = Math.max(130, ...days.map((x) => (x.rp ?? 0) + 100));
+            const PHASE_META: Record<string, { color: string; sub: Bi }> = {
               load: { color: "#a83e28", sub: { en: "MD-4 / MD-3 — the loading days", is: "MD-4 / MD-3 — álagsdagarnir" } },
-              sharpen: { color: "#de9328", sub: { en: "MD-2 / MD-1 — sharpen + primer", is: "MD-2 / MD-1 — skerpa + undirbúningur" } },
+              sharpen: { color: "#b8741a", sub: { en: "MD-2 / MD-1 — sharpen + primer", is: "MD-2 / MD-1 — skerpa + undirbúningur" } },
               recover: { color: "#1c7a4a", sub: { en: "MD+1 / MD+2 — recovery", is: "MD+1 / MD+2 — endurheimt" } },
             };
-            const relPl = (pl: number | null) => (pl == null || season.playerLoad == null || season.playerLoad === 0 ? null : Math.round((pl / season.playerLoad) * 100) - 100);
-            return (
-              <section className="rounded-xl border border-slate-200 bg-white p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-sm font-semibold text-slate-900">{is ? "Kröfur yfir míkró-sveifluna (eftir MD-degi)" : "Demands across the microcycle (by MD-day)"}</h2>
-                  <select value={pos.key} onChange={(e) => setMdPosKey(Number(e.target.value))} className="ml-auto rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
-                    {rows.map((b) => <option key={b.key} value={b.key}>{is ? b.label.is : b.label.en}</option>)}
-                  </select>
-                </div>
-                <p className="mt-1 text-[11px] text-slate-500">{is ? "Árs-meðaltalið að ofan blandar saman öllum dögum vikunnar. Hér er sama Dist/HSR/PL/Acc-Dec sundurliðað eftir því HVAR æfingin situr gagnvart leiknum — svo álagsdagur og léttur dagur renni ekki saman í eina tölu." : "The season average above blends every day of the week together. Here the same Dist/HSR/PL/Acc-Dec is split by WHERE the session sits relative to the match — so a loading day and a light day don't collapse into one number."}</p>
-                {/* Phases — the verdict read */}
-                <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  {pos.md.phases.map((ph) => { const a = ph.avg; const meta = PHASE_META[ph.key]; const rp = relPl(a.playerLoad); return (
-                    <div key={ph.key} className="rounded-lg border border-slate-200 p-2.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: meta?.color }} />
-                        <span className="text-[12px] font-semibold text-slate-900">{is ? ph.label.is : ph.label.en}</span>
-                        {rp != null && <span className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums" style={{ background: `${meta?.color}1a`, color: meta?.color }} title={is ? "PL á þessum dögum vs árs-meðaltal" : "PL on these days vs the season average"}>{rp > 0 ? "+" : ""}{rp}% PL</span>}
+            const tableRows = [...(plan.teamBaseline && plan.teamBaseline.avg.sessions > 0 ? [plan.teamBaseline] : []), ...plan.positionBaselines.filter((b) => b.avg.sessions > 0)];
+
+            return (<div className="space-y-4">
+
+          {/* 1 — POSITION PICKER */}
+          <section className="flex flex-wrap items-center gap-x-4 gap-y-2.5" aria-label={is ? "Staða" : "Position"}>
+            <span className="text-[12px] font-bold text-slate-700">{is ? "Sýna fyrir" : "Show for"}</span>
+            <div role="radiogroup" className="flex flex-wrap gap-1.5">
+              {rows.map((b) => {
+                const on = b.key === pos.key;
+                return (
+                  <button key={b.key} type="button" role="radio" aria-checked={on} onClick={() => setMdPosKey(b.key)}
+                    className={`h-10 rounded-full border px-3.5 text-[13px] font-semibold ${on ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-900 hover:bg-slate-50"}`}>
+                    {is ? b.label.is : b.label.en} <span className={`font-normal ${on ? "text-white/75" : "text-slate-500"}`}>{b.avg.players}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* 2 — VERDICT (Level 0 + 1) */}
+          <section className={card}>
+            <p className="text-[17px] font-bold text-slate-900">{verdict}</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] text-slate-700">
+              {ax.hsrDeficit && <li>{is ? ax.hsrDeficit.is : ax.hsrDeficit.en}</li>}
+              {ax.mechNeglect && <li>{is ? ax.mechNeglect.is : ax.mechNeglect.en}</li>}
+              {ax.capabilities.map((c, i) => <li key={i}>{is ? c.is : c.en}</li>)}
+              <li>{is ? "Það er ekkert eitt „%-af-leik“ — lestu ásana þrjá hver fyrir sig (Figueiredo o.fl.)." : "There is no single \"% of match\" — read the three axes separately (Figueiredo et al.)."}</li>
+            </ul>
+          </section>
+
+          {/* 3 — THREE AXES vs THE MATCH */}
+          <section>
+            <h2 className={`${h2} mb-2.5`}>{is ? "Þrír ásar gagnvart leiknum" : "Three axes vs the match"}</h2>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-3">
+              {axisList.map((a) => {
+                const badge = axisBadge(a);
+                return (
+                  <div key={a.axis} className="rounded-xl border border-slate-200 bg-white p-4" style={{ borderTop: `4px solid ${AXIS_COLOR[a.axis]}` }}>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-[15px] font-bold text-slate-900">{is ? a.label.is : a.label.en}</span>
+                      <span className="shrink-0 rounded-full px-2.5 py-0.5 text-[12px] font-bold" style={badge.s}>{is ? badge.t.is : badge.t.en}</span>
+                    </div>
+                    <p className="mt-1 text-[12px] text-slate-600">{is ? a.matchNote.is : a.matchNote.en}</p>
+                    {a.metrics.length > 0 && (
+                      <table className="mt-2.5 w-full text-[13px]">
+                        <thead><tr className="text-left text-[11px] text-slate-500">
+                          <th className="py-1 font-semibold">{is ? "Mæling" : "Metric"}</th>
+                          <th className="py-1 text-right font-semibold">{is ? "Leikur" : "Match"}</th>
+                          <th className="py-1 text-right font-semibold">{is ? "Æfingaþak" : "Training ceiling"}</th>
+                          <th className="py-1 text-right font-semibold">{is ? "Bil" : "Band"}</th>
+                        </tr></thead>
+                        <tbody>
+                          {a.metrics.map((m, i) => (
+                            <tr key={i} className="border-t border-slate-100">
+                              <td className="py-1.5 text-slate-800">{is ? m.metric.is : m.metric.en}</td>
+                              <td className="py-1.5 text-right tabular-nums text-slate-600">{m.matchValue}</td>
+                              <td className="py-1.5 text-right font-bold tabular-nums text-slate-900">{m.trainingCeiling}</td>
+                              <td className="py-1.5 text-right tabular-nums text-slate-600">{m.band}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                    {a.flag && <p className="mt-2 text-[12px] font-medium text-[#8a3220]">{is ? a.flag.is : a.flag.en}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* 4 — THE WEEK'S SHAPE: PL by MD-day + the three phases */}
+          {(pos.md?.phases.length ?? 0) > 0 && (
+            <section className={card}>
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h2 className={h2}>{is ? "Lögun vikunnar — kröfur eftir MD-degi" : "The week's shape — demands by MD-day"}</h2>
+                <span className="text-[12px] text-slate-500">{is ? "Ársmeðaltalið blandar öllum dögum saman — hér sést hvað hver dagur gagnvart leik krefst í raun." : "The season average blends every day together — this shows what each day relative to the match actually asks."}</span>
+              </div>
+              <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-5">
+                {days.length > 0 && (
+                  <div className="min-w-0 flex-[1_1_420px]">
+                    <div className="text-[12px] font-semibold text-slate-500">{is ? "Player Load per æfingu, % af ársmeðaltali stöðunnar" : "Player Load per session, % of the position's season average"}</div>
+                    <div className="relative mt-2 h-[150px] border-b border-slate-300">
+                      <div aria-hidden="true" className="absolute inset-x-0 border-t border-dashed border-slate-400" style={{ bottom: `${(100 / maxPct) * 100}%` }}>
+                        <span className="absolute -top-4 right-0 text-[11px] text-slate-500">{is ? "ársmeðaltal" : "season avg"}</span>
                       </div>
-                      <div className="mt-0.5 text-[10px] text-slate-400">{is ? meta?.sub.is : meta?.sub.en} · {a.sessions} {is ? "æf." : "sess."}</div>
-                      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
-                        <div className="flex justify-between"><span className="text-slate-500">{is ? "Vegal." : "Dist"}</span><span className="font-semibold tabular-nums text-slate-800">{km(a.distanceM)}</span></div>
-                        <div className="flex justify-between"><span className="text-slate-500">PL</span><span className="font-semibold tabular-nums text-slate-800">{a.playerLoad == null ? "–" : Math.round(a.playerLoad)}</span></div>
-                        <div className="flex justify-between"><span className="text-slate-500">HSR</span><span className="font-semibold tabular-nums text-slate-800">{a.hsrM == null ? "–" : `${Math.round(a.hsrM)}m`}</span></div>
-                        <div className="flex justify-between"><span className="text-slate-500">Acc/Dec</span><span className="font-semibold tabular-nums text-slate-800">{a.accel ?? "–"}/{a.decel ?? "–"}</span></div>
+                      <div className="grid h-full items-end gap-2.5" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
+                        {days.map(({ d, off, rp }) => (
+                          <div key={d.key} className="flex h-full flex-col items-center justify-end" title={`${is ? d.label.is : d.label.en}: PL ${d.avg.playerLoad == null ? "–" : Math.round(d.avg.playerLoad)} · ${d.avg.sessions} ${is ? "æfingar" : "sessions"}`}>
+                            <span className="text-[12px] font-bold tabular-nums" style={{ color: mdColor(off) }}>{rp == null ? "–" : `${rp > 0 ? "+" : ""}${rp}%`}</span>
+                            <div className="w-full max-w-[44px] rounded-t" style={{ height: `${(((rp ?? -100) + 100) / maxPct) * 100}%`, background: mdColor(off) }} />
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ); })}
-                </div>
-                {/* Per-MD-day detail — the S&C drill-down behind a toggle (explainability: 0→1 phases, 2 raw days) */}
-                {pos.md.days.length > 0 && (
-                  <button type="button" onClick={() => setMdDaysOpen((v) => !v)} className="mt-2.5 text-[11px] font-semibold text-[#2740e6]">
-                    {mdDaysOpen ? (is ? "Fela MD-dag sundurliðun" : "Hide MD-day detail") : (is ? `Sýna MD-dag sundurliðun (${pos.md.days.length})` : `Show MD-day detail (${pos.md.days.length})`)}
-                  </button>
+                    <div className="mt-1.5 grid gap-2.5" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
+                      {days.map(({ d }) => <span key={d.key} className="text-center text-[12px] font-bold text-slate-800">{is ? d.label.is : d.label.en}</span>)}
+                    </div>
+                  </div>
                 )}
-                {mdDaysOpen && pos.md.days.length > 0 && (
+                <div className="flex min-w-0 flex-[1_1_340px] flex-col gap-2">
+                  {pos.md.phases.map((ph) => {
+                    const a = ph.avg, meta = PHASE_META[ph.key], rp = relPl(a.playerLoad);
+                    return (
+                      <div key={ph.key} className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5">
+                        <span className="h-9 w-2.5 shrink-0 rounded-sm" style={{ background: meta?.color ?? "#94a3b8" }} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[14px] font-bold text-slate-900">{is ? ph.label.is : ph.label.en} <span className="font-normal text-slate-500">· {meta ? (is ? meta.sub.is : meta.sub.en) : ""} · {a.sessions} {is ? "æf." : "sess."}</span></span>
+                          <span className="block text-[12px] text-slate-700">{is ? "Vegal." : "Dist"} {km(a.distanceM)} · HSR {a.hsrM == null ? "–" : `${Math.round(a.hsrM)} m`} · PL {a.playerLoad == null ? "–" : Math.round(a.playerLoad)} · Acc/Dec {a.accel ?? "–"}/{a.decel ?? "–"}</span>
+                        </span>
+                        {rp != null && <span className="shrink-0 text-[18px] font-bold tabular-nums" style={{ color: meta?.color }} title={is ? "PL á þessum dögum vs ársmeðaltal" : "PL on these days vs the season average"}>{rp > 0 ? "+" : ""}{rp}%</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              {days.length > 0 && (
+                <details className="mt-4" open={mdDaysOpen} onToggle={(e) => setMdDaysOpen((e.target as HTMLDetailsElement).open)}>
+                  <summary className="cursor-pointer py-1 text-[13px] font-semibold text-[#2740e6]">{is ? `MD-dag sundurliðun (${days.length})` : `MD-day detail (${days.length})`}</summary>
                   <div className="mt-2 overflow-x-auto">
-                    <table className="w-full text-[12px]">
-                      <thead><tr className="text-left text-[9px] uppercase tracking-wide text-slate-400">
-                        <th className="py-1 pr-2 font-medium">MD</th>
-                        <th className="py-1 pr-2 text-right font-medium">{is ? "Æf." : "Sess."}</th>
-                        <th className="py-1 pr-2 text-right font-medium">{is ? "Vegal." : "Dist"}</th>
-                        <th className="py-1 pr-2 text-right font-medium">HSR</th>
-                        <th className="py-1 pr-2 text-right font-medium">PL</th>
-                        <th className="py-1 pr-2 text-right font-medium">{is ? "% PL" : "% PL"}</th>
-                        <th className="py-1 pl-2 text-right font-medium">Acc/Dec</th>
+                    <table className="w-full min-w-[560px] text-[13px]">
+                      <thead><tr className="text-left text-[11px] text-slate-500">
+                        <th className="py-1 pr-2 font-semibold">MD</th>
+                        <th className="py-1 pr-2 text-right font-semibold">{is ? "Æfingar" : "Sessions"}</th>
+                        <th className="py-1 pr-2 text-right font-semibold">{is ? "Vegal." : "Dist"}</th>
+                        <th className="py-1 pr-2 text-right font-semibold">HSR</th>
+                        <th className="py-1 pr-2 text-right font-semibold">PL</th>
+                        <th className="py-1 pr-2 text-right font-semibold">% PL</th>
+                        <th className="py-1 pl-2 text-right font-semibold">Acc/Dec</th>
                       </tr></thead>
                       <tbody>
-                        {pos.md.days.map((d) => { const a = d.avg; const rp = relPl(a.playerLoad); return (
+                        {days.map(({ d, rp }) => (
                           <tr key={d.key} className="border-t border-slate-100">
-                            <td className="py-1 pr-2 font-semibold text-slate-800">{is ? d.label.is : d.label.en}</td>
-                            <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{a.sessions}</td>
-                            <td className="py-1 pr-2 text-right tabular-nums">{km(a.distanceM)}</td>
-                            <td className="py-1 pr-2 text-right tabular-nums">{a.hsrM == null ? "–" : `${Math.round(a.hsrM)}m`}</td>
-                            <td className="py-1 pr-2 text-right tabular-nums font-semibold">{a.playerLoad == null ? "–" : Math.round(a.playerLoad)}</td>
-                            <td className={`py-1 pr-2 text-right tabular-nums ${rp == null ? "text-slate-300" : rp > 0 ? "text-[#a83e28]" : "text-[#1c7a4a]"}`}>{rp == null ? "–" : `${rp > 0 ? "+" : ""}${rp}%`}</td>
-                            <td className="py-1 pl-2 text-right tabular-nums">{a.accel ?? "–"}/{a.decel ?? "–"}</td>
+                            <td className="py-1.5 pr-2 font-semibold text-slate-800">{is ? d.label.is : d.label.en}</td>
+                            <td className="py-1.5 pr-2 text-right tabular-nums text-slate-600">{d.avg.sessions}</td>
+                            <td className="py-1.5 pr-2 text-right tabular-nums">{km(d.avg.distanceM)}</td>
+                            <td className="py-1.5 pr-2 text-right tabular-nums">{d.avg.hsrM == null ? "–" : `${Math.round(d.avg.hsrM)} m`}</td>
+                            <td className="py-1.5 pr-2 text-right font-semibold tabular-nums">{d.avg.playerLoad == null ? "–" : Math.round(d.avg.playerLoad)}</td>
+                            <td className={`py-1.5 pr-2 text-right tabular-nums ${rp == null ? "text-slate-400" : rp > 0 ? "text-[#a83e28]" : "text-[#15603a]"}`}>{rp == null ? "–" : `${rp > 0 ? "+" : ""}${rp}%`}</td>
+                            <td className="py-1.5 pl-2 text-right tabular-nums">{d.avg.accel ?? "–"}/{d.avg.decel ?? "–"}</td>
                           </tr>
-                        ); })}
+                        ))}
                       </tbody>
                     </table>
                   </div>
-                )}
-                <p className="mt-2 text-[9px] text-slate-400">{is ? "MD-dagur = fjarlægð æfingar frá næsta leik (±dagar). Hver flokkur þarf ≥3 æfingar til að birtast. % PL = vs árs-meðaltal stöðunnar. Leikdagur ekki talinn (þetta er æfingakrafa). Lýsandi — aldrei readiness-liturinn." : "MD-day = the session's distance from the nearest match (±days). Each bucket needs ≥3 sessions to show. % PL = vs the position's season average. The match day is excluded (this is training demand). Descriptive — never the readiness colour."}</p>
-              </section>
-            );
-          })()}
+                  <p className="mt-2 text-[12px] text-slate-500">{is ? "MD-dagur = fjarlægð æfingar frá næsta leik (±dagar). Hver flokkur þarf ≥3 æfingar til að birtast. % PL = vs árs-meðaltal stöðunnar. Leikdagur ekki talinn (þetta er æfingakrafa)." : "MD-day = the session's distance from the nearest match (±days). Each bucket needs ≥3 sessions to show. % PL = vs the position's season average. The match day is excluded (this is training demand)."}</p>
+                </details>
+              )}
+            </section>
+          )}
 
-          {/* THREE AXES vs THE MATCH — running / mechanical / internal (Figueiredo: no single "% of match") */}
-          {(plan.positionBaselines ?? []).some((b) => b.avg.sessions > 0) && (() => {
-            const rows = [plan.teamBaseline, ...plan.positionBaselines].filter((b) => b && b.avg.sessions > 0);
-            const pos = rows.find((b) => b.key === mdPosKey) ?? rows[0];
-            const ax = pos.axes;
-            const AXIS_COLOR: Record<string, string> = { running: "#2740e6", mechanical: "#a83e28", internal: "#1c7a4a" };
-            const axisList = [ax.running, ax.mechanical, ax.internal].filter((a) => a.axis !== "internal" || a.metrics.length > 0);
-            return (
-              <section className="rounded-xl border border-slate-200 bg-white p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-sm font-semibold text-slate-900">{is ? "Þrír ásar gagnvart leiknum" : "Three axes vs the match"}</h2>
-                  <select value={pos.key} onChange={(e) => setMdPosKey(Number(e.target.value))} className="ml-auto rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
-                    {rows.map((b) => <option key={b.key} value={b.key}>{is ? b.label.is : b.label.en}</option>)}
-                  </select>
-                </div>
-                <p className="mt-1 text-[11px] text-slate-500">{is ? "Það er ekkert eitt „%-af-leik“: æfingar fara YFIR leikinn á vélræna ásnum (accel/decel) en NÁ EKKI leiknum á hlaupa-ásnum (háhraði/sprettur). Hlaupa-plan eitt og sér er ófullnægjandi — sýndu alla þrjá ásana (Figueiredo o.fl.)." : "There is no single \"% of match\": training OVER-shoots the match on the mechanical axis (accel/decel) but UNDER-reaches it on the running axis (HSR/sprint). A running-only plan is incomplete — show all three axes (Figueiredo et al.)."}</p>
-                {ax.hsrDeficit && <p className="mt-1.5 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-900">⚠ {is ? ax.hsrDeficit.is : ax.hsrDeficit.en}</p>}
-                {ax.mechNeglect && <p className="mt-1.5 rounded-lg bg-[#a83e28]/10 px-2 py-1.5 text-[11px] font-medium text-[#a83e28]">⚠ {is ? ax.mechNeglect.is : ax.mechNeglect.en}</p>}
-                <div className="mt-2 grid gap-2 md:grid-cols-3">
-                  {axisList.map((a) => (
-                    <div key={a.axis} className="rounded-lg border border-slate-200 p-2.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: AXIS_COLOR[a.axis] }} />
-                        <span className="text-[12px] font-semibold text-slate-900">{is ? a.label.is : a.label.en}</span>
-                      </div>
-                      <p className="mt-0.5 text-[10px] text-slate-500">{is ? a.matchNote.is : a.matchNote.en}</p>
-                      {a.metrics.length > 0 && (
-                        <table className="mt-1.5 w-full text-[11px]">
-                          <thead><tr className="text-left text-[9px] uppercase tracking-wide text-slate-400"><th className="font-medium">{is ? "Mæling" : "Metric"}</th><th className="text-right font-medium">{is ? "Leikur" : "Match"}</th><th className="text-right font-medium">{is ? "Æf.þak" : "Tr. ceil"}</th><th className="text-right font-medium">%</th></tr></thead>
-                          <tbody>
-                            {a.metrics.map((m, i) => (
-                              <tr key={i} className="border-t border-slate-100">
-                                <td className="py-0.5 text-slate-700">{is ? m.metric.is : m.metric.en}</td>
-                                <td className="py-0.5 text-right tabular-nums text-slate-500">{m.matchValue}</td>
-                                <td className="py-0.5 text-right font-semibold tabular-nums text-slate-900">{m.trainingCeiling}</td>
-                                <td className="py-0.5 text-right tabular-nums text-slate-400">{m.band}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                      {a.flag && <p className="mt-1 text-[10px] font-medium text-[#a83e28]">{is ? a.flag.is : a.flag.en}</p>}
-                    </div>
-                  ))}
-                </div>
-                {ax.capabilities.length > 0 && (
-                  <ul className="mt-1.5 space-y-0.5">
-                    {ax.capabilities.map((c, i) => <li key={i} className="text-[10px] text-slate-500">✓ {is ? c.is : c.en}</li>)}
-                  </ul>
-                )}
-                <p className="mt-1.5 rounded-lg bg-slate-50 px-2 py-1.5 text-[10px] text-slate-500">{is ? "Þessar tölur eru upphafspunktur, aldrei viðmið til að hlýða í blindni. Þær lýsa því sem leikurinn krefst og hvað æfing nær venjulega — leikmaðurinn, samhengið og viðbragðið stýra deginum (Little & Buchheit — „ekki þrælar GPS-viðmiða“)." : "These numbers are a starting point, never a norm to obey. They describe what the match demands and what a session usually reaches — the player, the context and readiness govern the day (Little & Buchheit — don't be \"slaves to GPS norms\")."}</p>
-                <p className="mt-1 text-[9px] text-slate-400">Figueiredo et al. (dimension-specific training:match ratios) · Buchheit &amp; Simpson (mechanical vs locomotor). {is ? "Lýsandi — aldrei readiness-liturinn." : "Descriptive — never the readiness colour."}</p>
-              </section>
-            );
-          })()}
+          {/* 5 — RAW BASELINES (Level 2, folded) */}
+          <details className={card}>
+            <summary className="cursor-pointer py-1 text-[15px] font-bold text-slate-900">{is ? "Grunnlína allra staða (GPS + IMA)" : "Baseline for every position (GPS + IMA)"} <span className="text-[12px] font-medium text-slate-500">· {is ? "meðaltal per æfingu yfir tímabilið" : "mean per session over the season"}</span></summary>
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full min-w-[640px] text-[13px]">
+                <thead><tr className="text-left text-[11px] text-slate-500">
+                  <th className="py-1.5 pr-2 font-semibold">{is ? "Staða" : "Position"}</th>
+                  <th className="py-1.5 pr-2 text-right font-semibold">{is ? "Vegal." : "Dist"}</th>
+                  <th className="py-1.5 pr-2 text-right font-semibold">HSR</th>
+                  <th className="py-1.5 pr-2 text-right font-semibold">{is ? "Hám. km/klst" : "Max km/h"}</th>
+                  <th className="py-1.5 pr-2 text-right font-semibold">PL</th>
+                  <th className="py-1.5 pr-2 text-right font-semibold">Acc/Dec</th>
+                  <th className="py-1.5 pl-2 font-semibold">{is ? "IMA fram · hlið · aftur" : "IMA fwd · lat · back"}</th>
+                </tr></thead>
+                <tbody>
+                  {tableRows.map((b) => { const a = b.avg; const isTeam = b.key === -1; const on = b.key === pos.key; return (
+                    <tr key={b.key} className={`border-t border-slate-100 ${on ? "bg-[#2740e6]/[0.06]" : isTeam ? "bg-slate-50" : ""}`}>
+                      <td className={`py-1.5 pr-2 ${isTeam ? "font-bold" : "font-semibold"} text-slate-900`}>{is ? b.label.is : b.label.en} <span className="font-normal text-slate-500">({a.players})</span></td>
+                      <td className="py-1.5 pr-2 text-right tabular-nums">{km(a.distanceM)}</td>
+                      <td className="py-1.5 pr-2 text-right tabular-nums">{a.hsrM == null ? "–" : `${Math.round(a.hsrM)} m`}</td>
+                      <td className="py-1.5 pr-2 text-right tabular-nums">{a.maxKmh ?? "–"}</td>
+                      <td className="py-1.5 pr-2 text-right tabular-nums">{a.playerLoad == null ? "–" : Math.round(a.playerLoad)}</td>
+                      <td className="py-1.5 pr-2 text-right tabular-nums">{a.accel ?? "–"}/{a.decel ?? "–"}</td>
+                      <td className="py-1.5 pl-2">
+                        {a.direction ? (
+                          <span className="inline-flex h-2 w-28 overflow-hidden rounded-full align-middle" title={`${Math.round(a.direction.forward * 100)} / ${Math.round(a.direction.lateral * 100)} / ${Math.round(a.direction.backward * 100)} %`}>
+                            <span className="bg-[#2740e6]" style={{ width: `${a.direction.forward * 100}%` }} /><span className="bg-slate-400" style={{ width: `${a.direction.lateral * 100}%` }} /><span className="bg-amber-500" style={{ width: `${a.direction.backward * 100}%` }} />
+                          </span>
+                        ) : <span className="text-slate-400">–</span>}
+                      </td>
+                    </tr>
+                  ); })}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 text-[12px] text-slate-500">{is ? "IMA-slá: blátt = fram, grátt = hlið, gult = aftur. Sjálfgefið viðmið leikmanns er HANS staða, ekki allt liðið (Ju)." : "IMA bar: blue = forward, grey = lateral, amber = backward. A player's default falls back to HIS position, not the whole team (Ju)."}</p>
+          </details>
 
-          </div>)}
+          <p className="text-[12px] text-slate-500">{is ? "Tölurnar eru upphafspunktur, aldrei viðmið til að hlýða í blindni — leikmaðurinn, samhengið og viðbragðið stýra deginum (Little & Buchheit — „ekki þrælar GPS-viðmiða“). Figueiredo o.fl. (ás-sértæk æfing:leik hlutföll) · Buchheit & Simpson (vélrænt vs hlaup). Lýsandi — aldrei readiness-liturinn." : "These numbers are a starting point, never a norm to obey — the player, the context and readiness govern the day (Little & Buchheit — don't be \"slaves to GPS norms\"). Figueiredo et al. (dimension-specific training:match ratios) · Buchheit & Simpson (mechanical vs locomotor). Descriptive — never the readiness colour."}</p>
+
+            </div>);
+          })()}
 
           {/* THE PLAN tab — the block planner (primary) → the season meso map (context) → micro link */}
           {tab === "plan" && (() => {
@@ -2156,6 +2205,58 @@ export default function PeriodizationHubPage() {
                   </section>
                 </div>
 
+                {/* PRE-SEASON TESTING (moved from Players) — how to run each measure + when to repeat it. */}
+                <details className={card}>
+                  <summary className="cursor-pointer py-1 text-[15px] font-bold text-slate-900">{is ? "Mælingar í undirbúningi — hvernig + hvenær að endurtaka" : "Pre-season testing — how + when to repeat"}</summary>
+            {/* PRE-SEASON TESTING — how to run each measure + when to repeat it across the block. */}
+            {plan && (() => {
+              const preWeeks = Math.max(1, plan.phases.find((p) => p.key === "preseason")?.weeks ?? 6);
+              const hasVald = plan.players.some((p) => p.vald.status != null);
+              const schedule = recommendTestingSchedule({ preseasonWeeks: preWeeks, hasGps: plan.tier.loadSource === "gps", hasVald });
+              // "Due now" counts from current staleness (re-test the players who are missing/old).
+              const STALE = 42; // days
+              const dueBy: Partial<Record<TestKey, number>> = {
+                aerobic: plan.players.filter((p) => p.masAgeDays == null || p.masAgeDays > STALE).length,
+                maxStrength: plan.players.filter((p) => !p.vbt).length,
+                cmj: plan.players.filter((p) => p.vald.status == null).length,
+              };
+              return (
+                <div className="mt-3 rounded-lg border border-slate-200 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Mælingar í undirbúningi — hvernig + hvenær að endurtaka" : "Pre-season testing — how & when to repeat"}</span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-500">{is ? "Aðlögun er hröð í undirbúningi — endurtaktu prófin á lotuskilum svo MAS/hraðasvæði og styrktarálag fylgi núverandi getu leikmannsins." : "Adaptation is fast in pre-season — repeat the tests at block boundaries so MAS/speed zones + strength loads track each player's current capacity."}</p>
+                  <div className="mt-2 space-y-2">
+                    {schedule.map((tp) => {
+                      const due = dueBy[tp.protocol.key];
+                      return (
+                        <details key={tp.protocol.key} className="rounded-lg bg-slate-50 p-2.5">
+                          <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-[12px] font-semibold text-slate-900">
+                            {is ? tp.protocol.name.is : tp.protocol.name.en}
+                            <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${tp.priority === "core" ? "bg-[#2740e6]/10 text-[#2740e6]" : "bg-slate-200 text-slate-600"}`}>{tp.priority === "core" ? (is ? "kjarna" : "core") : (is ? "ráðlagt" : "recommended")}</span>
+                            <span className="flex flex-wrap gap-1">
+                              {tp.weeks.map((w) => <span key={w} className="rounded bg-white px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600 border border-slate-200">V{w}</span>)}
+                            </span>
+                            {due != null && due > 0 && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">{due} {is ? "þarf núna" : "due now"}</span>}
+                          </summary>
+                          <p className="mt-1.5 text-[11px] text-slate-600"><span className="font-semibold">{is ? "Mælir" : "Measures"}:</span> {is ? tp.protocol.measures.is : tp.protocol.measures.en}</p>
+                          <p className="text-[11px] text-slate-600"><span className="font-semibold">{is ? "Stillir" : "Sets"}:</span> {is ? tp.protocol.prescribes.is : tp.protocol.prescribes.en}</p>
+                          <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Framkvæmd" : "How"}</p>
+                          <ul className="mt-0.5 space-y-0.5">
+                            {tp.protocol.how.map((h, i) => <li key={i} className="text-[11px] text-slate-700">• {is ? h.is : h.en}</li>)}
+                          </ul>
+                          <p className="mt-1 text-[11px] text-slate-500">{is ? "Taktur" : "Cadence"}: {is ? tp.cadence.is : tp.cadence.en}</p>
+                          <p className="mt-0.5 text-[11px] text-slate-500">{tp.protocol.cite}</p>
+                        </details>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-500">{is ? "Ráðlegging — þjálfari skipuleggur prófin. „Þarf núna\" = leikmenn með gamalt/vantandi próf. Buchheit · Bangsbo · Mann/Weakley · Claudino · Bourne. Lýsandi — engin readiness-lit." : "Advisory — the coach schedules the tests. \"Due now\" = players with a stale/missing test. Buchheit · Bangsbo · Mann/Weakley · Claudino · Bourne. Descriptive — no readiness colour."}</p>
+                </div>
+              );
+            })()}
+                </details>
+
                 {/* 4 — REFERENCE: what each test measures and steers */}
                 <details className={card}>
                   <summary className="cursor-pointer py-1 text-[15px] font-bold text-slate-900">{is ? "Prófin og hvað þau stýra" : "The tests and what they steer"}</summary>
@@ -2173,8 +2274,245 @@ export default function PeriodizationHubPage() {
           })()}
 
           {/* PLAYERS tab — individualisation + match unit + VALD + data readiness */}
-          {tab === "players" && (<div className="space-y-4">
+          {tab === "players" && (() => {
+            const card = "rounded-xl border border-slate-200 bg-white p-4 sm:p-5";
+            const h2c = "text-[15px] font-bold text-slate-900";
+            const plist = plan.players;
+            const pIdx = plist.findIndex((p) => p.playerId === selId);
+            const prevP = pIdx > 0 ? plist[pIdx - 1] : null;
+            const nextP = pIdx >= 0 && pIdx < plist.length - 1 ? plist[pIdx + 1] : null;
+            const EMPH: Record<string, Bi> = {
+              hypertrophy: { en: "Hypertrophy", is: "Hypertrophy" },
+              max_strength: { en: "Max strength", is: "Hámarksstyrkur" },
+              power: { en: "Power / speed", is: "Afl / hraði" },
+              strength_endurance: { en: "Strength-endurance", is: "Styrktar-þol" },
+              injury_prevention_priority: { en: "Injury prevention", is: "Meiðslavarnir" },
+            };
+            type Tone = "ok" | "warn" | "bad" | "none";
+            const TONE: Record<Tone, { bg: string; c: string; dot: string }> = {
+              ok: { bg: "rgba(28,122,74,0.08)", c: "#15603a", dot: "#1c7a4a" },
+              warn: { bg: "rgba(222,147,40,0.14)", c: "#7a5210", dot: "#de9328" },
+              bad: { bg: "rgba(168,62,40,0.08)", c: "#8a3220", dot: "#a83e28" },
+              none: { bg: "#f1f5f9", c: "#475569", dot: "#94a3b8" },
+            };
+            const chips: Array<{ label: string; tone: Tone; title: string }> = player ? [
+              { label: is ? "Leikviðmið" : "Match unit", tone: player.matchUnit.load.typical == null ? "bad" : player.matchUnit.confidence === "low" ? "warn" : "ok", title: is ? player.matchUnit.windowNote.is : player.matchUnit.windowNote.en },
+              { label: "MAS", tone: player.masKmh == null ? "bad" : player.masAgeDays != null && player.masAgeDays > 42 ? "warn" : "ok", title: player.masKmh == null ? (is ? "Ekkert þolpróf" : "No endurance test") : `${player.masKmh} km/h${player.masAgeDays != null ? ` · ${player.masAgeDays} ${is ? "daga gamalt" : "days old"}` : ""}` },
+              { label: "VBT", tone: player.vbt ? "ok" : player.strengthFallback ? "warn" : "bad", title: player.vbt ? player.vbt.exercise : player.strengthFallback ? (is ? "Rannsóknarviðmið í stað VBT" : "Research default instead of VBT") : (is ? "Enginn VBT-prófíll" : "No VBT profile") },
+              { label: `VALD${player.vald.status ? ` · ${player.vald.status}` : ""}`, tone: player.vald.status === "green" ? "ok" : player.vald.status === "yellow" ? "warn" : player.vald.status === "red" ? "bad" : "none", title: is ? player.vald.note.is : player.vald.note.en },
+            ] : [];
+            const gapCount = player ? player.gaps.filter((g) => g.severity !== "ok").length : 0;
+            const pb = playerBlock;
+            const lighterTxt = !pb ? "" : pb.lighterPct > 0 ? (is ? `~${pb.lighterPct}% léttari en fullur rampur` : `~${pb.lighterPct}% lighter than the full ramp`) : pb.lighterPct < 0 ? (is ? `~${-pb.lighterPct}% þyngri en fullur rampur` : `~${-pb.lighterPct}% heavier than the full ramp`) : (is ? "á fullum rampi" : "on the full ramp");
+            const tiltTxt = !pb ? "" : pb.hsrEmph > 1.02 ? (is ? ", með háhraða yfir liðinu á hlaupadögum" : ", with HSR above the team on Locomotive days") : pb.hsrEmph < 0.98 ? (is ? ", meira vélrænt en liðið" : ", more mechanical than the team") : "";
+            const emphLabel = preEmphasis ? (is ? (EMPH[preEmphasis.emphasis]?.is ?? preEmphasis.emphasis) : (EMPH[preEmphasis.emphasis]?.en ?? preEmphasis.emphasis)) : null;
+            const verdict = !player ? "" : `${player.name}: ${pb ? `${is ? "lotan hans er" : "his block is"} ${lighterTxt}${tiltTxt}.` : (is ? "lotan hans birtist þegar Mesó-lota er sett upp." : "his block appears once a Meso block is laid out.")}${emphLabel ? ` ${is ? "Styrktaráhersla" : "Strength emphasis"}: ${emphLabel}.` : ""}`;
+            const mu = player?.matchUnit ?? null;
+            const wt = player ? player.weekTargets[player.weekTargets.current] : null;
+            const SUBS: Array<{ key: number; label: string }> = [
+              { key: 0, label: is ? "Lotan hans" : "His block" },
+              { key: 1, label: is ? "Uppbygging" : "Build-up" },
+              { key: 2, label: is ? "Æfingagildi" : "Training values" },
+              { key: 3, label: `${is ? "Gögn" : "Data"}${gapCount ? ` (${gapCount} ${is ? "vantar" : "missing"})` : ""}` },
+            ];
+            const squadLp = (p: typeof plist[number]) => {
+              const cap = p.vald.capPct; const mm = cap == null ? 1.4 : cap >= 100 ? 1.4 : cap >= 85 ? 1.15 : 1.0;
+              const am = p.recentMinutesAvg; const ls = am == null ? 1.0 : am >= 70 ? 0.9 : am >= 40 ? 0.95 : 1.0;
+              const up = Math.min(1.4, (blkBase + blkStep * Math.max(0, blkWeeks - 2)) / 100);
+              return up > 0 ? Math.round((1 - (Math.min(up, mm) * ls) / up) * 100) : 0;
+            };
 
+            return (<div className="space-y-4">
+
+          {/* 1 — PLAYER BAR: pick once, everything below follows */}
+          <section className={`${card} flex flex-wrap items-center gap-x-5 gap-y-3`} aria-label={is ? "Leikmaður" : "Player"}>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => prevP && setSelId(prevP.playerId)} disabled={!prevP} aria-label={is ? "Fyrri leikmaður" : "Previous player"} className="h-10 w-10 rounded-lg border border-slate-300 bg-white text-[18px] text-slate-700 hover:bg-slate-50 disabled:opacity-40">‹</button>
+              <label>
+                <span className="sr-only">{is ? "Leikmaður" : "Player"}</span>
+                <select value={selId} onChange={(e) => setSelId(e.target.value)} className="h-10 min-w-[220px] rounded-lg border border-slate-300 bg-white px-2.5 text-[16px] font-bold text-slate-900">
+                  {plist.map((p) => <option key={p.playerId} value={p.playerId}>{p.name}</option>)}
+                </select>
+              </label>
+              <button type="button" onClick={() => nextP && setSelId(nextP.playerId)} disabled={!nextP} aria-label={is ? "Næsti leikmaður" : "Next player"} className="h-10 w-10 rounded-lg border border-slate-300 bg-white text-[18px] text-slate-700 hover:bg-slate-50 disabled:opacity-40">›</button>
+            </div>
+            {player?.position && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-semibold text-slate-700">{player.position}</span>}
+            <div className="flex min-w-0 flex-[1_1_320px] flex-wrap gap-1.5">
+              {chips.map((c) => (
+                <span key={c.label} title={c.title} className="inline-flex min-h-[30px] items-center gap-1.5 rounded-full px-2.5 text-[12px] font-semibold" style={{ background: TONE[c.tone].bg, color: TONE[c.tone].c }}>
+                  <span className="h-[7px] w-[7px] rounded-full" style={{ background: TONE[c.tone].dot }} />{c.label}
+                </span>
+              ))}
+            </div>
+            {playerBlock && <button type="button" onClick={exportPlayerBlock} className="h-10 rounded-lg border border-[#2740e6] bg-white px-3.5 text-[13px] font-bold text-[#2740e6] hover:bg-[#2740e6]/5">{is ? "Lota leikmanns (PDF)" : "Player block (PDF)"}</button>}
+          </section>
+
+          {player && (<>
+          {/* 2 — VERDICT + four facts */}
+          <section className="space-y-3">
+            <p className="text-[17px] font-bold text-slate-900">{verdict}</p>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3">
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                <div className="text-[12px] font-semibold text-slate-500">{is ? "Leikviðmið hans" : "His match unit"}</div>
+                <div className="mt-0.5 text-[20px] font-bold text-slate-900">{mu && mu.load.typical != null ? `${mu.load.typical} PL${mu.hsr.typical != null ? ` · ${mu.hsr.typical} m HSR` : ""}` : "—"}</div>
+                <div className="text-[13px] text-slate-600">{mu ? (mu.load.typical != null ? `${is ? "Miðgildi" : "Median of"} ${mu.nNearFull} ${is ? "heilla leikja" : "near-full matches"} · ${mu.confidence === "high" ? (is ? "há vissa" : "high confidence") : mu.confidence === "medium" ? (is ? "miðlungs vissa" : "medium confidence") : (is ? "lítil vissa" : "low confidence")}` : (is ? "Enginn heill leikur — stöðu-grunnlína" : "No near-full match — position baseline")) : ""}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                <div className="text-[12px] font-semibold text-slate-500">{is ? "Vikumark" : "Weekly target"}</div>
+                <div className="mt-0.5 text-[20px] font-bold text-slate-900">{wt?.weeklyLoadTarget != null ? `≈ ${wt.weeklyLoadTarget} PL` : "—"}</div>
+                <div className="text-[13px] text-slate-600">{wt ? `${wt.phase === "preseason" ? (is ? "Undirbúningur" : "Pre-season") : (is ? "Keppnistímabil" : "In-season")}${wt.matchMultiple != null ? ` · ${wt.matchMultiple}× ${is ? "leikur" : "match"}` : ""} · ${wt.sessionCount} ${is ? "æfingar" : "sessions"}` : ""}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                <div className="text-[12px] font-semibold text-slate-500">{is ? "Geta til að taka álag (VALD)" : "Readiness to load (VALD)"}</div>
+                <div className="mt-0.5 flex items-center gap-2 text-[20px] font-bold text-slate-900">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: player.vald.status === "green" ? "#1c7a4a" : player.vald.status === "yellow" ? "#de9328" : player.vald.status === "red" ? "#a83e28" : "#94a3b8" }} />
+                  {player.vald.capPct != null ? `${is ? "Þak" : "Cap"} ${player.vald.capPct}%` : player.vald.status ? (is ? "Ekkert þak" : "No cap") : (is ? "Engin VALD-gögn" : "No VALD data")}
+                </div>
+                <div className="text-[13px] text-slate-600">{pb && pb.maxMult < 1.4 ? (is ? `Toppur takmarkaður við ×${pb.maxMult.toFixed(2)}` : `Peak capped at ×${pb.maxMult.toFixed(2)}`) : (is ? "Magnþak — ekki readiness-liturinn" : "Volume cap — not the readiness colour")}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                <div className="text-[12px] font-semibold text-slate-500">{is ? "Styrktaráhersla" : "Strength emphasis"}</div>
+                <div className="mt-0.5 text-[20px] font-bold text-slate-900">{emphLabel ?? "—"}</div>
+                <div className="text-[13px] text-slate-600">{preEmphasis ? (preEmphasis.driver === "dsi" && preEmphasis.dsi ? `DSI ${preEmphasis.dsi.ratio.toFixed(2)} · ${is ? "reglur, ekki gervigreind" : "rules, not AI"}` : `${is ? "vissa" : "confidence"}: ${preEmphasis.confidence}`) : (is ? "Á við í undirbúningi" : "Applies in pre-season")}</div>
+              </div>
+            </div>
+          </section>
+
+          {/* 3 — PLAYER SECTIONS: one at a time instead of nine stacked cards */}
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div role="tablist" aria-label={is ? "Hlutar" : "Sections"} className="flex gap-0.5 overflow-x-auto border-b border-slate-200 bg-slate-50 px-3">
+              {SUBS.map((s) => (
+                <button key={s.key} type="button" role="tab" aria-selected={plSub === s.key} onClick={() => setPlSub(s.key)}
+                  className={`h-12 shrink-0 px-3.5 text-[13px] font-bold ${plSub === s.key ? "text-[#2740e6] shadow-[inset_0_-2px_0_#2740e6]" : "text-slate-700 hover:text-slate-900"}`}>{s.label}</button>
+              ))}
+            </div>
+            <div className="space-y-4 p-4 sm:p-5">
+              {plSub === 0 && (<>
+            {!calBlock && <p className="mt-2 text-[12px] text-amber-700">{is ? "Settu upp lotu í Mesó-lotu flipanum fyrst — einstaklings-lotan reiknast úr henni." : "Lay out a block in the Meso Cycle tab first — the player's block is computed from it."}</p>}
+            {player && playerBlock && (() => {
+              const pb = playerBlock; const b = pb.block;
+              const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
+              const conf = pb.confidence === "high" ? { c: "bg-emerald-100 text-emerald-700", t: is ? "há vissa" : "high" } : pb.confidence === "medium" ? { c: "bg-amber-100 text-amber-700", t: is ? "miðlungs" : "medium" } : { c: "bg-rose-100 text-rose-700", t: is ? "lítil vissa" : "low" };
+              const lighterTxt = pb.lighterPct > 0 ? (is ? `~${pb.lighterPct}% léttari` : `~${pb.lighterPct}% lighter`) : pb.lighterPct < 0 ? (is ? `~${-pb.lighterPct}% þyngri` : `~${-pb.lighterPct}% heavier`) : (is ? "á liðsálagi" : "at the squad load");
+              const tiltTxt = pb.hsrEmph > 1.02 ? (is ? ", háhraði yfir liðinu á Locomotive-dögum" : ", HSR above the team on Locomotive days") : pb.hsrEmph < 0.98 ? (is ? ", meira vélrænt en liðið" : ", more mechanical than the team") : "";
+              const typeColor: Record<string, string> = { mechanical: "#a83e28", locomotive: "#1c7a4a", mixed: "#2740e6", activation: "#64748b", topup: "#7a5cc4", match: "#1c7a4a", rest: "#cbd5e1" };
+              const tint: Record<string, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#F0EAF7", match: "#FBEFDD", rest: "#f8fafc" };
+              const abbr = (t: string): string => t === "mechanical" ? "Mech" : t === "locomotive" ? (is ? "Hlaup" : "Loco") : t === "mixed" ? (is ? "Bland" : "Mixed") : t === "activation" ? (is ? "Virkj" : "Activ") : t === "topup" ? (is ? "Áfyll" : "Top") : t === "match" ? (is ? "Leikur" : "Match") : "—";
+              const dows = is ? ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+              return (
+                <div className="mt-3">
+                  {/* Level 0 — verdict */}
+                  <p className="text-[13px] font-semibold text-slate-900">{is ? `${player.name}: lotan er ${lighterTxt} en fullur rampur${!pb.useOwn ? " (liðs-grunnlína — fáir heilir leikir)" : ""}${tiltTxt}.` : `${player.name}'s block runs ${lighterTxt} than the full ramp${!pb.useOwn ? " (squad baseline — few full matches)" : ""}${tiltTxt}.`}{pb.steered && <span className="ml-1.5 rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{is ? "veikleika-stýrt" : "weakness-steered"}</span>}</p>
+                  {/* Level 1 — the drivers */}
+                  <ul className="mt-1.5 space-y-0.5 text-[12px] text-slate-700">
+                    <li>• {pb.useOwn ? (is ? `Eigið leikviðmið: ${pb.unit.load} PL · ${km(pb.unit.hsr)} háhraði (miðgildi ${pb.nNearFull} heilla leikja).` : `Own match unit: ${pb.unit.load} PL · ${km(pb.unit.hsr)} HSR (median of ${pb.nNearFull} full matches).`) : (is ? `Fáir heilir leikir (${pb.nNearFull}) — nota liðs-leikviðmið.` : `Few full matches (${pb.nNearFull}) — using the squad match unit.`)}</li>
+                    <li>• {pb.posLabel ? (is ? `${pb.posLabel.is}: háhraði ×${pb.hsrEmph.toFixed(2)}, vélrænt ×${pb.mechEmph.toFixed(2)} (Figueiredo).` : `${pb.posLabel.en} tilt: HSR ×${pb.hsrEmph.toFixed(2)}, mechanical ×${pb.mechEmph.toFixed(2)} (Figueiredo).`) : (is ? "Staða óþekkt — liðshlutföll." : "Position unknown — team shares.")}</li>
+                    <li>• {pb.maxMult < 1.4 ? (is ? `VALD ${player.vald.status ?? ""}: toppur takmarkaður við ×${pb.maxMult.toFixed(2)}. ` : `VALD ${player.vald.status ?? ""}: peak capped at ×${pb.maxMult.toFixed(2)}. `) : ""}{pb.loadScale < 1 ? (is ? `~${pb.avgMin}′ að meðaltali nýlega → æfingaálag trimmað ×${pb.loadScale.toFixed(2)}.` : `~${pb.avgMin}′ recent average → training load trimmed ×${pb.loadScale.toFixed(2)}.`) : (pb.avgMin != null && pb.avgMin < 40 ? (is ? `Fáar mínútur (~${pb.avgMin}′) → fullur rampur + áfyllingar.` : `Low minutes (~${pb.avgMin}′) → full ramp + top-ups.`) : (pb.maxMult >= 1.4 ? (is ? "Fullur rampur — ekkert þak/trim." : "Full ramp — no cap or trim.") : ""))}</li>
+                  </ul>
+                  <div className="mt-1.5"><span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase ${conf.c}`}>{is ? "vissa" : "confidence"}: {conf.t}</span></div>
+                  {/* Level 2 — the individualised block (compact calendar) */}
+                  <div className="mt-3 overflow-x-auto">
+                    <div className="grid min-w-[520px] gap-1" style={{ gridTemplateColumns: "auto repeat(7, 1fr)" }}>
+                      <div />
+                      {dows.map((d) => <div key={d} className="text-center text-[11px] font-medium uppercase text-slate-500">{d}</div>)}
+                      {b.weeks.map((w) => (
+                        <React.Fragment key={w.index}>
+                          <div className="flex flex-col justify-center pr-1"><span className="text-[11px] font-semibold text-slate-700">{is ? "V" : "W"}{w.index + 1}</span><span className={`text-[11px] font-bold ${w.isDeload ? "text-[#de9328]" : "text-[#2740e6]"}`}>{w.isDeload ? (is ? "niðurtr." : "deload") : `×${w.mult.toFixed(2)}`}</span></div>
+                          {w.days.map((d, i) => (
+                            <div key={i} className="rounded px-0.5 py-1 text-center leading-tight" style={{ background: tint[d.type] }} title={d.type === "rest" ? `${is ? d.dow.is : d.dow.en} ${d.md} — ${is ? "Frí" : "Rest"}` : `${is ? d.dow.is : d.dow.en} ${d.md} · ${is ? d.label.is : d.label.en} · ${is ? "Vegal" : "Dist"} ${km(d.dist)} · HSR ${km(d.hsr)} · PL ${d.load ?? "–"}${imaLine(d, is) ? ` · ${imaLine(d, is)}` : ""}`}>
+                              <div className="text-[11px] font-semibold" style={{ color: typeColor[d.type] }}>{abbr(d.type)}</div>
+                              <div className="text-[11px] tabular-nums text-slate-500">{d.type === "rest" ? "" : d.load ?? ""}</div>
+                            </div>
+                          ))}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-slate-500">{is ? "Sama beinagrind og Mesó-lotan (vikur/leikir/dagsgerðir/niðurtröppun) — aðeins tölur og þök einstaklingsmiðuð. Upphafspunktur, ekki viðmið (Little & Buchheit). Aldrei readiness-liturinn." : "Same skeleton as the Meso Cycle (weeks/matches/day-types/deload) — only the numbers and caps individualise. A starting point, not a norm (Little & Buchheit). Never the readiness colour."}</p>
+                  {(b.unit.accHiEff != null || b.unit.stride != null) && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-[11px] font-medium text-[#2740e6]">{is ? "Sýna vélrænt / IMA (Acc·Dec B2–3, skref, stefna)" : "Show mechanical/IMA detail (Acc·Dec B2–3, stride, direction)"}</summary>
+                      <ul className="mt-1.5 space-y-0.5 text-[11px] text-slate-600">
+                        {b.weeks.flatMap((w) => w.days.map((d, i) => ({ d, i, wi: w.index })).filter(({ d }) => d.type !== "rest")).map(({ d, i, wi }) => (
+                          <li key={`${wi}-${i}`} className="tabular-nums"><span className="text-slate-500">{is ? "V" : "W"}{wi + 1} {is ? d.dow.is : d.dow.en} {d.md}</span> · <b style={{ color: typeColor[d.type] }}>{abbr(d.type)}</b> — {imaLine(d, is) || (is ? "engin IMA-gögn" : "no IMA data")}</li>
+                        ))}
+                      </ul>
+                      <p className="mt-1 text-[11px] text-slate-500">{is ? "Stefnu-halli einstaklingsmiðaður eftir stöðu; skref/átök skala frá eigin leikviðmiði. Buchheit (stefnu-bil)." : "Direction tilt individualised by position; stride/efforts scale from his own match unit. Buchheit (directional gap)."}</p>
+                    </details>
+                  )}
+
+                </div>
+              );
+            })()}
+              </>)}
+              {plSub === 1 && (<>
+          {/* BUILD-UP TRACKING — actual accrued weekly training load vs the planned ramp, phase-gated on
+              chronic-baseline maturity (plan-relative at cold start → rolling/ACWR as the base matures).
+              Closes the plan → do → compare loop. Reads load only, never the readiness colour. */}
+          {player && trackingBlock && (
+            <BuildUpTrackingCard
+              playerId={selId}
+              playerName={player.name}
+              block={trackingBlock.block}
+              planConfidence={trackingBlock.confidence}
+              authHeader={authHeader}
+              isEN={!is}
+            />
+          )}
+
+          {/* WEAKNESS-STEERED BUILD-UP — reads Total Player Analysis (athlete-axis weaknesses + levers +
+              VALD focus) and biases the per-player ramp toward the qualities he's behind on. Read, not rebuilt. */}
+          {player && steerData?.hasAthlete && steer && steer.targets.length > 0 && (() => {
+            const qName = (id: QualityRead["id"]) => (is ? QUALITY_BY_ID[id].is : QUALITY_BY_ID[id].en);
+            const hard = steer.targets.filter((t) => !t.hint);
+            const hints = steer.targets.filter((t) => t.hint);
+            const top = hard.length ? hard : steer.targets; // if nothing confident, narrate the hints
+            const names = top.slice(0, 2).map((t) => qName(t.id));
+            const axisWord = (a: "hsr" | "mech") => (a === "hsr" ? (is ? "háhraða/hlaup" : "HSR/running") : (is ? "Acc/Dec (vélrænt)" : "Acc/Dec (mechanical)"));
+            const emphAxes = Array.from(new Set(hard.map((t) => t.axis).filter((a): a is "hsr" | "mech" => a !== "strength"))).map(axisWord);
+            const verdict = is
+              ? `Uppbygging forgangsraðar ${names.join(" og ")}${names.length ? ` — ${player.name}s lægstu íþrótta-eiginleikar` : ""}${emphAxes.length && steerActive ? `, rampar ${emphAxes.join(" + ")} hraðast að leikviðmiðinu` : ""}.`
+              : `Build-up prioritises ${names.join(" and ")}${names.length ? ` — ${player.name}'s lowest athlete qualities` : ""}${emphAxes.length && steerActive ? `, ramping ${emphAxes.join(" + ")} fastest toward the match unit` : ""}.`;
+            return (
+            <section className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-[15px] font-bold text-slate-900">{is ? "Veikleika-stýrð uppbygging" : "Weakness-steered build-up"}</h2>
+                <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{is ? "úr Heildargreiningu" : "from Total Player Analysis"}</span>
+                <label className="ml-auto flex items-center gap-1 text-[11px] text-slate-500"><input type="checkbox" checked={steerNeutral} onChange={(e) => setSteerNeutral(e.target.checked)} />{is ? "Hlutlaus rampi (án halla)" : "Neutral ramp (no bias)"}</label>
+              </div>
+              {/* Level 0 — verdict */}
+              <p className="mt-1 text-[13px] font-semibold text-slate-900">{steerActive ? verdict : (is ? `Hlutlaus rampi — engin veikleika-halli beittur.${hard.length ? " Kveiktu af til að forgangsraða veikleikum." : ""}` : `Neutral ramp — no weakness bias applied.${hard.length ? " Untick to prioritise the gaps." : ""}`)}</p>
+              {/* Level 1 — the targeted gaps + KPIs + levers, each source-tagged */}
+              <ul className="mt-1.5 space-y-1 text-[12px] text-slate-700">
+                {top.slice(0, 3).map((t) => (
+                  <li key={t.id}>
+                    <span className="font-medium">{qName(t.id)}</span>
+                    {t.percentile != null && <span className="text-slate-500"> ({t.percentile}th pctl)</span>}
+                    {t.axis !== "strength" && <span className="text-slate-500"> → {is ? "áhersla" : "emphasise"} {is ? t.kpis.is : t.kpis.en}</span>}
+                    {t.hint && <span className="ml-1 rounded bg-amber-100 px-1 text-[11px] font-semibold text-amber-700">{is ? "vísbending" : "hint"}</span>}
+                    {steerData.levers[t.id] && <div className="text-[11px] text-slate-500">↳ {is ? steerData.levers[t.id].is : steerData.levers[t.id].en}{steerData.levers[t.id].cite ? ` (${steerData.levers[t.id].cite})` : ""}</div>}
+                  </li>
+                ))}
+              </ul>
+              {/* VALD strength focus (the force/VBT qualities the GPS ramp can't build) */}
+              {steerData.valdPlan && steerData.valdPlan.priorities.length > 0 && (
+                <p className="mt-1.5 text-[11px] text-slate-600"><span className="font-medium">{is ? "Kraftur (VALD)" : "Strength (VALD)"}:</span> {steerData.valdPlan.priorities.slice(0, 2).map((p) => `${p.quality} — ${p.lever}`).join(" · ")} <span className="rounded bg-[#7a5cc4]/10 px-1 text-[11px] font-semibold text-[#7a5cc4]">VALD</span></p>
+              )}
+              {hints.length > 0 && steerActive && <p className="mt-1 text-[11px] text-amber-700">{is ? `Vísbendingar (lítið úrtak / lítil vissa) eru sýndar en ekki notaðar til að halla rampanum: ${hints.map((t) => qName(t.id)).join(", ")}.` : `Hints (thin sample / low confidence) are shown but not used to bias the ramp: ${hints.map((t) => qName(t.id)).join(", ")}.`}</p>}
+              <p className="mt-1.5 text-[11px] text-slate-500">{is ? "Íþrótta-ásinn stýrir líkamlegu uppbyggingunni (GPS/VALD/VBT). Innan öruggra þaka rampans (hraði / leikþak). Lýsandi — aldrei readiness-liturinn." : "The athlete axis steers the physical build-up (GPS/VALD/VBT). Within the ramp's safe caps (rate / match ceiling). Descriptive — never the readiness colour."} <a className="text-[#2740e6] hover:underline" href={`/coach/total-player-analysis?playerId=${encodeURIComponent(selId)}`}>{is ? "Opna prófílinn →" : "Open the profile →"}</a></p>
+            </section>
+            );
+          })()}
+
+          {/* BUILD-UP PLAN — the harvested Progressive Overload engine: ramp each player from current baseline
+              TO his match unit (pre-season / return-to-play). Reuses ProgressiveOverloadCard (its own fetch). */}
+          <section className="rounded-xl border border-slate-200 bg-white p-4">
+            <h2 className="text-[15px] font-bold text-slate-900">{is ? "Uppbyggingar-áætlun (undirbúningur / aftur í leik)" : "Build-up plan (pre-season / return-to-play)"}</h2>
+            <p className="mt-1 mb-2 text-[11px] text-slate-500">{is ? `Örugg vikuleg þróun frá núverandi grunnlínu AÐ leikviðmiði${player ? ` ${player.name}s` : " leikmanns"} — magn hraðast, háhraði/sprettur hægast (aftanlæri).${steerActive ? " Áherslu-KPI (veikleika-stýrð) rampa hraðar, innan sömu þaka." : ""} Aðal-þakið er leikkrafan + bráðaálags-þróun; ACWR er umdeilt aukagildi. Lýsandi — aldrei readiness-liturinn.` : `A safe weekly ramp from current baseline TO ${player ? `${player.name}'s` : "the player's"} match unit — volume fastest, HSR/sprint slowest (hamstring).${steerActive ? " The emphasised KPIs (weakness-steered) ramp faster, within the same caps." : ""} The primary ceiling is match demand + acute-load trend; ACWR is a contested secondary readout. Descriptive — never the readiness colour.`}</p>
+            <ProgressiveOverloadCard weeks={blkWeeks} playerId={selId || undefined} emphasis={poEmphasis} focusLabel={player?.name} />
+          </section>
+              </>)}
+              {plSub === 2 && (<>
           {/* PRE-SEASON STARTING EMPHASIS (Part 2) — this player's own strength/power/body-comp/deficits */}
           {preEmphasis && (() => {
             const EMPH: Record<string, Bi> = {
@@ -2188,9 +2526,9 @@ export default function PeriodizationHubPage() {
             return (
               <section className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{is ? "styrkur" : "strength"}</span>
-                  <h2 className="text-sm font-semibold text-slate-900">{is ? "Undirbúnings-upphaf (styrkur)" : "Pre-season starting emphasis"}</h2>
-                  <span className={`ml-auto rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${confTint}`}>{is ? "vissa" : "conf"}: {preEmphasis.confidence}</span>
+                  <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{is ? "styrkur" : "strength"}</span>
+                  <h2 className="text-[15px] font-bold text-slate-900">{is ? "Undirbúnings-upphaf (styrkur)" : "Pre-season starting emphasis"}</h2>
+                  <span className={`ml-auto rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase ${confTint}`}>{is ? "vissa" : "conf"}: {preEmphasis.confidence}</span>
                 </div>
                 {/* Level 0 — the verdict */}
                 <p className="mt-1 text-[13px] font-semibold text-slate-900">{is ? (EMPH[preEmphasis.emphasis]?.is ?? preEmphasis.emphasis) : (EMPH[preEmphasis.emphasis]?.en ?? preEmphasis.emphasis)}
@@ -2235,196 +2573,28 @@ export default function PeriodizationHubPage() {
                     <a href={`/coach/transfer-report`} className="font-semibold text-[#2740e6] hover:underline">{is ? "Mæla" : "Record"} →</a>
                   </div>
                 )}
-                <p className="mt-2 text-[9px] text-slate-400">{preEmphasis.cite}. {is ? "Ráðgefandi — allir fara í gegnum röðina; þetta setur upphafið. Aldrei readiness-liturinn." : "Advisory — everyone runs the sequence; this sets the start. Never the readiness colour."}</p>
+                <p className="mt-2 text-[11px] text-slate-500">{preEmphasis.cite}. {is ? "Ráðgefandi — allir fara í gegnum röðina; þetta setur upphafið. Aldrei readiness-liturinn." : "Advisory — everyone runs the sequence; this sets the start. Never the readiness colour."}</p>
               </section>
             );
           })()}
-
-          {/* INDIVIDUALISED BLOCK — the Meso skeleton, this player's own numbers */}
-          <section className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-semibold text-slate-900">{is ? "Einstaklings-lota — reiknuð úr Mesó-lotunni" : "Individualised block — computed from the Meso Cycle"}</h2>
-              <select value={selId} onChange={(e) => setSelId(e.target.value)} className="ml-auto rounded-lg border border-slate-300 bg-white px-2 py-1 text-[13px]">
-                {plan.players.map((p) => <option key={p.playerId} value={p.playerId}>{p.name}</option>)}
-              </select>
-              {playerBlock && <button onClick={exportPlayerBlock} className="rounded-lg border border-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">{is ? "Sækja lotu leikmanns (PDF)" : "Export this player's block (PDF)"}</button>}
-            </div>
-            {!calBlock && <p className="mt-2 text-[12px] text-amber-700">{is ? "Settu upp lotu í Mesó-lotu flipanum fyrst — einstaklings-lotan reiknast úr henni." : "Lay out a block in the Meso Cycle tab first — the player's block is computed from it."}</p>}
-            {player && playerBlock && (() => {
-              const pb = playerBlock; const b = pb.block;
-              const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
-              const conf = pb.confidence === "high" ? { c: "bg-emerald-100 text-emerald-700", t: is ? "há vissa" : "high" } : pb.confidence === "medium" ? { c: "bg-amber-100 text-amber-700", t: is ? "miðlungs" : "medium" } : { c: "bg-rose-100 text-rose-700", t: is ? "lítil vissa" : "low" };
-              const lighterTxt = pb.lighterPct > 0 ? (is ? `~${pb.lighterPct}% léttari` : `~${pb.lighterPct}% lighter`) : pb.lighterPct < 0 ? (is ? `~${-pb.lighterPct}% þyngri` : `~${-pb.lighterPct}% heavier`) : (is ? "á liðsálagi" : "at the squad load");
-              const tiltTxt = pb.hsrEmph > 1.02 ? (is ? ", háhraði yfir liðinu á Locomotive-dögum" : ", HSR above the team on Locomotive days") : pb.hsrEmph < 0.98 ? (is ? ", meira vélrænt en liðið" : ", more mechanical than the team") : "";
-              const typeColor: Record<string, string> = { mechanical: "#a83e28", locomotive: "#1c7a4a", mixed: "#2740e6", activation: "#64748b", topup: "#7a5cc4", match: "#1c7a4a", rest: "#cbd5e1" };
-              const tint: Record<string, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#F0EAF7", match: "#FBEFDD", rest: "#f8fafc" };
-              const abbr = (t: string): string => t === "mechanical" ? "Mech" : t === "locomotive" ? (is ? "Hlaup" : "Loco") : t === "mixed" ? (is ? "Bland" : "Mixed") : t === "activation" ? (is ? "Virkj" : "Activ") : t === "topup" ? (is ? "Áfyll" : "Top") : t === "match" ? (is ? "Leikur" : "Match") : "—";
-              const dows = is ? ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-              return (
-                <div className="mt-3">
-                  {/* Level 0 — verdict */}
-                  <p className="text-[13px] font-semibold text-slate-900">{is ? `${player.name}: lotan er ${lighterTxt} en fullur rampur${!pb.useOwn ? " (liðs-grunnlína — fáir heilir leikir)" : ""}${tiltTxt}.` : `${player.name}'s block runs ${lighterTxt} than the full ramp${!pb.useOwn ? " (squad baseline — few full matches)" : ""}${tiltTxt}.`}{pb.steered && <span className="ml-1.5 rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#7a5cc4]">{is ? "veikleika-stýrt" : "weakness-steered"}</span>}</p>
-                  {/* Level 1 — the drivers */}
-                  <ul className="mt-1.5 space-y-0.5 text-[12px] text-slate-700">
-                    <li>• {pb.useOwn ? (is ? `Eigið leikviðmið: ${pb.unit.load} PL · ${km(pb.unit.hsr)} háhraði (miðgildi ${pb.nNearFull} heilla leikja).` : `Own match unit: ${pb.unit.load} PL · ${km(pb.unit.hsr)} HSR (median of ${pb.nNearFull} full matches).`) : (is ? `Fáir heilir leikir (${pb.nNearFull}) — nota liðs-leikviðmið.` : `Few full matches (${pb.nNearFull}) — using the squad match unit.`)}</li>
-                    <li>• {pb.posLabel ? (is ? `${pb.posLabel.is}: háhraði ×${pb.hsrEmph.toFixed(2)}, vélrænt ×${pb.mechEmph.toFixed(2)} (Figueiredo).` : `${pb.posLabel.en} tilt: HSR ×${pb.hsrEmph.toFixed(2)}, mechanical ×${pb.mechEmph.toFixed(2)} (Figueiredo).`) : (is ? "Staða óþekkt — liðshlutföll." : "Position unknown — team shares.")}</li>
-                    <li>• {pb.maxMult < 1.4 ? (is ? `VALD ${player.vald.status ?? ""}: toppur takmarkaður við ×${pb.maxMult.toFixed(2)}. ` : `VALD ${player.vald.status ?? ""}: peak capped at ×${pb.maxMult.toFixed(2)}. `) : ""}{pb.loadScale < 1 ? (is ? `~${pb.avgMin}′ að meðaltali nýlega → æfingaálag trimmað ×${pb.loadScale.toFixed(2)}.` : `~${pb.avgMin}′ recent average → training load trimmed ×${pb.loadScale.toFixed(2)}.`) : (pb.avgMin != null && pb.avgMin < 40 ? (is ? `Fáar mínútur (~${pb.avgMin}′) → fullur rampur + áfyllingar.` : `Low minutes (~${pb.avgMin}′) → full ramp + top-ups.`) : (pb.maxMult >= 1.4 ? (is ? "Fullur rampur — ekkert þak/trim." : "Full ramp — no cap or trim.") : ""))}</li>
-                  </ul>
-                  <div className="mt-1.5"><span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${conf.c}`}>{is ? "vissa" : "confidence"}: {conf.t}</span></div>
-                  {/* Level 2 — the individualised block (compact calendar) */}
-                  <div className="mt-3 overflow-x-auto">
-                    <div className="grid min-w-[520px] gap-1" style={{ gridTemplateColumns: "auto repeat(7, 1fr)" }}>
-                      <div />
-                      {dows.map((d) => <div key={d} className="text-center text-[8px] font-medium uppercase text-slate-400">{d}</div>)}
-                      {b.weeks.map((w) => (
-                        <React.Fragment key={w.index}>
-                          <div className="flex flex-col justify-center pr-1"><span className="text-[10px] font-semibold text-slate-700">{is ? "V" : "W"}{w.index + 1}</span><span className={`text-[8px] font-bold ${w.isDeload ? "text-[#de9328]" : "text-[#2740e6]"}`}>{w.isDeload ? (is ? "niðurtr." : "deload") : `×${w.mult.toFixed(2)}`}</span></div>
-                          {w.days.map((d, i) => (
-                            <div key={i} className="rounded px-0.5 py-1 text-center leading-tight" style={{ background: tint[d.type] }} title={d.type === "rest" ? `${is ? d.dow.is : d.dow.en} ${d.md} — ${is ? "Frí" : "Rest"}` : `${is ? d.dow.is : d.dow.en} ${d.md} · ${is ? d.label.is : d.label.en} · ${is ? "Vegal" : "Dist"} ${km(d.dist)} · HSR ${km(d.hsr)} · PL ${d.load ?? "–"}${imaLine(d, is) ? ` · ${imaLine(d, is)}` : ""}`}>
-                              <div className="text-[9px] font-semibold" style={{ color: typeColor[d.type] }}>{abbr(d.type)}</div>
-                              <div className="text-[8px] tabular-nums text-slate-500">{d.type === "rest" ? "" : d.load ?? ""}</div>
-                            </div>
-                          ))}
-                        </React.Fragment>
-                      ))}
-                    </div>
-                  </div>
-                  <p className="mt-1.5 text-[9px] text-slate-400">{is ? "Sama beinagrind og Mesó-lotan (vikur/leikir/dagsgerðir/niðurtröppun) — aðeins tölur og þök einstaklingsmiðuð. Upphafspunktur, ekki viðmið (Little & Buchheit). Aldrei readiness-liturinn." : "Same skeleton as the Meso Cycle (weeks/matches/day-types/deload) — only the numbers and caps individualise. A starting point, not a norm (Little & Buchheit). Never the readiness colour."}</p>
-                  {(b.unit.accHiEff != null || b.unit.stride != null) && (
-                    <details className="mt-2">
-                      <summary className="cursor-pointer text-[11px] font-medium text-[#2740e6]">{is ? "Sýna vélrænt / IMA (Acc·Dec B2–3, skref, stefna)" : "Show mechanical/IMA detail (Acc·Dec B2–3, stride, direction)"}</summary>
-                      <ul className="mt-1.5 space-y-0.5 text-[10px] text-slate-600">
-                        {b.weeks.flatMap((w) => w.days.map((d, i) => ({ d, i, wi: w.index })).filter(({ d }) => d.type !== "rest")).map(({ d, i, wi }) => (
-                          <li key={`${wi}-${i}`} className="tabular-nums"><span className="text-slate-400">{is ? "V" : "W"}{wi + 1} {is ? d.dow.is : d.dow.en} {d.md}</span> · <b style={{ color: typeColor[d.type] }}>{abbr(d.type)}</b> — {imaLine(d, is) || (is ? "engin IMA-gögn" : "no IMA data")}</li>
-                        ))}
-                      </ul>
-                      <p className="mt-1 text-[9px] text-slate-400">{is ? "Stefnu-halli einstaklingsmiðaður eftir stöðu; skref/átök skala frá eigin leikviðmiði. Buchheit (stefnu-bil)." : "Direction tilt individualised by position; stride/efforts scale from his own match unit. Buchheit (directional gap)."}</p>
-                    </details>
-                  )}
-
-                  {/* Optional — the squad at a glance: who's lighter/heavier and why */}
-                  <details className="mt-3">
-                    <summary className="cursor-pointer text-[11px] font-medium text-[#2740e6]">{is ? "Allur hópurinn — hver er léttari/þyngri" : "Whole squad — who's lighter/heavier"}</summary>
-                    <div className="mt-1.5 overflow-x-auto">
-                      <table className="w-full text-[11px]">
-                        <thead><tr className="text-left text-[9px] uppercase tracking-wide text-slate-400"><th className="py-1 pr-2 font-medium">{is ? "Leikmaður" : "Player"}</th><th className="py-1 pr-2 text-right font-medium">{is ? "vs lið" : "vs squad"}</th><th className="py-1 pr-2 text-right font-medium">VALD</th><th className="py-1 text-right font-medium">{is ? "mín/leik" : "min/match"}</th></tr></thead>
-                        <tbody>
-                          {plan.players.map((p) => {
-                            const cap = p.vald.capPct; const mm = cap == null ? 1.4 : cap >= 100 ? 1.4 : cap >= 85 ? 1.15 : 1.0;
-                            const am = p.recentMinutesAvg; const ls = am == null ? 1.0 : am >= 70 ? 0.9 : am >= 40 ? 0.95 : 1.0;
-                            const up = Math.min(1.4, (blkBase + blkStep * Math.max(0, blkWeeks - 2)) / 100);
-                            const lp = up > 0 ? Math.round((1 - (Math.min(up, mm) * ls) / up) * 100) : 0;
-                            return (
-                              <tr key={p.playerId} className={`border-t border-slate-100 ${p.playerId === selId ? "bg-[#2740e6]/5" : ""}`}>
-                                <td className="py-1 pr-2 text-slate-700">{p.name}</td>
-                                <td className={`py-1 pr-2 text-right tabular-nums ${lp > 0 ? "text-emerald-700" : lp < 0 ? "text-rose-700" : "text-slate-500"}`}>{lp > 0 ? `−${lp}%` : lp < 0 ? `+${-lp}%` : "—"}</td>
-                                <td className="py-1 pr-2 text-right">{cap != null && cap < 100 ? <span className={`rounded px-1 text-[9px] font-semibold ${cap >= 85 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>{p.vald.status}</span> : <span className="text-slate-300">–</span>}</td>
-                                <td className="py-1 text-right tabular-nums text-slate-500">{am == null ? "–" : `${am}′`}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    <p className="mt-1 text-[9px] text-slate-400">{is ? "„vs lið“ = hversu miklu léttari (−) rampurinn er vs fullur rampur, eftir VALD-þaki + mínútu-trimmi." : "\"vs squad\" = how much lighter (−) the ramp is vs the full ramp, after the VALD cap + minutes trim."}</p>
-                  </details>
-                </div>
-              );
-            })()}
-          </section>
-
-          {/* BUILD-UP TRACKING — actual accrued weekly training load vs the planned ramp, phase-gated on
-              chronic-baseline maturity (plan-relative at cold start → rolling/ACWR as the base matures).
-              Closes the plan → do → compare loop. Reads load only, never the readiness colour. */}
-          {player && trackingBlock && (
-            <BuildUpTrackingCard
-              playerId={selId}
-              playerName={player.name}
-              block={trackingBlock.block}
-              planConfidence={trackingBlock.confidence}
-              authHeader={authHeader}
-              isEN={!is}
-            />
-          )}
-
-          {/* WEAKNESS-STEERED BUILD-UP — reads Total Player Analysis (athlete-axis weaknesses + levers +
-              VALD focus) and biases the per-player ramp toward the qualities he's behind on. Read, not rebuilt. */}
-          {player && steerData?.hasAthlete && steer && steer.targets.length > 0 && (() => {
-            const qName = (id: QualityRead["id"]) => (is ? QUALITY_BY_ID[id].is : QUALITY_BY_ID[id].en);
-            const hard = steer.targets.filter((t) => !t.hint);
-            const hints = steer.targets.filter((t) => t.hint);
-            const top = hard.length ? hard : steer.targets; // if nothing confident, narrate the hints
-            const names = top.slice(0, 2).map((t) => qName(t.id));
-            const axisWord = (a: "hsr" | "mech") => (a === "hsr" ? (is ? "háhraða/hlaup" : "HSR/running") : (is ? "Acc/Dec (vélrænt)" : "Acc/Dec (mechanical)"));
-            const emphAxes = Array.from(new Set(hard.map((t) => t.axis).filter((a): a is "hsr" | "mech" => a !== "strength"))).map(axisWord);
-            const verdict = is
-              ? `Uppbygging forgangsraðar ${names.join(" og ")}${names.length ? ` — ${player.name}s lægstu íþrótta-eiginleikar` : ""}${emphAxes.length && steerActive ? `, rampar ${emphAxes.join(" + ")} hraðast að leikviðmiðinu` : ""}.`
-              : `Build-up prioritises ${names.join(" and ")}${names.length ? ` — ${player.name}'s lowest athlete qualities` : ""}${emphAxes.length && steerActive ? `, ramping ${emphAxes.join(" + ")} fastest toward the match unit` : ""}.`;
-            return (
-            <section className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-sm font-semibold text-slate-900">{is ? "Veikleika-stýrð uppbygging" : "Weakness-steered build-up"}</h2>
-                <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#7a5cc4]">{is ? "úr Heildargreiningu" : "from Total Player Analysis"}</span>
-                <label className="ml-auto flex items-center gap-1 text-[11px] text-slate-500"><input type="checkbox" checked={steerNeutral} onChange={(e) => setSteerNeutral(e.target.checked)} />{is ? "Hlutlaus rampi (án halla)" : "Neutral ramp (no bias)"}</label>
-              </div>
-              {/* Level 0 — verdict */}
-              <p className="mt-1 text-[13px] font-semibold text-slate-900">{steerActive ? verdict : (is ? `Hlutlaus rampi — engin veikleika-halli beittur.${hard.length ? " Kveiktu af til að forgangsraða veikleikum." : ""}` : `Neutral ramp — no weakness bias applied.${hard.length ? " Untick to prioritise the gaps." : ""}`)}</p>
-              {/* Level 1 — the targeted gaps + KPIs + levers, each source-tagged */}
-              <ul className="mt-1.5 space-y-1 text-[12px] text-slate-700">
-                {top.slice(0, 3).map((t) => (
-                  <li key={t.id}>
-                    <span className="font-medium">{qName(t.id)}</span>
-                    {t.percentile != null && <span className="text-slate-400"> ({t.percentile}th pctl)</span>}
-                    {t.axis !== "strength" && <span className="text-slate-500"> → {is ? "áhersla" : "emphasise"} {is ? t.kpis.is : t.kpis.en}</span>}
-                    {t.hint && <span className="ml-1 rounded bg-amber-100 px-1 text-[9px] font-semibold text-amber-700">{is ? "vísbending" : "hint"}</span>}
-                    {steerData.levers[t.id] && <div className="text-[11px] text-slate-500">↳ {is ? steerData.levers[t.id].is : steerData.levers[t.id].en}{steerData.levers[t.id].cite ? ` (${steerData.levers[t.id].cite})` : ""}</div>}
-                  </li>
-                ))}
-              </ul>
-              {/* VALD strength focus (the force/VBT qualities the GPS ramp can't build) */}
-              {steerData.valdPlan && steerData.valdPlan.priorities.length > 0 && (
-                <p className="mt-1.5 text-[11px] text-slate-600"><span className="font-medium">{is ? "Kraftur (VALD)" : "Strength (VALD)"}:</span> {steerData.valdPlan.priorities.slice(0, 2).map((p) => `${p.quality} — ${p.lever}`).join(" · ")} <span className="rounded bg-[#7a5cc4]/10 px-1 text-[9px] font-semibold text-[#7a5cc4]">VALD</span></p>
-              )}
-              {hints.length > 0 && steerActive && <p className="mt-1 text-[10px] text-amber-700">{is ? `Vísbendingar (lítið úrtak / lítil vissa) eru sýndar en ekki notaðar til að halla rampanum: ${hints.map((t) => qName(t.id)).join(", ")}.` : `Hints (thin sample / low confidence) are shown but not used to bias the ramp: ${hints.map((t) => qName(t.id)).join(", ")}.`}</p>}
-              <p className="mt-1.5 text-[9px] text-slate-400">{is ? "Íþrótta-ásinn stýrir líkamlegu uppbyggingunni (GPS/VALD/VBT). Innan öruggra þaka rampans (hraði / leikþak). Lýsandi — aldrei readiness-liturinn." : "The athlete axis steers the physical build-up (GPS/VALD/VBT). Within the ramp's safe caps (rate / match ceiling). Descriptive — never the readiness colour."} <a className="text-[#2740e6] hover:underline" href={`/coach/total-player-analysis?playerId=${encodeURIComponent(selId)}`}>{is ? "Opna prófílinn →" : "Open the profile →"}</a></p>
-            </section>
-            );
-          })()}
-
-          {/* BUILD-UP PLAN — the harvested Progressive Overload engine: ramp each player from current baseline
-              TO his match unit (pre-season / return-to-play). Reuses ProgressiveOverloadCard (its own fetch). */}
-          <section className="rounded-xl border border-slate-200 bg-white p-4">
-            <h2 className="text-sm font-semibold text-slate-900">{is ? "Uppbyggingar-áætlun (undirbúningur / aftur í leik)" : "Build-up plan (pre-season / return-to-play)"}</h2>
-            <p className="mt-1 mb-2 text-[11px] text-slate-500">{is ? `Örugg vikuleg þróun frá núverandi grunnlínu AÐ leikviðmiði${player ? ` ${player.name}s` : " leikmanns"} — magn hraðast, háhraði/sprettur hægast (aftanlæri).${steerActive ? " Áherslu-KPI (veikleika-stýrð) rampa hraðar, innan sömu þaka." : ""} Aðal-þakið er leikkrafan + bráðaálags-þróun; ACWR er umdeilt aukagildi. Lýsandi — aldrei readiness-liturinn.` : `A safe weekly ramp from current baseline TO ${player ? `${player.name}'s` : "the player's"} match unit — volume fastest, HSR/sprint slowest (hamstring).${steerActive ? " The emphasised KPIs (weakness-steered) ramp faster, within the same caps." : ""} The primary ceiling is match demand + acute-load trend; ACWR is a contested secondary readout. Descriptive — never the readiness colour.`}</p>
-            <ProgressiveOverloadCard weeks={blkWeeks} playerId={selId || undefined} emphasis={poEmphasis} focusLabel={player?.name} />
-          </section>
-
-          {/* INDIVIDUALISATION + DATA READINESS */}
-          <section className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-semibold text-slate-900">{is ? "Einstaklingsmiðun" : "Individualisation"}</h2>
-              <select value={selId} onChange={(e) => setSelId(e.target.value)} className="ml-auto rounded-lg border border-slate-300 bg-white px-2 py-1 text-[13px]">
-                {plan.players.map((p) => <option key={p.playerId} value={p.playerId}>{p.name}</option>)}
-              </select>
-            </div>
 
             {player && (
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {/* Endurance intervals from his MAS */}
                 <div className="rounded-lg bg-slate-50 p-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Þolþjálfun — interval-hraði (Type 1–5)" : "Endurance — interval speeds (Type 1–5)"}</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Þolþjálfun — interval-hraði (Type 1–5)" : "Endurance — interval speeds (Type 1–5)"}</div>
                   {player.masKmh != null ? (
                     <>
-                      <p className="mt-1 text-[12px] text-slate-600">{is ? "MAS" : "MAS"}: <b>{player.masKmh} km/klst</b> <span className="text-slate-400">· {player.masSource}{player.masAgeDays != null ? ` · ${player.masAgeDays}d` : ""}</span></p>
+                      <p className="mt-1 text-[12px] text-slate-600">{is ? "MAS" : "MAS"}: <b>{player.masKmh} km/klst</b> <span className="text-slate-500">· {player.masSource}{player.masAgeDays != null ? ` · ${player.masAgeDays}d` : ""}</span></p>
                       <table className="mt-1 w-full text-[12px] text-slate-700">
-                        <tbody>{player.intervals.map((z) => <tr key={z.type}><td className="py-0.5 pr-2 text-slate-500">T{z.type} · {is ? z.label.is : z.label.en}</td><td className="py-0.5 text-right font-semibold tabular-nums">{z.kmh} km/klst</td><td className="py-0.5 pl-2 text-right text-[10px] text-slate-400">{z.pctMas}% MAS</td></tr>)}</tbody>
+                        <tbody>{player.intervals.map((z) => <tr key={z.type}><td className="py-0.5 pr-2 text-slate-500">T{z.type} · {is ? z.label.is : z.label.en}</td><td className="py-0.5 text-right font-semibold tabular-nums">{z.kmh} km/klst</td><td className="py-0.5 pl-2 text-right text-[11px] text-slate-500">{z.pctMas}% MAS</td></tr>)}</tbody>
                       </table>
                     </>
-                  ) : <p className="mt-1 text-[12px] text-slate-400">{is ? "Ekkert þolpróf — sjá gögn-tilbúnaðar spjaldið." : "No endurance test — see the data-readiness panel."}</p>}
+                  ) : <p className="mt-1 text-[12px] text-slate-500">{is ? "Ekkert þolpróf — sjá gögn-tilbúnaðar spjaldið." : "No endurance test — see the data-readiness panel."}</p>}
                 </div>
                 {/* Strength from his VBT */}
                 <div className="rounded-lg bg-slate-50 p-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Styrktarþjálfun — VBT" : "Strength — VBT"}</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Styrktarþjálfun — VBT" : "Strength — VBT"}</div>
                   {player.vbt ? (
                     <>
                       <p className="mt-1 text-[12px] text-slate-700">{player.vbt.exercise} · <b>{player.vbt.latestLoadKg ?? "–"} kg</b> @ {player.vbt.latestMeanV?.toFixed(2)} m/s → <span className="font-semibold">{is ? player.vbt.zone.is : player.vbt.zone.en}</span></p>
@@ -2432,11 +2602,11 @@ export default function PeriodizationHubPage() {
                     </>
                   ) : player.strengthFallback ? (
                     <>
-                      <p className="mt-1 text-[12px] text-slate-700"><span className="rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-violet-700">{is ? "rannsóknar-viðmið (enginn VBT)" : "research default (no VBT)"}</span> {is ? player.strengthFallback.quality.is : player.strengthFallback.quality.en}</p>
+                      <p className="mt-1 text-[12px] text-slate-700"><span className="rounded bg-violet-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase text-violet-700">{is ? "rannsóknar-viðmið (enginn VBT)" : "research default (no VBT)"}</span> {is ? player.strengthFallback.quality.is : player.strengthFallback.quality.en}</p>
                       <p className="mt-1 text-[12px] text-slate-700"><b>{is ? player.strengthFallback.pct1rm.is : player.strengthFallback.pct1rm.en}</b> · {is ? player.strengthFallback.velocity.is : player.strengthFallback.velocity.en} · {is ? player.strengthFallback.intent.is : player.strengthFallback.intent.en}</p>
-                      <p className="mt-1 text-[10px] text-slate-400">{player.strengthFallback.cite}</p>
+                      <p className="mt-1 text-[11px] text-slate-500">{player.strengthFallback.cite}</p>
                     </>
-                  ) : <p className="mt-1 text-[12px] text-slate-400">{is ? "Enginn VBT prófíll." : "No VBT profile."}</p>}
+                  ) : <p className="mt-1 text-[12px] text-slate-500">{is ? "Enginn VBT prófíll." : "No VBT profile."}</p>}
                 </div>
               </div>
             )}
@@ -2450,14 +2620,14 @@ export default function PeriodizationHubPage() {
               return (
                 <div className="mt-3 rounded-lg border border-slate-200 p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Leikviðmið hans (leikurinn = einingin)" : "His match unit (the match = the unit)"}</span>
-                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${conf.c}`}>{conf.t}</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikviðmið hans (leikurinn = einingin)" : "His match unit (the match = the unit)"}</span>
+                    <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${conf.c}`}>{conf.t}</span>
                   </div>
-                  <p className="mt-1 text-[10px] text-slate-500">{is ? mu.windowNote.is : mu.windowNote.en} {mu.minutesTypical != null && (is ? `Dæmigerðar ${mu.minutesTypical} mín.` : `Typical ${mu.minutesTypical} min.`)} {is ? "Dæmigert = miðgildi; ↑ = topp-leikur (p90)." : "Typical = median; ↑ = peak match (p90)."}</p>
+                  <p className="mt-1 text-[11px] text-slate-500">{is ? mu.windowNote.is : mu.windowNote.en} {mu.minutesTypical != null && (is ? `Dæmigerðar ${mu.minutesTypical} mín.` : `Typical ${mu.minutesTypical} min.`)} {is ? "Dæmigert = miðgildi; ↑ = topp-leikur (p90)." : "Typical = median; ↑ = peak match (p90)."}</p>
                   {mu.load.typical != null ? (
                     <div className="mt-1.5 overflow-x-auto">
                       <table className="w-full text-[11px]">
-                        <thead><tr className="text-left text-[9px] uppercase tracking-wide text-slate-400"><th className="py-0.5 pr-2 font-medium">{is ? "Ás" : "Axis"}</th><th className="py-0.5 pr-2 text-right font-medium">PL</th><th className="py-0.5 pr-2 text-right font-medium">HSR</th><th className="py-0.5 pr-2 text-right font-medium">{is ? "Sprettur" : "Sprint"}</th><th className="py-0.5 pr-2 text-right font-medium">Acc</th><th className="py-0.5 text-right font-medium">Dec</th></tr></thead>
+                        <thead><tr className="text-left text-[11px] uppercase tracking-wide text-slate-500"><th className="py-0.5 pr-2 font-medium">{is ? "Ás" : "Axis"}</th><th className="py-0.5 pr-2 text-right font-medium">PL</th><th className="py-0.5 pr-2 text-right font-medium">HSR</th><th className="py-0.5 pr-2 text-right font-medium">{is ? "Sprettur" : "Sprint"}</th><th className="py-0.5 pr-2 text-right font-medium">Acc</th><th className="py-0.5 text-right font-medium">Dec</th></tr></thead>
                         <tbody><tr className="border-t border-slate-100">
                           <td className="py-0.5 pr-2 text-slate-600">{is ? "Dæmigerður leikur" : "Typical match"}</td>
                           <td className="py-0.5 pr-2 text-right tabular-nums">{cell(mu.load, "")}</td>
@@ -2468,22 +2638,84 @@ export default function PeriodizationHubPage() {
                         </tr></tbody>
                       </table>
                     </div>
-                  ) : <p className="mt-1 text-[11px] text-slate-400">{is ? "Enginn næstum-heill leikur enn — vikumarkið fellur á stöðu-grunnlínu." : "No near-full match yet — the weekly target falls back to the position baseline."}</p>}
+                  ) : <p className="mt-1 text-[11px] text-slate-500">{is ? "Enginn næstum-heill leikur enn — vikumarkið fellur á stöðu-grunnlínu." : "No near-full match yet — the weekly target falls back to the position baseline."}</p>}
                   {/* The weekly target the unit implies — pre-season supra-match vs in-season match+headroom */}
                   <div className="mt-2 rounded-lg bg-slate-50 p-2.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded px-1.5 py-0.5 text-[9px] font-bold text-white" style={{ background: wt.phase === "preseason" ? "#7a5cc4" : "#2740e6" }}>{wt.phase === "preseason" ? (is ? "Undirbúningur" : "Pre-season") : (is ? "Keppni" : "In-season")}</span>
+                      <span className="rounded px-1.5 py-0.5 text-[11px] font-bold text-white" style={{ background: wt.phase === "preseason" ? "#7a5cc4" : "#2740e6" }}>{wt.phase === "preseason" ? (is ? "Undirbúningur" : "Pre-season") : (is ? "Keppni" : "In-season")}</span>
                       {wt.weeklyLoadTarget != null && <span className="text-[12px] font-semibold text-slate-900">{is ? "Vikumark" : "Weekly target"} ≈ {wt.weeklyLoadTarget} PL {wt.matchMultiple != null && <span className="font-normal text-slate-500">({wt.matchMultiple}× {is ? "leik" : "match"})</span>}</span>}
                       {wt.perSessionLoad != null && <span className="text-[11px] text-slate-500">≈ {wt.perSessionLoad}/{is ? "æfingu" : "session"} × {wt.sessionCount}</span>}
-                      {wt.topUp != null && wt.topUp > 0 && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">{is ? "Áfylling" : "Top-up"} +{wt.topUp}</span>}
+                      {wt.topUp != null && wt.topUp > 0 && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">{is ? "Áfylling" : "Top-up"} +{wt.topUp}</span>}
                     </div>
                     <p className="mt-1 text-[11px] text-slate-600">{is ? wt.note.is : wt.note.en}</p>
-                    <p className="mt-1 text-[9px] text-slate-400">{wt.cite}</p>
+                    <p className="mt-1 text-[11px] text-slate-500">{wt.cite}</p>
                   </div>
                 </div>
               );
             })()}
+              </>)}
+              {plSub === 3 && (<>
+            {/* VALD readiness to LOAD — volume cap (not the daily readiness colour) */}
+            {player && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-slate-50 p-2.5">
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${player.vald.status === "green" ? "bg-emerald-500" : player.vald.status === "yellow" ? "bg-amber-500" : player.vald.status === "red" ? "bg-rose-500" : "bg-slate-300"}`} />
+                <span className="text-[12px] text-slate-700"><span className="font-semibold">{is ? "VALD — geta til að taka álag" : "VALD — readiness to load"}{player.vald.capPct != null ? ` · ${is ? "magn-þak" : "cap"} ${player.vald.capPct}%` : ""}</span> — {is ? player.vald.note.is : player.vald.note.en}</span>
+              </div>
+            )}
 
+            {/* Data readiness — name the gap */}
+            {player && (
+              <div className="mt-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Gögn tilbúin? — hvað vantar" : "Data readiness — what's missing"}</div>
+                {player.gaps.length === 0 ? <p className="mt-1 text-[12px] text-emerald-700">{is ? "Öll gögn til staðar." : "All data present."}</p> : (
+                  <ul className="mt-1 space-y-1">
+                    {player.gaps.map((g) => <li key={g.key} className="flex items-start gap-2 text-[12px] text-slate-700"><span className={`mt-0.5 rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase ${sevColor(g.severity)}`}>{g.severity}</span><span>{is ? g.message.is : g.message.en}</span></li>)}
+                  </ul>
+                )}
+              </div>
+            )}
+              </>)}
+            </div>
+          </section>
+          </>)}
+
+          {/* 4 — THE SQUAD: team-level content, kept apart from the player; a row opens that player */}
+          <section className={card}>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h2 className={h2c}>{is ? "Allur hópurinn" : "The whole squad"}</h2>
+              <span className="text-[12px] text-slate-500">{is ? "Smelltu á leikmann til að opna hann hér að ofan." : "Click a player to open him above."}</span>
+            </div>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[680px] text-[13px]">
+                <thead><tr className="text-left text-[11px] text-slate-500">
+                  <th className="py-1.5 pr-2 font-semibold">{is ? "Leikmaður" : "Player"}</th>
+                  <th className="py-1.5 pr-2 font-semibold">{is ? "Staða" : "Position"}</th>
+                  <th className="py-1.5 pr-2 text-right font-semibold" title={is ? "Hversu miklu léttari (−) rampurinn er vs fullur rampur, eftir VALD-þaki + mínútu-trimmi" : "How much lighter (−) the ramp is vs the full ramp, after the VALD cap + minutes trim"}>{is ? "Lota vs fullur rampur" : "Block vs full ramp"}</th>
+                  <th className="py-1.5 pr-2 text-right font-semibold">{is ? "VALD-þak" : "VALD cap"}</th>
+                  <th className="py-1.5 pr-2 text-right font-semibold">{is ? "Mín./leik" : "Min/match"}</th>
+                  <th className="py-1.5 pl-2 font-semibold">{is ? "Gögn" : "Data"}</th>
+                </tr></thead>
+                <tbody>
+                  {plist.map((p) => {
+                    const lp = squadLp(p); const cap = p.vald.capPct; const am = p.recentMinutesAvg;
+                    const gaps = p.gaps.filter((g) => g.severity !== "ok").length;
+                    const on = p.playerId === selId;
+                    return (
+                      <tr key={p.playerId} onClick={() => setSelId(p.playerId)} className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${on ? "bg-[#2740e6]/[0.06]" : ""}`}>
+                        <td className="py-2 pr-2"><button type="button" onClick={(e) => { e.stopPropagation(); setSelId(p.playerId); }} aria-pressed={on} className="text-left font-semibold text-slate-900 hover:underline">{p.name}</button></td>
+                        <td className="py-2 pr-2 text-slate-600">{p.position ?? "–"}</td>
+                        <td className={`py-2 pr-2 text-right font-bold tabular-nums ${lp > 0 ? "text-emerald-700" : lp < 0 ? "text-[#8a3220]" : "text-slate-500"}`}>{lp > 0 ? `−${lp}%` : lp < 0 ? `+${-lp}%` : "—"}</td>
+                        <td className="py-2 pr-2 text-right tabular-nums">{cap != null && cap < 100 ? <span className={`rounded px-1.5 py-0.5 text-[12px] font-semibold ${cap >= 85 ? "bg-amber-100 text-amber-800" : "bg-rose-100 text-rose-800"}`}>{cap}%</span> : <span className="text-slate-500">–</span>}</td>
+                        <td className="py-2 pr-2 text-right tabular-nums text-slate-600">{am == null ? "–" : `${am}′`}</td>
+                        <td className={`py-2 pl-2 ${gaps ? "text-amber-800" : "text-emerald-700"}`}>{gaps ? (is ? `${gaps} vantar` : `${gaps} missing`) : (is ? "Í lagi" : "OK")}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <details className="mt-4">
+              <summary className="cursor-pointer py-1 text-[13px] font-bold text-[#2740e6]">{is ? "Undirbúningur — byrjunarálag viku 1 + stigmögnun (lið)" : "Pre-season — week-1 starting load + ramp (team)"}</summary>
             {/* PRE-SEASON WEEK-1 START — controlled re-entry + ramp to the pre-season build. Editable launch pad. */}
             {plan && (() => {
               const preWeeks = Math.max(1, plan.phases.find((p) => p.key === "preseason")?.weeks ?? 6);
@@ -2499,9 +2731,9 @@ export default function PeriodizationHubPage() {
               const targetLine = (row: PreseasonWeekTarget) => (
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <span className="text-[13px] font-bold text-slate-900">{row.multipleOfMatch}× {is ? "leik" : "match"}</span>
-                  {row.weeklyLoadTarget != null ? <span className="text-[12px] text-slate-700">{is ? "vika" : "week"} ≈ {row.weeklyLoadTarget} PL</span> : <span className="text-[11px] text-slate-400">{is ? "ekkert GPS-leikvið" : "no GPS match unit"}</span>}
+                  {row.weeklyLoadTarget != null ? <span className="text-[12px] text-slate-700">{is ? "vika" : "week"} ≈ {row.weeklyLoadTarget} PL</span> : <span className="text-[11px] text-slate-500">{is ? "ekkert GPS-leikvið" : "no GPS match unit"}</span>}
                   {row.perSessionLoad != null && <span className="text-[11px] text-slate-500">≈ {row.perSessionLoad}/{is ? "æf" : "sess"} × {row.sessionCount}</span>}
-                  {row.sRpeAuTarget != null && <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#7a5cc4]">sRPE ≈ {row.sRpeAuTarget} AU</span>}
+                  {row.sRpeAuTarget != null && <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">sRPE ≈ {row.sRpeAuTarget} AU</span>}
                 </div>
               );
               const kpiChips = (row: PreseasonWeekTarget) => {
@@ -2510,7 +2742,7 @@ export default function PeriodizationHubPage() {
                 return (
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {keys.map((k) => { const lbl = WEEKLY_LOAD_LABELS[k]; return (
-                      <span key={k} className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-600"><span className="text-slate-400">{is ? lbl.is : lbl.en}</span> <span className="font-semibold tabular-nums text-slate-800">{row.byKpi[k]}{lbl.unit}</span></span>
+                      <span key={k} className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] text-slate-600"><span className="text-slate-500">{is ? lbl.is : lbl.en}</span> <span className="font-semibold tabular-nums text-slate-800">{row.byKpi[k]}{lbl.unit}</span></span>
                     ); })}
                   </div>
                 );
@@ -2518,11 +2750,11 @@ export default function PeriodizationHubPage() {
               return (
                 <div className="mt-3 rounded-lg border-2 border-[#7a5cc4]/30 bg-[#7a5cc4]/5 p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{is ? "Undirbúningur — byrjunar-álag viku 1 + stigmögnun" : "Pre-season — week-1 starting load + ramp"}</span>
-                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${confChip(teamRow.confidence).c}`}>{confChip(teamRow.confidence).t}</span>
-                    <span className="rounded bg-white px-1.5 py-0.5 text-[9px] font-medium text-slate-500">{is ? "grunnur" : "anchor"}: {anchorLabel(teamRow.anchor)}</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{is ? "Undirbúningur — byrjunar-álag viku 1 + stigmögnun" : "Pre-season — week-1 starting load + ramp"}</span>
+                    <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${confChip(teamRow.confidence).c}`}>{confChip(teamRow.confidence).t}</span>
+                    <span className="rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-500">{is ? "grunnur" : "anchor"}: {anchorLabel(teamRow.anchor)}</span>
                   </div>
-                  <p className="mt-1 text-[10px] text-slate-500">{is ? "Vika 1 er stýrð endurkoma (brot úr leik) — ekki fullt leikálag. Byggðu upp héðan að undirbúnings-marki. Upphafspunktur; þú breytir." : "Week 1 is a controlled re-entry (a fraction of a match) — not full match load. Build from here to the pre-season target. A starting point; you edit it."}</p>
+                  <p className="mt-1 text-[11px] text-slate-500">{is ? "Vika 1 er stýrð endurkoma (brot úr leik) — ekki fullt leikálag. Byggðu upp héðan að undirbúnings-marki. Upphafspunktur; þú breytir." : "Week 1 is a controlled re-entry (a fraction of a match) — not full match load. Build from here to the pre-season target. A starting point; you edit it."}</p>
 
                   {/* Editable controls */}
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
@@ -2532,12 +2764,12 @@ export default function PeriodizationHubPage() {
                     <label className="flex items-center gap-1 text-slate-600">{is ? "Æfingar/viku" : "Sessions/wk"}
                       <select value={psSessions} onChange={(e) => setPsSessions(Number(e.target.value))} className="rounded border border-slate-300 px-1.5 py-0.5">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
                     </label>
-                    <span className="text-slate-400">·</span>
+                    <span className="text-slate-500">·</span>
                     <span className="text-slate-500">{is ? "Vika sýnd" : "Show week"}:</span>
                     <div className="inline-flex flex-wrap gap-1">
                       {teamRamp.map((r) => (
                         <button key={r.weekIndex} type="button" onClick={() => setPsWeekSel(r.weekIndex)}
-                          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${r.weekIndex === wkSel ? "bg-[#7a5cc4] text-white" : "bg-white text-slate-600 border border-slate-200"}`}
+                          className={`rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${r.weekIndex === wkSel ? "bg-[#7a5cc4] text-white" : "bg-white text-slate-600 border border-slate-200"}`}
                           title={`${r.multipleOfMatch}× ${is ? "leik" : "match"}`}>
                           {r.weekIndex}
                         </button>
@@ -2547,16 +2779,16 @@ export default function PeriodizationHubPage() {
 
                   {/* Team card for the selected week */}
                   <div className="mt-2.5 rounded-lg bg-white p-2.5">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? `Lið — vika ${wkSel}` : `Team — week ${wkSel}`}</div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? `Lið — vika ${wkSel}` : `Team — week ${wkSel}`}</div>
                     <div className="mt-1">{targetLine(teamRow)}</div>
                     {kpiChips(teamRow)}
-                    <p className="mt-1.5 text-[10px] text-slate-500">{is ? teamRow.note.is : teamRow.note.en}</p>
+                    <p className="mt-1.5 text-[11px] text-slate-500">{is ? teamRow.note.is : teamRow.note.en}</p>
                   </div>
 
                   {/* Selected player's own start for the week */}
                   {player && playerRow && (
                     <div className="mt-2 rounded-lg bg-white p-2.5">
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{player.name} — {is ? `vika ${wkSel}` : `week ${wkSel}`}</div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{player.name} — {is ? `vika ${wkSel}` : `week ${wkSel}`}</div>
                       <div className="mt-1">{targetLine(playerRow)}</div>
                       {kpiChips(playerRow)}
                     </div>
@@ -2565,7 +2797,7 @@ export default function PeriodizationHubPage() {
                   {/* Whole squad — the selected week's start per player (least-loaded units first) */}
                   <div className="mt-2 overflow-x-auto">
                     <table className="w-full text-[11px]">
-                      <thead><tr className="text-left text-[9px] uppercase tracking-wide text-slate-400"><th className="py-0.5 pr-2 font-medium">{is ? "Leikmaður" : "Player"}</th><th className="py-0.5 pr-2 text-right font-medium">×{is ? "leik" : "match"}</th><th className="py-0.5 pr-2 text-right font-medium">{is ? "vika" : "week"} PL</th><th className="py-0.5 text-right font-medium">/{is ? "æf" : "sess"}</th></tr></thead>
+                      <thead><tr className="text-left text-[11px] uppercase tracking-wide text-slate-500"><th className="py-0.5 pr-2 font-medium">{is ? "Leikmaður" : "Player"}</th><th className="py-0.5 pr-2 text-right font-medium">×{is ? "leik" : "match"}</th><th className="py-0.5 pr-2 text-right font-medium">{is ? "vika" : "week"} PL</th><th className="py-0.5 text-right font-medium">/{is ? "æf" : "sess"}</th></tr></thead>
                       <tbody>
                         {plan.players.map((pp) => {
                           const anc: LoadAnchor = pp.matchUnit.load.typical != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
@@ -2582,80 +2814,15 @@ export default function PeriodizationHubPage() {
                       </tbody>
                     </table>
                   </div>
-                  <p className="mt-1.5 text-[9px] text-slate-400">{is ? "Grunnur: leikurinn = einingin. Ekkert GPS-leikvið → engin GPS-tala (aldrei skálduð); sRPE/AU er liðs-dæmigert leik-álag. Teixeira 2021 · Gabbett/Malone (ACWR, endurkoma) · Foster (sRPE). Lýsandi — breytir aldrei readiness-litnum." : "Anchor: the match = the unit. No GPS match unit → no GPS number (never fabricated); sRPE/AU is the team's typical match session. Teixeira 2021 · Gabbett/Malone (ACWR, re-entry) · Foster (sRPE). Descriptive — never changes the readiness colour."}</p>
+                  <p className="mt-1.5 text-[11px] text-slate-500">{is ? "Grunnur: leikurinn = einingin. Ekkert GPS-leikvið → engin GPS-tala (aldrei skálduð); sRPE/AU er liðs-dæmigert leik-álag. Teixeira 2021 · Gabbett/Malone (ACWR, endurkoma) · Foster (sRPE). Lýsandi — breytir aldrei readiness-litnum." : "Anchor: the match = the unit. No GPS match unit → no GPS number (never fabricated); sRPE/AU is the team's typical match session. Teixeira 2021 · Gabbett/Malone (ACWR, re-entry) · Foster (sRPE). Descriptive — never changes the readiness colour."}</p>
                 </div>
               );
             })()}
-
-            {/* PRE-SEASON TESTING — how to run each measure + when to repeat it across the block. */}
-            {plan && (() => {
-              const preWeeks = Math.max(1, plan.phases.find((p) => p.key === "preseason")?.weeks ?? 6);
-              const hasVald = plan.players.some((p) => p.vald.status != null);
-              const schedule = recommendTestingSchedule({ preseasonWeeks: preWeeks, hasGps: plan.tier.loadSource === "gps", hasVald });
-              // "Due now" counts from current staleness (re-test the players who are missing/old).
-              const STALE = 42; // days
-              const dueBy: Partial<Record<TestKey, number>> = {
-                aerobic: plan.players.filter((p) => p.masAgeDays == null || p.masAgeDays > STALE).length,
-                maxStrength: plan.players.filter((p) => !p.vbt).length,
-                cmj: plan.players.filter((p) => p.vald.status == null).length,
-              };
-              return (
-                <div className="mt-3 rounded-lg border border-slate-200 p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Mælingar í undirbúningi — hvernig + hvenær að endurtaka" : "Pre-season testing — how & when to repeat"}</span>
-                  </div>
-                  <p className="mt-1 text-[10px] text-slate-500">{is ? "Aðlögun er hröð í undirbúningi — endurtaktu prófin á lotuskilum svo MAS/hraðasvæði og styrktarálag fylgi núverandi getu leikmannsins." : "Adaptation is fast in pre-season — repeat the tests at block boundaries so MAS/speed zones + strength loads track each player's current capacity."}</p>
-                  <div className="mt-2 space-y-2">
-                    {schedule.map((tp) => {
-                      const due = dueBy[tp.protocol.key];
-                      return (
-                        <details key={tp.protocol.key} className="rounded-lg bg-slate-50 p-2.5">
-                          <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-[12px] font-semibold text-slate-900">
-                            {is ? tp.protocol.name.is : tp.protocol.name.en}
-                            <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${tp.priority === "core" ? "bg-[#2740e6]/10 text-[#2740e6]" : "bg-slate-200 text-slate-600"}`}>{tp.priority === "core" ? (is ? "kjarna" : "core") : (is ? "ráðlagt" : "recommended")}</span>
-                            <span className="flex flex-wrap gap-1">
-                              {tp.weeks.map((w) => <span key={w} className="rounded bg-white px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-slate-600 border border-slate-200">V{w}</span>)}
-                            </span>
-                            {due != null && due > 0 && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">{due} {is ? "þarf núna" : "due now"}</span>}
-                          </summary>
-                          <p className="mt-1.5 text-[11px] text-slate-600"><span className="font-semibold">{is ? "Mælir" : "Measures"}:</span> {is ? tp.protocol.measures.is : tp.protocol.measures.en}</p>
-                          <p className="text-[11px] text-slate-600"><span className="font-semibold">{is ? "Stillir" : "Sets"}:</span> {is ? tp.protocol.prescribes.is : tp.protocol.prescribes.en}</p>
-                          <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Framkvæmd" : "How"}</p>
-                          <ul className="mt-0.5 space-y-0.5">
-                            {tp.protocol.how.map((h, i) => <li key={i} className="text-[11px] text-slate-700">• {is ? h.is : h.en}</li>)}
-                          </ul>
-                          <p className="mt-1 text-[10px] text-slate-500">{is ? "Taktur" : "Cadence"}: {is ? tp.cadence.is : tp.cadence.en}</p>
-                          <p className="mt-0.5 text-[9px] text-slate-400">{tp.protocol.cite}</p>
-                        </details>
-                      );
-                    })}
-                  </div>
-                  <p className="mt-2 text-[9px] text-slate-400">{is ? "Ráðlegging — þjálfari skipuleggur prófin. „Þarf núna\" = leikmenn með gamalt/vantandi próf. Buchheit · Bangsbo · Mann/Weakley · Claudino · Bourne. Lýsandi — engin readiness-lit." : "Advisory — the coach schedules the tests. \"Due now\" = players with a stale/missing test. Buchheit · Bangsbo · Mann/Weakley · Claudino · Bourne. Descriptive — no readiness colour."}</p>
-                </div>
-              );
-            })()}
-
-            {/* VALD readiness to LOAD — volume cap (not the daily readiness colour) */}
-            {player && (
-              <div className="mt-3 flex items-center gap-2 rounded-lg bg-slate-50 p-2.5">
-                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${player.vald.status === "green" ? "bg-emerald-500" : player.vald.status === "yellow" ? "bg-amber-500" : player.vald.status === "red" ? "bg-rose-500" : "bg-slate-300"}`} />
-                <span className="text-[12px] text-slate-700"><span className="font-semibold">{is ? "VALD — geta til að taka álag" : "VALD — readiness to load"}{player.vald.capPct != null ? ` · ${is ? "magn-þak" : "cap"} ${player.vald.capPct}%` : ""}</span> — {is ? player.vald.note.is : player.vald.note.en}</span>
-              </div>
-            )}
-
-            {/* Data readiness — name the gap */}
-            {player && (
-              <div className="mt-3">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Gögn tilbúin? — hvað vantar" : "Data readiness — what's missing"}</div>
-                {player.gaps.length === 0 ? <p className="mt-1 text-[12px] text-emerald-700">{is ? "Öll gögn til staðar." : "All data present."}</p> : (
-                  <ul className="mt-1 space-y-1">
-                    {player.gaps.map((g) => <li key={g.key} className="flex items-start gap-2 text-[12px] text-slate-700"><span className={`mt-0.5 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${sevColor(g.severity)}`}>{g.severity}</span><span>{is ? g.message.is : g.message.en}</span></li>)}
-                  </ul>
-                )}
-              </div>
-            )}
+            </details>
           </section>
-          </div>)}
+
+            </div>);
+          })()}
 
           <p className="text-[10px] text-slate-400">{is ? "Reglur mæla með — þjálfari ákveður og hnekkir. Tímabilsskipulag setur áætlunina; readiness stýrir deginum. Það breytir aldrei readiness-litnum. Martin-García 2018 (taper) · Buchheit & Laursen 2013 (interval) · Mann/Weakley (VBT-svæði)." : "Rules recommend — the coach decides and overrides. Periodization sets the plan; readiness modulates the day. It never changes the readiness colour. Martin-García 2018 (taper) · Buchheit & Laursen 2013 (intervals) · Mann/Weakley (VBT zones)."}</p>
         </div>
