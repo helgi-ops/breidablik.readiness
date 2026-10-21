@@ -30,6 +30,9 @@ const LABEL: Record<string, { en: string; is: string }> = {
   load_index: { en: "Load Index", is: "Álagsvísitala" },
   impacts: { en: "Impacts", is: "Impacts" },
   high_intensity_min: { en: "High-intensity time", is: "Háákefðar-tími" },
+  mid_intensity_min: { en: "Mid-intensity time", is: "Miðákefðar-tími" },
+  low_intensity_min: { en: "Low-intensity time", is: "Lágákefðar-tími" },
+  settled_min: { en: "Settled time", is: "Rólegur tími" },
 };
 
 const fmt = (v: number | null, unit: string) => {

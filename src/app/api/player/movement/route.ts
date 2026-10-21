@@ -33,9 +33,9 @@ const codSum = (r: Row) => num(r.ima_cod_left_high) + num(r.ima_cod_left_medium)
   + num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low);
 
 /** Titan Movement-Profile durations live in raw_payload_json.movement_profile. */
-function mpHigh(r: Row): number {
+function mp(r: Row, k: "settled" | "low" | "mid" | "high"): number {
   const p = r.raw_payload_json as { movement_profile?: Record<string, number | null> } | null;
-  return num(p?.movement_profile?.high);
+  return num(p?.movement_profile?.[k]);
 }
 
 // IMA signals (Pro S7) — the richest movement read.
@@ -53,7 +53,10 @@ const TITAN_METRICS: MetricDef[] = [
   { key: "load_index", unit: "", value: (r) => num(r.player_load) || num(r.total_player_load) },
   { key: "jumps", unit: "", value: (r) => num(r.jumps) },
   { key: "impacts", unit: "", value: (r) => num(r.impacts) },
-  { key: "high_intensity_min", unit: "", value: (r) => mpHigh(r) },
+  { key: "high_intensity_min", unit: "min", value: (r) => mp(r, "high") },
+  { key: "mid_intensity_min", unit: "min", value: (r) => mp(r, "mid") },
+  { key: "low_intensity_min", unit: "min", value: (r) => mp(r, "low") },
+  { key: "settled_min", unit: "min", value: (r) => mp(r, "settled") },
 ];
 
 // GPS signals (Lite / GPS-only) — the data the player genuinely receives.

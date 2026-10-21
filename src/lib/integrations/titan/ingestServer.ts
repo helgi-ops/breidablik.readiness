@@ -13,8 +13,22 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { titanRowToExternalLoad } from "./toExternalLoad";
 import type { TitanRow } from "./parseSyncedData";
 
-/** Case/spacing/punctuation-insensitive name key (keeps Icelandic letters intact). */
-const normName = (s: string): string => s.toLowerCase().replace(/[,._]/g, " ").replace(/\s+/g, " ").trim();
+/** Fold Icelandic/diacritic letters to ASCII — Titan/Hudl exports strip accents
+ *  ("Björk"→"Bjork", "Sverrisdóttir"→"Sverrisdottir"), so the roster (accented) and
+ *  the export (unaccented) must be compared on a common, accent-free key. NFD strips the
+ *  combining marks (á é í ó ú ý ö); ð/þ/æ don't decompose, so map them explicitly. */
+const foldDiacritics = (s: string): string =>
+  s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/ð/g, "d")
+    .replace(/þ/g, "th")
+    .replace(/æ/g, "ae")
+    .replace(/ø/g, "o")
+    .replace(/ö/g, "o");
+/** Case/spacing/punctuation- AND accent-insensitive name key. */
+const normName = (s: string): string =>
+  foldDiacritics(s.toLowerCase()).replace(/[,._]/g, " ").replace(/\s+/g, " ").trim();
 /** Word-order-independent key so "Jón Ari" matches "Ari, Jón". */
 const tokenKey = (s: string): string => normName(s).split(" ").filter(Boolean).sort().join(" ");
 

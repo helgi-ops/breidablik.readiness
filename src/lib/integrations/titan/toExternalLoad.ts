@@ -64,6 +64,8 @@ export function titanRowToExternalLoad(r: TitanRow, playerId: string, teamId: st
     // units are preserved exactly as Titan reports them (not converted).
     raw_payload_json: {
       provider: "titan",
+      // Titan is indoor IMU-only — flag it so the indoor-tier gating hides GPS-only surfaces for this team.
+      indoor: true,
       movement_profile: {
         settled: r.settledMin,
         low: r.lowActiveMin,
