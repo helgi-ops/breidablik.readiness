@@ -8,13 +8,17 @@ import "server-only";
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { loadRoster, loadAthleteProfilesForTeam } from "@/lib/micropulse/playerAnalysis/loadAthleteProfilesForTeam";
+import { loadRoster, loadAthleteProfilesForTeam, loadAthleteSignals, athleteSquadInput } from "@/lib/micropulse/playerAnalysis/loadAthleteProfilesForTeam";
 import { collectDeficits } from "@/lib/micropulse/unifiedDeficits/collect";
 import { buildFitnessTrends } from "@/lib/micropulse/load/fitnessTrend";
 import { resolveMas, resolveMss } from "@/lib/micropulse/load/speedZonesData";
 import { buildPositionFitnessRequirements } from "@/lib/micropulse/positionFitnessRequirements";
 import { computeAnaerobicSpeedReserve } from "@/lib/micropulse/load/criticalSpeed";
 import { oneRepMaxesFromLogs } from "@/lib/micropulse/strengthProgramming/oneRmFromLogs";
+import { recommendPreseasonEmphasis } from "@/lib/micropulse/strengthProgramming/preseasonEmphasis";
+import { deriveDsiForPlayer } from "@/lib/micropulse/strengthProgramming/deriveDsi";
+import { loadDsiForTeam, squadThresholdsFromMap } from "@/lib/micropulse/strengthProgramming/loadDsiForTeam";
+import { buildAthleteProfile } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import type { SetLogRow } from "@/lib/client/workingOneRm";
 import type { QualityId } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { buildOffWeekPlan, type GymAccess, type OffWeekPlan, type PlayerNeeds } from "./plan";
@@ -166,10 +170,40 @@ export async function loadOffWeekPlans(
     }
   } catch { /* thin data → no aerobic flag */ }
 
+  // Per-player strength emphasis (DSI-driven when force plates exist, else strength/power percentiles +
+  // body comp) → the engine's set/rep scheme. Mirrors /api/coach/strength-periodization?all=1; computed
+  // against the FULL squad so percentiles stay squad-relative even when generating for a subset.
+  const leanByPlayer = new Map<string, "hypertrophy" | "max_strength" | "power" | "balanced">();
+  try {
+    const squadRoster = await loadRoster(teamId);
+    const signals = await loadAthleteSignals(teamId);
+    const input = athleteSquadInput(squadRoster, signals);
+    const { data: bcRows } = await sb.from("player_body_metrics")
+      .select("player_id, mass_kg, body_fat_pct, lean_mass_kg, measured_on")
+      .in("player_id", squadRoster.map((r) => r.id)).order("measured_on", { ascending: false });
+    const bcByPlayer = new Map<string, { mass_kg?: number | null; body_fat_pct?: number | null; lean_mass_kg?: number | null }>();
+    for (const r of (bcRows ?? []) as Array<{ player_id: string; mass_kg?: number | null; body_fat_pct?: number | null; lean_mass_kg?: number | null }>) {
+      if (!bcByPlayer.has(r.player_id)) bcByPlayer.set(r.player_id, r); // first = latest (ordered desc)
+    }
+    const dsiMap = await loadDsiForTeam(sb, teamId).catch(() => new Map());
+    const squadThr = squadThresholdsFromMap(dsiMap);
+    for (const r of roster) {
+      const athlete = buildAthleteProfile(input, r.id);
+      const q = (id: string): number | null => athlete?.qualities.find((x) => x.id === id)?.positionPercentile ?? null;
+      const powerPctl = [q("vbt_power"), q("reactive_power")].filter((x): x is number => x != null).reduce<number | null>((best, x) => (best == null ? x : Math.max(best, x)), null);
+      const bc = bcByPlayer.get(r.id);
+      const dsiRead = deriveDsiForPlayer(dsiMap.get(r.id) ?? { cmjPeakForceN: null, imtpPeakForceN: null }, squadThr);
+      const rd = recommendPreseasonEmphasis({ maxStrengthPctl: q("max_strength"), powerPctl, bodyFatPct: bc?.body_fat_pct ?? null, leanMassKg: bc?.lean_mass_kg ?? null, massKg: bc?.mass_kg ?? null, deficitEmphases: [], position: r.position, dsi: dsiRead.dsi });
+      const lean = rd.emphasis === "hypertrophy" ? "hypertrophy" : rd.emphasis === "max_strength" ? "max_strength" : rd.emphasis === "power" ? "power" : "balanced";
+      leanByPlayer.set(r.id, lean);
+    }
+  } catch { /* thin data → balanced default in the engine */ }
+
   const players: OffWeekPlayerPlan[] = roster.map((r) => {
     const needs: PlayerNeeds = {
       deficitEmphases: defByPlayer.get(r.id),
       belowAerobicReq: belowAeroByPlayer.get(r.id) ?? false,
+      strengthLean: leanByPlayer.get(r.id) ?? null,
       masTrend: masTrendByPlayer.get(r.id) ?? null,
       rtpTrack: rtpByPlayer.get(r.id) ?? null,
       fatigueFlag: fatigueByPlayer.get(r.id) ?? false,
