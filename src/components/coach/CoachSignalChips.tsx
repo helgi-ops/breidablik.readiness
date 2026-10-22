@@ -25,6 +25,9 @@ type Signal = {
   playerId?: string | null;
 };
 
+// Signal engines that stay OFF the Today chip row (they keep their own pages).
+const HIDDEN_FROM_CHIPS = new Set<string>(["game_plan_fit"]);
+
 const LEVEL_STYLE: Record<string, { chip: string; dot: string }> = {
   elevated: { chip: "border-[#e6c9c0] bg-[#f6e2dc] text-[#a83e28]", dot: "#a83e28" },
   watch: { chip: "border-[#efdcb8] bg-[#fbf0dc] text-[#a86f14]", dot: "#de9328" },
@@ -55,8 +58,12 @@ export default function CoachSignalChips({ teamId, lang, signals: provided }: { 
   }, [teamId, provided]);
 
   const signals = provided !== undefined ? provided : fetched;
-  // Team-level chips only (per-player signals render inside the attention rows).
-  const actionable = (signals ?? []).filter((s) => s.level !== "steady" && !s.playerId);
+  // Team-level chips only (per-player signals render inside the attention rows),
+  // minus engines we deliberately keep OFF the Today row. game_plan_fit
+  // ("Matchday fit") grades role-fit vs the opponent and routinely flags many
+  // players red — on the briefing that reads as an alarm when it isn't one, so
+  // it lives on its own page (/coach/game-plan-fit) instead of as a chip here.
+  const actionable = (signals ?? []).filter((s) => s.level !== "steady" && !s.playerId && !HIDDEN_FROM_CHIPS.has(s.engine));
   if (actionable.length === 0) return null; // silent unless something needs the coach
 
   // Keep the CRITICAL (red / elevated) signals visible at a glance — those are
