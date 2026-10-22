@@ -157,10 +157,14 @@ export async function buildLoadPlanForTeam(
   // GPS over the lookback window (120 days). PostgREST caps a response at 1000
   // rows, so page through with .range() and assemble the full set.
   const from = addDaysISO(sessionDate, -120);
-  // raw_payload_json is selected so buildLoadPlan can tell previous-club (pre-
-  // transfer) rows apart: they count toward each player's OWN targets/ACWR but
-  // must not inflate the squad's team aggregates (matchRef, teamAcwr, baseline).
-  const SELECT_COLS = "player_id, date, source, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, high_speed_distance, sprint_distance, accel_decel_efforts, raw_payload_json";
+  // buildLoadPlan needs ONE bit from raw_payload_json — the previous-club (pre-
+  // transfer) flag — to keep those rows per-player while excluding them from team
+  // aggregates (matchRef, teamAcwr, baseline). Select ONLY that JSON field, not
+  // the whole blob: pulling every row's full raw_payload_json was ~11 MB for a
+  // 120-day squad window and stalled the request (the Pre-session report hung on
+  // "Loading"). isPrevClubRow still reads raw_payload_json.previous_club, so we
+  // rebuild a minimal { previous_club } object per row below.
+  const SELECT_COLS = "player_id, date, source, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, high_speed_distance, sprint_distance, accel_decel_efforts, previous_club:raw_payload_json->>previous_club";
   const PAGE = 1000;
   const loadRows: Array<Record<string, unknown>> = [];
   for (let offset = 0; ; offset += PAGE) {
@@ -175,7 +179,12 @@ export async function buildLoadPlanForTeam(
       .range(offset, offset + PAGE - 1);
     if (loadErr) throw new Error(loadErr.message);
     if (!page || page.length === 0) break;
-    loadRows.push(...(page as Array<Record<string, unknown>>));
+    // Reshape the pulled `previous_club` text back into the minimal raw_payload_json
+    // shape isPrevClubRow expects, so the per-player-vs-team split is unchanged.
+    for (const r of page as Array<Record<string, unknown>>) {
+      const { previous_club: prev, ...rest } = r;
+      loadRows.push({ ...rest, raw_payload_json: prev == null ? null : { previous_club: prev } });
+    }
     if (page.length < PAGE) break;
   }
 
