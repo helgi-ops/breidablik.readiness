@@ -8,10 +8,35 @@ import "server-only";
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { loadRoster } from "@/lib/micropulse/playerAnalysis/loadAthleteProfilesForTeam";
+import { loadRoster, loadAthleteProfilesForTeam } from "@/lib/micropulse/playerAnalysis/loadAthleteProfilesForTeam";
 import { collectDeficits } from "@/lib/micropulse/unifiedDeficits/collect";
 import { buildFitnessTrends } from "@/lib/micropulse/load/fitnessTrend";
+import { resolveMas, resolveMss } from "@/lib/micropulse/load/speedZonesData";
+import { buildPositionFitnessRequirements } from "@/lib/micropulse/positionFitnessRequirements";
+import { computeAnaerobicSpeedReserve } from "@/lib/micropulse/load/criticalSpeed";
+import { oneRepMaxesFromLogs } from "@/lib/micropulse/strengthProgramming/oneRmFromLogs";
+import type { SetLogRow } from "@/lib/client/workingOneRm";
+import type { QualityId } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { buildOffWeekPlan, type GymAccess, type OffWeekPlan, type PlayerNeeds } from "./plan";
+
+/** The off-week engine keys lifts as squat/bench/deadlift/trap_bar_deadlift; the logged-1RM map keys them
+ *  by canonicalLift ("back squat", "bench press", "trap-bar deadlift"…). Remap so the kg prescriptions fill. */
+function offWeekOneRepMaxes(working: Record<string, { one_rm: number }>): Record<string, number> | null {
+  const pick = (...keys: string[]): number | undefined => {
+    for (const k of keys) { const v = working[k]?.one_rm; if (v && v > 0) return v; }
+    return undefined;
+  };
+  const out: Record<string, number> = {};
+  const squat = pick("back squat", "squat", "front squat");
+  const bench = pick("bench press", "bench");
+  const deadlift = pick("deadlift");
+  const trap = pick("trap-bar deadlift");
+  if (squat) out.squat = squat;
+  if (bench) out.bench = bench;
+  if (deadlift) out.deadlift = deadlift;
+  if (trap) out.trap_bar_deadlift = trap;
+  return Object.keys(out).length ? out : null;
+}
 
 /** unifiedDeficits QualityKey → the emphasis words buildOffWeekPlan matches. */
 function qualityToEmphasis(q: string): string | null {
@@ -100,14 +125,56 @@ export async function loadOffWeekPlans(
     } catch { /* thin data → no emphasis */ }
   }));
 
+  // Logged strength → working 1RM per lift (so the gym plan prescribes real kg, not just bodyweight).
+  const ormByPlayer = new Map<string, Record<string, number>>();
+  try {
+    const cutoff = new Date(); cutoff.setUTCDate(cutoff.getUTCDate() - 120);
+    const { data: setRows } = await sb.from("player_strength_set_log")
+      .select("player_id, session_date, exercise_name, weight_kg, reps, rpe")
+      .in("player_id", ids).eq("is_warmup", false).gte("session_date", cutoff.toISOString().slice(0, 10));
+    const setsByPlayer = new Map<string, SetLogRow[]>();
+    for (const r of (setRows ?? []) as Array<{ player_id: string } & SetLogRow>) {
+      const a = setsByPlayer.get(r.player_id) ?? [];
+      a.push({ session_date: r.session_date, exercise_name: r.exercise_name, weight_kg: r.weight_kg, reps: r.reps, rpe: r.rpe });
+      setsByPlayer.set(r.player_id, a);
+    }
+    for (const [pid, sets] of setsByPlayer) {
+      const orm = offWeekOneRepMaxes(oneRepMaxesFromLogs(sets));
+      if (orm) ormByPlayer.set(pid, orm);
+    }
+  } catch { /* no strength logs → bodyweight prescriptions */ }
+
+  // Below his position's aerobic requirement → the engine adds running volume.
+  const belowAeroByPlayer = new Map<string, boolean>();
+  try {
+    const [{ roster: profRoster, profiles }, masMap, mssMap] = await Promise.all([
+      loadAthleteProfilesForTeam(teamId), resolveMas(teamId), resolveMss(teamId),
+    ]);
+    for (const r of profRoster) {
+      const mas = masMap.get(r.id)?.masKmh ?? null;
+      const mss = mssMap.get(r.id)?.mssKmh ?? null;
+      const fitnessValues: Partial<Record<QualityId, { value: number; unit: string }>> = {};
+      if (mas != null) fitnessValues.aerobic_endurance = { value: mas, unit: "km/h" };
+      if (mss != null) fitnessValues.speed = { value: mss, unit: "km/h" };
+      const asr = computeAnaerobicSpeedReserve({ masKmh: mas, mssKmh: mss });
+      const read = buildPositionFitnessRequirements({
+        playerId: r.id, name: r.full_name, position: r.position, sport: r.sport,
+        profile: profiles.get(r.id) ?? null, fitnessValues, asrKmh: asr?.asrKmh ?? null,
+      });
+      const aero = read.rows.find((x) => x.quality === "aerobic_endurance");
+      if (aero?.band === "below") belowAeroByPlayer.set(r.id, true);
+    }
+  } catch { /* thin data → no aerobic flag */ }
+
   const players: OffWeekPlayerPlan[] = roster.map((r) => {
     const needs: PlayerNeeds = {
       deficitEmphases: defByPlayer.get(r.id),
+      belowAerobicReq: belowAeroByPlayer.get(r.id) ?? false,
       masTrend: masTrendByPlayer.get(r.id) ?? null,
       rtpTrack: rtpByPlayer.get(r.id) ?? null,
       fatigueFlag: fatigueByPlayer.get(r.id) ?? false,
     };
-    const plan = buildOffWeekPlan({ days, masKmh: masByPlayer.get(r.id) ?? null, oneRepMaxes: null, gymAccess, needs });
+    const plan = buildOffWeekPlan({ days, masKmh: masByPlayer.get(r.id) ?? null, oneRepMaxes: ormByPlayer.get(r.id) ?? null, gymAccess, needs });
     return { playerId: r.id, name: r.full_name, position: r.position, needs, plan };
   });
 
