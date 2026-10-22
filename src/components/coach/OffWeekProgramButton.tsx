@@ -84,7 +84,8 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
 
   const dl = async (subset: OffWeekPlayerPlan[], filename?: string) => {
     const { downloadOffWeekPlanPdf } = await import("@/components/coach/OffWeekPlanPdf");
-    await downloadOffWeekPlanPdf(subset, lang, filename);
+    const teamName = teams.find((tm) => tm.id === teamId)?.name; // known when a team is selected (admin); header falls back to title + date
+    await downloadOffWeekPlanPdf(subset, lang, filename, teamName);
   };
 
   const sendToApp = async () => {

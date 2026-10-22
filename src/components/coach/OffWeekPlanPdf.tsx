@@ -31,10 +31,15 @@ const s = StyleSheet.create({
   key: { fontSize: 8, color: "#5b6472", marginTop: 4 },
 });
 
-function PlayerPage({ p, lang }: { p: OffWeekPlayerPlan; lang: "EN" | "IS" }) {
+function PlayerPage({ p, lang, teamName }: { p: OffWeekPlayerPlan; lang: "EN" | "IS"; teamName?: string }) {
   const t = (b: Bi) => (lang === "IS" ? b.is : b.en);
+  // Running header so every page of a handed-over squad pack identifies the club, the document and the date.
+  const docTitle = lang === "IS" ? "Viðhaldsplan utan tímabils" : "Off-season maintenance plan";
+  const dateStr = new Date().toLocaleDateString(lang === "IS" ? "is-IS" : "en-GB");
+  const header = [teamName, docTitle, dateStr].filter(Boolean).join(" · ");
   return (
     <Page size="A4" style={s.page}>
+      <Text fixed style={{ fontSize: 8, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.4 }}>{header}</Text>
       <Text style={s.h1}>{p.name}</Text>
       <Text style={s.sub}>{(p.position ? `${p.position} · ` : "")}{t(p.plan.summary)}</Text>
       {p.plan.why.length > 0 && (
@@ -64,12 +69,12 @@ function PlayerPage({ p, lang }: { p: OffWeekPlayerPlan; lang: "EN" | "IS" }) {
   );
 }
 
-export function OffWeekDoc({ players, lang }: { players: OffWeekPlayerPlan[]; lang: "EN" | "IS" }) {
-  return <Document>{players.map((p) => <PlayerPage key={p.playerId} p={p} lang={lang} />)}</Document>;
+export function OffWeekDoc({ players, lang, teamName }: { players: OffWeekPlayerPlan[]; lang: "EN" | "IS"; teamName?: string }) {
+  return <Document>{players.map((p) => <PlayerPage key={p.playerId} p={p} lang={lang} teamName={teamName} />)}</Document>;
 }
 
-export async function downloadOffWeekPlanPdf(players: OffWeekPlayerPlan[], lang: "EN" | "IS", filename?: string) {
-  const blob = await pdf(<OffWeekDoc players={players} lang={lang} />).toBlob();
+export async function downloadOffWeekPlanPdf(players: OffWeekPlayerPlan[], lang: "EN" | "IS", filename?: string, teamName?: string) {
+  const blob = await pdf(<OffWeekDoc players={players} lang={lang} teamName={teamName} />).toBlob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
