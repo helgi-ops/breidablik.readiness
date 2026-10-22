@@ -35,6 +35,7 @@ const LEVEL_STYLE: Record<string, { chip: string; dot: string }> = {
 export default function CoachSignalChips({ teamId, lang, signals: provided }: { teamId: string | null; lang: "EN" | "IS"; signals?: Signal[] | null }) {
   const isEN = lang !== "IS";
   const [fetched, setFetched] = React.useState<Signal[] | null>(null);
+  const [showAll, setShowAll] = React.useState(false); // caution/task chips hidden until expanded
 
   // When the parent already fetched /api/coach/signals it passes them in (one
   // fetch for the whole Today page — the endpoint's first call triggers the
@@ -58,22 +59,41 @@ export default function CoachSignalChips({ teamId, lang, signals: provided }: { 
   const actionable = (signals ?? []).filter((s) => s.level !== "steady" && !s.playerId);
   if (actionable.length === 0) return null; // silent unless something needs the coach
 
+  // Keep the CRITICAL (red / elevated) signals visible at a glance — those are
+  // the alarms the verdict's "why" rests on — and tuck the caution/task chips
+  // (watch amber + task cobalt) behind a "show more" toggle so the row stays
+  // light. Explainability: the critical read is never a click away; the softer
+  // signals are one tap down.
+  const critical = actionable.filter((s) => s.level === "elevated");
+  const rest = actionable.filter((s) => s.level !== "elevated");
+
+  const chip = (s: Signal) => {
+    const st = LEVEL_STYLE[s.level] ?? LEVEL_STYLE.watch;
+    const why = (isEN ? s.why.en : s.why.is)[0] ?? "";
+    const title = [...(isEN ? s.why.en : s.why.is), s.counterfactual ? (isEN ? s.counterfactual.en : s.counterfactual.is) : ""].filter(Boolean).join("\n");
+    return (
+      <Link key={s.engine} href={s.href} title={title}
+        className={`group inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12.5px] font-medium transition hover:brightness-[0.98] ${st.chip}`}>
+        <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: st.dot }} />
+        <span className="font-semibold">{isEN ? s.label.en : s.label.is}</span>
+        {why ? <span className="opacity-80">· {why}</span> : null}
+        <span className="opacity-60 transition group-hover:translate-x-0.5">→</span>
+      </Link>
+    );
+  };
+
   return (
-    <div className="mt-3 flex flex-wrap gap-2">
-      {actionable.map((s) => {
-        const st = LEVEL_STYLE[s.level] ?? LEVEL_STYLE.watch;
-        const why = (isEN ? s.why.en : s.why.is)[0] ?? "";
-        const title = [...(isEN ? s.why.en : s.why.is), s.counterfactual ? (isEN ? s.counterfactual.en : s.counterfactual.is) : ""].filter(Boolean).join("\n");
-        return (
-          <Link key={s.engine} href={s.href} title={title}
-            className={`group inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12.5px] font-medium transition hover:brightness-[0.98] ${st.chip}`}>
-            <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: st.dot }} />
-            <span className="font-semibold">{isEN ? s.label.en : s.label.is}</span>
-            {why ? <span className="opacity-80">· {why}</span> : null}
-            <span className="opacity-60 transition group-hover:translate-x-0.5">→</span>
-          </Link>
-        );
-      })}
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      {critical.map(chip)}
+      {showAll && rest.map(chip)}
+      {rest.length > 0 && (
+        <button type="button" onClick={() => setShowAll((v) => !v)}
+          className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-[#2740e6] transition hover:bg-zinc-50">
+          {showAll
+            ? (isEN ? "Show fewer" : "Sýna færri")
+            : (isEN ? `Show ${rest.length} more signal${rest.length > 1 ? "s" : ""}` : `Sýna ${rest.length} merki til viðbótar`)}
+        </button>
+      )}
     </div>
   );
 }
