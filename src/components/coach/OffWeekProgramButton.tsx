@@ -184,7 +184,9 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
               )}
               <label className="text-slate-600">{t("Days", "Dagar")}
                 <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="ml-1 rounded border border-slate-300 px-2 py-1">
-                  {[3, 4, 5, 6, 7].map((d) => <option key={d} value={d}>{d}</option>)}
+                  {[3, 4, 5, 6, 7, 10, 14, 21].map((d) => (
+                    <option key={d} value={d}>{d >= 14 ? t(`${d} (${d / 7} weeks)`, `${d} (${d / 7} vikur)`) : d >= 10 ? t(`${d} days`, `${d} dagar`) : d}</option>
+                  ))}
                 </select>
               </label>
               <div className="inline-flex overflow-hidden rounded-md border border-slate-300">

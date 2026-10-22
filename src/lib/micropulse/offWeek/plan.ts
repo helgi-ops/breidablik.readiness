@@ -29,7 +29,7 @@ export interface PlayerNeeds {
 }
 
 export interface OffWeekInputs {
-  days: number;                              // 1–10 (clamped)
+  days: number;                              // 1–21 (clamped) — up to a ~3-week bridge block
   masKmh: number | null;                     // running speeds; null → time/RPE only
   oneRepMaxes?: Record<string, number> | null; // gym loads; null/empty → bodyweight prescriptions
   gymAccess: GymAccess;
@@ -58,9 +58,11 @@ const round5 = (n: number) => Math.round(n / 5) * 5;
 const paceAt = (masKmh: number | null, frac: number): string | null =>
   masKmh && masKmh > 0 ? `~${(Math.round(masKmh * frac * 2) / 2).toFixed(1)} km/h` : null;
 
-/** The base maintenance skeleton for N days — rest separates hard days; extras drop first when short. */
+/** The base maintenance skeleton for N days — rest separates hard days; extras drop first when short.
+ *  Beyond a week (a national-team / off-season BRIDGE can run 2–3 weeks) the 7-day maintenance week
+ *  simply repeats, tiled and sliced to N — a repeating maintenance block (Rønnestad: hold the level). */
 function baseSlots(days: number): Slot[] {
-  const d = Math.max(1, Math.min(10, Math.round(days)));
+  const d = Math.max(1, Math.min(21, Math.round(days)));
   const table: Record<number, Slot[]> = {
     1: ["strength"],
     2: ["strength", "runEasy"],
@@ -71,9 +73,11 @@ function baseSlots(days: number): Slot[] {
     7: ["strength", "runEasy", "rest", "strength", "runTempo", "runEasy", "rest"],
   };
   if (table[d]) return table[d];
-  // 8–10 → the 7 skeleton + trailing easy/rest
-  const extra: Slot[] = ["runEasy", "rest", "rest"];
-  return [...table[7], ...extra.slice(0, d - 7)];
+  // 8+ → tile the 7-day maintenance week and slice to N.
+  const week = table[7];
+  const out: Slot[] = [];
+  while (out.length < d) out.push(...week);
+  return out.slice(0, d);
 }
 
 /** Apply the needs profile to the slot list (which sessions, before writing prescriptions). */
@@ -142,7 +146,7 @@ function runBlocks(kind: "easy" | "tempo", inp: OffWeekInputs): Array<{ label: B
 }
 
 export function buildOffWeekPlan(inp: OffWeekInputs): OffWeekPlan {
-  const days = Math.max(1, Math.min(10, Math.round(inp.days)));
+  const days = Math.max(1, Math.min(21, Math.round(inp.days)));
   const why: Bi[] = [];
 
   // RTP players keep their rehab track — never a generic plan over it.
