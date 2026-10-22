@@ -169,6 +169,7 @@ export const teamPlanningLinks: SidebarLink[] = [
   { href: "/coach/periodization-hub",  label: { EN: "Periodization Hub",   IS: "Tímabilsskipulag" } },
   { href: "/coach/week-setup",         label: { EN: "Week setup",          IS: "Vikuskipulag" } },
   { href: "/coach/load-plan",          label: { EN: "Pre-session report",  IS: "Æfingaskýrsla (fyrir)" } },
+  { href: "/coach/bridge-plan",        label: { EN: "Bridge plan",         IS: "Brú-plan" } },
   // Progressive overload folded into the Periodization Hub (Meso ramp is engine-driven; per-player
   // build-up lives on the Players tab). The old /coach/progressive-overload route now redirects there.
   // Match minutes STAYS a destination — it's an interactive MD+1 data-entry page
