@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fusion — Óli Valur Ómarsson · Breiðablik–Fram 24 Aug 2026</title>
+<style>
+  :root{
+    --surface:#f4f2ec; --ink:#14181c; --primary:#2740e6;
+    --green:#1c7a4a; --amber:#de9328; --red:#a83e28; --muted:#6b7078;
+    --card:#fffdf8; --line:#e4e0d6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--ink);
+    font-family:"Geist","Inter",system-ui,-apple-system,sans-serif;line-height:1.5;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 24px 56px}
+  .kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  h1{font-family:"Archivo","Geist",sans-serif;font-weight:800;font-size:30px;margin:6px 0 4px;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:15px;margin-bottom:6px}
+  .lede{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:20px 0 26px;
+    font-size:16px}
+  .lede b{color:var(--primary)}
+  .timeline{position:relative;height:74px;margin:30px 4px 34px;border-radius:10px;
+    background:linear-gradient(90deg,#efece3,#efece3);border:1px solid var(--line)}
+  .tl-half{position:absolute;top:0;bottom:0;display:flex;align-items:flex-end;padding:6px 8px;font-size:11px;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.08em}
+  .tl-mid{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
+  .band{position:absolute;top:14px;height:34px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    font-family:"Archivo",sans-serif;font-weight:700;font-size:12px;color:#fff;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.14)}
+  .band small{font-weight:600;opacity:.85;margin-left:5px;font-family:"Geist",sans-serif}
+  .b-def{background:var(--red)} .b-att{background:var(--green)}
+  .tick{position:absolute;top:-20px;font-size:11px;color:var(--muted);transform:translateX(-50%)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:720px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;position:relative;overflow:hidden}
+  .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px}
+  .card.def::before{background:var(--red)} .card.att::before{background:var(--green)}
+  .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    padding:3px 9px;border-radius:20px;color:#fff}
+  .tag.def{background:var(--red)} .tag.att{background:var(--green)}
+  .whenrow{font-family:"Archivo",sans-serif;font-weight:800;font-size:22px;margin:12px 0 2px}
+  .whensub{color:var(--muted);font-size:13px;margin-bottom:14px}
+  .verdict{font-size:16px;font-weight:600;margin:2px 0 16px}
+  .col2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .minih{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:7px}
+  ul{margin:0;padding-left:18px;font-size:14px}
+  li{margin:3px 0}
+  .phys{margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);display:flex;gap:22px;flex-wrap:wrap}
+  .stat .n{font-family:"Archivo",sans-serif;font-weight:800;font-size:20px}
+  .stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .foot{margin-top:30px;font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}
+  .foot b{color:var(--ink)}
+  .pill{display:inline-block;background:#eceafd;color:var(--primary);border-radius:20px;padding:2px 10px;
+    font-size:12px;font-weight:600;margin-left:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">MicroPulse · Fusion — physical peak × tactical content</div>
+  <h1>The same player. Two peaks. Opposite meaning.</h1>
+  <div class="sub">Óli Valur Ómarsson &nbsp;·&nbsp; Breiðablik–Fram &nbsp;·&nbsp; 24 Aug 2026 &nbsp;·&nbsp; real Catapult + Wyscout data <span class="pill">first half — clocks aligned</span></div>
+
+  <div class="lede">
+    GPS alone tells you <b>when</b> he worked hardest. Event data alone tells you <b>what</b> he did.
+    Only putting them on the same match clock tells you his <b>hardest single minute was defending a corner</b>,
+    while his <b>hardest 5-minute run was his own attack down the wing</b> — the read no siloed system gives.
+  </div>
+
+  <!-- timeline -->
+  <div class="timeline">
+    <div class="tl-half" style="left:0;width:50%;justify-content:flex-start">1st half</div>
+    <div class="tl-mid" style="left:50%"></div>
+    <div class="tl-half" style="left:50%;width:50%;justify-content:flex-start;padding-left:12px">↦ 2nd half</div>
+    <!-- 45-min first-half scale across full width -->
+    <div class="tick" style="left:0%">0'</div>
+    <div class="tick" style="left:33%">15'</div>
+    <div class="tick" style="left:66%">30'</div>
+    <div class="tick" style="left:99%">45'</div>
+    <!-- hardest minute at 8:17 -> 8.28/45 = 18.4% ; width ~1min=2.2% -->
+    <div class="band b-def" style="left:16.4%;width:6%">8:17 <small>hardest min</small></div>
+    <!-- hardest 5-min 27:02-32:02 -> 60% to 71% -->
+    <div class="band b-att" style="left:60%;width:11%">27–32' <small>hardest 5-min</small></div>
+  </div>
+
+  <div class="grid">
+    <!-- DEFENSIVE PEAK -->
+    <div class="card def">
+      <span class="tag def">Hardest single minute · Player Load</span>
+      <div class="whenrow">08:17 <span style="font-size:14px;color:var(--muted);font-weight:600">from kickoff</span></div>
+      <div class="whensub">Peak 1-minute Player Load window</div>
+      <div class="verdict">His most intense physical minute was <b style="color:var(--red)">defensive</b> — scrambling to defend a set-piece.</div>
+      <div class="col2">
+        <div>
+          <div class="minih">His actions</div>
+          <ul><li>Interception</li><li>Clearance</li></ul>
+        </div>
+        <div>
+          <div class="minih">Team phase (same minute)</div>
+          <ul><li>Crosses conceded ×2</li><li>Corner conceded</li><li>Chance conceded</li><li>Defending style of play</li></ul>
+        </div>
+      </div>
+      <div class="phys">
+        <div class="stat"><div class="n">22.4</div><div class="l">Player Load / min (AU)</div></div>
+        <div class="stat"><div class="n">defending</div><div class="l">team context</div></div>
+      </div>
+    </div>
+
+    <!-- ATTACKING PEAK -->
+    <div class="card att">
+      <span class="tag att">Hardest 5-minute run · Distance</span>
+      <div class="whenrow">27:02–32:02 <span style="font-size:14px;color:var(--muted);font-weight:600">from kickoff</span></div>
+      <div class="whensub">Peak 5-minute distance window</div>
+      <div class="verdict">His highest-distance spell was his own <b style="color:var(--green)">attack</b> down the flank.</div>
+      <div class="col2">
+        <div>
+          <div class="minih">His actions</div>
+          <ul><li>5 passes</li><li>1v1 dribble</li><li>2 crosses</li><li>Chance + shot</li></ul>
+        </div>
+        <div>
+          <div class="minih">Team phase (same window)</div>
+          <ul><li>Attacking style ×4</li><li>Crosses ×3</li><li>Attacking corners ×2</li><li>Chance + shot</li></ul>
+        </div>
+      </div>
+      <div class="phys">
+        <div class="stat"><div class="n">845 m</div><div class="l">distance in 5 min</div></div>
+        <div class="stat"><div class="n">attacking</div><div class="l">team context</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>Where the numbers come from:</b> physical peak windows + kickoff clock from the Catapult CTR
+    (<b>player_peak_window</b>, loaded); tactical labels from the Wyscout SportsCode events for the same
+    match, read in the same window. First-half windows, where the two clocks share a kickoff origin.
+    Season HSR context for Óli this match: 843&nbsp;m &gt;19.8&nbsp;km/h, 12.7&nbsp;km total.
+    <br><br>
+    <b>Honest limits:</b> tactical layer is derived from on-ball event data (off-ball/relational patterns
+    aren't in the feed); second-half windows need a half-time-gap correction; peak-window HSR (the Ju-2022
+    Table-2 peak score) still needs raw GPS. Descriptive context — it never touches the readiness colour.
+  </div>
+</div>
+</body>
+</html>

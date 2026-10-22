@@ -1,0 +1,27 @@
+MicroPulse — Needs Attention (Today) — narration for Pictory
+============================================================
+
+Scene 1
+Needs Attention — how to read it. This is your morning triage. Instead of scanning twenty-five players, it hands you the short list — who to look at today, grouped and ranked — so you spend your attention where it counts.
+
+Scene 2
+The first thing to know: this is not the whole squad. Everyone who's fine simply isn't here. The panel only lists players with something worth a look today — an injury, a red or yellow readiness, a load concern — and ranks them most-urgent-first. So if the panel is empty, that's the good news: everyone's ready, no one needs attention today.
+
+Scene 3
+The list is split into four groups, worst on top. Alert today — non-injury red readiness, the players to act on now. In rehabilitation — those actively managed today, rehab and return-to-training. Injured, not training — out today with nothing to action, so it's tucked away. And Watch today — yellow readiness, keep an eye but no alarm. The less-urgent groups start collapsed, with the names still visible, so the panel stays short whether you have eleven players or thirty.
+
+Scene 4
+Here's the most important thing to read. On the right of each row is the day-over-day signal, because a coach reads change faster than state. Down-down means he dropped versus yesterday. Up-up means he's recovering. And a dot means new — there's no data from yesterday to compare. Why does this matter? Because a player sitting in yellow might just be his normal. A player who dropped from green to yellow overnight is the one to act on. The panel shows you the drop, not just the colour.
+
+Scene 5
+The panel also knows context, so you don't misread a row. First, injury always leads: an injured or rehab player stays on the list even if his wellness reads green, because the injury is the headline, not the colour. Second, the day after a match, a load spike is expected — so it's downgraded from alert to watch and marked post-match, because that's an echo of the game, not an unplanned overreach. Gabbett's work is the basis. The panel does this for you.
+
+Scene 6
+And every flag shows its confidence. Open a player and you can see how much data the verdict actually rests on: how many of the input signals are present today, how mature his personal baseline is — a flag on five days of history is thinner ice than one on twenty-five — and whether he even checked in. Missing data is labelled honestly. No check-in is shown as no-data, never quietly turned into a green.
+
+Scene 7
+The rows themselves are deliberately minimal — a name, one signal, a chevron — so the list stays scannable. When you want the story, tap the row and the drawer opens with the full read: the verdict in plain words, the why and the counterfactual — what drove it and what would have to change to clear it — and, behind the numbers, the load breakdown and the research citation for every flag. The list triages; the drawer explains.
+
+Scene 8
+So, thirty seconds. First, the top group — alert today and rehab are expanded, start there. Second, read the arrows — down-down is the overnight drop that triggers action. Third, tap any row for the why: the verdict, the counterfactual, the confidence, and the citation. It's the short list, ranked; it shows change before state; and missing data is always labelled, never dressed up as a green.
+

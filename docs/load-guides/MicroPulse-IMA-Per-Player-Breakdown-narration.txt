@@ -1,0 +1,30 @@
+MicroPulse — IMA Per-Player Breakdown — narration for Pictory
+============================================================
+
+Scene 1
+Per-Player Breakdown — how to read it, the detailed table at the foot of the IMA Intelligence page. It puts three different reads on one row per player: how his running was distributed, how his sprint load compares to his own norm, and — the injury-relevant one — how balanced his cutting was, left versus right.
+
+Scene 2
+Each row carries three reads. First, the stride distribution — how his running split across the eight cadence bands, the shape of his day. Second, sprint versus baseline — today's high-speed work against his own usual. And third, the change-of-direction asymmetry — how even his high-intensity cutting was, left leg versus right. The first two are load; the third is the injury-relevant screen.
+
+Scene 3
+Every stride is bucketed into one of eight cadence bands, from walking up to maximum sprint. The table groups them into three columns — low, bands one to three; mid, four to six; high, seven and eight — so you see the shape at a glance. And bands five to eight together form the Sprint Exposure unit, the sortable sprint column. That's the demanding, injury-relevant running you actually track and sort the squad by.
+
+Scene 4
+The vs-baseline column compares today's sprint bands to the player's own fourteen-day training average, with matches excluded — his sprint day against his usual sprint day. Below seventy percent is a light day; around a hundred is typical; and above a hundred and fifty is a heavy spike, where the row turns red and you monitor recovery. And an asterisk means the baseline rests on just one training day, so read it lightly until more days build up — the panel is honest about a thin norm.
+
+Scene 5
+The star of the table is the change-of-direction asymmetry — how evenly a player cuts at high intensity, left leg versus right. If he makes six hard cuts to one side and only four to the other, that's a thirty-three-percent asymmetry, and above fifteen percent it's flagged. A big left-right gap means one leg is doing far more of the hard cutting, which is a commonly-flagged imbalance linked to injury risk on Bishop's work. And it's read only on the high-intensity tier — the injury-relevant one.
+
+Scene 6
+Expand a player and his cutting splits into three intensity tiers, each shown as a left-versus-right bar. Low — the gentle, everyday direction changes, rarely a concern. Medium — moderate cuts, useful context. And high, marked injury-relevant — the hard cuts, and the only tier where the asymmetry really counts. A player can look balanced overall but be badly one-sided on his hardest cuts, and that's exactly what this expander exposes.
+
+Scene 7
+And the table is honest about what these numbers are. The asymmetry is framed as a risk factor, not a validated predictor — Bishop's evidence is mainly single-leg-jump asymmetry, so change-of-direction asymmetry is a flag to check, not a verdict to act on blindly. It only shows a number when there are at least ten change-of-direction efforts, so it never asymmetry-flags off a handful of cuts. And the sprint comparison is always his own fourteen-day norm, matches excluded — personal, like everything else in MicroPulse.
+
+Scene 8
+Why it matters: this is the strength-and-conditioning drill-down for movement. It turns a big sprint day and a lopsided cutting pattern — the two mechanical set-ups for soft-tissue injury — into something you can see per player, and act on with an individual conversation or a targeted correction. Sort by sprint to find the heaviest legs; scan the asymmetry column for the lopsided ones. It rests on McBurnie and Bishop.
+
+Scene 9
+So, thirty seconds. First, sort by sprint to find the heaviest sprint legs today. Second, check vs baseline — red above a hundred and fifty is a spike, an asterisk means a thin baseline. Third, scan the asymmetry column — above fifteen percent on high-intensity cutting, open the player and look. It's load against his own norm, asymmetry on the hard cuts, and always a flag to check rather than a verdict to act on blind.
+

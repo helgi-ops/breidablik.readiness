@@ -1,0 +1,21 @@
+MicroPulse — HSR Intelligence — narration (for Pictory)
+========================================================
+
+Scene 1
+HSR Intelligence. Dose high-speed running across the week.
+
+Scene 2
+HSR Intelligence tracks each player's high-speed running against his own norm. It is the Lite-tier counterpart to Decel Intelligence — the same idea, built on the GPS dimensions a Lite club has.
+
+Scene 3
+Here's the HSR Intelligence screen. Everything on it follows the same layered read: a plain verdict on top, the reason below, and the detail only if you open it.
+
+Scene 4
+How to read it. It shows who is under or over on high-speed running against their own baseline, not a squad average. Sprint exposure is dosed across the week so high-speed running isn't dumped into a single session.
+
+Scene 5
+When to open it. Use it to manage hamstring risk — too little high-speed running is as risky as too much, and it shows which way a player is leaning. The research behind it: Malone et al. (2017); Buchheit (2014) — high-speed running and hamstring risk.
+
+Scene 6
+HSR Intelligence — Dose high-speed running across the week. Read a decision, not a dataset; the detail is always one click away.
+

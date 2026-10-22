@@ -1,0 +1,30 @@
+MicroPulse — Position Comparison (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Position Comparison — the whole page, explained. This page steps up from the individual player to the role — how each position plays at your club. Let's walk through it.
+
+Scene 2
+It groups players by role and asks two things: how does each position play here, and how does a player compare to others in the same slot? Everything is per-90 and squad-relative, on GPS plus IMA, so the comparison is fair. And crucially, each role gets a playing style, not just a number.
+
+Scene 3
+The verdict up top names which position leads on what — attack and wide cover the most sprint distance, central mids change direction the most. Then you pick any of about ten metrics — distance, high-speed running, sprint, top speed, accelerations, and so on — and each position gets a per-90 bar, with a dashed line at the squad average so you see instantly who's above or below.
+
+Scene 4
+The heart of the page is Movement DNA. Each position's style is shown as relative emphasis across four axes — speed, agility, engine and aerial — from squad percentiles, and the biggest slice is the position's playing style. Here a centre back reads aerial-heavy, a central mid agility-heavy, and an attacking mid engine and speed. It's the club's roles, in one picture.
+
+Scene 5
+Each position also gets style tags — aerial presence, high agility and repeat-effort, engine and box-to-box, speed and vertical threat — and a driven-by line naming the metrics behind them. The key point: these tags are assigned by rules, from a z-score versus the other positions. The AI Squad Style Overview can put the whole thing into words, but the rules decide the style, not the AI.
+
+Scene 6
+Below that, each position gets its own card — the number of players and matches, the style tags, the driven-by metrics, and a radar shape against the squad median. You can expand show players to drop into the individuals, and a star marks a player who stands out within his position. So you can go from the role down to the one player who breaks its mould.
+
+Scene 7
+So what is it for? Three things. Understanding role demands — what a position actually has to do at your club, not in the abstract. Judging recruitment fit — does a signing match the position's physical profile? And defining tactical identity — how the team plays, position by position. Because it's per-90 and squad-relative, all three comparisons are fair.
+
+Scene 8
+So, thirty seconds. First, the verdict — which position leads on what. Second, the Movement DNA — the biggest slice is the style. Third, the tags and the radar — the style's name and its shape, with a star for anyone who stands out. And remember: it's positions versus the squad, and the styles are rule-assigned and AI-explained.
+
+Scene 9
+The bottom line: Position Comparison gives you the position's fingerprint, not the individual's. It helps you understand roles, judge recruitment fit, and define how the team plays — with the style decided by rules and explained by the AI.
+

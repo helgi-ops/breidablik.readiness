@@ -1,0 +1,21 @@
+MicroPulse — Quadrant Intelligence — narration (for Pictory)
+========================================================
+
+Scene 1
+Quadrant Intelligence. Spot hidden fatigue before GPS moves.
+
+Scene 2
+The Quadrant plots external load (how much a player runs) against internal cost (how hard it feels to him). Players in the top right carry a lot of both — the zone to watch.
+
+Scene 3
+Here's the Quadrant Intelligence screen. Everything on it follows the same layered read: a plain verdict on top, the reason below, and the detail only if you open it.
+
+Scene 4
+How to read it. The top-left box, “Decoupled”, is the most telling: the player isn't running more than usual but it feels much harder — an early fatigue signal. The dividing lines sit at the squad median, so a player's position is always relative to the day.
+
+Scene 5
+When to open it. Open it when the numbers look normal but someone “feels” tired — the decoupled box often shows before any GPS number departs from normal. The research behind it: Gabbett (2017) — external versus internal load.
+
+Scene 6
+Quadrant Intelligence — Spot hidden fatigue before GPS moves. Read a decision, not a dataset; the detail is always one click away.
+

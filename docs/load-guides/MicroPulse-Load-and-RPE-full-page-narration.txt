@@ -1,0 +1,36 @@
+MicroPulse — Load & RPE — narration for Pictory
+============================================================
+
+Scene 1
+Load and RPE — the whole page, explained. Where Load Intelligence analyses external, GPS load, this tab is the internal-load hub. Let's walk through it.
+
+Scene 2
+It's the internal-load hub. Internal load is what a session cost the player — RPE and heart rate — and that's this tab. External load is what was done — GPS distance, speed, accelerations — and that's Load Intelligence. This tab handles RPE compliance, an HR cross-check, and the internal ACWR, all in one place.
+
+Scene 3
+First, the operational gate: is the RPE feed complete? Total submissions, how many are missing, and the compliance percentage — here twenty-eight of twenty-eight, a hundred per cent. Because RPE is a coach or player input, this is where you see whether it's actually being fed, before the readiness engine leans on it.
+
+Scene 4
+The number itself is sRPE. Session-RPE — how hard it felt, on a zero-to-ten scale — times the duration in minutes, gives the internal load in arbitrary units. On Foster's method, it's the cheapest and most robust load measure there is — no hardware needed — which is exactly why it's the backbone of readiness on every tier, including clubs with no GPS at all.
+
+Scene 5
+Then the clever part: the heart-rate cross-check. It compares HR load — Edwards' summated-heart-rate-zone method, adapted to Catapult's eight bands — against the sRPE. Does the objective heart rate corroborate the subjective RPE? When they match, that's reassurance — trust the load number. When they diverge, it's a flag: someone is under- or over-rating the effort. And HR is always read on the player's own norm, never as an absolute number comparable to sRPE.
+
+Scene 6
+And it's honest about what it can't measure. Only players who wore the belt on skin have heart-rate data — the rest are shown as no-data, never zero, that null-versus-zero discipline again. And the HR read is against the player's own norm, using band weights rather than calibrated percent-HRmax cuts, because a true percent-HRmax needs each athlete's max heart rate set in OpenField. It states its limits right on the screen.
+
+Scene 7
+The risk overview then puts that internal load into an ACWR — the acute-to-chronic ratio, but computed on sRPE, over twenty-eight days, per player, with a four-week trend. Zones: optimal between point-eight and one-point-three, caution up to one-point-five, high risk above. It's the internal counterpart to the external ACWR elsewhere in the app — and, as always, a workload reference, not an injury predictor.
+
+Scene 8
+The tab also pairs the internal signals — RPE and heart rate — with a glimpse of yesterday's external GPS load. Internal is what the session cost the player; external is what was actually done. Reading them together is the coupling — the same idea Load Intelligence shows from the external side, here from the internal.
+
+Scene 9
+And at the top sits a player lookup. Pick a player and a date, and you get all their load, wellness, ACWR and risk data for that day. It's the audit tool — reconstruct any player's state on any past day, for a review meeting or a what-happened question.
+
+Scene 10
+So, thirty seconds. First, compliance — is the RPE feed complete? Second, the HR cross-check — does heart rate agree with the RPE? Third, the ACWR risk counts — how many are high-risk, and who. And remember the four principles: sRPE is the internal backbone, HR corroborates it, ACWR is context not prediction, and no-data is never zero.
+
+Scene 11
+The bottom line: Load and RPE is the internal-load hub — it measures what the session cost, and keeps it honest. It keeps the RPE feed complete, corroborates it with heart rate, and puts it in ACWR context, all with its limits on show.
+

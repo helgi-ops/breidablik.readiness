@@ -1,0 +1,33 @@
+MicroPulse — Pre-Session Report (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Pre-Session Report — the whole page, explained. It's the pre-training briefing that turns match demand into today's targets, per player. Let's walk through it.
+
+Scene 2
+It turns the microcycle day and match demand into concrete load targets for today's session. Concrete — per-metric and per-player numbers, not just a verdict. And sendable — an AI briefing and a PDF you can push to the whole team. It's the planning complement to the monitoring pages.
+
+Scene 3
+The report opens with one line — today is MD minus four, a mechanical session at sixty-eight per cent of match — and four headline tiles: total distance, high-speed running, Player Load and hard efforts, each shown as its percentage of a match. Plus a session-load target, here five hundred and ninety-five units, RPE seven over eighty-five minutes, and a confidence line showing the baseline is mature.
+
+Scene 4
+What makes the targets meaningful is that they're anchored to the match. Every target is a percentage of what a match actually demands — measured as the squad's average on its two highest-load days. So sixty-eight per cent means sixty-eight per cent of a real game. You train relative to the match, not to an arbitrary number someone picked.
+
+Scene 5
+The report also recommends a session type. Mechanical means force and accel-decel — braking and explosive starts, loading the tendons, quads and calves. Locomotive means high-speed running — sprint volume, loading the hamstrings and conditioning the engine. Mixed is balanced. The microcycle day picks one, and every KPI target is re-weighted toward it — a mechanical day lifts the accel-decel targets and trims high-speed running; a locomotive day does the reverse.
+
+Scene 6
+When you need the detail, a table breaks the session into twelve KPIs — distance, Player Load, high-speed running, sprint, accelerations, decelerations, and the rest. Each shows its target, its percentage of match, the match reference, and the recent average. The target itself is the recent training-day mean, re-scaled by the squad's ACWR — and the page is honest that ACWR is a scaling context, not an injury predictor.
+
+Scene 7
+And it goes down to the individual. Each player gets his own targets, scaled to his own ACWR, with a flag. Hold back — already spiking, ACWR high; trim his volume, not the whole squad's. Or room to build — under-trained, ACWR below point-eight; he can take a little more than the squad target. So the same session isn't one blunt number — it's tuned per player.
+
+Scene 8
+It helps to see where this sits. Week Setup tags the day, the microcycle MD-X. The Pre-Session Report turns that plus match demand into today's targets. And afterwards, Load Intelligence monitors what actually happened. Log the actual RPE at the end, and the loop closes — planned versus actual, week after week.
+
+Scene 9
+So, thirty seconds. First, the verdict line — the session type and headline targets. Second, the per-player flags — who to hold back, and who has room to build. Third, send the PDF — one briefing to the whole team. And remember: the targets are anchored to the match, and ACWR is context, not a prediction.
+
+Scene 10
+The bottom line: the Pre-Session Report tells you exactly what to train today — per player, anchored to the game. It's one sendable briefing that turns where are we in the week into a concrete, individualized plan.
+

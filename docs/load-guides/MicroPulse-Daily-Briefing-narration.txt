@@ -1,0 +1,33 @@
+MicroPulse — Daily Briefing (Today) — narration for Pictory
+============================================================
+
+Scene 1
+Daily Briefing — how to read it. You open it from “Show details — full daily briefing”, and it gives you the whole squad's day in one place: a headline verdict, four tiles, the team pulse, and the players to watch. It's the complete morning read, built answer-first — so the verdict comes before any of the detail.
+
+Scene 2
+It's auto-generated every morning, and it answers the coach's first question before he even asks it: is today fine, or is there someone I need to watch? The verdict comes first, in plain words — for example, rest day, watching two or three names, the rest are fine. Everything below that line simply backs it up. It's the manifesto in one sentence: the verdict leads, first and boldest.
+
+Scene 3
+The headline is always one of four verdicts. Fresh and ready — the squad's good to go. Caution day — a few to keep an eye on. Risk day — a real concern to manage. Or rest day — off, just monitoring. It's a plain noun-phrase that never needs decoding; the coach knows the shape of his day from the first two words, before he reads another thing.
+
+Scene 4
+Two things make the headline trustworthy. First, it names only the players that matter — the top one or two by severity, then plus-N-more — never a wall of names you'd stop reading. Second, it counts the injured honestly. An injured player looks fine on a wellness check, but he isn't training, so the briefing doesn't count him as cleared — it lists him as out. You read twenty-seven of twenty-seven cleared, not a misleading twenty-eight of twenty-eight.
+
+Scene 5
+Under the headline sit four tiles that summarise the whole squad. Readiness — the split: how many are full, reduced, or recovery today. Planned — the session type and the match-day context, like off, day-one after a match. Load — how many are carrying a load spike worth watching. And attention — how many need a look, the same count as the Needs-attention list right below. Four numbers, and you've read the squad.
+
+Scene 6
+Below the tiles is the team pulse. It puts the squad's average readiness in plain words — fresh, a bit flat, low — and, most usefully, which way it's heading versus yesterday. A squad that's flat but climbing is a very different day from one that's flat and declining. It also shows the fatigue mix — how many are carrying mechanical versus metabolic strain — so you know what kind of tired the group is.
+
+Scene 7
+The briefing also knows where you are in the week. It reads the match calendar, tags the day — day-one after a match, or an off day — and frames the pulse accordingly. So when two players sit below baseline the morning after a game, it says so plainly: still below baseline, one day after the match. That's expected recovery, presented as context, not as an alarm. The briefing never cries wolf over a normal post-match dip.
+
+Scene 8
+Then the briefing lists the top attention players inline, each with its why. You see the confidence — five of five signals — and the change versus yesterday. The action in plain words: needs rest today. The plain-language reason, with its citation: energy two out of five against a usual of three-point-six, and yesterday's load sixty-five percent above his usual, which matches the game, on Nédélec. And — this is the recent hardening — a verdict built on no check-in is labelled estimated, so an absence of data can never impersonate a measured hard alert.
+
+Scene 9
+Inside the briefing, the read is layered — the same discipline as everywhere else in MicroPulse. The glance is the headline: the one-sentence verdict and who to watch. The fifteen-second read is the tiles and the pulse — the readiness split, the load, the trajectory. And the drill-down is the top-attention players, each opening to a full drawer. The head coach can stop at the headline; the staff can go all the way down.
+
+Scene 10
+So, thirty seconds. First, the headline — fresh, caution, risk, or rest, and who to watch. Second, the tiles and pulse — the readiness split, the load, and which way the squad is trending. Third, scan the rows — the named players, their action, and the plain why. Verdict first; the injured counted honestly; it knows where you are in the week; and estimates are labelled. That's the Daily Briefing — the one glance that sets up your whole morning.
+

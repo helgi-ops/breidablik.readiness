@@ -1,0 +1,35 @@
+MicroPulse — System Walkthrough (real screens) — narration for Pictory
+============================================================
+
+Scene 1
+This is MicroPulse — a walk through the actual system, on live data. It turns readiness, load and return-to-play into one clear decision per player, every day. Let's look at the real screens.
+
+Scene 2
+This is the Today Command Center — the page a coach opens every morning. One verdict for the whole squad: today it reads Ready, at medium confidence, on eighteen of twenty-four check-ins. The summary explains it in plain words; the cards show how many players are ready, modified or recovery, and the risk for tomorrow. Everything deeper is one click away.
+
+Scene 3
+The Load section opens with Load Intelligence — the squad's load command center. Today it reads Building, with two players carrying high braking load. The cards break the squad into high-speed running, load spikes and monotony, and each flagged player is named with the reason.
+
+Scene 4
+Quadrant Intelligence plots every player by how much they run against how hard it feels — external load versus internal cost. The top-right is the injury-risk zone; here nine players sit there, and you spot them at a glance, alongside those who are decoupled, at peak fitness, or under-stimulated.
+
+Scene 5
+Decel Intelligence scores the cost of braking and cutting — from the McBurnie framework. Sixteen players are carrying high braking load and flagged for a lighter session, each with a five-dimension risk profile: overload, underload, coupling, sharp cuts and recovery.
+
+Scene 6
+IMA Intelligence is the biomechanical view — change-of-direction and movement load per player, on an eight-band stride distribution measured against each player's own baseline. This week the squad is at twenty-three per cent of a typical week, below target, broken down by acceleration, deceleration and change-of-direction.
+
+Scene 7
+Heart Rate Intelligence cross-checks effort against what the heart actually did. Today effort and heart rate agree across the squad — twenty-four of twenty-four wore the belt — so you can trust their session ratings this week. It reads on each player's own norm, not the group's.
+
+Scene 8
+And Indoor Load Intelligence tracks training load in the hall, when GPS goes blank. Built on inertial sensors and the movement profile, compared to each player's own indoor baseline, it reads the same readiness language: ready, lighter, rest — so indoor sport gets the same load management as outdoor.
+
+Scene 9
+Train-Like-You-Play compares what each player trains to what his matches actually demand. The verdict says the squad is training at or above match demand — nobody under-prepared. Below, the weekly periodization shows the shape of the week by match-day, each day measured against its desirable band.
+
+Scene 10
+The Force-Plate Assessment turns VALD force-plate tests into one readiness picture. It's honest first: a partial-battery banner names what's measured and what's still pending. Then the verdict from the rules, the domain status, and the benchmarks — jump height, limb asymmetry, change-of-direction — every number next to the rule it's judged against.
+
+Scene 11
+That's the pattern on every screen: a verdict you can read in seconds, the plain why underneath, and the numbers and the research behind it whenever you want them. MicroPulse — the whole athlete, on one page.

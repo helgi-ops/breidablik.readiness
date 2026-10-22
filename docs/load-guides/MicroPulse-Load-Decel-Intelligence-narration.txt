@@ -1,0 +1,21 @@
+MicroPulse — Decel Intelligence — narration (for Pictory)
+========================================================
+
+Scene 1
+Decel Intelligence. The cost of hard stops.
+
+Scene 2
+Deceleration — the cost of hard stops and cuts — predicts load on the knee and quadriceps better than running volume does. Here each player is assessed across five dimensions from the McBurnie et al. framework.
+
+Scene 3
+Here's the Decel Intelligence screen. Everything on it follows the same layered read: a plain verdict on top, the reason below, and the detail only if you open it.
+
+Scene 4
+How to read it. The chips OVERLOAD, UNDERLOAD and A:D are the dimensions; each flagged player gets the reason spelled out — that his recent braking exposure is under half of match-day demand, for instance. The citation sits beside the heading and confidence is given as the share of players with data.
+
+Scene 5
+When to open it. Open it to manage braking load — especially for players returning to play or with a quad or knee history. The research behind it: McBurnie, Harper, Jones & Dos'Santos (2022), Sports Medicine. Requires Pro.
+
+Scene 6
+Decel Intelligence — The cost of hard stops. Read a decision, not a dataset; the detail is always one click away.
+

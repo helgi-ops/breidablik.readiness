@@ -1,0 +1,30 @@
+MicroPulse — Today Command Center — narration for Pictory
+============================================================
+
+Scene 1
+Today Command Center — how to read it. This is the cockpit strip at the head of the Today page: the whole squad's status in one row. Before you read a single player, it tells you the shape of the day — how many are good, how many need managing, what to do first, and what's coming tomorrow.
+
+Scene 2
+Everything else on the Today page is detail; the command center is the orientation. It answers three questions in a single line — how is the team, what should I do first, and what's coming next. In the header you get the team outlook, the Ready-Modified-Recovery split, a preview of tomorrow, the top actions, and the fatigue mix. Read the strip and you already know your morning.
+
+Scene 3
+First, the team outlook — one word for the whole day. Ready is a green light, the squad's good. Caution means a few players to manage. And High means real risk today, several players flagged. It's the overall read on the session, driven by how much of the squad is flagged, and it sets your expectation before you look at a single name.
+
+Scene 4
+Then the split — three training buckets with a live count in each. Ready: train as planned. Modified: train, but reduced. Recovery: rest and recover. It's the same green, amber, and red as the readiness verdict everywhere else in the app. Eighteen ready, four modified, three recovery — and you know the shape of the session before you plan a thing.
+
+Scene 5
+The command center also looks forward and tells you what to do now. A tomorrow preview — a look-ahead label and band — so today's plan already respects what the next day demands. And the top actions — the two or three most important things to do this morning, surfaced right in the header rather than buried three screens down. Orientation and a to-do list, together.
+
+Scene 6
+And the fatigue mix — because a tired squad isn't tired in just one way. The header shows how the flagged players split across three kinds. Mechanical: muscles and tendons, the braking and accelerating side. Metabolic: the engine, high-speed and energy-system load. And global: both at once, whole-system fatigue — the players to protect most. Two mechanical and one global is a very different day from three metabolic.
+
+Scene 7
+The command center is also the map into the rest of the day. It's the outlook — how's the team and what to do. Below it, Needs Attention gives you the ranked short list of who to look at. Decision Summary turns that into one training decision per player — full, modified, recovery, or off. And the load and movement panels — Load Intelligence, Unfamiliar Load, and the full daily briefing — give you the why behind it all. The header is the index; the page is the detail.
+
+Scene 8
+Underneath, the command center runs on the same rules as everything else in MicroPulse. Everyone is judged against himself — the Ready, Modified, Recovery split is each player against his own personal baseline, not a squad average. Rules decide and the AI only explains — the counts come from the engine, and any written narrative is labelled as AI. And there's one verdict everywhere — the split you see in this header is the same personal-norm colour that drives every other surface. Consistency is the promise.
+
+Scene 9
+So, thirty seconds. First, the outlook — Ready, Caution, or High, the shape of the day. Second, the split and the actions — how many are in each bucket, and the top things to do this morning. Third, drop into the page — Needs Attention for who, Decision Summary for what per player, and the load panels for the why. Read the cockpit first; it's a personal-norm split, one verdict everywhere, and the header is your index into the whole day.
+

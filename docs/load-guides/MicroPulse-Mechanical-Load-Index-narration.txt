@@ -1,0 +1,30 @@
+MicroPulse — Mechanical Load Index (MLI) — narration for Pictory
+============================================================
+
+Scene 1
+The Mechanical Load Index — the whole panel, explained. This is the tissue half of external load: how much braking, accelerating and pounding hit the body, not how hard the engine worked. And its best trick is that it tells you where the stress came from. Let's walk through it.
+
+Scene 2
+External load has two halves, and this is the mechanical one. What hit the body — braking, accelerating, cutting and pounding, the eccentric tissue-damage side — as opposed to the metabolic panel, which is the energy cost of the running. Same session, two different costs. MLI is the mechanical tank, and unlike a single load number it breaks down which movement actually caused the stress.
+
+Scene 3
+This is the star of the panel. Instead of one blunt load number, four sub-scores localise the mechanism. DSS — deceleration stress, the braking, eccentric side. ASS — acceleration stress, explosive push-off. CSS — change-of-direction stress, cutting. And GDS — G-force density: player-load per minute and impacts, how relentless the session was. So it's never just high load; it's high because of deceleration, or because of density — and that changes what you do about it.
+
+Scene 4
+The score is read against his own median — not his mean — over 28 days, which keeps one freak session from distorting the baseline. Each input is capped at twice the usual and mapped to nought-to-a-hundred, so a hundred means double his normal. The four sub-scores blend into the MLI, with deceleration weighted heaviest because braking carries the most tissue cost. The bands run low, moderate, high, very high, and extreme from eighty-five up.
+
+Scene 5
+A player can look fine today and still be carrying too much — so the residual MLI tracks mechanical load accumulated over three days, weighted toward the most recent: today at full weight, yesterday at 0.6, the day before at 0.3. It's what catches the third hard day in a row that a single-day view misses. Above 110 is caution, above 135 is high — the accumulated braking load that makes recovery the priority.
+
+Scene 6
+Under the score sit the flags — the plain why, in words. Decel spike: high-intensity braking jumped past 1.35 times his own norm. COD spike: change-of-direction load up past 1.4 times. Dense load: player-load per minute and inertial movement both elevated — a relentless session. And high or extreme: the overall index crossed seventy, or eighty-five. Each flag is the reason the score is what it is, named against the player's own baseline.
+
+Scene 7
+The panel is honest about its own data in two ways. First, the baseline uses the median, not the mean — so a single freak session can't inflate the norm and hide a real flag, or vice versa. Second, confidence follows coverage: high needs most of the inputs present and at least five baseline days; fewer inputs drops it to medium or low, stated plainly. And a missing pod or a lower Catapult tier withholds the signal — a dash means no-data, never zero.
+
+Scene 8
+And it follows the same honest, layered read as the rest of MicroPulse. The verdict first — one line: how many players are at very high mechanical load today, and who's highest. Then the plain why — the flags and the sub-scores, which tell you not just that load was high but which movement drove it. And only then the detail on demand: the per-player table with the index, the residual, the four sub-scores, the flags, and the confidence.
+
+Scene 9
+So, thirty seconds. First, the verdict and band — how many are extreme or very high, and who's highest. Second, the sub-scores and flags — where it came from: deceleration, acceleration, change of direction, or density. Third, the residual — accumulated braking over three days makes recovery the priority. Read on his own median, remembering a dash is never zero. The mechanical tank, sitting right beside the metabolic one.
+

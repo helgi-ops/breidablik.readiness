@@ -1,0 +1,39 @@
+MicroPulse — IMA Intelligence (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+IMA Intelligence — the whole page, explained. This is the biomechanical view of a training day. It answers how a player moved, not just how far. Let's walk through the whole page.
+
+Scene 2
+IMA stands for inertial movement — accelerations, decelerations and changes of direction, measured by the pod itself rather than GPS. That's why it works indoors, where GPS doesn't. And every reading is compared to the player's own usual day, not a squad average.
+
+Scene 3
+The page opens with a weekly projection dial. It shows the squad's cumulative movement load against a typical week — current, typical, and crucially, projected: where the week will land if you keep the current rate. Because it says day four of seven, you're seeing this mid-week, while there's still time to change the plan. This is the demo squad — no real player data.
+
+Scene 4
+The dial breaks down into cards by movement type — acceleration, braking, change of direction, and strides in the top cadence bands. Each shows this week versus typical, and the projected total. So you don't just see whether the week is heavy — you see why. Is it braking piling up, or change of direction? That tells you which drills to pull back.
+
+Scene 5
+Below the dial, the Movement Intelligence verdict names in plain language the players who ran well above their own usual today, while everyone else was within range. The comparison is personal — two hundred and eight per cent of usual means this player against his own normal day, never a squad average. That's what makes it fair across positions.
+
+Scene 6
+Session Shape gives one word for the day — Recovery, short, or full — backed by the band distribution. Mostly low bands means a recovery day; more high bands means intense. The tiles show the total strides, the share that were genuine high-cadence sprint strides, and how many players are flagged as lopsided in high-intensity cuts.
+
+Scene 7
+The change-of-direction profile splits cuts into three intensity tiers, each with a left-right balance. Low intensity is usually just a positional habit. Medium is context. Only the high-intensity, injury-relevant tier genuinely ties to risk — watch it above fifteen per cent asymmetry, on the Bishop 2020 threshold.
+
+Scene 8
+The free-running table shows high-speed running distance split by cadence band five to eight, with a total and an ACWR — acute over chronic, this week versus the player's rolling norm. Building means load is accruing safely; a low number like point-five-two shows a player well under his own usual.
+
+Scene 9
+This is the cleverest signal on the page. Under fatigue, a player keeps his stride frequency — but his stride length shortens. He pushes less, even though the legs turn over just as fast. Neither GPS distance nor cadence alone catches that; the ratio of the two does. It's flagged when it deviates two-and-a-half standard deviations from his own big sessions. That's hidden fatigue the output numbers miss.
+
+Scene 10
+Finally, a per-player table: total strides, the band split, sprint strides, the ratio to his own baseline, and high-intensity change of direction with asymmetry. Each player expands to a full breakdown across low, medium and high intensity, with the left-right split — so you can go from the squad view to one player's mechanics in a click.
+
+Scene 11
+So, thirty seconds. First, the weekly dial — above or below target, and where will the week land? Second, the movement verdict — who moved above their own usual? Third, session shape and stride length — was the day light or intense, and is anyone starting to push less? And the one injury-relevant flag to watch is high change-of-direction asymmetry over fifteen per cent.
+
+Scene 12
+The bottom line: IMA Intelligence is how a player moved, compared to himself. It's the one page that works indoors, forecasts where the week will land, and catches the player who's starting to push less before any output number moves. How, not how much.
+

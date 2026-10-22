@@ -1,0 +1,21 @@
+MicroPulse — Indoor Load Intelligence — narration (for Pictory)
+========================================================
+
+Scene 1
+Indoor Load Intelligence. Real load indoors, without GPS.
+
+Scene 2
+Indoors, GPS does not work. Instead of showing zero — which looks exactly like a player who did nothing — MicroPulse deliberately discards the GPS signals and computes load from the inertial sensors.
+
+Scene 3
+Here's the Indoor Load Intelligence screen. Everything on it follows the same layered read: a plain verdict on top, the reason below, and the detail only if you open it.
+
+Scene 4
+How to read it. The explanation box at the top is part of the screen itself, not a manual: it states what is dropped, why, and what replaces it. An indoor score is not comparable with an outdoor one — the system says so rather than pretending it is.
+
+Scene 5
+When to open it. In a northern climate, where much of the year is played indoors, this is not an edge case but core business — open it for every indoor session. The research behind it: Brown et al. (2016) — unreliability of GPS indoors; Football Movement Profile. Requires Pro.
+
+Scene 6
+Indoor Load Intelligence — Real load indoors, without GPS. Read a decision, not a dataset; the detail is always one click away.
+

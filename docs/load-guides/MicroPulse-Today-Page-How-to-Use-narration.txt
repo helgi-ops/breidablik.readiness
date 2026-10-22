@@ -1,0 +1,33 @@
+MicroPulse — The Today Page: How to Use (updated) — narration for Pictory
+============================================================
+
+Scene 1
+The Today page — how to use it. The page has grown, so here's the updated walkthrough. It's your morning cockpit: one screen that takes you from the shape of the whole day down to a single decision for one player. We'll go top to bottom, in the order the page reads.
+
+Scene 2
+The whole page is built to answer four questions, in order. Outlook — how's the team? Who — who needs me today? What — what should they actually do? And why — what's behind it? Each section down the page answers the next question, so you never have to scan all twenty-five players to find the one who needs you. Follow the page and you follow the workflow.
+
+Scene 3
+Section one, at the very top: the Command Center. It's the shape of the day before you read a single name. The team outlook — one word, Ready, Caution, or High. The split — a live count of how many are Ready, Modified, or Recovery, in the same green, amber, and red as everywhere else. And the actions plus tomorrow — the top things to do this morning, and a look-ahead to the next day. Read the strip and you know your morning.
+
+Scene 4
+Section two: Needs Attention — who. It's the ranked short list of players to look at; everyone who's fine simply isn't on it. It's grouped worst-on-top — alert, rehab, injured, watch — with the urgent groups expanded and the rest collapsed to keep it short. Each row shows change before state — the overnight drop, down-down worse, which is what triggers action rather than the colour alone. And injury always leads: an injured player is on the list even if his wellness reads green.
+
+Scene 5
+Section three: Decision Summary — what. This is where every signal becomes one training decision per player, for today: Full, Modified, Recovery, or Off — an action, not a number. Rules decide and the AI only explains: the decision comes from the engine and the canonical readiness colour, and the written summary just narrates, labelled as AI. And a safety net of hard overrides — injury, off day, post-match, and a flag when the plan says Full but the player's own STEN says otherwise.
+
+Scene 6
+Section four: Unfamiliar Load and the S and C signals — why. This is the context behind the decisions, and it's descriptive, never an injury prediction. Recovery watch — who's still below baseline the day after a game. Load and movement spikes — where squad load is climbing and who did unusual high-intensity work. And Unfamiliar Load — who's moving differently than his own norm, so you can phase the new demand in rather than pile it on.
+
+Scene 7
+Section five, at the bottom behind Show details: the full Daily Briefing — the complete morning read, answer-first. The headline verdict — one sentence: fresh, caution, risk, or rest, and who to watch. The tiles and team pulse — the readiness split, the planned day, the load, and which way the squad is trending. And the top-attention players inline, each with an action, a plain-language reason, and its citation. It's the whole day, laid out in full for when you want it.
+
+Scene 8
+One thing works the same everywhere: wherever a player appears — in Needs Attention, in the Decision Summary, in the briefing — tapping the row opens the same drawer. And the drawer is the layered read, all the way down: the verdict, the plain-language why, the counterfactual — if this one thing had been different, he'd be green — the confidence, the underlying signals with their citation, and the AI summary, clearly labelled as AI. The list triages; the drawer explains.
+
+Scene 9
+And underneath all five sections run the same four rules. Everyone is judged against himself — every verdict is the player against his own baseline. Rules decide and the AI only explains — the rules set the verdict, the AI narrates and cites its signals but never decides, and it's always labelled. One verdict everywhere — the colour is identical on every surface, from one canonical source. And honest confidence — thin or estimated data is labelled, never dressed up as fine. Those four rules are what make the whole page trustworthy.
+
+Scene 10
+So, thirty seconds to use the whole page. First, read the strip — the Command Center, the outlook and the Ready-Modified-Recovery split. Second, work the list — Needs Attention for who, Decision Summary for what. Third, open any row for the why — the drawer with the verdict, counterfactual, confidence, and citation. Outlook, who, what, why; everyone against his own norm; rules decide and the AI explains; and one verdict everywhere. That's the Today page.
+

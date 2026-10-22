@@ -1,0 +1,30 @@
+MicroPulse — Injury Pattern Analysis (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Injury Pattern Analysis — the whole page, explained. This is the proof-of-ROI page: for every injury, did the system warn beforehand? Let's walk through it.
+
+Scene 2
+It answers the question a board asks: is this actually delivering? For every recorded injury, it looks back at the fourteen days before and checks whether MicroPulse produced a warning signal — a yellow or red flag, a decoupling alert, or an ACWR spike. And it's computed after the fact, from real history — not a model, a look-back over what actually happened.
+
+Scene 3
+The headline is one number over the last three hundred and sixty-five days: what share of injuries had a warning in the days before — here, most of them. Beside it, the count with a strong pattern match and the average pattern score, split by body part. It's the club's real record, not a claim. This is the demo squad — no real player data.
+
+Scene 4
+Crucially, it's honest by design. The list shows the injuries it caught — and the ones it missed, marked no prior signal, zero per cent match. It doesn't hide the misses. And because it's a look-back over real history, the number can fall as well as rise — which is exactly why it's credible rather than marketing.
+
+Scene 5
+Each injury gets a score from zero to one, for how strongly its lead-up matched a warning pattern. Point-five or above counts as a strong match. And the score aggregates several signals — flags, decoupling and load spikes together — rather than leaning on any one, so it's less sensitive to chance than a single flag would be.
+
+Scene 6
+Open any injury and you get a full forensic reconstruction of the fourteen days before. The lead-up: every non-green day, and the load ratio at injury. The context: recent injuries, GPS spike days, match congestion, a VALD ForceDecks snapshot. And a day-by-day timeline: each flag with its drivers — soreness, energy, the z-value, volatility. It even tells you the first warning came so many days before — and every signal cites its paper, from Akubat to McBurnie.
+
+Scene 7
+It's worth being clear about what this page is and isn't. It is a retrospective audit — proof that the system flagged risk before injuries. It is not injury prediction: no system predicts injuries reliably, and this one doesn't pretend to. And it's not where you log injuries — that's the return-to-play tab. This page is read-only. It shows whether risk was flagged, not what happens next.
+
+Scene 8
+So, thirty seconds. First, the headline percentage — the ROI story, the share with a warning. Second, scan for the misses, marked no prior signal — the honest ones. Third, open one injury's forensics: the first warning day, the drivers, the decel pattern. And remember it's a look-back audit, not a prediction.
+
+Scene 9
+The bottom line: Injury Pattern Analysis is proof, not a promise. It's the answer to is this delivering — computed from the club's real history, misses and all, so the number you show a board is evidence rather than marketing.
+

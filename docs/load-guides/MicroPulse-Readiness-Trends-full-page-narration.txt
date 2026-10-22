@@ -1,0 +1,35 @@
+MicroPulse — Readiness Trends (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Readiness Trends, explained. This screen isn't about today's colour — it's about one player's direction of travel over the last thirty, sixty or ninety days. Is he holding steady, climbing, or drifting down? Let's walk through it.
+
+Scene 2
+Here's what it does. It splits the period in half and compares his recent readiness to his earlier readiness. If the recent half is clearly higher, he's improving; clearly lower, he's declining; within about a point either way, he's steady. So one glance tells you the trajectory, not just the snapshot.
+
+Scene 3
+The verdict is one plain line — "readiness steady over the last thirty days" — with a trajectory badge. Under it, three sentences in plain language: how his average readiness moved, out of twenty-five; whether his form is above or below his own norm; and how many times the system eased his load.
+
+Scene 4
+The badge is the five-second read. Improving means his recent average is more than a point above the earlier half. Declining means more than a point below. Steady is everything in between — and steady, for most of the season, is exactly what you want.
+
+Scene 5
+Five numbers sit under the verdict. Average readiness out of twenty-five. Average STEN out of ten. Check-in rate — how consistently he logged. And days RECOVERY and days REDUCED — the number of times the system called for easing off.
+
+Scene 6
+STEN is worth understanding. It's a standardised score from one to ten, measured against his own baseline — not the squad's. Five to six is his usual. Higher means fresher than normal; lower means more fatigued. It's how you compare a player to himself, fairly.
+
+Scene 7
+Recovery and reduced are the fatigue tell. They count the days the system recommended easing the load. A period with several of them — especially alongside falling readiness — is the pattern that flags accumulating fatigue, long before any single bad day would.
+
+Scene 8
+Three little trend lines put it together: readiness on a nought-to-twenty-five scale, STEN on one-to-ten with his five-to-six baseline marked, and total running distance from Catapult per session. Subjective sitting right next to objective — how he feels, beside how much he actually did.
+
+Scene 9
+It shows its coverage. "Based on twenty-nine check-ins across thirty days" — ninety-seven per cent. A trend built on nearly every day is trustworthy; a sparse one is flagged as such. And you can widen the lens to sixty or ninety days with one tap.
+
+Scene 10
+Under everything is the daily history — every check-in, newest first — the raw days the trend is built from. It stays folded away, so the verdict and the shape come first and the table is there only when you want to audit it.
+
+Scene 11
+The bottom line: a trend says more than a single day — slowly falling readiness, or a run of reduced days, is the early signal of accumulating fatigue. But it's context. A player's green, amber or red today still comes only from today's check-in and load — this screen tells you which direction he's heading.

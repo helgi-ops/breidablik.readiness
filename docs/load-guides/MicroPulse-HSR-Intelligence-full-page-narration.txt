@@ -1,0 +1,27 @@
+MicroPulse — HSR Intelligence (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+HSR Intelligence — the whole page, explained. This is the Lite-tier hamstring guard: is each player getting enough high-speed running before a match? Let's walk through it.
+
+Scene 2
+It's per-player soft-tissue monitoring, built on the GPS metrics every Catapult plan exposes — high-speed running, sprint and max velocity — so no inertial data is needed and a Lite club gets real hamstring monitoring. It's the GPS counterpart to Decel Intelligence, on the same published evidence: Malone 2017 and Buchheit 2014, from the British Journal of Sports Medicine.
+
+Scene 3
+The squad table lists every player, sorted by risk from red to green, so high risk sits at the top. Each value — high-speed running, sprint, max velocity — is coloured by its own sub-flag, and the status on the right is the worst-of-three combined verdict. This is a Lite-tier demo squad — no real player data.
+
+Scene 4
+It tracks three exposures. High-speed running — distance above the high-speed threshold, with an ACWR. Sprint — the top-end running distance, also with an ACWR. And max velocity — how often he actually reaches near top speed, counted as sessions at ninety-five per cent or more. Each has its own sub-flag, and a player's status is the worst of the three.
+
+Scene 5
+And here's the key idea. Ramping up too fast is a spike — too much, too soon. But dropping off is a risk too: too little high-speed running leaves the hamstring under-prepared for match sprints. On Malone 2017, too little is as dangerous as too much. That's why the page flags load dropped off right alongside ramping up fast — it protects against under-exposure, not just overload.
+
+Scene 6
+The max-velocity part deserves its own moment. Reaching ninety-five per cent or more of max velocity regularly is what prepares the hamstring for the sprints a match will demand — a kind of inoculation. So the page counts those sessions. Few high-speed exposures means under-prepared for the game's top-end, even if a player's total running looks perfectly fine.
+
+Scene 7
+So, thirty seconds. First, the verdict — who's flagged, ramping up or dropped off. Second, the table, sorted red to green — high risk on top, and which of the three exposures drove it. Third, the max-velocity exposure — enough near-top-speed sessions before the match? And remember: both too much and too little are hamstring risks.
+
+Scene 8
+The bottom line: HSR Intelligence makes sure each player gets enough sprinting — but not too much — before a match. It's real hamstring monitoring on the Lite tier, with the same science as Pro, built on the GPS you already have.
+

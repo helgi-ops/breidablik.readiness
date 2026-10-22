@@ -1,0 +1,27 @@
+MicroPulse — Match Intensity: 1st vs 2nd half — narration for Pictory
+============================================================
+
+Scene 1
+Match Intensity, first half versus second — how to read it. It answers one question the box-score can't: does a player's high-intensity movement fade after the break? It shows how much his intensity drops in the second half, per minute — the fatigue signature of a match.
+
+Scene 2
+Here's the idea. Every player slows in the second half — the question is by how much. A player who barely fades is well-conditioned and can be trusted with ninety minutes; one who falls off a cliff is a rotation or fitness conversation. And it's real: across your own matches, per-minute high-intensity movement drops about thirty percent in the second half — a measurable fatigue signature, not a hunch.
+
+Scene 3
+One thing makes it trustworthy: it compares intensity per minute, never the raw second-half total. Halves differ in length, players get substituted, stoppage time varies — so a raw drop could just mean a shorter half or a sub coming off. Dividing by minutes strips all of that out, leaving a true change in how intense his movement was, minute for minute.
+
+Scene 4
+The headline is one figure: the percentage change in high-intensity movement from first half to second. A player who ran nought-point-one-nine per minute in the first half and nought-point-one-three in the second is down thirty-two percent. Across your squad the typical fade runs from about minus twenty-eight to minus seventy-four percent — and the steepest drops are the players to watch, for conditioning work or an earlier substitution.
+
+Scene 5
+What it counts is high-intensity movement, per minute — the hard accelerations, decelerations, and change-of-direction efforts, the demanding stuff that fatigue hits first. Total movement per minute sits alongside it for the broader picture. And it's computed per player per match, then rolled into his own typical fade across recent games — so you can tell a one-off tired match from a player who consistently drops off.
+
+Scene 6
+It's framed honestly, and the page states it: this is a conditioning and rotation context read — use it to plan fitness work and substitutions, to tell who can hold ninety minutes and who fades. It is not a readiness verdict and not an injury prediction; it never sets the readiness colour. And it's gated — a player needs at least twenty minutes in each half of a match, and enough matches for a confident norm; below that it shows building, not a confident fade.
+
+Scene 7
+There's a team view — the squad's overall second-half fade, its collective fatigue signature — and a player view for the individual, his fade per match and against his own norm. And why it matters: a big drop-off is a clear conditioning and rotation signal — manage his minutes, or build his repeat-sprint fitness — on Akenhead's work showing high-intensity output declines across halves. It turns a gut feeling about who tires into a number you can act on.
+
+Scene 8
+So, thirty seconds. First, the fade percentage — how much high-intensity movement dropped after the break. Second, against his own norm — is this match worse than his usual fade? Third, check the confidence — building means wait for more matches, and he needs at least twenty minutes in each half. It's per minute not totals, it's his own norm, and it's a conditioning and rotation read — never a readiness verdict or an injury prediction.
+

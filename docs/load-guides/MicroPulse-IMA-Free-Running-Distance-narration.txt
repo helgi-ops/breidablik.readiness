@@ -1,0 +1,30 @@
+MicroPulse — IMA Free Running Distance — narration for Pictory
+============================================================
+
+Scene 1
+IMA Free Running Distance — how to read it, the second panel on the IMA Intelligence page. This one is about genuine running — the fast, sprint-cadence work — and it answers a single sharp question per player: is this week's sprint load a spike compared to what he's actually built up to?
+
+Scene 2
+What it measures is the distance a player covers at high running cadence — the true sprint side of the pod's inertial data, and it works indoors and outdoors. It's split by cadence band and totalled. So the table gives you bands five, six, seven, and eight, plus a total. But the number that turns all of that into a decision is the one on the right: the ACWR.
+
+Scene 3
+The band columns tell you where his running actually lives. Band five is fast running; six and seven are quicker strides climbing toward sprint cadence; and band eight is true sprint cadence — top-gear strides, the most demanding running there is. A player loaded heavily in band eight is doing real sprinting, not just fast jogging. His dominant band tells you the character of his week — steady fast running is a different exposure from repeated top-speed sprints.
+
+Scene 4
+The star of the panel is the ACWR — the acute-to-chronic workload ratio. It's his last seven days of sprint running divided by his rolling twenty-eight-day average. Acute over chronic. In plain terms: is this week out of line with what he's actually prepared for? A one means this week matches his norm; well above one means he's done far more sprinting than his body has built up to.
+
+Scene 5
+Reading the ratio is simple. OK, roughly nought-point-eight to one-point-three, is the sweet spot — fit and prepared. High, one-three to one-five, is a warning. And spike, one-point-five and above, is the danger zone — far too much sprinting, far too fast. Below nought-point-eight is Low, which points to detraining. And when there isn't yet enough twenty-eight-day history to judge, it shows Building — honest about not knowing, never a false green.
+
+Scene 6
+When any player crosses into a spike, the panel says so right at the top, and it gives you the fix in one line: a player is in a high-intensity running spike, so spread the sprint load across the week. That's the whole action — the danger isn't the sprinting itself, it's cramming it into one or two sessions. Distribute the same sprint volume across more days and the spike disappears.
+
+Scene 7
+Two things keep the ratio honest. It's personal — the chronic average is his own twenty-eight days, on Buchheit's per-player principle, not a squad number, so a naturally high-sprint winger isn't judged against a centre-back. And it's honest about maturity — with too little chronic history it shows Building rather than inventing a ratio. It also applies a recovery decay, so a hard Sunday match doesn't keep looking like today's spike three days later — on Williams' EWMA method.
+
+Scene 8
+Why it matters: the acute-to-chronic spike in high-speed running is the single most-cited mechanic behind soft-tissue and hamstring injuries, on Hulin and Gabbett. A sudden jump in sprinting relative to what the legs are used to is exactly what tears a hamstring. Catching that mid-week is the whole point of the panel. And note the framing — a spike is a warning to redistribute, not a reason to stop, because sprinting is actually protective when it's built up gradually.
+
+Scene 9
+So, thirty seconds. First, scan the ACWR column — a spike, one-point-five or more, is the one to act on. Second, check the bands — how much of it is true sprint, band eight, versus fast running. Third, the action — spread the sprint load across the week, don't stop it. It's this week against his own twenty-eight days; the sweet spot is nought-eight to one-three; Building is never a green; and the answer is to redistribute, not to remove.
+

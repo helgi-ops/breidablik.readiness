@@ -1,0 +1,39 @@
+MicroPulse — Indoor Load (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Indoor Load Intelligence — the whole page, explained. This is how you track load in the hall, when GPS can't help. Let's walk through it.
+
+Scene 2
+The page exists for one reason: indoors, GPS doesn't work — distance, sprints and top speed all become unreliable. So MicroPulse drops the GPS and keeps the pod, computing load from the inertial sensors only — FMP stride bands, player load and braking. And every score is compared to the player's own indoor baseline, where one hundred is his usual — never to an outdoor session, never to the squad.
+
+Scene 3
+And it doesn't hide any of this. Right at the top, a box explains why indoor numbers look different — that GPS signals are dropped because they're unreliable, that load comes from the inertial sensors instead, and that the score is against the player's own indoor average. An indoor score is deliberately not comparable to an outdoor one, and the page says so, up front. This is the demo squad — no real player data.
+
+Scene 4
+The Team Today line splits the squad four ways in one glance: who's ready for a normal hall session, who needs a lighter one, who needs rest or mobility only, and who's in rehab or returning to play. That's the day's fast read before you walk into the hall.
+
+Scene 5
+Below the split, Top Concerns lists the players who need attention — each with a status, like a hamstring in rehab or a head injury in stage four of return-to-play, and an action badge: Rehab, Return-to-play, or Rest. Injury and return status is woven straight into the load view, so a hamstring in rehab and a spike in load sit on the same screen.
+
+Scene 6
+The team load heatmap gives every player a row and every day a column, with each cell one session coloured by composite load — grey for light, blue for below, green for typical, amber for heavy, red for spike. An inner red border marks an indoor session. In one look you see who has been in the red repeatedly — the pattern over half a month, not just today.
+
+Scene 7
+The per-player list gives each player a row: the composite score, where one hundred is his average; the ACWR, this week versus his rolling norm; and the density in load per minute — a busy session or a calm one. And for the injured, the line carries the type, the return-to-play stage, and the estimated return date.
+
+Scene 8
+Open one player and you get the action layer — the layered read in miniature. A one-word verdict: rest, lighter, or ready. The reason in plain language: trained much harder than usual, and an ACWR outside the familiar range. And coach guidance: focus on mobility, recovery and light technical work. A number becomes an action.
+
+Scene 9
+At the heart of it is a single composite score, where one hundred is the player's own twenty-eight-day indoor average — so a hundred and forty-three is forty-three per cent above his usual, a spike. A fourteen-day trend shows indoor versus outdoor, and three columns compare the latest session to his twenty-eight-day baseline and his last seven days, across player load, duration, dynamic-high percent, high-metabolic distance and IMA.
+
+Scene 10
+And the shape of the session comes from the FMP movement distribution — where the time was spent, across six tiers from Very Low up to Dynamic High. Lots in the low tiers means calm technical work; more in Dynamic High means an intense session. This Football Movement Profile is exactly what the indoor score is built on, since GPS can't contribute.
+
+Scene 11
+So, thirty seconds. First, Team Today for the split — ready, lighter, rest, injured. Second, Top Concerns and the heatmap — who needs rest, and who's been in the red. Third, for one player, the composite score, where one hundred is his own usual, so read the distance from a hundred. And always remember: indoor is compared to himself, never to outdoor.
+
+Scene 12
+The bottom line: Indoor Load Intelligence gives you real load in the hall, compared to the player himself, when GPS simply can't help. For a club that trains half the year indoors, this isn't an edge case — it's the core. And the page stays honest throughout that indoor and outdoor scores don't mix.
+

@@ -1,0 +1,39 @@
+MicroPulse — 'How to use it' — narration script (for Pictory)
+============================================================
+
+Scene 1
+How to use MicroPulse. The system looks big, but you only need one page. This is the three-minute daily routine for the head coach.
+
+Scene 2
+MicroPulse monitors training load, player wellness, return-to-training, match reports, strength planning, and jump tests. That breadth is exactly why the system can look complex. But you don't need all of it every day. There is one page that pulls it together.
+
+Scene 3
+Meet Today. This is your home screen, and it's the only page you need day to day. It reads every signal — check-ins, load, jump tests, injury status — and gives one answer per player: green, amber, or red, with a plain-language action. Read a decision, not a dataset.
+
+Scene 4
+And here's the reassuring part. Most of what looks like separate pages in the sidebar are really just tabs on Today — Trends, Volatility, VALD, Strength, match-day comparison, return-to-training. They're not separate places to learn. The standalone Intelligence pages are optional deep-dives you open to answer why — not part of the daily routine.
+
+Scene 5
+Your morning takes three minutes. Step one: open Today, read the top verdict and the confidence next to it. Step two: read the squad split — ready, modified, recovery; a green squad means carry on as planned. Step three: check the flagged players; each amber or red comes with an action and a reason. If nobody is flagged, you're done.
+
+Scene 6
+Every player gets one action, not just a number. The card shows his status, his trend since yesterday, and what to do — in plain language, like clear for a full session. And every flag carries a counterfactual: one more point of sleep and he'd be green. That turns a colour into something you can act on.
+
+Scene 7
+Every screen is built in three layers, so you never read more than you need. The verdict is one colour and one sentence — five seconds. The why is two or three plain facts, visible without a click — fifteen seconds. And the details — the tables, the ACWR, the jargon — only appear if you open them. You choose the depth.
+
+Scene 8
+Just as important: the system tells you when it doesn't know. Every verdict shows how much data is behind it — how many players checked in, how mature the baseline is. Missing data is shown as missing, never quietly as zero. So you always know when to trust the screen and when to walk out and look at the pitch yourself.
+
+Scene 9
+Today reads everything automatically — but it can only read what arrives. Five small inputs keep it accurate. Player check-ins, and your job there is simply the reminder. Week setup once a week, with matches and day tags. Match minutes after each game. An RPE number after a session. And approving new players when a badge shows up. None of it takes long — but skip them and Today just gets more cautious than it needs to be.
+
+Scene 10
+One thing worth knowing about check-ins. In our own club data, a coach's start-of-day reminder drives more check-ins than automated push notifications do. Check-ins are the core signal behind the colour, so this matters. The best compliance we've seen comes from the coach who reminds his players — not from the club with the most automation.
+
+Scene 11
+When you do want to go deeper, it's a simple map: a question, and the page that answers it. Is the squad building or easing? Load Intelligence. Who runs a lot but finds it harder than usual? The Quadrant. Indoor load with no GPS? Indoor Load. Under on hard stops? Decel Intelligence. Ramping a player back? Return-to-Training. And for the board — is this delivering? Injury Pattern Analysis. Same layered read everywhere — even the deep pages open with a one-word verdict.
+
+Scene 12
+So, the bottom line. The system advises — it does not rule. You always have the last word, and if you override a verdict, it's logged with a reason. Daily: open Today, read the split, check any colour that isn't green, and remind your players. Weekly: set up the week, enter match minutes, and log injuries as they happen. Rules decide, the AI explains — never the other way round.
+

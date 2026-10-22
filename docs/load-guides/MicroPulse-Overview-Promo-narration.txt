@@ -1,0 +1,38 @@
+MicroPulse — Overview / homepage promo — narration for Pictory
+============================================================
+
+Scene 1
+Meet MicroPulse — an athlete-management platform that turns a flood of data into one clear decision per player, every day. Readiness, physical load, match performance and return-to-play — all explained, all on one page.
+
+Scene 2
+Modern sport drowns coaches in data: GPS, wellness, force plates, video, stats. But at eight in the morning, before training, nobody has time to open ten dashboards. The signal gets lost in the noise.
+
+Scene 3
+MicroPulse flips it. One page every morning gives you one verdict per player. The decision lives right there; the full depth is one click away when you want the why. It can look powerful, but it's really just one page — everything else is its detail.
+
+Scene 4
+At its heart is a simple traffic light. Every player is green, amber or red — but compared to his own normal, not a league average. A steady player and a jumpy one are judged against themselves, so the colour actually means something for him.
+
+Scene 5
+Instead of scanning twenty-five players, MicroPulse hands you the short list — who needs attention today, grouped and ranked, each with the reason. You spend your attention where it counts.
+
+Scene 6
+Under the readiness sits the physical layer. MicroPulse separates mechanical load — the pounding of braking, cutting and impacts — from metabolic load, the energy cost of high-speed running. That tells you whether a tired player needs less pounding or less running. And with IMA it works indoors too, where GPS goes blank.
+
+Scene 7
+It closes the loop to the match — movement, intensity by half, and each player's stats sitting right next to his physical load. Not just who's tired, but how the team actually played.
+
+Scene 8
+On the planning side, you build one strength session — the full ready-day version — and MicroPulse derives the reduced and the recovery versions automatically, so the work always matches the day, with a built-in auditor keeping it balanced.
+
+Scene 9
+When a player gets hurt, MicroPulse walks him up a clinical return-to-play ladder — force-plate testing and research-backed, criteria-based rehab for hamstrings, tendons and ankles — every stage cited, the clinician always in charge.
+
+Scene 10
+Here's what makes it different. Nothing is a black box. Every verdict shows its plain-language why, how confident it is, and the research behind it. Rules make the decision; the AI only explains it, and labels itself as AI. And any coach can override, with the reason logged.
+
+Scene 11
+The same verdict is visible everywhere. The head coach gets the answer in five seconds; the strength coach gets the full reasoning underneath. It runs for football and for indoor basketball — one system, the whole athlete.
+
+Scene 12
+MicroPulse — readiness, load, performance and return-to-play, turned into one clear, explainable decision per player, every day. The whole athlete, on one page.

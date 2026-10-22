@@ -1,0 +1,33 @@
+MicroPulse — GPS Data — narration for Pictory
+============================================================
+
+Scene 1
+GPS Data — the whole page, explained. It's the raw external-load tab — the ground truth of every Catapult session. Let's walk through it.
+
+Scene 2
+It's the ground truth. Where Load Intelligence analyses the load — the verdicts, who's building — this tab shows the actual numbers, every player, every session. It's raw, not analysed: no verdict, just what Catapult measured. And it's the source — every analytical page in the app is computed from here.
+
+Scene 3
+The page opens with a projection dial. It shows the cumulative GPS load this week against an eight-week historical average — here seventy-six per cent of a typical week, on track. Current, typical, and crucially projected: where the week will land if the current pace holds. It's the where's-the-week-heading view, at the raw-GPS level.
+
+Scene 4
+And the projected percentage is the early warning. A player can be at ninety per cent of a typical week now — looking fine today — but projected to two hundred and twenty-three per cent if the pace holds. That's a runaway week, and because you see it mid-week, you can act before it happens rather than after.
+
+Scene 5
+You can flip the dial between the whole squad, against its own history, or one player, against his. And it breaks down into per-KPI cards — player load, velocity bands five and six, accelerations and decelerations — each with its current, typical and projected value. So you can see whether it's the squad or one individual heading over.
+
+Scene 6
+Below the dial is the session table — nothing but data. Every player's raw numbers for the session: total distance, high-speed distance, accelerations and decelerations, the B2-3 counts, plus average and max heart rate for those who wore the belt — all with a squad-average row on top. This is exactly what every analytical page is computed from, so it's where you verify a number.
+
+Scene 7
+And it's honest about what's missing. A player without a valid heart-rate read shows a dash, never a zero — no belt on skin means no HR, shown as no-data, so the averages stay clean. And a freshness banner states the latest data date and whether anything's been uploaded since, so stale data is never passed off as current. You always know what you're looking at.
+
+Scene 8
+There's also a manual entry. If a player forgot to turn on his pod, the coach can log the GPS numbers by hand, so the record stays complete. It's the same keep-the-feed-fed idea as RPE and match minutes — so a training day isn't lost from the history just because of a forgotten pod.
+
+Scene 9
+Finally, where it sits. GPS Data is the bottom of the stack — the raw external feed that Load Intelligence, Decel, IMA, Quadrant and every ACWR are computed from. And it pairs with Load and RPE, the raw internal feed. Together they're the two ground truths beneath every analysis in the system.
+
+Scene 10
+So, thirty seconds. First, the dial — where's the week heading, and watch the projected percentage. Second, team or player — the squad, or one player against his own history. Third, the session table — the raw per-player numbers. And remember: this is the source everything else analyses, and a dash means no-data, not zero. It's where MicroPulse's ground truth lives.
+

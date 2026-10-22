@@ -1,0 +1,39 @@
+MicroPulse — Total Player Analysis (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Total Player Analysis — how to read it. This brings together two profiles of the same player: what kind of footballer he is, and what kind of athlete he is. Let's walk through how the two fit together.
+
+Scene 2
+It gives two distinct reads of one player: as a footballer, from Wyscout or StatsBomb, and as an athlete, from GPS, VALD force plates and velocity-based training. Each with its own strengths and weaknesses. Three things up front: it's performance-only — readiness and the daily decision stay elsewhere; it never blends the two into a single player rating; and it aggregates data you already have, it doesn't ask for new uploads.
+
+Scene 3
+The profile is two radars, side by side, and you read each on its own. One is the footballer — creation, progression, finishing, defending. The other is the athlete — speed, power, strength, endurance. Keeping them separate is deliberate: a player can be an elite footballer and an average athlete, or the other way round, and blending them into one number would hide exactly that.
+
+Scene 4
+The footballer axis is the read you already know from Player Analysis: his role, and his per-90 stats as percentiles against your squad, grouped into attacking, possession and defending — green for strengths, red for development areas. Nothing new to learn here; it's the technical and tactical half of the picture.
+
+Scene 5
+The athlete axis is where it goes further than most tools. It reads seven qualities, not just one: speed — max velocity and momentum; acceleration and explosiveness; power and reactive strength — jump height, reactive strength index, peak power; maximal and relative strength; the force-velocity profile from velocity-based training; change of direction; and — crucially — the engine: work capacity and endurance. Top speed alone is only the top end of an athlete.
+
+Scene 6
+Each quality is fed by data already flowing into MicroPulse. GPS and IMA give speed, high-speed running, accelerations, change of direction and work rate. VALD force plates give jump height, reactive strength, peak power, isometric strength and left-right asymmetry. And velocity-based training plus the physical assessment battery give the load-velocity profile, estimated one-rep-max, sprint tests and body composition. Nothing new to collect — it's brought together.
+
+Scene 7
+A raw number means little on its own — thirty-two kilometres an hour tells you nothing until you know the position and the benchmark. So every athlete quality is ranked as a percentile by position, and against the squad. That turns a bare figure into something you can act on: a genuinely fast full-back, or a striker who's strong but slow — the context, not just the number.
+
+Scene 8
+The most useful part is the cross-link — where the athletic qualities do, or don't, show up in games. High tested max velocity but low in-game top speed? The speed isn't being expressed. Strong in the gym but low high-speed distance in matches? The strength isn't translating. No siloed tool tells you this, because it needs the testing data and the match data together — and it's exactly where training priorities become obvious.
+
+Scene 9
+Every source is dated, so the profile shows a trend over time per quality — rising, stable or falling — not just today's snapshot. That matters most for young players: you can see development between tests, and whether the training is actually moving the needle, rather than judging on a single day.
+
+Scene 10
+Four guardrails. It's performance-only — it never touches the readiness colour, the load, or the daily decision. Left-right asymmetry is framed as a performance and robustness quality, not an injury score; the medical read stays in the return-to-training module. It's always two labelled axes, never one blended score, and every metric shows its source and confidence. And it degrades gracefully — missing VALD or VBT data just shows what exists and marks the gaps, never a broken screen.
+
+Scene 11
+Here's the shape of it — one player, both reads together. As a footballer: an elite creator, strong on the ball, light defensively. As an athlete: strong in power and acceleration, with top-end speed and the engine still developing. That combined picture — the footballer and the athlete side by side — is what selection, player development and recruitment all actually need, and no single feed gives it.
+
+Scene 12
+So, the thirty-second read. First, read the two radars — footballer on one side, athlete on the other, never one score. Second, green strengths and red gaps, benchmarked by position, tell you his edges and development areas. Third, check the cross-link — do the athletic qualities actually show up in his games? Bottom line: Total Player Analysis reads a player as both a footballer and an athlete, benchmarked and dated — the whole picture for selection and development, and never a single verdict.
+

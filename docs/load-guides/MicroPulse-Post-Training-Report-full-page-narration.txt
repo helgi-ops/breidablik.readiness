@@ -1,0 +1,33 @@
+MicroPulse — Post-Training Report (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Post-Training Report — the whole page, explained. It closes the loop the Pre-Session Report opened, and answers one question: did the session land where the plan asked? Let's walk through it.
+
+Scene 2
+It reads the actual captured session — GPS plus logged effort — and diffs it against the pre-session targets, at squad level and per player. That's plan versus actual: the GPS-captured session against the readiness-adjusted plan. And you review it on screen, without downloading; the PDF stays optional.
+
+Scene 3
+The report opens with the verdict — the squad landed on plan, three players above, five below — and headline tiles. The actual sits on top, the plan beneath, and a status band tells the story: total distance a hundred and eleven per cent, on plan; Player Load eighty-five per cent, on plan; but high-speed running only sixty per cent, under. So even at a glance you see which parts landed and which fell short.
+
+Scene 4
+Each metric gets a status band. On plan is eighty-five to a hundred and fifteen per cent — landed where the plan asked. Over or under, in the sixty-to-eighty-five or one-fifteen-to-one-forty range, is amber — drifting, worth a look. And beyond forty per cent either way is red, a real miss. The key: both directions are flagged. An unplanned overshoot is a red too — three hundred and thirty-five per cent of plan is flagged just as much as twenty-eight.
+
+Scene 5
+And here's the cleverest part. The squad can land on distance — a hundred and eleven per cent — yet come in well under on the mechanical KPIs: accelerations at twenty-eight per cent, decelerations at fifty-one. On a mechanical day, that isn't just less than planned — it's the wrong emphasis. They ran more and braked less than the plan asked. The report catches session-shape drift, not just volume. It tells you whether they did the right kind of work.
+
+Scene 6
+It goes down to each player — his own plan versus actual, with a status. One player at three hundred and thirty-five per cent of plan, well over — far too much for a light day. Another right on plan. A third at eighty per cent, under. It turns a squad average into individual accountability: you see exactly who did too much and who did too little, rather than hiding it in a team mean.
+
+Scene 7
+It also watches the returning players. For anyone injured or in return-to-training, it checks their week load against the individualized recommended ramp from the Return-to-Training engine. Over the ramp means ease off — he did more than his rehab allows. Under is usually fine; a partial week just reads so far, not behind. So the rehab ramp is woven right into the post-session review, and a returning player can't be quietly overloaded.
+
+Scene 8
+So the loop is complete. The Pre-Session Report sets the plan — match demand into today's targets. The session is run, captured by GPS and logged RPE. And the Post-Training Report reviews it — actual versus plan — and that delta feeds tomorrow's plan and the load baselines. Plan, execute, review, week after week.
+
+Scene 9
+So, thirty seconds. First, the verdict — where the squad landed. Second, the status column — which metrics drifted, and which way. Third, the per-player table — who over- or under-shot — and the return-to-training rows for the injured. And remember: it checks the kind of work, not just the amount, and both over and under are flagged.
+
+Scene 10
+The bottom line: the Post-Training Report answers whether the session delivered what it was meant to — plan versus actual, at squad and per-player level, in the right emphasis, and honest about both over and under. It's the review that closes the planning loop.
+

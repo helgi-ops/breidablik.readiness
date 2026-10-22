@@ -1,0 +1,21 @@
+MicroPulse — IMA Intelligence — narration (for Pictory)
+========================================================
+
+Scene 1
+IMA Intelligence. A biomechanical view of the day.
+
+Scene 2
+IMA Intelligence is a biomechanical view of a training day: stride distribution across eight bands, sprint strides against the player's own baseline, and left/right asymmetry in high-intensity changes of direction.
+
+Scene 3
+Here's the IMA Intelligence screen. Everything on it follows the same layered read: a plain verdict on top, the reason below, and the detail only if you open it.
+
+Scene 4
+How to read it. The weekly dial at the top shows where the squad sits against a typical week and projects where it lands if the current rate continues. Asymmetry over threshold is flagged — a persistent L/R difference is a known risk factor, not a one-day fluke.
+
+Scene 5
+When to open it. Useful on a Wednesday while there's still time to change the plan, and to watch asymmetry over time rather than one day at a time. The research behind it: Bishop et al. (2020) — L/R difference thresholds. Rests entirely on inertial data; requires Pro.
+
+Scene 6
+IMA Intelligence — A biomechanical view of the day. Read a decision, not a dataset; the detail is always one click away.
+

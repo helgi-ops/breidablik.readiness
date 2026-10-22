@@ -45,13 +45,27 @@ exactly the `statsbombLeagueTeamCsv` adapter in the ingestion brief. The 136-col
 | Export | Grain | Rows | → MicroPulse target |
 |---|---|---|---|
 | Squad (`Breidablik-Squad-2026.csv`, 216 col) | season, per player | one per player | `player_season_stats` |
-| Player Match Stats (`*-MatchStats.csv`, 199 col) | per match, one player per file | one per fixture | `player_match_stats` (empty today — Wyscout Excel could not fill it) |
+| **Match Stats (per-player, both teams)** (`… - Match Stats.csv`, 57 col — has `Team` **and** `Player`) | per match, one row per player, **both squads in one file** | ~40 (both teams) | **`player_match_stats`** — the clean, preferred filler |
+| Player Match Stats (`*-MatchStats.csv`, 199 col) | per match, one player per file | one per fixture | `player_match_stats` (fallback — one file per player) |
+
+**Preferred player-match source.** The **Match Stats (per-player, both teams)** CSV — one
+upload gives every player on *both* squads for a fixture, with shots/KP, passing & touches,
+defensive actions, xGChain/xG-buildup, the full **OBV** suite and **pressures +
+counterpressures** — is the clean way to fill `player_match_stats`. It is the CSV equivalent
+of the Match Report PDF's appendix pages (21–24), and richer (OBV + counterpressures). It has
+**no** minutes column, **no** post-shot xG, **no** per-shot log and **no** passer→receiver
+combinations — those remain PDF-only (see below).
 
 ## Rule of thumb
 
 - Has a `League Average` row and 2 rows total → **Team Stats** → scouting / benchmark.
-- Has a `Match` + `Date` column and one row per game → **Match Stats** → `sb_team_match_stats`.
-- Has one row per player → **Squad** (season) or **Player Match Stats** (per game).
+- Has a `Match` + `Date` column and one row per game → **Team Match Stats** → `sb_team_match_stats`.
+- Has **`Team` and `Player`** columns with rows for two teams → **Match Stats (per-player, both teams)** → `player_match_stats`.
+- Has one row per player, single team → **Squad** (season) or one-file-per-player **Player Match Stats**.
+
+Note the disambiguator: the season **Team Stats** file uses the column **`Team Name`**; the
+per-player **Match Stats** file uses **`Team`** (and adds `Player`). Different column labels,
+so the two never collide.
 
 ## How the app routes an upload (and catches wrong-grain drops)
 

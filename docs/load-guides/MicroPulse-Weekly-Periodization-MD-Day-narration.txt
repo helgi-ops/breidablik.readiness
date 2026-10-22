@@ -1,0 +1,29 @@
+MicroPulse — Weekly Periodization by MD-day (Train-Like-You-Play panel) — narration for Pictory
+============================================================
+
+Scene 1
+Weekly Periodization by MD-day — how to read this one panel. It shows the shape of your training week: how hard each day is, as a share of what a match demands. Let's read it.
+
+Scene 2
+Each row is a match-day marker — MD-minus-four, MD-minus-one, MD-plus-two and so on — and its bar is that day's training volume as a percentage of a full match. Read down the column and you see the week's shape: where you build and where you back off.
+
+Scene 3
+The percentage is the key. It's the session's total volume as a share of a whole match's total — not a per-ninety rate. Per-ninety inflates short sessions; total-volume keeps a light day looking light. So a hundred per cent means that day loaded the squad about as much as a full match did.
+
+Scene 4
+Behind each bar is a desirable band — the pale green zone. It's a typical periodization shape: low the day after a match and the day before the next, peaking mid-week. It's a reference, not a rule — drawn from Martin-García and Akenhead — and you adjust it to your own model.
+
+Scene 5
+The colours tell you where each day sits. Dark green is on target, inside the band. Amber is below the band, lighter than the reference. Blue is above it, heavier. You're not chasing green everywhere — you're checking the week bends the way you intend.
+
+Scene 6
+The post-match days, MD-plus-one and MD-plus-two, split into two bars, because the squad is really two groups. Players who played a full shift — sixty minutes or more — are recovering, against a low band. Everyone else — subs and non-starters — does a compensatory top-up to replace the match they missed, against a higher band of its own. Anderson, Hills and Nédélec.
+
+Scene 7
+Top right is the basis — the lens. You can read the same week through eight different qualities: top speed, running-high, dynamic-high and -medium, IMA deceleration and change-of-direction, Player Load, and work rate. It's built on the Catapult movement profile, so it captures multi-directional movement and works indoors, not just straight-line GPS.
+
+Scene 8
+Two honesty marks. An exclamation next to a bar means few sessions — low confidence, so weight it lightly. And the period selector at the top sets the window — last four weeks by default — so you're always reading recent load, not the whole season.
+
+Scene 9
+So, in ten seconds: read down the column for the shape — low ends, peak mid-week — spot any day sitting amber or blue against its band, and switch the basis to check another quality. It's a reference to compare your week against; you set the model, the panel just shows the shape you actually trained.

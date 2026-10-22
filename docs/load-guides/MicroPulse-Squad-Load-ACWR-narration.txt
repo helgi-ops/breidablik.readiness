@@ -1,0 +1,27 @@
+MicroPulse — Squad Load: 7D / 28D / ACWR — narration for Pictory
+============================================================
+
+Scene 1
+Squad Load, seven-day, twenty-eight-day, and ACWR — how to read it. It's the workload table on the Quadrant page: for every Catapult load metric, it shows this week's load, the player's own recent baseline, and the ratio between them. In plain terms — is this week out of line with what he's built up to?
+
+Scene 2
+It rests on two numbers. Acute — the seven-day column — is this week's load for the metric. Chronic — the twenty-eight-day column — is his rolling four-week average, expressed as a comparable weekly figure. The ACWR is simply the acute divided by the chronic. Around one means this week matches his norm; well above one means a jump his body hasn't built up to.
+
+Scene 3
+Every metric across the table gets three columns — seven-day, twenty-eight-day, and ACWR. The seven-day is the raw load this week; the twenty-eight-day is what he's typically been doing, his own norm; and the ACWR is the ratio — the number you actually scan and colour-read. The two raw columns are there for the story behind the ratio: is it high because this week spiked, or because his baseline is low?
+
+Scene 4
+The colours read like a traffic light. OK, roughly nought-point-eight to one-point-three, is the sweet spot — fit and prepared. Elevated, one-three to one-five, is a watch. High, above one-point-five, is a sharp jump worth managing. And low, below nought-point-eight, can mean undertraining, or simply a player returning from time out whose chronic base has dropped. Same four bands as the ACWR everywhere else in MicroPulse.
+
+Scene 5
+Here's the point of the grid: the ratio is shown per metric, so you see not just that a player is loaded but what kind of load jumped. Total distance is the big picture. Velocity bands five and six are high-speed and sprint distance — a band-six spike means his sprinting specifically jumped. And the acceleration and deceleration bands are the explosive and braking work — a decel spike means his braking load jumped, not his running. A player can be perfectly normal on total distance and red on just one column, and that's the finding.
+
+Scene 6
+So you read across the row and look for the one red or amber cell. A player who's normal everywhere but sitting at three-times on sprint distance has a targeted sprint spike — you manage that one thing, not his whole week. One red cell localises the risk to a movement type; a whole row of ambers is a broad overload building. The colour tells you exactly where to look.
+
+Scene 7
+And the table is honest about what the number is. It says it right on the page: ACWR is a workload reference, not an injury predictor, and it's been debated in the literature since 2019 — Impellizzeri's critique being the key one. So use it the way it's meant to be used: to monitor and plan load, to spot a jump early and shape the week — not to predict who's going to get hurt. It's a planning lens, framed honestly.
+
+Scene 8
+So, thirty seconds. First, scan for colour — amber and red are the cells to look at. Second, which metric — sprint, acceleration, deceleration, or total, so you know what kind of load jumped. Third, check the seven-day against the twenty-eight-day — is it a genuinely high week, or a dropped baseline from time out? The raw columns tell you. It's this week against his own twenty-eight days, per movement type, and it's a reference to plan by — not a predictor.
+

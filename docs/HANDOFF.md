@@ -273,3 +273,97 @@ confidence on low Catapult-tier coverage. Re-parent and synthesize, never delete
 - Pre-existing lint debt (not from recent work): `any` casts in
   `TrainerDashboard.tsx` (~line 329) and a `set-state-in-effect` warning in
   `src/app/client/page.tsx` (the page's own load effect). New code is clean.
+
+---
+
+## 7. Core (Lite) — derive session duration + Core intensity verdict
+
+**Why (verified against prod data, 1,348 Core rows — Þór/Afturelding/Grindavík):**
+For GPS the ingestion is already pulling everything the Core tier exposes (all
+~100% populated): `total_distance`, `high_speed_distance`, `sprint_distance`,
+`total_player_load`, `player_load_per_minute`, `accel_decel_efforts`,
+`max_acceleration`, `max_deceleration`, `max_velocity`,
+`velocity_band5/6_total_efforts_gen2`, `high_metabolic_load_distance_m`.
+Empty columns are empty because the hardware/tier doesn't send them, NOT because we
+fail to fetch: IMA/Driver layer (`ima_*`, `jumps`, strides, `impacts`) = 0;
+`metabolic_power` (di Prampero) = 0 (we use HML distance instead); heart rate
+(`avg_heart_rate`/`max_heart_rate`) is non-null but all zeros = no HR belts worn
+(field is wired; flows the moment a belt is used). Legacy `accelerations`/
+`decelerations` = 0 but superseded by `accel_decel_efforts`.
+Two software-only wins (no new data, no new hardware):
+
+### Task A — derive `session_duration_minutes` where missing
+`session_duration_minutes` is mostly NULL for Core (Þór 0%, Grindavík 0%,
+Afturelding 60%), but we hold both `total_player_load` (100%) and
+`player_load_per_minute` (~86%). Derive duration = `total_player_load /
+player_load_per_minute` when `session_duration_minutes IS NULL` AND
+`player_load_per_minute > 0`. Guard div-by-zero; clamp to a sane range
+(e.g. 1–200 min); round to 0.1. Implement as a deterministic helper in
+`src/lib/micropulse/` (e.g. `sessionDuration.ts`) used at read time, OR a backfill
++ ingestion fill. Prefer read-time derivation so it self-heals; if backfilling
+historical rows, save the migration under `supabase/migrations/` with a timestamp
+prefix per CLAUDE.md, and flag derived values (`metabolic_data_notes`-style note or
+a `duration_source` of 'derived' vs 'catapult') so provenance is visible.
+Unlocks correct per-minute intensity, "% of match", and density for everyone.
+
+### Task B — Core intensity verdict (capability-driven, NOT tier-hardcoded)
+Add an intensity dimension to the Core read using only signals that are present:
+primary = `player_load_per_minute`; corroborating = `high_metabolic_load_distance_m`
+(HML, 100% populated — use this, NOT the empty `metabolic_power`/di Prampero
+column) and `high_speed_distance`/HSR. Branch on signals-present via the existing
+capability engine (`docs/interpretation-architecture.md`) — do not key on tier
+name. Produce a one-line verdict ("intensity vs the player's own usual day") with
+named drivers, reusing `flagAgainstBaseline()` (`src/lib/micropulse/baselines`) for
+the own-baseline z-comparison (min 8 training days, mature-baseline rule mirroring
+`playerLoadAcwr`/`movementSignature`). Surface inside the existing
+`LoadVerdictCard` as another component tile/driver, not a new wall.
+
+### Constraints (CLAUDE.md)
+- Explainability-first: one-sentence verdict on top, jargon (HML, PL/min) behind
+  tooltips, every flag gets a named driver + counterfactual, every verdict shows
+  confidence (coverage + baseline maturity), AI labels itself and only rephrases
+  real signals (rules decide, AI explains).
+- Canonical verdict color stays `v_coach_readiness_today_v8.final_color`; this is a
+  load/intensity dimension, NOT the readiness color — surface it as a distinct
+  labelled signal, never overwrite the color.
+- Confidence must DEGRADE on low coverage (Core has fewer signals than Pro) — never
+  fake certainty. HML/PL-per-min are the honest Core inputs; di Prampero stays out.
+- No new lint errors (`npx eslint <file>` after edits). Any DB change applied via
+  `apply_migration` also saved as a timestamped `.sql` under `supabase/migrations/`.
+  Stage specific files only; user runs the dev server + git.
+
+### Verify
+- Spot-check derived duration on Þór/Grindavík rows: `total_player_load /
+  player_load_per_minute` lands in a believable minutes range; never NULL-divides.
+- Core intensity verdict shows lower/“moderate” confidence than a Pro team on the
+  same logic (fewer signals); agrees in direction with the daily briefing.
+- `npx eslint` clean on touched files; verdict reads in 5 s for a non-S&C coach.
+
+---
+
+## 8. Management / Executive read-only "Club status" view (new EXEC role)
+
+A GM/board member asked to *see the team's status* without coach tooling. Build a
+**read-only EXEC role** + a club-status dashboard. Full spec:
+**`docs/management-exec-view.md`**. Privacy-first and tier-fair (Lite + Pro).
+Realises the ELITE "organization dashboards / executive reporting" promise; seed
+exists at `src/app/coach/org-reporting`.
+
+Core: new `EXEC` role (strictly read-only, enforced server-side), whole-club
+multi-team access (reuse `coach_teams` / add `exec_teams`), invite via
+`team_invite_links.target_role='EXEC'` (extend the check constraint + `/join`
+handling + a "Stjórnandi" option in `TeamInviteLinks`). Dashboard shows AGGREGATES
+only — availability counts (from `v_coach_readiness_today_v8.final_color`), weekly
+load trajectory, post-match recovery, trend, check-in adherence, and a club roll-up
+across all the club's teams. **Privacy boundary is mandatory and server-enforced:**
+no individual health/wellness rows ever reach EXEC. Endpoint `/api/exec/club-overview`
+(EXEC-auth, read-only); new `src/app/exec/` shell. CLAUDE.md rules apply: canonical
+color untouched, confidence shown, no new lint, migrations saved with timestamp.
+
+## 9. (related) Per-player "How to train this player" engine
+
+Deepens Train like you Play into an individual training-emphasis read (game model ×
+how the player moves), capability-driven for Pro + Lite. Full spec:
+**`docs/train-like-you-play-individual.md`**. Rules pick qualities from a fixed
+cited catalogue; AI only phrases. Lite omits IMA-only qualities (CoD/asymmetry),
+lists them under `notAssessable`, and reports lower confidence.

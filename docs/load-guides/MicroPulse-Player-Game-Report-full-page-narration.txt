@@ -1,0 +1,33 @@
+MicroPulse — Player Game Report (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Player Game Report — the whole page, explained. It's the printable per-player match report, and it turns raw match data into something you can compare and hand to the player. Let's walk through it.
+
+Scene 2
+It's one player's physical output in matches, normalised to per-90 so a substitute and a starter sit on the same scale. Per-90 removes minutes from the comparison — forty-five minutes and ninety minutes become comparable. And it prints to one clean PDF, which clubs use in reviews and contract talks.
+
+Scene 3
+The report opens with an AI summary that reads like a scout's note — where he ranks, his strengths, and the context of his age and role. Below it sit the numbers the summary was written from: matches, minutes, top speed, high-speed running. The AI explains, but only from the data underneath. This is the demo squad — no real player data.
+
+Scene 4
+The central idea of the page is Engine versus Driver. The engine is how much he brings — distance, high-speed running, sprints, top speed; the raw output, like horsepower. The driver is how he moves — accelerations, decelerations, changes of direction, jumps; the sharp, reactive work. Two players can have the same engine but a very different driver, and the report shows each as its own radar against the squad. The concept is from Niklas Virtanen's Data as a language, at Catapult.
+
+Scene 5
+Everything on the report is normalised to ninety minutes. A player who came on for thirty and one who played the full match land on the same scale. Without that, a substitute always looks quieter just because he played less — per-90 removes that illusion, which is what makes the whole report fair to compare.
+
+Scene 6
+A Form block compares his last three matches to his season average, and tells you whether he's trending up or down. A broad drop across high-speed running, sprint and metabolic load is a fatigue or form flag. And per-dimension chips show each metric's move — high-speed running down fifteen per cent, change of direction down twenty-one, and so on — so you see exactly where the dip is.
+
+Scene 7
+For each metric — distance, high-speed running, sprint, top speed, accelerations, decelerations, change of direction, jumps, hard efforts and metabolic load — the report gives the per-90 value, the percentile, and the rank. So you don't just see that he did four hundred and eighty-six change-of-direction actions; you see that's top sixteen per cent, fourth of nineteen. The number gets its context.
+
+Scene 8
+Below that, bar charts and a full table give every match and every dimension. And the report stays honest: when match minutes are missing, the row is flagged warm-up in numbers, because without minutes a substitute's warm-up is inside the figures. The stride-length read is marked low confidence until enough of his own sessions exist to trust it. It says what it doesn't yet know.
+
+Scene 9
+So, thirty seconds. First, the AI summary for the plain-language story of the season. Second, Engine versus Driver — is he a big engine, or a sharp driver? Third, the form trend and the per-90 ranks — which way he's trending, and where he ranks. And remember: per-90 makes the comparison fair, and the percentiles are against this squad.
+
+Scene 10
+The bottom line: Player Game Report tells you how much a player brings and how he moves — Engine and Driver — in one printable report you can hand to the player himself. It ranks him fairly with per-90, and it's honest about what it doesn't yet know.
+

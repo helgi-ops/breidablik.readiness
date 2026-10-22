@@ -1,0 +1,30 @@
+MicroPulse — Injury / RTP (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Injury / RTP — the whole tab, explained. This is where injuries are logged, and where each injured player is walked up the clinical return-to-play ladder. Let's go through it.
+
+Scene 2
+It has two jobs. It's the register — where you log an injury and see at a glance who's injured, in rehab, in RTP training, or cleared. And it's the ladder — a staged, criteria-based path that walks each player back to match play.
+
+Scene 3
+The register opens with four tiles — injured, in rehabilitation, in RTP training, and cleared this period — the squad's injury picture in one glance. There's a record-injury button; this is where injuries are actually logged, while the other two injury pages are read-only. And each entry shows the player's severity, body part, date, and current stage on the ladder.
+
+Scene 4
+The return follows a clinically recognized ladder. Rest, then light aerobic — walking, swimming, cycling. Then sport-specific running. Then non-contact drills. Then full training with contact. And finally match play, fully cleared. Progress dots show where each player sits — here, at non-contact drills, with three stages already cleared.
+
+Scene 5
+And here's the heart of it. A player advances only when he meets the stage's criteria — not when a number of days pass. The criteria are explicit and concrete: strength symmetry of ninety per cent or more versus the uninjured side, full range of motion, pain-free change of direction. The progress button is only justified once that checklist is ticked. Criteria, not calendar.
+
+Scene 6
+Return isn't just feels-fine. The criteria span four dimensions. Physical — strength symmetry and full range of motion. Pain-free — no pain on Nordics, squats, or posterior-chain work. Psychological — no fear or apprehension during sprinting. And imaging — an MRI or ultrasound showing scar healing and reduced swelling. All four must be met before contact. That's why the ladder is safer than a calendar.
+
+Scene 7
+It helps to see how the three injury surfaces fit together. This tab, Injury and RTP, is the register plus the clinical staging. Return-to-Training is the individualized load ramp — how much to train, week by week. And Injury Pattern Analysis is the read-only look-back audit — did we warn? One logs and stages, one prescribes load, one audits. Together they cover rehab, prevention and proof.
+
+Scene 8
+So, thirty seconds. First, the tiles — the squad's injury picture. Second, each player's stage and progress dots — where he is on the ladder. Third, open one to read the current stage's criteria — the boxes still to tick before he advances. And remember: criteria, not calendar, and the physio still makes the final call.
+
+Scene 9
+The bottom line: on the Injury and RTP tab, every step back is earned, not waited out. It's a safe, staged return with clear, multidimensional criteria — and the physiotherapist remains the final call on whether a player is ready.
+

@@ -1,0 +1,42 @@
+MicroPulse — Player Season Analysis (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Player Season Analysis — how to read it. This page takes one of your own players and gives you a plain read of what kind of player he is, benchmarked, with the numbers behind every line. Let's walk through it.
+
+Scene 2
+It reads a single player from his season stats — his role, his strengths, and his development areas — in plain language, with the football output shown next to the physical GPS and IMA data. Three things to hold onto: it's descriptive and never touches the readiness colour or the daily decision, every value shows its source, and it works from two data sources — Wyscout or StatsBomb.
+
+Scene 3
+At the top is a data toggle that switches the whole page between two views of the same player. Wyscout shows his football output — goals, xG, shots, passing — right beside his physical output: sessions, distance, top speed, load and minutes. StatsBomb ranks his per-90 season stats as percentiles against your own squad, with a role and an AI read. Same player, two lenses.
+
+Scene 4
+Start with the Wyscout squad table. Each row puts a player's football on the left — minutes, goals, assists, xG, shots, passing — and his physical output on the right: sessions, distance, top speed, load, match minutes. Seeing both on one row lets you ask the question that matters: does his running output line up with his football output?
+
+Scene 5
+It's honest about coverage. The import summary gives you a one-line recap — players imported, top scorer, most minutes, highest xG. But it also flags what's missing: unmatched rows, and squad players who weren't in the file. It names them, so you know exactly which players to add by importing a file that includes them. No silent gaps.
+
+Scene 6
+Click any player to open his full card. Up top are the key numbers, and below sits the complete grid of all one hundred and four Wyscout metrics — nothing hidden. There's also an AI season summary you generate on demand: a short plain-language recap built from his position stats. Note the label — it's descriptive, not a load or a selection call.
+
+Scene 7
+Switch to StatsBomb and every stat becomes a bar showing how the player ranks against your own squad. Green means top quarter — a strength. Red means bottom quarter — a development area. Blue is the middle. In one glance you see where a player's edges and gaps are, relative to his own teammates.
+
+Scene 8
+One thing to keep straight: the ranking is against your own squad, not the league. So ninety-fifth percentile means top among his teammates, not necessarily in the division. That makes it perfect for questions like who in our squad is best at this, and where a given player's edges and gaps sit — just read it as relative to a squad of around twenty, a tendency rather than proof.
+
+Scene 9
+The bars are grouped by theme — attacking, possession and progression, and defending — and each group carries its own squad percentile. That lets you read the shape of the player at a glance: strong in attack, tidy in possession, light in defending, or whatever the mix is, without hunting through a table.
+
+Scene 10
+Above the bars sits a short AI paragraph that names the player's strengths and his development areas in plain language. It's labelled written from the numbers, decides nothing — and that's the rule across the product: the percentiles are computed by rules, so the facts are fixed, and the AI only phrases them. It explains; it never decides.
+
+Scene 11
+Here's the whole thing in ten seconds. Ágúst Orri Thorsteinsson, an attacking role over nearly fifteen hundred minutes. Strengths: an elite creator — ninety-fifth percentile for xG assisted — with high box activity, strong carrying and excellent ball recovery. Development areas: light defensively, sixteenth percentile for tackles. Typical of the role, with clear room to add defensive intensity. A complete, honest picture from one screen.
+
+Scene 12
+Four guardrails. It's descriptive — it never touches the readiness colour, the load, or the daily decision. Every value carries its source. The percentiles are rules and any AI text is labelled and invents nothing. And the rankings are against a squad of around twenty, so read them as a tendency, not proof.
+
+Scene 13
+So, the thirty-second read. First, pick your source and player — Wyscout for football beside physical, StatsBomb for percentiles versus the squad. Second, read the shape: green strengths, red development areas across attacking, possession and defending. Third, confirm in the numbers — open the full card or the AI paragraph, and check the coverage note. Bottom line: Player Season Analysis turns one player's season into a plain read of what kind of player he is — context for the coach, never a verdict.
+

@@ -1,0 +1,39 @@
+MicroPulse — Squad (S&C surface) — narration for Pictory
+============================================================
+
+Scene 1
+The Squad page, explained in full — the S&C surface. This is the full per-player drill-down behind Today's head-coach verdict. Let's walk through it.
+
+Scene 2
+It's the S&C surface. For each player, it lays out every engine's output — the readiness decision, injury risk, external load, fatigue, the auto-planned session and neural load — each with its own why, confidence and coach action. Every engine is open, and the coach can audit it all, and override the call, with the change logged.
+
+Scene 3
+At the top are the day's flags — low readiness, pain, neural bias applied — the team-level attention. You can filter by colour, and re-run the engine. And for each player there are three buttons — full, reduced, recovery — so the coach can override the engine's call, logged with a reason. The engine advises; the coach decides.
+
+Scene 4
+Each player has a card — the head-coach read before you drill in. The status, like yellow eighteen, with a plain why. And three tiles: today, his z-score versus his own usual; versus yesterday, the change overnight; and a rating on a zero-to-ten scale where five is the squad average. Then Show details opens the workbench.
+
+Scene 5
+The readiness decision explains itself. A why — PlayerLoad elevated versus the twenty-eight-day baseline, deceleration and acceleration above norm, rising neural load. And a coach action — protect painful tissue, reduce external load, cap intensity. Plus a tomorrow's outlook: if he improves it's yellow, if it holds it stays red — and honestly, when history is thin, it says forecast confidence is low.
+
+Scene 6
+Beside readiness sits injury risk — a separate engine, with its own why and recommendation. Here, fatigue remains elevated while recovery markers are below normal, so it recommends controlling high-speed and explosive volume, modifying total load, monitoring the response in warm-up, and prioritising recovery. Two engines, each with its own reasoning — they don't collapse into one number.
+
+Scene 7
+And you can see the raw check-in — nothing hidden. The player's actual wellness scores: fatigue and energy, sleep quality and duration, stress and mood, muscle soreness. With the baseline maturity, when it was logged, and the supporting z-scores. So a coach can see exactly what objective input drove the verdict, rather than trusting a black box.
+
+Scene 8
+The external load section shows two things. Today versus the team — where his load sits against the squad right now, often all green. And the weekly load: seven-day, twenty-eight-day, and the ACWR per metric, with the spiking ones flagged red. Here total accelerations and high-intensity distance are spiking, even though today looked green. Both the snapshot and the rolling ratio are shown, because they can disagree.
+
+Scene 9
+The fatigue and adaptation section is where a flag becomes an action. It names the type — here tissue fatigue, moderate, driven by high deceleration and acceleration load yesterday. And then it prescribes concrete modifiers: minus forty per cent volume, a recovery bias, swap the ballistic elements, add tendon reload, and a neural bias of minus eight per cent. The engine doesn't just flag fatigue — it turns it into an adapted session.
+
+Scene 10
+Finally, two more engines. The auto session — a reset or recovery plan, with its decision confidence: the inputs it used, what was missing, and any fallbacks, plus the actual warm-up and isometrics. And neural load — a separate engine tracking rising or declining neural fatigue and next-day risk, with the bias it applied to the decision. Every engine states its inputs and its confidence, so you can see exactly how the final call was built.
+
+Scene 11
+It's worth stepping back. Today is the head-coach surface — the verdict, in five seconds. Squad is the S&C surface — the whole workbench, every engine open. Same truth, two depths. The head coach gets the answer on Today; the S&C coach gets the full reasoning here; and both can override with a logged reason. One verdict, visible everywhere — and the reasoning lives on Squad.
+
+Scene 12
+So, thirty seconds. First, the player card's status and why. Second, the readiness decision — the why and the coach action. And if you disagree, override with full, reduced or recovery, logged. Everything else — injury risk, the weekly ACWR flags, the adapted session, the neural engine — is there when you need it. Every engine shows its reasoning and its confidence, and the coach decides. Squad is the depth that Today simplifies.
+

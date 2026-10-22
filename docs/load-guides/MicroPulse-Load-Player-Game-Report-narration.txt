@@ -1,0 +1,21 @@
+MicroPulse — Player Game Report — narration (for Pictory)
+========================================================
+
+Scene 1
+Player Game Report. Match output, made comparable.
+
+Scene 2
+The match report shows a player's physical output in matches, normalised to 90 minutes so a substitute and a starter are comparable. The form box compares the last three matches with his season average.
+
+Scene 3
+Here's the Player Game Report screen. Everything on it follows the same layered read: a plain verdict on top, the reason below, and the detail only if you open it.
+
+Scene 4
+How to read it. “Engine” is how much a player delivers; “Driver” is how he moves — two different questions the system keeps apart. The AI summary is explicitly labelled as AI and is generated only from the numbers below it — it invents nothing.
+
+Scene 5
+When to open it. Print it directly for review meetings and contract talks — many clubs use it that way, and it can be handed to the player himself. The research behind it: Normalisation to 90 min for comparability; AI labelled as AI (the explainability rule).
+
+Scene 6
+Player Game Report — Match output, made comparable. Read a decision, not a dataset; the detail is always one click away.
+

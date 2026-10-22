@@ -1,0 +1,21 @@
+MicroPulse — Load Intelligence — narration (for Pictory)
+========================================================
+
+Scene 1
+Load Intelligence. See overload before it bites.
+
+Scene 2
+Load Intelligence shows the squad's overall training load and who is trending up or down. The verdict is one word — “Building”, say — with a single sentence naming the players behind it.
+
+Scene 3
+Here's the Load Intelligence screen. Everything on it follows the same layered read: a plain verdict on top, the reason below, and the detail only if you open it.
+
+Scene 4
+How to read it. Four key figures show how many players carry braking load, high-speed running, an acute spike or training monotony. Each flagged player gets a reason chip; the jargon (ACWR, MLI, monotony) sits behind “Show S&C details” and never interrupts the head coach. A confidence line states what share of the dimensions arrived — for example “low · 5/6 dimensions”.
+
+Scene 5
+When to open it. Open it to see the week's load trend and who is spiking before it turns into an injury. The research behind it: Gabbett (2016, 2020) — acute:chronic workload and the sweet-spot; Foster — session-RPE load.
+
+Scene 6
+Load Intelligence — See overload before it bites. Read a decision, not a dataset; the detail is always one click away.
+

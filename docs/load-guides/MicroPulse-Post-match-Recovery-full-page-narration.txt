@@ -1,0 +1,30 @@
+MicroPulse — Post-match Recovery (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Post-match Recovery — the whole page, explained. After a match it answers one question: who has bounced back, and who is still carrying it? Let's walk through it.
+
+Scene 2
+The whole page rests on a known timeline. After a match, fatigue peaks the day after — MD plus one — and should clear within two to three days, on the Nédélec 2012 window. So the page tracks each player across MD plus one, two and three, and asks: has he cleared on schedule, or is he still carrying it?
+
+Scene 3
+For every player, every day, there are two reads side by side. The coloured dot is the subjective one — how he feels, from sleep, soreness and energy, versus his own norm. The percentage below it is the objective one — a countermovement jump test versus his baseline, the neuromuscular truth. Feel above, jump below.
+
+Scene 4
+And here's why both are shown. A player can self-report green — yet have a depressed jump. Subjective feel recovers before the neuromuscular system does. So when the dot says fine but the jump is still down, believe the jump — that gap is a player who thinks he's ready but isn't. On Gathercole 2015, that gap is the single most useful signal on the page.
+
+Scene 5
+The squad recovery curve makes the timeline visible. Three stacked bars, one per day, each split into red, yellow and green by the readiness verdict. You watch the green grow across the days. Here six red on MD plus one becomes eleven green by MD plus three — a healthy rebound. If red lingers at MD plus three, recovery is stalling and you have players to look at.
+
+Scene 6
+The page also tells real match fatigue apart from noise. A heavy echo is high mechanical match load — decel-weighted, because high-intensity decelerations best predict muscle damage on McBurnie 2022 — plus still flagged at MD plus two. That's genuine lingering fatigue: ease his plan or extend recovery. Contrast likely not post-match: flagged, but with low load or few minutes, so it's probably not from the game — look elsewhere.
+
+Scene 7
+Finally, Recovery watch. Players still below their own baseline three days after the match get escalated, and the system doesn't just flag them — it names the driver, whether it's energy or sleep dragging, with the readiness-z, and gives an action: modify training, and or refer to physio, because they're past the expected echo. It's directional — the direction beside the colour, not the colour itself.
+
+Scene 8
+So, thirty seconds. First, the verdict — how many rebounded by MD plus two. Second, the recovery curve — is the green growing day by day? Third, the dot versus the jump — a green feel with a down jump means still fatigued. And a heavy echo, high load plus still flagged, is the real one to act on.
+
+Scene 9
+The bottom line: after a match, feel recovers before the body does. So don't trust a green dot alone if the jump is still down — the gap between the two is the recovery you can't feel, and Post-match Recovery is the page that surfaces it.
+

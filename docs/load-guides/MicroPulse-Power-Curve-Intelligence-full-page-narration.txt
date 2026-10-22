@@ -1,0 +1,38 @@
+MicroPulse — Power Curve Intelligence (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Power Curve Intelligence — the whole page, explained. This is the ADI movement layer. It answers two questions about a player: how intensely can he work, and what kind of mover is he? Let's walk through the whole page.
+
+Scene 2
+The page has three cards, and they build a movement profile of the player over the season — not a single day. The power curve for how intense, and the movement signature and style for what kind of mover. Conditioning — critical speed and fitness tests — lives on its own page, so this one stays focused on movement.
+
+Scene 3
+The power curve is the heart of the page. Instead of a single total, it takes the peak — the worst, most demanding — rolling window at one, three and five minutes, for Player Load and distance. Those come straight from the Catapult Maximum Intensity Interval feed and fill automatically from the daily sync. No manual export.
+
+Scene 4
+The curve always slopes down: the longer the window, the lower the per-minute intensity, because nobody holds a one-minute peak for five minutes. Today's curve sits on top of the player's own season-best — his ceiling. The index tells you how close to that ceiling he got: near one hundred means he touched his best; well below means a light day, or fatigue.
+
+Scene 5
+The shape of that curve is a coaching signal a single number misses. Explosive means a high short burst that fades fast. Engine means he holds a high fraction of his peak over minutes — a repeatable-effort athlete. Under-conditioned means a low ceiling at every window versus his peers — a development priority, not a shape preference.
+
+Scene 6
+The second card is the movement signature — our take on ADI's Vector Distribution. It's the IMA clock: twelve directions by intensity, showing where and how much of his multidirectional work a player does. And it flags whether his recent shape has drifted from his own usual fingerprint — is he still moving like himself?
+
+Scene 7
+The third card is movement style — where he sits on the linear-to-multidirectional axis, read against the squad. It combines the change-of-direction clock with fast straight-line running, so it genuinely separates a linear sprinter from a multidirectional mover. It's a style, not a quality — no player is wrong to be either.
+
+Scene 8
+Every reading carries its confidence and its source. The curve matures after about four peak-period sessions; below that it's flagged low-confidence. Values are read exactly as Catapult reports them, never re-derived, and a missing window shows as no-data, never zero. Each card cites the science behind it.
+
+Scene 9
+One honest limit worth naming. This is IMA — the multidirectional density and direction of the work, not mechanical power in watts and not the raw acceleration vectors, which need a raw ten-hertz stream we don't ingest. So the signature is a faithful proxy for how he moves, not a wattage. We say so on the card.
+
+Scene 10
+And a placement note: everything here is descriptive. The power curve, the signature and the style feed training and understanding — but none of them ever touches the readiness colour, the load target, or the daily decision. Rules decide; this page explains.
+
+Scene 11
+So, thirty seconds. First, the power curve — how intense was his hardest window, and how close to his own ceiling? Second, the shape — Explosive, Engine or Under-conditioned? Third, the signature and style — where does he do his multidirectional work, and is he still moving like himself? Profile first, day second.
+
+Scene 12
+The bottom line: Power Curve Intelligence is the player's movement profile — how hard he can go, and what kind of athlete he is. Its sister page, IMA Intelligence, tells you what a single session delivered. Together: what kind of mover, and what today's session did. This page answers the first.

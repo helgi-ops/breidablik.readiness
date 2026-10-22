@@ -1,0 +1,36 @@
+MicroPulse — Train like you Play (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Train like you Play — the whole page, explained. It asks one question: does training prepare a player for what the game actually asks of him? Let's walk through it.
+
+Scene 2
+The principle is simple and old: train at the intensities the match demands. Where a player's best training is well below his own match, the body isn't being prepared for what the game asks of it. That's the train-like-you-play idea, from Gabbett 2016 — and this page makes it measurable.
+
+Scene 3
+Here's the crucial framing. Because movement events pile up in drills, training naturally runs above match intensity — so a high percentage is expected and fine, not a warning. The exposure gap only fires when best training drops below fifty per cent of match demand, on Malone 2017. That's under-preparation — and under-preparation, not overload, is the risk this page is built to catch.
+
+Scene 4
+You can look at it three ways. FMP — Catapult's movement zones. IMA — the raw events: accelerations, decelerations, changes of direction and jumps. And GPS — outdoor speed. You can compare a player to his own match or to his position's demand. And because FMP and IMA are inertial, they work in the hall where GPS can't.
+
+Scene 5
+The page also checks the shape of the week. Each training day is shown as a percentage of match demand, and the classic periodization shape is low the day after a match, building to a mid-week peak, then tapering low the day before the next game. Each day sits against a desirable band — but it's a reference, not a rule, on Martín-García 2018; you adjust it to your own model.
+
+Scene 6
+And here's a nuance most systems miss. On the day or two after a match, the page splits the squad in two. Players who played a full shift, sixty minutes or more, are recovering — a light day is exactly right for them. But subs and limited players do a compensatory top-up, to replace the match stimulus they missed. Each group is judged against its own desirable band, so the same light session isn't wrong for one and right for the other.
+
+Scene 7
+Then a per-position table shows best training as a percentage of match demand, metric by metric, coloured by band. Green is well trained, at or above match demand. Amber is a gap, drifting below and worth topping up. Red is under-trained, below fifty per cent — under-prepared for what the game asks. So the moment a gap opens, you see exactly who to train harder, and on which metric.
+
+Scene 8
+Finally, the page turns diagnosis into a plan. Per-player development emphasis equals your game model times how he moves. You pick the model — high press, possession, direct transition, low block, or balanced — and each asks something different of the same player. Change the model, and the recommended emphasis changes with it.
+
+Scene 9
+And the prescriptions are evidenced, not generic. Repeated-sprint capacity for a player who repeats high-speed efforts, on Buchheit 2024. Acceleration mechanics for first-step explosiveness in possession, on Morin. Eccentric-braking tolerance for a player who brakes hard — the main injury driver — on McBurnie 2022. Each comes with the player's own z-score as evidence, a method, and a priority — a plan you can hand straight to the strength coach.
+
+Scene 10
+So, thirty seconds. First, are there any exposure gaps — remembering it only fires below fifty per cent of match demand. Second, the week's shape — low-peak-low, each day in its band? Third, how to develop him — pick your game model and read the top priority per player. And keep the framing in mind: a high percentage is expected; the risk is a low one.
+
+Scene 11
+The bottom line: Train like you Play makes sure you prepare a player for the game you actually play. When a gap opens, it says who to train harder, on what, and how — all in line with how you want to play. Don't under-prepare the body for what the match asks.
+

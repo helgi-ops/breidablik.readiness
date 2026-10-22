@@ -1,0 +1,36 @@
+MicroPulse — Return-to-Training (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Return-to-Training — the whole page, explained. This is the safe, individualized ramp back from injury. Let's walk through how it rebuilds a player week by week.
+
+Scene 2
+It rebuilds a player's load week by week, toward a ceiling that is his own healthy baseline — never a generic scale. It's individualized, tailored to the player and to the injury. And it follows a safe order: the riskiest qualities unlock last, and ramp slowest.
+
+Scene 3
+The page opens with where he is — currently injured, in return-to-training, with his layoff length, the capacity he retained, and his RTP stage. Below that, today's recommended session, and the week-by-week targets. This is the demo squad — no real player data. Purple, by the way, is reserved for return-to-training surfaces, so it never competes with daily readiness.
+
+Scene 4
+The foundation is the ceiling. Every weekly target is a percentage of his own healthy weekly load — and it's a ceiling, the most he should do, not a floor to hit. So ninety per cent means ninety per cent of what he himself used to do when healthy, not ninety per cent of some average player. That's what makes the ramp fair to him.
+
+Scene 5
+Then the progression ladder. Qualities unlock in a fixed, safe order. Volume first — player load, distance and high-speed running in week one. Then sprinting, strides and accelerations in week two. And the riskiest work — decelerations, high-intensity braking, and above all change of direction, the most re-injury-prone quality — comes last. The base is built first; the risky work is added only once the foundation holds.
+
+Scene 6
+And it's not one-size-fits-all. The qualities most likely to re-injure this particular player ramp more slowly — seven per cent a week — and start lower than the rest. A hamstring case and a knee case get a different order and a different pace. The plan is shaped by the injury, not just the calendar.
+
+Scene 7
+For the coach on the day, it splits what's left of the week's target across the sessions still to come, and recommends today's type — mechanical, meaning cutting and braking, or a running day — based on what's still due. The targets themselves split into Engine, the GPS load, and Driver, the inertial load, each metric showing what's done and what's left. And every number is a ceiling, not a floor.
+
+Scene 8
+The ramp is controlled and honest about it. Week-to-week steps keep the ACWR near one-point-oh-four — small, safe increments — and the page calls ACWR what it is: a spike-size descriptor, not an injury predictor. Left-right balance is monitored, not ramped, to restore his normal side balance after a one-sided injury. And when actual load is under the recommended mid-week, the page says under isn't behind — it's just an unfinished week.
+
+Scene 9
+One boundary matters most here. This is a load framework for a safe, individualized ramp back. It is not medical clearance to play — that remains the physiotherapist's call. And the player himself sees a simplified version in the app: which week he's on, this week's focus, and what unlocks next — no raw numbers — so he's part of the journey without drowning in detail.
+
+Scene 10
+So, thirty seconds. First, the header — his stage, capacity, and week in the plan. Second, today's session — the type, and the load ceiling. Third, the ladder — what's unlocked, and what's still locked. And keep the two boundaries in mind: it's a ceiling, not a floor, and a framework, not clearance.
+
+Scene 11
+The bottom line: Return-to-Training is a safe road back, built around the individual player. The riskiest work comes last, the ceiling is set by his own healthy baseline, and the page is clear about the limits of what a load engine can and cannot say. Rules compute the ramp; the physio clears the player.
+

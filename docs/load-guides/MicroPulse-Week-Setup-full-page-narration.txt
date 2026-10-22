@@ -1,0 +1,33 @@
+MicroPulse — Week Setup (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Week Setup — the whole page, explained. This is the upstream page: a five-minute weekly setup that everything else in the system reads. Let's walk through it.
+
+Scene 2
+In three steps, you set the week's dates and matches, its intensity, and the day-by-day plan that gets sent to each player. It's the upstream page — it tells the whole system what a normal day looks like — and when you activate it, it pushes each player the right training day.
+
+Scene 3
+The page is a simple three-step wizard. Step one, week type — the dates, the season, and how many matches. Step two, setup — the intensity and manual control. Step three, review and activate — the day-by-day plan exactly as players will see it, and then activate to send. This is the demo squad — no real player data.
+
+Scene 4
+The single most important thing this page produces is the tag on each day — match day, MD plus one, plus two, all the way to MD minus one before the next game, each with its session type. Because every other page — Load Intelligence, readiness, all of it — reads what's normal load for this day from these tags. Without them, the system simply can't tell a match from a session.
+
+Scene 5
+When you activate the week, each player gets the right training day — a session type, whether it's a game, off, recovery or a training day, and a plain label like force, polish, or activation, so the intent is a word the player understands. The coach sets the week once, and the whole squad gets it.
+
+Scene 6
+There's also a humane touch. During a declared break, players get a full rest — no reminders, no missed-check-in flags, and break days don't count against their streak or compliance. And the system eases the return afterwards. It reads a break as a break, not as a collapse in load or a lapse in discipline.
+
+Scene 7
+Once you've built the week, an automatic review checks its shape against the research. It might suggest moving the rest day to MD plus two, which links to a lower overuse-injury rate on Buchheit's fifty-six team-seasons. Or placing heavy eccentric work early rather than late, because eccentric sessions after a match cause prolonged muscle damage and soreness. Crucially, these are suggestions, not blocks — the coach decides, with the principle and the citation shown.
+
+Scene 8
+So why does a setup page matter this much? Because it's the input that makes every downstream page fair — one of the small set of weekly coach inputs. Skip it, and the load model can't tell a match from a session, and the whole match-day logic breaks. It's five minutes a week that the entire system depends on.
+
+Scene 9
+So, thirty seconds. Step one, set the dates and the match count. Step three, check the day-by-day plan — especially the MD tags. Then read the microcycle suggestions, follow or ignore them, and activate to send. And remember: the MD tag is what every other page reads.
+
+Scene 10
+The bottom line: Week Setup is five minutes that give everything else its context. Match days, intent and breaks — set once, sent to every player, and read by every other page in the system.
+

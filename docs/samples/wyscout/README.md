@@ -152,3 +152,20 @@ Normalise both sides (`ð→d`, `þ→th`, `æ→ae`, strip remaining diacritics
 112. `Corners per 90`
 113. `Penalties taken`
 114. `Penalty conversion, %`
+
+---
+
+## Handoff update (2026-07-30) — per-match source decision (option A)
+
+Verified live in the Wyscout UI (Emil's login):
+
+- **Season stats** = unlimited **Excel** export (Advanced Search → All columns). This is what `player_season_stats` is fed from. DONE.
+- **Per-match per-player stats** are NOT available as Excel. The only per-match export in the UI is **"Players in match report"**, which is a **metered download** (per-match credit quota) with content type **"Wyscout report" (PDF)** — not a stats spreadsheet. The metered-PDF path is **rejected** (fragile, costs credits, wrong format).
+
+**Decision (option A):**
+
+1. **Ship the season view now** (Phase 3 overview off `player_season_stats` — data already loaded, 21 senior players, joins to `players`).
+2. **Build the same-match join as schema + adapter, ready but unpopulated:** `player_match_stats ⋈ player_drill_load (+ match_player_minutes)` on `player_id + match_date`. Give it an explicit empty state: *"Per-match football stats need the Wyscout Data API — not yet connected."* Do NOT try to source per-match from the season Excel (it's aggregates) or from the metered PDFs.
+3. **`player_match_stats` is populated only by Adapter B (Wyscout Data API).** That is gated on the club having the Data API add-on (being checked with Hudl) + `WYSCOUT_API_*` Supabase secret. Until then, the match-level view stays in its labelled empty state.
+
+So Adapter A (Excel) covers **season** stats end-to-end; **match-level** is Adapter B (API) only. Don't block shipping the season view on the match-level piece.

@@ -1,0 +1,42 @@
+MicroPulse — Opponent Analysis (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Opponent Analysis — how to read it. This turns the opponent's own season data into a plain pre-match plan: how they play, where to hurt them, and who to stop. Let's walk through it.
+
+Scene 2
+It's a plain-language opponent plan a non-analyst coach can read in a minute, built entirely from the opponent's own season data. You drop in their export and MicroPulse builds the report. Crucially, every number is benchmarked — against the league and against your own team — so it's relative, not a wall of raw stats. And it works from Wyscout or StatsBomb, whichever you have.
+
+Scene 3
+Every section follows the same shape. First a one-line verdict — for example, they keep the ball but leak at the back. Then the why: two or three plain facts with the key numbers, visible without a click. And behind a Show-details toggle, the full tables. You never have to dig for the point, and every claim cites the signal it came from.
+
+Scene 4
+It starts by classifying how they play, from the numbers. On the ball — are they possession-dominant or direct? Out of possession — do they press high or sit passive, judged by PPDA and how high their line sits versus the league? And territorially — do they dominate, or sit and counter? So you know the shape of the game before it kicks off.
+
+Scene 5
+Then how they attack — not just how much they create, but where the danger comes from: box presence, crosses, line-breaking passes, and the set-piece share of their xG. And it names the most dangerous route. Take Valur: their threat leans on crosses, and notably on long throws — a throw-in xG three times the league average. That's the thing you plan for.
+
+Scene 6
+The heart of it: where to hurt them. These are rule-based prompts, each citing the number behind it. Get into the box, because they allow deep completions above the league. Run at them, because they concede the most value to dribbles and carries. Press them high, because they give up shots off high presses. Attack the channels their line leaves open. Every one is a suggestion with its evidence — and every one is yours to override.
+
+Scene 7
+Set pieces, both ways. If they score a high share from set pieces, defending them becomes a priority — for Valur, that means a plan for the long throw. And if they concede heavily from set pieces, that's your opportunity this week. Each side is benchmarked against the league, so it only flags set pieces when they're genuinely an outlier.
+
+Scene 8
+If you add their player-scouting export, you get key players — the handful to plan around. The dangerman: their top scorer, how he gets his chances, and how to deny him service. The creator: their most-targeted playmaker, whom to screen and press on the turn. And their build-up and width — the deep distributor and the overlapping full-back, where their play starts and stretches you. Who to stop, not a full roster.
+
+Scene 9
+And you're not limited to the headline names. Open any opponent player for a detailed report — the same percentile read as your own Player Analysis, but for them. Their per-90 stats ranked against their own squad, strengths in green and development areas in red across attacking, possession and defending, and a per-player prompt for how to stop him. So you can prepare for the specific players the matchup will expose you to, not just the obvious stars.
+
+Scene 10
+Then the matchup — their numbers beside yours, with the deltas. Where are they better than you, and where worse? And most useful: which of your strengths line up against their weaknesses? That turns scouting from an abstract profile into a concrete plan — you can see, in one view, where the game is there to be won.
+
+Scene 11
+Finally, form. The last five matches — results and xG for and against — and whether their recent xG is rising or falling against their season average. A team can be hotter or colder than its season number right now, and form tells you which version of the opponent you're actually facing on the day.
+
+Scene 12
+Four guardrails. It's descriptive — it never touches your readiness colour, load or daily decision; it's a plan, not a command. Every recommendation shows the signal behind it and is yours to override. Any AI phrasing is labelled and writes only from the data. And one source is enough — Wyscout only or StatsBomb only both work.
+
+Scene 13
+So, the thirty-second read. First, the verdict and how they play — what you're walking into. Second, where to hurt them and their set pieces — the prompts, each with its number. Third, the key players and the matchup — who to stop, and where your strengths meet their gaps. Bottom line: Opponent Analysis turns the opponent's own data into a plain, benchmarked plan any coach can read in a minute and act on.
+

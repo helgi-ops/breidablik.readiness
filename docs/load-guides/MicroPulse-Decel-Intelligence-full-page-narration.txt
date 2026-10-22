@@ -1,0 +1,39 @@
+MicroPulse — Decel Intelligence (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Decel Intelligence — the whole page, explained. We'll walk through every card on the page, what each number means, its threshold, and the research behind it.
+
+Scene 2
+The page is really two engines under one roof. The top, Stride Intelligence, is a biomechanical view of running — cadence, stride length, asymmetry and sprint exposure. The lower half, Decel Intelligence proper, scores the cost of braking and cutting. And between them sits Player Load ACWR, the acute-to-chronic workload ratio.
+
+Scene 3
+Stride Intelligence opens with four baseline cards. Cadence — how fast the feet turn over; a drop below baseline is an early fatigue sign. Stride length — shorter strides at speed mean more load on the calf and hamstring. L/R asymmetry — a baseline card, so watch the change from his norm, not the raw number. And GPS-IMA decoupling — when he runs the same distance but the legs do more work, that gap is hidden fatigue.
+
+Scene 4
+Change-of-direction asymmetry is split into three intensity tiers, using the Bishop 2020 thresholds. Only the high-intensity tier genuinely ties to injury risk — watch it above fifteen per cent. Medium intensity is usually just a positional habit. Low intensity is balanced and rarely worth acting on. And the card says so itself: this is a risk factor, not a validated predictor.
+
+Scene 5
+Sprint exposure compares sprint strides — IMA bands five to eight — over the last seven days against match-day demand. On par with a match reads green. The key from Malone 2017: too little sprinting leaves players under-prepared, moderate exposure is protective, and the real risk is a rapid increase, not the level itself — over one hundred and fifty per cent is an accumulated spike. The sprint-cadence bands, seven and eight, are Catapult's highest — true sprint cadence, and they pair with the Decel-to-Sprint tile below.
+
+Scene 6
+Player Load ACWR divides acute load — the seven-day average — by chronic load, the twenty-eight-day average. It tells you whether this week is heavier or lighter than the player's recent normal. Point-eight to one-point-three is the safe, steady band. Above that, load is climbing faster than the body has adapted to. It's built on Gabbett 2016 — and the card is honest that this is a reference, not a predictor, a point debated since Impellizzeri 2020.
+
+Scene 7
+Now the lower half — Decel Intelligence proper, from the McBurnie 2022 framework. Deceleration, the cost of hard stops and cuts, predicts load on the knee and quadriceps better than running distance does. It's scored across six dimensions, each with its own threshold. This is the demo squad — no real player data.
+
+Scene 8
+The first three dimensions. Overload — cumulative braking over twenty-eight days against the daily baseline; red above one-and-a-half times expected. Underload — seven-day braking versus match demand; red below fifty per cent, meaning the player is under-prepared to brake in a match. And Decel-to-Accel coupling — braking versus accelerating, the eccentric-to-concentric balance from Osgnach 2023, healthy between point-eight and one-point-two.
+
+Scene 9
+The last three. Decel-to-Sprint coupling, measured in STEN — this is McBurnie's primary risk metric, on a one-to-ten scale; red at two-and-a-half or below, watch at three-and-a-half. Exposure concentration — is load bunched into one heavy day, or spread out; red if a single day carries over thirty per cent. And sharp-cut load, from Dos'Santos 2021 — sharp seventy-to-ninety-degree cuts produce the highest knee-joint load.
+
+Scene 10
+Finally, every player gets one row — a plain-language line, and seven chips. The first six map straight to the dimensions you just saw, and each chip's colour is that player's status on that dimension: green fine, amber watch, red flagged. The seventh, MPE Recovery, is the action — a button to assign a recovery session when a player is flagged.
+
+Scene 11
+So, how to read the whole page in thirty seconds. First, Decel-to-Sprint STEN — above three-and-a-half, you're fine. Second, Underload — anyone under fifty per cent of match demand is under-prepared to brake. Third, high-intensity asymmetry — over fifteen per cent, and only then is it worth a look. Everything else on the page is context behind those three questions.
+
+Scene 12
+The bottom line: Decel Intelligence tells you where to look — it does not make the decision. Every metric shows its threshold and its citation, and the page states its own uncertainty. A risk factor is called a risk factor, not a prediction. Rules decide, the coach decides — the page just makes sure you're looking at the right thing.
+

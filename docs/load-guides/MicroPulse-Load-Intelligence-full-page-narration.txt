@@ -1,0 +1,39 @@
+MicroPulse — Load Intelligence (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Load Intelligence — the whole page, explained. It's the squad's load command center, and it holds six engines on one screen. We'll walk through every one.
+
+Scene 2
+The page has two sides. External load is what you asked for — GPS, braking, mechanical load from Catapult. Internal load is what it cost the player — RPE-based monotony and strain, and metabolic load. The whole page is the coupling of the two: did the body do what you asked? When internal cost climbs while external stays flat, that's hidden fatigue.
+
+Scene 3
+The top of the page is the verdict — one word for the whole squad: Steady, Building or Spiking, with a sentence naming the players driving it. Beside it sits the confidence: how many of the six load dimensions arrived, and how mature the baseline is. If a signal isn't in this squad's data tier, the system says the verdict leans on the ones that are. This is the demo squad — no real player data.
+
+Scene 4
+Under the verdict are four headline tiles, each a count of players. Braking load — how many carry high deceleration load. High-speed running — how many are spiking on it. Acute load spike — this week far above the player's chronic norm, an ACWR over one-point-five. And Monotony — the same load every day, a Foster overtraining signal. Below them, a NEED ATTENTION chip spells out each flagged player's reason.
+
+Scene 5
+Open Show S&C details and a deeper Catapult engine appears, for the strength coach. It surfaces cohort alerts as actions: high decel burden means steer away from change-of-direction drills; a HID-percent fatigue trend means less high-speed work despite stable distance — hidden fatigue; and accumulated decel over three days flags a recovery priority. A per-player table then breaks it down across decel burden, accel-to-decel balance, HID-percent and residual decel.
+
+Scene 6
+The Monotony and Strain block comes from internal load — RPE times duration over the last seven days. Variability matters as much as volume: a player loading six hundred units every day is at higher risk than one alternating four and eight hundred. Monotony over two-point-zero is a risk, and strain over six thousand units is the illness and injury danger zone. Foster nineteen ninety-eight — and the combined signal beats either alone.
+
+Scene 7
+MD Comparison measures this week's high-speed running against each player's own match-day demand. Buchheit's ninety-five per cent rule: players who reach ninety-five per cent of their match HSR by the day before a game arrive prepared. Under eighty per cent across the cycle is a high acute-injury risk. And when there's no high-speed data, the card says so plainly rather than showing a misleading zero.
+
+Scene 8
+The Mechanical Load Index is a composite stress score built from acceleration, deceleration and density inputs — the physical pounding, not the energy cost. Sub-scores show where it comes from. Players are banded from moderate up to extreme, and a residual figure captures elevation that hasn't recovered, with flags like decel spike or dense load explaining why.
+
+Scene 9
+The Metabolic Load Score is a weighted z-score from high metabolic-load distance, time above threshold, and peak and average metabolic power — the energy-system cost. Its job is to separate metabolic fatigue from mechanical fatigue: a player can be high on one and normal on the other. It needs valid GPS data, so indoor sessions simply show no data rather than a wrong number.
+
+Scene 10
+It's worth pausing on why there are two scores. Mechanical load is the pounding — braking, cutting, impacts — tracked by the MLI. Metabolic load is the energy cost — high-speed distance and time in the red — tracked by the MLS. Reading them apart tells you whether a tired player needs less pounding or less running. That distinction is the whole reason both are on the page.
+
+Scene 11
+So, thirty seconds. First, the verdict word and confidence — Spiking at low confidence means watch, don't trust it blindly. Second, the NEED ATTENTION chips, each naming a player and the reason. Third, in the S&C layer, decel burden and HID-percent fatigue are the injury-relevant signals, and monotony is for overtraining. And if you need it, MLI versus MLS separates mechanical from metabolic fatigue.
+
+Scene 12
+The bottom line for the whole page: did the body do what you asked? Internal versus external — when the cost climbs while the ask holds steady, that's hidden fatigue. Every signal on this page shows its threshold, its citation and its confidence, so you always know how much to trust it.
+

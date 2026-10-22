@@ -1,0 +1,42 @@
+MicroPulse — Today Command Center (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Today Command Center — the whole page, explained in full. This is the most important page in MicroPulse: the one a coach opens every morning, and the only one he needs if all is well. Let's go through it in depth.
+
+Scene 2
+It's the command center. It reads every signal from every other page — load, readiness, injuries, tests — and gathers them here, returning a single decision per player: green, amber or red, and what to do. It's the one page the whole system exists to produce.
+
+Scene 3
+The top of the page is the verdict, in five seconds: one sentence — here, a rest day — with the confidence right beside it, twenty-four of twenty-five checked in. Four tiles split the squad into ready, modified and recovery, plus tomorrow's outlook. And an auto-lock thirty minutes before the session freezes the decision, so everyone sees the same answer. This is the demo squad — no real player data.
+
+Scene 4
+The whole page is built in three layers. The verdict — one colour and one sentence, with confidence, in five seconds. The plain why — two or three facts and the players to watch, visible without a click, in fifteen. And the detail — the per-player cards, the briefing and the S&C signals — on demand. It never jumps from verdict straight to raw data; the plain why always sits in between.
+
+Scene 5
+Right under the verdict is Needs attention — the two or three players who actually need a decision today, marked alert or watch, so your attention goes there first rather than scanning the whole squad. And on a green day it's short or empty, which is itself the message: carry on as planned.
+
+Scene 6
+Click a player and his whole story opens in a drawer. The why — in plain language, here that yesterday's load was sixty-five per cent above usual, with the numbers behind it. The counterfactual — what would have to change to flip the verdict: if readiness had been green, not red, this would be yellow. And an AI summary, labelled as AI, alongside the confidence — four of five signals. It's the layered read for one player, the whole manifesto in one panel.
+
+Scene 7
+Below that sits the Decision Summary — one card per player, with nothing hidden. The trend from yesterday, whether he's improving or sharply declining. And the decision, with the numbers that produced it: the wellness scores — sleep, soreness, energy, mood — and the load line — distance, body load, high-speed, sprint, accelerations, braking. Everything that drove the call is right there on the card.
+
+Scene 8
+Open Show details and you get the Daily Briefing — an auto-generated morning view you can send to staff. A team pulse: is the squad improving or declining versus yesterday, the average readiness, the fatigue mix. The top attention players with a plain why and an Ask-AI button. And compliance — how many checked in, how many RPEs, and who's missing. It's the morning summary in one place.
+
+Scene 9
+Beneath that is the S&C layer — unfamiliar load and S&C signals. Recovery watch, for players still below baseline after a match, with an escalate action — that's the return-to-training integration. Spiking alerts, for who's carrying a load or high-speed spike, linking straight to the Load and IMA pages. And moving differently — who's moving unlike his usual, framed explicitly as a descriptive signal, not an injury prediction. It weaves the other pages into the daily view.
+
+Scene 10
+And this is the big idea. Today is the aggregator — it surfaces the key signals from Load Intelligence, Decel, IMA, Post-match Recovery and return-to-training, so the coach doesn't have to open each one. The decision lives here; the depth is one click away when he wants the why. That's why the system can look complex but really be one page — all the others are simply its depth.
+
+Scene 11
+It's worth naming why Today feels trustworthy. Every rule the product is built on is visible on this one screen. The layered read — verdict to why to detail. Every verdict shows its confidence. Missing data is shown as missing. Every flag carries a counterfactual. And the AI labels itself as AI and cites its signals. Rules decide, the AI explains — and you can see all of it. Today is the manifesto, on one screen.
+
+Scene 12
+So, thirty seconds. First, the verdict and the confidence — if it's all green, that's all you need. Second, Needs attention — the two or three players to look at. Third, open a flagged player for the why and the counterfactual in his drawer. And everything else — the cards, the briefing, the S&C signals — is one toggle away.
+
+Scene 13
+The bottom line: Today answers what to do today, per player, with the why. The reasoning, the confidence and the S&C depth are all reachable, but never in the way. It's the page a coach lives on — and the page everything else in MicroPulse serves.
+

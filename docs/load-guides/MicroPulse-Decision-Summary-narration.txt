@@ -1,0 +1,36 @@
+MicroPulse — Decision Summary (Today) — narration for Pictory
+============================================================
+
+Scene 1
+Decision Summary — how to read it. This is the deepest surface in MicroPulse, and the endpoint of everything else. Readiness, load, wellness, injury — it all funnels down to one thing here: a single, defensible training decision for each player today. Let's walk through how it's built and how to read it.
+
+Scene 2
+The core output isn't a score — it's an action. Every player gets exactly one of four decisions for today. Full: train as planned. Modified: train, but reduced. Recovery: rest and recover. And Off: no session scheduled at all. Full, Modified, Recovery is the readiness ladder; Off is a planned rest day from the week plan. The card gives you the decision at a glance; the drawer gives you the whole why.
+
+Scene 3
+The most important principle: rules decide, the AI only explains. The decision itself comes from the readiness engine's suggested action and the canonical personal-norm readiness colour — never from a language model. The written summary you'll see is clearly labelled as AI-generated, it cites the real signals, and it can never change the verdict. So the number the coach acts on is the same personal-norm colour everywhere in the app, and the plan action lines up with it. One source, one verdict.
+
+Scene 4
+The readiness inside a decision is shown as a STEN — his own personal-norm z-score, placed on a standard one-to-ten scale, STEN equals two times z plus five-and-a-half. Five to six is his own normal. Below four is below baseline; below two is very low; seven and up is high or peak form. The point of using his own norm is fairness: a player who always sleeps a three isn't punished for it, and a player whose norm is four or five gets flagged the moment he slips to a three. Everyone is judged against himself.
+
+Scene 5
+A decision reads change and trajectory, not just today's snapshot. Day-over-day tells you what moved overnight — much worse than yesterday, moved from green to red. And trajectory tells you the direction over several days — below normal and sharply declining. A single low day is noise; a low day at the bottom of a downward slope is a decision. The card carries both.
+
+Scene 6
+This is the safety net — the rules that override a naive colour. An injury forces Recovery, or restricted work for return-to-training, even if wellness reads green. A planned OFF day suppresses the verdict entirely and just notes the check-in for trend continuity. The day after a sixty-minute match, MD-plus-one, is force-mapped to Recovery because the load echo is expected, not an overreach. And the sharpest one: if the plan says Full but the player's own STEN is low — where the engine would have said Modified — the decision is flagged override-risky, surfacing the contradiction instead of hiding it. Rules decide; the coach sees the conflict.
+
+Scene 7
+Open a decision and the why reads as one chain. The primary driver — the single headline behind it. What moved today — the specific input that dropped, like energy at two out of five against a usual of three-point-six. The possible load link — tying today's dip back to yesterday's load, with a citation, because after a hard match a dip is expected on Nédélec's work. And the counterfactual — if that input had been at his usual, the verdict would be green. Headline, trigger, cause, and fix, in order.
+
+Scene 8
+When a player has done something his body isn't used to, the decision spells it out. Today's load is sixty-five percent above his usual — elevated — and then it breaks that down by what kind of work spiked: total movement, sprints, decelerations, high-speed running, each shown as its own percentage over his own norm. That's the difference between a vague load warning and a coach knowing it was the braking, not the sprinting, that was unfamiliar.
+
+Scene 9
+Every decision shows how much it can be trusted. A confidence footer states it plainly — high confidence, five of five signals present, baseline fourteen of twenty-eight days. The written summary is labelled AI-generated, English-only, and cites its papers, so it's never mistaken for the verdict. And Ask-the-system is an optional extra, not the decision. When the data is too thin, the decision says so out loud — not enough data, rely on the coach's eye today — rather than inventing a verdict.
+
+Scene 10
+It's the same layered read as everywhere else, just deeper. The card is the glance: the decision, the day-over-day change, the primary driver, the wellness and the load — enough to act on without opening anything. The drawer is the full read for when you want it: the STEN, the readiness bars, the GPS load, the load signals, the deceleration profile, indoor load, the coach action, and the AI summary. The head coach lives on the card; the S&C lives in the drawer.
+
+Scene 11
+So, thirty seconds. First, the decision — Full, Modified, Recovery, or Off, the action for today. Second, the change and the driver — worse than yesterday, and the one thing behind it. Third, open the row for the full provenance — the STEN, what moved, the load link, the confidence, and the citation. One decision per player; rules decide and the AI only explains; and every verdict carries its provenance. That's the Decision Summary.
+

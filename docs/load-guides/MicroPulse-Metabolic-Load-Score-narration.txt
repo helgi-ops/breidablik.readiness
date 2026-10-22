@@ -1,0 +1,33 @@
+MicroPulse — Metabolic Load Score — narration for Pictory
+============================================================
+
+Scene 1
+The Metabolic Load Score — the whole panel, explained. This is the energy-system half of external load: how hard the player's engine worked, not just how hard his body was hit. It's built on metabolic power, the di Prampero model. Let's walk through it.
+
+Scene 2
+External load has two halves. Mechanical — what hit the body: decelerations, accelerations, impacts, the eccentric tissue side, covered by the Mechanical Load Index. And metabolic — what the engine did: the energy cost of all that running and accelerating. A player can be metabolically cooked but mechanically fine, or the reverse — and each needs a different plan. This panel is the metabolic tank.
+
+Scene 3
+What does it measure? Metabolic power is the energy cost of running — and crucially, accelerating costs far more energy than running at a steady speed, so this sees hard work a speed-only view misses. Four inputs feed the score: High Metabolic Load Distance — distance above a high-power threshold, weighted 40 percent; time spent above that threshold, 30 percent; and peak and average metabolic power, 20 and 10.
+
+Scene 4
+The score is read on his own engine. Each input is turned into a z-score against the player's own 28-day rolling baseline, blended by those weights, and mapped onto a 0-to-100 scale — his engine versus his engine, never a squad norm. Fifty is a typical day for him; the bands run low, moderate, high, and very high from seventy-five up. So an eighty means: a very high energy-system day, for this player.
+
+Scene 5
+This is the star of the panel. On its own a high metabolic score is just a number — the value comes from crossing it with the mechanical score, and with RPE. Both high is global fatigue. Engine high but body not is metabolic fatigue. Body high but engine not is mechanical fatigue. And GPS normal but the player rating the effort above his own baseline is a perceived mismatch — the earliest warning of all. The combination names the fatigue, and the fatigue names the fix.
+
+Scene 6
+And each fatigue type carries its own plan — rules decide, the coach acts. Global fatigue: a recovery day, lower the total load, monitor more often. Metabolic fatigue: cut conditioning volume and repeated-sprint work — the engine needs it, not the muscles. Mechanical fatigue: ease the eccentric side, heavy lower body and plyometrics. And a perceived mismatch: GPS says he's fine, so investigate — sleep, illness, early fatigue — and keep the session simple.
+
+Scene 7
+The panel is honest about its own data. Metabolic power needs a clean satellite signal, so indoors or with a dropout there's simply no score — no-data, never zero. And it needs a mature baseline: at least six valid days, around fourteen for high confidence, plus enough of the four inputs. It shows the valid-GNSS versus no-data counts right at the top — coverage before conclusions.
+
+Scene 8
+Two more reads sit next to the score. Delta — the five-day change: rising above plus five, recovering below minus five, otherwise stable — where the engine load is heading. And volatility — the spread of his scores over seven days: above fifteen means an unpredictable, swinging load, which is itself a known injury-risk pattern. It's not just how big today was, but how choppy the week has been.
+
+Scene 9
+And it follows the same honest, layered read as the rest of MicroPulse. The verdict first — one line: how many players carry high metabolic load today, and who is highest. Then the plain why — the fatigue type, in words. And only then the detail on demand — the per-player table with the distances, power, time, delta, volatility, and confidence. Verdict, then why, then the numbers.
+
+Scene 10
+So, thirty seconds. First, the verdict and coverage — how many are high, and how many actually have valid GNSS. Second, the fatigue type — global means recover, metabolic means cut conditioning, perceived mismatch means investigate. Third, trend and volatility — a rising or swinging load gets a closer look. Read on his own engine, remembering no GNSS is never zero. The metabolic tank, sitting right beside the mechanical one.
+

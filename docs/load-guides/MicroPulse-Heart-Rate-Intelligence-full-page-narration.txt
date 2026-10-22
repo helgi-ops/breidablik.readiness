@@ -1,0 +1,36 @@
+MicroPulse — Heart Rate Intelligence — narration for Pictory
+============================================================
+
+Scene 1
+Heart Rate Intelligence — the whole page, explained. It's the objective cross-check on the subjective effort rating: does the heart agree with what the player said the session cost? Let's walk through it.
+
+Scene 2
+The page rests on two numbers. sRPE — subjective — what the player says the session cost him. And heart rate — objective — what his heart actually did. The page compares the two, on each player's own norm. And when they disagree, the gap between them is the signal.
+
+Scene 3
+The verdict is one sentence: effort ratings and heart rate disagree for, say, five of twenty-four on a belt — five worked harder than they logged. And the first thing shown is belt coverage — twenty-four of twenty-five — because only players who wore the belt on skin have heart-rate data, and no belt is no-data, never zero.
+
+Scene 4
+There are two ways they can disagree. Hidden load — the heart worked harder than he rated it; possibly an under-reported session, so plan his recovery as if it was harder. And low cardiac demand — he rated it hard, but the heart stayed low; usually fine if it was strength or skills work, where the heart just isn't taxed. Each comes with its own plain-language action.
+
+Scene 5
+And here's why the gap means something. Heart rate captures the aerobic cost of a session; RPE captures the whole thing — including the anaerobic and the psychological. So the gap between them isn't noise — it's the part the heart can't see. On Impellizzeri 2004, session-RPE and HR load track together in soccer but not perfectly, precisely because heart rate misses the anaerobic contribution. The divergence is information.
+
+Scene 6
+Everything is read on the player's own norm. The HR index and the sRPE index are each this session versus his own average — a hundred means a typical session for him. The gap is the HR index minus the sRPE index, and beyond plus or minus twenty-five we call it diverging; within that it's ordinary wobble. And it's deliberately not comparable between players, because the bands are ordinal, not calibrated percent-HRmax cuts. The only defensible comparison is a player against himself.
+
+Scene 7
+The percent-HRmax read is honest about where its number came from. Best is a coach-set value. Next, the observed peak — the highest heart rate seen on the belt. And last, an age estimate, from Tanaka or Gulati for women — marked with a tilde, and it does not lift confidence, because only real measurement does. A per-player setter lets the coach override with a measured value. The number carries its own provenance.
+
+Scene 8
+The page also shows how hard the session was. Catapult's eight ordinal bands are grouped into three — low, bands one to three; moderate, four to five; high, six to eight — as minutes and percentages, blue to red. It's order only, not heart-rate zones: the boundaries are set in OpenField, not calibrated percent-HRmax. And the full eight-band detail is one click deeper, with beats-per-minute shown only where it's reliable.
+
+Scene 9
+And it's honest about its limits. Heart rate is the aerobic and autonomic lens only — not overall fatigue, not performance, on Dellal and on Achten and Jeukendrup. It needs enough belt sessions and an HRmax before the read is trustworthy; thin data shows as low confidence, stated plainly, never as a scold. And no belt, or no HRmax, is no-data — never zero.
+
+Scene 10
+This is v1 — the heart-rate-versus-effort cross-check. Version two adds more, on the same evidence base. HRex, a submaximal fitness marker and the most reliable heart-rate measure, on Buchheit 2014. HR recovery and a reserve read that's comparable across players. And conditioning-dose verification — did a session actually spend enough time in the red zone to hit its aerobic target, on Buchheit and Laursen. The page already names these as out of scope for v1, all gated by the smallest-worthwhile-change thresholds from Buchheit 2014.
+
+Scene 11
+So, thirty seconds. First, the verdict and belt coverage — who disagrees, and how many wore the belt. Second, hidden load versus low demand — plan the recovery, or note it was strength work. Third, open a flagged player for the why and the counterfactual. And remember: own-norm only, a cross-check not an injury flag, and no-data is never zero. Objective heart rate, corroborating — or contradicting — the subjective rating.
+

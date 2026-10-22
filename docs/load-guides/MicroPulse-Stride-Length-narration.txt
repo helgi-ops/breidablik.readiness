@@ -1,0 +1,30 @@
+MicroPulse — Stride Length: is he still pushing? — narration for Pictory
+============================================================
+
+Scene 1
+Stride Length — is he still pushing? The third panel on the IMA Intelligence page, and maybe the most subtle. It's after the earliest, quietest sign of fatigue there is — a change in how much ground a player gets per stride. It's the difference between a player still driving off the ground and one just turning his legs over.
+
+Scene 2
+The question the panel asks is: is he still driving, or just turning over? Two players can run at the exact same cadence — the same number of steps per second — and cover very different ground, because one is pushing hard off each step and the other isn't. Stride length is that push: how much ground each stride actually buys. When it fades, effort is fading, even if the legs still look busy.
+
+Scene 3
+What it measures is metres per stride at sprint cadence — a ratio, not a raw count. It's the high-cadence distance, from bands five to eight, divided by the high-cadence strides, from the same bands. Both numbers come from the same fast-cadence steps, so the ratio is clean: the metres he covered in true sprint running, divided by the strides it took him. For a footballer that's roughly two to two-and-a-half metres per stride.
+
+Scene 4
+Here's the signature. Under fatigue, a player keeps his stride frequency — the legs still turn over just as fast — but the stride length shortens; he pushes less. Same number of steps, less ground covered. And this is the clever part: GPS distance just sees less total running, cadence just sees the same number of steps — neither one catches it. Only the ratio, the metres per stride, sees the push shortening. That's the whole reason this panel exists.
+
+Scene 5
+A change can go two ways. Shorter than usual is the one to look at — the push is fading, which points to fatigue or a compensation. But longer than usual isn't automatically good news either: more ground per stride is usually a positive sign of freshness or intent, but if it appears suddenly it's worth a glance, because a big overstride can also be a mechanical change. The panel reports both, and tells you the percentage against his own usual.
+
+Scene 6
+Everything is against his own legs. His stride length is compared only to his own matches and big sessions — his personal norm on Buchheit's principle — because every player has his own natural stride. It's flagged only at two-and-a-half standard deviations, a deliberately high bar, so it catches a genuine change rather than normal session-to-session wobble. And it's reported in plain terms: twenty-eight percent longer, two-point-six metres against his usual two-point-one.
+
+Scene 7
+And it's honest while it's still learning. A personal stride norm needs enough of his own hard sessions before a change means anything, so the panel labels it: normal stride length, low confidence, based on five of his own matches, still settling. Few sessions means low confidence, stated plainly and never hidden. As more big sessions accumulate, the baseline firms up and the flag becomes trustworthy.
+
+Scene 8
+Why it matters: a shortening stride is often the first mechanical sign of fatigue. It shows up in the legs before the player says he's tired, and before it shows up as a slower total distance. Cadence holding while stride length drops is a recognised neuromuscular-fatigue pattern, on Cardinale. So it's an early, objective heads-up — a reason to check in with a player, not a verdict on its own.
+
+Scene 9
+So, thirty seconds. First, scan for flags — green is normal; a coloured row moved, so read its percentage. Second, which way — shorter means the push is fading, longer is usually fine but glance if it's sudden. Third, check the confidence — still settling or low confidence means wait for a few more of his own hard sessions. It's the push, not the pace; it's his own legs; and a shortening stride is the early, quiet fatigue tell.
+

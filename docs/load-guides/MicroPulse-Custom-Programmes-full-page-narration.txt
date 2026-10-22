@@ -1,0 +1,33 @@
+MicroPulse — Custom Programmes (strength builder) — narration for Pictory
+============================================================
+
+Scene 1
+Custom Programmes — the whole page, explained. It's the strength microdose builder, and its whole idea is that you build one session and get all three readiness versions. Let's walk through it.
+
+Scene 2
+Here's the whole idea. You build the green version — the full ready-day session — once. And the system generates the other two: yellow is a reduced dose, one or two fewer sets with the same structure; red is a recovery session — warm-up, an ISO circuit, and light core, with no lifts and no jumps. So a player's readiness colour maps to a session variant, without you building three programmes.
+
+Scene 3
+It's a four-step wizard. First, name and sport — pick the team and the season, whether preseason, in-season, playoffs or off-season. Second, choose the days — which microcycle days, from MD-four to MD-plus-two, you want to define. Third, build green — the ready-day session, with three ways to build it. And fourth, review the auto-generated yellow and red, and save.
+
+Scene 4
+And there are three ways to build the green session, for any working style. Describe it in words, and the AI builds the blocks from your description. Upload a file — a Word, Excel or PDF programme you already have — and it's parsed into blocks. Or pick a proven structure, like French contrast, Garcia-Ramos or Tufano clusters, built in. Then you edit the blocks and lines directly.
+
+Scene 5
+As you build, a live Program Auditor checks the session. It counts the movement patterns — squat, hinge, push, pull, core, carry — and the push-to-pull and knee-to-hip ratios. Here it flags that there's only squat work: no hinge, no push, no pull, no core. And each gap comes with a fix — no hinge work, add a hinge exercise. It stops you shipping a lopsided programme.
+
+Scene 6
+It's worth seeing how yellow and red are derived. Yellow keeps the same structure but drops one or two sets — enough to maintain without adding fatigue on a modified day. Red swaps to a recovery session: a warm-up, an ISO circuit — hamstring, adductor, calf, breathing — and light anti-rotation core, with no lifts and no jumps. So even a red day still does something useful for the tissue, rather than nothing.
+
+Scene 7
+You can also override per player. For a specific player — say someone injured or returning to play — an individual template deviates from the team baseline on the days you choose, within a period. The team plan stays the baseline, and the player's version only diverges where it needs to. So a player in rehab gets his own strength work without breaking the whole team's build.
+
+Scene 8
+So where does it sit? Today and Squad say green, yellow or red for each player. This page defines what those colours actually mean as a strength session. It's the library the daily microdose engine draws from — so the readiness verdict becomes a concrete, balanced, readiness-matched session, automatically, without anyone rebuilding it each day.
+
+Scene 9
+So, thirty seconds to build one. First, build green — describe it, upload a file, or pick a structure. Second, watch the auditor and fix any balance gaps it flags. Third, review the yellow and red that are generated for you, and save. And remember: you define the ready-day session, and the system handles the modified and recovery days.
+
+Scene 10
+The bottom line: build one session, and get all three. One balanced green session becomes a full readiness-adapted set — green, yellow and red — so the strength work always matches the day, with the system doing the deriving and the auditor keeping it balanced.
+

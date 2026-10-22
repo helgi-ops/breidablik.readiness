@@ -1,0 +1,33 @@
+MicroPulse — Weekly IMA Load — narration for Pictory
+============================================================
+
+Scene 1
+Weekly IMA Load — how to read it, the first panel on the IMA Intelligence page. Where Load Intelligence tells you about a single day, this one zooms out to the whole week and answers one question: are we on pace? How much of our usual weekly movement load have we banked so far, and where will we land by Sunday if we keep this up?
+
+Scene 2
+First, what IMA is. IMA stands for inertial movement analysis — the micro-actions the pod's accelerometer picks up, as opposed to the distance the GPS measures. It's the mechanical how of movement. Three families matter here: accelerations and decelerations — the starts, stops and braking; change of direction — the high-intensity cutting; and stride bands six to eight — the fast, sprint-cadence stride counts. Together they describe the demanding, injury-relevant movements, not just how far a player ran.
+
+Scene 3
+What the panel does is pacing. It adds up this week's IMA load so far and compares it to your typical week, so that mid-week — not on Sunday when it's too late — you can see whether you're heading for too much, too little, or about right. It's a pacing gauge, not a single-day reading: we're on day one of seven and we've already reached thirty-four percent of a typical week.
+
+Scene 4
+The ring at the top is where you stand. A headline percentage — how much of a typical week you've reached — and a one-word verdict: on track, below target, or above target. Underneath are three numbers that make it concrete. Current — what you've banked so far this week. Typical — what a normal week totals for you. And projected — where you'll land by Sunday if you keep this pace. Those three tell the whole pacing story at a glance.
+
+Scene 5
+The projection is the early warning. It takes this week's rate and carries it forward to Sunday — a straightforward extrapolation from the days that have data. When that projected total lands well above your typical week, the panel flags it. And crucially, it does this on day one, not day seven. A single hard Monday, extrapolated across the week, is a whole overloaded week waiting to happen — and you see it while there's still time to ease off.
+
+Scene 6
+Below the ring, every IMA metric gets its own card, so you see not just that the week is heavy but which movement is driving it. Accel, decel, and change-of-direction — the drivers — each with its percent of typical so far and its own projection. And the stride bands six to eight — the sprint cadence, which is often the first thing to spike. When one card projects three-hundred-and-fifty percent of typical, that specific movement is running hot, and you can adjust that, rather than pulling the whole week down.
+
+Scene 7
+The comparison only means something if the typical week is real — and it is. It's averaged from your own last eight weeks, not a guess or a generic number. A historical week only counts toward the baseline if it has at least three days of data, so a sparse week can't distort it. And it's training-only: match days can be excluded, so the norm reflects what your training weeks actually demand. The typical week is the team's own honest average.
+
+Scene 8
+You can measure against two things. Historical baseline — your own typical week, the default read. Or a target you set with a multiplier: maintain times one-point-zero to hold steady, below one to deliberately deload, above one to build load in a progressive block. The panel then paces the week against whatever intent you chose. So the coach sets the target — hold, deload, or overload — and the tracker simply tells you whether the week is tracking to it.
+
+Scene 9
+Why it matters: movement load — the accelerations, the cutting, the sprint strides — is the injury-relevant part of the week, and it accumulates quietly across days. This panel catches a week drifting too high while there's still time to shape it, rather than discovering the overload after it's done. Switch to Team view for the squad's pace, or Player view for an individual. It rests on McBurnie, Bishop, and Buchheit.
+
+Scene 10
+So, thirty seconds. First, the ring — percent of typical and the verdict: on track, above, or below. Second, the projection — where you'll land on Sunday at this pace. Third, the metric cards — which movement, accel, cutting, or sprint strides, is driving the week. It's pacing, not a single day; it's measured against your own typical week; and it's there to catch the drift before Sunday, while you can still shape the week.
+

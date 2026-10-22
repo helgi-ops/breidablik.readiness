@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contextualised Peak Periods — MicroPulse</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --surface:#f4f2ec;--ink:#14181c;--primary:#2740e6;--green:#1c7a4a;--amber:#de9328;
+    --red:#a83e28;--purple:#7a5cc4;--muted:#6b7078;--card:#fffdf8;--line:#e4e0d6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--ink);
+    font-family:"Geist","Inter",system-ui,-apple-system,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:30px 24px 60px}
+  .kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  h1{font-family:"Archivo","Geist",sans-serif;font-weight:800;font-size:30px;margin:6px 0 4px;letter-spacing:-.01em}
+  h2{font-family:"Archivo",sans-serif;font-weight:700;font-size:20px;margin:34px 0 10px}
+  .cite{color:var(--muted);font-size:13.5px;margin-bottom:4px}
+  .cite a{color:var(--primary);text-decoration:none}
+  .lede{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:18px 0 8px;font-size:16px}
+  .lede b{color:var(--primary)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:16px 0}
+  .defgrid{display:grid;grid-template-columns:200px 1fr;gap:2px 18px;font-size:14.5px}
+  .defgrid .grp{grid-column:1/3;font-family:"Archivo",sans-serif;font-weight:700;font-size:13px;text-transform:uppercase;
+    letter-spacing:.06em;margin:14px 0 6px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+  .defgrid .grp.poss{color:var(--green)} .defgrid .grp.oop{color:var(--red)} .defgrid .grp.unc{color:var(--muted)}
+  .defgrid dt{font-weight:600;padding:5px 0}
+  .defgrid dd{margin:0;padding:5px 0;color:#3a3f45}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px}
+  .pbtn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:22px;padding:7px 15px;
+    font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit}
+  .pbtn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .chartbox{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 18px 10px}
+  .chart-title{font-family:"Archivo",sans-serif;font-weight:700;font-size:17px;margin:2px 4px 2px}
+  .chart-sub{color:var(--muted);font-size:13px;margin:0 4px 10px}
+  .verdict{font-size:15.5px;margin:10px 4px 2px}
+  .verdict b{color:var(--primary)}
+  table.totals{border-collapse:collapse;width:100%;font-size:14px;margin-top:6px}
+  table.totals th,table.totals td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left}
+  table.totals th{font-family:"Archivo",sans-serif;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  table.totals td.n{font-family:"Archivo",sans-serif;font-weight:700;text-align:right}
+  .note{font-size:12.5px;color:var(--muted);margin-top:10px}
+  .mp{background:#eceafd;border:1px solid #d6d2fb;border-radius:14px;padding:18px 20px;margin-top:12px;font-size:15px}
+  .mp h2{margin-top:0;color:var(--primary)}
+  .foot{margin-top:34px;font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">MicroPulse · Load Intelligence · The science</div>
+  <h1>Contextualised peak periods of play</h1>
+  <div class="cite">Ju W, Doran D, Hawkins R, et al. <i>Contextualised peak periods of play in English Premier League matches.</i>
+    Biol Sport. 2022;39(4):973–983. <a href="https://doi.org/10.5114/biolsport.2022.112083">doi:10.5114/biolsport.2022.112083</a></div>
+
+  <div class="lede">
+    A player's <b>peak period</b> is his most intense passage of a match (the hardest rolling 1, 3 or 5 minutes).
+    Traditional GPS tells you <b>how much</b> he ran in it. Ju and colleagues synchronised tracking data with video
+    across 50 EPL matches (583 player observations, 350 hours of coding) to answer <b>what that running was made of</b>
+    tactically — and found peak periods are <b>not</b> mostly attacking sprints. They are dominated by
+    <b>Recovery Run</b> and <b>Covering</b> out of possession (28–37% of high-intensity distance) and
+    <b>Support Play</b> in possession (9–13%) — and the mix is <b>position-specific</b>.
+  </div>
+
+  <h2>The tactical taxonomy (Table 1)</h2>
+  <div class="card">
+    <div class="defgrid">
+      <div class="grp poss">In possession</div>
+      <dt>Push up Pitch</dt><dd>Player moves up the pitch to play offside and/or squeeze to a higher line.</dd>
+      <dt>Break into Box</dt><dd>Player enters the opposition penalty box to receive the ball (typically from a cross — ball in front and wide).</dd>
+      <dt>Run in Behind / Penetrate</dt><dd>Player attacks space behind, overtakes and/or unbalances the opposition defence (typically ball is behind).</dd>
+      <dt>Over / Underlap</dt><dd>Player runs from behind to in front of the player on the ball or receiving the ball.</dd>
+      <dt>Run with Ball</dt><dd>Player moves with the ball — dribbling with small touches or running at speed with fewer touches.</dd>
+      <dt>Move to Receive / Exploit Space</dt><dd>Player moves to receive a pass or to create/exploit space (typically comes short or moves wide to receive).</dd>
+      <dt>Support Play</dt><dd>Player supports from behind/level, trying to engage in offensive/transition play (typically during fast transitions).</dd>
+
+      <div class="grp oop">Out of possession</div>
+      <dt>Interception</dt><dd>Player cuts out a pass.</dd>
+      <dt>Recovery Run</dt><dd>Player runs back towards their own goal to be goal-side when out of position.</dd>
+      <dt>Covering</dt><dd>Player moves to cover space or an opposition player while remaining goal-side.</dd>
+      <dt>Close Down / Press</dt><dd>Player runs directly towards the opposition player on/receiving the ball, or towards space or players not on the ball.</dd>
+
+      <div class="grp unc">Unclassifiable</div>
+      <dt>Other</dt><dd>All other high-intensity actions that could not be categorised by the above.</dd>
+    </div>
+  </div>
+
+  <h2>What the peak minutes are made of — by position</h2>
+  <div class="chart-sub" style="margin-left:0">High-intensity running (&gt;19.8 km/h) in the peak 1-, 3- and 5-minute windows, split by tactical action.</div>
+  <div class="controls" id="pos-controls"></div>
+  <div class="chartbox">
+    <div class="chart-title" id="chart-title"></div>
+    <div class="chart-sub" id="chart-desc"></div>
+    <canvas id="chart" height="150"></canvas>
+    <div class="verdict" id="chart-verdict"></div>
+    <div class="note" id="chart-note"></div>
+  </div>
+
+  <h2>The peak-period totals (Ju et al. 2022, per position)</h2>
+  <div class="card">
+    <table class="totals">
+      <thead><tr><th>Position</th><th>Peak 1-min</th><th>Peak 3-min</th><th>Peak 5-min</th><th>Dominant actions</th></tr></thead>
+      <tbody>
+        <tr><td>Central Defensive</td><td class="n">55 m</td><td class="n">72 m</td><td class="n">86 m</td><td>Covering + Recovery Run (~80% out of possession)</td></tr>
+        <tr><td>Wide Defensive</td><td class="n">76 m</td><td class="n">104 m</td><td class="n">132 m</td><td>Recovery Run + Covering; Support Play 14%; Over/Underlap 6–7%</td></tr>
+        <tr><td>Central Midfield</td><td class="n">68 m</td><td class="n">96 m</td><td class="n">116 m</td><td>Recovery Run + Covering; Support Play 12–15%</td></tr>
+        <tr><td>Wide Offensive</td><td class="n">76 m</td><td class="n">107 m</td><td class="n">134 m</td><td>Recovery Run; Move to Receive 14–19%; Run with Ball / Support 10–14%</td></tr>
+        <tr><td>Central Offensive</td><td class="n">71 m</td><td class="n">96 m</td><td class="n">126 m</td><td>Close Down/Press; Run in Behind + Support Play 14–20%</td></tr>
+      </tbody>
+    </table>
+    <div class="note">Values are the reported peak high-intensity-running distances (m) per window. After the peak, the next
+      1-min period drops most sharply (48% vs ~25–30% for 3- and 5-min) — a transient fatigue/tactical decrement.</div>
+  </div>
+
+  <h2>Why it matters for training</h2>
+  <div class="card" style="font-size:15px">
+    Because peak periods are <b>position-specific</b> and mostly <b>defensive transition</b> (Recovery Run, Covering) rather
+    than attacking sprints, drills that only rehearse attacking runs under-prepare players for their real hardest minutes.
+    A centre-back's peak is covering and recovering; a wide attacker's is moving to receive and running in behind. Ju et al.
+    argue peak-period distance and action counts should shape <b>position- and player-specific</b> 11v11 drill design so the
+    most demanding episodes of match-play are actually trained.
+  </div>
+
+  <div class="mp">
+    <h2>How MicroPulse uses this</h2>
+    This framework is the scientific basis for the <b>Peak-period / Movement-signature</b> read. MicroPulse can't reproduce
+    Ju's hand-coded video taxonomy (it was coded frame-by-frame by analysts), so it approximates the same question —
+    <i>what is his peak intensity made of?</i> — from data it already has: the Catapult IMA movement signature (forward /
+    backward / lateral) plus the peak window's high-speed rate, and, where event data exists, the on-ball tactical labels
+    in that same window (the physical×tactical <b>Fusion</b> read). The taxonomy above is labelled honestly as the
+    inspiration, not a reproduction. High-speed running here is &gt;19.8 km/h — the same threshold Ju used.
+  </div>
+
+  <div class="foot">
+    Source: Ju W, Doran D, Hawkins R, Martín-García A, Gómez-Díaz A, Ade J, Laws A, Evans M, Bradley PS. Contextualised peak
+    periods of play in English Premier League matches. Biology of Sport 2022;39(4):973–983. Definitions reproduced from
+    Table 1. Chart heights are the paper's reported peak HIR distances; the tactical split is approximated from the paper's
+    reported ranges and figures (Figs 2–6) to illustrate the concept — not exact per-category values.
+  </div>
+</div>
+
+<script>
+const PALETTE = {
+  "Push up Pitch":"#22c6d6","Break into Box":"#e5342b","Run in Behind/Penetrate":"#e8890c",
+  "Over/Underlap":"#8a5a1e","Run with Ball":"#7a5cc4","Move to Receive/Exploit Space":"#12b886",
+  "Support Play":"#f4d03f","Interception":"#f1948a","Recovery Run":"#141414","Covering":"#2740e6",
+  "Close Down/Press":"#d9d5c8","Other":"#8a8f97"
+};
+// Heights = reported peak HIR distances (m) per window. Splits = approximate proportions from the paper.
+const POS = {
+  CDP:{name:"Central Defensive Player",tot:[55,72,86],
+    split:{"Covering":.40,"Recovery Run":.42,"Support Play":.08,"Other":.10},
+    verdict:"His hardest minutes are <b>defensive transition</b> — covering space and recovery runs. ~80% out of possession."},
+  WDP:{name:"Wide Defensive Player",tot:[76,104,132],
+    split:{"Covering":.30,"Recovery Run":.30,"Support Play":.14,"Over/Underlap":.065,"Run with Ball":.08,"Other":.115},
+    verdict:"Recovery Run + Covering dominate, but with a bespoke attacking load — <b>Support Play</b> (14%) and Over/Underlap."},
+  CMP:{name:"Central Midfield Player",tot:[68,96,116],
+    split:{"Covering":.30,"Recovery Run":.30,"Support Play":.13,"Move to Receive/Exploit Space":.10,"Other":.17},
+    verdict:"Recovery Run + Covering, with more <b>Support Play</b> (12–15%) than a centre-back — the transition engine."},
+  WOP:{name:"Wide Offensive Player",tot:[76,107,134],
+    split:{"Recovery Run":.28,"Move to Receive/Exploit Space":.16,"Support Play":.12,"Run with Ball":.12,"Run in Behind/Penetrate":.09,"Covering":.12,"Other":.11},
+    verdict:"Most varied profile: <b>Move to Receive</b>, Run with Ball and Run in Behind on top of Recovery Run."},
+  COP:{name:"Central Offensive Player",tot:[71,96,126],
+    split:{"Close Down/Press":.28,"Run in Behind/Penetrate":.17,"Support Play":.17,"Covering":.12,"Recovery Run":.12,"Other":.14},
+    verdict:"Defined by <b>Close Down/Press</b> out of possession and Run in Behind in possession — the front-line presser."}
+};
+const WINDOWS = ["Peak 1-min","Peak 3-min","Peak 5-min"];
+let chart;
+function draw(code){
+  const p = POS[code];
+  const cats = Object.keys(p.split);
+  const datasets = cats.map(cat=>({
+    label:cat, backgroundColor:PALETTE[cat]||"#999", stack:"s",
+    data:p.tot.map(t=>Math.round(t*p.split[cat]))
+  }));
+  document.getElementById("chart-title").textContent = p.name;
+  document.getElementById("chart-desc").textContent = "High-intensity running distance (m) in each peak window, by tactical action.";
+  document.getElementById("chart-verdict").innerHTML = "→ " + p.verdict;
+  document.getElementById("chart-note").textContent =
+    "Bar heights are the reported peak HIR distances ("+p.tot.join(" / ")+" m at 1/3/5-min). Category split approximated from Ju et al. 2022.";
+  const data = {labels:WINDOWS, datasets};
+  if(chart){chart.data=data; chart.update(); return;}
+  chart = new Chart(document.getElementById("chart"),{
+    type:"bar", data,
+    options:{responsive:true, plugins:{legend:{position:"right",labels:{boxWidth:12,font:{size:11}}},
+      tooltip:{callbacks:{label:c=>c.dataset.label+": "+c.parsed.y+" m"}}},
+      scales:{x:{stacked:true,grid:{display:false}},
+        y:{stacked:true,title:{display:true,text:"High-intensity running (m)"},grid:{color:"#ece7db"}}}}
+  });
+}
+const ctr = document.getElementById("pos-controls");
+Object.keys(POS).forEach((code,i)=>{
+  const b=document.createElement("button");
+  b.className="pbtn"+(i===0?" active":""); b.textContent=POS[code].name.replace(" Player","");
+  b.onclick=()=>{document.querySelectorAll(".pbtn").forEach(x=>x.classList.remove("active"));b.classList.add("active");draw(code);};
+  ctr.appendChild(b);
+});
+draw("CDP");
+</script>
+</body>
+</html>

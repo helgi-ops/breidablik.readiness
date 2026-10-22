@@ -1,0 +1,30 @@
+MicroPulse — Unfamiliar Load (Today) — narration for Pictory
+============================================================
+
+Scene 1
+Unfamiliar Load — how to read it. Total-load numbers tell you how much a player did. This panel tells you something they can't: who is moving differently than they usually do — even when the total looks perfectly normal. It's a description of what changed, not a prediction of injury.
+
+Scene 2
+Here's the core idea. A player can cover his usual distance and still be doing something his body isn't used to — more change-of-direction, more braking, a different mix of movement. Unfamiliar Load catches that, where a single load number can't. And it's honest about what it is: a description of who's moving differently, from GPS and inertial data. It is not an injury prediction, and it never changes the readiness colour.
+
+Scene 3
+There are two ways to be unfamiliar. Doing more than usual — an intensity drift, where a component is well above his norm; for example, about fifteen hundred metres of side-to-side running this week against a usual four hundred. And moving differently — a shape drift, where the total distance is normal but the mix changed; same distance, but the share that's side-to-side has risen from ten percent to twenty-three. The badge on each card tells you which.
+
+Scene 4
+It watches three kinds of movement, from the inertial and GPS data. Side-to-side and change-of-direction — the tight-space cutting, measured as inertial-band distance. Explosive bursts — the hard accelerations and decelerations, as effort counts. And the mix — how much of his running is multidirectional versus straight-line. On lower Catapult tiers it falls back to high-speed and metabolic shares so the signal still works. Together they describe the character of his movement, not just the amount.
+
+Scene 5
+Every comparison is against the player himself — his recent movement versus his own rolling baseline, expressed as a z-score, on Robertson's personal-norm principle. Never a squad average, never an absolute cut-off. So fifteen hundred metres of side-to-side against his usual four hundred means a great deal for him, even if another player does that every week without ever being flagged. Unfamiliar is always unfamiliar to this player.
+
+Scene 6
+And it's honest about how much it knows. A personal norm needs enough history before a drift means anything, so the panel says so out loud. Under eight training days, a player isn't flagged at all — it's still building, still learning his normal. From eight to thirteen days it's calibrating: it only flags a bigger move, one-and-a-half standard deviations, because the norm is young and shouldn't over-react. From fourteen days it's confident, at full sensitivity, and a sharp jump reads as a genuine spike. No flag ever rests on data too thin to trust.
+
+Scene 7
+Why does it matter? New movement patterns are exactly what the body isn't prepared for — an unfamiliar spike in cutting or braking is a classic set-up for soft-tissue trouble. But the point isn't to raise an alarm; it's to phase it in. So the guidance is measured: keep his total load, but ease his exposure to the tight-space, change-of-direction work for a day or two, or introduce the new demand gradually. Manage the novelty, don't panic about it.
+
+Scene 8
+Each card reads in plain language. First the sentence — what changed, in words: more explosive bursts than usual, seventy-three this week against his usual seventeen. The badge tells you which kind — doing more, or moving differently. Then the drill-downs — details, show signals, and movement profile — for the numbers, the components, and the shape of his movement. And Dismiss, because if the coach isn't concerned, he clears it. The panel surfaces; the coach decides.
+
+Scene 9
+So, thirty seconds. First, the badge — doing more than usual, or moving differently. Second, the sentence — what changed, in metres or counts, against his own usual. Third, maturity and action — if it says still learning his normal, go easy on reading it; otherwise, phase the new work in rather than piling it on. It's about different, not just more; it's always his own norm; and it's descriptive — never an injury prediction.
+

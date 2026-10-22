@@ -1,0 +1,42 @@
+MicroPulse — Team Match Insights (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Team Match Insights — the whole page, explained. This page takes how your team moved and how it played, and lines both up against your results. Let's walk through how to read it, top to bottom.
+
+Scene 2
+It's one page that reads your GPS and IMA movement against your results and your advanced match stats. Three things to hold onto from the start. It's descriptive — associations, not causation. It never changes the readiness verdict, the load, or the daily decision — it's context, not a command. And it has two data sources, StatsBomb or Wyscout, and two views, Movement and the Team season report.
+
+Scene 3
+Start at the top, with the block called The read. It's an auto-generated headline in plain sentences — an up arrow means higher, a down arrow means lower. Here it flags that sprint distance fell nearly forty percent in the second half of the last match, that total distance was higher in wins, and that more total distance went with better results. The confidence line — nineteen graded matches — tells you how much it rests on. One glance gives you the story.
+
+Scene 4
+Next, first half versus second half — did the team drop off after the break? Each metric shows its change from the first half to the second, per minute. In this match sprint distance fell thirty-nine percent, total IMA twenty-two, high-intensity running twenty — a clear second-half fade. But remember it's a single match, so read it as a snapshot, and open the per-player view to see who drove it.
+
+Scene 5
+Then, wins versus losses — how your wins looked next to your losses on movement. The d number is the size of the gap: here total distance was clearly higher in wins, and sprint strides higher in losses. Read it as a description of what those games looked like — not a recipe for winning. A gap doesn't mean doing more of it makes you win.
+
+Scene 6
+A quick word on that d number, because it appears all over the page. It's simply the size of the difference — around point-two is a small gap, point-five moderate, point-eight and up large. When a gap is large, it's worth a question rather than a conclusion: is that how you want to play, or just how those particular games happened to go?
+
+Scene 7
+The same idea runs on the tactical side — wins versus losses on chances, shots, pressing and possession. In this squad the wins came with more xG created and fewer shots and xG conceded, while losses had more of the ball. It's the same descriptive read: what winning and losing looked like in the numbers, not the cause of either.
+
+Scene 8
+Further down, What tracks the result asks which numbers rise and fall together with the result, or with season xG. Each gets a correlation — r — closer to plus or minus one means a tighter link, and a badge grades it moderate, weak or negligible. Here total distance is the clearest link, but it's still only moderate. And the n beside it matters: with a small sample these are tendencies, not proof.
+
+Scene 9
+Alongside it sits the per-player view — which movement habits go with creating more over a season. Here, players who cover more high-intensity running time tend to create more chances. It's a weak, squad-wide tendency, so treat it as a prompt to watch for, not a law — then check it against what you actually see.
+
+Scene 10
+The richest block is team stats times movement — every match's tactical stats and how each one links to how the team ran. A source chip names the provenance, so you always know it's StatsBomb or Wyscout underneath. The strongest link here is that xG created rose with high-speed running. And the habit to build: scan for the match that doesn't fit the pattern, and review that one back first — the exceptions teach you the most.
+
+Scene 11
+And underneath everything is the raw grid — every match, with goals, xG for and against, shots, possession, OBV, pressing and set-piece xG, and the result. It's there so you can always check a headline against the matches it came from. Nothing on the page is a black box; the evidence is one scroll away.
+
+Scene 12
+Four guardrails to keep in mind. Everything here is association, not causation. None of it changes the readiness verdict, the load, or the daily decision. Where an AI paragraph appears it's labelled AI and writes only from your own numbers — it invents nothing. And with small samples, read it all as a tendency, not proof.
+
+Scene 13
+So, the thirty-second read. First, The read — the plain headline of what changed and what goes with winning. Second, the halves and wins-versus-losses — did the team fade, and how did wins differ from losses? Third, what tracks the result and the match table — confirm the pattern, then check the match that doesn't fit. The bottom line: Team Match Insights turns your movement and match data into a plain read of how you play and what goes with winning — context for the coach, never a verdict.
+

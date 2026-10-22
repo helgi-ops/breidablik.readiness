@@ -1,0 +1,30 @@
+MicroPulse — MD Comparison: HSR exposure — narration for Pictory
+============================================================
+
+Scene 1
+MD Comparison — high-speed-running exposure — the whole panel, explained. Almost every load tool warns you when a player did too much. This one is different: it warns you when a player has done too little of the thing that matters most — running at match speed. Because if he doesn't reach those speeds in training, the match itself becomes the overload.
+
+Scene 2
+Here's the idea. If a player barely sprints all week, his legs meet top speed for the first time in the match — and that's when hamstrings and soft tissue tear. But if he rehearses those speeds through the week, at his own match demand, that chronic exposure actually protects him, as Stares showed. So under-exposure is a risk in its own right, not just over-load.
+
+Scene 3
+What it counts is simple: high-speed running — distance covered above nineteen-point-eight kilometres an hour, GPS bands five and six, genuinely fast running. It sums everything the player ran fast over the last seven days, training and matches, including today. And it's always per player — each man against his own legs, never a squad average, because match demand is deeply individual.
+
+Scene 4
+The reference is his own match day. Preferably it's match-derived — the median high-speed distance from his own matches over the last ninety days, counting only games where he played at least thirty minutes. Pre-season, before any matches, it falls back to a synthetic baseline: the top ten percent of his own training sessions as a proxy for match demand, so the panel is useful from day one instead of going dark for six weeks. A badge always shows which baseline is in use.
+
+Scene 5
+The number is a percentage: his week's high-speed running divided by one match's worth. Buchheit's rule sets the sweet spot at ninety-five to a hundred-and-ten percent. Below eighty is UNDER — he hasn't rehearsed match speed, high acute-injury risk. Eighty to ninety-five is WATCH — close, top it up. Ninety-five to a hundred-and-ten is READY — prepared. And above a hundred-and-ten is OVER — he may be carrying sprint fatigue into the game.
+
+Scene 6
+And each status points to an action — the panel informs, the coach decides. Under: top up sprints in the MD-minus-one session, or, if it's too late, reduce his minutes or extend his warm-up. Watch: a short high-speed block closes the gap. Ready: he's matched his demand, leave it alone. And over: soften the last session so he isn't carrying sprint fatigue into kick-off. The panel sorts the under-exposed players to the top, because they're the ones at risk on the next match day.
+
+Scene 7
+It's honest about its reference in two ways. First, it's his own demand, not a squad norm — a winger and a centre-back run wildly different match distances, so each is judged against himself. Second, it shows how firm the reference is: a match-derived baseline is solid; a synthetic one is a proxy, and the badge plus the sample count tell you which you're looking at. And a player with no high-speed data shows a dash, never a false zero percent.
+
+Scene 8
+And it follows the same honest, layered read as the rest of MicroPulse. The verdict first — one line naming who's under their match-day demand and to top them up in the MD-minus-one session. Then the plain facts — who's furthest below, and the squad split across the statuses. And only then the detail: the per-player table with the week's HSR, the match baseline, the percentage, the sample count, and the status.
+
+Scene 9
+So, thirty seconds. First, the verdict — who is under their match-day high-speed demand. Second, the ninety-five percent rule — ninety-five to a hundred-and-ten is ready, below eighty needs a top-up, above a hundred-and-ten means ease off. Third, the baseline badge — match-derived is firm, synthetic is a pre-season proxy. Train like you play: under-exposure is a real risk, and every player is measured against his own match demand.
+

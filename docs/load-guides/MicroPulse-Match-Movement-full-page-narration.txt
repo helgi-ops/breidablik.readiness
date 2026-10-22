@@ -1,0 +1,39 @@
+MicroPulse — Match Movement (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Match Movement — the whole page, explained. This page compares how one player moved across matches — his movement signature, game to game. Let's walk through it.
+
+Scene 2
+Where the IMA page shows one training day, Match Movement compares how a single player moved in this match versus another — his movement fingerprint, game to game. It's descriptive and tactical: it tells you how the match demanded of him, not whether he's at injury risk. And it works on both tiers — IMA-driven on Pro, GPS movement on Lite.
+
+Scene 3
+You pick a player and a match, and one plain sentence says how he moved differently — more high-cadence running, more braking-biased than usual — with the key shifts spelled out beneath. The confidence line names how many matches it's based on. And a small but important label: rules compute, not AI — the numbers themselves come from rules, not a model.
+
+Scene 4
+This is the clearest example of a principle that runs through the whole product. An AI paragraph interprets the numbers — that the acceleration-to-braking ratio fell from one-point-three-nine to point-five-two, that left-turn bias rose, that sprint strides nearly doubled — and draws a tactical conclusion: a reactive, defence-heavy performance, not an injury concern. But it writes only from the re-computed Catapult numbers, and invents nothing. The AI explains; the rules decide.
+
+Scene 5
+The dimension to read first is Accel-to-Decel — the balance of speeding up versus slowing down. Above one means front-foot: driving forward, accelerating into space. Below one means reactive: braking and stopping, stop-start defensive work. So a drop from one-point-three-nine to point-five-two tells you the same player switched from driving to reacting — a role change, visible in one number.
+
+Scene 6
+Every dimension is shown as this match against his usual — blue for this match, grey for his usual. Here you can see it at a glance: movement load per minute up, the accel-to-decel ratio collapsed, change of direction unchanged, a stronger left-turn bias, and high-cadence running nearly doubled. The change of direction held level while everything around it shifted — that's the signature of a different tactical role, not a fitness change.
+
+Scene 7
+All five dimensions come together in a radar chart that overlays this match on his usual, each axis normalised to the larger value. So the shape itself tells the story at a glance — is the signature stretched toward sprinting, or toward braking? And the by-dimension bars beside it give the exact numbers behind the shape.
+
+Scene 8
+Under the shape sits the raw detail, because a summary can hide where the difference sits. It breaks deceleration and change of direction down by intensity — low, medium and high — and shows the high-cadence stride bands six, seven and eight. The red high-intensity rows are the demanding end. It's a descriptive read of mechanical demand, from McBurnie, not an injury prediction.
+
+Scene 9
+And there are three ways to make the comparison. Versus norm puts this match against his own average — did he change from himself? Match A slash B puts two specific games head to head — what differed between them? And Squad compares him against the team — does he move unlike teammates in the same role? Same signature, three reference points.
+
+Scene 10
+One thing to be clear about: this page answers a tactical question — how did the game ask him to move, and how did that differ from usual? It is deliberately not an injury predictor. A changed signature usually means a changed role or a different opponent — that's useful context for the coach, not a warning to act on.
+
+Scene 11
+So, thirty seconds. First, the verdict sentence — did he move differently, and how? Second, Accel-to-Decel — was he driving, above one, or reactive, below one? Third, the radar shape for the whole signature, and the AI paragraph for the tactical story in words. And remember it's descriptive — how the game demanded of him, not a risk score.
+
+Scene 12
+The bottom line: Match Movement is a player's movement fingerprint, game to game. It lets you see when role or tactics change how a player moves — with the AI to explain it in plain language, and the rules to compute the numbers underneath.
+

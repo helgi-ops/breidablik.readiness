@@ -1,0 +1,35 @@
+MicroPulse — Readiness Volatility (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Readiness Volatility, explained. This screen doesn't ask how ready a player is today — it asks how steady he has been, day to day, over the last ten days. We'll walk through what it measures, the score, the why, and the one action it suggests.
+
+Scene 2
+Here's what it is. It measures how much a player's daily readiness has moved from one day to the next. A steady player is easy to plan for; a player whose numbers jump around is often carrying poor recovery, off-field stress or irregular sleep. Stable is good — and a big swing is worth a quiet word before you load him hard. The list is sorted most-volatile first, so the players to look at are at the top.
+
+Scene 3
+Four signals feed the swing, each on the same zero-to-one-hundred scale where zero is bad and one hundred is great. The daily check-in score. The Z-score — how today compares to his own norm — plus its day-to-day change, delta Z. Soreness, which is inverted so higher means less sore. And sleep, with mood, energy and stress feeding in too. The screen watches how much each of these jumps around.
+
+Scene 4
+It rolls up into one score from zero to one hundred — the bigger the number, the more he moved. Under thirty-three is Stable, a steady profile that's easy to plan for. Thirty-three to sixty-five is Moderate — some fluctuation, keep an eye. Sixty-six and up is High — marked variability, worth a word before loading. On the demo squad today nobody is in High and fourteen show some fluctuation.
+
+Scene 5
+Under the hood it's simple. For each signal it takes the change from one day to the next across the last week of check-ins, puts every signal on its own scale so a small check-in wobble and a small sleep wobble count the same, and averages them into one number. The jargon — Z-score, delta Z, normalisation — lives behind a How-is-this-computed toggle, never in the primary view.
+
+Scene 6
+It never leaves you with a bare number. Each player gets the one or two signals that are actually doing the moving — driven mostly by delta Z and Z-score, for example — so you know whether it's his norm shifting, his sleep, or his soreness before you open a single detail.
+
+Scene 7
+Every flagged player gets a counterfactual, which the system requires. It holds the single biggest driver steady and shows the level he'd fall to — if delta Z were steady, he'd be Stable. That turns a vague hunch into a concrete thing to ask about: his sleep, or his soreness, is the whole story.
+
+Scene 8
+It's honest about how much it knows. Each card says how many days he actually checked in — based on seven of ten. Fewer than three check-ins and it says not enough data rather than inventing a score. Missing days are shown as missing, never counted as a zero — because no data is not the same as stable.
+
+Scene 9
+Each card ends with a suggestion, not an order. For a Moderate player: keep an eye today, no need to pull back without more signals. For a High player: it's worth a word before loading hard — check sleep, stress, soreness. Volatility prompts a conversation; it never cuts his load on its own.
+
+Scene 10
+At the very top, before any card, one line reads the whole squad: nobody swinging hard, fourteen with some fluctuation. That's the five-second glance that tells you whether today needs your attention at all — before you scroll a single player.
+
+Scene 11
+The bottom line: readiness volatility is context about the last ten days — a prompt to check in, not a verdict. A player's green, amber or red today still comes only from today's check-in and load. A steady player can be red, and a jumpy one green. It tells you who's worth a word; today's decision stays where it always was.

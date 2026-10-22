@@ -1,0 +1,30 @@
+MicroPulse — Training Monotony & Strain — narration for Pictory
+============================================================
+
+Scene 1
+Training Monotony and Strain — the whole panel, explained. This is the oldest piece of load-monitoring maths in the sport, from Foster in 1998, and it still works — because it measures something the fancier numbers miss. Not how much a player trained, but how same.
+
+Scene 2
+Here's the idea in one picture. Two players carry the exact same weekly load. One trains six hundred every single day — flat, no variation. The other alternates four hundred and eight hundred — hard days and easy days. Same total, but the first is at much higher risk, because the body needs the easy days to adapt. Monotony captures that difference; total load alone can't.
+
+Scene 3
+It comes down to two numbers. Monotony is the mean weekly load divided by its standard deviation — how same the days are; low day-to-day variation makes it high. Strain is the weekly load multiplied by monotony — volume and sameness together, which Foster showed is a stronger warning than either on its own. The daily load itself is simply session-RPE times minutes. So two players with equal weekly load can end up with very different strain.
+
+Scene 4
+The bands are simple. Monotony at or below one-point-five is safe; one-five to two is watch; above two is high — very little variation, overtraining risk. Strain above four thousand is watch, and above six thousand is the illness-and-injury danger zone. And the badge on each row shows the worst of the two, so a coach can scan the right-hand column without reading both numbers.
+
+Scene 5
+One subtlety that matters: the seven-day window is filled in day by day, and missing days are counted as zero load — not skipped. That's deliberate: a genuine rest day pulls the standard deviation up and monotony down, exactly as it should, because rest is what creates healthy variation. And when the maths breaks down — every day identical, or all but one at zero — the panel shows a dash rather than an infinity or a fake number.
+
+Scene 6
+And this is why the panel earns its place: monotony is one of the very few load numbers a coach can act on directly. You don't have to cut the work. Just vary the intensity across the week — put a genuinely easy day next to a hard one — and monotony falls, even with the weekly total unchanged. Same work, lower risk. The number points straight at the fix.
+
+Scene 7
+It also works without any GPS. All it needs is session-RPE times minutes — no Catapult, no force plates — which makes it the highest-quality load signal a club can get from nothing but a phone. And if RPE logging is too thin that week, the panel quietly falls back to GPS distance instead: same maths, a weaker signal, and a badge that tells you which version you're looking at.
+
+Scene 8
+And it follows the same honest, layered read as the rest of MicroPulse. The verdict first — one line naming whose load is too samey or too relentless, and to vary their week. Then the plain facts — who's carrying the most weekly load and the risk split across the squad. And only then the detail: the per-player table with days logged, weekly load, monotony, strain, and status.
+
+Scene 9
+So, thirty seconds. First, the verdict — whose week is too flat or too relentless. Second, the numbers — monotony above two, or strain above six thousand, means act. Third, the lever — add a genuinely easy day next to a hard one, and monotony falls with the total unchanged. Remember: it's not how much, it's how same; rest days count as zero; and it works from a phone alone.
+

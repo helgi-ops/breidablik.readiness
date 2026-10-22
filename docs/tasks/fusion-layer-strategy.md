@@ -27,7 +27,7 @@ breytir ákvörðun (val í lið, hlutverk, æfingaáhersla, meiðsla-viðvörun
   leikmönnum (`scripts/validate-role-demand-fit.ts`): dreifing/röðun/watch-items standast; kvarðað (squad-
   relative frame, output mínútu-normaliserað). Stöðu-viðmiða-taflan varð `ROLE_DEMAND_FIT` (kóða-gögn, coach-
   tunable — engin ný DB-tafla). Sjá `role-demand-fit-spec.md` + `role-demand-fit-validation-plan.md`.
-- **#2 Contextualised peak period — 🟡 HÁLFNAÐ, alignment-vél komin.** Research-benchmark lagið er komið:
+- **#2 Contextualised peak period — 🟢 CATAPULT-LEIÐIN SHIPPUÐ, flokkari + kort komin.** Research-benchmark lagið er komið:
   `peakBenchmark.ts` (Ju 2022 Tafla 2 stöðu-viðmið, topphraði **litað**, HSR/sprettir samhengi) + **peak-period
   SHAPE** (1→3→5-mín fall-off, á Match Movement OG Total Player Analysis). Sjálft flaggskipið byrjað (ffa624c):
   feed-agnostíska **event-time alignment + Ju-taktík-flokkunar vélin** `peakPeriodContext` (hrein, 9 próf) er
@@ -37,7 +37,13 @@ breytir ákvörðun (val í lið, hlutverk, æfingaáhersla, meiðsla-viðvörun
   **CTR/period-útflutningur** ber HIR Dist + Vel B5/B6 + upphafstíma glugga → `player_peak_window` +
   `parseCatapultCtr` + `/api/coach/load/peak-window/upload`. Það OPNAÐI peak-HSR Ju-Töflu-2 einkunnina
   (`loadPeakHirWindows` → `computePeakBenchmark`, með HSR-þröskuld provenance). EFTIR: feed (1) tíma-stimplaðir
-  atburðir (StatsBomb events) + umbreyta window_start í sek-frá-KO fyrir fulla alignment. Sjá
+  atburðir (StatsBomb events) + umbreyta window_start í sek-frá-KO fyrir fulla alignment. **Uppfært (þessi
+lota):** Catapult-eini **hreyfi-undirskriftar-flokkarinn er fullbyggður og tengdur** — `peakMovementSignature`
+vél + `/api/coach/player/[id]/peak-demands` + `MatchPeakDemandsCard` + ingest-migration fyrir nýju reitina;
+staðfest end-to-end. Og **api.ts-gatið lagað**: sync-beiðnin biður nú um RHIE/running-symmetry reitina
+(`CATAPULT_RUNNING_MECHANICAL_PARAMETERS`) — þeir fylltust aldrei því ekki var beðið um þá. Eftir: keyra
+re-sync/backfill svo dálkarnir fyllist; StatsBomb-atburðir eru valfrjáls Phase 2. Sjá
+`peak-window-movement-proxy.md` + `catapult-new-params-mapping.md`. Sjá
   `peak-period-context-spec.md`.
 - **#4 Readiness-adjusted output — ✅ KOMIÐ + V2 DÝPKAÐ.** „Form vs State" spjaldið + `formVsState` engine.
   V2 samhengis-leiðrétt væntinga-band (readiness × úti/heima × andstæðingur, per-leikmanns effect gated á
@@ -47,12 +53,21 @@ breytir ákvörðun (val í lið, hlutverk, æfingaáhersla, meiðsla-viðvörun
   (vertical/multidirectional/engine/physical) × driver × output + „líkastir" leikmenn innan stöðu (nearest
   neighbour á percentile-vigri). Regla-byggt (ekki klösun — óstöðug á einu litlu liði); GK utan sviðs.
   `/api/coach/player-signature` + block á Total Player Analysis + real-data harness (23 leikmenn, dreifing OK).
-- **#5 Robustness / meiðsla-snemmviðvörun — ⬜ ekki byrjað.** Síðast, mesta validation; sér-labelað „trend
-  alert", aldrei liturinn.
+- **#5 Robustness / meiðsla-snemmviðvörun — 🟡 BYRJAÐ (skref 1–2).** Grunnað spec skrifað
+  (`robustness-injury-early-warning-spec.md`): ekki ein injury-tala (Haller 2023 of-flöggun í litlu liði),
+  heldur merki + persónu-norm + confidence + counterfactual, sér-labelað „trend alert", aldrei liturinn.
+  Byggt: legacy `risk/injury.ts` fjarlægt (canonical = `injuryRisk/`); `injuryRisk`-vélin víkkuð með
+  running-asymmetry / footstrike / RHIE / CMJ-halla / CMJ-recovery-deficit inntökum + íhaldssömum persónu-norm
+  reglum + why/driver-skýringum + unit-prófum (staðfest með `tsc` smoke-run, 10/10). Eftir: `cmjFatigue`
+  halla-vél (Hader 2019 expected-recovery), `robustnessWatch` yfirborð + route + kort, og validation-harness
+  (flag-rate hlið) áður en kortið fer í loftið.
 
-**Mælt næsta skref:** #1 er búið að staðfesta nálgunina. Fljótasta næsta gildið er (4) **dýpkun Readiness-
-adjusted output** (nánast til); stærsta aðgreiningin er (2) **flaggskipið**, sem byrjar á að leysa event-time
-alignment + peak-HSR gatið.
+**Mælt næsta skref (uppfært þessa lotu):** #1, #3, #4 komin; #2 Catapult-leiðin shippuð. Eftir standa (a)
+**#5 klárað** — `cmjFatigue` halla-vél, `robustnessWatch` yfirborð + route + kort, og validation-harness
+(flag-rate hlið) áður en það fer í loftið; og (b) operational: **re-sync/backfill** svo nýju Catapult-reitirnir
+fylli dálkana (RHIE/running-symmetry → #5 + flokkarinn). Samhliða (utan þessa vegvísis) er **IA/nav-
+endurskipulagning** í gangi — sjá `coach-pages-audit-background-vs-destination.md`; lykil-innviðurinn þar
+(`coach_signals` cache + Today-chips) er einmitt það sem breytir #1–#5 í bakgrunns-merki á Today.
 
 ---
 

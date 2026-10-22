@@ -1,0 +1,36 @@
+MicroPulse — Quadrant Intelligence (whole page) — narration for Pictory
+============================================================
+
+Scene 1
+Quadrant Intelligence — the whole page, explained. It answers one question in a single picture: who is working hard, and finding it hard? Let's walk through it.
+
+Scene 2
+The whole page rests on two numbers. External load — how much he runs, measured as average distance. And internal cost — how hard it feels to him, measured as average session-RPE. Plot one against the other and the gap between them tells the story.
+
+Scene 3
+The plot puts one dot per player, external load along the bottom, internal cost up the side. The dividing lines sit at the team median, so it's always relative to the squad that day. The four zones are the whole idea — and the top corners are where your attention goes. This is the demo squad — no real player data.
+
+Scene 4
+There are four zones. Top-right, injury risk: high load and high cost — the obvious one to watch. Bottom-right, peak fitness: running a lot but it feels easy, a sign of good form. Bottom-left, under-stimulated: neither running much nor finding it hard. And top-left, decoupled — high cost, low load — which is the one that matters most.
+
+Scene 5
+Decoupled deserves its own moment. The player isn't running more than usual — but it feels much harder to him. That gap between low external load and high internal cost is early fatigue, and it typically shows before any external number moves. So the most important corner of this plot isn't the busy top-right — it's the quiet top-left, where fatigue hides.
+
+Scene 6
+Above the plot, four tiles count how many players sit in each zone — injury risk, decoupled, peak fitness and under-stimulated — so you get the split without reading every dot. And a time toggle switches the window: seven days shows the acute picture, twenty-eight days the longer pattern.
+
+Scene 7
+When you need the detail, the Squad Load table below the plot breaks load into six Catapult dimensions — total distance, high-speed running in velocity bands five and six, accelerations and decelerations. Each has a seven-day acute value, a twenty-eight-day chronic value and an ACWR. So for a flagged player, this answers exactly which dimension is spiking.
+
+Scene 8
+Every ACWR value in the table is coloured by band, the same bands used across the app. Below point-eight is undertraining — doing less than his rolling norm. Point-eight to one-point-three is safe. One-point-three to one-point-five is elevated — climbing faster than he's adapted to. And above one-point-five is a spike, the injury-risk end. So the colours alone tell you where to look.
+
+Scene 9
+One subtlety worth knowing: the quadrant lines sit at the team median, not a fixed threshold. So a player's zone depends on how the rest of the squad looks that day. It's a live, relative read — the same player can move between zones as the squad's week shifts around him. That's a feature: it keeps the plot honest about who's high relative to their teammates right now.
+
+Scene 10
+So, thirty seconds. First, the top corners — injury risk on the right, decoupled on the left. Second, the four tiles for the counts in each zone. Third, the ACWR table to see which dimension is spiking on a flagged player. And the corner most people miss is decoupled — feeling it hard without running much.
+
+Scene 11
+The bottom line: the quadrant finds the player who is working hard and finding it hard — and especially the one who isn't running more but is finding it harder, because he's fatigued before the numbers show it. External against internal, in one picture.
+
