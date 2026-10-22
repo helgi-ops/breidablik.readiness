@@ -28,9 +28,10 @@ type Signal = {
 // Signal engines kept OFF the Today chip row:
 //  - game_plan_fit ("Matchday fit") grades role-fit vs the opponent and routinely
 //    flags many players red — on the briefing that reads as a squad alarm.
-//  - position_fitness ("Staða vs geta") does the same (many below a squad-relative
-//    floor), AND its href /coach/role-demand-fit has no page (404) — the data
-//    lives in RoleDemandFitCard inside the player analysis, not a standalone route.
+//  - position_fitness ("Staða vs geta") does the same (many players below a
+//    squad-relative floor). Its signal now links to the Power Curve Intelligence
+//    page (#pc-role), but it stays off the Today row for the same "reads as a
+//    squad alarm" reason.
 const HIDDEN_FROM_CHIPS = new Set<string>(["game_plan_fit", "position_fitness"]);
 
 const LEVEL_STYLE: Record<string, { chip: string; dot: string }> = {

@@ -778,7 +778,10 @@ export function deriveSpeedZonesSignal(reads: SpeedZonesLite[]): CoachSignal {
 // position_fitness — a player BELOW a squad-relative floor on a demanded physical requirement for
 // his position. Descriptive scouting/development read, beside the colour (never it).
 export type PositionFitnessLite = { playerId: string; name: string; belowTop: boolean; weakestEn: string | null; weakestIs: string | null; roleEn: string; roleIs: string };
-const POSITION_FITNESS_HREF = "/coach/role-demand-fit";
+// The role-demand-fit read lives in RoleDemandFitCard on the Power Curve
+// Intelligence page (there is no standalone /coach/role-demand-fit route); the
+// #pc-role anchor scrolls straight to it.
+const POSITION_FITNESS_HREF = "/coach/power-curve-intelligence#pc-role";
 export function derivePositionFitnessSignal(reads: PositionFitnessLite[]): CoachSignal {
   const base: CoachSignal = { engine: "position_fitness", level: "steady", label: { en: "Position fitness", is: "Staða vs geta" }, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: POSITION_FITNESS_HREF };
   const flagged = reads.filter((r) => r.belowTop);

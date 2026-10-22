@@ -77,7 +77,7 @@ describe("derivePositionFitnessSignal", () => {
     const one = derivePositionFitnessSignal([pf({ belowTop: true })]);
     expect(one.level).toBe("watch");
     expect(one.engine).toBe("position_fitness");
-    expect(one.href).toBe("/coach/role-demand-fit");
+    expect(one.href).toBe("/coach/power-curve-intelligence#pc-role");
     expect(one.counterfactual?.en).toMatch(/necessary, not sufficient/i);
     const three = derivePositionFitnessSignal([pf({ belowTop: true }), pf({ playerId: "p2", belowTop: true }), pf({ playerId: "p3", belowTop: true })]);
     expect(three.level).toBe("elevated");
