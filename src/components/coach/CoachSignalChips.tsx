@@ -25,8 +25,13 @@ type Signal = {
   playerId?: string | null;
 };
 
-// Signal engines that stay OFF the Today chip row (they keep their own pages).
-const HIDDEN_FROM_CHIPS = new Set<string>(["game_plan_fit"]);
+// Signal engines kept OFF the Today chip row:
+//  - game_plan_fit ("Matchday fit") grades role-fit vs the opponent and routinely
+//    flags many players red — on the briefing that reads as a squad alarm.
+//  - position_fitness ("Staða vs geta") does the same (many below a squad-relative
+//    floor), AND its href /coach/role-demand-fit has no page (404) — the data
+//    lives in RoleDemandFitCard inside the player analysis, not a standalone route.
+const HIDDEN_FROM_CHIPS = new Set<string>(["game_plan_fit", "position_fitness"]);
 
 const LEVEL_STYLE: Record<string, { chip: string; dot: string }> = {
   elevated: { chip: "border-[#e6c9c0] bg-[#f6e2dc] text-[#a83e28]", dot: "#a83e28" },
