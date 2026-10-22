@@ -47,18 +47,28 @@ export async function computePlayerToday(
   // The player's own load history (180 days), REAL sessions only (exclude
   // estimated pod-forgot rows — they must not feed a "usual" or an "actual").
   const since = addDaysISO(today, -180);
+  // Select ONLY the `estimated` flag out of raw_payload_json, not the whole blob
+  // (~8 kB/row) — the single-player 180-day window would otherwise pull ~1–2 MB
+  // of JSON just to read one boolean per row (same waste that stalled the team
+  // Pre-session report). `->>` yields TEXT, so convert to a real boolean below:
+  // the flag has both true AND false values, so a naive truthy check on the
+  // string "false" would wrongly drop those rows.
   const { data: rows } = await sb
     .from("player_external_load_daily")
-    .select("date, source, total_player_load, raw_payload_json")
+    .select("date, source, total_player_load, estimated:raw_payload_json->>estimated")
     .eq("player_id", playerId)
     .in("source", ["catapult", "manual", "titan"])
     .gte("date", since)
     .lte("date", today);
+  const shaped = ((rows ?? []) as Array<Record<string, unknown>>).map((r) => {
+    const { estimated: est, ...rest } = r;
+    return { ...rest, raw_payload_json: { estimated: est === "true" } };
+  });
   // One effective row per date: a manual coach entry overrides the pod reading
   // for that day (a correction can be lower than the bogus pod value, so we must
   // pick manual explicitly rather than take the max).
   const dedup = oneRowPerDate(
-    (rows ?? []) as Array<{ date: string; source?: string | null; total_player_load: number | null; raw_payload_json: unknown }>,
+    shaped as Array<{ date: string; source?: string | null; total_player_load: number | null; raw_payload_json: unknown }>,
   );
   const loadByDate = new Map<string, number>();
   for (const r of dedup) {
