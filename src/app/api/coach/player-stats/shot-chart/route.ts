@@ -35,11 +35,16 @@ export async function GET(req: NextRequest) {
   const mine = url.searchParams.get("mine") === "1"; // only the coach's own team's shots
   if (!/^\d+$/.test(gameId)) return NextResponse.json({ error: "Bad gameId" }, { status: 400 });
 
-  // KKÍ season_id from the team's feed config (basketball_team_ref = "season:team").
-  const { data: cfg } = await supabase.from("stat_ingestion_config").select("basketball_team_ref").eq("team_id", teamId).maybeSingle();
-  const ref = (cfg as { basketball_team_ref?: string | null } | null)?.basketball_team_ref ?? "";
-  const seasonId = ref.split(":")[0]?.trim();
-  if (!/^\d+$/.test(seasonId ?? "")) return NextResponse.json({ error: "No KKÍ season configured" }, { status: 400 });
+  // KKÍ season_id: from the pasted link (?seasonId=) when given — e.g. a Single Match Analysis KKÍ.is
+  // pull — else the team's feed config (basketball_team_ref = "season:team").
+  const seasonParam = (url.searchParams.get("seasonId") || "").trim();
+  let seasonId = /^\d+$/.test(seasonParam) ? seasonParam : "";
+  if (!seasonId) {
+    const { data: cfg } = await supabase.from("stat_ingestion_config").select("basketball_team_ref").eq("team_id", teamId).maybeSingle();
+    const ref = (cfg as { basketball_team_ref?: string | null } | null)?.basketball_team_ref ?? "";
+    seasonId = ref.split(":")[0]?.trim() ?? "";
+  }
+  if (!/^\d+$/.test(seasonId)) return NextResponse.json({ error: "No KKÍ season configured" }, { status: 400 });
 
   try {
     const scaffold = await fetchWidget(buildShotChartScaffoldUrl(gameId, seasonId!));

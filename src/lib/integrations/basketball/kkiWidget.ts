@@ -21,6 +21,21 @@ function q(params: Record<string, string>): string {
   return Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
 }
 
+/** Extract { gameId, seasonId } from a kki.is "Leikur" URL (…?game_id=…&season_id=…), or a bare
+ *  "gameId" / "gameId:seasonId". Both the match page and the widget feed key off these ids. */
+export function parseKkiGameUrl(input: string): { gameId: string | null; seasonId: string | null } {
+  const s = String(input ?? "").trim();
+  try {
+    const u = new URL(s);
+    const gid = u.searchParams.get("game_id");
+    const sid = u.searchParams.get("season_id");
+    if (gid && /^\d+$/.test(gid)) return { gameId: gid, seasonId: sid && /^\d+$/.test(sid) ? sid : null };
+  } catch { /* not a full URL — fall through */ }
+  const m = s.match(/^(\d{3,})(?::(\d{3,}))?$/);
+  if (m) return { gameId: m[1], seasonId: m[2] ?? null };
+  return { gameId: null, seasonId: null };
+}
+
 export function buildScheduleUrl(seasonId: string, stageId: string, page: number): string {
   return `${WIDGET_BASE}?${q({
     api: PUBLIC_KEY, lang: "is",
