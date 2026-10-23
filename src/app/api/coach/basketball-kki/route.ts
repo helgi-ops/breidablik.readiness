@@ -12,8 +12,8 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { parseBoxScore } from "@/lib/micropulse/basketballStats/parseWidget";
-import { buildBoxScoreUrl, fetchWidget, parseKkiGameUrl } from "@/lib/integrations/basketball/kkiWidget";
+import { parseBoxScore, parseQuarterScores, parseAdvancedStats } from "@/lib/micropulse/basketballStats/parseWidget";
+import { buildBoxScoreUrl, buildGameViewUrl, buildAdvancedStatsUrl, fetchWidget, parseKkiGameUrl } from "@/lib/integrations/basketball/kkiWidget";
 
 const n = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
@@ -90,5 +90,25 @@ export async function GET(req: NextRequest) {
     ? teams.map((t, i) => ({ ...t, factors: factorsFor(t, teams[i === 0 ? 1 : 0]) }))
     : teams.map((t) => ({ ...t, factors: null as FF | null }));
 
-  return NextResponse.json({ ok: true, gameId, seasonId, teams: withFactors });
+  // Quarter-by-quarter line score (default game view) + advanced team-comparison stats — both best-effort,
+  // so a missing block never breaks the box score.
+  let quarters: { a: number[]; b: number[] } | null = null;
+  let advanced: Array<{ label: string; a: string; b: string }> = [];
+  await Promise.all([
+    (async () => { try { quarters = parseQuarterScores(await fetchWidget(buildGameViewUrl(gameId, seasonId))); } catch { /* optional */ } })(),
+    (async () => { try { advanced = parseAdvancedStats(await fetchWidget(buildAdvancedStatsUrl(gameId, seasonId))); } catch { /* optional */ } })(),
+  ]);
+
+  // Stat leaders — the top player in each category across both teams (from the box score we already have).
+  const allPlayers = teams.flatMap((t) => t.players.map((p) => ({ ...p, team: t.name })));
+  const leaderIn = (key: keyof P, labelEn: string, labelIs: string) => {
+    const top = allPlayers.reduce<(typeof allPlayers)[number] | null>((best, p) => (n(p[key] as number) > n((best?.[key] as number) ?? -1) ? p : best), null);
+    return top && n(top[key] as number) > 0 ? { labelEn, labelIs, name: top.name, team: top.team, value: n(top[key] as number) } : null;
+  };
+  const leaders = [
+    leaderIn("pts", "Points", "Stig"), leaderIn("reb", "Rebounds", "Fráköst"), leaderIn("ast", "Assists", "Stoðsendingar"),
+    leaderIn("stl", "Steals", "Stolnir"), leaderIn("blk", "Blocks", "Varin skot"),
+  ].filter((x): x is NonNullable<typeof x> => x != null);
+
+  return NextResponse.json({ ok: true, gameId, seasonId, teams: withFactors, quarters, advanced, leaders });
 }

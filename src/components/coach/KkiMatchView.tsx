@@ -18,7 +18,10 @@ type P = {
 };
 type FF = { efg: number; tovPct: number; orebPct: number; ftRate: number; tp3: number };
 type Team = { name: string; players: P[]; totals: Record<string, number>; factors: FF | null };
-type Resp = { ok: boolean; gameId?: string; seasonId?: string; teams?: Team[]; error?: string };
+type Quarters = { a: number[]; b: number[] };
+type Adv = { label: string; a: string; b: string };
+type Leader = { labelEn: string; labelIs: string; name: string; team: string; value: number };
+type Resp = { ok: boolean; gameId?: string; seasonId?: string; teams?: Team[]; quarters?: Quarters | null; advanced?: Adv[]; leaders?: Leader[]; error?: string };
 
 const pct = (v: number) => `${Math.round(v * 1000) / 10}%`;
 const fr = (m: number, a: number) => `${m}-${a}${a > 0 ? ` · ${Math.round((m / a) * 100)}%` : ""}`;
@@ -61,6 +64,9 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
   React.useEffect(() => () => { if (img) URL.revokeObjectURL(img); }, [img]);
 
   const teams = data?.teams ?? [];
+  const quarters = data?.quarters ?? null;
+  const advanced = data?.advanced ?? [];
+  const leaders = data?.leaders ?? [];
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -77,6 +83,46 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
 
       {teams.length > 0 && (
         <>
+          {/* QUARTER-BY-QUARTER line score */}
+          {quarters && quarters.a.length > 0 && teams.length === 2 && (
+            <section className="rounded-xl border border-slate-200 bg-white p-4">
+              <h3 className="text-[14px] font-bold text-slate-900">{t("By quarter", "Eftir leikhlutum")}</h3>
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full text-[12.5px]">
+                  <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
+                    <th className="py-1 pr-2 font-medium">{t("Team", "Lið")}</th>
+                    {quarters.a.map((_, i) => <th key={i} className="py-1 px-2 text-right font-medium">{t(`Q${i + 1}`, `${i + 1}.`)}</th>)}
+                    <th className="py-1 pl-2 text-right font-medium">{t("Final", "Loka")}</th>
+                  </tr></thead>
+                  <tbody>
+                    {([[teams[0].name, quarters.a], [teams[1].name, quarters.b]] as const).map(([name, qs]) => (
+                      <tr key={name} className="border-t border-slate-100">
+                        <td className="py-1.5 pr-2 font-semibold text-slate-800">{name}</td>
+                        {qs.map((v, i) => <td key={i} className="py-1.5 px-2 text-right tabular-nums text-slate-700">{v}</td>)}
+                        <td className="py-1.5 pl-2 text-right tabular-nums font-bold">{qs.reduce((s, v) => s + v, 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {/* STAT LEADERS */}
+          {leaders.length > 0 && (
+            <section className="rounded-xl border border-slate-200 bg-white p-4">
+              <h3 className="text-[14px] font-bold text-slate-900">{t("Leaders", "Leiðtogar")}</h3>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {leaders.map((l) => (
+                  <div key={l.labelEn} className="rounded-lg border border-slate-200 px-2.5 py-1.5">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">{is ? l.labelIs : l.labelEn}</div>
+                    <div className="text-[12.5px]"><span className="font-bold tabular-nums text-slate-900">{l.value}</span> <span className="font-semibold text-slate-800">{l.name}</span> <span className="text-slate-400">· {l.team}</span></div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* FOUR FACTORS — both teams side by side */}
           {teams.length === 2 && teams.every((tm) => tm.factors) && (
             <section className="rounded-xl border border-slate-200 bg-white p-4">
@@ -172,6 +218,32 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
               </div>
             </section>
           ))}
+
+          {/* ADVANCED STATS — KKÍ team comparison (Ítarleg tölfræði) */}
+          {advanced.length > 0 && teams.length === 2 && (
+            <section className="rounded-xl border border-slate-200 bg-white p-4">
+              <h3 className="text-[14px] font-bold text-slate-900">{t("Advanced stats", "Ítarleg tölfræði")}</h3>
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full text-[12.5px]">
+                  <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
+                    <th className="py-1 pr-2 font-medium">{t("Stat", "Þáttur")}</th>
+                    <th className="py-1 px-2 text-right font-medium">{teams[0].name}</th>
+                    <th className="py-1 pl-2 text-right font-medium">{teams[1].name}</th>
+                  </tr></thead>
+                  <tbody>
+                    {advanced.map((r) => (
+                      <tr key={r.label} className="border-t border-slate-100">
+                        <td className="py-1.5 pr-2 text-slate-600">{r.label}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums text-slate-800">{r.a}</td>
+                        <td className="py-1.5 pl-2 text-right tabular-nums text-slate-800">{r.b}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-1.5 text-[10px] text-slate-400">{t("From KKÍ (baskethotel) — Ítarleg tölfræði. Descriptive — never the readiness colour.", "Úr KKÍ (baskethotel) — Ítarleg tölfræði. Lýsandi — aldrei readiness-liturinn.")}</p>
+            </section>
+          )}
 
           {/* SHOT CHART image (KKÍ render) */}
           {img && (

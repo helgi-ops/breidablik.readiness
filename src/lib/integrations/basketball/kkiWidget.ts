@@ -61,6 +61,31 @@ export function buildBoxScoreUrl(gameId: string, seasonId: string): string {
   })}`;
 }
 
+/** The default GAME_FULL_VIEW (no `part`) — carries the quarter-by-quarter line score in a
+ *  `.mbt-gamecard-quarters` block. */
+export function buildGameViewUrl(gameId: string, seasonId: string): string {
+  return `${WIDGET_BASE}?${q({
+    api: PUBLIC_KEY, lang: "is",
+    "request[0][container]": "view110",
+    "request[0][widget]": String(WIDGET_BOXSCORE),
+    "request[0][param][game_id]": gameId,
+    "request[0][param][season_id]": seasonId,
+  })}`;
+}
+
+/** The "Ítarleg tölfræði" (advanced stats) part — team-comparison rows: points in paint, fast-break
+ *  points, points off turnovers, bench points, biggest lead, possessions, etc. */
+export function buildAdvancedStatsUrl(gameId: string, seasonId: string): string {
+  return `${WIDGET_BASE}?${q({
+    api: PUBLIC_KEY, lang: "is",
+    "request[0][container]": "view110",
+    "request[0][widget]": String(WIDGET_BOXSCORE),
+    "request[0][part]": "advancedstats",
+    "request[0][param][game_id]": gameId,
+    "request[0][param][season_id]": seasonId,
+  })}`;
+}
+
 /** GET a widget and decode its windows-1252 body to a string. */
 export async function fetchWidget(url: string): Promise<string> {
   const res = await fetch(url, { headers: { referer: REFERER, "user-agent": "Mozilla/5.0" } });

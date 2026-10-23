@@ -22,6 +22,38 @@ export function unwrapWidgetHtml(raw: string): string {
 const strip = (s: string) => s.replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, "").replace(/\s+/g, " ").trim();
 const cells = (tr: string) => [...tr.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)].map((m) => strip(m[1]));
 
+/** Quarter-by-quarter line score from the GAME_FULL_VIEW (`.mbt-gamecard-quarters` → "18 - 20" spans).
+ *  Returns per-team arrays (team A = home-listed first), or null when the block is absent. */
+export function parseQuarterScores(raw: string): { a: number[]; b: number[] } | null {
+  const html = unwrapWidgetHtml(raw);
+  const block = /<div[^>]*class="[^"]*mbt-gamecard-quarters[^"]*"[^>]*>([\s\S]*?)<\/div>/i.exec(html);
+  if (!block) return null;
+  const pairs = [...block[1].matchAll(/<span[^>]*>\s*(\d+)\s*-\s*(\d+)\s*<\/span>/g)].map((m) => [Number(m[1]), Number(m[2])] as const);
+  if (pairs.length === 0) return null;
+  return { a: pairs.map((p) => p[0]), b: pairs.map((p) => p[1]) };
+}
+
+/** Team-comparison advanced stats from the `advancedstats` part — each a label + two team values
+ *  (points in paint, fast-break points, points off turnovers, bench points, biggest lead, possessions,
+ *  points per possession…). Skips the header row and the per-lineup (comma-separated names) rows. */
+export function parseAdvancedStats(raw: string): Array<{ label: string; a: string; b: string }> {
+  const html = unwrapWidgetHtml(raw);
+  const out: Array<{ label: string; a: string; b: string }> = [];
+  const seen = new Set<string>();
+  for (const tr of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)) {
+    const c = cells(tr[1]);
+    if (c.length !== 3) continue;
+    const [label, a, b] = c;
+    if (!label || label.includes(", ")) continue;          // header ("") + lineup (names) rows
+    if (!/[A-Za-zÀ-ÿ]/.test(label)) continue;               // must read as a stat label
+    if (!/\d/.test(a) && !/\d/.test(b)) continue;           // need at least one numeric value
+    if (seen.has(label)) continue;
+    seen.add(label);
+    out.push({ label, a, b });
+  }
+  return out;
+}
+
 /** "6/22" → [6, 22]; blanks → [null,null]. */
 function madeAtt(v: string): [number | null, number | null] {
   const m = /(\d+)\s*\/\s*(\d+)/.exec(v);

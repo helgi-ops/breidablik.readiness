@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseBoxScore, parseSchedule, parseShotChartFilters, unwrapWidgetHtml } from "../parseWidget";
+import { parseBoxScore, parseSchedule, parseShotChartFilters, unwrapWidgetHtml, parseQuarterScores, parseAdvancedStats } from "../parseWidget";
 
 const fx = (f: string) => readFileSync(join(__dirname, "fixtures", f), "utf8");
 const BOX = fx("boxscore-6146419.txt");
@@ -98,5 +98,40 @@ describe("parseShotChartFilters (real fixture)", () => {
     expect(f.playerB.length).toBeGreaterThan(5);
     expect(f.playerA).toContain("6359231"); // Dedrick, from the box score
     expect(f.playerA.every((v) => /^\d+$/.test(v))).toBe(true);
+  });
+});
+
+describe("parseQuarterScores", () => {
+  it("reads the mbt-gamecard-quarters line score into per-team arrays", () => {
+    const html = `MBT.API.update('view110', '<div class="mbt-gamecard-quarters">\\r\\n<span>18 - 20<\\/span><span>15 - 15<\\/span><span>14 - 17<\\/span><span>30 - 12<\\/span><\\/div>');`;
+    const q = parseQuarterScores(html);
+    expect(q).not.toBeNull();
+    expect(q!.a).toEqual([18, 15, 14, 30]);
+    expect(q!.b).toEqual([20, 15, 17, 12]);
+    expect(q!.a.reduce((s, v) => s + v, 0)).toBe(77);
+    expect(q!.b.reduce((s, v) => s + v, 0)).toBe(64);
+  });
+  it("returns null when there is no quarters block", () => {
+    expect(parseQuarterScores("<div>nope</div>")).toBeNull();
+  });
+});
+
+describe("parseAdvancedStats", () => {
+  const html = `MBT.API.update('view110', '<table>` +
+    `<tr><td><\\/td><td>Valur<\\/td><td>Njarðvík<\\/td><\\/tr>` +
+    `<tr><td>M. Ball, R. Stone<\\/td><td>+8.0<\\/td><\\/tr>` +
+    `<tr><td>Stig inni í teig<\\/td><td>38<\\/td><td>28<\\/td><\\/tr>` +
+    `<tr><td>Stig úr hraðaupphlaupum<\\/td><td>2<\\/td><td>7<\\/td><\\/tr>` +
+    `<tr><td>Mesta forskot<\\/td><td>13 (77:64)<\\/td><td>8 (42:50)<\\/td><\\/tr>` +
+    `<\\/table>');`;
+  it("keeps label+two-value stat rows, skips the header and lineup rows", () => {
+    const rows = parseAdvancedStats(html);
+    const labels = rows.map((r) => r.label);
+    expect(labels).toContain("Stig inni í teig");
+    expect(labels).toContain("Stig úr hraðaupphlaupum");
+    expect(labels).toContain("Mesta forskot");
+    expect(labels).not.toContain(""); // header row dropped
+    expect(labels.some((l) => l.includes(","))).toBe(false); // lineup row dropped
+    expect(rows.find((r) => r.label === "Stig inni í teig")).toMatchObject({ a: "38", b: "28" });
   });
 });
