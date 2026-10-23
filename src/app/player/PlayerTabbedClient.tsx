@@ -39,6 +39,7 @@ import FloatingChatBubble from "@/components/chat/FloatingChatBubble";
 import ChatThread from "@/components/chat/ChatThread";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
 const PlayerGameReportCard = dynamic(() => import("@/components/player/PlayerGameReportCard"), { ssr: false });
+const PlayerBasketballGameReportCard = dynamic(() => import("@/components/player/PlayerBasketballGameReportCard"), { ssr: false });
 const PlayerFootballStatsCard = dynamic(() => import("@/components/player/PlayerFootballStatsCard"), { ssr: false });
 const PlayerMatchMovementCard = dynamic(() => import("@/components/player/PlayerMatchMovementCard"), { ssr: false });
 import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
@@ -2263,6 +2264,7 @@ export default function DevPlayerClient() {
   const [chatPlayerId, setChatPlayerId] = useState<string | null>(null);
   const [chatPlayerName, setChatPlayerName] = useState<string>("Leikmaður");
   const [teamId, setTeamId] = useState<string | null>(null);
+  const [teamIsBasketball, setTeamIsBasketball] = useState(false); // basketball "Match" tab uses the KKÍ box-score report, not the football GPS one
 
   useEffect(() => {
     let alive = true;
@@ -2288,13 +2290,14 @@ export default function DevPlayerClient() {
 
       const { data: team } = await supabase
         .from("teams")
-        .select("plan_tier, club_theme_color")
+        .select("plan_tier, club_theme_color, sport")
         .eq("id", tid)
         .maybeSingle();
 
       if (alive && team) {
         setPlanTier(((team as any).plan_tier as PlanTier) ?? "FREE");
         setClubThemeColor((team as any).club_theme_color ?? null);
+        setTeamIsBasketball(String((team as any).sport ?? "").toLowerCase() === "basketball");
       }
     }
     loadPlanTier();
@@ -2789,7 +2792,9 @@ export default function DevPlayerClient() {
               )}
               {activeTab === "gamereport" && (
                 <div className="space-y-4">
-                  <PlayerGameReportCard lang={lang as "IS" | "EN"} />
+                  {teamIsBasketball
+                    ? <PlayerBasketballGameReportCard lang={lang as "IS" | "EN"} />
+                    : <PlayerGameReportCard lang={lang as "IS" | "EN"} />}
                 </div>
               )}
               {activeTab === "stats" && (
