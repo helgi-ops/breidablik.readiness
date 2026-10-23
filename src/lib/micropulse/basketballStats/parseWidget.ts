@@ -22,6 +22,20 @@ export function unwrapWidgetHtml(raw: string): string {
 const strip = (s: string) => s.replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, "").replace(/\s+/g, " ").trim();
 const cells = (tr: string) => [...tr.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)].map((m) => strip(m[1]));
 
+/** Best-effort match date from the GAME_FULL_VIEW header → ISO `yyyy-mm-dd`, or null.
+ *  KKÍ prints the date as `dd.mm.yyyy` / `dd-mm-yyyy` / `dd/mm/yyyy` (sometimes already ISO). */
+export function parseGameDate(raw: string): string | null {
+  const html = unwrapWidgetHtml(raw);
+  const iso = /\b(20\d{2})-(\d{2})-(\d{2})\b/.exec(html);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const dmy = /\b(\d{1,2})[.\-/](\d{1,2})[.\-/](20\d{2})\b/.exec(html);
+  if (dmy) {
+    const d = dmy[1].padStart(2, "0"), m = dmy[2].padStart(2, "0");
+    if (Number(m) >= 1 && Number(m) <= 12 && Number(d) >= 1 && Number(d) <= 31) return `${dmy[3]}-${m}-${d}`;
+  }
+  return null;
+}
+
 /** Quarter-by-quarter line score from the GAME_FULL_VIEW (`.mbt-gamecard-quarters` → "18 - 20" spans).
  *  Returns per-team arrays (team A = home-listed first), or null when the block is absent. */
 export function parseQuarterScores(raw: string): { a: number[]; b: number[] } | null {

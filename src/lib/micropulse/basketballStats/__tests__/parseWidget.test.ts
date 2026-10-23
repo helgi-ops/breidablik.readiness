@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseBoxScore, parseSchedule, parseShotChartFilters, unwrapWidgetHtml, parseQuarterScores, parseAdvancedStats } from "../parseWidget";
+import { parseBoxScore, parseSchedule, parseShotChartFilters, unwrapWidgetHtml, parseQuarterScores, parseAdvancedStats, parseGameDate } from "../parseWidget";
 
 const fx = (f: string) => readFileSync(join(__dirname, "fixtures", f), "utf8");
 const BOX = fx("boxscore-6146419.txt");
@@ -133,5 +133,21 @@ describe("parseAdvancedStats", () => {
     expect(labels).not.toContain(""); // header row dropped
     expect(labels.some((l) => l.includes(","))).toBe(false); // lineup row dropped
     expect(rows.find((r) => r.label === "Stig inni í teig")).toMatchObject({ a: "38", b: "28" });
+  });
+});
+
+describe("parseGameDate", () => {
+  it("reads dd.mm.yyyy → ISO", () => {
+    expect(parseGameDate("<div class=\"mbt-gamecard\">17.05.2026 kl. 19:15</div>")).toBe("2026-05-17");
+  });
+  it("reads dd-mm-yyyy → ISO", () => {
+    expect(parseGameDate("Leikur 3-11-2025 18:00")).toBe("2025-11-03");
+  });
+  it("prefers an explicit ISO date", () => {
+    expect(parseGameDate("date 2026-01-09 played")).toBe("2026-01-09");
+  });
+  it("returns null when there is no date / an impossible month", () => {
+    expect(parseGameDate("no date here")).toBeNull();
+    expect(parseGameDate("99.99.2026")).toBeNull();
   });
 });

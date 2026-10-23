@@ -11,15 +11,17 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 type Game = {
-  date: string; opponent: string; min: string | null; pts: number; reb: number; oreb: number; dreb: number;
+  date: string | null; opponent: string; comp: string | null; compLabel: string; min: string | null;
+  pts: number; reb: number; oreb: number; dreb: number;
   ast: number; stl: number; blk: number; tov: number; fgm: number; fga: number; tpm: number; tpa: number;
   ftm: number; fta: number; pip: number; pm: number | null;
 };
-type Summary = { games: number; ppg: number; rpg: number; apg: number; spg: number; bpg: number; fgPct: number; tpPct: number; ftPct: number; bestPts: number };
+type CompSplit = { label: string; games: number; ppg: number };
+type Summary = { games: number; ppg: number; rpg: number; apg: number; spg: number; bpg: number; fgPct: number; tpPct: number; ftPct: number; bestPts: number; byComp: CompSplit[] };
 type Resp = { ok: boolean; isBasketball?: boolean; games?: Game[]; summary?: Summary | null; error?: string };
 
 const fr = (m: number, a: number) => `${m}-${a}${a > 0 ? ` · ${Math.round((m / a) * 100)}%` : ""}`;
-const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
+const shortDate = (iso: string | null, is: boolean) => { if (!iso) return ""; try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
 
 export default function PlayerBasketballGameReportCard({ lang }: { lang: "IS" | "EN" }) {
   const is = lang === "IS";
@@ -76,6 +78,20 @@ export default function PlayerBasketballGameReportCard({ lang }: { lang: "IS" | 
       </div>
       <p className="text-[11px] text-zinc-400">{t(`Season best: ${s.bestPts} pts · ${s.spg} steals & ${s.bpg} blocks per game.`, `Flest stig í leik: ${s.bestPts} · ${s.spg} stolnir & ${s.bpg} varin per leik.`)}</p>
 
+      {/* Competition split — only when the player spans more than one team/competition (e.g. main + reserve). */}
+      {s.byComp.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {s.byComp.map((c) => (
+            <span key={c.label} className="inline-flex items-baseline gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-[11px]">
+              <span className="font-semibold text-zinc-700">{c.label}</span>
+              <span className="text-zinc-400">·</span>
+              <span className="tabular-nums text-zinc-500">{t(`${c.games} games`, `${c.games} leikir`)}</span>
+              <span className="tabular-nums font-semibold text-zinc-800">{c.ppg} {t("ppg", "stig/l")}</span>
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Per-game table */}
       <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
         <table className="w-full text-[12px]">
@@ -92,7 +108,11 @@ export default function PlayerBasketballGameReportCard({ lang }: { lang: "IS" | 
           <tbody>
             {games.map((g, i) => (
               <tr key={`${g.date}-${i}`} className="border-t border-zinc-100">
-                <td className="px-2 py-1.5"><span className="font-semibold text-zinc-800">{g.opponent}</span> <span className="text-zinc-400">· {shortDate(g.date, is)}</span></td>
+                <td className="px-2 py-1.5">
+                  <span className="font-semibold text-zinc-800">{g.opponent}</span>
+                  {g.date && <span className="text-zinc-400"> · {shortDate(g.date, is)}</span>}
+                  {s.byComp.length > 0 && <span className="ml-1.5 rounded border border-zinc-200 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-500">{g.compLabel}</span>}
+                </td>
                 <td className="px-1.5 py-1.5 text-right tabular-nums text-zinc-500">{g.min ?? "–"}</td>
                 <td className="px-1.5 py-1.5 text-right tabular-nums font-bold text-zinc-900">{g.pts}</td>
                 <td className="px-1.5 py-1.5 text-right tabular-nums">{g.reb}</td>

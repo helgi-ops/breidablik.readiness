@@ -23,6 +23,19 @@ type BoxRow = {
 
 const nn = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
+/** Competition code → short label shown on each game (so a player who plays both the main team and a
+ *  reserve / lower-division side sees which team each game was for). */
+function compLabel(code: string | null): string {
+  switch ((code ?? "").toLowerCase()) {
+    case "urvalsdeild-kvenna":
+    case "urvalsdeild-karla": return "Úrvalsdeild";
+    case "bonus-deild-karla": return "Bónus deild";
+    case "1deild-kvenna":
+    case "1deild-karla": return "1. deild";
+    default: return code ? code : "Leikir";
+  }
+}
+
 export async function GET(req: Request) {
   const sb = getSupabaseAdmin();
   let playerId: string;
@@ -40,21 +53,23 @@ export async function GET(req: Request) {
 
   const myKey = initialSurnameKey(fullName); // "D. Rodriguez"(box) ↔ "Danielle Rodriguez"(roster)
   const { data: games } = await sb.from("basketball_fiba_games")
-    .select("match_date, opp_name, own_box")
-    .eq("owner_team_id", teamId).order("match_date", { ascending: true });
+    .select("match_date, opp_name, own_box, competition_code")
+    .eq("owner_team_id", teamId);
 
   type Game = {
-    date: string; opponent: string; min: string | null; pts: number; reb: number; oreb: number; dreb: number;
+    date: string | null; opponent: string; comp: string | null; compLabel: string; min: string | null;
+    pts: number; reb: number; oreb: number; dreb: number;
     ast: number; stl: number; blk: number; tov: number; fgm: number; fga: number; tpm: number; tpa: number;
     ftm: number; fta: number; pip: number; pm: number | null;
   };
   const rows: Game[] = [];
-  for (const g of (games ?? []) as Array<{ match_date: string; opp_name: string | null; own_box: BoxRow[] | null }>) {
+  for (const g of (games ?? []) as Array<{ match_date: string | null; opp_name: string | null; own_box: BoxRow[] | null; competition_code: string | null }>) {
     const box = Array.isArray(g.own_box) ? g.own_box : [];
     const mine = myKey ? box.find((b) => b.name && initialSurnameKey(b.name) === myKey) : undefined;
     if (!mine) continue;
     rows.push({
-      date: g.match_date, opponent: g.opp_name ?? "—", min: mine.min ?? null,
+      date: g.match_date ?? null, opponent: g.opp_name ?? "—", comp: g.competition_code ?? null, compLabel: compLabel(g.competition_code),
+      min: mine.min ?? null,
       pts: nn(mine.pts), reb: nn(mine.reb), oreb: nn(mine.oreb), dreb: nn(mine.dreb), ast: nn(mine.ast),
       stl: nn(mine.stl), blk: nn(mine.blk), tov: nn(mine.tov), fgm: nn(mine.fgm), fga: nn(mine.fga),
       tpm: nn(mine.tpm), tpa: nn(mine.tpa), ftm: nn(mine.ftm), fta: nn(mine.fta), pip: nn(mine.pip),
@@ -66,13 +81,30 @@ export async function GET(req: Request) {
   const total = (k: keyof Game) => rows.reduce((a, r) => a + (typeof r[k] === "number" ? (r[k] as number) : 0), 0);
   const avg = (k: keyof Game) => (gp ? Math.round((total(k) / gp) * 10) / 10 : 0);
   const pct = (m: number, a: number) => (a > 0 ? Math.round((m / a) * 1000) / 10 : 0);
+
+  // Per-competition split (so main-team vs reserve/lower-division games are legible at a glance).
+  const compMap = new Map<string, { label: string; games: number; pts: number }>();
+  for (const r of rows) {
+    const key = r.compLabel;
+    const e = compMap.get(key) ?? { label: r.compLabel, games: 0, pts: 0 };
+    e.games += 1; e.pts += r.pts; compMap.set(key, e);
+  }
+  const byComp = [...compMap.values()].map((c) => ({ label: c.label, games: c.games, ppg: Math.round((c.pts / c.games) * 10) / 10 }))
+    .sort((a, b) => b.games - a.games);
+
   const summary = gp ? {
     games: gp, ppg: avg("pts"), rpg: avg("reb"), apg: avg("ast"), spg: avg("stl"), bpg: avg("blk"),
     fgPct: pct(total("fgm"), total("fga")), tpPct: pct(total("tpm"), total("tpa")), ftPct: pct(total("ftm"), total("fta")),
     bestPts: rows.reduce((m, r) => Math.max(m, r.pts), 0),
+    byComp: byComp.length > 1 ? byComp : [], // only worth showing when the player spans >1 competition
   } : null;
 
-  // Newest game first for the list.
-  rows.reverse();
+  // Newest game first for the list (dated games lead, newest→oldest; undated games trail in stored order).
+  rows.sort((x, y) => {
+    if (x.date && y.date) return y.date.localeCompare(x.date);
+    if (x.date) return -1;
+    if (y.date) return 1;
+    return 0;
+  });
   return NextResponse.json({ ok: true, isBasketball: true, playerName: fullName, games: rows, summary });
 }
