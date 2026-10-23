@@ -2829,7 +2829,7 @@ export default function PeriodizationHubPage() {
             <h2 className="text-[15px] font-bold text-slate-900">{is ? "Brú-plan (viðhald utan tímabils)" : "Bridge plan (off-season maintenance)"}</h2>
             <p className="mt-1 text-[12px] text-slate-500">{is ? "Hlaup + styrkur úr gögnum leikmannsins fram að verkefni (t.d. landsliðsgluggi). Veldu þennan leikmann eða allt liðið; sendu í appið eða prentaðu liðs-pakka." : "Running + strength from the player's own data up to an assignment (e.g. a national-team window). Scope to this player or the whole squad; send to the app or export the squad pack."}</p>
             <div className="mt-3">
-              <OffWeekProgramButton focusPlayerId={selId} focusPlayerName={player?.name ?? null} />
+              <OffWeekProgramButton focusPlayerId={selId} focusPlayerName={player?.name ?? null} players={plan.players.map((p) => ({ id: p.playerId, name: p.name }))} />
             </div>
           </section>
 

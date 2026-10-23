@@ -20,7 +20,7 @@ type CompletionData = { weekStart: string | null; players: CompletionPlayer[]; s
 // teamId is resolved server-side from the coach's auth; the prop only gates the mount in Week setup.
 // focusPlayerId/Name (optional): when mounted with a selected player (e.g. on the Periodization Hub) the
 // coach can scope the plan to THAT player or the whole squad.
-export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string | null; focusPlayerName?: string | null }> = ({ focusPlayerId = null, focusPlayerName = null }) => {
+export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string | null; focusPlayerName?: string | null; players?: Array<{ id: string; name: string }> }> = ({ focusPlayerId = null, focusPlayerName = null, players: roster }) => {
   const [lang] = useLang();
   const t = (en: string, is: string) => (lang === "IS" ? is : en);
   const [open, setOpen] = useState(false);
@@ -31,6 +31,8 @@ export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string 
   const [players, setPlayers] = useState<OffWeekPlayerPlan[]>([]);
   const [resolvedTeamName, setResolvedTeamName] = useState<string | null>(null); // the coach's own team name, from the API (works for non-admins too)
   const [scope, setScope] = useState<"squad" | "player">(focusPlayerId ? "player" : "squad"); // when a player is in focus, default to just him
+  const [focusPid, setFocusPid] = useState<string | null>(focusPlayerId); // the single player in scope — the roster dropdown can change it
+  useEffect(() => { if (focusPlayerId) setFocusPid(focusPlayerId); }, [focusPlayerId]); // follow the hub's selected player
   const [sending, setSending] = useState(false);
   const [sentMsg, setSentMsg] = useState<string | null>(null);
   const [view, setView] = useState<"plan" | "completion">("plan");
@@ -72,14 +74,14 @@ export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string 
     setComp(null); setSentMsg(null);
     void generate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId, focusPlayerId, scope]);
+  }, [teamId, focusPid, scope]);
 
   const generate = async () => {
     setLoading(true); setErr(null);
     try {
       const tk = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
       if (!tk) { setErr(t("Not signed in.", "Ekki innskráð(ur).")); return; }
-      const pidParam = scope === "player" && focusPlayerId ? `&playerIds=${encodeURIComponent(focusPlayerId)}` : "";
+      const pidParam = scope === "player" && focusPid ? `&playerIds=${encodeURIComponent(focusPid)}` : "";
       const res = await fetch(`/api/coach/team/off-week?days=${days}&gym=${gym}${teamParam}${pidParam}`, { headers: { Authorization: `Bearer ${tk}` } });
       const j = await res.json().catch(() => null);
       if (!res.ok || !j?.ok) { setErr(j?.error ?? t("Failed.", "Mistókst.")); return; }
@@ -99,7 +101,7 @@ export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string 
     try {
       const tk = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
       if (!tk) { setErr(t("Not signed in.", "Ekki innskráð(ur).")); return; }
-      const res = await fetch(`/api/coach/team/off-week`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ days, gym, ...(role === "admin" && teamId ? { teamId } : {}), ...(scope === "player" && focusPlayerId ? { playerIds: [focusPlayerId] } : {}) }) });
+      const res = await fetch(`/api/coach/team/off-week`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ days, gym, ...(role === "admin" && teamId ? { teamId } : {}), ...(scope === "player" && focusPid ? { playerIds: [focusPid] } : {}) }) });
       const j = await res.json().catch(() => null);
       if (!res.ok || !j?.ok) { setErr(j?.error ?? t("Send failed.", "Sending mistókst.")); return; }
       setSentMsg(t(`Sent to ${j.sent} players' app.`, `Sent í app ${j.sent} leikmanna.`));
@@ -189,7 +191,17 @@ export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string 
                   </select>
                 </label>
               )}
-              {focusPlayerId && (
+              {roster?.length ? (
+                // A roster dropdown lets the coach pick ANY single player here, not just the pre-selected one.
+                <div className="inline-flex items-center gap-1.5">
+                  <select value={scope === "player" ? (focusPid ?? "") : ""} onChange={(e) => { setFocusPid(e.target.value || null); setScope("player"); }}
+                    className={`rounded border px-2 py-1 font-semibold ${scope === "player" ? "border-[#2740e6] text-[#2740e6]" : "border-slate-300 text-slate-600"}`}>
+                    <option value="">{t("A player…", "Leikmaður…")}</option>
+                    {roster.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <button type="button" onClick={() => setScope("squad")} className={`rounded border px-2.5 py-1 font-semibold ${scope === "squad" ? "border-[#2740e6] bg-[#2740e6] text-white" : "border-slate-300 bg-white text-slate-600"}`}>{t("Whole squad", "Allt liðið")}</button>
+                </div>
+              ) : focusPlayerId ? (
                 <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
                   {(["player", "squad"] as const).map((sc) => (
                     <button key={sc} type="button" onClick={() => setScope(sc)} className={`px-2.5 py-1 font-semibold ${scope === sc ? "bg-[#2740e6] text-white" : "bg-white text-slate-600"}`}>
@@ -197,7 +209,7 @@ export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string 
                     </button>
                   ))}
                 </div>
-              )}
+              ) : null}
               <label className="text-slate-600">{t("Days", "Dagar")}
                 <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="ml-1 rounded border border-slate-300 px-2 py-1">
                   {[3, 4, 5, 6, 7, 10, 14, 21].map((d) => (
