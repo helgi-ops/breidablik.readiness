@@ -27,6 +27,7 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
   const [days, setDays] = useState(7);
   const [gym, setGym] = useState<"gym" | "bodyweight">("gym");
   const [players, setPlayers] = useState<OffWeekPlayerPlan[]>([]);
+  const [resolvedTeamName, setResolvedTeamName] = useState<string | null>(null); // the coach's own team name, from the API (works for non-admins too)
   const [sending, setSending] = useState(false);
   const [sentMsg, setSentMsg] = useState<string | null>(null);
   const [view, setView] = useState<"plan" | "completion">("plan");
@@ -79,13 +80,14 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
       const j = await res.json().catch(() => null);
       if (!res.ok || !j?.ok) { setErr(j?.error ?? t("Failed.", "Mistókst.")); return; }
       setPlayers((j.players ?? []) as OffWeekPlayerPlan[]);
+      setResolvedTeamName((j.teamName as string | null) ?? null);
     } finally { setLoading(false); }
   };
 
   const dl = async (subset: OffWeekPlayerPlan[], filename?: string) => {
     const { downloadOffWeekPlanPdf } = await import("@/components/coach/OffWeekPlanPdf");
-    const teamName = teams.find((tm) => tm.id === teamId)?.name; // known when a team is selected (admin); header falls back to title + date
-    await downloadOffWeekPlanPdf(subset, lang, filename, teamName);
+    const teamName = resolvedTeamName ?? teams.find((tm) => tm.id === teamId)?.name; // from the API for any coach; admin team-picker as fallback
+    await downloadOffWeekPlanPdf(subset, lang, filename, teamName ?? undefined);
   };
 
   const sendToApp = async () => {

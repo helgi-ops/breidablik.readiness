@@ -33,12 +33,14 @@ export async function GET(req: NextRequest) {
   const teamId = reqTeam && (role === "ADMIN" || reqTeam === ownTeam) ? reqTeam : ownTeam;
   if (!teamId) return NextResponse.json({ ok: false, error: "No team context" }, { status: 400 });
 
-  const days = Math.max(1, Math.min(10, Number(sp.get("days")) || 7));
+  const days = Math.max(1, Math.min(21, Number(sp.get("days")) || 7));
   const gymAccess = sp.get("gym") === "bodyweight" ? "bodyweight" : "gym";
   const playerIds = (sp.get("playerIds") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
 
+  const { data: team } = await sb.from("teams").select("name").eq("id", teamId).maybeSingle();
+  const teamName = (team as { name?: string | null } | null)?.name ?? null;
   const { players } = await loadOffWeekPlans(sb, { teamId, playerIds: playerIds.length ? playerIds : undefined, days, gymAccess });
-  return NextResponse.json({ ok: true, days, gymAccess, players });
+  return NextResponse.json({ ok: true, days, gymAccess, teamName, players });
 }
 
 /**
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest) {
   const teamId = reqTeam && (role === "ADMIN" || reqTeam === ownTeam) ? reqTeam : ownTeam;
   if (!teamId) return NextResponse.json({ ok: false, error: "No team context" }, { status: 400 });
 
-  const days = Math.max(1, Math.min(10, Number(body.days) || 7));
+  const days = Math.max(1, Math.min(21, Number(body.days) || 7));
   const gymAccess = body.gym === "bodyweight" ? "bodyweight" : "gym";
   const playerIds = Array.isArray(body.playerIds) ? body.playerIds.filter((x): x is string => typeof x === "string") : [];
   // week_start = the Monday of the given/next week (keeps one row per player per off-week).
