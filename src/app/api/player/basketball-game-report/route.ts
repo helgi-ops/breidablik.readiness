@@ -14,6 +14,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAuthedPlayerId } from "@/lib/session-rpe/server";
 import { initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
+import { latestSeason } from "@/lib/micropulse/basketballStats/season";
 
 type BoxRow = {
   name?: string; min?: string; pts?: number; reb?: number; oreb?: number; dreb?: number; ast?: number;
@@ -29,7 +30,8 @@ function compLabel(code: string | null): string {
   switch ((code ?? "").toLowerCase()) {
     case "urvalsdeild-kvenna":
     case "urvalsdeild-karla": return "Úrvalsdeild";
-    case "bonus-deild-karla": return "Bónus deild";
+    case "bonus-deild-karla":
+    case "bonus-deild-kvenna": return "Bónus deild";
     case "1deild-kvenna":
     case "1deild-karla": return "1. deild";
     default: return code ? code : "Leikir";
@@ -53,8 +55,15 @@ export async function GET(req: Request) {
 
   const myKey = initialSurnameKey(fullName); // "D. Rodriguez"(box) ↔ "Danielle Rodriguez"(roster)
   const { data: games } = await sb.from("basketball_fiba_games")
-    .select("match_date, opp_name, own_box, competition_code")
+    .select("match_date, opp_name, own_box, competition_code, season")
     .eq("owner_team_id", teamId);
+
+  // Scope to the CURRENT season (the team's newest season label) so last season's games don't linger in
+  // the player's Match tab — but keep them in the DB (they power the league/run-trend reads). When the
+  // team has no season-shaped labels at all (legacy data), show everything.
+  const allGames = (games ?? []) as Array<{ match_date: string | null; opp_name: string | null; own_box: BoxRow[] | null; competition_code: string | null; season: string | null }>;
+  const season = latestSeason(allGames.map((g) => g.season));
+  const scoped = season ? allGames.filter((g) => g.season === season) : allGames;
 
   type Game = {
     date: string | null; opponent: string; comp: string | null; compLabel: string; min: string | null;
@@ -63,7 +72,7 @@ export async function GET(req: Request) {
     ftm: number; fta: number; pip: number; pm: number | null;
   };
   const rows: Game[] = [];
-  for (const g of (games ?? []) as Array<{ match_date: string | null; opp_name: string | null; own_box: BoxRow[] | null; competition_code: string | null }>) {
+  for (const g of scoped) {
     const box = Array.isArray(g.own_box) ? g.own_box : [];
     const mine = myKey ? box.find((b) => b.name && initialSurnameKey(b.name) === myKey) : undefined;
     if (!mine) continue;
@@ -106,5 +115,5 @@ export async function GET(req: Request) {
     if (y.date) return 1;
     return 0;
   });
-  return NextResponse.json({ ok: true, isBasketball: true, playerName: fullName, games: rows, summary });
+  return NextResponse.json({ ok: true, isBasketball: true, playerName: fullName, season, games: rows, summary });
 }

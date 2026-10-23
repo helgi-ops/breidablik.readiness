@@ -9,6 +9,7 @@
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import { currentBasketballSeasonLabel } from "@/lib/micropulse/basketballStats/season";
 
 type P = {
   name: string; ref: string | null; min: string | null; pts: number;
@@ -30,7 +31,7 @@ const fr = (m: number, a: number) => `${m}-${a}${a > 0 ? ` · ${Math.round((m / 
 // roster) is stored under the SAME team but tagged with its own code, so players who play both see all
 // their games in one report while the league reads stay competition-scoped.
 const COMP_OPTS: Array<{ code: string; en: string; is: string }> = [
-  { code: "urvalsdeild-kvenna", en: "Úrvalsdeild (women, main)", is: "Úrvalsdeild kvenna (aðallið)" },
+  { code: "bonus-deild-kvenna", en: "Bónus deild (women, main)", is: "Bónus deild kvenna (aðallið)" },
   { code: "1deild-kvenna", en: "1. deild (women, reserve)", is: "1. deild kvenna (varalið)" },
   { code: "bonus-deild-karla", en: "Bónus deild (men, main)", is: "Bónus deild karla (aðallið)" },
   { code: "1deild-karla", en: "1. deild (men, reserve)", is: "1. deild karla (varalið)" },
@@ -49,6 +50,7 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
 
   // Persisting games (so they reach the player Match report + league reads).
   const [comp, setComp] = React.useState(COMP_OPTS[0].code);
+  const [season, setSeason] = React.useState(currentBasketballSeasonLabel());
   const [ownName, setOwnName] = React.useState("");          // "" = auto-detect by roster overlap
   const [saveBusy, setSaveBusy] = React.useState(false);
   const [saveMsg, setSaveMsg] = React.useState<{ ok: boolean; text: string } | null>(null);
@@ -95,7 +97,7 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
       if (!token) { setSaveMsg({ ok: false, text: t("Not signed in.", "Ekki innskráð(ur).") }); return; }
       const res = await fetch("/api/coach/basketball-kki", {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ save: true, gameId: data.gameId, seasonId: data.seasonId, competitionCode: comp, ownTeamName: ownName || undefined }),
+        body: JSON.stringify({ save: true, gameId: data.gameId, seasonId: data.seasonId, competitionCode: comp, season: season.trim() || undefined, ownTeamName: ownName || undefined }),
       });
       const j = (await res.json()) as { ok: boolean; own?: string; opp?: string; error?: string };
       setSaveMsg(res.ok && j.ok
@@ -104,7 +106,7 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
     } catch (e) {
       setSaveMsg({ ok: false, text: e instanceof Error ? e.message : t("Network error", "Netvilla") });
     } finally { setSaveBusy(false); }
-  }, [data?.gameId, data?.seasonId, comp, ownName, tok, is]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data?.gameId, data?.seasonId, comp, season, ownName, tok, is]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pullSchedule = React.useCallback(async () => {
     const seasonId = schedSeason.trim();
@@ -115,7 +117,7 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
       if (!token) { setSchedMsg({ ok: false, text: t("Not signed in.", "Ekki innskráð(ur).") }); return; }
       const res = await fetch("/api/coach/basketball-kki", {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ pullSchedule: true, seasonId, stageId: schedStage.trim() || undefined, competitionCode: comp, teamName: schedTeam.trim() || undefined }),
+        body: JSON.stringify({ pullSchedule: true, seasonId, stageId: schedStage.trim() || undefined, competitionCode: comp, season: season.trim() || undefined, teamName: schedTeam.trim() || undefined }),
       });
       const j = (await res.json()) as { ok: boolean; found?: number; imported?: number; failed?: number; error?: string };
       setSchedMsg(res.ok && j.ok
@@ -124,7 +126,7 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
     } catch (e) {
       setSchedMsg({ ok: false, text: e instanceof Error ? e.message : t("Network error", "Netvilla") });
     } finally { setSchedBusy(false); }
-  }, [schedSeason, schedStage, schedTeam, comp, tok, is]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [schedSeason, schedStage, schedTeam, comp, season, tok, is]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const teams = data?.teams ?? [];
   const quarters = data?.quarters ?? null;
@@ -152,6 +154,9 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
             className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-[12.5px]">
             {COMP_OPTS.map((o) => <option key={o.code} value={o.code}>{is ? o.is : o.en}</option>)}
           </select>
+          <label className="text-[12px] font-semibold text-slate-700">{t("Season", "Tímabil")}</label>
+          <input value={season} onChange={(e) => setSeason(e.target.value)} placeholder="2026-27"
+            className="h-9 w-24 rounded-lg border border-slate-300 bg-white px-2 text-[12.5px]" />
           <button type="button" onClick={() => setSchedOpen((v) => !v)}
             className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-[12.5px] font-medium text-slate-700">
             {schedOpen ? t("Hide season import", "Fela mótsinnflutning") : t("Import a whole season →", "Flytja inn heilt tímabil →")}

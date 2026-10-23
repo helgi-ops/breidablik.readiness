@@ -28,6 +28,7 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { parseBoxScore, parseQuarterScores, parseAdvancedStats, parseGameDate, parseSchedule } from "@/lib/micropulse/basketballStats/parseWidget";
 import { buildBoxScoreUrl, buildGameViewUrl, buildAdvancedStatsUrl, buildScheduleUrl, fetchWidget, parseKkiGameUrl, DEFAULT_STAGE_ID } from "@/lib/integrations/basketball/kkiWidget";
 import { initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
+import { currentBasketballSeasonLabel } from "@/lib/micropulse/basketballStats/season";
 
 const n = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "");
@@ -236,7 +237,9 @@ export async function POST(req: NextRequest) {
   const competitionCode = String(body.competitionCode ?? "").trim();
   if (!competitionCode) return NextResponse.json({ ok: false, error: "competitionCode is required (which competition these games belong to)." }, { status: 400 });
   const stage = String(body.stage ?? "regular").trim() || "regular";
-  const seasonLabel = String(body.season ?? "").trim(); // human label (e.g. "2025-26"); falls back to the KKÍ season_id
+  // Human season label (e.g. "2026-27") — tags the game for season-scoping. Defaults to the current
+  // basketball season, NEVER a bare numeric KKÍ id (that would break season ordering in the report).
+  const seasonLabel = String(body.season ?? "").trim() || currentBasketballSeasonLabel();
 
   const { data: teamRow } = await supabase.from("teams").select("name").eq("id", teamId).maybeSingle();
   const teamName = (teamRow as { name?: string } | null)?.name ?? null;
@@ -251,7 +254,7 @@ export async function POST(req: NextRequest) {
     const stageId = String(body.stageId ?? "").trim() || DEFAULT_STAGE_ID;
     const want = norm(body.teamName?.trim() || teamName || "");
     if (!want) return NextResponse.json({ ok: false, error: "No team name to match in the schedule — pass teamName." }, { status: 400 });
-    const season = seasonLabel || seasonId;
+    const season = seasonLabel;
     const tag = { competitionCode, season, stage };
 
     // Walk schedule pages until one returns no new games (cap to be kind to the feed).
@@ -294,7 +297,7 @@ export async function POST(req: NextRequest) {
     const seasonId = await resolveSeason(supabase, teamId, parsed.seasonId);
     if (!/^\d+$/.test(seasonId)) return NextResponse.json({ ok: false, error: "No season_id in the link and none configured." }, { status: 400 });
     const r = await ingestOne(supabase, teamId, gameId, seasonId, rosterKeys, teamName,
-      { competitionCode, season: seasonLabel || seasonId, stage }, body.ownTeamName, body.matchDate);
+      { competitionCode, season: seasonLabel, stage }, body.ownTeamName, body.matchDate);
     return NextResponse.json(r, { status: r.ok ? 200 : 400 });
   }
 

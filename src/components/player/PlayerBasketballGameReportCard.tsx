@@ -18,7 +18,7 @@ type Game = {
 };
 type CompSplit = { label: string; games: number; ppg: number };
 type Summary = { games: number; ppg: number; rpg: number; apg: number; spg: number; bpg: number; fgPct: number; tpPct: number; ftPct: number; bestPts: number; byComp: CompSplit[] };
-type Resp = { ok: boolean; isBasketball?: boolean; games?: Game[]; summary?: Summary | null; error?: string };
+type Resp = { ok: boolean; isBasketball?: boolean; season?: string | null; games?: Game[]; summary?: Summary | null; error?: string };
 
 const fr = (m: number, a: number) => `${m}-${a}${a > 0 ? ` · ${Math.round((m / a) * 100)}%` : ""}`;
 const shortDate = (iso: string | null, is: boolean) => { if (!iso) return ""; try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
@@ -64,7 +64,7 @@ export default function PlayerBasketballGameReportCard({ lang }: { lang: "IS" | 
     <div className="mx-auto max-w-lg space-y-4 px-1">
       <div>
         <h2 className="text-base font-semibold text-zinc-900">{t("Your season — by game", "Tímabilið þitt — eftir leikjum")}</h2>
-        <p className="text-xs text-zinc-500">{t(`${s.games} games · basketball box score from KKÍ`, `${s.games} leikir · körfubolta box score frá KKÍ`)}</p>
+        <p className="text-xs text-zinc-500">{data.season ? `${data.season} · ` : ""}{t(`${s.games} games · basketball box score from KKÍ`, `${s.games} leikir · körfubolta box score frá KKÍ`)}</p>
       </div>
 
       {/* Season averages */}
