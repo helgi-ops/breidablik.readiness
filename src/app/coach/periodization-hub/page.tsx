@@ -29,6 +29,7 @@ import type { ValdSlice } from "@/components/coach/ValdAssessmentBlock";
 import ProgressiveOverloadCard from "@/components/coach/ProgressiveOverloadCard";
 import BuildUpTrackingCard from "@/components/coach/BuildUpTrackingCard";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
+import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { preseasonStartRamp, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
@@ -2819,6 +2820,17 @@ export default function PeriodizationHubPage() {
               );
             })()}
             </details>
+          </section>
+
+          {/* BRIDGE / OFF-WEEK maintenance plan — per-player running + strength from HIS own data, for a
+              season-end / national-team window. Scoped to the selected player or the whole squad; sends to
+              the players' app + squad PDF. Reuses the off-week engine (same as Week Setup OFF weeks). */}
+          <section className={card}>
+            <h2 className="text-[15px] font-bold text-slate-900">{is ? "Brú-plan (viðhald utan tímabils)" : "Bridge plan (off-season maintenance)"}</h2>
+            <p className="mt-1 text-[12px] text-slate-500">{is ? "Hlaup + styrkur úr gögnum leikmannsins fram að verkefni (t.d. landsliðsgluggi). Veldu þennan leikmann eða allt liðið; sendu í appið eða prentaðu liðs-pakka." : "Running + strength from the player's own data up to an assignment (e.g. a national-team window). Scope to this player or the whole squad; send to the app or export the squad pack."}</p>
+            <div className="mt-3">
+              <OffWeekProgramButton focusPlayerId={selId} focusPlayerName={player?.name ?? null} />
+            </div>
           </section>
 
             </div>);

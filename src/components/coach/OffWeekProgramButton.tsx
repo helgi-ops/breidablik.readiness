@@ -18,7 +18,9 @@ type CompletionPlayer = { playerId: string; name: string; position: string | nul
 type CompletionData = { weekStart: string | null; players: CompletionPlayer[]; summary?: { players: number; totalDays: number; doneDays: number } };
 
 // teamId is resolved server-side from the coach's auth; the prop only gates the mount in Week setup.
-export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
+// focusPlayerId/Name (optional): when mounted with a selected player (e.g. on the Periodization Hub) the
+// coach can scope the plan to THAT player or the whole squad.
+export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string | null; focusPlayerName?: string | null }> = ({ focusPlayerId = null, focusPlayerName = null }) => {
   const [lang] = useLang();
   const t = (en: string, is: string) => (lang === "IS" ? is : en);
   const [open, setOpen] = useState(false);
@@ -28,6 +30,7 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
   const [gym, setGym] = useState<"gym" | "bodyweight">("gym");
   const [players, setPlayers] = useState<OffWeekPlayerPlan[]>([]);
   const [resolvedTeamName, setResolvedTeamName] = useState<string | null>(null); // the coach's own team name, from the API (works for non-admins too)
+  const [scope, setScope] = useState<"squad" | "player">(focusPlayerId ? "player" : "squad"); // when a player is in focus, default to just him
   const [sending, setSending] = useState(false);
   const [sentMsg, setSentMsg] = useState<string | null>(null);
   const [view, setView] = useState<"plan" | "completion">("plan");
@@ -63,20 +66,21 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
     })();
   }, []);
 
-  // Switching team (admin) reloads the preview / clears the completion view for the new club.
+  // Switching team (admin), the focused player, or the scope reloads the preview.
   useEffect(() => {
     if (!open) return;
     setComp(null); setSentMsg(null);
     void generate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId]);
+  }, [teamId, focusPlayerId, scope]);
 
   const generate = async () => {
     setLoading(true); setErr(null);
     try {
       const tk = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
       if (!tk) { setErr(t("Not signed in.", "Ekki innskráð(ur).")); return; }
-      const res = await fetch(`/api/coach/team/off-week?days=${days}&gym=${gym}${teamParam}`, { headers: { Authorization: `Bearer ${tk}` } });
+      const pidParam = scope === "player" && focusPlayerId ? `&playerIds=${encodeURIComponent(focusPlayerId)}` : "";
+      const res = await fetch(`/api/coach/team/off-week?days=${days}&gym=${gym}${teamParam}${pidParam}`, { headers: { Authorization: `Bearer ${tk}` } });
       const j = await res.json().catch(() => null);
       if (!res.ok || !j?.ok) { setErr(j?.error ?? t("Failed.", "Mistókst.")); return; }
       setPlayers((j.players ?? []) as OffWeekPlayerPlan[]);
@@ -95,7 +99,7 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
     try {
       const tk = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
       if (!tk) { setErr(t("Not signed in.", "Ekki innskráð(ur).")); return; }
-      const res = await fetch(`/api/coach/team/off-week`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ days, gym, ...(role === "admin" && teamId ? { teamId } : {}) }) });
+      const res = await fetch(`/api/coach/team/off-week`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ days, gym, ...(role === "admin" && teamId ? { teamId } : {}), ...(scope === "player" && focusPlayerId ? { playerIds: [focusPlayerId] } : {}) }) });
       const j = await res.json().catch(() => null);
       if (!res.ok || !j?.ok) { setErr(j?.error ?? t("Send failed.", "Sending mistókst.")); return; }
       setSentMsg(t(`Sent to ${j.sent} players' app.`, `Sent í app ${j.sent} leikmanna.`));
@@ -184,6 +188,15 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
                     {teams.map((tm) => <option key={tm.id} value={tm.id}>{formatTeamLabel({ name: tm.name, sport: tm.sport, gender: tm.gender }, lang === "IS" ? "IS" : "EN")}</option>)}
                   </select>
                 </label>
+              )}
+              {focusPlayerId && (
+                <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
+                  {(["player", "squad"] as const).map((sc) => (
+                    <button key={sc} type="button" onClick={() => setScope(sc)} className={`px-2.5 py-1 font-semibold ${scope === sc ? "bg-[#2740e6] text-white" : "bg-white text-slate-600"}`}>
+                      {sc === "player" ? (focusPlayerName ?? t("This player", "Þessi leikmaður")) : t("Whole squad", "Allt liðið")}
+                    </button>
+                  ))}
+                </div>
               )}
               <label className="text-slate-600">{t("Days", "Dagar")}
                 <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="ml-1 rounded border border-slate-300 px-2 py-1">
