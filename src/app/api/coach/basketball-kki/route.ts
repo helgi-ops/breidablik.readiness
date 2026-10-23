@@ -257,27 +257,40 @@ export async function POST(req: NextRequest) {
     const season = seasonLabel;
     const tag = { competitionCode, season, stage };
 
-    // Walk schedule pages until one returns no new games (cap to be kind to the feed).
+    // Walk schedule pages until a page adds no NEW games (finished or not — so a page of upcoming
+    // fixtures doesn't stop the walk early). Collect every team name seen, to help the coach when the
+    // name filter misses.
     const games: Array<{ gameId: string; date: string; home: string; away: string }> = [];
     const seen = new Set<string>();
-    for (let page = 0; page < 6; page++) {
+    const teamsSeen = new Set<string>();
+    for (let page = 0; page < 8; page++) {
       let parsedGames;
       try { parsedGames = parseSchedule(await fetchWidget(buildScheduleUrl(seasonId, stageId, page))); }
       catch { break; }
-      const fresh = parsedGames.filter((g) => g.finished && !seen.has(g.gameId));
-      if (fresh.length === 0) break;
-      for (const g of fresh) {
-        seen.add(g.gameId);
+      let added = 0;
+      for (const g of parsedGames) {
+        if (seen.has(g.gameId)) continue;
+        seen.add(g.gameId); added++;
+        if (g.homeTeam) teamsSeen.add(g.homeTeam);
+        if (g.awayTeam) teamsSeen.add(g.awayTeam);
+        if (!g.finished) continue; // only finished games carry a box score
         const mine = norm(g.homeTeam).includes(want) || want.includes(norm(g.homeTeam)) || norm(g.awayTeam).includes(want) || want.includes(norm(g.awayTeam));
         if (mine) games.push({ gameId: g.gameId, date: g.date, home: g.homeTeam, away: g.awayTeam });
       }
+      if (added === 0) break;
     }
-    if (games.length === 0) return NextResponse.json({ ok: false, error: `No finished games for "${body.teamName || teamName}" in that season/stage.` }, { status: 404 });
+    if (seen.size === 0) return NextResponse.json({ ok: false, error: "No schedule rows for that season_id/stage_id — double-check the stage_id." }, { status: 404 });
+    if (games.length === 0) return NextResponse.json({
+      ok: false,
+      error: `No finished games matched "${body.teamName || teamName}". Teams in that schedule: ${[...teamsSeen].sort().join(", ")}`,
+      teamsSeen: [...teamsSeen].sort(),
+    }, { status: 404 });
 
     const cap = Math.min(40, Math.max(1, Number(body.max) || 40));
     const results: SaveResult[] = [];
     for (const g of games.slice(0, cap)) {
-      results.push(await ingestOne(supabase, teamId, g.gameId, season, rosterKeys, teamName, tag, body.ownTeamName, g.date || null));
+      // 4th arg is the NUMERIC KKÍ season_id used to fetch each box; `season` (the label) goes in the tag.
+      results.push(await ingestOne(supabase, teamId, g.gameId, seasonId, rosterKeys, teamName, tag, body.ownTeamName, g.date || null));
     }
     await supabase.from("basketball_fiba_ingest_blocks").upsert({
       owner_team_id: teamId, competition_code: competitionCode, season, stage,
