@@ -14,6 +14,8 @@ export const dynamic = "force-dynamic"; // never statically cache — always rea
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
+import { initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
+import { scopeToCurrentSeason, aggregateOwnBox, pctOf, type FibaGame } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -167,6 +169,54 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const sport = await resolveTeamSport(supabase, teamId);
+
+  // Basketball fallback: a team whose only basketball data is KKÍ-saved games has NO player_season_stats
+  // rows (those come from the InStat/baskethotel sync). Aggregate the box scores in basketball_fiba_games
+  // (current season) instead, so the Players tab is populated. Shaped like the season-stat rows the client
+  // reads: football.minutes = season minutes; football.metrics carries the per-game/% keys it renders.
+  if (sport === "basketball" && players.length === 0) {
+    const { data: fibaRows } = await supabase
+      .from("basketball_fiba_games")
+      .select("match_date, own_box, season")
+      .eq("owner_team_id", teamId);
+    const { games: scoped, season: fibaSeason } = scopeToCurrentSeason(((fibaRows ?? []) as FibaGame[]));
+    if (scoped.length > 0) {
+      const rosterByKey = new Map<string, { id: string; name: string; position: string | null }>();
+      for (const p of ((roster ?? []) as Array<{ id: string; full_name: string | null; position: string | null }>)) {
+        const k = initialSurnameKey(p.full_name ?? "");
+        if (k && !rosterByKey.has(k)) rosterByKey.set(k, { id: p.id, name: p.full_name ?? "—", position: p.position ?? null });
+      }
+      const aggs = aggregateOwnBox(scoped, initialSurnameKey);
+      const fallbackPlayers = aggs.map((a) => {
+        const r = rosterByKey.get(a.key);
+        const ph = r ? phys.get(r.id) : undefined;
+        const d1 = (v: number) => Math.round((v / a.gp) * 10) / 10;
+        return {
+          playerId: r?.id ?? null,
+          name: r?.name ?? a.name,
+          position: r?.position ?? null,
+          football: {
+            minutes: Math.round(a.min), goals: null, assists: null, xg: null, shots: null, shotsOnTarget: null, passAccuracyPct: null,
+            metrics: {
+              "Points per game": d1(a.pts), "Rebounds per game": d1(a.reb), "Assists per game": d1(a.ast),
+              "Steals per game": d1(a.stl), "Blocks per game": d1(a.blk),
+              "Field goals %": pctOf(a.fgm, a.fga), "Three-point %": pctOf(a.tpm, a.tpa), "Free throws %": pctOf(a.ftm, a.fta),
+              "Games": a.gp,
+            } as Record<string, unknown>,
+          },
+          physical: {
+            sessions: ph?.sessions ?? 0,
+            totalDistanceKm: null, topSpeed: null,
+            playerLoad: ph ? Math.round(ph.load) : null,
+            matchMinutes: r ? (mins.get(r.id) ?? null) : null,
+          },
+          source: "kki", sourceRef: null, syncedAt: null,
+        };
+      });
+      fallbackPlayers.sort((x, y) => (Number((y.football.metrics as { "Points per game"?: number })["Points per game"]) || 0) - (Number((x.football.metrics as { "Points per game"?: number })["Points per game"]) || 0));
+      return NextResponse.json({ season: fibaSeason ?? season, start, end, sport, players: fallbackPlayers, unmatched: 0, missing });
+    }
+  }
 
   return NextResponse.json({ season, start, end, sport, players, unmatched, missing });
 }

@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic"; // never statically cache — always rea
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { scopeToCurrentSeason, toMinutes, type FibaGame, type FibaBoxRow } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -69,6 +70,31 @@ export async function GET(req: NextRequest) {
     ...g,
     players: (g.players as Array<{ points: number | null }>).sort((a, b) => (b.points ?? 0) - (a.points ?? 0)),
   }));
+
+  // Fallback: no InStat/baskethotel per-game rows → read the KKÍ-saved box scores in
+  // basketball_fiba_games (current season), shaped identically so the Matches tab renders.
+  if (games.length === 0) {
+    const { data: fibaRows } = await supabase
+      .from("basketball_fiba_games")
+      .select("match_id, match_date, opp_name, own_box, season")
+      .eq("owner_team_id", teamId);
+    const { games: scoped } = scopeToCurrentSeason(((fibaRows ?? []) as FibaGame[]));
+    const fibaGames = scoped.map((g) => ({
+      gameId: String(g.match_id ?? ""), date: g.match_date, opponent: g.opp_name ?? null, homeAway: null as string | null,
+      players: (Array.isArray(g.own_box) ? g.own_box : [])
+        .map((b: FibaBoxRow) => ({
+          name: (b.name ?? "—"),
+          minutes: b.min == null ? null : toMinutes(b.min),
+          points: num(b.pts), reb: num(b.reb), assists: num(b.ast), steals: num(b.stl), blocks: num(b.blk), turnovers: num(b.tov),
+          fg: madeAtt(num(b.fgm), num(b.fga)), tp: madeAtt(num(b.tpm), num(b.tpa)), ft: madeAtt(num(b.ftm), num(b.fta)),
+          plusMinus: num(b.pm),
+          efgPct: null as number | null, tsPct: null as number | null, astTo: null as number | null, // advanced = InStat-only
+          source: "kki",
+        }))
+        .sort((a, b) => (b.points ?? 0) - (a.points ?? 0)),
+    }));
+    return NextResponse.json({ games: fibaGames });
+  }
 
   return NextResponse.json({ games });
 }
