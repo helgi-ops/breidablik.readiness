@@ -14,6 +14,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
+import BasketballStatExplorer from "@/components/coach/BasketballStatExplorer";
 import {
   GROUP_LABEL, GROUP_ORDER, rankLeaderboard, metricValueForMode,
   type PlayerAgg, type GroupKey, type Mode, type Line, type Bi, type MetricSpec,
@@ -30,7 +31,40 @@ const toSpec = (c: CatalogEntry): MetricSpec => ({ ...c, aliases: [], tip: c.tip
 const fmt = (v: number | null, agg: "sum" | "mean"): string =>
   v == null ? "–" : agg === "mean" ? `${v.toFixed(0)}%` : Number.isInteger(v) ? String(v) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2);
 
+/** Sport switch: basketball teams get the box-score explorer; football teams the StatsBomb explorer. */
 export default function StatExplorerPage() {
+  const [lang] = useLang();
+  const is = lang === "IS";
+  const [sport, setSport] = React.useState<string | undefined>(undefined);
+  const [resolved, setResolved] = React.useState(false);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+        if (tok) {
+          const res = await fetch("/api/coach/player-stats/config", { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
+          if (res.ok) { const j = await res.json(); setSport(j.sport); }
+        }
+      } catch { /* default to football */ }
+      finally { setResolved(true); }
+    })();
+  }, []);
+
+  if (!resolved) return <div className="mx-auto max-w-6xl px-4 py-6 text-[13px] text-slate-500">{is ? "Hleð…" : "Loading…"}</div>;
+  if (String(sport ?? "").toLowerCase() === "basketball") {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-6">
+        <h1 className="font-[family-name:var(--font-archivo,inherit)] text-2xl font-bold text-[#14181c]">{is ? "Leikmanna-tölfræði" : "Player Stat Analysis"}</h1>
+        <PagePurpose en="pick a window and context, and see which players are producing the best box-score numbers — leaderboard or a full all-metrics table." is="velja glugga og samhengi, og sjá hvaða leikmenn skila bestu box-score tölunum — leiðtogatafla eða full tölfræðitafla." />
+        <div className="mt-4"><BasketballStatExplorer /></div>
+      </div>
+    );
+  }
+  return <FootballStatExplorer />;
+}
+
+function FootballStatExplorer() {
   const [lang] = useLang();
   const is: boolean = lang === "IS";
   const L = <T,>(o: { en: T; is: T }) => (is ? o.is : o.en);
