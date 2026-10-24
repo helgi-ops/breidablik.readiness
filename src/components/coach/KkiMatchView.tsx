@@ -54,6 +54,11 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
   const [ownName, setOwnName] = React.useState("");          // "" = auto-detect by roster overlap
   const [saveBusy, setSaveBusy] = React.useState(false);
   const [saveMsg, setSaveMsg] = React.useState<{ ok: boolean; text: string } | null>(null);
+  // Saved games (re-viewable from storage).
+  type Saved = { matchId: string; date: string | null; opponent: string; own: string; ownPts: number; oppPts: number; competition: string | null };
+  const [savedList, setSavedList] = React.useState<Saved[]>([]);
+  const [savedSeason, setSavedSeason] = React.useState<string | null>(null);
+  const [storedView, setStoredView] = React.useState(false);
   // Bulk schedule pull.
   const [schedOpen, setSchedOpen] = React.useState(false);
   const [schedSeason, setSchedSeason] = React.useState("");
@@ -65,7 +70,7 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
   const fetchGame = React.useCallback(async () => {
     const link = url.trim();
     if (!link) return;
-    setBusy(true); setErr(null); setData(null); setImg((u) => { if (u) URL.revokeObjectURL(u); return null; });
+    setBusy(true); setErr(null); setData(null); setStoredView(false); setImg((u) => { if (u) URL.revokeObjectURL(u); return null; });
     try {
       const token = await tok();
       if (!token) { setErr(t("Not signed in.", "Ekki innskráð(ur).")); return; }
@@ -89,6 +94,31 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
   React.useEffect(() => () => { if (img) URL.revokeObjectURL(img); }, [img]);
   React.useEffect(() => { setSaveMsg(null); setOwnName(""); }, [data?.gameId]);
 
+  const loadSaved = React.useCallback(async () => {
+    try {
+      const token = await tok(); if (!token) return;
+      const res = await fetch("/api/coach/basketball-kki?saved=1", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+      const j = (await res.json()) as { ok: boolean; season?: string | null; games?: Saved[] };
+      if (res.ok && j.ok) { setSavedList(j.games ?? []); setSavedSeason(j.season ?? null); }
+    } catch { /* non-critical */ }
+  }, [tok]);
+  React.useEffect(() => { void loadSaved(); }, [loadSaved]);
+
+  const viewSaved = React.useCallback(async (matchId: string) => {
+    setBusy(true); setErr(null); setData(null); setSaveMsg(null); setImg((u) => { if (u) URL.revokeObjectURL(u); return null; });
+    try {
+      const token = await tok();
+      if (!token) { setErr(t("Not signed in.", "Ekki innskráð(ur).")); return; }
+      const res = await fetch(`/api/coach/basketball-kki?saved=${encodeURIComponent(matchId)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+      const j = (await res.json()) as Resp;
+      if (!res.ok || !j.ok) { setErr(j.error ?? t("Could not open the saved game.", "Gat ekki opnað vistaðan leik.")); return; }
+      setStoredView(true); setData(j);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : t("Network error", "Netvilla"));
+    } finally { setBusy(false); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tok, is]);
+
   const saveGame = React.useCallback(async () => {
     if (!data?.gameId || !data?.seasonId) return;
     setSaveBusy(true); setSaveMsg(null);
@@ -100,9 +130,8 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
         body: JSON.stringify({ save: true, gameId: data.gameId, seasonId: data.seasonId, competitionCode: comp, season: season.trim() || undefined, ownTeamName: ownName || undefined }),
       });
       const j = (await res.json()) as { ok: boolean; own?: string; opp?: string; error?: string };
-      setSaveMsg(res.ok && j.ok
-        ? { ok: true, text: t(`Saved — ${j.own} vs ${j.opp}. It will show in those players' Match reports.`, `Vistað — ${j.own} vs ${j.opp}. Birtist í leikjaskýrslu þeirra leikmanna.`) }
-        : { ok: false, text: j.error ?? t("Save failed.", "Vistun mistókst.") });
+      if (res.ok && j.ok) { setSaveMsg({ ok: true, text: t(`Saved — ${j.own} vs ${j.opp}. It will show in those players' Match reports.`, `Vistað — ${j.own} vs ${j.opp}. Birtist í leikjaskýrslu þeirra leikmanna.`) }); void loadSaved(); }
+      else setSaveMsg({ ok: false, text: j.error ?? t("Save failed.", "Vistun mistókst.") });
     } catch (e) {
       setSaveMsg({ ok: false, text: e instanceof Error ? e.message : t("Network error", "Netvilla") });
     } finally { setSaveBusy(false); }
@@ -193,11 +222,30 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
         )}
       </div>
 
+      {/* Saved games this season — re-view any from storage (no re-fetch). */}
+      {savedList.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="text-[12px] font-semibold text-slate-700">{t("Saved games", "Vistaðir leikir")}{savedSeason ? ` · ${savedSeason}` : ""} <span className="font-normal text-slate-400">({savedList.length})</span></div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {savedList.map((g) => (
+              <button key={g.matchId} type="button" onClick={() => void viewSaved(g.matchId)} disabled={busy}
+                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px] text-slate-700 hover:border-[#2740e6] hover:text-[#2740e6] disabled:opacity-50">
+                <span className="font-semibold">{g.opponent}</span>
+                {g.ownPts || g.oppPts ? <span className="ml-1 tabular-nums text-slate-500">{g.ownPts}–{g.oppPts}</span> : null}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[11px] text-slate-400">{t("Click a game to re-view its box from storage (shot chart / quarters aren't stored).", "Smelltu á leik til að skoða box-skorið úr vistun (skotakort / leikhlutar eru ekki geymd).")}</p>
+        </div>
+      )}
+
       {err && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">{err}</div>}
 
       {teams.length > 0 && (
         <>
-          {/* SAVE this game into the season (so it reaches the players' Match reports). */}
+          {/* SAVE this game into the season (so it reaches the players' Match reports). Hidden when
+              re-viewing an already-saved game from storage. */}
+          {!storedView && (
           <section className="rounded-xl border border-[#2740e6]/30 bg-[#2740e6]/5 p-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[12.5px] font-semibold text-slate-800">{t("Save this game", "Vista þennan leik")}</span>
@@ -220,6 +268,7 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
             </div>
             {saveMsg && <div className={`mt-2 rounded-lg px-3 py-2 text-[12.5px] ${saveMsg.ok ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-red-200 bg-red-50 text-red-700"}`}>{saveMsg.text}</div>}
           </section>
+          )}
 
           {/* QUARTER-BY-QUARTER line score */}
           {quarters && quarters.a.length > 0 && teams.length === 2 && (

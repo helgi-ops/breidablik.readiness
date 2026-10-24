@@ -29,6 +29,7 @@ import { parseBoxScore, parseQuarterScores, parseAdvancedStats, parseGameDate, p
 import { buildBoxScoreUrl, buildGameViewUrl, buildAdvancedStatsUrl, buildScheduleUrl, fetchWidget, parseKkiGameUrl, DEFAULT_STAGE_ID } from "@/lib/integrations/basketball/kkiWidget";
 import { initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
 import { currentBasketballSeasonLabel } from "@/lib/micropulse/basketballStats/season";
+import { scopeToCurrentSeason, totalsPts } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 
 const n = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "");
@@ -84,6 +85,41 @@ function withFourFactors(teams: Team[]): Team[] {
   return teams.length === 2
     ? teams.map((t, i) => ({ ...t, factors: factorsFor(t, teams[i === 0 ? 1 : 0]) }))
     : teams.map((t) => ({ ...t, factors: null }));
+}
+
+/** Rebuild a Team from a stored own_box/opp_box (jsonb) so a saved game re-views without a live fetch. */
+function teamFromStoredBox(name: string, rows: Array<Record<string, unknown>>): Team {
+  const players: P[] = rows.map((r) => {
+    const fgM = n(r.fgm as number), fgA = n(r.fga as number), threeM = n(r.tpm as number), threeA = n(r.tpa as number), ftM = n(r.ftm as number), ftA = n(r.fta as number);
+    return {
+      name: String(r.name ?? "—"), ref: null, min: r.min == null ? null : String(r.min), pts: n(r.pts as number),
+      twoM: fgM - threeM, twoA: fgA - threeA, threeM, threeA, fgM, fgA, ftM, ftA,
+      oreb: n(r.oreb as number), dreb: n(r.dreb as number), reb: n(r.reb as number), ast: n(r.ast as number),
+      fouls: 0, to: n(r.tov as number), stl: n(r.stl as number), blk: n(r.blk as number),
+      eff: null, pm: typeof r.pm === "number" ? r.pm : null,
+    };
+  });
+  const sum = (k: keyof P) => players.reduce((a, p) => a + n(p[k] as number), 0);
+  return {
+    name, players: players.sort((a, b) => b.pts - a.pts),
+    totals: {
+      pts: sum("pts"), reb: sum("reb"), oreb: sum("oreb"), dreb: sum("dreb"), ast: sum("ast"), stl: sum("stl"), blk: sum("blk"), to: sum("to"), fouls: 0,
+      fgM: sum("fgM"), fgA: sum("fgA"), threeM: sum("threeM"), threeA: sum("threeA"), ftM: sum("ftM"), ftA: sum("ftA"), twoM: sum("twoM"), twoA: sum("twoA"),
+    },
+  };
+}
+
+/** Stat leaders (top player per category across both teams). Shared by the live + stored reads. */
+function leadersFromTeams(teams: Team[]) {
+  const allPlayers = teams.flatMap((t) => t.players.map((p) => ({ ...p, team: t.name })));
+  const leaderIn = (key: keyof P, labelEn: string, labelIs: string) => {
+    const top = allPlayers.reduce<(typeof allPlayers)[number] | null>((best, p) => (n(p[key] as number) > n((best?.[key] as number) ?? -1) ? p : best), null);
+    return top && n(top[key] as number) > 0 ? { labelEn, labelIs, name: top.name, team: top.team, value: n(top[key] as number) } : null;
+  };
+  return [
+    leaderIn("pts", "Points", "Stig"), leaderIn("reb", "Rebounds", "Fráköst"), leaderIn("ast", "Assists", "Stoðsendingar"),
+    leaderIn("stl", "Steals", "Stolnir"), leaderIn("blk", "Blocks", "Varin skot"),
+  ].filter((x): x is NonNullable<typeof x> => x != null);
 }
 
 /** The box-score shape the player Match report + league reads expect (FIBA own_box/opp_box keys). */
@@ -155,6 +191,32 @@ export async function GET(req: NextRequest) {
   const { supabase, teamId } = a;
 
   const sp = new URL(req.url).searchParams;
+
+  // Saved games (current season) rebuilt from storage — so the games the coach has saved are listed and
+  // re-viewable on the KKÍ.is tab without a live KKÍ fetch. ?saved=1 → the list; ?saved=<matchId> → detail.
+  const savedParam = (sp.get("saved") ?? "").trim();
+  if (savedParam) {
+    type Row = { match_id: string | null; match_date: string | null; own_name: string | null; opp_name: string | null; own_box: Array<Record<string, unknown>> | null; opp_box: Array<Record<string, unknown>> | null; own_totals: Record<string, unknown> | null; opp_totals: Record<string, unknown> | null; competition_code: string | null; season: string | null };
+    const { data: rows } = await supabase.from("basketball_fiba_games")
+      .select("match_id, match_date, own_name, opp_name, own_box, opp_box, own_totals, opp_totals, competition_code, season")
+      .eq("owner_team_id", teamId);
+    const { season, games } = scopeToCurrentSeason(((rows ?? []) as Row[]));
+    if (savedParam === "1" || savedParam === "list") {
+      const list = games.map((g) => ({
+        matchId: String(g.match_id ?? ""), date: g.match_date, opponent: g.opp_name ?? "—", own: g.own_name ?? "—",
+        ownPts: totalsPts(g.own_totals), oppPts: totalsPts(g.opp_totals), competition: g.competition_code ?? null,
+      }));
+      return NextResponse.json({ ok: true, saved: true, season, games: list });
+    }
+    const g = games.find((x) => String(x.match_id ?? "") === savedParam);
+    if (!g) return NextResponse.json({ ok: false, error: "Saved game not found." }, { status: 404 });
+    const teamsS = withFourFactors([
+      teamFromStoredBox(g.own_name ?? "—", Array.isArray(g.own_box) ? g.own_box : []),
+      teamFromStoredBox(g.opp_name ?? "—", Array.isArray(g.opp_box) ? g.opp_box : []),
+    ]);
+    return NextResponse.json({ ok: true, saved: true, stored: true, matchId: savedParam, date: g.match_date, teams: teamsS, quarters: null, advanced: [], leaders: leadersFromTeams(teamsS) });
+  }
+
   const parsed = sp.get("url") ? parseKkiGameUrl(sp.get("url")!) : { gameId: sp.get("gameId"), seasonId: sp.get("seasonId") };
   const gameId = (parsed.gameId ?? "").trim();
   if (!/^\d+$/.test(gameId)) return NextResponse.json({ ok: false, error: "Could not read a game_id from that link." }, { status: 400 });
@@ -177,17 +239,7 @@ export async function GET(req: NextRequest) {
     (async () => { try { advanced = parseAdvancedStats(await fetchWidget(buildAdvancedStatsUrl(gameId, seasonId))); } catch { /* optional */ } })(),
   ]);
 
-  const allPlayers = teams.flatMap((t) => t.players.map((p) => ({ ...p, team: t.name })));
-  const leaderIn = (key: keyof P, labelEn: string, labelIs: string) => {
-    const top = allPlayers.reduce<(typeof allPlayers)[number] | null>((best, p) => (n(p[key] as number) > n((best?.[key] as number) ?? -1) ? p : best), null);
-    return top && n(top[key] as number) > 0 ? { labelEn, labelIs, name: top.name, team: top.team, value: n(top[key] as number) } : null;
-  };
-  const leaders = [
-    leaderIn("pts", "Points", "Stig"), leaderIn("reb", "Rebounds", "Fráköst"), leaderIn("ast", "Assists", "Stoðsendingar"),
-    leaderIn("stl", "Steals", "Stolnir"), leaderIn("blk", "Blocks", "Varin skot"),
-  ].filter((x): x is NonNullable<typeof x> => x != null);
-
-  return NextResponse.json({ ok: true, gameId, seasonId, teams, quarters, advanced, leaders });
+  return NextResponse.json({ ok: true, gameId, seasonId, teams, quarters, advanced, leaders: leadersFromTeams(teams) });
 }
 
 type SaveResult = { ok: true; gameId: string; own: string; opp: string; how: string; date: string | null } | { ok: false; gameId: string; error: string };
