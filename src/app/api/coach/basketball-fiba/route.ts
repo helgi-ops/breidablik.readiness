@@ -29,6 +29,7 @@ const RUN_DRIVER_PHRASE: Record<string, string> = {
   three: "from three", secondChance: "on second-chance putbacks", assisted: "from assisted looks",
 };
 import { aggregateAdvancedShots, zonesFromAdvanced, hasZones } from "@/lib/micropulse/basketballStats/instatAggregate";
+import { latestSeason } from "@/lib/micropulse/basketballStats/season";
 
 const AI_MODEL = "claude-sonnet-5";
 const AI_SYSTEM = `You are a basketball scout writing a DETAILED report on a team from ONE game's tracking data (FIBA LiveStats), for a head coach. When InStat play-type/shot-zone data is also given, weave it in.
@@ -125,8 +126,8 @@ export async function GET(req: NextRequest) {
   if (params.get("trends")) {
     const big = Math.min(15, Math.max(6, Number(params.get("big") ?? 8) || 8));
     const { data: rows } = await supabase.from("basketball_fiba_games")
-      .select("match_id, own_tno, own_name, opp_name, runs").eq("owner_team_id", teamId);
-    const all = (rows ?? []) as Array<{ match_id: string; own_tno: number | null; own_name: string | null; opp_name: string | null; runs: RunAnalysis | null }>;
+      .select("match_id, own_tno, own_name, opp_name, runs, season").eq("owner_team_id", teamId);
+    const all = (rows ?? []) as Array<{ match_id: string; own_tno: number | null; own_name: string | null; opp_name: string | null; runs: RunAnalysis | null; season: string | null }>;
     // Backfill any games pulled before the runs column (best-effort, capped).
     const missing = all.filter((r) => !r.runs || !Array.isArray(r.runs.runs));
     let backfilled = 0;
@@ -140,11 +141,16 @@ export async function GET(req: NextRequest) {
         backfilled++;
       } catch { /* skip unreachable */ }
     }
-    const usable = all.filter((r) => r.runs && Array.isArray(r.runs.runs) && r.own_tno != null)
-      .map((r) => ({ runs: r.runs as RunAnalysis, ownTno: Number(r.own_tno) }));
+    // Scope the run-trend read to the newest season that actually HAS run data, so seasons don't mix
+    // (run data only exists on FIBA-shot games, not KKÍ box-only saves — this is a no-op while just one
+    // season has runs, and future-proofs it once more do).
+    const usableAll = all.filter((r) => r.runs && Array.isArray(r.runs.runs) && r.own_tno != null);
+    const trendSeason = latestSeason(usableAll.map((r) => r.season));
+    const usableRows = trendSeason ? usableAll.filter((r) => r.season === trendSeason) : usableAll;
+    const usable = usableRows.map((r) => ({ runs: r.runs as RunAnalysis, ownTno: Number(r.own_tno) }));
     const teamName = all.find((r) => r.own_name)?.own_name ?? null;
     return NextResponse.json({
-      ok: true, trends: analyzeRunTrends(usable, big), teamName,
+      ok: true, trends: analyzeRunTrends(usable, big), teamName, trendSeason,
       gamesTotal: all.length, gamesWithRuns: usable.length, backfilled,
       coverageNote: missing.length > 16 ? missing.length - 16 : 0,
     });

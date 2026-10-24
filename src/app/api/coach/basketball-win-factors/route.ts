@@ -14,6 +14,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { computeWinFactors, teamGamesFromFibaGame, beatTeamPlan, computeTeamForm, teamGameForTeam, type TeamGame } from "@/lib/micropulse/basketballStats/winFactors";
+import { seasonStartYear } from "@/lib/micropulse/basketballStats/season";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -50,7 +51,9 @@ export async function GET(req: NextRequest) {
     const e = leagues.get(key) ?? { competition: r.competition_code, season: r.season, stage, games: 0 };
     e.games++; leagues.set(key, e);
   }
-  const leagueList = [...leagues.values()].sort((a, b) => b.games - a.games);
+  // Newest season first (so the page defaults to the CURRENT league-season, not the one with the most
+  // games — which could be last season); within a season, more games first.
+  const leagueList = [...leagues.values()].sort((a, b) => (seasonStartYear(b.season) ?? -1) - (seasonStartYear(a.season) ?? -1) || b.games - a.games);
 
   // Team form / season trajectory — oriented to the COACH's own team (identified by name),
   // so it works whether the store holds only that team's games OR a whole league (own side
@@ -72,7 +75,7 @@ export async function GET(req: NextRequest) {
   }
   const teamFormSeasons = [...groups.entries()]
     .map(([key, rs]) => { const [competition, season] = key.split("|"); return { key, competition, season, games: rs.length }; })
-    .filter((g) => g.games >= 2).sort((a, b) => b.games - a.games);
+    .filter((g) => g.games >= 2).sort((a, b) => (seasonStartYear(b.season) ?? -1) - (seasonStartYear(a.season) ?? -1) || b.games - a.games);
   const formKey = (p.get("formSeason") ?? "").trim() || teamFormSeasons[0]?.key || "";
   const selRows = groups.get(formKey) ?? [];
   const teamForm = selRows.length >= 2 ? computeTeamForm(selRows.map((g) => teamGameForTeam(g, teamMatches)).filter((g): g is TeamGame => g != null)) : null;

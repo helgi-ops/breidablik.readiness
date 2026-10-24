@@ -19,6 +19,7 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { buildBasketballOpponentReport, type OppPlayerGame } from "@/lib/micropulse/basketballOpponentReport";
 import { aggregateAdvancedShots, type ShotTypeAgg } from "@/lib/micropulse/basketballStats/instatAggregate";
 import { scoutOpponentSeason } from "@/lib/integrations/basketball/scout";
+import { scopeToCurrentSeason } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -145,9 +146,15 @@ export async function GET(req: NextRequest) {
 
   if (url.searchParams.get("list")) {
     const { seasonId } = await seasonRef(auth.supabase, auth.teamId);
-    // Opponents the coach has actually faced (from own games) — the scoutable set.
+    // Opponents the coach has actually faced (from own games) — the scoutable set. Seed from BOTH the
+    // InStat per-game feed AND the KKÍ-saved box scores (basketball_fiba_games, current season), so a
+    // KKÍ-only team still gets a populated opponent list.
     const { data: own } = await auth.supabase.from("player_basketball_match_stats").select("opponent").eq("team_id", auth.teamId);
-    const opponents = Array.from(new Set(((own ?? []) as Array<{ opponent: string | null }>).map((r) => (r.opponent ?? "").trim()).filter(Boolean))).sort();
+    const oppSet = new Set(((own ?? []) as Array<{ opponent: string | null }>).map((r) => (r.opponent ?? "").trim()).filter(Boolean));
+    const { data: fibaOpp } = await auth.supabase.from("basketball_fiba_games").select("opp_name, season").eq("owner_team_id", auth.teamId);
+    const { games: scopedFiba } = scopeToCurrentSeason(((fibaOpp ?? []) as Array<{ opp_name: string | null; season: string | null; match_date: string | null }>).map((r) => ({ ...r, match_date: null })));
+    for (const r of scopedFiba) { const nm = (r.opp_name ?? "").trim(); if (nm) oppSet.add(nm); }
+    const opponents = Array.from(oppSet).sort();
     const { data: scouted } = await auth.supabase.from("scout_basketball_season").select("opponent_name, games, synced_at").eq("owner_team_id", auth.teamId);
     const scoutMap = new Map(((scouted ?? []) as Array<{ opponent_name: string; games: number | null; synced_at: string | null }>).map((s) => [s.opponent_name, s]));
     return NextResponse.json({
