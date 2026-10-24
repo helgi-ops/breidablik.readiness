@@ -14,6 +14,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import PageCrossRef from "@/components/coach/PageCrossRef";
+import BasketballBestMatches from "@/components/coach/BasketballBestMatches";
 import { downloadBestMatchesPdf } from "@/components/coach/BestMatchesPdf";
 
 type Bi = { en: string; is: string };
@@ -45,7 +46,34 @@ function fmtDate(d: string, is: boolean): string {
   return is ? `${day}. ${mon} ${y}` : `${day} ${mon} ${y}`;
 }
 
+/** Sport switch: basketball teams get the box-score "best games" board; football the StatsBomb one. */
 export default function BestMatchesPage() {
+  const [lang] = useLang();
+  const is = lang === "IS";
+  const [sport, setSport] = React.useState<string | undefined>(undefined);
+  const [resolved, setResolved] = React.useState(false);
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+        if (tok) { const res = await fetch("/api/coach/player-stats/config", { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } }); if (res.ok) setSport((await res.json()).sport); }
+      } catch { /* default football */ } finally { setResolved(true); }
+    })();
+  }, []);
+  if (!resolved) return <div className="mx-auto max-w-4xl px-4 py-6 text-[13px] text-slate-500">{is ? "Hleð…" : "Loading…"}</div>;
+  if (String(sport ?? "").toLowerCase() === "basketball") {
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-6">
+        <h1 className="font-[family-name:var(--font-archivo,inherit)] text-2xl font-bold text-[#14181c]">{is ? "Bestu leikir" : "Best Match Analysis"}</h1>
+        <PagePurpose en="the team's best games of the season — ranked by scoring margin, with what we did well in each." is="bestu leikir tímabilsins — raðað eftir stigamun, með því sem við gerðum vel í hverjum." />
+        <div className="mt-4"><BasketballBestMatches /></div>
+      </div>
+    );
+  }
+  return <FootballBestMatches />;
+}
+
+function FootballBestMatches() {
   const [lang] = useLang();
   const is: boolean = lang === "IS";
   const L = <T,>(o: { en: T; is: T }) => (is ? o.is : o.en);

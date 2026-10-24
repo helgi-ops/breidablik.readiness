@@ -22,6 +22,8 @@ import {
   avgFactors, aggregateAdvancedShots, zonesFromAdvanced, playerZonesFromRows, hasZones,
   type FourFactorAvg, type ShotTypeAgg, type ZoneAgg, type PlayerZones,
 } from "@/lib/micropulse/basketballStats/instatAggregate";
+import { scopeToCurrentSeason, aggregateOwnBox, totalsPts, type FibaGame } from "@/lib/micropulse/basketballStats/fibaGamesRead";
+import { initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -184,12 +186,55 @@ async function loadResults(supabase: ReturnType<typeof getSupabase>, teamId: str
   return out;
 }
 
+/** Fallback for a team whose only basketball data is KKÍ-saved box scores (basketball_fiba_games), with
+ *  no InStat per-player feed. Builds the same Season read (trend / record / per-opponent / leaders) from
+ *  the current season's box scores; the InStat-only extras (Four Factors, quarters, shot zones) stay null. */
+async function loadFibaSeasonFallback(supabase: ReturnType<typeof getSupabase>, teamId: string) {
+  const { data } = await supabase.from("basketball_fiba_games")
+    .select("match_id, match_date, opp_name, own_box, own_totals, opp_totals, season")
+    .eq("owner_team_id", teamId);
+  const { games: scoped } = scopeToCurrentSeason(((data ?? []) as FibaGame[]));
+  if (scoped.length === 0) return null;
+
+  const totals: GameTotals[] = [];
+  const results: Record<string, GameResult> = {};
+  for (const g of scoped) {
+    const gid = String(g.match_id ?? "");
+    const box = Array.isArray(g.own_box) ? g.own_box : [];
+    const gt: GameTotals = {
+      gameId: gid, date: g.match_date, opponent: g.opp_name ?? null, homeAway: null,
+      pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, oreb: 0, dreb: 0, reb: 0, ast: 0, stl: 0, blk: 0, tov: 0, fouls: 0,
+    };
+    for (const b of box) {
+      gt.pts += n(b.pts); gt.fgm += n(b.fgm); gt.fga += n(b.fga); gt.tpm += n(b.tpm); gt.tpa += n(b.tpa);
+      gt.ftm += n(b.ftm); gt.fta += n(b.fta); gt.oreb += n(b.oreb); gt.dreb += n(b.dreb); gt.reb += n(b.reb);
+      gt.ast += n(b.ast); gt.stl += n(b.stl); gt.blk += n(b.blk); gt.tov += n(b.tov);
+    }
+    totals.push(gt);
+    const pf = totalsPts(g.own_totals), pa = totalsPts(g.opp_totals);
+    if (pf || pa) results[gid] = { pointsFor: pf, pointsAgainst: pa };
+  }
+
+  const aggs = aggregateOwnBox(scoped, initialSurnameKey).filter((a) => a.gp >= 3);
+  const list = aggs.map((a) => ({
+    name: a.name, games: a.gp,
+    ppg: Math.round((a.pts / a.gp) * 10) / 10, rpg: Math.round((a.reb / a.gp) * 10) / 10, apg: Math.round((a.ast / a.gp) * 10) / 10,
+  }));
+  const top = (key: "ppg" | "rpg" | "apg") => list.slice().sort((x, y) => y[key] - x[key])[0] ?? null;
+  const leaders = { scorer: top("ppg"), rebounder: top("rpg"), playmaker: top("apg") };
+  return { season: buildBasketballSeason({ games: totals, results }), leaders };
+}
+
 export async function GET(req: NextRequest) {
   const auth = await authTeam(req);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   const rows = await loadRows(auth.supabase, auth.teamId);
   const seasonTeam = await loadSeasonTeam(auth.supabase, auth.teamId);
-  if (rows.length === 0) return NextResponse.json({ ok: true, hasData: false, season: null, leaders: null, seasonTeam });
+  if (rows.length === 0) {
+    const fiba = await loadFibaSeasonFallback(auth.supabase, auth.teamId);
+    if (fiba) return NextResponse.json({ ok: true, hasData: true, season: fiba.season, leaders: fiba.leaders, fourFactors: null, quarters: null, tacticalShots: null, shotZones: null, seasonTeam, source: "kki" });
+    return NextResponse.json({ ok: true, hasData: false, season: null, leaders: null, seasonTeam });
+  }
   const [results, fourFactors, quarters, tacticalShots, shotZones] = await Promise.all([
     loadResults(auth.supabase, auth.teamId),
     loadFourFactors(auth.supabase, auth.teamId),
