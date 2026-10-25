@@ -17,9 +17,9 @@
  */
 
 import { preseasonStartRamp } from "./preseasonStart";
-import { kpiVolumes, kpiTaperShare, standardTrainingDays } from "./plannedVolume";
+import { kpiVolumes, kpiTaperShare, standardTrainingDays, mesoWeeklyMultiples } from "./plannedVolume";
 import { teamKpiAvg } from "./preseasonKpiMap";
-import type { MatchUnit, SeasonPhase } from "./index";
+import type { MatchUnit, SeasonPhase, MesoBlock } from "./index";
 import type { WeeklyLoadMetricKey } from "../externalLoad/weeklyLoadTypes";
 
 /** Off-season running maintenance as a multiple of one match — a light aerobic base that holds the level
@@ -39,6 +39,7 @@ export type PlanWeeklyTarget = {
 const DAY = 86_400_000;
 const ms = (iso: string) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
 const addDaysIso = (iso: string, n: number) => new Date(ms(iso) + n * DAY).toISOString().slice(0, 10);
+const weeksBetween = (a: string, b: string) => Math.floor((ms(b) - ms(a)) / (7 * DAY));
 
 /** Which 1-based week of a [start, start+weeks) pre-season window `today` falls in, or null if outside. */
 function preseasonWeekOf(today: string, start: string, weeks: number): number | null {
@@ -56,6 +57,11 @@ export function planWeeklyTarget(opts: {
   matchUnits: MatchUnit[];
   today: string;
   matchesThisWeek?: number;
+  /** Meso blocks (the season's 4/5/6-week cycles) — used to apply the in-season ramp/deload factor for
+   *  the block week today sits in. Omit → no ramp (flat base-week volume). */
+  blocks?: MesoBlock[];
+  /** In-season weekly overload step (% per loading week); defaults to the hub default (5%). */
+  stepPct?: number;
   week1MatchMultiple?: number;
   sessionsPerWeek?: number;
 }): PlanWeeklyTarget | null {
@@ -81,17 +87,34 @@ export function planWeeklyTarget(opts: {
     };
   };
 
-  // 1. In-season — this week's fixture-count-aware KPI volume (each KPI tapered by its own exponent).
+  // 1. In-season — this week's fixture-count-aware KPI volume (each KPI tapered by its own exponent),
+  //    scaled by the meso ramp/deload factor for the block week today sits in (loading weeks ramp from
+  //    the base week by stepPct; the block's deload week drops to ~60% — Gabbett 2016, 3:1 overload).
   if (comp && today >= comp.start && today < comp.end) {
     const matches = Math.max(0, Math.round(opts.matchesThisWeek ?? 1));
     const vols = kpiVolumes(kpi, standardTrainingDays(matches));
     if (vols.length === 0) return null;
+
+    let factor = 1, weekIdx: number | undefined, blockWeeks: number | undefined, isDeloadWk = false;
+    const block = (opts.blocks ?? []).find((b) => today >= b.start && today < b.end);
+    if (block) {
+      blockWeeks = Math.max(1, block.weeks);
+      weekIdx = Math.min(blockWeeks, Math.max(1, weeksBetween(block.start, today) + 1));
+      const deloadWeek = block.deloadWeekStart ? Math.min(blockWeeks, Math.max(1, weeksBetween(block.start, block.deloadWeekStart) + 1)) : blockWeeks;
+      // baseMultiple 1 → the multiple IS the factor relative to the base (week-1) volume.
+      const mw = mesoWeeklyMultiples({ numWeeks: blockWeeks, baseMultiple: 1, stepPct: opts.stepPct ?? 5, deloadWeek })[weekIdx - 1];
+      if (mw) { factor = mw.multiple; isDeloadWk = mw.isDeload; }
+    }
+
     const byKpi: Partial<Record<WeeklyLoadMetricKey, number>> = {};
-    for (const v of vols) byKpi[v.key] = v.weeklyValue;
-    return {
-      phase: "inseason", byKpi,
-      label: { en: `In-season — ${matches}-match week`, is: `Keppni — ${matches} leikja vika` },
-    };
+    for (const v of vols) byKpi[v.key] = Math.round(v.weeklyValue * factor);
+    const pct = Math.round(factor * 100);
+    const label = isDeloadWk
+      ? { en: `In-season — ${matches}-match week · deload (${pct}%)`, is: `Keppni — ${matches} leikja vika · niðurtröppun (${pct}%)` }
+      : block && weekIdx
+        ? { en: `In-season — ${matches}-match week · block wk ${weekIdx}/${blockWeeks} (${pct}%)`, is: `Keppni — ${matches} leikja vika · lotuvika ${weekIdx}/${blockWeeks} (${pct}%)` }
+        : { en: `In-season — ${matches}-match week`, is: `Keppni — ${matches} leikja vika` };
+    return { phase: "inseason", byKpi, label, weekIndex: weekIdx, totalWeeks: blockWeeks };
   }
 
   // 2. Off-season — light aerobic maintenance (hold, don't build).

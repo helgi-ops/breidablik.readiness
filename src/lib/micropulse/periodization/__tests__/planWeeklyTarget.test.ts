@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { planWeeklyTarget, OFFSEASON_MAINTENANCE_MULT } from "../planWeeklyTarget";
 import { kpiTaperShare } from "../plannedVolume";
-import type { MatchUnit, SeasonPhase } from "../index";
+import type { MatchUnit, SeasonPhase, MesoBlock } from "../index";
 
 const m = (typical: number): { typical: number; peak: number } => ({ typical, peak: typical });
 // A match unit with distance 10km, PL 1000, HSR 600 (sprint 150 → band5 450), sprint 150, accel 40, decel 45.
@@ -31,13 +31,32 @@ describe("planWeeklyTarget", () => {
     expect(t.byKpi.velocityBand6! / 150).toBeLessThan(t.byKpi.accelB23! / 40);
   });
 
-  it("in-season → fixture-aware weekly volume, each KPI tapered (sprint < distance ×match)", () => {
+  it("in-season (no blocks) → base fixture-aware weekly volume, each KPI tapered (sprint < distance ×match)", () => {
     const t = planWeeklyTarget({ phases: PHASES, matchUnits: [UNIT], today: "2026-06-01", matchesThisWeek: 1 })!;
     expect(t.phase).toBe("inseason");
     // distance ≈ 2.35× a match (volume), sprint a smaller multiple
     expect(t.byKpi.totalDistance! / 10000).toBeCloseTo(2.35, 1);
     expect(t.byKpi.velocityBand6! / 150).toBeLessThan(t.byKpi.totalDistance! / 10000);
     expect(t.label.en).toContain("1-match");
+  });
+
+  it("in-season applies the meso ramp — a loading block week scales the base volume up (+5%/wk)", () => {
+    // 4-week block starting Mon 25 May, deload = last week (15 Jun). Today 1 Jun = block week 2 → +5%.
+    const block = { index: 0, start: "2026-05-25", end: "2026-06-22", weeks: 4, deloadWeekStart: "2026-06-15" } as unknown as MesoBlock;
+    const base = planWeeklyTarget({ phases: PHASES, matchUnits: [UNIT], today: "2026-06-01", matchesThisWeek: 1 })!;
+    const ramped = planWeeklyTarget({ phases: PHASES, blocks: [block], matchUnits: [UNIT], today: "2026-06-01", matchesThisWeek: 1 })!;
+    expect(ramped.weekIndex).toBe(2);
+    expect(ramped.totalWeeks).toBe(4);
+    expect(ramped.byKpi.totalDistance).toBe(Math.round(base.byKpi.totalDistance! * 1.05));
+    expect(ramped.label.en).toContain("block wk 2/4");
+  });
+
+  it("in-season deload week drops the whole week to ~60%", () => {
+    const block = { index: 0, start: "2026-05-25", end: "2026-06-22", weeks: 4, deloadWeekStart: "2026-06-15" } as unknown as MesoBlock;
+    const base = planWeeklyTarget({ phases: PHASES, matchUnits: [UNIT], today: "2026-06-15", matchesThisWeek: 1 })!;
+    const deload = planWeeklyTarget({ phases: PHASES, blocks: [block], matchUnits: [UNIT], today: "2026-06-15", matchesThisWeek: 1 })!;
+    expect(deload.byKpi.totalDistance).toBe(Math.round(base.byKpi.totalDistance! * 0.6));
+    expect(deload.label.en).toContain("deload");
   });
 
   it("upcoming pre-season → week 1 when the off-season has just ended (30 Nov), not the historical 2 Feb", () => {

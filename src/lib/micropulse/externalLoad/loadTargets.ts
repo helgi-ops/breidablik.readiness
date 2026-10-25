@@ -571,7 +571,7 @@ export async function computeWeeklyTarget(args: {
     const wkStart = monday.toISOString().slice(0, 10), wkEnd = sunday.toISOString().slice(0, 10);
     const matchesThisWeek = plan.fixtures.filter((f) => f >= wkStart && f <= wkEnd).length;
 
-    const pt = planWeeklyTarget({ phases: plan.phases, matchUnits: plan.players.map((p) => p.matchUnit), today: referenceDate, matchesThisWeek });
+    const pt = planWeeklyTarget({ phases: plan.phases, blocks: plan.blocks, matchUnits: plan.players.map((p) => p.matchUnit), today: referenceDate, matchesThisWeek });
     const target: Partial<Record<WeeklyLoadMetricKey, number | null>> = {};
     for (const key of activeMetrics) {
       const v = pt?.byKpi[key];
