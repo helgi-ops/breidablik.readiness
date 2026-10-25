@@ -33,7 +33,7 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-const VALID_MODES: LoadTargetMode[] = ["baseline", "match_demand", "coach_weekly"];
+const VALID_MODES: LoadTargetMode[] = ["baseline", "match_demand", "coach_weekly", "periodization_plan"];
 const VALID_PHASES = ["build", "maintain", "taper"] as const;
 
 // ─── GET ────────────────────────────────────────────────────────────────────

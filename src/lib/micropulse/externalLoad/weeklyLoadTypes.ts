@@ -166,7 +166,7 @@ export type WeeklyLoadMetricSummary = {
 
 /** Non-baseline target metadata attached to the weekly load result. */
 export type WeeklyLoadTargetMeta = {
-  mode: "baseline" | "match_demand" | "coach_weekly";
+  mode: "baseline" | "match_demand" | "coach_weekly" | "periodization_plan";
   corridorPct: number;
   mesocyclePhase: "build" | "maintain" | "taper" | null;
   mesocycleMultiplier: number;
@@ -187,6 +187,8 @@ export type WeeklyLoadTargetMeta = {
   baselineMatchDatesExcluded?: number;
   /** Number of player-day rows filtered out because their date was a match day. */
   baselineRowsExcluded?: number;
+  /** Which periodization-plan phase/week the target came from (periodization_plan mode only). */
+  planSource?: { phase: "preseason" | "inseason" | "offseason"; label: { en: string; is: string }; weekIndex?: number; totalWeeks?: number; multipleOfMatch?: number | null } | null;
 };
 
 export type WeeklyLoadResult = {

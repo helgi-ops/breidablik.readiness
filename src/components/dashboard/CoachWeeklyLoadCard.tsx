@@ -43,6 +43,7 @@ const COPY = {
     modeBaseline: "Söguleg meðaltöl",
     modeMatchDemand: "Leikálag",
     modeCoachWeekly: "Markmið þjálfara",
+    modePlan: "Áætlun",
     settings: "Stillingar",
     mesoBuild: "Uppbygging",
     mesoMaintain: "Viðhald",
@@ -75,6 +76,7 @@ const COPY = {
     modeBaseline: "Historical baseline",
     modeMatchDemand: "Match demand",
     modeCoachWeekly: "Coach target",
+    modePlan: "Plan",
     settings: "Settings",
     mesoBuild: "Build",
     mesoMaintain: "Maintain",
@@ -346,11 +348,17 @@ export default function CoachWeeklyLoadCard({
   const modeLabel =
     mode === "match_demand" ? t.modeMatchDemand :
     mode === "coach_weekly" ? t.modeCoachWeekly :
+    mode === "periodization_plan" ? t.modePlan :
     t.modeBaseline;
   const modeBadgeColor =
     mode === "match_demand" ? "bg-indigo-50 text-indigo-700 border-indigo-200" :
     mode === "coach_weekly" ? "bg-violet-50 text-violet-700 border-violet-200" :
+    mode === "periodization_plan" ? "bg-[#2740e6]/10 text-[#2740e6] border-[#2740e6]/20" :
     "bg-slate-50 text-slate-600 border-slate-200";
+  // In plan mode, the phase/week the target came from (e.g. "Pre-season — week 3 of 10").
+  const planSourceLabel = mode === "periodization_plan" && targetMeta?.planSource
+    ? (lang === "IS" ? targetMeta.planSource.label.is : targetMeta.planSource.label.en)
+    : null;
   const mesoLabel =
     targetMeta?.mesocyclePhase === "build" ? t.mesoBuild :
     targetMeta?.mesocyclePhase === "maintain" ? t.mesoMaintain :
@@ -423,6 +431,11 @@ export default function CoachWeeklyLoadCard({
             <span className={`text-[9px] font-semibold uppercase tracking-wider rounded-full border px-2 py-0.5 ${modeBadgeColor}`}>
               {modeLabel}
             </span>
+            {planSourceLabel && (
+              <span className="text-[9px] font-semibold rounded-full border border-[#2740e6]/20 bg-[#2740e6]/5 text-[#2740e6] px-2 py-0.5" title={lang === "IS" ? "Vika úr tímabilsáætluninni" : "This week from the season plan"}>
+                {planSourceLabel}
+              </span>
+            )}
             {indoor && (
               <span
                 className="text-[9px] font-semibold uppercase tracking-wider rounded-full border border-amber-200 bg-amber-50 text-amber-700 px-2 py-0.5"

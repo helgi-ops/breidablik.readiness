@@ -433,6 +433,7 @@ export async function computeWeeklyLoad(args: {
           matchesSampled: targetComp.matches_sampled,
           matchDemandAvg: targetComp.match_demand_avg,
           templateWeekSum: targetComp.template_week_sum,
+          planSource: targetComp.plan_source,
           fullMatchRowsUsed: targetComp.full_match_rows_used,
           rowsSkippedPartial: targetComp.rows_skipped_partial,
           minMinutesUsed: targetComp.min_minutes_used,

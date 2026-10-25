@@ -29,7 +29,7 @@ async function authHeaders(): Promise<Record<string, string>> {
 }
 
 type Lang = "IS" | "EN";
-type Mode = "baseline" | "match_demand" | "coach_weekly";
+type Mode = "baseline" | "match_demand" | "coach_weekly" | "periodization_plan";
 type Phase = "build" | "maintain" | "taper" | null;
 
 type Config = {
@@ -72,6 +72,8 @@ const COPY = {
     modeMatchDemandDesc: "Miðað við meðaltal síðustu leikja og MD-dag prósentutöflu (vísindaleg nálgun).",
     modeCoachWeekly: "Markmið þjálfara",
     modeCoachWeeklyDesc: "Þjálfari setur vikulegt markmið handvirkt fyrir hvert KPI.",
+    modePlan: "Áætlun (tímabilsskipulag)",
+    modePlanDesc: "Miðað við þína eigin áætlun fyrir þessa viku (undirbúnings-ramp / keppnis-rúmmál / off-season viðhald) úr Periodization Hub.",
     corridor: "Leyfilegt bil (±)",
     corridorHint: "Hve mikið má víkja frá markmiði áður en það telst of mikið/lítið álag.",
     baselineExcludeMatches: "Útiloka leikjadaga úr grunnmeðaltali",
@@ -119,6 +121,8 @@ const COPY = {
     modeMatchDemandDesc: "Use recent match average × MD-day template (evidence-based).",
     modeCoachWeekly: "Coach target",
     modeCoachWeeklyDesc: "Coach sets per-KPI weekly target by hand.",
+    modePlan: "Periodization plan",
+    modePlanDesc: "Use your own plan for this week (pre-season ramp / in-season volume / off-season maintenance) from the Periodization Hub.",
     corridor: "Corridor (±)",
     corridorHint: "How much deviation from target counts as normal.",
     baselineExcludeMatches: "Exclude match days from baseline",
@@ -342,6 +346,7 @@ export default function LoadTargetSettingsModal({
                   {(
                     [
                       ["baseline", t.modeBaseline, t.modeBaselineDesc],
+                      ["periodization_plan", t.modePlan, t.modePlanDesc],
                       ["match_demand", t.modeMatchDemand, t.modeMatchDemandDesc],
                       ["coach_weekly", t.modeCoachWeekly, t.modeCoachWeeklyDesc],
                     ] as const
