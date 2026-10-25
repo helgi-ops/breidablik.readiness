@@ -65,6 +65,34 @@ export function aggregateOwnBox(games: FibaGame[], keyFn: (name: string) => stri
   return [...by.values()];
 }
 
+/** Friendly competition label (shared across the basketball reads). */
+export function competitionLabel(code: string | null | undefined): string {
+  switch (String(code ?? "").toLowerCase()) {
+    case "urvalsdeild-kvenna": case "urvalsdeild-karla": return "Úrvalsdeild";
+    case "bonus-deild-karla": case "bonus-deild-kvenna": return "Bónus deild";
+    case "1deild-kvenna": case "1deild-karla": return "1. deild";
+    default: return code ? String(code) : "Annað";
+  }
+}
+/** Seniority rank — top divisions (Úrvalsdeild / Bónus deild) rank above a 1. deild reserve side. */
+const seniorRank = (code: string | null | undefined): number => (String(code ?? "").toLowerCase().includes("1deild") ? 0 : 1);
+
+export type CompetitionOption = { code: string | null; label: string; games: number };
+/** The distinct competitions (aðallið vs varalið, etc.) present in a set of games — senior first, then by
+ *  game count. Lets a season read separate the main team from a lower-division reserve side. */
+export function competitionsOf<T extends { competition_code?: string | null }>(games: T[]): CompetitionOption[] {
+  const m = new Map<string, number>();
+  for (const g of games) { const c = g.competition_code ?? ""; m.set(c, (m.get(c) ?? 0) + 1); }
+  return [...m.entries()].map(([c, n]) => ({ code: c || null, label: competitionLabel(c || null), games: n }))
+    .sort((a, b) => seniorRank(b.code) - seniorRank(a.code) || b.games - a.games);
+}
+/** Resolve the competition to show: an explicit (valid) choice, else the senior-most. */
+export function resolveCompetition<T extends { competition_code?: string | null }>(games: T[], requested?: string | null): string | null {
+  const opts = competitionsOf(games);
+  if (requested && opts.some((o) => (o.code ?? "") === requested)) return requested || null;
+  return opts[0]?.code ?? null;
+}
+
 export const pctOf = (m: number, a: number): number | null => (a > 0 ? Math.round((m / a) * 1000) / 10 : null);
 /** Team points from a stored totals object (KKÍ saves store `pts`). */
 export const totalsPts = (t: Record<string, unknown> | null | undefined): number => n((t as { pts?: number } | null | undefined)?.pts);

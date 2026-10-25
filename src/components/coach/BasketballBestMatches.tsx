@@ -17,7 +17,8 @@ type Game = {
   reb: number; ast: number; stl: number; tov: number; tpm: number;
   topScorer: { name: string; pts: number } | null;
 };
-type Resp = { ok: boolean; hasData?: boolean; season?: string | null; games?: Game[]; record?: { wins: number; losses: number; avgMargin: number | null } | null; error?: string };
+type CompetitionOption = { code: string | null; label: string; games: number };
+type Resp = { ok: boolean; hasData?: boolean; season?: string | null; games?: Game[]; record?: { wins: number; losses: number; avgMargin: number | null } | null; competitions?: CompetitionOption[]; competition?: string | null; error?: string };
 
 const compLabel = (c: string | null): string => {
   switch ((c ?? "").toLowerCase()) {
@@ -36,6 +37,7 @@ export default function BasketballBestMatches() {
   const [data, setData] = React.useState<Resp | null>(null);
   const [state, setState] = React.useState<"loading" | "ready" | "empty" | "error">("loading");
   const [err, setErr] = React.useState<string | null>(null);
+  const [selectedComp, setSelectedComp] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let live = true;
@@ -43,7 +45,8 @@ export default function BasketballBestMatches() {
       try {
         const token = (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null;
         if (!token) { if (live) { setErr(t("Not signed in.", "Ekki innskráð(ur).")); setState("error"); } return; }
-        const res = await fetch("/api/coach/basketball-best-matches", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+        const qs = selectedComp ? `?competition=${encodeURIComponent(selectedComp)}` : "";
+        const res = await fetch(`/api/coach/basketball-best-matches${qs}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
         const j = (await res.json()) as Resp;
         if (!live) return;
         if (!res.ok || !j.ok) { setErr(j.error ?? t("Load failed.", "Hleðsla mistókst.")); setState("error"); return; }
@@ -52,7 +55,20 @@ export default function BasketballBestMatches() {
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [is]);
+  }, [is, selectedComp]);
+
+  const comps = data?.competitions ?? [];
+  const compSelector = comps.length > 1 ? (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("Team / competition", "Lið / deild")}</span>
+      {comps.map((c) => (
+        <button key={c.code ?? "none"} type="button" onClick={() => setSelectedComp(c.code)}
+          className={`h-8 rounded-full px-3 text-[12.5px] font-semibold transition ${(data?.competition ?? null) === (c.code ?? null) ? "bg-[#2740e6] text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
+          {c.label} <span className="font-normal opacity-70">({c.games})</span>
+        </button>
+      ))}
+    </div>
+  ) : null;
 
   if (state === "loading") return <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-[13px] text-slate-500">{t("Loading…", "Hleð…")}</div>;
   if (state === "error") return <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">{err}</div>;
@@ -68,6 +84,7 @@ export default function BasketballBestMatches() {
 
   return (
     <div className="space-y-4">
+      {compSelector}
       {rec && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <span className="text-[13px] font-semibold text-slate-800">{t("Season", "Tímabil")} {data?.season ?? ""}</span>

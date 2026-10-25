@@ -328,6 +328,9 @@ export default function BasketballSeasonMatchAnalysis() {
   const [seasonTeam, setSeasonTeam] = React.useState<SeasonTeam | null>(null);
   const [zonesPlayer, setZonesPlayer] = React.useState<string | null>(null);
   const [hasData, setHasData] = React.useState<boolean | null>(null);
+  const [competitions, setCompetitions] = React.useState<Array<{ code: string | null; label: string; games: number }>>([]);
+  const [activeComp, setActiveComp] = React.useState<string | null>(null);
+  const [selectedComp, setSelectedComp] = React.useState<string | null>(null);
   const [details, setDetails] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
   const [drafts, setDrafts] = React.useState<Record<string, string>>({});
@@ -338,10 +341,11 @@ export default function BasketballSeasonMatchAnalysis() {
 
   const load = React.useCallback(async () => {
     const tok = await token(); if (!tok) return;
-    const res = await fetch("/api/coach/basketball-season-insights", { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
+    const qs = selectedComp ? `?competition=${encodeURIComponent(selectedComp)}` : "";
+    const res = await fetch(`/api/coach/basketball-season-insights${qs}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
     const j = await res.json();
-    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); setQuarters(j.quarters ?? null); setTacticalShots(j.tacticalShots ?? null); setShotZones(j.shotZones ?? null); setSeasonTeam(j.seasonTeam ?? null); }
-  }, [token]);
+    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); setQuarters(j.quarters ?? null); setTacticalShots(j.tacticalShots ?? null); setShotZones(j.shotZones ?? null); setSeasonTeam(j.seasonTeam ?? null); setCompetitions(j.competitions ?? []); setActiveComp(j.competition ?? null); }
+  }, [token, selectedComp]);
 
   React.useEffect(() => { void load(); }, [load]);
 
@@ -377,6 +381,19 @@ export default function BasketballSeasonMatchAnalysis() {
   return (
     <div className="space-y-3">
       {importer}
+      {/* Team / competition selector — separates the main team (e.g. Bónus deild) from a reserve side
+          (1. deild) so their seasons don't mix. */}
+      {competitions.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{lang === "IS" ? "Lið / deild" : "Team / competition"}</span>
+          {competitions.map((c) => (
+            <button key={c.code ?? "none"} type="button" onClick={() => setSelectedComp(c.code)}
+              className={`h-8 rounded-full px-3 text-[12.5px] font-semibold transition ${(activeComp ?? null) === (c.code ?? null) ? "bg-[#2740e6] text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
+              {c.label} <span className="font-normal opacity-70">({c.games})</span>
+            </button>
+          ))}
+        </div>
+      )}
       {/* Layer 0 — one-line verdict */}
       <div className="rounded-xl border border-[#e3e1d9] bg-white p-4">
         <p className="text-[15px] font-bold text-slate-900">

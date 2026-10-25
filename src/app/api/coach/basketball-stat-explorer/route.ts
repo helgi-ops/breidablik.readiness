@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
 import { latestSeason } from "@/lib/micropulse/basketballStats/season";
+import { competitionsOf, resolveCompetition } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 
 type BoxRow = {
   name?: string; min?: string | number | null; pts?: number; reb?: number; oreb?: number; dreb?: number; ast?: number;
@@ -77,14 +78,18 @@ export async function GET(req: NextRequest) {
   }
 
   const { data: gamesRaw } = await supabase.from("basketball_fiba_games")
-    .select("match_date, opp_name, own_box, own_totals, opp_totals, season")
+    .select("match_date, opp_name, own_box, own_totals, opp_totals, competition_code, season")
     .eq("owner_team_id", teamId);
-  type Row = { match_date: string | null; opp_name: string | null; own_box: BoxRow[] | null; own_totals: Record<string, unknown> | null; opp_totals: Record<string, unknown> | null; season: string | null };
+  type Row = { match_date: string | null; opp_name: string | null; own_box: BoxRow[] | null; own_totals: Record<string, unknown> | null; opp_totals: Record<string, unknown> | null; competition_code: string | null; season: string | null };
   const all = (gamesRaw ?? []) as Row[];
 
-  // Scope to the current (newest) season, like the player report.
+  // Scope to the current (newest) season, then to ONE competition (separate the main team from a reserve
+  // side so their numbers don't mix).
   const season = latestSeason(all.map((g) => g.season));
-  let games = season ? all.filter((g) => g.season === season) : all;
+  const seasonGames = season ? all.filter((g) => g.season === season) : all;
+  const competitions = competitionsOf(seasonGames);
+  const competition = resolveCompetition(seasonGames, sp.get("competition"));
+  let games = competitions.length > 1 ? seasonGames.filter((g) => (g.competition_code ?? null) === competition) : seasonGames;
 
   const opponents = [...new Set(games.map((g) => g.opp_name).filter((x): x is string => !!x))].sort();
 
@@ -132,5 +137,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true, isBasketball: true, hasData: players.length > 0, season,
     window: window ?? "all", matchCount: games.length, opponents, players,
+    competitions: competitions.length > 1 ? competitions : [], competition,
   });
 }

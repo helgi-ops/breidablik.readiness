@@ -22,7 +22,7 @@ import {
   avgFactors, aggregateAdvancedShots, zonesFromAdvanced, playerZonesFromRows, hasZones,
   type FourFactorAvg, type ShotTypeAgg, type ZoneAgg, type PlayerZones,
 } from "@/lib/micropulse/basketballStats/instatAggregate";
-import { scopeToCurrentSeason, aggregateOwnBox, totalsPts, type FibaGame } from "@/lib/micropulse/basketballStats/fibaGamesRead";
+import { scopeToCurrentSeason, aggregateOwnBox, totalsPts, competitionsOf, resolveCompetition, competitionLabel, type FibaGame } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 import { initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
 
 async function authTeam(req: NextRequest) {
@@ -189,12 +189,16 @@ async function loadResults(supabase: ReturnType<typeof getSupabase>, teamId: str
 /** Fallback for a team whose only basketball data is KKÍ-saved box scores (basketball_fiba_games), with
  *  no InStat per-player feed. Builds the same Season read (trend / record / per-opponent / leaders) from
  *  the current season's box scores; the InStat-only extras (Four Factors, quarters, shot zones) stay null. */
-async function loadFibaSeasonFallback(supabase: ReturnType<typeof getSupabase>, teamId: string) {
+async function loadFibaSeasonFallback(supabase: ReturnType<typeof getSupabase>, teamId: string, requestedComp?: string | null) {
   const { data } = await supabase.from("basketball_fiba_games")
-    .select("match_id, match_date, opp_name, own_box, own_totals, opp_totals, season")
+    .select("match_id, match_date, opp_name, own_box, own_totals, opp_totals, competition_code, season")
     .eq("owner_team_id", teamId);
-  const { games: scoped } = scopeToCurrentSeason(((data ?? []) as FibaGame[]));
-  if (scoped.length === 0) return null;
+  const { games: all } = scopeToCurrentSeason(((data ?? []) as FibaGame[]));
+  if (all.length === 0) return null;
+  // Separate the main team from a lower-division reserve side (they're different teams) — pick one.
+  const competitions = competitionsOf(all);
+  const competition = resolveCompetition(all, requestedComp);
+  const scoped = competitions.length > 1 ? all.filter((g) => (g.competition_code ?? null) === competition) : all;
 
   const totals: GameTotals[] = [];
   const results: Record<string, GameResult> = {};
@@ -222,7 +226,11 @@ async function loadFibaSeasonFallback(supabase: ReturnType<typeof getSupabase>, 
   }));
   const top = (key: "ppg" | "rpg" | "apg") => list.slice().sort((x, y) => y[key] - x[key])[0] ?? null;
   const leaders = { scorer: top("ppg"), rebounder: top("rpg"), playmaker: top("apg") };
-  return { season: buildBasketballSeason({ games: totals, results }), leaders };
+  return {
+    season: buildBasketballSeason({ games: totals, results }), leaders,
+    competitions: competitions.length > 1 ? competitions : [],
+    competition, competitionLabel: competitionLabel(competition),
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -231,8 +239,12 @@ export async function GET(req: NextRequest) {
   const rows = await loadRows(auth.supabase, auth.teamId);
   const seasonTeam = await loadSeasonTeam(auth.supabase, auth.teamId);
   if (rows.length === 0) {
-    const fiba = await loadFibaSeasonFallback(auth.supabase, auth.teamId);
-    if (fiba) return NextResponse.json({ ok: true, hasData: true, season: fiba.season, leaders: fiba.leaders, fourFactors: null, quarters: null, tacticalShots: null, shotZones: null, seasonTeam, source: "kki" });
+    const requestedComp = new URL(req.url).searchParams.get("competition");
+    const fiba = await loadFibaSeasonFallback(auth.supabase, auth.teamId, requestedComp);
+    if (fiba) return NextResponse.json({
+      ok: true, hasData: true, season: fiba.season, leaders: fiba.leaders, fourFactors: null, quarters: null, tacticalShots: null, shotZones: null, seasonTeam, source: "kki",
+      competitions: fiba.competitions, competition: fiba.competition, competitionLabel: fiba.competitionLabel,
+    });
     return NextResponse.json({ ok: true, hasData: false, season: null, leaders: null, seasonTeam });
   }
   const [results, fourFactors, quarters, tacticalShots, shotZones] = await Promise.all([

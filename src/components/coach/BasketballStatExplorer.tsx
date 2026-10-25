@@ -17,7 +17,8 @@ type PlayerAgg = {
   pts: number; oreb: number; dreb: number; reb: number; ast: number; stl: number; blk: number; tov: number;
   fgm: number; fga: number; tpm: number; tpa: number; ftm: number; fta: number;
 };
-type Resp = { ok: boolean; isBasketball?: boolean; hasData?: boolean; season?: string | null; matchCount?: number; opponents?: string[]; players?: PlayerAgg[]; error?: string };
+type CompetitionOption = { code: string | null; label: string; games: number };
+type Resp = { ok: boolean; isBasketball?: boolean; hasData?: boolean; season?: string | null; matchCount?: number; opponents?: string[]; players?: PlayerAgg[]; competitions?: CompetitionOption[]; competition?: string | null; error?: string };
 
 type Group = "scoring" | "rebounding" | "playmaking" | "defense" | "minutes";
 type Kind = "count" | "pct" | "ratio";
@@ -72,6 +73,7 @@ export default function BasketballStatExplorer() {
   const [win, setWin] = React.useState<"5" | "10" | "all">("5");
   const [result, setResult] = React.useState<"all" | "win" | "loss">("all");
   const [opponent, setOpponent] = React.useState("");
+  const [selectedComp, setSelectedComp] = React.useState<string | null>(null);
   const [metricKey, setMetricKey] = React.useState("pts");
   const [mode, setMode] = React.useState<Mode>("perGame");
   const [minGames, setMinGames] = React.useState(1);
@@ -91,7 +93,7 @@ export default function BasketballStatExplorer() {
       try {
         const token = await tok();
         if (!token) { if (live) { setErr(t("Not signed in.", "Ekki innskráð(ur).")); setState("error"); } return; }
-        const qs = new URLSearchParams({ window: win, result, ...(opponent ? { opponent } : {}) });
+        const qs = new URLSearchParams({ window: win, result, ...(opponent ? { opponent } : {}), ...(selectedComp ? { competition: selectedComp } : {}) });
         const res = await fetch(`/api/coach/basketball-stat-explorer?${qs}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
         const j = (await res.json()) as Resp;
         if (!live) return;
@@ -101,7 +103,7 @@ export default function BasketballStatExplorer() {
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [win, result, opponent, is]);
+  }, [win, result, opponent, selectedComp, is]);
 
   const metric = METRICS.find((m) => m.key === metricKey) ?? METRICS[0];
   const players = React.useMemo(() => (data?.players ?? []).filter((p) => p.gp >= minGames), [data, minGames]);
@@ -137,6 +139,14 @@ export default function BasketballStatExplorer() {
     <div className="space-y-4">
       {/* FILTER BAR */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        {(data?.competitions ?? []).length > 1 && (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="w-16 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("Team", "Lið")}</span>
+            {(data?.competitions ?? []).map((c) => (
+              <Chip key={c.code ?? "none"} active={(data?.competition ?? null) === (c.code ?? null)} onClick={() => setSelectedComp(c.code)}>{c.label} <span className="font-normal opacity-70">({c.games})</span></Chip>
+            ))}
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("Window", "Gluggi")}</span>
           <Chip active={win === "5"} onClick={() => setWin("5")}>{t("Last 5", "Síðustu 5")}</Chip>

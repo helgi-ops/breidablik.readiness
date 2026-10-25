@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { scopeToCurrentSeason, totalsPts, pctOf, type FibaGame, type FibaBoxRow } from "@/lib/micropulse/basketballStats/fibaGamesRead";
+import { scopeToCurrentSeason, totalsPts, pctOf, competitionsOf, resolveCompetition, type FibaGame, type FibaBoxRow } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 
 const n = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
@@ -38,8 +38,13 @@ export async function GET(req: NextRequest) {
   const { data } = await supabase.from("basketball_fiba_games")
     .select("match_id, match_date, opp_name, own_box, own_totals, opp_totals, competition_code, season")
     .eq("owner_team_id", teamId);
-  const { season, games: scoped } = scopeToCurrentSeason(((data ?? []) as FibaGame[]));
-  if (scoped.length === 0) return NextResponse.json({ ok: true, hasData: false, season, games: [], record: null });
+  const { season, games: all } = scopeToCurrentSeason(((data ?? []) as FibaGame[]));
+  if (all.length === 0) return NextResponse.json({ ok: true, hasData: false, season, games: [], record: null, competitions: [], competition: null });
+
+  // Separate the main team from a reserve side (different teams) — rank within one competition.
+  const competitions = competitionsOf(all);
+  const competition = resolveCompetition(all, new URL(req.url).searchParams.get("competition"));
+  const scoped = competitions.length > 1 ? all.filter((g) => (g.competition_code ?? null) === competition) : all;
 
   const games = scoped.map((g) => {
     const tot = (g.own_totals ?? {}) as Record<string, number>;
@@ -67,5 +72,5 @@ export async function GET(req: NextRequest) {
   const wins = decided.filter((g) => g.result === "W").length;
   const avgMargin = decided.length ? Math.round((decided.reduce((a, g) => a + (g.margin ?? 0), 0) / decided.length) * 10) / 10 : null;
 
-  return NextResponse.json({ ok: true, hasData: true, season, games, record: { wins, losses: decided.length - wins, avgMargin } });
+  return NextResponse.json({ ok: true, hasData: true, season, games, record: { wins, losses: decided.length - wins, avgMargin }, competitions: competitions.length > 1 ? competitions : [], competition });
 }
