@@ -558,7 +558,7 @@ export async function computeWeeklyTarget(args: {
       .from("season_plans").select("overrides")
       .eq("team_id", teamId).eq("season_year", new Date(`${referenceDate}T00:00:00Z`).getUTCFullYear())
       .maybeSingle();
-    const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; nextPreseasonStart?: string; offseasonWeeks?: number } } | null)?.overrides ?? {};
+    const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; nextPreseasonStart?: string; offseasonWeeks?: number; preseasonWeek1Mult?: number; preseasonSessions?: number; stepPct?: number } } | null)?.overrides ?? {};
     const plan = await loadPeriodization(sb, {
       teamId,
       preseasonStart: ov.preseasonStart ?? null, seasonEnd: ov.seasonEnd ?? null,
@@ -571,7 +571,14 @@ export async function computeWeeklyTarget(args: {
     const wkStart = monday.toISOString().slice(0, 10), wkEnd = sunday.toISOString().slice(0, 10);
     const matchesThisWeek = plan.fixtures.filter((f) => f >= wkStart && f <= wkEnd).length;
 
-    const pt = planWeeklyTarget({ phases: plan.phases, blocks: plan.blocks, matchUnits: plan.players.map((p) => p.matchUnit), today: referenceDate, matchesThisWeek });
+    const pt = planWeeklyTarget({
+      phases: plan.phases, blocks: plan.blocks, matchUnits: plan.players.map((p) => p.matchUnit),
+      today: referenceDate, matchesThisWeek,
+      // The coach's saved meso/pre-season tuning (defaults when unset), so plan mode matches the hub.
+      week1MatchMultiple: ov.preseasonWeek1Mult ?? undefined,
+      sessionsPerWeek: ov.preseasonSessions ?? undefined,
+      stepPct: ov.stepPct ?? undefined,
+    });
     const target: Partial<Record<WeeklyLoadMetricKey, number | null>> = {};
     for (const key of activeMetrics) {
       const v = pt?.byKpi[key];

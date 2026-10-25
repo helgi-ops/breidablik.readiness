@@ -49,7 +49,7 @@ export async function GET(req: Request) {
   const iso = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
   // Coach's saved window (season_plans.overrides) is the default; a query param overrides it live.
   const { data: saved } = await ctx.sb.from("season_plans").select("overrides").eq("team_id", ctx.teamId).eq("season_year", year ?? new Date().getUTCFullYear()).maybeSingle();
-  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number; nextPreseasonStart?: string; offseasonWeeks?: number; offseasonStart?: string; blockGoals?: Record<string, "accum" | "transmute" | "realize"> } } | null)?.overrides ?? {};
+  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number; nextPreseasonStart?: string; offseasonWeeks?: number; offseasonStart?: string; preseasonWeek1Mult?: number; preseasonSessions?: number; stepPct?: number; blockGoals?: Record<string, "accum" | "transmute" | "realize"> } } | null)?.overrides ?? {};
   const offWeeksParam = Number(sp.get("offWeeks"));
   const plan = await loadPeriodization(ctx.sb, {
     teamId: ctx.teamId, seasonYear: year,
@@ -80,6 +80,8 @@ export async function GET(req: Request) {
     preseasonStart: ov.preseasonStart ?? null, seasonEnd: ov.seasonEnd ?? null,
     nextPreseasonStart: ov.nextPreseasonStart ?? null, offseasonWeeks: ov.offseasonWeeks ?? null,
     offseasonStart: ov.offseasonStart ?? null,
+    // Meso/pre-season tuning the coach set — so the hub inputs + the server-side plan target read them back.
+    preseasonWeek1Mult: ov.preseasonWeek1Mult ?? null, preseasonSessions: ov.preseasonSessions ?? null, stepPct: ov.stepPct ?? null,
     // Per-block goal overrides (coach's chosen goal keyed by block start ISO) — sparse, merge-friendly.
     blockGoals: ov.blockGoals ?? {},
   };

@@ -280,13 +280,16 @@ export default function PeriodizationHubPage() {
       if (!res.ok || !j.ok) { setErr(j.error ?? "Failed"); return; }
       setPlan(j.plan as Plan);
       // Populate the season-window inputs from the saved overrides, once, so they reflect what's stored.
-      const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; offseasonStart?: string | null; blockGoals?: Record<string, "accum" | "transmute" | "realize"> } }).savedWindow;
+      const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; offseasonStart?: string | null; preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; stepPct?: number | null; blockGoals?: Record<string, "accum" | "transmute" | "realize"> } }).savedWindow;
       if (sw && !didPopulateWindow.current) {
         didPopulateWindow.current = true;
         if (sw.preseasonStart) setPreStart(sw.preseasonStart);
         if (sw.seasonEnd) setSeasonEnd(sw.seasonEnd);
         if (sw.nextPreseasonStart) setNextPreStart(sw.nextPreseasonStart);
         if (sw.offseasonStart) setOffStart(sw.offseasonStart);
+        if (sw.preseasonWeek1Mult != null && Number.isFinite(sw.preseasonWeek1Mult)) setPsWeek1Mult(Math.max(0.5, Math.min(3, sw.preseasonWeek1Mult)));
+        if (sw.preseasonSessions === 3 || sw.preseasonSessions === 4 || sw.preseasonSessions === 5 || sw.preseasonSessions === 6) setPsSessions(sw.preseasonSessions);
+        if (sw.stepPct != null && Number.isFinite(sw.stepPct)) setBlkStep(Math.max(0, Math.min(15, sw.stepPct)));
         if (sw.blockGoals && Object.keys(sw.blockGoals).length) setBlockGoals(sw.blockGoals);
       }
       // Restore the coach's saved block length (cadence) so the meso reads back the block they set up.
@@ -374,7 +377,26 @@ export default function PeriodizationHubPage() {
     preseasonStart: preStart || undefined, seasonEnd: seasonEnd || undefined, deloadCadence: c,
     nextPreseasonStart: nextPreStart || undefined,
     offseasonStart: offStart || undefined,
-  }), [preStart, seasonEnd, nextPreStart, offStart]);
+    // Meso/pre-season tuning — persisted so the hub + the live Weekly Load "plan" target read the coach's values.
+    preseasonWeek1Mult: psWeek1Mult, preseasonSessions: psSessions, stepPct: blkStep,
+  }), [preStart, seasonEnd, nextPreStart, offStart, psWeek1Mult, psSessions, blkStep]);
+
+  // Fire-and-forget (debounced) persist of a single overrides key — used by the meso/pre-season tuning
+  // inputs so the coach's choice sticks across visits and reaches the server-side plan target.
+  const tuningTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => () => { if (tuningTimer.current) clearTimeout(tuningTimer.current); }, []);
+  const persistOverridePatch = React.useCallback((patch: Record<string, number>) => {
+    if (!plan) return;
+    if (tuningTimer.current) clearTimeout(tuningTimer.current);
+    tuningTimer.current = setTimeout(async () => {
+      try {
+        await fetch("/api/coach/periodization", {
+          method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() },
+          body: JSON.stringify({ seasonYear: plan.seasonYear, overrides: patch }),
+        });
+      } catch { /* best-effort persist */ }
+    }, 600);
+  }, [plan, authHeader]);
 
   // Change the block length AND persist it immediately, so it reads back next visit without
   // needing a manual Save. Fire-and-forget; the value is the source for the meso re-flow.
@@ -2020,7 +2042,7 @@ export default function PeriodizationHubPage() {
                   <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Upphaf" : "Start"}<input type="date" value={blkStart} onChange={(e) => setBlkStart(e.target.value)} className="h-10 rounded-lg border border-slate-300 px-2 text-[13px] font-medium" /></label>
                   <div className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Vikur (úr Makró)" : "Weeks (from Macro)"}<div className="flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-[13px] font-medium text-slate-700">{blkWeeks} <span className="ml-1 text-[12px] font-normal text-slate-500">· {is ? "niðurtr. hverja" : "deload every"} {cadence}</span></div></div>
                   <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Grunn-álag %" : "Base overload %"}<input type="number" min={80} max={130} value={blkBase} onChange={(e) => setBlkBase(Number(e.target.value))} className="h-10 rounded-lg border border-slate-300 px-2 text-[13px] font-medium" /></label>
-                  <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Stig/viku %" : "Step/wk %"}<input type="number" min={0} max={15} value={blkStep} onChange={(e) => setBlkStep(Number(e.target.value))} className="h-10 rounded-lg border border-slate-300 px-2 text-[13px] font-medium" /></label>
+                  <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Stig/viku %" : "Step/wk %"}<input type="number" min={0} max={15} value={blkStep} onChange={(e) => { const v = Math.max(0, Math.min(15, Number(e.target.value) || 0)); setBlkStep(v); persistOverridePatch({ stepPct: v }); }} className="h-10 rounded-lg border border-slate-300 px-2 text-[13px] font-medium" /></label>
                   <label className="col-span-2 flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Umfang" : "Scope"}<select value={blkScope} onChange={(e) => setBlkScope(e.target.value as typeof blkScope)} className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-[13px] font-medium"><option value="team">{is ? "Lið" : "Team"}</option><option value="player">{is ? `Leikmaður: ${player?.name ?? ""}` : `Player: ${player?.name ?? ""}`}</option></select></label>
                 </div>
                 {blkScope === "player" && <p className="mt-1.5 text-[12px] text-slate-500">{is ? `Leikviðmið úr leikmanni völdum í „Leikmenn“-flipanum${player ? ` (${player.name})` : ""}. Skiptu um leikmann þar.` : `Match unit from the player selected in the "Players" tab${player ? ` (${player.name})` : ""}. Change the player there.`}</p>}
@@ -2453,46 +2475,6 @@ export default function PeriodizationHubPage() {
 
             return (<div className="space-y-4">
 
-          {/* 0 — BASELINE → MATCH TARGET → WEEK PLAN (all players, match-anchored) */}
-          <section className={card}>
-            <h2 className={h2c}>{is ? "Grunnur → leik-mark → vikuplan" : "Baseline → match target → week plan"}</h2>
-            <p className="mt-0.5 text-[12px] text-slate-500">{is ? "Grunnur (nýleg þjálfun, síð. 28 d — hvar leikmaðurinn er núna) → leik-mark (krafan per leik) → vikumark (áætlað vikuálag, leik-PL × vikumargfeldi ~2,35×)." : "Baseline (recent training, last 28d — where each player is now) → match target (per-match demand) → week target (planned weekly load, match PL × the weekly multiple ~2.35×)."}</p>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-[12.5px]">
-                <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
-                  <th className="py-1 pr-2 font-medium">{is ? "Leikmaður" : "Player"}</th>
-                  <th className="py-1 px-2 text-right font-medium">{is ? "Grunnur /æf (%leik)" : "Baseline /sess (%match)"}</th>
-                  <th className="py-1 px-2 text-right font-medium">{is ? "Leik-mark" : "Match target"}</th>
-                  <th className="py-1 px-2 text-right font-medium">{is ? "Vika PL" : "Week PL"}</th>
-                  <th className="py-1 px-2 text-right font-medium">MAS</th>
-                  <th className="py-1 pl-2 text-right font-medium">{is ? "Vantar" : "Gaps"}</th>
-                </tr></thead>
-                <tbody>
-                  {plist.map((p) => {
-                    const gk = /GK|MARK|KEEP/i.test(p.position ?? "");
-                    const mu = p.matchUnit.load.typical;
-                    const bpl = p.recentBaseline?.playerLoad ?? null;
-                    const pctM = bpl != null && mu != null && mu > 0 ? Math.round((bpl / mu) * 100) : null;
-                    const wk = mu != null ? Math.round(mu * bvWkMult) : null;
-                    const pctColor = pctM == null ? "" : pctM >= 100 ? "text-[#1c7a4a]" : pctM >= 60 ? "text-slate-500" : "text-[#de9328]";
-                    const gaps = p.gaps.filter((g) => g.severity !== "ok").length;
-                    return (
-                      <tr key={p.playerId} className={`border-t border-slate-100 ${p.playerId === selId ? "bg-[#2740e6]/5" : ""}`}>
-                        <td className="py-1.5 pr-2"><button type="button" onClick={() => setSelId(p.playerId)} className="font-semibold text-slate-800 hover:text-[#2740e6]">{p.name}</button>{p.position && <span className="ml-1 text-[11px] text-slate-400">{p.position}</span>}</td>
-                        <td className="py-1.5 px-2 text-right tabular-nums">{bpl != null ? <>{fmtKv(bpl)} PL{pctM != null && <span className={`ml-1 font-semibold ${pctColor}`}>({pctM}%)</span>}</> : <span className="text-slate-400">{is ? "– engin GPS" : "– no GPS"}</span>}</td>
-                        <td className="py-1.5 px-2 text-right tabular-nums text-slate-600">{gk ? (is ? "sérlíkan" : "GK model") : mu != null ? <>{mu} PL{p.matchUnit.hsr.typical != null ? ` · ${Math.round(p.matchUnit.hsr.typical)}m` : ""}{p.matchUnit.distance.typical != null ? ` · ${(p.matchUnit.distance.typical / 1000).toFixed(1)}km` : ""} <span className="text-slate-400">n{p.matchUnit.nNearFull}{p.matchUnit.confidence !== "high" ? ` (${p.matchUnit.confidence})` : ""}</span></> : "–"}</td>
-                        <td className="py-1.5 px-2 text-right tabular-nums font-bold text-[#2740e6]">{gk ? "–" : wk != null ? fmtKv(wk) : "–"}</td>
-                        <td className="py-1.5 px-2 text-right tabular-nums text-slate-400">{p.masKmh != null ? p.masKmh : "–"}</td>
-                        <td className={`py-1.5 pl-2 text-right tabular-nums font-semibold ${gaps > 0 ? "text-[#de9328]" : "text-[#1c7a4a]"}`}>{gaps}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-2 text-[11px] text-slate-400">{is ? "Grunnur = meðal-PL per þjálfunaræfingu síðustu 28 daga (grænt ≥100% af leik, gult <60%). Leik-mark = miðgildi næstum-heilla leikja. MAS = loftháða vélin. Lýsandi — aldrei readiness-liturinn." : "Baseline = mean PL per training session over the last 28 days (green ≥100% of a match, amber <60%). Match target = median of near-full matches. MAS = the aerobic engine. Descriptive — never the readiness colour."}</p>
-          </section>
-
           {/* 1 — PLAYER BAR: pick once, everything below follows */}
           <section className={`${card} flex flex-wrap items-center gap-x-5 gap-y-3`} aria-label={is ? "Leikmaður" : "Player"}>
             <div className="flex items-center gap-1">
@@ -2854,28 +2836,40 @@ export default function PeriodizationHubPage() {
               <h2 className={h2c}>{is ? "Allur hópurinn" : "The whole squad"}</h2>
               <span className="text-[12px] text-slate-500">{is ? "Smelltu á leikmann til að opna hann hér að ofan." : "Click a player to open him above."}</span>
             </div>
+            <p className="mt-1 text-[12px] text-slate-500">{is ? "Grunnur (nýleg þjálfun, síð. 28 d — hvar leikmaðurinn er núna) → leik-mark (krafan per leik) → vikumark (áætlað vikuálag, leik-PL × vikumargfeldi ~2,35×)." : "Baseline (recent training, last 28d — where each player is now) → match target (per-match demand) → week target (planned weekly load, match PL × the weekly multiple ~2.35×)."}</p>
             <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[680px] text-[13px]">
+              <table className="w-full min-w-[1040px] text-[13px]">
                 <thead><tr className="text-left text-[11px] text-slate-500">
                   <th className="py-1.5 pr-2 font-semibold">{is ? "Leikmaður" : "Player"}</th>
                   <th className="py-1.5 pr-2 font-semibold">{is ? "Staða" : "Position"}</th>
+                  <th className="py-1.5 px-2 text-right font-semibold">{is ? "Grunnur /æf (%leik)" : "Baseline /sess (%match)"}</th>
+                  <th className="py-1.5 px-2 text-right font-semibold">{is ? "Leik-mark" : "Match target"}</th>
+                  <th className="py-1.5 px-2 text-right font-semibold">{is ? "Vika PL" : "Week PL"}</th>
                   <th className="py-1.5 pr-2 text-right font-semibold" title={is ? "Hversu miklu léttari (−) rampurinn er vs fullur rampur, eftir VALD-þaki + mínútu-trimmi" : "How much lighter (−) the ramp is vs the full ramp, after the VALD cap + minutes trim"}>{is ? "Lota vs fullur rampur" : "Block vs full ramp"}</th>
                   <th className="py-1.5 pr-2 text-right font-semibold">{is ? "VALD-þak" : "VALD cap"}</th>
                   <th className="py-1.5 pr-2 text-right font-semibold">{is ? "Mín./leik" : "Min/match"}</th>
+                  <th className="py-1.5 pr-2 text-right font-semibold">MAS</th>
                   <th className="py-1.5 pl-2 font-semibold">{is ? "Gögn" : "Data"}</th>
                 </tr></thead>
                 <tbody>
                   {plist.map((p) => {
                     const lp = squadLp(p); const cap = p.vald.capPct; const am = p.recentMinutesAvg;
+                    const gk = /GK|MARK|KEEP/i.test(p.position ?? ""); const mu = p.matchUnit.load.typical; const bpl = p.recentBaseline?.playerLoad ?? null;
+                    const pctM = bpl != null && mu != null && mu > 0 ? Math.round((bpl / mu) * 100) : null; const wk = mu != null ? Math.round(mu * bvWkMult) : null;
+                    const pctColor = pctM == null ? "" : pctM >= 100 ? "text-[#15603a]" : pctM >= 60 ? "text-slate-600" : "text-[#7a5210]";
                     const gaps = p.gaps.filter((g) => g.severity !== "ok").length;
                     const on = p.playerId === selId;
                     return (
                       <tr key={p.playerId} onClick={() => setSelId(p.playerId)} className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${on ? "bg-[#2740e6]/[0.06]" : ""}`}>
                         <td className="py-2 pr-2"><button type="button" onClick={(e) => { e.stopPropagation(); setSelId(p.playerId); }} aria-pressed={on} className="text-left font-semibold text-slate-900 hover:underline">{p.name}</button></td>
                         <td className="py-2 pr-2 text-slate-600">{p.position ?? "–"}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{bpl != null ? <>{fmtKv(bpl)} PL{pctM != null && <span className={`ml-1 font-semibold ${pctColor}`}>({pctM}%)</span>}</> : <span className="text-slate-500">{is ? "– engin GPS" : "– no GPS"}</span>}</td>
+                        <td className="py-2 px-2 text-right tabular-nums text-slate-600">{gk ? (is ? "sérlíkan" : "GK model") : mu != null ? <>{mu} PL{p.matchUnit.hsr.typical != null ? ` · ${Math.round(p.matchUnit.hsr.typical)}m` : ""}{p.matchUnit.distance.typical != null ? ` · ${(p.matchUnit.distance.typical / 1000).toFixed(1)}km` : ""} <span className="text-slate-500">n{p.matchUnit.nNearFull}{p.matchUnit.confidence !== "high" ? ` (${p.matchUnit.confidence})` : ""}</span></> : "–"}</td>
+                        <td className="py-2 px-2 text-right tabular-nums font-bold text-[#2740e6]">{gk ? "–" : wk != null ? fmtKv(wk) : "–"}</td>
                         <td className={`py-2 pr-2 text-right font-bold tabular-nums ${lp > 0 ? "text-emerald-700" : lp < 0 ? "text-[#8a3220]" : "text-slate-500"}`}>{lp > 0 ? `−${lp}%` : lp < 0 ? `+${-lp}%` : "—"}</td>
                         <td className="py-2 pr-2 text-right tabular-nums">{cap != null && cap < 100 ? <span className={`rounded px-1.5 py-0.5 text-[12px] font-semibold ${cap >= 85 ? "bg-amber-100 text-amber-800" : "bg-rose-100 text-rose-800"}`}>{cap}%</span> : <span className="text-slate-500">–</span>}</td>
                         <td className="py-2 pr-2 text-right tabular-nums text-slate-600">{am == null ? "–" : `${am}′`}</td>
+                        <td className="py-2 pr-2 text-right tabular-nums text-slate-600">{p.masKmh != null ? p.masKmh : "–"}</td>
                         <td className={`py-2 pl-2 ${gaps ? "text-amber-800" : "text-emerald-700"}`}>{gaps ? (is ? `${gaps} vantar` : `${gaps} missing`) : (is ? "Í lagi" : "OK")}</td>
                       </tr>
                     );
@@ -2883,6 +2877,7 @@ export default function PeriodizationHubPage() {
                 </tbody>
               </table>
             </div>
+            <p className="mt-2 text-[12px] text-slate-500">{is ? "Grunnur = meðal-PL per þjálfunaræfingu síðustu 28 daga (grænt ≥100% af leik, gult <60%). Leik-mark = miðgildi næstum-heilla leikja. MAS = loftháða vélin. Lýsandi — aldrei readiness-liturinn." : "Baseline = mean PL per training session over the last 28 days (green ≥100% of a match, amber <60%). Match target = median of near-full matches. MAS = the aerobic engine. Descriptive — never the readiness colour."}</p>
             {/* PLANNED KPI VOLUME — in-season micro (week) + meso (block), anchored to match demand
                 (Martín-García 2018: weekly load ≈ ×match per KPI; Buchheit 2024 MD-day shape; deload per block). */}
             {(() => {
@@ -3010,10 +3005,10 @@ export default function PeriodizationHubPage() {
                   {/* Editable controls */}
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
                     <label className="flex items-center gap-1 text-slate-600">{is ? "Vika 1 ×leik" : "Week 1 ×match"}
-                      <input type="number" step={0.1} min={0.5} max={3} value={psWeek1Mult} onChange={(e) => setPsWeek1Mult(Math.max(0.5, Math.min(3, Number(e.target.value) || 1.3)))} className="w-16 rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
+                      <input type="number" step={0.1} min={0.5} max={3} value={psWeek1Mult} onChange={(e) => { const v = Math.max(0.5, Math.min(3, Number(e.target.value) || 1.3)); setPsWeek1Mult(v); persistOverridePatch({ preseasonWeek1Mult: v }); }} className="w-16 rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
                     </label>
                     <label className="flex items-center gap-1 text-slate-600">{is ? "Æfingar/viku" : "Sessions/wk"}
-                      <select value={psSessions} onChange={(e) => setPsSessions(Number(e.target.value))} className="rounded border border-slate-300 px-1.5 py-0.5">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+                      <select value={psSessions} onChange={(e) => { const v = Number(e.target.value); setPsSessions(v); persistOverridePatch({ preseasonSessions: v }); }} className="rounded border border-slate-300 px-1.5 py-0.5">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
                     </label>
                     <span className="text-slate-500">·</span>
                     <span className="text-slate-500">{is ? "Vika sýnd" : "Show week"}:</span>
