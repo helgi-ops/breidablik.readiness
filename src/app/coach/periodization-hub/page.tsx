@@ -775,14 +775,15 @@ export default function PeriodizationHubPage() {
     if (plan.phases.some((ph) => ph.key === "preseason")) {
       const preWeeks = Math.max(1, plan.phases.find((ph) => ph.key === "preseason")?.weeks ?? 6);
       const preAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
-      preRamp = preseasonStartRamp({ matchTypicalLoad: plan.matchLoad, matchKpiAvg: teamKpiAvg(plan.players), matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: preAnchor });
+      const preTka = teamKpiAvg(plan.players);
+      preRamp = preseasonStartRamp({ matchTypicalLoad: preTka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: preTka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: preAnchor });
       if (preRamp.length) {
         const anchorLabel = preAnchor === "match_this_season" ? (is ? "leikir í ár" : "this season's matches") : preAnchor === "srpe_only" ? (is ? "sRPE eingöngu" : "sRPE only") : (is ? "stöðu-viðmið" : "positional norm");
         const conf = preRamp[0].confidence === "high" ? (is ? "há" : "high") : preRamp[0].confidence === "moderate" ? (is ? "miðlungs" : "moderate") : (is ? "lítil" : "low");
         preseasonStart = {
           anchor: anchorLabel, confidence: conf,
           weeks: preRamp.map((w) => ({ weekIndex: w.weekIndex, multiple: w.multipleOfMatch, weeklyLoad: w.weeklyLoadTarget, perSession: w.perSessionLoad, srpe: w.sRpeAuTarget })),
-          week1Kpi: (Object.keys(preRamp[0].byKpi) as WeeklyLoadMetricKey[]).map((k) => ({ label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, value: preRamp[0].byKpi[k]!, unit: WEEKLY_LOAD_LABELS[k].unit })),
+          week1Kpi: (Object.keys(preRamp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad").map((k) => ({ label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, value: preRamp[0].byKpi[k]!, unit: WEEKLY_LOAD_LABELS[k].unit })),
         };
       }
     }
@@ -808,7 +809,8 @@ export default function PeriodizationHubPage() {
     let weeklyLoad: Parameters<typeof downloadPeriodizationHubPdf>[0]["weeklyLoad"] = null;
     if (preRamp.length) {
       const usesAu = preRamp.every((w) => w.weeklyLoadTarget == null);
-      const kpiKeys = (Object.keys(preRamp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => preRamp.some((w) => w.byKpi[k] != null));
+      // PlayerLoad is the headline bar (weeklyLoadTarget) — drop it from the per-KPI rows so it isn't duplicated.
+      const kpiKeys = (Object.keys(preRamp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad" && preRamp.some((w) => w.byKpi[k] != null));
       weeklyLoad = {
         startDate: preStart, unit: usesAu ? "AU" : "PL",
         weeks: preRamp.map((w) => ({ index: w.weekIndex, mult: w.multipleOfMatch, total: (usesAu ? w.sRpeAuTarget : w.weeklyLoadTarget) ?? null })),
@@ -1845,7 +1847,8 @@ export default function PeriodizationHubPage() {
               const preWeeks = Math.max(1, plan.phases.find((ph) => ph.key === "preseason")?.weeks ?? 6);
               const preStart = plan.phases.find((ph) => ph.key === "preseason")?.start ?? null;
               const preAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
-              const ramp = preseasonStartRamp({ matchTypicalLoad: plan.matchLoad, matchKpiAvg: teamKpiAvg(plan.players), matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: preAnchor });
+              const tka = teamKpiAvg(plan.players);
+              const ramp = preseasonStartRamp({ matchTypicalLoad: tka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: tka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: preAnchor });
               if (!ramp.length) return null;
               const usesAu = ramp.every((w) => w.weeklyLoadTarget == null); // srpe-only / normative teams have no PL unit
               const primary = (w: PreseasonWeekTarget) => (usesAu ? w.sRpeAuTarget : w.weeklyLoadTarget) ?? 0;
@@ -1853,7 +1856,8 @@ export default function PeriodizationHubPage() {
               const maxW = Math.max(1, ...ramp.map((w) => primary(w)));
               const total = ramp.reduce((sm, w) => sm + primary(w), 0);
               const fmt = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v));
-              const kpiKeys = (Object.keys(ramp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => ramp.some((w) => w.byKpi[k] != null));
+              // PlayerLoad is the headline bar — drop it from the per-KPI table so it isn't shown twice.
+              const kpiKeys = (Object.keys(ramp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad" && ramp.some((w) => w.byKpi[k] != null));
               return (
                 <section className={`${card} min-w-0`}>
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -2949,7 +2953,8 @@ export default function PeriodizationHubPage() {
               const preWeeks = Math.max(1, plan.phases.find((p) => p.key === "preseason")?.weeks ?? 6);
               const wkSel = Math.min(preWeeks, Math.max(1, psWeekSel));
               const teamAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
-              const teamRamp = preseasonStartRamp({ matchTypicalLoad: plan.matchLoad, matchKpiAvg: teamKpiAvg(plan.players), matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: teamAnchor });
+              const teamTka = teamKpiAvg(plan.players);
+              const teamRamp = preseasonStartRamp({ matchTypicalLoad: teamTka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: teamTka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: teamAnchor });
               const playerAnchor: LoadAnchor | null = player ? (player.matchUnit.load.typical != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative") : null;
               const playerRamp = player && playerAnchor ? preseasonStartRamp({ matchTypicalLoad: player.matchUnit.load.typical, matchKpiAvg: kpiAvgFromUnit(player.matchUnit), matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: playerAnchor }) : null;
               const teamRow = teamRamp[wkSel - 1];
@@ -2965,7 +2970,8 @@ export default function PeriodizationHubPage() {
                 </div>
               );
               const kpiChips = (row: PreseasonWeekTarget) => {
-                const keys = Object.keys(row.byKpi) as WeeklyLoadMetricKey[];
+                // PlayerLoad is the headline "week ≈ X PL" line — drop it from the chips so it isn't doubled.
+                const keys = (Object.keys(row.byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad");
                 if (keys.length === 0) return null;
                 return (
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
