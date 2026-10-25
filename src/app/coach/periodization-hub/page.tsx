@@ -33,6 +33,7 @@ import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { preseasonStartRamp, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
+import { standardTrainingDays, weeklyTrainingMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple } from "@/lib/micropulse/periodization/plannedVolume";
 import { recommendTestingSchedule, testsForBlock, TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
@@ -2728,6 +2729,78 @@ export default function PeriodizationHubPage() {
                 </tbody>
               </table>
             </div>
+            {/* PLANNED KPI VOLUME — in-season micro (week) + meso (block), anchored to match demand
+                (Martín-García 2018: weekly load ≈ ×match per KPI; Buchheit 2024 MD-day shape; deload per block). */}
+            {(() => {
+              const matchKpis = blkScope === "player" && player ? kpiAvgFromUnit(player.matchUnit) : teamKpiAvg(plan.players);
+              const wkMult = weeklyTrainingMultiple(standardTrainingDays(1)); // a standard 1-match week's TRAINING load
+              const vols = kpiVolumes(matchKpis, wkMult);
+              const meso = mesoWeeklyMultiples({ numWeeks: blkWeeks, baseMultiple: wkMult, stepPct: blkStep, deloadWeek: cadence });
+              const blockTotal = mesoTotalMultiple(meso);
+              const headKeys = (Object.keys(matchKpis) as WeeklyLoadMetricKey[]).slice(0, 2); // 1-2 headline KPIs for the meso table
+              const fmtK = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
+              return (
+                <details className="mt-4" open>
+                  <summary className="cursor-pointer py-1 text-[13px] font-bold text-[#2740e6]">{is ? "Áætlað KPI-magn — vika + meso (keppnistímabil)" : "Planned KPI volume — week + meso (in-season)"}</summary>
+                  <div className="mt-2 rounded-xl border border-slate-200 bg-white p-4">
+                    <p className="text-[15px] font-bold leading-snug text-slate-900">{is
+                      ? `Vika ≈ ${wkMult}× leikur í æfingaálagi (+ 1× leikurinn = ${Math.round((wkMult + 1) * 10) / 10}× heildar).`
+                      : `A week ≈ ${wkMult}× a match in training load (+ 1× the match = ${Math.round((wkMult + 1) * 10) / 10}× total).`}</p>
+                    <p className="mt-0.5 text-[12px] text-slate-500">{is ? `${blkScope === "player" && player ? player.name : "Liðsmeðaltal"} · leik-miðað per KPI (Martín-García 2018; MD-dagar Buchheit 2024).` : `${blkScope === "player" && player ? player.name : "Team average"} · match-anchored per KPI (Martín-García 2018; MD-day shape Buchheit 2024).`}</p>
+
+                    {vols.length > 0 ? (
+                      <div className="mt-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Vikumark per KPI" : "Weekly target per KPI"}</div>
+                        <div className="mt-1.5 overflow-x-auto">
+                          <table className="w-full text-[12.5px]">
+                            <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
+                              <th className="py-1 pr-2 font-medium">KPI</th><th className="py-1 px-2 text-right font-medium">{is ? "Leikur" : "Match"}</th><th className="py-1 pl-2 text-right font-medium">{is ? `Vika (${wkMult}×)` : `Week (${wkMult}×)`}</th>
+                            </tr></thead>
+                            <tbody>
+                              {vols.map((v) => (
+                                <tr key={v.key} className="border-t border-slate-100">
+                                  <td className="py-1.5 pr-2 text-slate-600">{is ? v.label.is : v.label.en}</td>
+                                  <td className="py-1.5 px-2 text-right tabular-nums text-slate-500">{fmtK(v.matchValue)}{v.unit}</td>
+                                  <td className="py-1.5 pl-2 text-right tabular-nums font-semibold text-slate-900">{fmtK(v.weeklyValue)}{v.unit}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : <p className="mt-2 text-[12px] text-amber-700">{is ? "Ekkert leikvið (GPS) enn — sýni sRPE-álag annars staðar." : "No GPS match unit yet — sRPE load is shown elsewhere."}</p>}
+
+                    <div className="mt-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? `Meso — ${blkWeeks} vikur (× leikur per viku)` : `Meso — ${blkWeeks} weeks (×match per week)`}</div>
+                      <div className="mt-1.5 overflow-x-auto">
+                        <table className="w-full text-[12.5px]">
+                          <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
+                            <th className="py-1 pr-2 font-medium">{is ? "Vika" : "Week"}</th><th className="py-1 px-2 text-right font-medium">× {is ? "leikur" : "match"}</th>
+                            {headKeys.map((k) => <th key={k} className="py-1 px-2 text-right font-medium">{is ? WEEKLY_LOAD_LABELS[k].is : WEEKLY_LOAD_LABELS[k].en}</th>)}
+                          </tr></thead>
+                          <tbody>
+                            {meso.map((w) => (
+                              <tr key={w.weekIndex} className="border-t border-slate-100">
+                                <td className="py-1.5 pr-2 text-slate-700">{is ? "Vika" : "Wk"} {w.weekIndex}{w.isDeload ? <span className="ml-1 rounded bg-[#de9328]/15 px-1 py-0.5 text-[9px] font-semibold uppercase text-[#de9328]">{is ? "niður" : "deload"}</span> : null}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums font-semibold text-slate-900">{w.multiple}×</td>
+                                {headKeys.map((k) => { const mv = matchKpis[k]; return <td key={k} className="py-1.5 px-2 text-right tabular-nums text-slate-600">{mv == null ? "–" : `${fmtK(mv * w.multiple)}${WEEKLY_LOAD_LABELS[k].unit}`}</td>; })}
+                              </tr>
+                            ))}
+                            <tr className="border-t-2 border-slate-300 font-semibold">
+                              <td className="py-1.5 pr-2">{is ? "Blokk alls" : "Block total"}</td>
+                              <td className="py-1.5 px-2 text-right tabular-nums text-slate-900">{blockTotal}×</td>
+                              {headKeys.map((k) => { const mv = matchKpis[k]; return <td key={k} className="py-1.5 px-2 text-right tabular-nums text-slate-700">{mv == null ? "–" : `${fmtK(mv * blockTotal)}${WEEKLY_LOAD_LABELS[k].unit}`}</td>; })}
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-[10px] text-slate-400">{is ? "Leik-miðað: hver KPI = leikgildi × vikumargfeldi. Vikan bylgjast um MD (MD-3 þyngst), blokkin stigmagnast með niðurtröppun. Lýsandi áætlun — aldrei readiness-liturinn." : "Match-anchored: each KPI = match value × weekly multiple. The week undulates around MD (MD-3 heaviest); the block ramps with a deload. Descriptive plan — never the readiness colour."}</p>
+                  </div>
+                </details>
+              );
+            })()}
+
             <details className="mt-4">
               <summary className="cursor-pointer py-1 text-[13px] font-bold text-[#2740e6]">{is ? "Undirbúningur — byrjunarálag viku 1 + stigmögnun (lið)" : "Pre-season — week-1 starting load + ramp (team)"}</summary>
             {/* PRE-SEASON WEEK-1 START — controlled re-entry + ramp to the pre-season build. Editable launch pad. */}
