@@ -801,12 +801,17 @@ export default function PeriodizationHubPage() {
       meso: pv.meso.map((w) => ({ weekIndex: w.weekIndex, isDeload: w.isDeload, volMultiple: w.volMultiple, kpi: w.kpi.map((c) => ({ multiple: c.multiple, value: c.value })) })),
       mesoTotal: { volMultiple: pv.mesoTotal.volMultiple, kpi: pv.mesoTotal.kpi.map((c) => ({ multiple: c.multiple, value: c.value })) },
     } : null;
+    // Weekly team load across the block (total planned PlayerLoad per week) + the ramp — the on-screen chart.
+    const weeklyLoad = calBlock && calBlock.weeks.length > 0 ? {
+      phase: calBlock.phase,
+      weeks: calBlock.weeks.map((w) => ({ index: w.index, mult: w.mult, isDeload: w.isDeload, total: Math.round(w.days.reduce((sm, d) => sm + (d.load ?? 0), 0)) })),
+    } : null;
     await downloadPeriodizationHubPdf({
       teamName: plan.teamName, seasonYear: plan.seasonYear, generatedAt: new Date().toISOString(), teamUnit,
       tier: plan.tier ? { label: plan.tier.label, loadSource: plan.tier.loadSource, confidence: plan.tier.confidence } : null,
       phases: plan.phases.map((ph) => ({ label: ph.label, start: ph.start, end: ph.end, weeks: ph.weeks, matches: ph.matches, rationale: ph.rationale })),
       congested: plan.congested ?? [], baselines, mdDemand, teamAxes: plan.teamBaseline?.axes ?? null, blocks,
-      block: calBlock, playerBlocks, mesoPlan, players, preseasonStart, plannedVolume,
+      block: calBlock, playerBlocks, mesoPlan, players, preseasonStart, plannedVolume, weeklyLoad,
     }, is ? "IS" : "EN");
   }
 
