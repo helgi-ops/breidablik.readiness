@@ -152,7 +152,8 @@ export default function PlayerStatsWyscoutView() {
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<string | null>(null);
-  const [view, setView] = React.useState<"import" | "players" | "matches">("import");
+  // Land on Players (the data), not Import (a setup step) — the empty state points to Import when needed.
+  const [view, setView] = React.useState<"import" | "players" | "matches">("players");
   const [overview, setOverview] = React.useState<Overview | null>(null);
   const [ovBusy, setOvBusy] = React.useState(false);
   const [selectedComp, setSelectedComp] = React.useState<string | null>(null);
