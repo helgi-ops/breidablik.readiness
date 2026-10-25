@@ -41,6 +41,15 @@ describe("winFactors math", () => {
     expect(form.trend!.note.en.toLowerCase()).toContain("up");
     expect(form.verdict.en).toContain("NJA");
     expect(form.confidence.en).toContain("6 loaded games");
+    // Team Win Factors — wins vs losses split (3 wins, 3 losses here; wins score much more).
+    expect(form.winFactors).not.toBeNull();
+    expect(form.winFactors!.comparable).toBe(true);
+    expect(form.winFactors!.wins).toBe(3);
+    expect(form.winFactors!.losses).toBe(3);
+    const ptsF = form.winFactors!.factors.find((f) => f.key === "pts")!;
+    expect(ptsF.winsVal).toBeGreaterThan(ptsF.lossesVal); // scored more in wins
+    expect(ptsF.delta).toBeGreaterThan(0);
+    expect(form.winFactors!.drivers.en).toContain("NJA");
   });
   it("ownTeamGameFromFibaGame needs shooting totals", () => {
     expect(ownTeamGameFromFibaGame({ own_totals: { points: 5 }, opp_totals: { points: 3 } })).toBeNull();

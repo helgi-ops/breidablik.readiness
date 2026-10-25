@@ -245,11 +245,15 @@ export function beatTeamPlan(teamGames: TeamGame[], teamName: string): BeatPlan 
 
 // ── Team form / season trajectory (single team — how their games are developing) ──
 export type TeamFormGame = { gameId: string; opponent: string; win: boolean; pts: number; oppPts: number; margin: number; eFG: number; oppEFG: number; tovPct: number; orebPct: number; ftRate: number; ast: number };
+/** One factor compared between this team's wins and its losses (the "what wins OUR games" read). */
+export type TeamWinFactor = { key: string; label: Bi; winsVal: number; lossesVal: number; delta: number; unit: "pct" | "num"; higherBetter: boolean };
 export type TeamFormRead = {
   team: string; games: number; wins: number; losses: number;
   avg: { pf: number; pa: number; net: number; eFG: number; oppEFG: number; tovPct: number; orebPct: number; ftRate: number; ast: number };
   log: TeamFormGame[];
   trend: { splitN: number; earlierNet: number; recentNet: number; deltaNet: number; note: Bi } | null;
+  // Team Win Factors — how THIS team's wins differ from its losses, ranked by the edge (needs ≥1 of each).
+  winFactors: { comparable: boolean; wins: number; losses: number; factors: TeamWinFactor[]; drivers: Bi } | null;
   verdict: Bi; facts: Bi[]; confidence: Bi;
 };
 
@@ -292,6 +296,36 @@ export function computeTeamForm(ownGames: TeamGame[]): TeamFormRead {
     trend = { splitN: recent.length, earlierNet, recentNet, deltaNet, note };
   }
 
+  // ── Team Win Factors: what separates THIS team's wins from its losses ──
+  const winGames = games.filter((g) => g.win), lossGames = games.filter((g) => !g.win);
+  let winFactors: TeamFormRead["winFactors"] = null;
+  if (winGames.length >= 1 && lossGames.length >= 1) {
+    const defs: Array<{ key: string; label: Bi; unit: "pct" | "num"; higherBetter: boolean; scale: number; of: (g: TeamGame) => number }> = [
+      { key: "efg", label: { en: "eFG% (offense)", is: "eFG% (sókn)" }, unit: "pct", higherBetter: true, scale: 0.08, of: (g) => eFG(g.box) },
+      { key: "oppEfg", label: { en: "Opponent eFG% (defense)", is: "eFG% andst. (vörn)" }, unit: "pct", higherBetter: false, scale: 0.08, of: (g) => eFG(g.oppBox) },
+      { key: "tovPct", label: { en: "Turnover %", is: "Tapaðir boltar %" }, unit: "pct", higherBetter: false, scale: 0.05, of: (g) => tovPct(g.box) },
+      { key: "orebPct", label: { en: "Off. rebound %", is: "Sóknarfráköst %" }, unit: "pct", higherBetter: true, scale: 0.08, of: (g) => orebPct(g.box, g.oppBox) },
+      { key: "ftRate", label: { en: "FT rate (FTM/FGA)", is: "Vítasókn (FTM/FGA)" }, unit: "pct", higherBetter: true, scale: 0.08, of: (g) => ftRate(g.box) },
+      { key: "ast", label: { en: "Assists", is: "Stoðsendingar" }, unit: "num", higherBetter: true, scale: 3, of: (g) => g.box.ast },
+      { key: "pts", label: { en: "Points scored", is: "Stig skoruð" }, unit: "num", higherBetter: true, scale: 8, of: (g) => g.box.pts },
+      { key: "pa", label: { en: "Points allowed", is: "Stig fengin" }, unit: "num", higherBetter: false, scale: 8, of: (g) => g.oppBox.pts },
+    ];
+    const fmt = (unit: "pct" | "num", v: number) => (unit === "pct" ? pctI(v) : r1n(v));
+    const scored = defs.map((d) => {
+      const w = mean(winGames.map(d.of)), l = mean(lossGames.map(d.of));
+      return { def: d, w, l, edge: (d.higherBetter ? w - l : l - w) / d.scale };
+    }).sort((a, b) => b.edge - a.edge);
+    const factors: TeamWinFactor[] = scored.map(({ def, w, l }) => ({
+      key: def.key, label: def.label, winsVal: fmt(def.unit, w), lossesVal: fmt(def.unit, l), delta: fmt(def.unit, w - l), unit: def.unit, higherBetter: def.higherBetter,
+    }));
+    const top = scored.filter((s) => s.edge > 0.4).slice(0, 3);
+    const names = (k: "en" | "is") => top.map((s) => s.def.label[k].replace(/\s*\(.*\)/, "")).join(", ");
+    const drivers: Bi = top.length
+      ? { en: `When ${team} win, the edge is: ${names("en")}.`, is: `Þegar ${team} vinna er munurinn: ${names("is")}.` }
+      : { en: "No single factor cleanly separates wins from losses yet — small sample.", is: "Enginn einn þáttur aðgreinir sigra frá töpum skýrt enn — lítið úrtak." };
+    winFactors = { comparable: true, wins: winGames.length, losses: lossGames.length, factors, drivers };
+  }
+
   // Verdict — their identity over these games.
   const verdict: Bi = avg.net >= 3
     ? { en: `${team} are outscoring opponents by +${avg.net} per game over these ${games.length} games.`, is: `${team} skora ${avg.net} stigum meira en andstæðingar að meðaltali í þessum ${games.length} leikjum.` }
@@ -309,7 +343,7 @@ export function computeTeamForm(ownGames: TeamGame[]): TeamFormRead {
     en: `${games.length} loaded games, ordered by game id (the FIBA feed has no date). Load a single full season for a true season trajectory. Descriptive — never touches readiness.`,
     is: `${games.length} leikir hlaðnir, raðað eftir leik-id (FIBA-fóðrið hefur enga dagsetningu). Hladdu heilu tímabili fyrir rétta tímabils-þróun. Lýsandi — snertir aldrei readiness.`,
   };
-  return { team, games: games.length, wins, losses: games.length - wins, avg, log, trend, verdict, facts, confidence };
+  return { team, games: games.length, wins, losses: games.length - wins, avg, log, trend, winFactors, verdict, facts, confidence };
 }
 
 // ── Plain-language verdict (rules decide; theme mapping keeps it jargon-free) ──

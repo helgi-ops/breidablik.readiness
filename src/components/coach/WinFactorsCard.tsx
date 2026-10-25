@@ -25,7 +25,8 @@ type League = { competition: string; season: string; stage: string; games: numbe
 type BeatItem = { key: string; label: Bi; r: number; oppValue: number; leagueAvg: number; higherIsBetter: boolean; note: Bi };
 type BeatPlan = { team: string; games: number; exploit: BeatItem[]; neutralize: BeatItem[]; note: Bi };
 type FormGame = { gameId: string; opponent: string; win: boolean; pts: number; oppPts: number; margin: number; eFG: number; oppEFG: number };
-type TeamForm = { team: string; games: number; wins: number; losses: number; avg: { pf: number; pa: number; net: number; eFG: number; oppEFG: number }; log: FormGame[]; trend: { note: Bi } | null; verdict: Bi; facts: Bi[]; confidence: Bi };
+type TeamWinFactor = { key: string; label: Bi; winsVal: number; lossesVal: number; delta: number; unit: "pct" | "num"; higherBetter: boolean };
+type TeamForm = { team: string; games: number; wins: number; losses: number; avg: { pf: number; pa: number; net: number; eFG: number; oppEFG: number }; log: FormGame[]; trend: { note: Bi } | null; winFactors: { comparable: boolean; wins: number; losses: number; factors: TeamWinFactor[]; drivers: Bi } | null; verdict: Bi; facts: Bi[]; confidence: Bi };
 type FormSeason = { key: string; competition: string; season: string; games: number };
 
 const T = {
@@ -82,6 +83,43 @@ function TeamFormBlock({ form, is, showLog, onToggleLog }: { form: TeamForm; is:
       <ul className="mt-1 space-y-0.5 text-[12.5px] text-slate-700">
         {form.facts.map((f, i) => <li key={i} className="flex gap-2"><span className="text-slate-400">•</span><span>{is ? f.is : f.en}</span></li>)}
       </ul>
+
+      {/* TEAM WIN FACTORS — what separates this team's wins from its losses */}
+      {form.winFactors?.comparable && (
+        <div className="mt-2.5 rounded-lg border border-[#2740e6]/20 bg-white p-2.5">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{is ? "Hvað vinnur ÞÍNA leiki" : "What wins YOUR games"}</div>
+          <p className="mt-0.5 text-[13px] font-semibold leading-snug text-slate-900">{is ? form.winFactors.drivers.is : form.winFactors.drivers.en}</p>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full min-w-[320px] text-[12px]">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-[9px] uppercase tracking-wide text-slate-400">
+                  <th className="py-1 pr-2 font-medium">{is ? "Þáttur" : "Factor"}</th>
+                  <th className="py-1 px-2 text-right font-medium">{is ? `Í sigrum (${form.winFactors.wins})` : `In wins (${form.winFactors.wins})`}</th>
+                  <th className="py-1 px-2 text-right font-medium">{is ? `Í töpum (${form.winFactors.losses})` : `In losses (${form.winFactors.losses})`}</th>
+                  <th className="py-1 pl-2 text-right font-medium">{is ? "Munur" : "Gap"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {form.winFactors.factors.map((f) => {
+                  const u = (v: number) => (f.unit === "pct" ? `${v}%` : String(v));
+                  const good = f.higherBetter ? f.delta > 0 : f.delta < 0; // gap favours winning
+                  const gapNum = f.higherBetter ? f.delta : -f.delta;
+                  return (
+                    <tr key={f.key} className="border-b border-slate-100 last:border-0">
+                      <td className="py-1 pr-2 text-slate-600">{is ? f.label.is : f.label.en}</td>
+                      <td className="py-1 px-2 text-right tabular-nums font-semibold text-slate-800">{u(f.winsVal)}</td>
+                      <td className="py-1 px-2 text-right tabular-nums text-slate-500">{u(f.lossesVal)}</td>
+                      <td className={`py-1 pl-2 text-right tabular-nums font-semibold ${good ? "text-[#1c7a4a]" : "text-[#a83e28]"}`}>{gapNum > 0 ? "+" : ""}{f.unit === "pct" ? `${gapNum}pp` : gapNum}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-1.5 text-[10px] text-slate-400">{is ? "Meðaltal í sigrum vs töpum. Grænn munur = hjálpar að vinna. Lýsandi — aldrei readiness." : "Average in wins vs losses. Green gap = helps you win. Descriptive — never readiness."}</p>
+        </div>
+      )}
+
       <button onClick={onToggleLog} className="mt-1.5 text-[12px] font-medium text-[#2740e6] hover:underline">{showLog ? t.hideLog : `${t.showLog} (${form.games})`}</button>
       {showLog && (
         <div className="mt-2 overflow-x-auto">
