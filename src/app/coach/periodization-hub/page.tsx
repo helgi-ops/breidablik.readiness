@@ -1737,10 +1737,10 @@ export default function PeriodizationHubPage() {
           {plan.phases.length === 0 && <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12px] font-medium text-amber-900">{is ? "⚠ Engir leikir/akkeri í Makró enn — stilltu Makró-lotuna fyrst (undirbúningsdag, leikjaskrá, niðurtröppun). Lotan hér reiknast úr því." : "⚠ No Macro anchors/fixtures yet — set the Macro Cycle first (pre-season date, fixtures, deload cadence). This block is computed from it."}</p>}
 
           {blkPopulated.length > 0 && (
-          <div className="flex flex-wrap items-start gap-4">
+          <div className="flex flex-col gap-4">
 
-            {/* 2 — THE CALENDAR: one grid. Top of a day = Off/Session/Match (click toggles); bottom = what the system computes (click opens the day). */}
-            <section className={`${card} min-w-0 flex-[999_1_620px]`}>
+            {/* 2 — THE CALENDAR: one grid, full width (single column so the whole week is visible). */}
+            <section className={`${card} min-w-0`}>
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <h2 className={h2}>{is ? "Dagatal lotunnar" : "Block calendar"}</h2>
                 {autoSave && (
@@ -1825,8 +1825,8 @@ export default function PeriodizationHubPage() {
               )}
             </section>
 
-            {/* 3 — SIDE PANEL: goal → numbers → testing → settings */}
-            <aside className="flex min-w-0 flex-[1_1_340px] flex-col gap-4">
+            {/* 3 — PANEL BELOW THE CALENDAR: goal → numbers → testing → settings, tiled in two columns. */}
+            <aside className="grid min-w-0 items-start gap-4 lg:grid-cols-2">
               <section className={card}>
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className={h2}>{is ? "Markmið lotunnar" : "Block goal"}</h2>
