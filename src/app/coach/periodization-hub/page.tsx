@@ -733,7 +733,10 @@ export default function PeriodizationHubPage() {
   async function exportAll() {
     if (!plan) return;
     const baselines = [plan.teamBaseline, ...plan.positionBaselines].filter((b) => b && b.avg.sessions > 0).map((b) => ({ label: b.label, players: b.avg.players, distanceM: b.avg.distanceM, hsrM: b.avg.hsrM, maxKmh: b.avg.maxKmh, playerLoad: b.avg.playerLoad, accel: b.avg.accel, decel: b.avg.decel, isTeam: b.key === -1 }));
-    const players = plan.players.map((p) => ({ name: p.name, position: p.position, masKmh: p.masKmh, matchUnitLoad: p.matchUnit.load.typical, matchUnitHsr: p.matchUnit.hsr.typical, nNearFull: p.matchUnit.nNearFull, matchUnitConf: p.matchUnit.confidence, valdCap: p.vald.capPct, gaps: p.gaps.filter((g) => g.severity !== "ok").length }));
+    // Per-player weekly PL target = that player's match unit (the TARGET/ceiling) × the in-season weekly
+    // multiple — the planned weekly volume each player ramps TO from their current baseline (MAS = engine).
+    const plWkMult = weeklyTrainingMultiple(standardTrainingDays(1));
+    const players = plan.players.map((p) => ({ name: p.name, position: p.position, masKmh: p.masKmh, matchUnitLoad: p.matchUnit.load.typical, matchUnitHsr: p.matchUnit.hsr.typical, matchUnitDistance: p.matchUnit.distance.typical, weeklyPlTarget: p.matchUnit.load.typical != null ? Math.round(p.matchUnit.load.typical * plWkMult) : null, nNearFull: p.matchUnit.nNearFull, matchUnitConf: p.matchUnit.confidence, valdCap: p.vald.capPct, gaps: p.gaps.filter((g) => g.severity !== "ok").length }));
     const blocks = mesoBlocks.map((b) => ({ phase: b.phase, goal: b.goal, goalKey: b.goalKey, start: b.start, end: b.end, weeks: b.weeks, isDeload: b.isDeload, deloadWeekStart: b.deloadWeekStart, tmr: b.tmr, volumeTargetPct: b.volumeTargetPct, flag: b.flag }));
     // The individualised calendar block(s) — one clean page per player. The coach picks the set (Selected /
     // All / custom); eligible = has a match unit AND is not a GK (GKs use a separate model, kept in the

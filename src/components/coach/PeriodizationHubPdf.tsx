@@ -20,7 +20,7 @@ export type HubBaselineRow = { label: Bi; players: number; distanceM: number | n
  *  session sits in the microcycle. relPl = Player Load vs the whole-squad season average (±%). */
 export type HubMdRow = { label: Bi; sessions: number; distanceM: number | null; hsrM: number | null; playerLoad: number | null; accel: number | null; decel: number | null; relPl: number | null };
 export type HubMdDemand = { phases: HubMdRow[]; days: HubMdRow[] };
-export type HubPlayerRow = { name: string; position: string | null; masKmh: number | null; matchUnitLoad: number | null; matchUnitHsr: number | null; nNearFull: number; matchUnitConf?: "high" | "medium" | "low" | null; valdCap: number | null; gaps: number };
+export type HubPlayerRow = { name: string; position: string | null; masKmh: number | null; matchUnitLoad: number | null; matchUnitHsr: number | null; matchUnitDistance?: number | null; weeklyPlTarget?: number | null; nNearFull: number; matchUnitConf?: "high" | "medium" | "low" | null; valdCap: number | null; gaps: number };
 export type HubBlockRow = { phase: Bi; goal: Bi; goalKey?: string; start: string; end: string; weeks: number; isDeload: boolean; deloadWeekStart?: string | null; tmr: number | null; volumeTargetPct: number | null; flag: Bi | null };
 export type HubPlayerBlock = { name: string; position: string | null; note: Bi; block: CalendarBlock };
 
@@ -407,21 +407,23 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
         {players.length > 0 && (
           <View style={s.section}>
             <Text style={s.h2}>{t.players}</Text>
-            <View style={s.th}><Text style={[s.thc, { flex: 1 }]}>{lang === "IS" ? "Leikmaður" : "Player"}</Text><Text style={[s.thc, { width: 34 }]}>{t.pos}</Text><Text style={[s.thc, { width: 50, textAlign: "right" }]}>{t.mas}</Text><Text style={[s.thc, { width: 118, textAlign: "right" }]}>{t.munit}</Text><Text style={[s.thc, { width: 44, textAlign: "right" }]}>{t.vald}</Text><Text style={[s.thc, { width: 34, textAlign: "right" }]}>{t.gaps}</Text></View>
+            <Text style={[s.small, { marginBottom: 2 }]}>{lang === "IS" ? "Grunnur (MAS-vél, hvar leikmaðurinn er) → Leik-mark (krafan per leik, þakið) → Vikumark (áætlað vikuálag sem rampað er AÐ)." : "Baseline (MAS engine — where the player is) → Match target (per-match demand, the ceiling) → Week target (planned weekly load ramped TO)."}</Text>
+            <View style={s.th}><Text style={[s.thc, { flex: 1 }]}>{lang === "IS" ? "Leikmaður" : "Player"}</Text><Text style={[s.thc, { width: 30 }]}>{t.pos}</Text><Text style={[s.thc, { width: 62, textAlign: "right" }]}>{lang === "IS" ? "Grunnur MAS" : "Baseline MAS"}</Text><Text style={[s.thc, { width: 124, textAlign: "right" }]}>{lang === "IS" ? "Leik-mark" : "Match target"}</Text><Text style={[s.thc, { width: 58, textAlign: "right" }]}>{lang === "IS" ? "Vika PL" : "Week PL"}</Text><Text style={[s.thc, { width: 38, textAlign: "right" }]}>{t.vald}</Text><Text style={[s.thc, { width: 30, textAlign: "right" }]}>{t.gaps}</Text></View>
             {players.map((p, i) => {
               const gk = /GK|MARK|KEEP/i.test(p.position ?? "");
               return (
               <View key={i} style={s.row}>
                 <Text style={{ flex: 1 }}>{p.name}{gk ? (lang === "IS" ? "  (mm)" : "  (GK)") : ""}</Text>
-                <Text style={{ width: 34, color: MUTE }}>{p.position ?? "–"}</Text>
-                <Text style={{ width: 50, textAlign: "right" }}>{p.masKmh != null ? `${p.masKmh}` : "–"}</Text>
-                <Text style={{ width: 118, textAlign: "right", color: gk ? MUTE : INK }}>{gk ? (lang === "IS" ? "sérlíkan" : "GK model") : (p.matchUnitLoad != null ? `${p.matchUnitLoad} PL · ${p.matchUnitHsr != null ? `${Math.round(p.matchUnitHsr)}m · ` : ""}n${p.nNearFull}${p.matchUnitConf && p.matchUnitConf !== "high" ? ` (${p.matchUnitConf})` : ""}` : "–")}</Text>
-                <Text style={{ width: 44, textAlign: "right" }}>{p.valdCap != null ? `${p.valdCap}%` : "–"}</Text>
-                <Text style={{ width: 34, textAlign: "right", color: p.gaps > 0 ? AMBER : "#1c7a4a" }}>{p.gaps}</Text>
+                <Text style={{ width: 30, color: MUTE }}>{p.position ?? "–"}</Text>
+                <Text style={{ width: 62, textAlign: "right" }}>{p.masKmh != null ? `${p.masKmh} km/h` : "–"}</Text>
+                <Text style={{ width: 124, textAlign: "right", color: gk ? MUTE : INK }}>{gk ? (lang === "IS" ? "sérlíkan" : "GK model") : (p.matchUnitLoad != null ? `${p.matchUnitLoad} PL · ${p.matchUnitHsr != null ? `${Math.round(p.matchUnitHsr)}m HSR` : ""}${p.matchUnitDistance != null ? ` · ${(p.matchUnitDistance / 1000).toFixed(1)}km` : ""} · n${p.nNearFull}${p.matchUnitConf && p.matchUnitConf !== "high" ? ` (${p.matchUnitConf})` : ""}` : "–")}</Text>
+                <Text style={{ width: 58, textAlign: "right", fontFamily: "Helvetica-Bold", color: gk ? MUTE : COBALT }}>{gk ? "–" : (p.weeklyPlTarget != null ? `${nf(p.weeklyPlTarget)}` : "–")}</Text>
+                <Text style={{ width: 38, textAlign: "right" }}>{p.valdCap != null ? `${p.valdCap}%` : "–"}</Text>
+                <Text style={{ width: 30, textAlign: "right", color: p.gaps > 0 ? AMBER : "#1c7a4a" }}>{p.gaps}</Text>
               </View>
               );
             })}
-            <Text style={[s.small, { marginTop: 3 }]}>{lang === "IS" ? "MAS í km/klst · Leikviðmið = miðgildi PL/HSR næstum-heilla leikja (n = fjöldi; lítil/miðlungs vissa → lestu sem vísbendingu, ekki hart mark) · VALD þak = geta til að taka álag · Vantar = fjöldi gagna-gata." : "MAS in km/h · Match unit = median PL/HSR of near-full matches (n = count; low/medium confidence → read as a hint, not a hard target) · VALD cap = readiness-to-load · Gaps = missing/stale data items."}</Text>
+            <Text style={[s.small, { marginTop: 3 }]}>{lang === "IS" ? "MAS = loftháða vélin (grunnur). Leik-mark = miðgildi PL/HSR/vegalengdar næstum-heilla leikja (n = fjöldi; lítil/miðlungs vissa → vísbending, ekki hart mark). Vika PL = leik-PL × vikumargfeldi (~2,35× fyrir 1-leiks viku). VALD þak = geta til að taka álag · Vantar = gagna-göt." : "MAS = the aerobic engine (baseline). Match target = median PL/HSR/distance of near-full matches (n = count; low/medium confidence → a hint, not a hard target). Week PL = match PL × the weekly multiple (~2.35× for a 1-match week). VALD cap = readiness-to-load · Gaps = missing data."}</Text>
             <Text style={[s.small, { marginTop: 1 }]}>{lang === "IS" ? "„–“ = engin næstum-heilir leikir enn (leikviðmið) eða ekkert VALD-próf (þak) — ekki villa; fyllist eftir því sem gögn safnast. Markmenn (mm) nota sérstakt álagslíkan, ekki útspilara-periodiseringu." : "\"–\" = no near-full matches yet (match unit) or no VALD test (cap) — not a bug; fills in as data accrues. Goalkeepers (GK) use a separate load model, not outfield periodization."}</Text>
           </View>
         )}
