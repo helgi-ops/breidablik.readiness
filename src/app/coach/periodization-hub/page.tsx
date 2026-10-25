@@ -186,6 +186,17 @@ export default function PeriodizationHubPage() {
 
   const authHeader = React.useCallback(async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`, [supabase]);
 
+  // Sport — the athlete-axis "Build Target" card (StatsBomb/GPS/VALD) is hidden for basketball.
+  const [isBasketball, setIsBasketball] = React.useState(false);
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/coach/player-stats/config", { headers: { Authorization: await authHeader() } });
+        if (res.ok) { const j = await res.json(); setIsBasketball(String(j.sport ?? "").toLowerCase() === "basketball"); }
+      } catch { /* default football */ }
+    })();
+  }, [authHeader]);
+
   // The strength coach's build-rule overrides (coach_strength_rules) — merged over the defaults so the
   // STRENGTH lane + phase-goal card reflect what the coach set. null → evidence-based defaults.
   const [coachStrengthRules, setCoachStrengthRules] = React.useState<CoachStrengthRules | null>(null);
@@ -519,7 +530,9 @@ export default function PeriodizationHubPage() {
   }, [tab, selId, authHeader]);
   const [steerNeutral, setSteerNeutral] = React.useState(false);
   React.useEffect(() => {
-    if (tab !== "players" || !selId) { setSteerData(null); return; }
+    // The athlete-axis "Build Target" steer reads the footballer+athlete profile (StatsBomb/GPS/VALD) and
+    // links to Total Player Analysis (hidden for basketball) — skip it entirely for a basketball team.
+    if (tab !== "players" || !selId || isBasketball) { setSteerData(null); return; }
     let alive = true;
     (async () => {
       try {
@@ -536,7 +549,7 @@ export default function PeriodizationHubPage() {
     })();
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, selId, is]);
+  }, [tab, selId, is, isBasketball]);
   const steer: BuildUpSteer | null = React.useMemo(() => (steerData && steerData.weaknesses.length ? computeBuildUpSteer(steerData.weaknesses) : null), [steerData]);
   const steerActive = !!steer && !steerNeutral && steer.hasHard;
   // Translate the axis boosts → the build-up card's per-KPI weekly-rate emphasis (same LoadKpi keys the

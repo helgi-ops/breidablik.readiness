@@ -7,12 +7,24 @@ import LoadPlanCard from "@/components/coach/LoadPlanCard";
 import OwenTaperCard from "@/components/coach/OwenTaperCard";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { readRestDayPref, writeRestDayPref } from "@/lib/coach/restDayPref";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 export default function LoadPlanPage() {
   const [date, setDate] = useState<string>("");
   const [restDay, setRestDay] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
   const effectiveDate = date || today;
+
+  // The Owen-2017 GPS volume/intensity taper is GPS-specific — hide it for a basketball (no-GPS) team.
+  const [isBasketball, setIsBasketball] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+        if (tok) { const res = await fetch("/api/coach/player-stats/config", { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } }); if (res.ok) setIsBasketball(String((await res.json()).sport ?? "").toLowerCase() === "basketball"); }
+      } catch { /* default football */ }
+    })();
+  }, []);
 
   // Restore the saved rest-day choice for the selected date (persists across
   // navigation and is shared with the Today dashboard download button).
@@ -55,7 +67,7 @@ export default function LoadPlanPage() {
         </div>
       </div>
       <LoadPlanCard date={date || undefined} restDay={restDay} />
-      <OwenTaperCard date={date || undefined} />
+      {!isBasketball && <OwenTaperCard date={date || undefined} />}
     </div>
   );
 }

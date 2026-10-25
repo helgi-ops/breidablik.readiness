@@ -846,7 +846,9 @@ export function CoachSidebar({
         />
         <Section
           label="Admin"
-          links={adminLinks}
+          // KSÍ Report is a football (KSÍ = Icelandic FOOTBALL federation) GPS/IMA call-up dossier —
+          // hide it for a basketball team (adminLinks is otherwise rendered without the tier/sport filter).
+          links={basketballTeam ? adminLinks.filter((l) => l.href !== "/coach/ksi-report") : adminLinks}
           pathname={pathname}
           currentTab={currentTab}
           lang={lang}
