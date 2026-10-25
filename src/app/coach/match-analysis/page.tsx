@@ -21,9 +21,7 @@ import StatsFileSourceGuide from "@/components/coach/StatsFileSourceGuide";
 import MatchReportPdfReader from "@/components/coach/MatchReportPdfReader";
 import SbTeamMatchReportPanel from "@/components/coach/SbTeamMatchReportPanel";
 import PassingNetworkPanel from "@/components/coach/PassingNetworkPanel";
-import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
-import BasketballSingleMatchAnalysis from "@/components/coach/BasketballSingleMatchAnalysis";
-import FibaShotCharts from "@/components/coach/FibaShotCharts";
+import BasketballMatchHub from "@/components/coach/BasketballMatchHub";
 
 type Source = "wyscout" | "statsbomb";
 type Named = { name: string; value: number };
@@ -185,33 +183,10 @@ export default function MatchAnalysisPage() {
           en="This page: one of your games in depth (box, halves, shot chart / Four Factors). For a player's season stats vs the squad → Player Season Analysis. For the whole-player footballer + athlete read → Total Player Analysis."
           is="Þessi síða: einn af þínum leikjum í dýpt (leikjatölur, hálfleikar, shot chart / Four Factors). Fyrir tímabils-tölfræði leikmanns vs liðið → Leikmanna-tímabilsgreining. Fyrir fótboltamann + íþróttamann saman → Heildar leikmannagreining."
         />
-        <details className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
-          <summary className="cursor-pointer text-[13px] font-semibold text-slate-700">
-            {is ? "Flytja inn leik (InStat leikskýrsla / tafla)" : "Import a game (InStat Game Report / table)"}
-          </summary>
-          <div className="mt-3">
-            <InstatBasketballUpload onImported={() => window.location.reload()} />
-          </div>
-        </details>
-
-        {/* Your team's game from FIBA LiveStats — paste the KKÍ game link (same feed as
-            Opponent Analysis, but focused on YOUR team): shot chart + box, free & public.
-            No InStat import needed. Descriptive — never the readiness colour. */}
+        {/* Unified: one shared list of your games (every source), merged per-game detail. The
+            per-source tools (FIBA shot charts, InStat deep read) live in the hub's Advanced drawer. */}
         <div className="mt-4">
-          <h2 className="text-[15px] font-bold text-slate-900">{is ? "Þinn leikur úr FIBA LiveStats" : "Your game from FIBA LiveStats"}</h2>
-          <p className="mt-0.5 text-[12px] text-slate-500">
-            {is
-              ? "Límdu inn KKÍ-leikinn þinn — shot chart, leikjatölur og skot-tilhneigingar fyrir þitt lið. Sami feed og í Andstæðinga-greiningu, en beint að þínu liði."
-              : "Paste your KKÍ game link — shot chart, box score and shooting tendencies for your team. Same feed as Opponent Analysis, but pointed at your own team."}
-          </p>
-          <div className="mt-2">
-            <FibaShotCharts focus="own" />
-          </div>
-        </div>
-
-        {/* This game's InStat read — team box, Four Factors, per-quarter, playtypes, zones. */}
-        <div className="mt-4">
-          <BasketballSingleMatchAnalysis />
+          <BasketballMatchHub />
         </div>
 
         <p className="mt-4 text-[12px] text-slate-500">
