@@ -62,6 +62,18 @@ export function weeklyKpiMultiple(mdDays: string[], key: WeeklyLoadMetricKey): n
   return weeklyMultiple(dayFractions(mdDays), KPI_TAPER_EXPONENT[key] ?? 1);
 }
 
+/** A KPI's SHARE of the volume multiple over a representative (full, 5-day) training week: the discount
+ *  that makes high-intensity KPIs accumulate a SMALLER weekly ×match than volume (sprint < HSR < acc/dec
+ *  < distance). 1.0 for volume metrics / unknown KPIs. Used where a single week multiple is spread across
+ *  KPIs (e.g. the pre-season ramp) so each metric tapers by its own exponent, not uniformly. */
+export function kpiTaperShare(key: string): number {
+  const fr = dayFractions(standardTrainingDays(0)); // the full no-match pre-season training-week shape
+  const vol = weeklyMultiple(fr, 1);
+  if (vol <= 0) return 1;
+  const share = weeklyMultiple(fr, KPI_TAPER_EXPONENT[key as WeeklyLoadMetricKey] ?? 1) / vol;
+  return Math.round(share * 1000) / 1000;
+}
+
 export type KpiVolume = { key: WeeklyLoadMetricKey; label: { en: string; is: string }; unit: string; matchValue: number; weeklyValue: number; multiple: number };
 
 /** Per-KPI planned weekly volume = each KPI's match value × its OWN tapered weekly multiple (so HSR/sprint

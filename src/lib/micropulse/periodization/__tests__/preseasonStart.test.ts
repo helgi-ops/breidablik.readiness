@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { preseasonStartRamp, defaultPeakMultiple } from "../preseasonStart";
+import { kpiTaperShare } from "../plannedVolume";
 
 const MATCH = 1000; // arbitrary match-unit load
 const KPI = { totalDistance: 10000, velocityBand6: 300, accelB23: 40, decelB23: 45, totalPlayerLoad: 500 };
@@ -27,15 +28,22 @@ describe("preseasonStartRamp", () => {
     expect(rows[rows.length - 1].multipleOfMatch!).toBeCloseTo(peak, 5);
   });
 
-  it("scales every KPI by the week's multiple", () => {
+  it("scales each KPI by the week's multiple × its OWN taper share (not uniformly)", () => {
     const rows = preseasonStartRamp({ matchTypicalLoad: MATCH, matchKpiAvg: KPI, sessionsPerWeek: 4, preseasonWeeks: 4, anchor: "match_this_season" });
     const w1 = rows[0];
-    expect(w1.byKpi.totalDistance).toBe(Math.round(10000 * 1.3));
-    expect(w1.byKpi.velocityBand6).toBe(Math.round(300 * 1.3));
-    expect(w1.byKpi.accelB23).toBe(Math.round(40 * 1.3));
-    // last week scales the same KPIs by the larger multiple
+    // Volume metrics (distance, PlayerLoad) keep the full multiple; high-intensity ones taper down.
+    expect(w1.byKpi.totalDistance).toBe(Math.round(10000 * 1.3 * kpiTaperShare("totalDistance")));
+    expect(w1.byKpi.totalDistance).toBe(Math.round(10000 * 1.3)); // share = 1.0 for distance
+    expect(w1.byKpi.velocityBand6).toBe(Math.round(300 * 1.3 * kpiTaperShare("velocityBand6")));
+    expect(w1.byKpi.accelB23).toBe(Math.round(40 * 1.3 * kpiTaperShare("accelB23")));
+    // Per-KPI ordering: sprint accumulates a SMALLER ×match than acc/dec, which is smaller than distance.
+    expect(kpiTaperShare("velocityBand6")).toBeLessThan(kpiTaperShare("accelB23"));
+    expect(kpiTaperShare("accelB23")).toBeLessThan(kpiTaperShare("totalDistance"));
+    expect(kpiTaperShare("totalDistance")).toBeCloseTo(1, 5);
+    // last week scales the same KPIs by the larger multiple (ramp still rises for every KPI)
     const wl = rows[rows.length - 1];
     expect(wl.byKpi.totalDistance!).toBeGreaterThan(w1.byKpi.totalDistance!);
+    expect(wl.byKpi.velocityBand6!).toBeGreaterThan(w1.byKpi.velocityBand6!);
   });
 
   it("carries an sRPE/AU weekly target when a match sRPE anchor is given", () => {

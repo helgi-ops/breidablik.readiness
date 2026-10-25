@@ -5,9 +5,10 @@
  * load — detrained players come off the break), then a safe progressive ramp across the pre-season
  * weeks toward the existing pre-season build (`weeklyTargetFromMatch` preseason ~2.2–4.2× a match/week).
  *
- * Anchor = the player's/team's own typical MATCH demand (the existing load unit). All main KPIs are
- * scaled from `matchKpiAvg` by the same weekly multiple, and an sRPE/AU (RPE×min) target rides
- * alongside so non-GPS teams get an arbitrary-units number too.
+ * Anchor = the player's/team's own typical MATCH demand (the existing load unit). Each KPI is scaled
+ * from `matchKpiAvg` by the week's multiple × its OWN taper share (high-intensity KPIs — HSR, sprint —
+ * accumulate a smaller weekly ×match than volume; `kpiTaperShare`), and an sRPE/AU (RPE×min) target
+ * rides alongside so non-GPS teams get an arbitrary-units number too.
  *
  * Pure, deterministic, null-safe. Advisory — the coach edits the week-1 multiple / ramp. Descriptive:
  * nothing here sets the readiness colour or the daily decision. Reuses `weeklyTargetFromMatch` for the
@@ -18,6 +19,7 @@
  */
 
 import { weeklyTargetFromMatch, type Bi } from "./index";
+import { kpiTaperShare } from "./plannedVolume";
 
 export type LoadAnchor = "match_this_season" | "match_last_season" | "normative" | "srpe_only";
 export type Confidence = "high" | "moderate" | "low";
@@ -87,10 +89,13 @@ export function preseasonStartRamp(opts: PreseasonStartOpts): PreseasonWeekTarge
     const weekly = opts.matchTypicalLoad != null ? r0(opts.matchTypicalLoad * mult) : null;
     const perSession = weekly != null ? r0(weekly / sc) : null;
 
+    // Per-KPI tapering: high-intensity metrics accumulate a SMALLER weekly ×match than volume
+    // (sprint < HSR < acc/dec < distance), so each KPI scales by mult × its own taper share — not the
+    // uniform volume multiple (Martín-García 2018; Oliva-Lozano 2020).
     const byKpi: Partial<Record<string, number>> = {};
     for (const k of kpiKeys) {
       const v = opts.matchKpiAvg?.[k];
-      if (typeof v === "number" && Number.isFinite(v)) byKpi[k] = r0(v * mult);
+      if (typeof v === "number" && Number.isFinite(v)) byKpi[k] = r0(v * mult * kpiTaperShare(k));
     }
 
     const sRpeAuTarget = opts.matchSrpeAu != null && Number.isFinite(opts.matchSrpeAu)
