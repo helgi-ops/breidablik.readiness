@@ -770,10 +770,12 @@ export default function PeriodizationHubPage() {
     // Pre-season start + ramp (team) — the controlled re-entry the pack builds from. Uses the coach's
     // current week-1 multiple / sessions from the Players tab, so the PDF matches what they set.
     let preseasonStart: Parameters<typeof downloadPeriodizationHubPdf>[0]["preseasonStart"] = null;
+    let preRamp: PreseasonWeekTarget[] = [];
+    const preStart = plan.phases.find((ph) => ph.key === "preseason")?.start ?? null;
     if (plan.phases.some((ph) => ph.key === "preseason")) {
       const preWeeks = Math.max(1, plan.phases.find((ph) => ph.key === "preseason")?.weeks ?? 6);
       const preAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
-      const preRamp = preseasonStartRamp({ matchTypicalLoad: plan.matchLoad, matchKpiAvg: teamKpiAvg(plan.players), matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: preAnchor });
+      preRamp = preseasonStartRamp({ matchTypicalLoad: plan.matchLoad, matchKpiAvg: teamKpiAvg(plan.players), matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: preAnchor });
       if (preRamp.length) {
         const anchorLabel = preAnchor === "match_this_season" ? (is ? "leikir í ár" : "this season's matches") : preAnchor === "srpe_only" ? (is ? "sRPE eingöngu" : "sRPE only") : (is ? "stöðu-viðmið" : "positional norm");
         const conf = preRamp[0].confidence === "high" ? (is ? "há" : "high") : preRamp[0].confidence === "moderate" ? (is ? "miðlungs" : "moderate") : (is ? "lítil" : "low");
@@ -801,11 +803,18 @@ export default function PeriodizationHubPage() {
       meso: pv.meso.map((w) => ({ weekIndex: w.weekIndex, isDeload: w.isDeload, volMultiple: w.volMultiple, kpi: w.kpi.map((c) => ({ multiple: c.multiple, value: c.value })) })),
       mesoTotal: { volMultiple: pv.mesoTotal.volMultiple, kpi: pv.mesoTotal.kpi.map((c) => ({ multiple: c.multiple, value: c.value })) },
     } : null;
-    // Weekly team load across the block (total planned PlayerLoad per week) + the ramp — the on-screen chart.
-    const weeklyLoad = calBlock && calBlock.weeks.length > 0 ? {
-      phase: calBlock.phase,
-      weeks: calBlock.weeks.map((w) => ({ index: w.index, mult: w.mult, isDeload: w.isDeload, total: Math.round(w.days.reduce((sm, d) => sm + (d.load ?? 0), 0)) })),
-    } : null;
+    // Pre-season weekly-load ramp — starts the week off-season ends (no off-season), ramps toward the
+    // build, with ALL KPI variables per week. Mirrors the on-screen "Pre-season weekly load — progression".
+    let weeklyLoad: Parameters<typeof downloadPeriodizationHubPdf>[0]["weeklyLoad"] = null;
+    if (preRamp.length) {
+      const usesAu = preRamp.every((w) => w.weeklyLoadTarget == null);
+      const kpiKeys = (Object.keys(preRamp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => preRamp.some((w) => w.byKpi[k] != null));
+      weeklyLoad = {
+        startDate: preStart, unit: usesAu ? "AU" : "PL",
+        weeks: preRamp.map((w) => ({ index: w.weekIndex, mult: w.multipleOfMatch, total: (usesAu ? w.sRpeAuTarget : w.weeklyLoadTarget) ?? null })),
+        kpi: kpiKeys.map((k) => ({ label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, unit: WEEKLY_LOAD_LABELS[k].unit, values: preRamp.map((w) => w.byKpi[k] ?? null) })),
+      };
+    }
     await downloadPeriodizationHubPdf({
       teamName: plan.teamName, seasonYear: plan.seasonYear, generatedAt: new Date().toISOString(), teamUnit,
       tier: plan.tier ? { label: plan.tier.label, loadSource: plan.tier.loadSource, confidence: plan.tier.confidence } : null,
@@ -1830,35 +1839,65 @@ export default function PeriodizationHubPage() {
               )}
             </section>
 
-            {/* 2b — WEEKLY TEAM LOAD across the block: total planned PlayerLoad per week + the progression. */}
-            {calBlock && calBlock.weeks.length > 0 && (() => {
-              const weekLoads = calBlock.weeks.map((w) => ({ index: w.index, mult: w.mult, isDeload: w.isDeload, total: Math.round(w.days.reduce((sm, d) => sm + (d.load ?? 0), 0)) }));
-              const active = weekLoads.filter((w) => w.total > 0);
-              const blockTotal = weekLoads.reduce((sm, w) => sm + w.total, 0);
-              const maxW = Math.max(1, ...weekLoads.map((w) => w.total));
-              const avgW = active.length ? Math.round(blockTotal / active.length) : 0;
-              const fmtPl = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v));
-              const phaseName = calBlock.phase ? (is ? calBlock.phase.is : calBlock.phase.en) : "";
+            {/* 2b — PRE-SEASON WEEKLY LOAD RAMP: starts the week off-season ends (no off-season shown),
+                 ramps week-by-week toward the pre-season build, with ALL KPI variables per week. */}
+            {plan.phases.some((ph) => ph.key === "preseason") && (() => {
+              const preWeeks = Math.max(1, plan.phases.find((ph) => ph.key === "preseason")?.weeks ?? 6);
+              const preStart = plan.phases.find((ph) => ph.key === "preseason")?.start ?? null;
+              const preAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
+              const ramp = preseasonStartRamp({ matchTypicalLoad: plan.matchLoad, matchKpiAvg: teamKpiAvg(plan.players), matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: preAnchor });
+              if (!ramp.length) return null;
+              const usesAu = ramp.every((w) => w.weeklyLoadTarget == null); // srpe-only / normative teams have no PL unit
+              const primary = (w: PreseasonWeekTarget) => (usesAu ? w.sRpeAuTarget : w.weeklyLoadTarget) ?? 0;
+              const unitLabel = usesAu ? "AU" : "PL";
+              const maxW = Math.max(1, ...ramp.map((w) => primary(w)));
+              const total = ramp.reduce((sm, w) => sm + primary(w), 0);
+              const fmt = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v));
+              const kpiKeys = (Object.keys(ramp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => ramp.some((w) => w.byKpi[k] != null));
               return (
                 <section className={`${card} min-w-0`}>
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h2 className={h2}>{is ? "Vikuálag liðsins — progression" : "Weekly team load — progression"}</h2>
-                    <span className="text-[12px] text-slate-500">{phaseName ? `${phaseName} · ` : ""}{is ? "blokk alls" : "block total"} <b className="tabular-nums text-slate-900">{fmtPl(blockTotal)} PL</b>{avgW ? <> · {is ? "meðal/viku" : "avg/week"} <b className="tabular-nums text-slate-700">{fmtPl(avgW)}</b></> : null}</span>
+                    <h2 className={h2}>{is ? "Vikuálag undirbúnings — progression" : "Pre-season weekly load — progression"}</h2>
+                    <span className="text-[12px] text-slate-500">{preStart ? <>{is ? "hefst" : "starts"} <b className="text-slate-700">{shortDate(preStart, is)}</b> · </> : null}{preWeeks} {is ? "vikur" : "weeks"} · {is ? "alls" : "total"} <b className="tabular-nums text-slate-900">{fmt(total)} {unitLabel}</b></span>
                   </div>
-                  <p className="mt-0.5 text-[12px] text-slate-500">{is ? "Summa áætlaðs Player Load allra daga hverrar viku — heildarálag blokkarinnar og hvernig það stigmagnast (niðurtröppun í gulu). Lýsandi áætlun — aldrei readiness-liturinn." : "Sum of planned Player Load across each week's days — the block's total load and how it ramps (deload in amber). Descriptive plan — never the readiness colour."}</p>
+                  <p className="mt-0.5 text-[12px] text-slate-500">{is ? "Fyrsta vikan er þegar off-season endar — stýrð endurkoma — og álagið stigmagnast þaðan að undirbúnings-uppbyggingu. Hvert vikuálag er margfeldi af einu leikálagi; allar KPI-breytur skalast með. Lýsandi áætlun — aldrei readiness-liturinn." : "Week 1 is when off-season ends — a controlled re-entry — ramping from there toward the pre-season build. Each week's load is a multiple of one match; every KPI variable scales with it. Descriptive plan — never the readiness colour."}</p>
                   <div className="mt-4 flex items-end gap-2 sm:gap-3">
-                    {weekLoads.map((w) => {
-                      const h = w.total > 0 ? Math.max(4, Math.round((w.total / maxW) * 108)) : 0;
+                    {ramp.map((w) => {
+                      const v = primary(w);
+                      const h = v > 0 ? Math.max(4, Math.round((v / maxW) * 108)) : 0;
                       return (
-                        <div key={w.index} className="flex min-w-0 flex-1 flex-col items-center">
-                          <span className="mb-1 text-[11px] font-semibold tabular-nums text-slate-700">{w.total ? fmtPl(w.total) : "–"}</span>
-                          <div className="w-[72%] rounded-t" style={{ height: h, background: w.isDeload ? "#de9328" : "#2740e6", opacity: w.total ? 1 : 0.12 }} title={`${is ? "Vika" : "Week"} ${w.index}: ${w.total} PL · ×${w.mult}${w.isDeload ? ` (${is ? "niður" : "deload"})` : ""}`} />
-                          <span className="mt-1.5 text-[11px] font-semibold text-slate-600">{is ? "V" : "W"}{w.index}</span>
-                          <span className="text-[10px] tabular-nums text-slate-400">×{w.mult}</span>
+                        <div key={w.weekIndex} className="flex min-w-0 flex-1 flex-col items-center">
+                          <span className="mb-1 text-[11px] font-semibold tabular-nums text-slate-700">{v ? fmt(v) : "–"}</span>
+                          <div className="w-[72%] rounded-t" style={{ height: h, background: "#2740e6", opacity: v ? 1 : 0.12 }} title={`${is ? "Vika" : "Week"} ${w.weekIndex}: ${v} ${unitLabel} · ×${w.multipleOfMatch} ${is ? "leik" : "match"}`} />
+                          <span className="mt-1.5 text-[11px] font-semibold text-slate-600">{is ? "V" : "W"}{w.weekIndex}</span>
+                          <span className="text-[10px] tabular-nums text-slate-400">×{w.multipleOfMatch}</span>
                         </div>
                       );
                     })}
                   </div>
+                  {kpiKeys.length > 0 && (
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="w-full min-w-[520px] border-collapse text-[12px]">
+                        <thead>
+                          <tr className="border-b border-slate-200 text-left text-slate-500">
+                            <th className="py-1.5 pr-3 font-semibold">{is ? "KPI-breyta" : "KPI variable"}</th>
+                            {ramp.map((w) => <th key={w.weekIndex} className="px-2 py-1.5 text-right font-semibold tabular-nums">{is ? "V" : "W"}{w.weekIndex}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {kpiKeys.map((k) => {
+                            const lab = WEEKLY_LOAD_LABELS[k];
+                            return (
+                              <tr key={k} className="border-b border-slate-100">
+                                <td className="py-1.5 pr-3 text-slate-700">{is ? lab.is : lab.en} <span className="text-slate-400">({lab.unit})</span></td>
+                                {ramp.map((w) => <td key={w.weekIndex} className="px-2 py-1.5 text-right tabular-nums text-slate-800">{w.byKpi[k] != null ? w.byKpi[k]!.toLocaleString("en-US") : "–"}</td>)}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </section>
               );
             })()}
