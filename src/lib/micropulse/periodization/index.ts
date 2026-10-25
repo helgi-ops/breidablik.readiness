@@ -959,6 +959,10 @@ export type MesoBlock = {
    *  last week by default, snapped to the lightest fixture week near the end; pulled forward when fatigued).
    *  `deloadNow` = fatigue-triggered pull-forward. `isDeload` mirrors `deloadNow` for legacy consumers. */
   deloadWeekStart: string | null; deloadNow: boolean; isDeload: boolean;
+  /** True when the coach pinned this block's deload week by hand (overrides the auto placement). */
+  deloadPinned?: boolean;
+  /** True when the coach set this block's length by hand (vs the auto cadence / calendar slice). */
+  lengthPinned?: boolean;
   volumeTargetPct: number | null; flag: Bi | null;
   /** LEADING meso metric — the week expressed in MATCH units (weekly training load ÷ one match's load).
    *  The match is the natural unit of demand; we ramp TMr sensibly, we don't chase an ACWR band. */
@@ -1027,7 +1031,16 @@ const ACWR_CONTESTED: Bi = {
  * bye / low-density week from `fixtures`); a fatigue signal pulls it to the block's first week (`deloadNow`).
  * `matchLoad` is the team's typical single-match load in the same currency (Player Load or sRPE-AU).
  */
-export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4, matchLoad: number | null = null, fixtures: string[] = [], competitiveStart: string | null = null, breaks: Array<{ start_date: string; end_date: string }> = [], offseasonStart: string | null = null, offseasonBuildStart: string | null = null): MesoBlock[] {
+export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4, matchLoad: number | null = null, fixtures: string[] = [], competitiveStart: string | null = null, breaks: Array<{ start_date: string; end_date: string }> = [], offseasonStart: string | null = null, offseasonBuildStart: string | null = null, opts?: {
+  /** Coach per-block LENGTH overrides, keyed by the block's start Monday ISO → weeks (2–8). A block that
+   *  starts on an overridden Monday takes that many weeks; later blocks re-flow (so resizing an earlier
+   *  block can reset a later block's own override). Does not apply to whole-gap / holiday blocks. */
+  blockWeeksByStart?: Record<string, number>;
+  /** Coach deload-week pins, keyed by the block's start Monday ISO → the Monday ISO of the deload week.
+   *  Wins over the auto placement + the fatigue pull-forward when it lands inside the block. */
+  deloadByStart?: Record<string, string>;
+}): MesoBlock[] {
+  const ovWeeks = (mon: string): number | null => { const w = opts?.blockWeeksByStart?.[mon]; return typeof w === "number" && w >= 2 && w <= 8 ? Math.round(w) : null; };
   const byWeek = [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
   const loadAt = (start: string, end: string) => byWeek.filter((w) => w.weekStart >= start && w.weekStart < end);
   const fxMs = fixtures.map((d) => Date.parse(d)).filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
@@ -1043,8 +1056,16 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
   //    team break becomes its OWN block (a re-load window); the competition stretches between gaps are
   //    sliced into ~blockWeeks chunks. So the calendar defines the block structure, not an arbitrary grid.
   const fixedCadence = (a: string, b: string): Array<{ start: string; end: string }> => {
-    const tw = Math.max(1, Math.round(daydiff(a, b) / 7)); const k = Math.max(1, Math.ceil(tw / blockWeeks));
-    return Array.from({ length: k }, (_, i) => ({ start: addDays(a, i * blockWeeks * 7), end: i === k - 1 ? b : addDays(a, (i + 1) * blockWeeks * 7) }));
+    const out: Array<{ start: string; end: string }> = [];
+    let cur = a;
+    while (cur < b) {
+      const len = ovWeeks(cur) ?? blockWeeks;
+      const rawEnd = addDays(cur, len * 7);
+      const end = rawEnd < b ? rawEnd : b;
+      out.push({ start: cur, end });
+      cur = end;
+    }
+    return out.length ? out : [{ start: a, end: b }];
   };
   let spans: Array<{ start: string; end: string; kind?: "holiday" }>;
   if (!competitiveStart || competitiveStart <= phaseStart) {
@@ -1069,7 +1090,7 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
       const gap = wk[i].gap; let j = i; while (j < wk.length && wk[j].gap === gap) j++;
       const spanEnd = (to: number) => (to < wk.length ? wk[to].mon : compEnd);
       if (gap) compSpans.push({ start: wk[i].mon, end: spanEnd(j) });
-      else for (let a = i; a < j; a += blockWeeks) compSpans.push({ start: wk[a].mon, end: spanEnd(Math.min(j, a + blockWeeks)) });
+      else { let a = i; while (a < j) { const len = ovWeeks(wk[a].mon) ?? blockWeeks; const to = Math.min(j, a + len); compSpans.push({ start: wk[a].mon, end: spanEnd(to) }); a = to; } }
       i = j;
     }
     if (compSpans.length) { compSpans[0].start = competitiveStart; spans = [...spans, ...compSpans]; } // meet pre-season exactly at the first fixture
@@ -1112,7 +1133,11 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
     for (let w = Math.max(0, blockWk - 2); w < blockWk; w++) cands.push(addDays(start, w * 7));
     let deloadWeekStart = cands.length ? cands[cands.length - 1] : start, best = Infinity;
     for (const c of cands) { const m = matchesInWeek(c); if (m <= best) { best = m; deloadWeekStart = c; } }
-    if (deloadNow) deloadWeekStart = start;
+    // Coach's pin wins over the auto placement AND the fatigue pull-forward, when it lands in this block.
+    const deloadPin = opts?.deloadByStart?.[start];
+    const deloadPinned = !!(deloadPin && deloadPin >= start && deloadPin < end);
+    if (deloadPinned) deloadWeekStart = deloadPin!;
+    else if (deloadNow) deloadWeekStart = start;
     // Fixture-aware block goal: pre-season keeps the build-up order; a competitive block reads as what
     // its calendar makes it — congested → Realization, a real gap/break → a loading block, else compete.
     const startMs = Date.parse(start), endMs = Date.parse(end);
@@ -1151,7 +1176,8 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
       : readinessDown ? { en: "Readiness trending down — pull the deload week forward", is: "Viðbragð lækkandi — færðu niðurtröppunar-vikuna framar" } : null;
     out.push({
       index: i, phase: g.phase, goal: g.goal, goalKey: gk,
-      start, end, weeks: blockWk, deloadWeekStart, deloadNow, isDeload: deloadNow, volumeTargetPct, flag,
+      start, end, weeks: blockWk, deloadWeekStart, deloadNow, isDeload: deloadNow, deloadPinned,
+      lengthPinned: ovWeeks(start) != null && !isHoliday, volumeTargetPct, flag,
       tmr, loadTrend, acwr, acwrNote: ACWR_CONTESTED,
     });
   }

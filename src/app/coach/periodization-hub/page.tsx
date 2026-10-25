@@ -178,6 +178,11 @@ export default function PeriodizationHubPage() {
   // Per-block goal overrides, keyed by block start ISO (coach's choice wins over the engine's default).
   // Persisted in season_plans.overrides.blockGoals; the editable goal is derived per selected block below.
   const [blockGoals, setBlockGoals] = React.useState<Record<string, "accum" | "transmute" | "realize">>({});
+  // Per-block LENGTH + DELOAD-week overrides, keyed by block start ISO. Persisted in
+  // season_plans.overrides.blockWeeks / .blockDeload; applied inside buildMesoBlocks (so the server-side
+  // plan target lands on the same blocks). Default = the auto cadence / smart deload placement.
+  const [blockLenOv, setBlockLenOv] = React.useState<Record<string, number>>({});
+  const [blockDeloadOv, setBlockDeloadOv] = React.useState<Record<string, string>>({});
   const [loadCurveKey, setLoadCurveKey] = React.useState(-1); // -1 = Team (whole squad), else a position key
   // Pre-season week-1 starting target + ramp (editable launch pad; coach builds from it).
   const [psWeek1Mult, setPsWeek1Mult] = React.useState(1.3); // week-1 ×match (controlled re-entry)
@@ -280,7 +285,7 @@ export default function PeriodizationHubPage() {
       if (!res.ok || !j.ok) { setErr(j.error ?? "Failed"); return; }
       setPlan(j.plan as Plan);
       // Populate the season-window inputs from the saved overrides, once, so they reflect what's stored.
-      const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; offseasonStart?: string | null; preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; stepPct?: number | null; blockGoals?: Record<string, "accum" | "transmute" | "realize"> } }).savedWindow;
+      const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; offseasonStart?: string | null; preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; stepPct?: number | null; blockGoals?: Record<string, "accum" | "transmute" | "realize">; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string> } }).savedWindow;
       if (sw && !didPopulateWindow.current) {
         didPopulateWindow.current = true;
         if (sw.preseasonStart) setPreStart(sw.preseasonStart);
@@ -291,6 +296,8 @@ export default function PeriodizationHubPage() {
         if (sw.preseasonSessions === 3 || sw.preseasonSessions === 4 || sw.preseasonSessions === 5 || sw.preseasonSessions === 6) setPsSessions(sw.preseasonSessions);
         if (sw.stepPct != null && Number.isFinite(sw.stepPct)) setBlkStep(Math.max(0, Math.min(15, sw.stepPct)));
         if (sw.blockGoals && Object.keys(sw.blockGoals).length) setBlockGoals(sw.blockGoals);
+        if (sw.blockWeeks && Object.keys(sw.blockWeeks).length) setBlockLenOv(sw.blockWeeks);
+        if (sw.blockDeload && Object.keys(sw.blockDeload).length) setBlockDeloadOv(sw.blockDeload);
       }
       // Restore the coach's saved block length (cadence) so the meso reads back the block they set up.
       const savedCadence = Number((j as { deloadCadence?: number }).deloadCadence);
@@ -345,8 +352,8 @@ export default function PeriodizationHubPage() {
     // competitiveStart lets the builder make each in-season block fixture-aware (compete vs re-load).
     const compStart = plan.phases.find((p) => p.key === "competitive")?.start ?? null;
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
-    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart, teamBreaks, offPhaseStart, offStart || null);
-  }, [plan, cadence, teamBreaks, offStart]);
+    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart, teamBreaks, offPhaseStart, offStart || null, { blockWeeksByStart: blockLenOv, deloadByStart: blockDeloadOv });
+  }, [plan, cadence, teamBreaks, offStart, blockLenOv, blockDeloadOv]);
 
   // The block the coach is editing (contains blkStart), and its EFFECTIVE goal = coach override for that
   // block ?? the engine's recommended goalKey. `deload` goalKey (holiday/unload blocks) maps to accum —
@@ -696,6 +703,27 @@ export default function PeriodizationHubPage() {
       } catch { /* best-effort persist */ }
     })();
   }, [blockGoals, activeBlockStart, plan, cadence, overridesPayload, authHeader, scheduleAutoSave]);
+
+  // Override a block's LENGTH (weeks) or pin its DELOAD week. Keyed by the block start ISO; the whole map
+  // is sent so the server's shallow merge replaces it cleanly. Re-applies week_plans (auto-save) because
+  // the block boundaries / deload move. null clears the override (back to auto).
+  const persistBlockMap = React.useCallback((key: "blockWeeks" | "blockDeload", map: Record<string, number | string>) => {
+    scheduleAutoSave();
+    if (!plan) return;
+    (async () => {
+      try {
+        await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: plan.seasonYear, overrides: { [key]: map } }) });
+      } catch { /* best-effort persist */ }
+    })();
+  }, [plan, authHeader, scheduleAutoSave]);
+  const setBlockLength = React.useCallback((blockStart: string, weeks: number | null) => {
+    const next = { ...blockLenOv }; if (weeks == null) delete next[blockStart]; else next[blockStart] = weeks;
+    setBlockLenOv(next); persistBlockMap("blockWeeks", next);
+  }, [blockLenOv, persistBlockMap]);
+  const setBlockDeload = React.useCallback((blockStart: string, weekMon: string | null) => {
+    const next = { ...blockDeloadOv }; if (weekMon == null) delete next[blockStart]; else next[blockStart] = weekMon;
+    setBlockDeloadOv(next); persistBlockMap("blockDeload", next);
+  }, [blockDeloadOv, persistBlockMap]);
 
   // Day-type editor: MATCHES ARE READ-ONLY HERE. A match belongs to Fixtures (match_schedule)
   // — the meso only reads it (isFixtureDay). Toggling a day changes the TRAINING type (Off /
@@ -1752,6 +1780,27 @@ export default function PeriodizationHubPage() {
                 <button onClick={applyToWeekSetup} disabled={!calBlock || wsBusy} className="h-10 rounded-lg bg-[#2740e6] px-3 text-[13px] font-semibold text-white hover:bg-[#1e34c0] disabled:opacity-40" title={is ? "Dagarnir vistast sjálfkrafa við hverja breytingu — þetta vistar strax núna" : "Days auto-save on every change — this saves now immediately"}>{wsBusy ? (is ? "Vista…" : "Saving…") : wsApplied === "ok" ? (is ? "✓ Vistað" : "✓ Saved") : (is ? "Vista núna" : "Save now")}</button>
               </div>
             </div>
+            {/* Per-block overrides — length + deload-week pin. Auto by default; the coach shapes a block
+                where it matters (the server plan target reads the same overrides). */}
+            {sel && sel.phase.en !== "Off-season break" && (
+              <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-3">
+                <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Lotulengd" : "Block length"}
+                  <select value={blockLenOv[sel.start] ?? ""} onChange={(e) => setBlockLength(sel.start, e.target.value === "" ? null : Number(e.target.value))} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
+                    <option value="">{is ? `Sjálfgefið (${cadence}v)` : `Auto (${cadence}w)`}</option>
+                    {[2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} {is ? "vikur" : "weeks"}</option>)}
+                  </select>
+                  {sel.lengthPinned && <span className="rounded-full bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#2740e6]">{is ? "stillt" : "set"}</span>}
+                </label>
+                <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Niðurtröppunarvika" : "Deload week"}
+                  <select value={blockDeloadOv[sel.start] ?? ""} onChange={(e) => setBlockDeload(sel.start, e.target.value || null)} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
+                    <option value="">{is ? `Sjálfgefið${sel.deloadWeekStart && !sel.deloadPinned ? ` (${shortDate(sel.deloadWeekStart, is)})` : ""}` : `Auto${sel.deloadWeekStart && !sel.deloadPinned ? ` (${shortDate(sel.deloadWeekStart, is)})` : ""}`}</option>
+                    {Array.from({ length: sel.weeks }, (_, w) => isoAdd(sel.start, w * 7)).map((mon) => <option key={mon} value={mon}>{is ? "Vika" : "Week of"} {shortDate(mon, is)}</option>)}
+                  </select>
+                  {sel.deloadPinned && <span className="rounded-full bg-[#de9328]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#de9328]">{is ? "fest" : "pinned"}</span>}
+                </label>
+                <span className="text-[11px] text-slate-400">{is ? "Sjálfvirkt sjálfgefið — hnekktu þar sem þarf." : "Auto by default — override where it matters."}</span>
+              </div>
+            )}
             {wsApplied === "ok" && <p className="mt-2 text-[12px] font-medium text-emerald-700">{is ? "✓ Lotan er komin í Vikuuppsetningu — leikir/æfingar/frí og dagsgerðir skrifaðar á week_plans." : "✓ The block is in Week Setup — matches/sessions/off and day-types written to week_plans."}</p>}
             {wsApplied === "err" && <p className="mt-2 text-[12px] font-medium text-rose-700">{is ? "Ekki tókst að vista í Vikuuppsetningu." : "Couldn't save to Week Setup."}</p>}
 

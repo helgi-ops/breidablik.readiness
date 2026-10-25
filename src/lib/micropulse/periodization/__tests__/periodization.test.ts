@@ -138,6 +138,34 @@ test("buildMesoBlocks: the deload is a WEEK (last week by default), snapped to t
   assert.equal(snapped[0].deloadWeekStart, "2026-04-20");
 });
 
+test("buildMesoBlocks: coach per-block LENGTH override re-flows later blocks", () => {
+  const weeks: WeekLoad[] = [];
+  const base = Date.parse("2026-04-06");
+  for (let i = 0; i < 12; i++) weeks.push({ weekStart: new Date(base + i * 7 * 86_400_000).toISOString().slice(0, 10), load: 2000, readiness: 70 });
+  // Default cadence 4 → three 4-week blocks. Override block 0 to 6 weeks → [6, 4, 2], starts re-flow.
+  const b = buildMesoBlocks("2026-04-06", "2026-06-29", weeks, 4, 700, [], null, [], null, null, { blockWeeksByStart: { "2026-04-06": 6 } });
+  assert.equal(b.length, 3);
+  assert.equal(b[0].weeks, 6);
+  assert.equal(b[0].lengthPinned, true);
+  assert.equal(b[1].start, "2026-05-18");       // 2026-04-06 + 6 weeks
+  assert.equal(b[1].lengthPinned, false);        // only the first block was pinned
+  // An out-of-range length (1 or 9) is ignored → falls back to the cadence.
+  const ignored = buildMesoBlocks("2026-04-06", "2026-06-29", weeks, 4, 700, [], null, [], null, null, { blockWeeksByStart: { "2026-04-06": 1 } });
+  assert.equal(ignored[0].weeks, 4);
+});
+
+test("buildMesoBlocks: coach deload-week pin wins over the auto placement", () => {
+  const weeks: WeekLoad[] = [];
+  const base = Date.parse("2026-04-06");
+  for (let i = 0; i < 8; i++) weeks.push({ weekStart: new Date(base + i * 7 * 86_400_000).toISOString().slice(0, 10), load: 2000, readiness: 70 });
+  const pinned = buildMesoBlocks("2026-04-06", "2026-05-31", weeks, 4, 700, [], null, [], null, null, { deloadByStart: { "2026-04-06": "2026-04-13" } });
+  assert.equal(pinned[0].deloadWeekStart, "2026-04-13");  // pinned, not the default last week (04-27)
+  assert.equal(pinned[0].deloadPinned, true);
+  // A pin outside the block is ignored.
+  const outside = buildMesoBlocks("2026-04-06", "2026-05-31", weeks, 4, 700, [], null, [], null, null, { deloadByStart: { "2026-04-06": "2026-05-25" } });
+  assert.equal(outside[0].deloadPinned, false);
+});
+
 test("intervalSpeedsFromMas: Type 1–5 km/h scale off MAS", () => {
   const z = intervalSpeedsFromMas(17.5);
   assert.equal(z.length, 5);

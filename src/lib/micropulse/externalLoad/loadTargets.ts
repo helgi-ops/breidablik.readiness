@@ -558,11 +558,12 @@ export async function computeWeeklyTarget(args: {
       .from("season_plans").select("overrides")
       .eq("team_id", teamId).eq("season_year", new Date(`${referenceDate}T00:00:00Z`).getUTCFullYear())
       .maybeSingle();
-    const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; nextPreseasonStart?: string; offseasonWeeks?: number; preseasonWeek1Mult?: number; preseasonSessions?: number; stepPct?: number } } | null)?.overrides ?? {};
+    const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; nextPreseasonStart?: string; offseasonWeeks?: number; preseasonWeek1Mult?: number; preseasonSessions?: number; stepPct?: number; deloadCadence?: number; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string> } } | null)?.overrides ?? {};
     const plan = await loadPeriodization(sb, {
       teamId,
       preseasonStart: ov.preseasonStart ?? null, seasonEnd: ov.seasonEnd ?? null,
       nextPreseasonStart: ov.nextPreseasonStart ?? null, offseasonWeeks: ov.offseasonWeeks ?? null,
+      deloadCadence: ov.deloadCadence ?? null, blockWeeksByStart: ov.blockWeeks ?? null, deloadByStart: ov.blockDeload ?? null,
     });
     // Fixtures in the Mon–Sun week containing referenceDate → in-season match count.
     const d = new Date(`${referenceDate}T00:00:00Z`);
