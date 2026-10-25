@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic"; // never statically cache — always rea
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { scopeToCurrentSeason, toMinutes, type FibaGame, type FibaBoxRow } from "@/lib/micropulse/basketballStats/fibaGamesRead";
+import { scopeToCurrentSeason, toMinutes, competitionsOf, resolveCompetition, type FibaGame, type FibaBoxRow } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -76,9 +76,12 @@ export async function GET(req: NextRequest) {
   if (games.length === 0) {
     const { data: fibaRows } = await supabase
       .from("basketball_fiba_games")
-      .select("match_id, match_date, opp_name, own_box, season")
+      .select("match_id, match_date, opp_name, own_box, competition_code, season")
       .eq("owner_team_id", teamId);
-    const { games: scoped } = scopeToCurrentSeason(((fibaRows ?? []) as FibaGame[]));
+    const { games: seasonScoped } = scopeToCurrentSeason(((fibaRows ?? []) as FibaGame[]));
+    const competitions = competitionsOf(seasonScoped);
+    const competition = resolveCompetition(seasonScoped, new URL(req.url).searchParams.get("competition"));
+    const scoped = competitions.length > 1 ? seasonScoped.filter((g) => (g.competition_code ?? null) === competition) : seasonScoped;
     const fibaGames = scoped.map((g) => ({
       gameId: String(g.match_id ?? ""), date: g.match_date, opponent: g.opp_name ?? null, homeAway: null as string | null,
       players: (Array.isArray(g.own_box) ? g.own_box : [])
@@ -93,7 +96,7 @@ export async function GET(req: NextRequest) {
         }))
         .sort((a, b) => (b.points ?? 0) - (a.points ?? 0)),
     }));
-    return NextResponse.json({ games: fibaGames });
+    return NextResponse.json({ games: fibaGames, competitions: competitions.length > 1 ? competitions : [], competition });
   }
 
   return NextResponse.json({ games });

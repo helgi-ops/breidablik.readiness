@@ -56,12 +56,15 @@ type OverviewPlayer = {
   };
   source: string; sourceRef: string | null; syncedAt: string | null;
 };
+type CompetitionOption = { code: string | null; label: string; games: number };
 type Overview = {
   season: string;
   sport?: string;
   players: OverviewPlayer[];
   unmatched: number;
   missing?: { playerId: string; name: string; position: string | null }[];
+  competitions?: CompetitionOption[];
+  competition?: string | null;
 };
 type BPlayer = {
   name: string; minutes: number | null; points: number | null; reb: number | null; assists: number | null;
@@ -152,9 +155,10 @@ export default function PlayerStatsWyscoutView() {
   const [view, setView] = React.useState<"import" | "players" | "matches">("import");
   const [overview, setOverview] = React.useState<Overview | null>(null);
   const [ovBusy, setOvBusy] = React.useState(false);
+  const [selectedComp, setSelectedComp] = React.useState<string | null>(null);
   const [ovErr, setOvErr] = React.useState<string | null>(null);
   const [modalPlayer, setModalPlayer] = React.useState<OverviewPlayer | null>(null);
-  const [bmatches, setBmatches] = React.useState<{ games: BGame[] } | null>(null);
+  const [bmatches, setBmatches] = React.useState<{ games: BGame[]; competitions?: CompetitionOption[]; competition?: string | null } | null>(null);
   const [mBusy, setMBusy] = React.useState(false);
   const [cfg, setCfg] = React.useState<{ source: string; wyscout_team_id: string | null; basketball_team_ref?: string | null; enabled: boolean } | null>(null);
   const [apiSecret, setApiSecret] = React.useState(false);
@@ -191,14 +195,15 @@ export default function PlayerStatsWyscoutView() {
     try {
       const t = await token();
       if (!t) { setOvErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
-      const res = await fetch(`/api/coach/player-stats/overview?season=${encodeURIComponent(season)}&_t=${Date.now()}`, { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
+      const compQs = selectedComp ? `&competition=${encodeURIComponent(selectedComp)}` : "";
+      const res = await fetch(`/api/coach/player-stats/overview?season=${encodeURIComponent(season)}${compQs}&_t=${Date.now()}`, { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
       const json = await res.json();
       if (!res.ok) { setOvErr(json.error ?? "Error"); return; }
       setOverview(json as Overview);
     } catch (e) {
       setOvErr(e instanceof Error ? e.message : "Error");
     } finally { setOvBusy(false); }
-  }, [season, is]);
+  }, [season, selectedComp, is]);
 
   React.useEffect(() => {
     if (view === "players") void fetchOverview();
@@ -212,11 +217,12 @@ export default function PlayerStatsWyscoutView() {
       try {
         const t = await token();
         if (!t) return;
-        const res = await fetch(`/api/coach/player-stats/basketball-matches?_t=${Date.now()}`, { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
+        const compQs = selectedComp ? `&competition=${encodeURIComponent(selectedComp)}` : "";
+        const res = await fetch(`/api/coach/player-stats/basketball-matches?_t=${Date.now()}${compQs}`, { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
         if (res.ok) { const j = await res.json(); setBmatches(j); }
       } finally { setMBusy(false); }
     })();
-  }, [view, sport]);
+  }, [view, sport, selectedComp]);
 
   async function runPreview() {
     if (!file) return;
@@ -315,6 +321,25 @@ export default function PlayerStatsWyscoutView() {
           </button>
         ))}
       </div>
+
+      {/* Team / competition selector — separates the main team (e.g. Bónus deild) from a reserve side
+          (1. deild) so a player's two-team numbers don't mix. Drives both the Players and Matches views. */}
+      {isBasketball(sport) && view !== "import" && (() => {
+        const comps = (overview?.competitions ?? bmatches?.competitions ?? []) as CompetitionOption[];
+        const active = (view === "matches" ? bmatches?.competition : overview?.competition) ?? null;
+        if (comps.length <= 1) return null;
+        return (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Lið / deild" : "Team / competition"}</span>
+            {comps.map((c) => (
+              <button key={c.code ?? "none"} type="button" onClick={() => setSelectedComp(c.code)}
+                className={`h-8 rounded-full px-3 text-[12.5px] font-semibold transition ${active === (c.code ?? null) ? "bg-[#2740e6] text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
+                {c.label} <span className="font-normal opacity-70">({c.games})</span>
+              </button>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Basketball: the Import tab is a feed-config card (no manual upload —
           basketball is fed automatically, zero coach effort once connected). */}

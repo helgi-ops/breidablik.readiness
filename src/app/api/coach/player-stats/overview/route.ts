@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import { initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
-import { scopeToCurrentSeason, aggregateOwnBox, pctOf, type FibaGame } from "@/lib/micropulse/basketballStats/fibaGamesRead";
+import { scopeToCurrentSeason, aggregateOwnBox, pctOf, competitionsOf, resolveCompetition, type FibaGame } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -177,9 +177,13 @@ export async function GET(req: NextRequest) {
   if (sport === "basketball" && players.length === 0) {
     const { data: fibaRows } = await supabase
       .from("basketball_fiba_games")
-      .select("match_date, own_box, season")
+      .select("match_date, own_box, competition_code, season")
       .eq("owner_team_id", teamId);
-    const { games: scoped, season: fibaSeason } = scopeToCurrentSeason(((fibaRows ?? []) as FibaGame[]));
+    const { games: seasonScoped, season: fibaSeason } = scopeToCurrentSeason(((fibaRows ?? []) as FibaGame[]));
+    // Separate the main team from a reserve side (1. deild) — one competition at a time.
+    const competitions = competitionsOf(seasonScoped);
+    const competition = resolveCompetition(seasonScoped, url.searchParams.get("competition"));
+    const scoped = competitions.length > 1 ? seasonScoped.filter((g) => (g.competition_code ?? null) === competition) : seasonScoped;
     if (scoped.length > 0) {
       const rosterByKey = new Map<string, { id: string; name: string; position: string | null }>();
       for (const p of ((roster ?? []) as Array<{ id: string; full_name: string | null; position: string | null }>)) {
@@ -214,7 +218,7 @@ export async function GET(req: NextRequest) {
         };
       });
       fallbackPlayers.sort((x, y) => (Number((y.football.metrics as { "Points per game"?: number })["Points per game"]) || 0) - (Number((x.football.metrics as { "Points per game"?: number })["Points per game"]) || 0));
-      return NextResponse.json({ season: fibaSeason ?? season, start, end, sport, players: fallbackPlayers, unmatched: 0, missing });
+      return NextResponse.json({ season: fibaSeason ?? season, start, end, sport, players: fallbackPlayers, unmatched: 0, missing, competitions: competitions.length > 1 ? competitions : [], competition });
     }
   }
 
