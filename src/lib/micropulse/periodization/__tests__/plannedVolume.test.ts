@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple } from "../plannedVolume";
+import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume } from "../plannedVolume";
 
 describe("standardTrainingDays", () => {
   it("fewer training days as fixture congestion rises", () => {
@@ -72,5 +72,22 @@ describe("mesoWeeklyMultiples", () => {
   it("mesoTotalMultiple sums the block", () => {
     const weeks = mesoWeeklyMultiples({ numWeeks: 3, baseMultiple: 2, stepPct: 0 });
     expect(mesoTotalMultiple(weeks)).toBeCloseTo(2 + 2 + 2 * 0.6, 2);
+  });
+});
+
+describe("buildPlannedVolume", () => {
+  it("assembles week + meso with per-KPI tapering and ramp/deload", () => {
+    const pv = buildPlannedVolume({ matchKpiAvg: { totalDistance: 10000, velocityBand6: 300 }, numWeeks: 4, stepPct: 10, deloadWeek: 4 })!;
+    expect(pv).not.toBeNull();
+    expect(pv.weekVolumeMultiple).toBeCloseTo(2.35, 2);
+    expect(pv.meso).toHaveLength(4);
+    expect(pv.meso[3].isDeload).toBe(true);
+    // sprint (velocityBand6) ramps from a LOWER base than distance across every week
+    const td = pv.headKpis.indexOf("totalDistance"), sp = pv.headKpis.indexOf("velocityBand6");
+    if (td >= 0 && sp >= 0) expect(pv.meso[0].kpi[sp].multiple).toBeLessThan(pv.meso[0].kpi[td].multiple);
+    expect(pv.mesoTotal.volMultiple).toBeGreaterThan(0);
+  });
+  it("returns null with no match unit", () => {
+    expect(buildPlannedVolume({ matchKpiAvg: {}, numWeeks: 4, stepPct: 10 })).toBeNull();
   });
 });

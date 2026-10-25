@@ -99,3 +99,39 @@ export function mesoWeeklyMultiples(opts: { numWeeks: number; baseMultiple: numb
 
 /** Block total multiple (sum of all weeks) — the meso's total planned training volume as ×match. */
 export const mesoTotalMultiple = (weeks: MesoWeek[]): number => Math.round(weeks.reduce((s, w) => s + w.multiple, 0) * 100) / 100;
+
+export type PlannedVolumeKpiCell = { key: WeeklyLoadMetricKey; multiple: number; value: number };
+export type PlannedVolume = {
+  weekVolumeMultiple: number;                 // the headline ×match (volume, e=1)
+  weekKpis: KpiVolume[];                       // per-KPI weekly target (each tapered)
+  headKpis: WeeklyLoadMetricKey[];             // the KPIs shown as meso columns
+  meso: Array<{ weekIndex: number; isDeload: boolean; volMultiple: number; kpi: PlannedVolumeKpiCell[] }>;
+  mesoTotal: { volMultiple: number; kpi: PlannedVolumeKpiCell[] };
+};
+
+/** One call that assembles the whole planned-KPI-volume read (week + meso), per-KPI tapered + ramped —
+ *  shared by the Hub card and the PDF so they never diverge. Returns null when there's no match unit. */
+export function buildPlannedVolume(opts: {
+  matchKpiAvg: Partial<Record<WeeklyLoadMetricKey, number>>;
+  numWeeks: number; stepPct: number; deloadWeek?: number; matches?: number; headKpiCount?: number;
+}): PlannedVolume | null {
+  const days = standardTrainingDays(opts.matches ?? 1);
+  const weekKpis = kpiVolumes(opts.matchKpiAvg, days);
+  if (weekKpis.length === 0) return null;
+  const wkMult = weeklyTrainingMultiple(days);
+  const meso = mesoWeeklyMultiples({ numWeeks: opts.numWeeks, baseMultiple: wkMult, stepPct: opts.stepPct, deloadWeek: opts.deloadWeek });
+  const headKpis = (Object.keys(opts.matchKpiAvg) as WeeklyLoadMetricKey[]).filter((k) => opts.matchKpiAvg[k] != null).slice(0, opts.headKpiCount ?? 2);
+  const factor = (w: MesoWeek) => (wkMult > 0 ? w.multiple / wkMult : 0);
+  const cell = (k: WeeklyLoadMetricKey, w: MesoWeek): PlannedVolumeKpiCell => {
+    const mv = opts.matchKpiAvg[k] ?? 0, m = weeklyKpiMultiple(days, k);
+    return { key: k, multiple: Math.round(m * factor(w) * 100) / 100, value: Math.round(mv * m * factor(w)) };
+  };
+  return {
+    weekVolumeMultiple: wkMult, weekKpis, headKpis,
+    meso: meso.map((w) => ({ weekIndex: w.weekIndex, isDeload: w.isDeload, volMultiple: w.multiple, kpi: headKpis.map((k) => cell(k, w)) })),
+    mesoTotal: {
+      volMultiple: mesoTotalMultiple(meso),
+      kpi: headKpis.map((k) => ({ key: k, multiple: Math.round(meso.reduce((s, w) => s + cell(k, w).multiple, 0) * 100) / 100, value: meso.reduce((s, w) => s + cell(k, w).value, 0) })),
+    },
+  };
+}

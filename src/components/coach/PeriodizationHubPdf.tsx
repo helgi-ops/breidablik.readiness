@@ -51,6 +51,14 @@ export type PeriodizationHubPayload = {
     weeks: Array<{ weekIndex: number; multiple: number | null; weeklyLoad: number | null; perSession: number | null; srpe: number | null }>;
     week1Kpi: Array<{ label: Bi; value: number; unit: string }>;
   } | null;
+  /** Planned KPI volume (in-season week + meso block), match-anchored + per-KPI tapered (team scope). */
+  plannedVolume?: {
+    weekVolumeMultiple: number;
+    weekKpis: Array<{ label: Bi; unit: string; matchValue: number; multiple: number; weeklyValue: number }>;
+    headKpis: Array<{ label: Bi; unit: string }>;
+    meso: Array<{ weekIndex: number; isDeload: boolean; volMultiple: number; kpi: Array<{ multiple: number; value: number }> }>;
+    mesoTotal: { volMultiple: number; kpi: Array<{ multiple: number; value: number }> };
+  } | null;
 };
 
 const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6", AMBER = "#de9328", PURPLE = "#7a5cc4", GREEN = "#1c7a4a", RED = "#a83e28", BONE = "#F4F2EC";
@@ -101,6 +109,7 @@ const L = {
     running: "Running (Locomotive) — training UNDER-reaches", mech: "Mechanical / IMA — training OVER-shoots", metric: "Metric", match: "Match", ceil: "Tr. ceiling",
     meso: "Meso blocks", block: "The scheduled block", players: "Players — individualisation", pos: "Pos", mas: "MAS", munit: "Match unit", vald: "VALD cap", gaps: "Gaps", week: "Week", deload: "Deload", overload: "overload", weekly: "weekly",
     preTitle: "Pre-season start + ramp (team)", preLead: "Week 1 = controlled re-entry (a fraction of a match), ramping to the pre-season build. The match is the unit.", preAnchor: "anchor", preConf: "confidence", preKpi: "Week-1 KPI targets", preSess: "/session",
+    pvTitle: "Planned KPI volume — week + meso (in-season)", pvLead: "Match-anchored: each KPI = match value × its own weekly multiple. HSR/sprint taper harder than distance (Martín-García 2018); the block ramps with a deload.", pvWeekHdr: "Weekly target per KPI", pvMesoHdr: "Meso — ×match per week", pvBlockTotal: "Block total", pvVol: "vol",
     munitLead: "THE MATCH IS THE UNIT (whole squad) — the running spine + the mechanical / IMA axis every block scales from (present where the feed carries it).",
     dist: "Distance", hsr: "HSR", load: "Player Load", accdec: "Acc + Dec", accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Stride", dirL: "IMA dir", rhieL: "RHIE", symL: "Symmetry", metL: "Met power", fwd: "fwd", lat: "lat", back: "back",
     foot: "Descriptive planning — never sets the readiness colour, never overrides the daily decision. Targets scale from the team's / player's own match unit (median of near-full matches) and each MD day's %-of-match shape; a data-anchored starting point, not a norm to obey (Little & Buchheit). No single \"% of match\" — mechanical over-shoots, HSR/sprint fall short (Figueiredo). Never stack HSR + mechanical the same day. Cites: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021 · Impellizzeri 2020 (ACWR contested)." },
@@ -110,6 +119,7 @@ const L = {
     running: "Hlaup (Locomotive) — æfing NÆR EKKI", mech: "Vélrænt / IMA — æfing FER YFIR", metric: "Mæling", match: "Leikur", ceil: "Æf.þak",
     meso: "Mesó lotur", block: "Skipulagða lotan", players: "Leikmenn — einstaklingsmiðun", pos: "Staða", mas: "MAS", munit: "Leikviðmið", vald: "VALD þak", gaps: "Vantar", week: "Vika", deload: "Niðurtröppun", overload: "álag", weekly: "vikumark",
     preTitle: "Undirbúningur — byrjun + stigmögnun (lið)", preLead: "Vika 1 = stýrð endurkoma (brot úr leik), stigmagnast upp að undirbúnings-marki. Leikurinn er einingin.", preAnchor: "grunnur", preConf: "vissa", preKpi: "KPI-mörk viku 1", preSess: "/æfingu",
+    pvTitle: "Áætlað KPI-magn — vika + meso (keppnistímabil)", pvLead: "Leik-miðað: hver KPI = leikgildi × sitt vikumargfeldi. Háhraði/sprettur trappast harðar en vegalengd (Martín-García 2018); blokkin stigmagnast með niðurtröppun.", pvWeekHdr: "Vikumark per KPI", pvMesoHdr: "Meso — × leikur per viku", pvBlockTotal: "Blokk alls", pvVol: "rúmmál",
     munitLead: "LEIKURINN ER EININGIN (allt liðið) — hlaupa-hryggurinn + vélræni / IMA ásinn sem hver lota skalar frá (þar sem gögnin ná).",
     dist: "Vegalengd", hsr: "Háhraði", load: "Player Load", accdec: "Acc + Dec", accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Skref", dirL: "IMA stefna", rhieL: "RHIE", symL: "Samhverfa", metL: "Efnaafl", fwd: "fram", lat: "hlið", back: "aftur",
     foot: "Lýsandi áætlun — setur aldrei readiness-litinn, hnekkir aldrei daglegu ákvörðuninni. Álagsmörk skala frá eigin leikviðmiði (miðgildi næstum-heilla leikja) og %-af-leik lögun hvers MD-dags; gagna-festur upphafspunktur, ekki viðmið til að hlýða (Little & Buchheit). Ekkert eitt „%-af-leik“ — vélrænt fer yfir, háhraði/sprettur ná ekki (Figueiredo). Aldrei stafla háhraða + vélrænu sama dag. Vitnar í: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021 · Impellizzeri 2020." },
@@ -271,6 +281,47 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
             )}
           </View>
         )}
+
+        {/* PLANNED KPI VOLUME — in-season week + meso (match-anchored, per-KPI tapered) */}
+        {payload.plannedVolume && payload.plannedVolume.weekKpis.length > 0 && (() => {
+          const pv = payload.plannedVolume!;
+          const fmtK = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
+          return (
+            <View style={s.section} wrap={false}>
+              <Text style={s.h2}>{t.pvTitle}</Text>
+              <Text style={s.p}>{t.pvLead}</Text>
+              {/* Week per-KPI */}
+              <Text style={[s.small, { marginTop: 2, marginBottom: 2, fontFamily: "Helvetica-Bold" }]}>{t.pvWeekHdr} — {pv.weekVolumeMultiple}×{t.match} ({t.pvVol})</Text>
+              <View style={s.th}><Text style={[s.thc, { flex: 1 }]}>KPI</Text><Text style={[s.thc, { width: 70, textAlign: "right" }]}>{t.match}</Text><Text style={[s.thc, { width: 50, textAlign: "right" }]}>×{t.match}</Text><Text style={[s.thc, { width: 70, textAlign: "right" }]}>{t.week}</Text></View>
+              {pv.weekKpis.map((k, i) => (
+                <View key={i} style={s.row}>
+                  <Text style={{ flex: 1 }}>{bi(k.label)}</Text>
+                  <Text style={{ width: 70, textAlign: "right", color: MUTE }}>{fmtK(k.matchValue)}{k.unit}</Text>
+                  <Text style={{ width: 50, textAlign: "right", color: MUTE }}>{k.multiple}×</Text>
+                  <Text style={{ width: 70, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{fmtK(k.weeklyValue)}{k.unit}</Text>
+                </View>
+              ))}
+              {/* Meso per-week */}
+              <Text style={[s.small, { marginTop: 5, marginBottom: 2, fontFamily: "Helvetica-Bold" }]}>{t.pvMesoHdr}</Text>
+              <View style={s.th}>
+                <Text style={[s.thc, { width: 60 }]}>{t.week}</Text><Text style={[s.thc, { width: 46, textAlign: "right" }]}>×{t.pvVol}</Text>
+                {pv.headKpis.map((h, i) => <Text key={i} style={[s.thc, { flex: 1, textAlign: "right" }]}>{bi(h.label)}</Text>)}
+              </View>
+              {pv.meso.map((w) => (
+                <View key={w.weekIndex} style={[s.row, ...(w.isDeload ? [{ backgroundColor: "#FBF2E2" }] : [])]}>
+                  <Text style={{ width: 60 }}>{t.week} {w.weekIndex}{w.isDeload ? ` (${t.deload})` : ""}</Text>
+                  <Text style={{ width: 46, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{w.volMultiple}×</Text>
+                  {w.kpi.map((c, i) => <Text key={i} style={{ flex: 1, textAlign: "right" }}>{c.multiple}× <Text style={{ color: MUTE }}>{fmtK(c.value)}{pv.headKpis[i]?.unit ?? ""}</Text></Text>)}
+                </View>
+              ))}
+              <View style={[s.row, { borderTopWidth: 1, borderTopColor: INK }]}>
+                <Text style={{ width: 60, fontFamily: "Helvetica-Bold" }}>{t.pvBlockTotal}</Text>
+                <Text style={{ width: 46, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{pv.mesoTotal.volMultiple}×</Text>
+                {pv.mesoTotal.kpi.map((c, i) => <Text key={i} style={{ flex: 1, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{c.multiple}× <Text style={{ color: MUTE, fontFamily: "Helvetica" }}>{fmtK(c.value)}{pv.headKpis[i]?.unit ?? ""}</Text></Text>)}
+              </View>
+            </View>
+          );
+        })()}
 
         {/* DEMANDS — baseline by position */}
         <View style={s.section}>
