@@ -26,6 +26,9 @@ export type PlayerPeriodization = {
   vald: ValdCap; gaps: DataGap[];
   matchUnit: MatchUnit; weekTargets: { preseason: WeekTargetPlan; inseason: WeekTargetPlan; current: "preseason" | "inseason" };
   recentMinutesAvg: number | null; // mean match minutes over the last ~11 weeks — the minutes-based load trim
+  /** The player's CURRENT baseline — mean per-session output over the last 28 days of TRAINING (non-match)
+   *  sessions. The data-derived starting point the ramp builds FROM, to read against the match-unit target. */
+  recentBaseline: { sessions: number; playerLoad: number | null; hsrM: number | null; distanceM: number | null; sprintM: number | null } | null;
 };
 export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages; axes: MatchAxes; md: MdDemandProfile };
 /** A loaded session row carrying the fields the loader needs after the roster loads: the player, the IMA
@@ -320,6 +323,15 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     if (use.length < 3) use = rows.slice(0, 6);
     return Math.round(use.reduce((s, r) => s + r.minutes, 0) / use.length);
   };
+
+  // Current baseline — mean per-session output over the last 28 days of TRAINING (non-match) sessions.
+  const baselineCutoffMs = 28 * 86_400_000;
+  const recentBaselineOf = (pid: string): PlayerPeriodization["recentBaseline"] => {
+    const rows = rawSessions.filter((r) => r.pid === pid && !r.isMatch && todayMs - Date.parse(r.date) <= baselineCutoffMs && (r.playerLoad != null || r.distanceM != null));
+    if (rows.length === 0) return null;
+    const mean = (vals: Array<number | null>) => { const v = vals.filter((x): x is number => x != null && Number.isFinite(x)); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null; };
+    return { sessions: rows.length, playerLoad: mean(rows.map((r) => r.playerLoad)), hsrM: mean(rows.map((r) => r.hsrM)), distanceM: mean(rows.map((r) => r.distanceM)), sprintM: mean(rows.map((r) => r.sprintM)) };
+  };
   // Current macro phase (pre-season vs in-season) → drives the match-multiple math.
   const curPhaseKey = phases.find((ph) => ph.start <= todayIso && todayIso < ph.end)?.key ?? (phases[phases.length - 1]?.key ?? "competitive");
   const inSeasonNow = curPhaseKey !== "preseason";
@@ -348,7 +360,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
       vbt: vbtRead,
       strengthFallback: vbtRead ? null : (curBlock ? strengthDefaultForBlock(curBlock.phase.en, curBlock.isDeload) : null),
       vald,
-      matchUnit, weekTargets, recentMinutesAvg: recentMinutesAvgOf(p.id),
+      matchUnit, weekTargets, recentMinutesAvg: recentMinutesAvgOf(p.id), recentBaseline: recentBaselineOf(p.id),
       gaps: dataReadiness({ hasCsTest, masAgeDays: masAge, vbtAgeDays: vbtAge, hasValdThisBlock: valdFresh }),
     };
   });
