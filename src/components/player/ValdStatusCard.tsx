@@ -24,6 +24,7 @@ function formatAgo(value: string | null): string {
 
 export default function ValdStatusCard({ playerId, date }: { playerId: string; date: string }) {
   const [row, setRow] = useState<ValdSnapshotRow | null>(null);
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     const supabase = getSupabaseClient();
     void supabase
@@ -32,8 +33,12 @@ export default function ValdStatusCard({ playerId, date }: { playerId: string; d
       .eq("microplayer_id", playerId)
       .eq("snapshot_date", date)
       .maybeSingle()
-      .then(({ data }) => setRow((data as ValdSnapshotRow | null) ?? null));
+      .then(({ data }) => { setRow((data as ValdSnapshotRow | null) ?? null); setLoaded(true); });
   }, [date, playerId]);
+
+  // Self-hide when there's no VALD snapshot — VALD is optional lab kit (force plates / dynamometer);
+  // a team that doesn't use it (e.g. an indoor basketball team) should see nothing, not an empty card.
+  if (!loaded || !row) return null;
 
   return (
     <div className="rounded-2xl border bg-white p-4 shadow-sm">

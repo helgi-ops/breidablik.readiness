@@ -1517,8 +1517,8 @@ function PlayerTodayRecapPortal({ activeTab, lang, clubThemeColor }: { activeTab
         <div className="mt-1.5 space-y-1.5 border-t border-zinc-200/70 pt-2 text-[11px] leading-snug text-zinc-500">
           {plannedShown && (
             <div>{is
-              ? `Í dag = mælt með GPS (áætluð álög undanskilin). Venjulega = þitt ${md} meðaltal úr ${data.plannedN} æfingum. Þetta er samanburður við þinn eigin takt — ekki keppni um hæsta álag.`
-              : `Today = measured by GPS (estimated loads excluded). Usual = your ${md} average from ${data.plannedN} sessions. This compares to your own rhythm — not a contest for the highest load.`}</div>
+              ? `Í dag = mæld álagsgögn (áætluð álög undanskilin). Venjulega = þitt ${md} meðaltal úr ${data.plannedN} æfingum. Þetta er samanburður við þinn eigin takt — ekki keppni um hæsta álag.`
+              : `Today = measured load (estimated loads excluded). Usual = your ${md} average from ${data.plannedN} sessions. This compares to your own rhythm — not a contest for the highest load.`}</div>
           )}
           {sv && (
             <div>{is

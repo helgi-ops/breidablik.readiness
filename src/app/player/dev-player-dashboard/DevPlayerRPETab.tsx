@@ -393,9 +393,9 @@ export default function DevPlayerRPETab() {
             <div>
               <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
                 Duration (minutes)
-                {gpsDurationLoading && <span className="ml-1 text-zinc-400 normal-case font-normal">– loading GPS…</span>}
+                {gpsDurationLoading && <span className="ml-1 text-zinc-400 normal-case font-normal">– loading…</span>}
                 {!gpsDurationLoading && gpsDuration != null && (
-                  <span className="ml-1 text-emerald-600 normal-case font-normal">– GPS: {gpsDuration} mín</span>
+                  <span className="ml-1 text-emerald-600 normal-case font-normal">– measured: {gpsDuration} mín</span>
                 )}
               </label>
               <input

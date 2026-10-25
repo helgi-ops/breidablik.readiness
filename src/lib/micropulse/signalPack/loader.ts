@@ -7,6 +7,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeSignalPack, weeklyMonotony, type SignalPack, type Voice } from "./index";
 import { buildWearableRecoveryInput } from "./wearableRecovery";
+import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
 const LOAD_DAYS = 35;      // EWMA runway + a few weeks for the monotony norm
 const WELLNESS_DAYS = 42;
@@ -74,12 +75,15 @@ export async function loadPlayerSignalPack(sb: SupabaseClient, teamId: string, p
   if (!pRow) return null;
   const name = (pRow as { full_name: string | null }).full_name ?? "Player";
 
+  // The GPS (decel/HSR) and VALD (CMJ) contributors are football/athlete signals — a basketball team has
+  // none; skip them so the pack is built from the shared spine (sRPE / readiness / injury / wearable) only.
+  const isBball = (await resolveTeamSport(sb, teamId)) === "basketball";
   const [rpeRes, gpsRes, injRes, wellRes, cmjRes, wearRes] = await Promise.all([
     sb.from("session_rpe_entries").select("player_id, session_date, session_load").eq("player_id", playerId).gte("session_date", loadSince).lte("session_date", asOf),
-    sb.from("player_external_load_daily").select("player_id, date, decelerations, high_speed_distance").eq("player_id", playerId).gte("date", loadSince).lte("date", asOf),
+    isBball ? Promise.resolve({ data: [] }) : sb.from("player_external_load_daily").select("player_id, date, decelerations, high_speed_distance").eq("player_id", playerId).gte("date", loadSince).lte("date", asOf),
     sb.from("player_injuries").select("player_id, injury_date, actual_return_date, body_part").eq("player_id", playerId).order("injury_date", { ascending: false }).limit(1),
     sb.from("readiness_entries").select("player_id, entry_date, sleep_quality").eq("player_id", playerId).gte("entry_date", addISO(asOf, -WELLNESS_DAYS)).lte("entry_date", asOf),
-    sb.from("vald_forcedecks_results").select("microplayer_id, jump_height_cm, asymmetry_percent, test_timestamp").eq("microplayer_id", playerId).gte("test_timestamp", `${addISO(asOf, -CMJ_DAYS)}T00:00:00`).lte("test_timestamp", `${asOf}T23:59:59`).not("jump_height_cm", "is", null),
+    isBball ? Promise.resolve({ data: [] }) : sb.from("vald_forcedecks_results").select("microplayer_id, jump_height_cm, asymmetry_percent, test_timestamp").eq("microplayer_id", playerId).gte("test_timestamp", `${addISO(asOf, -CMJ_DAYS)}T00:00:00`).lte("test_timestamp", `${asOf}T23:59:59`).not("jump_height_cm", "is", null),
     sb.from("wearable_daily_data").select("player_id, measurement_date, hrv_rmssd_ms, resting_hr_bpm, provider_recovery_score, stress_avg, body_battery").eq("player_id", playerId).gte("measurement_date", addISO(asOf, -WEARABLE_DAYS)).lte("measurement_date", asOf),
   ]);
   const maps = buildMaps(

@@ -7261,7 +7261,7 @@ export default function PlayerClient() {
                     </div>
                   </div>
 
-                  {catapultToday || catapultHistory.length ? (
+                  {!teamIsBasketball && (catapultToday || catapultHistory.length) ? (
                     <div className="mt-3 rounded-xl border bg-white px-3 py-2 text-xs text-zinc-700">
                       <span className="font-semibold">Catapult</span>: Required external-load metrics available below.
                     </div>
@@ -7280,6 +7280,8 @@ export default function PlayerClient() {
                     <MetricBox label="Total" value={metrics?.total_score} />
                   </div>
 
+                  {/* GPS / Catapult external-load pager — football/GPS only; hidden for basketball (no GPS indoors). */}
+                  {!teamIsBasketball && (
                   <div className="mt-5">
                     <div className={`rounded-xl border px-4 py-3 ${gpsDate === day ? "border-zinc-200 bg-zinc-50" : "border-blue-200 bg-blue-50"}`}>
                       <div className="flex items-center justify-between">
@@ -7458,6 +7460,7 @@ export default function PlayerClient() {
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
               </details>
             </CardShell>
