@@ -2306,6 +2306,10 @@ export default function PeriodizationHubPage() {
             const card = "rounded-xl border border-slate-200 bg-white p-4 sm:p-5";
             const h2c = "text-[15px] font-bold text-slate-900";
             const plist = plan.players;
+            // Baseline → match target → week plan (per player), mirroring the PDF.
+            const bvDays = standardTrainingDays(1);
+            const bvWkMult = weeklyTrainingMultiple(bvDays);
+            const fmtKv = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
             const pIdx = plist.findIndex((p) => p.playerId === selId);
             const prevP = pIdx > 0 ? plist[pIdx - 1] : null;
             const nextP = pIdx >= 0 && pIdx < plist.length - 1 ? plist[pIdx + 1] : null;
@@ -2351,6 +2355,46 @@ export default function PeriodizationHubPage() {
             };
 
             return (<div className="space-y-4">
+
+          {/* 0 — BASELINE → MATCH TARGET → WEEK PLAN (all players, match-anchored) */}
+          <section className={card}>
+            <h2 className={h2c}>{is ? "Grunnur → leik-mark → vikuplan" : "Baseline → match target → week plan"}</h2>
+            <p className="mt-0.5 text-[12px] text-slate-500">{is ? "Grunnur (nýleg þjálfun, síð. 28 d — hvar leikmaðurinn er núna) → leik-mark (krafan per leik) → vikumark (áætlað vikuálag, leik-PL × vikumargfeldi ~2,35×)." : "Baseline (recent training, last 28d — where each player is now) → match target (per-match demand) → week target (planned weekly load, match PL × the weekly multiple ~2.35×)."}</p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-[12.5px]">
+                <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
+                  <th className="py-1 pr-2 font-medium">{is ? "Leikmaður" : "Player"}</th>
+                  <th className="py-1 px-2 text-right font-medium">{is ? "Grunnur /æf (%leik)" : "Baseline /sess (%match)"}</th>
+                  <th className="py-1 px-2 text-right font-medium">{is ? "Leik-mark" : "Match target"}</th>
+                  <th className="py-1 px-2 text-right font-medium">{is ? "Vika PL" : "Week PL"}</th>
+                  <th className="py-1 px-2 text-right font-medium">MAS</th>
+                  <th className="py-1 pl-2 text-right font-medium">{is ? "Vantar" : "Gaps"}</th>
+                </tr></thead>
+                <tbody>
+                  {plist.map((p) => {
+                    const gk = /GK|MARK|KEEP/i.test(p.position ?? "");
+                    const mu = p.matchUnit.load.typical;
+                    const bpl = p.recentBaseline?.playerLoad ?? null;
+                    const pctM = bpl != null && mu != null && mu > 0 ? Math.round((bpl / mu) * 100) : null;
+                    const wk = mu != null ? Math.round(mu * bvWkMult) : null;
+                    const pctColor = pctM == null ? "" : pctM >= 100 ? "text-[#1c7a4a]" : pctM >= 60 ? "text-slate-500" : "text-[#de9328]";
+                    const gaps = p.gaps.filter((g) => g.severity !== "ok").length;
+                    return (
+                      <tr key={p.playerId} className={`border-t border-slate-100 ${p.playerId === selId ? "bg-[#2740e6]/5" : ""}`}>
+                        <td className="py-1.5 pr-2"><button type="button" onClick={() => setSelId(p.playerId)} className="font-semibold text-slate-800 hover:text-[#2740e6]">{p.name}</button>{p.position && <span className="ml-1 text-[11px] text-slate-400">{p.position}</span>}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums">{bpl != null ? <>{fmtKv(bpl)} PL{pctM != null && <span className={`ml-1 font-semibold ${pctColor}`}>({pctM}%)</span>}</> : <span className="text-slate-400">{is ? "– engin GPS" : "– no GPS"}</span>}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums text-slate-600">{gk ? (is ? "sérlíkan" : "GK model") : mu != null ? <>{mu} PL{p.matchUnit.hsr.typical != null ? ` · ${Math.round(p.matchUnit.hsr.typical)}m` : ""}{p.matchUnit.distance.typical != null ? ` · ${(p.matchUnit.distance.typical / 1000).toFixed(1)}km` : ""} <span className="text-slate-400">n{p.matchUnit.nNearFull}{p.matchUnit.confidence !== "high" ? ` (${p.matchUnit.confidence})` : ""}</span></> : "–"}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums font-bold text-[#2740e6]">{gk ? "–" : wk != null ? fmtKv(wk) : "–"}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums text-slate-400">{p.masKmh != null ? p.masKmh : "–"}</td>
+                        <td className={`py-1.5 pl-2 text-right tabular-nums font-semibold ${gaps > 0 ? "text-[#de9328]" : "text-[#1c7a4a]"}`}>{gaps}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-400">{is ? "Grunnur = meðal-PL per þjálfunaræfingu síðustu 28 daga (grænt ≥100% af leik, gult <60%). Leik-mark = miðgildi næstum-heilla leikja. MAS = loftháða vélin. Lýsandi — aldrei readiness-liturinn." : "Baseline = mean PL per training session over the last 28 days (green ≥100% of a match, amber <60%). Match target = median of near-full matches. MAS = the aerobic engine. Descriptive — never the readiness colour."}</p>
+          </section>
 
           {/* 1 — PLAYER BAR: pick once, everything below follows */}
           <section className={`${card} flex flex-wrap items-center gap-x-5 gap-y-3`} aria-label={is ? "Leikmaður" : "Player"}>
