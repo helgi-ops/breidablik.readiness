@@ -1825,6 +1825,39 @@ export default function PeriodizationHubPage() {
               )}
             </section>
 
+            {/* 2b — WEEKLY TEAM LOAD across the block: total planned PlayerLoad per week + the progression. */}
+            {calBlock && calBlock.weeks.length > 0 && (() => {
+              const weekLoads = calBlock.weeks.map((w) => ({ index: w.index, mult: w.mult, isDeload: w.isDeload, total: Math.round(w.days.reduce((sm, d) => sm + (d.load ?? 0), 0)) }));
+              const active = weekLoads.filter((w) => w.total > 0);
+              const blockTotal = weekLoads.reduce((sm, w) => sm + w.total, 0);
+              const maxW = Math.max(1, ...weekLoads.map((w) => w.total));
+              const avgW = active.length ? Math.round(blockTotal / active.length) : 0;
+              const fmtPl = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v));
+              const phaseName = calBlock.phase ? (is ? calBlock.phase.is : calBlock.phase.en) : "";
+              return (
+                <section className={`${card} min-w-0`}>
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h2 className={h2}>{is ? "Vikuálag liðsins — progression" : "Weekly team load — progression"}</h2>
+                    <span className="text-[12px] text-slate-500">{phaseName ? `${phaseName} · ` : ""}{is ? "blokk alls" : "block total"} <b className="tabular-nums text-slate-900">{fmtPl(blockTotal)} PL</b>{avgW ? <> · {is ? "meðal/viku" : "avg/week"} <b className="tabular-nums text-slate-700">{fmtPl(avgW)}</b></> : null}</span>
+                  </div>
+                  <p className="mt-0.5 text-[12px] text-slate-500">{is ? "Summa áætlaðs Player Load allra daga hverrar viku — heildarálag blokkarinnar og hvernig það stigmagnast (niðurtröppun í gulu). Lýsandi áætlun — aldrei readiness-liturinn." : "Sum of planned Player Load across each week's days — the block's total load and how it ramps (deload in amber). Descriptive plan — never the readiness colour."}</p>
+                  <div className="mt-4 flex items-end gap-2 sm:gap-3">
+                    {weekLoads.map((w) => {
+                      const h = w.total > 0 ? Math.max(4, Math.round((w.total / maxW) * 108)) : 0;
+                      return (
+                        <div key={w.index} className="flex min-w-0 flex-1 flex-col items-center">
+                          <span className="mb-1 text-[11px] font-semibold tabular-nums text-slate-700">{w.total ? fmtPl(w.total) : "–"}</span>
+                          <div className="w-[72%] rounded-t" style={{ height: h, background: w.isDeload ? "#de9328" : "#2740e6", opacity: w.total ? 1 : 0.12 }} title={`${is ? "Vika" : "Week"} ${w.index}: ${w.total} PL · ×${w.mult}${w.isDeload ? ` (${is ? "niður" : "deload"})` : ""}`} />
+                          <span className="mt-1.5 text-[11px] font-semibold text-slate-600">{is ? "V" : "W"}{w.index}</span>
+                          <span className="text-[10px] tabular-nums text-slate-400">×{w.mult}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })()}
+
             {/* 3 — PANEL BELOW THE CALENDAR: goal → numbers → testing → settings, tiled in two columns. */}
             <aside className="grid min-w-0 items-start gap-4 lg:grid-cols-2">
               <section className={card}>
