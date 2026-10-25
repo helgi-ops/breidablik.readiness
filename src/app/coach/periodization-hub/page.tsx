@@ -2740,8 +2740,11 @@ export default function PeriodizationHubPage() {
               const blockTotal = mesoTotalMultiple(meso);
               const headKeys = (Object.keys(matchKpis) as WeeklyLoadMetricKey[]).slice(0, 2); // 1-2 headline KPIs for the meso table
               const fmtK = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
-              // Per-week-per-KPI = the KPI's own weekly volume × the week's ramp/deload factor (w.multiple ÷ base).
-              const mesoKpi = (k: WeeklyLoadMetricKey, w: { multiple: number }) => { const mv = matchKpis[k]; return mv == null ? null : mv * weeklyKpiMultiple(days1, k) * (wkMult > 0 ? w.multiple / wkMult : 0); };
+              // Per-KPI meso multiple: the KPI's OWN tapered weekly ×match, scaled by the week's ramp/deload
+              // factor (w.multiple ÷ base). So HSR/sprint ramp from a lower base than distance across the block.
+              const rampFactor = (w: { multiple: number }) => (wkMult > 0 ? w.multiple / wkMult : 0);
+              const kpiWkMult = (k: WeeklyLoadMetricKey, w: { multiple: number }) => Math.round(weeklyKpiMultiple(days1, k) * rampFactor(w) * 100) / 100;
+              const mesoKpi = (k: WeeklyLoadMetricKey, w: { multiple: number }) => { const mv = matchKpis[k]; return mv == null ? null : mv * weeklyKpiMultiple(days1, k) * rampFactor(w); };
               return (
                 <details className="mt-4" open>
                   <summary className="cursor-pointer py-1 text-[13px] font-bold text-[#2740e6]">{is ? "Áætlað KPI-magn — vika + meso (keppnistímabil)" : "Planned KPI volume — week + meso (in-season)"}</summary>
@@ -2779,21 +2782,21 @@ export default function PeriodizationHubPage() {
                       <div className="mt-1.5 overflow-x-auto">
                         <table className="w-full text-[12.5px]">
                           <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
-                            <th className="py-1 pr-2 font-medium">{is ? "Vika" : "Week"}</th><th className="py-1 px-2 text-right font-medium">× {is ? "leikur" : "match"}</th>
-                            {headKeys.map((k) => <th key={k} className="py-1 px-2 text-right font-medium">{is ? WEEKLY_LOAD_LABELS[k].is : WEEKLY_LOAD_LABELS[k].en}</th>)}
+                            <th className="py-1 pr-2 font-medium">{is ? "Vika" : "Week"}</th><th className="py-1 px-2 text-right font-medium" title={is ? "Rúmmál (vegalengd/PlayerLoad)" : "Volume (distance/PlayerLoad)"}>× {is ? "rúmmál" : "vol"}</th>
+                            {headKeys.map((k) => <th key={k} className="py-1 px-2 text-right font-medium">{is ? WEEKLY_LOAD_LABELS[k].is : WEEKLY_LOAD_LABELS[k].en} <span className="normal-case text-slate-300">(× leik)</span></th>)}
                           </tr></thead>
                           <tbody>
                             {meso.map((w) => (
                               <tr key={w.weekIndex} className="border-t border-slate-100">
                                 <td className="py-1.5 pr-2 text-slate-700">{is ? "Vika" : "Wk"} {w.weekIndex}{w.isDeload ? <span className="ml-1 rounded bg-[#de9328]/15 px-1 py-0.5 text-[9px] font-semibold uppercase text-[#de9328]">{is ? "niður" : "deload"}</span> : null}</td>
                                 <td className="py-1.5 px-2 text-right tabular-nums font-semibold text-slate-900">{w.multiple}×</td>
-                                {headKeys.map((k) => { const val = mesoKpi(k, w); return <td key={k} className="py-1.5 px-2 text-right tabular-nums text-slate-600">{val == null ? "–" : `${fmtK(val)}${WEEKLY_LOAD_LABELS[k].unit}`}</td>; })}
+                                {headKeys.map((k) => { const val = mesoKpi(k, w); return <td key={k} className="py-1.5 px-2 text-right tabular-nums text-slate-600">{val == null ? "–" : <><span className="font-semibold text-slate-800">{kpiWkMult(k, w)}×</span> <span className="text-slate-400">{fmtK(val)}{WEEKLY_LOAD_LABELS[k].unit}</span></>}</td>; })}
                               </tr>
                             ))}
                             <tr className="border-t-2 border-slate-300 font-semibold">
                               <td className="py-1.5 pr-2">{is ? "Blokk alls" : "Block total"}</td>
                               <td className="py-1.5 px-2 text-right tabular-nums text-slate-900">{blockTotal}×</td>
-                              {headKeys.map((k) => { const tot = meso.reduce((s, w) => s + (mesoKpi(k, w) ?? 0), 0); const mv = matchKpis[k]; return <td key={k} className="py-1.5 px-2 text-right tabular-nums text-slate-700">{mv == null ? "–" : `${fmtK(tot)}${WEEKLY_LOAD_LABELS[k].unit}`}</td>; })}
+                              {headKeys.map((k) => { const mv = matchKpis[k]; const totMult = Math.round(meso.reduce((s, w) => s + kpiWkMult(k, w), 0) * 100) / 100; const tot = meso.reduce((s, w) => s + (mesoKpi(k, w) ?? 0), 0); return <td key={k} className="py-1.5 px-2 text-right tabular-nums text-slate-700">{mv == null ? "–" : <><span className="font-semibold text-slate-900">{totMult}×</span> <span className="text-slate-400">{fmtK(tot)}{WEEKLY_LOAD_LABELS[k].unit}</span></>}</td>; })}
                             </tr>
                           </tbody>
                         </table>
