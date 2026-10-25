@@ -1,19 +1,20 @@
 /**
  * Planned KPI volume — how much load a MICRO cycle (week) and a MESO cycle (block) should carry, anchored
- * to MATCH demand. Pure, cited, IO-free.
+ * to MATCH demand, PER KPI. Pure, cited, IO-free.
  *
  * Evidence base:
  *  - The match is the reference unit; weekly load is expressed as a MULTIPLE of a match, per KPI
- *    (Martín-García et al. 2018, "Quantification of a professional football team's external load using a
- *    microcycle structure" — weekly totals ≈ 3–5× a single match, with HSR/sprint at lower multiples).
+ *    (Martín-García et al. 2018 — weekly totals ≈ 3–5× a single match).
  *  - The within-week shape (MD-day %s) is Buchheit 2024's microcycle periodization, reused from
  *    `planSessionLoad` (MD-3 peak 85%, MD-4 68%, MD-2 50%, MD-1 32%).
- *  - The block (meso) progresses with a ramp + a deload week (3:1 / progressive overload, Gabbett 2016);
- *    ACWR 0.8–1.3 is a guardrail, not a predictor (contested — Impellizzeri 2020), handled elsewhere.
+ *  - CRITICAL per-KPI nuance: high-intensity metrics (HSR, sprint distance, high stride bands) are
+ *    CONCENTRATED on the high days (MD-4/MD-3) and taper to near-zero on MD-2/MD-1 — so their WEEKLY
+ *    accumulation is a SMALLER multiple of a match than total distance / PlayerLoad (volume) is
+ *    (Martín-García 2018; Oliva-Lozano 2020/2021 — session intensity distribution). Modelled with a
+ *    per-KPI taper exponent `e`: each day contributes `f^e` of its match value (f = the day's load
+ *    fraction); e=1 for volume, e>1 for high-intensity (steeper taper on low-load days).
+ *  - The block (meso) progresses with a ramp + a deload week (3:1 / progressive overload, Gabbett 2016).
  *  - Pre-season has no matches → anchor to the TARGET match unit and ramp toward it (preseasonStart.ts).
- *
- * Per-KPI tapering is approximated by a single weekly multiple applied to every KPI (the same simplification
- * the pre-season ramp uses); different KPIs taper slightly differently in Martín-García — a noted refinement.
  */
 
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
@@ -28,27 +29,52 @@ export function standardTrainingDays(matches: number): string[] {
   return ["MD-2", "MD-1"];                                           // 3 games → minimal training
 }
 
-/** Weekly TRAINING load as a multiple of one match: Σ of each training day's matchPct (Buchheit 2024
- *  via planSessionLoad) ÷ 100. Excludes the match itself; add `matches` to get total weekly exposure. */
-export function weeklyTrainingMultiple(mdDays: string[]): number {
-  let sum = 0;
-  for (const d of mdDays) {
-    const p = planSessionLoad({ mdDay: d, dayType: null, focus: null });
-    if (p.applicable) sum += p.matchPct;
-  }
-  return Math.round((sum / 100) * 100) / 100;
+/** Per-KPI taper exponent — how steeply a KPI falls on low-load days. Volume metrics (distance,
+ *  PlayerLoad) scale ~linearly with the day's load (e=1); high-intensity metrics taper HARDER (e>1), so
+ *  their weekly accumulation is a SMALLER ×match than distance (Martín-García 2018; Oliva-Lozano 2020).
+ *  e=1 for an unknown KPI. */
+export const KPI_TAPER_EXPONENT: Partial<Record<WeeklyLoadMetricKey, number>> = {
+  totalDistance: 1.0, totalPlayerLoad: 1.0,
+  velocityBand5: 1.5, velocityBand6: 2.0,     // HSR, sprint distance — taper hardest
+  accelB23: 1.2, decelB23: 1.2,               // mechanical — intermediate
+  fmpDynamicHigh: 1.5, fmpDynamicMedium: 1.1, fmpRunningHigh: 1.5,
+  imaTotal: 1.1, imaAccel: 1.2, imaDecel: 1.2, imaCod: 1.3,
+  imaStrideBand6: 1.5, imaStrideBand7: 1.7, imaStrideBand8: 2.0,
+};
+
+/** The per-day match-fractions (matchPct/100) for a set of MD-days (Buchheit 2024 via planSessionLoad). */
+export function dayFractions(mdDays: string[]): number[] {
+  const out: number[] = [];
+  for (const d of mdDays) { const p = planSessionLoad({ mdDay: d, dayType: null, focus: null }); if (p.applicable) out.push(p.matchPct / 100); }
+  return out;
 }
 
-export type KpiVolume = { key: WeeklyLoadMetricKey; label: { en: string; is: string }; unit: string; matchValue: number; weeklyValue: number };
+/** Weekly multiple for a taper exponent: Σ f^e over the training days. e=1 → the volume multiple. */
+export function weeklyMultiple(fractions: number[], exponent = 1): number {
+  return Math.round(fractions.reduce((s, f) => s + Math.pow(f, Math.max(0.1, exponent)), 0) * 100) / 100;
+}
 
-/** Per-KPI planned weekly volume = each KPI's match value × the weekly multiple (Martín-García 2018). */
-export function kpiVolumes(matchKpiAvg: Partial<Record<WeeklyLoadMetricKey, number>>, multiple: number): KpiVolume[] {
+/** Weekly TRAINING volume multiple (e=1) — the headline "×match". */
+export function weeklyTrainingMultiple(mdDays: string[]): number { return weeklyMultiple(dayFractions(mdDays), 1); }
+
+/** One KPI's tapered weekly multiple. */
+export function weeklyKpiMultiple(mdDays: string[], key: WeeklyLoadMetricKey): number {
+  return weeklyMultiple(dayFractions(mdDays), KPI_TAPER_EXPONENT[key] ?? 1);
+}
+
+export type KpiVolume = { key: WeeklyLoadMetricKey; label: { en: string; is: string }; unit: string; matchValue: number; weeklyValue: number; multiple: number };
+
+/** Per-KPI planned weekly volume = each KPI's match value × its OWN tapered weekly multiple (so HSR/sprint
+ *  come out as a lower ×match than total distance). */
+export function kpiVolumes(matchKpiAvg: Partial<Record<WeeklyLoadMetricKey, number>>, mdDays: string[]): KpiVolume[] {
+  const fr = dayFractions(mdDays);
   const out: KpiVolume[] = [];
   for (const key of Object.keys(matchKpiAvg) as WeeklyLoadMetricKey[]) {
     const mv = matchKpiAvg[key];
     if (mv == null || !Number.isFinite(mv)) continue;
+    const mult = weeklyMultiple(fr, KPI_TAPER_EXPONENT[key] ?? 1);
     const lab = WEEKLY_LOAD_LABELS[key];
-    out.push({ key, label: { en: lab.en, is: lab.is }, unit: lab.unit, matchValue: mv, weeklyValue: Math.round(mv * multiple) });
+    out.push({ key, label: { en: lab.en, is: lab.is }, unit: lab.unit, matchValue: mv, weeklyValue: Math.round(mv * mult), multiple: mult });
   }
   return out;
 }
