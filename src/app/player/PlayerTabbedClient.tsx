@@ -40,6 +40,7 @@ import ChatThread from "@/components/chat/ChatThread";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
 const PlayerGameReportCard = dynamic(() => import("@/components/player/PlayerGameReportCard"), { ssr: false });
 const PlayerBasketballGameReportCard = dynamic(() => import("@/components/player/PlayerBasketballGameReportCard"), { ssr: false });
+const PlayerBasketballMovementCard = dynamic(() => import("@/components/player/PlayerBasketballMovementCard"), { ssr: false });
 const PlayerFootballStatsCard = dynamic(() => import("@/components/player/PlayerFootballStatsCard"), { ssr: false });
 const PlayerMatchMovementCard = dynamic(() => import("@/components/player/PlayerMatchMovementCard"), { ssr: false });
 import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
@@ -654,7 +655,7 @@ function AteCommandCardPortal({ activeTab, clubThemeColor, lang }: { activeTab: 
 // hero + weekly-digest portals; that content now lives on its own tabs, one tap
 // away via these links (and the bottom nav).
 
-function TodayMorePortal({ activeTab, lang, onOpen }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; onOpen: (tab: DevPlayerTab) => void }) {
+function TodayMorePortal({ activeTab, lang, onOpen, isBasketball }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; onOpen: (tab: DevPlayerTab) => void; isBasketball?: boolean }) {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const is = lang === "IS";
 
@@ -701,9 +702,9 @@ function TodayMorePortal({ activeTab, lang, onOpen }: { activeTab: DevPlayerTab;
   if (!mountNode || activeTab !== "today") return null;
 
   const items: { key: DevPlayerTab; title: string; sub: string; Icon: typeof IconReport }[] = [
-    { key: "gamereport", title: is ? "Leikur" : "Game", sub: is ? "Leikjaskýrslan þín — síðasti leikur" : "Your game report — last match", Icon: IconReport },
-    { key: "stats", title: is ? "Tölfræði" : "Stats", sub: is ? "Tölfræðin þín — tímabilið" : "Your stats — the season", Icon: IconBarChart },
-    { key: "movement", title: is ? "Hreyfing" : "Movement", sub: is ? "Match movement — spretta, hröðun, vegalengd" : "Match movement — sprint, accel, distance", Icon: IconActivity },
+    { key: "gamereport", title: is ? "Leikur" : "Game", sub: isBasketball ? (is ? "Hreyfing á leikdegi — PlayerLoad, stökk" : "Game-day movement — PlayerLoad, jumps") : (is ? "Leikjaskýrslan þín — síðasti leikur" : "Your game report — last match"), Icon: IconReport },
+    { key: "stats", title: is ? "Tölfræði" : "Stats", sub: isBasketball ? (is ? "Tölfræðin þín — stig, fráköst, stoð" : "Your stats — points, rebounds, assists") : (is ? "Tölfræðin þín — tímabilið" : "Your stats — the season"), Icon: IconBarChart },
+    { key: "movement", title: is ? "Hreyfing" : "Movement", sub: isBasketball ? (is ? "Hreyfing — PlayerLoad, stökk, ákefð (Titan)" : "Movement — PlayerLoad, jumps, intensity (Titan)") : (is ? "Match movement — spretta, hröðun, vegalengd" : "Match movement — sprint, accel, distance"), Icon: IconActivity },
     { key: "dashboard", title: is ? "Yfirlit" : "Overview", sub: is ? "Öll gögnin þín — álag, styrkur, saga" : "All your data — load, strength, history", Icon: IconBarChart },
   ];
 
@@ -2754,7 +2755,7 @@ export default function DevPlayerClient() {
       {/* "See more" (Skoða meira) — quiet links to Game / Movement / Overview at
           the bottom of Today, replacing the old last-match + weekly-digest cards
           (round 14a). Their content lives on their own tabs, one tap away. */}
-      <TodayMorePortal activeTab={activeTab} lang={lang as "IS" | "EN"} onOpen={setTab} />
+      <TodayMorePortal activeTab={activeTab} lang={lang as "IS" | "EN"} onOpen={setTab} isBasketball={teamIsBasketball} />
       {/* Prominent "turn on notifications" banner at the TOP of Today — the single
           gateway for check-in / RPE / daily reminders. Shows only when push isn't
           granted; disappears once enabled. */}
@@ -2790,21 +2791,27 @@ export default function DevPlayerClient() {
                   <PlayerWorkingLoadsCard />
                 </div>
               )}
+              {/* Basketball (indoor, no GPS): Game = Titan movement on game days, Stats = KKÍ box score,
+                  Movement = the season's Titan movement. Football keeps the GPS game report / stats / movement. */}
               {activeTab === "gamereport" && (
                 <div className="space-y-4">
                   {teamIsBasketball
-                    ? <PlayerBasketballGameReportCard lang={lang as "IS" | "EN"} />
+                    ? <PlayerBasketballMovementCard lang={lang as "IS" | "EN"} mode="gameday" />
                     : <PlayerGameReportCard lang={lang as "IS" | "EN"} />}
                 </div>
               )}
               {activeTab === "stats" && (
                 <div className="space-y-4">
-                  <PlayerFootballStatsCard lang={lang as "IS" | "EN"} />
+                  {teamIsBasketball
+                    ? <PlayerBasketballGameReportCard lang={lang as "IS" | "EN"} />
+                    : <PlayerFootballStatsCard lang={lang as "IS" | "EN"} />}
                 </div>
               )}
               {activeTab === "movement" && (
                 <div className="mx-auto max-w-lg pb-24">
-                  <PlayerMatchMovementCard />
+                  {teamIsBasketball
+                    ? <PlayerBasketballMovementCard lang={lang as "IS" | "EN"} mode="all" />
+                    : <PlayerMatchMovementCard />}
                 </div>
               )}
               {activeTab === "chat" && chatPlayerId && (
