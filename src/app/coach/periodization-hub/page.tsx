@@ -94,6 +94,20 @@ const teamKpiAvg = (players: Player[]): Partial<Record<WeeklyLoadMetricKey, numb
 };
 type DayState = "match" | "session" | "off";
 
+/** The pre-season to PLAN FOR, relative to today. `detectSeasonPhases` only ever emits ONE pre-season
+ *  (the build-up before THIS season's first fixture — in the past once the season is under way). Once
+ *  we're in or past the off-season, the pre-season that matters is the NEXT one, which starts when the
+ *  off-season ends (= the coach's next-pre-season date, or the shown off-season horizon). Its length
+ *  reuses the detected pre-season's week count (next season's fixtures aren't loaded yet). Returns null
+ *  when there's no pre-season to plan. */
+function upcomingPreseason(phases: Phase[], todayIso: string): { start: string; weeks: number } | null {
+  const pre = phases.find((p) => p.key === "preseason");
+  const off = phases.find((p) => p.key === "offseason");
+  if (off && todayIso >= off.start) return { start: off.end, weeks: Math.max(1, pre?.weeks ?? 10) };
+  if (pre) return { start: pre.start, weeks: Math.max(1, pre.weeks) };
+  return null;
+}
+
 // The meso always seeds a full 6-week skeleton; a smaller cadence (4/5) just RENDERS fewer weeks
 // (the tail is trimmed, not reshuffled), so switching 6→4→5 shows the same block minus the last
 // 1–2 weeks and keeps the coach's day edits.
@@ -771,9 +785,10 @@ export default function PeriodizationHubPage() {
     // current week-1 multiple / sessions from the Players tab, so the PDF matches what they set.
     let preseasonStart: Parameters<typeof downloadPeriodizationHubPdf>[0]["preseasonStart"] = null;
     let preRamp: PreseasonWeekTarget[] = [];
-    const preStart = plan.phases.find((ph) => ph.key === "preseason")?.start ?? null;
-    if (plan.phases.some((ph) => ph.key === "preseason")) {
-      const preWeeks = Math.max(1, plan.phases.find((ph) => ph.key === "preseason")?.weeks ?? 6);
+    const upPre = upcomingPreseason(plan.phases, new Date().toISOString().slice(0, 10));
+    const preStart = upPre?.start ?? null;
+    if (upPre) {
+      const preWeeks = upPre.weeks;
       const preAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
       const preTka = teamKpiAvg(plan.players);
       preRamp = preseasonStartRamp({ matchTypicalLoad: preTka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: preTka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: preAnchor });
@@ -1843,9 +1858,10 @@ export default function PeriodizationHubPage() {
 
             {/* 2b — PRE-SEASON WEEKLY LOAD RAMP: starts the week off-season ends (no off-season shown),
                  ramps week-by-week toward the pre-season build, with ALL KPI variables per week. */}
-            {plan.phases.some((ph) => ph.key === "preseason") && (() => {
-              const preWeeks = Math.max(1, plan.phases.find((ph) => ph.key === "preseason")?.weeks ?? 6);
-              const preStart = plan.phases.find((ph) => ph.key === "preseason")?.start ?? null;
+            {upcomingPreseason(plan.phases, todayIso) && (() => {
+              const up = upcomingPreseason(plan.phases, todayIso)!;
+              const preWeeks = up.weeks;
+              const preStart = up.start;
               const preAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
               const tka = teamKpiAvg(plan.players);
               const ramp = preseasonStartRamp({ matchTypicalLoad: tka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: tka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: preAnchor });
@@ -2950,7 +2966,8 @@ export default function PeriodizationHubPage() {
               <summary className="cursor-pointer py-1 text-[13px] font-bold text-[#2740e6]">{is ? "Undirbúningur — byrjunarálag viku 1 + stigmögnun (lið)" : "Pre-season — week-1 starting load + ramp (team)"}</summary>
             {/* PRE-SEASON WEEK-1 START — controlled re-entry + ramp to the pre-season build. Editable launch pad. */}
             {plan && (() => {
-              const preWeeks = Math.max(1, plan.phases.find((p) => p.key === "preseason")?.weeks ?? 6);
+              const upPre = upcomingPreseason(plan.phases, new Date().toISOString().slice(0, 10));
+              const preWeeks = upPre?.weeks ?? Math.max(1, plan.phases.find((p) => p.key === "preseason")?.weeks ?? 6);
               const wkSel = Math.min(preWeeks, Math.max(1, psWeekSel));
               const teamAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
               const teamTka = teamKpiAvg(plan.players);
