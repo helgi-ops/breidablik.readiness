@@ -27,7 +27,8 @@ const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : Num
 export function boxFromTotals(t: Record<string, unknown> | null | undefined): TeamBox {
   const o = t ?? {};
   return {
-    pts: n(o.points), fgm: n(o.fgm), fga: n(o.fga), tpm: n(o.tpm), tpa: n(o.tpa), ftm: n(o.ftm), fta: n(o.fta),
+    // FIBA totals use `points`; KKÍ-saved totals use `pts` — accept either.
+    pts: n(o.points ?? o.pts), fgm: n(o.fgm), fga: n(o.fga), tpm: n(o.tpm), tpa: n(o.tpa), ftm: n(o.ftm), fta: n(o.fta),
     oreb: n(o.oreb), dreb: n(o.dreb), tov: n(o.tov), stl: n(o.stl), blk: n(o.blk), ast: n(o.ast),
   };
 }
