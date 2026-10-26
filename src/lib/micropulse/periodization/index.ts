@@ -1055,16 +1055,35 @@ const ACWR_CONTESTED: Bi = {
  *  off-season build is structured). A per-block length override still applies. Issurin 2010. */
 export const OFFSEASON_BLOCK_WEEKS = 4;
 
+/** Slice [a, b) into consecutive blocks of `defaultLen` weeks, honouring a coach LENGTH override map keyed
+ *  EITHER by block index ("0","1",… — robust, a resize never orphans a later block) OR, as a legacy
+ *  fallback, by the block's start-Monday ISO (index wins). Values clamp to 2–8 weeks; the last block is cut
+ *  at `b`. Shared by `buildMesoBlocks` and the pre-season sequence editor so both agree on the boundaries. */
+export function sliceByLengths(a: string, b: string, defaultLen: number, lengthOv?: Record<string, number>, startIdx = 0): Array<{ start: string; end: string; index: number }> {
+  const clamp = (w: unknown): number | null => (typeof w === "number" && w >= 2 && w <= 8 ? Math.round(w) : null);
+  const out: Array<{ start: string; end: string; index: number }> = [];
+  let cur = a;
+  while (cur < b) {
+    const idx = startIdx + out.length;
+    const len = clamp(lengthOv?.[String(idx)] ?? lengthOv?.[cur]) ?? defaultLen;
+    const rawEnd = addDays(cur, len * 7);
+    const end = rawEnd < b ? rawEnd : b;
+    out.push({ start: cur, end, index: idx });
+    cur = end;
+  }
+  return out.length ? out : [{ start: a, end: b, index: startIdx }];
+}
+
 export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4, matchLoad: number | null = null, fixtures: string[] = [], competitiveStart: string | null = null, breaks: Array<{ start_date: string; end_date: string }> = [], offseasonStart: string | null = null, offseasonBuildStart: string | null = null, opts?: {
-  /** Coach per-block LENGTH overrides, keyed by the block's start Monday ISO → weeks (2–8). A block that
-   *  starts on an overridden Monday takes that many weeks; later blocks re-flow (so resizing an earlier
-   *  block can reset a later block's own override). Does not apply to whole-gap / holiday blocks. */
-  blockWeeksByStart?: Record<string, number>;
+  /** Coach per-block LENGTH overrides. Keyed by block INDEX ("0","1",… — robust: an earlier resize no longer
+   *  orphans a later block) or, as a legacy fallback, by the block's start-Monday ISO (index wins). Weeks 2–8.
+   *  Does not apply to whole-gap / holiday blocks. */
+  blockWeeks?: Record<string, number>;
   /** Coach deload-week pins, keyed by the block's start Monday ISO → the Monday ISO of the deload week.
    *  Wins over the auto placement + the fatigue pull-forward when it lands inside the block. */
   deloadByStart?: Record<string, string>;
 }): MesoBlock[] {
-  const ovWeeks = (mon: string): number | null => { const w = opts?.blockWeeksByStart?.[mon]; return typeof w === "number" && w >= 2 && w <= 8 ? Math.round(w) : null; };
+  const ovWeeks = (mon: string, idx: number): number | null => { const w = opts?.blockWeeks?.[String(idx)] ?? opts?.blockWeeks?.[mon]; return typeof w === "number" && w >= 2 && w <= 8 ? Math.round(w) : null; };
   const byWeek = [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
   const loadAt = (start: string, end: string) => byWeek.filter((w) => w.weekStart >= start && w.weekStart < end);
   const fxMs = fixtures.map((d) => Date.parse(d)).filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
@@ -1079,23 +1098,16 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
   //    fixture calendar — a substantial fixture gap (≥2 consecutive game-free weeks) or a declared
   //    team break becomes its OWN block (a re-load window); the competition stretches between gaps are
   //    sliced into ~blockWeeks chunks. So the calendar defines the block structure, not an arbitrary grid.
-  const fixedCadence = (a: string, b: string, defaultLen = blockWeeks): Array<{ start: string; end: string }> => {
-    const out: Array<{ start: string; end: string }> = [];
-    let cur = a;
-    while (cur < b) {
-      const len = ovWeeks(cur) ?? defaultLen;
-      const rawEnd = addDays(cur, len * 7);
-      const end = rawEnd < b ? rawEnd : b;
-      out.push({ start: cur, end });
-      cur = end;
-    }
-    return out.length ? out : [{ start: a, end: b }];
-  };
+  // Blocks are indexed by their ORDER in the season (pre-season 0.., then competitive, then off-season), so
+  // the per-block LENGTH override can key by that stable index. `startIdx` = the index of this span's first
+  // block.
+  const fixedCadence = (a: string, b: string, defaultLen = blockWeeks, startIdx = 0): Array<{ start: string; end: string }> =>
+    sliceByLengths(a, b, defaultLen, opts?.blockWeeks, startIdx).map(({ start, end }) => ({ start, end }));
   let spans: Array<{ start: string; end: string; kind?: "holiday" }>;
   if (!competitiveStart || competitiveStart <= phaseStart) {
-    spans = fixedCadence(phaseStart, phaseEnd);
+    spans = fixedCadence(phaseStart, phaseEnd, blockWeeks, 0);
   } else {
-    spans = fixedCadence(phaseStart, competitiveStart); // pre-season
+    spans = fixedCadence(phaseStart, competitiveStart, blockWeeks, 0); // pre-season → indices 0..
     // Competitive weeks (Monday-aligned) up to the competitive end (= off-season start, else phase end),
     // each flagged game-free; a game-free RUN of ≥2 weeks, or any week overlapping a declared break, is a
     // "gap" (loading) span.
@@ -1110,11 +1122,12 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
     }
     // Group consecutive weeks by kind; slice competition runs into ~blockWeeks chunks, keep gaps whole.
     const compSpans: Array<{ start: string; end: string }> = [];
+    let cIdx = spans.length; // competitive blocks continue the index after the pre-season blocks
     for (let i = 0; i < wk.length;) {
       const gap = wk[i].gap; let j = i; while (j < wk.length && wk[j].gap === gap) j++;
       const spanEnd = (to: number) => (to < wk.length ? wk[to].mon : compEnd);
-      if (gap) compSpans.push({ start: wk[i].mon, end: spanEnd(j) });
-      else { let a = i; while (a < j) { const len = ovWeeks(wk[a].mon) ?? blockWeeks; const to = Math.min(j, a + len); compSpans.push({ start: wk[a].mon, end: spanEnd(to) }); a = to; } }
+      if (gap) { compSpans.push({ start: wk[i].mon, end: spanEnd(j) }); cIdx++; }
+      else { let a = i; while (a < j) { const len = ovWeeks(wk[a].mon, cIdx) ?? blockWeeks; const to = Math.min(j, a + len); compSpans.push({ start: wk[a].mon, end: spanEnd(to) }); cIdx++; a = to; } }
       i = j;
     }
     if (compSpans.length) { compSpans[0].start = competitiveStart; spans = [...spans, ...compSpans]; } // meet pre-season exactly at the first fixture
@@ -1131,8 +1144,8 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
       const offMon = mondayOnAfter(offseasonStart!);
       const buildMon = rawBuild ? mondayOnAfter(rawBuild) : null;
       spans = buildMon && buildMon > offMon
-        ? [...spans, { start: offMon, end: buildMon, kind: "holiday" as const }, ...fixedCadence(buildMon, phaseEnd, OFFSEASON_BLOCK_WEEKS)]
-        : [...spans, ...fixedCadence(offMon, phaseEnd, OFFSEASON_BLOCK_WEEKS)];
+        ? [...spans, { start: offMon, end: buildMon, kind: "holiday" as const }, ...fixedCadence(buildMon, phaseEnd, OFFSEASON_BLOCK_WEEKS, spans.length + 1)]
+        : [...spans, ...fixedCadence(offMon, phaseEnd, OFFSEASON_BLOCK_WEEKS, spans.length)];
     }
   }
 
@@ -1208,7 +1221,7 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
     out.push({
       index: i, phase: g.phase, goal: g.goal, goalKey: gk,
       start, end, weeks: blockWk, deloadWeekStart, deloadNow, isDeload: deloadNow, deloadPinned,
-      lengthPinned: ovWeeks(start) != null && !isHoliday, volumeTargetPct, flag,
+      lengthPinned: ovWeeks(start, i) != null && !isHoliday, volumeTargetPct, flag,
       tmr, loadTrend, acwr, acwrNote: ACWR_CONTESTED,
     });
   }

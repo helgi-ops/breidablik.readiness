@@ -40,6 +40,8 @@ export type PeriodizationPlan = {
   tier: TierRead; mdShape: Record<string, number>; nextWeekType: MatchWeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null;
   congested: Array<{ weekStart: string; matches: number }>; players: PlayerPeriodization[];
   fixtures: string[]; // fixture dates — MD anchors for the meso plan editor
+  nextFirstFixture: string | null; // the NEXT season's first competitive game (after this year) — so the
+                                    // upcoming pre-season can be planned all the way to it, not a fixed 10 weeks
 };
 
 const mondayOf = (iso: string) => {
@@ -59,6 +61,14 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     .gte("match_date", yStart).lte("match_date", yEnd).order("match_date");
   const fixtures = ((fxData ?? []) as Array<{ match_date: string; competition: string | null; is_home: boolean | null; is_friendly: boolean | null }>)
     .map((f) => ({ date: f.match_date, competition: f.competition, isHome: f.is_home, isFriendly: f.is_friendly }));
+
+  // The NEXT season's first competitive game (after this year's window): lets the upcoming pre-season be
+  // planned all the way to the real opener (e.g. early April next year) instead of a fixed 10 weeks.
+  const { data: nextFxRows } = await sb.from("match_schedule")
+    .select("match_date, is_friendly").eq("team_id", args.teamId)
+    .gt("match_date", yEnd).order("match_date").limit(20);
+  const nextFirstFixture = ((nextFxRows ?? []) as Array<{ match_date: string; is_friendly: boolean | null }>)
+    .filter((r) => r.is_friendly !== true).map((r) => r.match_date).sort()[0] ?? null;
 
   const matchDates = new Set(fixtures.map((f) => f.date));
 
@@ -173,7 +183,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   // in-season week becomes its own re-load block, so the server blocks match the hub's.
   const { data: breakRows } = await sb.from("team_breaks").select("start_date, end_date").eq("team_id", args.teamId);
   const teamBreaks = ((breakRows ?? []) as Array<{ start_date: string; end_date: string }>).filter((b) => b.start_date && b.end_date);
-  const blocks = phases.length ? buildMesoBlocks(planStart, planEnd, loadCurve, cadence, matchLoadTeam, fixtures.map((f) => f.date), compPhaseStart, teamBreaks, offPhaseStartIso, null, { blockWeeksByStart: args.blockWeeksByStart ?? undefined, deloadByStart: args.deloadByStart ?? undefined }) : [];
+  const blocks = phases.length ? buildMesoBlocks(planStart, planEnd, loadCurve, cadence, matchLoadTeam, fixtures.map((f) => f.date), compPhaseStart, teamBreaks, offPhaseStartIso, null, { blockWeeks: args.blockWeeksByStart ?? undefined, deloadByStart: args.deloadByStart ?? undefined }) : [];
 
   // Players + individualisation.
   const { data: plData } = await sb.from("players").select("id, full_name, position").eq("team_id", args.teamId).eq("is_active", true).order("full_name");
@@ -374,5 +384,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date) };
+  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date), nextFirstFixture };
 }

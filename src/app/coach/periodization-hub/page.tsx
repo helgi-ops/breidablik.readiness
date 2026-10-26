@@ -17,7 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupView from "@/components/coach/WeekSetupView";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
-import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
+import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { buildPlayerBlock, pickActiveBlock } from "@/lib/micropulse/periodization/playerBlock";
@@ -60,7 +60,7 @@ type MdDemandProfile = { phases: MdDemandBucket[]; days: MdDemandBucket[] };
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes; md: MdDemandProfile };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
-type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[] };
+type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; nextFirstFixture?: string | null };
 
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
 const isoAdd = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_400_000).toISOString().slice(0, 10);
@@ -97,14 +97,21 @@ type DayState = "match" | "session" | "off";
 /** The pre-season to PLAN FOR, relative to today. `detectSeasonPhases` only ever emits ONE pre-season
  *  (the build-up before THIS season's first fixture — in the past once the season is under way). Once
  *  we're in or past the off-season, the pre-season that matters is the NEXT one, which starts when the
- *  off-season ends (= the coach's next-pre-season date, or the shown off-season horizon). Its length
- *  reuses the detected pre-season's week count (next season's fixtures aren't loaded yet). Returns null
- *  when there's no pre-season to plan. */
-function upcomingPreseason(phases: Phase[], todayIso: string): { start: string; weeks: number } | null {
+ *  off-season ends (= the coach's next-pre-season date, or the shown off-season horizon). Its length is
+ *  computed to the NEXT season's first competitive game (`nextFirstFixture`) when the coach has entered it,
+ *  else it reuses the detected pre-season's week count. Returns null when there's no pre-season to plan. */
+function upcomingPreseason(phases: Phase[], todayIso: string, nextFirstFixture?: string | null): { start: string; weeks: number; end?: string } | null {
   const pre = phases.find((p) => p.key === "preseason");
   const off = phases.find((p) => p.key === "offseason");
-  if (off && todayIso >= off.start) return { start: off.end, weeks: Math.max(1, pre?.weeks ?? 10) };
-  if (pre) return { start: pre.start, weeks: Math.max(1, pre.weeks) };
+  if (off && todayIso >= off.start) {
+    // Compute to the real opener when known, else fall back to the detected pre-season length.
+    if (nextFirstFixture && nextFirstFixture > off.end) {
+      const weeks = Math.max(1, Math.round((Date.parse(`${nextFirstFixture}T00:00:00Z`) - Date.parse(`${off.end}T00:00:00Z`)) / (7 * 86_400_000)));
+      return { start: off.end, weeks, end: nextFirstFixture };
+    }
+    return { start: off.end, weeks: Math.max(1, pre?.weeks ?? 10) };
+  }
+  if (pre) return { start: pre.start, weeks: Math.max(1, pre.weeks), end: pre.end };
   return null;
 }
 
@@ -354,7 +361,7 @@ export default function PeriodizationHubPage() {
     // competitiveStart lets the builder make each in-season block fixture-aware (compete vs re-load).
     const compStart = plan.phases.find((p) => p.key === "competitive")?.start ?? null;
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
-    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart, teamBreaks, offPhaseStart, offStart || null, { blockWeeksByStart: blockLenOv, deloadByStart: blockDeloadOv });
+    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart, teamBreaks, offPhaseStart, offStart || null, { blockWeeks: blockLenOv, deloadByStart: blockDeloadOv });
   }, [plan, cadence, teamBreaks, offStart, blockLenOv, blockDeloadOv]);
 
   // The block the coach is editing (contains blkStart), and its EFFECTIVE goal = coach override for that
@@ -844,7 +851,7 @@ export default function PeriodizationHubPage() {
     // current week-1 multiple / sessions from the Players tab, so the PDF matches what they set.
     let preseasonStart: Parameters<typeof downloadPeriodizationHubPdf>[0]["preseasonStart"] = null;
     let preRamp: PreseasonWeekTarget[] = [];
-    const upPre = upcomingPreseason(plan.phases, new Date().toISOString().slice(0, 10));
+    const upPre = upcomingPreseason(plan.phases, new Date().toISOString().slice(0, 10), plan.nextFirstFixture);
     const preStart = upPre?.start ?? null;
     if (upPre) {
       const preWeeks = upPre.weeks;
@@ -1503,7 +1510,7 @@ export default function PeriodizationHubPage() {
             const card = "rounded-xl border border-slate-200 bg-white p-4 sm:p-5";
             const h2 = "text-[15px] font-bold text-slate-900";
             const todayIso = new Date().toISOString().slice(0, 10);
-            const up = upcomingPreseason(plan.phases, todayIso);
+            const up = upcomingPreseason(plan.phases, todayIso, plan.nextFirstFixture);
             if (!up) return (
               <section className={card}>
                 <h2 className={h2}>{is ? "Undirbúningur — heildarskipulag" : "Pre-season — whole plan"}</h2>
@@ -1531,6 +1538,14 @@ export default function PeriodizationHubPage() {
             const PS_LABEL: Record<string, string> = { hypertrophy: is ? "Ofvöxtur / styrktar-þol" : "Hypertrophy", max_strength: is ? "Hámarksstyrkur" : "Max strength", power: is ? "Afl / hraði" : "Power" };
             const dows = is ? ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
             const kpiKeys = ramp.length ? (Object.keys(ramp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad" && ramp.some((w) => w.byKpi[k] != null)) : [];
+            // The pre-season MESO CYCLES (Macro owns the lengths; index-keyed so a resize never orphans a
+            // later one). Slice the pre-season window with the coach's cadence + per-block length overrides.
+            const preEndIso = up.end ?? new Date(preEndMs).toISOString().slice(0, 10);
+            const preBlocks = sliceByLengths(preStart, preEndIso, cadence, blockLenOv, 0);
+            const blockEndExcl = (b: { end: string }) => b.end; // exclusive
+            const weeksBetween = (a: string, b: string) => Math.max(1, Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / (7 * 86_400_000)));
+            const emphOfBlock = (b: { start: string }) => preseasonBlockForWeeksOut(weeksBetween(b.start, preEndIso));
+            const seqTotal = preBlocks.reduce((s, b) => s + weeksBetween(b.start, blockEndExcl(b)), 0);
             return (<div className="space-y-4">
 
           {/* Header + the two tunable controls (persisted, shared with the Players tab). */}
@@ -1551,7 +1566,35 @@ export default function PeriodizationHubPage() {
             </div>
           </section>
 
-          {/* One card per pre-season week. */}
+          {/* Meso-cycle SEQUENCE editor — Macro owns the lengths; the Meso tab reads them. Index-keyed. */}
+          <section className={card}>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className={h2}>{is ? "Meso-lotur undirbúnings" : "Pre-season meso cycles"}</h2>
+              <span className="text-[12px] text-slate-500">{is ? "samtals" : "total"} <b className={`tabular-nums ${seqTotal === preWeeks ? "text-slate-900" : "text-[#de9328]"}`}>{seqTotal}</b> {is ? `af ${preWeeks} vikum` : `of ${preWeeks} weeks`}</span>
+            </div>
+            <p className="mt-0.5 text-[12px] text-slate-500">{is ? "Settu lengd hverrar meso-lotu (4–6 vikur). Mesó-flipinn les þær — breyting hér endurflæðir dagatalið og vikurnar fram að fyrsta leik." : "Set each meso cycle's length (4–6 weeks). The Meso tab reads them — a change here re-flows the calendar and the weeks up to the first game."}</p>
+            <div className="mt-3 space-y-1.5">
+              {preBlocks.map((b) => {
+                const bw = weeksBetween(b.start, blockEndExcl(b));
+                const emph = emphOfBlock(b);
+                return (
+                  <div key={b.index} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <span className="text-[13px] font-semibold text-slate-800">{is ? "Lota" : "Block"} {b.index + 1}</span>
+                    <span className="text-[12px] text-slate-500">{shortDate(b.start, is)}–{shortDate(isoAdd(b.end, -1), is)} · {bw} {is ? "v" : "wk"}</span>
+                    {emph && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{PS_LABEL[emph]}</span>}
+                    <label className="ml-auto flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Lengd" : "Length"}
+                      <select value={blockLenOv[String(b.index)] ?? blockLenOv[b.start] ?? ""} onChange={(e) => setBlockLength(String(b.index), e.target.value === "" ? null : Number(e.target.value))} className="rounded border border-slate-300 bg-white px-1.5 py-0.5">
+                        <option value="">{is ? `Sjálfgefið (${cadence}v)` : `Auto (${cadence}w)`}</option>
+                        {[4, 5, 6].map((n) => <option key={n} value={n}>{n} {is ? "vikur" : "weeks"}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* One card per pre-season week, grouped under its meso cycle. */}
           {ramp.map((w, i) => {
             const cw = cal.weeks[i];
             const weekMon = cw?.weekStart ?? isoAdd(preStart, i * 7);
@@ -1559,8 +1602,18 @@ export default function PeriodizationHubPage() {
             const weekTests = tests.filter((tp) => tp.weeks.includes(i + 1));
             const weekFx = preFixtures.filter((d) => d >= weekMon && d < isoAdd(weekMon, 7));
             const pv = primary(w);
+            const blk = preBlocks.find((b) => b.start === weekMon); // this week starts a new meso cycle?
+            const blkEmph = blk ? emphOfBlock(blk) : null;
             return (
-              <section key={i} className={`${card} min-w-0`}>
+              <React.Fragment key={i}>
+              {blk && (
+                <div className="flex flex-wrap items-center gap-2 pt-1 text-[12px] font-semibold text-slate-500">
+                  <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[#7a5cc4]">{is ? "Meso-lota" : "Meso cycle"} {blk.index + 1}</span>
+                  <span>{weeksBetween(blk.start, blk.end)} {is ? "vikur" : "weeks"}</span>
+                  {blkEmph && <span className="font-normal text-slate-400">· {PS_LABEL[blkEmph]}</span>}
+                </div>
+              )}
+              <section className={`${card} min-w-0`}>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                   <span className="text-[15px] font-bold text-slate-900">{is ? "Vika" : "Week"} {i + 1}</span>
                   <span className="text-[12px] text-slate-500">{shortDate(weekMon, is)}</span>
@@ -1595,6 +1648,7 @@ export default function PeriodizationHubPage() {
                   </div>
                 )}
               </section>
+              </React.Fragment>
             );
           })}
 
@@ -1913,7 +1967,7 @@ export default function PeriodizationHubPage() {
             {sel && sel.phase.en !== "Off-season break" && (
               <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-3">
                 <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Lotulengd" : "Block length"}
-                  <select value={blockLenOv[sel.start] ?? ""} onChange={(e) => setBlockLength(sel.start, e.target.value === "" ? null : Number(e.target.value))} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
+                  <select value={blockLenOv[String(sel.index)] ?? blockLenOv[sel.start] ?? ""} onChange={(e) => setBlockLength(String(sel.index), e.target.value === "" ? null : Number(e.target.value))} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
                     <option value="">{is ? `Sjálfgefið (${cadence}v)` : `Auto (${cadence}w)`}</option>
                     {[2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} {is ? "vikur" : "weeks"}</option>)}
                   </select>
@@ -2057,8 +2111,8 @@ export default function PeriodizationHubPage() {
 
             {/* 2b — PRE-SEASON WEEKLY LOAD RAMP: starts the week off-season ends (no off-season shown),
                  ramps week-by-week toward the pre-season build, with ALL KPI variables per week. */}
-            {upcomingPreseason(plan.phases, todayIso) && (() => {
-              const up = upcomingPreseason(plan.phases, todayIso)!;
+            {upcomingPreseason(plan.phases, todayIso, plan.nextFirstFixture) && (() => {
+              const up = upcomingPreseason(plan.phases, todayIso, plan.nextFirstFixture)!;
               const preWeeks = up.weeks;
               const preStart = up.start;
               const preAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
@@ -3143,7 +3197,7 @@ export default function PeriodizationHubPage() {
               <summary className="cursor-pointer py-1 text-[13px] font-bold text-[#2740e6]">{is ? "Undirbúningur — byrjunarálag viku 1 + stigmögnun (lið)" : "Pre-season — week-1 starting load + ramp (team)"}</summary>
             {/* PRE-SEASON WEEK-1 START — controlled re-entry + ramp to the pre-season build. Editable launch pad. */}
             {plan && (() => {
-              const upPre = upcomingPreseason(plan.phases, new Date().toISOString().slice(0, 10));
+              const upPre = upcomingPreseason(plan.phases, new Date().toISOString().slice(0, 10), plan.nextFirstFixture);
               const preWeeks = upPre?.weeks ?? Math.max(1, plan.phases.find((p) => p.key === "preseason")?.weeks ?? 6);
               const wkSel = Math.min(preWeeks, Math.max(1, psWeekSel));
               const teamAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";

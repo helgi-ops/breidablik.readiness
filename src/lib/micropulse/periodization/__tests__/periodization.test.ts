@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, recommendBlockGoal, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
+import { detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, recommendBlockGoal, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
 
 // A full Pro (GPS + IMA) match unit — running spine + the mechanical/IMA axis (Acc/Dec B2–3, stride, dir).
 const UNIT: MatchUnitAbs = { dist: 12564, hsr: 988, load: 1184, accdec: 259, accHiEff: 40, decHiEff: 52, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
@@ -185,15 +185,39 @@ test("buildMesoBlocks: coach per-block LENGTH override re-flows later blocks", (
   const base = Date.parse("2026-04-06");
   for (let i = 0; i < 12; i++) weeks.push({ weekStart: new Date(base + i * 7 * 86_400_000).toISOString().slice(0, 10), load: 2000, readiness: 70 });
   // Default cadence 4 → three 4-week blocks. Override block 0 to 6 weeks → [6, 4, 2], starts re-flow.
-  const b = buildMesoBlocks("2026-04-06", "2026-06-29", weeks, 4, 700, [], null, [], null, null, { blockWeeksByStart: { "2026-04-06": 6 } });
+  const b = buildMesoBlocks("2026-04-06", "2026-06-29", weeks, 4, 700, [], null, [], null, null, { blockWeeks: { "2026-04-06": 6 } });
   assert.equal(b.length, 3);
   assert.equal(b[0].weeks, 6);
   assert.equal(b[0].lengthPinned, true);
   assert.equal(b[1].start, "2026-05-18");       // 2026-04-06 + 6 weeks
   assert.equal(b[1].lengthPinned, false);        // only the first block was pinned
   // An out-of-range length (1 or 9) is ignored → falls back to the cadence.
-  const ignored = buildMesoBlocks("2026-04-06", "2026-06-29", weeks, 4, 700, [], null, [], null, null, { blockWeeksByStart: { "2026-04-06": 1 } });
+  const ignored = buildMesoBlocks("2026-04-06", "2026-06-29", weeks, 4, 700, [], null, [], null, null, { blockWeeks: { "2026-04-06": 1 } });
   assert.equal(ignored[0].weeks, 4);
+});
+
+test("buildMesoBlocks: INDEX-keyed length overrides don't orphan a later block when an earlier one is resized", () => {
+  const weeks: WeekLoad[] = [];
+  const base = Date.parse("2026-01-05");
+  for (let i = 0; i < 18; i++) weeks.push({ weekStart: new Date(base + i * 7 * 86_400_000).toISOString().slice(0, 10), load: 2000, readiness: 70 });
+  // Block 0 = 6 wk AND block 2 = 5 wk, keyed by INDEX. Resizing block 0 shifts block 2's start, but the
+  // index-2 override still applies — start-ISO keying would have silently dropped it.
+  const b = buildMesoBlocks("2026-01-05", "2026-05-04", weeks, 4, 700, [], null, [], null, null, { blockWeeks: { "0": 6, "2": 5 } });
+  assert.equal(b[0].weeks, 6);
+  assert.equal(b[0].lengthPinned, true);
+  assert.equal(b[2].weeks, 5);            // honoured by index despite block 0's resize
+  assert.equal(b[2].lengthPinned, true);
+  // Index wins over a legacy start-ISO key for the same block.
+  const mixed = buildMesoBlocks("2026-01-05", "2026-05-04", weeks, 4, 700, [], null, [], null, null, { blockWeeks: { "0": 5, "2026-01-05": 3 } });
+  assert.equal(mixed[0].weeks, 5);
+});
+
+test("sliceByLengths: index-keyed lengths produce deterministic, re-flowing boundaries", () => {
+  const s = sliceByLengths("2026-01-05", "2026-03-02", 4, { "0": 5 }, 0); // 8 weeks, block 0 = 5 → [5, 3]
+  assert.equal(s.length, 2);
+  assert.equal(s[0].index, 0);
+  assert.equal(Math.round((Date.parse(s[0].end) - Date.parse(s[0].start)) / (7 * 86_400_000)), 5);
+  assert.equal(s[1].start, "2026-02-09"); // 2026-01-05 + 5 weeks
 });
 
 test("buildMesoBlocks: off-season is sliced into its OWN ~4-week blocks, independent of the in-season cadence", () => {
