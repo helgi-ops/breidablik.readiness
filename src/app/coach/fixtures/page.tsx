@@ -30,7 +30,7 @@ const COPY = {
     home: "Home", away: "Away", kickoff: "Kickoff (optional)", competition: "Competition (optional)",
     competitionPh: "e.g. Besta deild",
     friendly: "Friendly (pre-season)", friendlyHint: "A training game — does NOT start the competitive season.", friendlyBadge: "Friendly",
-    compNone: "— Select —", compOther: "Other…",
+    compNone: "— Select —", compOther: "Other…", gLeague: "Leagues", gCup: "Cups", gEuro: "European",
     upcoming: "Upcoming", past: "Recent (played)", none: "No fixtures yet — add the month's games above.",
     del: "Delete", delConfirm: "Delete this fixture?", saving: "Saving…", loading: "Loading…",
     needDate: "Pick a date first.", vs: "vs",
@@ -48,7 +48,7 @@ const COPY = {
     home: "Heima", away: "Úti", kickoff: "Byrjunartími (valfrjálst)", competition: "Mót (valfrjálst)",
     competitionPh: "t.d. Besta deild",
     friendly: "Æfingaleikur (undirbúningur)", friendlyHint: "Æfingaleikur — byrjar EKKI keppnistímabilið.", friendlyBadge: "Æfingaleikur",
-    compNone: "— Veldu —", compOther: "Annað…",
+    compNone: "— Veldu —", compOther: "Annað…", gLeague: "Deildir", gCup: "Bikarkeppnir", gEuro: "Evrópukeppnir",
     upcoming: "Framundan", past: "Nýlegt (leikið)", none: "Engir leikir enn — bættu við leikjum mánaðarins að ofan.",
     del: "Eyða", delConfirm: "Eyða þessum leik?", saving: "Vista…", loading: "Hleð…",
     needDate: "Veldu dagsetningu fyrst.", vs: "vs",
@@ -73,16 +73,21 @@ type Fixture = {
 };
 
 /** Icelandic football competitions for the Fixtures dropdown. `friendly: true` (the pre-season friendly)
- *  sets is_friendly so it does NOT start the competitive season; "Other…" reveals a free-text field. */
-const FOOTBALL_COMPETITIONS: Array<{ value: string; friendly: boolean }> = [
-  { value: "Æfingaleikur", friendly: true },
-  { value: "Besta deild", friendly: false },
-  { value: "Lengjudeild", friendly: false },
-  { value: "2. deild", friendly: false },
-  { value: "3. deild", friendly: false },
-  { value: "4. deild", friendly: false },
-  { value: "Mjólkurbikarinn", friendly: false },
-  { value: "Lengjubikarinn", friendly: false },
+ *  sets is_friendly so it does NOT start the competitive season; "Other…" reveals a free-text field.
+ *  League names apply to both the men's and women's team (the team is per-gender). `group` buckets them
+ *  into optgroups. */
+const FOOTBALL_COMPETITIONS: Array<{ value: string; friendly: boolean; group: "pre" | "league" | "cup" | "euro" }> = [
+  { value: "Æfingaleikur", friendly: true, group: "pre" },
+  { value: "Besta deild", friendly: false, group: "league" },
+  { value: "Lengjudeild", friendly: false, group: "league" },
+  { value: "2. deild", friendly: false, group: "league" },
+  { value: "3. deild", friendly: false, group: "league" },
+  { value: "4. deild", friendly: false, group: "league" },
+  { value: "Mjólkurbikarinn", friendly: false, group: "cup" },
+  { value: "Lengjubikarinn", friendly: false, group: "cup" },
+  { value: "Meistaradeild Evrópu", friendly: false, group: "euro" },
+  { value: "Sambandsdeild Evrópu", friendly: false, group: "euro" },
+  { value: "Meistaradeild kvenna (Evrópa)", friendly: false, group: "euro" },
 ];
 
 /** Derive W/D/L from the two goal totals. null when the match isn't scored yet. */
@@ -388,7 +393,16 @@ export default function FixturesPage() {
               className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
             >
               <option value="">{t.compNone}</option>
-              {FOOTBALL_COMPETITIONS.map((c) => <option key={c.value} value={c.value}>{c.value === "Æfingaleikur" ? t.friendly : c.value}</option>)}
+              {FOOTBALL_COMPETITIONS.filter((c) => c.group === "pre").map((c) => <option key={c.value} value={c.value}>{t.friendly}</option>)}
+              <optgroup label={t.gLeague}>
+                {FOOTBALL_COMPETITIONS.filter((c) => c.group === "league").map((c) => <option key={c.value} value={c.value}>{c.value}</option>)}
+              </optgroup>
+              <optgroup label={t.gCup}>
+                {FOOTBALL_COMPETITIONS.filter((c) => c.group === "cup").map((c) => <option key={c.value} value={c.value}>{c.value}</option>)}
+              </optgroup>
+              <optgroup label={t.gEuro}>
+                {FOOTBALL_COMPETITIONS.filter((c) => c.group === "euro").map((c) => <option key={c.value} value={c.value}>{c.value}</option>)}
+              </optgroup>
               <option value="__other__">{t.compOther}</option>
             </select>
             {fCompCustom && <Input value={fCompetition} onChange={(e) => setFCompetition(e.target.value)} placeholder={t.competitionPh} className="mt-1.5" />}
