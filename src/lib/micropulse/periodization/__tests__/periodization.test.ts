@@ -154,6 +154,18 @@ test("buildMesoBlocks: coach per-block LENGTH override re-flows later blocks", (
   assert.equal(ignored[0].weeks, 4);
 });
 
+test("buildMesoBlocks: off-season is sliced into its OWN ~4-week blocks, independent of the in-season cadence", () => {
+  // Pre 05 Jan → comp 30 Mar (12w pre-season) → off-season 05 Oct → end 30 Nov (8 off-season weeks).
+  const blocks = buildMesoBlocks("2026-01-05", "2026-11-30", [], 6, 700, ["2026-04-04"], "2026-03-30", [], "2026-10-05", null);
+  const off = blocks.filter((b) => b.start >= "2026-10-05");
+  assert.ok(off.length >= 2, "8 off-season weeks at ~4w each → two blocks");
+  assert.equal(off[0].weeks, 4);                 // 4-week reconditioning block, NOT the 6-week cadence
+  assert.ok(off.every((b) => b.weeks <= 4));      // none inherits the 6-week in-season cadence
+  // The in-season cadence still governs the pre-season blocks (6 weeks here).
+  const pre = blocks.filter((b) => b.start < "2026-03-30");
+  assert.equal(pre[0].weeks, 6);
+});
+
 test("buildMesoBlocks: coach deload-week pin wins over the auto placement", () => {
   const weeks: WeekLoad[] = [];
   const base = Date.parse("2026-04-06");

@@ -1031,6 +1031,11 @@ const ACWR_CONTESTED: Bi = {
  * bye / low-density week from `fixtures`); a fatigue signal pulls it to the block's first week (`deloadNow`).
  * `matchLoad` is the team's typical single-match load in the same currency (Player Load or sRPE-AU).
  */
+/** Off-season reconditioning block length — a standard ~4-week development mesocycle, kept INDEPENDENT of
+ *  the in-season deload cadence (the coach's 4/5/6 choice is about match-block deload spacing, not how the
+ *  off-season build is structured). A per-block length override still applies. Issurin 2010. */
+export const OFFSEASON_BLOCK_WEEKS = 4;
+
 export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4, matchLoad: number | null = null, fixtures: string[] = [], competitiveStart: string | null = null, breaks: Array<{ start_date: string; end_date: string }> = [], offseasonStart: string | null = null, offseasonBuildStart: string | null = null, opts?: {
   /** Coach per-block LENGTH overrides, keyed by the block's start Monday ISO → weeks (2–8). A block that
    *  starts on an overridden Monday takes that many weeks; later blocks re-flow (so resizing an earlier
@@ -1055,11 +1060,11 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
   //    fixture calendar — a substantial fixture gap (≥2 consecutive game-free weeks) or a declared
   //    team break becomes its OWN block (a re-load window); the competition stretches between gaps are
   //    sliced into ~blockWeeks chunks. So the calendar defines the block structure, not an arbitrary grid.
-  const fixedCadence = (a: string, b: string): Array<{ start: string; end: string }> => {
+  const fixedCadence = (a: string, b: string, defaultLen = blockWeeks): Array<{ start: string; end: string }> => {
     const out: Array<{ start: string; end: string }> = [];
     let cur = a;
     while (cur < b) {
-      const len = ovWeeks(cur) ?? blockWeeks;
+      const len = ovWeeks(cur) ?? defaultLen;
       const rawEnd = addDays(cur, len * 7);
       const end = rawEnd < b ? rawEnd : b;
       out.push({ start: cur, end });
@@ -1094,14 +1099,16 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
       i = j;
     }
     if (compSpans.length) { compSpans[0].start = competitiveStart; spans = [...spans, ...compSpans]; } // meet pre-season exactly at the first fixture
-    // Off-season — its own fixed-cadence build blocks (no fixtures to align to). If the coach set an
-    // off-season START later than the season end, the weeks between are a HOLIDAY (Frí): a full-rest
-    // block before the reconditioning build begins.
+    // Off-season — its OWN reconditioning blocks, INDEPENDENT of the in-season deload cadence (a 6-week
+    // in-season block shouldn't make 6-week off-season blocks — the off-season is a separate development
+    // phase: a standard ~4-week reconditioning mesocycle, Issurin 2010). The coach can still resize an
+    // individual off-season block (the per-block length override). If the coach set an off-season START
+    // later than the season end, the weeks between are a HOLIDAY (Frí): full rest before the build begins.
     if (offStartMs != null) {
       const buildStart = offseasonBuildStart && offseasonBuildStart > offseasonStart! && offseasonBuildStart < phaseEnd ? offseasonBuildStart : null;
       spans = buildStart
-        ? [...spans, { start: offseasonStart!, end: buildStart, kind: "holiday" as const }, ...fixedCadence(buildStart, phaseEnd)]
-        : [...spans, ...fixedCadence(offseasonStart!, phaseEnd)];
+        ? [...spans, { start: offseasonStart!, end: buildStart, kind: "holiday" as const }, ...fixedCadence(buildStart, phaseEnd, OFFSEASON_BLOCK_WEEKS)]
+        : [...spans, ...fixedCadence(offseasonStart!, phaseEnd, OFFSEASON_BLOCK_WEEKS)];
     }
   }
 
