@@ -360,13 +360,20 @@ export default function PeriodizationHubPage() {
   // the coach never picks deload (it's a week, not a goal). This single value drives the computed block.
   const activeBlock = React.useMemo(() => mesoBlocks.find((b) => b.start <= blkStart && blkStart < b.end) ?? null, [mesoBlocks, blkStart]);
   const activeBlockStart = activeBlock?.start ?? mondayOf(blkStart);
+  // Effective calendar length = the selected block's OWN length (clamped to the horizon), so the micro
+  // view renders exactly the meso block and stops at its end — a competitive block halts at the season
+  // boundary instead of bleeding the in-season ramp into the off-season. Falls back to the cadence.
+  const blkWeeksEff = React.useMemo(() => {
+    const blkMon = mondayOf(blkStart);
+    const toEnd = activeBlock ? Math.round((Date.parse(`${activeBlock.end}T00:00:00Z`) - Date.parse(`${blkMon}T00:00:00Z`)) / (7 * 86_400_000)) : blkWeeks;
+    return Math.max(1, Math.min(MESO_HORIZON, toEnd > 0 ? toEnd : blkWeeks));
+  }, [activeBlock, blkStart, blkWeeks]);
   const engineGoal: "accum" | "transmute" | "realize" = activeBlock?.goalKey && activeBlock.goalKey !== "deload" ? activeBlock.goalKey : "accum";
   const effectiveGoal: "accum" | "transmute" | "realize" = blockGoals[activeBlockStart] ?? engineGoal;
 
-  // The cadence is JUST the block length: changing it trims (4/5) or extends (6) the tail — it never
-  // moves the block start, so 6→4→5 shows the same block minus the last 1–2 weeks (the coach's ask).
-  // A block that runs past the off-season boundary is NOT clamped — it SPLITS: buildCalendarBlock renders
-  // the weeks after the boundary as the off-season development build (see offseasonStart below).
+  // The cadence is the DEFAULT block length; the calendar renders the SELECTED block's own length
+  // (`blkWeeksEff`, clamped to the block end), so a competitive block stops at the season boundary and
+  // the off-season is viewed as its own block — not one window split across the phase boundary.
   React.useEffect(() => { setBlkWeeks(cadence); }, [cadence]);
 
   // Open the planner on the CURRENT macro block — only when the plan (re)loads, never on a cadence
@@ -543,11 +550,10 @@ export default function PeriodizationHubPage() {
 
   const calBlock = React.useMemo(() => {
     if (!plan || Object.keys(blkSkeleton).length === 0) return null;
-    // When this block runs past the season end, split it at the off-season boundary (dev build after it).
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
-    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeks, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [], offseasonStart: offPhaseStart ?? undefined, goal: effectiveGoal });
+    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeksEff, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [], offseasonStart: offPhaseStart ?? undefined, goal: effectiveGoal });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, blkScope, selId, blkUnit, effectiveGoal]);
+  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkScope, selId, blkUnit, effectiveGoal]);
 
   // ── WEAKNESS-STEERED BUILD-UP ─────────────────────────────────────────────────────────────────────
   // Read (never recompute) the selected player's Total Player Analysis — his ATHLETE-axis weaknesses +
@@ -616,9 +622,9 @@ export default function PeriodizationHubPage() {
     // "my build-up" view so the two can never drift (src/lib/.../playerBlock.ts).
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? undefined;
     return buildPlayerBlock(plan, pl, {
-      blkStart, blkWeeks, blkBase, blkStep, phaseLabel: blkPhaseLabel, skeletonSets, typeOverrides, steer: steerArg, offseasonStart: offPhaseStart, goal: effectiveGoal,
+      blkStart, blkWeeks: blkWeeksEff, blkBase, blkStep, phaseLabel: blkPhaseLabel, skeletonSets, typeOverrides, steer: steerArg, offseasonStart: offPhaseStart, goal: effectiveGoal,
     });
-  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, blkPhaseLabel, effectiveGoal]);
+  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkPhaseLabel, effectiveGoal]);
 
   // The SELECTED player's block (weakness-steer applied unless the coach picks a neutral ramp).
   const playerBlock = React.useMemo(
