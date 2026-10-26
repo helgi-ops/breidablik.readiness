@@ -2622,8 +2622,6 @@ export default function PeriodizationHubPage() {
 
           {/* MICRO CYCLE tab — the existing Week Setup, mounted in-place (one macro→meso→micro flow) */}
           {tab === "micro" && (
-            <div className="space-y-4">
-            {flowNote(is ? "Mesó (valin lota) · leikir" : "Meso (selected block) · fixtures", is ? "Today (leikmaður) · Mesó les til baka · PDF" : "Today (player) · Meso reads back · PDF")}
             <WeekSetupView
               embedded
               initialWeekStart={preseasonJumpWeek}
@@ -2645,7 +2643,6 @@ export default function PeriodizationHubPage() {
                 };
               }}
             />
-            </div>
           )}
 
           {/* TESTING tab — pin performance tests to real dates. Recommended windows (block boundaries)

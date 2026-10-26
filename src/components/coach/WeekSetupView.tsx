@@ -1552,6 +1552,15 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         </div>
       )}
 
+      {/* Flow line — what this week reads from and where day edits flow. Same single-source note as the
+          Periodization Hub tabs, so the macro→meso→micro propagation reads consistently here too. */}
+      <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg border border-[#e3e0d7] bg-[#faf9f5] px-3 py-1.5 text-[11px] text-[#6b6f76]">
+        <span className="font-mono text-[9px] uppercase tracking-wide text-[#9aa0a8]">{isIS ? "flæði" : "flow"}</span>
+        <span><b className="font-semibold text-[#3a3f45]">{isIS ? "Lesið frá" : "Reads"}:</b> {isIS ? "Mesó (valin lota) · leikir" : "Meso (selected block) · fixtures"}</span>
+        <span className="text-[#c9c4b8]">·</span>
+        <span><b className="font-semibold text-[#2740e6]">{isIS ? "Breytingar hér →" : "Edits here →"}</b> {isIS ? "Today (leikmaður) · Mesó les til baka · PDF" : "Today (player) · Meso reads back · PDF"}</span>
+      </div>
+
       {/* 1 — WEEK BAR: navigate + where this week sits (Macro phase · Meso block · week type) */}
       <section className={`${card} flex flex-wrap items-center gap-x-5 gap-y-3 px-5 py-4`}>
         <div className="flex items-center gap-1 rounded-[10px] border border-[#dcd8cc] bg-white p-1">
