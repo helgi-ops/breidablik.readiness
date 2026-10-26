@@ -49,7 +49,7 @@ export async function GET(req: Request) {
   const iso = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
   // Coach's saved window (season_plans.overrides) is the default; a query param overrides it live.
   const { data: saved } = await ctx.sb.from("season_plans").select("overrides").eq("team_id", ctx.teamId).eq("season_year", year ?? new Date().getUTCFullYear()).maybeSingle();
-  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number; nextPreseasonStart?: string; offseasonWeeks?: number; offseasonStart?: string; preseasonWeek1Mult?: number; preseasonSessions?: number; stepPct?: number; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string>; blockGoals?: Record<string, "accum" | "transmute" | "realize"> } } | null)?.overrides ?? {};
+  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number; nextPreseasonStart?: string; offseasonWeeks?: number; offseasonStart?: string; preseasonWeek1Mult?: number; preseasonSessions?: number; stepPct?: number; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string>; blockGoals?: Record<string, "accum" | "transmute" | "realize">; preMesoTail?: number[] } } | null)?.overrides ?? {};
   const offWeeksParam = Number(sp.get("offWeeks"));
   const plan = await loadPeriodization(ctx.sb, {
     teamId: ctx.teamId, seasonYear: year,
@@ -87,6 +87,9 @@ export async function GET(req: Request) {
     // Per-block overrides keyed by block start ISO — sparse, merge-friendly.
     blockGoals: ov.blockGoals ?? {},
     blockWeeks: ov.blockWeeks ?? {}, blockDeload: ov.blockDeload ?? {},
+    // Game-anchored pre-season meso-cycle lengths (backwards periodization: the tail blocks nearest the
+    // opener are exact, the base block absorbs the remainder). Drives the Pre-season meso editor.
+    preMesoTail: Array.isArray(ov.preMesoTail) ? ov.preMesoTail : null,
   };
   // The upcoming pre-season belongs to the season it opens (`plan.nextSeasonYear`), NOT this loaded year.
   // Echo that season's saved pre-season overrides separately so the hub's Pre-season tab reads/writes its
@@ -101,6 +104,7 @@ export async function GET(req: Request) {
       seasonYear: nextYear,
       preseasonWeek1Mult: nx.preseasonWeek1Mult ?? null, preseasonSessions: nx.preseasonSessions ?? null, stepPct: nx.stepPct ?? null,
       blockGoals: nx.blockGoals ?? {}, blockWeeks: nx.blockWeeks ?? {}, blockDeload: nx.blockDeload ?? {},
+      preMesoTail: Array.isArray(nx.preMesoTail) ? nx.preMesoTail : null,
     };
   }
   return NextResponse.json({ ok: true, plan, deloadCadence, savedWindow, savedWindowNext, weekPlans });

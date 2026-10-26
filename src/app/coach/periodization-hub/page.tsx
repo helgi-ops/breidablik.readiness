@@ -134,6 +134,29 @@ const caltypeFromFocus = (focus: string): CalType | undefined => {
 // Forward map: a chosen training stimulus → the English label written into week_plans.focus. These exact
 // words round-trip through caltypeFromFocus above, so a day's stimulus set on the Pre-season card reads back.
 const CALTYPE_FOCUS_LABEL: Partial<Record<CalType, string>> = { mechanical: "Mechanical", locomotive: "Locomotive", mixed: "Mixed", activation: "Activation", topup: "Top-up" };
+// Backwards periodization: given the pre-season window length and the coach's game-anchored TAIL blocks
+// (lengths of the meso cycles nearest the opener — e.g. a short power/peaking block that ends ON the first
+// game), lay out every block so the LAST ends at the opener and the FIRST (base) block absorbs the leftover
+// weeks. Tail blocks that would leave < 2 base weeks are dropped from the earliest tail inward. Returns the
+// split so the editor can render the flexible base separately from the coach's exact tail.
+const PRE_MIN_BLOCK = 2, PRE_MAX_BLOCK = 8;
+function preseasonMeso(windowWeeks: number, tail: number[], cadence: number): { lens: number[]; base: number[]; tail: number[] } {
+  const W = Math.max(1, Math.round(windowWeeks));
+  let t = tail.map((n) => Math.max(PRE_MIN_BLOCK, Math.min(PRE_MAX_BLOCK, Math.round(n))));
+  let sumTail = t.reduce((s, n) => s + n, 0);
+  while (t.length && W - sumTail < PRE_MIN_BLOCK) { sumTail -= t[0]; t = t.slice(1); }
+  const baseWeeks = Math.max(0, W - sumTail);
+  const base: number[] = [];
+  if (baseWeeks > 0) {
+    const n = Math.max(1, Math.ceil(baseWeeks / Math.max(2, cadence)));
+    for (let k = 0; k < n; k++) base.push(Math.max(2, cadence));
+    base[0] = baseWeeks - Math.max(2, cadence) * (n - 1); // earliest block absorbs the remainder
+    if (base[0] < PRE_MIN_BLOCK && base.length > 1) { base[1] += base[0]; base.shift(); }
+    if (base.length === 1) base[0] = baseWeeks;           // single base block = all the base weeks
+  }
+  return { lens: [...base, ...t], base, tail: t };
+}
+const lensToBlockWeeks = (lens: number[]): Record<string, number> => { const m: Record<string, number> = {}; lens.forEach((n, i) => { m[String(i)] = n; }); return m; };
 
 // The dominant IMA direction of a day's split, as a short localized label.
 const domDir = (dir: { fwd: number; back: number; lat: number } | null, is: boolean): string | null => {
@@ -207,6 +230,11 @@ export default function PeriodizationHubPage() {
   const [preBlockLenOv, setPreBlockLenOv] = React.useState<Record<string, number>>({});
   const [prePsWeek1Mult, setPrePsWeek1Mult] = React.useState(1.3);
   const [prePsSessions, setPrePsSessions] = React.useState(4);
+  // Game-anchored pre-season meso-cycle tail (lengths of the blocks NEAREST the opener; the base block
+  // absorbs the remainder — backwards periodization). null = not set → derive from the auto layout. Used
+  // only when `upcomingYear`; the next-year row holds pre-season blocks only, so add/remove never shifts a
+  // competitive-block index. Current-year pre-season keeps the per-block length dropdowns.
+  const [nextMesoTail, setNextMesoTail] = React.useState<number[] | null>(null);
   const [tab, setTab] = React.useState<"season" | "preseason" | "plan" | "micro" | "testing" | "demands" | "players">(() => {
     if (typeof window === "undefined") return "season";
     const t = new URLSearchParams(window.location.search).get("tab");
@@ -323,12 +351,13 @@ export default function PeriodizationHubPage() {
       }
       // The UPCOMING pre-season's saved overrides live in NEXT season's row — restore them into the separate
       // pre-season store so the Pre-season tab reads/writes that row (survives the rollover; no index clash).
-      const swn = (j as { savedWindowNext?: { preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; blockWeeks?: Record<string, number> } | null }).savedWindowNext;
+      const swn = (j as { savedWindowNext?: { preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; blockWeeks?: Record<string, number>; preMesoTail?: number[] | null } | null }).savedWindowNext;
       if (swn && !didPopulateNext.current) {
         didPopulateNext.current = true;
         if (swn.preseasonWeek1Mult != null && Number.isFinite(swn.preseasonWeek1Mult)) setPrePsWeek1Mult(Math.max(0.5, Math.min(3, swn.preseasonWeek1Mult)));
         if (swn.preseasonSessions === 3 || swn.preseasonSessions === 4 || swn.preseasonSessions === 5 || swn.preseasonSessions === 6) setPrePsSessions(swn.preseasonSessions);
         if (swn.blockWeeks && Object.keys(swn.blockWeeks).length) setPreBlockLenOv(swn.blockWeeks);
+        if (Array.isArray(swn.preMesoTail) && swn.preMesoTail.length) setNextMesoTail(swn.preMesoTail.filter((n) => Number.isFinite(n)));
       }
       // Restore the coach's saved block length (cadence) so the meso reads back the block they set up.
       const savedCadence = Number((j as { deloadCadence?: number }).deloadCadence);
@@ -787,6 +816,15 @@ export default function PeriodizationHubPage() {
     if (upcomingYear) { setPrePsSessions(v); persistOverridePatch({ preseasonSessions: v }, preYear); }
     else { setPsSessions(v); persistOverridePatch({ preseasonSessions: v }); }
   };
+  // Persist the upcoming pre-season's game-anchored meso tail (backwards editor). Derives the index-keyed
+  // blockWeeks so the week-card grouping + the ramp read the same boundaries, and writes BOTH to the
+  // next-year row (which holds pre-season blocks only, so the indices never collide with competitive ones).
+  const persistNextMesoTail = React.useCallback((tail: number[], windowWeeks: number, cad: number, year: number) => {
+    const { lens } = preseasonMeso(windowWeeks, tail, cad);
+    const bw = lensToBlockWeeks(lens);
+    setNextMesoTail(tail); setPreBlockLenOv(bw);
+    (async () => { try { await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: year, overrides: { preMesoTail: tail, blockWeeks: bw } }) }); } catch { /* best-effort persist */ } })();
+  }, [authHeader]);
 
   // Day-type editor: MATCHES ARE READ-ONLY HERE. A match belongs to Fixtures (match_schedule)
   // — the meso only reads it (isFixtureDay). Toggling a day changes the TRAINING type (Off /
@@ -1634,20 +1672,42 @@ export default function PeriodizationHubPage() {
             // The pre-season MESO CYCLES (Macro owns the lengths; index-keyed so a resize never orphans a
             // later one). Slice the pre-season window with the coach's cadence + per-block length overrides.
             const preEndIso = up.end ?? new Date(preEndMs).toISOString().slice(0, 10);
-            const preBlocks = sliceByLengths(preStart, preEndIso, cadence, lenOv, 0);
+            // Backwards periodization (upcoming pre-season): the coach's game-anchored tail blocks are exact
+            // and the base block flexes. When no tail is set yet, seed it from the auto layout (all blocks
+            // after the first) so the editor opens on the current sequence. In-season keeps the plain slice.
+            const autoPre = sliceByLengths(preStart, preEndIso, cadence, {}, 0);
+            const effTail = upcomingYear
+              ? (nextMesoTail ?? autoPre.slice(1).map((b) => Math.max(2, Math.round((Date.parse(`${b.end}T00:00:00Z`) - Date.parse(`${b.start}T00:00:00Z`)) / (7 * 86_400_000)))))
+              : [];
+            const preMeso = upcomingYear ? preseasonMeso(preWeeks, effTail, cadence) : null;
+            const preBlocks = upcomingYear
+              ? sliceByLengths(preStart, preEndIso, cadence, lensToBlockWeeks(preMeso!.lens), 0)
+              : sliceByLengths(preStart, preEndIso, cadence, lenOv, 0);
             const blockEndExcl = (b: { end: string }) => b.end; // exclusive
             const weeksBetween = (a: string, b: string) => Math.max(1, Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / (7 * 86_400_000)));
             const emphOfBlock = (b: { start: string }) => preseasonBlockForWeeksOut(weeksBetween(b.start, preEndIso));
             const seqTotal = preBlocks.reduce((s, b) => s + weeksBetween(b.start, blockEndExcl(b)), 0);
             return (<div className="space-y-4">
 
-          {/* Header + the two tunable controls (persisted, shared with the Players tab). */}
+          {/* Pre-season SETUP — one card: controls, the meso-cycle sequence (built backwards from the opener),
+              and the research "why" behind a toggle (explainability: jargon off the primary view). */}
+          {(() => {
+            // Backwards editor state (upcoming pre-season only): the coach-controlled tail blocks nearest the
+            // game; the base block flexes. Edits persist the derived blockWeeks + preMesoTail to the next row.
+            const tailVals = preMeso?.tail ?? [];
+            const baseLen = preMeso ? preMeso.base.reduce((s, n) => s + n, 0) : 0;
+            const roomForMore = preMeso != null && (baseLen - 3) >= PRE_MIN_BLOCK; // adding a 3-wk block keeps base ≥ 2
+            const setTailLen = (ti: number, v: number) => { const t = [...tailVals]; t[ti] = v; persistNextMesoTail(t, preWeeks, cadence, preYear); };
+            const removeTail = (ti: number) => persistNextMesoTail(tailVals.filter((_, i) => i !== ti), preWeeks, cadence, preYear);
+            const addTail = () => persistNextMesoTail([...tailVals, 3], preWeeks, cadence, preYear);
+            const resetTail = () => { setNextMesoTail(null); setPreBlockLenOv({}); (async () => { try { await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: preYear, overrides: { preMesoTail: null, blockWeeks: {} } }) }); } catch { /* best-effort */ } })(); };
+            const baseCount = preMeso?.base.length ?? 0;
+            return (
           <section className={card}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className={h2}>{is ? "Undirbúningur — heildarskipulag" : "Pre-season — whole plan"}</h2>
-              <span className="text-[12px] text-slate-500">{is ? "hefst" : "starts"} <b className="text-slate-700">{shortDate(preStart, is)}</b> · {preWeeks} {is ? "vikur" : "weeks"} · {is ? "fyrsti keppnisleikur endar það" : "ends at the first competitive game"}</span>
+              <h2 className={h2}>{is ? "Undirbúningur — uppsetning" : "Pre-season setup"}</h2>
+              <span className="text-[12px] text-slate-500">{is ? "hefst" : "starts"} <b className="text-slate-700">{shortDate(preStart, is)}</b> · {preWeeks} {is ? "vikur" : "weeks"} · {is ? "endar á fyrsta keppnisleik" : "ends at the first competitive game"}</span>
             </div>
-            <p className="mt-0.5 text-[12px] text-slate-500">{is ? "Hver vika: álags-ramp (×leik), dagar, styrktar-áfangi og próf — stýrð endurkoma í viku 1 upp að undirbúnings-uppbyggingu. Lýsandi áætlun — aldrei readiness-liturinn. Opnaðu viku í Vikuuppsetningu til að fínstilla dagana." : "Each week: the load ramp (×match), the days, the strength phase and testing — a controlled re-entry in week 1 up to the pre-season build. Descriptive plan — never the readiness colour. Open a week in Week Setup to fine-tune the days."}</p>
             <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px]">
               <label className="flex items-center gap-1.5 font-medium text-slate-600">{is ? "Vika 1 ×leik" : "Week 1 ×match"}
                 <input type="number" step={0.1} min={0.5} max={3} value={psW1} onChange={(e) => { const v = Math.max(0.5, Math.min(3, Number(e.target.value) || 1.3)); setPreW1(v); }} className="w-16 rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
@@ -1660,47 +1720,91 @@ export default function PeriodizationHubPage() {
               {preDaySave === "saved" && <span className="text-[11px] font-medium text-emerald-700">{is ? "✓ Dagar vistaðir í Vikuuppsetningu" : "✓ Days saved to Week Setup"}</span>}
               {preDaySave === "err" && <span className="text-[11px] font-medium text-[#a83e28]">{is ? "Vistun mistókst" : "Save failed"}</span>}
             </div>
-            {/* Plain "why" for the per-KPI ramp differences — explainability level 1 (visible, no drill-down). */}
-            <p className="mt-2.5 text-[11.5px] leading-relaxed text-slate-500">
-              <i className="mr-1 inline-block h-1.5 w-1.5 translate-y-[-1px] rounded-full align-middle" style={{ background: "#a83e28" }} />
-              <b className="font-semibold text-slate-600">{is ? "Vélrænar breytur" : "Biomechanical"}</b> {is ? "(hemlun, sprettir, háhraðahlaup, stefnubreytingar) stigþyngjast varlegar" : "(decel, sprint, HSR, COD) ramp more conservatively"}
-              <i className="mx-1 ml-3 inline-block h-1.5 w-1.5 translate-y-[-1px] rounded-full align-middle" style={{ background: "#2740e6" }} />
-              <b className="font-semibold text-slate-600">{is ? "efnaskipta-breytur" : "metabolic"}</b> {is ? "(hröðun, vegalengd) línulega — ólíkar aðlögunarleiðir vefja og efnaskipta" : "(accel, distance) linearly — tissue vs metabolic adapt differently"} (Vanrenterghem 2017, Harper &amp; McBurnie 2021, Duhig 2016).
-            </p>
-            <p className="mt-1.5 text-[11.5px] leading-relaxed text-slate-500">
-              {is
-                ? "Hvert KPI er sýnt sem sitt eigið ×leik-margfeldi (vikuálag ÷ einn leikur af þeirri breytu) — svo háhraðahlaup, sem lítur út fyrir fáa metra, vegur álagslega nærri heildarvegalengd. Breyturnar hafa ekki sama gildi (training:match, PMC6747517). Músarbending sýnir rannsóknar-viðmiðssvið; gult = yfir sviði (eðlilegt í undirbúnings-uppbyggingu)."
-                : "Each KPI is shown as its own ×match multiple (weekly ÷ one match of that KPI) — so high-speed running, which looks like few metres, carries a load close to total distance. The variables don't share a value (training:match, PMC6747517). Hover for the research reference range; amber = above range (normal in a pre-season build)."}
-            </p>
-          </section>
 
-          {/* Meso-cycle SEQUENCE editor — Macro owns the lengths; the Meso tab reads them. Index-keyed. */}
-          <section className={card}>
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className={h2}>{is ? "Meso-lotur undirbúnings" : "Pre-season meso cycles"}</h2>
+            {/* Meso-cycle sequence — planned BACKWARDS from the opener. */}
+            <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="text-[13px] font-bold text-slate-800">{is ? "Meso-lotur" : "Meso cycles"}</h3>
               <span className="text-[12px] text-slate-500">{is ? "samtals" : "total"} <b className={`tabular-nums ${seqTotal === preWeeks ? "text-slate-900" : "text-[#de9328]"}`}>{seqTotal}</b> {is ? `af ${preWeeks} vikum` : `of ${preWeeks} weeks`}</span>
             </div>
-            <p className="mt-0.5 text-[12px] text-slate-500">{is ? "Settu lengd hverrar meso-lotu (4–6 vikur). Mesó-flipinn les þær — breyting hér endurflæðir dagatalið og vikurnar fram að fyrsta leik." : "Set each meso cycle's length (4–6 weeks). The Meso tab reads them — a change here re-flows the calendar and the weeks up to the first game."}</p>
-            <div className="mt-3 space-y-1.5">
-              {preBlocks.map((b) => {
-                const bw = weeksBetween(b.start, blockEndExcl(b));
-                const emph = emphOfBlock(b);
-                return (
-                  <div key={b.index} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                    <span className="text-[13px] font-semibold text-slate-800">{is ? "Lota" : "Block"} {b.index + 1}</span>
-                    <span className="text-[12px] text-slate-500">{shortDate(b.start, is)}–{shortDate(isoAdd(b.end, -1), is)} · {bw} {is ? "v" : "wk"}</span>
-                    {emph && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{PS_LABEL[emph]}</span>}
-                    <label className="ml-auto flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Lengd" : "Length"}
-                      <select value={lenOv[String(b.index)] ?? lenOv[b.start] ?? ""} onChange={(e) => setPreLen(String(b.index), e.target.value === "" ? null : Number(e.target.value))} className="rounded border border-slate-300 bg-white px-1.5 py-0.5">
-                        <option value="">{is ? `Sjálfgefið (${cadence}v)` : `Auto (${cadence}w)`}</option>
-                        {[4, 5, 6].map((n) => <option key={n} value={n}>{n} {is ? "vikur" : "weeks"}</option>)}
-                      </select>
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
+            <p className="mt-0.5 text-[12px] text-slate-500">{upcomingYear
+              ? (is ? "Unnið aftur á bak: síðasta lotan endar á fyrsta leik (afl/peaking) og grunn-lotan gleypir afganginn. Bættu við lotum eða breyttu lengd þeirra sem eru næst leiknum." : "Planned backwards: the last block ends at the first game (power/peaking) and the base block absorbs the remainder. Add blocks or change the length of the ones nearest the game.")
+              : (is ? "Settu lengd hverrar meso-lotu. Mesó-flipinn les þær — breyting hér endurflæðir dagatalið fram að fyrsta leik." : "Set each meso cycle's length. The Meso tab reads them — a change here re-flows the calendar up to the first game.")}</p>
+
+            {upcomingYear ? (
+              <div className="mt-3 space-y-1.5">
+                {preBlocks.map((b, bi) => {
+                  const bw = weeksBetween(b.start, blockEndExcl(b));
+                  const emph = emphOfBlock(b);
+                  const isBase = bi < baseCount;          // the flexible base block(s) — earliest
+                  const ti = bi - baseCount;               // index into the coach-controlled tail
+                  const endsAtGame = bi === preBlocks.length - 1;
+                  return (
+                    <div key={b.index} className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 ${isBase ? "border-slate-200 bg-slate-50" : "border-[#2740e6]/20 bg-[#2740e6]/[0.03]"}`}>
+                      <span className="text-[13px] font-semibold text-slate-800">{is ? "Lota" : "Block"} {b.index + 1}</span>
+                      <span className="text-[12px] text-slate-500">{shortDate(b.start, is)}–{shortDate(isoAdd(b.end, -1), is)} · {bw} {is ? "v" : "wk"}</span>
+                      {emph && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{PS_LABEL[emph]}</span>}
+                      {endsAtGame && <span className="rounded-full bg-[#1c7a4a]/10 px-2 py-0.5 text-[11px] font-semibold text-[#1c7a4a]">{is ? "→ endar á leik" : "→ ends at game"}</span>}
+                      {isBase ? (
+                        <span className="ml-auto text-[11px] font-medium text-slate-400">{is ? "grunnur (sveigjanlegur)" : "base (flexes)"}</span>
+                      ) : (
+                        <div className="ml-auto flex items-center gap-1.5">
+                          <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Lengd" : "Length"}
+                            <select value={tailVals[ti] ?? ""} onChange={(e) => setTailLen(ti, Number(e.target.value))} className="rounded border border-slate-300 bg-white px-1.5 py-0.5">
+                              {[2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} {is ? "v" : "wk"}</option>)}
+                            </select>
+                          </label>
+                          <button type="button" onClick={() => removeTail(ti)} title={is ? "Fjarlægja lotu" : "Remove block"} aria-label={is ? "Fjarlægja lotu" : "Remove block"} className="rounded px-1.5 py-0.5 text-[13px] text-slate-400 hover:bg-[#a83e28]/10 hover:text-[#a83e28]">✕</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <div className="flex flex-wrap items-center gap-3 pt-0.5">
+                  <button type="button" onClick={addTail} disabled={!roomForMore} className={`rounded-lg border px-2.5 py-1 text-[12px] font-semibold ${roomForMore ? "border-[#2740e6]/40 text-[#2740e6] hover:bg-[#2740e6]/5" : "cursor-not-allowed border-slate-200 text-slate-300"}`}>+ {is ? "Bæta við meso-lotu" : "Add meso cycle"}</button>
+                  {nextMesoTail != null && <button type="button" onClick={resetTail} className="text-[12px] font-medium text-slate-500 hover:text-slate-700 hover:underline">{is ? "Núllstilla í sjálfgefið" : "Reset to auto"}</button>}
+                  {!roomForMore && <span className="text-[11px] text-slate-400">{is ? "ekki pláss fyrir fleiri lotur" : "no room for more blocks"}</span>}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 space-y-1.5">
+                {preBlocks.map((b) => {
+                  const bw = weeksBetween(b.start, blockEndExcl(b));
+                  const emph = emphOfBlock(b);
+                  return (
+                    <div key={b.index} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      <span className="text-[13px] font-semibold text-slate-800">{is ? "Lota" : "Block"} {b.index + 1}</span>
+                      <span className="text-[12px] text-slate-500">{shortDate(b.start, is)}–{shortDate(isoAdd(b.end, -1), is)} · {bw} {is ? "v" : "wk"}</span>
+                      {emph && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{PS_LABEL[emph]}</span>}
+                      <label className="ml-auto flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Lengd" : "Length"}
+                        <select value={lenOv[String(b.index)] ?? lenOv[b.start] ?? ""} onChange={(e) => setPreLen(String(b.index), e.target.value === "" ? null : Number(e.target.value))} className="rounded border border-slate-300 bg-white px-1.5 py-0.5">
+                          <option value="">{is ? `Sjálfgefið (${cadence}v)` : `Auto (${cadence}w)`}</option>
+                          {[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} {is ? "vikur" : "weeks"}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Research "why" — explainability L2 (jargon + citations behind a toggle, off the primary view). */}
+            <details className="mt-3 text-[11.5px] text-slate-500">
+              <summary className="cursor-pointer select-none font-medium text-slate-500 hover:text-slate-700">{is ? "Af hverju breyturnar stigþyngjast ólíkt" : "Why the variables ramp differently"}</summary>
+              <p className="mt-2 leading-relaxed">
+                <i className="mr-1 inline-block h-1.5 w-1.5 translate-y-[-1px] rounded-full align-middle" style={{ background: "#a83e28" }} />
+                <b className="font-semibold text-slate-600">{is ? "Vélrænar breytur" : "Biomechanical"}</b> {is ? "(hemlun, sprettir, háhraðahlaup, stefnubreytingar) stigþyngjast varlegar" : "(decel, sprint, HSR, COD) ramp more conservatively"}
+                <i className="mx-1 ml-3 inline-block h-1.5 w-1.5 translate-y-[-1px] rounded-full align-middle" style={{ background: "#2740e6" }} />
+                <b className="font-semibold text-slate-600">{is ? "efnaskipta-breytur" : "metabolic"}</b> {is ? "(hröðun, vegalengd) línulega — ólíkar aðlögunarleiðir vefja og efnaskipta" : "(accel, distance) linearly — tissue vs metabolic adapt differently"} (Vanrenterghem 2017, Harper &amp; McBurnie 2021, Duhig 2016).
+              </p>
+              <p className="mt-1.5 leading-relaxed">
+                {is
+                  ? "Hvert KPI er sýnt sem sitt eigið ×leik-margfeldi (vikuálag ÷ einn leikur af þeirri breytu) — svo háhraðahlaup, sem lítur út fyrir fáa metra, vegur álagslega nærri heildarvegalengd. Breyturnar hafa ekki sama gildi (training:match, PMC6747517). Músarbending sýnir rannsóknar-viðmiðssvið; gult = yfir sviði (eðlilegt í undirbúnings-uppbyggingu)."
+                  : "Each KPI is shown as its own ×match multiple (weekly ÷ one match of that KPI) — so high-speed running, which looks like few metres, carries a load close to total distance. The variables don't share a value (training:match, PMC6747517). Hover for the research reference range; amber = above range (normal in a pre-season build)."}
+              </p>
+            </details>
           </section>
+            );
+          })()}
 
           {/* One card per pre-season week, grouped under its meso cycle. */}
           {ramp.map((w, i) => {
