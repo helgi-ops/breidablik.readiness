@@ -60,7 +60,7 @@ type MdDemandProfile = { phases: MdDemandBucket[]; days: MdDemandBucket[] };
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes; md: MdDemandProfile };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
-type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; nextFirstFixture?: string | null };
+type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; nextFirstFixture?: string | null; nextSeasonYear?: number | null };
 
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
 const isoAdd = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_400_000).toISOString().slice(0, 10);
@@ -165,6 +165,7 @@ export default function PeriodizationHubPage() {
   // Refs so `load` can read the latest off-season window without changing its identity (deps).
   const nextPreStartRef = React.useRef(nextPreStart); nextPreStartRef.current = nextPreStart;
   const didPopulateWindow = React.useRef(false);
+  const didPopulateNext = React.useRef(false); // guard for the upcoming-pre-season (next-year) overrides restore
   const [friendly, setFriendly] = React.useState("");    // pre-season friendly date to add (MD anchor)
   const [friendlyKind, setFriendlyKind] = React.useState<"friendly" | "competitive">("friendly"); // tag so friendlies don't start the season
   const [mdPosKey, setMdPosKey] = React.useState<number | null>(null); // position selector for the three-axes + MD-demand cards
@@ -196,6 +197,13 @@ export default function PeriodizationHubPage() {
   const [psWeek1Mult, setPsWeek1Mult] = React.useState(1.3); // week-1 ×match (controlled re-entry)
   const [psSessions, setPsSessions] = React.useState(4);      // sessions / week
   const [psWeekSel, setPsWeekSel] = React.useState(1);        // which pre-season week the cards show (1 = week 1)
+  // UPCOMING pre-season (next season) overrides — a SEPARATE store persisted to `plan.nextSeasonYear`'s
+  // season_plans row, so next year's planning survives the calendar rollover and never shares block indices
+  // with the current season (the ártal-skörðun fix). Only used when `upcomingYear` (see below); in-season the
+  // Pre-season tab falls back to the current-year store unchanged.
+  const [preBlockLenOv, setPreBlockLenOv] = React.useState<Record<string, number>>({});
+  const [prePsWeek1Mult, setPrePsWeek1Mult] = React.useState(1.3);
+  const [prePsSessions, setPrePsSessions] = React.useState(4);
   const [tab, setTab] = React.useState<"season" | "preseason" | "plan" | "micro" | "testing" | "demands" | "players">(() => {
     if (typeof window === "undefined") return "season";
     const t = new URLSearchParams(window.location.search).get("tab");
@@ -308,6 +316,15 @@ export default function PeriodizationHubPage() {
         if (sw.blockWeeks && Object.keys(sw.blockWeeks).length) setBlockLenOv(sw.blockWeeks);
         if (sw.blockDeload && Object.keys(sw.blockDeload).length) setBlockDeloadOv(sw.blockDeload);
       }
+      // The UPCOMING pre-season's saved overrides live in NEXT season's row — restore them into the separate
+      // pre-season store so the Pre-season tab reads/writes that row (survives the rollover; no index clash).
+      const swn = (j as { savedWindowNext?: { preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; blockWeeks?: Record<string, number> } | null }).savedWindowNext;
+      if (swn && !didPopulateNext.current) {
+        didPopulateNext.current = true;
+        if (swn.preseasonWeek1Mult != null && Number.isFinite(swn.preseasonWeek1Mult)) setPrePsWeek1Mult(Math.max(0.5, Math.min(3, swn.preseasonWeek1Mult)));
+        if (swn.preseasonSessions === 3 || swn.preseasonSessions === 4 || swn.preseasonSessions === 5 || swn.preseasonSessions === 6) setPrePsSessions(swn.preseasonSessions);
+        if (swn.blockWeeks && Object.keys(swn.blockWeeks).length) setPreBlockLenOv(swn.blockWeeks);
+      }
       // Restore the coach's saved block length (cadence) so the meso reads back the block they set up.
       const savedCadence = Number((j as { deloadCadence?: number }).deloadCadence);
       if (savedCadence === 4 || savedCadence === 5 || savedCadence === 6) setCadence(savedCadence);
@@ -408,14 +425,15 @@ export default function PeriodizationHubPage() {
   // inputs so the coach's choice sticks across visits and reaches the server-side plan target.
   const tuningTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   React.useEffect(() => () => { if (tuningTimer.current) clearTimeout(tuningTimer.current); }, []);
-  const persistOverridePatch = React.useCallback((patch: Record<string, number>) => {
+  const persistOverridePatch = React.useCallback((patch: Record<string, number>, year?: number) => {
     if (!plan) return;
+    const yr = year ?? plan.seasonYear;
     if (tuningTimer.current) clearTimeout(tuningTimer.current);
     tuningTimer.current = setTimeout(async () => {
       try {
         await fetch("/api/coach/periodization", {
           method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() },
-          body: JSON.stringify({ seasonYear: plan.seasonYear, overrides: patch }),
+          body: JSON.stringify({ seasonYear: yr, overrides: patch }),
         });
       } catch { /* best-effort persist */ }
     }, 600);
@@ -723,12 +741,13 @@ export default function PeriodizationHubPage() {
   // Override a block's LENGTH (weeks) or pin its DELOAD week. Keyed by the block start ISO; the whole map
   // is sent so the server's shallow merge replaces it cleanly. Re-applies week_plans (auto-save) because
   // the block boundaries / deload move. null clears the override (back to auto).
-  const persistBlockMap = React.useCallback((key: "blockWeeks" | "blockDeload", map: Record<string, number | string>) => {
+  const persistBlockMap = React.useCallback((key: "blockWeeks" | "blockDeload", map: Record<string, number | string>, year?: number) => {
     scheduleAutoSave();
     if (!plan) return;
+    const yr = year ?? plan.seasonYear;
     (async () => {
       try {
-        await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: plan.seasonYear, overrides: { [key]: map } }) });
+        await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: yr, overrides: { [key]: map } }) });
       } catch { /* best-effort persist */ }
     })();
   }, [plan, authHeader, scheduleAutoSave]);
@@ -740,6 +759,29 @@ export default function PeriodizationHubPage() {
     const next = { ...blockDeloadOv }; if (weekMon == null) delete next[blockStart]; else next[blockStart] = weekMon;
     setBlockDeloadOv(next); persistBlockMap("blockDeload", next);
   }, [blockDeloadOv, persistBlockMap]);
+
+  // ── Upcoming-pre-season (next-season) scoping ──────────────────────────────────────────────────────
+  // When a distinct NEXT season exists (the coach has entered next year's first competitive game), the
+  // Pre-season tab + the off-season ramp plan THAT season and persist to its own row (plan.nextSeasonYear).
+  // In-season (no distinct next year) `upcomingYear` is false and everything falls back to the current store.
+  const upcomingYear = plan != null && plan.nextSeasonYear != null && plan.nextSeasonYear !== plan.seasonYear;
+  const preYear = upcomingYear ? plan!.nextSeasonYear! : (plan?.seasonYear ?? 0);
+  const psW1 = upcomingYear ? prePsWeek1Mult : psWeek1Mult;   // week-1 ×match for the upcoming pre-season
+  const psSess = upcomingYear ? prePsSessions : psSessions;   // sessions/wk for the upcoming pre-season
+  const lenOv = upcomingYear ? preBlockLenOv : blockLenOv;    // index-keyed block lengths for the upcoming pre-season
+  const setPreLen = (idxKey: string, weeks: number | null) => {
+    if (!upcomingYear) { setBlockLength(idxKey, weeks); return; } // in-season → current-year store (unchanged)
+    const next = { ...preBlockLenOv }; if (weeks == null) delete next[idxKey]; else next[idxKey] = weeks;
+    setPreBlockLenOv(next); persistBlockMap("blockWeeks", next, preYear);
+  };
+  const setPreW1 = (v: number) => {
+    if (upcomingYear) { setPrePsWeek1Mult(v); persistOverridePatch({ preseasonWeek1Mult: v }, preYear); }
+    else { setPsWeek1Mult(v); persistOverridePatch({ preseasonWeek1Mult: v }); }
+  };
+  const setPreSess = (v: number) => {
+    if (upcomingYear) { setPrePsSessions(v); persistOverridePatch({ preseasonSessions: v }, preYear); }
+    else { setPsSessions(v); persistOverridePatch({ preseasonSessions: v }); }
+  };
 
   // Day-type editor: MATCHES ARE READ-ONLY HERE. A match belongs to Fixtures (match_schedule)
   // — the meso only reads it (isFixtureDay). Toggling a day changes the TRAINING type (Off /
@@ -857,7 +899,7 @@ export default function PeriodizationHubPage() {
       const preWeeks = upPre.weeks;
       const preAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
       const preTka = teamKpiAvg(plan.players);
-      preRamp = preseasonStartRamp({ matchTypicalLoad: preTka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: preTka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: preAnchor });
+      preRamp = preseasonStartRamp({ matchTypicalLoad: preTka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: preTka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: preAnchor });
       if (preRamp.length) {
         const anchorLabel = preAnchor === "match_this_season" ? (is ? "leikir í ár" : "this season's matches") : preAnchor === "srpe_only" ? (is ? "sRPE eingöngu" : "sRPE only") : (is ? "stöðu-viðmið" : "positional norm");
         const conf = preRamp[0].confidence === "high" ? (is ? "há" : "high") : preRamp[0].confidence === "moderate" ? (is ? "miðlungs" : "moderate") : (is ? "lítil" : "low");
@@ -1521,7 +1563,7 @@ export default function PeriodizationHubPage() {
             const preEndMs = Date.parse(`${preStart}T00:00:00Z`) + preWeeks * 7 * 86_400_000;
             const preAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
             const tka = teamKpiAvg(plan.players);
-            const ramp = preseasonStartRamp({ matchTypicalLoad: tka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: tka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: preAnchor });
+            const ramp = preseasonStartRamp({ matchTypicalLoad: tka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: tka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: preAnchor });
             const usesAu = ramp.every((w) => w.weeklyLoadTarget == null);
             const unitLabel = usesAu ? "AU" : "PL";
             const primary = (w: PreseasonWeekTarget) => (usesAu ? w.sRpeAuTarget : w.weeklyLoadTarget) ?? 0;
@@ -1541,7 +1583,7 @@ export default function PeriodizationHubPage() {
             // The pre-season MESO CYCLES (Macro owns the lengths; index-keyed so a resize never orphans a
             // later one). Slice the pre-season window with the coach's cadence + per-block length overrides.
             const preEndIso = up.end ?? new Date(preEndMs).toISOString().slice(0, 10);
-            const preBlocks = sliceByLengths(preStart, preEndIso, cadence, blockLenOv, 0);
+            const preBlocks = sliceByLengths(preStart, preEndIso, cadence, lenOv, 0);
             const blockEndExcl = (b: { end: string }) => b.end; // exclusive
             const weeksBetween = (a: string, b: string) => Math.max(1, Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / (7 * 86_400_000)));
             const emphOfBlock = (b: { start: string }) => preseasonBlockForWeeksOut(weeksBetween(b.start, preEndIso));
@@ -1557,10 +1599,10 @@ export default function PeriodizationHubPage() {
             <p className="mt-0.5 text-[12px] text-slate-500">{is ? "Hver vika: álags-ramp (×leik), dagar, styrktar-áfangi og próf — stýrð endurkoma í viku 1 upp að undirbúnings-uppbyggingu. Lýsandi áætlun — aldrei readiness-liturinn. Opnaðu viku í Vikuuppsetningu til að fínstilla dagana." : "Each week: the load ramp (×match), the days, the strength phase and testing — a controlled re-entry in week 1 up to the pre-season build. Descriptive plan — never the readiness colour. Open a week in Week Setup to fine-tune the days."}</p>
             <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px]">
               <label className="flex items-center gap-1.5 font-medium text-slate-600">{is ? "Vika 1 ×leik" : "Week 1 ×match"}
-                <input type="number" step={0.1} min={0.5} max={3} value={psWeek1Mult} onChange={(e) => { const v = Math.max(0.5, Math.min(3, Number(e.target.value) || 1.3)); setPsWeek1Mult(v); persistOverridePatch({ preseasonWeek1Mult: v }); }} className="w-16 rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
+                <input type="number" step={0.1} min={0.5} max={3} value={psW1} onChange={(e) => { const v = Math.max(0.5, Math.min(3, Number(e.target.value) || 1.3)); setPreW1(v); }} className="w-16 rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
               </label>
               <label className="flex items-center gap-1.5 font-medium text-slate-600">{is ? "Æfingar/viku" : "Sessions/wk"}
-                <select value={psSessions} onChange={(e) => { const v = Number(e.target.value); setPsSessions(v); persistOverridePatch({ preseasonSessions: v }); }} className="rounded border border-slate-300 px-1.5 py-0.5">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+                <select value={psSess} onChange={(e) => { const v = Number(e.target.value); setPreSess(v); }} className="rounded border border-slate-300 px-1.5 py-0.5">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
               </label>
               <span className="text-[11px] text-slate-400">{is ? "Stillist hér eða í Leikmenn — endurflæðir allar vikur." : "Edit here or in Players — re-flows every week."}</span>
             </div>
@@ -1583,7 +1625,7 @@ export default function PeriodizationHubPage() {
                     <span className="text-[12px] text-slate-500">{shortDate(b.start, is)}–{shortDate(isoAdd(b.end, -1), is)} · {bw} {is ? "v" : "wk"}</span>
                     {emph && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{PS_LABEL[emph]}</span>}
                     <label className="ml-auto flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Lengd" : "Length"}
-                      <select value={blockLenOv[String(b.index)] ?? blockLenOv[b.start] ?? ""} onChange={(e) => setBlockLength(String(b.index), e.target.value === "" ? null : Number(e.target.value))} className="rounded border border-slate-300 bg-white px-1.5 py-0.5">
+                      <select value={lenOv[String(b.index)] ?? lenOv[b.start] ?? ""} onChange={(e) => setPreLen(String(b.index), e.target.value === "" ? null : Number(e.target.value))} className="rounded border border-slate-300 bg-white px-1.5 py-0.5">
                         <option value="">{is ? `Sjálfgefið (${cadence}v)` : `Auto (${cadence}w)`}</option>
                         {[4, 5, 6].map((n) => <option key={n} value={n}>{n} {is ? "vikur" : "weeks"}</option>)}
                       </select>
@@ -2117,7 +2159,7 @@ export default function PeriodizationHubPage() {
               const preStart = up.start;
               const preAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
               const tka = teamKpiAvg(plan.players);
-              const ramp = preseasonStartRamp({ matchTypicalLoad: tka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: tka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: preAnchor });
+              const ramp = preseasonStartRamp({ matchTypicalLoad: tka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: tka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: preAnchor });
               if (!ramp.length) return null;
               const usesAu = ramp.every((w) => w.weeklyLoadTarget == null); // srpe-only / normative teams have no PL unit
               const primary = (w: PreseasonWeekTarget) => (usesAu ? w.sRpeAuTarget : w.weeklyLoadTarget) ?? 0;
@@ -3202,9 +3244,9 @@ export default function PeriodizationHubPage() {
               const wkSel = Math.min(preWeeks, Math.max(1, psWeekSel));
               const teamAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
               const teamTka = teamKpiAvg(plan.players);
-              const teamRamp = preseasonStartRamp({ matchTypicalLoad: teamTka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: teamTka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: teamAnchor });
+              const teamRamp = preseasonStartRamp({ matchTypicalLoad: teamTka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: teamTka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: teamAnchor });
               const playerAnchor: LoadAnchor | null = player ? (player.matchUnit.load.typical != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative") : null;
-              const playerRamp = player && playerAnchor ? preseasonStartRamp({ matchTypicalLoad: player.matchUnit.load.typical, matchKpiAvg: kpiAvgFromUnit(player.matchUnit), matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: playerAnchor }) : null;
+              const playerRamp = player && playerAnchor ? preseasonStartRamp({ matchTypicalLoad: player.matchUnit.load.typical, matchKpiAvg: kpiAvgFromUnit(player.matchUnit), matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: playerAnchor }) : null;
               const teamRow = teamRamp[wkSel - 1];
               const playerRow = playerRamp?.[wkSel - 1] ?? null;
               const confChip = (c: "high" | "moderate" | "low") => c === "high" ? { c: "bg-emerald-100 text-emerald-700", t: is ? "há vissa" : "high confidence" } : c === "moderate" ? { c: "bg-amber-100 text-amber-700", t: is ? "miðlungs vissa" : "moderate confidence" } : { c: "bg-rose-100 text-rose-700", t: is ? "lítil vissa" : "low confidence" };
@@ -3241,10 +3283,10 @@ export default function PeriodizationHubPage() {
                   {/* Editable controls */}
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
                     <label className="flex items-center gap-1 text-slate-600">{is ? "Vika 1 ×leik" : "Week 1 ×match"}
-                      <input type="number" step={0.1} min={0.5} max={3} value={psWeek1Mult} onChange={(e) => { const v = Math.max(0.5, Math.min(3, Number(e.target.value) || 1.3)); setPsWeek1Mult(v); persistOverridePatch({ preseasonWeek1Mult: v }); }} className="w-16 rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
+                      <input type="number" step={0.1} min={0.5} max={3} value={psW1} onChange={(e) => { const v = Math.max(0.5, Math.min(3, Number(e.target.value) || 1.3)); setPreW1(v); }} className="w-16 rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
                     </label>
                     <label className="flex items-center gap-1 text-slate-600">{is ? "Æfingar/viku" : "Sessions/wk"}
-                      <select value={psSessions} onChange={(e) => { const v = Number(e.target.value); setPsSessions(v); persistOverridePatch({ preseasonSessions: v }); }} className="rounded border border-slate-300 px-1.5 py-0.5">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+                      <select value={psSess} onChange={(e) => { const v = Number(e.target.value); setPreSess(v); }} className="rounded border border-slate-300 px-1.5 py-0.5">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
                     </label>
                     <span className="text-slate-500">·</span>
                     <span className="text-slate-500">{is ? "Vika sýnd" : "Show week"}:</span>
@@ -3283,7 +3325,7 @@ export default function PeriodizationHubPage() {
                       <tbody>
                         {plan.players.map((pp) => {
                           const anc: LoadAnchor = pp.matchUnit.load.typical != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
-                          const row = preseasonStartRamp({ matchTypicalLoad: pp.matchUnit.load.typical, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: anc })[wkSel - 1];
+                          const row = preseasonStartRamp({ matchTypicalLoad: pp.matchUnit.load.typical, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: anc })[wkSel - 1];
                           return (
                             <tr key={pp.playerId} className={`border-t border-slate-100 ${pp.playerId === selId ? "bg-[#7a5cc4]/5" : ""}`}>
                               <td className="py-0.5 pr-2 text-slate-700">{pp.name}</td>

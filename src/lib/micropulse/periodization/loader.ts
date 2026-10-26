@@ -42,6 +42,9 @@ export type PeriodizationPlan = {
   fixtures: string[]; // fixture dates — MD anchors for the meso plan editor
   nextFirstFixture: string | null; // the NEXT season's first competitive game (after this year) — so the
                                     // upcoming pre-season can be planned all the way to it, not a fixed 10 weeks
+  nextSeasonYear: number | null;   // the SEASON the upcoming pre-season leads into (= year of nextFirstFixture).
+                                    // The upcoming pre-season's plan is persisted to THAT season_plans row, not
+                                    // this year's — so next year's planning survives the calendar rollover.
 };
 
 const mondayOf = (iso: string) => {
@@ -69,6 +72,9 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     .gt("match_date", yEnd).order("match_date").limit(20);
   const nextFirstFixture = ((nextFxRows ?? []) as Array<{ match_date: string; is_friendly: boolean | null }>)
     .filter((r) => r.is_friendly !== true).map((r) => r.match_date).sort()[0] ?? null;
+  // The season the upcoming pre-season leads into = the calendar year of that opener. Its plan belongs in
+  // THAT season_plans row (persist/read it there), so next year's planning survives the rollover.
+  const nextSeasonYear = nextFirstFixture ? Number(nextFirstFixture.slice(0, 4)) : null;
 
   const matchDates = new Set(fixtures.map((f) => f.date));
 
@@ -384,5 +390,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date), nextFirstFixture };
+  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date), nextFirstFixture, nextSeasonYear };
 }

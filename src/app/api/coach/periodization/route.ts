@@ -88,7 +88,22 @@ export async function GET(req: Request) {
     blockGoals: ov.blockGoals ?? {},
     blockWeeks: ov.blockWeeks ?? {}, blockDeload: ov.blockDeload ?? {},
   };
-  return NextResponse.json({ ok: true, plan, deloadCadence, savedWindow, weekPlans });
+  // The upcoming pre-season belongs to the season it opens (`plan.nextSeasonYear`), NOT this loaded year.
+  // Echo that season's saved pre-season overrides separately so the hub's Pre-season tab reads/writes its
+  // own row — next year's planning then survives the calendar rollover (the ártal-skörðun fix).
+  const loadedYear = year ?? new Date().getUTCFullYear();
+  let savedWindowNext: Record<string, unknown> | null = null;
+  const nextYear = (plan as { nextSeasonYear?: number | null }).nextSeasonYear ?? null;
+  if (nextYear != null && nextYear !== loadedYear) {
+    const { data: savedNext } = await ctx.sb.from("season_plans").select("overrides").eq("team_id", ctx.teamId).eq("season_year", nextYear).maybeSingle();
+    const nx = (savedNext as { overrides?: typeof ov } | null)?.overrides ?? {};
+    savedWindowNext = {
+      seasonYear: nextYear,
+      preseasonWeek1Mult: nx.preseasonWeek1Mult ?? null, preseasonSessions: nx.preseasonSessions ?? null, stepPct: nx.stepPct ?? null,
+      blockGoals: nx.blockGoals ?? {}, blockWeeks: nx.blockWeeks ?? {}, blockDeload: nx.blockDeload ?? {},
+    };
+  }
+  return NextResponse.json({ ok: true, plan, deloadCadence, savedWindow, savedWindowNext, weekPlans });
 }
 
 export async function POST(req: Request) {
