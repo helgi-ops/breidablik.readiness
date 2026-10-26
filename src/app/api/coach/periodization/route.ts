@@ -132,7 +132,7 @@ export async function POST(req: Request) {
   // downstream data (recorded minutes / match stats) references the fixture, unless `force` is set.
   const fx = (body as { fixture?: unknown }).fixture;
   if (fx && typeof fx === "object") {
-    const f = fx as { op?: string; date?: string; opponent?: string | null; isHome?: boolean | null; competition?: string | null; kickoff?: string | null; force?: boolean };
+    const f = fx as { op?: string; date?: string; opponent?: string | null; isHome?: boolean | null; competition?: string | null; kickoff?: string | null; isFriendly?: boolean | null; force?: boolean };
     if (!f.date || !/^\d{4}-\d{2}-\d{2}$/.test(f.date)) return NextResponse.json({ ok: false, error: "bad fixture date" }, { status: 400 });
     if (f.op === "delete") {
       // Guardrail — a fixture referenced by recorded minutes/stats is NOT deleted silently.
@@ -157,6 +157,10 @@ export async function POST(req: Request) {
     payload.competition = has(f.competition) ? f.competition!.trim() : (ex?.competition ?? "Friendly");
     payload.is_home = f.isHome != null ? !!f.isHome : (ex?.is_home ?? true);
     if (has(f.kickoff)) payload.kickoff_time = f.kickoff!.trim(); else if (ex?.kickoff_time != null) payload.kickoff_time = ex.kickoff_time;
+    // A planner-added fixture is a friendly by default (league games come from Fixtures); the caller can
+    // say otherwise. On an existing row, leave the flag untouched unless the caller sends it.
+    if (typeof f.isFriendly === "boolean") payload.is_friendly = f.isFriendly;
+    else if (!ex) payload.is_friendly = true;
     const { error } = await ctx.sb.from("match_schedule").upsert(payload, { onConflict: "team_id,match_date" });
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
     return NextResponse.json({ ok: true, fixture: f.date, created: !ex });

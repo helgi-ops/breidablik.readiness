@@ -32,6 +32,17 @@ test("detectSeasonPhases: a pre-season friendly does NOT start the competitive s
   assert.equal(comp.matches, 2);            // friendlies excluded from the competitive count
 });
 
+test("detectSeasonPhases: the explicit isFriendly flag is authoritative over the competition label", () => {
+  const fx = [
+    { date: "2026-02-15", competition: null, isFriendly: true },        // flagged friendly (no label)
+    { date: "2026-04-10", competition: "Friendly", isFriendly: false }, // league game mislabelled — flag wins
+    { date: "2026-10-20", competition: "Besta deild", isFriendly: false },
+  ];
+  const comp = detectSeasonPhases(fx, null).find((p) => p.key === "competitive")!;
+  assert.equal(comp.start, "2026-04-10");   // the flagged-competitive game starts the season, not the Feb friendly
+  assert.equal(comp.matches, 2);
+});
+
 test("detectSeasonPhases: an all-friendly schedule falls back to the earliest fixture", () => {
   const fx = [{ date: "2026-02-15", competition: "Friendly" }, { date: "2026-03-01", competition: "Friendly" }];
   const comp = detectSeasonPhases(fx, null).find((p) => p.key === "competitive")!;

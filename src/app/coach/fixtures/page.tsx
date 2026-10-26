@@ -29,6 +29,7 @@ const COPY = {
     date: "Date", opponent: "Opponent", opponentPh: "e.g. FH, Víkingur, Valur…",
     home: "Home", away: "Away", kickoff: "Kickoff (optional)", competition: "Competition (optional)",
     competitionPh: "e.g. Besta deild",
+    friendly: "Pre-season friendly", friendlyHint: "A training game — does NOT start the competitive season.", friendlyBadge: "Friendly",
     upcoming: "Upcoming", past: "Recent (played)", none: "No fixtures yet — add the month's games above.",
     del: "Delete", delConfirm: "Delete this fixture?", saving: "Saving…", loading: "Loading…",
     needDate: "Pick a date first.", vs: "vs",
@@ -45,6 +46,7 @@ const COPY = {
     date: "Dagsetning", opponent: "Andstæðingur", opponentPh: "t.d. FH, Víkingur, Valur…",
     home: "Heima", away: "Úti", kickoff: "Byrjunartími (valfrjálst)", competition: "Mót (valfrjálst)",
     competitionPh: "t.d. Besta deild",
+    friendly: "Æfingaleikur (undirbúningur)", friendlyHint: "Æfingaleikur — byrjar EKKI keppnistímabilið.", friendlyBadge: "Æfingaleikur",
     upcoming: "Framundan", past: "Nýlegt (leikið)", none: "Engir leikir enn — bættu við leikjum mánaðarins að ofan.",
     del: "Eyða", delConfirm: "Eyða þessum leik?", saving: "Vista…", loading: "Hleð…",
     needDate: "Veldu dagsetningu fyrst.", vs: "vs",
@@ -63,6 +65,7 @@ type Fixture = {
   is_home: boolean | null;
   kickoff_time: string | null;
   competition: string | null;
+  is_friendly: boolean | null;
   goals_for: number | null;
   goals_against: number | null;
 };
@@ -152,6 +155,7 @@ export default function FixturesPage() {
   const [fHome, setFHome] = useState(true);
   const [fKickoff, setFKickoff] = useState("");
   const [fCompetition, setFCompetition] = useState("");
+  const [fFriendly, setFFriendly] = useState(false);
 
   function resetForm() {
     setEditingId(null);
@@ -160,6 +164,7 @@ export default function FixturesPage() {
     setFHome(true);
     setFKickoff("");
     setFCompetition("");
+    setFFriendly(false);
   }
 
   async function loadFixtures(tid: string) {
@@ -170,7 +175,7 @@ export default function FixturesPage() {
     const fromISO = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}-${String(from.getDate()).padStart(2, "0")}`;
     const { data, error: e } = await supabase
       .from("match_schedule")
-      .select("id, match_date, opponent, is_home, kickoff_time, competition, goals_for, goals_against")
+      .select("id, match_date, opponent, is_home, kickoff_time, competition, is_friendly, goals_for, goals_against")
       .eq("team_id", tid)
       .gte("match_date", fromISO)
       .order("match_date", { ascending: true });
@@ -206,6 +211,7 @@ export default function FixturesPage() {
     setFHome(f.is_home ?? true);
     setFKickoff(f.kickoff_time ? f.kickoff_time.slice(0, 5) : "");
     setFCompetition(f.competition ?? "");
+    setFFriendly(f.is_friendly ?? false);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -221,6 +227,7 @@ export default function FixturesPage() {
       is_home: fHome,
       kickoff_time: fKickoff.trim() || null,
       competition: fCompetition.trim() || null,
+      is_friendly: fFriendly,
     };
     // Editing MOVES the existing row (update by id) so changing the date never
     // leaves a duplicate behind. Adding uses upsert on (team_id, match_date).
@@ -299,6 +306,7 @@ export default function FixturesPage() {
             <span className="font-medium">{f.opponent || "—"}</span>
             {f.kickoff_time ? <span className="ml-2 text-xs text-muted-foreground">{f.kickoff_time.slice(0, 5)}</span> : null}
             {f.competition ? <span className="ml-2 text-xs text-muted-foreground">· {f.competition}</span> : null}
+            {f.is_friendly ? <Badge variant="outline" className="ml-2 border-amber-300 text-amber-700">{t.friendlyBadge}</Badge> : null}
           </div>
           {isPast ? <ScoreCell f={f} t={t} onSave={(gf, ga) => saveScore(f, gf, ga)} /> : null}
           <Button variant="ghost" size="sm" onClick={() => startEdit(f)}>{t.edit}</Button>
@@ -349,6 +357,12 @@ export default function FixturesPage() {
           <div className="space-y-1 sm:col-span-2">
             <Label className="text-xs text-muted-foreground">{t.competition}</Label>
             <Input value={fCompetition} onChange={(e) => setFCompetition(e.target.value)} placeholder={t.competitionPh} />
+          </div>
+          <div className="space-y-1 sm:col-span-2">
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" checked={fFriendly} onChange={(e) => setFFriendly(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300" />
+              <span><span className="font-medium">{t.friendly}</span> <span className="block text-xs text-muted-foreground">{t.friendlyHint}</span></span>
+            </label>
           </div>
         </CardContent>
         <CardFooter className="gap-2">

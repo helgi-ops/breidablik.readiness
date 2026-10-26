@@ -12,13 +12,17 @@
 export type Bi = { en: string; is: string };
 
 // ─────────────────────────────── MACRO ───────────────────────────────
-export type Fixture = { date: string; competition?: string | null; isHome?: boolean | null };
+export type Fixture = { date: string; competition?: string | null; isHome?: boolean | null; isFriendly?: boolean | null };
 
-/** A friendly / pre-season game does NOT start the competitive season — it's a training fixture. Detected
- *  from the `competition` label (what the coach tags pre-season games with). Null/empty = treated as a
- *  real competitive fixture (the historical default), so only explicitly-tagged games are excluded. */
+/** A friendly / pre-season game does NOT start the competitive season — it's a training fixture. The coach
+ *  marks it explicitly (`match_schedule.is_friendly`); the `competition` label is a fallback for imported
+ *  games. Null/empty + unmarked = a real competitive fixture, so only tagged games are excluded. */
 const FRIENDLY_RE = /friendl|æfinga|undirb|pre.?season|vin[aá]tt|test|trial/i;
 export const isFriendlyFixture = (competition?: string | null): boolean => !!competition && FRIENDLY_RE.test(competition);
+/** Whether a fixture is a friendly. The explicit `isFriendly` flag is authoritative when set (so a league
+ *  game stays competitive whatever its label says); the competition-label regex is only a fallback for a
+ *  fixture with no flag (e.g. an older import). */
+export const fixtureIsFriendly = (f: Fixture): boolean => (f.isFriendly == null ? isFriendlyFixture(f.competition) : f.isFriendly === true);
 export type SeasonPhase = {
   key: "preseason" | "competitive" | "offseason";
   label: Bi; start: string; end: string; weeks: number; matches: number; rationale: Bi;
@@ -39,7 +43,7 @@ export function detectSeasonPhases(fixtures: Fixture[], dataStart: string | null
   // The pre-season → competitive boundary is the first COMPETITIVE fixture: friendlies / pre-season games
   // (tagged in the `competition` label) do NOT start the season. Fall back to all fixtures only if every
   // one is a friendly (so the plan still resolves).
-  const compDates = fixtures.filter((f) => f.date && !isFriendlyFixture(f.competition)).map((f) => f.date).sort();
+  const compDates = fixtures.filter((f) => f.date && !fixtureIsFriendly(f)).map((f) => f.date).sort();
   const first = compDates[0] ?? dates[0];
   const last = compDates[compDates.length - 1] ?? dates[dates.length - 1];
   const compCount = compDates.length || dates.length;

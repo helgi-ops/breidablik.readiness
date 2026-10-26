@@ -55,10 +55,10 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
 
   // Fixtures → macro phases.
   const { data: fxData } = await sb.from("match_schedule")
-    .select("match_date, competition, is_home").eq("team_id", args.teamId)
+    .select("match_date, competition, is_home, is_friendly").eq("team_id", args.teamId)
     .gte("match_date", yStart).lte("match_date", yEnd).order("match_date");
-  const fixtures = ((fxData ?? []) as Array<{ match_date: string; competition: string | null; is_home: boolean | null }>)
-    .map((f) => ({ date: f.match_date, competition: f.competition, isHome: f.is_home }));
+  const fixtures = ((fxData ?? []) as Array<{ match_date: string; competition: string | null; is_home: boolean | null; is_friendly: boolean | null }>)
+    .map((f) => ({ date: f.match_date, competition: f.competition, isHome: f.is_home, isFriendly: f.is_friendly }));
 
   const matchDates = new Set(fixtures.map((f) => f.date));
 

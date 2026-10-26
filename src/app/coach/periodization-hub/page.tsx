@@ -319,8 +319,8 @@ export default function PeriodizationHubPage() {
   // shared server route so match_schedule stays the single source of truth; then we refetch so Macro + Meso
   // re-derive. Delete is guarded: if the fixture has recorded minutes/stats the server returns 409 and we
   // ask the coach to confirm before forcing.
-  const writeFixture = React.useCallback(async (date: string, op: "upsert" | "delete", opts?: { force?: boolean; opponent?: string; competition?: string }): Promise<boolean> => {
-    const res = await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ fixture: { op, date, force: opts?.force ?? false, opponent: opts?.opponent, competition: opts?.competition } }) });
+  const writeFixture = React.useCallback(async (date: string, op: "upsert" | "delete", opts?: { force?: boolean; opponent?: string; competition?: string; isFriendly?: boolean }): Promise<boolean> => {
+    const res = await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ fixture: { op, date, force: opts?.force ?? false, opponent: opts?.opponent, competition: opts?.competition, isFriendly: opts?.isFriendly } }) });
     if (res.status === 409) {
       const j = await res.json().catch(() => ({})) as { refs?: { minutes: number; stats: number } };
       const r = j.refs ?? { minutes: 0, stats: 0 };
@@ -441,9 +441,8 @@ export default function PeriodizationHubPage() {
 
   async function addFriendly() {
     if (!friendly) return;
-    // Tag a friendly so detectSeasonPhases does NOT read it as the first competitive fixture (which would
-    // end pre-season early). A competitive game is left untagged (the real schedule import sets the comp).
-    const ok = await writeFixture(friendly, "upsert", friendlyKind === "friendly" ? { competition: "Friendly" } : undefined);
+    // Tag a friendly (is_friendly) so detectSeasonPhases does NOT read it as the first competitive fixture.
+    const ok = await writeFixture(friendly, "upsert", { isFriendly: friendlyKind === "friendly" });
     if (ok) setFriendly("");
   }
 
