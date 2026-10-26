@@ -1678,6 +1678,8 @@ export default function PeriodizationHubPage() {
             const trainDaySum = cw ? cw.days.filter((d) => d.type !== "match" && d.type !== "rest").reduce((s, d) => s + (d.load ?? 0), 0) : 0;
             const dayScale = trainingPL != null && trainDaySum > 0 ? trainingPL / trainDaySum : 1;
             const dayLoad = (d: CalDay) => d.load == null ? null : d.type === "match" ? d.load : Math.round(d.load * dayScale);
+            // Open this week in Week Setup — the coach SEES the recommended day-by-day load there and can EDIT it.
+            const openWeek = () => { setPreseasonJumpWeek(weekMon); setTab("micro"); };
             return (
               <React.Fragment key={i}>
               {blk && (
@@ -1690,23 +1692,26 @@ export default function PeriodizationHubPage() {
               <section className={`${card} min-w-0`}>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                   <span className="text-[15px] font-bold text-slate-900">{is ? "Vika" : "Week"} {i + 1}</span>
-                  <span className="text-[12px] text-slate-500">{shortDate(weekMon, is)}</span>
+                  <button type="button" onClick={openWeek} title={is ? "Opna í Vikuuppsetningu" : "Open in Week Setup"} className="rounded text-[12px] font-medium text-[#2740e6] underline decoration-dotted underline-offset-2 hover:decoration-solid">{shortDate(weekMon, is)}</button>
                   <span className="rounded-full bg-[#2740e6]/10 px-2 py-0.5 text-[11px] font-semibold text-[#2740e6]">×{w.multipleOfMatch} {is ? "leik" : "match"}</span>
                   {pv > 0 && <span className="text-[13px] font-semibold tabular-nums text-slate-900">{fmtv(pv)} {unitLabel}</span>}
                   {w.perSessionLoad != null && <span className="text-[12px] text-slate-500">≈ {w.perSessionLoad}/{is ? "æf" : "sess"}</span>}
                   {emph && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{PS_LABEL[emph]}</span>}
-                  <button type="button" onClick={() => { setPreseasonJumpWeek(weekMon); setTab("micro"); }} className="ml-auto text-[12px] font-semibold text-[#2740e6] hover:underline">{is ? "Opna í Vikuuppsetningu →" : "Open in Week Setup →"}</button>
+                  <button type="button" onClick={openWeek} className="ml-auto text-[12px] font-semibold text-[#2740e6] hover:underline">{is ? "Opna / breyta í Vikuuppsetningu →" : "Open / edit in Week Setup →"}</button>
                 </div>
                 {cw && (
+                  <>
                   <div className="mt-2.5 grid grid-cols-7 gap-1">
                     {cw.days.map((d, di) => { const dl = dayLoad(d); return (
-                      <div key={di} className="min-w-0 rounded-md border px-1 py-1.5 text-center" style={{ background: tint[d.type] ?? "#F8FAFC", borderColor: `${typeColor[d.type] ?? "#CBD5E1"}33` }} title={`${dows[di]} · ${typeName(d.type)}${dl != null ? ` · ${dl} PL${d.type === "match" ? ` (~${mins} ${is ? "mín" : "min"})` : ""}` : ""}`}>
+                      <button key={di} type="button" onClick={openWeek} title={`${dows[di]} · ${typeName(d.type)}${dl != null ? ` · ${dl} PL${d.type === "match" ? ` (~${mins} ${is ? "mín" : "min"})` : ""}` : ""} — ${is ? "smelltu til að breyta / sjá ráðlagt álag" : "click to edit / see recommended load"}`} className="min-w-0 cursor-pointer rounded-md border px-1 py-1.5 text-center transition-shadow hover:ring-2 hover:ring-[#2740e6]/30 focus:outline-none focus:ring-2 focus:ring-[#2740e6]/40" style={{ background: tint[d.type] ?? "#F8FAFC", borderColor: `${typeColor[d.type] ?? "#CBD5E1"}33` }}>
                         <div className="text-[9px] text-slate-400">{dows[di]}</div>
                         <div className="truncate text-[10px] font-semibold" style={{ color: typeColor[d.type] ?? "#64748B" }}>{d.type === "rest" ? "–" : typeName(d.type)}</div>
                         <div className="text-[10px] tabular-nums text-slate-600">{dl != null && d.type !== "rest" ? dl : ""}</div>
-                      </div>
+                      </button>
                     ); })}
                   </div>
+                  <p className="mt-1 text-[10.5px] text-slate-400">{is ? "Smelltu á dag (eða dagsetninguna) til að sjá ráðlagt álag og breyta uppsetningunni í Vikuuppsetningu." : "Click a day (or the date) to see the recommended load and edit the setup in Week Setup."}</p>
+                  </>
                 )}
                 {/* Friendly budget — the partial match counts toward the week; training fills the remainder. */}
                 {weekFx.length > 0 && (
