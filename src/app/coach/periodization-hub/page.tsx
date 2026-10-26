@@ -159,6 +159,7 @@ export default function PeriodizationHubPage() {
   const nextPreStartRef = React.useRef(nextPreStart); nextPreStartRef.current = nextPreStart;
   const didPopulateWindow = React.useRef(false);
   const [friendly, setFriendly] = React.useState("");    // pre-season friendly date to add (MD anchor)
+  const [friendlyKind, setFriendlyKind] = React.useState<"friendly" | "competitive">("friendly"); // tag so friendlies don't start the season
   const [mdPosKey, setMdPosKey] = React.useState<number | null>(null); // position selector for the three-axes + MD-demand cards
   const [mdDaysOpen, setMdDaysOpen] = React.useState(false); // "Show MD-day detail" toggle under the microcycle-demand phases
   // Meso plan-ahead editor state.
@@ -440,7 +441,9 @@ export default function PeriodizationHubPage() {
 
   async function addFriendly() {
     if (!friendly) return;
-    const ok = await writeFixture(friendly, "upsert"); // shared path → match_schedule; refetch re-anchors MD
+    // Tag a friendly so detectSeasonPhases does NOT read it as the first competitive fixture (which would
+    // end pre-season early). A competitive game is left untagged (the real schedule import sets the comp).
+    const ok = await writeFixture(friendly, "upsert", friendlyKind === "friendly" ? { competition: "Friendly" } : undefined);
     if (ok) setFriendly("");
   }
 
@@ -1127,6 +1130,7 @@ export default function PeriodizationHubPage() {
               </label>
               <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Tímabili lýkur" : "Season ends"}
                 <input type="date" value={seasonEnd} onChange={(e) => setSeasonEnd(e.target.value)} className="h-10 rounded-lg border border-slate-300 px-2.5 text-[13px] font-medium text-slate-900" />
+                <span className="text-[10px] font-normal leading-tight text-slate-400">{is ? "Lok keppninnar (→ off-season). Undirbúningur endar við fyrsta keppnisleik í Leikjaskrá — ekki hér." : "End of competition (→ off-season). Pre-season ends at the first competitive fixture in Fixtures — not here."}</span>
               </label>
               <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700" title={is ? "Þegar enduruppbygging byrjar. Tómt = strax við tímabilslok." : "When reconditioning begins. Empty = at the season end."}>{is ? "Off-season hefst (valfrjálst)" : "Off-season starts (optional)"}
                 <input type="date" value={offStart} onChange={(e) => setOffStart(e.target.value)} placeholder={seasonEnd} className="h-10 rounded-lg border border-slate-300 px-2.5 text-[13px] font-medium text-slate-900" />
@@ -2102,12 +2106,16 @@ export default function PeriodizationHubPage() {
                 </div>
                 {blkScope === "player" && <p className="mt-1.5 text-[12px] text-slate-500">{is ? `Leikviðmið úr leikmanni völdum í „Leikmenn“-flipanum${player ? ` (${player.name})` : ""}. Skiptu um leikmann þar.` : `Match unit from the player selected in the "Players" tab${player ? ` (${player.name})` : ""}. Change the player there.`}</p>}
                 <div className="mt-4 border-t border-slate-100 pt-3">
-                  <div className="text-[12px] font-semibold text-slate-700">{is ? "Bæta æfingaleik/leik í leikjaskrá" : "Add a friendly/match to the schedule"}</div>
-                  <div className="mt-1.5 flex gap-2">
+                  <div className="text-[12px] font-semibold text-slate-700">{is ? "Bæta leik í leikjaskrá" : "Add a fixture to the schedule"}</div>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
                     <input type="date" value={friendly} onChange={(e) => setFriendly(e.target.value)} aria-label={is ? "Dagsetning leiks" : "Match date"} className="h-10 min-w-0 flex-1 rounded-lg border border-slate-300 px-2 text-[13px]" />
-                    <button onClick={addFriendly} disabled={!friendly} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-slate-50 disabled:opacity-40">{is ? "+ Leikur" : "+ Fixture"}</button>
+                    <select value={friendlyKind} onChange={(e) => setFriendlyKind(e.target.value as "friendly" | "competitive")} aria-label={is ? "Tegund leiks" : "Fixture type"} className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-[13px] font-medium">
+                      <option value="friendly">{is ? "Æfingaleikur" : "Friendly"}</option>
+                      <option value="competitive">{is ? "Keppnisleikur" : "Competitive"}</option>
+                    </select>
+                    <button onClick={addFriendly} disabled={!friendly} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-slate-50 disabled:opacity-40">{is ? "+ Bæta við" : "+ Add"}</button>
                   </div>
-                  <p className="mt-1 text-[12px] text-slate-500">{is ? "Vistast í leikjaskrá (MD-akkeri) og endur-fræsir lotuna." : "Persists to the schedule (MD anchor) and re-seeds the block."}</p>
+                  <p className="mt-1 text-[12px] text-slate-500">{is ? "Æfingaleikir teljast EKKI upphaf keppnistímabilsins — þeir eru hluti af undirbúningi. Fyrsti keppnisleikurinn endar undirbúninginn." : "Friendlies do NOT start the competitive season — they stay in pre-season. The first competitive fixture ends pre-season."}</p>
                 </div>
               </section>
             </aside>

@@ -17,6 +17,27 @@ test("detectSeasonPhases: pre-season before first fixture + competitive across t
   assert.match(ph[1].rationale.en, /3 matches/);
 });
 
+test("detectSeasonPhases: a pre-season friendly does NOT start the competitive season", () => {
+  const fx = [
+    { date: "2026-02-15", competition: "Friendly" },      // pre-season friendly
+    { date: "2026-03-01", competition: "Æfingaleikur" },  // another friendly (IS)
+    { date: "2026-04-10", competition: "Besta deild" },   // first competitive fixture
+    { date: "2026-10-20", competition: "Besta deild" },
+  ];
+  const ph = detectSeasonPhases(fx, null);
+  const pre = ph.find((p) => p.key === "preseason")!;
+  const comp = ph.find((p) => p.key === "competitive")!;
+  assert.equal(comp.start, "2026-04-10");   // the first COMPETITIVE game, not the Feb friendly
+  assert.equal(pre.end, "2026-04-10");      // pre-season runs up to the first competitive game
+  assert.equal(comp.matches, 2);            // friendlies excluded from the competitive count
+});
+
+test("detectSeasonPhases: an all-friendly schedule falls back to the earliest fixture", () => {
+  const fx = [{ date: "2026-02-15", competition: "Friendly" }, { date: "2026-03-01", competition: "Friendly" }];
+  const comp = detectSeasonPhases(fx, null).find((p) => p.key === "competitive")!;
+  assert.equal(comp.start, "2026-02-15");   // still resolves (degenerate: no real competitive game)
+});
+
 test("buildMesoBlocks: leads with TMr, deloads on a sharp acute-load rise, ACWR is a contested view", () => {
   // 12 weeks; a clear jump in block 2 (weeks 5-8) vs the prior 4-week acute mean.
   const weeks: WeekLoad[] = [];

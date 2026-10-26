@@ -13,6 +13,12 @@ export type Bi = { en: string; is: string };
 
 // ─────────────────────────────── MACRO ───────────────────────────────
 export type Fixture = { date: string; competition?: string | null; isHome?: boolean | null };
+
+/** A friendly / pre-season game does NOT start the competitive season — it's a training fixture. Detected
+ *  from the `competition` label (what the coach tags pre-season games with). Null/empty = treated as a
+ *  real competitive fixture (the historical default), so only explicitly-tagged games are excluded. */
+const FRIENDLY_RE = /friendl|æfinga|undirb|pre.?season|vin[aá]tt|test|trial/i;
+export const isFriendlyFixture = (competition?: string | null): boolean => !!competition && FRIENDLY_RE.test(competition);
 export type SeasonPhase = {
   key: "preseason" | "competitive" | "offseason";
   label: Bi; start: string; end: string; weeks: number; matches: number; rationale: Bi;
@@ -30,7 +36,13 @@ const addDays = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_40
 export function detectSeasonPhases(fixtures: Fixture[], dataStart: string | null, opts?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null }): SeasonPhase[] {
   const dates = fixtures.map((f) => f.date).filter(Boolean).sort();
   if (dates.length === 0) return [];
-  const first = dates[0], last = dates[dates.length - 1];
+  // The pre-season → competitive boundary is the first COMPETITIVE fixture: friendlies / pre-season games
+  // (tagged in the `competition` label) do NOT start the season. Fall back to all fixtures only if every
+  // one is a friendly (so the plan still resolves).
+  const compDates = fixtures.filter((f) => f.date && !isFriendlyFixture(f.competition)).map((f) => f.date).sort();
+  const first = compDates[0] ?? dates[0];
+  const last = compDates[compDates.length - 1] ?? dates[dates.length - 1];
+  const compCount = compDates.length || dates.length;
   const out: SeasonPhase[] = [];
   const coachPre = opts?.preseasonStart && opts.preseasonStart < first ? opts.preseasonStart : null;
   const preStart = coachPre ?? (dataStart && dataStart < first ? dataStart : addDays(first, -42));
@@ -41,10 +53,10 @@ export function detectSeasonPhases(fixtures: Fixture[], dataStart: string | null
   });
   const compEnd = opts?.seasonEnd && opts.seasonEnd > last ? opts.seasonEnd : last;
   const compWeeks = Math.max(1, Math.round(daydiff(first, compEnd) / 7));
-  const perWeek = dates.length / Math.max(1, compWeeks);
+  const perWeek = compCount / Math.max(1, compWeeks);
   out.push({
-    key: "competitive", label: { en: "Competitive season", is: "Keppnistímabil" }, start: first, end: compEnd, weeks: compWeeks, matches: dates.length,
-    rationale: { en: `${compWeeks}-week season, ${dates.length} matches (~${perWeek.toFixed(1)}/week) — strength cycled by fixture density: re-strength in gaps, maintain + potentiate when congested, sharpen on match weeks, taper into the run-in.${opts?.seasonEnd ? " (coach-set end)" : ""}`, is: `${compWeeks} vikna tímabil, ${dates.length} leikir (~${perWeek.toFixed(1)}/viku) — styrkur eftir leikjaþéttleika: endur-styrkur í gluggum, viðhald + potentiation þegar þétt, sérhæfing á leikvikum, niðurtröppun á lokaspretti.${opts?.seasonEnd ? " (þjálfari stillti lok)" : ""}` },
+    key: "competitive", label: { en: "Competitive season", is: "Keppnistímabil" }, start: first, end: compEnd, weeks: compWeeks, matches: compCount,
+    rationale: { en: `${compWeeks}-week season, ${compCount} matches (~${perWeek.toFixed(1)}/week) — strength cycled by fixture density: re-strength in gaps, maintain + potentiate when congested, sharpen on match weeks, taper into the run-in.${opts?.seasonEnd ? " (coach-set end)" : ""}`, is: `${compWeeks} vikna tímabil, ${compCount} leikir (~${perWeek.toFixed(1)}/viku) — styrkur eftir leikjaþéttleika: endur-styrkur í gluggum, viðhald + potentiation þegar þétt, sérhæfing á leikvikum, niðurtröppun á lokaspretti.${opts?.seasonEnd ? " (þjálfari stillti lok)" : ""}` },
   });
   // Off-season — emitted ONLY once the coach has set a season end (the switch). It runs from the
   // competitive end onward: a transition/recovery, then a DEVELOPMENT build (no fixtures cap the load,
