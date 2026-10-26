@@ -31,9 +31,12 @@ describe("preseasonStartRamp", () => {
   it("scales each KPI by the week's multiple × its OWN taper share (not uniformly)", () => {
     const rows = preseasonStartRamp({ matchTypicalLoad: MATCH, matchKpiAvg: KPI, sessionsPerWeek: 4, preseasonWeeks: 4, anchor: "match_this_season" });
     const w1 = rows[0];
-    // Volume metrics (distance, PlayerLoad) keep the full multiple; high-intensity ones taper down.
-    expect(w1.byKpi.totalDistance).toBe(Math.round(10000 * 1.3 * kpiTaperShare("totalDistance")));
-    expect(w1.byKpi.totalDistance).toBe(Math.round(10000 * 1.3)); // share = 1.0 for distance
+    // Distance uses the pre-season re-entry FLOOR (aerobic volume built high & early): week 1 starts at
+    // 0.80 × peak, ABOVE the generic ×1.3 re-entry that the mechanical KPIs keep.
+    const peak = defaultPeakMultiple(4);
+    expect(w1.byKpi.totalDistance).toBe(Math.round(10000 * (Math.round(0.80 * peak * 100) / 100)));
+    expect(w1.byKpi.totalDistance!).toBeGreaterThan(Math.round(10000 * 1.3)); // floor raised it above re-entry
+    // Mechanical KPIs keep the generic ×1.3 re-entry (no floor) × their own taper share.
     expect(w1.byKpi.velocityBand6).toBe(Math.round(300 * 1.3 * kpiTaperShare("velocityBand6")));
     expect(w1.byKpi.accelB23).toBe(Math.round(40 * 1.3 * kpiTaperShare("accelB23")));
     // Per-KPI ordering (T:M-calibrated): sprint < HSR < distance ≤ accel. Accel/decel COUNTS accumulate
@@ -69,6 +72,24 @@ describe("preseasonStartRamp", () => {
     // pathway curve only changes the PATH. decel stays below accel throughout (convex curve + lower share).
     expect(mid.byKpi.decelB23!).toBeLessThan(mid.byKpi.accelB23!);
     expect(wl.byKpi.decelB23!).toBeLessThan(wl.byKpi.accelB23!); // accel share (1.05) > decel share (1.0)
+  });
+
+  it("re-entry floor: distance (and HSR) start HIGH early; sprint/mechanical keep the low re-entry", () => {
+    const K = { totalDistance: 10000, velocityBand5: 800, velocityBand6: 300, accelB23: 40 };
+    const rows = preseasonStartRamp({ matchTypicalLoad: MATCH, matchKpiAvg: K, sessionsPerWeek: 4, preseasonWeeks: 6, week1MatchMultiple: 1.3, anchor: "match_this_season" });
+    const peak = defaultPeakMultiple(4);
+    const w1 = rows[0];
+    // Distance week-1 ×match = 0.80 × peak (well above the 1.3 generic re-entry).
+    const distMult = w1.byKpi.totalDistance! / 10000;
+    expect(distMult).toBeCloseTo(Math.round(0.80 * peak * 100) / 100, 2);
+    expect(distMult).toBeGreaterThan(1.3);
+    // HSR week-1 is elevated (floor 0.65 × peak × its taper share) — above its own generic-re-entry level…
+    const hsrMult = w1.byKpi.velocityBand5! / 800;
+    expect(hsrMult).toBeGreaterThan(1.3 * kpiTaperShare("velocityBand5")); // raised vs the 1.3 re-entry
+    // …but still below distance (HSR is injury-sensitive, floor 0.65 < 0.80).
+    expect(hsrMult).toBeLessThan(distMult);
+    // Sprint keeps the conservative generic re-entry (no floor).
+    expect(w1.byKpi.velocityBand6).toBe(Math.round(300 * 1.3 * kpiTaperShare("velocityBand6")));
   });
 
   it("carries an sRPE/AU weekly target when a match sRPE anchor is given", () => {

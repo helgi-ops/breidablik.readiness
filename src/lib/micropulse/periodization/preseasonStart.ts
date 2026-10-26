@@ -21,7 +21,7 @@
  */
 
 import { weeklyTargetFromMatch, type Bi } from "./index";
-import { kpiTaperShare, pathwayRampGamma } from "./plannedVolume";
+import { kpiTaperShare, pathwayRampGamma, kpiReentryFloor } from "./plannedVolume";
 
 export type LoadAnchor = "match_this_season" | "match_last_season" | "normative" | "srpe_only";
 export type Confidence = "high" | "moderate" | "low";
@@ -99,12 +99,19 @@ export function preseasonStartRamp(opts: PreseasonStartOpts): PreseasonWeekTarge
     // physiological/metabolic metrics (accel, distance) ramp linearly, to the same end-of-pre-season
     // destination. Separates the two load-adaptation pathways (Vanrenterghem 2017; Harper & McBurnie
     // 2021 — decel = highest tissue load; Duhig 2016 — HSR/sprint & hamstring).
+    // Each KPI ramps from its OWN week-1 re-entry FLOOR (fraction of peak) to the shared peak. Aerobic
+    // volume (distance) and HSR start HIGH (safe base, built early); high-speed/mechanical keep the generic,
+    // conservative re-entry. The floor never pulls a KPI below the coach's week-1 multiple. The biomechanical
+    // pathway still ramps convex in between (Vanrenterghem). Jeong 2011; Teixeira 2021.
+    const w1frac = peak > 0 ? week1 / peak : 0;
     const byKpi: Partial<Record<string, number>> = {};
     for (const k of kpiKeys) {
       const v = opts.matchKpiAvg?.[k];
       if (typeof v !== "number" || !Number.isFinite(v)) continue;
+      const floor = Math.max(kpiReentryFloor(k), w1frac);  // KPI's week-1 fraction of peak (≥ generic re-entry)
+      const week1k = floor * peak;
       const fracK = weeks > 1 ? Math.pow(frac, pathwayRampGamma(k)) : 0;
-      const multK = r2(week1 + (peak - week1) * fracK);
+      const multK = r2(week1k + (peak - week1k) * fracK);
       byKpi[k] = r0(v * multK * kpiTaperShare(k));
     }
 

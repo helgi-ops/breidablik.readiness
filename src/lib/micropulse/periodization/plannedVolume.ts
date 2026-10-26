@@ -126,6 +126,28 @@ export function kpiTmRefRange(key: string): [number, number] | null {
   return KPI_TM_REF_RANGE[key as WeeklyLoadMetricKey] ?? null;
 }
 
+/**
+ * Pre-season WEEK-1 re-entry FLOOR per KPI, as a fraction of that KPI's peak ×match. The generic week-1
+ * re-entry (the coach's `week1MatchMultiple`) is a controlled fraction of a match for the WHOLE load — but
+ * aerobic VOLUME is the safe, low-injury base you build HIGH and EARLY in pre-season, so distance (and, to a
+ * lesser degree, HSR — the aerobic-power base) should NOT drop as far at re-entry as sprint/mechanical do
+ * (Jeong 2011; Teixeira 2021; Buchheit — build the engine first). An absent KPI uses the generic re-entry
+ * floor (= week1/peak), so only the overridden KPIs start higher; the floor never pulls a KPI BELOW the
+ * coach's week-1 multiple (see `max(..)` in preseasonStart). High-speed/mechanical metrics are deliberately
+ * omitted so they keep their conservative, injury-safe re-entry.
+ */
+export const KPI_REENTRY_FLOOR: Partial<Record<WeeklyLoadMetricKey, number>> = {
+  totalDistance: 0.80,   // aerobic volume — load high & early (~5.5 km/session re-entry at 4 sessions)
+  velocityBand5: 0.65,   // HSR — load the aerobic-power base early (coach priority), but below distance
+  imaStrideBand6: 0.62,  // IMA HSR-equivalent cadence band
+  fmpRunningHigh: 0.62,  // FMP high-speed running
+};
+
+/** A KPI's pre-season week-1 re-entry floor (fraction of peak), or 0 when it uses the generic re-entry. */
+export function kpiReentryFloor(key: string): number {
+  return KPI_REENTRY_FLOOR[key as WeeklyLoadMetricKey] ?? 0;
+}
+
 /** The ramp-progression exponent (γ) for a KPI's pathway — see `PATHWAY_RAMP_GAMMA`. */
 export function pathwayRampGamma(key: string): number {
   return PATHWAY_RAMP_GAMMA[kpiPathway(key)];

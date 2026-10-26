@@ -64,9 +64,10 @@ describe("planWeeklyTarget", () => {
     expect(t.phase).toBe("preseason");
     expect(t.weekIndex).toBe(1);
     expect(t.totalWeeks).toBe(10);
-    expect(t.multipleOfMatch).toBeCloseTo(1.3, 5);
-    // week-1 re-entry: distance ≈ match × 1.3; sprint tapered below that
-    expect(t.byKpi.totalDistance).toBe(Math.round(10000 * 1.3));
+    expect(t.multipleOfMatch).toBeCloseTo(1.3, 5); // headline re-entry stays ×1.3
+    // Distance starts at its aerobic re-entry FLOOR (0.80 × peak) — well ABOVE the ×1.3 headline (built
+    // high & early); sprint keeps the conservative re-entry (below ×1.3).
+    expect(t.byKpi.totalDistance! / 10000).toBeGreaterThan(1.3);
     expect(t.byKpi.velocityBand6! / 150).toBeLessThan(1.3);
   });
 
