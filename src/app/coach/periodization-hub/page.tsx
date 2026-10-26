@@ -1124,20 +1124,24 @@ export default function PeriodizationHubPage() {
               <h2 className={h2}>{is ? "Tímabilsrammi" : "Season frame"} <span className="font-normal text-slate-500">{plan.seasonYear}</span></h2>
               <span className="text-[12px] text-slate-500">{is ? "Stilltu þetta fyrst — kortið, Mesó og Míkró endurreiknast." : "Set these first — the map, Meso and Micro all re-flow from them."}</span>
             </div>
-            <div className="mt-3 flex flex-wrap items-end gap-x-5 gap-y-3">
-              <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Undirbúningur hefst" : "Pre-season starts"}
-                <input type="date" value={preStart} onChange={(e) => setPreStart(e.target.value)} className="h-10 rounded-lg border border-slate-300 px-2.5 text-[13px] font-medium text-slate-900" />
+            {/* Four date anchors — equal grid columns so they align and never stretch to a helper's width. */}
+            <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="flex min-w-0 flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Undirbúningur hefst" : "Pre-season starts"}
+                <input type="date" value={preStart} onChange={(e) => setPreStart(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 px-2.5 text-[13px] font-medium text-slate-900" />
               </label>
-              <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Tímabili lýkur" : "Season ends"}
-                <input type="date" value={seasonEnd} onChange={(e) => setSeasonEnd(e.target.value)} className="h-10 rounded-lg border border-slate-300 px-2.5 text-[13px] font-medium text-slate-900" />
-                <span className="text-[10px] font-normal leading-tight text-slate-400">{is ? "Lok keppninnar (→ off-season). Undirbúningur endar við fyrsta keppnisleik í Leikjaskrá — ekki hér." : "End of competition (→ off-season). Pre-season ends at the first competitive fixture in Fixtures — not here."}</span>
+              <label className="flex min-w-0 flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Tímabili lýkur" : "Season ends"}
+                <input type="date" value={seasonEnd} onChange={(e) => setSeasonEnd(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 px-2.5 text-[13px] font-medium text-slate-900" />
               </label>
-              <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700" title={is ? "Þegar enduruppbygging byrjar. Tómt = strax við tímabilslok." : "When reconditioning begins. Empty = at the season end."}>{is ? "Off-season hefst (valfrjálst)" : "Off-season starts (optional)"}
-                <input type="date" value={offStart} onChange={(e) => setOffStart(e.target.value)} placeholder={seasonEnd} className="h-10 rounded-lg border border-slate-300 px-2.5 text-[13px] font-medium text-slate-900" />
+              <label className="flex min-w-0 flex-col gap-1 text-[12px] font-semibold text-slate-700" title={is ? "Þegar enduruppbygging byrjar. Tómt = strax við tímabilslok." : "When reconditioning begins. Empty = at the season end."}>{is ? "Off-season hefst (valfrjálst)" : "Off-season starts (optional)"}
+                <input type="date" value={offStart} onChange={(e) => setOffStart(e.target.value)} placeholder={seasonEnd} className="h-10 w-full rounded-lg border border-slate-300 px-2.5 text-[13px] font-medium text-slate-900" />
               </label>
-              <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Off-season til (næsti undirb.)" : "Off-season to (next pre-season)"}
-                <input type="date" value={nextPreStart} onChange={(e) => setNextPreStart(e.target.value)} className="h-10 rounded-lg border border-slate-300 px-2.5 text-[13px] font-medium text-slate-900" />
+              <label className="flex min-w-0 flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Off-season til (næsti undirb.)" : "Off-season to (next pre-season)"}
+                <input type="date" value={nextPreStart} onChange={(e) => setNextPreStart(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 px-2.5 text-[13px] font-medium text-slate-900" />
               </label>
+            </div>
+            <p className="mt-2 text-[11px] leading-snug text-slate-400"><b className="font-semibold text-slate-500">{is ? "Tímabili lýkur" : "Season ends"}</b> {is ? "= lok keppninnar (→ off-season). Undirbúningur endar við fyrsta KEPPNISLEIK í Leikjaskrá — ekki hér (æfingaleikir teljast ekki með)." : "= end of competition (→ off-season). Pre-season ends at the first COMPETITIVE fixture in Fixtures — not here (friendlies don't count)."}</p>
+            {/* Block length + Save/Apply on their own row. */}
+            <div className="mt-3 flex flex-wrap items-end gap-x-5 gap-y-2">
               <div className="flex flex-col gap-1">
                 <span className="text-[12px] font-semibold text-slate-700">{is ? "Lotulengd (niðurtröppun hverja)" : "Block length (deload every)"}</span>
                 <div className="inline-flex overflow-hidden rounded-lg border border-slate-300" role="group">
