@@ -45,6 +45,10 @@ export interface RobustnessMechanicalInput {
   rhieBoutsZ: number | null;
   /** Whether an ACWR/HSR volume flag is already active (RHIE is a modifier only). */
   hasLoadSpike: boolean;
+  /** High-intensity L/R change-of-direction asymmetry %, last 14 days (Bishop 2020). Null if no CoD data. */
+  codAsymmetryHighPct?: number | null;
+  /** Dominant foot for the footedness-aware note (Havanecz 2026). Null = not set. */
+  dominantFoot?: "left" | "right" | "both" | null;
 }
 
 export interface RobustnessWatchInput {
@@ -91,6 +95,33 @@ const ROBUSTNESS_CITATION =
   "Gabbett 2017 · Majumdar 2022 · McBurnie 2022 · Saberisani 2025 · Hader 2019 · Neyroud 2016 · Hulin 2014";
 
 // ── New #5 contributors, in the signalPack SignalContributor shape ──────────
+
+/** High-intensity change-of-direction L/R asymmetry (Bishop 2020 — the injury-relevant tier). Footedness
+ *  (Havanecz 2026) is interpretive context, not the threshold: a modest plant-limb lean is normal, the
+ *  MAGNITUDE flags. Absolute % (not a personal-z) — flag at the Bishop concern level (≥15%). */
+function codAsymmetryContributor(pct: number | null, dominantFoot: "left" | "right" | "both" | null): SignalContributor | null {
+  if (pct == null || !Number.isFinite(pct)) return null;
+  const flagged = pct >= 15;
+  const severity = clamp01((pct - 9) / 12); // 9%->0, 21%->1
+  const footEn = dominantFoot ? ` (${dominantFoot}-footed)` : "";
+  return {
+    key: "cod_asymmetry",
+    label: { en: "Cutting asymmetry", is: "Skurð-ósamhverfa" },
+    why: flagged
+      ? { en: `His high-intensity cutting is lopsided left/right (${Math.round(pct)}%)${footEn} — more than a normal plant-limb lean.`, is: `Háákefðar skurðir hans eru ójafnir vinstri/hægri (${Math.round(pct)}%)${dominantFoot ? ` (${dominantFoot === "left" ? "örvfættur" : dominantFoot === "right" ? "réttfættur" : "jafnfættur"})` : ""} — meira en eðlilegur plant-fótar halli.` }
+      : { en: `His high-intensity left/right cutting is within the normal range.`, is: `Háákefðar vinstri/hægri skurðir eru innan eðlilegra marka.` },
+    counterfactual: flagged
+      ? { en: `If his high-intensity L/R cutting came back within ~15% → this clears.`, is: `Ef háákefðar vinstri/hægri skurðir kæmu aftur innan ~15% → þetta hreinsast.` }
+      : null,
+    citation: "Bishop 2020 · Havanecz 2026",
+    confidence: "moderate",
+    severity, flagged,
+    detail: {
+      en: `High-intensity CoD L/R asymmetry ${Math.round(pct)}% (last 14d). Flag ≥ 15% (Bishop 2020). Footedness is context, not the threshold (Havanecz 2026 — plant-limb preference makes a modest lean normal).`,
+      is: `Háákefðar CoD vinstri/hægri ósamhverfa ${Math.round(pct)}% (síðustu 14d). Flagg ≥ 15% (Bishop 2020). Ríkjandi fótur er samhengi, ekki þröskuldur (Havanecz 2026 — plant-fótar val gerir hóflegan halla eðlilegan).`,
+    },
+  };
+}
 
 /** Running bilateral asymmetry rising above the player's own norm. */
 function runningAsymmetryContributor(z: number | null, pct: number | null): SignalContributor | null {
@@ -233,6 +264,7 @@ export function computeRobustnessWatch(input: RobustnessWatchInput): RobustnessW
   // Merge the signalPack contributors with the new #5 contributors, re-rank.
   const extra = [
     runningAsymmetryContributor(input.mechanical.runningAsymmetryZ, input.mechanical.runningAsymmetryPct),
+    codAsymmetryContributor(input.mechanical.codAsymmetryHighPct ?? null, input.mechanical.dominantFoot ?? null),
     footstrikeContributor(input.mechanical.footstrikesZ),
     rhieContributor(input.mechanical.rhieBoutsZ, input.mechanical.hasLoadSpike),
     cmjTrendContributor(input.cmj),
@@ -270,6 +302,7 @@ export function computeRobustnessWatch(input: RobustnessWatchInput): RobustnessW
   const missingInputs: string[] = [];
   const track = (name: string, present: boolean) => (present ? presentInputs : missingInputs).push(name);
   track("running_asymmetry", input.mechanical.runningAsymmetryZ != null);
+  track("cod_asymmetry", input.mechanical.codAsymmetryHighPct != null);
   track("footstrikes", input.mechanical.footstrikesZ != null);
   track("rhie", input.mechanical.rhieBoutsZ != null);
   track("cmj_slope", input.cmj?.cmjSlopeZ != null);

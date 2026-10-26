@@ -58,4 +58,15 @@ describe("parseStatsbombSquadMatch — de-normalises per-90 to match totals", ()
     const { players: p2 } = parseStatsbombSquadMatch([{ Player: "DNP", Minutes: "0", Shots: "1" }]);
     expect(p2).toHaveLength(0);
   });
+
+  it("captures preferred foot (for footedness context on CoD asymmetry)", () => {
+    const { players } = parseStatsbombSquadMatch([
+      { Player: "R", Minutes: "90", "Preferred Foot": "Right Foot" },
+      { Player: "L", Minutes: "90", "Preferred Foot": "Left" },
+      { Player: "B", Minutes: "90", "Preferred Foot": "Both" },
+      { Player: "N", Minutes: "90" },
+    ]);
+    const by = Object.fromEntries(players.map((p) => [p.name, p.preferredFoot]));
+    expect(by).toEqual({ R: "right", L: "left", B: "both", N: null });
+  });
 });

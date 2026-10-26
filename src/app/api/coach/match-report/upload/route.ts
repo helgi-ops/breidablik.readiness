@@ -52,7 +52,7 @@ const bagNum = (m: Record<string, unknown>, ...keys: string[]): number | null =>
 };
 
 // A source-agnostic per-player row (from PDF or CSV) the rest of the route works on.
-type SrcPlayer = { name: string; teamName: string; minutes?: number | null; shots: number | null; goals: number | null; assists: number | null; xg: number | null; keyPasses: number | null; passes: number | null; metrics: Record<string, number | string | null> };
+type SrcPlayer = { name: string; teamName: string; minutes?: number | null; shots: number | null; goals: number | null; assists: number | null; xg: number | null; keyPasses: number | null; passes: number | null; metrics: Record<string, number | string | null>; preferredFoot?: "left" | "right" | "both" | null };
 
 export async function POST(req: NextRequest) {
   let form: FormData;
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
       singleTeam = true;
       const parsed = parseStatsbombSquadMatch(rows);
       meta = { home: ownName, away: "", date };
-      src = parsed.players.map((p) => ({ name: p.name, teamName: ownName, minutes: p.minutes, shots: p.shots, goals: p.goals, assists: p.assists, xg: p.xg, keyPasses: p.keyPasses, passes: p.passes, metrics: p.metrics }));
+      src = parsed.players.map((p) => ({ name: p.name, teamName: ownName, minutes: p.minutes, shots: p.shots, goals: p.goals, assists: p.assists, xg: p.xg, keyPasses: p.keyPasses, passes: p.passes, metrics: p.metrics, preferredFoot: p.preferredFoot }));
     } else {
       const isTeamSummary = headers.some((h) => /^team\s*name$/i.test(String(h))) && !headers.some((h) => /^player$/i.test(String(h)));
       return NextResponse.json({
@@ -139,10 +139,12 @@ export async function POST(req: NextRequest) {
   if (isPdf && pdfTeamLine) reconciliation = reconcile(ownSide === "home" ? pdfTeamLine.home : pdfTeamLine.away, pdfPlayers.filter((p) => p.team === ownSide));
 
   // Roster + remembered mappings (reuse the season-import approach).
-  const { data: squadRows } = await supabase.from("players").select("id, full_name, is_active").eq("team_id", auth.teamId);
+  const { data: squadRows } = await supabase.from("players").select("id, full_name, is_active, dominant_foot").eq("team_id", auth.teamId);
   const squad: SquadPlayer[] = (squadRows ?? [])
     .filter((p) => (p as { is_active: boolean | null }).is_active !== false)
     .map((p) => ({ id: (p as { id: string }).id, fullName: (p as { full_name: string | null }).full_name ?? "—" }));
+  const footByPlayerId = new Map<string, string | null>();
+  for (const p of (squadRows ?? []) as Array<{ id: string; dominant_foot: string | null }>) footByPlayerId.set(p.id, p.dominant_foot);
   const { data: mapRows } = await supabase.from("stat_player_mapping").select("source_player_ref, player_id").eq("team_id", auth.teamId);
   const remembered = new Map<string, string | null>();
   for (const m of (mapRows ?? []) as Array<{ source_player_ref: string; player_id: string | null }>) remembered.set(m.source_player_ref, m.player_id);
@@ -155,6 +157,15 @@ export async function POST(req: NextRequest) {
     const m = matchByInitialSurname(sp.name, squad);
     return { sp, sref, playerId: m.playerId, confidence: m.confidence, remembered: false, candidates: m.candidates };
   });
+
+  // Auto-prefill dominant foot from StatsBomb "Preferred Foot" for confidently-matched players only
+  // (remembered / exact), and only when it is still null — never overwrite a coach's choice. Best-effort.
+  const footFills = resolved
+    .filter((r) => r.playerId && (r.remembered || r.confidence === "exact") && r.sp.preferredFoot && !footByPlayerId.get(r.playerId))
+    .map((r) => ({ id: r.playerId as string, foot: r.sp.preferredFoot as string }));
+  if (footFills.length) {
+    await Promise.all(footFills.map((f) => supabase.from("players").update({ dominant_foot: f.foot }).eq("id", f.id).is("dominant_foot", null)));
+  }
 
   const nameOf = (id: string | null) => (id ? squad.find((s) => s.id === id)?.fullName ?? null : null);
   const summary = {

@@ -64,9 +64,22 @@ export type SquadMatchPlayer = {
   name: string;
   minutes: number | null;
   shots: number | null; goals: number | null; assists: number | null; xg: number | null; keyPasses: number | null; passes: number | null;
+  /** Dominant/preferred foot from the "Preferred Foot" column, if present. Advisory football data (for
+   *  footedness context on CoD asymmetry — Havanecz 2026), never a readiness signal. */
+  preferredFoot: "left" | "right" | "both" | null;
   /** Every numeric column, DE-NORMALISED to match totals, original header names. */
   metrics: Record<string, number>;
 };
+
+/** Map a StatsBomb "Preferred Foot" value to our enum. */
+function mapPreferredFoot(v: unknown): "left" | "right" | "both" | null {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (!s) return null;
+  if (s.includes("both") || s.includes("either")) return "both";
+  if (s.includes("left")) return "left";
+  if (s.includes("right")) return "right";
+  return null;
+}
 export type SquadMatchParse = { players: SquadMatchPlayer[] };
 
 const IGNORE = new Set(["player", "first name", "last name", "nickname", "preferred foot", "date of birth", "current team sbd id"]);
@@ -97,6 +110,7 @@ export function parseStatsbombSquadMatch(rows: Row[]): SquadMatchParse {
     };
     players.push({
       name, minutes,
+      preferredFoot: mapPreferredFoot(r["Preferred Foot"] ?? r["preferred foot"]),
       shots: pick("Shots", "Non Penalty Shots"),
       goals: pick("Goals & Penalty Goals", "Non Penalty Goals"),
       assists: pick("Assists"),

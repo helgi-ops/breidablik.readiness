@@ -87,6 +87,30 @@ describe("computeRobustnessWatch — contributors", () => {
     expect(c!.flagged).toBe(false);
   });
 
+  it("adds a flagged CoD-asymmetry contributor at >=15% (Bishop) with footedness context", () => {
+    const r = computeRobustnessWatch(base({
+      injury: injury("MODERATE", "high"),
+      mechanical: { runningAsymmetryZ: null, runningAsymmetryPct: null, footstrikesZ: null, rhieBoutsZ: null, hasLoadSpike: false, codAsymmetryHighPct: 22, dominantFoot: "right" },
+    }));
+    const c = r.contributors.find((x) => x.key === "cod_asymmetry");
+    expect(c).toBeTruthy();
+    expect(c!.flagged).toBe(true);
+    expect(c!.detail.en).toMatch(/Havanecz/);
+    expect(r.presentInputs).toContain("cod_asymmetry");
+  });
+
+  it("CoD asymmetry below 15% is present but not flagged; omitted entirely when null", () => {
+    const low = computeRobustnessWatch(base({
+      mechanical: { runningAsymmetryZ: null, runningAsymmetryPct: null, footstrikesZ: null, rhieBoutsZ: null, hasLoadSpike: false, codAsymmetryHighPct: 8, dominantFoot: null },
+    }));
+    expect(low.contributors.find((x) => x.key === "cod_asymmetry")!.flagged).toBe(false);
+    const none = computeRobustnessWatch(base({
+      mechanical: { runningAsymmetryZ: null, runningAsymmetryPct: null, footstrikesZ: null, rhieBoutsZ: null, hasLoadSpike: false },
+    }));
+    expect(none.contributors.some((x) => x.key === "cod_asymmetry")).toBe(false);
+    expect(none.presentInputs).not.toContain("cod_asymmetry");
+  });
+
   it("surfaces fatigueType only when the CMJ reads fatigued", () => {
     const cmjDown: CmjFatigueRead = {
       hasData: true, cmjSlopeZ: -1.4, latestZ: -1.2, cmjFatigued: true, fatigueType: "peripheral",

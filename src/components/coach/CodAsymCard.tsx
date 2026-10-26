@@ -26,6 +26,7 @@ type TierStats = {
   flag: Flag;
 };
 
+type Foot = "left" | "right" | "both";
 type CodResponse = {
   ok: boolean;
   windowDays?: number;
@@ -33,6 +34,8 @@ type CodResponse = {
   overall?: TierStats;
   tiers?: { low: TierStats; medium: TierStats; high: TierStats };
   thresholds?: { watchPct: number; concernPct: number; highPct: number };
+  dominantFoot?: Foot | null;
+  context?: { favoredSideHigh?: "left" | "right" | "balanced"; note?: { en: string; is: string } };
   error?: string;
 };
 
@@ -120,28 +123,41 @@ export default function CoDAsymmetryCard({
 }) {
   const [data, setData] = React.useState<CodResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [savingFoot, setSavingFoot] = React.useState(false);
+
+  const token = React.useCallback(async () => {
+    const sb = getSupabaseClient();
+    const { data: sessionData } = await sb.auth.getSession();
+    return sessionData?.session?.access_token ?? null;
+  }, []);
+
+  const load = React.useCallback(async () => {
+    const t = await token();
+    if (!t) return;
+    const res = await fetch(`/api/coach/player/${playerId}/cod-asymmetry`, { headers: { Authorization: `Bearer ${t}` } });
+    if (!res.ok) return;
+    setData((await res.json()) as CodResponse);
+  }, [playerId, token]);
 
   React.useEffect(() => {
     let alive = true;
-    (async () => {
-      setLoading(true);
-      try {
-        const sb = getSupabaseClient();
-        const { data: sessionData } = await sb.auth.getSession();
-        const token = sessionData?.session?.access_token;
-        if (!token) return;
-        const res = await fetch(`/api/coach/player/${playerId}/cod-asymmetry`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) return;
-        const json = (await res.json()) as CodResponse;
-        if (alive) setData(json);
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
+    (async () => { setLoading(true); try { if (alive) await load(); } finally { if (alive) setLoading(false); } })();
     return () => { alive = false; };
-  }, [playerId]);
+  }, [load]);
+
+  const saveFoot = React.useCallback(async (foot: Foot | null) => {
+    const t = await token();
+    if (!t) return;
+    setSavingFoot(true);
+    try {
+      await fetch(`/api/coach/player/${playerId}/cod-asymmetry`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+        body: JSON.stringify({ dominantFoot: foot }),
+      });
+      await load();
+    } finally { setSavingFoot(false); }
+  }, [playerId, token, load]);
 
   if (loading) {
     return (
@@ -182,6 +198,25 @@ export default function CoDAsymmetryCard({
           <div className="mt-0.5 text-[10.5px] text-slate-500">
             Bishop 2020 thresholds: {data.thresholds?.watchPct}% watch · {data.thresholds?.concernPct}% concern · {data.thresholds?.highPct}% high. {data.sessionsObserved ?? 0} sessions observed.
           </div>
+          {/* Dominant foot — footedness context for the asymmetry (Havanecz 2026). Coach-set; null = not set. */}
+          <div className="mt-1.5 flex items-center gap-1.5 text-[10.5px] text-slate-500">
+            <span>Dominant foot:</span>
+            {(["left", "right", "both"] as Foot[]).map((f) => (
+              <button
+                key={f}
+                type="button"
+                disabled={savingFoot}
+                onClick={() => saveFoot(f)}
+                className={`rounded-full border px-2 py-0.5 font-semibold capitalize transition-colors disabled:opacity-50 ${data.dominantFoot === f ? "border-[#2740e6] bg-[#2740e6]/10 text-[#2740e6]" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}
+              >
+                {f === "left" ? "L" : f === "right" ? "R" : "Both"}
+              </button>
+            ))}
+            {data.dominantFoot && (
+              <button type="button" disabled={savingFoot} onClick={() => saveFoot(null)} className="text-slate-400 underline hover:text-slate-600 disabled:opacity-50">clear</button>
+            )}
+            {!data.dominantFoot && <span className="text-slate-400">not set</span>}
+          </div>
         </div>
         <span
           className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${FLAG_PILL[overall.flag]}`}
@@ -199,6 +234,12 @@ export default function CoDAsymmetryCard({
         <TierRow label="Medium intensity" stats={tiers.medium} />
         <TierRow label="Low intensity" stats={tiers.low} />
       </div>
+
+      {data.context?.note?.en && (
+        <p className="mt-2.5 rounded-md border border-[#7a5cc4]/20 bg-[#7a5cc4]/5 px-2.5 py-1.5 text-[10.5px] leading-snug text-slate-600">
+          {data.context.note.en}
+        </p>
+      )}
 
       <p className="mt-2.5 text-[10.5px] leading-snug text-slate-500">
         High-intensity L/R asymmetry &gt; 15% is a commonly-flagged imbalance associated

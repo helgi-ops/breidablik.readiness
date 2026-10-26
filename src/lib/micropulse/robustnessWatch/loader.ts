@@ -20,6 +20,7 @@ import { loadCmjFatigue } from "@/lib/micropulse/cmjFatigue/loader";
 import { computePlayerTrend, type DailyZ } from "@/lib/micropulse/playerTrendForecast";
 import { buildInjuryRiskDecision, type InjuryRiskInput } from "@/lib/micropulse/injuryRisk";
 import type { Voice } from "@/lib/micropulse/signalPack";
+import { asymPct, type DominantFoot } from "@/lib/micropulse/codAsymmetry";
 
 const LOAD_DAYS = 35;      // EWMA runway for the internal-load ACWR
 const NORM_DAYS = 28;      // personal-norm window for the mechanical signals
@@ -54,6 +55,8 @@ type LoadRow = {
   running_imbalance: number | null;
   footstrikes: number | null;
   rhie_bouts: number | null;
+  ima_cod_left_high: number | null;
+  ima_cod_right_high: number | null;
 };
 
 /** Per-day "asymmetry" where HIGHER = worse, preferring imbalance > deviation > (100 - symmetry). */
@@ -93,7 +96,7 @@ export async function loadRobustnessWatch(
       .lte("decision_date", asOf)
       .order("decision_date", { ascending: true }),
     sb.from("player_external_load_daily")
-      .select("date, decelerations, high_speed_distance, running_symmetry, running_deviation, running_imbalance, footstrikes, rhie_bouts")
+      .select("date, decelerations, high_speed_distance, running_symmetry, running_deviation, running_imbalance, footstrikes, rhie_bouts, ima_cod_left_high, ima_cod_right_high")
       .eq("player_id", playerId)
       .in("source", ["catapult", "manual", "titan"])
       .gte("date", loadSince)
@@ -123,6 +126,8 @@ export async function loadRobustnessWatch(
     running_imbalance: num(r.running_imbalance),
     footstrikes: num(r.footstrikes),
     rhie_bouts: num(r.rhie_bouts),
+    ima_cod_left_high: num(r.ima_cod_left_high),
+    ima_cod_right_high: num(r.ima_cod_right_high),
   })) as LoadRow[];
 
   const inNorm = loadRows.filter((r) => r.date >= normSince);
@@ -154,6 +159,19 @@ export async function loadRobustnessWatch(
   const foot = personalZ(footVals);
   const rhieVals = inNorm.map((r) => r.rhie_bouts).filter((v): v is number => v != null);
   const rhie = personalZ(rhieVals);
+
+  // High-intensity CoD L/R asymmetry over the last 14 days (Bishop 2020) — an absolute %, not a
+  // personal-z. Plus the player's dominant foot for the footedness-aware contributor note (Havanecz 2026).
+  const codSince = addISO(asOf, -13);
+  const codHigh = loadRows.filter((r) => r.date >= codSince).reduce(
+    (a, r) => { a.l += r.ima_cod_left_high ?? 0; a.r += r.ima_cod_right_high ?? 0; return a; },
+    { l: 0, r: 0 },
+  );
+  const codAsymmetryHighPct = asymPct(codHigh.l, codHigh.r);
+  const { data: footRow } = await sb.from("players").select("dominant_foot").eq("id", playerId).maybeSingle();
+  const dominantFoot = (["left", "right", "both"].includes(String(footRow?.dominant_foot))
+    ? (footRow!.dominant_foot as DominantFoot)
+    : null);
 
   // Personal sleep/soreness z for the injury input — reuse the signal pack's sleep
   // read (its cmj/sleep contributors already encode the personal-norm flag). We map
@@ -187,6 +205,8 @@ export async function loadRobustnessWatch(
       footstrikesZ: foot.z,
       rhieBoutsZ: rhie.z,
       hasLoadSpike,
+      codAsymmetryHighPct,
+      dominantFoot,
     },
     coverage: { loadDays, cmjTests: cmj.nTests },
   });

@@ -27,16 +27,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { asymPct, codFlag, codFootednessNote, favoredSide, COD_WATCH_PCT as WATCH_PCT, COD_CONCERN_PCT as CONCERN_PCT, COD_HIGH_PCT as HIGH_PCT, type DominantFoot } from "@/lib/micropulse/codAsymmetry";
 
 export const runtime = "nodejs";
-
-// Bishop 2020 thresholds for L/R asymmetry %.
-// 9% = watchful · 15% = concern · 18% = high concern.
-const WATCH_PCT = 9;
-const CONCERN_PCT = 15;
-const HIGH_PCT = 18;
-
-type Flag = "ok" | "watch" | "concern" | "high" | "no_data";
 
 
 async function getCoachTeam(req: NextRequest) {
@@ -61,27 +54,13 @@ async function getCoachTeam(req: NextRequest) {
   return { userId, teamId } as const;
 }
 
-function asymPct(left: number, right: number): number | null {
-  const max = Math.max(left, right);
-  if (max <= 0) return null;
-  return (Math.abs(left - right) / max) * 100;
-}
-
-function flagFor(pct: number | null): Flag {
-  if (pct == null) return "no_data";
-  if (pct >= HIGH_PCT) return "high";
-  if (pct >= CONCERN_PCT) return "concern";
-  if (pct >= WATCH_PCT) return "watch";
-  return "ok";
-}
-
 function tierStats(left: number, right: number) {
   const pct = asymPct(left, right);
   return {
     left: Math.round(left),
     right: Math.round(right),
     asymPct: pct == null ? null : Number(pct.toFixed(1)),
-    flag: flagFor(pct),
+    flag: codFlag(pct),
   };
 }
 
@@ -104,12 +83,15 @@ export async function GET(
   // Verify player belongs to coach's team.
   const { data: playerCheck } = await supabase
     .from("players")
-    .select("id, team_id")
+    .select("id, team_id, dominant_foot")
     .eq("id", playerId)
     .maybeSingle();
   if (!playerCheck || playerCheck.team_id !== auth.teamId) {
     return NextResponse.json({ error: "Player not in your team" }, { status: 403 });
   }
+  const dominantFoot = (["left", "right", "both"].includes(String(playerCheck.dominant_foot))
+    ? (playerCheck.dominant_foot as DominantFoot)
+    : null);
 
   const todayIso = new Date().toISOString().slice(0, 10);
   const startIso = (() => {
@@ -179,7 +161,43 @@ export async function GET(
       medium: tierStats(totals.lMed, totals.rMed),
       high: tierStats(totals.lHigh, totals.rHigh),
     },
+    // Footedness context (Havanecz 2026) — dominant foot + favoured HIGH-intensity side + an interpretive
+    // note. Interpretation only; Bishop magnitude stays the flag.
+    dominantFoot,
+    context: {
+      favoredSideHigh: favoredSide(totals.lHigh, totals.rHigh),
+      note: codFootednessNote(dominantFoot, totals.lHigh, totals.rHigh),
+    },
     /** Bishop 2020 thresholds — exposed so the UI can label its scale. */
     thresholds: { watchPct: WATCH_PCT, concernPct: CONCERN_PCT, highPct: HIGH_PCT },
   });
+}
+
+/** Coach sets the player's dominant foot (the footedness context for the CoD-asymmetry read). */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id: playerId } = await params;
+  if (!playerId) return NextResponse.json({ error: "Missing player id" }, { status: 400 });
+
+  const auth = await getCoachTeam(req);
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
+  const body = (await req.json().catch(() => ({}))) as { dominantFoot?: unknown };
+  const val = body.dominantFoot;
+  const dominantFoot = val === null || val === "" ? null
+    : (["left", "right", "both"].includes(String(val)) ? String(val) : undefined);
+  if (dominantFoot === undefined) {
+    return NextResponse.json({ error: "dominantFoot must be left | right | both | null" }, { status: 400 });
+  }
+
+  const supabase = getSupabase();
+  const { data: playerCheck } = await supabase.from("players").select("id, team_id").eq("id", playerId).maybeSingle();
+  if (!playerCheck || playerCheck.team_id !== auth.teamId) {
+    return NextResponse.json({ error: "Player not in your team" }, { status: 403 });
+  }
+  const { error } = await supabase.from("players").update({ dominant_foot: dominantFoot }).eq("id", playerId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, playerId, dominantFoot });
 }
