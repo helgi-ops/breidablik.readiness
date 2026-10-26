@@ -216,4 +216,11 @@ export type WeeklyLoadResult = {
     daysUsed: number;
     metric: WeeklyLoadMetricKey; // the primary metric it was computed on
   } | null;
+  /** The research-shaped periodization-PLAN weekly target, shown as a mode-independent REFERENCE even when
+   *  the active target mode is not `periodization_plan` (so the season plan is never invisible). Null in
+   *  plan mode (it's already the active target) or when there's no plan week / match unit. */
+  planReference?: {
+    planSource: { phase: "preseason" | "inseason" | "offseason"; label: { en: string; is: string }; weekIndex?: number; totalWeeks?: number; multipleOfMatch?: number | null } | null;
+    byMetric: Partial<Record<WeeklyLoadMetricKey, number | null>>;
+  } | null;
 };

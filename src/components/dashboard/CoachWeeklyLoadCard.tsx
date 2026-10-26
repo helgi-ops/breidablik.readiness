@@ -483,6 +483,33 @@ export default function CoachWeeklyLoadCard({
         </div>
       </div>
 
+      {/* Season-plan REFERENCE (option B) — the research-shaped periodization-plan week target, shown in
+          every mode so the plan is never invisible. Does NOT change what the active mode measures against. */}
+      {data.planReference && (() => {
+        const pr = data.planReference!;
+        const planVal = pr.byMetric[primaryKey];
+        if (planVal == null) return null;
+        const lab = pr.planSource ? (lang === "IS" ? pr.planSource.label.is : pr.planSource.label.en) : null;
+        const cur = primaryMetric?.currentTotal ?? 0;
+        const pctOfPlan = planVal > 0 ? Math.round((cur / planVal) * 100) : null;
+        const unit = WEEKLY_LOAD_LABELS[primaryKey]?.unit ?? "";
+        return (
+          <div className="mx-4 mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-[#7a5cc4]/25 bg-[#7a5cc4]/5 px-3 py-2 text-[11px]">
+            <span className="font-semibold text-[#55389E]">{lang === "IS" ? "Áætlun (tímabilsskipulag)" : "Season plan"}</span>
+            {lab && <span className="text-slate-500">· {lab}</span>}
+            <span className="ml-auto text-slate-700">
+              {lang === "IS" ? "vikumark" : "week target"} ≈ <b className="tabular-nums">{Math.round(planVal).toLocaleString("en-US")}{unit}</b>
+              {pctOfPlan != null && <span className="text-slate-500"> · {pctOfPlan}% {lang === "IS" ? "náð" : "of plan"}</span>}
+            </span>
+            <span className="w-full text-[10px] leading-snug text-slate-400">
+              {lang === "IS"
+                ? "Viðmið úr rannsóknar-mótuðu tímabilsskipulagi (per-KPI tröppun, leikvikur, fasi). Baseline-markið að ofan er óbreytt. Veldu „Áætlun“-ham til að mæla vikuna beint við þetta."
+                : "Reference from the research-shaped season plan (per-KPI taper, game weeks, phase). The active target above is unchanged. Switch to “Season plan” mode to measure the week against it directly."}
+            </span>
+          </div>
+        );
+      })()}
+
       {/* Warning: match_demand mode but no matches sampled */}
       {mode === "match_demand" && (targetMeta?.matchesSampled ?? 0) === 0 && (
         <div className="mx-4 mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">

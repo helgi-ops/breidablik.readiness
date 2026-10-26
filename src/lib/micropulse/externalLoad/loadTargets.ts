@@ -503,6 +503,54 @@ async function computeMatchDemandAverage(args: {
 
 // ─── Main: compute target week total ───────────────────────────────────────
 
+/**
+ * The periodization-PLAN weekly per-KPI target for the current week — computed on its own so it can be
+ * shown as a mode-independent REFERENCE on the Weekly Load card (option B: the research-shaped plan is
+ * never invisible), not only when `periodization_plan` is the active mode. Mirrors the hub (saved season
+ * window + meso tuning). Returns empty/null when there's no match unit / plan week for today.
+ */
+export async function computePlanTarget(
+  teamId: string,
+  referenceDate: string,
+  activeMetrics: readonly WeeklyLoadMetricKey[],
+  meso = 1,
+): Promise<{ target_week_total: Partial<Record<WeeklyLoadMetricKey, number | null>>; plan_source: TargetComputation["plan_source"] }> {
+  const sb = getSupabaseAdmin();
+  const { data: saved } = await sb
+    .from("season_plans").select("overrides")
+    .eq("team_id", teamId).eq("season_year", new Date(`${referenceDate}T00:00:00Z`).getUTCFullYear())
+    .maybeSingle();
+  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; nextPreseasonStart?: string; offseasonWeeks?: number; preseasonWeek1Mult?: number; preseasonSessions?: number; stepPct?: number; deloadCadence?: number; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string> } } | null)?.overrides ?? {};
+  const plan = await loadPeriodization(sb, {
+    teamId,
+    preseasonStart: ov.preseasonStart ?? null, seasonEnd: ov.seasonEnd ?? null,
+    nextPreseasonStart: ov.nextPreseasonStart ?? null, offseasonWeeks: ov.offseasonWeeks ?? null,
+    deloadCadence: ov.deloadCadence ?? null, blockWeeksByStart: ov.blockWeeks ?? null, deloadByStart: ov.blockDeload ?? null,
+  });
+  const d = new Date(`${referenceDate}T00:00:00Z`);
+  const monday = new Date(d); monday.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  const sunday = new Date(monday); sunday.setUTCDate(monday.getUTCDate() + 6);
+  const wkStart = monday.toISOString().slice(0, 10), wkEnd = sunday.toISOString().slice(0, 10);
+  const matchesThisWeek = plan.fixtures.filter((f) => f >= wkStart && f <= wkEnd).length;
+
+  const pt = planWeeklyTarget({
+    phases: plan.phases, blocks: plan.blocks, matchUnits: plan.players.map((p) => p.matchUnit),
+    today: referenceDate, matchesThisWeek,
+    week1MatchMultiple: ov.preseasonWeek1Mult ?? undefined,
+    sessionsPerWeek: ov.preseasonSessions ?? undefined,
+    stepPct: ov.stepPct ?? undefined,
+  });
+  const target: Partial<Record<WeeklyLoadMetricKey, number | null>> = {};
+  for (const key of activeMetrics) {
+    const v = pt?.byKpi[key];
+    target[key] = v != null && Number.isFinite(v) ? v * meso : null;
+  }
+  return {
+    target_week_total: target,
+    plan_source: pt ? { phase: pt.phase, label: pt.label, weekIndex: pt.weekIndex, totalWeeks: pt.totalWeeks, multipleOfMatch: pt.multipleOfMatch } : null,
+  };
+}
+
 export async function computeWeeklyTarget(args: {
   teamId: string;
   referenceDate: string; // typically today, used to bound match-demand lookback
@@ -551,47 +599,15 @@ export async function computeWeeklyTarget(args: {
   // Periodization Hub is what the live week is measured against. Falls back to baseline when there's no
   // match unit / plan week for today.
   if (cfg.mode === "periodization_plan") {
-    const sb = getSupabaseAdmin();
-    // Mirror the hub: the coach's saved season window (season_plans.overrides) bounds the phases, so the
-    // off-season / next pre-season line up with what the hub shows.
-    const { data: saved } = await sb
-      .from("season_plans").select("overrides")
-      .eq("team_id", teamId).eq("season_year", new Date(`${referenceDate}T00:00:00Z`).getUTCFullYear())
-      .maybeSingle();
-    const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; nextPreseasonStart?: string; offseasonWeeks?: number; preseasonWeek1Mult?: number; preseasonSessions?: number; stepPct?: number; deloadCadence?: number; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string> } } | null)?.overrides ?? {};
-    const plan = await loadPeriodization(sb, {
-      teamId,
-      preseasonStart: ov.preseasonStart ?? null, seasonEnd: ov.seasonEnd ?? null,
-      nextPreseasonStart: ov.nextPreseasonStart ?? null, offseasonWeeks: ov.offseasonWeeks ?? null,
-      deloadCadence: ov.deloadCadence ?? null, blockWeeksByStart: ov.blockWeeks ?? null, deloadByStart: ov.blockDeload ?? null,
-    });
-    // Fixtures in the Mon–Sun week containing referenceDate → in-season match count.
-    const d = new Date(`${referenceDate}T00:00:00Z`);
-    const monday = new Date(d); monday.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-    const sunday = new Date(monday); sunday.setUTCDate(monday.getUTCDate() + 6);
-    const wkStart = monday.toISOString().slice(0, 10), wkEnd = sunday.toISOString().slice(0, 10);
-    const matchesThisWeek = plan.fixtures.filter((f) => f >= wkStart && f <= wkEnd).length;
-
-    const pt = planWeeklyTarget({
-      phases: plan.phases, blocks: plan.blocks, matchUnits: plan.players.map((p) => p.matchUnit),
-      today: referenceDate, matchesThisWeek,
-      // The coach's saved meso/pre-season tuning (defaults when unset), so plan mode matches the hub.
-      week1MatchMultiple: ov.preseasonWeek1Mult ?? undefined,
-      sessionsPerWeek: ov.preseasonSessions ?? undefined,
-      stepPct: ov.stepPct ?? undefined,
-    });
-    const target: Partial<Record<WeeklyLoadMetricKey, number | null>> = {};
-    for (const key of activeMetrics) {
-      const v = pt?.byKpi[key];
-      target[key] = v != null && Number.isFinite(v) ? v * meso : null;
-    }
+    // Mirror the hub: the coach's saved season window + meso tuning (inside computePlanTarget).
+    const { target_week_total, plan_source } = await computePlanTarget(teamId, referenceDate, activeMetrics, meso);
     return {
       mode: "periodization_plan",
       corridor_pct: cfg.corridor_pct,
       mesocycle_phase: cfg.mesocycle_phase,
       mesocycle_multiplier: meso,
-      target_week_total: target,
-      plan_source: pt ? { phase: pt.phase, label: pt.label, weekIndex: pt.weekIndex, totalWeeks: pt.totalWeeks, multipleOfMatch: pt.multipleOfMatch } : null,
+      target_week_total,
+      plan_source,
       indoor,
     };
   }

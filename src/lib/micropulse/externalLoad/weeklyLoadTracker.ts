@@ -15,6 +15,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
   computeWeeklyTarget,
+  computePlanTarget,
   findTeamMatchDates,
   getTeamIndoorMode,
   getTeamLoadTargetConfig,
@@ -382,6 +383,19 @@ export async function computeWeeklyLoad(args: {
     targetComp = null;
   }
 
+  // 8b. The periodization-PLAN target as a mode-independent REFERENCE (option B) — so the research-shaped
+  // season plan is visible on the card even in baseline/match_demand/coach_weekly mode, WITHOUT changing
+  // what the active mode measures against. Null in plan mode (already the active target) or on any failure.
+  // Team-level only (the plan is a team target); skip for a single-player view.
+  let planReference: WeeklyLoadResult["planReference"] = null;
+  if (!playerId && targetComp?.mode !== "periodization_plan") {
+    try {
+      const { target_week_total, plan_source } = await computePlanTarget(teamId, today, activeMetrics);
+      const hasAny = plan_source != null || Object.values(target_week_total).some((v) => v != null);
+      if (hasAny) planReference = { planSource: plan_source ?? null, byMetric: target_week_total };
+    } catch { planReference = null; }
+  }
+
   // 9. Build metric summaries
   const metricSummaries = activeMetrics.map((key) => {
     const current = currentCumulative[key] ?? 0;
@@ -437,6 +451,7 @@ export async function computeWeeklyLoad(args: {
     indoor,
     activeMetrics,
     monotony,
+    planReference,
     target: targetComp
       ? {
           mode: targetComp.mode,
