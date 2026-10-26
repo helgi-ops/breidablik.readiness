@@ -996,6 +996,17 @@ export default function PeriodizationHubPage() {
     }, is ? "IS" : "EN");
   }
 
+  // Per-tab "flow" line — makes the single-source propagation visible: what this tab reads, and where an
+  // edit here flows (season_plans / week_plans / fixtures re-derive the other tabs). Explainability L1.
+  const flowNote = (reads: string, flows: string) => (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-1.5 text-[11px] text-slate-500">
+      <span className="font-mono text-[9px] uppercase tracking-wide text-slate-400">{is ? "flæði" : "flow"}</span>
+      <span><b className="font-semibold text-slate-500">{is ? "Lesið frá" : "Reads"}:</b> {reads}</span>
+      <span className="text-slate-300">·</span>
+      <span><b className="font-semibold text-[#2740e6]">{is ? "Breytingar hér →" : "Edits here →"}</b> {flows}</span>
+    </div>
+  );
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -1063,22 +1074,43 @@ export default function PeriodizationHubPage() {
             </div>
           )}
 
-          {/* TABS — the periodisation spine (macro → meso → micro), then the supporting inputs */}
-          <div className="flex flex-wrap gap-1 border-b border-slate-200">
-            {([
+          {/* TABS — grouped: the PLAN (the macro→meso→micro spine, in order) and the INPUTS that feed it.
+              The grouping + the workflow strip below make the order and the single-source propagation legible. */}
+          {(() => {
+            const planTabs = [
               { key: "season", en: "Macro Cycle", is: "Makró-lota", subEn: "the season", subIs: "tímabilið" },
               { key: "preseason", en: "Pre-season", is: "Undirbúningur", subEn: "the whole pre-season", subIs: "allt undirbúningstímabilið" },
               { key: "plan", en: "Meso Cycle", is: "Mesó-lota", subEn: "the 4–6 week block", subIs: "4–6 vikna lotan" },
               { key: "micro", en: "Micro Cycle", is: "Míkró-lota", subEn: "the week", subIs: "vikan" },
-              { key: "testing", en: "Testing", is: "Próf", subEn: "when to test", subIs: "hvenær á að mæla" },
+            ] as const;
+            const inputTabs = [
               { key: "demands", en: "Demands", is: "Kröfur", subEn: "baselines & match unit", subIs: "grunnlínur & leikviðmið" },
               { key: "players", en: "Players", is: "Leikmenn", subEn: "individualisation", subIs: "einstaklingsmiðun" },
-            ] as const).map((t) => (
+              { key: "testing", en: "Testing", is: "Próf", subEn: "when to test", subIs: "hvenær á að mæla" },
+            ] as const;
+            const tabBtn = (t: { key: typeof tab; en: string; is: string; subEn: string; subIs: string }) => (
               <button key={t.key} onClick={() => setTab(t.key)} className={`-mb-px rounded-t-lg border-b-2 px-3 py-1.5 text-left ${tab === t.key ? "border-[#2740e6]" : "border-transparent hover:bg-slate-50"}`}>
                 <span className={`block text-[12px] font-semibold ${tab === t.key ? "text-[#2740e6]" : "text-slate-600"}`}>{is ? t.is : t.en}</span>
                 <span className="block text-[9px] text-slate-400">{is ? t.subIs : t.subEn}</span>
               </button>
-            ))}
+            );
+            return (
+              <div className="flex flex-wrap items-stretch gap-1 border-b border-slate-200">
+                <span className="self-end pb-2 pr-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-[#2740e6]/70">{is ? "Áætlun" : "Plan"}</span>
+                {planTabs.map(tabBtn)}
+                <span className="mx-1.5 my-1 w-px self-stretch bg-slate-200" aria-hidden="true"></span>
+                <span className="self-end pb-2 pr-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-slate-400">{is ? "Inntak" : "Inputs"}</span>
+                {inputTabs.map(tabBtn)}
+              </div>
+            );
+          })()}
+
+          {/* Workflow + propagation strip — the order the coach works in, and the promise that one edit flows. */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-[11.5px] leading-relaxed text-slate-500">
+            <span className="font-semibold text-slate-600">{is ? "Vinnuferli" : "Workflow"}:</span>{" "}
+            <b className="text-[#2740e6]">1 {is ? "Kröfur" : "Demands"}</b> <span className="text-slate-400">({is ? "grunnur" : "foundation"})</span> → <b className="text-[#2740e6]">2 {is ? "Makró" : "Macro"}</b> → <b className="text-[#7a5cc4]">3 {is ? "Undirb. / Mesó" : "Pre-season / Meso"}</b> → <b className="text-[#1c7a4a]">4 {is ? "Míkró" : "Micro"}</b>
+            <span className="text-slate-400"> · {is ? "Leikmenn + Próf næra öll þrepin." : "Players + Testing feed every step."}</span>
+            <span className="mt-0.5 block text-[10.5px] text-slate-400">{is ? "Breyting á einum stað flæðir sjálfkrafa í hinar — ein heimild (season_plans · week_plans · leikir)." : "A change in one place flows to the others automatically — one source (season_plans · week_plans · fixtures)."}</span>
           </div>
 
           {/* SEASON tab */}
@@ -1224,6 +1256,7 @@ export default function PeriodizationHubPage() {
             );
 
             return (<div className="space-y-4">
+          {flowNote(is ? "Leikir · Kröfur (leik-eining)" : "Fixtures · Demands (match unit)", is ? "Mesó · Míkró · Undirbúningur (gegnum season_plans)" : "Meso · Micro · Pre-season (via season_plans)")}
 
           {/* 1 — SEASON FRAME: the controls come first (Macro IS the control; everything below re-flows). */}
           <section className={card}>
@@ -1688,6 +1721,7 @@ export default function PeriodizationHubPage() {
             const emphOfBlock = (b: { start: string }) => preseasonBlockForWeeksOut(weeksBetween(b.start, preEndIso));
             const seqTotal = preBlocks.reduce((s, b) => s + weeksBetween(b.start, blockEndExcl(b)), 0);
             return (<div className="space-y-4">
+          {flowNote(is ? "Makró-fasar · leikir · Kröfur" : "Macro phases · fixtures · Demands", is ? "Vikuuppsetning (week_plans) · Mesó · PDF" : "Week Setup (week_plans) · Meso · PDF")}
 
           {/* Pre-season SETUP — one card: controls, the meso-cycle sequence (built backwards from the opener),
               and the research "why" behind a toggle (explainability: jargon off the primary view). */}
@@ -1976,6 +2010,7 @@ export default function PeriodizationHubPage() {
             const tableRows = [...(plan.teamBaseline && plan.teamBaseline.avg.sessions > 0 ? [plan.teamBaseline] : []), ...plan.positionBaselines.filter((b) => b.avg.sessions > 0)];
 
             return (<div className="space-y-4">
+          {flowNote(is ? "Leikgögn · grunnlínur · próf" : "Match data · baselines · tests", is ? "leik-einingin sem ÖLL mörk skalast af (Makró/Mesó/Míkró/Leikmenn)" : "the match unit ALL targets scale from (Macro/Meso/Micro/Players)")}
 
           {/* 1 — POSITION PICKER */}
           <section className="flex flex-wrap items-center gap-x-4 gap-y-2.5" aria-label={is ? "Staða" : "Position"}>
@@ -2217,6 +2252,7 @@ export default function PeriodizationHubPage() {
             const calStart = mondayOf(blkStart);
 
             return (<div className="space-y-4">
+          {flowNote(is ? "Makró-fasar · leikir · álagsferill" : "Macro phases · fixtures · load curve", is ? "Vikuuppsetning (week_plans) · Today · PDF" : "Week Setup (week_plans) · Today · PDF")}
 
           {/* 1 — WHICH BLOCK: navigator + the season strip (choose first, then plan) */}
           <section className={card}>
@@ -2586,6 +2622,8 @@ export default function PeriodizationHubPage() {
 
           {/* MICRO CYCLE tab — the existing Week Setup, mounted in-place (one macro→meso→micro flow) */}
           {tab === "micro" && (
+            <div className="space-y-4">
+            {flowNote(is ? "Mesó (valin lota) · leikir" : "Meso (selected block) · fixtures", is ? "Today (leikmaður) · Mesó les til baka · PDF" : "Today (player) · Meso reads back · PDF")}
             <WeekSetupView
               embedded
               initialWeekStart={preseasonJumpWeek}
@@ -2607,6 +2645,7 @@ export default function PeriodizationHubPage() {
                 };
               }}
             />
+            </div>
           )}
 
           {/* TESTING tab — pin performance tests to real dates. Recommended windows (block boundaries)
@@ -2673,6 +2712,7 @@ export default function PeriodizationHubPage() {
 
             return (
               <div className="space-y-4">
+                {flowNote(is ? "Undirbúningslengd · tæki (GPS/VALD)" : "Pre-season length · hardware (GPS/VALD)", is ? "prófadagskrá; úrslit → Kröfur / grunnlínur" : "test schedule; results → Demands / baselines")}
 
                 {/* 1 — VERDICT + four facts */}
                 <section className="space-y-3">
@@ -2987,6 +3027,7 @@ export default function PeriodizationHubPage() {
             };
 
             return (<div className="space-y-4">
+          {flowNote(is ? "Mesó-lota · leik-eining leikmanns" : "Meso block · player match unit", is ? "allar undirbúningsvikur (season_plans) · PDF" : "every pre-season week (season_plans) · PDF")}
 
           {/* 1 — PLAYER BAR: pick once, everything below follows */}
           <section className={`${card} flex flex-wrap items-center gap-x-5 gap-y-3`} aria-label={is ? "Leikmaður" : "Player"}>
