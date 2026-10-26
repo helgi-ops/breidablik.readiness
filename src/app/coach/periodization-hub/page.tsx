@@ -3085,6 +3085,18 @@ export default function PeriodizationHubPage() {
                       {wt.topUp != null && wt.topUp > 0 && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">{is ? "Áfylling" : "Top-up"} +{wt.topUp}</span>}
                     </div>
                     <p className="mt-1 text-[11px] text-slate-600">{is ? wt.note.is : wt.note.en}</p>
+                    {/* Match-compensation (Casamichana 2022): a low-/no-minute player accumulates less weekly
+                        load — especially HSR/sprint — so prescribe a run-based top-up on MD/MD+1. Shown only
+                        when the gap is material (> ~15% of a match). Descriptive — not the readiness colour. */}
+                    {wt.phase === "inseason" && wt.topUp != null && player.matchUnit.load.typical != null && wt.topUp > 0.15 * player.matchUnit.load.typical && (
+                      <div className="mt-1.5 rounded-md border border-[#7a5cc4]/25 bg-[#7a5cc4]/5 px-2 py-1.5 text-[11px] text-slate-700">
+                        <span className="font-semibold text-[#55389E]">{is ? "Leik-bæting" : "Match-compensation"}</span>{" "}
+                        {is
+                          ? `≈ ${wt.topUp} PL hlaupa-áhersla á leikdag eða MD+1 — fáar/engar mínútur safna minna álagi (einkum háhraðahlaup/sprettum). Leik-eining leikmannsins er viðmiðið.`
+                          : `≈ ${wt.topUp} PL run-based on matchday or MD+1 — a low-/no-minute player accumulates less load (especially HSR/sprint). Anchored to the player's own match unit.`}
+                        <span className="text-slate-400"> (Casamichana 2022)</span>
+                      </div>
+                    )}
                     <p className="mt-1 text-[11px] text-slate-500">{wt.cite}</p>
                   </div>
                 </div>
