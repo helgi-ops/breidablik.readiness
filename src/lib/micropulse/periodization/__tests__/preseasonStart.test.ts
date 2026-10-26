@@ -36,10 +36,13 @@ describe("preseasonStartRamp", () => {
     expect(w1.byKpi.totalDistance).toBe(Math.round(10000 * 1.3)); // share = 1.0 for distance
     expect(w1.byKpi.velocityBand6).toBe(Math.round(300 * 1.3 * kpiTaperShare("velocityBand6")));
     expect(w1.byKpi.accelB23).toBe(Math.round(40 * 1.3 * kpiTaperShare("accelB23")));
-    // Per-KPI ordering: sprint accumulates a SMALLER ×match than acc/dec, which is smaller than distance.
-    expect(kpiTaperShare("velocityBand6")).toBeLessThan(kpiTaperShare("accelB23"));
-    expect(kpiTaperShare("accelB23")).toBeLessThan(kpiTaperShare("totalDistance"));
+    // Per-KPI ordering (T:M-calibrated): sprint < HSR < distance ≤ accel. Accel/decel COUNTS accumulate
+    // AT LEAST as much as distance over a week (training is accel-dense), so their share is ≥ 1.
+    expect(kpiTaperShare("velocityBand6")).toBeLessThan(kpiTaperShare("velocityBand5")); // sprint < HSR
+    expect(kpiTaperShare("velocityBand5")).toBeLessThan(kpiTaperShare("totalDistance")); // HSR < distance
     expect(kpiTaperShare("totalDistance")).toBeCloseTo(1, 5);
+    expect(kpiTaperShare("accelB23")).toBeGreaterThan(kpiTaperShare("totalDistance")); // accel ≥ distance (fixed inversion)
+    expect(kpiTaperShare("accelB23")).toBeGreaterThan(kpiTaperShare("decelB23"));       // accel ≥ decel
     // last week scales the same KPIs by the larger multiple (ramp still rises for every KPI)
     const wl = rows[rows.length - 1];
     expect(wl.byKpi.totalDistance!).toBeGreaterThan(w1.byKpi.totalDistance!);
@@ -58,13 +61,14 @@ describe("preseasonStartRamp", () => {
     expect(prog("accelB23")).toBeCloseTo(0.5, 1);                 // physiological (metabolic) — linear
     expect(prog("velocityBand6")).toBeCloseTo(Math.pow(0.5, 1.7), 1); // biomechanical — convex
     // The fix the research demands: deceleration (highest tissue load) ramps MORE conservatively than
-    // acceleration (metabolic), even though their within-week taper share is identical.
+    // acceleration (metabolic). prog() cancels the taper share, so this isolates the pathway curve.
     expect(prog("decelB23")).toBeLessThan(prog("accelB23"));
     expect(prog("velocityBand6")).toBeLessThan(prog("accelB23")); // sprint too
     expect(prog("velocityBand5")).toBeLessThan(prog("accelB23")); // HSR too
-    // Endpoints are shared — every KPI reaches the same destination by the final build week.
-    expect(mid.byKpi.decelB23!).toBeLessThan(mid.byKpi.accelB23!); // same match value → decel lower mid-ramp
-    expect(wl.byKpi.decelB23).toBe(wl.byKpi.accelB23);             // equal at the peak week
+    // Each KPI reaches its OWN destination by the final build week at the same ramp fraction (1); the
+    // pathway curve only changes the PATH. decel stays below accel throughout (convex curve + lower share).
+    expect(mid.byKpi.decelB23!).toBeLessThan(mid.byKpi.accelB23!);
+    expect(wl.byKpi.decelB23!).toBeLessThan(wl.byKpi.accelB23!); // accel share (1.05) > decel share (1.0)
   });
 
   it("carries an sRPE/AU weekly target when a match sRPE anchor is given", () => {

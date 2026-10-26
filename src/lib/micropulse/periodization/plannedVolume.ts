@@ -29,17 +29,24 @@ export function standardTrainingDays(matches: number): string[] {
   return ["MD-2", "MD-1"];                                           // 3 games → minimal training
 }
 
-/** Per-KPI taper exponent — how steeply a KPI falls on low-load days. Volume metrics (distance,
- *  PlayerLoad) scale ~linearly with the day's load (e=1); high-intensity metrics taper HARDER (e>1), so
- *  their weekly accumulation is a SMALLER ×match than distance (Martín-García 2018; Oliva-Lozano 2020).
- *  e=1 for an unknown KPI. */
+/** Per-KPI taper exponent — how a KPI's weekly accumulation relates to the day's load. `e=1` scales
+ *  ~linearly with the day (volume); `e>1` tapers HARDER on low-load days (smaller weekly ×match); `e<1`
+ *  accumulates MORE than the day's volume. Calibrated to measured training:match (T:M) ratios:
+ *   - accel/decel COUNTS accumulate ≥ distance over a week (T:M ~2.0–4.45× vs TD ~1.86–2.8×) — training
+ *     (SSGs/drills) is accel/decel-dense even when distance is modest → `e<1` (share >1).
+ *   - HSR and especially sprint accumulate LESS (HSR ~0.2–2.6×, sprint ~0.03–1.3×) → steep `e>1`.
+ *   - distance / PlayerLoad are the volume anchors (`e=1`).
+ *  Within-week concentration still follows Martín-García 2018 / Oliva-Lozano 2020; the magnitudes are
+ *  anchored on the full-season T:M study (PMC6747517), Anderson 2016 and Casamichana 2022. `e=1` if unknown.
+ *  NB: HSR/sprint kept higher than the in-season T:M floor because the pre-season ramp (which also uses
+ *  this) deliberately builds speed capacity when there are no matches to stay fresh for. */
 export const KPI_TAPER_EXPONENT: Partial<Record<WeeklyLoadMetricKey, number>> = {
   totalDistance: 1.0, totalPlayerLoad: 1.0,
-  velocityBand5: 1.5, velocityBand6: 2.0,     // HSR, sprint distance — taper hardest
-  accelB23: 1.2, decelB23: 1.2,               // mechanical — intermediate
+  velocityBand5: 1.5, velocityBand6: 2.2,     // HSR, sprint distance — taper hardest (sprint lowest T:M)
+  accelB23: 0.9, decelB23: 1.0,               // accel/decel COUNTS accumulate ≥ distance (training-dense)
   fmpDynamicHigh: 1.5, fmpDynamicMedium: 1.1, fmpRunningHigh: 1.5,
-  imaTotal: 1.1, imaAccel: 1.2, imaDecel: 1.2, imaCod: 1.3,
-  imaStrideBand6: 1.5, imaStrideBand7: 1.7, imaStrideBand8: 2.0,
+  imaTotal: 1.1, imaAccel: 0.9, imaDecel: 1.0, imaCod: 1.1,
+  imaStrideBand6: 1.5, imaStrideBand7: 1.7, imaStrideBand8: 2.2,
 };
 
 /**

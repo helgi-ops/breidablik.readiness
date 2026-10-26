@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, pathwayRampGamma, PATHWAY_RAMP_GAMMA } from "../plannedVolume";
+import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, pathwayRampGamma, PATHWAY_RAMP_GAMMA, kpiTaperShare } from "../plannedVolume";
 
 describe("standardTrainingDays", () => {
   it("fewer training days as fixture congestion rises", () => {
@@ -8,6 +8,24 @@ describe("standardTrainingDays", () => {
     expect(standardTrainingDays(3).length).toBe(2);
     expect(standardTrainingDays(0).length).toBe(5);
     expect(standardTrainingDays(1)).not.toContain("MD"); // match excluded
+  });
+});
+
+describe("kpiTaperShare — T:M-calibrated per-KPI weekly accumulation", () => {
+  it("accel/decel accumulate AT LEAST as much as distance (training is accel-dense) — inversion fixed", () => {
+    expect(kpiTaperShare("accelB23")).toBeGreaterThan(1);                         // share > 1 (was 0.91)
+    expect(kpiTaperShare("accelB23")).toBeGreaterThan(kpiTaperShare("totalDistance"));
+    expect(kpiTaperShare("decelB23")).toBeGreaterThanOrEqual(kpiTaperShare("totalDistance") - 0.02);
+    expect(kpiTaperShare("accelB23")).toBeGreaterThan(kpiTaperShare("decelB23")); // accel ≥ decel
+  });
+  it("sprint accumulates the least and below its old value (pulled toward the measured ceiling)", () => {
+    expect(kpiTaperShare("velocityBand6")).toBeLessThan(kpiTaperShare("velocityBand5")); // sprint < HSR
+    expect(kpiTaperShare("velocityBand5")).toBeLessThan(kpiTaperShare("totalDistance")); // HSR < distance
+    expect(kpiTaperShare("velocityBand6")).toBeLessThan(0.64);                            // below the old 0.644
+  });
+  it("distance / PlayerLoad stay the volume anchor (share = 1)", () => {
+    expect(kpiTaperShare("totalDistance")).toBeCloseTo(1, 5);
+    expect(kpiTaperShare("totalPlayerLoad")).toBeCloseTo(1, 5);
   });
 });
 
