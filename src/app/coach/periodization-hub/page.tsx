@@ -33,7 +33,7 @@ import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { preseasonStartRamp, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
-import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume } from "@/lib/micropulse/periodization/plannedVolume";
+import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway } from "@/lib/micropulse/periodization/plannedVolume";
 import { recommendTestingSchedule, testsForBlock, TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
@@ -1606,6 +1606,13 @@ export default function PeriodizationHubPage() {
               </label>
               <span className="text-[11px] text-slate-400">{is ? "Stillist hér eða í Leikmenn — endurflæðir allar vikur." : "Edit here or in Players — re-flows every week."}</span>
             </div>
+            {/* Plain "why" for the per-KPI ramp differences — explainability level 1 (visible, no drill-down). */}
+            <p className="mt-2.5 text-[11.5px] leading-relaxed text-slate-500">
+              <i className="mr-1 inline-block h-1.5 w-1.5 translate-y-[-1px] rounded-full align-middle" style={{ background: "#a83e28" }} />
+              <b className="font-semibold text-slate-600">{is ? "Vélrænar breytur" : "Biomechanical"}</b> {is ? "(hemlun, sprettir, háhraðahlaup, stefnubreytingar) stigþyngjast varlegar" : "(decel, sprint, HSR, COD) ramp more conservatively"}
+              <i className="mx-1 ml-3 inline-block h-1.5 w-1.5 translate-y-[-1px] rounded-full align-middle" style={{ background: "#2740e6" }} />
+              <b className="font-semibold text-slate-600">{is ? "efnaskipta-breytur" : "metabolic"}</b> {is ? "(hröðun, vegalengd) línulega — ólíkar aðlögunarleiðir vefja og efnaskipta" : "(accel, distance) linearly — tissue vs metabolic adapt differently"} (Vanrenterghem 2017, Harper &amp; McBurnie 2021, Duhig 2016).
+            </p>
           </section>
 
           {/* Meso-cycle SEQUENCE editor — Macro owns the lengths; the Meso tab reads them. Index-keyed. */}
@@ -1678,8 +1685,8 @@ export default function PeriodizationHubPage() {
                 )}
                 {kpiKeys.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {kpiKeys.map((k) => { const lab = WEEKLY_LOAD_LABELS[k]; const val = w.byKpi[k]; if (val == null) return null; return (
-                      <span key={k} className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10.5px] text-slate-600"><span className="text-slate-400">{is ? lab.is : lab.en}</span> <span className="font-semibold tabular-nums text-slate-800">{val.toLocaleString("en-US")}{lab.unit}</span></span>
+                    {kpiKeys.map((k) => { const lab = WEEKLY_LOAD_LABELS[k]; const val = w.byKpi[k]; if (val == null) return null; const pw = kpiPathway(k); const pwDot = pw === "biomechanical" ? "#a83e28" : pw === "physiological" ? "#2740e6" : "#94a3b8"; return (
+                      <span key={k} className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10.5px] text-slate-600" title={pw === "biomechanical" ? (is ? "Vélræn leið — stigþyngist varlega (vefjaálag)" : "Biomechanical pathway — ramps conservatively (tissue load)") : pw === "physiological" ? (is ? "Efnaskipta-leið — stigþyngist línulega" : "Physiological pathway — ramps linearly") : (is ? "Rúmmál — viðmiðseining" : "Volume — the anchor")}><i className="h-1.5 w-1.5 rounded-full" style={{ background: pwDot }} /><span className="text-slate-400">{is ? lab.is : lab.en}</span> <span className="font-semibold tabular-nums text-slate-800">{val.toLocaleString("en-US")}{lab.unit}</span></span>
                     ); })}
                   </div>
                 )}

@@ -42,6 +42,49 @@ export const KPI_TAPER_EXPONENT: Partial<Record<WeeklyLoadMetricKey, number>> = 
   imaStrideBand6: 1.5, imaStrideBand7: 1.7, imaStrideBand8: 2.0,
 };
 
+/**
+ * Two load-adaptation PATHWAYS (Vanrenterghem, Nedergaard, Robinson & Drust 2017, *Sports Medicine*).
+ * A session loads the body along two distinct routes with DIFFERENT adaptation rates, so they must be
+ * progressed differently across a cycle:
+ *  - `physiological` — metabolic / cardiovascular stress. Accelerations carry a high METABOLIC cost but
+ *    modest mechanical cost (di Prampero; Harper & McBurnie 2021). Adapts relatively fast → ramp linearly.
+ *  - `biomechanical` — musculoskeletal TISSUE stress (braking forces, eccentric demand). DECELERATIONS
+ *    produce the highest ground-reaction forces / loading rates (Harper & McBurnie 2021); HSR & sprint
+ *    drive hamstring injury risk and matter speed-specifically, not as total load (Duhig 2016; Malone).
+ *    Adapts slower and is injury-sensitive → ramp CONSERVATIVELY (convex, stays low early, rises late).
+ *  - `volume` — the headline anchors (total distance, PlayerLoad): ramp linearly, carry the ×match bar.
+ * This is WHY (e.g.) sprint and deceleration should not share the same progression as total distance.
+ */
+export type LoadPathway = "volume" | "physiological" | "biomechanical";
+
+export const KPI_PATHWAY: Partial<Record<WeeklyLoadMetricKey, LoadPathway>> = {
+  totalDistance: "volume", totalPlayerLoad: "volume",
+  // metabolic-dominant (accelerations are orderly concentric work — high energy, lower tissue cost)
+  accelB23: "physiological", imaAccel: "physiological", imaTotal: "physiological", fmpDynamicMedium: "physiological",
+  // tissue-dominant (braking, eccentric, top-end speed) — injury-sensitive, slower adaptation
+  decelB23: "biomechanical", imaDecel: "biomechanical", imaCod: "biomechanical",
+  velocityBand5: "biomechanical", velocityBand6: "biomechanical",
+  fmpDynamicHigh: "biomechanical", fmpRunningHigh: "biomechanical",
+  imaStrideBand6: "biomechanical", imaStrideBand7: "biomechanical", imaStrideBand8: "biomechanical",
+};
+
+/** Ramp-progression exponent per pathway, applied to the pre-season ramp fraction (0→1): 1 = linear;
+ *  >1 = convex (the metric stays low through the early/mid weeks and rises late — a conservative,
+ *  tissue-protective build to the same end-of-pre-season destination). Vanrenterghem 2017. */
+export const PATHWAY_RAMP_GAMMA: Record<LoadPathway, number> = {
+  volume: 1, physiological: 1, biomechanical: 1.7,
+};
+
+/** The dominant load pathway for a KPI (unknown → physiological/linear, i.e. no extra caution). */
+export function kpiPathway(key: string): LoadPathway {
+  return KPI_PATHWAY[key as WeeklyLoadMetricKey] ?? "physiological";
+}
+
+/** The ramp-progression exponent (γ) for a KPI's pathway — see `PATHWAY_RAMP_GAMMA`. */
+export function pathwayRampGamma(key: string): number {
+  return PATHWAY_RAMP_GAMMA[kpiPathway(key)];
+}
+
 /** The per-day match-fractions (matchPct/100) for a set of MD-days (Buchheit 2024 via planSessionLoad). */
 export function dayFractions(mdDays: string[]): number[] {
   const out: number[] = [];

@@ -46,6 +46,27 @@ describe("preseasonStartRamp", () => {
     expect(wl.byKpi.velocityBand6!).toBeGreaterThan(w1.byKpi.velocityBand6!);
   });
 
+  it("progresses biomechanical KPIs conservatively (convex) vs physiological/volume (linear) in mid-ramp", () => {
+    // Big KPI values so r0 rounding is negligible for the progress ratios. (Vanrenterghem 2017 two pathways.)
+    const BIG = { totalDistance: 60000, velocityBand6: 2400, velocityBand5: 3000, accelB23: 1800, decelB23: 1800 };
+    const rows = preseasonStartRamp({ matchTypicalLoad: MATCH, matchKpiAvg: BIG, sessionsPerWeek: 4, preseasonWeeks: 5, anchor: "match_this_season" });
+    const w1 = rows[0], mid = rows[2], wl = rows[4]; // frac = 0, 0.5, 1
+    // Normalised progress from week-1 to peak at the midpoint. Cancels the match value + taper share,
+    // leaving frac^γ: linear pathways sit at ~0.5, the biomechanical pathway sits lower (convex).
+    const prog = (k: keyof typeof BIG) => (mid.byKpi[k]! - w1.byKpi[k]!) / (wl.byKpi[k]! - w1.byKpi[k]!);
+    expect(prog("totalDistance")).toBeCloseTo(0.5, 1);            // volume — linear
+    expect(prog("accelB23")).toBeCloseTo(0.5, 1);                 // physiological (metabolic) — linear
+    expect(prog("velocityBand6")).toBeCloseTo(Math.pow(0.5, 1.7), 1); // biomechanical — convex
+    // The fix the research demands: deceleration (highest tissue load) ramps MORE conservatively than
+    // acceleration (metabolic), even though their within-week taper share is identical.
+    expect(prog("decelB23")).toBeLessThan(prog("accelB23"));
+    expect(prog("velocityBand6")).toBeLessThan(prog("accelB23")); // sprint too
+    expect(prog("velocityBand5")).toBeLessThan(prog("accelB23")); // HSR too
+    // Endpoints are shared — every KPI reaches the same destination by the final build week.
+    expect(mid.byKpi.decelB23!).toBeLessThan(mid.byKpi.accelB23!); // same match value → decel lower mid-ramp
+    expect(wl.byKpi.decelB23).toBe(wl.byKpi.accelB23);             // equal at the peak week
+  });
+
   it("carries an sRPE/AU weekly target when a match sRPE anchor is given", () => {
     const rows = preseasonStartRamp({ matchTypicalLoad: MATCH, matchSrpeAu: 600, sessionsPerWeek: 4, preseasonWeeks: 4, anchor: "match_this_season" });
     expect(rows[0].sRpeAuTarget).toBe(Math.round(600 * 1.3));

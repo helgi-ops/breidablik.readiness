@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume } from "../plannedVolume";
+import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, pathwayRampGamma, PATHWAY_RAMP_GAMMA } from "../plannedVolume";
 
 describe("standardTrainingDays", () => {
   it("fewer training days as fixture congestion rises", () => {
@@ -8,6 +8,27 @@ describe("standardTrainingDays", () => {
     expect(standardTrainingDays(3).length).toBe(2);
     expect(standardTrainingDays(0).length).toBe(5);
     expect(standardTrainingDays(1)).not.toContain("MD"); // match excluded
+  });
+});
+
+describe("load pathways (Vanrenterghem 2017)", () => {
+  it("classifies metabolic metrics as physiological and tissue metrics as biomechanical", () => {
+    expect(kpiPathway("totalDistance")).toBe("volume");
+    expect(kpiPathway("totalPlayerLoad")).toBe("volume");
+    expect(kpiPathway("accelB23")).toBe("physiological");   // acceleration = metabolic cost
+    expect(kpiPathway("decelB23")).toBe("biomechanical");   // deceleration = tissue load (the fix)
+    expect(kpiPathway("velocityBand5")).toBe("biomechanical"); // HSR
+    expect(kpiPathway("velocityBand6")).toBe("biomechanical"); // sprint
+  });
+  it("gives the biomechanical pathway a conservative (convex) ramp, others linear", () => {
+    expect(PATHWAY_RAMP_GAMMA.volume).toBe(1);
+    expect(PATHWAY_RAMP_GAMMA.physiological).toBe(1);
+    expect(PATHWAY_RAMP_GAMMA.biomechanical).toBeGreaterThan(1);
+    // decel ramps more conservatively than accel even though their within-week taper is identical
+    expect(pathwayRampGamma("decelB23")).toBeGreaterThan(pathwayRampGamma("accelB23"));
+  });
+  it("unknown KPIs fall back to a neutral linear ramp", () => {
+    expect(pathwayRampGamma("somethingUnmapped")).toBe(1);
   });
 });
 

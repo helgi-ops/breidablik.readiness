@@ -15,11 +15,13 @@
  * peak multiple; takes per-KPI + sRPE match anchors as inputs (does NOT import the load-target engine).
  *
  * Citations: Teixeira 2021 (~80/20 training:match); Figueiredo (match as the load unit);
- * Gabbett / Malone (ACWR, progressive loading, controlled re-entry); Foster (sRPE).
+ * Gabbett / Malone (ACWR, progressive loading, controlled re-entry); Foster (sRPE); Vanrenterghem
+ * 2017 (physiological vs biomechanical load-adaptation pathways — progress them differently);
+ * Harper & McBurnie 2021 (deceleration = highest tissue load); Duhig 2016 (HSR/sprint & hamstring).
  */
 
 import { weeklyTargetFromMatch, type Bi } from "./index";
-import { kpiTaperShare } from "./plannedVolume";
+import { kpiTaperShare, pathwayRampGamma } from "./plannedVolume";
 
 export type LoadAnchor = "match_this_season" | "match_last_season" | "normative" | "srpe_only";
 export type Confidence = "high" | "moderate" | "low";
@@ -82,20 +84,28 @@ export function preseasonStartRamp(opts: PreseasonStartOpts): PreseasonWeekTarge
 
   const rows: PreseasonWeekTarget[] = [];
   for (let i = 1; i <= weeks; i++) {
-    // Linear ramp week1 → peak. Single-week pre-season stays at the re-entry multiple.
+    // Linear ramp week1 → peak (the VOLUME pathway) — the headline ×match bar, sRPE/AU and the note.
+    // Single-week pre-season stays at the re-entry multiple.
     const frac = weeks > 1 ? (i - 1) / (weeks - 1) : 0;
     const mult = r2(week1 + (peak - week1) * frac);
 
     const weekly = opts.matchTypicalLoad != null ? r0(opts.matchTypicalLoad * mult) : null;
     const perSession = weekly != null ? r0(weekly / sc) : null;
 
-    // Per-KPI tapering: high-intensity metrics accumulate a SMALLER weekly ×match than volume
-    // (sprint < HSR < acc/dec < distance), so each KPI scales by mult × its own taper share — not the
-    // uniform volume multiple (Martín-García 2018; Oliva-Lozano 2020).
+    // Per-KPI target = the week's multiple × the KPI's own WITHIN-WEEK taper share (how much it
+    // accumulates over the MD-day shape — sprint < HSR < acc/dec < distance; Martín-García 2018,
+    // Oliva-Lozano 2020) × a pathway-specific PROGRESSION: biomechanical/tissue metrics (decel, sprint,
+    // HSR, COD, high stride) ramp on a CONSERVATIVE convex curve (γ>1 — stays low early, rises late),
+    // physiological/metabolic metrics (accel, distance) ramp linearly, to the same end-of-pre-season
+    // destination. Separates the two load-adaptation pathways (Vanrenterghem 2017; Harper & McBurnie
+    // 2021 — decel = highest tissue load; Duhig 2016 — HSR/sprint & hamstring).
     const byKpi: Partial<Record<string, number>> = {};
     for (const k of kpiKeys) {
       const v = opts.matchKpiAvg?.[k];
-      if (typeof v === "number" && Number.isFinite(v)) byKpi[k] = r0(v * mult * kpiTaperShare(k));
+      if (typeof v !== "number" || !Number.isFinite(v)) continue;
+      const fracK = weeks > 1 ? Math.pow(frac, pathwayRampGamma(k)) : 0;
+      const multK = r2(week1 + (peak - week1) * fracK);
+      byKpi[k] = r0(v * multK * kpiTaperShare(k));
     }
 
     const sRpeAuTarget = opts.matchSrpeAu != null && Number.isFinite(opts.matchSrpeAu)
