@@ -29,7 +29,8 @@ const COPY = {
     date: "Date", opponent: "Opponent", opponentPh: "e.g. FH, Víkingur, Valur…",
     home: "Home", away: "Away", kickoff: "Kickoff (optional)", competition: "Competition (optional)",
     competitionPh: "e.g. Besta deild",
-    friendly: "Pre-season friendly", friendlyHint: "A training game — does NOT start the competitive season.", friendlyBadge: "Friendly",
+    friendly: "Friendly (pre-season)", friendlyHint: "A training game — does NOT start the competitive season.", friendlyBadge: "Friendly",
+    compNone: "— Select —", compOther: "Other…",
     upcoming: "Upcoming", past: "Recent (played)", none: "No fixtures yet — add the month's games above.",
     del: "Delete", delConfirm: "Delete this fixture?", saving: "Saving…", loading: "Loading…",
     needDate: "Pick a date first.", vs: "vs",
@@ -47,6 +48,7 @@ const COPY = {
     home: "Heima", away: "Úti", kickoff: "Byrjunartími (valfrjálst)", competition: "Mót (valfrjálst)",
     competitionPh: "t.d. Besta deild",
     friendly: "Æfingaleikur (undirbúningur)", friendlyHint: "Æfingaleikur — byrjar EKKI keppnistímabilið.", friendlyBadge: "Æfingaleikur",
+    compNone: "— Veldu —", compOther: "Annað…",
     upcoming: "Framundan", past: "Nýlegt (leikið)", none: "Engir leikir enn — bættu við leikjum mánaðarins að ofan.",
     del: "Eyða", delConfirm: "Eyða þessum leik?", saving: "Vista…", loading: "Hleð…",
     needDate: "Veldu dagsetningu fyrst.", vs: "vs",
@@ -69,6 +71,19 @@ type Fixture = {
   goals_for: number | null;
   goals_against: number | null;
 };
+
+/** Icelandic football competitions for the Fixtures dropdown. `friendly: true` (the pre-season friendly)
+ *  sets is_friendly so it does NOT start the competitive season; "Other…" reveals a free-text field. */
+const FOOTBALL_COMPETITIONS: Array<{ value: string; friendly: boolean }> = [
+  { value: "Æfingaleikur", friendly: true },
+  { value: "Besta deild", friendly: false },
+  { value: "Lengjudeild", friendly: false },
+  { value: "2. deild", friendly: false },
+  { value: "3. deild", friendly: false },
+  { value: "4. deild", friendly: false },
+  { value: "Mjólkurbikarinn", friendly: false },
+  { value: "Lengjubikarinn", friendly: false },
+];
 
 /** Derive W/D/L from the two goal totals. null when the match isn't scored yet. */
 function resultOf(gf: number | null, ga: number | null): "W" | "D" | "L" | null {
@@ -155,6 +170,7 @@ export default function FixturesPage() {
   const [fHome, setFHome] = useState(true);
   const [fKickoff, setFKickoff] = useState("");
   const [fCompetition, setFCompetition] = useState("");
+  const [fCompCustom, setFCompCustom] = useState(false); // "Other…" picked → free-text competition
   const [fFriendly, setFFriendly] = useState(false);
 
   function resetForm() {
@@ -164,6 +180,7 @@ export default function FixturesPage() {
     setFHome(true);
     setFKickoff("");
     setFCompetition("");
+    setFCompCustom(false);
     setFFriendly(false);
   }
 
@@ -210,7 +227,9 @@ export default function FixturesPage() {
     setFOpponent(f.opponent ?? "");
     setFHome(f.is_home ?? true);
     setFKickoff(f.kickoff_time ? f.kickoff_time.slice(0, 5) : "");
-    setFCompetition(f.competition ?? "");
+    const comp = f.competition ?? "";
+    setFCompetition(comp);
+    setFCompCustom(comp !== "" && !FOOTBALL_COMPETITIONS.some((c) => c.value === comp));
     setFFriendly(f.is_friendly ?? false);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -356,14 +375,32 @@ export default function FixturesPage() {
           </div>
           <div className="space-y-1 sm:col-span-2">
             <Label className="text-xs text-muted-foreground">{t.competition}</Label>
-            <Input value={fCompetition} onChange={(e) => setFCompetition(e.target.value)} placeholder={t.competitionPh} />
+            <select
+              value={fCompCustom ? "__other__" : fCompetition}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "__other__") { setFCompCustom(true); setFCompetition(""); return; }
+                setFCompCustom(false);
+                setFCompetition(v);
+                const preset = FOOTBALL_COMPETITIONS.find((c) => c.value === v);
+                setFFriendly(preset ? preset.friendly : false);
+              }}
+              className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option value="">{t.compNone}</option>
+              {FOOTBALL_COMPETITIONS.map((c) => <option key={c.value} value={c.value}>{c.value === "Æfingaleikur" ? t.friendly : c.value}</option>)}
+              <option value="__other__">{t.compOther}</option>
+            </select>
+            {fCompCustom && <Input value={fCompetition} onChange={(e) => setFCompetition(e.target.value)} placeholder={t.competitionPh} className="mt-1.5" />}
           </div>
-          <div className="space-y-1 sm:col-span-2">
-            <label className="flex items-start gap-2 text-sm">
-              <input type="checkbox" checked={fFriendly} onChange={(e) => setFFriendly(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300" />
-              <span><span className="font-medium">{t.friendly}</span> <span className="block text-xs text-muted-foreground">{t.friendlyHint}</span></span>
-            </label>
-          </div>
+          {fCompCustom && (
+            <div className="space-y-1 sm:col-span-2">
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" checked={fFriendly} onChange={(e) => setFFriendly(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300" />
+                <span><span className="font-medium">{t.friendly}</span> <span className="block text-xs text-muted-foreground">{t.friendlyHint}</span></span>
+              </label>
+            </div>
+          )}
         </CardContent>
         <CardFooter className="gap-2">
           <Button onClick={saveFixture} disabled={saving || !fDate}>{saving ? t.saving : t.save}</Button>
