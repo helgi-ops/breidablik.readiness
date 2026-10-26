@@ -60,6 +60,20 @@ const CONFIDENCE_BY_ANCHOR: Record<LoadAnchor, Confidence> = {
 const r0 = (n: number) => Math.round(n);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+/**
+ * Pre-season FRIENDLY match exposure — the fraction of a full match a friendly represents, because players
+ * build match fitness through partial minutes. It RAMPS across the pre-season: early cameos (~0.5 ≈ 45 min)
+ * up to near-full (~0.9 ≈ 80 min) by the opener (Buchheit/Gabbett — progressive re-exposure to match load).
+ * The partial friendly COUNTS toward the week's load budget; training fills the remainder. Clamped 0.5–0.9.
+ */
+export function preseasonMatchExposure(weekIndex: number, totalWeeks: number): number {
+  const n = Math.max(1, Math.round(totalWeeks));
+  if (n <= 1) return 0.9;
+  const i = Math.max(1, Math.min(n, Math.round(weekIndex)));
+  const frac = (i - 1) / (n - 1); // 0 (first week) → 1 (last week before the opener)
+  return Math.round((0.5 + 0.4 * frac) * 100) / 100;
+}
+
 /** The pre-season BUILD destination multiple (load-independent — depends only on session count). */
 export function defaultPeakMultiple(sessionsPerWeek: number): number {
   const wk = weeklyTargetFromMatch(1, { phase: "preseason", sessionCount: sessionsPerWeek });

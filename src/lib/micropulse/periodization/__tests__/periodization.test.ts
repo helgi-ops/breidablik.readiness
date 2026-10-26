@@ -416,6 +416,18 @@ test("buildCalendarBlock: reproduces the demo microcycle (Sat/Sun alternation, t
   assert.ok(w1match.dir != null && Math.abs(w1match.dir.fwd - 0.5) < 1e-9); // match keeps the raw split
 });
 
+test("buildCalendarBlock: matchExposure makes a pre-season friendly day read as PARTIAL of a match", () => {
+  const unit: MatchUnitAbs = { dist: 10000, hsr: 800, load: 1000, accdec: 200, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
+  const full = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 2, scopeName: "t", baseOverloadPct: 100, stepPct: 5, matchDates: ["2026-01-10"] });
+  const partial = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 2, scopeName: "t", baseOverloadPct: 100, stepPct: 5, matchDates: ["2026-01-10"], matchExposure: 0.5 });
+  const fm = full.weeks[0].days.find((d) => d.type === "match")!;
+  const pm = partial.weeks[0].days.find((d) => d.type === "match")!;
+  assert.equal(fm.load, 1000);                   // full match
+  assert.equal(pm.load, Math.round(1000 * 0.5)); // half (≈45–60 min friendly)
+  assert.equal(pm.dist, Math.round(10000 * 0.5));
+  assert.equal(pm.hsr, Math.round(800 * 0.5));
+});
+
 test("buildCalendarBlock: off-season split — days after the boundary drop the MD countup and run the development rotation; in-season days keep their MD labels", () => {
   // A 6-week block whose last 3 weeks fall in the off-season (boundary = Monday of week 4). Matches only in
   // the competitive first three weeks; the off-season weeks carry coach-forced sessions (onDays).

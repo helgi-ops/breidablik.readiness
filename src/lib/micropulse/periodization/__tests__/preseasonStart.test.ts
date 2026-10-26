@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { preseasonStartRamp, defaultPeakMultiple } from "../preseasonStart";
+import { preseasonStartRamp, defaultPeakMultiple, preseasonMatchExposure } from "../preseasonStart";
 import { kpiTaperShare } from "../plannedVolume";
 
 const MATCH = 1000; // arbitrary match-unit load
@@ -90,6 +90,14 @@ describe("preseasonStartRamp", () => {
     expect(hsrMult).toBeLessThan(distMult);
     // Sprint keeps the conservative generic re-entry (no floor).
     expect(w1.byKpi.velocityBand6).toBe(Math.round(300 * 1.3 * kpiTaperShare("velocityBand6")));
+  });
+
+  it("preseasonMatchExposure ramps 0.5 → 0.9 across the pre-season (partial minutes → match fitness)", () => {
+    expect(preseasonMatchExposure(1, 10)).toBeCloseTo(0.5, 5);  // first week — short cameo
+    expect(preseasonMatchExposure(10, 10)).toBeCloseTo(0.9, 5); // last week — near full
+    expect(preseasonMatchExposure(5, 10)).toBeGreaterThan(preseasonMatchExposure(2, 10)); // monotonic
+    expect(preseasonMatchExposure(1, 1)).toBeCloseTo(0.9, 5);   // single week → near full
+    expect(preseasonMatchExposure(99, 10)).toBeLessThanOrEqual(0.9); // clamped
   });
 
   it("carries an sRPE/AU weekly target when a match sRPE anchor is given", () => {

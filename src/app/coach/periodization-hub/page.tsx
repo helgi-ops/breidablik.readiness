@@ -32,7 +32,7 @@ import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationB
 import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
-import { preseasonStartRamp, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
+import { preseasonStartRamp, preseasonMatchExposure, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
 import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
 import { recommendTestingSchedule, testsForBlock, TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
@@ -1574,7 +1574,8 @@ export default function PeriodizationHubPage() {
             const fmtv = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v));
             // All pre-season fixtures are friendlies by definition (a competitive game ends pre-season).
             const preFixtures = (plan.fixtures ?? []).filter((d) => d >= preStart && Date.parse(`${d}T00:00:00Z`) < preEndMs).sort();
-            const cal = buildCalendarBlock({ unit: blkUnit, startDate: preStart, numWeeks: preWeeks, scopeName: "__team__", phase: { en: "Pre-season", is: "Undirbúningur" }, baseOverloadPct: blkBase, stepPct: blkStep, matchDates: preFixtures, allFixtures: plan.fixtures ?? [] });
+            const cal = buildCalendarBlock({ unit: blkUnit, startDate: preStart, numWeeks: preWeeks, scopeName: "__team__", phase: { en: "Pre-season", is: "Undirbúningur" }, baseOverloadPct: blkBase, stepPct: blkStep, matchDates: preFixtures, allFixtures: plan.fixtures ?? [], matchExposure: (wi) => preseasonMatchExposure(wi + 1, preWeeks) });
+            const matchLoadUnit = tka.totalPlayerLoad ?? plan.matchLoad; // PL match unit for the budget
             const hasVald = plan.players.some((p) => p.vald.status != null);
             const hasGps = plan.tier.loadSource === "gps";
             const tests = recommendTestingSchedule({ preseasonWeeks: preWeeks, hasGps, hasVald });
@@ -1662,6 +1663,21 @@ export default function PeriodizationHubPage() {
             const pv = primary(w);
             const blk = preBlocks.find((b) => b.start === weekMon); // this week starts a new meso cycle?
             const blkEmph = blk ? emphOfBlock(blk) : null;
+            // Friendly BUDGET: a pre-season friendly is partial minutes (match-fitness build-up), ramping
+            // across pre-season. The partial friendly COUNTS toward the week's target; training fills the
+            // remainder (target − friendly). Mirrors the coach's model: 22,000 target − 7,000 friendly = 15,000.
+            const exposure = preseasonMatchExposure(i + 1, preWeeks);
+            const friendlyFrac = Math.min(0.95, exposure * weekFx.length);
+            const mins = Math.round(exposure * 90);
+            const friendlyPL = weekFx.length > 0 && matchLoadUnit != null ? Math.round(friendlyFrac * matchLoadUnit) : null;
+            const trainingPL = friendlyPL != null && w.weeklyLoadTarget != null ? Math.max(0, w.weeklyLoadTarget - friendlyPL) : null;
+            const matchTD = tka.totalDistance ?? null, weeklyTD = w.byKpi.totalDistance ?? null;
+            const friendlyTD = weekFx.length > 0 && matchTD != null ? Math.round(friendlyFrac * matchTD) : null;
+            const trainingTD = friendlyTD != null && weeklyTD != null ? Math.max(0, weeklyTD - friendlyTD) : null;
+            // Scale the displayed TRAINING days so they sum to the training remainder (match day is already partial).
+            const trainDaySum = cw ? cw.days.filter((d) => d.type !== "match" && d.type !== "rest").reduce((s, d) => s + (d.load ?? 0), 0) : 0;
+            const dayScale = trainingPL != null && trainDaySum > 0 ? trainingPL / trainDaySum : 1;
+            const dayLoad = (d: CalDay) => d.load == null ? null : d.type === "match" ? d.load : Math.round(d.load * dayScale);
             return (
               <React.Fragment key={i}>
               {blk && (
@@ -1683,13 +1699,23 @@ export default function PeriodizationHubPage() {
                 </div>
                 {cw && (
                   <div className="mt-2.5 grid grid-cols-7 gap-1">
-                    {cw.days.map((d, di) => (
-                      <div key={di} className="min-w-0 rounded-md border px-1 py-1.5 text-center" style={{ background: tint[d.type] ?? "#F8FAFC", borderColor: `${typeColor[d.type] ?? "#CBD5E1"}33` }} title={`${dows[di]} · ${typeName(d.type)}${d.load != null ? ` · ${d.load} PL` : ""}`}>
+                    {cw.days.map((d, di) => { const dl = dayLoad(d); return (
+                      <div key={di} className="min-w-0 rounded-md border px-1 py-1.5 text-center" style={{ background: tint[d.type] ?? "#F8FAFC", borderColor: `${typeColor[d.type] ?? "#CBD5E1"}33` }} title={`${dows[di]} · ${typeName(d.type)}${dl != null ? ` · ${dl} PL${d.type === "match" ? ` (~${mins} ${is ? "mín" : "min"})` : ""}` : ""}`}>
                         <div className="text-[9px] text-slate-400">{dows[di]}</div>
                         <div className="truncate text-[10px] font-semibold" style={{ color: typeColor[d.type] ?? "#64748B" }}>{d.type === "rest" ? "–" : typeName(d.type)}</div>
-                        <div className="text-[10px] tabular-nums text-slate-600">{d.load != null && d.type !== "rest" ? d.load : ""}</div>
+                        <div className="text-[10px] tabular-nums text-slate-600">{dl != null && d.type !== "rest" ? dl : ""}</div>
                       </div>
-                    ))}
+                    ); })}
+                  </div>
+                )}
+                {/* Friendly budget — the partial match counts toward the week; training fills the remainder. */}
+                {weekFx.length > 0 && (
+                  <div className="mt-2 rounded-md border border-[#de9328]/30 bg-[#de9328]/5 px-2.5 py-1.5 text-[11.5px] text-slate-700">
+                    <b className="font-semibold text-[#9a6514]">{is ? "Æfingaleikur" : "Friendly"}</b> ~{mins} {is ? "mín" : "min"} {is ? "telur inn í vikumarkið" : "counts toward the week"}
+                    {friendlyPL != null && <> : <b className="tabular-nums">{friendlyPL.toLocaleString("en-US")}</b> PL</>}{friendlyTD != null && <> / <b className="tabular-nums">{friendlyTD.toLocaleString("en-US")}</b> m</>}
+                    {" → "}{is ? "æfingar" : "training"} ≈ <b className="tabular-nums">{trainingPL != null ? trainingPL.toLocaleString("en-US") : "–"}</b> PL{trainingTD != null && <> / <b className="tabular-nums">{trainingTD.toLocaleString("en-US")}</b> m</>}
+                    {trainingPL != null && <span className="text-slate-500"> ({Math.round(trainingPL / w.sessionCount)}/{is ? "æf" : "sess"})</span>}
+                    <span className="mt-0.5 block text-[10.5px] text-slate-400">{is ? `Vikumark ${w.weeklyLoadTarget != null ? w.weeklyLoadTarget.toLocaleString("en-US") + " PL" : "–"}. Leikmenn spila hluta leiks í undirbúningi — hlutfallið rís yfir tímabilið (Buchheit/Gabbett).` : `Week target ${w.weeklyLoadTarget != null ? w.weeklyLoadTarget.toLocaleString("en-US") + " PL" : "–"}. Players play partial minutes in pre-season — the share ramps across pre-season (Buchheit/Gabbett).`}</span>
                   </div>
                 )}
                 {kpiKeys.length > 0 && (

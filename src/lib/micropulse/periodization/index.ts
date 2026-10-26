@@ -625,6 +625,11 @@ export function buildCalendarBlock(opts: {
    *  build. Accumulation = higher volume / gentle taper; Transmutation = balanced / moderate taper;
    *  Realization = lower volume / deep taper + a roomier (fresher) week. Issurin 2010; Bosquet 2007. */
   goal?: RecGoalKey;
+  /** Pre-season MATCH EXPOSURE (0–1): the fraction of a full match a FRIENDLY represents on a match day,
+   *  because players build match fitness through partial minutes (a 60-min friendly ≈ 0.67). Scales the
+   *  match-day load so it reads partial, not a full match. A number applies to every week; a function
+   *  (weekIndex0 → fraction) lets it ramp across the pre-season. Omit / 1 = a full match (in-season). */
+  matchExposure?: number | ((weekIndex0: number) => number);
 }): CalendarBlock {
   const n = Math.max(1, Math.min(16, Math.round(opts.numWeeks))); // up to a long pre-season (6–16 weeks)
   // GOAL volume scalar on the week-1 base (the single dial that reaches every training day). It sits
@@ -758,6 +763,9 @@ export function buildCalendarBlock(opts: {
       stride: isDeload ? { m: dl.int, cap: "rate" } : axisRamp("stride", i, base, capMult),
     };
     const mult = ramp.load.m; // representative scalar (volume) for display + the deload comparison
+    // Pre-season match exposure — a friendly is partial minutes (match-fitness build-up), so its match-day
+    // load reads as a FRACTION of a full match. 1 (default) = a full match (in-season).
+    const mExp = Math.max(0, Math.min(1, typeof opts.matchExposure === "function" ? opts.matchExposure(i) : (opts.matchExposure ?? 1)));
     const weekStart = addDays(start, i * 7);
     const days: CalDay[] = [];
     let sumDist = 0, sumHsr = 0, sumLoad = 0, sumAccHi = 0, sumDecHi = 0, sumStride = 0, rest = 0;
@@ -772,14 +780,14 @@ export function buildCalendarBlock(opts: {
       // carry the position emphasis on the running (HSR) and mechanical (load) axes. Running axes ceiling
       // at match per session ("build TO match, not beyond"); the mechanical axis keeps the Figueiredo over-shoot.
       const capRun = (v: number, ref: number) => Math.min(v, ref);
-      const dist = type === "rest" || opts.unit.dist == null ? null : isM ? opts.unit.dist : rnd(capRun(opts.unit.dist * sh.dist * fA("dist"), opts.unit.dist), 10);
-      const hsr = type === "rest" || opts.unit.hsr == null ? null : isM ? opts.unit.hsr : rnd(capRun(opts.unit.hsr * sh.hsr * hsrEmph * fA("hsr"), opts.unit.hsr), 5);
-      const load = type === "rest" || opts.unit.load == null ? null : isM ? opts.unit.load : Math.round(opts.unit.load * sh.load * mechEmph * fA("load"));
+      const dist = type === "rest" || opts.unit.dist == null ? null : isM ? Math.round(opts.unit.dist * mExp) : rnd(capRun(opts.unit.dist * sh.dist * fA("dist"), opts.unit.dist), 10);
+      const hsr = type === "rest" || opts.unit.hsr == null ? null : isM ? Math.round(opts.unit.hsr * mExp) : rnd(capRun(opts.unit.hsr * sh.hsr * hsrEmph * fA("hsr"), opts.unit.hsr), 5);
+      const load = type === "rest" || opts.unit.load == null ? null : isM ? Math.round(opts.unit.load * mExp) : Math.round(opts.unit.load * sh.load * mechEmph * fA("load"));
       // Mechanical / IMA per-day targets (share × week factor); mechanical emphasis on the effort counts,
       // running emphasis on the free-running stride. Null on rest days or where the unit lacks the field.
-      const accHiEff = type === "rest" || opts.unit.accHiEff == null ? null : isM ? opts.unit.accHiEff : Math.round(opts.unit.accHiEff * sh.accdec * mechEmph * fA("accdec"));
-      const decHiEff = type === "rest" || opts.unit.decHiEff == null ? null : isM ? opts.unit.decHiEff : Math.round(opts.unit.decHiEff * sh.accdec * mechEmph * fA("accdec"));
-      const stride = type === "rest" || opts.unit.stride == null ? null : isM ? opts.unit.stride : Math.round(capRun(opts.unit.stride * sh.stride * hsrEmph * fA("stride"), opts.unit.stride));
+      const accHiEff = type === "rest" || opts.unit.accHiEff == null ? null : isM ? Math.round(opts.unit.accHiEff * mExp) : Math.round(opts.unit.accHiEff * sh.accdec * mechEmph * fA("accdec"));
+      const decHiEff = type === "rest" || opts.unit.decHiEff == null ? null : isM ? Math.round(opts.unit.decHiEff * mExp) : Math.round(opts.unit.decHiEff * sh.accdec * mechEmph * fA("accdec"));
+      const stride = type === "rest" || opts.unit.stride == null ? null : isM ? Math.round(opts.unit.stride * mExp) : Math.round(capRun(opts.unit.stride * sh.stride * hsrEmph * fA("stride"), opts.unit.stride));
       const dir = type === "rest" ? null : isM ? dirBase : dayDirTilt(dirTilted, type);
       if (type === "rest") rest += 1;
       else if (type !== "match") { sumDist += dist ?? 0; sumHsr += hsr ?? 0; sumLoad += load ?? 0; sumAccHi += accHiEff ?? 0; sumDecHi += decHiEff ?? 0; sumStride += stride ?? 0; }
