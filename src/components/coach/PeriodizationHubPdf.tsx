@@ -49,7 +49,7 @@ export type PeriodizationHubPayload = {
   preseasonStart?: {
     anchor: string; confidence: string;
     weeks: Array<{ weekIndex: number; multiple: number | null; weeklyLoad: number | null; perSession: number | null; srpe: number | null }>;
-    week1Kpi: Array<{ label: Bi; value: number; unit: string }>;
+    week1Kpi: Array<{ label: Bi; value: number; unit: string; multiple?: number | null }>;
   } | null;
   /** Pre-season weekly-load ramp — starts the week off-season ends (no off-season), ramps toward the
    *  build, with ALL KPI variables per week. */
@@ -57,7 +57,7 @@ export type PeriodizationHubPayload = {
     startDate: string | null;
     unit: string;
     weeks: Array<{ index: number; mult: number | null; total: number | null }>;
-    kpi: Array<{ label: Bi; unit: string; values: Array<number | null> }>;
+    kpi: Array<{ label: Bi; unit: string; matchValue?: number | null; values: Array<number | null> }>;
   } | null;
   /** Planned KPI volume (in-season week + meso block), match-anchored + per-KPI tapered (team scope). */
   plannedVolume?: {
@@ -291,18 +291,19 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
               <View style={{ marginTop: 4 }}>
                 <Text style={[s.small, { marginBottom: 2, fontFamily: "Helvetica-Bold" }]}>{t.preKpiWk}</Text>
                 <View style={s.th}>
-                  <Text style={[s.thc, { flex: 1 }]}>KPI</Text>
+                  <Text style={[s.thc, { flex: 1 }]}>KPI (×{t.match})</Text>
                   {payload.weeklyLoad.weeks.map((w) => <Text key={w.index} style={[s.thc, { width: 34, textAlign: "right" }]}>{lang === "IS" ? "V" : "W"}{w.index}</Text>)}
                 </View>
                 {payload.weeklyLoad.kpi.map((k, i) => (
                   <View key={i} style={s.row}>
                     <Text style={{ flex: 1 }}>{bi(k.label)} <Text style={{ color: MUTE }}>({k.unit})</Text></Text>
-                    {k.values.map((v, j) => <Text key={j} style={{ width: 34, textAlign: "right" }}>{nf(v)}</Text>)}
+                    {k.values.map((v, j) => { const mv = k.matchValue; const cell = v == null ? "–" : (mv != null && mv > 0 ? `×${Math.round((v / mv) * 100) / 100}` : nf(v)); return <Text key={j} style={{ width: 34, textAlign: "right" }}>{cell}</Text>; })}
                   </View>
                 ))}
+                <Text style={[s.small, { marginTop: 2, color: MUTE }]}>{lang === "IS" ? "Hvert gildi = ×leik (vikuálag ÷ einn leikur af þeirri breytu) — háhraðahlaup vegur nærri heildarvegalengd þótt metrarnir séu fáir (training:match)." : "Each value = ×match (weekly ÷ one match of that KPI) — HSR carries a load near total distance despite few metres (training:match)."}</Text>
               </View>
             ) : payload.preseasonStart.week1Kpi.length > 0 ? (
-              <Text style={[s.small, { marginTop: 3 }]}>{t.preKpi}: {payload.preseasonStart.week1Kpi.map((k) => `${bi(k.label)} ${nf(k.value)}${k.unit}`).join(" · ")}</Text>
+              <Text style={[s.small, { marginTop: 3 }]}>{t.preKpi}: {payload.preseasonStart.week1Kpi.map((k) => `${bi(k.label)} ${k.multiple != null ? `×${k.multiple} ` : ""}${nf(k.value)}${k.unit}`).join(" · ")}</Text>
             ) : null}
           </View>
         )}

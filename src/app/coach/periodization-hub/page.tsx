@@ -906,7 +906,7 @@ export default function PeriodizationHubPage() {
         preseasonStart = {
           anchor: anchorLabel, confidence: conf,
           weeks: preRamp.map((w) => ({ weekIndex: w.weekIndex, multiple: w.multipleOfMatch, weeklyLoad: w.weeklyLoadTarget, perSession: w.perSessionLoad, srpe: w.sRpeAuTarget })),
-          week1Kpi: (Object.keys(preRamp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad").map((k) => ({ label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, value: preRamp[0].byKpi[k]!, unit: WEEKLY_LOAD_LABELS[k].unit })),
+          week1Kpi: (Object.keys(preRamp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad").map((k) => { const mv = preTka[k]; return { label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, value: preRamp[0].byKpi[k]!, unit: WEEKLY_LOAD_LABELS[k].unit, multiple: mv != null && mv > 0 ? Math.round((preRamp[0].byKpi[k]! / mv) * 100) / 100 : null }; }),
         };
       }
     }
@@ -935,12 +935,13 @@ export default function PeriodizationHubPage() {
     let weeklyLoad: Parameters<typeof downloadPeriodizationHubPdf>[0]["weeklyLoad"] = null;
     if (preRamp.length) {
       const usesAu = preRamp.every((w) => w.weeklyLoadTarget == null);
+      const wlTka = teamKpiAvg(plan.players); // match KPI avg → per-KPI ×match in the weekly table
       // PlayerLoad is the headline bar (weeklyLoadTarget) — drop it from the per-KPI rows so it isn't duplicated.
       const kpiKeys = (Object.keys(preRamp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad" && preRamp.some((w) => w.byKpi[k] != null));
       weeklyLoad = {
         startDate: preStart, unit: usesAu ? "AU" : "PL",
         weeks: preRamp.map((w) => ({ index: w.weekIndex, mult: w.multipleOfMatch, total: (usesAu ? w.sRpeAuTarget : w.weeklyLoadTarget) ?? null })),
-        kpi: kpiKeys.map((k) => ({ label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, unit: WEEKLY_LOAD_LABELS[k].unit, values: preRamp.map((w) => w.byKpi[k] ?? null) })),
+        kpi: kpiKeys.map((k) => ({ label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, unit: WEEKLY_LOAD_LABELS[k].unit, matchValue: wlTka[k] ?? null, values: preRamp.map((w) => w.byKpi[k] ?? null) })),
       };
     }
     await downloadPeriodizationHubPdf({
@@ -3293,14 +3294,20 @@ export default function PeriodizationHubPage() {
                   {row.sRpeAuTarget != null && <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">sRPE ≈ {row.sRpeAuTarget} AU</span>}
                 </div>
               );
-              const kpiChips = (row: PreseasonWeekTarget) => {
+              const kpiChips = (row: PreseasonWeekTarget, matchAvg: Partial<Record<WeeklyLoadMetricKey, number>>) => {
                 // PlayerLoad is the headline "week ≈ X PL" line — drop it from the chips so it isn't doubled.
                 const keys = (Object.keys(row.byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad");
                 if (keys.length === 0) return null;
                 return (
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {keys.map((k) => { const lbl = WEEKLY_LOAD_LABELS[k]; return (
-                      <span key={k} className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] text-slate-600"><span className="text-slate-500">{is ? lbl.is : lbl.en}</span> <span className="font-semibold tabular-nums text-slate-800">{row.byKpi[k]}{lbl.unit}</span></span>
+                    {keys.map((k) => { const lbl = WEEKLY_LOAD_LABELS[k]; const val = row.byKpi[k]; if (val == null) return null;
+                      // Impact-weighted ×match read (weekly ÷ one match of that KPI) + pathway dot + research range.
+                      const pw = kpiPathway(k); const pwDot = pw === "biomechanical" ? "#a83e28" : pw === "physiological" ? "#2740e6" : "#94a3b8";
+                      const mv = matchAvg[k]; const xm = mv != null && mv > 0 ? Math.round((val / mv) * 100) / 100 : null;
+                      const ref = kpiTmRefRange(k); const over = xm != null && ref != null && xm > ref[1];
+                      const title = `${is ? lbl.is : lbl.en} — ${xm != null ? `×${xm} leik` : "—"}${ref ? ` · ${is ? "viðmið" : "ref"} ${ref[0]}–${ref[1]}×${over ? (is ? " (yfir — undirbúnings-uppbygging)" : " (above — pre-season build)") : ""}` : ""}`;
+                      return (
+                      <span key={k} className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] text-slate-600" title={title}><i className="h-1.5 w-1.5 rounded-full" style={{ background: pwDot }} />{xm != null && <span className={`font-semibold tabular-nums ${over ? "text-[#de9328]" : "text-slate-900"}`}>×{xm}</span>}<span className="text-slate-500">{is ? lbl.is : lbl.en}</span> <span className="tabular-nums text-slate-400">{val.toLocaleString("en-US")}{lbl.unit}</span></span>
                     ); })}
                   </div>
                 );
@@ -3339,7 +3346,7 @@ export default function PeriodizationHubPage() {
                   <div className="mt-2.5 rounded-lg bg-white p-2.5">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? `Lið — vika ${wkSel}` : `Team — week ${wkSel}`}</div>
                     <div className="mt-1">{targetLine(teamRow)}</div>
-                    {kpiChips(teamRow)}
+                    {kpiChips(teamRow, teamTka)}
                     <p className="mt-1.5 text-[11px] text-slate-500">{is ? teamRow.note.is : teamRow.note.en}</p>
                   </div>
 
@@ -3348,7 +3355,7 @@ export default function PeriodizationHubPage() {
                     <div className="mt-2 rounded-lg bg-white p-2.5">
                       <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{player.name} — {is ? `vika ${wkSel}` : `week ${wkSel}`}</div>
                       <div className="mt-1">{targetLine(playerRow)}</div>
-                      {kpiChips(playerRow)}
+                      {kpiChips(playerRow, kpiAvgFromUnit(player.matchUnit))}
                     </div>
                   )}
 
