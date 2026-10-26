@@ -625,9 +625,12 @@ export function buildCalendarBlock(opts: {
   const DAY = 86_400_000, firstMs = Date.parse(start), total = n * 7;
   const inBlock = (iso: string) => { const k = Math.round((Date.parse(iso) - firstMs) / DAY); return k >= 0 && k < total; };
   const weekIdxOf = (iso: string) => Math.floor(Math.round((Date.parse(iso) - firstMs) / DAY) / 7);
-  // Matches: the coach's fixtures/skeleton when provided, else one per week alternating Sat / Sun.
+  // Matches: the coach's fixtures/skeleton when provided, else a weekly friendly alternating Sat / Sun to
+  // anchor the pre-season microcycle — but NEVER invent one on OFF-SEASON days (no fixtures, no friendlies:
+  // reconditioning, not matches). Real fixtures in `matchDates` always show.
   const matchIdxOf = (i: number) => (i % 2 === 0 ? 5 : 6);
-  const autoMatch = Array.from({ length: n }, (_, i) => addDays(start, i * 7 + matchIdxOf(i)));
+  const autoMatch = Array.from({ length: n }, (_, i) => addDays(start, i * 7 + matchIdxOf(i)))
+    .filter((iso) => !opts.offseasonStart || iso < opts.offseasonStart);
   const matchIso = [...new Set((opts.matchDates && opts.matchDates.length ? opts.matchDates : autoMatch).filter(inBlock))].sort();
   const matchSet = new Set(matchIso);
   const matchMs = matchIso.map((d) => Date.parse(d));

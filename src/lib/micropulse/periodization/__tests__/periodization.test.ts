@@ -398,6 +398,16 @@ test("buildCalendarBlock: off-season split — days after the boundary drop the 
   }
 });
 
+test("buildCalendarBlock: an all-off-season block never invents a weekly match (no fixtures in off-season)", () => {
+  // No matchDates + the whole block is off-season → the auto Sat/Sun friendly must NOT be placed.
+  const b = buildCalendarBlock({ unit: UNIT, startDate: "2026-10-26", numWeeks: 4, scopeName: "__team__", baseOverloadPct: 100, offseasonStart: "2026-10-26" });
+  const matchDays = b.weeks.flatMap((w) => w.days).filter((d) => d.type === "match");
+  assert.equal(matchDays.length, 0);
+  // A real fixture inside the off-season still shows (it's a declared game, not an invented one).
+  const withGame = buildCalendarBlock({ unit: UNIT, startDate: "2026-10-26", numWeeks: 4, scopeName: "__team__", baseOverloadPct: 100, offseasonStart: "2026-10-26", matchDates: ["2026-11-07"] });
+  assert.equal(withGame.weeks.flatMap((w) => w.days).filter((d) => d.type === "match").length, 1);
+});
+
 test("buildCalendarBlock: block GOAL reshapes volume/taper/strength and stays additive when omitted", () => {
   const build = (goal?: "accum" | "transmute" | "realize") =>
     buildCalendarBlock({ unit: UNIT, startDate: "2026-01-05", numWeeks: 6, scopeName: "__team__", baseOverloadPct: 100, goal });
