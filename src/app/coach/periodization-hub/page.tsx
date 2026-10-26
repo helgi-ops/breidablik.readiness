@@ -189,11 +189,12 @@ export default function PeriodizationHubPage() {
   const [psWeek1Mult, setPsWeek1Mult] = React.useState(1.3); // week-1 ×match (controlled re-entry)
   const [psSessions, setPsSessions] = React.useState(4);      // sessions / week
   const [psWeekSel, setPsWeekSel] = React.useState(1);        // which pre-season week the cards show (1 = week 1)
-  const [tab, setTab] = React.useState<"season" | "plan" | "micro" | "testing" | "demands" | "players">(() => {
+  const [tab, setTab] = React.useState<"season" | "preseason" | "plan" | "micro" | "testing" | "demands" | "players">(() => {
     if (typeof window === "undefined") return "season";
     const t = new URLSearchParams(window.location.search).get("tab");
-    return t === "plan" || t === "micro" || t === "testing" || t === "demands" || t === "players" ? t : "season";
+    return t === "preseason" || t === "plan" || t === "micro" || t === "testing" || t === "demands" || t === "players" ? t : "season";
   });
+  const [preseasonJumpWeek, setPreseasonJumpWeek] = React.useState<string | undefined>(undefined); // deep-link Pre-season week → Week Setup
   const [blkSkeleton, setBlkSkeleton] = React.useState<Record<string, DayState>>({}); // coach's 6-week day grid
   const [typeOverrides, setTypeOverrides] = React.useState<Record<string, CalType>>({}); // per-day day-type picks
   const [savedPlans, setSavedPlans] = React.useState<Record<string, { dayType: string; focus: string | null }>>({}); // saved week_plans (read-back)
@@ -970,6 +971,7 @@ export default function PeriodizationHubPage() {
           <div className="flex flex-wrap gap-1 border-b border-slate-200">
             {([
               { key: "season", en: "Macro Cycle", is: "Makró-lota", subEn: "the season", subIs: "tímabilið" },
+              { key: "preseason", en: "Pre-season", is: "Undirbúningur", subEn: "the whole pre-season", subIs: "allt undirbúningstímabilið" },
               { key: "plan", en: "Meso Cycle", is: "Mesó-lota", subEn: "the 4–6 week block", subIs: "4–6 vikna lotan" },
               { key: "micro", en: "Micro Cycle", is: "Míkró-lota", subEn: "the week", subIs: "vikan" },
               { key: "testing", en: "Testing", is: "Próf", subEn: "when to test", subIs: "hvenær á að mæla" },
@@ -1492,6 +1494,109 @@ export default function PeriodizationHubPage() {
               </details>
             </section>
           )}
+
+            </div>);
+          })()}
+
+          {/* PRE-SEASON tab — the whole pre-season, week by week (ramp · days · strength · testing/friendlies). */}
+          {tab === "preseason" && (() => {
+            const card = "rounded-xl border border-slate-200 bg-white p-4 sm:p-5";
+            const h2 = "text-[15px] font-bold text-slate-900";
+            const todayIso = new Date().toISOString().slice(0, 10);
+            const up = upcomingPreseason(plan.phases, todayIso);
+            if (!up) return (
+              <section className={card}>
+                <h2 className={h2}>{is ? "Undirbúningur — heildarskipulag" : "Pre-season — whole plan"}</h2>
+                <p className="mt-1 text-[13px] text-slate-600">{is ? "Stilltu undirbúnings-dagsetningar í Makró-lotu flipanum til að opna heildarskipulagið (viku-fyrir-viku ramp, dagar, styrkur og próf)." : "Set the pre-season dates in the Macro Cycle tab to unlock the whole-pre-season plan (week-by-week ramp, days, strength and testing)."}</p>
+              </section>
+            );
+            const preStart = up.start, preWeeks = up.weeks;
+            const preEndMs = Date.parse(`${preStart}T00:00:00Z`) + preWeeks * 7 * 86_400_000;
+            const preAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
+            const tka = teamKpiAvg(plan.players);
+            const ramp = preseasonStartRamp({ matchTypicalLoad: tka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: tka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: preAnchor });
+            const usesAu = ramp.every((w) => w.weeklyLoadTarget == null);
+            const unitLabel = usesAu ? "AU" : "PL";
+            const primary = (w: PreseasonWeekTarget) => (usesAu ? w.sRpeAuTarget : w.weeklyLoadTarget) ?? 0;
+            const fmtv = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v));
+            // All pre-season fixtures are friendlies by definition (a competitive game ends pre-season).
+            const preFixtures = (plan.fixtures ?? []).filter((d) => d >= preStart && Date.parse(`${d}T00:00:00Z`) < preEndMs).sort();
+            const cal = buildCalendarBlock({ unit: blkUnit, startDate: preStart, numWeeks: preWeeks, scopeName: "__team__", phase: { en: "Pre-season", is: "Undirbúningur" }, baseOverloadPct: blkBase, stepPct: blkStep, matchDates: preFixtures, allFixtures: plan.fixtures ?? [] });
+            const hasVald = plan.players.some((p) => p.vald.status != null);
+            const hasGps = plan.tier.loadSource === "gps";
+            const tests = recommendTestingSchedule({ preseasonWeeks: preWeeks, hasGps, hasVald });
+            const typeColor: Record<string, string> = { mechanical: "#A83E28", locomotive: "#15603A", mixed: "#1B2DA8", activation: "#475569", topup: "#55389E", match: "#7A4A06", rest: "#64748B" };
+            const tint: Record<string, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#F0EAF7", match: "#FBEFDD", rest: "#F8FAFC" };
+            const typeName = (t: string): string => t === "mechanical" ? (is ? "Mekanískt" : "Mechanical") : t === "locomotive" ? (is ? "Hlaup" : "Locomotive") : t === "mixed" ? (is ? "Blandað" : "Mixed") : t === "activation" ? (is ? "Virkjun" : "Activation") : t === "topup" ? (is ? "Áfylling" : "Top-up") : t === "match" ? (is ? "Leikur" : "Match") : (is ? "Frí" : "Off");
+            const PS_LABEL: Record<string, string> = { hypertrophy: is ? "Ofvöxtur / styrktar-þol" : "Hypertrophy", max_strength: is ? "Hámarksstyrkur" : "Max strength", power: is ? "Afl / hraði" : "Power" };
+            const dows = is ? ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+            const kpiKeys = ramp.length ? (Object.keys(ramp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad" && ramp.some((w) => w.byKpi[k] != null)) : [];
+            return (<div className="space-y-4">
+
+          {/* Header + the two tunable controls (persisted, shared with the Players tab). */}
+          <section className={card}>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className={h2}>{is ? "Undirbúningur — heildarskipulag" : "Pre-season — whole plan"}</h2>
+              <span className="text-[12px] text-slate-500">{is ? "hefst" : "starts"} <b className="text-slate-700">{shortDate(preStart, is)}</b> · {preWeeks} {is ? "vikur" : "weeks"} · {is ? "fyrsti keppnisleikur endar það" : "ends at the first competitive game"}</span>
+            </div>
+            <p className="mt-0.5 text-[12px] text-slate-500">{is ? "Hver vika: álags-ramp (×leik), dagar, styrktar-áfangi og próf — stýrð endurkoma í viku 1 upp að undirbúnings-uppbyggingu. Lýsandi áætlun — aldrei readiness-liturinn. Opnaðu viku í Vikuuppsetningu til að fínstilla dagana." : "Each week: the load ramp (×match), the days, the strength phase and testing — a controlled re-entry in week 1 up to the pre-season build. Descriptive plan — never the readiness colour. Open a week in Week Setup to fine-tune the days."}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px]">
+              <label className="flex items-center gap-1.5 font-medium text-slate-600">{is ? "Vika 1 ×leik" : "Week 1 ×match"}
+                <input type="number" step={0.1} min={0.5} max={3} value={psWeek1Mult} onChange={(e) => { const v = Math.max(0.5, Math.min(3, Number(e.target.value) || 1.3)); setPsWeek1Mult(v); persistOverridePatch({ preseasonWeek1Mult: v }); }} className="w-16 rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
+              </label>
+              <label className="flex items-center gap-1.5 font-medium text-slate-600">{is ? "Æfingar/viku" : "Sessions/wk"}
+                <select value={psSessions} onChange={(e) => { const v = Number(e.target.value); setPsSessions(v); persistOverridePatch({ preseasonSessions: v }); }} className="rounded border border-slate-300 px-1.5 py-0.5">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+              </label>
+              <span className="text-[11px] text-slate-400">{is ? "Stillist hér eða í Leikmenn — endurflæðir allar vikur." : "Edit here or in Players — re-flows every week."}</span>
+            </div>
+          </section>
+
+          {/* One card per pre-season week. */}
+          {ramp.map((w, i) => {
+            const cw = cal.weeks[i];
+            const weekMon = cw?.weekStart ?? isoAdd(preStart, i * 7);
+            const emph = preseasonBlockForWeeksOut(preWeeks - i);
+            const weekTests = tests.filter((tp) => tp.weeks.includes(i + 1));
+            const weekFx = preFixtures.filter((d) => d >= weekMon && d < isoAdd(weekMon, 7));
+            const pv = primary(w);
+            return (
+              <section key={i} className={`${card} min-w-0`}>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <span className="text-[15px] font-bold text-slate-900">{is ? "Vika" : "Week"} {i + 1}</span>
+                  <span className="text-[12px] text-slate-500">{shortDate(weekMon, is)}</span>
+                  <span className="rounded-full bg-[#2740e6]/10 px-2 py-0.5 text-[11px] font-semibold text-[#2740e6]">×{w.multipleOfMatch} {is ? "leik" : "match"}</span>
+                  {pv > 0 && <span className="text-[13px] font-semibold tabular-nums text-slate-900">{fmtv(pv)} {unitLabel}</span>}
+                  {w.perSessionLoad != null && <span className="text-[12px] text-slate-500">≈ {w.perSessionLoad}/{is ? "æf" : "sess"}</span>}
+                  {emph && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{PS_LABEL[emph]}</span>}
+                  <button type="button" onClick={() => { setPreseasonJumpWeek(weekMon); setTab("micro"); }} className="ml-auto text-[12px] font-semibold text-[#2740e6] hover:underline">{is ? "Opna í Vikuuppsetningu →" : "Open in Week Setup →"}</button>
+                </div>
+                {cw && (
+                  <div className="mt-2.5 grid grid-cols-7 gap-1">
+                    {cw.days.map((d, di) => (
+                      <div key={di} className="min-w-0 rounded-md border px-1 py-1.5 text-center" style={{ background: tint[d.type] ?? "#F8FAFC", borderColor: `${typeColor[d.type] ?? "#CBD5E1"}33` }} title={`${dows[di]} · ${typeName(d.type)}${d.load != null ? ` · ${d.load} PL` : ""}`}>
+                        <div className="text-[9px] text-slate-400">{dows[di]}</div>
+                        <div className="truncate text-[10px] font-semibold" style={{ color: typeColor[d.type] ?? "#64748B" }}>{d.type === "rest" ? "–" : typeName(d.type)}</div>
+                        <div className="text-[10px] tabular-nums text-slate-600">{d.load != null && d.type !== "rest" ? d.load : ""}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {kpiKeys.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {kpiKeys.map((k) => { const lab = WEEKLY_LOAD_LABELS[k]; const val = w.byKpi[k]; if (val == null) return null; return (
+                      <span key={k} className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10.5px] text-slate-600"><span className="text-slate-400">{is ? lab.is : lab.en}</span> <span className="font-semibold tabular-nums text-slate-800">{val.toLocaleString("en-US")}{lab.unit}</span></span>
+                    ); })}
+                  </div>
+                )}
+                {(weekTests.length > 0 || weekFx.length > 0) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                    {weekTests.map((tp) => <span key={tp.protocol.key} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700" title={is ? tp.protocol.name.is : tp.protocol.name.en}>{is ? TEST_SHORT[tp.protocol.key].is : TEST_SHORT[tp.protocol.key].en}</span>)}
+                    {weekFx.map((d) => <span key={d} className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">{is ? "Æfingaleikur" : "Friendly"} {shortDate(d, is)}</span>)}
+                  </div>
+                )}
+              </section>
+            );
+          })}
 
             </div>);
           })()}
@@ -2152,6 +2257,7 @@ export default function PeriodizationHubPage() {
           {tab === "micro" && (
             <WeekSetupView
               embedded
+              initialWeekStart={preseasonJumpWeek}
               onOpenTab={(t) => setTab(t)}
               rulesSlot={<PeriodizationModelPicker lang={lang} variant="card" />}
               spine={(ws) => {

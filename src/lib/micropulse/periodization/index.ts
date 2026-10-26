@@ -619,7 +619,7 @@ export function buildCalendarBlock(opts: {
    *  Realization = lower volume / deep taper + a roomier (fresher) week. Issurin 2010; Bosquet 2007. */
   goal?: RecGoalKey;
 }): CalendarBlock {
-  const n = Math.max(1, Math.min(10, Math.round(opts.numWeeks)));
+  const n = Math.max(1, Math.min(16, Math.round(opts.numWeeks))); // up to a long pre-season (6–16 weeks)
   // GOAL volume scalar on the week-1 base (the single dial that reaches every training day). It sits
   // BEFORE the spike/ceiling caps in axisRamp, so accumulation builds TO the match ceiling while
   // realization sits clear of it — block periodisation's volume→intensity migration (Issurin 2010).

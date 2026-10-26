@@ -428,17 +428,21 @@ type WeekSetupViewProps = {
   rulesSlot?: ReactNode;
   /** Jump to a hub tab from the spine chips. */
   onOpenTab?: (tab: "season" | "plan") => void;
+  /** Deep-link: when set/changed, jump the editor to the Monday of this date (e.g. from the Pre-season tab). */
+  initialWeekStart?: string;
 };
 
 // Rendered by /coach/week-setup (standalone) and by the Periodization Hub's "Micro Cycle" tab
 // (embedded, with the Macro/Meso spine passed in) — one macro→meso→micro flow.
-export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOpenTab }: WeekSetupViewProps = {}) {
+export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOpenTab, initialWeekStart }: WeekSetupViewProps = {}) {
   const { isAtLeastPro } = usePlan();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
 
-  const [weekStart, setWeekStart] = useState<string>(() => isoMondayOf(new Date()));
+  const [weekStart, setWeekStart] = useState<string>(() => (initialWeekStart ? isoMondayOfISO(initialWeekStart) : isoMondayOf(new Date())));
+  // Deep-link: jump to the Monday of `initialWeekStart` whenever the caller changes it (e.g. the Pre-season tab).
+  useEffect(() => { if (initialWeekStart) setWeekStart(isoMondayOfISO(initialWeekStart)); }, [initialWeekStart]);
   const [weekType, setWeekType] = useState<WeekType>("NO_MATCH");
   const [seasonPhase, setSeasonPhase] = useState<SeasonPhase | null>(null);
   const [matches, setMatches] = useState<MatchInput[]>(DEFAULT_MATCHES);
