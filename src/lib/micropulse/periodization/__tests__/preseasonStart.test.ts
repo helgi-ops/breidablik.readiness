@@ -36,9 +36,11 @@ describe("preseasonStartRamp", () => {
     const peak = defaultPeakMultiple(4);
     expect(w1.byKpi.totalDistance).toBe(Math.round(10000 * (Math.round(0.80 * peak * 100) / 100)));
     expect(w1.byKpi.totalDistance!).toBeGreaterThan(Math.round(10000 * 1.3)); // floor raised it above re-entry
-    // Mechanical KPIs keep the generic ×1.3 re-entry (no floor) × their own taper share.
+    // Sprint keeps the generic ×1.3 re-entry (no floor) × its taper share.
     expect(w1.byKpi.velocityBand6).toBe(Math.round(300 * 1.3 * kpiTaperShare("velocityBand6")));
-    expect(w1.byKpi.accelB23).toBe(Math.round(40 * 1.3 * kpiTaperShare("accelB23")));
+    // Accel starts higher than the generic re-entry — its own floor 0.62 × peak (training-dense early).
+    expect(w1.byKpi.accelB23).toBe(Math.round(40 * (Math.round(0.62 * peak * 100) / 100) * kpiTaperShare("accelB23")));
+    expect(w1.byKpi.accelB23! / 40).toBeGreaterThan(1.3 * kpiTaperShare("accelB23")); // above the ×1.3 re-entry
     // Per-KPI ordering (T:M-calibrated): sprint < HSR < distance ≤ accel. Accel/decel COUNTS accumulate
     // AT LEAST as much as distance over a week (training is accel-dense), so their share is ≥ 1.
     expect(kpiTaperShare("velocityBand6")).toBeLessThan(kpiTaperShare("velocityBand5")); // sprint < HSR

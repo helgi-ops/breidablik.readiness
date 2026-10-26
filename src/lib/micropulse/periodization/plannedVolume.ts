@@ -141,6 +141,10 @@ export const KPI_REENTRY_FLOOR: Partial<Record<WeeklyLoadMetricKey, number>> = {
   velocityBand5: 0.65,   // HSR — load the aerobic-power base early (coach priority), but below distance
   imaStrideBand6: 0.62,  // IMA HSR-equivalent cadence band
   fmpRunningHigh: 0.62,  // FMP high-speed running
+  // Accel/decel are training-dense from day one (SSGs/drills) → start higher than the generic re-entry.
+  // Decel a touch lower than accel — it carries the highest tissue load (Harper & McBurnie 2021).
+  accelB23: 0.62, imaAccel: 0.62,
+  decelB23: 0.58, imaDecel: 0.58, imaCod: 0.58,
 };
 
 /** A KPI's pre-season week-1 re-entry floor (fraction of peak), or 0 when it uses the generic re-entry. */
