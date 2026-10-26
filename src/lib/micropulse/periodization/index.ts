@@ -286,8 +286,9 @@ export type WeekTargetPlan = {
   weeklyLoadTarget: number | null; perSessionLoad: number | null; matchMultiple: number | null;
   topUp: number | null; note: Bi; cite: string;
 };
-export function weeklyTargetFromMatch(matchTypicalLoad: number | null, opts: { phase: "preseason" | "inseason"; sessionCount: number; readinessCapPct?: number; minutesTypical?: number | null; matchMinutes?: number }): WeekTargetPlan {
+export function weeklyTargetFromMatch(matchTypicalLoad: number | null, opts: { phase: "preseason" | "inseason"; sessionCount: number; readinessCapPct?: number; minutesTypical?: number | null; matchMinutes?: number; matches?: number }): WeekTargetPlan {
   const sc = Math.max(1, Math.round(opts.sessionCount));
+  const matches = Math.max(1, Math.round(opts.matches ?? 1)); // games in the week — each ≈ 1× a match
   const cap = Math.max(0, Math.min(1, (opts.readinessCapPct ?? 100) / 100));
   const cite = "Teixeira 2021 (~80/20 training/match) · Figueiredo (match as unit) · Little & Buchheit (not a norm)";
   if (matchTypicalLoad == null) {
@@ -302,14 +303,20 @@ export function weeklyTargetFromMatch(matchTypicalLoad: number | null, opts: { p
     return { phase: "preseason", sessionCount: sc, weeklyLoadTarget: weekly, perSessionLoad: Math.round(weekly / sc), matchMultiple: mult, topUp: null, cite,
       note: { en: `Pre-season: build ABOVE the match — ~${mult}× a match across ${sc} sessions (${Math.round(weekly / sc)}/session). More sessions raise the weekly multiple; each session's dose drops.`, is: `Undirbúningur: byggðu YFIR leikinn — ~${mult}× leik yfir ${sc} æfingar (${Math.round(weekly / sc)}/æfingu). Fleiri æfingar hækka vikumargfeldið; skammtur hverrar æfingar lækkar.` } };
   }
-  // In-season: match (1×) + a readiness-gated training increment (~0.6× a match at full readiness).
+  // In-season: the matches themselves (N× a match) + a readiness-gated training increment (~0.6× a match at
+  // full readiness). The TOTAL rises with game count even as per-session training is trimmed — a 2/3-game
+  // week is a HIGHER week, not a lighter one (Anderson 2016). Per-week game count comes from the caller
+  // (fixtures); defaults to 1.
   const increment = Math.round(matchTypicalLoad * 0.6 * cap);
-  const weekly = Math.round(matchTypicalLoad + increment);
+  const weekly = Math.round(matchTypicalLoad * matches + increment);
   const mm = opts.matchMinutes ?? 90;
   const playedFrac = opts.minutesTypical != null ? Math.max(0, Math.min(1, opts.minutesTypical / mm)) : 1;
   const topUp = Math.round(matchTypicalLoad * (1 - playedFrac)); // low-minute players get a larger training add-on
-  return { phase: "inseason", sessionCount: sc, weeklyLoadTarget: weekly, perSessionLoad: Math.round(increment / Math.max(1, sc - 1)), matchMultiple: Math.round((weekly / matchTypicalLoad) * 100) / 100, topUp, cite,
-    note: { en: `In-season: match + a readiness-gated increment (~${Math.round((weekly / matchTypicalLoad - 1) * 100)}% over one match, capped at ${Math.round(cap * 100)}% readiness). ${topUp > 0 ? `Low-minute top-up ≈ ${topUp} toward the team target.` : "Full-minute player — training add-on stays modest."}`, is: `Keppni: leikur + viðbragðs-stýrð viðbót (~${Math.round((weekly / matchTypicalLoad - 1) * 100)}% yfir einn leik, þak við ${Math.round(cap * 100)}% viðbragð). ${topUp > 0 ? `Áfylling fyrir fáar mínútur ≈ ${topUp} að liðsmarkinu.` : "Fullar mínútur — æfingaviðbót er hófleg."}` } };
+  const gamesTxtEn = matches > 1 ? `${matches} matches` : "the match";
+  const gamesTxtIs = matches > 1 ? `${matches} leikir` : "leikurinn";
+  const totalMult = Math.round((weekly / matchTypicalLoad) * 100) / 100;
+  return { phase: "inseason", sessionCount: sc, weeklyLoadTarget: weekly, perSessionLoad: Math.round(increment / Math.max(1, sc - 1)), matchMultiple: totalMult, topUp, cite,
+    note: { en: `In-season: ${gamesTxtEn} + a readiness-gated increment (~${totalMult}× a match total, capped at ${Math.round(cap * 100)}% readiness)${matches > 1 ? " — a congested week is a HIGHER week, not lighter" : ""}. ${topUp > 0 ? `Low-minute top-up ≈ ${topUp} toward the team target.` : "Full-minute player — training add-on stays modest."}`, is: `Keppni: ${gamesTxtIs} + viðbragðs-stýrð viðbót (~${totalMult}× leik alls, þak við ${Math.round(cap * 100)}% viðbragð)${matches > 1 ? " — þétt vika er ÞYNGRI vika, ekki léttari" : ""}. ${topUp > 0 ? `Áfylling fyrir fáar mínútur ≈ ${topUp} að liðsmarkinu.` : "Fullar mínútur — æfingaviðbót er hófleg."}` } };
 }
 
 // ───────────────────── MD-ANCHORED DAY TARGETS ─────────────────────

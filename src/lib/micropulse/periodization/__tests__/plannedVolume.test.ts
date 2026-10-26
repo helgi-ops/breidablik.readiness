@@ -29,6 +29,18 @@ describe("kpiTaperShare — T:M-calibrated per-KPI weekly accumulation", () => {
   });
 });
 
+describe("game-week total (Anderson 2016)", () => {
+  const KPI = { totalDistance: 10000, totalPlayerLoad: 500 };
+  it("total ×match RISES with match count even as training ×match falls", () => {
+    const one = buildPlannedVolume({ matchKpiAvg: KPI, numWeeks: 4, stepPct: 5, matches: 1 })!;
+    const three = buildPlannedVolume({ matchKpiAvg: KPI, numWeeks: 4, stepPct: 5, matches: 3 })!;
+    expect(three.weekVolumeMultiple).toBeLessThan(one.weekVolumeMultiple);  // training trimmed
+    expect(three.weekTotalMultiple).toBeGreaterThan(one.weekTotalMultiple); // total higher (games dominate)
+    expect(one.weekTotalMultiple).toBeCloseTo(one.weekVolumeMultiple + 1, 5);
+    expect(three.matches).toBe(3);
+  });
+});
+
 describe("load pathways (Vanrenterghem 2017)", () => {
   it("classifies metabolic metrics as physiological and tissue metrics as biomechanical", () => {
     expect(kpiPathway("totalDistance")).toBe("volume");

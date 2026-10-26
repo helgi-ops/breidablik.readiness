@@ -140,6 +140,12 @@ test("weeklyTargetFromMatch: pre-season builds above match; in-season = match + 
   const capped = weeklyTargetFromMatch(800, { phase: "inseason", sessionCount: 4, minutesTypical: 90, readinessCapPct: 70 });
   assert.ok(capped.weeklyLoadTarget! < starter.weeklyLoadTarget!);   // readiness caps the increment
   assert.equal(weeklyTargetFromMatch(null, { phase: "inseason", sessionCount: 4 }).weeklyLoadTarget, null);
+  // A congested (2/3-game) week is a HIGHER week, not lighter — the games dominate (Anderson 2016).
+  const twoGame = weeklyTargetFromMatch(800, { phase: "inseason", sessionCount: 4, minutesTypical: 90, matches: 2 });
+  const threeGame = weeklyTargetFromMatch(800, { phase: "inseason", sessionCount: 4, minutesTypical: 90, matches: 3 });
+  assert.ok(twoGame.weeklyLoadTarget! > starter.weeklyLoadTarget!);  // 2 games > 1 game
+  assert.ok(threeGame.weeklyLoadTarget! > twoGame.weeklyLoadTarget!); // 3 > 2
+  assert.ok(threeGame.matchMultiple! > 3);                            // ≥3 matches + a training increment
 });
 
 test("buildMesoBlocks: re-flows from the anchors — moving the start shifts blocks; cadence sets block length", () => {

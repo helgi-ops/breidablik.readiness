@@ -922,6 +922,7 @@ export default function PeriodizationHubPage() {
     const pv = buildPlannedVolume({ matchKpiAvg: teamKpiAvg(plan.players), numWeeks: blkWeeks, stepPct: blkStep, deloadWeek: cadence });
     const plannedVolume = pv ? {
       weekVolumeMultiple: pv.weekVolumeMultiple,
+      matches: pv.matches, weekTotalMultiple: pv.weekTotalMultiple,
       weekKpis: pv.weekKpis.map((v) => ({ label: v.label, unit: v.unit, matchValue: v.matchValue, multiple: v.multiple, weeklyValue: v.weeklyValue })),
       headKpis: pv.headKpis.map((k) => ({ label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, unit: WEEKLY_LOAD_LABELS[k].unit })),
       meso: pv.meso.map((w) => ({ weekIndex: w.weekIndex, isDeload: w.isDeload, volMultiple: w.volMultiple, kpi: w.kpi.map((c) => ({ multiple: c.multiple, value: c.value })) })),

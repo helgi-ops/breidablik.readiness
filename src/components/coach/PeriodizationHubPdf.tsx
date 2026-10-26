@@ -62,6 +62,7 @@ export type PeriodizationHubPayload = {
   /** Planned KPI volume (in-season week + meso block), match-anchored + per-KPI tapered (team scope). */
   plannedVolume?: {
     weekVolumeMultiple: number;
+    matches?: number; weekTotalMultiple?: number;
     weekKpis: Array<{ label: Bi; unit: string; matchValue: number; multiple: number; weeklyValue: number }>;
     headKpis: Array<{ label: Bi; unit: string }>;
     meso: Array<{ weekIndex: number; isDeload: boolean; volMultiple: number; kpi: Array<{ multiple: number; value: number }> }>;
@@ -117,7 +118,7 @@ const L = {
     running: "Running (Locomotive) — training UNDER-reaches", mech: "Mechanical / IMA — training OVER-shoots", metric: "Metric", match: "Match", ceil: "Tr. ceiling",
     meso: "Meso blocks", block: "The scheduled block", players: "Players — individualisation", pos: "Pos", mas: "MAS", munit: "Match unit", vald: "VALD cap", gaps: "Gaps", week: "Week", deload: "Deload", overload: "overload", weekly: "weekly",
     preTitle: "Pre-season start + ramp (team)", preLead: "Week 1 = controlled re-entry (a fraction of a match), ramping to the pre-season build. The match is the unit. PlayerLoad is the weekly column; each KPI below scales by its OWN taper (HSR/sprint accumulate a smaller weekly ×match than distance).", preAnchor: "anchor", preConf: "confidence", preKpi: "Week-1 KPI targets", preKpiWk: "Weekly KPI targets (per week)", preSess: "/session",
-    pvTitle: "Planned KPI volume — week + meso (in-season)", pvLead: "Match-anchored: each KPI = match value × its own weekly multiple. HSR/sprint taper harder than distance (Martín-García 2018); the block ramps with a deload.", pvWeekHdr: "Weekly target per KPI", pvMesoHdr: "Meso — ×match per week", pvBlockTotal: "Block total", pvVol: "vol",
+    pvTitle: "Planned KPI volume — week + meso (in-season)", pvLead: "Match-anchored: each KPI = match value × its own weekly multiple. HSR/sprint taper harder than distance (Martín-García 2018); the block ramps with a deload.", pvWeekHdr: "Weekly target per KPI", pvMesoHdr: "Meso — ×match per week", pvBlockTotal: "Block total", pvVol: "vol", matches: "matches", pvTotal: "total", pvTotalNote: "a congested week is a HIGHER week (Anderson 2016)",
     wlStarts: "starts",
     munitLead: "THE MATCH IS THE UNIT (whole squad) — the running spine + the mechanical / IMA axis every block scales from (present where the feed carries it).",
     dist: "Distance", hsr: "HSR", load: "Player Load", accdec: "Acc + Dec", accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Stride", dirL: "IMA dir", rhieL: "RHIE", symL: "Symmetry", metL: "Met power", fwd: "fwd", lat: "lat", back: "back",
@@ -128,7 +129,7 @@ const L = {
     running: "Hlaup (Locomotive) — æfing NÆR EKKI", mech: "Vélrænt / IMA — æfing FER YFIR", metric: "Mæling", match: "Leikur", ceil: "Æf.þak",
     meso: "Mesó lotur", block: "Skipulagða lotan", players: "Leikmenn — einstaklingsmiðun", pos: "Staða", mas: "MAS", munit: "Leikviðmið", vald: "VALD þak", gaps: "Vantar", week: "Vika", deload: "Niðurtröppun", overload: "álag", weekly: "vikumark",
     preTitle: "Undirbúningur — byrjun + stigmögnun (lið)", preLead: "Vika 1 = stýrð endurkoma (brot úr leik), stigmagnast upp að undirbúnings-marki. Leikurinn er einingin. PlayerLoad er vikudálkurinn; hver KPI að neðan skalast með SINNI niðurtröppun (háhraði/sprettur safnast upp í lægra ×leik á viku en vegalengd).", preAnchor: "grunnur", preConf: "vissa", preKpi: "KPI-mörk viku 1", preKpiWk: "KPI-mörk per viku", preSess: "/æfingu",
-    pvTitle: "Áætlað KPI-magn — vika + meso (keppnistímabil)", pvLead: "Leik-miðað: hver KPI = leikgildi × sitt vikumargfeldi. Háhraði/sprettur trappast harðar en vegalengd (Martín-García 2018); blokkin stigmagnast með niðurtröppun.", pvWeekHdr: "Vikumark per KPI", pvMesoHdr: "Meso — × leikur per viku", pvBlockTotal: "Blokk alls", pvVol: "rúmmál",
+    pvTitle: "Áætlað KPI-magn — vika + meso (keppnistímabil)", pvLead: "Leik-miðað: hver KPI = leikgildi × sitt vikumargfeldi. Háhraði/sprettur trappast harðar en vegalengd (Martín-García 2018); blokkin stigmagnast með niðurtröppun.", pvWeekHdr: "Vikumark per KPI", pvMesoHdr: "Meso — × leikur per viku", pvBlockTotal: "Blokk alls", pvVol: "rúmmál", matches: "leikir", pvTotal: "alls", pvTotalNote: "þétt vika er ÞYNGRI vika (Anderson 2016)",
     wlStarts: "hefst",
     munitLead: "LEIKURINN ER EININGIN (allt liðið) — hlaupa-hryggurinn + vélræni / IMA ásinn sem hver lota skalar frá (þar sem gögnin ná).",
     dist: "Vegalengd", hsr: "Háhraði", load: "Player Load", accdec: "Acc + Dec", accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Skref", dirL: "IMA stefna", rhieL: "RHIE", symL: "Samhverfa", metL: "Efnaafl", fwd: "fram", lat: "hlið", back: "aftur",
@@ -316,6 +317,11 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
               <Text style={s.p}>{t.pvLead}</Text>
               {/* Week per-KPI */}
               <Text style={[s.small, { marginTop: 2, marginBottom: 2, fontFamily: "Helvetica-Bold" }]}>{t.pvWeekHdr} — {pv.weekVolumeMultiple}×{t.match} ({t.pvVol})</Text>
+              {pv.weekTotalMultiple != null && pv.matches != null && (
+                <Text style={[s.small, { marginBottom: 3, color: MUTE }]}>
+                  {t.pvVol} {pv.weekVolumeMultiple}× + {pv.matches} {pv.matches === 1 ? t.match : t.matches} = {pv.weekTotalMultiple}× {t.pvTotal} · {t.pvTotalNote}
+                </Text>
+              )}
               <View style={s.th}><Text style={[s.thc, { flex: 1 }]}>KPI</Text><Text style={[s.thc, { width: 70, textAlign: "right" }]}>{t.match}</Text><Text style={[s.thc, { width: 50, textAlign: "right" }]}>×{t.match}</Text><Text style={[s.thc, { width: 70, textAlign: "right" }]}>{t.week}</Text></View>
               {pv.weekKpis.map((k, i) => (
                 <View key={i} style={s.row}>

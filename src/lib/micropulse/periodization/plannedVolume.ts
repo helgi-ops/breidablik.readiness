@@ -164,7 +164,10 @@ export const mesoTotalMultiple = (weeks: MesoWeek[]): number => Math.round(weeks
 
 export type PlannedVolumeKpiCell = { key: WeeklyLoadMetricKey; multiple: number; value: number };
 export type PlannedVolume = {
-  weekVolumeMultiple: number;                 // the headline ×match (volume, e=1)
+  weekVolumeMultiple: number;                 // TRAINING-only ×match (volume, e=1) — falls as matches rise
+  matches: number;                             // matches in the week (each = 1× a match by definition)
+  weekTotalMultiple: number;                   // training + matches = the TOTAL week load as ×match. RISES
+                                               // with congestion even as training falls (Anderson 2016).
   weekKpis: KpiVolume[];                       // per-KPI weekly target (each tapered)
   headKpis: WeeklyLoadMetricKey[];             // the KPIs shown as meso columns
   meso: Array<{ weekIndex: number; isDeload: boolean; volMultiple: number; kpi: PlannedVolumeKpiCell[] }>;
@@ -177,7 +180,8 @@ export function buildPlannedVolume(opts: {
   matchKpiAvg: Partial<Record<WeeklyLoadMetricKey, number>>;
   numWeeks: number; stepPct: number; deloadWeek?: number; matches?: number; headKpiCount?: number;
 }): PlannedVolume | null {
-  const days = standardTrainingDays(opts.matches ?? 1);
+  const matches = Math.max(0, Math.round(opts.matches ?? 1));
+  const days = standardTrainingDays(matches);
   const weekKpis = kpiVolumes(opts.matchKpiAvg, days);
   if (weekKpis.length === 0) return null;
   const wkMult = weeklyTrainingMultiple(days);
@@ -189,7 +193,7 @@ export function buildPlannedVolume(opts: {
     return { key: k, multiple: Math.round(m * factor(w) * 100) / 100, value: Math.round(mv * m * factor(w)) };
   };
   return {
-    weekVolumeMultiple: wkMult, weekKpis, headKpis,
+    weekVolumeMultiple: wkMult, matches, weekTotalMultiple: Math.round((wkMult + matches) * 100) / 100, weekKpis, headKpis,
     meso: meso.map((w) => ({ weekIndex: w.weekIndex, isDeload: w.isDeload, volMultiple: w.multiple, kpi: headKpis.map((k) => cell(k, w)) })),
     mesoTotal: {
       volMultiple: mesoTotalMultiple(meso),
