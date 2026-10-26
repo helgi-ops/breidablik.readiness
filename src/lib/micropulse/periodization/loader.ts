@@ -169,7 +169,11 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const cadence = args.deloadCadence === 4 || args.deloadCadence === 5 || args.deloadCadence === 6 ? args.deloadCadence : 4;
   const compPhaseStart = phases.find((p) => p.key === "competitive")?.start ?? null;
   const offPhaseStartIso = phases.find((p) => p.key === "offseason")?.start ?? null;
-  const blocks = phases.length ? buildMesoBlocks(planStart, planEnd, loadCurve, cadence, matchLoadTeam, fixtures.map((f) => f.date), compPhaseStart, [], offPhaseStartIso, null, { blockWeeksByStart: args.blockWeeksByStart ?? undefined, deloadByStart: args.deloadByStart ?? undefined }) : [];
+  // Declared team breaks (the SAME source Week Setup / the hub macro lock on) — a break overlapping an
+  // in-season week becomes its own re-load block, so the server blocks match the hub's.
+  const { data: breakRows } = await sb.from("team_breaks").select("start_date, end_date").eq("team_id", args.teamId);
+  const teamBreaks = ((breakRows ?? []) as Array<{ start_date: string; end_date: string }>).filter((b) => b.start_date && b.end_date);
+  const blocks = phases.length ? buildMesoBlocks(planStart, planEnd, loadCurve, cadence, matchLoadTeam, fixtures.map((f) => f.date), compPhaseStart, teamBreaks, offPhaseStartIso, null, { blockWeeksByStart: args.blockWeeksByStart ?? undefined, deloadByStart: args.deloadByStart ?? undefined }) : [];
 
   // Players + individualisation.
   const { data: plData } = await sb.from("players").select("id, full_name, position").eq("team_id", args.teamId).eq("is_active", true).order("full_name");
