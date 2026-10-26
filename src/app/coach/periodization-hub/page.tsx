@@ -210,6 +210,7 @@ export default function PeriodizationHubPage() {
     return t === "preseason" || t === "plan" || t === "micro" || t === "testing" || t === "demands" || t === "players" ? t : "season";
   });
   const [preseasonJumpWeek, setPreseasonJumpWeek] = React.useState<string | undefined>(undefined); // deep-link Pre-season week → Week Setup
+  const [preDaySave, setPreDaySave] = React.useState<null | "saving" | "saved" | "err">(null); // pre-season draft day-toggle save status
   const [blkSkeleton, setBlkSkeleton] = React.useState<Record<string, DayState>>({}); // coach's 6-week day grid
   const [typeOverrides, setTypeOverrides] = React.useState<Record<string, CalType>>({}); // per-day day-type picks
   const [savedPlans, setSavedPlans] = React.useState<Record<string, { dayType: string; focus: string | null }>>({}); // saved week_plans (read-back)
@@ -1574,7 +1575,40 @@ export default function PeriodizationHubPage() {
             const fmtv = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v));
             // All pre-season fixtures are friendlies by definition (a competitive game ends pre-season).
             const preFixtures = (plan.fixtures ?? []).filter((d) => d >= preStart && Date.parse(`${d}T00:00:00Z`) < preEndMs).sort();
-            const cal = buildCalendarBlock({ unit: blkUnit, startDate: preStart, numWeeks: preWeeks, scopeName: "__team__", phase: { en: "Pre-season", is: "Undirbúningur" }, baseOverloadPct: blkBase, stepPct: blkStep, matchDates: preFixtures, allFixtures: plan.fixtures ?? [], matchExposure: (wi) => preseasonMatchExposure(wi + 1, preWeeks) });
+            // DRAFT-LEVEL day editing: overlay the coach's saved day layout (week_plans) on the auto pre-season
+            // layout so a day toggled on the pre-season card persists and reads back here — the same day-truth
+            // source Week Setup refines. A saved OFF forces rest; a saved TRAIN forces a session.
+            const preOffDays: string[] = [], preOnDays: string[] = [];
+            for (const [iso, sp] of Object.entries(savedPlans)) {
+              if (iso < preStart || Date.parse(`${iso}T00:00:00Z`) >= preEndMs) continue;
+              if (sp.dayType === "OFF") preOffDays.push(iso);
+              else if (sp.dayType === "TRAIN" || sp.dayType === "RECOVERY") preOnDays.push(iso);
+            }
+            const cal = buildCalendarBlock({ unit: blkUnit, startDate: preStart, numWeeks: preWeeks, scopeName: "__team__", phase: { en: "Pre-season", is: "Undirbúningur" }, baseOverloadPct: blkBase, stepPct: blkStep, matchDates: preFixtures, offDays: preOffDays, onDays: preOnDays, allFixtures: plan.fixtures ?? [], matchExposure: (wi) => preseasonMatchExposure(wi + 1, preWeeks) });
+            // Toggle a pre-season day between Training and Off (match days stay fixed to the fixture). Optimistic
+            // overlay via savedPlans; persists the whole week to week_plans through the SAME applyWeekSetup path
+            // the Meso tab uses, so Week Setup reads the draft back. Day stimulus + load are recomputed on render.
+            const togglePreDay = (cw: typeof cal.weeks[number], di: number) => {
+              const dsel = cw.days[di]; if (dsel.type === "match") return;
+              const selIso = isoAdd(cw.weekStart, di); const makeOff = dsel.type !== "rest";
+              setSavedPlans((prev) => ({ ...prev, [selIso]: { dayType: makeOff ? "OFF" : "TRAIN", focus: makeOff ? (dsel.md || null) : (prev[selIso]?.focus ?? null) } }));
+              const payload = [{
+                week_start: cw.weekStart,
+                system_key: cw.isDeload ? "RECOVERY" : "STRENGTH",
+                intensity_target: cw.isDeload ? 3 : Math.max(3, Math.min(9, Math.round(5 + (cw.mult - 1) * 12))),
+                days: cw.days.map((d, i) => {
+                  const dd = isoAdd(cw.weekStart, i);
+                  const isMatch = d.type === "match";
+                  const isRest = i === di ? makeOff : d.type === "rest";
+                  return { day_index: i + 1, day_date: dd,
+                    day_type: isMatch ? "GAME" : isRest ? "OFF" : "TRAIN",
+                    focus: isMatch ? null : isRest ? (d.md || null) : [d.md, d.label.en].filter(Boolean).join(" "),
+                    day_intent: isMatch ? "GAME" : isRest ? "OFF" : null };
+                }),
+              }];
+              setPreDaySave("saving");
+              (async () => { try { const r = await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ applyWeekSetup: payload }) }); setPreDaySave(r.ok ? "saved" : "err"); } catch { setPreDaySave("err"); } })();
+            };
             const matchLoadUnit = tka.totalPlayerLoad ?? plan.matchLoad; // PL match unit for the budget
             const hasVald = plan.players.some((p) => p.vald.status != null);
             const hasGps = plan.tier.loadSource === "gps";
@@ -1610,6 +1644,9 @@ export default function PeriodizationHubPage() {
                 <select value={psSess} onChange={(e) => { const v = Number(e.target.value); setPreSess(v); }} className="rounded border border-slate-300 px-1.5 py-0.5">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
               </label>
               <span className="text-[11px] text-slate-400">{is ? "Stillist hér eða í Leikmenn — endurflæðir allar vikur." : "Edit here or in Players — re-flows every week."}</span>
+              {preDaySave === "saving" && <span className="text-[11px] text-slate-400">{is ? "Vista…" : "Saving…"}</span>}
+              {preDaySave === "saved" && <span className="text-[11px] font-medium text-emerald-700">{is ? "✓ Dagar vistaðir í Vikuuppsetningu" : "✓ Days saved to Week Setup"}</span>}
+              {preDaySave === "err" && <span className="text-[11px] font-medium text-[#a83e28]">{is ? "Vistun mistókst" : "Save failed"}</span>}
             </div>
             {/* Plain "why" for the per-KPI ramp differences — explainability level 1 (visible, no drill-down). */}
             <p className="mt-2.5 text-[11.5px] leading-relaxed text-slate-500">
@@ -1702,15 +1739,21 @@ export default function PeriodizationHubPage() {
                 {cw && (
                   <>
                   <div className="mt-2.5 grid grid-cols-7 gap-1">
-                    {cw.days.map((d, di) => { const dl = dayLoad(d); return (
-                      <button key={di} type="button" onClick={openWeek} title={`${dows[di]} · ${typeName(d.type)}${dl != null ? ` · ${dl} PL${d.type === "match" ? ` (~${mins} ${is ? "mín" : "min"})` : ""}` : ""} — ${is ? "smelltu til að breyta / sjá ráðlagt álag" : "click to edit / see recommended load"}`} className="min-w-0 cursor-pointer rounded-md border px-1 py-1.5 text-center transition-shadow hover:ring-2 hover:ring-[#2740e6]/30 focus:outline-none focus:ring-2 focus:ring-[#2740e6]/40" style={{ background: tint[d.type] ?? "#F8FAFC", borderColor: `${typeColor[d.type] ?? "#CBD5E1"}33` }}>
+                    {cw.days.map((d, di) => { const dl = dayLoad(d); const isMatch = d.type === "match";
+                      // A match day is fixed to its fixture — clicking opens Week Setup. Any other day toggles
+                      // Training ↔ Off right here (the draft), persisting to week_plans for Week Setup to refine.
+                      const title = isMatch
+                        ? `${dows[di]} · ${typeName(d.type)}${dl != null ? ` · ${dl} PL (~${mins} ${is ? "mín" : "min"})` : ""} — ${is ? "leikdagur (fastur við leikinn) — opnar vikuna" : "match day (fixed to the fixture) — opens the week"}`
+                        : `${dows[di]} · ${typeName(d.type)}${dl != null && d.type !== "rest" ? ` · ${dl} PL` : ""} — ${d.type === "rest" ? (is ? "smelltu til að gera að æfingadegi" : "click to make a training day") : (is ? "smelltu til að gera að frídegi" : "click to make an off day")}`;
+                      return (
+                      <button key={di} type="button" onClick={() => isMatch ? openWeek() : togglePreDay(cw, di)} title={title} aria-label={title} className="min-w-0 cursor-pointer rounded-md border px-1 py-1.5 text-center transition-shadow hover:ring-2 hover:ring-[#2740e6]/30 focus:outline-none focus:ring-2 focus:ring-[#2740e6]/40" style={{ background: tint[d.type] ?? "#F8FAFC", borderColor: `${typeColor[d.type] ?? "#CBD5E1"}33` }}>
                         <div className="text-[9px] text-slate-400">{dows[di]}</div>
                         <div className="truncate text-[10px] font-semibold" style={{ color: typeColor[d.type] ?? "#64748B" }}>{d.type === "rest" ? "–" : typeName(d.type)}</div>
                         <div className="text-[10px] tabular-nums text-slate-600">{dl != null && d.type !== "rest" ? dl : ""}</div>
                       </button>
                     ); })}
                   </div>
-                  <p className="mt-1 text-[10.5px] text-slate-400">{is ? "Smelltu á dag (eða dagsetninguna) til að sjá ráðlagt álag og breyta uppsetningunni í Vikuuppsetningu." : "Click a day (or the date) to see the recommended load and edit the setup in Week Setup."}</p>
+                  <p className="mt-1 text-[10.5px] text-slate-400">{is ? "Smelltu á dag til að skipta milli Æfing/Frí (uppkast — vistast strax). Dagsetningin eða tengillinn opnar vikuna í Vikuuppsetningu til að fínstilla." : "Click a day to switch Training/Off (draft — saved instantly). The date or the link opens the week in Week Setup to refine."}</p>
                   </>
                 )}
                 {/* Friendly budget — the partial match counts toward the week; training fills the remainder. */}
