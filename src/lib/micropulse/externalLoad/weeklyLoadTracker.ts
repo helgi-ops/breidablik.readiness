@@ -34,6 +34,7 @@ import type {
 } from "./weeklyLoadTypes";
 
 import { getActiveWeeklyLoadMetrics } from "./weeklyLoadTypes";
+import { weeklyMonotony } from "./monotony";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
@@ -412,6 +413,17 @@ export async function computeWeeklyLoad(args: {
     };
   });
 
+  // Weekly monotony & strain (Foster 1998) on the primary load metric — PlayerLoad outdoor, IMA Total
+  // indoor, else the first active KPI. Rest/no-data days count as 0 (a genuine rest day lowers monotony).
+  const primaryMetric: WeeklyLoadMetricKey = activeMetrics.includes("totalPlayerLoad")
+    ? "totalPlayerLoad"
+    : activeMetrics.includes("imaTotal")
+      ? "imaTotal"
+      : (activeMetrics.includes("totalDistance") ? "totalDistance" : activeMetrics[0]);
+  const dailyPrimary = days.map((d) => d.metrics[primaryMetric] ?? 0);
+  const mono = weeklyMonotony(dailyPrimary);
+  const monotony = mono ? { value: mono.monotony, strain: mono.strain, band: mono.band, daysUsed: mono.daysUsed, metric: primaryMetric } : null;
+
   return {
     teamId,
     weekMonday,
@@ -424,6 +436,7 @@ export async function computeWeeklyLoad(args: {
     historicalWeeksUsed: validWeeks.length,
     indoor,
     activeMetrics,
+    monotony,
     target: targetComp
       ? {
           mode: targetComp.mode,

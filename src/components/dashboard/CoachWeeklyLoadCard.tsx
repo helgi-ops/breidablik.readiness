@@ -452,6 +452,21 @@ export default function CoachWeeklyLoadCard({
             <span className="text-[10px] text-slate-400">
               {t.day} {data.daysElapsed} {t.of} {data.totalWeekDays}
             </span>
+            {/* Monotony & strain (Foster 1998) — a signal BESIDE the total, never the readiness colour. */}
+            {data.monotony && (() => {
+              const m = data.monotony!;
+              const c = m.band === "high" ? "#a83e28" : m.band === "elevated" ? "#de9328" : "#1c7a4a";
+              const bandLabel = m.band === "high" ? (lang === "IS" ? "hátt" : "high") : m.band === "elevated" ? (lang === "IS" ? "hækkað" : "elevated") : (lang === "IS" ? "í lagi" : "ok");
+              const why = lang === "IS"
+                ? `Einhæfni (Foster): meðal-dagálag ÷ staðalfrávik yfir vikuna = ${m.value}. Há gildi (>2) = of jöfn vika (lítil hvíld/andstæður) → þreytu-/veikindaáhætta. Strain = heildarálag × einhæfni = ${m.strain.toLocaleString("en-US")}. Merki við hlið álagsins — ekki readiness-liturinn. (Foster 1998)`
+                : `Monotony (Foster): mean daily load ÷ SD across the week = ${m.value}. High (>2) = too-even a week (little rest/contrast) → fatigue/illness risk. Strain = total × monotony = ${m.strain.toLocaleString("en-US")}. A signal beside the load — not the readiness colour. (Foster 1998)`;
+              return (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold rounded-full border px-2 py-0.5" style={{ color: c, borderColor: `${c}33`, background: `${c}0d` }} title={why}>
+                  <i className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />
+                  {lang === "IS" ? "Einhæfni" : "Monotony"} {m.value} · {bandLabel}
+                </span>
+              );
+            })()}
             {/* Settings gear */}
             <button
               onClick={() => setShowSettings(true)}

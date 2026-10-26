@@ -207,4 +207,13 @@ export type WeeklyLoadResult = {
   indoor?: boolean;
   /** Active KPI keys for this team (indoor vs outdoor subset). */
   activeMetrics?: readonly WeeklyLoadMetricKey[];
+  /** Weekly training monotony & strain (Foster 1998) on the primary load metric — a signal beside the
+   *  total, never the readiness colour. Null until enough days have data / there is any day-to-day spread. */
+  monotony?: {
+    value: number;             // mean daily load / SD
+    strain: number;            // weekly total × monotony
+    band: "ok" | "elevated" | "high";
+    daysUsed: number;
+    metric: WeeklyLoadMetricKey; // the primary metric it was computed on
+  } | null;
 };
