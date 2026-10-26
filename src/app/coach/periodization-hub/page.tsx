@@ -33,7 +33,7 @@ import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { preseasonStartRamp, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
-import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway } from "@/lib/micropulse/periodization/plannedVolume";
+import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek } from "@/lib/micropulse/periodization/plannedVolume";
 import { recommendTestingSchedule, testsForBlock, TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
@@ -919,13 +919,15 @@ export default function PeriodizationHubPage() {
       ? { phases: plan.teamBaseline.md.phases.map(mdRow), days: plan.teamBaseline.md.days.map(mdRow) }
       : null;
     // Planned KPI volume (week + meso), match-anchored + per-KPI tapered — team scope, with head-KPI labels.
-    const pv = buildPlannedVolume({ matchKpiAvg: teamKpiAvg(plan.players), numWeeks: blkWeeks, stepPct: blkStep, deloadWeek: cadence });
+    // Per-week match count from fixtures → the meso's weekly TOTAL is congestion-aware week by week.
+    const pvMatchesByWeek = matchesPerWeek(blkStart, blkWeeks, plan.fixtures ?? []);
+    const pv = buildPlannedVolume({ matchKpiAvg: teamKpiAvg(plan.players), numWeeks: blkWeeks, stepPct: blkStep, deloadWeek: cadence, matchesByWeek: pvMatchesByWeek });
     const plannedVolume = pv ? {
       weekVolumeMultiple: pv.weekVolumeMultiple,
       matches: pv.matches, weekTotalMultiple: pv.weekTotalMultiple,
       weekKpis: pv.weekKpis.map((v) => ({ label: v.label, unit: v.unit, matchValue: v.matchValue, multiple: v.multiple, weeklyValue: v.weeklyValue })),
       headKpis: pv.headKpis.map((k) => ({ label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, unit: WEEKLY_LOAD_LABELS[k].unit })),
-      meso: pv.meso.map((w) => ({ weekIndex: w.weekIndex, isDeload: w.isDeload, volMultiple: w.volMultiple, kpi: w.kpi.map((c) => ({ multiple: c.multiple, value: c.value })) })),
+      meso: pv.meso.map((w) => ({ weekIndex: w.weekIndex, isDeload: w.isDeload, volMultiple: w.volMultiple, matches: w.matches, totalMultiple: w.totalMultiple, kpi: w.kpi.map((c) => ({ multiple: c.multiple, value: c.value })) })),
       mesoTotal: { volMultiple: pv.mesoTotal.volMultiple, kpi: pv.mesoTotal.kpi.map((c) => ({ multiple: c.multiple, value: c.value })) },
     } : null;
     // Pre-season weekly-load ramp — starts the week off-season ends (no off-season), ramps toward the

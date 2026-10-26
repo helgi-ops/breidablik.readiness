@@ -323,6 +323,10 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   // The block "now" sits in → its strength quality is the no-VBT fallback default.
   const todayIso = new Date(todayMs).toISOString().slice(0, 10);
   const curBlock = blocks.find((b) => b.start <= todayIso && todayIso < b.end) ?? blocks.find((b) => !b.isDeload) ?? blocks[0] ?? null;
+  // Matches in the CURRENT Mon–Sun week → the in-season weekly target is congestion-aware (a 2/3-game
+  // week is a HIGHER week, not lighter — Anderson 2016). weeklyTargetFromMatch clamps the count to ≥1.
+  const wkMonMs = Date.parse(`${mondayOf(todayIso)}T00:00:00Z`);
+  const currentWeekMatches = fixtures.filter((f) => { const t = Date.parse(`${f.date}T00:00:00Z`); return Number.isFinite(t) && t >= wkMonMs && t < wkMonMs + 7 * 86_400_000; }).length;
 
   // Match minutes → attach to the per-player match rows so the match-unit filter (near-full ≥80 min) works;
   // also keep per-player minute rows to compute REAL recent minutes (the minutes-based load trim).
@@ -375,7 +379,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     const capPct = vald.capPct ?? 100;
     const weekTargets = {
       preseason: weeklyTargetFromMatch(matchUnit.load.typical, { phase: "preseason", sessionCount: 5, readinessCapPct: capPct, minutesTypical: matchUnit.minutesTypical }),
-      inseason: weeklyTargetFromMatch(matchUnit.load.typical, { phase: "inseason", sessionCount: 4, readinessCapPct: capPct, minutesTypical: matchUnit.minutesTypical }),
+      inseason: weeklyTargetFromMatch(matchUnit.load.typical, { phase: "inseason", sessionCount: 4, readinessCapPct: capPct, minutesTypical: matchUnit.minutesTypical, matches: currentWeekMatches }),
       current: inSeasonNow ? ("inseason" as const) : ("preseason" as const),
     };
     return {

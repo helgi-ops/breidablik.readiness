@@ -29,6 +29,23 @@ export function standardTrainingDays(matches: number): string[] {
   return ["MD-2", "MD-1"];                                           // 3 games → minimal training
 }
 
+/** Matches falling in each week-window of a block: week i = [startISO + 7·(i−1), startISO + 7·i). Pure ISO
+ *  date arithmetic. Lets the weekly TOTAL load be congestion-aware PER week (Anderson 2016) rather than
+ *  assuming one match every week across the whole meso. */
+export function matchesPerWeek(startISO: string, numWeeks: number, fixtures: string[]): number[] {
+  const start = Date.parse(`${startISO}T00:00:00Z`);
+  const n = Math.max(0, Math.round(numWeeks));
+  const out: number[] = new Array(n).fill(0);
+  if (!Number.isFinite(start)) return out;
+  for (const f of fixtures) {
+    const t = Date.parse(`${f}T00:00:00Z`);
+    if (!Number.isFinite(t)) continue;
+    const wk = Math.floor((t - start) / (7 * 86_400_000));
+    if (wk >= 0 && wk < n) out[wk] += 1;
+  }
+  return out;
+}
+
 /** Per-KPI taper exponent — how a KPI's weekly accumulation relates to the day's load. `e=1` scales
  *  ~linearly with the day (volume); `e>1` tapers HARDER on low-load days (smaller weekly ×match); `e<1`
  *  accumulates MORE than the day's volume. Calibrated to measured training:match (T:M) ratios:
@@ -170,7 +187,7 @@ export type PlannedVolume = {
                                                // with congestion even as training falls (Anderson 2016).
   weekKpis: KpiVolume[];                       // per-KPI weekly target (each tapered)
   headKpis: WeeklyLoadMetricKey[];             // the KPIs shown as meso columns
-  meso: Array<{ weekIndex: number; isDeload: boolean; volMultiple: number; kpi: PlannedVolumeKpiCell[] }>;
+  meso: Array<{ weekIndex: number; isDeload: boolean; volMultiple: number; trainingMultiple: number; matches?: number; totalMultiple?: number; kpi: PlannedVolumeKpiCell[] }>;
   mesoTotal: { volMultiple: number; kpi: PlannedVolumeKpiCell[] };
 };
 
@@ -179,6 +196,10 @@ export type PlannedVolume = {
 export function buildPlannedVolume(opts: {
   matchKpiAvg: Partial<Record<WeeklyLoadMetricKey, number>>;
   numWeeks: number; stepPct: number; deloadWeek?: number; matches?: number; headKpiCount?: number;
+  /** Matches per meso week (length numWeeks), e.g. from `matchesPerWeek(blockStart, numWeeks, fixtures)`.
+   *  When given, each week's training multiple is recomputed for THAT week's game count and the total adds
+   *  the games — a congested week reads HIGHER. When absent, every week uses the single `matches`. */
+  matchesByWeek?: number[];
 }): PlannedVolume | null {
   const matches = Math.max(0, Math.round(opts.matches ?? 1));
   const days = standardTrainingDays(matches);
@@ -192,9 +213,21 @@ export function buildPlannedVolume(opts: {
     const mv = opts.matchKpiAvg[k] ?? 0, m = weeklyKpiMultiple(days, k);
     return { key: k, multiple: Math.round(m * factor(w) * 100) / 100, value: Math.round(mv * m * factor(w)) };
   };
+  // Per-week congestion: when matchesByWeek is given, re-cost each week's TRAINING for that week's game
+  // count (fewer training days ⇒ lower training multiple) and add the games for the TOTAL. KPI cells stay
+  // on the typical-week shape (per-KPI congestion is a secondary effect — the headline is the total).
+  const mesoRows = meso.map((w) => {
+    const mi = opts.matchesByWeek?.[w.weekIndex - 1];
+    const factor = wkMult > 0 ? w.multiple / wkMult : 0; // this week's progression (ramp/deload) factor
+    const trainingMultiple = mi != null
+      ? Math.round(weeklyTrainingMultiple(standardTrainingDays(mi)) * factor * 100) / 100
+      : w.multiple;
+    const totalMultiple = mi != null ? Math.round((trainingMultiple + mi) * 100) / 100 : undefined;
+    return { weekIndex: w.weekIndex, isDeload: w.isDeload, volMultiple: w.multiple, trainingMultiple, matches: mi, totalMultiple, kpi: headKpis.map((k) => cell(k, w)) };
+  });
   return {
     weekVolumeMultiple: wkMult, matches, weekTotalMultiple: Math.round((wkMult + matches) * 100) / 100, weekKpis, headKpis,
-    meso: meso.map((w) => ({ weekIndex: w.weekIndex, isDeload: w.isDeload, volMultiple: w.multiple, kpi: headKpis.map((k) => cell(k, w)) })),
+    meso: mesoRows,
     mesoTotal: {
       volMultiple: mesoTotalMultiple(meso),
       kpi: headKpis.map((k) => ({ key: k, multiple: Math.round(meso.reduce((s, w) => s + cell(k, w).multiple, 0) * 100) / 100, value: meso.reduce((s, w) => s + cell(k, w).value, 0) })),

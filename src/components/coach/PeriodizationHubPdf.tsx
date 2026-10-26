@@ -65,7 +65,7 @@ export type PeriodizationHubPayload = {
     matches?: number; weekTotalMultiple?: number;
     weekKpis: Array<{ label: Bi; unit: string; matchValue: number; multiple: number; weeklyValue: number }>;
     headKpis: Array<{ label: Bi; unit: string }>;
-    meso: Array<{ weekIndex: number; isDeload: boolean; volMultiple: number; kpi: Array<{ multiple: number; value: number }> }>;
+    meso: Array<{ weekIndex: number; isDeload: boolean; volMultiple: number; matches?: number; totalMultiple?: number; kpi: Array<{ multiple: number; value: number }> }>;
     mesoTotal: { volMultiple: number; kpi: Array<{ multiple: number; value: number }> };
   } | null;
 };
@@ -118,7 +118,7 @@ const L = {
     running: "Running (Locomotive) — training UNDER-reaches", mech: "Mechanical / IMA — training OVER-shoots", metric: "Metric", match: "Match", ceil: "Tr. ceiling",
     meso: "Meso blocks", block: "The scheduled block", players: "Players — individualisation", pos: "Pos", mas: "MAS", munit: "Match unit", vald: "VALD cap", gaps: "Gaps", week: "Week", deload: "Deload", overload: "overload", weekly: "weekly",
     preTitle: "Pre-season start + ramp (team)", preLead: "Week 1 = controlled re-entry (a fraction of a match), ramping to the pre-season build. The match is the unit. PlayerLoad is the weekly column; each KPI below scales by its OWN taper (HSR/sprint accumulate a smaller weekly ×match than distance).", preAnchor: "anchor", preConf: "confidence", preKpi: "Week-1 KPI targets", preKpiWk: "Weekly KPI targets (per week)", preSess: "/session",
-    pvTitle: "Planned KPI volume — week + meso (in-season)", pvLead: "Match-anchored: each KPI = match value × its own weekly multiple. HSR/sprint taper harder than distance (Martín-García 2018); the block ramps with a deload.", pvWeekHdr: "Weekly target per KPI", pvMesoHdr: "Meso — ×match per week", pvBlockTotal: "Block total", pvVol: "vol", matches: "matches", pvTotal: "total", pvTotalNote: "a congested week is a HIGHER week (Anderson 2016)",
+    pvTitle: "Planned KPI volume — week + meso (in-season)", pvLead: "Match-anchored: each KPI = match value × its own weekly multiple. HSR/sprint taper harder than distance (Martín-García 2018); the block ramps with a deload.", pvWeekHdr: "Weekly target per KPI", pvMesoHdr: "Meso — ×match per week", pvBlockTotal: "Block total", pvVol: "vol", matches: "matches", pvTotal: "total", pvTotalNote: "a congested week is a HIGHER week (Anderson 2016)", gamesAbbr: "G",
     wlStarts: "starts",
     munitLead: "THE MATCH IS THE UNIT (whole squad) — the running spine + the mechanical / IMA axis every block scales from (present where the feed carries it).",
     dist: "Distance", hsr: "HSR", load: "Player Load", accdec: "Acc + Dec", accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Stride", dirL: "IMA dir", rhieL: "RHIE", symL: "Symmetry", metL: "Met power", fwd: "fwd", lat: "lat", back: "back",
@@ -129,7 +129,7 @@ const L = {
     running: "Hlaup (Locomotive) — æfing NÆR EKKI", mech: "Vélrænt / IMA — æfing FER YFIR", metric: "Mæling", match: "Leikur", ceil: "Æf.þak",
     meso: "Mesó lotur", block: "Skipulagða lotan", players: "Leikmenn — einstaklingsmiðun", pos: "Staða", mas: "MAS", munit: "Leikviðmið", vald: "VALD þak", gaps: "Vantar", week: "Vika", deload: "Niðurtröppun", overload: "álag", weekly: "vikumark",
     preTitle: "Undirbúningur — byrjun + stigmögnun (lið)", preLead: "Vika 1 = stýrð endurkoma (brot úr leik), stigmagnast upp að undirbúnings-marki. Leikurinn er einingin. PlayerLoad er vikudálkurinn; hver KPI að neðan skalast með SINNI niðurtröppun (háhraði/sprettur safnast upp í lægra ×leik á viku en vegalengd).", preAnchor: "grunnur", preConf: "vissa", preKpi: "KPI-mörk viku 1", preKpiWk: "KPI-mörk per viku", preSess: "/æfingu",
-    pvTitle: "Áætlað KPI-magn — vika + meso (keppnistímabil)", pvLead: "Leik-miðað: hver KPI = leikgildi × sitt vikumargfeldi. Háhraði/sprettur trappast harðar en vegalengd (Martín-García 2018); blokkin stigmagnast með niðurtröppun.", pvWeekHdr: "Vikumark per KPI", pvMesoHdr: "Meso — × leikur per viku", pvBlockTotal: "Blokk alls", pvVol: "rúmmál", matches: "leikir", pvTotal: "alls", pvTotalNote: "þétt vika er ÞYNGRI vika (Anderson 2016)",
+    pvTitle: "Áætlað KPI-magn — vika + meso (keppnistímabil)", pvLead: "Leik-miðað: hver KPI = leikgildi × sitt vikumargfeldi. Háhraði/sprettur trappast harðar en vegalengd (Martín-García 2018); blokkin stigmagnast með niðurtröppun.", pvWeekHdr: "Vikumark per KPI", pvMesoHdr: "Meso — × leikur per viku", pvBlockTotal: "Blokk alls", pvVol: "rúmmál", matches: "leikir", pvTotal: "alls", pvTotalNote: "þétt vika er ÞYNGRI vika (Anderson 2016)", gamesAbbr: "L",
     wlStarts: "hefst",
     munitLead: "LEIKURINN ER EININGIN (allt liðið) — hlaupa-hryggurinn + vélræni / IMA ásinn sem hver lota skalar frá (þar sem gögnin ná).",
     dist: "Vegalengd", hsr: "Háhraði", load: "Player Load", accdec: "Acc + Dec", accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Skref", dirL: "IMA stefna", rhieL: "RHIE", symL: "Samhverfa", metL: "Efnaafl", fwd: "fram", lat: "hlið", back: "aftur",
@@ -311,6 +311,8 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
         {payload.plannedVolume && payload.plannedVolume.weekKpis.length > 0 && (() => {
           const pv = payload.plannedVolume!;
           const fmtK = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
+          const hasTotals = pv.meso.some((w) => w.totalMultiple != null); // per-week game counts supplied
+          const blockTotalMultiple = Math.round(pv.meso.reduce((a, w) => a + (w.totalMultiple ?? w.volMultiple), 0) * 100) / 100;
           return (
             <View style={s.section} wrap={false}>
               <Text style={s.h2}>{t.pvTitle}</Text>
@@ -334,19 +336,22 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
               {/* Meso per-week */}
               <Text style={[s.small, { marginTop: 5, marginBottom: 2, fontFamily: "Helvetica-Bold" }]}>{t.pvMesoHdr}</Text>
               <View style={s.th}>
-                <Text style={[s.thc, { width: 60 }]}>{t.week}</Text><Text style={[s.thc, { width: 46, textAlign: "right" }]}>×{t.pvVol}</Text>
+                <Text style={[s.thc, { width: 60 }]}>{t.week}</Text><Text style={[s.thc, { width: 44, textAlign: "right" }]}>×{t.pvVol}</Text>
+                {hasTotals && <Text style={[s.thc, { width: 54, textAlign: "right" }]}>×{t.pvTotal}</Text>}
                 {pv.headKpis.map((h, i) => <Text key={i} style={[s.thc, { flex: 1, textAlign: "right" }]}>{bi(h.label)}</Text>)}
               </View>
               {pv.meso.map((w) => (
                 <View key={w.weekIndex} style={[s.row, ...(w.isDeload ? [{ backgroundColor: "#FBF2E2" }] : [])]}>
                   <Text style={{ width: 60 }}>{t.week} {w.weekIndex}{w.isDeload ? ` (${t.deload})` : ""}</Text>
-                  <Text style={{ width: 46, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{w.volMultiple}×</Text>
+                  <Text style={{ width: 44, textAlign: "right" }}>{w.volMultiple}×</Text>
+                  {hasTotals && <Text style={{ width: 54, textAlign: "right", fontFamily: "Helvetica-Bold", color: (w.matches ?? 0) >= 2 ? AMBER : INK }}>{w.totalMultiple != null ? `${w.totalMultiple}×` : "—"}{(w.matches ?? 0) > 0 ? ` ${w.matches}${t.gamesAbbr}` : ""}</Text>}
                   {w.kpi.map((c, i) => <Text key={i} style={{ flex: 1, textAlign: "right" }}>{c.multiple}× <Text style={{ color: MUTE }}>{fmtK(c.value)}{pv.headKpis[i]?.unit ?? ""}</Text></Text>)}
                 </View>
               ))}
               <View style={[s.row, { borderTopWidth: 1, borderTopColor: INK }]}>
                 <Text style={{ width: 60, fontFamily: "Helvetica-Bold" }}>{t.pvBlockTotal}</Text>
-                <Text style={{ width: 46, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{pv.mesoTotal.volMultiple}×</Text>
+                <Text style={{ width: 44, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{pv.mesoTotal.volMultiple}×</Text>
+                {hasTotals && <Text style={{ width: 54, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{blockTotalMultiple}×</Text>}
                 {pv.mesoTotal.kpi.map((c, i) => <Text key={i} style={{ flex: 1, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{c.multiple}× <Text style={{ color: MUTE, fontFamily: "Helvetica" }}>{fmtK(c.value)}{pv.headKpis[i]?.unit ?? ""}</Text></Text>)}
               </View>
             </View>

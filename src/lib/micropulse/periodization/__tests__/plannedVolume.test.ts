@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, pathwayRampGamma, PATHWAY_RAMP_GAMMA, kpiTaperShare } from "../plannedVolume";
+import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, pathwayRampGamma, PATHWAY_RAMP_GAMMA, kpiTaperShare, matchesPerWeek } from "../plannedVolume";
 
 describe("standardTrainingDays", () => {
   it("fewer training days as fixture congestion rises", () => {
@@ -38,6 +38,21 @@ describe("game-week total (Anderson 2016)", () => {
     expect(three.weekTotalMultiple).toBeGreaterThan(one.weekTotalMultiple); // total higher (games dominate)
     expect(one.weekTotalMultiple).toBeCloseTo(one.weekVolumeMultiple + 1, 5);
     expect(three.matches).toBe(3);
+  });
+
+  it("matchesPerWeek counts fixtures into Monday-anchored week windows", () => {
+    // block starts Mon 2026-04-06; a 4-week block
+    const fx = ["2026-04-08", "2026-04-11", "2026-04-15", "2026-04-29", "2026-06-01"]; // wk0×2, wk1×1, wk3×1, out-of-range
+    expect(matchesPerWeek("2026-04-06", 4, fx)).toEqual([2, 1, 0, 1]);
+    expect(matchesPerWeek("2026-04-06", 4, [])).toEqual([0, 0, 0, 0]);
+  });
+
+  it("per-week matchesByWeek makes each meso week's total congestion-aware (congested week higher)", () => {
+    const pv = buildPlannedVolume({ matchKpiAvg: KPI, numWeeks: 4, stepPct: 0, matchesByWeek: [1, 1, 3, 1] })!;
+    const wk = (i: number) => pv.meso.find((w) => w.weekIndex === i)!;
+    expect(wk(3).matches).toBe(3);
+    expect(wk(3).trainingMultiple).toBeLessThan(wk(1).trainingMultiple);   // congested week trains less
+    expect(wk(3).totalMultiple!).toBeGreaterThan(wk(1).totalMultiple!);     // but totals MORE (games)
   });
 });
 
