@@ -1005,7 +1005,14 @@ export default function PeriodizationHubPage() {
             const curPhaseIdx = plan.phases.findIndex((p) => p.start <= todayIso && todayIso < p.end);
             const curPhase = curPhaseIdx >= 0 ? plan.phases[curPhaseIdx] : plan.phases[plan.phases.length - 1] ?? null;
             const nextPhase = curPhaseIdx >= 0 ? plan.phases[curPhaseIdx + 1] ?? null : null;
-            const weekInPhase = curPhase ? Math.max(1, Math.floor((utc(todayIso) - utc(curPhase.start)) / (7 * DAY)) + 1) : null;
+            // Off-season week count starts at the RECONDITIONING build (the coach's off-season start),
+            // not the phase start (= day after the last game). The weeks before it are the holiday/break,
+            // counted separately — so "week N of M of Off-season" reflects the build, matching the summary.
+            const offBuild = curPhase?.key === "offseason" && offStart && offStart > curPhase.start ? offStart : null;
+            const phaseCountStart = offBuild ?? curPhase?.start ?? null;
+            const phaseWeeksDisp = offBuild && curPhase ? Math.max(1, Math.round((utc(curPhase.end) - utc(offBuild)) / (7 * DAY))) : (curPhase?.weeks ?? null);
+            const inHoliday = !!(offBuild && todayIso < offBuild);
+            const weekInPhase = curPhase && phaseCountStart ? (inHoliday ? 0 : Math.max(1, Math.floor((utc(todayIso) - utc(phaseCountStart)) / (7 * DAY)) + 1)) : null;
             const thin = fixtures.length < 3 || (plan.loadCurve?.length ?? 0) < 4;
             const recLabel = goalRec ? (is ? BLOCK_GOAL_LABEL[goalRec.goal].is : BLOCK_GOAL_LABEL[goalRec.goal].en) : null;
             const hasOff = plan.phases.some((p) => p.key === "offseason");
@@ -1014,9 +1021,12 @@ export default function PeriodizationHubPage() {
             const verdictLong = is
               ? `Tímabilið byrjar á ${preWeeks ?? "~"} vikna undirbúnings-Uppsöfnun → Umbreytingu. Á keppnistímabili er áherslan að mestu Framkvæmd (keppni + vikuleg niðurtröppun); leikjagluggar/hlé fá endur-uppsöfnunar-lotu, og hver lota endar á niðurtröppunar-viku.${offClauseIS}`
               : `Your season opens with a ${preWeeks ?? "~"}-week pre-season Accumulation → Transmutation build-up. In-season the emphasis is mostly Realization (compete + a weekly taper); fixture gaps / breaks get a re-accumulation block, and each block ends in a deload week.${offClauseEN}`;
-            const verdict = curPhase && weekInPhase
-              ? (is ? `Þú ert í viku ${weekInPhase} af ${curPhase.weeks} á ${curPhase.label.is}${recLabel ? ` — næst: ${recLabel}` : ""}.` : `You're in week ${weekInPhase} of ${curPhase.weeks} of ${curPhase.label.en}${recLabel ? ` — next up: ${recLabel}` : ""}.`)
-              : null;
+            const verdict = !curPhase ? null
+              : inHoliday
+                ? (is ? `Þú ert í hléi — off-season uppbygging hefst ${shortDate(offBuild!, is)}${recLabel ? ` (næst: ${recLabel})` : ""}.` : `You're in the break — off-season build starts ${shortDate(offBuild!, is)}${recLabel ? ` (next up: ${recLabel})` : ""}.`)
+                : weekInPhase
+                  ? (is ? `Þú ert í viku ${weekInPhase} af ${phaseWeeksDisp} á ${curPhase.label.is}${recLabel ? ` — næst: ${recLabel}` : ""}.` : `You're in week ${weekInPhase} of ${phaseWeeksDisp} of ${curPhase.label.en}${recLabel ? ` — next up: ${recLabel}` : ""}.`)
+                  : null;
 
             // ONE date axis for every lane (Monday of the first block → end of the last block). Everything
             // — blocks, phases, fixtures, tests, load, months, today — is positioned by its DATE on this axis,
@@ -1187,7 +1197,7 @@ export default function PeriodizationHubPage() {
               <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                 <div className="text-[12px] font-semibold text-slate-500">{is ? "Fasi" : "Phase"}</div>
                 <div className="mt-0.5 text-[20px] font-bold text-slate-900">{curPhase ? (is ? curPhase.label.is : curPhase.label.en) : "—"}</div>
-                <div className="text-[13px] text-slate-600">{curPhase && weekInPhase ? (is ? `Vika ${weekInPhase} af ${curPhase.weeks}` : `Week ${weekInPhase} of ${curPhase.weeks}`) : ""}</div>
+                <div className="text-[13px] text-slate-600">{inHoliday ? (is ? `Hlé — uppbygging ${shortDate(offBuild!, is)}` : `Break — build ${shortDate(offBuild!, is)}`) : curPhase && weekInPhase ? (is ? `Vika ${weekInPhase} af ${phaseWeeksDisp}` : `Week ${weekInPhase} of ${phaseWeeksDisp}`) : ""}</div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                 <div className="text-[12px] font-semibold text-slate-500">{is ? "Lota núna" : "Current block"}</div>
