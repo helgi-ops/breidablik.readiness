@@ -159,6 +159,16 @@ test("buildMesoBlocks: the deload is a WEEK (last week by default), snapped to t
   assert.equal(snapped[0].deloadWeekStart, "2026-04-20");
 });
 
+test("buildMesoBlocks: off-season blocks snap to Monday (a Sunday season-end doesn't start a Sunday block)", () => {
+  // Season end 24 Oct 2026 (Sat) → off-season raw start 25 Oct (Sun). Blocks must start Mon 26 Oct.
+  const blocks = buildMesoBlocks("2026-01-05", "2026-11-30", [], 6, 700, ["2026-04-04"], "2026-03-30", [], "2026-10-25", null);
+  const off = blocks.filter((b) => b.start >= "2026-10-25");
+  assert.ok(off.length >= 1);
+  assert.equal(off[0].start, "2026-10-26");   // Monday, not the Sunday 25 Oct
+  const d = new Date(`${off[0].start}T00:00:00Z`).getUTCDay();
+  assert.equal(d, 1);                          // 1 = Monday
+});
+
 test("buildMesoBlocks: coach per-block LENGTH override re-flows later blocks", () => {
   const weeks: WeekLoad[] = [];
   const base = Date.parse("2026-04-06");
@@ -618,7 +628,7 @@ test("buildMesoBlocks: an off-season start later than season end makes a holiday
   const offBlocks = blocks.filter((b) => b.start >= comp.end);
   assert.equal(offBlocks[0].goalKey, "deload");        // the holiday is a full-rest (deload) block
   assert.equal(offBlocks[0].phase.en, "Off-season break");
-  assert.equal(offBlocks[0].start, "2026-10-27"); // off-season (holiday) starts the day after season end
+  assert.equal(offBlocks[0].start, "2026-11-02"); // Monday-aligned (season end 26 Oct Mon → first full off-week Mon 2 Nov)
   assert.equal(offBlocks[0].end, "2026-11-16");
   assert.equal(offBlocks[1].goalKey, "accum");         // the build still starts at accumulation after the holiday
   assert.ok(offBlocks.slice(1).every((b) => b.goalKey !== "realize"));

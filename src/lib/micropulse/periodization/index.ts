@@ -1117,10 +1117,15 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
     // individual off-season block (the per-block length override). If the coach set an off-season START
     // later than the season end, the weeks between are a HOLIDAY (Frí): full rest before the build begins.
     if (offStartMs != null) {
-      const buildStart = offseasonBuildStart && offseasonBuildStart > offseasonStart! && offseasonBuildStart < phaseEnd ? offseasonBuildStart : null;
-      spans = buildStart
-        ? [...spans, { start: offseasonStart!, end: buildStart, kind: "holiday" as const }, ...fixedCadence(buildStart, phaseEnd, OFFSEASON_BLOCK_WEEKS)]
-        : [...spans, ...fixedCadence(offseasonStart!, phaseEnd, OFFSEASON_BLOCK_WEEKS)];
+      // Off-season blocks are Monday-aligned (training weeks are Mon–Sun), so a season end mid-week doesn't
+      // make the block start on a Sunday and pull the previous (competitive) week into the calendar view.
+      const mondayOnAfter = (iso: string) => { const m = monday(iso); return m === iso ? m : addDays(m, 7); };
+      const rawBuild = offseasonBuildStart && offseasonBuildStart > offseasonStart! && offseasonBuildStart < phaseEnd ? offseasonBuildStart : null;
+      const offMon = mondayOnAfter(offseasonStart!);
+      const buildMon = rawBuild ? mondayOnAfter(rawBuild) : null;
+      spans = buildMon && buildMon > offMon
+        ? [...spans, { start: offMon, end: buildMon, kind: "holiday" as const }, ...fixedCadence(buildMon, phaseEnd, OFFSEASON_BLOCK_WEEKS)]
+        : [...spans, ...fixedCadence(offMon, phaseEnd, OFFSEASON_BLOCK_WEEKS)];
     }
   }
 
