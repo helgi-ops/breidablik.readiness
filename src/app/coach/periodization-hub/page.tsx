@@ -33,7 +33,7 @@ import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { preseasonStartRamp, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
-import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek } from "@/lib/micropulse/periodization/plannedVolume";
+import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
 import { recommendTestingSchedule, testsForBlock, TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
@@ -1616,6 +1616,11 @@ export default function PeriodizationHubPage() {
               <i className="mx-1 ml-3 inline-block h-1.5 w-1.5 translate-y-[-1px] rounded-full align-middle" style={{ background: "#2740e6" }} />
               <b className="font-semibold text-slate-600">{is ? "efnaskipta-breytur" : "metabolic"}</b> {is ? "(hröðun, vegalengd) línulega — ólíkar aðlögunarleiðir vefja og efnaskipta" : "(accel, distance) linearly — tissue vs metabolic adapt differently"} (Vanrenterghem 2017, Harper &amp; McBurnie 2021, Duhig 2016).
             </p>
+            <p className="mt-1.5 text-[11.5px] leading-relaxed text-slate-500">
+              {is
+                ? "Hvert KPI er sýnt sem sitt eigið ×leik-margfeldi (vikuálag ÷ einn leikur af þeirri breytu) — svo háhraðahlaup, sem lítur út fyrir fáa metra, vegur álagslega nærri heildarvegalengd. Breyturnar hafa ekki sama gildi (training:match, PMC6747517). Músarbending sýnir rannsóknar-viðmiðssvið; gult = yfir sviði (eðlilegt í undirbúnings-uppbyggingu)."
+                : "Each KPI is shown as its own ×match multiple (weekly ÷ one match of that KPI) — so high-speed running, which looks like few metres, carries a load close to total distance. The variables don't share a value (training:match, PMC6747517). Hover for the research reference range; amber = above range (normal in a pre-season build)."}
+            </p>
           </section>
 
           {/* Meso-cycle SEQUENCE editor — Macro owns the lengths; the Meso tab reads them. Index-keyed. */}
@@ -1688,8 +1693,15 @@ export default function PeriodizationHubPage() {
                 )}
                 {kpiKeys.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {kpiKeys.map((k) => { const lab = WEEKLY_LOAD_LABELS[k]; const val = w.byKpi[k]; if (val == null) return null; const pw = kpiPathway(k); const pwDot = pw === "biomechanical" ? "#a83e28" : pw === "physiological" ? "#2740e6" : "#94a3b8"; return (
-                      <span key={k} className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10.5px] text-slate-600" title={pw === "biomechanical" ? (is ? "Vélræn leið — stigþyngist varlega (vefjaálag)" : "Biomechanical pathway — ramps conservatively (tissue load)") : pw === "physiological" ? (is ? "Efnaskipta-leið — stigþyngist línulega" : "Physiological pathway — ramps linearly") : (is ? "Rúmmál — viðmiðseining" : "Volume — the anchor")}><i className="h-1.5 w-1.5 rounded-full" style={{ background: pwDot }} /><span className="text-slate-400">{is ? lab.is : lab.en}</span> <span className="font-semibold tabular-nums text-slate-800">{val.toLocaleString("en-US")}{lab.unit}</span></span>
+                    {kpiKeys.map((k) => { const lab = WEEKLY_LOAD_LABELS[k]; const val = w.byKpi[k]; if (val == null) return null; const pw = kpiPathway(k); const pwDot = pw === "biomechanical" ? "#a83e28" : pw === "physiological" ? "#2740e6" : "#94a3b8";
+                      // Impact-weighted read: each KPI as its OWN ×match multiple (weekly ÷ one match of that KPI).
+                      // Shows the variables don't share a value — HSR's small metres are a big ×match (T:M).
+                      const mv = tka[k]; const xmatch = mv != null && mv > 0 ? Math.round((val / mv) * 100) / 100 : null;
+                      const ref = kpiTmRefRange(k); const over = xmatch != null && ref != null && xmatch > ref[1];
+                      const pwName = pw === "biomechanical" ? (is ? "vélræn" : "biomechanical") : pw === "physiological" ? (is ? "efnaskipti" : "physiological") : (is ? "rúmmál" : "volume");
+                      const title = `${is ? lab.is : lab.en} — ${xmatch != null ? `×${xmatch} leik` : "—"}${ref ? ` · ${is ? "viðmið" : "ref"} ${ref[0]}–${ref[1]}×${over ? (is ? " (yfir — undirbúnings-uppbygging)" : " (above — pre-season build)") : ""}` : ""} · ${pwName}`;
+                      return (
+                      <span key={k} className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10.5px] text-slate-600" title={title}><i className="h-1.5 w-1.5 rounded-full" style={{ background: pwDot }} />{xmatch != null && <span className={`font-semibold tabular-nums ${over ? "text-[#de9328]" : "text-slate-900"}`}>×{xmatch}</span>}<span className="text-slate-400">{is ? lab.is : lab.en}</span> <span className="tabular-nums text-slate-500">{val.toLocaleString("en-US")}{lab.unit}</span></span>
                     ); })}
                   </div>
                 )}

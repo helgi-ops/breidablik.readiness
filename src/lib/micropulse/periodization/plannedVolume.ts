@@ -104,6 +104,28 @@ export function kpiPathway(key: string): LoadPathway {
   return KPI_PATHWAY[key as WeeklyLoadMetricKey] ?? "physiological";
 }
 
+/**
+ * Research reference range for a KPI's WEEKLY accumulation as a ×match multiple (training:match ratio) —
+ * the "impact-weighted" read that shows each variable's own weight: in raw metres HSR looks tiny next to
+ * total distance, but as ×match it is far closer (HSR ~1–2.3× vs TD ~1.8–3.1×). Ranges from measured T:M:
+ * TD 1.8–3.1 (Dutch 3.1; full-season ~1.8), HSR 0.2–2.3, sprint 0.03–1.3, accel 1.6–3.9, decel 0.6–3.3
+ * (full-season T:M study PMC6747517; Dutch 2-season; HSR/sprint systematic review PMC9968809). In-season
+ * figures — the pre-season ramp may sit at/above the upper bound by design (capacity building, no matches).
+ */
+export const KPI_TM_REF_RANGE: Partial<Record<WeeklyLoadMetricKey, [number, number]>> = {
+  totalDistance: [1.8, 3.5], totalPlayerLoad: [1.8, 3.1],
+  velocityBand5: [0.2, 2.3], velocityBand6: [0.03, 1.5],
+  accelB23: [1.6, 3.9], decelB23: [0.6, 3.3],
+  imaTotal: [1.6, 3.9], imaAccel: [1.6, 3.9], imaDecel: [0.6, 3.3], imaCod: [0.6, 3.3],
+  fmpDynamicHigh: [0.2, 2.3], fmpDynamicMedium: [1.0, 2.5], fmpRunningHigh: [0.2, 2.3],
+  imaStrideBand6: [0.2, 2.3], imaStrideBand7: [0.1, 1.5], imaStrideBand8: [0.03, 1.5],
+};
+
+/** The research T:M reference range for a KPI's weekly ×match multiple, or null if none. */
+export function kpiTmRefRange(key: string): [number, number] | null {
+  return KPI_TM_REF_RANGE[key as WeeklyLoadMetricKey] ?? null;
+}
+
 /** The ramp-progression exponent (γ) for a KPI's pathway — see `PATHWAY_RAMP_GAMMA`. */
 export function pathwayRampGamma(key: string): number {
   return PATHWAY_RAMP_GAMMA[kpiPathway(key)];

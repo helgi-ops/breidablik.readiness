@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, pathwayRampGamma, PATHWAY_RAMP_GAMMA, kpiTaperShare, matchesPerWeek } from "../plannedVolume";
+import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, pathwayRampGamma, PATHWAY_RAMP_GAMMA, kpiTaperShare, matchesPerWeek, kpiTmRefRange } from "../plannedVolume";
 
 describe("standardTrainingDays", () => {
   it("fewer training days as fixture congestion rises", () => {
@@ -26,6 +26,21 @@ describe("kpiTaperShare — T:M-calibrated per-KPI weekly accumulation", () => {
   it("distance / PlayerLoad stay the volume anchor (share = 1)", () => {
     expect(kpiTaperShare("totalDistance")).toBeCloseTo(1, 5);
     expect(kpiTaperShare("totalPlayerLoad")).toBeCloseTo(1, 5);
+  });
+});
+
+describe("kpiTmRefRange — research ×match (T:M) reference ranges", () => {
+  it("total distance sits higher than HSR, which sits higher than sprint (the impact-weighted read)", () => {
+    const td = kpiTmRefRange("totalDistance")!;
+    const hsr = kpiTmRefRange("velocityBand5")!;
+    const sprint = kpiTmRefRange("velocityBand6")!;
+    expect(td[1]).toBeGreaterThan(hsr[1]);      // TD upper > HSR upper
+    expect(hsr[1]).toBeGreaterThan(sprint[1]);  // HSR upper > sprint upper
+    expect(td).toEqual([1.8, 3.5]);
+    expect(hsr).toEqual([0.2, 2.3]);
+  });
+  it("returns null for an unmapped KPI", () => {
+    expect(kpiTmRefRange("somethingUnmapped")).toBeNull();
   });
 });
 
