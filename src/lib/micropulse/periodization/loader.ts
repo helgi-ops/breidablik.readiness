@@ -56,7 +56,12 @@ const ageDays = (iso: string | null, todayMs: number) => (iso ? Math.round((toda
 export async function loadPeriodization(sb: SupabaseClient, args: { teamId: string; seasonYear?: number; preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; deloadCadence?: number | null; blockWeeksByStart?: Record<string, number> | null; deloadByStart?: Record<string, string> | null }): Promise<PeriodizationPlan> {
   const todayMs = Date.now();
   const seasonYear = args.seasonYear ?? new Date().getUTCFullYear();
-  const yStart = `${seasonYear}-01-01`, yEnd = `${seasonYear}-12-31`;
+  // A season can OPEN in the PRIOR calendar year — pre-season often starts in Nov/Dec. When the coach set a
+  // pre-season start before Jan 1, widen the window back to it so the whole season (that pre-season → the
+  // competition → the off-season) loads under this season year, instead of the calendar year clipping it.
+  const yStartBase = `${seasonYear}-01-01`;
+  const yStart = args.preseasonStart && /^\d{4}-\d{2}-\d{2}$/.test(args.preseasonStart) && args.preseasonStart < yStartBase ? args.preseasonStart : yStartBase;
+  const yEnd = `${seasonYear}-12-31`;
 
   // Fixtures → macro phases.
   const { data: fxData } = await sb.from("match_schedule")

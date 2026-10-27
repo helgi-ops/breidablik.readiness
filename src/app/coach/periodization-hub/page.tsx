@@ -1373,7 +1373,7 @@ export default function PeriodizationHubPage() {
               <h2 className={h2}>{is ? "Tímabilsrammi" : "Season frame"}</h2>
               {(() => {
                 const nowY = new Date().getFullYear();
-                const minY = nowY - 1, maxY = nowY + 1;
+                const minY = nowY - 5, maxY = nowY + 1; // view up to five past seasons, or plan next year
                 const vy = viewYear ?? plan.seasonYear;
                 const btn = "flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-[15px] text-slate-600 hover:bg-slate-50 disabled:opacity-30";
                 return (
@@ -1541,7 +1541,10 @@ export default function PeriodizationHubPage() {
           )}
 
           {plan.phases.length === 0 || blocks.length === 0 ? (
-            <section className={card}><p className="text-[13px] text-slate-600">{is ? "Engir leikir skráðir fyrir tímabilið." : "No fixtures on record for the season."}</p></section>
+            <section className={card}>
+              <p className="text-[13px] font-semibold text-slate-800">{is ? `Ekkert tímabil enn fyrir ${viewYear ?? plan.seasonYear}.` : `No season yet for ${viewYear ?? plan.seasonYear}.`}</p>
+              <p className="mt-1 text-[13px] text-slate-600">{is ? "Áætlunin er leikja-drifin: bættu við leikjum tímabilsins (fyrsti keppnisleikurinn ræður hvar undirbúningur endar og keppni hefst). Akkerin ein og sér búa ekki til fasa. Bættu við leikjum í Leikjaskrá / „+ Leikur“ hér að neðan — dagsettum á þetta ár." : "The plan is fixtures-driven: add this season's fixtures (the first competitive game sets where pre-season ends and competition begins). The anchors alone don't create phases. Add fixtures in the Fixtures planner / \"+ Fixture\" below — dated in this year."}</p>
+            </section>
           ) : (<>
 
           {/* 2 — WHERE YOU ARE: Level 0 verdict + four plain facts */}
