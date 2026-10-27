@@ -344,6 +344,85 @@ type SessionItem = {
   sets: number;
 };
 
+// Basketball: map the day's planned stimulus → the categories to emphasise.
+const BB_FOCUS_CATEGORIES: Record<string, string[]> = {
+  locomotive: ["conditioning", "fast_break"],
+  mechanical: ["defense", "fast_break"],
+  mixed: ["half_court_offense", "fast_break"],
+  technical: ["shooting", "half_court_offense"],
+};
+const BB_CAT_ORDER = ["shooting", "fast_break", "half_court_offense", "defense", "conditioning", "warmup", "other"];
+
+/**
+ * Basketball drill ideas — the indoor replacement for the football playing-style + worst-case
+ * recommender. Groups the (sport-filtered) library drills by category, flags the categories
+ * recommended for the day's planned stimulus, and one-click adds a drill to the session. Reads
+ * the drills already fetched for the picker — no GPS, no match-demand; load shown on the Titan
+ * Load Index scale.
+ */
+function BasketballDrillIdeas({ drills, onAdd, inSessionIds, lang, catLabels, mdFocus }: {
+  drills: Drill[]; onAdd: (d: Drill) => void; inSessionIds: Set<string>;
+  lang: "IS" | "EN"; catLabels: Record<string, string>; mdFocus: string | null;
+}) {
+  const is = lang === "IS";
+  const byCat = new Map<string, Drill[]>();
+  for (const d of drills) {
+    const k = String(d.category);
+    const list = byCat.get(k) ?? [];
+    list.push(d);
+    byCat.set(k, list);
+  }
+  const cats = BB_CAT_ORDER.filter((c) => byCat.has(c));
+  if (cats.length === 0) return null;
+  const rec = new Set(mdFocus ? (BB_FOCUS_CATEGORIES[mdFocus.toLowerCase()] ?? []) : []);
+  const num = (v: number | null) => (v == null ? null : Math.round(v));
+  return (
+    <details className="group rounded-xl border border-slate-200 bg-white" open>
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-900">
+        <span className="text-[#2740e6] transition-transform group-open:rotate-90">▸</span>
+        {is ? "Körfubolta drilluhugmyndir" : "Basketball drill ideas"}
+        <span className="ml-1 text-[11px] font-normal text-slate-400">{is ? "— úr drillusafninu, eftir flokki" : "— from the library, by category"}</span>
+      </summary>
+      <div className="space-y-3 border-t border-slate-100 px-4 py-3">
+        {rec.size > 0 && (
+          <p className="text-[12px] text-slate-500">
+            {is ? "Mælt með fyrir áætlun dagsins: " : "Recommended for today's plan: "}
+            <span className="font-semibold text-slate-700">{[...rec].map((c) => catLabels[c] ?? c).join(", ")}</span>
+          </p>
+        )}
+        {cats.map((c) => (
+          <div key={c}>
+            <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              {catLabels[c] ?? c}
+              {rec.has(c) && <span className="rounded-full bg-[#2740e6]/10 px-1.5 py-0.5 text-[9px] font-bold text-[#2740e6]">{is ? "mælt með" : "recommended"}</span>}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {byCat.get(c)!.map((d) => {
+                const added = inSessionIds.has(String(d.id));
+                return (
+                  <div key={d.id} className="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-[13px] font-semibold text-slate-900">{d.drill_name}</span>
+                      <button type="button" onClick={() => onAdd(d)} disabled={added}
+                        className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold ${added ? "bg-emerald-100 text-emerald-700" : "bg-[#2740e6] text-white hover:bg-[#1e34c0]"}`}>
+                        {added ? (is ? "✓ Í æfingu" : "✓ Added") : (is ? "+ Bæta við" : "+ Add")}
+                      </button>
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-500">
+                      {[d.drill_format, d.duration_min != null ? `${num(d.duration_min)} min` : null, d.player_load != null ? `${num(d.player_load)} ${is ? "álag" : "load"}` : null, d.reps].filter(Boolean).join(" · ")}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        <p className="text-[11px] text-slate-400">{is ? "Lýsandi hugmyndir úr drillusafninu — álag á Titan Load Index skala, ekki GPS. Snertir ekki readiness." : "Descriptive ideas from the drill library — load on the Titan Load Index scale, not GPS. Never touches readiness."}</p>
+      </div>
+    </details>
+  );
+}
+
 export default function SessionBuilder({ teamId, teamSport = null }: { teamId: string; teamSport?: string | null }) {
   const [lang] = useLang();
   const t = SB_COPY[lang];
@@ -460,6 +539,9 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
       if (!token) throw new Error(t.missingAuth);
       const params = new URLSearchParams({ team_id: teamId });
       if (source === "mine") params.set("mine", "1");
+      // Basketball's own drills are few; include the shared (public) basketball bank so the
+      // picker + drill-ideas panel surface the standard library too.
+      else if (isBasketball) params.set("scope", "general");
       const res = await fetch(`/api/coach/drill-library?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -471,7 +553,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     } finally {
       setLoading(false);
     }
-  }, [teamId, source]);
+  }, [teamId, source, isBasketball]);
 
   useEffect(() => {
     refresh();
@@ -1966,6 +2048,17 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
 
       {/* ═══ DRILL IDEAS: by playing style + worst-case scenario (per player) — GPS/football only ═══ */}
       {!isBasketball && <DrillRecommenderPanel teamId={teamId} mdDay={mdDay || null} />}
+      {/* Basketball: library drill ideas by category (indoor, no GPS) in place of the above. */}
+      {isBasketball && (
+        <BasketballDrillIdeas
+          drills={drills}
+          onAdd={addDrill}
+          inSessionIds={sessionDrillIds}
+          lang={lang === "IS" ? "IS" : "EN"}
+          catLabels={catLabels}
+          mdFocus={mdFocus || null}
+        />
+      )}
 
       {/* ═══ MAIN 2-col: drill picker + selected drills ═══ */}
       <div className="space-y-4">
