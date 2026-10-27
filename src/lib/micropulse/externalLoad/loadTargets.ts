@@ -40,6 +40,7 @@ import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
 import { planWeeklyTarget } from "@/lib/micropulse/periodization/planWeeklyTarget";
+import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -546,12 +547,15 @@ export async function computePlanTarget(
   const wkStart = monday.toISOString().slice(0, 10), wkEnd = sunday.toISOString().slice(0, 10);
   const matchesThisWeek = plan.fixtures.filter((f) => f >= wkStart && f <= wkEnd).length;
 
+  // Basketball uses a shorter MD micro-cycle for the in-season weekly target.
+  const sport = await resolveTeamSport(sb, teamId);
   const pt = planWeeklyTarget({
     phases: plan.phases, blocks: plan.blocks, matchUnits: plan.players.map((p) => p.matchUnit),
     today: referenceDate, matchesThisWeek,
     week1MatchMultiple: ov.preseasonWeek1Mult ?? undefined,
     sessionsPerWeek: ov.preseasonSessions ?? undefined,
     stepPct: ov.stepPct ?? undefined,
+    sport,
   });
   const target: Partial<Record<WeeklyLoadMetricKey, number | null>> = {};
   for (const key of activeMetrics) {

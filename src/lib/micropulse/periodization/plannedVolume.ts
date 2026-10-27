@@ -22,7 +22,15 @@ import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/e
 
 /** The canonical TRAINING-day MD labels for a week with `matches` matches (MD-7 structure). The match
  *  day(s) are excluded — they ARE the unit. Fewer training days as the fixture congestion rises. */
-export function standardTrainingDays(matches: number): string[] {
+export function standardTrainingDays(matches: number, sport?: string | null): string[] {
+  // Basketball plays 1–2+ games a week, so the micro-cycle is a day or two shorter than
+  // football's at every congestion level — the MD countdown drops MD-5/MD-4.
+  if (String(sport ?? "").toLowerCase() === "basketball") {
+    if (matches <= 0) return ["MD-3", "MD-2", "MD-1"];               // no-game week → 3 quality days
+    if (matches === 1) return ["MD-3", "MD-2", "MD-1"];
+    if (matches === 2) return ["MD-2", "MD-1"];
+    return ["MD-1"];                                                 // 3+ games → minimal training
+  }
   if (matches <= 0) return ["MD-5", "MD-4", "MD-3", "MD-2", "MD-1"]; // a full no-match training week
   if (matches === 1) return ["MD-4", "MD-3", "MD-2", "MD-1"];
   if (matches === 2) return ["MD-3", "MD-2", "MD-1"];                // ~3 training days across two games

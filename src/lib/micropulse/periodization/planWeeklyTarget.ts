@@ -64,6 +64,8 @@ export function planWeeklyTarget(opts: {
   stepPct?: number;
   week1MatchMultiple?: number;
   sessionsPerWeek?: number;
+  /** Team sport — basketball uses a shorter MD micro-cycle (MD-3 → MD-1). Defaults to football. */
+  sport?: string | null;
 }): PlanWeeklyTarget | null {
   const kpi = teamKpiAvg(opts.matchUnits);
   if (Object.keys(kpi).length === 0) return null;
@@ -92,7 +94,7 @@ export function planWeeklyTarget(opts: {
   //    the base week by stepPct; the block's deload week drops to ~60% — Gabbett 2016, 3:1 overload).
   if (comp && today >= comp.start && today < comp.end) {
     const matches = Math.max(0, Math.round(opts.matchesThisWeek ?? 1));
-    const vols = kpiVolumes(kpi, standardTrainingDays(matches));
+    const vols = kpiVolumes(kpi, standardTrainingDays(matches, opts.sport));
     if (vols.length === 0) return null;
 
     let factor = 1, weekIdx: number | undefined, blockWeeks: number | undefined, isDeloadWk = false;

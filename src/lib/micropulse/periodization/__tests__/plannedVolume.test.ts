@@ -9,6 +9,15 @@ describe("standardTrainingDays", () => {
     expect(standardTrainingDays(0).length).toBe(5);
     expect(standardTrainingDays(1)).not.toContain("MD"); // match excluded
   });
+  it("basketball uses a shorter MD micro-cycle (no MD-5/MD-4)", () => {
+    expect(standardTrainingDays(0, "basketball")).toEqual(["MD-3", "MD-2", "MD-1"]);
+    expect(standardTrainingDays(1, "basketball")).toEqual(["MD-3", "MD-2", "MD-1"]);
+    expect(standardTrainingDays(2, "basketball")).toEqual(["MD-2", "MD-1"]);
+    expect(standardTrainingDays(3, "basketball")).toEqual(["MD-1"]);
+    expect(standardTrainingDays(0, "basketball")).not.toContain("MD-5");
+    // Football default is unchanged when no sport is passed.
+    expect(standardTrainingDays(0)).toEqual(["MD-5", "MD-4", "MD-3", "MD-2", "MD-1"]);
+  });
 });
 
 describe("kpiTaperShare — T:M-calibrated per-KPI weekly accumulation", () => {
