@@ -1611,6 +1611,28 @@ export default function PeriodizationHubPage() {
                     })}
                   </div>)}
 
+                {/* training camps — concentrated-load periods as a labelled amber band (its own lane so it never
+                    reads as a block's deload stripe) */}
+                {(() => {
+                  const campsInSpan = camps.filter((c) => utc(c.end_date) >= d0 && utc(c.start_date) < d1);
+                  if (!campsInSpan.length) return null;
+                  return lane(is ? "Æfingaferð" : "Camp", is ? "álagslota" : "loading block",
+                    <div className="relative h-6">
+                      {campsInSpan.map((c) => {
+                        const l = Math.max(0, pctOf(c.start_date)), r = Math.min(100, pctOf(isoAdd(c.end_date, 1)));
+                        if (r <= l) return null;
+                        return (
+                          <div key={c.id} className="absolute inset-y-0 px-px" style={{ left: `${l}%`, width: `${r - l}%` }}
+                            title={`${shortDate(c.start_date, is)}–${shortDate(c.end_date, is)} · +${c.load_pct}%${c.two_a_day ? (is ? " · tvíæfingar" : " · two-a-days") : ""}${c.label ? ` · ${c.label}` : ""}`}>
+                            <div className="flex h-full items-center overflow-hidden rounded-md px-1.5" style={{ background: "#DE9328" }}>
+                              <span className="truncate text-[11px] font-semibold text-[#5A3A06]">✈ +{c.load_pct}%{c.two_a_day ? (is ? " 2æf" : " 2×") : ""}{c.label ? ` · ${c.label}` : ""}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>);
+                })()}
+
                 {/* fixture density — in-season strength sub-phase, week by week */}
                 {compPhase && lane(is ? "Leikjaþéttleiki" : "Fixture density", is ? "styrkur viku fyrir viku" : "strength week by week",
                   <div className="relative h-5">
@@ -1669,6 +1691,7 @@ export default function PeriodizationHubPage() {
             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-slate-100 pt-3 text-[12px] text-slate-600">
               {ANATOMY.map((a) => <span key={a.g} className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px]" style={{ background: GC[a.g] }} />{goalName(a.g)}</span>)}
               <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px]" style={{ background: "#DE9328" }} />{is ? "Niðurtröppunarvika" : "Deload week"}</span>
+              {camps.length > 0 && <span className="inline-flex items-center gap-1.5"><span className="inline-flex h-3.5 items-center rounded-[3px] px-1 text-[9px] font-bold text-[#5A3A06]" style={{ background: "#DE9328" }}>✈</span>{is ? "Æfingaferð" : "Training camp"}</span>}
               {compPhase && <span className="h-4 w-px bg-slate-200" />}
               {compPhase && SUBPHASE_KEYS.map((k) => <span key={k} className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px]" style={{ background: SUB_COLOR[k] }} />{is ? subPhaseInfo(k).label.is : subPhaseInfo(k).label.en}</span>)}
               <span className="h-4 w-px bg-slate-200" />
