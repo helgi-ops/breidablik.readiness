@@ -65,7 +65,7 @@ export async function scoutOpponentSeason(
   const { data: seasonRow, error: sErr } = await supabase.from("scout_basketball_season").upsert({
     owner_team_id: ownerTeamId, opponent_name: opponentName, season, season_id: seasonId,
     source: "baskethotel", games: gameCount, synced_at: nowIso, updated_at: nowIso,
-  }, { onConflict: "owner_team_id,opponent_name,season" }).select("id").maybeSingle();
+  }, { onConflict: "owner_team_id,opponent_name,season,source" }).select("id").maybeSingle();
   if (sErr || !seasonRow) return { ok: false, games: gameCount, rows: 0, error: sErr?.message ?? "scout season upsert failed" };
   const scoutSeasonId = (seasonRow as { id: string }).id;
 

@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { buildBasketballOpponentReport, type OppPlayerGame } from "@/lib/micropulse/basketballOpponentReport";
 import { aggregateAdvancedShots, type ShotTypeAgg } from "@/lib/micropulse/basketballStats/instatAggregate";
+import { buildInstatOpponentScout, type InstatOpponentPayload, type ScoutLineup } from "@/lib/micropulse/basketballStats/scoutInstatOpponent";
 import { scoutOpponentSeason } from "@/lib/integrations/basketball/scout";
 import { scopeToCurrentSeason } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 
@@ -154,9 +155,11 @@ export async function GET(req: NextRequest) {
     const { data: fibaOpp } = await auth.supabase.from("basketball_fiba_games").select("opp_name, season").eq("owner_team_id", auth.teamId);
     const { games: scopedFiba } = scopeToCurrentSeason(((fibaOpp ?? []) as Array<{ opp_name: string | null; season: string | null; match_date: string | null }>).map((r) => ({ ...r, match_date: null })));
     for (const r of scopedFiba) { const nm = (r.opp_name ?? "").trim(); if (nm) oppSet.add(nm); }
-    const opponents = Array.from(oppSet).sort();
     const { data: scouted } = await auth.supabase.from("scout_basketball_season").select("opponent_name, games, synced_at").eq("owner_team_id", auth.teamId);
     const scoutMap = new Map(((scouted ?? []) as Array<{ opponent_name: string; games: number | null; synced_at: string | null }>).map((s) => [s.opponent_name, s]));
+    // Include opponents we scouted (KKÍ pull or InStat import) even if we never played them.
+    for (const nm of scoutMap.keys()) if (nm && nm.trim()) oppSet.add(nm.trim());
+    const opponents = Array.from(oppSet).sort();
     return NextResponse.json({
       ok: true, seasonId,
       opponents: opponents.map((name) => ({ name, scouted: scoutMap.has(name), games: scoutMap.get(name)?.games ?? null, syncedAt: scoutMap.get(name)?.synced_at ?? null })),
@@ -184,6 +187,8 @@ type OpponentBundle = {
   report: ReturnType<typeof buildBasketballOpponentReport> | null;
   oppFourFactors: FourFactorAvg | null; syncedAt?: string | null; instatGames?: number;
   oppCourtRegions: CourtRegion[] | null; oppPlaytypes: ShotTypeAgg[] | null; oppEfficiency: ShotTypeAgg[] | null;
+  /** Opponent's season 5-man units (InStat season export only). */
+  oppLineups: ScoutLineup[] | null;
 };
 
 /** The stored full-season header per source (KKÍ pull or an InStat season export). */
@@ -215,6 +220,15 @@ async function reportFromSeasonRow(supabase: ReturnType<typeof getSupabase>, sco
   return buildBasketballOpponentReport(opponent, games);
 }
 
+/** Build the InStat-season scout (report + playtypes + lineups) from the season row's
+ *  stored payload. Returns null if the payload is missing/empty. */
+async function instatSeasonScout(supabase: ReturnType<typeof getSupabase>, scoutSeasonId: string, opponent: string) {
+  const { data } = await supabase.from("scout_basketball_season").select("payload").eq("id", scoutSeasonId).maybeSingle();
+  const payload = (data as { payload?: InstatOpponentPayload | null } | null)?.payload ?? null;
+  if (!payload || (!payload.teamGames?.length && !payload.players?.length && !payload.lineups?.length)) return null;
+  return buildInstatOpponentScout(opponent, payload);
+}
+
 async function loadOpponentBundle(supabase: ReturnType<typeof getSupabase>, teamId: string, opponent: string, preferred?: "kki" | "instat" | null): Promise<OpponentBundle> {
   const oppFourFactors = await loadOpponentFourFactors(supabase, teamId, opponent);
   const sources = await seasonSourcesFor(supabase, teamId, opponent);
@@ -226,16 +240,21 @@ async function loadOpponentBundle(supabase: ReturnType<typeof getSupabase>, team
 
   if (chosen) {
     const row = sources[chosen]!;
+    // InStat season export carries playtypes + 5-man units; the KKÍ pull is box-only.
+    if (chosen === "instat") {
+      const scout = await instatSeasonScout(supabase, row.id, opponent);
+      return { scouted: true, reportSource: "instat", availableSources, seasonSource: "instat", report: scout?.report ?? null, oppFourFactors, syncedAt: row.syncedAt, oppCourtRegions: null, oppPlaytypes: scout?.playtypes.length ? scout.playtypes : null, oppEfficiency: scout?.efficiency.length ? scout.efficiency : null, oppLineups: scout?.lineups.length ? scout.lineups : null };
+    }
     const report = await reportFromSeasonRow(supabase, row.id, opponent);
-    return { scouted: true, reportSource: chosen, availableSources, seasonSource: chosen, report, oppFourFactors, syncedAt: row.syncedAt, oppCourtRegions: null, oppPlaytypes: null, oppEfficiency: null };
+    return { scouted: true, reportSource: chosen, availableSources, seasonSource: chosen, report, oppFourFactors, syncedAt: row.syncedAt, oppCourtRegions: null, oppPlaytypes: null, oppEfficiency: null, oppLineups: null };
   }
 
   // No stored season — fall back to the head-to-head InStat report.
   const instat = await loadInstatOpponentGames(supabase, teamId, opponent);
   if (instat.games.length > 0) {
-    return { scouted: true, reportSource: "instat", availableSources, seasonSource: null, report: buildBasketballOpponentReport(opponent, instat.games), oppFourFactors, instatGames: instat.gameCount, oppCourtRegions: instat.courtRegions, oppPlaytypes: instat.playtypes, oppEfficiency: instat.efficiency };
+    return { scouted: true, reportSource: "instat", availableSources, seasonSource: null, report: buildBasketballOpponentReport(opponent, instat.games), oppFourFactors, instatGames: instat.gameCount, oppCourtRegions: instat.courtRegions, oppPlaytypes: instat.playtypes, oppEfficiency: instat.efficiency, oppLineups: null };
   }
-  return { scouted: false, reportSource: null, availableSources, seasonSource: null, report: null, oppFourFactors, oppCourtRegions: null, oppPlaytypes: null, oppEfficiency: null };
+  return { scouted: false, reportSource: null, availableSources, seasonSource: null, report: null, oppFourFactors, oppCourtRegions: null, oppPlaytypes: null, oppEfficiency: null, oppLineups: null };
 }
 
 const AI_MODEL = "claude-sonnet-5";

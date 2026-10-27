@@ -18,6 +18,8 @@ export const SHOT_TYPE_LABELS: Record<string, { EN: string; IS: string }> = {
   iso: { EN: "Isolation", IS: "Einn á einn" },
   handOff: { EN: "Hand-off", IS: "Handafhending" },
   cut: { EN: "Cut", IS: "Skurður" },
+  pnp: { EN: "Pick & pop", IS: "Skýling og poppa" },
+  drive: { EN: "Drive", IS: "Drífa að körfu" },
   putback: { EN: "Putback", IS: "Endurstig" },
   uncontestedFg: { EN: "Uncontested FG", IS: "Óvarið skot" },
   contestedFg: { EN: "Contested FG", IS: "Varið skot" },

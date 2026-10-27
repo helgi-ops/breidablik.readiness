@@ -244,3 +244,67 @@ export function buildBasketballOpponentReport(opponentName: string, rows: OppPla
     howToDefend: howToDefend(profile, ps),
   };
 }
+
+// ── Pre-aggregated season input (InStat season export) ───────────────────────
+// The KKÍ pull gives raw per-player-per-game rows that `buildBasketballOpponentReport`
+// aggregates. An InStat season export is ALREADY aggregated (per-player season
+// averages + a team game log), so this second entry builds the SAME report shape from
+// those averages — reusing the identical tag thresholds, `describePlayer` and
+// `howToDefend` so both sources read the same. No per-game points series / game log
+// exists in the averages, so those are empty (the shooting split + tags carry it).
+
+export type SeasonPlayerInput = {
+  name: string; ref: string; games: number;
+  mpg: number | null; ppg: number | null; rpg: number | null; apg: number | null;
+  fgPct: number | null; tpPct: number | null; tpaPg: number | null;
+  spg: number | null; bpg: number | null; topg: number | null;
+  twoPct: number | null; twoPaPg: number | null; threePct: number | null; threePaPg: number | null;
+  ftPct: number | null; ftaPg: number | null;
+};
+
+function seasonPlayer(p: SeasonPlayerInput, teamPpg: number): OppPlayer {
+  const scoreShare = teamPpg > 0 && p.ppg != null ? Math.round((p.ppg / teamPpg) * 100) / 100 : null;
+  const tags: string[] = [];
+  if ((scoreShare ?? 0) >= SCORER_SHARE || (p.ppg ?? 0) >= P_SCORER_PPG) tags.push("primary_scorer");
+  if ((p.tpaPg ?? 0) >= P_SHOOTER_TPA && (p.tpPct ?? 0) >= P_SHOOTER_PCT) tags.push("three_point_threat");
+  if ((p.apg ?? 0) >= P_PLAYMAKER_APG) tags.push("playmaker");
+  if ((p.rpg ?? 0) >= P_GLASS_RPG) tags.push("glass");
+  const base = {
+    name: p.name, ref: p.ref, games: p.games,
+    mpg: p.mpg, ppg: p.ppg, rpg: p.rpg, apg: p.apg, fgPct: p.fgPct, tpPct: p.tpPct, tpaPg: p.tpaPg,
+    spg: p.spg, bpg: p.bpg, topg: p.topg, scoreShare, tags,
+  };
+  return {
+    ...base,
+    descriptor: describePlayer(base),
+    shooting: {
+      twoPct: p.twoPct, twoPaPg: p.twoPaPg, threePct: p.threePct, threePaPg: p.threePaPg,
+      ftPct: p.ftPct, ftaPg: p.ftaPg, ptsSeries: [],
+    },
+    recentGames: [],
+  };
+}
+
+/** Build the opponent report from a pre-aggregated InStat season (team profile +
+ *  per-player season averages). Mirrors `buildBasketballOpponentReport` output so the
+ *  same UI/PDF/AI consume it. Players below MIN_PLAYER_GAMES are dropped, as in the
+ *  per-game path. */
+export function buildOpponentReportFromSeason(
+  opponentName: string,
+  team: OppTeamProfile,
+  playersIn: SeasonPlayerInput[],
+): BasketballOpponentReport {
+  const teamPpg = team.ppg ?? 0;
+  const ps = playersIn
+    .filter((p) => p.games >= MIN_PLAYER_GAMES)
+    .map((p) => seasonPlayer(p, teamPpg))
+    .sort((a, b) => (b.ppg ?? 0) - (a.ppg ?? 0));
+  return {
+    opponentName,
+    games: team.games,
+    team,
+    players: ps,
+    keyPlayers: ps.filter((p) => p.tags.includes("primary_scorer")).slice(0, 4),
+    howToDefend: howToDefend(team, ps),
+  };
+}

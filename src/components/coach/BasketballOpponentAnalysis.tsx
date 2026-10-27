@@ -14,8 +14,10 @@ import { useLang } from "@/lib/lang";
 import type { BasketballOpponentReport, OppPlayer } from "@/lib/micropulse/basketballOpponentReport";
 import BasketballCourtMap from "@/components/coach/BasketballCourtMap";
 import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
+import InstatOpponentSeasonUpload from "@/components/coach/InstatOpponentSeasonUpload";
 import FibaShotCharts from "@/components/coach/FibaShotCharts";
 import { shotLabel } from "@/lib/micropulse/basketballStats/shotLabels";
+import type { ScoutLineup } from "@/lib/micropulse/basketballStats/scoutInstatOpponent";
 
 type OppShotType = { key: string; made: number; att: number; pct: number | null };
 type OppAi = {
@@ -51,7 +53,11 @@ const T = {
     instatUpload: "Import InStat Game Report (head-to-head)",
     instatUploadHint: "Upload the InStat game report of a match you played this opponent — it fills the “How they played you” Four Factors (for both teams). Descriptive; never a readiness judgement.",
     seasonSrc: "Whole season from", srcKki: "KKÍ", srcInstat: "InStat", noData: "no data",
-    instatSeasonEmpty: "No InStat season for this opponent yet — upload their InStat season export (parser coming). KKÍ already covers the whole season for now.",
+    instatSeasonEmpty: "No InStat season for this opponent yet — import their InStat season export below (Games / Players / Lineups). KKÍ already covers the whole season meanwhile.",
+    instatSeason: "Import InStat season export (whole-season scouting)",
+    instatSeasonHint: "The opponent's InStat Games / Players / Lineups tables — a richer whole-season read than the KKÍ box: FG playtypes, player tendencies and 5-man units.",
+    lineupsTitle: "Most-used lineups", lineupsHint: "Their season 5-man units by minutes, with net +/−. From the InStat Lineups export.",
+    luMin: "min/g", luPm: "+/−", luPts: "PTS",
     efg: "eFG%", toRate: "TO%", orebRate: "OREB%", ftf: "FTF", ppp: "PPP",
     efgTip: "Effective FG% — shooting that credits the extra point of a three.",
     toTip: "Turnover rate — turnovers per possession (lower is better).",
@@ -79,7 +85,11 @@ const T = {
     instatUpload: "Flytja inn InStat leikskýrslu (innbyrðis)",
     instatUploadHint: "Hladdu inn InStat leikskýrslu úr leik sem þið spiluðuð þennan andstæðing — hún fyllir „Hvernig þeir spiluðu ykkur“ Four Factors (fyrir bæði lið). Lýsandi; aldrei readiness-mat.",
     seasonSrc: "Allt tímabilið úr", srcKki: "KKÍ", srcInstat: "InStat", noData: "engin gögn",
-    instatSeasonEmpty: "Ekkert InStat-tímabil fyrir þennan andstæðing enn — hladdu inn InStat season export þeirra (parser á leiðinni). KKÍ nær nú þegar öllu tímabilinu í bili.",
+    instatSeasonEmpty: "Ekkert InStat-tímabil fyrir þennan andstæðing enn — flyttu inn InStat season export þeirra hér fyrir neðan (Games / Players / Lineups). KKÍ nær öllu tímabilinu á meðan.",
+    instatSeason: "Flytja inn InStat season export (heildar-tímabilsgreining)",
+    instatSeasonHint: "Games / Players / Lineups töflur andstæðingsins úr InStat — ríkari heildarlestur en KKÍ-boxið: sóknartegundir, leikmanna-tilhneigingar og fimmundir.",
+    lineupsTitle: "Mest notuðu fimmundir", lineupsHint: "Fimm-manna einingar þeirra eftir mínútum, með +/−. Úr InStat Lineups export.",
+    luMin: "mín/leik", luPm: "+/−", luPts: "stig",
     efg: "eFG%", toRate: "TO%", orebRate: "OREB%", ftf: "FTF", ppp: "PPP",
     efgTip: "Effective FG% — vallarskotanýting sem tekur tillit til aukastigsins í þristum.",
     toTip: "Tapaðir boltar á sókn (lægra er betra).",
@@ -246,6 +256,7 @@ export default function BasketballOpponentAnalysis() {
   const [oppCourt, setOppCourt] = React.useState<{ key: "paint" | "mid" | "three"; made: number; att: number; pct: number | null }[] | null>(null);
   const [oppPlay, setOppPlay] = React.useState<OppShotType[] | null>(null);
   const [oppEff, setOppEff] = React.useState<OppShotType[] | null>(null);
+  const [oppLineups, setOppLineups] = React.useState<ScoutLineup[] | null>(null);
   const [pdfBusy, setPdfBusy] = React.useState(false);
   const [ai, setAi] = React.useState<OppAi | null>(null);
   const [aiBusy, setAiBusy] = React.useState(false);
@@ -274,7 +285,7 @@ export default function BasketballOpponentAnalysis() {
       const tok = await token(); if (!tok) return;
       const res = await fetch(`/api/coach/basketball-opponent-scout?opponent=${encodeURIComponent(opponent)}&source=${seasonSource}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
       const j = await res.json();
-      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); setReportSource(j.reportSource ?? null); setInstatGames(j.instatGames ?? null); setOppCourt(j.oppCourtRegions ?? null); setOppPlay(j.oppPlaytypes ?? null); setOppEff(j.oppEfficiency ?? null); setAi((j.aiSummary as OppAi | null) ?? null); setAiErr(null); setAvailableSources(j.availableSources ?? { kki: false, instat: false }); }
+      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); setReportSource(j.reportSource ?? null); setInstatGames(j.instatGames ?? null); setOppCourt(j.oppCourtRegions ?? null); setOppPlay(j.oppPlaytypes ?? null); setOppEff(j.oppEfficiency ?? null); setOppLineups(j.oppLineups ?? null); setAi((j.aiSummary as OppAi | null) ?? null); setAiErr(null); setAvailableSources(j.availableSources ?? { kki: false, instat: false }); }
     } finally { setBusy(false); }
   }, [token, seasonSource]);
 
@@ -407,6 +418,22 @@ export default function BasketballOpponentAnalysis() {
         <p className="mt-1 text-[12px] leading-relaxed text-slate-500">{t.instatUploadHint}</p>
         <div className="mt-2">
           <InstatBasketballUpload onImported={() => { void loadList(); if (sel) void loadReport(sel); }} />
+        </div>
+      </details>
+
+      {/* Import the opponent's InStat SEASON export (Games/Players/Lineups) → builds the
+          whole-season report from the richer feed. Flips the source toggle to InStat. */}
+      <details className="group rounded-xl border border-orange-200 bg-orange-50/30 px-4 py-3">
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-800">
+          <span className="transition-transform group-open:rotate-90">▸</span>{t.instatSeason}
+          <span className="rounded bg-orange-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">InStat</span>
+        </summary>
+        <p className="mt-1 text-[12px] leading-relaxed text-slate-500">{t.instatSeasonHint}</p>
+        <div className="mt-2">
+          <InstatOpponentSeasonUpload
+            defaultOpponent={sel}
+            onImported={(opp) => { setSeasonSource("instat"); void loadList(); if (opp === sel) void loadReport(opp); else setSel(opp); }}
+          />
         </div>
       </details>
 
@@ -582,6 +609,39 @@ export default function BasketballOpponentAnalysis() {
               <p className="mt-2.5 text-[11px] text-slate-500">
                 {lang === "IS" ? "Súlan = hlutfallslegt magn; m-t · % = hittni. Úr ykkar innbyrðis InStat-leikjum." : "Bar = relative volume; m-a · % = shooting. From your head-to-head InStat games."}
               </p>
+            </div>
+          ) : null}
+
+          {/* Most-used lineups — opponent's season 5-man units (InStat season export) */}
+          {oppLineups && oppLineups.length ? (
+            <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-bold text-slate-800">{t.lineupsTitle}</span>
+                <span className="rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">InStat</span>
+              </div>
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full text-[12px]">
+                  <thead><tr className="text-left text-slate-400">
+                    <th className="py-1 pr-2 font-semibold">{lang === "IS" ? "Fimmund" : "Lineup"}</th>
+                    <th className="pr-2 text-right font-semibold">{t.luMin}</th>
+                    <th className="pr-2 text-right font-semibold">{t.luPm}</th>
+                    <th className="pr-2 text-right font-semibold">{t.luPts}</th>
+                    <th className="text-right font-semibold">{t.fg}</th>
+                  </tr></thead>
+                  <tbody>
+                    {oppLineups.slice(0, 6).map((l, i) => (
+                      <tr key={i} className="border-t border-[#eceae2]">
+                        <td className="py-1 pr-2 text-slate-700">{l.members.join(", ")}</td>
+                        <td className="pr-2 text-right tabular-nums text-slate-500">{d1(l.minutes)}</td>
+                        <td className="pr-2 text-right tabular-nums font-semibold" style={{ color: (l.plusMinus ?? 0) > 0 ? "#1c7a4a" : (l.plusMinus ?? 0) < 0 ? "#a83e28" : "#64748b" }}>{l.plusMinus == null ? "—" : (l.plusMinus > 0 ? `+${d1(l.plusMinus)}` : d1(l.plusMinus))}</td>
+                        <td className="pr-2 text-right tabular-nums text-slate-500">{d1(l.points)}</td>
+                        <td className="text-right tabular-nums text-slate-500">{pctS(l.fgPct)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">{t.lineupsHint}</p>
             </div>
           ) : null}
 
