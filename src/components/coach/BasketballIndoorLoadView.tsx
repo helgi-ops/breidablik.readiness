@@ -221,6 +221,9 @@ export default function BasketballIndoorLoadView({
         )}
       </div>
 
+      {/* Detailed explainability — what the score + each signal mean, how impacts are handled. */}
+      <HowToRead isEN={isEN} caveat={sampleCaveat} citation={citation ?? undefined} />
+
       {loading && (
         <div className="rounded-md border bg-white p-6 text-center text-sm text-slate-500">
           {isEN ? "Loading…" : "Hleður…"}
@@ -299,6 +302,109 @@ export default function BasketballIndoorLoadView({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Detailed coach explainability (layer 2) — what the score means, what each signal is in
+ * plain language (jargon in the muted sub-line), how impacts are handled, and what drives
+ * confidence. Collapsible so the board stays clean; opened when the coach wants the deep read.
+ */
+function Term({ name, plain, tech }: { name: string; plain: string; tech?: string }) {
+  return (
+    <div className="border-t border-slate-100 py-2 first:border-t-0">
+      <div className="text-[13px] font-semibold text-slate-800">{name}</div>
+      <div className="text-[12.5px] leading-relaxed text-slate-600">{plain}</div>
+      {tech && <div className="mt-0.5 text-[11px] leading-relaxed text-slate-400">{tech}</div>}
+    </div>
+  );
+}
+
+function HowToRead({ isEN, caveat, citation }: { isEN: boolean; caveat?: { en: string; is: string }; citation?: string }) {
+  const bands = isEN
+    ? "Light < 60 · Below avg 60–90 · Typical 90–110 · Heavy 110–140 · Spike ≥ 140"
+    : "Léttur < 60 · Undir meðaltali 60–90 · Týpískur 90–110 · Þungur 110–140 · Spike ≥ 140";
+  return (
+    <details className="group rounded-lg border border-slate-200 bg-white">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-800">
+        <span className="text-[#2740e6] transition-transform group-open:rotate-90">▸</span>
+        {isEN ? "How to read this board" : "Hvernig á að lesa þetta borð"}
+      </summary>
+      <div className="space-y-4 border-t border-slate-100 px-4 py-3">
+        {/* The score */}
+        <div>
+          <div className="text-[13px] font-semibold text-slate-900">{isEN ? "The score" : "Skorið"}</div>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-slate-600">
+            {isEN
+              ? "Each player's latest indoor session is scored against their OWN 28-day norm — 100 = a typical session for that player. It's a weighted blend of the signals we can trust indoors. There are no reliable league benchmarks for basketball, so everything is read on personal norm, never against other players."
+              : "Nýjasta innidyra-æfing hvers leikmanns er metin á móti HANS/HENNAR eigin 28-daga viðmiðun — 100 = týpísk æfing fyrir þann leikmann. Það er vegið meðaltal þeirra merkja sem við treystum innandyra. Það eru engin áreiðanleg deildar-viðmið fyrir körfubolta, svo allt er lesið á persónulegri viðmiðun, aldrei á móti öðrum leikmönnum."}
+          </p>
+          <div className="mt-1.5 rounded bg-slate-50 px-2.5 py-1.5 text-[11.5px] font-medium tabular-nums text-slate-600">{bands}</div>
+        </div>
+
+        {/* The signals */}
+        <div>
+          <div className="text-[13px] font-semibold text-slate-900">{isEN ? "The signals" : "Merkin"}</div>
+          <div className="mt-1">
+            <Term
+              name={isEN ? "PlayerLoad / Load Index" : "PlayerLoad / Álagsvísitala"}
+              plain={isEN
+                ? "Total mechanical work — all the accelerations the body produces in every direction through the session. The volume backbone of the score."
+                : "Heildar vélrænt álag — allar hröðanir sem líkaminn framleiðir í allar áttir yfir æfinguna. Rúmmáls-kjarni skorsins."}
+              tech={isEN ? "Weight 45% of the composite. Load Index = the session's raw total (the number behind the %)." : "Vægi 45% af composite. Álagsvísitala = hrá heildartala æfingarinnar (talan á bak við %)."}
+            />
+            <Term
+              name={isEN ? "High-intensity IMA (Catapult)" : "Háálags-IMA (Catapult)"}
+              plain={isEN
+                ? "Hard accelerations, decelerations and changes of direction — the sharp mechanical/decel work that matters most for indoor injury risk."
+                : "Harðar hröðanir, hægðanir og stefnubreytingar — snögga vélræna/hægðunar-vinnan sem skiptir mestu fyrir innidyra-meiðslahættu."}
+              tech={isEN ? "Band 3, > 3.0 m·s⁻² events. Weight 35%. Only on teams with Catapult IMA pods." : "Band 3, > 3.0 m·s⁻² atvik. Vægi 35%. Aðeins hjá liðum með Catapult IMA-pods."}
+            />
+            <Term
+              name={isEN ? "Jumps" : "Stökk"}
+              plain={isEN
+                ? "How many jumps in the session — a raw count. It does NOT measure jump height (height needs a CMJ / force-plate test)."
+                : "Hversu mörg stökk í æfingunni — hrá talning. Hún mælir EKKI stökkhæð (hæð krefst CMJ / force-plate prófs)."}
+              tech={isEN ? "Weight 20%." : "Vægi 20%."}
+            />
+            <Term
+              name={isEN ? "Impacts (Titan indoor IMU)" : "Impacts / Högg (Titan innidyra-IMU)"}
+              plain={isEN
+                ? "High-g impact events — hard landings or contacts above a g-threshold the IMU flags. These are discrete COLLISION events, not continuous load, and usually only a handful per session — so a day with 1 impact vs a 3-impact norm is noise, not a lighter session."
+                : "Há-g högg — harðar lendingar eða snertingar yfir g-þröskuldi sem IMU-inn merkir. Þetta eru stök ÁREKSTRA-atvik, ekki samfellt álag, og yfirleitt aðeins örfá á æfingu — svo dagur með 1 höggi á móti 3-högga viðmiðun er hávaði, ekki léttari æfing."}
+              tech={isEN
+                ? "So impacts only enter the score when a player's baseline is impact-rich (≥ 10/session, weight 25%); below that we show the raw count but don't score it."
+                : "Þess vegna fara impacts aðeins í skorið þegar grunnlína leikmanns er högg-rík (≥ 10/æfingu, vægi 25%); undir því sýnum við hráu töluna en skorum hana ekki."}
+            />
+            <Term
+              name={isEN ? "Titan Movement Profile (settled / low / mid / high)" : "Titan hreyfiprófíll (kyrr / lágt / miðlungs / hátt)"}
+              plain={isEN
+                ? "Minutes spent at each intensity in the latest session (time-in-intensity) — they add up to roughly the session length. Context for what today actually looked like, shown raw and separate from the personal-norm score."
+                : "Mínútur á hverri ákefð í nýjustu æfingu (tími-í-ákefð) — leggjast saman í u.þ.b. lengd æfingarinnar. Samhengi fyrir hvernig dagurinn leit raunverulega út, sýnt hrátt og aðskilið frá persónulega skorinu."}
+            />
+          </div>
+        </div>
+
+        {/* Confidence */}
+        <div>
+          <div className="text-[13px] font-semibold text-slate-900">{isEN ? "Confidence" : "Vissa"}</div>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-slate-600">
+            {isEN
+              ? "Stays Low until a player has at least 6 sessions AND a mechanical signal (IMA, or impact-rich impacts); Medium/High as the baseline matures. The weights above are provisional — no basketball squad has enough history to calibrate them yet, so treat the score as a trend, not a verdict."
+              : "Helst Lítil þar til leikmaður hefur a.m.k. 6 æfingar OG vélrænt merki (IMA, eða högg-rík impacts); Miðlungs/Há eftir því sem grunnlínan þroskast. Vægin að ofan eru til bráðabirgða — ekkert körfuboltalið hefur næga sögu til að kvarða þau enn, svo lestu skorið sem leitni, ekki dóm."}
+          </p>
+        </div>
+
+        {/* Provenance */}
+        {caveat && (
+          <div className="rounded-md border border-violet-100 bg-violet-50/50 px-3 py-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">{isEN ? "Provenance" : "Uppruni"}</div>
+            <p className="mt-1 text-[11.5px] leading-relaxed text-violet-900">{isEN ? caveat.en : caveat.is}</p>
+            {citation && <div className="mt-1 text-[10px] uppercase tracking-wide text-violet-400">{citation}</div>}
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 
