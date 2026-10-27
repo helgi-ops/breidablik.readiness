@@ -12,7 +12,7 @@
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
 import { shotLabel, type Lang } from "@/lib/micropulse/basketballStats/shotLabels";
 
-type ShotType = { key: string; made: number; att: number; pct: number | null };
+type ShotType = { key: string; made: number; att: number; pct: number | null; sharePct?: number | null };
 type CourtRegion = { key: "paint" | "mid" | "three"; made: number; att: number; pct: number | null };
 type FourFactors = { efgPct: number | null; toPct: number | null; orebPct: number | null; ftf: number | null; ppp: number | null; games: number } | null;
 type Team = { ppg: number | null; fgPct: number | null; tpPct: number | null; tpaPg: number | null; reb: number | null; ast: number | null; tov: number | null; homePpg: number | null; awayPpg: number | null } | null;
@@ -55,8 +55,8 @@ const st = StyleSheet.create({
 });
 
 const T = {
-  EN: { kicker: "OPPONENT SCOUTING - INSTAT", profile: "Team profile", ff: "How they played you (Four Factors)", zones: "Shot map (paint / mid-range / 3PT)", scored: "How they score", playtypes: "FG playtypes", eff: "Offensive-efficiency types", defend: "How to defend", players: "Key players", them: "Opp", foot: "Descriptive opponent scouting from imported InStat Game Reports. It does not decide anything and never changes a readiness verdict." },
-  IS: { kicker: "ANDSTAEDINGA-SKANNUN - INSTAT", profile: "Lidsprofill", ff: "Hvernig their spiludu ykkur (Four Factors)", zones: "Skotkort (teigur / midsvaedi / thristar)", scored: "Hvernig their skora", playtypes: "Soknartegundir", eff: "Soknargerd (efficiency)", defend: "Hvernig a ad verjast", players: "Lykilmenn", them: "Andst.", foot: "Lysandi andstaedinga-skannun ur InStat leikskyrslum. Akvedur ekkert og breytir aldrei readiness-domi." },
+  EN: { kicker: "OPPONENT SCOUTING - INSTAT", profile: "Team profile", ff: "How they played you (Four Factors)", zones: "Shot map (paint / mid-range / 3PT)", scored: "How they score", playtypes: "FG playtypes", eff: "Offensive-efficiency types", defend: "How to defend", players: "Key players", them: "Opp", ofShots: "of shots", foot: "Descriptive opponent scouting from imported InStat Game Reports. It does not decide anything and never changes a readiness verdict." },
+  IS: { kicker: "ANDSTAEDINGA-SKANNUN - INSTAT", profile: "Lidsprofill", ff: "Hvernig their spiludu ykkur (Four Factors)", zones: "Skotkort (teigur / midsvaedi / thristar)", scored: "Hvernig their skora", playtypes: "Soknartegundir", eff: "Soknargerd (efficiency)", defend: "Hvernig a ad verjast", players: "Lykilmenn", them: "Andst.", ofShots: "af skotum", foot: "Lysandi andstaedinga-skannun ur InStat leikskyrslum. Akvedur ekkert og breytir aldrei readiness-domi." },
 } as const;
 
 const regionLabel = (key: CourtRegion["key"], lang: Lang) =>
@@ -118,7 +118,10 @@ function Doc({ data, lang }: { data: BasketballOpponentPdfData; lang: Lang }) {
         {(data.playtypes && data.playtypes.length) || (data.efficiency && data.efficiency.length) ? (
           <><Text style={st.h2}>{t.scored}</Text>
             {data.playtypes && data.playtypes.length ? (<><Text style={st.h3}>{t.playtypes}</Text>{data.playtypes.slice(0, 8).map((r) => (
-              <View key={r.key} style={st.row}><Text style={st.cL}>{clean(shotLabel(r.key, lang))}</Text><Text style={st.cR}>{r.made}-{r.att}{r.pct != null ? `  ${r.pct}%` : ""}</Text></View>
+              <View key={r.key} style={st.row}>
+                <Text style={st.cL}>{clean(shotLabel(r.key, lang))}{r.sharePct != null ? <Text style={{ color: MUTE }}>{`  ${r.sharePct}% ${t.ofShots}`}</Text> : null}</Text>
+                <Text style={st.cR}>{r.made}-{r.att}{r.pct != null ? `  ${r.pct}%` : ""}</Text>
+              </View>
             ))}</>) : null}
             {data.efficiency && data.efficiency.length ? (<><Text style={st.h3}>{t.eff}</Text>{data.efficiency.map((r) => (
               <View key={r.key} style={st.row}><Text style={st.cL}>{clean(shotLabel(r.key, lang))}</Text><Text style={st.cR}>{r.made}-{r.att}{r.pct != null ? `  ${r.pct}%` : ""}</Text></View>

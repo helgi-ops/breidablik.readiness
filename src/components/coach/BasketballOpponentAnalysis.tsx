@@ -19,7 +19,7 @@ import FibaShotCharts from "@/components/coach/FibaShotCharts";
 import { shotLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 import type { ScoutLineup } from "@/lib/micropulse/basketballStats/scoutInstatOpponent";
 
-type OppShotType = { key: string; made: number; att: number; pct: number | null };
+type OppShotType = { key: string; made: number; att: number; pct: number | null; sharePct?: number | null };
 type OppAi = {
   headline?: string; summary?: string;
   strengths?: string[]; weaknesses?: string[];
@@ -278,12 +278,13 @@ export default function BasketballOpponentAnalysis() {
 
   React.useEffect(() => { void loadList(); }, [loadList]);
 
-  const loadReport = React.useCallback(async (opponent: string) => {
+  const loadReport = React.useCallback(async (opponent: string, srcOverride?: "kki" | "instat") => {
     if (!opponent) return;
+    const src = srcOverride ?? seasonSource;
     setBusy(true); setErr(null); setShowAll(false);
     try {
       const tok = await token(); if (!tok) return;
-      const res = await fetch(`/api/coach/basketball-opponent-scout?opponent=${encodeURIComponent(opponent)}&source=${seasonSource}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
+      const res = await fetch(`/api/coach/basketball-opponent-scout?opponent=${encodeURIComponent(opponent)}&source=${src}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
       const j = await res.json();
       if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); setReportSource(j.reportSource ?? null); setInstatGames(j.instatGames ?? null); setOppCourt(j.oppCourtRegions ?? null); setOppPlay(j.oppPlaytypes ?? null); setOppEff(j.oppEfficiency ?? null); setOppLineups(j.oppLineups ?? null); setAi((j.aiSummary as OppAi | null) ?? null); setAiErr(null); setAvailableSources(j.availableSources ?? { kki: false, instat: false }); }
     } finally { setBusy(false); }
@@ -432,7 +433,7 @@ export default function BasketballOpponentAnalysis() {
         <div className="mt-2">
           <InstatOpponentSeasonUpload
             defaultOpponent={sel}
-            onImported={(opp) => { setSeasonSource("instat"); void loadList(); if (opp === sel) void loadReport(opp); else setSel(opp); }}
+            onImported={(opp) => { setSeasonSource("instat"); void loadList(); if (opp === sel) void loadReport(opp, "instat"); else setSel(opp); }}
           />
         </div>
       </details>
