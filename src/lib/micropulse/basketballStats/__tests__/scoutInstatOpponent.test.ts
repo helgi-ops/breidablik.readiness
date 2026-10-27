@@ -4,6 +4,7 @@ import {
   teamProfileFromGames, buildInstatOpponentScout,
   type InstatOpponentPayload,
 } from "../scoutInstatOpponent";
+import { playerTendencyNotes } from "../../basketballOpponentReport";
 
 // Rows mirror the real InStat opponent season exports (header strings verified against
 // a live "Armann W" export: Games "Box score", Players "Box score", Lineups "Lineups").
@@ -43,7 +44,14 @@ const playerRows: Record<string, unknown>[] = [
     "2-pt field goals made": 5, "2-pt field goals attempted": 12, "2-pt field goals, %": "41.7%",
     "Free throws made": 5.8, "Free throws attempted": 7, "Free throws, %": "82.1%",
     Rebounds: 3.3, "Offensive rebounds": 1, "Defensive rebounds": 2.3, Assists: 4.3, Steals: 1.5, Turnovers: 6, Blocks: 0.8,
-    "Plus/Minus": -18.7, "Usage Percentage": "29.6%", "Right drives made, %": "47.7%", "Left drives made, %": "38.8%",
+    "Plus/Minus": -18.7, "Usage Percentage": "29.6%",
+    // Drive direction from the ATTEMPT counts (not the make-% columns, which collide on norm).
+    "Drives with shot": 4.5, "Right drives": 2.8, "Right drives made": 0.3, "Left drives": 1.8, "Left drives made": 1,
+    // Defence: opponents' shot mix against her + overall shooting allowed.
+    "Opponent's field goals made": 5.3, "Opponent's field goals attempted": 11, "Opponent's field goals, %": "47.7%",
+    "Opp Transition shots made": 1.5, "Opp Transition shots": 2,
+    "Opp catch and shoot shots made": 0.5, "Opp catch and shoot shots": 2.8,
+    "Opp Drives shots made": 0.8, "Opp Drives shots": 2.3,
   },
   {
     "Jersey number": "4", Player: "Edyta Falenczyk", "Games played": 4, Minutes: "31:17", Points: 15.5,
@@ -101,7 +109,13 @@ describe("parseScoutPlayers", () => {
     expect(battles.ref).toBe("instat:diamondbattles");
     expect(battles.ppg).toBe(23.3);
     expect(battles.usagePct).toBe(29.6);
-    expect(battles.driveRightPct).toBe(47.7);
+    // Drive lean from attempts: right 2.8 / (2.8 + 1.8) = 60.9% right.
+    expect(battles.driveRightShare).toBeCloseTo(60.9, 1);
+    expect(battles.drivesPg).toBe(4.5);
+    // Defence: overall FG% allowed + shot mix sorted by attempts (catch&shoot most).
+    expect(battles.oppFgPctAllowed).toBe(47.7);
+    expect(battles.defense[0].key).toBe("catchShoot");
+    expect(battles.defense[0].att).toBe(2.8);
   });
 });
 
@@ -131,10 +145,30 @@ describe("buildInstatOpponentScout", () => {
     expect(scout.report.players[0].tags).toContain("primary_scorer");
     expect(scout.report.keyPlayers[0].name).toBe("Diamond Battles");
     // Season tendencies flow through to the player for the detailed analysis.
-    expect(scout.report.players[0].season).toMatchObject({ usagePct: 29.6, plusMinus: -18.7, driveRightPct: 47.7 });
+    expect(scout.report.players[0].season).toMatchObject({ usagePct: 29.6, plusMinus: -18.7, oppFgPctAllowed: 47.7 });
+    expect(scout.report.players[0].season?.driveRightShare).toBeCloseTo(60.9, 1);
     // Playtypes aggregate across games, ranked by volume.
     expect(scout.playtypes.find((p) => p.key === "pnrHandler")?.att).toBe(20); // 9 + 11
     expect(scout.efficiency.find((e) => e.key === "contestedFg")?.att).toBe(131); // 62 + 69
     expect(scout.lineups).toHaveLength(2);
+  });
+
+  it("produces plain-language tendency notes (offense + defense)", () => {
+    const payload: InstatOpponentPayload = {
+      season: "2026-2027",
+      teamGames: parseScoutGames(gamesRows, "2026-2027"),
+      players: parseScoutPlayers(playerRows),
+      lineups: [],
+    };
+    const scout = buildInstatOpponentScout("Ármann", payload);
+    const notes = playerTendencyNotes(scout.report.players[0], "EN");
+    // Usage 29.6% -> "carries the offense" tier; on-court net worded; defence FG% + shot mix.
+    expect(notes.offense.some((n) => /carries the offense/i.test(n))).toBe(true);
+    expect(notes.offense.some((n) => /outscored by 18\.7/i.test(n))).toBe(true);
+    expect(notes.offense.some((n) => /driving right/i.test(n))).toBe(true);
+    expect(notes.defense.some((n) => /47\.7% with them defending/i.test(n))).toBe(true);
+    expect(notes.defense.some((n) => /Attacked most off/i.test(n))).toBe(true);
+    // Icelandic variant renders too.
+    expect(playerTendencyNotes(scout.report.players[0], "IS").defense.length).toBeGreaterThan(0);
   });
 });

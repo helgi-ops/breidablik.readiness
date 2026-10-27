@@ -8,6 +8,8 @@
  * daily decision. Rules compute everything; any AI layer only phrases it.
  */
 
+import { shotLabel, type Lang } from "./basketballStats/shotLabels";
+
 export type OppPlayerGame = {
   gameId: string; gameDate: string | null; opponent: string | null; homeAway: "home" | "away" | null;
   playerName: string; playerRef: string;
@@ -53,7 +55,15 @@ export type OppPlayer = {
   shooting: { twoPct: number | null; twoPaPg: number | null; threePct: number | null; threePaPg: number | null; ftPct: number | null; ftaPg: number | null; ptsSeries: number[] };
   recentGames: RecentGame[]; // most-recent first (for the pop-up game log)
   // Richer season tendencies (InStat season export only; null for the KKÍ box path).
-  season?: { usagePct: number | null; plusMinus: number | null; driveLeftPct: number | null; driveRightPct: number | null } | null;
+  season?: SeasonTendencies | null;
+};
+
+export type DefenseShot = { key: string; made: number; att: number };
+export type SeasonTendencies = {
+  usagePct: number | null; plusMinus: number | null;
+  driveRightShare: number | null; drivesPg: number | null;
+  oppFgPctAllowed: number | null; oppFgaPg: number | null;
+  defense: DefenseShot[];
 };
 
 export type RecentGame = {
@@ -262,7 +272,7 @@ export type SeasonPlayerInput = {
   spg: number | null; bpg: number | null; topg: number | null;
   twoPct: number | null; twoPaPg: number | null; threePct: number | null; threePaPg: number | null;
   ftPct: number | null; ftaPg: number | null;
-  usagePct?: number | null; plusMinus?: number | null; driveLeftPct?: number | null; driveRightPct?: number | null;
+  tendencies?: SeasonTendencies | null;
 };
 
 function seasonPlayer(p: SeasonPlayerInput, teamPpg: number): OppPlayer {
@@ -285,10 +295,7 @@ function seasonPlayer(p: SeasonPlayerInput, teamPpg: number): OppPlayer {
       ftPct: p.ftPct, ftaPg: p.ftaPg, ptsSeries: [],
     },
     recentGames: [],
-    season: {
-      usagePct: p.usagePct ?? null, plusMinus: p.plusMinus ?? null,
-      driveLeftPct: p.driveLeftPct ?? null, driveRightPct: p.driveRightPct ?? null,
-    },
+    season: p.tendencies ?? null,
   };
 }
 
@@ -314,4 +321,69 @@ export function buildOpponentReportFromSeason(
     keyPlayers: ps.filter((p) => p.tags.includes("primary_scorer")).slice(0, 4),
     howToDefend: howToDefend(team, ps),
   };
+}
+
+// ── Plain-language player tendencies (explainability L1) ─────────────────────
+// Turn the raw InStat season tendencies (usage %, on-court +/-, drive direction, and
+// the defensive shot mix) into short plain sentences a non-S&C coach reads at a glance
+// — the number stays in parentheses so the raw value is never hidden. Rule-based and
+// bilingual; shared by the on-screen modal and the PDF so both read identically.
+
+const r1t = (v: number) => Math.round(v * 10) / 10;
+const makePct = (d: DefenseShot): number | null => (d.att > 0 ? Math.round((d.made / d.att) * 1000) / 10 : null);
+
+export function playerTendencyNotes(p: OppPlayer, lang: Lang): { offense: string[]; defense: string[] } {
+  const s = p.season;
+  const offense: string[] = [];
+  const defense: string[] = [];
+  if (!s) return { offense, defense };
+  const isIS = lang === "IS";
+
+  if (s.usagePct != null) {
+    const u = Math.round(s.usagePct);
+    if (s.usagePct >= 28) offense.push(isIS ? `Dríf sóknarinnar — fer með boltann í ~${u}% af sóknum liðsins` : `Carries the offense — ends ~${u}% of the team's possessions`);
+    else if (s.usagePct >= 22) offense.push(isIS ? `Mikið í sókninni (${u}% notkun)` : `Heavily involved (${u}% usage)`);
+    else if (s.usagePct >= 14) offense.push(isIS ? `Fast sóknarhlutverk (${u}% notkun)` : `Steady role (${u}% usage)`);
+    else offense.push(isIS ? `Lítið með boltann (${u}% notkun)` : `Low-usage role player (${u}% usage)`);
+  }
+
+  if (s.plusMinus != null) {
+    const v = r1t(Math.abs(s.plusMinus));
+    if (s.plusMinus > 0) offense.push(isIS ? `Liðið skorar ${v} stigum meira en það fær á sig með viðkomandi inná (per leik)` : `Team outscores opponents by ${v}/game with them on court`);
+    else if (s.plusMinus < 0) offense.push(isIS ? `Liðinu gengur verr með viðkomandi inná (−${v} per leik)` : `Team is outscored by ${v}/game with them on court`);
+  }
+
+  if (s.driveRightShare != null && (s.drivesPg ?? 0) >= 1) {
+    const share = Math.round(s.driveRightShare);
+    if (s.driveRightShare >= 65) offense.push(isIS ? `Drífur nær alltaf til hægri (${share}%) — bjóddu vinstri hönd` : `Almost always drives right (${share}%) — force left`);
+    else if (s.driveRightShare >= 58) offense.push(isIS ? `Hallar á hægri drif (${share}%)` : `Prefers driving right (${share}%)`);
+    else if (s.driveRightShare <= 35) offense.push(isIS ? `Drífur nær alltaf til vinstri (${100 - share}%) — bjóddu hægri hönd` : `Almost always drives left (${100 - share}%) — force right`);
+    else if (s.driveRightShare <= 42) offense.push(isIS ? `Hallar á vinstri drif (${100 - share}%)` : `Prefers driving left (${100 - share}%)`);
+    else offense.push(isIS ? `Drífur báðum megin (${share}% hægri)` : `Drives both ways (${share}% right)`);
+  }
+
+  if (s.oppFgPctAllowed != null) {
+    const vol = s.oppFgaPg != null ? (isIS ? ` á ${r1t(s.oppFgaPg)} skot/leik` : ` on ${r1t(s.oppFgaPg)} shots/g`) : "";
+    defense.push(isIS ? `Andstæðingar skjóta ${r1t(s.oppFgPctAllowed)}% þegar viðkomandi ver${vol}` : `Opponents shoot ${r1t(s.oppFgPctAllowed)}% with them defending${vol}`);
+  }
+  const attacked = s.defense.filter((d) => d.att >= 1)[0] ?? s.defense[0];
+  if (attacked) {
+    const mp = makePct(attacked);
+    defense.push(isIS
+      ? `Sóttur mest með ${shotLabel(attacked.key, lang)} (${r1t(attacked.att)}/leik${mp != null ? `, andst. ${mp}%` : ""})`
+      : `Attacked most off ${shotLabel(attacked.key, lang)} (${r1t(attacked.att)}/g${mp != null ? `, opp ${mp}%` : ""})`);
+  }
+  // Weak spot: the most-made action opponents get (with a little volume), if it isn't the
+  // one already named and they actually score on it.
+  const weak = [...s.defense]
+    .filter((d) => d.att >= 0.8 && d.key !== attacked?.key && (makePct(d) ?? 0) >= 50)
+    .sort((a, b) => (makePct(b) ?? 0) - (makePct(a) ?? 0))[0];
+  if (weak) {
+    const mp = makePct(weak);
+    defense.push(isIS
+      ? `Gefur eftir í ${shotLabel(weak.key, lang)} (andst. ${mp}% á ${r1t(weak.att)}/leik)`
+      : `Concedes ${shotLabel(weak.key, lang)} (opp ${mp}% on ${r1t(weak.att)}/g)`);
+  }
+
+  return { offense, defense };
 }

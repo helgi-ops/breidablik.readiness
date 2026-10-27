@@ -298,7 +298,7 @@ export async function POST(req: NextRequest) {
       fourFactors_howTheyPlayedUs: bundle.oppFourFactors,
       playtypes: bundle.oppPlaytypes ?? [], efficiencyTypes: bundle.oppEfficiency ?? [],
       shotMap: bundle.oppCourtRegions ?? [],
-      keyPlayers: bundle.report.keyPlayers.slice(0, 8).map((p) => ({ name: p.name, ppg: p.ppg, rpg: p.rpg, apg: p.apg, fgPct: p.fgPct, tpPct: p.tpPct, tpaPg: p.tpaPg, scoreShare: p.scoreShare, tags: p.tags })),
+      keyPlayers: bundle.report.keyPlayers.slice(0, 8).map((p) => ({ name: p.name, ppg: p.ppg, rpg: p.rpg, apg: p.apg, fgPct: p.fgPct, tpPct: p.tpPct, tpaPg: p.tpaPg, scoreShare: p.scoreShare, tags: p.tags, tendencies: p.season ?? undefined })),
       ruleBasedDefend: bundle.report.howToDefend.map((f) => f.en),
     };
     let res: Response;

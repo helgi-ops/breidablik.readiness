@@ -54,6 +54,21 @@ const EFF_COLUMNS: Record<string, [string, string]> = {
   uncontestedFg: ["Uncontested field goals made", "Uncontested field goals"],
   contestedFg: ["Contested field goals made", "Contested field goals"],
 };
+/** Opponent-defence columns (made, attempted) per player → the shotLabels key. These are
+ *  the shots opponents TOOK against this player as the primary defender. */
+const OPP_DEF_COLUMNS: Record<string, [string, string]> = {
+  transition: ["Opp Transition shots made", "Opp Transition shots"],
+  catchShoot: ["Opp catch and shoot shots made", "Opp catch and shoot shots"],
+  catchDrive: ["Opp catch and drive shots made", "Opp Catch and drive shots"],
+  pnrHandler: ["Opp Pick-n-roll shots made", "Opp Pick-n-roll shots"],
+  pnp: ["Opp Pick-n-Pop shots made", "Opp Pick-n-Pop shots"],
+  screenOff: ["Opp Screens off shots made", "Opp Screens off shots"],
+  postUp: ["Opp Post up shots made", "Opp Post up shots"],
+  iso: ["Opp Isolations shots made", "Opp Isolations shots"],
+  handOff: ["Opp Hand off shots made", "Opp Hand off shots"],
+  cut: ["Opp Cuts shots made", "Opp Cuts shots"],
+  drive: ["Opp Drives shots made", "Opp Drives shots"],
+};
 
 export type ScoutTeamGame = {
   date: string | null; opponent: string | null; homeAway: "home" | "away" | null;
@@ -67,6 +82,9 @@ export type ScoutTeamGame = {
   advanced: Record<string, number>;
 };
 
+/** Opponent-defence shot volume against this player, per FG-playtype (shotLabels key). */
+export type OppDefenseShot = { key: string; made: number; att: number };
+
 export type ScoutSeasonPlayer = {
   name: string; ref: string; jersey: string | null; games: number;
   mpg: number | null; ppg: number | null; rpg: number | null; apg: number | null;
@@ -74,7 +92,11 @@ export type ScoutSeasonPlayer = {
   fgPct: number | null; tpPct: number | null; tpaPg: number | null;
   twoPct: number | null; twoPaPg: number | null; ftPct: number | null; ftaPg: number | null;
   usagePct: number | null; plusMinus: number | null;
-  driveLeftPct: number | null; driveRightPct: number | null;
+  // Drive direction from the attempt counts (share going right, 0-100) + total drive att/g.
+  driveRightShare: number | null; drivesPg: number | null;
+  // Defence: overall shooting opponents get against this player, and the shot mix they target.
+  oppFgPctAllowed: number | null; oppFgaPg: number | null;
+  defense: OppDefenseShot[];
 };
 
 export type ScoutLineup = {
@@ -159,6 +181,20 @@ export function parseScoutPlayers(rows: Record<string, unknown>[]): ScoutSeasonP
     const name = String(cell(row, ["Player"]) ?? "").trim();
     if (!isPlayerRow(name)) continue;
     const jerseyRaw = cell(row, ["Jersey number", "Jersey", "Number"]);
+    // Drive direction from the attempt counts (not the make-% columns, which collide on
+    // normalisation with the made-count columns). Right-share = right / (right + left).
+    const leftDrv = num(cell(row, ["Left drives"]));
+    const rightDrv = num(cell(row, ["Right drives"]));
+    const driveTot = (leftDrv ?? 0) + (rightDrv ?? 0);
+    const driveRightShare = driveTot > 0 ? Math.round(((rightDrv ?? 0) / driveTot) * 1000) / 10 : null;
+    // Defence: opponents' shot mix against this player, by playtype.
+    const defense: OppDefenseShot[] = [];
+    for (const [key, [mH, aH]] of Object.entries(OPP_DEF_COLUMNS)) {
+      const att = num(cell(row, [aH]));
+      if (att == null || att <= 0) continue;
+      defense.push({ key, made: num(cell(row, [mH])) ?? 0, att });
+    }
+    defense.sort((a, b) => b.att - a.att);
     out.push({
       name,
       ref: `instat:${foldName(name)}`,
@@ -180,8 +216,11 @@ export function parseScoutPlayers(rows: Record<string, unknown>[]): ScoutSeasonP
       ftaPg: num(cell(row, ["Free throws attempted"])),
       usagePct: num(cell(row, ["Usage Percentage"])),
       plusMinus: num(cell(row, ["Plus/Minus", "Plus Minus", "+/-"])),
-      driveLeftPct: num(cell(row, ["Left drives made, %", "Left drives made %"])),
-      driveRightPct: num(cell(row, ["Right drives made, %", "Right drives made %"])),
+      driveRightShare,
+      drivesPg: num(cell(row, ["Drives with shot"])) ?? (driveTot > 0 ? driveTot : null),
+      oppFgPctAllowed: num(cell(row, ["Opponent's field goals, %", "Opponent s field goals %"])),
+      oppFgaPg: num(cell(row, ["Opponent's field goals attempted", "Opponent s field goals attempted"])),
+      defense,
     });
   }
   return out;
@@ -237,7 +276,12 @@ export function buildInstatOpponentScout(opponentName: string, payload: InstatOp
     mpg: p.mpg, ppg: p.ppg, rpg: p.rpg, apg: p.apg, fgPct: p.fgPct, tpPct: p.tpPct, tpaPg: p.tpaPg,
     spg: p.spg, bpg: p.bpg, topg: p.topg,
     twoPct: p.twoPct, twoPaPg: p.twoPaPg, threePct: p.tpPct, threePaPg: p.tpaPg, ftPct: p.ftPct, ftaPg: p.ftaPg,
-    usagePct: p.usagePct, plusMinus: p.plusMinus, driveLeftPct: p.driveLeftPct, driveRightPct: p.driveRightPct,
+    tendencies: {
+      usagePct: p.usagePct, plusMinus: p.plusMinus,
+      driveRightShare: p.driveRightShare, drivesPg: p.drivesPg,
+      oppFgPctAllowed: p.oppFgPctAllowed, oppFgaPg: p.oppFgaPg,
+      defense: p.defense,
+    },
   }));
   const report = buildOpponentReportFromSeason(opponentName, team, playersIn);
   const advRows = payload.teamGames.map((g) => ({ advanced: g.advanced }));

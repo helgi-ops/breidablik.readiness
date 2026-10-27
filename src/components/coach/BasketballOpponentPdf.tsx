@@ -24,7 +24,7 @@ type PlayerDetail = {
   name: string; games: number; tags: string[];
   mpg: number | null; ppg: number | null; rpg: number | null; apg: number | null; spg: number | null; topg: number | null;
   shooting: Shooting;
-  season?: { usagePct: number | null; plusMinus: number | null; driveLeftPct: number | null; driveRightPct: number | null } | null;
+  notes?: { offense: string[]; defense: string[] } | null;
   descriptor?: { en: string; is: string };
 };
 
@@ -67,8 +67,8 @@ const st = StyleSheet.create({
 });
 
 const T = {
-  EN: { kicker: "OPPONENT SCOUTING - INSTAT", profile: "Team profile", ff: "How they played you (Four Factors)", zones: "Shot map (paint / mid-range / 3PT)", scored: "How they score", playtypes: "FG playtypes", eff: "Offensive-efficiency types", lineups: "Most-used lineups", lineupsHint: "By minutes, with net +/- (and PTS / FG% the unit put up).", defend: "How to defend", players: "Key players", analysis: "Player analysis", them: "Opp", ofShots: "of shots", usage: "Usage", driveLean: "Drives", left: "L", right: "R", foot: "Descriptive opponent scouting from imported InStat Game Reports. It does not decide anything and never changes a readiness verdict." },
-  IS: { kicker: "ANDSTAEDINGA-SKANNUN - INSTAT", profile: "Lidsprofill", ff: "Hvernig their spiludu ykkur (Four Factors)", zones: "Skotkort (teigur / midsvaedi / thristar)", scored: "Hvernig their skora", playtypes: "Soknartegundir", eff: "Soknargerd (efficiency)", lineups: "Mest notudu fimmundir", lineupsHint: "Eftir minutum, med +/- (og stig / FG% sem einingin skoradi).", defend: "Hvernig a ad verjast", players: "Lykilmenn", analysis: "Leikmanna-greining", them: "Andst.", ofShots: "af skotum", usage: "Notkun", driveLean: "Drif", left: "V", right: "H", foot: "Lysandi andstaedinga-skannun ur InStat leikskyrslum. Akvedur ekkert og breytir aldrei readiness-domi." },
+  EN: { kicker: "OPPONENT SCOUTING - INSTAT", profile: "Team profile", ff: "How they played you (Four Factors)", zones: "Shot map (paint / mid-range / 3PT)", scored: "How they score", playtypes: "FG playtypes", eff: "Offensive-efficiency types", lineups: "Most-used lineups", lineupsHint: "By minutes, with net +/- (and PTS / FG% the unit put up).", defend: "How to defend", players: "Key players", analysis: "Player analysis", them: "Opp", ofShots: "of shots", defenseShort: "Defense", foot: "Descriptive opponent scouting from imported InStat Game Reports. It does not decide anything and never changes a readiness verdict." },
+  IS: { kicker: "ANDSTAEDINGA-SKANNUN - INSTAT", profile: "Lidsprofill", ff: "Hvernig their spiludu ykkur (Four Factors)", zones: "Skotkort (teigur / midsvaedi / thristar)", scored: "Hvernig their skora", playtypes: "Soknartegundir", eff: "Soknargerd (efficiency)", lineups: "Mest notudu fimmundir", lineupsHint: "Eftir minutum, med +/- (og stig / FG% sem einingin skoradi).", defend: "Hvernig a ad verjast", players: "Lykilmenn", analysis: "Leikmanna-greining", them: "Andst.", ofShots: "af skotum", defenseShort: "Vörn", foot: "Lysandi andstaedinga-skannun ur InStat leikskyrslum. Akvedur ekkert og breytir aldrei readiness-domi." },
 } as const;
 
 const TAG_LABELS: Record<string, { EN: string; IS: string }> = {
@@ -184,11 +184,8 @@ function Doc({ data, lang }: { data: BasketballOpponentPdfData; lang: Lang }) {
               `3P ${pct(s.threePct)}${s.threePaPg != null ? ` (${d1(s.threePaPg)}/g)` : ""}`,
               `FT ${pct(s.ftPct)}${s.ftaPg != null ? ` (${d1(s.ftaPg)}/g)` : ""}`,
             ].join("  ·  ");
-            const sea = p.season;
-            const tend: string[] = [];
-            if (sea?.usagePct != null) tend.push(`${t.usage} ${pct(sea.usagePct)}`);
-            if (sea?.plusMinus != null) tend.push(`+/- ${sea.plusMinus > 0 ? "+" : ""}${sea.plusMinus.toFixed(1)}`);
-            if (sea?.driveLeftPct != null || sea?.driveRightPct != null) tend.push(`${t.driveLean} ${t.left} ${pct(sea?.driveLeftPct)} / ${t.right} ${pct(sea?.driveRightPct)}`);
+            const off = p.notes?.offense ?? [];
+            const def = p.notes?.defense ?? [];
             return (
               <View key={i} style={{ marginBottom: 5 }} wrap={false}>
                 <View style={{ flexDirection: "row", alignItems: "baseline" }}>
@@ -197,8 +194,9 @@ function Doc({ data, lang }: { data: BasketballOpponentPdfData; lang: Lang }) {
                 </View>
                 <Text style={{ fontSize: 8.5, color: MUTE }}>{p.games} G  ·  {d1(p.mpg)} MIN  ·  {d1(p.rpg)} REB  ·  {d1(p.apg)} AST  ·  {d1(p.spg)} STL  ·  {d1(p.topg)} TO</Text>
                 <Text style={{ fontSize: 8.5, color: "#333" }}>{shoot}</Text>
-                {tend.length ? <Text style={{ fontSize: 8.5, color: MUTE }}>{tend.join("  ·  ")}</Text> : null}
                 {p.descriptor ? <Text style={{ fontSize: 8.5, color: "#333" }}>{clean(lang === "IS" ? p.descriptor.is : p.descriptor.en)}</Text> : null}
+                {off.length ? <Text style={{ fontSize: 8.5, color: "#444" }}>{clean(off.join("  ·  "))}</Text> : null}
+                {def.length ? <Text style={{ fontSize: 8.5, color: AMBER }}>{clean(`${t.defenseShort}: ${def.join("  ·  ")}`)}</Text> : null}
               </View>
             );
           })}</>
