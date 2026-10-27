@@ -350,6 +350,10 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   const catLabels = drillCategoryLabels(lang === "IS" ? "IS" : "EN");
   // Sport-appropriate category chips (basketball: shooting/fast-break/defense…).
   const sportCategories = getDrillCategoriesForSport(teamSport);
+  // Basketball is indoor with no GPS, so the GPS/football-only panels (match-demand gap
+  // drills, playing-style + worst-case recommender) don't apply and the load anchor reads
+  // as "Load" not "Player Load".
+  const isBasketball = String(teamSport ?? "").toLowerCase() === "basketball";
   const [drills, setDrills] = useState<Drill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1586,7 +1590,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
             })}
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Target PL</label>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{isBasketball ? (lang === "IS" ? "Markmið álag" : "Target load") : "Target PL"}</label>
             <input
               type="number"
               placeholder="–"
@@ -1714,20 +1718,25 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
         {/* Totals strip — only show when there are drills in the session
             (avoids zero-filled visual noise on first paint) */}
         {items.length > 0 && (
-          <div className="grid grid-cols-2 divide-x divide-slate-100 sm:grid-cols-4 lg:grid-cols-8">
-            <TotalCell label="Player Load" value={n(totals.player_load, 0)} accent="blue" emphasis />
+          <div className={`grid grid-cols-2 divide-x divide-slate-100 ${isBasketball ? "sm:grid-cols-3" : "sm:grid-cols-4 lg:grid-cols-8"}`}>
+            <TotalCell label={isBasketball ? (lang === "IS" ? "Álag" : "Load") : "Player Load"} value={n(totals.player_load, 0)} accent="blue" emphasis />
             <TotalCell label="Duration" value={n(totals.duration_min, 0)} suffix={t.min} emphasis />
-            <TotalCell label="Distance" value={n(totals.distance_m, 0)} suffix="m" />
             <TotalCell label={t.plPerMin} value={avgPlPerMin != null ? avgPlPerMin.toFixed(2) : "–"} />
-            <TotalCell label="Vel B5" value={n(totals.vel_b5, 0)} suffix="m" />
-            <TotalCell label="Vel B6" value={n(totals.vel_b6, 0)} suffix="m" />
-            <TotalCell label="Accel B2-3" value={n(totals.accel_b23, 0)} />
-            <TotalCell label="Decel B2-3" value={n(totals.decel_b23, 0)} />
+            {/* GPS / football-only load tiles — hidden for indoor basketball. */}
+            {!isBasketball && (
+              <>
+                <TotalCell label="Distance" value={n(totals.distance_m, 0)} suffix="m" />
+                <TotalCell label="Vel B5" value={n(totals.vel_b5, 0)} suffix="m" />
+                <TotalCell label="Vel B6" value={n(totals.vel_b6, 0)} suffix="m" />
+                <TotalCell label="Accel B2-3" value={n(totals.accel_b23, 0)} />
+                <TotalCell label="Decel B2-3" value={n(totals.decel_b23, 0)} />
+              </>
+            )}
           </div>
         )}
 
-        {/* Metabolic totals strip (only when any drill has MetPwr data) */}
-        {totals.hasMetabolic && (
+        {/* Metabolic totals strip (only when any drill has MetPwr data) — GPS/football only */}
+        {!isBasketball && totals.hasMetabolic && (
           <div className="grid grid-cols-2 divide-x divide-slate-100 border-t border-slate-100 bg-indigo-50/30 sm:grid-cols-4">
             <TotalCell
               label="HMLD (>25.5 W/kg)"
@@ -1760,7 +1769,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
               <span className="font-medium text-slate-600">
                 {mdPlanning
                   ? `${t.plVsHistory} ${mdDay} ${t.history}`
-                  : `Player Load vs target`}
+                  : (isBasketball ? (lang === "IS" ? "Álag vs markmið" : "Load vs target") : `Player Load vs target`)}
               </span>
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
@@ -1948,15 +1957,15 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
         <WeekPlanPanel days={weekPlan} onUseDay={loadWeekDay} onSavePitch={savePitch} selectedDate={selectedWeekDate} onShowAll={() => setSelectedWeekDate(null)} lang={lang} />
       )}
 
-      {/* ═══ TRAIN-LIKE-YOU-PLAY: gap-drill recommendations ═══ */}
-      {teamGapDrills.length > 0 && (
+      {/* ═══ TRAIN-LIKE-YOU-PLAY: gap-drill recommendations (GPS match-demand — football only) ═══ */}
+      {!isBasketball && teamGapDrills.length > 0 && (
         <GapDrillPanel drills={teamGapDrills} inSession={sessionDrillIds} lang={lang} />
       )}
       </>
       )}
 
-      {/* ═══ DRILL IDEAS: by playing style + worst-case scenario (per player) ═══ */}
-      <DrillRecommenderPanel teamId={teamId} mdDay={mdDay || null} />
+      {/* ═══ DRILL IDEAS: by playing style + worst-case scenario (per player) — GPS/football only ═══ */}
+      {!isBasketball && <DrillRecommenderPanel teamId={teamId} mdDay={mdDay || null} />}
 
       {/* ═══ MAIN 2-col: drill picker + selected drills ═══ */}
       <div className="space-y-4">
