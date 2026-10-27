@@ -1442,106 +1442,6 @@ export default function PeriodizationHubPage() {
             })()}
           </section>
 
-          {/* LANDSLEIKJAHLÉ — the FIFA/FIBA international windows for this team's sport+gender. The coach sets
-              the ACTUAL break length (breaks vary by team) and adds it → a real team_break the macro/meso read. */}
-          {(() => {
-            const s = String(teamSport ?? "").toLowerCase();
-            if (s !== "football" && s !== "basketball") return null; // wait for config; skip general/PT teams
-            const windows = upcomingInternationalBreaks({ sport: teamSport, gender: teamGender, fromIso: todayIso });
-            if (!windows.length) return null;
-            const shown = windows.slice(0, 8);
-            const overlaps = (b: { start_date: string; end_date: string }, w: IntlBreak) => b.start_date <= w.end && b.end_date >= w.start;
-            const bodyColor = (body: string) => (body === "FIBA" ? "#7a5cc4" : "#2740e6");
-            return (
-              <section className={card}>
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <h2 className={h2}>{is ? "Landsleikjahlé" : "International breaks"}</h2>
-                  <span className="text-[12px] text-slate-500">{is ? "A-landsliðsgluggar (FIFA/FIBA) — þú ákveður lengd fríssins" : "A-team windows (FIFA/FIBA) — you set the break length"}</span>
-                </div>
-                <p className="mt-1 text-[12px] text-slate-500">{is ? "Hlé er mislangt milli liða (sumir fara til landsliðs, aðrir æfa). Stilltu dagsetningarnar og bættu við — þá verður frí í áætluninni (Mesó fær endurhleðslu-lotu, dagarnir merktir frí)." : "Breaks vary by team (some leave for national duty, others train). Set the dates and add it — it becomes a break in the plan (Meso gets a re-load block, the days are marked off)."}</p>
-                <div className="mt-3 space-y-1.5">
-                  {shown.map((w) => {
-                    const key = intlBreakKey(w);
-                    const covered = teamBreaksFull.find((b) => overlaps(b, w));
-                    const draft = breakEdits[key] ?? { start: w.start, end: w.end };
-                    const invalid = draft.end < draft.start;
-                    return (
-                      <div key={key} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                        <span className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white" style={{ background: bodyColor(w.body) }}>{w.body}</span>
-                        <span className="text-[12px] text-slate-600">{shortDate(w.start, is)}–{shortDate(w.end, is)} · {w.days} {is ? "d" : "d"}{w.kind === "tournament" ? ` · ${is ? w.label.is : w.label.en}` : ""}</span>
-                        {covered ? (
-                          <div className="ml-auto flex items-center gap-2">
-                            <span className="rounded-full bg-[#1c7a4a]/10 px-2 py-0.5 text-[11px] font-semibold text-[#1c7a4a]">{is ? "Frí" : "Break"} {shortDate(covered.start_date, is)}–{shortDate(covered.end_date, is)}</span>
-                            <button type="button" onClick={() => removeBreak(covered.id)} title={is ? "Fjarlægja frí" : "Remove break"} aria-label={is ? "Fjarlægja frí" : "Remove break"} className="rounded px-1.5 text-[13px] text-slate-400 hover:bg-[#a83e28]/10 hover:text-[#a83e28]">✕</button>
-                          </div>
-                        ) : (
-                          <div className="ml-auto flex flex-wrap items-center gap-1.5">
-                            <input type="date" value={draft.start} onChange={(e) => setBreakEdits((p) => ({ ...p, [key]: { ...draft, start: e.target.value } }))} className="h-8 rounded border border-slate-300 px-1.5 text-[12px]" />
-                            <span className="text-slate-400">–</span>
-                            <input type="date" value={draft.end} onChange={(e) => setBreakEdits((p) => ({ ...p, [key]: { ...draft, end: e.target.value } }))} className="h-8 rounded border border-slate-300 px-1.5 text-[12px]" />
-                            <button type="button" disabled={invalid} onClick={() => addBreak(draft.start, draft.end, is ? w.label.is : w.label.en)} className={`h-8 rounded-lg px-2.5 text-[12px] font-semibold ${invalid ? "cursor-not-allowed bg-slate-200 text-slate-400" : "bg-[#2740e6] text-white hover:brightness-110"}`}>{is ? "Bæta við sem frí" : "Add as break"}</button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="mt-2 text-[11px] text-slate-400">{is ? "A-landsliðsgluggar, ekki staðfest deildarhlé — athugaðu hjá KSÍ/deildinni. Eigin hlé má líka bæta við handvirkt." : "A-team windows, not confirmed league pauses — check with the federation/league. Custom breaks can be added manually too."}</p>
-              </section>
-            );
-          })()}
-
-          {/* ÆFINGAFERÐ — training camps: concentrated-load periods. Add dates + a load bump + 2-a-days; the
-              calendar bumps those training days and (on 2-a-days) turns rest days into extra sessions. */}
-          <section className={card}>
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h2 className={h2}>{is ? "Æfingaferð" : "Training camp"}</h2>
-              <span className="text-[12px] text-slate-500">{is ? "álagslota — hækkar álagið + aukaæfingar þá daga" : "a loading block — bumps load + adds sessions those days"}</span>
-            </div>
-            <p className="mt-1 text-[12px] text-slate-500">{is ? "Merkir dagana sem æfingar, hækkar álagið um valið hlutfall, og (með tvíæfingum) breytir hvíldardögum ferðarinnar í aukaæfingar. Mesó/Míkró og dagatalið endurspegla það." : "Marks the days as training, bumps the load by the chosen %, and (with two-a-days) turns the camp's rest days into extra sessions. Meso/Micro and the calendar reflect it."}</p>
-            {camps.length > 0 && (
-              <div className="mt-3 space-y-1.5">
-                {camps.map((c) => (
-                  <div key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[#de9328]/30 bg-[#de9328]/5 px-3 py-2">
-                    <span className="text-[13px] font-semibold text-slate-800">{shortDate(c.start_date, is)}–{shortDate(c.end_date, is)}</span>
-                    {c.label && <span className="text-[12px] text-slate-500">{c.label}</span>}
-                    <label className="flex items-center gap-1 text-[12px] font-medium text-slate-600">+{is ? "álag" : "load"}
-                      <select value={c.load_pct} onChange={(e) => patchCamp(c.id, { loadPct: Number(e.target.value) })} className="rounded border border-slate-300 bg-white px-1.5 py-0.5 tabular-nums">
-                        {[0, 5, 10, 15, 20, 25, 30, 40].map((n) => <option key={n} value={n}>{n}%</option>)}
-                      </select>
-                    </label>
-                    <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">
-                      <input type="checkbox" checked={c.two_a_day} onChange={(e) => patchCamp(c.id, { twoADay: e.target.checked })} /> {is ? "tvíæfingar" : "two-a-days"}
-                    </label>
-                    <button type="button" onClick={() => removeCamp(c.id)} title={is ? "Fjarlægja ferð" : "Remove camp"} aria-label={is ? "Fjarlægja ferð" : "Remove camp"} className="ml-auto rounded px-1.5 text-[13px] text-slate-400 hover:bg-[#a83e28]/10 hover:text-[#a83e28]">✕</button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="mt-3 flex flex-wrap items-end gap-x-3 gap-y-2 border-t border-slate-100 pt-3">
-              <label className="flex flex-col gap-1 text-[11px] font-semibold text-slate-600">{is ? "Frá" : "From"}
-                <input type="date" value={campDraft.start} onChange={(e) => setCampDraft((p) => ({ ...p, start: e.target.value }))} className="h-9 rounded border border-slate-300 px-2 text-[13px]" />
-              </label>
-              <label className="flex flex-col gap-1 text-[11px] font-semibold text-slate-600">{is ? "Til" : "To"}
-                <input type="date" value={campDraft.end} onChange={(e) => setCampDraft((p) => ({ ...p, end: e.target.value }))} className="h-9 rounded border border-slate-300 px-2 text-[13px]" />
-              </label>
-              <label className="flex flex-col gap-1 text-[11px] font-semibold text-slate-600">{is ? "Heiti (valfrj.)" : "Label (opt.)"}
-                <input type="text" value={campDraft.label} placeholder={is ? "t.d. Spánn" : "e.g. Spain"} onChange={(e) => setCampDraft((p) => ({ ...p, label: e.target.value }))} className="h-9 w-36 rounded border border-slate-300 px-2 text-[13px]" />
-              </label>
-              <label className="flex flex-col gap-1 text-[11px] font-semibold text-slate-600">+{is ? "álag" : "load"}
-                <select value={campDraft.loadPct} onChange={(e) => setCampDraft((p) => ({ ...p, loadPct: Number(e.target.value) }))} className="h-9 rounded border border-slate-300 bg-white px-1.5 text-[13px] tabular-nums">
-                  {[0, 5, 10, 15, 20, 25, 30, 40].map((n) => <option key={n} value={n}>{n}%</option>)}
-                </select>
-              </label>
-              <label className="flex items-center gap-1.5 pb-2 text-[12px] font-medium text-slate-600">
-                <input type="checkbox" checked={campDraft.twoADay} onChange={(e) => setCampDraft((p) => ({ ...p, twoADay: e.target.checked }))} /> {is ? "tvíæfingar" : "two-a-days"}
-              </label>
-              <button type="button" disabled={!campDraft.start || !campDraft.end || campDraft.end < campDraft.start}
-                onClick={() => { addCamp(campDraft); setCampDraft({ start: "", end: "", label: "", loadPct: 15, twoADay: true }); }}
-                className={`h-9 rounded-lg px-3 text-[13px] font-semibold ${!campDraft.start || !campDraft.end || campDraft.end < campDraft.start ? "cursor-not-allowed bg-slate-200 text-slate-400" : "bg-[#2740e6] text-white hover:brightness-110"}`}>{is ? "Bæta við ferð" : "Add camp"}</button>
-            </div>
-          </section>
-
           {!plan.phases.some((p) => p.key === "preseason" && p.weeks > 0) && (
             <div className="rounded-lg border border-dashed border-[#7a5cc4]/40 bg-[#7a5cc4]/5 px-3 py-2 text-[12px] text-[#4a3a7a]">
               {is
@@ -1989,6 +1889,109 @@ export default function PeriodizationHubPage() {
               </details>
             </section>
           )}
+
+          {/* PERIOD INPUTS — below the season map (the map is the main view). International breaks + training
+              camps are added here and show on the map's Breaks / Camp lanes. Always available (outside the
+              empty/non-empty branch), so they can be set even for a season with no fixtures yet. */}
+          {/* LANDSLEIKJAHLÉ — the FIFA/FIBA international windows for this team's sport+gender. The coach sets
+              the ACTUAL break length (breaks vary by team) and adds it → a real team_break the macro/meso read. */}
+          {(() => {
+            const s = String(teamSport ?? "").toLowerCase();
+            if (s !== "football" && s !== "basketball") return null; // wait for config; skip general/PT teams
+            const windows = upcomingInternationalBreaks({ sport: teamSport, gender: teamGender, fromIso: todayIso });
+            if (!windows.length) return null;
+            const shown = windows.slice(0, 8);
+            const overlaps = (b: { start_date: string; end_date: string }, w: IntlBreak) => b.start_date <= w.end && b.end_date >= w.start;
+            const bodyColor = (body: string) => (body === "FIBA" ? "#7a5cc4" : "#2740e6");
+            return (
+              <section className={card}>
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h2 className={h2}>{is ? "Landsleikjahlé" : "International breaks"}</h2>
+                  <span className="text-[12px] text-slate-500">{is ? "A-landsliðsgluggar (FIFA/FIBA) — þú ákveður lengd fríssins" : "A-team windows (FIFA/FIBA) — you set the break length"}</span>
+                </div>
+                <p className="mt-1 text-[12px] text-slate-500">{is ? "Hlé er mislangt milli liða (sumir fara til landsliðs, aðrir æfa). Stilltu dagsetningarnar og bættu við — þá verður frí í áætluninni (Mesó fær endurhleðslu-lotu, dagarnir merktir frí)." : "Breaks vary by team (some leave for national duty, others train). Set the dates and add it — it becomes a break in the plan (Meso gets a re-load block, the days are marked off)."}</p>
+                <div className="mt-3 space-y-1.5">
+                  {shown.map((w) => {
+                    const key = intlBreakKey(w);
+                    const covered = teamBreaksFull.find((b) => overlaps(b, w));
+                    const draft = breakEdits[key] ?? { start: w.start, end: w.end };
+                    const invalid = draft.end < draft.start;
+                    return (
+                      <div key={key} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        <span className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white" style={{ background: bodyColor(w.body) }}>{w.body}</span>
+                        <span className="text-[12px] text-slate-600">{shortDate(w.start, is)}–{shortDate(w.end, is)} · {w.days} {is ? "d" : "d"}{w.kind === "tournament" ? ` · ${is ? w.label.is : w.label.en}` : ""}</span>
+                        {covered ? (
+                          <div className="ml-auto flex items-center gap-2">
+                            <span className="rounded-full bg-[#1c7a4a]/10 px-2 py-0.5 text-[11px] font-semibold text-[#1c7a4a]">{is ? "Frí" : "Break"} {shortDate(covered.start_date, is)}–{shortDate(covered.end_date, is)}</span>
+                            <button type="button" onClick={() => removeBreak(covered.id)} title={is ? "Fjarlægja frí" : "Remove break"} aria-label={is ? "Fjarlægja frí" : "Remove break"} className="rounded px-1.5 text-[13px] text-slate-400 hover:bg-[#a83e28]/10 hover:text-[#a83e28]">✕</button>
+                          </div>
+                        ) : (
+                          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                            <input type="date" value={draft.start} onChange={(e) => setBreakEdits((p) => ({ ...p, [key]: { ...draft, start: e.target.value } }))} className="h-8 rounded border border-slate-300 px-1.5 text-[12px]" />
+                            <span className="text-slate-400">–</span>
+                            <input type="date" value={draft.end} onChange={(e) => setBreakEdits((p) => ({ ...p, [key]: { ...draft, end: e.target.value } }))} className="h-8 rounded border border-slate-300 px-1.5 text-[12px]" />
+                            <button type="button" disabled={invalid} onClick={() => addBreak(draft.start, draft.end, is ? w.label.is : w.label.en)} className={`h-8 rounded-lg px-2.5 text-[12px] font-semibold ${invalid ? "cursor-not-allowed bg-slate-200 text-slate-400" : "bg-[#2740e6] text-white hover:brightness-110"}`}>{is ? "Bæta við sem frí" : "Add as break"}</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-[11px] text-slate-400">{is ? "A-landsliðsgluggar, ekki staðfest deildarhlé — athugaðu hjá KSÍ/deildinni. Eigin hlé má líka bæta við handvirkt." : "A-team windows, not confirmed league pauses — check with the federation/league. Custom breaks can be added manually too."}</p>
+              </section>
+            );
+          })()}
+
+          {/* ÆFINGAFERÐ — training camps: concentrated-load periods. Add dates + a load bump + 2-a-days; the
+              calendar bumps those training days and (on 2-a-days) turns rest days into extra sessions. */}
+          <section className={card}>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h2 className={h2}>{is ? "Æfingaferð" : "Training camp"}</h2>
+              <span className="text-[12px] text-slate-500">{is ? "álagslota — hækkar álagið + aukaæfingar þá daga" : "a loading block — bumps load + adds sessions those days"}</span>
+            </div>
+            <p className="mt-1 text-[12px] text-slate-500">{is ? "Merkir dagana sem æfingar, hækkar álagið um valið hlutfall, og (með tvíæfingum) breytir hvíldardögum ferðarinnar í aukaæfingar. Mesó/Míkró og dagatalið endurspegla það." : "Marks the days as training, bumps the load by the chosen %, and (with two-a-days) turns the camp's rest days into extra sessions. Meso/Micro and the calendar reflect it."}</p>
+            {camps.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                {camps.map((c) => (
+                  <div key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[#de9328]/30 bg-[#de9328]/5 px-3 py-2">
+                    <span className="text-[13px] font-semibold text-slate-800">{shortDate(c.start_date, is)}–{shortDate(c.end_date, is)}</span>
+                    {c.label && <span className="text-[12px] text-slate-500">{c.label}</span>}
+                    <label className="flex items-center gap-1 text-[12px] font-medium text-slate-600">+{is ? "álag" : "load"}
+                      <select value={c.load_pct} onChange={(e) => patchCamp(c.id, { loadPct: Number(e.target.value) })} className="rounded border border-slate-300 bg-white px-1.5 py-0.5 tabular-nums">
+                        {[0, 5, 10, 15, 20, 25, 30, 40].map((n) => <option key={n} value={n}>{n}%</option>)}
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">
+                      <input type="checkbox" checked={c.two_a_day} onChange={(e) => patchCamp(c.id, { twoADay: e.target.checked })} /> {is ? "tvíæfingar" : "two-a-days"}
+                    </label>
+                    <button type="button" onClick={() => removeCamp(c.id)} title={is ? "Fjarlægja ferð" : "Remove camp"} aria-label={is ? "Fjarlægja ferð" : "Remove camp"} className="ml-auto rounded px-1.5 text-[13px] text-slate-400 hover:bg-[#a83e28]/10 hover:text-[#a83e28]">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="mt-3 flex flex-wrap items-end gap-x-3 gap-y-2 border-t border-slate-100 pt-3">
+              <label className="flex flex-col gap-1 text-[11px] font-semibold text-slate-600">{is ? "Frá" : "From"}
+                <input type="date" value={campDraft.start} onChange={(e) => setCampDraft((p) => ({ ...p, start: e.target.value }))} className="h-9 rounded border border-slate-300 px-2 text-[13px]" />
+              </label>
+              <label className="flex flex-col gap-1 text-[11px] font-semibold text-slate-600">{is ? "Til" : "To"}
+                <input type="date" value={campDraft.end} onChange={(e) => setCampDraft((p) => ({ ...p, end: e.target.value }))} className="h-9 rounded border border-slate-300 px-2 text-[13px]" />
+              </label>
+              <label className="flex flex-col gap-1 text-[11px] font-semibold text-slate-600">{is ? "Heiti (valfrj.)" : "Label (opt.)"}
+                <input type="text" value={campDraft.label} placeholder={is ? "t.d. Spánn" : "e.g. Spain"} onChange={(e) => setCampDraft((p) => ({ ...p, label: e.target.value }))} className="h-9 w-36 rounded border border-slate-300 px-2 text-[13px]" />
+              </label>
+              <label className="flex flex-col gap-1 text-[11px] font-semibold text-slate-600">+{is ? "álag" : "load"}
+                <select value={campDraft.loadPct} onChange={(e) => setCampDraft((p) => ({ ...p, loadPct: Number(e.target.value) }))} className="h-9 rounded border border-slate-300 bg-white px-1.5 text-[13px] tabular-nums">
+                  {[0, 5, 10, 15, 20, 25, 30, 40].map((n) => <option key={n} value={n}>{n}%</option>)}
+                </select>
+              </label>
+              <label className="flex items-center gap-1.5 pb-2 text-[12px] font-medium text-slate-600">
+                <input type="checkbox" checked={campDraft.twoADay} onChange={(e) => setCampDraft((p) => ({ ...p, twoADay: e.target.checked }))} /> {is ? "tvíæfingar" : "two-a-days"}
+              </label>
+              <button type="button" disabled={!campDraft.start || !campDraft.end || campDraft.end < campDraft.start}
+                onClick={() => { addCamp(campDraft); setCampDraft({ start: "", end: "", label: "", loadPct: 15, twoADay: true }); }}
+                className={`h-9 rounded-lg px-3 text-[13px] font-semibold ${!campDraft.start || !campDraft.end || campDraft.end < campDraft.start ? "cursor-not-allowed bg-slate-200 text-slate-400" : "bg-[#2740e6] text-white hover:brightness-110"}`}>{is ? "Bæta við ferð" : "Add camp"}</button>
+            </div>
+          </section>
 
             </div>);
           })()}
