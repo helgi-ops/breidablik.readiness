@@ -18,6 +18,7 @@ type FourFactors = { efgPct: number | null; toPct: number | null; orebPct: numbe
 type Team = { ppg: number | null; fgPct: number | null; tpPct: number | null; tpaPg: number | null; reb: number | null; ast: number | null; tov: number | null; homePpg: number | null; awayPpg: number | null } | null;
 type Player = { name: string; ppg: number | null; rpg: number | null; apg: number | null; fgPct: number | null; tpPct: number | null; tpaPg: number | null; descriptor?: { en: string; is: string } };
 type Defend = { en: string; is: string; evidence?: string };
+type Lineup = { members: string[]; minutes: number | null; plusMinus: number | null; points: number | null; fgPct: number | null };
 
 export type BasketballOpponentPdfData = {
   opponentName: string;
@@ -28,6 +29,7 @@ export type BasketballOpponentPdfData = {
   courtRegions: CourtRegion[] | null;
   playtypes: ShotType[] | null;
   efficiency: ShotType[] | null;
+  lineups: Lineup[] | null;
   howToDefend: Defend[];
   keyPlayers: Player[];
   ai: { headline?: string; summary?: string; strengths?: string[]; weaknesses?: string[]; keyPlayers?: { name: string; note: string }[]; howToDefend?: string[]; howToAttack?: string[] } | null;
@@ -55,8 +57,8 @@ const st = StyleSheet.create({
 });
 
 const T = {
-  EN: { kicker: "OPPONENT SCOUTING - INSTAT", profile: "Team profile", ff: "How they played you (Four Factors)", zones: "Shot map (paint / mid-range / 3PT)", scored: "How they score", playtypes: "FG playtypes", eff: "Offensive-efficiency types", defend: "How to defend", players: "Key players", them: "Opp", ofShots: "of shots", foot: "Descriptive opponent scouting from imported InStat Game Reports. It does not decide anything and never changes a readiness verdict." },
-  IS: { kicker: "ANDSTAEDINGA-SKANNUN - INSTAT", profile: "Lidsprofill", ff: "Hvernig their spiludu ykkur (Four Factors)", zones: "Skotkort (teigur / midsvaedi / thristar)", scored: "Hvernig their skora", playtypes: "Soknartegundir", eff: "Soknargerd (efficiency)", defend: "Hvernig a ad verjast", players: "Lykilmenn", them: "Andst.", ofShots: "af skotum", foot: "Lysandi andstaedinga-skannun ur InStat leikskyrslum. Akvedur ekkert og breytir aldrei readiness-domi." },
+  EN: { kicker: "OPPONENT SCOUTING - INSTAT", profile: "Team profile", ff: "How they played you (Four Factors)", zones: "Shot map (paint / mid-range / 3PT)", scored: "How they score", playtypes: "FG playtypes", eff: "Offensive-efficiency types", lineups: "Most-used lineups", lineupsHint: "By minutes, with net +/- (and PTS / FG% the unit put up).", defend: "How to defend", players: "Key players", them: "Opp", ofShots: "of shots", foot: "Descriptive opponent scouting from imported InStat Game Reports. It does not decide anything and never changes a readiness verdict." },
+  IS: { kicker: "ANDSTAEDINGA-SKANNUN - INSTAT", profile: "Lidsprofill", ff: "Hvernig their spiludu ykkur (Four Factors)", zones: "Skotkort (teigur / midsvaedi / thristar)", scored: "Hvernig their skora", playtypes: "Soknartegundir", eff: "Soknargerd (efficiency)", lineups: "Mest notudu fimmundir", lineupsHint: "Eftir minutum, med +/- (og stig / FG% sem einingin skoradi).", defend: "Hvernig a ad verjast", players: "Lykilmenn", them: "Andst.", ofShots: "af skotum", foot: "Lysandi andstaedinga-skannun ur InStat leikskyrslum. Akvedur ekkert og breytir aldrei readiness-domi." },
 } as const;
 
 const regionLabel = (key: CourtRegion["key"], lang: Lang) =>
@@ -126,6 +128,24 @@ function Doc({ data, lang }: { data: BasketballOpponentPdfData; lang: Lang }) {
             {data.efficiency && data.efficiency.length ? (<><Text style={st.h3}>{t.eff}</Text>{data.efficiency.map((r) => (
               <View key={r.key} style={st.row}><Text style={st.cL}>{clean(shotLabel(r.key, lang))}</Text><Text style={st.cR}>{r.made}-{r.att}{r.pct != null ? `  ${r.pct}%` : ""}</Text></View>
             ))}</>) : null}
+          </>
+        ) : null}
+
+        {data.lineups && data.lineups.length ? (
+          <><Text style={st.h2}>{t.lineups}</Text>
+            <Text style={{ fontSize: 8, color: MUTE, marginBottom: 2 }}>{t.lineupsHint}</Text>
+            {data.lineups.slice(0, 6).map((l, i) => {
+              const pm = l.plusMinus == null ? "-" : `${l.plusMinus > 0 ? "+" : ""}${l.plusMinus.toFixed(1)}`;
+              return (
+                <View key={i} style={{ marginBottom: 3 }}>
+                  <View style={st.row}>
+                    <Text style={st.cL}>{clean(l.members.join(", "))}</Text>
+                    <Text style={st.cR}>{d1(l.minutes)}m  {pm}</Text>
+                  </View>
+                  <Text style={st.ev}>{d1(l.points)} PTS  -  {pct(l.fgPct)} FG</Text>
+                </View>
+              );
+            })}
           </>
         ) : null}
 

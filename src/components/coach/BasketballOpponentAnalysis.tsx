@@ -337,6 +337,7 @@ export default function BasketballOpponentAnalysis() {
         courtRegions: oppCourt,
         playtypes: oppPlay,
         efficiency: oppEff,
+        lineups: oppLineups,
         howToDefend: report.howToDefend,
         keyPlayers: report.keyPlayers,
         ai,
