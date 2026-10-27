@@ -207,6 +207,11 @@ export default function PeriodizationHubPage() {
   const nextPreStartRef = React.useRef(nextPreStart); nextPreStartRef.current = nextPreStart;
   const didPopulateWindow = React.useRef(false);
   const didPopulateNext = React.useRef(false); // guard for the upcoming-pre-season (next-year) overrides restore
+  // Which SEASON YEAR the hub is viewing/planning. null until the first load resolves it to the current year;
+  // the coach can step to the next year (plan it — it begins where the off-season ends) or back to a past one.
+  const [viewYear, setViewYear] = React.useState<number | null>(null);
+  const viewYearRef = React.useRef<number | null>(null);
+  const carrySeedRef = React.useRef<string>(""); // off-season end carried into a NEW next-season's pre-season start
   const [friendly, setFriendly] = React.useState("");    // pre-season friendly date to add (MD anchor)
   const [friendlyKind, setFriendlyKind] = React.useState<"friendly" | "competitive">("friendly"); // tag so friendlies don't start the season
   const [mdPosKey, setMdPosKey] = React.useState<number | null>(null); // position selector for the three-axes + MD-demand cards
@@ -346,6 +351,7 @@ export default function PeriodizationHubPage() {
     setLoading(true); setErr(null);
     try {
       const qs = new URLSearchParams();
+      if (viewYearRef.current) qs.set("year", String(viewYearRef.current));
       if (preS) qs.set("preStart", preS);
       if (endS) qs.set("seasonEnd", endS);
       if (nextPreStartRef.current) qs.set("nextPreStart", nextPreStartRef.current);
@@ -353,6 +359,9 @@ export default function PeriodizationHubPage() {
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) { setErr(j.error ?? "Failed"); return; }
       setPlan(j.plan as Plan);
+      // Track the loaded season year (first load resolves `viewYear` to the current season).
+      viewYearRef.current = (j.plan as Plan).seasonYear;
+      setViewYear((j.plan as Plan).seasonYear);
       // Populate the season-window inputs from the saved overrides, once, so they reflect what's stored.
       const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; offseasonStart?: string | null; preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; stepPct?: number | null; blockGoals?: Record<string, "accum" | "transmute" | "realize">; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string> } }).savedWindow;
       if (sw && !didPopulateWindow.current) {
@@ -368,6 +377,9 @@ export default function PeriodizationHubPage() {
         if (sw.blockWeeks && Object.keys(sw.blockWeeks).length) setBlockLenOv(sw.blockWeeks);
         if (sw.blockDeload && Object.keys(sw.blockDeload).length) setBlockDeloadOv(sw.blockDeload);
       }
+      // Starting a NEW next season with no saved pre-season start yet: suggest the off-season end (where the
+      // new season begins). A local suggestion only — not persisted until the coach saves/applies.
+      if (carrySeedRef.current) { if (!sw?.preseasonStart) setPreStart(carrySeedRef.current); carrySeedRef.current = ""; }
       // The UPCOMING pre-season's saved overrides live in NEXT season's row — restore them into the separate
       // pre-season store so the Pre-season tab reads/writes that row (survives the rollover; no index clash).
       const swn = (j as { savedWindowNext?: { preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; blockWeeks?: Record<string, number>; preMesoTail?: number[] | null } | null }).savedWindowNext;
@@ -392,6 +404,22 @@ export default function PeriodizationHubPage() {
   }, [authHeader]);
 
   React.useEffect(() => { load("", ""); }, [load]);
+
+  // Switch the whole hub to another SEASON YEAR (plan + fixtures + anchors load for that year). Stepping to a
+  // LATER season carries the off-season end into its pre-season start (the off-season triggers the new season);
+  // year-scoped inputs are cleared so a fresh year never inherits the previous season's structure.
+  const switchYear = React.useCallback((yr: number) => {
+    const curYr = plan?.seasonYear ?? new Date().getFullYear();
+    carrySeedRef.current = yr > curYr ? (nextPreStart || offStart || "") : "";
+    viewYearRef.current = yr; setViewYear(yr);
+    didPopulateWindow.current = false; didPopulateNext.current = false;
+    setPreStart(""); setSeasonEnd(""); setOffStart(""); setNextPreStart("");
+    setBlockGoals({}); setBlockLenOv({}); setBlockDeloadOv({});
+    setNextMesoTail(null); setPreBlockLenOv({});
+    setCadence(4); setBlkStep(5); setPsWeek1Mult(1.3); setPsSessions(4);
+    nextPreStartRef.current = "";
+    void load("", "");
+  }, [plan, nextPreStart, offStart, load]);
 
   // THE ONE FIXTURE WRITE PATH (client side) — every match add/move/remove on the planner goes through the
   // shared server route so match_schedule stays the single source of truth; then we refetch so Macro + Meso
@@ -1342,7 +1370,21 @@ export default function PeriodizationHubPage() {
           {/* 1 — SEASON FRAME: the controls come first (Macro IS the control; everything below re-flows). */}
           <section className={card}>
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h2 className={h2}>{is ? "Tímabilsrammi" : "Season frame"} <span className="font-normal text-slate-500">{plan.seasonYear}</span></h2>
+              <h2 className={h2}>{is ? "Tímabilsrammi" : "Season frame"}</h2>
+              {(() => {
+                const nowY = new Date().getFullYear();
+                const minY = nowY - 1, maxY = nowY + 1;
+                const vy = viewYear ?? plan.seasonYear;
+                const btn = "flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-[15px] text-slate-600 hover:bg-slate-50 disabled:opacity-30";
+                return (
+                  <span className="inline-flex items-center gap-1.5" title={is ? "Veldu tímabil (ártal)" : "Choose the season (year)"}>
+                    <button type="button" disabled={vy <= minY || loading} onClick={() => switchYear(vy - 1)} className={btn} aria-label={is ? "Fyrra tímabil" : "Previous season"}>‹</button>
+                    <span className="min-w-[3ch] text-center text-[15px] font-bold tabular-nums text-slate-900">{vy}</span>
+                    <button type="button" disabled={vy >= maxY || loading} onClick={() => switchYear(vy + 1)} className={btn} aria-label={is ? "Næsta tímabil" : "Next season"}>›</button>
+                    {vy > nowY && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{is ? "nýtt tímabil" : "new season"}</span>}
+                  </span>
+                );
+              })()}
               <span className="text-[12px] text-slate-500">{is ? "Stilltu þetta fyrst — kortið, Mesó og Míkró endurreiknast." : "Set these first — the map, Meso and Micro all re-flow from them."}</span>
             </div>
             {/* Four date anchors — equal grid columns so they align and never stretch to a helper's width. */}
