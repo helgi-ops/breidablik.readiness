@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, recommendBlockGoal, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
+import { detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, recommendBlockGoal, blockGoalFromSeason, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
 
 // A full Pro (GPS + IMA) match unit — running spine + the mechanical/IMA axis (Acc/Dec B2–3, stride, dir).
 const UNIT: MatchUnitAbs = { dist: 12564, hsr: 988, load: 1184, accdec: 259, accHiEff: 40, decHiEff: 52, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
@@ -604,6 +604,11 @@ test("recommendBlockGoal: fatigue overrides sequence; phase / runway / sequence 
   // Thin data → capped confidence + a hint caveat.
   const thin = recommendBlockGoal({ ...base, phaseKey: "preseason", fixturesLoaded: 1, loadHistoryWeeks: 2 });
   assert.notEqual(thin.confidence, "high");
+  // blockGoalFromSeason: a real long gap in competition re-loads; but an ESTIMATED schedule (opener only)
+  // reads the competition as compete (Realization), not Accumulation (the trailing gap is an artefact).
+  assert.equal(blockGoalFromSeason({ phaseKey: "competitive", index: 1, matchesPerWeek: 0, maxGapDays: 200, prevGoal: "realize" }), "accum"); // long gap → re-load (nextInSequence)
+  assert.equal(blockGoalFromSeason({ phaseKey: "competitive", index: 1, matchesPerWeek: 0, maxGapDays: 200, prevGoal: "realize", estimated: true }), "realize"); // estimated → compete
+  assert.equal(blockGoalFromSeason({ phaseKey: "competitive", index: 0, matchesPerWeek: 1, maxGapDays: 5, prevGoal: null }), "realize"); // normal week-to-week → compete
   assert.ok(thin.reasons.some((r) => /hint|vísbendingu/i.test(r.en + r.is)));
   // Always carries an alternative.
   assert.ok(dl.alternative && dl.alternative.goal);

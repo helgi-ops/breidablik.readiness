@@ -468,7 +468,7 @@ export default function PeriodizationHubPage() {
     // competitiveStart lets the builder make each in-season block fixture-aware (compete vs re-load).
     const compStart = plan.phases.find((p) => p.key === "competitive")?.start ?? null;
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
-    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart, teamBreaks, offPhaseStart, offStart || null, { blockWeeks: blockLenOv, deloadByStart: blockDeloadOv });
+    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart, teamBreaks, offPhaseStart, offStart || null, { blockWeeks: blockLenOv, deloadByStart: blockDeloadOv, fixturesEstimated: plan.fixturesEstimated });
   }, [plan, cadence, teamBreaks, offStart, blockLenOv, blockDeloadOv]);
 
   // The block the coach is editing (contains blkStart), and its EFFECTIVE goal = coach override for that

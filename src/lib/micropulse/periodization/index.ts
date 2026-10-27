@@ -1049,11 +1049,15 @@ export function blockGoalFromSeason(opts: {
   maxGapDays: number | null;
   prevGoal: BlockGoalKey | null;
   gapDaysForLoad?: number; // a gap this long (no games) opens a loading window. Default 14.
+  estimated?: boolean;     // the competition is ESTIMATED (opener only) — the trailing gap isn't a real break.
 }): RecGoalKey {
   // Off-season is a build phase, reset: transition into a base, then convert — but never a peak (there is
   // no fixture to realize for). `index` is the phase-LOCAL block index.
   if (opts.phaseKey === "offseason") return opts.index === 0 ? "accum" : "transmute";
   if (opts.phaseKey !== "competitive") return blockGoalAt(opts.index); // pre-season → build-up order
+  // Estimated schedule (only the opener is known): the long post-opener "gap" is an artefact, so the
+  // competition reads as what it is — compete (Realization) — not a re-load. Corrected by real fixtures.
+  if (opts.estimated) return "realize";
   const congested = opts.matchesPerWeek != null && opts.matchesPerWeek >= 1.5;
   if (congested) return "realize"; // a dense run — hold freshness, never accumulate
   const gapForLoad = opts.gapDaysForLoad ?? 14;
@@ -1111,6 +1115,10 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
   /** Coach deload-week pins, keyed by the block's start Monday ISO → the Monday ISO of the deload week.
    *  Wins over the auto placement + the fatigue pull-forward when it lands inside the block. */
   deloadByStart?: Record<string, string>;
+  /** The competitive fixtures are ESTIMATED (only the opener is known — KSÍ publishes late). Then the long
+   *  "gap" after that single game is an artefact, not a real break, so competitive blocks default to
+   *  Realization (compete) instead of re-load/Accumulation. Corrected once real fixtures are added. */
+  fixturesEstimated?: boolean;
 }): MesoBlock[] {
   const ovWeeks = (mon: string, idx: number): number | null => { const w = opts?.blockWeeks?.[String(idx)] ?? opts?.blockWeeks?.[mon]; return typeof w === "number" && w >= 2 && w <= 8 ? Math.round(w) : null; };
   const byWeek = [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
@@ -1241,7 +1249,7 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
       gk = "deload";
       g = { phase: { en: "Off-season break", is: "Frí" }, goal: { en: "Holiday — full rest before reconditioning", is: "Frí — full hvíld fyrir enduruppbyggingu" } };
     } else {
-      const rgk = blockGoalFromSeason({ phaseKey, index: phaseLocal, matchesPerWeek, maxGapDays, prevGoal });
+      const rgk = blockGoalFromSeason({ phaseKey, index: phaseLocal, matchesPerWeek, maxGapDays, prevGoal, estimated: opts?.fixturesEstimated });
       gk = rgk; g = GOAL_BY_KEY[rgk];
     }
     const volumeTargetPct = acute != null ? Math.round(Math.min(1.1, Math.max(0.9, chronic && acute ? 1.08 : 1.0)) * 100) : 100;

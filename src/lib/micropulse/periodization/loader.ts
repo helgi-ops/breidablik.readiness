@@ -218,7 +218,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   // in-season week becomes its own re-load block, so the server blocks match the hub's.
   const { data: breakRows } = await sb.from("team_breaks").select("start_date, end_date").eq("team_id", args.teamId);
   const teamBreaks = ((breakRows ?? []) as Array<{ start_date: string; end_date: string }>).filter((b) => b.start_date && b.end_date);
-  const blocks = phases.length ? buildMesoBlocks(planStart, planEnd, loadCurve, cadence, matchLoadTeam, fixtures.map((f) => f.date), compPhaseStart, teamBreaks, offPhaseStartIso, null, { blockWeeks: args.blockWeeksByStart ?? undefined, deloadByStart: args.deloadByStart ?? undefined }) : [];
+  const blocks = phases.length ? buildMesoBlocks(planStart, planEnd, loadCurve, cadence, matchLoadTeam, fixtures.map((f) => f.date), compPhaseStart, teamBreaks, offPhaseStartIso, null, { blockWeeks: args.blockWeeksByStart ?? undefined, deloadByStart: args.deloadByStart ?? undefined, fixturesEstimated }) : [];
 
   // Players + individualisation.
   const { data: plData } = await sb.from("players").select("id, full_name, position").eq("team_id", args.teamId).eq("is_active", true).order("full_name");
