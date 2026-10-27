@@ -16,9 +16,11 @@ import { playerTendencyNotes, buildAttackBoard } from "@/lib/micropulse/basketba
 import BasketballCourtMap from "@/components/coach/BasketballCourtMap";
 import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import InstatOpponentSeasonUpload from "@/components/coach/InstatOpponentSeasonUpload";
+import PlayDiagramsSection from "@/components/coach/PlayDiagramsSection";
 import FibaShotCharts from "@/components/coach/FibaShotCharts";
 import { shotLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 import type { ScoutLineup } from "@/lib/micropulse/basketballStats/scoutInstatOpponent";
+import type { PlayDiagram } from "@/lib/micropulse/basketballStats/playDiagram";
 
 type OppShotType = { key: string; made: number; att: number; pct: number | null; sharePct?: number | null };
 type OppAi = {
@@ -356,6 +358,20 @@ export default function BasketballOpponentAnalysis() {
     setPdfBusy(true);
     try {
       const { downloadBasketballOpponentPdf } = await import("@/components/coach/BasketballOpponentPdf");
+      // Confirmed set-play diagrams for this opponent (coach-drawn + confirmed AI drafts).
+      let plays: { name: string; playType: string | null; diagram: PlayDiagram; source?: string | null; confidence?: string | null }[] | null = null;
+      try {
+        const tok = await token();
+        if (tok && sel) {
+          const res = await fetch(`/api/coach/scouting/play-diagrams?opponent=${encodeURIComponent(sel)}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
+          const j = await res.json();
+          if (j.ok && Array.isArray(j.diagrams)) {
+            plays = j.diagrams
+              .filter((d: { confirmed?: boolean }) => d.confirmed)
+              .map((d: { name: string; play_type: string | null; diagram: PlayDiagram; source?: string | null; confidence?: string | null }) => ({ name: d.name, playType: d.play_type, diagram: d.diagram, source: d.source, confidence: d.confidence }));
+          }
+        }
+      } catch { /* diagrams are optional — the report still downloads without them */ }
       await downloadBasketballOpponentPdf({
         opponentName: report.opponentName,
         source: reportSource,
@@ -370,6 +386,7 @@ export default function BasketballOpponentAnalysis() {
         attack: buildAttackBoard(report.players),
         keyPlayers: report.keyPlayers,
         players: report.players.map((p) => ({ ...p, notes: playerTendencyNotes(p, lang) })),
+        plays,
         ai,
       }, lang);
     } finally { setPdfBusy(false); }
@@ -750,6 +767,9 @@ export default function BasketballOpponentAnalysis() {
           <p className="text-[11px] text-slate-400">{t.perfNote}</p>
         </div>
       ) : null}
+
+      {/* Set plays — coach-drawn diagrams of the opponent's most-used sets (carry into the PDF). */}
+      {sel ? <PlayDiagramsSection opponent={sel} /> : null}
 
       {/* AI film-clip analysis panel removed from the page (user request 2026-08-15). The
           feature is intact — component BasketballFilmClip, route /api/coach/basketball-film-clip,
