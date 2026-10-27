@@ -242,3 +242,84 @@ export function computeBasketballIndoorLoad(rows: BballLoadRow[]): BasketballInd
     caveat: CAVEAT,
   };
 }
+
+// ── Per-player plain-language read (explainability L1) ───────────────────────
+// Reads ONE player's latest session straight from their own indexed numbers and writes a
+// short coach sentence: the verdict (band + score), what drove it (the signals furthest
+// from their 100 norm), and the honest caveats (impacts too sparse to score, thin
+// baseline). Rule-based and cited — no AI, never invents a number it wasn't given.
+
+/** Describe how far an index sits from the player's 100 norm, in plain words. */
+function devWord(idx: number, isIS: boolean): string {
+  if (idx >= 120) return isIS ? "langt yfir" : "well above";
+  if (idx >= 110) return isIS ? "yfir" : "above";
+  if (idx >= 90) return isIS ? "um það bil í" : "about";
+  if (idx >= 80) return isIS ? "aðeins undir" : "a little below";
+  return isIS ? "langt undir" : "well below";
+}
+
+export function explainBasketballIndoorLoad(load: BasketballIndoorLoad): Bi | null {
+  const s = load.latest;
+  if (!s || s.score == null || s.band == null) return null;
+  const c = s.components;
+  const sig = (en: string, is: string) => ({ en, is });
+  const NAMES: Record<"playerLoad" | "highIntensityIma" | "jumps" | "impacts", Bi> = {
+    playerLoad: sig("load volume", "álag"),
+    highIntensityIma: sig("high-intensity work", "háálags-vinna"),
+    jumps: sig("jumps", "stökk"),
+    impacts: sig("impacts", "högg"),
+  };
+  const present: Array<{ key: keyof typeof NAMES; idx: number }> = [];
+  (Object.keys(NAMES) as Array<keyof typeof NAMES>).forEach((k) => {
+    const idx = c[k];
+    if (idx != null) present.push({ key: k, idx });
+  });
+
+  // Headline: band + score, naming the signal furthest from the norm in the band's direction.
+  const low = [...present].sort((a, b) => a.idx - b.idx)[0];
+  const high = [...present].sort((a, b) => b.idx - a.idx)[0];
+  const sc = s.score;
+  let enHead = "", isHead = "";
+  if (s.band === "typical") {
+    enHead = `Typical session (${sc}) — overall load in line with the 28-day norm.`;
+    isHead = `Týpísk æfing (${sc}) — heildarálag í takt við 28-daga viðmiðun.`;
+  } else if (s.band === "below_average") {
+    enHead = `Lighter than usual (${sc})${low ? `, mainly ${NAMES[low.key].en} ${devWord(low.idx, false)} norm (${low.idx}%)` : ""}.`;
+    isHead = `Léttari en vanalega (${sc})${low ? `, einkum ${NAMES[low.key].is} ${devWord(low.idx, true)} viðmiðun (${low.idx}%)` : ""}.`;
+  } else if (s.band === "light") {
+    enHead = `Light session (${sc}) — well below the player's norm${low ? ` (${NAMES[low.key].en} ${low.idx}%)` : ""}.`;
+    isHead = `Létt æfing (${sc}) — langt undir viðmiðun leikmannsins${low ? ` (${NAMES[low.key].is} ${low.idx}%)` : ""}.`;
+  } else if (s.band === "heavy") {
+    enHead = `Heavy session (${sc})${high ? `, driven by ${NAMES[high.key].en} ${devWord(high.idx, false)} norm (${high.idx}%)` : ""}.`;
+    isHead = `Þung æfing (${sc})${high ? `, drifin af ${NAMES[high.key].is} ${devWord(high.idx, true)} viðmiðun (${high.idx}%)` : ""}.`;
+  } else {
+    enHead = `Load spike (${sc}) — well above the norm${high ? ` (${NAMES[high.key].en} ${high.idx}%)` : ""}; watch recovery.`;
+    isHead = `Álags-spike (${sc}) — langt yfir viðmiðun${high ? ` (${NAMES[high.key].is} ${high.idx}%)` : ""}; fylgstu með endurheimt.`;
+  }
+
+  // Signal line: each present component read vs the 100 norm.
+  const parts = present.map((p) => `${NAMES[p.key].en} ${p.idx}%`);
+  const partsIs = present.map((p) => `${NAMES[p.key].is} ${p.idx}%`);
+  const enSignals = parts.length ? `Signals: ${parts.join(", ")} (100 = their norm).` : "";
+  const isSignals = partsIs.length ? `Merki: ${partsIs.join(", ")} (100 = viðmiðun þeirra).` : "";
+
+  // Caveats: impacts present but too sparse to score; thin baseline.
+  const caveats: string[] = [];
+  const caveatsIs: string[] = [];
+  if (load.dataCoverage.hasImpacts && c.impacts == null) {
+    const avg = load.baseline.avgImpacts;
+    caveats.push(`impacts too sparse to score${avg != null ? ` (~${avg}/session)` : ""} — shown raw only`);
+    caveatsIs.push(`högg of strjál til að skora${avg != null ? ` (~${avg}/æfingu)` : ""} — sýnd hrá eingöngu`);
+  }
+  if (load.baseline.sessions < MIN_MATURE_SESSIONS) {
+    caveats.push(`baseline still thin (${load.baseline.sessions} session${load.baseline.sessions === 1 ? "" : "s"}) — read as a trend`);
+    caveatsIs.push(`grunnlína enn þunn (${load.baseline.sessions} æfing${load.baseline.sessions === 1 ? "" : "ar"}) — lestu sem leitni`);
+  }
+  const enCav = caveats.length ? ` Note: ${caveats.join("; ")}.` : "";
+  const isCav = caveatsIs.length ? ` Ath: ${caveatsIs.join("; ")}.` : "";
+
+  return {
+    en: `${enHead}${enSignals ? ` ${enSignals}` : ""}${enCav}`,
+    is: `${isHead}${isSignals ? ` ${isSignals}` : ""}${isCav}`,
+  };
+}

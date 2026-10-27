@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeBasketballIndoorLoad, type BballLoadRow } from "../basketball";
+import { computeBasketballIndoorLoad, explainBasketballIndoorLoad, type BballLoadRow } from "../basketball";
 
 function day(n: number): string {
   const d = new Date("2026-01-01T00:00:00Z");
@@ -90,6 +90,35 @@ describe("sparse impacts are not scored (noise guard)", () => {
   it("still scores impacts when the baseline is impact-rich (>=10/session)", () => {
     const out = computeBasketballIndoorLoad(flat(8, { playerLoad: 500, impacts: 120, jumps: 20 }));
     expect(out.latest?.components.impacts).toBe(100);
+  });
+});
+
+describe("explainBasketballIndoorLoad — per-player plain-language read", () => {
+  it("reads a normal-load session with sparse impacts as typical, and flags the sparse impacts", () => {
+    const rows: BballLoadRow[] = [
+      { date: day(0), playerLoad: 1500, highAccel: null, highDecel: null, highCod: null, jumps: 90, impacts: 6 },
+      { date: day(1), playerLoad: 1600, highAccel: null, highDecel: null, highCod: null, jumps: 85, impacts: 5 },
+      { date: day(2), playerLoad: 1550, highAccel: null, highDecel: null, highCod: null, jumps: 80, impacts: 2 },
+      { date: day(3), playerLoad: 1580, highAccel: null, highDecel: null, highCod: null, jumps: 88, impacts: 2 },
+      { date: day(4), playerLoad: 1600, highAccel: null, highDecel: null, highCod: null, jumps: 86, impacts: 1 },
+    ];
+    const read = explainBasketballIndoorLoad(computeBasketballIndoorLoad(rows));
+    expect(read).not.toBeNull();
+    expect(read!.en).toMatch(/Typical session/i);
+    expect(read!.en).toMatch(/impacts too sparse to score/i);
+    expect(read!.en).toMatch(/baseline still thin/i); // 5 < 6
+    expect(read!.is).toMatch(/Týpísk æfing/);
+  });
+
+  it("reads a clearly light session as light", () => {
+    const rows = flat(6, { playerLoad: 1500, jumps: 80, impacts: 40 });
+    rows.push({ date: day(6), playerLoad: 500, highAccel: null, highDecel: null, highCod: null, jumps: 20, impacts: 5 });
+    const read = explainBasketballIndoorLoad(computeBasketballIndoorLoad(rows));
+    expect(read!.en).toMatch(/Light session/i);
+  });
+
+  it("returns null when there is no session", () => {
+    expect(explainBasketballIndoorLoad(computeBasketballIndoorLoad([]))).toBeNull();
   });
 });
 

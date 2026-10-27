@@ -28,6 +28,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   computeBasketballIndoorLoad,
+  explainBasketballIndoorLoad,
   type BballLoadRow,
   type BasketballIndoorLoad,
   type LoadBand,
@@ -283,6 +284,15 @@ export default function BasketballIndoorLoadView({
                 </CardHeader>
                 {s && (
                   <CardContent className="pt-0 space-y-3">
+                    {(() => {
+                      const read = explainBasketballIndoorLoad(l);
+                      if (!read) return null;
+                      return (
+                        <p className="rounded-md border border-slate-200 bg-slate-50/70 px-3 py-2 text-[12.5px] leading-relaxed text-slate-700">
+                          {isEN ? read.en : read.is}
+                        </p>
+                      );
+                    })()}
                     <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                       <Component label="PlayerLoad" value={s.components.playerLoad} />
                       {s.components.highIntensityIma != null && (
