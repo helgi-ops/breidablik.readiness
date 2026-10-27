@@ -43,6 +43,7 @@ const T = {
       primary_scorer: "scorer", three_point_threat: "3pt threat", playmaker: "playmaker", glass: "glass",
     } as Record<string, string>,
     mpg: "MPG", spg: "STL", threat: "Threat",
+    tendencies: "Tendencies", usage: "Usage", plusMinus: "+/−", drives: "Drive lean", driveL: "left", driveR: "right", toLbl: "TO",
     moreInfo: "Details", shooting: "Shooting profile", two: "2P", three: "3P", ft: "FT",
     ptsTrend: "Points / game", noShotChart: "Make/attempt splits — the KKÍ feed has no shot locations, so no court chart.",
     lastGames: "Last {n} games", opp: "Opponent",
@@ -75,6 +76,7 @@ const T = {
       primary_scorer: "skorari", three_point_threat: "3ja skytta", playmaker: "stjórnandi", glass: "fráköst",
     } as Record<string, string>,
     mpg: "mín/leik", spg: "stolnir", threat: "Ógn",
+    tendencies: "Tilhneigingar", usage: "Notkun", plusMinus: "+/−", drives: "Drif-halli", driveL: "vinstri", driveR: "hægri", toLbl: "tapaðir",
     moreInfo: "Nánar", shooting: "Skot-prófíll", two: "2ja", three: "3ja", ft: "Vítask.",
     ptsTrend: "Stig / leik", noShotChart: "Skil hittinga/tilrauna — KKÍ straumurinn hefur engar skot-staðsetningar, svo ekkert vallar-kort.",
     lastGames: "Síðustu {n} leikir", opp: "Andstæðingur",
@@ -188,6 +190,17 @@ function PlayerModal({ p, t, lang, onClose }: { p: OppPlayer; t: Strings; lang: 
         </div>
 
         {p.descriptor ? <p className="mt-2 text-[13px] leading-relaxed text-slate-700">{lang === "IS" ? p.descriptor.is : p.descriptor.en}</p> : null}
+
+        {/* Season tendencies (InStat season export): usage, net +/-, drive hand lean, activity */}
+        {p.season && (p.season.usagePct != null || p.season.plusMinus != null || p.season.driveLeftPct != null || p.season.driveRightPct != null) ? (
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-[#eceae2] bg-[#faf9f5] px-3 py-2 text-[12px]">
+            {p.season.usagePct != null ? <span className="text-slate-600">{t.usage} <b className="tabular-nums text-slate-900">{pctS(p.season.usagePct)}</b></span> : null}
+            {p.season.plusMinus != null ? <span className="text-slate-600">{t.plusMinus} <b className="tabular-nums" style={{ color: p.season.plusMinus > 0 ? "#1c7a4a" : p.season.plusMinus < 0 ? "#a83e28" : "#64748b" }}>{p.season.plusMinus > 0 ? `+${d1(p.season.plusMinus)}` : d1(p.season.plusMinus)}</b></span> : null}
+            {(p.season.driveLeftPct != null || p.season.driveRightPct != null) ? <span className="text-slate-600">{t.drives} <b className="tabular-nums text-slate-900">{t.driveL} {pctS(p.season.driveLeftPct)} / {t.driveR} {pctS(p.season.driveRightPct)}</b></span> : null}
+            <span className="text-slate-600">{t.spg} <b className="tabular-nums text-slate-900">{d1(p.spg)}</b></span>
+            <span className="text-slate-600">{t.toLbl} <b className="tabular-nums text-slate-900">{d1(p.topg)}</b></span>
+          </div>
+        ) : null}
 
         {/* Shooting profile */}
         <div className="mt-4 rounded-xl border border-[#eceae2] p-3">
@@ -340,6 +353,7 @@ export default function BasketballOpponentAnalysis() {
         lineups: oppLineups,
         howToDefend: report.howToDefend,
         keyPlayers: report.keyPlayers,
+        players: report.players,
         ai,
       }, lang);
     } finally { setPdfBusy(false); }

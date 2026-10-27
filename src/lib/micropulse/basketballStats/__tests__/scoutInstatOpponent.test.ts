@@ -130,6 +130,8 @@ describe("buildInstatOpponentScout", () => {
     expect(scout.report.players.map((p) => p.name)).toEqual(["Diamond Battles", "Edyta Falenczyk"]);
     expect(scout.report.players[0].tags).toContain("primary_scorer");
     expect(scout.report.keyPlayers[0].name).toBe("Diamond Battles");
+    // Season tendencies flow through to the player for the detailed analysis.
+    expect(scout.report.players[0].season).toMatchObject({ usagePct: 29.6, plusMinus: -18.7, driveRightPct: 47.7 });
     // Playtypes aggregate across games, ranked by volume.
     expect(scout.playtypes.find((p) => p.key === "pnrHandler")?.att).toBe(20); // 9 + 11
     expect(scout.efficiency.find((e) => e.key === "contestedFg")?.att).toBe(131); // 62 + 69

@@ -19,6 +19,14 @@ type Team = { ppg: number | null; fgPct: number | null; tpPct: number | null; tp
 type Player = { name: string; ppg: number | null; rpg: number | null; apg: number | null; fgPct: number | null; tpPct: number | null; tpaPg: number | null; descriptor?: { en: string; is: string } };
 type Defend = { en: string; is: string; evidence?: string };
 type Lineup = { members: string[]; minutes: number | null; plusMinus: number | null; points: number | null; fgPct: number | null };
+type Shooting = { twoPct: number | null; twoPaPg: number | null; threePct: number | null; threePaPg: number | null; ftPct: number | null; ftaPg: number | null };
+type PlayerDetail = {
+  name: string; games: number; tags: string[];
+  mpg: number | null; ppg: number | null; rpg: number | null; apg: number | null; spg: number | null; topg: number | null;
+  shooting: Shooting;
+  season?: { usagePct: number | null; plusMinus: number | null; driveLeftPct: number | null; driveRightPct: number | null } | null;
+  descriptor?: { en: string; is: string };
+};
 
 export type BasketballOpponentPdfData = {
   opponentName: string;
@@ -32,6 +40,8 @@ export type BasketballOpponentPdfData = {
   lineups: Lineup[] | null;
   howToDefend: Defend[];
   keyPlayers: Player[];
+  /** Detailed per-player analysis (top scorers). Richer than keyPlayers; rendered when present. */
+  players?: PlayerDetail[] | null;
   ai: { headline?: string; summary?: string; strengths?: string[]; weaknesses?: string[]; keyPlayers?: { name: string; note: string }[]; howToDefend?: string[]; howToAttack?: string[] } | null;
 };
 
@@ -57,9 +67,16 @@ const st = StyleSheet.create({
 });
 
 const T = {
-  EN: { kicker: "OPPONENT SCOUTING - INSTAT", profile: "Team profile", ff: "How they played you (Four Factors)", zones: "Shot map (paint / mid-range / 3PT)", scored: "How they score", playtypes: "FG playtypes", eff: "Offensive-efficiency types", lineups: "Most-used lineups", lineupsHint: "By minutes, with net +/- (and PTS / FG% the unit put up).", defend: "How to defend", players: "Key players", them: "Opp", ofShots: "of shots", foot: "Descriptive opponent scouting from imported InStat Game Reports. It does not decide anything and never changes a readiness verdict." },
-  IS: { kicker: "ANDSTAEDINGA-SKANNUN - INSTAT", profile: "Lidsprofill", ff: "Hvernig their spiludu ykkur (Four Factors)", zones: "Skotkort (teigur / midsvaedi / thristar)", scored: "Hvernig their skora", playtypes: "Soknartegundir", eff: "Soknargerd (efficiency)", lineups: "Mest notudu fimmundir", lineupsHint: "Eftir minutum, med +/- (og stig / FG% sem einingin skoradi).", defend: "Hvernig a ad verjast", players: "Lykilmenn", them: "Andst.", ofShots: "af skotum", foot: "Lysandi andstaedinga-skannun ur InStat leikskyrslum. Akvedur ekkert og breytir aldrei readiness-domi." },
+  EN: { kicker: "OPPONENT SCOUTING - INSTAT", profile: "Team profile", ff: "How they played you (Four Factors)", zones: "Shot map (paint / mid-range / 3PT)", scored: "How they score", playtypes: "FG playtypes", eff: "Offensive-efficiency types", lineups: "Most-used lineups", lineupsHint: "By minutes, with net +/- (and PTS / FG% the unit put up).", defend: "How to defend", players: "Key players", analysis: "Player analysis", them: "Opp", ofShots: "of shots", usage: "Usage", driveLean: "Drives", left: "L", right: "R", foot: "Descriptive opponent scouting from imported InStat Game Reports. It does not decide anything and never changes a readiness verdict." },
+  IS: { kicker: "ANDSTAEDINGA-SKANNUN - INSTAT", profile: "Lidsprofill", ff: "Hvernig their spiludu ykkur (Four Factors)", zones: "Skotkort (teigur / midsvaedi / thristar)", scored: "Hvernig their skora", playtypes: "Soknartegundir", eff: "Soknargerd (efficiency)", lineups: "Mest notudu fimmundir", lineupsHint: "Eftir minutum, med +/- (og stig / FG% sem einingin skoradi).", defend: "Hvernig a ad verjast", players: "Lykilmenn", analysis: "Leikmanna-greining", them: "Andst.", ofShots: "af skotum", usage: "Notkun", driveLean: "Drif", left: "V", right: "H", foot: "Lysandi andstaedinga-skannun ur InStat leikskyrslum. Akvedur ekkert og breytir aldrei readiness-domi." },
 } as const;
+
+const TAG_LABELS: Record<string, { EN: string; IS: string }> = {
+  primary_scorer: { EN: "scorer", IS: "skorari" },
+  three_point_threat: { EN: "3pt threat", IS: "3ja skytta" },
+  playmaker: { EN: "playmaker", IS: "stjornandi" },
+  glass: { EN: "glass", IS: "frakost" },
+};
 
 const regionLabel = (key: CourtRegion["key"], lang: Lang) =>
   key === "paint" ? (lang === "IS" ? "Teigur" : "Paint") : key === "mid" ? (lang === "IS" ? "Midsvaedi" : "Mid-range") : "3PT";
@@ -158,7 +175,34 @@ function Doc({ data, lang }: { data: BasketballOpponentPdfData; lang: Lang }) {
           ))}</>
         ) : null}
 
-        {data.keyPlayers && data.keyPlayers.length ? (
+        {data.players && data.players.length ? (
+          <><Text style={st.h2}>{t.analysis}</Text>{data.players.slice(0, 8).map((p, i) => {
+            const tags = p.tags.map((tg) => TAG_LABELS[tg]?.[lang] ?? tg);
+            const s = p.shooting;
+            const shoot = [
+              `2P ${pct(s.twoPct)}${s.twoPaPg != null ? ` (${d1(s.twoPaPg)}/g)` : ""}`,
+              `3P ${pct(s.threePct)}${s.threePaPg != null ? ` (${d1(s.threePaPg)}/g)` : ""}`,
+              `FT ${pct(s.ftPct)}${s.ftaPg != null ? ` (${d1(s.ftaPg)}/g)` : ""}`,
+            ].join("  ·  ");
+            const sea = p.season;
+            const tend: string[] = [];
+            if (sea?.usagePct != null) tend.push(`${t.usage} ${pct(sea.usagePct)}`);
+            if (sea?.plusMinus != null) tend.push(`+/- ${sea.plusMinus > 0 ? "+" : ""}${sea.plusMinus.toFixed(1)}`);
+            if (sea?.driveLeftPct != null || sea?.driveRightPct != null) tend.push(`${t.driveLean} ${t.left} ${pct(sea?.driveLeftPct)} / ${t.right} ${pct(sea?.driveRightPct)}`);
+            return (
+              <View key={i} style={{ marginBottom: 5 }} wrap={false}>
+                <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+                  <Text style={{ flex: 1 }}><Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10.5 }}>{clean(p.name)}</Text>{tags.length ? <Text style={{ color: COBALT, fontSize: 8 }}>{`  ${tags.join(" / ")}`}</Text> : null}</Text>
+                  <Text style={{ width: 70, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{d1(p.ppg)} PPG</Text>
+                </View>
+                <Text style={{ fontSize: 8.5, color: MUTE }}>{p.games} G  ·  {d1(p.mpg)} MIN  ·  {d1(p.rpg)} REB  ·  {d1(p.apg)} AST  ·  {d1(p.spg)} STL  ·  {d1(p.topg)} TO</Text>
+                <Text style={{ fontSize: 8.5, color: "#333" }}>{shoot}</Text>
+                {tend.length ? <Text style={{ fontSize: 8.5, color: MUTE }}>{tend.join("  ·  ")}</Text> : null}
+                {p.descriptor ? <Text style={{ fontSize: 8.5, color: "#333" }}>{clean(lang === "IS" ? p.descriptor.is : p.descriptor.en)}</Text> : null}
+              </View>
+            );
+          })}</>
+        ) : data.keyPlayers && data.keyPlayers.length ? (
           <><Text style={st.h2}>{t.players}</Text>{data.keyPlayers.slice(0, 6).map((p, i) => (
             <View key={i} style={{ marginBottom: 3 }}>
               <Text><Text style={{ fontFamily: "Helvetica-Bold" }}>{clean(p.name)}</Text> <Text style={{ color: MUTE }}>{d1(p.ppg)} PPG · {d1(p.rpg)} REB · {d1(p.apg)} AST · {pct(p.tpPct)} 3P ({d1(p.tpaPg)}/g)</Text></Text>

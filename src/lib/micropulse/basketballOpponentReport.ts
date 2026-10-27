@@ -52,6 +52,8 @@ export type OppPlayer = {
   // is a make/attempt/percentage split, not a court chart) + a per-game points series.
   shooting: { twoPct: number | null; twoPaPg: number | null; threePct: number | null; threePaPg: number | null; ftPct: number | null; ftaPg: number | null; ptsSeries: number[] };
   recentGames: RecentGame[]; // most-recent first (for the pop-up game log)
+  // Richer season tendencies (InStat season export only; null for the KKÍ box path).
+  season?: { usagePct: number | null; plusMinus: number | null; driveLeftPct: number | null; driveRightPct: number | null } | null;
 };
 
 export type RecentGame = {
@@ -260,6 +262,7 @@ export type SeasonPlayerInput = {
   spg: number | null; bpg: number | null; topg: number | null;
   twoPct: number | null; twoPaPg: number | null; threePct: number | null; threePaPg: number | null;
   ftPct: number | null; ftaPg: number | null;
+  usagePct?: number | null; plusMinus?: number | null; driveLeftPct?: number | null; driveRightPct?: number | null;
 };
 
 function seasonPlayer(p: SeasonPlayerInput, teamPpg: number): OppPlayer {
@@ -282,6 +285,10 @@ function seasonPlayer(p: SeasonPlayerInput, teamPpg: number): OppPlayer {
       ftPct: p.ftPct, ftaPg: p.ftaPg, ptsSeries: [],
     },
     recentGames: [],
+    season: {
+      usagePct: p.usagePct ?? null, plusMinus: p.plusMinus ?? null,
+      driveLeftPct: p.driveLeftPct ?? null, driveRightPct: p.driveRightPct ?? null,
+    },
   };
 }
 

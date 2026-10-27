@@ -237,6 +237,7 @@ export function buildInstatOpponentScout(opponentName: string, payload: InstatOp
     mpg: p.mpg, ppg: p.ppg, rpg: p.rpg, apg: p.apg, fgPct: p.fgPct, tpPct: p.tpPct, tpaPg: p.tpaPg,
     spg: p.spg, bpg: p.bpg, topg: p.topg,
     twoPct: p.twoPct, twoPaPg: p.twoPaPg, threePct: p.tpPct, threePaPg: p.tpaPg, ftPct: p.ftPct, ftaPg: p.ftaPg,
+    usagePct: p.usagePct, plusMinus: p.plusMinus, driveLeftPct: p.driveLeftPct, driveRightPct: p.driveRightPct,
   }));
   const report = buildOpponentReportFromSeason(opponentName, team, playersIn);
   const advRows = payload.teamGames.map((g) => ({ advanced: g.advanced }));
