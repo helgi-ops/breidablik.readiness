@@ -196,6 +196,8 @@ export default function PeriodizationHubPage() {
   const [friendlyKind, setFriendlyKind] = React.useState<"friendly" | "competitive">("friendly"); // tag so friendlies don't start the season
   const [mdPosKey, setMdPosKey] = React.useState<number | null>(null); // position selector for the three-axes + MD-demand cards
   const [mdDaysOpen, setMdDaysOpen] = React.useState(false); // "Show MD-day detail" toggle under the microcycle-demand phases
+  // Macro season-map inline block editor: the block (by start ISO) the coach opened to edit goal + length.
+  const [macroEditStart, setMacroEditStart] = React.useState<string | null>(null);
   // Meso plan-ahead editor state.
   const [blkStart, setBlkStart] = React.useState(() => new Date().toISOString().slice(0, 10));
   const [blkWeeks, setBlkWeeks] = React.useState(4);
@@ -760,8 +762,10 @@ export default function PeriodizationHubPage() {
   // Persists the per-block override to season_plans.overrides.blockGoals (the whole map is sent so the
   // server's shallow merge is safe) AND re-applies the recomputed block to week_plans via auto-save, so
   // Meso + Micro + PDF pick up the new goal. Navigating blocks does NOT auto-save — only an actual choice.
-  const setBlockGoal = React.useCallback((g: "accum" | "transmute" | "realize") => {
-    const next = { ...blockGoals, [activeBlockStart]: g };
+  // Set a specific block's goal (keyed by its start ISO) — used by the Macro season-map inline editor and
+  // by the active-block picker. Re-flows Meso (auto-save) + persists the whole blockGoals map.
+  const setBlockGoalFor = React.useCallback((blockStart: string, g: "accum" | "transmute" | "realize") => {
+    const next = { ...blockGoals, [blockStart]: g };
     setBlockGoals(next);
     scheduleAutoSave();
     if (!plan) return;
@@ -770,7 +774,8 @@ export default function PeriodizationHubPage() {
         await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: plan.seasonYear, overrides: { ...overridesPayload(cadence), blockGoals: next } }) });
       } catch { /* best-effort persist */ }
     })();
-  }, [blockGoals, activeBlockStart, plan, cadence, overridesPayload, authHeader, scheduleAutoSave]);
+  }, [blockGoals, plan, cadence, overridesPayload, authHeader, scheduleAutoSave]);
+  const setBlockGoal = React.useCallback((g: "accum" | "transmute" | "realize") => setBlockGoalFor(activeBlockStart, g), [setBlockGoalFor, activeBlockStart]);
 
   // Override a block's LENGTH (weeks) or pin its DELOAD week. Keyed by the block start ISO; the whole map
   // is sent so the server's shallow merge replaces it cleanly. Re-applies week_plans (auto-save) because
@@ -1390,23 +1395,24 @@ export default function PeriodizationHubPage() {
                   </div>)}
 
                 {/* blocks — goal colour + the deload WEEK as an amber stripe at its position */}
-                {lane(is ? "Lotur" : "Blocks", is ? "markmið + niðurtröppun" : "goal + deload week",
+                {lane(is ? "Lotur" : "Blocks", is ? "smelltu til að breyta markmiði + lengd" : "click to edit goal + length",
                   <div className="relative h-10">
                     {blocks.map((b) => {
                       const l = pctOf(b.start), r = pctOf(b.end);
                       const g = (blockGoals[b.start] as BlockGoalKey | undefined) ?? b.goalKey;
                       const dl = b.deloadWeekStart ? Math.max(0, Math.min(100, ((utc(b.deloadWeekStart) - utc(b.start)) / Math.max(DAY, utc(b.end) - utc(b.start))) * 100)) : null;
                       const dlW = Math.min(100, ((7 * DAY) / Math.max(DAY, utc(b.end) - utc(b.start))) * 100);
+                      const selected = macroEditStart === b.start;
                       return (
-                        <div key={b.index} className="absolute inset-y-0 px-px" style={{ left: `${l}%`, width: `${r - l}%` }}
-                          title={`${shortDate(b.start, is)}–${shortDate(blockEndIncl(b), is)} · ${goalName(g)} · ${is ? b.phase.is : b.phase.en} · ${is ? "niðurtröppunarvika" : "deload week"} ${b.deloadWeekStart ? shortDate(b.deloadWeekStart, is) : "—"}${b.deloadNow ? (is ? " (færð framar)" : " (pulled forward)") : ""}`}>
-                          <div className="relative flex h-full items-center overflow-hidden rounded-md px-1.5" style={{ background: GC[g] }}>
+                        <button key={b.index} type="button" onClick={() => setMacroEditStart(selected ? null : b.start)} aria-pressed={selected} className="absolute inset-y-0 cursor-pointer border-0 bg-transparent p-0 px-px" style={{ left: `${l}%`, width: `${r - l}%` }}
+                          title={`${shortDate(b.start, is)}–${shortDate(blockEndIncl(b), is)} · ${goalName(g)} · ${is ? b.phase.is : b.phase.en} · ${is ? "niðurtröppunarvika" : "deload week"} ${b.deloadWeekStart ? shortDate(b.deloadWeekStart, is) : "—"}${b.deloadNow ? (is ? " (færð framar)" : " (pulled forward)") : ""} — ${is ? "smelltu til að breyta markmiði + lengd" : "click to edit goal + length"}`}>
+                          <div className={`relative flex h-full items-center overflow-hidden rounded-md px-1.5 ${selected ? "ring-2 ring-[#14181c] ring-offset-1" : ""}`} style={{ background: GC[g] }}>
                             <span className={`relative z-[1] truncate text-[12px] font-semibold ${g === "deload" ? "text-[#5A3A06]" : "text-white"}`}>{goalName(g)}</span>
                             {dl != null && g !== "deload" && (
                               <div className="absolute inset-y-0 border-l-2 border-white" style={{ left: `${dl}%`, width: `${dlW}%`, background: b.deloadNow ? "repeating-linear-gradient(45deg,#DE9328,#DE9328 3px,#F6D29A 3px,#F6D29A 6px)" : "#DE9328" }} />
                             )}
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>)}
@@ -1499,6 +1505,44 @@ export default function PeriodizationHubPage() {
             )}
             {thin && <p className="mt-2 text-[12px] text-amber-800">{is ? "Fá gögn enn (fáir leikir / lítil álags-saga) — lestu kortið sem vísbendingu." : "Thin data so far (few fixtures / little load history) — read the map as a hint."}</p>}
           </section>
+
+          {/* 3b — INLINE BLOCK EDITOR: click a block on the map → edit its goal + length right here.
+              Writes the same blockGoals / blockWeeks overrides, so Meso, Micro and the map all re-flow. */}
+          {macroEditStart && (() => {
+            const eb = blocks.find((b) => b.start === macroEditStart);
+            if (!eb) return null;
+            const g = (blockGoals[eb.start] as BlockGoalKey | undefined) ?? eb.goalKey;
+            const curLenOv = blockLenOv[String(eb.index)] ?? blockLenOv[eb.start];
+            return (
+              <section className={`${card} border-[#14181c]/25`}>
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h2 className={h2}>{is ? "Breyta lotu" : "Edit block"} {eb.index + 1}</h2>
+                  <span className="text-[12px] text-slate-500">{shortDate(eb.start, is)}–{shortDate(blockEndIncl(eb), is)} · {eb.weeks} {is ? "vikur" : "weeks"} · {is ? eb.phase.is : eb.phase.en}</span>
+                  <button type="button" onClick={() => setMacroEditStart(null)} className="ml-auto rounded px-1.5 text-[13px] text-slate-400 hover:text-slate-600" aria-label={is ? "Loka" : "Close"}>✕</button>
+                </div>
+                <div className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Markmið" : "Goal"}</div>
+                <div role="radiogroup" aria-label={is ? "Markmið lotu" : "Block goal"} className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {ANATOMY.map((a) => { const active = g === a.g; return (
+                    <button key={a.g} type="button" role="radio" aria-checked={active} onClick={() => setBlockGoalFor(eb.start, a.g)} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-[13px] ${active ? "border-transparent text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`} style={active ? { background: GC[a.g] } : undefined}>
+                      <span className="h-2.5 w-2.5 rounded-sm" style={{ background: active ? "#fff" : GC[a.g] }} />
+                      <span className="font-semibold">{goalName(a.g)}</span>
+                      <span className={`text-[11px] ${active ? "text-white/80" : "text-slate-400"}`}>{is ? a.role.is : a.role.en}</span>
+                    </button>
+                  ); })}
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+                  <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Lengd" : "Length"}
+                    <select value={curLenOv ?? ""} onChange={(e) => setBlockLength(String(eb.index), e.target.value === "" ? null : Number(e.target.value))} className="rounded border border-slate-300 bg-white px-1.5 py-1 text-[13px]">
+                      <option value="">{is ? `Sjálfgefið (${cadence}v)` : `Auto (${cadence}w)`}</option>
+                      {[2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n} {is ? "vikur" : "weeks"}</option>)}
+                    </select>
+                  </label>
+                  {curLenOv != null && <button type="button" onClick={() => setBlockLength(String(eb.index), null)} className="text-[12px] text-slate-500 hover:underline">{is ? "Núllstilla lengd" : "Reset length"}</button>}
+                  <span className="text-[11px] text-slate-400">{is ? "Breyting endurflæðir Mesó, Míkró og kortið (niðurtröppun er fest á Mesó-flipanum)." : "Changes re-flow Meso, Micro and the map (pin the deload on the Meso tab)."}</span>
+                </div>
+              </section>
+            );
+          })()}
 
           {/* 4 — DECISIONS: block goal + strength, side by side */}
           <div className="flex flex-wrap gap-4">
