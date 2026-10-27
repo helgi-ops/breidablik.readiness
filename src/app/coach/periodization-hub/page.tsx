@@ -196,6 +196,7 @@ export default function PeriodizationHubPage() {
   const supabase = React.useMemo(() => getSupabaseClient(), []);
   const [plan, setPlan] = React.useState<Plan | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [mapWide, setMapWide] = React.useState(false); // season map: break out to full viewport width
   const [err, setErr] = React.useState<string | null>(null);
   const [selId, setSelId] = React.useState("");
   const [preStart, setPreStart] = React.useState("");   // coach-set pre-season start (e.g. December)
@@ -1583,11 +1584,13 @@ export default function PeriodizationHubPage() {
             </div>
           </section>
 
-          {/* 3 — THE SEASON MAP: one shared date axis, every lane lines up */}
-          <section className={card}>
+          {/* 3 — THE SEASON MAP: one shared date axis, every lane lines up. Expand = break out to the full
+              viewport width (it's short on WIDTH, not height) so the lanes widen and read clearly. */}
+          <section className={`${card} ${mapWide ? "relative left-1/2 w-[94vw] max-w-none -translate-x-1/2 shadow-xl" : ""}`}>
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <h2 className={h2}>{is ? "Tímabilskortið" : "The season map"}</h2>
               <span className="text-[12px] text-slate-500">{is ? "Allar línur deila sama tímaás — lestu lóðrétt til að sjá hvað gerist sömu vikuna." : "Every lane shares one time axis — read down a column to see what happens that week."}</span>
+              <button type="button" onClick={() => setMapWide((v) => !v)} className="ml-auto rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[12px] font-semibold text-[#2740e6] hover:bg-slate-50" aria-pressed={mapWide}>{mapWide ? (is ? "Minnka ↙" : "Collapse ↙") : (is ? "Stækka ↗" : "Expand ↗")}</button>
             </div>
             <div className="mt-4 overflow-x-auto">
               <div className="relative flex min-w-[1040px] flex-col gap-2 pt-1">
