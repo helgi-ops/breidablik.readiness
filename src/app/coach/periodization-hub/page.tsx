@@ -1012,7 +1012,7 @@ export default function PeriodizationHubPage() {
     // multiple — the planned weekly volume each player ramps TO from their current baseline (MAS = engine).
     const plWkMult = weeklyTrainingMultiple(standardTrainingDays(1));
     const players = plan.players.map((p) => ({ name: p.name, position: p.position, masKmh: p.masKmh, matchUnitLoad: p.matchUnit.load.typical, matchUnitHsr: p.matchUnit.hsr.typical, matchUnitDistance: p.matchUnit.distance.typical, weeklyPlTarget: p.matchUnit.load.typical != null ? Math.round(p.matchUnit.load.typical * plWkMult) : null, baselinePl: p.recentBaseline?.playerLoad ?? null, baselineHsr: p.recentBaseline?.hsrM ?? null, baselineSessions: p.recentBaseline?.sessions ?? 0, nNearFull: p.matchUnit.nNearFull, matchUnitConf: p.matchUnit.confidence, valdCap: p.vald.capPct, gaps: p.gaps.filter((g) => g.severity !== "ok").length }));
-    const blocks = mesoBlocks.map((b) => ({ phase: b.phase, goal: b.goal, goalKey: b.goalKey, start: b.start, end: b.end, weeks: b.weeks, isDeload: b.isDeload, deloadWeekStart: b.deloadWeekStart, tmr: b.tmr, volumeTargetPct: b.volumeTargetPct, flag: b.flag }));
+    const blocks = mesoBlocks.map((b) => ({ phase: b.phase, goal: b.goal, goalKey: b.goalKey, start: b.start, end: b.end, weeks: b.weeks, isDeload: b.isDeload, deloadWeekStart: b.deloadWeekStart, deloadNow: b.deloadNow, tmr: b.tmr, volumeTargetPct: b.volumeTargetPct, flag: b.flag }));
     // The individualised calendar block(s) — one clean page per player. The coach picks the set (Selected /
     // All / custom); eligible = has a match unit AND is not a GK (GKs use a separate model, kept in the
     // table). The note states the VALD adjustment DIRECTION unambiguously + the match-unit n & confidence.
@@ -1647,6 +1647,26 @@ export default function PeriodizationHubPage() {
                       );
                     })}
                   </div>)}
+
+                {/* deload weeks — one amber week-band per block's deload on the shared axis (hatched when pulled
+                    forward by fatigue). Mirrors the thin stripe inside the Blocks lane, but readable at a glance. */}
+                {(() => {
+                  const dls = blocks.filter((b) => b.deloadWeekStart && utc(b.deloadWeekStart!) >= d0 && utc(b.deloadWeekStart!) < d1);
+                  if (!dls.length) return null;
+                  return lane(is ? "Niðurtröppun" : "Deload", is ? "léttari endurhleðslu-vika" : "lighter re-load week",
+                    <div className="relative h-5">
+                      {dls.map((b) => {
+                        const l = Math.max(0, pctOf(b.deloadWeekStart!)), r = Math.min(100, pctOf(isoAdd(b.deloadWeekStart!, 7)));
+                        if (r <= l) return null;
+                        return (
+                          <div key={`${b.start}-dl`} className="absolute inset-y-0 px-px" style={{ left: `${l}%`, width: `${r - l}%` }}
+                            title={`${is ? "Niðurtröppunarvika" : "Deload week"} ${shortDate(b.deloadWeekStart!, is)}${b.deloadNow ? (is ? " · færð framar (álag)" : " · pulled forward (load)") : ""}`}>
+                            <div className="h-full rounded-md" style={{ background: b.deloadNow ? "repeating-linear-gradient(45deg,#DE9328,#DE9328 3px,#F6D29A 3px,#F6D29A 6px)" : "#DE9328" }} />
+                          </div>
+                        );
+                      })}
+                    </div>);
+                })()}
 
                 {/* strength — same blocks, read as the strength quality they train */}
                 {lane(is ? "Styrkur" : "Strength", is ? "gæði sem lotan þjálfar" : "quality the block trains",
