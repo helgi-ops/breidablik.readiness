@@ -51,7 +51,9 @@ const pct = (v: number | null | undefined) => (v == null ? "-" : `${v.toFixed(1)
 const d1 = (v: number | null | undefined) => (v == null ? "-" : v.toFixed(1));
 
 const st = StyleSheet.create({
-  page: { paddingTop: 26, paddingBottom: 34, paddingHorizontal: 34, fontSize: 9.5, fontFamily: "Helvetica", color: INK, lineHeight: 1.4 },
+  // paddingBottom clears the absolutely-positioned fixed footer band (~42px tall at
+  // bottom:18) so flowing content never runs underneath it.
+  page: { paddingTop: 26, paddingBottom: 52, paddingHorizontal: 34, fontSize: 9.5, fontFamily: "Helvetica", color: INK, lineHeight: 1.4 },
   kicker: { fontSize: 8, color: COBALT, fontFamily: "Helvetica-Bold", letterSpacing: 0.8, marginBottom: 3 },
   h1: { fontSize: 16, fontFamily: "Helvetica-Bold" },
   sub: { fontSize: 10, color: MUTE, marginTop: 2, marginBottom: 8 },
@@ -154,7 +156,7 @@ function Doc({ data, lang }: { data: BasketballOpponentPdfData; lang: Lang }) {
             {data.lineups.slice(0, 6).map((l, i) => {
               const pm = l.plusMinus == null ? "-" : `${l.plusMinus > 0 ? "+" : ""}${l.plusMinus.toFixed(1)}`;
               return (
-                <View key={i} style={{ marginBottom: 3 }}>
+                <View key={i} style={{ marginBottom: 3 }} wrap={false} minPresenceAhead={24}>
                   <View style={st.row}>
                     <Text style={st.cL}>{clean(l.members.join(", "))}</Text>
                     <Text style={st.cR}>{d1(l.minutes)}m  {pm}</Text>
@@ -187,7 +189,7 @@ function Doc({ data, lang }: { data: BasketballOpponentPdfData; lang: Lang }) {
             const off = p.notes?.offense ?? [];
             const def = p.notes?.defense ?? [];
             return (
-              <View key={i} style={{ marginBottom: 5 }} wrap={false}>
+              <View key={i} style={{ marginBottom: 5 }} wrap={false} minPresenceAhead={24}>
                 <View style={{ flexDirection: "row", alignItems: "baseline" }}>
                   <Text style={{ flex: 1 }}><Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10.5 }}>{clean(p.name)}</Text>{tags.length ? <Text style={{ color: COBALT, fontSize: 8 }}>{`  ${tags.join(" / ")}`}</Text> : null}</Text>
                   <Text style={{ width: 70, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{d1(p.ppg)} PPG</Text>
