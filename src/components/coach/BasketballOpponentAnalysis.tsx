@@ -12,7 +12,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import type { BasketballOpponentReport, OppPlayer } from "@/lib/micropulse/basketballOpponentReport";
-import { playerTendencyNotes } from "@/lib/micropulse/basketballOpponentReport";
+import { playerTendencyNotes, buildAttackBoard } from "@/lib/micropulse/basketballOpponentReport";
 import BasketballCourtMap from "@/components/coach/BasketballCourtMap";
 import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import InstatOpponentSeasonUpload from "@/components/coach/InstatOpponentSeasonUpload";
@@ -45,6 +45,7 @@ const T = {
     } as Record<string, string>,
     mpg: "MPG", spg: "STL", threat: "Threat",
     tendencies: "Tendencies", defenseTitle: "Defensive tendencies",
+    attackTitle: "Where to attack", attackHint: "Each action's weakest defender — go at them here (opponents' shooting against that player on that action).", attackAction: "Action", attackAt: "Attack", attackConcedes: "Concedes",
     moreInfo: "Details", shooting: "Shooting profile", two: "2P", three: "3P", ft: "FT",
     ptsTrend: "Points / game", noShotChart: "Make/attempt splits — the KKÍ feed has no shot locations, so no court chart.",
     lastGames: "Last {n} games", opp: "Opponent",
@@ -78,6 +79,7 @@ const T = {
     } as Record<string, string>,
     mpg: "mín/leik", spg: "stolnir", threat: "Ógn",
     tendencies: "Tilhneigingar", defenseTitle: "Varnar-tilhneigingar",
+    attackTitle: "Hvar á að sækja", attackHint: "Veikasti verjandinn fyrir hverja sóknartegund — sæktu þar (hittni andstæðinga á þann leikmann í þeirri sókn).", attackAction: "Sóknartegund", attackAt: "Sæktu", attackConcedes: "Gefur eftir",
     moreInfo: "Nánar", shooting: "Skot-prófíll", two: "2ja", three: "3ja", ft: "Vítask.",
     ptsTrend: "Stig / leik", noShotChart: "Skil hittinga/tilrauna — KKÍ straumurinn hefur engar skot-staðsetningar, svo ekkert vallar-kort.",
     lastGames: "Síðustu {n} leikir", opp: "Andstæðingur",
@@ -365,6 +367,7 @@ export default function BasketballOpponentAnalysis() {
         efficiency: oppEff,
         lineups: oppLineups,
         howToDefend: report.howToDefend,
+        attack: buildAttackBoard(report.players),
         keyPlayers: report.keyPlayers,
         players: report.players.map((p) => ({ ...p, notes: playerTendencyNotes(p, lang) })),
         ai,
@@ -688,6 +691,39 @@ export default function BasketballOpponentAnalysis() {
               </ul>
             </div>
           ) : null}
+
+          {/* Where to attack — each action's weakest defender (InStat season defence) */}
+          {(() => {
+            const attack = buildAttackBoard(report.players).slice(0, 8);
+            if (!attack.length) return null;
+            return (
+              <div className="rounded-xl border border-[#cbe4d5] bg-[#f1f8f3] p-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-bold" style={{ color: "#1c7a4a" }}>▶ {t.attackTitle}</span>
+                  <span className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white" style={{ backgroundColor: "#1c7a4a" }}>InStat</span>
+                </div>
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full text-[12px]">
+                    <thead><tr className="text-left text-slate-400">
+                      <th className="py-1 pr-2 font-semibold">{t.attackAction}</th>
+                      <th className="pr-2 font-semibold">{t.attackAt}</th>
+                      <th className="text-right font-semibold">{t.attackConcedes}</th>
+                    </tr></thead>
+                    <tbody>
+                      {attack.map((a) => (
+                        <tr key={a.key} className="border-t border-[#d9ebe0]">
+                          <td className="py-1 pr-2 text-slate-700">{shotLabel(a.key, lang)}</td>
+                          <td className="pr-2 font-semibold text-slate-900">{a.defender}</td>
+                          <td className="text-right tabular-nums font-semibold" style={{ color: "#1c7a4a" }}>{pctS(a.oppPct)}<span className="ml-1 font-normal text-slate-400">({d1(a.att)}/g)</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-2 text-[11px] text-slate-500">{t.attackHint}</p>
+              </div>
+            );
+          })()}
 
           {/* Key players */}
           {report.keyPlayers.length ? (

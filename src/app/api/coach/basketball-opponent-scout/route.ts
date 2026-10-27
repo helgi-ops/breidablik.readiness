@@ -16,7 +16,7 @@ export const maxDuration = 120; // the KKÍ pull walks a season's schedule + per
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { buildBasketballOpponentReport, type OppPlayerGame } from "@/lib/micropulse/basketballOpponentReport";
+import { buildBasketballOpponentReport, buildAttackBoard, type OppPlayerGame } from "@/lib/micropulse/basketballOpponentReport";
 import { aggregateAdvancedShots, type ShotTypeAgg } from "@/lib/micropulse/basketballStats/instatAggregate";
 import { buildInstatOpponentScout, type InstatOpponentPayload, type ScoutLineup } from "@/lib/micropulse/basketballStats/scoutInstatOpponent";
 import { scoutOpponentSeason } from "@/lib/integrations/basketball/scout";
@@ -300,6 +300,8 @@ export async function POST(req: NextRequest) {
       shotMap: bundle.oppCourtRegions ?? [],
       keyPlayers: bundle.report.keyPlayers.slice(0, 8).map((p) => ({ name: p.name, ppg: p.ppg, rpg: p.rpg, apg: p.apg, fgPct: p.fgPct, tpPct: p.tpPct, tpaPg: p.tpaPg, scoreShare: p.scoreShare, tags: p.tags, tendencies: p.season ?? undefined })),
       ruleBasedDefend: bundle.report.howToDefend.map((f) => f.en),
+      // Where to attack: each action's weakest defender (opp shooting% against them).
+      attackBoard: buildAttackBoard(bundle.report.players).slice(0, 8),
     };
     let res: Response;
     try {

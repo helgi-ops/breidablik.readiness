@@ -414,3 +414,32 @@ export function playerTendencyNotes(p: OppPlayer, lang: Lang): { offense: string
 
   return { offense, defense };
 }
+
+// ── Where-to-attack board ────────────────────────────────────────────────────
+// For each FG-playtype, the opponent's WEAKEST defender — the player who concedes the
+// highest shooting% on that action (with enough volume to be real). Reads the per-player
+// defensive shot mix (season.defense). Ranked by how exploitable the action is (highest
+// conceded % first), so the coach reads the best attack off the top. InStat season only.
+
+export type AttackTarget = { key: string; defender: string; oppPct: number; att: number };
+
+const ATTACK_MIN_ATT = 1; // per-game shots against this defender needed to count
+
+export function buildAttackBoard(players: OppPlayer[]): AttackTarget[] {
+  const byAction = new Map<string, AttackTarget>();
+  for (const p of players) {
+    const def = p.season?.defense;
+    if (!Array.isArray(def)) continue;
+    for (const d of def) {
+      if (d.att < ATTACK_MIN_ATT) continue;
+      const mp = makePct(d);
+      if (mp == null) continue;
+      const cur = byAction.get(d.key);
+      // Weakest = highest conceded %; tie-break on volume (more shots = more reliable).
+      if (!cur || mp > cur.oppPct || (mp === cur.oppPct && d.att > cur.att)) {
+        byAction.set(d.key, { key: d.key, defender: p.name, oppPct: mp, att: r1t(d.att) });
+      }
+    }
+  }
+  return [...byAction.values()].sort((a, b) => b.oppPct - a.oppPct);
+}

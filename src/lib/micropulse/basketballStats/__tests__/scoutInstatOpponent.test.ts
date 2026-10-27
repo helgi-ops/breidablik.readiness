@@ -4,7 +4,7 @@ import {
   teamProfileFromGames, buildInstatOpponentScout,
   type InstatOpponentPayload,
 } from "../scoutInstatOpponent";
-import { playerTendencyNotes } from "../../basketballOpponentReport";
+import { playerTendencyNotes, buildAttackBoard } from "../../basketballOpponentReport";
 
 // Rows mirror the real InStat opponent season exports (header strings verified against
 // a live "Armann W" export: Games "Box score", Players "Box score", Lineups "Lineups").
@@ -61,6 +61,9 @@ const playerRows: Record<string, unknown>[] = [
     "Free throws made": 4.3, "Free throws attempted": 4.8, "Free throws, %": "89.5%",
     Rebounds: 6.3, "Offensive rebounds": 1.5, "Defensive rebounds": 4.8, Assists: 2, Steals: 4, Turnovers: 4.5, Blocks: 0.8,
     "Plus/Minus": -14.5, "Usage Percentage": "23.5%",
+    "Opponent's field goals, %": "44.7%", "Opponent's field goals attempted": 11.8,
+    "Opp Transition shots made": 1, "Opp Transition shots": 3,       // 33.3% (vs Battles 75%)
+    "Opp Cuts shots made": 1, "Opp Cuts shots": 1.3,                 // 76.9% — her weak spot
   },
   // Only 1 game → dropped by MIN_PLAYER_GAMES.
   { "Jersey number": "12", Player: "Audur Hreinsdottir", "Games played": 1, Minutes: "01:37", Points: 0 },
@@ -172,5 +175,24 @@ describe("buildInstatOpponentScout", () => {
     expect(notes.defense.some((n) => /Attacked most off/i.test(n))).toBe(true);
     // Icelandic variant renders too.
     expect(playerTendencyNotes(scout.report.players[0], "IS").defense.length).toBeGreaterThan(0);
+  });
+
+  it("ranks the weakest defender per action (where to attack)", () => {
+    const payload: InstatOpponentPayload = {
+      season: "2026-2027",
+      teamGames: parseScoutGames(gamesRows, "2026-2027"),
+      players: parseScoutPlayers(playerRows),
+      lineups: [],
+    };
+    const board = buildAttackBoard(buildInstatOpponentScout("Ármann", payload).report.players);
+    // Sorted most-exploitable first.
+    expect(board[0].oppPct).toBeGreaterThanOrEqual(board[board.length - 1].oppPct);
+    // Transition: Battles concedes 75% vs Edyta 33.3% -> Battles is the target.
+    const transition = board.find((b) => b.key === "transition")!;
+    expect(transition.defender).toBe("Diamond Battles");
+    expect(transition.oppPct).toBe(75);
+    // Cuts: only Edyta concedes them (76.9%).
+    const cuts = board.find((b) => b.key === "cut");
+    expect(cuts?.defender).toBe("Edyta Falenczyk");
   });
 });

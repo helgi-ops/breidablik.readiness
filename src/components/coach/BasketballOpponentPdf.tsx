@@ -39,13 +39,15 @@ export type BasketballOpponentPdfData = {
   efficiency: ShotType[] | null;
   lineups: Lineup[] | null;
   howToDefend: Defend[];
+  /** Each action's weakest defender — the "where to attack" board (InStat season). */
+  attack?: { key: string; defender: string; oppPct: number; att: number }[] | null;
   keyPlayers: Player[];
   /** Detailed per-player analysis (top scorers). Richer than keyPlayers; rendered when present. */
   players?: PlayerDetail[] | null;
   ai: { headline?: string; summary?: string; strengths?: string[]; weaknesses?: string[]; keyPlayers?: { name: string; note: string }[]; howToDefend?: string[]; howToAttack?: string[] } | null;
 };
 
-const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6", AMBER = "#a86a12";
+const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6", AMBER = "#a86a12", GREEN = "#1c7a4a";
 const clean = (s: unknown) => String(s ?? "").replace(/[‘’]/g, "'").replace(/[“”„]/g, '"').replace(/[–—−]/g, "-").replace(/[▲▼✓→⛨]/g, "");
 const pct = (v: number | null | undefined) => (v == null ? "-" : `${v.toFixed(1)}%`);
 const d1 = (v: number | null | undefined) => (v == null ? "-" : v.toFixed(1));
@@ -69,8 +71,8 @@ const st = StyleSheet.create({
 });
 
 const T = {
-  EN: { kicker: "OPPONENT SCOUTING - INSTAT", profile: "Team profile", ff: "How they played you (Four Factors)", zones: "Shot map (paint / mid-range / 3PT)", scored: "How they score", playtypes: "FG playtypes", eff: "Offensive-efficiency types", lineups: "Most-used lineups", lineupsHint: "By minutes, with net +/- (and PTS / FG% the unit put up).", defend: "How to defend", players: "Key players", analysis: "Player analysis", them: "Opp", ofShots: "of shots", defenseShort: "Defense", foot: "Descriptive opponent scouting from imported InStat Game Reports. It does not decide anything and never changes a readiness verdict." },
-  IS: { kicker: "ANDSTAEDINGA-SKANNUN - INSTAT", profile: "Lidsprofill", ff: "Hvernig their spiludu ykkur (Four Factors)", zones: "Skotkort (teigur / midsvaedi / thristar)", scored: "Hvernig their skora", playtypes: "Soknartegundir", eff: "Soknargerd (efficiency)", lineups: "Mest notudu fimmundir", lineupsHint: "Eftir minutum, med +/- (og stig / FG% sem einingin skoradi).", defend: "Hvernig a ad verjast", players: "Lykilmenn", analysis: "Leikmanna-greining", them: "Andst.", ofShots: "af skotum", defenseShort: "Vörn", foot: "Lysandi andstaedinga-skannun ur InStat leikskyrslum. Akvedur ekkert og breytir aldrei readiness-domi." },
+  EN: { kicker: "OPPONENT SCOUTING - INSTAT", profile: "Team profile", ff: "How they played you (Four Factors)", zones: "Shot map (paint / mid-range / 3PT)", scored: "How they score", playtypes: "FG playtypes", eff: "Offensive-efficiency types", lineups: "Most-used lineups", lineupsHint: "By minutes, with net +/- (and PTS / FG% the unit put up).", defend: "How to defend", players: "Key players", analysis: "Player analysis", them: "Opp", ofShots: "of shots", defenseShort: "Defense", attack: "Where to attack", attackHint: "Each action's weakest defender (opponents' shooting against that player on that action).", foot: "Descriptive opponent scouting from imported InStat Game Reports. It does not decide anything and never changes a readiness verdict." },
+  IS: { kicker: "ANDSTAEDINGA-SKANNUN - INSTAT", profile: "Lidsprofill", ff: "Hvernig their spiludu ykkur (Four Factors)", zones: "Skotkort (teigur / midsvaedi / thristar)", scored: "Hvernig their skora", playtypes: "Soknartegundir", eff: "Soknargerd (efficiency)", lineups: "Mest notudu fimmundir", lineupsHint: "Eftir minutum, med +/- (og stig / FG% sem einingin skoradi).", defend: "Hvernig a ad verjast", players: "Lykilmenn", analysis: "Leikmanna-greining", them: "Andst.", ofShots: "af skotum", defenseShort: "Vörn", attack: "Hvar a ad saekja", attackHint: "Veikasti verjandinn fyrir hverja soknartegund (hittni andstaedinga a thann leikmann i theirri sokn).", foot: "Lysandi andstaedinga-skannun ur InStat leikskyrslum. Akvedur ekkert og breytir aldrei readiness-domi." },
 } as const;
 
 const TAG_LABELS: Record<string, { EN: string; IS: string }> = {
@@ -175,6 +177,18 @@ function Doc({ data, lang }: { data: BasketballOpponentPdfData; lang: Lang }) {
               {f.evidence ? <Text style={st.ev}>{clean(f.evidence)}</Text> : null}
             </View>
           ))}</>
+        ) : null}
+
+        {data.attack && data.attack.length ? (
+          <><Text style={[st.h2, { color: GREEN }]}>{t.attack}</Text>
+            <Text style={{ fontSize: 8, color: MUTE, marginBottom: 2 }}>{t.attackHint}</Text>
+            {data.attack.slice(0, 8).map((a) => (
+              <View key={a.key} style={st.row}>
+                <Text style={st.cL}>{clean(shotLabel(a.key, lang))} - <Text style={{ fontFamily: "Helvetica-Bold" }}>{clean(a.defender)}</Text></Text>
+                <Text style={[st.cR, { color: GREEN }]}>{a.oppPct}%  ({d1(a.att)}/g)</Text>
+              </View>
+            ))}
+          </>
         ) : null}
 
         {data.players && data.players.length ? (
