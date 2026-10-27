@@ -45,6 +45,10 @@ export type PeriodizationPlan = {
   nextSeasonYear: number | null;   // the SEASON the upcoming pre-season leads into (= year of nextFirstFixture).
                                     // The upcoming pre-season's plan is persisted to THAT season_plans row, not
                                     // this year's — so next year's planning survives the calendar rollover.
+  fixturesEstimated: boolean;      // true when the season has NO fixtures of its own and the opener was
+                                    // ESTIMATED from last season (KSÍ publishes late) — corrected once real
+                                    // fixtures are added.
+  estimatedOpener: string | null;  // the estimated first competitive game (last season's opener + 1 year).
 };
 
 const mondayOf = (iso: string) => {
@@ -67,8 +71,28 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const { data: fxData } = await sb.from("match_schedule")
     .select("match_date, competition, is_home, is_friendly").eq("team_id", args.teamId)
     .gte("match_date", yStart).lte("match_date", yEnd).order("match_date");
-  const fixtures = ((fxData ?? []) as Array<{ match_date: string; competition: string | null; is_home: boolean | null; is_friendly: boolean | null }>)
+  let fixtures = ((fxData ?? []) as Array<{ match_date: string; competition: string | null; is_home: boolean | null; is_friendly: boolean | null }>)
     .map((f) => ({ date: f.match_date, competition: f.competition, isHome: f.is_home, isFriendly: f.is_friendly }));
+
+  // KSÍ publishes the fixture list late. When a season has NO fixtures of its own yet, ESTIMATE the opener
+  // from last season's first competitive game (+1 year), so pre-season → competition can be planned now. A
+  // single synthetic fixture (in-memory only — never written); it's replaced automatically the moment the
+  // coach adds a real fixture. The coach corrects the estimate when the real schedule arrives.
+  let fixturesEstimated = false;
+  let estimatedOpener: string | null = null;
+  if (fixtures.length === 0) {
+    const { data: prevFx } = await sb.from("match_schedule")
+      .select("match_date, is_friendly").eq("team_id", args.teamId)
+      .gte("match_date", `${seasonYear - 1}-01-01`).lte("match_date", `${seasonYear - 1}-12-31`).order("match_date");
+    const prevOpener = ((prevFx ?? []) as Array<{ match_date: string; is_friendly: boolean | null }>)
+      .filter((r) => r.is_friendly !== true).map((r) => r.match_date).sort()[0] ?? null;
+    if (prevOpener && /^\d{4}-\d{2}-\d{2}$/.test(prevOpener)) {
+      const cand = `${seasonYear}${prevOpener.slice(4)}`; // same month-day, this season year
+      estimatedOpener = Number.isNaN(Date.parse(`${cand}T00:00:00Z`)) ? `${seasonYear}-02-28` : cand; // Feb-29 guard
+      fixtures = [{ date: estimatedOpener, competition: "Estimated", isHome: true, isFriendly: false }];
+      fixturesEstimated = true;
+    }
+  }
 
   // The NEXT season's first competitive game (after this year's window): lets the upcoming pre-season be
   // planned all the way to the real opener (e.g. early April next year) instead of a fixed 10 weeks.
@@ -399,5 +423,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date), nextFirstFixture, nextSeasonYear };
+  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date), nextFirstFixture, nextSeasonYear, fixturesEstimated, estimatedOpener };
 }

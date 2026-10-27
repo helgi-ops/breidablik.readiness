@@ -61,7 +61,7 @@ type MdDemandProfile = { phases: MdDemandBucket[]; days: MdDemandBucket[] };
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes; md: MdDemandProfile };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
-type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; nextFirstFixture?: string | null; nextSeasonYear?: number | null };
+type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; nextFirstFixture?: string | null; nextSeasonYear?: number | null; fixturesEstimated?: boolean; estimatedOpener?: string | null };
 
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
 const isoAdd = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_400_000).toISOString().slice(0, 10);
@@ -1366,6 +1366,15 @@ export default function PeriodizationHubPage() {
 
             return (<div className="space-y-4">
           {flowNote(is ? "Leikir · Kröfur (leik-eining)" : "Fixtures · Demands (match unit)", is ? "Mesó · Míkró · Undirbúningur (gegnum season_plans)" : "Meso · Micro · Pre-season (via season_plans)")}
+
+          {/* Estimated opener — KSÍ publishes late, so a season with no fixtures yet gets its first game
+              estimated from last season (+1 year). Clearly flagged; replaced when real fixtures are added. */}
+          {plan.fixturesEstimated && plan.estimatedOpener && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-[#de9328]/40 bg-[#de9328]/10 px-3 py-2 text-[12px] text-[#7a5210]">
+              <span className="rounded bg-[#de9328] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#5a3a06]">{is ? "áætlað" : "estimated"}</span>
+              <span>{is ? `Fyrsti leikur áætlaður ${shortDate(plan.estimatedOpener, is)} (út frá ${plan.seasonYear - 1}). KSÍ-plan ekki komið — leiðréttu með því að bæta við raunverulegum leikjum, þá hverfur áætlunin.` : `First game estimated ${shortDate(plan.estimatedOpener, is)} (from ${plan.seasonYear - 1}). KSÍ schedule not out yet — add the real fixtures to correct it and the estimate drops.`}</span>
+            </div>
+          )}
 
           {/* 1 — SEASON FRAME: the controls come first (Macro IS the control; everything below re-flows). */}
           <section className={card}>
