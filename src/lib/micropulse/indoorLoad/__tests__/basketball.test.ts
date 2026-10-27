@@ -66,6 +66,33 @@ describe("computeBasketballIndoorLoad — Titan (impacts, no IMA) path", () => {
   });
 });
 
+describe("sparse impacts are not scored (noise guard)", () => {
+  it("excludes impacts from the composite + tile when the baseline is impact-poor (<10/session)", () => {
+    // Real Titan shape: normal PlayerLoad + jumps, but tiny single-digit impacts (0–6).
+    const rows: BballLoadRow[] = [
+      { date: day(0), playerLoad: 1500, highAccel: null, highDecel: null, highCod: null, jumps: 90, impacts: 6 },
+      { date: day(1), playerLoad: 1600, highAccel: null, highDecel: null, highCod: null, jumps: 85, impacts: 5 },
+      { date: day(2), playerLoad: 1550, highAccel: null, highDecel: null, highCod: null, jumps: 80, impacts: 2 },
+      { date: day(3), playerLoad: 1580, highAccel: null, highDecel: null, highCod: null, jumps: 88, impacts: 2 },
+      // Latest: normal load + jumps but only 1 impact. Must NOT read "below average".
+      { date: day(4), playerLoad: 1600, highAccel: null, highDecel: null, highCod: null, jumps: 86, impacts: 1 },
+    ];
+    const out = computeBasketballIndoorLoad(rows);
+    // Impacts baseline (~3.2/session) is below the index floor → not scored.
+    expect(out.latest?.components.impacts).toBeNull();
+    // Composite reflects PlayerLoad + jumps only → ~typical, not dragged down by the 1-impact noise.
+    expect(out.latest?.score).toBeGreaterThanOrEqual(90);
+    expect(out.latest?.band).toBe("typical");
+    // Raw coverage still records that impacts data exists (shown as raw count elsewhere).
+    expect(out.dataCoverage.hasImpacts).toBe(true);
+  });
+
+  it("still scores impacts when the baseline is impact-rich (>=10/session)", () => {
+    const out = computeBasketballIndoorLoad(flat(8, { playerLoad: 500, impacts: 120, jumps: 20 }));
+    expect(out.latest?.components.impacts).toBe(100);
+  });
+});
+
 describe("renormalisation — impacts slots into the mechanical role cleanly", () => {
   it("an all-average session scores 100 whether the mechanical signal is IMA or impacts", () => {
     const cata = computeBasketballIndoorLoad(flat(8, { playerLoad: 500, highAccel: 10, jumps: 20 }));

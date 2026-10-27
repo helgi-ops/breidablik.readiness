@@ -104,6 +104,17 @@ export const BAND_CUTOFFS = { spike: 140, heavy: 110, typical: 90, belowAverage:
 /** Baselines built from fewer than this many sessions are treated as immature. */
 export const MIN_MATURE_SESSIONS = 6;
 
+/**
+ * Minimum baseline-average impacts for the impacts component to be a defensible load
+ * index. Titan "impacts" are often sparse single-digit counts (e.g. 0–6/session); a ratio
+ * of such small integers is noise, not load — a session with 1 impact vs a 3-impact norm is
+ * "33%" by arithmetic but means nothing physiologically, yet at weight 0.25 it can drag an
+ * otherwise-normal session into "below average". So impacts only join the composite (and the
+ * per-component tile) when the player's baseline is impact-rich enough for the ratio to be
+ * stable; below that they're shown only as a raw count in the Titan strip, never scored.
+ */
+export const MIN_IMPACTS_FOR_INDEX = 10;
+
 const CITATION = "Tuttle et al. 2024 (thresholds, adapted) · Conte 2018 · Salazar 2020";
 
 const CAVEAT: Bi = {
@@ -183,7 +194,9 @@ export function computeBasketballIndoorLoad(rows: BballLoadRow[]): BasketballInd
     const plIdx = plRaw !== null && avgPl && avgPl > 0 ? (plRaw / avgPl) * 100 : null;
     const imaIdx = imaRaw !== null && avgIma && avgIma > 0 ? (imaRaw / avgIma) * 100 : null;
     const jmpIdx = jmpRaw !== null && avgJmp && avgJmp > 0 ? (jmpRaw / avgJmp) * 100 : null;
-    const impIdx = impRaw !== null && avgImp && avgImp > 0 ? (impRaw / avgImp) * 100 : null;
+    // Only index impacts when the baseline is impact-rich enough for the ratio to be
+    // stable — sparse single-digit counts are noise, not a load signal (see MIN_IMPACTS_FOR_INDEX).
+    const impIdx = impRaw !== null && avgImp && avgImp >= MIN_IMPACTS_FOR_INDEX ? (impRaw / avgImp) * 100 : null;
 
     // Weighted mean over the components that actually have a baseline; renormalise.
     const parts: Array<[number, number]> = [];

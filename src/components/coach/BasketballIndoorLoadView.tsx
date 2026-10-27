@@ -271,8 +271,8 @@ export default function BasketballIndoorLoadView({
                   <CardDescription>
                     {s
                       ? isEN
-                        ? `Latest session vs his own norm (100 = average). Baseline from ${l.baseline.sessions} session(s).`
-                        : `Nýjasta æfing á móti hans viðmiðun (100 = meðaltal). Viðmiðun úr ${l.baseline.sessions} æfingu(m).`
+                        ? `Latest session vs their own norm (100 = average). Baseline from ${l.baseline.sessions} session(s).`
+                        : `Nýjasta æfing á móti eigin viðmiðun (100 = meðaltal). Viðmiðun úr ${l.baseline.sessions} æfingu(m).`
                       : isEN
                         ? "No session in the window."
                         : "Engin æfing í glugganum."}
