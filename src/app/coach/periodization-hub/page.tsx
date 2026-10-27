@@ -32,7 +32,7 @@ import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationB
 import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
-import { preseasonStartRamp, preseasonMatchExposure, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
+import { preseasonStartRamp, preseasonMatchExposure, NORMATIVE_MATCH_KPI, NORMATIVE_MATCH_LOAD, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
 import { upcomingInternationalBreaks, intlBreakKey, type IntlBreak } from "@/lib/micropulse/internationalBreaks";
 import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
 import { recommendTestingSchedule, testsForBlock, TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
@@ -250,7 +250,8 @@ export default function PeriodizationHubPage() {
   // season_plans row, so next year's planning survives the calendar rollover and never shares block indices
   // with the current season (the ártal-skörðun fix). Only used when `upcomingYear` (see below); in-season the
   // Pre-season tab falls back to the current-year store unchanged.
-  const [preBlockLenOv, setPreBlockLenOv] = React.useState<Record<string, number>>({});
+  // Only the setter is used now (the upcoming pre-season's derived blockWeeks is written straight to its row).
+  const [, setPreBlockLenOv] = React.useState<Record<string, number>>({});
   const [prePsWeek1Mult, setPrePsWeek1Mult] = React.useState(1.3);
   const [prePsSessions, setPrePsSessions] = React.useState(4);
   // Game-anchored pre-season meso-cycle tail (lengths of the blocks NEAREST the opener; the base block
@@ -258,6 +259,13 @@ export default function PeriodizationHubPage() {
   // only when `upcomingYear`; the next-year row holds pre-season blocks only, so add/remove never shifts a
   // competitive-block index. Current-year pre-season keeps the per-block length dropdowns.
   const [nextMesoTail, setNextMesoTail] = React.useState<number[] | null>(null);
+  // Same game-anchored tail but for the VIEWED season's OWN pre-season (not the upcoming/next-year one), so
+  // the coach can add/remove meso cycles on any season, not only next year.
+  const [curMesoTail, setCurMesoTail] = React.useState<number[] | null>(null);
+  // Coach's WEEK-1 value per KPI (total distance, HSR, PlayerLoad, accel/decel…) — the ramp computes the rest
+  // from week 1. Kept per the viewed year vs the upcoming (next-year) pre-season row. {} = all auto/seeded.
+  const [curWeek1Kpi, setCurWeek1Kpi] = React.useState<Record<string, number>>({});
+  const [nextWeek1Kpi, setNextWeek1Kpi] = React.useState<Record<string, number>>({});
   const [tab, setTab] = React.useState<"season" | "preseason" | "plan" | "micro" | "testing" | "demands" | "players">(() => {
     if (typeof window === "undefined") return "season";
     const t = new URLSearchParams(window.location.search).get("tab");
@@ -364,7 +372,7 @@ export default function PeriodizationHubPage() {
       viewYearRef.current = (j.plan as Plan).seasonYear;
       setViewYear((j.plan as Plan).seasonYear);
       // Populate the season-window inputs from the saved overrides, once, so they reflect what's stored.
-      const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; offseasonStart?: string | null; preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; stepPct?: number | null; blockGoals?: Record<string, "accum" | "transmute" | "realize">; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string> } }).savedWindow;
+      const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; offseasonStart?: string | null; preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; stepPct?: number | null; blockGoals?: Record<string, "accum" | "transmute" | "realize">; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string>; preMesoTail?: number[] | null; preWeek1Kpi?: Record<string, number> | null } }).savedWindow;
       if (sw && !didPopulateWindow.current) {
         didPopulateWindow.current = true;
         if (sw.preseasonStart) setPreStart(sw.preseasonStart);
@@ -377,19 +385,22 @@ export default function PeriodizationHubPage() {
         if (sw.blockGoals && Object.keys(sw.blockGoals).length) setBlockGoals(sw.blockGoals);
         if (sw.blockWeeks && Object.keys(sw.blockWeeks).length) setBlockLenOv(sw.blockWeeks);
         if (sw.blockDeload && Object.keys(sw.blockDeload).length) setBlockDeloadOv(sw.blockDeload);
+        if (Array.isArray(sw.preMesoTail) && sw.preMesoTail.length) setCurMesoTail(sw.preMesoTail.filter((n) => Number.isFinite(n)));
+        if (sw.preWeek1Kpi && typeof sw.preWeek1Kpi === "object") setCurWeek1Kpi(sw.preWeek1Kpi);
       }
       // Starting a NEW next season with no saved pre-season start yet: suggest the off-season end (where the
       // new season begins). A local suggestion only — not persisted until the coach saves/applies.
       if (carrySeedRef.current) { if (!sw?.preseasonStart) setPreStart(carrySeedRef.current); carrySeedRef.current = ""; }
       // The UPCOMING pre-season's saved overrides live in NEXT season's row — restore them into the separate
       // pre-season store so the Pre-season tab reads/writes that row (survives the rollover; no index clash).
-      const swn = (j as { savedWindowNext?: { preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; blockWeeks?: Record<string, number>; preMesoTail?: number[] | null } | null }).savedWindowNext;
+      const swn = (j as { savedWindowNext?: { preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; blockWeeks?: Record<string, number>; preMesoTail?: number[] | null; preWeek1Kpi?: Record<string, number> | null } | null }).savedWindowNext;
       if (swn && !didPopulateNext.current) {
         didPopulateNext.current = true;
         if (swn.preseasonWeek1Mult != null && Number.isFinite(swn.preseasonWeek1Mult)) setPrePsWeek1Mult(Math.max(0.5, Math.min(3, swn.preseasonWeek1Mult)));
         if (swn.preseasonSessions === 3 || swn.preseasonSessions === 4 || swn.preseasonSessions === 5 || swn.preseasonSessions === 6) setPrePsSessions(swn.preseasonSessions);
         if (swn.blockWeeks && Object.keys(swn.blockWeeks).length) setPreBlockLenOv(swn.blockWeeks);
         if (Array.isArray(swn.preMesoTail) && swn.preMesoTail.length) setNextMesoTail(swn.preMesoTail.filter((n) => Number.isFinite(n)));
+        if (swn.preWeek1Kpi && typeof swn.preWeek1Kpi === "object") setNextWeek1Kpi(swn.preWeek1Kpi);
       }
       // Restore the coach's saved block length (cadence) so the meso reads back the block they set up.
       const savedCadence = Number((j as { deloadCadence?: number }).deloadCadence);
@@ -416,7 +427,7 @@ export default function PeriodizationHubPage() {
     didPopulateWindow.current = false; didPopulateNext.current = false;
     setPreStart(""); setSeasonEnd(""); setOffStart(""); setNextPreStart("");
     setBlockGoals({}); setBlockLenOv({}); setBlockDeloadOv({});
-    setNextMesoTail(null); setPreBlockLenOv({});
+    setNextMesoTail(null); setPreBlockLenOv({}); setCurMesoTail(null); setCurWeek1Kpi({}); setNextWeek1Kpi({});
     setCadence(4); setBlkStep(5); setPsWeek1Mult(1.3); setPsSessions(4);
     nextPreStartRef.current = "";
     void load("", "");
@@ -912,12 +923,8 @@ export default function PeriodizationHubPage() {
   const preYear = upcomingYear ? plan!.nextSeasonYear! : (plan?.seasonYear ?? 0);
   const psW1 = upcomingYear ? prePsWeek1Mult : psWeek1Mult;   // week-1 ×match for the upcoming pre-season
   const psSess = upcomingYear ? prePsSessions : psSessions;   // sessions/wk for the upcoming pre-season
-  const lenOv = upcomingYear ? preBlockLenOv : blockLenOv;    // index-keyed block lengths for the upcoming pre-season
-  const setPreLen = (idxKey: string, weeks: number | null) => {
-    if (!upcomingYear) { setBlockLength(idxKey, weeks); return; } // in-season → current-year store (unchanged)
-    const next = { ...preBlockLenOv }; if (weeks == null) delete next[idxKey]; else next[idxKey] = weeks;
-    setPreBlockLenOv(next); persistBlockMap("blockWeeks", next, preYear);
-  };
+  const mesoTail = upcomingYear ? nextMesoTail : curMesoTail; // the viewed/upcoming season's game-anchored tail
+  const week1KpiOv = upcomingYear ? nextWeek1Kpi : curWeek1Kpi; // the viewed/upcoming season's per-KPI week-1 overrides
   const setPreW1 = (v: number) => {
     if (upcomingYear) { setPrePsWeek1Mult(v); persistOverridePatch({ preseasonWeek1Mult: v }, preYear); }
     else { setPsWeek1Mult(v); persistOverridePatch({ preseasonWeek1Mult: v }); }
@@ -926,14 +933,23 @@ export default function PeriodizationHubPage() {
     if (upcomingYear) { setPrePsSessions(v); persistOverridePatch({ preseasonSessions: v }, preYear); }
     else { setPsSessions(v); persistOverridePatch({ preseasonSessions: v }); }
   };
-  // Persist the upcoming pre-season's game-anchored meso tail (backwards editor). Derives the index-keyed
-  // blockWeeks so the week-card grouping + the ramp read the same boundaries, and writes BOTH to the
-  // next-year row (which holds pre-season blocks only, so the indices never collide with competitive ones).
-  const persistNextMesoTail = React.useCallback((tail: number[], windowWeeks: number, cad: number, year: number) => {
+  // Persist a pre-season game-anchored meso tail (backwards editor). Derives the index-keyed blockWeeks so the
+  // week-card grouping + the ramp read the same boundaries. For the UPCOMING (next-year) row — which holds
+  // pre-season blocks only — it replaces blockWeeks outright. For the VIEWED season's own row it MERGES: keeps
+  // the competitive ISO-keyed length overrides and replaces only the numeric (pre-season) keys, so adding a
+  // pre-season meso cycle never wipes competitive overrides.
+  const persistMesoTail = React.useCallback((tail: number[], windowWeeks: number, cad: number, year: number, isUpcoming: boolean) => {
     const { lens } = preseasonMeso(windowWeeks, tail, cad);
-    const bw = lensToBlockWeeks(lens);
-    setNextMesoTail(tail); setPreBlockLenOv(bw);
+    const tailBw = lensToBlockWeeks(lens);
+    let bw: Record<string, number>;
+    if (isUpcoming) { bw = tailBw; setNextMesoTail(tail); setPreBlockLenOv(bw); }
+    else { const keepIso = Object.fromEntries(Object.entries(blockLenOv).filter(([k]) => !/^\d+$/.test(k))); bw = { ...keepIso, ...tailBw }; setCurMesoTail(tail); setBlockLenOv(bw); }
     (async () => { try { await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: year, overrides: { preMesoTail: tail, blockWeeks: bw } }) }); } catch { /* best-effort persist */ } })();
+  }, [authHeader, blockLenOv]);
+  // Persist the coach's per-KPI WEEK-1 overrides to the relevant pre-season row (viewed vs upcoming).
+  const persistWeek1Kpi = React.useCallback((next: Record<string, number>, year: number, isUpcoming: boolean) => {
+    if (isUpcoming) setNextWeek1Kpi(next); else setCurWeek1Kpi(next);
+    (async () => { try { await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: year, overrides: { preWeek1Kpi: next } }) }); } catch { /* best-effort persist */ } })();
   }, [authHeader]);
 
   // Day-type editor: MATCHES ARE READ-ONLY HERE. A match belongs to Fixtures (match_schedule)
@@ -2010,9 +2026,14 @@ export default function PeriodizationHubPage() {
             );
             const preStart = up.start, preWeeks = up.weeks;
             const preEndMs = Date.parse(`${preStart}T00:00:00Z`) + preWeeks * 7 * 86_400_000;
-            const preAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
-            const tka = teamKpiAvg(plan.players);
-            const ramp = preseasonStartRamp({ matchTypicalLoad: tka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: tka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: preAnchor });
+            // Normative fallback: a team with NO match data gets reference KPI values (the coach then adjusts
+            // them via the per-KPI week-1 editor). Own data → match_this_season; else → normative (low conf).
+            const tkaRaw = teamKpiAvg(plan.players);
+            const hasOwnKpi = tkaRaw.totalPlayerLoad != null && Number.isFinite(tkaRaw.totalPlayerLoad);
+            const tka = (hasOwnKpi ? tkaRaw : (NORMATIVE_MATCH_KPI as unknown as typeof tkaRaw));
+            const preMatchLoad = hasOwnKpi ? (tkaRaw.totalPlayerLoad ?? plan.matchLoad) : NORMATIVE_MATCH_LOAD;
+            const preAnchor: LoadAnchor = hasOwnKpi ? "match_this_season" : (plan.tier.loadSource === "srpe" && plan.matchSrpe != null ? "srpe_only" : "normative");
+            const ramp = preseasonStartRamp({ matchTypicalLoad: preMatchLoad, matchKpiAvg: tka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: preAnchor, week1KpiOverride: week1KpiOv });
             const usesAu = ramp.every((w) => w.weeklyLoadTarget == null);
             const unitLabel = usesAu ? "AU" : "PL";
             const primary = (w: PreseasonWeekTarget) => (usesAu ? w.sRpeAuTarget : w.weeklyLoadTarget) ?? 0;
@@ -2078,13 +2099,11 @@ export default function PeriodizationHubPage() {
             // and the base block flexes. When no tail is set yet, seed it from the auto layout (all blocks
             // after the first) so the editor opens on the current sequence. In-season keeps the plain slice.
             const autoPre = sliceByLengths(preStart, preEndIso, cadence, {}, 0);
-            const effTail = upcomingYear
-              ? (nextMesoTail ?? autoPre.slice(1).map((b) => Math.max(2, Math.round((Date.parse(`${b.end}T00:00:00Z`) - Date.parse(`${b.start}T00:00:00Z`)) / (7 * 86_400_000)))))
-              : [];
-            const preMeso = upcomingYear ? preseasonMeso(preWeeks, effTail, cadence) : null;
-            const preBlocks = upcomingYear
-              ? sliceByLengths(preStart, preEndIso, cadence, lensToBlockWeeks(preMeso!.lens), 0)
-              : sliceByLengths(preStart, preEndIso, cadence, lenOv, 0);
+            // Backwards editor for ANY season's pre-season (not only the upcoming one). When no tail is set yet,
+            // seed it from the auto layout (all blocks after the first) so the editor opens on the current seq.
+            const effTail = mesoTail ?? autoPre.slice(1).map((b) => Math.max(2, Math.round((Date.parse(`${b.end}T00:00:00Z`) - Date.parse(`${b.start}T00:00:00Z`)) / (7 * 86_400_000))));
+            const preMeso = preseasonMeso(preWeeks, effTail, cadence);
+            const preBlocks = sliceByLengths(preStart, preEndIso, cadence, lensToBlockWeeks(preMeso.lens), 0);
             const blockEndExcl = (b: { end: string }) => b.end; // exclusive
             const weeksBetween = (a: string, b: string) => Math.max(1, Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / (7 * 86_400_000)));
             const emphOfBlock = (b: { start: string }) => preseasonBlockForWeeksOut(weeksBetween(b.start, preEndIso));
@@ -2097,14 +2116,19 @@ export default function PeriodizationHubPage() {
           {(() => {
             // Backwards editor state (upcoming pre-season only): the coach-controlled tail blocks nearest the
             // game; the base block flexes. Edits persist the derived blockWeeks + preMesoTail to the next row.
-            const tailVals = preMeso?.tail ?? [];
-            const baseLen = preMeso ? preMeso.base.reduce((s, n) => s + n, 0) : 0;
-            const roomForMore = preMeso != null && (baseLen - 3) >= PRE_MIN_BLOCK; // adding a 3-wk block keeps base ≥ 2
-            const setTailLen = (ti: number, v: number) => { const t = [...tailVals]; t[ti] = v; persistNextMesoTail(t, preWeeks, cadence, preYear); };
-            const removeTail = (ti: number) => persistNextMesoTail(tailVals.filter((_, i) => i !== ti), preWeeks, cadence, preYear);
-            const addTail = () => persistNextMesoTail([...tailVals, 3], preWeeks, cadence, preYear);
-            const resetTail = () => { setNextMesoTail(null); setPreBlockLenOv({}); (async () => { try { await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: preYear, overrides: { preMesoTail: null, blockWeeks: {} } }) }); } catch { /* best-effort */ } })(); };
-            const baseCount = preMeso?.base.length ?? 0;
+            const tailVals = preMeso.tail;
+            const baseLen = preMeso.base.reduce((s, n) => s + n, 0);
+            const roomForMore = (baseLen - 3) >= PRE_MIN_BLOCK; // adding a 3-wk block keeps base ≥ 2
+            const setTailLen = (ti: number, v: number) => { const t = [...tailVals]; t[ti] = v; persistMesoTail(t, preWeeks, cadence, preYear, upcomingYear); };
+            const removeTail = (ti: number) => persistMesoTail(tailVals.filter((_, i) => i !== ti), preWeeks, cadence, preYear, upcomingYear);
+            const addTail = () => persistMesoTail([...tailVals, 3], preWeeks, cadence, preYear, upcomingYear);
+            const resetTail = () => {
+              const keptBw = upcomingYear ? {} : Object.fromEntries(Object.entries(blockLenOv).filter(([k]) => !/^\d+$/.test(k)));
+              if (upcomingYear) { setNextMesoTail(null); setPreBlockLenOv({}); } else { setCurMesoTail(null); setBlockLenOv(keptBw); }
+              (async () => { try { await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: preYear, overrides: { preMesoTail: null, blockWeeks: keptBw } }) }); } catch { /* best-effort */ } })();
+            };
+            const baseCount = preMeso.base.length;
+            const mesoTailSet = mesoTail != null;
             return (
           <section className={card}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -2129,11 +2153,9 @@ export default function PeriodizationHubPage() {
               <h3 className="text-[13px] font-bold text-slate-800">{is ? "Meso-lotur" : "Meso cycles"}</h3>
               <span className="text-[12px] text-slate-500">{is ? "samtals" : "total"} <b className={`tabular-nums ${seqTotal === preWeeks ? "text-slate-900" : "text-[#de9328]"}`}>{seqTotal}</b> {is ? `af ${preWeeks} vikum` : `of ${preWeeks} weeks`}</span>
             </div>
-            <p className="mt-0.5 text-[12px] text-slate-500">{upcomingYear
-              ? (is ? "Unnið aftur á bak: síðasta lotan endar á fyrsta leik (afl/peaking) og grunn-lotan gleypir afganginn. Bættu við lotum eða breyttu lengd þeirra sem eru næst leiknum." : "Planned backwards: the last block ends at the first game (power/peaking) and the base block absorbs the remainder. Add blocks or change the length of the ones nearest the game.")
-              : (is ? "Settu lengd hverrar meso-lotu. Mesó-flipinn les þær — breyting hér endurflæðir dagatalið fram að fyrsta leik." : "Set each meso cycle's length. The Meso tab reads them — a change here re-flows the calendar up to the first game.")}</p>
+            <p className="mt-0.5 text-[12px] text-slate-500">{is ? "Unnið aftur á bak: síðasta lotan endar á fyrsta leik (afl/peaking) og grunn-lotan gleypir afganginn. Bættu við lotum eða breyttu lengd þeirra sem eru næst leiknum." : "Planned backwards: the last block ends at the first game (power/peaking) and the base block absorbs the remainder. Add blocks or change the length of the ones nearest the game."}</p>
 
-            {upcomingYear ? (
+            {(
               <div className="mt-3 space-y-1.5">
                 {preBlocks.map((b, bi) => {
                   const bw = weeksBetween(b.start, blockEndExcl(b));
@@ -2164,31 +2186,34 @@ export default function PeriodizationHubPage() {
                 })}
                 <div className="flex flex-wrap items-center gap-3 pt-0.5">
                   <button type="button" onClick={addTail} disabled={!roomForMore} className={`rounded-lg border px-2.5 py-1 text-[12px] font-semibold ${roomForMore ? "border-[#2740e6]/40 text-[#2740e6] hover:bg-[#2740e6]/5" : "cursor-not-allowed border-slate-200 text-slate-300"}`}>+ {is ? "Bæta við meso-lotu" : "Add meso cycle"}</button>
-                  {nextMesoTail != null && <button type="button" onClick={resetTail} className="text-[12px] font-medium text-slate-500 hover:text-slate-700 hover:underline">{is ? "Núllstilla í sjálfgefið" : "Reset to auto"}</button>}
+                  {mesoTailSet && <button type="button" onClick={resetTail} className="text-[12px] font-medium text-slate-500 hover:text-slate-700 hover:underline">{is ? "Núllstilla í sjálfgefið" : "Reset to auto"}</button>}
                   {!roomForMore && <span className="text-[11px] text-slate-400">{is ? "ekki pláss fyrir fleiri lotur" : "no room for more blocks"}</span>}
                 </div>
               </div>
-            ) : (
-              <div className="mt-3 space-y-1.5">
-                {preBlocks.map((b) => {
-                  const bw = weeksBetween(b.start, blockEndExcl(b));
-                  const emph = emphOfBlock(b);
+            )}
+
+            {/* Week-1 per-KPI VALUES — the coach sets week 1; the ramp computes the rest from it. Seeded from
+                the team's match unit, or a NORMATIVE reference when there's no data (then the coach adjusts). */}
+            <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="text-[13px] font-bold text-slate-800">{is ? "Viku-1 breytur" : "Week-1 variables"}</h3>
+              <span className="text-[12px] text-slate-500">{is ? "stilltu viku 1 — restin reiknast þaðan" : "set week 1 — the rest computes from it"}{!hasOwnKpi ? (is ? " · viðmið (engin gögn)" : " · reference (no data)") : ""}</span>
+            </div>
+            {ramp.length > 0 && (
+              <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
+                {kpiKeys.map((k) => {
+                  const lab = WEEKLY_LOAD_LABELS[k]; const w1 = ramp[0].byKpi[k];
+                  if (w1 == null) return null;
+                  const overridden = week1KpiOv[k] != null;
                   return (
-                    <div key={b.index} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                      <span className="text-[13px] font-semibold text-slate-800">{is ? "Lota" : "Block"} {b.index + 1}</span>
-                      <span className="text-[12px] text-slate-500">{shortDate(b.start, is)}–{shortDate(isoAdd(b.end, -1), is)} · {bw} {is ? "v" : "wk"}</span>
-                      {emph && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{PS_LABEL[emph]}</span>}
-                      <label className="ml-auto flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Lengd" : "Length"}
-                        <select value={lenOv[String(b.index)] ?? lenOv[b.start] ?? ""} onChange={(e) => setPreLen(b.start, e.target.value === "" ? null : Number(e.target.value))} className="rounded border border-slate-300 bg-white px-1.5 py-0.5">
-                          <option value="">{is ? `Sjálfgefið (${cadence}v)` : `Auto (${cadence}w)`}</option>
-                          {[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} {is ? "vikur" : "weeks"}</option>)}
-                        </select>
-                      </label>
-                    </div>
+                    <label key={k} className="flex flex-col gap-0.5 text-[11px] font-medium text-slate-600">
+                      <span className="flex items-center gap-1 truncate">{is ? lab.is : lab.en}{overridden && <span title={is ? "handvirkt" : "manual"} className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2740e6]" />}</span>
+                      <input type="number" min={0} value={w1} onChange={(e) => { const v = Number(e.target.value); const next = { ...week1KpiOv }; if (!Number.isFinite(v) || v <= 0) delete next[k]; else next[k] = Math.round(v); persistWeek1Kpi(next, preYear, upcomingYear); }} className="h-8 rounded border border-slate-300 px-1.5 text-[13px] tabular-nums" />
+                    </label>
                   );
                 })}
               </div>
             )}
+            <p className="mt-1.5 text-[11px] text-slate-400">{is ? "Blár punktur = handvirkt gildi. Restin af undirbúningnum stigmagnast upp í hámark hverrar breytu út frá viku 1." : "Blue dot = a manual value. The rest of the pre-season ramps each variable up to its peak from week 1."}{Object.keys(week1KpiOv).length > 0 && <> · <button type="button" onClick={() => persistWeek1Kpi({}, preYear, upcomingYear)} className="font-medium text-slate-500 hover:text-slate-700 hover:underline">{is ? "Núllstilla" : "Reset"}</button></>}</p>
 
             {/* Research "why" — explainability L2 (jargon + citations behind a toggle, off the primary view). */}
             <details className="mt-3 text-[11.5px] text-slate-500">

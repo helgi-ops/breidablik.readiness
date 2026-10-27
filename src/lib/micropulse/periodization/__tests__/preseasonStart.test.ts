@@ -19,6 +19,14 @@ describe("preseasonStartRamp", () => {
     expect(w1.perSessionLoad).toBe(325);
   });
 
+  it("week-1 KPI override sets week 1; the rest ramps up from it; unset KPIs keep auto", () => {
+    const rows = preseasonStartRamp({ matchTypicalLoad: MATCH, matchKpiAvg: KPI, sessionsPerWeek: 4, preseasonWeeks: 6, anchor: "match_this_season", week1KpiOverride: { totalDistance: 7000 } });
+    expect(rows[0].byKpi.totalDistance).toBe(7000); // week 1 = the coach's value
+    for (let i = 1; i < rows.length; i++) expect(rows[i].byKpi.totalDistance!).toBeGreaterThanOrEqual(rows[i - 1].byKpi.totalDistance!);
+    const auto = preseasonStartRamp({ matchTypicalLoad: MATCH, matchKpiAvg: KPI, sessionsPerWeek: 4, preseasonWeeks: 6, anchor: "match_this_season" });
+    expect(rows[0].byKpi.accelB23).toBe(auto[0].byKpi.accelB23); // a KPI without an override is unchanged
+  });
+
   it("ramps monotonically to the peak (build destination) multiple", () => {
     const peak = defaultPeakMultiple(4);
     const rows = preseasonStartRamp({ matchTypicalLoad: MATCH, sessionsPerWeek: 4, preseasonWeeks: 5, anchor: "match_this_season" });

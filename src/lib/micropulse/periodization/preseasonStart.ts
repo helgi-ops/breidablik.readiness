@@ -47,8 +47,21 @@ export interface PreseasonStartOpts {
   preseasonWeeks: number;                                   // number of ramp weeks
   week1MatchMultiple?: number;                              // default ~1.3× (re-entry) — configurable
   peakMatchMultiple?: number;                               // default from weeklyTargetFromMatch preseason
+  /** Coach's WEEK-1 value per KPI (the actual weekly target for week 1). When set for a KPI, the ramp runs
+   *  from that value to the KPI's peak (rest computed from week 1); unset KPIs use the auto re-entry floor. */
+  week1KpiOverride?: Partial<Record<string, number>> | null;
   anchor: LoadAnchor;
 }
+
+/**
+ * Normative match-unit reference (adult football, team average) for clubs WITHOUT their own GPS/match data —
+ * so the pre-season ramp still produces numbers the coach can then ADJUST (per-KPI week-1 editing). A
+ * starting point, never a norm. Keys match the WeeklyLoadMetric KPI names.
+ */
+export const NORMATIVE_MATCH_KPI: Record<string, number> = {
+  totalDistance: 10000, velocityBand5: 620, velocityBand6: 180, accelB23: 40, decelB23: 46, totalPlayerLoad: 1100,
+};
+export const NORMATIVE_MATCH_LOAD = 1100; // PlayerLoad unit when the team has none
 
 const CONFIDENCE_BY_ANCHOR: Record<LoadAnchor, Confidence> = {
   match_this_season: "high",
@@ -122,11 +135,15 @@ export function preseasonStartRamp(opts: PreseasonStartOpts): PreseasonWeekTarge
     for (const k of kpiKeys) {
       const v = opts.matchKpiAvg?.[k];
       if (typeof v !== "number" || !Number.isFinite(v)) continue;
-      const floor = Math.max(kpiReentryFloor(k), w1frac);  // KPI's week-1 fraction of peak (≥ generic re-entry)
-      const week1k = floor * peak;
+      const share = kpiTaperShare(k);
+      const peakVal = v * peak * share;                                  // end-of-pre-season destination
+      const autoWeek1 = Math.max(kpiReentryFloor(k), w1frac) * peak * v * share; // auto re-entry floor value
+      // Coach's week-1 override for this KPI wins; the rest of the ramp is computed FROM it (week 1 → peak).
+      const ov = opts.week1KpiOverride?.[k];
+      const week1Val = typeof ov === "number" && Number.isFinite(ov) && ov > 0 ? ov : autoWeek1;
+      const top = Math.max(peakVal, week1Val);                           // never ramp downward (override ≥ peak → flat)
       const fracK = weeks > 1 ? Math.pow(frac, pathwayRampGamma(k)) : 0;
-      const multK = r2(week1k + (peak - week1k) * fracK);
-      byKpi[k] = r0(v * multK * kpiTaperShare(k));
+      byKpi[k] = r0(week1Val + (top - week1Val) * fracK);
     }
 
     const sRpeAuTarget = opts.matchSrpeAu != null && Number.isFinite(opts.matchSrpeAu)
