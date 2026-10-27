@@ -1513,6 +1513,10 @@ export default function PeriodizationHubPage() {
             if (!eb) return null;
             const g = (blockGoals[eb.start] as BlockGoalKey | undefined) ?? eb.goalKey;
             const curLenOv = blockLenOv[String(eb.index)] ?? blockLenOv[eb.start];
+            // Weeks (Mondays) inside this block — the pinnable deload candidates. Current pin = blockDeloadOv.
+            const blkMondays: string[] = [];
+            for (let t = utc(mondayOf(eb.start)); t < utc(eb.end) && blkMondays.length < 12; t += 7 * DAY) blkMondays.push(new Date(t).toISOString().slice(0, 10));
+            const curDeload = blockDeloadOv[eb.start] ?? "";
             return (
               <section className={`${card} border-[#14181c]/25`}>
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -1538,7 +1542,14 @@ export default function PeriodizationHubPage() {
                     </select>
                   </label>
                   {curLenOv != null && <button type="button" onClick={() => setBlockLength(String(eb.index), null)} className="text-[12px] text-slate-500 hover:underline">{is ? "Núllstilla lengd" : "Reset length"}</button>}
-                  <span className="text-[11px] text-slate-400">{is ? "Breyting endurflæðir Mesó, Míkró og kortið (niðurtröppun er fest á Mesó-flipanum)." : "Changes re-flow Meso, Micro and the map (pin the deload on the Meso tab)."}</span>
+                  <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Niðurtröppun" : "Deload"}
+                    <select value={curDeload} onChange={(e) => setBlockDeload(eb.start, e.target.value === "" ? null : e.target.value)} className="rounded border border-slate-300 bg-white px-1.5 py-1 text-[13px]">
+                      <option value="">{is ? "Sjálfgefið (snjallt)" : "Auto (smart)"}</option>
+                      {blkMondays.map((m, wi) => <option key={m} value={m}>{is ? `Vika ${wi + 1} · ${shortDate(m, is)}` : `Week ${wi + 1} · ${shortDate(m, is)}`}</option>)}
+                    </select>
+                  </label>
+                  {curDeload !== "" && <button type="button" onClick={() => setBlockDeload(eb.start, null)} className="text-[12px] text-slate-500 hover:underline">{is ? "Núllstilla" : "Reset"}</button>}
+                  <span className="text-[11px] text-slate-400">{is ? "Breyting endurflæðir Mesó, Míkró og kortið." : "Changes re-flow Meso, Micro and the map."}</span>
                 </div>
               </section>
             );
