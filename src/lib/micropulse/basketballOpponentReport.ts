@@ -62,8 +62,10 @@ export type DefenseShot = { key: string; made: number; att: number };
 export type SeasonTendencies = {
   usagePct: number | null; plusMinus: number | null;
   driveRightShare: number | null; drivesPg: number | null;
+  ftaPg?: number | null; tpaPg?: number | null;
+  offenseMix?: DefenseShot[];   // this player's own shot mix (attempts/g) — rim-vs-jumper read
   oppFgPctAllowed: number | null; oppFgaPg: number | null;
-  defense: DefenseShot[];
+  defense?: DefenseShot[];      // opponents' shot mix against this player
 };
 
 export type RecentGame = {
@@ -353,6 +355,30 @@ export function playerTendencyNotes(p: OppPlayer, lang: Lang): { offense: string
     else if (s.plusMinus < 0) offense.push(isIS ? `Liðinu gengur verr með viðkomandi inná (−${v} per leik)` : `Team is outscored by ${v}/game with them on court`);
   }
 
+  // Scoring style — does the shot get to the rim or settle for a jumper, and is it
+  // self-created or off the ball. Derived from the player's own playtype mix + FTA/3PA.
+  const mix = Array.isArray(s.offenseMix) ? s.offenseMix : [];
+  const att = (k: string) => mix.find((m) => m.key === k)?.att ?? 0;
+  const drives = s.drivesPg ?? att("drive");
+  const fta = s.ftaPg ?? 0;
+  const tpa = s.tpaPg ?? 0;
+  const created = att("iso") + att("pnrHandler") + drives;
+  const offBall = att("catchShoot") + att("screenOff") + att("cut") + att("handOff");
+  if (drives >= 4 || fta >= 4.5) {
+    const en: string[] = [], is: string[] = [];
+    if (drives >= 1) { en.push(`${r1t(drives)} drives/g`); is.push(`${r1t(drives)} drif/leik`); }
+    if (fta >= 1) { en.push(`gets to the line (${r1t(fta)} FTA/g)`); is.push(`sækir vítalínuna (${r1t(fta)} vítatilr./leik)`); }
+    offense.push(isIS ? `Fer alla leið að körfunni — ${is.join(" og ")}` : `Attacks the rim — ${en.join(" and ")}`);
+  } else if (tpa >= 3.5 && att("catchShoot") >= Math.max(att("iso"), att("pnrHandler"), drives)) {
+    offense.push(isIS
+      ? `Stökkskytta — grípur og skýtur frekar en að fara að körfunni (${r1t(tpa)} þristatilr./leik)`
+      : `Spot-up shooter — settles for the jumper rather than driving (${r1t(tpa)} 3PA/g)`);
+  } else if (created > 0 && created >= offBall * 1.3) {
+    offense.push(isIS ? `Býr til eigin skot (einn-á-einn / skýlingar)` : `Creates his own shot (iso / pick-and-roll)`);
+  } else if (offBall > 0 && offBall >= created * 1.3) {
+    offense.push(isIS ? `Skorar án bolta (spot-up, skýlingar, skurðir)` : `Scores off the ball (spot-ups, screens, cuts)`);
+  }
+
   if (s.driveRightShare != null && (s.drivesPg ?? 0) >= 1) {
     const share = Math.round(s.driveRightShare);
     if (s.driveRightShare >= 65) offense.push(isIS ? `Drífur nær alltaf til hægri (${share}%) — bjóddu vinstri hönd` : `Almost always drives right (${share}%) — force left`);
@@ -366,7 +392,8 @@ export function playerTendencyNotes(p: OppPlayer, lang: Lang): { offense: string
     const vol = s.oppFgaPg != null ? (isIS ? ` á ${r1t(s.oppFgaPg)} skot/leik` : ` on ${r1t(s.oppFgaPg)} shots/g`) : "";
     defense.push(isIS ? `Andstæðingar skjóta ${r1t(s.oppFgPctAllowed)}% þegar viðkomandi ver${vol}` : `Opponents shoot ${r1t(s.oppFgPctAllowed)}% with them defending${vol}`);
   }
-  const attacked = s.defense.filter((d) => d.att >= 1)[0] ?? s.defense[0];
+  const defMix = Array.isArray(s.defense) ? s.defense : [];
+  const attacked = defMix.filter((d) => d.att >= 1)[0] ?? defMix[0];
   if (attacked) {
     const mp = makePct(attacked);
     defense.push(isIS
@@ -375,7 +402,7 @@ export function playerTendencyNotes(p: OppPlayer, lang: Lang): { offense: string
   }
   // Weak spot: the most-made action opponents get (with a little volume), if it isn't the
   // one already named and they actually score on it.
-  const weak = [...s.defense]
+  const weak = [...defMix]
     .filter((d) => d.att >= 0.8 && d.key !== attacked?.key && (makePct(d) ?? 0) >= 50)
     .sort((a, b) => (makePct(b) ?? 0) - (makePct(a) ?? 0))[0];
   if (weak) {

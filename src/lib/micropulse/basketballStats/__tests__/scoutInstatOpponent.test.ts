@@ -166,6 +166,8 @@ describe("buildInstatOpponentScout", () => {
     expect(notes.offense.some((n) => /carries the offense/i.test(n))).toBe(true);
     expect(notes.offense.some((n) => /outscored by 18\.7/i.test(n))).toBe(true);
     expect(notes.offense.some((n) => /driving right/i.test(n))).toBe(true);
+    // Scoring style: 4.5 drives/g + 7 FTA/g -> rim attacker.
+    expect(notes.offense.some((n) => /Attacks the rim/i.test(n))).toBe(true);
     expect(notes.defense.some((n) => /47\.7% with them defending/i.test(n))).toBe(true);
     expect(notes.defense.some((n) => /Attacked most off/i.test(n))).toBe(true);
     // Icelandic variant renders too.

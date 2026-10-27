@@ -94,6 +94,8 @@ export type ScoutSeasonPlayer = {
   usagePct: number | null; plusMinus: number | null;
   // Drive direction from the attempt counts (share going right, 0-100) + total drive att/g.
   driveRightShare: number | null; drivesPg: number | null;
+  // Offence: this player's own shot mix by playtype (attempts/g) — drives the rim-vs-jumper read.
+  offenseMix: OppDefenseShot[];
   // Defence: overall shooting opponents get against this player, and the shot mix they target.
   oppFgPctAllowed: number | null; oppFgaPg: number | null;
   defense: OppDefenseShot[];
@@ -187,6 +189,14 @@ export function parseScoutPlayers(rows: Record<string, unknown>[]): ScoutSeasonP
     const rightDrv = num(cell(row, ["Right drives"]));
     const driveTot = (leftDrv ?? 0) + (rightDrv ?? 0);
     const driveRightShare = driveTot > 0 ? Math.round(((rightDrv ?? 0) / driveTot) * 1000) / 10 : null;
+    // Offence: this player's own shot mix, by playtype (attempts/g).
+    const offenseMix: OppDefenseShot[] = [];
+    for (const [key, [mH, aH]] of Object.entries(PT_COLUMNS)) {
+      const att = num(cell(row, [aH]));
+      if (att == null || att <= 0) continue;
+      offenseMix.push({ key, made: num(cell(row, [mH])) ?? 0, att });
+    }
+    offenseMix.sort((a, b) => b.att - a.att);
     // Defence: opponents' shot mix against this player, by playtype.
     const defense: OppDefenseShot[] = [];
     for (const [key, [mH, aH]] of Object.entries(OPP_DEF_COLUMNS)) {
@@ -218,6 +228,7 @@ export function parseScoutPlayers(rows: Record<string, unknown>[]): ScoutSeasonP
       plusMinus: num(cell(row, ["Plus/Minus", "Plus Minus", "+/-"])),
       driveRightShare,
       drivesPg: num(cell(row, ["Drives with shot"])) ?? (driveTot > 0 ? driveTot : null),
+      offenseMix,
       oppFgPctAllowed: num(cell(row, ["Opponent's field goals, %", "Opponent s field goals %"])),
       oppFgaPg: num(cell(row, ["Opponent's field goals attempted", "Opponent s field goals attempted"])),
       defense,
@@ -279,8 +290,10 @@ export function buildInstatOpponentScout(opponentName: string, payload: InstatOp
     tendencies: {
       usagePct: p.usagePct, plusMinus: p.plusMinus,
       driveRightShare: p.driveRightShare, drivesPg: p.drivesPg,
+      ftaPg: p.ftaPg, tpaPg: p.tpaPg,
+      offenseMix: p.offenseMix ?? [],
       oppFgPctAllowed: p.oppFgPctAllowed, oppFgaPg: p.oppFgaPg,
-      defense: p.defense,
+      defense: p.defense ?? [],
     },
   }));
   const report = buildOpponentReportFromSeason(opponentName, team, playersIn);
