@@ -630,6 +630,11 @@ export function buildCalendarBlock(opts: {
    *  match-day load so it reads partial, not a full match. A number applies to every week; a function
    *  (weekIndex0 → fraction) lets it ramp across the pre-season. Omit / 1 = a full match (in-season). */
   matchExposure?: number | ((weekIndex0: number) => number);
+  /** TRAINING CAMPS (æfingaferð) overlaid on the block: concentrated-load periods. A day inside a camp has
+   *  its training-day load bumped by `loadPct` (above the normal ceiling — a camp loads over match), and
+   *  when `twoADay` a camp REST day becomes an extra session (Mixed). Match days are unaffected. Each is an
+   *  inclusive date range. Descriptive overlay — it does not move block boundaries. */
+  camps?: Array<{ start: string; end: string; loadPct: number; twoADay: boolean }>;
 }): CalendarBlock {
   const n = Math.max(1, Math.min(16, Math.round(opts.numWeeks))); // up to a long pre-season (6–16 weeks)
   // GOAL volume scalar on the week-1 base (the single dial that reaches every training day). It sits
@@ -768,10 +773,18 @@ export function buildCalendarBlock(opts: {
     const mExp = Math.max(0, Math.min(1, typeof opts.matchExposure === "function" ? opts.matchExposure(i) : (opts.matchExposure ?? 1)));
     const weekStart = addDays(start, i * 7);
     const days: CalDay[] = [];
-    let sumDist = 0, sumHsr = 0, sumLoad = 0, sumAccHi = 0, sumDecHi = 0, sumStride = 0, rest = 0;
+    let sumDist = 0, sumHsr = 0, sumLoad = 0, sumAccHi = 0, sumDecHi = 0, sumStride = 0, rest = 0, campWeek = false;
     for (let d = 0; d < 7; d++) {
       const k = i * 7 + d;
-      const type = dayType[k], md = dayMd[k];
+      const dayIso = addDays(start, k);
+      // Training camp overlay: a camp day loads ABOVE the normal day (×cm, applied after the match ceiling
+      // so a camp genuinely overloads), and a two-a-day camp turns a REST day into an extra Mixed session.
+      const camp = opts.camps?.find((c) => dayIso >= c.start && dayIso <= c.end) ?? null;
+      if (camp) campWeek = true;
+      let type = dayType[k];
+      if (camp?.twoADay && type === "rest") type = "mixed";
+      const md = dayMd[k];
+      const cm = camp && type !== "rest" && type !== "match" ? 1 + Math.max(0, Math.min(60, camp.loadPct)) / 100 : 1;
       const sh = CAL_SHARE[type];
       const isM = type === "match";
       const fA = (axis: RampAxis) => (isM ? 1 : ramp[axis].m * loadScale); // per-axis week factor
@@ -780,14 +793,14 @@ export function buildCalendarBlock(opts: {
       // carry the position emphasis on the running (HSR) and mechanical (load) axes. Running axes ceiling
       // at match per session ("build TO match, not beyond"); the mechanical axis keeps the Figueiredo over-shoot.
       const capRun = (v: number, ref: number) => Math.min(v, ref);
-      const dist = type === "rest" || opts.unit.dist == null ? null : isM ? Math.round(opts.unit.dist * mExp) : rnd(capRun(opts.unit.dist * sh.dist * fA("dist"), opts.unit.dist), 10);
-      const hsr = type === "rest" || opts.unit.hsr == null ? null : isM ? Math.round(opts.unit.hsr * mExp) : rnd(capRun(opts.unit.hsr * sh.hsr * hsrEmph * fA("hsr"), opts.unit.hsr), 5);
-      const load = type === "rest" || opts.unit.load == null ? null : isM ? Math.round(opts.unit.load * mExp) : Math.round(opts.unit.load * sh.load * mechEmph * fA("load"));
+      const dist = type === "rest" || opts.unit.dist == null ? null : isM ? Math.round(opts.unit.dist * mExp) : rnd(capRun(opts.unit.dist * sh.dist * fA("dist"), opts.unit.dist) * cm, 10);
+      const hsr = type === "rest" || opts.unit.hsr == null ? null : isM ? Math.round(opts.unit.hsr * mExp) : rnd(capRun(opts.unit.hsr * sh.hsr * hsrEmph * fA("hsr"), opts.unit.hsr) * cm, 5);
+      const load = type === "rest" || opts.unit.load == null ? null : isM ? Math.round(opts.unit.load * mExp) : Math.round(opts.unit.load * sh.load * mechEmph * fA("load") * cm);
       // Mechanical / IMA per-day targets (share × week factor); mechanical emphasis on the effort counts,
       // running emphasis on the free-running stride. Null on rest days or where the unit lacks the field.
-      const accHiEff = type === "rest" || opts.unit.accHiEff == null ? null : isM ? Math.round(opts.unit.accHiEff * mExp) : Math.round(opts.unit.accHiEff * sh.accdec * mechEmph * fA("accdec"));
-      const decHiEff = type === "rest" || opts.unit.decHiEff == null ? null : isM ? Math.round(opts.unit.decHiEff * mExp) : Math.round(opts.unit.decHiEff * sh.accdec * mechEmph * fA("accdec"));
-      const stride = type === "rest" || opts.unit.stride == null ? null : isM ? Math.round(opts.unit.stride * mExp) : Math.round(capRun(opts.unit.stride * sh.stride * hsrEmph * fA("stride"), opts.unit.stride));
+      const accHiEff = type === "rest" || opts.unit.accHiEff == null ? null : isM ? Math.round(opts.unit.accHiEff * mExp) : Math.round(opts.unit.accHiEff * sh.accdec * mechEmph * fA("accdec") * cm);
+      const decHiEff = type === "rest" || opts.unit.decHiEff == null ? null : isM ? Math.round(opts.unit.decHiEff * mExp) : Math.round(opts.unit.decHiEff * sh.accdec * mechEmph * fA("accdec") * cm);
+      const stride = type === "rest" || opts.unit.stride == null ? null : isM ? Math.round(opts.unit.stride * mExp) : Math.round(capRun(opts.unit.stride * sh.stride * hsrEmph * fA("stride"), opts.unit.stride) * cm);
       const dir = type === "rest" ? null : isM ? dirBase : dayDirTilt(dirTilted, type);
       if (type === "rest") rest += 1;
       else if (type !== "match") { sumDist += dist ?? 0; sumHsr += hsr ?? 0; sumLoad += load ?? 0; sumAccHi += accHiEff ?? 0; sumDecHi += decHiEff ?? 0; sumStride += stride ?? 0; }
@@ -805,7 +818,8 @@ export function buildCalendarBlock(opts: {
     // A genuine 2-fixture week is CONGESTED — the microcycle compresses around both games (tight turnaround,
     // fewer quality days), not two independent full MD-0 blocks. Labelled so the coach reads it correctly.
     const weekMatchCount = days.filter((d) => d.type === "match").length;
-    const intent: Bi = weekMatchCount >= 2 ? { en: "Congested (2 games)", is: "Þétt (2 leikir)" }
+    const intent: Bi = campWeek ? { en: "Training camp", is: "Æfingaferð" }
+      : weekMatchCount >= 2 ? { en: "Congested (2 games)", is: "Þétt (2 leikir)" }
       : i === 0 ? { en: "Introduce", is: "Kynna" } : isDeload ? { en: "Deload", is: "Niðurtröppun" } : i === n - 2 ? { en: "Overload · peak", is: "Yfirálag · toppur" } : i <= (n - 1) / 2 ? { en: "Progress", is: "Framvinda" } : { en: "Overload", is: "Yfirálag" };
     const matchDayIdx = days.findIndex((d) => d.type === "match");
     const matchDow: Bi = matchDayIdx >= 0 ? DOW[matchDayIdx] : { en: "—", is: "—" };

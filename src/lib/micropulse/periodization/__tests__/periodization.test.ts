@@ -488,6 +488,25 @@ test("buildCalendarBlock: block GOAL reshapes volume/taper/strength and stays ad
   assert.equal(neutral.goalKey, undefined); assert.equal(neutral.strength, undefined);
 });
 
+test("buildCalendarBlock: a training camp bumps load, tags the week, and two-a-days add sessions", () => {
+  const opts = { unit: UNIT, startDate: "2026-01-05", numWeeks: 2, scopeName: "__team__", baseOverloadPct: 100 } as const;
+  const base = buildCalendarBlock(opts);
+  const campNo2 = buildCalendarBlock({ ...opts, camps: [{ start: "2026-01-05", end: "2026-01-11", loadPct: 20, twoADay: false }] });
+  const camp2 = buildCalendarBlock({ ...opts, camps: [{ start: "2026-01-05", end: "2026-01-11", loadPct: 20, twoADay: true }] });
+  const trainLoad = (b: typeof base, w: number) => b.weeks[w].days.filter((d) => d.type !== "rest" && d.type !== "match").reduce((s, d) => s + (d.load ?? 0), 0);
+  // Week 1 is tagged a training camp; week 2 (outside the camp) is byte-identical to the plain build.
+  assert.equal(camp2.weeks[0].intent.en, "Training camp");
+  assert.deepEqual(campNo2.weeks[1], base.weeks[1]);
+  assert.deepEqual(camp2.weeks[1], base.weeks[1]);
+  // +20% load bump on the camp's training days (above the normal build).
+  assert.ok(trainLoad(campNo2, 0) > trainLoad(base, 0), `camp load ${trainLoad(campNo2, 0)} should exceed base ${trainLoad(base, 0)}`);
+  // Two-a-days turn the camp's rest days into extra sessions → fewer rest days + at least as much load.
+  assert.ok(camp2.weeks[0].restDays <= campNo2.weeks[0].restDays);
+  assert.ok(trainLoad(camp2, 0) >= trainLoad(campNo2, 0));
+  // A no-camp build is byte-identical to one with an empty camp list (additive overlay).
+  assert.deepEqual(buildCalendarBlock({ ...opts, camps: [] }), base);
+});
+
 test("buildCalendarBlock: engine-driven ramp — volume climbs faster than HSR, running axes ceiling at match, week tags its cap", () => {
   const b = buildCalendarBlock({ unit: UNIT, startDate: "2026-01-05", numWeeks: 6, scopeName: "__team__", baseOverloadPct: 100 });
   // Week 1 is the flat start (mult 1.0) — the differentiated ramp opens equal, then diverges.

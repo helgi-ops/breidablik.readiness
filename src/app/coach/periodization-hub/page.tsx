@@ -424,6 +424,11 @@ export default function PeriodizationHubPage() {
   const [teamBreaksFull, setTeamBreaksFull] = React.useState<Array<{ id: string; start_date: string; end_date: string; label: string | null }>>([]);
   // Per-window edited dates in the international-break card — the coach sets the break LENGTH before adding.
   const [breakEdits, setBreakEdits] = React.useState<Record<string, { start: string; end: string }>>({});
+  // Training camps (æfingaferð) — concentrated-load periods. Full rows for the UI; `campRegions` (below) is
+  // the start/end/loadPct/twoADay slice the calendar engine reads.
+  const [camps, setCamps] = React.useState<Array<{ id: string; start_date: string; end_date: string; label: string | null; load_pct: number; two_a_day: boolean }>>([]);
+  const [campDraft, setCampDraft] = React.useState<{ start: string; end: string; label: string; loadPct: number; twoADay: boolean }>(() => ({ start: "", end: "", label: "", loadPct: 15, twoADay: true }));
+  const campRegions = React.useMemo(() => camps.map((c) => ({ start: c.start_date, end: c.end_date, loadPct: c.load_pct, twoADay: c.two_a_day })), [camps]);
 
   // MACRO IS THE CONTROL — the meso blocks are recomputed from the season span + the chosen deload cadence
   // (= block length), so changing the cadence (or, via re-fetch, the anchors) re-flows the whole plan.
@@ -585,6 +590,27 @@ export default function PeriodizationHubPage() {
     try { await fetch(`/api/coach/team/breaks?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: { Authorization: await authHeader() } }); } catch { /* best-effort */ }
     await loadBreaks();
   }, [authHeader, loadBreaks]);
+  // Training camps — load + add/edit/remove, then refetch so the macro/meso calendars re-flow.
+  const loadCamps = React.useCallback(async () => {
+    try {
+      const res = await fetch(`/api/coach/team/camps`, { headers: { Authorization: await authHeader() } });
+      const json = res.ok ? await res.json() : null;
+      if (json?.ok) setCamps((json.camps ?? []) as typeof camps);
+    } catch { /* camps optional */ }
+  }, [authHeader]);
+  React.useEffect(() => { void loadCamps(); }, [loadCamps]);
+  const addCamp = React.useCallback(async (c: { start: string; end: string; label: string; loadPct: number; twoADay: boolean }) => {
+    try { await fetch(`/api/coach/team/camps`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ startDate: c.start, endDate: c.end, label: c.label, loadPct: c.loadPct, twoADay: c.twoADay }) }); } catch { /* best-effort */ }
+    await loadCamps();
+  }, [authHeader, loadCamps]);
+  const patchCamp = React.useCallback(async (id: string, patch: Record<string, unknown>) => {
+    try { await fetch(`/api/coach/team/camps`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ id, ...patch }) }); } catch { /* best-effort */ }
+    await loadCamps();
+  }, [authHeader, loadCamps]);
+  const removeCamp = React.useCallback(async (id: string) => {
+    try { await fetch(`/api/coach/team/camps?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: { Authorization: await authHeader() } }); } catch { /* best-effort */ }
+    await loadCamps();
+  }, [authHeader, loadCamps]);
 
   // Seed a FULL 6-week skeleton (MESO_HORIZON) from the auto layout + the coach's saved day edits +
   // real fixtures whenever the block window or scope changes. Always seeding 6 weeks (regardless of the
@@ -644,9 +670,9 @@ export default function PeriodizationHubPage() {
   const calBlock = React.useMemo(() => {
     if (!plan || Object.keys(blkSkeleton).length === 0) return null;
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
-    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeksEff, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [], offseasonStart: offPhaseStart ?? undefined, goal: effectiveGoal });
+    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeksEff, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [], offseasonStart: offPhaseStart ?? undefined, goal: effectiveGoal, camps: campRegions });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkScope, selId, blkUnit, effectiveGoal]);
+  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkScope, selId, blkUnit, effectiveGoal, campRegions]);
 
   // ── WEAKNESS-STEERED BUILD-UP ─────────────────────────────────────────────────────────────────────
   // Read (never recompute) the selected player's Total Player Analysis — his ATHLETE-axis weaknesses +
@@ -715,9 +741,9 @@ export default function PeriodizationHubPage() {
     // "my build-up" view so the two can never drift (src/lib/.../playerBlock.ts).
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? undefined;
     return buildPlayerBlock(plan, pl, {
-      blkStart, blkWeeks: blkWeeksEff, blkBase, blkStep, phaseLabel: blkPhaseLabel, skeletonSets, typeOverrides, steer: steerArg, offseasonStart: offPhaseStart, goal: effectiveGoal,
+      blkStart, blkWeeks: blkWeeksEff, blkBase, blkStep, phaseLabel: blkPhaseLabel, skeletonSets, typeOverrides, steer: steerArg, offseasonStart: offPhaseStart, goal: effectiveGoal, camps: campRegions,
     });
-  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkPhaseLabel, effectiveGoal]);
+  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkPhaseLabel, effectiveGoal, campRegions]);
 
   // The SELECTED player's block (weakness-steer applied unless the coach picks a neutral ramp).
   const playerBlock = React.useMemo(
@@ -740,8 +766,8 @@ export default function PeriodizationHubPage() {
     // against is the same one the coach planned (override ?? engine goalKey; deload → accum).
     const wb = mesoBlocks.find((b) => b.start === win.blkStart);
     const wGoal: "accum" | "transmute" | "realize" = blockGoals[win.blkStart] ?? (wb?.goalKey && wb.goalKey !== "deload" ? wb.goalKey : "accum");
-    return buildPlayerBlock(plan, player, { blkStart: win.blkStart, blkWeeks: win.blkWeeks, phaseLabel: win.phaseLabel, matchDates: win.matchDates, goal: wGoal });
-  }, [player, plan, mesoBlocks, blockGoals]);
+    return buildPlayerBlock(plan, player, { blkStart: win.blkStart, blkWeeks: win.blkWeeks, phaseLabel: win.phaseLabel, matchDates: win.matchDates, goal: wGoal, camps: campRegions });
+  }, [player, plan, mesoBlocks, blockGoals, campRegions]);
 
   async function exportPlayerBlock() {
     if (!playerBlock || !plan) return;
@@ -1413,6 +1439,57 @@ export default function PeriodizationHubPage() {
             );
           })()}
 
+          {/* ÆFINGAFERÐ — training camps: concentrated-load periods. Add dates + a load bump + 2-a-days; the
+              calendar bumps those training days and (on 2-a-days) turns rest days into extra sessions. */}
+          <section className={card}>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h2 className={h2}>{is ? "Æfingaferð" : "Training camp"}</h2>
+              <span className="text-[12px] text-slate-500">{is ? "álagslota — hækkar álagið + aukaæfingar þá daga" : "a loading block — bumps load + adds sessions those days"}</span>
+            </div>
+            <p className="mt-1 text-[12px] text-slate-500">{is ? "Merkir dagana sem æfingar, hækkar álagið um valið hlutfall, og (með tvíæfingum) breytir hvíldardögum ferðarinnar í aukaæfingar. Mesó/Míkró og dagatalið endurspegla það." : "Marks the days as training, bumps the load by the chosen %, and (with two-a-days) turns the camp's rest days into extra sessions. Meso/Micro and the calendar reflect it."}</p>
+            {camps.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                {camps.map((c) => (
+                  <div key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[#de9328]/30 bg-[#de9328]/5 px-3 py-2">
+                    <span className="text-[13px] font-semibold text-slate-800">{shortDate(c.start_date, is)}–{shortDate(c.end_date, is)}</span>
+                    {c.label && <span className="text-[12px] text-slate-500">{c.label}</span>}
+                    <label className="flex items-center gap-1 text-[12px] font-medium text-slate-600">+{is ? "álag" : "load"}
+                      <select value={c.load_pct} onChange={(e) => patchCamp(c.id, { loadPct: Number(e.target.value) })} className="rounded border border-slate-300 bg-white px-1.5 py-0.5 tabular-nums">
+                        {[0, 5, 10, 15, 20, 25, 30, 40].map((n) => <option key={n} value={n}>{n}%</option>)}
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">
+                      <input type="checkbox" checked={c.two_a_day} onChange={(e) => patchCamp(c.id, { twoADay: e.target.checked })} /> {is ? "tvíæfingar" : "two-a-days"}
+                    </label>
+                    <button type="button" onClick={() => removeCamp(c.id)} title={is ? "Fjarlægja ferð" : "Remove camp"} aria-label={is ? "Fjarlægja ferð" : "Remove camp"} className="ml-auto rounded px-1.5 text-[13px] text-slate-400 hover:bg-[#a83e28]/10 hover:text-[#a83e28]">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="mt-3 flex flex-wrap items-end gap-x-3 gap-y-2 border-t border-slate-100 pt-3">
+              <label className="flex flex-col gap-1 text-[11px] font-semibold text-slate-600">{is ? "Frá" : "From"}
+                <input type="date" value={campDraft.start} onChange={(e) => setCampDraft((p) => ({ ...p, start: e.target.value }))} className="h-9 rounded border border-slate-300 px-2 text-[13px]" />
+              </label>
+              <label className="flex flex-col gap-1 text-[11px] font-semibold text-slate-600">{is ? "Til" : "To"}
+                <input type="date" value={campDraft.end} onChange={(e) => setCampDraft((p) => ({ ...p, end: e.target.value }))} className="h-9 rounded border border-slate-300 px-2 text-[13px]" />
+              </label>
+              <label className="flex flex-col gap-1 text-[11px] font-semibold text-slate-600">{is ? "Heiti (valfrj.)" : "Label (opt.)"}
+                <input type="text" value={campDraft.label} placeholder={is ? "t.d. Spánn" : "e.g. Spain"} onChange={(e) => setCampDraft((p) => ({ ...p, label: e.target.value }))} className="h-9 w-36 rounded border border-slate-300 px-2 text-[13px]" />
+              </label>
+              <label className="flex flex-col gap-1 text-[11px] font-semibold text-slate-600">+{is ? "álag" : "load"}
+                <select value={campDraft.loadPct} onChange={(e) => setCampDraft((p) => ({ ...p, loadPct: Number(e.target.value) }))} className="h-9 rounded border border-slate-300 bg-white px-1.5 text-[13px] tabular-nums">
+                  {[0, 5, 10, 15, 20, 25, 30, 40].map((n) => <option key={n} value={n}>{n}%</option>)}
+                </select>
+              </label>
+              <label className="flex items-center gap-1.5 pb-2 text-[12px] font-medium text-slate-600">
+                <input type="checkbox" checked={campDraft.twoADay} onChange={(e) => setCampDraft((p) => ({ ...p, twoADay: e.target.checked }))} /> {is ? "tvíæfingar" : "two-a-days"}
+              </label>
+              <button type="button" disabled={!campDraft.start || !campDraft.end || campDraft.end < campDraft.start}
+                onClick={() => { addCamp(campDraft); setCampDraft({ start: "", end: "", label: "", loadPct: 15, twoADay: true }); }}
+                className={`h-9 rounded-lg px-3 text-[13px] font-semibold ${!campDraft.start || !campDraft.end || campDraft.end < campDraft.start ? "cursor-not-allowed bg-slate-200 text-slate-400" : "bg-[#2740e6] text-white hover:brightness-110"}`}>{is ? "Bæta við ferð" : "Add camp"}</button>
+            </div>
+          </section>
+
           {!plan.phases.some((p) => p.key === "preseason" && p.weeks > 0) && (
             <div className="rounded-lg border border-dashed border-[#7a5cc4]/40 bg-[#7a5cc4]/5 px-3 py-2 text-[12px] text-[#4a3a7a]">
               {is
@@ -1829,7 +1906,7 @@ export default function PeriodizationHubPage() {
                 if (ct) preTypeOv[iso] = ct;
               }
             }
-            const cal = buildCalendarBlock({ unit: blkUnit, startDate: preStart, numWeeks: preWeeks, scopeName: "__team__", phase: { en: "Pre-season", is: "Undirbúningur" }, baseOverloadPct: blkBase, stepPct: blkStep, matchDates: preFixtures, offDays: preOffDays, onDays: preOnDays, typeOverrides: preTypeOv, allFixtures: plan.fixtures ?? [], matchExposure: (wi) => preseasonMatchExposure(wi + 1, preWeeks) });
+            const cal = buildCalendarBlock({ unit: blkUnit, startDate: preStart, numWeeks: preWeeks, scopeName: "__team__", phase: { en: "Pre-season", is: "Undirbúningur" }, baseOverloadPct: blkBase, stepPct: blkStep, matchDates: preFixtures, offDays: preOffDays, onDays: preOnDays, typeOverrides: preTypeOv, allFixtures: plan.fixtures ?? [], matchExposure: (wi) => preseasonMatchExposure(wi + 1, preWeeks), camps: campRegions });
             // Set a pre-season day's day-type directly on the card (draft): Off or a training stimulus
             // (mechanical/locomotive/mixed/activation/top-up). Match days stay fixed to the fixture. Optimistic
             // overlay via savedPlans; persists the whole week to week_plans through the SAME applyWeekSetup path
