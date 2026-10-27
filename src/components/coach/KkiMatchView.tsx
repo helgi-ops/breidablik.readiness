@@ -188,7 +188,7 @@ export default function KkiMatchView({ defaultUrl }: { defaultUrl?: string }) {
             className="h-9 w-24 rounded-lg border border-slate-300 bg-white px-2 text-[12.5px]" />
           <button type="button" onClick={() => setSchedOpen((v) => !v)}
             className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-[12.5px] font-medium text-slate-700">
-            {schedOpen ? t("Hide season import", "Fela mótsinnflutning") : t("Import a whole season →", "Flytja inn heilt tímabil →")}
+            {schedOpen ? t("Hide season import", "Fela mótsinnflutning") : t("Fetch multiple games (a whole season) →", "Sækja marga leiki (heilt tímabil) →")}
           </button>
         </div>
         <p className="mt-1.5 text-[11px] text-slate-500">{t("Pick the competition, then save a single game below — or import a whole season (e.g. the reserve team's 1. deild) in one go.", "Veldu deildina, vistaðu svo stakan leik hér fyrir neðan — eða flyttu inn heilt tímabil (t.d. 1. deild varaliðsins) í einu.")}</p>

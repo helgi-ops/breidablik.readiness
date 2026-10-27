@@ -380,7 +380,7 @@ export default function BasketballOpponentAnalysis() {
   const fibaCharts = (
     <details className="group rounded-xl border border-slate-200 bg-white px-4 py-3">
       <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-800">
-        <span className="transition-transform group-open:rotate-90">▸</span>{lang === "IS" ? "Shot charts (FIBA LiveStats — frítt)" : "Shot charts (FIBA LiveStats — free)"}
+        <span className="transition-transform group-open:rotate-90">▸</span>{lang === "IS" ? "Leikir & skotakort (KKÍ.is — frítt · stakur leikur eða heilt tímabil)" : "Games & shot charts (KKÍ.is — free · single game or a whole season)"}
       </summary>
       <div className="mt-2"><FibaShotCharts /></div>
     </details>

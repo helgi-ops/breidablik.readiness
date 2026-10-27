@@ -251,7 +251,7 @@ export default function BasketballMatchHub() {
       {/* ADVANCED — the rich per-source FIBA tools (interactive shot charts, run trends) for deeper reads */}
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
         <button type="button" onClick={() => setAdvOpen((v) => !v)} className="text-[13px] font-semibold text-slate-800">
-          {advOpen ? "▾" : "▸"} {t("Advanced: FIBA shot charts & run trends", "Ítarlegt: FIBA skotakort & rispu-mynstur")}
+          {advOpen ? "▾" : "▸"} {t("Advanced: KKÍ shot charts & deep stats", "Ítarlegt: KKÍ skotakort & ítarleg tölfræði")}
         </button>
         {advOpen && <div className="mt-3 space-y-4"><FibaShotCharts focus="own" /><BasketballSingleMatchAnalysis /></div>}
       </div>

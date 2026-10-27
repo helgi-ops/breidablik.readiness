@@ -615,7 +615,10 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
   const is = lang === "IS";
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
 
-  const [source, setSource] = React.useState<"fiba" | "instat" | "kki">("fiba");
+  // FIBA LiveStats 403s on server fetches, so the UI defaults to KKÍ.is (same free feed
+  // kki.is uses) and the FIBA tab is retired. The "fiba" branch stays in the file but is
+  // no longer reachable from the toggle.
+  const [source, setSource] = React.useState<"fiba" | "instat" | "kki">("kki");
   const [url, setUrl] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
@@ -777,17 +780,17 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
 
   return (
     <div className="space-y-3">
-      {/* Source toggle — FIBA (free x/y shot charts + box) vs InStat (play types + zones). */}
+      {/* Source toggle — KKÍ.is (free box + Four Factors + shot chart, single game OR a whole
+          season) vs InStat (play types + zones). FIBA LiveStats retired (403s server-side). */}
       <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[12px]">
-        <button onClick={() => setSource("fiba")} className={`rounded-md px-2.5 py-1 font-medium ${source === "fiba" ? "bg-[#2740e6] text-white" : "text-slate-600"}`}>FIBA LiveStats</button>
         <button onClick={() => setSource("kki")} className={`rounded-md px-2.5 py-1 font-medium ${source === "kki" ? "bg-[#2740e6] text-white" : "text-slate-600"}`}>KKÍ.is</button>
         <button onClick={() => setSource("instat")} className={`rounded-md px-2.5 py-1 font-medium ${source === "instat" ? "bg-[#2740e6] text-white" : "text-slate-600"}`}>InStat</button>
       </div>
 
       {source === "kki" ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <h3 className="text-[14px] font-bold text-slate-900">{is ? "Leikur af KKÍ.is" : "Your game from KKÍ.is"}</h3>
-          <p className="mt-0.5 mb-3 text-[12px] text-slate-500">{is ? "Límdu kki.is leikhlekkinn — box score, Four Factors og skotakort beggja liða. Virkar þegar FIBA LiveStats gefur 403." : "Paste the kki.is match link — box score, Four Factors and the shot chart for both teams. Works when FIBA LiveStats returns a 403."}</p>
+          <h3 className="text-[14px] font-bold text-slate-900">{is ? "Leikir af KKÍ.is" : "Games from KKÍ.is"}</h3>
+          <p className="mt-0.5 mb-3 text-[12px] text-slate-500">{is ? "Límdu kki.is leikhlekk fyrir stakan leik — box score, Four Factors og skotakort beggja liða. Eða sæktu marga leiki í einu með „Flytja inn heilt tímabil“ (eftir season_id)." : "Paste a kki.is match link for a single game — box score, Four Factors and the shot chart for both teams. Or fetch many games at once with “Import a whole season” (by season_id)."}</p>
           <KkiMatchView />
         </div>
       ) : source === "instat" ? <InstatShotView is={is} token={token} /> : (<>
