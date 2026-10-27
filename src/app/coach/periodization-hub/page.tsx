@@ -1665,6 +1665,28 @@ export default function PeriodizationHubPage() {
                     })}
                   </div>)}
 
+                {/* team breaks (incl. international windows added as breaks) — a slate band on the timeline; each
+                    becomes its own re-load block in the Blocks lane, so this shows WHERE that boundary comes from. */}
+                {(() => {
+                  const breaksInSpan = teamBreaksFull.filter((b) => utc(b.end_date) >= d0 && utc(b.start_date) < d1);
+                  if (!breaksInSpan.length) return null;
+                  return lane(is ? "Frí / hlé" : "Breaks", is ? "landsleikjahlé / hvíld" : "international / rest",
+                    <div className="relative h-6">
+                      {breaksInSpan.map((b) => {
+                        const l = Math.max(0, pctOf(b.start_date)), r = Math.min(100, pctOf(isoAdd(b.end_date, 1)));
+                        if (r <= l) return null;
+                        return (
+                          <div key={b.id} className="absolute inset-y-0 px-px" style={{ left: `${l}%`, width: `${r - l}%` }}
+                            title={`${shortDate(b.start_date, is)}–${shortDate(b.end_date, is)}${b.label ? ` · ${b.label}` : ""} — ${is ? "frí / endurhleðslu-lota" : "break / re-load block"}`}>
+                            <div className="flex h-full items-center overflow-hidden rounded-md px-1.5" style={{ background: "#94A3B8" }}>
+                              <span className="truncate text-[11px] font-semibold text-white">{is ? "Frí" : "Break"}{b.label ? ` · ${b.label}` : ""}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>);
+                })()}
+
                 {/* training camps — concentrated-load periods as a labelled amber band (its own lane so it never
                     reads as a block's deload stripe) */}
                 {(() => {
@@ -1745,6 +1767,7 @@ export default function PeriodizationHubPage() {
             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-slate-100 pt-3 text-[12px] text-slate-600">
               {ANATOMY.map((a) => <span key={a.g} className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px]" style={{ background: GC[a.g] }} />{goalName(a.g)}</span>)}
               <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px]" style={{ background: "#DE9328" }} />{is ? "Niðurtröppunarvika" : "Deload week"}</span>
+              {teamBreaksFull.length > 0 && <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px]" style={{ background: "#94A3B8" }} />{is ? "Frí / hlé" : "Break"}</span>}
               {camps.length > 0 && <span className="inline-flex items-center gap-1.5"><span className="inline-flex h-3.5 items-center rounded-[3px] px-1 text-[9px] font-bold text-[#5A3A06]" style={{ background: "#DE9328" }}>✈</span>{is ? "Æfingaferð" : "Training camp"}</span>}
               {compPhase && <span className="h-4 w-px bg-slate-200" />}
               {compPhase && SUBPHASE_KEYS.map((k) => <span key={k} className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px]" style={{ background: SUB_COLOR[k] }} />{is ? subPhaseInfo(k).label.is : subPhaseInfo(k).label.en}</span>)}
