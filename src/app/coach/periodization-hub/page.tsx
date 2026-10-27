@@ -1551,6 +1551,13 @@ export default function PeriodizationHubPage() {
                   {curDeload !== "" && <button type="button" onClick={() => setBlockDeload(eb.start, null)} className="text-[12px] text-slate-500 hover:underline">{is ? "Núllstilla" : "Reset"}</button>}
                   <span className="text-[11px] text-slate-400">{is ? "Breyting endurflæðir Mesó, Míkró og kortið." : "Changes re-flow Meso, Micro and the map."}</span>
                 </div>
+                {/* Structure — split this block in two (adds a block after it). Shortening this block frees its
+                    tail weeks into a new following block; "Reset length" absorbs them back (merge). */}
+                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 pt-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Uppbygging" : "Structure"}</span>
+                  <button type="button" disabled={eb.weeks < 4} onClick={() => setBlockLength(String(eb.index), Math.ceil(eb.weeks / 2))} className={`rounded-lg border px-2.5 py-1 text-[12px] font-semibold ${eb.weeks < 4 ? "cursor-not-allowed border-slate-200 text-slate-300" : "border-[#2740e6]/40 text-[#2740e6] hover:bg-[#2740e6]/5"}`}>{is ? "Skipta í tvennt" : "Split in two"}</button>
+                  <span className="text-[11px] text-slate-400">{is ? "bætir við lotu á eftir (skiptu aftur fyrir fleiri; „Núllstilla lengd“ sameinar til baka)" : "adds a block after (split again for more; “Reset length” merges back)"}</span>
+                </div>
               </section>
             );
           })()}
