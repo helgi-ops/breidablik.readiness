@@ -33,6 +33,7 @@ import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { preseasonStartRamp, preseasonMatchExposure, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
+import { upcomingInternationalBreaks, intlBreakKey, type IntlBreak } from "@/lib/micropulse/internationalBreaks";
 import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
 import { recommendTestingSchedule, testsForBlock, TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
@@ -275,11 +276,13 @@ export default function PeriodizationHubPage() {
 
   // Sport — the athlete-axis "Build Target" card (StatsBomb/GPS/VALD) is hidden for basketball.
   const [isBasketball, setIsBasketball] = React.useState(false);
+  const [teamSport, setTeamSport] = React.useState<string | null>(null);
+  const [teamGender, setTeamGender] = React.useState<string | null>(null);
   React.useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/coach/player-stats/config", { headers: { Authorization: await authHeader() } });
-        if (res.ok) { const j = await res.json(); setIsBasketball(String(j.sport ?? "").toLowerCase() === "basketball"); }
+        if (res.ok) { const j = await res.json(); setIsBasketball(String(j.sport ?? "").toLowerCase() === "basketball"); setTeamSport(j.sport ?? null); setTeamGender(j.gender ?? null); }
       } catch { /* default football */ }
     })();
   }, [authHeader]);
@@ -417,6 +420,10 @@ export default function PeriodizationHubPage() {
   // Declared team breaks (frí) — the SAME source Week Setup locks on; the macro reads them so a real
   // break becomes its own re-load block (and a break day is a rest day in the block map).
   const [teamBreaks, setTeamBreaks] = React.useState<Array<{ start_date: string; end_date: string }>>([]);
+  // Full break rows (id + label) for the breaks UI; `teamBreaks` above is the start/end slice the engine reads.
+  const [teamBreaksFull, setTeamBreaksFull] = React.useState<Array<{ id: string; start_date: string; end_date: string; label: string | null }>>([]);
+  // Per-window edited dates in the international-break card — the coach sets the break LENGTH before adding.
+  const [breakEdits, setBreakEdits] = React.useState<Record<string, { start: string; end: string }>>({});
 
   // MACRO IS THE CONTROL — the meso blocks are recomputed from the season span + the chosen deload cadence
   // (= block length), so changing the cadence (or, via re-fetch, the anchors) re-flows the whole plan.
@@ -556,20 +563,28 @@ export default function PeriodizationHubPage() {
   }, [isPlayerScope, player, plan]);
   const blkPhaseLabel = plan?.phases.find((ph) => ph.start <= blkStart && blkStart < ph.end)?.label ?? { en: "Season block", is: "Tímabils-lota" };
 
-  // Team breaks are fetched here into the teamBreaks state (declared above the macro memo, which reads them).
-  React.useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const token = (await supabase.auth.getSession()).data?.session?.access_token;
-        if (!token || !alive) return;
-        const res = await fetch(`/api/coach/team/breaks`, { headers: { Authorization: `Bearer ${token}` } });
-        const json = res.ok ? await res.json() : null;
-        if (alive && json?.ok) setTeamBreaks(((json.breaks ?? []) as Array<{ start_date: string; end_date: string }>).map((b) => ({ start_date: b.start_date, end_date: b.end_date })));
-      } catch { /* breaks optional */ }
-    })();
-    return () => { alive = false; };
-  }, [supabase]);
+  // Team breaks → the teamBreaks state (the macro memo reads start/end) + teamBreaksFull (id/label for the UI).
+  const loadBreaks = React.useCallback(async () => {
+    try {
+      const res = await fetch(`/api/coach/team/breaks`, { headers: { Authorization: await authHeader() } });
+      const json = res.ok ? await res.json() : null;
+      if (json?.ok) {
+        const rows = (json.breaks ?? []) as Array<{ id: string; start_date: string; end_date: string; label: string | null }>;
+        setTeamBreaksFull(rows);
+        setTeamBreaks(rows.map((b) => ({ start_date: b.start_date, end_date: b.end_date })));
+      }
+    } catch { /* breaks optional */ }
+  }, [authHeader]);
+  React.useEffect(() => { void loadBreaks(); }, [loadBreaks]);
+  // Declare a break (coach-set dates) / remove one — then refetch so the macro/meso re-flow.
+  const addBreak = React.useCallback(async (startDate: string, endDate: string, label: string) => {
+    try { await fetch(`/api/coach/team/breaks`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ startDate, endDate, label }) }); } catch { /* best-effort */ }
+    await loadBreaks();
+  }, [authHeader, loadBreaks]);
+  const removeBreak = React.useCallback(async (id: string) => {
+    try { await fetch(`/api/coach/team/breaks?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: { Authorization: await authHeader() } }); } catch { /* best-effort */ }
+    await loadBreaks();
+  }, [authHeader, loadBreaks]);
 
   // Seed a FULL 6-week skeleton (MESO_HORIZON) from the auto layout + the coach's saved day edits +
   // real fixtures whenever the block window or scope changes. Always seeding 6 weeks (regardless of the
@@ -1348,6 +1363,56 @@ export default function PeriodizationHubPage() {
               );
             })()}
           </section>
+
+          {/* LANDSLEIKJAHLÉ — the FIFA/FIBA international windows for this team's sport+gender. The coach sets
+              the ACTUAL break length (breaks vary by team) and adds it → a real team_break the macro/meso read. */}
+          {(() => {
+            const s = String(teamSport ?? "").toLowerCase();
+            if (s !== "football" && s !== "basketball") return null; // wait for config; skip general/PT teams
+            const windows = upcomingInternationalBreaks({ sport: teamSport, gender: teamGender, fromIso: todayIso });
+            if (!windows.length) return null;
+            const shown = windows.slice(0, 8);
+            const overlaps = (b: { start_date: string; end_date: string }, w: IntlBreak) => b.start_date <= w.end && b.end_date >= w.start;
+            const bodyColor = (body: string) => (body === "FIBA" ? "#7a5cc4" : "#2740e6");
+            return (
+              <section className={card}>
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h2 className={h2}>{is ? "Landsleikjahlé" : "International breaks"}</h2>
+                  <span className="text-[12px] text-slate-500">{is ? "A-landsliðsgluggar (FIFA/FIBA) — þú ákveður lengd fríssins" : "A-team windows (FIFA/FIBA) — you set the break length"}</span>
+                </div>
+                <p className="mt-1 text-[12px] text-slate-500">{is ? "Hlé er mislangt milli liða (sumir fara til landsliðs, aðrir æfa). Stilltu dagsetningarnar og bættu við — þá verður frí í áætluninni (Mesó fær endurhleðslu-lotu, dagarnir merktir frí)." : "Breaks vary by team (some leave for national duty, others train). Set the dates and add it — it becomes a break in the plan (Meso gets a re-load block, the days are marked off)."}</p>
+                <div className="mt-3 space-y-1.5">
+                  {shown.map((w) => {
+                    const key = intlBreakKey(w);
+                    const covered = teamBreaksFull.find((b) => overlaps(b, w));
+                    const draft = breakEdits[key] ?? { start: w.start, end: w.end };
+                    const invalid = draft.end < draft.start;
+                    return (
+                      <div key={key} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        <span className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white" style={{ background: bodyColor(w.body) }}>{w.body}</span>
+                        <span className="text-[12px] text-slate-600">{shortDate(w.start, is)}–{shortDate(w.end, is)} · {w.days} {is ? "d" : "d"}{w.kind === "tournament" ? ` · ${is ? w.label.is : w.label.en}` : ""}</span>
+                        {covered ? (
+                          <div className="ml-auto flex items-center gap-2">
+                            <span className="rounded-full bg-[#1c7a4a]/10 px-2 py-0.5 text-[11px] font-semibold text-[#1c7a4a]">{is ? "Frí" : "Break"} {shortDate(covered.start_date, is)}–{shortDate(covered.end_date, is)}</span>
+                            <button type="button" onClick={() => removeBreak(covered.id)} title={is ? "Fjarlægja frí" : "Remove break"} aria-label={is ? "Fjarlægja frí" : "Remove break"} className="rounded px-1.5 text-[13px] text-slate-400 hover:bg-[#a83e28]/10 hover:text-[#a83e28]">✕</button>
+                          </div>
+                        ) : (
+                          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                            <input type="date" value={draft.start} onChange={(e) => setBreakEdits((p) => ({ ...p, [key]: { ...draft, start: e.target.value } }))} className="h-8 rounded border border-slate-300 px-1.5 text-[12px]" />
+                            <span className="text-slate-400">–</span>
+                            <input type="date" value={draft.end} onChange={(e) => setBreakEdits((p) => ({ ...p, [key]: { ...draft, end: e.target.value } }))} className="h-8 rounded border border-slate-300 px-1.5 text-[12px]" />
+                            <button type="button" disabled={invalid} onClick={() => addBreak(draft.start, draft.end, is ? w.label.is : w.label.en)} className={`h-8 rounded-lg px-2.5 text-[12px] font-semibold ${invalid ? "cursor-not-allowed bg-slate-200 text-slate-400" : "bg-[#2740e6] text-white hover:brightness-110"}`}>{is ? "Bæta við sem frí" : "Add as break"}</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-[11px] text-slate-400">{is ? "A-landsliðsgluggar, ekki staðfest deildarhlé — athugaðu hjá KSÍ/deildinni. Eigin hlé má líka bæta við handvirkt." : "A-team windows, not confirmed league pauses — check with the federation/league. Custom breaks can be added manually too."}</p>
+              </section>
+            );
+          })()}
+
           {!plan.phases.some((p) => p.key === "preseason" && p.weeks > 0) && (
             <div className="rounded-lg border border-dashed border-[#7a5cc4]/40 bg-[#7a5cc4]/5 px-3 py-2 text-[12px] text-[#4a3a7a]">
               {is
