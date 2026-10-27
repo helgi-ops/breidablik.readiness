@@ -61,7 +61,7 @@ type MdDemandProfile = { phases: MdDemandBucket[]; days: MdDemandBucket[] };
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes; md: MdDemandProfile };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
-type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; nextFirstFixture?: string | null; nextSeasonYear?: number | null; fixturesEstimated?: boolean; estimatedOpener?: string | null };
+type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; nextFirstFixture?: string | null; nextSeasonYear?: number | null; fixturesEstimated?: boolean; estimatedOpener?: string | null; nextFirstFixtureEstimated?: boolean };
 
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
 const isoAdd = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_400_000).toISOString().slice(0, 10);
@@ -1066,9 +1066,11 @@ export default function PeriodizationHubPage() {
     const preStart = upPre?.start ?? null;
     if (upPre) {
       const preWeeks = upPre.weeks;
-      const preAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
-      const preTka = teamKpiAvg(plan.players);
-      preRamp = preseasonStartRamp({ matchTypicalLoad: preTka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: preTka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: preAnchor });
+      const preTkaRaw = teamKpiAvg(plan.players);
+      const preHasOwn = preTkaRaw.totalPlayerLoad != null && Number.isFinite(preTkaRaw.totalPlayerLoad);
+      const preTka = (preHasOwn ? preTkaRaw : (NORMATIVE_MATCH_KPI as unknown as typeof preTkaRaw));
+      const preAnchor: LoadAnchor = preHasOwn ? "match_this_season" : (plan.tier.loadSource === "srpe" && plan.matchSrpe != null ? "srpe_only" : "normative");
+      preRamp = preseasonStartRamp({ matchTypicalLoad: preHasOwn ? (preTkaRaw.totalPlayerLoad ?? plan.matchLoad) : NORMATIVE_MATCH_LOAD, matchKpiAvg: preTka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: preAnchor, week1KpiOverride: week1KpiOv });
       if (preRamp.length) {
         const anchorLabel = preAnchor === "match_this_season" ? (is ? "leikir í ár" : "this season's matches") : preAnchor === "srpe_only" ? (is ? "sRPE eingöngu" : "sRPE only") : (is ? "stöðu-viðmið" : "positional norm");
         const conf = preRamp[0].confidence === "high" ? (is ? "há" : "high") : preRamp[0].confidence === "moderate" ? (is ? "miðlungs" : "moderate") : (is ? "lítil" : "low");
@@ -2133,7 +2135,7 @@ export default function PeriodizationHubPage() {
           <section className={card}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className={h2}>{is ? "Undirbúningur — uppsetning" : "Pre-season setup"}</h2>
-              <span className="text-[12px] text-slate-500">{is ? "hefst" : "starts"} <b className="text-slate-700">{shortDate(preStart, is)}</b> · {preWeeks} {is ? "vikur" : "weeks"} · {is ? "endar á fyrsta keppnisleik" : "ends at the first competitive game"}</span>
+              <span className="text-[12px] text-slate-500">{is ? "hefst" : "starts"} <b className="text-slate-700">{shortDate(preStart, is)}</b> · {preWeeks} {is ? "vikur" : "weeks"} · {up.end && plan.nextFirstFixtureEstimated && up.end === plan.nextFirstFixture ? (is ? "endar á áætluðum fyrsta leik" : "ends at the estimated first game") : (is ? "endar á fyrsta keppnisleik" : "ends at the first competitive game")}</span>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px]">
               <label className="flex items-center gap-1.5 font-medium text-slate-600">{is ? "Vika 1 ×leik" : "Week 1 ×match"}
@@ -3921,9 +3923,11 @@ export default function PeriodizationHubPage() {
               const upPre = upcomingPreseason(plan.phases, new Date().toISOString().slice(0, 10), plan.nextFirstFixture);
               const preWeeks = upPre?.weeks ?? Math.max(1, plan.phases.find((p) => p.key === "preseason")?.weeks ?? 6);
               const wkSel = Math.min(preWeeks, Math.max(1, psWeekSel));
-              const teamAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
-              const teamTka = teamKpiAvg(plan.players);
-              const teamRamp = preseasonStartRamp({ matchTypicalLoad: teamTka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: teamTka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: teamAnchor });
+              const teamTkaRaw = teamKpiAvg(plan.players);
+              const teamHasOwn = teamTkaRaw.totalPlayerLoad != null && Number.isFinite(teamTkaRaw.totalPlayerLoad);
+              const teamTka = (teamHasOwn ? teamTkaRaw : (NORMATIVE_MATCH_KPI as unknown as typeof teamTkaRaw));
+              const teamAnchor: LoadAnchor = teamHasOwn ? "match_this_season" : (plan.tier.loadSource === "srpe" && plan.matchSrpe != null ? "srpe_only" : "normative");
+              const teamRamp = preseasonStartRamp({ matchTypicalLoad: teamHasOwn ? (teamTkaRaw.totalPlayerLoad ?? plan.matchLoad) : NORMATIVE_MATCH_LOAD, matchKpiAvg: teamTka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: teamAnchor, week1KpiOverride: week1KpiOv });
               const playerAnchor: LoadAnchor | null = player ? (player.matchUnit.load.typical != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative") : null;
               const playerRamp = player && playerAnchor ? preseasonStartRamp({ matchTypicalLoad: player.matchUnit.load.typical, matchKpiAvg: kpiAvgFromUnit(player.matchUnit), matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: playerAnchor }) : null;
               const teamRow = teamRamp[wkSel - 1];

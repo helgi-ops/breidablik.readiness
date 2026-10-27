@@ -636,7 +636,7 @@ export function buildCalendarBlock(opts: {
    *  inclusive date range. Descriptive overlay — it does not move block boundaries. */
   camps?: Array<{ start: string; end: string; loadPct: number; twoADay: boolean }>;
 }): CalendarBlock {
-  const n = Math.max(1, Math.min(16, Math.round(opts.numWeeks))); // up to a long pre-season (6–16 weeks)
+  const n = Math.max(1, Math.min(24, Math.round(opts.numWeeks))); // up to a long pre-season (counts to the opener)
   // GOAL volume scalar on the week-1 base (the single dial that reaches every training day). It sits
   // BEFORE the spike/ceiling caps in axisRamp, so accumulation builds TO the match ceiling while
   // realization sits clear of it — block periodisation's volume→intensity migration (Issurin 2010).

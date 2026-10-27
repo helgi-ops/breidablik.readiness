@@ -49,6 +49,8 @@ export type PeriodizationPlan = {
                                     // ESTIMATED from last season (KSÍ publishes late) — corrected once real
                                     // fixtures are added.
   estimatedOpener: string | null;  // the estimated first competitive game (last season's opener + 1 year).
+  nextFirstFixtureEstimated: boolean; // true when `nextFirstFixture` is an ESTIMATE (this season's opener + 1y),
+                                    // so the upcoming pre-season counts to it instead of a fixed 10 weeks.
 };
 
 const mondayOf = (iso: string) => {
@@ -99,8 +101,20 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const { data: nextFxRows } = await sb.from("match_schedule")
     .select("match_date, is_friendly").eq("team_id", args.teamId)
     .gt("match_date", yEnd).order("match_date").limit(20);
-  const nextFirstFixture = ((nextFxRows ?? []) as Array<{ match_date: string; is_friendly: boolean | null }>)
+  let nextFirstFixture = ((nextFxRows ?? []) as Array<{ match_date: string; is_friendly: boolean | null }>)
     .filter((r) => r.is_friendly !== true).map((r) => r.match_date).sort()[0] ?? null;
+  // KSÍ publishes late: when the NEXT season has no fixtures yet, ESTIMATE its opener from THIS season's
+  // first competitive game + 1 year, so the UPCOMING pre-season counts to it (not a fixed 10 weeks). Only
+  // when this season has its own real fixtures (don't cascade estimates off an estimated season).
+  let nextFirstFixtureEstimated = false;
+  if (!nextFirstFixture && !fixturesEstimated) {
+    const thisOpener = fixtures.filter((f) => f.isFriendly !== true).map((f) => f.date).sort()[0] ?? null;
+    if (thisOpener && /^\d{4}-\d{2}-\d{2}$/.test(thisOpener)) {
+      const cand = `${seasonYear + 1}${thisOpener.slice(4)}`;
+      nextFirstFixture = Number.isNaN(Date.parse(`${cand}T00:00:00Z`)) ? `${seasonYear + 1}-02-28` : cand;
+      nextFirstFixtureEstimated = true;
+    }
+  }
   // The season the upcoming pre-season leads into = the calendar year of that opener. Its plan belongs in
   // THAT season_plans row (persist/read it there), so next year's planning survives the rollover.
   const nextSeasonYear = nextFirstFixture ? Number(nextFirstFixture.slice(0, 4)) : null;
@@ -423,5 +437,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date), nextFirstFixture, nextSeasonYear, fixturesEstimated, estimatedOpener };
+  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date), nextFirstFixture, nextSeasonYear, fixturesEstimated, estimatedOpener, nextFirstFixtureEstimated };
 }
