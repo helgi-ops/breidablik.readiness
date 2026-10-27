@@ -1705,6 +1705,11 @@ export default function CoachPage() {
   // read), so the Command Center header never disagrees with the plan (e.g. header "MD-3" while
   // the week plan says MD-2). Authoritative when present; the grid/legacy chain is the fallback.
   const [teamMdToday, setTeamMdToday] = useState<string | null>(null);
+  // A real fixture today (match_schedule) — the SOURCE OF TRUTH for games (same as Week
+  // Setup). A scheduled game overrides an OFF/rest classification from week_plans so the
+  // briefing never says "rest day" on a day the squad actually plays (e.g. KKÍ/KSÍ publish
+  // the schedule late and the week was set up without the game).
+  const [matchToday, setMatchToday] = useState<{ opponent: string | null; isHome: boolean | null } | null>(null);
   // High-intensity L/R CoD asymmetry % per player over the last 14 days.
   // Bishop 2020: > 15% high-tier asymmetry is the strongest predictor of
   // non-contact lower-limb injury. Surfaced as a chronic-risk chip in the
@@ -2206,10 +2211,12 @@ export default function CoachPage() {
     const gridMdValid = /^md/i.test(gridMd) || gridMd.toUpperCase() === "GAME";
     // week_plans (Week Setup / the session builder's source) WINS, so the header can't show a
     // different MD than the plan. Then the grid, legacy context and plan preview as fallbacks.
-    const src = (teamMdToday && isValidMdToken(teamMdToday) ? teamMdToday : null)
+    // A real fixture today is game-day truth — MD wins over any week-plan token.
+    const src = matchToday ? "MD"
+      : (teamMdToday && isValidMdToken(teamMdToday) ? teamMdToday : null)
       ?? (gridMdValid ? gridMd : null) ?? mdContextToday ?? row?.md_day ?? planPreview?.md_day ?? null;
     return prettyMd(src).md;
-  }, [weekGrid, planPreview?.md_day, mdContextToday, teamMdToday]);
+  }, [weekGrid, planPreview?.md_day, mdContextToday, teamMdToday, matchToday]);
 
   // Today's day-type — the Week Setup plan WINS over the legacy week_plans.day_type
   // so a stale/absent week_plans row can't re-introduce a false OFF for a
@@ -3993,6 +4000,32 @@ export default function CoachPage() {
         setTeamMdToday(md && isValidMdToken(md) ? md : null);
       } catch {
         // Silently ignore — verdict simply won't switch to OFF_DAY.
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachVerified, coachTeamId, today]);
+
+  // ── A real fixture today (match_schedule → the source of truth for games) ───
+  // Overrides an OFF/rest day_type so the briefing shows a match day, not "rest day".
+  useEffect(() => {
+    if (!coachVerified || !coachTeamId) { setMatchToday(null); return; }
+    let alive = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("match_schedule")
+          .select("opponent, is_home")
+          .eq("team_id", coachTeamId)
+          .eq("match_date", today)
+          .order("kickoff_time", { ascending: true, nullsFirst: true })
+          .limit(1);
+        if (!alive) return;
+        if (error) return;
+        const fx = (data ?? [])[0] as { opponent?: string | null; is_home?: boolean | null } | undefined;
+        setMatchToday(fx ? { opponent: fx.opponent ?? null, isHome: fx.is_home ?? null } : null);
+      } catch {
+        // Silently ignore — the day just won't be forced to a match day.
       }
     })();
     return () => { alive = false; };
@@ -8507,8 +8540,10 @@ export default function CoachPage() {
                 const neuralState = String(teamNeuralSummary?.dominantState ?? "—");
                 const nextDayRisk = String(teamNeuralSummary?.nextDayRiskSummary ?? "—");
                 // OFF day detection — drives both the narrative builder
-                // and which secondary lines we surface below.
-                const isOffDay = effectiveTeamDayType === "OFF" || dayStateInfo.state === "OFF_DAY";
+                // and which secondary lines we surface below. A real fixture
+                // today (match_schedule) is never an OFF day, even if the week
+                // plan has no session for it (e.g. a late-published schedule).
+                const isOffDay = !matchToday && (effectiveTeamDayType === "OFF" || dayStateInfo.state === "OFF_DAY");
 
                 // ── Coach narrative builder ─────────────────────────────
                 // Reads every tile in Today Command Center and stitches a
@@ -8555,6 +8590,38 @@ export default function CoachPage() {
                           ? "Kerfið mildar álagið sjálfkrafa fyrstu dagana eftir fríið."
                           : "The system will ease the load back in over the first days after the break.",
                       ],
+                    };
+                  }
+                  // Match day — a real fixture today. Wins over any OFF/rest the week
+                  // plan may carry, so the squad never sees "rest day" on a game day.
+                  if (matchToday) {
+                    const opp = (matchToday.opponent ?? "").trim();
+                    const vs = opp ? (matchToday.isHome === false ? `@ ${opp}` : `vs ${opp}`) : "";
+                    const needManaging = nReducedN + nRecoveryN;
+                    const bullets: string[] = [];
+                    if (needManaging > 0) {
+                      bullets.push(lang === "IS"
+                        ? `${needManaging} af ${nTotal} eru ekki á fullu — yfirfar mínútur / hlutverk fyrir leik.`
+                        : `${needManaging} of ${nTotal} aren't at full readiness — manage their minutes / role for the game.`);
+                    }
+                    if (protectedCount > 0 || adjustedCount > 0) {
+                      bullets.push(lang === "IS"
+                        ? `${protectedCount + adjustedCount} leikmenn eru protected/adjusted — athugaðu availability fyrir leik.`
+                        : `${protectedCount + adjustedCount} player(s) are protected/adjusted — check availability before the game.`);
+                    }
+                    if (bullets.length === 0) {
+                      bullets.push(lang === "IS"
+                        ? "Hópurinn er klár — keyrðu venjulegan leikdags-undirbúning (virkjun + ferðalag)."
+                        : "The squad is ready — run the usual match-day prep (activation + travel).");
+                    }
+                    return {
+                      headline: lang === "IS"
+                        ? `Leikdagur${vs ? ` ${vs}` : ""} — liðið spilar í dag.`
+                        : `Match day${vs ? ` ${vs}` : ""} — the squad plays today.`,
+                      detail: lang === "IS"
+                        ? "Fókusinn er leikurinn: virkjun, ferðalag og undirbúningur. Readiness-flöggin hér fyrir neðan sýna hverja þarf að stýra fyrir leik."
+                        : "The focus is the game: activation, travel and prep. The readiness flags below show who to manage before tip-off.",
+                      bullets,
                     };
                   }
                   // OFF day path — different story entirely
