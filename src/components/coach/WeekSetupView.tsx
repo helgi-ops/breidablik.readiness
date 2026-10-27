@@ -502,6 +502,9 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
   // Declared team breaks (read-only here) — days inside a break are auto-locked
   // as "Frí" in the daily grid so you can't schedule training on a break day.
   const [teamBreaks, setTeamBreaks] = useState<Array<{ start_date: string; end_date: string }>>([]);
+  // Training camps (æfingaferð) — concentrated-load periods; the grid marks their days (a loading period,
+  // NOT a break/lock). Fetched below from the same route the Periodization Hub writes.
+  const [teamCamps, setTeamCamps] = useState<Array<{ start_date: string; end_date: string; label: string | null; load_pct: number; two_a_day: boolean }>>([]);
   // Off-season HOLIDAY (Frí) — the span between the season end (off-season phase start) and the
   // coach-set off-season START. Those weeks are auto-locked OFF here, just like a declared break.
   const [offBuildStart, setOffBuildStart] = useState<string>("");
@@ -517,6 +520,8 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
   const isHolidayDay = (dateIso: string) => isOffHolidayWindow(dateIso) && !hasFixtureOnDate(dateIso);
   const isDateOnBreak = (dateIso: string) =>
     teamBreaks.some((b) => b.start_date <= dateIso && dateIso <= b.end_date) || isHolidayDay(dateIso);
+  // The training camp covering a day (if any) — a loading period; a break wins over a camp if they overlap.
+  const campForDay = (dateIso: string) => teamCamps.find((c) => c.start_date <= dateIso && dateIso <= c.end_date) ?? null;
   // A fixture that falls inside the declared off-season window — kept as a match, but flagged so the
   // coach can move the off-season start past the final game if that is what they meant.
   const matchInOffHoliday = (dateIso: string) => isOffHolidayWindow(dateIso) && hasFixtureOnDate(dateIso);
@@ -961,6 +966,22 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           setTeamBreaks(((json.breaks ?? []) as Array<{ start_date: string; end_date: string }>)
             .map((b) => ({ start_date: b.start_date, end_date: b.end_date })));
         }
+      } catch { /* soft */ }
+    })();
+    return () => { alive = false; };
+  }, [teamId]);
+
+  // Load declared training camps for the grid markers.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!teamId) return;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch(`/api/coach/team/camps?team_id=${encodeURIComponent(teamId)}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const json = await res.json();
+        if (alive && json.ok) setTeamCamps((json.camps ?? []) as typeof teamCamps);
       } catch { /* soft */ }
     })();
     return () => { alive = false; };
@@ -1489,6 +1510,8 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
     return {
       i, date, dd, onBreak, mdLabel, isMatchDay, cycleLabel, dType, mIdx, opp: matchOpponents[date] ?? null,
       character, training, strengthValue, idea, tests, ps: ps && ps.training ? ps : null,
+      camp: !onBreak ? campForDay(date) : null, // a break day is a lock; a camp is a loading day
+
       sub: onBreak ? null
         : isMatchDay ? `${matches[mIdx]?.kickoff_time || ""}${matches[mIdx]?.kickoff_time ? " · " : ""}${matches[mIdx]?.home_away === "A" ? (isIS ? "Úti" : "Away") : (isIS ? "Heima" : "Home")}`
         : !training ? null
@@ -1745,6 +1768,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
                       {d.onBreak ? (isHolidayDay(d.date) ? (isIS ? "Undirbúningshlé — læst" : "Off-season break — locked") : (isIS ? "Frí liðsins — læst" : "Team break — locked")) : d.sub}
                     </span>
                     <span className="mt-auto flex flex-wrap gap-1.5 pt-1">
+                      {d.camp && <span className="inline-flex items-center gap-1 rounded-full bg-[#de9328]/15 px-2 py-0.5 text-[11px] font-bold text-[#7a5210]" title={`${isIS ? "Æfingaferð" : "Training camp"}${d.camp.label ? ` · ${d.camp.label}` : ""} · +${d.camp.load_pct}%${d.camp.two_a_day ? (isIS ? " · tvíæfingar" : " · two-a-days") : ""}`}>✈ +{d.camp.load_pct}%{d.camp.two_a_day ? (isIS ? " 2æf" : " 2×") : ""}</span>}
                       {d.idea?.load && <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={bandStyle(d.idea.load.band)}>{isIS ? LOAD_BAND_META[d.idea.load.band].label.is : LOAD_BAND_META[d.idea.load.band].label.en}</span>}
                       {d.ps?.loadTarget != null && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-bold tabular-nums text-[#55389e]">{d.ps.loadTarget} PL</span>}
                       {d.tests.map((wt) => (
