@@ -94,6 +94,11 @@ type RawRow = {
   ima_fr_band6_stride_count: number | null;
   ima_fr_band7_stride_count: number | null;
   ima_fr_band8_stride_count: number | null;
+  // Titan indoor IMU (basketball): jump + high-g impact counts, and the Movement-Profile
+  // high-intensity duration (raw_payload_json.movement_profile.high).
+  jumps: number | null;
+  impacts: number | null;
+  raw_payload_json: { movement_profile?: { settled?: number | null; low?: number | null; mid?: number | null; high?: number | null } | null } | null;
 };
 
 // Total CoD = sum of the six directional buckets. Null only when all six are
@@ -128,6 +133,13 @@ function extractMetric(row: RawRow, key: WeeklyLoadMetricKey): number | null {
     case "imaStrideBand6":    return row.ima_fr_band6_stride_count;
     case "imaStrideBand7":    return row.ima_fr_band7_stride_count;
     case "imaStrideBand8":    return row.ima_fr_band8_stride_count;
+    // Titan indoor IMU (basketball)
+    case "jumps":             return row.jumps;
+    case "impacts":           return row.impacts;
+    case "settled":           return row.raw_payload_json?.movement_profile?.settled ?? null;
+    case "lowIntensity":      return row.raw_payload_json?.movement_profile?.low ?? null;
+    case "midIntensity":      return row.raw_payload_json?.movement_profile?.mid ?? null;
+    case "highIntensity":     return row.raw_payload_json?.movement_profile?.high ?? null;
   }
 }
 
@@ -148,6 +160,8 @@ const SELECT_COLS = [
   "ima_cod_left_high", "ima_cod_left_medium", "ima_cod_left_low",
   "ima_cod_right_high", "ima_cod_right_medium", "ima_cod_right_low",
   "ima_fr_band6_stride_count", "ima_fr_band7_stride_count", "ima_fr_band8_stride_count",
+  // Titan indoor IMU (basketball)
+  "jumps", "impacts", "raw_payload_json",
 ].join(", ");
 
 export async function computeWeeklyLoad(args: {
@@ -176,7 +190,14 @@ export async function computeWeeklyLoad(args: {
   // Basketball is indoor but has no FMP; it uses the Player Load + IMA set.
   const indoor = args.indoor ?? (await getTeamIndoorMode(teamId));
   const isBasketball = (await resolveTeamSport(sb, teamId)) === "basketball";
-  const activeMetrics = args.metrics ?? getActiveWeeklyLoadMetrics(indoor, isBasketball);
+  // Titan indoor-IMU basketball teams have no Catapult IMA, so they use the Load Index +
+  // jumps + impacts + high-intensity KPI set instead of the empty IMA tiles.
+  let isTitan = false;
+  if (isBasketball) {
+    const { data: teamRow } = await sb.from("teams").select("gps_provider").eq("id", teamId).maybeSingle();
+    isTitan = String((teamRow as { gps_provider?: string | null } | null)?.gps_provider ?? "").toLowerCase() === "titan";
+  }
+  const activeMetrics = args.metrics ?? getActiveWeeklyLoadMetrics(indoor, isBasketball, isTitan);
 
   // Read team config once to know whether the baseline rollup should
   // exclude match days (recommended for indoor teams).

@@ -156,6 +156,17 @@ function metricFromRow(row: Record<string, unknown>, key: WeeklyLoadMetricKey): 
     case "imaStrideBand6":    return get("ima_fr_band6_stride_count");
     case "imaStrideBand7":    return get("ima_fr_band7_stride_count");
     case "imaStrideBand8":    return get("ima_fr_band8_stride_count");
+    // Titan indoor IMU (basketball). Movement-Profile buckets live in raw_payload_json.movement_profile.
+    case "jumps":             return get("jumps");
+    case "impacts":           return get("impacts");
+    case "settled":
+    case "lowIntensity":
+    case "midIntensity":
+    case "highIntensity": {
+      const mp = (row.raw_payload_json as { movement_profile?: { settled?: number | null; low?: number | null; mid?: number | null; high?: number | null } | null } | null)?.movement_profile;
+      const field = key === "settled" ? mp?.settled : key === "lowIntensity" ? mp?.low : key === "midIntensity" ? mp?.mid : mp?.high;
+      return typeof field === "number" && Number.isFinite(field) ? field : null;
+    }
   }
 }
 
@@ -179,6 +190,8 @@ const MATCH_DEMAND_SELECT_COLS = [
   "ima_cod_left_high", "ima_cod_left_medium", "ima_cod_left_low",
   "ima_cod_right_high", "ima_cod_right_medium", "ima_cod_right_low",
   "ima_fr_band6_stride_count", "ima_fr_band7_stride_count", "ima_fr_band8_stride_count",
+  // Titan indoor IMU (basketball)
+  "jumps", "impacts", "raw_payload_json",
   // FULL-game filter duration sources
   "fmp_total_duration_s",
   "player_load_per_minute",

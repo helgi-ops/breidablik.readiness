@@ -70,7 +70,8 @@ export const WEEKLY_LOAD_METRICS = WEEKLY_LOAD_METRICS_OUTDOOR;
 export type WeeklyLoadMetricKey =
   | (typeof WEEKLY_LOAD_METRICS_OUTDOOR)[number]
   | (typeof WEEKLY_LOAD_METRICS_INDOOR)[number]
-  | (typeof WEEKLY_LOAD_METRICS_IMA)[number];
+  | (typeof WEEKLY_LOAD_METRICS_IMA)[number]
+  | (typeof WEEKLY_LOAD_METRICS_BASKETBALL_TITAN)[number];
 
 // ─── Basketball KPI list ───────────────────────────────────────────────────
 // Basketball is indoor with NO FMP stride bands (those are a football feature) —
@@ -84,9 +85,26 @@ export const WEEKLY_LOAD_METRICS_BASKETBALL = [
   "imaCod",
 ] as const;
 
-/** Return the active KPI list for a team's sport + indoor flag. */
-export function getActiveWeeklyLoadMetrics(indoor: boolean, isBasketball = false): readonly WeeklyLoadMetricKey[] {
-  if (isBasketball) return WEEKLY_LOAD_METRICS_BASKETBALL;
+// ─── Basketball on Titan (indoor IMU) KPI list ─────────────────────────────
+// Titan indoor-IMU teams have NO Catapult IMA (accel/decel/CoD are all null), so the
+// IMA basketball set reads 0/0#. Their real signals are the Load Index + jumps + impacts
+// (high-g events) + the Movement-Profile high-intensity duration — the same tiles the
+// per-session Titan table shows. Picked when the team's provider is Titan.
+export const WEEKLY_LOAD_METRICS_BASKETBALL_TITAN = [
+  "totalPlayerLoad",
+  "jumps",
+  "impacts",
+  // Movement-Profile time-in-intensity buckets (settled / low / mid / high) — the same
+  // signals the per-session Titan table shows, so the weekly card carries all of them.
+  "settled",
+  "lowIntensity",
+  "midIntensity",
+  "highIntensity",
+] as const;
+
+/** Return the active KPI list for a team's sport + indoor flag + provider. */
+export function getActiveWeeklyLoadMetrics(indoor: boolean, isBasketball = false, isTitan = false): readonly WeeklyLoadMetricKey[] {
+  if (isBasketball) return isTitan ? WEEKLY_LOAD_METRICS_BASKETBALL_TITAN : WEEKLY_LOAD_METRICS_BASKETBALL;
   return indoor ? WEEKLY_LOAD_METRICS_INDOOR : WEEKLY_LOAD_METRICS_OUTDOOR;
 }
 
@@ -104,6 +122,10 @@ export const ALL_WEEKLY_LOAD_METRICS: readonly WeeklyLoadMetricKey[] = [
     (k) =>
       !(WEEKLY_LOAD_METRICS_OUTDOOR as readonly string[]).includes(k) &&
       !(WEEKLY_LOAD_METRICS_INDOOR as readonly string[]).includes(k)
+  ),
+  // Titan basketball-only keys (jumps/impacts/highIntensity) not in any prior list.
+  ...WEEKLY_LOAD_METRICS_BASKETBALL_TITAN.filter(
+    (k) => k !== "totalPlayerLoad",
   ),
 ] as const;
 
@@ -130,6 +152,14 @@ export const WEEKLY_LOAD_LABELS: Record<WeeklyLoadMetricKey, { en: string; is: s
   imaStrideBand6:   { en: "Stride B6",       is: "Skref-band 6",      unit: "#" },
   imaStrideBand7:   { en: "Stride B7",       is: "Skref-band 7",      unit: "#" },
   imaStrideBand8:   { en: "Stride B8",       is: "Skref-band 8",      unit: "#" },
+  // Titan indoor IMU (basketball)
+  jumps:            { en: "Jumps",           is: "Stökk",             unit: "#" },
+  impacts:          { en: "Impacts",         is: "Högg",              unit: "#" },
+  // Movement-Profile time-in-intensity (Titan reports these in "Idx" units — no unit label).
+  settled:          { en: "Settled",         is: "Kyrr",              unit: "" },
+  lowIntensity:     { en: "Low",             is: "Lágt",              unit: "" },
+  midIntensity:     { en: "Mid",             is: "Miðlungs",          unit: "" },
+  highIntensity:    { en: "High",            is: "Hátt",              unit: "" },
 };
 
 // ─── Shared result types ───────────────────────────────────────────────────

@@ -418,7 +418,7 @@ export default function CoachWeeklyLoadCard({
               </div>
             )}
             {viewMode === "team" && (
-              <p className="mt-0.5 text-[11px] text-slate-400">{subtitle ?? (indoor ? (lang === "IS" ? "Uppsafnað hreyfiálag (IMA) vikunnar vs söguleg meðaltöl" : "Cumulative movement load (IMA) this week vs historical averages") : headerSubtitle)}</p>
+              <p className="mt-0.5 text-[11px] text-slate-400">{subtitle ?? (indoor ? (isBasketball ? (lang === "IS" ? "Uppsafnað hreyfiálag vikunnar vs söguleg meðaltöl" : "Cumulative movement load this week vs historical averages") : (lang === "IS" ? "Uppsafnað hreyfiálag (IMA) vikunnar vs söguleg meðaltöl" : "Cumulative movement load (IMA) this week vs historical averages")) : headerSubtitle)}</p>
             )}
             {viewMode === "player" && selectedPlayerId && (
               <p className="mt-0.5 text-[11px] text-slate-400">
