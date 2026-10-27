@@ -111,10 +111,13 @@ export default function PlayDiagramEditor({ opponent, initial, onSaved, onCancel
       const token = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
       if (!token) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
       const body = { opponent, name: name.trim(), playType, diagram };
+      // Editing an unconfirmed AI draft is the coach taking ownership — confirm it on save
+      // (brief: "coach confirms or edits → confirmed:true"). Only confirmed plays print.
+      const confirmDraft = initial?.source === "ai_draft" && !initial.confirmed;
       const res = await fetch("/api/coach/scouting/play-diagrams", {
         method: initial ? "PUT" : "POST",
         headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify(initial ? { ...body, id: initial.id } : body),
+        body: JSON.stringify(initial ? { ...body, id: initial.id, ...(confirmDraft ? { confirmed: true } : {}) } : body),
       });
       const j = await res.json();
       if (!res.ok || !j.ok) { setErr(j.error ?? "Error"); return; }
@@ -127,8 +130,18 @@ export default function PlayDiagramEditor({ opponent, initial, onSaved, onCancel
       className={`rounded-md px-2.5 py-1 text-[12px] font-semibold ${tool === t ? "bg-[#2740e6] text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>{label}</button>
   );
 
+  const isUnconfirmedDraft = initial?.source === "ai_draft" && !initial.confirmed;
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3">
+      {isUnconfirmedDraft ? (
+        <div className="mb-2 flex items-start gap-2 rounded-lg border border-[#c4cbf5] bg-[#eef0fb] px-3 py-2">
+          <span className="rounded bg-[#2740e6] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">AI</span>
+          <p className="text-[11px] leading-snug text-slate-600">
+            {is ? "AI-uppkast úr myndbandi — les tölurnar, ákveður ekkert. Lagaðu staðsetningar og örvar; þegar þú vistar telst það staðfest og fer í PDF-ið." : "AI first draft from the clip — reads the frames, decides nothing. Fix the positions and arrows; saving confirms it and lets it print."}
+          </p>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder={is ? "Nafn leiks (t.d. Spread ball-screen)" : "Play name (e.g. Spread ball-screen)"}
           className="min-w-[200px] flex-1 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
@@ -184,7 +197,7 @@ export default function PlayDiagramEditor({ opponent, initial, onSaved, onCancel
 
       {err && <p className="mt-2 text-[12px] font-medium text-red-700">{err}</p>}
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => void save()} disabled={busy} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? "…" : (is ? "Vista leik" : "Save play")}</button>
+        <button type="button" onClick={() => void save()} disabled={busy} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? "…" : isUnconfirmedDraft ? (is ? "Vista og staðfesta" : "Save & confirm") : (is ? "Vista leik" : "Save play")}</button>
         <button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">{is ? "Hætta við" : "Cancel"}</button>
         <span className="ml-auto flex gap-2">
           <button type="button" onClick={undoArrow} className="text-[12px] font-semibold text-slate-500 hover:underline">{is ? "Afturkalla ör" : "Undo arrow"}</button>
