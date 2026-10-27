@@ -1641,9 +1641,13 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
             onChange={(e) => setSessionName(e.target.value)}
             className="min-w-[180px] flex-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
           />
-          {/* MD-day chips (manual pick → per-MD default type; clears a loaded day + its target). */}
+          {/* MD-day chips (manual pick → per-MD default type; clears a loaded day + its target).
+              Basketball plays 1–2+ games a week, so the micro-cycle is short — the MD model drops
+              the rarely-applicable MD-5 / MD-4 (5–6 clear days before a game) and runs MD-3 → MD+2. */}
           <div className="flex flex-wrap items-center gap-1" role="group" aria-label="MD day">
-            {(["MD-5", "MD-4", "MD-3", "MD-2", "MD-1", "MD", "MD+1", "MD+2"] as const).map((d) => {
+            {((isBasketball
+              ? ["MD-3", "MD-2", "MD-1", "MD", "MD+1", "MD+2"]
+              : ["MD-5", "MD-4", "MD-3", "MD-2", "MD-1", "MD", "MD+1", "MD+2"]) as readonly string[]).map((d) => {
               const on = mdDay === d;
               return (
                 <button
