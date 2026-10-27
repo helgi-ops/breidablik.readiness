@@ -157,6 +157,20 @@ function preseasonMeso(windowWeeks: number, tail: number[], cadence: number): { 
   return { lens: [...base, ...t], base, tail: t };
 }
 const lensToBlockWeeks = (lens: number[]): Record<string, number> => { const m: Record<string, number> = {}; lens.forEach((n, i) => { m[String(i)] = n; }); return m; };
+// Migrate legacy INDEX-keyed length overrides ("0","1",…) to stable block-START (ISO) keys, using the
+// current derived block list. Block-start is a stable identity the engine resolves positionally
+// (blockWeeks[mon] fallback), so after a resize/split/merge an override never mis-applies to the WRONG
+// block: a block that keeps its start keeps its length; one whose start moved simply reverts to auto (safe),
+// never a silent wrong length. Index keys that no longer match a block are dropped (orphan cleanup).
+function migrateLenToIso(map: Record<string, number>, blocks: Array<{ index: number; start: string }>): Record<string, number> {
+  const byIndex = new Map(blocks.map((b) => [b.index, b.start]));
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(map)) {
+    if (/^\d+$/.test(k)) { const s = byIndex.get(Number(k)); if (s) out[s] = v; }
+    else out[k] = v;
+  }
+  return out;
+}
 
 // The dominant IMA direction of a day's split, as a short localized label.
 const domDir = (dir: { fwd: number; back: number; lat: number } | null, is: boolean): string | null => {
@@ -790,10 +804,31 @@ export default function PeriodizationHubPage() {
       } catch { /* best-effort persist */ }
     })();
   }, [plan, authHeader, scheduleAutoSave]);
+  // All length edits write STABLE block-START (ISO) keys (migrating any legacy index keys first), so a
+  // resize/split/merge never shifts another block's override onto the wrong block.
   const setBlockLength = React.useCallback((blockStart: string, weeks: number | null) => {
-    const next = { ...blockLenOv }; if (weeks == null) delete next[blockStart]; else next[blockStart] = weeks;
+    const next = migrateLenToIso(blockLenOv, mesoBlocks);
+    if (weeks == null) delete next[blockStart]; else next[blockStart] = weeks;
     setBlockLenOv(next); persistBlockMap("blockWeeks", next);
-  }, [blockLenOv, persistBlockMap]);
+  }, [blockLenOv, mesoBlocks, persistBlockMap]);
+  // SPLIT a block in two — SPAN-PRESERVING (a + b = the block's weeks), so every later block keeps its
+  // start and thus its override. Both halves pinned by ISO start. ADD-a-block is a split.
+  const splitBlock = React.useCallback((b: { start: string; weeks: number; index: number }) => {
+    const a = Math.ceil(b.weeks / 2), b2 = b.weeks - a;
+    if (b2 < 2 || a < 2) return;
+    const newStart = isoAdd(mondayOf(b.start), a * 7);
+    const next = migrateLenToIso(blockLenOv, mesoBlocks);
+    next[b.start] = a; next[newStart] = b2;
+    setBlockLenOv(next); persistBlockMap("blockWeeks", next);
+  }, [blockLenOv, mesoBlocks, persistBlockMap]);
+  // MERGE a block with the next — also SPAN-PRESERVING (the combined block ends exactly where `next` did),
+  // so later blocks keep their starts. Removes `next`'s override; pins the combined length by ISO start.
+  const mergeNextBlock = React.useCallback((b: { start: string; weeks: number }, nextB: { start: string; weeks: number; index: number }) => {
+    const next = migrateLenToIso(blockLenOv, mesoBlocks);
+    next[b.start] = b.weeks + nextB.weeks;
+    delete next[nextB.start]; delete next[String(nextB.index)];
+    setBlockLenOv(next); persistBlockMap("blockWeeks", next);
+  }, [blockLenOv, mesoBlocks, persistBlockMap]);
   const setBlockDeload = React.useCallback((blockStart: string, weekMon: string | null) => {
     const next = { ...blockDeloadOv }; if (weekMon == null) delete next[blockStart]; else next[blockStart] = weekMon;
     setBlockDeloadOv(next); persistBlockMap("blockDeload", next);
@@ -1517,6 +1552,9 @@ export default function PeriodizationHubPage() {
             const blkMondays: string[] = [];
             for (let t = utc(mondayOf(eb.start)); t < utc(eb.end) && blkMondays.length < 12; t += 7 * DAY) blkMondays.push(new Date(t).toISOString().slice(0, 10));
             const curDeload = blockDeloadOv[eb.start] ?? "";
+            // Next block in the SAME phase — the merge target (span-preserving, so later blocks don't move).
+            const ebIdx = blocks.findIndex((b) => b.start === eb.start);
+            const nextB = ebIdx >= 0 && blocks[ebIdx + 1] && phaseOf(blocks[ebIdx + 1].start) === phaseOf(eb.start) ? blocks[ebIdx + 1] : null;
             return (
               <section className={`${card} border-[#14181c]/25`}>
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -1536,12 +1574,12 @@ export default function PeriodizationHubPage() {
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
                   <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Lengd" : "Length"}
-                    <select value={curLenOv ?? ""} onChange={(e) => setBlockLength(String(eb.index), e.target.value === "" ? null : Number(e.target.value))} className="rounded border border-slate-300 bg-white px-1.5 py-1 text-[13px]">
+                    <select value={curLenOv ?? ""} onChange={(e) => setBlockLength(eb.start, e.target.value === "" ? null : Number(e.target.value))} className="rounded border border-slate-300 bg-white px-1.5 py-1 text-[13px]">
                       <option value="">{is ? `Sjálfgefið (${cadence}v)` : `Auto (${cadence}w)`}</option>
                       {[2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n} {is ? "vikur" : "weeks"}</option>)}
                     </select>
                   </label>
-                  {curLenOv != null && <button type="button" onClick={() => setBlockLength(String(eb.index), null)} className="text-[12px] text-slate-500 hover:underline">{is ? "Núllstilla lengd" : "Reset length"}</button>}
+                  {curLenOv != null && <button type="button" onClick={() => setBlockLength(eb.start, null)} className="text-[12px] text-slate-500 hover:underline">{is ? "Núllstilla lengd" : "Reset length"}</button>}
                   <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Niðurtröppun" : "Deload"}
                     <select value={curDeload} onChange={(e) => setBlockDeload(eb.start, e.target.value === "" ? null : e.target.value)} className="rounded border border-slate-300 bg-white px-1.5 py-1 text-[13px]">
                       <option value="">{is ? "Sjálfgefið (snjallt)" : "Auto (smart)"}</option>
@@ -1551,12 +1589,13 @@ export default function PeriodizationHubPage() {
                   {curDeload !== "" && <button type="button" onClick={() => setBlockDeload(eb.start, null)} className="text-[12px] text-slate-500 hover:underline">{is ? "Núllstilla" : "Reset"}</button>}
                   <span className="text-[11px] text-slate-400">{is ? "Breyting endurflæðir Mesó, Míkró og kortið." : "Changes re-flow Meso, Micro and the map."}</span>
                 </div>
-                {/* Structure — split this block in two (adds a block after it). Shortening this block frees its
-                    tail weeks into a new following block; "Reset length" absorbs them back (merge). */}
+                {/* Structure — SPLIT (add a block) / MERGE (remove one). Both span-preserving: the edited span's
+                    total weeks are unchanged, so no later block moves → no other override shifts or orphans. */}
                 <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 pt-3">
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Uppbygging" : "Structure"}</span>
-                  <button type="button" disabled={eb.weeks < 4} onClick={() => setBlockLength(String(eb.index), Math.ceil(eb.weeks / 2))} className={`rounded-lg border px-2.5 py-1 text-[12px] font-semibold ${eb.weeks < 4 ? "cursor-not-allowed border-slate-200 text-slate-300" : "border-[#2740e6]/40 text-[#2740e6] hover:bg-[#2740e6]/5"}`}>{is ? "Skipta í tvennt" : "Split in two"}</button>
-                  <span className="text-[11px] text-slate-400">{is ? "bætir við lotu á eftir (skiptu aftur fyrir fleiri; „Núllstilla lengd“ sameinar til baka)" : "adds a block after (split again for more; “Reset length” merges back)"}</span>
+                  <button type="button" disabled={eb.weeks < 4} onClick={() => splitBlock(eb)} className={`rounded-lg border px-2.5 py-1 text-[12px] font-semibold ${eb.weeks < 4 ? "cursor-not-allowed border-slate-200 text-slate-300" : "border-[#2740e6]/40 text-[#2740e6] hover:bg-[#2740e6]/5"}`}>{is ? "Skipta í tvennt" : "Split in two"}</button>
+                  <button type="button" disabled={!nextB} onClick={() => nextB && mergeNextBlock(eb, nextB)} className={`rounded-lg border px-2.5 py-1 text-[12px] font-semibold ${!nextB ? "cursor-not-allowed border-slate-200 text-slate-300" : "border-slate-300 text-slate-600 hover:bg-slate-50"}`}>{is ? "Sameina við næstu" : "Merge with next"}</button>
+                  <span className="text-[11px] text-slate-400">{is ? "skipta = bæta við lotu · sameina = fjarlægja lotu" : "split = add a block · merge = remove a block"}</span>
                 </div>
               </section>
             );
@@ -1872,7 +1911,7 @@ export default function PeriodizationHubPage() {
                       <span className="text-[12px] text-slate-500">{shortDate(b.start, is)}–{shortDate(isoAdd(b.end, -1), is)} · {bw} {is ? "v" : "wk"}</span>
                       {emph && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{PS_LABEL[emph]}</span>}
                       <label className="ml-auto flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Lengd" : "Length"}
-                        <select value={lenOv[String(b.index)] ?? lenOv[b.start] ?? ""} onChange={(e) => setPreLen(String(b.index), e.target.value === "" ? null : Number(e.target.value))} className="rounded border border-slate-300 bg-white px-1.5 py-0.5">
+                        <select value={lenOv[String(b.index)] ?? lenOv[b.start] ?? ""} onChange={(e) => setPreLen(b.start, e.target.value === "" ? null : Number(e.target.value))} className="rounded border border-slate-300 bg-white px-1.5 py-0.5">
                           <option value="">{is ? `Sjálfgefið (${cadence}v)` : `Auto (${cadence}w)`}</option>
                           {[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} {is ? "vikur" : "weeks"}</option>)}
                         </select>
@@ -2342,7 +2381,7 @@ export default function PeriodizationHubPage() {
             {sel && sel.phase.en !== "Off-season break" && (
               <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-3">
                 <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Lotulengd" : "Block length"}
-                  <select value={blockLenOv[String(sel.index)] ?? blockLenOv[sel.start] ?? ""} onChange={(e) => setBlockLength(String(sel.index), e.target.value === "" ? null : Number(e.target.value))} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
+                  <select value={blockLenOv[String(sel.index)] ?? blockLenOv[sel.start] ?? ""} onChange={(e) => setBlockLength(sel.start, e.target.value === "" ? null : Number(e.target.value))} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
                     <option value="">{is ? `Sjálfgefið (${cadence}v)` : `Auto (${cadence}w)`}</option>
                     {[2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} {is ? "vikur" : "weeks"}</option>)}
                   </select>
