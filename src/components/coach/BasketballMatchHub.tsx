@@ -16,6 +16,7 @@ import KkiMatchView from "@/components/coach/KkiMatchView";
 import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import FibaShotCharts from "@/components/coach/FibaShotCharts";
 import BasketballSingleMatchAnalysis from "@/components/coach/BasketballSingleMatchAnalysis";
+import { groupStats, labelFor } from "@/lib/micropulse/basketballStats/instatStatGroups";
 
 type Layers = { box: boolean; shots: boolean; instat: boolean };
 type ListGame = { key: string; date: string | null; opponent: string; own: string; ownPts: number; oppPts: number; competition: string | null; layers: Layers };
@@ -23,11 +24,63 @@ type BoxP = { name: string; min: string | null; pts: number; reb: number; oreb: 
 type FF = { efg: number | null; tovPct: number | null; orebPct: number | null; ftRate: number | null; tp3: number | null };
 type Leader = { labelEn: string; labelIs: string; name: string; team: string; value: number };
 type Shot = { x: number | null; y: number | null; made: boolean; isThree: boolean };
+type PlayerStat = { name: string; stats: Record<string, unknown> };
 type Detail = {
   ok: boolean; key: string; date: string | null; ownName: string; oppName: string; ownPts: number; oppPts: number; competition: string | null;
   own: { box: BoxP[]; totals: Record<string, number> }; opp: { box: BoxP[]; totals: Record<string, number> };
-  fourFactors: { own: FF; opp: FF; source: "instat" | "computed" } | null; shots: Shot[] | null; leaders: Leader[]; layers: Layers; sources: string[]; error?: string;
+  fourFactors: { own: FF; opp: FF; source: "instat" | "computed" } | null; shots: Shot[] | null; leaders: Leader[]; layers: Layers; sources: string[];
+  allStats?: { own: PlayerStat[]; opp: PlayerStat[] } | null; error?: string;
 };
+
+/** Per-player drawer surfacing every stored InStat variable, grouped (behind a toggle). */
+function AllStatsSection({ allStats, ownName, oppName, is }: { allStats: { own: PlayerStat[]; opp: PlayerStat[] }; ownName: string; oppName: string; is: boolean }) {
+  const [open, setOpen] = React.useState(false);
+  const [sel, setSel] = React.useState<string | null>(null);
+  const players = [...allStats.own.map((p) => ({ ...p, team: ownName })), ...allStats.opp.map((p) => ({ ...p, team: oppName }))];
+  if (!players.length) return null;
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-3">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2 text-[13px] font-bold text-slate-900">
+        <span>{open ? "▾" : "▸"}</span>{is ? "Sýna allar breytur (InStat)" : "Show all stats (InStat)"}
+        <span className="text-[11px] font-medium text-slate-400">· {players.length} {is ? "leikmenn" : "players"} · {is ? "allar ~128 breytur" : "all ~128 variables"}</span>
+      </button>
+      {open && (
+        <div className="mt-2 space-y-1">
+          {players.map((p) => {
+            const key = `${p.team}|${p.name}`;
+            const isSel = sel === key;
+            const groups = isSel ? groupStats(p.stats) : [];
+            return (
+              <div key={key} className="rounded-lg border border-slate-100">
+                <button type="button" onClick={() => setSel(isSel ? null : key)} className="flex w-full items-center justify-between px-2.5 py-1.5 text-[13px]">
+                  <span className="font-semibold text-slate-800">{p.name} <span className="font-normal text-slate-400">· {p.team}</span></span>
+                  <span className="text-slate-400">{isSel ? "▾" : "▸"}</span>
+                </button>
+                {isSel && (
+                  <div className="space-y-2.5 border-t border-slate-100 px-2.5 py-2">
+                    {groups.map((g) => (
+                      <div key={g.group}>
+                        <div className="text-[10px] font-bold uppercase tracking-wide text-[#2740e6]">{is ? g.title.is : g.title.en}</div>
+                        <div className="mt-1 grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2 lg:grid-cols-3">
+                          {g.rows.map((r) => (
+                            <div key={r.key} className="flex items-baseline justify-between gap-2 border-b border-slate-50 py-0.5 text-[11.5px]">
+                              <span className="truncate text-slate-500">{labelFor(r.key, is ? "IS" : "EN")}</span>
+                              <span className="shrink-0 tabular-nums font-semibold text-slate-800">{r.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
 
 const compLabel = (c: string | null): string => {
   switch ((c ?? "").toLowerCase()) {
@@ -229,6 +282,11 @@ export default function BasketballMatchHub() {
                 <BoxTable name={detail.ownName} box={detail.own.box} />
                 <BoxTable name={detail.oppName} box={detail.opp.box} />
               </div>
+
+              {/* ALL INSTAT VARIABLES — grouped, per player, behind a toggle */}
+              {detail.allStats && (detail.allStats.own.length || detail.allStats.opp.length) ? (
+                <AllStatsSection allStats={detail.allStats} ownName={detail.ownName} oppName={detail.oppName} is={is} />
+              ) : null}
             </div>
           )}
           {!detailBusy && (!detail || !detail.ok) && <p className="text-[13px] text-slate-500">{detail?.error ?? t("Could not open the game.", "Gat ekki opnað leikinn.")}</p>}

@@ -235,7 +235,9 @@ async function handleMatchPlayers(
 
   const oppPlayers = oppSide
     ? parseInstatMatchPlayers(oppSide.rows, { ownerTeamId: teamId, matchRef, matchDate: resolvedDate, opponent: ownSide.teamName }).players
-        .map((p) => ({ name: p.playerName, points: p.points, fgm: p.fgm, fga: p.fga, tpm: p.tpm, tpa: p.tpa, ftm: p.ftm, fta: p.fta, reb: p.reb, assists: p.assists, steals: p.steals, blocks: p.blocks, turnovers: p.turnovers, minutes: p.minutes }))
+        // Keep the core box for the opponent table PLUS the full raw row (all ~128 InStat
+        // columns) so "Show all stats" works for the opponent side too.
+        .map((p) => ({ name: p.playerName, points: p.points, fgm: p.fgm, fga: p.fga, tpm: p.tpm, tpa: p.tpa, ftm: p.ftm, fta: p.fta, reb: p.reb, assists: p.assists, steals: p.steals, blocks: p.blocks, turnovers: p.turnovers, minutes: p.minutes, stats: p.stats }))
     : [];
 
   if (matchRow) {

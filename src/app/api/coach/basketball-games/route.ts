@@ -219,6 +219,23 @@ export async function GET(req: NextRequest) {
   };
   const leaders = [leaderIn("pts", "Points", "Stig"), leaderIn("reb", "Rebounds", "Fráköst"), leaderIn("ast", "Assists", "Stoðsendingar")].filter((x): x is NonNullable<typeof x> => x != null);
 
+  // Full InStat per-player stats (all ~128 columns) for the "Show all stats" view — own from the
+  // player rows, opponent from the team row's advanced.opp_players (present after a fresh upload).
+  let allStats: { own: { name: string; stats: Record<string, unknown> }[]; opp: { name: string; stats: Record<string, unknown> }[] } | null = null;
+  if (instat) {
+    const { data: ownFull } = await supabase.from("player_basketball_match_stats")
+      .select("source_player_name, stats").eq("team_id", teamId).eq("source", "instat").eq("game_id", instat.gameId);
+    const { data: teamFull } = await supabase.from("basketball_team_match_stats")
+      .select("advanced").eq("owner_team_id", teamId).eq("source", "instat").eq("period", "game").eq("is_opponent", false).eq("match_ref", instat.gameId).maybeSingle();
+    const oppRaw = ((teamFull as { advanced?: { opp_players?: Array<{ name?: string; stats?: Record<string, unknown> }> } } | null)?.advanced?.opp_players ?? []);
+    allStats = {
+      own: ((ownFull ?? []) as Array<{ source_player_name: string | null; stats: Record<string, unknown> | null }>)
+        .filter((r) => r.stats && Object.keys(r.stats).length).map((r) => ({ name: String(r.source_player_name ?? "—"), stats: r.stats as Record<string, unknown> })),
+      opp: oppRaw.filter((p) => p?.stats && Object.keys(p.stats).length).map((p) => ({ name: String(p.name ?? "—"), stats: p.stats as Record<string, unknown> })),
+    };
+    if (!allStats.own.length && !allStats.opp.length) allStats = null;
+  }
+
   return NextResponse.json({
     ok: true, key, date: g?.match_date ?? instat?.date ?? null,
     ownName: ownNameR, oppName: oppNameR,
@@ -228,6 +245,6 @@ export async function GET(req: NextRequest) {
     fourFactors, shots, leaders,
     pct: { ownFg: pctOf(ownTotals.fgm, ownTotals.fga), own3: pctOf(ownTotals.tpm, ownTotals.tpa), ownFt: pctOf(ownTotals.ftm, ownTotals.fta) },
     layers: { box: !!g, shots: !!(shots && shots.length), instat: !!instat },
-    sources,
+    sources, allStats,
   });
 }
