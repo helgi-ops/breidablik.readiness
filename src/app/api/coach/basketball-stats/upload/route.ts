@@ -47,6 +47,11 @@ import {
   parseInstatGames,
 } from "@/lib/micropulse/basketballStats/statsInstatGamesCsv";
 import {
+  isInstatMatchPlayersHeader,
+  parseInstatMatchPlayers,
+  teamNameFromSheet,
+} from "@/lib/micropulse/basketballStats/statsInstatMatchPlayersCsv";
+import {
   isInstatTeamComparisonMatrix,
   parseInstatTeamComparison,
 } from "@/lib/micropulse/basketballStats/statsInstatTeamComparisonCsv";
@@ -160,6 +165,116 @@ async function commitPlayers(
   };
 }
 
+// ── Single-match per-player export (one game, a sheet per team) ─────────────────
+type MatchSide = { teamName: string; rows: Record<string, unknown>[] };
+
+/**
+ * Ingest a single-match Players workbook: own-side players → player_basketball_match_stats,
+ * opponent side → the team 'game' row's advanced bag. Which sheet is our club is resolved by
+ * folding the team name (coach can swap via owner_is_opponent). The game is reconciled to an
+ * existing own 'game' row by opponent (+ date) so player rows share its match_ref; otherwise a
+ * light team row is created so the game still appears. Two-phase like the other paths.
+ */
+async function handleMatchPlayers(
+  _req: NextRequest, form: FormData, supabase: SupabaseClient,
+  teamId: string, fileName: string, sides: MatchSide[], phase: string,
+) {
+  const { data: teamRow } = await supabase.from("teams").select("name").eq("id", teamId).maybeSingle();
+  const ownName = (teamRow as { name?: string } | null)?.name ?? "";
+  const swap = String(form.get("owner_is_opponent") ?? "") === "1";
+  let ownIdx = sides.findIndex((s) => {
+    const a = foldName(s.teamName), b = foldName(ownName);
+    return b.length > 0 && (a === b || a.includes(b) || b.includes(a));
+  });
+  if (ownIdx < 0) ownIdx = 0;
+  if (swap && sides.length > 1) ownIdx = ownIdx === 0 ? 1 : 0;
+  const ownSide = sides[ownIdx];
+  const oppSide = sides.find((_, i) => i !== ownIdx) ?? null;
+
+  const opponent = String(form.get("opponent") ?? "").trim() || (oppSide ? oppSide.teamName : null);
+  const dateIn = String(form.get("match_date") ?? "").trim();
+  const matchDate = /^\d{4}-\d{2}-\d{2}$/.test(dateIn) ? dateIn : null;
+  const oppFold = opponent ? foldName(opponent) : "";
+
+  // Reconcile to an existing own 'game' row (same opponent, and date when given).
+  const { data: existing } = await supabase.from("basketball_team_match_stats")
+    .select("match_ref, match_date, opponent").eq("owner_team_id", teamId).eq("period", "game").eq("is_opponent", false);
+  const matchRow = ((existing ?? []) as Array<{ match_ref: string; match_date: string | null; opponent: string | null }>).find((r) => {
+    const oppOk = r.opponent != null && oppFold.length > 0 && foldName(r.opponent) === oppFold;
+    const dateOk = matchDate == null || r.match_date === matchDate;
+    return oppOk && dateOk;
+  });
+  const matchRef = matchRow?.match_ref ?? `instat:match:${oppFold || slug(fileName)}:${matchDate ?? slug(fileName)}`;
+  const resolvedDate = matchDate ?? matchRow?.match_date ?? null;
+
+  const ctx: InstatIngestContext = { ownerTeamId: teamId, matchRef, matchDate: resolvedDate, opponent };
+  const { players: ownRows } = parseInstatMatchPlayers(ownSide.rows, ctx);
+  const { squad, resolved } = await resolvePlayers(supabase, teamId, ownRows);
+
+  if (phase === "preview") {
+    return NextResponse.json({
+      ok: true, phase: "preview", kind: "match_players",
+      ownTeam: ownSide.teamName, opponent, sides: sides.map((s) => s.teamName), ownIsFirst: ownIdx === 0,
+      suggestedDate: resolvedDate, reconciled: !!matchRow, matchRef,
+      players: resolved.map((r) => ({
+        sourcePlayerRef: r.row.sourcePlayerRef, playerName: r.row.playerName,
+        points: r.row.points, reb: r.row.reb, assists: r.row.assists, minutes: r.row.minutes,
+        suggestedPlayerId: r.playerId, confidence: r.confidence, remembered: r.remembered, candidates: r.candidates,
+      })),
+      squad,
+      counts: {
+        exact: resolved.filter((r) => r.confidence === "exact").length,
+        fuzzy: resolved.filter((r) => r.confidence === "fuzzy").length,
+        none: resolved.filter((r) => r.confidence === "none").length,
+      },
+    });
+  }
+
+  // ── COMMIT ── a stable date is required so the game identity is reconcilable.
+  if (!resolvedDate) return NextResponse.json({ ok: false, error: "Pick the game date before saving." }, { status: 400 });
+
+  const oppPlayers = oppSide
+    ? parseInstatMatchPlayers(oppSide.rows, { ownerTeamId: teamId, matchRef, matchDate: resolvedDate, opponent: ownSide.teamName }).players
+        .map((p) => ({ name: p.playerName, points: p.points, fgm: p.fgm, fga: p.fga, tpm: p.tpm, tpa: p.tpa, ftm: p.ftm, fta: p.fta, reb: p.reb, assists: p.assists, steals: p.steals, blocks: p.blocks, turnovers: p.turnovers, minutes: p.minutes }))
+    : [];
+
+  if (matchRow) {
+    // Merge the opponent box onto the existing (possibly richer) team row — never clobber its Four Factors.
+    if (oppPlayers.length) {
+      const { data: cur } = await supabase.from("basketball_team_match_stats")
+        .select("advanced").eq("owner_team_id", teamId).eq("match_ref", matchRef).eq("period", "game").eq("is_opponent", false).maybeSingle();
+      const adv = { ...((cur as { advanced?: Record<string, unknown> } | null)?.advanced ?? {}), opp_players: oppPlayers, opp_team: oppSide?.teamName ?? null };
+      await supabase.from("basketball_team_match_stats").update({ advanced: adv, updated_at: new Date().toISOString() })
+        .eq("owner_team_id", teamId).eq("match_ref", matchRef).eq("period", "game").eq("is_opponent", false);
+    }
+  } else {
+    // No team row yet → a light one from the summed own box (Four Factors fill in later).
+    const s = (f: (r: BasketballBoxScoreRow) => number | null | undefined) => ownRows.reduce((a, r) => a + (Number(f(r)) || 0), 0);
+    const teamDb = basketballTeamMatchToDbRow({
+      ownerTeamId: teamId, matchRef, matchDate: resolvedDate, opponent, isOpponent: false, period: "game",
+      points: s((r) => r.points), fgm: s((r) => r.fgm), fga: s((r) => r.fga), tpm: s((r) => r.tpm), tpa: s((r) => r.tpa),
+      ftm: s((r) => r.ftm), fta: s((r) => r.fta), oreb: s((r) => r.oreb), dreb: s((r) => r.dreb), reb: s((r) => r.reb),
+      assists: s((r) => r.assists), steals: s((r) => r.steals), blocks: s((r) => r.blocks), turnovers: s((r) => r.turnovers), fouls: s((r) => r.fouls),
+      source: "instat", sourceRef: matchRef,
+    }) as Record<string, unknown>;
+    teamDb.advanced = { ...((teamDb.advanced as Record<string, unknown>) ?? {}), ...(oppPlayers.length ? { opp_players: oppPlayers, opp_team: oppSide?.teamName ?? null } : {}) };
+    const { error } = await supabase.from("basketball_team_match_stats").upsert(teamDb as never, { onConflict: BASKETBALL_TEAM_MATCH_CONFLICT });
+    if (error) return NextResponse.json({ ok: false, error: `Team row: ${error.message}` }, { status: 500 });
+  }
+
+  let decisions: Record<string, string> = {};
+  try { decisions = JSON.parse(String(form.get("decisions") ?? "{}")); } catch { decisions = {}; }
+  const playerRes = await commitPlayers(supabase, teamId, resolved, decisions);
+  if (playerRes.error) return NextResponse.json({ ok: false, error: playerRes.error }, { status: 500 });
+
+  return NextResponse.json({
+    ok: true, phase: "commit", kind: "match_players",
+    matchRef, opponent, matchDate: resolvedDate,
+    players: { rowsUpserted: playerRes.rowsUpserted, mapped: playerRes.mapped, unmatched: playerRes.unmatched },
+    oppPlayers: oppPlayers.length,
+  });
+}
+
 // ── Lineups (season 5-man units) ───────────────────────────────────────────────
 type ResolvedMember = {
   ref: string; name: string; jersey: string | null;
@@ -249,9 +364,23 @@ function readMatrix(buf: ArrayBuffer): unknown[][] {
   return XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null, raw: true });
 }
 
+/** Every worksheet → {name, header-keyed rows}. Single-match exports have a sheet per team. */
+function readAllSheets(buf: ArrayBuffer): { name: string; rows: Record<string, unknown>[] }[] {
+  const wb = XLSX.read(new Uint8Array(buf), { type: "array" });
+  return wb.SheetNames.map((name) => ({
+    name,
+    rows: XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[name], { defval: null, raw: true }),
+  }));
+}
+
 /** Filename → a stable, filesystem-safe slug (deterministic match_ref default). */
 function slug(s: string): string {
   return s.toLowerCase().replace(/\.[a-z0-9]+$/i, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 80);
+}
+
+/** Accent/case-insensitive key for team-name comparison (same folding as the scout route). */
+function foldName(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
 }
 
 export async function POST(req: NextRequest) {
@@ -372,6 +501,22 @@ export async function POST(req: NextRequest) {
 
   // ── CSV/Excel manual export → per-player box / lineups / players / games / team ──
   const csvBuf = await file.arrayBuffer();
+
+  // ── SINGLE-MATCH per-player export → one game, a sheet per team ──────────────
+  // Detected first because it is a multi-sheet workbook; the other CSV shapes are
+  // single-sheet. Own-side players land in player_basketball_match_stats; the
+  // opponent side is attached to the team 'game' row (advanced.opp_players), exactly
+  // like the Game Report PDF path.
+  {
+    const sheets = readAllSheets(csvBuf);
+    const matchSides = sheets
+      .filter((s) => s.rows.length && isInstatMatchPlayersHeader(Object.keys(s.rows[0])))
+      .map((s) => ({ teamName: teamNameFromSheet(s.name), rows: s.rows }));
+    if (matchSides.length) {
+      return handleMatchPlayers(req, form, supabase, auth.teamId, file.name, matchSides, phase);
+    }
+  }
+
   const rows = readRows(csvBuf);
   const headers = rows.length ? Object.keys(rows[0]) : [];
 

@@ -71,6 +71,17 @@ type TeamComparisonPreview = {
   team: { gamesPlayed: number | null; season: string | null; points: number | null; possessions: number | null; ppp: number | null; efgPct: number | null; fgPct: number | null };
 };
 
+type MatchPlayerRow = {
+  sourcePlayerRef: string; playerName: string;
+  points: number | null; reb: number | null; assists: number | null; minutes: number | null;
+  suggestedPlayerId: string | null; confidence: "exact" | "fuzzy" | "none"; remembered: boolean; candidates: Candidate[];
+};
+type MatchPlayersPreview = {
+  kind: "match_players"; ownTeam: string; opponent: string | null; sides: string[]; ownIsFirst: boolean;
+  suggestedDate: string | null; reconciled: boolean; matchRef: string;
+  players: MatchPlayerRow[]; squad: { id: string; fullName: string }[]; counts: { exact: number; fuzzy: number; none: number };
+};
+
 const num = (v: number | null | undefined, digits = 0) => (v == null ? "–" : v.toFixed(digits));
 
 export default function InstatBasketballUpload({ onImported }: { onImported?: () => void }) {
@@ -95,6 +106,46 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
   const [csvDecisions, setCsvDecisions] = React.useState<Record<string, string>>({});
   const [csvMsg, setCsvMsg] = React.useState<string | null>(null);
   const [csvErr, setCsvErr] = React.useState<string | null>(null);
+
+  // ── Single match — per-player box (one game, a sheet per team) ──
+  const [mmFile, setMmFile] = React.useState<File | null>(null);
+  const [mmDate, setMmDate] = React.useState("");
+  const [mmOpponent, setMmOpponent] = React.useState("");
+  const [mmSwap, setMmSwap] = React.useState(false);
+  const [mmBusy, setMmBusy] = React.useState<"" | "preview" | "commit">("");
+  const [mmPreview, setMmPreview] = React.useState<MatchPlayersPreview | null>(null);
+  const [mmDecisions, setMmDecisions] = React.useState<Record<string, string>>({});
+  const [mmMsg, setMmMsg] = React.useState<string | null>(null);
+  const [mmErr, setMmErr] = React.useState<string | null>(null);
+
+  async function mmSend(phase: "preview" | "commit", swapOverride?: boolean) {
+    if (!mmFile) return;
+    const swap = swapOverride ?? mmSwap;
+    setMmBusy(phase); setMmErr(null); setMmMsg(null);
+    try {
+      const t = await token(); if (!t) { setMmErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const fd = new FormData(); fd.set("phase", phase); fd.set("file", mmFile);
+      if (mmDate) fd.set("match_date", mmDate);
+      if (mmOpponent) fd.set("opponent", mmOpponent);
+      if (swap) fd.set("owner_is_opponent", "1");
+      if (phase === "commit") fd.set("decisions", JSON.stringify(mmDecisions));
+      const res = await fetch("/api/coach/basketball-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setMmErr(j.error ?? "Error"); return; }
+      if (phase === "preview") {
+        setMmPreview(j); setMmDecisions({});
+        if (j.suggestedDate && !mmDate) setMmDate(j.suggestedDate);
+        if (j.opponent && !mmOpponent) setMmOpponent(j.opponent);
+      } else {
+        setMmPreview(null); setMmDecisions({});
+        const pl = j.players as { rowsUpserted: number; mapped: number; unmatched: number };
+        setMmMsg(is
+          ? `${pl.rowsUpserted} leikmenn vistaðir fyrir leikinn (${pl.mapped} mappaðir, ${pl.unmatched} ómappaðir)${j.oppPlayers ? ` + ${j.oppPlayers} andstæðingar` : ""}.`
+          : `${pl.rowsUpserted} players saved for the game (${pl.mapped} mapped, ${pl.unmatched} unmatched)${j.oppPlayers ? ` + ${j.oppPlayers} opponent players` : ""}.`);
+        onImported?.();
+      }
+    } catch (e) { setMmErr(e instanceof Error ? e.message : "Error"); } finally { setMmBusy(""); }
+  }
 
   // ── Lineups (season 5-man units) ──
   const [luFile, setLuFile] = React.useState<File | null>(null);
@@ -329,6 +380,79 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
                 )}
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* SINGLE MATCH — per-player box (one game, a sheet per team) */}
+      <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/40 p-4">
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">{is ? "Stakur leikur" : "Single game"}</span>
+          <div className="text-sm font-semibold text-slate-800">{is ? "InStat per-leikmann box (einn leikur)" : "InStat per-player box (one game)"}</div>
+        </div>
+        <p className="mt-1.5 text-[12px] leading-relaxed text-slate-600">
+          {is
+            ? "InStat Players-tafla fyrir einn leik — eitt blað fyrir hvort lið. Fyllir per-leikmann tölur liðsins fyrir þann leik (Single Match Analysis) og nærir leaders/þróun á Season Match Analysis. Veldu leikdag, forskoðaðu og staðfestu nafnamöppun."
+            : "InStat Players table for one game — a sheet per team. Fills your players' box for that game (Single Match Analysis) and feeds Season Match Analysis leaders/trend. Pick the game date, preview, and confirm the name mapping."}
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Skrá (.xlsx / .csv)" : "File (.xlsx / .csv)"}</div>
+            <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => { setMmFile(e.target.files?.[0] ?? null); setMmPreview(null); setMmMsg(null); setMmErr(null); setMmSwap(false); }} className="text-sm" />
+          </label>
+          <label className="text-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikdagur" : "Game date"}</div>
+            <input type="date" value={mmDate} onChange={(e) => setMmDate(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
+          </label>
+          <label className="text-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Andstæðingur" : "Opponent"}</div>
+            <input type="text" value={mmOpponent} onChange={(e) => setMmOpponent(e.target.value)} placeholder={is ? "sjálfvirkt úr skrá" : "auto from file"} className="rounded border border-slate-300 px-2 py-1 text-sm" />
+          </label>
+          <button onClick={() => mmSend("preview")} disabled={!mmFile || mmBusy !== ""} className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{mmBusy === "preview" ? "…" : (is ? "Forskoða" : "Preview")}</button>
+          <button onClick={() => mmSend("commit")} disabled={!mmPreview || !mmDate || mmBusy !== ""} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{mmBusy === "commit" ? "…" : (is ? "Flytja inn" : "Import")}</button>
+        </div>
+        {mmErr && <p className="mt-2 text-[12px] font-medium text-red-700">{mmErr}</p>}
+        {mmMsg && <p className="mt-2 text-[12px] text-emerald-700">{mmMsg}</p>}
+        {mmPreview && (
+          <div className="mt-3 space-y-2 rounded-lg border border-slate-100 bg-white px-3 py-2.5">
+            <div className="flex flex-wrap items-center gap-2 text-[12px] text-slate-700">
+              <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-800">{is ? "Þitt lið" : "Your team"}: {mmPreview.ownTeam}</span>
+              <span className="text-slate-400">vs</span>
+              <span className="rounded bg-slate-200 px-1.5 py-0.5 font-semibold text-slate-600">{mmPreview.opponent ?? "—"}</span>
+              {mmPreview.reconciled ? <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] text-emerald-700" title={is ? "fann fyrirliggjandi leik" : "matched an existing game"}>✓ {is ? "samstillt" : "reconciled"}</span> : null}
+              {mmPreview.sides.length > 1 ? (
+                <button type="button" onClick={() => { const next = !mmSwap; setMmSwap(next); void mmSend("preview", next); }} disabled={mmBusy !== ""} className="rounded border border-slate-300 px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">{is ? "↔ Skipta um lið" : "↔ Swap teams"}</button>
+              ) : null}
+            </div>
+            {!mmDate && <p className="text-[11px] font-medium text-amber-700">{is ? "Veldu leikdag áður en þú flytur inn." : "Pick the game date before importing."}</p>}
+            <div className="flex flex-wrap items-center gap-2 text-[12px] text-slate-700">
+              <span>{mmPreview.players.length} {is ? "leikmenn" : "players"}</span>
+              <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[11px] text-slate-600">{mmPreview.counts.exact} {is ? "sjálfvirkt" : "auto"} · {mmPreview.counts.fuzzy + mmPreview.counts.none} {is ? "til yfirferðar" : "to review"}</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead><tr className="text-left text-slate-400"><th className="py-1 pr-2">{is ? "Leikmaður (skrá)" : "Player (file)"}</th><th className="pr-2">{is ? "Stig" : "Pts"}</th><th className="pr-2">Frák.</th><th className="pr-2">Stoð.</th><th>{is ? "Mappa á" : "Map to"}</th></tr></thead>
+                <tbody>
+                  {mmPreview.players.map((r) => {
+                    const val = Object.prototype.hasOwnProperty.call(mmDecisions, r.sourcePlayerRef) ? mmDecisions[r.sourcePlayerRef] : (r.confidence === "exact" ? (r.suggestedPlayerId ?? "") : "");
+                    return (
+                      <tr key={r.sourcePlayerRef} className="border-t border-slate-200">
+                        <td className="py-1 pr-2 text-slate-700">{r.playerName}{r.confidence !== "exact" ? <span className="ml-1 text-[10px] text-amber-700">{r.confidence === "fuzzy" ? "?" : "—"}</span> : null}{r.remembered ? <span className="ml-1 text-[10px] text-emerald-600">✓</span> : null}</td>
+                        <td className="pr-2 tabular-nums text-slate-500">{num(r.points)}</td>
+                        <td className="pr-2 tabular-nums text-slate-500">{num(r.reb)}</td>
+                        <td className="pr-2 tabular-nums text-slate-500">{num(r.assists)}</td>
+                        <td>
+                          <select value={val} onChange={(e) => setMmDecisions((d) => ({ ...d, [r.sourcePlayerRef]: e.target.value }))} className={`rounded border px-1 py-0.5 text-[12px] ${val ? "border-slate-300" : "border-amber-300 bg-amber-50"}`}>
+                            <option value="">{is ? "— sleppa —" : "— skip —"}</option>
+                            {mmPreview.squad.map((p) => <option key={p.id} value={p.id}>{p.fullName}</option>)}
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
