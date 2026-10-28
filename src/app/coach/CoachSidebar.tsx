@@ -495,6 +495,8 @@ export const NO_GPS_HIDDEN_HREFS = new Set<string>([
 export const BASKETBALL_KEEP_HREFS = new Set<string>([
   "/coach/match-insights",
   "/coach/win-factors",
+  // Basketball has a native Total Player Analysis (production + style, not GPS/VALD).
+  "/coach/total-player-analysis",
 ]);
 
 // Basketball-ONLY pages — hidden for non-basketball (e.g. football) teams, where they
