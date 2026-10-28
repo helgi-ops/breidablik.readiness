@@ -35,7 +35,7 @@ async function authTeam(req: NextRequest) {
 
 const AI_MODEL = "claude-haiku-4-5-20251001";
 
-/** A short, AI-labelled narrative of the rule-based percentile read. Phrases the numbers only —
+/** A detailed, AI-labelled narrative of the rule-based percentile read. Phrases the numbers only —
  *  rules decide, AI explains. Returns null when no key is configured (the bars still render). */
 async function generateNarrative(analysis: ReturnType<typeof buildBasketballPlayerAnalysis>, lang: "EN" | "IS"): Promise<{ summary: string; development: string } | null> {
   if (!analysis) return null;
@@ -43,18 +43,31 @@ async function generateNarrative(analysis: ReturnType<typeof buildBasketballPlay
   const language = lang === "IS" ? "Icelandic" : "English";
   const facts = {
     name: analysis.name, games: analysis.games, role: analysis.role?.key ?? null,
-    season: analysis.season,
-    categoryPercentiles: analysis.categories.map((c) => ({ category: c.key, percentile: c.avgPercentile })),
+    season: analysis.season,  // full per-game line: ppg, rebounds, assists, steals, blocks, turnovers, FG/3P/FT%, eFG/TS%, and 2PT/3PT/FT makes+attempts
+    categories: analysis.categories.map((c) => ({
+      category: c.key, percentile: c.avgPercentile,
+      metrics: c.metrics.map((m) => ({ metric: m.key, percentile: m.percentile, value: m.valueText ?? m.value })),
+    })),
     strengths: analysis.strengths.map((m) => ({ metric: m.key, percentile: m.percentile, value: m.value })),
     weaknesses: analysis.weaknesses.map((m) => ({ metric: m.key, percentile: m.percentile, value: m.value })),
   };
-  const system = `You are a basketball analyst writing a SHORT player read for a head coach, STRICTLY from the within-squad percentile analysis given. Percentiles are 0-100 within the player's OWN squad (100 = best on the team for that stat). Rules: use ONLY the numbers provided; never invent stats, games or events; refer to the player by name or as "they"/"them" (do not guess gender); name the role and the clearest strengths and weakness; plain language, no jargon; this is a PERFORMANCE read, never a readiness/medical/training verdict. Write in ${language}. Return ONLY a JSON object: {"summary": string (2-3 sentences — what kind of player they are within this squad and their leading strengths), "development": string (1-2 sentences — the clearest area to improve, from the low percentiles)}.`;
+  const system = `You are a basketball analyst writing a DETAILED player read for a head coach, STRICTLY from the within-squad percentile analysis given. Percentiles are 0-100 within the player's OWN squad (100 = best on the team for that stat); the season line gives the raw per-game numbers (scoring, rebounds, assists, steals, blocks, turnovers, shooting %s, and 2PT/3PT/FT makes-attempts). Rules:
+- Use ONLY the numbers provided; never invent stats, games, opponents or events. Refer to the player by name or as "they"/"them" (never guess gender).
+- Write the "summary" as several short paragraphs, each led by a bold label:
+  **Profile** — the player's role within this squad and what kind of player they are, with their headline per-game line (points, and the categories they rank highest in).
+  **Scoring & shooting** — how they score: the 2PT/3PT/FT makes-attempts split and the FG%/3P%/eFG%/TS% efficiency, saying whether they are a volume scorer, a shooter, efficient or not, inside vs outside.
+  **Rebounding & playmaking** — rebounds (off/def), assists vs turnovers.
+  **Defense** — steals and blocks, within the squad.
+  In each, cite the actual percentile and the raw number, and interpret it (what it means for how they help the team). Name the one or two clearest strengths.
+- Plain language a non-analyst coach reads quickly. A PERFORMANCE read only — never a readiness, medical, load or training-decision verdict.
+- Write in ${language}.
+Return ONLY a JSON object: {"summary": string (the sectioned read, paragraphs separated by blank lines, each starting with its bold label like "**Profile** …"), "development": string (2-3 sentences — the clearest areas to improve, from the lowest percentiles, concrete and constructive)}.`;
   let res: Response;
   try {
     res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: AI_MODEL, max_tokens: 600, system, messages: [{ role: "user", content: `Player percentile analysis:\n${JSON.stringify(facts)}` }] }),
+      body: JSON.stringify({ model: AI_MODEL, max_tokens: 1400, system, messages: [{ role: "user", content: `Player percentile analysis:\n${JSON.stringify(facts)}` }] }),
     });
   } catch { return null; }
   if (!res.ok) return null;
