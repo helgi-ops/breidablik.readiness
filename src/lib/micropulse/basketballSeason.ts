@@ -33,7 +33,7 @@ export type Split = {
 
 export type PerGame = {
   gameId: string; date: string | null; opponent: string | null; homeAway: "home" | "away" | null;
-  pts: number; fgPct: number | null; tpPct: number | null; tov: number;
+  pts: number; fgPct: number | null; tpPct: number | null; reb: number; ast: number; tov: number;
   pointsFor: number | null; pointsAgainst: number | null; margin: number | null; result: "W" | "L" | "T" | null;
 };
 
@@ -95,7 +95,7 @@ export function buildBasketballSeason(input: SeasonInput): BasketballSeason {
     const rr = resolveResult(g, results[g.gameId]);
     return {
       gameId: g.gameId, date: g.date, opponent: g.opponent, homeAway: g.homeAway,
-      pts: g.pts, fgPct: pct(g.fgm, g.fga), tpPct: pct(g.tpm, g.tpa), tov: g.tov,
+      pts: g.pts, fgPct: pct(g.fgm, g.fga), tpPct: pct(g.tpm, g.tpa), reb: g.reb, ast: g.ast, tov: g.tov,
       pointsFor: rr.pointsFor, pointsAgainst: rr.pointsAgainst, margin: rr.margin, result: rr.result,
     };
   });

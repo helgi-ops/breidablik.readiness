@@ -668,13 +668,28 @@ export default function BasketballSeasonMatchAnalysis() {
             <PointsSpark perGame={season.perGame} />
             <div className="mt-1 max-h-52 overflow-y-auto overflow-x-auto">
               <table className="w-full text-[12px]">
+                <thead>
+                  <tr className="text-right text-slate-500">
+                    <th className="py-1 pr-3 text-left font-semibold">{t.opp}</th>
+                    <th className="py-1 pr-3 font-semibold">{t.us}</th>
+                    <th className="py-1 pr-3 font-semibold">{t.fg}</th>
+                    <th className="py-1 pr-3 font-semibold">{t.tp}</th>
+                    <th className="py-1 pr-3 font-semibold">{t.reb}</th>
+                    <th className="py-1 pr-3 font-semibold">{t.ast}</th>
+                    <th className="py-1 pr-3 font-semibold">{t.tov}</th>
+                    <th className="py-1 pr-1 font-semibold">{t.result}</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {season.perGame.slice().reverse().map((g) => (
                     <tr key={g.gameId} className="border-t border-[#eceae2]">
-                      <td className="py-1 pr-3 text-slate-500">{g.date ?? ""}</td>
-                      <td className="py-1 pr-3 text-slate-700">{g.opponent ?? "—"}{g.homeAway ? ` (${g.homeAway === "home" ? t.home[0] : t.away[0]})` : ""}</td>
+                      <td className="py-1 pr-3 text-slate-700"><span className="text-slate-400">{g.date ?? ""}</span> {g.opponent ?? "—"}{g.homeAway ? ` (${g.homeAway === "home" ? t.home[0] : t.away[0]})` : ""}</td>
                       <td className="py-1 pr-3 text-right tabular-nums">{g.pointsFor ?? g.pts}{g.pointsAgainst != null ? `–${g.pointsAgainst}` : ""}</td>
                       <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{pctS(g.fgPct)}</td>
+                      <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{pctS(g.tpPct)}</td>
+                      <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{g.reb || "—"}</td>
+                      <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{g.ast || "—"}</td>
+                      <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{g.tov || "—"}</td>
                       <td className="py-1 pr-1 text-right font-semibold" style={{ color: g.result === "W" ? "#1c7a4a" : g.result === "L" ? "#a83e28" : "#9aa3af" }}>
                         {g.result === "W" ? t.w : g.result === "L" ? t.l : ""}{g.margin != null ? ` ${g.margin > 0 ? "+" : ""}${g.margin}` : ""}
                       </td>

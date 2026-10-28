@@ -22,7 +22,7 @@ import {
   avgFactors, aggregateAdvancedShots, zonesFromAdvanced, playerZonesFromRows, hasZones,
   type FourFactorAvg, type ShotTypeAgg, type ZoneAgg, type PlayerZones,
 } from "@/lib/micropulse/basketballStats/instatAggregate";
-import { scopeToCurrentSeason, totalsPts, competitionsOf, resolveCompetition, competitionLabel, type FibaGame } from "@/lib/micropulse/basketballStats/fibaGamesRead";
+import { scopeToCurrentSeason, totalsPts, competitionsOf, resolveCompetition, competitionLabel, foldTeamName, type FibaGame } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 import { initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
 
 async function authTeam(req: NextRequest) {
@@ -167,8 +167,7 @@ async function loadResults(supabase: ReturnType<typeof getSupabase>, teamId: str
   return out;
 }
 
-const foldNm = (s: string | null | undefined) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
-const gkey = (date: string | null, opp: string | null) => `${date ?? "-"}|${foldNm(opp)}`;
+const gkey = (date: string | null, opp: string | null) => `${date ?? "-"}|${foldTeamName(opp)}`;
 const round1 = (x: number) => Math.round(x * 10) / 10;
 type PlayerLine = { name: string; pts: number; reb: number; ast: number };
 

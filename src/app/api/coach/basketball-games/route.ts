@@ -16,12 +16,11 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { scopeToCurrentSeason, totalsPts, pctOf, type FibaGame, type FibaBoxRow } from "@/lib/micropulse/basketballStats/fibaGamesRead";
+import { scopeToCurrentSeason, totalsPts, pctOf, foldTeamName, type FibaGame, type FibaBoxRow } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 import { avgFactors } from "@/lib/micropulse/basketballStats/instatAggregate";
 
 const n = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
-const fold = (s: string | null | undefined): string => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "");
-const gameKey = (date: string | null, opp: string | null) => `${date ?? "-"}|${fold(opp)}`;
+const gameKey = (date: string | null, opp: string | null) => `${date ?? "-"}|${foldTeamName(opp)}`;
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();

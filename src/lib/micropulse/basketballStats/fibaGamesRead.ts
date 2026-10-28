@@ -96,3 +96,13 @@ export function resolveCompetition<T extends { competition_code?: string | null 
 export const pctOf = (m: number, a: number): number | null => (a > 0 ? Math.round((m / a) * 1000) / 10 : null);
 /** Team points from a stored totals object (KKÍ saves store `pts`). */
 export const totalsPts = (t: Record<string, unknown> | null | undefined): number => n((t as { pts?: number } | null | undefined)?.pts);
+
+/**
+ * Canonical fold key for an Icelandic club name, used to match the SAME team across sources that
+ * spell it differently — notably InStat's "<Club> Reykjavik" vs KKÍ's bare "<Club>" (e.g. InStat
+ * "KR Reykjavik" ≡ KKÍ "KR", which otherwise show up as two separate games on the season log).
+ * Lowercase, accent- and punctuation-stripped, then drop a trailing city qualifier. Conservative:
+ * only the trailing "reykjavik(ur)" token is removed, so "Keflavik"/"Njardvik" are untouched.
+ */
+export const foldTeamName = (s: string | null | undefined): string =>
+  String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "").replace(/reykjavik(ur)?$/, "");
