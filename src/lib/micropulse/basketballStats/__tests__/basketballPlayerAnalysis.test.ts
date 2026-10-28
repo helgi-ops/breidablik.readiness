@@ -17,6 +17,29 @@ describe("basketballPlayerAnalysis", () => {
     expect(a.topg).toBe(2);
     expect(a.fgPct).toBe(46.2); // 12/26
     expect(a.efgPct).toBe(50);  // (12 + 0.5*2)/26 = 50
+    // Per-game shot splits: 2PT = FG−3PT. FG 12/26, 3PT 2/7, FT 4/6 over 2 games.
+    expect(a.twoM).toBe(5);     // (12−2)/2
+    expect(a.twoA).toBe(9.5);   // (26−7)/2
+    expect(a.threeM).toBe(1);   // 2/2
+    expect(a.threeA).toBe(3.5); // 7/2
+    expect(a.ftM).toBe(2);      // 4/2
+    expect(a.ftA).toBe(3);      // 6/2
+  });
+
+  it("shows shot splits in the Scoring category as makes/attempts, out of strengths", () => {
+    const pool: BoxLine[] = [
+      { name: "A", pts: 20, fgm: 8, fga: 16, tpm: 3, tpa: 7, ftm: 1, fta: 2 },
+      { name: "B", pts: 6, fgm: 3, fga: 9, tpm: 0, tpa: 1, ftm: 0, fta: 0 },
+    ];
+    const analysis = buildBasketballPlayerAnalysis(aggregatePlayers(pool, key), "A", key)!;
+    const scoring = analysis.categories.find((c) => c.key === "scoring")!;
+    expect(scoring.metrics.map((m) => m.key)).toEqual(["ppg", "twoA", "threeA", "ftA"]);
+    const three = scoring.metrics.find((m) => m.key === "threeA")!;
+    expect(three.valueText).toBe("3/7");                 // makes/attempts per game
+    // volume splits never surface as a strength/weakness
+    expect(analysis.strengths.some((m) => m.key === "threeA")).toBe(false);
+    // …and they don't move the Scoring category percentile (still pure points output).
+    expect(scoring.avgPercentile).toBe(100);
   });
 
   it("merges name-format variants by key (InStat vs KKÍ)", () => {

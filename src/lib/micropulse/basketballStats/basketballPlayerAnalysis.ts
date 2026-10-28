@@ -19,6 +19,8 @@ export type PlayerSeason = {
   name: string; games: number;
   ppg: number; rpg: number; oreb: number; dreb: number; apg: number; spg: number; bpg: number; topg: number;
   fgPct: number | null; tpPct: number | null; ftPct: number | null; efgPct: number | null; tsPct: number | null;
+  // Per-game shooting volume, split by shot type (makes & attempts).
+  twoM: number; twoA: number; threeM: number; threeA: number; ftM: number; ftA: number;
 };
 
 const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -48,15 +50,20 @@ export function aggregatePlayers(lines: BoxLine[], keyFn: (name: string) => stri
     fgPct: pct(a.fgm, a.fga), tpPct: pct(a.tpm, a.tpa), ftPct: pct(a.ftm, a.fta),
     efgPct: a.fga > 0 ? Math.round(((a.fgm + 0.5 * a.tpm) / a.fga) * 1000) / 10 : null,
     tsPct: (a.fga + 0.44 * a.fta) > 0 ? Math.round((a.pts / (2 * (a.fga + 0.44 * a.fta))) * 1000) / 10 : null,
+    // 2-pt = all field goals minus threes; per game.
+    twoM: r1((a.fgm - a.tpm) / a.g), twoA: r1((a.fga - a.tpa) / a.g),
+    threeM: r1(a.tpm / a.g), threeA: r1(a.tpa / a.g), ftM: r1(a.ftm / a.g), ftA: r1(a.fta / a.g),
   }));
 }
 
 // ── Percentile analysis ──────────────────────────────────────────────────────
-type MetricKey = "ppg" | "fgPct" | "tpPct" | "efgPct" | "tsPct" | "rpg" | "oreb" | "dreb" | "apg" | "topg" | "spg" | "bpg";
+type MetricKey = "ppg" | "twoA" | "threeA" | "ftA" | "fgPct" | "tpPct" | "efgPct" | "tsPct" | "rpg" | "oreb" | "dreb" | "apg" | "topg" | "spg" | "bpg";
 type CatKey = "scoring" | "rebounding" | "playmaking" | "defense" | "efficiency";
 
 const METRIC_LABELS: Record<MetricKey, { en: string; is: string }> = {
-  ppg: { en: "Points / game", is: "Stig / leik" }, fgPct: { en: "FG%", is: "Skotnýting" }, tpPct: { en: "3PT%", is: "Þriggja %" },
+  ppg: { en: "Points / game", is: "Stig / leik" },
+  twoA: { en: "2PT made/att", is: "2ja hitt/skot" }, threeA: { en: "3PT made/att", is: "3ja hitt/skot" }, ftA: { en: "FT made/att", is: "Víti hitt/skot" },
+  fgPct: { en: "FG%", is: "Skotnýting" }, tpPct: { en: "3PT%", is: "Þriggja %" },
   efgPct: { en: "eFG%", is: "Virk FG%" }, tsPct: { en: "TS%", is: "Sönn nýting" },
   rpg: { en: "Rebounds / game", is: "Fráköst / leik" }, oreb: { en: "Off. reb / game", is: "Sóknarfrák. / leik" }, dreb: { en: "Def. reb / game", is: "Varnarfrák. / leik" },
   apg: { en: "Assists / game", is: "Stoðsendingar / leik" }, topg: { en: "Turnovers / game", is: "Tapaðir / leik" },
@@ -67,8 +74,13 @@ const CAT_LABELS: Record<CatKey, { en: string; is: string }> = {
   playmaking: { en: "Playmaking", is: "Leikstjórnun" }, defense: { en: "Defense", is: "Vörn" }, efficiency: { en: "Efficiency", is: "Nýting" },
 };
 const CATEGORIES: Record<CatKey, MetricKey[]> = {
-  scoring: ["ppg"], efficiency: ["fgPct", "tpPct", "efgPct", "tsPct"],
+  scoring: ["ppg", "twoA", "threeA", "ftA"], efficiency: ["fgPct", "tpPct", "efgPct", "tsPct"],
   rebounding: ["rpg", "oreb", "dreb"], playmaking: ["apg", "topg"], defense: ["spg", "bpg"],
+};
+// Shot-volume splits: shown as "makes/attempts" with a volume percentile bar, but NOT counted as a
+// strength/weakness (raw volume isn't a skill) — the makes come from a sibling field, see below.
+const SHOT_SPLIT: Partial<Record<MetricKey, (p: PlayerSeason) => { m: number; a: number }>> = {
+  twoA: (p) => ({ m: p.twoM, a: p.twoA }), threeA: (p) => ({ m: p.threeM, a: p.threeA }), ftA: (p) => ({ m: p.ftM, a: p.ftA }),
 };
 // Lower is better for turnovers; everything else higher is better.
 const LOWER_BETTER = new Set<MetricKey>(["topg"]);
@@ -84,7 +96,7 @@ function percentile(pool: PlayerSeason[], k: MetricKey, value: number): number {
   return LOWER_BETTER.has(k) ? 100 - base : base;
 }
 
-export type MetricCell = { key: MetricKey; label: { en: string; is: string }; value: number | null; percentile: number | null };
+export type MetricCell = { key: MetricKey; label: { en: string; is: string }; value: number | null; percentile: number | null; valueText?: string };
 export type Category = { key: CatKey; label: { en: string; is: string }; avgPercentile: number | null; metrics: MetricCell[] };
 export type PlayerAnalysis = {
   name: string; games: number; season: PlayerSeason;
@@ -107,14 +119,18 @@ export function buildBasketballPlayerAnalysis(pool: PlayerSeason[], pickedName: 
     const metrics: MetricCell[] = CATEGORIES[cat].map((k) => {
       const value = metricVal(picked, k);
       const pc = value == null ? null : percentile(scored, k, value);
-      return { key: k, label: METRIC_LABELS[k], value, percentile: pc };
+      const split = SHOT_SPLIT[k]?.(picked);
+      return { key: k, label: METRIC_LABELS[k], value, percentile: pc, ...(split ? { valueText: `${split.m}/${split.a}` } : {}) };
     });
-    const pcs = metrics.map((m) => m.percentile).filter((v): v is number => v != null);
+    // The category percentile (role detection, Total Player Analysis) is the mean of its SKILL
+    // metrics; shot-volume splits are display-only context and don't move it.
+    const pcs = metrics.filter((m) => !(m.key in SHOT_SPLIT)).map((m) => m.percentile).filter((v): v is number => v != null);
     return { key: cat, label: CAT_LABELS[cat], avgPercentile: pcs.length ? Math.round(pcs.reduce((a, b) => a + b, 0) / pcs.length) : null, metrics };
   });
 
   const role = categories.filter((c) => c.avgPercentile != null).sort((a, b) => (b.avgPercentile! - a.avgPercentile!))[0] ?? null;
-  const allCells = categories.flatMap((c) => c.metrics).filter((m) => m.percentile != null);
+  // Shot-volume splits are descriptive context, not a skill ranking → keep them out of strengths/weaknesses.
+  const allCells = categories.flatMap((c) => c.metrics).filter((m) => m.percentile != null && !(m.key in SHOT_SPLIT));
   const strengths = allCells.filter((m) => m.percentile! >= 75).sort((a, b) => b.percentile! - a.percentile!);
   const weaknesses = allCells.filter((m) => m.percentile! <= 25).sort((a, b) => a.percentile! - b.percentile!);
 

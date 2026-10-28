@@ -11,7 +11,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 
-type MetricCell = { key: string; label: { en: string; is: string }; value: number | null; percentile: number | null };
+type MetricCell = { key: string; label: { en: string; is: string }; value: number | null; percentile: number | null; valueText?: string };
 type Category = { key: string; label: { en: string; is: string }; avgPercentile: number | null; metrics: MetricCell[] };
 type Season = { games: number; ppg: number; rpg: number; apg: number; spg: number; bpg: number; topg: number; fgPct: number | null; tpPct: number | null; ftPct: number | null; tsPct: number | null };
 type Analysis = {
@@ -137,11 +137,11 @@ export default function BasketballPlayerAnalysis() {
                 <div className="space-y-1.5">
                   {c.metrics.map((m) => (
                     <div key={m.key} className="flex items-center gap-2">
-                      <span className="w-[108px] shrink-0 truncate text-[11px] text-slate-500">{L(m.label)}</span>
+                      <span className="w-[104px] shrink-0 truncate text-[11px] text-slate-500">{L(m.label)}</span>
                       <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
                         <div className="h-full rounded-full" style={{ width: `${m.percentile ?? 0}%`, backgroundColor: m.percentile == null ? "#cbd5e1" : barColor(m.percentile) }} />
                       </div>
-                      <span className="w-[42px] shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-800">{fmt(m.value, m.key.includes("Pct"))}</span>
+                      <span className="w-[54px] shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-800">{m.valueText ?? fmt(m.value, m.key.includes("Pct"))}</span>
                     </div>
                   ))}
                 </div>
