@@ -101,26 +101,35 @@ export function archetype(production: ProductionLite, style: PlayStyle | null): 
   const slash = shareOf(style, ["iso", "catchDrive"]);
   const inside = shareOf(style, ["post", "pnrRoller", "cut"]);
   const trans = shareOf(style, ["transition"]);
+  // Defence: prefer the direct matchup (how opponents shot vs them) when InStat gives it;
+  // else fall back to steals/blocks. A good defender holds opponents to a low FG%.
+  const oppFg = style?.defense?.oppFgPct ?? null;
+  const goodD = oppFg != null ? oppFg <= 42 : (hi(p.spg) || hi(p.bpg));
+  // On-ball lead guards: score-first vs pass-first by which percentile is higher.
+  const scoreLed = (p.ppg ?? 0) >= (p.apg ?? 0);
 
-  const FG = { key: "floor_general", label: { en: "Floor general", is: "Leikstjórnandi" }, why: { en: "Runs pick-&-roll and creates for others.", is: "Keyrir skýlingar og skapar fyrir aðra." } };
+  const SCORER = { key: "scorer", label: { en: "Primary scorer", is: "Aðal-skorari" }, why: { en: "Creates and scores on the ball — pick-&-roll, iso and drives.", is: "Skapar og skorar á boltanum — skýling, einn á einn og drífur." } };
+  const FG = { key: "floor_general", label: { en: "Floor general", is: "Leikstjórnandi" }, why: { en: "Runs the offense and sets others up more than scoring himself/herself.", is: "Keyrir sóknina og skapar fyrir aðra frekar en að skora sjálf(ur)." } };
   const SHOOT = { key: "shooter", label: { en: "Spot-up shooter", is: "Skytta" }, why: { en: "Scores off the catch — catch-&-shoot and off screens.", is: "Skorar af grip — grípa-og-skjóta og af skýlingum." } };
+  const THREED = { key: "three_and_d", label: { en: "3&D wing", is: "3&D vængur" }, why: { en: "Spaces the floor and defends — shoots off the catch, holds up on D.", is: "Teygir vörnina og ver vel — skýtur af gripi og stendur í vörn." } };
   const INT = { key: "interior", label: { en: "Interior / finisher", is: "Undir körfu / klárari" }, why: { en: "Scores near the rim (post / roll / cut) and works the glass.", is: "Skorar nálægt körfu (post / rúll / skurður) og vinnur fráköstin." } };
   const SLASH = { key: "slasher", label: { en: "Slasher / shot creator", is: "Sóknarmaður / skapari" }, why: { en: "Creates with isolation and drives off the catch.", is: "Skapar einn á einn og drífur af gripi." } };
   const TRANS = { key: "transition", label: { en: "Transition & disruption", is: "Hraðaupphlaup & truflun" }, why: { en: "Scores in transition and forces turnovers.", is: "Skorar í hraðaupphlaupi og neyðir fram tapanir." } };
-  const BAL = { key: "balanced", label: { en: "Balanced contributor", is: "Fjölhæfur" }, why: { en: "No single dominant play type — a balanced profile.", is: "Engin ein ráðandi sóknartegund — jafnt prófíl." } };
+  const CONN = { key: "connector", label: { en: "Connector / role player", is: "Tengiliður / hlutverk" }, why: { en: "Fills gaps without a dominant play type — a balanced role.", is: "Fyllir í götin án ráðandi sóknartegundar — jafnt hlutverk." } };
 
-  // STYLE leads when there's enough of it to read (the dominant bucket, most distinctive first).
+  // STYLE leads when there's enough of it to read — the dominant bucket, most distinctive first.
   if ((style?.totalAttempts ?? 0) >= 5) {
-    if (shoot >= 30) return SHOOT;
+    if (shoot >= 30) return goodD ? THREED : SHOOT;
     if (inside >= 30) return INT;
     if (slash >= 25) return SLASH;
-    if (pnrH >= 25) return FG;
+    if (pnrH >= 25) return scoreLed ? SCORER : FG;
     if (trans >= 20) return TRANS;
   }
   // Production fallback — no / unclear style (box-score percentiles only, so rougher).
-  if ((p.apg ?? 0) >= 70) return FG;
-  if (hi(p.tpPct) && hi(p.tsPct)) return SHOOT;
+  if (hi(p.tpPct) && hi(p.tsPct)) return goodD ? THREED : SHOOT;
+  if ((p.apg ?? 0) >= 70) return scoreLed && hi(p.ppg) ? SCORER : FG;
   if (hi(p.rpg) || hi(p.bpg)) return INT;
+  if (hi(p.ppg)) return SCORER;
   if (hi(p.spg)) return TRANS;
-  return BAL;
+  return CONN;
 }

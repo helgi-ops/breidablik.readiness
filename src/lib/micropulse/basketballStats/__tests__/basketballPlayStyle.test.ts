@@ -25,12 +25,22 @@ describe("basketballPlayStyle", () => {
 
   it("derives archetypes from style + production", () => {
     const pnrHeavy = buildPlayStyle([{ "PnR Handlers made": 5, "PnR Handlers attempted": 12, "Catch and shoot attempted": 2 }])!;
-    expect(archetype({ percentileOf: {} }, pnrHeavy).key).toBe("floor_general");
+    // On-ball PnR: score-first → Primary scorer; pass-first (apg > ppg) → Floor general.
+    expect(archetype({ percentileOf: { ppg: 90, apg: 40 } }, pnrHeavy).key).toBe("scorer");
+    expect(archetype({ percentileOf: { ppg: 40, apg: 90 } }, pnrHeavy).key).toBe("floor_general");
+
     const shooter = buildPlayStyle([{ "Catch and shoot made": 4, "Catch and shoot attempted": 10, "PnR Handlers attempted": 1 }])!;
     expect(archetype({ percentileOf: {} }, shooter).key).toBe("shooter");
+    // same shooter but opponents shoot poorly against them → 3&D wing
+    const shooterD = buildPlayStyle([{ "Catch and shoot made": 4, "Catch and shoot attempted": 10, "PnR Handlers attempted": 1, "Opponent's field goals made": 2, "Opponent's field goals attempted": 8 }])!;
+    expect(archetype({ percentileOf: {} }, shooterD).key).toBe("three_and_d");
+
     const big = buildPlayStyle([{ "Posts up made": 3, "Posts up attempted": 6, "Cuts attempted": 3 }])!;
     expect(archetype({ percentileOf: {} }, big).key).toBe("interior");
-    // production can tip it even with no style
+
+    // production fallback (no style)
     expect(archetype({ percentileOf: { apg: 90 } }, null).key).toBe("floor_general");
+    expect(archetype({ percentileOf: { rpg: 90, bpg: 80 } }, null).key).toBe("interior");
+    expect(archetype({ percentileOf: {} }, null).key).toBe("connector");
   });
 });
