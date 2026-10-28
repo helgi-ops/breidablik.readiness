@@ -32,6 +32,29 @@ export default function PlayerBasketballGameReportCard({ lang }: { lang: "IS" | 
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<Resp | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [ai, setAi] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiErr, setAiErr] = useState<string | null>(null);
+
+  async function fetchAi(sum: Summary, allStats: GroupedStat[] | null | undefined) {
+    setAiBusy(true); setAiErr(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const facts = {
+        season: data?.season ?? null,
+        games: sum.games, ppg: sum.ppg, rpg: sum.rpg, apg: sum.apg, spg: sum.spg, bpg: sum.bpg, topg: sum.topg,
+        fgPct: sum.fgPct, tpPct: sum.tpPct, ftPct: sum.ftPct, bestPts: sum.bestPts, shooting: sum.shooting,
+        detail: allStats ? allStats.map((g) => ({ group: is ? g.title.is : g.title.en, rows: g.rows.slice(0, 10) })) : null,
+      };
+      const res = await fetch("/api/player/basketball-ai-summary", {
+        method: "POST", headers: { Authorization: `Bearer ${session?.access_token ?? ""}`, "content-type": "application/json" },
+        body: JSON.stringify({ facts, lang }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setAiErr(j.error ?? "Error"); return; }
+      setAi(String(j.summary ?? ""));
+    } catch (e) { setAiErr(e instanceof Error ? e.message : "Error"); } finally { setAiBusy(false); }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -94,6 +117,30 @@ export default function PlayerBasketballGameReportCard({ lang }: { lang: "IS" | 
             <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</div>
           </div>
         ))}
+      </div>
+
+      {/* AI season read — player-facing, labelled; what's working + one thing to work on, from the numbers. */}
+      <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded bg-indigo-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">AI</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700">{t("reads your stats — not a score", "les tölurnar þínar — ekki einkunn")}</span>
+          <button type="button" onClick={() => void fetchAi(s, data.allStats)} disabled={aiBusy}
+            className="ml-auto rounded-lg border border-indigo-600 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
+            {aiBusy ? t("Writing…", "Skrifa…") : ai ? t("↻ Again", "↻ Aftur") : t("✨ My season", "✨ Tímabilið mitt")}
+          </button>
+        </div>
+        {aiErr ? <p className="mt-2 text-[12px] font-medium text-red-700">{aiErr}</p> : null}
+        {ai ? (
+          <div className="mt-2 space-y-2">
+            {ai.split(/\n{2,}/).map((para, i) => (
+              <p key={i} className="text-[13px] leading-relaxed text-zinc-700">
+                {para.split(/\*\*(.+?)\*\*/).map((seg, j) => (j % 2 === 1 ? <strong key={j} className="font-semibold text-zinc-900">{seg}</strong> : seg))}
+              </p>
+            ))}
+          </div>
+        ) : !aiBusy ? (
+          <p className="mt-2 text-[12px] text-zinc-500">{t("Get a short read of your season — what's working and one thing to work on.", "Fáðu stutta yfirferð á tímabilinu þínu — hvað gengur vel og eitt sem má bæta.")}</p>
+        ) : null}
       </div>
 
       {/* Competition split — only when the player spans more than one team/competition (e.g. main + reserve). */}
