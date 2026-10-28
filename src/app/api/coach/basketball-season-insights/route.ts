@@ -190,11 +190,17 @@ async function loadMergedSeason(
   const competition = resolveCompetition(allFiba, requestedComp);
   const kkiGames = competitions.length > 1 ? allFiba.filter((g) => (g.competition_code ?? null) === competition) : allFiba;
 
-  // InStat per-game opponent points (own points come from the box) for win/loss.
+  // InStat team 'game' rows (the Games-file season box + single-match team row). Carries own
+  // points + box totals; the opponent points come from advanced.opp_players (single-match) or
+  // basketball_game_results (Games file). Used for win/loss and as a season source in its own
+  // right so a team that uploads ONLY the Games file still gets a full season read.
   const { data: iteam } = await supabase.from("basketball_team_match_stats")
-    .select("match_date, opponent, points, advanced").eq("owner_team_id", teamId).eq("source", "instat").eq("period", "game").eq("is_opponent", false);
+    .select("match_ref, match_date, opponent, points, fgm, fga, tpm, tpa, ftm, fta, oreb, dreb, reb, assists, steals, blocks, turnovers, fouls, advanced")
+    .eq("owner_team_id", teamId).eq("source", "instat").eq("period", "game").eq("is_opponent", false);
+  type ITeamRow = { match_ref: string; match_date: string | null; opponent: string | null; points: number | null; fgm: number | null; fga: number | null; tpm: number | null; tpa: number | null; ftm: number | null; fta: number | null; oreb: number | null; dreb: number | null; reb: number | null; assists: number | null; steals: number | null; blocks: number | null; turnovers: number | null; fouls: number | null; advanced: { opp_players?: Array<{ points?: number | null }> } | null };
+  const iteamRows = (iteam ?? []) as ITeamRow[];
   const instatPts = new Map<string, { own: number; opp: number }>();
-  for (const r of ((iteam ?? []) as Array<{ match_date: string | null; opponent: string | null; points: number | null; advanced: { opp_players?: Array<{ points?: number | null }> } | null }>)) {
+  for (const r of iteamRows) {
     const opp = Array.isArray(r.advanced?.opp_players) ? r.advanced!.opp_players!.reduce((a, p) => a + (Number(p?.points) || 0), 0) : 0;
     instatPts.set(gkey(r.match_date, r.opponent), { own: Number(r.points) || 0, opp });
   }
@@ -232,6 +238,21 @@ async function loadMergedSeason(
     const pts = instatPts.get(key);
     const result = prev?.result ?? (pts ? { pointsFor: pts.own || gt.pts, pointsAgainst: pts.opp } : (gt.pts ? { pointsFor: gt.pts, pointsAgainst: 0 } : null));
     byKey.set(key, { total: gt, result, players: instPlayersByKey.get(key) ?? [] });
+  }
+
+  // Third source: InStat team rows (Games-file season box) for any game NOT already covered by
+  // the KKÍ box or the InStat per-player feed — team totals only (no per-player lines).
+  for (const r of iteamRows) {
+    const key = gkey(r.match_date, r.opponent);
+    if (byKey.has(key)) continue;
+    const total: GameTotals = {
+      gameId: r.match_ref, date: r.match_date, opponent: r.opponent ?? null, homeAway: null,
+      pts: n(r.points), fgm: n(r.fgm), fga: n(r.fga), tpm: n(r.tpm), tpa: n(r.tpa), ftm: n(r.ftm), fta: n(r.fta),
+      oreb: n(r.oreb), dreb: n(r.dreb), reb: n(r.reb), ast: n(r.assists), stl: n(r.steals), blk: n(r.blocks), tov: n(r.turnovers), fouls: n(r.fouls),
+    };
+    const pts = instatPts.get(key);
+    const result = coachResults[r.match_ref] ?? (pts && (pts.own || pts.opp) ? { pointsFor: pts.own || total.pts, pointsAgainst: pts.opp } : null);
+    byKey.set(key, { total, result, players: [] });
   }
 
   if (byKey.size === 0) return null;

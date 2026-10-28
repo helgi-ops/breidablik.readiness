@@ -696,7 +696,16 @@ export async function POST(req: NextRequest) {
     const { error } = await supabase.from("basketball_team_match_stats").upsert(dbRows as never, { onConflict: BASKETBALL_TEAM_MATCH_CONFLICT });
     if (error) return NextResponse.json({ ok: false, error: `Upsert: ${error.message}` }, { status: 500 });
 
-    return NextResponse.json({ ok: true, phase: "commit", kind: "games", season, rowsUpserted: dbRows.length, reconciled, skipped: skipped.length });
+    // Persist the final score from the file's "Score" column → basketball_game_results, so the
+    // season record (W/L, margin) works from the Games file alone (coach can still override).
+    const resultRows = games.map((g, i) => ({
+      team_id: auth.teamId, game_id: (dbRows[i] as { match_ref: string }).match_ref,
+      game_date: g.matchDate, opponent: g.opponent, points_for: g.pointsFor, points_against: g.pointsAgainst,
+      updated_by: auth.userId, updated_at: new Date().toISOString(),
+    })).filter((r) => r.points_for != null && r.points_against != null);
+    if (resultRows.length) await supabase.from("basketball_game_results").upsert(resultRows as never, { onConflict: "team_id,game_id" });
+
+    return NextResponse.json({ ok: true, phase: "commit", kind: "games", season, rowsUpserted: dbRows.length, reconciled, skipped: skipped.length, resultsSaved: resultRows.length });
   }
 
   // ── Team comparison export → team SEASON averages (basketball_team_match_stats, period 'season') ──
