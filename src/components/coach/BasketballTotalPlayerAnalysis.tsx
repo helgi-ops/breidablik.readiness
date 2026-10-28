@@ -18,7 +18,9 @@ type Production = { name: string; games: number; role: { key: string; label: Lbl
 type StyleSlice = { key: string; label: Lbl; attempts: number; made: number; share: number; pct: number | null };
 type Style = { games: number; totalAttempts: number; mix: StyleSlice[]; defense: { oppFgPct: number | null; oppFga: number; possessions: number } | null } | null;
 type Archetype = { key: string; label: Lbl; why: Lbl };
-type Resp = { production: Production; style: Style; archetype: Archetype; ai: { summary: string; development: string } | null };
+type PhysMetric = { key: string; label: Lbl; value: number | null; percentile: number | null };
+type Physical = { sessions: number; avgPercentile: number | null; metrics: PhysMetric[]; poolSize: number } | null;
+type Resp = { production: Production; style: Style; physical: Physical; archetype: Archetype; ai: { summary: string; development: string } | null };
 type ListPlayer = { name: string; games: number; ppg: number };
 
 const RADAR_ORDER = ["scoring", "efficiency", "playmaking", "defense", "rebounding"];
@@ -181,6 +183,29 @@ export default function BasketballTotalPlayerAnalysis() {
               )}
             </section>
           </div>
+
+          {/* PHYSICAL axis — Titan indoor-IMU output, within-squad percentiles. Descriptive output,
+              never fitness/readiness. Self-hides until the player has Titan sessions. */}
+          {d.physical && d.physical.metrics.some((m) => m.value != null) ? (
+            <section className="rounded-xl border border-[#d6cdee] bg-[#faf8ff] p-3">
+              <div className="flex items-baseline justify-between">
+                <div className="text-[13px] font-bold text-slate-900">{is ? "Líkamlegt" : "Physical"} <span className="text-[10px] font-medium text-slate-400">· Titan · {is ? "percentílar innan liðs" : "within-squad percentiles"}</span></div>
+                <span className="text-[11px] text-slate-400">{d.physical.sessions} {is ? "æfingar" : "sessions"}</span>
+              </div>
+              <div className="mt-2 grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+                {d.physical.metrics.map((m) => (
+                  <div key={m.key} className="flex items-center gap-2">
+                    <span className="w-[108px] shrink-0 truncate text-[11px] text-slate-600">{L(m.label)}</span>
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-full rounded-full" style={{ width: `${m.percentile ?? 0}%`, backgroundColor: m.percentile == null ? "#cbd5e1" : col(m.percentile) }} />
+                    </div>
+                    <span className="w-[52px] shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-800">{m.value ?? "–"}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[10px] text-slate-400">{is ? "Innivistar-álag úr Titan (álag · höggálag · stökk á æfingu). Lýsandi afköst — ekki fitness, readiness né meiðsli." : "Indoor output from Titan (load · impacts · jumps per session). Descriptive output — not fitness, readiness or injury."}</p>
+            </section>
+          ) : null}
 
           {(d.production.strengths.length || d.production.weaknesses.length) ? (
             <div className="grid gap-3 sm:grid-cols-2">

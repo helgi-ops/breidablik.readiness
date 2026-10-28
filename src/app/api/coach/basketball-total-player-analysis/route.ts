@@ -18,6 +18,7 @@ import { scopeToCurrentSeason, type FibaGame, type FibaBoxRow } from "@/lib/micr
 import { initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
 import { aggregatePlayers, buildBasketballPlayerAnalysis, type BoxLine, type PlayerSeason, type PlayerAnalysis } from "@/lib/micropulse/basketballStats/basketballPlayerAnalysis";
 import { buildPlayStyle, archetype, type PlayStyle } from "@/lib/micropulse/basketballStats/basketballPlayStyle";
+import { aggregatePhysical, buildPhysical, type TitanLine, type PhysicalPlayer, type PhysicalRead } from "@/lib/micropulse/basketballStats/basketballPhysical";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -58,6 +59,21 @@ async function loadSquadSeasons(supabase: ReturnType<typeof getSupabase>, teamId
   return aggregatePlayers(lines, initialSurnameKey);
 }
 
+/** The PHYSICAL axis pool — Titan indoor-IMU sessions per squad player, averaged. Returns the pool
+ *  plus a surname-key → player_id map so a box-score name resolves to its Titan rows. */
+async function loadPhysical(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<{ pool: PhysicalPlayer[]; idByKey: Map<string, string> }> {
+  const { data: roster } = await supabase.from("players").select("id, full_name").eq("team_id", teamId);
+  const idByKey = new Map<string, string>();
+  for (const p of ((roster ?? []) as Array<{ id: string; full_name: string | null }>)) if (p.full_name) idByKey.set(initialSurnameKey(p.full_name), p.id);
+  const ids = [...new Set(idByKey.values())];
+  if (!ids.length) return { pool: [], idByKey };
+  const { data } = await supabase.from("player_external_load_daily")
+    .select("player_id, player_load, impacts, jumps").eq("source", "titan").in("player_id", ids);
+  const lines: TitanLine[] = ((data ?? []) as Array<{ player_id: string; player_load: number | null; impacts: number | null; jumps: number | null }>)
+    .map((r) => ({ playerId: r.player_id, playerLoad: r.player_load, impacts: r.impacts, jumps: r.jumps }));
+  return { pool: aggregatePhysical(lines), idByKey };
+}
+
 /** A player's InStat per-game stats rows (the ~128-col bags) for the play-type / defence read. */
 async function loadStyleRows(supabase: ReturnType<typeof getSupabase>, teamId: string, player: string): Promise<Array<Record<string, unknown>>> {
   const { data } = await supabase.from("player_basketball_match_stats").select("source_player_name, stats").eq("team_id", teamId).eq("source", "instat");
@@ -75,7 +91,7 @@ function productionLite(a: PlayerAnalysis) {
 }
 
 const AI_MODEL = "claude-haiku-4-5-20251001";
-async function narrative(a: PlayerAnalysis, style: PlayStyle | null, arch: { label: { en: string; is: string } }, lang: "EN" | "IS"): Promise<{ summary: string; development: string } | null> {
+async function narrative(a: PlayerAnalysis, style: PlayStyle | null, physical: PhysicalRead | null, arch: { label: { en: string; is: string } }, lang: "EN" | "IS"): Promise<{ summary: string; development: string } | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY; if (!apiKey) return null;
   const language = lang === "IS" ? "Icelandic" : "English";
   const facts = {
@@ -89,6 +105,7 @@ async function narrative(a: PlayerAnalysis, style: PlayStyle | null, arch: { lab
     weaknesses: a.weaknesses.map((m) => ({ metric: m.key, percentile: m.percentile })),
     styleMix: (style?.mix ?? []).map((s) => ({ type: s.key, sharePctOfAttempts: s.share, successPct: s.pct })),
     defenseOppFgPct: style?.defense?.oppFgPct ?? null,
+    physicalTitan: physical ? { sessions: physical.sessions, metrics: physical.metrics.map((m) => ({ metric: m.key, perGame: m.value, squadPercentile: m.percentile })) } : null,
   };
   const system = `You are a basketball analyst writing a DETAILED two-axis player read for a head coach: PRODUCTION (within-squad box-score percentiles, 0-100, 100 = best on the team) + STYLE (how they generate offence — each play type's share of their attempts and how well they finish it) + a defence number (opponent FG% against them, lower is better). Rules:
 - Use ONLY the numbers given; never invent stats, games or events. Refer to the player by name or "they"/"them" (never guess gender).
@@ -97,6 +114,7 @@ async function narrative(a: PlayerAnalysis, style: PlayStyle | null, arch: { lab
   **How they score (style)** — walk the style mix: which play types make up most of their attempts and which they finish well vs poorly (cite the share% and success%), plus the 2PT/3PT/FT split; say whether they are on-ball or off-ball, inside or outside.
   **Production strengths** — the box-score categories and metrics where they rank highest within the squad, citing the percentile.
   **Defense** — what the opponent FG% against them says, within the squad.
+  **Physical (Titan)** — ONLY if physicalTitan numbers are given: read their indoor session player-load, impacts and jumps percentiles within the squad as how physically involved / active they are (a volume/output read, higher = more involved), NEVER as fitness, readiness or injury. If physicalTitan is absent, omit this paragraph entirely.
   In each section tie the numbers together and interpret what it means for how they help the team.
 - Plain language a non-analyst coach reads quickly. A PERFORMANCE read only — never a readiness, medical, load or training-decision verdict.
 - Write in ${language}.
@@ -132,6 +150,9 @@ export async function POST(req: NextRequest) {
   const styleRows = await loadStyleRows(auth.supabase, auth.teamId, production.name);
   const style = buildPlayStyle(styleRows);
   const arch = archetype(productionLite(production), style);
-  const ai = body?.prose === true ? await narrative(production, style, arch, String(body?.lang ?? "EN").toUpperCase() === "IS" ? "IS" : "EN") : null;
-  return NextResponse.json({ ok: true, production, style, archetype: arch, ai });
+  const { pool: physPool, idByKey } = await loadPhysical(auth.supabase, auth.teamId);
+  const pid = idByKey.get(initialSurnameKey(production.name)) ?? null;
+  const physical = pid ? buildPhysical(physPool, pid) : null;
+  const ai = body?.prose === true ? await narrative(production, style, physical, arch, String(body?.lang ?? "EN").toUpperCase() === "IS" ? "IS" : "EN") : null;
+  return NextResponse.json({ ok: true, production, style, physical, archetype: arch, ai });
 }
