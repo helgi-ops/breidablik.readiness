@@ -581,7 +581,10 @@ export default function InstatBasketballUpload({ onImported, surface = "all" }: 
         )}
       </details>
 
-      {/* Team comparison — season averages */}
+      {/* Team comparison — season averages. The own-team season line is already built from the Games
+          log + single-match uploads, so this manual Team-comparison import is only offered on the
+          catch-all surface (opponent scouting), not own-team Season Match. */}
+      {surface === "all" && (
       <details className="rounded-xl border border-slate-200 bg-white px-4 py-3">
         <summary className="cursor-pointer text-xs font-semibold text-slate-500">{is ? "Meðaltöl tímabils (InStat „Team comparison“ tafla)" : "Season averages (InStat “Team comparison” table)"}</summary>
         <p className="mt-1 text-[11px] text-slate-400">
@@ -614,6 +617,7 @@ export default function InstatBasketballUpload({ onImported, surface = "all" }: 
           </div>
         )}
       </details>
+      )}
 
       {/* Games — per-game team box (season log) */}
       <details className="rounded-xl border border-slate-200 bg-white px-4 py-3">
