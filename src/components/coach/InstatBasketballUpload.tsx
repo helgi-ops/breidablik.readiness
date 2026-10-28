@@ -663,7 +663,10 @@ export default function InstatBasketballUpload({ onImported, surface = "all" }: 
         )}
       </details>
 
-      {/* QUATERNARY — season players (per-player season averages) */}
+      {/* QUATERNARY — season players (per-player season averages). Own-team player data comes from the
+          single-match per-player uploads (aggregated on Player/Total analysis), so this season-averages
+          table is only offered on the catch-all surface (opponent scouting), not own-team Season Match. */}
+      {surface === "all" && (
       <details className="rounded-xl border border-slate-200 bg-white px-4 py-3">
         <summary className="cursor-pointer text-xs font-semibold text-slate-500">{is ? "Leikmenn – heilt tímabil (InStat „Players“ tafla)" : "Players – full season (InStat “Players” table)"}</summary>
         <p className="mt-1 text-[11px] text-slate-400">
@@ -715,6 +718,7 @@ export default function InstatBasketballUpload({ onImported, surface = "all" }: 
           </div>
         )}
       </details>
+      )}
       </>)}
 
       <p className="text-[11px] text-slate-400">

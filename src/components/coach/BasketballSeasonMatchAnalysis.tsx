@@ -330,6 +330,7 @@ export default function BasketballSeasonMatchAnalysis() {
   const [hasData, setHasData] = React.useState<boolean | null>(null);
   const [competitions, setCompetitions] = React.useState<Array<{ code: string | null; label: string; games: number }>>([]);
   const [activeComp, setActiveComp] = React.useState<string | null>(null);
+  const [activeCompLabel, setActiveCompLabel] = React.useState<string | null>(null);
   const [selectedComp, setSelectedComp] = React.useState<string | null>(null);
   const [details, setDetails] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
@@ -344,7 +345,7 @@ export default function BasketballSeasonMatchAnalysis() {
     const qs = selectedComp ? `?competition=${encodeURIComponent(selectedComp)}` : "";
     const res = await fetch(`/api/coach/basketball-season-insights${qs}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
     const j = await res.json();
-    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); setQuarters(j.quarters ?? null); setTacticalShots(j.tacticalShots ?? null); setShotZones(j.shotZones ?? null); setSeasonTeam(j.seasonTeam ?? null); setCompetitions(j.competitions ?? []); setActiveComp(j.competition ?? null); }
+    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); setQuarters(j.quarters ?? null); setTacticalShots(j.tacticalShots ?? null); setShotZones(j.shotZones ?? null); setSeasonTeam(j.seasonTeam ?? null); setCompetitions(j.competitions ?? []); setActiveComp(j.competition ?? null); setActiveCompLabel(j.competitionLabel ?? null); }
   }, [token, selectedComp]);
 
   React.useEffect(() => { void load(); }, [load]);
@@ -396,6 +397,7 @@ export default function BasketballSeasonMatchAnalysis() {
       )}
       {/* Layer 0 — one-line verdict */}
       <div className="rounded-xl border border-[#e3e1d9] bg-white p-4">
+        {activeCompLabel ? <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{activeCompLabel}</p> : null}
         <p className="text-[15px] font-bold text-slate-900">
           {rec ? `${rec.wins}–${rec.losses}${rec.ties ? `–${rec.ties}` : ""} · ` : `${season.gamesPlayed} ${t.games} · `}
           {d1(a.pts)} {t.ppg}
