@@ -27,6 +27,9 @@ export type InstatGameTeam = {
   assists: number | null; steals: number | null; turnovers: number | null; blocks: number | null; fouls: number | null;
   // Four Factors (own side) derived from the box.
   efgPct: number | null; toPct: number | null; ftf: number | null; ppp: number | null;
+  // The FULL per-game team row (every InStat column — playtypes, shot quality, advanced ratings),
+  // keyed by its original header, so the per-game "all stats" view shows everything the file carries.
+  stats: Record<string, number | string>;
 };
 
 const norm = (h: string) => h.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -95,6 +98,23 @@ export function mmddToIso(raw: string, season: string): string | null {
   return `${yr}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
+// Identity columns shown elsewhere (date/opponent in the row header, score in the box) — kept out
+// of the full stats bag so the "all stats" view shows only the detailed, non-core variables.
+const IDENTITY = new Set(["date", "opponent", "score"].map(norm));
+
+/** The whole game row as a bag of its detailed columns (original headers; blank/"-" cells dropped). */
+function fullStatsOf(row: Record<string, unknown>): Record<string, number | string> {
+  const out: Record<string, number | string> = {};
+  for (const [k, v] of Object.entries(row)) {
+    if (IDENTITY.has(norm(k))) continue;
+    if (v == null) continue;
+    const s = String(v).trim();
+    if (!s || s === "-" || s === "—") continue;
+    out[k.trim()] = typeof v === "number" ? v : s;
+  }
+  return out;
+}
+
 /** A row is a real game line if it has a score-or-opponent and isn't the average row. */
 function isGameRow(opponent: string, score: string): boolean {
   const f = `${opponent} ${score}`.toLowerCase();
@@ -156,6 +176,7 @@ export function parseInstatGames(
       blocks: num(cell(row, ["Blocks"])),
       fouls: num(cell(row, ["Fouls"])),
       efgPct, toPct, ftf, ppp,
+      stats: fullStatsOf(row),
     });
   }
   return { games, skipped };

@@ -695,6 +695,7 @@ export async function POST(req: NextRequest) {
         fgm: g.fgm, fga: g.fga, tpm: g.tpm, tpa: g.tpa, ftm: g.ftm, fta: g.fta,
         oreb: g.oreb, dreb: g.dreb, reb: g.reb, assists: g.assists, steals: g.steals, blocks: g.blocks, turnovers: g.turnovers, fouls: g.fouls,
         efg_pct: g.efgPct, to_pct: g.toPct, ftf: g.ftf, ppp: g.ppp,
+        stats: g.stats,  // the full per-game team row (all playtype/shot-quality/advanced columns)
         source: "instat", source_ref: `instat:games:${slug(file.name)}`, synced_at: new Date().toISOString(),
       };
     });

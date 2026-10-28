@@ -24,7 +24,6 @@ import {
 } from "@/lib/micropulse/basketballStats/instatAggregate";
 import { scopeToCurrentSeason, totalsPts, competitionsOf, resolveCompetition, competitionLabel, foldTeamName, type FibaGame } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 import { initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
-import { aggregateSeasonStats, type SeasonPlayerStats } from "@/lib/micropulse/basketballStats/instatStatGroups";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -73,16 +72,19 @@ async function loadRows(supabase: ReturnType<typeof getSupabase>, teamId: string
     .eq("team_id", teamId).range(from, to));
 }
 
-/** Per-player season line of EVERY InStat variable (per-game averages) — the "all stats" view for
- *  the whole season, aggregated from the per-game single-match uploads. Null when no InStat yet. */
-async function loadSeasonAllStats(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<SeasonPlayerStats[] | null> {
-  const rows = await fetchAllPages<{ source_player_name: string | null; stats: Record<string, unknown> | null }>((from, to) =>
-    supabase.from("player_basketball_match_stats").select("source_player_name, stats")
-      .eq("team_id", teamId).eq("source", "instat").range(from, to));
-  const withStats = rows.filter((r) => r.stats && Object.keys(r.stats).length);
-  if (!withStats.length) return null;
-  const agg = aggregateSeasonStats(withStats.map((r) => ({ name: r.source_player_name, stats: r.stats })));
-  return agg.length ? agg : null;
+/** Per-GAME detailed team stats — every InStat column from the "Games" file (playtypes, shot
+ *  quality, advanced ratings), one entry per game. This is the season's detailed stats BY GAME
+ *  (not per player). Null until the Games file has been uploaded with its full columns. */
+type SeasonGameStats = { date: string | null; opponent: string | null; points: number | null; stats: Record<string, unknown> };
+async function loadSeasonGameStats(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<SeasonGameStats[] | null> {
+  const { data } = await supabase.from("basketball_team_match_stats")
+    .select("match_date, opponent, points, stats")
+    .eq("owner_team_id", teamId).eq("source", "instat").eq("period", "game").eq("is_opponent", false);
+  const rows = ((data ?? []) as Array<{ match_date: string | null; opponent: string | null; points: number | null; stats: Record<string, unknown> | null }>)
+    .filter((r) => r.stats && Object.keys(r.stats).length)
+    .map((r) => ({ date: r.match_date, opponent: r.opponent, points: r.points, stats: r.stats! }))
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  return rows.length ? rows : null;
 }
 
 /** Season Four Factors from the InStat team feed — full-game rows, averaged.
@@ -310,16 +312,16 @@ export async function GET(req: NextRequest) {
   if (!merged) return NextResponse.json({ ok: true, hasData: false, season: null, leaders: null, seasonTeam });
 
   // InStat-only extras (cover whichever games have an InStat upload); null when no InStat yet.
-  const [fourFactors, quarters, tacticalShots, shotZones, allStats] = await Promise.all([
+  const [fourFactors, quarters, tacticalShots, shotZones, gameStats] = await Promise.all([
     loadFourFactors(auth.supabase, auth.teamId),
     loadQuarterScoring(auth.supabase, auth.teamId),
     loadTacticalShots(auth.supabase, auth.teamId),
     loadShotZones(auth.supabase, auth.teamId),
-    loadSeasonAllStats(auth.supabase, auth.teamId),
+    loadSeasonGameStats(auth.supabase, auth.teamId),
   ]);
   return NextResponse.json({
     ok: true, hasData: true, season: merged.season, leaders: merged.leaders,
-    fourFactors, quarters, tacticalShots, shotZones, allStats, seasonTeam, source: merged.source,
+    fourFactors, quarters, tacticalShots, shotZones, gameStats, seasonTeam, source: merged.source,
     competitions: merged.competitions, competition: merged.competition, competitionLabel: merged.competitionLabel,
   });
 }

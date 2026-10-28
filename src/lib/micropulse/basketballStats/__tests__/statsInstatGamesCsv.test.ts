@@ -75,6 +75,26 @@ describe("parseInstatGames", () => {
     expect(g1.result).toBe("L");
   });
 
+  it("captures the full per-game stats bag (detailed columns, identity + blanks dropped)", () => {
+    const { games } = parseInstatGames([
+      row({
+        Date: "05/17", Opponent: "vs Haukar", Score: "95:70", Possessions: "89", Points: "95",
+        "PnR Handlers made": "6", "Catch and shoot, %": "41.2%", "Offensive rating": "118.5",
+        "Field goals, %": "-", "Deflections": "",
+      }),
+    ], "2025-2026");
+    const s = games[0].stats;
+    expect(s["PnR Handlers made"]).toBe("6");
+    expect(s["Catch and shoot, %"]).toBe("41.2%");   // percentage string kept for display
+    expect(s["Offensive rating"]).toBe("118.5");
+    expect(s["Possessions"]).toBe("89");
+    expect("Date" in s).toBe(false);                  // identity dropped
+    expect("Opponent" in s).toBe(false);
+    expect("Score" in s).toBe(false);
+    expect("Field goals, %" in s).toBe(false);        // "-" dropped
+    expect("Deflections" in s).toBe(false);           // blank dropped
+  });
+
   it("leaves a never-reported factor null (no attempts → null, not 0)", () => {
     const { games } = parseInstatGames([
       row({ Date: "01/03", Opponent: "vs X", Score: "50:40", Possessions: "80", Points: "50" }),

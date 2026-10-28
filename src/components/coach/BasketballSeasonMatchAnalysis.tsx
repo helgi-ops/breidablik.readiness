@@ -17,7 +17,9 @@ import { useLang } from "@/lib/lang";
 import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import type { BasketballSeason, Split, PerGame } from "@/lib/micropulse/basketballSeason";
 import { shotLabel, zoneLabel } from "@/lib/micropulse/basketballStats/shotLabels";
-import { groupStats, labelFor, type SeasonPlayerStats } from "@/lib/micropulse/basketballStats/instatStatGroups";
+import { groupStats, labelFor } from "@/lib/micropulse/basketballStats/instatStatGroups";
+
+type SeasonGameStats = { date: string | null; opponent: string | null; points: number | null; stats: Record<string, unknown> };
 import type { LineupRead, LineupTier, TaggedUnit } from "@/lib/micropulse/basketballLineups";
 
 type Lang = "EN" | "IS";
@@ -117,33 +119,35 @@ function SplitRow({ label, s, tone }: { label: string; s: Split; tone?: "total" 
   );
 }
 
-/** All InStat variables for the whole season, per player (per-game averages). Mirrors the Single
- *  Match "Show all stats" view but aggregated over the season; each player expands to the grouped
- *  columns (play types, shot quality, advanced, defense). Descriptive — never a readiness signal. */
-function SeasonAllStatsSection({ players, is }: { players: SeasonPlayerStats[]; is: boolean }) {
+/** Detailed InStat stats for the season BY GAME (from the "Games" file): every team column —
+ *  play types, shot quality, advanced ratings — for each game, each game expandable. Mirrors the
+ *  Single Match "Show all stats" view but one entry per game, not per player. Descriptive only. */
+function SeasonGameStatsSection({ games, is }: { games: SeasonGameStats[]; is: boolean }) {
   const [open, setOpen] = React.useState(false);
   const [sel, setSel] = React.useState<string | null>(null);
-  if (!players.length) return null;
+  if (!games.length) return null;
+  const gkey = (g: SeasonGameStats) => `${g.date ?? "-"}|${g.opponent ?? "-"}`;
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2 text-[13px] font-bold text-slate-900">
-        <span>{open ? "▾" : "▸"}</span>{is ? "Allar breytur tímabilsins (InStat)" : "All season variables (InStat)"}
-        <span className="text-[11px] font-medium text-slate-400">· {players.length} {is ? "leikmenn · meðaltöl á leik · allar ~128 breytur" : "players · per-game averages · all ~128 variables"}</span>
+        <span>{open ? "▾" : "▸"}</span>{is ? "Ítarleg tölfræði eftir leik (InStat)" : "Detailed stats by game (InStat)"}
+        <span className="text-[11px] font-medium text-slate-400">· {games.length} {is ? "leikir · allar breytur úr „Games“ skránni" : "games · all variables from the Games file"}</span>
       </button>
       {open && (
         <div className="mt-2 space-y-1">
-          {players.map((p) => {
-            const isSel = sel === p.name;
-            const groups = isSel ? groupStats(p.stats) : [];
+          {games.map((gm) => {
+            const key = gkey(gm);
+            const isSel = sel === key;
+            const groups = isSel ? groupStats(gm.stats) : [];
             return (
-              <div key={p.name} className="rounded-lg border border-slate-100">
-                <button type="button" onClick={() => setSel(isSel ? null : p.name)} className="flex w-full items-center justify-between px-2.5 py-1.5 text-[13px]">
-                  <span className="font-semibold text-slate-800">{p.name} <span className="font-normal text-slate-400">· {p.games} {is ? "leikir" : "games"}</span></span>
+              <div key={key} className="rounded-lg border border-slate-100">
+                <button type="button" onClick={() => setSel(isSel ? null : key)} className="flex w-full items-center justify-between px-2.5 py-1.5 text-[13px]">
+                  <span className="font-semibold text-slate-800">{gm.opponent ?? "—"} <span className="font-normal text-slate-400">· {gm.date ?? ""}{gm.points != null ? ` · ${gm.points} ${is ? "stig" : "pts"}` : ""}</span></span>
                   <span className="text-slate-400">{isSel ? "▾" : "▸"}</span>
                 </button>
                 {isSel && (
                   <div className="space-y-2.5 border-t border-slate-100 px-2.5 py-2">
-                    {groups.length === 0 ? <p className="text-[12px] text-slate-400">{is ? "Engar ítarlegar breytur fyrir þennan leikmann." : "No detailed variables for this player."}</p> : null}
+                    {groups.length === 0 ? <p className="text-[12px] text-slate-400">{is ? "Engar ítarlegar breytur fyrir þennan leik." : "No detailed variables for this game."}</p> : null}
                     {groups.map((g) => (
                       <div key={g.group}>
                         <div className="text-[10px] font-bold uppercase tracking-wide text-[#2740e6]">{is ? g.title.is : g.title.en}</div>
@@ -385,7 +389,7 @@ export default function BasketballSeasonMatchAnalysis() {
   const [tacticalShots, setTacticalShots] = React.useState<TacticalShots>(null);
   const [shotZones, setShotZones] = React.useState<ShotZones>(null);
   const [seasonTeam, setSeasonTeam] = React.useState<SeasonTeam | null>(null);
-  const [allStats, setAllStats] = React.useState<SeasonPlayerStats[] | null>(null);
+  const [gameStats, setGameStats] = React.useState<SeasonGameStats[] | null>(null);
   const [zonesPlayer, setZonesPlayer] = React.useState<string | null>(null);
   const [hasData, setHasData] = React.useState<boolean | null>(null);
   const [competitions, setCompetitions] = React.useState<Array<{ code: string | null; label: string; games: number }>>([]);
@@ -408,7 +412,7 @@ export default function BasketballSeasonMatchAnalysis() {
     const qs = selectedComp ? `?competition=${encodeURIComponent(selectedComp)}` : "";
     const res = await fetch(`/api/coach/basketball-season-insights${qs}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
     const j = await res.json();
-    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); setQuarters(j.quarters ?? null); setTacticalShots(j.tacticalShots ?? null); setShotZones(j.shotZones ?? null); setSeasonTeam(j.seasonTeam ?? null); setAllStats(j.allStats ?? null); setCompetitions(j.competitions ?? []); setActiveComp(j.competition ?? null); setActiveCompLabel(j.competitionLabel ?? null); setSeasonAi(null); setSeasonAiErr(null); }
+    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); setQuarters(j.quarters ?? null); setTacticalShots(j.tacticalShots ?? null); setShotZones(j.shotZones ?? null); setSeasonTeam(j.seasonTeam ?? null); setGameStats(j.gameStats ?? null); setCompetitions(j.competitions ?? []); setActiveComp(j.competition ?? null); setActiveCompLabel(j.competitionLabel ?? null); setSeasonAi(null); setSeasonAiErr(null); }
   }, [token, selectedComp]);
 
   // Detailed AI season review — assembles every stat the view has and asks the model to walk them.
@@ -778,9 +782,9 @@ export default function BasketballSeasonMatchAnalysis() {
         );
       })() : null}
 
-      {/* All InStat variables for the season, per player (collapsed by default) — the season
-          counterpart of the Single Match "Show all stats" view. */}
-      {allStats && allStats.length ? <SeasonAllStatsSection players={allStats} is={lang === "IS"} /> : null}
+      {/* Detailed InStat stats BY GAME (from the Games file), collapsed by default — the season
+          counterpart of the Single Match "Show all stats" view, one entry per game. */}
+      {gameStats && gameStats.length ? <SeasonGameStatsSection games={gameStats} is={lang === "IS"} /> : null}
 
       <div className="flex flex-wrap gap-2">
         <button onClick={() => setDetails((v) => !v)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-[12px] font-semibold text-[#2740e6] hover:bg-slate-50">
