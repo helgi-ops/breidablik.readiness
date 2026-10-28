@@ -21,7 +21,8 @@ type CompSplit = { label: string; games: number; ppg: number };
 type MA = { m: number; a: number };
 type Shooting = { two: MA; three: MA; ft: MA };
 type Summary = { games: number; ppg: number; rpg: number; apg: number; spg: number; bpg: number; topg: number; fgPct: number; tpPct: number; ftPct: number; bestPts: number; shooting: Shooting; byComp: CompSplit[] };
-type Resp = { ok: boolean; isBasketball?: boolean; season?: string | null; games?: Game[]; summary?: Summary | null; allStats?: GroupedStat[] | null; error?: string };
+type Titan = { sessions: number; playerLoad: number | null; impacts: number | null; jumps: number | null };
+type Resp = { ok: boolean; isBasketball?: boolean; season?: string | null; games?: Game[]; summary?: Summary | null; allStats?: GroupedStat[] | null; titan?: Titan | null; error?: string };
 
 const fr = (m: number, a: number) => `${m}-${a}${a > 0 ? ` · ${Math.round((m / a) * 100)}%` : ""}`;
 const shortDate = (iso: string | null, is: boolean) => { if (!iso) return ""; try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
@@ -118,6 +119,30 @@ export default function PlayerBasketballGameReportCard({ lang }: { lang: "IS" | 
           </div>
         ))}
       </div>
+
+      {/* Titan load — the player's own indoor training output (load / impacts / jumps per session).
+          Descriptive self-awareness, NEVER a readiness score. Self-hides when no Titan data. */}
+      {data.titan && data.titan.sessions > 0 ? (
+        <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-3">
+          <div className="flex items-baseline justify-between">
+            <span className="text-[13px] font-semibold text-zinc-900">{t("Your training load", "Álagið þitt")} <span className="text-[10px] font-normal text-zinc-400">· Titan</span></span>
+            <span className="text-[11px] text-zinc-400">{data.titan.sessions} {t("sessions", "æfingar")}</span>
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {([
+              [t("Load / session", "Álag / æfingu"), data.titan.playerLoad],
+              [t("Impacts / session", "Höggálag / æf."), data.titan.impacts],
+              [t("Jumps / session", "Stökk / æf."), data.titan.jumps],
+            ] as const).map(([label, v]) => (
+              <div key={label} className="rounded-xl border border-zinc-200 bg-white px-2 py-2 text-center">
+                <div className="text-[15px] font-bold tabular-nums text-zinc-900">{v ?? "–"}</div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] text-zinc-400">{t("Your indoor movement output per session (Titan). Just so you can see your work — it's never a readiness or fitness score.", "Þín hreyfi-afköst á æfingu innandyra (Titan). Bara svo þú sjáir vinnuna þína — aldrei readiness- eða fitness-einkunn.")}</p>
+        </div>
+      ) : null}
 
       {/* AI season read — player-facing, labelled; what's working + one thing to work on, from the numbers. */}
       <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3">

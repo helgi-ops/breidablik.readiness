@@ -16,6 +16,7 @@ import { requireAuthedPlayerId } from "@/lib/session-rpe/server";
 import { initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
 import { latestSeason } from "@/lib/micropulse/basketballStats/season";
 import { groupStats, type GroupedStat } from "@/lib/micropulse/basketballStats/instatStatGroups";
+import { aggregatePhysical } from "@/lib/micropulse/basketballStats/basketballPhysical";
 
 /** Parse an InStat cell to a number (strip "%", commas), or null when blank / non-numeric. */
 function statNum(v: unknown): number | null {
@@ -154,6 +155,16 @@ export async function GET(req: Request) {
     .select("stats").eq("player_id", playerId).eq("source", "instat");
   const allStats = aggregatePlayerAllStats(((instatRows ?? []) as Array<{ stats: Record<string, unknown> | null }>));
 
+  // The player's OWN Titan indoor load — session player-load, impacts and jumps, averaged. Their own
+  // training output, for self-awareness; descriptive only, NEVER a readiness/fitness score. Null when none.
+  const { data: titanRows } = await sb.from("player_external_load_daily")
+    .select("player_load, impacts, jumps").eq("player_id", playerId).eq("source", "titan");
+  const titanAgg = aggregatePhysical(((titanRows ?? []) as Array<{ player_load: number | null; impacts: number | null; jumps: number | null }>)
+    .map((r) => ({ playerId, playerLoad: r.player_load, impacts: r.impacts, jumps: r.jumps })));
+  const titan = titanAgg.length && titanAgg[0].sessions > 0
+    ? { sessions: titanAgg[0].sessions, playerLoad: titanAgg[0].playerLoad, impacts: titanAgg[0].impacts, jumps: titanAgg[0].jumps }
+    : null;
+
   // Newest game first for the list (dated games lead, newest→oldest; undated games trail in stored order).
   rows.sort((x, y) => {
     if (x.date && y.date) return y.date.localeCompare(x.date);
@@ -161,5 +172,5 @@ export async function GET(req: Request) {
     if (y.date) return 1;
     return 0;
   });
-  return NextResponse.json({ ok: true, isBasketball: true, playerName: fullName, season, games: rows, summary, allStats });
+  return NextResponse.json({ ok: true, isBasketball: true, playerName: fullName, season, games: rows, summary, allStats, titan });
 }
