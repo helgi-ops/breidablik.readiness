@@ -45,6 +45,27 @@ function mapBox(rows: FibaBoxRow[]): BoxP[] {
     pm: typeof b.pm === "number" ? b.pm : null,
   })).sort((a, b) => b.pts - a.pts);
 }
+/** InStat minutes are a decimal (e.g. 39.867) — render as "mm:ss" to match the KKÍ box. */
+const minStr = (m: number | null | undefined): string | null =>
+  m == null || !Number.isFinite(m) ? null : `${Math.floor(m)}:${String(Math.round((m - Math.floor(m)) * 60)).padStart(2, "0")}`;
+
+type InstatP = { source_player_name?: string | null; minutes?: number | null; points?: number | null; fgm?: number | null; fga?: number | null; tpm?: number | null; tpa?: number | null; ftm?: number | null; fta?: number | null; oreb?: number | null; dreb?: number | null; reb?: number | null; assists?: number | null; steals?: number | null; blocks?: number | null; turnovers?: number | null; plus_minus?: number | null };
+/** Own-side InStat per-player rows → the shared box shape. */
+function instatBox(rows: InstatP[]): BoxP[] {
+  return rows.map((r) => ({
+    name: String(r.source_player_name ?? "—").trim(), min: minStr(r.minutes ?? null), pts: n(r.points), reb: n(r.reb), oreb: n(r.oreb), dreb: n(r.dreb),
+    ast: n(r.assists), stl: n(r.steals), blk: n(r.blocks), tov: n(r.turnovers), fgm: n(r.fgm), fga: n(r.fga), tpm: n(r.tpm), tpa: n(r.tpa), ftm: n(r.ftm), fta: n(r.fta),
+    pm: typeof r.plus_minus === "number" ? r.plus_minus : null,
+  })).sort((a, b) => b.pts - a.pts);
+}
+/** Opponent side comes from the team row's advanced.opp_players (lean — no OREB/DREB split). */
+function instatOppBox(rows: Array<Record<string, unknown>>): BoxP[] {
+  return rows.map((r) => ({
+    name: String(r.name ?? "—"), min: minStr(typeof r.minutes === "number" ? r.minutes : null), pts: n(r.points), reb: n(r.reb), oreb: 0, dreb: 0,
+    ast: n(r.assists), stl: n(r.steals), blk: n(r.blocks), tov: n(r.turnovers), fgm: n(r.fgm), fga: n(r.fga), tpm: n(r.tpm), tpa: n(r.tpa), ftm: n(r.ftm), fta: n(r.fta),
+    pm: null,
+  })).sort((a, b) => b.pts - a.pts);
+}
 function totalsOf(box: BoxP[]) {
   const s = (k: keyof BoxP) => box.reduce((a, p) => a + (typeof p[k] === "number" ? (p[k] as number) : 0), 0);
   return { pts: s("pts"), reb: s("reb"), oreb: s("oreb"), dreb: s("dreb"), ast: s("ast"), stl: s("stl"), blk: s("blk"), tov: s("tov"), fgm: s("fgm"), fga: s("fga"), tpm: s("tpm"), tpa: s("tpa"), ftm: s("ftm"), fta: s("fta") };
@@ -85,6 +106,15 @@ export async function GET(req: NextRequest) {
     const key = gameKey(r.game_date, r.opponent);
     if (!instatByKey.has(key)) instatByKey.set(key, { gameId: String(r.game_id ?? ""), date: r.game_date, opponent: r.opponent });
   }
+  // Per-game InStat scores (own team points + summed opponent box) so an InStat-only game shows
+  // a real score in the list, not 0–0.
+  const { data: instatTeam } = await supabase.from("basketball_team_match_stats")
+    .select("match_date, opponent, points, advanced").eq("owner_team_id", teamId).eq("source", "instat").eq("period", "game").eq("is_opponent", false);
+  const instatPtsByKey = new Map<string, { own: number; opp: number }>();
+  for (const r of ((instatTeam ?? []) as Array<{ match_date: string | null; opponent: string | null; points: number | null; advanced: { opp_players?: Array<{ points?: number | null }> } | null }>)) {
+    const oppPts = Array.isArray(r.advanced?.opp_players) ? r.advanced!.opp_players!.reduce((a, p) => a + (Number(p?.points) || 0), 0) : 0;
+    instatPtsByKey.set(gameKey(r.match_date, r.opponent), { own: Number(r.points) || 0, opp: oppPts });
+  }
 
   // ── LIST ──
   if (sp.get("list")) {
@@ -103,7 +133,8 @@ export async function GET(req: NextRequest) {
     // InStat-only games (no FIBA/KKÍ box) — still list them.
     for (const [key, g] of instatByKey) {
       if (seen.has(key)) continue;
-      entries.push({ key, date: g.date, opponent: g.opponent ?? "—", own: "—", ownPts: 0, oppPts: 0, competition: null, layers: { box: true, shots: false, instat: true } });
+      const pts = instatPtsByKey.get(key);
+      entries.push({ key, date: g.date, opponent: g.opponent ?? "—", own: "—", ownPts: pts?.own ?? 0, oppPts: pts?.opp ?? 0, competition: null, layers: { box: true, shots: false, instat: true } });
     }
     entries.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
     return NextResponse.json({ ok: true, season, games: entries });
@@ -117,9 +148,31 @@ export async function GET(req: NextRequest) {
   if (!g && !instat) return NextResponse.json({ ok: false, error: "Game not found." }, { status: 404 });
 
   const sources: string[] = [];
-  const ownBox = g ? mapBox(Array.isArray(g.own_box) ? g.own_box : []) : [];
-  const oppBox = g ? mapBox(Array.isArray(g.opp_box) ? g.opp_box : []) : [];
+  let ownBox = g ? mapBox(Array.isArray(g.own_box) ? g.own_box : []) : [];
+  let oppBox = g ? mapBox(Array.isArray(g.opp_box) ? g.opp_box : []) : [];
   if (g) sources.push(String(g.match_id ?? "").startsWith("kki-") ? "KKÍ" : "FIBA");
+
+  // InStat box fallback — when no KKÍ/FIBA box exists for this game, build the per-player
+  // box from the imported InStat rows (own from player_basketball_match_stats, opponent from
+  // the team row's advanced.opp_players). This is what makes an InStat-only single-match
+  // upload show its box, matching what KKÍ gives a non-InStat team.
+  let instatOwnName: string | null = null;
+  if (instat && ownBox.length === 0) {
+    const { data: ownP } = await supabase.from("player_basketball_match_stats")
+      .select("source_player_name, minutes, points, fgm, fga, tpm, tpa, ftm, fta, oreb, dreb, reb, assists, steals, blocks, turnovers, plus_minus")
+      .eq("team_id", teamId).eq("source", "instat").eq("game_id", instat.gameId);
+    ownBox = instatBox((ownP ?? []) as InstatP[]);
+    const { data: teamAdv } = await supabase.from("basketball_team_match_stats")
+      .select("advanced").eq("owner_team_id", teamId).eq("source", "instat").eq("period", "game").eq("is_opponent", false).eq("match_ref", instat.gameId).maybeSingle();
+    const adv = (teamAdv as { advanced?: { opp_players?: unknown[]; opp_team?: string | null } } | null)?.advanced ?? {};
+    oppBox = instatOppBox((adv.opp_players ?? []) as Array<Record<string, unknown>>);
+    if (ownBox.length) sources.push("InStat");
+    const { data: teamRow } = await supabase.from("teams").select("name").eq("id", teamId).maybeSingle();
+    instatOwnName = (teamRow as { name?: string } | null)?.name ?? null;
+  }
+
+  const ownNameR = g?.own_name ?? instatOwnName ?? "—";
+  const oppNameR = g?.opp_name ?? instat?.opponent ?? "—";
   const ownTotals = totalsOf(ownBox), oppTotals = totalsOf(oppBox);
 
   // Four Factors — InStat if imported for this game, else computed from the box totals.
@@ -159,7 +212,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Leaders across both teams (from the box).
-  const all = [...ownBox.map((p) => ({ ...p, team: g?.own_name ?? "—" })), ...oppBox.map((p) => ({ ...p, team: g?.opp_name ?? "—" }))];
+  const all = [...ownBox.map((p) => ({ ...p, team: ownNameR })), ...oppBox.map((p) => ({ ...p, team: oppNameR }))];
   const leaderIn = (k: keyof BoxP, en: string, is: string) => {
     const top = all.reduce<(typeof all)[number] | null>((best, p) => (n(p[k]) > n((best?.[k] as number) ?? -1) ? p : best), null);
     return top && n(top[k]) > 0 ? { labelEn: en, labelIs: is, name: top.name, team: top.team, value: n(top[k]) } : null;
@@ -168,7 +221,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     ok: true, key, date: g?.match_date ?? instat?.date ?? null,
-    ownName: g?.own_name ?? "—", oppName: g?.opp_name ?? instat?.opponent ?? "—",
+    ownName: ownNameR, oppName: oppNameR,
     ownPts: ownTotals.pts || totalsPts(g?.own_totals), oppPts: oppTotals.pts || totalsPts(g?.opp_totals),
     competition: g?.competition_code ?? null,
     own: { box: ownBox, totals: ownTotals }, opp: { box: oppBox, totals: oppTotals },
