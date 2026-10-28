@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { labelFor, type GroupedStat } from "@/lib/micropulse/basketballStats/instatStatGroups";
 
 type Game = {
   date: string | null; opponent: string; comp: string | null; compLabel: string; min: string | null;
@@ -17,8 +18,10 @@ type Game = {
   ftm: number; fta: number; pip: number; pm: number | null;
 };
 type CompSplit = { label: string; games: number; ppg: number };
-type Summary = { games: number; ppg: number; rpg: number; apg: number; spg: number; bpg: number; fgPct: number; tpPct: number; ftPct: number; bestPts: number; byComp: CompSplit[] };
-type Resp = { ok: boolean; isBasketball?: boolean; season?: string | null; games?: Game[]; summary?: Summary | null; error?: string };
+type MA = { m: number; a: number };
+type Shooting = { two: MA; three: MA; ft: MA };
+type Summary = { games: number; ppg: number; rpg: number; apg: number; spg: number; bpg: number; topg: number; fgPct: number; tpPct: number; ftPct: number; bestPts: number; shooting: Shooting; byComp: CompSplit[] };
+type Resp = { ok: boolean; isBasketball?: boolean; season?: string | null; games?: Game[]; summary?: Summary | null; allStats?: GroupedStat[] | null; error?: string };
 
 const fr = (m: number, a: number) => `${m}-${a}${a > 0 ? ` · ${Math.round((m / a) * 100)}%` : ""}`;
 const shortDate = (iso: string | null, is: boolean) => { if (!iso) return ""; try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
@@ -28,6 +31,7 @@ export default function PlayerBasketballGameReportCard({ lang }: { lang: "IS" | 
   const t = (en: string, isl: string) => (is ? isl : en);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<Resp | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -78,6 +82,20 @@ export default function PlayerBasketballGameReportCard({ lang }: { lang: "IS" | 
       </div>
       <p className="text-[11px] text-zinc-400">{t(`Season best: ${s.bestPts} pts · ${s.spg} steals & ${s.bpg} blocks per game.`, `Flest stig í leik: ${s.bestPts} · ${s.spg} stolnir & ${s.bpg} varin per leik.`)}</p>
 
+      {/* Shooting splits — makes/attempts per game by shot type */}
+      <div className="grid grid-cols-3 gap-2">
+        {([
+          [t("2PT per game", "2ja/leik"), s.shooting.two],
+          [t("3PT per game", "3ja/leik"), s.shooting.three],
+          [t("FT per game", "Víti/leik"), s.shooting.ft],
+        ] as const).map(([label, v]) => (
+          <div key={label} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-center">
+            <div className="text-[15px] font-bold tabular-nums text-zinc-900">{v.m}<span className="text-zinc-400">/</span>{v.a}</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</div>
+          </div>
+        ))}
+      </div>
+
       {/* Competition split — only when the player spans more than one team/competition (e.g. main + reserve). */}
       {s.byComp.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -126,6 +144,34 @@ export default function PlayerBasketballGameReportCard({ lang }: { lang: "IS" | 
         </table>
       </div>
       <p className="text-[10px] text-zinc-400">{t("Your own box score per game, from KKÍ (baskethotel). For motivation + self-review — never a readiness score.", "Þitt eigið box score per leik, frá KKÍ (baskethotel). Til hvatningar + sjálfsyfirferðar — aldrei readiness-stig.")}</p>
+
+      {/* Show all stats — the player's OWN full InStat variable set (season per-game averages),
+          grouped. Parity with the football players' "Show all stats". Only when InStat data exists. */}
+      {data.allStats && data.allStats.length ? (
+        <div className="rounded-xl border border-zinc-200 bg-white p-3">
+          <button type="button" onClick={() => setShowAll((v) => !v)} className="flex w-full items-center gap-2 text-[13px] font-semibold text-zinc-900">
+            <span className="text-zinc-400">{showAll ? "▾" : "▸"}</span>{t("Show all my stats (InStat)", "Sýna allar mínar tölur (InStat)")}
+            <span className="text-[11px] font-normal text-zinc-400">· {t("season per-game averages", "meðaltöl á leik")}</span>
+          </button>
+          {showAll && (
+            <div className="mt-2 space-y-2.5">
+              {data.allStats.map((grp) => (
+                <div key={grp.group}>
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{is ? grp.title.is : grp.title.en}</div>
+                  <div className="mt-1 grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
+                    {grp.rows.map((r) => (
+                      <div key={r.key} className="flex items-baseline justify-between gap-2 border-b border-zinc-50 py-0.5 text-[11.5px]">
+                        <span className="truncate text-zinc-500">{labelFor(r.key, is ? "IS" : "EN")}</span>
+                        <span className="shrink-0 font-semibold tabular-nums text-zinc-800">{r.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -15,6 +15,38 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAuthedPlayerId } from "@/lib/session-rpe/server";
 import { initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
 import { latestSeason } from "@/lib/micropulse/basketballStats/season";
+import { groupStats, type GroupedStat } from "@/lib/micropulse/basketballStats/instatStatGroups";
+
+/** Parse an InStat cell to a number (strip "%", commas), or null when blank / non-numeric. */
+function statNum(v: unknown): number | null {
+  if (v == null) return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  const s = String(v).trim().replace(/%/g, "").replace(/,/g, "");
+  if (!s || s === "-" || s === "—") return null;
+  const x = Number(s);
+  return Number.isFinite(x) ? x : null;
+}
+
+/** Aggregate the player's own per-game InStat rows → ONE season line (per-game average of every
+ *  numeric column), then group it for the "all stats" view. Averages each column only over the
+ *  games that reported it. Empty → null. */
+function aggregatePlayerAllStats(rows: Array<{ stats: Record<string, unknown> | null }>): GroupedStat[] | null {
+  const sums = new Map<string, { sum: number; n: number }>();
+  for (const r of rows) {
+    if (!r.stats) continue;
+    for (const [k, raw] of Object.entries(r.stats)) {
+      const num = statNum(raw);
+      if (num == null) continue;
+      const cur = sums.get(k) ?? { sum: 0, n: 0 };
+      cur.sum += num; cur.n += 1; sums.set(k, cur);
+    }
+  }
+  if (sums.size === 0) return null;
+  const bag: Record<string, number> = {};
+  for (const [k, { sum, n }] of sums) bag[k] = Math.round((sum / n) * 10) / 10;
+  const grouped = groupStats(bag);
+  return grouped.length ? grouped : null;
+}
 
 type BoxRow = {
   name?: string; min?: string; pts?: number; reb?: number; oreb?: number; dreb?: number; ast?: number;
@@ -101,12 +133,26 @@ export async function GET(req: Request) {
   const byComp = [...compMap.values()].map((c) => ({ label: c.label, games: c.games, ppg: Math.round((c.pts / c.games) * 10) / 10 }))
     .sort((a, b) => b.games - a.games);
 
+  const r1 = (x: number) => Math.round(x * 10) / 10;
   const summary = gp ? {
-    games: gp, ppg: avg("pts"), rpg: avg("reb"), apg: avg("ast"), spg: avg("stl"), bpg: avg("blk"),
+    games: gp, ppg: avg("pts"), rpg: avg("reb"), apg: avg("ast"), spg: avg("stl"), bpg: avg("blk"), topg: avg("tov"),
     fgPct: pct(total("fgm"), total("fga")), tpPct: pct(total("tpm"), total("tpa")), ftPct: pct(total("ftm"), total("fta")),
     bestPts: rows.reduce((m, r) => Math.max(m, r.pts), 0),
+    // Shooting splits — makes/attempts per game, by shot type (2PT = all FG minus threes).
+    shooting: {
+      two: { m: r1((total("fgm") - total("tpm")) / gp), a: r1((total("fga") - total("tpa")) / gp) },
+      three: { m: r1(total("tpm") / gp), a: r1(total("tpa") / gp) },
+      ft: { m: r1(total("ftm") / gp), a: r1(total("fta") / gp) },
+    },
     byComp: byComp.length > 1 ? byComp : [], // only worth showing when the player spans >1 competition
   } : null;
+
+  // Detailed InStat stats — the player's OWN full variable set (play types, shot quality, advanced),
+  // season per-game averages, grouped. Matched by player_id (populated on the InStat import). Gives
+  // basketball players the "show all stats" depth football players already get. Null when no InStat.
+  const { data: instatRows } = await sb.from("player_basketball_match_stats")
+    .select("stats").eq("player_id", playerId).eq("source", "instat");
+  const allStats = aggregatePlayerAllStats(((instatRows ?? []) as Array<{ stats: Record<string, unknown> | null }>));
 
   // Newest game first for the list (dated games lead, newest→oldest; undated games trail in stored order).
   rows.sort((x, y) => {
@@ -115,5 +161,5 @@ export async function GET(req: Request) {
     if (y.date) return 1;
     return 0;
   });
-  return NextResponse.json({ ok: true, isBasketball: true, playerName: fullName, season, games: rows, summary });
+  return NextResponse.json({ ok: true, isBasketball: true, playerName: fullName, season, games: rows, summary, allStats });
 }
