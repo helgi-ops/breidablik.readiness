@@ -17,7 +17,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import PlayerStatsWyscoutView from "@/components/coach/PlayerStatsWyscoutView";
-import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
+import BasketballPlayerAnalysis from "@/components/coach/BasketballPlayerAnalysis";
 import PlayerAnalysisStatsbombView from "@/components/coach/PlayerAnalysisStatsbombView";
 import StatsFileSourceGuide from "@/components/coach/StatsFileSourceGuide";
 
@@ -101,20 +101,12 @@ export default function PlayerAnalysisPage() {
           </div>
         ) : null}
 
-        {/* Basketball: import InStat per-player tables (advanced metrics) right here. */}
-        {isBasketball ? (
-          <details className="mb-4 rounded-xl border border-orange-200 bg-orange-50/40 px-4 py-2.5">
-            <summary className="cursor-pointer text-[12px] font-semibold text-orange-800">
-              {is ? "Flytja inn InStat gögn (leikskýrsla PDF / tafla)" : "Import InStat data (Game Report PDF / table)"}
-            </summary>
-            <div className="mt-3"><InstatBasketballUpload onImported={() => window.location.reload()} /></div>
-          </details>
-        ) : null}
-
         {/* Football: where to download the Squad / Player Stats (and the other exports). */}
         {!isBasketball ? <StatsFileSourceGuide /> : null}
 
-        {isBasketball || sel === "wyscout" ? <PlayerStatsWyscoutView /> : <PlayerAnalysisStatsbombView />}
+        {isBasketball
+          ? <BasketballPlayerAnalysis />
+          : sel === "wyscout" ? <PlayerStatsWyscoutView /> : <PlayerAnalysisStatsbombView />}
       </div>
     </div>
   );
