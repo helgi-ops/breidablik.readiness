@@ -130,8 +130,18 @@ export default function BasketballTotalPlayerAnalysis() {
           {ai ? (
             <div className="rounded-xl border border-[#c4cbf5] bg-[#f6f7fe] p-3">
               <div className="mb-1.5 flex items-center gap-2"><span className="rounded bg-[#2740e6] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">AI</span><span className="text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">{is ? "les tölurnar — ákveður ekkert" : "reads the numbers — decides nothing"}</span></div>
-              <p className="text-[13px] leading-relaxed text-slate-700">{ai.summary}</p>
-              {ai.development ? <p className="mt-1.5 text-[12.5px] leading-relaxed text-amber-800">{ai.development}</p> : null}
+              <div className="space-y-2">
+                {ai.summary.split(/\n{2,}/).map((para, i) => (
+                  <p key={i} className="text-[13px] leading-relaxed text-slate-700">
+                    {para.split(/\*\*(.+?)\*\*/).map((seg, j) => (j % 2 === 1 ? <strong key={j} className="font-semibold text-slate-900">{seg}</strong> : seg))}
+                  </p>
+                ))}
+              </div>
+              {ai.development ? (
+                <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[12.5px] leading-relaxed text-amber-800">
+                  <span className="font-semibold">{is ? "Þróun: " : "Development: "}</span>{ai.development}
+                </p>
+              ) : null}
             </div>
           ) : null}
 

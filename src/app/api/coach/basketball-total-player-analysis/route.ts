@@ -79,16 +79,31 @@ async function narrative(a: PlayerAnalysis, style: PlayStyle | null, arch: { lab
   const apiKey = process.env.ANTHROPIC_API_KEY; if (!apiKey) return null;
   const language = lang === "IS" ? "Icelandic" : "English";
   const facts = {
-    name: a.name, games: a.games, archetype: arch.label.en, role: a.role?.key ?? null, season: a.season,
+    name: a.name, games: a.games, archetype: arch.label.en, role: a.role?.key ?? null,
+    season: a.season,  // full per-game line incl. 2PT/3PT/FT makes-attempts, shooting %s, rebounds, assists, steals, blocks, turnovers
+    production: a.categories.map((c) => ({
+      category: c.key, percentile: c.avgPercentile,
+      metrics: c.metrics.map((m) => ({ metric: m.key, percentile: m.percentile, value: m.valueText ?? m.value })),
+    })),
     strengths: a.strengths.map((m) => ({ metric: m.key, percentile: m.percentile })),
     weaknesses: a.weaknesses.map((m) => ({ metric: m.key, percentile: m.percentile })),
-    styleMix: (style?.mix ?? []).slice(0, 4).map((s) => ({ type: s.key, sharePct: s.share, pct: s.pct })),
+    styleMix: (style?.mix ?? []).map((s) => ({ type: s.key, sharePctOfAttempts: s.share, successPct: s.pct })),
     defenseOppFgPct: style?.defense?.oppFgPct ?? null,
   };
-  const system = `You are a basketball analyst writing a SHORT two-axis player read for a head coach: PRODUCTION (within-squad box-score percentiles, 0-100) + STYLE (how they generate offence, by attempt share) + a defence number. Use ONLY the numbers given; never invent stats or events; refer to the player by name or "they"/"them" (do not guess gender); tie the archetype to the style mix and the top strengths; plain language; PERFORMANCE read only, never readiness/medical/training. Write in ${language}. Return ONLY JSON: {"summary": string (2-3 sentences — the archetype, how they score, leading strengths), "development": string (1-2 sentences — the clearest area to improve)}.`;
+  const system = `You are a basketball analyst writing a DETAILED two-axis player read for a head coach: PRODUCTION (within-squad box-score percentiles, 0-100, 100 = best on the team) + STYLE (how they generate offence — each play type's share of their attempts and how well they finish it) + a defence number (opponent FG% against them, lower is better). Rules:
+- Use ONLY the numbers given; never invent stats, games or events. Refer to the player by name or "they"/"them" (never guess gender).
+- Write the "summary" as several short paragraphs, each led by a bold label:
+  **Archetype & role** — name the archetype and what it means, their headline production (points and the categories they rank highest in).
+  **How they score (style)** — walk the style mix: which play types make up most of their attempts and which they finish well vs poorly (cite the share% and success%), plus the 2PT/3PT/FT split; say whether they are on-ball or off-ball, inside or outside.
+  **Production strengths** — the box-score categories and metrics where they rank highest within the squad, citing the percentile.
+  **Defense** — what the opponent FG% against them says, within the squad.
+  In each section tie the numbers together and interpret what it means for how they help the team.
+- Plain language a non-analyst coach reads quickly. A PERFORMANCE read only — never a readiness, medical, load or training-decision verdict.
+- Write in ${language}.
+Return ONLY JSON: {"summary": string (the sectioned read, paragraphs separated by blank lines, each starting with its bold label like "**Archetype & role** …"), "development": string (2-3 sentences — the clearest areas to improve, from the low percentiles / poorly-finished play types, concrete and constructive)}.`;
   let res: Response;
   try {
-    res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" }, body: JSON.stringify({ model: AI_MODEL, max_tokens: 600, system, messages: [{ role: "user", content: `Two-axis player analysis:\n${JSON.stringify(facts)}` }] }) });
+    res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" }, body: JSON.stringify({ model: AI_MODEL, max_tokens: 1400, system, messages: [{ role: "user", content: `Two-axis player analysis:\n${JSON.stringify(facts)}` }] }) });
   } catch { return null; }
   if (!res.ok) return null;
   const j = await res.json();
