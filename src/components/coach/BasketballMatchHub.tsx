@@ -225,6 +225,7 @@ export default function BasketballMatchHub() {
                 <span className="w-[52px] shrink-0 text-[12px] font-bold tabular-nums text-slate-900">{g.ownPts || g.oppPts ? `${g.ownPts}–${g.oppPts}` : "—"}</span>
                 <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-slate-700">{t("vs", "gegn")} {g.opponent} <span className="font-normal text-slate-400">{fmtDate(g.date, is)}</span></span>
                 <span className="flex shrink-0 items-center gap-1">
+                  {g.competition ? <span className="hidden rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 sm:inline">{compLabel(g.competition)}</span> : null}
                   <Badge on={g.layers.box}>{t("Box", "Box")}</Badge>
                   <Badge on={g.layers.shots}>{t("Shots", "Skot")}</Badge>
                   <Badge on={g.layers.instat}>{t("Adv", "Ítarl")}</Badge>
