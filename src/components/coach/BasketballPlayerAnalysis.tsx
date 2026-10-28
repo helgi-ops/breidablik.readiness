@@ -35,6 +35,19 @@ export default function BasketballPlayerAnalysis() {
   const [analysis, setAnalysis] = React.useState<Analysis | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+  const [ai, setAi] = React.useState<{ summary: string; development: string } | null>(null);
+  const [aiBusy, setAiBusy] = React.useState(false);
+
+  async function fetchAi() {
+    if (!sel) return;
+    setAiBusy(true);
+    try {
+      const t = await token(); if (!t) return;
+      const res = await fetch("/api/coach/basketball-player-analysis", { method: "POST", headers: { Authorization: `Bearer ${t}`, "content-type": "application/json" }, body: JSON.stringify({ player: sel, prose: true, lang }) });
+      const j = await res.json();
+      if (j.ok && j.ai) setAi(j.ai);
+    } finally { setAiBusy(false); }
+  }
 
   React.useEffect(() => {
     (async () => {
@@ -46,6 +59,7 @@ export default function BasketballPlayerAnalysis() {
   }, [token]);
 
   React.useEffect(() => {
+    setAi(null);
     if (!sel) { setAnalysis(null); return; }
     (async () => {
       setBusy(true); setErr(null);
@@ -83,7 +97,24 @@ export default function BasketballPlayerAnalysis() {
             {a.role ? <span className="rounded-full bg-[#2740e6]/10 px-2 py-0.5 text-[11px] font-bold text-[#2740e6]">{L(a.role.label)}</span> : null}
             <span className="text-[12px] text-slate-400">{a.games} {is ? "leikir" : "games"} · {is ? "borið saman við" : "vs"} {a.poolSize} {is ? "liðsfélaga" : "teammates"}</span>
             {a.smallSample ? <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">{is ? "lítið úrtak" : "small sample"}</span> : null}
+            {!ai ? (
+              <button type="button" onClick={() => void fetchAi()} disabled={aiBusy} className="ml-auto rounded-lg border border-[#2740e6] px-2.5 py-1 text-[12px] font-semibold text-[#2740e6] hover:bg-[#eef0fb] disabled:opacity-50">
+                {aiBusy ? (is ? "AI skrifar…" : "AI writing…") : (is ? "✨ AI-samantekt" : "✨ AI summary")}
+              </button>
+            ) : null}
           </div>
+
+          {/* AI summary — labelled, phrases the percentile numbers only */}
+          {ai ? (
+            <div className="rounded-xl border border-[#c4cbf5] bg-[#f6f7fe] p-3">
+              <div className="mb-1.5 flex items-center gap-2">
+                <span className="rounded bg-[#2740e6] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">AI</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">{is ? "les tölurnar — ákveður ekkert" : "reads the numbers — decides nothing"}</span>
+              </div>
+              <p className="text-[13px] leading-relaxed text-slate-700">{ai.summary}</p>
+              {ai.development ? <p className="mt-1.5 text-[12.5px] leading-relaxed text-amber-800">{ai.development}</p> : null}
+            </div>
+          ) : null}
 
           {/* Season line */}
           <div className="flex flex-wrap gap-2">

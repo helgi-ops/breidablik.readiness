@@ -33,6 +33,43 @@ async function authTeam(req: NextRequest) {
   return { supabase, teamId } as const;
 }
 
+const AI_MODEL = "claude-haiku-4-5-20251001";
+
+/** A short, AI-labelled narrative of the rule-based percentile read. Phrases the numbers only —
+ *  rules decide, AI explains. Returns null when no key is configured (the bars still render). */
+async function generateNarrative(analysis: ReturnType<typeof buildBasketballPlayerAnalysis>, lang: "EN" | "IS"): Promise<{ summary: string; development: string } | null> {
+  if (!analysis) return null;
+  const apiKey = process.env.ANTHROPIC_API_KEY; if (!apiKey) return null;
+  const language = lang === "IS" ? "Icelandic" : "English";
+  const facts = {
+    name: analysis.name, games: analysis.games, role: analysis.role?.key ?? null,
+    season: analysis.season,
+    categoryPercentiles: analysis.categories.map((c) => ({ category: c.key, percentile: c.avgPercentile })),
+    strengths: analysis.strengths.map((m) => ({ metric: m.key, percentile: m.percentile, value: m.value })),
+    weaknesses: analysis.weaknesses.map((m) => ({ metric: m.key, percentile: m.percentile, value: m.value })),
+  };
+  const system = `You are a basketball analyst writing a SHORT player read for a head coach, STRICTLY from the within-squad percentile analysis given. Percentiles are 0-100 within the player's OWN squad (100 = best on the team for that stat). Rules: use ONLY the numbers provided; never invent stats, games or events; refer to the player by name or as "they"/"them" (do not guess gender); name the role and the clearest strengths and weakness; plain language, no jargon; this is a PERFORMANCE read, never a readiness/medical/training verdict. Write in ${language}. Return ONLY a JSON object: {"summary": string (2-3 sentences — what kind of player they are within this squad and their leading strengths), "development": string (1-2 sentences — the clearest area to improve, from the low percentiles)}.`;
+  let res: Response;
+  try {
+    res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: AI_MODEL, max_tokens: 600, system, messages: [{ role: "user", content: `Player percentile analysis:\n${JSON.stringify(facts)}` }] }),
+    });
+  } catch { return null; }
+  if (!res.ok) return null;
+  const j = await res.json();
+  let text = String(j?.content?.[0]?.text ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const a = text.indexOf("{"), b = text.lastIndexOf("}");
+  text = a >= 0 && b > a ? text.slice(a, b + 1) : text;
+  try {
+    const parsed = JSON.parse(text) as { summary?: unknown; development?: unknown };
+    const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
+    const development = typeof parsed.development === "string" ? parsed.development.trim() : "";
+    return summary ? { summary, development } : null;
+  } catch { return null; }
+}
+
 const foldNm = (s: string | null | undefined) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
 const gkey = (date: string | null, opp: string | null) => `${date ?? "-"}|${foldNm(opp)}`;
 
@@ -83,5 +120,6 @@ export async function POST(req: NextRequest) {
   const seasons = await loadSquadSeasons(auth.supabase, auth.teamId);
   const analysis = buildBasketballPlayerAnalysis(seasons, player, initialSurnameKey);
   if (!analysis) return NextResponse.json({ ok: false, error: "No data for that player." }, { status: 404 });
-  return NextResponse.json({ ok: true, analysis });
+  const ai = body?.prose === true ? await generateNarrative(analysis, String(body?.lang ?? "EN").toUpperCase() === "IS" ? "IS" : "EN") : null;
+  return NextResponse.json({ ok: true, analysis, ai });
 }
