@@ -26,7 +26,8 @@ export type SeasonInput = { games: GameTotals[]; results: Record<string, GameRes
 
 export type Split = {
   games: number;
-  pts: number | null; fgPct: number | null; tpPct: number | null; ftPct: number | null;
+  pts: number | null; ptsAgainst: number | null; margin: number | null;
+  fgPct: number | null; tpPct: number | null; ftPct: number | null;
   reb: number | null; oreb: number | null; dreb: number | null;
   ast: number | null; stl: number | null; blk: number | null; tov: number | null; fouls: number | null;
 };
@@ -60,10 +61,13 @@ const pct = (made: number, att: number): number | null => (att > 0 ? Math.round(
 const round1 = (v: number) => Math.round(v * 10) / 10;
 const sum = (games: GameTotals[], f: (g: GameTotals) => number) => games.reduce((a, g) => a + (isNum(f(g)) ? f(g) : 0), 0);
 
-function summarize(games: GameTotals[]): Split {
+function summarize(games: GameTotals[], results: Record<string, GameResult> = {}): Split {
+  const decided = games.map((g) => resolveResult(g, results[g.gameId])).filter((r) => r.margin != null);
   return {
     games: games.length,
     pts: avg(games.map((g) => g.pts)),
+    ptsAgainst: decided.length ? avg(decided.map((r) => r.pointsAgainst!)) : null,
+    margin: decided.length ? avg(decided.map((r) => r.margin!)) : null,
     fgPct: pct(sum(games, (g) => g.fgm), sum(games, (g) => g.fga)),
     tpPct: pct(sum(games, (g) => g.tpm), sum(games, (g) => g.tpa)),
     ftPct: pct(sum(games, (g) => g.ftm), sum(games, (g) => g.fta)),
@@ -129,13 +133,13 @@ export function buildBasketballSeason(input: SeasonInput): BasketballSeason {
 
   return {
     gamesPlayed: games.length,
-    averages: summarize(games),
+    averages: summarize(games, results),
     perGame,
-    homeAway: { home: summarize(homeGames), away: summarize(awayGames) },
+    homeAway: { home: summarize(homeGames, results), away: summarize(awayGames, results) },
     byOpponent,
     resultsEntered,
     record: resultsEntered > 0 ? { wins: wins.length, losses: losses.length, ties } : null,
-    winLoss: (wins.length > 0 || losses.length > 0) ? { win: summarize(wins.map((x) => x.g)), loss: summarize(losses.map((x) => x.g)) } : null,
+    winLoss: (wins.length > 0 || losses.length > 0) ? { win: summarize(wins.map((x) => x.g), results), loss: summarize(losses.map((x) => x.g), results) } : null,
     marginSeries: perGame.filter((p) => p.margin != null).map((p) => ({ date: p.date, opponent: p.opponent, margin: p.margin! })),
   };
 }

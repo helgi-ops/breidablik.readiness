@@ -38,7 +38,7 @@ const T = {
     noResults: "No final scores entered yet — add opponent points below to unlock win/loss and margin.",
     home: "Home", away: "Away", leaders: "Season leaders", scorer: "Scorer", rebounder: "Rebounder", playmaker: "Playmaker",
     showDetails: "Show details", hideDetails: "Hide details",
-    averages: "Season averages", total: "Total", perGame: "Game by game", byOpponent: "By opponent", winLoss: "Wins vs losses",
+    averages: "Season averages", total: "Total", oppShort: "OPP", marShort: "±", perGame: "Game by game", byOpponent: "By opponent", winLoss: "Wins vs losses",
     enterResults: "Enter final scores", enterHint: "Your points come from the box score; type the opponent's final score. Saved per game.",
     us: "Us", them: "Them", opp: "Opponent", result: "Result", save: "Save", saved: "Saved", saving: "…",
     fg: "FG%", tp: "3P%", ft: "FT%", reb: "REB", ast: "AST", tov: "TOV", stl: "STL", blk: "BLK",
@@ -62,7 +62,7 @@ const T = {
     noResults: "Engin lokastaða skráð enn — skráðu stig andstæðinga hér að neðan til að fá sigra/töp og mun.",
     home: "Heima", away: "Úti", leaders: "Efstir á tímabilinu", scorer: "Stigahæstur", rebounder: "Fráköst", playmaker: "Stoðsendingar",
     showDetails: "Sýna nánar", hideDetails: "Fela nánar",
-    averages: "Meðaltöl tímabils", total: "Samtals", perGame: "Leik fyrir leik", byOpponent: "Eftir andstæðingi", winLoss: "Sigrar vs töp",
+    averages: "Meðaltöl tímabils", total: "Samtals", oppShort: "AND", marShort: "±", perGame: "Leik fyrir leik", byOpponent: "Eftir andstæðingi", winLoss: "Sigrar vs töp",
     enterResults: "Skrá lokastöður", enterHint: "Þín stig koma úr leikskýrslunni; sláðu inn lokastig andstæðingsins. Vistast per leik.",
     us: "Við", them: "Þeir", opp: "Andstæðingur", result: "Úrslit", save: "Vista", saved: "Vistað", saving: "…",
     fg: "Vallarsk.%", tp: "3ja%", ft: "Víti%", reb: "Fráköst", ast: "Stoðs.", tov: "Tapaðir", stl: "Stolnir", blk: "Varin",
@@ -102,6 +102,8 @@ function SplitRow({ label, s, tone }: { label: string; s: Split; tone?: "total" 
       <td className={`whitespace-nowrap py-1.5 pr-3 ${lab}`}>{label}</td>
       <td className="py-1.5 pr-3 text-right tabular-nums text-slate-400">{s.games}</td>
       <td className="py-1.5 pr-3 text-right font-semibold tabular-nums text-slate-900">{d1(s.pts)}</td>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-slate-500">{d1(s.ptsAgainst)}</td>
+      <td className="py-1.5 pr-3 text-right font-semibold tabular-nums" style={{ color: s.margin == null ? undefined : s.margin > 0 ? "#1c7a4a" : s.margin < 0 ? "#a83e28" : undefined }}>{s.margin == null ? "—" : `${s.margin > 0 ? "+" : ""}${d1(s.margin)}`}</td>
       <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{pctS(s.fgPct)}</td>
       <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{pctS(s.tpPct)}</td>
       <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{pctS(s.ftPct)}</td>
@@ -438,6 +440,8 @@ export default function BasketballSeasonMatchAnalysis() {
                 <th className="py-1 pr-3 text-left font-semibold" />
                 <th className="py-1 pr-3 font-semibold">{t.games}</th>
                 <th className="py-1 pr-3 font-semibold">{t.ppg}</th>
+                <th className="py-1 pr-3 font-semibold">{t.oppShort}</th>
+                <th className="py-1 pr-3 font-semibold">{t.marShort}</th>
                 <th className="py-1 pr-3 font-semibold">{t.fg}</th>
                 <th className="py-1 pr-3 font-semibold">{t.tp}</th>
                 <th className="py-1 pr-3 font-semibold">{t.ft}</th>
@@ -454,6 +458,48 @@ export default function BasketballSeasonMatchAnalysis() {
               {season.homeAway.away.games > 0 ? <SplitRow label={t.away} s={season.homeAway.away} /> : null}
               {season.winLoss ? <SplitRow label={t.win} s={season.winLoss.win} tone="win" /> : null}
               {season.winLoss ? <SplitRow label={t.loss} s={season.winLoss.loss} tone="loss" /> : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Game by game — under Season averages: the per-game trend + box line, newest first. */}
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="mb-2 text-[13px] font-bold text-slate-800">{t.perGame}</div>
+        <PointsSpark perGame={season.perGame} />
+        <div className="mt-2 max-h-64 overflow-y-auto overflow-x-auto">
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="text-right text-[10px] uppercase tracking-wide text-slate-400">
+                <th className="py-1 pr-3 text-left font-semibold">{t.opp}</th>
+                <th className="py-1 pr-3 font-semibold">{t.us}</th>
+                <th className="py-1 pr-3 font-semibold">{t.fg}</th>
+                <th className="py-1 pr-3 font-semibold">{t.tp}</th>
+                <th className="py-1 pr-3 font-semibold">{t.reb}</th>
+                <th className="py-1 pr-3 font-semibold">{t.ast}</th>
+                <th className="py-1 pr-3 font-semibold">{t.tov}</th>
+                <th className="py-1 pr-1 font-semibold">{t.result}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {season.perGame.slice().reverse().map((g) => (
+                <tr key={g.gameId} className="border-t border-[#eceae2]">
+                  <td className="whitespace-nowrap py-1.5 pr-3">
+                    <span className="font-medium text-slate-800">{g.opponent ?? "—"}</span>
+                    {g.homeAway ? <span className="ml-1 text-[10px] text-slate-400">{g.homeAway === "home" ? t.home[0] : t.away[0]}</span> : null}
+                    <span className="ml-1.5 text-[10px] text-slate-400">{g.date ?? ""}</span>
+                  </td>
+                  <td className="py-1.5 pr-3 text-right font-semibold tabular-nums text-slate-900">{g.pointsFor ?? g.pts}{g.pointsAgainst != null ? <span className="font-normal text-slate-400">–{g.pointsAgainst}</span> : ""}</td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{pctS(g.fgPct)}</td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{pctS(g.tpPct)}</td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{g.reb || "—"}</td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{g.ast || "—"}</td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{g.tov || "—"}</td>
+                  <td className="py-1.5 pr-1 text-right font-semibold tabular-nums" style={{ color: g.result === "W" ? "#1c7a4a" : g.result === "L" ? "#a83e28" : "#9aa3af" }}>
+                    {g.result === "W" ? t.w : g.result === "L" ? t.l : ""}{g.margin != null ? ` ${g.margin > 0 ? "+" : ""}${g.margin}` : ""}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -671,44 +717,6 @@ export default function BasketballSeasonMatchAnalysis() {
       {/* Layer 2 — details */}
       {details ? (
         <div className="space-y-4">
-          {/* Per-game trend */}
-          <div>
-            <div className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t.perGame}</div>
-            <PointsSpark perGame={season.perGame} />
-            <div className="mt-1 max-h-52 overflow-y-auto overflow-x-auto">
-              <table className="w-full text-[12px]">
-                <thead>
-                  <tr className="text-right text-slate-500">
-                    <th className="py-1 pr-3 text-left font-semibold">{t.opp}</th>
-                    <th className="py-1 pr-3 font-semibold">{t.us}</th>
-                    <th className="py-1 pr-3 font-semibold">{t.fg}</th>
-                    <th className="py-1 pr-3 font-semibold">{t.tp}</th>
-                    <th className="py-1 pr-3 font-semibold">{t.reb}</th>
-                    <th className="py-1 pr-3 font-semibold">{t.ast}</th>
-                    <th className="py-1 pr-3 font-semibold">{t.tov}</th>
-                    <th className="py-1 pr-1 font-semibold">{t.result}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {season.perGame.slice().reverse().map((g) => (
-                    <tr key={g.gameId} className="border-t border-[#eceae2]">
-                      <td className="py-1 pr-3 text-slate-700"><span className="text-slate-400">{g.date ?? ""}</span> {g.opponent ?? "—"}{g.homeAway ? ` (${g.homeAway === "home" ? t.home[0] : t.away[0]})` : ""}</td>
-                      <td className="py-1 pr-3 text-right tabular-nums">{g.pointsFor ?? g.pts}{g.pointsAgainst != null ? `–${g.pointsAgainst}` : ""}</td>
-                      <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{pctS(g.fgPct)}</td>
-                      <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{pctS(g.tpPct)}</td>
-                      <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{g.reb || "—"}</td>
-                      <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{g.ast || "—"}</td>
-                      <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{g.tov || "—"}</td>
-                      <td className="py-1 pr-1 text-right font-semibold" style={{ color: g.result === "W" ? "#1c7a4a" : g.result === "L" ? "#a83e28" : "#9aa3af" }}>
-                        {g.result === "W" ? t.w : g.result === "L" ? t.l : ""}{g.margin != null ? ` ${g.margin > 0 ? "+" : ""}${g.margin}` : ""}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
           {/* Per opponent */}
           <div>
             <div className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t.byOpponent}</div>
