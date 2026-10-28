@@ -84,7 +84,7 @@ type MatchPlayersPreview = {
 
 const num = (v: number | null | undefined, digits = 0) => (v == null ? "–" : v.toFixed(digits));
 
-export default function InstatBasketballUpload({ onImported }: { onImported?: () => void }) {
+export default function InstatBasketballUpload({ onImported, surface = "all" }: { onImported?: () => void; surface?: "all" | "single" }) {
   const [lang] = useLang();
   const is = lang === "IS";
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
@@ -457,6 +457,8 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
         )}
       </div>
 
+      {/* Season / legacy exports — hidden on the single-match surface (one game only). */}
+      {surface !== "single" && (<>
       {/* SECONDARY — per-player CSV/Excel */}
       <details className="rounded-xl border border-slate-200 bg-white px-4 py-3">
         <summary className="cursor-pointer text-xs font-semibold text-slate-500">{is ? "Per-leikmann tölur (InStat tafla — CSV/Excel)" : "Per-player stats (InStat table — CSV/Excel)"}</summary>
@@ -706,6 +708,7 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
           </div>
         )}
       </details>
+      </>)}
 
       <p className="text-[11px] text-slate-400">
         {is

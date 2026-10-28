@@ -243,7 +243,7 @@ export default function BasketballMatchHub() {
         {addOpen && (
           <div className="mt-3 space-y-4">
             <div><div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("Paste a KKÍ.is game link", "Límdu KKÍ.is leikhlekk")}</div><KkiMatchView /></div>
-            <div><div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("Or import an InStat Game Report (adds advanced stats)", "Eða flyttu inn InStat leikskýrslu (bætir við ítarlegri tölfræði)")}</div><InstatBasketballUpload onImported={() => void loadList()} /></div>
+            <div><div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("Or upload this game from InStat (per-player box or Game Report PDF)", "Eða hlaðið þessum leik upp úr InStat (per-leikmann box eða leikskýrsla PDF)")}</div><InstatBasketballUpload surface="single" onImported={() => void loadList()} /></div>
           </div>
         )}
       </div>
