@@ -620,6 +620,10 @@ export default function BasketballSeasonMatchAnalysis() {
         </div>
       </section>
 
+      {/* Detailed InStat stats BY GAME (from the Games file), collapsed by default — directly under
+          Game by game so the full per-game variables sit right beside the per-game list. */}
+      {gameStats && gameStats.length ? <SeasonGameStatsSection games={gameStats} is={lang === "IS"} /> : null}
+
       {/* Season averages (InStat "Team comparison") — authoritative full-season line. */}
       {seasonTeam ? <SeasonAveragesCard t={seasonTeam} is={lang === "IS"} /> : null}
 
@@ -781,10 +785,6 @@ export default function BasketballSeasonMatchAnalysis() {
           </div>
         );
       })() : null}
-
-      {/* Detailed InStat stats BY GAME (from the Games file), collapsed by default — the season
-          counterpart of the Single Match "Show all stats" view, one entry per game. */}
-      {gameStats && gameStats.length ? <SeasonGameStatsSection games={gameStats} is={lang === "IS"} /> : null}
 
       <div className="flex flex-wrap gap-2">
         <button onClick={() => setDetails((v) => !v)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-[12px] font-semibold text-[#2740e6] hover:bg-slate-50">
