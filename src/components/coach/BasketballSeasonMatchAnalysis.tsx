@@ -344,6 +344,9 @@ export default function BasketballSeasonMatchAnalysis() {
   const [drafts, setDrafts] = React.useState<Record<string, string>>({});
   const [savingId, setSavingId] = React.useState<string | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
+  const [seasonAi, setSeasonAi] = React.useState<string | null>(null);
+  const [seasonAiBusy, setSeasonAiBusy] = React.useState(false);
+  const [seasonAiErr, setSeasonAiErr] = React.useState<string | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
 
@@ -352,8 +355,38 @@ export default function BasketballSeasonMatchAnalysis() {
     const qs = selectedComp ? `?competition=${encodeURIComponent(selectedComp)}` : "";
     const res = await fetch(`/api/coach/basketball-season-insights${qs}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
     const j = await res.json();
-    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); setQuarters(j.quarters ?? null); setTacticalShots(j.tacticalShots ?? null); setShotZones(j.shotZones ?? null); setSeasonTeam(j.seasonTeam ?? null); setCompetitions(j.competitions ?? []); setActiveComp(j.competition ?? null); setActiveCompLabel(j.competitionLabel ?? null); }
+    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); setQuarters(j.quarters ?? null); setTacticalShots(j.tacticalShots ?? null); setShotZones(j.shotZones ?? null); setSeasonTeam(j.seasonTeam ?? null); setCompetitions(j.competitions ?? []); setActiveComp(j.competition ?? null); setActiveCompLabel(j.competitionLabel ?? null); setSeasonAi(null); setSeasonAiErr(null); }
   }, [token, selectedComp]);
+
+  // Detailed AI season review — assembles every stat the view has and asks the model to walk them.
+  const fetchSeasonAi = React.useCallback(async () => {
+    if (!season) return;
+    setSeasonAiBusy(true); setSeasonAiErr(null);
+    try {
+      const facts = {
+        competition: activeCompLabel,
+        gamesPlayed: season.gamesPlayed,
+        record: season.record,
+        averages: season.averages,
+        homeAway: season.homeAway,
+        winLoss: season.winLoss,
+        byOpponent: season.byOpponent,
+        leaders, fourFactors, quarters,
+        shotPlaytypes: tacticalShots?.playtypes ?? null,
+        shotEfficiency: tacticalShots?.efficiency ?? null,
+        shotZonesTeam: shotZones?.team ?? null,
+        seasonTeam,
+      };
+      const tok = await token(); if (!tok) { setSeasonAiErr(lang === "IS" ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const res = await fetch("/api/coach/basketball-season-summary", {
+        method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" },
+        body: JSON.stringify({ facts, lang }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setSeasonAiErr(j.error ?? "Error"); return; }
+      setSeasonAi(String(j.summary ?? ""));
+    } catch (e) { setSeasonAiErr(e instanceof Error ? e.message : "Error"); } finally { setSeasonAiBusy(false); }
+  }, [season, activeCompLabel, leaders, fourFactors, quarters, tacticalShots, shotZones, seasonTeam, token, lang]);
 
   React.useEffect(() => { void load(); }, [load]);
 
@@ -428,6 +461,31 @@ export default function BasketballSeasonMatchAnalysis() {
           </p>
         ) : null}
       </div>
+
+      {/* Detailed AI season review — labelled; walks every stat the view shows, from the data only. */}
+      <section className="rounded-xl border border-[#c4cbf5] bg-[#f6f7fe] p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded bg-[#2740e6] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">AI</span>
+          <span className="text-[13px] font-bold text-slate-800">{lang === "IS" ? "Ítarleg AI-greining tímabilsins" : "Detailed AI season review"}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">{lang === "IS" ? "les tölfræðina — ákveður ekkert" : "reads the stats — decides nothing"}</span>
+          <button type="button" onClick={() => void fetchSeasonAi()} disabled={seasonAiBusy}
+            className="ml-auto rounded-lg border border-[#2740e6] px-2.5 py-1 text-[11px] font-semibold text-[#2740e6] hover:bg-[#eef0fb] disabled:opacity-50">
+            {seasonAiBusy ? (lang === "IS" ? "AI skrifar…" : "AI writing…") : seasonAi ? (lang === "IS" ? "↻ Uppfæra" : "↻ Regenerate") : (lang === "IS" ? "✨ Greina tímabilið" : "✨ Review the season")}
+          </button>
+        </div>
+        {seasonAiErr ? <p className="mt-2 text-[12px] font-medium text-red-700">{seasonAiErr}</p> : null}
+        {seasonAi ? (
+          <div className="mt-3 space-y-2">
+            {seasonAi.split(/\n{2,}/).map((para, i) => (
+              <p key={i} className="text-[13px] leading-relaxed text-slate-700">
+                {para.split(/\*\*(.+?)\*\*/).map((seg, j) => (j % 2 === 1 ? <strong key={j} className="font-semibold text-slate-900">{seg}</strong> : seg))}
+              </p>
+            ))}
+          </div>
+        ) : seasonAiBusy ? null : (
+          <p className="mt-2 text-[12px] text-slate-500">{lang === "IS" ? "Skrifar yfirferð yfir alla tölfræðina: staða, Four Factors, skot, fráköst, heima/úti, sigrar vs töp, leikhlutar og lykilmenn." : "Writes a walk-through of every stat shown: record, Four Factors, shooting, rebounding, home/away, wins vs losses, quarters and key players."}</p>
+        )}
+      </section>
 
       {/* Season averages — the team's box-score line (per-game averages), with home/away and
           win/loss splits. Shown above Four Factors as the headline team stat line. */}
