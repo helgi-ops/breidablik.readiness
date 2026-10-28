@@ -18,9 +18,18 @@
  * Descriptive scouting — never touches readiness.
  */
 
+import * as React from "react";
 import { Document, Page, StyleSheet, Text, View, Svg, Path, Line, Circle, Polygon } from "@react-pdf/renderer";
 import { fb, fh, fileSafe, renderPdfBlob, saveBlob } from "@/components/pdf/brand";
 import { shotLabel, type Lang } from "@/lib/micropulse/basketballStats/shotLabels";
+import { shotChartGeometry } from "@/lib/micropulse/basketballStats/shotChartGeometry";
+
+export type ClipLite = { action: string; made: boolean | null; court_x: number | null; court_y: number | null; period: string | null; clock: string | null; video_url: string | null; source: string };
+const CLIP_ACTION_LABELS: Record<string, { en: string; is: string }> = {
+  "3pt_make": { en: "3PT make", is: "3ja hitt" }, "3pt_miss": { en: "3PT miss", is: "3ja miss" },
+  drive: { en: "Drive", is: "Drive" }, post_up: { en: "Post-up", is: "Póstur" }, oreb_putback: { en: "OReb put-back", is: "Sóknarfrák." },
+  assist: { en: "Assist", is: "Stoðs." }, turnover: { en: "Turnover", is: "Tapaður" }, other: { en: "Other", is: "Annað" },
+};
 import { buildPlayDiagram, playTypeLabel, PLAY_VIEW, type PlayDiagram, type PlayColors } from "@/lib/micropulse/basketballStats/playDiagram";
 
 type ShotType = { key: string; made: number; att: number; pct: number | null; sharePct?: number | null };
@@ -55,6 +64,8 @@ export type BasketballOpponentPdfData = {
   keyPlayers: Player[];
   /** Detailed per-player analysis (top scorers). Richer than keyPlayers; rendered when present. */
   players?: PlayerDetail[] | null;
+  /** Tagged scouting clips per player (deep links + timecodes) — a clips strip under each top scorer. */
+  clipsByPlayer?: Record<string, ClipLite[]> | null;
   /** Coach-drawn set-play diagrams (confirmed only) — rendered on their own page. */
   plays?: PdfPlay[] | null;
   ai: { headline?: string; summary?: string; strengths?: string[]; weaknesses?: string[]; keyPlayers?: { name: string; note: string }[]; howToDefend?: string[]; howToAttack?: string[] } | null;
@@ -175,6 +186,38 @@ function PlayDiagramPdf({ diagram, w }: { diagram: PlayDiagram; w: number }) {
   );
 }
 
+/** A compact clips strip under a top scorer: the shared shot-tendency chart (located clips) + a short
+ *  referenced list (action · Q/clock · link). A print can't play video, so clips are references only. */
+function ClipsStrip({ clips, lang, f }: { clips: ClipLite[]; lang: Lang; f: Fonts }) {
+  if (!clips.length) return null;
+  const g = shotChartGeometry(clips.filter((c) => c.court_x != null && c.court_y != null).map((c) => ({ x: c.court_x, y: c.court_y, made: !!c.made, kind: (c.action === "post_up" || c.action === "oreb_putback" || c.action === "drive") ? "paint" as const : "shot" as const })), 60, 56);
+  const label = (a: string) => clean(lang === "IS" ? CLIP_ACTION_LABELS[a]?.is ?? a : CLIP_ACTION_LABELS[a]?.en ?? a);
+  return (
+    <View wrap={false} style={[st.card, st.row, { paddingHorizontal: 13, paddingVertical: 8, marginBottom: 6, gap: 11 }]}>
+      <View>
+        <Text style={[f.b(700), { fontSize: 7.5, letterSpacing: 0.7, color: MUTE }]}>{lang === "IS" ? "MERKT SKEIÐ" : "TAGGED CLIPS"} · {clips.length}</Text>
+        {g.attempts ? (
+          <Svg viewBox={`-2 -2 ${g.width + 4} ${g.height + 4}`} width={66} height={62} style={{ marginTop: 3 }}>
+            <Path d={`M0 0 H${g.width} V${g.height} H0 Z`} stroke="#c9b48a" strokeWidth={0.8} fill="#f6efe2" />
+            {g.shots.map((p, i) => p.made
+              ? <Circle key={i} cx={p.cx} cy={p.cy} r={2.4} fill={p.kind === "paint" ? "#de9328" : "#1c7a4a"} />
+              : <Path key={i} d={`M${p.cx - 2} ${p.cy - 2} L${p.cx + 2} ${p.cy + 2} M${p.cx + 2} ${p.cy - 2} L${p.cx - 2} ${p.cy + 2}`} stroke="#a83e28" strokeWidth={0.8} />)}
+          </Svg>
+        ) : null}
+      </View>
+      <View style={{ flex: 1 }}>
+        {clips.slice(0, 7).map((c, i) => (
+          <View key={i} style={[st.row, { justifyContent: "space-between", paddingVertical: 1 }]}>
+            <Text style={[f.b(600), { fontSize: 8.25 }]}>{label(c.action)}{c.made != null ? ` · ${c.made ? (lang === "IS" ? "hitt" : "make") : "miss"}` : ""}</Text>
+            <Text style={[f.b(400), { fontSize: 8, color: MUTE }]}>{clean([c.period, c.clock].filter(Boolean).join(" "))}{c.video_url ? "  link" : ""}</Text>
+          </View>
+        ))}
+        {clips.length > 7 ? <Text style={[f.b(400), { fontSize: 7.5, color: MUTE, marginTop: 1 }]}>+{clips.length - 7} {lang === "IS" ? "fleiri" : "more"}</Text> : null}
+      </View>
+    </View>
+  );
+}
+
 function Doc({ data, lang, f }: { data: BasketballOpponentPdfData; lang: Lang; f: Fonts }) {
   const t = T[lang];
   const team = data.team;
@@ -257,6 +300,7 @@ function Doc({ data, lang, f }: { data: BasketballOpponentPdfData; lang: Lang; f
     `FT ${pct(s.ftPct)}${s.ftaPg != null ? ` (${d1(s.ftaPg)}/g)` : ""}`,
   ].join("  ·  ");
   const descr = (p: { descriptor?: { en: string; is: string } }) => (p.descriptor ? clean(lang === "IS" ? p.descriptor.is : p.descriptor.en) : "");
+  const clipsOf = (name: string): ClipLite[] => (data.clipsByPlayer?.[name] ?? []);
 
   const facts = data.howToDefend.slice(0, 3);
   const planDefend = ai?.howToDefend?.length ? ai.howToDefend : [];
@@ -512,8 +556,10 @@ function Doc({ data, lang, f }: { data: BasketballOpponentPdfData; lang: Lang; f
               {top.map((p, i) => {
                 const off = p.notes?.offense ?? [];
                 const def = p.notes?.defense ?? [];
+                const clips = clipsOf(p.name);
                 return (
-                  <View key={i} wrap={false} style={[st.card, st.row, { paddingHorizontal: 13, paddingVertical: 9, marginBottom: 6 }]}>
+                  <React.Fragment key={i}>
+                  <View wrap={false} style={[st.card, st.row, { paddingHorizontal: 13, paddingVertical: 9, marginBottom: clips.length ? 0 : 6, ...(clips.length ? { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 } : {}) }]}>
                     <View style={{ flex: 1.15, paddingRight: 12 }}>
                       <View style={[st.row, { justifyContent: "space-between", alignItems: "flex-start", gap: 8 }]}>
                         <View style={{ flex: 1 }}>
@@ -543,6 +589,8 @@ function Doc({ data, lang, f }: { data: BasketballOpponentPdfData; lang: Lang; f
                       </View>
                     ) : null}
                   </View>
+                  {clips.length ? <ClipsStrip clips={clips} lang={lang} f={f} /> : null}
+                  </React.Fragment>
                 );
               })}
 

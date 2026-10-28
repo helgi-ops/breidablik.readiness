@@ -19,6 +19,8 @@ import InstatOpponentSeasonUpload from "@/components/coach/InstatOpponentSeasonU
 import PlayDiagramsSection from "@/components/coach/PlayDiagramsSection";
 import FibaShotCharts from "@/components/coach/FibaShotCharts";
 import { shotLabel } from "@/lib/micropulse/basketballStats/shotLabels";
+import OpponentPlayerClips from "@/components/coach/OpponentPlayerClips";
+import type { ClipLite } from "@/components/coach/BasketballOpponentPdf";
 import type { ScoutLineup } from "@/lib/micropulse/basketballStats/scoutInstatOpponent";
 import type { PlayDiagram } from "@/lib/micropulse/basketballStats/playDiagram";
 
@@ -182,7 +184,7 @@ function ShotBar({ label, pct, paPg }: { label: string; pct: number | null; paPg
   );
 }
 
-function PlayerModal({ p, t, lang, onClose }: { p: OppPlayer; t: Strings; lang: Lang; onClose: () => void }) {
+function PlayerModal({ p, t, lang, opponent, token, onClose }: { p: OppPlayer; t: Strings; lang: Lang; opponent: string; token: () => Promise<string | null>; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -235,6 +237,9 @@ function PlayerModal({ p, t, lang, onClose }: { p: OppPlayer; t: Strings; lang: 
           </div>
           <p className="mt-2 text-[10px] text-slate-400">{t.noShotChart}</p>
         </div>
+
+        {/* Tagged clips + shot-tendency chart — evidence tied to this player (coach-tagged / feed API). */}
+        <OpponentPlayerClips opponent={opponent} playerName={p.name} token={token} lang={lang} />
 
         {/* Last games */}
         {p.recentGames.length ? (
@@ -372,6 +377,20 @@ export default function BasketballOpponentAnalysis() {
           }
         }
       } catch { /* diagrams are optional — the report still downloads without them */ }
+      // Tagged scouting clips for this opponent, grouped by player → a clips strip in the PDF.
+      let clipsByPlayer: Record<string, ClipLite[]> | null = null;
+      try {
+        const tok = await token();
+        if (tok && sel) {
+          const res = await fetch(`/api/coach/scouting/player-clips?opponent=${encodeURIComponent(sel)}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
+          const j = await res.json();
+          if (j.ok && Array.isArray(j.clips) && j.clips.length) {
+            const grouped: Record<string, ClipLite[]> = {};
+            for (const c of j.clips as Array<ClipLite & { player_name: string }>) (grouped[c.player_name] ??= []).push({ action: c.action, made: c.made, court_x: c.court_x, court_y: c.court_y, period: c.period, clock: c.clock, video_url: c.video_url, source: c.source });
+            clipsByPlayer = grouped;
+          }
+        }
+      } catch { /* clips are optional */ }
       await downloadBasketballOpponentPdf({
         opponentName: report.opponentName,
         source: reportSource,
@@ -387,6 +406,7 @@ export default function BasketballOpponentAnalysis() {
         keyPlayers: report.keyPlayers,
         players: report.players.map((p) => ({ ...p, notes: playerTendencyNotes(p, lang) })),
         plays,
+        clipsByPlayer,
         ai,
       }, lang);
     } finally { setPdfBusy(false); }
@@ -776,7 +796,7 @@ export default function BasketballOpponentAnalysis() {
           util extractFilmFrames, table basketball_film_clip_notes — re-add
           `{sel ? <BasketballFilmClip opponent={sel} /> : null}` (and its import) to re-enable. */}
 
-      {openPlayer ? <PlayerModal p={openPlayer} t={t} lang={lang} onClose={() => setOpenPlayer(null)} /> : null}
+      {openPlayer ? <PlayerModal p={openPlayer} t={t} lang={lang} opponent={sel} token={token} onClose={() => setOpenPlayer(null)} /> : null}
     </div>
   );
 }
