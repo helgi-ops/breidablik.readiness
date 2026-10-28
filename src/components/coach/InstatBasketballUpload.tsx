@@ -84,7 +84,7 @@ type MatchPlayersPreview = {
 
 const num = (v: number | null | undefined, digits = 0) => (v == null ? "–" : v.toFixed(digits));
 
-export default function InstatBasketballUpload({ onImported, surface = "all" }: { onImported?: () => void; surface?: "all" | "single" }) {
+export default function InstatBasketballUpload({ onImported, surface = "all" }: { onImported?: () => void; surface?: "all" | "single" | "season" }) {
   const [lang] = useLang();
   const is = lang === "IS";
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
@@ -312,6 +312,8 @@ export default function InstatBasketballUpload({ onImported, surface = "all" }: 
 
   return (
     <div className="space-y-4">
+      {/* Single-game imports (PDF + per-player box) — hidden on the season surface. */}
+      {surface !== "season" && (<>
       {/* PRIMARY — Game Report PDF */}
       <div className="rounded-xl border-2 border-[#e6742740]/30 bg-orange-50/40 p-4">
         <div className="flex items-center gap-2">
@@ -457,8 +459,10 @@ export default function InstatBasketballUpload({ onImported, surface = "all" }: 
         )}
       </div>
 
-      {/* Season / legacy exports — hidden on the single-match surface (one game only). */}
-      {surface !== "single" && (<>
+      </>)}
+
+      {/* Legacy per-player CSV — only on the catch-all surface (speculative format). */}
+      {surface === "all" && (<>
       {/* SECONDARY — per-player CSV/Excel */}
       <details className="rounded-xl border border-slate-200 bg-white px-4 py-3">
         <summary className="cursor-pointer text-xs font-semibold text-slate-500">{is ? "Per-leikmann tölur (InStat tafla — CSV/Excel)" : "Per-player stats (InStat table — CSV/Excel)"}</summary>
@@ -519,7 +523,10 @@ export default function InstatBasketballUpload({ onImported, surface = "all" }: 
           </div>
         )}
       </details>
+      </>)}
 
+      {/* Season exports (Games log, Players season, Team comparison, Lineups) — hidden on the single-match surface. */}
+      {surface !== "single" && (<>
       {/* TERTIARY — season lineups (5-man units) */}
       <details className="rounded-xl border border-slate-200 bg-white px-4 py-3">
         <summary className="cursor-pointer text-xs font-semibold text-slate-500">{is ? "Fimmundir – heilt tímabil (InStat „Lineups“ tafla)" : "Lineups – full season (InStat “Lineups” table)"}</summary>

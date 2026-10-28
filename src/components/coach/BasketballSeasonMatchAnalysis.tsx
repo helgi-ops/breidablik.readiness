@@ -367,7 +367,7 @@ export default function BasketballSeasonMatchAnalysis() {
   const importer = (
     <details className="rounded-xl border border-orange-200 bg-orange-50/40 px-4 py-2.5">
       <summary className="cursor-pointer text-[12px] font-semibold text-orange-800">{t.importInstat}</summary>
-      <div className="mt-3"><InstatBasketballUpload onImported={() => { void load(); setReloadKey((k) => k + 1); }} /></div>
+      <div className="mt-3"><InstatBasketballUpload surface="season" onImported={() => { void load(); setReloadKey((k) => k + 1); }} /></div>
     </details>
   );
 
