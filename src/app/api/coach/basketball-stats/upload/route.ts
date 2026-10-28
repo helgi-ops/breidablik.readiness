@@ -191,7 +191,12 @@ async function handleMatchPlayers(
   const ownSide = sides[ownIdx];
   const oppSide = sides.find((_, i) => i !== ownIdx) ?? null;
 
-  const opponent = String(form.get("opponent") ?? "").trim() || (oppSide ? oppSide.teamName : null);
+  let opponent = String(form.get("opponent") ?? "").trim() || (oppSide ? oppSide.teamName : null);
+  // Guard: the opponent must never be our own team (a stale/swapped form value). Fall back to the
+  // other sheet's team name, which is always the real opponent.
+  if (opponent && foldName(opponent) === foldName(ownName) && oppSide && foldName(oppSide.teamName) !== foldName(ownName)) {
+    opponent = oppSide.teamName;
+  }
   const dateIn = String(form.get("match_date") ?? "").trim();
   const matchDate = /^\d{4}-\d{2}-\d{2}$/.test(dateIn) ? dateIn : null;
   const oppFold = opponent ? foldName(opponent) : "";

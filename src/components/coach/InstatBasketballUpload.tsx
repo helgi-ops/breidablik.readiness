@@ -400,7 +400,7 @@ export default function InstatBasketballUpload({ onImported, surface = "all" }: 
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <label className="text-sm">
             <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Skrá (.xlsx / .csv)" : "File (.xlsx / .csv)"}</div>
-            <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => { setMmFile(e.target.files?.[0] ?? null); setMmPreview(null); setMmMsg(null); setMmErr(null); setMmSwap(false); }} className="text-sm" />
+            <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => { setMmFile(e.target.files?.[0] ?? null); setMmPreview(null); setMmMsg(null); setMmErr(null); setMmSwap(false); setMmDate(""); setMmOpponent(""); }} className="text-sm" />
           </label>
           <label className="text-sm">
             <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikdagur" : "Game date"}</div>

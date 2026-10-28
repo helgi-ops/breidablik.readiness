@@ -131,6 +131,23 @@ export default function BasketballMatchHub() {
   const [addOpen, setAddOpen] = React.useState(false);
   const [advOpen, setAdvOpen] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+  const [gameAi, setGameAi] = React.useState<string | null>(null);
+  const [gameAiBusy, setGameAiBusy] = React.useState(false);
+
+  async function fetchGameAi(dt: Detail) {
+    setGameAiBusy(true);
+    try {
+      const token = await tok(); if (!token) return;
+      const facts = {
+        own: dt.ownName, opp: dt.oppName, score: `${dt.ownPts}-${dt.oppPts}`, date: dt.date,
+        fourFactors: dt.fourFactors, leaders: dt.leaders,
+        ownTotals: dt.own.totals, oppTotals: dt.opp.totals,
+      };
+      const res = await fetch("/api/coach/basketball-game-summary", { method: "POST", headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ facts, lang }) });
+      const j = await res.json();
+      if (j.ok && j.summary) setGameAi(j.summary);
+    } finally { setGameAiBusy(false); }
+  }
 
   const loadList = React.useCallback(async () => {
     setListState("loading"); setErr(null);
@@ -146,7 +163,7 @@ export default function BasketballMatchHub() {
   React.useEffect(() => { void loadList(); }, [loadList]);
 
   const openGame = React.useCallback(async (key: string) => {
-    setSelKey(key); setDetail(null); setDetailBusy(true);
+    setSelKey(key); setDetail(null); setDetailBusy(true); setGameAi(null);
     try {
       const token = await tok(); if (!token) return;
       const res = await fetch(`/api/coach/basketball-games?key=${encodeURIComponent(key)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
@@ -201,14 +218,13 @@ export default function BasketballMatchHub() {
         {listState === "error" && <p className="mt-3 text-[13px] text-red-600">{err}</p>}
         {listState === "empty" && <p className="mt-3 text-[13px] text-slate-600">{t("No games this season yet. Add one below (KKÍ.is link or InStat upload).", "Engir leikir á tímabilinu enn. Bættu við hér fyrir neðan (KKÍ.is hlekkur eða InStat upphleðsla).")}</p>}
         {listState === "ready" && (
-          <div className="mt-3 space-y-1.5">
+          <div className="mt-2 max-h-[280px] space-y-1 overflow-y-auto pr-1">
             {list.map((g) => (
               <button key={g.key} type="button" onClick={() => void openGame(g.key)}
-                className={`flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-3 py-2 text-left transition ${selKey === g.key ? "border-[#2740e6] bg-[#2740e6]/5" : "border-slate-200 bg-white hover:border-slate-300"}`}>
-                <span className="text-[13px] font-bold tabular-nums text-slate-900">{g.ownPts || g.oppPts ? `${g.ownPts}–${g.oppPts}` : "—"}</span>
-                <span className="text-[13px] font-semibold text-slate-700">{t("vs", "gegn")} {g.opponent}</span>
-                <span className="text-[11px] text-slate-400">{fmtDate(g.date, is)}{g.competition ? ` · ${compLabel(g.competition)}` : ""}</span>
-                <span className="ml-auto flex items-center gap-1">
+                className={`flex w-full items-center gap-x-2.5 rounded-lg border px-2.5 py-1.5 text-left transition ${selKey === g.key ? "border-[#2740e6] bg-[#2740e6]/5" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                <span className="w-[52px] shrink-0 text-[12px] font-bold tabular-nums text-slate-900">{g.ownPts || g.oppPts ? `${g.ownPts}–${g.oppPts}` : "—"}</span>
+                <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-slate-700">{t("vs", "gegn")} {g.opponent} <span className="font-normal text-slate-400">{fmtDate(g.date, is)}</span></span>
+                <span className="flex shrink-0 items-center gap-1">
                   <Badge on={g.layers.box}>{t("Box", "Box")}</Badge>
                   <Badge on={g.layers.shots}>{t("Shots", "Skot")}</Badge>
                   <Badge on={g.layers.instat}>{t("Adv", "Ítarl")}</Badge>
@@ -229,8 +245,19 @@ export default function BasketballMatchHub() {
                 <span className="text-[18px] font-bold tabular-nums text-slate-900">{detail.ownPts}<span className="text-slate-400">–</span>{detail.oppPts}</span>
                 <span className="text-[14px] font-semibold text-slate-700">{detail.ownName} {t("vs", "gegn")} {detail.oppName}</span>
                 <span className="text-[12px] text-slate-400">{fmtDate(detail.date, is)}{detail.competition ? ` · ${compLabel(detail.competition)}` : ""}</span>
-                <span className="ml-auto flex flex-wrap gap-1">{detail.sources.map((s) => <span key={s} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{s}</span>)}</span>
+                <span className="ml-auto flex flex-wrap items-center gap-1">
+                  {detail.sources.map((s) => <span key={s} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{s}</span>)}
+                  {!gameAi ? <button type="button" onClick={() => detail && void fetchGameAi(detail)} disabled={gameAiBusy} className="rounded-lg border border-[#2740e6] px-2 py-0.5 text-[11px] font-semibold text-[#2740e6] hover:bg-[#eef0fb] disabled:opacity-50">{gameAiBusy ? (is ? "AI skrifar…" : "AI writing…") : (is ? "✨ AI-samantekt" : "✨ AI summary")}</button> : null}
+                </span>
               </div>
+
+              {/* AI GAME SUMMARY — labelled, phrases the box-score numbers only */}
+              {gameAi ? (
+                <div className="rounded-xl border border-[#c4cbf5] bg-[#f6f7fe] p-3">
+                  <div className="mb-1.5 flex items-center gap-2"><span className="rounded bg-[#2740e6] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">AI</span><span className="text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">{t("reads the box — decides nothing", "les boxið — ákveður ekkert")}</span></div>
+                  <p className="text-[13px] leading-relaxed text-slate-700">{gameAi}</p>
+                </div>
+              ) : null}
 
               {/* FOUR FACTORS */}
               {detail.fourFactors && (
