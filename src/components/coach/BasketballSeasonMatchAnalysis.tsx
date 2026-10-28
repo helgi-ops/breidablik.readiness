@@ -38,7 +38,7 @@ const T = {
     noResults: "No final scores entered yet — add opponent points below to unlock win/loss and margin.",
     home: "Home", away: "Away", leaders: "Season leaders", scorer: "Scorer", rebounder: "Rebounder", playmaker: "Playmaker",
     showDetails: "Show details", hideDetails: "Hide details",
-    averages: "Season averages", perGame: "Game by game", byOpponent: "By opponent", winLoss: "Wins vs losses",
+    averages: "Season averages", total: "Total", perGame: "Game by game", byOpponent: "By opponent", winLoss: "Wins vs losses",
     enterResults: "Enter final scores", enterHint: "Your points come from the box score; type the opponent's final score. Saved per game.",
     us: "Us", them: "Them", opp: "Opponent", result: "Result", save: "Save", saved: "Saved", saving: "…",
     fg: "FG%", tp: "3P%", ft: "FT%", reb: "REB", ast: "AST", tov: "TOV", stl: "STL", blk: "BLK",
@@ -62,7 +62,7 @@ const T = {
     noResults: "Engin lokastaða skráð enn — skráðu stig andstæðinga hér að neðan til að fá sigra/töp og mun.",
     home: "Heima", away: "Úti", leaders: "Efstir á tímabilinu", scorer: "Stigahæstur", rebounder: "Fráköst", playmaker: "Stoðsendingar",
     showDetails: "Sýna nánar", hideDetails: "Fela nánar",
-    averages: "Meðaltöl tímabils", perGame: "Leik fyrir leik", byOpponent: "Eftir andstæðingi", winLoss: "Sigrar vs töp",
+    averages: "Meðaltöl tímabils", total: "Samtals", perGame: "Leik fyrir leik", byOpponent: "Eftir andstæðingi", winLoss: "Sigrar vs töp",
     enterResults: "Skrá lokastöður", enterHint: "Þín stig koma úr leikskýrslunni; sláðu inn lokastig andstæðingsins. Vistast per leik.",
     us: "Við", them: "Þeir", opp: "Andstæðingur", result: "Úrslit", save: "Vista", saved: "Vistað", saving: "…",
     fg: "Vallarsk.%", tp: "3ja%", ft: "Víti%", reb: "Fráköst", ast: "Stoðs.", tov: "Tapaðir", stl: "Stolnir", blk: "Varin",
@@ -94,17 +94,22 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SplitRow({ label, s }: { label: string; s: Split }) {
+function SplitRow({ label, s, tone }: { label: string; s: Split; tone?: "total" | "win" | "loss" }) {
+  const bg = tone === "win" ? "bg-[#1c7a4a]/[0.06]" : tone === "loss" ? "bg-[#a83e28]/[0.06]" : "";
+  const lab = tone === "total" ? "font-bold text-slate-900" : "font-medium text-slate-600";
   return (
-    <tr className="border-t border-[#eceae2]">
-      <td className="py-1 pr-3 font-medium text-slate-800">{label}</td>
-      <td className="py-1 pr-3 text-right tabular-nums">{s.games}</td>
-      <td className="py-1 pr-3 text-right tabular-nums">{d1(s.pts)}</td>
-      <td className="py-1 pr-3 text-right tabular-nums">{pctS(s.fgPct)}</td>
-      <td className="py-1 pr-3 text-right tabular-nums">{pctS(s.tpPct)}</td>
-      <td className="py-1 pr-3 text-right tabular-nums">{d1(s.reb)}</td>
-      <td className="py-1 pr-3 text-right tabular-nums">{d1(s.ast)}</td>
-      <td className="py-1 pr-1 text-right tabular-nums">{d1(s.tov)}</td>
+    <tr className={`border-t border-[#eceae2] ${bg}`}>
+      <td className={`whitespace-nowrap py-1.5 pr-3 ${lab}`}>{label}</td>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-slate-400">{s.games}</td>
+      <td className="py-1.5 pr-3 text-right font-semibold tabular-nums text-slate-900">{d1(s.pts)}</td>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{pctS(s.fgPct)}</td>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{pctS(s.tpPct)}</td>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{pctS(s.ftPct)}</td>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{d1(s.reb)}</td>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{d1(s.ast)}</td>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{d1(s.stl)}</td>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{d1(s.blk)}</td>
+      <td className="py-1.5 pr-1 text-right tabular-nums text-slate-600">{d1(s.tov)}</td>
     </tr>
   );
 }
@@ -422,6 +427,38 @@ export default function BasketballSeasonMatchAnalysis() {
         ) : null}
       </div>
 
+      {/* Season averages — the team's box-score line (per-game averages), with home/away and
+          win/loss splits. Shown above Four Factors as the headline team stat line. */}
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="mb-2 text-[13px] font-bold text-slate-800">{t.averages}</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="text-right text-[10px] uppercase tracking-wide text-slate-400">
+                <th className="py-1 pr-3 text-left font-semibold" />
+                <th className="py-1 pr-3 font-semibold">{t.games}</th>
+                <th className="py-1 pr-3 font-semibold">{t.ppg}</th>
+                <th className="py-1 pr-3 font-semibold">{t.fg}</th>
+                <th className="py-1 pr-3 font-semibold">{t.tp}</th>
+                <th className="py-1 pr-3 font-semibold">{t.ft}</th>
+                <th className="py-1 pr-3 font-semibold">{t.reb}</th>
+                <th className="py-1 pr-3 font-semibold">{t.ast}</th>
+                <th className="py-1 pr-3 font-semibold">{t.stl}</th>
+                <th className="py-1 pr-3 font-semibold">{t.blk}</th>
+                <th className="py-1 pr-1 font-semibold">{t.tov}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <SplitRow label={t.total} s={a} tone="total" />
+              {season.homeAway.home.games > 0 ? <SplitRow label={t.home} s={season.homeAway.home} /> : null}
+              {season.homeAway.away.games > 0 ? <SplitRow label={t.away} s={season.homeAway.away} /> : null}
+              {season.winLoss ? <SplitRow label={t.win} s={season.winLoss.win} tone="win" /> : null}
+              {season.winLoss ? <SplitRow label={t.loss} s={season.winLoss.loss} tone="loss" /> : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       {/* Season averages (InStat "Team comparison") — authoritative full-season line. */}
       {seasonTeam ? <SeasonAveragesCard t={seasonTeam} is={lang === "IS"} /> : null}
 
@@ -634,34 +671,6 @@ export default function BasketballSeasonMatchAnalysis() {
       {/* Layer 2 — details */}
       {details ? (
         <div className="space-y-4">
-          {/* Home/away split table */}
-          <div>
-            <div className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t.averages}</div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
-                <thead>
-                  <tr className="text-left text-slate-500">
-                    <th className="py-1 pr-3 font-semibold" />
-                    <th className="py-1 pr-3 text-right font-semibold">{t.games}</th>
-                    <th className="py-1 pr-3 text-right font-semibold">{t.ppg}</th>
-                    <th className="py-1 pr-3 text-right font-semibold">{t.fg}</th>
-                    <th className="py-1 pr-3 text-right font-semibold">{t.tp}</th>
-                    <th className="py-1 pr-3 text-right font-semibold">{t.reb}</th>
-                    <th className="py-1 pr-3 text-right font-semibold">{t.ast}</th>
-                    <th className="py-1 pr-1 text-right font-semibold">{t.tov}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <SplitRow label="Total" s={a} />
-                  <SplitRow label={t.home} s={season.homeAway.home} />
-                  <SplitRow label={t.away} s={season.homeAway.away} />
-                  {season.winLoss ? <SplitRow label={t.win} s={season.winLoss.win} /> : null}
-                  {season.winLoss ? <SplitRow label={t.loss} s={season.winLoss.loss} /> : null}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
           {/* Per-game trend */}
           <div>
             <div className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t.perGame}</div>
