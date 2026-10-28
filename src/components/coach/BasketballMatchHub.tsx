@@ -138,10 +138,16 @@ export default function BasketballMatchHub() {
     setGameAiBusy(true);
     try {
       const token = await tok(); if (!token) return;
+      // Compact per-player line so the model can read who did well / struggled without noise.
+      const line = (p: BoxP) => ({
+        name: p.name, min: p.min, pts: p.pts, reb: p.reb, oreb: p.oreb, dreb: p.dreb, ast: p.ast,
+        stl: p.stl, blk: p.blk, tov: p.tov, fg: `${p.fgm}/${p.fga}`, tp: `${p.tpm}/${p.tpa}`, ft: `${p.ftm}/${p.fta}`, pm: p.pm,
+      });
       const facts = {
-        own: dt.ownName, opp: dt.oppName, score: `${dt.ownPts}-${dt.oppPts}`, date: dt.date,
+        own: dt.ownName, opp: dt.oppName, score: `${dt.ownPts}-${dt.oppPts}`, date: dt.date, competition: dt.competition,
         fourFactors: dt.fourFactors, leaders: dt.leaders,
         ownTotals: dt.own.totals, oppTotals: dt.opp.totals,
+        ownPlayers: dt.own.box.map(line), oppPlayers: dt.opp.box.map(line),
       };
       const res = await fetch("/api/coach/basketball-game-summary", { method: "POST", headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ facts, lang }) });
       const j = await res.json();
@@ -248,15 +254,25 @@ export default function BasketballMatchHub() {
                 <span className="text-[12px] text-slate-400">{fmtDate(detail.date, is)}{detail.competition ? ` · ${compLabel(detail.competition)}` : ""}</span>
                 <span className="ml-auto flex flex-wrap items-center gap-1">
                   {detail.sources.map((s) => <span key={s} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{s}</span>)}
-                  {!gameAi ? <button type="button" onClick={() => detail && void fetchGameAi(detail)} disabled={gameAiBusy} className="rounded-lg border border-[#2740e6] px-2 py-0.5 text-[11px] font-semibold text-[#2740e6] hover:bg-[#eef0fb] disabled:opacity-50">{gameAiBusy ? (is ? "AI skrifar…" : "AI writing…") : (is ? "✨ AI-samantekt" : "✨ AI summary")}</button> : null}
+                  {!gameAi ? <button type="button" onClick={() => detail && void fetchGameAi(detail)} disabled={gameAiBusy} className="rounded-lg border border-[#2740e6] px-2 py-0.5 text-[11px] font-semibold text-[#2740e6] hover:bg-[#eef0fb] disabled:opacity-50">{gameAiBusy ? (is ? "AI skrifar…" : "AI writing…") : (is ? "✨ AI-greining" : "✨ AI analysis")}</button> : null}
                 </span>
               </div>
 
-              {/* AI GAME SUMMARY — labelled, phrases the box-score numbers only */}
+              {/* AI GAME SUMMARY — labelled; a detailed what-went-well / what-to-improve read of the box */}
               {gameAi ? (
                 <div className="rounded-xl border border-[#c4cbf5] bg-[#f6f7fe] p-3">
-                  <div className="mb-1.5 flex items-center gap-2"><span className="rounded bg-[#2740e6] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">AI</span><span className="text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">{t("reads the box — decides nothing", "les boxið — ákveður ekkert")}</span></div>
-                  <p className="text-[13px] leading-relaxed text-slate-700">{gameAi}</p>
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <span className="rounded bg-[#2740e6] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">AI</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">{t("reads the box — decides nothing", "les boxið — ákveður ekkert")}</span>
+                    <button type="button" onClick={() => detail && void fetchGameAi(detail)} disabled={gameAiBusy} className="ml-auto rounded-lg border border-[#2740e6] px-2 py-0.5 text-[10px] font-semibold text-[#2740e6] hover:bg-[#eef0fb] disabled:opacity-50">{gameAiBusy ? (is ? "AI skrifar…" : "AI writing…") : (is ? "↻ Uppfæra" : "↻ Regenerate")}</button>
+                  </div>
+                  <div className="space-y-2">
+                    {gameAi.split(/\n{2,}/).map((para, i) => (
+                      <p key={i} className="text-[13px] leading-relaxed text-slate-700">
+                        {para.split(/\*\*(.+?)\*\*/).map((seg, j) => (j % 2 === 1 ? <strong key={j} className="font-semibold text-slate-900">{seg}</strong> : seg))}
+                      </p>
+                    ))}
+                  </div>
                 </div>
               ) : null}
 

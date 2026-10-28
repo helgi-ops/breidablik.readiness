@@ -3,9 +3,10 @@ export const dynamic = "force-dynamic";
 
 /**
  * /api/coach/basketball-game-summary
- *   POST { facts, lang } → a short, AI-labelled summary of ONE game, written strictly from the
- *   box-score facts the Single Match view already computed (score, Four Factors, leaders). The
- *   client passes what it displays; the model phrases the numbers only — it never invents.
+ *   POST { facts, lang } → a DETAILED, AI-labelled analysis of ONE game, written strictly from the
+ *   facts the Single Match view already computed (final score, Four Factors own vs opponent, team
+ *   totals, and the per-player box for both teams). It explicitly reads what the team did WELL and
+ *   what it needs to IMPROVE, from the numbers — the model phrases and interprets, never invents.
  *
  * Descriptive scouting — never touches the readiness colour, load, or the daily decision.
  */
@@ -38,14 +39,24 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return NextResponse.json({ ok: false, error: "AI summary unavailable (no API key configured)." }, { status: 503 });
 
-  const system = `You are a basketball analyst writing a SHORT summary of ONE game for a head coach, STRICTLY from the box-score facts given (final score, Four Factors, and the game's statistical leaders). Rules: use ONLY the numbers provided; never invent plays, events, stats or names not in the facts; say who won and the margin, then the 1-2 factors that decided it (from the Four Factors — eFG%, turnovers, offensive rebounding, free-throw rate) and the leading performers; refer to players by the names given; plain language; a PERFORMANCE read, never a readiness/medical/training verdict. Write in ${language}. Return ONLY a JSON object: {"summary": string (3-4 sentences)}.`;
+  const system = `You are a basketball analyst writing a DETAILED single-game analysis for a head coach, STRICTLY from the facts given (final score, Four Factors own vs opponent, team totals for both teams, and the per-player box: minutes, points, rebounds with offensive/defensive split, assists, steals, blocks, turnovers, FG/3P/FT as made/attempted, plus/minus). Rules:
+- Use ONLY the numbers provided; never invent plays, events, stats, opponents or names not in the facts. Refer to players by the names given, and use "they/them" for any individual.
+- Write these sections, each a short paragraph led by a bold label:
+  **Overview** — who won and the margin, the overall shooting/scoring shape of the game.
+  **What went well** — the clearest STRENGTHS from the numbers: the Four Factors the team won (eFG%, turnovers, offensive rebounding, free-throw rate), efficient shooting splits, players who produced efficiently (high points on good FG/3P/FT, strong +/-, assists, defensive stats). Name the players and cite their line.
+  **What to improve** — the clearest WEAKNESSES: the Four Factors the team lost, poor shooting (low FG%/3P%/FT%), turnovers, rebounds conceded, players who struggled (poor shooting volume, negative +/-, high turnovers). Be specific and cite the numbers. Be honest but constructive.
+  **Key players** — the 2-3 most impactful performers (either team) and why, from their box line.
+- Interpret, don't just list: say what each number means for how the team won or lost, and tie strengths/weaknesses to the Four Factors where possible. Compare own vs opponent.
+- Plain language a non-analyst coach reads quickly; expand an abbreviation the first time. A PERFORMANCE read only — never a readiness, medical, load or training-decision verdict.
+- Write in ${language}.
+Return ONLY a JSON object: {"summary": string} where summary is the full analysis, paragraphs separated by blank lines, each starting with its bold label like "**Overview** …".`;
 
   let res: Response;
   try {
     res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: AI_MODEL, max_tokens: 600, system, messages: [{ role: "user", content: `Game facts:\n${JSON.stringify(facts).slice(0, 4000)}` }] }),
+      body: JSON.stringify({ model: AI_MODEL, max_tokens: 1600, system, messages: [{ role: "user", content: `Game facts:\n${JSON.stringify(facts).slice(0, 10000)}` }] }),
     });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "AI request failed." }, { status: 502 });
