@@ -24,6 +24,7 @@ import {
 } from "@/lib/micropulse/basketballStats/instatAggregate";
 import { scopeToCurrentSeason, totalsPts, competitionsOf, resolveCompetition, competitionLabel, foldTeamName, type FibaGame } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 import { initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
+import { aggregateSeasonStats, type SeasonPlayerStats } from "@/lib/micropulse/basketballStats/instatStatGroups";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -70,6 +71,18 @@ async function loadRows(supabase: ReturnType<typeof getSupabase>, teamId: string
   return fetchAllPages<Row>((from, to) => supabase.from("player_basketball_match_stats")
     .select("game_id, game_date, opponent, home_away, points, fgm, fga, tpm, tpa, ftm, fta, oreb, dreb, reb, assists, steals, blocks, turnovers, fouls, source_player_name")
     .eq("team_id", teamId).range(from, to));
+}
+
+/** Per-player season line of EVERY InStat variable (per-game averages) — the "all stats" view for
+ *  the whole season, aggregated from the per-game single-match uploads. Null when no InStat yet. */
+async function loadSeasonAllStats(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<SeasonPlayerStats[] | null> {
+  const rows = await fetchAllPages<{ source_player_name: string | null; stats: Record<string, unknown> | null }>((from, to) =>
+    supabase.from("player_basketball_match_stats").select("source_player_name, stats")
+      .eq("team_id", teamId).eq("source", "instat").range(from, to));
+  const withStats = rows.filter((r) => r.stats && Object.keys(r.stats).length);
+  if (!withStats.length) return null;
+  const agg = aggregateSeasonStats(withStats.map((r) => ({ name: r.source_player_name, stats: r.stats })));
+  return agg.length ? agg : null;
 }
 
 /** Season Four Factors from the InStat team feed — full-game rows, averaged.
@@ -297,15 +310,16 @@ export async function GET(req: NextRequest) {
   if (!merged) return NextResponse.json({ ok: true, hasData: false, season: null, leaders: null, seasonTeam });
 
   // InStat-only extras (cover whichever games have an InStat upload); null when no InStat yet.
-  const [fourFactors, quarters, tacticalShots, shotZones] = await Promise.all([
+  const [fourFactors, quarters, tacticalShots, shotZones, allStats] = await Promise.all([
     loadFourFactors(auth.supabase, auth.teamId),
     loadQuarterScoring(auth.supabase, auth.teamId),
     loadTacticalShots(auth.supabase, auth.teamId),
     loadShotZones(auth.supabase, auth.teamId),
+    loadSeasonAllStats(auth.supabase, auth.teamId),
   ]);
   return NextResponse.json({
     ok: true, hasData: true, season: merged.season, leaders: merged.leaders,
-    fourFactors, quarters, tacticalShots, shotZones, seasonTeam, source: merged.source,
+    fourFactors, quarters, tacticalShots, shotZones, allStats, seasonTeam, source: merged.source,
     competitions: merged.competitions, competition: merged.competition, competitionLabel: merged.competitionLabel,
   });
 }

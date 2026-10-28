@@ -80,6 +80,53 @@ export function statValue(v: unknown): string {
   return !s || s === "-" || s === "—" ? "–" : s;
 }
 
+/** Parse an InStat cell to a number, or null when it is blank / non-numeric ("-", "", "45.5%"). */
+export function statNumber(v: unknown): number | null {
+  if (v == null) return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  const s = String(v).trim().replace(/%/g, "").replace(/,/g, "");
+  if (!s || s === "-" || s === "—") return null;
+  const x = Number(s);
+  return Number.isFinite(x) ? x : null;
+}
+
+export type SeasonPlayerStats = { name: string; games: number; stats: Record<string, number> };
+
+/**
+ * Aggregate per-game InStat player rows into ONE season line per player — the per-game average of
+ * every numeric column (so the "all stats" view works for a whole season, not just one game).
+ * Players are matched across games by an accent/case-folded name; a column is averaged only over the
+ * games that reported it (blank/"-" cells don't drag the mean). Percentages are averaged unweighted —
+ * a browse-level season view, not an exact possession-weighted rate. Descriptive scouting only.
+ */
+export function aggregateSeasonStats(rows: Array<{ name: string | null; stats: Record<string, unknown> | null }>): SeasonPlayerStats[] {
+  const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+  type Acc = { name: string; games: number; sums: Map<string, { sum: number; n: number }> };
+  const byPlayer = new Map<string, Acc>();
+  for (const r of rows) {
+    const nm = String(r.name ?? "").trim();
+    if (!nm || !r.stats) continue;
+    const k = fold(nm);
+    let acc = byPlayer.get(k);
+    if (!acc) { acc = { name: nm, games: 0, sums: new Map() }; byPlayer.set(k, acc); }
+    acc.games += 1;
+    for (const [col, raw] of Object.entries(r.stats)) {
+      const num = statNumber(raw);
+      if (num == null) continue;
+      const cur = acc.sums.get(col) ?? { sum: 0, n: 0 };
+      cur.sum += num; cur.n += 1;
+      acc.sums.set(col, cur);
+    }
+  }
+  return [...byPlayer.values()]
+    .map((acc) => {
+      const stats: Record<string, number> = {};
+      for (const [col, { sum, n }] of acc.sums) stats[col] = Math.round((sum / n) * 10) / 10;
+      return { name: acc.name, games: acc.games, stats };
+    })
+    .sort((a, b) => b.games - a.games || a.name.localeCompare(b.name));
+}
+
 export type GroupedStat = { group: GroupKey; title: { en: string; is: string }; rows: { key: string; value: string }[] };
 
 /** Group a player's raw stats bag into display sections (non-empty groups only, ordered). */
