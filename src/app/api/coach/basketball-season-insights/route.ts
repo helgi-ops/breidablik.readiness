@@ -22,7 +22,7 @@ import {
   avgFactors, aggregateAdvancedShots, zonesFromAdvanced, playerZonesFromRows, hasZones,
   type FourFactorAvg, type ShotTypeAgg, type ZoneAgg, type PlayerZones,
 } from "@/lib/micropulse/basketballStats/instatAggregate";
-import { scopeToCurrentSeason, aggregateOwnBox, totalsPts, competitionsOf, resolveCompetition, competitionLabel, type FibaGame } from "@/lib/micropulse/basketballStats/fibaGamesRead";
+import { scopeToCurrentSeason, totalsPts, competitionsOf, resolveCompetition, competitionLabel, type FibaGame } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 import { initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
 
 async function authTeam(req: NextRequest) {
@@ -64,25 +64,6 @@ function aggregateGames(rows: Row[]): GameTotals[] {
     g.ast += n(r.assists); g.stl += n(r.steals); g.blk += n(r.blocks); g.tov += n(r.turnovers); g.fouls += n(r.fouls);
   }
   return Array.from(byGame.values());
-}
-
-/** Season per-player leaders (per-game averages), by name (the feed is name-keyed). */
-function leaders(rows: Row[]) {
-  const byName = new Map<string, { games: number; pts: number; reb: number; ast: number }>();
-  for (const r of rows) {
-    const name = String(r.source_player_name ?? "").trim(); if (!name) continue;
-    const a = byName.get(name) ?? { games: 0, pts: 0, reb: 0, ast: 0 };
-    a.games += 1; a.pts += n(r.points); a.reb += n(r.reb); a.ast += n(r.assists);
-    byName.set(name, a);
-  }
-  const list = Array.from(byName.entries()).map(([name, a]) => ({
-    name, games: a.games,
-    ppg: a.games ? Math.round((a.pts / a.games) * 10) / 10 : 0,
-    rpg: a.games ? Math.round((a.reb / a.games) * 10) / 10 : 0,
-    apg: a.games ? Math.round((a.ast / a.games) * 10) / 10 : 0,
-  })).filter((p) => p.games >= 3);
-  const top = (key: "ppg" | "rpg" | "apg") => list.slice().sort((x, y) => y[key] - x[key])[0] ?? null;
-  return { scorer: top("ppg"), rebounder: top("rpg"), playmaker: top("apg") };
 }
 
 async function loadRows(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<Row[]> {
@@ -186,76 +167,127 @@ async function loadResults(supabase: ReturnType<typeof getSupabase>, teamId: str
   return out;
 }
 
-/** Fallback for a team whose only basketball data is KKÍ-saved box scores (basketball_fiba_games), with
- *  no InStat per-player feed. Builds the same Season read (trend / record / per-opponent / leaders) from
- *  the current season's box scores; the InStat-only extras (Four Factors, quarters, shot zones) stay null. */
-async function loadFibaSeasonFallback(supabase: ReturnType<typeof getSupabase>, teamId: string, requestedComp?: string | null) {
+const foldNm = (s: string | null | undefined) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+const gkey = (date: string | null, opp: string | null) => `${date ?? "-"}|${foldNm(opp)}`;
+const round1 = (x: number) => Math.round(x * 10) / 10;
+type PlayerLine = { name: string; pts: number; reb: number; ast: number };
+
+/** The Season read, MERGING the InStat per-player feed with the KKÍ box-score feed by (date,
+ *  opponent): every game shows once. An InStat game uses its richer totals/players; a KKÍ-only
+ *  game uses its box. Prevents one InStat upload from hiding the rest of the KKÍ season.
+ *  The InStat-only extras (Four Factors, quarters, shot zones) are loaded separately and simply
+ *  cover whichever games have InStat. */
+async function loadMergedSeason(
+  supabase: ReturnType<typeof getSupabase>, teamId: string, requestedComp: string | null,
+  instatRows: Row[], coachResults: Record<string, GameResult>,
+) {
+  // KKÍ games (current season; one competition when a reserve side is also present).
   const { data } = await supabase.from("basketball_fiba_games")
     .select("match_id, match_date, opp_name, own_box, own_totals, opp_totals, competition_code, season")
     .eq("owner_team_id", teamId);
-  const { games: all } = scopeToCurrentSeason(((data ?? []) as FibaGame[]));
-  if (all.length === 0) return null;
-  // Separate the main team from a lower-division reserve side (they're different teams) — pick one.
-  const competitions = competitionsOf(all);
-  const competition = resolveCompetition(all, requestedComp);
-  const scoped = competitions.length > 1 ? all.filter((g) => (g.competition_code ?? null) === competition) : all;
+  const { games: allFiba } = scopeToCurrentSeason(((data ?? []) as FibaGame[]));
+  const competitions = competitionsOf(allFiba);
+  const competition = resolveCompetition(allFiba, requestedComp);
+  const kkiGames = competitions.length > 1 ? allFiba.filter((g) => (g.competition_code ?? null) === competition) : allFiba;
 
-  const totals: GameTotals[] = [];
-  const results: Record<string, GameResult> = {};
-  for (const g of scoped) {
-    const gid = String(g.match_id ?? "");
-    const box = Array.isArray(g.own_box) ? g.own_box : [];
-    const gt: GameTotals = {
-      gameId: gid, date: g.match_date, opponent: g.opp_name ?? null, homeAway: null,
-      pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, oreb: 0, dreb: 0, reb: 0, ast: 0, stl: 0, blk: 0, tov: 0, fouls: 0,
-    };
-    for (const b of box) {
-      gt.pts += n(b.pts); gt.fgm += n(b.fgm); gt.fga += n(b.fga); gt.tpm += n(b.tpm); gt.tpa += n(b.tpa);
-      gt.ftm += n(b.ftm); gt.fta += n(b.fta); gt.oreb += n(b.oreb); gt.dreb += n(b.dreb); gt.reb += n(b.reb);
-      gt.ast += n(b.ast); gt.stl += n(b.stl); gt.blk += n(b.blk); gt.tov += n(b.tov);
-    }
-    totals.push(gt);
-    const pf = totalsPts(g.own_totals), pa = totalsPts(g.opp_totals);
-    if (pf || pa) results[gid] = { pointsFor: pf, pointsAgainst: pa };
+  // InStat per-game opponent points (own points come from the box) for win/loss.
+  const { data: iteam } = await supabase.from("basketball_team_match_stats")
+    .select("match_date, opponent, points, advanced").eq("owner_team_id", teamId).eq("source", "instat").eq("period", "game").eq("is_opponent", false);
+  const instatPts = new Map<string, { own: number; opp: number }>();
+  for (const r of ((iteam ?? []) as Array<{ match_date: string | null; opponent: string | null; points: number | null; advanced: { opp_players?: Array<{ points?: number | null }> } | null }>)) {
+    const opp = Array.isArray(r.advanced?.opp_players) ? r.advanced!.opp_players!.reduce((a, p) => a + (Number(p?.points) || 0), 0) : 0;
+    instatPts.set(gkey(r.match_date, r.opponent), { own: Number(r.points) || 0, opp });
   }
 
-  const aggs = aggregateOwnBox(scoped, initialSurnameKey).filter((a) => a.gp >= 3);
-  const list = aggs.map((a) => ({
-    name: a.name, games: a.gp,
-    ppg: Math.round((a.pts / a.gp) * 10) / 10, rpg: Math.round((a.reb / a.gp) * 10) / 10, apg: Math.round((a.ast / a.gp) * 10) / 10,
+  type Merged = { total: GameTotals; result: GameResult | null; players: PlayerLine[] };
+  const byKey = new Map<string, Merged>();
+
+  // KKÍ games first.
+  for (const g of kkiGames) {
+    const key = gkey(g.match_date, g.opp_name);
+    const box = Array.isArray(g.own_box) ? g.own_box : [];
+    const total: GameTotals = { gameId: String(g.match_id ?? key), date: g.match_date, opponent: g.opp_name ?? null, homeAway: null, pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, oreb: 0, dreb: 0, reb: 0, ast: 0, stl: 0, blk: 0, tov: 0, fouls: 0 };
+    const players: PlayerLine[] = [];
+    for (const b of box) {
+      total.pts += n(b.pts); total.fgm += n(b.fgm); total.fga += n(b.fga); total.tpm += n(b.tpm); total.tpa += n(b.tpa);
+      total.ftm += n(b.ftm); total.fta += n(b.fta); total.oreb += n(b.oreb); total.dreb += n(b.dreb); total.reb += n(b.reb);
+      total.ast += n(b.ast); total.stl += n(b.stl); total.blk += n(b.blk); total.tov += n(b.tov);
+      if (b.name) players.push({ name: String(b.name), pts: n(b.pts), reb: n(b.reb), ast: n(b.ast) });
+    }
+    const pf = totalsPts(g.own_totals), pa = totalsPts(g.opp_totals);
+    byKey.set(key, { total, result: (pf || pa) ? { pointsFor: pf, pointsAgainst: pa } : null, players });
+  }
+
+  // InStat games override the same matchup (richer); add any InStat-only games.
+  const instPlayersByKey = new Map<string, PlayerLine[]>();
+  for (const r of instatRows) {
+    const key = gkey((r.game_date as string | null) ?? null, (r.opponent as string | null) ?? null);
+    const arr = instPlayersByKey.get(key) ?? [];
+    arr.push({ name: String(r.source_player_name ?? "").trim(), pts: n(r.points), reb: n(r.reb), ast: n(r.assists) });
+    instPlayersByKey.set(key, arr);
+  }
+  for (const gt of aggregateGames(instatRows)) {
+    const key = gkey(gt.date, gt.opponent);
+    const prev = byKey.get(key);
+    const pts = instatPts.get(key);
+    const result = prev?.result ?? (pts ? { pointsFor: pts.own || gt.pts, pointsAgainst: pts.opp } : (gt.pts ? { pointsFor: gt.pts, pointsAgainst: 0 } : null));
+    byKey.set(key, { total: gt, result, players: instPlayersByKey.get(key) ?? [] });
+  }
+
+  if (byKey.size === 0) return null;
+
+  const totals = [...byKey.values()].map((m) => m.total);
+  const results: Record<string, GameResult> = { ...coachResults };
+  for (const m of byKey.values()) if (m.result && !(m.total.gameId in results)) results[m.total.gameId] = m.result;
+
+  // Leaders — merge player lines across games by SURNAME KEY (InStat and KKÍ spell names
+  // differently: "Asta Grimsdottir" vs "Ásta Júlía Grímsdóttir"), keeping the fuller name.
+  const byPlayer = new Map<string, { name: string; games: number; pts: number; reb: number; ast: number }>();
+  for (const m of byKey.values()) for (const p of m.players) {
+    const k = initialSurnameKey(p.name); if (!k) continue;
+    const a = byPlayer.get(k) ?? { name: p.name, games: 0, pts: 0, reb: 0, ast: 0 };
+    a.games += 1; a.pts += p.pts; a.reb += p.reb; a.ast += p.ast;
+    if (p.name.length > a.name.length) a.name = p.name;
+    byPlayer.set(k, a);
+  }
+  const list = [...byPlayer.values()].filter((a) => a.games >= 3).map((a) => ({
+    name: a.name, games: a.games, ppg: round1(a.pts / a.games), rpg: round1(a.reb / a.games), apg: round1(a.ast / a.games),
   }));
   const top = (key: "ppg" | "rpg" | "apg") => list.slice().sort((x, y) => y[key] - x[key])[0] ?? null;
-  const leaders = { scorer: top("ppg"), rebounder: top("rpg"), playmaker: top("apg") };
+
   return {
-    season: buildBasketballSeason({ games: totals, results }), leaders,
+    season: buildBasketballSeason({ games: totals, results }),
+    leaders: { scorer: top("ppg"), rebounder: top("rpg"), playmaker: top("apg") },
     competitions: competitions.length > 1 ? competitions : [],
     competition, competitionLabel: competitionLabel(competition),
+    source: instatRows.length ? "instat" : "kki",
   };
 }
 
 export async function GET(req: NextRequest) {
   const auth = await authTeam(req);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
-  const rows = await loadRows(auth.supabase, auth.teamId);
-  const seasonTeam = await loadSeasonTeam(auth.supabase, auth.teamId);
-  if (rows.length === 0) {
-    const requestedComp = new URL(req.url).searchParams.get("competition");
-    const fiba = await loadFibaSeasonFallback(auth.supabase, auth.teamId, requestedComp);
-    if (fiba) return NextResponse.json({
-      ok: true, hasData: true, season: fiba.season, leaders: fiba.leaders, fourFactors: null, quarters: null, tacticalShots: null, shotZones: null, seasonTeam, source: "kki",
-      competitions: fiba.competitions, competition: fiba.competition, competitionLabel: fiba.competitionLabel,
-    });
-    return NextResponse.json({ ok: true, hasData: false, season: null, leaders: null, seasonTeam });
-  }
-  const [results, fourFactors, quarters, tacticalShots, shotZones] = await Promise.all([
+  const requestedComp = new URL(req.url).searchParams.get("competition");
+  const [rows, seasonTeam, coachResults] = await Promise.all([
+    loadRows(auth.supabase, auth.teamId),
+    loadSeasonTeam(auth.supabase, auth.teamId),
     loadResults(auth.supabase, auth.teamId),
+  ]);
+  const merged = await loadMergedSeason(auth.supabase, auth.teamId, requestedComp, rows, coachResults);
+  if (!merged) return NextResponse.json({ ok: true, hasData: false, season: null, leaders: null, seasonTeam });
+
+  // InStat-only extras (cover whichever games have an InStat upload); null when no InStat yet.
+  const [fourFactors, quarters, tacticalShots, shotZones] = await Promise.all([
     loadFourFactors(auth.supabase, auth.teamId),
     loadQuarterScoring(auth.supabase, auth.teamId),
     loadTacticalShots(auth.supabase, auth.teamId),
     loadShotZones(auth.supabase, auth.teamId),
   ]);
-  const season = buildBasketballSeason({ games: aggregateGames(rows), results });
-  return NextResponse.json({ ok: true, hasData: true, season, leaders: leaders(rows), fourFactors, quarters, tacticalShots, shotZones, seasonTeam });
+  return NextResponse.json({
+    ok: true, hasData: true, season: merged.season, leaders: merged.leaders,
+    fourFactors, quarters, tacticalShots, shotZones, seasonTeam, source: merged.source,
+    competitions: merged.competitions, competition: merged.competition, competitionLabel: merged.competitionLabel,
+  });
 }
 
 export async function POST(req: NextRequest) {
