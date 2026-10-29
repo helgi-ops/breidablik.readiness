@@ -75,6 +75,17 @@ function ShotChart({ shots, is }: { shots: ShotPoint[]; is: boolean }) {
   );
 }
 
+/** Read a start time (seconds) from whatever the coach typed: "#t=327s", "327", "327s", "5:27",
+ *  "#t=1m30s". Lets the clock/timecode they enter drive where the clip starts playing. */
+function parseStart(s: string): number | null {
+  const str = (s ?? "").trim(); if (!str) return null;
+  let m: RegExpMatchArray | null;
+  if ((m = str.match(/t=(?:(\d+)h)?(?:(\d+)m)?(\d+)s?/i))) return Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Number(m[3]);
+  if ((m = str.match(/^(\d+):(\d{1,2})$/))) return Number(m[1]) * 60 + Number(m[2]);
+  if ((m = str.match(/^(\d+)s?$/i))) return Number(m[1]);
+  return null;
+}
+
 export default function OpponentPlayerClips({ opponent, playerName, token, lang }: { opponent: string; playerName: string; token: () => Promise<string | null>; lang: Lang }) {
   const is = lang === "IS";
   const t = (en: string, isl: string) => (is ? isl : en);
@@ -122,9 +133,17 @@ export default function OpponentPlayerClips({ opponent, playerName, token, lang 
     try {
       const tok = await token(); if (!tok) return;
       const made = form.made === "yes" ? true : form.made === "no" ? false : undefined;
+      // Make the clip start where it was tagged: take the start time from the clock field (or an
+      // existing #t= on the link) and bake it onto the saved link, so ▶ plays from that moment.
+      const raw = form.videoUrl.trim();
+      const startSecs = parseStart(form.clock) ?? (raw.includes("#") ? parseStart(raw.split("#").slice(1).join("#")) : null);
+      let videoUrl: string | undefined = raw || undefined;
+      if (videoUrl && startSecs != null && !/#t=/.test(videoUrl)) videoUrl = `${videoUrl.split("#")[0]}#t=${startSecs}s`;
+      // If the clock field was used for a video timecode (#t=…/327s), show it cleanly as mm:ss.
+      const clock = /t=\d|^\s*\d+s\s*$/i.test(form.clock) && startSecs != null ? `${Math.floor(startSecs / 60)}:${String(startSecs % 60).padStart(2, "0")}` : form.clock.trim();
       const res = await fetch("/api/coach/scouting/player-clips", {
         method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" },
-        body: JSON.stringify({ opponent, player: playerName, action: form.action, made, period: form.period || undefined, clock: form.clock || undefined, videoUrl: form.videoUrl || undefined, source: "coach" }),
+        body: JSON.stringify({ opponent, player: playerName, action: form.action, made, period: form.period || undefined, clock: clock || undefined, videoUrl, source: "coach" }),
       });
       if ((await res.json())?.ok) { setForm((f) => ({ ...f, period: "", clock: "", videoUrl: "" })); setAdding(false); await load(); }
     } finally { setBusy(false); }
@@ -201,7 +220,7 @@ export default function OpponentPlayerClips({ opponent, playerName, token, lang 
               <option value="no">{t("Miss", "Miss")}</option>
             </select>
             <input value={form.period} onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))} placeholder="Q1" className="w-14 rounded border border-slate-300 px-2 py-1 text-[12px]" />
-            <input value={form.clock} onChange={(e) => setForm((f) => ({ ...f, clock: e.target.value }))} placeholder="05:27" className="w-20 rounded border border-slate-300 px-2 py-1 text-[12px]" />
+            <input value={form.clock} onChange={(e) => setForm((f) => ({ ...f, clock: e.target.value }))} placeholder={t("time e.g 5:27", "tími t.d 5:27")} title={t("Game clock or video time — used as the clip's start point", "Leikklukka eða tími í myndbandi — notað sem byrjun klippunnar")} className="w-24 rounded border border-slate-300 px-2 py-1 text-[12px]" />
           </div>
           <div className="flex gap-2">
             <input value={form.videoUrl} onChange={(e) => setForm((f) => ({ ...f, videoUrl: e.target.value }))} placeholder={t("Deep link into the game feed (Vimeo / YouTube)", "Hlekkur í leikmyndband (Vimeo / YouTube)")} className="flex-1 rounded border border-slate-300 px-2 py-1 text-[12px]" />
