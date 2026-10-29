@@ -23,9 +23,11 @@ export async function GET(req: Request) {
   const teamId = (p?.team_id as string | null) ?? null;
   if (!teamId) return NextResponse.json({ ok: true, share: null });
 
+  // The latest share meant for this player: either team-wide (no target) or targeted at them.
   const { data: shareRow } = await sb.from("opponent_scout_shares")
     .select("opponent, opponent_key, title, snapshot, created_at")
-    .eq("team_id", teamId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    .eq("team_id", teamId).or(`target_player_id.is.null,target_player_id.eq.${playerId}`)
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
   const share = shareRow as { opponent: string; opponent_key: string; title: string | null; snapshot: Record<string, unknown>; created_at: string } | null;
   if (!share) return NextResponse.json({ ok: true, share: null });
 

@@ -296,6 +296,8 @@ export default function BasketballOpponentAnalysis() {
   const [deckBusy, setDeckBusy] = React.useState(false);
   const [shareBusy, setShareBusy] = React.useState(false);
   const [shareMsg, setShareMsg] = React.useState<string | null>(null);
+  const [roster, setRoster] = React.useState<{ id: string; name: string }[]>([]);
+  const [recipient, setRecipient] = React.useState<string>(""); // "" = whole team, else a player id
   const [ai, setAi] = React.useState<OppAi | null>(null);
   const [aiBusy, setAiBusy] = React.useState(false);
   const [aiErr, setAiErr] = React.useState<string | null>(null);
@@ -482,12 +484,26 @@ export default function BasketballOpponentAnalysis() {
       };
       const res = await fetch("/api/coach/scouting/share", {
         method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" },
-        body: JSON.stringify({ opponent: sel, title: report.opponentName, snapshot }),
+        body: JSON.stringify({ opponent: sel, title: report.opponentName, snapshot, targetPlayerId: recipient || undefined }),
       });
       const j = await res.json();
-      setShareMsg(j.ok ? (lang === "IS" ? "✓ Sent í leikmannaappið" : "✓ Sent to the player app") : (j.error ?? "Error"));
+      const who = j.target ? j.target : (lang === "IS" ? "allt liðið" : "the whole team");
+      setShareMsg(j.ok ? (lang === "IS" ? `✓ Sent á ${who}` : `✓ Sent to ${who}`) : (j.error ?? "Error"));
     } catch { setShareMsg(lang === "IS" ? "Villa við sendingu" : "Send failed"); } finally { setShareBusy(false); }
   };
+
+  // Own-team roster for the "send to" recipient picker (loaded once a report is available).
+  React.useEffect(() => {
+    if (!report || roster.length) return;
+    (async () => {
+      const tok = await token(); if (!tok) return;
+      try {
+        const res = await fetch("/api/coach/scouting/share?players=1", { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
+        const j = await res.json();
+        if (j.ok && Array.isArray(j.players)) setRoster(j.players);
+      } catch { /* picker falls back to whole-team only */ }
+    })();
+  }, [report, roster.length, token]);
 
   // Shot charts from the free public FIBA LiveStats feed — own team + any opponent. Shown
   // even with no scouted opponents yet (it's a pull tool, not opponent-dependent).
@@ -535,6 +551,12 @@ export default function BasketballOpponentAnalysis() {
             className="rounded-lg border border-[#2740e6] bg-white px-2.5 py-1 text-[13px] font-semibold text-[#2740e6] hover:bg-[#eef0fb] disabled:opacity-50">
             {deckBusy ? (lang === "IS" ? "Bý til…" : "Building…") : (lang === "IS" ? "Fundar-kynning (PPT)" : "Meeting deck (PPT)")}
           </button>
+          {roster.length ? (
+            <select value={recipient} onChange={(e) => setRecipient(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px] text-slate-700">
+              <option value="">{lang === "IS" ? "Allt liðið" : "Whole team"}</option>
+              {roster.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          ) : null}
           <button onClick={() => void sendToPlayers()} disabled={shareBusy}
             className="rounded-lg bg-[#2740e6] px-2.5 py-1 text-[13px] font-semibold text-white hover:bg-[#1f34c0] disabled:opacity-50">
             {shareBusy ? (lang === "IS" ? "Sendi…" : "Sending…") : (lang === "IS" ? "Senda í leikmannaapp" : "Send to players")}

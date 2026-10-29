@@ -29,11 +29,16 @@ async function authTeam(req: NextRequest) {
   return { supabase, teamId, userId: userRes.user.id } as const;
 }
 
-/** Fire-and-forget push to active players that a new scout has landed. */
-async function notify(supabase: ReturnType<typeof getSupabase>, teamId: string, opponent: string) {
+/** Fire-and-forget push to the recipients that a new scout has landed (one player, or the whole team). */
+async function notify(supabase: ReturnType<typeof getSupabase>, teamId: string, opponent: string, targetPlayerId: string | null) {
   try {
-    const { data: players } = await supabase.from("players").select("id").eq("team_id", teamId).eq("status", "ACTIVE");
-    const ids = (players ?? []).map((p) => (p as { id: string }).id);
+    let ids: string[];
+    if (targetPlayerId) {
+      ids = [targetPlayerId];
+    } else {
+      const { data: players } = await supabase.from("players").select("id").eq("team_id", teamId).eq("status", "ACTIVE");
+      ids = (players ?? []).map((p) => (p as { id: string }).id);
+    }
     if (!ids.length) return;
     const { data: subs } = await supabase.from("player_push_subscriptions").select("id, endpoint, p256dh, auth").in("player_id", ids).eq("is_active", true);
     const payload = { title: "Þjálfari", body: `Skátaskýrsla: ${opponent}`.slice(0, 100), url: "/player" };
@@ -45,6 +50,15 @@ async function notify(supabase: ReturnType<typeof getSupabase>, teamId: string, 
   } catch { /* push is best-effort */ }
 }
 
+// GET ?players=1 → the own-team active roster, for the "send to" recipient picker.
+export async function GET(req: NextRequest) {
+  const auth = await authTeam(req);
+  if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+  if (!new URL(req.url).searchParams.get("players")) return NextResponse.json({ ok: false, error: "players=1 required" }, { status: 400 });
+  const { data } = await auth.supabase.from("players").select("id, full_name").eq("team_id", auth.teamId).eq("status", "ACTIVE").order("full_name");
+  return NextResponse.json({ ok: true, players: (data ?? []).map((p) => ({ id: (p as { id: string }).id, name: (p as { full_name: string | null }).full_name ?? "—" })) });
+}
+
 export async function POST(req: NextRequest) {
   const auth = await authTeam(req);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
@@ -54,11 +68,20 @@ export async function POST(req: NextRequest) {
   const snapshot = body?.snapshot && typeof body.snapshot === "object" ? body.snapshot : {};
   const title = body?.title ? String(body.title).slice(0, 200) : null;
 
+  // Optional single-player target — validated to be on the coach's team (null = whole team).
+  const targetPlayerId: string | null = body?.targetPlayerId ? String(body.targetPlayerId) : null;
+  let targetName: string | null = null;
+  if (targetPlayerId) {
+    const { data: pl } = await auth.supabase.from("players").select("id, full_name").eq("id", targetPlayerId).eq("team_id", auth.teamId).maybeSingle();
+    if (!pl) return NextResponse.json({ ok: false, error: "That player isn't on your team." }, { status: 400 });
+    targetName = (pl as { full_name: string | null }).full_name ?? null;
+  }
+
   const { data, error } = await auth.supabase.from("opponent_scout_shares").insert({
-    team_id: auth.teamId, opponent, opponent_key: foldName(opponent), title, snapshot, created_by: auth.userId,
+    team_id: auth.teamId, opponent, opponent_key: foldName(opponent), title, snapshot, created_by: auth.userId, target_player_id: targetPlayerId,
   } as never).select("id").maybeSingle();
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-  void notify(auth.supabase, auth.teamId, opponent);
-  return NextResponse.json({ ok: true, id: (data as { id?: string } | null)?.id ?? null });
+  void notify(auth.supabase, auth.teamId, opponent, targetPlayerId);
+  return NextResponse.json({ ok: true, id: (data as { id?: string } | null)?.id ?? null, target: targetName });
 }
