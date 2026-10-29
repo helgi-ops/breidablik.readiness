@@ -14,6 +14,8 @@
  *
  * Provenance (per the explainability manifesto, every rule carries its source):
  *   Salazar 2020   — external W3>W0>W2>W1; internal peaks in no-game weeks.
+ *   Salazar 2025   — short-term (within-microcycle) load distribution across six
+ *                    elite-European head coaches; corroborates the MD-relative shape.
  *   Conte 2018     — 1-game weeks carry MORE total load than 2-game weeks;
  *                    starters > bench; bench needs topping up (esp. 2-game).
  *   Power 2024     — congested weeks are tapered; the 3rd game of a 3-game week
@@ -63,7 +65,7 @@ const BASKETBALL_SHAPES: Record<WeekType, WeekShape> = {
       en: "External load ranks second-highest of any week type, yet perceived (internal) load often peaks when there is no game to pace the week. Plan the work — then watch it doesn't quietly spike.",
       is: "Ytra álag er næst-hæst allra vikugerða, en upplifað (innra) álag toppar oft þegar enginn leikur stýrir vikunni. Skipuleggðu álagið — og fylgstu með að það rjúki ekki hljóðlega upp.",
     },
-    citation: "Salazar et al. 2020",
+    citation: "Salazar et al. 2020 · Salazar et al. 2025",
   },
   ONE_MATCH: {
     weekType: "ONE_MATCH",

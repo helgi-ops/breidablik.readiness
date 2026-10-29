@@ -115,7 +115,10 @@ export const MIN_MATURE_SESSIONS = 6;
  */
 export const MIN_IMPACTS_FOR_INDEX = 10;
 
-const CITATION = "Tuttle et al. 2024 (thresholds, adapted) · Conte 2018 · Salazar 2020";
+// Internal:external basketball validation — Fox, O'Grady & Scanlan 2020 (IJSPP): PlayerLoad has the
+// strongest dose-response with internal load (sRPE / summated-HR zones), and the external:internal
+// relationship is tighter in training than games — the decoupling this composite watches.
+const CITATION = "Tuttle et al. 2024 (thresholds, adapted) · Conte 2018 · Salazar 2020 · Fox et al. 2020";
 
 const CAVEAT: Bi = {
   en: "Provisional, not yet calibrated to real basketball data. Accel/decel/CoD use Catapult Band 3 (>3.0 m·s⁻²) as the available proxy for Tuttle's >3.5; jumps are counts, not >40 cm heights; impacts (Titan indoor IMU) are counts of high-g impact events (hard landings / contacts above a threshold) — discrete collision events, not continuous load, so they only enter the score when a player's baseline is impact-rich (≥10/session); below that they're shown as a raw count only, never scored (a ratio of single-digit counts is noise). Read on personal norm, low confidence until a squad's own data accrues.",
