@@ -12,6 +12,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { WEB_PLAY_COLORS } from "@/components/coach/PlayDiagramSvg";
 import { buildPlayDiagram, PLAY_VIEW, PLAY_TYPES, ARROW_KINDS, type PlayDiagram, type PlayArrow, type ArrowKind } from "@/lib/micropulse/basketballStats/playDiagram";
+import { COMMON_SETS } from "@/lib/micropulse/basketballStats/commonSets";
 
 type Tool = "off" | "def" | "arrow" | "move" | "erase";
 export type SavedDiagram = { id: string; name: string; play_type: string | null; diagram: PlayDiagram; source: string; confirmed: boolean; confidence: string | null };
@@ -30,6 +31,17 @@ export default function PlayDiagramEditor({ opponent, initial, onSaved, onCancel
   const [playType, setPlayType] = React.useState(initial?.play_type ?? "pnrHandler");
   const [tool, setTool] = React.useState<Tool>("off");
   const [kind, setKind] = React.useState<ArrowKind>("move");
+
+  // Start from a named set — seed the name, play type and a standard starting alignment from the
+  // common-sets library, which the coach then draws up (adjusts) and saves. Free-text naming still
+  // works for a play that isn't in the library.
+  const applyTemplate = (key: string) => {
+    const set = COMMON_SETS.find((s) => s.key === key);
+    if (!set) return;
+    setName(is ? set.name.is : set.name.en);
+    setPlayType(set.playType);
+    setDiagram(JSON.parse(JSON.stringify(set.diagram)) as PlayDiagram);
+  };
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
 
@@ -147,6 +159,16 @@ export default function PlayDiagramEditor({ opponent, initial, onSaved, onCancel
           className="min-w-[200px] flex-1 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
         <select value={playType} onChange={(e) => setPlayType(e.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-[13px]">
           {PLAY_TYPES.map((p) => <option key={p.key} value={p.key}>{is ? p.is : p.en}</option>)}
+        </select>
+      </div>
+      {/* Start from a named standard set (Horns, Spain PnR, Chicago, Floppy…) — seeds the name + a
+          starting alignment to draw up; or just type a name above and draw from scratch. */}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Byrja á kerfi" : "Start from a set"}</span>
+        <select value="" onChange={(e) => { if (e.target.value) applyTemplate(e.target.value); e.currentTarget.value = ""; }}
+          className="rounded-md border border-slate-300 px-2 py-1.5 text-[13px] text-slate-600">
+          <option value="">{is ? "Veldu kerfi…" : "Choose a set…"}</option>
+          {COMMON_SETS.map((s) => <option key={s.key} value={s.key}>{is ? s.name.is : s.name.en}</option>)}
         </select>
       </div>
 
