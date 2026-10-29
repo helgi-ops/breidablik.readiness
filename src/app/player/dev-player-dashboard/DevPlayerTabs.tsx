@@ -11,9 +11,12 @@ type Props = {
   activeTab: DevPlayerTab;
   onChange: (tab: DevPlayerTab) => void;
   planTier?: PlanTier;
+  /** Basketball-only surfaces (e.g. the coach-sent scouting page) are added only
+   *  for basketball teams. */
+  isBasketball?: boolean;
 };
 
-const TABS_BASE: Array<{ key: DevPlayerTab; labelKey: "today" | "rpe" | "dashboard" | "history" | "vald"; fullLabelIS: string; fullLabelEN: string; minTier: MinTier }> = [
+const TABS_BASE: Array<{ key: DevPlayerTab; labelKey: "today" | "rpe" | "dashboard" | "history" | "vald"; fullLabelIS: string; fullLabelEN: string; minTier: MinTier; basketballOnly?: boolean }> = [
   { key: "today",     labelKey: "today",     fullLabelIS: "Í dag",                   fullLabelEN: "Today",                   minTier: "free"  },
   { key: "rpe",       labelKey: "rpe",       fullLabelIS: "RPE skráning",             fullLabelEN: "Post Session RPE",         minTier: "pro"   },
   { key: "dashboard", labelKey: "dashboard", fullLabelIS: "Yfirlit",                  fullLabelEN: "Dashboard",                minTier: "pro"   },
@@ -22,6 +25,7 @@ const TABS_BASE: Array<{ key: DevPlayerTab; labelKey: "today" | "rpe" | "dashboa
   { key: "strength",  labelKey: "today",     fullLabelIS: "Styrkur / VBT",            fullLabelEN: "Strength / VBT",           minTier: "pro"   },
   { key: "gamereport", labelKey: "history",  fullLabelIS: "Leikjaskýrsla",            fullLabelEN: "Game report",              minTier: "free"  },
   { key: "stats",     labelKey: "history",   fullLabelIS: "Tölfræði",                 fullLabelEN: "Stats",                    minTier: "free"  },
+  { key: "scouting",  labelKey: "history",   fullLabelIS: "Scouting",                 fullLabelEN: "Scouting",                 minTier: "free", basketballOnly: true },
   { key: "movement",  labelKey: "history",   fullLabelIS: "Hreyfing",                 fullLabelEN: "Movement",                 minTier: "free"  },
   { key: "history",   labelKey: "history",   fullLabelIS: "Saga",                     fullLabelEN: "History",                  minTier: "free"  },
   { key: "privacy",   labelKey: "today",     fullLabelIS: "Friðhelgi",                fullLabelEN: "Privacy",                  minTier: "free"  },
@@ -38,14 +42,15 @@ function minTierRank(t: MinTier): number {
   return 0;
 }
 
-export default function DevPlayerTabs({ activeTab, onChange, planTier = "FREE" }: Props) {
+export default function DevPlayerTabs({ activeTab, onChange, planTier = "FREE", isBasketball = false }: Props) {
   const rank = tierRank(planTier);
   const [lang] = useLang();
+  const tabs = TABS_BASE.filter((t) => (t.basketballOnly ? isBasketball : true));
 
   return (
     <div className="mt-3 border-b border-zinc-200 overflow-x-auto">
       <div className="flex min-w-max">
-        {TABS_BASE.map((tab) => {
+        {tabs.map((tab) => {
           const label = lang === "IS" ? tab.fullLabelIS : tab.fullLabelEN;
           const active = tab.key === activeTab;
           const locked = rank < minTierRank(tab.minTier);

@@ -1,4 +1,4 @@
-export type DevPlayerTab = "today" | "history" | "dashboard" | "risk" | "rpe" | "vald" | "strength" | "gamereport" | "movement" | "stats" | "chat" | "privacy";
+export type DevPlayerTab = "today" | "history" | "dashboard" | "risk" | "rpe" | "vald" | "strength" | "gamereport" | "movement" | "stats" | "scouting" | "chat" | "privacy";
 
 export type DevPlayerRiskViewModel = {
   statusLabel: string;
@@ -20,6 +20,7 @@ export function normalizeDevPlayerTab(value: string | null | undefined): DevPlay
   if (v === "gamereport") return "gamereport";
   if (v === "movement") return "movement";
   if (v === "stats") return "stats";
+  if (v === "scouting") return "scouting";
   if (v === "chat") return "chat";
   if (v === "privacy") return "privacy";
   return "today";

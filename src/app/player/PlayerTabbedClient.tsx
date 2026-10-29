@@ -2027,6 +2027,9 @@ const PWA_PRIMARY_TABS = [
 const PWA_SECONDARY_TABS = [
   { key: "movement" as DevPlayerTab, tabKey: "movement" as const, Icon: IconActivity, minTier: "free"  as const, href: null as string | null },
   { key: "stats"    as DevPlayerTab, tabKey: "stats"    as const, Icon: IconBarChart, minTier: "free"  as const, href: null as string | null },
+  // Scouting — opponent scout the coach sends (basketball only). Filtered out for
+  // non-basketball teams in PWABottomNav, like `rpe` under hideWellness.
+  { key: "scouting" as DevPlayerTab, tabKey: "scouting" as const, Icon: IconReport,   minTier: "free"  as const, href: null as string | null },
   { key: "chat"     as DevPlayerTab, tabKey: "chat"     as const, Icon: IconChat,     minTier: "free"  as const, href: null as string | null },
   { key: "history"  as DevPlayerTab, tabKey: "history"  as const, Icon: IconClock,    minTier: "free"  as const, href: null as string | null },
   { key: "strength" as DevPlayerTab, tabKey: "strength" as const, Icon: IconDumbbell, minTier: "pro"   as const, href: null as string | null },
@@ -2044,6 +2047,7 @@ function PWABottomNav({
   planTier,
   unreadChatCount = 0,
   hideWellness = false,
+  isBasketball = false,
 }: {
   activeTab: DevPlayerTab;
   onChange: (tab: DevPlayerTab) => void;
@@ -2053,6 +2057,9 @@ function PWABottomNav({
    *  the bottom nav. The slot stays balanced because primary tabs without
    *  RPE come to 3 + More button = 4. */
   hideWellness?: boolean;
+  /** Scouting is a basketball-only surface (coach-sent opponent scout) — drop it
+   *  from the More-sheet for football/other teams. */
+  isBasketball?: boolean;
 }) {
   const router = useRouter();
   const isAtLeastPro = planTier === "PRO" || planTier === "ELITE";
@@ -2064,9 +2071,9 @@ function PWABottomNav({
   const primaryTabs = PWA_PRIMARY_TABS;
   // RPE now lives in the More-sheet; when wellness is hidden for this player,
   // drop it there (previously it was filtered out of the primary bar).
-  const secondaryTabs = hideWellness
-    ? PWA_SECONDARY_TABS.filter((t) => t.key !== "rpe")
-    : PWA_SECONDARY_TABS;
+  const secondaryTabs = PWA_SECONDARY_TABS.filter(
+    (t) => (hideWellness ? t.key !== "rpe" : true) && (t.key === "scouting" ? isBasketball : true),
+  );
 
   function isLocked(tier: string) {
     return (tier === "pro" && !isAtLeastPro) || (tier === "elite" && !isElite);
@@ -2620,7 +2627,7 @@ export default function DevPlayerClient() {
     why: dailyDecision.why,
     mdContext: dailyDecision.mdContext,
   });
-  const tabsElement = <DevPlayerTabs activeTab={activeTab} onChange={setTab} planTier={planTier} />;
+  const tabsElement = <DevPlayerTabs activeTab={activeTab} onChange={setTab} planTier={planTier} isBasketball={teamIsBasketball} />;
 
   const tabbedShellCss = `
         .dev-player-tabbed-shell[data-player-active-tab="today"] [data-player-card="metrics"],
@@ -2803,10 +2810,16 @@ export default function DevPlayerClient() {
               )}
               {activeTab === "stats" && (
                 <div className="space-y-4">
-                  {teamIsBasketball ? <PlayerScoutingCard lang={lang as "IS" | "EN"} /> : null}
                   {teamIsBasketball
                     ? <PlayerBasketballGameReportCard lang={lang as "IS" | "EN"} />
                     : <PlayerFootballStatsCard lang={lang as "IS" | "EN"} />}
+                </div>
+              )}
+              {/* Scouting — the coach-sent opponent scout, its own page (basketball
+                  only). Self-hides until a scout has been shared to this player. */}
+              {activeTab === "scouting" && teamIsBasketball && (
+                <div className="mx-auto max-w-lg pb-24">
+                  <PlayerScoutingCard lang={lang as "IS" | "EN"} />
                 </div>
               )}
               {activeTab === "movement" && (
@@ -2874,7 +2887,7 @@ export default function DevPlayerClient() {
       </div>
       <PlayerPrivacyConsentPrompt />
       {/* PWA bottom navigation bar */}
-      {isPwa && <PWABottomNav activeTab={activeTab} onChange={setTab} planTier={planTier} unreadChatCount={unreadChatCount} hideWellness={hideWellness} />}
+      {isPwa && <PWABottomNav activeTab={activeTab} onChange={setTab} planTier={planTier} unreadChatCount={unreadChatCount} hideWellness={hideWellness} isBasketball={teamIsBasketball} />}
     </>
   );
 }
