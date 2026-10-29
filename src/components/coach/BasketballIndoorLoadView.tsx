@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import type { Lang } from "@/lib/lang";
+import { basketballFamily, familyLabel, positionGeneralNote, type PositionFamily } from "@/lib/micropulse/indoorLoad/positionContext";
 import {
   Card,
   CardContent,
@@ -69,6 +70,8 @@ type TitanLatest = {
 type PlayerResult = {
   id: string;
   name: string;
+  /** Position family (guard/wing/big) for reading context — null when no position is set. */
+  family: PositionFamily | null;
   load: BasketballIndoorLoad;
   /** Non-null only for Titan teams that report the Movement-Profile durations. */
   titanLatest: TitanLatest | null;
@@ -105,11 +108,11 @@ export default function BasketballIndoorLoadView({
         const sb = getSupabaseClient();
         const { data: players } = await sb
           .from("players")
-          .select("id, full_name")
+          .select("id, full_name, position")
           .eq("team_id", teamId)
           .eq("is_active", true)
           .order("full_name");
-        const roster = (players ?? []) as Array<{ id: string; full_name: string | null }>;
+        const roster = (players ?? []) as Array<{ id: string; full_name: string | null; position: string | null }>;
         if (roster.length === 0) { if (alive) { setResults([]); setLoading(false); } return; }
 
         const since = daysAgoIso(WINDOW_DAYS);
@@ -169,6 +172,7 @@ export default function BasketballIndoorLoadView({
         const computed: PlayerResult[] = roster.map((p) => ({
           id: p.id,
           name: p.full_name ?? "—",
+          family: basketballFamily(p.position),
           load: computeBasketballIndoorLoad(byPlayer.get(p.id) ?? []),
           titanLatest: titanByPlayer.get(p.id) ?? null,
         }));
@@ -260,7 +264,14 @@ export default function BasketballIndoorLoadView({
               <Card key={r.id}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between gap-3">
-                    <CardTitle className="text-base">{r.name}</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-base">{r.name}</CardTitle>
+                      {r.family && (
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                          {familyLabel(r.family, isEN)}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       {s?.band && (
                         <Badge className={BAND_COLORS[s.band]} variant="secondary">
@@ -350,6 +361,12 @@ function HowToRead({ isEN, caveat, citation }: { isEN: boolean; caveat?: { en: s
               : "Nýjasta innidyra-æfing hvers leikmanns er metin á móti HANS/HENNAR eigin 28-daga viðmiðun — 100 = týpísk æfing fyrir þann leikmann. Það er vegið meðaltal þeirra merkja sem við treystum innandyra. Það eru engin áreiðanleg deildar-viðmið fyrir körfubolta, svo allt er lesið á persónulegri viðmiðun, aldrei á móti öðrum leikmönnum."}
           </p>
           <div className="mt-1.5 rounded bg-slate-50 px-2.5 py-1.5 text-[11.5px] font-medium tabular-nums text-slate-600">{bands}</div>
+        </div>
+
+        {/* Position context (descriptive, cited) — why personal norm, not cross-position, is the right read. */}
+        <div>
+          <div className="text-[13px] font-semibold text-slate-900">{isEN ? "Position context" : "Leikstöðu-samhengi"}</div>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-slate-600">{positionGeneralNote(isEN)}</p>
         </div>
 
         {/* The signals */}
