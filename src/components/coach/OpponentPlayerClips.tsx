@@ -26,6 +26,37 @@ const ACTION_LABELS: Record<string, { en: string; is: string }> = {
 const isPaint = (a: string) => a === "post_up" || a === "oreb_putback" || a === "drive";
 const toneOf = (c: Clip) => (c.made === true ? C.green : c.made === false ? C.red : isPaint(c.action) ? C.amber : C.primary);
 
+/**
+ * Turn a clip's deep link into an inline-playable embed URL (no video is downloaded — it plays from
+ * the source). Handles Vimeo (incl. the owner "manage" link + private hash) and YouTube; any `#t=`
+ * timecode is preserved so the clip starts on the action. Returns null when it can't be embedded.
+ */
+function toEmbed(url: string | null): string | null {
+  if (!url) return null;
+  let u: URL;
+  try { u = new URL(url); } catch { return null; }
+  const host = u.hostname.replace(/^www\./, "");
+  const t = u.hash.match(/t=([0-9hms:]+)/i)?.[1] ?? u.searchParams.get("t");
+  if (host === "vimeo.com" || host === "player.vimeo.com") {
+    const parts = u.pathname.split("/").filter(Boolean);
+    let id: string | null = null, hash: string | null = u.searchParams.get("h");
+    const vIdx = parts.indexOf("video"); if (vIdx >= 0 && parts[vIdx + 1]) id = parts[vIdx + 1];
+    const mIdx = parts.indexOf("videos"); if (mIdx >= 0 && parts[mIdx + 1]) { id = parts[mIdx + 1]; if (parts[mIdx + 2]) hash = parts[mIdx + 2]; }
+    if (!id && /^\d+$/.test(parts[0] ?? "")) { id = parts[0]; if (/^[a-z0-9]+$/i.test(parts[1] ?? "")) hash = parts[1]; }
+    if (!id || !/^\d+$/.test(id)) return null;
+    return `https://player.vimeo.com/video/${id}${hash ? `?h=${hash}` : ""}${t ? `#t=${t}` : ""}`;
+  }
+  if (host === "youtube.com" || host === "m.youtube.com") {
+    const id = u.searchParams.get("v"); if (!id) return null;
+    return `https://www.youtube.com/embed/${id}${t ? `?start=${String(t).replace(/[^0-9]/g, "")}` : ""}`;
+  }
+  if (host === "youtu.be") {
+    const id = u.pathname.split("/").filter(Boolean)[0]; if (!id) return null;
+    return `https://www.youtube.com/embed/${id}${t ? `?start=${String(t).replace(/[^0-9]/g, "")}` : ""}`;
+  }
+  return null;
+}
+
 /** Half-court shot chart from the tagged clips' locations (shared geometry → PDF parity). */
 function ShotChart({ shots, is }: { shots: ShotPoint[]; is: boolean }) {
   const g = shotChartGeometry(shots);
@@ -51,6 +82,7 @@ export default function OpponentPlayerClips({ opponent, playerName, token, lang 
   const [loading, setLoading] = React.useState(true);
   const [adding, setAdding] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  const [playing, setPlaying] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<{ action: ActionKey; made: "" | "yes" | "no"; period: string; clock: string; videoUrl: string }>({ action: "3pt_make", made: "", period: "", clock: "", videoUrl: "" });
 
   const load = React.useCallback(async () => {
@@ -59,7 +91,7 @@ export default function OpponentPlayerClips({ opponent, playerName, token, lang 
       const tok = await token(); if (!tok) { setData(null); return; }
       const qs = `?opponent=${encodeURIComponent(opponent)}&player=${encodeURIComponent(playerName)}`;
       const res = await fetch(`/api/coach/scouting/player-clips${qs}`, { headers: { Authorization: `Bearer ${tok}` }, cache: "no-store" });
-      setData((await res.json()) as Resp);
+      setData((await res.json()) as Resp); setPlaying(null);
     } catch { setData(null); } finally { setLoading(false); }
   }, [opponent, playerName, token]);
 
@@ -87,6 +119,8 @@ export default function OpponentPlayerClips({ opponent, playerName, token, lang 
   const clips = data?.clips ?? [];
   const byAction = data?.byAction ?? [];
   const shotPoints = data?.shotPoints ?? [];
+  const playingClip = clips.find((c) => c.id === playing) ?? null;
+  const embed = playingClip ? toEmbed(playingClip.video_url) : null;
 
   return (
     <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
@@ -96,6 +130,29 @@ export default function OpponentPlayerClips({ opponent, playerName, token, lang 
       </div>
 
       {loading ? <p className="mt-2 text-[12px] text-slate-500">{t("Loading…", "Hleð…")}</p> : null}
+
+      {/* Inline player — the selected clip plays here, beside this player's stats + shot chart. The
+          video streams from its source (Vimeo/YouTube); nothing is downloaded or re-hosted. */}
+      {playingClip ? (
+        <div className="mt-2">
+          {embed ? (
+            <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-black" style={{ paddingTop: "56.25%" }}>
+              <iframe src={embed} title={`${playingClip.action} — ${playerName}`} className="absolute inset-0 h-full w-full" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
+            </div>
+          ) : (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[12px] text-amber-800">
+              {t("This link can't be played inline. ", "Ekki hægt að spila þennan hlekk hér. ")}
+              {playingClip.video_url ? <a href={playingClip.video_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#2740e6] hover:underline">{t("Open it", "Opna")}</a> : null}
+            </p>
+          )}
+          <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500">
+            <span className="font-semibold text-slate-700">{is ? ACTION_LABELS[playingClip.action]?.is ?? playingClip.action : ACTION_LABELS[playingClip.action]?.en ?? playingClip.action}</span>
+            {playingClip.made != null ? <span>{playingClip.made ? t("make", "hitt") : t("miss", "miss")}</span> : null}
+            {(playingClip.period || playingClip.clock) ? <span>· {playingClip.period ?? ""} {playingClip.clock ?? ""}</span> : null}
+            <button type="button" onClick={() => setPlaying(null)} className="ml-auto text-slate-400 hover:text-slate-700">{t("✕ close", "✕ loka")}</button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Shot tendency chart (from clips with a location) */}
       {shotPoints.length ? <div className="mt-2"><ShotChart shots={shotPoints} is={is} /></div> : null}
@@ -145,7 +202,11 @@ export default function OpponentPlayerClips({ opponent, playerName, token, lang 
               {c.made != null ? <span className="text-slate-400">{c.made ? t("make", "hitt") : t("miss", "miss")}</span> : null}
               {(c.period || c.clock) ? <span className="text-slate-400">· {c.period ?? ""} {c.clock ?? ""}</span> : null}
               <span className="ml-auto flex items-center gap-2">
-                {c.video_url ? <a href={c.video_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#2740e6] hover:underline">▶ {t("clip", "skeið")}</a> : null}
+                {c.video_url ? (
+                  toEmbed(c.video_url)
+                    ? <button type="button" onClick={() => setPlaying(c.id)} className={`font-semibold ${playing === c.id ? "text-slate-400" : "text-[#2740e6] hover:underline"}`}>▶ {t("play", "spila")}</button>
+                    : <a href={c.video_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#2740e6] hover:underline">▶ {t("open", "opna")}</a>
+                ) : null}
                 <span className="text-[9px] uppercase tracking-wide text-slate-300">{c.source}</span>
                 <button type="button" onClick={() => void del(c.id)} className="text-slate-300 hover:text-red-600" aria-label={t("delete", "eyða")}>✕</button>
               </span>
