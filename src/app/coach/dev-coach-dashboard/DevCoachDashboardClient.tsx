@@ -33,6 +33,7 @@ import { buildTeamRiskMap } from "@/lib/micropulse/performanceIntelligence/teamR
 import { buildWeeklyRiskReport } from "@/lib/micropulse/performanceIntelligence/weeklyReport";
 import { buildTeamOutlook } from "@/lib/micropulse/performanceIntelligence/teamOutlook";
 import { resolveSessionMdContextFromSources } from "@/lib/micropulse/weekSetup/sessionSource";
+import { mdOffsetForDate } from "@/lib/micropulse/readinessOutlook/assemble";
 import { computePlayerVolatilitySummary } from "@/lib/micropulse/volatility/compute";
 import { summarizeDrivers, volatilityLevelLabel, volatilityLevelTone } from "@/lib/micropulse/volatility/format";
 import type { VolatilityDailyPoint } from "@/lib/micropulse/volatility/types";
@@ -1710,6 +1711,10 @@ export default function CoachPage() {
   // briefing never says "rest day" on a day the squad actually plays (e.g. KKÍ/KSÍ publish
   // the schedule late and the week was set up without the game).
   const [matchToday, setMatchToday] = useState<{ opponent: string | null; isHome: boolean | null } | null>(null);
+  // Today's day context DERIVED from the nearest fixture (match_schedule) — the same rhythm Week
+  // Setup previews (GD+1 recovery, GD+2 practice, …). A fallback used only when no plan is saved for
+  // today, so the Today page never contradicts Week Setup with a false "rest day".
+  const [fixtureCtx, setFixtureCtx] = useState<{ md: string | null; dayType: string | null; intensity: string | null }>({ md: null, dayType: null, intensity: null });
   // High-intensity L/R CoD asymmetry % per player over the last 14 days.
   // Bishop 2020: > 15% high-tier asymmetry is the strongest predictor of
   // non-contact lower-limb injury. Surfaced as a chronic-risk chip in the
@@ -2192,13 +2197,19 @@ export default function CoachPage() {
   // so a scheduled FORCE day can't be read as a rest day. Null when the week
   // has no intents → the legacy v_training_day_context path stands.
   const todayPlanContext = useMemo(() => {
-    if (!noMatchIntents || noMatchIntents.length !== 7) return null;
     const t = dateKey(todayISO());
-    const row = (weekGrid ?? []).find((x) => dateKey(x?.day_date) === t) ?? null;
-    if (!row) return null;
-    const dayType = String(row.day_type_final ?? "").trim().toUpperCase() || null;
-    return { mdDay: row.md_day ?? null, dayType, intensity: gridRowIntensity(row) };
-  }, [noMatchIntents, weekGrid]);
+    const haveIntents = !!noMatchIntents && noMatchIntents.length === 7;
+    const row = haveIntents ? ((weekGrid ?? []).find((x) => dateKey(x?.day_date) === t) ?? null) : null;
+    if (row) {
+      const dayType = String(row.day_type_final ?? "").trim().toUpperCase() || null;
+      return { mdDay: row.md_day ?? null, dayType, intensity: gridRowIntensity(row) };
+    }
+    // No saved/seeded plan row for today → derive the context from the nearest fixture (the same
+    // rhythm Week Setup previews), so Today doesn't fall back to a false rest day. Never fires when
+    // there's no nearby game (fixtureCtx stays null), preserving the legacy no-fixture behaviour.
+    if (fixtureCtx.dayType) return { mdDay: fixtureCtx.md, dayType: fixtureCtx.dayType, intensity: fixtureCtx.intensity };
+    return null;
+  }, [noMatchIntents, weekGrid, fixtureCtx]);
 
   const mdDayToday = useMemo(() => {
     const t = dateKey(todayISO());
@@ -2214,9 +2225,9 @@ export default function CoachPage() {
     // A real fixture today is game-day truth — MD wins over any week-plan token.
     const src = matchToday ? "MD"
       : (teamMdToday && isValidMdToken(teamMdToday) ? teamMdToday : null)
-      ?? (gridMdValid ? gridMd : null) ?? mdContextToday ?? row?.md_day ?? planPreview?.md_day ?? null;
+      ?? (gridMdValid ? gridMd : null) ?? mdContextToday ?? row?.md_day ?? planPreview?.md_day ?? fixtureCtx.md ?? null;
     return prettyMd(src).md;
-  }, [weekGrid, planPreview?.md_day, mdContextToday, teamMdToday, matchToday]);
+  }, [weekGrid, planPreview?.md_day, mdContextToday, teamMdToday, matchToday, fixtureCtx.md]);
 
   // Today's day-type — the Week Setup plan WINS over the legacy week_plans.day_type
   // so a stale/absent week_plans row can't re-introduce a false OFF for a
@@ -4027,6 +4038,43 @@ export default function CoachPage() {
       } catch {
         // Silently ignore — the day just won't be forced to a match day.
       }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachVerified, coachTeamId, today]);
+
+  // ── Today's context derived from the nearest fixture (match_schedule) ──
+  // Mirrors Week Setup: a day anchored to a game reads MD-relative (MD+1 recovery, MD+2 practice,
+  // the game day itself). Used only as a FALLBACK when no plan is saved for today, so the Today
+  // briefing matches Week Setup instead of falling back to a false "rest day". Never overrides a
+  // coach-saved plan.
+  useEffect(() => {
+    if (!coachVerified || !coachTeamId) { setFixtureCtx({ md: null, dayType: null, intensity: null }); return; }
+    let alive = true;
+    (async () => {
+      try {
+        const ms = 86400000;
+        const iso = (deltaDays: number) => new Date(Date.parse(`${today}T00:00:00Z`) + deltaDays * ms).toISOString().slice(0, 10);
+        const { data, error } = await supabase
+          .from("match_schedule")
+          .select("match_date")
+          .eq("team_id", coachTeamId)
+          .gte("match_date", iso(-7))
+          .lte("match_date", iso(7));
+        if (!alive) return;
+        if (error) { setFixtureCtx({ md: null, dayType: null, intensity: null }); return; }
+        const dates = ((data ?? []) as Array<{ match_date: string }>).map((r) => String(r.match_date).slice(0, 10)).filter(Boolean);
+        // Only derive when today sits within ~a week of a real fixture; otherwise leave it generic.
+        const anchored = dates.some((d) => Math.abs(Math.round((Date.parse(`${d}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / ms)) <= 6);
+        if (!anchored) { setFixtureCtx({ md: null, dayType: null, intensity: null }); return; }
+        const off = mdOffsetForDate(today, dates);
+        const md = off === 0 ? "MD" : off > 0 ? `MD+${off}` : `MD-${-off}`;
+        // Game-relative day type (same shape Week Setup seeds): the game, the day after = recovery,
+        // everything else = a (moderate) practice. A session either way — never a rest day.
+        const dayType = off === 0 ? "GAME" : off === 1 ? "RECOVERY" : "TRAIN";
+        const intensity = off === 0 ? "GAME" : off === 1 ? "RECOVERY" : "MODERATE";
+        setFixtureCtx({ md, dayType, intensity });
+      } catch { if (alive) setFixtureCtx({ md: null, dayType: null, intensity: null }); }
     })();
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
