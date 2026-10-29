@@ -8,12 +8,15 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import PlayDiagramSvg from "@/components/coach/PlayDiagramSvg";
+import { playTypeLabel, type PlayDiagram } from "@/lib/micropulse/basketballStats/playDiagram";
 
 type KeyPlayer = { name: string; line: string; watchFor?: string[] };
 type Attack = { action: string; target: string; concedes: string };
 type Snapshot = { headline?: string | null; howWePlay?: string[]; watchOuts?: string[]; keyPlayers?: KeyPlayer[]; howToDefend?: string[]; whereToAttack?: Attack[] };
 type Clip = { action: string; made: boolean | null; period: string | null; clock: string | null; video_url: string | null; is_file: boolean };
-type Resp = { ok: boolean; share?: { opponent: string; title: string | null; snapshot: Snapshot; createdAt: string } | null; clipsByPlayer?: Record<string, Clip[]> | null };
+type Play = { name: string; playType: string | null; diagram: PlayDiagram };
+type Resp = { ok: boolean; share?: { opponent: string; title: string | null; snapshot: Snapshot; createdAt: string } | null; clipsByPlayer?: Record<string, Clip[]> | null; plays?: Play[] | null };
 
 const ACTION_LABELS: Record<string, { en: string; is: string }> = {
   "3pt_make": { en: "3PT make", is: "3ja hitt" }, "3pt_miss": { en: "3PT miss", is: "3ja miss" }, drive: { en: "Drive", is: "Drive" },
@@ -73,6 +76,7 @@ export default function PlayerScoutingCard({ lang }: { lang: "IS" | "EN" }) {
     </div>
   ) : null;
 
+  const plays = data.plays ?? [];
   const allClips: Array<{ key: string; player: string; c: Clip }> = [];
   for (const [player, cs] of Object.entries(clipsByPlayer)) cs.forEach((c, i) => allClips.push({ key: `${player}-${i}`, player, c }));
   const playingClip = allClips.find((x) => x.key === playing)?.c ?? null;
@@ -113,6 +117,23 @@ export default function PlayerScoutingCard({ lang }: { lang: "IS" | "EN" }) {
               {(p.watchFor ?? []).length ? <ul className="mt-1 space-y-0.5">{(p.watchFor ?? []).map((w, i) => <li key={i} className="text-[12px] leading-snug text-zinc-600">• {w}</li>)}</ul> : null}
             </div>
           ))}
+        </div>
+      ) : null}
+
+      {plays.length ? (
+        <div className="rounded-xl border border-zinc-200 bg-white p-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{t("Set plays", "Leikkerfi")} · {plays.length}</div>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {plays.map((p, i) => (
+              <div key={i} className="rounded-lg border border-zinc-200 bg-zinc-50/50 p-1.5">
+                <div className="rounded border border-zinc-200 bg-white p-1"><PlayDiagramSvg diagram={p.diagram} /></div>
+                <div className="mt-1 min-w-0">
+                  <div className="truncate text-[12.5px] font-semibold text-zinc-900">{p.name}</div>
+                  {p.playType ? <div className="text-[11px] text-zinc-500">{playTypeLabel(p.playType, is ? "IS" : "EN")}</div> : null}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
 

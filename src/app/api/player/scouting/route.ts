@@ -46,5 +46,14 @@ export async function GET(req: Request) {
   const clipsByPlayer: Record<string, Array<{ action: string; made: boolean | null; period: string | null; clock: string | null; video_url: string | null; is_file: boolean }>> = {};
   for (const c of clips) (clipsByPlayer[c.player_name] ??= []).push({ action: c.action, made: c.made, period: c.period, clock: c.clock, video_url: c.video_url, is_file: !!c.storage_path });
 
-  return NextResponse.json({ ok: true, share: { opponent: share.opponent, title: share.title, snapshot: share.snapshot, createdAt: share.created_at }, clipsByPlayer });
+  // The opponent's set plays (leikkerfi), joined live for the same team + opponent. Only CONFIRMED
+  // plays reach players — mirrors the scouting PDF, so an unconfirmed AI draft never shows.
+  const { data: diagramRows } = await sb.from("opponent_play_diagrams")
+    .select("name, play_type, diagram")
+    .eq("owner_team_id", teamId).eq("opponent_key", share.opponent_key).eq("confirmed", true)
+    .order("created_at", { ascending: false });
+  const plays = ((diagramRows ?? []) as Array<{ name: string; play_type: string | null; diagram: unknown }>)
+    .map((d) => ({ name: d.name, playType: d.play_type, diagram: d.diagram }));
+
+  return NextResponse.json({ ok: true, share: { opponent: share.opponent, title: share.title, snapshot: share.snapshot, createdAt: share.created_at }, clipsByPlayer, plays });
 }
