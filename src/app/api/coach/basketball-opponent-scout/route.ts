@@ -205,6 +205,9 @@ type OpponentBundle = {
   availableSources: { kki: boolean; instat: boolean };
   /** Which season source built the main report (null when it fell back to head-to-head). */
   seasonSource: "kki" | "instat" | null;
+  /** Sources actually blended into this view — e.g. ["kki","instat"] when the KKÍ box report is
+   *  overlaid with InStat's tactical blocks (playtypes / 5-man units). One entry = single source. */
+  mergedSources: Array<"kki" | "instat">;
   report: ReturnType<typeof buildBasketballOpponentReport> | null;
   oppFourFactors: FourFactorAvg | null; syncedAt?: string | null; instatGames?: number;
   oppCourtRegions: CourtRegion[] | null; oppPlaytypes: ShotTypeAgg[] | null; oppEfficiency: ShotTypeAgg[] | null;
@@ -264,18 +267,32 @@ async function loadOpponentBundle(supabase: ReturnType<typeof getSupabase>, team
     // InStat season export carries playtypes + 5-man units; the KKÍ pull is box-only.
     if (chosen === "instat") {
       const scout = await instatSeasonScout(supabase, row.id, opponent);
-      return { scouted: true, reportSource: "instat", availableSources, seasonSource: "instat", report: scout?.report ?? null, oppFourFactors, syncedAt: row.syncedAt, oppCourtRegions: null, oppPlaytypes: scout?.playtypes.length ? scout.playtypes : null, oppEfficiency: scout?.efficiency.length ? scout.efficiency : null, oppLineups: scout?.lineups.length ? scout.lineups : null };
+      return { scouted: true, reportSource: "instat", availableSources, seasonSource: "instat", mergedSources: ["instat"], report: scout?.report ?? null, oppFourFactors, syncedAt: row.syncedAt, oppCourtRegions: null, oppPlaytypes: scout?.playtypes.length ? scout.playtypes : null, oppEfficiency: scout?.efficiency.length ? scout.efficiency : null, oppLineups: scout?.lineups.length ? scout.lineups : null };
     }
+    // KKÍ base = complete free-season box + players. When an InStat season export ALSO exists, they
+    // complement each other: overlay InStat's tactical blocks (playtypes, offensive-efficiency types,
+    // 5-man units) that the KKÍ box can't give, so the coach sees both in one view (and the AI too).
     const report = await reportFromSeasonRow(supabase, row.id, opponent);
-    return { scouted: true, reportSource: chosen, availableSources, seasonSource: chosen, report, oppFourFactors, syncedAt: row.syncedAt, oppCourtRegions: null, oppPlaytypes: null, oppEfficiency: null, oppLineups: null };
+    let oppPlaytypes: ShotTypeAgg[] | null = null, oppEfficiency: ShotTypeAgg[] | null = null, oppLineups: ScoutLineup[] | null = null;
+    const merged: Array<"kki" | "instat"> = ["kki"];
+    if (sources.instat) {
+      const scout = await instatSeasonScout(supabase, sources.instat.id, opponent);
+      if (scout) {
+        oppPlaytypes = scout.playtypes.length ? scout.playtypes : null;
+        oppEfficiency = scout.efficiency.length ? scout.efficiency : null;
+        oppLineups = scout.lineups.length ? scout.lineups : null;
+        if (oppPlaytypes || oppEfficiency || oppLineups) merged.push("instat");
+      }
+    }
+    return { scouted: true, reportSource: chosen, availableSources, seasonSource: chosen, mergedSources: merged, report, oppFourFactors, syncedAt: row.syncedAt, oppCourtRegions: null, oppPlaytypes, oppEfficiency, oppLineups };
   }
 
   // No stored season — fall back to the head-to-head InStat report.
   const instat = await loadInstatOpponentGames(supabase, teamId, opponent);
   if (instat.games.length > 0) {
-    return { scouted: true, reportSource: "instat", availableSources, seasonSource: null, report: buildBasketballOpponentReport(opponent, instat.games), oppFourFactors, instatGames: instat.gameCount, oppCourtRegions: instat.courtRegions, oppPlaytypes: instat.playtypes, oppEfficiency: instat.efficiency, oppLineups: null };
+    return { scouted: true, reportSource: "instat", availableSources, seasonSource: null, mergedSources: ["instat"], report: buildBasketballOpponentReport(opponent, instat.games), oppFourFactors, instatGames: instat.gameCount, oppCourtRegions: instat.courtRegions, oppPlaytypes: instat.playtypes, oppEfficiency: instat.efficiency, oppLineups: null };
   }
-  return { scouted: false, reportSource: null, availableSources, seasonSource: null, report: null, oppFourFactors, oppCourtRegions: null, oppPlaytypes: null, oppEfficiency: null, oppLineups: null };
+  return { scouted: false, reportSource: null, availableSources, seasonSource: null, mergedSources: [], report: null, oppFourFactors, oppCourtRegions: null, oppPlaytypes: null, oppEfficiency: null, oppLineups: null };
 }
 
 const AI_MODEL = "claude-sonnet-5";

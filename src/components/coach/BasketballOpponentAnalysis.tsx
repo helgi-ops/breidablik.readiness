@@ -287,6 +287,7 @@ export default function BasketballOpponentAnalysis() {
   const [reportSource, setReportSource] = React.useState<"kki" | "instat" | null>(null);
   const [seasonSource, setSeasonSource] = React.useState<"kki" | "instat">("kki"); // which full-season source drives the report
   const [availableSources, setAvailableSources] = React.useState<{ kki: boolean; instat: boolean }>({ kki: false, instat: false });
+  const [mergedSources, setMergedSources] = React.useState<Array<"kki" | "instat">>([]); // sources blended into the current view
   const [instatGames, setInstatGames] = React.useState<number | null>(null);
   const [oppCourt, setOppCourt] = React.useState<{ key: "paint" | "mid" | "three"; made: number; att: number; pct: number | null }[] | null>(null);
   const [oppPlay, setOppPlay] = React.useState<OppShotType[] | null>(null);
@@ -326,7 +327,7 @@ export default function BasketballOpponentAnalysis() {
       const tok = await token(); if (!tok) return;
       const res = await fetch(`/api/coach/basketball-opponent-scout?opponent=${encodeURIComponent(opponent)}&source=${src}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
       const j = await res.json();
-      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); setReportSource(j.reportSource ?? null); setInstatGames(j.instatGames ?? null); setOppCourt(j.oppCourtRegions ?? null); setOppPlay(j.oppPlaytypes ?? null); setOppEff(j.oppEfficiency ?? null); setOppLineups(j.oppLineups ?? null); setAi((j.aiSummary as OppAi | null) ?? null); setAiErr(null); setAvailableSources(j.availableSources ?? { kki: false, instat: false }); }
+      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); setReportSource(j.reportSource ?? null); setInstatGames(j.instatGames ?? null); setOppCourt(j.oppCourtRegions ?? null); setOppPlay(j.oppPlaytypes ?? null); setOppEff(j.oppEfficiency ?? null); setOppLineups(j.oppLineups ?? null); setAi((j.aiSummary as OppAi | null) ?? null); setAiErr(null); setAvailableSources(j.availableSources ?? { kki: false, instat: false }); setMergedSources(j.mergedSources ?? []); }
     } finally { setBusy(false); }
   }, [token, seasonSource]);
 
@@ -717,11 +718,19 @@ export default function BasketballOpponentAnalysis() {
           {/* Layer 0 + 1 — profile line + stat grid */}
           <div className="rounded-xl border border-[#e3e1d9] bg-white p-4">
             <div className="mb-1.5 flex flex-wrap items-center gap-2">
-              <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white ${reportSource === "instat" ? "bg-orange-600" : "bg-[#2740e6]"}`}>
-                {reportSource === "instat" ? "InStat" : "KKÍ"}
-              </span>
+              {mergedSources.length > 1 ? (
+                <span className="rounded bg-gradient-to-r from-[#2740e6] to-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">KKÍ + InStat</span>
+              ) : (
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white ${reportSource === "instat" ? "bg-orange-600" : "bg-[#2740e6]"}`}>
+                  {reportSource === "instat" ? "InStat" : "KKÍ"}
+                </span>
+              )}
               <span className="text-[11px] text-slate-500">
-                {reportSource === "instat"
+                {mergedSources.length > 1
+                  ? (lang === "IS"
+                      ? "KKÍ heila-tímabils box + InStat taktík (sóknartegundir, 5-manna samsetningar). Þau bæta hvort annað upp."
+                      : "KKÍ whole-season box + InStat tactics (playtypes, 5-man units). They complement each other.")
+                  : reportSource === "instat"
                   ? (lang === "IS"
                       ? `Byggt á ${instatGames ?? report.games} InStat leik/leikjum sem þið spiluðuð þá — skoring & skot. Sæktu KKÍ-tímabil fyrir fráköst/stoðsendingar + allt tímabilið.`
                       : `From ${instatGames ?? report.games} InStat head-to-head game(s) — scoring & shooting. Pull the KKÍ season for rebounds/assists + the whole season.`)
