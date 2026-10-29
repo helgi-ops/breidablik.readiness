@@ -293,6 +293,7 @@ export default function BasketballOpponentAnalysis() {
   const [oppEff, setOppEff] = React.useState<OppShotType[] | null>(null);
   const [oppLineups, setOppLineups] = React.useState<ScoutLineup[] | null>(null);
   const [pdfBusy, setPdfBusy] = React.useState(false);
+  const [deckBusy, setDeckBusy] = React.useState(false);
   const [ai, setAi] = React.useState<OppAi | null>(null);
   const [aiBusy, setAiBusy] = React.useState(false);
   const [aiErr, setAiErr] = React.useState<string | null>(null);
@@ -412,6 +413,53 @@ export default function BasketballOpponentAnalysis() {
     } finally { setPdfBusy(false); }
   };
 
+  // Export a PowerPoint team-meeting deck — the key scouting aspects + tagged clips. Uploaded short
+  // clips are embedded (play offline in PowerPoint); external links become clickable ▶ Play buttons.
+  const downloadDeck = async () => {
+    if (!report) return;
+    setDeckBusy(true);
+    try {
+      const b64 = (buf: ArrayBuffer): string => { const b = new Uint8Array(buf); let s = ""; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000)); return btoa(s); };
+      type DeckClip = { action: string; made: boolean | null; period: string | null; clock: string | null; videoDataUri?: string | null; externalUrl?: string | null };
+      let clipsByPlayer: Record<string, DeckClip[]> | null = null;
+      const tok = await token();
+      if (tok && sel) {
+        try {
+          const res = await fetch(`/api/coach/scouting/player-clips?opponent=${encodeURIComponent(sel)}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
+          const j = await res.json();
+          const clips = (j.ok && Array.isArray(j.clips)) ? j.clips as Array<{ player_name: string; action: string; made: boolean | null; period: string | null; clock: string | null; video_url: string | null; is_file?: boolean }> : [];
+          if (clips.length) {
+            const grouped: Record<string, DeckClip[]> = {};
+            let embedded = 0;
+            for (const c of clips) {
+              let videoDataUri: string | null = null, externalUrl: string | null = null;
+              if (c.is_file && c.video_url && embedded < 12) {
+                try {
+                  const vr = await fetch(c.video_url); const buf = await vr.arrayBuffer();
+                  if (buf.byteLength <= 30 * 1024 * 1024) { videoDataUri = `data:video/mp4;base64,${b64(buf)}`; embedded++; } else externalUrl = c.video_url;
+                } catch { externalUrl = c.video_url; }
+              } else if (c.video_url) { externalUrl = c.video_url; }
+              (grouped[c.player_name] ??= []).push({ action: c.action, made: c.made, period: c.period, clock: c.clock, videoDataUri, externalUrl });
+            }
+            clipsByPlayer = grouped;
+          }
+        } catch { /* clips are optional */ }
+      }
+      const { downloadBasketballScoutDeck } = await import("@/components/coach/BasketballScoutDeck");
+      await downloadBasketballScoutDeck({
+        opponentName: report.opponentName, games: report.games,
+        ai: ai ? { headline: ai.headline, summary: ai.summary, strengths: ai.strengths, weaknesses: ai.weaknesses, howToDefend: ai.howToDefend, howToAttack: ai.howToAttack } : null,
+        fourFactors: oppFF,
+        shotMap: oppCourt ? oppCourt.map((r) => ({ label: r.key === "paint" ? (lang === "IS" ? "Teigur" : "Paint") : r.key === "mid" ? (lang === "IS" ? "Millifjarl." : "Mid") : "3P", made: r.made, att: r.att, pct: r.pct })) : null,
+        playtypes: oppPlay ? oppPlay.map((p) => ({ label: shotLabel(p.key, lang), made: p.made, att: p.att, pct: p.pct, share: p.sharePct ?? null })) : null,
+        keyPlayers: report.keyPlayers.slice(0, 3).map((p) => ({ name: p.name, ppg: p.ppg, rpg: p.rpg, apg: p.apg, fgPct: p.fgPct, tpPct: p.tpPct, tpaPg: p.tpaPg, tags: p.tags, descriptor: p.descriptor, notes: playerTendencyNotes(p, lang) })),
+        attack: buildAttackBoard(report.players).slice(0, 8).map((a) => ({ action: a.key, defender: a.defender, oppPct: a.oppPct, att: a.att })),
+        howToDefend: report.howToDefend.map((f) => (lang === "IS" ? f.is : f.en)),
+        clipsByPlayer,
+      }, lang);
+    } finally { setDeckBusy(false); }
+  };
+
   // Shot charts from the free public FIBA LiveStats feed — own team + any opponent. Shown
   // even with no scouted opponents yet (it's a pull tool, not opponent-dependent).
   const fibaCharts = (
@@ -449,10 +497,16 @@ export default function BasketballOpponentAnalysis() {
           {pulling ? t.scouting : scouted ? t.rescout : t.scout}
         </button>
         {report && !instatEmpty ? (
+          <>
           <button onClick={() => void downloadPdf()} disabled={pdfBusy}
             className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
             {pdfBusy ? "…" : (lang === "IS" ? "Sækja PDF" : "Download PDF")}
           </button>
+          <button onClick={() => void downloadDeck()} disabled={deckBusy}
+            className="rounded-lg border border-[#2740e6] bg-white px-2.5 py-1 text-[13px] font-semibold text-[#2740e6] hover:bg-[#eef0fb] disabled:opacity-50">
+            {deckBusy ? (lang === "IS" ? "Bý til…" : "Building…") : (lang === "IS" ? "Fundar-kynning (PPT)" : "Meeting deck (PPT)")}
+          </button>
+          </>
         ) : null}
       </div>
 
