@@ -165,7 +165,7 @@ const st = StyleSheet.create({
 
 // Play-diagram colours on the PDF (concrete hex — @react-pdf has no CSS tokens). Mirrors
 // the design system: amber offense, cobalt ball, ink markings.
-const PDF_PLAY_COLORS: PlayColors = { court: "#ffffff", line: "#c3c7cd", off: "#de9328", def: "#6b7280", ball: "#2740e6", ink: "#14181c", arrow: "#334155" };
+const PDF_PLAY_COLORS: PlayColors = { court: "#ffffff", line: "#14181c", off: "#14181c", def: "#14181c", ball: "#14181c", ink: "#14181c", arrow: "#14181c", paint: "#ffffff" };
 
 /** The exact same primitive list as the web canvas, drawn with @react-pdf <Svg>. */
 function PlayDiagramPdf({ diagram, w }: { diagram: PlayDiagram; w: number }) {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildPlayDiagram, PLAY_VIEW, playTypeLabel, type PlayColors, type PlayDiagram } from "../playDiagram";
 
-const COLORS: PlayColors = { court: "#f4f2ec", line: "#8a93a0", off: "#de9328", def: "#5c6672", ball: "#2740e6", ink: "#14181c", arrow: "#14181c" };
+const COLORS: PlayColors = { court: "#f4f2ec", line: "#8a93a0", off: "#de9328", def: "#5c6672", ball: "#2740e6", ink: "#14181c", arrow: "#14181c", paint: "#eef1fc" };
 
 const FIXTURE: PlayDiagram = {
   court: "half",
@@ -31,8 +31,8 @@ describe("buildPlayDiagram — shared renderer (web + PDF parity)", () => {
     const { prims } = buildPlayDiagram(FIXTURE, COLORS);
     // Court comes first (boundary path is the first primitive).
     expect(prims[0].t).toBe("path");
-    // A ball-handler gets a highlight ring (an extra circle in the ball colour).
-    expect(prims.some((p) => p.t === "circle" && p.stroke === COLORS.ball)).toBe(true);
+    // The ball-handler gets a filled ball dot (an extra circle filled in the ball colour).
+    expect(prims.some((p) => p.t === "circle" && p.fill === COLORS.ball)).toBe(true);
     // The defender renders as an X (two crossing lines in the def colour).
     expect(prims.filter((p) => p.t === "line" && p.stroke === COLORS.def).length).toBe(2);
     // Arrowheads are polygons; move/dribble/pass each add one (screen uses a bar, no head).

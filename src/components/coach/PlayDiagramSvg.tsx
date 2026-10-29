@@ -2,23 +2,25 @@
 
 /**
  * PlayDiagramSvg — the WEB half of the shared play renderer. Draws the primitives from
- * buildPlayDiagram() as an inline <svg>, colouring them from the globals.css tokens
- * (--surface / --ink / --primary / --amber) via color-mix, never hardcoded hex. The PDF
- * renders the identical primitive list with @react-pdf <Svg>, so the drawing matches.
+ * buildPlayDiagram() as an inline <svg>. A set-play diagram is a black-on-white coaching
+ * diagram (white "paper", black ink) like a chalkboard — so it is intentionally theme-
+ * independent fixed B&W, not tinted by the app tokens. The PDF renders the identical
+ * primitive list with @react-pdf <Svg>, so the drawing matches.
  */
 
 import * as React from "react";
 import { buildPlayDiagram, PLAY_VIEW, type PlayColors, type PlayDiagram, type Prim } from "@/lib/micropulse/basketballStats/playDiagram";
 
-/** Colours from the CSS design tokens (fallbacks match globals.css). */
+/** Pure black-on-white coaching-diagram palette (matches the printed PDF; theme-independent). */
 export const WEB_PLAY_COLORS: PlayColors = {
-  court: "var(--surface, #f4f2ec)",
-  line: "color-mix(in srgb, var(--ink, #14181c) 32%, transparent)",
-  off: "var(--amber, #de9328)",
-  def: "color-mix(in srgb, var(--ink, #14181c) 55%, transparent)",
-  ball: "var(--primary, #2740e6)",
-  ink: "var(--ink, #14181c)",
-  arrow: "color-mix(in srgb, var(--ink, #14181c) 72%, transparent)",
+  court: "#ffffff",
+  line: "#14181c",
+  off: "#14181c",
+  def: "#14181c",
+  ball: "#14181c",
+  ink: "#14181c",
+  arrow: "#14181c",
+  paint: "#ffffff",
 };
 
 function PrimEl({ p }: { p: Prim }) {

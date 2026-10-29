@@ -46,7 +46,7 @@ export type Prim =
   | { t: "polygon"; pts: Array<[number, number]>; fill?: string; stroke?: string; w?: number }
   | { t: "text"; x: number; y: number; s: string; size: number; fill: string; anchor?: "start" | "middle" | "end"; weight?: number };
 
-export type PlayColors = { court: string; line: string; off: string; def: string; ball: string; ink: string; arrow: string };
+export type PlayColors = { court: string; line: string; off: string; def: string; ball: string; ink: string; arrow: string; paint: string };
 
 /** The view box: a FIBA-proportioned half court, 50 ft wide × 47 ft deep (×2 → 100 × 94). */
 export const PLAY_VIEW = { w: 100, h: 94 } as const;
@@ -54,38 +54,50 @@ export const PLAY_VIEW = { w: 100, h: 94 } as const;
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const fmt = (x: number, y: number) => `${r2(x)} ${r2(y)}`;
 
-/** Static half-court markings (boundary, paint, FT circle, 3-pt arc, basket). */
+/** Static half-court markings, drawn like a coaching whiteboard: the BASKET IS AT THE TOP (baseline
+ *  along the top edge), the key runs down from it, and the half-court line is along the bottom. */
 function courtPrims(c: PlayColors): Prim[] {
   const W = PLAY_VIEW.w, H = PLAY_VIEW.h;
   const cx = 50;
-  const rimY = H - 10.5;          // basket centre ~5.25 ft off the baseline
-  const boardY = H - 8;           // backboard
-  const ftY = H - 38;             // free-throw line ~19 ft from the baseline
-  const keyHalf = 12;             // paint half-width (~6 ft each side)
-  const ftR = 12;                 // FT circle radius (~6 ft)
-  const arcR = 44;                // 3-pt radius from the basket (~22 ft)
-  const cornerX = 6;              // 3-pt line corner (straight part) inset from the sideline
-  // 3-pt arc endpoints where the straight corner lines meet the arc.
-  const dx = cornerX - cx;        // = -44 → corner sits exactly on the arc at this width
-  const ay = Math.sqrt(Math.max(0, arcR * arcR - dx * dx));
-  const arcTopY = rimY - ay;      // y where the arc reaches the corner-line x
-  const stroke = c.line, w = 0.8;
-  return [
-    { t: "path", d: `M 0 0 L ${W} 0 L ${W} ${H} L 0 ${H} Z`, fill: c.court, stroke, w },
-    // paint / key
-    { t: "path", d: `M ${cx - keyHalf} ${H} L ${cx - keyHalf} ${ftY} L ${cx + keyHalf} ${ftY} L ${cx + keyHalf} ${H}`, fill: "none", stroke, w },
-    // FT circle (full)
-    { t: "circle", cx, cy: ftY, r: ftR, fill: "none", stroke, w },
-    // restricted-area semicircle under the rim
+  const rimY = 10.5;              // basket centre ~5.25 ft below the top baseline
+  const boardY = 8;              // backboard (between the baseline and the rim)
+  const ftY = 38;               // free-throw line ~19 ft from the baseline
+  const keyHalf = 12;            // paint half-width (~6 ft each side)
+  const ftR = 12;               // FT circle radius (~6 ft)
+  const arcR = 44;              // 3-pt radius from the basket (~22 ft)
+  const cornerX = 6;           // 3-pt line corner (straight part) inset from the sideline
+  const dx = cornerX - cx;     // = -44 → corner sits exactly on the arc at this width
+  const ayv = Math.sqrt(Math.max(0, arcR * arcR - dx * dx));
+  const arcCornerY = rimY + ayv; // y where the arc meets the corner line (below the rim)
+  const stroke = c.line, w = 1.0, bold = 1.4;
+  const prims: Prim[] = [
+    // floor + bolder boundary
+    { t: "path", d: `M 0 0 L ${W} 0 L ${W} ${H} L 0 ${H} Z`, fill: c.court, stroke, w: bold },
+    // painted key (a light tint) + outline — runs DOWN from the top baseline to the FT line
+    { t: "path", d: `M ${cx - keyHalf} 0 L ${cx - keyHalf} ${ftY} L ${cx + keyHalf} ${ftY} L ${cx + keyHalf} 0 Z`, fill: c.paint, w: 0 },
+    { t: "path", d: `M ${cx - keyHalf} 0 L ${cx - keyHalf} ${ftY} L ${cx + keyHalf} ${ftY} L ${cx + keyHalf} 0`, fill: "none", stroke, w },
+    // FT circle: solid half toward centre court (below), dashed half inside the key (above)
+    { t: "path", d: `M ${fmt(cx - ftR, ftY)} A ${ftR} ${ftR} 0 0 0 ${fmt(cx + ftR, ftY)}`, fill: "none", stroke, w },
+    { t: "path", d: `M ${fmt(cx - ftR, ftY)} A ${ftR} ${ftR} 0 0 1 ${fmt(cx + ftR, ftY)}`, fill: "none", stroke, w, dash: "2 2" },
+    // restricted-area semicircle under the rim (bulges down into the court)
     { t: "path", d: `M ${cx - 8} ${rimY} A 8 8 0 0 0 ${cx + 8} ${rimY}`, fill: "none", stroke, w },
-    // backboard + rim
-    { t: "line", x1: cx - 6, y1: boardY, x2: cx + 6, y2: boardY, stroke: c.ink, w: 1 },
-    { t: "circle", cx, cy: rimY, r: 2, fill: "none", stroke: c.ink, w: 0.9 },
-    // 3-pt line: straight corners + arc
-    { t: "line", x1: cornerX, y1: H, x2: cornerX, y2: arcTopY, stroke, w },
-    { t: "line", x1: W - cornerX, y1: H, x2: W - cornerX, y2: arcTopY, stroke, w },
-    { t: "path", d: `M ${fmt(cornerX, arcTopY)} A ${arcR} ${arcR} 0 0 1 ${fmt(W - cornerX, arcTopY)}`, fill: "none", stroke, w },
+    // backboard + rim + short net
+    { t: "line", x1: cx - 6, y1: boardY, x2: cx + 6, y2: boardY, stroke: c.ink, w: 1.6 },
+    { t: "circle", cx, cy: rimY, r: 2, fill: "none", stroke: c.ink, w: 1.2 },
+    { t: "line", x1: cx, y1: rimY + 2, x2: cx, y2: rimY + 4, stroke: c.ink, w: 0.7 },
+    // 3-pt line: short corners from the top baseline + arc bulging toward centre court
+    { t: "line", x1: cornerX, y1: 0, x2: cornerX, y2: arcCornerY, stroke, w },
+    { t: "line", x1: W - cornerX, y1: 0, x2: W - cornerX, y2: arcCornerY, stroke, w },
+    { t: "path", d: `M ${fmt(cornerX, arcCornerY)} A ${arcR} ${arcR} 0 0 0 ${fmt(W - cornerX, arcCornerY)}`, fill: "none", stroke, w },
+    // half-court centre circle — top half rising from the bottom edge
+    { t: "path", d: `M ${fmt(cx - 9, H)} A 9 9 0 0 1 ${fmt(cx + 9, H)}`, fill: "none", stroke, w },
   ];
+  // lane hash marks (block spaces) near the top baseline
+  for (const y of [12, 16, 20]) {
+    prims.push({ t: "line", x1: cx - keyHalf - 1.8, y1: y, x2: cx - keyHalf, y2: y, stroke, w });
+    prims.push({ t: "line", x1: cx + keyHalf, y1: y, x2: cx + keyHalf + 1.8, y2: y, stroke, w });
+  }
+  return prims;
 }
 
 /** Arrowhead triangle at `to`, pointing along the incoming direction. */
@@ -149,19 +161,21 @@ function arrowPrims(a: PlayArrow, c: PlayColors): Prim[] {
 
 function playerPrims(p: PlayPlayer, c: PlayColors): Prim[] {
   const out: Prim[] = [];
-  const r = 3.4;
+  const r = 3.6;
   if (p.team === "def") {
-    // X marker
-    const s = r * 0.8;
-    out.push({ t: "line", x1: r2(p.x - s), y1: r2(p.y - s), x2: r2(p.x + s), y2: r2(p.y + s), stroke: c.def, w: 1.2 });
-    out.push({ t: "line", x1: r2(p.x + s), y1: r2(p.y - s), x2: r2(p.x - s), y2: r2(p.y + s), stroke: c.def, w: 1.2 });
+    // X marker — bold, with the assignment label below it
+    const s = r * 0.82;
+    out.push({ t: "line", x1: r2(p.x - s), y1: r2(p.y - s), x2: r2(p.x + s), y2: r2(p.y + s), stroke: c.def, w: 1.5 });
+    out.push({ t: "line", x1: r2(p.x + s), y1: r2(p.y - s), x2: r2(p.x - s), y2: r2(p.y + s), stroke: c.def, w: 1.5 });
     if (p.label) out.push({ t: "text", x: p.x, y: p.y + r + 3.2, s: p.label, size: 3.4, fill: c.def, anchor: "middle" });
     return out;
   }
-  // offensive O
-  if (p.ball) out.push({ t: "circle", cx: p.x, cy: p.y, r: r + 1.3, fill: "none", stroke: c.ball, w: 0.9 });
-  out.push({ t: "circle", cx: p.x, cy: p.y, r, fill: "none", stroke: c.off, w: 1.3 });
-  if (p.label) out.push({ t: "text", x: p.x, y: p.y + 1.2, s: p.label, size: 3.6, fill: c.off, anchor: "middle", weight: 700 });
+  // offensive O — white-filled circle with a bold dark number (the textbook coaching-diagram look):
+  // the fill sits opaque over the court lines so the number stays crisp.
+  out.push({ t: "circle", cx: p.x, cy: p.y, r, fill: c.court, stroke: c.off, w: 1.4 });
+  if (p.label) out.push({ t: "text", x: p.x, y: p.y + 1.4, s: p.label, size: 4.2, fill: c.off, anchor: "middle", weight: 700 });
+  // ball-handler — a small filled dot tucked under the circle, like a chalkboard diagram.
+  if (p.ball) out.push({ t: "circle", cx: p.x, cy: p.y + r + 0.4, r: 1.4, fill: c.ball });
   return out;
 }
 
