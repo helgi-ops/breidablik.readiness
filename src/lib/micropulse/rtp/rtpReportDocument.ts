@@ -12,6 +12,7 @@ import type { ReportDocument, ReportSection } from "@/lib/micropulse/reporting/t
 import type { RtpAssessment, RtpCriterion } from "./types";
 import { computeSprintCost } from "@/lib/micropulse/load/criticalSpeed";
 import { classifyValdMetric, benchmarkPopulationNote } from "@/lib/micropulse/vald/benchmarks";
+import { buildGroinStrength, findGroinAdductorTest, GROIN_STRENGTH_CITATION } from "@/lib/micropulse/vald/groinStrength";
 
 /** CS/D′ inputs for the optional sprint-capacity section (same source as the Conditioning card). */
 export type RtpSprintInput = { csKmh: number; dPrimeM: number; dPrimePercentile?: number | null; mssKmh?: number | null };
@@ -158,6 +159,24 @@ export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | nu
         ...(b.lsiPct != null ? [{ metric: "LSI (involved/uninvolved)", value: `${b.lsiPct}%` }] : []),
       ],
     });
+  }
+
+  // 3c-bis. Absolute hip-adductor strength (ForceFrame groin) — led before the raw limb tables.
+  // Absolute adductor weakness is the modifiable groin-injury risk factor (the add:abd ratio is not);
+  // we read it against the player's own baseline, not a group mean. Descriptive, cited; self-hides
+  // when there's no ForceFrame groin data (never a fabricated 0).
+  {
+    const groin = buildGroinStrength(findGroinAdductorTest(a.limbStrength));
+    if (groin.present) {
+      const lines = [
+        groin.verdict.en,
+        "",
+        ...groin.facts.map((f) => f.en),
+        "",
+        `Absolute adductor strength is the modifiable risk factor; the add:abd ratio is not. (${GROIN_STRENGTH_CITATION})`,
+      ];
+      sections.push({ id: "groin_adductor_strength", title: "Adductor Strength (groin)", kind: "TEXT", data: lines.join("\n") });
+    }
   }
 
   // 3d. Limb strength — NordBord (hamstring) + ForceFrame (groin/adductor…)

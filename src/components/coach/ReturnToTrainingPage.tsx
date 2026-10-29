@@ -514,6 +514,10 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
                   body={is
                     ? "Við byggjum upp rúmmál og þol fyrst; háhraðahlaup og stefnubreytingar SÍÐAST — þau eru mest endurmeiðsla-hætt. Hvert gæði opnast aðeins þegar það á undan er komið. Buchheit o.fl. (2025) útlista sömu stigmögnun frá return-to-run til fullrar liðsþjálfunar."
                     : "We rebuild volume and aerobic base first; high-speed running and change-of-direction LAST — they are the most re-injury-prone. Each quality unlocks only after the one before it. Buchheit et al. (2025) frame the same staged progression from return-to-run to full team integration."} />
+                <MethodRow term={is ? "Verkjalaus ≠ fullbatnaður" : "Pain-free ≠ recovered"} cite="Buchheit/Heiderscheit/Kotsifaki 2024 (Aspetar)"
+                  body={is
+                    ? "Breytt hreyfimynstur í stefnubreytingum geta varað eftir að verkur hverfur. Klárun ætti að vega absólút aðlægðarkraft OG fjölstefnu-álagsþol (Control-Chaos Continuum) — ekki verk eða styrk-samhverfu eina saman. Rök, ekki sönnun."
+                    : "Altered cutting mechanics can persist after pain resolves. Clearance should weigh absolute adductor strength AND multidirectional load exposure (the Control-Chaos Continuum) — not pain or strength-symmetry alone. A rationale, not proof."} />
                 {data.injuryProfile && data.injuryProfile.riskQualities.length > 0 && !data.headInjury && (
                   <MethodRow term={is ? "Meiðsla-sértækt" : "Injury-specific"} cite=""
                     body={is

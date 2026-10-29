@@ -12,6 +12,7 @@ import DPrimeSprintCostBlock from "@/components/coach/DPrimeSprintCostBlock";
 import ValdBenchmarkPanel from "@/components/coach/ValdBenchmarkPanel";
 import ValdTrainingFocus from "@/components/coach/ValdTrainingFocus";
 import { djRsiFromBattery, cmrjRsiFromBattery, slHamstringLsiFromBattery, beltSquatRelForceFromBattery, buildValdTrainingPlan } from "@/lib/micropulse/vald/valdSummary";
+import { buildGroinStrength, findGroinAdductorTest, GROIN_STRENGTH_CITATION } from "@/lib/micropulse/vald/groinStrength";
 import type { RtpAssessment, RtpCriterion, RtpLimbStrengthTest } from "@/lib/micropulse/rtp/types";
 import { recommendValdTests, REGION_LABEL, type RtpRegion } from "@/lib/micropulse/rtp/testRecommender";
 import type { CriticalSpeedRead, CsCombinedResult, CsTestRead, AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
@@ -289,6 +290,10 @@ export default function RtpAssessmentPage() {
         </div>
       ) : null}
 
+      {/* Absolute hip-adductor strength — led here (the risk-relevant signal), above the raw
+          ForceFrame tables. Self-hides when there's no groin force data. */}
+      <GroinAdductorCard limbStrength={a.limbStrength} />
+
       {/* Metric tables */}
       <div className="grid gap-4 sm:grid-cols-2">
         {a.imtp ? (
@@ -475,6 +480,34 @@ function LimbStrengthCard({ test }: { test: RtpLimbStrengthTest }) {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/** Absolute hip-adductor strength lead (ForceFrame groin). Leads with the absolute number — the
+ *  risk-relevant signal (Buchheit/Heiderscheit/Kotsifaki; King) — with asymmetry demoted to a
+ *  supporting fact, and a personal-norm trend vs the player's own baseline. Descriptive, cited;
+ *  never the readiness colour, never an injury-prediction claim. Self-hides with no ForceFrame data. */
+function GroinAdductorCard({ limbStrength }: { limbStrength: RtpLimbStrengthTest[] }) {
+  const read = buildGroinStrength(findGroinAdductorTest(limbStrength));
+  if (!read.present) return null; // empty-state is handled by the raw ForceFrame card below — never a fabricated 0
+  const concern = !!read.trend?.dropped;
+  return (
+    <div className={`rounded-xl border bg-white p-4 ${concern ? "border-[#e3c6a0]" : "border-zinc-200"}`}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="text-sm font-semibold text-zinc-900">Adductor strength (groin)</div>
+        <div className="text-[11px] text-zinc-400">ForceFrame{read.testDate ? ` · ${read.testDate}` : ""}</div>
+      </div>
+      {/* Layer 0 — the one-line verdict, first and boldest. */}
+      <p className={`mt-1.5 text-[15px] font-bold ${concern ? "text-[#b06a12]" : "text-zinc-900"}`}>{read.verdict.en}</p>
+      {/* Layer 1 — 2-3 plain facts (absolute L/R + the key number) without a click. */}
+      <ul className="mt-1.5 space-y-0.5 text-[13px] text-zinc-600">
+        {read.facts.map((f, i) => <li key={i}>{f.en}</li>)}
+      </ul>
+      <p className="mt-2 text-[11px] text-zinc-400">
+        Absolute adductor strength is the modifiable risk factor; the add:abd ratio is not.
+        <span className="ml-1 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-zinc-500">{GROIN_STRENGTH_CITATION}</span>
+      </p>
     </div>
   );
 }
