@@ -619,6 +619,12 @@ export default function BasketballOpponentAnalysis() {
 
       {fibaCharts}
 
+      {/* Opponent set plays (leikkerfi) — coach-drawn diagrams / recognise-from-clip, keyed to the
+          selected opponent and carried into the scouting PDF. A core scouting INPUT, so it sits here
+          with the other add-opponent-data tools (not buried below the report) and shows as soon as an
+          opponent is selected — alongside the per-player clips in each player's card. */}
+      {sel ? <PlayDiagramsSection opponent={sel} /> : null}
+
       {/* How this opponent played AGAINST US — Four Factors from imported InStat
           Game Reports of our head-to-heads. Independent of the KKÍ scout pull. */}
       {oppFF && oppFF.games > 0 ? (
@@ -907,8 +913,6 @@ export default function BasketballOpponentAnalysis() {
         </div>
       ) : null}
 
-      {/* Set plays — coach-drawn diagrams of the opponent's most-used sets (carry into the PDF). */}
-      {sel ? <PlayDiagramsSection opponent={sel} /> : null}
 
       {/* AI film-clip analysis panel removed from the page (user request 2026-08-15). The
           feature is intact — component BasketballFilmClip, route /api/coach/basketball-film-clip,
