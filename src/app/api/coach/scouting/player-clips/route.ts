@@ -39,8 +39,9 @@ const num = (v: unknown): number | null => (v == null || v === "" ? null : Numbe
 type ClipRow = {
   id: string; player_name: string; action: string; made: boolean | null;
   court_x: number | null; court_y: number | null; period: string | null; clock: string | null;
-  video_url: string | null; source: string; created_at: string;
+  video_url: string | null; storage_path?: string | null; source: string; created_at: string;
 };
+const SCOUTING_BUCKET = "scouting-clips";
 
 export async function GET(req: NextRequest) {
   const auth = await authTeam(req);
@@ -51,11 +52,20 @@ export async function GET(req: NextRequest) {
   if (!opponent) return NextResponse.json({ ok: false, error: "opponent is required" }, { status: 400 });
 
   let q = auth.supabase.from("opponent_player_clips")
-    .select("id, player_name, action, made, court_x, court_y, period, clock, video_url, source, created_at")
+    .select("id, player_name, action, made, court_x, court_y, period, clock, video_url, storage_path, source, created_at")
     .eq("owner_team_id", auth.teamId).eq("opponent_key", foldName(opponent));
   if (player) q = q.eq("player_name", player);
   const { data } = await q.order("created_at", { ascending: false });
   const clips = (data ?? []) as ClipRow[];
+
+  // Uploaded clips live in a PRIVATE bucket — hand the client a short-lived signed URL to play, and
+  // flag it as a file so the UI uses a <video> tag (not an iframe embed).
+  const stored = clips.filter((c) => c.storage_path);
+  if (stored.length) {
+    const { data: signed } = await auth.supabase.storage.from(SCOUTING_BUCKET).createSignedUrls(stored.map((c) => c.storage_path as string), 60 * 60 * 3);
+    const byPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
+    for (const c of clips) if (c.storage_path) { c.video_url = byPath.get(c.storage_path) ?? null; (c as ClipRow & { is_file?: boolean }).is_file = true; }
+  }
 
   // Aggregate by action (made/attempted) + shot-location points for the chart.
   const byActionMap = new Map<string, { made: number; attempts: number }>();
@@ -98,7 +108,11 @@ export async function DELETE(req: NextRequest) {
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   const id = (new URL(req.url).searchParams.get("id") ?? "").trim();
   if (!id) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
+  // Remove the stored file too (if this clip was an upload), scoped to the team.
+  const { data: row } = await auth.supabase.from("opponent_player_clips").select("storage_path").eq("owner_team_id", auth.teamId).eq("id", id).maybeSingle();
+  const path = (row as { storage_path?: string | null } | null)?.storage_path ?? null;
   const { error } = await auth.supabase.from("opponent_player_clips").delete().eq("owner_team_id", auth.teamId).eq("id", id);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (path) await auth.supabase.storage.from(SCOUTING_BUCKET).remove([path]).catch(() => {});
   return NextResponse.json({ ok: true });
 }

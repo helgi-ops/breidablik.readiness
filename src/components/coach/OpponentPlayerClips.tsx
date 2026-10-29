@@ -9,9 +9,10 @@
 
 import * as React from "react";
 import { shotChartGeometry } from "@/lib/micropulse/basketballStats/shotChartGeometry";
+import { parseScoutClipFilename } from "@/lib/micropulse/basketballStats/scoutClipFilename";
 
 type Lang = "EN" | "IS";
-type Clip = { id: string; player_name: string; action: string; made: boolean | null; court_x: number | null; court_y: number | null; period: string | null; clock: string | null; video_url: string | null; source: string; created_at: string };
+type Clip = { id: string; player_name: string; action: string; made: boolean | null; court_x: number | null; court_y: number | null; period: string | null; clock: string | null; video_url: string | null; is_file?: boolean; source: string; created_at: string };
 type ShotPoint = { x: number; y: number; made: boolean; action: string };
 type Resp = { ok: boolean; clips?: Clip[]; byAction?: { action: string; made: number; attempts: number }[]; shotPoints?: ShotPoint[]; error?: string };
 
@@ -98,6 +99,8 @@ export default function OpponentPlayerClips({ opponent, playerName, token, lang 
   const [meta, setMeta] = React.useState<{ title: string; durationSec: number | null; chapters: { title: string; seconds: number }[] } | null>(null);
   const [metaBusy, setMetaBusy] = React.useState(false);
   const [metaErr, setMetaErr] = React.useState<string | null>(null);
+  const [file, setFile] = React.useState<File | null>(null);
+  const [fileDur, setFileDur] = React.useState<number | null>(null);
 
   const readVimeo = async () => {
     if (!form.videoUrl.trim()) return;
@@ -129,24 +132,49 @@ export default function OpponentPlayerClips({ opponent, playerName, token, lang 
   React.useEffect(() => { void load(); }, [load]);
 
   const addClip = async () => {
-    setBusy(true);
+    setBusy(true); setMetaErr(null);
     try {
       const tok = await token(); if (!tok) return;
       const made = form.made === "yes" ? true : form.made === "no" ? false : undefined;
-      // Make the clip start where it was tagged: take the start time from the clock field (or an
-      // existing #t= on the link) and bake it onto the saved link, so ▶ plays from that moment.
+      // Make a linked clip start where it was tagged: bake #t= onto the link from the clock field.
       const raw = form.videoUrl.trim();
       const startSecs = parseStart(form.clock) ?? (raw.includes("#") ? parseStart(raw.split("#").slice(1).join("#")) : null);
       let videoUrl: string | undefined = raw || undefined;
       if (videoUrl && startSecs != null && !/#t=/.test(videoUrl)) videoUrl = `${videoUrl.split("#")[0]}#t=${startSecs}s`;
-      // If the clock field was used for a video timecode (#t=…/327s), show it cleanly as mm:ss.
       const clock = /t=\d|^\s*\d+s\s*$/i.test(form.clock) && startSecs != null ? `${Math.floor(startSecs / 60)}:${String(startSecs % 60).padStart(2, "0")}` : form.clock.trim();
-      const res = await fetch("/api/coach/scouting/player-clips", {
-        method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" },
-        body: JSON.stringify({ opponent, player: playerName, action: form.action, made, period: form.period || undefined, clock: clock || undefined, videoUrl, source: "coach" }),
-      });
-      if ((await res.json())?.ok) { setForm((f) => ({ ...f, period: "", clock: "", videoUrl: "" })); setAdding(false); await load(); }
+
+      if (file) {
+        // Uploaded short clip (e.g. an InStat possession) → multipart to the private bucket.
+        const fd = new FormData();
+        fd.set("file", file); fd.set("opponent", opponent); fd.set("player", playerName); fd.set("action", form.action);
+        if (made !== undefined) fd.set("made", String(made));
+        if (form.period) fd.set("period", form.period);
+        if (clock) fd.set("clock", clock);
+        if (fileDur != null) fd.set("duration_s", String(fileDur));
+        const res = await fetch("/api/coach/scouting/player-clips/upload", { method: "POST", headers: { Authorization: `Bearer ${tok}` }, body: fd });
+        const j = await res.json();
+        if (!res.ok || !j.ok) { setMetaErr(j.error ?? "Upload failed"); return; }
+      } else {
+        const res = await fetch("/api/coach/scouting/player-clips", {
+          method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" },
+          body: JSON.stringify({ opponent, player: playerName, action: form.action, made, period: form.period || undefined, clock: clock || undefined, videoUrl, source: "coach" }),
+        });
+        if (!(await res.json())?.ok) { setMetaErr("Couldn't add the clip"); return; }
+      }
+      setForm((f) => ({ ...f, period: "", clock: "", videoUrl: "" })); setFile(null); setFileDur(null); setMeta(null); setAdding(false); await load();
     } finally { setBusy(false); }
+  };
+
+  const pickFile = (f: File | null) => {
+    setFile(f); setFileDur(null); setMetaErr(null);
+    if (!f) return;
+    const m = parseScoutClipFilename(f.name);  // read player / quarter / clock from the filename
+    setForm((prev) => ({ ...prev, period: m.period ?? prev.period, clock: m.clock ?? prev.clock, videoUrl: "" }));
+    try {
+      const v = document.createElement("video"); v.preload = "metadata";
+      v.onloadedmetadata = () => { setFileDur(Number.isFinite(v.duration) ? Math.round(v.duration) : null); URL.revokeObjectURL(v.src); };
+      v.src = URL.createObjectURL(f);
+    } catch { /* duration is optional */ }
   };
 
   const del = async (id: string) => {
@@ -174,7 +202,9 @@ export default function OpponentPlayerClips({ opponent, playerName, token, lang 
           video streams from its source (Vimeo/YouTube); nothing is downloaded or re-hosted. */}
       {playingClip ? (
         <div className="mt-2">
-          {embed ? (
+          {playingClip.is_file && playingClip.video_url ? (
+            <video src={playingClip.video_url} controls autoPlay className="w-full rounded-lg border border-slate-200 bg-black" style={{ maxHeight: "60vh" }} />
+          ) : embed ? (
             <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-black" style={{ paddingTop: "56.25%" }}>
               <iframe src={embed} title={`${playingClip.action} — ${playerName}`} className="absolute inset-0 h-full w-full" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
             </div>
@@ -222,12 +252,26 @@ export default function OpponentPlayerClips({ opponent, playerName, token, lang 
             <input value={form.period} onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))} placeholder="Q1" className="w-14 rounded border border-slate-300 px-2 py-1 text-[12px]" />
             <input value={form.clock} onChange={(e) => setForm((f) => ({ ...f, clock: e.target.value }))} placeholder={t("time e.g 5:27", "tími t.d 5:27")} title={t("Game clock or video time — used as the clip's start point", "Leikklukka eða tími í myndbandi — notað sem byrjun klippunnar")} className="w-24 rounded border border-slate-300 px-2 py-1 text-[12px]" />
           </div>
+          {/* Upload a short clip (e.g. the InStat .mp4 download) — the filename fills the quarter/time. */}
+          <label className="flex flex-wrap items-center gap-2 text-[12px]">
+            <span className="shrink-0 font-medium text-slate-600">{t("Upload short clip", "Hlaða upp stuttri klippu")}</span>
+            <input type="file" accept="video/*" onChange={(e) => pickFile(e.target.files?.[0] ?? null)} className="text-[11px]" />
+          </label>
+          {file ? (
+            <p className="flex items-center gap-2 text-[11px] text-emerald-700">
+              <span>✓ {file.name}{fileDur != null ? ` · ${fmtSecs(fileDur)}` : ""}</span>
+              <button type="button" onClick={() => pickFile(null)} className="text-slate-400 hover:text-red-600">{t("✕ remove", "✕ fjarlægja")}</button>
+            </p>
+          ) : null}
+          {!file ? (<>
+          <div className="text-center text-[10px] uppercase tracking-wide text-slate-300">{t("— or paste a link —", "— eða límdu hlekk —")}</div>
           <div className="flex gap-2">
             <input value={form.videoUrl} onChange={(e) => setForm((f) => ({ ...f, videoUrl: e.target.value }))} placeholder={t("Deep link into the game feed (Vimeo / YouTube)", "Hlekkur í leikmyndband (Vimeo / YouTube)")} className="flex-1 rounded border border-slate-300 px-2 py-1 text-[12px]" />
             <button type="button" onClick={() => void readVimeo()} disabled={metaBusy || !form.videoUrl.trim()} className="shrink-0 rounded-lg border border-[#2740e6] px-2.5 py-1 text-[11px] font-semibold text-[#2740e6] hover:bg-[#eef0fb] disabled:opacity-50">{metaBusy ? t("Reading…", "Les…") : t("Read Vimeo", "Lesa Vimeo")}</button>
           </div>
+          </>) : null}
           {metaErr ? <p className="text-[11px] font-medium text-red-700">{metaErr}</p> : null}
-          {meta ? (
+          {meta && !file ? (
             <div className="rounded-lg border border-slate-100 bg-white px-2.5 py-2">
               <div className="text-[12px] font-semibold text-slate-800">{meta.title || t("(untitled clip)", "(ónefnd klippa)")}{meta.durationSec != null ? <span className="font-normal text-slate-400"> · {fmtSecs(Math.round(meta.durationSec))}</span> : null}</div>
               {meta.chapters.length ? (
@@ -245,8 +289,8 @@ export default function OpponentPlayerClips({ opponent, playerName, token, lang 
             </div>
           ) : null}
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => void addClip()} disabled={busy} className="rounded-lg bg-[#2740e6] px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-50">{busy ? "…" : t("Add clip", "Bæta við")}</button>
-            <span className="text-[10px] text-slate-400">{t("Link + timecode only — no video is stored.", "Aðeins hlekkur + tími — ekkert myndband vistað.")}</span>
+            <button type="button" onClick={() => void addClip()} disabled={busy} className="rounded-lg bg-[#2740e6] px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-50">{busy ? (file ? t("Uploading…", "Hleð upp…") : "…") : t("Add clip", "Bæta við")}</button>
+            <span className="text-[10px] text-slate-400">{file ? t("Short clip stored privately (signed links).", "Stutt klippa geymd í einkageymslu (undirrituð tengsl).") : t("Link + timecode only — no video is stored.", "Aðeins hlekkur + tími — ekkert myndband vistað.")}</span>
           </div>
         </div>
       ) : null}
@@ -262,10 +306,10 @@ export default function OpponentPlayerClips({ opponent, playerName, token, lang 
               {c.made != null ? <span className="text-slate-400">{c.made ? t("make", "hitt") : t("miss", "miss")}</span> : null}
               {(c.period || c.clock) ? <span className="text-slate-400">· {c.period ?? ""} {c.clock ?? ""}</span> : null}
               <span className="ml-auto flex items-center gap-2">
-                {c.video_url ? (
-                  toEmbed(c.video_url)
+                {c.video_url || c.is_file ? (
+                  c.is_file || toEmbed(c.video_url)
                     ? <button type="button" onClick={() => setPlaying(c.id)} className={`font-semibold ${playing === c.id ? "text-slate-400" : "text-[#2740e6] hover:underline"}`}>▶ {t("play", "spila")}</button>
-                    : <a href={c.video_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#2740e6] hover:underline">▶ {t("open", "opna")}</a>
+                    : <a href={c.video_url ?? "#"} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#2740e6] hover:underline">▶ {t("open", "opna")}</a>
                 ) : null}
                 <span className="text-[9px] uppercase tracking-wide text-slate-300">{c.source}</span>
                 <button type="button" onClick={() => void del(c.id)} className="text-slate-300 hover:text-red-600" aria-label={t("delete", "eyða")}>✕</button>
