@@ -84,6 +84,26 @@ export default function OpponentPlayerClips({ opponent, playerName, token, lang 
   const [busy, setBusy] = React.useState(false);
   const [playing, setPlaying] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<{ action: ActionKey; made: "" | "yes" | "no"; period: string; clock: string; videoUrl: string }>({ action: "3pt_make", made: "", period: "", clock: "", videoUrl: "" });
+  const [meta, setMeta] = React.useState<{ title: string; durationSec: number | null; chapters: { title: string; seconds: number }[] } | null>(null);
+  const [metaBusy, setMetaBusy] = React.useState(false);
+  const [metaErr, setMetaErr] = React.useState<string | null>(null);
+
+  const readVimeo = async () => {
+    if (!form.videoUrl.trim()) return;
+    setMetaBusy(true); setMetaErr(null); setMeta(null);
+    try {
+      const tok = await token(); if (!tok) return;
+      const res = await fetch("/api/coach/scouting/vimeo-clip", { method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ url: form.videoUrl.trim() }) });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setMetaErr(j.error ?? "Error"); return; }
+      setMeta({ title: j.clip.title, durationSec: j.clip.durationSec, chapters: j.clip.chapters ?? [] });
+    } catch (e) { setMetaErr(e instanceof Error ? e.message : "Error"); } finally { setMetaBusy(false); }
+  };
+  const fmtSecs = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const applyChapter = (ch: { title: string; seconds: number }) => {
+    const base = form.videoUrl.split("#")[0];
+    setForm((f) => ({ ...f, videoUrl: `${base}#t=${ch.seconds}s`, clock: fmtSecs(ch.seconds) }));
+  };
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -183,7 +203,28 @@ export default function OpponentPlayerClips({ opponent, playerName, token, lang 
             <input value={form.period} onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))} placeholder="Q1" className="w-14 rounded border border-slate-300 px-2 py-1 text-[12px]" />
             <input value={form.clock} onChange={(e) => setForm((f) => ({ ...f, clock: e.target.value }))} placeholder="05:27" className="w-20 rounded border border-slate-300 px-2 py-1 text-[12px]" />
           </div>
-          <input value={form.videoUrl} onChange={(e) => setForm((f) => ({ ...f, videoUrl: e.target.value }))} placeholder={t("Deep link into the game feed (optional)", "Hlekkur inn í leikmyndband (valfrjálst)")} className="w-full rounded border border-slate-300 px-2 py-1 text-[12px]" />
+          <div className="flex gap-2">
+            <input value={form.videoUrl} onChange={(e) => setForm((f) => ({ ...f, videoUrl: e.target.value }))} placeholder={t("Deep link into the game feed (Vimeo / YouTube)", "Hlekkur í leikmyndband (Vimeo / YouTube)")} className="flex-1 rounded border border-slate-300 px-2 py-1 text-[12px]" />
+            <button type="button" onClick={() => void readVimeo()} disabled={metaBusy || !form.videoUrl.trim()} className="shrink-0 rounded-lg border border-[#2740e6] px-2.5 py-1 text-[11px] font-semibold text-[#2740e6] hover:bg-[#eef0fb] disabled:opacity-50">{metaBusy ? t("Reading…", "Les…") : t("Read Vimeo", "Lesa Vimeo")}</button>
+          </div>
+          {metaErr ? <p className="text-[11px] font-medium text-red-700">{metaErr}</p> : null}
+          {meta ? (
+            <div className="rounded-lg border border-slate-100 bg-white px-2.5 py-2">
+              <div className="text-[12px] font-semibold text-slate-800">{meta.title || t("(untitled clip)", "(ónefnd klippa)")}{meta.durationSec != null ? <span className="font-normal text-slate-400"> · {fmtSecs(Math.round(meta.durationSec))}</span> : null}</div>
+              {meta.chapters.length ? (
+                <>
+                  <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{t("Chapters — tap to use the timecode", "Kaflar — smelltu til að nota tímann")}</div>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {meta.chapters.map((ch, i) => (
+                      <button key={i} type="button" onClick={() => applyChapter(ch)} className="rounded-full border border-slate-200 px-2 py-0.5 text-[11px] text-slate-600 hover:border-[#2740e6] hover:text-[#2740e6]">
+                        <span className="tabular-nums text-slate-400">{fmtSecs(ch.seconds)}</span> {ch.title || t("chapter", "kafli")}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : <p className="mt-1 text-[11px] text-slate-400">{t("No chapters in this clip — tag the action manually.", "Engir kaflar í klippunni — merktu aðgerðina handvirkt.")}</p>}
+            </div>
+          ) : null}
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => void addClip()} disabled={busy} className="rounded-lg bg-[#2740e6] px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-50">{busy ? "…" : t("Add clip", "Bæta við")}</button>
             <span className="text-[10px] text-slate-400">{t("Link + timecode only — no video is stored.", "Aðeins hlekkur + tími — ekkert myndband vistað.")}</span>
