@@ -20,7 +20,7 @@ import { buildBasketballOpponentReport, buildAttackBoard, type OppPlayerGame } f
 import { aggregateAdvancedShots, type ShotTypeAgg } from "@/lib/micropulse/basketballStats/instatAggregate";
 import { buildInstatOpponentScout, type InstatOpponentPayload, type ScoutLineup } from "@/lib/micropulse/basketballStats/scoutInstatOpponent";
 import { scoutOpponentSeason, scoutOpponentGames } from "@/lib/integrations/basketball/scout";
-import { parseKkiGameUrl } from "@/lib/integrations/basketball/kkiWidget";
+import { parseKkiGameUrl, parseKkiTeamUrl } from "@/lib/integrations/basketball/kkiWidget";
 import { scopeToCurrentSeason } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 
 async function authTeam(req: NextRequest) {
@@ -369,14 +369,25 @@ export async function POST(req: NextRequest) {
 
   const { seasonId, season } = await seasonRef(auth.supabase, auth.teamId);
 
-  // Per-link scouting — POST { opponent, addGames: [<kki.is Leikur links>] } → save THOSE games under the
-  // scouted opponent (accumulating). Each link's season_id is used when present, else the team's config.
+  // Scouting from pasted KKÍ links — POST { opponent, addGames: [<links>] }. Two accepted link kinds:
+  //  • a TEAM-season overview link (…/Eitt-lid?…season_id=…&team_id=…) → pull that team's WHOLE season
+  //    in one go (the simplest input — one paste, every game).
+  //  • one or more single-game links (…/Leikur?…game_id=…) → save just those games (accumulating).
   if (Array.isArray(body?.addGames)) {
-    const refs = (body.addGames as unknown[])
-      .map((u) => String(u ?? "").trim()).filter(Boolean)
+    const raw = (body.addGames as unknown[]).map((u) => String(u ?? "").trim()).filter(Boolean);
+    // A team-season link wins: it already covers every game, so pull the whole season from its season_id.
+    const teamLink = raw.map((u) => parseKkiTeamUrl(u)).find((tl) => tl.seasonId);
+    if (teamLink?.seasonId) {
+      // Walk the opponent's own season_id (from the link); label the stored season with the coach's
+      // config so it merges with per-link adds and the whole-season button into one opponent row.
+      const res = await scoutOpponentSeason(auth.supabase, auth.teamId, teamLink.seasonId, opponent, season || teamLink.seasonId);
+      if (!res.ok) return NextResponse.json({ ok: false, error: res.error ?? "Could not pull that team's season." }, { status: 400 });
+      return NextResponse.json({ ok: true, games: res.games, rows: res.rows, added: res.games, wholeSeason: true });
+    }
+    const refs = raw
       .map((u) => parseKkiGameUrl(u))
       .filter((r): r is { gameId: string; seasonId: string | null } => !!r?.gameId && /^\d+$/.test(r.gameId));
-    if (refs.length === 0) return NextResponse.json({ ok: false, error: "No readable KKÍ game links (…/Leikur?…game_id=…)." }, { status: 400 });
+    if (refs.length === 0) return NextResponse.json({ ok: false, error: "No readable KKÍ link — paste the team page (…/Eitt-lid?…team_id=…) or a game link (…/Leikur?…game_id=…)." }, { status: 400 });
     const res = await scoutOpponentGames(auth.supabase, auth.teamId, opponent, season || seasonId || "", seasonId, refs);
     if (!res.ok) return NextResponse.json({ ok: false, error: res.error ?? "Could not save those games.", skipped: res.skipped }, { status: 400 });
     return NextResponse.json({ ok: true, games: res.games, rows: res.rows, added: res.added, skipped: res.skipped });

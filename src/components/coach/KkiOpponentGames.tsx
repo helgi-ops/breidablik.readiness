@@ -40,7 +40,7 @@ export default function KkiOpponentGames({
     const name = team.trim();
     const urls = links.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
     if (!name) { setMsg({ ok: false, text: t("Enter the team you're scouting.", "Sláðu inn liðið sem þú ert að skanna.") }); return; }
-    if (urls.length === 0) { setMsg({ ok: false, text: t("Paste at least one kki.is game link.", "Límdu inn að minnsta kosti einn kki.is leikhlekk.") }); return; }
+    if (urls.length === 0) { setMsg({ ok: false, text: t("Paste the team's kki.is page, or one or more game links.", "Límdu inn kki.is síðu liðsins, eða einn eða fleiri leikhlekki.") }); return; }
     setBusy(true); setMsg(null);
     try {
       const tok = await token(); if (!tok) { setMsg({ ok: false, text: t("Not signed in.", "Ekki innskráð(ur).") }); return; }
@@ -48,13 +48,15 @@ export default function KkiOpponentGames({
         method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" },
         body: JSON.stringify({ opponent: name, addGames: urls }),
       });
-      const j = (await res.json()) as { ok: boolean; added?: number; games?: number; skipped?: Array<{ gameId: string; reason: string }>; error?: string };
+      const j = (await res.json()) as { ok: boolean; added?: number; games?: number; wholeSeason?: boolean; skipped?: Array<{ gameId: string; reason: string }>; error?: string };
       if (res.ok && j.ok) {
         const skips = (j.skipped ?? []).length;
-        setMsg({ ok: true, text: t(
-          `Saved ${j.added} game${j.added === 1 ? "" : "s"} under ${name} (${j.games} total)${skips ? ` · ${skips} skipped` : ""}.`,
-          `Vistaði ${j.added} leik${j.added === 1 ? "" : "i"} undir ${name} (${j.games} alls)${skips ? ` · ${skips} sleppt` : ""}.`,
-        ) });
+        setMsg({ ok: true, text: j.wholeSeason
+          ? t(`Pulled ${name}'s whole season — ${j.games} game${j.games === 1 ? "" : "s"}.`, `Sótti allt tímabil ${name} — ${j.games} leik${j.games === 1 ? "" : "i"}.`)
+          : t(
+            `Saved ${j.added} game${j.added === 1 ? "" : "s"} under ${name} (${j.games} total)${skips ? ` · ${skips} skipped` : ""}.`,
+            `Vistaði ${j.added} leik${j.added === 1 ? "" : "i"} undir ${name} (${j.games} alls)${skips ? ` · ${skips} sleppt` : ""}.`,
+          ) });
         setLinks("");
         void loadSaved(name);
         onSaved?.();
@@ -75,9 +77,9 @@ export default function KkiOpponentGames({
               className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-[13px]" />
           </label>
         </div>
-        <label className="mt-2 block text-[12px] font-semibold text-slate-700">{t("KKÍ game link(s)", "KKÍ leikhlekkur / -hlekkir")}
+        <label className="mt-2 block text-[12px] font-semibold text-slate-700">{t("KKÍ link", "KKÍ hlekkur")}
           <textarea value={links} onChange={(e) => setLinks(e.target.value)} rows={3}
-            placeholder={"https://kki.is/…/Leikur?…&game_id=…\nhttps://kki.is/…/Leikur?…&game_id=…"}
+            placeholder={"https://kki.is/…/Eitt-lid?…&team_id=…\n— eða —\nhttps://kki.is/…/Leikur?…&game_id=…"}
             className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-[12.5px] font-mono" />
         </label>
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -85,7 +87,7 @@ export default function KkiOpponentGames({
             className="h-9 rounded-lg bg-[#2740e6] px-3 text-[12.5px] font-semibold text-white disabled:opacity-50">
             {busy ? t("Saving…", "Vista…") : team.trim() ? t(`Save under ${team.trim()}`, `Vista undir ${team.trim()}`) : t("Save games", "Vista leiki")}
           </button>
-          <span className="text-[11px] text-slate-500">{t("One link per game — paste several at once (new line, space or comma).", "Einn hlekkur per leik — límdu marga í einu (ný lína, bil eða komma).")}</span>
+          <span className="text-[11px] text-slate-500">{t("Paste the team's KKÍ page (…/Eitt-lid?…) for the whole season in one go — or individual game links (…/Leikur?…game_id=…) for just those.", "Límdu KKÍ síðu liðsins (…/Eitt-lid?…) fyrir allt tímabilið í einu — eða staka leikhlekki (…/Leikur?…game_id=…) fyrir valda leiki.")}</span>
         </div>
         {msg && <div className={`mt-2 rounded-lg px-3 py-2 text-[12.5px] ${msg.ok ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-red-200 bg-red-50 text-red-700"}`}>{msg.text}</div>}
       </div>

@@ -36,6 +36,23 @@ export function parseKkiGameUrl(input: string): { gameId: string | null; seasonI
   return { gameId: null, seasonId: null };
 }
 
+/** Extract { seasonId, teamId, leagueId } from a kki.is TEAM-season overview URL
+ *  (…/Eitt-lid?league_id=…&season_id=…&team_id=…) — the whole-season page for one team, used to
+ *  pull that team's entire schedule. Returns nulls when the link isn't a team-season page. */
+export function parseKkiTeamUrl(input: string): { seasonId: string | null; teamId: string | null; leagueId: string | null } {
+  try {
+    const u = new URL(String(input ?? "").trim());
+    const seasonId = u.searchParams.get("season_id");
+    const teamId = u.searchParams.get("team_id");
+    const leagueId = u.searchParams.get("league_id");
+    // A team page has a season_id AND a team_id but NO game_id (that would be a single game).
+    if (seasonId && /^\d+$/.test(seasonId) && teamId && /^\d+$/.test(teamId) && !u.searchParams.get("game_id")) {
+      return { seasonId, teamId, leagueId: leagueId && /^\d+$/.test(leagueId) ? leagueId : null };
+    }
+  } catch { /* not a full URL */ }
+  return { seasonId: null, teamId: null, leagueId: null };
+}
+
 export function buildScheduleUrl(seasonId: string, stageId: string, page: number): string {
   return `${WIDGET_BASE}?${q({
     api: PUBLIC_KEY, lang: "is",

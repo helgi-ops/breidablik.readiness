@@ -796,7 +796,7 @@ export default function FibaShotCharts({ onImported, focus = "opp", opponentScop
           <h3 className="text-[14px] font-bold text-slate-900">{is ? "Leikir af KKÍ.is" : "Games from KKÍ.is"}</h3>
           {opponentMode ? (
             <>
-              <p className="mt-0.5 mb-3 text-[12px] text-slate-500">{is ? "Nefndu liðið sem þú ert að skanna og límdu inn kki.is leikhlekk(i) — leikirnir vistast undir því liði og fæða skýrsluna um það." : "Name the team you're scouting and paste kki.is game link(s) — the games save under that team and feed its scouting report."}</p>
+              <p className="mt-0.5 mb-3 text-[12px] text-slate-500">{is ? "Nefndu liðið sem þú ert að skanna og límdu inn KKÍ síðu liðsins (allt tímabilið í einu) eða staka leikhlekki — leikirnir vistast undir því liði og fæða skýrsluna um það." : "Name the team you're scouting and paste its KKÍ team page (the whole season in one go) or individual game links — the games save under that team and feed its scouting report."}</p>
               <KkiOpponentGames opponent={opponentScope ?? null} token={token} is={is} onSaved={onImported} />
             </>
           ) : (
