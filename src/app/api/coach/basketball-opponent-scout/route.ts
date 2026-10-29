@@ -19,7 +19,8 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { buildBasketballOpponentReport, buildAttackBoard, type OppPlayerGame } from "@/lib/micropulse/basketballOpponentReport";
 import { aggregateAdvancedShots, type ShotTypeAgg } from "@/lib/micropulse/basketballStats/instatAggregate";
 import { buildInstatOpponentScout, type InstatOpponentPayload, type ScoutLineup } from "@/lib/micropulse/basketballStats/scoutInstatOpponent";
-import { scoutOpponentSeason } from "@/lib/integrations/basketball/scout";
+import { scoutOpponentSeason, scoutOpponentGames } from "@/lib/integrations/basketball/scout";
+import { parseKkiGameUrl } from "@/lib/integrations/basketball/kkiWidget";
 import { scopeToCurrentSeason } from "@/lib/micropulse/basketballStats/fibaGamesRead";
 
 async function authTeam(req: NextRequest) {
@@ -164,6 +165,26 @@ export async function GET(req: NextRequest) {
       ok: true, seasonId,
       opponents: opponents.map((name) => ({ name, scouted: scoutMap.has(name), games: scoutMap.get(name)?.games ?? null, syncedAt: scoutMap.get(name)?.synced_at ?? null })),
     });
+  }
+
+  // The KKÍ games saved UNDER a scouted opponent (per-link scouting) — date, who they played, and the
+  // scouted team's points that game. Lists each distinct game for the KKÍ games tool on the opponent page.
+  const savedFor = (url.searchParams.get("savedGames") ?? "").trim();
+  if (savedFor) {
+    const { data: seasonRow } = await auth.supabase.from("scout_basketball_season")
+      .select("id").eq("owner_team_id", auth.teamId).eq("opponent_name", savedFor).eq("source", "baskethotel").maybeSingle();
+    const scoutSeasonId = (seasonRow as { id?: string } | null)?.id ?? null;
+    if (!scoutSeasonId) return NextResponse.json({ ok: true, savedGames: true, opponent: savedFor, games: [] });
+    const { data: rows } = await auth.supabase.from("scout_basketball_player_game")
+      .select("game_id, game_date, opponent, points").eq("scout_season_id", scoutSeasonId);
+    const byGame = new Map<string, { gameId: string; date: string | null; opponent: string | null; pts: number }>();
+    for (const r of ((rows ?? []) as Array<{ game_id: string; game_date: string | null; opponent: string | null; points: number | null }>)) {
+      const g = byGame.get(r.game_id) ?? { gameId: r.game_id, date: r.game_date, opponent: r.opponent, pts: 0 };
+      g.pts += num(r.points) ?? 0;
+      byGame.set(r.game_id, g);
+    }
+    const games = [...byGame.values()].sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? "")));
+    return NextResponse.json({ ok: true, savedGames: true, opponent: savedFor, games });
   }
 
   const opponent = (url.searchParams.get("opponent") ?? "").trim();
@@ -330,6 +351,20 @@ export async function POST(req: NextRequest) {
   }
 
   const { seasonId, season } = await seasonRef(auth.supabase, auth.teamId);
+
+  // Per-link scouting — POST { opponent, addGames: [<kki.is Leikur links>] } → save THOSE games under the
+  // scouted opponent (accumulating). Each link's season_id is used when present, else the team's config.
+  if (Array.isArray(body?.addGames)) {
+    const refs = (body.addGames as unknown[])
+      .map((u) => String(u ?? "").trim()).filter(Boolean)
+      .map((u) => parseKkiGameUrl(u))
+      .filter((r): r is { gameId: string; seasonId: string | null } => !!r?.gameId && /^\d+$/.test(r.gameId));
+    if (refs.length === 0) return NextResponse.json({ ok: false, error: "No readable KKÍ game links (…/Leikur?…game_id=…)." }, { status: 400 });
+    const res = await scoutOpponentGames(auth.supabase, auth.teamId, opponent, season || seasonId || "", seasonId, refs);
+    if (!res.ok) return NextResponse.json({ ok: false, error: res.error ?? "Could not save those games.", skipped: res.skipped }, { status: 400 });
+    return NextResponse.json({ ok: true, games: res.games, rows: res.rows, added: res.added, skipped: res.skipped });
+  }
+
   if (!seasonId) return NextResponse.json({ ok: false, error: "No KKÍ season configured for this team (set the basketball feed reference first)." }, { status: 400 });
   const res = await scoutOpponentSeason(auth.supabase, auth.teamId, seasonId, opponent, season);
   if (!res.ok) return NextResponse.json({ ok: false, error: res.error ?? "Scout pull failed" }, { status: 502 });

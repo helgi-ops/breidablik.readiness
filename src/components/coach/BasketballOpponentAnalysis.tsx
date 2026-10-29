@@ -512,7 +512,7 @@ export default function BasketballOpponentAnalysis() {
       <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-800">
         <span className="transition-transform group-open:rotate-90">▸</span>{lang === "IS" ? "Leikir & skotakort (KKÍ.is — frítt · stakur leikur eða heilt tímabil)" : "Games & shot charts (KKÍ.is — free · single game or a whole season)"}
       </summary>
-      <div className="mt-2"><FibaShotCharts /></div>
+      <div className="mt-2"><FibaShotCharts opponentScope={sel} onImported={() => { void loadList(); if (sel) void loadReport(sel); }} /></div>
     </details>
   );
 

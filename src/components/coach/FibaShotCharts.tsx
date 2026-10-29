@@ -15,6 +15,7 @@ import { foldShot, type FibaShot, type PlayerTendency, type FibaPlayerBox, type 
 import { shotLabel, zoneLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 import { zoneOf, EXPECTED_FG, ZONE_ORDER, type ZoneName } from "@/lib/micropulse/basketballStats/shotZones";
 import KkiMatchView from "@/components/coach/KkiMatchView";
+import KkiOpponentGames from "@/components/coach/KkiOpponentGames";
 
 type AiReport = { headline?: string; summary?: string; strengths?: string[]; weaknesses?: string[]; keyPlayers?: Array<{ name: string; note: string }>; howToDefend?: string[]; howToAttack?: string[] };
 type Side = { shots: FibaShot[]; tendencies: PlayerTendency[]; box?: FibaPlayerBox[]; totals?: FibaTeamTotals | null; pbp?: PbpSummary | null; ai?: AiReport | null };
@@ -610,7 +611,10 @@ function RunTrendsCard({ token, is, gamesCount }: { token: () => Promise<string 
   );
 }
 
-export default function FibaShotCharts({ onImported, focus = "opp" }: { onImported?: () => void; focus?: "own" | "opp" }) {
+export default function FibaShotCharts({ onImported, focus = "opp", opponentScope }: { onImported?: () => void; focus?: "own" | "opp"; opponentScope?: string | null }) {
+  // When the page is scouting a specific opponent, the KKÍ.is tab is opponent-scoped: games paste in
+  // under the scouted team (not your own). `opponentScope === undefined` keeps the own-team tool.
+  const opponentMode = opponentScope !== undefined;
   const [lang] = useLang();
   const is = lang === "IS";
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
@@ -790,8 +794,17 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
       {source === "kki" ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <h3 className="text-[14px] font-bold text-slate-900">{is ? "Leikir af KKÍ.is" : "Games from KKÍ.is"}</h3>
-          <p className="mt-0.5 mb-3 text-[12px] text-slate-500">{is ? "Límdu kki.is leikhlekk fyrir stakan leik — box score, Four Factors og skotakort beggja liða. Eða sæktu marga leiki í einu með „Flytja inn heilt tímabil“ (eftir season_id)." : "Paste a kki.is match link for a single game — box score, Four Factors and the shot chart for both teams. Or fetch many games at once with “Import a whole season” (by season_id)."}</p>
-          <KkiMatchView />
+          {opponentMode ? (
+            <>
+              <p className="mt-0.5 mb-3 text-[12px] text-slate-500">{is ? "Nefndu liðið sem þú ert að skanna og límdu inn kki.is leikhlekk(i) — leikirnir vistast undir því liði og fæða skýrsluna um það." : "Name the team you're scouting and paste kki.is game link(s) — the games save under that team and feed its scouting report."}</p>
+              <KkiOpponentGames opponent={opponentScope ?? null} token={token} is={is} onSaved={onImported} />
+            </>
+          ) : (
+            <>
+              <p className="mt-0.5 mb-3 text-[12px] text-slate-500">{is ? "Límdu kki.is leikhlekk fyrir stakan leik — box score, Four Factors og skotakort beggja liða. Eða sæktu marga leiki í einu með „Flytja inn heilt tímabil“ (eftir season_id)." : "Paste a kki.is match link for a single game — box score, Four Factors and the shot chart for both teams. Or fetch many games at once with “Import a whole season” (by season_id)."}</p>
+              <KkiMatchView />
+            </>
+          )}
         </div>
       ) : source === "instat" ? <InstatShotView is={is} token={token} /> : (<>
       <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">

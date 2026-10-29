@@ -9,11 +9,86 @@ import "server-only";
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { buildScheduleUrl, buildBoxScoreUrl, fetchWidget, DEFAULT_STAGE_ID } from "./kkiWidget";
-import { parseBoxScore, parseSchedule } from "@/lib/micropulse/basketballStats/parseWidget";
+import { buildScheduleUrl, buildBoxScoreUrl, buildGameViewUrl, fetchWidget, DEFAULT_STAGE_ID } from "./kkiWidget";
+import { parseBoxScore, parseSchedule, parseGameDate } from "@/lib/micropulse/basketballStats/parseWidget";
 import { normalizeName } from "@/lib/micropulse/statsIngestion/nameMatch";
 
 export type ScoutPullResult = { ok: boolean; games: number; rows: number; error?: string };
+
+/**
+ * Ingest SPECIFIC KKÍ games under a scouted opponent (per-link scouting). Unlike the
+ * whole-season pull, this accumulates: each game link is attributed to `opponentName`
+ * (we keep that team's box-score rows) and merged into the same scout_basketball_season
+ * header the whole-season pull uses, so pasting more links adds games rather than
+ * replacing them. A link that doesn't feature the scouted team is reported, not stored.
+ */
+export async function scoutOpponentGames(
+  supabase: SupabaseClient,
+  ownerTeamId: string,
+  opponentName: string,
+  season: string,
+  seasonIdFallback: string | null,
+  refs: Array<{ gameId: string; seasonId: string | null }>,
+): Promise<ScoutPullResult & { added: number; skipped: Array<{ gameId: string; reason: string }> }> {
+  const filter = normalizeName(opponentName);
+  const matches = (name: string | null) => name != null && normalizeName(name) === filter;
+  const skipped: Array<{ gameId: string; reason: string }> = [];
+
+  // home_away is unknown from a bare game link (no schedule row), so it stays null — the report's
+  // home/away split simply doesn't count these games, rather than mislabelling them all "home".
+  type Row = ReturnType<typeof parseBoxScore>[number] & { gameDate: string; opponent: string; homeAway: null };
+  const byGame = new Map<string, Row[]>();
+  for (const ref of refs) {
+    const seasonId = (ref.seasonId && /^\d+$/.test(ref.seasonId) ? ref.seasonId : seasonIdFallback) ?? "";
+    if (!/^\d+$/.test(seasonId)) { skipped.push({ gameId: ref.gameId, reason: "no season_id in the link and none configured" }); continue; }
+    let box: string;
+    try { box = await fetchWidget(buildBoxScoreUrl(ref.gameId, seasonId)); }
+    catch { skipped.push({ gameId: ref.gameId, reason: "KKÍ fetch failed" }); continue; }
+    const parsed = parseBoxScore(box, ref.gameId, ownerTeamId, "baskethotel");
+    const teamNames = [...new Set(parsed.map((r) => r.team).filter(Boolean))] as string[];
+    const scoutedHere = parsed.filter((r) => matches(r.team));
+    if (scoutedHere.length === 0) {
+      skipped.push({ gameId: ref.gameId, reason: teamNames.length ? `${opponentName} not in this game (${teamNames.join(" vs ")})` : "no box score for that game" });
+      continue;
+    }
+    // The other side's name = the opponent-of-the-opponent (who they played), for the game label.
+    const other = teamNames.find((t) => !matches(t)) ?? "—";
+    let gameDate = "";
+    try { gameDate = parseGameDate(await fetchWidget(buildGameViewUrl(ref.gameId, seasonId))) ?? ""; } catch { /* date is best-effort */ }
+    byGame.set(ref.gameId, scoutedHere.map((r) => ({ ...r, gameDate, opponent: other, homeAway: null })));
+  }
+
+  if (byGame.size === 0) return { ok: false, games: 0, rows: 0, added: 0, skipped, error: skipped[0]?.reason ?? "No games to add." };
+
+  const nowIso = new Date().toISOString();
+  // Upsert the scout-season header (merge key matches the whole-season pull so links accumulate there).
+  const { data: seasonRow, error: sErr } = await supabase.from("scout_basketball_season").upsert({
+    owner_team_id: ownerTeamId, opponent_name: opponentName, season, season_id: seasonIdFallback,
+    source: "baskethotel", synced_at: nowIso, updated_at: nowIso,
+  }, { onConflict: "owner_team_id,opponent_name,season,source" }).select("id").maybeSingle();
+  if (sErr || !seasonRow) return { ok: false, games: 0, rows: 0, added: 0, skipped, error: sErr?.message ?? "scout season upsert failed" };
+  const scoutSeasonId = (seasonRow as { id: string }).id;
+
+  // Replace just the rows for the game_ids we're (re)adding, so existing scouted games stay.
+  const gameIds = [...byGame.keys()];
+  await supabase.from("scout_basketball_player_game").delete().eq("scout_season_id", scoutSeasonId).in("game_id", gameIds);
+  const insertRows = [...byGame.values()].flat().map((r) => ({
+    scout_season_id: scoutSeasonId, game_id: r.gameId, game_date: r.gameDate || null, opponent: r.opponent, home_away: r.homeAway,
+    player_name: r.playerName, player_ref: r.sourcePlayerRef,
+    minutes: r.minutes, points: r.points, fgm: r.fgm, fga: r.fga, tpm: r.tpm, tpa: r.tpa, ftm: r.ftm, fta: r.fta,
+    oreb: r.oreb, dreb: r.dreb, reb: r.reb, assists: r.assists, steals: r.steals, blocks: r.blocks, turnovers: r.turnovers, fouls: r.fouls,
+    plus_minus: r.plusMinus, efficiency: r.efficiency, stats: r.stats, source: "baskethotel",
+  }));
+  const { error: iErr } = await supabase.from("scout_basketball_player_game").insert(insertRows as never);
+  if (iErr) return { ok: false, games: 0, rows: 0, added: 0, skipped, error: iErr.message };
+
+  // Recompute the header's game count from everything now stored for this opponent.
+  const { data: allRows } = await supabase.from("scout_basketball_player_game").select("game_id").eq("scout_season_id", scoutSeasonId);
+  const total = new Set(((allRows ?? []) as Array<{ game_id: string }>).map((r) => r.game_id)).size;
+  await supabase.from("scout_basketball_season").update({ games: total, synced_at: nowIso, updated_at: nowIso }).eq("id", scoutSeasonId);
+
+  return { ok: true, games: total, rows: insertRows.length, added: byGame.size, skipped };
+}
 
 /**
  * Pull `opponentName`'s whole KKÍ season (box scores of every game they played) and
