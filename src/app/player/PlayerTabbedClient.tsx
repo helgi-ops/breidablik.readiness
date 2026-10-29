@@ -40,6 +40,7 @@ import ChatThread from "@/components/chat/ChatThread";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
 const PlayerGameReportCard = dynamic(() => import("@/components/player/PlayerGameReportCard"), { ssr: false });
 const PlayerBasketballGameReportCard = dynamic(() => import("@/components/player/PlayerBasketballGameReportCard"), { ssr: false });
+const PlayerScoutingCard = dynamic(() => import("@/components/player/PlayerScoutingCard"), { ssr: false });
 const PlayerBasketballMovementCard = dynamic(() => import("@/components/player/PlayerBasketballMovementCard"), { ssr: false });
 const PlayerFootballStatsCard = dynamic(() => import("@/components/player/PlayerFootballStatsCard"), { ssr: false });
 const PlayerMatchMovementCard = dynamic(() => import("@/components/player/PlayerMatchMovementCard"), { ssr: false });
@@ -2802,6 +2803,7 @@ export default function DevPlayerClient() {
               )}
               {activeTab === "stats" && (
                 <div className="space-y-4">
+                  {teamIsBasketball ? <PlayerScoutingCard lang={lang as "IS" | "EN"} /> : null}
                   {teamIsBasketball
                     ? <PlayerBasketballGameReportCard lang={lang as "IS" | "EN"} />
                     : <PlayerFootballStatsCard lang={lang as "IS" | "EN"} />}

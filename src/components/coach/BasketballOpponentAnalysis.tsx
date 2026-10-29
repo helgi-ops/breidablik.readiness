@@ -294,6 +294,8 @@ export default function BasketballOpponentAnalysis() {
   const [oppLineups, setOppLineups] = React.useState<ScoutLineup[] | null>(null);
   const [pdfBusy, setPdfBusy] = React.useState(false);
   const [deckBusy, setDeckBusy] = React.useState(false);
+  const [shareBusy, setShareBusy] = React.useState(false);
+  const [shareMsg, setShareMsg] = React.useState<string | null>(null);
   const [ai, setAi] = React.useState<OppAi | null>(null);
   const [aiBusy, setAiBusy] = React.useState(false);
   const [aiErr, setAiErr] = React.useState<string | null>(null);
@@ -460,6 +462,33 @@ export default function BasketballOpponentAnalysis() {
     } finally { setDeckBusy(false); }
   };
 
+  // Send the scouting briefing to the team's players (they read it in the player app, with the clips).
+  const sendToPlayers = async () => {
+    if (!report) return;
+    setShareBusy(true); setShareMsg(null);
+    try {
+      const tok = await token(); if (!tok || !sel) return;
+      const snapshot = {
+        headline: ai?.headline ?? null,
+        howWePlay: ai?.strengths ?? [],
+        watchOuts: ai?.weaknesses ?? [],
+        keyPlayers: report.keyPlayers.slice(0, 4).map((p) => ({
+          name: p.name,
+          line: `${d1(p.ppg)} PPG · ${d1(p.rpg)} REB · ${d1(p.apg)} AST · ${pctS(p.tpPct)} 3P`,
+          watchFor: playerTendencyNotes(p, lang).offense.slice(0, 3),
+        })),
+        howToDefend: report.howToDefend.map((f) => (lang === "IS" ? f.is : f.en)),
+        whereToAttack: buildAttackBoard(report.players).slice(0, 5).map((a) => ({ action: shotLabel(a.key, lang), target: a.defender, concedes: `${a.oppPct}%` })),
+      };
+      const res = await fetch("/api/coach/scouting/share", {
+        method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" },
+        body: JSON.stringify({ opponent: sel, title: report.opponentName, snapshot }),
+      });
+      const j = await res.json();
+      setShareMsg(j.ok ? (lang === "IS" ? "✓ Sent í leikmannaappið" : "✓ Sent to the player app") : (j.error ?? "Error"));
+    } catch { setShareMsg(lang === "IS" ? "Villa við sendingu" : "Send failed"); } finally { setShareBusy(false); }
+  };
+
   // Shot charts from the free public FIBA LiveStats feed — own team + any opponent. Shown
   // even with no scouted opponents yet (it's a pull tool, not opponent-dependent).
   const fibaCharts = (
@@ -506,6 +535,11 @@ export default function BasketballOpponentAnalysis() {
             className="rounded-lg border border-[#2740e6] bg-white px-2.5 py-1 text-[13px] font-semibold text-[#2740e6] hover:bg-[#eef0fb] disabled:opacity-50">
             {deckBusy ? (lang === "IS" ? "Bý til…" : "Building…") : (lang === "IS" ? "Fundar-kynning (PPT)" : "Meeting deck (PPT)")}
           </button>
+          <button onClick={() => void sendToPlayers()} disabled={shareBusy}
+            className="rounded-lg bg-[#2740e6] px-2.5 py-1 text-[13px] font-semibold text-white hover:bg-[#1f34c0] disabled:opacity-50">
+            {shareBusy ? (lang === "IS" ? "Sendi…" : "Sending…") : (lang === "IS" ? "Senda í leikmannaapp" : "Send to players")}
+          </button>
+          {shareMsg ? <span className="self-center text-[12px] font-medium text-emerald-700">{shareMsg}</span> : null}
           </>
         ) : null}
       </div>
