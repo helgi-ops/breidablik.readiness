@@ -34,6 +34,9 @@ import { buildWeeklyRiskReport } from "@/lib/micropulse/performanceIntelligence/
 import { buildTeamOutlook } from "@/lib/micropulse/performanceIntelligence/teamOutlook";
 import { resolveSessionMdContextFromSources } from "@/lib/micropulse/weekSetup/sessionSource";
 import { mdOffsetForDate } from "@/lib/micropulse/readinessOutlook/assemble";
+import { useTeamMode } from "@/lib/useTeamMode";
+import { isGpsOnly } from "@/lib/teamMode";
+import { GpsOnlyLoadHero, GpsOnlyLoadSummary, type LoadVerdictResponse } from "@/components/coach/GpsOnlyTodayDecision";
 import { computePlayerVolatilitySummary } from "@/lib/micropulse/volatility/compute";
 import { summarizeDrivers, volatilityLevelLabel, volatilityLevelTone } from "@/lib/micropulse/volatility/format";
 import type { VolatilityDailyPoint } from "@/lib/micropulse/volatility/types";
@@ -2183,6 +2186,35 @@ export default function CoachPage() {
   }, [ctxIntensity]);
 
   const today = useMemo(() => todayISO(), []);
+
+  // ── GPS Intelligence Only mode ────────────────────────────────────────────
+  // For GPS-only teams (team_settings.uses_wellness_features = false) there is no
+  // check-in, so the readiness hero + readiness Decision Summary have nothing to
+  // read. When gpsOnly, we swap in a load-based equivalent fed by the existing
+  // /api/coach/load-verdict engine. One fetch, lifted here so the hero and the
+  // summary agree and the route is hit once. Descriptive only — never the
+  // readiness verdict (see GpsOnlyTodayDecision.tsx + CLAUDE.md).
+  const teamMode = useTeamMode(coachTeamId);
+  const gpsOnly = isGpsOnly(teamMode);
+  const [gpsLoadVerdict, setGpsLoadVerdict] = useState<LoadVerdictResponse | null>(null);
+  useEffect(() => {
+    if (!gpsOnly || !coachTeamId) { setGpsLoadVerdict(null); return; }
+    let alive = true;
+    (async () => {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess?.session?.access_token;
+        if (!token) return;
+        const res = await fetch(`/api/coach/load-verdict?date=${today}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) { if (alive) setGpsLoadVerdict(null); return; }
+        const json = (await res.json()) as LoadVerdictResponse;
+        if (alive) setGpsLoadVerdict(json);
+      } catch {
+        if (alive) setGpsLoadVerdict(null);
+      }
+    })();
+    return () => { alive = false; };
+  }, [gpsOnly, coachTeamId, today]);
 
   // Keep the Pre-Session "Rest day" checkbox in sync with the saved choice for
   // the selected day (shared with the /coach/load-plan page).
@@ -8863,6 +8895,9 @@ export default function CoachPage() {
                         team signal the old hand-rolled narrative box + tiles used,
                         so the verdict is computed once and can never diverge
                         (no new data, no new API — golden rule #1). */}
+                    {gpsOnly ? (
+                      <GpsOnlyLoadHero data={gpsLoadVerdict} lang={lang === "IS" ? "IS" : "EN"} />
+                    ) : (
                     <TodayCommandCenter
                       lang={lang === "IS" ? "IS" : "EN"}
                       zone={(risk.level === "HIGH" ? "HIGH" : risk.level === "CAUTION" ? "CAUTION" : "READY") as CommandZone}
@@ -8888,6 +8923,7 @@ export default function CoachPage() {
                         ? { submitted: complianceSummary.rpe.submitted, missing: complianceSummary.rpe.missing }
                         : null}
                     />
+                    )}
 
                     {/* The full per-player squad grid is a drill-down (one canonical home at
                         ?tab=squad) — reach it from the verdict here. Keeps Today decide-first. */}
@@ -9222,8 +9258,13 @@ export default function CoachPage() {
             );
           })()}
 
-          {/* Decision Summary — per-player today */}
-          {rows.length > 0 && (
+          {/* GPS Intelligence Only: load-based Decision Summary in place of the
+              readiness one (the readiness version is hidden below for these
+              teams, since there is no check-in to drive it). */}
+          {gpsOnly && <GpsOnlyLoadSummary data={gpsLoadVerdict} lang={lang === "IS" ? "IS" : "EN"} />}
+
+          {/* Decision Summary — per-player today (readiness; full-suite teams) */}
+          {rows.length > 0 && !gpsOnly && (
             <DecisionSummaryCard rows={rows.map((r) => {
               // Match-minutes lookup (powers MD+1 hard-recovery guardrail)
               const matchMin = playerMatchMinutes[r.player_id] ?? null;

@@ -100,7 +100,11 @@ export async function GET(req: NextRequest) {
     byPlayer.get(id)!.push({ date: String(r.date), pl: num(r.total_player_load), decel: num(r.decelerations), hsr: num(r.high_speed_distance), dist: num(r.total_distance), metabolic: num(r.metabolic_power), plPerMin: num(r.player_load_per_minute), hml: num(r.high_metabolic_load_distance_m) });
   }
 
-  const perPlayer: Array<{ player_id: string; name: string; verdict: LoadVerdict; intensity: IntensityVerdict }> = [];
+  // `figures` surfaces the already-computed per-player numbers the GPS-only Today
+  // Load Summary cards render (body load · ACWR · HSR). No new signal — just the
+  // values this loop already derives, exposed so the card needn't recompute them.
+  type PlayerFigures = { acwr: number | null; bodyLoad: number | null; hsr: number | null; hsrDeltaPct: number | null };
+  const perPlayer: Array<{ player_id: string; name: string; verdict: LoadVerdict; intensity: IntensityVerdict; figures: PlayerFigures }> = [];
   for (const p of players) {
     const rows = (byPlayer.get(p.id) ?? []).sort((a, b) => a.date.localeCompare(b.date));
     if (!rows.length) continue;
@@ -134,7 +138,24 @@ export async function GET(req: NextRequest) {
       history: { pl_per_min: series((r) => r.plPerMin), hml: series((r) => r.hml), hsr: series((r) => r.hsr) },
     });
 
-    perPlayer.push({ player_id: p.id, name: (p.full_name ?? "—").trim(), verdict: computeLoadVerdict(input), intensity });
+    // Headline figures for the GPS-only Load Summary card. Body load / HSR take
+    // today's row, else the most recent session in the window (rows are sorted
+    // ascending). HSR delta is today vs the player's own prior-window mean.
+    const recentRow = todayRow ?? rows[rows.length - 1] ?? null;
+    const hsrHist = series((r) => r.hsr);
+    const hsrMean = hsrHist.length ? hsrHist.reduce((a, b) => a + b, 0) / hsrHist.length : null;
+    const hsrNow = recentRow?.hsr ?? null;
+    const hsrDeltaPct = hsrNow != null && hsrMean != null && hsrMean > 0
+      ? Math.round(((hsrNow - hsrMean) / hsrMean) * 100)
+      : null;
+    const figures: PlayerFigures = {
+      acwr: acwrPayload.ratio,
+      bodyLoad: recentRow?.pl ?? null,
+      hsr: hsrNow,
+      hsrDeltaPct,
+    };
+
+    perPlayer.push({ player_id: p.id, name: (p.full_name ?? "—").trim(), verdict: computeLoadVerdict(input), intensity, figures });
   }
 
   // ── Team verdict: squad-level band + named per-player exceptions ──
