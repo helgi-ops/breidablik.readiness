@@ -29,11 +29,25 @@
  *   <GpsOnlyLoadSummary> — replaces <DecisionSummaryCard> when isGpsOnly
  */
 
+import { useState } from "react";
+
 export type LoadBand = "SUSTAINABLE" | "BUILDING" | "SPIKING" | "UNDER";
 type Lang = "EN" | "IS";
 type LangText = { EN: string; IS: string };
 
 type LoadDriver = { signal: string; plain: LangText; z?: number; weight: number };
+type LoadComponent = { key: string; label: LangText; value: number | null; band: "LOW" | "NORMAL" | "ELEVATED" | "HIGH"; tooltip: LangText };
+// Mirror of IntensityVerdict (src/lib/micropulse/intensityVerdict) — the fields the detail view reads.
+type IntensityLite = {
+  available: boolean;
+  band: string;
+  z: number | null;
+  confident: boolean;
+  baselineDays: number;
+  coverage: number;
+  headline: LangText | null;
+  counterfactual: LangText | null;
+};
 
 export type LoadVerdictResponse = {
   date: string;
@@ -49,12 +63,21 @@ export type LoadVerdictResponse = {
       dimensionsTotal?: number;
     };
   };
-  players: Array<{
-    player_id: string;
-    name: string;
-    verdict: { band: LoadBand; sentence: LangText; drivers: LoadDriver[] };
-    figures: { acwr: number | null; bodyLoad: number | null; hsr: number | null; hsrDeltaPct: number | null };
-  }>;
+  players: Array<LoadPlayer>;
+};
+
+type LoadPlayer = {
+  player_id: string;
+  name: string;
+  verdict: {
+    band: LoadBand;
+    sentence: LangText;
+    drivers: LoadDriver[];
+    components?: LoadComponent[];
+    confidence?: { level: "high" | "moderate" | "low"; coverage: number; baselineDays: number };
+  };
+  intensity?: IntensityLite;
+  figures: { acwr: number | null; bodyLoad: number | null; hsr: number | null; hsrDeltaPct: number | null };
 };
 
 const L = (lang: Lang, en: string, is: string) => (lang === "IS" ? is : en);
@@ -181,9 +204,11 @@ export function GpsOnlyLoadHero({ data, lang }: { data: LoadVerdictResponse | nu
 /* ─────────────────────── Per-player summary ─────────────────────── */
 
 export function GpsOnlyLoadSummary({ data, lang }: { data: LoadVerdictResponse | null; lang: Lang }) {
+  const [openId, setOpenId] = useState<string | null>(null);
   if (!data) return null;
   const players = data.players ?? [];
   const counts = data.team.counts;
+  const open = players.find((p) => p.player_id === openId) ?? null;
 
   if (!players.length) {
     return (
@@ -223,7 +248,14 @@ export function GpsOnlyLoadSummary({ data, lang }: { data: LoadVerdictResponse |
           const driverLine = `ACWR ${acwr} · ${driver}`;
           const hsr = fmtHsr(p.figures);
           return (
-            <div key={p.player_id} className="rounded-2xl border p-4" style={{ background: style.cardBg, borderColor: style.cardBorder }}>
+            <button
+              key={p.player_id}
+              type="button"
+              onClick={() => setOpenId(p.player_id)}
+              aria-label={L(lang, `Inspect load for ${p.name}`, `Skoða álag fyrir ${p.name}`)}
+              className="rounded-2xl border p-4 text-left transition hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2740e6]"
+              style={{ background: style.cardBg, borderColor: style.cardBorder }}
+            >
               <div className="flex items-start justify-between gap-2">
                 <div className="font-archivo text-[15px] font-bold leading-tight text-[#14181c]">{p.name}</div>
                 <span className="rounded-full px-2.5 py-1 text-[11px] font-bold text-white" style={{ background: style.fg }}>
@@ -257,14 +289,162 @@ export function GpsOnlyLoadSummary({ data, lang }: { data: LoadVerdictResponse |
                 ) : null}
               </div>
 
-              <div className="mt-2.5 text-[10.5px] text-slate-400">
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 font-bold text-slate-600">{L(lang, "EXTERNAL", "YTRA")}</span>
-                &nbsp;{L(lang, "external load", "ytra álag")}
+              <div className="mt-2.5 flex items-center justify-between text-[10.5px] text-slate-400">
+                <span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 font-bold text-slate-600">{L(lang, "EXTERNAL", "YTRA")}</span>
+                  &nbsp;{L(lang, "external load", "ytra álag")}
+                </span>
+                <span className="font-semibold text-[#2740e6]">{L(lang, "Inspect →", "Skoða →")}</span>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
+
+      {open ? <GpsOnlyLoadDetailModal player={open} lang={lang} onClose={() => setOpenId(null)} /> : null}
     </section>
+  );
+}
+
+/* ─────────────────────── Per-player load detail ─────────────────────── */
+
+const COMPONENT_BAND_STYLE: Record<LoadComponent["band"], { bg: string; fg: string }> = {
+  LOW: { bg: "#e6eef7", fg: "#2f6fb0" },
+  NORMAL: { bg: "#f1f0ea", fg: "#55585c" },
+  ELEVATED: { bg: "#fbefd7", fg: "#8a5a12" },
+  HIGH: { bg: "#f7e7e2", fg: "#a83e28" },
+};
+const COMPONENT_BAND_LABEL: Record<LoadComponent["band"], LangText> = {
+  LOW: { EN: "Low", IS: "Lágt" },
+  NORMAL: { EN: "Normal", IS: "Venjulegt" },
+  ELEVATED: { EN: "Elevated", IS: "Hækkað" },
+  HIGH: { EN: "High", IS: "Hátt" },
+};
+
+export function GpsOnlyLoadDetailModal({ player, lang, onClose }: { player: LoadPlayer; lang: Lang; onClose: () => void }) {
+  const [showDetails, setShowDetails] = useState(false);
+  const band = player.verdict.band;
+  const style = BAND_STYLE[band];
+  const T = (t: LangText | undefined | null) => (t ? t[lang === "IS" ? "IS" : "EN"] : "");
+  const components = (player.verdict.components ?? []).filter((c) => c.value != null);
+  const conf = player.verdict.confidence;
+  const intensity = player.intensity;
+  const hsr = fmtHsr(player.figures);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="my-6 w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="font-archivo text-xl font-extrabold leading-tight text-[#14181c]">{player.name}</div>
+            <div className="mt-0.5 text-[11px] text-slate-500">{L(lang, "Load state — not the readiness verdict", "Álagsstaða — ekki heilsustöðu-dómur")}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full px-2.5 py-1 text-[11px] font-bold text-white" style={{ background: style.fg }}>
+              {BAND_LABEL[band][lang === "IS" ? "IS" : "EN"]}
+            </span>
+            <button type="button" onClick={onClose} aria-label={L(lang, "Close", "Loka")} className="rounded-md px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
+          </div>
+        </div>
+
+        {/* L0 — the verdict sentence (plain "why") */}
+        <div className="mt-3 rounded-xl px-4 py-3 text-sm" style={{ background: style.tileBg, color: style.tileFg }}>
+          {player.verdict.sentence[lang === "IS" ? "IS" : "EN"]}
+        </div>
+
+        {/* L1 — headline figures + named drivers */}
+        <div className="mt-3 flex gap-5">
+          <div className="text-[10.5px] uppercase tracking-wide text-slate-500">
+            {L(lang, "Body load", "Líkamsálag")}
+            <b className="mt-0.5 block font-archivo text-lg normal-case tracking-normal text-[#14181c]">{fmtInt(player.figures.bodyLoad)}</b>
+          </div>
+          <div className="text-[10.5px] uppercase tracking-wide text-slate-500">
+            ACWR
+            <b className="mt-0.5 block font-archivo text-lg normal-case tracking-normal text-[#14181c]">{fmtAcwr(player.figures.acwr)}</b>
+          </div>
+          {hsr ? (
+            <div className="text-[10.5px] uppercase tracking-wide text-slate-500">
+              HSR
+              <b className="mt-0.5 block font-archivo text-lg normal-case tracking-normal text-[#14181c]">{hsr}</b>
+            </div>
+          ) : null}
+        </div>
+
+        {player.verdict.drivers.length ? (
+          <ul className="mt-3 space-y-1.5">
+            {player.verdict.drivers.slice(0, 4).map((d, i) => (
+              <li key={`${d.signal}-${i}`} className="flex items-baseline gap-2 text-[13px] text-[#2a2e33]">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: style.dot }} />
+                <span>{T(d.plain)}{d.z != null ? <span className="text-slate-400"> · z {d.z > 0 ? "+" : ""}{d.z}</span> : null}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {/* L2 — details toggle: component tiles + intensity + confidence */}
+        <button
+          type="button"
+          onClick={() => setShowDetails((v) => !v)}
+          className="mt-4 text-xs font-semibold text-[#2740e6] hover:underline"
+          aria-expanded={showDetails}
+        >
+          {showDetails ? L(lang, "Hide details", "Fela nánar") : L(lang, "Show details — S&C", "Sýna nánar — S&C")}
+        </button>
+
+        {showDetails ? (
+          <div className="mt-3 space-y-4">
+            {components.length ? (
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                {components.map((c) => {
+                  const cs = COMPONENT_BAND_STYLE[c.band];
+                  return (
+                    <div key={c.key} className="rounded-xl p-3" style={{ background: cs.bg }} title={T(c.tooltip)}>
+                      <div className="text-[10px] uppercase tracking-wide" style={{ color: cs.fg }}>{T(c.label)}</div>
+                      <div className="mt-0.5 font-archivo text-base font-bold tabular-nums text-[#14181c]">{c.value != null ? Math.round(c.value * 10) / 10 : "—"}</div>
+                      <div className="text-[10px] font-semibold" style={{ color: cs.fg }}>{COMPONENT_BAND_LABEL[c.band][lang === "IS" ? "IS" : "EN"]}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {intensity?.available ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[13px]">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{L(lang, "Work rate vs his usual day", "Ákefð m.v. venjulegan dag")}</div>
+                <div className="mt-1 text-[#2a2e33]">
+                  {T(intensity.headline) || L(lang, "Within his usual range.", "Innan venju hans.")}
+                  {intensity.z != null ? <span className="text-slate-400"> · z {intensity.z > 0 ? "+" : ""}{intensity.z}</span> : null}
+                </div>
+                {intensity.counterfactual ? <div className="mt-1 text-slate-500">{T(intensity.counterfactual)}</div> : null}
+              </div>
+            ) : null}
+
+            {conf ? (
+              <div className="text-[12px] text-slate-500">
+                {CONF_LABEL[conf.level][lang === "IS" ? "IS" : "EN"]}
+                {" · "}
+                {L(lang, "coverage", "þekja")} {Math.round(conf.coverage * 100)}%
+                {" · "}
+                {L(lang, "baseline", "grunnlína")} {conf.baselineDays}{L(lang, "d", " d")}
+              </div>
+            ) : null}
+
+            <div className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-400">
+              {L(lang,
+                "External-load proxy (Vanrenterghem 2017; Impellizzeri 2020) — describes load, not injury risk or readiness.",
+                "Ytra álags-mæling (Vanrenterghem 2017; Impellizzeri 2020) — lýsir álagi, ekki meiðslahættu eða heilsustöðu.")}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
