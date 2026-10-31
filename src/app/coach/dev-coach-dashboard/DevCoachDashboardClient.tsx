@@ -106,13 +106,7 @@ import CoachingLibrary from "@/components/coach/CoachingLibrary";
 import CoachSignalChips from "@/components/coach/CoachSignalChips";
 import AttentionList, { type AttentionItem as AttentionListItem } from "@/components/coach/AttentionList";
 import PlayerDecisionDrawer, { type DecisionDrawerData, type DrawerColor } from "@/components/coach/PlayerDecisionDrawer";
-import CalibrationVerdictNote from "@/components/coach/CalibrationVerdictNote";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import UnfamiliarLoadCard from "@/components/coach/UnfamiliarLoadCard";
-import UnfamiliarSpikeBanner from "@/components/coach/UnfamiliarSpikeBanner";
-import RecoveryWatchBanner from "@/components/coach/RecoveryWatchBanner";
-import LoadVerdictCard from "@/components/coach/LoadVerdictCard";
-import ImaVerdictStrip from "@/components/coach/ImaVerdictStrip";
 import CoachBreakBanner from "@/components/coach/CoachBreakBanner";
 import TitanTodayUploadCard from "@/components/coach/TitanTodayUploadCard";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
@@ -2196,9 +2190,15 @@ export default function CoachPage() {
   // readiness verdict (see GpsOnlyTodayDecision.tsx + CLAUDE.md).
   const teamMode = useTeamMode(coachTeamId);
   const gpsOnly = isGpsOnly(teamMode);
+  // Show the load-based per-player cards whenever there is no check-in to drive
+  // the readiness decision summary — GPS-only teams always, AND full-suite teams
+  // on a day nobody has checked in — so the Today surface is consistent and never
+  // shows an empty board (coach feedback 2026-10-31).
+  const noCheckin = !loading && rows.length === 0;
+  const showLoadCards = gpsOnly || noCheckin;
   const [gpsLoadVerdict, setGpsLoadVerdict] = useState<LoadVerdictResponse | null>(null);
   useEffect(() => {
-    if (!gpsOnly || !coachTeamId) { setGpsLoadVerdict(null); return; }
+    if (!showLoadCards || !coachTeamId) { setGpsLoadVerdict(null); return; }
     let alive = true;
     (async () => {
       try {
@@ -2214,7 +2214,7 @@ export default function CoachPage() {
       }
     })();
     return () => { alive = false; };
-  }, [gpsOnly, coachTeamId, today]);
+  }, [showLoadCards, coachTeamId, today]);
 
   // Keep the Pre-Session "Rest day" checkbox in sync with the saved choice for
   // the selected day (shared with the /coach/load-plan page).
@@ -8895,7 +8895,7 @@ export default function CoachPage() {
                         team signal the old hand-rolled narrative box + tiles used,
                         so the verdict is computed once and can never diverge
                         (no new data, no new API — golden rule #1). */}
-                    {gpsOnly ? (
+                    {showLoadCards ? (
                       <GpsOnlyLoadHero data={gpsLoadVerdict} lang={lang === "IS" ? "IS" : "EN"} />
                     ) : (
                     <TodayCommandCenter
@@ -9261,7 +9261,7 @@ export default function CoachPage() {
           {/* GPS Intelligence Only: load-based Decision Summary in place of the
               readiness one (the readiness version is hidden below for these
               teams, since there is no check-in to drive it). */}
-          {gpsOnly && <GpsOnlyLoadSummary data={gpsLoadVerdict} lang={lang === "IS" ? "IS" : "EN"} />}
+          {showLoadCards && <GpsOnlyLoadSummary data={gpsLoadVerdict} lang={lang === "IS" ? "IS" : "EN"} />}
 
           {/* Decision Summary — per-player today (readiness; full-suite teams) */}
           {rows.length > 0 && !gpsOnly && (
@@ -9517,37 +9517,11 @@ export default function CoachPage() {
             />
           )}
 
-          {/* Unfamiliar Load & S&C signals — team-level section, shown for
-              CHECK-IN teams only. For GPS-only teams this layer now lives
-              per-player ON the load cards (the Unfamiliar-Load drift text +
-              S&C chips in GpsOnlyLoadSummary), so the team section is dropped
-              there to avoid duplication (coach feedback 2026-10-31). Each child
-              still self-hides when nothing on it needs attention. */}
-          {!gpsOnly && (
-          <section className="mt-4 rounded-xl border-2 border-[#2740e6]/30 bg-[#eef1fe] p-4 shadow-sm">
-            <div className="flex items-center gap-2.5 text-[15px] font-bold text-[#2740e6]">
-              <span aria-hidden>⚡</span>
-              {lang === "IS" ? "Óvanalegt álag & S&C merki" : "Unfamiliar load & S&C signals"}
-            </div>
-            <p className="mt-0.5 text-[12.5px] text-[#2740e6]/70">
-              {lang === "IS"
-                ? "Merkjalagið á bak við dóminn — óvanalegt álag, endurheimt, Engine/Driver. Hver lína birtist aðeins þegar hún þarf athygli."
-                : "The signal layer behind the verdict — unfamiliar load, recovery, engine/driver. Each line shows only when it needs attention."}
-            </p>
-            <div className="mt-3 space-y-4">
-              <UnfamiliarSpikeBanner lang={lang} date={today} />
-              <RecoveryWatchBanner lang={lang === "EN" ? "EN" : "IS"} />
-              {/* Calibration context beside the verdict — rule-derived, cites the
-                  30-day recovery rate, NEVER changes the colour. */}
-              <CalibrationVerdictNote lang={lang === "EN" ? "EN" : "IS"} />
-              {/* Engine + Driver strip pair (Niklas Virtanen): load axis (GPS) +
-                  movement axis (IMA), each linking to its own detail page. */}
-              <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} variant="strip" />
-              <ImaVerdictStrip date={today} lang={lang === "EN" ? "EN" : "IS"} />
-              <UnfamiliarLoadCard lang={lang} date={today} />
-            </div>
-          </section>
-          )}
+          {/* The old team-level "Unfamiliar load & S&C signals" section was
+              removed (coach feedback 2026-10-31): the Unfamiliar-Load signal now
+              lives per-player ON the decision cards everywhere — a small ⚡
+              indicator on the card face and the full text on open — for both
+              check-in and GPS-only teams, so Today reads the same for every team. */}
 
           {/* Indoor Briefing — team-level executive summary.
               Shown ONLY when the effective mode is indoor, i.e. the squad's
