@@ -209,6 +209,38 @@ export function GpsOnlyLoadHero({ data, lang }: { data: LoadVerdictResponse | nu
   );
 }
 
+/** The per-player Unfamiliar-Load / S&C signal chips, surfaced ON the card so the
+ *  signal layer is part of each player's decision (coach feedback) — not only a
+ *  team-level section. Derived from data already in the load-verdict response
+ *  (verdict.components + signals); each chip self-hides unless it's flagged, so a
+ *  clean player shows none. */
+function signalChips(p: LoadPlayer, lang: Lang): Array<{ label: string; bg: string; fg: string }> {
+  const chips: Array<{ label: string; bg: string; fg: string }> = [];
+  const comp = (k: string) => (p.verdict.components ?? []).find((c) => c.key === k);
+  const red = { bg: "#f7e7e2", fg: "#a83e28" };
+  const amber = { bg: "#fbefd7", fg: "#8a5a12" };
+  const slate = { bg: "#f1f0ea", fg: "#55585c" };
+
+  const spike = comp("spike");
+  if (spike && spike.band === "HIGH") chips.push({ label: L(lang, "⚡ Unfamiliar spike", "⚡ Óvanalegt stökk"), ...red });
+
+  const braking = comp("braking");
+  const eccentric = p.signals?.loadProfile === "eccentric";
+  if ((braking && (braking.band === "HIGH" || braking.band === "ELEVATED")) || eccentric)
+    chips.push({ label: L(lang, "↯ Braking-heavy", "↯ Mikil hemlun"), ...amber });
+
+  const imaZ = Math.max(p.signals?.ima.decel.z ?? -9, p.signals?.ima.total.z ?? -9);
+  if (imaZ >= 1) chips.push({ label: L(lang, "Multidirectional ↑", "Fjölstefnu-álag ↑"), ...amber });
+
+  const hid = comp("hid");
+  if (hid && (hid.band === "HIGH" || hid.band === "ELEVATED")) chips.push({ label: L(lang, "High-intensity ↑", "Háákefð ↑"), ...amber });
+
+  const mono = comp("monotony");
+  if (mono && (mono.band === "ELEVATED" || mono.band === "HIGH")) chips.push({ label: L(lang, "Monotony", "Einhæfni"), ...slate });
+
+  return chips;
+}
+
 /* ─────────────────────── Per-player summary ─────────────────────── */
 
 export function GpsOnlyLoadSummary({ data, lang }: { data: LoadVerdictResponse | null; lang: Lang }) {
@@ -279,6 +311,17 @@ export function GpsOnlyLoadSummary({ data, lang }: { data: LoadVerdictResponse |
                 <b className="block">→ {RECO[band][lang === "IS" ? "IS" : "EN"]}</b>
                 {driverLine}
               </div>
+
+              {(() => {
+                const chips = signalChips(p, lang);
+                return chips.length ? (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    {chips.map((c, i) => (
+                      <span key={i} className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: c.bg, color: c.fg }}>{c.label}</span>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
 
               <div className="mt-2.5 flex gap-4 border-t border-black/5 pt-2.5">
                 <div className="text-[10.5px] uppercase tracking-wide text-slate-500">
