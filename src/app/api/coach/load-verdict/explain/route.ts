@@ -76,24 +76,26 @@ function buildFacts(body: Record<string, unknown>) {
     ima_decel: sz(ima.decel),
     ima_total: sz(ima.total),
     intensity: { available: intensity.available === true, band: str(intensity.band as string), z: num(intensity.z), headline: str(intensity.headline as string) },
+    recommended_action: str(body.recommendedAction as string),
   };
 }
 
 function systemPrompt(): string {
-  return `You explain an athlete's external-load state to a football head coach, in plain English.
+  return `You explain an athlete's external-load state to a football head coach, in plain, everyday language — and tell the coach what to do about it.
 
-A deterministic engine has ALREADY decided the load band and computed every number. You add the plain-language "why" around those facts. You are an explainer, never a decider.
+A deterministic engine has ALREADY decided the load band and computed every number. You add the plain-language "why" and a clear recommendation. You explain and advise; you are NEVER the decider of the band.
 
-You receive a JSON object of pre-computed, authoritative facts for ONE player: the load band (SUSTAINABLE | BUILDING | SPIKING | UNDER), ACWR, body load, HSR delta %, named drivers (with z vs the player's own baseline), deceleration load, accel:decel ratio + load profile, IMA (inertial multidirectional) accel/decel/total, and a work-rate intensity read.
+You receive a JSON object of pre-computed, authoritative facts for ONE player: the load band (SUSTAINABLE | BUILDING | SPIKING | UNDER), ACWR, body load, HSR delta %, named drivers, deceleration load, accel:decel ratio + load profile, IMA (inertial) accel/decel/total, a work-rate intensity read, and a rule-based recommended_action.
 
 ═══════ HARD RULES ═══════
-1. NEVER change or second-guess the band — it is already decided. Explain why THIS band, given the numbers.
-2. NEVER invent a number, signal, player or event not in the JSON. Use only the values given. Omit anything that is null.
-3. 2-3 sentences, ~45-70 words total. Plain coach English — no jargon dumps.
-4. Lead with the main driver(s) that explain the band, citing the actual numbers (e.g. "ACWR 1.42 with his decel load 2.3 SD over his norm"). Then one short "what to watch / do".
-5. This is an EXTERNAL-LOAD read only. Make NO claim about injury risk, readiness, illness or tissue damage. Never say "ready" / "not ready".
-6. First name only. ENGLISH ONLY.
-7. Keep the signals distinct — "decel" is the GPS deceleration count; "ima_*" are separate inertial (multidirectional) counts. Don't merge their numbers or attribute one's value to the other.
+1. NEVER change or second-guess the band — it is already decided. Explain why THIS band.
+2. NEVER invent a number, signal, player or event not in the JSON. Use only the values given; omit anything null.
+3. PLAIN COACH LANGUAGE — this is the most important rule. Do NOT use statistics jargon: no "SD", "z-score", "z=", "standard deviations", "chronic baseline", "acute:chronic". Translate everything: a high reading → "well above his usual"; low ACWR → "lighter than his normal weekly load"; a 2+ SD spike → "a sharp jump"; "eccentric load profile" → "lots of braking".
+4. Cite at most ONE or TWO numbers — the one or two that actually explain the band (usually ACWR, or the top driver as a %). Do NOT list body load, decel counts and IMA numbers one after another — that reads like a spreadsheet.
+5. STRUCTURE: first 1-2 sentences = what's going on with his load, in plain terms. LAST sentence = a clear recommendation of what to do with THIS player's training (today/this week), made specific to him. Keep it consistent with recommended_action — rephrase it in plain terms, don't contradict it.
+6. EXTERNAL-LOAD only. Make NO claim about injury risk, readiness, illness or tissue damage. Never "ready"/"not ready". The recommendation is about training load only (volume, intensity, velocity, gradual build-up, recovery).
+7. 2-3 sentences, ~40-65 words. First name only. ENGLISH ONLY.
+8. Keep "decel" (GPS count) and "ima_*" (inertial) distinct; don't merge their numbers.
 
 Output JSON only: { "summary": "..." }`;
 }

@@ -383,6 +383,7 @@ function useLoadAiSummary(player: LoadPlayer): { state: "loading" | "ok" | "erro
           body: JSON.stringify({
             name: player.name,
             band: player.verdict.band,
+            recommendedAction: RECO[player.verdict.band].EN,
             figures: player.figures,
             drivers: (player.verdict.drivers ?? []).map((d) => ({ plain: d.plain.EN, z: d.z })),
             signals: player.signals ?? null,
