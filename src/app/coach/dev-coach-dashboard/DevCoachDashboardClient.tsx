@@ -1456,6 +1456,10 @@ export default function CoachPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
+  // Set to an ISO date when the readiness board is showing a CARRIED-FORWARD
+  // day (no check-ins logged yet today) rather than today's own check-ins.
+  // Null = showing today. Drives an honest "most recent check-in" provenance note.
+  const [readinessAsOf, setReadinessAsOf] = useState<string | null>(null);
 
   const [filter, setFilter] = useState<Filter>("all");
   const [teamFilter, setTeamFilter] = useState<string>("all");
@@ -3410,23 +3414,59 @@ export default function CoachPage() {
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      let q = supabase
-        .from("v_coach_readiness_today_v8")
-        .select("*", { count: "exact" })
-        .eq("entry_date", entryDate)
-        .order("total_score", { ascending: true })
-        .order("full_name", { ascending: true })
-        .range(from, to);
-
       // Always filter by team — use coachTeamId (UUID) via team_id column
       const effectiveTeamId = teamIdOverride ?? coachTeamId;
-      if (effectiveTeamId) q = q.eq("team_id", effectiveTeamId);
-      else if (teamFilter && teamFilter !== "all") q = q.eq("team", teamFilter);
-      if (filter !== "all") q = q.eq("final_color", filter);
-      if (search.trim().length > 0) q = q.ilike("full_name", `%${search.trim()}%`);
 
-      const { data, error, count } = await q;
-      console.log("[loadToday] readiness query done, rows=", data?.length ?? 0, "error=", error?.message ?? "none");
+      // The readiness board reads one day of the per-player view. Built as a
+      // reusable builder so we can re-run it for a carried-forward date below.
+      const buildReadinessQuery = (dateStr: string) => {
+        let q = supabase
+          .from("v_coach_readiness_today_v8")
+          .select("*", { count: "exact" })
+          .eq("entry_date", dateStr)
+          .order("total_score", { ascending: true })
+          .order("full_name", { ascending: true })
+          .range(from, to);
+        if (effectiveTeamId) q = q.eq("team_id", effectiveTeamId);
+        else if (teamFilter && teamFilter !== "all") q = q.eq("team", teamFilter);
+        if (filter !== "all") q = q.eq("final_color", filter);
+        if (search.trim().length > 0) q = q.ilike("full_name", `%${search.trim()}%`);
+        return q;
+      };
+
+      let readinessDate = entryDate;
+      let { data, error, count } = await buildReadinessQuery(readinessDate);
+
+      // Carry-forward: a check-in team whose players haven't logged a check-in
+      // YET today (early morning, or a demo fixture dated to yesterday) would
+      // otherwise show a blank readiness board — and fall through to the
+      // GPS-only load cards. Instead, fall back to the most recent day that has
+      // rows and show it with an honest "as of <date>" note. A GPS-only team has
+      // no readiness rows at all, so the latest-date lookup finds nothing and
+      // the load-card view stands untouched. Only when the board is unfiltered
+      // (a filtered-to-empty result must not spuriously carry forward).
+      if (!error && (!data || data.length === 0) && filter === "all" && search.trim().length === 0) {
+        let latestQ = supabase
+          .from("v_coach_readiness_today_v8")
+          .select("entry_date")
+          .lte("entry_date", entryDate)
+          .order("entry_date", { ascending: false })
+          .limit(1);
+        if (effectiveTeamId) latestQ = latestQ.eq("team_id", effectiveTeamId);
+        else if (teamFilter && teamFilter !== "all") latestQ = latestQ.eq("team", teamFilter);
+        const { data: latestRows } = await latestQ;
+        const latestDate = (latestRows?.[0] as { entry_date?: string } | undefined)?.entry_date
+          ? String((latestRows![0] as { entry_date?: string }).entry_date).slice(0, 10)
+          : null;
+        if (latestDate && latestDate !== entryDate) {
+          readinessDate = latestDate;
+          ({ data, error, count } = await buildReadinessQuery(readinessDate));
+        }
+      }
+      // Drives the "showing the most recent check-in" note above the board.
+      setReadinessAsOf(readinessDate !== entryDate ? readinessDate : null);
+
+      console.log("[loadToday] readiness query done, rows=", data?.length ?? 0, "date=", readinessDate, "error=", error?.message ?? "none");
       if (error) {
         setError(error.message);
         setRows([]);
@@ -9262,6 +9302,17 @@ export default function CoachPage() {
               readiness one (the readiness version is hidden below for these
               teams, since there is no check-in to drive it). */}
           {showLoadCards && <GpsOnlyLoadSummary data={gpsLoadVerdict} lang={lang === "IS" ? "IS" : "EN"} />}
+
+          {/* Provenance note — the board is showing the most recent check-in
+              day (carried forward), because no check-ins have been logged yet
+              today. Honest about WHAT the data is, per the explainability rule. */}
+          {rows.length > 0 && !gpsOnly && readinessAsOf && (
+            <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              {lang === "IS"
+                ? `Sýni nýjustu skráninguna (${readinessAsOf.slice(5)}) — engin check-in skráð í dag enn. Tölurnar uppfærast um leið og leikmenn svara í morgun.`
+                : `Showing the most recent check-in (${readinessAsOf.slice(5)}) — none logged yet today. Figures refresh as players check in this morning.`}
+            </div>
+          )}
 
           {/* Decision Summary — per-player today (readiness; full-suite teams) */}
           {rows.length > 0 && !gpsOnly && (
