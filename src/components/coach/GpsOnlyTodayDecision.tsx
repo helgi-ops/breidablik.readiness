@@ -344,33 +344,25 @@ export function GpsOnlyLoadSummary({ data, lang }: { data: LoadVerdictResponse |
                 {driverLine}
               </div>
 
+              {/* Signal chips — quick flags only (incl. an "unfamiliar movement"
+                  indicator when the player is drifting from his own norm). The full
+                  Unfamiliar-Load story lives in the Inspect detail, not on the card. */}
               {(() => {
                 const chips = signalChips(p, lang);
-                return chips.length ? (
+                const uf = ufMap.get(p.player_id);
+                const ufChip = uf
+                  ? (uf.spike
+                      ? { label: L(lang, "⚡ Unfamiliar spike", "⚡ Óvanalegt frávik"), bg: "#f7e7e2", fg: "#a83e28" }
+                      : { label: `⚡ ${driftWord(uf.driftType, lang)}`, bg: "#ede9fe", fg: "#6d28d9" })
+                  : null;
+                const all = ufChip ? [ufChip, ...chips] : chips;
+                return all.length ? (
                   <div className="mt-2.5 flex flex-wrap gap-1.5">
-                    {chips.map((c, i) => (
+                    {all.map((c, i) => (
                       <span key={i} className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: c.bg, color: c.fg }}>{c.label}</span>
                     ))}
                   </div>
                 ) : null;
-              })()}
-
-              {/* Unfamiliar Load — the plain-language "moving differently / doing
-                  more than usual" story for THIS player, from the movement-signature
-                  engine. Self-hides unless he's drifting from his own norm. */}
-              {(() => {
-                const uf = ufMap.get(p.player_id);
-                if (!uf || !uf.headline) return null;
-                return (
-                  <div className="mt-2.5 rounded-lg border border-violet-200 bg-violet-50/70 px-3 py-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {uf.spike ? <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">⚡ {L(lang, "spike", "frávik")}</span> : null}
-                      <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-800">{driftWord(uf.driftType, lang)}</span>
-                      <span className="text-[9.5px] text-slate-400">{L(lang, `based on ${uf.baselineDays} training days`, `byggt á ${uf.baselineDays} æfingadögum`)}{uf.calibrating ? L(lang, " · still learning his normal", " · enn að læra hans eðlilega") : ""}</span>
-                    </div>
-                    <p className="mt-1 text-[12.5px] leading-snug text-[#2a2e33]">{uf.headline[lang === "IS" ? "IS" : "EN"]}</p>
-                  </div>
-                );
               })()}
 
               <div className="mt-2.5 flex gap-4 border-t border-black/5 pt-2.5">
@@ -402,7 +394,7 @@ export function GpsOnlyLoadSummary({ data, lang }: { data: LoadVerdictResponse |
         })}
       </div>
 
-      {open ? <GpsOnlyLoadDetailModal player={open} lang={lang} onClose={() => setOpenId(null)} /> : null}
+      {open ? <GpsOnlyLoadDetailModal player={open} uf={ufMap.get(open.player_id) ?? null} lang={lang} onClose={() => setOpenId(null)} /> : null}
     </section>
   );
 }
@@ -502,7 +494,7 @@ function useLoadAiSummary(player: LoadPlayer): { state: "loading" | "ok" | "erro
   return res;
 }
 
-export function GpsOnlyLoadDetailModal({ player, lang, onClose }: { player: LoadPlayer; lang: Lang; onClose: () => void }) {
+export function GpsOnlyLoadDetailModal({ player, uf, lang, onClose }: { player: LoadPlayer; uf?: UnfamiliarItem | null; lang: Lang; onClose: () => void }) {
   const ai = useLoadAiSummary(player);
   const [showDetails, setShowDetails] = useState(false);
   const band = player.verdict.band;
@@ -559,6 +551,19 @@ export function GpsOnlyLoadDetailModal({ player, lang, onClose }: { player: Load
           )}
           <div className="mt-1.5 text-[10px] text-violet-400">{L(lang, "AI-written · the rule engine set the band, not the AI", "AI-skrifað · reglukerfið setti bandið, ekki gervigreindin")}</div>
         </div>
+
+        {/* Unfamiliar Load — the movement-signature "moving differently / doing
+            more than usual" story, shown here on open (not on the card face). */}
+        {uf && uf.headline ? (
+          <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/70 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {uf.spike ? <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">⚡ {L(lang, "spike", "frávik")}</span> : null}
+              <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-800">{driftWord(uf.driftType, lang)}</span>
+              <span className="text-[9.5px] text-slate-400">{L(lang, `based on ${uf.baselineDays} training days`, `byggt á ${uf.baselineDays} æfingadögum`)}{uf.calibrating ? L(lang, " · still learning his normal", " · enn að læra hans eðlilega") : ""}</span>
+            </div>
+            <p className="mt-1 text-[13px] leading-snug text-[#2a2e33]">{uf.headline[lang === "IS" ? "IS" : "EN"]}</p>
+          </div>
+        ) : null}
 
         {/* L1 — headline figures + named drivers */}
         <div className="mt-3 flex gap-5">

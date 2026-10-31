@@ -1172,17 +1172,28 @@ const EstimatedMarker: FC<{ row: DecisionSummaryRow; lang?: Lang; size?: "sm" | 
   );
 };
 
+// Per-player Unfamiliar-Load drift (movement-signature engine, /api/coach/
+// unfamiliar-load). Shown as a small indicator on the card face and the full
+// plain-language story inside the detail modal (coach feedback: not inline).
+type UnfamiliarItem = { player_id: string; driftType: string; spike?: boolean; baselineDays: number; calibrating?: boolean; headline: { EN: string; IS: string } | null };
+const ufDriftWord = (t: string, lang: Lang) =>
+  lang === "IS"
+    ? (t === "shape" ? "hreyfir sig öðruvísi" : t === "mixed" ? "meira + öðruvísi" : "gerir meira en venjulega")
+    : (t === "shape" ? "moving differently" : t === "mixed" ? "more + differently" : "doing more than usual");
+
 const PlayerModal: FC<{
   row: DecisionSummaryRow;
   onClose: () => void;
   lang?: Lang;
+  /** Unfamiliar-Load drift for this player — the full story shown on open. */
+  uf?: UnfamiliarItem | null;
   /** Team-level load pipeline override — see DecisionSummaryCard prop. */
   trainingMode?: "auto" | "indoor" | "outdoor";
   /** Foster Monotony & Strain (per player, last 7 days). Surfaces the
    *  Lite-tier overtraining-risk signal directly in this modal so coaches
    *  see it at the point of decision, not on a separate page. */
   foster?: FosterMetrics | null;
-}> = ({ row, onClose, lang = "EN", trainingMode = "auto", foster = null }) => {
+}> = ({ row, onClose, lang = "EN", trainingMode = "auto", foster = null, uf = null }) => {
   const displayAction = resolveDisplayAction(row);
   const cfg = STATE_CONFIG[displayAction ?? ""] ?? UNKNOWN_STATE;
   const verdict = getIcelandicVerdict(displayAction, row._injury_status, row._injury_body_part, lang);
@@ -1302,6 +1313,20 @@ const PlayerModal: FC<{
               </svg>
             </button>
           </div>
+
+          {/* Unfamiliar Load — the movement-signature "moving differently / doing
+              more than usual" story. Shown here on open, with only a small
+              indicator on the card face (coach feedback 2026-10-31). */}
+          {uf && uf.headline ? (
+            <div className="rounded-xl border border-violet-200 bg-violet-50/70 px-4 py-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {uf.spike ? <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">⚡ {lang === "IS" ? "frávik" : "spike"}</span> : null}
+                <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800">{ufDriftWord(uf.driftType, lang)}</span>
+                <span className="text-[11px] text-slate-400">{lang === "IS" ? `byggt á ${uf.baselineDays} æfingadögum` : `based on ${uf.baselineDays} training days`}{uf.calibrating ? (lang === "IS" ? " · enn að læra hans eðlilega" : " · still learning his normal") : ""}</span>
+              </div>
+              <p className="mt-1.5 text-sm leading-snug text-slate-800">{uf.headline[lang === "IS" ? "IS" : "EN"]}</p>
+            </div>
+          ) : null}
 
           {/* Override warning — shown when coach set FULL but STEN signals otherwise */}
           {(() => {
@@ -2520,7 +2545,7 @@ const ReadinessLoadDetail: FC<{
 // Red/Yellow: full detail — coach needs all info to make a decision
 // Green: compact — just a quick confirmation, no noise
 
-const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang }> = ({ row, onClick, lang = "EN" }) => {
+const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang; unfamiliar?: UnfamiliarItem | null }> = ({ row, onClick, lang = "EN", unfamiliar = null }) => {
   const displayAction = resolveDisplayAction(row);
   const cfg = STATE_CONFIG[displayAction ?? ""] ?? UNKNOWN_STATE;
   const verdict = getIcelandicVerdict(displayAction, row._injury_status, row._injury_body_part, lang);
@@ -2573,6 +2598,16 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
               {row.full_name}
             </span>
             <EstimatedMarker row={row} lang={lang} />
+            {/* Unfamiliar-Load indicator — the coach sees there's a spike /
+                movement drift; the full text is in the detail (on open). */}
+            {unfamiliar ? (
+              <span
+                className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${unfamiliar.spike ? "bg-rose-100 text-rose-700" : "bg-violet-100 text-violet-800"}`}
+                title={unfamiliar.headline ? (lang === "IS" ? unfamiliar.headline.IS : unfamiliar.headline.EN) : (lang === "IS" ? "Óvanalegt álag — opnaðu til að lesa" : "Unfamiliar load — open to read")}
+              >
+                ⚡ {unfamiliar.spike ? (lang === "IS" ? "frávik" : "spike") : (lang === "IS" ? "óvanalegt" : "unfamiliar")}
+              </span>
+            ) : null}
           </span>
           <div className="flex items-center gap-1.5 shrink-0">
             <span
@@ -2998,6 +3033,33 @@ const DecisionSummaryCard: FC<{
   const [fosterByPlayer, setFosterByPlayer] = useState<Map<string, FosterMetrics>>(new Map());
   const playerIds = useMemo(() => rows.map((r) => r.player_id), [rows]);
 
+  // Unfamiliar-Load drift per player (movement-signature engine) — one team-wide
+  // fetch on mount, indexed by player_id. Drives the small card-face indicator
+  // and the full story inside the detail modal. Non-blocking: on any failure the
+  // cards simply show no indicator.
+  const [ufByPlayer, setUfByPlayer] = useState<Map<string, UnfamiliarItem>>(new Map());
+  useEffect(() => {
+    if (playerIds.length === 0) return;
+    let alive = true;
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const { data: sess } = await sb.auth.getSession();
+        const token = sess?.session?.access_token;
+        if (!token) return;
+        const today = new Date().toISOString().slice(0, 10);
+        const r = await fetch(`/api/coach/unfamiliar-load?date=${today}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) return;
+        const json = (await r.json()) as { items?: UnfamiliarItem[] };
+        if (!alive) return;
+        const m = new Map<string, UnfamiliarItem>();
+        for (const it of json.items ?? []) m.set(it.player_id, it);
+        setUfByPlayer(m);
+      } catch { /* non-blocking */ }
+    })();
+    return () => { alive = false; };
+  }, [playerIds]);
+
   useEffect(() => {
     if (playerIds.length === 0) return;
     let alive = true;
@@ -3173,6 +3235,7 @@ const DecisionSummaryCard: FC<{
                 row={row}
                 onClick={() => (onPlayerClick ? onPlayerClick(row.player_id) : setSelectedRow(row))}
                 lang={lang}
+                unfamiliar={ufByPlayer.get(row.player_id) ?? null}
               />
             ))}
           </div>
@@ -3193,6 +3256,7 @@ const DecisionSummaryCard: FC<{
             lang={lang}
             trainingMode={trainingMode}
             foster={fosterByPlayer.get(modalRow.player_id) ?? null}
+            uf={ufByPlayer.get(modalRow.player_id) ?? null}
           />
         );
       })()}
