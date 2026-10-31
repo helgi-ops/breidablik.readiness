@@ -1496,7 +1496,7 @@ export default function CoachPage() {
   const [breakToday, setBreakToday] = useState<{ label: string | null; day: number; total: number } | null>(null);
   const [teamSport, setTeamSport] = useState<string | null>(null);
   const [teamType, setTeamType] = useState<string>("club_team");
-  const [gpsProvider, setGpsProvider] = useState<"catapult" | "statsport" | "wimu" | "titan" | "none">("catapult");
+  const [gpsProvider, setGpsProvider] = useState<"catapult" | "statsport" | "wimu" | "titan" | "kinexon" | "none">("catapult");
   // Catapult data tier — drives Lite-Mode gating (mirrors the sidebar filter in
   // CoachShell/CoachSidebar) for Pro-only in-app tabs and Lite feature gating.
   // Defaults to 'lite' (conservative — show fewer surfaces while detecting).
@@ -2814,7 +2814,7 @@ export default function CoachPage() {
         setTeamSport(String((teamData as any)?.sport ?? "").toLowerCase() || null);
         setTeamType(String((teamData as any)?.team_type ?? "club_team"));
         const gp = String((teamData as any)?.gps_provider ?? "catapult").toLowerCase();
-        if (gp === "statsport" || gp === "wimu" || gp === "titan" || gp === "none") setGpsProvider(gp);
+        if (gp === "statsport" || gp === "wimu" || gp === "titan" || gp === "kinexon" || gp === "none") setGpsProvider(gp);
         else setGpsProvider("catapult");
         const tm = String((teamData as any)?.training_mode_default ?? "auto").toLowerCase();
         if (tm === "indoor" || tm === "outdoor" || tm === "auto") setTrainingMode(tm);
@@ -4622,7 +4622,7 @@ export default function CoachPage() {
 
         const { data: loadData } = await supabase
           .from("player_external_load_daily")
-          .select("player_id, date, source, total_distance, high_speed_distance, sprint_distance, velocity_band5_total_distance, velocity_band6_total_distance, velocity_band6_total_efforts_gen2, high_metabolic_load_distance_m, accel_decel_efforts, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, cod_events, jumps, impacts, raw_payload_json, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, avg_heart_rate, max_heart_rate")
+          .select("player_id, date, source, total_distance, high_speed_distance, sprint_distance, velocity_band5_total_distance, velocity_band6_total_distance, velocity_band6_total_efforts_gen2, high_metabolic_load_distance_m, accel_decel_efforts, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, session_duration_minutes, max_vel, max_velocity, accelerations, decelerations, metabolic_power, metabolic_power_peak, ima_accel, ima_decel, ima_cod, cod_events, jumps, impacts, raw_payload_json, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, avg_heart_rate, max_heart_rate")
           .in("source", ["catapult", "manual", "titan", "kinexon"])
           .in("player_id", playerIds)
           .gte("date", startDate)
@@ -10119,6 +10119,12 @@ export default function CoachPage() {
         // Load Index + jumps + impacts + Movement-Profile durations, so the session table swaps the
         // empty Catapult columns for the Titan ones.
         const isTitan = gpsProvider === "titan";
+        // Kinexon indoor LPS (basketball): a full indoor variable set — Player Load,
+        // distance/speed (local positioning), accel/decel COUNTS (not Catapult IMA),
+        // CoD, jumps, metabolic power, HR. The accel/decel columns live in
+        // `accelerations`/`decelerations`, so the basketball table falls back to
+        // those, and a grouped "Full Kinexon metrics" panel below carries the rest.
+        const isKinexon = gpsProvider === "kinexon";
         // Core/Lite football clubs have no B2-3 split — show Sprint Efforts + HML
         // (signals they DO carry) in those two column slots instead.
         const isLiteGps = !isBasketball && catapultDataTier === "lite";
@@ -10237,8 +10243,10 @@ export default function CoachPage() {
                 .reduce((a, k) => a + (typeof row[k] === "number" ? (row[k] as number) : 0), 0);
               return s > 0 ? s : null;
             })(),
-            imaAccel:         getVal(row, ["ima_accel", "imaAccel"]),
-            imaDecel:         getVal(row, ["ima_decel", "imaDecel"]),
+            // Kinexon records accel/decel as raw counts (ima_accel/ima_decel are
+            // Catapult IMA and stay null) — fall back so the counts show for it.
+            imaAccel:         getVal(row, ["ima_accel", "imaAccel", "accelerations"]),
+            imaDecel:         getVal(row, ["ima_decel", "imaDecel", "decelerations"]),
             jumps:            getVal(row, ["jumps"]),
             maxVel:           getVal(row, ["max_vel", "maxVel", "max_velocity"]),
             // Titan indoor-IMU: impacts (foot-strikes/collisions) + Movement-Profile time-in-intensity.
@@ -10424,7 +10432,7 @@ export default function CoachPage() {
                       {isViewingToday ? `Æfing Dagsins · ${gpsDate}` : `Æfing · ${gpsDate}`}
                     </CardTitle>
                     <CardDescription className="mt-1 text-sm text-slate-500">
-                      {isTitan ? "Player Load · Titan (innidyra IMU)" : isBasketball ? "Player Load · Catapult" : "GPS gögn · Catapult"}
+                      {isTitan ? "Player Load · Titan (innidyra IMU)" : isKinexon ? "Kinexon · innidyra staðsetning (LPS)" : isBasketball ? "Player Load · Catapult" : "GPS gögn · Catapult"}
                     </CardDescription>
                   </div>
                   <div className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-600">
@@ -10449,8 +10457,8 @@ export default function CoachPage() {
                       ] : isBasketball ? [
                         { label: "Player Load",      value: fmtN(tAvgPlayerLoad, 1), unit: "avg" },
                         { label: "PL / min",         value: fmtN(tAvgPlPerMin,   2), unit: "avg" },
-                        { label: "IMA COD",          value: fmtN(tAvgImaCod,     0), unit: "avg" },
-                        { label: "IMA Accelerations",value: fmtN(tAvgImaAccel,   0), unit: "avg" },
+                        { label: isKinexon ? "Changes of Dir" : "IMA COD", value: fmtN(tAvgImaCod, 0), unit: "avg" },
+                        { label: isKinexon ? "Accelerations" : "IMA Accelerations", value: fmtN(tAvgImaAccel, 0), unit: "avg" },
                       ] : [
                         { label: lang === "EN" ? "Total Distance" : "Heildarvegalengd", value: fmtN(tAvgDist),    unit: "m avg" },
                         { label: lang === "EN" ? "High-speed Dist" : "Háhraðavegalengd", value: fmtN(tAvgHs),      unit: isLiteGps ? "m avg" : "m avg (VB5+VB6)" },
@@ -10486,9 +10494,9 @@ export default function CoachPage() {
                             </> : isBasketball ? <>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Player Load</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">PL/min</th>
-                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">IMA COD</th>
-                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">IMA Accels</th>
-                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">IMA Decels</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">{isKinexon ? "CoD" : "IMA COD"}</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">{isKinexon ? "Accels" : "IMA Accels"}</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">{isKinexon ? "Decels" : "IMA Decels"}</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Jumps</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-red-500 whitespace-nowrap">Avg HR</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-red-500 whitespace-nowrap">Max HR</th>
@@ -10578,6 +10586,117 @@ export default function CoachPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* ── Full Kinexon metrics (indoor LPS) ──
+                Kinexon captures a full indoor variable set; the snapshot table
+                above is the per-player daily view, this groups EVERY captured
+                metric into families with the 7d/28d/ACWR treatment (reusing the
+                same computeSnapshot the squad table uses). Descriptive only. */}
+            {isKinexon && gpsAllPlayers.length > 0 && (() => {
+              const pooled = gpsAllPlayers.flatMap((p) => p.history);
+              const todayRows = pooled.filter((r) => String(r.date ?? "").slice(0, 10) === gpsDate);
+              const squadToday = (aliases: string[]) => {
+                const vals = todayRows.map((r) => getVal(r, aliases)).filter((v): v is number => v != null);
+                return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+              };
+              const acwrTone = (v: number | null) =>
+                v == null ? "text-slate-400"
+                : v > 1.5 || v < 0.5 ? "text-rose-600"
+                : v > 1.3 || v < 0.8 ? "text-amber-600"
+                : "text-emerald-600";
+              type KMetric = { label: string; labelIS: string; aliases: string[]; digits: number; unit: string; acwr: boolean };
+              const FAMILIES: Array<{ title: string; titleIS: string; metrics: KMetric[] }> = [
+                { title: "Load", titleIS: "Álag", metrics: [
+                  { label: "Player Load", labelIS: "Player Load", aliases: ["total_player_load"], digits: 1, unit: "", acwr: true },
+                  { label: "Player Load / min", labelIS: "Player Load / mín", aliases: ["player_load_per_minute"], digits: 2, unit: "", acwr: false },
+                  { label: "Session duration", labelIS: "Lengd æfingar", aliases: ["session_duration_minutes"], digits: 0, unit: "min", acwr: false },
+                ]},
+                { title: "Movement · indoor positioning", titleIS: "Hreyfing · innistaðsetning", metrics: [
+                  { label: "Total distance", labelIS: "Heildarvegalengd", aliases: ["total_distance"], digits: 0, unit: "m", acwr: true },
+                  { label: "High-speed distance", labelIS: "Háhraðavegalengd", aliases: ["high_speed_distance"], digits: 0, unit: "m", acwr: true },
+                  { label: "Sprint distance", labelIS: "Sprettvegalengd", aliases: ["sprint_distance"], digits: 0, unit: "m", acwr: true },
+                  { label: "Max velocity", labelIS: "Hámarkshraði", aliases: ["max_vel", "max_velocity"], digits: 1, unit: "km/h", acwr: false },
+                ]},
+                { title: "Change of direction & agility", titleIS: "Stefnubreytingar", metrics: [
+                  { label: "Changes of direction", labelIS: "Stefnubreytingar", aliases: ["ima_cod", "cod_events"], digits: 0, unit: "#", acwr: true },
+                  { label: "Accelerations", labelIS: "Hröðun", aliases: ["accelerations"], digits: 0, unit: "#", acwr: true },
+                  { label: "Decelerations", labelIS: "Hægingar", aliases: ["decelerations"], digits: 0, unit: "#", acwr: true },
+                  { label: "High-effort accel (B2-3)", labelIS: "Kröftug hröðun (B2-3)", aliases: ["accel_b2_3_tot_effs_gen2"], digits: 0, unit: "#", acwr: true },
+                  { label: "High-effort decel (B2-3)", labelIS: "Kröftug hæging (B2-3)", aliases: ["decel_b2_3_tot_effs_gen2"], digits: 0, unit: "#", acwr: true },
+                ]},
+                { title: "Jumps & metabolic", titleIS: "Stökk & efnaskipti", metrics: [
+                  { label: "Jumps", labelIS: "Stökk", aliases: ["jumps"], digits: 0, unit: "#", acwr: true },
+                  { label: "Metabolic power", labelIS: "Efnaskiptaafl", aliases: ["metabolic_power"], digits: 1, unit: "W/kg", acwr: false },
+                  { label: "Peak metabolic power", labelIS: "Hámarks efnaskiptaafl", aliases: ["metabolic_power_peak"], digits: 1, unit: "W/kg", acwr: false },
+                  { label: "High-metabolic-load dist", labelIS: "Hátt efnaskiptaálag (vegal.)", aliases: ["high_metabolic_load_distance_m"], digits: 0, unit: "m", acwr: true },
+                ]},
+                { title: "Heart rate", titleIS: "Hjartsláttur", metrics: [
+                  { label: "Average HR", labelIS: "Meðal hjartsláttur", aliases: ["avg_heart_rate"], digits: 0, unit: "bpm", acwr: false },
+                  { label: "Max HR", labelIS: "Hámarks hjartsláttur", aliases: ["max_heart_rate"], digits: 0, unit: "bpm", acwr: false },
+                ]},
+              ];
+              return (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">
+                      {lang === "EN" ? "Full Kinexon metrics" : "Allir Kinexon mælikvarðar"}
+                    </CardTitle>
+                    <CardDescription className="mt-1 text-sm text-slate-500">
+                      {lang === "EN"
+                        ? "Everything Kinexon captures indoors — squad average today vs the 7- and 28-day baselines. ACWR is shown for accumulation metrics only."
+                        : "Allt sem Kinexon mælir innandyra — meðaltal sveitar í dag á móti 7- og 28-daga grunnlínum. ACWR aðeins fyrir uppsöfnunarmælikvarða."}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0 space-y-5">
+                    {FAMILIES.map((fam) => (
+                      <div key={fam.title}>
+                        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                          {lang === "EN" ? fam.title : fam.titleIS}
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm border-collapse">
+                            <thead>
+                              <tr className="border-b border-slate-200 text-[11px] uppercase tracking-wide text-slate-400">
+                                <th className="px-3 py-1.5 text-left font-semibold">{lang === "EN" ? "Metric" : "Mælikvarði"}</th>
+                                <th className="px-3 py-1.5 text-right font-semibold">{lang === "EN" ? "Today" : "Í dag"}</th>
+                                <th className="px-3 py-1.5 text-right font-semibold">7d</th>
+                                <th className="px-3 py-1.5 text-right font-semibold">28d</th>
+                                <th className="px-3 py-1.5 text-right font-semibold">ACWR</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {fam.metrics.map((m) => {
+                                const snap = computeSnapshot(pooled, m.aliases, m.digits);
+                                const today = squadToday(m.aliases);
+                                return (
+                                  <tr key={m.label} className="border-b border-slate-100">
+                                    <td className="px-3 py-1.5 text-slate-700">
+                                      {lang === "EN" ? m.label : m.labelIS}
+                                      {m.unit ? <span className="text-slate-400"> ({m.unit})</span> : null}
+                                    </td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums font-medium text-slate-900">{today == null ? "—" : today.toFixed(m.digits)}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{snap.a7}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{snap.c28}</td>
+                                    <td className={`px-3 py-1.5 text-right tabular-nums font-semibold ${m.acwr ? acwrTone(snap.acwr) : "text-slate-300"}`}>
+                                      {m.acwr ? (snap.acwr == null ? "—" : snap.acwr.toFixed(2)) : "—"}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+                    <p className="text-[11px] text-slate-400">
+                      {lang === "EN"
+                        ? "Descriptive external load (Kinexon indoor LPS) — never a readiness verdict. ACWR = 7-day ÷ 28-day squad mean (Gabbett 2016)."
+                        : "Lýsandi ytra álag (Kinexon innistaðsetning) — aldrei readiness-dómur. ACWR = 7-daga ÷ 28-daga meðaltal sveitar (Gabbett 2016)."}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             {/* GpsLoadIntelligence + Squad Load + MLI + MLS moved out:
                 - Load Intelligence + MLI + MLS → /coach/load-intelligence
