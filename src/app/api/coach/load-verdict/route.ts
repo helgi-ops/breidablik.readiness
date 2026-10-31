@@ -45,7 +45,7 @@ function addDays(iso: string, n: number): string {
   const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10);
 }
 
-type Row = { date: string; pl: number | null; decel: number | null; hsr: number | null; dist: number | null; metabolic: number | null; plPerMin: number | null; hml: number | null };
+type Row = { date: string; pl: number | null; decel: number | null; accel: number | null; hsr: number | null; dist: number | null; metabolic: number | null; plPerMin: number | null; hml: number | null; imaAccel: number | null; imaDecel: number | null; imaTotal: number | null };
 
 /** Recent-peak (last 7d) vs 28-day baseline z. null when baseline too thin. */
 function spikeZ(rows: Row[], pick: (r: Row) => number | null, date: string): { value: number | null; z: number | null } {
@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
   const [playersRes, loadRes, caps] = await Promise.all([
     supabase.from("players").select("id, full_name").eq("team_id", teamId).eq("is_active", true),
     supabase.from("player_external_load_daily")
-      .select("player_id, date, total_player_load, decelerations, high_speed_distance, total_distance, metabolic_power, player_load_per_minute, high_metabolic_load_distance_m")
+      .select("player_id, date, total_player_load, decelerations, accelerations, high_speed_distance, total_distance, metabolic_power, player_load_per_minute, high_metabolic_load_distance_m, ima_accel, ima_decel, ima_total")
       .eq("source", "catapult").eq("team_id", teamId).gte("date", from).lte("date", date).limit(5000),
     // Capability-driven confidence: which of the 5 interpretation dimensions this
     // club's signals actually support over the window (data, not tier). Same engine
@@ -97,14 +97,23 @@ export async function GET(req: NextRequest) {
   for (const r of (loadRes.data ?? []) as Array<Record<string, unknown>>) {
     const id = String(r.player_id);
     if (!byPlayer.has(id)) byPlayer.set(id, []);
-    byPlayer.get(id)!.push({ date: String(r.date), pl: num(r.total_player_load), decel: num(r.decelerations), hsr: num(r.high_speed_distance), dist: num(r.total_distance), metabolic: num(r.metabolic_power), plPerMin: num(r.player_load_per_minute), hml: num(r.high_metabolic_load_distance_m) });
+    byPlayer.get(id)!.push({ date: String(r.date), pl: num(r.total_player_load), decel: num(r.decelerations), accel: num(r.accelerations), hsr: num(r.high_speed_distance), dist: num(r.total_distance), metabolic: num(r.metabolic_power), plPerMin: num(r.player_load_per_minute), hml: num(r.high_metabolic_load_distance_m), imaAccel: num(r.ima_accel), imaDecel: num(r.ima_decel), imaTotal: num(r.ima_total) });
   }
 
   // `figures` surfaces the already-computed per-player numbers the GPS-only Today
   // Load Summary cards render (body load · ACWR · HSR). No new signal — just the
   // values this loop already derives, exposed so the card needn't recompute them.
   type PlayerFigures = { acwr: number | null; bodyLoad: number | null; hsr: number | null; hsrDeltaPct: number | null };
-  const perPlayer: Array<{ player_id: string; name: string; verdict: LoadVerdict; intensity: IntensityVerdict; figures: PlayerFigures }> = [];
+  // Decel + IMA intelligence readouts for the detail view (which movement
+  // variables are elevated/spiking), recent-peak vs 28d baseline — same spikeZ
+  // the verdict uses, so the drill-down agrees with the band.
+  type SZ = { value: number | null; z: number | null };
+  type PlayerSignals = {
+    decel: SZ; accel: SZ; adRatio: number | null;
+    loadProfile: "eccentric" | "concentric" | "balanced" | null;
+    ima: { accel: SZ; decel: SZ; total: SZ };
+  };
+  const perPlayer: Array<{ player_id: string; name: string; verdict: LoadVerdict; intensity: IntensityVerdict; figures: PlayerFigures; signals: PlayerSignals }> = [];
   for (const p of players) {
     const rows = (byPlayer.get(p.id) ?? []).sort((a, b) => a.date.localeCompare(b.date));
     if (!rows.length) continue;
@@ -155,7 +164,30 @@ export async function GET(req: NextRequest) {
       hsrDeltaPct,
     };
 
-    perPlayer.push({ player_id: p.id, name: (p.full_name ?? "—").trim(), verdict: computeLoadVerdict(input), intensity, figures });
+    // Decel + IMA intelligence — recent-peak vs 28d baseline (same spikeZ the
+    // verdict uses). Lets the detail view show which movement variables are
+    // elevated/spiking; accel:decel ratio → load profile (braking vs push).
+    const decelSig = spikeZ(rows, (r) => r.decel, date);
+    const accelSig = spikeZ(rows, (r) => r.accel, date);
+    const adRatio = recentRow?.accel != null && recentRow?.decel != null && recentRow.decel > 0
+      ? Math.round((recentRow.accel / recentRow.decel) * 100) / 100
+      : null;
+    const loadProfile: PlayerSignals["loadProfile"] = adRatio == null
+      ? null
+      : adRatio < 0.9 ? "eccentric" : adRatio > 1.1 ? "concentric" : "balanced";
+    const signals: PlayerSignals = {
+      decel: decelSig,
+      accel: accelSig,
+      adRatio,
+      loadProfile,
+      ima: {
+        accel: spikeZ(rows, (r) => r.imaAccel, date),
+        decel: spikeZ(rows, (r) => r.imaDecel, date),
+        total: spikeZ(rows, (r) => r.imaTotal, date),
+      },
+    };
+
+    perPlayer.push({ player_id: p.id, name: (p.full_name ?? "—").trim(), verdict: computeLoadVerdict(input), intensity, figures, signals });
   }
 
   // ── Team verdict: squad-level band + named per-player exceptions ──

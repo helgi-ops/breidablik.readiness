@@ -37,6 +37,12 @@ type LangText = { EN: string; IS: string };
 
 type LoadDriver = { signal: string; plain: LangText; z?: number; weight: number };
 type LoadComponent = { key: string; label: LangText; value: number | null; band: "LOW" | "NORMAL" | "ELEVATED" | "HIGH"; tooltip: LangText };
+type SZ = { value: number | null; z: number | null };
+type PlayerSignals = {
+  decel: SZ; accel: SZ; adRatio: number | null;
+  loadProfile: "eccentric" | "concentric" | "balanced" | null;
+  ima: { accel: SZ; decel: SZ; total: SZ };
+};
 // Mirror of IntensityVerdict (src/lib/micropulse/intensityVerdict) — the fields the detail view reads.
 type IntensityLite = {
   available: boolean;
@@ -77,6 +83,7 @@ type LoadPlayer = {
     confidence?: { level: "high" | "moderate" | "low"; coverage: number; baselineDays: number };
   };
   intensity?: IntensityLite;
+  signals?: PlayerSignals;
   figures: { acwr: number | null; bodyLoad: number | null; hsr: number | null; hsrDeltaPct: number | null };
 };
 
@@ -321,6 +328,36 @@ const COMPONENT_BAND_LABEL: Record<LoadComponent["band"], LangText> = {
   HIGH: { EN: "High", IS: "Hátt" },
 };
 
+const SPIKE_SD = 2;
+function zTone(z: number | null): { bg: string; fg: string; label: LangText } {
+  if (z != null && z >= SPIKE_SD) return { bg: "#f7e7e2", fg: "#a83e28", label: { EN: "spiking", IS: "stökk" } };
+  if (z != null && z >= 1) return { bg: "#fbefd7", fg: "#8a5a12", label: { EN: "elevated", IS: "hækkað" } };
+  return { bg: "#f1f0ea", fg: "#55585c", label: { EN: "normal", IS: "venjulegt" } };
+}
+function profileLabel(p: PlayerSignals["loadProfile"], lang: Lang): string {
+  if (p === "eccentric") return L(lang, "braking-dominant", "hemlunar-drifið");
+  if (p === "concentric") return L(lang, "push-dominant", "hröðunar-drifið");
+  if (p === "balanced") return L(lang, "balanced", "í jafnvægi");
+  return "—";
+}
+function SignalLine({ label, sz, lang }: { label: string; sz: SZ; lang: Lang }) {
+  const tone = zTone(sz.z);
+  return (
+    <div className="flex items-center justify-between gap-3 text-[12.5px]">
+      <span className="text-slate-600">{label}</span>
+      <span className="flex items-center gap-2">
+        <span className="font-semibold tabular-nums text-[#14181c]">{sz.value != null ? Math.round(sz.value).toLocaleString("is-IS") : "—"}</span>
+        {sz.z != null ? (
+          <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: tone.bg, color: tone.fg }}>
+            z {sz.z > 0 ? "+" : ""}{sz.z} · {tone.label[lang === "IS" ? "IS" : "EN"]}
+          </span>
+        ) : null}
+      </span>
+    </div>
+  );
+}
+const anySignal = (...xs: SZ[]) => xs.some((s) => s.value != null);
+
 export function GpsOnlyLoadDetailModal({ player, lang, onClose }: { player: LoadPlayer; lang: Lang; onClose: () => void }) {
   const [showDetails, setShowDetails] = useState(false);
   const band = player.verdict.band;
@@ -413,6 +450,42 @@ export function GpsOnlyLoadDetailModal({ player, lang, onClose }: { player: Load
                     </div>
                   );
                 })}
+              </div>
+            ) : null}
+
+            {/* Decel intelligence — braking burden + accel:decel balance (McBurnie 2022). */}
+            {player.signals && anySignal(player.signals.decel, player.signals.accel) ? (
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{L(lang, "Decel intelligence", "Hemlunar-greining")}</div>
+                <div className="mt-1.5 space-y-1.5">
+                  <SignalLine label={L(lang, "Decelerations", "Hemlanir")} sz={player.signals.decel} lang={lang} />
+                  {player.signals.adRatio != null ? (
+                    <div className="flex items-center justify-between gap-3 text-[12.5px]">
+                      <span className="text-slate-600">{L(lang, "Accel : decel", "Hröðun : hemlun")}</span>
+                      <span className="font-semibold tabular-nums text-[#14181c]">{player.signals.adRatio.toFixed(2)} · {profileLabel(player.signals.loadProfile, lang)}</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {/* IMA intelligence — inertial multidirectional efforts GPS speed can't see. */}
+            {player.signals && anySignal(player.signals.ima.accel, player.signals.ima.decel, player.signals.ima.total) ? (
+              <div>
+                <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  {L(lang, "IMA intelligence", "IMA-greining")}
+                  <span
+                    className="cursor-help text-slate-400"
+                    title={L(lang,
+                      "Inertial movement analysis — multidirectional accel/decel/CoD efforts the GPS speed trace can't see.",
+                      "Inertial movement analysis — fjölstefnu hröðun/hemlun/stefnubreytingar sem GPS-hraðinn sér ekki.")}
+                  >ⓘ</span>
+                </div>
+                <div className="mt-1.5 space-y-1.5">
+                  <SignalLine label={L(lang, "IMA accel", "IMA hröðun")} sz={player.signals.ima.accel} lang={lang} />
+                  <SignalLine label={L(lang, "IMA decel", "IMA hemlun")} sz={player.signals.ima.decel} lang={lang} />
+                  <SignalLine label={L(lang, "IMA total", "IMA samtals")} sz={player.signals.ima.total} lang={lang} />
+                </div>
               </div>
             ) : null}
 
