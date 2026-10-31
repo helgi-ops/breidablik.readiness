@@ -11,10 +11,14 @@
  * Spec: docs/load-intelligence-explainability.md (step 1).
  *
  * Band logic (mirrors playerLoadAcwr cut-points so the page agrees with the
- * rest of the system: <0.8 UNDERTRAIN · 0.8–1.3 SAFE · 1.3–1.5 WATCH · >1.5 RISK):
- *   SPIKING     ACWR > 1.5, OR a ≥2.0 SD spike in a load driver (movementSignature
- *               peakZ, braking, or HSR) — "a sharp jump above the player's norm".
- *   BUILDING    ACWR 1.3–1.5 (WATCH), or rising monotony/strain.
+ * rest of the system: <0.8 UNDERTRAIN · 0.8–1.3 SAFE · 1.3–1.5 WATCH · >1.5 RISK).
+ * ACWR anchors; the noisier secondary ≥2 SD spikes (movementSignature peakZ,
+ * braking/decel, HSR) must CORROBORATE before they turn a player red — one lone
+ * spike is a watch signal, not an alarm, and never reds an under-loaded player:
+ *   SPIKING     ACWR > 1.5, OR ≥2 secondary spikes agree, OR a building ACWR
+ *               (≥1.3 / WATCH) + ≥1 spike. Never when ACWR says under-loaded.
+ *   BUILDING    ACWR 1.3–1.5 (WATCH), rising monotony/strain, OR a single
+ *               secondary spike (unless the player is under-loaded).
  *   UNDER       ACWR < 0.8 (undertraining).
  *   SUSTAINABLE otherwise.
  *
@@ -87,16 +91,41 @@ const present = (s: Signal | null | undefined): boolean => !!s && (s.value != nu
 
 function deriveBand(input: LoadVerdictInput): { band: LoadVerdictBand; trigger: string | null } {
   const ratio = input.acwr?.ratio ?? null;
-  // ── SPIKING ── ACWR risk, or a sharp ≥2 SD spike in a load driver.
-  if (ratio != null && ratio > ACWR_RISK) return { band: "SPIKING", trigger: "acwr_spike" };
-  if (input.movementSpike?.spike) return { band: "SPIKING", trigger: "movement_spike" };
-  if (zOf(input.braking) >= SPIKE_Z) return { band: "SPIKING", trigger: "braking" };
-  if (zOf(input.hsr) >= SPIKE_Z) return { band: "SPIKING", trigger: "hsr" };
-  // ── BUILDING ── elevated ACWR trajectory or rising monotony/strain.
-  if (input.acwr?.band === "WATCH" || (ratio != null && ratio >= 1.3 && ratio <= ACWR_RISK)) return { band: "BUILDING", trigger: "acwr_watch" };
+  const acwrBand = input.acwr?.band ?? null;
+
+  // ACWR is the anchor (validated acute:chronic). The secondary ≥2 SD spikes —
+  // HSR, braking (decel), unfamiliar-movement — are noisier (GPS counts /
+  // thin-baseline % swings), so a SINGLE one is a watch signal, not an alarm:
+  // red from secondaries needs corroboration (≥2 agreeing, or an already-
+  // building ACWR + 1), and an under-loaded player never turns red off one
+  // noisy signal. ACWR > 1.5 stays red on its own.
+  const acwrRisk = ratio != null && ratio > ACWR_RISK;                                   // > 1.5
+  const acwrBuilding = acwrBand === "WATCH" || (ratio != null && ratio >= 1.3 && ratio <= ACWR_RISK);
+  const acwrUnder = acwrBand === "UNDERTRAIN" || (ratio != null && ratio < 0.8);
+
+  // Independent secondary spikes that corroborate one another.
+  const spikes: string[] = [];
+  if (input.movementSpike?.spike) spikes.push("movement_spike");
+  if (zOf(input.braking) >= SPIKE_Z) spikes.push("braking");
+  if (zOf(input.hsr) >= SPIKE_Z) spikes.push("hsr");
+  const nSpikes = spikes.length;
+
+  // ── SPIKING ──
+  if (acwrRisk) return { band: "SPIKING", trigger: "acwr_spike" };
+  // Corroborated: ≥2 secondary spikes agree, OR a building ACWR + ≥1 spike.
+  // Never for an under-loaded player (a lone burst ≠ an overloaded athlete).
+  if (!acwrUnder && (nSpikes >= 2 || (acwrBuilding && nSpikes >= 1))) {
+    return { band: "SPIKING", trigger: spikes[0] };
+  }
+
+  // ── BUILDING ── elevated ACWR trajectory, rising monotony, or a single
+  // secondary spike (watch, not alarm — unless the player is under-loaded).
+  if (acwrBuilding) return { band: "BUILDING", trigger: "acwr_watch" };
   if (input.monotony?.rising) return { band: "BUILDING", trigger: "monotony" };
+  if (!acwrUnder && nSpikes >= 1) return { band: "BUILDING", trigger: spikes[0] };
+
   // ── UNDER ── undertraining.
-  if (input.acwr?.band === "UNDERTRAIN" || (ratio != null && ratio < 0.8)) return { band: "UNDER", trigger: "acwr_under" };
+  if (acwrUnder) return { band: "UNDER", trigger: "acwr_under" };
   return { band: "SUSTAINABLE", trigger: null };
 }
 

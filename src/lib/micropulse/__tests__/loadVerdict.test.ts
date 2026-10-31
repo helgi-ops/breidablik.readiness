@@ -4,9 +4,11 @@
  * Run with:  npx vitest src/lib/micropulse/__tests__/loadVerdict.test.ts
  *
  * The headline sanity check is on Anton Logi around 16 June 2026 — his real
- * signals (pulled from player_external_load_daily): ACWR is only 1.15 (SAFE),
- * so the verdict must read SPIKING via the BRAKING spike (16 Jun decel z = 3.1,
- * ≥ 2.0 SD), with braking + high-speed running (z = 1.8) named as drivers.
+ * signals (pulled from player_external_load_daily): ACWR is only 1.15 (SAFE)
+ * with a single decel spike (16 Jun decel z = 3.1, ≥ 2.0 SD). Under the
+ * corroboration rule (ACWR anchors; one lone secondary spike is a watch signal,
+ * not an alarm) this reads BUILDING — braking + high-speed running (z = 1.8)
+ * are still named as drivers so the coach sees exactly what rose.
  */
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
@@ -27,8 +29,8 @@ describe("loadVerdict — Anton sanity (~16 Jun 2026, real signals)", () => {
   };
   const v = computeLoadVerdict(anton);
 
-  it("reads SPIKING even though ACWR is in the SAFE band", () => {
-    expect(v.band).toBe("SPIKING");
+  it("reads BUILDING — a single decel spike on a SAFE ACWR is a watch signal, not red", () => {
+    expect(v.band).toBe("BUILDING");
   });
 
   it("names braking and HSR as drivers, braking first (highest z)", () => {
@@ -44,7 +46,7 @@ describe("loadVerdict — Anton sanity (~16 Jun 2026, real signals)", () => {
   });
 
   it("sentence is plain-language and mentions the drivers", () => {
-    expect(v.sentence.EN.toLowerCase()).toContain("spiking");
+    expect(v.sentence.EN.toLowerCase()).toContain("building");
     expect(v.sentence.EN.toLowerCase()).toContain("braking");
     expect(v.sentence.IS).toContain("Anton");
   });
@@ -88,6 +90,36 @@ describe("loadVerdict — band logic", () => {
   it("metabolic power alone never flips a band (guardrail)", () => {
     const v = computeLoadVerdict({ subject: { name: "X" }, acwr: { ratio: 1.0, band: "SAFE", daysObserved: 20 }, metabolic: { value: 14, z: 3.0 } });
     expect(v.band).toBe("SUSTAINABLE");
+  });
+});
+
+describe("loadVerdict — spikes must corroborate (ACWR anchors)", () => {
+  const safe = { ratio: 1.0, band: "SAFE" as const, daysObserved: 20 };
+
+  it("a SINGLE secondary spike on a SAFE ACWR → BUILDING, not SPIKING", () => {
+    const v = computeLoadVerdict({ subject: { name: "X" }, acwr: safe, braking: { value: 1, z: 2.6 }, hsr: { value: 1, z: 0.4 } });
+    expect(v.band).toBe("BUILDING");
+    expect(v.drivers[0].signal).toBe("braking");
+  });
+
+  it("TWO corroborating secondary spikes on a SAFE ACWR → SPIKING", () => {
+    const v = computeLoadVerdict({ subject: { name: "X" }, acwr: safe, braking: { value: 1, z: 2.6 }, hsr: { value: 1, z: 2.3 } });
+    expect(v.band).toBe("SPIKING");
+  });
+
+  it("a building ACWR (WATCH) + ONE spike escalates to SPIKING", () => {
+    const v = computeLoadVerdict({ subject: { name: "X" }, acwr: { ratio: 1.4, band: "WATCH", daysObserved: 20 }, hsr: { value: 1, z: 2.3 }, braking: { value: 1, z: 0.2 } });
+    expect(v.band).toBe("SPIKING");
+  });
+
+  it("a lone spike NEVER reds an under-loaded player — stays UNDER", () => {
+    const v = computeLoadVerdict({ subject: { name: "X" }, acwr: { ratio: 0.59, band: "UNDERTRAIN", daysObserved: 20 }, hsr: { value: 1, z: 3.1 }, braking: { value: 1, z: 0.1 } });
+    expect(v.band).toBe("UNDER");
+  });
+
+  it("movement spike + decel spike (two independent) → SPIKING", () => {
+    const v = computeLoadVerdict({ subject: { name: "X" }, acwr: safe, movementSpike: { peakZ: 2.4, spike: true }, braking: { value: 1, z: 2.2 }, hsr: { value: 1, z: 0.3 } });
+    expect(v.band).toBe("SPIKING");
   });
 });
 
