@@ -2736,6 +2736,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
               >
                 <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold ${band.chipBg} ${band.chipText}`}>
                   {lang === "IS" ? "Líðan" : "Wellness"}: {band.shortLabel}
+                  <span className="opacity-70 font-semibold">· {sten}/10</span>
                 </span>
               </div>
               {warn && (

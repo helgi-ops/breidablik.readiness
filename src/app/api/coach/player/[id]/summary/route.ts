@@ -25,7 +25,7 @@ import { isHighMatchMinutes } from "@/lib/micropulse/matchMinutes";
 
 const ANTHROPIC_API_URL  = "https://api.anthropic.com/v1/messages";
 const CLAUDE_MODEL       = "claude-haiku-4-5-20251001";
-const MAX_OUTPUT_TOKENS  = 350;
+const MAX_OUTPUT_TOKENS  = 500;
 
 
 async function getCoachTeam(req: NextRequest) {
@@ -702,8 +702,16 @@ ENGLISH ONLY. Do NOT output Icelandic.
 
 ═══════ HARD RULES — VIOLATING ANY OF THESE WILL CAUSE REJECTION ═══════
 
-LENGTH:
-- Each summary: exactly 3-4 sentences. NEVER more.
+LENGTH & SHAPE:
+- 4-6 sentences. Enough to actually explain the player — never a single terse line.
+- Open with the player's current state (the on-screen verdict, in plain words).
+- The middle sentences carry the "why": the signals that drove it and anything
+  the coach should watch.
+- The LAST sentence is ALWAYS a clear, concrete recommendation — what the coach
+  should do with THIS player today (training-wise), or, if injured, the next
+  rehab step. Make it specific to what the data above actually showed, and keep
+  it consistent with the on-screen verdict (never recommend full intensity when
+  the verdict is Recovery/Out).
 
 LANGUAGE:
 - Plain coach language. NO data jargon. NEVER use internal metric names:
@@ -973,15 +981,17 @@ RECOVERY FORECAST (Hader 2019) — when present:
   likely something else, not match load").
 - NEVER cite recovery_forecast values when recovery_forecast is null.
 
-When several extra signals fire together, mention 1-2 in sentence 2 — the most
-salient ones — not all. Quality > comprehensiveness.
+When several extra signals fire together, mention the 2-3 most salient ones
+across the middle sentences — the ones that actually change what the coach does
+— not every signal. Quality > comprehensiveness, but don't be so terse that the
+coach learns nothing new; if real signals are present, name them.
 
 NEVER invent signals not in the input. Better to say "limited data" than guess.
 NEVER pretend the player is injured if active_injuries is empty.
 NEVER cite a number unless it appears literally in the input JSON.
 
 Output JSON only, no surrounding text:
-{ "summary": "English 3-4 sentence summary" }`;
+{ "summary": "English 4-6 sentence summary that ends with a clear recommendation" }`;
 
 async function callClaude(input: unknown): Promise<{ summary: string }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
