@@ -29,7 +29,8 @@
  *   <GpsOnlyLoadSummary> — replaces <DecisionSummaryCard> when isGpsOnly
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 export type LoadBand = "SUSTAINABLE" | "BUILDING" | "SPIKING" | "UNDER";
 type Lang = "EN" | "IS";
@@ -358,7 +359,57 @@ function SignalLine({ label, sz, lang }: { label: string; sz: SZ; lang: Lang }) 
 }
 const anySignal = (...xs: SZ[]) => xs.some((s) => s.value != null);
 
+// One AI "why" per player+band, cached for the page session so reopening a card
+// doesn't re-call. The rule engine decides the band; this only explains it.
+const AI_CACHE = new Map<string, string>();
+
+function useLoadAiSummary(player: LoadPlayer): { state: "loading" | "ok" | "error"; text: string } {
+  const key = `${player.player_id}:${player.verdict.band}`;
+  const [res, setRes] = useState<{ state: "loading" | "ok" | "error"; text: string }>(
+    () => (AI_CACHE.has(key) ? { state: "ok", text: AI_CACHE.get(key)! } : { state: "loading", text: "" }),
+  );
+  useEffect(() => {
+    if (AI_CACHE.has(key)) { setRes({ state: "ok", text: AI_CACHE.get(key)! }); return; }
+    let alive = true;
+    setRes({ state: "loading", text: "" });
+    (async () => {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess?.session?.access_token;
+        if (!token) { if (alive) setRes({ state: "error", text: "" }); return; }
+        const r = await fetch("/api/coach/load-verdict/explain", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: player.name,
+            band: player.verdict.band,
+            figures: player.figures,
+            drivers: (player.verdict.drivers ?? []).map((d) => ({ plain: d.plain.EN, z: d.z })),
+            signals: player.signals ?? null,
+            intensity: player.intensity
+              ? { available: player.intensity.available, band: player.intensity.band, z: player.intensity.z, headline: player.intensity.headline?.EN ?? "" }
+              : null,
+          }),
+        });
+        if (!r.ok) { if (alive) setRes({ state: "error", text: "" }); return; }
+        const text = String(((await r.json()) as { summary?: string }).summary ?? "").trim();
+        if (!text) { if (alive) setRes({ state: "error", text: "" }); return; }
+        AI_CACHE.set(key, text);
+        if (alive) setRes({ state: "ok", text });
+      } catch {
+        if (alive) setRes({ state: "error", text: "" });
+      }
+    })();
+    return () => { alive = false; };
+    // Refetch only when the player or their band changes (cache miss) — not on
+    // every render; `player` is read fresh inside the effect at that point.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return res;
+}
+
 export function GpsOnlyLoadDetailModal({ player, lang, onClose }: { player: LoadPlayer; lang: Lang; onClose: () => void }) {
+  const ai = useLoadAiSummary(player);
   const [showDetails, setShowDetails] = useState(false);
   const band = player.verdict.band;
   const style = BAND_STYLE[band];
@@ -392,9 +443,27 @@ export function GpsOnlyLoadDetailModal({ player, lang, onClose }: { player: Load
           </div>
         </div>
 
-        {/* L0 — the verdict sentence (plain "why") */}
+        {/* L0 — the verdict sentence (plain "why", rule-based) */}
         <div className="mt-3 rounded-xl px-4 py-3 text-sm" style={{ background: style.tileBg, color: style.tileFg }}>
           {player.verdict.sentence[lang === "IS" ? "IS" : "EN"]}
+        </div>
+
+        {/* AI summary — reads the variables and explains the rule-decided band in
+            plain language, citing the signals shown below. Labelled as AI; the
+            engine (not the AI) set the band. */}
+        <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">
+            <span>✨ {L(lang, "AI summary", "AI samantekt")}</span>
+            <span className="font-medium normal-case tracking-normal text-violet-500">· {L(lang, "explains the band, cites your data", "útskýrir bandið, vísar í gögnin")}</span>
+          </div>
+          {ai.state === "loading" ? (
+            <div className="mt-1 text-[13px] text-violet-500">{L(lang, "Reading the signals…", "Les úr merkjunum…")}</div>
+          ) : ai.state === "error" ? (
+            <div className="mt-1 text-[12.5px] text-slate-400">{L(lang, "AI summary unavailable — the signals below still explain the band.", "AI samantekt ófáanleg — merkin að neðan útskýra bandið.")}</div>
+          ) : (
+            <div className="mt-1 text-[13.5px] leading-snug text-[#2a2e33]">{ai.text}</div>
+          )}
+          <div className="mt-1.5 text-[10px] text-violet-400">{L(lang, "AI-written · the rule engine set the band, not the AI", "AI-skrifað · reglukerfið setti bandið, ekki gervigreindin")}</div>
         </div>
 
         {/* L1 — headline figures + named drivers */}
