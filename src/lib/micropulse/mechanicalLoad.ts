@@ -15,6 +15,11 @@ export type MechanicalLoadSourceRow = {
   ima_total: number | null;
   playerload_per_min: number | null;
   impacts: number | null;
+  /** Vendor-MEASURED session mechanical load (e.g. Kinexon "Mechanical Load").
+   *  When present it drives the headline MLI directly — a direct measurement
+   *  beats the accel/decel-derived estimate. Optional; null for providers that
+   *  don't report it (Catapult/Titan derive it from the components above). */
+  mechanical_load?: number | null;
 };
 
 export type MechanicalLoadComputedRow = {
@@ -23,6 +28,9 @@ export type MechanicalLoadComputedRow = {
   css: number | null;
   gds: number | null;
   mli: number | null;
+  /** How the headline MLI was formed: "measured" = driven by a vendor mechanical
+   *  load (Kinexon), "derived" = the accel/decel/CoD composite. */
+  mliBasis: "measured" | "derived";
   residualMli: number | null;
   mliBand: MechanicalLoadBand | null;
   residualBand: ResidualMechanicalLoadBand | null;
@@ -47,6 +55,7 @@ type BaselineSample = {
   ima_total: number | null;
   playerload_per_min: number | null;
   impacts: number | null;
+  mechanical_load?: number | null;
 };
 
 const MLI_LOOKBACK_DAYS = 28;
@@ -121,6 +130,7 @@ function buildBaseline(rows: MechanicalLoadSourceRow[], dateKey: string): Baseli
     ima_total: collectMedian(relevant, "ima_total"),
     playerload_per_min: collectMedian(relevant, "playerload_per_min"),
     impacts: collectMedian(relevant, "impacts"),
+    mechanical_load: collectMedian(relevant, "mechanical_load"),
   };
 }
 
@@ -137,8 +147,12 @@ function countPresentInputs(row: MechanicalLoadSourceRow): number {
     row.ima_total,
     row.playerload_per_min,
     row.impacts,
+    row.mechanical_load ?? null,
   ].filter(isFiniteNumber).length;
 }
+
+/** Total inputs counted above — keep in sync with countPresentInputs. */
+const MLI_INPUT_COUNT = 12;
 
 function countBaselineObservations(rows: MechanicalLoadSourceRow[], dateKey: string): number {
   const start = dateMinusDays(dateKey, MLI_LOOKBACK_DAYS);
@@ -168,8 +182,14 @@ function computeConfidence(
   dateKey: string
 ): { confidence: MechanicalLoadConfidence; confidenceReason: string } {
   const presentInputs = countPresentInputs(current);
-  const coverageRatio = presentInputs / 11;
+  const coverageRatio = presentInputs / MLI_INPUT_COUNT;
   const baselineObservations = countBaselineObservations(rows, dateKey);
+
+  // A vendor-MEASURED mechanical load (Kinexon) is a direct measurement, not a
+  // multi-signal estimate — with a personal baseline it stands on its own.
+  if (isFiniteNumber(current.mechanical_load) && baselineObservations >= MLI_MIN_BASELINE_OBSERVATIONS) {
+    return { confidence: "high", confidenceReason: "measured_mechanical_load" };
+  }
 
   if (coverageRatio >= 0.8 && baselineObservations >= MLI_MIN_BASELINE_OBSERVATIONS) {
     return { confidence: "high", confidenceReason: "personal_baseline" };
@@ -241,12 +261,20 @@ export function computeMechanicalLoad(
     { value: ratioToScore(impactsRatio), weight: current.impacts != null ? 0.25 : 0 },
   ]);
 
-  const mli = weightedMean([
+  const derivedMli = weightedMean([
     { value: dss, weight: 0.4 },
     { value: ass, weight: 0.2 },
     { value: css, weight: 0.25 },
     { value: gds, weight: 0.15 },
   ]);
+
+  // Measured beats derived: when the provider reports a direct session mechanical
+  // load (Kinexon), the headline MLI is that measurement's acute-vs-personal-
+  // baseline ratio, on the same 0-100 scale. The accel/decel/CoD sub-scores still
+  // compute (for the drilldown + spike flags) but no longer form the headline.
+  const measuredMliScore = ratioToScore(safeRatio(current.mechanical_load, baseline.mechanical_load));
+  const mliBasis: "measured" | "derived" = isFiniteNumber(measuredMliScore) ? "measured" : "derived";
+  const mli = mliBasis === "measured" ? measuredMliScore : derivedMli;
 
   const yesterdayKey = dateMinusDays(dateKey, 1);
   const twoDaysAgoKey = dateMinusDays(dateKey, 2);
@@ -269,6 +297,7 @@ export function computeMechanicalLoad(
     css,
     gds,
     mli,
+    mliBasis,
     residualMli,
     mliBand: bandFromMLI(mli),
     residualBand: bandFromResidual(residualMli),

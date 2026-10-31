@@ -9,8 +9,13 @@ import {
   type MechanicalLoadSourceRow,
   type ResidualMechanicalLoadBand,
 } from "@/lib/micropulse/mechanicalLoad";
+import { KINEXON_CATALOG, readKinexonMetric } from "@/lib/integrations/kinexon/metricCatalog";
 
 export const runtime = "nodejs";
+
+// The vendor-measured Kinexon "Mechanical Load" metric — promoted into the MLI
+// engine as a direct measurement (beats the accel/decel-derived estimate).
+const KX_MECH_LOAD = KINEXON_CATALOG.flatMap((g) => g.metrics).find((m) => m.key === "mech_load")!;
 
 type PlayerRow = {
   id: string;
@@ -36,10 +41,11 @@ type ExternalLoadRow = {
   player_load_per_minute: number | null;
   impacts: number | null;
   source: string | null;
+  raw_payload_json: unknown;
 };
 
 const BASE_SELECT =
-  "player_id, date, decel_b2_3_tot_effs_gen2, tot_ds, decelerations, accel_b2_3_tot_effs_gen2, tot_as, accelerations, player_load_per_minute, source";
+  "player_id, date, decel_b2_3_tot_effs_gen2, tot_ds, decelerations, accel_b2_3_tot_effs_gen2, tot_as, accelerations, player_load_per_minute, source, raw_payload_json";
 
 const IMA_SELECT =
   "ima_decel, ima_accel, cod_events, ima_cod, ima_total, impacts";
@@ -50,6 +56,7 @@ type ResponseRow = {
   date: string;
   mli: number | null;
   mli_band: MechanicalLoadBand | null;
+  mli_basis: "measured" | "derived";
   residual_mli: number | null;
   residual_band: ResidualMechanicalLoadBand | null;
   dss: number | null;
@@ -110,6 +117,12 @@ function mapSourceRow(row: ExternalLoadRow): MechanicalLoadSourceRow {
     ima_total: row.ima_total,
     playerload_per_min: row.player_load_per_minute,
     impacts: row.impacts,
+    // Kinexon reports a direct session mechanical load — promote it so the MLI
+    // engine uses the measurement instead of the accel/decel-derived estimate.
+    mechanical_load:
+      row.source === "kinexon"
+        ? readKinexonMetric(row as unknown as Record<string, unknown>, KX_MECH_LOAD)
+        : null,
   };
 }
 
@@ -179,6 +192,7 @@ async function fetchExternalLoadRows(
     player_load_per_minute: (row.player_load_per_minute as number | null) ?? null,
     impacts: null,
     source: (row.source as string | null) ?? null,
+    raw_payload_json: (row.raw_payload_json as unknown) ?? null,
   }));
 }
 
@@ -246,6 +260,7 @@ export async function GET(req: Request) {
           date: row.date,
           mli: computed.mli,
           mli_band: computed.mliBand,
+          mli_basis: computed.mliBasis,
           residual_mli: computed.residualMli,
           residual_band: computed.residualBand,
           dss: computed.dss,

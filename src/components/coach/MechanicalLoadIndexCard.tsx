@@ -15,6 +15,7 @@ type ResponseRow = {
   date: string;
   mli: number | null;
   mli_band: MechanicalLoadBand | null;
+  mli_basis?: "measured" | "derived";
   residual_mli: number | null;
   residual_band: ResidualMechanicalLoadBand | null;
   dss: number | null;
@@ -134,6 +135,9 @@ export default function MechanicalLoadIndexCard({ teamId, lang = "EN" }: { teamI
 
   const rows = data?.rows ?? [];
   const anyCss = rows.some((r) => r.css != null);
+  // Kinexon reports a direct mechanical load → the headline MLI is measured, not
+  // derived from accel/decel. Relabel so the provenance is honest.
+  const anyMeasured = rows.some((r) => r.mli_basis === "measured");
   // Genuine no-data only: a club whose Catapult tier never exposes the accel/
   // decel B2-3 efforts MLI is built from (Core/Lite). Note the API already falls
   // back to the most recent session, so a rest day for an IMA-tier club does NOT
@@ -167,12 +171,18 @@ export default function MechanicalLoadIndexCard({ teamId, lang = "EN" }: { teamI
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-[10px] uppercase tracking-wide text-slate-500">{is ? "Frá Catapult" : "Catapult Derived"}</div>
+          <div className="text-[10px] uppercase tracking-wide text-slate-500">
+            {anyMeasured ? (is ? "Mælt af Kinexon" : "Measured by Kinexon") : (is ? "Frá Catapult" : "Catapult Derived")}
+          </div>
           <div className="mt-1 text-sm font-semibold text-slate-900">{is ? "Vélrænt álagsskor (MLI)" : "Mechanical Load Index (MLI)"}</div>
           <div className="mt-1 text-xs text-slate-500">
-            {is
-              ? "Vélrænt álagsskor reiknað úr hröðun, hemlun og density."
-              : "Derived mechanical stress score from acceleration, deceleration and density inputs."}
+            {anyMeasured
+              ? (is
+                  ? "Beint mælt vélrænt álag Kinexon (á móti eigin grunnlínu). Bein mæling er notuð fremur en hröðun/hemlun-mat."
+                  : "Kinexon's directly measured mechanical load (vs the player's own baseline). A direct measurement is used instead of the accel/decel estimate.")
+              : (is
+                  ? "Vélrænt álagsskor reiknað úr hröðun, hemlun og density."
+                  : "Derived mechanical stress score from acceleration, deceleration and density inputs.")}
           </div>
           {staleSession && shownDate ? (
             <div className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
