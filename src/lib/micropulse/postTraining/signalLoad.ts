@@ -32,7 +32,7 @@ export async function loadPostTrainingForSignal(sb: SupabaseClient, teamId: stri
 
   // Most recent captured session at/before today.
   const { data: lastRow } = await sb.from("player_external_load_daily")
-    .select("date").in("player_id", playerIds).in("source", ["catapult", "manual", "titan"])
+    .select("date").in("player_id", playerIds).in("source", ["catapult", "manual", "titan", "kinexon"])
     .lte("date", today).order("date", { ascending: false }).limit(1).maybeSingle();
   const sessionDate = (lastRow as { date?: string } | null)?.date ?? null;
   if (!sessionDate) return { ok: true, sessionDate: null, plannedVsActual: null };

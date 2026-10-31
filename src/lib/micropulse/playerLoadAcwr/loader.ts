@@ -31,7 +31,7 @@ export async function loadPlayerLoadAcwr(
     .from("player_external_load_daily")
     .select("date, source, total_player_load, raw_payload_json")
     .eq("player_id", args.playerId)
-    .in("source", ["catapult", "manual", "titan"])
+    .in("source", ["catapult", "manual", "titan", "kinexon"])
     .gte("date", startIso)
     .lte("date", args.todayIso)
     .order("date", { ascending: true });
@@ -82,7 +82,7 @@ export async function loadPlayerLoadAcwrBatch(
         sb.from("player_external_load_daily")
           .select("player_id, date, source, total_player_load, raw_payload_json")
           .in("player_id", args.playerIds as string[])
-          .in("source", ["catapult", "manual", "titan"])
+          .in("source", ["catapult", "manual", "titan", "kinexon"])
           .gte("date", startIso).lte("date", args.todayIso)
           .order("date", { ascending: true }).range(from, to));
       return { data: rows, error: null as null | { message: string } };

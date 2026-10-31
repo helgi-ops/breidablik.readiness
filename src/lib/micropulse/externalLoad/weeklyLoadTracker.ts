@@ -224,7 +224,7 @@ export async function computeWeeklyLoad(args: {
     .eq("team_id", teamId)
     .gte("date", weekMonday)
     .lte("date", today)
-    .in("source", ["catapult", "manual", "titan"]);
+    .in("source", ["catapult", "manual", "titan", "kinexon"]);
   // Team branch rolls players together by date → exclude pre-transfer rows. The
   // single-player branch keeps them (his own weekly view includes his history).
   if (playerId) currentQuery = currentQuery.eq("player_id", playerId);
@@ -291,7 +291,7 @@ export async function computeWeeklyLoad(args: {
       .eq("team_id", teamId)
       .gte("date", histStart)
       .lte("date", histEnd)
-      .in("source", ["catapult", "manual", "titan"]);
+      .in("source", ["catapult", "manual", "titan", "kinexon"]);
     if (playerId) q = q.eq("player_id", playerId);
     else q = q.or(EXCLUDE_PREV_CLUB_OR); // team weekly baseline — exclude pre-transfer rows
     return q.order("date", { ascending: true }).range(from, from + 999);

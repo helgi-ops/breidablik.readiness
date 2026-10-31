@@ -57,7 +57,7 @@ export async function computePlayerToday(
     .from("player_external_load_daily")
     .select("date, source, total_player_load, estimated:raw_payload_json->>estimated")
     .eq("player_id", playerId)
-    .in("source", ["catapult", "manual", "titan"])
+    .in("source", ["catapult", "manual", "titan", "kinexon"])
     .gte("date", since)
     .lte("date", today);
   const shaped = ((rows ?? []) as Array<Record<string, unknown>>).map((r) => {

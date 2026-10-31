@@ -195,7 +195,7 @@ async function fetchCatapultRows(
   const { data, error } = await sb
     .from("player_external_load_daily")
     .select("*")
-    .in("source", ["catapult", "manual", "titan"])
+    .in("source", ["catapult", "manual", "titan", "kinexon"])
     .in("player_id", playerIds)
     .gte("date", startDate)
     .lte("date", date)

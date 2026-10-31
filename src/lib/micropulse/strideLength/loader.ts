@@ -149,7 +149,7 @@ export async function loadStrideVerdict(
     sb.from("player_external_load_daily")
       .select(STRIDE_LOAD_COLS)
       .eq("player_id", args.playerId)
-      .in("source", ["catapult", "manual", "titan"])
+      .in("source", ["catapult", "manual", "titan", "kinexon"])
       .gte("date", startIso)
       .lte("date", args.date)
       .order("date", { ascending: true }),
@@ -195,7 +195,7 @@ export async function loadTeamStrideVerdicts(
     const { data, error } = await sb.from("player_external_load_daily")
       .select(STRIDE_LOAD_COLS)
       .eq("team_id", args.teamId)
-      .in("source", ["catapult", "manual", "titan"])
+      .in("source", ["catapult", "manual", "titan", "kinexon"])
       .gte("date", startIso)
       .lte("date", args.date)
       .order("date", { ascending: true })

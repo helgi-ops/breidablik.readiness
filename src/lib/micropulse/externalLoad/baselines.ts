@@ -136,7 +136,7 @@ export async function fetchCatapultDailyLoadRows(args: {
     let query = supabase
       .from("player_external_load_daily")
       .select("*")
-      .in("source", ["catapult", "manual", "titan"])
+      .in("source", ["catapult", "manual", "titan", "kinexon"])
       .eq("player_id", args.playerId)
       .gte("date", startDate)
       .lte("date", args.date)

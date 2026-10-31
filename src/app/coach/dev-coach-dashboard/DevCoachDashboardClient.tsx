@@ -2635,7 +2635,7 @@ export default function CoachPage() {
       .eq("team_id", teamId)
       .eq("date", yday)
       .or(EXCLUDE_PREV_CLUB_OR) // squad avg/max for yesterday — exclude a just-transferred player's pre-transfer row
-      .in("source", ["catapult", "manual", "titan"]);
+      .in("source", ["catapult", "manual", "titan", "kinexon"]);
 
     if (error) {
       console.warn("loadYesterdayContext (Catapult) error:", error.message);
@@ -3156,7 +3156,7 @@ export default function CoachPage() {
       const { data, error } = await supabase
         .from("player_external_load_daily")
         .select("player_id, date, total_distance, high_speed_distance, sprint_distance, accelerations, decelerations, player_load, max_velocity, velocity_band5_total_distance, velocity_band6_total_distance, hir_dist, max_vel, accel_b2_3_tot_effs_gen2, accel_decel_efforts, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, source")
-        .in("source", ["catapult", "manual", "titan"])
+        .in("source", ["catapult", "manual", "titan", "kinexon"])
         .in("player_id", playerIds)
         .gte("date", startDate)
         .lte("date", entryDate)
@@ -4583,7 +4583,7 @@ export default function CoachPage() {
         const { data: loadData } = await supabase
           .from("player_external_load_daily")
           .select("player_id, date, source, total_distance, high_speed_distance, sprint_distance, velocity_band5_total_distance, velocity_band6_total_distance, velocity_band6_total_efforts_gen2, high_metabolic_load_distance_m, accel_decel_efforts, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, cod_events, jumps, impacts, raw_payload_json, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, avg_heart_rate, max_heart_rate")
-          .in("source", ["catapult", "manual", "titan"])
+          .in("source", ["catapult", "manual", "titan", "kinexon"])
           .in("player_id", playerIds)
           .gte("date", startDate)
           .lte("date", refDate)
@@ -6038,7 +6038,7 @@ export default function CoachPage() {
       const { data: latestDateRows } = await supabase
         .from("player_external_load_daily")
         .select("date")
-        .in("source", ["catapult", "manual", "titan"])
+        .in("source", ["catapult", "manual", "titan", "kinexon"])
         .in("player_id", playerIds)
         .lte("date", boundDate)
         .order("date", { ascending: false })
@@ -6051,7 +6051,7 @@ export default function CoachPage() {
       const { data: loadRows, error: loadErr } = await supabase
         .from("player_external_load_daily")
         .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_fr_band58_total_distance, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low")
-        .in("source", ["catapult", "manual", "titan"])
+        .in("source", ["catapult", "manual", "titan", "kinexon"])
         .in("player_id", playerIds)
         .gte("date", chronicStart)
         .lte("date", sessionDate)
