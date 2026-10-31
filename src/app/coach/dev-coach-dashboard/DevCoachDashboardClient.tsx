@@ -9517,12 +9517,13 @@ export default function CoachPage() {
             />
           )}
 
-          {/* Unfamiliar Load & S&C signals — promoted out of the old collapsed
-              drawer at the bottom to sit WITH the Decision Summary (coach
-              feedback 2026-10-31): the unfamiliar-load / recovery / engine-driver
-              layer is part of the decision, not a footnote. Open, titled, and
-              shown for BOTH check-in and GPS-only teams. Each child still
-              self-hides when nothing on it needs attention. */}
+          {/* Unfamiliar Load & S&C signals — team-level section, shown for
+              CHECK-IN teams only. For GPS-only teams this layer now lives
+              per-player ON the load cards (the Unfamiliar-Load drift text +
+              S&C chips in GpsOnlyLoadSummary), so the team section is dropped
+              there to avoid duplication (coach feedback 2026-10-31). Each child
+              still self-hides when nothing on it needs attention. */}
+          {!gpsOnly && (
           <section className="mt-4 rounded-xl border-2 border-[#2740e6]/30 bg-[#eef1fe] p-4 shadow-sm">
             <div className="flex items-center gap-2.5 text-[15px] font-bold text-[#2740e6]">
               <span aria-hidden>⚡</span>
@@ -9546,6 +9547,7 @@ export default function CoachPage() {
               <UnfamiliarLoadCard lang={lang} date={today} />
             </div>
           </section>
+          )}
 
           {/* Indoor Briefing — team-level executive summary.
               Shown ONLY when the effective mode is indoor, i.e. the squad's

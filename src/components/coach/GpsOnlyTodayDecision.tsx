@@ -90,6 +90,16 @@ type LoadPlayer = {
 
 const L = (lang: Lang, en: string, is: string) => (lang === "IS" ? is : en);
 
+// Per-player Unfamiliar-Load drift item from /api/coach/unfamiliar-load (the
+// movement-signature engine) — the plain-language "moving differently / doing
+// more than usual" story, surfaced ON the card.
+type UnfamiliarItem = { player_id: string; driftType: string; spike?: boolean; baselineDays: number; calibrating?: boolean; headline: LangText | null };
+// Mirror of UnfamiliarLoadCard's driftWord so the badge reads identically.
+const driftWord = (t: string, lang: Lang) =>
+  lang === "IS"
+    ? (t === "shape" ? "hreyfir sig öðruvísi" : t === "mixed" ? "meira + öðruvísi" : "gerir meira en venjulega")
+    : (t === "shape" ? "moving differently" : t === "mixed" ? "more + differently" : "doing more than usual");
+
 const BAND_LABEL: Record<LoadBand, LangText> = {
   SUSTAINABLE: { EN: "Sustainable", IS: "Sjálfbært" },
   BUILDING: { EN: "Building", IS: "Að byggjast upp" },
@@ -245,6 +255,28 @@ function signalChips(p: LoadPlayer, lang: Lang): Array<{ label: string; bg: stri
 
 export function GpsOnlyLoadSummary({ data, lang }: { data: LoadVerdictResponse | null; lang: Lang }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  // Unfamiliar-Load drift text per player (movement-signature engine), surfaced
+  // on each card. Fetched once for the team; each card shows its own if flagged.
+  const [ufMap, setUfMap] = useState<Map<string, UnfamiliarItem>>(new Map());
+  const ufDate = data?.date;
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess?.session?.access_token;
+        if (!token) return;
+        const r = await fetch(`/api/coach/unfamiliar-load${ufDate ? `?date=${ufDate}` : ""}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) return;
+        const json = (await r.json()) as { items?: UnfamiliarItem[] };
+        if (!alive) return;
+        const m = new Map<string, UnfamiliarItem>();
+        for (const it of json.items ?? []) m.set(it.player_id, it);
+        setUfMap(m);
+      } catch { /* non-blocking */ }
+    })();
+    return () => { alive = false; };
+  }, [ufDate]);
   if (!data) return null;
   const players = data.players ?? [];
   const counts = data.team.counts;
@@ -321,6 +353,24 @@ export function GpsOnlyLoadSummary({ data, lang }: { data: LoadVerdictResponse |
                     ))}
                   </div>
                 ) : null;
+              })()}
+
+              {/* Unfamiliar Load — the plain-language "moving differently / doing
+                  more than usual" story for THIS player, from the movement-signature
+                  engine. Self-hides unless he's drifting from his own norm. */}
+              {(() => {
+                const uf = ufMap.get(p.player_id);
+                if (!uf || !uf.headline) return null;
+                return (
+                  <div className="mt-2.5 rounded-lg border border-violet-200 bg-violet-50/70 px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {uf.spike ? <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">⚡ {L(lang, "spike", "frávik")}</span> : null}
+                      <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-800">{driftWord(uf.driftType, lang)}</span>
+                      <span className="text-[9.5px] text-slate-400">{L(lang, `based on ${uf.baselineDays} training days`, `byggt á ${uf.baselineDays} æfingadögum`)}{uf.calibrating ? L(lang, " · still learning his normal", " · enn að læra hans eðlilega") : ""}</span>
+                    </div>
+                    <p className="mt-1 text-[12.5px] leading-snug text-[#2a2e33]">{uf.headline[lang === "IS" ? "IS" : "EN"]}</p>
+                  </div>
+                );
               })()}
 
               <div className="mt-2.5 flex gap-4 border-t border-black/5 pt-2.5">
