@@ -31,6 +31,7 @@ import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard"
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
 import FosterMonotonyStrainCard from "@/components/coach/FosterMonotonyStrainCard";
 import MdHsrComparisonCard from "@/components/coach/MdHsrComparisonCard";
+import KinexonMetricsPanel from "@/components/coach/KinexonMetricsPanel";
 import { useLang } from "@/lib/lang";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import PagePurpose from "@/components/coach/PagePurpose";
@@ -48,6 +49,7 @@ export default function LoadIntelligencePage() {
   const [teamId, setTeamId] = React.useState<string | null>(null);
   const [isBasketball, setIsBasketball] = React.useState(false);
   const [isTitan, setIsTitan] = React.useState(false);
+  const [isKinexon, setIsKinexon] = React.useState(false);
   const [players, setPlayers] = React.useState<GpsPlayerInput[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -76,7 +78,8 @@ export default function LoadIntelligencePage() {
       const s = await resolveTeamSport(supabase, tid);
       if (alive) setIsBasketball(s === "basketball");
       const { data: team } = await supabase.from("teams").select("gps_provider").eq("id", tid).maybeSingle();
-      if (alive) setIsTitan(String((team as { gps_provider?: string } | null)?.gps_provider ?? "") === "titan");
+      const provider = String((team as { gps_provider?: string } | null)?.gps_provider ?? "");
+      if (alive) { setIsTitan(provider === "titan"); setIsKinexon(provider === "kinexon"); }
     })();
     return () => { alive = false; };
   }, [supabase, lang]);
@@ -114,7 +117,7 @@ export default function LoadIntelligencePage() {
 
         const { data: loadData } = await supabase
           .from("player_external_load_daily")
-          .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, avg_heart_rate, max_heart_rate")
+          .select("player_id, date, total_distance, high_speed_distance, sprint_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, session_duration_minutes, max_vel, max_velocity, accelerations, decelerations, metabolic_power, metabolic_power_peak, high_metabolic_load_distance_m, ima_accel, ima_decel, ima_cod, cod_events, jumps, avg_heart_rate, max_heart_rate, raw_payload_json")
           .in("source", ["catapult", "manual", "titan", "kinexon"])
           .in("player_id", playerIds)
           .gte("date", startDate)
@@ -151,7 +154,9 @@ export default function LoadIntelligencePage() {
   // Indoor / no-GPS team (basketball, or any Titan indoor-IMU team): the external GPS cards
   // (braking/HSR signals, MD-HSR, accel/decel MLI, metabolic power) have no data, so the load
   // story is the internal sRPE monotony/strain + the readiness verdict/outlook.
-  const indoorNoGps = isBasketball || isTitan;
+  // Kinexon is the exception: an indoor LPS that DOES carry a full external set, so it is
+  // indoor-WITH-external — its own catalog panel below, not the sRPE-only story.
+  const indoorNoGps = (isBasketball || isTitan) && !isKinexon;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-6">
@@ -165,7 +170,11 @@ export default function LoadIntelligencePage() {
           tutorial="load-intelligence"
         />
         <p className="mt-1 text-sm text-slate-600">
-          {indoorNoGps
+          {isKinexon
+            ? (lang === "EN"
+                ? "Kinexon is an indoor local-positioning system — it captures a full external load set indoors (distance, acceleration load, metabolic power, CoD, jumps). The full metric catalog is below, alongside the internal sRPE story."
+                : "Kinexon er innidyra staðsetningarkerfi — það mælir fullt ytra álag innandyra (vegalengd, hröðunarálag, efnaskiptaafl, stefnubreytingar, stökk). Allur mælikvarðalistinn er hér fyrir neðan, ásamt innri sRPE sögunni.")
+            : indoorNoGps
             ? (lang === "EN"
                 ? "Internal load (sRPE monotony & strain) is the load story indoors — there are no GPS velocity signals. The Titan indoor-IMU signals (Load Index, jumps, impacts) live on the Indoor Load and IMA tabs."
                 : "Innra álag (sRPE einhæfni & strain) er álagssagan innandyra — engin GPS-hraðamerki. Titan innidyra-IMU merkin (Álagsvísitala, stökk, impacts) eru á Innandyra álag og IMA többunum.")
@@ -176,7 +185,7 @@ export default function LoadIntelligencePage() {
         {/* Basketball caveat — one line, verdict first. Indoors there are no GPS
             signals, so read this squad on sRPE (Foster monotony/strain, ACWR),
             and the week on game count, not MD-days. Football teams never see it. */}
-        {isBasketball && (
+        {isBasketball && !isKinexon && (
           <div className="mt-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-900">
             <span className="font-semibold">
               {lang === "EN"
@@ -204,11 +213,20 @@ export default function LoadIntelligencePage() {
 
       {/* GPS empty state — football/GPS teams only. An indoor team has no GPS by
           design, and its load story lives in the sRPE cards below, not here. */}
-      {!loading && !error && players.length === 0 && !indoorNoGps && (
+      {!loading && !error && players.length === 0 && !indoorNoGps && !isKinexon && (
         <div className="rounded-md border bg-white p-6 text-center text-sm text-slate-500">
           {lang === "EN"
             ? "No Catapult GPS data available for this team yet. Sync Catapult or upload a CSV to start."
             : "Engin Catapult GPS gögn fundust fyrir liðið ennþá. Tengdu Catapult eða hladdu upp CSV."}
+        </div>
+      )}
+
+      {/* Kinexon empty state — points at the Kinexon upload, not Catapult. */}
+      {!loading && !error && isKinexon && players.length === 0 && (
+        <div className="rounded-md border bg-white p-6 text-center text-sm text-slate-500">
+          {lang === "EN"
+            ? "No Kinexon data for this team yet. Upload a Kinexon export to start."
+            : "Engin Kinexon gögn fyrir liðið ennþá. Hladdu upp Kinexon útflutningi til að byrja."}
         </div>
       )}
 
@@ -242,8 +260,18 @@ export default function LoadIntelligencePage() {
         </div>
       )}
 
+      {/* ── Kinexon: indoor LPS with a full external set — the catalog panel (all
+          families, 7d/28d/ACWR) plus the internal sRPE coupling story. Not the
+          Catapult S&C cards (those read Catapult-specific columns). ── */}
+      {!loading && !error && teamId && isKinexon && players.length > 0 && (
+        <div className="space-y-6">
+          <KinexonMetricsPanel players={players} date={today} lang={lang === "EN" ? "EN" : "IS"} />
+          <FosterMonotonyStrainCard teamId={teamId} refDate={today} lang={lang === "EN" ? "EN" : "IS"} />
+        </div>
+      )}
+
       {/* ── The dense GPS S&C cards — football/GPS teams only (all empty indoors). ── */}
-      {!loading && !error && teamId && players.length > 0 && !indoorNoGps && (
+      {!loading && !error && teamId && players.length > 0 && !indoorNoGps && !isKinexon && (
         <details className="rounded-xl border border-slate-200 bg-white">
           <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-slate-700">
             {lang === "EN" ? "Show S&C details" : "Sýna S&C smáatriði"}

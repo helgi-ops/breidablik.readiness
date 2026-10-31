@@ -83,6 +83,7 @@ import TeamSessionBuildSummaryCard from "@/components/sessionBuilder/TeamSession
 
 // shadcn/ui
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import KinexonMetricsPanel from "@/components/coach/KinexonMetricsPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCard";
@@ -10185,33 +10186,10 @@ export default function CoachPage() {
           return d.toISOString().slice(0, 10);
         }
 
-        function computeSnapshot(history: Array<Record<string, unknown>>, aliases: string[], digits: number) {
-          const refDate = gpsDate; // browsable reference date
-          const acuteStart = dateMinusDays(refDate, 6);   // last 7 calendar days inclusive
-          const chronicStart = dateMinusDays(refDate, 27); // last 28 calendar days inclusive
-
-          const dated = history.filter((r) => typeof r.date === "string");
-
-          const acuteVals = dated
-            .filter((r) => String(r.date) >= acuteStart && String(r.date) <= refDate)
-            .map((r) => getVal(r, aliases))
-            .filter((v): v is number => v != null);
-
-          const chronicVals = dated
-            .filter((r) => String(r.date) >= chronicStart && String(r.date) <= refDate)
-            .map((r) => getVal(r, aliases))
-            .filter((v): v is number => v != null);
-
-          const a7 = avg(acuteVals);
-          const c28 = avg(chronicVals);
-          const acwr = a7 != null && c28 != null && c28 > 0 ? a7 / c28 : null;
-          const fmt = (n: number | null) => n == null ? "—" : n.toFixed(digits);
-          return { a7: fmt(a7), c28: fmt(c28), acwr };
-        }
-
-        // acwrColor / acwrBg / gpsRows / noData / computeSnapshot used to
-        // live here for the Squad Load 7d/28d/ACWR table — moved with the
-        // table to /coach/quadrant via the SquadLoadTable component.
+        // acwrColor / acwrBg / gpsRows / noData / computeSnapshot used to live
+        // here for the Squad Load 7d/28d/ACWR table — moved to /coach/quadrant
+        // (SquadLoadTable). The Kinexon catalog panel now owns the 7d/28d/ACWR
+        // snapshot for Kinexon (KinexonMetricsPanel, shared with Load Intelligence).
 
         // ── Today's session overview ──────────────────────────────────────
         const todayPlayerRows = gpsAllPlayers.map((p) => {
@@ -10587,116 +10565,10 @@ export default function CoachPage() {
               </CardContent>
             </Card>
 
-            {/* ── Full Kinexon metrics (indoor LPS) ──
-                Kinexon captures a full indoor variable set; the snapshot table
-                above is the per-player daily view, this groups EVERY captured
-                metric into families with the 7d/28d/ACWR treatment (reusing the
-                same computeSnapshot the squad table uses). Descriptive only. */}
-            {isKinexon && gpsAllPlayers.length > 0 && (() => {
-              const pooled = gpsAllPlayers.flatMap((p) => p.history);
-              const todayRows = pooled.filter((r) => String(r.date ?? "").slice(0, 10) === gpsDate);
-              const squadToday = (aliases: string[]) => {
-                const vals = todayRows.map((r) => getVal(r, aliases)).filter((v): v is number => v != null);
-                return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
-              };
-              const acwrTone = (v: number | null) =>
-                v == null ? "text-slate-400"
-                : v > 1.5 || v < 0.5 ? "text-rose-600"
-                : v > 1.3 || v < 0.8 ? "text-amber-600"
-                : "text-emerald-600";
-              type KMetric = { label: string; labelIS: string; aliases: string[]; digits: number; unit: string; acwr: boolean };
-              const FAMILIES: Array<{ title: string; titleIS: string; metrics: KMetric[] }> = [
-                { title: "Load", titleIS: "Álag", metrics: [
-                  { label: "Player Load", labelIS: "Player Load", aliases: ["total_player_load"], digits: 1, unit: "", acwr: true },
-                  { label: "Player Load / min", labelIS: "Player Load / mín", aliases: ["player_load_per_minute"], digits: 2, unit: "", acwr: false },
-                  { label: "Session duration", labelIS: "Lengd æfingar", aliases: ["session_duration_minutes"], digits: 0, unit: "min", acwr: false },
-                ]},
-                { title: "Movement · indoor positioning", titleIS: "Hreyfing · innistaðsetning", metrics: [
-                  { label: "Total distance", labelIS: "Heildarvegalengd", aliases: ["total_distance"], digits: 0, unit: "m", acwr: true },
-                  { label: "High-speed distance", labelIS: "Háhraðavegalengd", aliases: ["high_speed_distance"], digits: 0, unit: "m", acwr: true },
-                  { label: "Sprint distance", labelIS: "Sprettvegalengd", aliases: ["sprint_distance"], digits: 0, unit: "m", acwr: true },
-                  { label: "Max velocity", labelIS: "Hámarkshraði", aliases: ["max_vel", "max_velocity"], digits: 1, unit: "km/h", acwr: false },
-                ]},
-                { title: "Change of direction & agility", titleIS: "Stefnubreytingar", metrics: [
-                  { label: "Changes of direction", labelIS: "Stefnubreytingar", aliases: ["ima_cod", "cod_events"], digits: 0, unit: "#", acwr: true },
-                  { label: "Accelerations", labelIS: "Hröðun", aliases: ["accelerations"], digits: 0, unit: "#", acwr: true },
-                  { label: "Decelerations", labelIS: "Hægingar", aliases: ["decelerations"], digits: 0, unit: "#", acwr: true },
-                  { label: "High-effort accel (B2-3)", labelIS: "Kröftug hröðun (B2-3)", aliases: ["accel_b2_3_tot_effs_gen2"], digits: 0, unit: "#", acwr: true },
-                  { label: "High-effort decel (B2-3)", labelIS: "Kröftug hæging (B2-3)", aliases: ["decel_b2_3_tot_effs_gen2"], digits: 0, unit: "#", acwr: true },
-                ]},
-                { title: "Jumps & metabolic", titleIS: "Stökk & efnaskipti", metrics: [
-                  { label: "Jumps", labelIS: "Stökk", aliases: ["jumps"], digits: 0, unit: "#", acwr: true },
-                  { label: "Metabolic power", labelIS: "Efnaskiptaafl", aliases: ["metabolic_power"], digits: 1, unit: "W/kg", acwr: false },
-                  { label: "Peak metabolic power", labelIS: "Hámarks efnaskiptaafl", aliases: ["metabolic_power_peak"], digits: 1, unit: "W/kg", acwr: false },
-                  { label: "High-metabolic-load dist", labelIS: "Hátt efnaskiptaálag (vegal.)", aliases: ["high_metabolic_load_distance_m"], digits: 0, unit: "m", acwr: true },
-                ]},
-                { title: "Heart rate", titleIS: "Hjartsláttur", metrics: [
-                  { label: "Average HR", labelIS: "Meðal hjartsláttur", aliases: ["avg_heart_rate"], digits: 0, unit: "bpm", acwr: false },
-                  { label: "Max HR", labelIS: "Hámarks hjartsláttur", aliases: ["max_heart_rate"], digits: 0, unit: "bpm", acwr: false },
-                ]},
-              ];
-              return (
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">
-                      {lang === "EN" ? "Full Kinexon metrics" : "Allir Kinexon mælikvarðar"}
-                    </CardTitle>
-                    <CardDescription className="mt-1 text-sm text-slate-500">
-                      {lang === "EN"
-                        ? "Everything Kinexon captures indoors — squad average today vs the 7- and 28-day baselines. ACWR is shown for accumulation metrics only."
-                        : "Allt sem Kinexon mælir innandyra — meðaltal sveitar í dag á móti 7- og 28-daga grunnlínum. ACWR aðeins fyrir uppsöfnunarmælikvarða."}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0 space-y-5">
-                    {FAMILIES.map((fam) => (
-                      <div key={fam.title}>
-                        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                          {lang === "EN" ? fam.title : fam.titleIS}
-                        </div>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm border-collapse">
-                            <thead>
-                              <tr className="border-b border-slate-200 text-[11px] uppercase tracking-wide text-slate-400">
-                                <th className="px-3 py-1.5 text-left font-semibold">{lang === "EN" ? "Metric" : "Mælikvarði"}</th>
-                                <th className="px-3 py-1.5 text-right font-semibold">{lang === "EN" ? "Today" : "Í dag"}</th>
-                                <th className="px-3 py-1.5 text-right font-semibold">7d</th>
-                                <th className="px-3 py-1.5 text-right font-semibold">28d</th>
-                                <th className="px-3 py-1.5 text-right font-semibold">ACWR</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {fam.metrics.map((m) => {
-                                const snap = computeSnapshot(pooled, m.aliases, m.digits);
-                                const today = squadToday(m.aliases);
-                                return (
-                                  <tr key={m.label} className="border-b border-slate-100">
-                                    <td className="px-3 py-1.5 text-slate-700">
-                                      {lang === "EN" ? m.label : m.labelIS}
-                                      {m.unit ? <span className="text-slate-400"> ({m.unit})</span> : null}
-                                    </td>
-                                    <td className="px-3 py-1.5 text-right tabular-nums font-medium text-slate-900">{today == null ? "—" : today.toFixed(m.digits)}</td>
-                                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{snap.a7}</td>
-                                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{snap.c28}</td>
-                                    <td className={`px-3 py-1.5 text-right tabular-nums font-semibold ${m.acwr ? acwrTone(snap.acwr) : "text-slate-300"}`}>
-                                      {m.acwr ? (snap.acwr == null ? "—" : snap.acwr.toFixed(2)) : "—"}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    ))}
-                    <p className="text-[11px] text-slate-400">
-                      {lang === "EN"
-                        ? "Descriptive external load (Kinexon indoor LPS) — never a readiness verdict. ACWR = 7-day ÷ 28-day squad mean (Gabbett 2016)."
-                        : "Lýsandi ytra álag (Kinexon innistaðsetning) — aldrei readiness-dómur. ACWR = 7-daga ÷ 28-daga meðaltal sveitar (Gabbett 2016)."}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })()}
+            {/* Full Kinexon metrics — catalog-driven panel, shared with Load Intelligence. */}
+            {isKinexon && (
+              <KinexonMetricsPanel players={gpsAllPlayers} date={gpsDate} lang={lang === "EN" ? "EN" : "IS"} />
+            )}
 
             {/* GpsLoadIntelligence + Squad Load + MLI + MLS moved out:
                 - Load Intelligence + MLI + MLS → /coach/load-intelligence
