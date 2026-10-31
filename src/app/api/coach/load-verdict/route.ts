@@ -20,6 +20,7 @@ import { computeLoadVerdict, type LoadVerdictInput, type LoadVerdict } from "@/l
 import { resolveCapabilities } from "@/lib/micropulse/interpretation/resolveCapabilities";
 import { DIMENSIONS } from "@/lib/micropulse/interpretation/registry";
 import { computeIntensityVerdict, type IntensityVerdict } from "@/lib/micropulse/intensityVerdict";
+import { oneRowPerDate } from "@/lib/micropulse/load/oneRowPerDate";
 
 export const runtime = "nodejs";
 
@@ -45,7 +46,7 @@ function addDays(iso: string, n: number): string {
   const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10);
 }
 
-type Row = { date: string; pl: number | null; decel: number | null; accel: number | null; hsr: number | null; dist: number | null; metabolic: number | null; plPerMin: number | null; hml: number | null; imaAccel: number | null; imaDecel: number | null; imaTotal: number | null };
+type Row = { date: string; source: string | null; pl: number | null; decel: number | null; accel: number | null; hsr: number | null; dist: number | null; metabolic: number | null; plPerMin: number | null; hml: number | null; imaAccel: number | null; imaDecel: number | null; imaTotal: number | null };
 
 /** Recent-peak (last 7d) vs 28-day baseline z. null when baseline too thin. */
 function spikeZ(rows: Row[], pick: (r: Row) => number | null, date: string): { value: number | null; z: number | null } {
@@ -83,8 +84,13 @@ export async function GET(req: NextRequest) {
   const [playersRes, loadRes, caps] = await Promise.all([
     supabase.from("players").select("id, full_name").eq("team_id", teamId).eq("is_active", true),
     supabase.from("player_external_load_daily")
-      .select("player_id, date, total_player_load, decelerations, accelerations, high_speed_distance, total_distance, metabolic_power, player_load_per_minute, high_metabolic_load_distance_m, ima_accel, ima_decel, ima_total")
-      .eq("source", "catapult").eq("team_id", teamId).gte("date", from).lte("date", date).limit(5000),
+      // All external-load sources (vendor-neutral): catapult (football GPS),
+      // titan (basketball indoor IMU), kinexon (coming), wimu, manual overrides.
+      // Deduped to one row per player-date below (manual wins). The engine
+      // tolerates the columns a source doesn't carry (e.g. Titan has only
+      // PlayerLoad → ACWR from PlayerLoad; GPS/decel/IMA simply read null).
+      .select("player_id, date, source, total_player_load, decelerations, accelerations, high_speed_distance, total_distance, metabolic_power, player_load_per_minute, high_metabolic_load_distance_m, ima_accel, ima_decel, ima_total")
+      .eq("team_id", teamId).gte("date", from).lte("date", date).limit(8000),
     // Capability-driven confidence: which of the 5 interpretation dimensions this
     // club's signals actually support over the window (data, not tier). Same engine
     // for every tier; lower tiers simply cover fewer dimensions (shown honestly).
@@ -97,7 +103,7 @@ export async function GET(req: NextRequest) {
   for (const r of (loadRes.data ?? []) as Array<Record<string, unknown>>) {
     const id = String(r.player_id);
     if (!byPlayer.has(id)) byPlayer.set(id, []);
-    byPlayer.get(id)!.push({ date: String(r.date), pl: num(r.total_player_load), decel: num(r.decelerations), accel: num(r.accelerations), hsr: num(r.high_speed_distance), dist: num(r.total_distance), metabolic: num(r.metabolic_power), plPerMin: num(r.player_load_per_minute), hml: num(r.high_metabolic_load_distance_m), imaAccel: num(r.ima_accel), imaDecel: num(r.ima_decel), imaTotal: num(r.ima_total) });
+    byPlayer.get(id)!.push({ date: String(r.date), source: r.source == null ? null : String(r.source), pl: num(r.total_player_load), decel: num(r.decelerations), accel: num(r.accelerations), hsr: num(r.high_speed_distance), dist: num(r.total_distance), metabolic: num(r.metabolic_power), plPerMin: num(r.player_load_per_minute), hml: num(r.high_metabolic_load_distance_m), imaAccel: num(r.ima_accel), imaDecel: num(r.ima_decel), imaTotal: num(r.ima_total) });
   }
 
   // `figures` surfaces the already-computed per-player numbers the GPS-only Today
@@ -115,7 +121,8 @@ export async function GET(req: NextRequest) {
   };
   const perPlayer: Array<{ player_id: string; name: string; verdict: LoadVerdict; intensity: IntensityVerdict; figures: PlayerFigures; signals: PlayerSignals }> = [];
   for (const p of players) {
-    const rows = (byPlayer.get(p.id) ?? []).sort((a, b) => a.date.localeCompare(b.date));
+    // One row per player-date across sources (manual correction wins), then sort.
+    const rows = oneRowPerDate(byPlayer.get(p.id) ?? []).sort((a, b) => a.date.localeCompare(b.date));
     if (!rows.length) continue;
     const acwrPayload = computePlayerLoadAcwr(rows.map((r): DailyLoad => ({ date: r.date, load: r.pl })), date);
     if (acwrPayload.daysObserved === 0) continue; // no real sessions in window — skip
