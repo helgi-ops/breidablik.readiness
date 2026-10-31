@@ -9517,6 +9517,36 @@ export default function CoachPage() {
             />
           )}
 
+          {/* Unfamiliar Load & S&C signals — promoted out of the old collapsed
+              drawer at the bottom to sit WITH the Decision Summary (coach
+              feedback 2026-10-31): the unfamiliar-load / recovery / engine-driver
+              layer is part of the decision, not a footnote. Open, titled, and
+              shown for BOTH check-in and GPS-only teams. Each child still
+              self-hides when nothing on it needs attention. */}
+          <section className="mt-4 rounded-xl border-2 border-[#2740e6]/30 bg-[#eef1fe] p-4 shadow-sm">
+            <div className="flex items-center gap-2.5 text-[15px] font-bold text-[#2740e6]">
+              <span aria-hidden>⚡</span>
+              {lang === "IS" ? "Óvanalegt álag & S&C merki" : "Unfamiliar load & S&C signals"}
+            </div>
+            <p className="mt-0.5 text-[12.5px] text-[#2740e6]/70">
+              {lang === "IS"
+                ? "Merkjalagið á bak við dóminn — óvanalegt álag, endurheimt, Engine/Driver. Hver lína birtist aðeins þegar hún þarf athygli."
+                : "The signal layer behind the verdict — unfamiliar load, recovery, engine/driver. Each line shows only when it needs attention."}
+            </p>
+            <div className="mt-3 space-y-4">
+              <UnfamiliarSpikeBanner lang={lang} date={today} />
+              <RecoveryWatchBanner lang={lang === "EN" ? "EN" : "IS"} />
+              {/* Calibration context beside the verdict — rule-derived, cites the
+                  30-day recovery rate, NEVER changes the colour. */}
+              <CalibrationVerdictNote lang={lang === "EN" ? "EN" : "IS"} />
+              {/* Engine + Driver strip pair (Niklas Virtanen): load axis (GPS) +
+                  movement axis (IMA), each linking to its own detail page. */}
+              <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} variant="strip" />
+              <ImaVerdictStrip date={today} lang={lang === "EN" ? "EN" : "IS"} />
+              <UnfamiliarLoadCard lang={lang} date={today} />
+            </div>
+          </section>
+
           {/* Indoor Briefing — team-level executive summary.
               Shown ONLY when the effective mode is indoor, i.e. the squad's
               recent sessions have no GPS (see effectiveTrainingMode). Previously
@@ -9551,38 +9581,8 @@ export default function CoachPage() {
             )}
 
 
-          {/* Second, equal-weight box — the Unfamiliar-Load / S&C signal layer
-              gets its own first-class drill-down so it isn't buried under the
-              daily briefing. Each child self-hides when nothing needs
-              attention (per-player / per-signal). */}
-          <details className="group mt-3 rounded-xl border-2 border-[#2740e6]/30 bg-[#eef1fe] shadow-sm transition-colors hover:border-[#2740e6]/60 open:bg-[#eef1fe]/50">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5">
-              <span className="flex items-center gap-2.5 text-[15px] font-bold text-[#2740e6]">
-                <ChevronDown className="h-5 w-5 transition-transform group-open:rotate-180" />
-                {lang === "IS" ? "Óvanalegt álag & S&C merki" : "Unfamiliar load & S&C signals"}
-              </span>
-              <span className="hidden shrink-0 text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]/70 md:inline">
-                {lang === "IS" ? "spikes · endurheimt · Engine/Driver" : "spikes · recovery · engine/driver"}
-              </span>
-            </summary>
-            <div className="space-y-4 px-4 pb-4 pt-1">
-              {/* Deep S&C signal layer — each self-hiding when nothing needs
-                  attention (per-player / per-signal drill-down). */}
-              <UnfamiliarSpikeBanner lang={lang} date={today} />
-              <RecoveryWatchBanner lang={lang === "EN" ? "EN" : "IS"} />
-              {/* Calibration context beside the verdict — when a colour is over-sensitive
-                  for this squad AND present today. Rule-derived, cites the 30-day recovery
-                  rate, NEVER changes the colour (CLAUDE.md: distinct signal next to it). */}
-              <CalibrationVerdictNote lang={lang === "EN" ? "EN" : "IS"} />
-              {/* Engine + Driver strip pair (Niklas Virtanen): the load axis (GPS) and
-                  the movement axis (IMA), each one plain line linking to its own detail
-                  page. Rules decide, not AI. */}
-              <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} variant="strip" />
-              <ImaVerdictStrip date={today} lang={lang === "EN" ? "EN" : "IS"} />
-              {/* Unfamiliar Load — Driver-layer "what to look at" (signal-level attention) */}
-              <UnfamiliarLoadCard lang={lang} date={today} />
-            </div>
-          </details>
+          {/* Unfamiliar Load & S&C signals moved UP to sit with the Decision
+              Summary (open, titled) — see the section right after it above. */}
 
           {/* Planned session load removed from Today: the chip read its day
               type from rows[0].planned_day_type, which does NOT reliably carry
