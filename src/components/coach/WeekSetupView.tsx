@@ -1465,7 +1465,62 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
       })),
     } : null;
 
-    await downloadWeekSetupPdf({ teamName: isIS ? "Vikuplan" : "Week plan", weekLabel, phaseLabel, weekTypeLabel, preseason, days }, isIS ? "IS" : "EN");
+    // Per-player individualised load (all teams) — the main GPS + IMA load from each
+    // player's match unit via the periodization engine (graceful nulls where a feed
+    // lacks a metric). Best-effort: a failure leaves the PDF team-level.
+    let playerLoad: Parameters<typeof downloadWeekSetupPdf>[0]["playerLoad"] = null;
+    try {
+      const token = (await supabase.auth.getSession()).data?.session?.access_token;
+      const res = await fetch(`/api/coach/periodization`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const j = await res.json();
+        type MU = { typical: number | null };
+        const pls = (j?.plan?.players ?? []) as Array<{
+          name: string; position: string | null;
+          matchUnit: { minutesTypical: number | null; confidence: "high" | "medium" | "low"; load: MU; distance: MU; hsr: MU; accel: MU; decel: MU };
+          weekTargets: { current: "preseason" | "inseason"; preseason: { weeklyLoadTarget: number | null }; inseason: { weeklyLoadTarget: number | null } };
+          recentBaseline: { playerLoad: number | null; hsrM: number | null; distanceM: number | null; accel: number | null; decel: number | null } | null;
+        }>;
+        // Training days + their planned session load → the distribution weights.
+        const srpeOf = (d: (typeof days)[number]): number | null => {
+          const idea = "idea" in d ? d.idea : null;
+          const dose = "dose" in d ? d.dose : null;
+          return idea?.srpe ?? dose?.srpe ?? null;
+        };
+        const trainIdx = days.filter((d) => d.kind === "train");
+        const nTrain = trainIdx.length;
+        const weights = trainIdx.map((d) => srpeOf(d) ?? 0);
+        const wSum = weights.reduce((a, b) => a + b, 0);
+        const shares = wSum > 0 ? weights.map((w) => w / wSum) : weights.map(() => (nTrain ? 1 / nTrain : 0));
+        const trainDays = trainIdx.map((d) => ({ label: d.weekday, md: d.md ?? null }));
+        const mapped = pls.map((p) => {
+          const mu = p.matchUnit; const rb = p.recentBaseline;
+          // Per-session typical GPS + IMA load: the player's recent TRAINING baseline first
+          // (works without matches), the match unit as fallback.
+          const pl = rb?.playerLoad ?? mu.load.typical;
+          const distance = rb?.distanceM ?? mu.distance.typical;
+          const hsr = rb?.hsrM ?? mu.hsr.typical;
+          const accel = rb?.accel ?? mu.accel.typical;
+          const decel = rb?.decel ?? mu.decel.typical;
+          // Weekly PL = the per-session load across the week's training days (transparent),
+          // falling back to the engine's match-anchored weekly target.
+          const weekTarget = p.weekTargets.current === "preseason" ? p.weekTargets.preseason.weeklyLoadTarget : p.weekTargets.inseason.weeklyLoadTarget;
+          const weeklyPl = pl != null && nTrain > 0 ? Math.round(pl * nTrain) : weekTarget;
+          return {
+            name: p.name, position: p.position,
+            minutes: mu.minutesTypical, confidence: mu.confidence,
+            weeklyPl, pl, distance, hsr, accel, decel,
+            perDay: shares.map((s) => (weeklyPl == null ? null : Math.round(weeklyPl * s))),
+          };
+        }).filter((p) => p.pl != null || p.weeklyPl != null);
+        if (mapped.length) {
+          const hasGps = mapped.some((p) => p.distance != null || p.hsr != null || p.accel != null || p.decel != null);
+          playerLoad = { players: mapped, trainDays, hasGps };
+        }
+      }
+    } catch { /* best-effort — PDF stays team-level */ }
+
+    await downloadWeekSetupPdf({ teamName: isIS ? "Vikuplan" : "Week plan", weekLabel, phaseLabel, weekTypeLabel, preseason, days, playerLoad }, isIS ? "IS" : "EN");
   };
   const phaseDot: Record<SeasonPhase, string> = { preseason: "#de9328", inseason: "#1c7a4a", playoffs: "#a83e28", offseason: "#9aa0a6" };
   const dayColor = (dt: DayType, onBreak: boolean) =>
