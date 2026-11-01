@@ -19,7 +19,7 @@ import type {
  * Hides itself when there's not enough match-day baseline data yet
  * (needs ≥ 2 match days in the 28-day window).
  */
-export const SprintExposureCard: FC<{ playerId: string }> = ({ playerId }) => {
+export const SprintExposureCard: FC<{ playerId: string; isKinexon?: boolean }> = ({ playerId, isKinexon = false }) => {
   const [lang] = useLang();
   const [payload, setPayload] = useState<SprintExposurePayload | null>(null);
   const [narrative, setNarrative] = useState<string>("");
@@ -63,8 +63,11 @@ export const SprintExposureCard: FC<{ playerId: string }> = ({ playerId }) => {
   // coach knows the card exists but is awaiting data. Hides only the
   // visual bar + numbers, keeps the title visible.
   if (payload.band === "INSUFFICIENT_DATA") {
-    const why =
-      payload.matchDaysObserved < 2
+    const why = isKinexon
+      ? (lang === "IS"
+          ? "Kinexon flytur ekki út IMA bands 5-8 stride gögn, svo sprettálagið er ekki reiknanlegt fyrir Kinexon-lið — það þarf stride-gögn (t.d. Catapult IMA Free Running)."
+          : "Kinexon doesn't export IMA bands 5-8 stride data, so sprint exposure can't be computed for a Kinexon team — it needs stride-level data (e.g. Catapult IMA Free Running).")
+      : payload.matchDaysObserved < 2
         ? (lang === "IS"
             ? `Þarf ≥ 2 leikdaga (≥60 mín) með IMA bands 5-8 stride gögnum í síðustu 28 dögum til að reikna match-day demand. Núna: ${payload.matchDaysObserved} leikdagar með band-gögnum.`
             : `Need ≥ 2 match days (≥60 min) with IMA bands 5-8 stride data in the last 28 days to compute match-day demand. Currently: ${payload.matchDaysObserved} match days with band data.`)
@@ -84,11 +87,13 @@ export const SprintExposureCard: FC<{ playerId: string }> = ({ playerId }) => {
         <p className="mt-3 text-xs text-slate-600 leading-relaxed">
           {why}
         </p>
-        <p className="mt-2 text-[10px] text-slate-400 leading-snug">
-          {lang === "IS"
-            ? "Eftir Catapult IMA Free Running fix nýlega geta eldri activities vantað bands 5-8 stride gögn. Kortið birtist sjálfkrafa um leið og baseline er reiknanlegur."
-            : "After the recent Catapult IMA Free Running fix, older activities may be missing bands 5-8 stride data. The card lights up automatically once the baseline is computable."}
-        </p>
+        {!isKinexon && (
+          <p className="mt-2 text-[10px] text-slate-400 leading-snug">
+            {lang === "IS"
+              ? "Eftir Catapult IMA Free Running fix nýlega geta eldri activities vantað bands 5-8 stride gögn. Kortið birtist sjálfkrafa um leið og baseline er reiknanlegur."
+              : "After the recent Catapult IMA Free Running fix, older activities may be missing bands 5-8 stride data. The card lights up automatically once the baseline is computable."}
+          </p>
+        )}
       </div>
     );
   }

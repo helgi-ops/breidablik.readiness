@@ -117,9 +117,13 @@ function TierRow({
 export default function CoDAsymmetryCard({
   playerId,
   className = "",
+  isKinexon = false,
 }: {
   playerId: string;
   className?: string;
+  /** Kinexon records TOTAL changes of direction but not the left/right split this
+   *  card needs — so its empty state says that, not "no CoD recorded". */
+  isKinexon?: boolean;
 }) {
   const [data, setData] = React.useState<CodResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -181,8 +185,9 @@ export default function CoDAsymmetryCard({
           L/R CoD asymmetry · 14d
         </div>
         <p className="mt-1 text-slate-700">
-          No change-of-direction events recorded in the last 14 days. This card lights
-          up once Catapult IMA captures CoD data (works indoor and outdoor).
+          {isKinexon
+            ? "Kinexon records total changes of direction, but not the left/right split this asymmetry read needs — it needs a directional CoD signal (e.g. Catapult IMA L/R)."
+            : "No change-of-direction events recorded in the last 14 days. This card lights up once Catapult IMA captures CoD data (works indoor and outdoor)."}
         </p>
       </div>
     );

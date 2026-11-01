@@ -124,6 +124,7 @@ export default function CoachDecelIntelligencePage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [rows, setRows] = React.useState<Row[]>([]);
+  const [isKinexon, setIsKinexon] = React.useState(false);
   // Refresh-baselines / Re-sync-7d / Diagnose-B3 buttons removed from this
   // page (admin/dev concerns, not coach UX). Baselines run nightly via the
   // refresh_mcburnie_decel_baselines cron; Catapult re-sync moved to
@@ -140,6 +141,11 @@ export default function CoachDecelIntelligencePage() {
       const { data: profile } = await sb.from("profiles").select("team_id").eq("id", user.id).maybeSingle();
       const tid = profile?.team_id as string | undefined;
       if (!tid) { setError("Ekki tengdur við lið"); return; }
+
+      // Provider — drives the "awaiting data" copy on cards whose raw signal
+      // (L/R CoD split, IMA Free Running strides) Kinexon doesn't export.
+      const { data: teamRow } = await sb.from("teams").select("gps_provider").eq("id", tid).maybeSingle();
+      setIsKinexon(String((teamRow as { gps_provider?: string } | null)?.gps_provider ?? "") === "kinexon");
 
       const { data: roster } = await sb.from("players")
         .select("id, full_name").eq("team_id", tid).order("full_name");
@@ -548,7 +554,7 @@ export default function CoachDecelIntelligencePage() {
         )}
         {!loading && !error && rows.length > 0 && (
           <div className="space-y-2">
-            {rows.map((r) => <PlayerRow key={r.player_id} row={r} />)}
+            {rows.map((r) => <PlayerRow key={r.player_id} row={r} isKinexon={isKinexon} />)}
           </div>
         )}
       </div>
@@ -606,7 +612,7 @@ export default function CoachDecelIntelligencePage() {
 
 // ─── Player row ──────────────────────────────────────────────────────────
 
-function PlayerRow({ row }: { row: Row }) {
+function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }) {
   const [expanded, setExpanded] = React.useState(false);
   const s = row.status;
   const overall = s?.overall_flag ?? "unknown";
@@ -661,7 +667,7 @@ function PlayerRow({ row }: { row: Row }) {
           {/* Stride Intelligence — IMA Free Running 8-band stride mechanics +
               L/R CoD asymmetry. Mode-agnostic (works indoor + outdoor). Sits
               alongside McBurnie because both are stride-mechanical signals. */}
-          <StrideIntelligenceCard playerId={row.player_id} />
+          <StrideIntelligenceCard playerId={row.player_id} isKinexon={isKinexon} />
 
           {/* L/R CoD asymmetry by intensity tier (Bishop 2020). Same IMA CoD
               data as the Stride card's L/R tile, but split into Low/Med/High
@@ -669,7 +675,7 @@ function PlayerRow({ row }: { row: Row }) {
               injury-relevant high-intensity tier or just at jog-pace.
               File renamed to CodAsymCard to dodge the macOS↔Linux case
               mismatch that the original CoDAsymmetryCard.tsx kept tripping. */}
-          <CodAsymCard playerId={row.player_id} />
+          <CodAsymCard playerId={row.player_id} isKinexon={isKinexon} />
 
           {/* Peak high-intensity effort windows (Accel / Decel / CoD) from the CTR
               fixed-time bins — the most demanding 1/3/5-min stretch, High-band counts.
@@ -684,7 +690,7 @@ function PlayerRow({ row }: { row: Row }) {
               flags hamstring injury risk from undertraining; over 150%
               flags accumulated overload. Self-hides when no match-day
               baseline is available yet. */}
-          <SprintExposureCard playerId={row.player_id} />
+          <SprintExposureCard playerId={row.player_id} isKinexon={isKinexon} />
 
           {/* IMA Free Running Bands 7-8 — the sprint-cadence stride volume
               that now feeds the Decel:Sprint Coupling denominator (outdoor +

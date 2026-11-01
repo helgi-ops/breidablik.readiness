@@ -194,7 +194,7 @@ const STRIDE_TIPS = {
     "Gap between high-speed running distance and high-load stride detection (percentage points). Large gaps (>15 %pt) mean the player is producing effort that doesn't translate into distance — mechanical inefficiency or fatigue under load.",
 } as const;
 
-export default function StrideIntelligenceCard({ playerId, date: dateProp }: { playerId: string; date?: string }) {
+export default function StrideIntelligenceCard({ playerId, date: dateProp, isKinexon = false }: { playerId: string; date?: string; isKinexon?: boolean }) {
   const [data, setData] = useState<StrideApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -302,9 +302,9 @@ export default function StrideIntelligenceCard({ playerId, date: dateProp }: { p
 
         {!hasAnyTrendData ? (
           <div className="mt-3 text-xs text-slate-600">
-            No IMA Free Running sessions recorded in the last 14 days. This card
-            lights up once Catapult Vector S7+ stride detection is captured
-            (works indoor and outdoor).
+            {isKinexon
+              ? "Kinexon doesn't export per-stride IMA Free Running mechanics, so this card stays empty for a Kinexon team — the signal needs stride-level detection (e.g. Catapult Vector S7+)."
+              : "No IMA Free Running sessions recorded in the last 14 days. This card lights up once Catapult Vector S7+ stride detection is captured (works indoor and outdoor)."}
           </div>
         ) : (
           <>
