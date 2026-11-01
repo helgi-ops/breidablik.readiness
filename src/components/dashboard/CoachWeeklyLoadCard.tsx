@@ -157,6 +157,9 @@ type ViewMode = "team" | "player";
 const KINEXON_WEEKLY_LABELS: Partial<
   Record<WeeklyLoadMetricKey, { en: string; is: string; unit: string }>
 > = {
+  // Headline: total_player_load is Kinexon's Accumulated Acceleration Load —
+  // named "Acceleration Load" to stay distinct from the "Accels Load" tile.
+  totalPlayerLoad: { en: "Acceleration Load", is: "Hröðunarálag (uppsafn.)", unit: "" },
   imaTotal: { en: "Movement load", is: "Hreyfiálag", unit: "#" },
   imaAccel: { en: "Accels", is: "Hröðun", unit: "#" },
   imaDecel: { en: "Decels", is: "Hemlun", unit: "#" },

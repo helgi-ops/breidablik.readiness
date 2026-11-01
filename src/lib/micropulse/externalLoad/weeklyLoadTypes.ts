@@ -71,7 +71,8 @@ export type WeeklyLoadMetricKey =
   | (typeof WEEKLY_LOAD_METRICS_OUTDOOR)[number]
   | (typeof WEEKLY_LOAD_METRICS_INDOOR)[number]
   | (typeof WEEKLY_LOAD_METRICS_IMA)[number]
-  | (typeof WEEKLY_LOAD_METRICS_BASKETBALL_TITAN)[number];
+  | (typeof WEEKLY_LOAD_METRICS_BASKETBALL_TITAN)[number]
+  | (typeof WEEKLY_LOAD_METRICS_KINEXON)[number];
 
 // ─── Basketball KPI list ───────────────────────────────────────────────────
 // Basketball is indoor with NO FMP stride bands (those are a football feature) —
@@ -102,8 +103,39 @@ export const WEEKLY_LOAD_METRICS_BASKETBALL_TITAN = [
   "highIntensity",
 ] as const;
 
+// ─── Kinexon (indoor LPS) KPI list ─────────────────────────────────────────
+// Kinexon is indoor positioning, not Catapult IMA — so the weekly card shows
+// Kinexon's OWN populated load variables under their real Kinexon names, never
+// "IMA" (CLAUDE.md: Kinexon surfaces are not labelled IMU/IMA). The headline is
+// the accumulated Acceleration Load (total_player_load); the companion tiles are
+// the accumulation signals this club actually records (counts/CoD are 0 here, so
+// they are deliberately omitted). Values come from raw_payload_json via the
+// Kinexon catalog, so adding one is a key here + a label below.
+export const WEEKLY_LOAD_METRICS_KINEXON = [
+  "totalPlayerLoad",
+  "kxAccelsLoad",
+  "kxDecelsLoad",
+  "kxChangesOfOrientation",
+  "kxExertions",
+  "kxMechLoad",
+  "kxMetabWork",
+] as const;
+
+/** Maps a Kinexon weekly key → its catalog metric key (the read recipe). */
+export const KINEXON_WEEKLY_METRIC_KEYS: Partial<Record<WeeklyLoadMetricKey, string>> = {
+  kxAccelsLoad: "accels_load",
+  kxDecelsLoad: "decels_load",
+  kxChangesOfOrientation: "coo",
+  kxExertions: "exertions",
+  kxMechLoad: "mech_load",
+  kxMetabWork: "metab_work",
+};
+
 /** Return the active KPI list for a team's sport + indoor flag + provider. */
-export function getActiveWeeklyLoadMetrics(indoor: boolean, isBasketball = false, isTitan = false): readonly WeeklyLoadMetricKey[] {
+export function getActiveWeeklyLoadMetrics(indoor: boolean, isBasketball = false, isTitan = false, isKinexon = false): readonly WeeklyLoadMetricKey[] {
+  // Kinexon wins over sport: indoor LPS has its own populated load variables,
+  // whether the team is football or basketball.
+  if (isKinexon) return WEEKLY_LOAD_METRICS_KINEXON;
   if (isBasketball) return isTitan ? WEEKLY_LOAD_METRICS_BASKETBALL_TITAN : WEEKLY_LOAD_METRICS_BASKETBALL;
   return indoor ? WEEKLY_LOAD_METRICS_INDOOR : WEEKLY_LOAD_METRICS_OUTDOOR;
 }
@@ -127,6 +159,8 @@ export const ALL_WEEKLY_LOAD_METRICS: readonly WeeklyLoadMetricKey[] = [
   ...WEEKLY_LOAD_METRICS_BASKETBALL_TITAN.filter(
     (k) => k !== "totalPlayerLoad",
   ),
+  // Kinexon-only keys (totalPlayerLoad already present).
+  ...WEEKLY_LOAD_METRICS_KINEXON.filter((k) => k !== "totalPlayerLoad"),
 ] as const;
 
 // ─── Labels ────────────────────────────────────────────────────────────────
@@ -160,6 +194,13 @@ export const WEEKLY_LOAD_LABELS: Record<WeeklyLoadMetricKey, { en: string; is: s
   lowIntensity:     { en: "Low",             is: "Lágt",              unit: "" },
   midIntensity:     { en: "Mid",             is: "Miðlungs",          unit: "" },
   highIntensity:    { en: "High",            is: "Hátt",              unit: "" },
+  // Kinexon (indoor LPS) — real Kinexon export names (see KINEXON_CATALOG).
+  kxAccelsLoad:           { en: "Accels Load",           is: "Hröðunarálag",       unit: "" },
+  kxDecelsLoad:           { en: "Decels Load",           is: "Hægingarálag",       unit: "" },
+  kxChangesOfOrientation: { en: "Changes of Orientation", is: "Stefnusnúningar",   unit: "#" },
+  kxExertions:            { en: "Exertions",             is: "Átök",               unit: "#" },
+  kxMechLoad:             { en: "Mechanical Load",        is: "Vélrænt álag",      unit: "" },
+  kxMetabWork:            { en: "Metabolic Work",         is: "Efnaskiptavinna",   unit: "kcal" },
 };
 
 // ─── Shared result types ───────────────────────────────────────────────────

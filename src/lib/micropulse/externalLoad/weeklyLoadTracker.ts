@@ -34,10 +34,15 @@ import type {
   WeeklyLoadMetricKey,
 } from "./weeklyLoadTypes";
 
-import { getActiveWeeklyLoadMetrics } from "./weeklyLoadTypes";
+import { getActiveWeeklyLoadMetrics, KINEXON_WEEKLY_METRIC_KEYS } from "./weeklyLoadTypes";
 import { weeklyMonotony } from "./monotony";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
+import { KINEXON_CATALOG, readKinexonMetric, type KinexonMetric } from "@/lib/integrations/kinexon/metricCatalog";
+
+// Flat catalog lookup so a Kinexon weekly key resolves to its read recipe once.
+const KINEXON_METRIC_BY_KEY: Record<string, KinexonMetric> = {};
+for (const g of KINEXON_CATALOG) for (const m of g.metrics) KINEXON_METRIC_BY_KEY[m.key] = m;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -152,6 +157,15 @@ function extractMetric(row: RawRow, key: WeeklyLoadMetricKey): number | null {
     case "lowIntensity":      return row.raw_payload_json?.movement_profile?.low ?? null;
     case "midIntensity":      return row.raw_payload_json?.movement_profile?.mid ?? null;
     case "highIntensity":     return row.raw_payload_json?.movement_profile?.high ?? null;
+    default: {
+      // Kinexon (indoor LPS) keys read their value from raw_payload_json via the
+      // catalog — typed col first, else the original Kinexon header. Null when
+      // the metric isn't present (never 0, so a missing cell can't skew a baseline).
+      const catalogKey = KINEXON_WEEKLY_METRIC_KEYS[key];
+      const m = catalogKey ? KINEXON_METRIC_BY_KEY[catalogKey] : undefined;
+      if (m) return readKinexonMetric(row as unknown as Record<string, unknown>, m);
+      return null;
+    }
   }
 }
 
@@ -203,14 +217,14 @@ export async function computeWeeklyLoad(args: {
   // Basketball is indoor but has no FMP; it uses the Player Load + IMA set.
   const indoor = args.indoor ?? (await getTeamIndoorMode(teamId));
   const isBasketball = (await resolveTeamSport(sb, teamId)) === "basketball";
-  // Titan indoor-IMU basketball teams have no Catapult IMA, so they use the Load Index +
-  // jumps + impacts + high-intensity KPI set instead of the empty IMA tiles.
-  let isTitan = false;
-  if (isBasketball) {
-    const { data: teamRow } = await sb.from("teams").select("gps_provider").eq("id", teamId).maybeSingle();
-    isTitan = String((teamRow as { gps_provider?: string | null } | null)?.gps_provider ?? "").toLowerCase() === "titan";
-  }
-  const activeMetrics = args.metrics ?? getActiveWeeklyLoadMetrics(indoor, isBasketball, isTitan);
+  // Provider drives the KPI set too: Titan indoor-IMU teams have no Catapult IMA
+  // (they use Load Index + jumps + impacts), and Kinexon indoor-LPS teams use
+  // their own populated load variables (accels/decels load, exertions, CoO, …).
+  const { data: teamRow } = await sb.from("teams").select("gps_provider").eq("id", teamId).maybeSingle();
+  const provider = String((teamRow as { gps_provider?: string | null } | null)?.gps_provider ?? "").toLowerCase();
+  const isTitan = isBasketball && provider === "titan";
+  const isKinexon = provider === "kinexon";
+  const activeMetrics = args.metrics ?? getActiveWeeklyLoadMetrics(indoor, isBasketball, isTitan, isKinexon);
 
   // Read team config once to know whether the baseline rollup should
   // exclude match days (recommended for indoor teams).

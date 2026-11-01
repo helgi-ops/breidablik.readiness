@@ -35,7 +35,8 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { MARTIN_GARCIA_TEMPLATE } from "./loadTemplatePresets";
 import type { WeeklyLoadMetricKey } from "./weeklyLoadTypes";
-import { getActiveWeeklyLoadMetrics } from "./weeklyLoadTypes";
+import { getActiveWeeklyLoadMetrics, KINEXON_WEEKLY_METRIC_KEYS } from "./weeklyLoadTypes";
+import { KINEXON_CATALOG, readKinexonMetric, type KinexonMetric } from "@/lib/integrations/kinexon/metricCatalog";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
@@ -168,8 +169,19 @@ function metricFromRow(row: Record<string, unknown>, key: WeeklyLoadMetricKey): 
       const field = key === "settled" ? mp?.settled : key === "lowIntensity" ? mp?.low : key === "midIntensity" ? mp?.mid : mp?.high;
       return typeof field === "number" && Number.isFinite(field) ? field : null;
     }
+    default: {
+      // Kinexon (indoor LPS) keys read via the catalog (raw_payload_json / typed
+      // col). Null-safe when raw_payload_json isn't selected for this path.
+      const catalogKey = KINEXON_WEEKLY_METRIC_KEYS[key];
+      const m = catalogKey ? KINEXON_METRIC_BY_KEY[catalogKey] : undefined;
+      return m ? readKinexonMetric(row, m) : null;
+    }
   }
 }
+
+// Flat catalog lookup so a Kinexon weekly key resolves to its read recipe once.
+const KINEXON_METRIC_BY_KEY: Record<string, KinexonMetric> = {};
+for (const g of KINEXON_CATALOG) for (const m of g.metrics) KINEXON_METRIC_BY_KEY[m.key] = m;
 
 /** Columns we need to select from `player_external_load_daily` for match
  *  demand averaging — union of outdoor + indoor columns. */
