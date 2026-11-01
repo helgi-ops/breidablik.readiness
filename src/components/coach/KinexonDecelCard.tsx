@@ -124,8 +124,8 @@ export default function KinexonDecelCard({
 
       <p className="mt-3 text-[10px] leading-snug text-slate-400">
         {isEN
-          ? "Kinexon load/effort signals (Decels Load, Accels Load, Exertions, Mechanical Load) vs the player's own 28-day norm — McBurnie 2022 dimensions on measured load, not event counts. L/R CoD asymmetry and decel:sprint coupling need signals Kinexon doesn't export. Descriptive — never the readiness verdict."
-          : "Kinexon álags/átaks-merki (Decels Load, Accels Load, Exertions, Mechanical Load) á móti eigin 28-daga viðmiði — McBurnie 2022 víddir á mældu álagi, ekki atburðatalningu. L/R CoD ósamhverfa og hemlun:sprettur þurfa merki sem Kinexon flytur ekki út. Lýsandi — aldrei readiness-dómur."}
+          ? "Kinexon load/effort signals (Decels Load, Accels Load, Exertions, Mechanical Load) vs the player's own 28-day norm — McBurnie 2022 dimensions on measured load, not event counts. L/R CoD asymmetry (per-intensity-tier split) and decel:sprint coupling (sprint strides) aren't available from this Kinexon config. Descriptive — never the readiness verdict."
+          : "Kinexon álags/átaks-merki (Decels Load, Accels Load, Exertions, Mechanical Load) á móti eigin 28-daga viðmiði — McBurnie 2022 víddir á mældu álagi, ekki atburðatalningu. L/R CoD ósamhverfa (eftir ákefðarþrepum) og hemlun:sprettur (sprett-skref) eru ekki í boði úr þessari Kinexon-uppsetningu. Lýsandi — aldrei readiness-dómur."}
       </p>
     </div>
   );

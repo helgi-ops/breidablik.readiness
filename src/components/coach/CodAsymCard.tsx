@@ -121,8 +121,10 @@ export default function CoDAsymmetryCard({
 }: {
   playerId: string;
   className?: string;
-  /** Kinexon records TOTAL changes of direction but not the left/right split this
-   *  card needs — so its empty state says that, not "no CoD recorded". */
+  /** Kinexon HAS left/right CoD columns, but (1) this club's export leaves them 0
+   *  (it records Changes of Orientation instead) and (2) it gives only a total L/R
+   *  count, not the per-intensity-tier split this Bishop read needs — so the empty
+   *  state says exactly that, not "no CoD recorded". */
   isKinexon?: boolean;
 }) {
   const [data, setData] = React.useState<CodResponse | null>(null);
@@ -186,7 +188,7 @@ export default function CoDAsymmetryCard({
         </div>
         <p className="mt-1 text-slate-700">
           {isKinexon
-            ? "Kinexon records total changes of direction, but not the left/right split this asymmetry read needs — it needs a directional CoD signal (e.g. Catapult IMA L/R)."
+            ? "Kinexon does report left/right changes of direction, but in this export they're all zero — this setup records “Changes of Orientation” instead of CoD. And Kinexon gives only a total L/R count, not the per-intensity-tier (Low/Med/High) split the Bishop asymmetry read needs."
             : "No change-of-direction events recorded in the last 14 days. This card lights up once Catapult IMA captures CoD data (works indoor and outdoor)."}
         </p>
       </div>
