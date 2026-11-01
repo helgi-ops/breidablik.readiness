@@ -119,6 +119,8 @@ export const WEEKLY_LOAD_METRICS_KINEXON = [
   "kxExertions",
   "kxMechLoad",
   "kxMetabWork",
+  "kxPhysioLoad",
+  "kxHmpd",
 ] as const;
 
 /** Maps a Kinexon weekly key → its catalog metric key (the read recipe). */
@@ -129,6 +131,8 @@ export const KINEXON_WEEKLY_METRIC_KEYS: Partial<Record<WeeklyLoadMetricKey, str
   kxExertions: "exertions",
   kxMechLoad: "mech_load",
   kxMetabWork: "metab_work",
+  kxPhysioLoad: "physio_load",
+  kxHmpd: "hmpd",
 };
 
 /** Return the active KPI list for a team's sport + indoor flag + provider. */
@@ -201,6 +205,8 @@ export const WEEKLY_LOAD_LABELS: Record<WeeklyLoadMetricKey, { en: string; is: s
   kxExertions:            { en: "Exertions",             is: "Átök",               unit: "#" },
   kxMechLoad:             { en: "Mechanical Load",        is: "Vélrænt álag",      unit: "" },
   kxMetabWork:            { en: "Metabolic Work",         is: "Efnaskiptavinna",   unit: "kcal" },
+  kxPhysioLoad:           { en: "Physio Load",            is: "Lífeðlisálag",      unit: "" },
+  kxHmpd:                 { en: "High-metab-power dist",   is: "Hátt efnaskiptaafl (vegal.)", unit: "m" },
 };
 
 // ─── Shared result types ───────────────────────────────────────────────────

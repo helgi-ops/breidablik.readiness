@@ -189,6 +189,8 @@ const SELECT_COLS = [
   "ima_fr_band6_stride_count", "ima_fr_band7_stride_count", "ima_fr_band8_stride_count",
   // Titan indoor IMU (basketball)
   "jumps", "impacts", "raw_payload_json",
+  // Kinexon typed column promoted at ingestion (hmpd reads it before raw_payload_json).
+  "high_metabolic_load_distance_m",
 ].join(", ");
 
 export async function computeWeeklyLoad(args: {
