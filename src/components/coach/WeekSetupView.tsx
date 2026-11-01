@@ -1481,17 +1481,28 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           weekTargets: { current: "preseason" | "inseason"; preseason: { weeklyLoadTarget: number | null }; inseason: { weeklyLoadTarget: number | null } };
           recentBaseline: { playerLoad: number | null; hsrM: number | null; distanceM: number | null; accel: number | null; decel: number | null } | null;
         }>;
-        // Training days + their planned session load → the distribution weights.
+        // The team's OWN data-derived MD-day load shape (MD-5 ≈ +15%, MD-1 ≈ -8%, …),
+        // keyed "MD-5"/"MD-1"/"MD+1". This is the precise per-MD multiplier the per-day
+        // breakdown uses, instead of the day plan's coarse Low/Moderate/High band.
+        const mdShape = (j?.plan?.mdShape ?? {}) as Record<string, number>;
         const srpeOf = (d: (typeof days)[number]): number | null => {
           const idea = "idea" in d ? d.idea : null;
           const dose = "dose" in d ? d.dose : null;
           return idea?.srpe ?? dose?.srpe ?? null;
         };
         const trainIdx = days.filter((d) => d.kind === "train");
-        const nTrain = trainIdx.length;
-        const weights = trainIdx.map((d) => srpeOf(d) ?? 0);
-        const wSum = weights.reduce((a, b) => a + b, 0);
-        const shares = wSum > 0 ? weights.map((w) => w / wSum) : weights.map(() => (nTrain ? 1 / nTrain : 0));
+        const srpeVals = trainIdx.map((d) => srpeOf(d)).filter((x): x is number => x != null && x > 0);
+        const srpeMean = srpeVals.length ? srpeVals.reduce((a, b) => a + b, 0) / srpeVals.length : 0;
+        // Per training-day multiplier: the MD-day shape (precise) where the team has it,
+        // else the planned session load normalised to the week's mean. A planned rest/off
+        // day (no session load) stays 0 so it carries no load.
+        const dayRatios = trainIdx.map((d) => {
+          const s = srpeOf(d);
+          if (s == null || s <= 0) return 0; // planned rest within a training slot
+          const md = d.md;
+          if (md && mdShape[md] != null && mdShape[md] > 0) return mdShape[md];
+          return srpeMean > 0 ? s / srpeMean : 1;
+        });
         const trainDays = trainIdx.map((d) => ({ label: d.weekday, md: d.md ?? null }));
         const mapped = pls.map((p) => {
           const mu = p.matchUnit; const rb = p.recentBaseline;
@@ -1502,15 +1513,15 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           const hsr = rb?.hsrM ?? mu.hsr.typical;
           const accel = rb?.accel ?? mu.accel.typical;
           const decel = rb?.decel ?? mu.decel.typical;
-          // Weekly PL = the per-session load across the week's training days (transparent),
-          // falling back to the engine's match-anchored weekly target.
+          // Each MD-day's load = the player's session baseline × that MD-day's multiplier.
+          const perDay = dayRatios.map((r) => (pl == null ? null : Math.round(pl * r)));
+          // Weekly PL = the sum of the per-MD days (precise), else the engine's weekly target.
           const weekTarget = p.weekTargets.current === "preseason" ? p.weekTargets.preseason.weeklyLoadTarget : p.weekTargets.inseason.weeklyLoadTarget;
-          const weeklyPl = pl != null && nTrain > 0 ? Math.round(pl * nTrain) : weekTarget;
+          const weeklyPl = pl != null ? perDay.reduce<number>((a, b) => a + (b ?? 0), 0) : weekTarget;
           return {
             name: p.name, position: p.position,
             minutes: mu.minutesTypical, confidence: mu.confidence,
-            weeklyPl, pl, distance, hsr, accel, decel,
-            perDay: shares.map((s) => (weeklyPl == null ? null : Math.round(weeklyPl * s))),
+            weeklyPl, pl, distance, hsr, accel, decel, perDay,
           };
         }).filter((p) => p.pl != null || p.weeklyPl != null);
         if (mapped.length) {
