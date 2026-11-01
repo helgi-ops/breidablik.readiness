@@ -239,7 +239,11 @@ export async function GET(req: Request) {
     const timeZone = getOperationalTimezone();
     const dateKey = validDateKey(url.searchParams.get("date")) ?? getDateKeyInTimezone(new Date(), timeZone);
 
-    let rosterQuery = sb.from("players").select("id, full_name, team_id, user_id").not("user_id", "is", null);
+    // Coach-facing: resolve names for EVERY player on the team, including those
+    // with no app login (e.g. demo squads) — otherwise their rows read "Unknown
+    // player". (The old .not("user_id") filter suited player-facing nudges, not a
+    // coach dashboard.)
+    let rosterQuery = sb.from("players").select("id, full_name, team_id, user_id");
     if (teamId) rosterQuery = rosterQuery.eq("team_id", teamId);
     const { data: rosterData, error: rosterErr } = await rosterQuery;
     if (rosterErr) return NextResponse.json({ ok: false, error: rosterErr.message }, { status: 500 });

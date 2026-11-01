@@ -319,8 +319,9 @@ export async function GET(req: Request): Promise<NextResponse<ResponsePayload>> 
     // 42 days: 28-day baseline + 7-day volatility window + 7-day buffer
     const startDate = dateMinusDays(dateKey, 42);
 
-    // Roster
-    let rosterQuery = sb.from("players").select("id, full_name, team_id, user_id").not("user_id", "is", null);
+    // Roster — coach-facing: resolve names for every player on the team, incl.
+    // those with no app login (demo squads), so rows don't read "Unknown player".
+    let rosterQuery = sb.from("players").select("id, full_name, team_id, user_id");
     if (teamId) rosterQuery = rosterQuery.eq("team_id", teamId);
     const { data: rosterData, error: rosterErr } = await rosterQuery;
     if (rosterErr) return NextResponse.json({ ok: false, error: rosterErr.message }, { status: 500 });

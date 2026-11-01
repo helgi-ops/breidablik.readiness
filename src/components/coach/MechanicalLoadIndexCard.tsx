@@ -268,8 +268,8 @@ export default function MechanicalLoadIndexCard({ teamId, lang = "EN" }: { teamI
                     <InfoTh
                       title={is ? "Undirskor" : "Sub-scores"}
                       body={is
-                        ? "DSS = Deceleration Stress Score. ASS = Acceleration Stress Score. CSS = Change-of-direction Stress Score (ef til). GDS = G-force Density Score (player load/mín). Hvert skor er 0–100 miðað við 28d baseline."
-                        : "DSS = Deceleration Stress Score. ASS = Acceleration Stress Score. CSS = Change-of-direction Stress Score (if present). GDS = G-force Density Score (player load/min). Each score is 0–100 vs the 28-day baseline."}
+                        ? `DSS = Deceleration Stress Score. ASS = Acceleration Stress Score. CSS = Change-of-direction Stress Score (ef til). GDS = G-force Density Score (player load/mín). Hvert skor er 0–100 miðað við 28d baseline.${anyMeasured ? " Fyrir mældar (Kinexon) raðir er aðalskorið bein mæling — þessi undirskor eru samhengi og leggjast ekki saman í MLI." : ""}`
+                        : `DSS = Deceleration Stress Score. ASS = Acceleration Stress Score. CSS = Change-of-direction Stress Score (if present). GDS = G-force Density Score (player load/min). Each score is 0–100 vs the 28-day baseline.${anyMeasured ? " For measured (Kinexon) rows the headline is a direct measurement — these components are context and do not sum to the MLI." : ""}`}
                     >{is ? "Undirskor" : "Sub-scores"}</InfoTh>
                     <InfoTh
                       title={is ? "Flögg" : "Flags"}
@@ -295,6 +295,11 @@ export default function MechanicalLoadIndexCard({ teamId, lang = "EN" }: { teamI
                         <span className={`ml-1 inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${bandClass(row.mli_band)}`}>
                           {row.mli_band?.replace("_", " ") ?? "—"}
                         </span>
+                        {row.mli_basis === "measured" && (
+                          <span className="ml-1 inline-flex rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700" title={is ? "Bein Kinexon-mæling (ekki hröðun/hemlun-mat)" : "Direct Kinexon measurement (not the accel/decel estimate)"}>
+                            {is ? "mælt" : "measured"}
+                          </span>
+                        )}
                       </td>
                       <td className="py-1 pr-2">
                         <span className="tabular-nums font-semibold text-slate-800">{row.residual_mli ?? "—"}</span>
@@ -302,7 +307,10 @@ export default function MechanicalLoadIndexCard({ teamId, lang = "EN" }: { teamI
                           {row.residual_band ?? "—"}
                         </span>
                       </td>
-                      <td className="py-1 pr-2 text-slate-600">
+                      <td className={`py-1 pr-2 ${row.mli_basis === "measured" ? "text-slate-400 italic" : "text-slate-600"}`}>
+                        {/* For a measured headline the components are context, not the
+                            basis — they won't sum to the MLI, so mark them as such. */}
+                        {row.mli_basis === "measured" ? (is ? "samhengi: " : "context: ") : ""}
                         {[
                           `DSS ${row.dss ?? "—"}`,
                           `ASS ${row.ass ?? "—"}`,
