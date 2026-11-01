@@ -21,6 +21,7 @@ const M_DECELS = metric("decels_load");
 const M_ACCELS = metric("accels_load");
 const M_EXER_HI = metric("exertions_hi");
 const M_MECH = metric("mech_load");
+const M_COD = metric("cod");
 const M_ORIENT = metric("coo");
 
 function flagDot(flag: KxDecelFlag): string {
@@ -49,7 +50,7 @@ export default function KinexonDecelCard({
       const since = (() => { const d = new Date(); d.setUTCDate(d.getUTCDate() - 35); return d.toISOString().slice(0, 10); })();
       const { data } = await supabase
         .from("player_external_load_daily")
-        .select("date, source, total_player_load, raw_payload_json")
+        .select("date, source, total_player_load, ima_cod, raw_payload_json")
         .eq("player_id", playerId)
         .eq("source", "kinexon")
         .gte("date", since)
@@ -62,6 +63,7 @@ export default function KinexonDecelCard({
         exertionsHigh: readKinexonMetric(r, M_EXER_HI),
         mechLoad: readKinexonMetric(r, M_MECH),
         playerLoad: typeof r.total_player_load === "number" ? r.total_player_load : null,
+        changesOfDirection: readKinexonMetric(r, M_COD),
         changesOfOrientation: readKinexonMetric(r, M_ORIENT),
       }));
       setRows(mapped);
@@ -126,8 +128,8 @@ export default function KinexonDecelCard({
 
       <p className="mt-3 text-[10px] leading-snug text-slate-400">
         {isEN
-          ? "Kinexon load/effort signals (Decels Load, Accels Load, Exertions, Mechanical Load) vs the player's own 28-day norm — McBurnie 2022 dimensions on measured load, not event counts. 'Directional work' uses Changes of Orientation as a CoD/agility proxy (this config records orientation, not changes of direction). L/R CoD asymmetry (per-intensity-tier split) and decel:sprint coupling aren't available here. Descriptive — never the readiness verdict."
-          : "Kinexon álags/átaks-merki (Decels Load, Accels Load, Exertions, Mechanical Load) á móti eigin 28-daga viðmiði — McBurnie 2022 víddir á mældu álagi, ekki atburðatalningu. 'Stefnuvinna' notar Changes of Orientation sem CoD/agility-proxy (þessi uppsetning skráir orientation, ekki changes of direction). L/R CoD ósamhverfa (eftir ákefðarþrepum) og hemlun:sprettur eru ekki í boði hér. Lýsandi — aldrei readiness-dómur."}
+          ? "Kinexon load/effort signals (Decels Load, Accels Load, Exertions, Mechanical Load) vs the player's own 28-day norm — McBurnie 2022 dimensions on measured load, not event counts. Directional work shows both Changes of Direction (CoD) and Changes of Orientation (CoO), flagged on CoD. L/R CoD asymmetry (per-intensity-tier split) and decel:sprint coupling aren't available here. Descriptive — never the readiness verdict."
+          : "Kinexon álags/átaks-merki (Decels Load, Accels Load, Exertions, Mechanical Load) á móti eigin 28-daga viðmiði — McBurnie 2022 víddir á mældu álagi, ekki atburðatalningu. Stefnuvinna sýnir bæði Changes of Direction (CoD) og Changes of Orientation (CoO), flöggað á CoD. L/R CoD ósamhverfa (eftir ákefðarþrepum) og hemlun:sprettur eru ekki í boði hér. Lýsandi — aldrei readiness-dómur."}
       </p>
     </div>
   );

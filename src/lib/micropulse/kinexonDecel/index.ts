@@ -27,8 +27,11 @@ export interface KinexonDecelDay {
   exertionsHigh: number | null;
   mechLoad: number | null;
   playerLoad: number | null;
-  /** Changes of Orientation — the club's directional-movement signal when it
-   *  doesn't capture Changes of Direction. Used as a CoD/agility proxy. */
+  /** Changes of Direction (ima_cod) — the real CoD/agility signal when the config
+   *  captures it; primary for the directional dimension. */
+  changesOfDirection: number | null;
+  /** Changes of Orientation — shown alongside CoD; the CoD fallback where a config
+   *  records orientation but not direction. */
   changesOfOrientation: number | null;
 }
 
@@ -101,6 +104,7 @@ export function computeKinexonDecel(rowsIn: KinexonDecelDay[], refDateIn?: strin
   const exer = snapshot(rows, (d) => d.exertionsHigh, refDate);
   const mech = snapshot(rows, (d) => d.mechLoad, refDate);
   const orient = snapshot(rows, (d) => d.changesOfOrientation, refDate);
+  const cod = snapshot(rows, (d) => d.changesOfDirection, refDate);
 
   // ── 1. Eccentric load (overload) — Decels Load vs own 28d norm ──
   const eccFlag = zFlag(decel.z, "high");
@@ -120,11 +124,16 @@ export function computeKinexonDecel(rowsIn: KinexonDecelDay[], refDateIn?: strin
   // ── 3. High-intensity braking exposure — Exertions (high) vs own norm ──
   const hiFlag = zFlag(exer.z, "high");
 
-  // ── Directional work — Changes of Orientation as a CoD/agility proxy (the club
-  // doesn't capture Changes of Direction) vs the player's own norm. ──
-  const dirFlag = zFlag(orient.z, "high");
-  const dirPctAbove = isNum(orient.z) && isNum(orient.mean28) && isNum(orient.recent7) && orient.mean28 > 0
-    ? Math.round(((orient.recent7 - orient.mean28) / orient.mean28) * 100) : null;
+  // ── Directional work — Changes of Direction (the real CoD signal) vs the player's
+  // own norm, with Changes of Orientation shown alongside. CoO is the fallback where
+  // a config records orientation but not direction. ──
+  const dirPrimary = isNum(cod.recent7) ? cod : orient; // CoD if captured, else CoO
+  const dirFlag = zFlag(dirPrimary.z, "high");
+  const dirPctAbove = isNum(dirPrimary.z) && isNum(dirPrimary.mean28) && isNum(dirPrimary.recent7) && dirPrimary.mean28 > 0
+    ? Math.round(((dirPrimary.recent7 - dirPrimary.mean28) / dirPrimary.mean28) * 100) : null;
+  const codText = isNum(cod.recent7) ? `CoD ${Math.round(cod.recent7)}` : null;
+  const cooText = isNum(orient.recent7) ? `CoO ${Math.round(orient.recent7)}` : null;
+  const dirUsesCod = isNum(cod.recent7);
 
   // ── 4. Exposure concentration — peak-day Decels Load share of 28d total ──
   const conc = decel.peakPctOf28;
@@ -156,11 +165,11 @@ export function computeKinexonDecel(rowsIn: KinexonDecelDay[], refDateIn?: strin
       coachIS: hiFlag === "no_data" ? "engin háákefðar-átaksgögn" : hiFlag === "green" ? "háákefðar-átök í eðlilegu bili" : "háákefðar-átök yfir 28-daga viðmiði",
     },
     {
-      key: "directional_work", labelEN: "Directional work (orientation)", labelIS: "Stefnuvinna (orientation)",
+      key: "directional_work", labelEN: "Change of direction & orientation", labelIS: "Stefnubreytingar & snúningar",
       flag: dirFlag,
-      valueText: isNum(orient.recent7) ? `${Math.round(orient.recent7)} /day (28d avg ${isNum(orient.mean28) ? Math.round(orient.mean28) : "—"})` : "no data",
-      coachEN: dirFlag === "no_data" ? "no directional-movement data" : dirPctAbove != null && dirPctAbove !== 0 ? `changes of orientation (CoD proxy) ${dirPctAbove > 0 ? "+" : ""}${dirPctAbove}% vs his norm` : "directional work is in his normal range",
-      coachIS: dirFlag === "no_data" ? "engin stefnuhreyfigögn" : dirPctAbove != null && dirPctAbove !== 0 ? `stefnubreytingar (CoD proxy) ${dirPctAbove > 0 ? "+" : ""}${dirPctAbove}% á móti viðmiði` : "stefnuvinna í eðlilegu bili",
+      valueText: [codText, cooText].filter(Boolean).join(" · ") ? `${[codText, cooText].filter(Boolean).join(" · ")} /day` : "no data",
+      coachEN: dirFlag === "no_data" ? "no directional-movement data" : dirPctAbove != null && dirPctAbove !== 0 ? `${dirUsesCod ? "changes of direction" : "changes of orientation"} ${dirPctAbove > 0 ? "+" : ""}${dirPctAbove}% vs his norm` : "directional work is in his normal range",
+      coachIS: dirFlag === "no_data" ? "engin stefnuhreyfigögn" : dirPctAbove != null && dirPctAbove !== 0 ? `${dirUsesCod ? "stefnubreytingar" : "stefnusnúningar"} ${dirPctAbove > 0 ? "+" : ""}${dirPctAbove}% á móti viðmiði` : "stefnuvinna í eðlilegu bili",
     },
     {
       key: "concentration", labelEN: "Exposure concentration", labelIS: "Álagsþétting",
