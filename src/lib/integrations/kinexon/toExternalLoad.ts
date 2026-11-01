@@ -85,7 +85,12 @@ export function kinexonRowToExternalLoad(r: KinexonRow, playerId: string, teamId
     accelerations: intOrNull(r.accelerations),
     decelerations: intOrNull(r.decelerations),
     accel_b2_3_tot_effs_gen2: intOrNull(r.accelHighEfforts),
-    decel_b2_3_tot_effs_gen2: intOrNull(r.decelHighEfforts),
+    // High-effort decel for the existing decel surfaces: prefer the Decel 3+4
+    // count bands, but fall back to Exertions (high) when a config leaves the
+    // count bands empty (common indoors) — otherwise this reads zero.
+    decel_b2_3_tot_effs_gen2: (r.decelHighEfforts != null && r.decelHighEfforts > 0)
+      ? intOrNull(r.decelHighEfforts)
+      : intOrNull(r.exertionsHigh),
     cod_events: intOrNull(r.codEvents),
     ima_cod: intOrNull(r.codEvents),
     jumps: intOrNull(r.jumps),
@@ -106,6 +111,13 @@ export function kinexonRowToExternalLoad(r: KinexonRow, playerId: string, teamId
       jump_load_j: r.jumpLoadJ,
       cod_left: r.codLeft,
       cod_right: r.codRight,
+      // Stable-key copies of the load/effort decel signals the Kinexon
+      // Deceleration Intelligence reads (so it never depends on exact export
+      // header spelling). Original headers are still preserved in ...r.raw.
+      "Decels Load": r.decelsLoad,
+      "Accels Load": r.accelsLoad,
+      "Exertions (high)": r.exertionsHigh,
+      "Mechanical Intensity": r.mechanicalIntensity,
       ...r.raw,
     },
   };

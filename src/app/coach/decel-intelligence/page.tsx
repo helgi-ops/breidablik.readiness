@@ -32,6 +32,7 @@ import SprintExposureCard from "@/components/coach/SprintExposureCard";
 import SprintCadenceBandsCard from "@/components/coach/SprintCadenceBandsCard";
 import PlayerLoadAcwrCard from "@/components/coach/PlayerLoadAcwrCard";
 import CodAsymCard from "@/components/coach/CodAsymCard";
+import KinexonDecelCard from "@/components/coach/KinexonDecelCard";
 import PeakEffortWindowsCard from "@/components/coach/PeakEffortWindowsCard";
 import CoachAssignProtocolButton from "@/components/recovery/CoachAssignProtocolButton";
 import LiteTierBanner from "@/components/coach/LiteTierBanner";
@@ -614,6 +615,7 @@ export default function CoachDecelIntelligencePage() {
 
 function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }) {
   const [expanded, setExpanded] = React.useState(false);
+  const [rowLang] = useLang();
   const s = row.status;
   const overall = s?.overall_flag ?? "unknown";
 
@@ -663,6 +665,11 @@ function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }
               the LLM never invents its own reading of the numbers — see
               lib/micropulse/decelNarrative for the design rationale. */}
           <PlayerDecelSummaryCard playerId={row.player_id} />
+
+          {/* Kinexon Deceleration Intelligence — the primary decel read for a
+              Kinexon team, built on measured Decels/Accels Load + Exertions
+              (the count-based McBurnie tiles below are near-empty for Kinexon). */}
+          {isKinexon && <KinexonDecelCard playerId={row.player_id} lang={rowLang === "EN" ? "EN" : "IS"} />}
 
           {/* Stride Intelligence — IMA Free Running 8-band stride mechanics +
               L/R CoD asymmetry. Mode-agnostic (works indoor + outdoor). Sits

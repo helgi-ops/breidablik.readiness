@@ -112,6 +112,11 @@ export interface KinexonRow {
   decelerations: number | null;       // sum Decel 1..4
   accelHighEfforts: number | null;    // Accel 3 + 4
   decelHighEfforts: number | null;    // Decel 3 + 4
+  decelsLoad: number | null;          // Decels Load — total eccentric/braking load
+  accelsLoad: number | null;          // Accels Load — total acceleration load
+  exertions: number | null;           // Exertions — high-intensity effort count
+  exertionsHigh: number | null;       // Exertions (high) + (very high)
+  mechanicalIntensity: number | null; // Mechanical Intensity
   codEvents: number | null;           // Changes of Direction (fills the CoD gap)
   codLeft: number | null;
   codRight: number | null;
@@ -194,6 +199,15 @@ export function parseKinexonExport(headers: string[], rows: string[][]): Kinexon
     accel3: findCol(normed, ["accel", "3"]), accel4: findCol(normed, ["accel", "4"]),
     decel1: findCol(normed, ["decel", "1"]), decel2: findCol(normed, ["decel", "2"]),
     decel3: findCol(normed, ["decel", "3"]), decel4: findCol(normed, ["decel", "4"]),
+    // Load/effort decel signals — the columns a real indoor config actually
+    // populates (the discrete Decel 1-4 count bands are often all zero). These
+    // feed the Kinexon Deceleration Intelligence.
+    decelsLoad: findCol(normed, ["decels", "load"], ["min"]),
+    accelsLoad: findCol(normed, ["accels", "load"], ["min"]),
+    exertions: findCol(normed, ["exertions"], ["min", "low", "medium", "high"]),
+    exertionsHigh: findCol(normed, ["exertions", "high"], ["min", "very"]),
+    exertionsVeryHigh: findCol(normed, ["exertions", "very", "high"], ["min"]),
+    mechIntensity: findCol(normed, ["mechanical", "intensity"], ["def", "off"]),
     cod: findCol(normed, ["changes", "direction"], ["left", "right"]),
     codLeft: findCol(normed, ["changes", "direction", "left"]),
     codRight: findCol(normed, ["changes", "direction", "right"]),
@@ -237,6 +251,11 @@ export function parseKinexonExport(headers: string[], rows: string[][]): Kinexon
       decelerations: sumCols(n, [col.decel1, col.decel2, col.decel3, col.decel4]),
       accelHighEfforts: sumCols(n, [col.accel3, col.accel4]),
       decelHighEfforts: sumCols(n, [col.decel3, col.decel4]),
+      decelsLoad: n(col.decelsLoad),
+      accelsLoad: n(col.accelsLoad),
+      exertions: n(col.exertions),
+      exertionsHigh: sumCols(n, [col.exertionsHigh, col.exertionsVeryHigh]),
+      mechanicalIntensity: n(col.mechIntensity),
       codEvents: n(col.cod),
       codLeft: n(col.codLeft),
       codRight: n(col.codRight),
