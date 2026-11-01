@@ -1499,13 +1499,15 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           .map((x) => ({ md: x.d.md ?? null, weekday: x.d.weekday, rest: (noMatchIntents[x.i] ?? "OFF") === "OFF", srpe: srpeOf(x.d) }));
         const srpeVals = trainCols.filter((c) => !c.rest).map((c) => c.srpe).filter((x): x is number => x != null && x > 0);
         const srpeMean = srpeVals.length ? srpeVals.reduce((a, b) => a + b, 0) / srpeVals.length : 0;
-        // Per-day multiplier: the team's MD-day shape (precise) where it has one, else the
-        // planned session load normalised to the week's mean (football), else equal weight
-        // (basketball/Kinexon with no sRPE). A planned OFF day stays 0.
+        // Per-day multiplier: the PLANNED session load for this week (normalised to the
+        // week's mean) FIRST — it carries the coach's intended MD-day taper (MD-1 is the
+        // lightest primer, not a norm pulled from noisy historical averages). Falls back to
+        // the team's own MD-day shape where there is no planned load (basketball/Kinexon),
+        // else equal weight. A planned OFF day stays 0.
         let dayRatios = trainCols.map((c) => {
           if (c.rest) return 0;
-          if (c.md && mdShape[c.md] != null && mdShape[c.md] > 0) return mdShape[c.md];
           if (srpeMean > 0 && c.srpe != null && c.srpe > 0) return c.srpe / srpeMean;
+          if (c.md && mdShape[c.md] != null && mdShape[c.md] > 0) return mdShape[c.md];
           return 1;
         });
         // Never produce an all-zero week (e.g. every intent OFF) — fall back to equal days.
