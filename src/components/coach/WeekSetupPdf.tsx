@@ -46,11 +46,14 @@ export type WeekSetupPdfPayload = {
       name: string; position: string | null;
       minutes: number | null; confidence: "high" | "medium" | "low";
       weeklyPl: number | null;                  // individualised weekly Player Load target
-      pl: number | null; distance: number | null; hsr: number | null; accel: number | null; decel: number | null; // match-unit (typical)
+      pl: number | null; distance: number | null; hsr: number | null; accel: number | null; decel: number | null; // per-session typical
+      // Kinexon-only distinctive variables (indoor LPS): changes of orientation, exertions, mechanical load.
+      coo?: number | null; exertions?: number | null; mechLoad?: number | null;
       perDay: Array<number | null>;             // weekly PL distributed across the training days below
     }>;
     trainDays: Array<{ label: string; md: string | null }>; // the training-day columns for the detailed grid
     hasGps: boolean;                             // any GPS/IMA metric present (else overview shows PL only)
+    isKinexon?: boolean;                         // Kinexon team → show its own variables (CoO / Exert / Mech)
   } | null;
 };
 
@@ -71,7 +74,7 @@ const L = {
     legForce: "Force / mechanical", legVel: "Velocity / speed", legAct: "Activation / polish", legRec: "Recovery", legMatchOff: "Match / off",
     plWeekly: "Per-player weekly load", plWeeklyLead: "Each player's week individualised from his own match unit — the main GPS + IMA load. Descriptive — scales from his near-full matches; a feed that lacks a metric shows \"-\".",
     plDetail: "Detailed load — per MD-day", plDetailLead: "Each training day = the player's session baseline scaled by that day's planned load — the week's MD-day taper (MD-1 the lightest primer). Descriptive — off/match days omitted; the row totals the week.",
-    player: "Player", role: "Role", wk: "Week PL", dist: "Dist", hsr: "HSR", acc: "Acc", dec: "Dec", conf2: "conf", total: "Total", starter: "starter", rot: "rotation", lowMin: "low-min",
+    player: "Player", role: "Role", wk: "Week PL", dist: "Dist", hsr: "HSR", acc: "Acc", dec: "Dec", coo: "CoO", exert: "Exert", mech: "Mech", conf2: "conf", total: "Total", starter: "starter", rot: "rotation", lowMin: "low-min",
     note: "Descriptive planning - a starting point per the day's focus, never a norm to obey, and never the readiness colour.",
     foot: "Descriptive planning — the planned load (low/moderate/high), duration and on-pitch examples are a starting point per the day's focus, never a norm to obey, and never the readiness colour. planSessionLoad (Buchheit 2024) · small-sided games Hill-Haas 2011 · Lacome 2018 · López-Fernández 2019 · Foster (sRPE)." },
   IS: { title: "vikuplan", doc: "Vikuplan", prepared: "Unnið fyrir þjálfarateymið · MicroPulse", phase: "Fasi", wtype: "Vikugerð",
@@ -81,7 +84,7 @@ const L = {
     legForce: "Kraftur / vélrænt", legVel: "Hraði", legAct: "Virkjun / fínpússun", legRec: "Endurheimt", legMatchOff: "Leikur / frí",
     plWeekly: "Vikulegt álag per leikmann", plWeeklyLead: "Vika hvers leikmanns einstaklingsmiðuð frá hans eigin leikviðmiði — helsta GPS + IMA álagið. Lýsandi — skalast frá næstum-heilum leikjum hans; mæling sem gögnin vantar sýnir \"-\".",
     plDetail: "Ítarlegt álag — eftir MD-degi", plDetailLead: "Hver æfingadagur = grunnlína leikmanns margfölduð með áætluðu álagi dagsins — taper vikunnar (MD-1 léttasti undirbúningsdagur). Lýsandi — frí/leikdagar sleppt; röðin telur vikuna.",
-    player: "Leikmaður", role: "Hlutverk", wk: "Viku PL", dist: "Vegal.", hsr: "HSR", acc: "Hröð.", dec: "Heml.", conf2: "vissa", total: "Alls", starter: "byrjun", rot: "skipt", lowMin: "lág-mín",
+    player: "Leikmaður", role: "Hlutverk", wk: "Viku PL", dist: "Vegal.", hsr: "HSR", acc: "Hröð.", dec: "Heml.", coo: "Stefnub.", exert: "Átök", mech: "Vélr.", conf2: "vissa", total: "Alls", starter: "byrjun", rot: "skipt", lowMin: "lág-mín",
     note: "Lýsandi áætlun - upphafspunktur eftir áherslu dagsins, aldrei viðmið til að hlýða, og aldrei readiness-liturinn.",
     foot: "Lýsandi áætlun — áætlað álag (lágt/miðlungs/hátt), lengd og vallar-dæmi eru upphafspunktur eftir áherslu dagsins, aldrei viðmið til að hlýða, og aldrei readiness-liturinn. planSessionLoad (Buchheit 2024) · fámennir leikir Hill-Haas 2011 · Lacome 2018 · López-Fernández 2019 · Foster (sRPE)." },
 } as const;
@@ -205,27 +208,40 @@ function WeekDoc({ payload, lang }: { payload: WeekSetupPdfPayload; lang: Lang }
                 <Table
                   cols={[
                     { label: t.player, flex: 1 },
-                    { label: t.role, width: 50 },
-                    { label: t.wk, width: 50, align: "right", strong: true },
-                    { label: t.pl, width: 40, align: "right" },
-                    ...(pl.hasGps ? [
+                    { label: t.role, width: 48 },
+                    { label: t.wk, width: 48, align: "right", strong: true },
+                    { label: t.pl, width: 36, align: "right" },
+                    ...(pl.hasGps ? (pl.isKinexon ? [
+                      // Kinexon (indoor LPS) → its own distinctive variables.
+                      { label: t.dist, width: 42, align: "right" as const },
+                      { label: t.hsr, width: 38, align: "right" as const },
+                      { label: t.coo, width: 42, align: "right" as const },
+                      { label: t.exert, width: 42, align: "right" as const },
+                      { label: t.mech, width: 44, align: "right" as const },
+                    ] : [
                       { label: t.dist, width: 46, align: "right" as const },
                       { label: t.hsr, width: 42, align: "right" as const },
                       { label: t.acc, width: 38, align: "right" as const },
                       { label: t.dec, width: 38, align: "right" as const },
-                    ] : []),
+                    ]) : []),
                   ]}
                   rows={players.map((p) => [
                     tx(p.name),
                     roleOf(p.minutes),
                     p.weeklyPl == null ? "-" : nf(p.weeklyPl),
                     p.pl == null ? "-" : nf(p.pl),
-                    ...(pl.hasGps ? [
+                    ...(pl.hasGps ? (pl.isKinexon ? [
+                      kmv(p.distance),
+                      p.hsr == null ? "-" : `${nf(p.hsr)}m`,
+                      p.coo == null ? "-" : nf(p.coo),
+                      p.exertions == null ? "-" : nf(p.exertions),
+                      p.mechLoad == null ? "-" : nf(p.mechLoad),
+                    ] : [
                       kmv(p.distance),
                       p.hsr == null ? "-" : `${nf(p.hsr)}m`,
                       p.accel == null ? "-" : nf(p.accel),
                       p.decel == null ? "-" : nf(p.decel),
-                    ] : []),
+                    ]) : []),
                   ])}
                 />
               </Section>
