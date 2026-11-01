@@ -84,7 +84,7 @@ const TABS: Array<{ key: TabKey; href: string; label: { EN: string; IS: string }
   { key: "ima", href: "/coach/ima-intelligence", label: { EN: "IMA", IS: "IMA" } },
 ];
 
-type Flags = { tier: "full" | "lite"; noGps: boolean; noHr: boolean; basketball: boolean };
+type Flags = { tier: "full" | "lite"; noGps: boolean; noHr: boolean; basketball: boolean; kinexon: boolean };
 
 function Hub() {
   const [lang] = useLang();
@@ -105,19 +105,26 @@ function Hub() {
       let noGps = false;
       let noHr = false;
       let basketball = false;
+      let kinexon = false;
       try {
         const sb = getSupabaseClient();
         const { data: auth } = await sb.auth.getUser();
         const userId = auth?.user?.id;
-        if (!userId) { if (alive) setFlags({ tier, noGps, noHr, basketball }); return; }
+        if (!userId) { if (alive) setFlags({ tier, noGps, noHr, basketball, kinexon }); return; }
         const { data: prof } = await sb.from("profiles").select("team_id").eq("id", userId).maybeSingle();
         const teamId = (prof as { team_id?: string | null } | null)?.team_id ?? null;
-        if (!teamId) { if (alive) setFlags({ tier, noGps, noHr, basketball }); return; }
+        if (!teamId) { if (alive) setFlags({ tier, noGps, noHr, basketball, kinexon }); return; }
 
         try {
           const { data: tierData } = await sb.rpc("get_catapult_data_tier", { p_team_id: teamId });
           tier = String(tierData ?? "").toLowerCase() === "full" ? "full" : "lite";
         } catch { tier = "lite"; }
+
+        // Kinexon is indoor LPS, not IMA/IMU — used to relabel the IMA tab.
+        try {
+          const { data: teamRow } = await sb.from("teams").select("gps_provider").eq("id", teamId).maybeSingle();
+          kinexon = String((teamRow as { gps_provider?: string | null } | null)?.gps_provider ?? "").toLowerCase() === "kinexon";
+        } catch { kinexon = false; }
 
         try {
           const sport = await resolveTeamSport(sb, teamId);
@@ -138,7 +145,7 @@ function Hub() {
           }
         } catch { /* leave noGps/noHr/basketball as resolved so far */ }
       } finally {
-        if (alive) setFlags({ tier, noGps, noHr, basketball });
+        if (alive) setFlags({ tier, noGps, noHr, basketball, kinexon });
       }
     })();
     return () => { alive = false; };
@@ -213,7 +220,7 @@ function Hub() {
                     : "border-transparent text-slate-500 hover:text-slate-800"
                 }`}
               >
-                {isEN ? meta.label.EN : meta.label.IS}
+                {t === "ima" && flags?.kinexon ? "Kinexon" : (isEN ? meta.label.EN : meta.label.IS)}
               </button>
             );
           })}
