@@ -292,11 +292,14 @@ export default function PeriodizationHubPage() {
   const [isBasketball, setIsBasketball] = React.useState(false);
   const [teamSport, setTeamSport] = React.useState<string | null>(null);
   const [teamGender, setTeamGender] = React.useState<string | null>(null);
+  // Kinexon = indoor LPS (not Catapult IMA): hide the directional-IMA / stride /
+  // RHIE / symmetry reads (null there) and relabel "GPS + IMA" wording.
+  const [isKinexon, setIsKinexon] = React.useState(false);
   React.useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/coach/player-stats/config", { headers: { Authorization: await authHeader() } });
-        if (res.ok) { const j = await res.json(); setIsBasketball(String(j.sport ?? "").toLowerCase() === "basketball"); setTeamSport(j.sport ?? null); setTeamGender(j.gender ?? null); }
+        if (res.ok) { const j = await res.json(); setIsBasketball(String(j.sport ?? "").toLowerCase() === "basketball"); setTeamSport(j.sport ?? null); setTeamGender(j.gender ?? null); setIsKinexon(String(j.gpsProvider ?? "").toLowerCase() === "kinexon"); }
       } catch { /* default football */ }
     })();
   }, [authHeader]);
@@ -2557,7 +2560,7 @@ export default function PeriodizationHubPage() {
 
           {/* 5 — RAW BASELINES (Level 2, folded) */}
           <details className={card}>
-            <summary className="cursor-pointer py-1 text-[15px] font-bold text-slate-900">{is ? "Grunnlína allra staða (GPS + IMA)" : "Baseline for every position (GPS + IMA)"} <span className="text-[12px] font-medium text-slate-500">· {is ? "meðaltal per æfingu yfir tímabilið" : "mean per session over the season"}</span></summary>
+            <summary className="cursor-pointer py-1 text-[15px] font-bold text-slate-900">{is ? (isKinexon ? "Grunnlína allra staða (Kinexon)" : "Grunnlína allra staða (GPS + IMA)") : (isKinexon ? "Baseline for every position (Kinexon)" : "Baseline for every position (GPS + IMA)")} <span className="text-[12px] font-medium text-slate-500">· {is ? "meðaltal per æfingu yfir tímabilið" : "mean per session over the season"}</span></summary>
             <div className="mt-2 overflow-x-auto">
               <table className="w-full min-w-[640px] text-[13px]">
                 <thead><tr className="text-left text-[11px] text-slate-500">
@@ -2567,7 +2570,7 @@ export default function PeriodizationHubPage() {
                   <th className="py-1.5 pr-2 text-right font-semibold">{is ? "Hám. km/klst" : "Max km/h"}</th>
                   <th className="py-1.5 pr-2 text-right font-semibold">PL</th>
                   <th className="py-1.5 pr-2 text-right font-semibold">Acc/Dec</th>
-                  <th className="py-1.5 pl-2 font-semibold">{is ? "IMA fram · hlið · aftur" : "IMA fwd · lat · back"}</th>
+                  {!isKinexon && <th className="py-1.5 pl-2 font-semibold">{is ? "IMA fram · hlið · aftur" : "IMA fwd · lat · back"}</th>}
                 </tr></thead>
                 <tbody>
                   {tableRows.map((b) => { const a = b.avg; const isTeam = b.key === -1; const on = b.key === pos.key; return (
@@ -2578,19 +2581,21 @@ export default function PeriodizationHubPage() {
                       <td className="py-1.5 pr-2 text-right tabular-nums">{a.maxKmh ?? "–"}</td>
                       <td className="py-1.5 pr-2 text-right tabular-nums">{a.playerLoad == null ? "–" : Math.round(a.playerLoad)}</td>
                       <td className="py-1.5 pr-2 text-right tabular-nums">{a.accel ?? "–"}/{a.decel ?? "–"}</td>
-                      <td className="py-1.5 pl-2">
-                        {a.direction ? (
-                          <span className="inline-flex h-2 w-28 overflow-hidden rounded-full align-middle" title={`${Math.round(a.direction.forward * 100)} / ${Math.round(a.direction.lateral * 100)} / ${Math.round(a.direction.backward * 100)} %`}>
-                            <span className="bg-[#2740e6]" style={{ width: `${a.direction.forward * 100}%` }} /><span className="bg-slate-400" style={{ width: `${a.direction.lateral * 100}%` }} /><span className="bg-amber-500" style={{ width: `${a.direction.backward * 100}%` }} />
-                          </span>
-                        ) : <span className="text-slate-400">–</span>}
-                      </td>
+                      {!isKinexon && (
+                        <td className="py-1.5 pl-2">
+                          {a.direction ? (
+                            <span className="inline-flex h-2 w-28 overflow-hidden rounded-full align-middle" title={`${Math.round(a.direction.forward * 100)} / ${Math.round(a.direction.lateral * 100)} / ${Math.round(a.direction.backward * 100)} %`}>
+                              <span className="bg-[#2740e6]" style={{ width: `${a.direction.forward * 100}%` }} /><span className="bg-slate-400" style={{ width: `${a.direction.lateral * 100}%` }} /><span className="bg-amber-500" style={{ width: `${a.direction.backward * 100}%` }} />
+                            </span>
+                          ) : <span className="text-slate-400">–</span>}
+                        </td>
+                      )}
                     </tr>
                   ); })}
                 </tbody>
               </table>
             </div>
-            <p className="mt-2 text-[12px] text-slate-500">{is ? "IMA-slá: blátt = fram, grátt = hlið, gult = aftur. Sjálfgefið viðmið leikmanns er HANS staða, ekki allt liðið (Ju)." : "IMA bar: blue = forward, grey = lateral, amber = backward. A player's default falls back to HIS position, not the whole team (Ju)."}</p>
+            {!isKinexon && <p className="mt-2 text-[12px] text-slate-500">{is ? "IMA-slá: blátt = fram, grátt = hlið, gult = aftur. Sjálfgefið viðmið leikmanns er HANS staða, ekki allt liðið (Ju)." : "IMA bar: blue = forward, grey = lateral, amber = backward. A player's default falls back to HIS position, not the whole team (Ju)."}</p>}
           </details>
 
           <p className="text-[12px] text-slate-500">{is ? "Tölurnar eru upphafspunktur, aldrei viðmið til að hlýða í blindni — leikmaðurinn, samhengið og viðbragðið stýra deginum (Little & Buchheit — „ekki þrælar GPS-viðmiða“). Figueiredo o.fl. (ás-sértæk æfing:leik hlutföll) · Buchheit & Simpson (vélrænt vs hlaup). Lýsandi — aldrei readiness-liturinn." : "These numbers are a starting point, never a norm to obey — the player, the context and readiness govern the day (Little & Buchheit — don't be \"slaves to GPS norms\"). Figueiredo et al. (dimension-specific training:match ratios) · Buchheit & Simpson (mechanical vs locomotor). Descriptive — never the readiness colour."}</p>
@@ -4125,7 +4130,7 @@ export default function PeriodizationHubPage() {
 
               {/* Team average on the training variables (GPS + IMA) — the baseline the targets scale from */}
               <div className="mt-3">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{(is ? baseline.label.is : baseline.label.en)} — {is ? "meðaltal á æfingu (GPS + IMA)" : "average per session (GPS + IMA)"}</div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{(is ? baseline.label.is : baseline.label.en)} — {is ? (isKinexon ? "meðaltal á æfingu (Kinexon)" : "meðaltal á æfingu (GPS + IMA)") : (isKinexon ? "average per session (Kinexon)" : "average per session (GPS + IMA)")}</div>
                 <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-[12px] text-slate-700 sm:grid-cols-3">
                   <span>{is ? "Vegal" : "Distance"}: <b className="tabular-nums">{km(a.distanceM)}</b></span>
                   <span>HSR: <b className="tabular-nums">{a.hsrM == null ? "–" : `${Math.round(a.hsrM)} m`}</b></span>

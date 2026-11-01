@@ -37,8 +37,10 @@ export async function GET(req: NextRequest) {
     .from("stat_ingestion_config").select("source, wyscout_team_id, enabled, basketball_team_ref").eq("team_id", ctx.teamId).maybeSingle();
   const sport = await resolveTeamSport(ctx.supabase, ctx.teamId);
   // Team gender (M/F) — used to filter the international-break calendar in the Periodization Hub.
-  const { data: teamRow } = await ctx.supabase.from("teams").select("gender").eq("id", ctx.teamId).maybeSingle();
+  // gps_provider lets the hub relabel/hide Catapult-IMA-only reads for a Kinexon (indoor LPS) team.
+  const { data: teamRow } = await ctx.supabase.from("teams").select("gender, gps_provider").eq("id", ctx.teamId).maybeSingle();
   const gender = (teamRow as { gender?: string | null } | null)?.gender ?? null;
+  const gpsProvider = (teamRow as { gps_provider?: string | null } | null)?.gps_provider ?? null;
   // Which football-stats providers does THIS team actually have season data for?
   // Drives the Wyscout | StatsBomb source toggle on the merged Player Analysis page.
   const { data: srcRows } = await ctx.supabase
@@ -59,6 +61,7 @@ export async function GET(req: NextRequest) {
     basketballFeedConfigured: true, // the KKÍ feed is a public GET — always available
     sport,
     gender,
+    gpsProvider,
     providers,
   });
 }
