@@ -8291,8 +8291,10 @@ export default function CoachPage() {
       {!isPwa && (() => {
         const labels = { ...(ct.tabs as Record<string, string>) };
         // Indoor (basketball) teams have no GPS — the "GPS Data" tab is Player
-        // Load + IMA (accelerometer), so label it accordingly.
-        if (teamSport === "basketball") labels.gps = lang === "EN" ? "IMA Data" : "IMA gögn";
+        // Load + IMA (accelerometer), so label it accordingly. Kinexon is indoor
+        // LPS, not IMA/IMU — label its tab just "Kinexon" (no IMU/IMA wording).
+        if (gpsProvider === "kinexon") labels.gps = "Kinexon";
+        else if (teamSport === "basketball") labels.gps = lang === "EN" ? "IMA Data" : "IMA gögn";
         if (!labels.library) labels.library = lang === "EN" ? "Library" : "Safn";
         const proTabs = new Set(["squad", "load", "gps", "md", "drills", "volatility", "vald", "strength", "trend", "rtp"]);
 
