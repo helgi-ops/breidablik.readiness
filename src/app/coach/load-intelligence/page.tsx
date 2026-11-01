@@ -32,6 +32,7 @@ import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSum
 import FosterMonotonyStrainCard from "@/components/coach/FosterMonotonyStrainCard";
 import MdHsrComparisonCard from "@/components/coach/MdHsrComparisonCard";
 import KinexonMetricsPanel from "@/components/coach/KinexonMetricsPanel";
+import KinexonPlayerLoadTable from "@/components/coach/KinexonPlayerLoadTable";
 import { useLang } from "@/lib/lang";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import PagePurpose from "@/components/coach/PagePurpose";
@@ -266,6 +267,8 @@ export default function LoadIntelligencePage() {
       {!loading && !error && teamId && isKinexon && players.length > 0 && (
         <div className="space-y-6">
           <KinexonMetricsPanel players={players} date={today} lang={lang === "EN" ? "EN" : "IS"} />
+          {/* Per-player drill-down of the same Kinexon variables (squad panel → per player). */}
+          <KinexonPlayerLoadTable players={players} date={today} lang={lang === "EN" ? "EN" : "IS"} />
           {/* Promoted engines: MLI headline driven by Kinexon's measured Mechanical
               Load; metabolic composite on Kinexon's measured metabolic power. */}
           <MechanicalLoadIndexCard teamId={teamId} lang={lang === "EN" ? "EN" : "IS"} />
