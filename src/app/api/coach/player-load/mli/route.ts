@@ -9,13 +9,22 @@ import {
   type MechanicalLoadSourceRow,
   type ResidualMechanicalLoadBand,
 } from "@/lib/micropulse/mechanicalLoad";
-import { KINEXON_CATALOG, readKinexonMetric } from "@/lib/integrations/kinexon/metricCatalog";
+import { KINEXON_CATALOG, readKinexonMetric, type KinexonMetric } from "@/lib/integrations/kinexon/metricCatalog";
 
 export const runtime = "nodejs";
 
-// The vendor-measured Kinexon "Mechanical Load" metric — promoted into the MLI
-// engine as a direct measurement (beats the accel/decel-derived estimate).
-const KX_MECH_LOAD = KINEXON_CATALOG.flatMap((g) => g.metrics).find((m) => m.key === "mech_load")!;
+// Kinexon metrics promoted into the MLI engine. "Mechanical Load" is the direct
+// measurement that drives the headline MLI (beats the accel/decel estimate); the
+// rest feed the composite sub-scores so the drilldown + spike flags still reflect
+// real Kinexon effort when its accel/decel COUNTS are 0 (its signal lives here).
+const kxMetric = (key: string): KinexonMetric =>
+  KINEXON_CATALOG.flatMap((g) => g.metrics).find((m) => m.key === key)!;
+const KX_MECH_LOAD = kxMetric("mech_load");
+const KX_EXERTIONS = kxMetric("exertions");
+const KX_EXERTIONS_HI = kxMetric("exertions_hi");
+const KX_ACCELS_LOAD = kxMetric("accels_load");
+const KX_DECELS_LOAD = kxMetric("decels_load");
+const KX_COO = kxMetric("coo");
 
 type PlayerRow = {
   id: string;
@@ -104,25 +113,37 @@ function roundNumber(value: number | null, decimals = 1): number | null {
 }
 
 function mapSourceRow(row: ExternalLoadRow): MechanicalLoadSourceRow {
+  const isKx = row.source === "kinexon";
+  const rec = row as unknown as Record<string, unknown>;
+  const kx = (m: KinexonMetric): number | null => (isKx ? readKinexonMetric(rec, m) : null);
+  // For Kinexon a native accel/decel COUNT of 0 or null means "not measured" — its
+  // effort signal lives in Exertions / Accels-Decels Load — so fall back to those.
+  const kxCount = (native: number | null, ...fallbacks: Array<() => number | null>): number | null => {
+    if (!isKx) return native;
+    if (native != null && native !== 0) return native;
+    for (const f of fallbacks) {
+      const v = f();
+      if (v != null && v !== 0) return v;
+    }
+    return native;
+  };
+
   return {
     date: row.date,
-    high_decels: row.decel_b2_3_tot_effs_gen2,
-    total_decels: row.tot_ds ?? row.decelerations,
+    high_decels: kxCount(row.decel_b2_3_tot_effs_gen2, () => kx(KX_EXERTIONS_HI)),
+    total_decels: kxCount(row.tot_ds ?? row.decelerations, () => kx(KX_DECELS_LOAD), () => kx(KX_EXERTIONS)),
     ima_decel: row.ima_decel,
-    high_accels: row.accel_b2_3_tot_effs_gen2,
-    total_accels: row.tot_as ?? row.accelerations,
+    high_accels: kxCount(row.accel_b2_3_tot_effs_gen2, () => kx(KX_EXERTIONS_HI)),
+    total_accels: kxCount(row.tot_as ?? row.accelerations, () => kx(KX_ACCELS_LOAD), () => kx(KX_EXERTIONS)),
     ima_accel: row.ima_accel,
-    cod_events: row.cod_events,
+    cod_events: kxCount(row.cod_events, () => kx(KX_COO)),
     ima_cod: row.ima_cod,
     ima_total: row.ima_total,
     playerload_per_min: row.player_load_per_minute,
     impacts: row.impacts,
     // Kinexon reports a direct session mechanical load — promote it so the MLI
     // engine uses the measurement instead of the accel/decel-derived estimate.
-    mechanical_load:
-      row.source === "kinexon"
-        ? readKinexonMetric(row as unknown as Record<string, unknown>, KX_MECH_LOAD)
-        : null,
+    mechanical_load: isKx ? kx(KX_MECH_LOAD) : null,
   };
 }
 

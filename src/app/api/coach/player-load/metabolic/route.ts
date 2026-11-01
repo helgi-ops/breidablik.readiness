@@ -113,13 +113,21 @@ function roundNumber(value: number | null, decimals = 1): number | null {
 }
 
 function mapDBRowToSourceRow(row: DBExternalLoadRow): MetabolicLoadSourceRow {
+  // Kinexon (indoor LPS) computes metabolic power directly (di Prampero) — unlike
+  // Catapult GPS it has no fix-quality caveat, so a present metabolic_power IS
+  // valid. The metabolic_data_valid column is a Catapult concept and sits false on
+  // Kinexon rows, which would otherwise exclude them from the engine's baseline.
+  const dataValid =
+    row.source === "kinexon"
+      ? row.metabolic_power != null
+      : (row.metabolic_data_valid ?? false);
   return {
     date: row.date,
     metabolic_power: row.metabolic_power,
     metabolic_power_peak: row.metabolic_power_peak,
     high_metabolic_load_distance_m: row.high_metabolic_load_distance_m,
     time_above_hml_threshold_s: row.time_above_hml_threshold_s,
-    metabolic_data_valid: row.metabolic_data_valid ?? false,
+    metabolic_data_valid: dataValid,
   };
 }
 

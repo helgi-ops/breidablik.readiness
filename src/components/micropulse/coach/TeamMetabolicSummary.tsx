@@ -158,9 +158,13 @@ function InfoTh({ children, title, body, className = "" }: { children: React.Rea
 export default function TeamMetabolicSummary({
   teamId,
   className = "",
+  isKinexon = false,
 }: {
   teamId?: string | null;
   className?: string;
+  /** Kinexon (indoor LPS) teams measure metabolic power directly — relabels the
+   *  provenance eyebrow / empty state away from "Catapult". */
+  isKinexon?: boolean;
 }) {
   const supabase = useMemo(() => getSupabaseClient(), []);
   const [dateKey, setDateKey] = useState(todayISO());
@@ -252,10 +256,12 @@ export default function TeamMetabolicSummary({
       {/* ── Header ───────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-[10px] uppercase tracking-wide text-slate-500">Catapult Derived</div>
+          <div className="text-[10px] uppercase tracking-wide text-slate-500">{isKinexon ? "Measured by Kinexon" : "Catapult Derived"}</div>
           <div className="mt-1 text-sm font-semibold text-slate-900">Metabolic Load Score</div>
           <div className="mt-1 text-xs text-slate-500">
-            Weighted z-score composite: HMLD · time above threshold · peak &amp; avg metabolic power.
+            {isKinexon
+              ? "Weighted z-score composite of Kinexon's directly measured metabolic power (peak & avg) + high-metabolic-load distance."
+              : "Weighted z-score composite: HMLD · time above threshold · peak & avg metabolic power."}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -477,7 +483,7 @@ export default function TeamMetabolicSummary({
                     <tr key={mp.player_id} className="border-t align-top opacity-50">
                       <td className="py-1 pr-2 font-medium text-slate-500">{mp.player_name}</td>
                       <td className="py-1 pr-2 text-slate-400 italic" colSpan={7}>
-                        no Catapult data
+                        {isKinexon ? "no Kinexon data" : "no Catapult data"}
                       </td>
                     </tr>
                   ))}
