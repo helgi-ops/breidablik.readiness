@@ -34,6 +34,11 @@ import {
   type BasketballIndoorLoad,
   type LoadBand,
 } from "@/lib/micropulse/indoorLoad/basketball";
+import { KINEXON_CATALOG, readKinexonMetric } from "@/lib/integrations/kinexon/metricCatalog";
+
+// Changes of Orientation — Kinexon's directional-movement signal (a CoD/agility
+// proxy when the config records orientation, not changes of direction).
+const KX_ORIENTATION = KINEXON_CATALOG.flatMap((g) => g.metrics).find((m) => m.key === "coo")!;
 
 const BAND_COLORS: Record<LoadBand, string> = {
   light: "bg-slate-100 text-slate-600",
@@ -153,6 +158,7 @@ export default function BasketballIndoorLoadView({
             highCod,
             jumps,
             impacts,
+            changesOfOrientation: isKx ? readKinexonMetric(raw, KX_ORIENTATION) : null,
           };
           const list = byPlayer.get(pid) ?? [];
           list.push(row);
@@ -331,6 +337,9 @@ export default function BasketballIndoorLoadView({
                         <Component label={isEN ? "Impacts" : "Impacts"} value={s.components.impacts} />
                       )}
                       <Component label={isEN ? "Jumps" : "Stökk"} value={s.components.jumps} />
+                      {s.components.orientation != null && (
+                        <Component label={isEN ? "Orientation" : "Stefnubr."} value={s.components.orientation} />
+                      )}
                     </div>
                     {r.titanLatest && <TitanProfileStrip t={r.titanLatest} isEN={isEN} />}
                   </CardContent>

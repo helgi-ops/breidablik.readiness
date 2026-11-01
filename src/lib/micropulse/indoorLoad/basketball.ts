@@ -48,6 +48,10 @@ export interface BballLoadRow {
   /** impacts — foot-strike / collision count (the Titan indoor-IMU mechanical signal). Null for
    *  Catapult-only teams that don't report it. */
   impacts?: number | null;
+  /** Changes of Orientation — a Kinexon directional-movement signal, used as a
+   *  CoD/agility proxy when the config doesn't capture Changes of Direction.
+   *  Display-only (index vs the player's own norm), never scored. */
+  changesOfOrientation?: number | null;
 }
 
 export interface SessionScore {
@@ -61,6 +65,9 @@ export interface SessionScore {
     highIntensityIma: number | null;
     jumps: number | null;
     impacts: number | null;
+    /** Directional-movement index (Changes of Orientation vs own norm). Display
+     *  only — not part of the weighted score. Null when the team doesn't report it. */
+    orientation: number | null;
   };
 }
 
@@ -72,10 +79,11 @@ export interface BasketballIndoorLoad {
     avgHighIntensityIma: number | null;
     avgJumps: number | null;
     avgImpacts: number | null;
+    avgOrientation: number | null;
     sessions: number;
   };
   confidence: Confidence;
-  dataCoverage: { hasPlayerLoad: boolean; hasIma: boolean; hasJumps: boolean; hasImpacts: boolean; sessions: number };
+  dataCoverage: { hasPlayerLoad: boolean; hasIma: boolean; hasJumps: boolean; hasImpacts: boolean; hasOrientation: boolean; sessions: number };
   citation: string;
   /** Bilingual honesty note — the Band-3 proxy + jump-count + provisional caveats. */
   caveat: Bi;
@@ -165,17 +173,20 @@ export function computeBasketballIndoorLoad(rows: BballLoadRow[]): BasketballInd
   const imaVals = sorted.map((r) => highIntensityIma(r)).filter((v): v is number => v !== null);
   const jmpVals = sorted.map((r) => num(r.jumps)).filter((v): v is number => v !== null);
   const impVals = sorted.map((r) => num(r.impacts)).filter((v): v is number => v !== null);
+  const oriVals = sorted.map((r) => num(r.changesOfOrientation)).filter((v): v is number => v !== null);
 
   const avgPl = mean(plVals);
   const avgIma = mean(imaVals);
   const avgJmp = mean(jmpVals);
   const avgImp = mean(impVals);
+  const avgOri = mean(oriVals);
 
   const baseline = {
     avgPlayerLoad: avgPl === null ? null : r1(avgPl),
     avgHighIntensityIma: avgIma === null ? null : r1(avgIma),
     avgJumps: avgJmp === null ? null : r1(avgJmp),
     avgImpacts: avgImp === null ? null : r1(avgImp),
+    avgOrientation: avgOri === null ? null : r1(avgOri),
     sessions: sorted.length,
   };
 
@@ -184,6 +195,7 @@ export function computeBasketballIndoorLoad(rows: BballLoadRow[]): BasketballInd
     hasIma: imaVals.length > 0,
     hasJumps: jmpVals.length > 0,
     hasImpacts: impVals.length > 0,
+    hasOrientation: oriVals.length > 0,
     sessions: sorted.length,
   };
 
@@ -200,6 +212,9 @@ export function computeBasketballIndoorLoad(rows: BballLoadRow[]): BasketballInd
     // Only index impacts when the baseline is impact-rich enough for the ratio to be
     // stable — sparse single-digit counts are noise, not a load signal (see MIN_IMPACTS_FOR_INDEX).
     const impIdx = impRaw !== null && avgImp && avgImp >= MIN_IMPACTS_FOR_INDEX ? (impRaw / avgImp) * 100 : null;
+    // Directional-movement index (display only — never in the weighted score).
+    const oriRaw = num(row.changesOfOrientation);
+    const oriIdx = oriRaw !== null && avgOri && avgOri > 0 ? (oriRaw / avgOri) * 100 : null;
 
     // Weighted mean over the components that actually have a baseline; renormalise.
     const parts: Array<[number, number]> = [];
@@ -220,6 +235,7 @@ export function computeBasketballIndoorLoad(rows: BballLoadRow[]): BasketballInd
         highIntensityIma: imaIdx === null ? null : r1(imaIdx),
         jumps: jmpIdx === null ? null : r1(jmpIdx),
         impacts: impIdx === null ? null : r1(impIdx),
+        orientation: oriIdx === null ? null : r1(oriIdx),
       },
     };
   }
