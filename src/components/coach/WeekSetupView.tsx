@@ -1412,6 +1412,10 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "match" as const, matchLabel: label, stripe: "#a83e28" };
       }
       const intent = noMatchIntents[i] ?? "OFF";
+      // A coach-set OFF day (intent, not a declared break) is a rest day too — classify it
+      // as "off" (keeping its MD label) so the PDF's training-day/off counts and the per-player
+      // distribution read it correctly, exactly like the on-screen week.
+      if (intent === "OFF") return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "off" as const, stripe: "#1c7a4a" };
       // Day-type colour band (mirrors the on-screen intent grouping): force/mechanical = purple,
       // velocity/speed = cobalt, activation/polish = amber, recovery = green, off = green.
       const stripe =
@@ -1419,7 +1423,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         intent === "NEURAL_VELOCITY" || intent === "VELOCITY" ? "#2740e6" :
         intent === "POLISH_CALM" || intent === "ACTIVATION" ? "#de9328" :
         intent === "RECOVERY" || intent === "RECOVERY_MD1" || intent === "RECOVERY_MD2" || intent === "RECOVERY_PLUS" ? "#1c7a4a" :
-        intent === "OFF" ? "#1c7a4a" : "#6b7280";
+        "#6b7280"; // OFF handled above (early-returned as an off day)
       // Pre-season dose for this day (if computed) — the two KPIs it loads most.
       let dose: { load: number | null; srpe: number | null; kpis: Array<{ label: string; value: number; unit: string }> } | null = null;
       if (seasonPhase === "preseason" && psInfo) {
