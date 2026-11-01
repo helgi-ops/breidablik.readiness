@@ -61,6 +61,17 @@ describe("loadVerdict — Anton sanity (~16 Jun 2026, real signals)", () => {
     const spike = v.components.find((c) => c.key === "spike");
     expect(spike?.band).toBe("HIGH");
   });
+
+  it("names which signal is spiking on the spike tile (braking here)", () => {
+    const spike = v.components.find((c) => c.key === "spike");
+    expect(spike?.label.EN).toContain("braking load");
+    expect(spike?.label.IS).toContain("hemlunarálag");
+  });
+
+  it("names high-speed running when HSR is the dominant spike", () => {
+    const v2 = computeLoadVerdict({ subject: { name: "X" }, acwr: { ratio: 1.4, band: "WATCH", daysObserved: 20 }, hsr: { value: 1, z: 2.8 }, braking: { value: 1, z: 0.3 } });
+    expect(v2.components.find((c) => c.key === "spike")?.label.EN).toContain("high-speed running");
+  });
 });
 
 describe("loadVerdict — band logic", () => {

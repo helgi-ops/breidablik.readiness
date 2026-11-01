@@ -186,8 +186,24 @@ function buildComponents(input: LoadVerdictInput): LoadComponent[] {
   if (present(input.braking)) tiles.push({ key: "braking", label: { EN: "Braking load", IS: "Hemlunarálag" }, value: input.braking!.value, band: tileBand(input.braking!.z), tooltip: { EN: "High-intensity deceleration burden (McBurnie 2022) vs the player's own norm.", IS: "Háákefðar-hemlunarálag (McBurnie 2022) m.v. eigin venju leikmannsins." } });
   if (present(input.hid)) tiles.push({ key: "hid", label: { EN: "High-intensity %", IS: "Háákefðar-%" }, value: input.hid!.value, band: tileBand(input.hid!.z), tooltip: { EN: "Share of distance covered at high speed.", IS: "Hlutfall vegalengdar á háum hraða." } });
   if (input.monotony) tiles.push({ key: "monotony", label: { EN: "Monotony", IS: "Einhæfni" }, value: input.monotony.monotony, band: input.monotony.rising ? "ELEVATED" : "NORMAL", tooltip: { EN: "Foster training monotony — day-to-day sameness of load; high monotony raises strain.", IS: "Foster einhæfni — hversu eins álagið er dag frá degi; mikil einhæfni eykur strain." } });
-  const spikeZ = Math.max(zOf(input.braking), zOf(input.hsr), input.movementSpike?.peakZ ?? -Infinity);
-  tiles.push({ key: "spike", label: { EN: "Spike", IS: "Stökk" }, value: Number.isFinite(spikeZ) ? round1(spikeZ) : null, band: spikeZ >= SPIKE_Z ? "HIGH" : "NORMAL", tooltip: { EN: "A sharp jump (≥2 SD) above the player's own recent norm.", IS: "Snöggt stökk (≥2 SD) yfir nýlega venju leikmannsins." } });
+  // Name WHICH signal is spiking, so "Unfamiliar spike" isn't a mystery on the
+  // card — the spike tile reads e.g. "Spike · braking load".
+  const spikeSources = [
+    { z: zOf(input.braking),                   en: "braking load",        is: "hemlunarálag" },
+    { z: zOf(input.hsr),                        en: "high-speed running",  is: "háhraða hlaup" },
+    { z: input.movementSpike?.peakZ ?? -Infinity, en: "movement pattern", is: "hreyfimynstur" },
+  ].filter((s) => Number.isFinite(s.z)).sort((a, b) => b.z - a.z);
+  const spikeZ = spikeSources.length ? spikeSources[0].z : -Infinity;
+  const spikeSrc = spikeZ >= SPIKE_Z ? spikeSources[0] : null;
+  tiles.push({
+    key: "spike",
+    label: spikeSrc ? { EN: `Spike · ${spikeSrc.en}`, IS: `Stökk · ${spikeSrc.is}` } : { EN: "Spike", IS: "Stökk" },
+    value: Number.isFinite(spikeZ) ? round1(spikeZ) : null,
+    band: spikeZ >= SPIKE_Z ? "HIGH" : "NORMAL",
+    tooltip: spikeSrc
+      ? { EN: `A sharp jump (≥2 SD) in ${spikeSrc.en} above the player's own recent norm.`, IS: `Snöggt stökk (≥2 SD) í ${spikeSrc.is} yfir nýlega venju leikmannsins.` }
+      : { EN: "A sharp jump (≥2 SD) above the player's own recent norm.", IS: "Snöggt stökk (≥2 SD) yfir nýlega venju leikmannsins." },
+  });
   return tiles;
 }
 
