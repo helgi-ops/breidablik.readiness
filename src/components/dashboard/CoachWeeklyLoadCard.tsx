@@ -151,6 +151,18 @@ function pickReference(
 type PlayerOption = { id: string; name: string };
 type ViewMode = "team" | "player";
 
+// Kinexon relabel of the IMA driver tiles — indoor positioning totals, never
+// "IMA" (see CLAUDE.md: Kinexon surfaces are not labelled IMU/IMA). Stride
+// bands are omitted entirely (not filtered here) since Kinexon never has them.
+const KINEXON_WEEKLY_LABELS: Partial<
+  Record<WeeklyLoadMetricKey, { en: string; is: string; unit: string }>
+> = {
+  imaTotal: { en: "Movement load", is: "Hreyfiálag", unit: "#" },
+  imaAccel: { en: "Accels", is: "Hröðun", unit: "#" },
+  imaDecel: { en: "Decels", is: "Hemlun", unit: "#" },
+  imaCod: { en: "Changes of dir.", is: "Stefnubreyt.", unit: "#" },
+};
+
 export default function CoachWeeklyLoadCard({
   teamId,
   lang,
@@ -159,6 +171,7 @@ export default function CoachWeeklyLoadCard({
   title,
   subtitle,
   isBasketball,
+  isKinexon,
 }: {
   teamId: string;
   lang: Lang;
@@ -172,9 +185,22 @@ export default function CoachWeeklyLoadCard({
   subtitle?: string;
   /** Basketball → the indoor movement profile is labelled BMP, not FMP. */
   isBasketball?: boolean;
+  /** Kinexon indoor-LPS team → drop the empty Catapult stride-band tiles and
+      relabel the accel/decel/CoD tiles away from "IMA" (it's not inertial here). */
+  isKinexon?: boolean;
 }) {
   const t = COPY[lang];
   const mp = movementProfileLabel(isBasketball);
+  // Kinexon reports accel/decel/CoD as indoor-positioning totals, NOT inertial
+  // "IMA" events, and has no Free-Running stride bands — so for a Kinexon team
+  // we relabel those tiles away from "IMA" and hide the always-empty stride tiles.
+  const resolveLabel = useCallback(
+    (metric: WeeklyLoadMetricKey) => {
+      if (isKinexon && KINEXON_WEEKLY_LABELS[metric]) return KINEXON_WEEKLY_LABELS[metric]!;
+      return WEEKLY_LOAD_LABELS[metric];
+    },
+    [isKinexon]
+  );
   const headerTitle = title ?? t.title;
   const headerSubtitle = subtitle ?? t.subtitle;
   const [data, setData] = useState<WeeklyLoadResult | null>(null);
@@ -337,13 +363,20 @@ export default function CoachWeeklyLoadCard({
   const corridorPct = targetMeta?.corridorPct ?? 0.15;
   const indoor = targetMeta?.indoor === true || data.indoor === true;
 
+  // Kinexon has no Free-Running stride bands — those tiles always read 0/0#, so
+  // drop them from the tile grid (and the swappable primary) for a Kinexon team.
+  const visibleMetrics = isKinexon
+    ? data.metrics.filter((m) => !String(m.metric).startsWith("imaStrideBand"))
+    : data.metrics;
+
   // Primary metric for the big display (swappable)
-  const primaryMetric = data.metrics.find((m) => m.metric === primaryKey) ?? data.metrics[0];
+  const primaryMetric =
+    visibleMetrics.find((m) => m.metric === primaryKey) ?? visibleMetrics[0] ?? data.metrics[0];
   const primaryRef = pickReference(primaryMetric, mode);
   const primaryPct = primaryRef.pct;
   const primaryColor = pctColor(primaryPct, primaryMetric.expectedPctAtThisPoint, corridorPct);
   const primaryStatus = statusLabel(primaryPct, primaryMetric.expectedPctAtThisPoint, lang, corridorPct);
-  const primaryLabel = WEEKLY_LOAD_LABELS[primaryMetric.metric];
+  const primaryLabel = resolveLabel(primaryMetric.metric);
 
   const modeLabel =
     mode === "match_demand" ? t.modeMatchDemand :
@@ -595,13 +628,14 @@ export default function CoachWeeklyLoadCard({
       {/* Other metrics grid */}
       <div className="px-4 pb-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-          {data.metrics.filter((m) => m.metric !== primaryKey).map((m) => (
+          {visibleMetrics.filter((m) => m.metric !== primaryKey).map((m) => (
             <MetricMiniCard
               key={m.metric}
               metric={m}
               lang={lang}
               mode={mode}
               corridorPct={corridorPct}
+              label={resolveLabel(m.metric)}
               onClick={() => setPrimaryKey(m.metric)}
             />
           ))}
@@ -775,16 +809,19 @@ function MetricMiniCard({
   lang,
   mode,
   corridorPct,
+  label: labelOverride,
   onClick,
 }: {
   metric: WeeklyLoadMetricSummary;
   lang: Lang;
   mode?: WeeklyLoadTargetMeta["mode"];
   corridorPct?: number;
+  /** Resolved label (lets a Kinexon team relabel the IMA tiles). */
+  label?: { en: string; is: string; unit: string };
   onClick?: () => void;
 }) {
   const t = COPY[lang];
-  const label = WEEKLY_LOAD_LABELS[metric.metric];
+  const label = labelOverride ?? WEEKLY_LOAD_LABELS[metric.metric];
   const ref = pickReference(metric, mode);
   const color = pctColor(ref.pct, metric.expectedPctAtThisPoint, corridorPct ?? 0.15);
   const projectionDenom = ref.referenceValue;

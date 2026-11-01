@@ -358,6 +358,7 @@ export default function ImaIntelligencePage() {
             lang={lang}
             date={date}
             group="ima"
+            isKinexon={isKinexon}
             title={isKinexon ? (lang === "IS" ? "Vikulegt hreyfiálag" : "Weekly movement load") : (lang === "IS" ? "Vikulegt IMA-álag" : "Weekly IMA Load")}
             subtitle={isKinexon
               ? (lang === "IS" ? "Uppsafnað hreyfiálag vikunnar (hröðun/hægðun/stefnubreytingar) vs dæmigert" : "Cumulative movement load this week (accel/decel/CoD) vs typical")
