@@ -24,6 +24,10 @@ export type WeekSetupPdfDay = {
   // Detailed coaching idea (train days, football): physical focus + planned load band + est. duration +
   // sRPE + on-pitch examples (resolved to the PDF's language). Omitted → the card shows the compact row.
   idea?: { focus: string; band: string | null; bandColor: string | null; durationMin: number | null; srpe: number | null; pitch: Array<{ text: string; cite: string }> } | null;
+  // Indoor teams (basketball / Kinexon) have no football day-idea — show the planned load
+  // for the day instead: a band + the team's expected Player Load from the MD-day taper.
+  dayLoad?: { band: string | null; bandColor: string | null; pl: number | null } | null;
+  strength?: string | null;     // the day's strength-session title (indoor teams)
 };
 
 export type WeekSetupPdfPayload = {
@@ -178,6 +182,14 @@ function WeekDoc({ payload, lang }: { payload: WeekSetupPdfPayload; lang: Lang }
                       {(d.dose?.kpis ?? []).map((k, j) => (
                         <Text key={j} style={[fb(400), { fontSize: 8, color: C.mute }]}>{tx(`${k.label} ${nf(k.value)}${k.unit}`)}</Text>
                       ))}
+                    </View>
+                  )}
+                  {/* Indoor teams (no football idea) — the day's planned load + strength session. */}
+                  {d.kind === "train" && !d.idea && d.dayLoad && (
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 4 }}>
+                      {d.dayLoad.band ? <Chip text={d.dayLoad.band} tone={toneOfHex(d.dayLoad.bandColor)} /> : null}
+                      {d.dayLoad.pl != null && <Text style={[fh(600), { fontSize: 8.5 }]}>{`${t.pl} ~${nf(d.dayLoad.pl)}`}</Text>}
+                      {d.strength ? <Text style={[fb(400), { fontSize: 8, color: C.mute }]}>{tx(d.strength)}</Text> : null}
                     </View>
                   )}
                   {d.kind === "train" && (d.idea?.pitch ?? []).length > 0 && (

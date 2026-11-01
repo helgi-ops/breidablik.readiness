@@ -1453,7 +1453,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           pitch: io.pitch.map((p) => ({ text: `${isIS ? p.form.is : p.form.en} · ${isIS ? p.area.is : p.area.en} · ${isIS ? p.bout.is : p.bout.en}`, cite: p.cite })),
         };
       }
-      return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "train" as const, intent: intentLabelOf(intent), dose, stripe, idea };
+      return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "train" as const, intent: intentLabelOf(intent), dose, stripe, idea, strength: isBasketball ? (bbStrengthTitles[i] ?? null) : null, dayLoad: null as { band: string | null; bandColor: string | null; pl: number | null } | null };
     });
 
     const phaseDef = SEASON_PHASES.find((p) => p.id === seasonPhase);
@@ -1500,7 +1500,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         const trainCols = days
           .map((d, i) => ({ d, i }))
           .filter((x) => x.d.kind === "train")
-          .map((x) => ({ md: x.d.md ?? null, weekday: x.d.weekday, rest: (noMatchIntents[x.i] ?? "OFF") === "OFF", srpe: srpeOf(x.d) }));
+          .map((x) => ({ d: x.d, md: x.d.md ?? null, weekday: x.d.weekday, rest: (noMatchIntents[x.i] ?? "OFF") === "OFF", srpe: srpeOf(x.d) }));
         const srpeVals = trainCols.filter((c) => !c.rest).map((c) => c.srpe).filter((x): x is number => x != null && x > 0);
         const srpeMean = srpeVals.length ? srpeVals.reduce((a, b) => a + b, 0) / srpeVals.length : 0;
         // Per-day multiplier: the PLANNED session load for this week (normalised to the
@@ -1544,6 +1544,24 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
             cod: null as number | null, coo: null as number | null, exertions: null as number | null, mechLoad: null as number | null,
           };
         }).filter((p) => p.pl != null || p.weeklyPl != null);
+        // Indoor teams (basketball / Kinexon) have no football day-idea, so give each
+        // training day a planned load on the PDF card: a band + the team's expected Player
+        // Load from that MD-day's taper (× the squad per-session baseline). Football keeps
+        // its own idea; this only fills the otherwise-bare indoor day cards.
+        if (isBasketball && mapped.length) {
+          const plVals = mapped.map((p) => p.pl).filter((x): x is number => x != null);
+          const teamSessionPl = plVals.length ? plVals.reduce((a, b) => a + b, 0) / plVals.length : null;
+          trainCols.forEach((c, j) => {
+            const r = dayRatios[j];
+            if (r <= 0) return;
+            const bandKey: "high" | "moderate" | "low" = r >= 1.05 ? "high" : r <= 0.9 ? "low" : "moderate";
+            (c.d as { dayLoad: { band: string | null; bandColor: string | null; pl: number | null } | null }).dayLoad = {
+              band: isIS ? LOAD_BAND_META[bandKey].label.is : LOAD_BAND_META[bandKey].label.en,
+              bandColor: LOAD_BAND_META[bandKey].color,
+              pl: teamSessionPl != null ? Math.round(teamSessionPl * r) : null,
+            };
+          });
+        }
         if (mapped.length) {
           // Kinexon (indoor LPS) → merge in its own distinctive variables (Changes of
           // Orientation, Exertions, Mechanical Load), read server-side from raw_payload_json.
