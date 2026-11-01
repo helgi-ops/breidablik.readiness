@@ -1490,20 +1490,28 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           const dose = "dose" in d ? d.dose : null;
           return idea?.srpe ?? dose?.srpe ?? null;
         };
-        const trainIdx = days.filter((d) => d.kind === "train");
-        const srpeVals = trainIdx.map((d) => srpeOf(d)).filter((x): x is number => x != null && x > 0);
+        // Training-slot columns (kind "train"), keeping the index so a genuine rest day
+        // is read from the intent (OFF), not from a missing sRPE — basketball/Kinexon
+        // weeks carry no per-day sRPE, so sRPE-absence must NOT be treated as rest.
+        const trainCols = days
+          .map((d, i) => ({ d, i }))
+          .filter((x) => x.d.kind === "train")
+          .map((x) => ({ md: x.d.md ?? null, weekday: x.d.weekday, rest: (noMatchIntents[x.i] ?? "OFF") === "OFF", srpe: srpeOf(x.d) }));
+        const srpeVals = trainCols.filter((c) => !c.rest).map((c) => c.srpe).filter((x): x is number => x != null && x > 0);
         const srpeMean = srpeVals.length ? srpeVals.reduce((a, b) => a + b, 0) / srpeVals.length : 0;
-        // Per training-day multiplier: the MD-day shape (precise) where the team has it,
-        // else the planned session load normalised to the week's mean. A planned rest/off
-        // day (no session load) stays 0 so it carries no load.
-        const dayRatios = trainIdx.map((d) => {
-          const s = srpeOf(d);
-          if (s == null || s <= 0) return 0; // planned rest within a training slot
-          const md = d.md;
-          if (md && mdShape[md] != null && mdShape[md] > 0) return mdShape[md];
-          return srpeMean > 0 ? s / srpeMean : 1;
+        // Per-day multiplier: the team's MD-day shape (precise) where it has one, else the
+        // planned session load normalised to the week's mean (football), else equal weight
+        // (basketball/Kinexon with no sRPE). A planned OFF day stays 0.
+        let dayRatios = trainCols.map((c) => {
+          if (c.rest) return 0;
+          if (c.md && mdShape[c.md] != null && mdShape[c.md] > 0) return mdShape[c.md];
+          if (srpeMean > 0 && c.srpe != null && c.srpe > 0) return c.srpe / srpeMean;
+          return 1;
         });
-        const trainDays = trainIdx.map((d) => ({ label: d.weekday, md: d.md ?? null }));
+        // Never produce an all-zero week (e.g. every intent OFF) — fall back to equal days.
+        if (dayRatios.every((r) => r === 0)) dayRatios = trainCols.map((c) => (c.rest ? 0 : 1));
+        if (dayRatios.every((r) => r === 0)) dayRatios = trainCols.map(() => 1);
+        const trainDays = trainCols.map((c) => ({ label: c.weekday, md: c.md }));
         const mapped = pls.map((p) => {
           const mu = p.matchUnit; const rb = p.recentBaseline;
           // Per-session typical GPS + IMA load: the player's recent TRAINING baseline first
