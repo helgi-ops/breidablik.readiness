@@ -27,10 +27,13 @@ export interface KinexonDecelDay {
   exertionsHigh: number | null;
   mechLoad: number | null;
   playerLoad: number | null;
+  /** Changes of Orientation — the club's directional-movement signal when it
+   *  doesn't capture Changes of Direction. Used as a CoD/agility proxy. */
+  changesOfOrientation: number | null;
 }
 
 export interface KxDecelDimension {
-  key: "eccentric_load" | "ad_balance" | "high_intensity" | "concentration" | "mechanical";
+  key: "eccentric_load" | "ad_balance" | "high_intensity" | "directional_work" | "concentration" | "mechanical";
   labelEN: string;
   labelIS: string;
   flag: KxDecelFlag;
@@ -97,6 +100,7 @@ export function computeKinexonDecel(rowsIn: KinexonDecelDay[], refDateIn?: strin
   const accel = snapshot(rows, (d) => d.accelsLoad, refDate);
   const exer = snapshot(rows, (d) => d.exertionsHigh, refDate);
   const mech = snapshot(rows, (d) => d.mechLoad, refDate);
+  const orient = snapshot(rows, (d) => d.changesOfOrientation, refDate);
 
   // ── 1. Eccentric load (overload) — Decels Load vs own 28d norm ──
   const eccFlag = zFlag(decel.z, "high");
@@ -115,6 +119,12 @@ export function computeKinexonDecel(rowsIn: KinexonDecelDay[], refDateIn?: strin
 
   // ── 3. High-intensity braking exposure — Exertions (high) vs own norm ──
   const hiFlag = zFlag(exer.z, "high");
+
+  // ── Directional work — Changes of Orientation as a CoD/agility proxy (the club
+  // doesn't capture Changes of Direction) vs the player's own norm. ──
+  const dirFlag = zFlag(orient.z, "high");
+  const dirPctAbove = isNum(orient.z) && isNum(orient.mean28) && isNum(orient.recent7) && orient.mean28 > 0
+    ? Math.round(((orient.recent7 - orient.mean28) / orient.mean28) * 100) : null;
 
   // ── 4. Exposure concentration — peak-day Decels Load share of 28d total ──
   const conc = decel.peakPctOf28;
@@ -144,6 +154,13 @@ export function computeKinexonDecel(rowsIn: KinexonDecelDay[], refDateIn?: strin
       valueText: isNum(exer.recent7) ? `${Math.round(exer.recent7)} high efforts/day` : "no data",
       coachEN: hiFlag === "no_data" ? "no high-intensity effort data" : hiFlag === "green" ? "high-intensity efforts are in his normal range" : "high-intensity efforts are running above his 28-day norm",
       coachIS: hiFlag === "no_data" ? "engin háákefðar-átaksgögn" : hiFlag === "green" ? "háákefðar-átök í eðlilegu bili" : "háákefðar-átök yfir 28-daga viðmiði",
+    },
+    {
+      key: "directional_work", labelEN: "Directional work (orientation)", labelIS: "Stefnuvinna (orientation)",
+      flag: dirFlag,
+      valueText: isNum(orient.recent7) ? `${Math.round(orient.recent7)} /day (28d avg ${isNum(orient.mean28) ? Math.round(orient.mean28) : "—"})` : "no data",
+      coachEN: dirFlag === "no_data" ? "no directional-movement data" : dirPctAbove != null && dirPctAbove !== 0 ? `changes of orientation (CoD proxy) ${dirPctAbove > 0 ? "+" : ""}${dirPctAbove}% vs his norm` : "directional work is in his normal range",
+      coachIS: dirFlag === "no_data" ? "engin stefnuhreyfigögn" : dirPctAbove != null && dirPctAbove !== 0 ? `stefnubreytingar (CoD proxy) ${dirPctAbove > 0 ? "+" : ""}${dirPctAbove}% á móti viðmiði` : "stefnuvinna í eðlilegu bili",
     },
     {
       key: "concentration", labelEN: "Exposure concentration", labelIS: "Álagsþétting",

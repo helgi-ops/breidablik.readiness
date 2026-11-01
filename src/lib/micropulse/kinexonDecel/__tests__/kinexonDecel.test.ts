@@ -4,7 +4,7 @@ import { computeKinexonDecel, type KinexonDecelDay } from "../index";
 const REF = "2026-11-01";
 function day(offset: number, over: Partial<KinexonDecelDay> = {}): KinexonDecelDay {
   const d = new Date(`${REF}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - offset);
-  return { date: d.toISOString().slice(0, 10), decelsLoad: 1000, accelsLoad: 500, exertionsHigh: 40, mechLoad: 2000, playerLoad: 600, ...over };
+  return { date: d.toISOString().slice(0, 10), decelsLoad: 1000, accelsLoad: 500, exertionsHigh: 40, mechLoad: 2000, playerLoad: 600, changesOfOrientation: 120, ...over };
 }
 
 describe("computeKinexonDecel", () => {
@@ -34,7 +34,7 @@ describe("computeKinexonDecel", () => {
   });
 
   it("returns no_data when there is no braking signal", () => {
-    const rows = Array.from({ length: 10 }, (_, i) => day(i, { decelsLoad: null, accelsLoad: null, exertionsHigh: null, mechLoad: null }));
+    const rows = Array.from({ length: 10 }, (_, i) => day(i, { decelsLoad: null, accelsLoad: null, exertionsHigh: null, mechLoad: null, changesOfOrientation: null }));
     expect(computeKinexonDecel(rows, REF).overall).toBe("no_data");
   });
 });
