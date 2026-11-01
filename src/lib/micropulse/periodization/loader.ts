@@ -127,9 +127,12 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   // Season daily GPS/IMA (paged past 1000) → weekly team Player Load curve + the squad baseline.
   // Richer mechanical/IMA columns (Band 2–3 high-intensity effort counts, top-band free-running strides,
   // RHIE / running symmetry / metabolic power) are pulled too — rendered only where the feed carries them.
-  type Raw = { date: string; player_load: number | null; total_distance: number | null; velocity_band5_total_distance: number | null; velocity_band6_total_distance: number | null; ima_accel: number | null; ima_decel: number | null; player_load_per_minute: number | null; max_velocity: number | null; ima_clock_gen2: ClockGrid | null; player_id: string | null; accel_b2_3_tot_effs_gen2: number | null; decel_b2_3_tot_effs_gen2: number | null; ima_fr_band6_stride_count: number | null; ima_fr_band7_stride_count: number | null; ima_fr_band8_stride_count: number | null; rhie_bouts: number | null; running_symmetry: number | null; metabolic_power: number | null };
+  // Kinexon (indoor LPS) reports accel/decel as plain counts (accelerations/
+  // decelerations), not Catapult IMA (ima_accel/ima_decel) — pulled too so the
+  // accel/decel baseline populates for a Kinexon team (ima_* stay null there).
+  type Raw = { date: string; player_load: number | null; total_distance: number | null; velocity_band5_total_distance: number | null; velocity_band6_total_distance: number | null; ima_accel: number | null; ima_decel: number | null; accelerations: number | null; decelerations: number | null; player_load_per_minute: number | null; max_velocity: number | null; ima_clock_gen2: ClockGrid | null; player_id: string | null; accel_b2_3_tot_effs_gen2: number | null; decel_b2_3_tot_effs_gen2: number | null; ima_fr_band6_stride_count: number | null; ima_fr_band7_stride_count: number | null; ima_fr_band8_stride_count: number | null; rhie_bouts: number | null; running_symmetry: number | null; metabolic_power: number | null };
   const daily = await fetchAllPages<Raw>((from, to) =>
-    sb.from("player_external_load_daily").select("date, player_id, player_load, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_accel, ima_decel, player_load_per_minute, max_velocity, ima_clock_gen2, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, rhie_bouts, running_symmetry, metabolic_power")
+    sb.from("player_external_load_daily").select("date, player_id, player_load, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_accel, ima_decel, accelerations, decelerations, player_load_per_minute, max_velocity, ima_clock_gen2, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, rhie_bouts, running_symmetry, metabolic_power")
       .eq("team_id", args.teamId).gte("date", yStart).lte("date", yEnd).order("date").range(from, to));
   const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
   let dataStart: string | null = null, dataEnd: string | null = null;
@@ -145,7 +148,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     if (dataStart === null || r.date < dataStart) dataStart = r.date;
     if (dataEnd === null || r.date > dataEnd) dataEnd = r.date;
     if (typeof r.player_load === "number" && r.player_load > 0) { hasGps = true; gpsLoad.push({ date: r.date, load: r.player_load }); if (r.player_id) gpsLoadByPid.push({ date: r.date, load: r.player_load, pid: r.player_id }); }
-    if (r.ima_accel != null) hasIma = true;
+    if (r.ima_accel != null || r.accelerations != null) hasIma = true;
     const v5 = num(r.velocity_band5_total_distance), v6 = num(r.velocity_band6_total_distance);
     const strideHiParts = [num(r.ima_fr_band6_stride_count), num(r.ima_fr_band7_stride_count), num(r.ima_fr_band8_stride_count)].filter((x): x is number => x != null);
     const strideHi = strideHiParts.length ? strideHiParts.reduce((a, b) => a + b, 0) : null;
@@ -154,13 +157,13 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
       isMatch: matchDates.has(r.date), date: r.date,
       distanceM: num(r.total_distance), hsrM: hsr, sprintM: v6,
       maxKmh: num(r.max_velocity), playerLoad: num(r.player_load), plPerMin: num(r.player_load_per_minute),
-      accel: num(r.ima_accel), decel: num(r.ima_decel), pid: r.player_id, clock: r.ima_clock_gen2 ?? null,
+      accel: num(r.ima_accel) ?? num(r.accelerations), decel: num(r.ima_decel) ?? num(r.decelerations), pid: r.player_id, clock: r.ima_clock_gen2 ?? null,
       accelHiEff: num(r.accel_b2_3_tot_effs_gen2), decelHiEff: num(r.decel_b2_3_tot_effs_gen2), strideHi,
       rhieBouts: num(r.rhie_bouts), runSymmetry: num(r.running_symmetry), metabolicPower: num(r.metabolic_power),
     });
     if (r.player_id && matchDates.has(r.date)) {
       const arr = matchRowByPlayer.get(r.player_id) ?? [];
-      arr.push({ date: r.date, minutes: null, load: num(r.player_load), hsr, sprint: v6, distance: num(r.total_distance), accel: num(r.ima_accel), decel: num(r.ima_decel),
+      arr.push({ date: r.date, minutes: null, load: num(r.player_load), hsr, sprint: v6, distance: num(r.total_distance), accel: num(r.ima_accel) ?? num(r.accelerations), decel: num(r.ima_decel) ?? num(r.decelerations),
         accHiEff: num(r.accel_b2_3_tot_effs_gen2), decHiEff: num(r.decel_b2_3_tot_effs_gen2), stride: strideHi, rhie: num(r.rhie_bouts), symmetry: num(r.running_symmetry), metPower: num(r.metabolic_power) });
       matchRowByPlayer.set(r.player_id, arr);
     }
