@@ -12,7 +12,8 @@
  * dedicated DB column. Families with no data at all auto-hide (feed honesty).
  *
  * Descriptive external load (Kinexon indoor LPS) — never a readiness verdict.
- * Shared by Load Intelligence and the coach External/IMA tab.
+ * Shared by Load Intelligence and the coach External/IMA tab. Layered read:
+ * verdict + 2-3 facts first, the dense per-family tables behind "Show details".
  */
 
 import * as React from "react";
