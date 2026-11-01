@@ -243,7 +243,7 @@ export function Chip({ text, tone = "neutral" }: { text: string; tone?: Tone }) 
   const t = TONE[tone];
   const outline = tone === "neutral";
   return (
-    <Text style={[fb(600), { fontSize: 7.75, color: t.text, backgroundColor: outline ? undefined : t.tint, borderWidth: outline ? 1 : 0, borderColor: C.ink, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }]}>{clean(text)}</Text>
+    <Text style={[fb(600), { fontSize: 7.75, color: t.text, backgroundColor: outline ? undefined : t.tint, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, ...(outline ? { borderWidth: 1, borderColor: C.ink } : {}) }]}>{clean(text)}</Text>
   );
 }
 
