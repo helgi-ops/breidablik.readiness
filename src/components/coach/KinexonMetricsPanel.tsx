@@ -17,6 +17,7 @@
  */
 
 import * as React from "react";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { KINEXON_CATALOG, readKinexonMetric, type KinexonMetric } from "@/lib/integrations/kinexon/metricCatalog";
 
@@ -46,15 +47,56 @@ function acwrTone(v: number | null): string {
 
 export default function KinexonMetricsPanel({
   players,
+  teamId,
   date,
   lang,
+  groupKeys,
+  titleEN,
+  titleIS,
+  descEN,
+  descIS,
 }: {
-  players: KinexonPlayerInput[];
+  /** Pass the players (with 28d history) directly, OR pass teamId to self-fetch. */
+  players?: KinexonPlayerInput[];
+  teamId?: string | null;
   date: string;
   lang: "EN" | "IS";
+  /** Restrict to these catalog group keys (e.g. ["cod","accel_decel"]); default all. */
+  groupKeys?: string[];
+  titleEN?: string;
+  titleIS?: string;
+  descEN?: string;
+  descIS?: string;
 }) {
+  // Self-fetch when only a teamId is given (keeps the fetch logic in one place).
+  const [fetched, setFetched] = React.useState<KinexonPlayerInput[] | null>(null);
+  const supabase = React.useMemo(() => getSupabaseClient(), []);
+  React.useEffect(() => {
+    if (players || !teamId) return;
+    let alive = true;
+    (async () => {
+      const since = (() => { const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 35); return d.toISOString().slice(0, 10); })();
+      const { data: roster } = await supabase.from("players").select("id, full_name, position").eq("team_id", teamId).eq("is_active", true).order("full_name");
+      const ids = ((roster ?? []) as Array<{ id: string }>).map((p) => String(p.id));
+      if (!ids.length) { if (alive) setFetched([]); return; }
+      const { data: rows } = await supabase.from("player_external_load_daily")
+        .select("player_id, date, source, total_player_load, raw_payload_json")
+        .eq("source", "kinexon").in("player_id", ids).gte("date", since).lte("date", date).order("date");
+      const byPlayer = new Map<string, Array<Record<string, unknown>>>();
+      for (const r of (rows ?? []) as Array<Record<string, unknown>>) {
+        const pid = String(r.player_id); const list = byPlayer.get(pid) ?? []; list.push(r); byPlayer.set(pid, list);
+      }
+      const out: KinexonPlayerInput[] = ((roster ?? []) as Array<{ id: string; full_name?: string; position?: string }>)
+        .map((p) => ({ id: String(p.id), name: String(p.full_name ?? ""), position: String(p.position ?? "—"), history: byPlayer.get(String(p.id)) ?? [] }))
+        .filter((p) => p.history.length > 0);
+      if (alive) setFetched(out);
+    })();
+    return () => { alive = false; };
+  }, [players, teamId, date, supabase]);
+
+  const effectivePlayers = players ?? fetched;
   // Pool every player's window history into one squad series per metric.
-  const pooled = React.useMemo(() => players.flatMap((p) => p.history), [players]);
+  const pooled = React.useMemo(() => (effectivePlayers ?? []).flatMap((p) => p.history), [effectivePlayers]);
 
   const acuteStart = dateMinusDays(date, 6);
   const chronicStart = dateMinusDays(date, 27);
@@ -79,13 +121,17 @@ export default function KinexonMetricsPanel({
   }
 
   // Compute once; drop metrics with no data and families left empty.
-  const groups = KINEXON_CATALOG.map((g) => {
+  const catalog = groupKeys ? KINEXON_CATALOG.filter((g) => groupKeys.includes(g.key)) : KINEXON_CATALOG;
+  const groups = catalog.map((g) => {
     const rows = g.metrics
       .map((m) => ({ m, snap: snapshot(m) }))
       .filter((r) => r.snap.has);
     return { g, rows };
   }).filter((grp) => grp.rows.length > 0);
 
+  if (teamId && effectivePlayers == null) {
+    return <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-400">Loading…</div>;
+  }
   if (groups.length === 0) return null;
 
   const fmt = (n: number | null, digits: number) => (n == null ? "—" : n.toFixed(digits));
@@ -130,12 +176,12 @@ export default function KinexonMetricsPanel({
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">
-          {lang === "EN" ? "Full Kinexon metrics" : "Allir Kinexon mælikvarðar"}
+          {lang === "EN" ? (titleEN ?? "Full Kinexon metrics") : (titleIS ?? "Allir Kinexon mælikvarðar")}
         </CardTitle>
         <CardDescription className="mt-1 text-sm text-slate-500">
           {lang === "EN"
-            ? "Everything Kinexon captures indoors — squad average today vs the 7- and 28-day baselines."
-            : "Allt sem Kinexon mælir innandyra — meðaltal sveitar í dag á móti 7- og 28-daga grunnlínum."}
+            ? (descEN ?? "Everything Kinexon captures indoors — squad average today vs the 7- and 28-day baselines.")
+            : (descIS ?? "Allt sem Kinexon mælir innandyra — meðaltal sveitar í dag á móti 7- og 28-daga grunnlínum.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-0 space-y-4">

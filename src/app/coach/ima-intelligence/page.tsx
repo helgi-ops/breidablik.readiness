@@ -32,6 +32,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import VerdictBanner, { type VerdictDriver } from "@/components/coach/VerdictBanner";
 import LiteTierBanner from "@/components/coach/LiteTierBanner";
 import CoachWeeklyLoadCard from "@/components/dashboard/CoachWeeklyLoadCard";
+import KinexonMetricsPanel from "@/components/coach/KinexonMetricsPanel";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import ShowDetails from "@/components/common/ShowDetails";
 import TitanMovementIntelligence from "@/components/coach/TitanMovementIntelligence";
@@ -312,7 +313,7 @@ export default function ImaIntelligencePage() {
           <Link href="/coach" className="text-sm text-slate-500 hover:text-slate-700">
             {t("backToDashboard", lang)}
           </Link>
-          <h1 className="mt-1 text-2xl font-bold text-slate-900">{t("pageTitle", lang)}</h1>
+          <h1 className="mt-1 text-2xl font-bold text-slate-900">{isKinexon ? (lang === "IS" ? "Hreyfigreining" : "Movement Intelligence") : t("pageTitle", lang)}</h1>
           <PagePurpose
             en="see change-of-direction and movement load per player"
             is="sjá stefnubreytinga- og hreyfiálag per leikmann"
@@ -320,7 +321,11 @@ export default function ImaIntelligencePage() {
           />
           <p className="text-xs text-slate-500">{isTitan ? "Titan indoor IMU · Power et al. 2022" : t("citation", lang)}</p>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            {isTitan
+            {isKinexon
+              ? (lang === "IS"
+                  ? "Innidyra hreyfiálag frá Kinexon staðsetningu: stefnubreytingar, stefnusnúningar, átök og hröðun/hægðun per leikmaður, lesið á persónulegri viðmiðun. (Ekki IMA Free Running.)"
+                  : "Indoor movement load from Kinexon positioning: changes of direction, orientation, exertions and accel/decel per player, read on personal norm. (Not IMA Free Running.)")
+              : isTitan
               ? (lang === "IS"
                   ? "Hreyfigreining fyrir Titan innidyra-IMU: IMU Álagsvísitala, stökk, impacts og tími-í-ákefð (Kyrr/Lágt/Miðlungs/Hátt) per leikmaður, lesið á persónulegri viðmiðun."
                   : "Movement intelligence for the Titan indoor IMU: IMU Load Index, jumps, impacts and time-in-intensity (settled/low/mid/high) per player, read on personal norm.")
@@ -353,8 +358,10 @@ export default function ImaIntelligencePage() {
             lang={lang}
             date={date}
             group="ima"
-            title={lang === "IS" ? "Vikulegt IMA-álag" : "Weekly IMA Load"}
-            subtitle={lang === "IS" ? "Uppsafnað IMA (driver) álag vikunnar vs dæmigert" : "Cumulative IMA (driver) load this week vs typical"}
+            title={isKinexon ? (lang === "IS" ? "Vikulegt hreyfiálag" : "Weekly movement load") : (lang === "IS" ? "Vikulegt IMA-álag" : "Weekly IMA Load")}
+            subtitle={isKinexon
+              ? (lang === "IS" ? "Uppsafnað hreyfiálag vikunnar (hröðun/hægðun/stefnubreytingar) vs dæmigert" : "Cumulative movement load this week (accel/decel/CoD) vs typical")
+              : (lang === "IS" ? "Uppsafnað IMA (driver) álag vikunnar vs dæmigert" : "Cumulative IMA (driver) load this week vs typical")}
           />
         </div>
       )}
@@ -367,16 +374,30 @@ export default function ImaIntelligencePage() {
           intensity-tier CoD this page's session-shape, sprint-stride and L/R
           asymmetry reads need — so those Catapult-specific sections are replaced
           with an honest pointer to where Kinexon's movement data lives. */}
-      {isKinexon && (
-        <div className="mb-6 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
-          <div className="font-semibold">{lang === "IS" ? "Kinexon — hreyfiálag er í Weekly IMA Load að ofan" : "Kinexon — movement load is in the Weekly IMA Load above"}</div>
-          <p className="mt-1 text-[13px] leading-relaxed">
+      {/* Kinexon indoor movement — its own change-of-direction & effort variables
+          (CoD, Changes of Orientation, Exertions, accel/decel), not the Catapult
+          IMA Free Running / directional-CoD this page is built on. Indoor — never
+          labelled IMA/IMU. */}
+      {isKinexon && teamId && (
+        <div className="mb-6">
+          <KinexonMetricsPanel
+            teamId={teamId}
+            date={date}
+            lang={lang === "IS" ? "IS" : "EN"}
+            groupKeys={["cod", "accel_decel", "accel_load"]}
+            titleEN="Indoor movement & change of direction"
+            titleIS="Innidyra hreyfing & stefnubreytingar"
+            descEN="Kinexon's own change-of-direction and effort signals — squad average today vs the 7- and 28-day baselines (ACWR on accumulation metrics). Indoor positioning, not IMA Free Running."
+            descIS="Kinexon sín eigin stefnubreytinga- og átaksmerki — meðaltal sveitar í dag á móti 7- og 28-daga grunnlínum (ACWR á uppsöfnun). Innidyra staðsetning, ekki IMA Free Running."
+          />
+          <p className="mt-2 text-[11px] text-slate-400">
             {lang === "IS"
-              ? "Kinexon skráir hröðun/hægðun/stefnubreytingar sem heildartölur (sýnt að ofan), en ekki per-skref IMA Free Running böndin eða stefnu-/þrep-skipta CoD sem mynstur-, sprett-skref- og L/R-ósamhverfu-lestrar þessarar síðu þurfa. Fyrir fullt Kinexon hreyfiálag sjáðu "
-              : "Kinexon records accel/decel/changes-of-direction as totals (shown above), but not the per-stride IMA Free Running bands or the directional / intensity-tier CoD that this page's session-shape, sprint-stride and L/R-asymmetry reads need. For Kinexon's full movement load see "}
-            <a href="/coach/load-intelligence?tab=gps" className="font-semibold underline">{lang === "IS" ? "Full Kinexon metrics" : "Full Kinexon metrics"}</a>
+              ? "Stride-bönd, sprett-skref og L/R CoD ósamhverfa eru ekki í Kinexon-útflutningi. Fullt Kinexon hreyfiálag er á "
+              : "Stride bands, sprint-strides and L/R CoD asymmetry aren't in a Kinexon export. Full Kinexon movement load is on the "}
+            <a href="/coach/load-intelligence?tab=gps" className="underline">Full Kinexon metrics</a>
             {lang === "IS" ? " og " : " and "}
-            <a href="/coach/decel-intelligence" className="font-semibold underline">{lang === "IS" ? "Deceleration Intelligence" : "Deceleration Intelligence"}</a>.
+            <a href="/coach/decel-intelligence" className="underline">Deceleration Intelligence</a>
+            {lang === "IS" ? " yfirborðunum." : " surfaces."}
           </p>
         </div>
       )}
