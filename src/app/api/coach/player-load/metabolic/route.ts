@@ -27,6 +27,14 @@ import {
   computeMechanicalLoad,
   type MechanicalLoadSourceRow,
 } from "@/lib/micropulse/mechanicalLoad";
+import { KINEXON_CATALOG, readKinexonMetric, type KinexonMetric } from "@/lib/integrations/kinexon/metricCatalog";
+
+// Kinexon's time-at-high-metabolic-power zones (minutes) → the engine's
+// time_above_hml_threshold_s input (seconds). Kinexon's analogue of HML time.
+const kxMetabMetric = (key: string): KinexonMetric =>
+  KINEXON_CATALOG.flatMap((g) => g.metrics).find((m) => m.key === key)!;
+const KX_METAB_TIME_HIGH = kxMetabMetric("metab_time_high");
+const KX_METAB_TIME_VHIGH = kxMetabMetric("metab_time_vhigh");
 
 export const runtime = "nodejs";
 
@@ -49,6 +57,7 @@ type DBExternalLoadRow = {
   metabolic_data_valid: boolean;
   metabolic_power_gen: string | null;
   source: string | null;
+  raw_payload_json: unknown;
 };
 
 type ResponseRow = {
@@ -117,16 +126,28 @@ function mapDBRowToSourceRow(row: DBExternalLoadRow): MetabolicLoadSourceRow {
   // Catapult GPS it has no fix-quality caveat, so a present metabolic_power IS
   // valid. The metabolic_data_valid column is a Catapult concept and sits false on
   // Kinexon rows, which would otherwise exclude them from the engine's baseline.
-  const dataValid =
-    row.source === "kinexon"
-      ? row.metabolic_power != null
-      : (row.metabolic_data_valid ?? false);
+  const isKx = row.source === "kinexon";
+  const dataValid = isKx ? row.metabolic_power != null : (row.metabolic_data_valid ?? false);
+
+  // Kinexon reports time-at-high/very-high metabolic power (minutes) rather than a
+  // single "time above HML threshold" — sum the two high zones (→ seconds) into
+  // that engine input so the composite's time component works for Kinexon too.
+  let timeAbove = row.time_above_hml_threshold_s;
+  if (isKx && timeAbove == null) {
+    const rec = row as unknown as Record<string, unknown>;
+    const hiMin = readKinexonMetric(rec, KX_METAB_TIME_HIGH);
+    const vhiMin = readKinexonMetric(rec, KX_METAB_TIME_VHIGH);
+    if (hiMin != null || vhiMin != null) {
+      timeAbove = Math.round(((hiMin ?? 0) + (vhiMin ?? 0)) * 60);
+    }
+  }
+
   return {
     date: row.date,
     metabolic_power: row.metabolic_power,
     metabolic_power_peak: row.metabolic_power_peak,
     high_metabolic_load_distance_m: row.high_metabolic_load_distance_m,
-    time_above_hml_threshold_s: row.time_above_hml_threshold_s,
+    time_above_hml_threshold_s: timeAbove,
     metabolic_data_valid: dataValid,
   };
 }
@@ -138,7 +159,7 @@ async function fetchMetabolicRows(
   endDate: string,
 ): Promise<DBExternalLoadRow[]> {
   const SELECT =
-    "player_id, date, metabolic_power, metabolic_power_peak, high_metabolic_load_distance_m, time_above_hml_threshold_s, metabolic_data_valid, metabolic_power_gen, source";
+    "player_id, date, metabolic_power, metabolic_power_peak, high_metabolic_load_distance_m, time_above_hml_threshold_s, metabolic_data_valid, metabolic_power_gen, source, raw_payload_json";
 
   let query = sb
     .from("player_external_load_daily")
@@ -191,6 +212,7 @@ async function fetchMetabolicRows(
     metabolic_data_valid: false,
     metabolic_power_gen: null,
     source: (row.source as string | null) ?? null,
+    raw_payload_json: (row.raw_payload_json as unknown) ?? null,
   }));
 }
 

@@ -100,6 +100,10 @@ export const KINEXON_CATALOG: KinexonMetricGroup[] = [
       { key: "hmpd", labelEN: "High-metabolic-power dist", labelIS: "Hátt efnaskiptaafl (vegal.)", col: "high_metabolic_load_distance_m", tokens: ["high", "metabolic", "power", "distance"], excl: ["min"], unit: "m", digits: 0, kind: "volume" },
       { key: "anaerobic", labelEN: "Anaerobic activity dist", labelIS: "Loftfirrð virkni (vegal.)", tokens: ["anaerobic", "activity", "distance"], unit: "m", digits: 0, kind: "volume" },
       { key: "physio_load", labelEN: "Physio load", labelIS: "Lífeðlisálag", tokens: ["physio", "load"], unit: "", digits: 0, kind: "volume" },
+      // Time spent at high / very-high metabolic power — "hh:mm:ss" cells → minutes.
+      // Together these are the Kinexon analogue of "time above HML threshold".
+      { key: "metab_time_high", labelEN: "Time at high met. power", labelIS: "Tími við hátt efnaskiptaafl", tokens: ["metabolic", "power", "time", "high"], excl: ["very"], unit: "min", digits: 1, kind: "volume", duration: true },
+      { key: "metab_time_vhigh", labelEN: "Time at very-high met. power", labelIS: "Tími við mjög hátt efnaskiptaafl", tokens: ["metabolic", "power", "time", "very", "high"], unit: "min", digits: 1, kind: "volume", duration: true },
     ],
   },
   {
