@@ -1514,6 +1514,10 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         if (dayRatios.every((r) => r === 0)) dayRatios = trainCols.map((c) => (c.rest ? 0 : 1));
         if (dayRatios.every((r) => r === 0)) dayRatios = trainCols.map(() => 1);
         const trainDays = trainCols.map((c) => ({ label: c.weekday, md: c.md }));
+        // The week's effective training-day count (sum of the MD-day multipliers) — every
+        // GPS + IMA column is a WEEKLY total (per-session baseline × this), to match "Week PL".
+        const weekMult = dayRatios.reduce((a, b) => a + b, 0);
+        const wk = (v: number | null): number | null => (v == null ? null : Math.round(v * weekMult));
         const mapped = pls.map((p) => {
           const mu = p.matchUnit; const rb = p.recentBaseline;
           // Per-session typical GPS + IMA load: the player's recent TRAINING baseline first
@@ -1531,7 +1535,8 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           return {
             name: p.name, position: p.position,
             minutes: mu.minutesTypical, confidence: mu.confidence,
-            weeklyPl, pl, distance, hsr, accel, decel, perDay,
+            // Columns are WEEKLY totals; pl stays the per-session baseline (unused by the table now).
+            weeklyPl, pl, distance: wk(distance), hsr: wk(hsr), accel: wk(accel), decel: wk(decel), perDay,
             cod: null as number | null, coo: null as number | null, exertions: null as number | null, mechLoad: null as number | null,
           };
         }).filter((p) => p.pl != null || p.weeklyPl != null);
@@ -1548,7 +1553,8 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
                 const kByName = new Map<string, { cod: number | null; coo: number | null; exertions: number | null; mechLoad: number | null }>(
                   (kj.players as Array<{ name: string; cod: number | null; coo: number | null; exertions: number | null; mechLoad: number | null }>).map((p) => [p.name, p])
                 );
-                for (const p of mapped) { const k = kByName.get(p.name); if (k) { p.cod = k.cod; p.coo = k.coo; p.exertions = k.exertions; p.mechLoad = k.mechLoad; } }
+                // Kinexon variables are per-session means — scale to weekly like the others.
+                for (const p of mapped) { const k = kByName.get(p.name); if (k) { p.cod = wk(k.cod); p.coo = wk(k.coo); p.exertions = wk(k.exertions); p.mechLoad = wk(k.mechLoad); } }
               }
             }
           } catch { /* best-effort — fall back to the generic GPS columns */ }
