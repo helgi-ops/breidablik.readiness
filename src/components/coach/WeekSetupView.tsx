@@ -1532,7 +1532,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
             name: p.name, position: p.position,
             minutes: mu.minutesTypical, confidence: mu.confidence,
             weeklyPl, pl, distance, hsr, accel, decel, perDay,
-            coo: null as number | null, exertions: null as number | null, mechLoad: null as number | null,
+            cod: null as number | null, coo: null as number | null, exertions: null as number | null, mechLoad: null as number | null,
           };
         }).filter((p) => p.pl != null || p.weeklyPl != null);
         if (mapped.length) {
@@ -1545,10 +1545,10 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
               const kj = await kres.json();
               if (kj?.isKinexon && Array.isArray(kj.players)) {
                 isKinexon = true;
-                const kByName = new Map<string, { coo: number | null; exertions: number | null; mechLoad: number | null }>(
-                  (kj.players as Array<{ name: string; coo: number | null; exertions: number | null; mechLoad: number | null }>).map((p) => [p.name, p])
+                const kByName = new Map<string, { cod: number | null; coo: number | null; exertions: number | null; mechLoad: number | null }>(
+                  (kj.players as Array<{ name: string; cod: number | null; coo: number | null; exertions: number | null; mechLoad: number | null }>).map((p) => [p.name, p])
                 );
-                for (const p of mapped) { const k = kByName.get(p.name); if (k) { p.coo = k.coo; p.exertions = k.exertions; p.mechLoad = k.mechLoad; } }
+                for (const p of mapped) { const k = kByName.get(p.name); if (k) { p.cod = k.cod; p.coo = k.coo; p.exertions = k.exertions; p.mechLoad = k.mechLoad; } }
               }
             }
           } catch { /* best-effort — fall back to the generic GPS columns */ }
