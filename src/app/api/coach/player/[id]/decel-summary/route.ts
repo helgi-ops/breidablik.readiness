@@ -161,9 +161,11 @@ You will receive a JSON object with:
 ═══════ HARD RULES ═══════
 
 1. Do NOT compute your own interpretation of the raw numbers. The pre-computed
-   direction and coach_phrase are the only authoritative readings. If
-   ad_coupling.direction = "below_healthy" you MUST say braking exceeds
-   acceleration — never say the coupling is healthy or balanced.
+   direction and coach_phrase are the only authoritative readings. Follow each
+   coach_phrase's stated direction EXACTLY — if it says "braking exceeds
+   acceleration" never say the reverse, and vice versa. If a metric's direction
+   is "no_data", it was NOT measured for this player: do NOT mention it at all and
+   never read a 0 value as a concern.
 
 2. Use ONLY phrases that align with each metric's direction. Each metric has
    forbidden_when_used phrases that contradict its direction; using any of

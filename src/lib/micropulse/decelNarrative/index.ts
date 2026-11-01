@@ -160,16 +160,32 @@ function buildUnderload(u: NonNullable<RawDecelInputs["underload"]>): MetricLabe
 
 function buildAdCoupling(a: NonNullable<RawDecelInputs["accel_coupling"]>): MetricLabel {
   const r = a.recent_ratio;
+  // No accel/decel signal at all → not assessable (don't read a 0 as a concern).
+  if (a.flag === "unknown") {
+    return {
+      label: "Decel:Accel coupling",
+      value_text: "no accel/decel data — not assessed",
+      direction: "no_data",
+      severity: "ok",
+      coach_phrase: "no accel/decel data is available for this player, so decel:accel coupling cannot be assessed",
+      forbidden_when_used: ["braking exceeds", "acceleration exceeds", "decel-heavy", "accel-heavy", "one-sided", "balanced"],
+    };
+  }
+  // The ratio is DECEL:ACCEL (healthy 0.8–1.2): HIGH = more braking than
+  // acceleration (decel-heavy); LOW = more acceleration than braking (accel-heavy).
+  // Red fires at either extreme (<0.7 or >2.0), so split the red case by side.
   let direction: MetricLabel["direction"];
   let severity: Severity;
   let coach_phrase: string;
-  if (r < 0.8 || a.flag === "red") {
-    direction = "below_healthy";
-    severity = r < 0.6 ? "concern" : "watch";
-    coach_phrase = `braking exceeds acceleration (${r.toFixed(2)} vs healthy 0.8–1.2) — one-sided movement, decel-heavy`;
-  } else if (r > 1.2) {
+  const high = r > 1.2 || (a.flag === "red" && r > 1.0);
+  const low = r < 0.8 || (a.flag === "red" && r <= 1.0);
+  if (high) {
     direction = "above_healthy";
-    severity = r > 1.5 ? "concern" : "watch";
+    severity = r > 2.0 ? "concern" : "watch";
+    coach_phrase = `braking exceeds acceleration (${r.toFixed(2)} vs healthy 0.8–1.2) — one-sided movement, decel-heavy`;
+  } else if (low) {
+    direction = "below_healthy";
+    severity = r < 0.7 ? "concern" : "watch";
     coach_phrase = `acceleration exceeds braking (${r.toFixed(2)} vs healthy 0.8–1.2) — accel-heavy, may lack braking control`;
   } else {
     direction = "in_range";
@@ -183,16 +199,29 @@ function buildAdCoupling(a: NonNullable<RawDecelInputs["accel_coupling"]>): Metr
     severity,
     coach_phrase,
     forbidden_when_used:
-      direction === "below_healthy"
-        ? ["healthy coupling", "in range", "balanced", "good range", "exceeds acceleration", "acceleration heavy"]
-        : direction === "above_healthy"
-          ? ["healthy coupling", "in range", "balanced", "decel heavy", "braking heavy"]
+      direction === "above_healthy" // decel-heavy
+        ? ["healthy coupling", "in range", "balanced", "good range", "acceleration exceeds", "accel-heavy", "accel heavy", "lack braking"]
+        : direction === "below_healthy" // accel-heavy
+          ? ["healthy coupling", "in range", "balanced", "good range", "braking exceeds", "decel-heavy", "decel heavy", "braking heavy"]
           : ["one-sided", "imbalanced"],
   };
 }
 
 function buildDSprint(d: NonNullable<RawDecelInputs["sprint_coupling"]>): MetricLabel {
   const r = d.recent_ratio;
+  // No sprint/stride signal (e.g. Kinexon, or any team without IMA Free Running):
+  // the ratio is 0 only because there is no data, NOT because the player sprinted
+  // without braking. Return a no-data label so the AI never reads it as a concern.
+  if (d.flag === "unknown") {
+    return {
+      label: "Decel:Sprint coupling",
+      value_text: "no sprint/stride data — not assessed",
+      direction: "no_data",
+      severity: "ok",
+      coach_phrase: "no sprint/stride data is available for this player, so decel:sprint coupling cannot be assessed",
+      forbidden_when_used: ["sprinting without braking", "classic injury pattern", "high-speed injury", "proportional braking", "choppy", "decel-heavy", "accel-heavy"],
+    };
+  }
   let direction: MetricLabel["direction"];
   let severity: Severity;
   let coach_phrase: string;
