@@ -121,8 +121,11 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
 
   const matchDates = new Set(fixtures.map((f) => f.date));
 
-  const { data: teamRow } = await sb.from("teams").select("name").eq("id", args.teamId).maybeSingle();
+  const { data: teamRow } = await sb.from("teams").select("name, gps_provider").eq("id", args.teamId).maybeSingle();
   const teamName = (teamRow as { name?: string } | null)?.name ?? "Team";
+  // Kinexon is indoor LPS, not Catapult — used to relabel the data tier away from
+  // the Catapult product name ("Vector Pro (GPS + IMA)").
+  const isKinexon = String((teamRow as { gps_provider?: string | null } | null)?.gps_provider ?? "").toLowerCase() === "kinexon";
 
   // Season daily GPS/IMA (paged past 1000) → weekly team Player Load curve + the squad baseline.
   // Richer mechanical/IMA columns (Band 2–3 high-intensity effort counts, top-band free-running strides,
@@ -177,7 +180,12 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     const au = num(r.session_load_au) ?? (num(r.rpe) != null && num(r.duration_min) != null ? (r.rpe as number) * (r.duration_min as number) : null);
     if (r.session_date && au != null && au > 0) { srpeLoad.push({ date: r.session_date, load: au }); if (dataStart === null || r.session_date < dataStart) dataStart = r.session_date; if (dataEnd === null || r.session_date > dataEnd) dataEnd = r.session_date; }
   }
-  const tier = dataTier({ ima: hasIma, gps: hasGps, rpe: srpeLoad.length > 0 });
+  const tierBase = dataTier({ ima: hasIma, gps: hasGps, rpe: srpeLoad.length > 0 });
+  // Kinexon reports indoor-LPS external load (not Catapult GPS+IMU) — relabel the
+  // tier from the Catapult product name so the plan/PDF read correctly for Kinexon.
+  const tier = isKinexon && tierBase.loadSource === "gps"
+    ? { ...tierBase, label: { en: "Kinexon (indoor LPS)", is: "Kinexon (innidyra LPS)" }, unlock: null }
+    : tierBase;
   // Load curve + MD shape come from the best source the club has (GPS external load, else sRPE).
   const loadEntries = tier.loadSource === "gps" ? gpsLoad : tier.loadSource === "srpe" ? srpeLoad : [];
   const weekMap = new Map<string, number>();
