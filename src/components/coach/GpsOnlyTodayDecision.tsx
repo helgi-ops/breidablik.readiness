@@ -253,7 +253,18 @@ function signalChips(p: LoadPlayer, lang: Lang): Array<{ label: string; bg: stri
 
 /* ─────────────────────── Per-player summary ─────────────────────── */
 
-export function GpsOnlyLoadSummary({ data, lang }: { data: LoadVerdictResponse | null; lang: Lang }) {
+/** Tooltip for the "Body load" label — names the vendor metric it maps to.
+ *  Body load = total_player_load, which for Kinexon is Accumulated Acceleration
+ *  Load (its PlayerLoad). Undefined (no tooltip) for other providers. */
+function bodyLoadTitle(lang: Lang, isKinexon: boolean): string | undefined {
+  return isKinexon
+    ? L(lang,
+        "Accumulated Acceleration Load — Kinexon's PlayerLoad (summed acceleration magnitude in every direction)",
+        "Accumulated Acceleration Load — PlayerLoad Kinexon (uppsöfnuð stærð hröðana í allar áttir)")
+    : undefined;
+}
+
+export function GpsOnlyLoadSummary({ data, lang, isKinexon = false }: { data: LoadVerdictResponse | null; lang: Lang; isKinexon?: boolean }) {
   const [openId, setOpenId] = useState<string | null>(null);
   // Unfamiliar-Load drift text per player (movement-signature engine), surfaced
   // on each card. Fetched once for the team; each card shows its own if flagged.
@@ -366,8 +377,8 @@ export function GpsOnlyLoadSummary({ data, lang }: { data: LoadVerdictResponse |
               })()}
 
               <div className="mt-2.5 flex gap-4 border-t border-black/5 pt-2.5">
-                <div className="text-[10.5px] uppercase tracking-wide text-slate-500">
-                  {L(lang, "Body load", "Líkamsálag")}
+                <div className="text-[10.5px] uppercase tracking-wide text-slate-500" title={bodyLoadTitle(lang, isKinexon)}>
+                  {L(lang, "Body load", "Líkamsálag")}{isKinexon ? <span className="ml-0.5 text-slate-400">ⓘ</span> : null}
                   <b className="mt-0.5 block font-archivo text-[15px] normal-case tracking-normal text-[#14181c]">{fmtInt(p.figures.bodyLoad)}</b>
                 </div>
                 <div className="text-[10.5px] uppercase tracking-wide text-slate-500">
@@ -394,7 +405,7 @@ export function GpsOnlyLoadSummary({ data, lang }: { data: LoadVerdictResponse |
         })}
       </div>
 
-      {open ? <GpsOnlyLoadDetailModal player={open} uf={ufMap.get(open.player_id) ?? null} lang={lang} onClose={() => setOpenId(null)} /> : null}
+      {open ? <GpsOnlyLoadDetailModal player={open} uf={ufMap.get(open.player_id) ?? null} lang={lang} isKinexon={isKinexon} onClose={() => setOpenId(null)} /> : null}
     </section>
   );
 }
@@ -494,7 +505,7 @@ function useLoadAiSummary(player: LoadPlayer): { state: "loading" | "ok" | "erro
   return res;
 }
 
-export function GpsOnlyLoadDetailModal({ player, uf, lang, onClose }: { player: LoadPlayer; uf?: UnfamiliarItem | null; lang: Lang; onClose: () => void }) {
+export function GpsOnlyLoadDetailModal({ player, uf, lang, isKinexon = false, onClose }: { player: LoadPlayer; uf?: UnfamiliarItem | null; lang: Lang; isKinexon?: boolean; onClose: () => void }) {
   const ai = useLoadAiSummary(player);
   const [showDetails, setShowDetails] = useState(false);
   const band = player.verdict.band;
@@ -567,8 +578,8 @@ export function GpsOnlyLoadDetailModal({ player, uf, lang, onClose }: { player: 
 
         {/* L1 — headline figures + named drivers */}
         <div className="mt-3 flex gap-5">
-          <div className="text-[10.5px] uppercase tracking-wide text-slate-500">
-            {L(lang, "Body load", "Líkamsálag")}
+          <div className="text-[10.5px] uppercase tracking-wide text-slate-500" title={bodyLoadTitle(lang, isKinexon)}>
+            {L(lang, "Body load", "Líkamsálag")}{isKinexon ? <span className="ml-0.5 text-slate-400">ⓘ</span> : null}
             <b className="mt-0.5 block font-archivo text-lg normal-case tracking-normal text-[#14181c]">{fmtInt(player.figures.bodyLoad)}</b>
           </div>
           <div className="text-[10.5px] uppercase tracking-wide text-slate-500">

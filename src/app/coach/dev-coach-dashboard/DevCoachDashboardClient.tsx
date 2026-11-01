@@ -9302,7 +9302,7 @@ export default function CoachPage() {
           {/* GPS Intelligence Only: load-based Decision Summary in place of the
               readiness one (the readiness version is hidden below for these
               teams, since there is no check-in to drive it). */}
-          {showLoadCards && <GpsOnlyLoadSummary data={gpsLoadVerdict} lang={lang === "IS" ? "IS" : "EN"} />}
+          {showLoadCards && <GpsOnlyLoadSummary data={gpsLoadVerdict} lang={lang === "IS" ? "IS" : "EN"} isKinexon={gpsProvider === "kinexon"} />}
 
           {/* Provenance note — the board is showing the most recent check-in
               day (carried forward), because no check-ins have been logged yet
