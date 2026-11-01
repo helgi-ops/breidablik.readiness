@@ -37,7 +37,7 @@ type Lang = "EN" | "IS";
 type LangText = { EN: string; IS: string };
 
 type LoadDriver = { signal: string; plain: LangText; z?: number; weight: number };
-type LoadComponent = { key: string; label: LangText; value: number | null; band: "LOW" | "NORMAL" | "ELEVATED" | "HIGH"; tooltip: LangText };
+type LoadComponent = { key: string; label: LangText; value: number | null; band: "LOW" | "NORMAL" | "ELEVATED" | "HIGH"; tooltip: LangText; source?: string };
 type SZ = { value: number | null; z: number | null };
 type PlayerSignals = {
   decel: SZ; accel: SZ; adRatio: number | null;
@@ -232,7 +232,16 @@ function signalChips(p: LoadPlayer, lang: Lang): Array<{ label: string; bg: stri
   const slate = { bg: "#f1f0ea", fg: "#55585c" };
 
   const spike = comp("spike");
-  if (spike && spike.band === "HIGH") chips.push({ label: L(lang, "⚡ Unfamiliar spike", "⚡ Óvanalegt stökk"), ...red });
+  if (spike && spike.band === "HIGH") {
+    // Name which signal is spiking, so the chip isn't a mystery at a glance.
+    const spikeChip: Record<string, { en: string; is: string }> = {
+      braking:  { en: "⚡ Braking spike",  is: "⚡ Hemlunar-stökk" },
+      hsr:      { en: "⚡ Sprint spike",   is: "⚡ Spretts-stökk" },
+      movement: { en: "⚡ Movement spike", is: "⚡ Hreyfi-stökk" },
+    };
+    const m = spike.source ? spikeChip[spike.source] : undefined;
+    chips.push({ label: m ? L(lang, m.en, m.is) : L(lang, "⚡ Unfamiliar spike", "⚡ Óvanalegt stökk"), ...red });
+  }
 
   const braking = comp("braking");
   const eccentric = p.signals?.loadProfile === "eccentric";

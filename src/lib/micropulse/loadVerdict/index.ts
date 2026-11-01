@@ -55,7 +55,7 @@ export type LoadVerdictInput = {
 };
 
 export type LoadDriver = { signal: string; plain: Lang; z?: number; weight: number };
-export type LoadComponent = { key: string; label: Lang; value: number | null; band: "LOW" | "NORMAL" | "ELEVATED" | "HIGH"; tooltip: Lang };
+export type LoadComponent = { key: string; label: Lang; value: number | null; band: "LOW" | "NORMAL" | "ELEVATED" | "HIGH"; tooltip: Lang; /** For the spike tile: which signal is spiking ("braking" | "hsr" | "movement"). */ source?: string };
 export type LoadVerdict = {
   band: LoadVerdictBand;
   sentence: Lang;
@@ -189,9 +189,9 @@ function buildComponents(input: LoadVerdictInput): LoadComponent[] {
   // Name WHICH signal is spiking, so "Unfamiliar spike" isn't a mystery on the
   // card — the spike tile reads e.g. "Spike · braking load".
   const spikeSources = [
-    { z: zOf(input.braking),                   en: "braking load",        is: "hemlunarálag" },
-    { z: zOf(input.hsr),                        en: "high-speed running",  is: "háhraða hlaup" },
-    { z: input.movementSpike?.peakZ ?? -Infinity, en: "movement pattern", is: "hreyfimynstur" },
+    { key: "braking",  z: zOf(input.braking),                    en: "braking load",       is: "hemlunarálag" },
+    { key: "hsr",      z: zOf(input.hsr),                         en: "high-speed running", is: "háhraða hlaup" },
+    { key: "movement", z: input.movementSpike?.peakZ ?? -Infinity, en: "movement pattern", is: "hreyfimynstur" },
   ].filter((s) => Number.isFinite(s.z)).sort((a, b) => b.z - a.z);
   const spikeZ = spikeSources.length ? spikeSources[0].z : -Infinity;
   const spikeSrc = spikeZ >= SPIKE_Z ? spikeSources[0] : null;
@@ -200,6 +200,7 @@ function buildComponents(input: LoadVerdictInput): LoadComponent[] {
     label: spikeSrc ? { EN: `Spike · ${spikeSrc.en}`, IS: `Stökk · ${spikeSrc.is}` } : { EN: "Spike", IS: "Stökk" },
     value: Number.isFinite(spikeZ) ? round1(spikeZ) : null,
     band: spikeZ >= SPIKE_Z ? "HIGH" : "NORMAL",
+    source: spikeSrc?.key,
     tooltip: spikeSrc
       ? { EN: `A sharp jump (≥2 SD) in ${spikeSrc.en} above the player's own recent norm.`, IS: `Snöggt stökk (≥2 SD) í ${spikeSrc.is} yfir nýlega venju leikmannsins.` }
       : { EN: "A sharp jump (≥2 SD) above the player's own recent norm.", IS: "Snöggt stökk (≥2 SD) yfir nýlega venju leikmannsins." },
