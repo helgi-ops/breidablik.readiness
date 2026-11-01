@@ -97,6 +97,7 @@ export default function BasketballIndoorLoadView({
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<PlayerResult[]>([]);
   const [showDetails, setShowDetails] = useState(false);
+  const [isKinexon, setIsKinexon] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -119,18 +120,25 @@ export default function BasketballIndoorLoadView({
         const { data: rows } = await sb
           .from("player_external_load_daily")
           .select(
-            "player_id, date, source, player_load, total_player_load, ima_band3_accel_count, ima_band3_decel_count, ima_cod_left_high, ima_cod_right_high, jumps, impacts, raw_payload_json",
+            "player_id, date, source, player_load, total_player_load, ima_band3_accel_count, ima_band3_decel_count, ima_cod_left_high, ima_cod_right_high, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, cod_events, jumps, impacts, raw_payload_json",
           )
           .in("player_id", roster.map((p) => p.id))
           .gte("date", since);
+
+        if (alive) setIsKinexon(((rows ?? []) as Array<{ source?: string | null }>).some((r) => r.source === "kinexon"));
 
         const byPlayer = new Map<string, BballLoadRow[]>();
         const titanByPlayer = new Map<string, TitanLatest>();
         for (const raw of (rows ?? []) as Array<Record<string, unknown>>) {
           const pid = String(raw.player_id);
+          const isKx = raw.source === "kinexon";
           const codL = raw.ima_cod_left_high as number | null;
           const codR = raw.ima_cod_right_high as number | null;
-          const highCod = codL == null && codR == null ? null : (codL ?? 0) + (codR ?? 0);
+          // Catapult carries high-intensity CoD by direction (Band 3); Kinexon
+          // carries total CoD in cod_events (its ima_cod_*_high are null) — fall
+          // back so Kinexon's agility signal reaches the board.
+          const codBase = codL == null && codR == null ? null : (codL ?? 0) + (codR ?? 0);
+          const highCod = codBase != null ? codBase : (isKx ? ((raw.cod_events as number | null) ?? null) : null);
           const date = String(raw.date);
           const playerLoad = (raw.player_load as number | null) ?? (raw.total_player_load as number | null) ?? null;
           const jumps = (raw.jumps as number | null) ?? null;
@@ -138,8 +146,10 @@ export default function BasketballIndoorLoadView({
           const row: BballLoadRow = {
             date,
             playerLoad,
-            highAccel: (raw.ima_band3_accel_count as number | null) ?? null,
-            highDecel: (raw.ima_band3_decel_count as number | null) ?? null,
+            // Kinexon's high-effort accel/decel live in the B2-3 effort columns
+            // (its Catapult Band-3 columns are null).
+            highAccel: (raw.ima_band3_accel_count as number | null) ?? (isKx ? (raw.accel_b2_3_tot_effs_gen2 as number | null) ?? null : null),
+            highDecel: (raw.ima_band3_decel_count as number | null) ?? (isKx ? (raw.decel_b2_3_tot_effs_gen2 as number | null) ?? null : null),
             highCod,
             jumps,
             impacts,
@@ -199,18 +209,26 @@ export default function BasketballIndoorLoadView({
           {isEN ? "Indoor Load — Basketball" : "Indoor Load — Körfubolti"}
         </h1>
         <p className="mt-1 text-sm text-slate-600">
-          {isEN
-            ? "Court load from PlayerLoad + high-intensity IMA (accel/decel/change-of-direction) or Titan impacts + jump counts, each read against the player's own 28-day norm."
-            : "Hallar-álag úr PlayerLoad + háálags-IMA (hröðun/hægðun/stefnubreytingar) eða Titan-impacts + stökkfjölda, hvert lesið á móti 28-daga viðmiðun leikmannsins."}
+          {isKinexon
+            ? (isEN
+                ? "Court load from Kinexon PlayerLoad + high-effort accel/decel and changes of direction + jump counts, each read against the player's own 28-day norm."
+                : "Hallar-álag úr Kinexon PlayerLoad + kröftugri hröðun/hægðun og stefnubreytingum + stökkfjölda, hvert lesið á móti 28-daga viðmiðun leikmannsins.")
+            : (isEN
+                ? "Court load from PlayerLoad + high-intensity IMA (accel/decel/change-of-direction) or Titan impacts + jump counts, each read against the player's own 28-day norm."
+                : "Hallar-álag úr PlayerLoad + háálags-IMA (hröðun/hægðun/stefnubreytingar) eða Titan-impacts + stökkfjölda, hvert lesið á móti 28-daga viðmiðun leikmannsins.")}
         </p>
       </div>
 
       {/* Provisional / honesty banner — always shown for basketball */}
       <div className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
         <strong>{isEN ? "Provisional model — awaiting real-data calibration." : "Bráðabirgða-líkan — bíður raun-kvörðunar."}</strong>{" "}
-        {isEN
-          ? "No basketball squad has enough IMA history yet to calibrate the weights, so confidence stays low and every read is on personal norm."
-          : "Ekkert körfuboltalið hefur næga IMA-sögu enn til að kvarða vægin, svo vissan helst lítil og allt er lesið á persónulegri viðmiðun."}
+        {isKinexon
+          ? (isEN
+              ? "Kinexon measures accel/decel and changes of direction directly, but the component weights aren't calibrated to basketball yet — confidence stays low and every read is on the player's own norm."
+              : "Kinexon mælir hröðun/hægðun og stefnubreytingar beint, en vægin eru ekki enn kvörðuð fyrir körfubolta — vissan helst lítil og allt er lesið á persónulegri viðmiðun.")
+          : (isEN
+              ? "No basketball squad has enough IMA history yet to calibrate the weights, so confidence stays low and every read is on personal norm."
+              : "Ekkert körfuboltalið hefur næga IMA-sögu enn til að kvarða vægin, svo vissan helst lítil og allt er lesið á persónulegri viðmiðun.")}
         <button
           type="button"
           className="ml-2 underline decoration-dotted"
@@ -227,7 +245,7 @@ export default function BasketballIndoorLoadView({
       </div>
 
       {/* Detailed explainability — what the score + each signal mean, how impacts are handled. */}
-      <HowToRead isEN={isEN} caveat={sampleCaveat} citation={citation ?? undefined} />
+      <HowToRead isEN={isEN} caveat={sampleCaveat} citation={citation ?? undefined} isKinexon={isKinexon} />
 
       {loading && (
         <div className="rounded-md border bg-white p-6 text-center text-sm text-slate-500">
@@ -307,7 +325,7 @@ export default function BasketballIndoorLoadView({
                     <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                       <Component label="PlayerLoad" value={s.components.playerLoad} />
                       {s.components.highIntensityIma != null && (
-                        <Component label={isEN ? "High-intensity IMA" : "Háálags-IMA"} value={s.components.highIntensityIma} />
+                        <Component label={isKinexon ? (isEN ? "Accel/Decel/CoD" : "Hröðun/Hægðun/CoD") : (isEN ? "High-intensity IMA" : "Háálags-IMA")} value={s.components.highIntensityIma} />
                       )}
                       {s.components.impacts != null && (
                         <Component label={isEN ? "Impacts" : "Impacts"} value={s.components.impacts} />
@@ -341,7 +359,7 @@ function Term({ name, plain, tech }: { name: string; plain: string; tech?: strin
   );
 }
 
-function HowToRead({ isEN, caveat, citation }: { isEN: boolean; caveat?: { en: string; is: string }; citation?: string }) {
+function HowToRead({ isEN, caveat, citation, isKinexon }: { isEN: boolean; caveat?: { en: string; is: string }; citation?: string; isKinexon?: boolean }) {
   const bands = isEN
     ? "Light < 60 · Below avg 60–90 · Typical 90–110 · Heavy 110–140 · Spike ≥ 140"
     : "Léttur < 60 · Undir meðaltali 60–90 · Týpískur 90–110 · Þungur 110–140 · Spike ≥ 140";
@@ -381,11 +399,13 @@ function HowToRead({ isEN, caveat, citation }: { isEN: boolean; caveat?: { en: s
               tech={isEN ? "Weight 45% of the composite. Load Index = the session's raw total (the number behind the %)." : "Vægi 45% af composite. Álagsvísitala = hrá heildartala æfingarinnar (talan á bak við %)."}
             />
             <Term
-              name={isEN ? "High-intensity IMA (Catapult)" : "Háálags-IMA (Catapult)"}
+              name={isKinexon ? (isEN ? "Accel/Decel/CoD (Kinexon)" : "Hröðun/Hægðun/CoD (Kinexon)") : (isEN ? "High-intensity IMA (Catapult)" : "Háálags-IMA (Catapult)")}
               plain={isEN
                 ? "Hard accelerations, decelerations and changes of direction — the sharp mechanical/decel work that matters most for indoor injury risk."
                 : "Harðar hröðanir, hægðanir og stefnubreytingar — snögga vélræna/hægðunar-vinnan sem skiptir mestu fyrir innidyra-meiðslahættu."}
-              tech={isEN ? "Band 3, > 3.0 m·s⁻² events. Weight 35%. Only on teams with Catapult IMA pods." : "Band 3, > 3.0 m·s⁻² atvik. Vægi 35%. Aðeins hjá liðum með Catapult IMA-pods."}
+              tech={isKinexon
+                ? (isEN ? "Kinexon high-effort accel/decel events + changes of direction. Weight 35%." : "Kinexon kröftug hröðunar/hægðunar-atvik + stefnubreytingar. Vægi 35%.")
+                : (isEN ? "Band 3, > 3.0 m·s⁻² events. Weight 35%. Only on teams with Catapult IMA pods." : "Band 3, > 3.0 m·s⁻² atvik. Vægi 35%. Aðeins hjá liðum með Catapult IMA-pods.")}
             />
             <Term
               name={isEN ? "Jumps" : "Stökk"}
