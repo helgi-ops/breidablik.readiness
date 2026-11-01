@@ -26,6 +26,7 @@ import {
   type AvailabilityInput,
   type InjuryStatus,
 } from "@/lib/micropulse/availabilityBoard";
+import { loadPlayerLoadAcwrBatch } from "@/lib/micropulse/playerLoadAcwr/loader";
 
 type AuthProfile = { role: string | null; team_id: string | null };
 
@@ -185,6 +186,19 @@ export async function GET(req: Request) {
       const pid = String(r.player_id ?? "");
       if (!pid) continue;
       acwrByPlayer.set(pid, extractAcwr(r.training_modifier));
+    }
+
+    // Fallback for players with no readiness-derived ACWR — notably check-in-less
+    // GPS/Kinexon teams, which never write a training_modifier. Use the external-
+    // load ACWR off total_player_load (vendor-neutral, so it reads Kinexon's
+    // Accumulated Acceleration Load too). Keeps the load advisory alive for them.
+    const needExternalAcwr = roster.filter((p) => acwrByPlayer.get(p.id) == null).map((p) => p.id);
+    if (needExternalAcwr.length) {
+      const extAcwr = await loadPlayerLoadAcwrBatch(sb, { playerIds: needExternalAcwr, todayIso: date });
+      for (const pid of needExternalAcwr) {
+        const ratio = extAcwr.get(pid)?.ratio ?? null;
+        if (ratio != null) acwrByPlayer.set(pid, ratio);
+      }
     }
 
     const inputs: AvailabilityInput[] = roster.map((p) => {

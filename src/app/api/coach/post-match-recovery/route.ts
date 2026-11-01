@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
     const playedSet = new Set(played.map((m) => m.player_id));
     const { data: matchLoad } = await supabase.from("player_external_load_daily")
       .select("player_id, session_duration_minutes")
-      .eq("team_id", teamId).eq("source", "catapult").eq("date", match.match_date);
+      .eq("team_id", teamId).in("source", ["catapult", "manual", "titan", "kinexon"]).eq("date", match.match_date);
     for (const r of (matchLoad ?? []) as Array<{ player_id: string; session_duration_minutes: number | null }>) {
       const pid = String(r.player_id), mins = num(r.session_duration_minutes ?? 0);
       if (!playedSet.has(pid) && mins >= 20) { played.push({ player_id: pid, minutes_played: Math.round(mins) }); playedSet.add(pid); }
@@ -133,12 +133,18 @@ export async function GET(req: NextRequest) {
   if (playerIds.length) {
     const { data: ld } = await supabase
       .from("player_external_load_daily")
-      .select("player_id, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, accel_decel_efforts")
-      .eq("source", "catapult").in("player_id", playerIds).eq("date", match.match_date);
+      .select("player_id, source, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, accel_decel_efforts, cod_events, ima_cod, accelerations, decelerations")
+      .in("source", ["catapult", "manual", "titan", "kinexon"]).in("player_id", playerIds).eq("date", match.match_date);
     for (const r of (ld ?? []) as Array<Record<string, unknown>>) {
-      const cod = num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low) +
+      // Catapult directional IMA CoD; Kinexon (indoor LPS) carries CoD in
+      // cod_events/ima_cod and accel/decel as raw counts (its ima_accel/ima_decel
+      // are null) — fall back so the MD+1 mechanical "dose" works for it too.
+      const imaCodSum = num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low) +
         num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low);
-      rawLoad.set(String(r.player_id), { decel: num(r.ima_decel), accel: num(r.ima_accel), cod, jumps: num(r.jumps), efforts: num(r.accel_decel_efforts) });
+      const cod = imaCodSum > 0 ? imaCodSum : (num(r.cod_events) || num(r.ima_cod));
+      const decel = num(r.ima_decel) || num(r.decelerations);
+      const accel = num(r.ima_accel) || num(r.accelerations);
+      rawLoad.set(String(r.player_id), { decel, accel, cod, jumps: num(r.jumps), efforts: num(r.accel_decel_efforts) });
     }
   }
   // Cohort mean/sd per metric (players with load only) → z-composite tiers.
