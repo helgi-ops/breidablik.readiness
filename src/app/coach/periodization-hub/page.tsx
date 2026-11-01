@@ -814,7 +814,7 @@ export default function PeriodizationHubPage() {
 
   async function exportPlayerBlock() {
     if (!playerBlock || !plan) return;
-    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: playerBlock.block }, is ? "IS" : "EN");
+    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: playerBlock.block, isKinexon }, is ? "IS" : "EN");
   }
 
   // ── AUTO-SAVE the block skeleton to Week Setup on every edit ─────────────────────────────────────
@@ -1009,7 +1009,7 @@ export default function PeriodizationHubPage() {
 
   async function exportBlock() {
     if (!calBlock || !plan) return;
-    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: calBlock }, is ? "IS" : "EN");
+    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: calBlock, isKinexon }, is ? "IS" : "EN");
   }
 
   // Write the block skeleton back into Week Setup (week_setups + week_plans) so the two stay in sync.
@@ -1119,7 +1119,7 @@ export default function PeriodizationHubPage() {
       };
     }
     await downloadPeriodizationHubPdf({
-      teamName: plan.teamName, seasonYear: plan.seasonYear, generatedAt: new Date().toISOString(), teamUnit,
+      teamName: plan.teamName, seasonYear: plan.seasonYear, generatedAt: new Date().toISOString(), isKinexon, teamUnit,
       tier: plan.tier ? { label: plan.tier.label, loadSource: plan.tier.loadSource, confidence: plan.tier.confidence } : null,
       phases: plan.phases.map((ph) => ({ label: ph.label, start: ph.start, end: ph.end, weeks: ph.weeks, matches: ph.matches, rationale: ph.rationale })),
       congested: plan.congested ?? [], baselines, mdDemand, teamAxes: plan.teamBaseline?.axes ?? null, blocks,

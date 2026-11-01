@@ -1,101 +1,75 @@
 "use client";
 
 /**
- * PeriodizationBlockPdf — a scheduled mesocycle as a match-anchored calendar, styled to the approved
- * demo (MicroPulse-Periodization-Manudur1-Demo.pdf).
+ * PeriodizationBlockPdf — a scheduled mesocycle as a match-anchored calendar.
  *
- * Page 1: navy header band, the match unit as four colour-coded stat chips, a weekly progressive-overload
- * table (training total as % of one match, per dimension), and the MD microcycle template. Page 2+:
- * session-by-session Mon–Sun tables for the whole block — absolute DIST/HSR/LOAD, day-type row tints,
- * rest days as em-dashes, a friendly (MD-0) alternating Sat/Sun.
+ * Summary first: the block in one line, the match unit as plain facts (+ the IMA axis where the
+ * feed carries it), the weekly progressive-overload table (training total as % of one match, per
+ * dimension), and the MD microcycle template. Then session-by-session Mon–Sun tables for the whole
+ * block — absolute DIST/HSR/LOAD, day-type row tints (the day-type word is always printed), rest days as
+ * dashes, a friendly (MD-0) alternating Sat/Sun.
  *
  * Numbers scale from the scope's own match unit; a starting point, never a norm (Little & Buchheit).
  * Descriptive — never the readiness colour.
+ *
+ * Styling + download: shared MicroPulse PDF kit (src/components/pdf/brand.tsx).
  */
 
-import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
+import { Document, Text, View } from "@react-pdf/renderer";
 import type { CalendarBlock, CalType, Bi } from "@/lib/micropulse/periodization/index";
+import { BrandPage, Bullets, C, Chip, FactRow, Provenance, Section, StatGrid, TONE, Table, Verdict, clean, fb, fh, renderPdfBlob, saveBlob, type Tone } from "@/components/pdf/brand";
 
 type Lang = "EN" | "IS";
-export type PeriodizationBlockPayload = { teamName: string; block: CalendarBlock; generatedAt?: string };
+export type PeriodizationBlockPayload = { teamName: string; block: CalendarBlock; generatedAt?: string; isKinexon?: boolean };
 
-const NAVY = "#14181C", INK = "#14181C", MUTE = "#6b7280", LINE = "#DCD9CF", BONE = "#F4F2EC";
-const COBALT = "#2740E6", AMBER = "#DE9328", PURPLE = "#7A5CC4", GREEN = "#1C7A4A", RED = "#A83E28";
-const DELOAD_TINT = "#FCF2E2";
-const ACCENT: Record<CalType, string> = { mechanical: RED, locomotive: GREEN, mixed: COBALT, activation: "#64748b", topup: PURPLE, match: AMBER, rest: MUTE };
-const TINT: Record<CalType, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#F0EAF7", match: "#FBEFDD", rest: BONE };
-
-const s = StyleSheet.create({
-  page: { paddingTop: 38, paddingBottom: 40, paddingHorizontal: 40, fontSize: 8.5, color: INK, fontFamily: "Helvetica", lineHeight: 1.35 },
-  band: { backgroundColor: NAVY, marginHorizontal: -40, marginTop: -38, paddingHorizontal: 40, paddingTop: 22, paddingBottom: 16, borderTopWidth: 3, borderTopColor: COBALT },
-  eyebrow: { fontSize: 8, letterSpacing: 3, color: "#8ea2ff", fontFamily: "Helvetica-Bold" },
-  h1: { fontSize: 19, fontFamily: "Helvetica-Bold", color: "#ffffff", marginTop: 3 },
-  bandSub: { fontSize: 9, color: "#c7cdd6", marginTop: 3 },
-  callout: { marginTop: 14, borderWidth: 1, borderColor: COBALT, borderRadius: 6, padding: 10 },
-  calloutLead: { fontSize: 9, fontFamily: "Helvetica-Bold" },
-  chips: { flexDirection: "row", marginTop: 8 },
-  chip: { flex: 1, paddingHorizontal: 8 },
-  chipDiv: { borderRightWidth: 1, borderRightColor: LINE },
-  chipNum: { fontSize: 14, fontFamily: "Helvetica-Bold" },
-  chipLbl: { fontSize: 7, color: MUTE, marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 },
-  h2: { fontSize: 12, fontFamily: "Helvetica-Bold", marginTop: 16, marginBottom: 5 },
-  narr: { fontSize: 8.5, color: "#374151", marginBottom: 6 },
-  navHead: { flexDirection: "row", backgroundColor: NAVY, paddingVertical: 3.5, paddingHorizontal: 5 },
-  cobHead: { flexDirection: "row", backgroundColor: COBALT, paddingVertical: 3.5, paddingHorizontal: 5 },
-  hc: { fontSize: 7, color: "#ffffff", textTransform: "uppercase", letterSpacing: 0.4, fontFamily: "Helvetica-Bold" },
-  row: { flexDirection: "row", paddingVertical: 2.8, paddingHorizontal: 5, borderBottomWidth: 1, borderBottomColor: LINE, alignItems: "flex-start" },
-  weekBanner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4, paddingHorizontal: 7, borderRadius: 4, marginTop: 12 },
-  weekBannerTxt: { fontSize: 10.5, fontFamily: "Helvetica-Bold", color: "#ffffff" },
-  weekBannerR: { fontSize: 8.5, color: "#e5e7eb" },
-  mdTag: { fontSize: 7, fontFamily: "Helvetica-Bold" },
-  footRow: { position: "absolute", bottom: 18, left: 40, right: 40, flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: LINE, paddingTop: 6 },
-  footTxt: { fontSize: 7, color: MUTE },
-  noteLi: { flexDirection: "row", marginBottom: 2 }, bullet: { width: 9, color: COBALT }, noteTxt: { flex: 1, fontSize: 8, color: "#374151" },
-  tag: { marginTop: 10, alignSelf: "flex-start", fontSize: 7.5, color: COBALT, borderColor: COBALT, borderWidth: 1, borderRadius: 3, paddingVertical: 2, paddingHorizontal: 5 },
-});
+/** Day-type → kit tone (row tint + label colour). The day-type label is always printed next to it. */
+const CAL_TONE: Record<CalType, Tone | null> = { mechanical: "red", locomotive: "green", mixed: "cobalt", activation: "neutral", topup: "rtp", match: "amber", rest: null };
+/** Kit text helper: typographic clean-up + the maths glyphs Archivo/Helvetica lack. */
+const tx = (s: unknown) => clean(String(s ?? "").replace(/→/g, "->")).replace(/≈/g, "~").replace(/≥/g, ">=").replace(/≤/g, "<=");
 
 const L = {
-  EN: { eyebrow: "MICROPULSE", plan: "Periodization Plan", block: "Week Block", anchored: "match-anchored · individualised to", team: "the squad",
-    tag: "Recommended from the team's own data — the coach decides and overrides",
-    unitLead: "THE MATCH IS THE UNIT — one near-full match (median, ≥80 min), the multiple every training week is scaled from.",
+  EN: { plan: "Periodization Plan", block: "Week Block", anchored: "match-anchored · individualised to", team: "the squad", doc: "Periodization plan",
+    tag: "Recommended from the team's own data - the coach decides and overrides",
+    unitTitle: "The match is the unit",
+    unitLead: "One near-full match (median, ≥80 min) - the multiple every training week is scaled from.",
     dist: "Distance", hsr: "HSR (V5+V6)", load: "Player Load", accdec: "Acc + Dec",
     accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Stride", dirL: "IMA dir", rhieL: "RHIE", symL: "Symmetry", metL: "Met power",
-    fwd: "fwd", lat: "lat", back: "back", imaLead: "Mechanical / IMA — the same match unit on the movement axis (present where the feed carries it).",
+    fwd: "fwd", lat: "lat", back: "back", imaLead: "Mechanical / IMA - the same match unit on the movement axis (present where the feed carries it).",
     ramp: "Progressive overload — weekly ramp", rampNarr: "Each KPI ramps at its own rate — volume (distance, Player Load) climbs fastest, HSR + stride slowest with the tightest ceilings (hamstring exposure; Malone 2017, Gabbett 2016) — up to a peak, then a deload. Running axes build TO match and hold there; mechanical work over-shoots the match by design. The note under each week says what held it.",
     week: "Week", intent: "Intent", running: "Running dist", mech: "Mechanical", rest: "Rest days", deload: "Deload", match: "match",
     theWeek: "The week — matchday-anchored microcycle", weekNarr: "Built around a weekly friendly (MD-0) that alternates Saturday / Sunday. After the match: a light top-up (MD+1), then a full day off (MD+2). Sessions are spaced so there are never more than three in a row — often just two — with HSR (Locomotive) and mechanical work on separate days to protect the posterior chain. The deload week adds rest.",
     md: "MD", dayType: "Day-type", whatItIs: "What it is",
     sbs: "Session-by-session — the full block", sbsNarr: "Absolute per-session targets, scaled from the match unit by the day-type and the week multiplier. DIST and HSR in metres; LOAD in Player Load (AU). Rest days shown as dashes.",
     day: "Day", focus: "Focus", footer: "MicroPulse — Periodization Plan",
+    summary: (n: number, who: string) => `A ${n}-week block, match-anchored for ${who}.`,
+    peak: (hi: number, wk: number) => `Weekly running volume peaks at ${hi}% of one match in week ${wk}`, deloadIn: (w: string) => `deload in week ${w}`, restTotal: (n: number) => `${n} rest days in total`,
     foot: "Descriptive planning — never sets the readiness colour, never overrides the daily decision. Targets scale from the scope's own match unit (median of near-full matches ≥80 min) by each day-type's share of the match and the week multiplier; a data-anchored starting point, not a norm to obey (Little & Buchheit). No single \"% of match\" — mechanical over-shoots, HSR/sprint fall short (Figueiredo). Cites: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021." },
-  IS: { eyebrow: "MICROPULSE", plan: "Tímabilsáætlun", block: "vikna lota", anchored: "leik-fest · einstaklingsmiðað fyrir", team: "liðið",
-    tag: "Ráðlagt út frá eigin gögnum liðsins — þjálfarinn ákveður og hnekkir",
-    unitLead: "LEIKURINN ER EININGIN — einn næstum-heill leikur (miðgildi, ≥80 mín), margfeldið sem hver æfingavika skalar frá.",
+  IS: { plan: "Tímabilsáætlun", block: "vikna lota", anchored: "leik-fest · einstaklingsmiðað fyrir", team: "liðið", doc: "Tímabilsáætlun",
+    tag: "Ráðlagt út frá eigin gögnum liðsins - þjálfarinn ákveður og hnekkir",
+    unitTitle: "Leikurinn er einingin",
+    unitLead: "Einn næstum-heill leikur (miðgildi, ≥80 mín) - margfeldið sem hver æfingavika skalar frá.",
     dist: "Vegalengd", hsr: "Háhraði (V5+V6)", load: "Player Load", accdec: "Acc + Dec",
     accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Skref", dirL: "IMA stefna", rhieL: "RHIE", symL: "Samhverfa", metL: "Efnaafl",
-    fwd: "fram", lat: "hlið", back: "aftur", imaLead: "Vélrænt / IMA — sama leikvið á hreyfi-ásnum (þar sem gögnin ná).",
+    fwd: "fram", lat: "hlið", back: "aftur", imaLead: "Vélrænt / IMA - sama leikviðmið á hreyfi-ásnum (þar sem gögnin ná).",
     ramp: "Stígandi álag — vikuleg þróun", rampNarr: "Hvert mæligildi hækkar á sínum hraða — magn (vegalengd, Player Load) hraðast, háhraði + skref hægast með þéttustu þökin (aftanlæris-áhætta; Malone 2017, Gabbett 2016) — upp að toppi og svo niðurtröppun. Hlaupa-ásarnir byggja AÐ leik og halda þar; vélrænt fer yfir leikinn viljandi. Nótan undir hverri viku segir hvað hélt henni.",
     week: "Vika", intent: "Markmið", running: "Hlaup vegal.", mech: "Vélrænt", rest: "Hvíldard.", deload: "Niðurtröppun", match: "leik",
     theWeek: "Vikan — leikdags-fest microcycle", weekNarr: "Byggt um vikulegan æfingaleik (MD-0) sem skiptist á laugardag / sunnudag. Eftir leik: létt áfylling (MD+1), svo heill frídagur (MD+2). Æfingar dreifðar svo aldrei eru fleiri en þrjár í röð — oft bara tvær — með háhraða (Locomotive) og vélrænu á sitt hvorum degi til að vernda afturkeðjuna. Niðurtröppunarvikan bætir við hvíld.",
     md: "MD", dayType: "Dagsgerð", whatItIs: "Hvað það er",
     sbs: "Æfing fyrir æfingu — öll lotan", sbsNarr: "Alger mörk per æfingu, skalað frá leikviðmiðinu eftir dagsgerð og vikumargfeldi. VEGAL og HÁHRAÐI í metrum; ÁLAG í Player Load (AU). Hvíldardagar sýndir sem strik.",
     day: "Dagur", focus: "Áhersla", footer: "MicroPulse — Tímabilsáætlun",
+    summary: (n: number, who: string) => `${n} vikna lota, leik-fest fyrir ${who}.`,
+    peak: (hi: number, wk: number) => `Vikulegt hlaupamagn nær hámarki ${hi}% af einum leik í viku ${wk}`, deloadIn: (w: string) => `niðurtröppun í viku ${w}`, restTotal: (n: number) => `${n} hvíldardagar alls`,
     foot: "Lýsandi áætlun — setur aldrei readiness-litinn, hnekkir aldrei daglegu ákvörðuninni. Álagsmörk skala frá eigin leikviðmiði (miðgildi næstum-heilla leikja ≥80 mín) eftir hlutdeild hverrar dagsgerðar og vikumargfeldi; gagna-festur upphafspunktur, ekki viðmið til að hlýða (Little & Buchheit). Ekkert eitt „%-af-leik“ — vélrænt fer yfir, háhraði/sprettur ná ekki (Figueiredo). Vitnar í: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021." },
 } as const;
 
-const nfmt = (n: number | null) => (n == null ? "—" : n.toLocaleString("en-US"));
-
-function Footer({ t }: { t: { footer: string } }) {
-  return (
-    <View style={s.footRow} fixed>
-      <Text style={s.footTxt}>{t.footer}</Text>
-      <Text style={s.footTxt} render={({ pageNumber }) => `Page ${pageNumber}`} />
-    </View>
-  );
-}
+const nfmt = (n: number | null) => (n == null ? "-" : n.toLocaleString("en-US"));
 
 function BlockDoc({ payload, lang }: { payload: PeriodizationBlockPayload; lang: Lang }) {
-  const t = L[lang]; const bi = (b: Bi) => (lang === "IS" ? b.is : b.en);
+  // Kinexon is indoor LPS, not Catapult IMA — relabel the "/ IMA" movement-axis lead.
+  const t = payload.isKinexon
+    ? { ...L[lang], imaLead: lang === "IS" ? "Vélrænt - sama leikviðmið á hreyfi-ásnum (þar sem gögnin ná)." : "Mechanical - the same match unit on the movement axis (present where the feed carries it)." }
+    : L[lang];
+  const bi = (b: Bi) => tx(lang === "IS" ? b.is : b.en);
   const { block } = payload; const u = block.unit;
   const who = block.scopeName === "__team__" ? t.team : `${block.scopeName}${block.scopePos ? ` (${block.scopePos})` : ""}`;
   const dom = (d: { fwd: number; back: number; lat: number }) => { const m = Math.max(d.fwd, d.back, d.lat); const w = m === d.fwd ? t.fwd : m === d.lat ? t.lat : t.back; return `${w} ${Math.round(m * 100)}%`; };
@@ -104,138 +78,144 @@ function BlockDoc({ payload, lang }: { payload: PeriodizationBlockPayload; lang:
     if (d.accHiEff != null) p.push(`${t.accB} ${d.accHiEff}`);
     if (d.decHiEff != null) p.push(`${t.decB} ${d.decHiEff}`);
     if (d.stride != null) p.push(`${t.strideL} ${d.stride}`);
-    if (d.dir) p.push(`${t.dirL} → ${dom(d.dir)}`);
-    return p.join("   ·   ");
+    if (d.dir) p.push(`${t.dirL}: ${dom(d.dir)}`);
+    return p.join("  ·  ");
   };
   const hasMech = u.accHiEff != null || u.stride != null;
-  const imaChips: Array<{ n: string; l: string; c: string }> = [];
-  if (u.accHiEff != null) imaChips.push({ n: nfmt(u.accHiEff), l: t.accB, c: RED });
-  if (u.decHiEff != null) imaChips.push({ n: nfmt(u.decHiEff), l: t.decB, c: RED });
-  if (u.stride != null) imaChips.push({ n: nfmt(u.stride), l: t.strideL, c: GREEN });
-  if (u.dirFwd != null && u.dirBack != null && u.dirLat != null) imaChips.push({ n: dom({ fwd: u.dirFwd, back: u.dirBack, lat: u.dirLat }), l: t.dirL, c: COBALT });
-  if (u.rhie != null) imaChips.push({ n: nfmt(u.rhie), l: t.rhieL, c: PURPLE });
-  if (u.symmetry != null) imaChips.push({ n: `${u.symmetry}`, l: t.symL, c: PURPLE });
-  if (u.metPower != null) imaChips.push({ n: `${u.metPower}`, l: t.metL, c: PURPLE });
+  const imaChips: Array<{ n: string; l: string }> = [];
+  if (u.accHiEff != null) imaChips.push({ n: nfmt(u.accHiEff), l: t.accB });
+  if (u.decHiEff != null) imaChips.push({ n: nfmt(u.decHiEff), l: t.decB });
+  if (u.stride != null) imaChips.push({ n: nfmt(u.stride), l: t.strideL });
+  if (u.dirFwd != null && u.dirBack != null && u.dirLat != null) imaChips.push({ n: dom({ fwd: u.dirFwd, back: u.dirBack, lat: u.dirLat }), l: t.dirL });
+  if (u.rhie != null) imaChips.push({ n: nfmt(u.rhie), l: t.rhieL });
+  if (u.symmetry != null) imaChips.push({ n: `${u.symmetry}`, l: t.symL });
+  if (u.metPower != null) imaChips.push({ n: `${u.metPower}`, l: t.metL });
+
+  // Layer 0 — a rule-built one-line read of the block (from the same week rows the tables print).
+  const run = block.weeks.map((w) => w.pctRunning).filter((v): v is number => v != null);
+  const peakIdx = block.weeks.reduce((bi_, w, i) => ((w.pctRunning ?? -1) > (block.weeks[bi_]?.pctRunning ?? -1) ? i : bi_), 0);
+  const deloads = block.weeks.filter((w) => w.isDeload).map((w) => String(w.index + 1));
+  const restTotal = block.weeks.reduce((a, w) => a + w.restDays, 0);
+  const body = [run.length ? t.peak(Math.max(...run), peakIdx + 1) : "", deloads.length ? t.deloadIn(deloads.join(", ")) : "", t.restTotal(restTotal)].filter(Boolean).join("; ") + ".";
+
   return (
     <Document>
       {/* PAGE 1 — overview */}
-      <Page size="A4" style={s.page}>
-        <View style={s.band}>
-          <Text style={s.eyebrow}>{t.eyebrow}</Text>
-          <Text style={s.h1}>{t.plan} — {block.numWeeks}-{t.block}</Text>
-          <Text style={s.bandSub}>{bi(block.phase)} · {t.anchored} {who}</Text>
-        </View>
+      <BrandPage
+        doc={t.doc}
+        context={payload.teamName}
+        kicker={t.plan}
+        title={`${t.plan} - ${block.numWeeks}-${t.block}`}
+        subtitle={`${bi(block.phase)} · ${t.anchored} ${who}${payload.generatedAt ? ` · ${payload.generatedAt.slice(0, 10)}` : ""}`}
+        chips={[{ text: bi(block.phase) }, { text: `${block.numWeeks} ${lang === "IS" ? "vikur" : "weeks"}`, tone: "cobalt" }]}
+        note={t.footer}
+      >
+        <Verdict tone="neutral" label={t.tag} headline={tx(t.summary(block.numWeeks, who))} body={tx(body)} />
 
-        {/* Match-unit callout */}
-        <View style={s.callout}>
-          <Text style={s.calloutLead}>{t.unitLead}</Text>
-          <View style={s.chips}>
-            <View style={[s.chip, s.chipDiv]}><Text style={[s.chipNum, { color: INK }]}>{nfmt(u.dist)} m</Text><Text style={s.chipLbl}>{t.dist}</Text></View>
-            <View style={[s.chip, s.chipDiv]}><Text style={[s.chipNum, { color: GREEN }]}>{nfmt(u.hsr)} m</Text><Text style={s.chipLbl}>{t.hsr}</Text></View>
-            <View style={[s.chip, s.chipDiv]}><Text style={[s.chipNum, { color: PURPLE }]}>{nfmt(u.load)} AU</Text><Text style={s.chipLbl}>{t.load}</Text></View>
-            <View style={s.chip}><Text style={[s.chipNum, { color: RED }]}>{nfmt(u.accdec)}</Text><Text style={s.chipLbl}>{t.accdec}</Text></View>
-          </View>
+        {/* Layer 1 — the match unit */}
+        <Section title={t.unitTitle} hint={tx(t.unitLead)} mt={2}>
+          <FactRow
+            facts={[
+              { value: `${nfmt(u.dist)} m`, label: t.dist },
+              { value: `${nfmt(u.hsr)} m`, label: t.hsr },
+              { value: `${nfmt(u.load)} AU`, label: t.load },
+              { value: nfmt(u.accdec), label: t.accdec },
+            ]}
+          />
           {imaChips.length > 0 && (
             <>
-              <Text style={[s.chipLbl, { marginTop: 9, color: MUTE }]}>{t.imaLead}</Text>
-              <View style={[s.chips, { marginTop: 4, flexWrap: "wrap" }]}>
-                {imaChips.map((c, i) => (
-                  <View key={i} style={[s.chip, i < imaChips.length - 1 ? s.chipDiv : {}, { minWidth: 70 }]}>
-                    <Text style={[s.chipNum, { color: c.c, fontSize: 12 }]}>{c.n}</Text><Text style={s.chipLbl}>{c.l}</Text>
-                  </View>
-                ))}
-              </View>
+              <Text style={[fb(400), { fontSize: 8, color: C.mute, marginTop: -3, marginBottom: 5 }]}>{tx(t.imaLead)}</Text>
+              <StatGrid cols={Math.max(4, Math.min(7, imaChips.length))} items={imaChips.map((c) => ({ label: tx(c.l), value: tx(c.n) }))} />
             </>
           )}
-        </View>
+        </Section>
 
-        {/* Progressive-overload table */}
-        <Text style={s.h2}>{t.ramp}</Text>
-        <Text style={s.narr}>{t.rampNarr}</Text>
-        <View style={s.navHead}>
-          <Text style={[s.hc, { width: 54 }]}>{t.week}</Text><Text style={[s.hc, { flex: 1 }]}>{t.intent}</Text>
-          <Text style={[s.hc, { width: 62, textAlign: "right" }]}>{t.running}</Text><Text style={[s.hc, { width: 46, textAlign: "right" }]}>HSR</Text>
-          <Text style={[s.hc, { width: 62, textAlign: "right" }]}>{t.mech}</Text><Text style={[s.hc, { width: 52, textAlign: "right" }]}>{t.rest}</Text>
-        </View>
-        {block.weeks.map((w, i) => (
-          <View key={w.index} style={[s.row, { backgroundColor: w.isDeload ? DELOAD_TINT : i % 2 ? BONE : "#ffffff" }]}>
-            <Text style={{ width: 54, fontFamily: "Helvetica-Bold" }}>{t.week} {w.index + 1}</Text>
-            <View style={{ flex: 1, paddingRight: 4 }}>
-              <Text style={{ color: w.isDeload ? AMBER : INK }}>{bi(w.intent)}</Text>
-              {w.capNote && <Text style={{ fontSize: 6.5, color: MUTE, marginTop: 1 }}>{bi(w.capNote)}</Text>}
-            </View>
-            <Text style={{ width: 62, textAlign: "right", color: INK }}>{w.pctRunning != null ? `${w.pctRunning}%` : "—"}</Text>
-            <Text style={{ width: 46, textAlign: "right", color: GREEN }}>{w.pctHsr != null ? `${w.pctHsr}%` : "—"}</Text>
-            <Text style={{ width: 62, textAlign: "right", color: RED, fontFamily: "Helvetica-Bold" }}>{w.pctMech != null ? `${w.pctMech}%` : "—"}</Text>
-            <Text style={{ width: 52, textAlign: "right" }}>{w.restDays}</Text>
-          </View>
-        ))}
+        {/* Layer 2 — progressive-overload table */}
+        <Section title={tx(t.ramp)} hint={tx(t.rampNarr)}>
+          <Table
+            cols={[
+              { label: t.week, width: 50 }, { label: t.intent, flex: 1 },
+              { label: t.running, width: 62, align: "right" }, { label: "HSR", width: 46, align: "right" },
+              { label: t.mech, width: 62, align: "right", strong: true }, { label: t.rest, width: 52, align: "right" },
+            ]}
+            rowTone={(i) => (block.weeks[i]?.isDeload ? "amber" : null)}
+            rows={block.weeks.map((w) => [
+              `${t.week} ${w.index + 1}`,
+              <View key="i">
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                  <Text style={[fb(600), { fontSize: 8.5 }]}>{bi(w.intent)}</Text>
+                  {w.isDeload ? <Chip text={t.deload} tone="amber" /> : null}
+                </View>
+                {w.capNote ? <Text style={[fb(400), { fontSize: 7, color: C.mute, marginTop: 1 }]}>{bi(w.capNote)}</Text> : null}
+              </View>,
+              w.pctRunning != null ? `${w.pctRunning}%` : "-",
+              w.pctHsr != null ? `${w.pctHsr}%` : "-",
+              w.pctMech != null ? `${w.pctMech}%` : "-",
+              String(w.restDays),
+            ])}
+          />
+        </Section>
 
         {/* Microcycle template */}
-        <Text style={s.h2}>{t.theWeek}</Text>
-        <Text style={s.narr}>{t.weekNarr}</Text>
-        <View style={s.cobHead}><Text style={[s.hc, { width: 52 }]}>{t.md}</Text><Text style={[s.hc, { width: 120 }]}>{t.dayType}</Text><Text style={[s.hc, { flex: 1 }]}>{t.whatItIs}</Text></View>
-        {block.legend.map((g, i) => (
-          <View key={i} style={[s.row, { backgroundColor: i % 2 ? BONE : "#ffffff" }]}>
-            <Text style={{ width: 52, fontFamily: "Helvetica-Bold", color: COBALT }}>{g.md}</Text>
-            <Text style={{ width: 120, fontFamily: "Helvetica-Bold" }}>{bi(g.label)}</Text>
-            <Text style={{ flex: 1, color: "#374151" }}>{bi(g.what)}</Text>
-          </View>
-        ))}
-        <Text style={s.tag}>{t.tag}</Text>
-        <Footer t={t} />
-      </Page>
+        <Section title={tx(t.theWeek)} hint={tx(t.weekNarr)}>
+          <Table
+            cols={[{ label: t.md, width: 50 }, { label: t.dayType, width: 120 }, { label: t.whatItIs, flex: 1 }]}
+            rows={block.legend.map((g) => [
+              <Text key="m" style={[fh(700), { fontSize: 8.5, color: C.cobalt }]}>{tx(g.md)}</Text>,
+              <Text key="l" style={[fb(600), { fontSize: 8.5 }]}>{bi(g.label)}</Text>,
+              <Text key="w" style={[fb(400), { fontSize: 8.25, color: C.mute, lineHeight: 1.35 }]}>{bi(g.what)}</Text>,
+            ])}
+          />
+        </Section>
 
-      {/* PAGE 2+ — session-by-session */}
-      <Page size="A4" style={s.page}>
-        <Text style={s.h2}>{t.sbs}</Text>
-        <Text style={s.narr}>{t.sbsNarr}</Text>
-        {block.weeks.map((w) => (
-          <View key={w.index} wrap={false}>
-            <View style={[s.weekBanner, { backgroundColor: w.isDeload ? AMBER : NAVY }]}>
-              <Text style={s.weekBannerTxt}>{t.week} {w.index + 1} — {bi(w.intent)}</Text>
-              <Text style={s.weekBannerR}>{t.match} {bi(w.matchDow)} · ×{w.mult.toFixed(2)}{w.isDeload ? ` · ${t.deload.toUpperCase()}` : ""}</Text>
-            </View>
-            <View style={s.cobHead}>
-              <Text style={[s.hc, { width: 32 }]}>{t.day}</Text><Text style={[s.hc, { width: 38 }]}>{t.md}</Text><Text style={[s.hc, { width: 76 }]}>{t.dayType}</Text>
-              <Text style={[s.hc, { flex: 1 }]}>{t.focus}</Text>
-              <Text style={[s.hc, { width: 44, textAlign: "right" }]}>DIST</Text><Text style={[s.hc, { width: 40, textAlign: "right" }]}>HSR</Text><Text style={[s.hc, { width: 40, textAlign: "right" }]}>LOAD</Text>
-            </View>
-            {w.days.map((d, i) => (
-              <View key={i} style={[s.row, { backgroundColor: TINT[d.type] }]}>
-                <Text style={{ width: 32, fontFamily: "Helvetica-Bold" }}>{bi(d.dow)}</Text>
-                <Text style={[s.mdTag, { width: 38, color: ACCENT[d.type] }]}>{d.md}</Text>
-                <Text style={{ width: 76, fontFamily: "Helvetica-Bold", color: ACCENT[d.type] }}>{bi(d.label)}</Text>
-                <View style={{ flex: 1, paddingRight: 4 }}>
-                  <Text style={{ color: "#374151" }}>{bi(d.focus)}</Text>
-                  {hasMech && d.type !== "rest" && dayIma(d) !== "" && <Text style={{ fontSize: 7, color: MUTE, marginTop: 1 }}>{dayIma(d)}</Text>}
+        {/* Session-by-session — flows on from the template (each week kept whole on a page) */}
+        <Section title={tx(t.sbs)} hint={tx(t.sbsNarr)}>
+          {block.weeks.map((w) => (
+            <View key={w.index} wrap={false} style={{ marginBottom: 10 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4, gap: 8 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
+                  <Text style={[fh(700), { fontSize: 11 }]}>{`${t.week} ${w.index + 1} - ${bi(w.intent)}`}</Text>
+                  {w.isDeload ? <Chip text={t.deload} tone="amber" /> : null}
                 </View>
-                <Text style={{ width: 44, textAlign: "right" }}>{d.dist == null ? "—" : nfmt(d.dist)}</Text>
-                <Text style={{ width: 40, textAlign: "right" }}>{d.hsr == null ? "—" : nfmt(d.hsr)}</Text>
-                <Text style={{ width: 40, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{d.load == null ? "—" : nfmt(d.load)}</Text>
+                <Text style={[fb(400), { fontSize: 8, color: C.mute }]}>{tx(`${t.match} ${bi(w.matchDow)} · ×${w.mult.toFixed(2)}`)}</Text>
               </View>
-            ))}
-          </View>
-        ))}
-        <View style={{ marginTop: 12 }}>
-          {block.notes.map((n, i) => <View key={i} style={s.noteLi}><Text style={s.bullet}>•</Text><Text style={s.noteTxt}>{bi(n)}</Text></View>)}
-        </View>
-        <Text style={[s.footTxt, { marginTop: 10 }]}>{t.foot}</Text>
-        <Footer t={t} />
-      </Page>
+              <Table
+                dense
+                size={8}
+                cols={[
+                  { label: t.day, width: 30 }, { label: t.md, width: 36 }, { label: t.dayType, width: 78 }, { label: t.focus, flex: 1 },
+                  { label: "DIST", width: 44, align: "right" }, { label: "HSR", width: 38, align: "right" }, { label: "LOAD", width: 40, align: "right", strong: true },
+                ]}
+                rowTone={(i) => { const d = w.days[i]; return d ? CAL_TONE[d.type] : null; }}
+                rows={w.days.map((d) => {
+                  const tone = CAL_TONE[d.type];
+                  const col = tone ? TONE[tone].text : C.mute;
+                  return [
+                    bi(d.dow),
+                    <Text key="m" style={[fh(700), { fontSize: 7.5, color: col }]}>{tx(d.md)}</Text>,
+                    <Text key="l" style={[fb(600), { fontSize: 8, color: col }]}>{bi(d.label)}</Text>,
+                    <View key="f">
+                      <Text style={[fb(400), { fontSize: 7.75, lineHeight: 1.3 }]}>{bi(d.focus)}</Text>
+                      {hasMech && d.type !== "rest" && dayIma(d) !== "" ? <Text style={[fb(400), { fontSize: 6.75, color: C.mute, marginTop: 1 }]}>{tx(dayIma(d))}</Text> : null}
+                    </View>,
+                    d.dist == null ? "-" : nfmt(d.dist),
+                    d.hsr == null ? "-" : nfmt(d.hsr),
+                    d.load == null ? "-" : nfmt(d.load),
+                  ];
+                })}
+              />
+            </View>
+          ))}
+        </Section>
+        {block.notes.length > 0 && <View style={{ marginTop: 2 }} wrap={false}><Bullets items={block.notes.map((n) => bi(n))} size={8} /></View>}
+        <Provenance>{tx(t.foot)}</Provenance>
+      </BrandPage>
     </Document>
   );
 }
 
 export async function downloadPeriodizationBlockPdf(payload: PeriodizationBlockPayload, lang: Lang) {
-  const blob = await pdf(<BlockDoc payload={payload} lang={lang} />).toBlob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
+  const blob = await renderPdfBlob(() => <BlockDoc payload={payload} lang={lang} />);
   const name = payload.block.scopeName === "__team__" ? payload.teamName : payload.block.scopeName;
-  a.href = url;
-  a.download = `${name.replace(/\s+/g, "-")}-periodization-block.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  saveBlob(blob, `${name.replace(/\s+/g, "-")}-periodization-block.pdf`);
 }

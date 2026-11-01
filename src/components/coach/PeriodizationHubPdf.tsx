@@ -1,17 +1,22 @@
 "use client";
 
 /**
- * PeriodizationHubPdf — the WHOLE hub as one PDF: the season macro map, the squad demands (baseline
- * by position + the three axes vs the match), the meso blocks, the scheduled plan-ahead block, and a
- * per-player individualisation table. Everything the coach sees across the four tabs, in one export.
+ * PeriodizationHubPdf — the WHOLE hub as one PDF: the plan in one line + the key facts first, then the
+ * season macro map, the pre-season ramp / planned volume, the squad demands (baseline by position, by
+ * MD-day, the three axes vs the match), the meso blocks, the scheduled plan-ahead block, a per-player
+ * individualisation table, and the chosen players' own blocks. Everything the coach sees across the four
+ * tabs, in one export.
  *
  * Descriptive planning — it never sets the readiness colour. Numbers are the team's / player's own
  * data; targets are a starting point, not a norm to obey (Little & Buchheit). Rules recommend; the
  * coach decides.
+ *
+ * Styling + download: shared MicroPulse PDF kit (src/components/pdf/brand.tsx).
  */
 
-import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
+import { Document, Text, View } from "@react-pdf/renderer";
 import type { MatchAxes, MatchUnitAbs, CalendarBlock, CalType, CalDay, MesoPlan, Bi } from "@/lib/micropulse/periodization/index";
+import { BrandPage, Body, Bullets, C, Card, Chip, FactRow, Provenance, Section, StatGrid, TONE, Table, Verdict, clean, fb, fh, renderPdfBlob, saveBlob, type Tone } from "@/components/pdf/brand";
 
 type Lang = "EN" | "IS";
 
@@ -26,6 +31,9 @@ export type HubPlayerBlock = { name: string; position: string | null; note: Bi; 
 
 export type PeriodizationHubPayload = {
   teamName: string; seasonYear: number; generatedAt?: string;
+  /** Kinexon (indoor LPS, not Catapult IMA) → relabel the "/ IMA" axis wording.
+   *  The directional / stride / RHIE / symmetry chips are already null-gated. */
+  isKinexon?: boolean;
   teamUnit: MatchUnitAbs | null;
   tier: { label: Bi; loadSource: string; confidence: string } | null;
   phases: Array<{ label: Bi; start: string; end: string; weeks: number; matches: number; rationale: Bi }>;
@@ -70,46 +78,6 @@ export type PeriodizationHubPayload = {
   } | null;
 };
 
-const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6", AMBER = "#de9328", PURPLE = "#7a5cc4", GREEN = "#1c7a4a", RED = "#a83e28", BONE = "#F4F2EC";
-// Calendar day-type palette (shared vocabulary with the block PDF — one Top-up, MD-1 Activation, no "Restart").
-const CAL_ACCENT: Record<CalType, string> = { mechanical: RED, locomotive: GREEN, mixed: COBALT, activation: "#64748b", topup: PURPLE, match: AMBER, rest: MUTE };
-const CAL_TINT: Record<CalType, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#F0EAF7", match: "#FBEFDD", rest: BONE };
-
-const s = StyleSheet.create({
-  page: { paddingTop: 40, paddingBottom: 44, paddingHorizontal: 40, fontSize: 9, color: INK, fontFamily: "Helvetica", lineHeight: 1.4 },
-  h1: { fontSize: 18, fontFamily: "Helvetica-Bold" },
-  sub: { fontSize: 9, color: MUTE, marginTop: 3 },
-  tag: { marginTop: 7, alignSelf: "flex-start", fontSize: 7.5, color: COBALT, borderColor: COBALT, borderWidth: 1, borderRadius: 3, paddingVertical: 2, paddingHorizontal: 5 },
-  section: { marginTop: 14 },
-  h2: { fontSize: 12, fontFamily: "Helvetica-Bold", marginBottom: 5, borderBottomWidth: 1, borderBottomColor: LINE, paddingBottom: 2 },
-  p: { marginBottom: 2 }, small: { fontSize: 7.5, color: MUTE },
-  row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: LINE, paddingVertical: 2.5 },
-  th: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#cbd5e1", paddingBottom: 2 },
-  thc: { fontSize: 7, color: MUTE, textTransform: "uppercase" },
-  teamRow: { backgroundColor: "#f1f5f9" },
-  chip: { fontSize: 7, fontFamily: "Helvetica-Bold", color: "#fff", borderRadius: 3, paddingVertical: 1.5, paddingHorizontal: 4, marginLeft: 5 },
-  weekBox: { marginTop: 9, borderWidth: 1, borderColor: LINE, borderRadius: 5, padding: 8 },
-  weekHead: { flexDirection: "row", alignItems: "center", marginBottom: 5 },
-  dayRow: { flexDirection: "row", alignItems: "flex-start", borderTopWidth: 1, borderTopColor: LINE, paddingVertical: 2.5 },
-  mdTag: { width: 40, fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#fff", borderRadius: 3, paddingVertical: 1.5, textAlign: "center" },
-  flag: { marginTop: 4, backgroundColor: "#fef3c7", color: "#92400e", fontSize: 8, borderRadius: 3, padding: 4 },
-  noteLi: { flexDirection: "row", marginBottom: 2 }, bullet: { width: 9, color: COBALT }, noteTxt: { flex: 1, fontSize: 8 },
-  calBanner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 3, paddingHorizontal: 6, borderRadius: 4, marginTop: 8 },
-  calBannerTxt: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#fff" },
-  calBannerR: { fontSize: 7.5, color: "#e5e7eb" },
-  calHead: { flexDirection: "row", backgroundColor: COBALT, paddingVertical: 2.5, paddingHorizontal: 4 },
-  calHc: { fontSize: 6.5, color: "#fff", textTransform: "uppercase", fontFamily: "Helvetica-Bold" },
-  calRow: { flexDirection: "row", paddingVertical: 2, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: LINE, alignItems: "flex-start" },
-  calCap: { fontSize: 6.5, color: MUTE, marginTop: 1 },
-  callout: { marginBottom: 8, borderWidth: 1, borderColor: COBALT, borderRadius: 5, padding: 8 },
-  calloutLead: { fontSize: 8, fontFamily: "Helvetica-Bold" },
-  uChips: { flexDirection: "row", flexWrap: "wrap", marginTop: 5 },
-  uChip: { paddingHorizontal: 7, marginBottom: 2, minWidth: 66 },
-  uChipDiv: { borderRightWidth: 1, borderRightColor: LINE },
-  uNum: { fontSize: 11.5, fontFamily: "Helvetica-Bold" },
-  uLbl: { fontSize: 6.5, color: MUTE, marginTop: 1.5, textTransform: "uppercase", letterSpacing: 0.4 },
-  foot: { position: "absolute", bottom: 20, left: 40, right: 40, paddingTop: 6, borderTopWidth: 1, borderTopColor: LINE, fontSize: 7, color: MUTE, lineHeight: 1.4 },
-});
 
 const L = {
   EN: { title: "periodization — full plan", prepared: "Prepared for the coaching staff · MicroPulse", tag: "Recommended from the team's own data — the coach decides and overrides",
@@ -137,9 +105,9 @@ const L = {
 } as const;
 
 const shortDate = (iso: string, lang: Lang) => { try { return new Intl.DateTimeFormat(lang === "IS" ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
-const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${Math.round(m)}m`);
+const km = (m: number | null) => (m == null ? "-" : m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${Math.round(m)}m`);
 
-const nf = (n: number | null) => (n == null ? "—" : Math.round(n).toLocaleString("en-US"));
+const nf = (n: number | null) => (n == null ? "-" : Math.round(n).toLocaleString("en-US"));
 function domDir(d: { fwd: number; back: number; lat: number } | null, is: boolean): string | null {
   if (!d) return null;
   const m = Math.max(d.fwd, d.back, d.lat);
@@ -152,160 +120,204 @@ function dayIma(d: CalDay, is: boolean, unitStride: number | null): string {
   if (d.decHiEff != null) p.push(`Dec B2–3 ${d.decHiEff}`);
   // The ceiling marker attaches to the STRIDE value it refers to (built TO match, not beyond), not the dir.
   if (d.stride != null) p.push(`${is ? "Skref" : "Stride"} ${d.stride}${unitStride != null && d.stride >= unitStride && d.type !== "match" ? "†" : ""}`);
-  const dd = domDir(d.dir, is); if (dd) p.push(`${is ? "stefna" : "dir"} → ${dd}`);
+  const dd = domDir(d.dir, is); if (dd) p.push(`${is ? "stefna" : "dir"}: ${dd}`);
   return p.join("  ·  ");
 }
+
+/** Kit text helper: typographic clean-up + the maths glyphs Archivo/Helvetica lack. */
+const tx = (s: unknown) => clean(String(s ?? "").replace(/→/g, "->")).replace(/≈/g, "~").replace(/≥/g, ">=").replace(/≤/g, "<=");
+/** Calendar day-type → kit tone (row tint + label colour; the day-type word is always printed). Shared
+ *  vocabulary with the block PDF — one Top-up, MD-1 Activation, no "Restart". */
+const CAL_TONE: Record<CalType, Tone | null> = { mechanical: "red", locomotive: "green", mixed: "cobalt", activation: "neutral", topup: "rtp", match: "amber", rest: null };
+const small = (extra?: { marginTop?: number; marginBottom?: number }) => [fb(400), { fontSize: 7.75, color: C.mute, lineHeight: 1.4, ...extra }];
+const strong = (size = 8.5, color: string = C.ink) => [fb(600), { fontSize: size, color }];
+
 /** The scheduled block as the demo-format Mon–Sun calendar: rest days as dashes, MD+1 top-up / MD+2 off,
  *  the match on its real weekday, the deload as the LAST week, and the per-session IMA line (tier-gated). */
 function CalWeeks({ block, lang }: { block: CalendarBlock; lang: Lang }) {
   const is = lang === "IS";
-  const bi = (b: Bi) => (is ? b.is : b.en);
+  const bi = (b: Bi) => tx(is ? b.is : b.en);
   const hasMech = block.unit.accHiEff != null || block.unit.stride != null;
   return (
     <>
       {block.weeks.map((w) => (
-        <View key={w.index} wrap={false}>
-          <View style={[s.calBanner, { backgroundColor: w.isDeload ? AMBER : INK }]}>
-            <Text style={s.calBannerTxt}>{is ? "Vika" : "Week"} {w.index + 1} — {bi(w.intent)}</Text>
-            <Text style={s.calBannerR}>{is ? "leikur" : "match"} {bi(w.matchDow)} · ×{w.mult.toFixed(2)}{w.isDeload ? ` · ${is ? "NIÐURTR." : "DELOAD"}` : ""}</Text>
-          </View>
-          <View style={s.calHead}>
-            <Text style={[s.calHc, { width: 26 }]}>{is ? "Dag" : "Day"}</Text><Text style={[s.calHc, { width: 32 }]}>MD</Text>
-            <Text style={[s.calHc, { flex: 1 }]}>{is ? "Dagsgerð" : "Day-type"}</Text>
-            <Text style={[s.calHc, { width: 40, textAlign: "right" }]}>DIST</Text><Text style={[s.calHc, { width: 34, textAlign: "right" }]}>HSR</Text><Text style={[s.calHc, { width: 34, textAlign: "right" }]}>LOAD</Text>
-          </View>
-          {w.days.map((d, i) => (
-            <View key={i} style={[s.calRow, { backgroundColor: CAL_TINT[d.type] }]}>
-              <Text style={{ width: 26, fontFamily: "Helvetica-Bold" }}>{bi(d.dow)}</Text>
-              <Text style={{ width: 32, fontSize: 7, fontFamily: "Helvetica-Bold", color: CAL_ACCENT[d.type] }}>{d.md}</Text>
-              <View style={{ flex: 1, paddingRight: 3 }}>
-                <Text style={{ fontFamily: "Helvetica-Bold", color: CAL_ACCENT[d.type], fontSize: 8 }}>{bi(d.label)}</Text>
-                {hasMech && d.type !== "rest" && dayIma(d, is, block.unit.stride) !== "" && <Text style={s.calCap}>{dayIma(d, is, block.unit.stride)}</Text>}
-              </View>
-              <Text style={{ width: 40, textAlign: "right" }}>{d.dist == null ? "—" : nf(d.dist)}</Text>
-              <Text style={{ width: 34, textAlign: "right" }}>{d.hsr == null ? "—" : nf(d.hsr)}</Text>
-              <Text style={{ width: 34, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{d.load == null ? "—" : nf(d.load)}</Text>
+        <View key={w.index} wrap={false} style={{ marginTop: 8 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 3 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
+              <Text style={[fh(700), { fontSize: 10 }]}>{`${is ? "Vika" : "Week"} ${w.index + 1} - ${bi(w.intent)}`}</Text>
+              {w.isDeload ? <Chip text={is ? "Niðurtröppun" : "Deload"} tone="amber" /> : null}
             </View>
-          ))}
-          {w.capNote && <Text style={[s.calCap, { marginTop: 2, fontFamily: "Helvetica-Bold" }]}>{is ? "Vikuþak" : "Week cap"}: {bi(w.capNote)}</Text>}
+            <Text style={small()}>{tx(`${is ? "leikur" : "match"} ${bi(w.matchDow)} · ×${w.mult.toFixed(2)}`)}</Text>
+          </View>
+          <Table
+            dense
+            size={7.75}
+            cols={[{ label: is ? "Dag" : "Day", width: 28 }, { label: "MD", width: 34 }, { label: is ? "Dagsgerð" : "Day-type", flex: 1 }, { label: "DIST", width: 42, align: "right" }, { label: "HSR", width: 36, align: "right" }, { label: "LOAD", width: 38, align: "right", strong: true }]}
+            rowTone={(i) => { const d = w.days[i]; return d ? CAL_TONE[d.type] : null; }}
+            rows={w.days.map((d) => {
+              const tone = CAL_TONE[d.type];
+              const col = tone ? TONE[tone].text : C.mute;
+              const ima = hasMech && d.type !== "rest" ? dayIma(d, is, block.unit.stride) : "";
+              return [
+                bi(d.dow),
+                <Text key="m" style={[fh(700), { fontSize: 7.25, color: col }]}>{tx(d.md)}</Text>,
+                <View key="l">
+                  <Text style={strong(8, col)}>{bi(d.label)}</Text>
+                  {ima ? <Text style={[fb(400), { fontSize: 6.75, color: C.mute, marginTop: 1 }]}>{tx(ima)}</Text> : null}
+                </View>,
+                d.dist == null ? "-" : nf(d.dist),
+                d.hsr == null ? "-" : nf(d.hsr),
+                d.load == null ? "-" : nf(d.load),
+              ];
+            })}
+          />
+          {w.capNote ? <Text style={small({ marginTop: 2 })}><Text style={fb(600)}>{`${is ? "Vikuþak" : "Week cap"}: `}</Text>{bi(w.capNote)}</Text> : null}
         </View>
       ))}
-      {block.unit.stride != null && <Text style={[s.calCap, { marginTop: 3 }]}>{is ? "† skref við leikþak (byggt AÐ leik) · stefna = leikmanns-undirskrift, hallar eftir dagsgerð (vélrænt/virkjun aftur+hlið, hlaup fram)." : "† stride at match ceiling (built TO match) · dir = the player's signature, tilted by day-type (mechanical/activation back+lateral, locomotive forward)."}</Text>}
+      {block.unit.stride != null && <Text style={small({ marginTop: 4 })}>{is ? "† skref við leikþak (byggt AÐ leik) · stefna = leikmanns-undirskrift, hallar eftir dagsgerð (vélrænt/virkjun aftur+hlið, hlaup fram)." : "† stride at match ceiling (built TO match) · dir = the player's signature, tilted by day-type (mechanical/activation back+lateral, locomotive forward)."}</Text>}
     </>
   );
 }
 
 function AxisTable({ axis, t, bi }: { axis: MatchAxes["running"]; t: { metric: string; match: string; ceil: string }; bi: (b: Bi) => string }) {
   return (
-    <View style={{ marginTop: 4 }}>
-      <View style={s.th}><Text style={[s.thc, { flex: 1 }]}>{t.metric}</Text><Text style={[s.thc, { width: 60, textAlign: "right" }]}>{t.match}</Text><Text style={[s.thc, { width: 60, textAlign: "right" }]}>{t.ceil}</Text><Text style={[s.thc, { width: 60, textAlign: "right" }]}>%</Text></View>
-      {axis.metrics.map((m, i) => (
-        <View key={i} style={s.row}><Text style={{ flex: 1 }}>{bi(m.metric)}</Text><Text style={{ width: 60, textAlign: "right", color: MUTE }}>{m.matchValue}</Text><Text style={{ width: 60, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{m.trainingCeiling}</Text><Text style={{ width: 60, textAlign: "right", color: MUTE }}>{m.band}</Text></View>
-      ))}
-      {axis.flag && <Text style={s.flag}>{bi(axis.flag)}</Text>}
+    <View style={{ marginTop: 3 }}>
+      <Table
+        cols={[{ label: t.metric, flex: 1 }, { label: t.match, width: 70, align: "right" }, { label: t.ceil, width: 70, align: "right", strong: true }, { label: "%", width: 70, align: "right" }]}
+        rows={axis.metrics.map((m) => [bi(m.metric), tx(m.matchValue), tx(m.trainingCeiling), tx(m.band)])}
+      />
+      {axis.flag ? <Card tone="amber" pad={7} style={{ marginTop: 4 }}><Text style={strong(8, C.amberText)}>{bi(axis.flag)}</Text></Card> : null}
     </View>
   );
 }
 
-/** MD-relative demand rows — phases or per-MD-day, same columns. relPl tinted red (over season) / green (under). */
+/** MD-relative demand rows — phases or per-MD-day, same columns. relPl: + = above the season average. */
 function MdTable({ rows, head, t, bi }: { rows: HubMdRow[]; head: string; t: { mdSess: string; mdPctPl: string }; bi: (b: Bi) => string }) {
   return (
-    <View style={{ marginTop: 4 }}>
-      <View style={s.th}>
-        <Text style={[s.thc, { flex: 1 }]}>{head}</Text>
-        <Text style={[s.thc, { width: 34, textAlign: "right" }]}>{t.mdSess}</Text>
-        <Text style={[s.thc, { width: 46, textAlign: "right" }]}>Dist</Text>
-        <Text style={[s.thc, { width: 46, textAlign: "right" }]}>HSR</Text>
-        <Text style={[s.thc, { width: 40, textAlign: "right" }]}>PL</Text>
-        <Text style={[s.thc, { width: 44, textAlign: "right" }]}>{t.mdPctPl}</Text>
-        <Text style={[s.thc, { width: 56, textAlign: "right" }]}>Acc/Dec</Text>
-      </View>
-      {rows.map((r, i) => (
-        <View key={i} style={s.row}>
-          <Text style={{ flex: 1, fontFamily: "Helvetica-Bold" }}>{bi(r.label)}</Text>
-          <Text style={{ width: 34, textAlign: "right", color: MUTE }}>{r.sessions}</Text>
-          <Text style={{ width: 46, textAlign: "right" }}>{km(r.distanceM)}</Text>
-          <Text style={{ width: 46, textAlign: "right" }}>{r.hsrM == null ? "–" : `${Math.round(r.hsrM)}m`}</Text>
-          <Text style={{ width: 40, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{r.playerLoad == null ? "–" : Math.round(r.playerLoad)}</Text>
-          <Text style={{ width: 44, textAlign: "right", color: r.relPl == null ? MUTE : r.relPl > 0 ? RED : GREEN }}>{r.relPl == null ? "–" : `${r.relPl > 0 ? "+" : ""}${r.relPl}%`}</Text>
-          <Text style={{ width: 56, textAlign: "right" }}>{r.accel ?? "–"}/{r.decel ?? "–"}</Text>
-        </View>
-      ))}
-    </View>
+    <Table
+      cols={[{ label: head, flex: 1 }, { label: t.mdSess, width: 36, align: "right" }, { label: "Dist", width: 48, align: "right" }, { label: "HSR", width: 46, align: "right" }, { label: "PL", width: 40, align: "right", strong: true }, { label: t.mdPctPl, width: 46, align: "right" }, { label: "Acc/Dec", width: 56, align: "right" }]}
+      rows={rows.map((r) => [
+        bi(r.label),
+        String(r.sessions),
+        km(r.distanceM),
+        r.hsrM == null ? "-" : `${Math.round(r.hsrM)}m`,
+        r.playerLoad == null ? "-" : String(Math.round(r.playerLoad)),
+        <Text key="p" style={strong(8.5, r.relPl == null ? C.mute : r.relPl > 0 ? TONE.red.text : TONE.green.text)}>{r.relPl == null ? "-" : `${r.relPl > 0 ? "+" : ""}${r.relPl}%`}</Text>,
+        `${r.accel ?? "-"}/${r.decel ?? "-"}`,
+      ])}
+    />
   );
 }
 
 function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lang }) {
-  const t = L[lang]; const bi = (b: Bi) => (lang === "IS" ? b.is : b.en);
+  const is = lang === "IS"; const bi = (b: Bi) => tx(is ? b.is : b.en);
+  // Kinexon is indoor LPS, not Catapult IMA — drop the "/ IMA" from the mechanical
+  // axis wording (its directional/stride chips are already null-gated out).
+  const t = payload.isKinexon
+    ? {
+        ...L[lang],
+        mech: is ? "Vélrænt — æfing FER YFIR" : "Mechanical — training OVER-shoots",
+        munitLead: is
+          ? "LEIKURINN ER EININGIN (allt liðið) — hlaupa-hryggurinn + vélræni ásinn sem hver lota skalar frá (þar sem gögnin ná)."
+          : "THE MATCH IS THE UNIT (whole squad) — the running spine + the mechanical axis every block scales from (present where the feed carries it).",
+      }
+    : L[lang];
   const { tier, phases, congested, baselines, mdDemand, teamAxes, blocks, block, playerBlocks, players, teamUnit } = payload;
   // #4 — align the detailed block's label/dates/goal to the season-map block that actually contains its start.
   const mapBlock = block ? blocks.find((b) => b.start <= block.startDate && block.startDate < b.end) ?? null : null;
-  const nfmt = (n: number | null) => (n == null ? "—" : n.toLocaleString("en-US"));
-  const kmv = (m: number | null) => (m == null ? "—" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
+  const nfmt = (n: number | null) => (n == null ? "-" : n.toLocaleString("en-US"));
+  const kmv = (m: number | null) => (m == null ? "-" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
   const dom = (u: MatchUnitAbs) => { if (u.dirFwd == null || u.dirBack == null || u.dirLat == null) return null; const m = Math.max(u.dirFwd, u.dirBack, u.dirLat); const w = m === u.dirFwd ? t.fwd : m === u.dirLat ? t.lat : t.back; return `${w} ${Math.round(m * 100)}%`; };
-  const unitChips: Array<{ n: string; l: string; c: string }> = [];
+  const unitChips: Array<{ n: string; l: string }> = [];
   if (teamUnit) {
-    unitChips.push({ n: kmv(teamUnit.dist), l: t.dist, c: INK }, { n: kmv(teamUnit.hsr), l: t.hsr, c: GREEN }, { n: `${nfmt(teamUnit.load)} AU`, l: t.load, c: PURPLE }, { n: nfmt(teamUnit.accdec), l: t.accdec, c: RED });
-    if (teamUnit.accHiEff != null) unitChips.push({ n: nfmt(teamUnit.accHiEff), l: t.accB, c: RED });
-    if (teamUnit.decHiEff != null) unitChips.push({ n: nfmt(teamUnit.decHiEff), l: t.decB, c: RED });
-    if (teamUnit.stride != null) unitChips.push({ n: nfmt(teamUnit.stride), l: t.strideL, c: GREEN });
-    const dd = dom(teamUnit); if (dd) unitChips.push({ n: dd, l: t.dirL, c: COBALT });
-    if (teamUnit.rhie != null) unitChips.push({ n: nfmt(teamUnit.rhie), l: t.rhieL, c: PURPLE });
-    if (teamUnit.symmetry != null) unitChips.push({ n: `${teamUnit.symmetry}`, l: t.symL, c: PURPLE });
-    if (teamUnit.metPower != null) unitChips.push({ n: `${teamUnit.metPower}`, l: t.metL, c: PURPLE });
+    unitChips.push({ n: kmv(teamUnit.dist), l: t.dist }, { n: kmv(teamUnit.hsr), l: t.hsr }, { n: `${nfmt(teamUnit.load)} AU`, l: t.load }, { n: nfmt(teamUnit.accdec), l: t.accdec });
+    if (teamUnit.accHiEff != null) unitChips.push({ n: nfmt(teamUnit.accHiEff), l: t.accB });
+    if (teamUnit.decHiEff != null) unitChips.push({ n: nfmt(teamUnit.decHiEff), l: t.decB });
+    if (teamUnit.stride != null) unitChips.push({ n: nfmt(teamUnit.stride), l: t.strideL });
+    const dd = dom(teamUnit); if (dd) unitChips.push({ n: dd, l: t.dirL });
+    if (teamUnit.rhie != null) unitChips.push({ n: nfmt(teamUnit.rhie), l: t.rhieL });
+    if (teamUnit.symmetry != null) unitChips.push({ n: `${teamUnit.symmetry}`, l: t.symL });
+    if (teamUnit.metPower != null) unitChips.push({ n: `${teamUnit.metPower}`, l: t.metL });
   }
+  const blockStart = block ? (mapBlock ? mapBlock.start : block.startDate) : null;
+  const blockEnd = block ? (mapBlock ? mapBlock.end : (block.weeks[block.weeks.length - 1]?.weekStart ?? block.startDate)) : null;
+  const blockPhase = block ? bi(mapBlock ? mapBlock.phase : block.phase) : null;
+  const seasonWeeks = phases.reduce((a, p) => a + p.weeks, 0);
+  const seasonMatches = phases.reduce((a, p) => a + p.matches, 0);
+
+  // Layer 0 — a rule-built one-line read of the plan (from the same rows printed below).
+  const headline = block
+    ? (is ? `Næsta lota: ${blockPhase}, ${shortDate(blockStart!, lang)}–${shortDate(blockEnd!, lang)} (${block.numWeeks} vikur).` : `Next block: ${blockPhase}, ${shortDate(blockStart!, lang)}–${shortDate(blockEnd!, lang)} (${block.numWeeks} weeks).`)
+    : (is ? `Tímabilið ${payload.seasonYear}: ${phases.length} fasar, ${seasonWeeks} vikur.` : `Season ${payload.seasonYear}: ${phases.length} phases over ${seasonWeeks} weeks.`);
+  const body = [
+    phases.map((p) => `${bi(p.label)} (${p.weeks}${is ? "v" : "w"})`).join(" · "),
+    mapBlock ? `${is ? "Markmið" : "Goal"}: ${bi(mapBlock.goal)}` : "",
+    congested.length ? (is ? `${congested.length} þéttar vikur (2+ leikir).` : `${congested.length} congested week${congested.length === 1 ? "" : "s"} (2+ matches).`) : "",
+  ].filter(Boolean).join(" · ");
+
   return (
     <Document>
-      <Page size="A4" style={s.page}>
-        <Text style={s.h1}>{payload.teamName} — {t.title}</Text>
-        <Text style={s.sub}>{t.prepared}{payload.generatedAt ? ` · ${payload.generatedAt.slice(0, 10)}` : ""} · {payload.seasonYear}</Text>
-        <Text style={s.tag}>{t.tag}</Text>
+      <BrandPage
+        doc={is ? "Tímabilsskipulag" : "Periodization"}
+        context={payload.teamName}
+        kicker={is ? "Tímabilsskipulag" : "Periodization"}
+        title={`${payload.teamName} - ${t.title}`}
+        subtitle={`${t.prepared}${payload.generatedAt ? ` · ${payload.generatedAt.slice(0, 10)}` : ""} · ${payload.seasonYear}`}
+        chips={[{ text: String(payload.seasonYear) }, ...(tier ? [{ text: `${t.tier}: ${bi(tier.label)}`, tone: "cobalt" as const }] : [])]}
+        note={is ? "Lýsandi áætlun - setur aldrei readiness-litinn, hnekkir aldrei daglegu ákvörðuninni. Þjálfarinn ákveður." : "Descriptive planning - never sets the readiness colour, never overrides the daily decision. The coach decides."}
+      >
+        <Verdict tone="neutral" label={tx(t.tag)} headline={tx(headline)} body={tx(body)} />
+        <FactRow
+          facts={[
+            { value: teamUnit?.load != null ? `${nfmt(teamUnit.load)} AU` : "-", label: is ? "Leikviðmið (PL)" : "Match unit (PL)", sub: teamUnit ? `${kmv(teamUnit.dist)} · HSR ${kmv(teamUnit.hsr)}` : undefined },
+            { value: String(phases.length), label: is ? "Fasar" : "Phases", sub: `${seasonWeeks} ${is ? "vikur" : "weeks"} · ${seasonMatches} ${is ? "leikir" : "matches"}` },
+            { value: String(congested.length), label: is ? "Þéttar vikur" : "Congested weeks", sub: is ? "2+ leikir" : "2+ matches", tone: congested.length ? "amber" : undefined },
+            { value: String(players.length), label: is ? "Leikmenn" : "Players", sub: playerBlocks.length ? (is ? `${playerBlocks.length} með eigin lotu` : `${playerBlocks.length} with own block`) : undefined },
+          ]}
+        />
 
         {/* MACRO */}
-        <View style={s.section}>
-          <Text style={s.h2}>{t.macro}</Text>
-          {tier && <Text style={s.p}>{t.tier}: <Text style={{ fontFamily: "Helvetica-Bold" }}>{bi(tier.label)}</Text> · {tier.loadSource === "srpe" ? "sRPE" : tier.loadSource === "gps" ? "GPS" : "—"} · conf {tier.confidence}</Text>}
-          {phases.map((ph, i) => (
-            <Text key={i} style={s.p}><Text style={{ fontFamily: "Helvetica-Bold" }}>{bi(ph.label)}</Text> ({shortDate(ph.start, lang)}–{shortDate(ph.end, lang)}, {ph.weeks}w{ph.matches ? `, ${ph.matches} matches` : ""}) — {bi(ph.rationale)}</Text>
-          ))}
-          {congested.length > 0 && <Text style={[s.small, { marginTop: 3 }]}>{t.congested}: {congested.map((c) => `${shortDate(c.weekStart, lang)} (${c.matches})`).join(", ")}</Text>}
-        </View>
+        <Section title={t.macro}>
+          <Card>
+            {tier && <Body>{tx(`${t.tier}: `)}<Text style={fb(600)}>{bi(tier.label)}</Text>{tx(` · ${tier.loadSource === "srpe" ? "sRPE" : tier.loadSource === "gps" ? "GPS" : "-"} · conf ${tier.confidence}`)}</Body>}
+            {phases.map((ph, i) => (
+              <View key={i} wrap={false} style={{ paddingVertical: 4, borderTopWidth: i === 0 && !tier ? 0 : 1, borderTopColor: C.hair, marginTop: i === 0 && tier ? 4 : 0 }}>
+                <Text style={[fb(400), { fontSize: 8.75, lineHeight: 1.4 }]}>
+                  <Text style={fb(600)}>{bi(ph.label)}</Text>
+                  {tx(` (${shortDate(ph.start, lang)}–${shortDate(ph.end, lang)}, ${ph.weeks}w${ph.matches ? `, ${ph.matches} matches` : ""}) - ${bi(ph.rationale)}`)}
+                </Text>
+              </View>
+            ))}
+            {congested.length > 0 && <Text style={small({ marginTop: 3 })}>{tx(`${t.congested}: ${congested.map((c) => `${shortDate(c.weekStart, lang)} (${c.matches})`).join(", ")}`)}</Text>}
+          </Card>
+        </Section>
 
         {/* PRE-SEASON START + RAMP (team) */}
         {payload.preseasonStart && payload.preseasonStart.weeks.length > 0 && (
-          <View style={s.section} wrap={false}>
-            <Text style={s.h2}>{t.preTitle}{payload.weeklyLoad?.startDate ? <Text style={[s.small, { color: MUTE }]}>  · {t.wlStarts} {shortDate(payload.weeklyLoad.startDate, lang)}</Text> : null}</Text>
-            <Text style={s.p}>{t.preLead}</Text>
-            <Text style={[s.small, { marginBottom: 3 }]}>{t.preAnchor}: <Text style={{ fontFamily: "Helvetica-Bold" }}>{payload.preseasonStart.anchor}</Text> · {t.preConf}: {payload.preseasonStart.confidence}</Text>
-            <View style={s.th}><Text style={[s.thc, { width: 44 }]}>{t.week}</Text><Text style={[s.thc, { flex: 1, textAlign: "right" }]}>×{t.match}</Text><Text style={[s.thc, { width: 70, textAlign: "right" }]}>{t.weekly} PL</Text><Text style={[s.thc, { width: 54, textAlign: "right" }]}>{t.preSess}</Text><Text style={[s.thc, { width: 66, textAlign: "right" }]}>sRPE AU</Text></View>
-            {payload.preseasonStart.weeks.map((w) => (
-              <View key={w.weekIndex} style={[s.row, ...(w.weekIndex === 1 ? [s.teamRow] : [])]}>
-                <Text style={{ width: 44, fontFamily: w.weekIndex === 1 ? "Helvetica-Bold" : "Helvetica" }}>{t.week} {w.weekIndex}</Text>
-                <Text style={{ flex: 1, textAlign: "right" }}>{w.multiple == null ? "–" : `${w.multiple}×`}</Text>
-                <Text style={{ width: 70, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{w.weeklyLoad == null ? "–" : nf(w.weeklyLoad)}</Text>
-                <Text style={{ width: 54, textAlign: "right" }}>{w.perSession == null ? "–" : nf(w.perSession)}</Text>
-                <Text style={{ width: 66, textAlign: "right", color: PURPLE }}>{w.srpe == null ? "–" : nf(w.srpe)}</Text>
-              </View>
-            ))}
+          <Section title={`${t.preTitle}${payload.weeklyLoad?.startDate ? ` · ${t.wlStarts} ${shortDate(payload.weeklyLoad.startDate, lang)}` : ""}`} hint={tx(t.preLead)}>
+            <Text style={small({ marginBottom: 4 })}>{`${t.preAnchor}: `}<Text style={fb(600)}>{tx(payload.preseasonStart.anchor)}</Text>{` · ${t.preConf}: ${tx(payload.preseasonStart.confidence)}`}</Text>
+            <View wrap={false}><Table
+              cols={[{ label: t.week, width: 56 }, { label: `×${t.match}`, flex: 1, align: "right" }, { label: `${t.weekly} PL`, width: 80, align: "right", strong: true }, { label: t.preSess, width: 64, align: "right" }, { label: "sRPE AU", width: 70, align: "right" }]}
+              rowTone={(i) => (payload.preseasonStart!.weeks[i]?.weekIndex === 1 ? "cobalt" : null)}
+              rows={payload.preseasonStart.weeks.map((w) => [`${t.week} ${w.weekIndex}`, w.multiple == null ? "-" : `${w.multiple}×`, w.weeklyLoad == null ? "-" : nf(w.weeklyLoad), w.perSession == null ? "-" : nf(w.perSession), w.srpe == null ? "-" : nf(w.srpe)])}
+            /></View>
             {payload.weeklyLoad && payload.weeklyLoad.kpi.length > 0 ? (
-              <View style={{ marginTop: 4 }}>
-                <Text style={[s.small, { marginBottom: 2, fontFamily: "Helvetica-Bold" }]}>{t.preKpiWk}</Text>
-                <View style={s.th}>
-                  <Text style={[s.thc, { flex: 1 }]}>KPI (×{t.match})</Text>
-                  {payload.weeklyLoad.weeks.map((w) => <Text key={w.index} style={[s.thc, { width: 34, textAlign: "right" }]}>{lang === "IS" ? "V" : "W"}{w.index}</Text>)}
-                </View>
-                {payload.weeklyLoad.kpi.map((k, i) => (
-                  <View key={i} style={s.row}>
-                    <Text style={{ flex: 1 }}>{bi(k.label)} <Text style={{ color: MUTE }}>({k.unit})</Text></Text>
-                    {k.values.map((v, j) => { const mv = k.matchValue; const cell = v == null ? "–" : (mv != null && mv > 0 ? `×${Math.round((v / mv) * 100) / 100}` : nf(v)); return <Text key={j} style={{ width: 34, textAlign: "right" }}>{cell}</Text>; })}
-                  </View>
-                ))}
-                <Text style={[s.small, { marginTop: 2, color: MUTE }]}>{lang === "IS" ? "Hvert gildi = ×leik (vikuálag ÷ einn leikur af þeirri breytu) — háhraðahlaup vegur nærri heildarvegalengd þótt metrarnir séu fáir (training:match)." : "Each value = ×match (weekly ÷ one match of that KPI) — HSR carries a load near total distance despite few metres (training:match)."}</Text>
+              <View style={{ marginTop: 6 }} wrap={false}>
+                <Text style={[...strong(8.5), { marginBottom: 3 }]}>{t.preKpiWk}</Text>
+                <Table
+                  size={8}
+                  cols={[{ label: `KPI (×${t.match})`, flex: 1 }, ...payload.weeklyLoad.weeks.map((w) => ({ label: `${is ? "V" : "W"}${w.index}`, width: 36, align: "right" as const }))]}
+                  rows={payload.weeklyLoad.kpi.map((k) => [
+                    <Text key="k" style={strong(8)}>{bi(k.label)}{k.unit ? <Text style={[fb(400), { color: C.mute }]}>{` (${k.unit})`}</Text> : null}</Text>,
+                    ...k.values.map((v) => { const mv = k.matchValue; return v == null ? "-" : (mv != null && mv > 0 ? `×${Math.round((v / mv) * 100) / 100}` : nf(v)); }),
+                  ])}
+                />
+                <Text style={small({ marginTop: 3 })}>{is ? "Hvert gildi = ×leik (vikuálag ÷ einn leikur af þeirri breytu) — háhraðahlaup vegur nærri heildarvegalengd þótt metrarnir séu fáir (training:match)." : "Each value = ×match (weekly ÷ one match of that KPI) — HSR carries a load near total distance despite few metres (training:match)."}</Text>
               </View>
             ) : payload.preseasonStart.week1Kpi.length > 0 ? (
-              <Text style={[s.small, { marginTop: 3 }]}>{t.preKpi}: {payload.preseasonStart.week1Kpi.map((k) => `${bi(k.label)} ${k.multiple != null ? `×${k.multiple} ` : ""}${nf(k.value)}${k.unit}`).join(" · ")}</Text>
+              <Text style={small({ marginTop: 4 })}>{tx(`${t.preKpi}: ${payload.preseasonStart.week1Kpi.map((k) => `${bi(k.label)} ${k.multiple != null ? `×${k.multiple} ` : ""}${nf(k.value)}${k.unit}`).join(" · ")}`)}</Text>
             ) : null}
-          </View>
+          </Section>
         )}
 
         {/* PLANNED KPI VOLUME — in-season week + meso (match-anchored, per-KPI tapered) */}
@@ -314,181 +326,172 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
           const fmtK = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
           const hasTotals = pv.meso.some((w) => w.totalMultiple != null); // per-week game counts supplied
           const blockTotalMultiple = Math.round(pv.meso.reduce((a, w) => a + (w.totalMultiple ?? w.volMultiple), 0) * 100) / 100;
+          const kpiCell = (c: { multiple: number; value: number }, i: number, bold = false) => (
+            <Text key={i} style={[bold ? fh(700) : fb(400), { fontSize: 8, textAlign: "right" }]}>{`${c.multiple}× `}<Text style={[fb(400), { color: C.mute }]}>{`${fmtK(c.value)}${pv.headKpis[i]?.unit ?? ""}`}</Text></Text>
+          );
           return (
-            <View style={s.section} wrap={false}>
-              <Text style={s.h2}>{t.pvTitle}</Text>
-              <Text style={s.p}>{t.pvLead}</Text>
-              {/* Week per-KPI */}
-              <Text style={[s.small, { marginTop: 2, marginBottom: 2, fontFamily: "Helvetica-Bold" }]}>{t.pvWeekHdr} — {pv.weekVolumeMultiple}×{t.match} ({t.pvVol})</Text>
+            <Section title={t.pvTitle} hint={tx(t.pvLead)}>
+              <View wrap={false}>
+              <Text style={[...strong(8.5), { marginBottom: 2 }]}>{`${t.pvWeekHdr} - ${pv.weekVolumeMultiple}×${t.match} (${t.pvVol})`}</Text>
               {pv.weekTotalMultiple != null && pv.matches != null && (
-                <Text style={[s.small, { marginBottom: 3, color: MUTE }]}>
-                  {t.pvVol} {pv.weekVolumeMultiple}× + {pv.matches} {pv.matches === 1 ? t.match : t.matches} = {pv.weekTotalMultiple}× {t.pvTotal} · {t.pvTotalNote}
-                </Text>
+                <Text style={small({ marginBottom: 3 })}>{`${t.pvVol} ${pv.weekVolumeMultiple}× + ${pv.matches} ${pv.matches === 1 ? t.match : t.matches} = ${pv.weekTotalMultiple}× ${t.pvTotal} · ${t.pvTotalNote}`}</Text>
               )}
-              <View style={s.th}><Text style={[s.thc, { flex: 1 }]}>KPI</Text><Text style={[s.thc, { width: 70, textAlign: "right" }]}>{t.match}</Text><Text style={[s.thc, { width: 50, textAlign: "right" }]}>×{t.match}</Text><Text style={[s.thc, { width: 70, textAlign: "right" }]}>{t.week}</Text></View>
-              {pv.weekKpis.map((k, i) => (
-                <View key={i} style={s.row}>
-                  <Text style={{ flex: 1 }}>{bi(k.label)}</Text>
-                  <Text style={{ width: 70, textAlign: "right", color: MUTE }}>{fmtK(k.matchValue)}{k.unit}</Text>
-                  <Text style={{ width: 50, textAlign: "right", color: MUTE }}>{k.multiple}×</Text>
-                  <Text style={{ width: 70, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{fmtK(k.weeklyValue)}{k.unit}</Text>
-                </View>
-              ))}
-              {/* Meso per-week */}
-              <Text style={[s.small, { marginTop: 5, marginBottom: 2, fontFamily: "Helvetica-Bold" }]}>{t.pvMesoHdr}</Text>
-              <View style={s.th}>
-                <Text style={[s.thc, { width: 60 }]}>{t.week}</Text><Text style={[s.thc, { width: 44, textAlign: "right" }]}>×{t.pvVol}</Text>
-                {hasTotals && <Text style={[s.thc, { width: 54, textAlign: "right" }]}>×{t.pvTotal}</Text>}
-                {pv.headKpis.map((h, i) => <Text key={i} style={[s.thc, { flex: 1, textAlign: "right" }]}>{bi(h.label)}</Text>)}
+              <Table
+                cols={[{ label: "KPI", flex: 1 }, { label: t.match, width: 70, align: "right" }, { label: `×${t.match}`, width: 56, align: "right" }, { label: t.week, width: 70, align: "right", strong: true }]}
+                rows={pv.weekKpis.map((k) => [bi(k.label), `${fmtK(k.matchValue)}${k.unit}`, `${k.multiple}×`, `${fmtK(k.weeklyValue)}${k.unit}`])}
+              />
               </View>
-              {pv.meso.map((w) => (
-                <View key={w.weekIndex} style={[s.row, ...(w.isDeload ? [{ backgroundColor: "#FBF2E2" }] : [])]}>
-                  <Text style={{ width: 60 }}>{t.week} {w.weekIndex}{w.isDeload ? ` (${t.deload})` : ""}</Text>
-                  <Text style={{ width: 44, textAlign: "right" }}>{w.volMultiple}×</Text>
-                  {hasTotals && <Text style={{ width: 54, textAlign: "right", fontFamily: "Helvetica-Bold", color: (w.matches ?? 0) >= 2 ? AMBER : INK }}>{w.totalMultiple != null ? `${w.totalMultiple}×` : "—"}{(w.matches ?? 0) > 0 ? ` ${w.matches}${t.gamesAbbr}` : ""}</Text>}
-                  {w.kpi.map((c, i) => <Text key={i} style={{ flex: 1, textAlign: "right" }}>{c.multiple}× <Text style={{ color: MUTE }}>{fmtK(c.value)}{pv.headKpis[i]?.unit ?? ""}</Text></Text>)}
-                </View>
-              ))}
-              <View style={[s.row, { borderTopWidth: 1, borderTopColor: INK }]}>
-                <Text style={{ width: 60, fontFamily: "Helvetica-Bold" }}>{t.pvBlockTotal}</Text>
-                <Text style={{ width: 44, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{pv.mesoTotal.volMultiple}×</Text>
-                {hasTotals && <Text style={{ width: 54, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{blockTotalMultiple}×</Text>}
-                {pv.mesoTotal.kpi.map((c, i) => <Text key={i} style={{ flex: 1, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{c.multiple}× <Text style={{ color: MUTE, fontFamily: "Helvetica" }}>{fmtK(c.value)}{pv.headKpis[i]?.unit ?? ""}</Text></Text>)}
+              <View wrap={false}>
+              <Text style={[...strong(8.5), { marginTop: 7, marginBottom: 3 }]}>{t.pvMesoHdr}</Text>
+              <Table
+                size={8}
+                cols={[
+                  { label: t.week, width: 78 }, { label: `×${t.pvVol}`, width: 44, align: "right" },
+                  ...(hasTotals ? [{ label: `×${t.pvTotal}`, width: 56, align: "right" as const }] : []),
+                  ...pv.headKpis.map((h) => ({ label: bi(h.label), flex: 1, align: "right" as const })),
+                ]}
+                rowTone={(i) => (i < pv.meso.length && pv.meso[i].isDeload ? "amber" : i === pv.meso.length ? "neutral" : null)}
+                rows={[
+                  ...pv.meso.map((w) => [
+                    `${t.week} ${w.weekIndex}${w.isDeload ? ` (${t.deload})` : ""}`,
+                    `${w.volMultiple}×`,
+                    ...(hasTotals ? [<Text key="tt" style={[fh(700), { fontSize: 8, textAlign: "right", color: (w.matches ?? 0) >= 2 ? C.amberText : C.ink }]}>{`${w.totalMultiple != null ? `${w.totalMultiple}×` : "-"}${(w.matches ?? 0) > 0 ? ` ${w.matches}${t.gamesAbbr}` : ""}`}</Text>] : []),
+                    ...w.kpi.map((c, i) => kpiCell(c, i)),
+                  ]),
+                  [
+                    <Text key="bt" style={[fh(700), { fontSize: 8 }]}>{t.pvBlockTotal}</Text>,
+                    <Text key="bv" style={[fh(700), { fontSize: 8, textAlign: "right" }]}>{`${pv.mesoTotal.volMultiple}×`}</Text>,
+                    ...(hasTotals ? [<Text key="bm" style={[fh(700), { fontSize: 8, textAlign: "right" }]}>{`${blockTotalMultiple}×`}</Text>] : []),
+                    ...pv.mesoTotal.kpi.map((c, i) => kpiCell(c, i, true)),
+                  ],
+                ]}
+              />
               </View>
-            </View>
+            </Section>
           );
         })()}
 
         {/* DEMANDS — baseline by position */}
-        <View style={s.section}>
-          <Text style={s.h2}>{t.demands}</Text>
+        <Section title={t.demands}>
           {unitChips.length > 0 && (
-            <View style={s.callout}>
-              <Text style={s.calloutLead}>{t.munitLead}</Text>
-              <View style={s.uChips}>
-                {unitChips.map((c, i) => (
-                  <View key={i} style={[s.uChip, i < unitChips.length - 1 ? s.uChipDiv : {}]}>
-                    <Text style={[s.uNum, { color: c.c }]}>{c.n}</Text><Text style={s.uLbl}>{c.l}</Text>
-                  </View>
-                ))}
-              </View>
+            <View style={{ marginBottom: 7 }} wrap={false}>
+              <Text style={[fb(600), { fontSize: 8, lineHeight: 1.4, marginBottom: 4 }]}>{tx(t.munitLead)}</Text>
+              <StatGrid cols={unitChips.length > 8 ? 6 : 4} items={unitChips.map((c) => ({ label: tx(c.l), value: tx(c.n) }))} />
             </View>
           )}
-          <View style={s.th}><Text style={[s.thc, { flex: 1 }]}>{t.pos}</Text><Text style={[s.thc, { width: 46, textAlign: "right" }]}>Dist</Text><Text style={[s.thc, { width: 46, textAlign: "right" }]}>HSR</Text><Text style={[s.thc, { width: 40, textAlign: "right" }]}>Max</Text><Text style={[s.thc, { width: 40, textAlign: "right" }]}>PL</Text><Text style={[s.thc, { width: 60, textAlign: "right" }]}>Acc/Dec</Text></View>
-          {baselines.map((b, i) => (
-            <View key={i} style={[s.row, ...(b.isTeam ? [s.teamRow] : [])]}>
-              <Text style={{ flex: 1, fontFamily: b.isTeam ? "Helvetica-Bold" : "Helvetica" }}>{bi(b.label)} ({b.players})</Text>
-              <Text style={{ width: 46, textAlign: "right" }}>{km(b.distanceM)}</Text>
-              <Text style={{ width: 46, textAlign: "right" }}>{b.hsrM == null ? "–" : `${Math.round(b.hsrM)}m`}</Text>
-              <Text style={{ width: 40, textAlign: "right" }}>{b.maxKmh ?? "–"}</Text>
-              <Text style={{ width: 40, textAlign: "right" }}>{b.playerLoad == null ? "–" : Math.round(b.playerLoad)}</Text>
-              <Text style={{ width: 60, textAlign: "right" }}>{b.accel ?? "–"}/{b.decel ?? "–"}</Text>
-            </View>
-          ))}
-        </View>
+          <Table
+            cols={[{ label: t.pos, flex: 1 }, { label: "Dist", width: 50, align: "right" }, { label: "HSR", width: 48, align: "right" }, { label: "Max", width: 40, align: "right" }, { label: "PL", width: 42, align: "right", strong: true }, { label: "Acc/Dec", width: 60, align: "right" }]}
+            rowTone={(i) => (baselines[i]?.isTeam ? "neutral" : null)}
+            rows={baselines.map((b) => [
+              <Text key="l" style={b.isTeam ? strong(8.5) : [fb(400), { fontSize: 8.5 }]}>{`${bi(b.label)} (${b.players})`}</Text>,
+              km(b.distanceM), b.hsrM == null ? "-" : `${Math.round(b.hsrM)}m`, b.maxKmh == null ? "-" : String(b.maxKmh), b.playerLoad == null ? "-" : String(Math.round(b.playerLoad)), `${b.accel ?? "-"}/${b.decel ?? "-"}`,
+            ])}
+          />
+        </Section>
 
         {/* DEMANDS BY MD-DAY (whole squad) — the microcycle shape of the season demand (phases + per-day) */}
         {mdDemand && mdDemand.phases.length > 0 && (
-          <View style={s.section} wrap={false}>
-            <Text style={s.h2}>{t.mdTitle}</Text>
-            <Text style={s.p}>{t.mdLead}</Text>
-            <MdTable rows={mdDemand.phases} head={t.mdPhase} t={t} bi={bi} />
-            {mdDemand.days.length > 0 && <View style={{ marginTop: 6 }}><MdTable rows={mdDemand.days} head={t.mdDay} t={t} bi={bi} /></View>}
-            <Text style={[s.small, { marginTop: 3 }]}>{t.mdFoot}</Text>
-          </View>
+          <Section title={t.mdTitle} hint={tx(t.mdLead)}>
+            <View wrap={false}><MdTable rows={mdDemand.phases} head={t.mdPhase} t={t} bi={bi} /></View>
+            {mdDemand.days.length > 0 && <View style={{ marginTop: 6 }} wrap={false}><MdTable rows={mdDemand.days} head={t.mdDay} t={t} bi={bi} /></View>}
+            <Text style={small({ marginTop: 3 })}>{tx(t.mdFoot)}</Text>
+          </Section>
         )}
 
         {/* THREE AXES (whole squad) */}
         {teamAxes && (
-          <View style={s.section} wrap={false}>
-            <Text style={s.h2}>{t.axes}</Text>
-            {teamAxes.hsrDeficit && <Text style={s.flag}>{bi(teamAxes.hsrDeficit)}</Text>}
-            {teamAxes.mechNeglect && <Text style={s.flag}>{bi(teamAxes.mechNeglect)}</Text>}
-            <Text style={[s.p, { marginTop: 5, fontFamily: "Helvetica-Bold" }]}>{t.running}</Text>
-            <AxisTable axis={teamAxes.running} t={t} bi={bi} />
-            <Text style={[s.p, { marginTop: 6, fontFamily: "Helvetica-Bold" }]}>{t.mech}</Text>
-            <AxisTable axis={teamAxes.mechanical} t={t} bi={bi} />
-          </View>
+          <Section title={t.axes}>
+            {teamAxes.hsrDeficit && <Card tone="amber" pad={7} style={{ marginBottom: 4 }}><Text style={strong(8, C.amberText)}>{bi(teamAxes.hsrDeficit)}</Text></Card>}
+            {teamAxes.mechNeglect && <Card tone="amber" pad={7} style={{ marginBottom: 4 }}><Text style={strong(8, C.amberText)}>{bi(teamAxes.mechNeglect)}</Text></Card>}
+            <View wrap={false}>
+              <Text style={[...strong(9), { marginTop: 4 }]}>{tx(t.running)}</Text>
+              <AxisTable axis={teamAxes.running} t={t} bi={bi} />
+            </View>
+            <View wrap={false}>
+              <Text style={[...strong(9), { marginTop: 7 }]}>{tx(t.mech)}</Text>
+              <AxisTable axis={teamAxes.mechanical} t={t} bi={bi} />
+            </View>
+          </Section>
         )}
 
         {/* MESO BLOCKS */}
         {blocks.length > 0 && (
-          <View style={s.section}>
-            <Text style={s.h2}>{t.meso}</Text>
-            {blocks.map((b, i) => (
-              <View key={i} style={s.row}>
-                <Text style={{ flex: 1, fontFamily: "Helvetica-Bold" }}>{bi(b.phase)}</Text>
-                <Text style={{ width: 90, color: MUTE }}>{shortDate(b.start, lang)}–{shortDate(b.end, lang)} · {b.weeks}w</Text>
-                <Text style={{ width: 70, textAlign: "right" }}>{b.tmr != null ? `TMr ${b.tmr}×` : ""}</Text>
-                <Text style={{ width: 60, textAlign: "right" }}>{b.volumeTargetPct != null ? `${b.volumeTargetPct}%` : ""}</Text>
-                <Text style={{ width: 90, textAlign: "right", color: b.isDeload ? AMBER : MUTE, fontSize: 7.5 }}>{b.flag ? bi(b.flag).slice(0, 28) : ""}</Text>
-              </View>
-            ))}
-          </View>
+          <Section title={t.meso}>
+            <Table
+              cols={[{ label: is ? "Lota" : "Block", flex: 1 }, { label: is ? "Dagsetningar" : "Dates", width: 96 }, { label: "TMr", width: 54, align: "right" }, { label: is ? "Magn" : "Volume", width: 50, align: "right" }, { label: is ? "Athugasemd" : "Note", width: 120 }]}
+              rowTone={(i) => (blocks[i]?.isDeload ? "amber" : null)}
+              rows={blocks.map((b) => [
+                <View key="p"><Text style={strong(8.5)}>{bi(b.phase)}</Text>{b.isDeload ? <Text style={[fb(600), { fontSize: 7, color: C.amberText }]}>{t.deload}</Text> : null}</View>,
+                <Text key="d" style={[fb(400), { fontSize: 8, color: C.mute }]}>{`${shortDate(b.start, lang)}–${shortDate(b.end, lang)} · ${b.weeks}w`}</Text>,
+                b.tmr != null ? `TMr ${b.tmr}×` : "",
+                b.volumeTargetPct != null ? `${b.volumeTargetPct}%` : "",
+                <Text key="f" style={[fb(400), { fontSize: 7.5, color: b.isDeload ? C.amberText : C.mute }]}>{b.flag ? bi(b.flag) : ""}</Text>,
+              ])}
+            />
+          </Section>
         )}
 
         {/* SCHEDULED BLOCK — the demo-format Mon–Sun calendar (rest days, MD+1 top-up / MD+2 off,
             match on its real weekday, deload = last week, IMA per session). Title aligned to the map block. */}
         {block && (
-          <View style={s.section}>
-            <Text style={s.h2}>{t.block} — {bi(mapBlock ? mapBlock.phase : block.phase)}</Text>
-            <Text style={s.small}>{shortDate(mapBlock ? mapBlock.start : block.startDate, lang)}–{shortDate(mapBlock ? mapBlock.end : (block.weeks[block.weeks.length - 1]?.weekStart ?? block.startDate), lang)} · {block.numWeeks}w · {block.scopeName === "__team__" ? (lang === "IS" ? "liðið" : "the squad") : block.scopeName}{mapBlock ? ` · ${bi(mapBlock.goal)}` : ""}</Text>
-            {block.notes.slice(0, 3).map((n, i) => <View key={i} style={s.noteLi}><Text style={s.bullet}>•</Text><Text style={s.noteTxt}>{bi(n)}</Text></View>)}
-            {congested.length > 0 && <Text style={[s.small, { marginTop: 2 }]}>{lang === "IS" ? "Þéttar vikur (2+ leikir) þjappa lotuna — færri gæðadagar milli leikja." : "Congested weeks (2+ matches) compress the block — fewer quality days between games."}</Text>}
+          <Section title={`${t.block} - ${blockPhase}`}>
+            <Text style={small()}>{tx(`${shortDate(blockStart!, lang)}–${shortDate(blockEnd!, lang)} · ${block.numWeeks}w · ${block.scopeName === "__team__" ? (is ? "liðið" : "the squad") : block.scopeName}${mapBlock ? ` · ${bi(mapBlock.goal)}` : ""}`)}</Text>
+            {block.notes.length > 0 && <View style={{ marginTop: 4 }} wrap={false}><Bullets items={block.notes.slice(0, 3).map((n) => bi(n))} size={8} /></View>}
+            {congested.length > 0 && <Text style={small({ marginTop: 2 })}>{is ? "Þéttar vikur (2+ leikir) þjappa lotuna — færri gæðadagar milli leikja." : "Congested weeks (2+ matches) compress the block — fewer quality days between games."}</Text>}
             <CalWeeks block={block} lang={lang} />
-          </View>
+          </Section>
         )}
 
         {/* PLAYERS */}
+        {/* Keep the title + the table's (fixed, repeating) header from starting alone at a page foot. */}
+        {players.length > 0 && <View minPresenceAhead={120} />}
         {players.length > 0 && (
-          <View style={s.section}>
-            <Text style={s.h2}>{t.players}</Text>
-            <Text style={[s.small, { marginBottom: 2 }]}>{lang === "IS" ? "Grunnur (nýleg þjálfun, síð. 28 d — hvar leikmaðurinn er NÚNA) → Leik-mark (krafan per leik, þakið) → Vikumark (áætlað vikuálag sem rampað er AÐ)." : "Baseline (recent training, last 28d — where the player is NOW) → Match target (per-match demand, the ceiling) → Week target (planned weekly load ramped TO)."}</Text>
-            <View style={s.th}><Text style={[s.thc, { flex: 1 }]}>{lang === "IS" ? "Leikmaður" : "Player"}</Text><Text style={[s.thc, { width: 28 }]}>{t.pos}</Text><Text style={[s.thc, { width: 92, textAlign: "right" }]}>{lang === "IS" ? "Grunnur /æf (%leik)" : "Baseline /sess (%match)"}</Text><Text style={[s.thc, { width: 116, textAlign: "right" }]}>{lang === "IS" ? "Leik-mark" : "Match target"}</Text><Text style={[s.thc, { width: 50, textAlign: "right" }]}>{lang === "IS" ? "Vika PL" : "Week PL"}</Text><Text style={[s.thc, { width: 36, textAlign: "right" }]}>MAS</Text><Text style={[s.thc, { width: 26, textAlign: "right" }]}>{t.gaps}</Text></View>
-            {players.map((p, i) => {
-              const gk = /GK|MARK|KEEP/i.test(p.position ?? "");
-              const pctM = p.baselinePl != null && p.matchUnitLoad != null && p.matchUnitLoad > 0 ? Math.round((p.baselinePl / p.matchUnitLoad) * 100) : null;
-              return (
-              <View key={i} style={s.row}>
-                <Text style={{ flex: 1 }}>{p.name}{gk ? (lang === "IS" ? "  (mm)" : "  (GK)") : ""}</Text>
-                <Text style={{ width: 28, color: MUTE }}>{p.position ?? "–"}</Text>
-                <Text style={{ width: 92, textAlign: "right" }}>{p.baselinePl != null ? <>{nf(p.baselinePl)} PL{pctM != null ? <Text style={{ color: pctM >= 100 ? GREEN : pctM >= 60 ? INK : AMBER }}> ({pctM}%)</Text> : null}</> : <Text style={{ color: MUTE }}>{lang === "IS" ? "– engin GPS" : "– no GPS"}</Text>}</Text>
-                <Text style={{ width: 116, textAlign: "right", color: gk ? MUTE : INK }}>{gk ? (lang === "IS" ? "sérlíkan" : "GK model") : (p.matchUnitLoad != null ? `${p.matchUnitLoad} PL · ${p.matchUnitHsr != null ? `${Math.round(p.matchUnitHsr)}m` : ""}${p.matchUnitDistance != null ? ` · ${(p.matchUnitDistance / 1000).toFixed(1)}km` : ""} · n${p.nNearFull}${p.matchUnitConf && p.matchUnitConf !== "high" ? ` (${p.matchUnitConf})` : ""}` : "–")}</Text>
-                <Text style={{ width: 50, textAlign: "right", fontFamily: "Helvetica-Bold", color: gk ? MUTE : COBALT }}>{gk ? "–" : (p.weeklyPlTarget != null ? `${nf(p.weeklyPlTarget)}` : "–")}</Text>
-                <Text style={{ width: 36, textAlign: "right", color: MUTE }}>{p.masKmh != null ? `${p.masKmh}` : "–"}</Text>
-                <Text style={{ width: 26, textAlign: "right", color: p.gaps > 0 ? AMBER : "#1c7a4a" }}>{p.gaps}</Text>
-              </View>
-              );
-            })}
-            <Text style={[s.small, { marginTop: 3 }]}>{lang === "IS" ? "Grunnur = meðal-PL per þjálfunaræfingu síðustu 28 daga (%leik = hlutfall af einum leik — grænt ≥100%, gult <60%). Leik-mark = miðgildi PL/HSR/vegalengdar næstum-heilla leikja (n; lítil/miðlungs vissa → vísbending). Vika PL = leik-PL × vikumargfeldi (~2,35× fyrir 1-leiks viku). MAS = loftháða vélin (km/klst). „– engin GPS“ = engin þjálfunar-GPS gögn síð. 28 d." : "Baseline = mean PL per TRAINING session over the last 28 days (%match = share of one match — green ≥100%, amber <60%). Match target = median PL/HSR/distance of near-full matches (n; low/medium confidence → a hint). Week PL = match PL × the weekly multiple (~2.35× for a 1-match week). MAS = the aerobic engine (km/h). \"– no GPS\" = no training GPS in the last 28d."}</Text>
-            <Text style={[s.small, { marginTop: 1 }]}>{lang === "IS" ? "„–“ = engin næstum-heilir leikir enn (leikviðmið) eða ekkert VALD-próf (þak) — ekki villa; fyllist eftir því sem gögn safnast. Markmenn (mm) nota sérstakt álagslíkan, ekki útspilara-periodiseringu." : "\"–\" = no near-full matches yet (match unit) or no VALD test (cap) — not a bug; fills in as data accrues. Goalkeepers (GK) use a separate load model, not outfield periodization."}</Text>
-          </View>
+          <Section title={t.players} hint={tx(is ? "Grunnur (nýleg þjálfun, síð. 28 d — hvar leikmaðurinn er NÚNA) → Leik-mark (krafan per leik, þakið) → Vikumark (áætlað vikuálag sem rampað er AÐ)." : "Baseline (recent training, last 28d — where the player is NOW) → Match target (per-match demand, the ceiling) → Week target (planned weekly load ramped TO).")}>
+            <Table
+              size={8}
+              dense
+              cols={[
+                { label: is ? "Leikmaður" : "Player", flex: 1 }, { label: t.pos, width: 30 },
+                { label: is ? "Grunnur /æf (%leik)" : "Baseline /sess (%match)", width: 98, align: "right" },
+                { label: is ? "Leik-mark" : "Match target", width: 140, align: "right" },
+                { label: is ? "Vika PL" : "Week PL", width: 46, align: "right" }, { label: "MAS", width: 32, align: "right" }, { label: t.gaps, width: 30, align: "right" },
+              ]}
+              rows={players.map((p) => {
+                const gk = /GK|MARK|KEEP/i.test(p.position ?? "");
+                const pctM = p.baselinePl != null && p.matchUnitLoad != null && p.matchUnitLoad > 0 ? Math.round((p.baselinePl / p.matchUnitLoad) * 100) : null;
+                return [
+                  tx(`${p.name}${gk ? (is ? "  (mm)" : "  (GK)") : ""}`),
+                  p.position ?? "-",
+                  p.baselinePl != null
+                    ? <Text key="b" style={[fb(400), { fontSize: 8, textAlign: "right" }]}>{`${nf(p.baselinePl)} PL`}{pctM != null ? <Text style={[fb(600), { color: pctM >= 100 ? TONE.green.text : pctM >= 60 ? C.ink : TONE.amber.text }]}>{` (${pctM}%)`}</Text> : null}</Text>
+                    : <Text key="b" style={[fb(400), { fontSize: 8, textAlign: "right", color: C.mute }]}>{is ? "- engin GPS" : "- no GPS"}</Text>,
+                  <Text key="m" style={[fb(400), { fontSize: 7.75, textAlign: "right", color: gk ? C.mute : C.ink }]}>{gk ? (is ? "sérlíkan" : "GK model") : (p.matchUnitLoad != null ? `${p.matchUnitLoad} PL · ${p.matchUnitHsr != null ? `${Math.round(p.matchUnitHsr)}m` : ""}${p.matchUnitDistance != null ? ` · ${(p.matchUnitDistance / 1000).toFixed(1)}km` : ""} · n${p.nNearFull}${p.matchUnitConf && p.matchUnitConf !== "high" ? ` (${p.matchUnitConf})` : ""}` : "-")}</Text>,
+                  <Text key="w" style={[fh(700), { fontSize: 8, textAlign: "right", color: gk ? C.mute : C.cobalt }]}>{gk ? "-" : (p.weeklyPlTarget != null ? `${nf(p.weeklyPlTarget)}` : "-")}</Text>,
+                  p.masKmh != null ? `${p.masKmh}` : "-",
+                  <Text key="g" style={[fb(600), { fontSize: 8, textAlign: "right", color: p.gaps > 0 ? TONE.amber.text : TONE.green.text }]}>{String(p.gaps)}</Text>,
+                ];
+              })}
+            />
+            <Text style={small({ marginTop: 4 })}>{tx(is ? "Grunnur = meðal-PL per þjálfunaræfingu síðustu 28 daga (%leik = hlutfall af einum leik — grænt ≥100%, gult <60%). Leik-mark = miðgildi PL/HSR/vegalengdar næstum-heilla leikja (n; lítil/miðlungs vissa → vísbending). Vika PL = leik-PL × vikumargfeldi (~2,35× fyrir 1-leiks viku). MAS = loftháða vélin (km/klst). „– engin GPS“ = engin þjálfunar-GPS gögn síð. 28 d." : "Baseline = mean PL per TRAINING session over the last 28 days (%match = share of one match — green ≥100%, amber <60%). Match target = median PL/HSR/distance of near-full matches (n; low/medium confidence → a hint). Week PL = match PL × the weekly multiple (~2.35× for a 1-match week). MAS = the aerobic engine (km/h). \"– no GPS\" = no training GPS in the last 28d.")}</Text>
+            <Text style={small({ marginTop: 1 })}>{tx(is ? "„–“ = engin næstum-heilir leikir enn (leikviðmið) eða ekkert VALD-próf (þak) — ekki villa; fyllist eftir því sem gögn safnast. Markmenn (mm) nota sérstakt álagslíkan, ekki útspilara-periodiseringu." : "\"–\" = no near-full matches yet (match unit) or no VALD test (cap) — not a bug; fills in as data accrues. Goalkeepers (GK) use a separate load model, not outfield periodization.")}</Text>
+          </Section>
         )}
+
+        <Provenance>{tx(t.foot)}</Provenance>
 
         {/* PER-PLAYER BLOCKS (appendix) — one clean page per chosen player: own match unit, VALD ceiling +
             minutes trim applied. A plan, not just a table row. */}
         {playerBlocks.map((pbk, i) => (
-          <View key={i} style={s.section} break>
-            <Text style={s.h2}>{lang === "IS" ? "Einstaklings-lota" : "Individualised block"} — {pbk.name}{pbk.position ? ` (${pbk.position})` : ""}</Text>
-            <Text style={s.small}>{bi(pbk.note)}</Text>
+          <Section key={i} break title={`${is ? "Einstaklings-lota" : "Individualised block"} - ${pbk.name}${pbk.position ? ` (${pbk.position})` : ""}`} hint={bi(pbk.note)} mt={0}>
             <CalWeeks block={pbk.block} lang={lang} />
-          </View>
+          </Section>
         ))}
-
-        <Text style={s.foot} fixed>{t.foot}</Text>
-      </Page>
+      </BrandPage>
     </Document>
   );
 }
 
 export async function downloadPeriodizationHubPdf(payload: PeriodizationHubPayload, lang: Lang) {
-  const blob = await pdf(<HubDoc payload={payload} lang={lang} />).toBlob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${payload.teamName.replace(/\s+/g, "-")}-periodization-${payload.seasonYear}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  const blob = await renderPdfBlob(() => <HubDoc payload={payload} lang={lang} />);
+  saveBlob(blob, `${payload.teamName.replace(/\s+/g, "-")}-periodization-${payload.seasonYear}.pdf`);
 }
