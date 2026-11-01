@@ -45,22 +45,24 @@ export async function GET(req: NextRequest) {
 
   // Recent Kinexon rows — raw_payload_json read here (server), only compact means go back.
   const { data: rows } = await sb.from("player_external_load_daily")
-    .select("player_id, total_player_load, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_cod, raw_payload_json")
+    .select("player_id, total_player_load, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, session_duration_minutes, ima_cod, raw_payload_json")
     .eq("team_id", teamId).eq("source", "kinexon").gte("date", since).limit(1000);
 
-  type Agg = { pl: number[]; dist: number[]; hsr: number[]; cod: number[]; coo: number[]; ex: number[]; mech: number[] };
+  type Agg = { pl: number[]; dist: number[]; hsr: number[]; dur: number[]; cod: number[]; coo: number[]; ex: number[]; mech: number[] };
   const agg = new Map<string, Agg>();
   for (const r of (rows ?? []) as Array<Record<string, unknown>>) {
     const pid = r.player_id as string | null;
     if (!pid) continue;
-    const a = agg.get(pid) ?? { pl: [], dist: [], hsr: [], cod: [], coo: [], ex: [], mech: [] };
+    const a = agg.get(pid) ?? { pl: [], dist: [], hsr: [], dur: [], cod: [], coo: [], ex: [], mech: [] };
     const pl = r.total_player_load as number | null;
     const dist = r.total_distance as number | null;
     const v5 = r.velocity_band5_total_distance as number | null;
     const v6 = r.velocity_band6_total_distance as number | null;
+    const dur = r.session_duration_minutes as number | null;
     if (typeof pl === "number") a.pl.push(pl);
     if (typeof dist === "number") a.dist.push(dist);
     if (v5 != null || v6 != null) a.hsr.push((v5 ?? 0) + (v6 ?? 0));
+    if (typeof dur === "number" && dur > 0) a.dur.push(dur);
     const cod = readKinexonMetric(r, BY_KEY["cod"]); if (cod != null) a.cod.push(cod);
     const coo = readKinexonMetric(r, BY_KEY["coo"]); if (coo != null) a.coo.push(coo);
     const ex = readKinexonMetric(r, BY_KEY["exertions"]); if (ex != null) a.ex.push(ex);
@@ -70,7 +72,7 @@ export async function GET(req: NextRequest) {
   const mean = (xs: number[]): number | null => (xs.length ? Math.round(xs.reduce((s, x) => s + x, 0) / xs.length) : null);
   const out = [...agg.entries()].map(([pid, a]) => ({
     name: nameById.get(pid) ?? "—",
-    pl: mean(a.pl), distance: mean(a.dist), hsr: mean(a.hsr),
+    pl: mean(a.pl), distance: mean(a.dist), hsr: mean(a.hsr), duration: mean(a.dur),
     cod: mean(a.cod), coo: mean(a.coo), exertions: mean(a.ex), mechLoad: mean(a.mech),
   }));
   return NextResponse.json({ isKinexon: true, players: out });

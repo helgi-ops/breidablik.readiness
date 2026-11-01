@@ -26,7 +26,7 @@ export type WeekSetupPdfDay = {
   idea?: { focus: string; band: string | null; bandColor: string | null; durationMin: number | null; srpe: number | null; pitch: Array<{ text: string; cite: string }> } | null;
   // Indoor teams (basketball / Kinexon) have no football day-idea — show the planned load
   // for the day instead: a band + the team's expected Player Load from the MD-day taper.
-  dayLoad?: { band: string | null; bandColor: string | null; pl: number | null } | null;
+  dayLoad?: { band: string | null; bandColor: string | null; pl: number | null; durationMin: number | null } | null;
   strength?: string | null;     // the day's strength-session title (indoor teams)
 };
 
@@ -188,6 +188,7 @@ function WeekDoc({ payload, lang }: { payload: WeekSetupPdfPayload; lang: Lang }
                   {d.kind === "train" && !d.idea && d.dayLoad && (
                     <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 4 }}>
                       {d.dayLoad.band ? <Chip text={d.dayLoad.band} tone={toneOfHex(d.dayLoad.bandColor)} /> : null}
+                      {d.dayLoad.durationMin != null && <Text style={[fh(600), { fontSize: 8.5 }]}>{`~${d.dayLoad.durationMin} ${t.min}`}</Text>}
                       {d.dayLoad.pl != null && <Text style={[fh(600), { fontSize: 8.5 }]}>{`${t.pl} ~${nf(d.dayLoad.pl)}`}</Text>}
                       {d.strength ? <Text style={[fb(400), { fontSize: 8, color: C.mute }]}>{tx(d.strength)}</Text> : null}
                     </View>

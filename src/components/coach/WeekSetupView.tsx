@@ -1453,7 +1453,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           pitch: io.pitch.map((p) => ({ text: `${isIS ? p.form.is : p.form.en} · ${isIS ? p.area.is : p.area.en} · ${isIS ? p.bout.is : p.bout.en}`, cite: p.cite })),
         };
       }
-      return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "train" as const, intent: intentLabelOf(intent), dose, stripe, idea, strength: isBasketball ? (bbStrengthTitles[i] ?? null) : null, dayLoad: null as { band: string | null; bandColor: string | null; pl: number | null } | null };
+      return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "train" as const, intent: intentLabelOf(intent), dose, stripe, idea, strength: isBasketball ? (bbStrengthTitles[i] ?? null) : null, dayLoad: null as { band: string | null; bandColor: string | null; pl: number | null; durationMin: number | null } | null };
     });
 
     const phaseDef = SEASON_PHASES.find((p) => p.id === seasonPhase);
@@ -1544,28 +1544,11 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
             cod: null as number | null, coo: null as number | null, exertions: null as number | null, mechLoad: null as number | null,
           };
         }).filter((p) => p.pl != null || p.weeklyPl != null);
-        // Indoor teams (basketball / Kinexon) have no football day-idea, so give each
-        // training day a planned load on the PDF card: a band + the team's expected Player
-        // Load from that MD-day's taper (× the squad per-session baseline). Football keeps
-        // its own idea; this only fills the otherwise-bare indoor day cards.
-        if (isBasketball && mapped.length) {
-          const plVals = mapped.map((p) => p.pl).filter((x): x is number => x != null);
-          const teamSessionPl = plVals.length ? plVals.reduce((a, b) => a + b, 0) / plVals.length : null;
-          trainCols.forEach((c, j) => {
-            const r = dayRatios[j];
-            if (r <= 0) return;
-            const bandKey: "high" | "moderate" | "low" = r >= 1.05 ? "high" : r <= 0.9 ? "low" : "moderate";
-            (c.d as { dayLoad: { band: string | null; bandColor: string | null; pl: number | null } | null }).dayLoad = {
-              band: isIS ? LOAD_BAND_META[bandKey].label.is : LOAD_BAND_META[bandKey].label.en,
-              bandColor: LOAD_BAND_META[bandKey].color,
-              pl: teamSessionPl != null ? Math.round(teamSessionPl * r) : null,
-            };
-          });
-        }
         if (mapped.length) {
           // Kinexon (indoor LPS) → merge in its own distinctive variables (Changes of
           // Orientation, Exertions, Mechanical Load), read server-side from raw_payload_json.
           let isKinexon = false;
+          let teamDuration: number | null = null; // team avg Kinexon session minutes
           let kinexonMd: { rows: Array<{ label: string; perDay: Array<number | null>; total: number | null }> } | null = null;
           try {
             const kres = await fetch(`/api/coach/week-plan/kinexon-player-load`, { headers: { Authorization: `Bearer ${token}` } });
@@ -1573,11 +1556,13 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
               const kj = await kres.json();
               if (kj?.isKinexon && Array.isArray(kj.players)) {
                 isKinexon = true;
-                const kByName = new Map<string, { cod: number | null; coo: number | null; exertions: number | null; mechLoad: number | null }>(
-                  (kj.players as Array<{ name: string; cod: number | null; coo: number | null; exertions: number | null; mechLoad: number | null }>).map((p) => [p.name, p])
-                );
+                const kPlayers = kj.players as Array<{ name: string; cod: number | null; coo: number | null; exertions: number | null; mechLoad: number | null; duration: number | null }>;
+                const kByName = new Map(kPlayers.map((p) => [p.name, p]));
                 // Kinexon variables are per-session means — scale to weekly like the others.
                 for (const p of mapped) { const k = kByName.get(p.name); if (k) { p.cod = wk(k.cod); p.coo = wk(k.coo); p.exertions = wk(k.exertions); p.mechLoad = wk(k.mechLoad); } }
+                // Team average session duration (per-session minutes) — for the day-card length.
+                const durVals = kPlayers.map((p) => p.duration).filter((x): x is number => x != null && x > 0);
+                teamDuration = durVals.length ? durVals.reduce((a, b) => a + b, 0) / durVals.length : null;
                 // Team-level breakdown of each Kinexon variable across the MD-days: the squad
                 // weekly total spread by the same per-MD taper as the per-player table above.
                 const shares = dayRatios.map((r) => (weekMult > 0 ? r / weekMult : 0));
@@ -1600,6 +1585,30 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
               }
             }
           } catch { /* best-effort — fall back to the generic GPS columns */ }
+          // Indoor teams (basketball / Kinexon) have no football day-idea, so give each
+          // training day a planned load on the PDF card: a band + the team's expected Player
+          // Load from that MD-day's taper, and the session length (real Kinexon session
+          // minutes, band-adjusted; else a band-typical default). Football keeps its own idea.
+          if (isBasketball) {
+            const plVals = mapped.map((p) => p.pl).filter((x): x is number => x != null);
+            const teamSessionPl = plVals.length ? plVals.reduce((a, b) => a + b, 0) / plVals.length : null;
+            const durFor = (band: "high" | "moderate" | "low"): number | null => {
+              const factor = band === "high" ? 1.1 : band === "low" ? 0.82 : 1;
+              if (teamDuration != null) return Math.round(teamDuration * factor);
+              return band === "high" ? 85 : band === "low" ? 55 : 72; // band-typical fallback
+            };
+            trainCols.forEach((c, j) => {
+              const r = dayRatios[j];
+              if (r <= 0) return;
+              const bandKey: "high" | "moderate" | "low" = r >= 1.05 ? "high" : r <= 0.9 ? "low" : "moderate";
+              (c.d as { dayLoad: { band: string | null; bandColor: string | null; pl: number | null; durationMin: number | null } | null }).dayLoad = {
+                band: isIS ? LOAD_BAND_META[bandKey].label.is : LOAD_BAND_META[bandKey].label.en,
+                bandColor: LOAD_BAND_META[bandKey].color,
+                pl: teamSessionPl != null ? Math.round(teamSessionPl * r) : null,
+                durationMin: durFor(bandKey),
+              };
+            });
+          }
           const hasGps = mapped.some((p) => p.distance != null || p.hsr != null || p.accel != null || p.decel != null || p.coo != null);
           playerLoad = { players: mapped, trainDays, hasGps, isKinexon, kinexonMd };
         }
