@@ -240,6 +240,7 @@ export default function ImaIntelligencePage() {
   // indoor-IMU team has no Catapult strides/CoD, so the whole page swaps to the Titan variant.
   const [teamId, setTeamId] = React.useState<string | null>(null);
   const [isTitan, setIsTitan] = React.useState(false);
+  const [isKinexon, setIsKinexon] = React.useState(false);
   React.useEffect(() => {
     let alive = true;
     (async () => {
@@ -254,7 +255,8 @@ export default function ImaIntelligencePage() {
         setTeamId(tid);
         if (tid) {
           const { data: team } = await sb.from("teams").select("gps_provider").eq("id", tid).maybeSingle();
-          if (alive) setIsTitan(String((team as { gps_provider?: string } | null)?.gps_provider ?? "") === "titan");
+          const provider = String((team as { gps_provider?: string } | null)?.gps_provider ?? "");
+          if (alive) { setIsTitan(provider === "titan"); setIsKinexon(provider === "kinexon"); }
         }
       } catch { /* best-effort — the day profile still renders without it */ }
     })();
@@ -263,8 +265,9 @@ export default function ImaIntelligencePage() {
 
   React.useEffect(() => {
     let alive = true;
-    // Titan teams render the Titan variant below — skip the Catapult day-profile fetch entirely.
-    if (isTitan) { setLoading(false); setError(null); return; }
+    // Titan (own variant) and Kinexon (no IMA Free Running / directional CoD) skip
+    // the Catapult day-profile fetch entirely.
+    if (isTitan || isKinexon) { setLoading(false); setError(null); return; }
     setLoading(true);
     setError(null);
     (async () => {
@@ -292,7 +295,7 @@ export default function ImaIntelligencePage() {
       }
     })();
     return () => { alive = false; };
-  }, [date, lang, isTitan]);
+  }, [date, lang, isTitan, isKinexon]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
@@ -359,17 +362,36 @@ export default function ImaIntelligencePage() {
       {/* Titan indoor-IMU variant — replaces the Catapult stride/CoD read entirely. */}
       {isTitan && <TitanMovementIntelligence teamId={teamId} date={date} lang={lang} />}
 
-      {!isTitan && loading && (
+      {/* Kinexon reports accel/decel/CoD as totals (shown in the Weekly IMA Load
+          above), but not the per-stride IMA Free Running bands or directional/
+          intensity-tier CoD this page's session-shape, sprint-stride and L/R
+          asymmetry reads need — so those Catapult-specific sections are replaced
+          with an honest pointer to where Kinexon's movement data lives. */}
+      {isKinexon && (
+        <div className="mb-6 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+          <div className="font-semibold">{lang === "IS" ? "Kinexon — hreyfiálag er í Weekly IMA Load að ofan" : "Kinexon — movement load is in the Weekly IMA Load above"}</div>
+          <p className="mt-1 text-[13px] leading-relaxed">
+            {lang === "IS"
+              ? "Kinexon skráir hröðun/hægðun/stefnubreytingar sem heildartölur (sýnt að ofan), en ekki per-skref IMA Free Running böndin eða stefnu-/þrep-skipta CoD sem mynstur-, sprett-skref- og L/R-ósamhverfu-lestrar þessarar síðu þurfa. Fyrir fullt Kinexon hreyfiálag sjáðu "
+              : "Kinexon records accel/decel/changes-of-direction as totals (shown above), but not the per-stride IMA Free Running bands or the directional / intensity-tier CoD that this page's session-shape, sprint-stride and L/R-asymmetry reads need. For Kinexon's full movement load see "}
+            <a href="/coach/load-intelligence?tab=gps" className="font-semibold underline">{lang === "IS" ? "Full Kinexon metrics" : "Full Kinexon metrics"}</a>
+            {lang === "IS" ? " og " : " and "}
+            <a href="/coach/decel-intelligence" className="font-semibold underline">{lang === "IS" ? "Deceleration Intelligence" : "Deceleration Intelligence"}</a>.
+          </p>
+        </div>
+      )}
+
+      {!isTitan && !isKinexon && loading && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">
           {t("loading", lang)}
         </div>
       )}
 
-      {!isTitan && error && !loading && (
+      {!isTitan && !isKinexon && error && !loading && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</div>
       )}
 
-      {!isTitan && !loading && !error && profile && (
+      {!isTitan && !isKinexon && !loading && !error && profile && (
         <>
           {(() => {
             const v = computeImaVerdict(profile);
