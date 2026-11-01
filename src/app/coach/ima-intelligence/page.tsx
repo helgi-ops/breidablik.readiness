@@ -357,11 +357,13 @@ export default function ImaIntelligencePage() {
             teamId={teamId}
             lang={lang}
             date={date}
-            group="ima"
+            // Kinexon: let the API auto-select the Kinexon load set (real variable
+            // names) instead of forcing the Catapult IMA driver set.
+            group={isKinexon ? undefined : "ima"}
             isKinexon={isKinexon}
             title={isKinexon ? (lang === "IS" ? "Vikulegt hreyfiálag" : "Weekly movement load") : (lang === "IS" ? "Vikulegt IMA-álag" : "Weekly IMA Load")}
             subtitle={isKinexon
-              ? (lang === "IS" ? "Uppsafnað hreyfiálag vikunnar (hröðun/hægðun/stefnubreytingar) vs dæmigert" : "Cumulative movement load this week (accel/decel/CoD) vs typical")
+              ? (lang === "IS" ? "Uppsafnað innidyra-álag vikunnar (Kinexon-breytur) vs dæmigert" : "Cumulative indoor load this week (Kinexon variables) vs typical")
               : (lang === "IS" ? "Uppsafnað IMA (driver) álag vikunnar vs dæmigert" : "Cumulative IMA (driver) load this week vs typical")}
           />
         </div>
