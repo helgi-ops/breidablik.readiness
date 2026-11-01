@@ -54,6 +54,9 @@ export type WeekSetupPdfPayload = {
     trainDays: Array<{ label: string; md: string | null }>; // the training-day columns for the detailed grid
     hasGps: boolean;                             // any GPS/IMA metric present (else overview shows PL only)
     isKinexon?: boolean;                         // Kinexon team → show its own variables (CoO / Exert / Mech)
+    // Kinexon team → a compact team-level breakdown of each Kinexon variable across the
+    // MD-days (rows = variables, cols = the training-day grid above). Descriptive.
+    kinexonMd?: { rows: Array<{ label: string; perDay: Array<number | null>; total: number | null }> } | null;
   } | null;
 };
 
@@ -74,6 +77,7 @@ const L = {
     legForce: "Force / mechanical", legVel: "Velocity / speed", legAct: "Activation / polish", legRec: "Recovery", legMatchOff: "Match / off",
     plWeekly: "Per-player weekly load", plWeeklyLead: "Weekly totals, individualised from each player's own recent session load (the main GPS + IMA variables) across the week's training days. Descriptive — a feed that lacks a metric shows \"-\".",
     plDetail: "Detailed load — per MD-day", plDetailLead: "Each training day = the player's session baseline scaled by that day's planned load — the week's MD-day taper (MD-1 the lightest primer). Descriptive — off/match days omitted; the row totals the week.",
+    plKxMd: "Kinexon variables — per MD-day", plKxMdLead: "Team weekly total of each Kinexon variable, spread across the MD-days by the same taper. Descriptive.", metricCol: "Variable",
     player: "Player", role: "Role", wk: "Week PL", dist: "Dist", hsr: "HSR", acc: "Acc", dec: "Dec", cod: "CoD", coo: "CoO", exert: "Exert", mech: "Mech", conf2: "conf", total: "Total", starter: "starter", rot: "rotation", lowMin: "low-min",
     note: "Descriptive planning - a starting point per the day's focus, never a norm to obey, and never the readiness colour.",
     foot: "Descriptive planning — the planned load (low/moderate/high), duration and on-pitch examples are a starting point per the day's focus, never a norm to obey, and never the readiness colour. planSessionLoad (Buchheit 2024) · small-sided games Hill-Haas 2011 · Lacome 2018 · López-Fernández 2019 · Foster (sRPE)." },
@@ -84,6 +88,7 @@ const L = {
     legForce: "Kraftur / vélrænt", legVel: "Hraði", legAct: "Virkjun / fínpússun", legRec: "Endurheimt", legMatchOff: "Leikur / frí",
     plWeekly: "Vikulegt álag per leikmann", plWeeklyLead: "Vikusamtölur, einstaklingsmiðaðar frá nýlegu æfingaálagi hvers leikmanns (helstu GPS + IMA breyturnar) yfir æfingadaga vikunnar. Lýsandi — mæling sem gögnin vantar sýnir \"-\".",
     plDetail: "Ítarlegt álag — eftir MD-degi", plDetailLead: "Hver æfingadagur = grunnlína leikmanns margfölduð með áætluðu álagi dagsins — taper vikunnar (MD-1 léttasti undirbúningsdagur). Lýsandi — frí/leikdagar sleppt; röðin telur vikuna.",
+    plKxMd: "Kinexon breytur — eftir MD-degi", plKxMdLead: "Vikusamtala liðsins fyrir hverja Kinexon breytu, dreift á MD-dagana með sama taper. Lýsandi.", metricCol: "Breyta",
     player: "Leikmaður", role: "Hlutverk", wk: "Viku PL", dist: "Vegal.", hsr: "HSR", acc: "Hröð.", dec: "Heml.", cod: "Stefnubr.", coo: "Snún.", exert: "Átök", mech: "Vélr.", conf2: "vissa", total: "Alls", starter: "byrjun", rot: "skipt", lowMin: "lág-mín",
     note: "Lýsandi áætlun - upphafspunktur eftir áherslu dagsins, aldrei viðmið til að hlýða, og aldrei readiness-liturinn.",
     foot: "Lýsandi áætlun — áætlað álag (lágt/miðlungs/hátt), lengd og vallar-dæmi eru upphafspunktur eftir áherslu dagsins, aldrei viðmið til að hlýða, og aldrei readiness-liturinn. planSessionLoad (Buchheit 2024) · fámennir leikir Hill-Haas 2011 · Lacome 2018 · López-Fernández 2019 · Foster (sRPE)." },
@@ -262,6 +267,28 @@ function WeekDoc({ payload, lang }: { payload: WeekSetupPdfPayload; lang: Lang }
                       tx(p.name),
                       ...p.perDay.map((v) => (v == null ? "-" : nf(v))),
                       p.weeklyPl == null ? "-" : nf(p.weeklyPl),
+                    ])}
+                  />
+                </Section>
+              )}
+
+              {/* Kinexon variables by MD-day — compact team-level breakdown of each
+                  Kinexon variable across the same MD-day grid. */}
+              {pl.isKinexon && pl.kinexonMd && pl.kinexonMd.rows.length > 0 && pl.trainDays.length > 0 && (
+                <Section title={t.plKxMd}>
+                  <Text style={[fb(400), { fontSize: 8, color: C.mute, marginBottom: 5, lineHeight: 1.35 }]}>{tx(t.plKxMdLead)}</Text>
+                  <Table
+                    size={7.75}
+                    dense
+                    cols={[
+                      { label: t.metricCol, flex: 1 },
+                      ...pl.trainDays.map((d) => ({ label: d.md ?? d.label, width: 42, align: "right" as const })),
+                      { label: t.total, width: 46, align: "right" as const, strong: true },
+                    ]}
+                    rows={pl.kinexonMd.rows.map((r) => [
+                      tx(r.label),
+                      ...r.perDay.map((v) => (v == null ? "-" : nf(v))),
+                      r.total == null ? "-" : nf(r.total),
                     ])}
                   />
                 </Section>

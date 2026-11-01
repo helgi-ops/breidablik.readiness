@@ -1548,6 +1548,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           // Kinexon (indoor LPS) → merge in its own distinctive variables (Changes of
           // Orientation, Exertions, Mechanical Load), read server-side from raw_payload_json.
           let isKinexon = false;
+          let kinexonMd: { rows: Array<{ label: string; perDay: Array<number | null>; total: number | null }> } | null = null;
           try {
             const kres = await fetch(`/api/coach/week-plan/kinexon-player-load`, { headers: { Authorization: `Bearer ${token}` } });
             if (kres.ok) {
@@ -1559,11 +1560,30 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
                 );
                 // Kinexon variables are per-session means — scale to weekly like the others.
                 for (const p of mapped) { const k = kByName.get(p.name); if (k) { p.cod = wk(k.cod); p.coo = wk(k.coo); p.exertions = wk(k.exertions); p.mechLoad = wk(k.mechLoad); } }
+                // Team-level breakdown of each Kinexon variable across the MD-days: the squad
+                // weekly total spread by the same per-MD taper as the per-player table above.
+                const shares = dayRatios.map((r) => (weekMult > 0 ? r / weekMult : 0));
+                const teamSum = (sel: (p: (typeof mapped)[number]) => number | null): number | null => {
+                  const vals = mapped.map(sel).filter((x): x is number => x != null);
+                  return vals.length ? vals.reduce((a, b) => a + b, 0) : null;
+                };
+                const varDefs: Array<{ label: string; v: number | null }> = [
+                  { label: "Player Load", v: teamSum((p) => p.weeklyPl) },
+                  { label: isIS ? "Stefnubreytingar" : "Changes of direction", v: teamSum((p) => p.cod) },
+                  { label: isIS ? "Stefnusnúningar" : "Changes of orientation", v: teamSum((p) => p.coo) },
+                  { label: isIS ? "Átök" : "Exertions", v: teamSum((p) => p.exertions) },
+                  { label: isIS ? "Vélrænt álag" : "Mechanical Load", v: teamSum((p) => p.mechLoad) },
+                ];
+                const rows = varDefs.filter((d) => d.v != null).map((d) => ({
+                  label: d.label, total: d.v,
+                  perDay: shares.map((s) => (d.v == null ? null : Math.round(d.v * s))),
+                }));
+                if (rows.length) kinexonMd = { rows };
               }
             }
           } catch { /* best-effort — fall back to the generic GPS columns */ }
           const hasGps = mapped.some((p) => p.distance != null || p.hsr != null || p.accel != null || p.decel != null || p.coo != null);
-          playerLoad = { players: mapped, trainDays, hasGps, isKinexon };
+          playerLoad = { players: mapped, trainDays, hasGps, isKinexon, kinexonMd };
         }
       }
     } catch { /* best-effort — PDF stays team-level */ }
