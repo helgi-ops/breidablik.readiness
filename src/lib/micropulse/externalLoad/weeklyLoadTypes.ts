@@ -173,8 +173,8 @@ export const WEEKLY_LOAD_LABELS: Record<WeeklyLoadMetricKey, { en: string; is: s
   // Outdoor
   totalDistance:    { en: "Total Distance",  is: "Heildarvegalengd",  unit: "m" },
   totalPlayerLoad:  { en: "Player Load",     is: "Player Load",       unit: "" },
-  velocityBand5:    { en: "Vel Band 5",      is: "Hraðaband 5",       unit: "m" },
-  velocityBand6:    { en: "Vel Band 6",      is: "Hraðaband 6",       unit: "m" },
+  velocityBand5:    { en: "HSR",             is: "Háhraði",           unit: "m" },
+  velocityBand6:    { en: "Sprint",          is: "Sprettur",          unit: "m" },
   accelB23:         { en: "Accel B2-3",      is: "Hröðun B2-3",       unit: "#" },
   decelB23:         { en: "Decel B2-3",      is: "Hægðun B2-3",       unit: "#" },
   // Indoor (FMP / IMA)
