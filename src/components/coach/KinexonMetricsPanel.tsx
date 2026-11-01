@@ -88,6 +88,42 @@ export default function KinexonMetricsPanel({
   if (groups.length === 0) return null;
 
   const fmt = (n: number | null, digits: number) => (n == null ? "—" : n.toFixed(digits));
+  const label = (m: KinexonMetric) => (lang === "EN" ? m.labelEN : m.labelIS);
+
+  // ── Layered read (manifesto): a one-line verdict + 2-3 plain facts before the
+  // raw family tables, which go behind "Show details". Never jump 0 → 2. ──
+  const volRows = groups.flatMap((grp) => grp.rows).filter((r) => r.m.kind === "volume" && r.snap.acwr != null);
+  const spikes = volRows.filter((r) => (r.snap.acwr as number) > 1.3).sort((a, b) => (b.snap.acwr as number) - (a.snap.acwr as number));
+  const unders = volRows.filter((r) => (r.snap.acwr as number) < 0.8).sort((a, b) => (a.snap.acwr as number) - (b.snap.acwr as number));
+  const plRow = groups.flatMap((grp) => grp.rows).find((r) => r.m.key === "player_load");
+  const plPct = plRow && plRow.snap.today != null && plRow.snap.c28 != null && plRow.snap.c28 > 0
+    ? Math.round((plRow.snap.today / plRow.snap.c28) * 100)
+    : null;
+  const nameList = (rs: typeof spikes) => rs.slice(0, 3).map((r) => `${label(r.m)} (ACWR ${(r.snap.acwr as number).toFixed(2)})`).join(", ");
+
+  const verdict = spikes.length > 0
+    ? (lang === "EN"
+        ? `${spikes.length} metric${spikes.length === 1 ? "" : "s"} above the usual range: ${nameList(spikes)}.`
+        : `${spikes.length} mælikvar${spikes.length === 1 ? "ði" : "ðar"} yfir vanalegu bili: ${nameList(spikes)}.`)
+    : (lang === "EN"
+        ? "Indoor load is balanced — every tracked family sits within its usual range."
+        : "Innra álag í jafnvægi — allar fjölskyldur sitja innan vanalegs bils.");
+  const verdictTone = spikes.length > 0 ? "text-amber-700" : "text-emerald-700";
+
+  const facts: string[] = [];
+  if (plRow && plRow.snap.today != null) {
+    facts.push(lang === "EN"
+      ? `Player Load ${fmt(plRow.snap.today, 1)}${plPct != null ? ` — ${plPct}% of the 28-day norm` : ""}.`
+      : `Player Load ${fmt(plRow.snap.today, 1)}${plPct != null ? ` — ${plPct}% af 28-daga viðmiði` : ""}.`);
+  }
+  facts.push(lang === "EN"
+    ? `${groups.length} metric families tracked${unders.length ? `, ${unders.length} below the usual range` : ""}.`
+    : `${groups.length} mælikvarða-fjölskyldur fylgst með${unders.length ? `, ${unders.length} undir vanalegu bili` : ""}.`);
+  if (spikes.length > 0) {
+    facts.push(lang === "EN"
+      ? `Biggest mover: ${label(spikes[0].m)} at ${(spikes[0].snap.acwr as number).toFixed(2)}× its 28-day load.`
+      : `Mesta breytingin: ${label(spikes[0].m)} í ${(spikes[0].snap.acwr as number).toFixed(2)}× af 28-daga álagi.`);
+  }
 
   return (
     <Card>
@@ -97,11 +133,26 @@ export default function KinexonMetricsPanel({
         </CardTitle>
         <CardDescription className="mt-1 text-sm text-slate-500">
           {lang === "EN"
-            ? "Everything Kinexon captures indoors — squad average today vs the 7- and 28-day baselines. ACWR is shown for accumulation metrics only; empty families are hidden."
-            : "Allt sem Kinexon mælir innandyra — meðaltal sveitar í dag á móti 7- og 28-daga grunnlínum. ACWR aðeins fyrir uppsöfnunarmælikvarða; tómar fjölskyldur faldar."}
+            ? "Everything Kinexon captures indoors — squad average today vs the 7- and 28-day baselines."
+            : "Allt sem Kinexon mælir innandyra — meðaltal sveitar í dag á móti 7- og 28-daga grunnlínum."}
         </CardDescription>
       </CardHeader>
-      <CardContent className="pt-0 space-y-5">
+      <CardContent className="pt-0 space-y-4">
+        {/* Layer 0 — verdict, first and boldest */}
+        <p className={`text-sm font-semibold ${verdictTone}`}>{verdict}</p>
+        {/* Layer 1 — 2-3 plain facts, no click */}
+        <ul className="space-y-1 text-sm text-slate-600">
+          {facts.map((f, i) => <li key={i}>· {f}</li>)}
+        </ul>
+        {/* Layer 2 — raw family tables behind a toggle */}
+        <details className="group rounded-lg border border-slate-200">
+          <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-slate-700">
+            {lang === "EN" ? "Show details" : "Sýna smáatriði"}
+            <span className="ml-1.5 text-xs font-normal text-slate-400">
+              {lang === "EN" ? "(every family · 7d/28d/ACWR)" : "(allar fjölskyldur · 7d/28d/ACWR)"}
+            </span>
+          </summary>
+          <div className="space-y-5 border-t border-slate-100 p-3">
         {groups.map(({ g, rows }) => (
           <div key={g.key}>
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -138,11 +189,13 @@ export default function KinexonMetricsPanel({
             </div>
           </div>
         ))}
-        <p className="text-[11px] text-slate-400">
-          {lang === "EN"
-            ? "Descriptive external load (Kinexon indoor LPS) — never a readiness verdict. ACWR = 7-day ÷ 28-day squad mean (Gabbett 2016). Every export column is preserved; per-minute and per-zone variants live in the raw record."
-            : "Lýsandi ytra álag (Kinexon innistaðsetning) — aldrei readiness-dómur. ACWR = 7-daga ÷ 28-daga meðaltal sveitar (Gabbett 2016). Allir dálkar útflutnings varðveittir; á-mínútu og svæða-afbrigði eru í hráu færslunni."}
-        </p>
+            <p className="text-[11px] text-slate-400">
+              {lang === "EN"
+                ? "Descriptive external load (Kinexon indoor LPS) — never a readiness verdict. ACWR = 7-day ÷ 28-day squad mean (Gabbett 2016). Every export column is preserved; per-minute and per-zone variants live in the raw record."
+                : "Lýsandi ytra álag (Kinexon innistaðsetning) — aldrei readiness-dómur. ACWR = 7-daga ÷ 28-daga meðaltal sveitar (Gabbett 2016). Allir dálkar útflutnings varðveittir; á-mínútu og svæða-afbrigði eru í hráu færslunni."}
+            </p>
+          </div>
+        </details>
       </CardContent>
     </Card>
   );

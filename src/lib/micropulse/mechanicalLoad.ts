@@ -168,11 +168,16 @@ export function bandFromMLI(mli: number | null | undefined): MechanicalLoadBand 
   return "LOW";
 }
 
+// Residual = the 3-day weighted-MEAN MLI (0-100, same scale as a single day's
+// MLI), so the bands mirror the MLI bands: a residual this high means load at
+// that level has been SUSTAINED across the window, not recovered between
+// sessions. (Previously computeResidual returned a weighted SUM ~1.9× the mean,
+// so these bands fired for any consistently-training squad — see computeResidual.)
 export function bandFromResidual(residual: number | null | undefined): ResidualMechanicalLoadBand | null {
   if (!isFiniteNumber(residual)) return null;
-  if (residual >= 135) return "HIGH";
-  if (residual >= 110) return "CAUTION";
-  if (residual >= 70) return "ELEVATED";
+  if (residual >= 85) return "HIGH";       // sustained EXTREME daily load
+  if (residual >= 70) return "CAUTION";    // sustained VERY_HIGH
+  if (residual >= 55) return "ELEVATED";   // sustained HIGH
   return "NORMAL";
 }
 
@@ -205,13 +210,14 @@ function computeConfidence(
 }
 
 function computeResidual(currentMli: number | null, yesterdayMli: number | null, twoDaysAgoMli: number | null): number | null {
-  const items = [
+  // Weighted MEAN (today 50% · yesterday 30% · day-before 20%, as the UI
+  // documents) — a 3-day recovery read on the 0-100 MLI scale. weightedMean
+  // normalises by the present weights, so a missing day doesn't deflate it.
+  return weightedMean([
     { value: currentMli, weight: 1 },
     { value: yesterdayMli, weight: 0.6 },
     { value: twoDaysAgoMli, weight: 0.3 },
-  ].filter((item): item is { value: number; weight: number } => isFiniteNumber(item.value));
-  if (!items.length) return null;
-  return roundNumber(items.reduce((sum, item) => sum + item.value * item.weight, 0), 1);
+  ]);
 }
 
 export function computeMechanicalLoad(

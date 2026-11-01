@@ -179,11 +179,14 @@ function metabolicToScore(score: number | null | undefined): number | null {
  *   110–134 → CAUTION
  *   ≥ 135 → HIGH
  */
+// Residual MLI is a 3-day weighted-MEAN MLI (0-100 scale) — bands mirror the MLI
+// bands (sustained HIGH / VERY_HIGH / EXTREME). Kept in sync with bandFromResidual
+// in mechanicalLoad.ts.
 function residualMliBand(residual: number | null | undefined): "NORMAL" | "ELEVATED" | "CAUTION" | "HIGH" | null {
   if (residual == null || !Number.isFinite(residual)) return null;
-  if (residual < 70) return "NORMAL";
-  if (residual < 110) return "ELEVATED";
-  if (residual < 135) return "CAUTION";
+  if (residual < 55) return "NORMAL";
+  if (residual < 70) return "ELEVATED";
+  if (residual < 85) return "CAUTION";
   return "HIGH";
 }
 

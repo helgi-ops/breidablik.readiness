@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeMechanicalLoad, type MechanicalLoadSourceRow } from "../mechanicalLoad";
+import { computeMechanicalLoad, bandFromResidual, type MechanicalLoadSourceRow } from "../mechanicalLoad";
 
 /**
  * Measured-beats-derived promotion: when a provider reports a direct session
@@ -42,6 +42,30 @@ describe("computeMechanicalLoad — measured mechanical load (Kinexon)", () => {
   it("tracks the measured ratio (ratio 1.5 → 75)", () => {
     const rows = [...baseline(1000), day(REF, { mechanical_load: 1500 })];
     expect(computeMechanicalLoad(rows, REF)!.mli).toBe(75);
+  });
+
+  it("residual is a 3-day weighted MEAN (not a sum) so a steady squad stays NORMAL", () => {
+    // Steady MLI 49 across the window: measured path (mechanical_load constant).
+    const rows = [
+      ...baseline(1000),
+      day("2026-10-18", { mechanical_load: 1000 }),
+      day("2026-10-19", { mechanical_load: 1000 }),
+      day(REF, { mechanical_load: 1000 }),
+    ];
+    const out = computeMechanicalLoad(rows, REF, new Map([
+      ["2026-10-18", 49], ["2026-10-19", 49],
+    ]));
+    // residual = weighted mean of (today 50, yest 49, 2dago 49) ≈ 50 → NORMAL,
+    // not ~95 (the old weighted-sum bug that flagged every steady squad).
+    expect(out!.residualMli).toBeLessThan(55);
+    expect(out!.residualBand).toBe("NORMAL");
+  });
+
+  it("bandFromResidual mirrors the MLI bands on the 0-100 mean scale", () => {
+    expect(bandFromResidual(40)).toBe("NORMAL");
+    expect(bandFromResidual(60)).toBe("ELEVATED");
+    expect(bandFromResidual(75)).toBe("CAUTION");
+    expect(bandFromResidual(90)).toBe("HIGH");
   });
 
   it("falls back to the derived composite when no mechanical load is present", () => {
