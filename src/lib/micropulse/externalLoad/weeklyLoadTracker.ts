@@ -82,6 +82,12 @@ type RawRow = {
   ima_total: number | null;
   ima_accel: number | null;
   ima_decel: number | null;
+  // Kinexon (indoor LPS) reports accel/decel/CoD as plain counts, not Catapult
+  // IMA — fall back to these when the ima_* columns are null.
+  accelerations: number | null;
+  decelerations: number | null;
+  cod_events: number | null;
+  ima_cod: number | null;
   // CoD directional breakdown — the aggregate ima_cod column is NULL on our
   // tiers, so total CoD is the sum of these six directional/intensity buckets.
   ima_cod_left_high: number | null;
@@ -125,11 +131,17 @@ function extractMetric(row: RawRow, key: WeeklyLoadMetricKey): number | null {
     case "fmpDynamicHigh":    return row.fmp_dynamic_high_s;
     case "fmpDynamicMedium":  return row.fmp_dynamic_medium_s;
     case "fmpRunningHigh":    return row.fmp_running_high_s;
-    case "imaTotal":          return row.ima_total;
-    // IMA breakdown (driver)
-    case "imaAccel":          return row.ima_accel;
-    case "imaDecel":          return row.ima_decel;
-    case "imaCod":            return sumCod(row);
+    case "imaTotal": {
+      if (row.ima_total != null) return row.ima_total;
+      // Kinexon: synthesise a total movement-event count from its own counts.
+      const c = sumCod(row) ?? row.ima_cod ?? row.cod_events;
+      if (row.accelerations == null && row.decelerations == null && c == null) return null;
+      return (row.accelerations ?? 0) + (row.decelerations ?? 0) + (c ?? 0);
+    }
+    // IMA breakdown (driver) — Kinexon reports plain accel/decel/CoD counts.
+    case "imaAccel":          return row.ima_accel ?? row.accelerations;
+    case "imaDecel":          return row.ima_decel ?? row.decelerations;
+    case "imaCod":            return sumCod(row) ?? row.ima_cod ?? row.cod_events;
     case "imaStrideBand6":    return row.ima_fr_band6_stride_count;
     case "imaStrideBand7":    return row.ima_fr_band7_stride_count;
     case "imaStrideBand8":    return row.ima_fr_band8_stride_count;
@@ -157,6 +169,7 @@ const SELECT_COLS = [
   // Indoor (FMP + IMA)
   "fmp_dynamic_high_s", "fmp_dynamic_medium_s", "fmp_running_high_s",
   "ima_total", "ima_accel", "ima_decel",
+  "accelerations", "decelerations", "cod_events", "ima_cod",
   "ima_cod_left_high", "ima_cod_left_medium", "ima_cod_left_low",
   "ima_cod_right_high", "ima_cod_right_medium", "ima_cod_right_low",
   "ima_fr_band6_stride_count", "ima_fr_band7_stride_count", "ima_fr_band8_stride_count",
