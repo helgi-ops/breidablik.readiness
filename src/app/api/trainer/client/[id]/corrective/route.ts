@@ -20,10 +20,38 @@ import {
   generateCorrectiveProposal,
   sanitizeItems,
   sanitizeWeekdays,
+  CORRECTIVE_SLUG_TO_LIBRARY,
   type CorrectiveItem,
 } from "@/lib/trainer/correctiveFromInjury";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
+
+/** Fill a video on each corrective item from the club's own exercise_library,
+ *  reusing a curated demo clip (via the slug→library-name map) when the cited
+ *  library entry has none. Mutates the items in place; best-effort. */
+async function attachLibraryVideos(sb: SupabaseClient, items: CorrectiveItem[]) {
+  const names = new Set<string>();
+  for (const it of items) {
+    if (it.videoUrl || !it.slug) continue;
+    const lib = CORRECTIVE_SLUG_TO_LIBRARY[it.slug];
+    if (lib) names.add(lib);
+  }
+  if (names.size === 0) return;
+  const { data } = await sb
+    .from("exercise_library")
+    .select("name, video_url")
+    .in("name", [...names]);
+  const byName = new Map<string, string>();
+  for (const r of (data ?? []) as Array<{ name: string; video_url: string | null }>) {
+    if (r.video_url) byName.set(r.name, r.video_url);
+  }
+  for (const it of items) {
+    if (it.videoUrl || !it.slug) continue;
+    const url = byName.get(CORRECTIVE_SLUG_TO_LIBRARY[it.slug] ?? "");
+    if (url) it.videoUrl = url;
+  }
+}
 
 async function requireTrainerForClient(req: Request, clientId: string) {
   const auth = req.headers.get("authorization") || "";
@@ -107,6 +135,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   try {
     const proposal = await generateCorrectiveProposal({ apiKey, injuryText });
+    await attachLibraryVideos(a.sb, proposal.items); // reuse the club's curated videos
     return NextResponse.json({ ok: true, proposal });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "AI error";
@@ -125,8 +154,14 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
   const items = sanitizeItems(body.items);
-  const weekdays = sanitizeWeekdays(body.weekdays);
   if (items.length === 0) return NextResponse.json({ error: "Engar æfingar valdar." }, { status: 400 });
+  // Per-item days let the trainer put different exercises on different days. The
+  // prescription's weekdays = the union of every item's days; an item left with
+  // no days of its own falls back to the globally-selected days.
+  const sentWeekdays = sanitizeWeekdays(body.weekdays);
+  const union = new Set<number>(items.some((it) => !it.days || it.days.length === 0) ? sentWeekdays : []);
+  for (const it of items) for (const d of it.days ?? []) union.add(d);
+  const weekdays = [...union].sort((a, b) => a - b);
   if (weekdays.length === 0) return NextResponse.json({ error: "Veldu a.m.k. einn dag." }, { status: 400 });
   const durRaw = Number(body.durationMin);
   const durationMin = Number.isFinite(durRaw) && durRaw > 0 ? Math.min(180, Math.round(durRaw)) : null;

@@ -685,10 +685,16 @@ export async function GET(req: Request) {
       .eq("player_id", player.id)
       .maybeSingle();
     const row = corrRow as { structure?: { items?: unknown[] } | null; weekdays?: number[] | null; duration_min?: number | null; status?: string | null } | null;
-    const corrItems = Array.isArray(row?.structure?.items) ? row!.structure!.items! : [];
+    const corrItems = Array.isArray(row?.structure?.items) ? (row!.structure!.items! as Array<{ days?: number[] }>) : [];
     const corrWeekdays = Array.isArray(row?.weekdays) ? row!.weekdays! : [];
-    if (row && row.status === "active" && corrItems.length > 0 && corrWeekdays.includes(isoDow)) {
-      corrective = { title: "Corrective", duration_min: row.duration_min ?? null, items: corrItems };
+    if (row && row.status === "active" && corrItems.length > 0) {
+      // Per-item days: show only the exercises scheduled for today. An item with
+      // no days of its own falls back to the prescription's weekdays.
+      const todays = corrItems.filter((it) => {
+        const d = Array.isArray(it.days) && it.days.length ? it.days : null;
+        return d ? d.includes(isoDow) : corrWeekdays.includes(isoDow);
+      });
+      if (todays.length > 0) corrective = { title: "Corrective", duration_min: row.duration_min ?? null, items: todays };
     }
   }
 

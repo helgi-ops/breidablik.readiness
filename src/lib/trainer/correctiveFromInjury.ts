@@ -26,6 +26,7 @@ import {
 } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import {
   CORRECTIVE_BY_SLUG,
+  SEED_CORRECTIVE_EXERCISES,
   type CorrectiveExercise,
   type CorrectivePhase,
 } from "@/lib/micropulse/movementScreen/correctives/registry";
@@ -62,6 +63,68 @@ const TRACK_CORRECTIVE_SLUGS: Record<string, string[]> = {
 
 const PHASE_RANK: Record<string, number> = { inhibit: 0, lengthen: 1, activate: 2, integrate: 3 };
 
+/**
+ * Corrective-library slug → an `exercise_library` row name whose curated video
+ * demonstrates the same movement. Lets the corrective items reuse the club's
+ * OWN demo videos (kept in exercise_library) instead of sourcing new ones. The
+ * route looks the names up live, so a re-curated video flows through. Only
+ * confident matches are listed; the rest stay video-less (honest).
+ */
+export const CORRECTIVE_SLUG_TO_LIBRARY: Record<string, string> = {
+  copenhagen_adduction: "Copenhagen Adductor",
+  ball_squeeze_isometric: "Adductor Plate Squeeze",
+  spanish_squat_iso: "Spanish Squat",
+  glute_bridge: "Glute Bridge",
+  iso_glute_bridge_hold: "ISO Hip Extension (overcoming)",
+  barbell_hip_thrust: "Hip Thrust",
+  nordic_hamstring: "Nordic Hamstring Curl",
+  single_leg_rdl: "Single-Leg RDL",
+  pallof_press: "Pallof Press",
+  iso_wall_sit: "Wall Sit",
+  iso_single_leg_heel_raise_hold: "ISO Calf Raise Hold (Single-Leg)",
+  lateral_step_up: "Step-Up",
+  crossover_step_up: "Step-Up",
+  split_squat: "RFESS",
+  suitcase_carry: "Suitcase Carry",
+  pogo_hops: "Pogo Jump",
+  lateral_hurdle_hop: "Hurdle Hop",
+  goblet_squat_knee_tracking: "Goblet Squat",
+  goblet_squat_counterbalance: "Goblet Squat",
+  side_plank_hip_abduction: "Side Plank",
+};
+
+/** A light exercise entry for the manual-add autocomplete. */
+export type LibrarySearchItem = {
+  name: string;
+  nameIs?: string;
+  slug?: string;
+  dose?: string;
+  doseIs?: string;
+  cue?: string;
+  cueIs?: string;
+  citation?: string;
+  videoUrl?: string | null;
+  kind: "corrective" | "library";
+};
+
+/** Search the cited corrective library by name (EN/IS) for the autocomplete. */
+export function searchCorrectiveLibrary(q: string, limit = 8): LibrarySearchItem[] {
+  const n = q.trim().toLowerCase();
+  if (n.length < 2) return [];
+  const out: LibrarySearchItem[] = [];
+  for (const e of SEED_CORRECTIVE_EXERCISES) {
+    if (e.name.en.toLowerCase().includes(n) || e.name.is.toLowerCase().includes(n)) {
+      out.push({
+        name: e.name.en, nameIs: e.name.is, slug: e.slug,
+        dose: e.dose.en, doseIs: e.dose.is, cue: e.cue.en, cueIs: e.cue.is,
+        citation: e.citation, videoUrl: e.videoUrl ?? null, kind: "corrective",
+      });
+      if (out.length >= limit) break;
+    }
+  }
+  return out;
+}
+
 export type Side = "left" | "right" | "bilateral" | null;
 
 export type CorrectiveInjury = {
@@ -93,6 +156,10 @@ export type CorrectiveItem = {
   aiSuggested?: boolean;
   /** True = added by the trainer by hand (not from the library or AI). */
   manual?: boolean;
+  /** ISO weekdays (1=Mon..7=Sun) this exercise appears on. Empty/undefined =
+   *  every day the prescription runs (the prescription's `weekdays`). Lets the
+   *  trainer give different exercises on different days. */
+  days?: number[];
 };
 
 export type CorrectiveProposal = {
@@ -327,6 +394,7 @@ export function sanitizeItems(v: unknown): CorrectiveItem[] {
       videoUrl: str(it.videoUrl),
       aiSuggested: it.aiSuggested === true || undefined,
       manual: it.manual === true || undefined,
+      days: sanitizeWeekdays(it.days),
     });
     if (out.length >= 40) break; // sane cap
   }
