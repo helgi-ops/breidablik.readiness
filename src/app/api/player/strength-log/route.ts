@@ -70,13 +70,19 @@ export async function POST(req: Request) {
   const weight = numOrNull(body?.weight_kg);
   if (weight != null && (weight < 0 || weight > 700)) return NextResponse.json({ ok: false, error: "weight_kg out of range." }, { status: 400 });
   const reps = numOrNull(body?.reps);
+  // Optional manual VBT velocity (m/s) for this set.
+  const meanVel = numOrNull(body?.mean_velocity);
+  if (meanVel != null && (meanVel <= 0 || meanVel > 3)) return NextResponse.json({ ok: false, error: "mean_velocity must be 0–3 m/s." }, { status: 400 });
+  const peakVel = numOrNull(body?.peak_velocity);
+  if (peakVel != null && (peakVel <= 0 || peakVel > 5)) return NextResponse.json({ ok: false, error: "peak_velocity out of range." }, { status: 400 });
 
   const teamId = await getPlayerTeamId(sb, playerId);
   const { error } = await sb.from("player_strength_set_log").upsert({
     player_id: playerId, team_id: teamId, session_date: sessionDate,
     exercise_id: exerciseId, exercise_name: exerciseName, canonical_lift: canonicalLift(exerciseName),
     set_index: setIndex, weight_kg: weight, reps: reps != null ? Math.round(reps) : null,
-    rpe, rir: numOrNull(body?.rir), is_warmup: body?.is_warmup === true, source: "player",
+    rpe, rir: numOrNull(body?.rir), is_warmup: body?.is_warmup === true,
+    mean_velocity: meanVel, peak_velocity: peakVel, source: "player",
   }, { onConflict: "player_id,session_date,exercise_id,set_index" });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

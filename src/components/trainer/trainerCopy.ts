@@ -7,6 +7,7 @@ export const TRAINER_COPY = {
       invitations: "Boð",
       isometrics: "Ísómetrísk prótocol",
       lvProfile: "LV próf",
+      vbt: "VBT (hraði)",
       explosive: "Sprengikraftur 12v",
     },
     header: {
@@ -115,6 +116,7 @@ export const TRAINER_COPY = {
       invitations: "Invitations",
       isometrics: "Isometric Protocols",
       lvProfile: "LV Profile",
+      vbt: "VBT (velocity)",
       explosive: "Explosive Power 12w",
     },
     header: {

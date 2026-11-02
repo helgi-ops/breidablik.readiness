@@ -8,6 +8,7 @@ import PlanBuilder from "./PlanBuilder";
 import PlanAssigner from "./PlanAssigner";
 import IsometricProtocolLibrary from "./IsometricProtocolLibrary";
 import LvProfilePanel from "./LvProfilePanel";
+import VbtPanel from "./VbtPanel";
 import PtClientSummaryCard from "./PtClientSummaryCard";
 import LoadQuadrant from "@/components/player/LoadQuadrant";
 import VolumeLoadCard from "@/components/player/VolumeLoadCard";
@@ -108,7 +109,7 @@ interface PlanAssignment {
   status: string;
 }
 
-type TrainerTab = "clients" | "invitations" | "plans" | "isometrics" | "lvProfile";
+type TrainerTab = "clients" | "invitations" | "plans" | "isometrics" | "lvProfile" | "vbt";
 
 /* ── Component ───────────────────────────────────────── */
 
@@ -123,7 +124,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
   // /coach/custom-templates for the site owner. Having it as a tab in the
   // PT dashboard confused trainers (the tab implied it was a per-client
   // tool, but it's actually a library Helgi owns).
-  const visibleTabs: TrainerTab[] = ["clients", "invitations", "plans", "isometrics", "lvProfile"];
+  const visibleTabs: TrainerTab[] = ["clients", "invitations", "plans", "isometrics", "lvProfile", "vbt"];
 
   // Tab is URL-driven so the CoachSidebar can deep-link into a specific
   // TrainerDashboard tab via /coach?tab=lvProfile (etc). Defaults to
@@ -131,7 +132,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
   const [tab, setTab] = useState<TrainerTab>(() => {
     if (typeof window === "undefined") return "clients";
     const p = new URLSearchParams(window.location.search).get("tab");
-    const valid: TrainerTab[] = ["clients","invitations","plans","isometrics","lvProfile"];
+    const valid: TrainerTab[] = ["clients","invitations","plans","isometrics","lvProfile","vbt"];
     return (valid.includes(p as TrainerTab) ? (p as TrainerTab) : "clients");
   });
 
@@ -142,7 +143,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
     if (typeof window === "undefined") return;
     const sync = () => {
       const p = new URLSearchParams(window.location.search).get("tab");
-      const valid: TrainerTab[] = ["clients","invitations","plans","isometrics","lvProfile"];
+      const valid: TrainerTab[] = ["clients","invitations","plans","isometrics","lvProfile","vbt"];
       if (valid.includes(p as TrainerTab)) setTab(p as TrainerTab);
       else setTab("clients");
     };
@@ -1061,6 +1062,14 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
       {/* ── Load-Velocity Profile tab (ELITE add-on, per-client) ── */}
       {tab === "lvProfile" && (
         <LvProfilePanel
+          lang={lang === "EN" ? "EN" : "IS"}
+          clients={clients.map((c) => ({ id: c.id, name: c.name }))}
+        />
+      )}
+
+      {/* ── VBT (manual velocity) tab ── */}
+      {tab === "vbt" && (
+        <VbtPanel
           lang={lang === "EN" ? "EN" : "IS"}
           clients={clients.map((c) => ({ id: c.id, name: c.name }))}
         />

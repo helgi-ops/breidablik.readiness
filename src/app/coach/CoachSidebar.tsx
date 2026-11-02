@@ -218,6 +218,8 @@ const ptStrengthLinks: SidebarLink[] = [
   // sidebar deep-links into the dashboard with `?tab=lvProfile`. Same
   // pattern coach-side uses for dashTab navigation.
   { href: "/coach?tab=lvProfile",     label: { EN: "Load-Velocity Profile", IS: "Kraft-/hraðapróf" } },
+  // Manual VBT (velocity) — also a TrainerDashboard tab, `?tab=vbt`.
+  { href: "/coach?tab=vbt",           label: { EN: "VBT (velocity)",        IS: "VBT (hraði)" } },
 ];
 const ptAdminLinks: SidebarLink[] = [
   { href: "/coach?tab=invitations",  label: { EN: "Invitations",   IS: "Boð" } },
