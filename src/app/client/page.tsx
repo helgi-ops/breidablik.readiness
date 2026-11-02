@@ -349,7 +349,9 @@ export default function ClientTodayPage() {
               href="/client/log"
               className="flex min-h-12 items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground"
             >
-              {lang === "IS" ? "Byrja æfingu" : "Start session"}
+              {data.session_logged_today
+                ? (lang === "IS" ? "Halda áfram með æfingu" : "Continue session")
+                : (lang === "IS" ? "Byrja æfingu" : "Start session")}
             </Link>
           )}
 

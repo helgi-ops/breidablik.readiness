@@ -8,17 +8,48 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLang } from "@/lib/lang";
+import { supabase } from "@/lib/supabaseClient";
 import PtSessionLogForm from "@/components/player/PtSessionLogForm";
 import PtSportSessionForm from "@/components/player/PtSportSessionForm";
+import SessionRunner from "@/components/client/SessionRunner";
+import type { PlanRow } from "@/lib/client/sessionRunner";
 
 type Mode = "strength" | "sport";
+type Plan = { name: string; rows: PlanRow[] };
 
 export default function ClientLogPage() {
   const [lang] = useLang();
   const [mode, setMode] = useState<Mode>("strength");
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [checked, setChecked] = useState(false);
+  const [manual, setManual] = useState(false);
   const L = lang === "EN" ? "EN" : "IS";
+
+  // A session planned today opens the guided runner; otherwise the free form.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch("/api/client/today", { headers: { Authorization: `Bearer ${session?.access_token ?? ""}` } });
+        const json = await res.json();
+        const ex = json?.explosive as { rest_day?: boolean; is_match_day?: boolean; phase_name?: string; blocks?: Array<{ name: string; rows: PlanRow[] }> } | null;
+        const rows = (ex?.blocks ?? []).flatMap((b) => b.rows ?? []);
+        if (alive && ex && !ex.rest_day && !ex.is_match_day && rows.length > 0) {
+          setPlan({ name: ex.blocks?.[0]?.name ?? ex.phase_name ?? "", rows });
+        }
+      } catch { /* the free form still works */ }
+      if (alive) setChecked(true);
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  if (!checked) return <div className="text-sm text-slate-500">{L === "IS" ? "Hleð…" : "Loading…"}</div>;
+  if (plan && !manual) {
+    return <SessionRunner lang={L} planRows={plan.rows} sessionName={plan.name} onManual={() => setManual(true)} />;
+  }
 
   const copy = L === "IS"
     ? { title: "Skrá æfingu", strength: "Styrktaræfing", sport: "Íþrótt / annað" }
