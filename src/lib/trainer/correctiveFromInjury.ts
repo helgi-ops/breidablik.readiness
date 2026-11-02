@@ -91,6 +91,32 @@ export const CORRECTIVE_SLUG_TO_LIBRARY: Record<string, string> = {
   goblet_squat_knee_tracking: "Goblet Squat",
   goblet_squat_counterbalance: "Goblet Squat",
   side_plank_hip_abduction: "Side Plank",
+  // Corrective-specific moves added to exercise_library with demo videos
+  // (migration 20261102150000). Names match the inserted rows exactly.
+  clamshell: "Clamshell (banded)",
+  side_lying_hip_abduction: "Side-lying hip abduction",
+  iso_side_lying_hip_abduction: "Side-lying hip abduction", // reuse the position demo
+  standing_banded_hip_abduction: "Standing hip abduction, band at the ankle",
+  quadruped_hip_extension: "Quadruped hip extension",
+  hip_flexor_stretch: "Half-kneeling hip-flexor stretch",
+  calf_stretch_gastroc: "Standing calf stretch (gastroc)",
+  ankle_df_knee_to_wall: "Knee-to-wall ankle mobilisation (banded)",
+  hip_ir_mobility: "Hip internal-rotation mobilisation (90/90)",
+  thoracic_rotation_mobility: "Thoracic rotation (open-book / quadruped)",
+  mcgill_curl_up: "Curl-up (McGill, endurance holds)",
+  mcgill_side_bridge: "Side bridge (McGill, endurance)",
+  bird_dog: "Bird-dog (quadruped, anti-rotation)",
+  hip_hinge_dowel: "Hip-hinge patterning (dowel)",
+  side_lying_hip_adduction: "Side-lying hip adduction",
+  standing_hip_adduction_band: "Standing banded hip adduction",
+  single_leg_squat: "Single-leg squat (to box)",
+  rotational_single_leg_squat: "Single-leg squat (to box)", // reuse
+  single_leg_balance: "Single-leg balance progression",
+  eccentric_step_down: "Slow eccentric step-down",
+  smr_calf: "Foam-roll calf (gastroc/soleus)",
+  smr_tfl_itband: "Foam-roll TFL / IT band",
+  smr_adductors: "Foam-roll adductors",
+  single_leg_hops: "Single-leg hops, stick the landing",
 };
 
 /** A light exercise entry for the manual-add autocomplete. */
