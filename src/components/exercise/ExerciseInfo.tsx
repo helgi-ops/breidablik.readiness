@@ -15,7 +15,7 @@ import { useLang } from "@/lib/lang";
 import { splitDescription } from "@/lib/exercise/descriptionBullets";
 
 /** Only allow well-formed http(s) links (e.g. a YouTube demo). */
-function safeHttpUrl(u?: string | null): string | null {
+export function safeHttpUrl(u?: string | null): string | null {
   if (!u) return null;
   try {
     const url = new URL(u);
@@ -25,7 +25,7 @@ function safeHttpUrl(u?: string | null): string | null {
 
 /** Extract a YouTube video id from watch / youtu.be / shorts / embed URLs.
  *  Returns null for non-YouTube URLs (then we fall back to a plain link). */
-function youtubeId(u: string): string | null {
+export function youtubeId(u: string): string | null {
   try {
     const url = new URL(u);
     const host = url.hostname.replace(/^www\./, "");

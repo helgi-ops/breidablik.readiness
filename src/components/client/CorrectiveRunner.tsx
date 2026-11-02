@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import ExerciseInfo from "@/components/exercise/ExerciseInfo";
+import ExerciseVideo from "@/components/exercise/ExerciseVideo";
 import { buildSteps, type CorrectiveStepItem } from "@/lib/client/correctiveRun";
 
 type Lang = "IS" | "EN";
@@ -184,11 +184,9 @@ export default function CorrectiveRunner({ lang, items, week }: {
       </header>
 
       <section className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+        <ExerciseVideo name={name} url={step.item.videoUrl} lang={lang} />
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="font-display text-[26px] font-extrabold leading-tight tracking-tight">{name}</h1>
-            <ExerciseInfo name={name} description={step.item.cue ?? undefined} descriptionIs={step.item.cueIs ?? undefined} videoUrl={step.item.videoUrl ?? undefined} className="shrink-0" />
-          </div>
+          <h1 className="font-display text-[26px] font-extrabold leading-tight tracking-tight">{name}</h1>
           {dose && <div className="mt-1 text-slate-700">{dose}</div>}
         </div>
         {cue && <p className="rounded-[10px] bg-slate-100 px-3 py-2.5 text-sm text-slate-700">{cue}</p>}
