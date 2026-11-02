@@ -1271,27 +1271,48 @@ function ExerciseInfoModal({
             </div>
           ) : null}
 
-          {/* Video link */}
-          {exInfo?.videoUrl ? (
-            <a
-              href={exInfo.videoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-3 rounded-xl bg-indigo-50 border border-indigo-200 px-4 py-3.5 transition-colors active:bg-indigo-100"
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100">
-                <span className="text-lg">▶</span>
-              </span>
-              <div>
-                <div className="text-sm font-semibold text-indigo-900">
-                  {isIS ? "Horfa á myndband" : "Watch video"}
+          {/* Embedded demo video — same helper as the row video modal, so a
+              YouTube/Vimeo clip plays inline here instead of linking out. */}
+          {exInfo?.videoUrl ? (() => {
+            const emb = embedDrillVideo(exInfo.videoUrl);
+            if (emb.type === "youtube" || emb.type === "vimeo") {
+              return (
+                <div className="relative w-full overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "16 / 9" }}>
+                  <iframe
+                    src={emb.src}
+                    title={isIS ? "Myndband" : "Video"}
+                    className="absolute inset-0 h-full w-full"
+                    loading="lazy"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
                 </div>
-                <div className="text-[11px] text-indigo-500">
-                  {isIS ? "Sjá hvernig æfingin er framkvæmd" : "See how to perform the exercise"}
+              );
+            }
+            if (emb.type === "file") {
+              return <video src={emb.src} controls playsInline className="w-full rounded-xl bg-black" />;
+            }
+            return (
+              <a
+                href={emb.src}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 rounded-xl bg-indigo-50 border border-indigo-200 px-4 py-3.5 transition-colors active:bg-indigo-100"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100">
+                  <span className="text-lg">▶</span>
+                </span>
+                <div>
+                  <div className="text-sm font-semibold text-indigo-900">
+                    {isIS ? "Horfa á myndband" : "Watch video"}
+                  </div>
+                  <div className="text-[11px] text-indigo-500">
+                    {isIS ? "Sjá hvernig æfingin er framkvæmd" : "See how to perform the exercise"}
+                  </div>
                 </div>
-              </div>
-            </a>
-          ) : null}
+              </a>
+            );
+          })() : null}
 
           {/* Exercise-specific: Focus points */}
           {desc?.focus?.length ? (
