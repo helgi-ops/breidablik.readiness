@@ -78,10 +78,12 @@ export async function GET(req: Request) {
     };
 
     // In-season strength mode (microdose vs traditional) lives in the settings jsonb (feature-flag home).
-    const jsonb = (settings as { settings?: { in_season_strength_mode?: string } | null }).settings ?? null;
+    const jsonb = (settings as { settings?: { in_season_strength_mode?: string; intro_set_ramp?: boolean } | null }).settings ?? null;
     const inSeasonStrengthMode = jsonb?.in_season_strength_mode === "traditional" ? "traditional" : "microdose";
+    // Intro set-ramp: first 2 weeks of a PT programme cap at 2 sets (opt-in).
+    const introSetRamp = jsonb?.intro_set_ramp === true;
 
-    return NextResponse.json({ ...settings, training_mode_default: trainingModeDefault, team_type: teamType, in_season_strength_mode: inSeasonStrengthMode });
+    return NextResponse.json({ ...settings, training_mode_default: trainingModeDefault, team_type: teamType, in_season_strength_mode: inSeasonStrengthMode, intro_set_ramp: introSetRamp });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     const status = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
@@ -151,6 +153,18 @@ export async function PATCH(req: Request) {
       const { data: cur } = await sb.from("team_settings").select("settings").eq("team_id", teamId).maybeSingle();
       const prevSettings = ((cur as { settings?: Record<string, unknown> } | null)?.settings) ?? {};
       updates.settings = { ...prevSettings, in_season_strength_mode: body.in_season_strength_mode };
+    }
+
+    // Intro set-ramp (PT practice): first 2 weeks of a programme cap at 2 sets.
+    // Merged into the settings jsonb, reusing any settings set just above so a
+    // combined PATCH doesn't drop the other flag.
+    if (typeof body.intro_set_ramp === "boolean") {
+      let prevSettings = (updates.settings as Record<string, unknown> | undefined);
+      if (!prevSettings) {
+        const { data: cur } = await sb.from("team_settings").select("settings").eq("team_id", teamId).maybeSingle();
+        prevSettings = ((cur as { settings?: Record<string, unknown> } | null)?.settings) ?? {};
+      }
+      updates.settings = { ...prevSettings, intro_set_ramp: body.intro_set_ramp };
     }
 
     // Operating mode flag — Full Suite (true) vs GPS Intelligence Only (false).

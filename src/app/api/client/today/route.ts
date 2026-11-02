@@ -11,6 +11,7 @@
  * Single round trip so /client/today renders fast on mobile.
  */
 
+import { computeLoadQuadrant } from "@/lib/client/loadQuadrant";
 import { NextResponse } from "next/server";
 import { getSupabaseServer as admin } from "@/lib/supabaseServer";
 import {
@@ -70,6 +71,16 @@ export async function GET(req: Request) {
     player.uses_wellness_features,
     teamMode.usesWellnessFeatures,
   );
+
+  // Intro set-ramp (practice toggle): the first 2 weeks of any PT programme cap
+  // every exercise at 2 sets, then the programme runs as written. Resolved live
+  // from the programme's start, so it also applies to already-sent programmes.
+  // Stored in team_settings.settings.intro_set_ramp.
+  let introRampEnabled = false;
+  {
+    const { data: tsRow } = await sb.from("team_settings").select("settings").eq("team_id", player.team_id).maybeSingle();
+    introRampEnabled = ((tsRow as { settings?: { intro_set_ramp?: boolean } | null } | null)?.settings?.intro_set_ramp) === true;
+  }
 
   // ── Next upcoming game → pre-game taper (trainer-entered) ─────────
   const { data: nextGameRow } = await sb
@@ -153,6 +164,7 @@ export async function GET(req: Request) {
     /** Pre-game taper (trainer-entered game dates). Client localises the text. */
     is_match_day?: boolean;
     days_to_game?: number | null;
+    intro_ramp?: boolean;
     /** Closed loop: lifts whose strength test is stale (retest) or missing. */
     retest_due?: string[];
     needs_test?: string[];
@@ -257,16 +269,23 @@ export async function GET(req: Request) {
       const phaseNote = phase ? SEASON_PHASE_SPEC[phase].note.EN : null;
       const seasonMult = phase ? SEASON_PHASE_SPEC[phase].volume : 1;
       const volMult = seasonMult * taper.volume;
+      // Intro set-ramp: weeks 1–2 (weeksSinceStart 0/1) cap every exercise at 2
+      // sets, then the programme as written.
+      const weeksSinceStart = (slot.kind === "session" || slot.kind === "rest") ? slot.weeksSinceStart : null;
+      const introRampActive = introRampEnabled && weeksSinceStart != null && weeksSinceStart < 2;
       const applyPhase = (block: unknown): unknown => {
-        if (volMult === 1 || !block || typeof block !== "object") return block;
+        if ((volMult === 1 && !introRampActive) || !block || typeof block !== "object") return block;
         const b = block as { name?: string; rows?: Array<Record<string, unknown>> };
         if (!Array.isArray(b.rows)) return block;
         return {
           ...b,
-          rows: b.rows.map((r) => ({
-            ...r,
-            sets: typeof r.sets === "number" ? Math.max(1, Math.round(r.sets * volMult)) : r.sets,
-          })),
+          rows: b.rows.map((r) => {
+            if (typeof r.sets !== "number") return r;
+            let sets = r.sets;
+            if (volMult !== 1) sets = Math.max(1, Math.round(sets * volMult));
+            if (introRampActive) sets = Math.min(sets, 2); // ≤2 sets in weeks 1–2
+            return { ...r, sets };
+          }),
         };
       };
 
@@ -278,6 +297,7 @@ export async function GET(req: Request) {
         season_note: phaseNote,
         is_match_day: taper.is_match_day,
         days_to_game: taper.days_to_game,
+        intro_ramp: introRampActive,
       };
       if (slot.kind === "session") {
         explosive = {
@@ -414,6 +434,8 @@ export async function GET(req: Request) {
       const dayOffset = Math.max(0, Math.floor((todayMs - startMs) / msPerDay));
       const weekNumber = Math.floor(dayOffset / 7) + 1;
       const isoWeekday = ((new Date(today + "T00:00:00Z").getUTCDay() + 6) % 7) + 1;
+      // Intro set-ramp: weeks 1–2 of the plan cap every exercise at 2 sets.
+      const introRampActivePlan = introRampEnabled && weekNumber <= 2;
 
       // Total weeks in the plan → drives the "Week X / N" progress bar.
       const endMs = new Date(plan.end_date + "T00:00:00Z").getTime();
@@ -495,7 +517,7 @@ export async function GET(req: Request) {
             num: String(i + 1),
             exercise: (r.exercise_id && nameById.get(r.exercise_id)) || "Exercise",
             reps: r.reps ?? "",
-            sets: r.sets ?? 0,
+            sets: introRampActivePlan ? Math.min(r.sets ?? 0, 2) : (r.sets ?? 0),
             method: r.load_type ?? undefined,
             // Grouping: authored group label + session method drive the
             // superset/triset/giant/contrast badge on the client surface.
@@ -524,6 +546,7 @@ export async function GET(req: Request) {
         moved_to: movedTo,
         weeks_per_phase: 1,
         total_phases: totalWeeks,
+        intro_ramp: introRampActivePlan,
         blocks: sessionRow
           ? [{ name: (sessionRow as { session_name: string }).session_name, rows }]
           : [],
@@ -622,6 +645,10 @@ export async function GET(req: Request) {
     .filter((r) => r.session_load != null && Number.isFinite(r.session_load))
     .map((r) => ({ date: r.session_date, load: Number(r.session_load) }));
   const foster = computeFosterMonotonyStrain(sessionLoads, 7);
+
+  // Load vs normal: the signal behind the Today verdict when check-in is off.
+  // Same computation as the trainer's list, so both sides see the same number.
+  const loadQuadrant = await computeLoadQuadrant(sb, player.id);
 
   // Heavy-lifting exposure: sets ≥80% 1RM in last 7 days
   const { data: setData } = await sb
@@ -723,6 +750,7 @@ export async function GET(req: Request) {
           delta_kg: priorBw ? Number((latestBw.weight_kg - priorBw.weight_kg).toFixed(2)) : null,
         }
       : null,
+    load: { ratio: loadQuadrant.acwr, confidence: loadQuadrant.confidence },
     intelligence: {
       foster,
       exposure,

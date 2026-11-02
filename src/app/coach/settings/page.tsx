@@ -80,6 +80,9 @@ export default function CoachSettingsPage() {
   // ("training-load only, no check-in") instead of the club GPS wording. The
   // toggle logic is identical; only the copy changes.
   const [isPt, setIsPt] = useState<boolean>(false);
+  // Intro set-ramp (PT practice): first 2 weeks of a programme cap at 2 sets.
+  const [introSetRamp, setIntroSetRamp] = useState<boolean>(false);
+  const [introRampLoading, setIntroRampLoading] = useState(false);
   const [wellnessModeLoading, setWellnessModeLoading] = useState(false);
   const [wellnessModeError, setWellnessModeError] = useState("");
   const [wellnessConfirmOpen, setWellnessConfirmOpen] = useState<null | boolean>(null);
@@ -202,6 +205,7 @@ export default function CoachSettingsPage() {
           const pt = String(json.team_type ?? "") === "personal_trainer";
           setUsesWellnessFeatures(json.uses_wellness_features ?? !pt);
           setIsPt(pt);
+          setIntroSetRamp(json.intro_set_ramp === true);
         }
       } catch { /* silently fail */ }
     };
@@ -266,6 +270,25 @@ export default function CoachSettingsPage() {
       setWellnessModeError(err instanceof Error ? err.message : "Failed");
     } finally {
       setWellnessModeLoading(false);
+    }
+  }, [teamId, supabase]);
+
+  const setIntroRampRemote = useCallback(async (next: boolean) => {
+    if (!teamId) return;
+    setIntroRampLoading(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch("/api/team/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ team_id: teamId, intro_set_ramp: next }),
+      });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error((j as { error?: string }).error ?? "Failed"); }
+      setIntroSetRamp(next);
+    } catch { /* surfaced via the control's disabled state */ } finally {
+      setIntroRampLoading(false);
     }
   }, [teamId, supabase]);
 
@@ -590,6 +613,34 @@ export default function CoachSettingsPage() {
               </div>
             </div>
           )}
+        </section>
+      )}
+
+      {/* ── Intro set-ramp (PT practices) ────────────────────────────── */}
+      {teamId && isPt && (
+        <section className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Inngangs-ramp</div>
+              <h2 className="mt-1 text-lg font-semibold text-zinc-950">Fyrstu 2 vikur: 2 sett</h2>
+              <p className="mt-1 text-sm text-zinc-600">
+                Þegar kveikt er á: fyrstu 2 vikur hvers æfingakerfis takmarkast við 2 sett á æfingu (aðlögun), svo keyrir kerfið eins og það er skrifað. Gildir líka um kerfi sem þú ert þegar búinn að senda — reiknast út frá byrjunardegi hvers viðskiptavinar.
+              </p>
+              <p className="mt-2 text-[11px] italic text-zinc-500">
+                When on: the first 2 weeks of every programme cap each exercise at 2 sets (ramp-in), then the programme runs as written. Applies to already-sent programmes too.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={introSetRamp}
+              disabled={introRampLoading}
+              onClick={() => setIntroRampRemote(!introSetRamp)}
+              className={`relative mt-1 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${introSetRamp ? "bg-emerald-600" : "bg-zinc-300"}`}
+            >
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${introSetRamp ? "translate-x-5" : "translate-x-1"}`} />
+            </button>
+          </div>
         </section>
       )}
 
