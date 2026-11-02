@@ -35,6 +35,8 @@ function weekdayName(iso: number, lang: string): string {
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import { useTeamMode } from "@/lib/useTeamMode";
+import { isGpsOnly } from "@/lib/teamMode";
 import ClientProgrammeOverview from "@/components/player/ClientProgrammeOverview";
 import ClientMoveSessionButton from "@/components/player/ClientMoveSessionButton";
 import ClientMoveSessionControl from "@/components/player/ClientMoveSessionControl";
@@ -133,6 +135,14 @@ export default function ClientTodayPage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // Practice operating mode. A personal-trainer practice is a team; when it
+  // runs "GPS / load only" (uses_wellness_features = false) the client gets no
+  // check-in surfaces. Null = still loading → default to showing wellness, so a
+  // Full Suite client never flashes hidden. The today response already carries
+  // the team id, so no extra profile lookup is needed.
+  const teamMode = useTeamMode(data?.team?.id ?? null);
+  const gpsOnly = isGpsOnly(teamMode);
+
   if (err) return <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>;
   if (!data) return <div className="text-sm text-slate-500">{lang === "IS" ? "Hleð…" : "Loading…"}</div>;
 
@@ -162,8 +172,9 @@ export default function ClientTodayPage() {
       {/* Vacation / return banner (declared per-client breaks). */}
       <ClientVacationBanner lang={lang === "EN" ? "EN" : "IS"} />
 
-      {/* Today's readiness score + recommendation (shows once checked in). */}
-      <ReadinessCard lang={lang === "EN" ? "EN" : "IS"} />
+      {/* Today's readiness score + recommendation (shows once checked in).
+          Hidden for a GPS/load-only practice — there is no check-in there. */}
+      {!gpsOnly && <ReadinessCard lang={lang === "EN" ? "EN" : "IS"} />}
 
       {/* Training Momentum — the consistency score to keep up.
           (Progress analytics — hero, quadrant, load — live on Progression.) */}
@@ -187,7 +198,9 @@ export default function ClientTodayPage() {
       <PtReportsCard lang={lang === "EN" ? "EN" : "IS"} />
 
       {/* Readiness nudge — stays in the PT shell (returns to /client) instead
-          of dropping the client onto the football /team surface. */}
+          of dropping the client onto the football /team surface. Hidden for a
+          GPS/load-only practice (check-in is turned off). */}
+      {!gpsOnly && (
       <Link
         href="/player/checkin?return=/client"
         className={`block rounded-xl border p-3.5 transition-colors ${
@@ -210,6 +223,7 @@ export default function ClientTodayPage() {
           {!readinessDone && <span className="text-amber-700 text-sm font-medium">→</span>}
         </div>
       </Link>
+      )}
 
       {/* Today's workout */}
       {data.explosive ? (
@@ -255,8 +269,10 @@ export default function ClientTodayPage() {
           ) : null}
 
           {/* Readiness-adapted today — honest: only shown when the session was
-              actually scaled, or a recovery day was prescribed. */}
-          {data.explosive.readiness && !data.explosive.rest_day && !data.explosive.is_match_day && (() => {
+              actually scaled, or a recovery day was prescribed. Hidden for a
+              GPS/load-only practice — with no check-in there is no readiness to
+              adapt to, so the session shows as planned. */}
+          {!gpsOnly && data.explosive.readiness && !data.explosive.rest_day && !data.explosive.is_match_day && (() => {
             const rd = data.explosive.readiness!;
             const volCut = 100 - rd.volume_pct;
             const intCut = 100 - rd.intensity_pct;

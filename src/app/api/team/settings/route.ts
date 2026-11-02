@@ -56,11 +56,13 @@ export async function GET(req: Request) {
     // gps_provider, etc.
     const { data: teamRow } = await sb
       .from("teams")
-      .select("training_mode_default")
+      .select("training_mode_default, team_type")
       .eq("id", teamId)
       .maybeSingle();
     const trainingModeDefault =
       String((teamRow as { training_mode_default?: string } | null)?.training_mode_default ?? "auto");
+    const teamType =
+      String((teamRow as { team_type?: string } | null)?.team_type ?? "club_team");
 
     // Return defaults if no row exists yet
     const settings = data ?? {
@@ -77,7 +79,7 @@ export async function GET(req: Request) {
     const jsonb = (settings as { settings?: { in_season_strength_mode?: string } | null }).settings ?? null;
     const inSeasonStrengthMode = jsonb?.in_season_strength_mode === "traditional" ? "traditional" : "microdose";
 
-    return NextResponse.json({ ...settings, training_mode_default: trainingModeDefault, in_season_strength_mode: inSeasonStrengthMode });
+    return NextResponse.json({ ...settings, training_mode_default: trainingModeDefault, team_type: teamType, in_season_strength_mode: inSeasonStrengthMode });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     const status = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;

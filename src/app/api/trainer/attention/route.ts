@@ -21,6 +21,7 @@ import { computeLoadQuadrant } from "@/lib/client/loadQuadrant";
 import { computeVolumeLoad } from "@/lib/client/volumeLoad";
 import { RETEST_DAYS } from "@/lib/client/oneRepMax";
 import { getPlayersOnBreak } from "@/lib/notifications/clientBreaks";
+import { getTeamMode, isGpsOnly } from "@/lib/teamMode";
 
 export const runtime = "nodejs";
 
@@ -49,6 +50,11 @@ export async function GET(req: Request) {
   const teamId = url.searchParams.get("team_id") || (prof as { team_id?: string } | null)?.team_id;
   if (!teamId) return NextResponse.json({ ok: true, clients: [] });
 
+  // GPS/load-only practice: check-in is off, so the wellness-derived flags
+  // (red readiness, trending down, "no check-in today") must never fire —
+  // only the load-based flags stand. Fail-safe to Full Suite on read error.
+  const gpsOnly = isGpsOnly(await getTeamMode(sb, teamId));
+
   const { data: players } = await sb
     .from("players").select("id, full_name, user_id")
     .eq("team_id", teamId).eq("is_active", true).order("full_name");
@@ -61,24 +67,27 @@ export async function GET(req: Request) {
   const results = await Promise.all(list.filter((p) => !onBreak.has(p.id)).map(async (p) => {
     const flags: Flag[] = [];
 
-    // Readiness today + recent trend (canonical color).
-    const { data: rday } = await sb
-      .from("readiness_entries").select("color, total_score, entry_date")
-      .eq("player_id", p.id).gte("entry_date", iso(9))
-      .order("entry_date", { ascending: false }).limit(6);
-    const rows = ((rday ?? []) as Array<{ color: string | null; total_score: number | null; entry_date: string }>);
-    const todayRow = rows.find((r) => r.entry_date === today) ?? null;
+    // Readiness today + recent trend (canonical color). Skipped entirely for a
+    // GPS/load-only practice — no check-in means no wellness flags.
+    if (!gpsOnly) {
+      const { data: rday } = await sb
+        .from("readiness_entries").select("color, total_score, entry_date")
+        .eq("player_id", p.id).gte("entry_date", iso(9))
+        .order("entry_date", { ascending: false }).limit(6);
+      const rows = ((rday ?? []) as Array<{ color: string | null; total_score: number | null; entry_date: string }>);
+      const todayRow = rows.find((r) => r.entry_date === today) ?? null;
 
-    if (todayRow?.color && todayRow.color.toLowerCase() === "red") {
-      flags.push({ severity: 2, code: "readiness_red", label: "Red readiness today" });
-    } else {
-      const scores = rows.map((r) => r.total_score).filter((x): x is number => x != null);
-      if (scores.length >= 3 && scores[0] - scores[scores.length - 1] <= -4) {
-        flags.push({ severity: 1, code: "readiness_down", label: "Readiness trending down" });
+      if (todayRow?.color && todayRow.color.toLowerCase() === "red") {
+        flags.push({ severity: 2, code: "readiness_red", label: "Red readiness today" });
+      } else {
+        const scores = rows.map((r) => r.total_score).filter((x): x is number => x != null);
+        if (scores.length >= 3 && scores[0] - scores[scores.length - 1] <= -4) {
+          flags.push({ severity: 1, code: "readiness_down", label: "Readiness trending down" });
+        }
       }
-    }
-    if (!todayRow && p.user_id) {
-      flags.push({ severity: 1, code: "no_checkin", label: "No check-in today" });
+      if (!todayRow && p.user_id) {
+        flags.push({ severity: 1, code: "no_checkin", label: "No check-in today" });
+      }
     }
 
     // Load spikes (sRPE quadrant + tonnage).

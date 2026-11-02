@@ -76,6 +76,10 @@ export default function CoachSettingsPage() {
   // (GPS / IMA / external load only — no check-in, RPE, wearables, decision card).
   // Default true matches the DB default; existing teams are unaffected.
   const [usesWellnessFeatures, setUsesWellnessFeatures] = useState<boolean>(true);
+  // Personal-trainer practice → the operating-mode card speaks PT language
+  // ("training-load only, no check-in") instead of the club GPS wording. The
+  // toggle logic is identical; only the copy changes.
+  const [isPt, setIsPt] = useState<boolean>(false);
   const [wellnessModeLoading, setWellnessModeLoading] = useState(false);
   const [wellnessModeError, setWellnessModeError] = useState("");
   const [wellnessConfirmOpen, setWellnessConfirmOpen] = useState<null | boolean>(null);
@@ -194,6 +198,7 @@ export default function CoachSettingsPage() {
           const tm = String(json.training_mode_default ?? "auto").toLowerCase();
           if (tm === "indoor" || tm === "outdoor" || tm === "auto") setTrainingMode(tm);
           setUsesWellnessFeatures(json.uses_wellness_features ?? true);
+          setIsPt(String(json.team_type ?? "") === "personal_trainer");
         }
       } catch { /* silently fail */ }
     };
@@ -433,12 +438,18 @@ export default function CoachSettingsPage() {
           <div>
             <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Operating mode / Rekstrarmáti</div>
             <h2 className="mt-1 text-lg font-semibold text-zinc-950">
-              {usesWellnessFeatures ? "Full Intelligence Suite" : "GPS Intelligence Only"}
+              {usesWellnessFeatures
+                ? "Full Intelligence Suite"
+                : isPt ? "Æfingaálag eingöngu (ekkert check-in) / Training-load only" : "GPS Intelligence Only"}
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-zinc-600">
               {usesWellnessFeatures
-                ? "Wellness (check-in, RPE, wearables) er virkur með GPS og IMA gögnum. AI ákvarðanir reiknast út frá öllu saman."
-                : "Bara GPS og IMA gögn — check-in, RPE og wearable kröfur eru faldar fyrir leikmenn. ACWR og Foster nota external load (player_load) í staðinn fyrir sRPE."}
+                ? (isPt
+                    ? "Daglegt check-in (líðan, RPE) er virkt ásamt æfingaálagi og styrktargögnum. Viðskiptavinir fá check-in nudd og þú sérð viðbúnað þeirra."
+                    : "Wellness (check-in, RPE, wearables) er virkur með GPS og IMA gögnum. AI ákvarðanir reiknast út frá öllu saman.")
+                : (isPt
+                    ? "Bara æfingaálag og styrkur — daglegt check-in er slökkt. Viðskiptavinir fá ekkert check-in nudd og mælaborðið sýnir álag (ACWR / sRPE) í stað viðbúnaðar."
+                    : "Bara GPS og IMA gögn — check-in, RPE og wearable kröfur eru faldar fyrir leikmenn. ACWR og Foster nota external load (player_load) í staðinn fyrir sRPE.")}
             </p>
             {wellnessModeError && (
               <div className="mt-2 text-sm text-red-600">{wellnessModeError}</div>
@@ -499,19 +510,37 @@ export default function CoachSettingsPage() {
               )}
               <div className="flex items-center gap-2">
                 <span className="text-2xl" aria-hidden="true">📊</span>
-                <div className="text-base font-semibold text-zinc-900">GPS Intelligence Only</div>
+                <div className="text-base font-semibold text-zinc-900">{isPt ? "Æfingaálag eingöngu / Training-load only" : "GPS Intelligence Only"}</div>
               </div>
               <p className="mt-2 text-xs leading-relaxed text-zinc-600">
-                Allir GPS-driven kort (Sprint, Decel, Stride, IMA, HSR vs MD), Foster og ACWR á external load. Engin check-in, engin RPE, engin wearable krafa frá leikmönnum.
+                {isPt
+                  ? "Bara æfingaálag og styrkur — sett, þyngdir, tonnage, Foster og ACWR. Ekkert daglegt check-in, engin RPE- eða wearable-krafa frá viðskiptavinum."
+                  : "Allir GPS-driven kort (Sprint, Decel, Stride, IMA, HSR vs MD), Foster og ACWR á external load. Engin check-in, engin RPE, engin wearable krafa frá leikmönnum."}
               </p>
               <ul className="mt-3 space-y-1 text-[11px] text-zinc-700">
-                <li>✓ Allt GPS + IMA Intelligence</li>
-                <li>✓ Foster / ACWR á player_load</li>
-                <li>✓ Catapult / STATSports upload</li>
-                <li>✗ Wellness check-in (falinn)</li>
-                <li>✗ RPE og wearable (falin)</li>
+                {isPt ? (
+                  <>
+                    <li>✓ Æfingaskráning + styrktar-framvinda</li>
+                    <li>✓ Foster / ACWR á æfingaálagi</li>
+                    <li>✓ Álag (ACWR / sRPE) á mælaborði</li>
+                    <li>✗ Daglegt check-in (slökkt)</li>
+                    <li>✗ RPE og wearable (slökkt)</li>
+                  </>
+                ) : (
+                  <>
+                    <li>✓ Allt GPS + IMA Intelligence</li>
+                    <li>✓ Foster / ACWR á player_load</li>
+                    <li>✓ Catapult / STATSports upload</li>
+                    <li>✗ Wellness check-in (falinn)</li>
+                    <li>✗ RPE og wearable (falin)</li>
+                  </>
+                )}
               </ul>
-              <p className="mt-3 text-[10px] italic text-zinc-500">Best fyrir lið með Catapult/STATSports sem vilja ekki krefjast wellness frá leikmönnum.</p>
+              <p className="mt-3 text-[10px] italic text-zinc-500">
+                {isPt
+                  ? "Best fyrir þjálfara sem vilja bara fylgjast með æfingaálagi og vilja ekki krefjast check-in frá viðskiptavinum."
+                  : "Best fyrir lið með Catapult/STATSports sem vilja ekki krefjast wellness frá leikmönnum."}
+              </p>
             </button>
           </div>
 
@@ -530,8 +559,12 @@ export default function CoachSettingsPage() {
                 </h3>
                 <p className="mt-2 text-sm text-zinc-600">
                   {wellnessConfirmOpen
-                    ? "Þetta virkjar wellness check-in, RPE, wearable sync, og daglegar AI ákvarðanir fyrir alla leikmenn. Söguleg gögn haldast óbreytt — bara sýnileiki á UI breytist."
-                    : "Þetta felur check-in, RPE, wearable og decision card fyrir alla leikmenn í liðinu. Notifications fyrir check-in/RPE slökkva. GPS, IMA og external-load kort virka eins og venjulega. Þú getur skipt aftur til baka hvenær sem er."}
+                    ? (isPt
+                        ? "Þetta virkjar daglegt check-in, RPE og viðbúnað fyrir alla viðskiptavini. Söguleg gögn haldast óbreytt — bara sýnileiki á UI breytist."
+                        : "Þetta virkjar wellness check-in, RPE, wearable sync, og daglegar AI ákvarðanir fyrir alla leikmenn. Söguleg gögn haldast óbreytt — bara sýnileiki á UI breytist.")
+                    : (isPt
+                        ? "Þetta felur check-in og RPE fyrir alla viðskiptavini. Check-in nudd slökkva og mælaborðið sýnir álag (ACWR / sRPE) í stað viðbúnaðar. Æfingaskráning og styrktar-framvinda virka eins og venjulega. Þú getur skipt aftur til baka hvenær sem er."
+                        : "Þetta felur check-in, RPE, wearable og decision card fyrir alla leikmenn í liðinu. Notifications fyrir check-in/RPE slökkva. GPS, IMA og external-load kort virka eins og venjulega. Þú getur skipt aftur til baka hvenær sem er.")}
                 </p>
                 <div className="mt-5 flex justify-end gap-2">
                   <button

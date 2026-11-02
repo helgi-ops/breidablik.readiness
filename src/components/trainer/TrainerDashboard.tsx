@@ -151,6 +151,10 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
     return () => window.removeEventListener("popstate", sync);
   }, []);
   const [clients, setClients] = useState<Client[]>([]);
+  // GPS/load-only practice (uses_wellness_features = false): the clients API
+  // returns readiness null and team.gpsOnly = true, so the list shows load
+  // (ACWR / sRPE) in place of the readiness dot/badge and check-in count.
+  const [gpsOnly, setGpsOnly] = useState(false);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [templates, setTemplates] = useState<PlanTemplate[]>([]);
   // Starter programmes (pt_explosive category='starter_template'), mapped into
@@ -242,6 +246,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
       });
       const json = await res.json();
       if (json.clients) setClients(json.clients);
+      setGpsOnly(!!json.team?.gpsOnly);
     } catch {
       // silent
     } finally {
@@ -445,6 +450,20 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
     return ct.readiness[zone as keyof typeof ct.readiness] ?? zone;
   }
 
+  // ACWR → traffic-light, for the GPS/load-only list where load stands in for
+  // readiness. Danger outside 0.5–1.5, caution outside 0.8–1.3 (Gabbett band).
+  function acwrDot(acwr: number | null) {
+    if (acwr == null) return "bg-gray-300";
+    if (acwr > 1.5 || acwr < 0.5) return "bg-red-500";
+    if (acwr > 1.3 || acwr < 0.8) return "bg-amber-500";
+    return "bg-green-500";
+  }
+  function acwrBadge(acwr: number) {
+    if (acwr > 1.5 || acwr < 0.5) return "bg-red-100 text-red-800 border-red-300";
+    if (acwr > 1.3 || acwr < 0.8) return "bg-amber-100 text-amber-800 border-amber-300";
+    return "bg-green-100 text-green-800 border-green-300";
+  }
+
   function trendArrow(trend: string | null) {
     if (trend === "RISING") return "↑";
     if (trend === "DROPPING") return "↓";
@@ -525,9 +544,13 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
               <div className="text-2xl font-bold mt-1">{clients.length}</div>
             </div>
             <div className="bg-white border rounded-lg p-4">
-              <div className="text-xs text-gray-500 uppercase tracking-wide">{ct.clients.checkedIn}</div>
+              <div className="text-xs text-gray-500 uppercase tracking-wide">
+                {gpsOnly ? (isIS ? "Álag skráð" : "Load tracked") : ct.clients.checkedIn}
+              </div>
               <div className="text-2xl font-bold mt-1 text-green-600">
-                {clients.filter((c) => c.checkedInToday).length}
+                {gpsOnly
+                  ? clients.filter((c) => c.load).length
+                  : clients.filter((c) => c.checkedInToday).length}
               </div>
             </div>
             <div className="bg-white border rounded-lg p-4">
@@ -574,26 +597,40 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                   onClick={() => setSelectedClient(selectedClient?.id === client.id ? null : client)}
                 >
                   <div className="flex items-center gap-4">
-                    {/* Readiness dot */}
-                    <div className={`w-3 h-3 rounded-full flex-shrink-0 ${zoneDot(client.readiness?.zone ?? "none")}`} />
+                    {/* Status dot — readiness zone, or (GPS/load-only) ACWR band */}
+                    <div className={`w-3 h-3 rounded-full flex-shrink-0 ${gpsOnly ? acwrDot(client.load?.acwr ?? null) : zoneDot(client.readiness?.zone ?? "none")}`} />
 
                     {/* Name + status */}
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{client.name || "—"}</div>
                       <div className="text-xs text-gray-500">
-                        {client.checkedInToday ? ct.clients.checkedIn : (
+                        {gpsOnly ? (
+                          client.load?.acwr != null
+                            ? <span>{ct.load.acwr} {Number(client.load.acwr).toFixed(2)}</span>
+                            : (client.hasAccount ? (isIS ? "Ekkert álag skráð" : "No load logged") : ct.clients.noAccount)
+                        ) : client.checkedInToday ? ct.clients.checkedIn : (
                           <span className="text-amber-600">{client.hasAccount ? ct.clients.notCheckedIn : ct.clients.noAccount}</span>
                         )}
                       </div>
                     </div>
 
-                    {/* Readiness zone badge */}
-                    <div className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${zoneBg(client.readiness?.zone ?? "none")}`}>
-                      {zoneLabel(client.readiness?.zone ?? "none")}
-                      {client.readiness?.totalScore != null && (
-                        <span className="ml-1 opacity-70">{client.readiness.totalScore}/25</span>
-                      )}
-                    </div>
+                    {/* Status badge — readiness zone, or (GPS/load-only) ACWR */}
+                    {gpsOnly ? (
+                      client.load?.acwr != null ? (
+                        <div className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${acwrBadge(Number(client.load.acwr))}`}>
+                          {ct.load.acwr} {Number(client.load.acwr).toFixed(2)} {trendArrow(client.load.trend)}
+                        </div>
+                      ) : (
+                        <div className="px-2.5 py-0.5 rounded-full text-xs font-medium border bg-gray-100 text-gray-500 border-gray-200">—</div>
+                      )
+                    ) : (
+                      <div className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${zoneBg(client.readiness?.zone ?? "none")}`}>
+                        {zoneLabel(client.readiness?.zone ?? "none")}
+                        {client.readiness?.totalScore != null && (
+                          <span className="ml-1 opacity-70">{client.readiness.totalScore}/25</span>
+                        )}
+                      </div>
+                    )}
 
                     {/* ACWR */}
                     <div className="text-right w-20 flex-shrink-0 hidden sm:block">
@@ -652,7 +689,9 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                           ["goals", "Markmið", "Goals"],
                           ["load", "Álag", "Load"],
                           ["adjust", "Aðlaganir", "Adjustments"],
-                        ] as [DetailTab, string, string][]).map(([key, isLabel, enLabel]) => (
+                        ] as [DetailTab, string, string][])
+                          .filter(([key]) => !(gpsOnly && key === "readiness"))
+                          .map(([key, isLabel, enLabel]) => (
                           <button
                             key={key}
                             type="button"
@@ -719,7 +758,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                         </div>
                       )}
 
-                      {detailTab === "readiness" && (
+                      {detailTab === "readiness" && !gpsOnly && (
                         <div className="space-y-4">
                           <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
                             <div>
