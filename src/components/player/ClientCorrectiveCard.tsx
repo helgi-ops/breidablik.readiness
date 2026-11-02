@@ -25,6 +25,7 @@ type Item = {
   citation?: string | null;
   videoUrl?: string | null;
   aiSuggested?: boolean;
+  manual?: boolean;
 };
 
 export type CorrectiveData = {
@@ -67,7 +68,11 @@ export default function ClientCorrectiveCard({ data, lang }: { data: CorrectiveD
                   {dose && <div className="text-xs text-slate-600">{dose}</div>}
                   {cue && <div className="mt-0.5 text-[11px] text-slate-500">{cue}</div>}
                 </div>
-                {it.aiSuggested ? (
+                {it.manual ? (
+                  <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold bg-violet-100 text-violet-700" title={isIS ? "Bætt við af þjálfara" : "Added by your trainer"}>
+                    {isIS ? "þjálfari" : "trainer"}
+                  </span>
+                ) : it.aiSuggested ? (
                   <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold bg-amber-100 text-amber-800" title={isIS ? "AI-tillaga — yfirfarin af þjálfara" : "AI suggestion — vetted by your trainer"}>
                     {isIS ? "AI-tillaga" : "AI suggestion"}
                   </span>

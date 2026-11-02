@@ -91,6 +91,8 @@ export type CorrectiveItem = {
   /** True = proposed by AI because no library exercise covered a stated problem
    *  (no citation). The trainer must vet it. */
   aiSuggested?: boolean;
+  /** True = added by the trainer by hand (not from the library or AI). */
+  manual?: boolean;
 };
 
 export type CorrectiveProposal = {
@@ -324,6 +326,7 @@ export function sanitizeItems(v: unknown): CorrectiveItem[] {
       evidenceGrade: str(it.evidenceGrade) ?? undefined,
       videoUrl: str(it.videoUrl),
       aiSuggested: it.aiSuggested === true || undefined,
+      manual: it.manual === true || undefined,
     });
     if (out.length >= 40) break; // sane cap
   }

@@ -29,6 +29,7 @@ type Item = {
   citation?: string;
   videoUrl?: string | null;
   aiSuggested?: boolean;
+  manual?: boolean;
 };
 type Injury = { body_part: string; side: string | null; type: string | null; note: string | null };
 
@@ -62,6 +63,18 @@ export default function ClientCorrectiveControl({
   const [active, setActive] = useState(false);
   const [busy, setBusy] = useState<"load" | "ai" | "save" | "off" | null>("load");
   const [msg, setMsg] = useState<string | null>(null);
+  // Manual add-exercise form (e.g. a knee exercise the AI/library didn't cover).
+  const [showAdd, setShowAdd] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [addDose, setAddDose] = useState("");
+  const [addCue, setAddCue] = useState("");
+
+  function addManual() {
+    const name = addName.trim();
+    if (!name) return;
+    setItems((xs) => [...xs, { name, dose: addDose.trim() || undefined, cue: addCue.trim() || undefined, manual: true }]);
+    setAddName(""); setAddDose(""); setAddCue(""); setShowAdd(false);
+  }
 
   const authHeader = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -212,7 +225,9 @@ export default function ClientCorrectiveControl({
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm font-medium text-slate-800 truncate">{pick(it.name, it.nameIs)}</span>
-                  {it.aiSuggested ? (
+                  {it.manual ? (
+                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold bg-violet-100 text-violet-700">{isIS ? "þjálfari" : "trainer"}</span>
+                  ) : it.aiSuggested ? (
                     <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold bg-amber-100 text-amber-800">{isIS ? "AI-tillaga" : "AI suggestion"}</span>
                   ) : (
                     <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium bg-slate-200 text-slate-600">{isIS ? "heimild" : "cited"}</span>
@@ -230,6 +245,48 @@ export default function ClientCorrectiveControl({
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Manual add — an exercise the library/AI didn't cover (e.g. the knee). */}
+      {!(busy === "load") && (
+        <div className="mt-2">
+          {!showAdd ? (
+            <button type="button" onClick={() => setShowAdd(true)} className="text-[11px] font-medium text-violet-700 hover:underline">
+              {isIS ? "+ Bæta við æfingu handvirkt" : "+ Add an exercise manually"}
+            </button>
+          ) : (
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-2 space-y-1.5">
+              <input
+                value={addName}
+                onChange={(e) => setAddName(e.target.value)}
+                placeholder={isIS ? "Æfing (t.d. Spænsk hnébeygja — ísómetrísk)" : "Exercise (e.g. Spanish squat — isometric)"}
+                className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+              />
+              <div className="flex gap-1.5">
+                <input
+                  value={addDose}
+                  onChange={(e) => setAddDose(e.target.value)}
+                  placeholder={isIS ? "Skammtur (t.d. 3×8)" : "Dose (e.g. 3×8)"}
+                  className="flex-1 rounded-md border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                />
+              </div>
+              <input
+                value={addCue}
+                onChange={(e) => setAddCue(e.target.value)}
+                placeholder={isIS ? "Vísbending (valfrjálst)" : "Cue (optional)"}
+                className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+              />
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={addManual} disabled={!addName.trim()} className="rounded-md bg-violet-600 px-3 py-1 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50">
+                  {isIS ? "Bæta við" : "Add"}
+                </button>
+                <button type="button" onClick={() => { setShowAdd(false); setAddName(""); setAddDose(""); setAddCue(""); }} className="text-[11px] font-medium text-slate-500 hover:underline">
+                  {isIS ? "Hætta við" : "Cancel"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {items.length > 0 && (
