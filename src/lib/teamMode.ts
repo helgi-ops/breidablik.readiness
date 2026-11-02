@@ -81,6 +81,20 @@ export async function getTeamMode(
   return { teamId, usesWellnessFeatures: resolved, mode: modeFromFlag(resolved) };
 }
 
+/** Per-client resolution. A personal-trainer practice can turn the daily
+ *  check-in on or off for an individual client (players.uses_wellness_features),
+ *  overriding the practice-wide default. An explicit per-player true/false wins;
+ *  null (the common case) inherits the already-resolved team value — which for a
+ *  PT practice is the team's own choice or the team_type default (off). Pass the
+ *  team value from getTeamMode(...).usesWellnessFeatures, which has already
+ *  folded in the team flag and team_type default. */
+export function resolveWellnessForPlayer(
+  playerFlag: boolean | null | undefined,
+  teamResolvedWellness: boolean,
+): boolean {
+  return typeof playerFlag === "boolean" ? playerFlag : teamResolvedWellness;
+}
+
 /** Convenience helper: true if the team should show wellness features. */
 export function showsWellness(row: TeamModeRow | null | undefined): boolean {
   if (!row) return true; // safe default during load
@@ -130,6 +144,51 @@ export async function getGpsOnlyTeamIds(
         .in("team_id", ptIds);
       const optedInSet = new Set(((optedIn ?? []) as Array<{ team_id: string }>).map((r) => String(r.team_id)));
       for (const id of ptIds) if (!optedInSet.has(id)) out.add(id);
+    }
+
+    return out;
+  } catch {
+    return new Set();
+  }
+}
+
+/** Server-side: returns the set of PLAYER ids that run in GPS/load-only mode
+ *  (no check-in), after applying the per-client override. Used by the
+ *  notification scheduler so a reminder is skipped for exactly the clients whose
+ *  check-in is off — whether that comes from the practice-wide default or from a
+ *  per-client switch. Resolution per player: explicit players.uses_wellness_features
+ *  wins; otherwise the player inherits the team (getGpsOnlyTeamIds). Returns an
+ *  empty set on any error — safer to send reminders than to silently skip them. */
+export async function getGpsOnlyPlayerIds(
+  sb: SupabaseClient,
+): Promise<Set<string>> {
+  try {
+    const gpsOnlyTeams = await getGpsOnlyTeamIds(sb);
+    const out = new Set<string>();
+
+    // 1. Explicit per-client OFF, any team. (A manual per-client action, so this
+    //    set is small — never near the 1000-row cap.)
+    const { data: off, error: offErr } = await sb
+      .from("players")
+      .select("id")
+      .eq("uses_wellness_features", false);
+    if (offErr) return new Set();
+    for (const r of (off ?? []) as Array<{ id: string }>) out.add(String(r.id));
+
+    // 2. Players inheriting a gps-only team default, EXCEPT those explicitly
+    //    opted in (= true). Scoped to the gps-only teams only (a handful), so
+    //    the query stays well under the 1000-row cap rather than scanning every
+    //    player in the database.
+    if (gpsOnlyTeams.size > 0) {
+      const { data: inh, error: inhErr } = await sb
+        .from("players")
+        .select("id, uses_wellness_features")
+        .in("team_id", Array.from(gpsOnlyTeams));
+      if (inhErr) return out;
+      for (const r of (inh ?? []) as Array<{ id: string; uses_wellness_features?: boolean | null }>) {
+        if (r.uses_wellness_features === true) continue; // explicit opt-in wins
+        out.add(String(r.id)); // null inherits off; false already added above
+      }
     }
 
     return out;

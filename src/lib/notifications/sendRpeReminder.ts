@@ -5,7 +5,7 @@ import { getRpeComplianceForDate } from "@/lib/session-rpe/compliance";
 import { rpeReminderConfig, type RpeReminderType } from "@/lib/session-rpe/reminderConfig";
 import type { ReminderProfile } from "@/lib/notifications/schedule";
 import { isSubscriptionGone, sendWebPush, type NativePushSubscription } from "@/lib/push/webPush";
-import { getGpsOnlyTeamIds } from "@/lib/teamMode";
+import { getGpsOnlyPlayerIds } from "@/lib/teamMode";
 import { getTeamsOnBreak } from "@/lib/notifications/teamBreaks";
 import { getPlayersOnBreak } from "@/lib/notifications/clientBreaks";
 
@@ -143,11 +143,13 @@ export async function sendRpeReminderToMissingPlayers(
 
   const allMissing = compliance.missingPlayers;
 
-  // GPS-only teams don't use RPE — skip their players entirely.
-  const gpsOnlyTeams = await getGpsOnlyTeamIds(sb);
-  const afterGpsFilter = gpsOnlyTeams.size === 0
+  // Check-in-off clients don't use RPE — skip them entirely. Resolved per
+  // player (per-client override over the team default), so a PT practice can
+  // keep RPE for some clients while turning it off for others.
+  const gpsOnlyPlayers = await getGpsOnlyPlayerIds(sb);
+  const afterGpsFilter = gpsOnlyPlayers.size === 0
     ? allMissing
-    : allMissing.filter((p) => !(p.team_id && gpsOnlyTeams.has(String(p.team_id))));
+    : allMissing.filter((p) => !gpsOnlyPlayers.has(String(p.player_id)));
 
   // Skip RPE reminders for teams whose week_plan marks today as OFF.
   const teamIdsForOffCheck = Array.from(

@@ -7,7 +7,7 @@ import {
   getOperationalTimezone,
   type ReminderProfile,
 } from "@/lib/notifications/schedule";
-import { getGpsOnlyTeamIds } from "@/lib/teamMode";
+import { getGpsOnlyPlayerIds } from "@/lib/teamMode";
 import { getTeamsOnBreak } from "@/lib/notifications/teamBreaks";
 import { getPlayersOnBreak } from "@/lib/notifications/clientBreaks";
 
@@ -68,13 +68,15 @@ export async function getActivePlayers(
       team_id: p.team_id ?? null,
     }));
 
-  // GPS-only teams opt OUT of wellness reminders entirely — check-ins and
-  // RPE prompts are not part of their workflow. Filter out their players
-  // before any reminder dispatch.
-  const gpsOnlyTeams = await getGpsOnlyTeamIds(sb);
-  const afterGpsFilter = gpsOnlyTeams.size === 0
+  // Check-in-off clients opt OUT of wellness reminders — check-ins and RPE
+  // prompts are not part of their workflow. This is resolved per player (the
+  // per-client override over the team default), so a PT practice can still have
+  // some clients checking in while the rest don't. Filter them out before any
+  // reminder dispatch.
+  const gpsOnlyPlayers = await getGpsOnlyPlayerIds(sb);
+  const afterGpsFilter = gpsOnlyPlayers.size === 0
     ? all
-    : all.filter((p) => !(p.team_id && gpsOnlyTeams.has(String(p.team_id))));
+    : all.filter((p) => !gpsOnlyPlayers.has(String(p.id)));
 
   // Declared team breaks: players on a team that is on a break today are not
   // "active" for reminders/compliance — they get a real break, no nudges, no

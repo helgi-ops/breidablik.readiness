@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
-import { getTeamMode, isGpsOnly } from "@/lib/teamMode";
+import { getTeamMode, isGpsOnly, resolveWellnessForPlayer } from "@/lib/teamMode";
 
 /* ── helpers ─────────────────────────────────────────── */
 
@@ -80,19 +80,23 @@ export async function GET(req: Request) {
     // Practice operating mode. A GPS/load-only practice turns check-in off, so
     // readiness must not be the per-client headline — ACWR / sRPE load stands
     // instead. Fail-safe to Full Suite on any read error (getTeamMode default).
-    const gpsOnly = isGpsOnly(await getTeamMode(sb, ctx.teamId));
+    // The trainer can also override per client (players.uses_wellness_features),
+    // so the practice-wide value is only the default each client inherits.
+    const teamMode = await getTeamMode(sb, ctx.teamId);
+    const teamWellness = teamMode.usesWellnessFeatures;
+    const gpsOnly = isGpsOnly(teamMode);
 
     // Get all active players (clients) on this team
     const { data: players, error: playersErr } = await sb
       .from("players")
-      .select("id, full_name, user_id, position, sport, is_active, status, created_at")
+      .select("id, full_name, user_id, position, sport, is_active, status, created_at, uses_wellness_features")
       .eq("team_id", ctx.teamId)
       .eq("is_active", true)
       .order("full_name");
 
     if (playersErr) throw new Error(playersErr.message);
     if (!players || players.length === 0) {
-      return NextResponse.json({ clients: [], team: { id: ctx.teamId, name: ctx.teamName, type: ctx.teamType, gpsOnly } });
+      return NextResponse.json({ clients: [], team: { id: ctx.teamId, name: ctx.teamName, type: ctx.teamType, gpsOnly, wellnessDefault: teamWellness } });
     }
 
     const playerIds = players.map((p) => p.id);
@@ -198,15 +202,23 @@ export async function GET(req: Request) {
       const plan = planMap.get(p.id);
       const comp = completionMap.get(p.id);
 
+      // Per-client check-in mode. The per-client override wins over the
+      // practice-wide value; load (ACWR / sRPE) stands in for readiness when off.
+      const clientWellness = resolveWellnessForPlayer(p.uses_wellness_features, teamWellness);
+      const clientGpsOnly = !clientWellness;
+
       return {
         id: p.id,
         name: p.full_name,
         hasAccount: !!p.user_id,
         position: p.position,
-        // GPS/load-only practice: check-in is off, so never surface readiness
-        // as the client's state — load (ACWR / sRPE) is the signal instead.
-        checkedInToday: gpsOnly ? false : !!r,
-        readiness: r && !gpsOnly
+        // Check-in-off client: never surface readiness as the client's state —
+        // load (ACWR / sRPE) is the signal instead.
+        gpsOnly: clientGpsOnly,
+        // Raw per-client override: true/false explicit, null = inherit the team.
+        wellnessOverride: (p.uses_wellness_features ?? null) as boolean | null,
+        checkedInToday: clientGpsOnly ? false : !!r,
+        readiness: r && !clientGpsOnly
           ? {
               totalScore: r.total_score,
               zone: getZone(r.total_score),
@@ -241,7 +253,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       clients,
-      team: { id: ctx.teamId, name: ctx.teamName, type: ctx.teamType, gpsOnly },
+      team: { id: ctx.teamId, name: ctx.teamName, type: ctx.teamType, gpsOnly, wellnessDefault: teamWellness },
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

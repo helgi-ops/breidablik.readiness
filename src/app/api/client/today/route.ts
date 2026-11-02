@@ -25,6 +25,7 @@ import { buildOneRmMap, canonicalLift, isStale, type LvTest } from "@/lib/client
 import { computeWorkingOneRm, workingTargetKg, type SetLogRow } from "@/lib/client/workingOneRm";
 import { e1rmFromSet } from "@/lib/client/oneRepMaxFormulas";
 import { zoneFromColor, computeReadinessAdjustment, scaleSets, scaleLoadKg, DEFAULT_PT_BAND, type ReadinessBand } from "@/lib/client/readinessAdjust";
+import { getTeamMode, resolveWellnessForPlayer } from "@/lib/teamMode";
 
 export const runtime = "nodejs";
 
@@ -39,11 +40,11 @@ async function requirePlayer(req: Request) {
   if (!u?.user?.id) return { error: "Unauthorized", status: 401 } as const;
   const { data: p } = await sb
     .from("players")
-    .select("id, team_id, full_name")
+    .select("id, team_id, full_name, uses_wellness_features")
     .eq("user_id", u.user.id)
     .maybeSingle();
   if (!p) return { error: "Not a player account", status: 403 } as const;
-  return { sb, player: p as { id: string; team_id: string; full_name: string } } as const;
+  return { sb, player: p as { id: string; team_id: string; full_name: string; uses_wellness_features: boolean | null } } as const;
 }
 
 export async function GET(req: Request) {
@@ -58,6 +59,17 @@ export async function GET(req: Request) {
     .select("id, name, team_type, club_short_name")
     .eq("id", player.team_id)
     .maybeSingle();
+
+  // Effective operating mode for THIS client. A personal-trainer practice
+  // defaults to check-in off, but the trainer can switch an individual client
+  // on/off (players.uses_wellness_features). Explicit per-client flag wins;
+  // otherwise inherit the team-resolved value. Fail-safe: getTeamMode defaults to
+  // Full Suite on a read error, so a client never loses an intended check-in.
+  const teamMode = await getTeamMode(sb, player.team_id);
+  const usesWellnessFeatures = resolveWellnessForPlayer(
+    player.uses_wellness_features,
+    teamMode.usesWellnessFeatures,
+  );
 
   // ── Next upcoming game → pre-game taper (trainer-entered) ─────────
   const { data: nextGameRow } = await sb
@@ -663,6 +675,9 @@ export async function GET(req: Request) {
   return NextResponse.json({
     ok: true,
     player: { id: player.id, full_name: player.full_name },
+    // Effective check-in mode for this client (per-client override folded in).
+    // false = GPS/load-only (no check-in surfaces).
+    usesWellnessFeatures,
     team: team
       ? { id: (team as { id: string }).id, name: (team as { name: string }).name,
           type: (team as { team_type: string }).team_type,

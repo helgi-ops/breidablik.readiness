@@ -25,6 +25,7 @@ import PtReportsCard from "@/components/player/PtReportsCard";
 import ClientGoalsCard from "@/components/trainer/ClientGoalsCard";
 import type { TemplateLite } from "@/lib/trainer/goalRecommend";
 import ClientBreaksManager from "./ClientBreaksManager";
+import ClientCheckinControl from "./ClientCheckinControl";
 import TrainerAttentionList from "./TrainerAttentionList";
 
 /* ── Types ───────────────────────────────────────────── */
@@ -70,6 +71,10 @@ interface Client {
   name: string;
   hasAccount: boolean;
   position: string | null;
+  /** Per-client effective mode: true = check-in off (load-only) for this client. */
+  gpsOnly: boolean;
+  /** Raw per-client override: true/false explicit, null = inherit the team. */
+  wellnessOverride: boolean | null;
   checkedInToday: boolean;
   readiness: ClientReadiness | null;
   load: ClientLoad | null;
@@ -151,10 +156,10 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
     return () => window.removeEventListener("popstate", sync);
   }, []);
   const [clients, setClients] = useState<Client[]>([]);
-  // GPS/load-only practice (uses_wellness_features = false): the clients API
-  // returns readiness null and team.gpsOnly = true, so the list shows load
-  // (ACWR / sRPE) in place of the readiness dot/badge and check-in count.
-  const [gpsOnly, setGpsOnly] = useState(false);
+  // Practice-wide check-in default (team_settings; PT practices default off).
+  // Per client it can be overridden — each client carries its own `gpsOnly`.
+  // This value only feeds the per-client control's "Team default" label.
+  const [teamWellnessDefault, setTeamWellnessDefault] = useState(true);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [templates, setTemplates] = useState<PlanTemplate[]>([]);
   // Starter programmes (pt_explosive category='starter_template'), mapped into
@@ -246,7 +251,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
       });
       const json = await res.json();
       if (json.clients) setClients(json.clients);
-      setGpsOnly(!!json.team?.gpsOnly);
+      setTeamWellnessDefault(json.team?.wellnessDefault ?? true);
     } catch {
       // silent
     } finally {
@@ -544,13 +549,16 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
               <div className="text-2xl font-bold mt-1">{clients.length}</div>
             </div>
             <div className="bg-white border rounded-lg p-4">
+              {/* When no client has check-in on, the headline is load; once any
+                  client checks in (practice default or a per-client override),
+                  count check-ins among the clients who actually use it. */}
               <div className="text-xs text-gray-500 uppercase tracking-wide">
-                {gpsOnly ? (isIS ? "Álag skráð" : "Load tracked") : ct.clients.checkedIn}
+                {clients.some((c) => !c.gpsOnly) ? ct.clients.checkedIn : (isIS ? "Álag skráð" : "Load tracked")}
               </div>
               <div className="text-2xl font-bold mt-1 text-green-600">
-                {gpsOnly
-                  ? clients.filter((c) => c.load).length
-                  : clients.filter((c) => c.checkedInToday).length}
+                {clients.some((c) => !c.gpsOnly)
+                  ? clients.filter((c) => !c.gpsOnly && c.checkedInToday).length
+                  : clients.filter((c) => c.load).length}
               </div>
             </div>
             <div className="bg-white border rounded-lg p-4">
@@ -597,14 +605,14 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                   onClick={() => setSelectedClient(selectedClient?.id === client.id ? null : client)}
                 >
                   <div className="flex items-center gap-4">
-                    {/* Status dot — readiness zone, or (GPS/load-only) ACWR band */}
-                    <div className={`w-3 h-3 rounded-full flex-shrink-0 ${gpsOnly ? acwrDot(client.load?.acwr ?? null) : zoneDot(client.readiness?.zone ?? "none")}`} />
+                    {/* Status dot — readiness zone, or (check-in off) ACWR band */}
+                    <div className={`w-3 h-3 rounded-full flex-shrink-0 ${client.gpsOnly ? acwrDot(client.load?.acwr ?? null) : zoneDot(client.readiness?.zone ?? "none")}`} />
 
                     {/* Name + status */}
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{client.name || "—"}</div>
                       <div className="text-xs text-gray-500">
-                        {gpsOnly ? (
+                        {client.gpsOnly ? (
                           client.load?.acwr != null
                             ? <span>{ct.load.acwr} {Number(client.load.acwr).toFixed(2)}</span>
                             : (client.hasAccount ? (isIS ? "Ekkert álag skráð" : "No load logged") : ct.clients.noAccount)
@@ -614,8 +622,8 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                       </div>
                     </div>
 
-                    {/* Status badge — readiness zone, or (GPS/load-only) ACWR */}
-                    {gpsOnly ? (
+                    {/* Status badge — readiness zone, or (check-in off) ACWR */}
+                    {client.gpsOnly ? (
                       client.load?.acwr != null ? (
                         <div className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${acwrBadge(Number(client.load.acwr))}`}>
                           {ct.load.acwr} {Number(client.load.acwr).toFixed(2)} {trendArrow(client.load.trend)}
@@ -690,7 +698,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                           ["load", "Álag", "Load"],
                           ["adjust", "Aðlaganir", "Adjustments"],
                         ] as [DetailTab, string, string][])
-                          .filter(([key]) => !(gpsOnly && key === "readiness"))
+                          .filter(([key]) => !(client.gpsOnly && key === "readiness"))
                           .map(([key, isLabel, enLabel]) => (
                           <button
                             key={key}
@@ -758,7 +766,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                         </div>
                       )}
 
-                      {detailTab === "readiness" && !gpsOnly && (
+                      {detailTab === "readiness" && !client.gpsOnly && (
                         <div className="space-y-4">
                           <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
                             <div>
@@ -835,6 +843,16 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
 
                       {detailTab === "adjust" && (
                         <div className="space-y-4">
+                          {/* Per-client daily check-in switch — on / off / inherit
+                              the practice default. Refetch so the row re-renders
+                              with load vs readiness to match. */}
+                          <ClientCheckinControl
+                            clientId={client.id}
+                            value={client.wellnessOverride}
+                            teamDefault={teamWellnessDefault}
+                            lang={isIS ? "IS" : "EN"}
+                            onChanged={fetchClients}
+                          />
                           <MoveClientSessionControl clientId={client.id} lang={isIS ? "IS" : "EN"} />
                           <ClientSessionLogCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
                           <AutoProgressionCard clientId={client.id} lang={isIS ? "IS" : "EN"} />

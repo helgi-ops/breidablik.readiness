@@ -35,8 +35,6 @@ function weekdayName(iso: number, lang: string): string {
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { useTeamMode } from "@/lib/useTeamMode";
-import { isGpsOnly } from "@/lib/teamMode";
 import ClientProgrammeOverview from "@/components/player/ClientProgrammeOverview";
 import ClientMoveSessionButton from "@/components/player/ClientMoveSessionButton";
 import ClientMoveSessionControl from "@/components/player/ClientMoveSessionControl";
@@ -46,6 +44,9 @@ import MethodologyLink from "@/components/common/MethodologyLink";
 type TodayResp = {
   ok: true;
   player: { id: string; full_name: string };
+  /** Effective check-in mode for this client (per-client override folded in).
+   *  false = GPS/load-only, so no check-in surfaces. Resolved server-side. */
+  usesWellnessFeatures?: boolean;
   team: { id: string; name: string; type: string | null; short: string | null } | null;
   explosive: {
     level: string;
@@ -135,13 +136,12 @@ export default function ClientTodayPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  // Practice operating mode. A personal-trainer practice is a team; when it
-  // runs "GPS / load only" (uses_wellness_features = false) the client gets no
-  // check-in surfaces. Null = still loading → default to showing wellness, so a
-  // Full Suite client never flashes hidden. The today response already carries
-  // the team id, so no extra profile lookup is needed.
-  const teamMode = useTeamMode(data?.team?.id ?? null, data?.team?.type ?? undefined);
-  const gpsOnly = isGpsOnly(teamMode);
+  // Effective check-in mode for this client — resolved server-side with the
+  // per-client override folded in (players.uses_wellness_features over the
+  // practice-wide default). false = GPS/load-only → no check-in surfaces. Before
+  // the one API call resolves, data is null and the page shows a loader, so a
+  // Full Suite client never flashes hidden.
+  const gpsOnly = data?.usesWellnessFeatures === false;
 
   if (err) return <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>;
   if (!data) return <div className="text-sm text-slate-500">{lang === "IS" ? "Hleð…" : "Loading…"}</div>;

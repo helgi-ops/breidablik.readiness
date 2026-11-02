@@ -21,7 +21,7 @@ import { computeLoadQuadrant } from "@/lib/client/loadQuadrant";
 import { computeVolumeLoad } from "@/lib/client/volumeLoad";
 import { RETEST_DAYS } from "@/lib/client/oneRepMax";
 import { getPlayersOnBreak } from "@/lib/notifications/clientBreaks";
-import { getTeamMode, isGpsOnly } from "@/lib/teamMode";
+import { getTeamMode, resolveWellnessForPlayer } from "@/lib/teamMode";
 
 export const runtime = "nodejs";
 
@@ -50,15 +50,17 @@ export async function GET(req: Request) {
   const teamId = url.searchParams.get("team_id") || (prof as { team_id?: string } | null)?.team_id;
   if (!teamId) return NextResponse.json({ ok: true, clients: [] });
 
-  // GPS/load-only practice: check-in is off, so the wellness-derived flags
-  // (red readiness, trending down, "no check-in today") must never fire —
-  // only the load-based flags stand. Fail-safe to Full Suite on read error.
-  const gpsOnly = isGpsOnly(await getTeamMode(sb, teamId));
+  // Check-in-off clients: the wellness-derived flags (red readiness, trending
+  // down, "no check-in today") must never fire — only the load-based flags
+  // stand. This is per-client: the trainer can turn check-in on/off for an
+  // individual client (players.uses_wellness_features) over the practice-wide
+  // default. Fail-safe to Full Suite on read error (getTeamMode default).
+  const teamWellness = (await getTeamMode(sb, teamId)).usesWellnessFeatures;
 
   const { data: players } = await sb
-    .from("players").select("id, full_name, user_id")
+    .from("players").select("id, full_name, user_id, uses_wellness_features")
     .eq("team_id", teamId).eq("is_active", true).order("full_name");
-  const list = ((players ?? []) as Array<{ id: string; full_name: string; user_id: string | null }>).slice(0, 50);
+  const list = ((players ?? []) as Array<{ id: string; full_name: string; user_id: string | null; uses_wellness_features: boolean | null }>).slice(0, 50);
   const today = new Date().toISOString().slice(0, 10);
 
   // Clients on a declared vacation are excluded — no false "missed check-in".
@@ -67,9 +69,11 @@ export async function GET(req: Request) {
   const results = await Promise.all(list.filter((p) => !onBreak.has(p.id)).map(async (p) => {
     const flags: Flag[] = [];
 
-    // Readiness today + recent trend (canonical color). Skipped entirely for a
-    // GPS/load-only practice — no check-in means no wellness flags.
-    if (!gpsOnly) {
+    // Readiness today + recent trend (canonical color). Skipped entirely when
+    // this client's check-in is off (per-client override, else team default) —
+    // no check-in means no wellness flags.
+    const clientGpsOnly = !resolveWellnessForPlayer(p.uses_wellness_features, teamWellness);
+    if (!clientGpsOnly) {
       const { data: rday } = await sb
         .from("readiness_entries").select("color, total_score, entry_date")
         .eq("player_id", p.id).gte("entry_date", iso(9))
