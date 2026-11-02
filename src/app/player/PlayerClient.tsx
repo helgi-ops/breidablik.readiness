@@ -8,6 +8,7 @@ import { PLAYER_COPY } from "./playerCopy";
 import { lookupExercise } from "./exerciseDatabase";
 import { useExerciseVideoLookup } from "./exerciseVideos";
 import { embedDrillVideo } from "@/components/team/sessionShared";
+import { playTimerDone } from "@/lib/client/timerChime";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -2745,6 +2746,8 @@ function SessionFocusScreen({
     const id = setInterval(() => setRestLeft((s) => (s != null && s > 0 ? s - 1 : s)), 1000);
     return () => clearInterval(id);
   }, [restLeft]);
+  // Chime + vibrate the moment the rest countdown reaches 0.
+  useEffect(() => { if (restLeft === 0) playTimerDone(); }, [restLeft]);
 
   // ── Inline per-set logging (non-VBT loop) ──────────────────────────────────
   // As the player taps "Set complete" on a canonical barbell lift, persist weight × reps × RPE to
