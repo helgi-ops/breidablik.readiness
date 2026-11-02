@@ -140,7 +140,7 @@ export default function ClientTodayPage() {
   // check-in surfaces. Null = still loading → default to showing wellness, so a
   // Full Suite client never flashes hidden. The today response already carries
   // the team id, so no extra profile lookup is needed.
-  const teamMode = useTeamMode(data?.team?.id ?? null);
+  const teamMode = useTeamMode(data?.team?.id ?? null, data?.team?.type ?? undefined);
   const gpsOnly = isGpsOnly(teamMode);
 
   if (err) return <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>;

@@ -39,27 +39,45 @@ export function modeFromFlag(usesWellnessFeatures: boolean): TeamMode {
   return usesWellnessFeatures ? "full_suite" : "gps_only";
 }
 
-/** Server-side: read team mode for a given team. Defaults to Full Suite if
- *  no team_settings row exists yet — keeps the safe behaviour for any team
- *  that hasn't been touched since the migration. */
+/** The effective mode when a team has NOT explicitly chosen (team_settings
+ *  row missing or uses_wellness_features = null). A personal-trainer practice
+ *  defaults to check-in OFF — its clients just track load/strength and the
+ *  trainer opts in to wellness. Every other team type defaults to Full Suite. */
+export function defaultWellnessForTeamType(teamType: string | null | undefined): boolean {
+  return String(teamType ?? "").toLowerCase() !== "personal_trainer";
+}
+
+/** Server-side: read team mode for a given team. An explicit true/false always
+ *  wins; when unset (no row / null), the default follows team_type — club teams
+ *  keep Full Suite, personal-trainer practices default to check-in OFF. */
 export async function getTeamMode(
   sb: SupabaseClient,
   teamId: string,
 ): Promise<TeamModeRow> {
+  // team_type decides the default when the practice hasn't chosen yet.
+  let teamType: string | null = null;
+  try {
+    const { data: t } = await sb.from("teams").select("team_type").eq("id", teamId).maybeSingle();
+    teamType = (t as { team_type?: string | null } | null)?.team_type ?? null;
+  } catch {
+    teamType = null; // unknown → treated as club (Full Suite) below
+  }
+  const fallback = defaultWellnessForTeamType(teamType);
+
   const { data, error } = await sb
     .from("team_settings")
     .select("uses_wellness_features")
     .eq("team_id", teamId)
     .maybeSingle();
 
-  // Tolerant: if RLS blocks read or the column doesn't exist yet, default to
-  // Full Suite. Better to over-show wellness than to silently hide it.
+  // Tolerant: if RLS blocks the settings read, fall back to the team_type
+  // default (club → Full Suite, PT → off). No silent, wrong override either way.
   if (error) {
-    return { teamId, usesWellnessFeatures: true, mode: "full_suite" };
+    return { teamId, usesWellnessFeatures: fallback, mode: modeFromFlag(fallback) };
   }
 
-  const usesWellnessFeatures = (data as { uses_wellness_features?: boolean } | null)?.uses_wellness_features;
-  const resolved = typeof usesWellnessFeatures === "boolean" ? usesWellnessFeatures : true;
+  const usesWellnessFeatures = (data as { uses_wellness_features?: boolean | null } | null)?.uses_wellness_features;
+  const resolved = typeof usesWellnessFeatures === "boolean" ? usesWellnessFeatures : fallback;
   return { teamId, usesWellnessFeatures: resolved, mode: modeFromFlag(resolved) };
 }
 
@@ -75,22 +93,46 @@ export function isGpsOnly(row: TeamModeRow | null | undefined): boolean {
   return !row.usesWellnessFeatures;
 }
 
-/** Server-side: returns the set of team_ids that have
- *  uses_wellness_features = false. Used by the notification scheduler to
- *  skip check-in and RPE reminders for GPS-only teams without making a
- *  per-team round trip. Returns empty set on any error — safer to send
- *  reminders than to silently skip them. */
+/** Server-side: returns the set of team_ids that run in GPS/load-only mode
+ *  (no check-in). Used by the notification scheduler to skip check-in and RPE
+ *  reminders without a per-team round trip. Two sources:
+ *    1. any team that explicitly opted out (uses_wellness_features = false);
+ *    2. every personal-trainer practice that has NOT explicitly opted in
+ *       (uses_wellness_features = true) — PT defaults to off.
+ *  Returns empty set on any error — safer to send reminders than to silently
+ *  skip them. */
 export async function getGpsOnlyTeamIds(
   sb: SupabaseClient,
 ): Promise<Set<string>> {
   try {
-    const { data, error } = await sb
+    const out = new Set<string>();
+
+    // 1. Explicit opt-out, any team type.
+    const { data: off, error: offErr } = await sb
       .from("team_settings")
       .select("team_id")
       .eq("uses_wellness_features", false);
-    if (error) return new Set();
-    const rows = (data ?? []) as Array<{ team_id: string }>;
-    return new Set(rows.map((r) => String(r.team_id)));
+    if (offErr) return new Set();
+    for (const r of (off ?? []) as Array<{ team_id: string }>) out.add(String(r.team_id));
+
+    // 2. Personal-trainer practices default to off unless explicitly opted in.
+    const { data: ptTeams, error: ptErr } = await sb
+      .from("teams")
+      .select("id")
+      .eq("team_type", "personal_trainer");
+    if (ptErr) return out;
+    const ptIds = ((ptTeams ?? []) as Array<{ id: string }>).map((r) => String(r.id));
+    if (ptIds.length > 0) {
+      const { data: optedIn } = await sb
+        .from("team_settings")
+        .select("team_id")
+        .eq("uses_wellness_features", true)
+        .in("team_id", ptIds);
+      const optedInSet = new Set(((optedIn ?? []) as Array<{ team_id: string }>).map((r) => String(r.team_id)));
+      for (const id of ptIds) if (!optedInSet.has(id)) out.add(id);
+    }
+
+    return out;
   } catch {
     return new Set();
   }

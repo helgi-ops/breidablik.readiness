@@ -197,8 +197,11 @@ export default function CoachSettingsPage() {
           setSportType(json.sport_type === "basketball" ? "basketball" : "football");
           const tm = String(json.training_mode_default ?? "auto").toLowerCase();
           if (tm === "indoor" || tm === "outdoor" || tm === "auto") setTrainingMode(tm);
-          setUsesWellnessFeatures(json.uses_wellness_features ?? true);
-          setIsPt(String(json.team_type ?? "") === "personal_trainer");
+          // Unset (null) follows team_type: PT practices default to check-in
+          // OFF, every other team type to Full Suite.
+          const pt = String(json.team_type ?? "") === "personal_trainer";
+          setUsesWellnessFeatures(json.uses_wellness_features ?? !pt);
+          setIsPt(pt);
         }
       } catch { /* silently fail */ }
     };

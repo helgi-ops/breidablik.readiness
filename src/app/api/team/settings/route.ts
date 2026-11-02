@@ -64,12 +64,14 @@ export async function GET(req: Request) {
     const teamType =
       String((teamRow as { team_type?: string } | null)?.team_type ?? "club_team");
 
-    // Return defaults if no row exists yet
+    // Return defaults if no row exists yet. uses_wellness_features follows
+    // team_type when unset: a personal-trainer practice defaults to check-in
+    // OFF, every other team type to Full Suite (see src/lib/teamMode.ts).
     const settings = data ?? {
       team_id: teamId,
       indoor_mode: false,
       sport_type: "football",
-      uses_wellness_features: true,
+      uses_wellness_features: teamType === "personal_trainer" ? false : true,
       notes: null,
       updated_at: null,
       updated_by: null,
