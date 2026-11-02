@@ -6,9 +6,9 @@
  *
  * Flow: type the client's injury history → "Búa til með AI" proposes a cited
  * corrective list (library-first; gaps flagged "AI-tillaga") → the trainer
- * reviews/removes items, can add more (with a typeahead over the exercise
- * library), sets which weekdays EACH exercise runs on, picks a duration → Vista.
- * Nothing reaches the client until saved. "Slökkva" archives it.
+ * reviews/removes items, can add more (typeahead over the exercise library),
+ * sets which weekdays EACH exercise runs on (independently), picks a duration →
+ * Vista. Nothing reaches the client until saved. "Slökkva" archives it.
  *
  * AI proposes; the trainer confirms. Screening / training support, not a diagnosis.
  */
@@ -31,7 +31,7 @@ type Item = {
   videoUrl?: string | null;
   aiSuggested?: boolean;
   manual?: boolean;
-  /** ISO weekdays this exercise runs on; empty = follows the global days. */
+  /** ISO weekdays (1=Mon..7=Sun) this exercise runs on — independent per item. */
   days?: number[];
 };
 type Injury = { body_part: string; side: string | null; type: string | null; note: string | null };
@@ -50,6 +50,8 @@ const WEEKDAYS: Array<{ iso: number; en: string; is: string }> = [
   { iso: 6, en: "Sat", is: "Lau" },
   { iso: 7, en: "Sun", is: "Sun" },
 ];
+// What a newly added/generated exercise starts on when there's nothing to copy.
+const DEFAULT_DAYS = [1, 3, 5]; // Mon/Wed/Fri — a sensible corrective cadence
 
 export default function ClientCorrectiveControl({
   clientId,
@@ -64,7 +66,6 @@ export default function ClientCorrectiveControl({
   const [injuryText, setInjuryText] = useState("");
   const [items, setItems] = useState<Item[]>([]);
   const [injuries, setInjuries] = useState<Injury[]>([]);
-  const [weekdays, setWeekdays] = useState<number[]>([]);
   const [durationMin, setDurationMin] = useState<number | "">("");
   const [model, setModel] = useState<string | null>(null);
   const [extracted, setExtracted] = useState<unknown>(null);
@@ -84,20 +85,23 @@ export default function ClientCorrectiveControl({
     return { Authorization: `Bearer ${session?.access_token ?? ""}` };
   }, []);
 
-  // Effective days for an item (its own, else the global plan days).
-  const effDays = useCallback((it: Item) => (it.days && it.days.length ? it.days : weekdays), [weekdays]);
-
-  function newItemDays() { return weekdays.length ? [...weekdays] : []; }
+  // A new exercise starts on the days the existing exercises use (union), else
+  // the default. Each exercise's days are then edited independently.
+  function defaultDays(): number[] {
+    const union = new Set<number>();
+    for (const it of items) for (const d of it.days ?? []) union.add(d);
+    return union.size ? [...union].sort((a, b) => a - b) : [...DEFAULT_DAYS];
+  }
 
   function addManual() {
     const name = addName.trim();
     if (!name) return;
-    setItems((xs) => [...xs, { name, dose: addDose.trim() || undefined, cue: addCue.trim() || undefined, manual: true, days: newItemDays() }]);
+    setItems((xs) => [...xs, { name, dose: addDose.trim() || undefined, cue: addCue.trim() || undefined, manual: true, days: defaultDays() }]);
     setAddName(""); setAddDose(""); setAddCue(""); setSug([]); setShowAdd(false);
   }
 
   function pickSuggestion(s: Suggestion) {
-    const base = { name: s.name, nameIs: s.nameIs, dose: s.dose, doseIs: s.doseIs, cue: s.cue, cueIs: s.cueIs, videoUrl: s.videoUrl ?? null, days: newItemDays() };
+    const base = { name: s.name, nameIs: s.nameIs, dose: s.dose, doseIs: s.doseIs, cue: s.cue, cueIs: s.cueIs, videoUrl: s.videoUrl ?? null, days: defaultDays() };
     const it: Item = s.kind === "corrective"
       ? { ...base, slug: s.slug, citation: s.citation }   // cited library pick
       : { ...base, manual: true };                         // exercise_library pick (has video)
@@ -125,9 +129,14 @@ export default function ClientCorrectiveControl({
       const j = await res.json().catch(() => ({}));
       const p = j.prescription;
       if (p) {
+        // Backfill days on legacy items (saved before per-item days): use the
+        // prescription's weekdays, else the default.
+        const fallback = Array.isArray(p.weekdays) && p.weekdays.length ? p.weekdays : [...DEFAULT_DAYS];
         setInjuryText(p.injuryText ?? "");
-        setItems(Array.isArray(p.items) ? p.items : []);
-        setWeekdays(Array.isArray(p.weekdays) ? p.weekdays : []);
+        setItems((Array.isArray(p.items) ? p.items : []).map((it: Item) => ({
+          ...it,
+          days: Array.isArray(it.days) && it.days.length ? it.days : [...fallback],
+        })));
         setDurationMin(p.durationMin ?? "");
         setModel(p.model ?? null);
         setExtracted(p.extracted ?? null);
@@ -145,6 +154,12 @@ export default function ClientCorrectiveControl({
   async function generate() {
     if (injuryText.trim().length < 10) { setMsg(isIS ? "Lýstu meiðslunum í aðeins meiri texta." : "Describe the injuries in a little more detail."); return; }
     setBusy("ai"); setMsg(null);
+    // Seed generated exercises with the days already in use, else the default.
+    const seed = (() => {
+      const u = new Set<number>();
+      for (const it of items) for (const d of it.days ?? []) u.add(d);
+      return u.size ? [...u].sort((a, b) => a - b) : [...DEFAULT_DAYS];
+    })();
     try {
       const res = await fetch(`/api/trainer/client/${clientId}/corrective`, {
         method: "POST",
@@ -154,7 +169,10 @@ export default function ClientCorrectiveControl({
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error ?? `${res.status}`);
       const prop = j.proposal ?? {};
-      setItems(Array.isArray(prop.items) ? prop.items : []);
+      setItems((Array.isArray(prop.items) ? prop.items : []).map((it: Item) => ({
+        ...it,
+        days: Array.isArray(it.days) && it.days.length ? it.days : [...seed],
+      })));
       setInjuries(Array.isArray(prop.injuries) ? prop.injuries : []);
       setModel(prop.model ?? null);
       setExtracted(prop.injuries ?? null);
@@ -168,7 +186,8 @@ export default function ClientCorrectiveControl({
 
   async function save() {
     if (items.length === 0) { setMsg(isIS ? "Engar æfingar valdar." : "No exercises selected."); return; }
-    if (weekdays.length === 0) { setMsg(isIS ? "Veldu a.m.k. einn dag." : "Pick at least one day."); return; }
+    if (items.some((it) => !it.days || it.days.length === 0)) { setMsg(isIS ? "Hver æfing þarf a.m.k. einn dag." : "Every exercise needs at least one day."); return; }
+    const weekdays = Array.from(new Set(items.flatMap((it) => it.days ?? []))).sort((a, b) => a - b);
     setBusy("save"); setMsg(null);
     try {
       const res = await fetch(`/api/trainer/client/${clientId}/corrective`, {
@@ -179,7 +198,7 @@ export default function ClientCorrectiveControl({
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error ?? `${res.status}`);
       setActive(true);
-      setMsg(isIS ? "✓ Vistað — birtist hjá viðskiptavininum á völdum dögum." : "✓ Saved — shows for the client on the chosen days.");
+      setMsg(isIS ? "✓ Vistað — hver æfing birtist á sínum dögum." : "✓ Saved — each exercise shows on its own days.");
       onChanged?.();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : (isIS ? "Villa" : "Error"));
@@ -194,7 +213,7 @@ export default function ClientCorrectiveControl({
     try {
       const res = await fetch(`/api/trainer/client/${clientId}/corrective`, { method: "DELETE", headers: await authHeader() });
       if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error ?? `${res.status}`); }
-      setActive(false); setItems([]); setWeekdays([]); setDurationMin("");
+      setActive(false); setItems([]); setDurationMin("");
       setMsg(isIS ? "Slökkt." : "Turned off.");
       onChanged?.();
     } catch (e) {
@@ -206,28 +225,21 @@ export default function ClientCorrectiveControl({
 
   const pick = (en?: string | null, is?: string | null) => (isIS ? is || en : en || is) ?? "";
 
-  // Global plan days. Removing a day also prunes it from every item's own days.
-  const toggleDay = (iso: number) => {
-    setWeekdays((w) => {
-      const has = w.includes(iso);
-      const next = has ? w.filter((d) => d !== iso) : [...w, iso].sort((a, b) => a - b);
-      if (has) setItems((xs) => xs.map((it) => (it.days ? { ...it, days: it.days.filter((d) => d !== iso) } : it)));
-      return next;
-    });
-  };
-
-  // Per-item day: toggle within the effective set; never empty; collapse to
-  // "follow global" when it equals the full global set.
+  // Per-exercise day toggle — independent, no coupling to other exercises.
   function toggleItemDay(idx: number, iso: number) {
     setItems((xs) => xs.map((it, i) => {
       if (i !== idx) return it;
-      const cur = new Set(effDays(it));
+      const cur = new Set(it.days ?? []);
       if (cur.has(iso)) cur.delete(iso); else cur.add(iso);
-      const next = [...cur].sort((a, b) => a - b);
-      if (next.length === 0) return it; // keep at least one day
-      const sameAsGlobal = next.length === weekdays.length && next.every((x) => weekdays.includes(x));
-      return { ...it, days: sameAsGlobal ? undefined : next };
+      return { ...it, days: [...cur].sort((a, b) => a - b) };
     }));
+  }
+  // Copy one exercise's days onto every exercise (the "same days for all" shortcut).
+  function copyDaysToAll(idx: number) {
+    setItems((xs) => {
+      const src = [...(xs[idx]?.days ?? [])];
+      return xs.map((it) => ({ ...it, days: [...src] }));
+    });
   }
 
   return (
@@ -244,8 +256,8 @@ export default function ClientCorrectiveControl({
       </div>
       <p className="mt-0.5 text-xs text-slate-500">
         {isIS
-          ? "Skrifaðu meiðslasögu viðskiptavinarins; AI leggur til leiðréttingaræfingar úr cited safni (göt merkt „AI-tillaga“). Þú yfirferð, velur daga per æfingu og vistar."
-          : "Describe the client's injury history; AI proposes corrective exercises from the cited library (gaps flagged “AI suggestion”). You review, set days per exercise, and save."}
+          ? "Skrifaðu meiðslasögu viðskiptavinarins; AI leggur til leiðréttingaræfingar úr cited safni (göt merkt „AI-tillaga“). Þú yfirferð og velur daga fyrir hverja æfingu."
+          : "Describe the client's injury history; AI proposes corrective exercises from the cited library (gaps flagged “AI suggestion”). You review and set days for each exercise."}
       </p>
 
       <textarea
@@ -278,28 +290,8 @@ export default function ClientCorrectiveControl({
         </div>
       )}
 
-      {/* Global plan days — which weekdays the corrective runs on (the default
-          for each exercise; narrow per exercise below). */}
       {items.length > 0 && (
-        <div className="mt-3">
-          <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500">{isIS ? "Dagar (plan keyrir)" : "Days (plan runs)"}</div>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {WEEKDAYS.map((d) => (
-              <button
-                key={d.iso}
-                type="button"
-                onClick={() => toggleDay(d.iso)}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium ${weekdays.includes(d.iso) ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-              >
-                {isIS ? d.is : d.en}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {items.length > 0 && (
-        <ul className="mt-2 space-y-1.5">
+        <ul className="mt-3 space-y-1.5">
           {items.map((it, i) => (
             <li key={`${it.slug ?? it.name}-${i}`} className="rounded-md border border-slate-100 bg-slate-50 px-2.5 py-1.5">
               <div className="flex items-start justify-between gap-2">
@@ -325,31 +317,39 @@ export default function ClientCorrectiveControl({
                   {isIS ? "Fjarlægja" : "Remove"}
                 </button>
               </div>
-              {/* Per-exercise days — pick among the global plan days. */}
-              {weekdays.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {WEEKDAYS.filter((d) => weekdays.includes(d.iso)).map((d) => {
-                    const on = effDays(it).includes(d.iso);
-                    return (
-                      <button
-                        key={d.iso}
-                        type="button"
-                        onClick={() => toggleItemDay(i, d.iso)}
-                        className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${on ? "bg-violet-500 text-white" : "bg-white text-slate-400 border border-slate-200 hover:bg-slate-100"}`}
-                      >
-                        {isIS ? d.is : d.en}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              {/* This exercise's own days — independent of the others. */}
+              <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                <span className="mr-0.5 text-[10px] text-slate-400">{isIS ? "Dagar:" : "Days:"}</span>
+                {WEEKDAYS.map((d) => {
+                  const on = (it.days ?? []).includes(d.iso);
+                  return (
+                    <button
+                      key={d.iso}
+                      type="button"
+                      onClick={() => toggleItemDay(i, d.iso)}
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${on ? "bg-violet-500 text-white" : "bg-white text-slate-400 border border-slate-200 hover:bg-slate-100"}`}
+                    >
+                      {isIS ? d.is : d.en}
+                    </button>
+                  );
+                })}
+                {items.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => copyDaysToAll(i)}
+                    className="ml-1 text-[10px] font-medium text-violet-600 hover:underline"
+                    title={isIS ? "Nota þessa daga á allar æfingar" : "Use these days for every exercise"}
+                  >
+                    {isIS ? "afrita á allar" : "copy to all"}
+                  </button>
+                )}
+              </div>
             </li>
           ))}
         </ul>
       )}
 
-      {/* Add an exercise — with a typeahead over the cited library + your
-          exercise_library (which carries demo videos). */}
+      {/* Add an exercise — typeahead over the cited library + your exercise_library. */}
       {!(busy === "load") && (
         <div className="mt-2">
           {!showAdd ? (
