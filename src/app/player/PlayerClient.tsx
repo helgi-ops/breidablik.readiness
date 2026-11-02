@@ -2477,6 +2477,22 @@ function parseFocusStats(ex: ParsedExercise): { sets: number | null; reps: strin
   return { sets, reps, load, rest };
 }
 
+/** Rest in whole seconds from a parseFocusStats `rest` ("90s" / "2m" / "60–90s").
+ *  Falls back to 90 s so the between-sets timer always has a sensible default. */
+function restSecondsFromStat(rest: string | null | undefined): number {
+  if (!rest) return 90;
+  const m = rest.match(/(\d+)/);
+  const n = m ? parseInt(m[1], 10) : 0;
+  if (!n) return 90;
+  return /m/i.test(rest) ? n * 60 : n;
+}
+
+/** Seconds → "M:SS". */
+function clockMMSS(sec: number): string {
+  const s = Math.max(0, Math.round(sec));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
 // Strip a leading "A. " / "B1. " plan label and a trailing "(...)" note so the
 // exercise name reads cleanly as a focus-screen heading.
 function focusExName(raw: string): string {
@@ -2720,6 +2736,16 @@ function SessionFocusScreen({
   const toggleMember = (i: number) =>
     setDoneMembers((prev) => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
 
+  // ── Between-sets rest timer ────────────────────────────────────────────────
+  // Starts (counting down from the exercise's prescribed rest, else 90 s) when
+  // the player completes a set with more to go. Skippable, extendable (+30 s).
+  const [restLeft, setRestLeft] = useState<number | null>(null);
+  useEffect(() => {
+    if (restLeft == null || restLeft <= 0) return;
+    const id = setInterval(() => setRestLeft((s) => (s != null && s > 0 ? s - 1 : s)), 1000);
+    return () => clearInterval(id);
+  }, [restLeft]);
+
   // ── Inline per-set logging (non-VBT loop) ──────────────────────────────────
   // As the player taps "Set complete" on a canonical barbell lift, persist weight × reps × RPE to
   // player_strength_set_log (→ e1RM / working kg). Hidden for VBT teams. Descriptive — never readiness.
@@ -2759,6 +2785,7 @@ function SessionFocusScreen({
   const stats = reducedEx ? parseFocusStats(reducedEx) : null;
   const complexSets = cur?.kind === "complex" ? parseComplexSets(cur.members, cur.restNote) : null;
   const setCount = cur?.kind === "complex" ? complexSets : stats?.sets ?? null;
+  const restSeconds = restSecondsFromStat(cur?.kind === "single" ? stats?.rest ?? null : null);
 
   // Loggable only for a single canonical barbell lift on a non-VBT team.
   const liftCanon = baseEx ? canonicalLift(baseEx.name) : null;
@@ -2821,18 +2848,20 @@ function SessionFocusScreen({
     setDoneSets(0);
     setDoneMembers(new Set());
     setSwapOpen(false);
+    setRestLeft(null);
     if (isLastStep) { setFinished(true); onComplete?.(); }
     else setStepIdx((i) => Math.min(total - 1, i + 1));
   };
   const primaryAction = () => {
     logCurrentSet(); // persist the set the player just completed (no-op unless loggable + inputs valid)
-    if (!onLastSet) { setDoneSets((s) => s + 1); setDoneMembers(new Set()); }
+    if (!onLastSet) { setDoneSets((s) => s + 1); setDoneMembers(new Set()); setRestLeft(restSeconds); }
     else advance();
   };
   const goBack = () => {
     setDoneSets(0);
     setDoneMembers(new Set());
     setSwapOpen(false);
+    setRestLeft(null);
     setStepIdx((i) => Math.max(0, i - 1));
   };
 
@@ -3121,6 +3150,27 @@ function SessionFocusScreen({
       {!finished ? (
         <div className="shrink-0 border-t border-zinc-100 px-4 py-3">
           <div className="mx-auto max-w-lg space-y-2">
+            {/* Between-sets rest countdown — appears after a set is completed. */}
+            {restLeft != null ? (
+              <div className="flex items-center gap-2 rounded-xl border border-[#2740e6]/30 bg-[#eef0ff] px-3 py-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">{isIS ? "Hvíld" : "Rest"}</span>
+                <span className="font-mono text-lg font-bold tabular-nums text-[#2740e6]">{clockMMSS(restLeft)}</span>
+                <button
+                  type="button"
+                  onClick={() => setRestLeft((s) => (s ?? 0) + 30)}
+                  className="ml-auto rounded-full border border-[#2740e6]/30 px-2.5 py-1 text-[11px] font-semibold text-[#2740e6] active:bg-[#2740e6]/10"
+                >
+                  +30s
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRestLeft(null)}
+                  className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-zinc-500 active:bg-zinc-100"
+                >
+                  {isIS ? "Sleppa" : "Skip"}
+                </button>
+              </div>
+            ) : null}
             <div className="flex items-center gap-3">
               <button
                 type="button"
