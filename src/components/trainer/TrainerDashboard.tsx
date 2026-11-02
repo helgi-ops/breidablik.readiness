@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { TRAINER_COPY } from "./trainerCopy";
@@ -26,7 +27,8 @@ import ClientGoalsCard from "@/components/trainer/ClientGoalsCard";
 import type { TemplateLite } from "@/lib/trainer/goalRecommend";
 import ClientBreaksManager from "./ClientBreaksManager";
 import ClientCheckinControl from "./ClientCheckinControl";
-import TrainerAttentionList from "./TrainerAttentionList";
+import ClientCorrectiveControl from "./ClientCorrectiveControl";
+import TrainerAttentionList, { isCardFlag, type AttentionClient } from "./TrainerAttentionList";
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -80,6 +82,13 @@ interface Client {
   load: ClientLoad | null;
   plan: ClientPlan | null;
   todayCompletion: ClientCompletion | null;
+  onBreak: boolean;
+  /** Last 7 days vs normal; same computation as the attention feed. */
+  loadRatio: number | null;
+  lastSessionDate: string | null;
+  daysSinceLastSession: number | null;
+  sessionsLast7d: number;
+  momentumScore: number | null;
 }
 
 interface Invitation {
@@ -169,10 +178,12 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
   const [assignments, setAssignments] = useState<PlanAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [attention, setAttention] = useState<AttentionClient[]>([]);
+  const [clientFilter, setClientFilter] = useState<"all" | "need" | "noplan" | "break">("all");
   // Sub-tab for the expanded client-detail panel. Only one client is expanded
   // at a time (selectedClient is single), so a single state suffices. Splits the
   // ~15-section "dumping ground" into focused views (audit P2).
-  type DetailTab = "overview" | "readiness" | "goals" | "load" | "adjust";
+  type DetailTab = "overview" | "readiness" | "goals" | "load" | "corrective" | "adjust";
   const [detailTab, setDetailTab] = useState<DetailTab>("overview");
 
   // Invitation form
@@ -433,46 +444,31 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
 
   /* ── Readiness zone helpers ─────────────────────────── */
 
-  function zoneBg(zone: string) {
-    switch (zone) {
-      case "green": return "bg-green-100 text-green-800 border-green-300";
-      case "yellow": return "bg-amber-100 text-amber-800 border-amber-300";
-      case "red": return "bg-red-100 text-red-800 border-red-300";
-      default: return "bg-gray-100 text-gray-500 border-gray-200";
-    }
-  }
-
-  function zoneDot(zone: string) {
-    switch (zone) {
-      case "green": return "bg-green-500";
-      case "yellow": return "bg-amber-500";
-      case "red": return "bg-red-500";
-      default: return "bg-gray-300";
-    }
-  }
-
   function zoneLabel(zone: string) {
     return ct.readiness[zone as keyof typeof ct.readiness] ?? zone;
   }
 
-  // ACWR → traffic-light, for the GPS/load-only list where load stands in for
-  // readiness. Danger outside 0.5–1.5, caution outside 0.8–1.3 (Gabbett band).
-  function acwrDot(acwr: number | null) {
-    if (acwr == null) return "bg-gray-300";
-    if (acwr > 1.5 || acwr < 0.5) return "bg-red-500";
-    if (acwr > 1.3 || acwr < 0.8) return "bg-amber-500";
-    return "bg-green-500";
-  }
-  function acwrBadge(acwr: number) {
-    if (acwr > 1.5 || acwr < 0.5) return "bg-red-100 text-red-800 border-red-300";
-    if (acwr > 1.3 || acwr < 0.8) return "bg-amber-100 text-amber-800 border-amber-300";
-    return "bg-green-100 text-green-800 border-green-300";
+  // Plain-language load status (Gabbett bands), word + colour, so ACWR
+  // itself stays out of the primary view.
+  function loadStatus(c: Client): { label: string; dot: string; text: string; ratio: string | null } {
+    if (c.onBreak) return { label: isIS ? "Í pásu" : "On break", dot: "bg-slate-300", text: "text-slate-500", ratio: null };
+    if (!c.hasAccount) return { label: ct.clients.noAccount, dot: "bg-slate-300", text: "text-slate-500", ratio: null };
+    const r = c.loadRatio;
+    if (r == null) return { label: isIS ? "Engin gögn" : "No data", dot: "bg-slate-300", text: "text-slate-500", ratio: null };
+    const ratio = `${r.toFixed(1)}×`;
+    if (r > 1.5) return { label: isIS ? "Of hratt" : "Too fast", dot: "bg-red-600", text: "text-red-700", ratio };
+    if (r < 0.5) return { label: isIS ? "Fellur hratt" : "Dropping fast", dot: "bg-red-600", text: "text-red-700", ratio };
+    if (r > 1.3) return { label: isIS ? "Hækkar" : "Rising", dot: "bg-amber-500", text: "text-amber-800", ratio };
+    if (r < 0.8) return { label: isIS ? "Fellur" : "Dropping", dot: "bg-amber-500", text: "text-amber-800", ratio };
+    return { label: isIS ? "Á réttri leið" : "On track", dot: "bg-emerald-600", text: "text-emerald-700", ratio };
   }
 
-  function trendArrow(trend: string | null) {
-    if (trend === "RISING") return "↑";
-    if (trend === "DROPPING") return "↓";
-    return "→";
+  function lastSessionLabel(c: Client): string {
+    const d = c.daysSinceLastSession;
+    if (d == null) return isIS ? "Engin enn" : "None yet";
+    if (d <= 0) return isIS ? "Í dag" : "Today";
+    if (d === 1) return isIS ? "Í gær" : "Yesterday";
+    return isIS ? `Fyrir ${d} dögum` : `${d} days ago`;
   }
 
   function planTypeLabel(type: string) {
@@ -511,11 +507,13 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">{ct.header.title}</h1>
-        <p className="text-sm text-gray-500">{ct.header.subtitle}</p>
-      </div>
+      {/* Header — on Clients the verdict below is the headline. */}
+      {tab !== "clients" && (
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold tracking-tight">{ct.header.title}</h1>
+          <p className="text-sm text-gray-500">{ct.header.subtitle}</p>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 mb-6">
@@ -542,46 +540,80 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
       {/* ── Clients tab ───────────────────────────────── */}
       {tab === "clients" && (
         <>
-          {/* Summary cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white border rounded-lg p-4">
-              <div className="text-xs text-gray-500 uppercase tracking-wide">{ct.tabs.clients}</div>
-              <div className="text-2xl font-bold mt-1">{clients.length}</div>
-            </div>
-            <div className="bg-white border rounded-lg p-4">
-              {/* When no client has check-in on, the headline is load; once any
-                  client checks in (practice default or a per-client override),
-                  count check-ins among the clients who actually use it. */}
-              <div className="text-xs text-gray-500 uppercase tracking-wide">
-                {clients.some((c) => !c.gpsOnly) ? ct.clients.checkedIn : (isIS ? "Álag skráð" : "Load tracked")}
-              </div>
-              <div className="text-2xl font-bold mt-1 text-green-600">
-                {clients.some((c) => !c.gpsOnly)
-                  ? clients.filter((c) => !c.gpsOnly && c.checkedInToday).length
-                  : clients.filter((c) => c.load).length}
-              </div>
-            </div>
-            <div className="bg-white border rounded-lg p-4">
-              <div className="text-xs text-gray-500 uppercase tracking-wide">{ct.clients.todayDone}</div>
-              <div className="text-2xl font-bold mt-1 text-blue-600">
-                {clients.filter((c) => c.todayCompletion && c.todayCompletion.completed > 0).length}
-              </div>
-            </div>
-            <div className="bg-white border rounded-lg p-4">
-              <div className="text-xs text-gray-500 uppercase tracking-wide">{ct.clients.noPlan}</div>
-              <div className="text-2xl font-bold mt-1 text-gray-400">
-                {clients.filter((c) => !c.plan).length}
-              </div>
-            </div>
-          </div>
+          {/* Layer 0 + 1: one verdict, then the plain facts behind it. */}
+          {(() => {
+            const needIds = new Set(attention.filter((a) => a.flags.some((f) => isCardFlag(f.code))).map((a) => a.id));
+            const active = clients.filter((c) => c.hasAccount && !c.onBreak);
+            const checkinClients = active.filter((c) => !c.gpsOnly);
+            const anyCheckin = clients.some((c) => !c.gpsOnly);
+            const allCheckin = clients.length > 0 && clients.every((c) => !c.gpsOnly);
+            const dayScope = attention.some((a) => a.flags.some((f) => f.code === "readiness_red"));
+            const trainedRecently = active.filter((c) => c.daysSinceLastSession != null && c.daysSinceLastSession <= 2).length;
+            const finished = clients.filter((c) => c.todayCompletion && c.todayCompletion.total > 0 && c.todayCompletion.completed === c.todayCompletion.total).length;
+            const underWay = clients.filter((c) => c.todayCompletion && c.todayCompletion.completed > 0 && c.todayCompletion.completed < c.todayCompletion.total).length;
+            const noPlan = clients.filter((c) => !c.plan).length;
+            const n = needIds.size;
+            const verdict = n === 0
+              ? (isIS ? "Allir skjólstæðingar eru á réttri leið." : "All clients are on track.")
+              : isIS
+                ? `${n} ${n === 1 ? "skjólstæðingur þarf" : "skjólstæðingar þurfa"} á þér að halda ${dayScope ? "í dag" : "í vikunni"}.`
+                : `${n} ${n === 1 ? "client needs" : "clients need"} you ${dayScope ? "today" : "this week"}.`;
+            const facts = [
+              anyCheckin
+                ? (isIS
+                    ? `${checkinClients.filter((c) => c.checkedInToday).length} af ${checkinClients.length} check-in komin`
+                    : `${checkinClients.filter((c) => c.checkedInToday).length} of ${checkinClients.length} check-ins are in`)
+                : (isIS
+                    ? `${trainedRecently} af ${active.length} æfðu síðustu 3 daga`
+                    : `${trainedRecently} of ${active.length} trained in the last 3 days`),
+              isIS ? `${finished} æfingum lokið, ${underWay} í gangi` : `${finished} sessions finished, ${underWay} under way`,
+              isIS
+                ? `${noPlan} án prógramms`
+                : `${noPlan} ${noPlan === 1 ? "client has" : "clients have"} no programme`,
+            ];
+            return (
+              <header className="mb-6">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-slate-500">
+                    {new Date().toLocaleDateString(isIS ? "is-IS" : "en-GB", { weekday: "long", day: "numeric", month: "long" })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTab("invitations")}
+                    className="min-h-11 rounded-[10px] bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90"
+                  >
+                    {isIS ? "Bjóða skjólstæðingi" : "Invite client"}
+                  </button>
+                </div>
+                <h1 className="font-display text-4xl font-extrabold leading-[1.04] tracking-tight text-slate-900 sm:text-5xl">{verdict}</h1>
+                <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[15px] text-slate-700">
+                  {facts.map((f) => <span key={f}>{f}</span>)}
+                  <Link href="/coach/settings" className="text-primary hover:underline">
+                    {allCheckin
+                      ? (isIS ? "Check-in er virkt hjá öllum" : "Check-in is on for everyone")
+                      : anyCheckin
+                        ? (isIS ? `Check-in virkt hjá ${clients.filter((c) => !c.gpsOnly).length}` : `Check-in on for ${clients.filter((c) => !c.gpsOnly).length} clients`)
+                        : (isIS ? "Check-in er slökkt" : "Check-in is off for this practice")}
+                  </Link>
+                </div>
+              </header>
+            );
+          })()}
 
-          {/* Needs-attention banner — flagged clients, most severe first. */}
+          {/* Needs attention — flagged clients, most severe first. */}
           <TrainerAttentionList
             teamId={teamId}
             lang={isIS ? "IS" : "EN"}
-            onSelect={(id) => {
+            title={attention.some((a) => a.flags.some((f) => f.code === "readiness_red"))
+              ? (isIS ? "Þarf á þér að halda í dag" : "Needs you today")
+              : (isIS ? "Þarf á þér að halda í vikunni" : "Needs you this week")}
+            onLoaded={setAttention}
+            onSelect={(id, code) => {
               const c = clients.find((x) => x.id === id);
-              if (c) setSelectedClient(c);
+              if (!c) return;
+              setClientFilter("all");
+              setDetailTab(code === "gone_quiet" ? "overview" : "adjust");
+              setSelectedClient(c);
             }}
           />
 
@@ -596,86 +628,117 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                 {ct.clients.addClient}
               </button>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {clients.map((client) => (
+          ) : (() => {
+            const needIds = new Set(attention.filter((a) => a.flags.some((f) => isCardFlag(f.code))).map((a) => a.id));
+            const noteById = new Map(attention.map((a) => [a.id, a.flags.filter((f) => !isCardFlag(f.code))]));
+            const showCheckin = clients.some((c) => !c.gpsOnly);
+            const filters: ["all" | "need" | "noplan" | "break", string, number][] = [
+              ["all", isIS ? "Allir" : "All", clients.length],
+              ["need", isIS ? "Þarf athygli" : "Needs you", needIds.size],
+              ["noplan", isIS ? "Án prógramms" : "No programme", clients.filter((c) => !c.plan).length],
+              ["break", isIS ? "Í pásu" : "On break", clients.filter((c) => c.onBreak).length],
+            ];
+            const rank = (c: Client) => {
+              const i = attention.findIndex((a) => a.id === c.id && needIds.has(a.id));
+              return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+            };
+            const visible = clients
+              .filter((c) => clientFilter === "all"
+                || (clientFilter === "need" && needIds.has(c.id))
+                || (clientFilter === "noplan" && !c.plan)
+                || (clientFilter === "break" && c.onBreak))
+              .sort((x, y) => rank(x) - rank(y));
+            return (
+            <section aria-labelledby="clients-heading">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <h2 id="clients-heading" className="font-display text-lg font-bold text-slate-900">
+                  {isIS ? "Allir skjólstæðingar" : "All clients"}
+                </h2>
+                <div role="group" aria-label={isIS ? "Sía skjólstæðinga" : "Filter clients"} className="flex flex-wrap gap-1.5">
+                  {filters.map(([key, label, count]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={clientFilter === key}
+                      onClick={() => setClientFilter(key)}
+                      className={`min-h-9 rounded-full border px-3 text-[13px] font-medium ${clientFilter === key ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-900 hover:bg-slate-50"}`}
+                    >
+                      {label} {count}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
+              {/* Column heads (the same widths as the rows). */}
+              <div className="hidden items-center gap-4 border-b border-slate-200 px-5 py-3 text-xs text-slate-500 md:flex">
+                <div className="min-w-0 flex-1">{isIS ? "Skjólstæðingur" : "Client"}</div>
+                <div className="w-44 shrink-0" title={isIS ? "Síðustu 7 dagar miðað við síðustu 28 (ACWR)" : "Last 7 days vs last 28 (ACWR)"}>{isIS ? "Álag miðað við venjulega viku" : "Load vs normal week"}</div>
+                {showCheckin && <div className="w-24 shrink-0">Check-in</div>}
+                <div className="w-20 shrink-0">{isIS ? "7 dagar" : "7 days"}</div>
+                <div className="w-28 shrink-0">{isIS ? "Síðasta æfing" : "Last session"}</div>
+                <div className="hidden w-44 shrink-0 lg:block">{isIS ? "Prógramm" : "Programme"}</div>
+                <div className="w-16 shrink-0 text-right">Momentum</div>
+              </div>
+              {visible.length === 0 && (
+                <div className="px-5 py-8 text-center text-sm text-slate-500">
+                  {isIS ? "Enginn skjólstæðingur hér." : "No clients here."}
+                </div>
+              )}
+              {visible.map((client) => {
+                const status = loadStatus(client);
+                const notes = noteById.get(client.id) ?? [];
+                return (
                 <div
                   key={client.id}
-                  className="bg-white border rounded-lg p-4 hover:shadow-sm transition-shadow cursor-pointer"
+                  className="cursor-pointer border-b border-slate-100 px-5 py-3 last:border-b-0 hover:bg-slate-50"
                   onClick={() => setSelectedClient(selectedClient?.id === client.id ? null : client)}
                 >
                   <div className="flex items-center gap-4">
-                    {/* Status dot — readiness zone, or (check-in off) ACWR band */}
-                    <div className={`w-3 h-3 rounded-full flex-shrink-0 ${client.gpsOnly ? acwrDot(client.load?.acwr ?? null) : zoneDot(client.readiness?.zone ?? "none")}`} />
-
-                    {/* Name + status */}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{client.name || "—"}</div>
-                      <div className="text-xs text-gray-500">
-                        {client.gpsOnly ? (
-                          client.load?.acwr != null
-                            ? <span>{ct.load.acwr} {Number(client.load.acwr).toFixed(2)}</span>
-                            : (client.hasAccount ? (isIS ? "Ekkert álag skráð" : "No load logged") : ct.clients.noAccount)
-                        ) : client.checkedInToday ? ct.clients.checkedIn : (
-                          <span className="text-amber-600">{client.hasAccount ? ct.clients.notCheckedIn : ct.clients.noAccount}</span>
-                        )}
-                      </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-slate-900">{client.name || "—"}</div>
+                      {notes.length > 0 && (
+                        <div className="truncate text-xs text-amber-800">{notes.map((f) => f.why[isIS ? "IS" : "EN"]).join(" · ")}</div>
+                      )}
                     </div>
 
-                    {/* Status badge — readiness zone, or (check-in off) ACWR */}
-                    {client.gpsOnly ? (
-                      client.load?.acwr != null ? (
-                        <div className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${acwrBadge(Number(client.load.acwr))}`}>
-                          {ct.load.acwr} {Number(client.load.acwr).toFixed(2)} {trendArrow(client.load.trend)}
-                        </div>
-                      ) : (
-                        <div className="px-2.5 py-0.5 rounded-full text-xs font-medium border bg-gray-100 text-gray-500 border-gray-200">—</div>
-                      )
-                    ) : (
-                      <div className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${zoneBg(client.readiness?.zone ?? "none")}`}>
-                        {zoneLabel(client.readiness?.zone ?? "none")}
-                        {client.readiness?.totalScore != null && (
-                          <span className="ml-1 opacity-70">{client.readiness.totalScore}/25</span>
+                    <div className="flex w-44 shrink-0 items-center gap-2 text-sm">
+                      <span aria-hidden="true" className={`h-2.5 w-2.5 shrink-0 rounded-full ${status.dot}`} />
+                      <span className={`font-medium ${status.text}`}>{status.label}</span>
+                      {status.ratio && <span className="text-slate-500">{status.ratio}</span>}
+                    </div>
+
+                    {showCheckin && (
+                      <div className="hidden w-24 shrink-0 text-sm font-medium md:block">
+                        {client.gpsOnly ? (
+                          <span className="text-slate-500">{isIS ? "Slökkt" : "Off"}</span>
+                        ) : client.readiness ? (
+                          <span className={client.readiness.zone === "red" ? "text-red-700" : client.readiness.zone === "yellow" ? "text-amber-800" : "text-emerald-700"}>
+                            {zoneLabel(client.readiness.zone)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500">{isIS ? "Ekki enn" : "Not yet"}</span>
                         )}
                       </div>
                     )}
 
-                    {/* ACWR */}
-                    <div className="text-right w-20 flex-shrink-0 hidden sm:block">
-                      <div className="text-xs text-gray-500">{ct.load.acwr}</div>
-                      <div className="text-sm font-medium">
-                        {client.load?.acwr != null ? (
-                          <>
-                            {Number(client.load.acwr).toFixed(2)} {trendArrow(client.load.trend)}
-                          </>
-                        ) : (
-                          "—"
-                        )}
+                    <div className="hidden w-20 shrink-0 text-sm text-slate-700 md:block">
+                      {isIS ? `${client.sessionsLast7d} æfingar` : `${client.sessionsLast7d} ${client.sessionsLast7d === 1 ? "session" : "sessions"}`}
+                    </div>
+
+                    <div className={`hidden w-28 shrink-0 text-sm md:block ${attention.some((a) => a.id === client.id && a.flags.some((f) => f.code === "gone_quiet")) ? "font-medium text-red-700" : "text-slate-700"}`}>
+                      {lastSessionLabel(client)}
+                    </div>
+
+                    <div className="hidden w-44 shrink-0 text-sm lg:block">
+                      <div className="truncate" title={client.plan ? `${client.plan.name} · ${planTypeLabel(client.plan.type)}` : undefined}>
+                        {client.plan
+                          ? <span className="text-slate-900">{client.plan.name}</span>
+                          : <span className="text-slate-500">{ct.clients.noPlan}</span>}
                       </div>
                     </div>
 
-                    {/* Plan — show WHICH programme the client is on (name), with the
-                        type as a tooltip, so the trainer sees the actual plan at a glance. */}
-                    <div className="text-right w-44 flex-shrink-0 hidden md:block">
-                      <div className="text-xs text-gray-500">{ct.tabs.plans}</div>
-                      <div className="text-sm truncate" title={client.plan ? `${client.plan.name} · ${planTypeLabel(client.plan.type)}` : undefined}>
-                        {client.plan ? (
-                          <span className="font-medium">{client.plan.name}</span>
-                        ) : (
-                          <span className="text-gray-400">{ct.clients.noPlan}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Today completion */}
-                    <div className="text-right w-16 flex-shrink-0 hidden md:block">
-                      {client.todayCompletion ? (
-                        <span className="text-sm text-green-600 font-medium">
-                          {client.todayCompletion.completed}/{client.todayCompletion.total}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-gray-300">—</span>
-                      )}
+                    <div className="hidden w-16 shrink-0 text-right font-display text-base font-bold text-slate-900 md:block">
+                      {client.momentumScore ?? "–"}
                     </div>
                   </div>
 
@@ -696,6 +759,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                           ["readiness", "Viðbúnaður", "Readiness"],
                           ["goals", "Markmið", "Goals"],
                           ["load", "Álag", "Load"],
+                          ["corrective", "Corrective", "Corrective"],
                           ["adjust", "Aðlaganir", "Adjustments"],
                         ] as [DetailTab, string, string][])
                           .filter(([key]) => !(client.gpsOnly && key === "readiness"))
@@ -841,6 +905,12 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                         </div>
                       )}
 
+                      {detailTab === "corrective" && (
+                        <div className="space-y-4">
+                          <ClientCorrectiveControl clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                        </div>
+                      )}
+
                       {detailTab === "adjust" && (
                         <div className="space-y-4">
                           {/* Per-client daily check-in switch — on / off / inherit
@@ -867,9 +937,12 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
-          )}
+            </section>
+            );
+          })()}
         </>
       )}
 

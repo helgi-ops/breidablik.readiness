@@ -672,9 +672,30 @@ export async function GET(req: Request) {
     if (fc) prForecast = { exercise_name: topExerciseName, forecast: fc };
   }
 
+  // Corrective / prehab prescription (PT "morning" session). Trainer-authored,
+  // AI-proposed + trainer-confirmed; surfaced as a SEPARATE labelled block on the
+  // chosen weekdays — deliberately kept out of explosive.blocks so no strength
+  // modifier (readiness scaling, target_kg, match-day blanking) touches it.
+  const isoDow = ((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7) + 1; // 1=Mon..7=Sun
+  let corrective: { title: string; duration_min: number | null; items: unknown[] } | null = null;
+  {
+    const { data: corrRow } = await sb
+      .from("pt_corrective_prescriptions")
+      .select("structure, weekdays, duration_min, status")
+      .eq("player_id", player.id)
+      .maybeSingle();
+    const row = corrRow as { structure?: { items?: unknown[] } | null; weekdays?: number[] | null; duration_min?: number | null; status?: string | null } | null;
+    const corrItems = Array.isArray(row?.structure?.items) ? row!.structure!.items! : [];
+    const corrWeekdays = Array.isArray(row?.weekdays) ? row!.weekdays! : [];
+    if (row && row.status === "active" && corrItems.length > 0 && corrWeekdays.includes(isoDow)) {
+      corrective = { title: "Corrective", duration_min: row.duration_min ?? null, items: corrItems };
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     player: { id: player.id, full_name: player.full_name },
+    corrective,
     // Effective check-in mode for this client (per-client override folded in).
     // false = GPS/load-only (no check-in surfaces).
     usesWellnessFeatures,

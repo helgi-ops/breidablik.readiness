@@ -35,6 +35,7 @@ function weekdayName(iso: number, lang: string): string {
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import ClientCorrectiveCard, { type CorrectiveData } from "@/components/player/ClientCorrectiveCard";
 import ClientProgrammeOverview from "@/components/player/ClientProgrammeOverview";
 import ClientMoveSessionButton from "@/components/player/ClientMoveSessionButton";
 import ClientMoveSessionControl from "@/components/player/ClientMoveSessionControl";
@@ -47,6 +48,9 @@ type TodayResp = {
   /** Effective check-in mode for this client (per-client override folded in).
    *  false = GPS/load-only, so no check-in surfaces. Resolved server-side. */
   usesWellnessFeatures?: boolean;
+  /** Corrective / prehab "morning" session for today (null unless today is a
+   *  scheduled corrective weekday). Separate from the strength session. */
+  corrective?: CorrectiveData | null;
   team: { id: string; name: string; type: string | null; short: string | null } | null;
   explosive: {
     level: string;
@@ -223,6 +227,11 @@ export default function ClientTodayPage() {
           {!readinessDone && <span className="text-amber-700 text-sm font-medium">→</span>}
         </div>
       </Link>
+      )}
+
+      {/* Corrective / prehab — the "first part of the day", on scheduled days. */}
+      {data.corrective && (
+        <ClientCorrectiveCard data={data.corrective} lang={lang === "EN" ? "EN" : "IS"} />
       )}
 
       {/* Today's workout */}
