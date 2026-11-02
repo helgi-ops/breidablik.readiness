@@ -23,6 +23,22 @@ function safeHttpUrl(u?: string | null): string | null {
   } catch { return null; }
 }
 
+/** Extract a YouTube video id from watch / youtu.be / shorts / embed URLs.
+ *  Returns null for non-YouTube URLs (then we fall back to a plain link). */
+function youtubeId(u: string): string | null {
+  try {
+    const url = new URL(u);
+    const host = url.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") return url.pathname.slice(1).split("/")[0] || null;
+    if (host.endsWith("youtube.com") || host.endsWith("youtube-nocookie.com")) {
+      if (url.pathname === "/watch") return url.searchParams.get("v");
+      const m = url.pathname.match(/^\/(?:embed|shorts|v)\/([^/?#]+)/);
+      if (m) return m[1];
+    }
+    return null;
+  } catch { return null; }
+}
+
 export default function ExerciseInfo({
   name,
   description,
@@ -79,7 +95,7 @@ export default function ExerciseInfo({
       {open && (
         <div
           role="dialog"
-          className="absolute left-1/2 top-7 z-50 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white p-3 text-left shadow-xl"
+          className={`absolute left-1/2 top-7 z-50 ${video ? "w-72" : "w-64"} -translate-x-1/2 rounded-lg border border-slate-200 bg-white p-3 text-left shadow-xl`}
           onClick={(e) => e.stopPropagation()}
         >
           {name && <div className="mb-1 text-xs font-semibold text-slate-900">{name}</div>}
@@ -89,17 +105,38 @@ export default function ExerciseInfo({
               ? <ul className="list-disc space-y-0.5 pl-4 text-xs leading-relaxed text-slate-600">{bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>
               : <div className="text-xs leading-relaxed text-slate-600">{text}</div>;
           })()}
-          {video && (
-            <a
-              href={video}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className={`inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 ${text ? "mt-2" : ""}`}
-            >
-              ▶ {lang === "IS" ? "Horfa á myndband" : "Watch video"}
-            </a>
-          )}
+          {video && (() => {
+            const id = youtubeId(video);
+            if (id) {
+              // Embedded player (16:9). youtube-nocookie + lazy; only mounts when
+              // the popover is open, so it's not loaded for every exercise.
+              return (
+                <div className={`${text ? "mt-2" : ""} aspect-video w-full overflow-hidden rounded-md bg-black`}>
+                  <iframe
+                    src={`https://www.youtube-nocookie.com/embed/${id}?rel=0`}
+                    title={name ?? (lang === "IS" ? "Myndband" : "Video")}
+                    className="h-full w-full"
+                    loading="lazy"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+                    allowFullScreen
+                  />
+                </div>
+              );
+            }
+            // Non-YouTube URL → keep the plain link.
+            return (
+              <a
+                href={video}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className={`inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 ${text ? "mt-2" : ""}`}
+              >
+                ▶ {lang === "IS" ? "Horfa á myndband" : "Watch video"}
+              </a>
+            );
+          })()}
         </div>
       )}
     </span>
