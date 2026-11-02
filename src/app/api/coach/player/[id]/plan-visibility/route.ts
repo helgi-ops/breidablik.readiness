@@ -41,8 +41,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id: clientId } = await params;
   const a = await auth(req, clientId);
   if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
+  // Default ON for PT clients — a client should see their own programme unless
+  // the coach explicitly hid it (visible = false). No row = visible.
   const { data } = await a.sb.from("pt_plan_visibility").select("visible").eq("player_id", clientId).maybeSingle();
-  return NextResponse.json({ ok: true, visible: (data as { visible?: boolean } | null)?.visible ?? false });
+  return NextResponse.json({ ok: true, visible: (data as { visible?: boolean } | null)?.visible ?? true });
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

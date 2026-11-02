@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import ExerciseInfo from "@/components/exercise/ExerciseInfo";
+import { playTimerDone } from "@/lib/client/timerChime";
 import {
   addSet, applySaved, buildRunnerBlocks, completeRound, firstOpen, lastTimeByExercise,
   roundsIn, skipBlock, summarize, toPayload, updateSet,
@@ -172,7 +173,7 @@ export default function SessionRunner({ lang, planRows, sessionName, onManual }:
   useEffect(() => {
     if (phase !== "rest" || restLeft > 0 || buzzed.current) return;
     buzzed.current = true;
-    try { navigator.vibrate?.([200, 100, 200]); } catch { /* optional */ }
+    playTimerDone(); // chime + vibrate when the rest countdown ends
   }, [phase, restLeft]);
 
   async function post(extra?: { duration_minutes: number; session_rpe: number }, source: RunBlock[] = blocks) {

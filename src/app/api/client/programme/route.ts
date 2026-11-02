@@ -40,9 +40,10 @@ export async function GET(req: Request) {
   if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
   const { sb, playerId } = a;
 
-  // Visibility gate — default hidden.
+  // Visibility gate — a PT client sees their programme by DEFAULT; the coach can
+  // still hide it per client (an explicit pt_plan_visibility.visible = false row).
   const { data: vis } = await sb.from("pt_plan_visibility").select("visible").eq("player_id", playerId).maybeSingle();
-  if (!((vis as { visible?: boolean } | null)?.visible)) {
+  if ((vis as { visible?: boolean } | null)?.visible === false) {
     return NextResponse.json({ ok: true, visible: false });
   }
 
