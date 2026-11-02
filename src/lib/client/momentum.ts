@@ -9,6 +9,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getClientBreakRanges, dateInRanges } from "@/lib/notifications/clientBreaks";
+import { getTeamMode, resolveWellnessForPlayer } from "@/lib/teamMode";
 
 export type Momentum = {
   score: number;            // 0-100
@@ -25,7 +26,20 @@ const SPORT_TYPES = new Set(["team_training", "match", "other"]);
 
 function iso(n: number): string { const d = new Date(); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); }
 
-export async function computeMomentum(sb: SupabaseClient, playerId: string): Promise<Momentum> {
+/** Is the daily check-in off for this client (per-client override, else practice default)? */
+async function isCheckinOff(sb: SupabaseClient, playerId: string): Promise<boolean> {
+  const { data } = await sb.from("players").select("team_id, uses_wellness_features").eq("id", playerId).maybeSingle();
+  const p = data as { team_id?: string | null; uses_wellness_features?: boolean | null } | null;
+  if (!p?.team_id) return false;
+  const team = await getTeamMode(sb, p.team_id);
+  return !resolveWellnessForPlayer(p.uses_wellness_features, team.usesWellnessFeatures);
+}
+
+export async function computeMomentum(
+  sb: SupabaseClient,
+  playerId: string,
+  opts?: { checkinOff?: boolean },
+): Promise<Momentum> {
   const since = iso(WINDOW - 1);
   const [checkRes, setRes, rpeRes, ranges] = await Promise.all([
     sb.from("readiness_entries").select("entry_date").eq("player_id", playerId).gte("entry_date", iso(40)),
@@ -60,7 +74,13 @@ export async function computeMomentum(sb: SupabaseClient, playerId: string): Pro
   const workoutScore = Math.min(1, workouts / 8);   // ~4 sessions/week
   const sportScore = Math.min(1, sportSessions / 4);
   const streakScore = Math.min(1, streak / WINDOW);
-  const score = Math.round(100 * (0.4 * checkinRatio + 0.3 * workoutScore + 0.15 * streakScore + 0.15 * sportScore));
+  // Check-in off: check-ins and the streak can't be earned, so they must not cap
+  // the score. It rests on training alone, weighted so that a client lifting ~4
+  // times a week with no separate sport still reaches "high".
+  const checkinOff = opts?.checkinOff ?? await isCheckinOff(sb, playerId);
+  const score = Math.round(100 * (checkinOff
+    ? 0.8 * workoutScore + 0.2 * sportScore
+    : 0.4 * checkinRatio + 0.3 * workoutScore + 0.15 * streakScore + 0.15 * sportScore));
 
   const level: Momentum["level"] = score >= 75 ? "high" : score >= 45 ? "building" : "low";
 

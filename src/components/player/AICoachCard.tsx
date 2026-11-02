@@ -38,19 +38,16 @@ export default function AICoachCard({ lang = "IS" }: { lang?: Lang }) {
   if (!loaded || !insight) return null;
 
   return (
-    <div className="rounded-2xl border border-emerald-200 bg-white shadow-sm overflow-hidden">
-      <div className="flex items-center gap-2 bg-gradient-to-r from-zinc-900 to-neutral-800 px-4 py-2 text-white">
-        <span className="text-sm">💡</span>
-        <span className="text-[13px] font-semibold">{t.title}</span>
-        <span className="ml-auto rounded-full bg-emerald-500/90 px-2 py-0.5 text-[10px] font-bold tracking-wide">{t.badge}</span>
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-slate-900">{t.title}</span>
+        <span className="rounded-md bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700">{t.badge}</span>
       </div>
-      <div className="p-4 space-y-2">
-        <p className="text-sm text-slate-800">{insight}</p>
-        {signals.length > 0 && (
-          <p className="text-[10px] text-slate-500">{t.based}: {signals.join(" · ")}</p>
-        )}
-        <p className="text-[10px] text-slate-400 italic">{t.disclaimer}</p>
-      </div>
+      <p className="mt-1 text-sm text-slate-800">{insight}</p>
+      {signals.length > 0 && (
+        <p className="mt-1 text-xs text-slate-500">{t.based}: {signals.join(" · ")}</p>
+      )}
+      <p className="mt-1 text-xs text-slate-500">{t.disclaimer}</p>
     </div>
   );
 }

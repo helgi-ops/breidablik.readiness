@@ -11,6 +11,8 @@
  *   - no check-in today              (has an account but hasn't logged)
  *   - load spike                     (sRPE ACWR danger / tonnage very high)
  *   - retest due                     (latest LV test older than the window)
+ *   - gone quiet                     (no session logged for QUIET_DAYS, no break set)
+ *   - load dropping fast             (sRPE ACWR under 0.5)
  *
  * Returns only flagged clients, most severe first.
  */
@@ -22,6 +24,7 @@ import { computeVolumeLoad } from "@/lib/client/volumeLoad";
 import { RETEST_DAYS } from "@/lib/client/oneRepMax";
 import { getPlayersOnBreak } from "@/lib/notifications/clientBreaks";
 import { getTeamMode, resolveWellnessForPlayer } from "@/lib/teamMode";
+import { getSessionActivity, QUIET_DAYS } from "@/lib/trainer/sessionActivity";
 
 export const runtime = "nodejs";
 
@@ -31,7 +34,28 @@ function getAdmin(): SupabaseClient {
 }
 function iso(n: number): string { const d = new Date(); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); }
 
-type Flag = { severity: 1 | 2; code: string; label: string };
+type Bi = { EN: string; IS: string };
+type Flag = {
+  severity: 1 | 2;
+  code: string;
+  label: string;
+  title: Bi;
+  /** Plain-language reason, shown on the card. */
+  why: Bi;
+  /** Counterfactual: what would clear the flag. */
+  ifThen?: Bi;
+  /** How much data the flag rests on. */
+  confidence?: Bi;
+};
+
+function loadConfidence(level: "low" | "medium" | "high", days: number): Bi {
+  const en = { high: "High", medium: "Medium", low: "Low" }[level];
+  const is = { high: "Mikið", medium: "Miðlungs", low: "Lítið" }[level];
+  return {
+    EN: `${en} confidence: ${days} of 28 days logged`,
+    IS: `${is} öryggi: ${days} af 28 dögum skráðir`,
+  };
+}
 
 export async function GET(req: Request) {
   const auth = req.headers.get("authorization") || "";
@@ -82,24 +106,98 @@ export async function GET(req: Request) {
       const todayRow = rows.find((r) => r.entry_date === today) ?? null;
 
       if (todayRow?.color && todayRow.color.toLowerCase() === "red") {
-        flags.push({ severity: 2, code: "readiness_red", label: "Red readiness today" });
+        flags.push({
+          severity: 2, code: "readiness_red", label: "Red readiness today",
+          title: { EN: "Recovery", IS: "Hvíld" },
+          why: { EN: "Today's check-in is well below their usual.", IS: "Check-in dagsins er langt undir því sem er venjulegt." },
+        });
       } else {
         const scores = rows.map((r) => r.total_score).filter((x): x is number => x != null);
         if (scores.length >= 3 && scores[0] - scores[scores.length - 1] <= -4) {
-          flags.push({ severity: 1, code: "readiness_down", label: "Readiness trending down" });
+          flags.push({
+            severity: 1, code: "readiness_down", label: "Readiness trending down",
+            title: { EN: "Readiness sliding", IS: "Viðbúnaður á niðurleið" },
+            why: {
+              EN: `Down ${scores[scores.length - 1] - scores[0]} points over the last ${scores.length} check-ins.`,
+              IS: `Niður um ${scores[scores.length - 1] - scores[0]} stig síðustu ${scores.length} check-in.`,
+            },
+          });
         }
       }
       if (!todayRow && p.user_id) {
-        flags.push({ severity: 1, code: "no_checkin", label: "No check-in today" });
+        flags.push({
+          severity: 1, code: "no_checkin", label: "No check-in today",
+          title: { EN: "No check-in today", IS: "Ekkert check-in í dag" },
+          why: { EN: "No check-in yet today.", IS: "Ekkert check-in enn í dag." },
+        });
       }
     }
 
     // Load spikes (sRPE quadrant + tonnage).
-    const [quad, vol] = await Promise.all([computeLoadQuadrant(sb, p.id), computeVolumeLoad(sb, p.id)]);
+    const [quad, vol, activity] = await Promise.all([
+      computeLoadQuadrant(sb, p.id), computeVolumeLoad(sb, p.id), getSessionActivity(sb, p.id),
+    ]);
+    const confidence = loadConfidence(quad.confidence, quad.days_with_data);
     if ((quad.acwr != null && quad.acwr > 1.5) || quad.zone === "danger") {
-      flags.push({ severity: 2, code: "load_spike", label: `Load spike (ACWR ${quad.acwr ?? "?"})` });
+      flags.push({
+        severity: 2, code: "load_spike", label: `Load spike (ACWR ${quad.acwr ?? "?"})`,
+        title: { EN: "Load rising too fast", IS: "Álag hækkar of hratt" },
+        why: {
+          EN: `Has trained ${quad.acwr ?? "?"} times a normal week.`,
+          IS: `Hefur æft ${quad.acwr ?? "?"} sinnum venjulega viku.`,
+        },
+        ifThen: {
+          EN: "If this week comes back to 1.5 times normal or less, this clears.",
+          IS: "Ef vikan fer aftur niður í 1,5 sinnum venjulegt eða minna hverfur þetta.",
+        },
+        confidence,
+      });
     } else if (vol.acwr_status === "very_high") {
-      flags.push({ severity: 2, code: "tonnage_spike", label: `Tonnage spike (${vol.acwr})` });
+      flags.push({
+        severity: 2, code: "tonnage_spike", label: `Tonnage spike (${vol.acwr})`,
+        title: { EN: "Tonnage rising too fast", IS: "Tonnage hækkar of hratt" },
+        why: {
+          EN: `Has lifted ${vol.acwr} times a normal week's tonnage.`,
+          IS: `Hefur lyft ${vol.acwr} sinnum venjulegu tonnage vikunnar.`,
+        },
+        ifThen: {
+          EN: "If this week's tonnage comes back to 1.5 times normal or less, this clears.",
+          IS: "Ef tonnage vikunnar fer aftur niður í 1,5 sinnum venjulegt eða minna hverfur þetta.",
+        },
+      });
+    }
+
+    // Gone quiet — with check-in off the session log is the only sign of life.
+    // Breaks are already excluded above; never-logged clients aren't "quiet".
+    const days = activity.daysSinceLastSession;
+    if (p.user_id && days != null && days >= QUIET_DAYS) {
+      flags.push({
+        severity: 2, code: "gone_quiet", label: `No session for ${days} days`,
+        title: { EN: "Gone quiet", IS: "Hefur ekki látið í sér heyra" },
+        why: {
+          EN: `No session logged for ${days} days, and no break is set.`,
+          IS: `Engin æfing skráð í ${days} daga og engin pása skráð.`,
+        },
+        ifThen: {
+          EN: "If one session is logged, this clears.",
+          IS: "Ef ein æfing er skráð hverfur þetta.",
+        },
+        confidence: { EN: "Based on the session log only", IS: "Byggt eingöngu á æfingaskráningu" },
+      });
+    } else if (quad.acwr != null && quad.acwr < 0.5) {
+      flags.push({
+        severity: 1, code: "load_low", label: `Load dropping (ACWR ${quad.acwr})`,
+        title: { EN: "Load dropping fast", IS: "Álag fellur hratt" },
+        why: {
+          EN: `Has trained ${quad.acwr} times a normal week.`,
+          IS: `Hefur æft ${quad.acwr} sinnum venjulega viku.`,
+        },
+        ifThen: {
+          EN: "If this week comes back above half of normal, this clears.",
+          IS: "Ef vikan fer aftur yfir helming af venjulegu hverfur þetta.",
+        },
+        confidence,
+      });
     }
 
     // Retest due.
@@ -108,11 +206,15 @@ export async function GET(req: Request) {
       .eq("client_id", p.id).order("test_date", { ascending: false }).limit(1).maybeSingle();
     const lvDate = (lv as { test_date?: string } | null)?.test_date;
     if (lvDate && ((new Date(today).getTime() - new Date(lvDate).getTime()) / 86_400_000) > RETEST_DAYS) {
-      flags.push({ severity: 1, code: "retest_due", label: "Strength test due" });
+      flags.push({
+        severity: 1, code: "retest_due", label: "Strength test due",
+        title: { EN: "Strength test due", IS: "Styrktarpróf á dagskrá" },
+        why: { EN: "Strength test due.", IS: "Styrktarpróf á dagskrá." },
+      });
     }
 
     const topSeverity = flags.reduce((m, f) => Math.max(m, f.severity), 0);
-    return { id: p.id, name: p.full_name, flags: flags.slice(0, 3), topSeverity };
+    return { id: p.id, name: p.full_name, flags: flags.slice(0, 4), topSeverity };
   }));
 
   const clients = results

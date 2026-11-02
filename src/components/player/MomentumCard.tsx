@@ -34,7 +34,7 @@ const LEVEL_COLOR: Record<string, string> = {
   high: "#2b8a54", building: "#cb8420", low: "#a9a493",
 };
 
-export default function MomentumCard({ lang = "IS", clientId }: { lang?: Lang; clientId?: string }) {
+export default function MomentumCard({ lang = "IS", clientId, compact = false }: { lang?: Lang; clientId?: string; compact?: boolean }) {
   const t = COPY[lang];
   const [m, setM] = useState<Momentum | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -53,6 +53,23 @@ export default function MomentumCard({ lang = "IS", clientId }: { lang?: Lang; c
   useEffect(() => { void load(); }, [load]);
 
   if (!loaded || !m) return null;
+
+  if (compact) {
+    const levelText = lang === "IS"
+      ? { high: "Hátt", building: "Á uppleið", low: "Að byrja" }[m.level]
+      : { high: "High", building: "Building", low: "Getting started" }[m.level];
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">Momentum: {levelText}</div>
+          <div className="text-[13px] text-slate-500">
+            {lang === "IS" ? `${m.workouts} æfingar síðustu ${m.window_days} daga` : `${m.workouts} sessions in the last ${m.window_days} days`}
+          </div>
+        </div>
+        <div className="font-display text-[28px] font-extrabold text-slate-900">{m.score}</div>
+      </div>
+    );
+  }
 
   const color = LEVEL_COLOR[m.level];
   const R = 30, C = 2 * Math.PI * R;

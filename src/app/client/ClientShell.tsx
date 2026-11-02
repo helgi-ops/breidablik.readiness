@@ -28,16 +28,22 @@ type Tab = {
   href: string;
   match: (p: string) => boolean;
   label: { IS: string; EN: string };
-  icon: string;
+  icon: ReactNode;
 };
 
+const Icon = ({ d }: { d: string }) => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d={d} />
+  </svg>
+);
+
+// Five tabs; the LV test is reached from Progression, so it lights that tab.
 const TABS: Tab[] = [
-  { href: "/client",             match: (p) => p === "/client",                    label: { IS: "Í dag",      EN: "Today" },       icon: "🏠" },
-  { href: "/client/log",         match: (p) => p.startsWith("/client/log"),        label: { IS: "Skrá",       EN: "Log" },         icon: "🏋️" },
-  { href: "/client/progression", match: (p) => p.startsWith("/client/progression"), label: { IS: "Framvinda",  EN: "Progression" }, icon: "📈" },
-  { href: "/client/lv-profile",  match: (p) => p.startsWith("/client/lv-profile"), label: { IS: "LV próf",    EN: "LV Test" },     icon: "⚡" },
-  { href: "/client/chat",        match: (p) => p.startsWith("/client/chat"),       label: { IS: "Spjall",     EN: "Chat" },        icon: "💬" },
-  { href: "/client/profile",     match: (p) => p.startsWith("/client/profile"),    label: { IS: "Ég",         EN: "Me" },          icon: "👤" },
+  { href: "/client",             match: (p) => p === "/client",                    label: { IS: "Í dag",     EN: "Today" },       icon: <Icon d="M3 11 12 4l9 7M6 10v10h12V10" /> },
+  { href: "/client/log",         match: (p) => p.startsWith("/client/log"),        label: { IS: "Skrá",      EN: "Log" },         icon: <Icon d="M4 9v6M8 6v12M16 6v12M20 9v6M8 12h8" /> },
+  { href: "/client/progression", match: (p) => p.startsWith("/client/progression") || p.startsWith("/client/lv-profile"), label: { IS: "Framvinda", EN: "Progression" }, icon: <Icon d="M4 18 10 12l4 4 6-8" /> },
+  { href: "/client/chat",        match: (p) => p.startsWith("/client/chat"),       label: { IS: "Spjall",    EN: "Chat" },        icon: <Icon d="M4 5h16v11H9l-5 4z" /> },
+  { href: "/client/profile",     match: (p) => p.startsWith("/client/profile"),    label: { IS: "Ég",        EN: "Me" },          icon: <Icon d="M16 8a4 4 0 1 1-8 0 4 4 0 0 1 8 0M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" /> },
 ];
 
 export default function ClientShell({ children }: { children: ReactNode }) {
@@ -120,12 +126,9 @@ export default function ClientShell({ children }: { children: ReactNode }) {
   if (!authed) return null;
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
+    <div className="min-h-screen bg-background pb-20">
       <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📡</span>
-          <span className="text-sm font-semibold text-slate-900">MicroPulse PT</span>
-        </div>
+        <span className="text-sm font-semibold text-slate-900">MicroPulse PT</span>
         <button
           type="button"
           onClick={async () => {
@@ -146,18 +149,19 @@ export default function ClientShell({ children }: { children: ReactNode }) {
       <PlayerPrivacyConsentPrompt />
 
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 px-1 py-1.5 shadow-[0_-2px_8px_rgba(0,0,0,0.04)]">
-        <div className="mx-auto max-w-2xl grid grid-cols-6">
+        <div className="mx-auto max-w-2xl grid grid-cols-5">
           {TABS.map((t) => {
             const active = t.match(pathname);
             return (
               <Link
                 key={t.href}
                 href={t.href}
-                className={`flex flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[10px] font-medium transition-colors ${
-                  active ? "text-slate-900" : "text-slate-400 hover:text-slate-700"
+                aria-current={active ? "page" : undefined}
+                className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1 text-[11px] font-medium transition-colors ${
+                  active ? "text-primary" : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <span className={`text-lg leading-none ${active ? "" : "opacity-60"}`}>{t.icon}</span>
+                {t.icon}
                 <span className="leading-tight">{t.label[lang === "EN" ? "EN" : "IS"]}</span>
               </Link>
             );

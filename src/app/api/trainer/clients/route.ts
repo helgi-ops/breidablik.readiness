@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
 import { getTeamMode, isGpsOnly, resolveWellnessForPlayer } from "@/lib/teamMode";
+import { computeLoadQuadrant } from "@/lib/client/loadQuadrant";
+import { computeMomentum } from "@/lib/client/momentum";
+import { getPlayersOnBreak } from "@/lib/notifications/clientBreaks";
+import { getSessionActivity } from "@/lib/trainer/sessionActivity";
 
 /* ── helpers ─────────────────────────────────────────── */
 
@@ -195,6 +199,19 @@ export async function GET(req: Request) {
       return "red";
     }
 
+    // Per-client overview signals. Load ratio comes from the same computation as
+    // the attention feed, so a row and its flag can never show different numbers.
+    const onBreak = await getPlayersOnBreak(sb, today);
+    const overview = new Map(await Promise.all(players.slice(0, 50).map(async (p) => {
+      const checkinOff = !resolveWellnessForPlayer(p.uses_wellness_features, teamWellness);
+      const [quad, activity, momentum] = await Promise.all([
+        computeLoadQuadrant(sb, p.id),
+        getSessionActivity(sb, p.id),
+        computeMomentum(sb, p.id, { checkinOff }),
+      ]);
+      return [p.id, { loadRatio: quad.acwr, activity, momentumScore: momentum.score }] as const;
+    })));
+
     // Assemble client list
     const clients = players.map((p) => {
       const r = readinessMap.get(p.id);
@@ -248,6 +265,12 @@ export async function GET(req: Request) {
                   kind: "starter" as const, programmeKey: epPlanMap.get(p.id)!.programmeKey, level: epPlanMap.get(p.id)!.level }
               : null),
         todayCompletion: comp || null,
+        onBreak: onBreak.has(p.id),
+        loadRatio: overview.get(p.id)?.loadRatio ?? null,
+        lastSessionDate: overview.get(p.id)?.activity.lastSessionDate ?? null,
+        daysSinceLastSession: overview.get(p.id)?.activity.daysSinceLastSession ?? null,
+        sessionsLast7d: overview.get(p.id)?.activity.sessionsLast7d ?? 0,
+        momentumScore: overview.get(p.id)?.momentumScore ?? null,
       };
     });
 

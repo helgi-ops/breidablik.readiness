@@ -4,12 +4,11 @@
  * /client (today)
  *
  * Mobile home screen for the PT client:
- *   - Header card with trainer name
- *   - Daily check-in nudge (readiness) — links to /player for the form
- *     (re-using the established 6-step wellness UI rather than rebuilding)
+ *   - One rule-based decision (src/lib/client/todayDecision)
  *   - Today's prescribed workout — pulled from active Explosive Power
  *     assignment or custom_template_sets player override
- *   - Quick bodyweight tile with 7-day delta
+ *   - Corrective, on scheduled days
+ *   - Momentum, AI insight, then one line each for everything else
  *
  * One API call: GET /api/client/today composes everything.
  */
@@ -17,12 +16,12 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import ReadinessCard from "@/components/player/ReadinessCard";
 import MomentumCard from "@/components/player/MomentumCard";
 import AICoachCard from "@/components/player/AICoachCard";
 import ClientVacationBanner from "@/components/player/ClientVacationBanner";
 import ClientNudges from "@/components/player/ClientNudges";
 import ExerciseInfo from "@/components/exercise/ExerciseInfo";
+import { decideToday, type DecisionTone } from "@/lib/client/todayDecision";
 import { isSeasonPhase, SEASON_PHASE_SPEC } from "@/lib/client/seasonPhase";
 import { buildSessionBlocks } from "@/lib/client/sessionGrouping";
 
@@ -39,7 +38,6 @@ import ClientCorrectiveCard, { type CorrectiveData } from "@/components/player/C
 import ClientProgrammeOverview from "@/components/player/ClientProgrammeOverview";
 import ClientMoveSessionButton from "@/components/player/ClientMoveSessionButton";
 import ClientMoveSessionControl from "@/components/player/ClientMoveSessionControl";
-import PtReportsCard from "@/components/player/PtReportsCard";
 import MethodologyLink from "@/components/common/MethodologyLink";
 
 type TodayResp = {
@@ -91,6 +89,7 @@ type TodayResp = {
   } | null;
   readinessToday: { id: string; total_score: number | null; color: string | null } | null;
   session_logged_today?: boolean;
+  load?: { ratio: number | null; confidence: "low" | "medium" | "high" };
   bodyweight: { latest: { log_date: string; weight_kg: number }; delta_kg: number | null } | null;
   intelligence: {
     foster: {
@@ -115,7 +114,7 @@ type TodayResp = {
 };
 
 export default function ClientTodayPage() {
-  const [lang] = useLang();
+  const [lang, setLang] = useLang();
   const [data, setData] = useState<TodayResp | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -150,247 +149,138 @@ export default function ClientTodayPage() {
   if (err) return <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>;
   if (!data) return <div className="text-sm text-slate-500">{lang === "IS" ? "Hleð…" : "Loading…"}</div>;
 
+  const L = lang === "EN" ? "EN" : "IS";
   const firstName = data.player.full_name.split(" ")[0];
+  const checkinOn = !gpsOnly;
   const readinessDone = !!data.readinessToday;
+  const ex = data.explosive;
+  const hasBlocks = !!ex && ex.blocks.length > 0;
+  const decision = decideToday({
+    checkinOn,
+    checkedIn: readinessDone,
+    session: ex
+      ? {
+          restDay: ex.rest_day,
+          matchDay: !!ex.is_match_day,
+          daysToGame: ex.days_to_game ?? null,
+          readiness: ex.readiness
+            ? {
+                applied: ex.readiness.applied, zone: ex.readiness.zone, action: ex.readiness.action,
+                volumePct: ex.readiness.volume_pct, intensityPct: ex.readiness.intensity_pct,
+              }
+            : null,
+        }
+      : null,
+    fosterStatus: data.intelligence.foster.status,
+    fosterReason: data.intelligence.foster.reason,
+    loadRatio: data.load?.ratio ?? null,
+  });
+  const TONE: Record<DecisionTone, { text: string; dot: string }> = {
+    good: { text: "text-emerald-700", dot: "bg-emerald-600" },
+    warn: { text: "text-amber-800", dot: "bg-amber-500" },
+    bad: { text: "text-red-700", dot: "bg-red-600" },
+    neutral: { text: "text-slate-600", dot: "bg-slate-400" },
+  };
+  const tone = TONE[decision.tone];
+  const corrective = data.corrective ? <ClientCorrectiveCard data={data.corrective} lang={L} /> : null;
+  const today = new Date().toLocaleDateString(lang === "IS" ? "is-IS" : "en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const pr = data.intelligence.pr_forecast;
+
+  const rowClass = "flex min-h-12 items-center justify-between gap-3 border-b border-slate-100 px-4 text-sm text-slate-900 last:border-b-0 hover:bg-slate-50";
 
   return (
-    <div className="space-y-3">
-      {/* Greeting */}
-      <div>
-        <div className="text-xs text-slate-500">{lang === "IS" ? "Halló" : "Hello"}</div>
-        <div className="text-xl font-semibold text-slate-900">{firstName} 👋</div>
-        {data.team && (
-          <div className="text-xs text-slate-500 mt-0.5">
-            {lang === "IS" ? "Þjálfari" : "Trainer"}: {data.team.short ?? data.team.name}
+    <div className="space-y-3.5">
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-[26px] font-extrabold leading-tight tracking-tight text-slate-900">
+            {lang === "IS" ? "Hæ" : "Hi"}, {firstName}
+          </h1>
+          <div className="mt-0.5 text-[13px] text-slate-500">
+            {today}
+            {data.team && <> · {lang === "IS" ? "Þjálfari" : "Trainer"}: {data.team.short ?? data.team.name}</>}
           </div>
-        )}
-      </div>
-
-      {/* In-app nudges: session-today reminder + start-of-week recap. */}
-      <ClientNudges
-        lang={lang === "EN" ? "EN" : "IS"}
-        hasSessionToday={!!data.explosive && !data.explosive.rest_day && !data.explosive.is_match_day && data.explosive.blocks.length > 0}
-        sessionLoggedToday={!!data.session_logged_today}
-      />
+        </div>
+        <div role="group" aria-label={lang === "IS" ? "Tungumál" : "Language"} className="flex gap-0.5 rounded-[9px] bg-slate-200 p-[3px]">
+          {(["EN", "IS"] as const).map((l) => (
+            <button
+              key={l}
+              type="button"
+              aria-pressed={L === l}
+              onClick={() => setLang(l)}
+              className={`min-h-8 min-w-9 rounded-[7px] text-xs font-semibold ${L === l ? "bg-white text-slate-900" : "text-slate-600"}`}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      </header>
 
       {/* Vacation / return banner (declared per-client breaks). */}
-      <ClientVacationBanner lang={lang === "EN" ? "EN" : "IS"} />
+      <ClientVacationBanner lang={L} />
 
-      {/* Today's readiness score + recommendation (shows once checked in).
-          Hidden for a GPS/load-only practice — there is no check-in there. */}
-      {!gpsOnly && <ReadinessCard lang={lang === "EN" ? "EN" : "IS"} />}
-
-      {/* Training Momentum — the consistency score to keep up.
-          (Progress analytics — hero, quadrant, load — live on Progression.) */}
-      <MomentumCard lang={lang === "EN" ? "EN" : "IS"} />
-
-      {/* Daily AI Coach — labelled AI, cites real signals (lazy, hides if none). */}
-      <AICoachCard lang={lang === "EN" ? "EN" : "IS"} />
-
-      {/* Full programme overview — only renders if the coach turned plan
-          visibility on for this client (read-only, no loads). */}
-      <ClientProgrammeOverview lang={lang === "EN" ? "EN" : "IS"} />
-
-      {/* Move any of my sessions to another day, either direction (e.g. do
-          Thursday's session early on Wednesday). Backend allows backward; the
-          control blocks moving into the past. Refresh today's view on change. */}
-      <div className="mt-3">
-        <ClientMoveSessionControl lang={lang === "EN" ? "EN" : "IS"} onChanged={() => { void load(); }} />
-      </div>
-
-      {/* Performance reports (VALD etc.) — upload + view own reports. */}
-      <PtReportsCard lang={lang === "EN" ? "EN" : "IS"} />
-
-      {/* Readiness nudge — stays in the PT shell (returns to /client) instead
-          of dropping the client onto the football /team surface. Hidden for a
-          GPS/load-only practice (check-in is turned off). */}
-      {!gpsOnly && (
-      <Link
-        href="/player/checkin?return=/client"
-        className={`block rounded-xl border p-3.5 transition-colors ${
-          readinessDone
-            ? "border-emerald-200 bg-emerald-50"
-            : "border-amber-300 bg-amber-50 hover:bg-amber-100"
-        }`}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">
-              {lang === "IS" ? "Daglegt check-in" : "Daily check-in"}
-            </div>
-            <div className={`mt-0.5 text-sm ${readinessDone ? "text-emerald-700" : "text-amber-900"}`}>
-              {readinessDone
-                ? (lang === "IS" ? "✓ Klárað í dag" : "✓ Done for today")
-                : (lang === "IS" ? "Skráðu svefn, þreytu og bólgu" : "Log sleep, fatigue and soreness")}
-            </div>
+      {/* The one decision — readiness, taper, deload and load, stated once. */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        {decision.label && (
+          <div className={`mb-2 flex items-center gap-2 text-xs font-semibold ${tone.text}`}>
+            <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${tone.dot}`} />
+            <span>{decision.label[L]}</span>
           </div>
-          {!readinessDone && <span className="text-amber-700 text-sm font-medium">→</span>}
-        </div>
-      </Link>
-      )}
+        )}
+        <h2 className="font-display text-[26px] font-extrabold leading-tight tracking-tight text-slate-900">{decision.headline[L]}</h2>
+        <p className="mt-1 text-sm text-slate-700">{decision.why[L]}</p>
+        {decision.fosterCited && (
+          <>
+            <div className="mt-1 text-[10px] text-slate-500">Foster 1998 · sRPE × duration · 7-day rolling</div>
+            <MethodologyLink />
+          </>
+        )}
+        {/* Hidden when check-in is off for this client. */}
+        {checkinOn && !readinessDone && (
+          <Link
+            href="/player/checkin?return=/client"
+            className="mt-3 flex min-h-12 items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground"
+          >
+            {lang === "IS" ? "Opna check-in" : "Open check-in"}
+          </Link>
+        )}
+      </section>
 
-      {/* Corrective / prehab — the "first part of the day", on scheduled days. */}
-      {data.corrective && (
-        <ClientCorrectiveCard data={data.corrective} lang={lang === "EN" ? "EN" : "IS"} />
-      )}
+      {/* On a rest day corrective is the day's only work, so it comes first. */}
+      {ex?.rest_day && corrective}
 
-      {/* Today's workout */}
-      {data.explosive ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-          {/* Programme name banner — always visible so client recognizes
-              their plan even on rest days. Was missing before, which made
-              rest days feel like nothing was assigned. */}
-          {data.explosive.programme_name && (
-            <div className="flex items-center gap-1.5 -mb-1">
-              <span className="text-[10px]">📋</span>
-              <span className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wide">
-                {data.explosive.programme_name}
-              </span>
-            </div>
-          )}
-          {/* Season-phase banner — shows the trainer's chosen block and the
-              plain-language volume/intensity adjustment (explainability). */}
-          {isSeasonPhase(data.explosive.season_phase) && (
-            <div className="rounded-lg bg-slate-100 px-2.5 py-1.5">
-              <span className="text-[11px] font-semibold text-slate-700">
-                {SEASON_PHASE_SPEC[data.explosive.season_phase].label[lang === "EN" ? "EN" : "IS"]}
-              </span>
-              <span className="text-[11px] text-slate-500"> · {SEASON_PHASE_SPEC[data.explosive.season_phase].note[lang === "EN" ? "EN" : "IS"]}</span>
-            </div>
-          )}
-          {/* Pre-game taper banner — auto from trainer-entered game dates. */}
-          {data.explosive.is_match_day ? (
-            <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-2">
-              <span className="text-[11px] font-semibold text-emerald-900">
-                {lang === "IS" ? "⚽ Leikdagur" : "⚽ Match day"}
-              </span>
-              <span className="text-[11px] text-emerald-800"> · {lang === "IS" ? "haltu þér ferskum — engin lyftingaæfing í dag." : "keep fresh — no gym session today."}</span>
-            </div>
-          ) : (data.explosive.days_to_game === 1 || data.explosive.days_to_game === 2) ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5">
-              <span className="text-[11px] font-semibold text-amber-900">
-                {data.explosive.days_to_game === 1
-                  ? (lang === "IS" ? "Leikur á morgun" : "Game tomorrow")
-                  : (lang === "IS" ? "2 dagar í leik" : "2 days to game")}
-              </span>
-              <span className="text-[11px] text-amber-800"> · {lang === "IS" ? "minna magn til að halda ferskleika." : "reduced volume to stay fresh."}</span>
-            </div>
-          ) : null}
-
-          {/* Readiness-adapted today — honest: only shown when the session was
-              actually scaled, or a recovery day was prescribed. Hidden for a
-              GPS/load-only practice — with no check-in there is no readiness to
-              adapt to, so the session shows as planned. */}
-          {!gpsOnly && data.explosive.readiness && !data.explosive.rest_day && !data.explosive.is_match_day && (() => {
-            const rd = data.explosive.readiness!;
-            const volCut = 100 - rd.volume_pct;
-            const intCut = 100 - rd.intensity_pct;
-            if (rd.applied) {
-              const parts: string[] = [];
-              if (volCut > 0) parts.push(`${lang === "IS" ? "−" : "−"}${volCut}% ${lang === "IS" ? "magn" : "volume"}`);
-              if (intCut > 0) parts.push(`−${intCut}% ${lang === "IS" ? "þyngd" : "load"}`);
-              const detail = parts.join(" · ");
-              const amber = rd.zone === "yellow";
-              return (
-                <div className={`rounded-lg border px-2.5 py-1.5 ${amber ? "border-amber-200 bg-amber-50" : "border-rose-200 bg-rose-50"}`}>
-                  <span className={`text-[11px] font-semibold ${amber ? "text-amber-900" : "text-rose-900"}`}>
-                    {lang === "IS" ? "Stillt eftir líðan" : "Adjusted to how you feel"}
-                  </span>
-                  <span className={`text-[11px] ${amber ? "text-amber-800" : "text-rose-800"}`}>
-                    {" "}· {detail} — {lang === "IS" ? "léttari æfing í dag svo þú náir góðum gæðum." : "lighter today so you keep good quality."}
-                  </span>
-                </div>
-              );
-            }
-            if (rd.action === "recovery" || rd.action === "skip") {
-              return (
-                <div className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5">
-                  <span className="text-[11px] font-semibold text-sky-900">
-                    {lang === "IS" ? "Endurheimtardagur" : "Recovery day"}
-                  </span>
-                  <span className="text-[11px] text-sky-800">
-                    {" "}· {lang === "IS" ? "þú ert ekki í toppstandi — slepptu þungu, haltu því léttu og hreyfðu þig rólega." : "you're not at your best — skip the heavy work, keep it light and easy."}
-                  </span>
-                </div>
-              );
-            }
-            if (rd.zone === "green") {
-              return (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5">
-                  <span className="text-[11px] font-semibold text-emerald-900">{lang === "IS" ? "Þú ert í góðu standi" : "You're good to go"}</span>
-                  <span className="text-[11px] text-emerald-800"> · {lang === "IS" ? "haltu áætlun dagsins." : "proceed as planned."}</span>
-                </div>
-              );
-            }
-            return null;
-          })()}
-
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">
-                {data.explosive.rest_day
-                  ? (data.explosive.blocks.length > 0
-                      ? (lang === "IS" ? "Hvíldardagur · Næsta æfing" : "Rest day · Next session")
-                      : (lang === "IS" ? "Hvíldardagur" : "Rest day"))
-                  : (lang === "IS" ? "Æfing dagsins" : "Today's session")}
-              </div>
-              <div className="text-base font-semibold text-slate-900 mt-0.5 truncate">
-                {data.explosive.blocks[0]?.name ?? data.explosive.phase_name}
-              </div>
-              <div className="text-[11px] text-slate-500 mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
-                <span>
-                  {(() => {
-                    const wpp = data.explosive.weeks_per_phase ?? 3;
-                    const tp = data.explosive.total_phases ?? 4;
-                    const total = wpp * tp;
-                    const cur = (data.explosive.phase - 1) * wpp + (data.explosive.week_in_phase ?? 1);
-                    return `${lang === "IS" ? "Vika" : "Week"} ${cur} / ${total}`;
+      {/* Today's workout, or the next one on a rest day */}
+      {ex && hasBlocks && !ex.is_match_day ? (
+        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+          <div>
+            <div className="text-xs font-semibold text-slate-500">
+              {ex.rest_day
+                ? `${lang === "IS" ? "Næsta æfing" : "Next session"}${ex.next_session_label ? ` · ${ex.next_session_label}` : ""}`
+                : (() => {
+                    const wpp = ex.weeks_per_phase ?? 3;
+                    const total = wpp * (ex.total_phases ?? 4);
+                    const cur = (ex.phase - 1) * wpp + (ex.week_in_phase ?? 1);
+                    return lang === "IS" ? `Æfing dagsins · Vika ${cur} af ${total}` : `Today's session · Week ${cur} of ${total}`;
                   })()}
-                </span>
-                <span>·</span>
-                <span>Phase {data.explosive.phase} · {data.explosive.phase_name}</span>
-                {data.explosive.weekday_index != null && (<><span>·</span><span>{weekdayName(data.explosive.weekday_index, lang)}</span></>)}
-              </div>
             </div>
-            {!data.explosive.rest_day && (
-              <Link
-                href="/client/log"
-                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white shrink-0"
-              >
-                {lang === "IS" ? "Skrá" : "Log"}
-              </Link>
+            <h2 className="mt-0.5 font-display text-xl font-bold leading-tight text-slate-900">{ex.blocks[0]?.name ?? ex.phase_name}</h2>
+            {ex.programme_name && (
+              <div className="mt-0.5 text-xs text-slate-500">
+                {ex.programme_name}
+                {ex.weekday_index != null && !ex.rest_day ? ` · ${weekdayName(ex.weekday_index, lang)}` : ""}
+              </div>
+            )}
+            {/* The trainer's chosen block, with its plain-language adjustment. */}
+            {isSeasonPhase(ex.season_phase) && (
+              <div className="mt-1 text-xs text-slate-600">
+                {SEASON_PHASE_SPEC[ex.season_phase].label[L]} · {SEASON_PHASE_SPEC[ex.season_phase].note[L]}
+              </div>
             )}
           </div>
-
-          {/* Move today's session to another day when life gets in the way. */}
-          {((!data.explosive.rest_day && data.explosive.blocks.length > 0) || data.explosive.moved_to) && (
-            <ClientMoveSessionButton
-              lang={lang === "EN" ? "EN" : "IS"}
-              movedTo={data.explosive.moved_to ?? null}
-              movedFrom={data.explosive.moved_from ?? null}
-              endDate={null}
-              onChanged={() => { void load(); }}
-            />
-          )}
-
-          {/* Rest day → encouraging note + next session label */}
-          {data.explosive.rest_day && (
-            <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-700">
-              {lang === "IS"
-                ? "Hvíldu vel í dag — endurheimt er hluti af æfingunni."
-                : "Take it easy today — recovery is part of the work."}
-              {data.explosive.next_session_label && (
-                <div className="text-xs text-slate-500 mt-0.5">
-                  {lang === "IS" ? "Næsta æfing" : "Next session"}: {data.explosive.next_session_label}
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Show prescribed exercises — for both today's session AND rest-day
               preview of next session. UI label above clarifies which it is.
               Block list capped to first 8 rows in either mode. */}
-          {data.explosive.blocks.slice(0, 1).map((b) => {
+          {ex.blocks.slice(0, 1).map((b) => {
             const groups = buildSessionBlocks(b.rows);
             let shown = 0;
             const CAP = 8;
@@ -445,7 +335,7 @@ export default function ClientTodayPage() {
           })}
 
           {/* Auto-progression caption (mobile has no hover for the ↑). */}
-          {data.explosive.blocks.some((b) => b.rows.some((r) => r.target_auto)) && (
+          {ex.blocks.some((b) => b.rows.some((r) => r.target_auto)) && (
             <div className="text-[10px] text-emerald-700">
               {lang === "IS"
                 ? "↑ sjálfvirk framvinda — þyngd hækkuð út frá þínum skráðu lyftum."
@@ -453,189 +343,95 @@ export default function ClientTodayPage() {
             </div>
           )}
 
+
+          {!ex.rest_day && (
+            <Link
+              href="/client/log"
+              className="flex min-h-12 items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground"
+            >
+              {lang === "IS" ? "Byrja æfingu" : "Start session"}
+            </Link>
+          )}
+
+          {/* Move today's session to another day when life gets in the way. */}
+          {(!ex.rest_day || ex.moved_to) && (
+            <ClientMoveSessionButton
+              lang={L}
+              movedTo={ex.moved_to ?? null}
+              movedFrom={ex.moved_from ?? null}
+              endDate={null}
+              onChanged={() => { void load(); }}
+            />
+          )}
+
           {/* Closed loop — retest / test nudges. Stale tests = retest; lifts
               with a %1RM but no test yet = test to unlock target weights. */}
-          {(data.explosive.retest_due?.length || data.explosive.needs_test?.length) ? (
+          {(ex.retest_due?.length || ex.needs_test?.length) ? (
             <Link href="/client/lv-profile" className="block rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 hover:bg-emerald-100">
-              {data.explosive.retest_due && data.explosive.retest_due.length > 0 ? (
+              {ex.retest_due && ex.retest_due.length > 0 ? (
                 <div className="text-[12px] text-emerald-900">
                   <span className="font-semibold">{lang === "IS" ? "Tími á endurprófi" : "Time to retest"}:</span>{" "}
-                  {data.explosive.retest_due.join(", ")}
+                  {ex.retest_due.join(", ")}
                   <span className="text-emerald-700"> — {lang === "IS" ? "uppfærðu 1RM svo þyngdir haldist réttar." : "update your 1RM so target weights stay accurate."}</span>
                 </div>
               ) : (
                 <div className="text-[12px] text-emerald-900">
                   <span className="font-semibold">{lang === "IS" ? "Taktu styrktarpróf" : "Run a strength test"}:</span>{" "}
-                  {data.explosive.needs_test!.join(", ")}
+                  {ex.needs_test!.join(", ")}
                   <span className="text-emerald-700"> — {lang === "IS" ? "til að fá raun-þyngdir í stað prósenta." : "to get real target weights instead of percentages."}</span>
                 </div>
               )}
             </Link>
           ) : null}
-        </div>
-      ) : (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500 mb-1">
-            {lang === "IS" ? "Æfing dagsins" : "Today's session"}
-          </div>
-          <div className="text-sm text-slate-600">
-            {lang === "IS"
-              ? "Engin föst æfing í dag — skráðu þína eigin æfingu."
-              : "No prescribed session today — log your own workout."}
-          </div>
-          <Link
-            href="/client/log"
-            className="mt-3 inline-block rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
-          >
-            {lang === "IS" ? "Skrá æfingu" : "Log session"}
+        </section>
+      ) : (!ex || (!hasBlocks && !ex.rest_day)) ? (
+        <Link href="/client/log" className="flex min-h-12 items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground">
+          {lang === "IS" ? "Skrá æfingu" : "Log session"}
+        </Link>
+      ) : null}
+
+      {/* A session moved away can leave today empty; keep the undo reachable. */}
+      {ex?.moved_to && !hasBlocks && (
+        <ClientMoveSessionButton lang={L} movedTo={ex.moved_to} movedFrom={ex.moved_from ?? null} endDate={null} onChanged={() => { void load(); }} />
+      )}
+
+      {!ex?.rest_day && corrective}
+
+      {/* Session-logged and weekly recap prompts sit below the session. */}
+      <ClientNudges lang={L} hasSessionToday={false} sessionLoggedToday={!!data.session_logged_today} />
+
+      <MomentumCard lang={L} compact />
+
+      {/* Daily AI Coach — labelled AI, cites real signals (lazy, hides if none). */}
+      <AICoachCard lang={L} />
+
+      {/* Full programme overview — only renders if the coach turned plan
+          visibility on for this client (read-only, no loads). */}
+      <ClientProgrammeOverview lang={L} />
+
+      {/* Move any of my sessions, either direction. */}
+      <ClientMoveSessionControl lang={L} onChanged={() => { void load(); }} />
+
+      {/* Everything else, one line each. */}
+      <nav aria-label={lang === "IS" ? "Meira" : "More"} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        {pr && pr.forecast.eta_days !== null && (
+          <Link href="/client/progression" className={rowClass}>
+            <span className="truncate">{lang === "IS" ? "Næsta met" : "Next record"}: {pr.exercise_name}</span>
+            <span className="shrink-0 text-slate-600">
+              ~{pr.forecast.target_kg} kg · {pr.forecast.eta_weeks} {lang === "IS" ? "vikur" : "weeks"}
+            </span>
           </Link>
-        </div>
-      )}
-
-      {/* Fitness×Fatigue, Training Load and the progress hero moved to the
-          Progression tab to keep Today focused on the day's action. */}
-
-      {/* Smart insights — Foster + heavy-lift exposure + PR forecast.
-          These three are MicroPulse PT's main differentiators vs generic
-          calendar apps. Render each card only when it has a useful signal. */}
-      {(data.intelligence.foster.status !== "ok" || data.intelligence.exposure.heavy_sets > 0 || data.intelligence.pr_forecast) && (
-        <div className="space-y-2">
-          {/* Auto-deload alert (Foster) — only when watch+ */}
-          {data.intelligence.foster.status !== "ok" && (() => {
-            const f = data.intelligence.foster;
-            const tone = f.status === "deload_required"
-              ? { bg: "bg-red-50", border: "border-red-300", title: "text-red-900", body: "text-red-800", chip: "bg-red-200 text-red-900", icon: "🛑" }
-              : f.status === "deload_recommended"
-              ? { bg: "bg-amber-50", border: "border-amber-300", title: "text-amber-900", body: "text-amber-800", chip: "bg-amber-200 text-amber-900", icon: "⚠️" }
-              : { bg: "bg-yellow-50", border: "border-yellow-300", title: "text-yellow-900", body: "text-yellow-800", chip: "bg-yellow-200 text-yellow-900", icon: "👀" };
-            const titleText = f.status === "deload_required" ? (lang === "IS" ? "Deload nauðsynlegt" : "Deload required")
-                           : f.status === "deload_recommended" ? (lang === "IS" ? "Deload mælt með" : "Deload recommended")
-                           : (lang === "IS" ? "Fylgjast með álagi" : "Watch your load");
-            return (
-              <div className={`rounded-xl border ${tone.border} ${tone.bg} p-3.5`}>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">{tone.icon}</span>
-                    <span className={`text-[11px] uppercase tracking-wide font-semibold ${tone.title}`}>
-                      {titleText}
-                    </span>
-                  </div>
-                  {f.monotony != null && (
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${tone.chip}`}>
-                      Monotony {f.monotony.toFixed(2)}
-                    </span>
-                  )}
-                </div>
-                <div className={`mt-1 text-sm ${tone.body}`}>{f.reason}</div>
-                <div className="mt-1 text-[10px] text-slate-500">
-                  Foster 1998 · sRPE × duration · 7-day rolling
-                </div>
-                <MethodologyLink />
-              </div>
-            );
-          })()}
-
-          {/* Heavy-lifting exposure (Pareja-Blanco threshold) */}
-          {data.intelligence.exposure.heavy_sets > 0 && (() => {
-            const e = data.intelligence.exposure;
-            const tone = e.status === "excessive" ? { bg: "bg-red-50", border: "border-red-200", text: "text-red-800", bar: "bg-red-500" }
-                       : e.status === "high"      ? { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-800", bar: "bg-amber-500" }
-                       : e.status === "optimal"   ? { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-800", bar: "bg-emerald-500" }
-                                                  : { bg: "bg-slate-50", border: "border-slate-200", text: "text-slate-700", bar: "bg-slate-400" };
-            return (
-              <div className={`rounded-xl border ${tone.border} ${tone.bg} p-3.5 space-y-2`}>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-700">
-                    💪 {lang === "IS" ? "Þung lyfting þessa viku" : "Heavy lifting this week"}
-                  </div>
-                  <div className={`text-sm font-semibold tabular-nums ${tone.text}`}>
-                    {e.heavy_sets} / {e.cap}
-                  </div>
-                </div>
-                <div className="h-1.5 w-full rounded-full bg-slate-200/70 overflow-hidden">
-                  <div className={`h-full ${tone.bar} transition-all`} style={{ width: `${Math.min(100, (e.heavy_sets / e.cap) * 100)}%` }} />
-                </div>
-                <div className={`text-xs ${tone.text}`}>{e.reason}</div>
-                <div className="text-[10px] text-slate-500">
-                  ≥80% 1RM · Pareja-Blanco 2017
-                </div>
-                <MethodologyLink />
-              </div>
-            );
-          })()}
-
-          {/* PR forecast */}
-          {data.intelligence.pr_forecast && (() => {
-            const pr = data.intelligence.pr_forecast!;
-            const f = pr.forecast;
-            const onTrack = f.eta_days !== null;
-            return (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-[11px] uppercase tracking-wide font-semibold text-emerald-800">
-                    🎯 {lang === "IS" ? "Næsta met" : "Next PR"}
-                  </div>
-                  <span className="rounded-full bg-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-900 truncate max-w-[12rem]">
-                    {pr.exercise_name}
-                  </span>
-                </div>
-                <div className="mt-1 text-base font-semibold text-emerald-900">
-                  {onTrack
-                    ? (lang === "IS"
-                        ? `Að meðaltali +${f.weekly_rate_kg.toFixed(1)} kg/viku`
-                        : `Averaging +${f.weekly_rate_kg.toFixed(1)} kg/week`)
-                    : (lang === "IS" ? "Engin upp-leitni núna" : "No upward trend right now")}
-                </div>
-                {onTrack && (
-                  <div className="text-xs text-emerald-700 mt-0.5">
-                    {lang === "IS"
-                      ? `Haldist þetta: ~${f.target_kg} kg eftir ~${f.eta_weeks} vikur`
-                      : `If this holds: ~${f.target_kg} kg in ~${f.eta_weeks} weeks`}
-                  </div>
-                )}
-                <div className="text-xs text-emerald-700 mt-0.5">
-                  {lang === "IS" ? "Núv. PR" : "Current PR"} {f.current_pr_kg} kg
-                </div>
-                <div className="text-[10px] text-slate-500 mt-1">
-                  Linear regression on Epley e1RM · {f.sessions} {lang === "IS" ? "skráðar æfingar" : "logged sessions"}
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      )}
-
-      {/* Quick stats row */}
-      <div className="grid grid-cols-2 gap-2">
-        <Link href="/client/profile" className="rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50">
-          <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">
-            {lang === "IS" ? "Líkamsþyngd" : "Body weight"}
-          </div>
-          {data.bodyweight ? (
-            <>
-              <div className="text-base font-semibold text-slate-900 mt-0.5">
-                {data.bodyweight.latest.weight_kg.toFixed(1)} kg
-              </div>
-              {data.bodyweight.delta_kg !== null && (
-                <div className="text-[11px] text-slate-500">
-                  {/* Neutral: mass change isn't good/bad for an athlete. */}
-                  {data.bodyweight.delta_kg > 0 ? "+" : ""}{data.bodyweight.delta_kg.toFixed(1)} kg / 7d
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="text-xs text-slate-500 mt-0.5">{lang === "IS" ? "Skrá þyngd →" : "Log weight →"}</div>
-          )}
+        )}
+        <Link href="/client/profile" className={rowClass}>
+          <span>{lang === "IS" ? "Líkamsþyngd" : "Body weight"}</span>
+          <span className="text-slate-600">
+            {data.bodyweight ? `${data.bodyweight.latest.weight_kg.toFixed(1)} kg` : (lang === "IS" ? "Skrá þyngd" : "Log weight")}
+          </span>
         </Link>
-        <Link href="/client/progression" className="rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50">
-          <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">
-            {lang === "IS" ? "Framvinda" : "Progression"}
-          </div>
-          <div className="text-sm text-slate-700 mt-0.5">
-            {lang === "IS" ? "Sjá línurit →" : "View charts →"}
-          </div>
+        <Link href="/client/progression#reports" className={rowClass}>
+          <span>{lang === "IS" ? "Skýrslur" : "Reports"}</span>
         </Link>
-      </div>
+      </nav>
     </div>
   );
 }

@@ -16,6 +16,9 @@ import ProgressionSummaryCard from "@/components/player/ProgressionSummaryCard";
 import AthleteHero from "@/components/player/AthleteHero";
 import LoadQuadrant from "@/components/player/LoadQuadrant";
 import TrainingLoadCard from "@/components/player/TrainingLoadCard";
+import Link from "next/link";
+import HeavyLiftingCard, { type HeavyExposure } from "@/components/client/HeavyLiftingCard";
+import PtReportsCard from "@/components/player/PtReportsCard";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 
@@ -28,6 +31,7 @@ export default function ClientProgressionPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [exposure, setExposure] = useState<HeavyExposure | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -39,6 +43,11 @@ export default function ClientProgressionPage() {
       });
       const json = await res.json();
       if (!res.ok || !json.ok) { setErr(json.error ?? "Failed"); return; }
+      // Heavy-lifting exposure lives here now; Today keeps to the day's action.
+      void fetch("/api/client/today", { headers: { Authorization: `Bearer ${session.access_token}` } })
+        .then((r) => r.json())
+        .then((t) => { if (t.ok) setExposure(t.intelligence?.exposure ?? null); })
+        .catch(() => { /* soft */ });
       const xs = (json.exercises ?? []) as Exercise[];
       setExercises(xs);
       if (xs.length > 0 && !selected) setSelected(xs[0].name);
@@ -66,6 +75,11 @@ export default function ClientProgressionPage() {
         </div>
       </div>
 
+      <Link href="/client/lv-profile" className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-900 hover:bg-slate-50">
+        <span>{lang === "IS" ? "Styrktarpróf (LV)" : "Strength test (LV)"}</span>
+        <span className="text-primary">{lang === "IS" ? "Opna" : "Open"}</span>
+      </Link>
+
       {/* Motivating snapshot: streak, weekly volume, newest PB, last set. */}
       <ProgressionSummaryCard lang={lang === "EN" ? "EN" : "IS"} />
 
@@ -75,6 +89,10 @@ export default function ClientProgressionPage() {
       <TrainingLoadCard lang={lang === "EN" ? "EN" : "IS"} />
       <VolumeLoadCard lang={lang === "EN" ? "EN" : "IS"} />
       <PersonalRecordsCard lang={lang === "EN" ? "EN" : "IS"} />
+      {exposure && <HeavyLiftingCard exposure={exposure} lang={lang === "EN" ? "EN" : "IS"} />}
+      <div id="reports" className="scroll-mt-16">
+        <PtReportsCard lang={lang === "EN" ? "EN" : "IS"} />
+      </div>
 
       {loading ? (
         <div className="text-sm text-slate-500">{lang === "IS" ? "Hleð…" : "Loading…"}</div>
