@@ -27,6 +27,7 @@ import ClientGoalsCard from "@/components/trainer/ClientGoalsCard";
 import type { TemplateLite } from "@/lib/trainer/goalRecommend";
 import ClientBreaksManager from "./ClientBreaksManager";
 import ClientCheckinControl from "./ClientCheckinControl";
+import CorrectiveAdherence from "./CorrectiveAdherence";
 import ClientCorrectiveControl from "./ClientCorrectiveControl";
 import TrainerAttentionList, { isCardFlag, type AttentionClient } from "./TrainerAttentionList";
 
@@ -612,7 +613,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
               const c = clients.find((x) => x.id === id);
               if (!c) return;
               setClientFilter("all");
-              setDetailTab(code === "gone_quiet" ? "overview" : "adjust");
+              setDetailTab(code === "gone_quiet" ? "overview" : code === "corrective_pain" ? "corrective" : "adjust");
               setSelectedClient(c);
             }}
           />
@@ -907,6 +908,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
 
                       {detailTab === "corrective" && (
                         <div className="space-y-4">
+                          <CorrectiveAdherence clientId={client.id} lang={isIS ? "IS" : "EN"} />
                           <ClientCorrectiveControl clientId={client.id} lang={isIS ? "IS" : "EN"} />
                         </div>
                       )}

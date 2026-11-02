@@ -12,6 +12,7 @@
  */
 
 import { useState } from "react";
+import Link from "next/link";
 import ExerciseInfo from "@/components/exercise/ExerciseInfo";
 
 type Item = {
@@ -33,14 +34,33 @@ export type CorrectiveData = {
   title: string;
   duration_min: number | null;
   items: Item[];
+  done_today?: boolean;
+  week_done?: number;
+  week_planned?: number;
 };
 
-export default function ClientCorrectiveCard({ data, lang }: { data: CorrectiveData; lang: "EN" | "IS" }) {
+export default function ClientCorrectiveCard({ data, lang, primary = false }: { data: CorrectiveData; lang: "EN" | "IS"; primary?: boolean }) {
   const isIS = lang === "IS";
   const [open, setOpen] = useState(false);
   const [showList, setShowList] = useState(false);
   const pick = (en?: string | null, is?: string | null) => (isIS ? is || en : en || is) ?? "";
   if (!data.items.length) return null;
+
+  if (data.done_today) {
+    return (
+      <section className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5">
+        <div>
+          <div className="text-sm font-semibold text-emerald-700">{isIS ? "Leiðréttingaræfingum lokið" : "Corrective done"}</div>
+          {!!data.week_planned && (
+            <div className="text-[13px] text-slate-500">
+              {isIS ? `${data.week_done} af ${data.week_planned} dögum í vikunni` : `${data.week_done} of ${data.week_planned} days this week`}
+            </div>
+          )}
+        </div>
+        <Link href="/client/corrective" className="flex min-h-11 items-center text-sm font-medium text-primary">{isIS ? "Gera aftur" : "Redo"}</Link>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -58,11 +78,17 @@ export default function ClientCorrectiveCard({ data, lang }: { data: CorrectiveD
       <div className="mt-2 text-xs text-slate-500">
         {isIS ? "Úr meiðslasögu þinni, staðfest af þjálfara" : "From your injury history, confirmed by your trainer"}
       </div>
+      <Link
+        href="/client/corrective"
+        className={`mt-2 flex min-h-11 items-center justify-center rounded-[10px] text-sm font-semibold ${primary ? "bg-primary text-primary-foreground" : "border border-slate-300 bg-white text-slate-900 hover:bg-slate-50"}`}
+      >
+        {isIS ? "Byrja leiðréttingaræfingar" : "Start corrective"}
+      </Link>
       <button
         type="button"
         aria-expanded={showList}
         onClick={() => setShowList((v) => !v)}
-        className="mt-2 min-h-11 w-full rounded-[10px] border border-slate-300 bg-white text-sm font-medium text-slate-900 hover:bg-slate-50"
+        className="mt-1 min-h-9 w-full text-[13px] font-medium text-primary"
       >
         {showList ? (isIS ? "Fela æfingar" : "Hide exercises") : (isIS ? "Sýna æfingar" : "Show exercises")}
       </button>

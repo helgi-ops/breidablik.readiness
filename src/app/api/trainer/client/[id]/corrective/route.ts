@@ -23,6 +23,7 @@ import {
   CORRECTIVE_SLUG_TO_LIBRARY,
   type CorrectiveItem,
 } from "@/lib/trainer/correctiveFromInjury";
+import { plannedWeekdays, weekStartIso } from "@/lib/client/correctiveRun";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
@@ -117,7 +118,24 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     .eq("player_id", clientId)
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, prescription: toClient(data as Row | null) });
+  // How the client is actually doing it: this week's count + latest pain answer.
+  const row = data as { structure?: { items?: Array<{ days?: number[] | null }> } | null; weekdays?: number[] | null } | null;
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: logs } = await a.sb
+    .from("pt_corrective_logs")
+    .select("log_date, pain")
+    .eq("player_id", clientId)
+    .order("log_date", { ascending: false })
+    .limit(14);
+  const logRows = (logs ?? []) as Array<{ log_date: string; pain: "none" | "little" | "yes" }>;
+  const weekStart = weekStartIso(today);
+  const adherence = {
+    weekDone: logRows.filter((l) => l.log_date >= weekStart).length,
+    weekPlanned: plannedWeekdays(row?.structure?.items ?? [], row?.weekdays ?? []).length,
+    lastPain: logRows[0]?.pain ?? null,
+    lastDate: logRows[0]?.log_date ?? null,
+  };
+  return NextResponse.json({ ok: true, prescription: toClient(data as Row | null), adherence });
 }
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {

@@ -11,6 +11,7 @@
  * Single round trip so /client/today renders fast on mobile.
  */
 
+import { plannedWeekdays, weekStartIso } from "@/lib/client/correctiveRun";
 import { computeLoadQuadrant } from "@/lib/client/loadQuadrant";
 import { NextResponse } from "next/server";
 import { getSupabaseServer as admin } from "@/lib/supabaseServer";
@@ -704,7 +705,10 @@ export async function GET(req: Request) {
   // chosen weekdays — deliberately kept out of explosive.blocks so no strength
   // modifier (readiness scaling, target_kg, match-day blanking) touches it.
   const isoDow = ((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7) + 1; // 1=Mon..7=Sun
-  let corrective: { title: string; duration_min: number | null; items: unknown[] } | null = null;
+  let corrective: {
+    title: string; duration_min: number | null; items: unknown[];
+    done_today: boolean; week_done: number; week_planned: number;
+  } | null = null;
   {
     const { data: corrRow } = await sb
       .from("pt_corrective_prescriptions")
@@ -721,7 +725,22 @@ export async function GET(req: Request) {
         const d = Array.isArray(it.days) && it.days.length ? it.days : null;
         return d ? d.includes(isoDow) : corrWeekdays.includes(isoDow);
       });
-      if (todays.length > 0) corrective = { title: "Corrective", duration_min: row.duration_min ?? null, items: todays };
+      if (todays.length > 0) {
+        const { data: corrLogs } = await sb
+          .from("pt_corrective_logs")
+          .select("log_date")
+          .eq("player_id", player.id)
+          .gte("log_date", weekStartIso(today));
+        const logged = ((corrLogs ?? []) as Array<{ log_date: string }>).map((l) => l.log_date);
+        corrective = {
+          title: "Corrective",
+          duration_min: row.duration_min ?? null,
+          items: todays,
+          done_today: logged.includes(today),
+          week_done: logged.length,
+          week_planned: plannedWeekdays(corrItems, corrWeekdays).length,
+        };
+      }
     }
   }
 

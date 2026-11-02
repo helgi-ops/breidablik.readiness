@@ -182,7 +182,7 @@ export default function ClientTodayPage() {
     neutral: { text: "text-slate-600", dot: "bg-slate-400" },
   };
   const tone = TONE[decision.tone];
-  const corrective = data.corrective ? <ClientCorrectiveCard data={data.corrective} lang={L} /> : null;
+  const corrective = data.corrective ? <ClientCorrectiveCard data={data.corrective} lang={L} primary={!!ex?.rest_day} /> : null;
   const today = new Date().toLocaleDateString(lang === "IS" ? "is-IS" : "en-GB", { weekday: "short", day: "numeric", month: "short" });
   const pr = data.intelligence.pr_forecast;
 

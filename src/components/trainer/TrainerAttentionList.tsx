@@ -67,7 +67,7 @@ export default function TrainerAttentionList({
       <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map(({ client, flag }) => {
           const urgent = flag.severity >= 2;
-          const quiet = flag.code === "gone_quiet";
+          const quiet = flag.code === "gone_quiet" || flag.code === "corrective_pain";
           return (
             <article key={client.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
               <div className={`flex items-center gap-2 text-[13px] font-semibold ${urgent ? "text-red-700" : "text-amber-800"}`}>

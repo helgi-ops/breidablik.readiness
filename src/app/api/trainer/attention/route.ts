@@ -13,6 +13,7 @@
  *   - retest due                     (latest LV test older than the window)
  *   - gone quiet                     (no session logged for QUIET_DAYS, no break set)
  *   - load dropping fast             (sRPE ACWR under 0.5)
+ *   - corrective pain                (latest corrective in 7 days answered "yes")
  *
  * Returns only flagged clients, most severe first.
  */
@@ -197,6 +198,22 @@ export async function GET(req: Request) {
           IS: "Ef vikan fer aftur yfir helming af venjulegu hverfur þetta.",
         },
         confidence,
+      });
+    }
+
+    // Pain in corrective. The latest answer decides, so a pain-free one clears it.
+    const { data: corr } = await sb
+      .from("pt_corrective_logs").select("log_date, pain")
+      .eq("player_id", p.id).gte("log_date", iso(7))
+      .order("log_date", { ascending: false }).limit(1).maybeSingle();
+    const corrLog = corr as { log_date?: string; pain?: string } | null;
+    if (corrLog?.pain === "yes") {
+      flags.push({
+        severity: 2, code: "corrective_pain", label: "Pain in corrective",
+        title: { EN: "Pain in corrective", IS: "Verkur í leiðréttingaræfingum" },
+        why: { EN: `Reported pain on ${corrLog.log_date}.`, IS: `Skráði verk ${corrLog.log_date}.` },
+        ifThen: { EN: "If the next corrective is pain-free, this clears.", IS: "Ef næstu leiðréttingaræfingar eru verkjalausar hverfur þetta." },
+        confidence: { EN: "Based on the client's own answer", IS: "Byggt á svari skjólstæðings" },
       });
     }
 
