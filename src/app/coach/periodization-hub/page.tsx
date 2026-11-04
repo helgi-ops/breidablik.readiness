@@ -33,6 +33,7 @@ import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { preseasonStartRamp, preseasonMatchExposure, NORMATIVE_MATCH_KPI, NORMATIVE_MATCH_LOAD, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
+import { weeklyTargetFromMatch } from "@/lib/micropulse/periodization";
 import { upcomingInternationalBreaks, intlBreakKey, type IntlBreak } from "@/lib/micropulse/internationalBreaks";
 import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
 import { mdOffset } from "@/lib/micropulse/periodization/periodizationModel";
@@ -3593,7 +3594,11 @@ export default function PeriodizationHubPage() {
             const verdict = !player ? "" : `${player.name}: ${pb ? `${is ? "lotan hans er" : "his block is"} ${lighterTxt}${tiltTxt}.` : (is ? "lotan hans birtist þegar Mesó-lota er sett upp." : "his block appears once a Meso block is laid out.")}${emphLabel ? ` ${is ? "Styrktaráhersla" : "Strength emphasis"}: ${emphLabel}.` : ""}`;
             const mu = player?.matchUnit ?? null;
             const effPhase: "preseason" | "inseason" = phaseOverride ?? (player?.weekTargets.current ?? "inseason");
-            const wt = player ? player.weekTargets[effPhase] : null;
+            // Pre-season recomputed with the coach's OWN session count (psSess) so the card matches the
+            // Build-up ramp (the server bakes a fixed 5; the coach may run 4). In-season uses the server value.
+            const wt = !player ? null : (effPhase === "preseason" && player.matchUnit.load.typical != null
+              ? weeklyTargetFromMatch(player.matchUnit.load.typical, { phase: "preseason", sessionCount: psSess, readinessCapPct: player.vald.capPct ?? undefined, minutesTypical: player.matchUnit.minutesTypical })
+              : player.weekTargets[effPhase]);
             const SUBS: Array<{ key: number; label: string }> = [
               { key: 0, label: is ? "Lotan hans" : "His block" },
               { key: 1, label: is ? "Uppbygging" : "Build-up" },
@@ -4024,11 +4029,23 @@ export default function PeriodizationHubPage() {
               { k: "accelB23", en: "Accelerations (B2–3)", is: "Hröðun (B2–3)", u: "#" },
               { k: "decelB23", en: "Decelerations (B2–3)", is: "Hemlun (B2–3)", u: "#" },
             ] as const).filter((r) => (matchKpiAvg as Partial<Record<string, number>>)[r.k] != null || ramp.some((w) => w.byKpi[r.k] != null));
+            // Weakness-steer (the "Individualised build-up" card) biases the ramp: the axes he's behind on
+            // ramp to a HIGHER peak. "Neutral ramp (no bias)" (steerNeutral) switches it off → a uniform ramp.
+            const biasOn = steerActive && !!steer;
+            const boostOf = (k: string): number => {
+              if (!biasOn || !steer) return 1;
+              if (k === "velocityBand5" || k === "velocityBand6") return steer.hsrBoost ?? 1;   // running axis
+              if (k === "accelB23" || k === "decelB23") return steer.mechBoost ?? 1;             // mechanical axis
+              return 1;
+            };
+            const emphWords: string[] = [];
+            if (biasOn && steer) { if ((steer.hsrBoost ?? 1) > 1) emphWords.push(is ? "háhraði/sprettur" : "HSR/sprint"); if ((steer.mechBoost ?? 1) > 1) emphWords.push("Acc/Dec"); }
             return (
             <section className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <h2 className="text-[15px] font-bold text-slate-900">{is ? "Uppbyggingar-áætlun (undirbúningur)" : "Build-up plan (pre-season)"}</h2>
                 <span className="rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#2740e6]">{player.name}</span>
+                {biasOn && emphWords.length > 0 && <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#7a5cc4]" title={is ? `Áherslu-ásar rampa hærra: ${emphWords.join(" + ")}` : `Emphasised axes ramp higher: ${emphWords.join(" + ")}`}>{is ? "veikleika-stýrt" : "weakness-steered"}</span>}
                 <span className="text-[12px] text-slate-500">{is ? `Vika 1 = stýrð endurkoma (${psW1}× leik) → ${peakMult != null ? `${peakMult}× leik` : "uppbygging"} yfir ${psSess} æfingar/viku.` : `Week 1 = controlled re-entry (${psW1}× match) → ${peakMult != null ? `${peakMult}× match` : "the build"} across ${psSess} sessions/wk.`}</span>
               </div>
               <p className="mt-1 text-[11px] text-slate-500">{is ? `Fest á LEIK (ekki GPS-grunnlínu): ${srcLabel}. Magn (vegalengd, PL) rampar hraðast; háhraði/sprettur hægast (aftanlæri). Lýsandi — aldrei readiness-liturinn.` : `Anchored on the MATCH (not a GPS baseline): ${srcLabel}. Volume (distance, PL) ramps fastest; HSR/sprint slowest (hamstring). Descriptive — never the readiness colour.`}</p>
@@ -4043,7 +4060,7 @@ export default function PeriodizationHubPage() {
                     {KPIS.map((r) => (
                       <tr key={r.k} className="border-t border-slate-100">
                         <td className="py-1.5 pr-2 text-slate-700">{is ? r.is : r.en}</td>
-                        {ramp.map((w) => <td key={w.weekIndex} className="py-1.5 px-2 text-right tabular-nums text-slate-600">{fmt(w.byKpi[r.k])}{r.u}</td>)}
+                        {ramp.map((w) => { const raw = w.byKpi[r.k]; const b = boostOf(r.k); return <td key={w.weekIndex} className={`py-1.5 px-2 text-right tabular-nums ${b > 1 ? "font-semibold text-[#7a5cc4]" : "text-slate-600"}`}>{fmt(raw == null ? null : raw * b)}{r.u}</td>; })}
                         <td className="py-1.5 pl-2 text-right tabular-nums text-slate-400">{fmt((matchKpiAvg as Partial<Record<string, number>>)[r.k])}{r.u}</td>
                       </tr>
                     ))}
@@ -4051,8 +4068,8 @@ export default function PeriodizationHubPage() {
                 </table>
               </div>
               <p className="mt-2 text-[11px] text-slate-400">{is
-                ? `Vikuleg heildarmörk (≈ ÷${psSess} ≈ per æfingu). Hver KPI stiglar frá endurkomu-gólfi að toppi; háhraði/sprettur toppa lægra (taper). Engin GPS-saga þarf — fest á leik. Upphafspunktur, ekki viðmið (Little & Buchheit). Lýsandi — aldrei readiness-liturinn.`
-                : `Weekly totals (≈ ÷${psSess} ≈ per session). Each KPI ramps from a re-entry floor to its peak; HSR/sprint peak lower (taper). No GPS history needed — anchored on the match. A starting point, not a norm (Little & Buchheit). Descriptive — never the readiness colour.`}</p>
+                ? `Vikuleg heildarmörk (≈ ÷${psSess} ≈ per æfingu). Hver KPI stiglar frá endurkomu-gólfi að toppi; háhraði/sprettur toppa lægra (taper).${biasOn && emphWords.length ? ` Veikleika-stýrt: ${emphWords.join(" + ")} rampa hærra (fjólubláir dálkar) — hakaðu „Hlutlaus rampi“ til að slökkva.` : ""} Engin GPS-saga þarf — fest á leik. Upphafspunktur, ekki viðmið (Little & Buchheit). Lýsandi — aldrei readiness-liturinn.`
+                : `Weekly totals (≈ ÷${psSess} ≈ per session). Each KPI ramps from a re-entry floor to its peak; HSR/sprint peak lower (taper).${biasOn && emphWords.length ? ` Weakness-steered: ${emphWords.join(" + ")} ramp higher (purple cells) — tick "Neutral ramp" to switch it off.` : ""} No GPS history needed — anchored on the match. A starting point, not a norm (Little & Buchheit). Descriptive — never the readiness colour.`}</p>
             </section>
             );
           })() : (
@@ -4164,7 +4181,9 @@ export default function PeriodizationHubPage() {
             {/* THE MATCH UNIT — his own near-full match (typical + peak) → the weekly target it implies */}
             {player && (() => {
               const mu = player.matchUnit;
-              const wt = player.weekTargets[effPhase];
+              const wt = (effPhase === "preseason" && player.matchUnit.load.typical != null)
+                ? weeklyTargetFromMatch(player.matchUnit.load.typical, { phase: "preseason", sessionCount: psSess, readinessCapPct: player.vald.capPct ?? undefined, minutesTypical: player.matchUnit.minutesTypical })
+                : player.weekTargets[effPhase];
               const conf = mu.confidence === "high" ? { c: "bg-emerald-100 text-emerald-700", t: is ? "há vissa" : "high confidence" } : mu.confidence === "medium" ? { c: "bg-amber-100 text-amber-700", t: is ? "miðlungs vissa" : "medium confidence" } : { c: "bg-rose-100 text-rose-700", t: is ? "lítil vissa" : "low confidence" };
               const cell = (m: MatchUnitMetric, unit: string) => m.typical == null ? "–" : `${m.typical}${unit}${m.peak != null && m.peak !== m.typical ? ` · ↑${m.peak}${unit}` : ""}`;
               return (
