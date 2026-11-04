@@ -289,6 +289,9 @@ export default function PeriodizationHubPage() {
   const [testShowAll, setTestShowAll] = React.useState(false); // Testing tab: show every block, not just the next three
   const [testFocus, setTestFocus] = React.useState<string | null>(null); // Testing tab: block (start ISO) clicked on the strip
   const [plSub, setPlSub] = React.useState(0); // Players tab: which player section is open (block / build-up / values / data)
+  // Players tab phase view: pre-season = the Build-up ramp, in-season = the typical-week Player Demands.
+  // null = follow the player's own current phase; the toggle sets an explicit override.
+  const [phaseOverride, setPhaseOverride] = React.useState<"preseason" | "inseason" | null>(null);
 
   const authHeader = React.useCallback(async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`, [supabase]);
 
@@ -3615,7 +3618,8 @@ export default function PeriodizationHubPage() {
             const emphLabel = preEmphasis ? (is ? (EMPH[preEmphasis.emphasis]?.is ?? preEmphasis.emphasis) : (EMPH[preEmphasis.emphasis]?.en ?? preEmphasis.emphasis)) : null;
             const verdict = !player ? "" : `${player.name}: ${pb ? `${is ? "lotan hans er" : "his block is"} ${lighterTxt}${tiltTxt}.` : (is ? "lotan hans birtist þegar Mesó-lota er sett upp." : "his block appears once a Meso block is laid out.")}${emphLabel ? ` ${is ? "Styrktaráhersla" : "Strength emphasis"}: ${emphLabel}.` : ""}`;
             const mu = player?.matchUnit ?? null;
-            const wt = player ? player.weekTargets[player.weekTargets.current] : null;
+            const effPhase: "preseason" | "inseason" = phaseOverride ?? (player?.weekTargets.current ?? "inseason");
+            const wt = player ? player.weekTargets[effPhase] : null;
             const SUBS: Array<{ key: number; label: string }> = [
               { key: 0, label: is ? "Lotan hans" : "His block" },
               { key: 1, label: is ? "Uppbygging" : "Build-up" },
@@ -3655,6 +3659,22 @@ export default function PeriodizationHubPage() {
           {/* 2 — VERDICT + four facts */}
           <section className="space-y-3">
             <p className="text-[17px] font-bold text-slate-900">{verdict}</p>
+            {/* Phase view toggle — pre-season shows the Build-up ramp; in-season shows the typical-week
+                Player Demands. Defaults to the player's own current phase; the targets below follow it. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[12px] font-semibold text-slate-500">{is ? "Áætlun fyrir" : "Planning for"}:</span>
+              <div className="flex rounded-lg border border-slate-300 p-0.5 text-[12px]">
+                {(["preseason", "inseason"] as const).map((ph) => (
+                  <button key={ph} type="button" onClick={() => setPhaseOverride(ph)}
+                    className={`rounded-md px-2.5 py-1 font-semibold ${effPhase === ph ? "bg-[#2740e6] text-white" : "text-slate-600 hover:text-slate-900"}`}>
+                    {ph === "preseason" ? (is ? "Undirbúningur" : "Pre-season") : (is ? "Keppnistímabil" : "In-season")}
+                  </button>
+                ))}
+              </div>
+              {phaseOverride && phaseOverride !== (player?.weekTargets.current ?? "inseason") && (
+                <span className="text-[11px] text-slate-400">{is ? `(sjálfgefið fyrir hann: ${player?.weekTargets.current === "preseason" ? "undirbúningur" : "keppnistímabil"})` : `(his default: ${player?.weekTargets.current === "preseason" ? "pre-season" : "in-season"})`}</span>
+              )}
+            </div>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3">
               <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                 <div className="text-[12px] font-semibold text-slate-500">{is ? "Leikviðmið hans" : "His match unit"}</div>
@@ -3685,7 +3705,14 @@ export default function PeriodizationHubPage() {
           {/* PLAYER DEMANDS — his own match unit split across the typical week (MD-day shape). The
               per-player analogue of the Team Demands tab; answers "how does his match demand distribute
               across MD-4…MD-1?". Steady-state reference (no ramp); the His-block grid shows the planned block. */}
-          {!isBasketball && player && player.matchUnit.load.typical != null && (() => {
+          {!isBasketball && player && effPhase === "preseason" && (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-[12px] text-slate-500">
+              {is ? "Undirbúnings-sýn — dæmigerða æfingavikan (Leikmanns-kröfur) er keppnistímabils-sýn. Uppbyggingar-rampinn er hér að neðan í „Uppbygging“ flipanum." : "Pre-season view — the typical training week (Player Demands) is an in-season view. The Build-up ramp is below in the “Build-up” tab."}{" "}
+              <button type="button" onClick={() => setPlSub(1)} className="font-semibold text-[#2740e6] hover:underline">{is ? "Opna Uppbygging →" : "Open Build-up →"}</button>
+            </div>
+          )}
+
+          {!isBasketball && player && effPhase === "inseason" && player.matchUnit.load.typical != null && (() => {
             const mu = player.matchUnit;
             // Day-types come from the ENGINE's own microcycle (buildCalendarBlock), not a hand map — so this
             // matches "His block" exactly, including that MD-2 is a recovery/rest day (never the heaviest).
@@ -3839,7 +3866,7 @@ export default function PeriodizationHubPage() {
 
           {/* WEAKNESS-STEERED BUILD-UP — reads Total Player Analysis (athlete-axis weaknesses + levers +
               VALD focus) and biases the per-player ramp toward the qualities he's behind on. Read, not rebuilt. */}
-          {player && steer && (steer.targets.length > 0 || steer.exposureTargets.length > 0 || steer.dirTargets.length > 0) && (() => {
+          {effPhase === "preseason" && player && steer && (steer.targets.length > 0 || steer.exposureTargets.length > 0 || steer.dirTargets.length > 0) && (() => {
             const qName = (id: QualityRead["id"]) => (is ? QUALITY_BY_ID[id].is : QUALITY_BY_ID[id].en);
             const axisWord = (a: "hsr" | "mech") => (a === "hsr" ? (is ? "háhraða/hlaup" : "HSR/running") : (is ? "Acc/Dec (vélrænt)" : "Acc/Dec (mechanical)"));
             const dirWord = (f: "fwd" | "back" | "lat") => (f === "fwd" ? (is ? "fram" : "forward") : f === "back" ? (is ? "aftur" : "backward") : (is ? "til hliðar" : "lateral"));
@@ -3924,12 +3951,21 @@ export default function PeriodizationHubPage() {
           })()}
 
           {/* BUILD-UP PLAN — the harvested Progressive Overload engine: ramp each player from current baseline
-              TO his match unit (pre-season / return-to-play). Reuses ProgressiveOverloadCard (its own fetch). */}
+              TO his match unit. A PRE-SEASON / return-to-play tool, so it shows in the pre-season view; in-season
+              the typical week is the Player Demands card instead. Reuses ProgressiveOverloadCard (its own fetch). */}
+          {effPhase === "preseason" ? (
           <section className="rounded-xl border border-slate-200 bg-white p-4">
             <h2 className="text-[15px] font-bold text-slate-900">{is ? "Uppbyggingar-áætlun (undirbúningur / aftur í leik)" : "Build-up plan (pre-season / return-to-play)"}</h2>
             <p className="mt-1 mb-2 text-[11px] text-slate-500">{is ? `Örugg vikuleg þróun frá núverandi grunnlínu AÐ leikviðmiði${player ? ` ${player.name}s` : " leikmanns"} — magn hraðast, háhraði/sprettur hægast (aftanlæri).${steerActive ? " Áherslu-KPI (veikleika-stýrð) rampa hraðar, innan sömu þaka." : ""} Aðal-þakið er leikkrafan + bráðaálags-þróun; ACWR er umdeilt aukagildi. Lýsandi — aldrei readiness-liturinn.` : `A safe weekly ramp from current baseline TO ${player ? `${player.name}'s` : "the player's"} match unit — volume fastest, HSR/sprint slowest (hamstring).${steerActive ? " The emphasised KPIs (weakness-steered) ramp faster, within the same caps." : ""} The primary ceiling is match demand + acute-load trend; ACWR is a contested secondary readout. Descriptive — never the readiness colour.`}</p>
             <ProgressiveOverloadCard weeks={blkWeeks} playerId={selId || undefined} emphasis={poEmphasis} matchRef={poMatchRef} focusLabel={player?.name} sessionsPerWeek={standardTrainingDays(1, isBasketball ? "basketball" : null).length} />
           </section>
+          ) : (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-[12px] text-slate-500">
+            {is ? "Keppnistímabil — Uppbyggingar-rampinn er undirbúnings-/aftur-í-leik verkfæri. Dæmigerða vikan er „Leikmanns-kröfur“ að ofan." : "In-season — the Build-up ramp is a pre-season / return-to-play tool. The typical week is the “Player Demands” card above."}{" "}
+            <button type="button" onClick={() => setPhaseOverride("preseason")} className="font-semibold text-[#2740e6] hover:underline">{is ? "Skipta í undirbúning →" : "Switch to Pre-season →"}</button>
+            <span className="text-slate-400">{is ? " (t.d. fyrir leikmann á leið aftur eftir meiðsli)" : " (e.g. for a player returning from injury)"}</span>
+          </div>
+          )}
               </>)}
               {plSub === 2 && (<>
           {/* PRE-SEASON STARTING EMPHASIS (Part 2) — this player's own strength/power/body-comp/deficits */}
@@ -4033,7 +4069,7 @@ export default function PeriodizationHubPage() {
             {/* THE MATCH UNIT — his own near-full match (typical + peak) → the weekly target it implies */}
             {player && (() => {
               const mu = player.matchUnit;
-              const wt = player.weekTargets[player.weekTargets.current];
+              const wt = player.weekTargets[effPhase];
               const conf = mu.confidence === "high" ? { c: "bg-emerald-100 text-emerald-700", t: is ? "há vissa" : "high confidence" } : mu.confidence === "medium" ? { c: "bg-amber-100 text-amber-700", t: is ? "miðlungs vissa" : "medium confidence" } : { c: "bg-rose-100 text-rose-700", t: is ? "lítil vissa" : "low confidence" };
               const cell = (m: MatchUnitMetric, unit: string) => m.typical == null ? "–" : `${m.typical}${unit}${m.peak != null && m.peak !== m.typical ? ` · ↑${m.peak}${unit}` : ""}`;
               return (
