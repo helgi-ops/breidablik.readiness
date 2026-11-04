@@ -53,6 +53,19 @@ const ASSESSMENTS: Assessment[] = [
     tag: { EN: "ForceDecks · NordBord · ForceFrame", IS: "ForceDecks · NordBord · ForceFrame" },
   },
   {
+    // Movement Screen — a physical screen (AI/pose read → region assessment → cited
+    // correctives), so it's an assessment, not injury-log monitoring. Moved here from
+    // Injury Monitoring (Nov 2026). Screening & training only, never a diagnosis and
+    // never the readiness colour; the route is unchanged.
+    href: "/coach/movement-screen",
+    title: { EN: "Movement Screen", IS: "Hreyfiskimun" },
+    blurb: {
+      EN: "Analyse & measure a movement (AI read + pose), record a region assessment, then pick the correctives to send — screening & training, not a diagnosis.",
+      IS: "Greindu & mældu hreyfingu (AI-lestur + pose), skráðu svæðismat, veldu svo corrective æfingar til að senda — skimun & þjálfun, ekki greining.",
+    },
+    tag: { EN: "AI/pose · correctives", IS: "AI/pose · corrective" },
+  },
+  {
     href: "/coach/assessment-profile",
     title: { EN: "Assessment profile", IS: "Mælingaprófíll" },
     blurb: {

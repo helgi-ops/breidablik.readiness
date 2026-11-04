@@ -131,7 +131,9 @@ export const injuryMonitoringLinks: SidebarLink[] = [
   { href: "/coach/injuries",           label: { EN: "Injuries",                         IS: "Meiðsli" } },
   { href: "/coach?tab=rtp",            label: { EN: "Injuries / RTP",                   IS: "Meiðsli / RTP" } },
   { href: "/coach/return-to-training", label: { EN: "Return to Training",               IS: "Endurkoma í æfingar" } },
-  { href: "/coach/movement-screen",    label: { EN: "Movement Screen",                  IS: "Hreyfiskimun" } },
+  // Movement Screen moved to the Assessments hub (Nov 2026) — it's a physical screen
+  // (AI/pose read → region assessment → cited correctives), an assessment surface, not
+  // an injury-log one. Route /coach/movement-screen unchanged; it's a card there now.
   { href: "/coach/notifications",      label: { EN: "Notifications",                    IS: "Tilkynningar" } },
 ];
 
