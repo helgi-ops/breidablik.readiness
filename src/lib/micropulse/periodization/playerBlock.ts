@@ -11,7 +11,9 @@
  * both satisfy it without importing across the client/server boundary.
  */
 import { buildCalendarBlock, positionGroup } from "./index";
-import type { Bi, CalType, CalendarBlock, MatchUnitAbs, RecGoalKey, TeamAverages } from "./index";
+import type { Bi, CalType, CalendarBlock, CalWeek, MatchUnitAbs, RecGoalKey, TeamAverages } from "./index";
+import { standardTrainingDays, weeklyKpiMultiple } from "./plannedVolume";
+import type { WeeklyLoadMetricKey } from "../externalLoad/weeklyLoadTypes";
 import type { BuildUpSteer } from "./buildUpSteer";
 
 type Metric = { typical: number | null };
@@ -71,6 +73,51 @@ export interface PlayerBlockResult {
 
 const MIN_SAMPLE = 4;
 
+/** Rescale a built block so each axis's PEAK (non-deload) week sums to the team's weekly ×match multiple for
+ *  that variable (plannedVolume) — the same model the Meso tab + the Build-up ramp use. One constant factor
+ *  per axis keeps the ramp/deload shape and the day-type distribution; only the absolute level changes.
+ *  Mutates `block` in place (buildCalendarBlock returns a fresh block, so there is no shared reference). */
+function alignBlockToTeamMultiple(block: CalendarBlock): void {
+  const matchDays = block.weeks.reduce((s, w) => s + w.days.filter((d) => d.type === "match").length, 0);
+  const perWk = block.weeks.length ? Math.round(matchDays / block.weeks.length) : 0;
+  const preDays = standardTrainingDays(perWk); // the team's training-week shape for this congestion
+  const AXIS_KPI: Record<"dist" | "hsr" | "load" | "accdec" | "stride", WeeklyLoadMetricKey> = {
+    dist: "totalDistance", hsr: "velocityBand5", load: "totalPlayerLoad", accdec: "accelB23", stride: "velocityBand6",
+  };
+  const trainWeeks = block.weeks.filter((w) => !w.isDeload);
+  if (!trainWeeks.length) return;
+  const peakPct = (sel: (w: CalWeek) => number | null): number => Math.max(0, ...trainWeeks.map((w) => sel(w) ?? 0));
+  const scaleOf = (axis: keyof typeof AXIS_KPI, pk: number): number => {
+    if (!pk || pk <= 0) return 1;
+    const tm = weeklyKpiMultiple(preDays, AXIS_KPI[axis]);
+    return Number.isFinite(tm) && tm > 0 ? (tm * 100) / pk : 1; // tm×100 because pct is ×match ×100
+  };
+  const sc = {
+    dist: scaleOf("dist", peakPct((w) => w.pctRunning)),
+    hsr: scaleOf("hsr", peakPct((w) => w.pctHsr)),
+    load: scaleOf("load", peakPct((w) => w.pctMech)),
+    accdec: scaleOf("accdec", peakPct((w) => w.pctAccDec23)),
+    stride: scaleOf("stride", peakPct((w) => w.pctStride)),
+  };
+  if (!Object.values(sc).some((x) => Math.abs(x - 1) > 0.001)) return; // already aligned
+  for (const w of block.weeks) {
+    for (const d of w.days) {
+      if (d.type === "match" || d.type === "rest") continue;
+      if (d.dist != null) d.dist = Math.round((d.dist * sc.dist) / 10) * 10;
+      if (d.hsr != null) d.hsr = Math.round((d.hsr * sc.hsr) / 5) * 5;
+      if (d.load != null) d.load = Math.round(d.load * sc.load);
+      if (d.accHiEff != null) d.accHiEff = Math.round(d.accHiEff * sc.accdec);
+      if (d.decHiEff != null) d.decHiEff = Math.round(d.decHiEff * sc.accdec);
+      if (d.stride != null) d.stride = Math.round(d.stride * sc.stride);
+    }
+    if (w.pctRunning != null) w.pctRunning = Math.round(w.pctRunning * sc.dist);
+    if (w.pctHsr != null) w.pctHsr = Math.round(w.pctHsr * sc.hsr);
+    if (w.pctMech != null) w.pctMech = Math.round(w.pctMech * sc.load);
+    if (w.pctAccDec23 != null) w.pctAccDec23 = Math.round(w.pctAccDec23 * sc.accdec);
+    if (w.pctStride != null) w.pctStride = Math.round(w.pctStride * sc.stride);
+  }
+}
+
 export function buildPlayerBlock(plan: PlayerBlockPlan, pl: PlayerBlockPlayer, opts: PlayerBlockOpts): PlayerBlockResult {
   const blkBase = opts.blkBase ?? 100;
   const blkStep = opts.blkStep ?? 5;
@@ -119,6 +166,15 @@ export function buildPlayerBlock(plan: PlayerBlockPlan, pl: PlayerBlockPlayer, o
     phase: opts.phaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeleton, typeOverrides: opts.typeOverrides,
     maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph, dir: steerActive && steer ? steer.dirEmph : undefined }, offseasonStart: opts.offseasonStart, goal: opts.goal, camps: opts.camps,
   });
+
+  // ── Align the block's weekly VOLUME to the TEAM's ×match multiple PER VARIABLE ──
+  // The raw CAL_SHARE day-sum over-loads a week (~1.5× the team's planned ×match). Rescale each axis by a
+  // single factor so the PEAK (non-deload) week sums to the team's `weeklyKpiMultiple` for that variable —
+  // preserving the day-type shape + the ramp/deload curve. This makes His block, the PDF, the player app and
+  // the Build-up ramp all tell the same volume story (the Meso tab already uses this multiple). Best-effort.
+  try {
+    alignBlockToTeamMultiple(block);
+  } catch { /* alignment is advisory; keep the raw block on any surprise */ }
 
   const uncappedPeak = Math.min(1.4, (blkBase + blkStep * Math.max(0, opts.blkWeeks - 2)) / 100);
   const lighterPct = uncappedPeak > 0 ? Math.round((1 - (Math.min(uncappedPeak, maxMult) * loadScale) / uncappedPeak) * 100) : 0;
