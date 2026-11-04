@@ -143,8 +143,9 @@ export default function TrainLikeYouPlayPage() {
   }), []);
   const [mode, setMode] = useState<Mode>("fmp");
   // Top-level tabs: the three magnitude bases (FMP/IMA/GPS) drive the board; "shape" is the
-  // directional movement-shape card (IMA clock, trained vs played) on its own tab.
-  const [view, setView] = useState<"board" | "shape">("board");
+  // directional movement-shape card (IMA clock, trained vs played); "develop" is the per-player
+  // development-emphasis grid ("how to develop him"). Each on its own tab.
+  const [view, setView] = useState<"board" | "shape" | "develop">("board");
   const [baseline, setBaseline] = useState<Baseline>("own");
   const metricKeys = useMemo<MetricKey[]>(() => data?.modes?.[mode] ?? [], [data, mode]);
   // How many of a mode's metrics the club actually has match data for. top_speed
@@ -199,7 +200,14 @@ export default function TrainLikeYouPlayPage() {
   const totalGaps = useMemo(() => players.reduce((s, p) => s + p.modeGaps, 0), [players]);
   const playersWithGaps = useMemo(() => players.filter((p) => p.modeGaps > 0).length, [players]);
   const [microMetric, setMicroMetric] = useState<MetricKey>("fmp_dyn_high");
-  const microKey: MetricKey | undefined = metricKeys.includes(microMetric) ? microMetric : metricKeys[1] ?? metricKeys[0];
+  // The periodization chart is a LOAD/volume read (total session vs full match), and its MD-day
+  // target band is a load shape — so offer only the cumulative (per90) metrics. Top speed (peak)
+  // and PL/min (rate) aren't "% of match load"; they stay on the board where they're framed right.
+  const microMetricKeys = useMemo(() => {
+    const kind = new Map((data?.metrics ?? []).map((m) => [m.key, m.kind]));
+    return metricKeys.filter((k) => kind.get(k) === "per90");
+  }, [data, metricKeys]);
+  const microKey: MetricKey | undefined = microMetricKeys.includes(microMetric) ? microMetric : microMetricKeys[0];
 
   // ── VERDICT (rules, not AI) ─────────────────────────────────────────────
   // Plain one-sentence read of the board: who is under-exposed to match-intensity
@@ -363,6 +371,11 @@ export default function TrainLikeYouPlayPage() {
               {IS ? "Hreyfi-lögun" : "Movement shape"}
             </button>
           ) : null}
+          <button type="button" role="tab" aria-selected={view === "develop"}
+            onClick={() => setView("develop")}
+            className={`-mb-px rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors ${view === "develop" ? "border-[#2740e6] text-[#2740e6]" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
+            {IS ? "Þróa hann" : "Develop him"}
+          </button>
         </div>
       </div>
 
@@ -420,7 +433,7 @@ export default function TrainLikeYouPlayPage() {
                     <option value="season">{IS ? "Allt tímabilið" : "Whole season"}</option>
                   </select>
                   <select value={microKey} onChange={(e) => setMicroMetric(e.target.value as MetricKey)} className="tlp-noprint rounded-md border border-slate-300 px-2 py-1 text-xs">
-                    {metricKeys.map((m) => <option key={m} value={m}>{IS ? META[m].is : META[m].en}</option>)}
+                    {microMetricKeys.map((m) => <option key={m} value={m}>{IS ? META[m].is : META[m].en}</option>)}
                   </select>
                 </div>
               </div>
@@ -559,11 +572,11 @@ export default function TrainLikeYouPlayPage() {
         <div className="tlp-noprint rounded-lg border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">{IS ? "Engin gögn." : "No data."}</div>
       )}
 
-      {/* "How to develop him" — per-player development drill-down at the BOTTOM of the board tab:
-          it deepens the squad-level TLYP analysis above into an individual read
-          (game model × how he moves). Self-fetches; capability-driven. */}
-      {view === "board" && (
-        <div className="tlp-noprint mt-6">
+      {/* "How to develop him" tab — the per-player development-emphasis grid (game model ×
+          how he moves). Its own tab (was the board's bottom section); squad-scoped, so it
+          stays on this page. Self-fetches; capability-driven. */}
+      {view === "develop" && (
+        <div className="tlp-noprint">
           <TrainingReadPanel lang={lang === "EN" ? "EN" : "IS"} />
         </div>
       )}
