@@ -80,6 +80,10 @@ export const loadMonitoringLinks: SidebarLink[] = [
   // ?tab=squad). A drill-down reached from here + the Today verdict, not a primary Today tab.
   { href: "/coach?tab=squad", label: { EN: "Squad Intelligence", IS: "Liðsgreining" } },
   { href: "/coach/load-intelligence-hub", label: { EN: "Load Intelligence", IS: "Álagsgreining" } },
+  // Pre-session report — moved here from Team Planning (Nov 2026, team-planning-prune-brief):
+  // it's a pre-training load/readiness report ("what does the squad look like before this
+  // session"), a monitoring surface, not a planning tool. Route unchanged (/coach/load-plan).
+  { href: "/coach/load-plan",             label: { EN: "Pre-session report", IS: "Æfingaskýrsla (fyrir)" } },
 ];
 
 // Match / game analysis — post-match and match-referenced surfaces. Split out of
@@ -159,24 +163,23 @@ export const performanceAnalyticsLinks: SidebarLink[] = [
 // clubs (head coach vs S&C coach) so separating them mirrors how the
 // staff actually splits responsibilities.
 export const teamPlanningLinks: SidebarLink[] = [
-  // Coaching Library HUB — the coach's knowledge base (Drills · Videos · Meetings).
-  // Sits at the top of planning: it's where drills, clips and meeting notes live.
-  { href: "/coach/library",            label: { EN: "Coaching Library",    IS: "Þjálfarasafn" } },
-  // Fixtures is the upstream source of match days — Week setup reads the match
-  // day for a week from here, so it sits first in the planning workflow.
-  { href: "/coach/fixtures",           label: { EN: "Fixtures",            IS: "Leikjadagatal" } },
-  // Periodization Hub sits above Week setup: it sets the season macro→meso plan the week executes.
+  // Pruned Nov 2026 (team-planning-prune-brief) to the four surfaces that are genuinely
+  // "plan the team's work", in season order (season macro → the match → the week):
+  //   · Coaching Library dropped — it's the Dashboard's own "Library" tab (Drills · Videos ·
+  //     Meetings), reachable from Today, not a planning destination. Route /coach/library stays.
+  //   · Fixtures + Match minutes collapsed into the Match hub (/coach/match-hub) — both are the
+  //     same games seen from the planning side (fixtures before, minutes after). Standalone
+  //     routes stay live for deep links and the coach_signals "confirm minutes" chip.
+  //   · Bridge plan dropped — the off-week/KSÍ maintenance builder already lives inside the
+  //     Periodization Hub (its "Brú-plan" card). Route /coach/bridge-plan stays bookmarkable.
+  //   · Pre-session report moved to Load Monitoring — it's a live load/readiness report, not a
+  //     planning tool (see loadMonitoringLinks).
+  // Periodization Hub sits first: it sets the season macro→meso plan the week executes.
   { href: "/coach/periodization-hub",  label: { EN: "Periodization Hub",   IS: "Tímabilsskipulag" } },
+  // Match hub = Fixtures + Match minutes. Fixtures is the upstream match-day source Week setup
+  // reads, so the hub sits above Week setup in the workflow.
+  { href: "/coach/match-hub",          label: { EN: "Match hub",           IS: "Leikir" } },
   { href: "/coach/week-setup",         label: { EN: "Week setup",          IS: "Vikuskipulag" } },
-  { href: "/coach/load-plan",          label: { EN: "Pre-session report",  IS: "Æfingaskýrsla (fyrir)" } },
-  { href: "/coach/bridge-plan",        label: { EN: "Bridge plan",         IS: "Brú-plan" } },
-  // Progressive overload folded into the Periodization Hub (Meso ramp is engine-driven; per-player
-  // build-up lives on the Players tab). The old /coach/progressive-overload route now redirects there.
-  // Match minutes STAYS a destination — it's an interactive MD+1 data-entry page
-  // (the coach enters/edits minutes routinely), not a pure background signal. The
-  // coach_signals "confirm minutes" chip on Today is only the exception nudge to
-  // the same page; it can't replace routine access. See team-planning-prune-brief.
-  { href: "/coach/match-minutes",      label: { EN: "Match minutes",       IS: "Leikmínútur" } },
   // Relocated (Aug 2026): Availability Board → Injury Monitoring (a today team-
   // state read). game-plan-fit (analysis) + post-training (report) → Today
   // "background signal" chips via coach_signals; pages kept as the chips'
@@ -406,8 +409,8 @@ function Section({
                     {lockedHrefs?.has(l.href) && (
                       <span
                         className="text-[11px] leading-none text-violet-500"
-                        title={lang === "IS" ? "Elite-eiginleiki — smelltu til að sjá" : "Elite feature — click to preview"}
-                        aria-label={lang === "IS" ? "Elite-eiginleiki" : "Elite feature"}
+                        title={lang === "IS" ? "Hærri pakki — smelltu til að sjá" : "Higher plan — click to preview"}
+                        aria-label={lang === "IS" ? "Læstur eiginleiki" : "Locked feature"}
                       >
                         🔒
                       </span>
@@ -578,7 +581,9 @@ export function CoachSidebar({
   const { hasFeature, loading: planLoading } = usePlan();
   const lockedHrefs = new Set<string>();
   if (!planLoading) {
-    for (const l of [...gamesLinks, ...playersLinks, ...performanceAnalyticsLinks, ...strengthTrainingLinks, ...programmeLibraryLinks]) {
+    // Includes team-planning links so Periodization Hub (Elite) and Week setup
+    // (Pro) get a lock glyph for teams below their required plan.
+    for (const l of [...gamesLinks, ...playersLinks, ...performanceAnalyticsLinks, ...strengthTrainingLinks, ...programmeLibraryLinks, ...teamPlanningLinks]) {
       const feat = eliteFeatureForHref(l.href);
       if (feat && !hasFeature(feat)) lockedHrefs.add(l.href);
     }
