@@ -35,7 +35,7 @@ import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHub
 import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { preseasonStartRamp, preseasonMatchExposure, NORMATIVE_MATCH_KPI, NORMATIVE_MATCH_LOAD, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
 import { upcomingInternationalBreaks, intlBreakKey, type IntlBreak } from "@/lib/micropulse/internationalBreaks";
-import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
+import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek, kpiTmRefRange, KPI_TAPER_EXPONENT } from "@/lib/micropulse/periodization/plannedVolume";
 import { DEFAULT_MD_MICROCYCLE, TACTICAL_PERIODIZATION_MORPHOCYCLE, mdOffset, type MdDaySpec } from "@/lib/micropulse/periodization/periodizationModel";
 import { recommendTestingSchedule, testsForBlock, TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
@@ -3693,13 +3693,16 @@ export default function PeriodizationHubPage() {
             const days = mdModelDays.filter((d) => (mdOffset(d.mdDay) ?? 0) < 0).sort((a, b) => (mdOffset(a.mdDay) ?? 0) - (mdOffset(b.mdDay) ?? 0));
             if (!days.length) return null;
             const fmt = (v: number | null) => (v == null ? "–" : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
+            // Each KPI tapers differently with the day's intensity: volume (Player Load, distance) ~linear,
+            // HSR/sprint taper harder before a match (KPI_TAPER_EXPONENT, Martín-García 2018). All anchored
+            // on his MATCH unit (the 90-min season median) × the day's share^exponent.
             const rows = ([
-              { en: "Player Load", is: "Player Load", v: mu.load.typical, u: "" },
-              { en: "Total distance", is: "Heildar-vegalengd", v: mu.distance.typical, u: "m" },
-              { en: "High-speed running", is: "Háhraðahlaup", v: mu.hsr.typical, u: "m" },
-              { en: "Sprint distance", is: "Sprett-vegalengd", v: mu.sprint.typical, u: "m" },
-              { en: "Accelerations (B2–3)", is: "Hröðun (B2–3)", v: mu.accel.typical, u: "#" },
-              { en: "Decelerations (B2–3)", is: "Hemlun (B2–3)", v: mu.decel.typical, u: "#" },
+              { en: "Player Load", is: "Player Load", v: mu.load.typical, u: "", kpi: "totalPlayerLoad" },
+              { en: "Total distance", is: "Heildar-vegalengd", v: mu.distance.typical, u: "m", kpi: "totalDistance" },
+              { en: "High-speed running", is: "Háhraðahlaup", v: mu.hsr.typical, u: "m", kpi: "velocityBand5" },
+              { en: "Sprint distance", is: "Sprett-vegalengd", v: mu.sprint.typical, u: "m", kpi: "velocityBand6" },
+              { en: "Accelerations (B2–3)", is: "Hröðun (B2–3)", v: mu.accel.typical, u: "#", kpi: "accelB23" },
+              { en: "Decelerations (B2–3)", is: "Hemlun (B2–3)", v: mu.decel.typical, u: "#", kpi: "decelB23" },
             ] as const).filter((r) => r.v != null);
             return (
               <section className="rounded-xl border border-slate-200 bg-white p-4">
@@ -3718,7 +3721,8 @@ export default function PeriodizationHubPage() {
                     </tr></thead>
                     <tbody>
                       {rows.map((r) => {
-                        const perDay = days.map((d) => (r.v as number) * (d.cap / 100));
+                        const e = KPI_TAPER_EXPONENT[r.kpi] ?? 1;
+                        const perDay = days.map((d) => (r.v as number) * Math.pow(d.cap / 100, e));
                         const wk = perDay.reduce((s, x) => s + x, 0);
                         return (
                           <tr key={r.en} className="border-t border-slate-100">
@@ -3733,8 +3737,8 @@ export default function PeriodizationHubPage() {
                   </table>
                 </div>
                 <p className="mt-2 text-[11px] text-slate-400">{is
-                  ? `MD-dags hlutföll = hvers dags % af leik úr periodization-módeli liðsins (heildar álags-lögun; „Lotan hans" fínstillir hlaup vs vélrænt per dag). Vika = summa æfingadaga. „Leikur" = leikeining hans (miðgildi ${mu.nNearFull} leikja). Lýsandi — aldrei readiness-liturinn.`
-                  : `MD-day shares = each day's % of a match from the team periodization model (overall load shape; "His block" refines running vs mechanical per day). Week = sum of the training days. "Match" = his match unit (median of ${mu.nNearFull} matches). Descriptive — never the readiness colour.`}</p>
+                  ? `Allt reiknað út frá LEIKNUM hans (miðgildi ${mu.nNearFull} ~90-mín leikja) × hlutfall dagsins úr periodization-módeli liðsins. Hver KPI trappast ólíkt: magn (PL/vegalengd) ~línulega, háhraði/sprettur harðar fyrir leik (Martín-García 2018). Vika = summa æfingadaga. Lýsandi — aldrei readiness-liturinn.`
+                  : `Everything is computed from his MATCH (median of ${mu.nNearFull} ~90-min games) × the day's share from the team periodization model. Each KPI tapers differently: volume (PL/distance) ~linearly, HSR/sprint harder before a match (Martín-García 2018). Week = sum of the training days. Descriptive — never the readiness colour.`}</p>
               </section>
             );
           })()}
