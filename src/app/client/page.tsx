@@ -35,6 +35,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ClientCorrectiveCard, { type CorrectiveData } from "@/components/player/ClientCorrectiveCard";
+import ClientWeekOverview from "@/components/player/ClientWeekOverview";
 import ClientProgrammeOverview from "@/components/player/ClientProgrammeOverview";
 import ClientMoveSessionButton from "@/components/player/ClientMoveSessionButton";
 import ClientMoveSessionControl from "@/components/player/ClientMoveSessionControl";
@@ -407,8 +408,12 @@ export default function ClientTodayPage() {
       {/* Daily AI Coach — labelled AI, cites real signals (lazy, hides if none). */}
       <AICoachCard lang={L} />
 
-      {/* Full programme overview — only renders if the coach turned plan
-          visibility on for this client (read-only, no loads). */}
+      {/* This week at a glance — all 7 days, today highlighted (hides if the
+          week has no sessions). Answers "what's on the other days?". */}
+      <ClientWeekOverview lang={L} />
+
+      {/* Full programme overview — shown by default for PT clients; the coach
+          can hide it per client (read-only, no loads). */}
       <ClientProgrammeOverview lang={L} />
 
       {/* Move any of my sessions, either direction. */}
