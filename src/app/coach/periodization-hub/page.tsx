@@ -3707,10 +3707,14 @@ export default function PeriodizationHubPage() {
               { en: "Accelerations (B2–3)", is: "Hröðun (B2–3)", u: "#", tf: "accel", mf: "matchAccel", pm: mu.accel.typical },
               { en: "Decelerations (B2–3)", is: "Hemlun (B2–3)", u: "#", tf: "decel", mf: "matchDecel", pm: mu.decel.typical },
             ] as const).filter((r) => r.pm != null);
+            // ONE representative 7-day microcycle (recovery MD+1/+2 + build MD-4…MD-1). The profile holds a
+            // bucket for EVERY MD-offset the season ever saw (incl. long-gap MD-5/MD-6 and MD+3), but those
+            // belong to different week LENGTHS — summing them all double-counts into a ~2× too-big week.
+            const STD_MICRO = new Set([1, 2, -4, -3, -2, -1]);
             const mdCols = (mdBase?.md?.days ?? [])
               .map((d) => ({ d, off: mdOffL(d.label.en) }))
-              .filter((x) => (playsMatches || x.off < 0))              // drop post-match recovery for a non-playing week
-              .sort((a, b) => ((a.off > 0 ? a.off : a.off + 100) - (b.off > 0 ? b.off : b.off + 100))); // MD+1,+2,+3, MD-4…MD-1
+              .filter((x) => STD_MICRO.has(x.off) && (x.off < 0 || playsMatches)) // drop recovery days for a non-playing week
+              .sort((a, b) => ((a.off > 0 ? a.off : a.off + 100) - (b.off > 0 ? b.off : b.off + 100))); // MD+1,+2, MD-4…MD-1
             if (mdBase && mdCols.length) {
               const denom = mdBase.avg; // season avg carries the match* references (the per-day denominator)
               const subOf = (off: number): string => off > 0 ? (is ? "endurheimt" : "recovery") : off <= -3 ? (is ? "álag" : "load") : off === -2 ? (is ? "léttur" : "light") : (is ? "virkjun" : "prime");
@@ -3752,8 +3756,8 @@ export default function PeriodizationHubPage() {
                     </table>
                   </div>
                   <p className="mt-2 text-[11px] text-slate-400">{is
-                    ? `Hver MD-dagur = raunverulegt hlutfall þess dags af leik (úr sömu gögnum og Liðs-kröfur), sett á LEIKINN hans (miðgildi ${mu.nNearFull} ~90-mín leikja). MD+1/MD+2 eru endurheimt eftir leik (aðeins sýnd þegar hann spilar); MD+3 birtist bara í lengra hléi. Vika = summa æfingadaga (leikdagur ekki talinn) — þetta er MÆLT dreifing, en „Vikumark“-spjaldið er ÁÆTLUN (leikur + viðbót), svo þau mega vera ólík. Lýsandi — aldrei readiness-liturinn.`
-                    : `Each MD-day = that day's actual % of a match (from the same data as Team Demands), applied to HIS match (median of ${mu.nNearFull} ~90-min games). MD+1/MD+2 are post-match recovery (shown only when he plays); MD+3 appears only in a longer gap. Week = the training days summed (the match day is excluded) — this is the OBSERVED distribution, while the "Weekly target" card is a PLANNING target (match + increment), so the two can differ. Descriptive — never the readiness colour.`}</p>
+                    ? `Hver MD-dagur = raunverulegt hlutfall þess dags af leik (úr sömu gögnum og Liðs-kröfur), sett á LEIKINN hans (miðgildi ${mu.nNearFull} ~90-mín leikja). Sýndur er einn dæmigerður 7-daga míkróhringur: endurheimt (MD+1/MD+2, aðeins þegar hann spilar) + uppbygging (MD-4…MD-1); lengri-hlés dagar (MD+3, MD-5…) tilheyra öðrum vikulengdum. Vika = summa æfingadaga (leikdagur ekki talinn) — MÆLT dreifing, en „Vikumark“-spjaldið er ÁÆTLUN (leikur + viðbót), svo þau mega vera ólík. Lýsandi — aldrei readiness-liturinn.`
+                    : `Each MD-day = that day's actual % of a match (from the same data as Team Demands), applied to HIS match (median of ${mu.nNearFull} ~90-min games). One representative 7-day microcycle is shown: recovery (MD+1/MD+2, only when he plays) + build (MD-4…MD-1); longer-gap days (MD+3, MD-5…) belong to other week lengths. Week = the training days summed (the match day is excluded) — the OBSERVED distribution, while the "Weekly target" card is a PLANNING target (match + increment), so the two can differ. Descriptive — never the readiness colour.`}</p>
                 </section>
               );
             }
@@ -4053,7 +4057,7 @@ export default function PeriodizationHubPage() {
             );
           })() : (
           <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-[12px] text-slate-500">
-            {is ? "Keppnistímabil — Uppbyggingar-rampinn er undirbúnings-verkfæri. Dæmigerða vikan er „Leikmanns-kröfur“ að ofan." : "In-season — the Build-up ramp is a pre-season tool. The typical week is the “Player Demands” card above."}{" "}
+            {is ? `Keppnistímabil — Uppbyggingar-rampinn er undirbúnings-verkfæri. Skiptu í „Undirbúningur“ efst til að sjá HANS eigin ramp-tölur (vika fyrir viku, úr leikeiningunni${player ? ` ${player.name}s` : ""}) — ekki bara liðsins (Pre-season flipinn). Dæmigerða keppnistímabils-vikan er „Leikmanns-kröfur“ að ofan.` : `In-season — the Build-up ramp is a pre-season tool. Switch to “Pre-season” at the top to see HIS own ramped numbers (week by week, from ${player ? `${player.name}'s` : "his"} match unit) — not just the team's (that's the Pre-season tab). The typical in-season week is the “Player Demands” card above.`}{" "}
             <button type="button" onClick={() => setPhaseOverride("preseason")} className="font-semibold text-[#2740e6] hover:underline">{is ? "Skipta í undirbúning →" : "Switch to Pre-season →"}</button>
           </div>
           )}
