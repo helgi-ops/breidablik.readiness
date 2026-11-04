@@ -37,7 +37,9 @@ type Row = {
   fmp_total_duration_s: number | string | null;
 };
 
-const num = (v: unknown): number | null => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+// null-safe: Number(null) === 0, so guard null/undefined first (else a null duration
+// reads as 0 and the ?? fallback to fmp never fires — dropping every clock-only row).
+const num = (v: unknown): number | null => { if (v == null) return null; const n = Number(v); return Number.isFinite(n) ? n : null; };
 /** Minutes for a daily row: session_duration_minutes, else fmp_total_duration_s / 60 (the reliable feed). */
 const minutesOf = (r: Row): number | null => num(r.session_duration_minutes) ?? (num(r.fmp_total_duration_s) != null ? (r.fmp_total_duration_s as number) / 60 : null);
 /** load.perDirection → Record<dir, share> for the load-shape radar. */
