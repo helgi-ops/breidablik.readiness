@@ -123,6 +123,11 @@ export type BuildProgressiveOverloadInput = {
    *  emphasised KPIs ramp at — still bounded by the SAME ACWR cap + match ceiling, so it never spikes past
    *  the safe envelope. Absent / 1 = neutral. */
   emphasis?: Partial<Record<LoadKpi, number>>;
+  /** CANONICAL match reference per KPI (the `matchUnit` — the median of the player's ~90-min matches,
+   *  the same base the Periodization Hub + Player Demands use). When given, it REPLACES the GPS peak-day
+   *  heuristic for those KPIs, so the ceiling is a real match (not "his busiest training day") and every
+   *  surface agrees on what a match is. KPIs absent here keep the GPS-derived reference. */
+  matchRefOverride?: Partial<Record<LoadKpi, number>>;
 };
 
 /** Simulate one KPI's weekly ramp with rate, ACWR cap and match ceiling. `rateMult` is the (optional)
@@ -191,6 +196,11 @@ export function buildProgressiveOverload(input: BuildProgressiveOverloadInput): 
   const matchDays = plDays.filter((x) => x.pl >= 0.8 * peakPL).slice(0, 8).map((x) => x.d);
   const matchRef: Partial<Record<LoadKpi, number | null>> = {};
   for (const k of LOAD_KPIS) matchRef[k] = mean(matchDays.map((d) => dateMeans.get(d)?.[k] ?? 0));
+  // Canonical override: where the caller passes the real match unit, it wins over the GPS peak-day guess —
+  // so the ceiling is a true match (never below current training) and every surface shares one match base.
+  if (input.matchRefOverride) {
+    for (const k of LOAD_KPIS) { const v = input.matchRefOverride[k]; if (v != null && Number.isFinite(v) && v > 0) matchRef[k] = v; }
+  }
 
   // Current baseline per KPI = mean over the last 28d training (non-match) days.
   const chronicFrom = addDays(input.sessionDate, -27);

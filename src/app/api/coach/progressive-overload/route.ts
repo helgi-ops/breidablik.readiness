@@ -58,6 +58,14 @@ export async function GET(req: NextRequest) {
     const key = (k ?? "").trim() as LoadKpi; const mult = Number(v);
     if (KPI_KEYS.has(key) && Number.isFinite(mult) && mult > 0 && mult <= 1.5) emphasis[key] = mult;
   }
+  // Canonical match reference per KPI ("kpi:value,…") — the player's real match unit from the hub, so the
+  // ramp ceiling is a true match instead of the GPS peak-day guess. Absolute values (metres / counts / AU).
+  const matchRefOverride: Partial<Record<LoadKpi, number>> = {};
+  for (const part of (url.searchParams.get("mref") ?? "").split(",")) {
+    const [k, v] = part.split(":");
+    const key = (k ?? "").trim() as LoadKpi; const val = Number(v);
+    if (KPI_KEYS.has(key) && Number.isFinite(val) && val > 0) matchRefOverride[key] = val;
+  }
 
   const { data: players } = await sb.from("players").select("id, full_name").eq("team_id", teamId).eq("is_active", true);
   const playerIds = (players ?? []).map((p) => String((p as { id: string }).id));
@@ -93,6 +101,7 @@ export async function GET(req: NextRequest) {
     nameById,
     focusPlayerId,
     emphasis: Object.keys(emphasis).length ? emphasis : undefined,
+    matchRefOverride: Object.keys(matchRefOverride).length ? matchRefOverride : undefined,
   });
 
   // Light KPI label map for the client (avoid importing the lib there).

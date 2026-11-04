@@ -827,6 +827,22 @@ export default function PeriodizationHubPage() {
     return Object.keys(e).length ? e : undefined;
   }, [steerActive, steer]);
 
+  // The canonical match reference for the Build-up ramp = this player's own match unit (the median of his
+  // ~90-min matches — the SAME base the Meso block + Player Demands use). Passed to ProgressiveOverloadCard
+  // so the ramp ceiling is a true match, not the engine's GPS peak-day guess (which could land below his
+  // current training and flatline). Keeps the two surfaces consistent. IMA event counts / jumps aren't in
+  // the match unit, so those KPIs keep the engine's own reference.
+  const poMatchRef = React.useMemo(() => {
+    const mu = player?.matchUnit;
+    if (!mu) return undefined;
+    const r: Record<string, number> = {};
+    const set = (k: string, v: number | null | undefined) => { if (v != null && Number.isFinite(v) && v > 0) r[k] = v; };
+    set("totalDistance", mu.distance.typical); set("playerLoad", mu.load.typical); set("hsr", mu.hsr.typical);
+    set("sprint", mu.sprint.typical); set("accel", mu.accel.typical); set("decel", mu.decel.typical);
+    set("ima", mu.stride.typical);
+    return Object.keys(r).length ? r : undefined;
+  }, [player]);
+
   // Build ONE player's individualised block — his own match unit + position tilt + VALD ceiling + minutes
   // trim, plus the optional weakness-steer bias. Reused for the on-screen selected player AND every player
   // in the PDF export (so "computed from the Meso Cycle" holds for the whole squad).
@@ -3671,10 +3687,17 @@ export default function PeriodizationHubPage() {
               across MD-4…MD-1?". Steady-state reference (no ramp); the His-block grid shows the planned block. */}
           {!isBasketball && player && player.matchUnit.load.typical != null && (() => {
             const mu = player.matchUnit;
-            // The standard MD training days (MD-4…MD-1) mapped to their stimulus type — matching the engine's
-            // "His block" grid (MD-4 mechanical, MD-3 locomotive, MD-2 mixed, MD-1 activation).
-            const typeForMd = (md: string): CalType => { const o = mdOffset(md) ?? 0; return o <= -4 ? "mechanical" : o === -3 ? "locomotive" : o === -2 ? "mixed" : "activation"; };
-            const days = standardTrainingDays(1).map((md) => ({ md, type: typeForMd(md) }));
+            // Day-types come from the ENGINE's own microcycle (buildCalendarBlock), not a hand map — so this
+            // matches "His block" exactly, including that MD-2 is a recovery/rest day (never the heaviest).
+            const microUnit = { dist: mu.distance.typical, hsr: mu.hsr.typical, load: mu.load.typical,
+              accdec: ((mu.accel.typical ?? 0) + (mu.decel.typical ?? 0)) || null, accHiEff: mu.accHiEff.typical,
+              decHiEff: mu.decHiEff.typical, stride: mu.stride.typical, dirFwd: null, dirBack: null, dirLat: null,
+              rhie: mu.rhie.typical, symmetry: mu.symmetry.typical, metPower: mu.metPower.typical };
+            const microMon = (() => { const d = new Date(blkStart + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); })();
+            const microWk = (() => { const mb = buildCalendarBlock({ unit: microUnit, startDate: microMon, numWeeks: 2, scopeName: player.name, scopePos: player.position, baseOverloadPct: 100 }); return mb.weeks[1] ?? mb.weeks[0]; })();
+            const microDays = (microWk?.days ?? []).map((d) => ({ md: d.md, type: d.type, o: mdOffset(d.md) ?? 99 })).filter((d) => d.o >= -4 && d.o <= -1).sort((a, b) => a.o - b.o);
+            const days: Array<{ md: string; type: CalType }> = microDays.length ? microDays.map((d) => ({ md: d.md, type: d.type })) : standardTrainingDays(1).map((md) => ({ md, type: "mixed" as CalType }));
+            const TYPE_LABEL: Partial<Record<CalType, { en: string; is: string }>> = { mechanical: { en: "mech", is: "vélrænt" }, locomotive: { en: "loco", is: "hlaup" }, mixed: { en: "mixed", is: "blandað" }, activation: { en: "prime", is: "virkjun" }, rest: { en: "rest", is: "hvíld" }, topup: { en: "top-up", is: "áfylling" } };
             const fmt = (v: number | null) => (v == null ? "–" : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
             // Per SESSION = his MATCH unit × the day-type's realistic share of a match (CAL_SHARE — the SAME
             // shares the "His block" grid uses, so the two agree). Each day-type has its own per-axis profile
@@ -3698,7 +3721,7 @@ export default function PeriodizationHubPage() {
                   <table className="w-full text-[12.5px]">
                     <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
                       <th className="py-1 pr-2 font-medium">KPI</th>
-                      {days.map((d) => <th key={d.md} className="py-1 px-2 text-right font-medium">{d.md}</th>)}
+                      {days.map((d) => <th key={d.md} className="py-1 px-2 text-right font-medium"><div>{d.md}</div><div className="text-[9px] font-normal normal-case text-slate-400">{TYPE_LABEL[d.type] ? (is ? TYPE_LABEL[d.type]!.is : TYPE_LABEL[d.type]!.en) : d.type}</div></th>)}
                       <th className="py-1 px-2 text-right font-medium">{is ? "Vika" : "Week"}</th>
                       <th className="py-1 pl-2 text-right font-medium">{is ? "Leikur" : "Match"}</th>
                     </tr></thead>
@@ -3719,8 +3742,8 @@ export default function PeriodizationHubPage() {
                   </table>
                 </div>
                 <p className="mt-2 text-[11px] text-slate-400">{is
-                  ? `Allt reiknað út frá LEIKNUM hans (miðgildi ${mu.nNearFull} ~90-mín leikja) × raunhæft per-æfingu hlutfall eftir dag-gerð (sömu hlutföll og „Lotan hans" notar — vélrænn dagur = hátt Acc/Dec, lágt háhraða; locomotive = hátt háhraða). Þess vegna er æfing vel undir heilum leik í vegalengd. Vika = summa æfingadaga. Lýsandi — aldrei readiness-liturinn.`
-                  : `Everything is computed from his MATCH (median of ${mu.nNearFull} ~90-min games) × a realistic per-session share by day-type — the same shares "His block" uses (mechanical day = high Acc/Dec, low HSR; locomotive = high HSR). So a session sits well under a full match's distance. Week = sum of the training days. Descriptive — never the readiness colour.`}</p>
+                  ? `Allt reiknað út frá LEIKNUM hans (miðgildi ${mu.nNearFull} ~90-mín leikja) × raunhæft per-æfingu hlutfall eftir dag-gerð. Dag-gerðirnar koma úr sömu vél og „Lotan hans" (vélrænn dagur = hátt Acc/Dec, lágt háhraða; locomotive = hátt háhraða) — þ.a. MD-2 er endurheimtar-/hvíldardagur og les 0, ekki þyngsti dagurinn. Æfing situr vel undir heilum leik. Vika = summa æfingadaga. Lýsandi — aldrei readiness-liturinn.`
+                  : `Everything is computed from his MATCH (median of ${mu.nNearFull} ~90-min games) × a realistic per-session share by day-type. The day-types come from the same engine as "His block" (mechanical day = high Acc/Dec, low HSR; locomotive = high HSR) — so MD-2 is a recovery/rest day and reads 0, not the heaviest day. A session sits well under a full match. Week = sum of the training days. Descriptive — never the readiness colour.`}</p>
               </section>
             );
           })()}
@@ -3898,7 +3921,7 @@ export default function PeriodizationHubPage() {
           <section className="rounded-xl border border-slate-200 bg-white p-4">
             <h2 className="text-[15px] font-bold text-slate-900">{is ? "Uppbyggingar-áætlun (undirbúningur / aftur í leik)" : "Build-up plan (pre-season / return-to-play)"}</h2>
             <p className="mt-1 mb-2 text-[11px] text-slate-500">{is ? `Örugg vikuleg þróun frá núverandi grunnlínu AÐ leikviðmiði${player ? ` ${player.name}s` : " leikmanns"} — magn hraðast, háhraði/sprettur hægast (aftanlæri).${steerActive ? " Áherslu-KPI (veikleika-stýrð) rampa hraðar, innan sömu þaka." : ""} Aðal-þakið er leikkrafan + bráðaálags-þróun; ACWR er umdeilt aukagildi. Lýsandi — aldrei readiness-liturinn.` : `A safe weekly ramp from current baseline TO ${player ? `${player.name}'s` : "the player's"} match unit — volume fastest, HSR/sprint slowest (hamstring).${steerActive ? " The emphasised KPIs (weakness-steered) ramp faster, within the same caps." : ""} The primary ceiling is match demand + acute-load trend; ACWR is a contested secondary readout. Descriptive — never the readiness colour.`}</p>
-            <ProgressiveOverloadCard weeks={blkWeeks} playerId={selId || undefined} emphasis={poEmphasis} focusLabel={player?.name} sessionsPerWeek={standardTrainingDays(1, isBasketball ? "basketball" : null).length} />
+            <ProgressiveOverloadCard weeks={blkWeeks} playerId={selId || undefined} emphasis={poEmphasis} matchRef={poMatchRef} focusLabel={player?.name} sessionsPerWeek={standardTrainingDays(1, isBasketball ? "basketball" : null).length} />
           </section>
               </>)}
               {plSub === 2 && (<>

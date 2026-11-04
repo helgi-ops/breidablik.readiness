@@ -30,7 +30,7 @@ const CAP_LABEL: Record<CapReason, string> = { rate: "rate", acwr: "held (no spi
 /** `playerId` focuses the projection on one player (his baseline → his match ref); `emphasis` biases the
  *  weekly rate of the given KPIs (the weakness steer) — the engine's ACWR + match-ceiling caps still bound
  *  it. `focusLabel` names the focus in the header. All optional → the neutral team-wide build. */
-export default function ProgressiveOverloadCard({ date, weeks = 5, playerId, emphasis, focusLabel, sessionsPerWeek = 4 }: { date?: string; weeks?: number; playerId?: string; emphasis?: Record<string, number>; focusLabel?: string; sessionsPerWeek?: number }) {
+export default function ProgressiveOverloadCard({ date, weeks = 5, playerId, emphasis, matchRef, focusLabel, sessionsPerWeek = 4 }: { date?: string; weeks?: number; playerId?: string; emphasis?: Record<string, number>; matchRef?: Record<string, number>; focusLabel?: string; sessionsPerWeek?: number }) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -44,6 +44,8 @@ export default function ProgressiveOverloadCard({ date, weeks = 5, playerId, emp
 
   const emphKey = emphasis ? Object.entries(emphasis).filter(([, v]) => v !== 1).map(([k, v]) => `${k}:${v.toFixed(2)}`).join(",") : "";
   const steered = emphKey.length > 0;
+  // Canonical match reference ("kpi:value,…") — the player's real match unit, so the ceiling is a true match.
+  const mrefKey = matchRef ? Object.entries(matchRef).filter(([, v]) => Number.isFinite(v) && v > 0).map(([k, v]) => `${k}:${Math.round(v)}`).join(",") : "";
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -55,6 +57,7 @@ export default function ProgressiveOverloadCard({ date, weeks = 5, playerId, emp
       qs.set("weeks", String(weeks));
       if (playerId) qs.set("player", playerId);
       if (emphKey) qs.set("emph", emphKey);
+      if (mrefKey) qs.set("mref", mrefKey);
       const res = await fetch(`/api/coach/progressive-overload?${qs.toString()}`, {
         headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
       });
@@ -65,7 +68,7 @@ export default function ProgressiveOverloadCard({ date, weeks = 5, playerId, emp
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Network error");
     } finally { setLoading(false); }
-  }, [date, weeks, playerId, emphKey]);
+  }, [date, weeks, playerId, emphKey, mrefKey]);
   useEffect(() => { void load(); }, [load]);
 
   if (loading) return <div className="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">Loading build plan…</div>;
