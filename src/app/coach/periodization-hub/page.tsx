@@ -19,7 +19,7 @@ import PageCrossRef from "@/components/coach/PageCrossRef";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
 import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
-import { computeBuildUpSteer, TLYP_METRIC_AXIS, type BuildUpSteer, type WeaknessInput, type ExposureInput } from "@/lib/micropulse/periodization/buildUpSteer";
+import { computeBuildUpSteer, TLYP_METRIC_AXIS, type BuildUpSteer, type WeaknessInput, type ExposureInput, type ShapeDirInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { buildPlayerBlock, pickActiveBlock } from "@/lib/micropulse/periodization/playerBlock";
 import { classifyInSeasonSubPhase, subPhaseInfo, SUBPHASE_KEYS, type InSeasonSubPhaseKey } from "@/lib/micropulse/periodization/inSeasonSubPhase";
 import { strengthForBlockGoal, STRENGTH_METHODS } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
@@ -796,11 +796,29 @@ export default function PeriodizationHubPage() {
     return () => { alive = false; };
   }, [tab, isBasketball, authHeader]);
   const selExposures = React.useMemo(() => tlypExposures.get(selId) ?? [], [tlypExposures, selId]);
+
+  // Phase 3 — the player's movement-SHAPE under-trained directions (IMA clock, training vs his own
+  // matches) tilt the plan's fwd/back/lat split. Per-player fetch (season window); skipped for basketball.
+  const [shapeDirs, setShapeDirs] = React.useState<ShapeDirInput[]>([]);
+  React.useEffect(() => {
+    if (tab !== "players" || !selId || isBasketball) { setShapeDirs([]); return; }
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/coach/player/${encodeURIComponent(selId)}/train-vs-play-shape`, { headers: { Authorization: await authHeader() } });
+        const j = await res.json().catch(() => ({}));
+        const under = j?.ok && j?.hasData ? (j.windows?.season?.underTrained ?? []) : [];
+        if (alive) setShapeDirs((under as Array<{ dir: string; delta: number }>).map((u) => ({ dir: u.dir, delta: u.delta })));
+      } catch { if (alive) setShapeDirs([]); }
+    })();
+    return () => { alive = false; };
+  }, [tab, selId, isBasketball, authHeader]);
+
   const steer: BuildUpSteer | null = React.useMemo(() => {
     const w = steerData?.weaknesses ?? [];
-    if (!w.length && !selExposures.length) return null;
-    return computeBuildUpSteer(w, selExposures);
-  }, [steerData, selExposures]);
+    if (!w.length && !selExposures.length && !shapeDirs.length) return null;
+    return computeBuildUpSteer(w, selExposures, shapeDirs);
+  }, [steerData, selExposures, shapeDirs]);
   const steerActive = !!steer && !steerNeutral && steer.hasHard;
   // Translate the axis boosts → the build-up card's per-KPI weekly-rate emphasis (same LoadKpi keys the
   // progressive-overload engine ramps). hsr axis → running KPIs; mech axis → the Acc/Dec effort KPIs.
@@ -3604,20 +3622,23 @@ export default function PeriodizationHubPage() {
 
           {/* WEAKNESS-STEERED BUILD-UP — reads Total Player Analysis (athlete-axis weaknesses + levers +
               VALD focus) and biases the per-player ramp toward the qualities he's behind on. Read, not rebuilt. */}
-          {player && steer && (steer.targets.length > 0 || steer.exposureTargets.length > 0) && (() => {
+          {player && steer && (steer.targets.length > 0 || steer.exposureTargets.length > 0 || steer.dirTargets.length > 0) && (() => {
             const qName = (id: QualityRead["id"]) => (is ? QUALITY_BY_ID[id].is : QUALITY_BY_ID[id].en);
             const axisWord = (a: "hsr" | "mech") => (a === "hsr" ? (is ? "háhraða/hlaup" : "HSR/running") : (is ? "Acc/Dec (vélrænt)" : "Acc/Dec (mechanical)"));
+            const dirWord = (f: "fwd" | "back" | "lat") => (f === "fwd" ? (is ? "fram" : "forward") : f === "back" ? (is ? "aftur" : "backward") : (is ? "til hliðar" : "lateral"));
             const hard = steer.targets.filter((t) => !t.hint);
             const hints = steer.targets.filter((t) => t.hint);
             const top = hard.length ? hard : steer.targets; // if nothing confident, narrate the hints
             const hardExp = steer.exposureTargets.filter((e) => !e.hint);
             const topExp = hardExp.length ? hardExp : steer.exposureTargets;
+            const hardDir = steer.dirTargets.filter((d) => !d.hint);
             const lbl = (e: typeof steer.exposureTargets[number]) => (is ? e.label.is : e.label.en);
             const emphAxes = Array.from(new Set([...hard.map((t) => t.axis), ...hardExp.map((e) => e.axis)].filter((a): a is "hsr" | "mech" => a !== "strength"))).map(axisWord);
-            // Verdict composes whichever drivers exist (weakness and/or exposure).
+            // Verdict composes whichever drivers exist (weakness / exposure / movement direction).
             const drivers: string[] = [];
             if (steer.targets.length) drivers.push(`${is ? "lægstu eiginleikar" : "lowest qualities"}: ${top.slice(0, 2).map((t) => qName(t.id)).join(is ? " og " : " and ")}`);
             if (steer.exposureTargets.length) drivers.push(`${is ? "vanþjálfað vs leikur" : "under-trained vs matches"}: ${topExp.slice(0, 2).map(lbl).join(is ? " og " : " and ")}`);
+            if (hardDir.length) drivers.push(`${is ? "hreyfi-stefna" : "movement direction"}: ${hardDir.slice(0, 2).map((d) => dirWord(d.family)).join(is ? " og " : " and ")}`);
             const verdict = is
               ? `Uppbygging ${player.name}s forgangsraðar — ${drivers.join("; ")}${emphAxes.length && steerActive ? `, rampar ${emphAxes.join(" + ")} hraðast að leikviðmiðinu` : ""}.`
               : `${player.name}'s build-up prioritises — ${drivers.join("; ")}${emphAxes.length && steerActive ? `, ramping ${emphAxes.join(" + ")} fastest toward the match unit` : ""}.`;
@@ -3626,7 +3647,7 @@ export default function PeriodizationHubPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-[15px] font-bold text-slate-900">{is ? "Einstaklingsmiðuð uppbygging" : "Individualised build-up"}</h2>
                 {steer.targets.length > 0 && <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{is ? "Heildargreining" : "Total Player Analysis"}</span>}
-                {steer.exposureTargets.length > 0 && <span className="rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#2740e6]">{is ? "Train like you Play" : "Train like you Play"}</span>}
+                {(steer.exposureTargets.length > 0 || steer.dirTargets.length > 0) && <span className="rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#2740e6]">{is ? "Train like you Play" : "Train like you Play"}</span>}
                 <label className="ml-auto flex items-center gap-1 text-[11px] text-slate-500"><input type="checkbox" checked={steerNeutral} onChange={(e) => setSteerNeutral(e.target.checked)} />{is ? "Hlutlaus rampi (án halla)" : "Neutral ramp (no bias)"}</label>
               </div>
               {/* Level 0 — verdict */}
@@ -3660,6 +3681,20 @@ export default function PeriodizationHubPage() {
                     ))}
                   </ul>
                 </>
+              )}
+              {/* Level 1c — movement-shape direction: which family he under-does vs his matches, tilting
+                  the plan's fwd/back/lat split (the day grid + block PDF show each day's dominant direction). */}
+              {steer.dirTargets.length > 0 && (
+                <p className="mt-2 text-[12px] text-slate-700">
+                  <span className="font-semibold">{is ? "Hreyfi-stefna vs leikur" : "Movement direction vs matches"}:</span>{" "}
+                  {steer.dirTargets.slice(0, 3).map((d, i) => (
+                    <span key={d.family}>
+                      {i > 0 ? ", " : ""}<b>{dirWord(d.family)}</b> <span className="text-slate-500">(+{d.deltaPts}{is ? " stig vanþjálfað" : "pts under"})</span>
+                      {d.hint && <span className="ml-1 rounded bg-amber-100 px-1 text-[11px] font-semibold text-amber-700">{is ? "vísbending" : "hint"}</span>}
+                    </span>
+                  ))}
+                  {hardDir.length > 0 && <span className="text-slate-500"> → {is ? "blokkin hallar stefnu-skiptingu þangað" : "the block tilts its direction split there"}</span>}.
+                </p>
               )}
               {/* VALD strength focus (the force/VBT qualities the GPS ramp can't build) */}
               {steerData?.valdPlan && steerData.valdPlan.priorities.length > 0 && (

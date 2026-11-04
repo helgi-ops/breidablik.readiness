@@ -63,3 +63,21 @@ test("computeBuildUpSteer: exposure-only (no athlete weaknesses) still produces 
   assert.equal(s.targets.length, 0);
   assert.ok(s.hsrBoost > 1 && s.hasHard);
 });
+
+test("computeBuildUpSteer: an under-trained movement family tilts the direction split; small gaps are hints", () => {
+  // dir 3 + 9 → lateral (sum 0.10 ≥ flag) → biased; dir 12 → forward (0.02 < flag) → hint only.
+  const s = computeBuildUpSteer([], [], [{ dir: "3", delta: 0.06 }, { dir: "9", delta: 0.04 }, { dir: "12", delta: 0.02 }]);
+  assert.ok(s.dirEmph.lat > 1);
+  assert.equal(s.dirEmph.fwd, 1);
+  assert.equal(s.dirEmph.back, 1);
+  assert.equal(s.hasHard, true);
+  assert.equal(s.dirTargets.find((d) => d.family === "lat")!.hint, false);
+  assert.equal(s.dirTargets.find((d) => d.family === "fwd")!.hint, true);
+  assert.equal(s.dirTargets[0].family, "lat"); // biggest gap first
+});
+
+test("computeBuildUpSteer: no shape dirs → neutral direction emphasis (unaffected)", () => {
+  const s = computeBuildUpSteer([w("work_capacity", 12)]);
+  assert.deepEqual(s.dirEmph, { fwd: 1, back: 1, lat: 1 });
+  assert.equal(s.dirTargets.length, 0);
+});

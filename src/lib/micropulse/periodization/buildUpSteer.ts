@@ -64,14 +64,33 @@ export const TLYP_METRIC_AXIS: Record<string, { axis: SteerAxis; label: Bi }> = 
 
 export type ExposureInput = { key: string; axis: SteerAxis; label: Bi; flag: "under" | "gap"; pct: number | null };
 export type ExposureTarget = ExposureInput & { hint: boolean };
+
+/** 12 clock directions (12 = straight forward) → movement family. Mirrors peakMovementSignature's
+ *  FORWARD/BACKWARD/LATERAL sectors, so "under-trains lateral vs games" tilts the plan's direction split. */
+export type DirFamily = "fwd" | "back" | "lat";
+export const DIR_FAMILY: Record<string, DirFamily> = {
+  "11": "fwd", "12": "fwd", "1": "fwd",
+  "5": "back", "6": "back", "7": "back",
+  "2": "lat", "3": "lat", "4": "lat", "8": "lat", "9": "lat", "10": "lat",
+};
+/** A movement-shape under-trained direction (from train-vs-play-shape): delta = game-share − train-share
+ *  (>0 = he does this direction MORE in games than training). */
+export type ShapeDirInput = { dir: string; delta: number };
+export type DirEmph = { fwd: number; back: number; lat: number };
+export type DirTarget = { family: DirFamily; deltaPts: number; hint: boolean };
+
 export type BuildUpSteer = {
   hsrBoost: number;   // multiplier to layer on the running-axis emphasis (caller re-clamps to the safe band)
   mechBoost: number;  // multiplier to layer on the mechanical-axis emphasis
+  dirEmph: DirEmph;   // per-family multiplier for the plan's direction split (1 = neutral)
   targets: SteerTarget[];        // every mapped weakness (hard + hint), worst-percentile first
   strengthTargets: SteerTarget[];// force/VBT weaknesses → the VALD focus covers these, not the GPS ramp
   exposureTargets: ExposureTarget[]; // TLYP match-exposure gaps mapped to an axis, worst-exposed first
-  hasHard: boolean;   // at least one confident (non-hint) GPS-axis signal actually biased the ramp
+  dirTargets: DirTarget[];       // movement-shape families under-trained vs games, biggest gap first
+  hasHard: boolean;   // at least one confident (non-hint) signal actually biased the ramp / direction
 };
+
+const DIR_FLAG = 0.05; // a family under-trained by ≥5 share-points vs matches biases the direction split
 
 const BOOST = 1.10;    // one confident weakness on an axis lifts its emphasis ~10%
 const BOOST_CAP = 1.2; // two weaknesses on the same axis don't compound past +20% (safety)
@@ -87,7 +106,7 @@ export function isHintOnly(w: WeaknessInput): boolean {
  * @param exposures  Train-like-you-Play match-exposure gaps (training vs own matches). Both drivers
  *                   bias the SAME hsr/mech boosts; the ±20% cap keeps them from compounding.
  */
-export function computeBuildUpSteer(weaknesses: WeaknessInput[], exposures: ExposureInput[] = []): BuildUpSteer {
+export function computeBuildUpSteer(weaknesses: WeaknessInput[], exposures: ExposureInput[] = [], shapeDirs: ShapeDirInput[] = []): BuildUpSteer {
   const targets: SteerTarget[] = [];
   const strengthTargets: SteerTarget[] = [];
   let hsrBoost = 1, mechBoost = 1, hasHard = false;
@@ -120,9 +139,25 @@ export function computeBuildUpSteer(weaknesses: WeaknessInput[], exposures: Expo
   }
   exposureTargets.sort((a, b) => (a.pct ?? 100) - (b.pct ?? 100));
 
+  // Movement-shape direction gaps → tilt the plan's fwd/back/lat split toward the family he
+  // under-does vs his matches. Sum the under-trained share-points per family; a family past the
+  // flag gets a flat ±10% tilt (no magnitude scaling — conservative). "match the way he plays".
+  const famDelta: Record<DirFamily, number> = { fwd: 0, back: 0, lat: 0 };
+  for (const d of shapeDirs) { const f = DIR_FAMILY[d.dir]; if (f && d.delta > 0) famDelta[f] += d.delta; }
+  const dirEmph: DirEmph = { fwd: 1, back: 1, lat: 1 };
+  const dirTargets: DirTarget[] = [];
+  for (const f of ["fwd", "back", "lat"] as DirFamily[]) {
+    if (famDelta[f] <= 0) continue;
+    const hint = famDelta[f] < DIR_FLAG;
+    dirTargets.push({ family: f, deltaPts: Math.round(famDelta[f] * 100), hint });
+    if (!hint) { dirEmph[f] = BOOST; hasHard = true; }
+  }
+  dirTargets.sort((a, b) => b.deltaPts - a.deltaPts);
+
   return {
     hsrBoost: Math.min(BOOST_CAP, hsrBoost),
     mechBoost: Math.min(BOOST_CAP, mechBoost),
-    targets, strengthTargets, exposureTargets, hasHard,
+    dirEmph,
+    targets, strengthTargets, exposureTargets, dirTargets, hasHard,
   };
 }

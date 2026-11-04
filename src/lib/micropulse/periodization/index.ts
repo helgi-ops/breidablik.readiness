@@ -614,7 +614,7 @@ export function buildCalendarBlock(opts: {
    *  multiplier (readiness-to-load / VALD cap); `loadScale` trims every training day (minutes-based —
    *  high-minute starters carry load from matches); `emphasis` biases the running (`hsr`) and mechanical
    *  (`mech`) day-type shares by position (Figueiredo). Match days stay the exact unit (100%). */
-  maxMult?: number; loadScale?: number; emphasis?: { hsr?: number; mech?: number };
+  maxMult?: number; loadScale?: number; emphasis?: { hsr?: number; mech?: number; dir?: { fwd?: number; back?: number; lat?: number } };
   /** The off-season phase boundary (ISO). When a block spans it, days ON/AFTER it belong to the
    *  off-season DEVELOPMENT build, not the in-season microcycle: they drop the MD countup label and
    *  each session day is re-typed to a development rotation (Strength / Power / Conditioning / Activation).
@@ -753,6 +753,13 @@ export function buildCalendarBlock(opts: {
   const dirBase = opts.unit.dirFwd != null && opts.unit.dirBack != null && opts.unit.dirLat != null
     ? { fwd: opts.unit.dirFwd, back: opts.unit.dirBack, lat: opts.unit.dirLat } : null;
   const dirTilted = directionTilt(dirBase, opts.scopePos ?? null);
+  // Player movement-shape emphasis (Phase 3): tilt the TRAINING-day direction split toward the family
+  // he under-does vs matches, then renormalise. Match-day dir stays the raw unit (the reference). Neutral
+  // (all 1) when no emphasis is passed, so the team block and the player app are unaffected.
+  const de = opts.emphasis?.dir;
+  const dirPlan = de && dirTilted
+    ? (() => { const f = dirTilted.fwd * (de.fwd ?? 1), b = dirTilted.back * (de.back ?? 1), l = dirTilted.lat * (de.lat ?? 1); const s = f + b + l; return s > 0 ? { fwd: f / s, back: b / s, lat: l / s } : dirTilted; })()
+    : dirTilted;
   const weeks: CalWeek[] = [];
   for (let i = 0; i < n; i++) {
     const isDeload = i === n - 1 && n >= 3; // classic end-of-block unload
@@ -801,7 +808,7 @@ export function buildCalendarBlock(opts: {
       const accHiEff = type === "rest" || opts.unit.accHiEff == null ? null : isM ? Math.round(opts.unit.accHiEff * mExp) : Math.round(opts.unit.accHiEff * sh.accdec * mechEmph * fA("accdec") * cm);
       const decHiEff = type === "rest" || opts.unit.decHiEff == null ? null : isM ? Math.round(opts.unit.decHiEff * mExp) : Math.round(opts.unit.decHiEff * sh.accdec * mechEmph * fA("accdec") * cm);
       const stride = type === "rest" || opts.unit.stride == null ? null : isM ? Math.round(opts.unit.stride * mExp) : Math.round(capRun(opts.unit.stride * sh.stride * hsrEmph * fA("stride"), opts.unit.stride) * cm);
-      const dir = type === "rest" ? null : isM ? dirBase : dayDirTilt(dirTilted, type);
+      const dir = type === "rest" ? null : isM ? dirBase : dayDirTilt(dirPlan, type);
       if (type === "rest") rest += 1;
       else if (type !== "match") { sumDist += dist ?? 0; sumHsr += hsr ?? 0; sumLoad += load ?? 0; sumAccHi += accHiEff ?? 0; sumDecHi += decHiEff ?? 0; sumStride += stride ?? 0; }
       days.push({ dow: DOW[d], md, type, label: CAL_LABEL[type], focus: CAL_FOCUS[type], dist, hsr, load, accHiEff, decHiEff, stride, dir });
