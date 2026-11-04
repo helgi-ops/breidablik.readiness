@@ -3699,9 +3699,13 @@ export default function PeriodizationHubPage() {
             const days: Array<{ md: string; type: CalType }> = microDays.length ? microDays.map((d) => ({ md: d.md, type: d.type })) : standardTrainingDays(1).map((md) => ({ md, type: "mixed" as CalType }));
             const TYPE_LABEL: Partial<Record<CalType, { en: string; is: string }>> = { mechanical: { en: "mech", is: "vélrænt" }, locomotive: { en: "loco", is: "hlaup" }, mixed: { en: "mixed", is: "blandað" }, activation: { en: "prime", is: "virkjun" }, rest: { en: "rest", is: "hvíld" }, topup: { en: "top-up", is: "áfylling" } };
             const fmt = (v: number | null) => (v == null ? "–" : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
-            // Per SESSION = his MATCH unit × the day-type's realistic share of a match (CAL_SHARE — the SAME
-            // shares the "His block" grid uses, so the two agree). Each day-type has its own per-axis profile
-            // (mechanical = high Acc/Dec, low HSR; locomotive = high HSR), so a session sits well under a match.
+            // These are TRAINING days (the match is a separate column). In-season the official weekly target
+            // (the "Weekly target" card) = the match itself + a readiness-gated TRAINING increment, so the
+            // training-only week = matchMultiple − 1 game (= 0.6×readiness cap). Pre-season has no competitive
+            // match in the week, so the whole supra-match multiple is training. Anchoring here means
+            // Σ(training days) + the match === the card's weekly target exactly, and a session sits well under
+            // a match (the earlier version summed the whole week onto the training days — nearly 2× a match).
+            const weekMult = wt?.phase === "preseason" ? (wt?.matchMultiple ?? 2.2) : Math.max(0.3, (wt?.matchMultiple ?? 1.5) - 1);
             const rows = ([
               { en: "Player Load", is: "Player Load", v: mu.load.typical, u: "", ax: "load" },
               { en: "Total distance", is: "Heildar-vegalengd", v: mu.distance.typical, u: "m", ax: "dist" },
@@ -3727,8 +3731,11 @@ export default function PeriodizationHubPage() {
                     </tr></thead>
                     <tbody>
                       {rows.map((r) => {
-                        const perDay = days.map((d) => (r.v as number) * CAL_SHARE[d.type][r.ax]);
-                        const wk = perDay.reduce((s, x) => s + x, 0);
+                        // WEEK = his match × the official weekly multiple; distribute across the engine's days
+                        // by their CAL_SHARE weight (rest days weigh 0 → read 0). Σ(perDay) === wk by construction.
+                        const wk = (r.v as number) * weekMult;
+                        const wSum = days.reduce((s, d) => s + CAL_SHARE[d.type][r.ax], 0) || 1;
+                        const perDay = days.map((d) => (wk * CAL_SHARE[d.type][r.ax]) / wSum);
                         return (
                           <tr key={r.en} className="border-t border-slate-100">
                             <td className="py-1.5 pr-2 text-slate-700">{is ? r.is : r.en}</td>
@@ -3742,8 +3749,8 @@ export default function PeriodizationHubPage() {
                   </table>
                 </div>
                 <p className="mt-2 text-[11px] text-slate-400">{is
-                  ? `Allt reiknað út frá LEIKNUM hans (miðgildi ${mu.nNearFull} ~90-mín leikja) × raunhæft per-æfingu hlutfall eftir dag-gerð. Dag-gerðirnar koma úr sömu vél og „Lotan hans" (vélrænn dagur = hátt Acc/Dec, lágt háhraða; locomotive = hátt háhraða) — þ.a. MD-2 er endurheimtar-/hvíldardagur og les 0, ekki þyngsti dagurinn. Æfing situr vel undir heilum leik. Vika = summa æfingadaga. Lýsandi — aldrei readiness-liturinn.`
-                  : `Everything is computed from his MATCH (median of ${mu.nNearFull} ~90-min games) × a realistic per-session share by day-type. The day-types come from the same engine as "His block" (mechanical day = high Acc/Dec, low HSR; locomotive = high HSR) — so MD-2 is a recovery/rest day and reads 0, not the heaviest day. A session sits well under a full match. Week = sum of the training days. Descriptive — never the readiness colour.`}</p>
+                  ? `Þetta eru ÆFINGADAGAR (leikurinn er sér dálkur). ${wt?.phase === "preseason" ? "Í undirbúningi er öll vikan æfing (yfir-leik)." : "Á keppnistímabili er vikumarkið = leikurinn sjálfur + æfingaviðbót, svo æfingavikan er ~"+weekMult.toFixed(2)+"× leik."} Vikunni er dreift á dagana eftir dag-gerð úr sömu vél og „Lotan hans" (mixed = stóri dagurinn; MD-2 er hvíldardagur og les 0). Æfingadagar (${fmt((mu.load.typical ?? 0) * weekMult)} PL) + leikurinn (${fmt(mu.load.typical)} PL) ≈ vikumarkið (${wt?.weeklyLoadTarget ?? "—"} PL á spjaldinu). Grunnur = LEIKUR hans (miðgildi ${mu.nNearFull} ~90-mín leikja). Lýsandi — aldrei readiness-liturinn.`
+                  : `These are TRAINING days (the match is its own column). ${wt?.phase === "preseason" ? "In pre-season the whole week is training (supra-match)." : `In-season the weekly target = the match itself + a training increment, so the training week is ~${weekMult.toFixed(2)}× a match.`} The week is spread across the days by day-type from the same engine as "His block" (mixed = the big day; MD-2 is a recovery/rest day and reads 0). Training days (${fmt((mu.load.typical ?? 0) * weekMult)} PL) + the match (${fmt(mu.load.typical)} PL) ≈ the weekly target (${wt?.weeklyLoadTarget ?? "—"} PL on the card). Base = his MATCH (median of ${mu.nNearFull} ~90-min games). Descriptive — never the readiness colour.`}</p>
               </section>
             );
           })()}
