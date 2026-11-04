@@ -30,12 +30,17 @@ const CAP_LABEL: Record<CapReason, string> = { rate: "rate", acwr: "held (no spi
 /** `playerId` focuses the projection on one player (his baseline → his match ref); `emphasis` biases the
  *  weekly rate of the given KPIs (the weakness steer) — the engine's ACWR + match-ceiling caps still bound
  *  it. `focusLabel` names the focus in the header. All optional → the neutral team-wide build. */
-export default function ProgressiveOverloadCard({ date, weeks = 5, playerId, emphasis, focusLabel }: { date?: string; weeks?: number; playerId?: string; emphasis?: Record<string, number>; focusLabel?: string }) {
+export default function ProgressiveOverloadCard({ date, weeks = 5, playerId, emphasis, focusLabel, sessionsPerWeek = 4 }: { date?: string; weeks?: number; playerId?: string; emphasis?: Record<string, number>; focusLabel?: string; sessionsPerWeek?: number }) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [showPlayers, setShowPlayers] = useState(false);
+  // Show the targets per SESSION (the prescription) or per WEEK (× training sessions) — the week total
+  // the coach plans against. Per-week just scales each per-session figure by sessionsPerWeek.
+  const [unit, setUnit] = useState<"session" | "week">("session");
+  const spw = Math.max(1, Math.round(sessionsPerWeek));
+  const mult = unit === "week" ? spw : 1;
 
   const emphKey = emphasis ? Object.entries(emphasis).filter(([, v]) => v !== 1).map(([k, v]) => `${k}:${v.toFixed(2)}`).join(",") : "";
   const steered = emphKey.length > 0;
@@ -78,7 +83,13 @@ export default function ProgressiveOverloadCard({ date, weeks = 5, playerId, emp
         {focusLabel && !plan.fellBackToTeam ? <span className="rounded-md bg-[#2740e6]/10 px-2 py-0.5 text-xs font-medium text-[#2740e6]">{focusLabel}</span> : plan.teamName && <span className="rounded-md bg-slate-900/5 px-2 py-0.5 text-xs font-medium text-slate-700">{plan.teamName}</span>}
         <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">{plan.weeks}-week ramp</span>
         {steered && !plan.fellBackToTeam && <span className="rounded-md bg-[#7a5cc4]/10 px-2 py-0.5 text-xs font-medium text-[#7a5cc4]" title="Weakness-steered: the emphasised KPIs ramp faster, still within the ACWR + match-ceiling caps.">weakness-steered</span>}
-        <span className="ml-auto text-xs text-slate-400">from {plan.startWeekOf}</span>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="flex rounded-md border border-slate-300 p-0.5 text-[11px]">
+            <button type="button" onClick={() => setUnit("session")} className={`rounded px-2 py-0.5 font-medium ${unit === "session" ? "bg-slate-900 text-white" : "text-slate-600"}`}>Per session</button>
+            <button type="button" onClick={() => setUnit("week")} className={`rounded px-2 py-0.5 font-medium ${unit === "week" ? "bg-slate-900 text-white" : "text-slate-600"}`} title={`Weekly total = per-session × ${spw} training sessions/week`}>Per week (×{spw})</button>
+          </div>
+          <span className="text-xs text-slate-400">from {plan.startWeekOf}</span>
+        </div>
       </div>
       {plan.fellBackToTeam && (
         <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800">
@@ -105,7 +116,7 @@ export default function ProgressiveOverloadCard({ date, weeks = 5, playerId, emp
             <table className="w-full text-xs">
               <thead className="bg-slate-100 text-slate-600">
                 <tr>
-                  <th className="px-2 py-1.5 text-left">Metric (per session / player)</th>
+                  <th className="px-2 py-1.5 text-left">Metric ({unit === "week" ? `per week · ×${spw} sess` : "per session"} / player)</th>
                   <th className="px-2 py-1.5 text-right">Now</th>
                   {plan.ramps[0]?.weeks.map((w) => (
                     <th key={w.week} className="px-2 py-1.5 text-right">Wk {w.week}</th>
@@ -120,12 +131,12 @@ export default function ProgressiveOverloadCard({ date, weeks = 5, playerId, emp
                       <div className="font-medium text-slate-800">{labels[r.kpi] ?? r.kpi}</div>
                       <div className="text-[10px] text-slate-400">+{r.ratePct}% / week</div>
                     </td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{fmt(r.baseline)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{fmt(r.baseline == null ? null : r.baseline * mult)}</td>
                     {r.weeks.map((w) => (
                       <td key={w.week} className="px-2 py-1.5 text-right tabular-nums">
-                        <div className="font-semibold text-slate-900">{fmt(w.target)}</div>
+                        <div className="font-semibold text-slate-900">{fmt(w.target == null ? null : w.target * mult)}</div>
                         <div className={`text-[9px] ${w.cap ? CAP_TINT[w.cap] : "text-slate-400"}`}>
-                          {w.pctOfMatch != null ? `${w.pctOfMatch}%m` : ""}{w.cap && w.cap !== "rate" ? ` · ${CAP_LABEL[w.cap]}` : ""}
+                          {w.pctOfMatch != null ? `${w.pctOfMatch * mult}%m` : ""}{w.cap && w.cap !== "rate" ? ` · ${CAP_LABEL[w.cap]}` : ""}
                         </div>
                       </td>
                     ))}
@@ -136,7 +147,7 @@ export default function ProgressiveOverloadCard({ date, weeks = 5, playerId, emp
             </table>
           </div>
           <p className="mt-1.5 text-[10px] leading-relaxed text-slate-400">
-            Each cell = the recommended per-session per-player target for that week. <span className="text-amber-600">held (no spike)</span> = the week was trimmed so acute load doesn&apos;t jump too far past recent load; <span className="text-sky-600">match ceiling</span> = it reached match demand and holds. &quot;%m&quot; = % of the squad&apos;s match reference. Volume ramps faster than high-speed/sprint by design (hamstring exposure). ACWR is shown as a contested reference only — the guardrails are match demand + the acute-load trend (Teixeira 2021).
+            Each cell = the recommended {unit === "week" ? <>per-<strong>week</strong> per-player target (per-session × {spw} training sessions)</> : "per-session per-player target"} for that week; &quot;%m&quot; is vs one match (a week is naturally &gt;100% of a single match). <span className="text-amber-600">held (no spike)</span> = the week was trimmed so acute load doesn&apos;t jump too far past recent load; <span className="text-sky-600">match ceiling</span> = it reached match demand and holds. &quot;%m&quot; = % of the squad&apos;s match reference. Volume ramps faster than high-speed/sprint by design (hamstring exposure). ACWR is shown as a contested reference only — the guardrails are match demand + the acute-load trend (Teixeira 2021).
           </p>
 
           <button type="button" onClick={() => setShowPlayers((v) => !v)} className="mt-3 text-xs font-medium text-indigo-600 hover:text-indigo-700">

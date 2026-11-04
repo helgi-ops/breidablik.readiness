@@ -1265,7 +1265,7 @@ export default function PeriodizationHubPage() {
               { key: "micro", en: "Micro Cycle", is: "Míkró-lota", subEn: "the week", subIs: "vikan" },
             ] as const;
             const inputTabs = [
-              { key: "demands", en: "Demands", is: "Kröfur", subEn: "baselines & match unit", subIs: "grunnlínur & leikviðmið" },
+              { key: "demands", en: "Team Demands", is: "Liðs-kröfur", subEn: "position baselines & team match unit", subIs: "stöðu-grunnlínur & liðs-leikviðmið" },
               { key: "players", en: "Players", is: "Leikmenn", subEn: "individualisation", subIs: "einstaklingsmiðun" },
               { key: "testing", en: "Testing", is: "Próf", subEn: "when to test", subIs: "hvenær á að mæla" },
             ] as const;
@@ -1289,7 +1289,7 @@ export default function PeriodizationHubPage() {
           {/* Workflow + propagation strip — the order the coach works in, and the promise that one edit flows. */}
           <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-[11.5px] leading-relaxed text-slate-500">
             <span className="font-semibold text-slate-600">{is ? "Vinnuferli" : "Workflow"}:</span>{" "}
-            <b className="text-[#2740e6]">1 {is ? "Kröfur" : "Demands"}</b> <span className="text-slate-400">({is ? "grunnur" : "foundation"})</span> → <b className="text-[#2740e6]">2 {is ? "Makró" : "Macro"}</b> → <b className="text-[#7a5cc4]">3 {is ? "Undirb. / Mesó" : "Pre-season / Meso"}</b> → <b className="text-[#1c7a4a]">4 {is ? "Míkró" : "Micro"}</b>
+            <b className="text-[#2740e6]">1 {is ? "Liðs-kröfur" : "Team Demands"}</b> <span className="text-slate-400">({is ? "grunnur" : "foundation"})</span> → <b className="text-[#2740e6]">2 {is ? "Makró" : "Macro"}</b> → <b className="text-[#7a5cc4]">3 {is ? "Undirb. / Mesó" : "Pre-season / Meso"}</b> → <b className="text-[#1c7a4a]">4 {is ? "Míkró" : "Micro"}</b>
             <span className="text-slate-400"> · {is ? "Leikmenn + Próf næra öll þrepin." : "Players + Testing feed every step."}</span>
             <span className="mt-0.5 block text-[10.5px] text-slate-400">{is ? "Breyting á einum stað flæðir sjálfkrafa í hinar — ein heimild (season_plans · week_plans · leikir)." : "A change in one place flows to the others automatically — one source (season_plans · week_plans · fixtures)."}</span>
           </div>
@@ -3837,7 +3837,7 @@ export default function PeriodizationHubPage() {
           <section className="rounded-xl border border-slate-200 bg-white p-4">
             <h2 className="text-[15px] font-bold text-slate-900">{is ? "Uppbyggingar-áætlun (undirbúningur / aftur í leik)" : "Build-up plan (pre-season / return-to-play)"}</h2>
             <p className="mt-1 mb-2 text-[11px] text-slate-500">{is ? `Örugg vikuleg þróun frá núverandi grunnlínu AÐ leikviðmiði${player ? ` ${player.name}s` : " leikmanns"} — magn hraðast, háhraði/sprettur hægast (aftanlæri).${steerActive ? " Áherslu-KPI (veikleika-stýrð) rampa hraðar, innan sömu þaka." : ""} Aðal-þakið er leikkrafan + bráðaálags-þróun; ACWR er umdeilt aukagildi. Lýsandi — aldrei readiness-liturinn.` : `A safe weekly ramp from current baseline TO ${player ? `${player.name}'s` : "the player's"} match unit — volume fastest, HSR/sprint slowest (hamstring).${steerActive ? " The emphasised KPIs (weakness-steered) ramp faster, within the same caps." : ""} The primary ceiling is match demand + acute-load trend; ACWR is a contested secondary readout. Descriptive — never the readiness colour.`}</p>
-            <ProgressiveOverloadCard weeks={blkWeeks} playerId={selId || undefined} emphasis={poEmphasis} focusLabel={player?.name} />
+            <ProgressiveOverloadCard weeks={blkWeeks} playerId={selId || undefined} emphasis={poEmphasis} focusLabel={player?.name} sessionsPerWeek={standardTrainingDays(1, isBasketball ? "basketball" : null).length} />
           </section>
               </>)}
               {plSub === 2 && (<>
