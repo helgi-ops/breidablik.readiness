@@ -42,12 +42,35 @@ export type WeaknessInput = {
   poolSize: number;
 };
 export type SteerTarget = { id: QualityId; percentile: number | null; axis: SteerAxis; kpis: Bi; hint: boolean };
+
+/** Train-like-you-Play match-EXPOSURE gap → the build-up axis that closes it. A second, independent
+ *  driver of the same ramp bias: "weakness" is what he's behind on vs peers (percentiles); "exposure"
+ *  is what his TRAINING under-does vs his own MATCHES. Accel/decel/CoD → mech; speed/HSR → hsr
+ *  (mirrors WEAKNESS_AXIS). pl_per_min is a rate, not a volume gap, so it's intentionally left out. */
+export const TLYP_METRIC_AXIS: Record<string, { axis: SteerAxis; label: Bi }> = {
+  top_speed: { axis: "hsr", label: { en: "top speed", is: "hámarkshraði" } },
+  fmp_run_high: { axis: "hsr", label: { en: "high-speed running", is: "háhraðahlaup" } },
+  hsr_dist: { axis: "hsr", label: { en: "high-speed running", is: "háhraðahlaup" } },
+  sprint_eff: { axis: "hsr", label: { en: "sprint efforts", is: "spretta-átök" } },
+  ima_accel: { axis: "mech", label: { en: "accelerations", is: "hröðun" } },
+  ima_decel: { axis: "mech", label: { en: "decelerations", is: "hemlun" } },
+  decel_eff: { axis: "mech", label: { en: "accel/decel efforts", is: "accel/decel átök" } },
+  ima_cod: { axis: "mech", label: { en: "change-of-direction", is: "stefnubreytingar" } },
+  ima_jumps: { axis: "mech", label: { en: "jumps", is: "stökk" } },
+  fmp_dyn_high: { axis: "mech", label: { en: "dynamic accelerations", is: "dýnamísk hröðun" } },
+  fmp_dyn_med: { axis: "mech", label: { en: "dynamic accelerations", is: "dýnamísk hröðun" } },
+  player_load: { axis: "mech", label: { en: "mechanical load (Player Load)", is: "vélrænt álag (Player Load)" } },
+};
+
+export type ExposureInput = { key: string; axis: SteerAxis; label: Bi; flag: "under" | "gap"; pct: number | null };
+export type ExposureTarget = ExposureInput & { hint: boolean };
 export type BuildUpSteer = {
   hsrBoost: number;   // multiplier to layer on the running-axis emphasis (caller re-clamps to the safe band)
   mechBoost: number;  // multiplier to layer on the mechanical-axis emphasis
   targets: SteerTarget[];        // every mapped weakness (hard + hint), worst-percentile first
   strengthTargets: SteerTarget[];// force/VBT weaknesses → the VALD focus covers these, not the GPS ramp
-  hasHard: boolean;   // at least one confident (non-hint) GPS-axis weakness actually biased the ramp
+  exposureTargets: ExposureTarget[]; // TLYP match-exposure gaps mapped to an axis, worst-exposed first
+  hasHard: boolean;   // at least one confident (non-hint) GPS-axis signal actually biased the ramp
 };
 
 const BOOST = 1.10;    // one confident weakness on an axis lifts its emphasis ~10%
@@ -59,7 +82,12 @@ export function isHintOnly(w: WeaknessInput): boolean {
   return w.confidence === "low" || w.benchmark === "squad" || w.poolSize < 4;
 }
 
-export function computeBuildUpSteer(weaknesses: WeaknessInput[]): BuildUpSteer {
+/**
+ * @param weaknesses athlete-axis weaknesses from Total Player Analysis (percentile-based).
+ * @param exposures  Train-like-you-Play match-exposure gaps (training vs own matches). Both drivers
+ *                   bias the SAME hsr/mech boosts; the ±20% cap keeps them from compounding.
+ */
+export function computeBuildUpSteer(weaknesses: WeaknessInput[], exposures: ExposureInput[] = []): BuildUpSteer {
   const targets: SteerTarget[] = [];
   const strengthTargets: SteerTarget[] = [];
   let hsrBoost = 1, mechBoost = 1, hasHard = false;
@@ -76,9 +104,25 @@ export function computeBuildUpSteer(weaknesses: WeaknessInput[]): BuildUpSteer {
     }
   }
   targets.sort((a, b) => (a.percentile ?? 100) - (b.percentile ?? 100));
+
+  // Match-exposure gaps. Only a real under-exposure (<50% of match, flag "under") biases the ramp;
+  // a milder "gap" is surfaced as a hint but doesn't move the dose (don't over-index). Shares the
+  // same accumulators, so an axis flagged by BOTH a weakness and an exposure still caps at +20%.
+  const exposureTargets: ExposureTarget[] = [];
+  for (const e of exposures) {
+    if (e.axis === "strength") continue; // TLYP has no strength-axis metric
+    const hint = e.flag !== "under";
+    exposureTargets.push({ ...e, hint });
+    if (!hint) {
+      hasHard = true;
+      if (e.axis === "hsr") hsrBoost *= BOOST; else mechBoost *= BOOST;
+    }
+  }
+  exposureTargets.sort((a, b) => (a.pct ?? 100) - (b.pct ?? 100));
+
   return {
     hsrBoost: Math.min(BOOST_CAP, hsrBoost),
     mechBoost: Math.min(BOOST_CAP, mechBoost),
-    targets, strengthTargets, hasHard,
+    targets, strengthTargets, exposureTargets, hasHard,
   };
 }

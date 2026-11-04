@@ -19,7 +19,7 @@ import PageCrossRef from "@/components/coach/PageCrossRef";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
 import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
-import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput } from "@/lib/micropulse/periodization/buildUpSteer";
+import { computeBuildUpSteer, TLYP_METRIC_AXIS, type BuildUpSteer, type WeaknessInput, type ExposureInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { buildPlayerBlock, pickActiveBlock } from "@/lib/micropulse/periodization/playerBlock";
 import { classifyInSeasonSubPhase, subPhaseInfo, SUBPHASE_KEYS, type InSeasonSubPhaseKey } from "@/lib/micropulse/periodization/inSeasonSubPhase";
 import { strengthForBlockGoal, STRENGTH_METHODS } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
@@ -767,7 +767,40 @@ export default function PeriodizationHubPage() {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, selId, is, isBasketball]);
-  const steer: BuildUpSteer | null = React.useMemo(() => (steerData && steerData.weaknesses.length ? computeBuildUpSteer(steerData.weaknesses) : null), [steerData]);
+  // Phase 2 — Train-like-you-Play match-EXPOSURE gaps per player feed the SAME steer, so the ramp
+  // also responds to what training under-does vs his own matches (not just TPA percentile weakness).
+  // One squad fetch per season (not per player); indexed by playerId. Skipped for basketball (no GPS TLYP).
+  const [tlypExposures, setTlypExposures] = React.useState<Map<string, ExposureInput[]>>(new Map());
+  React.useEffect(() => {
+    if (tab !== "players" || isBasketball) return;
+    let alive = true;
+    (async () => {
+      try {
+        const yr = new Date().getFullYear();
+        const res = await fetch(`/api/coach/train-like-you-play?season=${yr}`, { headers: { Authorization: await authHeader() } });
+        const j = await res.json().catch(() => ({}));
+        if (!alive || !res.ok) return;
+        const map = new Map<string, ExposureInput[]>();
+        for (const p of (j.players ?? []) as Array<{ id: string; metrics: Record<string, { flag?: string; pct?: number | null }> }>) {
+          const exps: ExposureInput[] = [];
+          for (const [key, cell] of Object.entries(p.metrics ?? {})) {
+            const ax = TLYP_METRIC_AXIS[key];
+            if (!ax || (cell?.flag !== "under" && cell?.flag !== "gap")) continue;
+            exps.push({ key, axis: ax.axis, label: ax.label, flag: cell.flag as "under" | "gap", pct: cell.pct ?? null });
+          }
+          if (exps.length) map.set(p.id, exps);
+        }
+        if (alive) setTlypExposures(map);
+      } catch { /* leave empty — the steer falls back to TPA weaknesses only */ }
+    })();
+    return () => { alive = false; };
+  }, [tab, isBasketball, authHeader]);
+  const selExposures = React.useMemo(() => tlypExposures.get(selId) ?? [], [tlypExposures, selId]);
+  const steer: BuildUpSteer | null = React.useMemo(() => {
+    const w = steerData?.weaknesses ?? [];
+    if (!w.length && !selExposures.length) return null;
+    return computeBuildUpSteer(w, selExposures);
+  }, [steerData, selExposures]);
   const steerActive = !!steer && !steerNeutral && steer.hasHard;
   // Translate the axis boosts → the build-up card's per-KPI weekly-rate emphasis (same LoadKpi keys the
   // progressive-overload engine ramps). hsr axis → running KPIs; mech axis → the Acc/Dec effort KPIs.
@@ -3571,44 +3604,69 @@ export default function PeriodizationHubPage() {
 
           {/* WEAKNESS-STEERED BUILD-UP — reads Total Player Analysis (athlete-axis weaknesses + levers +
               VALD focus) and biases the per-player ramp toward the qualities he's behind on. Read, not rebuilt. */}
-          {player && steerData?.hasAthlete && steer && steer.targets.length > 0 && (() => {
+          {player && steer && (steer.targets.length > 0 || steer.exposureTargets.length > 0) && (() => {
             const qName = (id: QualityRead["id"]) => (is ? QUALITY_BY_ID[id].is : QUALITY_BY_ID[id].en);
+            const axisWord = (a: "hsr" | "mech") => (a === "hsr" ? (is ? "háhraða/hlaup" : "HSR/running") : (is ? "Acc/Dec (vélrænt)" : "Acc/Dec (mechanical)"));
             const hard = steer.targets.filter((t) => !t.hint);
             const hints = steer.targets.filter((t) => t.hint);
             const top = hard.length ? hard : steer.targets; // if nothing confident, narrate the hints
-            const names = top.slice(0, 2).map((t) => qName(t.id));
-            const axisWord = (a: "hsr" | "mech") => (a === "hsr" ? (is ? "háhraða/hlaup" : "HSR/running") : (is ? "Acc/Dec (vélrænt)" : "Acc/Dec (mechanical)"));
-            const emphAxes = Array.from(new Set(hard.map((t) => t.axis).filter((a): a is "hsr" | "mech" => a !== "strength"))).map(axisWord);
+            const hardExp = steer.exposureTargets.filter((e) => !e.hint);
+            const topExp = hardExp.length ? hardExp : steer.exposureTargets;
+            const lbl = (e: typeof steer.exposureTargets[number]) => (is ? e.label.is : e.label.en);
+            const emphAxes = Array.from(new Set([...hard.map((t) => t.axis), ...hardExp.map((e) => e.axis)].filter((a): a is "hsr" | "mech" => a !== "strength"))).map(axisWord);
+            // Verdict composes whichever drivers exist (weakness and/or exposure).
+            const drivers: string[] = [];
+            if (steer.targets.length) drivers.push(`${is ? "lægstu eiginleikar" : "lowest qualities"}: ${top.slice(0, 2).map((t) => qName(t.id)).join(is ? " og " : " and ")}`);
+            if (steer.exposureTargets.length) drivers.push(`${is ? "vanþjálfað vs leikur" : "under-trained vs matches"}: ${topExp.slice(0, 2).map(lbl).join(is ? " og " : " and ")}`);
             const verdict = is
-              ? `Uppbygging forgangsraðar ${names.join(" og ")}${names.length ? ` — ${player.name}s lægstu íþrótta-eiginleikar` : ""}${emphAxes.length && steerActive ? `, rampar ${emphAxes.join(" + ")} hraðast að leikviðmiðinu` : ""}.`
-              : `Build-up prioritises ${names.join(" and ")}${names.length ? ` — ${player.name}'s lowest athlete qualities` : ""}${emphAxes.length && steerActive ? `, ramping ${emphAxes.join(" + ")} fastest toward the match unit` : ""}.`;
+              ? `Uppbygging ${player.name}s forgangsraðar — ${drivers.join("; ")}${emphAxes.length && steerActive ? `, rampar ${emphAxes.join(" + ")} hraðast að leikviðmiðinu` : ""}.`
+              : `${player.name}'s build-up prioritises — ${drivers.join("; ")}${emphAxes.length && steerActive ? `, ramping ${emphAxes.join(" + ")} fastest toward the match unit` : ""}.`;
             return (
             <section className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-[15px] font-bold text-slate-900">{is ? "Veikleika-stýrð uppbygging" : "Weakness-steered build-up"}</h2>
-                <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{is ? "úr Heildargreiningu" : "from Total Player Analysis"}</span>
+                <h2 className="text-[15px] font-bold text-slate-900">{is ? "Einstaklingsmiðuð uppbygging" : "Individualised build-up"}</h2>
+                {steer.targets.length > 0 && <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{is ? "Heildargreining" : "Total Player Analysis"}</span>}
+                {steer.exposureTargets.length > 0 && <span className="rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#2740e6]">{is ? "Train like you Play" : "Train like you Play"}</span>}
                 <label className="ml-auto flex items-center gap-1 text-[11px] text-slate-500"><input type="checkbox" checked={steerNeutral} onChange={(e) => setSteerNeutral(e.target.checked)} />{is ? "Hlutlaus rampi (án halla)" : "Neutral ramp (no bias)"}</label>
               </div>
               {/* Level 0 — verdict */}
-              <p className="mt-1 text-[13px] font-semibold text-slate-900">{steerActive ? verdict : (is ? `Hlutlaus rampi — engin veikleika-halli beittur.${hard.length ? " Kveiktu af til að forgangsraða veikleikum." : ""}` : `Neutral ramp — no weakness bias applied.${hard.length ? " Untick to prioritise the gaps." : ""}`)}</p>
-              {/* Level 1 — the targeted gaps + KPIs + levers, each source-tagged */}
-              <ul className="mt-1.5 space-y-1 text-[12px] text-slate-700">
-                {top.slice(0, 3).map((t) => (
-                  <li key={t.id}>
-                    <span className="font-medium">{qName(t.id)}</span>
-                    {t.percentile != null && <span className="text-slate-500"> ({t.percentile}th pctl)</span>}
-                    {t.axis !== "strength" && <span className="text-slate-500"> → {is ? "áhersla" : "emphasise"} {is ? t.kpis.is : t.kpis.en}</span>}
-                    {t.hint && <span className="ml-1 rounded bg-amber-100 px-1 text-[11px] font-semibold text-amber-700">{is ? "vísbending" : "hint"}</span>}
-                    {steerData.levers[t.id] && <div className="text-[11px] text-slate-500">↳ {is ? steerData.levers[t.id].is : steerData.levers[t.id].en}{steerData.levers[t.id].cite ? ` (${steerData.levers[t.id].cite})` : ""}</div>}
-                  </li>
-                ))}
-              </ul>
+              <p className="mt-1 text-[13px] font-semibold text-slate-900">{steerActive ? verdict : (is ? "Hlutlaus rampi — enginn halli beittur. Kveiktu af til að forgangsraða götunum." : "Neutral ramp — no bias applied. Untick to prioritise the gaps.")}</p>
+              {/* Level 1a — athlete-axis weaknesses (percentiles) */}
+              {steer.targets.length > 0 && (
+                <ul className="mt-1.5 space-y-1 text-[12px] text-slate-700">
+                  {top.slice(0, 3).map((t) => (
+                    <li key={t.id}>
+                      <span className="font-medium">{qName(t.id)}</span>
+                      {t.percentile != null && <span className="text-slate-500"> ({t.percentile}th pctl)</span>}
+                      {t.axis !== "strength" && <span className="text-slate-500"> → {is ? "áhersla" : "emphasise"} {is ? t.kpis.is : t.kpis.en}</span>}
+                      {t.hint && <span className="ml-1 rounded bg-amber-100 px-1 text-[11px] font-semibold text-amber-700">{is ? "vísbending" : "hint"}</span>}
+                      {steerData?.levers?.[t.id] && <div className="text-[11px] text-slate-500">↳ {is ? steerData.levers[t.id].is : steerData.levers[t.id].en}{steerData.levers[t.id].cite ? ` (${steerData.levers[t.id].cite})` : ""}</div>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {/* Level 1b — Train-like-you-Play match-exposure gaps (training vs his own matches) */}
+              {steer.exposureTargets.length > 0 && (
+                <>
+                  <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Vanþjálfað vs eigin leikir" : "Under-trained vs his own matches"}</p>
+                  <ul className="mt-0.5 space-y-1 text-[12px] text-slate-700">
+                    {topExp.slice(0, 3).map((e) => (
+                      <li key={e.key}>
+                        <span className="font-medium">{lbl(e)}</span>
+                        {e.pct != null && <span className="text-slate-500"> ({e.pct}% {is ? "af leik" : "of match"})</span>}
+                        <span className="text-slate-500"> → {is ? "áhersla" : "emphasise"} {axisWord(e.axis as "hsr" | "mech")}</span>
+                        {e.hint && <span className="ml-1 rounded bg-amber-100 px-1 text-[11px] font-semibold text-amber-700">{is ? "vísbending" : "hint"}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
               {/* VALD strength focus (the force/VBT qualities the GPS ramp can't build) */}
-              {steerData.valdPlan && steerData.valdPlan.priorities.length > 0 && (
+              {steerData?.valdPlan && steerData.valdPlan.priorities.length > 0 && (
                 <p className="mt-1.5 text-[11px] text-slate-600"><span className="font-medium">{is ? "Kraftur (VALD)" : "Strength (VALD)"}:</span> {steerData.valdPlan.priorities.slice(0, 2).map((p) => `${p.quality} — ${p.lever}`).join(" · ")} <span className="rounded bg-[#7a5cc4]/10 px-1 text-[11px] font-semibold text-[#7a5cc4]">VALD</span></p>
               )}
               {hints.length > 0 && steerActive && <p className="mt-1 text-[11px] text-amber-700">{is ? `Vísbendingar (lítið úrtak / lítil vissa) eru sýndar en ekki notaðar til að halla rampanum: ${hints.map((t) => qName(t.id)).join(", ")}.` : `Hints (thin sample / low confidence) are shown but not used to bias the ramp: ${hints.map((t) => qName(t.id)).join(", ")}.`}</p>}
-              <p className="mt-1.5 text-[11px] text-slate-500">{is ? "Íþrótta-ásinn stýrir líkamlegu uppbyggingunni (GPS/VALD/VBT). Innan öruggra þaka rampans (hraði / leikþak). Lýsandi — aldrei readiness-liturinn." : "The athlete axis steers the physical build-up (GPS/VALD/VBT). Within the ramp's safe caps (rate / match ceiling). Descriptive — never the readiness colour."} <a className="text-[#2740e6] hover:underline" href={`/coach/total-player-analysis?playerId=${encodeURIComponent(selId)}`}>{is ? "Opna prófílinn →" : "Open the profile →"}</a></p>
+              <p className="mt-1.5 text-[11px] text-slate-500">{is ? "Tvær heimildir halla líkamlegu uppbyggingunni: íþrótta-veikleikar (percentílur) og vanþjálfun vs leikur (Train like you Play). Innan öruggra þaka rampans (hraði / leikþak); +20% hámark. Lýsandi — aldrei readiness-liturinn." : "Two sources steer the physical build-up: athlete weaknesses (percentiles) and under-exposure vs matches (Train like you Play). Within the ramp's safe caps (rate / match ceiling); +20% max. Descriptive — never the readiness colour."} <a className="text-[#2740e6] hover:underline" href={`/coach/total-player-analysis?playerId=${encodeURIComponent(selId)}`}>{is ? "Prófíll →" : "Profile →"}</a> · <a className="text-[#2740e6] hover:underline" href="/coach/train-like-you-play">{is ? "Train like you Play →" : "Train like you Play →"}</a></p>
             </section>
             );
           })()}

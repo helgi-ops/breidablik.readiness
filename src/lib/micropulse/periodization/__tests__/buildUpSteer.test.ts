@@ -1,9 +1,11 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { computeBuildUpSteer, isHintOnly, WEAKNESS_AXIS, type WeaknessInput } from "../buildUpSteer";
+import { computeBuildUpSteer, isHintOnly, WEAKNESS_AXIS, TLYP_METRIC_AXIS, type WeaknessInput, type ExposureInput } from "../buildUpSteer";
 
 const w = (id: WeaknessInput["id"], p: number, over: Partial<WeaknessInput> = {}): WeaknessInput =>
   ({ id, percentile: p, confidence: "high", benchmark: "position", poolSize: 8, ...over });
+const ex = (key: string, flag: "under" | "gap", pct: number): ExposureInput =>
+  ({ key, axis: TLYP_METRIC_AXIS[key].axis, label: TLYP_METRIC_AXIS[key].label, flag, pct });
 
 test("computeBuildUpSteer: a confident running weakness biases the HSR axis; mechanical stays neutral", () => {
   const s = computeBuildUpSteer([w("work_capacity", 12)]);
@@ -36,4 +38,28 @@ test("computeBuildUpSteer: strength qualities route to the VALD focus, not the G
   assert.equal(s.targets.every((t) => t.axis !== "strength"), true);
   // Worst-percentile first among the GPS targets.
   assert.ok((s.targets[0].percentile ?? 100) <= (s.targets[1].percentile ?? 100));
+});
+
+test("computeBuildUpSteer: a TLYP under-exposure biases its axis; a mild gap is a hint only", () => {
+  const s = computeBuildUpSteer([], [ex("hsr_dist", "under", 42), ex("ima_decel", "gap", 68)]);
+  assert.ok(s.hsrBoost > 1);            // under-exposed HSR → HSR axis biased
+  assert.equal(s.mechBoost, 1);          // the decel "gap" is a hint, never biases
+  assert.equal(s.hasHard, true);
+  assert.equal(s.exposureTargets.length, 2);
+  assert.equal(s.exposureTargets.find((e) => e.key === "ima_decel")!.hint, true);
+  assert.equal(s.exposureTargets.find((e) => e.key === "hsr_dist")!.hint, false);
+  // Worst-exposed (lowest pct) first.
+  assert.equal(s.exposureTargets[0].key, "hsr_dist");
+});
+
+test("computeBuildUpSteer: weakness + exposure on the same axis don't compound past the +20% cap", () => {
+  const s = computeBuildUpSteer([w("acceleration", 15)], [ex("ima_cod", "under", 30)]); // both → mech
+  assert.ok(s.mechBoost <= 1.2);
+  assert.equal(s.hasHard, true);
+});
+
+test("computeBuildUpSteer: exposure-only (no athlete weaknesses) still produces a steer", () => {
+  const s = computeBuildUpSteer([], [ex("sprint_eff", "under", 38)]);
+  assert.equal(s.targets.length, 0);
+  assert.ok(s.hsrBoost > 1 && s.hasHard);
 });
