@@ -506,7 +506,7 @@ const DOW: Bi[] = [
 // Band 2–3 high-intensity subset (mechanical days over-shoot the match ≥1×; running days sit well under);
 // `stride` = the top-band free-running quality (highest on the Locomotive/running day). Keeping HSR and
 // mechanical on separate days protects the posterior chain (Buchheit).
-const CAL_SHARE: Record<CalType, { dist: number; hsr: number; load: number; accdec: number; stride: number }> = {
+export const CAL_SHARE: Record<CalType, { dist: number; hsr: number; load: number; accdec: number; stride: number }> = {
   mechanical: { dist: 0.45, hsr: 0.30, load: 1.10, accdec: 1.30, stride: 0.50 },
   locomotive: { dist: 0.55, hsr: 0.70, load: 0.55, accdec: 0.40, stride: 0.90 },
   mixed: { dist: 0.70, hsr: 0.55, load: 0.85, accdec: 0.85, stride: 0.75 },

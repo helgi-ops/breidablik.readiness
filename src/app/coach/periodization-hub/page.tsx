@@ -17,7 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupView from "@/components/coach/WeekSetupView";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
-import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
+import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput, type ExposureInput, type ShapeDirInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { exposuresFromTlyp, shapeDirsFromShape } from "@/lib/micropulse/trainingNeeds";
@@ -35,8 +35,8 @@ import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHub
 import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { preseasonStartRamp, preseasonMatchExposure, NORMATIVE_MATCH_KPI, NORMATIVE_MATCH_LOAD, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
 import { upcomingInternationalBreaks, intlBreakKey, type IntlBreak } from "@/lib/micropulse/internationalBreaks";
-import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek, kpiTmRefRange, KPI_TAPER_EXPONENT } from "@/lib/micropulse/periodization/plannedVolume";
-import { DEFAULT_MD_MICROCYCLE, TACTICAL_PERIODIZATION_MORPHOCYCLE, mdOffset, type MdDaySpec } from "@/lib/micropulse/periodization/periodizationModel";
+import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
+import { mdOffset } from "@/lib/micropulse/periodization/periodizationModel";
 import { recommendTestingSchedule, testsForBlock, TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
@@ -793,25 +793,6 @@ export default function PeriodizationHubPage() {
   }, [tab, isBasketball, authHeader]);
   const selExposures = React.useMemo(() => tlypExposures.get(selId) ?? [], [tlypExposures, selId]);
 
-  // The team's MD-day load shape (per-day % of a match) — for the Player Demands card. One team-level
-  // fetch; resolves the chosen model (default / tactical / custom), same source as the TLYP band.
-  const [mdModelDays, setMdModelDays] = React.useState<Array<{ mdDay: string; cap: number }>>([]);
-  React.useEffect(() => {
-    if (tab !== "players" || isBasketball) return;
-    let alive = true;
-    (async () => {
-      try {
-        const res = await fetch("/api/coach/team/periodization-model", { headers: { Authorization: await authHeader() } });
-        const j = await res.json().catch(() => ({}));
-        if (!alive || !j?.ok) return;
-        const src = String(j.source ?? "default_md");
-        const model = src === "tactical_periodization" ? TACTICAL_PERIODIZATION_MORPHOCYCLE : DEFAULT_MD_MICROCYCLE;
-        const days: MdDaySpec[] = src === "custom" && Array.isArray(j.days) ? (j.days as MdDaySpec[]) : (model.days as MdDaySpec[]);
-        setMdModelDays(days.filter((d) => d && typeof d.intensityCapPct === "number").map((d) => ({ mdDay: d.mdDay, cap: d.intensityCapPct as number })));
-      } catch { /* leave empty — the Player Demands card hides */ }
-    })();
-    return () => { alive = false; };
-  }, [tab, isBasketball, authHeader]);
 
   // Phase 3 — the player's movement-SHAPE under-trained directions (IMA clock, training vs his own
   // matches) tilt the plan's fwd/back/lat split. Per-player fetch (season window); skipped for basketball.
@@ -3688,41 +3669,42 @@ export default function PeriodizationHubPage() {
           {/* PLAYER DEMANDS — his own match unit split across the typical week (MD-day shape). The
               per-player analogue of the Team Demands tab; answers "how does his match demand distribute
               across MD-4…MD-1?". Steady-state reference (no ramp); the His-block grid shows the planned block. */}
-          {!isBasketball && player && player.matchUnit.load.typical != null && mdModelDays.length > 0 && (() => {
+          {!isBasketball && player && player.matchUnit.load.typical != null && (() => {
             const mu = player.matchUnit;
-            const days = mdModelDays.filter((d) => (mdOffset(d.mdDay) ?? 0) < 0).sort((a, b) => (mdOffset(a.mdDay) ?? 0) - (mdOffset(b.mdDay) ?? 0));
-            if (!days.length) return null;
+            // The standard MD training days (MD-4…MD-1) mapped to their stimulus type — matching the engine's
+            // "His block" grid (MD-4 mechanical, MD-3 locomotive, MD-2 mixed, MD-1 activation).
+            const typeForMd = (md: string): CalType => { const o = mdOffset(md) ?? 0; return o <= -4 ? "mechanical" : o === -3 ? "locomotive" : o === -2 ? "mixed" : "activation"; };
+            const days = standardTrainingDays(1).map((md) => ({ md, type: typeForMd(md) }));
             const fmt = (v: number | null) => (v == null ? "–" : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
-            // Each KPI tapers differently with the day's intensity: volume (Player Load, distance) ~linear,
-            // HSR/sprint taper harder before a match (KPI_TAPER_EXPONENT, Martín-García 2018). All anchored
-            // on his MATCH unit (the 90-min season median) × the day's share^exponent.
+            // Per SESSION = his MATCH unit × the day-type's realistic share of a match (CAL_SHARE — the SAME
+            // shares the "His block" grid uses, so the two agree). Each day-type has its own per-axis profile
+            // (mechanical = high Acc/Dec, low HSR; locomotive = high HSR), so a session sits well under a match.
             const rows = ([
-              { en: "Player Load", is: "Player Load", v: mu.load.typical, u: "", kpi: "totalPlayerLoad" },
-              { en: "Total distance", is: "Heildar-vegalengd", v: mu.distance.typical, u: "m", kpi: "totalDistance" },
-              { en: "High-speed running", is: "Háhraðahlaup", v: mu.hsr.typical, u: "m", kpi: "velocityBand5" },
-              { en: "Sprint distance", is: "Sprett-vegalengd", v: mu.sprint.typical, u: "m", kpi: "velocityBand6" },
-              { en: "Accelerations (B2–3)", is: "Hröðun (B2–3)", v: mu.accel.typical, u: "#", kpi: "accelB23" },
-              { en: "Decelerations (B2–3)", is: "Hemlun (B2–3)", v: mu.decel.typical, u: "#", kpi: "decelB23" },
+              { en: "Player Load", is: "Player Load", v: mu.load.typical, u: "", ax: "load" },
+              { en: "Total distance", is: "Heildar-vegalengd", v: mu.distance.typical, u: "m", ax: "dist" },
+              { en: "High-speed running", is: "Háhraðahlaup", v: mu.hsr.typical, u: "m", ax: "hsr" },
+              { en: "Sprint distance", is: "Sprett-vegalengd", v: mu.sprint.typical, u: "m", ax: "hsr" },
+              { en: "Accelerations (B2–3)", is: "Hröðun (B2–3)", v: mu.accel.typical, u: "#", ax: "accdec" },
+              { en: "Decelerations (B2–3)", is: "Hemlun (B2–3)", v: mu.decel.typical, u: "#", ax: "accdec" },
             ] as const).filter((r) => r.v != null);
             return (
               <section className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <h2 className="text-[15px] font-bold text-slate-900">{is ? "Leikmanns-kröfur — dæmigerð vika" : "Player Demands — the typical week"}</h2>
                   <span className="rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#2740e6]">{player.name}</span>
-                  <span className="text-[12px] text-slate-500">{is ? "Leikeiningin hans × MD-dags lögun (MD-3 þyngst, MD-1 niðurtröppun)." : "His match unit × the MD-day shape (MD-3 heaviest, MD-1 taper)."}</span>
+                  <span className="text-[12px] text-slate-500">{is ? "Leikeiningin hans × dag-gerðar hlutfall (hver eiginleiki toppar á sínum degi)." : "His match unit × the day-type share (each quality peaks on its stimulus day)."}</span>
                 </div>
                 <div className="mt-3 overflow-x-auto">
                   <table className="w-full text-[12.5px]">
                     <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
                       <th className="py-1 pr-2 font-medium">KPI</th>
-                      {days.map((d) => <th key={d.mdDay} className="py-1 px-2 text-right font-medium">{d.mdDay}</th>)}
+                      {days.map((d) => <th key={d.md} className="py-1 px-2 text-right font-medium">{d.md}</th>)}
                       <th className="py-1 px-2 text-right font-medium">{is ? "Vika" : "Week"}</th>
                       <th className="py-1 pl-2 text-right font-medium">{is ? "Leikur" : "Match"}</th>
                     </tr></thead>
                     <tbody>
                       {rows.map((r) => {
-                        const e = KPI_TAPER_EXPONENT[r.kpi] ?? 1;
-                        const perDay = days.map((d) => (r.v as number) * Math.pow(d.cap / 100, e));
+                        const perDay = days.map((d) => (r.v as number) * CAL_SHARE[d.type][r.ax]);
                         const wk = perDay.reduce((s, x) => s + x, 0);
                         return (
                           <tr key={r.en} className="border-t border-slate-100">
@@ -3737,8 +3719,8 @@ export default function PeriodizationHubPage() {
                   </table>
                 </div>
                 <p className="mt-2 text-[11px] text-slate-400">{is
-                  ? `Allt reiknað út frá LEIKNUM hans (miðgildi ${mu.nNearFull} ~90-mín leikja) × hlutfall dagsins úr periodization-módeli liðsins. Hver KPI trappast ólíkt: magn (PL/vegalengd) ~línulega, háhraði/sprettur harðar fyrir leik (Martín-García 2018). Vika = summa æfingadaga. Lýsandi — aldrei readiness-liturinn.`
-                  : `Everything is computed from his MATCH (median of ${mu.nNearFull} ~90-min games) × the day's share from the team periodization model. Each KPI tapers differently: volume (PL/distance) ~linearly, HSR/sprint harder before a match (Martín-García 2018). Week = sum of the training days. Descriptive — never the readiness colour.`}</p>
+                  ? `Allt reiknað út frá LEIKNUM hans (miðgildi ${mu.nNearFull} ~90-mín leikja) × raunhæft per-æfingu hlutfall eftir dag-gerð (sömu hlutföll og „Lotan hans" notar — vélrænn dagur = hátt Acc/Dec, lágt háhraða; locomotive = hátt háhraða). Þess vegna er æfing vel undir heilum leik í vegalengd. Vika = summa æfingadaga. Lýsandi — aldrei readiness-liturinn.`
+                  : `Everything is computed from his MATCH (median of ${mu.nNearFull} ~90-min games) × a realistic per-session share by day-type — the same shares "His block" uses (mechanical day = high Acc/Dec, low HSR; locomotive = high HSR). So a session sits well under a full match's distance. Week = sum of the training days. Descriptive — never the readiness colour.`}</p>
               </section>
             );
           })()}
