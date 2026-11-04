@@ -4011,12 +4011,20 @@ export default function PeriodizationHubPage() {
             const teamKpi = teamKpiAvg(plan.players);
             const teamHasOwn = teamKpi.totalPlayerLoad != null && Number.isFinite(teamKpi.totalPlayerLoad);
             const matchKpiAvg = hasOwn ? kpiAvgFromUnit(player.matchUnit) : (teamHasOwn ? teamKpi : (NORMATIVE_MATCH_KPI as Partial<Record<WeeklyLoadMetricKey, number>>));
-            const matchLoad = hasOwn ? player.matchUnit.load.typical! : (teamHasOwn ? teamKpi.totalPlayerLoad! : NORMATIVE_MATCH_LOAD);
-            const anchor: LoadAnchor = hasOwn || teamHasOwn ? "match_this_season" : "normative";
             const preWeeksN = plan.phases.find((p) => p.key === "preseason")?.weeks ?? blkWeeks;
-            const ramp = preseasonStartRamp({ matchTypicalLoad: matchLoad, matchKpiAvg, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeksN, week1MatchMultiple: psW1, anchor });
             const fmt = (v: number | null | undefined) => (v == null ? "–" : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
-            const peakMult = ramp.length ? ramp[ramp.length - 1].multipleOfMatch : null;
+            // Follow the TEAM's weekly ×match multiple PER VARIABLE (plannedVolume — the same model the Meso
+            // tab uses), individualised by HIS match unit: each KPI's peak = his match × the team's weekly
+            // ×match for that KPI; the week ramps from a controlled re-entry (psW1×) up to that peak.
+            const preDays = standardTrainingDays(0); // the team's pre-season (no-match) training week
+            const teamMult = (k: WeeklyLoadMetricKey) => weeklyKpiMultiple(preDays, k);
+            const volPeak = teamMult("totalPlayerLoad");
+            const reentryFrac = Math.min(1, Math.max(0.2, (psW1 || 1.3) / Math.max(1, volPeak)));
+            const weeks = Array.from({ length: preWeeksN }, (_, idx) => {
+              const scale = reentryFrac + (1 - reentryFrac) * (preWeeksN > 1 ? idx / (preWeeksN - 1) : 0);
+              return { i: idx + 1, scale, mult: Math.round(volPeak * scale * 100) / 100 };
+            });
+            const peakMult = Math.round(volPeak * 100) / 100;
             const srcLabel = hasOwn
               ? (is ? `Leikeining ${player.name}s — miðgildi ${player.matchUnit.nNearFull} ~90-mín leikja` : `${player.name}'s match unit — median of ${player.matchUnit.nNearFull} ~90-min matches`)
               : teamHasOwn ? (is ? "Meðaltal úr leikjum liðsins (fáir heilir leikir hjá honum)" : "Team match average (few full matches of his own)")
@@ -4028,7 +4036,7 @@ export default function PeriodizationHubPage() {
               { k: "velocityBand6", en: "Sprint distance", is: "Sprett-vegalengd", u: "m" },
               { k: "accelB23", en: "Accelerations (B2–3)", is: "Hröðun (B2–3)", u: "#" },
               { k: "decelB23", en: "Decelerations (B2–3)", is: "Hemlun (B2–3)", u: "#" },
-            ] as const).filter((r) => (matchKpiAvg as Partial<Record<string, number>>)[r.k] != null || ramp.some((w) => w.byKpi[r.k] != null));
+            ] as const).filter((r) => (matchKpiAvg as Partial<Record<string, number>>)[r.k] != null);
             // Weakness-steer (the "Individualised build-up" card) biases the ramp: the axes he's behind on
             // ramp to a HIGHER peak. "Neutral ramp (no bias)" (steerNeutral) switches it off → a uniform ramp.
             const biasOn = steerActive && !!steer;
@@ -4040,6 +4048,10 @@ export default function PeriodizationHubPage() {
             };
             const emphWords: string[] = [];
             if (biasOn && steer) { if ((steer.hsrBoost ?? 1) > 1) emphWords.push(is ? "háhraði/sprettur" : "HSR/sprint"); if ((steer.mechBoost ?? 1) > 1) emphWords.push("Acc/Dec"); }
+            const cellVal = (r: typeof KPIS[number], w: typeof weeks[number]): number | null => {
+              const base = (matchKpiAvg as Partial<Record<string, number>>)[r.k];
+              return base == null ? null : base * teamMult(r.k) * boostOf(r.k) * w.scale;
+            };
             return (
             <section className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -4048,19 +4060,19 @@ export default function PeriodizationHubPage() {
                 {biasOn && emphWords.length > 0 && <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#7a5cc4]" title={is ? `Áherslu-ásar rampa hærra: ${emphWords.join(" + ")}` : `Emphasised axes ramp higher: ${emphWords.join(" + ")}`}>{is ? "veikleika-stýrt" : "weakness-steered"}</span>}
                 <span className="text-[12px] text-slate-500">{is ? `Vika 1 = stýrð endurkoma (${psW1}× leik) → ${peakMult != null ? `${peakMult}× leik` : "uppbygging"} yfir ${psSess} æfingar/viku.` : `Week 1 = controlled re-entry (${psW1}× match) → ${peakMult != null ? `${peakMult}× match` : "the build"} across ${psSess} sessions/wk.`}</span>
               </div>
-              <p className="mt-1 text-[11px] text-slate-500">{is ? `Fest á LEIK (ekki GPS-grunnlínu): ${srcLabel}. Magn (vegalengd, PL) rampar hraðast; háhraði/sprettur hægast (aftanlæri). Lýsandi — aldrei readiness-liturinn.` : `Anchored on the MATCH (not a GPS baseline): ${srcLabel}. Volume (distance, PL) ramps fastest; HSR/sprint slowest (hamstring). Descriptive — never the readiness colour.`}</p>
+              <p className="mt-1 text-[11px] text-slate-500">{is ? `Fest á LEIK (ekki GPS-grunnlínu): ${srcLabel}. Toppur hverrar breytu = leikur hans × vikulegur ×leik-margfaldari liðsins fyrir þá breytu (sama líkan og Mesó/Liðs-kröfur). Lýsandi — aldrei readiness-liturinn.` : `Anchored on the MATCH (not a GPS baseline): ${srcLabel}. Each variable's peak = his match × the TEAM's weekly ×match multiple for that variable (the same model as Meso / Team Demands). Descriptive — never the readiness colour.`}</p>
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full text-[12.5px]">
                   <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
                     <th className="py-1 pr-2 font-medium">{is ? "KPI (vika)" : "KPI (per week)"}</th>
-                    {ramp.map((w) => <th key={w.weekIndex} className="py-1 px-2 text-right font-medium"><div>{is ? "V" : "Wk"}{w.weekIndex}</div><div className="text-[9px] font-normal normal-case text-slate-400">{w.multipleOfMatch != null ? `×${w.multipleOfMatch}` : ""}</div></th>)}
+                    {weeks.map((w) => <th key={w.i} className="py-1 px-2 text-right font-medium"><div>{is ? "V" : "Wk"}{w.i}</div><div className="text-[9px] font-normal normal-case text-slate-400">×{w.mult}</div></th>)}
                     <th className="py-1 pl-2 text-right font-medium">{is ? "Leikur" : "Match"}</th>
                   </tr></thead>
                   <tbody>
                     {KPIS.map((r) => (
                       <tr key={r.k} className="border-t border-slate-100">
                         <td className="py-1.5 pr-2 text-slate-700">{is ? r.is : r.en}</td>
-                        {ramp.map((w) => { const raw = w.byKpi[r.k]; const b = boostOf(r.k); return <td key={w.weekIndex} className={`py-1.5 px-2 text-right tabular-nums ${b > 1 ? "font-semibold text-[#7a5cc4]" : "text-slate-600"}`}>{fmt(raw == null ? null : raw * b)}{r.u}</td>; })}
+                        {weeks.map((w) => { const b = boostOf(r.k); return <td key={w.i} className={`py-1.5 px-2 text-right tabular-nums ${b > 1 ? "font-semibold text-[#7a5cc4]" : "text-slate-600"}`}>{fmt(cellVal(r, w))}{r.u}</td>; })}
                         <td className="py-1.5 pl-2 text-right tabular-nums text-slate-400">{fmt((matchKpiAvg as Partial<Record<string, number>>)[r.k])}{r.u}</td>
                       </tr>
                     ))}
@@ -4068,8 +4080,8 @@ export default function PeriodizationHubPage() {
                 </table>
               </div>
               <p className="mt-2 text-[11px] text-slate-400">{is
-                ? `Vikuleg heildarmörk (≈ ÷${psSess} ≈ per æfingu). Hver KPI stiglar frá endurkomu-gólfi að toppi; háhraði/sprettur toppa lægra (taper).${biasOn && emphWords.length ? ` Veikleika-stýrt: ${emphWords.join(" + ")} rampa hærra (fjólubláir dálkar) — hakaðu „Hlutlaus rampi“ til að slökkva.` : ""} Engin GPS-saga þarf — fest á leik. Upphafspunktur, ekki viðmið (Little & Buchheit). Lýsandi — aldrei readiness-liturinn.`
-                : `Weekly totals (≈ ÷${psSess} ≈ per session). Each KPI ramps from a re-entry floor to its peak; HSR/sprint peak lower (taper).${biasOn && emphWords.length ? ` Weakness-steered: ${emphWords.join(" + ")} ramp higher (purple cells) — tick "Neutral ramp" to switch it off.` : ""} No GPS history needed — anchored on the match. A starting point, not a norm (Little & Buchheit). Descriptive — never the readiness colour.`}</p>
+                ? `Vikuleg heildarmörk (≈ ÷${psSess} ≈ per æfingu). Hver breyta stiglar frá endurkomu (${psW1}× leik) að toppi = liðs-margfaldarinn fyrir þá breytu; háhraði/sprettur safna minna (taper).${biasOn && emphWords.length ? ` Veikleika-stýrt: ${emphWords.join(" + ")} rampa hærra (fjólubláir dálkar) — hakaðu „Hlutlaus rampi“ til að slökkva.` : ""} Fest á leik, engin GPS-saga þarf. Upphafspunktur, ekki viðmið (Little & Buchheit). Lýsandi — aldrei readiness-liturinn.`
+                : `Weekly totals (≈ ÷${psSess} ≈ per session). Each variable ramps from re-entry (${psW1}× match) to its peak = the team's ×match multiple for that variable; HSR/sprint accumulate less (taper).${biasOn && emphWords.length ? ` Weakness-steered: ${emphWords.join(" + ")} ramp higher (purple cells) — tick "Neutral ramp" to switch it off.` : ""} Anchored on the match, no GPS history needed. A starting point, not a norm (Little & Buchheit). Descriptive — never the readiness colour.`}</p>
             </section>
             );
           })() : (
