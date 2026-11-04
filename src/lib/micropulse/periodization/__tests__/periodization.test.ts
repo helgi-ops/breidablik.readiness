@@ -79,7 +79,7 @@ test("buildMesoBlocks: leads with TMr, deloads on a sharp acute-load rise, ACWR 
 });
 
 test("matchAxisTargets: three axes vs the match — running under, mechanical over, HSR deficit flagged", () => {
-  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 200, sprintM: 60, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 60, decel: 80, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, accelHiEff: 20, decelHiEff: 30, strideHi: 150, matchAccelHiEff: 40, matchDecelHiEff: 55, matchStrideHi: 300, rhieBouts: null, runSymmetry: null, metabolicPower: null };
+  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 200, sprintM: 60, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 60, decel: 80, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, imaCod: null, matchImaCod: null, accelHiEff: 20, decelHiEff: 30, strideHi: 150, matchAccelHiEff: 40, matchDecelHiEff: 55, matchStrideHi: 300, rhieBouts: null, runSymmetry: null, metabolicPower: null };
   const ax = matchAxisTargets(b);
   // Running axis under-reaches the match — training ceiling < match value.
   const hsr = ax.running.metrics.find((m) => /HSR/.test(m.metric.en))!;
@@ -320,7 +320,7 @@ test("positionGroup: buckets positions GK/Def/Mid/Fwd", () => {
 });
 
 test("mdWeekTargets: MD-anchored days with numbers from the position baseline", () => {
-  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, accelHiEff: null, decelHiEff: null, strideHi: null, matchAccelHiEff: null, matchDecelHiEff: null, matchStrideHi: null, rhieBouts: null, runSymmetry: null, metabolicPower: null };
+  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, imaCod: null, matchImaCod: null, accelHiEff: null, decelHiEff: null, strideHi: null, matchAccelHiEff: null, matchDecelHiEff: null, matchStrideHi: null, rhieBouts: null, runSymmetry: null, metabolicPower: null };
   const days = mdWeekTargets(b);
   const tag = (t: string) => days.find((d) => d.mdTag === t)!;
   assert.equal(tag("MD-5").type, "mechanical");   // MD-5 = mechanical (accel/decel/PL)
@@ -349,7 +349,7 @@ test("congested weeks: classify + collapse the micro (Oliveira 2019)", () => {
   assert.equal(cw.length, 1);
   assert.equal(cw[0].matches, 2);
   // The template collapses — no MD-5/-4/-3 build in a 2-game week:
-  const b: TeamAverages = { sessions: 50, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 10, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, accelHiEff: null, decelHiEff: null, strideHi: null, matchAccelHiEff: null, matchDecelHiEff: null, matchStrideHi: null, rhieBouts: null, runSymmetry: null, metabolicPower: null };
+  const b: TeamAverages = { sessions: 50, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 10, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, imaCod: null, matchImaCod: null, accelHiEff: null, decelHiEff: null, strideHi: null, matchAccelHiEff: null, matchDecelHiEff: null, matchStrideHi: null, rhieBouts: null, runSymmetry: null, metabolicPower: null };
   const two = mdWeekTargets(b, { weekType: "two_game" }).map((d) => d.mdTag);
   assert.ok(!two.includes("MD-5") && !two.includes("MD-4") && !two.includes("MD-3"));
   assert.deepEqual(two, ["MD+1", "MD-2", "MD-1", "MD", "Top-up"]);
@@ -358,7 +358,7 @@ test("congested weeks: classify + collapse the micro (Oliveira 2019)", () => {
 });
 
 test("buildMesoPlan: N weeks, deload every 4th, overload ramps, week type from fixtures, numbers scale", () => {
-  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, accelHiEff: null, decelHiEff: null, strideHi: null, matchAccelHiEff: null, matchDecelHiEff: null, matchStrideHi: null, rhieBouts: null, runSymmetry: null, metabolicPower: null };
+  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, imaCod: null, matchImaCod: null, accelHiEff: null, decelHiEff: null, strideHi: null, matchAccelHiEff: null, matchDecelHiEff: null, matchStrideHi: null, rhieBouts: null, runSymmetry: null, metabolicPower: null };
   const plan = buildMesoPlan({ startDate: "2026-01-05", numWeeks: 4, sessionsPerWeek: 5, baseline: b, matchUnitLoad: 1000, fixtures: ["2026-01-21", "2026-01-24"] });
   assert.equal(plan.weeks.length, 4);
   assert.equal(plan.weeks[3].isDeload, true);              // every 4th week is a planned deload

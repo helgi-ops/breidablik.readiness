@@ -12,7 +12,7 @@ import {
   type PlayerMatchRow, type MatchUnit, type WeekTargetPlan, type MdDemandBucket, type MdDemandProfile,
 } from "./index";
 import { computePeakMovementSignature, sumClocks } from "@/lib/micropulse/peakMovementSignature";
-import type { ClockGrid } from "@/lib/micropulse/directionalSignature";
+import { gridTotal, type ClockGrid } from "@/lib/micropulse/directionalSignature";
 
 /**
  * Assemble the periodization recommendation from the team's OWN data — read-only, composes the pure
@@ -163,11 +163,13 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
       accel: num(r.ima_accel) ?? num(r.accelerations), decel: num(r.ima_decel) ?? num(r.decelerations), pid: r.player_id, clock: r.ima_clock_gen2 ?? null,
       accelHiEff: num(r.accel_b2_3_tot_effs_gen2), decelHiEff: num(r.decel_b2_3_tot_effs_gen2), strideHi,
       rhieBouts: num(r.rhie_bouts), runSymmetry: num(r.running_symmetry), metabolicPower: num(r.metabolic_power),
+      imaCod: r.ima_clock_gen2 ? gridTotal(r.ima_clock_gen2) : null,
     });
     if (r.player_id && matchDates.has(r.date)) {
       const arr = matchRowByPlayer.get(r.player_id) ?? [];
       arr.push({ date: r.date, minutes: null, load: num(r.player_load), hsr, sprint: v6, distance: num(r.total_distance), accel: num(r.ima_accel) ?? num(r.accelerations), decel: num(r.ima_decel) ?? num(r.decelerations),
-        accHiEff: num(r.accel_b2_3_tot_effs_gen2), decHiEff: num(r.decel_b2_3_tot_effs_gen2), stride: strideHi, rhie: num(r.rhie_bouts), symmetry: num(r.running_symmetry), metPower: num(r.metabolic_power) });
+        accHiEff: num(r.accel_b2_3_tot_effs_gen2), decHiEff: num(r.decel_b2_3_tot_effs_gen2), stride: strideHi, rhie: num(r.rhie_bouts), symmetry: num(r.running_symmetry), metPower: num(r.metabolic_power),
+        imaCod: r.ima_clock_gen2 ? gridTotal(r.ima_clock_gen2) : null });
       matchRowByPlayer.set(r.player_id, arr);
     }
   }

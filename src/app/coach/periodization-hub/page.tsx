@@ -50,11 +50,11 @@ type Gap = { key: string; severity: "missing" | "stale" | "ok"; message: Bi };
 type StrengthDefault = { quality: Bi; pct1rm: Bi; velocity: Bi; intent: Bi; cite: string };
 type Vald = { status: "green" | "yellow" | "red" | null; capPct: number | null; note: Bi };
 type MatchUnitMetric = { typical: number | null; peak: number | null };
-type MatchUnit = { nNearFull: number; nInWindow: number; fellBack: boolean; confidence: "high" | "medium" | "low"; windowNote: Bi; minutesTypical: number | null; load: MatchUnitMetric; hsr: MatchUnitMetric; sprint: MatchUnitMetric; distance: MatchUnitMetric; accel: MatchUnitMetric; decel: MatchUnitMetric; accHiEff: MatchUnitMetric; decHiEff: MatchUnitMetric; stride: MatchUnitMetric; rhie: MatchUnitMetric; symmetry: MatchUnitMetric; metPower: MatchUnitMetric };
+type MatchUnit = { nNearFull: number; nInWindow: number; fellBack: boolean; confidence: "high" | "medium" | "low"; windowNote: Bi; minutesTypical: number | null; load: MatchUnitMetric; hsr: MatchUnitMetric; sprint: MatchUnitMetric; distance: MatchUnitMetric; accel: MatchUnitMetric; decel: MatchUnitMetric; accHiEff: MatchUnitMetric; decHiEff: MatchUnitMetric; stride: MatchUnitMetric; rhie: MatchUnitMetric; symmetry: MatchUnitMetric; metPower: MatchUnitMetric; imaCod: MatchUnitMetric };
 type WeekTargetPlan = { phase: "preseason" | "inseason"; sessionCount: number; weeklyLoadTarget: number | null; perSessionLoad: number | null; matchMultiple: number | null; topUp: number | null; note: Bi; cite: string };
 type RecentBaseline = { sessions: number; playerLoad: number | null; hsrM: number | null; distanceM: number | null; sprintM: number | null };
 type Player = { playerId: string; name: string; position: string | null; masKmh: number | null; masSource: string | null; masAgeDays: number | null; intervals: Interval[]; vbt: Vbt; strengthFallback: StrengthDefault | null; vald: Vald; gaps: Gap[]; matchUnit: MatchUnit; weekTargets: { preseason: WeekTargetPlan; inseason: WeekTargetPlan; current: "preseason" | "inseason" }; recentMinutesAvg: number | null; recentBaseline: RecentBaseline | null };
-type TeamAvg = { sessions: number; players: number; distanceM: number | null; hsrM: number | null; sprintM: number | null; maxKmh: number | null; playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null; direction: { forward: number; backward: number; lateral: number } | null; matchSessions: number; matchDistanceM: number | null; matchHsrM: number | null; matchPlayerLoad: number | null; matchSprintM: number | null; matchAccel: number | null; matchDecel: number | null; accelHiEff: number | null; decelHiEff: number | null; strideHi: number | null; matchAccelHiEff: number | null; matchDecelHiEff: number | null; matchStrideHi: number | null; rhieBouts: number | null; runSymmetry: number | null; metabolicPower: number | null };
+type TeamAvg = { sessions: number; players: number; distanceM: number | null; hsrM: number | null; sprintM: number | null; maxKmh: number | null; playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null; direction: { forward: number; backward: number; lateral: number } | null; matchSessions: number; matchDistanceM: number | null; matchHsrM: number | null; matchPlayerLoad: number | null; matchSprintM: number | null; matchAccel: number | null; matchDecel: number | null; imaCod: number | null; matchImaCod: number | null; accelHiEff: number | null; decelHiEff: number | null; strideHi: number | null; matchAccelHiEff: number | null; matchDecelHiEff: number | null; matchStrideHi: number | null; rhieBouts: number | null; runSymmetry: number | null; metabolicPower: number | null };
 type AxisMetric = { metric: Bi; matchValue: string; trainingCeiling: string; band: string };
 type Axis = { axis: "running" | "mechanical" | "internal"; label: Bi; matchNote: Bi; metrics: AxisMetric[]; flag: Bi | null };
 type MatchAxes = { running: Axis; mechanical: Axis; internal: Axis; hsrDeficit: Bi | null; mechNeglect: Bi | null; capabilities: Bi[] };
@@ -79,6 +79,7 @@ const kpiAvgFromUnit = (mu: MatchUnit): Partial<Record<WeeklyLoadMetricKey, numb
   if (mu.hsr.typical != null && mu.sprint.typical != null && mu.hsr.typical > mu.sprint.typical) out.velocityBand5 = Math.round(mu.hsr.typical - mu.sprint.typical);
   if (mu.accel.typical != null) out.accelB23 = mu.accel.typical;
   if (mu.decel.typical != null) out.decelB23 = mu.decel.typical;
+  if (mu.imaCod.typical != null) out.imaCod = mu.imaCod.typical;
   return out;
 };
 // Team KPI average across players who have a match unit (mean per KPI).
@@ -3707,13 +3708,19 @@ export default function PeriodizationHubPage() {
               ?? (((plan.teamBaseline?.md?.days?.length ?? 0) > 0) ? plan.teamBaseline : null);
             const mdOffL = (label: string) => { const m = /MD([+-]\d+)/.exec(label); return m ? Number(m[1]) : 0; };
             const playsMatches = (mu.minutesTypical ?? player.recentMinutesAvg ?? 0) >= 20 || mu.nNearFull > 0;
-            const KROWS = ([
+            // Accel/decel are Catapult IMA events on a Pro feed (loader coalesces ima_accel ?? accelerations),
+            // plain GPS effort-counts otherwise — so the row labels follow the tier. IMA CoD is the summed clock.
+            const imaSrc = plan.tier.tier === "pro";
+            type Tf = "playerLoad" | "distanceM" | "hsrM" | "sprintM" | "accel" | "decel" | "imaCod";
+            type Mf = "matchPlayerLoad" | "matchDistanceM" | "matchHsrM" | "matchSprintM" | "matchAccel" | "matchDecel" | "matchImaCod";
+            const KROWS: Array<{ en: string; is: string; u: string; tf: Tf; mf: Mf; pm: number | null }> = ([
               { en: "Player Load", is: "Player Load", u: "", tf: "playerLoad", mf: "matchPlayerLoad", pm: mu.load.typical },
               { en: "Total distance", is: "Heildar-vegalengd", u: "m", tf: "distanceM", mf: "matchDistanceM", pm: mu.distance.typical },
               { en: "High-speed running", is: "Háhraðahlaup", u: "m", tf: "hsrM", mf: "matchHsrM", pm: mu.hsr.typical },
               { en: "Sprint distance", is: "Sprett-vegalengd", u: "m", tf: "sprintM", mf: "matchSprintM", pm: mu.sprint.typical },
-              { en: "Accelerations (B2–3)", is: "Hröðun (B2–3)", u: "#", tf: "accel", mf: "matchAccel", pm: mu.accel.typical },
-              { en: "Decelerations (B2–3)", is: "Hemlun (B2–3)", u: "#", tf: "decel", mf: "matchDecel", pm: mu.decel.typical },
+              { en: imaSrc ? "Accelerations (IMA)" : "Accelerations (B2–3)", is: imaSrc ? "Hröðun (IMA)" : "Hröðun (B2–3)", u: "#", tf: "accel", mf: "matchAccel", pm: mu.accel.typical },
+              { en: imaSrc ? "Decelerations (IMA)" : "Decelerations (B2–3)", is: imaSrc ? "Hemlun (IMA)" : "Hemlun (B2–3)", u: "#", tf: "decel", mf: "matchDecel", pm: mu.decel.typical },
+              { en: "IMA CoD (change of direction)", is: "IMA stefnubreytingar", u: "#", tf: "imaCod", mf: "matchImaCod", pm: mu.imaCod.typical },
             ] as const).filter((r) => r.pm != null);
             // ONE representative 7-day microcycle (recovery MD+1/+2 + build MD-4…MD-1). The profile holds a
             // bucket for EVERY MD-offset the season ever saw (incl. long-gap MD-5/MD-6 and MD+3), but those
@@ -4032,13 +4039,17 @@ export default function PeriodizationHubPage() {
               ? (is ? `Leikeining ${player.name}s — miðgildi ${player.matchUnit.nNearFull} ~90-mín leikja` : `${player.name}'s match unit — median of ${player.matchUnit.nNearFull} ~90-min matches`)
               : teamHasOwn ? (is ? "Meðaltal úr leikjum liðsins (fáir heilir leikir hjá honum)" : "Team match average (few full matches of his own)")
               : (is ? "Stöðuviðmið (engin leikgögn enn)" : "Positional norm (no match data yet)");
-            const KPIS = ([
+            // Accel/decel are Catapult IMA events on a Pro feed (ima_accel ?? accelerations), plain GPS
+            // effort-counts otherwise — so the labels follow the tier. IMA CoD = his summed match clock.
+            const imaSrc = plan.tier.tier === "pro";
+            const KPIS: Array<{ k: WeeklyLoadMetricKey; en: string; is: string; u: string }> = ([
               { k: "totalPlayerLoad", en: "Player Load", is: "Player Load", u: "" },
               { k: "totalDistance", en: "Total distance", is: "Heildar-vegalengd", u: "m" },
               { k: "velocityBand5", en: "High-speed running", is: "Háhraðahlaup", u: "m" },
               { k: "velocityBand6", en: "Sprint distance", is: "Sprett-vegalengd", u: "m" },
-              { k: "accelB23", en: "Accelerations (B2–3)", is: "Hröðun (B2–3)", u: "#" },
-              { k: "decelB23", en: "Decelerations (B2–3)", is: "Hemlun (B2–3)", u: "#" },
+              { k: "accelB23", en: imaSrc ? "Accelerations (IMA)" : "Accelerations (B2–3)", is: imaSrc ? "Hröðun (IMA)" : "Hröðun (B2–3)", u: "#" },
+              { k: "decelB23", en: imaSrc ? "Decelerations (IMA)" : "Decelerations (B2–3)", is: imaSrc ? "Hemlun (IMA)" : "Hemlun (B2–3)", u: "#" },
+              { k: "imaCod", en: "IMA CoD (change of direction)", is: "IMA stefnubreytingar", u: "#" },
             ] as const).filter((r) => (matchKpiAvg as Partial<Record<string, number>>)[r.k] != null);
             // Weakness-steer (the "Individualised build-up" card) biases the ramp: the axes he's behind on
             // ramp to a HIGHER peak. "Neutral ramp (no bias)" (steerNeutral) switches it off → a uniform ramp.
@@ -4046,7 +4057,7 @@ export default function PeriodizationHubPage() {
             const boostOf = (k: string): number => {
               if (!biasOn || !steer) return 1;
               if (k === "velocityBand5" || k === "velocityBand6") return steer.hsrBoost ?? 1;   // running axis
-              if (k === "accelB23" || k === "decelB23") return steer.mechBoost ?? 1;             // mechanical axis
+              if (k === "accelB23" || k === "decelB23" || k === "imaCod") return steer.mechBoost ?? 1; // mechanical / CoD axis
               return 1;
             };
             const emphWords: string[] = [];

@@ -11,7 +11,7 @@ function matchUnit(over: Partial<MatchUnit>): MatchUnit {
     nNearFull: 6, nInWindow: 6, fellBack: false, confidence: "high",
     windowNote: { en: "", is: "" }, minutesTypical: 90,
     load: NIL, hsr: NIL, sprint: NIL, distance: NIL, accel: NIL, decel: NIL,
-    accHiEff: NIL, decHiEff: NIL, stride: NIL, rhie: NIL, symmetry: NIL, metPower: NIL,
+    accHiEff: NIL, decHiEff: NIL, stride: NIL, rhie: NIL, symmetry: NIL, metPower: NIL, imaCod: NIL,
     ...over,
   };
 }
