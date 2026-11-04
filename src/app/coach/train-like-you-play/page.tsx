@@ -384,11 +384,10 @@ export default function TrainLikeYouPlayPage() {
               />
             </div>
           )}
+          {/* Thin summary strip — no title here (the header card + verdict kicker already name the
+              page); just the reading hint and the exposure-gap count. */}
           <div className="tlp-sec flex items-end justify-between border-b border-slate-200 pb-3">
-            <div>
-              <div className="text-lg font-bold text-slate-900">{IS ? "Þjálfa eins og þú spilar" : "Train like you play"}</div>
-              <div className="text-xs text-slate-500">{IS ? "Tölur = besta þjálfun sem % af leik-kröfu" : "Numbers = best training as % of match demand"} · {season}</div>
-            </div>
+            <div className="text-xs text-slate-500">{IS ? "Tölur = besta þjálfun sem % af leik-kröfu" : "Numbers = best training as % of match demand"} · {season}</div>
             <div className="text-right">
               <div className="text-2xl font-bold tabular-nums text-slate-900">{playersWithGaps}<span className="text-sm font-normal text-slate-400">/{players.length}</span></div>
               <div className="text-[11px] text-slate-500">{IS ? "með exposure-gap" : "with an exposure gap"}{totalGaps > 0 ? ` · ${totalGaps} ${IS ? "alls" : "total"}` : ""}</div>
