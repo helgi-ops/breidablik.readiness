@@ -19,7 +19,8 @@ import PageCrossRef from "@/components/coach/PageCrossRef";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
 import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
-import { computeBuildUpSteer, TLYP_METRIC_AXIS, type BuildUpSteer, type WeaknessInput, type ExposureInput, type ShapeDirInput } from "@/lib/micropulse/periodization/buildUpSteer";
+import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput, type ExposureInput, type ShapeDirInput } from "@/lib/micropulse/periodization/buildUpSteer";
+import { exposuresFromTlyp, shapeDirsFromShape } from "@/lib/micropulse/trainingNeeds";
 import { buildPlayerBlock, pickActiveBlock } from "@/lib/micropulse/periodization/playerBlock";
 import { classifyInSeasonSubPhase, subPhaseInfo, SUBPHASE_KEYS, type InSeasonSubPhaseKey } from "@/lib/micropulse/periodization/inSeasonSubPhase";
 import { strengthForBlockGoal, STRENGTH_METHODS } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
@@ -782,12 +783,7 @@ export default function PeriodizationHubPage() {
         if (!alive || !res.ok) return;
         const map = new Map<string, ExposureInput[]>();
         for (const p of (j.players ?? []) as Array<{ id: string; metrics: Record<string, { flag?: string; pct?: number | null }> }>) {
-          const exps: ExposureInput[] = [];
-          for (const [key, cell] of Object.entries(p.metrics ?? {})) {
-            const ax = TLYP_METRIC_AXIS[key];
-            if (!ax || (cell?.flag !== "under" && cell?.flag !== "gap")) continue;
-            exps.push({ key, axis: ax.axis, label: ax.label, flag: cell.flag as "under" | "gap", pct: cell.pct ?? null });
-          }
+          const exps = exposuresFromTlyp(p.metrics); // shared assembler — one needs model
           if (exps.length) map.set(p.id, exps);
         }
         if (alive) setTlypExposures(map);
@@ -808,7 +804,7 @@ export default function PeriodizationHubPage() {
         const res = await fetch(`/api/coach/player/${encodeURIComponent(selId)}/train-vs-play-shape`, { headers: { Authorization: await authHeader() } });
         const j = await res.json().catch(() => ({}));
         const under = j?.ok && j?.hasData ? (j.windows?.season?.underTrained ?? []) : [];
-        if (alive) setShapeDirs((under as Array<{ dir: string; delta: number }>).map((u) => ({ dir: u.dir, delta: u.delta })));
+        if (alive) setShapeDirs(shapeDirsFromShape(under as Array<{ dir: string; delta: number }>)); // shared assembler
       } catch { if (alive) setShapeDirs([]); }
     })();
     return () => { alive = false; };
