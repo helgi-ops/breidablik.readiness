@@ -27,7 +27,6 @@ import { strengthForBlockGoal, STRENGTH_METHODS } from "@/lib/micropulse/strengt
 import { QUALITY_BY_ID, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { buildValdTrainingPlan, valdHasData, type ValdTrainingPlan } from "@/lib/micropulse/vald/valdSummary";
 import type { ValdSlice } from "@/components/coach/ValdAssessmentBlock";
-import ProgressiveOverloadCard from "@/components/coach/ProgressiveOverloadCard";
 import BuildUpTrackingCard from "@/components/coach/BuildUpTrackingCard";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
 import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
@@ -820,31 +819,6 @@ export default function PeriodizationHubPage() {
     return computeBuildUpSteer(w, selExposures, shapeDirs);
   }, [steerData, selExposures, shapeDirs]);
   const steerActive = !!steer && !steerNeutral && steer.hasHard;
-  // Translate the axis boosts → the build-up card's per-KPI weekly-rate emphasis (same LoadKpi keys the
-  // progressive-overload engine ramps). hsr axis → running KPIs; mech axis → the Acc/Dec effort KPIs.
-  const poEmphasis = React.useMemo(() => {
-    if (!steerActive || !steer) return undefined;
-    const e: Record<string, number> = {};
-    if (steer.hsrBoost > 1) for (const k of ["hsr", "sprint", "ima"]) e[k] = steer.hsrBoost;
-    if (steer.mechBoost > 1) for (const k of ["accel", "decel", "efforts", "imaAccel", "imaDecel", "imaCod"]) e[k] = steer.mechBoost;
-    return Object.keys(e).length ? e : undefined;
-  }, [steerActive, steer]);
-
-  // The canonical match reference for the Build-up ramp = this player's own match unit (the median of his
-  // ~90-min matches — the SAME base the Meso block + Player Demands use). Passed to ProgressiveOverloadCard
-  // so the ramp ceiling is a true match, not the engine's GPS peak-day guess (which could land below his
-  // current training and flatline). Keeps the two surfaces consistent. IMA event counts / jumps aren't in
-  // the match unit, so those KPIs keep the engine's own reference.
-  const poMatchRef = React.useMemo(() => {
-    const mu = player?.matchUnit;
-    if (!mu) return undefined;
-    const r: Record<string, number> = {};
-    const set = (k: string, v: number | null | undefined) => { if (v != null && Number.isFinite(v) && v > 0) r[k] = v; };
-    set("totalDistance", mu.distance.typical); set("playerLoad", mu.load.typical); set("hsr", mu.hsr.typical);
-    set("sprint", mu.sprint.typical); set("accel", mu.accel.typical); set("decel", mu.decel.typical);
-    set("ima", mu.stride.typical);
-    return Object.keys(r).length ? r : undefined;
-  }, [player]);
 
   // Build ONE player's individualised block — his own match unit + position tilt + VALD ceiling + minutes
   // trim, plus the optional weakness-steer bias. Reused for the on-screen selected player AND every player
@@ -3884,8 +3858,8 @@ export default function PeriodizationHubPage() {
             if (steer.exposureTargets.length) drivers.push(`${is ? "vanþjálfað vs leikur" : "under-trained vs matches"}: ${topExp.slice(0, 2).map(lbl).join(is ? " og " : " and ")}`);
             if (hardDir.length) drivers.push(`${is ? "hreyfi-stefna" : "movement direction"}: ${hardDir.slice(0, 2).map((d) => dirWord(d.family)).join(is ? " og " : " and ")}`);
             const verdict = is
-              ? `Uppbygging ${player.name}s forgangsraðar — ${drivers.join("; ")}${emphAxes.length && steerActive ? `, rampar ${emphAxes.join(" + ")} hraðast að leikviðmiðinu` : ""}.`
-              : `${player.name}'s build-up prioritises — ${drivers.join("; ")}${emphAxes.length && steerActive ? `, ramping ${emphAxes.join(" + ")} fastest toward the match unit` : ""}.`;
+              ? `Uppbygging ${player.name}s forgangsraðar — ${drivers.join("; ")}${emphAxes.length && steerActive ? `, leggðu áherslu á ${emphAxes.join(" + ")} í uppbyggingunni` : ""}.`
+              : `${player.name}'s build-up prioritises — ${drivers.join("; ")}${emphAxes.length && steerActive ? `, emphasise ${emphAxes.join(" + ")} in the build-up` : ""}.`;
             return (
             <section className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-center gap-2">
@@ -3950,20 +3924,67 @@ export default function PeriodizationHubPage() {
             );
           })()}
 
-          {/* BUILD-UP PLAN — the harvested Progressive Overload engine: ramp each player from current baseline
-              TO his match unit. A PRE-SEASON / return-to-play tool, so it shows in the pre-season view; in-season
-              the typical week is the Player Demands card instead. Reuses ProgressiveOverloadCard (its own fetch). */}
-          {effPhase === "preseason" ? (
-          <section className="rounded-xl border border-slate-200 bg-white p-4">
-            <h2 className="text-[15px] font-bold text-slate-900">{is ? "Uppbyggingar-áætlun (undirbúningur / aftur í leik)" : "Build-up plan (pre-season / return-to-play)"}</h2>
-            <p className="mt-1 mb-2 text-[11px] text-slate-500">{is ? `Örugg vikuleg þróun frá núverandi grunnlínu AÐ leikviðmiði${player ? ` ${player.name}s` : " leikmanns"} — magn hraðast, háhraði/sprettur hægast (aftanlæri).${steerActive ? " Áherslu-KPI (veikleika-stýrð) rampa hraðar, innan sömu þaka." : ""} Aðal-þakið er leikkrafan + bráðaálags-þróun; ACWR er umdeilt aukagildi. Lýsandi — aldrei readiness-liturinn.` : `A safe weekly ramp from current baseline TO ${player ? `${player.name}'s` : "the player's"} match unit — volume fastest, HSR/sprint slowest (hamstring).${steerActive ? " The emphasised KPIs (weakness-steered) ramp faster, within the same caps." : ""} The primary ceiling is match demand + acute-load trend; ACWR is a contested secondary readout. Descriptive — never the readiness colour.`}</p>
-            <ProgressiveOverloadCard weeks={blkWeeks} playerId={selId || undefined} emphasis={poEmphasis} matchRef={poMatchRef} focusLabel={player?.name} sessionsPerWeek={standardTrainingDays(1, isBasketball ? "basketball" : null).length} />
-          </section>
-          ) : (
+          {/* BUILD-UP PLAN — MATCH-ANCHORED pre-season ramp (same engine as the Pre-season tab: preseasonStartRamp).
+              Week 1 = controlled re-entry (~1.3× a match), ramping to the pre-season build. GPS-free: it reads
+              his own match unit, else the squad's match average, else a positional norm — never a GPS baseline. */}
+          {effPhase === "preseason" ? (() => {
+            const hasOwn = player.matchUnit.load.typical != null;
+            const teamKpi = teamKpiAvg(plan.players);
+            const teamHasOwn = teamKpi.totalPlayerLoad != null && Number.isFinite(teamKpi.totalPlayerLoad);
+            const matchKpiAvg = hasOwn ? kpiAvgFromUnit(player.matchUnit) : (teamHasOwn ? teamKpi : (NORMATIVE_MATCH_KPI as Partial<Record<WeeklyLoadMetricKey, number>>));
+            const matchLoad = hasOwn ? player.matchUnit.load.typical! : (teamHasOwn ? teamKpi.totalPlayerLoad! : NORMATIVE_MATCH_LOAD);
+            const anchor: LoadAnchor = hasOwn || teamHasOwn ? "match_this_season" : "normative";
+            const preWeeksN = plan.phases.find((p) => p.key === "preseason")?.weeks ?? blkWeeks;
+            const ramp = preseasonStartRamp({ matchTypicalLoad: matchLoad, matchKpiAvg, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeksN, week1MatchMultiple: psW1, anchor });
+            const fmt = (v: number | null | undefined) => (v == null ? "–" : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
+            const peakMult = ramp.length ? ramp[ramp.length - 1].multipleOfMatch : null;
+            const srcLabel = hasOwn
+              ? (is ? `Leikeining ${player.name}s — miðgildi ${player.matchUnit.nNearFull} ~90-mín leikja` : `${player.name}'s match unit — median of ${player.matchUnit.nNearFull} ~90-min matches`)
+              : teamHasOwn ? (is ? "Meðaltal úr leikjum liðsins (fáir heilir leikir hjá honum)" : "Team match average (few full matches of his own)")
+              : (is ? "Stöðuviðmið (engin leikgögn enn)" : "Positional norm (no match data yet)");
+            const KPIS = ([
+              { k: "totalPlayerLoad", en: "Player Load", is: "Player Load", u: "" },
+              { k: "totalDistance", en: "Total distance", is: "Heildar-vegalengd", u: "m" },
+              { k: "velocityBand5", en: "High-speed running", is: "Háhraðahlaup", u: "m" },
+              { k: "velocityBand6", en: "Sprint distance", is: "Sprett-vegalengd", u: "m" },
+              { k: "accelB23", en: "Accelerations (B2–3)", is: "Hröðun (B2–3)", u: "#" },
+              { k: "decelB23", en: "Decelerations (B2–3)", is: "Hemlun (B2–3)", u: "#" },
+            ] as const).filter((r) => (matchKpiAvg as Partial<Record<string, number>>)[r.k] != null || ramp.some((w) => w.byKpi[r.k] != null));
+            return (
+            <section className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h2 className="text-[15px] font-bold text-slate-900">{is ? "Uppbyggingar-áætlun (undirbúningur)" : "Build-up plan (pre-season)"}</h2>
+                <span className="rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#2740e6]">{player.name}</span>
+                <span className="text-[12px] text-slate-500">{is ? `Vika 1 = stýrð endurkoma (${psW1}× leik) → ${peakMult != null ? `${peakMult}× leik` : "uppbygging"} yfir ${psSess} æfingar/viku.` : `Week 1 = controlled re-entry (${psW1}× match) → ${peakMult != null ? `${peakMult}× match` : "the build"} across ${psSess} sessions/wk.`}</span>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500">{is ? `Fest á LEIK (ekki GPS-grunnlínu): ${srcLabel}. Magn (vegalengd, PL) rampar hraðast; háhraði/sprettur hægast (aftanlæri). Lýsandi — aldrei readiness-liturinn.` : `Anchored on the MATCH (not a GPS baseline): ${srcLabel}. Volume (distance, PL) ramps fastest; HSR/sprint slowest (hamstring). Descriptive — never the readiness colour.`}</p>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full text-[12.5px]">
+                  <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
+                    <th className="py-1 pr-2 font-medium">{is ? "KPI (vika)" : "KPI (per week)"}</th>
+                    {ramp.map((w) => <th key={w.weekIndex} className="py-1 px-2 text-right font-medium"><div>{is ? "V" : "Wk"}{w.weekIndex}</div><div className="text-[9px] font-normal normal-case text-slate-400">{w.multipleOfMatch != null ? `×${w.multipleOfMatch}` : ""}</div></th>)}
+                    <th className="py-1 pl-2 text-right font-medium">{is ? "Leikur" : "Match"}</th>
+                  </tr></thead>
+                  <tbody>
+                    {KPIS.map((r) => (
+                      <tr key={r.k} className="border-t border-slate-100">
+                        <td className="py-1.5 pr-2 text-slate-700">{is ? r.is : r.en}</td>
+                        {ramp.map((w) => <td key={w.weekIndex} className="py-1.5 px-2 text-right tabular-nums text-slate-600">{fmt(w.byKpi[r.k])}{r.u}</td>)}
+                        <td className="py-1.5 pl-2 text-right tabular-nums text-slate-400">{fmt((matchKpiAvg as Partial<Record<string, number>>)[r.k])}{r.u}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-[11px] text-slate-400">{is
+                ? `Vikuleg heildarmörk (≈ ÷${psSess} ≈ per æfingu). Hver KPI stiglar frá endurkomu-gólfi að toppi; háhraði/sprettur toppa lægra (taper). Engin GPS-saga þarf — fest á leik. Upphafspunktur, ekki viðmið (Little & Buchheit). Lýsandi — aldrei readiness-liturinn.`
+                : `Weekly totals (≈ ÷${psSess} ≈ per session). Each KPI ramps from a re-entry floor to its peak; HSR/sprint peak lower (taper). No GPS history needed — anchored on the match. A starting point, not a norm (Little & Buchheit). Descriptive — never the readiness colour.`}</p>
+            </section>
+            );
+          })() : (
           <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-[12px] text-slate-500">
-            {is ? "Keppnistímabil — Uppbyggingar-rampinn er undirbúnings-/aftur-í-leik verkfæri. Dæmigerða vikan er „Leikmanns-kröfur“ að ofan." : "In-season — the Build-up ramp is a pre-season / return-to-play tool. The typical week is the “Player Demands” card above."}{" "}
+            {is ? "Keppnistímabil — Uppbyggingar-rampinn er undirbúnings-verkfæri. Dæmigerða vikan er „Leikmanns-kröfur“ að ofan." : "In-season — the Build-up ramp is a pre-season tool. The typical week is the “Player Demands” card above."}{" "}
             <button type="button" onClick={() => setPhaseOverride("preseason")} className="font-semibold text-[#2740e6] hover:underline">{is ? "Skipta í undirbúning →" : "Switch to Pre-season →"}</button>
-            <span className="text-slate-400">{is ? " (t.d. fyrir leikmann á leið aftur eftir meiðsli)" : " (e.g. for a player returning from injury)"}</span>
           </div>
           )}
               </>)}
