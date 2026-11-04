@@ -18,6 +18,7 @@ import VerdictBanner, { type VerdictDriver, type VerdictTone } from "@/component
 import TlypTrainingFocus, { type FocusGroup } from "@/components/coach/TlypTrainingFocus";
 import TrainingReadPanel from "@/components/coach/TrainingReadPanel";
 import TlypMovementShapeCard from "@/components/coach/TlypMovementShapeCard";
+import { DEFAULT_MD_MICROCYCLE, TACTICAL_PERIODIZATION_MORPHOCYCLE, type MdDaySpec } from "@/lib/micropulse/periodization/periodizationModel";
 
 type MetricKey =
   | "top_speed" | "fmp_run_high" | "fmp_dyn_high" | "fmp_dyn_med"
@@ -125,6 +126,39 @@ export default function TrainLikeYouPlayPage() {
     finally { setLoading(false); }
   }, [token, IS]);
   useEffect(() => { void load(season); }, [load, season]);
+
+  // Plan-aware microcycle band: reflect the team's chosen periodization model (its per-MD
+  // intensity caps, as a share of a match) instead of a generic textbook shape — so "are they
+  // training like they play?" is read against THIS team's plan. Falls back to MD_TARGET for days
+  // the model doesn't specify (MD-5 / MD+3) or when no model is set.
+  const [planModel, setPlanModel] = useState<{ source: string; name: string; byDay: Record<string, number> } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const t = await token(); if (!t) return;
+        const res = await fetch("/api/coach/team/periodization-model", { headers: { Authorization: `Bearer ${t}` } });
+        const j = await res.json().catch(() => null);
+        if (!alive || !j?.ok) return;
+        const src = String(j.source ?? "default_md");
+        const model = src === "tactical_periodization" ? TACTICAL_PERIODIZATION_MORPHOCYCLE : DEFAULT_MD_MICROCYCLE;
+        const days: MdDaySpec[] = src === "custom" && Array.isArray(j.days) ? (j.days as MdDaySpec[]) : (model.days as MdDaySpec[]);
+        const byDay: Record<string, number> = {};
+        for (const d of days) if (d && typeof d.intensityCapPct === "number") byDay[d.mdDay] = d.intensityCapPct;
+        const name = src === "custom" ? (IS ? "Sérsniðið módel" : "Custom model") : (IS ? model.name.is : model.name.en);
+        setPlanModel({ source: src, name, byDay });
+      } catch { /* keep the textbook fallback */ }
+    })();
+    return () => { alive = false; };
+  }, [token, IS]);
+
+  // Reference band for an MD-day: the team's plan (80–100% of its intended cap) when the model
+  // specifies that day, else the textbook MD_TARGET.
+  const planBand = useCallback((label: string): { lo: number; hi: number } | null => {
+    const cap = planModel?.byDay[label];
+    if (cap != null) return { lo: Math.round(cap * 0.8), hi: cap };
+    return MD_TARGET[label] ?? null;
+  }, [planModel]);
 
   const META = useMemo<Record<MetricKey, { en: string; is: string }>>(() => ({
     top_speed: { en: "Top speed", is: "Hámarkshraði" },
@@ -327,6 +361,8 @@ export default function TrainLikeYouPlayPage() {
               tutorial="train-like-you-play"
             />
             <div className="text-xs text-slate-500">{IS ? "Besta þjálfunar-exposure vs leik-krafa (IMU — virkar innandyra). Grunnur: FMP (Catapult hreyfi-flokkar) eða hrá IMA (atburðir: hröðun, hemlun, stefnubreytingar, stökk)." : "Best training exposure vs match demand (IMU — works indoors). Basis: FMP (Catapult movement zones) or raw IMA (events: accelerations, decelerations, change-of-direction, jumps)."}</div>
+            {/* Analysis → plan: this page says what each player is under-exposed to; the hub plans the load. */}
+            <a href="/coach/periodization-hub?tab=plan" className="tlp-noprint mt-1 inline-block text-xs font-semibold text-[#2740e6] hover:underline">{IS ? "Skipuleggja álagið → Periodization Hub" : "Plan the load → Periodization Hub"}</a>
           </div>
           {/* Board-only controls — the Movement-shape tab carries its own (player + window). */}
           {view === "board" ? (
@@ -452,7 +488,7 @@ export default function TrainLikeYouPlayPage() {
                   if (c && (c.recovery || c.topup)) {
                     const recPct = c.recovery ? c.recovery.metrics[microKey] : null;
                     const topPct = c.topup ? c.topup.metrics[microKey] : null;
-                    const recBand = MD_TARGET[d.md_day] ?? null;
+                    const recBand = planBand(d.md_day);
                     const topBand = TOPUP_TARGET[d.md_day] ?? null;
                     const onPlan = (p: number | null, b: { lo: number; hi: number } | null) => p != null && b != null && p >= b.lo && p <= b.hi;
                     const parts: string[] = [];
@@ -475,7 +511,7 @@ export default function TrainLikeYouPlayPage() {
                     );
                   }
                   // Every other MD-day: single squad bar (unchanged).
-                  return <MicroBar key={d.md_day} leftLabel={d.md_day} pct={microKey ? d.metrics[microKey] : null} band={MD_TARGET[d.md_day] ?? null} sessions={d.sessions} IS={IS} />;
+                  return <MicroBar key={d.md_day} leftLabel={d.md_day} pct={microKey ? d.metrics[microKey] : null} band={planBand(d.md_day)} sessions={d.sessions} IS={IS} />;
                 })}
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-400">
@@ -484,7 +520,16 @@ export default function TrainLikeYouPlayPage() {
                 <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-amber-400" />{IS ? "undir" : "below"}</span>
                 <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-indigo-500" />{IS ? "yfir" : "above"}</span>
               </div>
-              <div className="mt-1 text-[10px] text-slate-400">{IS ? "Æskilegt bil = dæmigert vikuskipulag (lágt MD+1 og MD-1, hámark mið-viku) — viðmið, ekki regla; aðlagaðu að þínu módeli (Martin-García 2018; Akenhead 2016)." : "Desirable band = a typical periodization shape (low MD+1 & MD-1, peak mid-week) — a reference, not a rule; adjust to your model (Martin-García 2018; Akenhead 2016)."}</div>
+              <div className="mt-1 text-[10px] text-slate-400">
+                {planModel
+                  ? (IS
+                      ? `Bil = þitt periodization-módel (${planModel.name}): 80–100% af fyrirhuguðu álagsþaki hvers MD-dags. Top-up varamanna notar leik-jafngildis-bil. `
+                      : `Band = your periodization model (${planModel.name}): 80–100% of each MD-day's intended load cap. Non-starter top-up uses a match-equivalent band. `)
+                  : (IS
+                      ? "Æskilegt bil = dæmigert vikuskipulag (lágt MD+1 og MD-1, hámark mið-viku) — viðmið, ekki regla (Martin-García 2018; Akenhead 2016). "
+                      : "Desirable band = a typical periodization shape (low MD+1 & MD-1, peak mid-week) — a reference, not a rule (Martin-García 2018; Akenhead 2016). ")}
+                <a href="/coach/periodization-hub?tab=plan" className="tlp-noprint font-semibold text-[#2740e6] hover:underline">{IS ? "Breyta í Periodization Hub →" : "Edit in Periodization Hub →"}</a>
+              </div>
               <div className="mt-1 text-[10px] text-slate-400">{IS ? "Hver % = heildar-magn æfingar sem hlutfall af heildar-magni heils leiks (ekki per-90 hraði — það blæs upp stuttar sessionir). MD+1/MD+2 skipt í tvennt: leikmenn sem spiluðu fullan skammt (≥60 mín) eru í endurheimt; allir aðrir (varamenn, takmarkaðar eða engar mínútur) gera „top-up\" til að bæta upp leik-áreitið sem þá vantaði — hvor með sitt æskilegt bil (Anderson 2016; Hills 2018; Nédélec 2012). „!\" = fá úrtök, lítið traust." : "Each % = the session's total volume as a share of a full match's total (not a per-90 rate — that inflates short sessions). MD+1/MD+2 are split in two: players who played a full shift (≥60 min) are recovering; everyone else (subs, limited or no minutes) does a compensatory “top-up” to replace the match stimulus they missed — each against its own desirable band (Anderson 2016; Hills 2018; Nédélec 2012). “!” = few sessions, low confidence."}</div>
             </div>
           )}
@@ -509,7 +554,7 @@ export default function TrainLikeYouPlayPage() {
                       {g.members.map((p) => (
                         <tr key={p.id} className={`border-t border-slate-100 ${p.modeGaps > 0 ? "bg-red-50/30" : ""}`}>
                           <td className="px-2 py-1.5">
-                            <span className="font-medium text-slate-800">{p.name}</span>
+                            <a href={`/coach/periodization-hub?tab=players&player=${encodeURIComponent(p.id)}`} className="font-medium text-slate-800 hover:text-[#2740e6] hover:underline" title={IS ? "Skipuleggja þennan leikmann í Periodization Hub" : "Plan this player in the Periodization Hub"}>{p.name}</a>
                             <span className="ml-1 text-[10px] text-slate-400">{p.position}</span>
                           </td>
                           {metricKeys.map((m) => {

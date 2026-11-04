@@ -198,7 +198,10 @@ export default function PeriodizationHubPage() {
   const [loading, setLoading] = React.useState(true);
   const [mapWide, setMapWide] = React.useState(false); // season map: break out to full viewport width
   const [err, setErr] = React.useState<string | null>(null);
-  const [selId, setSelId] = React.useState("");
+  const [selId, setSelId] = React.useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("player") ?? ""; // deep-link from Train like you Play
+  });
   const [preStart, setPreStart] = React.useState("");   // coach-set pre-season start (e.g. December)
   const [seasonEnd, setSeasonEnd] = React.useState("");  // coach-set season end (e.g. late October)
   const [nextPreStart, setNextPreStart] = React.useState(""); // coach-set NEXT pre-season start — bounds the off-season by date
@@ -413,7 +416,8 @@ export default function PeriodizationHubPage() {
       const map: Record<string, { dayType: string; focus: string | null }> = {};
       for (const r of wp) if (r?.day_date) map[r.day_date] = { dayType: String(r.day_type ?? "").toUpperCase(), focus: r.focus ?? null };
       setSavedPlans(map);
-      setSelId((prev) => prev || ((j.plan as Plan).players?.[0]?.playerId ?? ""));
+      // Keep a valid deep-linked player (?player=) if it's in the roster, else default to the first.
+      setSelId((prev) => (prev && (j.plan as Plan).players?.some((p) => p.playerId === prev) ? prev : ((j.plan as Plan).players?.[0]?.playerId ?? "")));
     } catch (e) { setErr(e instanceof Error ? e.message : "Failed"); }
     finally { setLoading(false); }
   }, [authHeader]);
@@ -3440,6 +3444,8 @@ export default function PeriodizationHubPage() {
               <button type="button" onClick={() => nextP && setSelId(nextP.playerId)} disabled={!nextP} aria-label={is ? "Næsti leikmaður" : "Next player"} className="h-10 w-10 rounded-lg border border-slate-300 bg-white text-[18px] text-slate-700 hover:bg-slate-50 disabled:opacity-40">›</button>
             </div>
             {player?.position && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-semibold text-slate-700">{player.position}</span>}
+            {/* Back to the analysis that says what to plan toward. */}
+            <a href="/coach/train-like-you-play" className="text-[12px] font-semibold text-[#2740e6] hover:underline" title={is ? "Sjá exposure-göt og hreyfi-lögun" : "See exposure gaps & movement shape"}>{is ? "Train like you Play →" : "Train like you Play →"}</a>
             <div className="flex min-w-0 flex-[1_1_320px] flex-wrap gap-1.5">
               {chips.map((c) => (
                 <span key={c.label} title={c.title} className="inline-flex min-h-[30px] items-center gap-1.5 rounded-full px-2.5 text-[12px] font-semibold" style={{ background: TONE[c.tone].bg, color: TONE[c.tone].c }}>
