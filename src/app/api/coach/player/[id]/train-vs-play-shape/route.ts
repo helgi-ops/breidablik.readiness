@@ -28,7 +28,13 @@ export const runtime = "nodejs";
 const MIN_MATCH_MIN = 20;
 const MIN_TRAIN_MIN = 20;
 const MIN_MATCHES_CONFIDENT = 5; // same threshold seasonTrends uses to scope to matches
-const TVD_FLAG = 0.2;            // ~20% of his movement in different directions = a notable gap
+const MIN_TRAIN_CONFIDENT = 3;   // training sessions with the clock in a window for a confident read
+const RECENT_DAYS = 28;          // the "last 4 weeks" training window
+// Shape-gap bands (TVD = share of his directional movement in different directions than his games).
+// Reasoned defaults — no published IMA-clock train-vs-game norm exists — so they're tunable:
+//   < WATCH = OK (trains like he plays) · WATCH–FLAG = watch · ≥ FLAG = a real specificity gap.
+const TVD_WATCH = 0.1;
+const TVD_FLAG = 0.2;
 
 type Row = {
   date: string;
@@ -87,11 +93,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const matchDates = new Set<string>([...scheduledDates, ...minByDate.keys()]);
 
   const rows = (rowsData ?? []) as Row[];
+  const recentCut = new Date(Date.parse(today + "T00:00:00Z") - RECENT_DAYS * 86_400_000).toISOString().slice(0, 10);
+
+  // GAME side = the stable season reference (how he actually plays). The toggle later switches only
+  // the TRAINING window, since 4 weeks rarely holds enough matches for a stable game baseline.
   const matchGrids: Array<ClockGrid | null> = [];
-  const trainGrids: Array<ClockGrid | null> = [];
-  let matchMin = 0, trainMin = 0;
+  let matchMin = 0;
   const matchDaysWithClock = new Set<string>();
-  const trainDaysWithClock = new Set<string>();
+  // Training rows kept with date + minutes so a window can filter them without re-querying.
+  const trainRows: Array<{ date: string; grid: ClockGrid | null; min: number; hasClock: boolean }> = [];
 
   for (const r of rows) {
     const mins = minutesOf(r);
@@ -107,61 +117,71 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     } else {
       // A training day.
       if ((mins ?? 0) < MIN_TRAIN_MIN) continue;
-      trainGrids.push(r.ima_clock_gen2);
-      if (hasClock) { trainMin += mins as number; trainDaysWithClock.add(r.date); }
+      trainRows.push({ date: r.date, grid: r.ima_clock_gen2, min: mins as number, hasClock });
     }
   }
 
   const gameVector = gridShares(sumClocks(matchGrids));
-  const trainVector = gridShares(sumClocks(trainGrids));
-  const hasData = !!gameVector && !!trainVector;
+  const nMatches = matchDaysWithClock.size;
 
-  if (!hasData) {
+  // Need a game baseline to compare anything against.
+  if (!gameVector) {
     return NextResponse.json({
       ok: true, player_id: playerId, name: p.full_name, position: p.position, hasData: false,
-      nMatchesWithClock: matchDaysWithClock.size, nTrainWithClock: trainDaysWithClock.size,
+      nMatchesWithClock: nMatches, nTrainWithClock: new Set(trainRows.filter((t) => t.hasClock).map((t) => t.date)).size,
     });
   }
 
   const gameLoad = directionalMechLoad(matchGrids, matchMin || null);
-  const trainLoad = directionalMechLoad(trainGrids, trainMin || null);
-  const cmp = compareShapes(gameVector, trainVector);
+  const topGameDir = [...compareShapes(gameVector, gameVector).perDirection].sort((a, b) => b.game - a.game)[0] ?? null;
 
-  // Where he moves MOST in games — the shape he should be reproducing.
-  const topGameDir = [...cmp.perDirection].sort((a, b) => b.game - a.game)[0] ?? null;
-  const topTrainDir = [...cmp.perDirection].sort((a, b) => b.train - a.train)[0] ?? null;
-  // Per-minute mechanical-load gap: does he cut as HARD (per minute) in training as in games?
-  const loadPerMinRatio = gameLoad?.perMinTotal && trainLoad?.perMinTotal
-    ? Math.round((trainLoad.perMinTotal / gameLoad.perMinTotal) * 100) / 100
-    : null;
+  // Build the training-vs-game comparison for a training window (all rows, or ≥ cut).
+  const buildWindow = (cut?: string) => {
+    const subset = cut ? trainRows.filter((t) => t.date >= cut) : trainRows;
+    const grids = subset.map((t) => t.grid);
+    const trainMin = subset.reduce((s, t) => s + (t.hasClock ? t.min : 0), 0);
+    const nTrain = new Set(subset.filter((t) => t.hasClock).map((t) => t.date)).size;
+    const trainVector = gridShares(sumClocks(grids));
+    const trainLoad = directionalMechLoad(grids, trainMin || null);
+    const cmp = compareShapes(gameVector, trainVector);
+    const confident = nMatches >= MIN_MATCHES_CONFIDENT && nTrain >= MIN_TRAIN_CONFIDENT;
+    const calibrating = !confident && nMatches >= 2 && nTrain >= 2;
+    const band = cmp.tvd == null ? null : cmp.tvd >= TVD_FLAG ? "flag" : cmp.tvd >= TVD_WATCH ? "watch" : "ok";
+    const flagged = confident && band === "flag";
+    const topTrainDir = trainVector ? [...cmp.perDirection].sort((a, b) => b.train - a.train)[0] : null;
+    const loadPerMinRatio = gameLoad?.perMinTotal && trainLoad?.perMinTotal
+      ? Math.round((trainLoad.perMinTotal / gameLoad.perMinTotal) * 100) / 100 : null;
+    return {
+      hasTrain: !!trainVector, nTrainWithClock: nTrain,
+      confident, calibrating, band, flagged, tvd: cmp.tvd,
+      trainVector,
+      trainLoadShare: loadShareMap(trainLoad),
+      trainLoadPerMin: trainLoad?.perMinTotal ?? null, loadPerMinRatio,
+      perDirection: cmp.perDirection, underTrained: cmp.underTrained, overTrained: cmp.overTrained,
+      topTrainDir,
+    };
+  };
 
-  const nMatches = matchDaysWithClock.size;
-  const confident = nMatches >= MIN_MATCHES_CONFIDENT;
-  const calibrating = nMatches >= 2 && nMatches < MIN_MATCHES_CONFIDENT;
-  const flagged = confident && cmp.tvd != null && cmp.tvd >= TVD_FLAG;
+  const season = buildWindow();
+  const recent = buildWindow(recentCut);
 
   return NextResponse.json({
     ok: true,
     player_id: playerId,
     name: p.full_name,
     position: p.position,
-    hasData: true,
+    hasData: season.hasTrain,          // at least the season training side must exist
     nMatchesWithClock: nMatches,
-    nTrainWithClock: trainDaysWithClock.size,
-    confident, calibrating, flagged,
-    tvdFlag: TVD_FLAG,
-    tvd: cmp.tvd,
-    gameVector, trainVector,
+    recentDays: RECENT_DAYS,
+    tvdWatch: TVD_WATCH, tvdFlag: TVD_FLAG,
+    // Shared game reference (season) — same in both windows.
+    gameVector,
     gameLoadShare: loadShareMap(gameLoad),
-    trainLoadShare: loadShareMap(trainLoad),
     gameLoadPerMin: gameLoad?.perMinTotal ?? null,
-    trainLoadPerMin: trainLoad?.perMinTotal ?? null,
-    loadPerMinRatio,
-    perDirection: cmp.perDirection,
-    underTrained: cmp.underTrained,
-    overTrained: cmp.overTrained,
-    topGameDir, topTrainDir,
+    topGameDir,
     directionsOrder: DIRECTIONS,
-    note: "IMA movement shape in games vs training (12 clock directions). Descriptive movement-behaviour signal, not an injury prediction; never the readiness colour.",
+    // Per training window; the card toggles between these.
+    windows: { season, recent },
+    note: "IMA movement shape in games (season) vs training (12 clock directions). Descriptive movement-behaviour signal, not an injury prediction; never the readiness colour.",
   });
 }
