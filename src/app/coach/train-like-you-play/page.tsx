@@ -17,6 +17,7 @@ import { POSITION_GROUPS } from "@/lib/micropulse/positionStyle";
 import VerdictBanner, { type VerdictDriver, type VerdictTone } from "@/components/coach/VerdictBanner";
 import TlypTrainingFocus, { type FocusGroup } from "@/components/coach/TlypTrainingFocus";
 import TrainingReadPanel from "@/components/coach/TrainingReadPanel";
+import TlypMovementShapeCard from "@/components/coach/TlypMovementShapeCard";
 
 type MetricKey =
   | "top_speed" | "fmp_run_high" | "fmp_dyn_high" | "fmp_dyn_med"
@@ -511,6 +512,15 @@ export default function TrainLikeYouPlayPage() {
               </div>
             )}
           </div>
+
+          {/* Movement SHAPE — do they move the way they play? (IMA clock: training vs games).
+              The directional complement to the magnitude board above. Per-player; shown only
+              for clubs with IMA data. Self-hides its body when a player has no clock. */}
+          {players.length > 0 && (data?.modes?.ima?.length ?? 0) > 0 ? (
+            <div className="tlp-sec">
+              <TlypMovementShapeCard players={players.map((p) => ({ id: p.id, name: p.name }))} />
+            </div>
+          ) : null}
 
           <div className="tlp-sec rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 text-[12px] leading-relaxed text-slate-700">
             {IS

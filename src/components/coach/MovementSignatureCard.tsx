@@ -17,6 +17,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
+import ImaClockRadar, { CLOCK_LABEL as LABEL } from "@/components/coach/ImaClockRadar";
 
 type DirDrift = { dir: string; label: string; recent: number; usual: number; z: number | null };
 type Signature = {
@@ -36,62 +37,7 @@ const POS_WORD: Record<string, { en: string; is: string }> = {
   MID: { en: "midfielders", is: "miðjumenn" }, FWD: { en: "forwards", is: "framherjar" },
 };
 
-// 12 clock directions → short label (12 = straight forward, clockwise).
-const LABEL: Record<string, string> = {
-  "12": "F", "1": "FR", "2": "R+", "3": "R", "4": "RB", "5": "BR",
-  "6": "B", "7": "BL", "8": "L+", "9": "L", "10": "LF", "11": "FL",
-};
-const DIRS = ["12", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"];
-
-/** Angle (deg, clockwise from top) for a clock direction. 12→0°, 3→90°, 6→180°, 9→270°. */
-const angleOf = (d: string) => (Number(d) % 12) * 30;
-const pt = (d: string, r: number, cx: number, cy: number) => {
-  const a = (angleOf(d) * Math.PI) / 180;
-  return [cx + r * Math.sin(a), cy - r * Math.cos(a)] as const;
-};
-
-/** 12-spoke polar: usual fingerprint (dashed) + recent shape (solid, coloured) + optional position
- *  avg, with each direction beaded by its mechanical LOAD (cobalt intensity = hotter). */
-function SignatureRadar({ usual, recent, flagged, position, load }: { usual: Record<string, number> | null; recent: Record<string, number>; flagged: boolean; position?: Record<string, number> | null; load?: Record<string, number> | null }) {
-  const S = 260, cx = S / 2, cy = S / 2, maxR = 96;
-  const peak = Math.max(0.0001, ...DIRS.map((d) => Math.max(usual?.[d] ?? 0, recent[d] ?? 0, position?.[d] ?? 0)));
-  const poly = (v: Record<string, number>) =>
-    DIRS.map((d) => { const [x, y] = pt(d, ((v[d] ?? 0) / peak) * maxR, cx, cy); return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(" ");
-  const recentColor = flagged ? "#de9328" : "#1c7a4a";
-  return (
-    <svg viewBox={`0 0 ${S} ${S}`} className="mx-auto w-full max-w-[300px]" role="img" aria-label="movement signature">
-      {/* rings */}
-      {[0.33, 0.66, 1].map((f) => <circle key={f} cx={cx} cy={cy} r={maxR * f} fill="none" stroke="#e2e8f0" strokeWidth="1" />)}
-      {/* spokes + tick labels */}
-      {DIRS.map((d) => {
-        const [ex, ey] = pt(d, maxR, cx, cy);
-        const [lx, ly] = pt(d, maxR + 14, cx, cy);
-        const card = d === "12" || d === "3" || d === "6" || d === "9";
-        return (
-          <g key={d}>
-            <line x1={cx} y1={cy} x2={ex} y2={ey} stroke="#eef2f6" strokeWidth="1" />
-            <text x={lx} y={ly + 3} textAnchor="middle" fontSize={card ? 10 : 8} fontWeight={card ? 700 : 400} fill={card ? "#475569" : "#94a3b8"}>{LABEL[d]}</text>
-          </g>
-        );
-      })}
-      {/* position average (cobalt, faint fill + dashed outline) — the positional norm zone his shape sits vs */}
-      {position ? <polygon points={poly(position)} fill="#2740e6" fillOpacity="0.06" stroke="#2740e6" strokeWidth="1.5" strokeDasharray="3 2" strokeLinejoin="round" opacity="0.9" /> : null}
-      {/* usual fingerprint */}
-      {usual ? <polygon points={poly(usual)} fill="#a9a493" fillOpacity="0.10" stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="4 3" strokeLinejoin="round" /> : null}
-      {/* recent shape */}
-      <polygon points={poly(recent)} fill={recentColor} fillOpacity={flagged ? 0.12 : 0.07} stroke={recentColor} strokeWidth="2.5" strokeLinejoin="round" />
-      {/* mechanical-load heat beads — one per direction on the rim, cobalt intensity by his load share */}
-      {load ? (() => {
-        const maxL = Math.max(0.0001, ...DIRS.map((d) => load[d] ?? 0));
-        return DIRS.map((d) => {
-          const [dx, dy] = pt(d, maxR, cx, cy);
-          const t = (load[d] ?? 0) / maxL;
-          return <circle key={`ld-${d}`} cx={dx} cy={dy} r={5} fill="#2740e6" fillOpacity={0.18 + 0.82 * t} stroke="#fff" strokeWidth="0.8" />;
-        });
-      })() : null}
-    </svg>
-  );
-}
+const SignatureRadar = ImaClockRadar; // shared 12-spoke rose (extracted to ImaClockRadar)
 
 export default function MovementSignatureCard({ players, playerId }: { players: Array<{ id: string; name: string }>; playerId?: string }) {
   const [lang] = useLang();

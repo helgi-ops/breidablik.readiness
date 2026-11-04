@@ -33,6 +33,7 @@ export const DIRECTION_LABEL: Record<string, string> = {
 };
 
 const cellSum = (c?: ClockCell): number => (Number(c?.high) || 0) + (Number(c?.medium) || 0) + (Number(c?.low) || 0);
+const round = (n: number, d = 3) => { const f = 10 ** d; return Math.round(n * f) / f; };
 
 /** Total directional events in a grid. */
 export function gridTotal(grid: ClockGrid | null | undefined): number {
@@ -92,6 +93,52 @@ export function directionalMechLoad(
   return { perDirection, totalAU: Math.round(total), perMinTotal: perMinOf(total), top, minutes: min };
 }
 
+// ── Two-fingerprint comparison (e.g. training shape vs game shape) ───────────────
+//
+// Reused by "Train like you Play" (movement SHAPE): given two normalized 12-direction
+// share vectors — how a player moves in GAMES vs how he moves in TRAINING — score the
+// gap and name which directions diverge. Pure + deterministic; symmetric TVD, signed
+// per-direction deltas (delta = game − train, so positive = he does MORE of that
+// direction in games than in training = under-trained).
+
+/** Total variation distance between two share vectors (0–1). Both are treated as distributions. */
+export function tvd(a: Record<string, number> | null | undefined, b: Record<string, number> | null | undefined): number | null {
+  if (!a || !b) return null;
+  let s = 0;
+  for (const d of DIRECTIONS) s += Math.abs((Number(a[d]) || 0) - (Number(b[d]) || 0));
+  return round(s / 2, 3);
+}
+
+export type ShapeDelta = { dir: Direction; label: string; game: number; train: number; delta: number };
+export type ShapeComparison = {
+  tvd: number | null;                 // overall shape gap (0–1)
+  perDirection: ShapeDelta[];         // all 12, ordered 1..12 (for the chart / table)
+  underTrained: ShapeDelta[];         // directions done MORE in games than training, biggest gap first
+  overTrained: ShapeDelta[];          // directions done MORE in training than games, biggest gap first
+};
+
+/**
+ * Compare a GAME share vector against a TRAINING share vector.
+ * @param gameShares normalized 12-direction shares from matches (gridShares of the summed match clock).
+ * @param trainShares normalized 12-direction shares from training sessions.
+ * @param minDelta minimum |share gap| (fraction, default 0.04 = 4 points) to list a direction.
+ */
+export function compareShapes(
+  gameShares: Record<string, number> | null | undefined,
+  trainShares: Record<string, number> | null | undefined,
+  minDelta = 0.04,
+): ShapeComparison {
+  const perDirection: ShapeDelta[] = DIRECTIONS.map((dir) => {
+    const game = round(Number(gameShares?.[dir]) || 0);
+    const train = round(Number(trainShares?.[dir]) || 0);
+    return { dir, label: DIRECTION_LABEL[dir], game, train, delta: round(game - train) };
+  });
+  const listed = perDirection.filter((d) => Math.abs(d.delta) >= minDelta);
+  const underTrained = listed.filter((d) => d.delta > 0).sort((a, b) => b.delta - a.delta);
+  const overTrained = listed.filter((d) => d.delta < 0).sort((a, b) => a.delta - b.delta);
+  return { tvd: tvd(gameShares, trainShares), perDirection, underTrained, overTrained };
+}
+
 export type DirectionDrift = {
   dir: Direction;
   label: string;
@@ -120,7 +167,6 @@ export type DirectionalSignature = {
 
 const MIN_DAYS = 8;
 const ACTIVE_DAYS = 14;
-const round = (n: number, d = 3) => { const f = 10 ** d; return Math.round(n * f) / f; };
 
 /**
  * @param grids most-recent-first list of a player's daily clock grids.
