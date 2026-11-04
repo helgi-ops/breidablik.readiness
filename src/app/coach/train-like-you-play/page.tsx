@@ -142,6 +142,9 @@ export default function TrainLikeYouPlayPage() {
     pl_per_min: { en: "Work rate", is: "Ákefð" },
   }), []);
   const [mode, setMode] = useState<Mode>("fmp");
+  // Top-level tabs: the three magnitude bases (FMP/IMA/GPS) drive the board; "shape" is the
+  // directional movement-shape card (IMA clock, trained vs played) on its own tab.
+  const [view, setView] = useState<"board" | "shape">("board");
   const [baseline, setBaseline] = useState<Baseline>("own");
   const metricKeys = useMemo<MetricKey[]>(() => data?.modes?.[mode] ?? [], [data, mode]);
   // How many of a mode's metrics the club actually has match data for. top_speed
@@ -163,6 +166,9 @@ export default function TrainLikeYouPlayPage() {
       .sort((a, b) => b[1] - a[1])[0];
     if (best && best[1] > 0 && best[0] !== mode) setMode(best[0]);
   }, [data, mode, modeDataCount]);
+  // The Movement-shape tab needs IMA-clock data; if the club has none, keep it off the board.
+  const hasIma = (data?.modes?.ima?.length ?? 0) > 0;
+  useEffect(() => { if (view === "shape" && data && !hasIma) setView("board"); }, [view, data, hasIma]);
   const [microWindow, setMicroWindow] = useState<MicroWindow>("season");
   const microcycle = useMemo(
     () => data?.microcycleByWindow?.[microWindow] ?? data?.microcycle ?? [],
@@ -314,38 +320,56 @@ export default function TrainLikeYouPlayPage() {
             />
             <div className="text-xs text-slate-500">{IS ? "Besta þjálfunar-exposure vs leik-krafa (IMU — virkar innandyra). Grunnur: FMP (Catapult hreyfi-flokkar) eða hrá IMA (atburðir: hröðun, hemlun, stefnubreytingar, stökk)." : "Best training exposure vs match demand (IMU — works indoors). Basis: FMP (Catapult movement zones) or raw IMA (events: accelerations, decelerations, change-of-direction, jumps)."}</div>
           </div>
-          <div className="ml-auto flex items-end gap-2">
-            <div>
-              <label className="block text-[11px] uppercase tracking-wide text-slate-500">{IS ? "Grunnur" : "Basis"}</label>
-              <div className="mt-0.5 flex rounded-md border border-slate-300 p-0.5 text-xs">
-                <button type="button" onClick={() => setMode("fmp")} className={`rounded px-2 py-1 ${mode === "fmp" ? "bg-slate-900 text-white" : "text-slate-600"}`}>FMP</button>
-                <button type="button" onClick={() => setMode("ima")} className={`rounded px-2 py-1 ${mode === "ima" ? "bg-slate-900 text-white" : "text-slate-600"}`}>IMA</button>
-                <button type="button" onClick={() => setMode("core")} className={`rounded px-2 py-1 ${mode === "core" ? "bg-slate-900 text-white" : "text-slate-600"}`} title={IS ? "GPS + Gen2 átök (allir Catapult-pakkar)" : "GPS + Gen2 efforts (every Catapult tier)"}>GPS</button>
+          {/* Board-only controls — the Movement-shape tab carries its own (player + window). */}
+          {view === "board" ? (
+            <div className="ml-auto flex items-end gap-2">
+              <div>
+                <label className="block text-[11px] uppercase tracking-wide text-slate-500">{IS ? "Borið við" : "Compared to"}</label>
+                <div className="mt-0.5 flex rounded-md border border-slate-300 p-0.5 text-xs">
+                  <button type="button" onClick={() => setBaseline("own")} className={`rounded px-2 py-1 ${baseline === "own" ? "bg-slate-900 text-white" : "text-slate-600"}`}>{IS ? "Eigin leik" : "Own match"}</button>
+                  <button type="button" onClick={() => setBaseline("position")} className={`rounded px-2 py-1 ${baseline === "position" ? "bg-slate-900 text-white" : "text-slate-600"}`}>{IS ? "Stöðu-norm" : "Position"}</button>
+                </div>
               </div>
-            </div>
-            <div>
-              <label className="block text-[11px] uppercase tracking-wide text-slate-500">{IS ? "Borið við" : "Compared to"}</label>
-              <div className="mt-0.5 flex rounded-md border border-slate-300 p-0.5 text-xs">
-                <button type="button" onClick={() => setBaseline("own")} className={`rounded px-2 py-1 ${baseline === "own" ? "bg-slate-900 text-white" : "text-slate-600"}`}>{IS ? "Eigin leik" : "Own match"}</button>
-                <button type="button" onClick={() => setBaseline("position")} className={`rounded px-2 py-1 ${baseline === "position" ? "bg-slate-900 text-white" : "text-slate-600"}`}>{IS ? "Stöðu-norm" : "Position"}</button>
+              <div>
+                <label className="block text-[11px] uppercase tracking-wide text-slate-500">{IS ? "Tímabil" : "Season"}</label>
+                <select value={season} onChange={(e) => setSeason(Number(e.target.value))} className="mt-0.5 rounded-md border border-slate-300 px-2 py-1.5 text-sm">
+                  {[thisYear, thisYear - 1, thisYear - 2].map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
               </div>
+              <button type="button" onClick={() => window.print()} disabled={!data || players.length === 0}
+                className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">🖨 PDF</button>
             </div>
-            <div>
-              <label className="block text-[11px] uppercase tracking-wide text-slate-500">{IS ? "Tímabil" : "Season"}</label>
-              <select value={season} onChange={(e) => setSeason(Number(e.target.value))} className="mt-0.5 rounded-md border border-slate-300 px-2 py-1.5 text-sm">
-                {[thisYear, thisYear - 1, thisYear - 2].map((y) => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </div>
-            <button type="button" onClick={() => window.print()} disabled={!data || players.length === 0}
-              className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">🖨 PDF</button>
-          </div>
+          ) : null}
+        </div>
+
+        {/* Tabs: the three magnitude bases (FMP / IMA / GPS) + the directional Movement-shape view.
+            Basis tabs drive the board's metric set; "Movement shape" swaps in the IMA-clock card. */}
+        <div className="mt-3 flex flex-wrap gap-1 border-b border-slate-200" role="tablist">
+          {([["fmp", "FMP"], ["ima", "IMA"], ["core", "GPS"]] as const).map(([m, label]) => {
+            const on = view === "board" && mode === m;
+            return (
+              <button key={m} type="button" role="tab" aria-selected={on}
+                onClick={() => { setMode(m); setView("board"); }}
+                title={m === "core" ? (IS ? "GPS + Gen2 átök (allir Catapult-pakkar)" : "GPS + Gen2 efforts (every Catapult tier)") : undefined}
+                className={`-mb-px rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors ${on ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
+                {label}
+              </button>
+            );
+          })}
+          {hasIma ? (
+            <button type="button" role="tab" aria-selected={view === "shape"}
+              onClick={() => setView("shape")}
+              className={`-mb-px rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors ${view === "shape" ? "border-[#2740e6] text-[#2740e6]" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
+              {IS ? "Hreyfi-lögun" : "Movement shape"}
+            </button>
+          ) : null}
         </div>
       </div>
 
       {err && <div className="tlp-noprint mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
       {loading && <div className="tlp-noprint mb-4 text-sm text-slate-500">…</div>}
 
-      {data && players.length > 0 && (
+      {data && players.length > 0 && view === "board" && (
         <div id="tlp" className="space-y-4">
           {verdict && (
             <div className="tlp-sec">
@@ -513,15 +537,6 @@ export default function TrainLikeYouPlayPage() {
             )}
           </div>
 
-          {/* Movement SHAPE — do they move the way they play? (IMA clock: training vs games).
-              The directional complement to the magnitude board above. Per-player; shown only
-              for clubs with IMA data. Self-hides its body when a player has no clock. */}
-          {players.length > 0 && (data?.modes?.ima?.length ?? 0) > 0 ? (
-            <div className="tlp-sec">
-              <TlypMovementShapeCard players={players.map((p) => ({ id: p.id, name: p.name }))} />
-            </div>
-          ) : null}
-
           <div className="tlp-sec rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 text-[12px] leading-relaxed text-slate-700">
             {IS
               ? "Byggt á Catapult Football Movement Profile (IMU) — fangar dýnamíska, fjölátta hreyfingu (ekki bara beinan GPS-hraða) og virkar innandyra. Þjálfun á að undirbúa fyrir leik-hreyfimynstrið (Gabbett 2016); undir ~50% af leik-kröfu í háákefðar-flokkunum = aukin áhætta (Malone 2018, Duhig 2016). FMP gefur sína eigin session-lengd, svo per-90 ákefð er reiknanleg þótt GPS-lengd vanti."
@@ -532,16 +547,27 @@ export default function TrainLikeYouPlayPage() {
           </div>
         </div>
       )}
+      {/* Movement SHAPE tab — do they move the WAY they play? (IMA clock, trained vs played).
+          Its own tab because it's a different question from the magnitude board, and the page
+          is already dense. Per-player; self-hides its body when a player has no clock. */}
+      {data && players.length > 0 && view === "shape" && hasIma && (
+        <div className="space-y-4">
+          <TlypMovementShapeCard players={players.map((p) => ({ id: p.id, name: p.name }))} />
+        </div>
+      )}
+
       {data && players.length === 0 && !loading && (
         <div className="tlp-noprint rounded-lg border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">{IS ? "Engin gögn." : "No data."}</div>
       )}
 
-      {/* "How to develop him" — per-player development drill-down at the BOTTOM:
+      {/* "How to develop him" — per-player development drill-down at the BOTTOM of the board tab:
           it deepens the squad-level TLYP analysis above into an individual read
           (game model × how he moves). Self-fetches; capability-driven. */}
-      <div className="tlp-noprint mt-6">
-        <TrainingReadPanel lang={lang === "EN" ? "EN" : "IS"} />
-      </div>
+      {view === "board" && (
+        <div className="tlp-noprint mt-6">
+          <TrainingReadPanel lang={lang === "EN" ? "EN" : "IS"} />
+        </div>
+      )}
     </div>
   );
 }
