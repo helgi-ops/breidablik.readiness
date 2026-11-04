@@ -53,6 +53,10 @@ export interface PlayerBlockOpts {
   /** Training camps overlaid on the block (same as the team block) — concentrated-load periods. */
   camps?: Array<{ start: string; end: string; loadPct: number; twoADay: boolean }>;
   steer?: { active: boolean; steer: BuildUpSteer | null };
+  /** The block's matches are FRIENDLIES (pre-season), so they must NOT reduce the training-week alignment
+   *  target — a friendly carries its own load but the training week still builds the full ×match volume.
+   *  When true the alignment uses a no-match training week; when false (in-season) real matches count. */
+  friendlyMatches?: boolean;
 }
 export interface PlayerBlockResult {
   block: CalendarBlock;
@@ -77,8 +81,10 @@ const MIN_SAMPLE = 4;
  *  that variable (plannedVolume) — the same model the Meso tab + the Build-up ramp use. One constant factor
  *  per axis keeps the ramp/deload shape and the day-type distribution; only the absolute level changes.
  *  Mutates `block` in place (buildCalendarBlock returns a fresh block, so there is no shared reference). */
-function alignBlockToTeamMultiple(block: CalendarBlock): void {
-  const matchDays = block.weeks.reduce((s, w) => s + w.days.filter((d) => d.type === "match").length, 0);
+function alignBlockToTeamMultiple(block: CalendarBlock, friendlyMatches: boolean): void {
+  // Friendlies (pre-season) don't reduce the training target — a friendly carries its own load but the
+  // training week still builds the full no-match ×match volume. Real competitive matches do reduce it.
+  const matchDays = friendlyMatches ? 0 : block.weeks.reduce((s, w) => s + w.days.filter((d) => d.type === "match").length, 0);
   const perWk = block.weeks.length ? Math.round(matchDays / block.weeks.length) : 0;
   const preDays = standardTrainingDays(perWk); // the team's training-week shape for this congestion
   const AXIS_KPI: Record<"dist" | "hsr" | "load" | "accdec" | "stride", WeeklyLoadMetricKey> = {
@@ -173,7 +179,7 @@ export function buildPlayerBlock(plan: PlayerBlockPlan, pl: PlayerBlockPlayer, o
   // preserving the day-type shape + the ramp/deload curve. This makes His block, the PDF, the player app and
   // the Build-up ramp all tell the same volume story (the Meso tab already uses this multiple). Best-effort.
   try {
-    alignBlockToTeamMultiple(block);
+    alignBlockToTeamMultiple(block, !!opts.friendlyMatches);
   } catch { /* alignment is advisory; keep the raw block on any surprise */ }
 
   const uncappedPeak = Math.min(1.4, (blkBase + blkStep * Math.max(0, opts.blkWeeks - 2)) / 100);

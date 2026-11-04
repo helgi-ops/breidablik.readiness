@@ -48,12 +48,16 @@ export async function GET(req: Request) {
     const engineGoal: "accum" | "transmute" | "realize" = activeMb && activeMb.goalKey !== "deload" ? activeMb.goalKey : "accum";
     const goal = blockGoals[win.blkStart] ?? engineGoal;
 
+    // Pre-season matches are friendlies — exclude them from the training-week alignment target (so the
+    // player sees the same aligned block the coach does, never a friendly-reduced one).
+    const winIsPreseason = plan.phases.find((ph) => ph.start <= win.blkStart && win.blkStart < ph.end)?.key === "preseason";
     const built = buildPlayerBlock(plan, player, {
       blkStart: win.blkStart,
       blkWeeks: win.blkWeeks,
       phaseLabel: win.phaseLabel,
       matchDates: win.matchDates,
       goal,
+      friendlyMatches: winIsPreseason,
     });
 
     const actuals = await loadBuildUpActuals(sb, {

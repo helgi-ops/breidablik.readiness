@@ -618,6 +618,8 @@ export default function PeriodizationHubPage() {
           accHiEff: ta?.matchAccelHiEff ?? null, decHiEff: ta?.matchDecelHiEff ?? null, stride: ta?.matchStrideHi ?? null, ...dirFields, rhie: ta?.rhieBouts ?? null, symmetry: ta?.runSymmetry ?? null, metPower: ta?.metabolicPower ?? null };
   }, [isPlayerScope, player, plan]);
   const blkPhaseLabel = plan?.phases.find((ph) => ph.start <= blkStart && blkStart < ph.end)?.label ?? { en: "Season block", is: "Tímabils-lota" };
+  // Pre-season matches are friendlies — they must not pull down His block's training-week alignment target.
+  const blkIsPreseason = plan?.phases.find((ph) => ph.start <= blkStart && blkStart < ph.end)?.key === "preseason";
 
   // Team breaks → the teamBreaks state (the macro memo reads start/end) + teamBreaksFull (id/label for the UI).
   const loadBreaks = React.useCallback(async () => {
@@ -830,9 +832,9 @@ export default function PeriodizationHubPage() {
     // "my build-up" view so the two can never drift (src/lib/.../playerBlock.ts).
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? undefined;
     return buildPlayerBlock(plan, pl, {
-      blkStart, blkWeeks: blkWeeksEff, blkBase, blkStep, phaseLabel: blkPhaseLabel, skeletonSets, typeOverrides, steer: steerArg, offseasonStart: offPhaseStart, goal: effectiveGoal, camps: campRegions,
+      blkStart, blkWeeks: blkWeeksEff, blkBase, blkStep, phaseLabel: blkPhaseLabel, skeletonSets, typeOverrides, steer: steerArg, offseasonStart: offPhaseStart, goal: effectiveGoal, camps: campRegions, friendlyMatches: blkIsPreseason,
     });
-  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkPhaseLabel, effectiveGoal, campRegions]);
+  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkPhaseLabel, blkIsPreseason, effectiveGoal, campRegions]);
 
   // The SELECTED player's block (weakness-steer applied unless the coach picks a neutral ramp).
   const playerBlock = React.useMemo(
@@ -855,7 +857,8 @@ export default function PeriodizationHubPage() {
     // against is the same one the coach planned (override ?? engine goalKey; deload → accum).
     const wb = mesoBlocks.find((b) => b.start === win.blkStart);
     const wGoal: "accum" | "transmute" | "realize" = blockGoals[win.blkStart] ?? (wb?.goalKey && wb.goalKey !== "deload" ? wb.goalKey : "accum");
-    return buildPlayerBlock(plan, player, { blkStart: win.blkStart, blkWeeks: win.blkWeeks, phaseLabel: win.phaseLabel, matchDates: win.matchDates, goal: wGoal, camps: campRegions });
+    const winIsPreseason = plan.phases.find((ph) => ph.start <= win.blkStart && win.blkStart < ph.end)?.key === "preseason";
+    return buildPlayerBlock(plan, player, { blkStart: win.blkStart, blkWeeks: win.blkWeeks, phaseLabel: win.phaseLabel, matchDates: win.matchDates, goal: wGoal, camps: campRegions, friendlyMatches: winIsPreseason });
   }, [player, plan, mesoBlocks, blockGoals, campRegions]);
 
   async function exportPlayerBlock() {
