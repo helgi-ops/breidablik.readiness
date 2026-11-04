@@ -3688,6 +3688,77 @@ export default function PeriodizationHubPage() {
 
           {!isBasketball && player && effPhase === "inseason" && player.matchUnit.load.typical != null && (() => {
             const mu = player.matchUnit;
+            const fmt = (v: number | null) => (v == null ? "–" : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
+
+            // ── MD-DAY DEMAND PROFILE (the per-player analogue of Team Demands) ──
+            // The actual MD-day training shape (what the squad/position really does on MD+1…MD-1, incl. the
+            // recovery days + a real MD-2), INDIVIDUALISED: each day's %-of-match (from the Team-Demands data)
+            // applied to HIS own match unit. Prefer his position's profile; fall back to the team's.
+            const posKey = positionGroup(player.position).key;
+            const mdBase = (plan.positionBaselines ?? []).find((b) => b.key === posKey && (b.md?.days?.length ?? 0) > 0)
+              ?? (((plan.teamBaseline?.md?.days?.length ?? 0) > 0) ? plan.teamBaseline : null);
+            const mdOffL = (label: string) => { const m = /MD([+-]\d+)/.exec(label); return m ? Number(m[1]) : 0; };
+            const playsMatches = (mu.minutesTypical ?? player.recentMinutesAvg ?? 0) >= 20 || mu.nNearFull > 0;
+            const KROWS = ([
+              { en: "Player Load", is: "Player Load", u: "", tf: "playerLoad", mf: "matchPlayerLoad", pm: mu.load.typical },
+              { en: "Total distance", is: "Heildar-vegalengd", u: "m", tf: "distanceM", mf: "matchDistanceM", pm: mu.distance.typical },
+              { en: "High-speed running", is: "Háhraðahlaup", u: "m", tf: "hsrM", mf: "matchHsrM", pm: mu.hsr.typical },
+              { en: "Sprint distance", is: "Sprett-vegalengd", u: "m", tf: "sprintM", mf: "matchSprintM", pm: mu.sprint.typical },
+              { en: "Accelerations (B2–3)", is: "Hröðun (B2–3)", u: "#", tf: "accel", mf: "matchAccel", pm: mu.accel.typical },
+              { en: "Decelerations (B2–3)", is: "Hemlun (B2–3)", u: "#", tf: "decel", mf: "matchDecel", pm: mu.decel.typical },
+            ] as const).filter((r) => r.pm != null);
+            const mdCols = (mdBase?.md?.days ?? [])
+              .map((d) => ({ d, off: mdOffL(d.label.en) }))
+              .filter((x) => (playsMatches || x.off < 0))              // drop post-match recovery for a non-playing week
+              .sort((a, b) => ((a.off > 0 ? a.off : a.off + 100) - (b.off > 0 ? b.off : b.off + 100))); // MD+1,+2,+3, MD-4…MD-1
+            if (mdBase && mdCols.length) {
+              const denom = mdBase.avg; // season avg carries the match* references (the per-day denominator)
+              const subOf = (off: number): string => off > 0 ? (is ? "endurheimt" : "recovery") : off <= -3 ? (is ? "álag" : "load") : off === -2 ? (is ? "léttur" : "light") : (is ? "virkjun" : "prime");
+              const cellVal = (d: typeof mdCols[number]["d"], r: typeof KROWS[number]): number | null => {
+                const train = d.avg[r.tf]; if (train == null) return null;
+                const dn = denom[r.mf];
+                return (dn != null && dn > 0 && r.pm != null) ? train * ((r.pm as number) / dn) : train;
+              };
+              const srcLabel = mdBase.key === -1 ? (is ? "liðs-mynstur (engin stöðu-gögn)" : "team shape (no position data)") : (is ? `${mdBase.label.is}-mynstur` : `${mdBase.label.en} shape`);
+              return (
+                <section className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <h2 className="text-[15px] font-bold text-slate-900">{is ? "Leikmanns-kröfur — dæmigerð vika" : "Player Demands — the typical week"}</h2>
+                    <span className="rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#2740e6]">{player.name}</span>
+                    <span className="text-[12px] text-slate-500">{is ? `Raunverulegt MD-dags mynstur (${srcLabel}) × leikeiningin hans — heill míkróhringur.` : `Actual MD-day shape (${srcLabel}) × his match unit — the full microcycle.`}</span>
+                  </div>
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full text-[12.5px]">
+                      <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
+                        <th className="py-1 pr-2 font-medium">KPI</th>
+                        {mdCols.map(({ d, off }) => <th key={d.key} className="py-1 px-2 text-right font-medium"><div>{is ? d.label.is : d.label.en}</div><div className="text-[9px] font-normal normal-case text-slate-400">{subOf(off)}</div></th>)}
+                        <th className="py-1 px-2 text-right font-medium">{is ? "Vika" : "Week"}</th>
+                        <th className="py-1 pl-2 text-right font-medium">{is ? "Leikur" : "Match"}</th>
+                      </tr></thead>
+                      <tbody>
+                        {KROWS.map((r) => {
+                          const per = mdCols.map(({ d }) => cellVal(d, r));
+                          const wk = per.reduce<number>((s, x) => s + (x ?? 0), 0);
+                          return (
+                            <tr key={r.en} className="border-t border-slate-100">
+                              <td className="py-1.5 pr-2 text-slate-700">{is ? r.is : r.en}</td>
+                              {per.map((x, i) => <td key={i} className="py-1.5 px-2 text-right tabular-nums text-slate-600">{fmt(x)}{r.u}</td>)}
+                              <td className="py-1.5 px-2 text-right tabular-nums font-semibold text-slate-900">{fmt(wk)}{r.u}</td>
+                              <td className="py-1.5 pl-2 text-right tabular-nums text-slate-400">{fmt(r.pm)}{r.u}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-400">{is
+                    ? `Hver MD-dagur = raunverulegt hlutfall þess dags af leik (úr sömu gögnum og Liðs-kröfur), sett á LEIKINN hans (miðgildi ${mu.nNearFull} ~90-mín leikja). MD+1/MD+2 eru endurheimt eftir leik (aðeins sýnd þegar hann spilar); MD+3 birtist bara í lengra hléi. Vika = summa æfingadaga (leikdagur ekki talinn) — þetta er MÆLT dreifing, en „Vikumark“-spjaldið er ÁÆTLUN (leikur + viðbót), svo þau mega vera ólík. Lýsandi — aldrei readiness-liturinn.`
+                    : `Each MD-day = that day's actual % of a match (from the same data as Team Demands), applied to HIS match (median of ${mu.nNearFull} ~90-min games). MD+1/MD+2 are post-match recovery (shown only when he plays); MD+3 appears only in a longer gap. Week = the training days summed (the match day is excluded) — this is the OBSERVED distribution, while the "Weekly target" card is a PLANNING target (match + increment), so the two can differ. Descriptive — never the readiness colour.`}</p>
+                </section>
+              );
+            }
+
+            // Fallback (no MD-day training data yet): the engine microcycle, anchored to the weekly target.
             // Day-types come from the ENGINE's own microcycle (buildCalendarBlock), not a hand map — so this
             // matches "His block" exactly, including that MD-2 is a recovery/rest day (never the heaviest).
             const microUnit = { dist: mu.distance.typical, hsr: mu.hsr.typical, load: mu.load.typical,
@@ -3699,7 +3770,6 @@ export default function PeriodizationHubPage() {
             const microDays = (microWk?.days ?? []).map((d) => ({ md: d.md, type: d.type, o: mdOffset(d.md) ?? 99 })).filter((d) => d.o >= -4 && d.o <= -1).sort((a, b) => a.o - b.o);
             const days: Array<{ md: string; type: CalType }> = microDays.length ? microDays.map((d) => ({ md: d.md, type: d.type })) : standardTrainingDays(1).map((md) => ({ md, type: "mixed" as CalType }));
             const TYPE_LABEL: Partial<Record<CalType, { en: string; is: string }>> = { mechanical: { en: "mech", is: "vélrænt" }, locomotive: { en: "loco", is: "hlaup" }, mixed: { en: "mixed", is: "blandað" }, activation: { en: "prime", is: "virkjun" }, rest: { en: "rest", is: "hvíld" }, topup: { en: "top-up", is: "áfylling" } };
-            const fmt = (v: number | null) => (v == null ? "–" : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
             // These are TRAINING days (the match is a separate column). In-season the official weekly target
             // (the "Weekly target" card) = the match itself + a readiness-gated TRAINING increment, so the
             // training-only week = matchMultiple − 1 game (= 0.6×readiness cap). Pre-season has no competitive
