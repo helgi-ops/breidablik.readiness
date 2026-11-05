@@ -116,6 +116,7 @@ function domDir(d: { fwd: number; back: number; lat: number } | null, is: boolea
 }
 function dayIma(d: CalDay, is: boolean, unitStride: number | null): string {
   const p: string[] = [];
+  if (d.accel != null || d.decel != null) p.push(`Acc/Dec ${d.accel ?? "-"}/${d.decel ?? "-"}`);
   if (d.accHiEff != null) p.push(`Acc B2–3 ${d.accHiEff}`);
   if (d.decHiEff != null) p.push(`Dec B2–3 ${d.decHiEff}`);
   // The ceiling marker attaches to the STRIDE value it refers to (built TO match, not beyond), not the dir.
@@ -139,7 +140,7 @@ const strong = (size = 8.5, color: string = C.ink) => [fb(600), { fontSize: size
 function CalWeeks({ block, lang }: { block: CalendarBlock; lang: Lang }) {
   const is = lang === "IS";
   const bi = (b: Bi) => tx(is ? b.is : b.en);
-  const hasMech = block.unit.accHiEff != null || block.unit.stride != null || block.unit.fr != null || block.unit.cod != null;
+  const hasMech = block.unit.accHiEff != null || block.unit.stride != null || block.unit.fr != null || block.unit.cod != null || block.unit.accel != null;
   return (
     <>
       {block.weeks.map((w) => (

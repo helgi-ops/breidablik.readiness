@@ -88,8 +88,8 @@ function alignBlockToTeamMultiple(block: CalendarBlock, friendlyMatches: boolean
   const matchDays = friendlyMatches ? 0 : block.weeks.reduce((s, w) => s + w.days.filter((d) => d.type === "match").length, 0);
   const perWk = block.weeks.length ? Math.round(matchDays / block.weeks.length) : 0;
   const preDays = standardTrainingDays(perWk); // the team's training-week shape for this congestion
-  const AXIS_KPI: Record<"dist" | "hsr" | "load" | "accdec" | "stride" | "fr" | "cod", WeeklyLoadMetricKey> = {
-    dist: "totalDistance", hsr: "velocityBand5", load: "totalPlayerLoad", accdec: "accelB23", stride: "velocityBand6", fr: "imaFrDistance", cod: "imaCod",
+  const AXIS_KPI: Record<"dist" | "hsr" | "load" | "accdec" | "stride" | "fr" | "cod" | "acc" | "dec", WeeklyLoadMetricKey> = {
+    dist: "totalDistance", hsr: "velocityBand5", load: "totalPlayerLoad", accdec: "accelB23", stride: "velocityBand6", fr: "imaFrDistance", cod: "imaCod", acc: "imaAccel", dec: "imaDecel",
   };
   const trainWeeks = block.weeks.filter((w) => !w.isDeload);
   if (!trainWeeks.length) return;
@@ -107,6 +107,8 @@ function alignBlockToTeamMultiple(block: CalendarBlock, friendlyMatches: boolean
     stride: scaleOf("stride", peakPct((w) => w.pctStride)),
     fr: scaleOf("fr", peakPct((w) => w.pctFr ?? null)),
     cod: scaleOf("cod", peakPct((w) => w.pctCod ?? null)),
+    acc: scaleOf("acc", peakPct((w) => w.pctAccel ?? null)),
+    dec: scaleOf("dec", peakPct((w) => w.pctDecel ?? null)),
   };
   if (!Object.values(sc).some((x) => Math.abs(x - 1) > 0.001)) return; // already aligned
   for (const w of block.weeks) {
@@ -120,6 +122,8 @@ function alignBlockToTeamMultiple(block: CalendarBlock, friendlyMatches: boolean
       if (d.stride != null) d.stride = Math.round(d.stride * sc.stride);
       if (d.fr != null) d.fr = Math.round((d.fr * sc.fr) / 10) * 10;
       if (d.cod != null) d.cod = Math.round(d.cod * sc.cod);
+      if (d.accel != null) d.accel = Math.round(d.accel * sc.acc);
+      if (d.decel != null) d.decel = Math.round(d.decel * sc.dec);
     }
     if (w.pctRunning != null) w.pctRunning = Math.round(w.pctRunning * sc.dist);
     if (w.pctHsr != null) w.pctHsr = Math.round(w.pctHsr * sc.hsr);
@@ -128,6 +132,8 @@ function alignBlockToTeamMultiple(block: CalendarBlock, friendlyMatches: boolean
     if (w.pctStride != null) w.pctStride = Math.round(w.pctStride * sc.stride);
     if (w.pctFr != null) w.pctFr = Math.round(w.pctFr * sc.fr);
     if (w.pctCod != null) w.pctCod = Math.round(w.pctCod * sc.cod);
+    if (w.pctAccel != null) w.pctAccel = Math.round(w.pctAccel * sc.acc);
+    if (w.pctDecel != null) w.pctDecel = Math.round(w.pctDecel * sc.dec);
   }
 }
 
@@ -146,7 +152,7 @@ export function buildPlayerBlock(plan: PlayerBlockPlan, pl: PlayerBlockPlayer, o
     accdec: ((tb.matchAccel ?? 0) + (tb.matchDecel ?? 0)) || null,
     accHiEff: tb.matchAccelHiEff, decHiEff: tb.matchDecelHiEff, stride: tb.matchStrideHi,
     ...dirFields, rhie: tb.rhieBouts, symmetry: tb.runSymmetry, metPower: tb.metabolicPower,
-    fr: tb.matchImaFrDist ?? null, cod: tb.matchImaCod ?? null,
+    fr: tb.matchImaFrDist ?? null, cod: tb.matchImaCod ?? null, accel: tb.matchAccel, decel: tb.matchDecel,
   };
   const useOwn = !!(mu && mu.load.typical != null && mu.nNearFull >= MIN_SAMPLE);
   const unit: MatchUnitAbs = useOwn
@@ -156,6 +162,7 @@ export function buildPlayerBlock(plan: PlayerBlockPlan, pl: PlayerBlockPlayer, o
         accHiEff: mu.accHiEff.typical, decHiEff: mu.decHiEff.typical, stride: mu.stride.typical,
         ...dirFields, rhie: mu.rhie.typical, symmetry: mu.symmetry.typical, metPower: mu.metPower.typical,
         fr: mu.imaFr?.typical ?? teamUnit.fr ?? null, cod: mu.imaCod?.typical ?? teamUnit.cod ?? null,
+        accel: mu.accel.typical, decel: mu.decel.typical,
       }
     : teamUnit;
 

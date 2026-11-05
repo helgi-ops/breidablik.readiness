@@ -780,3 +780,17 @@ describeIma("Meso calendar — IMA CoD", () => {
     expectIma(b.weeks[0].pctCod).not.toBeNull();
   });
 });
+
+describeIma("Meso calendar — IMA accelerations / decelerations", () => {
+  const unit = { dist: 10000, hsr: 800, load: 1000, accdec: 160, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
+  itIma("plans accel + decel on the mechanical axis (match = the unit, rest = null, mechanical > locomotive)", () => {
+    const b = buildCalendarBlock({ unit: { ...unit, accel: 69, decel: 97 }, startDate: "2026-09-07", numWeeks: 4, scopeName: "Team", scopePos: null, baseOverloadPct: 100 });
+    const days = b.weeks.flatMap((w) => w.days);
+    expectIma(days.filter((d) => d.type === "match").every((d) => d.accel === 69 && d.decel === 97)).toBe(true);
+    expectIma(days.filter((d) => d.type === "rest").every((d) => d.accel == null && d.decel == null)).toBe(true);
+    const mech = days.find((d) => d.type === "mechanical"), loco = days.find((d) => d.type === "locomotive");
+    if (mech && loco) expectIma((mech.decel ?? 0)).toBeGreaterThan(loco.decel ?? 0);
+    expectIma(b.weeks[0].pctAccel).not.toBeNull();
+    expectIma(b.weeks[0].pctDecel).not.toBeNull();
+  });
+});
