@@ -289,7 +289,7 @@ export default function PeriodizationHubPage() {
   const [testAddDate, setTestAddDate] = React.useState<string>(() => new Date().toISOString().slice(0, 10));
   const [testShowAll, setTestShowAll] = React.useState(false); // Testing tab: show every block, not just the next three
   const [testFocus, setTestFocus] = React.useState<string | null>(null); // Testing tab: block (start ISO) clicked on the strip
-  const [plSub, setPlSub] = React.useState(0); // Players tab: which player section is open (block / build-up / values / data)
+  const [plSub, setPlSub] = React.useState(1); // Players tab: which player section is open (build-up / values / data). "His block" (0) removed — the player calendar lives on the Meso tab (player scope).
   // Players tab phase view: pre-season = the Build-up ramp, in-season = the typical-week Player Demands.
   // null = follow the player's own current phase; the toggle sets an explicit override.
   const [phaseOverride, setPhaseOverride] = React.useState<"preseason" | "inseason" | null>(null);
@@ -844,7 +844,7 @@ export default function PeriodizationHubPage() {
   );
   // The Block calendar is ONE calendar: team scope renders the editable team skeleton (calBlock); player
   // scope renders the SAME structure re-individualised (buildPlayerBlock — aligned/capped/steered), so the
-  // player-scoped calendar reads identically to "His block" on the Players tab (no second, divergent grid).
+  // player-scoped calendar is the player's individualised block (buildPlayerBlock) — one grid, no duplicate.
   // Player scope is read-only (day-type edits are a team concern); switch to Team scope to edit.
   const mesoCalBlock = React.useMemo(
     () => (isPlayerScope && playerBlock ? playerBlock.block : calBlock),
@@ -2808,7 +2808,7 @@ export default function PeriodizationHubPage() {
               </div>
               <p className="mt-1 text-[13px] text-slate-600">{is ? "Efri hluti dags: smelltu til að skipta Frí ↔ Æfing (vistast sjálfkrafa í Vikuuppsetningu; leikir koma úr Leikjaskrá). Neðri hluti: dagsgerð + Player Load sem kerfið reiknar — smelltu til að breyta deginum." : "Top of a day: click to toggle Off ↔ Session (auto-saves to Week Setup; matches come from Fixtures). Bottom: the day-type + Player Load the system computes — click to edit the day."}</p>
               {isPlayerScope && (
-                <p className="mt-1.5 rounded-lg bg-[#2740e6]/[0.06] px-2.5 py-1.5 text-[12px] text-[#2740e6]">{is ? `Leikmanns-umfang (${player?.name}) — þetta er lotan HANS, einstaklingsmiðuð (leik-miðuð, þök/trim/áhersla) — sömu tölur og „Lotan hans“ á Leikmenn-flipanum. Les-only: skiptu í Liðs-umfang til að breyta dagsgerðum.` : `Player scope (${player?.name}) — this is HIS block, individualised (match-anchored, caps/trim/steer) — the same numbers as "His block" on the Players tab. Read-only: switch to Team scope to edit day-types.`}</p>
+                <p className="mt-1.5 rounded-lg bg-[#2740e6]/[0.06] px-2.5 py-1.5 text-[12px] text-[#2740e6]">{is ? `Leikmanns-umfang (${player?.name}) — þetta er lotan HANS, einstaklingsmiðuð (leik-miðuð, þök/trim/áhersla). Les-only: skiptu í Liðs-umfang til að breyta dagsgerðum.` : `Player scope (${player?.name}) — this is HIS block, individualised (match-anchored, caps/trim/steer). Read-only: switch to Team scope to edit day-types.`}</p>
               )}
               <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-slate-600">
                 {(["match", "session", "off"] as DayState[]).map((st) => <span key={st} className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px] border border-slate-300" style={{ background: stateBg[st] }} />{stateLbl[st]}</span>)}
@@ -3617,7 +3617,6 @@ export default function PeriodizationHubPage() {
               ? weeklyTargetFromMatch(player.matchUnit.load.typical, { phase: "preseason", sessionCount: psSess, readinessCapPct: player.vald.capPct ?? undefined, minutesTypical: player.matchUnit.minutesTypical })
               : player.weekTargets[effPhase]);
             const SUBS: Array<{ key: number; label: string }> = [
-              { key: 0, label: is ? "Lotan hans" : "His block" },
               { key: 1, label: is ? "Uppbygging" : "Build-up" },
               { key: 2, label: is ? "Æfingagildi" : "Training values" },
               { key: 3, label: `${is ? "Gögn" : "Data"}${gapCount ? ` (${gapCount} ${is ? "vantar" : "missing"})` : ""}` },
@@ -3852,8 +3851,8 @@ export default function PeriodizationHubPage() {
                   </table>
                 </div>
                 <p className="mt-2 text-[11px] text-slate-400">{is
-                  ? `Þetta eru ÆFINGADAGAR (leikurinn er sér dálkur). ${wt?.phase === "preseason" ? "Í undirbúningi er öll vikan æfing (yfir-leik)." : "Á keppnistímabili er vikumarkið = leikurinn sjálfur + æfingaviðbót, svo æfingavikan er ~"+weekMult.toFixed(2)+"× leik."} Vikunni er dreift á dagana eftir dag-gerð úr sömu vél og „Lotan hans" (mixed = stóri dagurinn; MD-2 er hvíldardagur og les 0). Æfingadagar (${fmt((mu.load.typical ?? 0) * weekMult)} PL) + leikurinn (${fmt(mu.load.typical)} PL) ≈ vikumarkið (${wt?.weeklyLoadTarget ?? "—"} PL á spjaldinu). Grunnur = LEIKUR hans (miðgildi ${mu.nNearFull} ~90-mín leikja). Lýsandi — aldrei readiness-liturinn.`
-                  : `These are TRAINING days (the match is its own column). ${wt?.phase === "preseason" ? "In pre-season the whole week is training (supra-match)." : `In-season the weekly target = the match itself + a training increment, so the training week is ~${weekMult.toFixed(2)}× a match.`} The week is spread across the days by day-type from the same engine as "His block" (mixed = the big day; MD-2 is a recovery/rest day and reads 0). Training days (${fmt((mu.load.typical ?? 0) * weekMult)} PL) + the match (${fmt(mu.load.typical)} PL) ≈ the weekly target (${wt?.weeklyLoadTarget ?? "—"} PL on the card). Base = his MATCH (median of ${mu.nNearFull} ~90-min games). Descriptive — never the readiness colour.`}</p>
+                  ? `Þetta eru ÆFINGADAGAR (leikurinn er sér dálkur). ${wt?.phase === "preseason" ? "Í undirbúningi er öll vikan æfing (yfir-leik)." : "Á keppnistímabili er vikumarkið = leikurinn sjálfur + æfingaviðbót, svo æfingavikan er ~"+weekMult.toFixed(2)+"× leik."} Vikunni er dreift á dagana eftir dag-gerð úr sömu vél og dagatal lotunnar (mixed = stóri dagurinn; MD-2 er hvíldardagur og les 0). Æfingadagar (${fmt((mu.load.typical ?? 0) * weekMult)} PL) + leikurinn (${fmt(mu.load.typical)} PL) ≈ vikumarkið (${wt?.weeklyLoadTarget ?? "—"} PL á spjaldinu). Grunnur = LEIKUR hans (miðgildi ${mu.nNearFull} ~90-mín leikja). Lýsandi — aldrei readiness-liturinn.`
+                  : `These are TRAINING days (the match is its own column). ${wt?.phase === "preseason" ? "In pre-season the whole week is training (supra-match)." : `In-season the weekly target = the match itself + a training increment, so the training week is ~${weekMult.toFixed(2)}× a match.`} The week is spread across the days by day-type from the same engine as the block calendar (mixed = the big day; MD-2 is a recovery/rest day and reads 0). Training days (${fmt((mu.load.typical ?? 0) * weekMult)} PL) + the match (${fmt(mu.load.typical)} PL) ≈ the weekly target (${wt?.weeklyLoadTarget ?? "—"} PL on the card). Base = his MATCH (median of ${mu.nNearFull} ~90-min games). Descriptive — never the readiness colour.`}</p>
               </section>
             );
           })()}
@@ -3867,55 +3866,6 @@ export default function PeriodizationHubPage() {
               ))}
             </div>
             <div className="space-y-4 p-4 sm:p-5">
-              {plSub === 0 && (<>
-            {!calBlock && <p className="mt-2 text-[12px] text-amber-700">{is ? "Settu upp lotu í Mesó-lotu flipanum fyrst — einstaklings-lotan reiknast úr henni." : "Lay out a block in the Meso Cycle tab first — the player's block is computed from it."}</p>}
-            {player && playerBlock && (() => {
-              const pb = playerBlock; const b = pb.block;
-              const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
-              const conf = pb.confidence === "high" ? { c: "bg-emerald-100 text-emerald-700", t: is ? "há vissa" : "high" } : pb.confidence === "medium" ? { c: "bg-amber-100 text-amber-700", t: is ? "miðlungs" : "medium" } : { c: "bg-rose-100 text-rose-700", t: is ? "lítil vissa" : "low" };
-              const lighterTxt = pb.lighterPct > 0 ? (is ? `~${pb.lighterPct}% léttari` : `~${pb.lighterPct}% lighter`) : pb.lighterPct < 0 ? (is ? `~${-pb.lighterPct}% þyngri` : `~${-pb.lighterPct}% heavier`) : (is ? "á liðsálagi" : "at the squad load");
-              const tiltTxt = pb.hsrEmph > 1.02 ? (is ? ", háhraði yfir liðinu á Locomotive-dögum" : ", HSR above the team on Locomotive days") : pb.hsrEmph < 0.98 ? (is ? ", meira vélrænt en liðið" : ", more mechanical than the team") : "";
-              const typeColor: Record<string, string> = { mechanical: "#a83e28", locomotive: "#1c7a4a", mixed: "#2740e6", activation: "#64748b", topup: "#7a5cc4", match: "#1c7a4a", rest: "#cbd5e1" };
-              const tint: Record<string, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#F0EAF7", match: "#FBEFDD", rest: "#f8fafc" };
-              const abbr = (t: string): string => t === "mechanical" ? "Mech" : t === "locomotive" ? (is ? "Hlaup" : "Loco") : t === "mixed" ? (is ? "Bland" : "Mixed") : t === "activation" ? (is ? "Virkj" : "Activ") : t === "topup" ? (is ? "Áfyll" : "Top") : t === "match" ? (is ? "Leikur" : "Match") : "—";
-              const dows = is ? ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-              return (
-                <div className="mt-3">
-                  {/* Level 0 — verdict */}
-                  <p className="text-[13px] font-semibold text-slate-900">{is ? `${player.name}: lotan er ${lighterTxt} en fullur rampur${!pb.useOwn ? " (liðs-grunnlína — fáir heilir leikir)" : ""}${tiltTxt}.` : `${player.name}'s block runs ${lighterTxt} than the full ramp${!pb.useOwn ? " (squad baseline — few full matches)" : ""}${tiltTxt}.`}{pb.steered && <span className="ml-1.5 rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{is ? "veikleika-stýrt" : "weakness-steered"}</span>}</p>
-                  {/* Level 1 — the drivers */}
-                  <ul className="mt-1.5 space-y-0.5 text-[12px] text-slate-700">
-                    <li>• {pb.useOwn ? (is ? `Eigið leikviðmið: ${pb.unit.load} PL · ${km(pb.unit.hsr)} háhraði (miðgildi ${pb.nNearFull} heilla leikja).` : `Own match unit: ${pb.unit.load} PL · ${km(pb.unit.hsr)} HSR (median of ${pb.nNearFull} full matches).`) : (is ? `Fáir heilir leikir (${pb.nNearFull}) — nota liðs-leikviðmið.` : `Few full matches (${pb.nNearFull}) — using the squad match unit.`)}</li>
-                    <li>• {pb.posLabel ? (is ? `${pb.posLabel.is}: háhraði ×${pb.hsrEmph.toFixed(2)}, vélrænt ×${pb.mechEmph.toFixed(2)} (Figueiredo).` : `${pb.posLabel.en} tilt: HSR ×${pb.hsrEmph.toFixed(2)}, mechanical ×${pb.mechEmph.toFixed(2)} (Figueiredo).`) : (is ? "Staða óþekkt — liðshlutföll." : "Position unknown — team shares.")}</li>
-                    <li>• {pb.maxMult < 1.4 ? (is ? `VALD ${player.vald.status ?? ""}: toppur takmarkaður við ×${pb.maxMult.toFixed(2)}. ` : `VALD ${player.vald.status ?? ""}: peak capped at ×${pb.maxMult.toFixed(2)}. `) : ""}{pb.loadScale < 1 ? (is ? `~${pb.avgMin}′ að meðaltali nýlega → æfingaálag trimmað ×${pb.loadScale.toFixed(2)}.` : `~${pb.avgMin}′ recent average → training load trimmed ×${pb.loadScale.toFixed(2)}.`) : (pb.avgMin != null && pb.avgMin < 40 ? (is ? `Fáar mínútur (~${pb.avgMin}′) → fullur rampur + áfyllingar.` : `Low minutes (~${pb.avgMin}′) → full ramp + top-ups.`) : (pb.maxMult >= 1.4 ? (is ? "Fullur rampur — ekkert þak/trim." : "Full ramp — no cap or trim.") : ""))}</li>
-                  </ul>
-                  <div className="mt-1.5"><span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase ${conf.c}`}>{is ? "vissa" : "confidence"}: {conf.t}</span></div>
-                  {/* Level 2 — the individualised block (compact calendar) */}
-                  <div className="mt-3 overflow-x-auto">
-                    <div className="grid min-w-[520px] gap-1" style={{ gridTemplateColumns: "auto repeat(7, 1fr)" }}>
-                      <div />
-                      {dows.map((d) => <div key={d} className="text-center text-[11px] font-medium uppercase text-slate-500">{d}</div>)}
-                      {b.weeks.map((w) => (
-                        <React.Fragment key={w.index}>
-                          <div className="flex flex-col justify-center pr-1"><span className="text-[11px] font-semibold text-slate-700">{is ? "V" : "W"}{w.index + 1}</span><span className={`text-[11px] font-bold ${w.isDeload ? "text-[#de9328]" : "text-[#2740e6]"}`}>{w.isDeload ? (is ? "niðurtr." : "deload") : `×${w.mult.toFixed(2)}`}</span></div>
-                          {w.days.map((d, i) => (
-                            <div key={i} className="rounded px-0.5 py-1 text-center leading-tight" style={{ background: tint[d.type] }} title={d.type === "rest" ? `${is ? d.dow.is : d.dow.en} ${d.md} — ${is ? "Frí" : "Rest"}` : `${is ? d.dow.is : d.dow.en} ${d.md} · ${is ? d.label.is : d.label.en} · ${is ? "Vegal" : "Dist"} ${km(d.dist)} · HSR ${km(d.hsr)} · PL ${d.load ?? "–"}${imaLine(d, is) ? ` · ${imaLine(d, is)}` : ""}`}>
-                              <div className="text-[11px] font-semibold" style={{ color: typeColor[d.type] }}>{abbr(d.type)}</div>
-                              <div className="text-[11px] tabular-nums text-slate-500">{d.type === "rest" ? "" : d.load ?? ""}</div>
-                            </div>
-                          ))}
-                        </React.Fragment>
-                      ))}
-                    </div>
-                  </div>
-                  <p className="mt-1.5 text-[11px] text-slate-500">{is ? "Þetta er yfirlits-grid — sama lota og á Mesó-flipanum (leikmanns-umfang). Fullt dagatal, dag-fyrir-dag vélrænt/IMA og PDF eru þar." : "This is a glance grid — the same block as on the Meso tab (player scope). The full calendar, day-by-day mechanical/IMA detail and PDF live there."}{" "}
-                    <button type="button" onClick={() => { setBlkScope("player"); setTab("plan"); }} className="font-semibold text-[#2740e6] hover:underline">{is ? "Opna fullt dagatal hans →" : "Open his full calendar →"}</button></p>
-                  <p className="mt-1 text-[11px] text-slate-500">{is ? "Einstaklingsmiðuð (leik-miðuð, þök/trim/áhersla). Upphafspunktur, ekki viðmið (Little & Buchheit). Aldrei readiness-liturinn." : "Individualised (match-anchored, caps/trim/steer). A starting point, not a norm (Little & Buchheit). Never the readiness colour."}</p>
-
-                </div>
-              );
-            })()}
-              </>)}
               {plSub === 1 && (<>
           {/* BUILD-UP TRACKING — actual accrued weekly training load vs the planned ramp, phase-gated on
               chronic-baseline maturity (plan-relative at cold start → rolling/ACWR as the base matures).
