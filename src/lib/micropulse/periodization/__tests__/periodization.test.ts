@@ -79,7 +79,7 @@ test("buildMesoBlocks: leads with TMr, deloads on a sharp acute-load rise, ACWR 
 });
 
 test("matchAxisTargets: three axes vs the match — running under, mechanical over, HSR deficit flagged", () => {
-  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 200, sprintM: 60, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 60, decel: 80, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, imaCod: null, matchImaCod: null, accelHiEff: 20, decelHiEff: 30, strideHi: 150, matchAccelHiEff: 40, matchDecelHiEff: 55, matchStrideHi: 300, rhieBouts: null, runSymmetry: null, metabolicPower: null };
+  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 200, sprintM: 60, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 60, decel: 80, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, imaCod: null, matchImaCod: null, imaFrDist: null, matchImaFrDist: null, accelHiEff: 20, decelHiEff: 30, strideHi: 150, matchAccelHiEff: 40, matchDecelHiEff: 55, matchStrideHi: 300, rhieBouts: null, runSymmetry: null, metabolicPower: null };
   const ax = matchAxisTargets(b);
   // Running axis under-reaches the match — training ceiling < match value.
   const hsr = ax.running.metrics.find((m) => /HSR/.test(m.metric.en))!;
@@ -320,7 +320,7 @@ test("positionGroup: buckets positions GK/Def/Mid/Fwd", () => {
 });
 
 test("mdWeekTargets: MD-anchored days with numbers from the position baseline", () => {
-  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, imaCod: null, matchImaCod: null, accelHiEff: null, decelHiEff: null, strideHi: null, matchAccelHiEff: null, matchDecelHiEff: null, matchStrideHi: null, rhieBouts: null, runSymmetry: null, metabolicPower: null };
+  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, imaCod: null, matchImaCod: null, imaFrDist: null, matchImaFrDist: null, accelHiEff: null, decelHiEff: null, strideHi: null, matchAccelHiEff: null, matchDecelHiEff: null, matchStrideHi: null, rhieBouts: null, runSymmetry: null, metabolicPower: null };
   const days = mdWeekTargets(b);
   const tag = (t: string) => days.find((d) => d.mdTag === t)!;
   assert.equal(tag("MD-5").type, "mechanical");   // MD-5 = mechanical (accel/decel/PL)
@@ -349,7 +349,7 @@ test("congested weeks: classify + collapse the micro (Oliveira 2019)", () => {
   assert.equal(cw.length, 1);
   assert.equal(cw[0].matches, 2);
   // The template collapses — no MD-5/-4/-3 build in a 2-game week:
-  const b: TeamAverages = { sessions: 50, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 10, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, imaCod: null, matchImaCod: null, accelHiEff: null, decelHiEff: null, strideHi: null, matchAccelHiEff: null, matchDecelHiEff: null, matchStrideHi: null, rhieBouts: null, runSymmetry: null, metabolicPower: null };
+  const b: TeamAverages = { sessions: 50, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 10, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, imaCod: null, matchImaCod: null, imaFrDist: null, matchImaFrDist: null, accelHiEff: null, decelHiEff: null, strideHi: null, matchAccelHiEff: null, matchDecelHiEff: null, matchStrideHi: null, rhieBouts: null, runSymmetry: null, metabolicPower: null };
   const two = mdWeekTargets(b, { weekType: "two_game" }).map((d) => d.mdTag);
   assert.ok(!two.includes("MD-5") && !two.includes("MD-4") && !two.includes("MD-3"));
   assert.deepEqual(two, ["MD+1", "MD-2", "MD-1", "MD", "Top-up"]);
@@ -358,7 +358,7 @@ test("congested weeks: classify + collapse the micro (Oliveira 2019)", () => {
 });
 
 test("buildMesoPlan: N weeks, deload every 4th, overload ramps, week type from fixtures, numbers scale", () => {
-  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, imaCod: null, matchImaCod: null, accelHiEff: null, decelHiEff: null, strideHi: null, matchAccelHiEff: null, matchDecelHiEff: null, matchStrideHi: null, rhieBouts: null, runSymmetry: null, metabolicPower: null };
+  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, imaCod: null, matchImaCod: null, imaFrDist: null, matchImaFrDist: null, accelHiEff: null, decelHiEff: null, strideHi: null, matchAccelHiEff: null, matchDecelHiEff: null, matchStrideHi: null, rhieBouts: null, runSymmetry: null, metabolicPower: null };
   const plan = buildMesoPlan({ startDate: "2026-01-05", numWeeks: 4, sessionsPerWeek: 5, baseline: b, matchUnitLoad: 1000, fixtures: ["2026-01-21", "2026-01-24"] });
   assert.equal(plan.weeks.length, 4);
   assert.equal(plan.weeks[3].isDeload, true);              // every 4th week is a planned deload
@@ -722,4 +722,27 @@ test("buildMesoBlocks: an off-season start later than season end makes a holiday
   // With no off-season start, there is no holiday block.
   const noHol = buildMesoBlocks(phases[0].start, phases[phases.length - 1].end, [], 4, 650, fx, comp.start, [], off.start, null);
   assert.equal(noHol.filter((b) => b.start >= comp.end)[0].goalKey, "accum");
+});
+
+// ── IMA running pair (Free Running bands 5–8 distance + Stride bands 6–8) ───────────────
+import { describe as describeIma, it as itIma, expect as expectIma } from "vitest";
+import { weeklyKpiMultiple as wkm, standardTrainingDays as stdDays } from "@/lib/micropulse/periodization/plannedVolume";
+describeIma("IMA Free Running + Stride in the periodization vocabulary", () => {
+  itIma("match unit medians IMA Free Running from near-full matches", () => {
+    const rows = [1200, 1300, 1400, 1500].map((fr, i) => ({ date: `2026-09-0${i + 1}`, minutes: 90, load: 1000, hsr: 800, sprint: 200, distance: 10000, accel: 60, decel: 90, imaFr: fr }));
+    const mu = computeMatchUnit(rows);
+    expectIma(mu.imaFr.typical).toBe(1350);
+  });
+  itIma("teamAverages carries training + match Free Running", () => {
+    const base = { distanceM: 5000, hsrM: 200, sprintM: 50, maxKmh: 30, playerLoad: 500, plPerMin: 8, accel: 40, decel: 50 };
+    const t = teamAverages([{ ...base, isMatch: false, imaFrDist: 400 }, { ...base, isMatch: true, imaFrDist: 1300 }], null);
+    expectIma(t.imaFrDist).toBe(850);
+    expectIma(t.matchImaFrDist).toBe(1300);
+  });
+  itIma("weekly ×match: strides accumulate more than volume, fast running less", () => {
+    const days = stdDays(1);
+    const vol = wkm(days, "totalDistance");
+    expectIma(wkm(days, "imaStrideHi")).toBeGreaterThan(vol);
+    expectIma(wkm(days, "imaFrDistance")).toBeLessThan(vol);
+  });
 });

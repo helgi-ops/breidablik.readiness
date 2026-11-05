@@ -72,6 +72,10 @@ export const KPI_TAPER_EXPONENT: Partial<Record<WeeklyLoadMetricKey, number>> = 
   fmpDynamicHigh: 1.5, fmpDynamicMedium: 1.1, fmpRunningHigh: 1.5,
   imaTotal: 1.1, imaAccel: 0.9, imaDecel: 1.0, imaCod: 1.1,
   imaStrideBand6: 1.5, imaStrideBand7: 1.7, imaStrideBand8: 2.2,
+  // IMA running pair — calibrated on Breiðablik's per-MD-day medians (2026, ~1,600 sessions): fast strides
+  // (bands 6–8 include sub-maximal running) stay ~60% of a match even on MD-1 → flat (e<1, ~3.9× a match
+  // per week); fast-running distance (bands 5–8) tapers a little harder than volume (e=1.2, ~2.3×).
+  imaFrDistance: 1.2, imaStrideHi: 0.7,
 };
 
 /**
@@ -98,6 +102,7 @@ export const KPI_PATHWAY: Partial<Record<WeeklyLoadMetricKey, LoadPathway>> = {
   velocityBand5: "biomechanical", velocityBand6: "biomechanical",
   fmpDynamicHigh: "biomechanical", fmpRunningHigh: "biomechanical",
   imaStrideBand6: "biomechanical", imaStrideBand7: "biomechanical", imaStrideBand8: "biomechanical",
+  imaFrDistance: "biomechanical", imaStrideHi: "biomechanical",
 };
 
 /** Ramp-progression exponent per pathway, applied to the pre-season ramp fraction (0→1): 1 = linear;
@@ -148,6 +153,7 @@ export const KPI_REENTRY_FLOOR: Partial<Record<WeeklyLoadMetricKey, number>> = {
   totalDistance: 0.80,   // aerobic volume — load high & early (~5.5 km/session re-entry at 4 sessions)
   velocityBand5: 0.65,   // HSR — load the aerobic-power base early (coach priority), but below distance
   imaStrideBand6: 0.62,  // IMA HSR-equivalent cadence band
+  imaFrDistance: 0.62,   // IMA fast-running distance (bands 5–8) — the IMA HSR-equivalent
   fmpRunningHigh: 0.62,  // FMP high-speed running
   // Accel/decel are training-dense from day one (SSGs/drills) → start higher than the generic re-entry.
   // Decel a touch lower than accel — it carries the highest tissue load (Harper & McBurnie 2021).

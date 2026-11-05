@@ -67,8 +67,15 @@ export const WEEKLY_LOAD_METRICS_IMA = [
  */
 export const WEEKLY_LOAD_METRICS = WEEKLY_LOAD_METRICS_OUTDOOR;
 
+// ─── IMA running KPIs (periodization vocabulary) ──────────────────────────────
+// The running-side IMA pair the periodization hub plans with, beside IMA CoD: IMA Free Running fast
+// distance (bands 5–8, `ima_fr_band58_total_distance`) and IMA Stride fast strides (bands 6–8 summed).
+// Part of the key vocabulary only — not a Weekly Load tracker tile set (the tracker shows the 3 bands).
+export const WEEKLY_LOAD_METRICS_IMA_RUN = ["imaFrDistance", "imaStrideHi"] as const;
+
 export type WeeklyLoadMetricKey =
   | (typeof WEEKLY_LOAD_METRICS_OUTDOOR)[number]
+  | (typeof WEEKLY_LOAD_METRICS_IMA_RUN)[number]
   | (typeof WEEKLY_LOAD_METRICS_INDOOR)[number]
   | (typeof WEEKLY_LOAD_METRICS_IMA)[number]
   | (typeof WEEKLY_LOAD_METRICS_BASKETBALL_TITAN)[number]
@@ -190,6 +197,9 @@ export const WEEKLY_LOAD_LABELS: Record<WeeklyLoadMetricKey, { en: string; is: s
   imaStrideBand6:   { en: "Stride B6",       is: "Skref-band 6",      unit: "#" },
   imaStrideBand7:   { en: "Stride B7",       is: "Skref-band 7",      unit: "#" },
   imaStrideBand8:   { en: "Stride B8",       is: "Skref-band 8",      unit: "#" },
+  // IMA running pair (periodization): fast running distance + fast strides
+  imaFrDistance:    { en: "IMA Free Running", is: "IMA hraðhlaup",    unit: "m" },
+  imaStrideHi:      { en: "IMA Stride",      is: "IMA hröð skref",    unit: "#" },
   // Titan indoor IMU (basketball)
   jumps:            { en: "Jumps",           is: "Stökk",             unit: "#" },
   impacts:          { en: "Impacts",         is: "Högg",              unit: "#" },

@@ -54,18 +54,18 @@ const UNIT: Record<EnoughVar, Bi> = {
 
 /**
  * How a variable's single-session share scales with the day's load (share = (matchPct/100)^e).
- * Accel/decel/CoD reuse the periodization taper exponents. Fast running and fast strides differ from
- * the WEEKLY taper: calibrated on Breiðablik's own per-MD-day medians (2026, ~1,600 sessions) —
+ * All five read the periodization hub's KPI_TAPER_EXPONENT (one source for plan and review). The IMA
+ * running pair there is calibrated on Breiðablik's own per-MD-day medians (2026, ~1,600 sessions) —
  * fast strides (band 6–8 includes sub-maximal running) stay high even on light days (~60% of a match
- * on MD-1), so their session share is flatter (e<1); fast-running distance tapers a little harder
- * than volume (e=1.2). A typical MD-4 then reads ~on target, a light MD-1 does not read "short".
+ * on MD-1), so their share is flatter (e<1); fast-running distance tapers a little harder than volume
+ * (e=1.2). A typical MD-4 then reads ~on target, a light MD-1 does not read "short".
  */
 export const SESSION_SHARE_EXPONENT: Record<EnoughVar, number> = {
   imaAccel: KPI_TAPER_EXPONENT.imaAccel ?? 0.9,
   imaDecel: KPI_TAPER_EXPONENT.imaDecel ?? 1.0,
   imaCod: KPI_TAPER_EXPONENT.imaCod ?? 1.1,
-  frDistance: 1.2,
-  strideHi: 0.7,
+  frDistance: KPI_TAPER_EXPONENT.imaFrDistance ?? 1.2,
+  strideHi: KPI_TAPER_EXPONENT.imaStrideHi ?? 0.7,
 };
 
 export const ENOUGH_CITATIONS = [

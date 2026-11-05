@@ -96,6 +96,8 @@ export type TeamAverages = {
   matchSprintM: number | null; matchAccel: number | null; matchDecel: number | null;
   // IMA CoD = total directional change-of-direction events per session (summed IMA clock). Match ref too.
   imaCod: number | null; matchImaCod: number | null;
+  // IMA Free Running fast distance (bands 5–8, m) per session + match ref. Pro/Catapult only.
+  imaFrDist: number | null; matchImaFrDist: number | null;
   // Richer mechanical/IMA axis (Figueiredo, Buchheit directional gap) — nullable, shown only when the
   // club's feed carries them. accel/decel Band 2–3 = high-INTENSITY effort counts; strideHi = top-band
   // free-running stride count; rhie/symmetry/metabolic are presence-gated (absent even on some Pro feeds).
@@ -110,7 +112,7 @@ export type SessionRow = {
   maxKmh: number | null; playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null;
   accelHiEff?: number | null; decelHiEff?: number | null; strideHi?: number | null;
   rhieBouts?: number | null; runSymmetry?: number | null; metabolicPower?: number | null;
-  imaCod?: number | null;
+  imaCod?: number | null; imaFrDist?: number | null;
 };
 
 /** Coarse position group — the squad baseline is read per position (Ju: peak demands are position-
@@ -138,6 +140,7 @@ export function teamAverages(rows: SessionRow[], direction: TeamAverages["direct
     matchHsrM: avg(col((r) => r.hsrM, matches)), matchPlayerLoad: avg(col((r) => r.playerLoad, matches)),
     matchSprintM: avg(col((r) => r.sprintM, matches)), matchAccel: avg(col((r) => r.accel, matches)), matchDecel: avg(col((r) => r.decel, matches)),
     imaCod: avg(col((r) => r.imaCod ?? null)), matchImaCod: avg(col((r) => r.imaCod ?? null, matches)),
+    imaFrDist: avg(col((r) => r.imaFrDist ?? null)), matchImaFrDist: avg(col((r) => r.imaFrDist ?? null, matches)),
     accelHiEff: avg(col((r) => r.accelHiEff ?? null)), decelHiEff: avg(col((r) => r.decelHiEff ?? null)), strideHi: avg(col((r) => r.strideHi ?? null)),
     matchAccelHiEff: avg(col((r) => r.accelHiEff ?? null, matches)), matchDecelHiEff: avg(col((r) => r.decelHiEff ?? null, matches)), matchStrideHi: avg(col((r) => r.strideHi ?? null, matches)),
     rhieBouts: avg(col((r) => r.rhieBouts ?? null)), runSymmetry: avg(col((r) => r.runSymmetry ?? null)), metabolicPower: avg(col((r) => r.metabolicPower ?? null)),
@@ -240,13 +243,15 @@ export type PlayerMatchRow = {
   // IMA CoD = total directional change-of-direction events (summed IMA clock, gridTotal). The aggregate
   // ima_cod column is NULL in our feed, so the loader derives this from ima_clock_gen2. Pro/Catapult only.
   imaCod?: number | null;
+  // IMA Free Running fast distance (bands 5–8, m) — the running-side IMA companion to stride.
+  imaFr?: number | null;
 };
 export type MatchUnit = {
   nNearFull: number; nInWindow: number; fellBack: boolean; confidence: "high" | "medium" | "low";
   windowNote: Bi; minutesTypical: number | null;
   load: MatchUnitMetric; hsr: MatchUnitMetric; sprint: MatchUnitMetric; distance: MatchUnitMetric; accel: MatchUnitMetric; decel: MatchUnitMetric;
   accHiEff: MatchUnitMetric; decHiEff: MatchUnitMetric; stride: MatchUnitMetric; rhie: MatchUnitMetric; symmetry: MatchUnitMetric; metPower: MatchUnitMetric;
-  imaCod: MatchUnitMetric;
+  imaCod: MatchUnitMetric; imaFr: MatchUnitMetric;
 };
 const median = (xs: number[]): number | null => {
   if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); const m = Math.floor(s.length / 2);
@@ -294,7 +299,7 @@ export function computeMatchUnit(rows: PlayerMatchRow[], opts?: NearFullOpts): M
     distance: metric((r) => r.distance), accel: metric((r) => r.accel), decel: metric((r) => r.decel),
     accHiEff: metric((r) => r.accHiEff ?? null), decHiEff: metric((r) => r.decHiEff ?? null), stride: metric((r) => r.stride ?? null),
     rhie: metric((r) => r.rhie ?? null), symmetry: metric((r) => r.symmetry ?? null), metPower: metric((r) => r.metPower ?? null),
-    imaCod: metric((r) => r.imaCod ?? null),
+    imaCod: metric((r) => r.imaCod ?? null), imaFr: metric((r) => r.imaFr ?? null),
   };
 }
 
