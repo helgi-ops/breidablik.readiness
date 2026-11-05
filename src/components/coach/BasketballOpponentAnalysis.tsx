@@ -416,7 +416,7 @@ export default function BasketballOpponentAnalysis() {
     try {
       const { downloadBasketballOpponentPdf } = await import("@/components/coach/BasketballOpponentPdf");
       // Confirmed set-play diagrams for this opponent (coach-drawn + confirmed AI drafts).
-      let plays: { name: string; playType: string | null; diagram: PlayDiagram; source?: string | null; confidence?: string | null }[] | null = null;
+      let plays: { name: string; playType: string | null; diagram: PlayDiagram; source?: string | null; confidence?: string | null; coverage?: string | null }[] | null = null;
       try {
         const tok = await token();
         if (tok && sel) {
@@ -425,7 +425,7 @@ export default function BasketballOpponentAnalysis() {
           if (j.ok && Array.isArray(j.diagrams)) {
             plays = j.diagrams
               .filter((d: { confirmed?: boolean }) => d.confirmed)
-              .map((d: { name: string; play_type: string | null; diagram: PlayDiagram; source?: string | null; confidence?: string | null }) => ({ name: d.name, playType: d.play_type, diagram: d.diagram, source: d.source, confidence: d.confidence }));
+              .map((d: { name: string; play_type: string | null; diagram: PlayDiagram; source?: string | null; confidence?: string | null; coverage?: string | null }) => ({ name: d.name, playType: d.play_type, diagram: d.diagram, source: d.source, confidence: d.confidence, coverage: d.coverage }));
           }
         }
       } catch { /* diagrams are optional — the report still downloads without them */ }

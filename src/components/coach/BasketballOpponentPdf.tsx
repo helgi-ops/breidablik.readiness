@@ -73,7 +73,7 @@ export type BasketballOpponentPdfData = {
   plays?: PdfPlay[] | null;
   ai: { headline?: string; summary?: string; strengths?: string[]; weaknesses?: string[]; keyPlayers?: { name: string; note: string }[]; howToDefend?: string[]; howToAttack?: string[] } | null;
 };
-export type PdfPlay = { name: string; playType: string | null; diagram: PlayDiagram; source?: string | null; confidence?: string | null };
+export type PdfPlay = { name: string; playType: string | null; diagram: PlayDiagram; source?: string | null; confidence?: string | null; coverage?: string | null };
 
 // ── Design tokens (CLAUDE.md § Design system) ────────────────────────────────
 const BONE = "#f4f2ec", CARD = "#ffffff", INK = "#14181c", MUTE = "#575c63", RULE = "#dcd8cc", HAIR = "#efece4";
@@ -107,7 +107,7 @@ const T = {
     small: "Small sample - read as tendencies", ai: "READS THE NUMBERS - DECIDES NOTHING", basedOn: "Based on the InStat numbers on pages 2-3 of this report.",
     plan: "Game plan", defend: "How to defend", attack: "Where to attack", keyFacts: "Key facts",
     scoreHead: "HOW THEY SCORE", playersHead: "PLAYERS", behindHead: "BEHIND THE NUMBERS", setPlaysHead: "SET PLAYS",
-    shotChart: "Shot chart", shotsLabel: "shots",
+    shotChart: "Shot chart", shotsLabel: "shots", ourCoverage: "Our coverage",
     setPlays: "Set plays", setPlaysHint: "The opponent's most-used sets, drawn by the coaching staff. O = attacker, X = defender; dashed = pass, zig-zag = dribble, bar = screen.", aiDraft: "AI first draft", unconfirmed: "unconfirmed",
     profile: "Team profile", perGame: "per game", ff: "How they played you (Four Factors)", zones: "Shot map",
     shotsFrom: "Where their shots come from", shareOfShots: "Share of shots", aboveAvg: "Above their average FG%", playType: "Play type", madeAtt: "Made-att",
@@ -128,7 +128,7 @@ const T = {
     small: "Lítið úrtak - lesið sem tilhneigingar", ai: "LES TÖLURNAR - ÁKVEÐUR EKKERT", basedOn: "Byggt á InStat-tölunum á bls. 2-3 í þessari skýrslu.",
     plan: "Leikplan", defend: "Hvernig á að verjast", attack: "Hvar á að sækja", keyFacts: "Lykilatriði",
     scoreHead: "HVERNIG ÞEIR SKORA", playersHead: "LEIKMENN", behindHead: "Á BAK VIÐ TÖLURNAR", setPlaysHead: "LEIKKERFI",
-    shotChart: "Skotakort", shotsLabel: "skot",
+    shotChart: "Skotakort", shotsLabel: "skot", ourCoverage: "Okkar vörn",
     setPlays: "Leikkerfi", setPlaysHint: "Mest notuðu sóknir andstæðingsins, teiknaðar af þjálfarateymi. O = sóknarmaður, X = varnarmaður; brotalína = sending, sikk-sakk = rakning, strik = skermur.", aiDraft: "AI-uppkast", unconfirmed: "óstaðfest",
     profile: "Liðsprófíll", perGame: "í leik", ff: "Hvernig þeir spiluðu ykkur (Four Factors)", zones: "Skotkort",
     shotsFrom: "Hvaðan skotin koma", shareOfShots: "Hlutfall skota", aboveAvg: "Yfir meðalnýtingu þeirra", playType: "Sóknartegund", madeAtt: "Hitt-reynt",
@@ -702,6 +702,12 @@ function Doc({ data, lang, f }: { data: BasketballOpponentPdfData; lang: Lang; f
                   <View style={{ backgroundColor: "#ffffff", borderWidth: 1, borderColor: HAIR, borderRadius: 6, padding: 4, alignItems: "center" }}>
                     <PlayDiagramPdf diagram={p.diagram} w={210} />
                   </View>
+                  {p.coverage ? (
+                    <View style={{ marginTop: 6, backgroundColor: COBALT_TINT, borderRadius: 5, paddingHorizontal: 7, paddingVertical: 5 }}>
+                      <Text style={[f.b(700), { fontSize: 7, letterSpacing: 0.7, color: COBALT }]}>{t.ourCoverage.toUpperCase()}</Text>
+                      <Text style={[f.b(400), { fontSize: 8.75, lineHeight: 1.4, marginTop: 1.5, color: INK }]}>{clean(p.coverage)}</Text>
+                    </View>
+                  ) : null}
                 </View>
               );
             })}

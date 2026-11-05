@@ -222,6 +222,11 @@ export default function PlayDiagramsSection({ opponent }: { opponent: string }) 
                   <button type="button" onClick={() => void del(p.id)} className="text-red-600 hover:underline">{is ? "Eyða" : "Delete"}</button>
                 </div>
               </div>
+              {p.coverage ? (
+                <div className="mt-1 rounded bg-[#2740e6]/[0.06] px-1.5 py-1 text-[11px] leading-snug text-slate-600">
+                  <span className="font-semibold text-[#2740e6]">{is ? "Okkar vörn: " : "Our coverage: "}</span>{p.coverage}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>

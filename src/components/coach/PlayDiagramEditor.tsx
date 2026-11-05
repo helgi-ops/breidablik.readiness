@@ -15,7 +15,7 @@ import { buildPlayDiagram, PLAY_VIEW, PLAY_TYPES, ARROW_KINDS, type PlayDiagram,
 import { COMMON_SETS } from "@/lib/micropulse/basketballStats/commonSets";
 
 type Tool = "off" | "def" | "arrow" | "move" | "erase";
-export type SavedDiagram = { id: string; name: string; play_type: string | null; diagram: PlayDiagram; source: string; confirmed: boolean; confidence: string | null };
+export type SavedDiagram = { id: string; name: string; play_type: string | null; diagram: PlayDiagram; source: string; confirmed: boolean; confidence: string | null; coverage?: string | null };
 
 const EMPTY: PlayDiagram = { court: "half", players: [], arrows: [] };
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -29,6 +29,8 @@ export default function PlayDiagramEditor({ opponent, initial, onSaved, onCancel
   const [diagram, setDiagram] = React.useState<PlayDiagram>(initial?.diagram ?? EMPTY);
   const [name, setName] = React.useState(initial?.name ?? "");
   const [playType, setPlayType] = React.useState(initial?.play_type ?? "pnrHandler");
+  const [coverage, setCoverage] = React.useState(initial?.coverage ?? ""); // how WE guard this set
+  const [covBusy, setCovBusy] = React.useState(false);
   const [tool, setTool] = React.useState<Tool>("off");
   const [kind, setKind] = React.useState<ArrowKind>("move");
 
@@ -122,7 +124,7 @@ export default function PlayDiagramEditor({ opponent, initial, onSaved, onCancel
     try {
       const token = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
       if (!token) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
-      const body = { opponent, name: name.trim(), playType, diagram };
+      const body = { opponent, name: name.trim(), playType, diagram, coverage: coverage.trim() || null };
       // Editing an unconfirmed AI draft is the coach taking ownership — confirm it on save
       // (brief: "coach confirms or edits → confirmed:true"). Only confirmed plays print.
       const confirmDraft = initial?.source === "ai_draft" && !initial.confirmed;
@@ -135,6 +137,23 @@ export default function PlayDiagramEditor({ opponent, initial, onSaved, onCancel
       if (!res.ok || !j.ok) { setErr(j.error ?? "Error"); return; }
       onSaved();
     } catch (e) { setErr(e instanceof Error ? e.message : "Error"); } finally { setBusy(false); }
+  }
+
+  // AI drafts a first-pass "how we guard this" from the play (name/type/shape). The coach edits it —
+  // rules/coach decide, AI only drafts. Never touches the readiness colour.
+  async function draftCoverage() {
+    setCovBusy(true); setErr(null);
+    try {
+      const token = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+      if (!token) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const res = await fetch("/api/coach/scouting/play-diagrams/draft-coverage", {
+        method: "POST", headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), playType, diagram, lang }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setErr(j.error ?? "Error"); return; }
+      if (j.coverage) setCoverage(String(j.coverage));
+    } catch (e) { setErr(e instanceof Error ? e.message : "Error"); } finally { setCovBusy(false); }
   }
 
   const toolBtn = (t: Tool, label: string) => (
@@ -170,6 +189,22 @@ export default function PlayDiagramEditor({ opponent, initial, onSaved, onCancel
           <option value="">{is ? "Veldu kerfi…" : "Choose a set…"}</option>
           {COMMON_SETS.map((s) => <option key={s.key} value={s.key}>{is ? s.name.is : s.name.en}</option>)}
         </select>
+      </div>
+
+      {/* "Our coverage" — the coach's defensive plan for this set (the Keflavík "our coverage" column).
+          Prints under the diagram in the scouting PDF. AI drafts a first pass; the coach edits/owns it. */}
+      <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/60 p-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Okkar vörn (hvernig við verjumst)" : "Our coverage (how we guard it)"}</span>
+          <button type="button" onClick={() => void draftCoverage()} disabled={covBusy || !name.trim() || diagram.players.length === 0}
+            className="ml-auto rounded-md border border-[#2740e6] px-2 py-0.5 text-[11px] font-semibold text-[#2740e6] hover:bg-[#eef0fb] disabled:opacity-50">
+            {covBusy ? "AI…" : (is ? "✨ AI-uppkast" : "✨ AI draft")}
+          </button>
+        </div>
+        <textarea value={coverage} onChange={(e) => setCoverage(e.target.value)} rows={2}
+          placeholder={is ? "T.d. „Blue ef stóri er í stöðu, annars high flat. Chase over, næsti verjandi í gapið.“" : "e.g. \"Blue if our big is in position, else high flat. Chase over, next defender in the gap.\""}
+          className="mt-1 w-full resize-y rounded-md border border-slate-300 px-2 py-1.5 text-[13px]" />
+        <p className="mt-0.5 text-[10px] text-slate-400">{is ? "Þitt varnar-plan — prentast undir kerfinu í scouting-PDF-inu. AI gerir uppkast, þú ræður." : "Your defensive plan — prints under the diagram in the scouting PDF. AI drafts a first pass, you decide."}</p>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
