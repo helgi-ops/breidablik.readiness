@@ -11,6 +11,7 @@ import {
   deriveRecoveryTeamSignal, derivePlayerRecoverySignals,
   deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal,
   derivePositionFitnessSignal, deriveStrength1rmSignal, deriveStrengthPhaseSignal,
+  deriveSessionEnoughSignal,
   type CoachSignal,
 } from "@/lib/micropulse/coachSignals";
 import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite, loadTeamPositionFitnessLite, loadTeamStrength1rmLite, loadTeamStrengthPhaseLite } from "@/lib/micropulse/coachSignals/newEngineLoads";
@@ -20,6 +21,7 @@ import { loadTeamHrvReads } from "@/lib/micropulse/hrvTrend/teamLoad";
 import { loadTeamWearableRecovery } from "@/lib/micropulse/wearableRecovery/teamLoad";
 import { loadTeamHrLoadSignals } from "@/lib/micropulse/hrLoad/signalLoad";
 import { loadTeamRecoveryWatch } from "@/lib/micropulse/recoveryWatch/teamLoad";
+import { loadSessionEnoughForSignal } from "@/lib/micropulse/postTraining/signalLoad";
 
 /** A signal with its owner — playerId null = team-level, set = per-player. */
 export type OwnedSignal = CoachSignal & { playerId: string | null };
@@ -44,6 +46,9 @@ export async function computeAdminSignals(
   sb: SupabaseClient,
   teamId: string,
   today: string,
+  /** includeSessionEnough: add yesterday's "Did we do enough?" read (Vector Pro football). The morning
+   *  digest opts in; threshold push-alerts do not (a light session is a review item, not an alert). */
+  opts?: { includeSessionEnough?: boolean },
 ): Promise<OwnedSignal[]> {
   const [formReads, robustReads, hrvReads, wearableReads, hrLoadReads, recoveryReads, fitTrendLite, bodyCompLite, speedZonesLite] = await Promise.all([
     loadTeamFormReads(sb, teamId).catch(() => []),
@@ -113,7 +118,12 @@ export async function computeAdminSignals(
     });
   }
 
-  const team: OwnedSignal[] = [mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase].map((s) => ({ ...s, playerId: null }));
+  // "Did we do enough?" — tokenless (no load-plan self-fetch), unlike post-training's plan diff.
+  const enough = opts?.includeSessionEnough
+    ? deriveSessionEnoughSignal(await loadSessionEnoughForSignal(sb, teamId, today).catch(() => null))
+    : null;
+
+  const team: OwnedSignal[] = [mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase, ...(enough ? [enough] : [])].map((s) => ({ ...s, playerId: null }));
   const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }

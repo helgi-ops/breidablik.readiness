@@ -124,10 +124,15 @@ export function deriveSessionEnoughSignal(resp: SessionEnoughLite | null): Coach
   const href = "/coach/post-training";
   const label: Bi = { en: "Did we do enough?", is: "Gerðum við nóg?" };
   const base: CoachSignal = { engine: "session_enough", level: "steady", label, why: { en: [], is: [] }, confidence: null, counterfactual: null, href };
-  if (!resp || resp.state !== "ok" || !resp.verdict || resp.verdict === "yes") return base; // enough → silent
+  if (!resp || resp.state !== "ok" || !resp.verdict) return base;
+  const tag = `${resp.mdLabel ?? ""}${resp.sessionDate ? ` · ${resp.sessionDate}` : ""}`.trim();
+  // Enough → level stays steady (no Today chip), but the why carries the "yes" so the morning
+  // digest can still answer the question every morning.
+  if (resp.verdict === "yes") {
+    return { ...base, why: { en: [`${resp.headline?.en ?? ""}${tag ? ` (${tag})` : ""}`], is: [`${resp.headline?.is ?? ""}${tag ? ` (${tag})` : ""}`] } };
+  }
   const level: SignalLevel = resp.verdict === "no" ? "elevated" : "watch";
   const facts = (resp.facts ?? []).slice(0, 1);
-  const tag = `${resp.mdLabel ?? ""}${resp.sessionDate ? ` · ${resp.sessionDate}` : ""}`.trim();
   return {
     ...base, level, confidence: resp.confidence?.level ?? "moderate",
     why: {

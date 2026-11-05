@@ -33,6 +33,12 @@ export type Digest = {
 
 /** Compose the digest from a team's computed signals. Pure. */
 export function buildMorningDigest(signals: OwnedSignal[]): Digest {
+  // "Did we do enough?" is a standing first line whenever yesterday's session was judged — including a
+  // "yes" — so the coach gets the answer every morning. It still counts toward the summary by its level.
+  const enough = signals.find((s) => s.engine === "session_enough" && s.playerId == null && (s.why?.en?.[0] ?? "") !== "");
+  const enoughItem: DigestItem[] = enough
+    ? [{ label: enough.label, why: { en: enough.why.en[0], is: enough.why.is?.[0] ?? enough.why.en[0] }, href: enough.href }]
+    : [];
   const actionable = signals.filter((s) => s.level === "elevated" || s.level === "task");
   const watch = signals.filter((s) => s.level === "watch");
   const pool = (actionable.length ? actionable : watch)
@@ -42,11 +48,11 @@ export function buildMorningDigest(signals: OwnedSignal[]): Digest {
       (CONF_RANK[a.confidence ?? "low"] ?? 9) - (CONF_RANK[b.confidence ?? "low"] ?? 9),
     );
 
-  const items: DigestItem[] = pool.map((s) => ({
+  const items: DigestItem[] = [...enoughItem, ...pool.filter((s) => s !== enough).map((s) => ({
     label: { en: s.label?.en ?? "", is: s.label?.is ?? s.label?.en ?? "" },
     why: { en: s.why?.en?.[0] ?? "", is: s.why?.is?.[0] ?? s.why?.en?.[0] ?? "" },
     href: s.href ?? "/coach",
-  }));
+  }))];
 
   const nAction = actionable.length;
   const nWatch = watch.length;
@@ -73,7 +79,7 @@ export function buildMorningDigest(signals: OwnedSignal[]): Digest {
       en: "All steady — nothing needs action today.",
       is: "Allt í jafnvægi — ekkert kallar á aðgerð í dag.",
     },
-    items: [],
+    items: enoughItem,
   };
 }
 
@@ -181,7 +187,7 @@ export async function runCoachMorningDigest(
     if (tier !== "PRO" && tier !== "ELITE") { res.teamsBelowTier++; continue; }
 
     // 3. Compose from fresh, tokenless signals.
-    const signals = await computeAdminSignals(sb, teamId, dateKey).catch(() => [] as OwnedSignal[]);
+    const signals = await computeAdminSignals(sb, teamId, dateKey, { includeSessionEnough: true }).catch(() => [] as OwnedSignal[]);
     const digest = buildMorningDigest(signals);
 
     // Email addresses for this team's coaches (auth.users via RPC).
@@ -240,7 +246,7 @@ export async function runCoachMorningDigest(
 // ── Preview / send-test (coach-triggered, no dedupe, respects tier upstream) ──
 /** Compose today's digest for a team without sending — for the Settings preview. */
 export async function previewDigest(sb: SupabaseClient, teamId: string, dateKey: string): Promise<Digest> {
-  const signals = await computeAdminSignals(sb, teamId, dateKey).catch(() => [] as OwnedSignal[]);
+  const signals = await computeAdminSignals(sb, teamId, dateKey, { includeSessionEnough: true }).catch(() => [] as OwnedSignal[]);
   return buildMorningDigest(signals);
 }
 
