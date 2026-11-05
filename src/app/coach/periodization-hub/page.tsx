@@ -842,6 +842,14 @@ export default function PeriodizationHubPage() {
     () => (player ? computePlayerBlock(player, { active: steerActive, steer }) : null),
     [player, computePlayerBlock, steerActive, steer],
   );
+  // The Block calendar is ONE calendar: team scope renders the editable team skeleton (calBlock); player
+  // scope renders the SAME structure re-individualised (buildPlayerBlock — aligned/capped/steered), so the
+  // player-scoped calendar reads identically to "His block" on the Players tab (no second, divergent grid).
+  // Player scope is read-only (day-type edits are a team concern); switch to Team scope to edit.
+  const mesoCalBlock = React.useMemo(
+    () => (isPlayerScope && playerBlock ? playerBlock.block : calBlock),
+    [isPlayerScope, playerBlock, calBlock],
+  );
 
   // Build-up TRACKING block — the CURRENT build-up (active Meso block, past→now)
   // on the steer-independent neutral ramp. Retrospective adherence asks "did
@@ -1058,8 +1066,9 @@ export default function PeriodizationHubPage() {
   const recTint = (c: "high" | "medium" | "low") => (c === "high" ? "bg-emerald-100 text-emerald-700" : c === "medium" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500");
 
   async function exportBlock() {
-    if (!calBlock || !plan) return;
-    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: calBlock, isKinexon }, is ? "IS" : "EN");
+    const blk = mesoCalBlock; // player scope exports HIS block; team scope the team block
+    if (!blk || !plan) return;
+    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: blk, isKinexon }, is ? "IS" : "EN");
   }
 
   // Write the block skeleton back into Week Setup (week_setups + week_plans) so the two stay in sync.
@@ -2722,8 +2731,8 @@ export default function PeriodizationHubPage() {
                 <button type="button" onClick={() => nextB && setBlkStart(nextB.start)} disabled={!nextB} aria-label={is ? "Næsta lota" : "Next block"} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40">{is ? "Næsta" : "Next"} ›</button>
                 {todayB && sel && sel.start !== todayB.start && <button type="button" onClick={() => setBlkStart(todayB.start)} className="h-10 rounded-lg px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">{is ? "Fara á núverandi" : "Go to current"}</button>}
                 <span className="mx-1 hidden h-6 w-px bg-slate-200 sm:block" />
-                <button onClick={exportBlock} disabled={!calBlock} className="h-10 rounded-lg border border-[#2740e6] bg-white px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-40" title={is ? "Bara þessa lotu (heildar-PDF er efst á síðunni)" : "Just this block (the full-data PDF is at the top of the page)"}>{is ? "Sækja lotu (PDF)" : "Export block (PDF)"}</button>
-                <button onClick={applyToWeekSetup} disabled={!calBlock || wsBusy} className="h-10 rounded-lg bg-[#2740e6] px-3 text-[13px] font-semibold text-white hover:bg-[#1e34c0] disabled:opacity-40" title={is ? "Dagarnir vistast sjálfkrafa við hverja breytingu — þetta vistar strax núna" : "Days auto-save on every change — this saves now immediately"}>{wsBusy ? (is ? "Vista…" : "Saving…") : wsApplied === "ok" ? (is ? "✓ Vistað" : "✓ Saved") : (is ? "Vista núna" : "Save now")}</button>
+                <button onClick={exportBlock} disabled={!mesoCalBlock} className="h-10 rounded-lg border border-[#2740e6] bg-white px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-40" title={isPlayerScope ? (is ? `Lotan hans ${player?.name ?? ""} (heildar-PDF er efst á síðunni)` : `${player?.name ?? "His"} block (the full-data PDF is at the top of the page)`) : (is ? "Bara þessa lotu (heildar-PDF er efst á síðunni)" : "Just this block (the full-data PDF is at the top of the page)")}>{is ? "Sækja lotu (PDF)" : "Export block (PDF)"}</button>
+                {!isPlayerScope && <button onClick={applyToWeekSetup} disabled={!calBlock || wsBusy} className="h-10 rounded-lg bg-[#2740e6] px-3 text-[13px] font-semibold text-white hover:bg-[#1e34c0] disabled:opacity-40" title={is ? "Dagarnir vistast sjálfkrafa við hverja breytingu — þetta vistar strax núna" : "Days auto-save on every change — this saves now immediately"}>{wsBusy ? (is ? "Vista…" : "Saving…") : wsApplied === "ok" ? (is ? "✓ Vistað" : "✓ Saved") : (is ? "Vista núna" : "Save now")}</button>}
               </div>
             </div>
             {/* Per-block overrides — length + deload-week pin. Auto by default; the coach shapes a block
@@ -2798,6 +2807,9 @@ export default function PeriodizationHubPage() {
                 )}
               </div>
               <p className="mt-1 text-[13px] text-slate-600">{is ? "Efri hluti dags: smelltu til að skipta Frí ↔ Æfing (vistast sjálfkrafa í Vikuuppsetningu; leikir koma úr Leikjaskrá). Neðri hluti: dagsgerð + Player Load sem kerfið reiknar — smelltu til að breyta deginum." : "Top of a day: click to toggle Off ↔ Session (auto-saves to Week Setup; matches come from Fixtures). Bottom: the day-type + Player Load the system computes — click to edit the day."}</p>
+              {isPlayerScope && (
+                <p className="mt-1.5 rounded-lg bg-[#2740e6]/[0.06] px-2.5 py-1.5 text-[12px] text-[#2740e6]">{is ? `Leikmanns-umfang (${player?.name}) — þetta er lotan HANS, einstaklingsmiðuð (leik-miðuð, þök/trim/áhersla) — sömu tölur og „Lotan hans“ á Leikmenn-flipanum. Les-only: skiptu í Liðs-umfang til að breyta dagsgerðum.` : `Player scope (${player?.name}) — this is HIS block, individualised (match-anchored, caps/trim/steer) — the same numbers as "His block" on the Players tab. Read-only: switch to Team scope to edit day-types.`}</p>
+              )}
               <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-slate-600">
                 {(["match", "session", "off"] as DayState[]).map((st) => <span key={st} className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px] border border-slate-300" style={{ background: stateBg[st] }} />{stateLbl[st]}</span>)}
                 <span className="h-4 w-px bg-slate-200" />
@@ -2808,7 +2820,7 @@ export default function PeriodizationHubPage() {
                   <div />
                   {dows.map((d) => <div key={d} className="pb-0.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">{d}</div>)}
                   {Array.from({ length: blkWeeks }, (_, i) => {
-                    const w = calBlock?.weeks[i] ?? null;
+                    const w = mesoCalBlock?.weeks[i] ?? null;
                     const wkOff = offPhaseStart != null && isoAdd(calStart, i * 7) >= offPhaseStart;
                     return (
                       <React.Fragment key={i}>
@@ -2824,16 +2836,17 @@ export default function PeriodizationHubPage() {
                           const cd = w?.days[d] ?? null;
                           const isToday = iso === todayIso;
                           const ima = cd && cd.type !== "rest" ? imaLine(cd, is) : "";
+                          const ro = isPlayerScope; // player scope is read-only (edit the structure in Team scope)
                           return (
                             <div key={d} className={`flex min-w-0 flex-col overflow-hidden rounded-lg border ${isToday ? "border-[#a83e28] ring-1 ring-[#a83e28]" : "border-slate-200"} ${wkOff ? "opacity-90" : ""}`}>
-                              <button type="button" onClick={() => cycleDay(iso)} title={`${shortDate(iso, is)} — ${stateLbl[st]}${st === "match" ? (is ? " (úr Leikjaskrá)" : " (from Fixtures)") : ""}`}
-                                className="flex min-h-[30px] items-center justify-between gap-1 px-1.5 text-[12px] font-semibold" style={{ background: stateBg[st], color: stateInk[st] }}>
+                              <button type="button" onClick={ro ? undefined : () => cycleDay(iso)} disabled={ro} title={`${shortDate(iso, is)} — ${stateLbl[st]}${st === "match" ? (is ? " (úr Leikjaskrá)" : " (from Fixtures)") : ""}${ro ? (is ? " · les-only (breyttu í Liðs-umfangi)" : " · read-only (edit in Team scope)") : ""}`}
+                                className={`flex min-h-[30px] items-center justify-between gap-1 px-1.5 text-[12px] font-semibold ${ro ? "cursor-default" : ""}`} style={{ background: stateBg[st], color: stateInk[st] }}>
                                 <span className="tabular-nums">{new Date(`${iso}T00:00:00Z`).getUTCDate()}</span>
                                 <span className="truncate text-[11px]">{stateLbl[st]}</span>
                               </button>
-                              <button type="button" onClick={() => setDayModal(iso)} className="flex min-h-[40px] flex-col items-start justify-center px-1.5 py-1 text-left hover:brightness-95"
+                              <button type="button" onClick={ro ? undefined : () => setDayModal(iso)} disabled={ro} className={`flex min-h-[40px] flex-col items-start justify-center px-1.5 py-1 text-left ${ro ? "cursor-default" : "hover:brightness-95"}`}
                                 style={{ background: cd ? tint[cd.type] : "#FFFFFF" }}
-                                title={!cd || cd.type === "rest" ? (is ? "Smelltu til að breyta dagsgerð" : "Click to change the day-type") : `${is ? cd.label.is : cd.label.en} · PL ${dash(cd.load)}${ima ? ` · ${ima}` : ""}`}>
+                                title={!cd || cd.type === "rest" ? (ro ? (is ? "Les-only — breyttu dagsgerð í Liðs-umfangi" : "Read-only — change the day-type in Team scope") : (is ? "Smelltu til að breyta dagsgerð" : "Click to change the day-type")) : `${is ? cd.label.is : cd.label.en} · PL ${dash(cd.load)}${ima ? ` · ${ima}` : ""}`}>
                                 {cd && cd.type !== "rest" ? (<>
                                   <span className="w-full truncate text-[12px] font-bold" style={{ color: typeColor[cd.type] }}>{typeName(cd.type)}</span>
                                   <span className="text-[11px] tabular-nums text-slate-600">{dash(cd.load)}</span>
@@ -2860,11 +2873,11 @@ export default function PeriodizationHubPage() {
                 </ul>
                 <p className="mt-1.5 text-[12px] text-slate-500">Issurin 2010 (block periodisation) · Owen 2017 (positional mesocycle, MD taper) · Oliveira 2019 (congested-week variants) · Oliveira 2021 (ACWR/monotony on sRPE+HSR) · Teixeira 2021 (monitoring) · Martín-García 2018 (%-of-match-demand). {is ? "Lýsandi — aldrei readiness-liturinn." : "Descriptive — never the readiness colour."}</p>
               </details>
-              {calBlock && (calBlock.unit.accHiEff != null || calBlock.unit.stride != null) && (
+              {mesoCalBlock && (mesoCalBlock.unit.accHiEff != null || mesoCalBlock.unit.stride != null) && (
                 <details className="mt-1">
                   <summary className="cursor-pointer py-1 text-[13px] font-semibold text-[#2740e6]">{is ? "Sýna vélrænt / IMA (Acc·Dec B2–3, skref, stefna)" : "Show mechanical/IMA detail (Acc·Dec B2–3, stride, direction)"}</summary>
                   <ul className="mt-1.5 space-y-0.5 text-[12px] text-slate-700">
-                    {calBlock.weeks.flatMap((w) => w.days.map((d, i) => ({ d, i, wi: w.index })).filter(({ d }) => d.type !== "rest")).map(({ d, i, wi }) => (
+                    {mesoCalBlock.weeks.flatMap((w) => w.days.map((d, i) => ({ d, i, wi: w.index })).filter(({ d }) => d.type !== "rest")).map(({ d, i, wi }) => (
                       <li key={`${wi}-${i}`} className="tabular-nums"><span className="text-slate-500">{is ? "V" : "W"}{wi + 1} {is ? d.dow.is : d.dow.en} {d.md}</span> · <b style={{ color: typeColor[d.type] }}>{typeName(d.type)}</b> — {imaLine(d, is) || (is ? "engin IMA-gögn" : "no IMA data")}</li>
                     ))}
                   </ul>
@@ -3040,7 +3053,7 @@ export default function PeriodizationHubPage() {
                   <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Stig/viku %" : "Step/wk %"}<input type="number" min={0} max={15} value={blkStep} onChange={(e) => { const v = Math.max(0, Math.min(15, Number(e.target.value) || 0)); setBlkStep(v); persistOverridePatch({ stepPct: v }); }} className="h-10 rounded-lg border border-slate-300 px-2 text-[13px] font-medium" /></label>
                   <label className="col-span-2 flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Umfang" : "Scope"}<select value={blkScope} onChange={(e) => setBlkScope(e.target.value as typeof blkScope)} className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-[13px] font-medium"><option value="team">{is ? "Lið" : "Team"}</option><option value="player">{is ? `Leikmaður: ${player?.name ?? ""}` : `Player: ${player?.name ?? ""}`}</option></select></label>
                 </div>
-                {blkScope === "player" && <p className="mt-1.5 text-[12px] text-slate-500">{is ? `Leikviðmið úr leikmanni völdum í „Leikmenn“-flipanum${player ? ` (${player.name})` : ""}. Skiptu um leikmann þar.` : `Match unit from the player selected in the "Players" tab${player ? ` (${player.name})` : ""}. Change the player there.`}</p>}
+                {blkScope === "player" && <p className="mt-1.5 text-[12px] text-slate-500">{is ? `Einstaklingsmiðuð lota (leik-miðuð, þök/trim/áhersla) fyrir leikmann valinn í „Leikmenn“-flipanum${player ? ` (${player.name})` : ""} — les-only (breyttu dagsgerðum í Liðs-umfangi). Skiptu um leikmann í Leikmenn-flipanum.` : `The individualised block (match-anchored, caps/trim/steer) for the player selected in the "Players" tab${player ? ` (${player.name})` : ""} — read-only (edit day-types in Team scope). Change the player in the Players tab.`}</p>}
                 <div className="mt-4 border-t border-slate-100 pt-3">
                   <div className="text-[12px] font-semibold text-slate-700">{is ? "Bæta leik í leikjaskrá" : "Add a fixture to the schedule"}</div>
                   <div className="mt-1.5 flex flex-wrap gap-2">
@@ -3895,18 +3908,9 @@ export default function PeriodizationHubPage() {
                       ))}
                     </div>
                   </div>
-                  <p className="mt-1.5 text-[11px] text-slate-500">{is ? "Sama beinagrind og Mesó-lotan (vikur/leikir/dagsgerðir/niðurtröppun) — aðeins tölur og þök einstaklingsmiðuð. Upphafspunktur, ekki viðmið (Little & Buchheit). Aldrei readiness-liturinn." : "Same skeleton as the Meso Cycle (weeks/matches/day-types/deload) — only the numbers and caps individualise. A starting point, not a norm (Little & Buchheit). Never the readiness colour."}</p>
-                  {(b.unit.accHiEff != null || b.unit.stride != null) && (
-                    <details className="mt-2">
-                      <summary className="cursor-pointer text-[11px] font-medium text-[#2740e6]">{is ? "Sýna vélrænt / IMA (Acc·Dec B2–3, skref, stefna)" : "Show mechanical/IMA detail (Acc·Dec B2–3, stride, direction)"}</summary>
-                      <ul className="mt-1.5 space-y-0.5 text-[11px] text-slate-600">
-                        {b.weeks.flatMap((w) => w.days.map((d, i) => ({ d, i, wi: w.index })).filter(({ d }) => d.type !== "rest")).map(({ d, i, wi }) => (
-                          <li key={`${wi}-${i}`} className="tabular-nums"><span className="text-slate-500">{is ? "V" : "W"}{wi + 1} {is ? d.dow.is : d.dow.en} {d.md}</span> · <b style={{ color: typeColor[d.type] }}>{abbr(d.type)}</b> — {imaLine(d, is) || (is ? "engin IMA-gögn" : "no IMA data")}</li>
-                        ))}
-                      </ul>
-                      <p className="mt-1 text-[11px] text-slate-500">{is ? "Stefnu-halli einstaklingsmiðaður eftir stöðu; skref/átök skala frá eigin leikviðmiði. Buchheit (stefnu-bil)." : "Direction tilt individualised by position; stride/efforts scale from his own match unit. Buchheit (directional gap)."}</p>
-                    </details>
-                  )}
+                  <p className="mt-1.5 text-[11px] text-slate-500">{is ? "Þetta er yfirlits-grid — sama lota og á Mesó-flipanum (leikmanns-umfang). Fullt dagatal, dag-fyrir-dag vélrænt/IMA og PDF eru þar." : "This is a glance grid — the same block as on the Meso tab (player scope). The full calendar, day-by-day mechanical/IMA detail and PDF live there."}{" "}
+                    <button type="button" onClick={() => { setBlkScope("player"); setTab("plan"); }} className="font-semibold text-[#2740e6] hover:underline">{is ? "Opna fullt dagatal hans →" : "Open his full calendar →"}</button></p>
+                  <p className="mt-1 text-[11px] text-slate-500">{is ? "Einstaklingsmiðuð (leik-miðuð, þök/trim/áhersla). Upphafspunktur, ekki viðmið (Little & Buchheit). Aldrei readiness-liturinn." : "Individualised (match-anchored, caps/trim/steer). A starting point, not a norm (Little & Buchheit). Never the readiness colour."}</p>
 
                 </div>
               );
