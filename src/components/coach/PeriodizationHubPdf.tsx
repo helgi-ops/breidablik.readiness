@@ -120,6 +120,7 @@ function dayIma(d: CalDay, is: boolean, unitStride: number | null): string {
   if (d.decHiEff != null) p.push(`Dec B2–3 ${d.decHiEff}`);
   // The ceiling marker attaches to the STRIDE value it refers to (built TO match, not beyond), not the dir.
   if (d.stride != null) p.push(`${is ? "Skref" : "Stride"} ${d.stride}${unitStride != null && d.stride >= unitStride && d.type !== "match" ? "†" : ""}`);
+  if (d.fr != null) p.push(`${is ? "Hraðhlaup" : "Free Running"} ${d.fr} m`);
   const dd = domDir(d.dir, is); if (dd) p.push(`${is ? "stefna" : "dir"}: ${dd}`);
   return p.join("  ·  ");
 }
@@ -137,7 +138,7 @@ const strong = (size = 8.5, color: string = C.ink) => [fb(600), { fontSize: size
 function CalWeeks({ block, lang }: { block: CalendarBlock; lang: Lang }) {
   const is = lang === "IS";
   const bi = (b: Bi) => tx(is ? b.is : b.en);
-  const hasMech = block.unit.accHiEff != null || block.unit.stride != null;
+  const hasMech = block.unit.accHiEff != null || block.unit.stride != null || block.unit.fr != null;
   return (
     <>
       {block.weeks.map((w) => (

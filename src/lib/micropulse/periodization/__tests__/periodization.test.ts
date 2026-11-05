@@ -746,3 +746,24 @@ describeIma("IMA Free Running + Stride in the periodization vocabulary", () => {
     expectIma(wkm(days, "imaFrDistance")).toBeLessThan(vol);
   });
 });
+
+describeIma("Meso calendar — IMA Free Running", () => {
+  const unit = { dist: 10000, hsr: 800, load: 1000, accdec: 200, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
+  itIma("plans Free Running on training days like HSR (match = the unit, capped at match, rest = null)", () => {
+    const b = buildCalendarBlock({ unit: { ...unit, fr: 1300 }, startDate: "2026-09-07", numWeeks: 4, scopeName: "Team", scopePos: null, baseOverloadPct: 100 });
+    const days = b.weeks.flatMap((w) => w.days);
+    const train = days.filter((d) => d.type !== "match" && d.type !== "rest");
+    expectIma(train.every((d) => d.fr != null && d.fr > 0 && d.fr <= 1300)).toBe(true);
+    expectIma(days.filter((d) => d.type === "rest").every((d) => d.fr == null)).toBe(true);
+    expectIma(days.filter((d) => d.type === "match").every((d) => d.fr === 1300)).toBe(true);
+    expectIma(b.weeks[0].pctFr).not.toBeNull();
+    // the HSR-heavy locomotive day carries more Free Running than the activation day
+    const loco = train.find((d) => d.type === "locomotive"), act = train.find((d) => d.type === "activation");
+    if (loco && act) expectIma((loco.fr ?? 0)).toBeGreaterThan(act.fr ?? 0);
+  });
+  itIma("leaves Free Running out when the feed has none", () => {
+    const b = buildCalendarBlock({ unit, startDate: "2026-09-07", numWeeks: 2, scopeName: "Team", scopePos: null, baseOverloadPct: 100 });
+    expectIma(b.weeks.flatMap((w) => w.days).every((d) => d.fr == null)).toBe(true);
+    expectIma(b.weeks[0].pctFr ?? null).toBeNull();
+  });
+});

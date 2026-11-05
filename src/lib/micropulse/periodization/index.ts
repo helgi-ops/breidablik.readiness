@@ -513,14 +513,18 @@ export type MatchUnitAbs = {
   accHiEff: number | null; decHiEff: number | null; stride: number | null;
   dirFwd: number | null; dirBack: number | null; dirLat: number | null;
   rhie: number | null; symmetry: number | null; metPower: number | null;
+  /** IMA Free Running fast distance (bands 5–8, m) per match — Pro/IMU; optional for older callers. */
+  fr?: number | null;
 };
 export type CalDay = {
   dow: Bi; md: string; type: CalType; label: Bi; focus: Bi; dist: number | null; hsr: number | null; load: number | null;
   // Mechanical / IMA per-day targets — null on rest days or when the unit lacks the field.
   accHiEff: number | null; decHiEff: number | null; stride: number | null;
+  /** IMA Free Running fast distance (bands 5–8, m) — runs on the HSR axis (share, ramp, emphasis, match cap). */
+  fr?: number | null;
   dir: { fwd: number; back: number; lat: number } | null;
 };
-export type CalWeek = { index: number; weekStart: string; intent: Bi; matchDow: Bi; mult: number; isDeload: boolean; days: CalDay[]; pctRunning: number | null; pctHsr: number | null; pctMech: number | null; pctAccDec23: number | null; pctStride: number | null; restDays: number; capNote: Bi | null };
+export type CalWeek = { index: number; weekStart: string; intent: Bi; matchDow: Bi; mult: number; isDeload: boolean; days: CalDay[]; pctRunning: number | null; pctHsr: number | null; pctMech: number | null; pctAccDec23: number | null; pctStride: number | null; pctFr?: number | null; restDays: number; capNote: Bi | null };
 export type CalendarBlock = { unit: MatchUnitAbs; scopeName: string; scopePos: string | null; phase: Bi; numWeeks: number; startDate: string; weeks: CalWeek[]; legend: Array<{ md: string; label: Bi; what: Bi }>; notes: Bi[];
   /** Set only when the block was built with a `goal` — the chosen block goal and its evidence-based gym
    *  scheme (max-strength / strength–power / power). Lets the hub + PDF show what the goal prescribes. */
@@ -807,7 +811,7 @@ export function buildCalendarBlock(opts: {
     const mExp = Math.max(0, Math.min(1, typeof opts.matchExposure === "function" ? opts.matchExposure(i) : (opts.matchExposure ?? 1)));
     const weekStart = addDays(start, i * 7);
     const days: CalDay[] = [];
-    let sumDist = 0, sumHsr = 0, sumLoad = 0, sumAccHi = 0, sumDecHi = 0, sumStride = 0, rest = 0, campWeek = false;
+    let sumDist = 0, sumHsr = 0, sumLoad = 0, sumAccHi = 0, sumDecHi = 0, sumStride = 0, sumFr = 0, rest = 0, campWeek = false;
     for (let d = 0; d < 7; d++) {
       const k = i * 7 + d;
       const dayIso = addDays(start, k);
@@ -835,10 +839,12 @@ export function buildCalendarBlock(opts: {
       const accHiEff = type === "rest" || opts.unit.accHiEff == null ? null : isM ? Math.round(opts.unit.accHiEff * mExp) : Math.round(opts.unit.accHiEff * sh.accdec * mechEmph * fA("accdec") * cm);
       const decHiEff = type === "rest" || opts.unit.decHiEff == null ? null : isM ? Math.round(opts.unit.decHiEff * mExp) : Math.round(opts.unit.decHiEff * sh.accdec * mechEmph * fA("accdec") * cm);
       const stride = type === "rest" || opts.unit.stride == null ? null : isM ? Math.round(opts.unit.stride * mExp) : Math.round(capRun(opts.unit.stride * sh.stride * hsrEmph * fA("stride"), opts.unit.stride) * cm);
+      // IMA Free Running (bands 5–8 distance) is fast running → same share/ramp/emphasis/match-cap as HSR.
+      const fr = type === "rest" || opts.unit.fr == null ? null : isM ? Math.round(opts.unit.fr * mExp) : rnd(capRun(opts.unit.fr * sh.hsr * hsrEmph * fA("hsr"), opts.unit.fr) * cm, 10);
       const dir = type === "rest" ? null : isM ? dirBase : dayDirTilt(dirPlan, type);
       if (type === "rest") rest += 1;
-      else if (type !== "match") { sumDist += dist ?? 0; sumHsr += hsr ?? 0; sumLoad += load ?? 0; sumAccHi += accHiEff ?? 0; sumDecHi += decHiEff ?? 0; sumStride += stride ?? 0; }
-      days.push({ dow: DOW[d], md, type, label: CAL_LABEL[type], focus: CAL_FOCUS[type], dist, hsr, load, accHiEff, decHiEff, stride, dir });
+      else if (type !== "match") { sumDist += dist ?? 0; sumHsr += hsr ?? 0; sumLoad += load ?? 0; sumAccHi += accHiEff ?? 0; sumDecHi += decHiEff ?? 0; sumStride += stride ?? 0; sumFr += fr ?? 0; }
+      days.push({ dow: DOW[d], md, type, label: CAL_LABEL[type], focus: CAL_FOCUS[type], dist, hsr, load, accHiEff, decHiEff, stride, fr, dir });
     }
     const unitAccDec = (opts.unit.accHiEff ?? 0) + (opts.unit.decHiEff ?? 0);
     // Self-explaining cap: which axes are held this week, and why. ACWR is NOT the headline (hub stance) —
@@ -864,6 +870,7 @@ export function buildCalendarBlock(opts: {
       pctMech: opts.unit.load ? Math.round((sumLoad / opts.unit.load) * 100) : null,
       pctAccDec23: unitAccDec > 0 ? Math.round(((sumAccHi + sumDecHi) / unitAccDec) * 100) : null,
       pctStride: opts.unit.stride ? Math.round((sumStride / opts.unit.stride) * 100) : null,
+      pctFr: opts.unit.fr ? Math.round((sumFr / opts.unit.fr) * 100) : null,
       restDays: rest, capNote,
     });
   }
