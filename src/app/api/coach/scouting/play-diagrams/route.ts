@@ -33,7 +33,7 @@ async function authTeam(req: NextRequest) {
   return { supabase, teamId, userId: userRes.user.id } as const;
 }
 
-const SELECT = "id, opponent_key, name, play_type, diagram, phases, source, confidence, confirmed, confirmed_by, notes, coverage, created_at, updated_at";
+const SELECT = "id, opponent_key, name, play_type, diagram, phases, source, confidence, confirmed, confirmed_by, notes, coverage, description, created_at, updated_at";
 
 export async function GET(req: NextRequest) {
   const auth = await authTeam(req);
@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
     confirmed_by: source === "manual" ? auth.userId : null,
     notes: body?.notes ? String(body.notes) : null,
     coverage: body?.coverage ? String(body.coverage) : null,
+    description: body?.description ? String(body.description) : null,
     // Multi-phase sequence (PlayDiagram[]); null for a single-phase play (diagram stays phase 1).
     phases: Array.isArray(body?.phases) && body.phases.length > 1 ? body.phases : null,
   };
@@ -91,6 +92,7 @@ export async function PUT(req: NextRequest) {
   if ("phases" in body) patch.phases = Array.isArray(body.phases) && body.phases.length > 1 ? body.phases : null;
   if ("notes" in body) patch.notes = body.notes ? String(body.notes) : null;
   if ("coverage" in body) patch.coverage = body.coverage ? String(body.coverage) : null;
+  if ("description" in body) patch.description = body.description ? String(body.description) : null;
   // Confirming a play (coach is the source of truth — logs who confirmed).
   if (body?.confirmed === true) { patch.confirmed = true; patch.confirmed_by = auth.userId; }
   else if (body?.confirmed === false) { patch.confirmed = false; patch.confirmed_by = null; }

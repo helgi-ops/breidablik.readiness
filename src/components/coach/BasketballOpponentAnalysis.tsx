@@ -17,6 +17,9 @@ import BasketballCourtMap from "@/components/coach/BasketballCourtMap";
 import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import InstatOpponentSeasonUpload from "@/components/coach/InstatOpponentSeasonUpload";
 import PlayDiagramsSection from "@/components/coach/PlayDiagramsSection";
+// Parked: the opponent set-plays input (diagrams / from-image / multi-phase) is hidden from the page
+// until the UX is solid. Everything behind it stays wired; flip this to true to bring it back.
+const SHOW_SET_PLAYS = false;
 import FibaShotCharts from "@/components/coach/FibaShotCharts";
 import { ShotCourt } from "@/components/coach/ShotCourt";
 import { samePlayerName, type FibaShot, type PlayerTendency } from "@/lib/micropulse/basketballStats/fibaLiveStats";
@@ -672,11 +675,13 @@ export default function BasketballOpponentAnalysis() {
 
       {fibaCharts}
 
-      {/* Opponent set plays (leikkerfi) — coach-drawn diagrams / recognise-from-clip, keyed to the
-          selected opponent and carried into the scouting PDF. A core scouting INPUT, so it sits here
-          with the other add-opponent-data tools (not buried below the report) and shows as soon as an
-          opponent is selected — alongside the per-player clips in each player's card. */}
-      {sel ? <PlayDiagramsSection opponent={sel} /> : null}
+      {/* Opponent set plays (leikkerfi) — coach-drawn diagrams / recognise-from-clip / from-image /
+          multi-phase, keyed to the opponent and carried into the scouting PDF.
+          PARKED (2026-11): hidden from the page until the UX is good enough (coach feedback: "this isn't
+          coming out well — keep it off the page until we find a good solution"). Component + API + diagram
+          data are all intact; flip SHOW_SET_PLAYS to re-enable. Existing confirmed plays still print in the
+          PDF, so nothing is lost. */}
+      {SHOW_SET_PLAYS && sel ? <PlayDiagramsSection opponent={sel} /> : null}
 
       {/* How this opponent played AGAINST US — Four Factors from imported InStat
           Game Reports of our head-to-heads. Independent of the KKÍ scout pull. */}
