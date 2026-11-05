@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { buildPlannedVsActual, type ActualKpis, type PlanForCompare } from "@/lib/micropulse/loadPlan/plannedVsActual";
+import { loadSessionEnough } from "@/lib/micropulse/sessionEnough/loader";
 
 export const runtime = "nodejs";
 
@@ -118,5 +119,9 @@ export async function GET(req: NextRequest) {
     ? { rpe: avg(rpes.map((r) => r.rpe)), sessionLoad: avg(rpes.map((r) => r.session_load)), durationMin: avg(rpes.map((r) => r.duration_minutes)), n: rpes.length }
     : null;
 
-  return NextResponse.json({ ok: true, sessionDate, teamName, plannedVsActual, rpe, playersCaptured: actualById.size });
+  // "Did we do enough?" — this session's IMA vs the players' real match demand for the MD-day
+  // (Vector Pro football only; degrades to a labelled state, never fails the report).
+  const enough = await loadSessionEnough(sb, teamId, sessionDate).catch(() => null);
+
+  return NextResponse.json({ ok: true, sessionDate, teamName, plannedVsActual, rpe, playersCaptured: actualById.size, enough });
 }

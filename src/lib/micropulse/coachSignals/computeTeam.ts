@@ -15,7 +15,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal,
+  deriveGamePlanFitSignal, derivePostTrainingSignal, deriveSessionEnoughSignal, deriveMatchMinutesSignal,
   deriveFormVsStateSignal, derivePlayerFormVsStateSignals,
   deriveRobustnessTeamSignal, derivePlayerRobustnessSignals,
   mergeRecoveryReads, deriveWearableRecoveryTeamSignal, derivePlayerWearableRecoverySignals,
@@ -31,7 +31,7 @@ import {
 } from "@/lib/micropulse/coachSignals";
 import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite, loadTeamPositionFitnessLite, loadTeamStrength1rmLite, loadTeamStrengthPhaseLite } from "@/lib/micropulse/coachSignals/newEngineLoads";
 import { loadGamePlanFitForSignal } from "@/lib/micropulse/gamePlanFit/signalLoad";
-import { loadPostTrainingForSignal } from "@/lib/micropulse/postTraining/signalLoad";
+import { loadPostTrainingForSignal, loadSessionEnoughForSignal } from "@/lib/micropulse/postTraining/signalLoad";
 import { loadTeamFormReads } from "@/lib/micropulse/formVsState/teamLoad";
 import { loadTeamRobustnessWatch } from "@/lib/micropulse/robustnessWatch/teamLoad";
 import { loadTeamHrvReads } from "@/lib/micropulse/hrvTrend/teamLoad";
@@ -66,7 +66,7 @@ export async function computeTeamSignals(sb: SupabaseClient, teamId: string, tod
   const bodyComp = deriveBodyCompSignal(bodyCompLite);
   const speedZones = deriveSpeedZonesSignal(speedZonesLite);
 
-  const [posFitLite, strengthLite, strengthPhaseLite, cccGateReads, acwrReads, sprintDropReads, strideFatigueReads] = await Promise.all([
+  const [posFitLite, strengthLite, strengthPhaseLite, cccGateReads, acwrReads, sprintDropReads, strideFatigueReads, enoughRead] = await Promise.all([
     loadTeamPositionFitnessLite(sb, teamId).catch(() => []),
     loadTeamStrength1rmLite(sb, teamId).catch(() => []),
     loadTeamStrengthPhaseLite(sb, teamId).catch(() => ({ phase: null, needBodyComp: 0, total: 0, weeksToOpener: null })),
@@ -74,6 +74,7 @@ export async function computeTeamSignals(sb: SupabaseClient, teamId: string, tod
     loadTeamLoadAcwrSignals(sb, teamId, today).catch(() => []),
     loadTeamSprintDropSignals(sb, teamId, today).catch(() => []),
     loadTeamStrideFatigueSignals(sb, teamId, today).catch(() => []),
+    loadSessionEnoughForSignal(sb, teamId, today).catch(() => null),
   ]);
   const posFit = derivePositionFitnessSignal(posFitLite);
   const strength1rm = deriveStrength1rmSignal(strengthLite);
@@ -132,7 +133,7 @@ export async function computeTeamSignals(sb: SupabaseClient, teamId: string, tod
     });
   }
 
-  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase, cccGate, loadAcwr, sprintDrop, strideFatigue].map((s) => ({ ...s, playerId: null }));
+  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), deriveSessionEnoughSignal(enoughRead), mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase, cccGate, loadAcwr, sprintDrop, strideFatigue].map((s) => ({ ...s, playerId: null }));
   const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers, ...cccGatePlayers, ...loadAcwrPlayers, ...sprintDropPlayers, ...strideFatiguePlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }

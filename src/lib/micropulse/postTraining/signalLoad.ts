@@ -16,6 +16,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildPlannedVsActual, type ActualKpis, type PlanForCompare } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import { buildLoadPlanForTeam } from "@/lib/micropulse/loadPlan/forTeam";
+import { loadSessionEnough } from "@/lib/micropulse/sessionEnough/loader";
+import type { SessionEnough } from "@/lib/micropulse/sessionEnough";
 
 export type PostTrainingSignalInput = {
   ok: boolean;
@@ -73,4 +75,21 @@ export async function loadPostTrainingForSignal(sb: SupabaseClient, teamId: stri
   } catch { /* no plan → comparison reports no-plan → signal stays steady */ }
 
   return { ok: true, sessionDate, plannedVsActual: buildPlannedVsActual(plan, teamActual, actualById) };
+}
+
+/**
+ * "Did we do enough?" for the most recent captured session at/before today (Today chip). Same
+ * session-date rule as the post-training route, so the chip and the page answer the same session.
+ */
+export async function loadSessionEnoughForSignal(sb: SupabaseClient, teamId: string, today: string): Promise<SessionEnough | null> {
+  const { data: players } = await sb.from("players").select("id").eq("team_id", teamId).eq("is_active", true);
+  const playerIds = (players ?? []).map((p) => String((p as { id: string }).id));
+  if (playerIds.length === 0) return null;
+  const { data: lastRow } = await sb.from("player_external_load_daily")
+    .select("date").in("player_id", playerIds).in("source", ["catapult", "manual", "titan", "kinexon"])
+    .lte("date", today).order("date", { ascending: false }).limit(1).maybeSingle();
+  const sessionDate = (lastRow as { date?: string } | null)?.date ?? null;
+  // Only a recent session is worth a Today chip.
+  if (!sessionDate || Date.parse(`${today}T00:00:00Z`) - Date.parse(`${sessionDate}T00:00:00Z`) > 2 * 86_400_000) return null;
+  return loadSessionEnough(sb, teamId, sessionDate);
 }

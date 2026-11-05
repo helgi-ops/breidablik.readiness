@@ -12,7 +12,7 @@ export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
 export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load" | "post_match_recovery"
   | "fitness_trend" | "body_comp" | "speed_zones" | "position_fitness" | "strength_1rm" | "strength_phase" | "wearable_recovery"
-  | "ccc_gate" | "load_acwr" | "sprint_speed_drop" | "stride_fatigue";
+  | "ccc_gate" | "load_acwr" | "sprint_speed_drop" | "stride_fatigue" | "session_enough";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -104,6 +104,39 @@ export function derivePostTrainingSignal(resp: PostTrainingResp | null): CoachSi
     counterfactual: {
       en: "Descriptive — actual GPS vs the pre-session plan; adjust the next plan, not the readiness colour.",
       is: "Lýsandi — raun-GPS vs áætlun fyrir æfingu; stilltu næstu áætlun, ekki readiness-litinn.",
+    },
+  };
+}
+
+// ── session-enough → "did we do enough?" (IMA vs match demand for the MD-day) ──
+type SessionEnoughLite = {
+  state?: string;
+  sessionDate?: string | null;
+  mdLabel?: string | null;
+  verdict?: "yes" | "mostly" | "no" | null;
+  headline?: Bi;
+  facts?: Bi[];
+  counterfactual?: Bi | null;
+  confidence?: { level?: "high" | "moderate" | "low" } | null;
+};
+
+export function deriveSessionEnoughSignal(resp: SessionEnoughLite | null): CoachSignal {
+  const href = "/coach/post-training";
+  const label: Bi = { en: "Did we do enough?", is: "Gerðum við nóg?" };
+  const base: CoachSignal = { engine: "session_enough", level: "steady", label, why: { en: [], is: [] }, confidence: null, counterfactual: null, href };
+  if (!resp || resp.state !== "ok" || !resp.verdict || resp.verdict === "yes") return base; // enough → silent
+  const level: SignalLevel = resp.verdict === "no" ? "elevated" : "watch";
+  const facts = (resp.facts ?? []).slice(0, 1);
+  const tag = `${resp.mdLabel ?? ""}${resp.sessionDate ? ` · ${resp.sessionDate}` : ""}`.trim();
+  return {
+    ...base, level, confidence: resp.confidence?.level ?? "moderate",
+    why: {
+      en: [`${resp.headline?.en ?? ""}${tag ? ` (${tag})` : ""}`, ...facts.map((f) => f.en)],
+      is: [`${resp.headline?.is ?? ""}${tag ? ` (${tag})` : ""}`, ...facts.map((f) => f.is)],
+    },
+    counterfactual: resp.counterfactual ?? {
+      en: "Descriptive — session movement vs match demand for the day; adjust the next session, not the readiness colour.",
+      is: "Lýsandi — hreyfing æfingar vs kröfur leiks fyrir daginn; stilltu næstu æfingu, ekki readiness-litinn.",
     },
   };
 }

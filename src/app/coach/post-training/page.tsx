@@ -20,8 +20,9 @@ export default function PostTrainingPage() {
             is="fara yfir hvernig æfing dagsins var miðað við áætlun"
           />
           <p className="text-sm text-slate-500">
-            Did the session land where the plan asked? This reads the captured session and diffs it against the
-            pre-session targets — at squad level and per player — so you can review on screen without downloading.
+            Two questions after every session: did we do enough compared with what a match demands (Vector Pro
+            teams), and did the session land where the plan asked? Both read the captured session — at squad level
+            and per player — so you can review on screen without downloading.
             The PDF report is still available from the dashboard for consulting or sending to a team.
           </p>
         </div>

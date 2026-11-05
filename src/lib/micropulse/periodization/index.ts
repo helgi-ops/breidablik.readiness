@@ -256,26 +256,39 @@ const p90 = (xs: number[]): number | null => {
   if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b);
   return s[Math.min(s.length - 1, Math.ceil(0.9 * s.length) - 1)] ?? s[s.length - 1];
 };
-/** The player's match unit from his near-full matches (median = typical, p90 = peak), per axis. */
-export function computeMatchUnit(rows: PlayerMatchRow[], opts?: { minMinutes?: number; windowDays?: number; asOfMs?: number; minSample?: number }): MatchUnit {
+export type NearFullOpts = { minMinutes?: number; windowDays?: number; asOfMs?: number; minSample?: number };
+export type NearFullSelection<T> = {
+  use: T[]; nNearFull: number; nInWindow: number; fellBack: boolean;
+  confidence: "high" | "medium" | "low"; minMinutes: number; windowDays: number;
+};
+/** Which of a player's matches define his match unit: near-full (≥ minMinutes) inside a rolling window,
+ *  widened to all near-full matches when the window is thin. Shared by `computeMatchUnit` and the
+ *  per-session "did we do enough?" reference so both use the same match definition. */
+export function selectNearFullMatches<T extends { date: string; minutes: number | null }>(rows: T[], opts?: NearFullOpts): NearFullSelection<T> {
   const minMinutes = opts?.minMinutes ?? 80, windowDays = opts?.windowDays ?? 77, minSample = opts?.minSample ?? 4;
   const nearFull = rows.filter((r) => r.minutes != null && r.minutes >= minMinutes);
   const asOf = opts?.asOfMs ?? (nearFull.length ? Math.max(...nearFull.map((r) => Date.parse(r.date))) : Date.now());
   const inWindow = nearFull.filter((r) => asOf - Date.parse(r.date) <= windowDays * 86_400_000);
   const fellBack = inWindow.length < minSample;
   const use = fellBack ? nearFull : inWindow; // widen to the full season's near-full matches on a thin window
+  const confidence: NearFullSelection<T>["confidence"] = use.length >= 6 ? "high" : use.length >= minSample ? "medium" : "low";
+  return { use, nNearFull: nearFull.length, nInWindow: inWindow.length, fellBack, confidence, minMinutes, windowDays };
+}
+
+/** The player's match unit from his near-full matches (median = typical, p90 = peak), per axis. */
+export function computeMatchUnit(rows: PlayerMatchRow[], opts?: NearFullOpts): MatchUnit {
+  const { use, nNearFull, nInWindow, fellBack, confidence, minMinutes, windowDays } = selectNearFullMatches(rows, opts);
   const metric = (sel: (r: PlayerMatchRow) => number | null): MatchUnitMetric => {
     const xs = use.map(sel).filter((x): x is number => x != null && Number.isFinite(x));
     return { typical: median(xs), peak: p90(xs) };
   };
-  const confidence: MatchUnit["confidence"] = use.length >= 6 ? "high" : use.length >= minSample ? "medium" : "low";
   const windowNote: Bi = use.length === 0
     ? { en: "No near-full matches yet — using the position baseline instead.", is: "Engir næstum-heilir leikir enn — nota stöðu-grunnlínu í staðinn." }
     : fellBack
       ? { en: `Thin recent sample — widened to all ${use.length} near-full matches (≥${minMinutes} min) this season.`, is: `Lítið nýlegt úrtak — víkkað í alla ${use.length} næstum-heila leiki (≥${minMinutes} mín) tímabilsins.` }
       : { en: `${use.length} near-full matches (≥${minMinutes} min) in the last ~${Math.round(windowDays / 7)} weeks.`, is: `${use.length} næstum-heilir leikir (≥${minMinutes} mín) síðustu ~${Math.round(windowDays / 7)} vikur.` };
   return {
-    nNearFull: nearFull.length, nInWindow: inWindow.length, fellBack, confidence, windowNote,
+    nNearFull, nInWindow, fellBack, confidence, windowNote,
     minutesTypical: median(use.map((r) => r.minutes).filter((x): x is number => x != null)),
     load: metric((r) => r.load), hsr: metric((r) => r.hsr), sprint: metric((r) => r.sprint),
     distance: metric((r) => r.distance), accel: metric((r) => r.accel), decel: metric((r) => r.decel),

@@ -15,6 +15,8 @@ import {
   PVA_KPIS, PVA_LABEL,
   type PlannedVsActual, type PvaStatus, type KpiCompare,
 } from "@/lib/micropulse/loadPlan/plannedVsActual";
+import SessionEnoughCard from "@/components/coach/SessionEnoughCard";
+import type { SessionEnough } from "@/lib/micropulse/sessionEnough";
 
 type Rpe = { rpe: number | null; sessionLoad: number | null; durationMin: number | null; n: number };
 type RttSummaryPlayer = {
@@ -33,6 +35,7 @@ type Resp = {
   plannedVsActual: PlannedVsActual | null;
   rpe: Rpe | null;
   playersCaptured?: number;
+  enough?: SessionEnough | null;
   error?: string;
 };
 
@@ -120,6 +123,8 @@ export default function PostTrainingCard({ date }: { date?: string }) {
     : { EN: "IMA", IS: "IMA" };
 
   return (
+    <>
+    <SessionEnoughCard enough={data.enough ?? null} />
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h3 className="text-base font-semibold text-slate-900">Post-Training Report</h3>
@@ -369,5 +374,6 @@ export default function PostTrainingCard({ date }: { date?: string }) {
         </>
       )}
     </div>
+    </>
   );
 }
