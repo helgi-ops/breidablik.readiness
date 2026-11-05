@@ -23,6 +23,7 @@ import { Document, Page, StyleSheet, Text, View, Svg, Path, Line, Circle, Polygo
 import { fb, fh, fileSafe, renderPdfBlob, saveBlob } from "@/components/pdf/brand";
 import { shotLabel, type Lang } from "@/lib/micropulse/basketballStats/shotLabels";
 import { shotChartGeometry } from "@/lib/micropulse/basketballStats/shotChartGeometry";
+import { foldShot } from "@/lib/micropulse/basketballStats/fibaLiveStats";
 
 export type ClipLite = { action: string; made: boolean | null; court_x: number | null; court_y: number | null; period: string | null; clock: string | null; video_url: string | null; source: string };
 const CLIP_ACTION_LABELS: Record<string, { en: string; is: string }> = {
@@ -66,6 +67,8 @@ export type BasketballOpponentPdfData = {
   players?: PlayerDetail[] | null;
   /** Tagged scouting clips per player (deep links + timecodes) — a clips strip under each top scorer. */
   clipsByPlayer?: Record<string, ClipLite[]> | null;
+  /** FIBA half-court shots per player (key = accent-folded player name) — a shot chart in each top-scorer card. */
+  playerShots?: Record<string, Array<{ x: number; y: number; made: boolean; three: boolean }>> | null;
   /** Coach-drawn set-play diagrams (confirmed only) — rendered on their own page. */
   plays?: PdfPlay[] | null;
   ai: { headline?: string; summary?: string; strengths?: string[]; weaknesses?: string[]; keyPlayers?: { name: string; note: string }[]; howToDefend?: string[]; howToAttack?: string[] } | null;
@@ -104,6 +107,7 @@ const T = {
     small: "Small sample - read as tendencies", ai: "READS THE NUMBERS - DECIDES NOTHING", basedOn: "Based on the InStat numbers on pages 2-3 of this report.",
     plan: "Game plan", defend: "How to defend", attack: "Where to attack", keyFacts: "Key facts",
     scoreHead: "HOW THEY SCORE", playersHead: "PLAYERS", behindHead: "BEHIND THE NUMBERS", setPlaysHead: "SET PLAYS",
+    shotChart: "Shot chart", shotsLabel: "shots",
     setPlays: "Set plays", setPlaysHint: "The opponent's most-used sets, drawn by the coaching staff. O = attacker, X = defender; dashed = pass, zig-zag = dribble, bar = screen.", aiDraft: "AI first draft", unconfirmed: "unconfirmed",
     profile: "Team profile", perGame: "per game", ff: "How they played you (Four Factors)", zones: "Shot map",
     shotsFrom: "Where their shots come from", shareOfShots: "Share of shots", aboveAvg: "Above their average FG%", playType: "Play type", madeAtt: "Made-att",
@@ -124,6 +128,7 @@ const T = {
     small: "Lítið úrtak - lesið sem tilhneigingar", ai: "LES TÖLURNAR - ÁKVEÐUR EKKERT", basedOn: "Byggt á InStat-tölunum á bls. 2-3 í þessari skýrslu.",
     plan: "Leikplan", defend: "Hvernig á að verjast", attack: "Hvar á að sækja", keyFacts: "Lykilatriði",
     scoreHead: "HVERNIG ÞEIR SKORA", playersHead: "LEIKMENN", behindHead: "Á BAK VIÐ TÖLURNAR", setPlaysHead: "LEIKKERFI",
+    shotChart: "Skotakort", shotsLabel: "skot",
     setPlays: "Leikkerfi", setPlaysHint: "Mest notuðu sóknir andstæðingsins, teiknaðar af þjálfarateymi. O = sóknarmaður, X = varnarmaður; brotalína = sending, sikk-sakk = rakning, strik = skermur.", aiDraft: "AI-uppkast", unconfirmed: "óstaðfest",
     profile: "Liðsprófíll", perGame: "í leik", ff: "Hvernig þeir spiluðu ykkur (Four Factors)", zones: "Skotkort",
     shotsFrom: "Hvaðan skotin koma", shareOfShots: "Hlutfall skota", aboveAvg: "Yfir meðalnýtingu þeirra", playType: "Sóknartegund", madeAtt: "Hitt-reynt",
@@ -215,6 +220,34 @@ function ClipsStrip({ clips, lang, f }: { clips: ClipLite[]; lang: Lang; f: Font
         {clips.length > 7 ? <Text style={[f.b(400), { fontSize: 7.5, color: MUTE, marginTop: 1 }]}>+{clips.length - 7} {lang === "IS" ? "fleiri" : "more"}</Text> : null}
       </View>
     </View>
+  );
+}
+
+// Accent- and punctuation-insensitive name fold (matches the page + API) — look up a player's shots.
+const foldName = (s: string | null | undefined): string =>
+  String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+
+/** FIBA half-court for print — mirrors the web ShotCourt mapping (basket top-centre; cx from court
+ *  width, cy from depth) with @react-pdf primitives, so the PDF chart matches the on-page modal. */
+function ShotCourtPdf({ shots, w = 132 }: { shots: Array<{ x: number; y: number; made: boolean; three: boolean }>; w?: number }) {
+  const W = 150, H = 140, cx0 = 75, rimY = 15.75;
+  const h = (w * (H + 12)) / (W + 12);
+  const pt = (s: { x: number; y: number }) => { const f = foldShot(s.x, s.y); return { cx: (f.y / 100) * W, cy: (f.x / 50) * H }; };
+  return (
+    <Svg viewBox={`-6 -6 ${W + 12} ${H + 12}`} width={w} height={h}>
+      <Path d={`M-6 -6 H${W + 6} V${H + 6} H-6 Z`} fill="#f4f2ec" />
+      <Path d={`M0 0 H${W} V${H} H0 Z`} fill="#efe7d4" stroke="#c9b48a" strokeWidth={1} />
+      <Path d={`M${cx0 - 24.5} 0 H${cx0 + 24.5} V58 H${cx0 - 24.5} Z`} fill="#2740e6" />
+      <Path d={`M${cx0 - 18} 58 A 18 18 0 0 0 ${cx0 + 18} 58`} stroke="#ffffff" strokeWidth={1.1} fill="none" />
+      <Path d={`M9 0 L9 29.9 A 67.5 67.5 0 0 0 ${W - 9} 29.9 L ${W - 9} 0`} stroke="#ffffff" strokeWidth={1.1} fill="none" />
+      <Circle cx={cx0} cy={rimY} r={2.25} stroke="#e8542f" strokeWidth={1.3} fill="none" />
+      {shots.map((s, i) => {
+        const p = pt(s); const fill = s.three ? "#3b5bff" : "#25a563"; const stroke = s.three ? "#2740e6" : "#177a45"; const d = 2.1;
+        return s.made
+          ? <Circle key={i} cx={p.cx} cy={p.cy} r={2.7} fill={fill} />
+          : <Path key={i} d={`M${p.cx - d} ${p.cy - d} L${p.cx + d} ${p.cy + d} M${p.cx + d} ${p.cy - d} L${p.cx - d} ${p.cy + d}`} stroke={stroke} strokeWidth={1.7} fill="none" />;
+      })}
+    </Svg>
   );
 }
 
@@ -557,6 +590,7 @@ function Doc({ data, lang, f }: { data: BasketballOpponentPdfData; lang: Lang; f
                 const off = p.notes?.offense ?? [];
                 const def = p.notes?.defense ?? [];
                 const clips = clipsOf(p.name);
+                const pShots = (data.playerShots?.[foldName(p.name)] ?? []).filter((s) => Number.isFinite(s.x) && Number.isFinite(s.y));
                 return (
                   <React.Fragment key={i}>
                   <View wrap={false} style={[st.card, st.row, { paddingHorizontal: 13, paddingVertical: 9, marginBottom: clips.length ? 0 : 6, ...(clips.length ? { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 } : {}) }]}>
@@ -586,6 +620,13 @@ function Doc({ data, lang, f }: { data: BasketballOpponentPdfData; lang: Lang; f
                             <Text style={[f.b(400), { fontSize: 8.5, lineHeight: 1.4, marginTop: 1.5, color: AMBER_TXT }]}>{clean(def.join("  ·  "))}</Text>
                           </View>
                         ) : null}
+                      </View>
+                    ) : null}
+                    {pShots.length ? (
+                      <View style={{ width: 112, paddingLeft: 10, borderLeftWidth: 1, borderLeftColor: "#e6e2d8", alignItems: "center" }}>
+                        <Text style={[f.b(700), { fontSize: 7.75, letterSpacing: 0.7, color: MUTE, alignSelf: "flex-start" }]}>{t.shotChart}</Text>
+                        <View style={{ marginTop: 3 }}><ShotCourtPdf shots={pShots} w={102} /></View>
+                        <Text style={[f.b(400), { fontSize: 7, color: MUTE, marginTop: 2 }]}>{pShots.length} {t.shotsLabel} · {pShots.filter((s) => s.made).length}/{pShots.length}</Text>
                       </View>
                     ) : null}
                   </View>

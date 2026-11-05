@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractMatchId, fibaDataUrl, parseFibaGame, foldShot, playerTendencies, analyzeRunTrends } from "../fibaLiveStats";
+import { extractMatchId, fibaDataUrl, parseFibaGame, foldShot, playerTendencies, analyzeRunTrends, samePlayerName } from "../fibaLiveStats";
 import type { RunAnalysis, ScoringRun } from "../fibaLiveStats";
 
 const feed = {
@@ -232,5 +232,18 @@ describe("analyzeRunTrends", () => {
     expect(a.ours.bigCount).toBe(0);
     expect(a.against.confidence).toBe("none");
     expect(a.ours.leadCorrelate).toBeNull();
+  });
+});
+
+describe("samePlayerName", () => {
+  it("matches full name to initial+surname across feeds, accent-insensitive", () => {
+    expect(samePlayerName("Anna Ásgeirsdóttir", "A. Asgeirsdottir")).toBe(true);
+    expect(samePlayerName("A. Asgeirsdottir", "Anna Ásgeirsdóttir")).toBe(true);
+    expect(samePlayerName("B. Dinkins", "Briana Dinkins")).toBe(true);
+  });
+  it("rejects different surnames or different initials", () => {
+    expect(samePlayerName("A. Asgeirsdottir", "B. Asgeirsdottir")).toBe(false);
+    expect(samePlayerName("A. Asgeirsdottir", "A. Bodvarsdottir")).toBe(false);
+    expect(samePlayerName("", "A. Asgeirsdottir")).toBe(false);
   });
 });

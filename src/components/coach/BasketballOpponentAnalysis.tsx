@@ -19,7 +19,7 @@ import InstatOpponentSeasonUpload from "@/components/coach/InstatOpponentSeasonU
 import PlayDiagramsSection from "@/components/coach/PlayDiagramsSection";
 import FibaShotCharts from "@/components/coach/FibaShotCharts";
 import { ShotCourt } from "@/components/coach/ShotCourt";
-import type { FibaShot, PlayerTendency } from "@/lib/micropulse/basketballStats/fibaLiveStats";
+import { samePlayerName, type FibaShot, type PlayerTendency } from "@/lib/micropulse/basketballStats/fibaLiveStats";
 import { shotLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 import OpponentPlayerClips from "@/components/coach/OpponentPlayerClips";
 import type { ClipLite } from "@/components/coach/BasketballOpponentPdf";
@@ -194,8 +194,8 @@ function ShotBar({ label, pct, paPg }: { label: string; pct: number | null; paPg
 
 function PlayerModal({ p, t, lang, opponent, token, onClose, oppShots, onJumpToCharts }: { p: OppPlayer; t: Strings; lang: Lang; opponent: string; token: () => Promise<string | null>; onClose: () => void; oppShots: { shots: FibaShot[]; tendencies: PlayerTendency[]; games: number } | null; onJumpToCharts: () => void }) {
   const is = lang === "IS";
-  // Match the box-feed player to the FIBA shot feed by accent-folded name (prefer shirt when present).
-  const playerShots = oppShots ? oppShots.shots.filter((s) => foldName(s.playerName) === foldName(p.name)) : [];
+  // Match the box-feed player to the FIBA shot feed tolerantly (full name vs initial+surname).
+  const playerShots = oppShots ? oppShots.shots.filter((s) => samePlayerName(s.playerName, p.name)) : [];
   const withXY = playerShots.filter((s) => s.x != null && s.y != null);
   const made = withXY.filter((s) => s.result === 1).length;
   const threes = withXY.filter((s) => s.actionType === "3pt");
@@ -364,6 +364,21 @@ export default function BasketballOpponentAnalysis() {
 
   React.useEffect(() => { if (sel) void loadReport(sel); }, [sel, loadReport]);
 
+  // Load the scouted opponent's stored FIBA shots aggregated across ALL their games, so the per-player
+  // modal shows a shot chart without the coach first opening a single game. One page-level pull per
+  // opponent (not per modal-open); null when the team has no FIBA shot data yet → modal keeps the note.
+  React.useEffect(() => {
+    if (!sel) { setOppShots(null); return; }
+    let cancelled = false;
+    void (async () => {
+      const tk = await token(); if (!tk) return;
+      const r = await fetch(`/api/coach/basketball-fiba?opponent=${encodeURIComponent(sel)}`, { cache: "no-store", headers: { Authorization: `Bearer ${tk}` } }).then((x) => x.json()).catch(() => null);
+      if (cancelled) return;
+      setOppShots(r?.ok && Array.isArray(r.shots) && r.shots.length ? { shots: r.shots, tendencies: r.tendencies ?? [], games: r.games ?? 0 } : null);
+    })();
+    return () => { cancelled = true; };
+  }, [sel, token]);
+
   const scout = async () => {
     if (!sel) return;
     setPulling(true); setErr(null);
@@ -444,6 +459,13 @@ export default function BasketballOpponentAnalysis() {
         players: report.players.map((p) => ({ ...p, notes: playerTendencyNotes(p, lang) })),
         plays,
         clipsByPlayer,
+        // FIBA half-court shots per player (key = folded REPORT name; tolerant match to the shot feed) —
+        // the same data the on-page modal shows. The PDF looks up each top scorer by foldName(name).
+        playerShots: oppShots ? Object.fromEntries(report.players.map((rp) => [
+          foldName(rp.name),
+          oppShots.shots.filter((s) => s.x != null && s.y != null && samePlayerName(s.playerName, rp.name))
+            .map((s) => ({ x: s.x as number, y: s.y as number, made: s.result === 1, three: s.actionType === "3pt" })),
+        ]).filter(([, v]) => (v as unknown[]).length)) : null,
         ai,
       }, lang);
     } finally { setPdfBusy(false); }
@@ -544,7 +566,7 @@ export default function BasketballOpponentAnalysis() {
       <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-800">
         <span className="transition-transform group-open:rotate-90">▸</span>{lang === "IS" ? "Leikir & skotakort (KKÍ.is — frítt · stakur leikur eða heilt tímabil)" : "Games & shot charts (KKÍ.is — free · single game or a whole season)"}
       </summary>
-      <div className="mt-2"><FibaShotCharts opponentScope={sel} onOppShots={setOppShots} onImported={() => { void loadList(); if (sel) void loadReport(sel); }} /></div>
+      <div className="mt-2"><FibaShotCharts opponentScope={sel} onOppShots={(p) => { if (p && p.shots.length) setOppShots(p); }} onImported={() => { void loadList(); if (sel) void loadReport(sel); }} /></div>
     </details>
   );
 

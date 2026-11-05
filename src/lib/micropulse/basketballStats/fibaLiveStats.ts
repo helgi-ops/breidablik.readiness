@@ -465,6 +465,19 @@ export function foldShot(x: number, y: number): { x: number; y: number } {
   return x <= 50 ? { x, y } : { x: 100 - x, y: 100 - y };
 }
 
+/** Tolerant player-name match across feeds — the box feed may carry a full name ("Anna Ásgeirsdóttir")
+ *  while the FIBA shot feed abbreviates ("A. Asgeirsdottir"). Accent/punctuation-insensitive; matches on
+ *  an exact fold, OR on same surname (last token) + same first initial. Pure. */
+export function samePlayerName(a: string | null | undefined, b: string | null | undefined): boolean {
+  const parts = (s: string | null | undefined): string[] =>
+    String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+  const A = parts(a), B = parts(b);
+  if (!A.length || !B.length) return false;
+  if (A.join("") === B.join("")) return true;
+  const aSur = A[A.length - 1], bSur = B[B.length - 1];
+  return aSur === bSur && A[0][0] === B[0][0]; // same surname + same first initial
+}
+
 // ── Per-player shooting tendencies (coordinate-free — from actionType/subType) ──
 export type PlayerTendency = {
   key: string;                 // shirt|name

@@ -29,6 +29,18 @@ const RUN_DRIVER_PHRASE: Record<string, string> = {
   three: "from three", secondChance: "on second-chance putbacks", assisted: "from assisted looks",
 };
 import { aggregateAdvancedShots, zonesFromAdvanced, hasZones } from "@/lib/micropulse/basketballStats/instatAggregate";
+
+// Map a stored basketball_shots row to a FibaShot (shared by the single-game and opponent-aggregate reads).
+const rowToShot = (r: Record<string, unknown>): FibaShot => ({
+  tno: Number(r.tno), playerNo: (r.player_no as number) ?? null, pno: (r.player_pno as number) ?? null,
+  playerName: (r.player_name as string) ?? "—", shirt: (r.shirt_number as string) ?? null,
+  x: r.x == null ? null : Number(r.x), y: r.y == null ? null : Number(r.y),
+  result: r.result === 1 ? 1 : r.result === 0 ? 0 : null, actionType: (r.action_type as string) ?? null,
+  subType: (r.sub_type as string) ?? null, period: (r.period as number) ?? null, actionNumber: (r.action_number as number) ?? null,
+});
+// Accent- and punctuation-insensitive team-name fold (matches the client + scoutInstatOpponent idiom).
+const foldName = (s: unknown): string =>
+  String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
 import { latestSeason } from "@/lib/micropulse/basketballStats/season";
 
 const AI_MODEL = "claude-sonnet-5";
@@ -160,13 +172,7 @@ export async function GET(req: NextRequest) {
     const { data } = await supabase.from("basketball_shots").select("*").eq("owner_team_id", teamId).eq("match_id", matchId);
     const rows = (data ?? []) as Array<Record<string, unknown>>;
     if (!rows.length) return NextResponse.json({ ok: true, found: false });
-    const toShot = (r: Record<string, unknown>): FibaShot => ({
-      tno: Number(r.tno), playerNo: (r.player_no as number) ?? null, pno: (r.player_pno as number) ?? null,
-      playerName: (r.player_name as string) ?? "—", shirt: (r.shirt_number as string) ?? null,
-      x: r.x == null ? null : Number(r.x), y: r.y == null ? null : Number(r.y),
-      result: r.result === 1 ? 1 : r.result === 0 ? 0 : null, actionType: (r.action_type as string) ?? null,
-      subType: (r.sub_type as string) ?? null, period: (r.period as number) ?? null, actionNumber: (r.action_number as number) ?? null,
-    });
+    const toShot = rowToShot;
     const ownRows = rows.filter((r) => r.is_opponent === false);
     const oppRows = rows.filter((r) => r.is_opponent === true);
     const ownName = (ownRows[0]?.team_name as string) ?? null;
@@ -205,6 +211,20 @@ export async function GET(req: NextRequest) {
       opp: { shots: oppRows.map(toShot), tendencies: playerTendencies(oppRows.map(toShot)), box: gg.opp_box ?? [], totals: oppTotals, pbp: gg.opp_pbp ?? null, ai: gg.opp_ai ?? null },
       flow, runs,
     });
+  }
+
+  // Opponent-aggregate shots across ALL that team's stored games (the per-player modal reuses this,
+  // so a shot chart shows without the coach first opening a single game). Fold-match the team name.
+  const opponent = (params.get("opponent") ?? "").trim();
+  if (opponent) {
+    const { data } = await supabase.from("basketball_shots")
+      .select("tno, player_no, player_pno, player_name, shirt_number, x, y, result, action_type, sub_type, period, action_number, team_name, match_id")
+      .eq("owner_team_id", teamId).not("x", "is", null).limit(20000);
+    const want = foldName(opponent);
+    const mine = ((data ?? []) as Array<Record<string, unknown>>).filter((r) => foldName(r.team_name) === want);
+    const shots = mine.map(rowToShot);
+    const games = new Set(mine.map((r) => r.match_id as string)).size;
+    return NextResponse.json({ ok: true, opponent, teamName: (mine[0]?.team_name as string) ?? opponent, games, shots, tendencies: playerTendencies(shots) });
   }
 
   // List pulled games.
