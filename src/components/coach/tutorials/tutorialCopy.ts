@@ -1631,6 +1631,15 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         ],
       },
       {
+        heading: { en: "Why a hard decel is a high-cost event (Sideris & Buchheit 2026)", is: "Af hverju hörð hemlun er dýr (Sideris & Buchheit 2026)" },
+        body: [
+          {
+            en: "A maximal deceleration isn't one brake — it's spread across several foot contacts. The final plant removes the most speed, but the earlier, faster contacts absorb the most energy and carry the highest braking power (energy scales with speed²). The joint doing the work also shifts: the early contacts are knee-dominant, the final plant hip-dominant, the ankle small throughout. That's the mechanistic 'why' behind the braking-load score — and why re-introducing maximal decelerations late in a return-to-training block is a progressive knee-then-hip loading step. (Lab study, n=4 — mechanism only; the pods measure whole-event decel magnitude, not contact-level joint work, so this is context, never a per-player number or injury claim.)",
+            is: "Hámarks-hemlun er ekki ein bremsa — hún dreifist á nokkrar fótsnertingar. Lokaskrefið tekur mestan hraða af, en fyrri, hraðari snertingarnar gleypa mesta orku og bera hæsta hemlunaraflið (orka vex með hraða²). Liðurinn sem vinnur verkið færist líka til: fyrri snertingar eru hné-drifnar, lokaskrefið mjaðma-drifið, ökklinn lítill allan tímann. Það er líffræðilega „af hverju“ á bak við hemlunarálags-skorið — og af hverju það að innleiða hámarks-hemlanir seint í return-to-training er stigvaxandi hné-svo-mjöðm álagsskref. (Rannsóknarstofu-rannsókn, n=4 — aðeins vélbúnaður; pod-arnir mæla heildar-hemlunarstærð, ekki lið-vinnu per snertingu, svo þetta er samhengi, aldrei tala per leikmann eða meiðsla-fullyrðing.)",
+          },
+        ],
+      },
+      {
         heading: { en: "Stride Intelligence — the four baseline cards", is: "Stride Intelligence — grunnlínukortin fjögur" },
         body: [
           {
@@ -2335,6 +2344,15 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         ],
       },
       {
+        heading: { en: "HSR distance is a dose, not the internal load (Buchheit 2021)", is: "HSR-vegalengd er skammtur, ekki innra álagið (Buchheit 2021)" },
+        body: [
+          {
+            en: "A fixed team HSR drill — everyone runs the same box-to-box — lands very differently on each player: the same external metres cost a fit, fast player little and a less-fit, slower player a lot (modelled internal load, as W′ depletion, diverges widely on an identical drill). Individualising the run distance by each player's locomotor profile (MAS/MSS, anaerobic speed reserve) evens out the internal cost. The practical read: a fixed prescription under-prepares some and over-cooks others — which is also why substitutes and <60′ players need their own top-up, not the team dose. (Modelling study on simulated profiles — rationale for individualising HSR, not a measured per-player number, no injury claim.)",
+            is: "Föst liðs-HSR-æfing — allir hlaupa sama box-to-box — lendir mjög ólíkt á hverjum leikmanni: sömu ytri metrarnir kosta fit, hraðan leikmann lítið en less-fit, hægari mikið (reiknað innra álag, sem W′-eyðing, dreifist vítt á sömu æfingu). Að einstaklingsmiða vegalengdina eftir locomotor-prófíl hvers (MAS/MSS, anaerobic speed reserve) jafnar innra kostnaðinn. Hagnýta lesningin: föst forskrift vanbýr suma og ofkeyrir aðra — þess vegna þurfa varamenn og <60′ leikmenn sinn eigin top-up, ekki liðs-skammtinn. (Líkana-rannsókn á hermuðum prófílum — rök fyrir einstaklingsmiðun HSR, ekki mæld tala per leikmann, engin meiðsla-fullyrðing.)",
+          },
+        ],
+      },
+      {
         heading: { en: "Both directions are the risk", is: "Báðar áttir eru áhætta" },
         body: [
           {
@@ -2481,6 +2499,15 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "The return follows clinically recognized stages: (1) Rest — no activity; (2) Light aerobic — walking, swimming, cycling, no resistance; (3) Sport-specific — running, straight-line movement; (4) Non-contact drills — technical and team drills without contact; (5) Full training — contact, simulated play; and finally Match play — cleared, full participant. Progress dots show where each player sits.",
             is: "Endurkoman fylgir klínískt viðurkenndum þrepum: (1) Rest — engin hreyfing; (2) Light aerobic — ganga, sund, hjól, engin mótstaða; (3) Sport-specific — hlaup, beinar hreyfingar; (4) Non-contact drills — tækni- og liðsæfingar án snertingar; (5) Full training — snerting, hermileikur; og loks Match play — hreinsaður, fullur þátttakandi. Framvindupunktar sýna hvar hver leikmaður stendur.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Reintroducing max decelerations (Sideris & Buchheit 2026)", is: "Að innleiða hámarks-hemlanir aftur (Sideris & Buchheit 2026)" },
+        body: [
+          {
+            en: "A maximal deceleration is one of the most mechanically costly actions in the game, and the braking is distributed — the early, faster foot contacts absorb the most energy (knee-dominant) and the final plant is hip-dominant. So a hard brake late in the ladder isn't a single box to tick: treat it as a progressive knee-then-hip loading step, building braking tolerance before full-speed change-of-direction under fatigue. (Lab mechanics, n=4 — a rationale for sequencing the load, not a measured per-player metric or an injury threshold; the physio still clears.)",
+            is: "Hámarks-hemlun er ein af vélrænt dýrustu hreyfingum leiksins, og hemlunin dreifist — fyrri, hraðari fótsnertingar gleypa mesta orku (hné-drifnar) og lokaskrefið er mjaðma-drifið. Þannig er hörð hemlun seint í stiganum ekki einn reitur til að haka: meðhöndlaðu hana sem stigvaxandi hné-svo-mjöðm álagsskref, byggðu hemlunarþol áður en full-hraða stefnubreytingar koma undir þreytu. (Rannsóknarstofu-vélbúnaður, n=4 — rök fyrir röðun álagsins, ekki mæld tala per leikmann né meiðsla-þröskuldur; sjúkraþjálfarinn hreinsar samt.)",
           },
         ],
       },
