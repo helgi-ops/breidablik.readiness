@@ -76,6 +76,7 @@ import {
 } from "@/lib/micropulse/sprintExposure";
 import ExplainabilityDrawer from "@/components/performanceIntelligence/ExplainabilityDrawer";
 import type { ImaSessionProfile } from "@/lib/micropulse/imaDayProfile";
+import type { SessionEnough } from "@/lib/micropulse/sessionEnough";
 import PerformanceIntelligencePanel from "@/components/performanceIntelligence/PerformanceIntelligencePanel";
 import SessionDraftCard from "@/components/sessionBuilder/SessionDraftCard";
 import SessionDraftDetails from "@/components/sessionBuilder/SessionDraftDetails";
@@ -417,6 +418,8 @@ export type PostTrainingReportData = {
   monitorCount: number;
   /** Biomechanical (IMA / stride) view of the session — null if no IMA data. */
   ima: ImaSessionProfile | null;
+  /** "Did we do enough?" — session IMA vs match demand for the MD-day (Vector Pro football; null otherwise). */
+  enough?: SessionEnough | null;
   /** Load explainability — team metrics today vs the recent norm and the
    *  peak-load (≈ match) day, the player distribution, and per-player spikes. */
   loadSummary: {
@@ -6466,6 +6469,19 @@ export default function CoachPage() {
         console.warn("RTT summary fetch for report failed:", e);
       }
 
+      // "Did we do enough?" — same engine as the Post-Training page (Vector Pro football only).
+      let enough: SessionEnough | null = null;
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess?.session?.access_token;
+        if (token) {
+          const res = await fetch(`/api/coach/session-enough?date=${sessionDate}`, { headers: { Authorization: `Bearer ${token}` } });
+          if (res.ok) { const j = await res.json(); enough = (j.enough ?? null) as SessionEnough | null; }
+        }
+      } catch (e) {
+        console.warn("Session-enough fetch for report failed:", e);
+      }
+
       const reportData: PostTrainingReportData = {
         teamName: (rowsWithAdaptive[0] as any)?.team ?? "Team",
         sessionDate,
@@ -6481,6 +6497,7 @@ export default function CoachPage() {
         loadSummary,
         plannedVsActual,
         rttSummary,
+        enough,
       };
 
       if (reportPlayers.length === 0) {

@@ -7,6 +7,8 @@
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
 import type { ImaPlayerDay } from "@/lib/micropulse/imaDayProfile";
 import { PVA_KPIS, PVA_LABEL, type PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
+import { SessionEnoughPdfPage } from "@/components/coach/SessionEnoughPdf";
+import { renderPdfBlob } from "@/components/pdf/brand";
 import type {
   ReadinessRiskReportData,
   ReadinessRiskReportPlayer,
@@ -671,6 +673,9 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
         </View>
       </Page>
 
+      {/* ══ Did we do enough? — session IMA vs match demand (Vector Pro football; skipped otherwise) ══ */}
+      <SessionEnoughPdfPage enough={data.enough} teamName={data.teamName} sessionDate={data.sessionDate} />
+
       {/* ══ Page 2: External Load — GPS ══ */}
       <Page size="A4" orientation="landscape" style={postStyles.page}>
         <View style={postStyles.section}>
@@ -970,6 +975,7 @@ export async function downloadReadinessRiskReportPdf(data: ReadinessRiskReportDa
 
 /** Render + download the post-training report. Lazy entry point. */
 export async function downloadPostTrainingReportPdf(data: PostTrainingReportData, sessionDate: string) {
-  const blob = await pdf(<PostTrainingReportDocument data={data} />).toBlob();
+  // Brand fonts are registered here because the "Did we do enough?" page uses the shared PDF kit.
+  const blob = await renderPdfBlob(() => <PostTrainingReportDocument data={data} />);
   triggerPdfDownload(blob, `post-training-report-${sessionDate}.pdf`);
 }

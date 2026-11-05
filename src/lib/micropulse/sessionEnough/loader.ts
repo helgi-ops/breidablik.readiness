@@ -194,7 +194,10 @@ export async function loadSessionEnough(sb: SupabaseClient, teamId: string, sess
   const inputs: EnoughPlayerInput[] = trained.map((r) => {
     const own = ownSel.get(r.player_id) ?? [];
     const useOwn = own.length >= OWN_REF_MIN;
-    const ref = useOwn ? medOf(own) : teamRef;
+    // Own match median per variable; a variable the player's matches never carried falls back to the team's.
+    const ownMed = useOwn ? medOf(own) : null;
+    const ref = {} as VarValues;
+    for (const k of ENOUGH_VARS) ref[k] = ownMed?.[k] ?? teamRef[k];
     let weekActual: VarValues | null = null;
     if (weekDayPcts) {
       const mine = blockRows.filter((b) => b.player_id === r.player_id && weekDates.includes(b.date)).map(varsOf);
