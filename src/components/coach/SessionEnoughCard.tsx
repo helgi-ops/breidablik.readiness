@@ -11,7 +11,7 @@ import ShowDetails from "@/components/common/ShowDetails";
 import { useLang } from "@/lib/lang";
 import type { PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import {
-  ENOUGH_LABEL, ENOUGH_TECH, ENOUGH_VARS,
+  ENOUGH_LABEL, ENOUGH_TECH, ENOUGH_VARS, DAY_TYPE_LABEL,
   type SessionEnough, type PlayerVerdict, type TeamVerdict,
 } from "@/lib/micropulse/sessionEnough";
 
@@ -35,11 +35,11 @@ const CELL: Record<PvaStatus, string> = {
 };
 const PLAYER_WORD: Record<PlayerVerdict, Bi> = {
   enough: { en: "enough", is: "nóg" }, partly: { en: "partly", is: "að hluta" }, short: { en: "short", is: "vantaði" },
-  partial_session: { en: "shortened session", is: "styttri æfing" }, no_data: { en: "no data", is: "engin gögn" },
+  partial_session: { en: "shortened session", is: "styttri æfing" }, recovery: { en: "recovering", is: "í endurheimt" }, no_data: { en: "no data", is: "engin gögn" },
 };
 const PLAYER_TINT: Record<PlayerVerdict, string> = {
   enough: "bg-emerald-100 text-emerald-800", partly: "bg-amber-100 text-amber-800", short: "bg-rose-100 text-rose-800",
-  partial_session: "bg-slate-100 text-slate-600", no_data: "bg-slate-100 text-slate-500",
+  partial_session: "bg-slate-100 text-slate-600", recovery: "bg-sky-100 text-sky-800", no_data: "bg-slate-100 text-slate-500",
 };
 const CONF: Record<"high" | "moderate" | "low", { word: Bi; tone: string }> = {
   high: { word: { en: "high", is: "há" }, tone: "border-emerald-200 bg-emerald-100 text-emerald-800" },
@@ -72,9 +72,9 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
 
   const v = enough.verdict;
   const conf = CONF[enough.confidence.level];
-  const judged = enough.players.filter((p) => p.verdict !== "partial_session" && p.verdict !== "no_data");
+  const judged = enough.players.filter((p) => p.verdict !== "partial_session" && p.verdict !== "recovery" && p.verdict !== "no_data");
   const shown = [...enough.players].sort((a, b) => {
-    const rank: Record<PlayerVerdict, number> = { short: 0, partly: 1, enough: 2, partial_session: 3, no_data: 4 };
+    const rank: Record<PlayerVerdict, number> = { short: 0, partly: 1, enough: 2, recovery: 3, partial_session: 4, no_data: 5 };
     return rank[a.verdict] - rank[b.verdict] || a.name.localeCompare(b.name);
   });
 
@@ -83,6 +83,7 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-base font-semibold text-slate-900">{title}</h3>
         {enough.mdLabel && <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{enough.mdLabel}</span>}
+        {enough.dayType && <span className="rounded-md bg-[#2740e6]/10 px-2 py-0.5 text-xs font-semibold text-[#2740e6]" title={L({ en: "The planned day-type decides which movement types are judged.", is: "Skipulögð dagsgerð ræður hvaða hreyfiþættir eru metnir." })}>{L(DAY_TYPE_LABEL[enough.dayType])}</span>}
         {enough.matchPct != null && (
           <span className="text-xs text-slate-400" title={L({ en: "How big a session this MD-day should be, as a share of a match (Buchheit 2024).", is: "Hve stór æfing þessi MD-dagur á að vera, sem hlutfall af leik (Buchheit 2024)." })}>
             {L({ en: `day ≈ ${enough.matchPct}% of a match`, is: `dagur ≈ ${enough.matchPct}% af leik` })}
@@ -97,6 +98,8 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
         {v && <div className="text-[11px] font-semibold uppercase tracking-wide opacity-80">{L(VERDICT_WORD[v])}</div>}
         <div className="text-[15px] font-semibold leading-snug">{L(enough.headline)}</div>
       </div>
+
+      {enough.focusNote && <p className="mt-2 text-[12.5px] font-medium text-slate-600">{L(enough.focusNote)}</p>}
 
       {/* (1) The plain why */}
       {enough.facts.length > 0 && (
@@ -117,19 +120,20 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
       {/* Five bars — % of the day's target (marker = target) */}
       <div className="mt-3 space-y-1.5">
         {enough.team.map((t) => {
-          const pct = v ? t.pctOfTarget : t.pctOfMatch;
+          const judgedVar = !!v && t.focus;
+          const pct = judgedVar ? t.pctOfTarget : t.pctOfMatch;
           const w = pct == null ? 0 : Math.min(100, (pct / 150) * 100);
           return (
-            <div key={t.key} className="grid grid-cols-[minmax(0,9.5rem)_1fr_auto] items-center gap-2 text-xs">
+            <div key={t.key} className={`grid grid-cols-[minmax(0,9.5rem)_1fr_auto] items-center gap-2 text-xs ${v && !t.focus ? "opacity-60" : ""}`}>
               <span className="truncate text-slate-700" title={ENOUGH_TECH[t.key]}>{L(ENOUGH_LABEL[t.key])}</span>
               <div className="relative h-2.5 rounded-full bg-slate-100">
-                <div className={`absolute inset-y-0 left-0 rounded-full ${v ? BAR[t.status] : "bg-slate-400"}`} style={{ width: `${w}%` }} />
-                {v && <div className="absolute inset-y-[-2px] w-px bg-slate-700" style={{ left: `${(100 / 150) * 100}%` }} title={L({ en: "The day's target", is: "Markmið dagsins" })} />}
+                <div className={`absolute inset-y-0 left-0 rounded-full ${judgedVar ? BAR[t.status] : "bg-slate-400"}`} style={{ width: `${w}%` }} />
+                {judgedVar && <div className="absolute inset-y-[-2px] w-px bg-slate-700" style={{ left: `${(100 / 150) * 100}%` }} title={L({ en: "The day's target", is: "Markmið dagsins" })} />}
               </div>
               <span className="w-[8.5rem] text-right tabular-nums text-slate-600">
-                {pct == null ? "—" : v
+                {pct == null ? "—" : judgedVar
                   ? <>{pct}% <span className="text-slate-400">{L({ en: "of target", is: "af markmiði" })}</span></>
-                  : <>{pct}% <span className="text-slate-400">{L({ en: "of a match", is: "af leik" })}</span></>}
+                  : <>{pct}% <span className="text-slate-400">{v ? L({ en: "of a match · not today's focus", is: "af leik · ekki áhersla dagsins" }) : L({ en: "of a match", is: "af leik" })}</span></>}
               </span>
             </div>
           );
@@ -182,8 +186,8 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
                   {ENOUGH_VARS.map((k) => {
                     const c = p.byVar[k];
                     return (
-                      <td key={k} className="whitespace-nowrap px-2 py-1 text-right tabular-nums">
-                        <span className={CELL[c.status]}>{fmt(c.actual)}</span>
+                      <td key={k} className={`whitespace-nowrap px-2 py-1 text-right tabular-nums ${c.focus ? "" : "opacity-50"}`}>
+                        <span className={c.focus && !p.recovering ? CELL[c.status] : "text-slate-500"}>{fmt(c.actual)}</span>
                         <span className="text-[10px] text-slate-400"> / {fmt(c.dayTarget ?? c.matchRef)}</span>
                       </td>
                     );
@@ -193,12 +197,13 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
                     {p.refSource === "own"
                       ? L({ en: `own · ${p.refMatches} matches`, is: `eigin · ${p.refMatches} leikir` })
                       : L({ en: "team (too few own matches)", is: "liðið (of fáir eigin leikir)" })}
+                    {p.lastMatchMinutes != null && enough.dayType === "topup" ? ` · ${p.lastMatchMinutes}′` : ""}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="mt-1 text-[10px] text-slate-400">{L({ en: "Each cell: session / the day's target for that player. Colour: green ≥85% of target, amber 60–84%, red <60%.", is: "Hver reitur: æfing / markmið dagsins fyrir leikmanninn. Litur: grænn ≥85% af markmiði, gulur 60–84%, rauður <60%." })}</p>
+          <p className="mt-1 text-[10px] text-slate-400">{L({ en: "Each cell: session / the day's target for that player. Colour: green ≥85% of target, amber 60–84%, red <60%. Faded columns are not today's focus.", is: "Hver reitur: æfing / markmið dagsins fyrir leikmanninn. Litur: grænn ≥85% af markmiði, gulur 60–84%, rauður <60%. Daufir dálkar eru ekki áhersla dagsins." })}</p>
         </div>
 
         {enough.week && (
@@ -222,8 +227,8 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
         <div className="mt-4 rounded-lg bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600">
           <div className="mb-1 font-semibold text-slate-700">{L({ en: "How this is calculated", is: "Hvernig þetta er reiknað" })}</div>
           <p>{L({
-            en: "Each player's match reference is the median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when there are fewer than 3). The day's target is that match value × the share of a match this MD-day should deliver — the share tapers per movement type (fast running drops more on light days, fast strides less). Enough = at least 85% of the target. Partial sessions (<60% of the squad's duration) are shown but not judged. Running hotter than the day is a note, not a fail.",
-            is: "Leikviðmið hvers leikmanns er miðgildi hans eigin næstum-heilu leikja (≥80 mín, síðustu ~11 vikur; liðsins ef hann á færri en 3). Markmið dagsins er það leikgildi × hlutfallið af leik sem þessi MD-dagur á að gefa — hlutfallið er mismunandi eftir hreyfiþætti (hraðhlaup minnkar meira á léttum dögum, hröð skref minna). Nóg = a.m.k. 85% af markmiði. Styttri æfingar (<60% af lengd hópsins) eru sýndar en ekki metnar. Meira en dagurinn kallar á er athugasemd, ekki fall.",
+            en: "Each player's match reference is the median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when there are fewer than 3). The MD-day sets HOW BIG the day's target is: that match value × the share of a match this MD-day should deliver, tapered per movement type. The planned day-type sets WHAT is judged: Mechanical = accelerations, braking, changes of direction; Locomotive = fast running, fast strides; Mixed / Activation = all five; Top-up (MD+1) = starters (60+ min) recover, the rest are judged against ~40% of a match. Enough = at least 85% of the target. Partial sessions (<60% of the squad's duration) are shown but not judged. Running hotter than the day is a note, not a fail.",
+            is: "Leikviðmið hvers leikmanns er miðgildi hans eigin næstum-heilu leikja (≥80 mín, síðustu ~11 vikur; liðsins ef þeir eru færri en 3). MD-dagurinn ræður HVE STÓRT markmiðið er: leikgildið × hlutfallið af leik sem dagurinn á að gefa, mismunandi eftir hreyfiþætti. Skipulögð dagsgerð ræður HVAÐ er metið: Mechanical = hröðun, hemlun, stefnubreytingar; Locomotive = hraðhlaup, hröð skref; Mixed / Virkjun = allir fimm; Uppbót (MD+1) = byrjunarlið (60+ mín) í endurheimt, hinir metnir á móti ~40% af leik. Nóg = a.m.k. 85% af markmiði. Styttri æfingar (<60% af lengd hópsins) eru sýndar en ekki metnar. Meira en dagurinn kallar á er athugasemd, ekki fall.",
           })}</p>
           <p className="mt-1.5 text-slate-500">{L({ en: "Sources: ", is: "Heimildir: " })}{enough.citations.join(" · ")}</p>
         </div>

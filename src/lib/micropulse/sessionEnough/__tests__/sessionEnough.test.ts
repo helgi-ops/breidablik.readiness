@@ -95,3 +95,49 @@ describe("buildSessionEnough", () => {
     expect(r.confidence.level).not.toBe("high");
   });
 });
+
+import { dayTypeFromText, TOPUP_MATCH_PCT } from "@/lib/micropulse/sessionEnough";
+describe("day-type aware judging", () => {
+  it("maps Meso / Week-setup labels to day-types", () => {
+    expect(dayTypeFromText("MD-5 Mechanical")).toBe("mechanical");
+    expect(dayTypeFromText("FORCE")).toBe("mechanical");
+    expect(dayTypeFromText("MD-4 Locomotive")).toBe("locomotive");
+    expect(dayTypeFromText("NEURAL / VELOCITY")).toBe("locomotive");
+    expect(dayTypeFromText("MD-1 Activation")).toBe("activation");
+    expect(dayTypeFromText("MD+1 Top-up")).toBe("topup");
+    expect(dayTypeFromText("RECOVERY")).toBe("topup");
+    expect(dayTypeFromText("POLISH / CALM")).toBe("mixed");
+    expect(dayTypeFromText(null)).toBeNull();
+  });
+
+  it("Mechanical day: low running is NOT a fail — judged on accel/decel/CoD only", () => {
+    const low = { frDistance: REF.frDistance! * dayShare("frDistance", 68) * 0.3, strideHi: REF.strideHi! * dayShare("strideHi", 68) * 0.3 };
+    const r = buildSessionEnough({ ...base, mdLabel: "MD-4", matchPct: 68, dayType: "mechanical", dayTypeSource: "meso", players: ["1", "2", "3"].map((id) => player(id, 68, 1.0, low)) });
+    expect(r.verdict).toBe("yes");
+    expect(r.dayType).toBe("mechanical");
+    expect(r.focusNote?.en).toMatch(/Mechanical day/);
+    expect(r.team.find((t) => t.key === "frDistance")?.focus).toBe(false);
+    expect(r.headline.en).toContain("MD-4 Mechanical");
+  });
+
+  it("Locomotive day: both running types well under → No", () => {
+    const low = { frDistance: REF.frDistance! * dayShare("frDistance", 85) * 0.4, strideHi: REF.strideHi! * dayShare("strideHi", 85) * 0.4 };
+    const r = buildSessionEnough({ ...base, dayType: "locomotive", dayTypeSource: "week_setup", players: ["1", "2", "3"].map((id) => player(id, 85, 1.0, low)) });
+    expect(r.verdict).toBe("no");
+    expect(r.team.filter((t) => t.focus).map((t) => t.key)).toEqual(["frDistance", "strideHi"]);
+  });
+
+  it("Top-up day: starters recover (not judged), low-minute players judged against the top-up target", () => {
+    const players = [
+      player("s1", 22, 1.0, {}, { lastMatchMinutes: 90 }),
+      player("s2", 22, 1.0, {}, { lastMatchMinutes: 75 }),
+      player("b1", TOPUP_MATCH_PCT, 1.0, {}, { lastMatchMinutes: 15 }),
+      player("b2", TOPUP_MATCH_PCT, 1.0, {}, { lastMatchMinutes: 0 }),
+    ];
+    const r = buildSessionEnough({ ...base, mdLabel: "MD+1", matchPct: 22, dayType: "topup", dayTypeSource: "md", squadSize: 4, players });
+    expect(r.players.filter((p) => p.verdict === "recovery").map((p) => p.playerId).sort()).toEqual(["s1", "s2"]);
+    expect(r.confidence.judged).toBe(2);
+    expect(r.verdict).toBe("yes");
+    expect(r.focusNote?.en).toMatch(/2 starters/);
+  });
+});

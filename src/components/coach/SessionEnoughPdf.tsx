@@ -7,28 +7,28 @@
 import { Text, View } from "@react-pdf/renderer";
 import { BrandPage, Bullets, Provenance, Section, Status, Table, Verdict, FactRow, fb, type Col, type Tone } from "@/components/pdf/brand";
 import type { PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
-import { ENOUGH_LABEL, ENOUGH_VARS, type PlayerVerdict, type SessionEnough, type TeamVerdict } from "@/lib/micropulse/sessionEnough";
+import { DAY_TYPE_LABEL, ENOUGH_LABEL, ENOUGH_VARS, type PlayerVerdict, type SessionEnough, type TeamVerdict } from "@/lib/micropulse/sessionEnough";
 
 const VERDICT_TONE: Record<TeamVerdict, Tone> = { yes: "green", mostly: "amber", no: "red" };
 const VERDICT_LABEL: Record<TeamVerdict, string> = { yes: "Enough", mostly: "Mostly", no: "Not enough" };
 const STATUS_TONE: Record<PvaStatus, Tone> = { on: "green", over: "green", well_over: "amber", under: "amber", well_under: "red", na: "neutral" };
 const PLAYER: Record<PlayerVerdict, { text: string; tone: Tone }> = {
   enough: { text: "enough", tone: "green" }, partly: { text: "partly", tone: "amber" }, short: { text: "short", tone: "red" },
-  partial_session: { text: "shortened", tone: "neutral" }, no_data: { text: "no data", tone: "neutral" },
+  partial_session: { text: "shortened", tone: "neutral" }, recovery: { text: "recovering", tone: "neutral" }, no_data: { text: "no data", tone: "neutral" },
 };
 const fmt = (n: number | null) => (n == null ? "-" : Math.round(n).toLocaleString("en-US"));
 
 export function SessionEnoughPdfPage({ enough, teamName, sessionDate }: { enough: SessionEnough | null | undefined; teamName: string; sessionDate: string }) {
   if (!enough || (enough.state !== "ok" && enough.state !== "no_md")) return null;
   const v = enough.verdict;
-  const md = enough.mdLabel ? `${enough.mdLabel}${enough.matchPct != null ? ` (~${enough.matchPct}% of a match)` : ""}` : "no day type";
+  const md = [enough.mdLabel ? `${enough.mdLabel}${enough.matchPct != null ? ` (~${enough.matchPct}% of a match)` : ""}` : "no MD-day", enough.dayType ? DAY_TYPE_LABEL[enough.dayType].en : ""].filter(Boolean).join(" · ");
   const c = enough.confidence;
-  const rank: Record<PlayerVerdict, number> = { short: 0, partly: 1, enough: 2, partial_session: 3, no_data: 4 };
+  const rank: Record<PlayerVerdict, number> = { short: 0, partly: 1, enough: 2, recovery: 3, partial_session: 4, no_data: 5 };
   const players = [...enough.players].sort((a, b) => rank[a.verdict] - rank[b.verdict] || a.name.localeCompare(b.name));
 
   const cols: Col[] = [
     { label: "Player", flex: 1.6 },
-    ...ENOUGH_VARS.map((k): Col => ({ label: `${ENOUGH_LABEL[k].en} (session / target)`, flex: 1.15, align: "right" })),
+    ...ENOUGH_VARS.map((k): Col => ({ label: `${ENOUGH_LABEL[k].en}${enough.team.find((t) => t.key === k)?.focus === false ? " (not focus)" : ""} (session / target)`, flex: 1.15, align: "right" })),
     { label: "Verdict", width: 66 },
     { label: "Match reference", width: 92 },
   ];
@@ -62,8 +62,9 @@ export function SessionEnoughPdfPage({ enough, teamName, sessionDate }: { enough
           body={enough.counterfactual ? `What would have flipped it: ${enough.counterfactual.en}` : undefined}
           confidence={`Confidence: ${c.level} · ${c.judged}/${c.squad} judged · ${c.ownRef} on own matches`}
         />
+        {enough.focusNote ? <Text style={[fb(600), { fontSize: 8.5, marginBottom: 6 }]}>{enough.focusNote.en}</Text> : null}
         <FactRow
-          facts={enough.team.map((t) => ({
+          facts={enough.team.filter((t) => !v || t.focus).map((t) => ({
             value: v ? (t.pctOfTarget == null ? "-" : `${t.pctOfTarget}%`) : (t.pctOfMatch == null ? "-" : `${t.pctOfMatch}%`),
             label: ENOUGH_LABEL[t.key].en,
             sub: v
@@ -101,7 +102,7 @@ export function SessionEnoughPdfPage({ enough, teamName, sessionDate }: { enough
       ) : null}
 
       <Provenance>
-        {`How it's calculated: each player's match reference = median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when fewer than 3). Day target = match value × the share of a match this MD-day should deliver, tapered per movement type. Enough = ≥85% of target. Movement = IMA accelerations, decelerations, change of direction, Free Running bands 5-8 (m), Stride bands 6-8. Sources: ${enough.citations.join("; ")}.`}
+        {`How it's calculated: each player's match reference = median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when fewer than 3). Day target = match value × the share of a match this MD-day should deliver, tapered per movement type. The planned day-type decides what is judged: Mechanical = accelerations, braking, CoD; Locomotive = fast running, strides; Mixed/Activation = all five; Top-up = starters (60+ min) recover, the rest vs ~40% of a match. Enough = ≥85% of target. Movement = IMA accelerations, decelerations, change of direction, Free Running bands 5-8 (m), Stride bands 6-8. Sources: ${enough.citations.join("; ")}.`}
       </Provenance>
     </BrandPage>
   );

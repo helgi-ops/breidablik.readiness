@@ -82,6 +82,44 @@ export function dayShare(key: EnoughVar, matchPct: number): number {
   return Math.pow(f, SESSION_SHARE_EXPONENT[key]);
 }
 
+/**
+ * The planned day-type (from the coach's Week setup / Meso block). It decides WHICH movement types a
+ * session is judged on; the MD-day decides HOW BIG the target is. Mechanical days are about braking /
+ * accelerations / changes of direction (running isn't the job); Locomotive days are about fast running /
+ * strides; Mixed and Activation judge all five. Top-up (MD+1): starters recover, low-minute players are
+ * judged against a top-up target. Calendar day-type shares are NOT copied as magnitudes: they were set for
+ * B2-3 high-intensity efforts and sit far from real IMA totals (e.g. Mechanical 130% vs ~50% in practice).
+ */
+export type EnoughDayType = "mechanical" | "locomotive" | "mixed" | "activation" | "topup";
+export const DAY_TYPE_LABEL: Record<EnoughDayType, Bi> = {
+  mechanical: { en: "Mechanical", is: "Mechanical" },
+  locomotive: { en: "Locomotive", is: "Locomotive" },
+  mixed: { en: "Mixed", is: "Mixed" },
+  activation: { en: "Activation", is: "Virkjun" },
+  topup: { en: "Top-up", is: "Uppbót" },
+};
+export const DAY_FOCUS: Record<EnoughDayType, readonly EnoughVar[]> = {
+  mechanical: ["imaAccel", "imaDecel", "imaCod"],
+  locomotive: ["frDistance", "strideHi"],
+  mixed: ENOUGH_VARS, activation: ENOUGH_VARS, topup: ENOUGH_VARS,
+};
+/** A planned day-type from a Meso focus label / Week-setup stimulus / legacy intent token. Pure. */
+export function dayTypeFromText(text: string | null | undefined): EnoughDayType | null {
+  const f = String(text ?? "").toUpperCase();
+  if (!f) return null;
+  if (f.includes("ACTIVATION")) return "activation";
+  if (f.includes("TOP-UP") || f.includes("TOPUP") || f.includes("TOP UP") || f.includes("RECOVERY")) return "topup";
+  if (f.includes("MECHANICAL") || f.includes("FORCE")) return "mechanical";
+  if (f.includes("LOCOMOTIVE") || f.includes("VELOCITY") || f.includes("NEURAL") || f.includes("SPEED")) return "locomotive";
+  if (f.includes("MIXED") || f.includes("TECHNICAL") || f.includes("POLISH") || f.includes("CALM")) return "mixed";
+  return null;
+}
+
+/** Top-up target for low-minute players on MD+1 (share of a match) — the calendar's top-up day. */
+export const TOPUP_MATCH_PCT = 40;
+/** Minutes in the last match at/above which a player is a starter recovering on a top-up day. */
+export const STARTER_MINUTES = 60;
+
 export type EnoughPlayerInput = {
   playerId: string;
   name: string;
@@ -94,6 +132,8 @@ export type EnoughPlayerInput = {
   partial: boolean;
   /** Sum of this player's training since the last match, up to and including this session. */
   weekActual?: VarValues | null;
+  /** Minutes in the most recent match (top-up days: >= STARTER_MINUTES = recovering, not judged). */
+  lastMatchMinutes?: number | null;
 };
 
 export type EnoughInput = {
@@ -107,6 +147,9 @@ export type EnoughInput = {
   players: EnoughPlayerInput[];
   /** matchPct of each training day since the last match, incl. this session (for "week so far"). */
   weekDayPcts?: number[] | null;
+  /** The planned day-type and where it came from (null = unknown: all five judged, MD-only). */
+  dayType?: EnoughDayType | null;
+  dayTypeSource?: "week_setup" | "meso" | "md" | null;
 };
 
 export type VarCompare = {
@@ -117,13 +160,17 @@ export type VarCompare = {
   pctOfMatch: number | null;
   pctOfTarget: number | null;
   status: PvaStatus;
+  /** Part of today's day-type focus (judged). False = shown for context, not judged. */
+  focus: boolean;
 };
 
-export type PlayerVerdict = "enough" | "partly" | "short" | "partial_session" | "no_data";
+export type PlayerVerdict = "enough" | "partly" | "short" | "partial_session" | "recovery" | "no_data";
 export type PlayerEnough = {
   playerId: string; name: string; verdict: PlayerVerdict;
   byVar: Record<EnoughVar, VarCompare>; shortOn: EnoughVar[];
   refSource: "own" | "team"; refMatches: number; partial: boolean;
+  /** Top-up day: played >= STARTER_MINUTES in the last match, so recovering and not judged. */
+  recovering: boolean; lastMatchMinutes: number | null;
 };
 
 export type TeamVerdict = "yes" | "mostly" | "no";
@@ -136,6 +183,11 @@ export type SessionEnough = {
   sessionDate: string | null;
   mdLabel: string | null;
   matchPct: number | null;
+  /** The planned day-type used to pick the judged movement types (null = all five, MD-only). */
+  dayType: EnoughDayType | null;
+  dayTypeSource: "week_setup" | "meso" | "md" | null;
+  /** One plain line on what today's day-type is judged on (null when all five / unknown). */
+  focusNote: Bi | null;
   verdict: TeamVerdict | null;
   headline: Bi;
   facts: Bi[];
@@ -169,15 +221,16 @@ function verdictOf(statuses: PvaStatus[]): "enough" | "partly" | "short" | null 
   const short = judged.filter(isShort).length;
   const wellUnder = judged.filter((s) => s === "well_under").length;
   if (short === 0) return "enough";
-  if (short >= 3 || wellUnder >= 2) return "short";
+  // "short" = most of the judged set (3 of 5; 2 of 3; both of 2) or two clearly under.
+  if (short >= Math.max(2, Math.ceil(judged.length * 0.6)) || wellUnder >= 2) return "short";
   return "partly";
 }
 
-function compareVar(key: EnoughVar, actual: number | null, matchRef: number | null, matchPct: number | null): VarCompare {
+function compareVar(key: EnoughVar, actual: number | null, matchRef: number | null, matchPct: number | null, focus = true): VarCompare {
   const pctOfMatch = actual != null && matchRef != null && matchRef > 0 ? Math.round((actual / matchRef) * 100) : null;
   const dayTarget = matchRef != null && matchRef > 0 && matchPct != null ? matchRef * dayShare(key, matchPct) : null;
   const { pct, status } = statusOf(dayTarget, actual);
-  return { key, actual: r0(actual), matchRef: r0(matchRef), dayTarget: r0(dayTarget), pctOfMatch, pctOfTarget: pct, status };
+  return { key, actual: r0(actual), matchRef: r0(matchRef), dayTarget: r0(dayTarget), pctOfMatch, pctOfTarget: pct, status, focus };
 }
 
 const EMPTY_CONF = (squad: number): SessionEnough["confidence"] => ({
@@ -194,7 +247,8 @@ export function emptyEnough(state: Exclude<EnoughState, "ok">, opts?: { sessionD
     not_available: { en: "Needs Vector Pro movement data (IMA) from a football team.", is: "Þarf Vector Pro hreyfigögn (IMA) frá fótboltaliði." },
   };
   return {
-    state, sessionDate: opts?.sessionDate ?? null, mdLabel: opts?.mdLabel ?? null, matchPct: null, verdict: null,
+    state, sessionDate: opts?.sessionDate ?? null, mdLabel: opts?.mdLabel ?? null, matchPct: null,
+    dayType: null, dayTypeSource: null, focusNote: null, verdict: null,
     headline: state === "no_md" ? { en: "Not judged — no match context for this day.", is: "Ekki metið — ekkert leikjasamhengi fyrir þennan dag." } : H[state],
     facts: [], counterfactual: null, overNote: null, team: [], players: [], week: null,
     confidence: EMPTY_CONF(opts?.squad ?? 0), citations: ENOUGH_CITATIONS,
@@ -202,31 +256,50 @@ export function emptyEnough(state: Exclude<EnoughState, "ok">, opts?: { sessionD
 }
 
 export function buildSessionEnough(input: EnoughInput): SessionEnough {
-  const { matchPct, mdLabel, sessionDate } = input;
+  const { mdLabel, sessionDate } = input;
   if (input.isMatchDay) return emptyEnough("match_day", { sessionDate, mdLabel: "MD", squad: input.squadSize });
-  const md = mdLabel ?? "";
+  const dayType = input.dayType ?? null;
+  const isTopup = dayType === "topup";
+  // Top-up: low-minute players are judged against the top-up target, not the MD+1 recovery level.
+  const matchPct = isTopup ? Math.max(input.matchPct ?? 0, TOPUP_MATCH_PCT) : input.matchPct;
+  const focusSet = new Set<EnoughVar>(DAY_FOCUS[dayType ?? "mixed"]);
+  const dtLabel = dayType ? DAY_TYPE_LABEL[dayType] : null;
+  const md = [mdLabel ?? "", dtLabel ? dtLabel.en : ""].filter(Boolean).join(" ");
+  const mdIs = [mdLabel ?? "", dtLabel ? dtLabel.is : ""].filter(Boolean).join(" ");
 
   // ── Per player ───────────────────────────────────────────────────────────
   const players: PlayerEnough[] = input.players.map((p) => {
+    const recovering = isTopup && (p.lastMatchMinutes ?? 0) >= STARTER_MINUTES;
+    const pct = recovering ? (input.matchPct ?? matchPct) : matchPct;
     const byVar = {} as Record<EnoughVar, VarCompare>;
-    for (const k of ENOUGH_VARS) byVar[k] = compareVar(k, p.actual[k], p.matchRef[k], matchPct);
-    const statuses = ENOUGH_VARS.map((k) => byVar[k].status);
+    for (const k of ENOUGH_VARS) byVar[k] = compareVar(k, p.actual[k], p.matchRef[k], pct, focusSet.has(k));
+    const statuses = ENOUGH_VARS.filter((k) => focusSet.has(k)).map((k) => byVar[k].status);
     const v = verdictOf(statuses);
-    const shortOn = ENOUGH_VARS.filter((k) => isShort(byVar[k].status));
-    const verdict: PlayerVerdict = p.partial ? "partial_session" : v ?? "no_data";
-    return { playerId: p.playerId, name: p.name.trim(), verdict, byVar, shortOn, refSource: p.refSource, refMatches: p.refMatches, partial: p.partial };
+    const shortOn = ENOUGH_VARS.filter((k) => focusSet.has(k) && isShort(byVar[k].status));
+    const verdict: PlayerVerdict = p.partial ? "partial_session" : recovering ? "recovery" : v ?? "no_data";
+    return { playerId: p.playerId, name: p.name.trim(), verdict, byVar, shortOn, refSource: p.refSource, refMatches: p.refMatches, partial: p.partial, recovering, lastMatchMinutes: p.lastMatchMinutes ?? null };
   });
-  const judged = players.filter((p) => !p.partial && p.verdict !== "no_data");
+  const judged = players.filter((p) => !p.partial && !p.recovering && p.verdict !== "no_data");
+  const recoveringN = players.filter((p) => p.recovering).length;
+  const focusNote: Bi | null = dayType === "mechanical"
+    ? { en: "Mechanical day: judged on accelerations, braking and changes of direction. Running isn't the job today.", is: "Mechanical-dagur: metið á hröðun, hemlun og stefnubreytingum. Hlaup er ekki verkefni dagsins." }
+    : dayType === "locomotive"
+      ? { en: "Locomotive day: judged on fast running and fast strides. Braking and cutting aren't the job today.", is: "Locomotive-dagur: metið á hraðhlaupi og hröðum skrefum. Hemlun og stefnubreytingar eru ekki verkefni dagsins." }
+      : isTopup && recoveringN === 0
+        ? { en: `Top-up day: the players who trained are judged against a top-up target (~${TOPUP_MATCH_PCT}% of a match); starters (${STARTER_MINUTES}+ min last match) would be recovering.`, is: `Uppbótardagur: þeir sem æfðu eru metnir á móti uppbótarmarkmiði (~${TOPUP_MATCH_PCT}% af leik); byrjunarlið (${STARTER_MINUTES}+ mín í síðasta leik) væri í endurheimt.` }
+      : isTopup
+        ? { en: `Top-up day: ${recoveringN} starter${recoveringN === 1 ? "" : "s"} (${STARTER_MINUTES}+ min last match) recovering and not judged; the rest judged against a top-up target (~${TOPUP_MATCH_PCT}% of a match).`, is: `Uppbótardagur: ${recoveringN} byrjunarliðsmenn (${STARTER_MINUTES}+ mín í síðasta leik) í endurheimt og ekki metnir; hinir metnir á móti uppbótarmarkmiði (~${TOPUP_MATCH_PCT}% af leik).` }
+        : null;
   const anyRef = input.players.some((p) => ENOUGH_VARS.some((k) => (p.matchRef[k] ?? 0) > 0));
   if (!anyRef) return emptyEnough("no_reference", { sessionDate, mdLabel, squad: input.squadSize });
 
   // ── Team: median across fully-participating players ─────────────────────────
-  const pool = judged.length ? judged : players.filter((p) => !p.partial);
+  const pool = judged.length ? judged : players.filter((p) => !p.partial && !p.recovering);
   const team: VarCompare[] = ENOUGH_VARS.map((k) => {
     const pick = (sel: (c: VarCompare) => number | null) => median(pool.map((p) => sel(p.byVar[k])).filter((x): x is number => x != null));
     const pctT = pick((c) => c.pctOfTarget);
     const status: PvaStatus = pctT == null ? "na" : statusOf(100, pctT).status;
-    return { key: k, actual: r0(pick((c) => c.actual)), matchRef: r0(pick((c) => c.matchRef)), dayTarget: r0(pick((c) => c.dayTarget)), pctOfMatch: r0(pick((c) => c.pctOfMatch)), pctOfTarget: r0(pctT), status };
+    return { key: k, actual: r0(pick((c) => c.actual)), matchRef: r0(pick((c) => c.matchRef)), dayTarget: r0(pick((c) => c.dayTarget)), pctOfMatch: r0(pick((c) => c.pctOfMatch)), pctOfTarget: r0(pctT), status, focus: focusSet.has(k) };
   });
 
   // ── Confidence ──────────────────────────────────────────────────────────────
@@ -235,13 +308,17 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   const cov = squad > 0 ? judged.length / squad : 0;
   const ownShare = judged.length ? ownRef / judged.length : 0;
   const level: SessionEnough["confidence"]["level"] = cov >= 0.6 && ownShare >= 0.6 && input.mdSource ? "high" : cov >= 0.35 && ownShare >= 0.3 ? "moderate" : "low";
-  const mdSrc: Bi = input.mdSource === "week_setup" ? { en: "day type from your week setup", is: "dagtegund úr vikuskipulagi" }
-    : input.mdSource === "fixtures" ? { en: "day type from the fixture list", is: "dagtegund úr leikjaplani" } : { en: "no day type", is: "engin dagtegund" };
+  const mdSrc: Bi = input.mdSource === "week_setup" ? { en: "MD-day from your week setup", is: "MD-dagur úr vikuskipulagi" }
+    : input.mdSource === "fixtures" ? { en: "MD-day from the fixture list", is: "MD-dagur úr leikjaplani" } : { en: "no MD-day", is: "enginn MD-dagur" };
+  const dtSrc: Bi = !dtLabel ? { en: "no planned day-type (all five judged)", is: "engin skipulögð dagsgerð (allir fimm metnir)" }
+    : input.dayTypeSource === "week_setup" ? { en: `${dtLabel.en} from your week setup`, is: `${dtLabel.is} úr vikuskipulagi` }
+    : input.dayTypeSource === "meso" ? { en: `${dtLabel.en} from the Meso plan`, is: `${dtLabel.is} úr Meso-áætlun` }
+    : { en: `${dtLabel.en} (MD+1 default)`, is: `${dtLabel.is} (sjálfgefið á MD+1)` };
   const confidence: SessionEnough["confidence"] = {
     level, judged: judged.length, squad, ownRef, mdSource: input.mdSource,
     note: {
-      en: `${judged.length} of ${squad} players judged · ${ownRef} against their own matches, the rest against the team's · ${mdSrc.en}.`,
-      is: `${judged.length} af ${squad} leikmönnum metnir · ${ownRef} miðað við eigin leiki, hinir við leiki liðsins · ${mdSrc.is}.`,
+      en: `${judged.length} of ${squad} players judged · ${ownRef} against their own matches, the rest against the team's · ${mdSrc.en} · ${dtSrc.en}.`,
+      is: `${judged.length} af ${squad} leikmönnum metnir · ${ownRef} miðað við eigin leiki, hinir við leiki liðsins · ${mdSrc.is} · ${dtSrc.is}.`,
     },
   };
 
@@ -253,7 +330,7 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
     const lo = pm.length ? Math.min(...pm) : null, hi = pm.length ? Math.max(...pm) : null;
     return {
       ...emptyEnough("no_md", { sessionDate, mdLabel: null, squad }),
-      team, players, confidence,
+      team, players, confidence, dayType, dayTypeSource: input.dayTypeSource ?? null, focusNote,
       facts: lo != null ? [{
         en: `The session gave ${lo}–${hi}% of a match across the five movement types.`,
         is: `Æfingin gaf ${lo}–${hi}% af leik yfir hreyfiþættina fimm.`,
@@ -265,17 +342,17 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   }
 
   // ── Team verdict ────────────────────────────────────────────────────────────
-  const tv = verdictOf(team.map((t) => t.status));
-  if (!tv) return { ...emptyEnough("no_reference", { sessionDate, mdLabel, squad }), team, players, confidence };
+  const tv = verdictOf(team.filter((t) => t.focus).map((t) => t.status));
+  if (!tv) return { ...emptyEnough("no_reference", { sessionDate, mdLabel, squad }), team, players, confidence, dayType, dayTypeSource: input.dayTypeSource ?? null, focusNote };
   const verdict: TeamVerdict = tv === "enough" ? "yes" : tv === "partly" ? "mostly" : "no";
-  const shortVars = team.filter((t) => isShort(t.status)).sort((a, b) => (a.pctOfTarget ?? 0) - (b.pctOfTarget ?? 0));
-  const judgedVars = team.filter((t) => t.status !== "na");
+  const shortVars = team.filter((t) => t.focus && isShort(t.status)).sort((a, b) => (a.pctOfTarget ?? 0) - (b.pctOfTarget ?? 0));
+  const judgedVars = team.filter((t) => t.focus && t.status !== "na");
 
   const headline: Bi = verdict === "yes"
-    ? { en: `Yes — the session gave what ${md || "this day"} should.`, is: `Já — æfingin skilaði því sem ${md || "þessi dagur"} á að gefa.` }
+    ? { en: `Yes — the session gave what ${md || "this day"} should.`, is: `Já — æfingin skilaði því sem ${mdIs || "þessi dagur"} á að gefa.` }
     : verdict === "mostly"
       ? { en: `Mostly — short on ${listBi(shortVars.map((t) => t.key), "en")}.`, is: `Að mestu — vantaði upp á ${listBi(shortVars.map((t) => t.key), "is")}.` }
-      : { en: `No — a light session for ${md || "this day"} (short on ${shortVars.length} of ${judgedVars.length} movement types).`, is: `Nei — létt æfing miðað við ${md || "þennan dag"} (vantaði upp á ${shortVars.length} af ${judgedVars.length} hreyfiþáttum).` };
+      : { en: `No — a light session for ${md || "this day"} (short on ${shortVars.length} of ${judgedVars.length} movement types).`, is: `Nei — létt æfing miðað við ${mdIs || "þennan dag"} (vantaði upp á ${shortVars.length} af ${judgedVars.length} hreyfiþáttum).` };
 
   // ── Facts (2–3 plain lines) ──────────────────────────────────────────────────
   const facts: Bi[] = [];
@@ -283,8 +360,8 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   if (weakest) {
     const L = ENOUGH_LABEL[weakest.key];
     facts.push(verdict === "yes"
-      ? { en: `Every movement type reached the day's target — lowest was ${L.en.toLowerCase()} at ${weakest.pctOfTarget}%.`, is: `Allir hreyfiþættir náðu markmiði dagsins — lægst var ${L.is.toLowerCase()} í ${weakest.pctOfTarget}%.` }
-      : { en: `${L.en} reached ${weakest.pctOfTarget}% of what ${md} should give (${weakest.pctOfMatch}% of a match; the day calls for ~${Math.round(dayShare(weakest.key, matchPct) * 100)}%).`, is: `${L.is} náði ${weakest.pctOfTarget}% af því sem ${md} á að gefa (${weakest.pctOfMatch}% af leik; dagurinn kallar á ~${Math.round(dayShare(weakest.key, matchPct) * 100)}%).` });
+      ? { en: `Every judged movement type reached the day's target — lowest was ${L.en.toLowerCase()} at ${weakest.pctOfTarget}%.`, is: `Allir metnir hreyfiþættir náðu markmiði dagsins — lægst var ${L.is.toLowerCase()} í ${weakest.pctOfTarget}%.` }
+      : { en: `${L.en} reached ${weakest.pctOfTarget}% of what ${md} should give (${weakest.pctOfMatch}% of a match; the day calls for ~${Math.round(dayShare(weakest.key, matchPct) * 100)}%).`, is: `${L.is} náði ${weakest.pctOfTarget}% af því sem ${mdIs} á að gefa (${weakest.pctOfMatch}% af leik; dagurinn kallar á ~${Math.round(dayShare(weakest.key, matchPct) * 100)}%).` });
   }
   const clearlyShort = judged.filter((p) => p.verdict === "short").sort((a, b) => b.shortOn.length - a.shortOn.length);
   const partly = judged.filter((p) => p.verdict === "partly");
@@ -347,11 +424,11 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   const over = team.filter((t) => t.status === "well_over");
   const overNote: Bi | null = over.length ? {
     en: `More ${listBi(over.map((t) => t.key), "en")} than ${md} usually calls for (${over.map((t) => `${t.pctOfTarget}%`).join(", ")} of the day's target) — fine if planned, worth a look close to a match.`,
-    is: `Meira af ${listBi(over.map((t) => t.key), "is")} en ${md} kallar venjulega á (${over.map((t) => `${t.pctOfTarget}%`).join(", ")} af markmiði dagsins) — í lagi ef það var ætlunin, vert að skoða nálægt leik.`,
+    is: `Meira af ${listBi(over.map((t) => t.key), "is")} en ${mdIs} kallar venjulega á (${over.map((t) => `${t.pctOfTarget}%`).join(", ")} af markmiði dagsins) — í lagi ef það var ætlunin, vert að skoða nálægt leik.`,
   } : null;
 
   return {
-    state: "ok", sessionDate, mdLabel, matchPct, verdict, headline,
+    state: "ok", sessionDate, mdLabel, matchPct, dayType, dayTypeSource: input.dayTypeSource ?? null, focusNote, verdict, headline,
     facts: facts.slice(0, 3), counterfactual, overNote, team, players, week, confidence, citations: ENOUGH_CITATIONS,
   };
 }

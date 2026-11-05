@@ -7,7 +7,9 @@ import "server-only";
  *  - Gate: football + Vector Pro (Catapult tier "full").
  *  - Match reference: each player's own near-full matches (selectNearFullMatches — the same rule as
  *    the periodization match unit), else the team's near-full matches.
- *  - MD-day: coach's Week setup first (resolveMdContext), then the fixture list.
+ *  - MD-day: coach's Week setup first (resolveMdContext), then the fixture list (decides HOW BIG).
+ *  - Day-type: Meso activation/top-up label → Week-setup pitch stimulus → Meso stimulus → MD+1 default
+ *    (decides WHAT is judged).
  *  - Session: one effective row per player (manual overrides pod), previous-club rows excluded.
  *
  * READ-ONLY / descriptive — never the readiness colour.
@@ -25,7 +27,7 @@ import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 import { imaCodTotal } from "@/lib/micropulse/catapultCapability";
 import {
-  buildSessionEnough, emptyEnough, ENOUGH_VARS,
+  buildSessionEnough, emptyEnough, ENOUGH_VARS, dayTypeFromText, type EnoughDayType,
   type EnoughPlayerInput, type EnoughVar, type SessionEnough, type VarValues,
 } from "@/lib/micropulse/sessionEnough";
 
@@ -144,6 +146,27 @@ export async function loadSessionEnough(sb: SupabaseClient, teamId: string, sess
     if (off != null && p != null) { mdLabel = labelForOffset(off); matchPct = p; mdSource = "fixtures"; }
   }
 
+  // ── Planned day-type: Meso activation/top-up label → Week-setup pitch stimulus → Meso stimulus → MD+1 ─
+  let dayType: EnoughDayType | null = null;
+  let dayTypeSource: "week_setup" | "meso" | "md" | null = null;
+  {
+    const sd = new Date(`${sessionDate}T00:00:00Z`);
+    const idx = (sd.getUTCDay() + 6) % 7;
+    const weekStart = addDays(sessionDate, -idx);
+    const [{ data: wp }, { data: cws }] = await Promise.all([
+      sb.from("week_plans").select("focus, day_type").eq("team_id", teamId).eq("day_date", sessionDate).limit(1).maybeSingle(),
+      sb.from("coach_week_setup").select("day_stimuli").eq("team_id", teamId).eq("week_start_date", weekStart).maybeSingle(),
+    ]);
+    const plan = wp as { focus?: string | null; day_type?: string | null } | null;
+    const fromPlan = dayTypeFromText(plan?.focus) ?? (String(plan?.day_type ?? "").toUpperCase() === "RECOVERY" ? "topup" : null);
+    const stimRaw = (cws as { day_stimuli?: unknown } | null)?.day_stimuli;
+    const stim = Array.isArray(stimRaw) && stimRaw.length === 7 ? dayTypeFromText(String(stimRaw[idx] ?? "")) : null;
+    if (fromPlan === "activation" || fromPlan === "topup") { dayType = fromPlan; dayTypeSource = "meso"; }
+    else if (stim) { dayType = stim; dayTypeSource = "week_setup"; }
+    else if (fromPlan) { dayType = fromPlan; dayTypeSource = "meso"; }
+    else if (mdLabel === "MD+1") { dayType = "topup"; dayTypeSource = "md"; }
+  }
+
   // ── Load rows: match days (reference) + the training block since the last match ─
   const lastMatch = pastMatches[pastMatches.length - 1] ?? null;
   const weekFrom = lastMatch && Date.parse(`${sessionDate}T00:00:00Z`) - Date.parse(`${lastMatch}T00:00:00Z`) <= 10 * DAY ? addDays(lastMatch, 1) : sessionDate;
@@ -206,8 +229,19 @@ export async function loadSessionEnough(sb: SupabaseClient, teamId: string, sess
       for (const k of ENOUGH_VARS) (weekActual as Record<EnoughVar, number | null>)[k] = sumOrNull(mine.map((v) => v[k]));
     }
     const d = durationMin(r);
+    // Minutes in the last match (top-up days: starters recover). Entered minutes first, else the
+    // match-day session length (includes the warm-up, so only clearly long appearances read as starters).
+    let lastMatchMinutes: number | null = null;
+    if (lastMatch) {
+      const key = `${r.player_id}|${lastMatch}`;
+      if (minutesByKey.has(key)) lastMatchMinutes = minutesByKey.get(key)!;
+      else {
+        const mr = matchRows.find((m) => m.player_id === r.player_id && m.date === lastMatch);
+        lastMatchMinutes = mr ? Math.round(durationMin(mr)) || null : null;
+      }
+    }
     return {
-      playerId: r.player_id, name: nameOf.get(r.player_id) ?? "—",
+      playerId: r.player_id, name: nameOf.get(r.player_id) ?? "—", lastMatchMinutes,
       actual: varsOf(r), matchRef: ref, refSource: useOwn ? "own" : "team", refMatches: own.length,
       partial: medDur != null && d > 0 && d < PARTIAL_SHARE * medDur,
       weekActual,
@@ -216,6 +250,6 @@ export async function loadSessionEnough(sb: SupabaseClient, teamId: string, sess
 
   return buildSessionEnough({
     sessionDate, mdLabel, matchPct, mdSource, isMatchDay: false,
-    squadSize: playerIds.length, players: inputs, weekDayPcts,
+    squadSize: playerIds.length, players: inputs, weekDayPcts, dayType, dayTypeSource,
   });
 }
