@@ -18,6 +18,8 @@ import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import InstatOpponentSeasonUpload from "@/components/coach/InstatOpponentSeasonUpload";
 import PlayDiagramsSection from "@/components/coach/PlayDiagramsSection";
 import FibaShotCharts from "@/components/coach/FibaShotCharts";
+import { ShotCourt } from "@/components/coach/ShotCourt";
+import type { FibaShot, PlayerTendency } from "@/lib/micropulse/basketballStats/fibaLiveStats";
 import { shotLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 import OpponentPlayerClips from "@/components/coach/OpponentPlayerClips";
 import type { ClipLite } from "@/components/coach/BasketballOpponentPdf";
@@ -52,6 +54,7 @@ const T = {
     attackTitle: "Where to attack", attackHint: "Each action's weakest defender — go at them here (opponents' shooting against that player on that action).", attackAction: "Action", attackAt: "Attack", attackConcedes: "Concedes",
     moreInfo: "Details", shooting: "Shooting profile", two: "2P", three: "3P", ft: "FT",
     ptsTrend: "Points / game", noShotChart: "Make/attempt splits — the KKÍ feed has no shot locations, so no court chart.",
+    shotChartTitle: "Shot chart", shotsLabel: "shots", pullShotCharts: "Open Games & shot charts to load this →", noShotChartYet: "No FIBA shot locations loaded for this opponent yet.",
     lastGames: "Last {n} games", opp: "Opponent",
     perfNote: "Descriptive scouting from the opponent's public KKÍ box scores — never a readiness or medical judgement.",
     err: "Couldn't pull that opponent from KKÍ. Check the team name matches KKÍ exactly, or try again.",
@@ -86,6 +89,7 @@ const T = {
     attackTitle: "Hvar á að sækja", attackHint: "Veikasti verjandinn fyrir hverja sóknartegund — sæktu þar (hittni andstæðinga á þann leikmann í þeirri sókn).", attackAction: "Sóknartegund", attackAt: "Sæktu", attackConcedes: "Gefur eftir",
     moreInfo: "Nánar", shooting: "Skot-prófíll", two: "2ja", three: "3ja", ft: "Vítask.",
     ptsTrend: "Stig / leik", noShotChart: "Skil hittinga/tilrauna — KKÍ straumurinn hefur engar skot-staðsetningar, svo ekkert vallar-kort.",
+    shotChartTitle: "Skotakort", shotsLabel: "skot", pullShotCharts: "Opnaðu „Leikir & skotakort“ til að sækja þetta →", noShotChartYet: "Engar FIBA skot-staðsetningar sóttar fyrir þennan andstæðing enn.",
     lastGames: "Síðustu {n} leikir", opp: "Andstæðingur",
     perfNote: "Lýsandi skönnun úr opinberum KKÍ leikskýrslum andstæðingsins — aldrei readiness- eða læknismat.",
     err: "Náði ekki í andstæðinginn úr KKÍ. Athugaðu að liðsnafnið passi nákvæmlega við KKÍ, eða reyndu aftur.",
@@ -109,6 +113,10 @@ const T = {
 } as const;
 
 const d1 = (v: number | null | undefined): string => (v == null ? "—" : v.toFixed(1));
+// Shared basketball name-fold idiom (matches scoutInstatOpponent / fibaGamesRead) — match the box-feed
+// player name (OppPlayer.name) to the FIBA shot feed's playerName, accent- and punctuation-insensitive.
+const foldName = (s: string | null | undefined): string =>
+  String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
 const pctS = (v: number | null | undefined): string => (v == null ? "—" : `${v.toFixed(1)}%`);
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -184,7 +192,14 @@ function ShotBar({ label, pct, paPg }: { label: string; pct: number | null; paPg
   );
 }
 
-function PlayerModal({ p, t, lang, opponent, token, onClose }: { p: OppPlayer; t: Strings; lang: Lang; opponent: string; token: () => Promise<string | null>; onClose: () => void }) {
+function PlayerModal({ p, t, lang, opponent, token, onClose, oppShots, onJumpToCharts }: { p: OppPlayer; t: Strings; lang: Lang; opponent: string; token: () => Promise<string | null>; onClose: () => void; oppShots: { shots: FibaShot[]; tendencies: PlayerTendency[]; games: number } | null; onJumpToCharts: () => void }) {
+  const is = lang === "IS";
+  // Match the box-feed player to the FIBA shot feed by accent-folded name (prefer shirt when present).
+  const playerShots = oppShots ? oppShots.shots.filter((s) => foldName(s.playerName) === foldName(p.name)) : [];
+  const withXY = playerShots.filter((s) => s.x != null && s.y != null);
+  const made = withXY.filter((s) => s.result === 1).length;
+  const threes = withXY.filter((s) => s.actionType === "3pt");
+  const tpm = threes.filter((s) => s.result === 1).length;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -235,7 +250,19 @@ function PlayerModal({ p, t, lang, opponent, token, onClose }: { p: OppPlayer; t
             </div>
             <div className="flex items-end justify-center"><Sparkline series={p.shooting.ptsSeries} /></div>
           </div>
-          <p className="mt-2 text-[10px] text-slate-400">{t.noShotChart}</p>
+          {withXY.length > 0 ? (
+            <div className="mt-3">
+              <div className="flex items-baseline justify-between">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{t.shotChartTitle}</div>
+                <div className="text-[10px] tabular-nums text-slate-400">{withXY.length} {t.shotsLabel} · FG {made}/{withXY.length}{threes.length ? ` · 3P ${tpm}/${threes.length}` : ""}</div>
+              </div>
+              <div className="mt-1.5 flex justify-center"><ShotCourt shots={withXY} is={is} /></div>
+              <p className="mt-1.5 text-[10px] text-slate-400">{t.noShotChart}</p>
+            </div>
+          ) : (
+            <p className="mt-2 text-[10px] text-slate-400">{oppShots ? t.noShotChart : t.noShotChartYet}{" "}
+              {!oppShots ? <button type="button" onClick={onJumpToCharts} className="font-semibold text-[#2740e6] hover:underline">{t.pullShotCharts}</button> : null}</p>
+          )}
         </div>
 
         {/* Tagged clips + shot-tendency chart — evidence tied to this player (coach-tagged / feed API). */}
@@ -307,6 +334,10 @@ export default function BasketballOpponentAnalysis() {
   const [err, setErr] = React.useState<string | null>(null);
   const [showAll, setShowAll] = React.useState(false);
   const [openPlayer, setOpenPlayer] = React.useState<OppPlayer | null>(null);
+  // The scouted opponent's pulled FIBA shot set, lifted from the "Games & shot charts" section so the
+  // per-player modal can render its court from the same data — no second network pull. null until a game
+  // is opened in that section. setState is stable, so passing it as onOppShots won't loop the effect.
+  const [oppShots, setOppShots] = React.useState<{ shots: FibaShot[]; tendencies: PlayerTendency[]; games: number } | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
 
@@ -509,11 +540,11 @@ export default function BasketballOpponentAnalysis() {
   // Shot charts from the free public FIBA LiveStats feed — own team + any opponent. Shown
   // even with no scouted opponents yet (it's a pull tool, not opponent-dependent).
   const fibaCharts = (
-    <details className="group rounded-xl border border-slate-200 bg-white px-4 py-3">
+    <details id="opp-shot-charts" className="group rounded-xl border border-slate-200 bg-white px-4 py-3">
       <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-800">
         <span className="transition-transform group-open:rotate-90">▸</span>{lang === "IS" ? "Leikir & skotakort (KKÍ.is — frítt · stakur leikur eða heilt tímabil)" : "Games & shot charts (KKÍ.is — free · single game or a whole season)"}
       </summary>
-      <div className="mt-2"><FibaShotCharts opponentScope={sel} onImported={() => { void loadList(); if (sel) void loadReport(sel); }} /></div>
+      <div className="mt-2"><FibaShotCharts opponentScope={sel} onOppShots={setOppShots} onImported={() => { void loadList(); if (sel) void loadReport(sel); }} /></div>
     </details>
   );
 
@@ -919,7 +950,7 @@ export default function BasketballOpponentAnalysis() {
           util extractFilmFrames, table basketball_film_clip_notes — re-add
           `{sel ? <BasketballFilmClip opponent={sel} /> : null}` (and its import) to re-enable. */}
 
-      {openPlayer ? <PlayerModal p={openPlayer} t={t} lang={lang} opponent={sel} token={token} onClose={() => setOpenPlayer(null)} /> : null}
+      {openPlayer ? <PlayerModal p={openPlayer} t={t} lang={lang} opponent={sel} token={token} onClose={() => setOpenPlayer(null)} oppShots={oppShots} onJumpToCharts={() => { setOpenPlayer(null); const el = document.getElementById("opp-shot-charts"); if (el instanceof HTMLDetailsElement) el.open = true; el?.scrollIntoView({ behavior: "smooth", block: "start" }); }} /> : null}
     </div>
   );
 }
