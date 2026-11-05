@@ -554,6 +554,22 @@ export const CAL_SHARE: Record<CalType, { dist: number; hsr: number; load: numbe
   match: { dist: 1, hsr: 1, load: 1, accdec: 1, stride: 1 },
   rest: { dist: 0, hsr: 0, load: 0, accdec: 0, stride: 0 },
 };
+// IMA TOTAL counts (accelerations, decelerations, CoD) per day-type, as a share of the match. Separate
+// from `accdec` above, which is for the Band 2–3 HIGH-INTENSITY subset (that can overshoot the match on a
+// mechanical day). Whole-session IMA totals don't: across 146 Breiðablik training days (2026, team median
+// per day vs near-full-match median) accel p10/25/50/75/90 = 29/40/51/59/70%, decel 35/43/60/72/82%,
+// CoD 31/42/57/64/72%. Each day-type is anchored to a percentile of the team's OWN distribution so the
+// plan stays achievable but ordered: Mechanical = p90 (the team's biggest mechanical day), Mixed = p75,
+// Locomotive and Top-up = p25, Activation = p10. Recalibrated 2026-11-05 (was accdec 1.30/0.85/0.40/…).
+export const CAL_SHARE_IMA: Record<CalType, { accel: number; decel: number; cod: number }> = {
+  mechanical: { accel: 0.70, decel: 0.82, cod: 0.72 },
+  mixed: { accel: 0.59, decel: 0.72, cod: 0.64 },
+  locomotive: { accel: 0.40, decel: 0.43, cod: 0.42 },
+  topup: { accel: 0.40, decel: 0.43, cod: 0.42 },
+  activation: { accel: 0.29, decel: 0.35, cod: 0.31 },
+  match: { accel: 1, decel: 1, cod: 1 },
+  rest: { accel: 0, decel: 0, cod: 0 },
+};
 /** Tilt a match direction split (fwd/back/lat fractions) by position — the movement signature the
  *  block emphasises: wingers/forwards more forward + lateral; defenders more backward + lateral (covering);
  *  midfielders slightly forward. Unknown position → the team split unchanged (Buchheit directional gap). */
@@ -849,11 +865,12 @@ export function buildCalendarBlock(opts: {
       const stride = type === "rest" || opts.unit.stride == null ? null : isM ? Math.round(opts.unit.stride * mExp) : Math.round(capRun(opts.unit.stride * sh.stride * hsrEmph * fA("stride"), opts.unit.stride) * cm);
       // IMA Free Running (bands 5–8 distance) is fast running → same share/ramp/emphasis/match-cap as HSR.
       const fr = type === "rest" || opts.unit.fr == null ? null : isM ? Math.round(opts.unit.fr * mExp) : rnd(capRun(opts.unit.fr * sh.hsr * hsrEmph * fA("hsr"), opts.unit.fr) * cm, 10);
-      // IMA CoD is mechanical (cutting / braking-led) → the Acc/Dec axis: share, ramp, mechanical emphasis, no run cap.
-      const cod = type === "rest" || opts.unit.cod == null ? null : isM ? Math.round(opts.unit.cod * mExp) : Math.round(opts.unit.cod * sh.accdec * mechEmph * fA("accdec") * cm);
-      // IMA accelerations / decelerations — mechanical axis (same share/ramp/emphasis as CoD and Acc/Dec B2–3).
-      const mechDay = (v: number | null | undefined) => (type === "rest" || v == null ? null : isM ? Math.round(v * mExp) : Math.round(v * sh.accdec * mechEmph * fA("accdec") * cm));
-      const accel = mechDay(opts.unit.accel), decel = mechDay(opts.unit.decel);
+      // IMA totals (CoD, accelerations, decelerations) — the mechanical axis's ramp + emphasis, but their own
+      // calibrated day-type share (CAL_SHARE_IMA), not the B2–3 `accdec` share. No running cap.
+      const shI = CAL_SHARE_IMA[type];
+      const cod = type === "rest" || opts.unit.cod == null ? null : isM ? Math.round(opts.unit.cod * mExp) : Math.round(opts.unit.cod * shI.cod * mechEmph * fA("accdec") * cm);
+      const mechDay = (v: number | null | undefined, share: number) => (type === "rest" || v == null ? null : isM ? Math.round(v * mExp) : Math.round(v * share * mechEmph * fA("accdec") * cm));
+      const accel = mechDay(opts.unit.accel, shI.accel), decel = mechDay(opts.unit.decel, shI.decel);
       const dir = type === "rest" ? null : isM ? dirBase : dayDirTilt(dirPlan, type);
       if (type === "rest") rest += 1;
       else if (type !== "match") { sumDist += dist ?? 0; sumHsr += hsr ?? 0; sumLoad += load ?? 0; sumAccHi += accHiEff ?? 0; sumDecHi += decHiEff ?? 0; sumStride += stride ?? 0; sumFr += fr ?? 0; sumCod += cod ?? 0; sumAcc += accel ?? 0; sumDec += decel ?? 0; }

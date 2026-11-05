@@ -87,8 +87,9 @@ export function dayShare(key: EnoughVar, matchPct: number): number {
  * session is judged on; the MD-day decides HOW BIG the target is. Mechanical days are about braking /
  * accelerations / changes of direction (running isn't the job); Locomotive days are about fast running /
  * strides; Mixed and Activation judge all five. Top-up (MD+1): starters recover, low-minute players are
- * judged against a top-up target. Calendar day-type shares are NOT copied as magnitudes: they were set for
- * B2-3 high-intensity efforts and sit far from real IMA totals (e.g. Mechanical 130% vs ~50% in practice).
+ * judged against a top-up target. The Meso calendar's IMA day-type shares (CAL_SHARE_IMA, recalibrated to
+ * the team's own percentiles) give similar magnitudes to the MD-day shares used here (e.g. MD-4 Mechanical
+ * accelerations: calendar 70% of a match, this card ~71%), so plan and review agree.
  */
 export type EnoughDayType = "mechanical" | "locomotive" | "mixed" | "activation" | "topup";
 export const DAY_TYPE_LABEL: Record<EnoughDayType, Bi> = {

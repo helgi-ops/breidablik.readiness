@@ -794,3 +794,21 @@ describeIma("Meso calendar — IMA accelerations / decelerations", () => {
     expectIma(b.weeks[0].pctDecel).not.toBeNull();
   });
 });
+
+describeIma("Meso calendar — IMA Acc/Dec/CoD calibrated to the team's own distribution", () => {
+  itIma("week-1 targets = match × CAL_SHARE_IMA; ordered mechanical > mixed > locomotive > activation; never above match", () => {
+    const unit = { dist: 10000, hsr: 800, load: 1000, accdec: 160, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null, accel: 100, decel: 100, cod: 100 };
+    const b = buildCalendarBlock({ unit, startDate: "2026-09-07", numWeeks: 4, scopeName: "Team", scopePos: null, baseOverloadPct: 100 });
+    const w1 = b.weeks[0].days;
+    const by = (t: string) => w1.find((d) => d.type === t);
+    expectIma(by("mechanical")?.decel).toBe(82);
+    expectIma(by("mechanical")?.accel).toBe(70);
+    expectIma(by("activation")?.cod).toBe(31);
+    const dec = (t: string) => by(t)?.decel ?? 0;
+    expectIma(dec("mechanical")).toBeGreaterThan(dec("mixed"));
+    expectIma(dec("mixed")).toBeGreaterThan(dec("locomotive"));
+    expectIma(dec("locomotive")).toBeGreaterThan(dec("activation"));
+    const train = b.weeks.flatMap((w) => w.days).filter((d) => d.type !== "match" && d.type !== "rest");
+    expectIma(train.every((d) => (d.accel ?? 0) <= 100 && (d.decel ?? 0) <= 100 && (d.cod ?? 0) <= 100)).toBe(true);
+  });
+});
