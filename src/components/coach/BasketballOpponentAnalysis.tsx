@@ -17,8 +17,10 @@ import BasketballCourtMap from "@/components/coach/BasketballCourtMap";
 import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import InstatOpponentSeasonUpload from "@/components/coach/InstatOpponentSeasonUpload";
 import PlayDiagramsSection from "@/components/coach/PlayDiagramsSection";
-// Parked: the opponent set-plays input (diagrams / from-image / multi-phase) is hidden from the page
-// until the UX is solid. Everything behind it stays wired; flip this to true to bring it back.
+import SetPlayVideos from "@/components/coach/SetPlayVideos";
+// Parked: the drawn-diagram set-plays input (diagrams / from-image / multi-phase) is hidden from the page
+// until the UX is solid. Set plays are surfaced as VIDEO links instead (SetPlayVideos). Everything behind
+// the diagram tool stays wired; flip this to true to bring it back alongside the videos.
 const SHOW_SET_PLAYS = false;
 import FibaShotCharts from "@/components/coach/FibaShotCharts";
 import { ShotCourt } from "@/components/coach/ShotCourt";
@@ -432,6 +434,16 @@ export default function BasketballOpponentAnalysis() {
           }
         }
       } catch { /* diagrams are optional — the report still downloads without them */ }
+      // Opponent set plays as video links → a clickable "▶ Watch" list on the set-plays page.
+      let setVideos: { label: string; url: string }[] | null = null;
+      try {
+        const tok = await token();
+        if (tok && sel) {
+          const res = await fetch(`/api/coach/scouting/set-videos?opponent=${encodeURIComponent(sel)}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
+          const j = await res.json();
+          if (j.ok && Array.isArray(j.videos)) setVideos = j.videos.map((v: { label: string; url: string }) => ({ label: v.label, url: v.url }));
+        }
+      } catch { /* videos are optional */ }
       // Tagged scouting clips for this opponent, grouped by player → a clips strip in the PDF.
       let clipsByPlayer: Record<string, ClipLite[]> | null = null;
       try {
@@ -461,6 +473,7 @@ export default function BasketballOpponentAnalysis() {
         keyPlayers: report.keyPlayers,
         players: report.players.map((p) => ({ ...p, notes: playerTendencyNotes(p, lang) })),
         plays,
+        setVideos,
         clipsByPlayer,
         // FIBA half-court shots per player (key = folded REPORT name; tolerant match to the shot feed) —
         // the same data the on-page modal shows. The PDF looks up each top scorer by foldName(name).
@@ -681,6 +694,7 @@ export default function BasketballOpponentAnalysis() {
           coming out well — keep it off the page until we find a good solution"). Component + API + diagram
           data are all intact; flip SHOW_SET_PLAYS to re-enable. Existing confirmed plays still print in the
           PDF, so nothing is lost. */}
+      {sel ? <SetPlayVideos opponent={sel} /> : null}
       {SHOW_SET_PLAYS && sel ? <PlayDiagramsSection opponent={sel} /> : null}
 
       {/* How this opponent played AGAINST US — Four Factors from imported InStat

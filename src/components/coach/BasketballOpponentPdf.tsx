@@ -19,7 +19,7 @@
  */
 
 import * as React from "react";
-import { Document, Page, StyleSheet, Text, View, Svg, Path, Line, Circle, Polygon } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, Text, View, Svg, Path, Line, Circle, Polygon, Link } from "@react-pdf/renderer";
 import { fb, fh, fileSafe, renderPdfBlob, saveBlob } from "@/components/pdf/brand";
 import { shotLabel, type Lang } from "@/lib/micropulse/basketballStats/shotLabels";
 import { shotChartGeometry } from "@/lib/micropulse/basketballStats/shotChartGeometry";
@@ -71,6 +71,8 @@ export type BasketballOpponentPdfData = {
   playerShots?: Record<string, Array<{ x: number; y: number; made: boolean; three: boolean }>> | null;
   /** Coach-drawn set-play diagrams (confirmed only) — rendered on their own page. */
   plays?: PdfPlay[] | null;
+  /** Opponent set plays as video links (YouTube etc.) — a clickable "▶ Watch" list on the set-plays page. */
+  setVideos?: { label: string; url: string }[] | null;
   ai: { headline?: string; summary?: string; strengths?: string[]; weaknesses?: string[]; keyPlayers?: { name: string; note: string }[]; howToDefend?: string[]; howToAttack?: string[] } | null;
 };
 export type PdfPlay = { name: string; playType: string | null; diagram: PlayDiagram; phases?: PlayDiagram[] | null; source?: string | null; confidence?: string | null; coverage?: string | null };
@@ -108,6 +110,7 @@ const T = {
     plan: "Game plan", defend: "How to defend", attack: "Where to attack", keyFacts: "Key facts",
     scoreHead: "HOW THEY SCORE", playersHead: "PLAYERS", behindHead: "BEHIND THE NUMBERS", setPlaysHead: "SET PLAYS",
     shotChart: "Shot chart", shotsLabel: "shots", ourCoverage: "Our coverage",
+    setVideosTitle: "Set plays — video", setVideosHint: "Opponent set plays on video (links). Click to watch.", watch: "Watch",
     setPlays: "Set plays", setPlaysHint: "The opponent's most-used sets, drawn by the coaching staff. O = attacker, X = defender; dashed = pass, zig-zag = dribble, bar = screen.", aiDraft: "AI first draft", unconfirmed: "unconfirmed",
     profile: "Team profile", perGame: "per game", ff: "How they played you (Four Factors)", zones: "Shot map",
     shotsFrom: "Where their shots come from", shareOfShots: "Share of shots", aboveAvg: "Above their average FG%", playType: "Play type", madeAtt: "Made-att",
@@ -129,6 +132,7 @@ const T = {
     plan: "Leikplan", defend: "Hvernig á að verjast", attack: "Hvar á að sækja", keyFacts: "Lykilatriði",
     scoreHead: "HVERNIG ÞEIR SKORA", playersHead: "LEIKMENN", behindHead: "Á BAK VIÐ TÖLURNAR", setPlaysHead: "LEIKKERFI",
     shotChart: "Skotakort", shotsLabel: "skot", ourCoverage: "Okkar vörn",
+    setVideosTitle: "Leikkerfi — vídeó", setVideosHint: "Leikkerfi andstæðingsins á vídeói (hlekkir). Smelltu til að horfa.", watch: "Horfa",
     setPlays: "Leikkerfi", setPlaysHint: "Mest notuðu sóknir andstæðingsins, teiknaðar af þjálfarateymi. O = sóknarmaður, X = varnarmaður; brotalína = sending, sikk-sakk = rakning, strik = skermur.", aiDraft: "AI-uppkast", unconfirmed: "óstaðfest",
     profile: "Liðsprófíll", perGame: "í leik", ff: "Hvernig þeir spiluðu ykkur (Four Factors)", zones: "Skotkort",
     shotsFrom: "Hvaðan skotin koma", shareOfShots: "Hlutfall skota", aboveAvg: "Yfir meðalnýtingu þeirra", playType: "Sóknartegund", madeAtt: "Hitt-reynt",
@@ -680,9 +684,10 @@ function Doc({ data, lang, f }: { data: BasketballOpponentPdfData; lang: Lang; f
       ) : null}
 
       {/* ───────────── Set plays — coach-drawn diagrams ───────────── */}
-      {data.plays && data.plays.length ? (
+      {(data.plays && data.plays.length) || (data.setVideos && data.setVideos.length) ? (
         <Page size="A4" style={[st.page, st.pageRun]}>
           {runHead(t.setPlaysHead)}
+          {data.plays && data.plays.length ? (<>
           {h2(t.setPlays)}
           <Text style={[f.b(400), { fontSize: 8.75, color: MUTE, marginTop: -3, marginBottom: 9, lineHeight: 1.4, maxWidth: 440 }]}>{t.setPlaysHint}</Text>
           <View style={[st.row, { flexWrap: "wrap", gap: 9 }]}>
@@ -721,6 +726,19 @@ function Doc({ data, lang, f }: { data: BasketballOpponentPdfData; lang: Lang; f
               );
             })}
           </View>
+          </>) : null}
+          {data.setVideos && data.setVideos.length ? (
+            <View style={{ marginTop: data.plays && data.plays.length ? 14 : 0 }}>
+              {h2(t.setVideosTitle)}
+              <Text style={[f.b(400), { fontSize: 8.75, color: MUTE, marginTop: -3, marginBottom: 9, lineHeight: 1.4, maxWidth: 440 }]}>{t.setVideosHint}</Text>
+              {data.setVideos.map((v, i) => (
+                <View key={i} style={[st.row, { justifyContent: "space-between", alignItems: "center", paddingVertical: 5 }, i < data.setVideos!.length - 1 ? st.hairRow : {}]}>
+                  <Text style={[f.b(600), { fontSize: 10 }]}>{clean(v.label)}</Text>
+                  <Link src={v.url} style={[f.b(700), { fontSize: 9, color: COBALT }]}>▶ {t.watch}</Link>
+                </View>
+              ))}
+            </View>
+          ) : null}
           {footer()}
         </Page>
       ) : null}
