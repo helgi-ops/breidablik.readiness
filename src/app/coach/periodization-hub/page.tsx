@@ -22,6 +22,7 @@ import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput, type ExposureInput, type ShapeDirInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { exposuresFromTlyp, shapeDirsFromShape } from "@/lib/micropulse/trainingNeeds";
 import { buildPlayerBlock, pickActiveBlock } from "@/lib/micropulse/periodization/playerBlock";
+import KkiFixturesImport from "@/components/coach/KkiFixturesImport";
 import { classifyInSeasonSubPhase, subPhaseInfo, SUBPHASE_KEYS, type InSeasonSubPhaseKey } from "@/lib/micropulse/periodization/inSeasonSubPhase";
 import { strengthForBlockGoal, STRENGTH_METHODS } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { QUALITY_BY_ID, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
@@ -3065,6 +3066,7 @@ export default function PeriodizationHubPage() {
                     <button onClick={addFriendly} disabled={!friendly} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-slate-50 disabled:opacity-40">{is ? "+ Bæta við" : "+ Add"}</button>
                   </div>
                   <p className="mt-1 text-[12px] text-slate-500">{is ? "Æfingaleikir teljast EKKI upphaf keppnistímabilsins — þeir eru hluti af undirbúningi. Fyrsti keppnisleikurinn endar undirbúninginn." : "Friendlies do NOT start the competitive season — they stay in pre-season. The first competitive fixture ends pre-season."}</p>
+                  <div className="mt-3"><KkiFixturesImport onImported={() => void load(preStart, seasonEnd)} /></div>
                 </div>
               </section>
             </aside>
