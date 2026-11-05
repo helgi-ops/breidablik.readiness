@@ -94,7 +94,7 @@ export type TeamAverages = {
   direction: { forward: number; backward: number; lateral: number } | null;
   matchSessions: number; matchDistanceM: number | null; matchHsrM: number | null; matchPlayerLoad: number | null;
   matchSprintM: number | null; matchAccel: number | null; matchDecel: number | null;
-  // IMA CoD = total directional change-of-direction events per session (summed IMA clock). Match ref too.
+  // IMA CoD = Catapult's six left/right CoD buckets summed (imaCodTotal) per session. Match ref too.
   imaCod: number | null; matchImaCod: number | null;
   // IMA Free Running fast distance (bands 5–8, m) per session + match ref. Pro/Catapult only.
   imaFrDist: number | null; matchImaFrDist: number | null;
@@ -240,8 +240,8 @@ export type PlayerMatchRow = {
   // Mechanical / IMA (nullable — present only where the player's feed carries it).
   accHiEff?: number | null; decHiEff?: number | null; stride?: number | null;
   rhie?: number | null; symmetry?: number | null; metPower?: number | null;
-  // IMA CoD = total directional change-of-direction events (summed IMA clock, gridTotal). The aggregate
-  // ima_cod column is NULL in our feed, so the loader derives this from ima_clock_gen2. Pro/Catapult only.
+  // IMA CoD = Catapult's six left/right change-of-direction buckets summed (imaCodTotal — the one CoD
+  // definition app-wide; the aggregate ima_cod column is NULL in our feed). Pro/Catapult only.
   imaCod?: number | null;
   // IMA Free Running fast distance (bands 5–8, m) — the running-side IMA companion to stride.
   imaFr?: number | null;

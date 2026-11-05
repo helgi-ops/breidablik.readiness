@@ -15,6 +15,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildPlannedVsActual, type ActualKpis, type PlanForCompare } from "@/lib/micropulse/loadPlan/plannedVsActual";
+import { imaCodTotal } from "@/lib/micropulse/catapultCapability";
 import { buildLoadPlanForTeam } from "@/lib/micropulse/loadPlan/forTeam";
 import { loadSessionEnough } from "@/lib/micropulse/sessionEnough/loader";
 import type { SessionEnough } from "@/lib/micropulse/sessionEnough";
@@ -44,16 +45,14 @@ export async function loadPostTrainingForSignal(sb: SupabaseClient, teamId: stri
     .in("player_id", playerIds).eq("date", sessionDate);
   const actualById = new Map<string, ActualKpis>();
   for (const r of (gpsRows ?? []) as Array<Record<string, unknown>>) {
-    const z = (v: unknown) => num(v) ?? 0;
-    const cod = z(r.ima_cod_left_high) + z(r.ima_cod_left_medium) + z(r.ima_cod_left_low) +
-      z(r.ima_cod_right_high) + z(r.ima_cod_right_medium) + z(r.ima_cod_right_low);
+    const cod = imaCodTotal(r);
     actualById.set(String(r.player_id), {
       totalDistance: num(r.total_distance), playerLoad: num(r.total_player_load),
       hsr: num(r.velocity_band5_total_distance) || num(r.high_speed_distance),
       sprint: num(r.velocity_band6_total_distance) || num(r.sprint_distance),
       accel: num(r.accel_b2_3_tot_effs_gen2), decel: num(r.decel_b2_3_tot_effs_gen2),
       efforts: num(r.accel_decel_efforts), ima: num(r.ima_fr_band58_total_distance),
-      imaAccel: num(r.ima_accel), imaDecel: num(r.ima_decel), imaCod: cod || null, jumps: num(r.jumps),
+      imaAccel: num(r.ima_accel), imaDecel: num(r.ima_decel), imaCod: cod, jumps: num(r.jumps),
     });
   }
   const mean = (xs: Array<number | null>) => { const v = xs.filter((x): x is number => x != null && x > 0); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };

@@ -7,6 +7,7 @@ import {
   isMetricLive,
   rowHasGenuineIma,
   MIN_APPEARANCE_MINUTES,
+  imaCodTotal,
 } from "../catapultCapability";
 
 describe("catapultCapability — Lite vs Pro data shape", () => {
@@ -69,5 +70,16 @@ describe("catapultCapability — Lite vs Pro data shape", () => {
     it("MIN_APPEARANCE_MINUTES is the warmup filter", () => {
       expect(MIN_APPEARANCE_MINUTES).toBe(20);
     });
+  });
+});
+
+describe("imaCodTotal — the one IMA CoD definition", () => {
+  it("sums the six left/right CoD buckets", () => {
+    expect(imaCodTotal({ ima_cod_left_high: 10, ima_cod_left_medium: 20, ima_cod_left_low: 30, ima_cod_right_high: 11, ima_cod_right_medium: 21, ima_cod_right_low: 31 })).toBe(123);
+  });
+  it("treats missing buckets as absent, not zero, and returns null when none are captured", () => {
+    expect(imaCodTotal({ ima_cod_left_high: 5, ima_cod_right_high: "7" })).toBe(12);
+    expect(imaCodTotal({ ima_clock_gen2: { any: 1 }, ima_cod: null })).toBeNull();
+    expect(imaCodTotal({ ima_cod_left_high: 0, ima_cod_right_high: 0 })).toBe(0);
   });
 });

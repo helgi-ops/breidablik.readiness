@@ -3734,7 +3734,7 @@ export default function PeriodizationHubPage() {
             const mdOffL = (label: string) => { const m = /MD([+-]\d+)/.exec(label); return m ? Number(m[1]) : 0; };
             const playsMatches = (mu.minutesTypical ?? player.recentMinutesAvg ?? 0) >= 20 || mu.nNearFull > 0;
             // Accel/decel are Catapult IMA events on a Pro feed (loader coalesces ima_accel ?? accelerations),
-            // plain GPS effort-counts otherwise — so the row labels follow the tier. IMA CoD is the summed clock.
+            // plain GPS effort-counts otherwise — so the row labels follow the tier. IMA CoD = the six left/right CoD buckets (imaCodTotal).
             const imaSrc = plan.tier.tier === "pro";
             type Tf = "playerLoad" | "distanceM" | "hsrM" | "sprintM" | "accel" | "decel" | "imaCod" | "imaFrDist" | "strideHi";
             type Mf = "matchPlayerLoad" | "matchDistanceM" | "matchHsrM" | "matchSprintM" | "matchAccel" | "matchDecel" | "matchImaCod" | "matchImaFrDist" | "matchStrideHi";

@@ -23,6 +23,7 @@ import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { selectNearFullMatches } from "@/lib/micropulse/periodization";
 import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
+import { imaCodTotal } from "@/lib/micropulse/catapultCapability";
 import {
   buildSessionEnough, emptyEnough, ENOUGH_VARS,
   type EnoughPlayerInput, type EnoughVar, type SessionEnough, type VarValues,
@@ -55,7 +56,7 @@ export function varsOf(r: Record<string, unknown>): VarValues {
   return {
     imaAccel: num(r.ima_accel),
     imaDecel: num(r.ima_decel),
-    imaCod: sumOrNull([r.ima_cod_left_high, r.ima_cod_left_medium, r.ima_cod_left_low, r.ima_cod_right_high, r.ima_cod_right_medium, r.ima_cod_right_low].map(num)),
+    imaCod: imaCodTotal(r),
     frDistance: num(r.ima_fr_band58_total_distance),
     strideHi: sumOrNull([r.ima_fr_band6_stride_count, r.ima_fr_band7_stride_count, r.ima_fr_band8_stride_count].map(num)),
   };

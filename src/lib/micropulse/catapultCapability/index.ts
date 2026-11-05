@@ -13,6 +13,31 @@
 
 const toNum = (v: unknown): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
+/** The six Catapult IMA change-of-direction buckets (left/right × high/medium/low). */
+export const IMA_COD_COLUMNS = [
+  "ima_cod_left_high", "ima_cod_left_medium", "ima_cod_left_low",
+  "ima_cod_right_high", "ima_cod_right_medium", "ima_cod_right_low",
+] as const;
+
+/**
+ * THE canonical IMA CoD count for a load row: the sum of Catapult's six directional
+ * change-of-direction buckets. Null when all six are null/blank (no CoD capture), so a
+ * missing value never reads as 0. The aggregate `ima_cod` column is NULL on our feeds,
+ * and the IMA clock (`ima_clock_gen2`) counts EVERY directional event (forward/back
+ * accelerations too), so neither is used for CoD. Every CoD surface reads this.
+ */
+export function imaCodTotal(row: Record<string, unknown>): number | null {
+  let sum = 0, seen = false;
+  for (const c of IMA_COD_COLUMNS) {
+    const v = row[c];
+    if (v == null || v === "") continue;
+    const n = Number(v);
+    if (!Number.isFinite(n)) continue;
+    sum += n; seen = true;
+  }
+  return seen ? sum : null;
+}
+
 /**
  * Sprint distance (metres). The V6 (top-speed) velocity band IS the sprint
  * distance; Lite units usually leave the separate `sprint_distance` field at 0

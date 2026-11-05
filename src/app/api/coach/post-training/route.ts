@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { buildPlannedVsActual, type ActualKpis, type PlanForCompare } from "@/lib/micropulse/loadPlan/plannedVsActual";
+import { imaCodTotal } from "@/lib/micropulse/catapultCapability";
 import { loadSessionEnough } from "@/lib/micropulse/sessionEnough/loader";
 
 export const runtime = "nodejs";
@@ -65,9 +66,7 @@ export async function GET(req: NextRequest) {
     .eq("date", sessionDate);
   const actualById = new Map<string, ActualKpis>();
   for (const r of (gpsRows ?? []) as Array<Record<string, unknown>>) {
-    const z = (v: unknown) => num(v) ?? 0;
-    const cod = z(r.ima_cod_left_high) + z(r.ima_cod_left_medium) + z(r.ima_cod_left_low) +
-      z(r.ima_cod_right_high) + z(r.ima_cod_right_medium) + z(r.ima_cod_right_low);
+    const cod = imaCodTotal(r);
     actualById.set(String(r.player_id), {
       totalDistance: num(r.total_distance), playerLoad: num(r.total_player_load),
       // HSR/Sprint fall back to the Lite columns; efforts = combined Gen2 count (Lite/Core).
@@ -77,7 +76,7 @@ export async function GET(req: NextRequest) {
       efforts: num(r.accel_decel_efforts),
       ima: num(r.ima_fr_band58_total_distance),
       // Pro IMA counts (the indoor / basketball movement metrics).
-      imaAccel: num(r.ima_accel), imaDecel: num(r.ima_decel), imaCod: cod || null, jumps: num(r.jumps),
+      imaAccel: num(r.ima_accel), imaDecel: num(r.ima_decel), imaCod: cod, jumps: num(r.jumps),
       impacts: num(r.impacts),
     });
   }
