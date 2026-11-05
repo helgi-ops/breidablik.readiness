@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPlayDiagram, PLAY_VIEW, playTypeLabel, type PlayColors, type PlayDiagram } from "../playDiagram";
+import { buildPlayDiagram, sanitizePlayDiagram, PLAY_VIEW, playTypeLabel, type PlayColors, type PlayDiagram } from "../playDiagram";
 
 const COLORS: PlayColors = { court: "#f4f2ec", line: "#8a93a0", off: "#de9328", def: "#5c6672", ball: "#2740e6", ink: "#14181c", arrow: "#14181c", paint: "#eef1fc" };
 
@@ -52,5 +52,35 @@ describe("buildPlayDiagram — shared renderer (web + PDF parity)", () => {
   it("play-type labels resolve bilingually", () => {
     expect(playTypeLabel("pnrHandler", "EN")).toMatch(/Pick & roll/);
     expect(playTypeLabel("pnrHandler", "IS")).toMatch(/Skýling/);
+  });
+});
+
+describe("sanitizePlayDiagram", () => {
+  it("clamps coords, validates vocab, caps counts and keeps one ball-handler", () => {
+    const d = sanitizePlayDiagram({
+      players: [
+        { team: "off", x: 150, y: -5, ball: true, label: "1" },
+        { team: "off", x: 50, y: 50, ball: true, label: "2" }, // second ball ignored
+        { team: "weird", x: 10, y: 10 },                        // unknown team → off
+        { team: "def", x: 20, y: 20, label: "X" },
+      ],
+      arrows: [
+        { from: [0, 0], to: [200, 200], kind: "dribble" },
+        { from: [10, 10], to: [20, 20], kind: "nonsense" },    // unknown kind → move
+        { to: [5, 5], kind: "pass" },                          // no from → dropped
+      ],
+    });
+    expect(d.court).toBe("half");
+    expect(d.players).toHaveLength(4);
+    expect(d.players[0]).toMatchObject({ team: "off", x: 100, y: 0, ball: true }); // clamped 150→100, -5→0
+    expect(d.players.filter((p) => p.ball)).toHaveLength(1);                        // only the first
+    expect(d.players[2].team).toBe("off");                                          // unknown → off
+    expect(d.arrows).toHaveLength(2);                                               // the from-less one dropped
+    expect(d.arrows[0].to).toEqual([100, 94]);                                      // clamped to court
+    expect(d.arrows[1].kind).toBe("move");                                          // unknown → move
+  });
+  it("never throws on junk and yields an empty-but-valid diagram", () => {
+    expect(sanitizePlayDiagram(null)).toEqual({ court: "half", players: [], arrows: [] });
+    expect(sanitizePlayDiagram("nope")).toEqual({ court: "half", players: [], arrows: [] });
   });
 });

@@ -16,6 +16,38 @@ export type PlayPlayer = { id: string; team: PlayTeam; x: number; y: number; bal
 export type PlayArrow = { from: [number, number]; to: [number, number]; kind: ArrowKind; curve?: number };
 export type PlayDiagram = { court: "half"; players: PlayPlayer[]; arrows: PlayArrow[] };
 
+/** Coerce loose/untrusted diagram JSON (e.g. an AI reconstruction) into a valid PlayDiagram: clamp coords
+ *  to the 0–100 × 0–94 court, validate team/kind vocab, cap counts, keep at most one ball-handler. Pure,
+ *  never throws — unknown input yields an empty-but-valid diagram. */
+export function sanitizePlayDiagram(raw: unknown): PlayDiagram {
+  const clamp = (v: unknown, hi: number): number => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.min(hi, Math.round(n))) : 0; };
+  const o = (raw ?? {}) as { players?: unknown; arrows?: unknown };
+  const players: PlayPlayer[] = [];
+  let ballSeen = false;
+  for (const p of (Array.isArray(o.players) ? o.players : []).slice(0, 12)) {
+    const pp = (p ?? {}) as Record<string, unknown>;
+    const team: PlayTeam = pp.team === "def" ? "def" : "off";
+    const ball = team === "off" && !ballSeen && pp.ball === true;
+    if (ball) ballSeen = true;
+    players.push({
+      id: typeof pp.id === "string" && pp.id ? pp.id : `${team}-${players.length}-${Math.random().toString(36).slice(2, 7)}`,
+      team, x: clamp(pp.x, 100), y: clamp(pp.y, 94),
+      ...(ball ? { ball: true } : {}),
+      ...(typeof pp.label === "string" ? { label: pp.label.slice(0, 3) } : {}),
+    });
+  }
+  const kinds = new Set<ArrowKind>(["move", "dribble", "screen", "pass"]);
+  const arrows: PlayArrow[] = [];
+  for (const a of (Array.isArray(o.arrows) ? o.arrows : []).slice(0, 20)) {
+    const aa = (a ?? {}) as Record<string, unknown>;
+    const from = Array.isArray(aa.from) ? aa.from : null;
+    const to = Array.isArray(aa.to) ? aa.to : null;
+    if (!from || !to) continue;
+    arrows.push({ from: [clamp(from[0], 100), clamp(from[1], 94)], to: [clamp(to[0], 100), clamp(to[1], 94)], kind: (kinds.has(aa.kind as ArrowKind) ? aa.kind : "move") as ArrowKind });
+  }
+  return { court: "half", players, arrows };
+}
+
 /** InStat play-type vocabulary the scouting report already uses (value → bilingual label). */
 export const PLAY_TYPES: Array<{ key: string; en: string; is: string }> = [
   { key: "pnrHandler", en: "Pick & roll (handler)", is: "Skýling (leikstjóri)" },

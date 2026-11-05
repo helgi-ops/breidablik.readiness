@@ -73,7 +73,7 @@ export type BasketballOpponentPdfData = {
   plays?: PdfPlay[] | null;
   ai: { headline?: string; summary?: string; strengths?: string[]; weaknesses?: string[]; keyPlayers?: { name: string; note: string }[]; howToDefend?: string[]; howToAttack?: string[] } | null;
 };
-export type PdfPlay = { name: string; playType: string | null; diagram: PlayDiagram; source?: string | null; confidence?: string | null; coverage?: string | null };
+export type PdfPlay = { name: string; playType: string | null; diagram: PlayDiagram; phases?: PlayDiagram[] | null; source?: string | null; confidence?: string | null; coverage?: string | null };
 
 // ── Design tokens (CLAUDE.md § Design system) ────────────────────────────────
 const BONE = "#f4f2ec", CARD = "#ffffff", INK = "#14181c", MUTE = "#575c63", RULE = "#dcd8cc", HAIR = "#efece4";
@@ -688,19 +688,28 @@ function Doc({ data, lang, f }: { data: BasketballOpponentPdfData; lang: Lang; f
           <View style={[st.row, { flexWrap: "wrap", gap: 9 }]}>
             {data.plays.map((p, i) => {
               const isDraft = p.source === "ai_draft";
+              const phs = p.phases && p.phases.length > 1 ? p.phases : [p.diagram];
+              const multi = phs.length > 1;
               return (
-                <View key={i} wrap={false} style={[st.card, { width: "49.3%", paddingHorizontal: 11, paddingVertical: 9 }]}>
+                <View key={i} wrap={false} style={[st.card, { width: multi ? "100%" : "49.3%", paddingHorizontal: 11, paddingVertical: 9 }]}>
                   <View style={[st.row, { justifyContent: "space-between", alignItems: "flex-start", gap: 6, marginBottom: 6 }]}>
                     <View style={{ flex: 1 }}>
-                      <Text style={[f.h(800), { fontSize: 12, letterSpacing: -0.1 }]}>{clean(p.name)}</Text>
+                      <Text style={[f.h(800), { fontSize: 12, letterSpacing: -0.1 }]}>{clean(p.name)}{multi ? `  ·  ${phs.length} ${lang === "IS" ? "fasar" : "phases"}` : ""}</Text>
                       <Text style={[f.b(600), { fontSize: 8.5, color: COBALT, marginTop: 1 }]}>{clean(playTypeLabel(p.playType, lang))}</Text>
                     </View>
                     {isDraft ? (
                       <Text style={[f.b(700), { fontSize: 7, backgroundColor: COBALT_TINT, color: COBALT, paddingHorizontal: 4, paddingVertical: 2, borderRadius: 3, letterSpacing: 0.4 }]}>{t.aiDraft}{p.confidence ? ` · ${clean(p.confidence)}` : ""}</Text>
                     ) : null}
                   </View>
-                  <View style={{ backgroundColor: "#ffffff", borderWidth: 1, borderColor: HAIR, borderRadius: 6, padding: 4, alignItems: "center" }}>
-                    <PlayDiagramPdf diagram={p.diagram} w={210} />
+                  <View style={[st.row, { flexWrap: "wrap", gap: 7, justifyContent: multi ? "flex-start" : "center", alignItems: "flex-start" }]}>
+                    {phs.map((dg, pi) => (
+                      <View key={pi} style={{ alignItems: "center" }}>
+                        {multi ? <Text style={[f.b(700), { fontSize: 8, color: COBALT, marginBottom: 2 }]}>{String.fromCharCode(65 + pi)}</Text> : null}
+                        <View style={{ backgroundColor: "#ffffff", borderWidth: 1, borderColor: HAIR, borderRadius: 6, padding: 4 }}>
+                          <PlayDiagramPdf diagram={dg} w={multi ? 150 : 210} />
+                        </View>
+                      </View>
+                    ))}
                   </View>
                   {p.coverage ? (
                     <View style={{ marginTop: 6, backgroundColor: COBALT_TINT, borderRadius: 5, paddingHorizontal: 7, paddingVertical: 5 }}>

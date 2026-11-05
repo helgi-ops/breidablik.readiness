@@ -36,6 +36,7 @@ export default function PlayDiagramsSection({ opponent }: { opponent: string }) 
   const [match, setMatch] = React.useState<MatchResult | null>(null);
   const [picking, setPicking] = React.useState(false); // choose-from-library panel open
   const fileRef = React.useRef<HTMLInputElement | null>(null);
+  const imageRef = React.useRef<HTMLInputElement | null>(null);
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
 
   const load = React.useCallback(async () => {
@@ -77,6 +78,39 @@ export default function PlayDiagramsSection({ opponent }: { opponent: string }) 
           : e.message);
       } else setErr(e instanceof Error ? e.message : "Error");
     } finally { setBusy(false); if (fileRef.current) fileRef.current.value = ""; }
+  }
+
+  // Reconstruct a (multi-phase) play from uploaded clean diagram images (e.g. "Diagram A/B/C"). The AI
+  // reads each image → editable phases; saved as an AI draft the coach reviews/fixes/confirms in the editor.
+  async function onImages(files: FileList) {
+    setErr(null); setMsg(null); setMatch(null); setPicking(false); setBusy(true);
+    try {
+      const arr = Array.from(files).slice(0, 6);
+      setMsg(is ? "Les myndir…" : "Reading images…");
+      const images = await Promise.all(arr.map((f) => new Promise<string>((resolve, reject) => {
+        const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.onerror = () => reject(new Error("read")); r.readAsDataURL(f);
+      })));
+      setMsg(is ? "AI les kerfið úr myndunum…" : "AI is reading the play from the images…");
+      const t = await token(); if (!t) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const res = await fetch("/api/coach/scouting/play-diagrams/reconstruct-from-image", {
+        method: "POST", headers: { Authorization: `Bearer ${t}`, "content-type": "application/json" },
+        body: JSON.stringify({ opponent, images, lang }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setErr(j.error ?? "Error"); return; }
+      // Save as an editable AI draft (unconfirmed), then open it so the coach reviews/fixes/confirms.
+      const save = await fetch("/api/coach/scouting/play-diagrams", {
+        method: "POST", headers: { Authorization: `Bearer ${t}`, "content-type": "application/json" },
+        body: JSON.stringify({ opponent, name: j.name, playType: j.playType, diagram: j.phases[0], phases: j.phases.length > 1 ? j.phases : null, source: "ai_draft", confidence: j.confidence, notes: j.note || null }),
+      });
+      const sj = await save.json();
+      if (!save.ok || !sj.ok) { setErr(sj.error ?? "Error"); return; }
+      setMsg(null);
+      await load();
+      if (sj.diagram) setEditing(sj.diagram as SavedDiagram);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error");
+    } finally { setBusy(false); if (imageRef.current) imageRef.current.value = ""; }
   }
 
   // Save a matched common set as one of this opponent's plays (so it lists + prints).
@@ -152,6 +186,11 @@ export default function PlayDiagramsSection({ opponent }: { opponent: string }) 
         {editing === null && (
           <div className="ml-auto flex items-center gap-2">
             <input ref={fileRef} type="file" accept="video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); }} />
+            <input ref={imageRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { const fs = e.target.files; if (fs && fs.length) void onImages(fs); }} />
+            <button type="button" disabled={busy} onClick={() => imageRef.current?.click()}
+              className="rounded-lg border border-slate-300 px-2.5 py-1 text-[12px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              {busy ? (is ? "Vinn…" : "Working…") : (is ? "🖼️ Úr mynd(um)" : "🖼️ From image(s)")}
+            </button>
             <button type="button" disabled={busy} onClick={() => fileRef.current?.click()}
               className="rounded-lg border border-slate-300 px-2.5 py-1 text-[12px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
               {busy ? (is ? "Vinn…" : "Working…") : (is ? "🔍 Þekkja úr myndbandi" : "🔍 Recognise from clip")}
@@ -171,7 +210,7 @@ export default function PlayDiagramsSection({ opponent }: { opponent: string }) 
       ) : null}
       {editing === null && !err && !busy && !match ? (
         <p className="mb-2 text-[11px] text-slate-400">
-          {is ? "Þekkja úr myndbandi: hlaðið upp stuttu búti (ein sókn, ~10–25 s). AI ber það saman við teiknuðu kerfin þín og algeng kerfi og segir hvert það líkist — myndbandið fer aldrei á netþjóninn." : "Recognise from clip: upload a short possession (~10–25 s). The AI compares it to your drawn plays and common sets and says which it resembles — the video never leaves your browser."}
+          {is ? "Úr mynd(um): hlaðið upp hreinum skýringarmyndum (t.d. Diagram A/B/C) — AI les hverja sem fasa og gerir editable kerfi sem þú lagar. Þekkja úr myndbandi: stutt sókn (~10–25 s) borin saman við þekkt kerfi — myndbandið fer aldrei á netþjóninn." : "From image(s): upload clean play diagrams (e.g. Diagram A/B/C) — the AI reads each as a phase into an editable play you fix up. Recognise from clip: a short possession (~10–25 s) matched to known sets — the video never leaves your browser."}
         </p>
       ) : null}
 
@@ -215,7 +254,7 @@ export default function PlayDiagramsSection({ opponent }: { opponent: string }) 
               <div className="mt-1.5 flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="truncate text-[13px] font-semibold text-slate-900">{p.name}</div>
-                  <div className="text-[11px] text-slate-500">{playTypeLabel(p.play_type, is ? "IS" : "EN")}</div>
+                  <div className="text-[11px] text-slate-500">{playTypeLabel(p.play_type, is ? "IS" : "EN")}{p.phases && p.phases.length > 1 ? ` · ${p.phases.length} ${is ? "fasar" : "phases"}` : ""}</div>
                 </div>
                 <div className="flex shrink-0 gap-1.5 text-[11px] font-semibold">
                   <button type="button" onClick={() => setEditing(p)} className="text-[#2740e6] hover:underline">{is ? "Breyta" : "Edit"}</button>

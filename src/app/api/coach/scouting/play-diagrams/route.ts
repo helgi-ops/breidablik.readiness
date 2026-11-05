@@ -33,7 +33,7 @@ async function authTeam(req: NextRequest) {
   return { supabase, teamId, userId: userRes.user.id } as const;
 }
 
-const SELECT = "id, opponent_key, name, play_type, diagram, source, confidence, confirmed, confirmed_by, notes, coverage, created_at, updated_at";
+const SELECT = "id, opponent_key, name, play_type, diagram, phases, source, confidence, confirmed, confirmed_by, notes, coverage, created_at, updated_at";
 
 export async function GET(req: NextRequest) {
   const auth = await authTeam(req);
@@ -70,6 +70,8 @@ export async function POST(req: NextRequest) {
     confirmed_by: source === "manual" ? auth.userId : null,
     notes: body?.notes ? String(body.notes) : null,
     coverage: body?.coverage ? String(body.coverage) : null,
+    // Multi-phase sequence (PlayDiagram[]); null for a single-phase play (diagram stays phase 1).
+    phases: Array.isArray(body?.phases) && body.phases.length > 1 ? body.phases : null,
   };
   const { data, error } = await auth.supabase.from("opponent_play_diagrams").insert(row as never).select(SELECT).maybeSingle();
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -86,6 +88,7 @@ export async function PUT(req: NextRequest) {
   if (typeof body?.name === "string") patch.name = body.name.trim();
   if ("playType" in body) patch.play_type = body.playType ? String(body.playType) : null;
   if (body?.diagram && typeof body.diagram === "object") patch.diagram = body.diagram;
+  if ("phases" in body) patch.phases = Array.isArray(body.phases) && body.phases.length > 1 ? body.phases : null;
   if ("notes" in body) patch.notes = body.notes ? String(body.notes) : null;
   if ("coverage" in body) patch.coverage = body.coverage ? String(body.coverage) : null;
   // Confirming a play (coach is the source of truth — logs who confirmed).

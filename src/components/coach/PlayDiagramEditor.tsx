@@ -15,7 +15,7 @@ import { buildPlayDiagram, PLAY_VIEW, PLAY_TYPES, ARROW_KINDS, type PlayDiagram,
 import { COMMON_SETS } from "@/lib/micropulse/basketballStats/commonSets";
 
 type Tool = "off" | "def" | "arrow" | "move" | "erase";
-export type SavedDiagram = { id: string; name: string; play_type: string | null; diagram: PlayDiagram; source: string; confirmed: boolean; confidence: string | null; coverage?: string | null };
+export type SavedDiagram = { id: string; name: string; play_type: string | null; diagram: PlayDiagram; phases?: PlayDiagram[] | null; source: string; confirmed: boolean; confidence: string | null; coverage?: string | null };
 
 const EMPTY: PlayDiagram = { court: "half", players: [], arrows: [] };
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -26,7 +26,12 @@ export default function PlayDiagramEditor({ opponent, initial, onSaved, onCancel
   const [lang] = useLang();
   const is = lang === "IS";
   const svgRef = React.useRef<SVGSVGElement | null>(null);
-  const [diagram, setDiagram] = React.useState<PlayDiagram>(initial?.diagram ?? EMPTY);
+  // Multi-phase: a play can be a sequence (A/B/C). `diagram`/`setDiagram` stay the LIVE active-phase state
+  // (so all the pointer handlers below are unchanged); `phases` holds the folded sequence, `active` the index.
+  const initialPhases: PlayDiagram[] = (initial?.phases && Array.isArray(initial.phases) && initial.phases.length) ? (initial.phases as PlayDiagram[]) : [initial?.diagram ?? EMPTY];
+  const [phases, setPhases] = React.useState<PlayDiagram[]>(initialPhases);
+  const [active, setActive] = React.useState(0);
+  const [diagram, setDiagram] = React.useState<PlayDiagram>(initialPhases[0] ?? EMPTY);
   const [name, setName] = React.useState(initial?.name ?? "");
   const [playType, setPlayType] = React.useState(initial?.play_type ?? "pnrHandler");
   const [coverage, setCoverage] = React.useState(initial?.coverage ?? ""); // how WE guard this set
@@ -46,6 +51,14 @@ export default function PlayDiagramEditor({ opponent, initial, onSaved, onCancel
   };
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+
+  // Fold the live active-phase edits back into the sequence; phase switch / add (duplicates the current
+  // phase, since a progression usually starts from the previous look) / remove.
+  const mergedPhases = (): PlayDiagram[] => phases.map((p, i) => (i === active ? diagram : p));
+  const switchPhase = (i: number) => { const m = mergedPhases(); setPhases(m); setDiagram(m[i] ?? EMPTY); setActive(i); };
+  const addPhase = () => { const m = mergedPhases(); const copy = JSON.parse(JSON.stringify(m[active] ?? EMPTY)) as PlayDiagram; const np = [...m.slice(0, active + 1), copy, ...m.slice(active + 1)]; setPhases(np); setDiagram(copy); setActive(active + 1); };
+  const removePhase = () => { if (phases.length <= 1) return; const m = mergedPhases(); const np = m.filter((_, i) => i !== active); const na = Math.max(0, active - 1); setPhases(np); setActive(na); setDiagram(np[na] ?? EMPTY); };
+  const phaseLabel = (i: number) => String.fromCharCode(65 + i);
 
   // drag + arrow-draw transient state
   const dragId = React.useRef<string | null>(null);
@@ -124,7 +137,8 @@ export default function PlayDiagramEditor({ opponent, initial, onSaved, onCancel
     try {
       const token = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
       if (!token) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
-      const body = { opponent, name: name.trim(), playType, diagram, coverage: coverage.trim() || null };
+      const allPhases = mergedPhases();
+      const body = { opponent, name: name.trim(), playType, diagram: allPhases[0], phases: allPhases.length > 1 ? allPhases : null, coverage: coverage.trim() || null };
       // Editing an unconfirmed AI draft is the coach taking ownership — confirm it on save
       // (brief: "coach confirms or edits → confirmed:true"). Only confirmed plays print.
       const confirmDraft = initial?.source === "ai_draft" && !initial.confirmed;
@@ -205,6 +219,21 @@ export default function PlayDiagramEditor({ opponent, initial, onSaved, onCancel
           placeholder={is ? "T.d. „Blue ef stóri er í stöðu, annars high flat. Chase over, næsti verjandi í gapið.“" : "e.g. \"Blue if our big is in position, else high flat. Chase over, next defender in the gap.\""}
           className="mt-1 w-full resize-y rounded-md border border-slate-300 px-2 py-1.5 text-[13px]" />
         <p className="mt-0.5 text-[10px] text-slate-400">{is ? "Þitt varnar-plan — prentast undir kerfinu í scouting-PDF-inu. AI gerir uppkast, þú ræður." : "Your defensive plan — prints under the diagram in the scouting PDF. AI drafts a first pass, you decide."}</p>
+      </div>
+
+      {/* Phases — a play can be a sequence (A→B→C). Each phase is its own diagram; "+ Phase" duplicates
+          the current look so a progression starts where the last one ended. Single-phase plays ignore this. */}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Fasar" : "Phases"}</span>
+        <div className="inline-flex overflow-hidden rounded-md border border-slate-200">
+          {phases.map((_, i) => (
+            <button key={i} type="button" onClick={() => switchPhase(i)}
+              className={`px-2.5 py-1 text-[12px] font-bold ${i === active ? "bg-[#2740e6] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>{phaseLabel(i)}</button>
+          ))}
+        </div>
+        <button type="button" onClick={addPhase} className="rounded-md border border-slate-300 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">{is ? "+ Fasi" : "+ Phase"}</button>
+        {phases.length > 1 ? <button type="button" onClick={removePhase} className="rounded-md border border-slate-300 px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50">{is ? "Eyða fasa" : "Remove phase"}</button> : null}
+        <span className="text-[11px] text-slate-400">{is ? `Ritstýrir fasa ${phaseLabel(active)}` : `Editing phase ${phaseLabel(active)}`}</span>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
