@@ -2856,6 +2856,7 @@ export default function PeriodizationHubPage() {
                                   <span className="w-full truncate text-[12px] font-bold" style={{ color: typeColor[cd.type] }}>{typeName(cd.type)}</span>
                                   <span className="text-[11px] tabular-nums text-slate-600">{dash(cd.load)}</span>
                                   {cd.fr != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "IMA hraðhlaup (band 5–8), metrar" : "IMA Free Running (fast running, band 5–8), metres"}>FR {cd.fr} m</span>}
+                                  {cd.stride != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "IMA hröð skref (band 6–8), fjöldi" : "IMA Stride (fast strides, band 6–8), count"}>{is ? "Skref" : "Stride"} {cd.stride}</span>}
                                 </>) : <span className="text-[11px] text-slate-500">—</span>}
                               </button>
                             </div>
@@ -2866,7 +2867,7 @@ export default function PeriodizationHubPage() {
                   })}
                 </div>
               </div>
-              <p className="mt-3 text-[12px] text-slate-500">{is ? "Talan = Player Load; „FR“ = IMA hraðhlaup (band 5–8, metrar) þar sem gögnin eru til — fylgir háhraða-ásnum. Vikuálagið er stigvaxandi per mæligildi (magn hækkar hraðar en háhraði; hvert við leikþak — ⚑ sýnir hvað heldur vikunni). Lýsandi — upphafspunktur, ekki viðmið. Aldrei fleiri en 3 æfingar í röð. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021." : "The number = Player Load; \"FR\" = IMA Free Running (fast running, band 5–8, metres) where the feed carries it — it follows the HSR axis. Weekly overload ramps per-KPI (volume climbs faster than HSR; each ceilings at match — ⚑ shows what held the week). Descriptive — a starting point, not a norm. Never more than 3 sessions in a row. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021."}</p>
+              <p className="mt-3 text-[12px] text-slate-500">{is ? "Talan = Player Load; „FR“ = IMA hraðhlaup (band 5–8, metrar) og „Skref“ = IMA hröð skref (band 6–8) þar sem gögnin eru til — bæði fylgja hlaupa-ásnum. Vikuálagið er stigvaxandi per mæligildi (magn hækkar hraðar en háhraði; hvert við leikþak — ⚑ sýnir hvað heldur vikunni). Lýsandi — upphafspunktur, ekki viðmið. Aldrei fleiri en 3 æfingar í röð. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021." : "The number = Player Load; \"FR\" = IMA Free Running (fast running, band 5–8, metres) and \"Stride\" = IMA Stride (fast strides, band 6–8) where the feed carries them — both follow the running axis. Weekly overload ramps per-KPI (volume climbs faster than HSR; each ceilings at match — ⚑ shows what held the week). Descriptive — a starting point, not a norm. Never more than 3 sessions in a row. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021."}</p>
               <details className="mt-3">
                 <summary className="cursor-pointer py-1 text-[13px] font-semibold text-[#2740e6]">{is ? "Hvað þýða dagsgerðirnar?" : "What the day-types mean"}</summary>
                 <ul className="mt-1.5 space-y-1 text-[13px] text-slate-700">
