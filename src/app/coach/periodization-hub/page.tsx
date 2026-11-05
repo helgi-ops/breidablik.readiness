@@ -187,13 +187,14 @@ const domDir = (dir: { fwd: number; back: number; lat: number } | null, is: bool
   const key = m === dir.fwd ? (is ? "fram" : "fwd") : m === dir.lat ? (is ? "hlið" : "lat") : (is ? "aftur" : "back");
   return `${key} ${Math.round(m * 100)}%`;
 };
-// Compact "Acc B2–3 · Dec B2–3 · Stride · Free Running · dir" line for a day — only the metrics the feed carries.
+// Compact "Acc B2–3 · Dec B2–3 · Stride · Free Running · CoD · dir" line for a day — only the metrics the feed carries.
 const imaLine = (d: CalDay, is: boolean): string => {
   const p: string[] = [];
   if (d.accHiEff != null) p.push(`Acc B2–3 ${d.accHiEff}`);
   if (d.decHiEff != null) p.push(`Dec B2–3 ${d.decHiEff}`);
   if (d.stride != null) p.push(`${is ? "Skref" : "Stride"} ${d.stride}`);
   if (d.fr != null) p.push(`${is ? "Hraðhlaup" : "Free Running"} ${d.fr} m`);
+  if (d.cod != null) p.push(`${is ? "Stefnubr." : "CoD"} ${d.cod}`);
   const dd = domDir(d.dir, is); if (dd) p.push(`${is ? "stefna" : "dir"} → ${dd}`);
   return p.join(" · ");
 };
@@ -619,9 +620,9 @@ export default function PeriodizationHubPage() {
     const dirFields = { dirFwd: dir?.forward ?? null, dirBack: dir?.backward ?? null, dirLat: dir?.lateral ?? null };
     return isPlayerScope && mu
       ? { dist: mu.distance.typical, hsr: mu.hsr.typical, load: mu.load.typical, accdec: ((mu.accel.typical ?? 0) + (mu.decel.typical ?? 0)) || null,
-          accHiEff: mu.accHiEff.typical, decHiEff: mu.decHiEff.typical, stride: mu.stride.typical, ...dirFields, rhie: mu.rhie.typical, symmetry: mu.symmetry.typical, metPower: mu.metPower.typical, fr: mu.imaFr?.typical ?? ta?.matchImaFrDist ?? null }
+          accHiEff: mu.accHiEff.typical, decHiEff: mu.decHiEff.typical, stride: mu.stride.typical, ...dirFields, rhie: mu.rhie.typical, symmetry: mu.symmetry.typical, metPower: mu.metPower.typical, fr: mu.imaFr?.typical ?? ta?.matchImaFrDist ?? null, cod: mu.imaCod.typical ?? ta?.matchImaCod ?? null }
       : { dist: ta?.matchDistanceM ?? null, hsr: ta?.matchHsrM ?? null, load: ta?.matchPlayerLoad ?? null, accdec: ((ta?.matchAccel ?? 0) + (ta?.matchDecel ?? 0)) || null,
-          accHiEff: ta?.matchAccelHiEff ?? null, decHiEff: ta?.matchDecelHiEff ?? null, stride: ta?.matchStrideHi ?? null, ...dirFields, rhie: ta?.rhieBouts ?? null, symmetry: ta?.runSymmetry ?? null, metPower: ta?.metabolicPower ?? null, fr: ta?.matchImaFrDist ?? null };
+          accHiEff: ta?.matchAccelHiEff ?? null, decHiEff: ta?.matchDecelHiEff ?? null, stride: ta?.matchStrideHi ?? null, ...dirFields, rhie: ta?.rhieBouts ?? null, symmetry: ta?.runSymmetry ?? null, metPower: ta?.metabolicPower ?? null, fr: ta?.matchImaFrDist ?? null, cod: ta?.matchImaCod ?? null };
   }, [isPlayerScope, player, plan]);
   const blkPhaseLabel = plan?.phases.find((ph) => ph.start <= blkStart && blkStart < ph.end)?.label ?? { en: "Season block", is: "Tímabils-lota" };
   // Pre-season matches are friendlies — they must not pull down His block's training-week alignment target.
@@ -1122,7 +1123,7 @@ export default function PeriodizationHubPage() {
     }
     const tb = plan.teamBaseline?.avg;
     const teamUnit = tb ? { dist: tb.matchDistanceM, hsr: tb.matchHsrM, load: tb.matchPlayerLoad, accdec: ((tb.matchAccel ?? 0) + (tb.matchDecel ?? 0)) || null,
-      accHiEff: tb.matchAccelHiEff, decHiEff: tb.matchDecelHiEff, stride: tb.matchStrideHi, fr: tb.matchImaFrDist,
+      accHiEff: tb.matchAccelHiEff, decHiEff: tb.matchDecelHiEff, stride: tb.matchStrideHi, fr: tb.matchImaFrDist, cod: tb.matchImaCod,
       dirFwd: tb.direction?.forward ?? null, dirBack: tb.direction?.backward ?? null, dirLat: tb.direction?.lateral ?? null,
       rhie: tb.rhieBouts, symmetry: tb.runSymmetry, metPower: tb.metabolicPower } : null;
     // Pre-season start + ramp (team) — the controlled re-entry the pack builds from. Uses the coach's
@@ -2857,6 +2858,7 @@ export default function PeriodizationHubPage() {
                                   <span className="text-[11px] tabular-nums text-slate-600">{dash(cd.load)}</span>
                                   {cd.fr != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "IMA hraðhlaup (band 5–8), metrar" : "IMA Free Running (fast running, band 5–8), metres"}>FR {cd.fr} m</span>}
                                   {cd.stride != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "IMA hröð skref (band 6–8), fjöldi" : "IMA Stride (fast strides, band 6–8), count"}>{is ? "Skref" : "Stride"} {cd.stride}</span>}
+                                  {cd.cod != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "IMA stefnubreytingar, fjöldi" : "IMA CoD (change of direction), count"}>CoD {cd.cod}</span>}
                                 </>) : <span className="text-[11px] text-slate-500">—</span>}
                               </button>
                             </div>
@@ -2867,7 +2869,7 @@ export default function PeriodizationHubPage() {
                   })}
                 </div>
               </div>
-              <p className="mt-3 text-[12px] text-slate-500">{is ? "Talan = Player Load; „FR“ = IMA hraðhlaup (band 5–8, metrar) og „Skref“ = IMA hröð skref (band 6–8) þar sem gögnin eru til — bæði fylgja hlaupa-ásnum. Vikuálagið er stigvaxandi per mæligildi (magn hækkar hraðar en háhraði; hvert við leikþak — ⚑ sýnir hvað heldur vikunni). Lýsandi — upphafspunktur, ekki viðmið. Aldrei fleiri en 3 æfingar í röð. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021." : "The number = Player Load; \"FR\" = IMA Free Running (fast running, band 5–8, metres) and \"Stride\" = IMA Stride (fast strides, band 6–8) where the feed carries them — both follow the running axis. Weekly overload ramps per-KPI (volume climbs faster than HSR; each ceilings at match — ⚑ shows what held the week). Descriptive — a starting point, not a norm. Never more than 3 sessions in a row. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021."}</p>
+              <p className="mt-3 text-[12px] text-slate-500">{is ? "Talan = Player Load; „FR“ = IMA hraðhlaup (band 5–8, metrar) og „Skref“ = IMA hröð skref (band 6–8) fylgja hlaupa-ásnum; „CoD“ = IMA stefnubreytingar fylgja vélræna ásnum (Acc/Dec) — þar sem gögnin eru til. Vikuálagið er stigvaxandi per mæligildi (magn hækkar hraðar en háhraði; hvert við leikþak — ⚑ sýnir hvað heldur vikunni). Lýsandi — upphafspunktur, ekki viðmið. Aldrei fleiri en 3 æfingar í röð. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021." : "The number = Player Load; \"FR\" = IMA Free Running (fast running, band 5–8, metres) and \"Stride\" = IMA Stride (fast strides, band 6–8) follow the running axis; \"CoD\" = IMA change of direction follows the mechanical (Acc/Dec) axis — where the feed carries them. Weekly overload ramps per-KPI (volume climbs faster than HSR; each ceilings at match — ⚑ shows what held the week). Descriptive — a starting point, not a norm. Never more than 3 sessions in a row. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021."}</p>
               <details className="mt-3">
                 <summary className="cursor-pointer py-1 text-[13px] font-semibold text-[#2740e6]">{is ? "Hvað þýða dagsgerðirnar?" : "What the day-types mean"}</summary>
                 <ul className="mt-1.5 space-y-1 text-[13px] text-slate-700">
@@ -2880,9 +2882,9 @@ export default function PeriodizationHubPage() {
                 </ul>
                 <p className="mt-1.5 text-[12px] text-slate-500">Issurin 2010 (block periodisation) · Owen 2017 (positional mesocycle, MD taper) · Oliveira 2019 (congested-week variants) · Oliveira 2021 (ACWR/monotony on sRPE+HSR) · Teixeira 2021 (monitoring) · Martín-García 2018 (%-of-match-demand). {is ? "Lýsandi — aldrei readiness-liturinn." : "Descriptive — never the readiness colour."}</p>
               </details>
-              {mesoCalBlock && (mesoCalBlock.unit.accHiEff != null || mesoCalBlock.unit.stride != null || mesoCalBlock.unit.fr != null) && (
+              {mesoCalBlock && (mesoCalBlock.unit.accHiEff != null || mesoCalBlock.unit.stride != null || mesoCalBlock.unit.fr != null || mesoCalBlock.unit.cod != null) && (
                 <details className="mt-1">
-                  <summary className="cursor-pointer py-1 text-[13px] font-semibold text-[#2740e6]">{is ? "Sýna vélrænt / IMA (Acc·Dec B2–3, skref, hraðhlaup, stefna)" : "Show mechanical/IMA detail (Acc·Dec B2–3, stride, Free Running, direction)"}</summary>
+                  <summary className="cursor-pointer py-1 text-[13px] font-semibold text-[#2740e6]">{is ? "Sýna vélrænt / IMA (Acc·Dec B2–3, skref, hraðhlaup, stefnubr., stefna)" : "Show mechanical/IMA detail (Acc·Dec B2–3, stride, Free Running, CoD, direction)"}</summary>
                   <ul className="mt-1.5 space-y-0.5 text-[12px] text-slate-700">
                     {mesoCalBlock.weeks.flatMap((w) => w.days.map((d, i) => ({ d, i, wi: w.index })).filter(({ d }) => d.type !== "rest")).map(({ d, i, wi }) => (
                       <li key={`${wi}-${i}`} className="tabular-nums"><span className="text-slate-500">{is ? "V" : "W"}{wi + 1} {is ? d.dow.is : d.dow.en} {d.md}</span> · <b style={{ color: typeColor[d.type] }}>{typeName(d.type)}</b> — {imaLine(d, is) || (is ? "engin IMA-gögn" : "no IMA data")}</li>
@@ -3805,7 +3807,7 @@ export default function PeriodizationHubPage() {
             const microUnit = { dist: mu.distance.typical, hsr: mu.hsr.typical, load: mu.load.typical,
               accdec: ((mu.accel.typical ?? 0) + (mu.decel.typical ?? 0)) || null, accHiEff: mu.accHiEff.typical,
               decHiEff: mu.decHiEff.typical, stride: mu.stride.typical, dirFwd: null, dirBack: null, dirLat: null,
-              rhie: mu.rhie.typical, symmetry: mu.symmetry.typical, metPower: mu.metPower.typical, fr: mu.imaFr?.typical ?? null };
+              rhie: mu.rhie.typical, symmetry: mu.symmetry.typical, metPower: mu.metPower.typical, fr: mu.imaFr?.typical ?? null, cod: mu.imaCod.typical ?? null };
             const microMon = (() => { const d = new Date(blkStart + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); })();
             const microWk = (() => { const mb = buildCalendarBlock({ unit: microUnit, startDate: microMon, numWeeks: 2, scopeName: player.name, scopePos: player.position, baseOverloadPct: 100 }); return mb.weeks[1] ?? mb.weeks[0]; })();
             const microDays = (microWk?.days ?? []).map((d) => ({ md: d.md, type: d.type, o: mdOffset(d.md) ?? 99 })).filter((d) => d.o >= -4 && d.o <= -1).sort((a, b) => a.o - b.o);
@@ -4332,12 +4334,13 @@ export default function PeriodizationHubPage() {
                       <span>PL: <b className="tabular-nums">{day.load ?? "–"}</b></span>
                       {day.type === "match" && <span className="text-[10px] text-slate-400">({is ? "leikkrafan = 100%" : "the match = 100%"})</span>}
                     </div>
-                    {(day.accHiEff != null || day.decHiEff != null || day.stride != null || day.fr != null || day.dir) && (
+                    {(day.accHiEff != null || day.decHiEff != null || day.stride != null || day.fr != null || day.cod != null || day.dir) && (
                       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-slate-500">
                         {day.accHiEff != null && <span>Acc B2–3: <b className="tabular-nums">{day.accHiEff}</b></span>}
                         {day.decHiEff != null && <span>Dec B2–3: <b className="tabular-nums">{day.decHiEff}</b></span>}
                         {day.stride != null && <span>{is ? "Skref" : "Stride"}: <b className="tabular-nums">{day.stride}</b></span>}
                         {day.fr != null && <span>{is ? "Hraðhlaup" : "Free Running"}: <b className="tabular-nums">{day.fr} m</b></span>}
+                        {day.cod != null && <span>{is ? "Stefnubr." : "CoD"}: <b className="tabular-nums">{day.cod}</b></span>}
                         {day.dir && <span>{is ? "stefna" : "dir"} → <b>{domDir(day.dir, is)}</b></span>}
                       </div>
                     )}

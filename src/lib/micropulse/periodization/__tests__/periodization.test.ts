@@ -767,3 +767,16 @@ describeIma("Meso calendar — IMA Free Running", () => {
     expectIma(b.weeks[0].pctFr ?? null).toBeNull();
   });
 });
+
+describeIma("Meso calendar — IMA CoD", () => {
+  const unit = { dist: 10000, hsr: 800, load: 1000, accdec: 200, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
+  itIma("plans CoD on the mechanical axis (mechanical day > locomotive day; match = the unit; rest = null)", () => {
+    const b = buildCalendarBlock({ unit: { ...unit, cod: 440 }, startDate: "2026-09-07", numWeeks: 4, scopeName: "Team", scopePos: null, baseOverloadPct: 100 });
+    const days = b.weeks.flatMap((w) => w.days);
+    expectIma(days.filter((d) => d.type === "match").every((d) => d.cod === 440)).toBe(true);
+    expectIma(days.filter((d) => d.type === "rest").every((d) => d.cod == null)).toBe(true);
+    const mech = days.find((d) => d.type === "mechanical"), loco = days.find((d) => d.type === "locomotive");
+    if (mech && loco) expectIma((mech.cod ?? 0)).toBeGreaterThan(loco.cod ?? 0);
+    expectIma(b.weeks[0].pctCod).not.toBeNull();
+  });
+});
