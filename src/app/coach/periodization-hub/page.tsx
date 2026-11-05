@@ -64,7 +64,7 @@ type MdDemandProfile = { phases: MdDemandBucket[]; days: MdDemandBucket[] };
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes; md: MdDemandProfile };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
-type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; nextFirstFixture?: string | null; nextSeasonYear?: number | null; fixturesEstimated?: boolean; estimatedOpener?: string | null; nextFirstFixtureEstimated?: boolean };
+type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; nextFirstFixture?: string | null; nextSeasonYear?: number | null; fixturesEstimated?: boolean; estimatedOpener?: string | null; nextFirstFixtureEstimated?: boolean; imaCalibration?: { shares: Record<CalType, { accel: number; decel: number; cod: number }>; source: "team" | "partial" | "default"; nDays: number; nMatchRows: number } };
 
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
 const isoAdd = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_400_000).toISOString().slice(0, 10);
@@ -732,7 +732,7 @@ export default function PeriodizationHubPage() {
   const calBlock = React.useMemo(() => {
     if (!plan || Object.keys(blkSkeleton).length === 0) return null;
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
-    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeksEff, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [], offseasonStart: offPhaseStart ?? undefined, goal: effectiveGoal, camps: campRegions });
+    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeksEff, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [], offseasonStart: offPhaseStart ?? undefined, goal: effectiveGoal, camps: campRegions, imaShare: plan.imaCalibration?.shares });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkScope, selId, blkUnit, effectiveGoal, campRegions]);
 
@@ -2125,7 +2125,7 @@ export default function PeriodizationHubPage() {
                 if (ct) preTypeOv[iso] = ct;
               }
             }
-            const cal = buildCalendarBlock({ unit: blkUnit, startDate: preStart, numWeeks: preWeeks, scopeName: "__team__", phase: { en: "Pre-season", is: "Undirbúningur" }, baseOverloadPct: blkBase, stepPct: blkStep, matchDates: preFixtures, offDays: preOffDays, onDays: preOnDays, typeOverrides: preTypeOv, allFixtures: plan.fixtures ?? [], matchExposure: (wi) => preseasonMatchExposure(wi + 1, preWeeks), camps: campRegions });
+            const cal = buildCalendarBlock({ unit: blkUnit, startDate: preStart, numWeeks: preWeeks, scopeName: "__team__", phase: { en: "Pre-season", is: "Undirbúningur" }, baseOverloadPct: blkBase, stepPct: blkStep, matchDates: preFixtures, offDays: preOffDays, onDays: preOnDays, typeOverrides: preTypeOv, allFixtures: plan.fixtures ?? [], matchExposure: (wi) => preseasonMatchExposure(wi + 1, preWeeks), camps: campRegions, imaShare: plan.imaCalibration?.shares });
             // Set a pre-season day's day-type directly on the card (draft): Off or a training stimulus
             // (mechanical/locomotive/mixed/activation/top-up). Match days stay fixed to the fixture. Optimistic
             // overlay via savedPlans; persists the whole week to week_plans through the SAME applyWeekSetup path
@@ -2873,6 +2873,15 @@ export default function PeriodizationHubPage() {
                 </div>
               </div>
               <p className="mt-3 text-[12px] text-slate-500">{is ? "Talan = Player Load; „FR“ = IMA hraðhlaup (band 5–8, metrar) og „Skref“ = IMA hröð skref (band 6–8) fylgja hlaupa-ásnum; „CoD“ = IMA stefnubreytingar og „Acc/Dec“ = hröðun/hemlun (IMA á Pro) fylgja vélræna ásnum — þar sem gögnin eru til. Vikuálagið er stigvaxandi per mæligildi (magn hækkar hraðar en háhraði; hvert við leikþak — ⚑ sýnir hvað heldur vikunni). Lýsandi — upphafspunktur, ekki viðmið. Aldrei fleiri en 3 æfingar í röð. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021." : "The number = Player Load; \"FR\" = IMA Free Running (fast running, band 5–8, metres) and \"Stride\" = IMA Stride (fast strides, band 6–8) follow the running axis; \"CoD\" = IMA change of direction and \"Acc/Dec\" = accelerations/decelerations (IMA on Pro) follow the mechanical axis — where the feed carries them. Weekly overload ramps per-KPI (volume climbs faster than HSR; each ceilings at match — ⚑ shows what held the week). Descriptive — a starting point, not a norm. Never more than 3 sessions in a row. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021."}</p>
+              {plan.imaCalibration && (
+                <p className="mt-1 text-[11px] text-slate-400" title={is ? "Mechanical = p90 liðsins, Mixed = p75, Locomotive/Uppbót = p25, Virkjun = p10 (miðgildi liðs á æfingadegi ÷ miðgildi heils leiks)." : "Mechanical = your team's p90, Mixed = p75, Locomotive/Top-up = p25, Activation = p10 (team median per training day ÷ near-full-match median)."}>
+                  {plan.imaCalibration.source === "team"
+                    ? (is ? `Acc/Dec/CoD-hlutföll dagsgerða eru kvörðuð á ykkar eigin ${plan.imaCalibration.nDays} æfingadögum (og ${plan.imaCalibration.nMatchRows} heilum leikframmistöðum).` : `Acc/Dec/CoD day-type shares are calibrated on your own ${plan.imaCalibration.nDays} training days (and ${plan.imaCalibration.nMatchRows} near-full match appearances).`)
+                    : plan.imaCalibration.source === "partial"
+                      ? (is ? "Acc/Dec/CoD-hlutföll eru að hluta kvörðuð á ykkar gögnum; hinar breyturnar nota viðmiðunargildi þar til næg gögn eru komin." : "Acc/Dec/CoD shares are partly calibrated on your data; the rest use reference values until there's enough data.")
+                      : (is ? "Acc/Dec/CoD-hlutföll nota viðmiðunargildi þar til liðið á 30 æfingadaga með hreyfigögnum og 10 heilar leikframmistöður." : "Acc/Dec/CoD shares use reference values until your team has 30 training days with movement data and 10 near-full match appearances.")}
+                </p>
+              )}
               <details className="mt-3">
                 <summary className="cursor-pointer py-1 text-[13px] font-semibold text-[#2740e6]">{is ? "Hvað þýða dagsgerðirnar?" : "What the day-types mean"}</summary>
                 <ul className="mt-1.5 space-y-1 text-[13px] text-slate-700">
@@ -3812,7 +3821,7 @@ export default function PeriodizationHubPage() {
               decHiEff: mu.decHiEff.typical, stride: mu.stride.typical, dirFwd: null, dirBack: null, dirLat: null,
               rhie: mu.rhie.typical, symmetry: mu.symmetry.typical, metPower: mu.metPower.typical, fr: mu.imaFr?.typical ?? null, cod: mu.imaCod.typical ?? null, accel: mu.accel.typical, decel: mu.decel.typical };
             const microMon = (() => { const d = new Date(blkStart + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); })();
-            const microWk = (() => { const mb = buildCalendarBlock({ unit: microUnit, startDate: microMon, numWeeks: 2, scopeName: player.name, scopePos: player.position, baseOverloadPct: 100 }); return mb.weeks[1] ?? mb.weeks[0]; })();
+            const microWk = (() => { const mb = buildCalendarBlock({ unit: microUnit, startDate: microMon, numWeeks: 2, scopeName: player.name, scopePos: player.position, baseOverloadPct: 100, imaShare: plan.imaCalibration?.shares }); return mb.weeks[1] ?? mb.weeks[0]; })();
             const microDays = (microWk?.days ?? []).map((d) => ({ md: d.md, type: d.type, o: mdOffset(d.md) ?? 99 })).filter((d) => d.o >= -4 && d.o <= -1).sort((a, b) => a.o - b.o);
             const days: Array<{ md: string; type: CalType }> = microDays.length ? microDays.map((d) => ({ md: d.md, type: d.type })) : standardTrainingDays(1).map((md) => ({ md, type: "mixed" as CalType }));
             const TYPE_LABEL: Partial<Record<CalType, { en: string; is: string }>> = { mechanical: { en: "mech", is: "vélrænt" }, locomotive: { en: "loco", is: "hlaup" }, mixed: { en: "mixed", is: "blandað" }, activation: { en: "prime", is: "virkjun" }, rest: { en: "rest", is: "hvíld" }, topup: { en: "top-up", is: "áfylling" } };

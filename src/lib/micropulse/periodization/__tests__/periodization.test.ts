@@ -812,3 +812,32 @@ describeIma("Meso calendar — IMA Acc/Dec/CoD calibrated to the team's own dist
     expectIma(train.every((d) => (d.accel ?? 0) <= 100 && (d.decel ?? 0) <= 100 && (d.cod ?? 0) <= 100)).toBe(true);
   });
 });
+
+import { calibrateImaShares, CAL_SHARE_IMA } from "../index";
+describeIma("calibrateImaShares — per-team calendar IMA shares", () => {
+  const days = Array.from({ length: 100 }, (_, i) => ({ accel: 20 + i * 0.6, decel: 30 + i * 0.7, cod: 100 + i * 2 })); // uniform spreads
+  const ref = { accel: 100, decel: 100, cod: 400 };
+  itIma("uses the team's own p90/p75/p25/p10, ordered and clamped to ≤ 1", () => {
+    const c = calibrateImaShares(days, ref, 40);
+    expectIma(c.source).toBe("team");
+    expectIma(c.shares.mechanical.accel).toBeCloseTo(0.73, 2);   // p90 of 20..79.4
+    expectIma(c.shares.activation.decel).toBeCloseTo(0.37, 2);   // p10 of 30..99.3
+    const d = (t: "mechanical" | "mixed" | "locomotive" | "activation") => c.shares[t].decel;
+    expectIma(d("mechanical") >= d("mixed") && d("mixed") >= d("locomotive") && d("locomotive") >= d("activation")).toBe(true);
+    expectIma(c.shares.topup.cod).toBe(c.shares.locomotive.cod);
+    expectIma(Object.values(c.shares).every((s) => s.accel <= 1 && s.decel <= 1 && s.cod <= 1)).toBe(true);
+  });
+  itIma("falls back to the reference table with too few days or match rows", () => {
+    expectIma(calibrateImaShares(days.slice(0, 10), ref, 40).source).toBe("default");
+    expectIma(calibrateImaShares(days, ref, 3).shares).toEqual(CAL_SHARE_IMA);
+    const partial = calibrateImaShares(days, { accel: 100, decel: 100, cod: null }, 40);
+    expectIma(partial.source).toBe("partial");
+    expectIma(partial.shares.mechanical.cod).toBe(CAL_SHARE_IMA.mechanical.cod);
+  });
+  itIma("buildCalendarBlock uses a team table when given", () => {
+    const unit = { dist: 10000, hsr: 800, load: 1000, accdec: 160, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null, decel: 100 };
+    const team = calibrateImaShares(days, ref, 40).shares;
+    const b = buildCalendarBlock({ unit, startDate: "2026-09-07", numWeeks: 2, scopeName: "Team", scopePos: null, baseOverloadPct: 100, imaShare: team });
+    expectIma(b.weeks[0].days.find((x) => x.type === "mechanical")?.decel).toBe(Math.round(100 * team.mechanical.decel));
+  });
+});

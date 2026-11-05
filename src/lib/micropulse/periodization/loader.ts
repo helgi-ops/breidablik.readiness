@@ -5,7 +5,7 @@ import { fetchAllPages } from "@/lib/supabasePaginate";
 import {
   detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness,
   valdVolumeCap, strengthDefaultForBlock, teamAverages, positionGroup, dataTier,
-  classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch,
+  classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, calibrateImaShares, type ImaShareCalibration,
   type SeasonPhase, type MesoBlock, type WeekLoad, type IntervalZone, type VbtRead, type DataGap,
   mdOffsetLabel,
   type ValdCap, type StrengthDefault, type TeamAverages, type SessionRow, type Bi, type TierRead, type MatchWeekType, type MatchAxes,
@@ -52,6 +52,8 @@ export type PeriodizationPlan = {
   estimatedOpener: string | null;  // the estimated first competitive game (last season's opener + 1 year).
   nextFirstFixtureEstimated: boolean; // true when `nextFirstFixture` is an ESTIMATE (this season's opener + 1y),
                                     // so the upcoming pre-season counts to it instead of a fixed 10 weeks.
+  /** The calendar's IMA Acc/Dec/CoD day-type shares calibrated on THIS team's data (or the default). */
+  imaCalibration: ImaShareCalibration;
 };
 
 const mondayOf = (iso: string) => {
@@ -400,6 +402,24 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     }
   }
   for (const [pid, rows] of matchRowByPlayer) for (const r of rows) r.minutes = minutesByKey.get(`${pid}|${r.date}`) ?? r.minutes;
+
+  // ── Per-team IMA day-type calibration (calendar Acc/Dec/CoD shares) ──────────────────────────────
+  // Team median per TRAINING day (≥6 players) vs the team's near-full-match (≥80 min) median.
+  const medianOf = (xs: number[]): number | null => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+  const trainByDate = new Map<string, Array<{ accel: number | null; decel: number | null; cod: number | null }>>();
+  for (const r of rawSessions) {
+    if (r.isMatch) continue;
+    const arr = trainByDate.get(r.date) ?? []; arr.push({ accel: r.accel, decel: r.decel, cod: r.imaCod ?? null }); trainByDate.set(r.date, arr);
+  }
+  const vals = (rows: Array<{ accel: number | null; decel: number | null; cod: number | null }>, k: "accel" | "decel" | "cod") => rows.map((x) => x[k]).filter((x): x is number => x != null && x > 0);
+  const dayMedians = [...trainByDate.values()].filter((rows) => rows.length >= 6)
+    .map((rows) => ({ accel: medianOf(vals(rows, "accel")), decel: medianOf(vals(rows, "decel")), cod: medianOf(vals(rows, "cod")) }));
+  const nearFullRows = [...matchRowByPlayer.values()].flat().filter((r) => (r.minutes ?? 0) >= 80);
+  const imaCalibration = calibrateImaShares(dayMedians, {
+    accel: medianOf(nearFullRows.map((r) => r.accel).filter((x): x is number => x != null && x > 0)),
+    decel: medianOf(nearFullRows.map((r) => r.decel).filter((x): x is number => x != null && x > 0)),
+    cod: medianOf(nearFullRows.map((r) => r.imaCod ?? null).filter((x): x is number => x != null && x > 0)),
+  }, nearFullRows.length);
   // Real recent minutes per player: mean minutes over the last ~11 weeks (incl 0-min appearances), else the
   // last 6 matches. Reflects how much of the match load the player actually carries → the training trim.
   const recentWindowMs = 77 * 86_400_000;
@@ -452,5 +472,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date), nextFirstFixture, nextSeasonYear, fixturesEstimated, estimatedOpener, nextFirstFixtureEstimated };
+  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date), nextFirstFixture, nextSeasonYear, fixturesEstimated, estimatedOpener, nextFirstFixtureEstimated, imaCalibration };
 }

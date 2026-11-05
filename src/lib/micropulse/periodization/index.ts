@@ -570,6 +570,51 @@ export const CAL_SHARE_IMA: Record<CalType, { accel: number; decel: number; cod:
   match: { accel: 1, decel: 1, cod: 1 },
   rest: { accel: 0, decel: 0, cod: 0 },
 };
+
+export type ImaShareTable = Record<CalType, { accel: number; decel: number; cod: number }>;
+export type ImaShareCalibration = {
+  shares: ImaShareTable;
+  /** "team" = every variable from this team's own data; "partial" = some vars fell back; "default". */
+  source: "team" | "partial" | "default";
+  /** Training days (team median per day) and near-full match rows the calibration read. */
+  nDays: number; nMatchRows: number;
+};
+/** Minimum team training days with IMA (and near-full match rows) before a team gets its own shares. */
+export const IMA_CALIBRATION_MIN_DAYS = 30;
+export const IMA_CALIBRATION_MIN_MATCH_ROWS = 10;
+
+/**
+ * Per-TEAM calibration of the calendar's IMA day-type shares — the same percentile rule as the default
+ * table (Mechanical p90, Mixed p75, Locomotive + Top-up p25, Activation p10), read from THIS team's own
+ * training days (team median per day ÷ the team's near-full-match median). A variable with too few days
+ * or no match reference keeps the default share. Shares are clamped to [0.15, 1] (whole-session IMA totals
+ * never exceed a match) and kept ordered. Pure.
+ */
+export function calibrateImaShares(
+  dayMedians: Array<{ accel: number | null; decel: number | null; cod: number | null }>,
+  matchRef: { accel: number | null; decel: number | null; cod: number | null },
+  nMatchRows: number,
+): ImaShareCalibration {
+  const q = (xs: number[], p: number): number => {
+    const s = [...xs].sort((a, b) => a - b); const i = (s.length - 1) * p; const lo = Math.floor(i), hi = Math.ceil(i);
+    return s[lo] + (s[hi] - s[lo]) * (i - lo);
+  };
+  const clamp = (x: number) => Math.round(Math.min(1, Math.max(0.15, x)) * 100) / 100;
+  const shares: ImaShareTable = JSON.parse(JSON.stringify(CAL_SHARE_IMA));
+  let own = 0, nDays = 0;
+  for (const k of ["accel", "decel", "cod"] as const) {
+    const ref = matchRef[k];
+    const fr = dayMedians.map((d) => d[k]).filter((x): x is number => x != null && x > 0).map((x) => (ref && ref > 0 ? x / ref : NaN)).filter(Number.isFinite);
+    nDays = Math.max(nDays, fr.length);
+    if (!ref || ref <= 0 || fr.length < IMA_CALIBRATION_MIN_DAYS || nMatchRows < IMA_CALIBRATION_MIN_MATCH_ROWS) continue;
+    const p10 = clamp(q(fr, 0.10)), p25 = clamp(q(fr, 0.25)), p75 = clamp(q(fr, 0.75)), p90 = clamp(q(fr, 0.90));
+    shares.mechanical[k] = p90; shares.mixed[k] = Math.min(p75, p90);
+    shares.locomotive[k] = Math.min(p25, shares.mixed[k]); shares.topup[k] = shares.locomotive[k];
+    shares.activation[k] = Math.min(p10, shares.locomotive[k]);
+    own++;
+  }
+  return { shares, source: own === 3 ? "team" : own > 0 ? "partial" : "default", nDays, nMatchRows };
+}
 /** Tilt a match direction split (fwd/back/lat fractions) by position — the movement signature the
  *  block emphasises: wingers/forwards more forward + lateral; defenders more backward + lateral (covering);
  *  midfielders slightly forward. Unknown position → the team split unchanged (Buchheit directional gap). */
@@ -680,6 +725,8 @@ export function buildCalendarBlock(opts: {
    *  build. Accumulation = higher volume / gentle taper; Transmutation = balanced / moderate taper;
    *  Realization = lower volume / deep taper + a roomier (fresher) week. Issurin 2010; Bosquet 2007. */
   goal?: RecGoalKey;
+  /** The team's own IMA day-type shares (calibrateImaShares); omitted → the default CAL_SHARE_IMA. */
+  imaShare?: ImaShareTable;
   /** Pre-season MATCH EXPOSURE (0–1): the fraction of a full match a FRIENDLY represents on a match day,
    *  because players build match fitness through partial minutes (a 60-min friendly ≈ 0.67). Scales the
    *  match-day load so it reads partial, not a full match. A number applies to every week; a function
@@ -867,7 +914,7 @@ export function buildCalendarBlock(opts: {
       const fr = type === "rest" || opts.unit.fr == null ? null : isM ? Math.round(opts.unit.fr * mExp) : rnd(capRun(opts.unit.fr * sh.hsr * hsrEmph * fA("hsr"), opts.unit.fr) * cm, 10);
       // IMA totals (CoD, accelerations, decelerations) — the mechanical axis's ramp + emphasis, but their own
       // calibrated day-type share (CAL_SHARE_IMA), not the B2–3 `accdec` share. No running cap.
-      const shI = CAL_SHARE_IMA[type];
+      const shI = (opts.imaShare ?? CAL_SHARE_IMA)[type];
       const cod = type === "rest" || opts.unit.cod == null ? null : isM ? Math.round(opts.unit.cod * mExp) : Math.round(opts.unit.cod * shI.cod * mechEmph * fA("accdec") * cm);
       const mechDay = (v: number | null | undefined, share: number) => (type === "rest" || v == null ? null : isM ? Math.round(v * mExp) : Math.round(v * share * mechEmph * fA("accdec") * cm));
       const accel = mechDay(opts.unit.accel, shI.accel), decel = mechDay(opts.unit.decel, shI.decel);
