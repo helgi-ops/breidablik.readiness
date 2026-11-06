@@ -17,7 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupView from "@/components/coach/WeekSetupView";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
-import { VALD_TRIM_CITE, mondayOfIso, buildMesoPlan, buildMesoBlocks, buildCalendarBlock, seedBlockDays, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ValdTrimLift, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
+import { VALD_TRIM_CITE, mondayOfIso, buildMesoPlan, buildMesoBlocks, buildCalendarBlock, seedBlockDays, teamMatchUnitNote, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ValdTrimLift, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput, type ExposureInput, type ShapeDirInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { exposuresFromTlyp, shapeDirsFromShape } from "@/lib/micropulse/trainingNeeds";
@@ -687,6 +687,8 @@ export default function PeriodizationHubPage() {
       : { dist: ta?.matchDistanceM ?? null, hsr: ta?.matchHsrM ?? null, load: ta?.matchPlayerLoad ?? null, accdec: ((ta?.matchAccel ?? 0) + (ta?.matchDecel ?? 0)) || null,
           accHiEff: ta?.matchAccelHiEff ?? null, decHiEff: ta?.matchDecelHiEff ?? null, stride: ta?.matchStrideHi ?? null, ...dirFields, rhie: ta?.rhieBouts ?? null, symmetry: ta?.runSymmetry ?? null, metPower: ta?.metabolicPower ?? null, fr: ta?.matchImaFrDist ?? null, cod: ta?.matchImaCod ?? null, accel: ta?.matchAccel ?? null, decel: ta?.matchDecel ?? null };
   }, [isPlayerScope, player, plan]);
+  // A full match in Player Load (the KPI tables' near-full unit), named beside the calendar's squad value. sRPE teams have no PL.
+  const fullMatchPl = React.useMemo(() => (plan && plan.tier.loadSource !== "srpe" ? teamKpiAvg(plan.players).totalPlayerLoad ?? null : null), [plan]);
   const blkPhaseLabel = plan?.phases.find((ph) => ph.start <= blkStart && blkStart < ph.end)?.label ?? { en: "Season block", is: "Tímabils-lota" };
   // Pre-season matches are friendlies — they must not pull down His block's training-week alignment target.
   const blkIsPreseason = plan?.phases.find((ph) => ph.start <= blkStart && blkStart < ph.end)?.key === "preseason";
@@ -1136,7 +1138,7 @@ export default function PeriodizationHubPage() {
   async function exportBlock() {
     const blk = mesoCalBlock; // player scope exports HIS block; team scope the team block
     if (!blk || !plan) return;
-    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: blk, isKinexon }, is ? "IS" : "EN");
+    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: blk, isKinexon, fullMatchPl }, is ? "IS" : "EN");
   }
 
   // Write the block skeleton back into Week Setup (week_setups + week_plans) so the two stay in sync.
@@ -1245,7 +1247,7 @@ export default function PeriodizationHubPage() {
       };
     }
     await downloadPeriodizationHubPdf({
-      teamName: plan.teamName, seasonYear: plan.seasonYear, generatedAt: new Date().toISOString(), isKinexon, teamUnit,
+      teamName: plan.teamName, seasonYear: plan.seasonYear, generatedAt: new Date().toISOString(), isKinexon, teamUnit, fullMatchPl,
       tier: plan.tier ? { label: plan.tier.label, loadSource: plan.tier.loadSource, confidence: plan.tier.confidence } : null,
       phases: plan.phases.map((ph) => ({ label: ph.label, start: ph.start, end: ph.end, weeks: ph.weeks, matches: ph.matches, rationale: ph.rationale })),
       congested: plan.congested ?? [], baselines, mdDemand, teamAxes: plan.teamBaseline?.axes ?? null, blocks,
@@ -2935,6 +2937,7 @@ export default function PeriodizationHubPage() {
                   })}
                 </div>
               </div>
+              {!isPlayerScope && (() => { const n = teamMatchUnitNote(blkUnit.load, fullMatchPl); return n && <p className="mt-3 text-[12px] font-medium text-slate-700">{is ? `Leikreiturinn: ${n.is} Æfingadagarnir skalast frá fyrri tölunni.` : `The Match cell: ${n.en} Training days scale from the first number.`}</p>; })()}
               <p className="mt-3 text-[12px] text-slate-500">{is ? "Talan = Player Load; „FR“ = IMA hraðhlaup (band 5–8, metrar) og „Skref“ = IMA hröð skref (band 6–8) fylgja hlaupa-ásnum; „CoD“ = IMA stefnubreytingar og „Acc/Dec“ = hröðun/hemlun (IMA á Pro) fylgja vélræna ásnum — þar sem gögnin eru til. " + (blkHold ? "Keppnislota heldur staðalvikunni, ekkert þrep milli vikna; hvert mæligildi við leikþak (⚑ sýnir hvað heldur vikunni)." : "Vikuálagið er stigvaxandi per mæligildi (magn hækkar hraðar en háhraði; hvert við leikþak — ⚑ sýnir hvað heldur vikunni).") + " Lýsandi — upphafspunktur, ekki viðmið. Aldrei fleiri en 3 æfingar í röð. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021." : "The number = Player Load; \"FR\" = IMA Free Running (fast running, band 5–8, metres) and \"Stride\" = IMA Stride (fast strides, band 6–8) follow the running axis; \"CoD\" = IMA change of direction and \"Acc/Dec\" = accelerations/decelerations (IMA on Pro) follow the mechanical axis — where the feed carries them. " + (blkHold ? "A competitive block holds the standard week, no step between weeks; each KPI ceilings at match (⚑ shows what held the week)." : "Weekly overload ramps per-KPI (volume climbs faster than HSR; each ceilings at match — ⚑ shows what held the week).") + " Descriptive — a starting point, not a norm. Never more than 3 sessions in a row. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021."}</p>
               {(() => {
                 const pct = (x: number) => Math.round(x * 100);
@@ -3124,7 +3127,7 @@ export default function PeriodizationHubPage() {
                   <p className="mt-2 text-[12px] text-slate-600">{is ? sel.goal.is : sel.goal.en}</p>
                   <p className="mt-1.5 text-[12px] text-slate-500">{blkHold
                     ? (is ? "Leikurinn er einingin: TMr = vikuálag ÷ eitt leikálag. Keppnislota heldur staðalvikunni; við lesum bráðaálags-þróun + viðbragð — ekki ACWR-band." : "The match is the unit: TMr = weekly load ÷ one match's load. A competitive block holds the standard week; we read the acute-load trend + readiness — not an ACWR band.")
-                    : (is ? "Leikurinn er einingin: TMr = vikuálag ÷ eitt leikálag. Við röppum TMr skynsamlega og lesum bráðaálags-þróun + viðbragð — ekki ACWR-band." : "The match is the unit: TMr = weekly load ÷ one match's load. We ramp TMr sensibly and read the acute-load trend + readiness — not an ACWR band.")}{plan.matchLoad != null && <> {is ? "Eitt leikálag" : "One match"} ≈ {plan.matchLoad} {plan.tier.loadSource === "srpe" ? "AU" : "PL"}.</>}</p>
+                    : (is ? "Leikurinn er einingin: TMr = vikuálag ÷ eitt leikálag. Við röppum TMr skynsamlega og lesum bráðaálags-þróun + viðbragð — ekki ACWR-band." : "The match is the unit: TMr = weekly load ÷ one match's load. We ramp TMr sensibly and read the acute-load trend + readiness — not an ACWR band.")}{(() => { const n = teamMatchUnitNote(plan.matchLoad, fullMatchPl, plan.tier.loadSource === "srpe" ? "AU" : "PL"); return n && <> {is ? n.is : n.en}</>; })()}</p>
                   {sel.acwr != null && (
                     <details className="mt-1">
                       <summary className="cursor-pointer py-1 text-[12px] text-slate-500 hover:text-slate-700">{is ? `ACWR ${sel.acwr} — umdeilt viðmið` : `ACWR ${sel.acwr} — contested view`}</summary>

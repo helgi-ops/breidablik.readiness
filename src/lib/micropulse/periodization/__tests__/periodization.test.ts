@@ -1,7 +1,7 @@
 import { test } from "vitest";
 import { buildPlayerBlock } from "@/lib/micropulse/periodization/playerBlock";
 import assert from "node:assert/strict";
-import { activeValdTrimLift, nextValdTrimLiftLog, holdsStandardWeek, blockDeloadOf, deloadWeekIndex, detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, seedBlockDays, recommendBlockGoal, blockGoalFromSeason, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
+import { teamMatchUnitNote, activeValdTrimLift, nextValdTrimLiftLog, holdsStandardWeek, blockDeloadOf, deloadWeekIndex, detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, seedBlockDays, recommendBlockGoal, blockGoalFromSeason, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
 
 // A full Pro (GPS + IMA) match unit — running spine + the mechanical/IMA axis (Acc/Dec B2–3, stride, dir).
 const UNIT: MatchUnitAbs = { dist: 12564, hsr: 988, load: 1184, accdec: 259, accHiEff: 40, decHiEff: 52, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
@@ -1265,4 +1265,18 @@ test("buildPlayerBlock hold: every week sits on the block's peak, the same level
   const peak = Math.max(...ramp.map((w) => w.pctRunning!));
   for (const w of flat) assert.ok(Math.abs(w.pctRunning! - peak) <= 2);
   assert.ok(flat[1].pctRunning! > ramp[1].pctRunning!);
+});
+
+test("teamMatchUnitNote names the squad value and a full match", () => {
+  const both = teamMatchUnitNote(859.7, 1085)!;
+  assert.equal(both.en, "Average player on a match day, subs included: 860 PL. A full match: 1085 PL.");
+  assert.equal(both.is, "Meðalleikmaður á leikdegi, með varamönnum: 860 PL. Heill leikur: 1085 PL.");
+  assert.ok(!teamMatchUnitNote(752, null, "AU")!.en.includes("full match"));
+  assert.equal(teamMatchUnitNote(null, 1085), null);
+});
+
+test("the calendar's first note names the unit its scope reads", () => {
+  const args = { unit: UNIT, startDate: "2026-11-09", numWeeks: 1, matchDates: ["2026-11-14"] };
+  assert.ok(buildCalendarBlock({ ...args, scopeName: "__team__" }).notes[0].en.includes("subs included"));
+  assert.ok(buildCalendarBlock({ ...args, scopeName: "Player 2" }).notes[0].en.includes("near-full"));
 });

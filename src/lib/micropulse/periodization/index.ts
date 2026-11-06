@@ -149,6 +149,17 @@ export function teamAverages(rows: SessionRow[], direction: TeamAverages["direct
   };
 }
 
+/** Names the two "one match" values the hub shows: the team calendar reads the mean above (every match-day row, subs
+ *  included), the KPI and player tables read a full match (near-full unit). null = no squad value to explain. */
+export function teamMatchUnitNote(squad: number | null | undefined, fullMatch: number | null | undefined, unit = "PL"): Bi | null {
+  if (squad == null) return null;
+  const s = Math.round(squad), f = fullMatch == null ? null : Math.round(fullMatch);
+  return {
+    en: `Average player on a match day, subs included: ${s} ${unit}.${f != null ? ` A full match: ${f} ${unit}.` : ""}`,
+    is: `Meðalleikmaður á leikdegi, með varamönnum: ${s} ${unit}.${f != null ? ` Heill leikur: ${f} ${unit}.` : ""}`,
+  };
+}
+
 // ───────────────────── MD-RELATIVE DEMAND PROFILE (microcycle shape, not a season blend) ─────────────────────
 // A season average hides the microcycle: MD-4/-3 are the LOADING days (highest demand), MD-2 moderate,
 // MD-1 a primer (lightest), MD+1/+2 recovery. Splitting the same Dist/HSR/PL/Acc-Dec by where the session
@@ -1042,7 +1053,9 @@ export function buildCalendarBlock(opts: {
     { md: "MD-1", label: CAL_LABEL.activation, what: { en: "Primer — sharpen, don't fatigue.", is: "Virkjun — skerpa, ekki þreyta." } },
   ];
   const notes: Bi[] = [
-    { en: "The match is the unit — every training day is a share of one near-full match, scaled by the week multiplier.", is: "Leikurinn er einingin — hver æfingadagur er hlutfall af einum næstum-heilum leik, skalað með vikumargfeldi." },
+    opts.scopeName === "__team__"
+      ? { en: "The match is the unit — at team level every training day is a share of the average player on a match day, subs included, scaled by the week multiplier.", is: "Leikurinn er einingin — hjá liðinu er hver æfingadagur hlutfall af meðalleikmanni á leikdegi, með varamönnum, skalað með vikumargfeldi." }
+      : { en: "The match is the unit — every training day is a share of one near-full match, scaled by the week multiplier.", is: "Leikurinn er einingin — hver æfingadagur er hlutfall af einum næstum-heilum leik, skalað með vikumargfeldi." },
     { en: "Mechanical work over-shoots the match on load; HSR sits under it per session — never stack them on one day (Figueiredo; hamstring protection).", is: "Vélrænt fer yfir leikinn í álagi; háhraði er undir per æfingu — aldrei stafla þeim á einn dag (Figueiredo; aftanlæris-vernd)." },
     { en: "Mechanical days load Acc/Dec Band 2–3 (high-intensity efforts) + strength; Locomotive days load free-running strides + HSR — the split that protects the posterior chain (Buchheit).", is: "Mechanical-dagar hlaða Acc/Dec Band 2–3 (ákafar átök) + styrk; Locomotive-dagar hlaða frjáls-hlaupa skref + háhraða — skiptingin sem verndar afturkeðjuna (Buchheit)." },
     { en: "A starting point anchored to the player's data, never a norm to obey (Little & Buchheit). Descriptive — never the readiness colour.", is: "Upphafspunktur festur í gögnum leikmannsins, aldrei viðmið til að hlýða (Little & Buchheit). Lýsandi — aldrei readiness-liturinn." },

@@ -15,7 +15,7 @@
  */
 
 import { Document, Text, View } from "@react-pdf/renderer";
-import type { MatchAxes, MatchUnitAbs, CalendarBlock, CalType, CalDay, MesoPlan, Bi } from "@/lib/micropulse/periodization/index";
+import { teamMatchUnitNote, type MatchAxes, type MatchUnitAbs, type CalendarBlock, type CalType, type CalDay, type MesoPlan, type Bi } from "@/lib/micropulse/periodization/index";
 import { BrandPage, Body, Bullets, C, Card, Chip, FactRow, Provenance, Section, StatGrid, TONE, Table, Verdict, clean, fb, fh, renderPdfBlob, saveBlob, type Tone } from "@/components/pdf/brand";
 
 type Lang = "EN" | "IS";
@@ -35,6 +35,8 @@ export type PeriodizationHubPayload = {
    *  The directional / stride / RHIE / symmetry chips are already null-gated. */
   isKinexon?: boolean;
   teamUnit: MatchUnitAbs | null;
+  /** A full match in Player Load (the near-full unit), named beside the squad value in `teamUnit`. */
+  fullMatchPl?: number | null;
   tier: { label: Bi; loadSource: string; confidence: string } | null;
   phases: Array<{ label: Bi; start: string; end: string; weeks: number; matches: number; rationale: Bi }>;
   congested: Array<{ weekStart: string; matches: number }>;
@@ -90,7 +92,7 @@ const L = {
     wlStarts: "starts",
     munitLead: "THE MATCH IS THE UNIT (whole squad) — the running spine + the mechanical / IMA axis every block scales from (present where the feed carries it).",
     dist: "Distance", hsr: "HSR", load: "Player Load", accdec: "Acc + Dec", accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Stride", dirL: "IMA dir", rhieL: "RHIE", symL: "Symmetry", metL: "Met power", fwd: "fwd", lat: "lat", back: "back",
-    foot: "Descriptive planning — never sets the readiness colour, never overrides the daily decision. Targets scale from the team's / player's own match unit (median of near-full matches) and each MD day's %-of-match shape; a data-anchored starting point, not a norm to obey (Little & Buchheit). No single \"% of match\" — mechanical over-shoots, HSR/sprint fall short (Figueiredo). Never stack HSR + mechanical the same day. Cites: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021 · Impellizzeri 2020 (ACWR contested)." },
+    foot: "Descriptive planning — never sets the readiness colour, never overrides the daily decision. Targets scale from the match unit (a player's own: median of near-full matches; the team's: the average player on a match day, subs included) and each MD day's %-of-match shape; a data-anchored starting point, not a norm to obey (Little & Buchheit). No single \"% of match\" — mechanical over-shoots, HSR/sprint fall short (Figueiredo). Never stack HSR + mechanical the same day. Cites: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021 · Impellizzeri 2020 (ACWR contested)." },
   IS: { title: "tímabilsskipulag — heildaráætlun", prepared: "Unnið fyrir þjálfarateymið · MicroPulse", tag: "Ráðlagt út frá eigin gögnum liðsins — þjálfarinn ákveður og hnekkir",
     macro: "Tímabils-kort (makró)", tier: "Gagnastig", congested: "Þéttar vikur (2+ leikir)", demands: "Kröfur liðs — grunnlína eftir stöðu", axes: "Þrír ásar gagnvart leik (allt liðið)",
     mdTitle: "Kröfur eftir MD-degi (allt liðið)", mdLead: "Árs-meðaltalið blandar saman öllum dögum vikunnar — hér er sama krafan sundurliðuð eftir því hvar æfingin situr gagnvart leiknum (MD-4/-3 álag, MD-1 undirbúningur, MD+1 endurheimt).", mdPhase: "Fasi", mdDay: "MD", mdSess: "Æf.", mdPctPl: "% PL", mdFoot: "MD-dagur = fjarlægð æfingar frá næsta leik · hver flokkur þarf ≥3 æfingar · % PL vs árs-meðaltal liðsins · leikdagur ekki talinn (æfingakrafa).",
@@ -101,7 +103,7 @@ const L = {
     wlStarts: "hefst",
     munitLead: "LEIKURINN ER EININGIN (allt liðið) — hlaupa-hryggurinn + vélræni / IMA ásinn sem hver lota skalar frá (þar sem gögnin ná).",
     dist: "Vegalengd", hsr: "Háhraði", load: "Player Load", accdec: "Acc + Dec", accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Skref", dirL: "IMA stefna", rhieL: "RHIE", symL: "Samhverfa", metL: "Efnaafl", fwd: "fram", lat: "hlið", back: "aftur",
-    foot: "Lýsandi áætlun — setur aldrei readiness-litinn, hnekkir aldrei daglegu ákvörðuninni. Álagsmörk skala frá eigin leikviðmiði (miðgildi næstum-heilla leikja) og %-af-leik lögun hvers MD-dags; gagna-festur upphafspunktur, ekki viðmið til að hlýða (Little & Buchheit). Ekkert eitt „%-af-leik“ — vélrænt fer yfir, háhraði/sprettur ná ekki (Figueiredo). Aldrei stafla háhraða + vélrænu sama dag. Vitnar í: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021 · Impellizzeri 2020." },
+    foot: "Lýsandi áætlun — setur aldrei readiness-litinn, hnekkir aldrei daglegu ákvörðuninni. Álagsmörk skala frá leikviðmiði (leikmanns: miðgildi næstum-heilla leikja; liðs: meðalleikmaður á leikdegi, með varamönnum) og %-af-leik lögun hvers MD-dags; gagna-festur upphafspunktur, ekki viðmið til að hlýða (Little & Buchheit). Ekkert eitt „%-af-leik“ — vélrænt fer yfir, háhraði/sprettur ná ekki (Figueiredo). Aldrei stafla háhraða + vélrænu sama dag. Vitnar í: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021 · Impellizzeri 2020." },
 } as const;
 
 const shortDate = (iso: string, lang: Lang) => { try { return new Intl.DateTimeFormat(lang === "IS" ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
@@ -232,6 +234,7 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
   const kmv = (m: number | null) => (m == null ? "-" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
   const dom = (u: MatchUnitAbs) => { if (u.dirFwd == null || u.dirBack == null || u.dirLat == null) return null; const m = Math.max(u.dirFwd, u.dirBack, u.dirLat); const w = m === u.dirFwd ? t.fwd : m === u.dirLat ? t.lat : t.back; return `${w} ${Math.round(m * 100)}%`; };
   const unitChips: Array<{ n: string; l: string }> = [];
+  const unitNote = teamMatchUnitNote(teamUnit?.load, payload.fullMatchPl);
   if (teamUnit) {
     unitChips.push({ n: kmv(teamUnit.dist), l: t.dist }, { n: kmv(teamUnit.hsr), l: t.hsr }, { n: `${nfmt(teamUnit.load)} AU`, l: t.load }, { n: nfmt(teamUnit.accdec), l: t.accdec });
     if (teamUnit.accHiEff != null) unitChips.push({ n: nfmt(teamUnit.accHiEff), l: t.accB });
@@ -272,7 +275,7 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
         <Verdict tone="neutral" label={tx(t.tag)} headline={tx(headline)} body={tx(body)} />
         <FactRow
           facts={[
-            { value: teamUnit?.load != null ? `${nfmt(teamUnit.load)} AU` : "-", label: is ? "Leikviðmið (PL)" : "Match unit (PL)", sub: teamUnit ? `${kmv(teamUnit.dist)} · HSR ${kmv(teamUnit.hsr)}` : undefined },
+            { value: teamUnit?.load != null ? `${nfmt(teamUnit.load)} AU` : "-", label: is ? "Meðalleikmaður á leikdegi (PL)" : "Average player on a match day (PL)", sub: teamUnit ? `${kmv(teamUnit.dist)} · HSR ${kmv(teamUnit.hsr)}` : undefined },
             { value: String(phases.length), label: is ? "Fasar" : "Phases", sub: `${seasonWeeks} ${is ? "vikur" : "weeks"} · ${seasonMatches} ${is ? "leikir" : "matches"}` },
             { value: String(congested.length), label: is ? "Þéttar vikur" : "Congested weeks", sub: is ? "2+ leikir" : "2+ matches", tone: congested.length ? "amber" : undefined },
             { value: String(players.length), label: is ? "Leikmenn" : "Players", sub: playerBlocks.length ? (is ? `${playerBlocks.length} með eigin lotu` : `${playerBlocks.length} with own block`) : undefined },
@@ -378,7 +381,8 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
         <Section title={t.demands}>
           {unitChips.length > 0 && (
             <View style={{ marginBottom: 7 }} wrap={false}>
-              <Text style={[fb(600), { fontSize: 8, lineHeight: 1.4, marginBottom: 4 }]}>{tx(t.munitLead)}</Text>
+              <Text style={[fb(600), { fontSize: 8, lineHeight: 1.4, marginBottom: unitNote ? 1 : 4 }]}>{tx(t.munitLead)}</Text>
+              {unitNote && <Text style={small({ marginBottom: 4 })}>{tx(is ? unitNote.is : unitNote.en)}</Text>}
               <StatGrid cols={unitChips.length > 8 ? 6 : 4} items={unitChips.map((c) => ({ label: tx(c.l), value: tx(c.n) }))} />
             </View>
           )}
@@ -441,6 +445,7 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
             <Text style={small()}>{tx(`${shortDate(blockStart!, lang)}–${shortDate(blockEnd!, lang)} · ${block.numWeeks}w · ${block.scopeName === "__team__" ? (is ? "liðið" : "the squad") : block.scopeName}${mapBlock ? ` · ${bi(mapBlock.goal)}` : ""}`)}</Text>
             {block.notes.length > 0 && <View style={{ marginTop: 4 }} wrap={false}><Bullets items={block.notes.slice(0, 3).map((n) => bi(n))} size={8} /></View>}
             {congested.length > 0 && <Text style={small({ marginTop: 2 })}>{is ? "Þéttar vikur (2+ leikir) þjappa lotuna — færri gæðadagar milli leikja." : "Congested weeks (2+ matches) compress the block — fewer quality days between games."}</Text>}
+            {block.scopeName === "__team__" && unitNote && <Text style={small({ marginTop: 2 })}>{tx(is ? unitNote.is : unitNote.en)}</Text>}
             <CalWeeks block={block} lang={lang} />
           </Section>
         )}

@@ -16,11 +16,11 @@
  */
 
 import { Document, Text, View } from "@react-pdf/renderer";
-import type { CalendarBlock, CalType, Bi } from "@/lib/micropulse/periodization/index";
+import { teamMatchUnitNote, type CalendarBlock, type CalType, type Bi } from "@/lib/micropulse/periodization/index";
 import { BrandPage, Bullets, C, Chip, FactRow, Provenance, Section, StatGrid, TONE, Table, Verdict, clean, fb, fh, renderPdfBlob, saveBlob, type Tone } from "@/components/pdf/brand";
 
 type Lang = "EN" | "IS";
-export type PeriodizationBlockPayload = { teamName: string; block: CalendarBlock; generatedAt?: string; isKinexon?: boolean };
+export type PeriodizationBlockPayload = { teamName: string; block: CalendarBlock; generatedAt?: string; isKinexon?: boolean; fullMatchPl?: number | null };
 
 /** Day-type → kit tone (row tint + label colour). The day-type label is always printed next to it. */
 const CAL_TONE: Record<CalType, Tone | null> = { mechanical: "red", locomotive: "green", mixed: "cobalt", activation: "neutral", topup: "rtp", match: "amber", rest: null };
@@ -32,6 +32,7 @@ const L = {
     tag: "Recommended from the team's own data - the coach decides and overrides",
     unitTitle: "The match is the unit",
     unitLead: "One near-full match (median, ≥80 min) - the multiple every training week is scaled from.",
+    unitLeadTeam: "Every training week is scaled from the first number.",
     dist: "Distance", hsr: "HSR (V5+V6)", load: "Player Load", accdec: "Acc + Dec",
     accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Stride", dirL: "IMA dir", rhieL: "RHIE", symL: "Symmetry", metL: "Met power",
     fwd: "fwd", lat: "lat", back: "back", imaLead: "Mechanical / IMA - the same match unit on the movement axis (present where the feed carries it).",
@@ -44,11 +45,12 @@ const L = {
     day: "Day", focus: "Focus", footer: "MicroPulse — Periodization Plan",
     summary: (n: number, who: string) => `A ${n}-week block, match-anchored for ${who}.`,
     peak: (hi: number, wk: number) => `Weekly running volume peaks at ${hi}% of one match in week ${wk}`, deloadIn: (w: string) => `deload in week ${w}`, lightIn: (w: string) => `light week in week ${w}`, restTotal: (n: number) => `${n} rest days in total`,
-    foot: "Descriptive planning — never sets the readiness colour, never overrides the daily decision. Targets scale from the scope's own match unit (median of near-full matches ≥80 min) by each day-type's share of the match and the week multiplier; a data-anchored starting point, not a norm to obey (Little & Buchheit). No single \"% of match\" — mechanical over-shoots, HSR/sprint fall short (Figueiredo). Cites: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021." },
+    foot: "Descriptive planning — never sets the readiness colour, never overrides the daily decision. Targets scale from the match unit (a player's own: median of near-full matches ≥80 min; the team's: the average player on a match day, subs included) by each day-type's share of the match and the week multiplier; a data-anchored starting point, not a norm to obey (Little & Buchheit). No single \"% of match\" — mechanical over-shoots, HSR/sprint fall short (Figueiredo). Cites: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021." },
   IS: { plan: "Tímabilsáætlun", block: "vikna lota", anchored: "leik-fest · einstaklingsmiðað fyrir", team: "liðið", doc: "Tímabilsáætlun",
     tag: "Ráðlagt út frá eigin gögnum liðsins - þjálfarinn ákveður og hnekkir",
     unitTitle: "Leikurinn er einingin",
     unitLead: "Einn næstum-heill leikur (miðgildi, ≥80 mín) - margfeldið sem hver æfingavika skalar frá.",
+    unitLeadTeam: "Hver æfingavika skalast frá fyrri tölunni.",
     dist: "Vegalengd", hsr: "Háhraði (V5+V6)", load: "Player Load", accdec: "Acc + Dec",
     accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Skref", dirL: "IMA stefna", rhieL: "RHIE", symL: "Samhverfa", metL: "Efnaafl",
     fwd: "fram", lat: "hlið", back: "aftur", imaLead: "Vélrænt / IMA - sama leikviðmið á hreyfi-ásnum (þar sem gögnin ná).",
@@ -61,7 +63,7 @@ const L = {
     day: "Dagur", focus: "Áhersla", footer: "MicroPulse — Tímabilsáætlun",
     summary: (n: number, who: string) => `${n} vikna lota, leik-fest fyrir ${who}.`,
     peak: (hi: number, wk: number) => `Vikulegt hlaupamagn nær hámarki ${hi}% af einum leik í viku ${wk}`, deloadIn: (w: string) => `niðurtröppun í viku ${w}`, lightIn: (w: string) => `létt vika í viku ${w}`, restTotal: (n: number) => `${n} hvíldardagar alls`,
-    foot: "Lýsandi áætlun — setur aldrei readiness-litinn, hnekkir aldrei daglegu ákvörðuninni. Álagsmörk skala frá eigin leikviðmiði (miðgildi næstum-heilla leikja ≥80 mín) eftir hlutdeild hverrar dagsgerðar og vikumargfeldi; gagna-festur upphafspunktur, ekki viðmið til að hlýða (Little & Buchheit). Ekkert eitt „%-af-leik“ — vélrænt fer yfir, háhraði/sprettur ná ekki (Figueiredo). Vitnar í: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021." },
+    foot: "Lýsandi áætlun — setur aldrei readiness-litinn, hnekkir aldrei daglegu ákvörðuninni. Álagsmörk skala frá leikviðmiði (leikmanns: miðgildi næstum-heilla leikja ≥80 mín; liðs: meðalleikmaður á leikdegi, með varamönnum) eftir hlutdeild hverrar dagsgerðar og vikumargfeldi; gagna-festur upphafspunktur, ekki viðmið til að hlýða (Little & Buchheit). Ekkert eitt „%-af-leik“ — vélrænt fer yfir, háhraði/sprettur ná ekki (Figueiredo). Vitnar í: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021." },
 } as const;
 
 const nfmt = (n: number | null) => (n == null ? "-" : n.toLocaleString("en-US"));
@@ -73,6 +75,7 @@ function BlockDoc({ payload, lang }: { payload: PeriodizationBlockPayload; lang:
     : L[lang];
   const bi = (b: Bi) => tx(lang === "IS" ? b.is : b.en);
   const { block } = payload; const u = block.unit;
+  const unitNote = block.scopeName === "__team__" ? teamMatchUnitNote(u.load, payload.fullMatchPl) : null;
   const who = block.scopeName === "__team__" ? t.team : `${block.scopeName}${block.scopePos ? ` (${block.scopePos})` : ""}`;
   const dom = (d: { fwd: number; back: number; lat: number }) => { const m = Math.max(d.fwd, d.back, d.lat); const w = m === d.fwd ? t.fwd : m === d.lat ? t.lat : t.back; return `${w} ${Math.round(m * 100)}%`; };
   const dayIma = (d: typeof block.weeks[number]["days"][number]) => {
@@ -116,7 +119,7 @@ function BlockDoc({ payload, lang }: { payload: PeriodizationBlockPayload; lang:
         <Verdict tone="neutral" label={t.tag} headline={tx(t.summary(block.numWeeks, who))} body={tx(body)} />
 
         {/* Layer 1 — the match unit */}
-        <Section title={t.unitTitle} hint={tx(t.unitLead)} mt={2}>
+        <Section title={t.unitTitle} hint={tx(unitNote ? `${bi(unitNote)} ${t.unitLeadTeam}` : t.unitLead)} mt={2}>
           <FactRow
             facts={[
               { value: `${nfmt(u.dist)} m`, label: t.dist },
