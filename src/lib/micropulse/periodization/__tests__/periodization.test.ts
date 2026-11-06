@@ -1,7 +1,7 @@
 import { test } from "vitest";
 import { buildPlayerBlock } from "@/lib/micropulse/periodization/playerBlock";
 import assert from "node:assert/strict";
-import { teamMatchUnitNote, activeValdTrimLift, nextValdTrimLiftLog, holdsStandardWeek, blockDeloadOf, deloadWeekIndex, detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, seedBlockDays, recommendBlockGoal, blockGoalFromSeason, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
+import { hasNoGpsReading, teamMatchUnitNote, activeValdTrimLift, nextValdTrimLiftLog, holdsStandardWeek, blockDeloadOf, deloadWeekIndex, detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, seedBlockDays, recommendBlockGoal, blockGoalFromSeason, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
 
 // A full Pro (GPS + IMA) match unit — running spine + the mechanical/IMA axis (Acc/Dec B2–3, stride, dir).
 const UNIT: MatchUnitAbs = { dist: 12564, hsr: 988, load: 1184, accdec: 259, accHiEff: 40, decHiEff: 52, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
@@ -1279,4 +1279,13 @@ test("the calendar's first note names the unit its scope reads", () => {
   const args = { unit: UNIT, startDate: "2026-11-09", numWeeks: 1, matchDates: ["2026-11-14"] };
   assert.ok(buildCalendarBlock({ ...args, scopeName: "__team__" }).notes[0].en.includes("subs included"));
   assert.ok(buildCalendarBlock({ ...args, scopeName: "Player 2" }).notes[0].en.includes("near-full"));
+});
+
+test("an indoor row is a missing GPS reading, a feed with no distance isn't", () => {
+  assert.equal(hasNoGpsReading(700, 0), true);
+  assert.equal(hasNoGpsReading(700, 35), true);
+  assert.equal(hasNoGpsReading(700, 4366), false);
+  assert.equal(hasNoGpsReading(700, null), false); // basketball: no distance column, real accelerations
+  assert.equal(hasNoGpsReading(0, 0), false);
+  assert.equal(hasNoGpsReading(null, 0), false);
 });

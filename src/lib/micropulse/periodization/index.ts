@@ -117,6 +117,15 @@ export type SessionRow = {
   imaCod?: number | null; imaFrDist?: number | null;
 };
 
+/** Indoors there's no satellite lock: the row has real Player Load, IMA accel/decel, CoD and strides, but distance 0 or a few
+ *  metres, and everything built on speed reads 0 (HSR, sprint, top speed, Free Running, Acc/Dec B2-3). HK's indoor days in
+ *  2026: 940 rows, 0 of them with HSR. That's a missing reading, not a 0 km session. A feed with no distance at all (null,
+ *  basketball) isn't this case: its accelerations are real. */
+const NO_GPS_MAX_M = 200;
+export function hasNoGpsReading(playerLoad: number | null, totalDistance: number | null): boolean {
+  return playerLoad != null && playerLoad > 0 && totalDistance != null && totalDistance < NO_GPS_MAX_M;
+}
+
 /** Coarse position group — the squad baseline is read per position (Ju: peak demands are position-
  *  specific), so a player without his own test falls back to HIS position's average, not the whole team. */
 export function positionGroup(pos: string | null | undefined): { key: number; label: Bi } {

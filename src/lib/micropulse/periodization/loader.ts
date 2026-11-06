@@ -5,7 +5,7 @@ import { fetchAllPages } from "@/lib/supabasePaginate";
 import {
   detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness,
   valdVolumeCap, strengthDefaultForBlock, teamAverages, positionGroup, dataTier,
-  classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, calibrateImaShares, type ImaShareCalibration,
+  classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, hasNoGpsReading, weeklyTargetFromMatch, calibrateImaShares, type ImaShareCalibration,
   type SeasonPhase, type MesoBlock, type WeekLoad, type IntervalZone, type VbtRead, type DataGap,
   mdOffsetLabel, activeValdTrimLift,
   type ValdCap, type ValdTrimLift, type StrengthDefault, type TeamAverages, type SessionRow, type Bi, type TierRead, type MatchWeekType, type MatchAxes,
@@ -158,25 +158,27 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     if (dataEnd === null || r.date > dataEnd) dataEnd = r.date;
     if (typeof r.player_load === "number" && r.player_load > 0) { hasGps = true; gpsLoad.push({ date: r.date, load: r.player_load }); if (r.player_id) gpsLoadByPid.push({ date: r.date, load: r.player_load, pid: r.player_id }); }
     if (r.ima_accel != null || r.accelerations != null) hasIma = true;
-    const v5 = num(r.velocity_band5_total_distance), v6 = num(r.velocity_band6_total_distance);
+    const noGps = hasNoGpsReading(num(r.player_load), num(r.total_distance));
+    const gps = (v: unknown) => (noGps ? null : num(v));
+    const v5 = gps(r.velocity_band5_total_distance), v6 = gps(r.velocity_band6_total_distance);
     const strideHiParts = [num(r.ima_fr_band6_stride_count), num(r.ima_fr_band7_stride_count), num(r.ima_fr_band8_stride_count)].filter((x): x is number => x != null);
     const strideHi = strideHiParts.length ? strideHiParts.reduce((a, b) => a + b, 0) : null;
     const hsr = v5 != null || v6 != null ? (v5 ?? 0) + (v6 ?? 0) : null;
     rawSessions.push({
       isMatch: matchDates.has(r.date), date: r.date,
-      distanceM: num(r.total_distance), hsrM: hsr, sprintM: v6,
-      maxKmh: num(r.max_velocity), playerLoad: num(r.player_load), plPerMin: num(r.player_load_per_minute),
-      accel: num(r.ima_accel) ?? num(r.accelerations), decel: num(r.ima_decel) ?? num(r.decelerations), pid: r.player_id, clock: r.ima_clock_gen2 ?? null,
-      accelHiEff: num(r.accel_b2_3_tot_effs_gen2), decelHiEff: num(r.decel_b2_3_tot_effs_gen2), strideHi,
+      distanceM: gps(r.total_distance), hsrM: hsr, sprintM: v6,
+      maxKmh: gps(r.max_velocity), playerLoad: num(r.player_load), plPerMin: num(r.player_load_per_minute),
+      accel: num(r.ima_accel) ?? gps(r.accelerations), decel: num(r.ima_decel) ?? gps(r.decelerations), pid: r.player_id, clock: r.ima_clock_gen2 ?? null,
+      accelHiEff: gps(r.accel_b2_3_tot_effs_gen2), decelHiEff: gps(r.decel_b2_3_tot_effs_gen2), strideHi,
       rhieBouts: num(r.rhie_bouts), runSymmetry: num(r.running_symmetry), metabolicPower: num(r.metabolic_power),
       imaCod: imaCodTotal(r as unknown as Record<string, unknown>),
-      imaFrDist: num(r.ima_fr_band58_total_distance),
+      imaFrDist: gps(r.ima_fr_band58_total_distance),
     });
     if (r.player_id && matchDates.has(r.date)) {
       const arr = matchRowByPlayer.get(r.player_id) ?? [];
-      arr.push({ date: r.date, minutes: null, load: num(r.player_load), hsr, sprint: v6, distance: num(r.total_distance), accel: num(r.ima_accel) ?? num(r.accelerations), decel: num(r.ima_decel) ?? num(r.decelerations),
-        accHiEff: num(r.accel_b2_3_tot_effs_gen2), decHiEff: num(r.decel_b2_3_tot_effs_gen2), stride: strideHi, rhie: num(r.rhie_bouts), symmetry: num(r.running_symmetry), metPower: num(r.metabolic_power),
-        imaCod: imaCodTotal(r as unknown as Record<string, unknown>), imaFr: num(r.ima_fr_band58_total_distance) });
+      arr.push({ date: r.date, minutes: null, load: num(r.player_load), hsr, sprint: v6, distance: gps(r.total_distance), accel: num(r.ima_accel) ?? gps(r.accelerations), decel: num(r.ima_decel) ?? gps(r.decelerations),
+        accHiEff: gps(r.accel_b2_3_tot_effs_gen2), decHiEff: gps(r.decel_b2_3_tot_effs_gen2), stride: strideHi, rhie: num(r.rhie_bouts), symmetry: num(r.running_symmetry), metPower: num(r.metabolic_power),
+        imaCod: imaCodTotal(r as unknown as Record<string, unknown>), imaFr: gps(r.ima_fr_band58_total_distance) });
       matchRowByPlayer.set(r.player_id, arr);
     }
   }
