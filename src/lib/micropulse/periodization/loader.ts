@@ -27,6 +27,8 @@ export type PlayerPeriodization = {
   vald: ValdCap; gaps: DataGap[];
   matchUnit: MatchUnit; weekTargets: { preseason: WeekTargetPlan; inseason: WeekTargetPlan; current: "preseason" | "inseason" };
   recentMinutesAvg: number | null; // mean match minutes over the last ~11 weeks — the minutes-based load trim
+  /** Latest coach-set player_injuries.status ("injured" | "rehabilitation" | "rtp_training" | "cleared"); null = no record. */
+  injuryStatus: string | null;
   /** The player's CURRENT baseline — mean per-session output over the last 28 days of TRAINING (non-match)
    *  sessions. The data-derived starting point the ramp builds FROM, to read against the match-unit target. */
   recentBaseline: { sessions: number; playerLoad: number | null; hsrM: number | null; distanceM: number | null; sprintM: number | null; accel: number | null; decel: number | null; accelHiEff: number | null; decelHiEff: number | null; strideHi: number | null; imaCod: number | null; imaFr: number | null } | null;
@@ -443,6 +445,17 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const curPhaseKey = phases.find((ph) => ph.start <= todayIso && todayIso < ph.end)?.key ?? (phases[phases.length - 1]?.key ?? "competitive");
   const inSeasonNow = curPhaseKey !== "preseason";
 
+  // Latest coach-set injury status per player (player_injuries is the only availability source; a clinical
+  // report never sets it). Best-effort: a failed read leaves everyone without a status.
+  const injuryStatusByPlayer = new Map<string, string>();
+  {
+    const { data: injRows } = await sb.from("player_injuries").select("player_id, status, updated_at").eq("team_id", args.teamId).order("updated_at", { ascending: false });
+    for (const r of (injRows ?? []) as Array<{ player_id: string | null; status: string | null }>) {
+      const pid = String(r.player_id ?? "");
+      if (pid && !injuryStatusByPlayer.has(pid)) injuryStatusByPlayer.set(pid, String(r.status ?? "").toLowerCase());
+    }
+  }
+
   const out: PlayerPeriodization[] = players.map((p) => {
     const run = runByPlayer.get(p.id) ?? null;
     const masAge = run ? ageDays(run.date, todayMs) : null;
@@ -467,7 +480,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
       vbt: vbtRead,
       strengthFallback: vbtRead ? null : (curBlock ? strengthDefaultForBlock(curBlock.phase.en, curBlock.isDeload) : null),
       vald,
-      matchUnit, weekTargets, recentMinutesAvg: recentMinutesAvgOf(p.id), recentBaseline: recentBaselineOf(p.id),
+      matchUnit, weekTargets, recentMinutesAvg: recentMinutesAvgOf(p.id), injuryStatus: injuryStatusByPlayer.get(p.id) ?? null, recentBaseline: recentBaselineOf(p.id),
       gaps: dataReadiness({ hasCsTest, masAgeDays: masAge, vbtAgeDays: vbtAge, hasValdThisBlock: valdFresh }),
     };
   });

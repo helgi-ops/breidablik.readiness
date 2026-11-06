@@ -1485,6 +1485,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           name: string; position: string | null;
           matchUnit: { minutesTypical: number | null; confidence: "high" | "medium" | "low"; load: MU; distance: MU; hsr: MU; sprint: MU; accel: MU; decel: MU; imaCod: MU; imaFr: MU; stride: MU; accHiEff: MU; decHiEff: MU };
           recentMinutesAvg: number | null;
+          injuryStatus?: string | null;
           weekTargets: { current: "preseason" | "inseason"; preseason: { weeklyLoadTarget: number | null }; inseason: { weeklyLoadTarget: number | null } };
           recentBaseline: { playerLoad: number | null; hsrM: number | null; distanceM: number | null; sprintM: number | null; accel: number | null; decel: number | null; accelHiEff: number | null; decelHiEff: number | null; strideHi: number | null; imaCod: number | null; imaFr: number | null } | null;
         }>;
@@ -1635,7 +1636,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
               players: pls.map((p) => {
                 const mu = p.matchUnit, rb = p.recentBaseline;
                 return {
-                  name: p.name, position: p.position, usualMinutes: p.recentMinutesAvg ?? null, matchMinutes: mu.minutesTypical,
+                  name: p.name, position: p.position, usualMinutes: p.recentMinutesAvg ?? null, matchMinutes: mu.minutesTypical, injuryStatus: p.injuryStatus ?? null,
                   baseline: rb && { pl: rb.playerLoad, distance: rb.distanceM, hsr: rb.hsrM, sprint: rb.sprintM, accel: rb.accel, decel: rb.decel, cod: rb.imaCod, fr: rb.imaFr, stride: rb.strideHi, accHi: rb.accelHiEff, decHi: rb.decelHiEff },
                   match: { pl: mu.load.typical, distance: mu.distance.typical, hsr: mu.hsr.typical, sprint: mu.sprint.typical, accel: mu.accel.typical, decel: mu.decel.typical, cod: mu.imaCod.typical, fr: mu.imaFr.typical, stride: mu.stride.typical, accHi: mu.accHiEff.typical, decHi: mu.decHiEff.typical },
                 };

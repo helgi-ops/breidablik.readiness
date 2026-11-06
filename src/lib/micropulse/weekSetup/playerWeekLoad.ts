@@ -47,6 +47,8 @@ export type PlayerWeekInput = {
   matchMinutes: number | null;
   baseline: Partial<PlayerWeekValues> | null;
   match: Partial<PlayerWeekValues> | null;
+  /** Latest coach-set injury status (player_injuries.status); null / "cleared" = available. */
+  injuryStatus?: string | null;
 };
 
 export type PlayerWeekDay = {
@@ -58,10 +60,18 @@ export type PlayerWeekDay = {
 };
 
 export type PlayerWeekRole = "starter" | "rotation" | "low" | null;
+/** Not training with the squad: left out of the plan and named instead. */
+export type PlayerWeekOut = "injured" | "rehabilitation";
+export const outStatusOf = (s: string | null | undefined): PlayerWeekOut | null => {
+  const v = String(s ?? "").toLowerCase();
+  return v === "injured" || v === "rehabilitation" ? v : null;
+};
 export type PlayerWeekRow = {
   name: string;
   position: string | null;
   role: PlayerWeekRole;
+  /** Back in team training on a return ramp: planned like the rest, but flagged. */
+  returning: boolean;
   usualMinutes: number | null;
   perDay: PlayerWeekValues[];
   training: PlayerWeekValues;
@@ -77,6 +87,8 @@ export type PlayerWeekLoad = {
   vars: PlayerWeekVar[];
   /** Sorted by the week's Player Load, highest first. */
   players: PlayerWeekRow[];
+  /** Injured or in rehab: no plan printed for them. */
+  notPlanned: Array<{ name: string; status: PlayerWeekOut }>;
 };
 
 const empty = (): PlayerWeekValues => Object.fromEntries(PLAYER_WEEK_VARS.map((k) => [k, null])) as PlayerWeekValues;
@@ -102,7 +114,13 @@ function dayTarget(key: EnoughVar, day: PlayerWeekDay, usualMinutes: number | nu
   return targetShare(key, day.matchPct, day.dayType).share;
 }
 
-function buildRow(p: PlayerWeekInput, days: PlayerWeekDay[], matchCount: number): PlayerWeekRow {
+/** An IMA count or distance of 0 over a whole match or a month of training is a feed without that data. */
+const present = (k: PlayerWeekVar, v: number | null | undefined): number | null => (v == null ? null : CARD_VAR[k] && v <= 0 ? null : v);
+const cleaned = (vals: Partial<PlayerWeekValues> | null): Partial<PlayerWeekValues> | null =>
+  vals && (Object.fromEntries(PLAYER_WEEK_VARS.map((k) => [k, present(k, vals[k])])) as PlayerWeekValues);
+
+function buildRow(raw: PlayerWeekInput, days: PlayerWeekDay[], matchCount: number): PlayerWeekRow {
+  const p = { ...raw, baseline: cleaned(raw.baseline), match: cleaned(raw.match) };
   // Recent training × the day's ratio; with no recent training, the match value × the day's share of a match.
   const fromBase = (k: PlayerWeekVar, day: PlayerWeekDay): number | null => {
     const b = p.baseline?.[k] ?? null;
@@ -117,8 +135,7 @@ function buildRow(p: PlayerWeekInput, days: PlayerWeekDay[], matchCount: number)
     for (const k of PLAYER_WEEK_VARS) {
       const card = CARD_VAR[k];
       const matchValue = p.match?.[k] ?? null;
-      // A match value of 0 means the feed had no such data, same as the card treats it.
-      const share = card && hasImaFeed && (matchValue ?? 0) > 0 && day.ratio > 0 ? dayTarget(card, day, p.usualMinutes) : null;
+      const share = card && hasImaFeed && matchValue != null && day.ratio > 0 ? dayTarget(card, day, p.usualMinutes) : null;
       const b = share != null ? (matchValue as number) * share : fromBase(k, day);
       out[k] = b == null ? null : Math.round(b);
     }
@@ -135,17 +152,21 @@ function buildRow(p: PlayerWeekInput, days: PlayerWeekDay[], matchCount: number)
     matches[k] = perMatch[k] == null ? null : (perMatch[k] as number) * matchCount;
     week[k] = sumOrNull([training[k], matches[k]]);
   }
-  return { name: p.name, position: p.position, role: roleOfMinutes(p.usualMinutes), usualMinutes: p.usualMinutes, perDay, training, perMatch, matches, week };
+  return { name: p.name, position: p.position, role: roleOfMinutes(p.usualMinutes), returning: String(p.injuryStatus ?? "").toLowerCase() === "rtp_training", usualMinutes: p.usualMinutes, perDay, training, perMatch, matches, week };
 }
 
 export function buildPlayerWeekLoad(input: { players: PlayerWeekInput[]; days: PlayerWeekDay[]; matchCount: number }): PlayerWeekLoad {
   const matchCount = Math.max(0, input.matchCount);
+  const notPlanned = input.players
+    .flatMap((p) => { const status = outStatusOf(p.injuryStatus); return status ? [{ name: p.name.trim(), status }] : []; })
+    .sort((a, b) => a.name.localeCompare(b.name));
   const players = input.players
+    .filter((p) => !outStatusOf(p.injuryStatus))
     .map((p) => buildRow(p, input.days, matchCount))
     .filter((r) => PLAYER_WEEK_VARS.some((k) => r.week[k] != null))
     .sort((a, b) => (b.week.pl ?? -1) - (a.week.pl ?? -1));
   const vars = PLAYER_WEEK_VARS.filter((k) => players.some((r) => r.week[k] != null));
-  return { matchCount, vars, players };
+  return { matchCount, vars, players, notPlanned };
 }
 
 /** One plain line on what a day's numbers mean, for the PDF's per-day tables. */

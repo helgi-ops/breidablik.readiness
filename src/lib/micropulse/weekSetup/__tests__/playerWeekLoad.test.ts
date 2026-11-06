@@ -32,8 +32,19 @@ describe("training days", () => {
     expect(d.decel).toBe(96);
   });
   it("a match value of 0 is missing data, not a target of 0", () => {
-    const d = one(player({ match: { ...MATCH, stride: 0 } })).perDay[0];
-    expect(d.stride).toBe(300);
+    const r = one(player({ match: { ...MATCH, stride: 0 } }));
+    expect(r.perDay[0].stride).toBe(300);
+    expect(r.perMatch.stride).toBeNull();
+  });
+  it("an IMA variable with no data anywhere prints nothing, never 0", () => {
+    const r = one(player({ baseline: { ...BASE, stride: 0 }, match: { ...MATCH, stride: 0 } }));
+    expect(r.perDay[0].stride).toBeNull();
+    expect(r.training.stride).toBeNull();
+    expect(r.week.stride).toBeNull();
+    expect(r.week.accel).not.toBeNull();
+  });
+  it("a real 0 stays 0 on variables where it can happen, like sprint distance", () => {
+    expect(one(player({ baseline: { ...BASE, sprint: 0 } })).perDay[0].sprint).toBe(0);
   });
   it("no recent training: the match value × the day's share, not a full match on every day", () => {
     const d = one(player({ baseline: null })).perDay[0];
@@ -106,6 +117,19 @@ describe("the table", () => {
     const t = buildPlayerWeekLoad({ players: [lite("low", 200), lite("high", 500)], days: [mech], matchCount: 1 });
     expect(t.players.map((p) => p.name)).toEqual(["high", "low"]);
     expect(t.vars).toEqual(["pl", "distance", "hsr"]);
+  });
+  it("injured and rehab players get no plan and are named instead", () => {
+    const t = buildPlayerWeekLoad({
+      players: [player({ name: "Fit" }), player({ name: "Zed", injuryStatus: "Injured" }), player({ name: "Abe", injuryStatus: "rehabilitation" }), player({ name: "Old", injuryStatus: "cleared" })],
+      days: [mech], matchCount: 1,
+    });
+    expect(t.players.map((p) => p.name).sort()).toEqual(["Fit", "Old"]);
+    expect(t.notPlanned).toEqual([{ name: "Abe", status: "rehabilitation" }, { name: "Zed", status: "injured" }]);
+  });
+  it("a player on a return ramp stays in the plan, flagged", () => {
+    const t = buildPlayerWeekLoad({ players: [player({ injuryStatus: "rtp_training" }), player({ name: "Fit" })], days: [mech], matchCount: 1 });
+    expect(t.players.map((p) => p.returning).sort()).toEqual([false, true]);
+    expect(t.notPlanned).toEqual([]);
   });
   it("drops a player with no data at all", () => {
     const t = buildPlayerWeekLoad({ players: [player(), player({ name: "empty", baseline: null, match: null })], days: [mech], matchCount: 1 });

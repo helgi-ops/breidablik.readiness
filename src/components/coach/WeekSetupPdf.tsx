@@ -91,6 +91,7 @@ const L = {
       ? `Each player's week: training days + expected matches = the week. A match line is the player's own match load at their usual minutes, × ${n} this week. Descriptive - a feed that lacks a metric shows "-".`
       : `Each player's week across the training days; no match this week. Descriptive - a feed that lacks a metric shows "-".`,
     rowTrain: "Training", rowMatch: (n: number) => `Matches ×${n}`, rowWeek: "Week",
+    notPlanned: "Not in this plan", outInjured: "injured", outRehab: "in rehab", returning: "returning - follow the return ramp",
     plDays: "Detailed load - per day", plDaysLead: "Each day's plan for every player. Off and match days omitted.",
     plPerMatch: "Per match - expected", plPerMatchLead: (n: number) => `One match at the player's usual minutes, counted ×${n} in the week above.`,
     roleOf: (r: PlayerWeekRole) => (r === "starter" ? "starter" : r === "rotation" ? "rotation" : r === "low" ? "low-min" : "-"),
@@ -109,6 +110,7 @@ const L = {
       ? `Vika hvers leikmanns: æfingadagar + væntanlegir leikir = vikan. Leikjalínan er eigið leikálag leikmannsins miðað við venjulegar mínútur hans, × ${n} þessa viku. Lýsandi - mæling sem gögnin vantar sýnir "-".`
       : `Vika hvers leikmanns yfir æfingadagana; enginn leikur þessa viku. Lýsandi - mæling sem gögnin vantar sýnir "-".`,
     rowTrain: "Æfingar", rowMatch: (n: number) => `Leikir ×${n}`, rowWeek: "Vikan",
+    notPlanned: "Ekki í þessu plani", outInjured: "meiddur", outRehab: "í endurhæfingu", returning: "í endurkomu - fylgið endurkomuáætlun",
     plDays: "Ítarlegt álag - eftir degi", plDaysLead: "Áætlun dagsins fyrir hvern leikmann. Frí- og leikdögum sleppt.",
     plPerMatch: "Á leik - áætlað", plPerMatchLead: (n: number) => `Einn leikur miðað við venjulegar mínútur leikmannsins, talinn ×${n} í vikunni hér að ofan.`,
     roleOf: (r: PlayerWeekRole) => (r === "starter" ? "byrjun" : r === "rotation" ? "skipt" : r === "low" ? "lág-mín" : "-"),
@@ -360,8 +362,9 @@ function PlayerDetailPages({ detail, teamName, lang }: { detail: NonNullable<Non
   );
   const nameCol = (r: (typeof detail.players)[number]) => stack(0, [
     { s: tx(r.name), bold: true },
-    { s: tx(`${t.roleOf(r.role)}${r.usualMinutes != null ? ` · ${Math.round(r.usualMinutes)} ${t.min}` : ""}`) },
+    { s: tx(r.returning ? t.returning : `${t.roleOf(r.role)}${r.usualMinutes != null ? ` · ${Math.round(r.usualMinutes)} ${t.min}` : ""}`) },
   ]);
+  const notPlanned = detail.notPlanned.map((x) => `${x.name.trim()} (${x.status === "injured" ? t.outInjured : t.outRehab})`).join(", ");
   const lead = (s: string) => <Text style={[fb(400), { fontSize: 8, color: C.mute, marginBottom: 5, lineHeight: 1.35 }]}>{tx(s)}</Text>;
   // A whole table stays together on one page when a landscape page can hold it (about 24 dense rows).
   const keepTogether = detail.players.length <= 24;
@@ -377,6 +380,11 @@ function PlayerDetailPages({ detail, teamName, lang }: { detail: NonNullable<Non
     <BrandPage doc={t.doc} context={teamName} orientation="landscape" note={t.note}>
       <Section title={t.plWeekly} mt={0}>
         {lead(t.plWeekLead(detail.matchCount))}
+        {notPlanned ? (
+          <Text style={[fb(400), { fontSize: 8.5, marginBottom: 6 }]}>
+            <Text style={fb(600)}>{tx(`${t.notPlanned}:`)}</Text>{` ${tx(notPlanned)}`}
+          </Text>
+        ) : null}
         <Table
           dense
           cols={[{ label: t.player, flex: 1 }, { label: "", width: 52 }, ...numCols]}
