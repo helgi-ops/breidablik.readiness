@@ -546,7 +546,7 @@ export async function computePlanTarget(
     .from("season_plans").select("overrides")
     .eq("team_id", teamId).eq("season_year", new Date(`${referenceDate}T00:00:00Z`).getUTCFullYear())
     .maybeSingle();
-  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; nextPreseasonStart?: string; offseasonWeeks?: number; preseasonWeek1Mult?: number; preseasonSessions?: number; stepPct?: number; deloadCadence?: number; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string> } } | null)?.overrides ?? {};
+  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; nextPreseasonStart?: string; offseasonWeeks?: number; preseasonWeek1Mult?: number; preseasonSessions?: number; stepPct?: number; deloadCadence?: number; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string>; blockGoals?: Record<string, string> } } | null)?.overrides ?? {};
   const plan = await loadPeriodization(sb, {
     teamId,
     preseasonStart: ov.preseasonStart ?? null, seasonEnd: ov.seasonEnd ?? null,
@@ -567,6 +567,7 @@ export async function computePlanTarget(
     week1MatchMultiple: ov.preseasonWeek1Mult ?? undefined,
     sessionsPerWeek: ov.preseasonSessions ?? undefined,
     stepPct: ov.stepPct ?? undefined,
+    blockGoals: ov.blockGoals ?? null,
     sport,
   });
   const target: Partial<Record<WeeklyLoadMetricKey, number | null>> = {};

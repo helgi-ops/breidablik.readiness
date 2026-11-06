@@ -109,3 +109,12 @@ export const CAL_SHARE_HI_REF: Record<ImaTrainingDayType, Record<HiVar, { range:
  *  weeks (load -25.5%, intensity unchanged, higher match running after) and Moalla 2021 (3 standard + 1 taper,
  *  about -18%). Both observational, one club each, so it's the coach's call and never automatic. */
 export const LIGHT_WEEK_VOL = 0.8;
+
+/** A competitive Realization block holds the standard week: no step up between weeks and no ×0.75 start, the
+ *  week moves with the fixtures and any light week the coach picks. Malone 2015 and Oliveira 2019 found little
+ *  change between in-season blocks (observational, one club each). It's also the level "Did we do enough?" and
+ *  the Week plan judge against, so plan and review read the same number. A build-up block (a fixture gap, or the
+ *  coach's pick) keeps its ramp. */
+export function holdsStandardWeek(inSeason: boolean | null | undefined, goal: string | null | undefined): boolean {
+  return !!inSeason && goal === "realize";
+}

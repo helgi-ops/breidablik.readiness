@@ -36,6 +36,7 @@ export interface PlayerBlockPlayer {
 export interface PlayerBlockPlan {
   teamBaseline: { avg: TeamAverages };
   positionBaselines: Array<{ key: number; avg: TeamAverages; label: Bi }>;
+  fixtures?: string[];
 }
 export interface PlayerBlockOpts {
   blkStart: string;
@@ -54,6 +55,8 @@ export interface PlayerBlockOpts {
   goal?: RecGoalKey;
   /** The block's unload week (`blockDeloadOf`), same as the team calendar. */
   deload?: BlockDeload;
+  /** Hold the standard week (`holdsStandardWeek`), same as the team calendar. */
+  hold?: boolean;
   /** Training camps overlaid on the block (same as the team block) — concentrated-load periods. */
   camps?: Array<{ start: string; end: string; loadPct: number; twoADay: boolean }>;
   steer?: { active: boolean; steer: BuildUpSteer | null };
@@ -191,7 +194,10 @@ export function buildPlayerBlock(plan: PlayerBlockPlan, pl: PlayerBlockPlayer, o
   const block = buildCalendarBlock({
     unit, startDate: opts.blkStart, numWeeks: opts.blkWeeks, scopeName: pl.name, scopePos: pl.position,
     phase: opts.phaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeleton, typeOverrides: opts.typeOverrides,
-    maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph, dir: steerActive && steer ? steer.dirEmph : undefined }, offseasonStart: opts.offseasonStart, goal: opts.goal, deload: opts.deload, camps: opts.camps,
+    maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph, dir: steerActive && steer ? steer.dirEmph : undefined }, offseasonStart: opts.offseasonStart, goal: opts.goal, deload: opts.deload, hold: opts.hold, camps: opts.camps,
+    // A held week 1 has to see the match just before the block, as the team calendar does, or it plans a
+    // full week of training with no recovery days and sets the peak every other week is scaled against.
+    ...(opts.hold && plan.fixtures?.length ? { allFixtures: plan.fixtures } : {}),
   });
 
   // ── Align the block's weekly VOLUME to the TEAM's ×match multiple PER VARIABLE ──
@@ -203,7 +209,7 @@ export function buildPlayerBlock(plan: PlayerBlockPlan, pl: PlayerBlockPlayer, o
     alignBlockToTeamMultiple(block, !!opts.friendlyMatches);
   } catch { /* alignment is advisory; keep the raw block on any surprise */ }
 
-  const uncappedPeak = Math.min(1.4, (blkBase + blkStep * Math.max(0, opts.blkWeeks - 2)) / 100);
+  const uncappedPeak = Math.min(1.4, (blkBase + (opts.hold ? 0 : blkStep) * Math.max(0, opts.blkWeeks - 2)) / 100);
   const lighterPct = uncappedPeak > 0 ? Math.round((1 - (Math.min(uncappedPeak, maxMult) * loadScale) / uncappedPeak) * 100) : 0;
 
   return {

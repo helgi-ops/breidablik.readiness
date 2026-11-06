@@ -9,7 +9,7 @@
  * number is sourced from the squad instead of assumptions (his frustration: "built with no data").
  */
 
-import { CAL_SHARE_HI, CAL_SHARE_HI_REF, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, LIGHT_WEEK_VOL, type HiEvidence, type HiVar, type ImaTrainingDayType, type ImaVar } from "./imaStandard";
+import { CAL_SHARE_HI, CAL_SHARE_HI_REF, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, LIGHT_WEEK_VOL, holdsStandardWeek, type HiEvidence, type HiVar, type ImaTrainingDayType, type ImaVar } from "./imaStandard";
 
 export type Bi = { en: string; is: string };
 
@@ -538,7 +538,9 @@ export type CalWeek = { index: number; weekStart: string; intent: Bi; matchDow: 
 export type CalendarBlock = { unit: MatchUnitAbs; scopeName: string; scopePos: string | null; phase: Bi; numWeeks: number; startDate: string; weeks: CalWeek[]; legend: Array<{ md: string; label: Bi; what: Bi }>; notes: Bi[];
   /** Set only when the block was built with a `goal` — the chosen block goal and its evidence-based gym
    *  scheme (max-strength / strength–power / power). Lets the hub + PDF show what the goal prescribes. */
-  goalKey?: RecGoalKey; strength?: StrengthDefault };
+  goalKey?: RecGoalKey; strength?: StrengthDefault;
+  /** Built with `hold`: every normal week sits on the standard week (`holdsStandardWeek`). */
+  hold?: boolean };
 
 const DOW: Bi[] = [
   { en: "Mon", is: "Mán" }, { en: "Tue", is: "Þri" }, { en: "Wed", is: "Mið" }, { en: "Thu", is: "Fim" }, { en: "Fri", is: "Fös" }, { en: "Sat", is: "Lau" }, { en: "Sun", is: "Sun" },
@@ -559,7 +561,7 @@ export const CAL_SHARE: Record<CalType, { dist: number; hsr: number; sprint: num
   rest: { dist: 0, hsr: 0, sprint: 0, fr: 0, load: 0, accdec: 0, stride: 0 },
 };
 // The IMA Acc/Dec/CoD research standard lives in ./imaStandard (shared with "Did we do enough?").
-export { CAL_SHARE_HI, CAL_SHARE_HI_REF, CAL_SHARE_IMA, CAL_SHARE_IMA_REF };
+export { CAL_SHARE_HI, CAL_SHARE_HI_REF, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, holdsStandardWeek };
 export type { HiEvidence, HiVar, ImaVar, ImaTrainingDayType };
 
 export type ImaShareTable = Record<CalType, { accel: number; decel: number; cod: number }>;
@@ -753,6 +755,9 @@ export function buildCalendarBlock(opts: {
   /** The unload week, normally `blockDeloadOf(block)` so the calendar agrees with the block overview.
    *  Omit → the old rule, the last week of a 3+ week block. */
   deload?: BlockDeload;
+  /** Hold the standard week (`holdsStandardWeek`): no goal volume scalar and no step between weeks. The goal
+   *  still picks the week layout and the gym scheme. Omit → the ramp. */
+  hold?: boolean;
   /** Pre-season MATCH EXPOSURE (0–1): the fraction of a full match a FRIENDLY represents on a match day,
    *  because players build match fitness through partial minutes (a 60-min friendly ≈ 0.67). Scales the
    *  match-day load so it reads partial, not a full match. A number applies to every week; a function
@@ -768,7 +773,7 @@ export function buildCalendarBlock(opts: {
   // GOAL volume scalar on the week-1 base (the single dial that reaches every training day). It sits
   // BEFORE the spike/ceiling caps in axisRamp, so accumulation builds TO the match ceiling while
   // realization sits clear of it — block periodisation's volume→intensity migration (Issurin 2010).
-  const volScalar = opts.goal ? GOAL_VOL[opts.goal] : 1.0;
+  const volScalar = opts.goal && !opts.hold ? GOAL_VOL[opts.goal] : 1.0;
   const base = (opts.baseOverloadPct ?? 100) * volScalar; // week-1 start %; the per-KPI ramp (axisRamp) supersedes the old flat step
   const start = mondayOfIso(opts.startDate);
   const DAY = 86_400_000, firstMs = Date.parse(start), total = n * 7;
@@ -782,7 +787,15 @@ export function buildCalendarBlock(opts: {
     .filter((iso) => !opts.offseasonStart || iso < opts.offseasonStart);
   const matchIso = [...new Set((opts.matchDates && opts.matchDates.length ? opts.matchDates : autoMatch).filter(inBlock))].sort();
   const matchSet = new Set(matchIso);
-  const matchMs = matchIso.map((d) => Date.parse(d));
+  // A held block lays its days out across its edges too: the match just before it shapes its first days and
+  // the first one after it its last days, or the edge weeks plan a phantom full week / a near-empty week.
+  const layoutIso = (() => {
+    if (!opts.hold || !opts.allFixtures?.length) return matchIso;
+    const all = [...new Set(opts.allFixtures)].sort(), endIso = addDays(start, total);
+    const before = all.filter((d) => d < start).pop(), after = all.find((d) => d >= endIso);
+    return [...(before ? [before] : []), ...matchIso, ...(after ? [after] : [])];
+  })();
+  const matchMs = layoutIso.map((d) => Date.parse(d));
   // For the MD LABEL only: the full fixture list (incl. matches just before the block), so post-match
   // days read MD+1/MD+2/MD+3. Layout still uses matchIso (in-block). Falls back to in-block matches.
   const mdMatchMs = [...new Set((opts.allFixtures && opts.allFixtures.length ? opts.allFixtures : matchIso).map((d) => Date.parse(d)).filter((n) => Number.isFinite(n)))].sort((a, b) => a - b);
@@ -835,7 +848,7 @@ export function buildCalendarBlock(opts: {
       const gapStartMs = prevMs > -Infinity ? prevMs + 3 * DAY : firstMs;         // first buildable day after recovery
       const slots = Math.round((nextMs - gapStartMs) / DAY);
       const idx = Math.round((dMs - gapStartMs) / DAY);
-      const isDeloadMatch = weekIdxOf(matchIso[nextIdx]) === deloadIdx && !deloadLight;
+      const isDeloadMatch = weekIdxOf(layoutIso[nextIdx]) === deloadIdx && !deloadLight;
       const tpl = isDeloadMatch ? DLT : slots >= 4 ? roomyTpl : ST;                // roomy → full (goal-picked); tight → compressed
       const tIdx = idx + (tpl.length - slots);                                     // align template to the match (end)
       dayType.push(tIdx >= 0 && tIdx < tpl.length ? tpl[tIdx] : "rest");
@@ -901,13 +914,14 @@ export function buildCalendarBlock(opts: {
     // volume axes (dist/load/accdec) → `dl.vol`, intensity axes (hsr/stride) → `dl.int`. No goal = 0.6/0.6.
     // A light week stays on its own ramp: volume axes × LIGHT_WEEK_VOL, intensity axes untouched.
     const dl = opts.goal ? GOAL_DELOAD[opts.goal] : { vol: 0.6, int: 0.6 };
-    const lightVol = (a: RampAxis) => ({ m: axisRamp(a, i, base, capMult).m * LIGHT_WEEK_VOL, cap: "rate" as CapReason });
+    const rampIdx = opts.hold ? 0 : i;
+    const lightVol = (a: RampAxis) => ({ m: axisRamp(a, rampIdx, base, capMult).m * LIGHT_WEEK_VOL, cap: "rate" as CapReason });
     const ramp: Record<RampAxis, { m: number; cap: CapReason }> = {
-      dist: isDeep ? { m: dl.vol, cap: "rate" } : isLight ? lightVol("dist") : axisRamp("dist", i, base, capMult),
-      hsr: isDeep ? { m: dl.int, cap: "rate" } : axisRamp("hsr", i, base, capMult),
-      load: isDeep ? { m: dl.vol, cap: "rate" } : isLight ? lightVol("load") : axisRamp("load", i, base, capMult),
-      accdec: isDeep ? { m: dl.vol, cap: "rate" } : isLight ? lightVol("accdec") : axisRamp("accdec", i, base, capMult),
-      stride: isDeep ? { m: dl.int, cap: "rate" } : axisRamp("stride", i, base, capMult),
+      dist: isDeep ? { m: dl.vol, cap: "rate" } : isLight ? lightVol("dist") : axisRamp("dist", rampIdx, base, capMult),
+      hsr: isDeep ? { m: dl.int, cap: "rate" } : axisRamp("hsr", rampIdx, base, capMult),
+      load: isDeep ? { m: dl.vol, cap: "rate" } : isLight ? lightVol("load") : axisRamp("load", rampIdx, base, capMult),
+      accdec: isDeep ? { m: dl.vol, cap: "rate" } : isLight ? lightVol("accdec") : axisRamp("accdec", rampIdx, base, capMult),
+      stride: isDeep ? { m: dl.int, cap: "rate" } : axisRamp("stride", rampIdx, base, capMult),
     };
     const mult = ramp.load.m; // representative scalar (volume) for display + the deload comparison
     // Pre-season match exposure — a friendly is partial minutes (match-fitness build-up), so its match-day
@@ -970,7 +984,7 @@ export function buildCalendarBlock(opts: {
     const weekMatchCount = days.filter((d) => d.type === "match").length;
     const intent: Bi = campWeek ? { en: "Training camp", is: "Æfingaferð" }
       : weekMatchCount >= 2 ? { en: "Congested (2 games)", is: "Þétt (2 leikir)" }
-      : isLight ? { en: "Light week", is: "Létt vika" } : isDeload ? { en: "Deload", is: "Niðurtröppun" } : i === 0 ? { en: "Introduce", is: "Kynna" } : i === peakIdx ? { en: "Overload · peak", is: "Yfirálag · toppur" } : i <= (n - 1) / 2 ? { en: "Progress", is: "Framvinda" } : { en: "Overload", is: "Yfirálag" };
+      : isLight ? { en: "Light week", is: "Létt vika" } : isDeload ? { en: "Deload", is: "Niðurtröppun" } : opts.hold ? { en: "Standard week", is: "Staðalvika" } : i === 0 ? { en: "Introduce", is: "Kynna" } : i === peakIdx ? { en: "Overload · peak", is: "Yfirálag · toppur" } : i <= (n - 1) / 2 ? { en: "Progress", is: "Framvinda" } : { en: "Overload", is: "Yfirálag" };
     const matchDayIdx = days.findIndex((d) => d.type === "match");
     const matchDow: Bi = matchDayIdx >= 0 ? DOW[matchDayIdx] : { en: "—", is: "—" };
     weeks.push({
@@ -1009,7 +1023,9 @@ export function buildCalendarBlock(opts: {
     const stance: Record<RecGoalKey, Bi> = deloadLight ? {
       accum: { en: "Accumulation: higher volume (×1.10) — build work capacity + max-strength (Issurin 2010).", is: "Uppsöfnun: meira rúmmál (×1,10) — byggja vinnugetu + hámarksstyrk (Issurin 2010)." },
       transmute: { en: "Transmutation: balanced volume (×0.95) — convert to football-specific strength–power.", is: "Umbreyting: jafnvægis-rúmmál (×0,95) — umbreyta í fótbolta-sérhæfðan styrk–kraft." },
-      realize: { en: "Realization: lower volume (×0.75), a roomier week — peak + power/speed gym (Mujika 2003).", is: "Framkvæmd: minna rúmmál (×0,75), rýmri vika — toppur + kraft/hraða lyftingar (Mujika 2003)." },
+      realize: opts.hold
+        ? { en: "Realization: holds the standard week, no step between weeks, the week follows the fixtures, a roomier week — power/speed gym (Malone 2015; Oliveira 2019; observational).", is: "Framkvæmd: heldur staðalvikunni, ekkert þrep milli vikna, vikan fylgir leikjunum, rýmri vika — kraft/hraða lyftingar (Malone 2015; Oliveira 2019; athugunarrannsóknir)." }
+        : { en: "Realization: lower volume (×0.75), a roomier week — peak + power/speed gym (Mujika 2003).", is: "Framkvæmd: minna rúmmál (×0,75), rýmri vika — toppur + kraft/hraða lyftingar (Mujika 2003)." },
     } : {
       accum: { en: "Accumulation: higher volume (×1.10), gentle late unload — build work capacity + max-strength (Issurin 2010).", is: "Uppsöfnun: meira rúmmál (×1,10), væg sein niðurtröppun — byggja vinnugetu + hámarksstyrk (Issurin 2010)." },
       transmute: { en: "Transmutation: balanced volume (×0.95), moderate taper — convert to football-specific strength–power.", is: "Umbreyting: jafnvægis-rúmmál (×0,95), hófleg niðurtröppun — umbreyta í fótbolta-sérhæfðan styrk–kraft." },
@@ -1019,7 +1035,7 @@ export function buildCalendarBlock(opts: {
     if (deloadLight) notes.push({ en: "In-season: no automatic deload, the taper before each match varies the load. A light week is the coach's call: volume −20%, intensity held (Malone 2015; Fessi 2016; Moalla 2021; observational).", is: "Keppnistímabil: engin sjálfvirk niðurtröppun, minnkunin fyrir hvern leik sveiflar álaginu. Létt vika er val þjálfarans: rúmmál −20%, ákefð haldið (Malone 2015; Fessi 2016; Moalla 2021; athugunarrannsóknir)." });
     if (strength) notes.push({ en: `${gl.en} gym: ${strength.quality.en} — ${strength.pct1rm.en} (${strength.cite}).`, is: `${gl.is} lyftingar: ${strength.quality.is} — ${strength.pct1rm.is} (${strength.cite}).` });
   }
-  return { unit: opts.unit, scopeName: opts.scopeName, scopePos: opts.scopePos ?? null, phase: opts.phase ?? { en: "Pre-season", is: "Undirbúningstímabil" }, numWeeks: n, startDate: start, weeks, legend, notes, goalKey: opts.goal, strength };
+  return { unit: opts.unit, scopeName: opts.scopeName, scopePos: opts.scopePos ?? null, phase: opts.phase ?? { en: "Pre-season", is: "Undirbúningstímabil" }, numWeeks: n, startDate: start, weeks, legend, notes, goalKey: opts.goal, strength, ...(opts.hold ? { hold: true } : {}) };
 }
 
 /** Weeks with 2+ matches inside a calendar week (congested). Each such week's Monday + match count. */
@@ -1083,7 +1099,9 @@ export function recommendBlockGoal(opts: {
     if (nearKey || congested) {
       // Runway to the next key fixture / congestion → peak & freshen.
       const r: Bi[] = [];
-      if (nearKey) r.push({ en: `Key fixture ~${opts.weeksToNextFixture} week(s) out — peak and taper (low volume, high intensity).`, is: `Mikilvægur leikur eftir ~${opts.weeksToNextFixture} viku(r) — toppaðu og trappaðu niður (lítið magn, mikil ákefð).` });
+      if (nearKey) r.push(opts.phaseKey === "competitive"
+        ? { en: `Next fixture ~${opts.weeksToNextFixture} week(s) out — compete: hold the standard week and stay fresh.`, is: `Næsti leikur eftir ~${opts.weeksToNextFixture} viku(r) — keppni: haltu staðalvikunni og vertu ferskur.` }
+        : { en: `Key fixture ~${opts.weeksToNextFixture} week(s) out — peak and taper (low volume, high intensity).`, is: `Mikilvægur leikur eftir ~${opts.weeksToNextFixture} viku(r) — toppaðu og trappaðu niður (lítið magn, mikil ákefð).` });
       if (congested) r.push({ en: "Congested run — hold freshness, don't accumulate.", is: "Þéttur leikjakafli — haltu ferskleika, ekki safna álagi." });
       if (opts.prevGoal !== "transmute" && opts.prevGoal !== "accum") r.push({ en: "Note: little build behind this — a short sharpening block, not a true peak.", is: "Athuga: lítil uppbygging að baki — stutt skerpingar-lota, ekki fullur toppur." });
       base = { goal: "realize", confidence: cap(nearKey && congested ? "high" : "medium"), reasons: [...r, ...(thin ? [hintCaveat] : [])],

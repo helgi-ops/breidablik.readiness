@@ -19,6 +19,7 @@
 import { preseasonStartRamp } from "./preseasonStart";
 import { kpiVolumes, kpiTaperShare, standardTrainingDays, mesoWeeklyMultiples } from "./plannedVolume";
 import { teamKpiAvg } from "./preseasonKpiMap";
+import { holdsStandardWeek } from "./imaStandard";
 import type { MatchUnit, SeasonPhase, MesoBlock } from "./index";
 import type { WeeklyLoadMetricKey } from "../externalLoad/weeklyLoadTypes";
 
@@ -60,6 +61,8 @@ export function planWeeklyTarget(opts: {
   /** Meso blocks (the season's 4/5/6-week cycles) — used to apply the in-season ramp/light-week factor for
    *  the block week today sits in. Omit → no ramp (flat base-week volume). */
   blocks?: MesoBlock[];
+  /** The coach's per-block goal picks (season_plans.overrides.blockGoals), keyed by block start. */
+  blockGoals?: Record<string, string> | null;
   /** In-season weekly overload step (% per loading week); defaults to the hub default (5%). */
   stepPct?: number;
   week1MatchMultiple?: number;
@@ -98,14 +101,16 @@ export function planWeeklyTarget(opts: {
     const vols = kpiVolumes(kpi, standardTrainingDays(matches, opts.sport));
     if (vols.length === 0) return null;
 
-    let factor = 1, weekIdx: number | undefined, blockWeeks: number | undefined, isDeloadWk = false, isLightWk = false;
+    let factor = 1, weekIdx: number | undefined, blockWeeks: number | undefined, isDeloadWk = false, isLightWk = false, hold = false;
     const block = (opts.blocks ?? []).find((b) => today >= b.start && today < b.end);
     if (block) {
       blockWeeks = Math.max(1, block.weeks);
       weekIdx = Math.min(blockWeeks, Math.max(1, weeksBetween(block.start, today) + 1));
       const deloadWeek = block.deloadWeekStart ? Math.min(blockWeeks, Math.max(1, weeksBetween(block.start, block.deloadWeekStart) + 1)) : block.inSeason ? null : blockWeeks;
+      // A competitive Realization block holds the standard week, so no step between weeks.
+      hold = holdsStandardWeek(block.inSeason, opts.blockGoals?.[block.start] ?? block.goalKey);
       // baseMultiple 1 → the multiple IS the factor relative to the base (week-1) volume.
-      const mw = mesoWeeklyMultiples({ numWeeks: blockWeeks, baseMultiple: 1, stepPct: opts.stepPct ?? 5, deloadWeek, light: !!block.inSeason })[weekIdx - 1];
+      const mw = mesoWeeklyMultiples({ numWeeks: blockWeeks, baseMultiple: 1, stepPct: hold ? 0 : opts.stepPct ?? 5, deloadWeek, light: !!block.inSeason })[weekIdx - 1];
       if (mw) { factor = mw.multiple; isDeloadWk = mw.isDeload; isLightWk = !!mw.isLight; }
     }
 
@@ -117,7 +122,7 @@ export function planWeeklyTarget(opts: {
       : isDeloadWk
       ? { en: `In-season — ${matches}-match week · deload (${pct}%)`, is: `Keppni — ${matches} leikja vika · niðurtröppun (${pct}%)` }
       : block && weekIdx
-        ? { en: `In-season — ${matches}-match week · block wk ${weekIdx}/${blockWeeks} (${pct}%)`, is: `Keppni — ${matches} leikja vika · lotuvika ${weekIdx}/${blockWeeks} (${pct}%)` }
+        ? { en: `In-season — ${matches}-match week · block wk ${weekIdx}/${blockWeeks}${hold ? "" : ` (${pct}%)`}`, is: `Keppni — ${matches} leikja vika · lotuvika ${weekIdx}/${blockWeeks}${hold ? "" : ` (${pct}%)`}` }
         : { en: `In-season — ${matches}-match week`, is: `Keppni — ${matches} leikja vika` };
     return { phase: "inseason", byKpi, label, weekIndex: weekIdx, totalWeeks: blockWeeks };
   }

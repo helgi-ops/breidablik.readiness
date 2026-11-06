@@ -14,7 +14,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAuthedPlayerId } from "@/lib/session-rpe/server";
 import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
 import { buildPlayerBlock, pickActiveBlock } from "@/lib/micropulse/periodization/playerBlock";
-import { blockDeloadOf } from "@/lib/micropulse/periodization";
+import { blockDeloadOf, holdsStandardWeek } from "@/lib/micropulse/periodization";
 import { loadBuildUpActuals } from "@/lib/micropulse/buildUpTracking/loader";
 import { computeBuildUpAdherence } from "@/lib/micropulse/buildUpTracking";
 
@@ -60,6 +60,7 @@ export async function GET(req: Request) {
       matchDates: win.matchDates,
       goal,
       deload: activeMb ? { ...blockDeloadOf(activeMb)!, ...(deloadPin ? { weekStart: deloadPin } : {}) } : undefined,
+      hold: holdsStandardWeek(activeMb?.inSeason, goal),
       friendlyMatches: winIsPreseason,
     });
 

@@ -35,6 +35,7 @@ const L = {
     dist: "Distance", hsr: "HSR (V5+V6)", load: "Player Load", accdec: "Acc + Dec",
     accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Stride", dirL: "IMA dir", rhieL: "RHIE", symL: "Symmetry", metL: "Met power",
     fwd: "fwd", lat: "lat", back: "back", imaLead: "Mechanical / IMA - the same match unit on the movement axis (present where the feed carries it).",
+    rampHold: "The weekly load — standard week", rampNarrHold: "A competitive block holds the standard week every week: no step between weeks, the week moves with the fixtures and any light week the coach picks (Malone 2015; Oliveira 2019; observational). Running axes stay at or under the match; mechanical work over-shoots it by design.", holdRead: (hi: number) => `Weekly running volume holds the standard week, up to ${hi}% of one match`,
     ramp: "Progressive overload — weekly ramp", rampNarr: "Each KPI ramps at its own rate — volume (distance, Player Load) climbs fastest, HSR + stride slowest with the tightest ceilings (hamstring exposure; Malone 2017, Gabbett 2016) — up to a peak, with a deload in pre-season. Running axes build TO match and hold there; mechanical work over-shoots the match by design. The note under each week says what held it.",
     week: "Week", intent: "Intent", running: "Running dist", mech: "Mechanical", rest: "Rest days", light: "Light week", deload: "Deload", match: "match",
     theWeek: "The week — matchday-anchored microcycle", weekNarr: "Built around a weekly friendly (MD-0) that alternates Saturday / Sunday. After the match: a light top-up (MD+1), then a full day off (MD+2). Sessions are spaced so there are never more than three in a row — often just two — with HSR (Locomotive) and mechanical work on separate days to protect the posterior chain. A pre-season deload week adds rest.",
@@ -51,6 +52,7 @@ const L = {
     dist: "Vegalengd", hsr: "Háhraði (V5+V6)", load: "Player Load", accdec: "Acc + Dec",
     accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Skref", dirL: "IMA stefna", rhieL: "RHIE", symL: "Samhverfa", metL: "Efnaafl",
     fwd: "fram", lat: "hlið", back: "aftur", imaLead: "Vélrænt / IMA - sama leikviðmið á hreyfi-ásnum (þar sem gögnin ná).",
+    rampHold: "Vikuálag — staðalvika", rampNarrHold: "Keppnislota heldur staðalvikunni allar vikur: ekkert þrep milli vikna, vikan breytist með leikjunum og léttri viku ef þjálfarinn velur hana (Malone 2015; Oliveira 2019; athugunarrannsóknir). Hlaupa-ásarnir haldast við eða undir leik; vélrænt fer yfir leikinn viljandi.", holdRead: (hi: number) => `Vikulegt hlaupamagn heldur staðalvikunni, allt að ${hi}% af einum leik`,
     ramp: "Stígandi álag — vikuleg þróun", rampNarr: "Hvert mæligildi hækkar á sínum hraða — magn (vegalengd, Player Load) hraðast, háhraði + skref hægast með þéttustu þökin (aftanlæris-áhætta; Malone 2017, Gabbett 2016) — upp að toppi, með niðurtröppun í undirbúningi. Hlaupa-ásarnir byggja AÐ leik og halda þar; vélrænt fer yfir leikinn viljandi. Nótan undir hverri viku segir hvað hélt henni.",
     week: "Vika", intent: "Markmið", running: "Hlaup vegal.", mech: "Vélrænt", rest: "Hvíldard.", light: "Létt vika", deload: "Niðurtröppun", match: "leik",
     theWeek: "Vikan — leikdags-fest microcycle", weekNarr: "Byggt um vikulegan æfingaleik (MD-0) sem skiptist á laugardag / sunnudag. Eftir leik: létt áfylling (MD+1), svo heill frídagur (MD+2). Æfingar dreifðar svo aldrei eru fleiri en þrjár í röð — oft bara tvær — með háhraða (Locomotive) og vélrænu á sitt hvorum degi til að vernda afturkeðjuna. Niðurtröppunarvika í undirbúningi bætir við hvíld.",
@@ -97,7 +99,7 @@ function BlockDoc({ payload, lang }: { payload: PeriodizationBlockPayload; lang:
   const deloads = block.weeks.filter((w) => w.isDeload && !w.isLight).map((w) => String(w.index + 1));
   const lights = block.weeks.filter((w) => w.isLight).map((w) => String(w.index + 1));
   const restTotal = block.weeks.reduce((a, w) => a + w.restDays, 0);
-  const body = [run.length ? t.peak(Math.max(...run), peakIdx + 1) : "", deloads.length ? t.deloadIn(deloads.join(", ")) : "", lights.length ? t.lightIn(lights.join(", ")) : "", t.restTotal(restTotal)].filter(Boolean).join("; ") + ".";
+  const body = [run.length ? (block.hold ? t.holdRead(Math.max(...run)) : t.peak(Math.max(...run), peakIdx + 1)) : "", deloads.length ? t.deloadIn(deloads.join(", ")) : "", lights.length ? t.lightIn(lights.join(", ")) : "", t.restTotal(restTotal)].filter(Boolean).join("; ") + ".";
 
   return (
     <Document>
@@ -132,7 +134,7 @@ function BlockDoc({ payload, lang }: { payload: PeriodizationBlockPayload; lang:
         </Section>
 
         {/* Layer 2 — progressive-overload table */}
-        <Section title={tx(t.ramp)} hint={tx(t.rampNarr)}>
+        <Section title={tx(block.hold ? t.rampHold : t.ramp)} hint={tx(block.hold ? t.rampNarrHold : t.rampNarr)}>
           <Table
             cols={[
               { label: t.week, width: 50 }, { label: t.intent, flex: 1 },

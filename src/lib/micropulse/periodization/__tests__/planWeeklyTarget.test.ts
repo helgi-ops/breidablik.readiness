@@ -59,6 +59,31 @@ describe("planWeeklyTarget", () => {
     expect(last.label.en).toContain("block wk 4/4");
   });
 
+  it("a competitive Realization block holds the standard week, no step and no % in the label", () => {
+    const block = { index: 0, start: "2026-05-25", end: "2026-06-22", weeks: 4, deloadWeekStart: null, inSeason: true, goalKey: "realize" } as unknown as MesoBlock;
+    const base = planWeeklyTarget({ phases: PHASES, matchUnits: [UNIT], today: "2026-06-15", matchesThisWeek: 1 })!;
+    const held = planWeeklyTarget({ phases: PHASES, blocks: [block], matchUnits: [UNIT], today: "2026-06-15", matchesThisWeek: 1 })!;
+    expect(held.byKpi.totalDistance).toBe(base.byKpi.totalDistance);
+    expect(held.label.en).toContain("block wk 4/4");
+    expect(held.label.en).not.toContain("%");
+  });
+
+  it("the coach picking a build-up goal for that block brings the step back", () => {
+    const block = { index: 0, start: "2026-05-25", end: "2026-06-22", weeks: 4, deloadWeekStart: null, inSeason: true, goalKey: "realize" } as unknown as MesoBlock;
+    const base = planWeeklyTarget({ phases: PHASES, matchUnits: [UNIT], today: "2026-06-15", matchesThisWeek: 1 })!;
+    const built = planWeeklyTarget({ phases: PHASES, blocks: [block], blockGoals: { "2026-05-25": "accum" }, matchUnits: [UNIT], today: "2026-06-15", matchesThisWeek: 1 })!;
+    expect(built.byKpi.totalDistance).toBe(Math.round(base.byKpi.totalDistance! * 1.15));
+    expect(built.label.en).toContain("(115%)");
+  });
+
+  it("a light week in a held block is 80% of the standard week", () => {
+    const block = { index: 0, start: "2026-05-25", end: "2026-06-22", weeks: 4, deloadWeekStart: "2026-06-08", inSeason: true, goalKey: "realize" } as unknown as MesoBlock;
+    const base = planWeeklyTarget({ phases: PHASES, matchUnits: [UNIT], today: "2026-06-08", matchesThisWeek: 1 })!;
+    const light = planWeeklyTarget({ phases: PHASES, blocks: [block], matchUnits: [UNIT], today: "2026-06-08", matchesThisWeek: 1 })!;
+    expect(light.byKpi.totalDistance).toBe(Math.round(base.byKpi.totalDistance! * 0.8));
+    expect(light.label.en).toContain("light week (80%)");
+  });
+
   it("a light week the coach picked sits 20% under that week's ramp", () => {
     const block = { index: 0, start: "2026-05-25", end: "2026-06-22", weeks: 4, deloadWeekStart: "2026-06-08", inSeason: true } as unknown as MesoBlock;
     const base = planWeeklyTarget({ phases: PHASES, matchUnits: [UNIT], today: "2026-06-08", matchesThisWeek: 1 })!;

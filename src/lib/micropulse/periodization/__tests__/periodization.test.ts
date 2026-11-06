@@ -1,7 +1,7 @@
 import { test } from "vitest";
 import { buildPlayerBlock } from "@/lib/micropulse/periodization/playerBlock";
 import assert from "node:assert/strict";
-import { blockDeloadOf, deloadWeekIndex, detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, recommendBlockGoal, blockGoalFromSeason, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
+import { holdsStandardWeek, blockDeloadOf, deloadWeekIndex, detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, recommendBlockGoal, blockGoalFromSeason, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
 
 // A full Pro (GPS + IMA) match unit — running spine + the mechanical/IMA axis (Acc/Dec B2–3, stride, dir).
 const UNIT: MatchUnitAbs = { dist: 12564, hsr: 988, load: 1184, accdec: 259, accHiEff: 40, decHiEff: 52, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
@@ -1041,4 +1041,88 @@ test("deloadWeekIndex: outside the block means no deload", () => {
   assert.equal(deloadWeekIndex("2026-04-13", "2026-04-27", 4), 2);
   assert.equal(deloadWeekIndex("2026-04-13", "2026-05-11", 4), null);
   assert.equal(deloadWeekIndex("2026-04-13", "2026-04-06", 4), null);
+});
+
+// ── In-season: a competitive Realization block holds the standard week ──────────────────────
+const HOLD_ARGS = { unit: { ...UNIT, accel: 100, decel: 120, cod: 400 }, startDate: "2026-04-13", numWeeks: 4, scopeName: "__team__", baseOverloadPct: 100, goal: "realize" as const, matchDates: ["2026-04-18", "2026-04-25", "2026-05-02", "2026-05-09"], allFixtures: ["2026-04-11", "2026-04-18", "2026-04-25", "2026-05-02", "2026-05-09", "2026-05-16"] };
+
+test("holdsStandardWeek: only a competitive Realization block", () => {
+  assert.equal(holdsStandardWeek(true, "realize"), true);
+  assert.equal(holdsStandardWeek(true, "accum"), false);
+  assert.equal(holdsStandardWeek(true, "transmute"), false);
+  assert.equal(holdsStandardWeek(false, "realize"), false);
+  assert.equal(holdsStandardWeek(undefined, undefined), false);
+});
+
+test("buildCalendarBlock hold: every normal week is the standard week, no ×0.75 start and no step", () => {
+  const cal = buildCalendarBlock({ ...HOLD_ARGS, deload: { weekStart: null, light: true }, hold: true });
+  assert.equal(cal.hold, true);
+  assert.deepEqual(cal.weeks.map((w) => w.mult), [1, 1, 1, 1]);
+  assert.ok(cal.weeks.every((w) => w.intent.en === "Standard week" && !w.isDeload));
+  assert.deepEqual(cal.weeks.map((w) => w.pctRunning), cal.weeks.map(() => cal.weeks[0].pctRunning));
+});
+
+test("buildCalendarBlock hold: the plan reads the same number as Did we do enough?", () => {
+  const cal = buildCalendarBlock({ ...HOLD_ARGS, deload: { weekStart: null, light: true }, hold: true });
+  for (const d of cal.weeks[0].days.filter((x) => x.type === "mixed" || x.type === "locomotive")) {
+    assert.equal(d.accel, Math.round(100 * CAL_SHARE_IMA[d.type as "mixed"].accel));
+    assert.equal(d.decel, Math.round(120 * CAL_SHARE_IMA[d.type as "mixed"].decel));
+  }
+});
+
+test("buildCalendarBlock hold: a light week is still volume −20%, intensity held", () => {
+  const none = buildCalendarBlock({ ...HOLD_ARGS, deload: { weekStart: null, light: true }, hold: true });
+  const light = buildCalendarBlock({ ...HOLD_ARGS, deload: { weekStart: "2026-04-27", light: true }, hold: true });
+  assert.equal(light.weeks[2].mult, 0.8);
+  assert.equal(light.weeks[2].intent.en, "Light week");
+  assert.deepEqual(light.weeks[2].days.map((d) => d.type), none.weeks[2].days.map((d) => d.type));
+  assert.equal(light.weeks[2].pctHsr, none.weeks[2].pctHsr);
+  assert.ok(Math.abs(light.weeks[2].pctRunning! / none.weeks[2].pctRunning! - 0.8) < 0.02);
+  assert.equal(light.weeks[1].mult, 1);
+});
+
+test("buildCalendarBlock: without hold the ramp and the goal volume are untouched", () => {
+  const args = { ...HOLD_ARGS, deload: { weekStart: null, light: true } };
+  const ramp = buildCalendarBlock(args);
+  assert.equal(ramp.hold, undefined);
+  assert.deepEqual(buildCalendarBlock({ ...args, hold: false }), ramp);
+  assert.equal(ramp.weeks[0].mult, 0.75);
+  assert.ok(ramp.weeks[3].mult > ramp.weeks[0].mult);
+  assert.equal(ramp.weeks[3].intent.en, "Overload · peak");
+  const accum = buildCalendarBlock({ ...args, goal: "accum" });
+  assert.equal(accum.weeks[0].mult, 1.1);
+});
+
+test("buildCalendarBlock hold: the last week still trains for the first match of the next block", () => {
+  const args = { ...HOLD_ARGS, numWeeks: 2, matchDates: ["2026-04-18", "2026-04-20"], allFixtures: ["2026-04-18", "2026-04-20", "2026-04-28"], deload: { weekStart: null, light: true } };
+  const held = buildCalendarBlock({ ...args, hold: true });
+  assert.ok(held.weeks[1].restDays < buildCalendarBlock(args).weeks[1].restDays);
+  assert.ok(held.weeks[1].days.some((d) => d.type === "mixed" || d.type === "locomotive"));
+});
+
+test("buildCalendarBlock hold: without the season's fixtures it still builds on the block's own matches", () => {
+  const { allFixtures: _unused, ...args } = HOLD_ARGS;
+  void _unused;
+  const cal = buildCalendarBlock({ ...args, deload: { weekStart: null, light: true }, hold: true });
+  assert.deepEqual(cal.weeks.map((w) => w.mult), [1, 1, 1, 1]);
+  assert.equal(cal.weeks[0].days.filter((d) => d.type === "match").length, 1);
+});
+
+test("the hold notes don't promise a lower volume the block doesn't plan", () => {
+  const notes = buildCalendarBlock({ ...HOLD_ARGS, deload: { weekStart: null, light: true }, hold: true }).notes.map((x) => x.en).join(" ");
+  assert.doesNotMatch(notes, /×0\.75/);
+  assert.match(notes, /holds the standard week/);
+  assert.match(notes, /Malone 2015; Oliveira 2019/);
+});
+
+test("buildPlayerBlock hold: every week sits on the block's peak, the same level the ramp only reached at the end", () => {
+  const m = (typical: number | null) => ({ typical });
+  const pl = { name: "P", position: null, vald: { capPct: null }, recentMinutesAvg: 90, matchUnit: { nNearFull: 6, confidence: "high", load: m(900), hsr: m(500), distance: m(10000), accel: m(60), decel: m(60), accHiEff: m(20), decHiEff: m(30), stride: m(300), rhie: m(null), symmetry: m(null), metPower: m(null), imaCod: m(null), imaFr: m(null) } } as never;
+  const plan = { teamBaseline: { avg: { sessions: 0 } }, positionBaselines: [], fixtures: HOLD_ARGS.allFixtures } as never;
+  const args = { blkStart: "2026-04-13", blkWeeks: 4, phaseLabel: { en: "x", is: "x" }, matchDates: HOLD_ARGS.matchDates, goal: "realize" as const, deload: { weekStart: null, light: true } };
+  const ramp = buildPlayerBlock(plan, pl, args).block.weeks;
+  const flat = buildPlayerBlock(plan, pl, { ...args, hold: true }).block.weeks;
+  const peak = Math.max(...ramp.map((w) => w.pctRunning!));
+  for (const w of flat) assert.ok(Math.abs(w.pctRunning! - peak) <= 2);
+  assert.ok(flat[1].pctRunning! > ramp[1].pctRunning!);
 });
