@@ -7,9 +7,9 @@ import "server-only";
  *  - Gate: football + Vector Pro (Catapult tier "full").
  *  - Match reference: each player's own near-full matches (selectNearFullMatches — the same rule as
  *    the periodization match unit), else the team's near-full matches.
- *  - MD-day: coach's Week setup first (resolveMdContext), then the fixture list (decides HOW BIG).
+ *  - MD-day: coach's Week setup first (resolveMdContext), then the fixture list (sizes fast running + strides).
  *  - Day-type: Meso activation/top-up label → Week-setup pitch stimulus → Meso stimulus → MD+1 default
- *    (decides WHAT is judged).
+ *    (decides WHAT is judged, and sizes Acc/Dec/CoD from the calendar's standard).
  *  - Session: one effective row per player (manual overrides pod), previous-club rows excluded.
  *
  * READ-ONLY / descriptive — never the readiness colour.
@@ -103,6 +103,39 @@ const pctForOffset = (off: number | null): number | null => {
   return p.applicable ? p.matchPct : null;
 };
 
+/** Planned day-type per date: Meso activation/top-up label → Week-setup pitch stimulus → Meso stimulus → MD+1 default. */
+async function resolveDayTypes(
+  sb: SupabaseClient, teamId: string, days: Array<{ date: string; mdLabel: string | null }>,
+): Promise<Map<string, { dayType: EnoughDayType | null; source: "week_setup" | "meso" | "md" | null }>> {
+  const out = new Map<string, { dayType: EnoughDayType | null; source: "week_setup" | "meso" | "md" | null }>();
+  if (!days.length) return out;
+  const dowOf = (d: string) => (new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7;
+  const weekOf = (d: string) => addDays(d, -dowOf(d));
+  const [{ data: wps }, { data: cws }] = await Promise.all([
+    sb.from("week_plans").select("day_date, focus, day_type").eq("team_id", teamId).in("day_date", days.map((d) => d.date)),
+    sb.from("coach_week_setup").select("week_start_date, day_stimuli").eq("team_id", teamId).in("week_start_date", [...new Set(days.map((d) => weekOf(d.date)))]),
+  ]);
+  const planType = (p: { focus?: string | null; day_type?: string | null }): EnoughDayType | null =>
+    dayTypeFromText(p.focus) ?? (String(p.day_type ?? "").toUpperCase() === "RECOVERY" ? "topup" : null);
+  const planByDate = new Map<string, EnoughDayType>();
+  for (const p of (wps ?? []) as Array<{ day_date: string; focus?: string | null; day_type?: string | null }>) {
+    const t = planType(p);
+    if (t && !planByDate.has(p.day_date)) planByDate.set(p.day_date, t);
+  }
+  const stimByWeek = new Map(((cws ?? []) as Array<{ week_start_date: string; day_stimuli?: unknown }>).map((c) => [c.week_start_date, c.day_stimuli]));
+  for (const { date, mdLabel } of days) {
+    const fromPlan = planByDate.get(date) ?? null;
+    const stimRaw = stimByWeek.get(weekOf(date));
+    const stim = Array.isArray(stimRaw) && stimRaw.length === 7 ? dayTypeFromText(String(stimRaw[dowOf(date)] ?? "")) : null;
+    if (fromPlan === "activation" || fromPlan === "topup") out.set(date, { dayType: fromPlan, source: "meso" });
+    else if (stim) out.set(date, { dayType: stim, source: "week_setup" });
+    else if (fromPlan) out.set(date, { dayType: fromPlan, source: "meso" });
+    else if (mdLabel === "MD+1") out.set(date, { dayType: "topup", source: "md" });
+    else out.set(date, { dayType: null, source: null });
+  }
+  return out;
+}
+
 export async function loadSessionEnough(sb: SupabaseClient, teamId: string, sessionDate: string | null): Promise<SessionEnough> {
   if (!sessionDate) return emptyEnough("no_session");
   const [sport, tier] = await Promise.all([resolveTeamSport(sb, teamId), getCatapultDataTier(sb, teamId)]);
@@ -146,26 +179,10 @@ export async function loadSessionEnough(sb: SupabaseClient, teamId: string, sess
     if (off != null && p != null) { mdLabel = labelForOffset(off); matchPct = p; mdSource = "fixtures"; }
   }
 
-  // ── Planned day-type: Meso activation/top-up label → Week-setup pitch stimulus → Meso stimulus → MD+1 ─
-  let dayType: EnoughDayType | null = null;
-  let dayTypeSource: "week_setup" | "meso" | "md" | null = null;
-  {
-    const sd = new Date(`${sessionDate}T00:00:00Z`);
-    const idx = (sd.getUTCDay() + 6) % 7;
-    const weekStart = addDays(sessionDate, -idx);
-    const [{ data: wp }, { data: cws }] = await Promise.all([
-      sb.from("week_plans").select("focus, day_type").eq("team_id", teamId).eq("day_date", sessionDate).limit(1).maybeSingle(),
-      sb.from("coach_week_setup").select("day_stimuli").eq("team_id", teamId).eq("week_start_date", weekStart).maybeSingle(),
-    ]);
-    const plan = wp as { focus?: string | null; day_type?: string | null } | null;
-    const fromPlan = dayTypeFromText(plan?.focus) ?? (String(plan?.day_type ?? "").toUpperCase() === "RECOVERY" ? "topup" : null);
-    const stimRaw = (cws as { day_stimuli?: unknown } | null)?.day_stimuli;
-    const stim = Array.isArray(stimRaw) && stimRaw.length === 7 ? dayTypeFromText(String(stimRaw[idx] ?? "")) : null;
-    if (fromPlan === "activation" || fromPlan === "topup") { dayType = fromPlan; dayTypeSource = "meso"; }
-    else if (stim) { dayType = stim; dayTypeSource = "week_setup"; }
-    else if (fromPlan) { dayType = fromPlan; dayTypeSource = "meso"; }
-    else if (mdLabel === "MD+1") { dayType = "topup"; dayTypeSource = "md"; }
-  }
+  // ── Planned day-type of the session ─────────────────────────────────────────
+  const sessionType = (await resolveDayTypes(sb, teamId, [{ date: sessionDate, mdLabel }])).get(sessionDate);
+  const dayType = sessionType?.dayType ?? null;
+  const dayTypeSource = sessionType?.source ?? null;
 
   // ── Load rows: match days (reference) + the training block since the last match ─
   const lastMatch = pastMatches[pastMatches.length - 1] ?? null;
@@ -212,8 +229,15 @@ export async function loadSessionEnough(sb: SupabaseClient, teamId: string, sess
   const dayCount = new Map<string, number>();
   for (const r of blockRows) dayCount.set(r.date, (dayCount.get(r.date) ?? 0) + 1);
   const weekDates = blockDates.filter((d) => (dayCount.get(d) ?? 0) >= 3 || d === sessionDate);
-  const weekDayPcts = matchPct == null || weekFrom === sessionDate ? null
-    : weekDates.map((d) => (d === sessionDate ? matchPct! : pctForOffset(fixtureOffset(d, allMatches)) ?? 0));
+  let weekDays: Array<{ matchPct: number; dayType: EnoughDayType | null }> | null = null;
+  if (matchPct != null && weekFrom !== sessionDate) {
+    const others = weekDates.filter((d) => d !== sessionDate);
+    const offsets = new Map(others.map((d) => [d, fixtureOffset(d, allMatches)]));
+    const types = await resolveDayTypes(sb, teamId, others.map((d) => { const off = offsets.get(d) ?? null; return { date: d, mdLabel: off == null ? null : labelForOffset(off) }; }));
+    weekDays = weekDates.map((d) => (d === sessionDate
+      ? { matchPct: matchPct!, dayType }
+      : { matchPct: pctForOffset(offsets.get(d) ?? null) ?? 0, dayType: types.get(d)?.dayType ?? null }));
+  }
 
   const inputs: EnoughPlayerInput[] = trained.map((r) => {
     const own = ownSel.get(r.player_id) ?? [];
@@ -223,7 +247,7 @@ export async function loadSessionEnough(sb: SupabaseClient, teamId: string, sess
     const ref = {} as VarValues;
     for (const k of ENOUGH_VARS) ref[k] = ownMed?.[k] ?? teamRef[k];
     let weekActual: VarValues | null = null;
-    if (weekDayPcts) {
+    if (weekDays) {
       const mine = blockRows.filter((b) => b.player_id === r.player_id && weekDates.includes(b.date)).map(varsOf);
       weekActual = {} as VarValues;
       for (const k of ENOUGH_VARS) (weekActual as Record<EnoughVar, number | null>)[k] = sumOrNull(mine.map((v) => v[k]));
@@ -250,6 +274,6 @@ export async function loadSessionEnough(sb: SupabaseClient, teamId: string, sess
 
   return buildSessionEnough({
     sessionDate, mdLabel, matchPct, mdSource, isMatchDay: false,
-    squadSize: playerIds.length, players: inputs, weekDayPcts, dayType, dayTypeSource,
+    squadSize: playerIds.length, players: inputs, weekDays, dayType, dayTypeSource,
   });
 }

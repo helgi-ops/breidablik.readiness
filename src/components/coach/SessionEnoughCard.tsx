@@ -78,13 +78,19 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
     return rank[a.verdict] - rank[b.verdict] || a.name.localeCompare(b.name);
   });
 
+  const stdTarget = enough.team.find((t) => t.focus && t.basis === "day_type");
+
   return (
     <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-base font-semibold text-slate-900">{title}</h3>
         {enough.mdLabel && <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{enough.mdLabel}</span>}
-        {enough.dayType && <span className="rounded-md bg-[#2740e6]/10 px-2 py-0.5 text-xs font-semibold text-[#2740e6]" title={L({ en: "The planned day-type decides which movement types are judged.", is: "Skipulögð dagsgerð ræður hvaða hreyfiþættir eru metnir." })}>{L(DAY_TYPE_LABEL[enough.dayType])}</span>}
-        {enough.matchPct != null && (
+        {enough.dayType && <span className="rounded-md bg-[#2740e6]/10 px-2 py-0.5 text-xs font-semibold text-[#2740e6]" title={L({ en: "The planned day-type decides which movement types are judged, and how much of a match is expected in accelerations, braking and changes of direction.", is: "Skipulögð dagsgerð ræður hvaða hreyfiþættir eru metnir og hve mikils af leik er vænst í hröðun, hemlun og stefnubreytingum." })}>{L(DAY_TYPE_LABEL[enough.dayType])}</span>}
+        {stdTarget?.targetPct != null ? (
+          <span className="text-xs text-slate-400" title={L({ en: "The same standard the Meso calendar plans from (Stevens 2017, Martín-García 2018).", is: "Sami staðall og Meso-dagatalið notar (Stevens 2017, Martín-García 2018)." })}>
+            {L({ en: `about ${stdTarget.targetPct}% of a match in accelerations, braking, changes of direction`, is: `um ${stdTarget.targetPct}% af leik í hröðun, hemlun, stefnubreytingum` })}
+          </span>
+        ) : enough.matchPct != null && (
           <span className="text-xs text-slate-400" title={L({ en: "How big a session this MD-day should be, as a share of a match (Buchheit 2024).", is: "Hve stór æfing þessi MD-dagur á að vera, sem hlutfall af leik (Buchheit 2024)." })}>
             {L({ en: `day ≈ ${enough.matchPct}% of a match`, is: `dagur ≈ ${enough.matchPct}% af leik` })}
           </span>
@@ -149,6 +155,7 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
                 <th className="py-1 pr-2 font-semibold">{L({ en: "Movement", is: "Hreyfing" })}</th>
                 <th className="py-1 pr-2 text-right font-semibold">{L({ en: "Session", is: "Æfing" })}</th>
                 <th className="py-1 pr-2 text-right font-semibold">{L({ en: "Day target", is: "Markmið dags" })}</th>
+                <th className="py-1 pr-2 text-right font-semibold">{L({ en: "Target % of a match", is: "Markmið % af leik" })}</th>
                 <th className="py-1 pr-2 text-right font-semibold">{L({ en: "Match", is: "Leikur" })}</th>
                 <th className="py-1 pr-2 text-right font-semibold">{L({ en: "% of a match", is: "% af leik" })}</th>
               </tr>
@@ -159,6 +166,7 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
                   <td className="py-1 pr-2 text-slate-800" title={ENOUGH_TECH[t.key]}>{L(ENOUGH_LABEL[t.key])}</td>
                   <td className="py-1 pr-2 text-right font-semibold tabular-nums text-slate-900">{fmt(t.actual)}</td>
                   <td className="py-1 pr-2 text-right tabular-nums text-slate-600">{fmt(t.dayTarget)}</td>
+                  <td className="py-1 pr-2 text-right tabular-nums text-slate-600">{t.targetPct == null ? "—" : `${t.targetPct}%`}</td>
                   <td className="py-1 pr-2 text-right tabular-nums text-slate-600">{fmt(t.matchRef)}</td>
                   <td className="py-1 pr-2 text-right tabular-nums text-slate-600">{t.pctOfMatch == null ? "—" : `${t.pctOfMatch}%`}</td>
                 </tr>
@@ -227,8 +235,8 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
         <div className="mt-4 rounded-lg bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600">
           <div className="mb-1 font-semibold text-slate-700">{L({ en: "How this is calculated", is: "Hvernig þetta er reiknað" })}</div>
           <p>{L({
-            en: "Each player's match reference is the median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when there are fewer than 3). The MD-day sets HOW BIG the day's target is: that match value × the share of a match this MD-day should deliver, tapered per movement type. The planned day-type sets WHAT is judged: Mechanical = accelerations, braking, changes of direction; Locomotive = fast running, fast strides; Mixed / Activation = all five; Top-up (MD+1) = starters (60+ min) recover, the rest are judged against ~40% of a match. Enough = at least 85% of the target. Partial sessions (<60% of the squad's duration) are shown but not judged. Running hotter than the day is a note, not a fail.",
-            is: "Leikviðmið hvers leikmanns er miðgildi hans eigin næstum-heilu leikja (≥80 mín, síðustu ~11 vikur; liðsins ef þeir eru færri en 3). MD-dagurinn ræður HVE STÓRT markmiðið er: leikgildið × hlutfallið af leik sem dagurinn á að gefa, mismunandi eftir hreyfiþætti. Skipulögð dagsgerð ræður HVAÐ er metið: Mechanical = hröðun, hemlun, stefnubreytingar; Locomotive = hraðhlaup, hröð skref; Mixed / Virkjun = allir fimm; Uppbót (MD+1) = byrjunarlið (60+ mín) í endurheimt, hinir metnir á móti ~40% af leik. Nóg = a.m.k. 85% af markmiði. Styttri æfingar (<60% af lengd hópsins) eru sýndar en ekki metnar. Meira en dagurinn kallar á er athugasemd, ekki fall.",
+            en: "Each player's match reference is the median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when there are fewer than 3). The planned day-type sets WHAT is judged: Mechanical = accelerations, braking, changes of direction; Locomotive = fast running, fast strides; Mixed / Activation = all five; Top-up (MD+1) = starters (60+ min) recover, the rest are judged. The day-type also sets the target for accelerations, braking and changes of direction, the same standard the Meso calendar plans from: Mechanical 80% of a match, Mixed 60%, Top-up 55%, Locomotive 50%, Activation 38%. These come from studies of elite teams (Stevens 2017, Martín-García 2018), which describe what those teams do rather than prove what is best; no study measures IMA change of direction directly, so it follows the same share. Fast running and fast strides are sized by the MD-day, as is everything when no day-type is planned. Enough = at least 85% of the target, roughly the low end of the published range. Partial sessions (<60% of the squad's duration) are shown but not judged. Running hotter than the day is a note, not a fail.",
+            is: "Leikviðmið hvers leikmanns er miðgildi hans eigin næstum-heilu leikja (≥80 mín, síðustu ~11 vikur; liðsins ef þeir eru færri en 3). Skipulögð dagsgerð ræður HVAÐ er metið: Mechanical = hröðun, hemlun, stefnubreytingar; Locomotive = hraðhlaup, hröð skref; Mixed / Virkjun = allir fimm; Uppbót (MD+1) = byrjunarlið (60+ mín) í endurheimt, hinir metnir. Dagsgerðin ræður líka markmiðinu í hröðun, hemlun og stefnubreytingum, sami staðall og Meso-dagatalið notar: Mechanical 80% af leik, Mixed 60%, Uppbót 55%, Locomotive 50%, Virkjun 38%. Tölurnar koma úr rannsóknum á úrvalsliðum (Stevens 2017, Martín-García 2018) sem lýsa því hvað þau gera en sanna ekki hvað er best; engin rannsókn mælir IMA-stefnubreytingar beint, svo þær fylgja sama hlutfalli. MD-dagurinn ræður stærð markmiðs í hraðhlaupi og hröðum skrefum, og í öllu þegar engin dagsgerð er skipulögð. Nóg = a.m.k. 85% af markmiði, um það bil neðri mörk birta bilsins. Styttri æfingar (<60% af lengd hópsins) eru sýndar en ekki metnar. Meira en dagurinn kallar á er athugasemd, ekki fall.",
           })}</p>
           <p className="mt-1.5 text-slate-500">{L({ en: "Sources: ", is: "Heimildir: " })}{enough.citations.join(" · ")}</p>
         </div>

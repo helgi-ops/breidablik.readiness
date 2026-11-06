@@ -82,7 +82,7 @@ describe("buildSessionEnough", () => {
       for (const k of Object.keys(REF) as Array<keyof VarValues>) wk[k] = (REF[k] as number) * (dayShare(k, 22) + dayShare(k, 85)) * 0.5;
       return { ...p, weekActual: wk };
     });
-    const r = buildSessionEnough({ ...base, players, weekDayPcts: [22, 85] });
+    const r = buildSessionEnough({ ...base, players, weekDays: [{ matchPct: 22, dayType: null }, { matchPct: 85, dayType: null }] });
     expect(r.week?.sessions).toBe(2);
     expect(r.facts.some((f) => f.en.startsWith("Week so far"))).toBe(true);
     expect(r.week?.vars.every((v) => v.status === "well_under")).toBe(true);
@@ -96,7 +96,29 @@ describe("buildSessionEnough", () => {
   });
 });
 
-import { dayTypeFromText, TOPUP_MATCH_PCT } from "@/lib/micropulse/sessionEnough";
+import { dayTypeFromText, targetShare, TOPUP_MATCH_PCT } from "@/lib/micropulse/sessionEnough";
+import { CAL_SHARE_IMA } from "@/lib/micropulse/periodization/imaStandard";
+import { CAL_SHARE_IMA as CAL_FROM_ENGINE } from "@/lib/micropulse/periodization";
+
+/** A player at `fracOfMatch` of a match on Acc/Dec/CoD; running stays on the MD-day target. */
+const atMatchShare = (fracOfMatch: number): Partial<VarValues> => ({ imaAccel: REF.imaAccel! * fracOfMatch, imaDecel: REF.imaDecel! * fracOfMatch, imaCod: REF.imaCod! * fracOfMatch });
+
+describe("targetShare — one standard for plan and review", () => {
+  it("Acc/Dec/CoD with a day-type read the calendar's table, whatever the MD-day", () => {
+    expect(targetShare("imaAccel", 60, "mechanical")).toEqual({ share: 0.8, basis: "day_type" });
+    expect(targetShare("imaDecel", 85, "mixed")).toEqual({ share: 0.6, basis: "day_type" });
+    expect(targetShare("imaCod", 32, "activation")).toEqual({ share: CAL_SHARE_IMA.activation.cod, basis: "day_type" });
+  });
+  it("fast running and strides stay on the MD-day, as does everything with no day-type", () => {
+    expect(targetShare("frDistance", 60, "mechanical")).toEqual({ share: dayShare("frDistance", 60), basis: "md" });
+    expect(targetShare("strideHi", 85, "mixed")).toEqual({ share: dayShare("strideHi", 85), basis: "md" });
+    expect(targetShare("imaAccel", 60, null)).toEqual({ share: dayShare("imaAccel", 60), basis: "md" });
+  });
+  it("the calendar engine exposes the very same table", () => {
+    expect(CAL_FROM_ENGINE).toBe(CAL_SHARE_IMA);
+  });
+});
+
 describe("day-type aware judging", () => {
   it("maps Meso / Week-setup labels to day-types", () => {
     expect(dayTypeFromText("MD-5 Mechanical")).toBe("mechanical");
@@ -111,13 +133,44 @@ describe("day-type aware judging", () => {
   });
 
   it("Mechanical day: low running is NOT a fail — judged on accel/decel/CoD only", () => {
-    const low = { frDistance: REF.frDistance! * dayShare("frDistance", 68) * 0.3, strideHi: REF.strideHi! * dayShare("strideHi", 68) * 0.3 };
+    const low = { ...atMatchShare(0.8), frDistance: REF.frDistance! * dayShare("frDistance", 68) * 0.3, strideHi: REF.strideHi! * dayShare("strideHi", 68) * 0.3 };
     const r = buildSessionEnough({ ...base, mdLabel: "MD-4", matchPct: 68, dayType: "mechanical", dayTypeSource: "meso", players: ["1", "2", "3"].map((id) => player(id, 68, 1.0, low)) });
     expect(r.verdict).toBe("yes");
+    expect(r.team.find((t) => t.key === "imaAccel")?.targetPct).toBe(80);
+    expect(r.team.find((t) => t.key === "imaAccel")?.basis).toBe("day_type");
+    expect(r.team.find((t) => t.key === "frDistance")?.basis).toBe("md");
     expect(r.dayType).toBe("mechanical");
     expect(r.focusNote?.en).toMatch(/Mechanical day/);
     expect(r.team.find((t) => t.key === "frDistance")?.focus).toBe(false);
     expect(r.headline.en).toContain("MD-4 Mechanical");
+  });
+
+  it("Mechanical day at ~60% of a match reads short on all three, even on a light MD-day", () => {
+    const r = buildSessionEnough({ ...base, mdLabel: "MD-5", matchPct: 60, dayType: "mechanical", dayTypeSource: "meso", players: ["1", "2", "3"].map((id) => player(id, 60, 1.0, atMatchShare(0.6))) });
+    expect(r.verdict).toBe("no");
+    expect(r.team.filter((t) => t.focus).every((t) => t.pctOfTarget === 75)).toBe(true);
+    expect(r.facts[0].en).toContain("the day calls for ~80%");
+    expect(r.focusNote?.en).toContain("published range 70–90%");
+  });
+
+  it("Mixed day on MD-3 at 55% of a match reads on target (the calendar plans 60%, not the MD-day's 85%)", () => {
+    const r = buildSessionEnough({ ...base, dayType: "mixed", dayTypeSource: "meso", players: ["1", "2", "3"].map((id) => player(id, 85, 1.0, atMatchShare(0.55))) });
+    expect(r.verdict).toBe("yes");
+    expect(r.focusNote?.en).toMatch(/Mixed day/);
+  });
+
+  it("Locomotive day: Acc/Dec/CoD are context only, whatever they did", () => {
+    const r = buildSessionEnough({ ...base, dayType: "locomotive", dayTypeSource: "week_setup", players: ["1", "2", "3"].map((id) => player(id, 85, 1.0, atMatchShare(0.1))) });
+    expect(r.verdict).toBe("yes");
+    expect(r.team.find((t) => t.key === "imaDecel")?.focus).toBe(false);
+  });
+
+  it("week so far sums day-type shares, and a top-up day counts at its MD-day recovery level", () => {
+    const days = [{ matchPct: 22, dayType: "topup" as const }, { matchPct: 60, dayType: "mechanical" as const }, { matchPct: 85, dayType: "mixed" as const }];
+    const r = buildSessionEnough({ ...base, dayType: "mixed", dayTypeSource: "meso", weekDays: days, players: ["1", "2", "3"].map((id) => ({ ...player(id, 85, 1.0, atMatchShare(0.6)), weekActual: atMatchShare(1.5) as VarValues })) });
+    const accel = r.week?.vars.find((v) => v.key === "imaAccel");
+    expect(accel?.targetTimesMatch).toBe(Math.round((dayShare("imaAccel", 22) + 0.8 + 0.6) * 10) / 10);
+    expect(accel?.timesMatch).toBe(1.5);
   });
 
   it("Locomotive day: both running types well under → No", () => {
@@ -131,13 +184,17 @@ describe("day-type aware judging", () => {
     const players = [
       player("s1", 22, 1.0, {}, { lastMatchMinutes: 90 }),
       player("s2", 22, 1.0, {}, { lastMatchMinutes: 75 }),
-      player("b1", TOPUP_MATCH_PCT, 1.0, {}, { lastMatchMinutes: 15 }),
-      player("b2", TOPUP_MATCH_PCT, 1.0, {}, { lastMatchMinutes: 0 }),
+      player("b1", TOPUP_MATCH_PCT, 1.0, atMatchShare(0.55), { lastMatchMinutes: 15 }),
+      player("b2", TOPUP_MATCH_PCT, 1.0, atMatchShare(0.55), { lastMatchMinutes: 0 }),
     ];
     const r = buildSessionEnough({ ...base, mdLabel: "MD+1", matchPct: 22, dayType: "topup", dayTypeSource: "md", squadSize: 4, players });
     expect(r.players.filter((p) => p.verdict === "recovery").map((p) => p.playerId).sort()).toEqual(["s1", "s2"]);
     expect(r.confidence.judged).toBe(2);
     expect(r.verdict).toBe("yes");
     expect(r.focusNote?.en).toMatch(/2 starters/);
+    expect(r.focusNote?.en).toContain("~55% of a match");
+    // A recovering starter keeps the MD-day's recovery level, not the top-up target.
+    expect(r.players.find((p) => p.playerId === "s1")?.byVar.imaAccel.targetPct).toBe(Math.round(dayShare("imaAccel", 22) * 100));
+    expect(r.players.find((p) => p.playerId === "b1")?.byVar.imaAccel.targetPct).toBe(55);
   });
 });

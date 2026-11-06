@@ -2,23 +2,26 @@
  * "Did we do enough?" — the post-training answer for a Vector Pro (IMA) football team.
  *
  * Compares ONE training session's IMA movement against each player's real MATCH demand, scaled to
- * what this MD-day should deliver. The question is "enough", so the verdict is about falling short;
+ * what this day should deliver. The question is "enough", so the verdict is about falling short;
  * running hotter than the day calls for is surfaced as a separate note, not as "not enough".
  *
- *   day target = player's match median × share(matchPct of the MD-day, per-variable exponent)
+ *   day target = player's match median × share
+ *   share = Acc/Dec/CoD with a planned day-type: CAL_SHARE_IMA, the same standard the Meso calendar plans from
+ *           fast running / strides, or no day-type: (matchPct of the MD-day)^(per-variable exponent)
  *
  * Five variables (the coach's IMA set): accelerations, decelerations (braking), change of direction,
  * IMA Free Running fast distance (band 5–8) and IMA Stride fast strides (band 6–8).
  *
  * Pure, deterministic, IO-free. Rules decide; no AI. Descriptive — NEVER the readiness colour.
- * Day shares: Buchheit 2024 MD-day load model (via planSessionLoad's matchPct); within-week
- * concentration Martín-García 2018; braking/CoD tissue load Harper & McBurnie 2021; fast running /
+ * Day shares: Stevens 2017 + Martín-García 2018 (Acc/Dec/CoD standard); Buchheit 2024 MD-day load
+ * model (via planSessionLoad's matchPct); braking/CoD tissue load Harper & McBurnie 2021; fast running /
  * strides exposure Malone 2018; training:match ratios PMC6747517.
  */
 
 import { statusOf } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import type { PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import { KPI_TAPER_EXPONENT } from "@/lib/micropulse/periodization/plannedVolume";
+import { CAL_SHARE_IMA, CAL_SHARE_IMA_REF, type ImaVar } from "@/lib/micropulse/periodization/imaStandard";
 
 export type Bi = { en: string; is: string };
 
@@ -85,11 +88,10 @@ export function dayShare(key: EnoughVar, matchPct: number): number {
 
 /**
  * The planned day-type (from the coach's Week setup / Meso block). It decides WHICH movement types a
- * session is judged on; the MD-day decides HOW BIG the target is. Mechanical days are about braking /
+ * session is judged on, and HOW BIG the Acc/Dec/CoD target is (see targetShare). Mechanical days are about braking /
  * accelerations / changes of direction (running isn't the job); Locomotive days are about fast running /
  * strides; Mixed and Activation judge all five. Top-up (MD+1): starters recover, low-minute players are
- * judged against a top-up target. The size still comes from the MD-day, while the Meso calendar's IMA shares
- * (CAL_SHARE_IMA, the research standard) come from the day-type, so the two can differ on a given day.
+ * judged against a top-up target.
  */
 export type EnoughDayType = "mechanical" | "locomotive" | "mixed" | "activation" | "topup";
 export const DAY_TYPE_LABEL: Record<EnoughDayType, Bi> = {
@@ -116,7 +118,23 @@ export function dayTypeFromText(text: string | null | undefined): EnoughDayType 
   return null;
 }
 
-/** Top-up target for low-minute players on MD+1 (share of a match) — the calendar's top-up day. */
+/** The Acc/Dec/CoD variables, which share the Meso calendar's research standard. */
+const IMA_STANDARD_VAR: Partial<Record<EnoughVar, ImaVar>> = { imaAccel: "accel", imaDecel: "decel", imaCod: "cod" };
+export type TargetBasis = "day_type" | "md";
+
+/**
+ * The share of a match this session should deliver for one variable, and what set it. Acc/Dec/CoD with a
+ * planned day-type read the same CAL_SHARE_IMA the Meso calendar plans from, so plan and review agree. Fast
+ * running and strides stay on the MD-day taper (the calendar's running shares are not research-anchored yet),
+ * as does everything on a day with no planned day-type. Pure.
+ */
+export function targetShare(key: EnoughVar, matchPct: number, dayType: EnoughDayType | null): { share: number; basis: TargetBasis } {
+  const v = IMA_STANDARD_VAR[key];
+  if (v && dayType) return { share: CAL_SHARE_IMA[dayType][v], basis: "day_type" };
+  return { share: dayShare(key, matchPct), basis: "md" };
+}
+
+/** Fast running / strides target for low-minute players on MD+1 (share of a match). Acc/Dec/CoD use CAL_SHARE_IMA.topup. */
 export const TOPUP_MATCH_PCT = 40;
 /** Minutes in the last match at/above which a player is a starter recovering on a top-up day. */
 export const STARTER_MINUTES = 60;
@@ -146,8 +164,8 @@ export type EnoughInput = {
   isMatchDay: boolean;
   squadSize: number;
   players: EnoughPlayerInput[];
-  /** matchPct of each training day since the last match, incl. this session (for "week so far"). */
-  weekDayPcts?: number[] | null;
+  /** Each training day since the last match, incl. this session (for "week so far"). */
+  weekDays?: Array<{ matchPct: number; dayType: EnoughDayType | null }> | null;
   /** The planned day-type and where it came from (null = unknown: all five judged, MD-only). */
   dayType?: EnoughDayType | null;
   dayTypeSource?: "week_setup" | "meso" | "md" | null;
@@ -160,6 +178,9 @@ export type VarCompare = {
   dayTarget: number | null;
   pctOfMatch: number | null;
   pctOfTarget: number | null;
+  /** The day's target as a share of a match (0–100), and what set it. */
+  targetPct: number | null;
+  basis: TargetBasis;
   status: PvaStatus;
   /** Part of today's day-type focus (judged). False = shown for context, not judged. */
   focus: boolean;
@@ -227,11 +248,13 @@ function verdictOf(statuses: PvaStatus[]): "enough" | "partly" | "short" | null 
   return "partly";
 }
 
-function compareVar(key: EnoughVar, actual: number | null, matchRef: number | null, matchPct: number | null, focus = true): VarCompare {
+function compareVar(key: EnoughVar, actual: number | null, matchRef: number | null, matchPct: number | null, focus = true, dayType: EnoughDayType | null = null): VarCompare {
   const pctOfMatch = actual != null && matchRef != null && matchRef > 0 ? Math.round((actual / matchRef) * 100) : null;
-  const dayTarget = matchRef != null && matchRef > 0 && matchPct != null ? matchRef * dayShare(key, matchPct) : null;
+  // No MD context means no verdict at all (the no_md state), whatever the day-type.
+  const t = matchPct == null ? null : targetShare(key, matchPct, dayType);
+  const dayTarget = matchRef != null && matchRef > 0 && t ? matchRef * t.share : null;
   const { pct, status } = statusOf(dayTarget, actual);
-  return { key, actual: r0(actual), matchRef: r0(matchRef), dayTarget: r0(dayTarget), pctOfMatch, pctOfTarget: pct, status, focus };
+  return { key, actual: r0(actual), matchRef: r0(matchRef), dayTarget: r0(dayTarget), pctOfMatch, pctOfTarget: pct, targetPct: t ? Math.round(t.share * 100) : null, basis: t?.basis ?? "md", status, focus };
 }
 
 const EMPTY_CONF = (squad: number): SessionEnough["confidence"] => ({
@@ -261,7 +284,8 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   if (input.isMatchDay) return emptyEnough("match_day", { sessionDate, mdLabel: "MD", squad: input.squadSize });
   const dayType = input.dayType ?? null;
   const isTopup = dayType === "topup";
-  // Top-up: low-minute players are judged against the top-up target, not the MD+1 recovery level.
+  // Top-up: low-minute players are judged against the top-up target, not the MD+1 recovery level
+  // (Acc/Dec/CoD via CAL_SHARE_IMA.topup in targetShare; fast running / strides via TOPUP_MATCH_PCT).
   const matchPct = isTopup ? Math.max(input.matchPct ?? 0, TOPUP_MATCH_PCT) : input.matchPct;
   const focusSet = new Set<EnoughVar>(DAY_FOCUS[dayType ?? "mixed"]);
   const dtLabel = dayType ? DAY_TYPE_LABEL[dayType] : null;
@@ -273,7 +297,8 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
     const recovering = isTopup && (p.lastMatchMinutes ?? 0) >= STARTER_MINUTES;
     const pct = recovering ? (input.matchPct ?? matchPct) : matchPct;
     const byVar = {} as Record<EnoughVar, VarCompare>;
-    for (const k of ENOUGH_VARS) byVar[k] = compareVar(k, p.actual[k], p.matchRef[k], pct, focusSet.has(k));
+    // A recovering starter keeps the MD-day's recovery level for display: the top-up target isn't theirs.
+    for (const k of ENOUGH_VARS) byVar[k] = compareVar(k, p.actual[k], p.matchRef[k], pct, focusSet.has(k), recovering ? null : dayType);
     const statuses = ENOUGH_VARS.filter((k) => focusSet.has(k)).map((k) => byVar[k].status);
     const v = verdictOf(statuses);
     const shortOn = ENOUGH_VARS.filter((k) => focusSet.has(k) && isShort(byVar[k].status));
@@ -282,14 +307,19 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   });
   const judged = players.filter((p) => !p.partial && !p.recovering && p.verdict !== "no_data");
   const recoveringN = players.filter((p) => p.recovering).length;
+  const stdPct = (t: EnoughDayType) => Math.round(CAL_SHARE_IMA[t].accel * 100);
+  const stdRange = (t: EnoughDayType) => `${Math.round(CAL_SHARE_IMA_REF[t].range[0] * 100)}–${Math.round(CAL_SHARE_IMA_REF[t].range[1] * 100)}%`;
+  const topupTarget: Bi = { en: `~${stdPct("topup")}% of a match in accelerations, braking and changes of direction`, is: `~${stdPct("topup")}% af leik í hröðun, hemlun og stefnubreytingum` };
   const focusNote: Bi | null = dayType === "mechanical"
-    ? { en: "Mechanical day: judged on accelerations, braking and changes of direction. Running isn't the job today.", is: "Mechanical-dagur: metið á hröðun, hemlun og stefnubreytingum. Hlaup er ekki verkefni dagsins." }
+    ? { en: `Mechanical day: judged on accelerations, braking and changes of direction, against about ${stdPct("mechanical")}% of a match (published range ${stdRange("mechanical")}). Running isn't the job today.`, is: `Mechanical-dagur: metið á hröðun, hemlun og stefnubreytingum, á móti um ${stdPct("mechanical")}% af leik (birt bil ${stdRange("mechanical")}). Hlaup er ekki verkefni dagsins.` }
     : dayType === "locomotive"
       ? { en: "Locomotive day: judged on fast running and fast strides. Braking and cutting aren't the job today.", is: "Locomotive-dagur: metið á hraðhlaupi og hröðum skrefum. Hemlun og stefnubreytingar eru ekki verkefni dagsins." }
+      : dayType === "mixed" || dayType === "activation"
+        ? { en: `${DAY_TYPE_LABEL[dayType].en} day: accelerations, braking and changes of direction are judged against about ${stdPct(dayType)}% of a match (published range ${stdRange(dayType)}); fast running and strides against the MD-day.`, is: `${DAY_TYPE_LABEL[dayType].is}-dagur: hröðun, hemlun og stefnubreytingar eru metnar á móti um ${stdPct(dayType)}% af leik (birt bil ${stdRange(dayType)}); hraðhlaup og hröð skref á móti MD-deginum.` }
       : isTopup && recoveringN === 0
-        ? { en: `Top-up day: the players who trained are judged against a top-up target (~${TOPUP_MATCH_PCT}% of a match); starters (${STARTER_MINUTES}+ min last match) would be recovering.`, is: `Uppbótardagur: þeir sem æfðu eru metnir á móti uppbótarmarkmiði (~${TOPUP_MATCH_PCT}% af leik); byrjunarlið (${STARTER_MINUTES}+ mín í síðasta leik) væri í endurheimt.` }
+        ? { en: `Top-up day: the players who trained are judged against a top-up target (${topupTarget.en}); starters (${STARTER_MINUTES}+ min last match) would be recovering.`, is: `Uppbótardagur: þeir sem æfðu eru metnir á móti uppbótarmarkmiði (${topupTarget.is}); byrjunarlið (${STARTER_MINUTES}+ mín í síðasta leik) væri í endurheimt.` }
       : isTopup
-        ? { en: `Top-up day: ${recoveringN} starter${recoveringN === 1 ? "" : "s"} (${STARTER_MINUTES}+ min last match) recovering and not judged; the rest judged against a top-up target (~${TOPUP_MATCH_PCT}% of a match).`, is: `Uppbótardagur: ${recoveringN} byrjunarliðsmenn (${STARTER_MINUTES}+ mín í síðasta leik) í endurheimt og ekki metnir; hinir metnir á móti uppbótarmarkmiði (~${TOPUP_MATCH_PCT}% af leik).` }
+        ? { en: `Top-up day: ${recoveringN} starter${recoveringN === 1 ? "" : "s"} (${STARTER_MINUTES}+ min last match) recovering and not judged; the rest judged against a top-up target (${topupTarget.en}).`, is: `Uppbótardagur: ${recoveringN} byrjunarliðsmenn (${STARTER_MINUTES}+ mín í síðasta leik) í endurheimt og ekki metnir; hinir metnir á móti uppbótarmarkmiði (${topupTarget.is}).` }
         : null;
   const anyRef = input.players.some((p) => ENOUGH_VARS.some((k) => (p.matchRef[k] ?? 0) > 0));
   if (!anyRef) return emptyEnough("no_reference", { sessionDate, mdLabel, squad: input.squadSize });
@@ -300,7 +330,8 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
     const pick = (sel: (c: VarCompare) => number | null) => median(pool.map((p) => sel(p.byVar[k])).filter((x): x is number => x != null));
     const pctT = pick((c) => c.pctOfTarget);
     const status: PvaStatus = pctT == null ? "na" : statusOf(100, pctT).status;
-    return { key: k, actual: r0(pick((c) => c.actual)), matchRef: r0(pick((c) => c.matchRef)), dayTarget: r0(pick((c) => c.dayTarget)), pctOfMatch: r0(pick((c) => c.pctOfMatch)), pctOfTarget: r0(pctT), status, focus: focusSet.has(k) };
+    const t = matchPct == null ? null : targetShare(k, matchPct, dayType);
+    return { key: k, actual: r0(pick((c) => c.actual)), matchRef: r0(pick((c) => c.matchRef)), dayTarget: r0(pick((c) => c.dayTarget)), pctOfMatch: r0(pick((c) => c.pctOfMatch)), pctOfTarget: r0(pctT), targetPct: t ? Math.round(t.share * 100) : null, basis: t?.basis ?? "md", status, focus: focusSet.has(k) };
   });
 
   // ── Confidence ──────────────────────────────────────────────────────────────
@@ -362,7 +393,7 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
     const L = ENOUGH_LABEL[weakest.key];
     facts.push(verdict === "yes"
       ? { en: `Every judged movement type reached the day's target — lowest was ${L.en.toLowerCase()} at ${weakest.pctOfTarget}%.`, is: `Allir metnir hreyfiþættir náðu markmiði dagsins — lægst var ${L.is.toLowerCase()} í ${weakest.pctOfTarget}%.` }
-      : { en: `${L.en} reached ${weakest.pctOfTarget}% of what ${md} should give (${weakest.pctOfMatch}% of a match; the day calls for ~${Math.round(dayShare(weakest.key, matchPct) * 100)}%).`, is: `${L.is} náði ${weakest.pctOfTarget}% af því sem ${mdIs} á að gefa (${weakest.pctOfMatch}% af leik; dagurinn kallar á ~${Math.round(dayShare(weakest.key, matchPct) * 100)}%).` });
+      : { en: `${L.en} reached ${weakest.pctOfTarget}% of what ${md} should give (${weakest.pctOfMatch}% of a match; the day calls for ~${weakest.targetPct}%).`, is: `${L.is} náði ${weakest.pctOfTarget}% af því sem ${mdIs} á að gefa (${weakest.pctOfMatch}% af leik; dagurinn kallar á ~${weakest.targetPct}%).` });
   }
   const clearlyShort = judged.filter((p) => p.verdict === "short").sort((a, b) => b.shortOn.length - a.shortOn.length);
   const partly = judged.filter((p) => p.verdict === "partly");
@@ -387,10 +418,11 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
 
   // ── Week so far ──────────────────────────────────────────────────────────────
   let week: SessionEnough["week"] = null;
-  const dayPcts = (input.weekDayPcts ?? []).filter((x) => Number.isFinite(x) && x > 0);
-  if (dayPcts.length >= 2) {
+  const weekDays = (input.weekDays ?? []).filter((d) => Number.isFinite(d.matchPct) && d.matchPct > 0);
+  if (weekDays.length >= 2) {
     const vars: WeekVar[] = ENOUGH_VARS.map((k) => {
-      const targetTimes = dayPcts.reduce((s, p) => s + dayShare(k, p), 0);
+      // A top-up day counts at its MD-day recovery level: starters aren't expected to do the top-up.
+      const targetTimes = weekDays.reduce((s, d) => s + targetShare(k, d.matchPct, d.dayType === "topup" ? null : d.dayType).share, 0);
       const perPlayer = judged.map((p) => {
         const src = input.players.find((x) => x.playerId === p.playerId);
         const wa = src?.weekActual?.[k] ?? null, ref = src?.matchRef[k] ?? null;
@@ -400,13 +432,13 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
       const { pct, status } = statusOf(targetTimes, times);
       return { key: k, pctOfTarget: pct, status, timesMatch: times == null ? null : Math.round(times * 10) / 10, targetTimesMatch: Math.round(targetTimes * 10) / 10 };
     });
-    week = { sessions: dayPcts.length, vars };
+    week = { sessions: weekDays.length, vars };
     const wShort = vars.filter((v) => isShort(v.status));
     const wJudged = vars.filter((v) => v.status !== "na");
     if (wJudged.length) {
       facts.push(wShort.length === 0
-        ? { en: `Week so far (${dayPcts.length} sessions since the match): on track on all ${wJudged.length} movement types.`, is: `Vikan hingað til (${dayPcts.length} æfingar frá leik): á áætlun í öllum ${wJudged.length} hreyfiþáttum.` }
-        : { en: `Week so far (${dayPcts.length} sessions since the match): behind on ${listBi(wShort.map((v) => v.key), "en")}.`, is: `Vikan hingað til (${dayPcts.length} æfingar frá leik): á eftir í ${listBi(wShort.map((v) => v.key), "is")}.` });
+        ? { en: `Week so far (${weekDays.length} sessions since the match): on track on all ${wJudged.length} movement types.`, is: `Vikan hingað til (${weekDays.length} æfingar frá leik): á áætlun í öllum ${wJudged.length} hreyfiþáttum.` }
+        : { en: `Week so far (${weekDays.length} sessions since the match): behind on ${listBi(wShort.map((v) => v.key), "en")}.`, is: `Vikan hingað til (${weekDays.length} æfingar frá leik): á eftir í ${listBi(wShort.map((v) => v.key), "is")}.` });
     }
   }
 

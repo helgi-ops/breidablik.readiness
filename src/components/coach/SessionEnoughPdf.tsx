@@ -21,7 +21,11 @@ const fmt = (n: number | null) => (n == null ? "-" : Math.round(n).toLocaleStrin
 export function SessionEnoughPdfPage({ enough, teamName, sessionDate }: { enough: SessionEnough | null | undefined; teamName: string; sessionDate: string }) {
   if (!enough || (enough.state !== "ok" && enough.state !== "no_md")) return null;
   const v = enough.verdict;
-  const md = [enough.mdLabel ? `${enough.mdLabel}${enough.matchPct != null ? ` (~${enough.matchPct}% of a match)` : ""}` : "no MD-day", enough.dayType ? DAY_TYPE_LABEL[enough.dayType].en : ""].filter(Boolean).join(" · ");
+  const stdTarget = enough.team.find((t) => t.focus && t.basis === "day_type");
+  const md = [
+    enough.mdLabel ? `${enough.mdLabel}${!stdTarget && enough.matchPct != null ? ` (~${enough.matchPct}% of a match)` : ""}` : "no MD-day",
+    enough.dayType ? `${DAY_TYPE_LABEL[enough.dayType].en}${stdTarget?.targetPct != null ? ` (~${stdTarget.targetPct}% of a match)` : ""}` : "",
+  ].filter(Boolean).join(" · ");
   const c = enough.confidence;
   const rank: Record<PlayerVerdict, number> = { short: 0, partly: 1, enough: 2, recovery: 3, partial_session: 4, no_data: 5 };
   const players = [...enough.players].sort((a, b) => rank[a.verdict] - rank[b.verdict] || a.name.localeCompare(b.name));
@@ -52,7 +56,7 @@ export function SessionEnoughPdfPage({ enough, teamName, sessionDate }: { enough
       doc="Post-training report"
       context={`${teamName} · ${sessionDate}`}
       orientation="landscape"
-      note="Rule-computed from IMA data - no AI. Session vs each player's own near-full match median, scaled to the MD-day. Never the readiness colour."
+      note="Rule-computed from IMA data - no AI. Session vs each player's own near-full match median, scaled to the day. Never the readiness colour."
     >
       <Section title="Did we do enough?" hint={`This session's movement vs what a match demands · ${md}`} mt={0}>
         <Verdict
@@ -102,7 +106,7 @@ export function SessionEnoughPdfPage({ enough, teamName, sessionDate }: { enough
       ) : null}
 
       <Provenance>
-        {`How it's calculated: each player's match reference = median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when fewer than 3). Day target = match value × the share of a match this MD-day should deliver, tapered per movement type. The planned day-type decides what is judged: Mechanical = accelerations, braking, CoD; Locomotive = fast running, strides; Mixed/Activation = all five; Top-up = starters (60+ min) recover, the rest vs ~40% of a match. Enough = ≥85% of target. Movement = IMA accelerations, decelerations, change of direction, Free Running bands 5-8 (m), Stride bands 6-8. Sources: ${enough.citations.join("; ")}.`}
+        {`How it's calculated: each player's match reference = median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when fewer than 3). The planned day-type decides what is judged: Mechanical = accelerations, braking, CoD; Locomotive = fast running, strides; Mixed/Activation = all five; Top-up = starters (60+ min) recover, the rest are judged. It also sets the target for accelerations, braking and CoD, the same standard the Meso calendar plans from: Mechanical 80% of a match, Mixed 60%, Top-up 55%, Locomotive 50%, Activation 38% (studies of elite teams describe this, they don't prove it best; CoD follows the same share). Fast running and strides are sized by the MD-day, as is everything with no planned day-type. Enough = ≥85% of target. Movement = IMA accelerations, decelerations, change of direction, Free Running bands 5-8 (m), Stride bands 6-8. Sources: ${enough.citations.join("; ")}.`}
       </Provenance>
     </BrandPage>
   );
