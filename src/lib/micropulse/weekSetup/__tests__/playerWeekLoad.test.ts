@@ -20,11 +20,16 @@ describe("training days", () => {
     expect(d.fr).toBe(Math.round(1300 * dayShare("frDistance", 60)));
     expect(d.stride).toBe(Math.round(390 * dayShare("strideHi", 60)));
   });
-  it("Player Load, distance and HSR stay baseline × the day's planned ratio", () => {
+  it("Player Load and distance stay baseline × the day's planned ratio", () => {
     const d = one(player()).perDay[0];
     expect(d.pl).toBe(480);
     expect(d.distance).toBe(6000);
-    expect(d.hsr).toBe(360);
+  });
+  it("HSR = own match × the day-type standard, not the player's recent training", () => {
+    expect(one(player()).perDay[0].hsr).toBe(200);
+    expect(one(player({ baseline: { ...BASE, hsr: 0 } })).perDay[0].hsr).toBe(200);
+    expect(one(player(), [{ ratio: 1, matchPct: 60, dayType: "locomotive" }]).perDay[0].hsr).toBe(360);
+    expect(one(player(), [{ ratio: 1, matchPct: 60, dayType: null }]).perDay[0].hsr).toBe(300);
   });
   it("sprint and Acc/Dec B2-3 = own match × the day-type standard", () => {
     const d = one(player()).perDay[0];
@@ -167,6 +172,7 @@ describe("the table", () => {
     expect(dayTargetNote(mech).en).toContain("about 80%");
     expect(dayTargetNote({ ratio: 1, matchPct: 50, dayType: null }).en).toContain("MD-day");
     expect(dayTargetNote(mech).en).toContain("sprint about 10%");
+    expect(dayTargetNote(mech).en).toContain("high-speed running about 25%");
     expect(dayTargetNote(mech, false).en).not.toContain("changes of direction");
     expect(dayTargetNote(mech, false).en).toContain("Hard accelerations about 90%");
     expect(dayTargetNote({ ratio: 1, matchPct: 50, dayType: null }, false).en).toContain("recent training load");

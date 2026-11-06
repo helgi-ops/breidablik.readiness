@@ -561,7 +561,7 @@ test("buildCalendarBlock: honours the coach's skeleton — explicit match days +
   const ov = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 2, scopeName: "__team__", typeOverrides: { "2026-01-08": "locomotive" } });
   const thu = ov.weeks[0].days[3]; // Thu of week 1
   assert.equal(thu.type, "locomotive");
-  assert.equal(thu.hsr, Math.round(988 * 0.70 / 5) * 5); // locomotive HSR share 0.70 at ×1.00
+  assert.equal(thu.hsr, Math.round(988 * 0.45 / 5) * 5); // locomotive HSR share 0.45 at ×1.00
   // Per-player knobs: VALD cap limits the peak multiplier, loadScale trims, emphasis tilts HSR/mech.
   const full = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 5, scopeName: "__team__", baseOverloadPct: 100, stepPct: 10 });
   const capped = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 5, scopeName: "P", maxMult: 1.15, baseOverloadPct: 100, stepPct: 10 });
@@ -872,7 +872,7 @@ import { CAL_SHARE, CAL_SHARE_HI, CAL_SHARE_HI_REF } from "../index";
 describeIma("Meso calendar — Acc/Dec B2-3 and sprint follow the research standard", () => {
   const TYPES = ["mechanical", "mixed", "locomotive", "activation", "topup"] as const;
   itIma("every value lies inside its published range, and every sprint value says what backs it", () => {
-    for (const t of TYPES) for (const k of ["accHi", "decHi", "sprint"] as const) {
+    for (const t of TYPES) for (const k of ["accHi", "decHi", "hsr", "sprint"] as const) {
       const [lo, hi] = CAL_SHARE_HI_REF[t][k].range;
       expectIma(CAL_SHARE_HI[t][k]).toBeGreaterThanOrEqual(lo);
       expectIma(CAL_SHARE_HI[t][k]).toBeLessThanOrEqual(hi);
@@ -885,8 +885,27 @@ describeIma("Meso calendar — Acc/Dec B2-3 and sprint follow the research stand
     expectIma(week).toBeGreaterThanOrEqual(0.03);
     expectIma(week).toBeLessThanOrEqual(1.3);
   });
-  itIma("the legacy accdec weights stay equal to the standard, so there is one source", () => {
-    for (const t of TYPES) expectIma(CAL_SHARE[t].accdec).toBe(CAL_SHARE_HI[t].accHi);
+  itIma("a week of HSR shares sits inside the published weekly range, and the day-types keep their order", () => {
+    const week = TYPES.reduce((a, t) => a + CAL_SHARE_HI[t].hsr, 0);
+    expectIma(week).toBeGreaterThanOrEqual(0.2);
+    expectIma(week).toBeLessThanOrEqual(2.3);
+    expectIma(CAL_SHARE_HI.locomotive.hsr).toBeGreaterThan(CAL_SHARE_HI.mixed.hsr);
+    expectIma(CAL_SHARE_HI.mixed.hsr).toBeGreaterThan(CAL_SHARE_HI.mechanical.hsr);
+    expectIma(CAL_SHARE_HI.mechanical.hsr).toBeGreaterThan(CAL_SHARE_HI.activation.hsr);
+  });
+  itIma("the calendar's weights stay equal to the standard, so there is one source", () => {
+    for (const t of TYPES) {
+      expectIma(CAL_SHARE[t].accdec).toBe(CAL_SHARE_HI[t].accHi);
+      expectIma(CAL_SHARE[t].hsr).toBe(CAL_SHARE_HI[t].hsr);
+      expectIma(CAL_SHARE[t].sprint).toBe(CAL_SHARE_HI[t].sprint);
+    }
+  });
+  itIma("Free Running keeps its own weights in the calendar and doesn't follow the HSR standard", () => {
+    const unit = { dist: 10000, hsr: 800, fr: 1000, load: 1000, accdec: 200, accHiEff: 100, decHiEff: 100, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
+    const w1 = buildCalendarBlock({ unit, startDate: "2026-09-07", numWeeks: 4, scopeName: "Team", scopePos: null, baseOverloadPct: 100 }).weeks[0].days;
+    const loco = w1.find((d) => d.type === "locomotive");
+    expectIma(loco?.hsr).toBe(360);
+    expectIma(loco?.fr).toBe(700);
   });
   itIma("the calendar plans Acc/Dec B2-3 from it", () => {
     const unit = { dist: 10000, hsr: 800, load: 1000, accdec: 200, accHiEff: 100, decHiEff: 100, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };

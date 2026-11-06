@@ -544,17 +544,19 @@ const DOW: Bi[] = [
   { en: "Mon", is: "Mán" }, { en: "Tue", is: "Þri" }, { en: "Wed", is: "Mið" }, { en: "Thu", is: "Fim" }, { en: "Fri", is: "Fös" }, { en: "Sat", is: "Lau" }, { en: "Sun", is: "Sun" },
 ];
 // Each day-type's SHARE of the match, per axis (Figueiredo dimension-specific). `accdec` = the Acc/Dec
-// Band 2–3 high-intensity subset, kept equal to CAL_SHARE_HI.accHi (the research standard, ./imaStandard);
+// Band 2–3 high-intensity subset; `accdec`, `hsr` and `sprint` are kept equal to CAL_SHARE_HI (the research
+// standard, ./imaStandard). `fr` = IMA Free Running b5-8, a wider band than HSR that training carries far more of, so it
+// doesn't follow the HSR standard: these are its own weights, not yet on a standard;
 // `stride` = the top-band free-running quality (highest on the Locomotive/running day). Keeping HSR and
 // mechanical on separate days protects the posterior chain (Buchheit).
-export const CAL_SHARE: Record<CalType, { dist: number; hsr: number; load: number; accdec: number; stride: number }> = {
-  mechanical: { dist: 0.45, hsr: 0.30, load: 1.10, accdec: 0.90, stride: 0.50 },
-  locomotive: { dist: 0.55, hsr: 0.70, load: 0.55, accdec: 0.45, stride: 0.90 },
-  mixed: { dist: 0.70, hsr: 0.55, load: 0.85, accdec: 0.65, stride: 0.75 },
-  activation: { dist: 0.30, hsr: 0.22, load: 0.40, accdec: 0.43, stride: 0.30 },
-  topup: { dist: 0.40, hsr: 0.35, load: 0.40, accdec: 0.70, stride: 0.35 },
-  match: { dist: 1, hsr: 1, load: 1, accdec: 1, stride: 1 },
-  rest: { dist: 0, hsr: 0, load: 0, accdec: 0, stride: 0 },
+export const CAL_SHARE: Record<CalType, { dist: number; hsr: number; sprint: number; fr: number; load: number; accdec: number; stride: number }> = {
+  mechanical: { dist: 0.45, hsr: 0.25, sprint: 0.10, fr: 0.30, load: 1.10, accdec: 0.90, stride: 0.50 },
+  locomotive: { dist: 0.55, hsr: 0.45, sprint: 0.45, fr: 0.70, load: 0.55, accdec: 0.45, stride: 0.90 },
+  mixed: { dist: 0.70, hsr: 0.30, sprint: 0.30, fr: 0.55, load: 0.85, accdec: 0.65, stride: 0.75 },
+  activation: { dist: 0.30, hsr: 0.15, sprint: 0.15, fr: 0.22, load: 0.40, accdec: 0.43, stride: 0.30 },
+  topup: { dist: 0.40, hsr: 0.25, sprint: 0.25, fr: 0.35, load: 0.40, accdec: 0.70, stride: 0.35 },
+  match: { dist: 1, hsr: 1, sprint: 1, fr: 1, load: 1, accdec: 1, stride: 1 },
+  rest: { dist: 0, hsr: 0, sprint: 0, fr: 0, load: 0, accdec: 0, stride: 0 },
 };
 // The IMA Acc/Dec/CoD research standard lives in ./imaStandard (shared with "Did we do enough?").
 export { CAL_SHARE_HI, CAL_SHARE_HI_REF, CAL_SHARE_IMA, CAL_SHARE_IMA_REF };
@@ -922,7 +924,7 @@ export function buildCalendarBlock(opts: {
       const decHiEff = type === "rest" || opts.unit.decHiEff == null ? null : isM ? Math.round(opts.unit.decHiEff * mExp) : Math.round(opts.unit.decHiEff * CAL_SHARE_HI[type].decHi * mechEmph * fA("accdec") * cm);
       const stride = type === "rest" || opts.unit.stride == null ? null : isM ? Math.round(opts.unit.stride * mExp) : Math.round(capRun(opts.unit.stride * sh.stride * hsrEmph * fA("stride"), opts.unit.stride) * cm);
       // IMA Free Running (bands 5–8 distance) is fast running → same share/ramp/emphasis/match-cap as HSR.
-      const fr = type === "rest" || opts.unit.fr == null ? null : isM ? Math.round(opts.unit.fr * mExp) : rnd(capRun(opts.unit.fr * sh.hsr * hsrEmph * fA("hsr"), opts.unit.fr) * cm, 10);
+      const fr = type === "rest" || opts.unit.fr == null ? null : isM ? Math.round(opts.unit.fr * mExp) : rnd(capRun(opts.unit.fr * sh.fr * hsrEmph * fA("hsr"), opts.unit.fr) * cm, 10);
       // IMA totals (CoD, accelerations, decelerations) — the mechanical axis's ramp + emphasis, but their own
       // research-standard day-type share (CAL_SHARE_IMA), not the B2–3 `accdec` share. No running cap.
       const shI = CAL_SHARE_IMA[type];

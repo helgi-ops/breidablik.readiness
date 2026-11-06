@@ -3,13 +3,13 @@
  * the week's matches counted. Pure, deterministic, IO-free. Descriptive planning, never the readiness colour.
  *
  * Training day:
- *   - Player Load, distance, HSR: the player's recent training baseline × the day's planned-load ratio (the
+ *   - Player Load, distance: the player's recent training baseline × the day's planned-load ratio (the
  *     week's MD-day taper). With no recent training, the player's match value × the
  *     day's share of a match, never a full match on every training day.
  *   - IMA accelerations, decelerations, CoD, Free Running, Stride: the player's own match value × targetShare,
  *     the exact target "Did we do enough?" judges afterwards, so plan and review print the same number.
  *     Without a match value, an MD context or an IMA feed these fall back to baseline × ratio.
- *   - Sprint, Acc/Dec B2-3: the player's own match value × the day-type's research standard (CAL_SHARE_HI), the
+ *   - HSR, sprint, Acc/Dec B2-3: the player's own match value × the day-type's research standard (CAL_SHARE_HI), the
  *     same table the Meso calendar plans its B2-3 efforts from. With no planned day-type: baseline × ratio.
  * Match: own match value × how much of it the player usually plays × the week's match count.
  * Week: training + matches.
@@ -39,7 +39,7 @@ export const PLAYER_WEEK_VAR_LABEL: Record<PlayerWeekVar, { short: { en: string;
 };
 
 /** The GPS-derived variables on the day-type research standard. Available to every tier, so no IMA gate. */
-const HI_VAR: Partial<Record<PlayerWeekVar, HiVar>> = { sprint: "sprint", accHi: "accHi", decHi: "decHi" };
+const HI_VAR: Partial<Record<PlayerWeekVar, HiVar>> = { hsr: "hsr", sprint: "sprint", accHi: "accHi", decHi: "decHi" };
 
 /** The IMA variables that share a target with the post-training card. */
 const CARD_VAR: Partial<Record<PlayerWeekVar, EnoughVar>> = { accel: "imaAccel", decel: "imaDecel", cod: "imaCod", fr: "frDistance", stride: "strideHi" };
@@ -125,7 +125,7 @@ const present = (k: PlayerWeekVar, v: number | null | undefined): number | null 
 const cleaned = (vals: Partial<PlayerWeekValues> | null): Partial<PlayerWeekValues> | null =>
   vals && (Object.fromEntries(PLAYER_WEEK_VARS.map((k) => [k, present(k, vals[k])])) as PlayerWeekValues);
 
-/** The day-type's share for sprint / Acc-Dec B2-3, or null when it doesn't apply (no day-type; a recovering starter). */
+/** The day-type's share for HSR / sprint / Acc-Dec B2-3, or null when it doesn't apply (no day-type; a recovering starter). */
 function hiShare(k: PlayerWeekVar, day: PlayerWeekDay, usualMinutes: number | null): number | null {
   const v = HI_VAR[k];
   if (!v || !day.dayType) return null;
@@ -190,8 +190,8 @@ export function dayTargetNote(day: PlayerWeekDay, hasIma = true): { en: string; 
   const hi = day.dayType ? CAL_SHARE_HI[day.dayType] : null;
   const pctOf = (x: number) => Math.round(x * 100);
   const hiNote = hi ? {
-    en: `Hard accelerations about ${pctOf(hi.accHi)}%, hard braking about ${pctOf(hi.decHi)}%, sprint about ${pctOf(hi.sprint)}% of a match.`,
-    is: `Kröftugar hraðaaukningar um ${pctOf(hi.accHi)}%, kröftugar hemlanir um ${pctOf(hi.decHi)}%, sprettur um ${pctOf(hi.sprint)}% af leik.`,
+    en: `Hard accelerations about ${pctOf(hi.accHi)}%, hard braking about ${pctOf(hi.decHi)}%, high-speed running about ${pctOf(hi.hsr)}%, sprint about ${pctOf(hi.sprint)}% of a match.`,
+    is: `Kröftugar hraðaaukningar um ${pctOf(hi.accHi)}%, kröftugar hemlanir um ${pctOf(hi.decHi)}%, háhraðahlaup um ${pctOf(hi.hsr)}%, sprettur um ${pctOf(hi.sprint)}% af leik.`,
   } : null;
   if (!hasIma) {
     const rest = { en: "The rest is recent training load, scaled by the day's planned load.", is: "Hitt er nýlegt æfingaálag, kvarðað með áætluðu álagi dagsins." };

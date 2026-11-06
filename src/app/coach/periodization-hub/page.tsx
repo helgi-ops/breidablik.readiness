@@ -2913,6 +2913,9 @@ export default function PeriodizationHubPage() {
                 <p className="mt-1.5 text-[12px] text-slate-500">{is
                   ? "Acc/Dec/CoD-viðmiðin: rannsóknirnar lýsa því hvað úrvalslið gera, þær sanna ekki hvað er best. Þess vegna eru markmiðin miðgildi innan bils, hlutfall af leik liðsins sjálfs, því tölur milli mælitækja eru ekki sambærilegar. Hlaupadagurinn byggir á ráðleggingum sérfræðings, ekki mælingum, og engin rannsókn mælir IMA CoD beint, svo það fylgir sama hlutfalli. Stevens 2017 · Martín-García 2018 · Clemente 2019 · Silva 2022 · Buchheit 2019."
                   : "The Acc/Dec/CoD reference: these studies describe what elite teams do, they do not prove what is best. So each target is a midpoint inside a range, as a share of your own match, because counts from different devices are not comparable. The running day rests on expert guidance rather than measurement, and no study measures IMA CoD directly, so it follows the same share. Stevens 2017 · Martín-García 2018 · Clemente 2019 · Silva 2022 · Buchheit 2019."}</p>
+                <p className="mt-1.5 text-[12px] text-slate-500">{is
+                  ? "Háhraðahlaup og kröftugar hraðaaukningar og hemlanir byggja á sömu hugsun. Hlaupadagurinn er settur á stærsta dag sem hefur verið mældur, um 45% af leik í háhraða, en engin rannsókn einangrar hreinan hlaupadag, svo lið sem vill meira getur farið hærra. Sprettmarkmiðin eru óvissust, aðeins stærsti dagurinn er mældur. Stevens 2017 · Martín-García 2018 · Dalen 2019 · Gualtieri 2023."
+                  : "High-speed running and the hard accelerations and braking follow the same idea. The running day sits on the biggest day measured, about 45% of a match at high speed, but no study isolates a pure running day, so a team that wants more can go higher. Sprint targets are the least certain, only the biggest day is measured. Stevens 2017 · Martín-García 2018 · Dalen 2019 · Gualtieri 2023."}</p>
                 <p className="mt-1.5 text-[12px] text-slate-500">Issurin 2010 (block periodisation) · Owen 2017 (positional mesocycle, MD taper) · Oliveira 2019 (congested-week variants) · Oliveira 2021 (ACWR/monotony on sRPE+HSR) · Teixeira 2021 (monitoring) · Martín-García 2018 (%-of-match-demand). {is ? "Lýsandi — aldrei readiness-liturinn." : "Descriptive — never the readiness colour."}</p>
               </details>
               {mesoCalBlock && (mesoCalBlock.unit.accHiEff != null || mesoCalBlock.unit.stride != null || mesoCalBlock.unit.fr != null || mesoCalBlock.unit.cod != null || mesoCalBlock.unit.accel != null) && (
@@ -3857,7 +3860,7 @@ export default function PeriodizationHubPage() {
               { en: "Player Load", is: "Player Load", v: mu.load.typical, u: "", ax: "load" },
               { en: "Total distance", is: "Heildar-vegalengd", v: mu.distance.typical, u: "m", ax: "dist" },
               { en: "High-speed running", is: "Háhraðahlaup", v: mu.hsr.typical, u: "m", ax: "hsr" },
-              { en: "Sprint distance", is: "Sprett-vegalengd", v: mu.sprint.typical, u: "m", ax: "hsr" },
+              { en: "Sprint distance", is: "Sprett-vegalengd", v: mu.sprint.typical, u: "m", ax: "sprint" },
               { en: "Accelerations (B2–3)", is: "Hröðun (B2–3)", v: mu.accel.typical, u: "#", ax: "accdec" },
               { en: "Decelerations (B2–3)", is: "Hemlun (B2–3)", v: mu.decel.typical, u: "#", ax: "accdec" },
             ] as const).filter((r) => r.v != null);
