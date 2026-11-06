@@ -1,6 +1,7 @@
 import "server-only";
 
 import crypto from "node:crypto";
+import { CMJ_BASELINE_RULE, VALD_ASYMMETRY_WATCH_PCT, VALD_FLAG_WINDOW_DAYS } from "@/lib/micropulse/vald/flagFreshness";
 import type { ValdAuthMode, ValdConnectionConfig, ValdRegion } from "./types";
 
 // ── VALD token endpoint ───────────────────────────────────────────────────────
@@ -64,10 +65,10 @@ export const VALD_THRESHOLDS = {
   cmjModerateDropPct: 5,
   cmjSevereDropPct: 10,
   nordbordHighAsymmetryPct: 15,
-  nordbordModerateAsymmetryPct: 10,
+  nordbordModerateAsymmetryPct: VALD_ASYMMETRY_WATCH_PCT,
   forceframeHighAsymmetryPct: 15,
-  baselineWindowDays: 42,
-  baselineMinTests: 3,
+  baselineWindowDays: CMJ_BASELINE_RULE.windowDays,
+  baselineMinTests: CMJ_BASELINE_RULE.minTests,
 };
 
 export const VALD_RUNTIME = {
@@ -80,9 +81,9 @@ export const VALD_RUNTIME = {
   // (VALD_FETCH_DEVICE_METRICS=true) once those metrics are populated.
   fetchDeviceMetrics: parseBool(optionalEnv("VALD_FETCH_DEVICE_METRICS"), false),
   freshness: {
-    cmjDays: parseIntEnv("VALD_FRESHNESS_DAYS_CMJ", 7),
-    nordbordDays: parseIntEnv("VALD_FRESHNESS_DAYS_NORDBORD", 14),
-    forceframeDays: parseIntEnv("VALD_FRESHNESS_DAYS_FORCEFRAME", 21),
+    cmjDays: parseIntEnv("VALD_FRESHNESS_DAYS_CMJ", VALD_FLAG_WINDOW_DAYS.cmjDays),
+    nordbordDays: parseIntEnv("VALD_FRESHNESS_DAYS_NORDBORD", VALD_FLAG_WINDOW_DAYS.nordbordDays),
+    forceframeDays: parseIntEnv("VALD_FRESHNESS_DAYS_FORCEFRAME", VALD_FLAG_WINDOW_DAYS.forceframeDays),
   },
 };
 

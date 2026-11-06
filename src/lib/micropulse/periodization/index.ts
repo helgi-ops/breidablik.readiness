@@ -1573,7 +1573,7 @@ export function dataReadiness(input: {
     key: "vbt", severity: "stale", message: { en: `VBT profile is ${input.vbtAgeDays} days old — refresh for accurate strength loads.`, is: `VBT prófíll er ${input.vbtAgeDays} daga gamall — endurnýja fyrir nákvæmt styrktarálag.` },
   });
   if (!input.hasValdThisBlock) gaps.push({
-    key: "vald", severity: "missing", message: { en: "No VALD (force) data this block — volume caps use the squad default.", is: "Engin VALD (kraft) gögn þessa lotu — magn-þök nota sjálfgefið liðsgildi." },
+    key: "vald", severity: "missing", message: { en: "No jump test in the last 21 days, so VALD can't trim this block's volume.", is: "Ekkert hoppróf síðustu 21 dag, svo VALD getur ekki lækkað magn þessarar lotu." },
   });
   return gaps;
 }

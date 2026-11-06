@@ -7541,7 +7541,7 @@ export default function PlayerClient() {
 
             <PlayerRobustnessCard lang={lang === "IS" ? "IS" : "EN"} />
 
-            {profile?.player_id ? <ValdStatusCard playerId={profile.player_id} date={today} /> : null}
+            {profile?.player_id ? <ValdStatusCard playerId={profile.player_id} date={today} lang={lang === "IS" ? "IS" : "EN"} /> : null}
 
             <CardShell data-player-card="risk">
               <details className="group">

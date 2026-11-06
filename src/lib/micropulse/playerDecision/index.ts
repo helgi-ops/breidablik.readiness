@@ -825,7 +825,7 @@ export async function buildPlayerSource(args: {
     const hpm = hoursPostMatch(args.matchRecovery?.matchDate ?? null, args.date);
     if (args.matchRecovery?.hsr != null && hpm != null && hpm <= 96) {
       const cmjExpl = (valdDailySnapshot?.explanation?.cmj ?? null) as { delta_percent?: unknown } | null;
-      const deltaPct = typeof cmjExpl?.delta_percent === "number" ? cmjExpl.delta_percent : null;
+      const deltaPct = valdDailySnapshot?.cmjFreshnessStatus === "fresh" && typeof cmjExpl?.delta_percent === "number" ? cmjExpl.delta_percent : null;
       recovery = {
         matchHsr: args.matchRecovery.hsr,
         hoursPostMatch: hpm,

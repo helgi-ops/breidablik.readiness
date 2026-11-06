@@ -4,6 +4,8 @@ import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { aggregateTrialsByTest, metricSeries, type TrialMetricRow } from "@/lib/micropulse/vald/trialAggregate";
+import { CMJ_BASELINE_RULE, selectCmjBaseline, strengthRetestList, VALD_FLAG_WINDOW_DAYS } from "@/lib/micropulse/vald/flagFreshness";
+import { useLang } from "@/lib/lang";
 
 type Props = {
   teamId: string | null;
@@ -19,7 +21,8 @@ type ValdSnapshotRow = {
   cmjFreshnessStatus: string | null;
   latestCmjAt: string | null;
   cmjScore: number | null;
-  cmjBaseline: number | null;  // 42-day median jump height
+  cmjBaseline: number | null;  // median jump height of the recent tests it may flag against
+  returnMessage: { en: string; is: string } | null; // first test after a gap: plain comparison, no flag
   phase: PhaseSummary | null;  // CV-gated force-time phase read
 };
 
@@ -57,8 +60,8 @@ type CmjResult = {
 };
 
 /**
- * Per-player CMJ force-time baseline (median of best daily trials over the
- * 42 days before the selected date). Force-time metrics (RSI-mod, contraction
+ * Per-player CMJ force-time baseline (median of the tests selectCmjBaseline
+ * allows, before the selected date). Force-time metrics (RSI-mod, contraction
  * time, peak force) are 2-4x more sensitive to residual neuromuscular fatigue
  * than jump height — Marques et al. / Buchheit 2026, "Jump Height Lies".
  */
@@ -232,6 +235,7 @@ const REASON_META: Record<
 const PRIORITY_GROUPS: CmjRequiredEntry["reason"][] = ["neuromuscular", "protocol", "stale"];
 
 export default function ValdAlertsPanel({ teamId, date }: Props) {
+  const [lang] = useLang();
   const [snapshots, setSnapshots]       = useState<ValdSnapshotRow[]>([]);
   const [cmjResults, setCmjResults]     = useState<CmjResult[]>([]);
   const [cmjBaselines, setCmjBaselines] = useState<Map<string, CmjBaseline>>(new Map());
@@ -252,10 +256,10 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
     if (!teamId) { setLoading(false); return; }
     const supabase = getSupabaseClient();
     setLoading(true);
-    // Start of the 42-day baseline window (the 42 days BEFORE the selected date).
+    // Start of the baseline window, running back from the selected date.
     const baselineWindowStart = (() => {
       const d = new Date(`${date}T00:00:00Z`);
-      d.setUTCDate(d.getUTCDate() - 42);
+      d.setUTCDate(d.getUTCDate() - CMJ_BASELINE_RULE.windowDays);
       return d.toISOString().slice(0, 10);
     })();
     // Recent CMJ personal bests (last 21 days) — badge the player's row when
@@ -290,7 +294,8 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         .lte("test_timestamp", `${date}T23:59:59`)
         .not("microplayer_id", "is", null)
         .order("test_timestamp", { ascending: false }),
-      // 42-day baseline window — all CMJ trials before the selected date.
+      // Baseline window — CMJ trials before the selected date, newest first so a
+      // row cap can only cut tests too old to be used.
       supabase
         .from("vald_forcedecks_results")
         .select("microplayer_id, raw_test_id, jump_height_cm, rsi_mod, time_to_takeoff_ms, peak_force_n, test_timestamp")
@@ -299,7 +304,8 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         .gte("test_timestamp", `${baselineWindowStart}T00:00:00`)
         .lt("test_timestamp", `${date}T00:00:00`)
         .not("microplayer_id", "is", null)
-        .not("jump_height_cm", "is", null),
+        .not("jump_height_cm", "is", null)
+        .order("test_timestamp", { ascending: false }),
       // NordBord (hamstring) — most recent tests per player, team-wide.
       supabase
         .from("vald_nordbord_results")
@@ -346,6 +352,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
       const cmjExpl = (expl?.cmj as Record<string, unknown> | null) ?? null;
       const baselineRaw = cmjExpl?.baseline;
       const cmjBaseline = typeof baselineRaw === "number" && Number.isFinite(baselineRaw) ? baselineRaw : null;
+      const returnRead = (cmjExpl?.return_read as { message?: { en?: string; is?: string } } | null) ?? null;
       return {
         playerId: String(row.microplayer_id ?? ""),
         playerName: String(player?.full_name ?? "Player"),
@@ -356,6 +363,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         latestCmjAt: row.latest_cmj_at ? String(row.latest_cmj_at) : null,
         cmjScore: row.cmj_score != null ? Number(row.cmj_score) : null,
         cmjBaseline,
+        returnMessage: returnRead?.message?.en && returnRead.message.is ? { en: returnRead.message.en, is: returnRead.message.is } : null,
         phase: parsePhaseSummary(cmjExpl),
       };
     });
@@ -414,9 +422,10 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
     }
     setCmjResults(todayResults.sort((a, b) => b.jumpHeightCm - a.jumpHeightCm));
 
-    // ── 42-day force-time baselines ──────────────────────────────────────
+    // ── Force-time baselines ─────────────────────────────────────────────
     // Per player: the MEAN of each test's valid trials (Claudino 2017), then the
-    // median of that per-test value across tests. `days` now counts TESTS.
+    // median across the tests selectCmjBaseline allows, the same ones the flag
+    // uses. No baseline after a gap. `days` now counts TESTS.
     const baselineRowsByPlayer = new Map<string, TrialMetricRow[]>();
     for (const row of ((baselineRes.data ?? []) as Array<Record<string, unknown>>)) {
       const pid = String(row.microplayer_id ?? "");
@@ -432,7 +441,9 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
     }
     const baselines = new Map<string, CmjBaseline>();
     for (const [pid, rows] of baselineRowsByPlayer) {
-      const aggs = aggregateTrialsByTest(rows, ["jh", "rsi", "ttt", "pf"]);
+      const selection = selectCmjBaseline(`${date}T00:00:00Z`, aggregateTrialsByTest(rows, ["jh", "rsi", "ttt", "pf"]));
+      if (selection.status !== "ready") continue;
+      const aggs = selection.tests;
       baselines.set(pid, {
         jumpHeightCm: median(metricSeries(aggs, "jh")),
         rsiMod: median(metricSeries(aggs, "rsi")),
@@ -555,6 +566,16 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
 
   const noValdData = !loading && snapshots.length === 0 && missingCount === activePlayers.length && urgentCount === 0;
   const nameByPlayerId = new Map(activePlayers.map((p) => [p.id, p.name]));
+
+  // ── Old strength results ───────────────────────────────────────────────
+  // A left/right gap on a test too old to call today's state: not an alert, a job to do.
+  const retestNames = (rows: DeviceStrengthRow[], windowDays: number) =>
+    strengthRetestList(rows, date, windowDays)
+      .filter((e) => nameByPlayerId.has(e.playerId))
+      .map((e) => `${nameByPlayerId.get(e.playerId)} (${lang === "IS" ? `${e.ageDays} d` : `${e.ageDays}d`})`);
+  const hamstringRetest = retestNames(nordbordRows, VALD_FLAG_WINDOW_DAYS.nordbordDays);
+  const groinRetest = retestNames(forceframeRows, VALD_FLAG_WINDOW_DAYS.forceframeDays);
+  const hasRetest = hamstringRetest.length > 0 || groinRetest.length > 0;
 
   return (
     <div className="space-y-4">
@@ -715,7 +736,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                         const hiddenFatigue = hasBaseline && jumpLooksFine && forceTimeDegraded;
 
                         const open = expandedCmj === r.playerId;
-                        // Plain read of today vs his own 42-day norm.
+                        // Plain read of today vs the player's own recent norm.
                         const badList: string[] = [];
                         if (hasBaseline) {
                           if (jumpD?.tone === "bad" && Math.abs(jumpD.pct) >= 5) badList.push("jump height");
@@ -724,12 +745,12 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                           if (forceD?.tone === "bad" && Math.abs(forceD.pct) >= 5) badList.push("peak force");
                         }
                         const readText = !hasBaseline
-                          ? "Not enough baseline yet (needs ≥3 test days) to compare today to his norm."
+                          ? (snap?.returnMessage ? snap.returnMessage[lang === "IS" ? "is" : "en"] : "Not enough recent tests yet to compare today with the player's own level (needs 3 in the past 90 days, the last within 21 days).")
                           : hiddenFatigue
-                            ? "Jump height looks normal, but a force-time metric has dropped vs his 42-day norm — possible hidden neuromuscular fatigue. Confirm before loading hard."
+                            ? "Jump height looks normal, but a force-time metric has dropped vs the player's recent norm — possible hidden neuromuscular fatigue. Confirm before loading hard."
                             : badList.length
-                              ? `Down vs his 42-day norm: ${badList.join(", ")}. Worth a look before a heavy session.`
-                              : "In line with — or above — his 42-day norm. Looks fresh.";
+                              ? `Down vs the player's recent norm: ${badList.join(", ")}. Worth a look before a heavy session.`
+                              : "In line with — or above — the player's recent norm. Looks fresh.";
                         const cmpRows: Array<{ label: string; today: string; norm: string; d: ReturnType<typeof metricDelta> }> = [
                           { label: "Jump height", today: `${r.jumpHeightCm.toFixed(1)} cm`, norm: base?.jumpHeightCm != null ? `${base.jumpHeightCm.toFixed(1)} cm` : "–", d: jumpD },
                           { label: "RSI-mod", today: r.rsiMod != null ? r.rsiMod.toFixed(2) : "–", norm: base?.rsiMod != null ? base.rsiMod.toFixed(2) : "–", d: rsiD },
@@ -747,7 +768,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                                 {hiddenFatigue && (
                                   <span
                                     className="rounded bg-rose-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-rose-700"
-                                    title="Jump height looks normal but force-time metrics have regressed vs the player's 42-day baseline — possible hidden neuromuscular fatigue."
+                                    title="Jump height looks normal but force-time metrics have regressed vs the player's recent baseline — possible hidden neuromuscular fatigue."
                                   >
                                     ⚠ Hidden fatigue
                                   </span>
@@ -843,7 +864,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                                 })()}
 
                                 <div className="mt-2 text-[9px] leading-snug text-slate-400">
-                                  Baseline μ = median of his best daily trials over the 42 days before today{base?.days != null ? ` (${base.days} test days)` : ""}. Force-time metrics (RSI-mod, contraction time, peak force) come from VALD /trials and are read on the player&apos;s own norm — they catch residual neuromuscular fatigue jump height alone can miss (Gathercole 2015; Claudino 2017).
+                                  Baseline μ = median of the player&apos;s last tests in the past 90 days{base?.days != null ? ` (${base.days} tests)` : ""}, the last within 21 days (a coaching rule). Force-time metrics (RSI-mod, contraction time, peak force) come from VALD /trials and are read on the player&apos;s own norm — they catch residual neuromuscular fatigue jump height alone can miss (Gathercole 2015; Claudino 2017).
                                 </div>
                               </td>
                             </tr>
@@ -994,7 +1015,11 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
           {!loading && !hasInjuryAlerts && (
             <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2.5 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
-              <span className="text-xs text-emerald-700 font-medium">No injury alerts today.</span>
+              <span className="text-xs text-emerald-700 font-medium">
+                {hasRetest
+                  ? (lang === "IS" ? "Engar núverandi viðvaranir, en styrkpróf eru of gömul til að lesa í dag." : "No current alerts, but some strength tests are too old to read today.")
+                  : "No injury alerts today."}
+              </span>
             </div>
           )}
 
@@ -1019,6 +1044,32 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                 names={groinConcern.map((s) => s.playerName)}
               />
             </>
+          )}
+
+          {!loading && hasRetest && (
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <div className="text-xs font-semibold text-slate-700">{lang === "IS" ? "Þarf að prófa aftur" : "Needs a new test"}</div>
+              <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+                {lang === "IS"
+                  ? "Síðasta próf sýndi 10%+ mun á hægri og vinstri en er of gamalt til að segja til um stöðuna í dag. Nýtt próf hreinsar þetta."
+                  : "The last test showed a 10%+ left/right gap but is too old to say anything about today. A new test clears this."}
+              </p>
+              {hamstringRetest.length > 0 && (
+                <p className="mt-1 text-xs text-slate-600">
+                  <span className="font-medium">{lang === "IS" ? "Aftanlæri" : "Hamstring"}: </span>{hamstringRetest.join(", ")}
+                </p>
+              )}
+              {groinRetest.length > 0 && (
+                <p className="mt-1 text-xs text-slate-600">
+                  <span className="font-medium">{lang === "IS" ? "Nári" : "Groin"}: </span>{groinRetest.join(", ")}
+                </p>
+              )}
+              <p className="mt-1 text-[10px] leading-snug text-slate-400">
+                {lang === "IS"
+                  ? `Of gamalt: aftanlæri eftir ${VALD_FLAG_WINDOW_DAYS.nordbordDays} daga, nári eftir ${VALD_FLAG_WINDOW_DAYS.forceframeDays} daga (þjálfunarregla). Styrkmunur: Opar 2015, Hägglund 2013.`
+                  : `Too old: hamstring after ${VALD_FLAG_WINDOW_DAYS.nordbordDays} days, groin after ${VALD_FLAG_WINDOW_DAYS.forceframeDays} days (a coaching rule). Strength gap: Opar 2015, Hägglund 2013.`}
+              </p>
+            </div>
           )}
         </div>
       </div>
