@@ -9,6 +9,7 @@
 
 import { Document, Text, View } from "@react-pdf/renderer";
 import { BrandPage, C, Chip, FactRow, Provenance, Section, Table, Verdict, clean, fb, fh, renderPdfBlob, saveBlob, type Tone } from "@/components/pdf/brand";
+import type { PlayerWeekLoad, PlayerWeekRole, PlayerWeekValues, PlayerWeekVar } from "@/lib/micropulse/weekSetup/playerWeekLoad";
 
 type Lang = "EN" | "IS";
 
@@ -61,6 +62,9 @@ export type WeekSetupPdfPayload = {
     // Kinexon team → a compact team-level breakdown of each Kinexon variable across the
     // MD-days (rows = variables, cols = the training-day grid above). Descriptive.
     kinexonMd?: { rows: Array<{ label: string; perDay: Array<number | null>; total: number | null }> } | null;
+    // Every variable per day and for the week, matches counted. Present → these landscape pages replace the
+    // two tables above (null for Kinexon, which keeps its own variables). Labels are already localized.
+    detail?: (PlayerWeekLoad & { varLabels: string[]; legend: string; days: Array<{ title: string; note: string }> }) | null;
   } | null;
 };
 
@@ -68,6 +72,8 @@ export type WeekSetupPdfPayload = {
 const tx = (s: unknown) => clean(String(s ?? "").replace(/→/g, "->")).replace(/≈/g, "~").replace(/≥/g, ">=").replace(/≤/g, "<=");
 const nf = (n: number) => (Math.abs(n) >= 1000 ? Math.round(n).toLocaleString("en-US") : String(Math.round(n)));
 /** The caller sends the on-screen band colour; map it to a kit tone (the band word is always printed). */
+/** One variable's value for a table cell: distance prints in km, everything else as a whole number. */
+const cellOf = (k: PlayerWeekVar, v: number | null) => (v == null ? "-" : k === "distance" ? (v / 1000).toFixed(1) : nf(v));
 const toneOfHex = (hex: string | null | undefined): Tone => {
   const h = String(hex ?? "").toLowerCase();
   return h === C.green ? "green" : h === C.cobalt ? "cobalt" : h === C.amber ? "amber" : h === C.red ? "red" : h === C.rtp ? "rtp" : "neutral";
@@ -81,6 +87,13 @@ const L = {
     legForce: "Force / mechanical", legVel: "Velocity / speed", legAct: "Activation / polish", legRec: "Recovery", legMatchOff: "Match / off",
     plWeekly: "Per-player weekly load", plWeeklyLead: "Weekly totals, individualised from each player's own recent session load (the main GPS + IMA variables) across the week's training days. Descriptive — a feed that lacks a metric shows \"-\".",
     plDetail: "Detailed load — per MD-day", plDetailLead: "Each training day = the player's session baseline scaled by that day's planned load — the week's MD-day taper (MD-1 the lightest primer). Descriptive — off/match days omitted; the row totals the week.",
+    plWeekLead: (n: number) => n > 0
+      ? `Each player's week: training days + expected matches = the week. A match line is the player's own match load at their usual minutes, × ${n} this week. Descriptive - a feed that lacks a metric shows "-".`
+      : `Each player's week across the training days; no match this week. Descriptive - a feed that lacks a metric shows "-".`,
+    rowTrain: "Training", rowMatch: (n: number) => `Matches ×${n}`, rowWeek: "Week",
+    plDays: "Detailed load - per day", plDaysLead: "Each day's plan for every player. Off and match days omitted.",
+    plPerMatch: "Per match - expected", plPerMatchLead: (n: number) => `One match at the player's usual minutes, counted ×${n} in the week above.`,
+    roleOf: (r: PlayerWeekRole) => (r === "starter" ? "starter" : r === "rotation" ? "rotation" : r === "low" ? "low-min" : "-"),
     plKxMd: "Kinexon variables — per MD-day", plKxMdLead: "Team weekly total of each Kinexon variable, spread across the MD-days by the same taper. Descriptive.", metricCol: "Variable",
     player: "Player", role: "Role", wk: "Week PL", dist: "Dist", hsr: "HSR", acc: "Acc", dec: "Dec", cod: "CoD", coo: "CoO", exert: "Exert", mech: "Mech", conf2: "conf", total: "Total", starter: "starter", rot: "rotation", lowMin: "low-min",
     note: "Descriptive planning - a starting point per the day's focus, never a norm to obey, and never the readiness colour.",
@@ -92,6 +105,13 @@ const L = {
     legForce: "Kraftur / vélrænt", legVel: "Hraði", legAct: "Virkjun / fínpússun", legRec: "Endurheimt", legMatchOff: "Leikur / frí",
     plWeekly: "Vikulegt álag per leikmann", plWeeklyLead: "Vikusamtölur, einstaklingsmiðaðar frá nýlegu æfingaálagi hvers leikmanns (helstu GPS + IMA breyturnar) yfir æfingadaga vikunnar. Lýsandi — mæling sem gögnin vantar sýnir \"-\".",
     plDetail: "Ítarlegt álag — eftir MD-degi", plDetailLead: "Hver æfingadagur = grunnlína leikmanns margfölduð með áætluðu álagi dagsins — taper vikunnar (MD-1 léttasti undirbúningsdagur). Lýsandi — frí/leikdagar sleppt; röðin telur vikuna.",
+    plWeekLead: (n: number) => n > 0
+      ? `Vika hvers leikmanns: æfingadagar + væntanlegir leikir = vikan. Leikjalínan er eigið leikálag leikmannsins miðað við venjulegar mínútur hans, × ${n} þessa viku. Lýsandi - mæling sem gögnin vantar sýnir "-".`
+      : `Vika hvers leikmanns yfir æfingadagana; enginn leikur þessa viku. Lýsandi - mæling sem gögnin vantar sýnir "-".`,
+    rowTrain: "Æfingar", rowMatch: (n: number) => `Leikir ×${n}`, rowWeek: "Vikan",
+    plDays: "Ítarlegt álag - eftir degi", plDaysLead: "Áætlun dagsins fyrir hvern leikmann. Frí- og leikdögum sleppt.",
+    plPerMatch: "Á leik - áætlað", plPerMatchLead: (n: number) => `Einn leikur miðað við venjulegar mínútur leikmannsins, talinn ×${n} í vikunni hér að ofan.`,
+    roleOf: (r: PlayerWeekRole) => (r === "starter" ? "byrjun" : r === "rotation" ? "skipt" : r === "low" ? "lág-mín" : "-"),
     plKxMd: "Kinexon breytur — eftir MD-degi", plKxMdLead: "Vikusamtala liðsins fyrir hverja Kinexon breytu, dreift á MD-dagana með sama taper. Lýsandi.", metricCol: "Breyta",
     player: "Leikmaður", role: "Hlutverk", wk: "Viku PL", dist: "Vegal.", hsr: "HSR", acc: "Hröð.", dec: "Heml.", cod: "Stefnubr.", coo: "Snún.", exert: "Átök", mech: "Vélr.", conf2: "vissa", total: "Alls", starter: "byrjun", rot: "skipt", lowMin: "lág-mín",
     note: "Lýsandi áætlun - upphafspunktur eftir áherslu dagsins, aldrei viðmið til að hlýða, og aldrei readiness-liturinn.",
@@ -213,7 +233,7 @@ function WeekDoc({ payload, lang }: { payload: WeekSetupPdfPayload; lang: Lang }
           })}
         </Section>
 
-        {payload.playerLoad && payload.playerLoad.players.length > 0 && (() => {
+        {payload.playerLoad && payload.playerLoad.players.length > 0 && !payload.playerLoad.detail && (() => {
           const pl = payload.playerLoad!;
           const players = [...pl.players].sort((a, b) => (b.weeklyPl ?? -1) - (a.weeklyPl ?? -1));
           const roleOf = (min: number | null) => (min == null ? "-" : min >= 80 ? t.starter : min >= 30 ? t.rot : t.lowMin);
@@ -310,9 +330,82 @@ function WeekDoc({ payload, lang }: { payload: WeekSetupPdfPayload; lang: Lang }
           );
         })()}
 
-        <Provenance>{tx(t.foot)}</Provenance>
+        {!payload.playerLoad?.detail && <Provenance>{tx(t.foot)}</Provenance>}
       </BrandPage>
+      {payload.playerLoad?.detail && payload.playerLoad.detail.players.length > 0 && (
+        <PlayerDetailPages detail={payload.playerLoad.detail} teamName={payload.teamName} lang={lang} />
+      )}
     </Document>
+  );
+}
+
+/** Landscape pages: 11 numeric columns don't fit portrait. Week table, then one table per training day. */
+function PlayerDetailPages({ detail, teamName, lang }: { detail: NonNullable<NonNullable<WeekSetupPdfPayload["playerLoad"]>["detail"]>; teamName: string; lang: Lang }) {
+  const t = L[lang];
+  const vars = detail.vars;
+  const numCols = vars.map((k, i) => ({ label: detail.varLabels[i], width: k === "accHi" || k === "decHi" || k === "cod" ? 50 : 42, align: "right" as const }));
+  const lines: Array<{ label: string; of: (r: (typeof detail.players)[number]) => PlayerWeekValues; bold?: boolean }> = detail.matchCount > 0
+    ? [
+        { label: t.rowTrain, of: (r) => r.training },
+        { label: t.rowMatch(detail.matchCount), of: (r) => r.matches },
+        { label: t.rowWeek, of: (r) => r.week, bold: true },
+      ]
+    : [{ label: t.rowTrain, of: (r) => r.training, bold: true }];
+  const stack = (key: number, texts: Array<{ s: string; bold?: boolean }>, right = false) => (
+    <View key={key}>
+      {texts.map((x, i) => (
+        <Text key={i} style={[x.bold ? fh(700) : fb(400), { fontSize: 7.5, textAlign: right ? "right" : "left", color: x.bold ? C.ink : C.mute }]}>{x.s}</Text>
+      ))}
+    </View>
+  );
+  const nameCol = (r: (typeof detail.players)[number]) => stack(0, [
+    { s: tx(r.name), bold: true },
+    { s: tx(`${t.roleOf(r.role)}${r.usualMinutes != null ? ` · ${Math.round(r.usualMinutes)} ${t.min}` : ""}`) },
+  ]);
+  const lead = (s: string) => <Text style={[fb(400), { fontSize: 8, color: C.mute, marginBottom: 5, lineHeight: 1.35 }]}>{tx(s)}</Text>;
+  // A whole table stays together on one page when a landscape page can hold it (about 24 dense rows).
+  const keepTogether = detail.players.length <= 24;
+  const simple = (of: (r: (typeof detail.players)[number]) => PlayerWeekValues) => (
+    <Table
+      size={7.75}
+      dense
+      cols={[{ label: t.player, flex: 1 }, ...numCols]}
+      rows={detail.players.map((r) => [tx(r.name), ...vars.map((k) => cellOf(k, of(r)[k]))])}
+    />
+  );
+  return (
+    <BrandPage doc={t.doc} context={teamName} orientation="landscape" note={t.note}>
+      <Section title={t.plWeekly} mt={0}>
+        {lead(t.plWeekLead(detail.matchCount))}
+        <Table
+          dense
+          cols={[{ label: t.player, flex: 1 }, { label: "", width: 52 }, ...numCols]}
+          rows={detail.players.map((r) => [
+            nameCol(r),
+            stack(1, lines.map((l) => ({ s: l.label, bold: l.bold }))),
+            ...vars.map((k, i) => stack(i + 2, lines.map((l) => ({ s: cellOf(k, l.of(r)[k]), bold: l.bold })), true)),
+          ])}
+        />
+        <Text style={[fb(400), { fontSize: 7.25, color: C.mute, marginTop: 5, lineHeight: 1.35 }]}>{tx(detail.legend)}</Text>
+      </Section>
+      {detail.days.map((d, j) => (
+        <Section key={j} title={j === 0 ? t.plDays : undefined} wrap={!keepTogether}>
+          {j === 0 ? lead(t.plDaysLead) : null}
+          <View minPresenceAhead={60} wrap={false}>
+            <Text style={[fh(700), { fontSize: 10, marginBottom: 1 }]}>{tx(d.title)}</Text>
+            {lead(d.note)}
+          </View>
+          {simple((r) => r.perDay[j])}
+        </Section>
+      ))}
+      {detail.matchCount > 0 && (
+        <Section title={t.plPerMatch} wrap={!keepTogether}>
+          {lead(t.plPerMatchLead(detail.matchCount))}
+          {simple((r) => r.perMatch)}
+        </Section>
+      )}
+      <Provenance>{tx(`${t.foot} Stevens 2017 · Martín-García 2018.`)}</Provenance>
+    </BrandPage>
   );
 }
 

@@ -12,6 +12,8 @@ import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
 import PreseasonStartWeekCard, { type PreseasonComputed } from "@/components/coach/PreseasonStartWeekCard";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
+import { DAY_TYPE_LABEL, dayTypeFromText, type EnoughDayType } from "@/lib/micropulse/sessionEnough";
+import { buildPlayerWeekLoad, dayTargetNote, PLAYER_WEEK_VAR_LABEL, type PlayerWeekDay } from "@/lib/micropulse/weekSetup/playerWeekLoad";
 import { dayIdea, LOAD_BAND_META, rpeRange } from "@/lib/micropulse/dayIdeas";
 import { parseMdOffset, mdOffsetForDate } from "@/lib/micropulse/readinessOutlook/assemble";
 import type { PlannedDay } from "@/lib/micropulse/readinessOutlook";
@@ -1481,9 +1483,10 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         type MU = { typical: number | null };
         const pls = (j?.plan?.players ?? []) as Array<{
           name: string; position: string | null;
-          matchUnit: { minutesTypical: number | null; confidence: "high" | "medium" | "low"; load: MU; distance: MU; hsr: MU; accel: MU; decel: MU };
+          matchUnit: { minutesTypical: number | null; confidence: "high" | "medium" | "low"; load: MU; distance: MU; hsr: MU; sprint: MU; accel: MU; decel: MU; imaCod: MU; imaFr: MU; stride: MU; accHiEff: MU; decHiEff: MU };
+          recentMinutesAvg: number | null;
           weekTargets: { current: "preseason" | "inseason"; preseason: { weeklyLoadTarget: number | null }; inseason: { weeklyLoadTarget: number | null } };
-          recentBaseline: { playerLoad: number | null; hsrM: number | null; distanceM: number | null; accel: number | null; decel: number | null } | null;
+          recentBaseline: { playerLoad: number | null; hsrM: number | null; distanceM: number | null; sprintM: number | null; accel: number | null; decel: number | null; accelHiEff: number | null; decelHiEff: number | null; strideHi: number | null; imaCod: number | null; imaFr: number | null } | null;
         }>;
         // The team's OWN data-derived MD-day load shape (MD-5 ≈ +15%, MD-1 ≈ -8%, …),
         // keyed "MD-5"/"MD-1"/"MD+1". This is the precise per-MD multiplier the per-day
@@ -1500,7 +1503,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         const trainCols = days
           .map((d, i) => ({ d, i }))
           .filter((x) => x.d.kind === "train")
-          .map((x) => ({ d: x.d, md: x.d.md ?? null, weekday: x.d.weekday, rest: (noMatchIntents[x.i] ?? "OFF") === "OFF", srpe: srpeOf(x.d) }));
+          .map((x) => ({ d: x.d, i: x.i, md: x.d.md ?? null, weekday: x.d.weekday, rest: (noMatchIntents[x.i] ?? "OFF") === "OFF", srpe: srpeOf(x.d) }));
         const srpeVals = trainCols.filter((c) => !c.rest).map((c) => c.srpe).filter((x): x is number => x != null && x > 0);
         const srpeMean = srpeVals.length ? srpeVals.reduce((a, b) => a + b, 0) / srpeVals.length : 0;
         // Per-day multiplier: the PLANNED session load for this week (normalised to the
@@ -1610,7 +1613,49 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
             });
           }
           const hasGps = mapped.some((p) => p.distance != null || p.hsr != null || p.accel != null || p.decel != null || p.coo != null);
-          playerLoad = { players: mapped, trainDays, hasGps, isKinexon, kinexonMd };
+          // Every variable, per day and for the week with the matches counted (Kinexon keeps its own tables).
+          let detail: NonNullable<NonNullable<Parameters<typeof downloadWeekSetupPdf>[0]["playerLoad"]>["detail"]> | null = null;
+          if (!isKinexon) {
+            const L = isIS ? "is" : "en";
+            const dayTypeOfCol = (i: number): EnoughDayType | null => {
+              // Same order as the post-training card: an activation/top-up plan label first, then the day's stimulus.
+              const fromFocus = dayTypeFromText(previewDays[i]?.focus);
+              if (fromFocus === "activation" || fromFocus === "topup") return fromFocus;
+              const c = dayCharacters[i] ?? characterFromDay(noMatchIntents[i] ?? "OFF", dayStimuli[i] ?? null);
+              return c === "MECHANICAL" ? "mechanical" : c === "LOCOMOTIVE" ? "locomotive" : c === "MIXED" || c === "TECHNICAL" ? "mixed"
+                : c === "ACTIVATION" ? "activation" : c === "TOPUP" || c === "RECOVERY" ? "topup" : fromFocus;
+            };
+            const weekDays: PlayerWeekDay[] = trainCols.map((c, j) => {
+              const plan = planSessionLoad({ mdDay: c.md, dayType: previewDays[c.i]?.day_type, focus: previewDays[c.i]?.focus });
+              return { ratio: dayRatios[j], matchPct: plan.applicable ? plan.matchPct : null, dayType: dayTypeOfCol(c.i) };
+            });
+            const load = buildPlayerWeekLoad({
+              days: weekDays,
+              matchCount: days.filter((d) => d.kind === "match").length,
+              players: pls.map((p) => {
+                const mu = p.matchUnit, rb = p.recentBaseline;
+                return {
+                  name: p.name, position: p.position, usualMinutes: p.recentMinutesAvg ?? null, matchMinutes: mu.minutesTypical,
+                  baseline: rb && { pl: rb.playerLoad, distance: rb.distanceM, hsr: rb.hsrM, sprint: rb.sprintM, accel: rb.accel, decel: rb.decel, cod: rb.imaCod, fr: rb.imaFr, stride: rb.strideHi, accHi: rb.accelHiEff, decHi: rb.decelHiEff },
+                  match: { pl: mu.load.typical, distance: mu.distance.typical, hsr: mu.hsr.typical, sprint: mu.sprint.typical, accel: mu.accel.typical, decel: mu.decel.typical, cod: mu.imaCod.typical, fr: mu.imaFr.typical, stride: mu.stride.typical, accHi: mu.accHiEff.typical, decHi: mu.decHiEff.typical },
+                };
+              }),
+            });
+            const hasIma = load.vars.some((k) => k === "cod" || k === "fr" || k === "stride");
+            detail = {
+              ...load,
+              varLabels: load.vars.map((k) => PLAYER_WEEK_VAR_LABEL[k].short[L]),
+              legend: load.vars.map((k) => `${PLAYER_WEEK_VAR_LABEL[k].short[L]} = ${PLAYER_WEEK_VAR_LABEL[k].plain[L]}`).join(" · "),
+              days: trainCols.map((c, j) => {
+                const dt = weekDays[j].dayType;
+                return {
+                  title: [`${c.weekday} ${c.d.date}`, c.md, dt ? DAY_TYPE_LABEL[dt][L] : null].filter(Boolean).join(" · "),
+                  note: dayTargetNote(weekDays[j], hasIma)[L],
+                };
+              }),
+            };
+          }
+          playerLoad = { players: mapped, trainDays, hasGps, isKinexon, kinexonMd, detail };
         }
       }
     } catch { /* best-effort — PDF stays team-level */ }

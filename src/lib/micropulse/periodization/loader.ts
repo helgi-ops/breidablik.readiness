@@ -29,7 +29,7 @@ export type PlayerPeriodization = {
   recentMinutesAvg: number | null; // mean match minutes over the last ~11 weeks — the minutes-based load trim
   /** The player's CURRENT baseline — mean per-session output over the last 28 days of TRAINING (non-match)
    *  sessions. The data-derived starting point the ramp builds FROM, to read against the match-unit target. */
-  recentBaseline: { sessions: number; playerLoad: number | null; hsrM: number | null; distanceM: number | null; sprintM: number | null; accel: number | null; decel: number | null } | null;
+  recentBaseline: { sessions: number; playerLoad: number | null; hsrM: number | null; distanceM: number | null; sprintM: number | null; accel: number | null; decel: number | null; accelHiEff: number | null; decelHiEff: number | null; strideHi: number | null; imaCod: number | null; imaFr: number | null } | null;
 };
 export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages; axes: MatchAxes; md: MdDemandProfile };
 /** A loaded session row carrying the fields the loader needs after the roster loads: the player, the IMA
@@ -437,7 +437,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     const rows = rawSessions.filter((r) => r.pid === pid && !r.isMatch && todayMs - Date.parse(r.date) <= baselineCutoffMs && (r.playerLoad != null || r.distanceM != null));
     if (rows.length === 0) return null;
     const mean = (vals: Array<number | null>) => { const v = vals.filter((x): x is number => x != null && Number.isFinite(x)); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null; };
-    return { sessions: rows.length, playerLoad: mean(rows.map((r) => r.playerLoad)), hsrM: mean(rows.map((r) => r.hsrM)), distanceM: mean(rows.map((r) => r.distanceM)), sprintM: mean(rows.map((r) => r.sprintM)), accel: mean(rows.map((r) => r.accel)), decel: mean(rows.map((r) => r.decel)) };
+    return { sessions: rows.length, playerLoad: mean(rows.map((r) => r.playerLoad)), hsrM: mean(rows.map((r) => r.hsrM)), distanceM: mean(rows.map((r) => r.distanceM)), sprintM: mean(rows.map((r) => r.sprintM)), accel: mean(rows.map((r) => r.accel)), decel: mean(rows.map((r) => r.decel)), accelHiEff: mean(rows.map((r) => r.accelHiEff ?? null)), decelHiEff: mean(rows.map((r) => r.decelHiEff ?? null)), strideHi: mean(rows.map((r) => r.strideHi ?? null)), imaCod: mean(rows.map((r) => r.imaCod ?? null)), imaFr: mean(rows.map((r) => r.imaFrDist ?? null)) };
   };
   // Current macro phase (pre-season vs in-season) → drives the match-multiple math.
   const curPhaseKey = phases.find((ph) => ph.start <= todayIso && todayIso < ph.end)?.key ?? (phases[phases.length - 1]?.key ?? "competitive");
