@@ -39,7 +39,7 @@ import { upcomingInternationalBreaks, intlBreakKey, type IntlBreak } from "@/lib
 import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
 import { mdOffset } from "@/lib/micropulse/periodization/periodizationModel";
 import { buildDayDrillSheet } from "@/lib/micropulse/dayDrillSheet";
-import { fetchDrillLibrary } from "@/lib/micropulse/dayDrillLibraryFetch";
+import { fetchResearchDrills } from "@/lib/micropulse/dayDrillLibraryFetch";
 import { recommendTestingSchedule, testsForBlock, TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
@@ -942,12 +942,13 @@ export default function PeriodizationHubPage() {
     return buildPlayerBlock(plan, player, { blkStart: win.blkStart, blkWeeks: win.blkWeeks, phaseLabel: win.phaseLabel, matchDates: win.matchDates, goal: wGoal, deload: blockDeloadOf(wb), hold: holdsStandardWeek(wb?.inSeason, wGoal), camps: campRegions, friendlyMatches: winIsPreseason, asOf: new Date().toISOString().slice(0, 10) });
   }, [player, plan, mesoBlocks, blockGoals, campRegions]);
 
-  // Drills by MD day for the PDFs (football): the coach's own library drills that fit each training day
-  // type of the block, beside the general ideas. Read at export time; an empty library leaves the ideas.
+  // Drills by MD day for the PDFs (football): research drills paired to each training day type of the
+  // block, beside the general ideas. Never the coach's own library (it follows him across teams). Read at
+  // export time; an empty read leaves the ideas.
   async function dayDrillsFor(block: CalendarBlock) {
     if (isBasketball || (teamSport != null && teamSport.toLowerCase() !== "football")) return null;
     const mb = mesoBlocks.find((b) => b.start <= block.startDate && block.startDate < b.end);
-    return buildDayDrillSheet({ days: block.weeks.flatMap((w) => w.days), rows: await fetchDrillLibrary(await authHeader()), phase: mb && !mb.inSeason ? "preseason" : "inseason" });
+    return buildDayDrillSheet({ days: block.weeks.flatMap((w) => w.days), rows: await fetchResearchDrills(await authHeader()), phase: mb && !mb.inSeason ? "preseason" : "inseason" });
   }
 
   async function exportPlayerBlock() {

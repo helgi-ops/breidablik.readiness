@@ -16,8 +16,8 @@ import { DAY_TYPE_LABEL, dayTypeFromText, type EnoughDayType } from "@/lib/micro
 import { buildPlayerWeekLoad, dayTargetNote, outStatusOf, PLAYER_WEEK_VAR_LABEL, type PlayerWeekDay } from "@/lib/micropulse/weekSetup/playerWeekLoad";
 import { kinexonMatchLine, type KinexonPlayerLoad, type KinexonWeekValues } from "@/lib/integrations/kinexon/weekPlanLoad";
 import { dayIdea, pitchIdeasFor, LOAD_BAND_META, rpeRange } from "@/lib/micropulse/dayIdeas";
-import { drillsForDay, ownDrillMeta, ideaText, isLowMinutesDay } from "@/lib/micropulse/dayDrillSheet";
-import { fetchDrillLibrary } from "@/lib/micropulse/dayDrillLibraryFetch";
+import { researchDrillsForDay, researchDrillPrint, ideaText } from "@/lib/micropulse/dayDrillSheet";
+import { fetchResearchDrills } from "@/lib/micropulse/dayDrillLibraryFetch";
 import { parseMdOffset, mdOffsetForDate } from "@/lib/micropulse/readinessOutlook/assemble";
 import type { PlannedDay } from "@/lib/micropulse/readinessOutlook";
 import { usePlan } from "@/lib/micropulse/product";
@@ -1401,8 +1401,9 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
 
   const handleExportWeekPdf = async () => {
     const { downloadWeekSetupPdf } = await import("@/components/coach/WeekSetupPdf");
-    // The coach's own drills, for the per-day picks (football). An empty library leaves the ideas alone.
-    const ownDrillRows = isBasketball ? [] : await fetchDrillLibrary(`Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`);
+    // The research drill bank, for the per-day picks (football). Never the coach's own library: a personal
+    // library follows the coach to every team. An empty read leaves the ideas alone.
+    const researchRows = isBasketball ? [] : await fetchResearchDrills(`Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`);
     const mdDates = visibleMatches.map((m) => m.date);
     const days = Array.from({ length: 7 }).map((_, i) => {
       const date = addDays(weekStart, i);
@@ -1447,7 +1448,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
       }
       // Detailed coaching idea for the PDF (football): focus + colour-coded load band + est. duration +
       // sRPE + on-pitch examples — resolved to the current language so the PDF stays a plain string model.
-      let idea: { focus: string; band: string | null; bandColor: string | null; durationMin: number | null; srpe: number | null; pitch: Array<{ text: string; cite: string }>; drills: Array<{ name: string; meta: string }>; lowMinutes: boolean } | null = null;
+      let idea: { focus: string; band: string | null; bandColor: string | null; durationMin: number | null; srpe: number | null; pitch: Array<{ text: string; cite: string }>; research: Array<{ name: string; meta: string; finding: string; cite: string }> } | null = null;
       if (!isBasketball) {
         const character = dayCharacters[i] ?? characterFromDay(intent, dayStimuli[i] ?? null);
         const drillDay = { stimulus: characterToStimulus(character), character };
@@ -1458,10 +1459,9 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           bandColor: io.load ? LOAD_BAND_META[io.load.band].color : null,
           durationMin: io.load?.durationMin ?? null,
           srpe: io.load?.sessionLoad ?? null,
-          // Print gets every idea for the day and the coach's own drills that fit it; the screen keeps one.
+          // Print gets every idea for the day and the study drills paired to it; the screen keeps one idea.
           pitch: pitchIdeasFor({ ...drillDay, phase: seasonPhase }).map((p) => ({ text: ideaText(p, isIS), cite: p.cite })),
-          drills: drillsForDay(ownDrillRows, drillDay).map((d) => ({ name: d.name, meta: ownDrillMeta(d, isIS) })),
-          lowMinutes: isLowMinutesDay(drillDay),
+          research: researchDrillsForDay(researchRows, drillDay).map((d) => researchDrillPrint(d, isIS)),
         };
       }
       return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "train" as const, intent: intentLabelOf(intent), dose, stripe, idea, strength: isBasketball ? (bbStrengthTitles[i] ?? null) : null, dayLoad: null as { band: string | null; bandColor: string | null; pl: number | null; durationMin: number | null } | null };
