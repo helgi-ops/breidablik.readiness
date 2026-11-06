@@ -5,7 +5,9 @@ import { maskSecret } from "@/lib/integrations/vald/config";
 import { runPersonalBestDetection } from "@/lib/notifications/sendPersonalBestNudge";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// A one-day sync still re-processes the 3-year NordBord/ForceFrame back-fill: 83–108 s
+// for Breiðablik. At 60 s runs were cut off mid-way and stayed `running` for good.
+export const maxDuration = 300;
 
 async function requireCoach(req: Request): Promise<{ teamId: string; userId: string }> {
   const auth = req.headers.get("authorization") || "";
