@@ -1,6 +1,7 @@
 import { test } from "vitest";
+import { buildPlayerBlock } from "@/lib/micropulse/periodization/playerBlock";
 import assert from "node:assert/strict";
-import { detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, recommendBlockGoal, blockGoalFromSeason, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
+import { blockDeloadOf, deloadWeekIndex, detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, recommendBlockGoal, blockGoalFromSeason, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
 
 // A full Pro (GPS + IMA) match unit — running spine + the mechanical/IMA axis (Acc/Dec B2–3, stride, dir).
 const UNIT: MatchUnitAbs = { dist: 12564, hsr: 988, load: 1184, accdec: 259, accHiEff: 40, decHiEff: 52, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
@@ -914,4 +915,130 @@ describeIma("Meso calendar — Acc/Dec B2-3 and sprint follow the research stand
     expectIma(mech?.accHiEff).toBe(90);
     expectIma(mech?.decHiEff).toBe(80);
   });
+});
+
+// ── In-season: no automatic deload, the light week is the coach's call ──────────────────────
+const SEASON_WEEKS = (): WeekLoad[] => {
+  const base = Date.parse("2026-02-02");
+  return Array.from({ length: 30 }, (_, i) => ({ weekStart: new Date(base + i * 7 * 86_400_000).toISOString().slice(0, 10), load: 2000, readiness: 70 }));
+};
+const SEASON_FX = ["2026-04-18", "2026-04-25", "2026-05-02", "2026-05-09", "2026-05-16", "2026-05-23", "2026-05-30", "2026-06-06"];
+const seasonBlocks = (weeks: WeekLoad[], deloadByStart?: Record<string, string>) =>
+  buildMesoBlocks("2026-02-02", "2026-08-31", weeks, 4, 700, SEASON_FX, "2026-04-13", [], null, null, { deloadByStart });
+
+test("buildMesoBlocks: competitive blocks have no deload week, pre-season blocks keep theirs", () => {
+  const blocks = seasonBlocks(SEASON_WEEKS());
+  const pre = blocks.filter((b) => !b.inSeason), comp = blocks.filter((b) => b.inSeason);
+  assert.ok(pre.length > 0 && comp.length > 0);
+  for (const b of pre) assert.ok(b.deloadWeekStart);
+  for (const b of comp) { assert.equal(b.deloadWeekStart, null); assert.equal(b.deloadPinned, false); }
+});
+
+test("buildMesoBlocks: an in-season load spike suggests a light week, it moves nothing", () => {
+  const weeks = SEASON_WEEKS().map((w) => (w.weekStart >= "2026-05-11" && w.weekStart < "2026-06-08" ? { ...w, load: 4200 } : w));
+  const spiked = seasonBlocks(weeks).find((b) => b.inSeason && b.deloadNow)!;
+  assert.ok(spiked);
+  assert.equal(spiked.deloadWeekStart, null);
+  assert.equal(spiked.isDeload, false);                 // the strength default and PDF chip don't react to it
+  assert.match(spiked.flag!.en, /consider a light week/);
+  assert.match(spiked.flag!.is, /íhugaðu létta viku/);
+  assert.doesNotMatch(spiked.flag!.en, /deload/);
+});
+
+test("buildMesoBlocks: a pre-season load spike still pulls the deload week forward", () => {
+  const weeks = SEASON_WEEKS().map((w) => (w.weekStart >= "2026-03-02" && w.weekStart < "2026-03-30" ? { ...w, load: 4200 } : w));
+  const spiked = seasonBlocks(weeks).find((b) => !b.inSeason && b.deloadNow)!;
+  assert.equal(spiked.deloadWeekStart, spiked.start);
+  assert.equal(spiked.isDeload, true);
+  assert.match(spiked.flag!.en, /pull the deload week forward/);
+});
+
+test("buildMesoBlocks: the coach's pin is the light week in-season", () => {
+  const comp = seasonBlocks(SEASON_WEEKS()).find((b) => b.inSeason)!;
+  const week2 = deloadWeekIndex(comp.start, comp.start, 4) === 0 ? new Date(Date.parse(comp.start) + 7 * 86_400_000).toISOString().slice(0, 10) : "";
+  const pinned = seasonBlocks(SEASON_WEEKS(), { [comp.start]: week2 }).find((b) => b.start === comp.start)!;
+  assert.equal(pinned.deloadWeekStart, week2);
+  assert.equal(pinned.deloadPinned, true);
+  assert.deepEqual(blockDeloadOf(pinned), { weekStart: week2, light: true });
+});
+
+test("buildCalendarBlock: no deload week in-season, the ramp peaks in the last week", () => {
+  const cal = buildCalendarBlock({ unit: UNIT, startDate: "2026-04-13", numWeeks: 4, scopeName: "__team__", baseOverloadPct: 100, deload: { weekStart: null, light: true } });
+  assert.equal(cal.weeks.filter((w) => w.isDeload).length, 0);
+  const m = cal.weeks.map((w) => w.mult);
+  assert.ok(m[0] < m[1] && m[1] < m[2] && m[2] < m[3]);
+  assert.equal(cal.weeks[3].intent.en, "Overload · peak");
+  assert.notEqual(cal.weeks[2].intent.en, "Overload · peak");
+});
+
+test("buildCalendarBlock: a light week cuts volume 20% and holds intensity, on the same week layout", () => {
+  const args = { unit: UNIT, startDate: "2026-04-13", numWeeks: 4, scopeName: "__team__", baseOverloadPct: 100, matchDates: ["2026-05-02"] };
+  const none = buildCalendarBlock({ ...args, deload: { weekStart: null, light: true } });
+  const light = buildCalendarBlock({ ...args, deload: { weekStart: "2026-04-27", light: true } });
+  const wk = light.weeks[2], ref = none.weeks[2];
+  assert.equal(wk.isDeload, true);
+  assert.equal(wk.isLight, true);
+  assert.equal(wk.intent.en, "Light week");
+  assert.ok(Math.abs(wk.mult - ref.mult * 0.8) < 0.01);
+  assert.deepEqual(wk.days.map((d) => d.type), ref.days.map((d) => d.type));
+  assert.deepEqual(wk.days.map((d) => d.hsr), ref.days.map((d) => d.hsr));
+  assert.deepEqual(wk.days.map((d) => d.stride), ref.days.map((d) => d.stride));
+  const train = (w: typeof wk) => w.days.filter((d) => d.type !== "match" && d.type !== "rest").reduce((a, d) => a + (d.dist ?? 0), 0);
+  assert.ok(Math.abs(train(wk) / train(ref) - 0.8) < 0.02);
+  assert.equal(light.weeks[3].isDeload, false);
+  assert.deepEqual(light.weeks[3].days.map((d) => d.dist), none.weeks[3].days.map((d) => d.dist));
+});
+
+test("buildCalendarBlock: the deep deload lands on the block's own week, the same one the overview shows", () => {
+  const legacy = buildCalendarBlock({ unit: UNIT, startDate: "2026-02-02", numWeeks: 4, scopeName: "__team__", baseOverloadPct: 100 });
+  assert.deepEqual(legacy.weeks.map((w) => w.isDeload), [false, false, false, true]);
+  // Friendly in week 4 → the overview snaps the deload to the bye week 3. The calendar now agrees.
+  const blocks = buildMesoBlocks("2026-02-02", "2026-03-30", SEASON_WEEKS().slice(0, 8), 4, 700, ["2026-02-25"]);
+  assert.equal(blocks[0].deloadWeekStart, "2026-02-16");
+  const cal = buildCalendarBlock({ unit: UNIT, startDate: blocks[0].start, numWeeks: 4, scopeName: "__team__", baseOverloadPct: 100, deload: blockDeloadOf(blocks[0]) });
+  assert.deepEqual(cal.weeks.map((w) => w.isDeload), [false, false, true, false]);
+  assert.equal(cal.weeks[2].isLight, false);
+  assert.equal(cal.weeks[2].intent.en, "Deload");
+  assert.equal(cal.weeks[3].intent.en, "Overload · peak");
+});
+
+test("a pre-season fatigue signal is flagged on the map, the plan players see stays until the coach pins a week", () => {
+  const weeks = SEASON_WEEKS().map((w) => (w.weekStart >= "2026-03-02" && w.weekStart < "2026-03-30" ? { ...w, load: 4200 } : w));
+  const spiked = seasonBlocks(weeks).find((b) => !b.inSeason && b.deloadNow)!;
+  assert.equal(spiked.deloadWeekStart, spiked.start);
+  assert.notEqual(blockDeloadOf(spiked)!.weekStart, spiked.start);
+  assert.equal(blockDeloadOf(spiked)!.weekStart, spiked.plannedDeloadWeekStart);
+  const pinned = seasonBlocks(weeks, { [spiked.start]: spiked.start }).find((b) => b.start === spiked.start)!;
+  assert.equal(blockDeloadOf(pinned)!.weekStart, spiked.start);
+});
+
+test("the in-season notes don't promise a deload the block doesn't have", () => {
+  const args = { unit: UNIT, startDate: "2026-04-13", numWeeks: 4, scopeName: "__team__", baseOverloadPct: 100, goal: "realize" as const };
+  const season = buildCalendarBlock({ ...args, deload: { weekStart: null, light: true } }).notes.map((x) => x.en).join(" ");
+  assert.doesNotMatch(season, /deep taper/);
+  assert.match(season, /no automatic deload/);
+  assert.match(buildCalendarBlock(args).notes.map((x) => x.en).join(" "), /deep taper/);
+});
+
+test("buildPlayerBlock: picking a light week changes only that week, and it can't read above the peak", () => {
+  const m = (typical: number | null) => ({ typical });
+  const pl = { name: "P", position: null, vald: { capPct: null }, recentMinutesAvg: 90, matchUnit: { nNearFull: 6, confidence: "high", load: m(900), hsr: m(500), distance: m(10000), accel: m(60), decel: m(60), accHiEff: m(20), decHiEff: m(30), stride: m(300), rhie: m(null), symmetry: m(null), metPower: m(null) } } as never;
+  const plan = { teamBaseline: { avg: { sessions: 0 } }, positionBaselines: [] } as never;
+  const args = { blkStart: "2026-04-13", blkWeeks: 4, phaseLabel: { en: "x", is: "x" }, matchDates: ["2026-04-18", "2026-04-25", "2026-05-02", "2026-05-09"], goal: "realize" as const };
+  const none = buildPlayerBlock(plan, pl, { ...args, deload: { weekStart: null, light: true } }).block.weeks;
+  const light = buildPlayerBlock(plan, pl, { ...args, deload: { weekStart: "2026-05-04", light: true } }).block.weeks;
+  for (const i of [0, 1, 2]) {
+    assert.ok(Math.abs(light[i].pctRunning! - none[i].pctRunning!) <= 1);
+    assert.ok(Math.abs(light[i].pctHsr! - none[i].pctHsr!) <= 1);
+  }
+  assert.ok(Math.abs(light[3].pctRunning! / none[3].pctRunning! - 0.8) < 0.02);
+  assert.ok(Math.abs(light[3].pctHsr! - none[3].pctHsr!) <= 1);
+  assert.ok(light[3].pctRunning! < Math.max(...none.map((w) => w.pctRunning!)));
+});
+
+test("deloadWeekIndex: outside the block means no deload", () => {
+  assert.equal(deloadWeekIndex("2026-04-13", null, 4), null);
+  assert.equal(deloadWeekIndex("2026-04-13", "2026-04-27", 4), 2);
+  assert.equal(deloadWeekIndex("2026-04-13", "2026-05-11", 4), null);
+  assert.equal(deloadWeekIndex("2026-04-13", "2026-04-06", 4), null);
 });

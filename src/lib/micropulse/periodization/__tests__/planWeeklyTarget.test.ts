@@ -51,6 +51,23 @@ describe("planWeeklyTarget", () => {
     expect(ramped.label.en).toContain("block wk 2/4");
   });
 
+  it("an in-season block with no light week keeps ramping through its last week", () => {
+    const block = { index: 0, start: "2026-05-25", end: "2026-06-22", weeks: 4, deloadWeekStart: null, inSeason: true } as unknown as MesoBlock;
+    const base = planWeeklyTarget({ phases: PHASES, matchUnits: [UNIT], today: "2026-06-15", matchesThisWeek: 1 })!;
+    const last = planWeeklyTarget({ phases: PHASES, blocks: [block], matchUnits: [UNIT], today: "2026-06-15", matchesThisWeek: 1 })!;
+    expect(last.byKpi.totalDistance).toBe(Math.round(base.byKpi.totalDistance! * 1.15));
+    expect(last.label.en).toContain("block wk 4/4");
+  });
+
+  it("a light week the coach picked sits 20% under that week's ramp", () => {
+    const block = { index: 0, start: "2026-05-25", end: "2026-06-22", weeks: 4, deloadWeekStart: "2026-06-08", inSeason: true } as unknown as MesoBlock;
+    const base = planWeeklyTarget({ phases: PHASES, matchUnits: [UNIT], today: "2026-06-08", matchesThisWeek: 1 })!;
+    const light = planWeeklyTarget({ phases: PHASES, blocks: [block], matchUnits: [UNIT], today: "2026-06-08", matchesThisWeek: 1 })!;
+    expect(light.byKpi.totalDistance).toBe(Math.round(base.byKpi.totalDistance! * 0.88));
+    expect(light.label.en).toContain("light week (88%)");
+    expect(light.label.is).toContain("létt vika");
+  });
+
   it("in-season deload week drops the whole week to ~60%", () => {
     const block = { index: 0, start: "2026-05-25", end: "2026-06-22", weeks: 4, deloadWeekStart: "2026-06-15" } as unknown as MesoBlock;
     const base = planWeeklyTarget({ phases: PHASES, matchUnits: [UNIT], today: "2026-06-15", matchesThisWeek: 1 })!;

@@ -35,14 +35,14 @@ const L = {
     dist: "Distance", hsr: "HSR (V5+V6)", load: "Player Load", accdec: "Acc + Dec",
     accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Stride", dirL: "IMA dir", rhieL: "RHIE", symL: "Symmetry", metL: "Met power",
     fwd: "fwd", lat: "lat", back: "back", imaLead: "Mechanical / IMA - the same match unit on the movement axis (present where the feed carries it).",
-    ramp: "Progressive overload — weekly ramp", rampNarr: "Each KPI ramps at its own rate — volume (distance, Player Load) climbs fastest, HSR + stride slowest with the tightest ceilings (hamstring exposure; Malone 2017, Gabbett 2016) — up to a peak, then a deload. Running axes build TO match and hold there; mechanical work over-shoots the match by design. The note under each week says what held it.",
-    week: "Week", intent: "Intent", running: "Running dist", mech: "Mechanical", rest: "Rest days", deload: "Deload", match: "match",
-    theWeek: "The week — matchday-anchored microcycle", weekNarr: "Built around a weekly friendly (MD-0) that alternates Saturday / Sunday. After the match: a light top-up (MD+1), then a full day off (MD+2). Sessions are spaced so there are never more than three in a row — often just two — with HSR (Locomotive) and mechanical work on separate days to protect the posterior chain. The deload week adds rest.",
+    ramp: "Progressive overload — weekly ramp", rampNarr: "Each KPI ramps at its own rate — volume (distance, Player Load) climbs fastest, HSR + stride slowest with the tightest ceilings (hamstring exposure; Malone 2017, Gabbett 2016) — up to a peak, with a deload in pre-season. Running axes build TO match and hold there; mechanical work over-shoots the match by design. The note under each week says what held it.",
+    week: "Week", intent: "Intent", running: "Running dist", mech: "Mechanical", rest: "Rest days", light: "Light week", deload: "Deload", match: "match",
+    theWeek: "The week — matchday-anchored microcycle", weekNarr: "Built around a weekly friendly (MD-0) that alternates Saturday / Sunday. After the match: a light top-up (MD+1), then a full day off (MD+2). Sessions are spaced so there are never more than three in a row — often just two — with HSR (Locomotive) and mechanical work on separate days to protect the posterior chain. A pre-season deload week adds rest.",
     md: "MD", dayType: "Day-type", whatItIs: "What it is",
     sbs: "Session-by-session — the full block", sbsNarr: "Absolute per-session targets, scaled from the match unit by the day-type and the week multiplier. DIST and HSR in metres; LOAD in Player Load (AU). Rest days shown as dashes.",
     day: "Day", focus: "Focus", footer: "MicroPulse — Periodization Plan",
     summary: (n: number, who: string) => `A ${n}-week block, match-anchored for ${who}.`,
-    peak: (hi: number, wk: number) => `Weekly running volume peaks at ${hi}% of one match in week ${wk}`, deloadIn: (w: string) => `deload in week ${w}`, restTotal: (n: number) => `${n} rest days in total`,
+    peak: (hi: number, wk: number) => `Weekly running volume peaks at ${hi}% of one match in week ${wk}`, deloadIn: (w: string) => `deload in week ${w}`, lightIn: (w: string) => `light week in week ${w}`, restTotal: (n: number) => `${n} rest days in total`,
     foot: "Descriptive planning — never sets the readiness colour, never overrides the daily decision. Targets scale from the scope's own match unit (median of near-full matches ≥80 min) by each day-type's share of the match and the week multiplier; a data-anchored starting point, not a norm to obey (Little & Buchheit). No single \"% of match\" — mechanical over-shoots, HSR/sprint fall short (Figueiredo). Cites: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021." },
   IS: { plan: "Tímabilsáætlun", block: "vikna lota", anchored: "leik-fest · einstaklingsmiðað fyrir", team: "liðið", doc: "Tímabilsáætlun",
     tag: "Ráðlagt út frá eigin gögnum liðsins - þjálfarinn ákveður og hnekkir",
@@ -51,14 +51,14 @@ const L = {
     dist: "Vegalengd", hsr: "Háhraði (V5+V6)", load: "Player Load", accdec: "Acc + Dec",
     accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Skref", dirL: "IMA stefna", rhieL: "RHIE", symL: "Samhverfa", metL: "Efnaafl",
     fwd: "fram", lat: "hlið", back: "aftur", imaLead: "Vélrænt / IMA - sama leikviðmið á hreyfi-ásnum (þar sem gögnin ná).",
-    ramp: "Stígandi álag — vikuleg þróun", rampNarr: "Hvert mæligildi hækkar á sínum hraða — magn (vegalengd, Player Load) hraðast, háhraði + skref hægast með þéttustu þökin (aftanlæris-áhætta; Malone 2017, Gabbett 2016) — upp að toppi og svo niðurtröppun. Hlaupa-ásarnir byggja AÐ leik og halda þar; vélrænt fer yfir leikinn viljandi. Nótan undir hverri viku segir hvað hélt henni.",
-    week: "Vika", intent: "Markmið", running: "Hlaup vegal.", mech: "Vélrænt", rest: "Hvíldard.", deload: "Niðurtröppun", match: "leik",
-    theWeek: "Vikan — leikdags-fest microcycle", weekNarr: "Byggt um vikulegan æfingaleik (MD-0) sem skiptist á laugardag / sunnudag. Eftir leik: létt áfylling (MD+1), svo heill frídagur (MD+2). Æfingar dreifðar svo aldrei eru fleiri en þrjár í röð — oft bara tvær — með háhraða (Locomotive) og vélrænu á sitt hvorum degi til að vernda afturkeðjuna. Niðurtröppunarvikan bætir við hvíld.",
+    ramp: "Stígandi álag — vikuleg þróun", rampNarr: "Hvert mæligildi hækkar á sínum hraða — magn (vegalengd, Player Load) hraðast, háhraði + skref hægast með þéttustu þökin (aftanlæris-áhætta; Malone 2017, Gabbett 2016) — upp að toppi, með niðurtröppun í undirbúningi. Hlaupa-ásarnir byggja AÐ leik og halda þar; vélrænt fer yfir leikinn viljandi. Nótan undir hverri viku segir hvað hélt henni.",
+    week: "Vika", intent: "Markmið", running: "Hlaup vegal.", mech: "Vélrænt", rest: "Hvíldard.", light: "Létt vika", deload: "Niðurtröppun", match: "leik",
+    theWeek: "Vikan — leikdags-fest microcycle", weekNarr: "Byggt um vikulegan æfingaleik (MD-0) sem skiptist á laugardag / sunnudag. Eftir leik: létt áfylling (MD+1), svo heill frídagur (MD+2). Æfingar dreifðar svo aldrei eru fleiri en þrjár í röð — oft bara tvær — með háhraða (Locomotive) og vélrænu á sitt hvorum degi til að vernda afturkeðjuna. Niðurtröppunarvika í undirbúningi bætir við hvíld.",
     md: "MD", dayType: "Dagsgerð", whatItIs: "Hvað það er",
     sbs: "Æfing fyrir æfingu — öll lotan", sbsNarr: "Alger mörk per æfingu, skalað frá leikviðmiðinu eftir dagsgerð og vikumargfeldi. VEGAL og HÁHRAÐI í metrum; ÁLAG í Player Load (AU). Hvíldardagar sýndir sem strik.",
     day: "Dagur", focus: "Áhersla", footer: "MicroPulse — Tímabilsáætlun",
     summary: (n: number, who: string) => `${n} vikna lota, leik-fest fyrir ${who}.`,
-    peak: (hi: number, wk: number) => `Vikulegt hlaupamagn nær hámarki ${hi}% af einum leik í viku ${wk}`, deloadIn: (w: string) => `niðurtröppun í viku ${w}`, restTotal: (n: number) => `${n} hvíldardagar alls`,
+    peak: (hi: number, wk: number) => `Vikulegt hlaupamagn nær hámarki ${hi}% af einum leik í viku ${wk}`, deloadIn: (w: string) => `niðurtröppun í viku ${w}`, lightIn: (w: string) => `létt vika í viku ${w}`, restTotal: (n: number) => `${n} hvíldardagar alls`,
     foot: "Lýsandi áætlun — setur aldrei readiness-litinn, hnekkir aldrei daglegu ákvörðuninni. Álagsmörk skala frá eigin leikviðmiði (miðgildi næstum-heilla leikja ≥80 mín) eftir hlutdeild hverrar dagsgerðar og vikumargfeldi; gagna-festur upphafspunktur, ekki viðmið til að hlýða (Little & Buchheit). Ekkert eitt „%-af-leik“ — vélrænt fer yfir, háhraði/sprettur ná ekki (Figueiredo). Vitnar í: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021." },
 } as const;
 
@@ -94,9 +94,10 @@ function BlockDoc({ payload, lang }: { payload: PeriodizationBlockPayload; lang:
   // Layer 0 — a rule-built one-line read of the block (from the same week rows the tables print).
   const run = block.weeks.map((w) => w.pctRunning).filter((v): v is number => v != null);
   const peakIdx = block.weeks.reduce((bi_, w, i) => ((w.pctRunning ?? -1) > (block.weeks[bi_]?.pctRunning ?? -1) ? i : bi_), 0);
-  const deloads = block.weeks.filter((w) => w.isDeload).map((w) => String(w.index + 1));
+  const deloads = block.weeks.filter((w) => w.isDeload && !w.isLight).map((w) => String(w.index + 1));
+  const lights = block.weeks.filter((w) => w.isLight).map((w) => String(w.index + 1));
   const restTotal = block.weeks.reduce((a, w) => a + w.restDays, 0);
-  const body = [run.length ? t.peak(Math.max(...run), peakIdx + 1) : "", deloads.length ? t.deloadIn(deloads.join(", ")) : "", t.restTotal(restTotal)].filter(Boolean).join("; ") + ".";
+  const body = [run.length ? t.peak(Math.max(...run), peakIdx + 1) : "", deloads.length ? t.deloadIn(deloads.join(", ")) : "", lights.length ? t.lightIn(lights.join(", ")) : "", t.restTotal(restTotal)].filter(Boolean).join("; ") + ".";
 
   return (
     <Document>
@@ -144,7 +145,7 @@ function BlockDoc({ payload, lang }: { payload: PeriodizationBlockPayload; lang:
               <View key="i">
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
                   <Text style={[fb(600), { fontSize: 8.5 }]}>{bi(w.intent)}</Text>
-                  {w.isDeload ? <Chip text={t.deload} tone="amber" /> : null}
+                  {w.isDeload && (w.isLight ? t.light : t.deload) !== bi(w.intent) ? <Chip text={w.isLight ? t.light : t.deload} tone="amber" /> : null}
                 </View>
                 {w.capNote ? <Text style={[fb(400), { fontSize: 7, color: C.mute, marginTop: 1 }]}>{bi(w.capNote)}</Text> : null}
               </View>,
@@ -175,7 +176,7 @@ function BlockDoc({ payload, lang }: { payload: PeriodizationBlockPayload; lang:
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4, gap: 8 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
                   <Text style={[fh(700), { fontSize: 11 }]}>{`${t.week} ${w.index + 1} - ${bi(w.intent)}`}</Text>
-                  {w.isDeload ? <Chip text={t.deload} tone="amber" /> : null}
+                  {w.isDeload && (w.isLight ? t.light : t.deload) !== bi(w.intent) ? <Chip text={w.isLight ? t.light : t.deload} tone="amber" /> : null}
                 </View>
                 <Text style={[fb(400), { fontSize: 8, color: C.mute }]}>{tx(`${t.match} ${bi(w.matchDow)} · ×${w.mult.toFixed(2)}`)}</Text>
               </View>

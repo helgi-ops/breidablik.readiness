@@ -17,7 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupView from "@/components/coach/WeekSetupView";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
-import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
+import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, blockDeloadOf, deloadWeekIndex, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput, type ExposureInput, type ShapeDirInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { exposuresFromTlyp, shapeDirsFromShape } from "@/lib/micropulse/trainingNeeds";
@@ -42,6 +42,10 @@ import { recommendTestingSchedule, testsForBlock, TEST_SHORT, type TestKey } fro
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
 type Bi = { en: string; is: string };
+const IN_SEASON_DELOAD_NOTE: Bi = {
+  en: "In-season there's no automatic deload: the taper before each match already varies the load. A light week cuts volume about 20% and holds intensity (Fessi 2016, Moalla 2021; observational).",
+  is: "Á keppnistímabili er engin sjálfvirk niðurtröppun: minnkunin fyrir hvern leik sveiflar álaginu nú þegar. Létt vika minnkar magn um 20% en heldur ákefð (Fessi 2016, Moalla 2021; athugunarrannsóknir).",
+};
 type Phase = { key: string; label: Bi; start: string; end: string; weeks: number; matches: number; rationale: Bi };
 type Block = { index: number; phase: Bi; goal: Bi; start: string; end: string; weeks: number; isDeload: boolean; volumeTargetPct: number | null; flag: Bi | null; tmr: number | null; loadTrend: "rising" | "steady" | "falling" | null; acwr: number | null; acwrNote: Bi };
 type WeekLoad = { weekStart: string; load: number | null };
@@ -518,6 +522,14 @@ export default function PeriodizationHubPage() {
   }, [activeBlock, blkStart, blkWeeks]);
   const engineGoal: "accum" | "transmute" | "realize" = activeBlock?.goalKey && activeBlock.goalKey !== "deload" ? activeBlock.goalKey : "accum";
   const effectiveGoal: "accum" | "transmute" | "realize" = blockGoals[activeBlockStart] ?? engineGoal;
+  // The block's unload week, the one the map shows: pre-season keeps its deload, in-season has none unless
+  // the coach picked a light week. The calendar, player blocks and planned volume all read this.
+  const blkDeload = React.useMemo(() => blockDeloadOf(activeBlock), [activeBlock]);
+  const blkMesoDeload = React.useMemo((): { deloadWeek: number | null; light?: boolean } => {
+    if (!blkDeload) return { deloadWeek: cadence };
+    const wi = deloadWeekIndex(mondayOf(blkStart), blkDeload.weekStart, blkWeeks);
+    return { deloadWeek: wi == null ? null : wi + 1, light: blkDeload.light };
+  }, [blkDeload, blkStart, blkWeeks, cadence]);
 
   // The cadence is the DEFAULT block length; the calendar renders the SELECTED block's own length
   // (`blkWeeksEff`, clamped to the block end), so a competitive block stops at the season boundary and
@@ -683,7 +695,7 @@ export default function PeriodizationHubPage() {
   React.useEffect(() => {
     if (!plan) return;
     const start = mondayOf(blkStart);
-    const auto = buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: MESO_HORIZON, scopeName: isPlayerScope ? player!.name : "__team__", baseOverloadPct: blkBase, stepPct: blkStep });
+    const auto = buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: MESO_HORIZON, scopeName: isPlayerScope ? player!.name : "__team__", baseOverloadPct: blkBase, stepPct: blkStep, deload: activeBlock?.inSeason ? { weekStart: null, light: true } : undefined });
     const sk: Record<string, DayState> = {};
     const ov: Record<string, CalType> = {};
     // FIXTURES ARE THE ONLY SOURCE OF MATCHES. The auto layout seeds only session/off — it never
@@ -732,9 +744,9 @@ export default function PeriodizationHubPage() {
   const calBlock = React.useMemo(() => {
     if (!plan || Object.keys(blkSkeleton).length === 0) return null;
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
-    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeksEff, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [], offseasonStart: offPhaseStart ?? undefined, goal: effectiveGoal, camps: campRegions });
+    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeksEff, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [], offseasonStart: offPhaseStart ?? undefined, goal: effectiveGoal, deload: blkDeload, camps: campRegions });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkScope, selId, blkUnit, effectiveGoal, campRegions]);
+  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkScope, selId, blkUnit, effectiveGoal, blkDeload, campRegions]);
 
   // ── WEAKNESS-STEERED BUILD-UP ─────────────────────────────────────────────────────────────────────
   // Read (never recompute) the selected player's Total Player Analysis — his ATHLETE-axis weaknesses +
@@ -841,9 +853,9 @@ export default function PeriodizationHubPage() {
     // "my build-up" view so the two can never drift (src/lib/.../playerBlock.ts).
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? undefined;
     return buildPlayerBlock(plan, pl, {
-      blkStart, blkWeeks: blkWeeksEff, blkBase, blkStep, phaseLabel: blkPhaseLabel, skeletonSets, typeOverrides, steer: steerArg, offseasonStart: offPhaseStart, goal: effectiveGoal, camps: campRegions, friendlyMatches: blkIsPreseason,
+      blkStart, blkWeeks: blkWeeksEff, blkBase, blkStep, phaseLabel: blkPhaseLabel, skeletonSets, typeOverrides, steer: steerArg, offseasonStart: offPhaseStart, goal: effectiveGoal, deload: blkDeload, camps: campRegions, friendlyMatches: blkIsPreseason,
     });
-  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkPhaseLabel, blkIsPreseason, effectiveGoal, campRegions]);
+  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkPhaseLabel, blkIsPreseason, effectiveGoal, blkDeload, campRegions]);
 
   // The SELECTED player's block (weakness-steer applied unless the coach picks a neutral ramp).
   const playerBlock = React.useMemo(
@@ -875,7 +887,7 @@ export default function PeriodizationHubPage() {
     const wb = mesoBlocks.find((b) => b.start === win.blkStart);
     const wGoal: "accum" | "transmute" | "realize" = blockGoals[win.blkStart] ?? (wb?.goalKey && wb.goalKey !== "deload" ? wb.goalKey : "accum");
     const winIsPreseason = plan.phases.find((ph) => ph.start <= win.blkStart && win.blkStart < ph.end)?.key === "preseason";
-    return buildPlayerBlock(plan, player, { blkStart: win.blkStart, blkWeeks: win.blkWeeks, phaseLabel: win.phaseLabel, matchDates: win.matchDates, goal: wGoal, camps: campRegions, friendlyMatches: winIsPreseason });
+    return buildPlayerBlock(plan, player, { blkStart: win.blkStart, blkWeeks: win.blkWeeks, phaseLabel: win.phaseLabel, matchDates: win.matchDates, goal: wGoal, deload: blockDeloadOf(wb), camps: campRegions, friendlyMatches: winIsPreseason });
   }, [player, plan, mesoBlocks, blockGoals, campRegions]);
 
   async function exportPlayerBlock() {
@@ -889,8 +901,8 @@ export default function PeriodizationHubPage() {
   // computed block so the debounced save sees the post-edit layout (calBlock recomputes after the click).
   const buildApplyPayload = React.useCallback((block: CalendarBlock) => block.weeks.map((w) => ({
     week_start: w.weekStart,
-    system_key: w.isDeload ? "RECOVERY" : effectiveGoal === "accum" ? "STRENGTH" : "POWER",
-    intensity_target: w.isDeload ? 3 : Math.max(3, Math.min(9, Math.round(5 + (w.mult - 1) * 12))),
+    system_key: w.isDeload && !w.isLight ? "RECOVERY" : effectiveGoal === "accum" ? "STRENGTH" : "POWER",
+    intensity_target: w.isDeload && !w.isLight ? 3 : Math.max(3, Math.min(9, Math.round(5 + (w.mult - 1) * 12))),
     days: w.days.map((d, i) => ({
       day_index: i + 1, day_date: isoAdd(w.weekStart, i),
       day_type: d.type === "match" ? "GAME" : d.type === "rest" ? "OFF" : "TRAIN",
@@ -1066,7 +1078,7 @@ export default function PeriodizationHubPage() {
     const inWin = fx.filter((ms) => ms >= startMs && ms < endMs).length;
     return recommendBlockGoal({
       phaseKey: phaseKey ?? null, weeksToNextFixture, matchesPerWeek: blkWeeks > 0 ? inWin / blkWeeks : null,
-      deloadNow: !!curBlock?.isDeload, deloadReason: curBlock?.flag ?? null,
+      deloadNow: !!curBlock?.deloadNow, deloadReason: curBlock?.flag ?? null,
       prevGoal: prevBlock ? gk(prevBlock.phase.en) : null,
       fixturesLoaded: (plan.fixtures ?? []).length, loadHistoryWeeks: (plan.loadCurve ?? []).length,
     });
@@ -1162,13 +1174,13 @@ export default function PeriodizationHubPage() {
     // Planned KPI volume (week + meso), match-anchored + per-KPI tapered — team scope, with head-KPI labels.
     // Per-week match count from fixtures → the meso's weekly TOTAL is congestion-aware week by week.
     const pvMatchesByWeek = matchesPerWeek(blkStart, blkWeeks, plan.fixtures ?? []);
-    const pv = buildPlannedVolume({ matchKpiAvg: teamKpiAvg(plan.players), numWeeks: blkWeeks, stepPct: blkStep, deloadWeek: cadence, matchesByWeek: pvMatchesByWeek });
+    const pv = buildPlannedVolume({ matchKpiAvg: teamKpiAvg(plan.players), numWeeks: blkWeeks, stepPct: blkStep, ...blkMesoDeload, matchesByWeek: pvMatchesByWeek });
     const plannedVolume = pv ? {
       weekVolumeMultiple: pv.weekVolumeMultiple,
       matches: pv.matches, weekTotalMultiple: pv.weekTotalMultiple,
       weekKpis: pv.weekKpis.map((v) => ({ label: v.label, unit: v.unit, matchValue: v.matchValue, multiple: v.multiple, weeklyValue: v.weeklyValue })),
       headKpis: pv.headKpis.map((k) => ({ label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, unit: WEEKLY_LOAD_LABELS[k].unit })),
-      meso: pv.meso.map((w) => ({ weekIndex: w.weekIndex, isDeload: w.isDeload, volMultiple: w.volMultiple, matches: w.matches, totalMultiple: w.totalMultiple, kpi: w.kpi.map((c) => ({ multiple: c.multiple, value: c.value })) })),
+      meso: pv.meso.map((w) => ({ weekIndex: w.weekIndex, isDeload: w.isDeload, isLight: w.isLight, volMultiple: w.volMultiple, matches: w.matches, totalMultiple: w.totalMultiple, kpi: w.kpi.map((c) => ({ multiple: c.multiple, value: c.value })) })),
       mesoTotal: { volMultiple: pv.mesoTotal.volMultiple, kpi: pv.mesoTotal.kpi.map((c) => ({ multiple: c.multiple, value: c.value })) },
     } : null;
     // Pre-season weekly-load ramp — starts the week off-season ends (no off-season), ramps toward the
@@ -1346,8 +1358,8 @@ export default function PeriodizationHubPage() {
             const offClauseIS = hasOff ? " Eftir sett tímabilslok tekur Undirbúningshlé við — umskipti/hvíld, svo uppbygging, fram að næsta undirbúningi." : "";
             const offClauseEN = hasOff ? " After the set season end, an Off-season takes over — transition/recovery, then a development build, until next pre-season." : "";
             const verdictLong = is
-              ? `Tímabilið byrjar á ${preWeeks ?? "~"} vikna undirbúnings-Uppsöfnun → Umbreytingu. Á keppnistímabili er áherslan að mestu Framkvæmd (keppni + vikuleg niðurtröppun); leikjagluggar/hlé fá endur-uppsöfnunar-lotu, og hver lota endar á niðurtröppunar-viku.${offClauseIS}`
-              : `Your season opens with a ${preWeeks ?? "~"}-week pre-season Accumulation → Transmutation build-up. In-season the emphasis is mostly Realization (compete + a weekly taper); fixture gaps / breaks get a re-accumulation block, and each block ends in a deload week.${offClauseEN}`;
+              ? `Tímabilið byrjar á ${preWeeks ?? "~"} vikna undirbúnings-Uppsöfnun → Umbreytingu. Á keppnistímabili er áherslan að mestu Framkvæmd (keppni + vikuleg niðurtröppun); leikjagluggar/hlé fá endur-uppsöfnunar-lotu. Undirbúningslotur enda á niðurtröppunar-viku; á keppnistímabili er hún ekki föst, létt vika er val þjálfarans.${offClauseIS}`
+              : `Your season opens with a ${preWeeks ?? "~"}-week pre-season Accumulation → Transmutation build-up. In-season the emphasis is mostly Realization (compete + a weekly taper); fixture gaps / breaks get a re-accumulation block. Pre-season blocks end in a deload week; in-season there's no fixed one, a light week is the coach's call.${offClauseEN}`;
             const verdict = !curPhase ? null
               : inHoliday
                 ? (is ? `Þú ert í hléi — off-season uppbygging hefst ${shortDate(offBuild!, is)}${recLabel ? ` (næst: ${recLabel})` : ""}.` : `You're in the break — off-season build starts ${shortDate(offBuild!, is)}${recLabel ? ` (next up: ${recLabel})` : ""}.`)
@@ -1389,6 +1401,8 @@ export default function PeriodizationHubPage() {
             const weekInBlock = curBlock ? Math.max(1, Math.floor((utc(todayIso) - utc(curBlock.start)) / (7 * DAY)) + 1) : null;
             const thisMon = mondayOf(todayIso);
             const nextDl = blocks.filter((b) => b.deloadWeekStart && b.deloadWeekStart >= thisMon).sort((a, b) => (a.deloadWeekStart! < b.deloadWeekStart! ? -1 : 1))[0] ?? null;
+            // In-season nothing is scheduled by default: say so instead of pointing at next year's pre-season.
+            const seasonNoDl = !!curBlock?.inSeason && !nextDl?.inSeason;
             const dlDays = nextDl?.deloadWeekStart ? Math.round((utc(nextDl.deloadWeekStart) - utc(todayIso)) / DAY) : null;
             const blockEndIncl = (b: { end: string }) => isoAdd(b.end, -1);
 
@@ -1504,14 +1518,14 @@ export default function PeriodizationHubPage() {
             {/* Block length + Save/Apply on their own row. */}
             <div className="mt-3 flex flex-wrap items-end gap-x-5 gap-y-2">
               <div className="flex flex-col gap-1">
-                <span className="text-[12px] font-semibold text-slate-700">{is ? "Lotulengd (niðurtröppun hverja)" : "Block length (deload every)"}</span>
+                <span className="text-[12px] font-semibold text-slate-700">{is ? "Lotulengd" : "Block length"}</span>
                 <div className="inline-flex overflow-hidden rounded-lg border border-slate-300" role="group">
                   {([4, 5, 6] as const).map((c) => (
                     <button key={c} onClick={() => changeCadence(c)} aria-pressed={cadence === c} className={`h-10 min-w-16 px-3 text-[13px] font-semibold ${cadence === c ? "bg-[#2740e6] text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>{is ? `${c} vikur` : `${c} weeks`}</button>
                   ))}
                 </div>
               </div>
-              <span className="pb-2.5 text-[12px] text-slate-600">{is ? `${cadence - 1} uppbyggingarvikur + 1 niðurtröppun` : `${cadence - 1} build weeks + 1 deload`}</span>
+              <span className="pb-2.5 text-[12px] text-slate-600">{is ? `Undirbúningur: ${cadence - 1} uppbyggingarvikur + 1 niðurtröppun · keppni: engin föst` : `Pre-season: ${cadence - 1} build weeks + 1 deload · in-season: none fixed`}</span>
               <div className="ml-auto flex gap-2">
                 <button onClick={savePlan} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-[13px] font-semibold text-slate-700 hover:bg-slate-50">{saved ? (is ? "✓ Vistað" : "✓ Saved") : (is ? "Vista" : "Save")}</button>
                 <button onClick={() => load(preStart, seasonEnd)} className="h-10 rounded-lg bg-[#2740e6] px-4 text-[13px] font-semibold text-white">{is ? "Uppfæra" : "Apply"}</button>
@@ -1560,9 +1574,9 @@ export default function PeriodizationHubPage() {
                 <div className="text-[13px] text-slate-600">{curBlock && weekInBlock ? `${is ? `Vika ${weekInBlock} af ${curBlock.weeks}` : `Week ${weekInBlock} of ${curBlock.weeks}`} · ${shortDate(curBlock.start, is)}–${shortDate(blockEndIncl(curBlock), is)}` : ""}</div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                <div className="text-[12px] font-semibold text-slate-500">{is ? "Næsta niðurtröppun" : "Next deload"}</div>
-                <div className="mt-0.5 text-[20px] font-bold text-slate-900">{nextDl?.deloadWeekStart ? `${is ? "Vika" : "Week of"} ${shortDate(nextDl.deloadWeekStart, is)}` : "—"}</div>
-                <div className="text-[13px] text-slate-600">{dlDays == null ? "" : dlDays <= 0 ? (is ? "Þessa viku" : "This week") : (is ? `Eftir ${dlDays} daga` : `In ${dlDays} days`)}{nextDl?.deloadNow ? (is ? " · færð framar (álag)" : " · pulled forward (load)") : ""}</div>
+                <div className="text-[12px] font-semibold text-slate-500">{curBlock?.inSeason ? (is ? "Næsta létta vika" : "Next light week") : (is ? "Næsta niðurtröppun" : "Next deload")}</div>
+                <div className="mt-0.5 text-[20px] font-bold text-slate-900">{seasonNoDl ? (is ? "Engin föst" : "None set") : nextDl?.deloadWeekStart ? `${is ? "Vika" : "Week of"} ${shortDate(nextDl.deloadWeekStart, is)}` : "—"}</div>
+                <div className="text-[13px] text-slate-600">{seasonNoDl ? (curBlock?.deloadNow ? (is ? "Þreytumerki: íhugaðu létta viku" : "Fatigue signal: consider a light week") : (is ? "Þú velur hana ef þarf" : "Your call, when needed")) : <>{dlDays == null ? "" : dlDays <= 0 ? (is ? "Þessa viku" : "This week") : (is ? `Eftir ${dlDays} daga` : `In ${dlDays} days`)}{nextDl?.deloadNow && !nextDl.inSeason ? (is ? " · færð framar (álag)" : " · pulled forward (load)") : ""}</>}</div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                 <div className="text-[12px] font-semibold text-slate-500">{is ? "Næst" : "Next up"}</div>
@@ -1627,11 +1641,11 @@ export default function PeriodizationHubPage() {
                       const selected = macroEditStart === b.start;
                       return (
                         <button key={b.index} type="button" onClick={() => setMacroEditStart(selected ? null : b.start)} aria-pressed={selected} className="absolute inset-y-0 cursor-pointer border-0 bg-transparent p-0 px-px" style={{ left: `${l}%`, width: `${r - l}%` }}
-                          title={`${shortDate(b.start, is)}–${shortDate(blockEndIncl(b), is)} · ${goalName(g)} · ${is ? b.phase.is : b.phase.en} · ${is ? "niðurtröppunarvika" : "deload week"} ${b.deloadWeekStart ? shortDate(b.deloadWeekStart, is) : "—"}${b.deloadNow ? (is ? " (færð framar)" : " (pulled forward)") : ""} — ${is ? "smelltu til að breyta markmiði + lengd" : "click to edit goal + length"}`}>
+                          title={`${shortDate(b.start, is)}–${shortDate(blockEndIncl(b), is)} · ${goalName(g)} · ${is ? b.phase.is : b.phase.en} · ${b.inSeason ? (is ? "létt vika" : "light week") : (is ? "niðurtröppunarvika" : "deload week")} ${b.deloadWeekStart ? shortDate(b.deloadWeekStart, is) : "—"}${b.deloadNow ? (b.inSeason ? (is ? " (þreytumerki)" : " (fatigue signal)") : (is ? " (færð framar)" : " (pulled forward)")) : ""} — ${is ? "smelltu til að breyta markmiði + lengd" : "click to edit goal + length"}`}>
                           <div className={`relative flex h-full items-center overflow-hidden rounded-md px-1.5 ${selected ? "ring-2 ring-[#14181c] ring-offset-1" : ""}`} style={{ background: GC[g] }}>
                             <span className={`relative z-[1] truncate text-[12px] font-semibold ${g === "deload" ? "text-[#5A3A06]" : "text-white"}`}>{goalName(g)}</span>
                             {dl != null && g !== "deload" && (
-                              <div className="absolute inset-y-0 border-l-2 border-white" style={{ left: `${dl}%`, width: `${dlW}%`, background: b.deloadNow ? "repeating-linear-gradient(45deg,#DE9328,#DE9328 3px,#F6D29A 3px,#F6D29A 6px)" : "#DE9328" }} />
+                              <div className="absolute inset-y-0 border-l-2 border-white" style={{ left: `${dl}%`, width: `${dlW}%`, background: b.deloadNow && !b.inSeason ? "repeating-linear-gradient(45deg,#DE9328,#DE9328 3px,#F6D29A 3px,#F6D29A 6px)" : "#DE9328" }} />
                             )}
                           </div>
                         </button>
@@ -1644,15 +1658,15 @@ export default function PeriodizationHubPage() {
                 {(() => {
                   const dls = blocks.filter((b) => b.deloadWeekStart && utc(b.deloadWeekStart!) >= d0 && utc(b.deloadWeekStart!) < d1);
                   if (!dls.length) return null;
-                  return lane(is ? "Niðurtröppun" : "Deload", is ? "léttari endurhleðslu-vika" : "lighter re-load week",
+                  return lane(is ? "Niðurtröppun" : "Deload", is ? "léttari vika" : "lighter week",
                     <div className="relative h-5">
                       {dls.map((b) => {
                         const l = Math.max(0, pctOf(b.deloadWeekStart!)), r = Math.min(100, pctOf(isoAdd(b.deloadWeekStart!, 7)));
                         if (r <= l) return null;
                         return (
                           <div key={`${b.start}-dl`} className="absolute inset-y-0 px-px" style={{ left: `${l}%`, width: `${r - l}%` }}
-                            title={`${is ? "Niðurtröppunarvika" : "Deload week"} ${shortDate(b.deloadWeekStart!, is)}${b.deloadNow ? (is ? " · færð framar (álag)" : " · pulled forward (load)") : ""}`}>
-                            <div className="h-full rounded-md" style={{ background: b.deloadNow ? "repeating-linear-gradient(45deg,#DE9328,#DE9328 3px,#F6D29A 3px,#F6D29A 6px)" : "#DE9328" }} />
+                            title={`${b.inSeason ? (is ? "Létt vika" : "Light week") : (is ? "Niðurtröppunarvika" : "Deload week")} ${shortDate(b.deloadWeekStart!, is)}${b.deloadNow && !b.inSeason ? (is ? " · færð framar (álag)" : " · pulled forward (load)") : ""}`}>
+                            <div className="h-full rounded-md" style={{ background: b.deloadNow && !b.inSeason ? "repeating-linear-gradient(45deg,#DE9328,#DE9328 3px,#F6D29A 3px,#F6D29A 6px)" : "#DE9328" }} />
                           </div>
                         );
                       })}
@@ -1777,7 +1791,7 @@ export default function PeriodizationHubPage() {
             {/* legend */}
             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-slate-100 pt-3 text-[12px] text-slate-600">
               {ANATOMY.map((a) => <span key={a.g} className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px]" style={{ background: GC[a.g] }} />{goalName(a.g)}</span>)}
-              <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px]" style={{ background: "#DE9328" }} />{is ? "Niðurtröppunarvika" : "Deload week"}</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px]" style={{ background: "#DE9328" }} />{is ? "Niðurtröppun / létt vika" : "Deload / light week"}</span>
               {teamBreaksFull.length > 0 && <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px]" style={{ background: "#94A3B8" }} />{is ? "Frí / hlé" : "Break"}</span>}
               {camps.length > 0 && <span className="inline-flex items-center gap-1.5"><span className="inline-flex h-3.5 items-center rounded-[3px] px-1 text-[9px] font-bold text-[#5A3A06]" style={{ background: "#DE9328" }}>✈</span>{is ? "Æfingaferð" : "Training camp"}</span>}
               {compPhase && <span className="h-4 w-px bg-slate-200" />}
@@ -1833,15 +1847,16 @@ export default function PeriodizationHubPage() {
                     </select>
                   </label>
                   {curLenOv != null && <button type="button" onClick={() => setBlockLength(eb.start, null)} className="text-[12px] text-slate-500 hover:underline">{is ? "Núllstilla lengd" : "Reset length"}</button>}
-                  <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Niðurtröppun" : "Deload"}
+                  <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{eb.inSeason ? (is ? "Létt vika" : "Light week") : (is ? "Niðurtröppun" : "Deload")}
                     <select value={curDeload} onChange={(e) => setBlockDeload(eb.start, e.target.value === "" ? null : e.target.value)} className="rounded border border-slate-300 bg-white px-1.5 py-1 text-[13px]">
-                      <option value="">{is ? "Sjálfgefið (snjallt)" : "Auto (smart)"}</option>
+                      <option value="">{eb.inSeason ? (is ? "Engin (sjálfgefið)" : "None (default)") : (is ? "Sjálfgefið (snjallt)" : "Auto (smart)")}</option>
                       {blkMondays.map((m, wi) => <option key={m} value={m}>{is ? `Vika ${wi + 1} · ${shortDate(m, is)}` : `Week ${wi + 1} · ${shortDate(m, is)}`}</option>)}
                     </select>
                   </label>
                   {curDeload !== "" && <button type="button" onClick={() => setBlockDeload(eb.start, null)} className="text-[12px] text-slate-500 hover:underline">{is ? "Núllstilla" : "Reset"}</button>}
                   <span className="text-[11px] text-slate-400">{is ? "Breyting endurflæðir Mesó, Míkró og kortið." : "Changes re-flow Meso, Micro and the map."}</span>
                 </div>
+                {eb.inSeason && <p className="mt-1.5 text-[11px] text-slate-500">{is ? IN_SEASON_DELOAD_NOTE.is : IN_SEASON_DELOAD_NOTE.en}</p>}
                 {/* Structure — SPLIT (add a block) / MERGE (remove one). Both span-preserving: the edited span's
                     total weeks are unchanged, so no later block moves → no other override shifts or orphans. */}
                 <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 pt-3">
@@ -1893,7 +1908,7 @@ export default function PeriodizationHubPage() {
               <ul className="mt-3 list-disc space-y-1 pl-5 text-[13px] text-slate-700">
                 <li>{is ? "Uppsöfnun byggir grunninn, Umbreyting sérhæfir hann í fótbolta, Framkvæmd toppar þig fyrir leiki — í þeirri röð." : "Accumulation builds the base, Transmutation sharpens it to football-specific, Realization peaks you for matches — in that order."}</li>
                 <li>{is ? "Á tímabilinu skiptistu milli Umbreyting ↔ Framkvæmd kringum leiki; þú safnar aftur eftir niðurtröppun eða pásu." : "In-season you cycle Transmutation ↔ Realization around fixtures; you re-accumulate after a deload or a break."}</li>
-                <li>{is ? "Niðurtröppun er ekki fjórða lotan — hún er lokavika hverrar lotu (gula rákin), færð framar ef álag rýkur upp eða viðbragð lækkar." : "Deload isn't a fourth block — it's the last week of every block (the amber stripe), pulled forward if load spikes or readiness drifts."}</li>
+                <li>{is ? "Niðurtröppun er ekki fjórða lotan — í undirbúningi er hún lokavika lotunnar (gula rákin), færð framar ef álag rýkur upp eða viðbragð lækkar. Á keppnistímabili er hún ekki föst: minnkunin fyrir hvern leik sveiflar álaginu og létt vika (20% minna magn, sama ákefð) er þitt val." : "Deload isn't a fourth block — in pre-season it's the block's last week (the amber stripe), pulled forward if load spikes or readiness drifts. In-season it isn't fixed: the taper before each match varies the load, and a light week (20% less volume, same intensity) is your call."}</li>
               </ul>
             </section>
 
@@ -1973,7 +1988,7 @@ export default function PeriodizationHubPage() {
                 <p className="mt-1.5 text-[13px] text-slate-700">{verdictLong}</p>
                 <p className="mt-1.5 text-[13px] text-slate-700">{is ? "MicroPulse setur loturnar á ÞÍNA leiki og álag — svo lengd og staðsetning eru liðsins eigin, ekki fast sniðmát. Röðin (Uppsöfnun → Umbreyting → Framkvæmd, niðurtröppun sem hvíld) er úr blokkar-periodisation; hún mælir með — val á lotu-markmiði er áfram þjálfarans." : "MicroPulse places the blocks on YOUR fixtures and load — so the lengths and positions are the team's own, not a fixed template. The order (Accumulation → Transmutation → Realization, deload as the unload) is block periodisation; it recommends — the block-goal choice stays the coach's call."}</p>
                 <p className="mt-1.5 text-[13px] text-slate-700">{is ? "Próf: við upphaf hverrar lotu er endur-grunnmælt svo svæði/álög passi núverandi getu. Framkvæmd = aðeins vöktun (ekkert þreytandi inn í leiki). Niðurtröppun = besti glugginn." : "Testing: at each block start, re-baseline so zones/loads fit current capacity. Realization = monitoring only (nothing fatiguing into matches). Deload = the best window."}</p>
-                <p className="mt-1.5 text-[12px] text-slate-500">Issurin 2010 (block periodisation) · Martín-García 2018 + Owen 2017 (taper/realization into fixtures) · Teixeira 2021 (deload on load-trend + readiness, not ACWR) · Oliveira 2019/2021 (pre-season = accumulation) · Buchheit; Mann/Weakley; Claudino; Bourne (testing). {is ? "Lýsandi — aldrei readiness-liturinn." : "Descriptive — never the readiness colour."}</p>
+                <p className="mt-1.5 text-[12px] text-slate-500">Issurin 2010 (block periodisation) · Martín-García 2018 + Owen 2017 (taper/realization into fixtures) · Teixeira 2021 (deload on load-trend + readiness, not ACWR) · Malone 2015 + Fessi 2016 + Moalla 2021 (in-season: small between-block change, ~20% taper weeks; observational) · Oliveira 2019/2021 (pre-season = accumulation) · Buchheit; Mann/Weakley; Claudino; Bourne (testing). {is ? "Lýsandi — aldrei readiness-liturinn." : "Descriptive — never the readiness colour."}</p>
               </details>
             </section>
           )}
@@ -2754,14 +2769,15 @@ export default function PeriodizationHubPage() {
                   </select>
                   {sel.lengthPinned && <span className="rounded-full bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#2740e6]">{is ? "stillt" : "set"}</span>}
                 </label>
-                <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Niðurtröppunarvika" : "Deload week"}
+                <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{sel.inSeason ? (is ? "Létt vika" : "Light week") : (is ? "Niðurtröppunarvika" : "Deload week")}
                   <select value={blockDeloadOv[sel.start] ?? ""} onChange={(e) => setBlockDeload(sel.start, e.target.value || null)} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
-                    <option value="">{is ? `Sjálfgefið${sel.deloadWeekStart && !sel.deloadPinned ? ` (${shortDate(sel.deloadWeekStart, is)})` : ""}` : `Auto${sel.deloadWeekStart && !sel.deloadPinned ? ` (${shortDate(sel.deloadWeekStart, is)})` : ""}`}</option>
+                    <option value="">{sel.inSeason ? (is ? "Engin (sjálfgefið)" : "None (default)") : is ? `Sjálfgefið${sel.deloadWeekStart && !sel.deloadPinned ? ` (${shortDate(sel.deloadWeekStart, is)})` : ""}` : `Auto${sel.deloadWeekStart && !sel.deloadPinned ? ` (${shortDate(sel.deloadWeekStart, is)})` : ""}`}</option>
                     {Array.from({ length: sel.weeks }, (_, w) => isoAdd(sel.start, w * 7)).map((mon) => <option key={mon} value={mon}>{is ? "Vika" : "Week of"} {shortDate(mon, is)}</option>)}
                   </select>
                   {sel.deloadPinned && <span className="rounded-full bg-[#de9328]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#de9328]">{is ? "fest" : "pinned"}</span>}
                 </label>
                 <span className="text-[11px] text-slate-400">{is ? "Sjálfvirkt sjálfgefið — hnekktu þar sem þarf." : "Auto by default — override where it matters."}</span>
+                {sel.inSeason && <p className="w-full text-[11px] text-slate-500">{is ? IN_SEASON_DELOAD_NOTE.is : IN_SEASON_DELOAD_NOTE.en}</p>}
               </div>
             )}
             {wsApplied === "ok" && <p className="mt-2 text-[12px] font-medium text-emerald-700">{is ? "✓ Lotan er komin í Vikuuppsetningu — leikir/æfingar/frí og dagsgerðir skrifaðar á week_plans." : "✓ The block is in Week Setup — matches/sessions/off and day-types written to week_plans."}</p>}
@@ -2834,7 +2850,7 @@ export default function PeriodizationHubPage() {
                       <React.Fragment key={i}>
                         <div className="flex flex-col justify-center pr-1" title={wkOff ? (is ? "Off-season þróunarvika" : "Off-season development week") : w ? `${is ? w.intent.is : w.intent.en}${w.capNote ? ` — ${is ? w.capNote.is : w.capNote.en}` : ""}` : undefined}>
                           <span className="text-[13px] font-bold text-slate-900">{is ? "V" : "W"}{i + 1}</span>
-                          {w && <span className={`text-[11px] font-bold ${w.isDeload ? "text-[#9A5B06]" : "text-[#1B2DA8]"}`}>{w.isDeload ? (is ? "niðurtr." : "deload") : `×${w.mult.toFixed(2)}`}</span>}
+                          {w && <span className={`text-[11px] font-bold ${w.isDeload ? "text-[#9A5B06]" : "text-[#1B2DA8]"}`}>{w.isLight ? (is ? "létt" : "light") : w.isDeload ? (is ? "niðurtr." : "deload") : `×${w.mult.toFixed(2)}`}</span>}
                           {wkOff && <span className="mt-0.5 w-fit rounded bg-slate-200 px-1 text-[10px] font-bold text-slate-700">Off-s.</span>}
                           {!wkOff && w?.capNote && <span className="text-[11px] font-semibold text-amber-800">⚑ {is ? "þak" : "cap"}</span>}
                         </div>
@@ -3026,7 +3042,7 @@ export default function PeriodizationHubPage() {
                 {goalRec && effectiveGoal !== goalRec.goal && (
                   <button type="button" onClick={() => setBlockGoal(goalRec.goal as "accum" | "transmute" | "realize")} className="mt-2 h-9 rounded-lg border border-[#2740e6] bg-white px-3 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">{is ? `Nota ráðlagt (${BLOCK_GOAL_LABEL[goalRec.goal].is})` : `Use recommended (${BLOCK_GOAL_LABEL[goalRec.goal].en})`}</button>
                 )}
-                {goalRec?.deloadNow && <p className="mt-2 flex items-center gap-1.5 rounded-lg bg-amber-100 px-2.5 py-1.5 text-[12px] font-semibold text-amber-900"><span className="inline-block h-3 w-2 rounded-sm" style={{ background: "#DE9328" }} />{is ? "Þreytumerki — færðu niðurtröppunar-vikuna framar (markmiðið helst)." : "Fatigue signal — pull the deload week forward (the goal is unchanged)."}</p>}
+                {goalRec?.deloadNow && <p className="mt-2 flex items-center gap-1.5 rounded-lg bg-amber-100 px-2.5 py-1.5 text-[12px] font-semibold text-amber-900"><span className="inline-block h-3 w-2 rounded-sm" style={{ background: "#DE9328" }} />{activeBlock?.inSeason ? (is ? "Þreytumerki — íhugaðu létta viku (markmiðið helst)." : "Fatigue signal — consider a light week (the goal is unchanged).") : (is ? "Þreytumerki — færðu niðurtröppunar-vikuna framar (markmiðið helst)." : "Fatigue signal — pull the deload week forward (the goal is unchanged).")}</p>}
                 {goalRec && (<>
                   <ul className="mt-2 list-disc space-y-0.5 pl-5 text-[13px] text-slate-700">
                     {goalRec.reasons.slice(0, 3).map((r, i) => <li key={i}>{is ? r.is : r.en}</li>)}
@@ -3053,8 +3069,8 @@ export default function PeriodizationHubPage() {
                       <div className="text-[15px] font-bold text-slate-900">{trendWord(sel.loadTrend)}</div>
                     </div>
                     <div>
-                      <div className="text-[12px] font-semibold text-slate-500">{is ? "Niðurtröppunarvika" : "Deload week"}</div>
-                      <div className="text-[15px] font-bold text-slate-900">{sel.deloadWeekStart ? shortDate(sel.deloadWeekStart, is) : "—"}{sel.deloadNow && <span className="ml-1 text-[12px] font-semibold text-amber-800">{is ? "· færð framar" : "· pulled fwd"}</span>}</div>
+                      <div className="text-[12px] font-semibold text-slate-500">{sel.inSeason ? (is ? "Létt vika" : "Light week") : (is ? "Niðurtröppunarvika" : "Deload week")}</div>
+                      <div className="text-[15px] font-bold text-slate-900">{sel.deloadWeekStart ? shortDate(sel.deloadWeekStart, is) : sel.inSeason ? (is ? "Engin" : "None") : "—"}{sel.deloadNow && !sel.inSeason && <span className="ml-1 text-[12px] font-semibold text-amber-800">{is ? "· færð framar" : "· pulled fwd"}</span>}</div>
                     </div>
                   </div>
                   {sel.flag && <p className="mt-2 rounded-lg bg-amber-100 px-2.5 py-1.5 text-[12px] font-semibold text-amber-900">{is ? sel.flag.is : sel.flag.en}</p>}
@@ -3124,7 +3140,7 @@ export default function PeriodizationHubPage() {
               const days1 = standardTrainingDays(1);          // a standard 1-match week
               const wkMult = weeklyTrainingMultiple(days1);   // VOLUME multiple (e=1) — the headline ×match
               const vols = kpiVolumes(matchKpis, days1);      // per-KPI, each tapered by its own exponent
-              const meso = mesoWeeklyMultiples({ numWeeks: blkWeeks, baseMultiple: wkMult, stepPct: blkStep, deloadWeek: cadence });
+              const meso = mesoWeeklyMultiples({ numWeeks: blkWeeks, baseMultiple: wkMult, stepPct: blkStep, ...blkMesoDeload });
               const blockTotal = mesoTotalMultiple(meso);
               const headKeys = (Object.keys(matchKpis) as WeeklyLoadMetricKey[]).slice(0, 2); // 1-2 headline KPIs for the meso table
               const fmtK = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
@@ -3176,7 +3192,7 @@ export default function PeriodizationHubPage() {
                           <tbody>
                             {meso.map((w) => (
                               <tr key={w.weekIndex} className="border-t border-slate-100">
-                                <td className="py-1.5 pr-2 text-slate-700">{is ? "Vika" : "Wk"} {w.weekIndex}{w.isDeload ? <span className="ml-1 rounded bg-[#de9328]/15 px-1 py-0.5 text-[9px] font-semibold uppercase text-[#de9328]">{is ? "niður" : "deload"}</span> : null}</td>
+                                <td className="py-1.5 pr-2 text-slate-700">{is ? "Vika" : "Wk"} {w.weekIndex}{w.isDeload ? <span className="ml-1 rounded bg-[#de9328]/15 px-1 py-0.5 text-[9px] font-semibold uppercase text-[#de9328]">{w.isLight ? (is ? "létt" : "light") : is ? "niður" : "deload"}</span> : null}</td>
                                 <td className="py-1.5 px-2 text-right tabular-nums font-semibold text-slate-900">{w.multiple}×</td>
                                 {headKeys.map((k) => { const val = mesoKpi(k, w); return <td key={k} className="py-1.5 px-2 text-right tabular-nums text-slate-600">{val == null ? "–" : <><span className="font-semibold text-slate-800">{kpiWkMult(k, w)}×</span> <span className="text-slate-400">{fmtK(val)}{WEEKLY_LOAD_LABELS[k].unit}</span></>}</td>; })}
                               </tr>
@@ -3190,7 +3206,7 @@ export default function PeriodizationHubPage() {
                         </table>
                       </div>
                     </div>
-                    <p className="mt-2 text-[10px] text-slate-400">{is ? "Leik-miðað: hver KPI = leikgildi × SITT vikumargfeldi — háhraði/sprettur safnast upp í lægra margfeldi en vegalengd (þeir trappast harðar fyrir leik; Martín-García 2018). Vikan bylgjast um MD (MD-3 þyngst), blokkin stigmagnast með niðurtröppun. Lýsandi áætlun — aldrei readiness-liturinn." : "Match-anchored: each KPI = match value × its OWN weekly multiple — HSR/sprint accumulate a lower multiple than distance (they taper harder before a match; Martín-García 2018). The week undulates around MD (MD-3 heaviest); the block ramps with a deload. Descriptive plan — never the readiness colour."}</p>
+                    <p className="mt-2 text-[10px] text-slate-400">{is ? "Leik-miðað: hver KPI = leikgildi × SITT vikumargfeldi — háhraði/sprettur safnast upp í lægra margfeldi en vegalengd (þeir trappast harðar fyrir leik; Martín-García 2018). Vikan bylgjast um MD (MD-3 þyngst), blokkin stigmagnast; niðurtröppun eða létt vika sést í töflunni. Lýsandi áætlun — aldrei readiness-liturinn." : "Match-anchored: each KPI = match value × its OWN weekly multiple — HSR/sprint accumulate a lower multiple than distance (they taper harder before a match; Martín-García 2018). The week undulates around MD (MD-3 heaviest); the block ramps; any deload or light week shows in the table. Descriptive plan — never the readiness colour."}</p>
                   </div>
                 </details>
               );
@@ -3290,7 +3306,7 @@ export default function PeriodizationHubPage() {
                   block: b && g ? {
                     label: BLOCK_GOAL_LABEL[g], color: GCm[g],
                     week: Math.max(1, Math.floor((Date.parse(`${ws}T00:00:00Z`) - Date.parse(`${mondayOf(b.start)}T00:00:00Z`)) / (7 * 86_400_000)) + 1),
-                    of: b.weeks, deload: b.deloadWeekStart === ws,
+                    of: b.weeks, deload: b.deloadWeekStart === ws, light: !!b.inSeason,
                   } : null,
                 };
               }}

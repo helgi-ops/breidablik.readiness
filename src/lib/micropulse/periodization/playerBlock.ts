@@ -11,8 +11,9 @@
  * both satisfy it without importing across the client/server boundary.
  */
 import { buildCalendarBlock, positionGroup } from "./index";
-import type { Bi, CalType, CalendarBlock, CalWeek, MatchUnitAbs, RecGoalKey, TeamAverages } from "./index";
+import type { Bi, BlockDeload, CalType, CalendarBlock, CalWeek, MatchUnitAbs, RecGoalKey, TeamAverages } from "./index";
 import { standardTrainingDays, weeklyKpiMultiple } from "./plannedVolume";
+import { LIGHT_WEEK_VOL } from "./imaStandard";
 import type { WeeklyLoadMetricKey } from "../externalLoad/weeklyLoadTypes";
 import type { BuildUpSteer } from "./buildUpSteer";
 
@@ -51,6 +52,8 @@ export interface PlayerBlockOpts {
   offseasonStart?: string;
   /** Block goal — shapes the player's ramp volume / taper / strength exactly as the coach's team block. */
   goal?: RecGoalKey;
+  /** The block's unload week (`blockDeloadOf`), same as the team calendar. */
+  deload?: BlockDeload;
   /** Training camps overlaid on the block (same as the team block) — concentrated-load periods. */
   camps?: Array<{ start: string; end: string; loadPct: number; twoADay: boolean }>;
   steer?: { active: boolean; steer: BuildUpSteer | null };
@@ -91,24 +94,26 @@ function alignBlockToTeamMultiple(block: CalendarBlock, friendlyMatches: boolean
   const AXIS_KPI: Record<"dist" | "hsr" | "load" | "accdec" | "stride" | "fr" | "cod" | "acc" | "dec", WeeklyLoadMetricKey> = {
     dist: "totalDistance", hsr: "velocityBand5", load: "totalPlayerLoad", accdec: "accelB23", stride: "velocityBand6", fr: "imaFrDistance", cod: "imaCod", acc: "imaAccel", dec: "imaDecel",
   };
-  const trainWeeks = block.weeks.filter((w) => !w.isDeload);
+  const trainWeeks = block.weeks.filter((w) => !w.isDeload || w.isLight);
   if (!trainWeeks.length) return;
   const peakPct = (sel: (w: CalWeek) => number | null): number => Math.max(0, ...trainWeeks.map((w) => sel(w) ?? 0));
+  // A light week counts at its un-cut level on the volume axes, so picking one changes only that week.
+  const peakVol = (sel: (w: CalWeek) => number | null): number => Math.max(0, ...trainWeeks.map((w) => (sel(w) ?? 0) / (w.isLight ? LIGHT_WEEK_VOL : 1)));
   const scaleOf = (axis: keyof typeof AXIS_KPI, pk: number): number => {
     if (!pk || pk <= 0) return 1;
     const tm = weeklyKpiMultiple(preDays, AXIS_KPI[axis]);
     return Number.isFinite(tm) && tm > 0 ? (tm * 100) / pk : 1; // tm×100 because pct is ×match ×100
   };
   const sc = {
-    dist: scaleOf("dist", peakPct((w) => w.pctRunning)),
+    dist: scaleOf("dist", peakVol((w) => w.pctRunning)),
     hsr: scaleOf("hsr", peakPct((w) => w.pctHsr)),
-    load: scaleOf("load", peakPct((w) => w.pctMech)),
-    accdec: scaleOf("accdec", peakPct((w) => w.pctAccDec23)),
+    load: scaleOf("load", peakVol((w) => w.pctMech)),
+    accdec: scaleOf("accdec", peakVol((w) => w.pctAccDec23)),
     stride: scaleOf("stride", peakPct((w) => w.pctStride)),
     fr: scaleOf("fr", peakPct((w) => w.pctFr ?? null)),
-    cod: scaleOf("cod", peakPct((w) => w.pctCod ?? null)),
-    acc: scaleOf("acc", peakPct((w) => w.pctAccel ?? null)),
-    dec: scaleOf("dec", peakPct((w) => w.pctDecel ?? null)),
+    cod: scaleOf("cod", peakVol((w) => w.pctCod ?? null)),
+    acc: scaleOf("acc", peakVol((w) => w.pctAccel ?? null)),
+    dec: scaleOf("dec", peakVol((w) => w.pctDecel ?? null)),
   };
   if (!Object.values(sc).some((x) => Math.abs(x - 1) > 0.001)) return; // already aligned
   for (const w of block.weeks) {
@@ -186,7 +191,7 @@ export function buildPlayerBlock(plan: PlayerBlockPlan, pl: PlayerBlockPlayer, o
   const block = buildCalendarBlock({
     unit, startDate: opts.blkStart, numWeeks: opts.blkWeeks, scopeName: pl.name, scopePos: pl.position,
     phase: opts.phaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeleton, typeOverrides: opts.typeOverrides,
-    maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph, dir: steerActive && steer ? steer.dirEmph : undefined }, offseasonStart: opts.offseasonStart, goal: opts.goal, camps: opts.camps,
+    maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph, dir: steerActive && steer ? steer.dirEmph : undefined }, offseasonStart: opts.offseasonStart, goal: opts.goal, deload: opts.deload, camps: opts.camps,
   });
 
   // ── Align the block's weekly VOLUME to the TEAM's ×match multiple PER VARIABLE ──

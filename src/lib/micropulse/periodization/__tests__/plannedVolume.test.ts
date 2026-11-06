@@ -154,6 +154,18 @@ describe("mesoWeeklyMultiples", () => {
     expect(weeks[3].isDeload).toBe(true);
     expect(weeks[3].multiple).toBeCloseTo(2.4 * 0.6, 2);
   });
+  it("null means no deload at all", () => {
+    const weeks = mesoWeeklyMultiples({ numWeeks: 4, baseMultiple: 2, stepPct: 10, deloadWeek: null });
+    expect(weeks.map((w) => w.isDeload)).toEqual([false, false, false, false]);
+    expect(weeks.map((w) => w.multiple)).toEqual([2, 2.2, 2.4, 2.6]);
+  });
+  it("a light week stays on its ramp × 0.8, and the ramp carries on after it", () => {
+    const weeks = mesoWeeklyMultiples({ numWeeks: 4, baseMultiple: 2, stepPct: 10, deloadWeek: 2, light: true });
+    expect(weeks.map((w) => w.multiple)).toEqual([2, 1.76, 2.4, 2.6]);
+    expect(weeks[1].isDeload).toBe(true);
+    expect(weeks[1].isLight).toBe(true);
+    expect(weeks[2].isLight).toBeUndefined();
+  });
   it("respects an explicit deload week", () => {
     const weeks = mesoWeeklyMultiples({ numWeeks: 4, baseMultiple: 2, stepPct: 10, deloadWeek: 2 });
     expect(weeks[1].isDeload).toBe(true);

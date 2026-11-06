@@ -9,7 +9,7 @@
  * number is sourced from the squad instead of assumptions (his frustration: "built with no data").
  */
 
-import { CAL_SHARE_HI, CAL_SHARE_HI_REF, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, type HiEvidence, type HiVar, type ImaTrainingDayType, type ImaVar } from "./imaStandard";
+import { CAL_SHARE_HI, CAL_SHARE_HI_REF, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, LIGHT_WEEK_VOL, type HiEvidence, type HiVar, type ImaTrainingDayType, type ImaVar } from "./imaStandard";
 
 export type Bi = { en: string; is: string };
 
@@ -534,7 +534,7 @@ export type CalDay = {
   accel?: number | null; decel?: number | null;
   dir: { fwd: number; back: number; lat: number } | null;
 };
-export type CalWeek = { index: number; weekStart: string; intent: Bi; matchDow: Bi; mult: number; isDeload: boolean; days: CalDay[]; pctRunning: number | null; pctHsr: number | null; pctMech: number | null; pctAccDec23: number | null; pctStride: number | null; pctFr?: number | null; pctCod?: number | null; pctAccel?: number | null; pctDecel?: number | null; restDays: number; capNote: Bi | null };
+export type CalWeek = { index: number; weekStart: string; intent: Bi; matchDow: Bi; mult: number; isDeload: boolean; isLight?: boolean; days: CalDay[]; pctRunning: number | null; pctHsr: number | null; pctMech: number | null; pctAccDec23: number | null; pctStride: number | null; pctFr?: number | null; pctCod?: number | null; pctAccel?: number | null; pctDecel?: number | null; restDays: number; capNote: Bi | null };
 export type CalendarBlock = { unit: MatchUnitAbs; scopeName: string; scopePos: string | null; phase: Bi; numWeeks: number; startDate: string; weeks: CalWeek[]; legend: Array<{ md: string; label: Bi; what: Bi }>; notes: Bi[];
   /** Set only when the block was built with a `goal` — the chosen block goal and its evidence-based gym
    *  scheme (max-strength / strength–power / power). Lets the hub + PDF show what the goal prescribes. */
@@ -711,6 +711,16 @@ const GOAL_DELOAD: Record<RecGoalKey, { vol: number; int: number }> = {
   accum: { vol: 0.75, int: 0.75 }, transmute: { vol: 0.60, int: 0.60 }, realize: { vol: 0.45, int: 0.70 },
 };
 
+/** Which week of a block unloads, and how. `weekStart` null = none. `light` = the in-season light week
+ *  (volume down, intensity held, same week layout) instead of the deep deload. */
+export type BlockDeload = { weekStart: string | null; light: boolean };
+/** Index of a deload week inside a run of `n` weeks starting at `startMonday`; null when it's outside. */
+export function deloadWeekIndex(startMonday: string, weekStart: string | null, n: number): number | null {
+  if (!weekStart) return null;
+  const k = Math.round((Date.parse(mondayOfIso(weekStart)) - Date.parse(startMonday)) / (7 * 86_400_000));
+  return k >= 0 && k < n ? k : null;
+}
+
 export function buildCalendarBlock(opts: {
   unit: MatchUnitAbs; startDate: string; numWeeks: number; scopeName: string; scopePos?: string | null;
   phase?: Bi; baseOverloadPct?: number; stepPct?: number;
@@ -740,6 +750,9 @@ export function buildCalendarBlock(opts: {
    *  build. Accumulation = higher volume / gentle taper; Transmutation = balanced / moderate taper;
    *  Realization = lower volume / deep taper + a roomier (fresher) week. Issurin 2010; Bosquet 2007. */
   goal?: RecGoalKey;
+  /** The unload week, normally `blockDeloadOf(block)` so the calendar agrees with the block overview.
+   *  Omit → the old rule, the last week of a 3+ week block. */
+  deload?: BlockDeload;
   /** Pre-season MATCH EXPOSURE (0–1): the fraction of a full match a FRIENDLY represents on a match day,
    *  because players build match fitness through partial minutes (a 60-min friendly ≈ 0.67). Scales the
    *  match-day load so it reads partial, not a full match. A number applies to every week; a function
@@ -790,7 +803,10 @@ export function buildCalendarBlock(opts: {
   };
   const offSet = new Set((opts.offDays ?? []).filter(inBlock));
   const onSet = new Set((opts.onDays ?? []).filter(inBlock));
-  const lastWeek = n - 1;
+  const deloadIdx = opts.deload === undefined ? (n >= 3 ? n - 1 : null) : deloadWeekIndex(start, opts.deload.weekStart, n);
+  const deloadLight = !!opts.deload?.light;
+  // With no unload at the end of the block the ramp peaks in its last week.
+  const peakIdx = opts.deload === undefined || deloadIdx === n - 1 ? n - 2 : n - 1;
   // Build-up templates (evidence-ordered): roomy weeks get Mechanical→Locomotive→Mixed→Off→Activation;
   // tight weeks compress to Locomotive→Mixed→Off (drop Mechanical + Activation); deload inserts extra rest.
   const LT: CalType[] = ["mechanical", "locomotive", "mixed", "rest", "activation"];
@@ -819,7 +835,7 @@ export function buildCalendarBlock(opts: {
       const gapStartMs = prevMs > -Infinity ? prevMs + 3 * DAY : firstMs;         // first buildable day after recovery
       const slots = Math.round((nextMs - gapStartMs) / DAY);
       const idx = Math.round((dMs - gapStartMs) / DAY);
-      const isDeloadMatch = weekIdxOf(matchIso[nextIdx]) === lastWeek && n >= 3;
+      const isDeloadMatch = weekIdxOf(matchIso[nextIdx]) === deloadIdx && !deloadLight;
       const tpl = isDeloadMatch ? DLT : slots >= 4 ? roomyTpl : ST;                // roomy → full (goal-picked); tight → compressed
       const tIdx = idx + (tpl.length - slots);                                     // align template to the match (end)
       dayType.push(tIdx >= 0 && tIdx < tpl.length ? tpl[tIdx] : "rest");
@@ -877,17 +893,21 @@ export function buildCalendarBlock(opts: {
     : dirTilted;
   const weeks: CalWeek[] = [];
   for (let i = 0; i < n; i++) {
-    const isDeload = i === n - 1 && n >= 3; // classic end-of-block unload
+    const isDeload = i === deloadIdx;
+    const isLight = isDeload && deloadLight;
+    const isDeep = isDeload && !deloadLight;
     // The week's overload is now per-KPI (engine-driven ramp), not one flat multiplier: volume ramps
     // faster than HSR/stride, each ceilinged at match. Deload unloads every axis — depth per goal:
     // volume axes (dist/load/accdec) → `dl.vol`, intensity axes (hsr/stride) → `dl.int`. No goal = 0.6/0.6.
+    // A light week stays on its own ramp: volume axes × LIGHT_WEEK_VOL, intensity axes untouched.
     const dl = opts.goal ? GOAL_DELOAD[opts.goal] : { vol: 0.6, int: 0.6 };
+    const lightVol = (a: RampAxis) => ({ m: axisRamp(a, i, base, capMult).m * LIGHT_WEEK_VOL, cap: "rate" as CapReason });
     const ramp: Record<RampAxis, { m: number; cap: CapReason }> = {
-      dist: isDeload ? { m: dl.vol, cap: "rate" } : axisRamp("dist", i, base, capMult),
-      hsr: isDeload ? { m: dl.int, cap: "rate" } : axisRamp("hsr", i, base, capMult),
-      load: isDeload ? { m: dl.vol, cap: "rate" } : axisRamp("load", i, base, capMult),
-      accdec: isDeload ? { m: dl.vol, cap: "rate" } : axisRamp("accdec", i, base, capMult),
-      stride: isDeload ? { m: dl.int, cap: "rate" } : axisRamp("stride", i, base, capMult),
+      dist: isDeep ? { m: dl.vol, cap: "rate" } : isLight ? lightVol("dist") : axisRamp("dist", i, base, capMult),
+      hsr: isDeep ? { m: dl.int, cap: "rate" } : axisRamp("hsr", i, base, capMult),
+      load: isDeep ? { m: dl.vol, cap: "rate" } : isLight ? lightVol("load") : axisRamp("load", i, base, capMult),
+      accdec: isDeep ? { m: dl.vol, cap: "rate" } : isLight ? lightVol("accdec") : axisRamp("accdec", i, base, capMult),
+      stride: isDeep ? { m: dl.int, cap: "rate" } : axisRamp("stride", i, base, capMult),
     };
     const mult = ramp.load.m; // representative scalar (volume) for display + the deload comparison
     // Pre-season match exposure — a friendly is partial minutes (match-fitness build-up), so its match-day
@@ -950,11 +970,11 @@ export function buildCalendarBlock(opts: {
     const weekMatchCount = days.filter((d) => d.type === "match").length;
     const intent: Bi = campWeek ? { en: "Training camp", is: "Æfingaferð" }
       : weekMatchCount >= 2 ? { en: "Congested (2 games)", is: "Þétt (2 leikir)" }
-      : i === 0 ? { en: "Introduce", is: "Kynna" } : isDeload ? { en: "Deload", is: "Niðurtröppun" } : i === n - 2 ? { en: "Overload · peak", is: "Yfirálag · toppur" } : i <= (n - 1) / 2 ? { en: "Progress", is: "Framvinda" } : { en: "Overload", is: "Yfirálag" };
+      : isLight ? { en: "Light week", is: "Létt vika" } : isDeload ? { en: "Deload", is: "Niðurtröppun" } : i === 0 ? { en: "Introduce", is: "Kynna" } : i === peakIdx ? { en: "Overload · peak", is: "Yfirálag · toppur" } : i <= (n - 1) / 2 ? { en: "Progress", is: "Framvinda" } : { en: "Overload", is: "Yfirálag" };
     const matchDayIdx = days.findIndex((d) => d.type === "match");
     const matchDow: Bi = matchDayIdx >= 0 ? DOW[matchDayIdx] : { en: "—", is: "—" };
     weeks.push({
-      index: i, weekStart, intent, matchDow, mult: Math.round(mult * 100) / 100, isDeload, days,
+      index: i, weekStart, intent, matchDow, mult: Math.round(mult * 100) / 100, isDeload, isLight, days,
       pctRunning: opts.unit.dist ? Math.round((sumDist / opts.unit.dist) * 100) : null,
       pctHsr: opts.unit.hsr ? Math.round((sumHsr / opts.unit.hsr) * 100) : null,
       pctMech: opts.unit.load ? Math.round((sumLoad / opts.unit.load) * 100) : null,
@@ -986,12 +1006,17 @@ export function buildCalendarBlock(opts: {
   const strength = opts.goal ? STRENGTH_DEFAULTS[GOAL_STRENGTH[opts.goal]] : undefined;
   if (opts.goal) {
     const gl = BLOCK_GOAL_LABEL[opts.goal];
-    const stance: Record<RecGoalKey, Bi> = {
+    const stance: Record<RecGoalKey, Bi> = deloadLight ? {
+      accum: { en: "Accumulation: higher volume (×1.10) — build work capacity + max-strength (Issurin 2010).", is: "Uppsöfnun: meira rúmmál (×1,10) — byggja vinnugetu + hámarksstyrk (Issurin 2010)." },
+      transmute: { en: "Transmutation: balanced volume (×0.95) — convert to football-specific strength–power.", is: "Umbreyting: jafnvægis-rúmmál (×0,95) — umbreyta í fótbolta-sérhæfðan styrk–kraft." },
+      realize: { en: "Realization: lower volume (×0.75), a roomier week — peak + power/speed gym (Mujika 2003).", is: "Framkvæmd: minna rúmmál (×0,75), rýmri vika — toppur + kraft/hraða lyftingar (Mujika 2003)." },
+    } : {
       accum: { en: "Accumulation: higher volume (×1.10), gentle late unload — build work capacity + max-strength (Issurin 2010).", is: "Uppsöfnun: meira rúmmál (×1,10), væg sein niðurtröppun — byggja vinnugetu + hámarksstyrk (Issurin 2010)." },
       transmute: { en: "Transmutation: balanced volume (×0.95), moderate taper — convert to football-specific strength–power.", is: "Umbreyting: jafnvægis-rúmmál (×0,95), hófleg niðurtröppun — umbreyta í fótbolta-sérhæfðan styrk–kraft." },
       realize: { en: "Realization: lower volume (×0.75), deep taper (vol −55%, intensity held), a roomier week — peak + power/speed gym (Bosquet 2007; Mujika 2003).", is: "Framkvæmd: minna rúmmál (×0,75), djúp niðurtröppun (rúmmál −55%, ákefð haldið), rýmri vika — toppur + kraft/hraða lyftingar (Bosquet 2007; Mujika 2003)." },
     };
     notes.push(stance[opts.goal]);
+    if (deloadLight) notes.push({ en: "In-season: no automatic deload, the taper before each match varies the load. A light week is the coach's call: volume −20%, intensity held (Malone 2015; Fessi 2016; Moalla 2021; observational).", is: "Keppnistímabil: engin sjálfvirk niðurtröppun, minnkunin fyrir hvern leik sveiflar álaginu. Létt vika er val þjálfarans: rúmmál −20%, ákefð haldið (Malone 2015; Fessi 2016; Moalla 2021; athugunarrannsóknir)." });
     if (strength) notes.push({ en: `${gl.en} gym: ${strength.quality.en} — ${strength.pct1rm.en} (${strength.cite}).`, is: `${gl.is} lyftingar: ${strength.quality.is} — ${strength.pct1rm.is} (${strength.cite}).` });
   }
   return { unit: opts.unit, scopeName: opts.scopeName, scopePos: opts.scopePos ?? null, phase: opts.phase ?? { en: "Pre-season", is: "Undirbúningstímabil" }, numWeeks: n, startDate: start, weeks, legend, notes, goalKey: opts.goal, strength };
@@ -1077,7 +1102,9 @@ export function recommendBlockGoal(opts: {
   // Fatigue is a WEEK-level action, not a goal change: pull the block's deload week forward. Prepend the
   // reason so the coach sees it above the goal rationale; the goal itself stays what the season signals say.
   if (opts.deloadNow) {
-    const pull: Bi = { en: "Load spiking / readiness drifting — pull this block's deload week forward (or add one). The block goal is unchanged.", is: "Álag rýkur upp / viðbragð lækkar — færðu niðurtröppunar-viku lotunnar framar (eða bættu einni við). Markmið lotunnar helst." };
+    const pull: Bi = opts.phaseKey === "competitive"
+      ? { en: "Load spiking / readiness drifting — consider a light week. The block goal is unchanged.", is: "Álag rýkur upp / viðbragð lækkar — íhugaðu létta viku. Markmið lotunnar helst." }
+      : { en: "Load spiking / readiness drifting — pull this block's deload week forward (or add one). The block goal is unchanged.", is: "Álag rýkur upp / viðbragð lækkar — færðu niðurtröppunar-viku lotunnar framar (eða bættu einni við). Markmið lotunnar helst." };
     return { ...base, deloadNow: true, reasons: [opts.deloadReason ?? pull, ...base.reasons] };
   }
   return { ...base, deloadNow: false };
@@ -1111,6 +1138,11 @@ export const GOAL_STRENGTH: Record<RecGoalKey, keyof typeof STRENGTH_DEFAULTS> =
   accum: "max_strength", transmute: "strength_power", realize: "power_speed",
 };
 /** Map a meso block's phase/goal to the strength quality default. */
+/** The week a calendar for this block should unload: the block's planned deload (or the coach's pin). */
+export function blockDeloadOf(b: Pick<MesoBlock, "deloadWeekStart" | "plannedDeloadWeekStart" | "inSeason"> | null | undefined): BlockDeload | undefined {
+  return b ? { weekStart: b.plannedDeloadWeekStart !== undefined ? b.plannedDeloadWeekStart : b.deloadWeekStart, light: !!b.inSeason } : undefined;
+}
+
 export function strengthDefaultForBlock(phaseEn: string, isDeload: boolean): StrengthDefault {
   if (isDeload) return STRENGTH_DEFAULTS.strength_power; // keep intensity touches, low volume
   if (/accumulation/i.test(phaseEn)) return STRENGTH_DEFAULTS.max_strength;
@@ -1139,8 +1171,14 @@ export type MesoBlock = {
   index: number; phase: Bi; goal: Bi; goalKey: BlockGoalKey; start: string; end: string; weeks: number;
   /** A deload is a WEEK, never a block: `deloadWeekStart` is the Monday of this block's deload week (the
    *  last week by default, snapped to the lightest fixture week near the end; pulled forward when fatigued).
-   *  `deloadNow` = fatigue-triggered pull-forward. `isDeload` mirrors `deloadNow` for legacy consumers. */
-  deloadWeekStart: string | null; deloadNow: boolean; isDeload: boolean;
+   *  `deloadNow` = the fatigue signal. `isDeload` = that signal actually moved the week.
+   *  In-season (`inSeason`) nothing is automatic: `deloadWeekStart` is null unless the coach picked a light
+   *  week, and `deloadNow` only suggests one. The MD taper already varies the week; Malone 2015 found little
+   *  between-block change in-season, and the taper weeks that helped were ~20% cuts (Fessi 2016, Moalla 2021). */
+  deloadWeekStart: string | null; deloadNow: boolean; isDeload: boolean; inSeason?: boolean;
+  /** The deload week before any fatigue pull. The calendar builds on this: the signal is shown on the map
+   *  and flagged to the coach, but the plan players see only moves when the coach pins a week. */
+  plannedDeloadWeekStart?: string | null;
   /** True when the coach pinned this block's deload week by hand (overrides the auto placement). */
   deloadPinned?: boolean;
   /** True when the coach set this block's length by hand (vs the auto cadence / calendar slice). */
@@ -1215,6 +1253,7 @@ const ACWR_CONTESTED: Bi = {
  * Realization) and ENDS IN A DELOAD WEEK — the deload is never a standalone block. `deloadWeekStart` is
  * the deload week's Monday: the block's last week, snapped to the LIGHTEST fixture week near the end (a
  * bye / low-density week from `fixtures`); a fatigue signal pulls it to the block's first week (`deloadNow`).
+ * Competitive blocks are the exception: no automatic deload, see `MesoBlock.deloadWeekStart`.
  * `matchLoad` is the team's typical single-match load in the same currency (Player Load or sRPE-AU).
  */
 /** Off-season reconditioning block length — a standard ~4-week development mesocycle, kept INDEPENDENT of
@@ -1352,7 +1391,8 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
     const deloadPin = opts?.deloadByStart?.[start];
     const deloadPinned = !!(deloadPin && deloadPin >= start && deloadPin < end);
     if (deloadPinned) deloadWeekStart = deloadPin!;
-    else if (deloadNow) deloadWeekStart = start;
+    const plannedDeloadWeekStart = deloadWeekStart;
+    if (!deloadPinned && deloadNow) deloadWeekStart = start;
     // Fixture-aware block goal: pre-season keeps the build-up order; a competitive block reads as what
     // its calendar makes it — congested → Realization, a real gap/break → a loading block, else compete.
     const startMs = Date.parse(start), endMs = Date.parse(end);
@@ -1387,11 +1427,13 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
       gk = rgk; g = GOAL_BY_KEY[rgk];
     }
     const volumeTargetPct = acute != null ? Math.round(Math.min(1.1, Math.max(0.9, chronic && acute ? 1.08 : 1.0)) * 100) : 100;
-    const flag: Bi | null = sharpRise ? { en: `Acute load rising sharply (${Math.round((ratio! - 1) * 100)}% over the prior 4 weeks) — pull the deload week forward`, is: `Bráðaálag hækkar hratt (${Math.round((ratio! - 1) * 100)}% yfir síðustu 4 vikur) — færðu niðurtröppunar-vikuna framar` }
-      : readinessDown ? { en: "Readiness trending down — pull the deload week forward", is: "Viðbragð lækkandi — færðu niðurtröppunar-vikuna framar" } : null;
+    const inSeason = phaseKey === "competitive";
+    const act: Bi = inSeason ? { en: "consider a light week", is: "íhugaðu létta viku" } : { en: "pull the deload week forward", is: "færðu niðurtröppunar-vikuna framar" };
+    const flag: Bi | null = sharpRise ? { en: `Acute load rising sharply (${Math.round((ratio! - 1) * 100)}% over the prior 4 weeks) — ${act.en}`, is: `Bráðaálag hækkar hratt (${Math.round((ratio! - 1) * 100)}% yfir síðustu 4 vikur) — ${act.is}` }
+      : readinessDown ? { en: `Readiness trending down — ${act.en}`, is: `Viðbragð lækkandi — ${act.is}` } : null;
     out.push({
       index: i, phase: g.phase, goal: g.goal, goalKey: gk,
-      start, end, weeks: blockWk, deloadWeekStart, deloadNow, isDeload: deloadNow, deloadPinned,
+      start, end, weeks: blockWk, deloadWeekStart: inSeason ? (deloadPinned ? deloadPin! : null) : deloadWeekStart, plannedDeloadWeekStart: inSeason ? (deloadPinned ? deloadPin! : null) : plannedDeloadWeekStart, deloadNow, isDeload: deloadNow && !inSeason, inSeason, deloadPinned,
       lengthPinned: ovWeeks(start, i) != null && !isHoliday, volumeTargetPct, flag,
       tmr, loadTrend, acwr, acwrNote: ACWR_CONTESTED,
     });

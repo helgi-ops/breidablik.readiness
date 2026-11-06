@@ -14,6 +14,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAuthedPlayerId } from "@/lib/session-rpe/server";
 import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
 import { buildPlayerBlock, pickActiveBlock } from "@/lib/micropulse/periodization/playerBlock";
+import { blockDeloadOf } from "@/lib/micropulse/periodization";
 import { loadBuildUpActuals } from "@/lib/micropulse/buildUpTracking/loader";
 import { computeBuildUpAdherence } from "@/lib/micropulse/buildUpTracking";
 
@@ -44,6 +45,7 @@ export async function GET(req: Request) {
     // fall back to the engine's goalKey for this block (deload → accum, since the player ramp isn't a goal).
     const { data: spRow } = await sb.from("season_plans").select("overrides").eq("team_id", teamId).eq("season_year", plan.seasonYear).maybeSingle();
     const blockGoals = ((spRow as { overrides?: { blockGoals?: Record<string, "accum" | "transmute" | "realize"> } } | null)?.overrides?.blockGoals) ?? {};
+    const deloadPin = (spRow as { overrides?: { blockDeload?: Record<string, string> } } | null)?.overrides?.blockDeload?.[win.blkStart];
     const activeMb = (plan.blocks ?? []).find((b) => b.start === win.blkStart);
     const engineGoal: "accum" | "transmute" | "realize" = activeMb && activeMb.goalKey !== "deload" ? activeMb.goalKey : "accum";
     const goal = blockGoals[win.blkStart] ?? engineGoal;
@@ -57,6 +59,7 @@ export async function GET(req: Request) {
       phaseLabel: win.phaseLabel,
       matchDates: win.matchDates,
       goal,
+      deload: activeMb ? { ...blockDeloadOf(activeMb)!, ...(deloadPin ? { weekStart: deloadPin } : {}) } : undefined,
       friendlyMatches: winIsPreseason,
     });
 

@@ -19,6 +19,7 @@
 
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
+import { LIGHT_WEEK_VOL } from "./imaStandard";
 
 /** The canonical TRAINING-day MD labels for a week with `matches` matches (MD-7 structure). The match
  *  day(s) are excluded — they ARE the unit. Fewer training days as the fixture congestion rises. */
@@ -220,18 +221,20 @@ export function kpiVolumes(matchKpiAvg: Partial<Record<WeeklyLoadMetricKey, numb
   return out;
 }
 
-export type MesoWeek = { weekIndex: number; multiple: number; isDeload: boolean };
+export type MesoWeek = { weekIndex: number; multiple: number; isDeload: boolean; isLight?: boolean };
 
 /** Per-week training multiple across a meso block. Loading weeks ramp from `baseMultiple` by `stepPct`
- *  each; the deload week (default = the last week) drops to ~60% of base (3:1 block, Gabbett 2016). */
-export function mesoWeeklyMultiples(opts: { numWeeks: number; baseMultiple: number; stepPct: number; deloadWeek?: number }): MesoWeek[] {
+ *  each; the deload week (default = the last week) drops to ~60% of base (3:1 block, Gabbett 2016).
+ *  `deloadWeek: null` = no deload. `light` = that week stays on its ramp × LIGHT_WEEK_VOL (in-season). */
+export function mesoWeeklyMultiples(opts: { numWeeks: number; baseMultiple: number; stepPct: number; deloadWeek?: number | null; light?: boolean }): MesoWeek[] {
   const n = Math.max(1, Math.round(opts.numWeeks));
-  const deload = Math.min(n, Math.max(1, opts.deloadWeek ?? n));
+  const deload = opts.deloadWeek === null ? null : Math.min(n, Math.max(1, opts.deloadWeek ?? n));
   const rows: MesoWeek[] = [];
   let loadIdx = 0;
   for (let w = 1; w <= n; w++) {
-    if (w === deload && n > 1) { rows.push({ weekIndex: w, multiple: Math.round(opts.baseMultiple * 0.6 * 100) / 100, isDeload: true }); continue; }
+    if (w === deload && n > 1 && !opts.light) { rows.push({ weekIndex: w, multiple: Math.round(opts.baseMultiple * 0.6 * 100) / 100, isDeload: true }); continue; }
     const mult = opts.baseMultiple * (1 + (Math.max(0, opts.stepPct) / 100) * loadIdx);
+    if (w === deload && n > 1) { rows.push({ weekIndex: w, multiple: Math.round(mult * LIGHT_WEEK_VOL * 100) / 100, isDeload: true, isLight: true }); loadIdx++; continue; }
     rows.push({ weekIndex: w, multiple: Math.round(mult * 100) / 100, isDeload: false });
     loadIdx++;
   }
@@ -249,7 +252,7 @@ export type PlannedVolume = {
                                                // with congestion even as training falls (Anderson 2016).
   weekKpis: KpiVolume[];                       // per-KPI weekly target (each tapered)
   headKpis: WeeklyLoadMetricKey[];             // the KPIs shown as meso columns
-  meso: Array<{ weekIndex: number; isDeload: boolean; volMultiple: number; trainingMultiple: number; matches?: number; totalMultiple?: number; kpi: PlannedVolumeKpiCell[] }>;
+  meso: Array<{ weekIndex: number; isDeload: boolean; isLight?: boolean; volMultiple: number; trainingMultiple: number; matches?: number; totalMultiple?: number; kpi: PlannedVolumeKpiCell[] }>;
   mesoTotal: { volMultiple: number; kpi: PlannedVolumeKpiCell[] };
 };
 
@@ -257,7 +260,7 @@ export type PlannedVolume = {
  *  shared by the Hub card and the PDF so they never diverge. Returns null when there's no match unit. */
 export function buildPlannedVolume(opts: {
   matchKpiAvg: Partial<Record<WeeklyLoadMetricKey, number>>;
-  numWeeks: number; stepPct: number; deloadWeek?: number; matches?: number; headKpiCount?: number;
+  numWeeks: number; stepPct: number; deloadWeek?: number | null; light?: boolean; matches?: number; headKpiCount?: number;
   /** Matches per meso week (length numWeeks), e.g. from `matchesPerWeek(blockStart, numWeeks, fixtures)`.
    *  When given, each week's training multiple is recomputed for THAT week's game count and the total adds
    *  the games — a congested week reads HIGHER. When absent, every week uses the single `matches`. */
@@ -268,7 +271,7 @@ export function buildPlannedVolume(opts: {
   const weekKpis = kpiVolumes(opts.matchKpiAvg, days);
   if (weekKpis.length === 0) return null;
   const wkMult = weeklyTrainingMultiple(days);
-  const meso = mesoWeeklyMultiples({ numWeeks: opts.numWeeks, baseMultiple: wkMult, stepPct: opts.stepPct, deloadWeek: opts.deloadWeek });
+  const meso = mesoWeeklyMultiples({ numWeeks: opts.numWeeks, baseMultiple: wkMult, stepPct: opts.stepPct, deloadWeek: opts.deloadWeek, light: opts.light });
   const headKpis = (Object.keys(opts.matchKpiAvg) as WeeklyLoadMetricKey[]).filter((k) => opts.matchKpiAvg[k] != null).slice(0, opts.headKpiCount ?? 2);
   const factor = (w: MesoWeek) => (wkMult > 0 ? w.multiple / wkMult : 0);
   const cell = (k: WeeklyLoadMetricKey, w: MesoWeek): PlannedVolumeKpiCell => {
@@ -285,7 +288,7 @@ export function buildPlannedVolume(opts: {
       ? Math.round(weeklyTrainingMultiple(standardTrainingDays(mi)) * factor * 100) / 100
       : w.multiple;
     const totalMultiple = mi != null ? Math.round((trainingMultiple + mi) * 100) / 100 : undefined;
-    return { weekIndex: w.weekIndex, isDeload: w.isDeload, volMultiple: w.multiple, trainingMultiple, matches: mi, totalMultiple, kpi: headKpis.map((k) => cell(k, w)) };
+    return { weekIndex: w.weekIndex, isDeload: w.isDeload, isLight: w.isLight, volMultiple: w.multiple, trainingMultiple, matches: mi, totalMultiple, kpi: headKpis.map((k) => cell(k, w)) };
   });
   return {
     weekVolumeMultiple: wkMult, matches, weekTotalMultiple: Math.round((wkMult + matches) * 100) / 100, weekKpis, headKpis,

@@ -104,3 +104,8 @@ export const CAL_SHARE_HI_REF: Record<ImaTrainingDayType, Record<HiVar, { range:
     sprint: { range: [0.10, 0.20], evidence: "derived" },
   },
 };
+
+/** In-season light week: volume about 20% under that week's own ramp, intensity held. Fessi 2016 tapered
+ *  weeks (load -25.5%, intensity unchanged, higher match running after) and Moalla 2021 (3 standard + 1 taper,
+ *  about -18%). Both observational, one club each, so it's the coach's call and never automatic. */
+export const LIGHT_WEEK_VOL = 0.8;

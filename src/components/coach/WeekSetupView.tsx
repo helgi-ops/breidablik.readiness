@@ -420,7 +420,7 @@ type Bi = { en: string; is: string };
 /** Where a week sits in the periodisation spine — supplied by the Periodization Hub (Micro tab). */
 export type WeekSpine = {
   phase: Bi | null;
-  block: { label: Bi; color: string; week: number; of: number; deload: boolean } | null;
+  block: { label: Bi; color: string; week: number; of: number; deload: boolean; light?: boolean } | null;
 };
 type WeekSetupViewProps = {
   /** Mounted inside the Periodization Hub: no page header, the hub supplies the context. */
@@ -1814,7 +1814,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
               <span className="text-[#6b6f76]">{isIS ? "Mesó" : "Meso"}</span>
               <span className="h-2 w-2 rounded-[2px]" style={{ background: sp.block.color }} />
               <b>{isIS ? sp.block.label.is : sp.block.label.en} · {isIS ? `vika ${sp.block.week} af ${sp.block.of}` : `week ${sp.block.week} of ${sp.block.of}`}</b>
-              {sp.block.deload && <span className="font-semibold text-[#7a5210]">{isIS ? "niðurtröppun" : "deload"}</span>}
+              {sp.block.deload && <span className="font-semibold text-[#7a5210]">{sp.block.light ? (isIS ? "létt vika" : "light week") : isIS ? "niðurtröppun" : "deload"}</span>}
             </button>
           )}
           <span className={chip} title={weekTypeWhy}>
