@@ -236,3 +236,12 @@ describe("buildNeuromuscularFatigueRead (decision-response builder)", () => {
     expect(read).toBeNull();
   });
 });
+
+describe("cmjEvidenceFromValdSnapshot: test age", () => {
+  it("a jump too old to read today gives no evidence", () => {
+    const withStatus = (status: string) => ({ ...snapshotWith([REAL_PEAKPOWER_DROP]), cmjFreshnessStatus: status }) as unknown as ValdDailySnapshot;
+    expect(cmjEvidenceFromValdSnapshot(withStatus("fresh"))).toBeDefined();
+    expect(cmjEvidenceFromValdSnapshot(withStatus("stale"))).toBeUndefined();
+    expect(cmjEvidenceFromValdSnapshot(withStatus("missing"))).toBeUndefined();
+  });
+});

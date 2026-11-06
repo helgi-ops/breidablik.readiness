@@ -1,7 +1,7 @@
 /**
  * Batched CMJ neuromuscular-freshness read for a whole squad (one query).
  *
- * Per player: the latest CMJ jump height vs his own 6-week baseline median → a percent
+ * Per player: the latest CMJ jump height vs their own recent baseline median → a percent
  * drop. This is the Janetzki-2023 readiness marker — a drop = neuromuscular fatigue even
  * when the wellness check-in reads green. Reuses the app-wide VALD thresholds so it agrees
  * with the VALD snapshot elsewhere. Descriptive — the fit surfaces it as a distinct labelled
@@ -9,7 +9,8 @@
  */
 
 import { getSupabaseServer } from "@/lib/supabaseServer";
-import { VALD_THRESHOLDS } from "@/lib/integrations/vald/config";
+import { VALD_RUNTIME, VALD_THRESHOLDS } from "@/lib/integrations/vald/config";
+import { selectCmjBaseline } from "./flagFreshness";
 
 export type CmjFreshness = {
   playerId: string;
@@ -32,7 +33,7 @@ export async function loadCmjFreshnessForTeam(teamId: string, date: string): Pro
   const sb = getSupabaseServer();
   const end = new Date(`${date}T23:59:59.999Z`);
   const start = new Date(`${date}T00:00:00.000Z`);
-  start.setUTCDate(start.getUTCDate() - VALD_THRESHOLDS.baselineWindowDays);
+  start.setUTCDate(start.getUTCDate() - VALD_THRESHOLDS.baselineWindowDays - VALD_RUNTIME.freshness.cmjDays);
 
   const { data } = await sb.from("vald_forcedecks_results")
     .select("microplayer_id, test_timestamp, jump_height_cm, is_valid, test_type")
@@ -62,7 +63,8 @@ export async function loadCmjFreshnessForTeam(teamId: string, date: string): Pro
       .map(([day, v]) => ({ day, mean: v.sum / v.n, at: v.at }))
       .sort((a, b) => (a.day < b.day ? 1 : -1)); // newest first
     const newest = perDay[0];
-    const prior = perDay.slice(1).map((d) => d.mean);
+    const selection = selectCmjBaseline(newest?.at ?? null, perDay.slice(1).map((d) => ({ testTimestamp: d.at, mean: d.mean })));
+    const prior = selection.status === "ready" ? selection.tests.map((d) => d.mean) : [];
     const baseline = prior.length >= VALD_THRESHOLDS.baselineMinTests ? median(prior) : null;
     const latest = newest?.mean ?? null;
     const dropPct = latest != null && baseline != null && baseline > 0 ? ((latest - baseline) / baseline) * 100 : null;

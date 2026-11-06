@@ -5,6 +5,7 @@ import type { ValdDailySnapshot, ValdFlag, ValdFreshnessStatus } from "./types";
 import { aggregateTrialsByTest, metricSeries, type TrialMetricRow } from "./trialAggregate";
 import { classifyPhaseChange, worstRealChange, type PhaseMetricKey } from "./phaseChange";
 import { ftCtRatio, normalizedRfd } from "./cmjDerived";
+import { buildCmjReturnRead, currentValdFlag, selectCmjBaseline, worstValdFlag } from "./flagFreshness";
 
 // CMJ metric key → results column. Trial-averaged per test (Claudino 2017) and,
 // for the phase set, CV-gated before it may flag (Gathercole 2015).
@@ -52,6 +53,12 @@ function freshness(latestAt: string | null | undefined, targetDate: string, maxD
   return deltaDays <= maxDays ? "fresh" : "stale";
 }
 
+function testAgeDays(latestAt: string | null | undefined, targetDate: string): number | null {
+  if (!latestAt) return null;
+  const target = new Date(`${targetDate}T23:59:59.999Z`);
+  return Math.floor((target.getTime() - new Date(latestAt).getTime()) / 86400000);
+}
+
 function median(values: number[]): number | null {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -81,7 +88,8 @@ function scoreAsymmetry(asymmetry: number | null, moderate: number, severe: numb
 export async function buildValdDailySnapshot(teamId: string, microplayerId: string, snapshotDate: string, client?: SupabaseClient): Promise<ValdDailySnapshot> {
   const sb = client ?? getSupabaseServer();
   const baselineStart = new Date(`${snapshotDate}T00:00:00.000Z`);
-  baselineStart.setUTCDate(baselineStart.getUTCDate() - VALD_THRESHOLDS.baselineWindowDays);
+  // The baseline window runs back from the TEST, which may be up to the freshness window old.
+  baselineStart.setUTCDate(baselineStart.getUTCDate() - VALD_THRESHOLDS.baselineWindowDays - VALD_RUNTIME.freshness.cmjDays);
   const baselineDate = baselineStart.toISOString();
   const snapshotEnd = `${snapshotDate}T23:59:59.999Z`;
 
@@ -102,8 +110,8 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
   const latestForce = (ffRes.data ?? [])[0] as Record<string, unknown> | undefined;
 
   // ── Trial averaging (Claudino 2017): one aggregate per TEST = the mean of its
-  // valid trials. The latest test is compared against the median of the PRIOR
-  // tests' means (excluded from its own baseline). ─────────────────────────────
+  // valid trials. The latest test is compared against the median of the player's
+  // last prior tests (selectCmjBaseline); a return after a gap gets no flag. ────
   const cmjTrialRows: TrialMetricRow[] = cmjRows.map((row) => ({
     rawTestId: (row.raw_test_id as string | null) ?? null,
     testTimestamp: String(row.test_timestamp ?? ""),
@@ -113,13 +121,26 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
   }));
   const cmjAggregates = aggregateTrialsByTest(cmjTrialRows, Object.keys(CMJ_METRIC_COLUMNS));
   const latestCmjAgg = cmjAggregates[0] ?? null;
-  const priorCmjAggs = cmjAggregates.slice(1);
+  const cmjSelection = selectCmjBaseline(
+    latestCmjAgg?.testTimestamp ?? null,
+    cmjAggregates.slice(1).filter((a) => a.metrics.jumpHeight != null),
+  );
+  // Only a `ready` selection may flag. Every metric below compares against the same tests.
+  const priorCmjAggs = cmjSelection.status === "ready" ? cmjSelection.tests : [];
   const latestCmj = cmjRows[0] as Record<string, unknown> | undefined; // newest trial — freshness + rsi source only
   const latestCmjTrialCount = latestCmjAgg?.trialCount ?? 0;
 
   const cmjBaselineValues = metricSeries(priorCmjAggs, "jumpHeight");
   const cmjBaseline = cmjBaselineValues.length >= VALD_THRESHOLDS.baselineMinTests ? median(cmjBaselineValues) : null;
   const latestCmjValue = latestCmjAgg?.metrics.jumpHeight ?? null;
+  const cmjReturnRead = cmjSelection.status === "gap" && latestCmjValue != null && cmjSelection.daysSincePrevious != null
+    ? buildCmjReturnRead({
+        latest: latestCmjValue,
+        baseline: median(metricSeries(cmjSelection.tests, "jumpHeight")),
+        comparedTests: cmjSelection.tests.length,
+        daysSincePrevious: cmjSelection.daysSincePrevious,
+      })
+    : null;
   const cmjDrop = percentDrop(latestCmjValue, cmjBaseline);
   const cmjScored = scoreFromDrop(cmjDrop, VALD_THRESHOLDS.cmjModerateDropPct, VALD_THRESHOLDS.cmjSevereDropPct);
 
@@ -200,24 +221,40 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
   const nordbordFreshnessStatus = freshness((latestNord?.test_timestamp as string | null) ?? null, snapshotDate, VALD_RUNTIME.freshness.nordbordDays);
   const forceframeFreshnessStatus = freshness((latestForce?.test_timestamp as string | null) ?? null, snapshotDate, VALD_RUNTIME.freshness.forceframeDays);
 
-  const overallValdStatus: ValdFlag =
-    [cmjScored.flag, nordScored.flag, ffScored.flag].includes("red")
-      ? "red"
-      : [cmjScored.flag, nordScored.flag, ffScored.flag].includes("yellow")
-      ? "yellow"
-      : [cmjScored.flag, nordScored.flag, ffScored.flag].includes("green")
-      ? "green"
-      : null;
+  // The stored flags say what is true TODAY, so nothing downstream has to know about
+  // test age. What the test itself showed stays in `explanation` (and the *_score columns).
+  const neuromuscularFlag = currentValdFlag(cmjScored.flag, cmjFreshnessStatus);
+  const hamstringFlag = currentValdFlag(nordScored.flag, nordbordFreshnessStatus);
+  const groinFlag = currentValdFlag(ffScored.flag, forceframeFreshnessStatus);
+  const overallValdStatus: ValdFlag = worstValdFlag([neuromuscularFlag, hamstringFlag, groinFlag]);
+
+  const cmjAgeDays = testAgeDays((latestCmj?.test_timestamp as string | null) ?? null, snapshotDate);
+  const nordAgeDays = testAgeDays((latestNord?.test_timestamp as string | null) ?? null, snapshotDate);
+  const forceAgeDays = testAgeDays((latestForce?.test_timestamp as string | null) ?? null, snapshotDate);
+  const retestNeeded = (flag: ValdFlag, status: ValdFreshnessStatus) => status === "stale" && (flag === "yellow" || flag === "red");
+  const oldStrengthMessage = (label: string, age: number | null, asym: number | null, needsRetest: boolean) =>
+    needsRetest && asym != null
+      ? `Last ${label} test ${age} days ago: ${asym.toFixed(0)}% left/right gap. Too old to read today, needs a new test.`
+      : `Last ${label} test ${age} days ago: too old to read today.`;
 
   const explanation = {
     cmj: {
       baseline: cmjBaseline,
       latest: latestCmjValue,
       delta_percent: cmjDrop,
+      test_flag: cmjScored.flag,
+      test_age_days: cmjAgeDays,
+      baseline_status: cmjSelection.status,
+      days_since_previous_test: cmjSelection.daysSincePrevious,
+      return_read: cmjReturnRead,
       // Trials averaged into this test's value (Claudino 2017). Higher = steadier.
       trial_count: latestCmjTrialCount,
       message:
-        cmjDrop == null
+        cmjFreshnessStatus === "stale"
+          ? `Last jump test ${cmjAgeDays} days ago: too old to read today.`
+          : cmjReturnRead
+          ? cmjReturnRead.message.en
+          : cmjDrop == null
           ? "No stable CMJ baseline available."
           : cmjDrop <= -VALD_THRESHOLDS.cmjSevereDropPct
           ? "Latest CMJ is meaningfully below recent baseline."
@@ -305,9 +342,14 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
     },
     nordbord: {
       asymmetry_percent: latestNordAsym,
+      test_flag: nordScored.flag,
+      test_age_days: nordAgeDays,
+      retest_needed: retestNeeded(nordScored.flag, nordbordFreshnessStatus),
       message:
         latestNordAsym == null
           ? "No recent NordBord asymmetry value available."
+          : nordbordFreshnessStatus === "stale"
+          ? oldStrengthMessage("hamstring", nordAgeDays, latestNordAsym, retestNeeded(nordScored.flag, nordbordFreshnessStatus))
           : latestNordAsym >= VALD_THRESHOLDS.nordbordHighAsymmetryPct
           ? "Hamstring asymmetry is elevated versus recent normal range."
           : latestNordAsym >= VALD_THRESHOLDS.nordbordModerateAsymmetryPct
@@ -316,9 +358,14 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
     },
     forceframe: {
       asymmetry_percent: latestForceAsym,
+      test_flag: ffScored.flag,
+      test_age_days: forceAgeDays,
+      retest_needed: retestNeeded(ffScored.flag, forceframeFreshnessStatus),
       message:
         latestForceAsym == null
           ? "No recent ForceFrame asymmetry value available."
+          : forceframeFreshnessStatus === "stale"
+          ? oldStrengthMessage("groin", forceAgeDays, latestForceAsym, retestNeeded(ffScored.flag, forceframeFreshnessStatus))
           : latestForceAsym >= VALD_THRESHOLDS.forceframeHighAsymmetryPct
           ? "ForceFrame groin profile indicates possible adductor readiness concern."
           : "ForceFrame profile is within expected recent range.",
@@ -338,9 +385,9 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
     cmjScore: cmjScored.score,
     nordbordScore: nordScored.score,
     forceframeScore: ffScored.score,
-    neuromuscularFlag: cmjScored.flag,
-    hamstringFlag: nordScored.flag,
-    groinFlag: ffScored.flag,
+    neuromuscularFlag,
+    hamstringFlag,
+    groinFlag,
     overallValdStatus,
     explanation,
   };

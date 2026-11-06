@@ -174,6 +174,8 @@ export function cmjEvidenceFromValdSnapshot(
   recoverySlope: CmjRecoverySlope = "unknown",
 ): CmjFatigueEvidence | undefined {
   if (!snapshot) return undefined;
+  // A jump too old to read today says nothing about today's fatigue.
+  if (snapshot.cmjFreshnessStatus === "stale" || snapshot.cmjFreshnessStatus === "missing") return undefined;
   const cmj = (snapshot.explanation?.cmj ?? null) as Record<string, unknown> | null;
   const phase = (cmj?.phase ?? null) as Record<string, unknown> | null;
   const rawMetrics = Array.isArray(phase?.metrics) ? (phase!.metrics as Array<Record<string, unknown>>) : [];

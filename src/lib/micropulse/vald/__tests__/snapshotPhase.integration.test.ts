@@ -108,3 +108,94 @@ test("e2e: jump height uses the TRIAL MEAN, not the best trial", async () => {
   const cmj = (snap.explanation as Record<string, unknown>).cmj as { latest: number | null };
   assert.equal(cmj.latest, 30, "latest jump height should be the trial mean (30), not the best trial (40)");
 });
+
+const jump = (id: string, ts: string, cm: number) => trial(id, ts, { jump_height_cm: cm });
+
+test("e2e: a jump 6% down flags while the test is fresh, and stops counting when it is older than 7 days", async () => {
+  const rows = [
+    jump("D", "2026-07-22T10:00:00Z", 28.2),
+    jump("C", "2026-07-15T10:00:00Z", 30),
+    jump("B", "2026-07-10T10:00:00Z", 30),
+    jump("A", "2026-07-05T10:00:00Z", 30),
+  ];
+  const fresh = await buildValdDailySnapshot("team", "player", "2026-07-22", stubClient({ vald_forcedecks_results: rows }));
+  assert.equal(fresh.neuromuscularFlag, "yellow");
+  assert.equal(fresh.overallValdStatus, "yellow");
+
+  const old = await buildValdDailySnapshot("team", "player", "2026-07-30", stubClient({ vald_forcedecks_results: rows }));
+  assert.equal(old.cmjFreshnessStatus, "stale");
+  assert.equal(old.neuromuscularFlag, null, "8 days old is not today's state");
+  assert.equal(old.overallValdStatus, null);
+  const cmj = (old.explanation as Record<string, unknown>).cmj as { test_flag: string; message: string };
+  assert.equal(cmj.test_flag, "yellow", "what the test showed stays in the explanation");
+  assert.match(cmj.message, /Last jump test 8 days ago/);
+});
+
+test("e2e: a first jump after a gap gets the plain comparison, no flag, however far down it is", async () => {
+  const rows = [
+    jump("N", "2026-10-14T10:00:00Z", 24),
+    jump("D", "2026-08-27T10:00:00Z", 30),
+    jump("C", "2026-08-22T10:00:00Z", 30),
+    jump("B", "2026-08-14T10:00:00Z", 30),
+    jump("A", "2026-08-07T10:00:00Z", 30),
+  ];
+  const snap = await buildValdDailySnapshot("team", "player", "2026-10-14", stubClient({ vald_forcedecks_results: rows }));
+  assert.equal(snap.cmjFreshnessStatus, "fresh");
+  assert.equal(snap.neuromuscularFlag, null, "20% down, but 48 days since the last test");
+  const cmj = (snap.explanation as Record<string, unknown>).cmj as {
+    baseline: number | null; delta_percent: number | null; baseline_status: string; message: string;
+    return_read: { baseline: number; delta_percent: number; compared_tests: number; message: { is: string } };
+    phase: { available: boolean };
+  };
+  assert.equal(cmj.baseline_status, "gap");
+  assert.equal(cmj.baseline, null);
+  assert.equal(cmj.delta_percent, null, "nothing downstream reads it as a fatigue drop");
+  assert.equal(cmj.phase.available, false, "phase metrics use the same rule");
+  assert.equal(cmj.return_read.baseline, 30);
+  assert.equal(cmj.return_read.delta_percent, -20);
+  assert.equal(cmj.return_read.compared_tests, 4);
+  assert.match(cmj.message, /First jump test in 48 days: 24\.0 cm, 20\.0% below the last 4 tests/);
+  assert.match(cmj.return_read.message.is, /Fyrsta hoppróf í 48 daga/);
+});
+
+test("e2e: tests every 2-3 weeks can flag, using only the last 5 from the past 90 days", async () => {
+  const rows = [
+    jump("F", "2026-08-27T10:00:00Z", 28),
+    jump("E", "2026-08-07T10:00:00Z", 30),
+    jump("D", "2026-07-18T10:00:00Z", 30),
+    jump("C", "2026-06-29T10:00:00Z", 30),
+    jump("OLD", "2026-05-01T10:00:00Z", 60), // past 90 days: must not move the baseline
+  ];
+  const snap = await buildValdDailySnapshot("team", "player", "2026-08-27", stubClient({ vald_forcedecks_results: rows }));
+  assert.equal(snap.neuromuscularFlag, "yellow");
+  assert.equal(((snap.explanation as Record<string, unknown>).cmj as { baseline: number }).baseline, 30);
+});
+
+test("e2e: an old strength gap is not today's state, says it needs a new test, and leaves the overall empty", async () => {
+  const strength = { is_valid: true, left_peak_force_n: 300, right_peak_force_n: 400, test_timestamp: "2025-01-30T10:00:00Z" };
+  const snap = await buildValdDailySnapshot("team", "player", "2026-11-06", stubClient({
+    vald_forcedecks_results: [],
+    vald_nordbord_results: [strength],
+    vald_forceframe_results: [strength],
+  }));
+  assert.equal(snap.nordbordFreshnessStatus, "stale");
+  assert.equal(snap.hamstringFlag, null);
+  assert.equal(snap.groinFlag, null);
+  assert.equal(snap.overallValdStatus, null);
+  const expl = snap.explanation as { nordbord: { test_flag: string; retest_needed: boolean; test_age_days: number; message: string }; forceframe: { retest_needed: boolean; message: string } };
+  assert.equal(expl.nordbord.test_flag, "red", "25% gap stays on record");
+  assert.equal(expl.nordbord.retest_needed, true);
+  assert.equal(expl.nordbord.test_age_days, 645);
+  assert.match(expl.nordbord.message, /Last hamstring test 645 days ago: 25% left\/right gap\. Too old to read today, needs a new test\./);
+  assert.equal(expl.forceframe.retest_needed, true);
+  assert.match(expl.forceframe.message, /Last groin test 645 days ago/);
+});
+
+test("e2e: a fresh strength gap still flags", async () => {
+  const strength = { is_valid: true, left_peak_force_n: 300, right_peak_force_n: 400, test_timestamp: "2026-11-01T10:00:00Z" };
+  const snap = await buildValdDailySnapshot("team", "player", "2026-11-06", stubClient({ vald_nordbord_results: [strength] }));
+  assert.equal(snap.hamstringFlag, "red");
+  assert.equal(snap.overallValdStatus, "red");
+  const expl = snap.explanation as { nordbord: { retest_needed: boolean } };
+  assert.equal(expl.nordbord.retest_needed, false);
+});

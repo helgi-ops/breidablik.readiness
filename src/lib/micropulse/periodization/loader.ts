@@ -378,10 +378,10 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const valdByPlayer = new Map<string, { cmjFlag: string | null; cmjAt: string | null; hamstring: string | null; hamstringAt: string | null; date: string }>();
   if (ids.length) {
     const { data: vs } = await sb.from("vald_daily_player_snapshot")
-      .select("microplayer_id, snapshot_date, neuromuscular_flag, latest_cmj_at, hamstring_flag, latest_nordbord_at")
+      .select("microplayer_id, snapshot_date, neuromuscular_flag, latest_cmj_at, hamstring_flag, hamstring_test_flag:explanation->nordbord->>test_flag, latest_nordbord_at")
       .eq("team_id", args.teamId).in("microplayer_id", ids).order("snapshot_date", { ascending: false });
-    for (const r of (vs ?? []) as Array<{ microplayer_id: string; snapshot_date: string; neuromuscular_flag: string | null; latest_cmj_at: string | null; hamstring_flag: string | null; latest_nordbord_at: string | null }>) {
-      if (!valdByPlayer.has(r.microplayer_id)) valdByPlayer.set(r.microplayer_id, { cmjFlag: r.neuromuscular_flag, cmjAt: r.latest_cmj_at, hamstring: r.hamstring_flag, hamstringAt: r.latest_nordbord_at, date: r.snapshot_date });
+    for (const r of (vs ?? []) as Array<{ microplayer_id: string; snapshot_date: string; neuromuscular_flag: string | null; latest_cmj_at: string | null; hamstring_flag: string | null; hamstring_test_flag: string | null; latest_nordbord_at: string | null }>) {
+      if (!valdByPlayer.has(r.microplayer_id)) valdByPlayer.set(r.microplayer_id, { cmjFlag: r.neuromuscular_flag, cmjAt: r.latest_cmj_at, hamstring: r.hamstring_flag ?? r.hamstring_test_flag, hamstringAt: r.latest_nordbord_at, date: r.snapshot_date });
     }
   }
   // Coach lifts of the VALD trim (audit log on the season plan). Best-effort: a failed read lifts nothing.
@@ -471,7 +471,8 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
       ...valdVolumeCap({ cmjFlag: vs?.cmjFlag ?? null, cmjAgeDays: ageDays(vs?.cmjAt ?? null, todayMs), hamstringFlag: vs?.hamstring ?? null, hamstringAgeDays: ageDays(vs?.hamstringAt ?? null, todayMs), freshDays: VALD_RUNTIME.freshness.cmjDays }),
       lift: activeValdTrimLift(valdTrimLifts, p.id, mondayOf(todayIso)),
     };
-    const valdFresh = vs != null && (ageDays(vs.date, todayMs) ?? 999) <= 21;
+    // The test date, not the snapshot date: a sync writes a new snapshot however old the test is.
+    const valdFresh = vs != null && (ageDays(vs.cmjAt, todayMs) ?? 999) <= 21;
     const vbtRead = strengthFromVbt(vbt?.exercise ?? null, vbt?.loadKg ?? null, vbt?.meanV ?? null);
     // The player's own match unit (median of near-full matches, per axis) + the weekly target it implies.
     const matchUnit = computeMatchUnit(matchRowByPlayer.get(p.id) ?? [], { asOfMs: todayMs });
