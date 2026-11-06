@@ -138,6 +138,60 @@ describe("the week", () => {
   });
 });
 
+describe("a player with no near-full match", () => {
+  const known = (name: string, position: string, pl: number, distance: number, matchMinutes = 90): PlayerWeekInput =>
+    player({ name, position, matchMinutes, match: { ...MATCH, pl, distance } });
+  const sub = (over: Partial<PlayerWeekInput> = {}) => player({ name: "Sub", position: "LW", usualMinutes: 45, matchMinutes: null, match: null, ...over });
+  const rowOf = (players: PlayerWeekInput[], name = "Sub") => buildPlayerWeekLoad({ players, days: [mech], matchCount: 2 }).players.find((r) => r.name === name)!;
+  const squad = [known("A", "RW", 800, 10000), known("B", "CF", 1000, 12000), known("C", "CB", 400, 5000), known("D", "CM", 500, 6000)];
+
+  it("gets the median of the same part of the team × their usual minutes, marked as an estimate", () => {
+    const r = rowOf([...squad, sub()]);
+    expect(r.perMatchEstimated).toBe(true);
+    expect(r.perMatch.pl).toBe(450);
+    expect(r.perMatch.distance).toBe(5500);
+    expect(r.matches.pl).toBe(900);
+    expect(r.week.pl).toBe(480 + 900);
+  });
+  it("training days don't change: they still read the player's own baseline", () => {
+    const r = rowOf([...squad, sub()]);
+    expect(r.perDay[0].pl).toBe(480);
+    expect(r.perDay[0].distance).toBe(6000);
+  });
+  it("reads all outfielders when the part of the team has fewer than two", () => {
+    const r = rowOf([known("A", "RW", 800, 10000), known("C", "CB", 400, 5000), known("D", "CM", 600, 6000), sub()]);
+    expect(r.perMatch.pl).toBe(300);
+  });
+  it("a goalkeeper never reads outfielders", () => {
+    const r = rowOf([...squad, sub({ position: "GK" })]);
+    expect(r.perMatchEstimated).toBe(false);
+    expect(r.perMatch.pl).toBeNull();
+    const withKeeper = rowOf([...squad, known("K", "GK", 300, 4000), sub({ position: "GK" })]);
+    expect(withKeeper.perMatch.pl).toBe(150);
+  });
+  it("outfield estimates leave goalkeepers out", () => {
+    const r = rowOf([known("K", "GK", 100, 1000), known("A", "RW", 800, 10000), known("B", "CF", 1000, 12000), sub()]);
+    expect(r.perMatch.pl).toBe(450);
+  });
+  it("no estimate when they don't play, when minutes are unknown, or with too few squad-mates", () => {
+    for (const r of [rowOf([...squad, sub({ usualMinutes: 0 })]), rowOf([...squad, sub({ usualMinutes: null })]), rowOf([known("A", "CB", 800, 10000), sub({ position: "CF" })])]) {
+      expect(r.perMatchEstimated).toBe(false);
+      expect(r.perMatch.pl).toBeNull();
+      expect(r.week.pl).toBe(480);
+    }
+  });
+  it("a player with their own near-full match is never estimated", () => {
+    const r = rowOf([...squad, player({ name: "Own", position: "LW", usualMinutes: 45 })], "Own");
+    expect(r.perMatchEstimated).toBe(false);
+    expect(r.perMatch.pl).toBe(450);
+  });
+  it("an estimate never fills a variable the squad has no data for", () => {
+    const r = rowOf([known("A", "RW", 800, 10000), { ...known("B", "CF", 1000, 12000), match: { pl: 1000, distance: 12000 } }, { ...known("E", "ST", 900, 11000), match: { pl: 900, distance: 11000, cod: 0 } }, sub()].map((x) => (x.name === "A" ? { ...x, match: { pl: 800, distance: 10000 } } : x)));
+    expect(r.perMatch.cod).toBeNull();
+    expect(r.perMatch.pl).toBe(450);
+  });
+});
+
 describe("the table", () => {
   it("sorts by the week's Player Load and hides variables nobody has", () => {
     const lite = (name: string, pl: number): PlayerWeekInput => ({

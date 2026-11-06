@@ -102,6 +102,7 @@ const L = {
     plKxWeekLead: (n: number) => `Each player's week: training days + expected matches = the week. A match line is the mean of the player's own recorded matches, × ${n} this week. Kinexon records in the home arena, so a player with no recorded match shows "-" and the week is training only.`,
     plDays: "Detailed load - per day", plDaysLead: "Each day's plan for every player. Off and match days omitted.",
     plPerMatch: "Per match - expected", plPerMatchLead: (n: number) => `One match at the player's usual minutes, counted ×${n} in the week above.`,
+    plEstimated: "~ = estimate: the player has no match of 80+ minutes yet, so the line is the median of squad-mates in the same part of the team, at this player's usual minutes.",
     roleOf: (r: PlayerWeekRole) => (r === "starter" ? "starter" : r === "rotation" ? "rotation" : r === "low" ? "low-min" : "-"),
     plKxMd: "Kinexon variables — per MD-day", plKxMdLead: "Team weekly total of each Kinexon variable, spread across the MD-days by the same taper. Descriptive.", metricCol: "Variable",
     player: "Player", role: "Role", wk: "Week PL", dist: "Dist", hsr: "HSR", acc: "Acc", dec: "Dec", cod: "CoD", coo: "CoO", exert: "Exert", mech: "Mech", conf2: "conf", total: "Total", starter: "starter", rot: "rotation", lowMin: "low-min",
@@ -123,6 +124,7 @@ const L = {
     plKxWeekLead: (n: number) => `Vika hvers leikmanns: æfingadagar + væntanlegir leikir = vikan. Leikjalínan er meðaltal skráðra leikja leikmannsins sjálfs, × ${n} þessa viku. Kinexon mælir í heimahöllinni, svo leikmaður án skráðs leiks sýnir "-" og vikan er þá bara æfingar.`,
     plDays: "Ítarlegt álag - eftir degi", plDaysLead: "Áætlun dagsins fyrir hvern leikmann. Frí- og leikdögum sleppt.",
     plPerMatch: "Á leik - áætlað", plPerMatchLead: (n: number) => `Einn leikur miðað við venjulegar mínútur leikmannsins, talinn ×${n} í vikunni hér að ofan.`,
+    plEstimated: "~ = áætlun: leikmaðurinn á engan leik með 80+ mínútum enn, svo línan er miðgildi liðsfélaga í sama hluta liðsins, miðað við venjulegar mínútur leikmannsins.",
     roleOf: (r: PlayerWeekRole) => (r === "starter" ? "byrjun" : r === "rotation" ? "skipt" : r === "low" ? "lág-mín" : "-"),
     plKxMd: "Kinexon breytur — eftir MD-degi", plKxMdLead: "Vikusamtala liðsins fyrir hverja Kinexon breytu, dreift á MD-dagana með sama taper. Lýsandi.", metricCol: "Breyta",
     player: "Leikmaður", role: "Hlutverk", wk: "Viku PL", dist: "Vegal.", hsr: "HSR", acc: "Hröð.", dec: "Heml.", cod: "Stefnubr.", coo: "Snún.", exert: "Átök", mech: "Vélr.", conf2: "vissa", total: "Alls", starter: "byrjun", rot: "skipt", lowMin: "lág-mín",
@@ -374,10 +376,10 @@ function PlayerDetailPages({ detail, teamName, lang }: { detail: NonNullable<Non
   const t = L[lang];
   const vars = detail.vars;
   const numCols = vars.map((k, i) => ({ label: detail.varLabels[i], width: k === "accHi" || k === "decHi" || k === "cod" ? 50 : 42, align: "right" as const }));
-  const lines: Array<{ label: string; of: (r: (typeof detail.players)[number]) => PlayerWeekValues; bold?: boolean }> = detail.matchCount > 0
+  const lines: Array<{ label: string; of: (r: (typeof detail.players)[number]) => PlayerWeekValues; bold?: boolean; match?: boolean }> = detail.matchCount > 0
     ? [
         { label: t.rowTrain, of: (r) => r.training },
-        { label: t.rowMatch(detail.matchCount), of: (r) => r.matches },
+        { label: t.rowMatch(detail.matchCount), of: (r) => r.matches, match: true },
         { label: t.rowWeek, of: (r) => r.week, bold: true },
       ]
     : [{ label: t.rowTrain, of: (r) => r.training, bold: true }];
@@ -396,12 +398,13 @@ function PlayerDetailPages({ detail, teamName, lang }: { detail: NonNullable<Non
   const lead = (s: string) => <Text style={[fb(400), { fontSize: 8, color: C.mute, marginBottom: 5, lineHeight: 1.35 }]}>{tx(s)}</Text>;
   // A whole table stays together on one page when a landscape page can hold it (about 24 dense rows).
   const keepTogether = detail.players.length <= 24;
-  const simple = (of: (r: (typeof detail.players)[number]) => PlayerWeekValues) => (
+  const anyEstimated = detail.matchCount > 0 && detail.players.some((r) => r.perMatchEstimated);
+  const simple = (of: (r: (typeof detail.players)[number]) => PlayerWeekValues, markEstimated = false) => (
     <Table
       size={7.75}
       dense
       cols={[{ label: t.player, flex: 1 }, ...numCols]}
-      rows={detail.players.map((r) => [tx(r.name), ...vars.map((k) => cellOf(k, of(r)[k]))])}
+      rows={detail.players.map((r) => [`${markEstimated && r.perMatchEstimated ? "~ " : ""}${tx(r.name)}`, ...vars.map((k) => cellOf(k, of(r)[k]))])}
     />
   );
   return (
@@ -418,11 +421,12 @@ function PlayerDetailPages({ detail, teamName, lang }: { detail: NonNullable<Non
           cols={[{ label: t.player, flex: 1 }, { label: "", width: 52 }, ...numCols]}
           rows={detail.players.map((r) => [
             nameCol(r),
-            stack(1, lines.map((l) => ({ s: l.label, bold: l.bold }))),
+            stack(1, lines.map((l) => ({ s: `${l.match && r.perMatchEstimated ? "~ " : ""}${l.label}`, bold: l.bold }))),
             ...vars.map((k, i) => stack(i + 2, lines.map((l) => ({ s: cellOf(k, l.of(r)[k]), bold: l.bold })), true)),
           ])}
         />
         <Text style={[fb(400), { fontSize: 7.25, color: C.mute, marginTop: 5, lineHeight: 1.35 }]}>{tx(detail.legend)}</Text>
+        {anyEstimated ? <Text style={[fb(400), { fontSize: 7.25, color: C.mute, marginTop: 2, lineHeight: 1.35 }]}>{tx(t.plEstimated)}</Text> : null}
       </Section>
       {detail.days.map((d, j) => (
         <Section key={j} title={j === 0 ? t.plDays : undefined} wrap={!keepTogether}>
@@ -436,8 +440,8 @@ function PlayerDetailPages({ detail, teamName, lang }: { detail: NonNullable<Non
       ))}
       {detail.matchCount > 0 && (
         <Section title={t.plPerMatch} wrap={!keepTogether}>
-          {lead(t.plPerMatchLead(detail.matchCount))}
-          {simple((r) => r.perMatch)}
+          {lead(anyEstimated ? `${t.plPerMatchLead(detail.matchCount)} ${t.plEstimated}` : t.plPerMatchLead(detail.matchCount))}
+          {simple((r) => r.perMatch, true)}
         </Section>
       )}
       <Provenance>{tx(`${t.foot} Stevens 2017 · Martín-García 2018 · Dalen 2019 · Gualtieri 2023. ${t.sprintCaveat}`)}</Provenance>

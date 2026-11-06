@@ -1,7 +1,7 @@
 import { test } from "vitest";
 import { buildPlayerBlock } from "@/lib/micropulse/periodization/playerBlock";
 import assert from "node:assert/strict";
-import { activeValdTrimLift, nextValdTrimLiftLog, holdsStandardWeek, blockDeloadOf, deloadWeekIndex, detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, recommendBlockGoal, blockGoalFromSeason, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
+import { activeValdTrimLift, nextValdTrimLiftLog, holdsStandardWeek, blockDeloadOf, deloadWeekIndex, detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, seedBlockDays, recommendBlockGoal, blockGoalFromSeason, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
 
 // A full Pro (GPS + IMA) match unit — running spine + the mechanical/IMA axis (Acc/Dec B2–3, stride, dir).
 const UNIT: MatchUnitAbs = { dist: 12564, hsr: 988, load: 1184, accdec: 259, accHiEff: 40, decHiEff: 52, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
@@ -517,6 +517,44 @@ test("buildCalendarBlock: reproduces the demo microcycle (Sat/Sun alternation, t
   // the Mechanical day leans backward — so loco.fwd > mech.fwd. The match day keeps the raw split (0.5).
   assert.ok(loco.dir != null && mech.dir != null && loco.dir.fwd > mech.dir.fwd);
   assert.ok(w1match.dir != null && Math.abs(w1match.dir.fwd - 0.5) < 1e-9); // match keeps the raw split
+});
+
+test("seedBlockDays: the seed agrees with the block, so real weeks keep their day-types instead of Mixed", () => {
+  const unit: MatchUnitAbs = { dist: 10000, hsr: 800, load: 1000, accdec: 200, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
+  const fixtures = ["2026-05-02", "2026-05-09", "2026-05-16", "2026-05-23", "2026-05-27", "2026-05-31"];
+  const common = { unit, startDate: "2026-05-04", scopeName: "t", baseOverloadPct: 100, stepPct: 5, goal: "realize" as const, hold: true, deload: { weekStart: null, light: true } };
+  const seed = seedBlockDays({ ...common, numWeeks: 6, allFixtures: fixtures });
+  const matchDates = fixtures.filter((d) => d >= "2026-05-04");
+  const sets = { offDays: [] as string[], onDays: [] as string[] };
+  for (const [iso, v] of Object.entries(seed.days)) if (!matchDates.includes(iso)) (v === "off" ? sets.offDays : sets.onDays).push(iso);
+  const edited = buildCalendarBlock({ ...common, numWeeks: 4, matchDates, ...sets, typeOverrides: seed.types, allFixtures: fixtures });
+  const untouched = buildCalendarBlock({ ...common, numWeeks: 4, matchDates, allFixtures: fixtures });
+  assert.deepEqual(edited.weeks.map((w) => w.days.map((d) => d.type)), untouched.weeks.map((w) => w.days.map((d) => d.type)));
+  // A 7-day match week in a held block: the top-up, a rest, Locomotive, Mixed, a rest, Activation, the match.
+  assert.deepEqual(untouched.weeks[0].days.map((d) => d.type), ["rest", "locomotive", "mixed", "rest", "activation", "match", "topup"]);
+  assert.ok(untouched.weeks.every((w) => w.days.filter((d) => d.type === "mixed").length <= 2));
+});
+
+test("seedBlockDays: a week with no fixture gets a training week, keeps the rest after a match, and leaves real weeks alone", () => {
+  const unit: MatchUnitAbs = { dist: 10000, hsr: 800, load: 1000, accdec: 200, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
+  const common = { unit, scopeName: "t", baseOverloadPct: 100, stepPct: 5, goal: "accum" as const, deload: { weekStart: null, light: true } };
+  // A match on Sun 3 May, then nothing until the last week of the horizon.
+  const seed = seedBlockDays({ ...common, startDate: "2026-05-04", numWeeks: 6, allFixtures: ["2026-05-03", "2026-06-13"] });
+  const type = (iso: string) => seed.types[iso] ?? seed.days[iso];
+  assert.deepEqual(["2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-09", "2026-05-10"].map(type), ["session", "off", "mixed", "off", "activation", "off", "off"]);
+  assert.deepEqual(["2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15", "2026-05-16", "2026-05-17"].map(type), ["mechanical", "locomotive", "mixed", "off", "activation", "off", "off"]);
+  // Past the season: on, but untyped, so the block's development rotation still runs.
+  const off = seedBlockDays({ ...common, startDate: "2026-05-04", numWeeks: 6, allFixtures: ["2026-06-13"], offseasonStart: "2026-05-01" });
+  assert.equal(off.days["2026-05-04"], "session");
+  assert.deepEqual(off.types, {});
+});
+
+test("buildCalendarBlock: a held week keeps the full week; a Realization block outside the hold keeps the lighter one", () => {
+  const unit: MatchUnitAbs = { dist: 10000, hsr: 800, load: 1000, accdec: 200, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
+  const common = { unit, startDate: "2026-05-04", numWeeks: 2, scopeName: "t", baseOverloadPct: 100, stepPct: 5, goal: "realize" as const, matchDates: ["2026-05-09", "2026-05-16"], allFixtures: ["2026-05-02", "2026-05-09", "2026-05-16"] };
+  const sessions = (hold: boolean) => buildCalendarBlock({ ...common, hold }).weeks[1].days.filter((d) => !["rest", "match"].includes(d.type)).map((d) => d.type);
+  assert.deepEqual(sessions(true), ["locomotive", "mixed", "activation", "topup"]);
+  assert.deepEqual(sessions(false), ["mixed", "activation", "topup"]);
 });
 
 test("buildCalendarBlock: matchExposure makes a pre-season friendly day read as PARTIAL of a match", () => {

@@ -17,7 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupView from "@/components/coach/WeekSetupView";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
-import { VALD_TRIM_CITE, mondayOfIso, buildMesoPlan, buildMesoBlocks, buildCalendarBlock, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ValdTrimLift, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
+import { VALD_TRIM_CITE, mondayOfIso, buildMesoPlan, buildMesoBlocks, buildCalendarBlock, seedBlockDays, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ValdTrimLift, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput, type ExposureInput, type ShapeDirInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { exposuresFromTlyp, shapeDirsFromShape } from "@/lib/micropulse/trainingNeeds";
@@ -744,15 +744,14 @@ export default function PeriodizationHubPage() {
   React.useEffect(() => {
     if (!plan) return;
     const start = mondayOf(blkStart);
-    const auto = buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: MESO_HORIZON, scopeName: isPlayerScope ? player!.name : "__team__", baseOverloadPct: blkBase, stepPct: blkStep, deload: activeBlock?.inSeason ? { weekStart: null, light: true } : undefined });
-    const sk: Record<string, DayState> = {};
-    const ov: Record<string, CalType> = {};
+    const seed = seedBlockDays({ unit: blkUnit, startDate: blkStart, numWeeks: MESO_HORIZON, scopeName: isPlayerScope ? player!.name : "__team__", baseOverloadPct: blkBase, stepPct: blkStep, allFixtures: plan.fixtures ?? [], goal: effectiveGoal, deload: blkDeload, hold: blkHold, offseasonStart: plan.phases.find((p) => p.key === "offseason")?.start ?? undefined });
+    const sk: Record<string, DayState> = { ...seed.days };
+    const ov: Record<string, CalType> = { ...seed.types };
     // FIXTURES ARE THE ONLY SOURCE OF MATCHES. The auto layout seeds only session/off — it never
     // fabricates a Sat/Sun "match". A phantom match on a fixture-less week fights the coach (removing
     // it just re-appears on the next re-seed) and contradicts fixtures-as-source. Real fixtures below
     // are the ONLY thing that turns a day into a match; the coach adds one by clicking a day (which
     // writes a real fixture).
-    auto.weeks.flatMap((w) => w.days).forEach((d, i) => { sk[isoAdd(start, i)] = d.type === "rest" ? "off" : "session"; });
     // READ BACK the coach's saved day layout (week_plans): a saved OFF stays off, a saved training day
     // keeps its stimulus type (focus). This is the "meso reads the day changes back too" ask — the block
     // the coach set up returns as they left it (not the raw auto layout) on the next visit.
@@ -760,7 +759,7 @@ export default function PeriodizationHubPage() {
       const iso = isoAdd(start, k);
       const sp = savedPlans[iso];
       if (!sp) continue;
-      if (sp.dayType === "OFF") sk[iso] = "off";
+      if (sp.dayType === "OFF") { sk[iso] = "off"; delete ov[iso]; }
       else if (sp.dayType === "TRAIN" || sp.dayType === "RECOVERY") {
         sk[iso] = "session";
         const ct = sp.focus ? caltypeFromFocus(sp.focus) : undefined;
@@ -780,7 +779,7 @@ export default function PeriodizationHubPage() {
     }
     setBlkSkeleton(sk); setTypeOverrides(ov); setDayModal(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, blkStart, blkScope, selId, teamBreaks, savedPlans]);
+  }, [plan, blkStart, blkScope, selId, teamBreaks, savedPlans, effectiveGoal, blkHold, blkDeload]);
 
   // The coach's skeleton, split into the sets buildCalendarBlock consumes — shared by the team block and
   // every per-player block (so the Players tab is literally "computed from the Meso Cycle").
@@ -3159,7 +3158,7 @@ export default function PeriodizationHubPage() {
                 <h2 className={h2}>{is ? "Stillingar lotu" : "Block settings"}</h2>
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Upphaf" : "Start"}<input type="date" value={blkStart} onChange={(e) => setBlkStart(e.target.value)} className="h-10 rounded-lg border border-slate-300 px-2 text-[13px] font-medium" /></label>
-                  <div className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Vikur (úr Makró)" : "Weeks (from Macro)"}<div className="flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-[13px] font-medium text-slate-700">{blkWeeks} <span className="ml-1 text-[12px] font-normal text-slate-500">· {is ? "niðurtr. hverja" : "deload every"} {cadence}</span></div></div>
+                  <div className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Vikur (úr Makró)" : "Weeks (from Macro)"}<div className="flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-[13px] font-medium text-slate-700">{blkWeeks}{!activeBlock?.inSeason && <span className="ml-1 text-[12px] font-normal text-slate-500">· {is ? "niðurtr. hverja" : "deload every"} {cadence}</span>}</div></div>
                   <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Grunn-álag %" : "Base overload %"}<input type="number" min={80} max={130} value={blkBase} onChange={(e) => setBlkBase(Number(e.target.value))} className="h-10 rounded-lg border border-slate-300 px-2 text-[13px] font-medium" /></label>
                   <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Stig/viku %" : "Step/wk %"}<input type="number" min={0} max={15} value={blkStep} onChange={(e) => { const v = Math.max(0, Math.min(15, Number(e.target.value) || 0)); setBlkStep(v); persistOverridePatch({ stepPct: v }); }} className="h-10 rounded-lg border border-slate-300 px-2 text-[13px] font-medium" /></label>
                   <label className="col-span-2 flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Umfang" : "Scope"}<select value={blkScope} onChange={(e) => setBlkScope(e.target.value as typeof blkScope)} className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-[13px] font-medium"><option value="team">{is ? "Lið" : "Team"}</option><option value="player">{is ? `Leikmaður: ${player?.name ?? ""}` : `Player: ${player?.name ?? ""}`}</option></select></label>

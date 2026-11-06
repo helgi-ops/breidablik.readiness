@@ -11,7 +11,8 @@
  *     Without a match value, an MD context or an IMA feed these fall back to baseline × ratio.
  *   - HSR, sprint, Acc/Dec B2-3: the player's own match value × the day-type's research standard (CAL_SHARE_HI), the
  *     same table the Meso calendar plans its B2-3 efforts from. With no planned day-type: baseline × ratio.
- * Match: own match value × how much of it the player usually plays × the week's match count.
+ * Match: own match value × how much of it the player usually plays × the week's match count. A player who plays
+ *   but has no near-full match yet gets the median of squad-mates in the same part of the team, marked as an estimate.
  * Week: training + matches.
  *
  * Stevens 2017 + Martín-García 2018 (Acc/Dec/CoD by day-type); Buchheit 2024 (MD-day shares).
@@ -19,6 +20,7 @@
 
 import { STARTER_MINUTES, TOPUP_MATCH_PCT, targetShare, type EnoughDayType, type EnoughVar } from "@/lib/micropulse/sessionEnough";
 import { CAL_SHARE_HI, type HiVar } from "@/lib/micropulse/periodization/imaStandard";
+import { positionGroup } from "@/lib/micropulse/periodization";
 
 export const PLAYER_WEEK_VARS = ["pl", "distance", "hsr", "sprint", "accel", "decel", "cod", "fr", "stride", "accHi", "decHi"] as const;
 export type PlayerWeekVar = (typeof PLAYER_WEEK_VARS)[number];
@@ -83,6 +85,8 @@ export type PlayerWeekRow = {
   training: PlayerWeekValues;
   /** Expected from ONE match at the player's usual minutes. All null when usual minutes are unknown. */
   perMatch: PlayerWeekValues;
+  /** perMatch comes from squad-mates, because the player has no near-full match of their own yet. */
+  perMatchEstimated: boolean;
   /** perMatch × the week's match count. */
   matches: PlayerWeekValues;
   week: PlayerWeekValues;
@@ -133,7 +137,31 @@ function hiShare(k: PlayerWeekVar, day: PlayerWeekDay, usualMinutes: number | nu
   return CAL_SHARE_HI[day.dayType][v];
 }
 
-function buildRow(raw: PlayerWeekInput, days: PlayerWeekDay[], matchCount: number): PlayerWeekRow {
+/** What a player with no near-full match is estimated from. */
+type MatchRef = { match: Partial<PlayerWeekValues>; minutes: number };
+const medianOf = (xs: number[]): number | null => {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b), m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+const refFrom = (rows: PlayerWeekInput[]): MatchRef | null => {
+  const minutes = medianOf(rows.map((r) => r.matchMinutes as number));
+  if (minutes == null) return null;
+  const match = Object.fromEntries(PLAYER_WEEK_VARS.map((k) => [k, medianOf(rows.map((r) => present(k, r.match?.[k])).filter((v): v is number => v != null))])) as PlayerWeekValues;
+  return { match, minutes };
+};
+/** Same part of the team (2+ players), else all outfielders (3+). A goalkeeper only ever reads goalkeepers. */
+function matchRefOf(p: PlayerWeekInput, squad: PlayerWeekInput[]): MatchRef | null {
+  const group = positionGroup(p.position).key;
+  const known = squad.filter((s) => s.matchMinutes && s.match);
+  const same = known.filter((s) => positionGroup(s.position).key === group);
+  if (group === 0) return same.length ? refFrom(same) : null;
+  if (same.length >= 2) return refFrom(same);
+  const outfield = known.filter((s) => positionGroup(s.position).key !== 0);
+  return outfield.length >= 3 ? refFrom(outfield) : null;
+}
+
+function buildRow(raw: PlayerWeekInput, days: PlayerWeekDay[], matchCount: number, squad: PlayerWeekInput[]): PlayerWeekRow {
   const p = { ...raw, baseline: cleaned(raw.baseline), match: cleaned(raw.match) };
   // Recent training × the day's ratio; with no recent training, the match value × the day's share of a match.
   const fromBase = (k: PlayerWeekVar, day: PlayerWeekDay): number | null => {
@@ -159,16 +187,18 @@ function buildRow(raw: PlayerWeekInput, days: PlayerWeekDay[], matchCount: numbe
   });
 
   // Never above a full match: the match values already come from near-full matches.
-  const minutesFactor = p.usualMinutes == null || !p.matchMinutes ? null : Math.min(1, p.usualMinutes / p.matchMinutes);
+  const ref = !p.matchMinutes && p.usualMinutes ? matchRefOf(p, squad) : null;
+  const matchMinutes = ref ? ref.minutes : p.matchMinutes;
+  const minutesFactor = p.usualMinutes == null || !matchMinutes ? null : Math.min(1, p.usualMinutes / matchMinutes);
   const training = empty(), perMatch = empty(), matches = empty(), week = empty();
   for (const k of PLAYER_WEEK_VARS) {
     training[k] = sumOrNull(perDay.map((d) => d[k]));
-    const mv = p.match?.[k] ?? null;
+    const mv = (ref ? ref.match : p.match)?.[k] ?? null;
     perMatch[k] = mv == null || minutesFactor == null ? null : Math.round(mv * minutesFactor);
     matches[k] = perMatch[k] == null ? null : (perMatch[k] as number) * matchCount;
     week[k] = sumOrNull([training[k], matches[k]]);
   }
-  return { name: p.name, position: p.position, role: roleOfMinutes(p.usualMinutes), returning: String(p.injuryStatus ?? "").toLowerCase() === "rtp_training", usualMinutes: p.usualMinutes, perDay, training, perMatch, matches, week };
+  return { name: p.name, position: p.position, role: roleOfMinutes(p.usualMinutes), returning: String(p.injuryStatus ?? "").toLowerCase() === "rtp_training", usualMinutes: p.usualMinutes, perDay, training, perMatch, perMatchEstimated: !!ref, matches, week };
 }
 
 export function buildPlayerWeekLoad(input: { players: PlayerWeekInput[]; days: PlayerWeekDay[]; matchCount: number }): PlayerWeekLoad {
@@ -178,7 +208,7 @@ export function buildPlayerWeekLoad(input: { players: PlayerWeekInput[]; days: P
     .sort((a, b) => a.name.localeCompare(b.name));
   const players = input.players
     .filter((p) => !outStatusOf(p.injuryStatus))
-    .map((p) => buildRow(p, input.days, matchCount))
+    .map((p) => buildRow(p, input.days, matchCount, input.players))
     .filter((r) => PLAYER_WEEK_VARS.some((k) => r.week[k] != null))
     .sort((a, b) => (b.week.pl ?? -1) - (a.week.pl ?? -1));
   const vars = PLAYER_WEEK_VARS.filter((k) => players.some((r) => r.week[k] != null));
