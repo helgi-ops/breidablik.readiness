@@ -53,3 +53,8 @@ on conflict (team_id, day_date) do update set
 
 update week_setups set system_key = 'POWER', intensity_target = 5
 where team_id = 'de300001-0000-4000-8000-000000000001'::uuid and week_start in (select w from (values ('2026-10-12'::date), ('2026-10-19'::date), ('2026-10-26'::date), ('2026-11-09'::date), ('2026-11-16'::date), ('2026-11-23'::date)) x(w));
+
+-- The week's GAME rows carry its system too.
+update week_plans set system_key = 'POWER'
+where team_id = 'de300001-0000-4000-8000-000000000001'::uuid and day_type = 'GAME'
+  and day_date in ('2026-10-14', '2026-10-21', '2026-10-30', '2026-11-14', '2026-11-18', '2026-11-22', '2026-11-28');
