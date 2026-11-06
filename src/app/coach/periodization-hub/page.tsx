@@ -17,7 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupView from "@/components/coach/WeekSetupView";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
-import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
+import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, seedBlockDays, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput, type ExposureInput, type ShapeDirInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { exposuresFromTlyp, shapeDirsFromShape } from "@/lib/micropulse/trainingNeeds";
@@ -698,15 +698,14 @@ export default function PeriodizationHubPage() {
   React.useEffect(() => {
     if (!plan) return;
     const start = mondayOf(blkStart);
-    const auto = buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: MESO_HORIZON, scopeName: isPlayerScope ? player!.name : "__team__", baseOverloadPct: blkBase, stepPct: blkStep, deload: activeBlock?.inSeason ? { weekStart: null, light: true } : undefined });
-    const sk: Record<string, DayState> = {};
-    const ov: Record<string, CalType> = {};
+    const seed = seedBlockDays({ unit: blkUnit, startDate: blkStart, numWeeks: MESO_HORIZON, scopeName: isPlayerScope ? player!.name : "__team__", baseOverloadPct: blkBase, stepPct: blkStep, allFixtures: plan.fixtures ?? [], goal: effectiveGoal, deload: blkDeload, hold: blkHold, offseasonStart: plan.phases.find((p) => p.key === "offseason")?.start ?? undefined });
+    const sk: Record<string, DayState> = { ...seed.days };
+    const ov: Record<string, CalType> = { ...seed.types };
     // FIXTURES ARE THE ONLY SOURCE OF MATCHES. The auto layout seeds only session/off — it never
     // fabricates a Sat/Sun "match". A phantom match on a fixture-less week fights the coach (removing
     // it just re-appears on the next re-seed) and contradicts fixtures-as-source. Real fixtures below
     // are the ONLY thing that turns a day into a match; the coach adds one by clicking a day (which
     // writes a real fixture).
-    auto.weeks.flatMap((w) => w.days).forEach((d, i) => { sk[isoAdd(start, i)] = d.type === "rest" ? "off" : "session"; });
     // READ BACK the coach's saved day layout (week_plans): a saved OFF stays off, a saved training day
     // keeps its stimulus type (focus). This is the "meso reads the day changes back too" ask — the block
     // the coach set up returns as they left it (not the raw auto layout) on the next visit.
@@ -714,7 +713,7 @@ export default function PeriodizationHubPage() {
       const iso = isoAdd(start, k);
       const sp = savedPlans[iso];
       if (!sp) continue;
-      if (sp.dayType === "OFF") sk[iso] = "off";
+      if (sp.dayType === "OFF") { sk[iso] = "off"; delete ov[iso]; }
       else if (sp.dayType === "TRAIN" || sp.dayType === "RECOVERY") {
         sk[iso] = "session";
         const ct = sp.focus ? caltypeFromFocus(sp.focus) : undefined;
@@ -734,7 +733,7 @@ export default function PeriodizationHubPage() {
     }
     setBlkSkeleton(sk); setTypeOverrides(ov); setDayModal(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, blkStart, blkScope, selId, teamBreaks, savedPlans]);
+  }, [plan, blkStart, blkScope, selId, teamBreaks, savedPlans, effectiveGoal, blkHold, blkDeload]);
 
   // The coach's skeleton, split into the sets buildCalendarBlock consumes — shared by the team block and
   // every per-player block (so the Players tab is literally "computed from the Meso Cycle").

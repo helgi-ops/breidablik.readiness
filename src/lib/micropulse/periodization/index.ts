@@ -723,6 +723,32 @@ export function deloadWeekIndex(startMonday: string, weekStart: string | null, n
   return k >= 0 && k < n ? k : null;
 }
 
+/** A week with no match to build towards: the build-up week, on the same day order as the match week. */
+const FREE_WEEK: CalType[] = ["mechanical", "locomotive", "mixed", "rest", "activation", "rest", "rest"];
+
+/** The layout a block starts from before the coach edits it. Same fixtures, goal and hold as the block it seeds, so
+ *  every seeded day agrees with what `buildCalendarBlock` computes: a seeded session on a day it rests would count as
+ *  forced on, read as Mixed and skip the 3-in-a-row safety. A week with no fixture and under two sessions has nothing
+ *  to build towards and would plan empty, so it gets `FREE_WEEK`, keeping the rest after a match (Breiðablik trained
+ *  3.8 days in those weeks in 2026). Fixture days are set by the caller. */
+export function seedBlockDays(opts: Pick<Parameters<typeof buildCalendarBlock>[0], "unit" | "startDate" | "numWeeks" | "scopeName" | "baseOverloadPct" | "stepPct" | "goal" | "deload" | "hold" | "offseasonStart"> & { allFixtures: string[] }): { days: Record<string, "off" | "session">; types: Record<string, CalType> } {
+  const start = mondayOfIso(opts.startDate), endIso = addDays(start, opts.numWeeks * 7);
+  const matchDates = opts.allFixtures.filter((d) => d >= start && d < endIso);
+  const days: Record<string, "off" | "session"> = {}, types: Record<string, CalType> = {};
+  const justPlayed = (iso: string) => [1, 2].some((n) => opts.allFixtures.includes(addDays(iso, -n)));
+  buildCalendarBlock({ ...opts, matchDates }).weeks.forEach((w) => {
+    const sessions = w.days.filter((d) => d.type !== "rest" && d.type !== "topup" && d.type !== "match").length;
+    const free = sessions < 2 && !w.days.some((d) => d.type === "match");
+    w.days.forEach((d, i) => {
+      const iso = addDays(w.weekStart, i), fill = free && d.type === "rest" && !justPlayed(iso) ? FREE_WEEK[i] : "rest";
+      days[iso] = d.type !== "rest" || fill !== "rest" ? "session" : "off";
+      // Past the season the block rotates its own development days, so a filled day stays untyped there.
+      if (fill !== "rest" && !(opts.offseasonStart && iso >= opts.offseasonStart)) types[iso] = fill;
+    });
+  });
+  return { days, types };
+}
+
 export function buildCalendarBlock(opts: {
   unit: MatchUnitAbs; startDate: string; numWeeks: number; scopeName: string; scopePos?: string | null;
   phase?: Bi; baseOverloadPct?: number; stepPct?: number;
@@ -829,7 +855,9 @@ export function buildCalendarBlock(opts: {
   // + 2 rests vs the roomy 4). Same length as LT so the match-alignment math is unchanged; day ORDER is NOT
   // reshuffled (keeps the evidence-ordered microcycle + never-stack-HSR-and-mechanical). Mujika 2003; Issurin 2010.
   const RT: CalType[] = ["locomotive", "rest", "mixed", "rest", "activation"];
-  const roomyTpl = opts.goal === "realize" ? RT : LT; // goal picks the roomy-week skeleton; accum/transmute keep LT
+  // A held week is the normal week, not a taper, so it keeps LT: four sessions in a 7-day match week, as Breiðablik
+  // trained in 2026 (3.7 days, about 160% of a match; RT gives 140%, LT 195%). One team, one season.
+  const roomyTpl = opts.goal === "realize" && !opts.hold ? RT : LT; // goal picks the roomy-week skeleton; accum/transmute keep LT
   // Assign a day-type + MD label to every calendar day of the block (a continuous match stream).
   const dayType: CalType[] = [], dayMd: string[] = [];
   for (let k = 0; k < total; k++) {
@@ -1024,7 +1052,7 @@ export function buildCalendarBlock(opts: {
       accum: { en: "Accumulation: higher volume (×1.10) — build work capacity + max-strength (Issurin 2010).", is: "Uppsöfnun: meira rúmmál (×1,10) — byggja vinnugetu + hámarksstyrk (Issurin 2010)." },
       transmute: { en: "Transmutation: balanced volume (×0.95) — convert to football-specific strength–power.", is: "Umbreyting: jafnvægis-rúmmál (×0,95) — umbreyta í fótbolta-sérhæfðan styrk–kraft." },
       realize: opts.hold
-        ? { en: "Realization: holds the standard week, no step between weeks, the week follows the fixtures, a roomier week — power/speed gym (Malone 2015; Oliveira 2019; observational).", is: "Framkvæmd: heldur staðalvikunni, ekkert þrep milli vikna, vikan fylgir leikjunum, rýmri vika — kraft/hraða lyftingar (Malone 2015; Oliveira 2019; athugunarrannsóknir)." }
+        ? { en: "Realization: holds the standard week, no step between weeks, the week follows the fixtures — power/speed gym (Malone 2015; Oliveira 2019; observational).", is: "Framkvæmd: heldur staðalvikunni, ekkert þrep milli vikna, vikan fylgir leikjunum — kraft/hraða lyftingar (Malone 2015; Oliveira 2019; athugunarrannsóknir)." }
         : { en: "Realization: lower volume (×0.75), a roomier week — peak + power/speed gym (Mujika 2003).", is: "Framkvæmd: minna rúmmál (×0,75), rýmri vika — toppur + kraft/hraða lyftingar (Mujika 2003)." },
     } : {
       accum: { en: "Accumulation: higher volume (×1.10), gentle late unload — build work capacity + max-strength (Issurin 2010).", is: "Uppsöfnun: meira rúmmál (×1,10), væg sein niðurtröppun — byggja vinnugetu + hámarksstyrk (Issurin 2010)." },
