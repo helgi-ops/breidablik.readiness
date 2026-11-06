@@ -857,8 +857,9 @@ export function buildCalendarBlock(opts: {
   // reshuffled (keeps the evidence-ordered microcycle + never-stack-HSR-and-mechanical). Mujika 2003; Issurin 2010.
   const RT: CalType[] = ["locomotive", "rest", "mixed", "rest", "activation"];
   // A held week is the normal week, not a taper, so it keeps LT: four sessions in a 7-day match week. Breiðablik's
-  // 2026 1-match weeks: 3.7 training days, running about 1.4× a full match. LT fits the days and sits above on running
-  // (1.95×); RT fits the running (1.4×) on three days, none of them a running day. One team, one season.
+  // 2026 1-match weeks: 3.7 training days, about 15 km of running. On the team unit (every match-day row, subs included:
+  // 7.8 km) LT gives 15.2 km and fits both; RT gives 10.9 km on three days, none of them a running day. On a player's own
+  // near-full unit the same shares read about 40% higher. One team, one season.
   const roomyTpl = opts.goal === "realize" && !opts.hold ? RT : LT; // goal picks the roomy-week skeleton; accum/transmute keep LT
   // Assign a day-type + MD label to every calendar day of the block (a continuous match stream).
   const dayType: CalType[] = [], dayMd: string[] = [];
