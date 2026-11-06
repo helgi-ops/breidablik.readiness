@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { supabaseFetchWithTimeout } from "@/lib/supabaseFetchTimeout";
 
 /**
  * The single canonical server-side Supabase client (service role).
@@ -39,5 +40,6 @@ export function getSupabaseServer(): SupabaseClient {
 
   return createClient(url, serviceKey, {
     auth: { persistSession: false },
+    global: { fetch: supabaseFetchWithTimeout },
   });
 }

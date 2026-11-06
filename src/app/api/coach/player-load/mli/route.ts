@@ -10,6 +10,7 @@ import {
   type ResidualMechanicalLoadBand,
 } from "@/lib/micropulse/mechanicalLoad";
 import { KINEXON_CATALOG, readKinexonMetric, type KinexonMetric } from "@/lib/integrations/kinexon/metricCatalog";
+import { attachKinexonPayloads } from "@/lib/integrations/kinexon/attachKinexonPayloads";
 
 export const runtime = "nodejs";
 
@@ -53,8 +54,9 @@ type ExternalLoadRow = {
   raw_payload_json: unknown;
 };
 
+// raw_payload_json is left out on purpose; see attachKinexonPayloads.
 const BASE_SELECT =
-  "player_id, date, decel_b2_3_tot_effs_gen2, tot_ds, decelerations, accel_b2_3_tot_effs_gen2, tot_as, accelerations, player_load_per_minute, source, raw_payload_json";
+  "player_id, date, decel_b2_3_tot_effs_gen2, tot_ds, decelerations, accel_b2_3_tot_effs_gen2, tot_as, accelerations, player_load_per_minute, source";
 
 const IMA_SELECT =
   "ima_decel, ima_accel, cod_events, ima_cod, ima_total, impacts";
@@ -251,7 +253,11 @@ export async function GET(req: Request) {
     const rosterById = new Map(roster.map((p) => [p.id, p]));
 
     const startDate = dateMinusDays(dateKey, 30);
-    const rows = await fetchExternalLoadRows(sb, teamId, startDate, dateKey);
+    const rows = await attachKinexonPayloads(sb, await fetchExternalLoadRows(sb, teamId, startDate, dateKey), {
+      teamId,
+      startDate,
+      endDate: dateKey,
+    });
     const grouped = new Map<string, MechanicalLoadSourceRow[]>();
     for (const row of rows) {
       const mapped = mapSourceRow(row);

@@ -28,6 +28,7 @@ import {
   type MechanicalLoadSourceRow,
 } from "@/lib/micropulse/mechanicalLoad";
 import { KINEXON_CATALOG, readKinexonMetric, type KinexonMetric } from "@/lib/integrations/kinexon/metricCatalog";
+import { attachKinexonPayloads } from "@/lib/integrations/kinexon/attachKinexonPayloads";
 
 // Kinexon's time-at-high-metabolic-power zones (minutes) → the engine's
 // time_above_hml_threshold_s input (seconds). Kinexon's analogue of HML time.
@@ -158,8 +159,9 @@ async function fetchMetabolicRows(
   startDate: string,
   endDate: string,
 ): Promise<DBExternalLoadRow[]> {
+  // raw_payload_json is left out on purpose; see attachKinexonPayloads.
   const SELECT =
-    "player_id, date, metabolic_power, metabolic_power_peak, high_metabolic_load_distance_m, time_above_hml_threshold_s, metabolic_data_valid, metabolic_power_gen, source, raw_payload_json";
+    "player_id, date, metabolic_power, metabolic_power_peak, high_metabolic_load_distance_m, time_above_hml_threshold_s, metabolic_data_valid, metabolic_power_gen, source";
 
   let query = sb
     .from("player_external_load_daily")
@@ -330,7 +332,9 @@ export async function GET(req: Request): Promise<NextResponse<ResponsePayload>> 
 
     // Fetch GPS, RPE and mechanical in parallel
     const [dbRows, rpeByPlayer, mechByPlayer] = await Promise.all([
-      fetchMetabolicRows(sb, teamId, startDate, dateKey),
+      fetchMetabolicRows(sb, teamId, startDate, dateKey).then((rows) =>
+        attachKinexonPayloads(sb, rows, { teamId, startDate, endDate: dateKey }),
+      ),
       fetchRpeRows(sb, teamId, startDate, dateKey),
       fetchMechanicalRows(sb, teamId, startDate, dateKey),
     ]);
