@@ -1461,7 +1461,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           srpe: io.load?.sessionLoad ?? null,
           // Print gets every idea for the day and the study drills paired to it; the screen keeps one idea.
           pitch: pitchIdeasFor({ ...drillDay, phase: seasonPhase }).map((p) => ({ text: ideaText(p, isIS), cite: p.cite })),
-          research: researchDrillsForDay(researchRows, drillDay).map((d) => researchDrillPrint(d, isIS)),
+          research: researchDrillsForDay(researchRows, { ...drillDay, mds: mdLabel ? [mdLabel] : null }).map((d) => researchDrillPrint(d, isIS)),
         };
       }
       return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "train" as const, intent: intentLabelOf(intent), dose, stripe, idea, strength: isBasketball ? (bbStrengthTitles[i] ?? null) : null, dayLoad: null as { band: string | null; bandColor: string | null; pl: number | null; durationMin: number | null } | null };

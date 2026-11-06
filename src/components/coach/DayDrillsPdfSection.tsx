@@ -19,7 +19,7 @@ const L = {
     hint: "For each training day in the block: drills from published studies that fit it, and a few ideas beside them.",
     hintIdeas: "A few ideas for each training day in the block.",
     day: "Day", research: "From research", ideas: "Ideas", none: "No study drill is paired to this day",
-    footResearch: "Research drills are paired to a day by a rule, not AI: small games on a tight pitch for a mechanical day, mid-size games for a mixed day, large games or interval runs for a running day (Hill-Haas 2011; Riboli 2020). Each was measured on the players of its own study, who are not your squad.",
+    footResearch: "Research drills are paired to a day by a rule, not AI. Where a study places a drill on a day of its own week, that day is used (Martín-García 2018). Otherwise: small games on a tight pitch for a mechanical day, mid-size games for a mixed day, large games or interval runs for a running day (Hill-Haas 2011; Riboli 2020). Each was measured on the players of its own study, who are not your squad.",
     foot: "The ideas are examples to start from; a citation covers the pitch size, bout length or load level, not the game itself. Descriptive planning, never the readiness colour.",
   },
   IS: {
@@ -27,7 +27,7 @@ const L = {
     hint: "Fyrir hvern æfingadag í lotunni: drillur úr birtum rannsóknum sem passa við hann, og nokkrar hugmyndir við hliðina.",
     hintIdeas: "Nokkrar hugmyndir fyrir hvern æfingadag í lotunni.",
     day: "Dagur", research: "Úr rannsóknum", ideas: "Hugmyndir", none: "Engin rannsóknardrilla er pöruð við daginn",
-    footResearch: "Rannsóknardrillur eru paraðar við dag með reglu, ekki gervigreind: fámennir leikir á þröngu svæði á mechanical-degi, miðlungsstórir leikir á mixed-degi, stórir leikir eða interval hlaup á hlaupadegi (Hill-Haas 2011; Riboli 2020). Hver þeirra var mæld á leikmönnum sinnar rannsóknar, sem eru ekki þitt lið.",
+    footResearch: "Rannsóknardrillur eru paraðar við dag með reglu, ekki gervigreind. Ef rannsókn setur drillu á ákveðinn dag í sinni viku er sá dagur notaður (Martín-García 2018). Annars: fámennir leikir á þröngu svæði á mechanical-degi, miðlungsstórir leikir á mixed-degi, stórir leikir eða interval hlaup á hlaupadegi (Hill-Haas 2011; Riboli 2020). Hver þeirra var mæld á leikmönnum sinnar rannsóknar, sem eru ekki þitt lið.",
     foot: "Hugmyndirnar eru dæmi til að byrja á; heimild á við um svæðið, lotulengdina eða álagið, ekki leikinn sjálfan. Lýsandi áætlun, aldrei readiness-liturinn.",
   },
 };

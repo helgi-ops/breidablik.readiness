@@ -44,9 +44,26 @@ test("researchDrillsForDay: an unchecked row never prints, nor the no-encouragem
   assert.equal(researchDrillsForDay([], { stimulus: "mixed" }).length, 0);
 });
 
+test("researchDrillsForDay: best-checked first, and a drill its study ties to one MD day prints only there", () => {
+  const bank = [
+    row("z-excerpt", { day_fit: ["mixed"], verified_from: "excerpt", finding_en: "x" }),
+    row("y-abstract", { day_fit: ["mixed"], verified_from: "abstract" }),
+    row("x-full", { day_fit: ["mixed"], verified_from: "full_text" }),
+    row("md2", { day_fit: ["activation", "MD-2"] }), row("md1", { day_fit: ["activation", "MD-1"] }),
+  ];
+  assert.deepEqual(researchDrillsForDay(bank, { stimulus: "mixed" }).map((d) => d.id), ["x-full", "y-abstract", "z-excerpt"]);
+  assert.deepEqual(researchDrillsForDay(bank, { stimulus: null, character: "ACTIVATION", mds: ["MD-1"] }).map((d) => d.id), ["md1"]);
+  assert.deepEqual(researchDrillsForDay(bank, { stimulus: "technical", mds: ["MD-2"] }).map((d) => d.id), ["md2"]);
+  assert.equal(researchDrillsForDay(bank, { stimulus: null, character: "ACTIVATION", mds: ["MD-3"] }).length, 0);
+  // The MD day isn't known: both low-load drills are candidates.
+  assert.equal(researchDrillsForDay(bank, { stimulus: null, character: "ACTIVATION" }).length, 2);
+});
+
 test("researchDrillPrint: the set-up the paper used, the measured fact, the short citation; nothing invented", () => {
   assert.deepEqual(researchDrillPrint(BANK[0], false), { name: "3v3", meta: "18 × 30 m · 90 m²/player · 3 × 4 min", finding: "about 90% of max heart rate", cite: "Rampinini et al. 2007" });
   assert.deepEqual(researchDrillPrint({ ...BANK[0], drill_name_is: "3v3 leikur" }, true), { name: "3v3 leikur", meta: "18 × 30 m · 90 m²/leikm. · 3 × 4 mín", finding: "um 90% af hámarkspúls", cite: "Rampinini et al. 2007" });
+  assert.equal(researchDrillPrint(row("b", { reps: "4 min" }), false).meta, "4 min bouts");
+  assert.equal(researchDrillPrint(row("b", { reps: "4 min" }), true).meta, "4 mín lotur");
   // No pitch, no bouts, no finding recorded: the line is just the name and the citation.
   assert.deepEqual(researchDrillPrint(row("run", { source_citation: "Buchheit & Laursen 2013" }), true), { name: "run", meta: "", finding: "", cite: "Buchheit & Laursen 2013" });
 });

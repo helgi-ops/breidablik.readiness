@@ -1,9 +1,10 @@
 /**
  * Drills for a training day, for print — pure. Two sources side by side, per match-day-relative day:
  *   - research: drills from published studies (`drill_library_public`), each with its citation. A row is
- *               paired to a day type by `day_fit`, set when the row was checked against its paper (the rule:
- *               pitch size per player and game size, and for MD+1 what the study measured on substitutes).
- *               An unverified row never prints.
+ *               paired to a day type by `day_fit`, set when the row was checked against its paper. The rule:
+ *               where the study places the drill on a day of its own week, that day wins (Martín-García 2018);
+ *               otherwise game size and pitch size per player (Hill-Haas 2011; Riboli 2020). An unverified
+ *               row never prints.
  *   - ideas:    the general on-pitch examples from `pitchIdeasFor` (dayIdeas.ts).
  *
  * The coach's own library is deliberately NOT a source: a personal library follows the coach to every team
@@ -31,7 +32,8 @@ export function toDrillPickInput(d: DrillLibraryRow): DrillPickInput {
   };
 }
 
-export type DrillDay = { stimulus: StimulusType | null; character?: string | null };
+/** `mds` = the MD labels the day falls on ("MD-1"), when known: a row tied to one MD day prints only there. */
+export type DrillDay = { stimulus: StimulusType | null; character?: string | null; mds?: string[] | null };
 
 /** A `drill_library_public` row (numeric columns may arrive as strings). */
 export type ResearchDrillRow = {
@@ -54,16 +56,27 @@ export function researchDayKey(day: DrillDay): ResearchDayKey | null {
   return c === "ACTIVATION" ? "activation" : c === "TOPUP" || c === "RECOVERY" ? "topup" : null;
 }
 
-const VERIFIED = new Set(["full_text", "abstract"]);
+/** How a row was checked against its paper, best first: the full text, the abstract, or an excerpt of the
+ *  paper's table surfaced by a search. Anything else is unchecked and never prints. */
+const VERIFIED = ["full_text", "abstract", "excerpt"];
+const isMdToken = (t: string) => /^MD[+-]?\d*$/i.test(t);
 
-/** The research drills paired to a day, measured ones first, game sizes kept different. Leaves out a row
- *  nobody checked against its paper, and the "no coach encouragement" twin of a drill (same drill, same pitch). */
+/** The research drills paired to a day: best-checked first, then the measured ones, game sizes kept
+ *  different. Leaves out a row nobody checked against its paper, the "no coach encouragement" twin of a drill
+ *  (same drill, same pitch), and a row its study ties to another MD day than this one. */
 export function researchDrillsForDay(rows: ResearchDrillRow[], day: DrillDay, limit = 3): ResearchDrillRow[] {
   const key = researchDayKey(day);
   if (!key) return [];
+  const mds = (day.mds ?? []).map((m) => m.toUpperCase());
+  const rank = (r: ResearchDrillRow) => VERIFIED.indexOf(String(r.verified_from ?? ""));
   const fit = rows
-    .filter((r) => (r.day_fit ?? []).includes(key) && VERIFIED.has(String(r.verified_from ?? "")) && r.coach_encouragement !== false)
-    .sort((a, b) => Number(!!b.finding_en) - Number(!!a.finding_en) || a.drill_name.localeCompare(b.drill_name));
+    .filter((r) => {
+      const tokens = r.day_fit ?? [];
+      if (!tokens.includes(key) || rank(r) < 0 || r.coach_encouragement === false) return false;
+      const own = tokens.filter(isMdToken).map((t) => t.toUpperCase());
+      return own.length === 0 || mds.length === 0 || own.some((t) => mds.includes(t));
+    })
+    .sort((a, b) => rank(a) - rank(b) || Number(!!b.finding_en) - Number(!!a.finding_en) || a.drill_name.localeCompare(b.drill_name));
   const out: ResearchDrillRow[] = []; const formats = new Set<string>();
   for (const r of fit) {
     const f = String(r.drill_format ?? r.id);
@@ -80,7 +93,9 @@ const trim1 = (n: number) => String(Math.round(n * 10) / 10);
  *  measured fact, and the short citation ("Rampinini et al. 2007"). Only what the row carries. */
 export function researchDrillPrint(r: ResearchDrillRow, isIS: boolean): { name: string; meta: string; finding: string; cite: string } {
   const L = num(r.field_length_m), W = num(r.field_width_m), area = num(r.area_per_player_m2);
-  const reps = r.reps ? (isIS ? r.reps.replace(/\bmin\b/g, "mín") : r.reps) : null;
+  // A bare duration ("4 min") is the length of one bout; "3 × 5 min" already says so.
+  const bouts = r.reps && /^\d+ min$/.test(r.reps.trim()) ? `${r.reps.trim()} bouts` : r.reps;
+  const reps = bouts ? (isIS ? bouts.replace(/\bmin\b/g, "mín").replace(/\bbouts\b/g, "lotur") : bouts) : null;
   return {
     name: (isIS && r.drill_name_is) || r.drill_name,
     meta: [L != null && W != null ? `${trim1(L)} × ${trim1(W)} m` : null, area != null ? `${Math.round(area)} m²/${isIS ? "leikm." : "player"}` : null, reps].filter(Boolean).join(" · "),
@@ -111,6 +126,6 @@ export function buildDayDrillSheet(opts: { days: Array<{ type: CalType; md: stri
   }
   return SHEET_ORDER.filter((t) => seen.has(t)).map((t) => {
     const day = dayOfCalType(t)!; const e = seen.get(t)!;
-    return { type: t, mds: e.mds, label: e.label, research: researchDrillsForDay(opts.rows, day, opts.limit ?? 3), ideas: pitchIdeasFor({ ...day, phase: opts.phase }) };
+    return { type: t, mds: e.mds, label: e.label, research: researchDrillsForDay(opts.rows, { ...day, mds: e.mds }, opts.limit ?? 3), ideas: pitchIdeasFor({ ...day, phase: opts.phase }) };
   });
 }
