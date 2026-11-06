@@ -55,6 +55,10 @@ export type WeekSetupPdfPayload = {
       // Kinexon-only distinctive variables (indoor LPS): changes of direction/orientation, exertions, mechanical load.
       cod?: number | null; coo?: number | null; exertions?: number | null; mechLoad?: number | null;
       perDay: Array<number | null>;             // weekly PL distributed across the training days below
+      // Kinexon: the week's expected match load (the player's own recorded match mean × the week's matches),
+      // and how many recorded matches that mean rests on. null = no recorded match → no match line.
+      match?: { pl: number | null; distance: number | null; hsr: number | null; cod: number | null; coo: number | null; exertions: number | null; mechLoad: number | null } | null;
+      matchesRecorded?: number | null;
     }>;
     trainDays: Array<{ label: string; md: string | null }>; // the training-day columns for the detailed grid
     hasGps: boolean;                             // any GPS/IMA metric present (else overview shows PL only)
@@ -62,6 +66,8 @@ export type WeekSetupPdfPayload = {
     // Kinexon team → a compact team-level breakdown of each Kinexon variable across the
     // MD-days (rows = variables, cols = the training-day grid above). Descriptive.
     kinexonMd?: { rows: Array<{ label: string; perDay: Array<number | null>; total: number | null }> } | null;
+    matchCount?: number;                         // matches in the week (Kinexon weekly table prints a match line)
+    notPlanned?: Array<{ name: string; status: "injured" | "rehabilitation" }>; // injured / rehab: named, not planned
     // Every variable per day and for the week, matches counted. Present → these landscape pages replace the
     // two tables above (null for Kinexon, which keeps its own variables). Labels are already localized.
     detail?: (PlayerWeekLoad & { varLabels: string[]; legend: string; days: Array<{ title: string; note: string }> }) | null;
@@ -92,6 +98,7 @@ const L = {
       : `Each player's week across the training days; no match this week. Descriptive - a feed that lacks a metric shows "-".`,
     rowTrain: "Training", rowMatch: (n: number) => `Matches ×${n}`, rowWeek: "Week",
     notPlanned: "Not in this plan", outInjured: "injured", outRehab: "in rehab", returning: "returning - follow the return ramp",
+    plKxWeekLead: (n: number) => `Each player's week: training days + expected matches = the week. A match line is the mean of the player's own recorded matches, × ${n} this week. Kinexon records in the home arena, so a player with no recorded match shows "-" and the week is training only.`,
     plDays: "Detailed load - per day", plDaysLead: "Each day's plan for every player. Off and match days omitted.",
     plPerMatch: "Per match - expected", plPerMatchLead: (n: number) => `One match at the player's usual minutes, counted ×${n} in the week above.`,
     roleOf: (r: PlayerWeekRole) => (r === "starter" ? "starter" : r === "rotation" ? "rotation" : r === "low" ? "low-min" : "-"),
@@ -111,6 +118,7 @@ const L = {
       : `Vika hvers leikmanns yfir æfingadagana; enginn leikur þessa viku. Lýsandi - mæling sem gögnin vantar sýnir "-".`,
     rowTrain: "Æfingar", rowMatch: (n: number) => `Leikir ×${n}`, rowWeek: "Vikan",
     notPlanned: "Ekki í þessu plani", outInjured: "meiddur", outRehab: "í endurhæfingu", returning: "í endurkomu - fylgið endurkomuáætlun",
+    plKxWeekLead: (n: number) => `Vika hvers leikmanns: æfingadagar + væntanlegir leikir = vikan. Leikjalínan er meðaltal skráðra leikja leikmannsins sjálfs, × ${n} þessa viku. Kinexon mælir í heimahöllinni, svo leikmaður án skráðs leiks sýnir "-" og vikan er þá bara æfingar.`,
     plDays: "Ítarlegt álag - eftir degi", plDaysLead: "Áætlun dagsins fyrir hvern leikmann. Frí- og leikdögum sleppt.",
     plPerMatch: "Á leik - áætlað", plPerMatchLead: (n: number) => `Einn leikur miðað við venjulegar mínútur leikmannsins, talinn ×${n} í vikunni hér að ofan.`,
     roleOf: (r: PlayerWeekRole) => (r === "starter" ? "byrjun" : r === "rotation" ? "skipt" : r === "low" ? "lág-mín" : "-"),
@@ -240,48 +248,66 @@ function WeekDoc({ payload, lang }: { payload: WeekSetupPdfPayload; lang: Lang }
           const players = [...pl.players].sort((a, b) => (b.weeklyPl ?? -1) - (a.weeklyPl ?? -1));
           const roleOf = (min: number | null) => (min == null ? "-" : min >= 80 ? t.starter : min >= 30 ? t.rot : t.lowMin);
           const kmv = (m: number | null) => (m == null ? "-" : m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${Math.round(m)}m`);
+          const num = (v: number | null) => (v == null ? "-" : nf(v));
+          type P = (typeof players)[number];
+          type M = NonNullable<P["match"]>;
+          const col = (key: string, label: string, width: number, train: (p: P) => number | null, match: (m: M) => number | null, fmt: (v: number | null) => string = num) => ({ key, label, width, train, match, fmt });
+          const kxCols = [
+            col("pl", t.wk, 52, (p) => p.weeklyPl, (m) => m.pl),
+            ...(pl.hasGps ? (pl.isKinexon ? [
+              // Kinexon (indoor LPS) → its own distinctive variables.
+              col("distance", t.dist, 42, (p) => p.distance, (m) => m.distance, kmv),
+              col("hsr", t.hsr, 38, (p) => p.hsr, (m) => m.hsr, (v) => (v == null ? "-" : `${nf(v)}m`)),
+              col("cod", t.cod, 38, (p) => p.cod ?? null, (m) => m.cod),
+              col("coo", t.coo, 38, (p) => p.coo ?? null, (m) => m.coo),
+              col("exertions", t.exert, 40, (p) => p.exertions ?? null, (m) => m.exertions),
+              col("mechLoad", t.mech, 42, (p) => p.mechLoad ?? null, (m) => m.mechLoad),
+            ] : [
+              col("distance", t.dist, 46, (p) => p.distance, () => null, kmv),
+              col("hsr", t.hsr, 42, (p) => p.hsr, () => null, (v) => (v == null ? "-" : `${nf(v)}m`)),
+              col("accel", t.acc, 38, (p) => p.accel, () => null),
+              col("decel", t.dec, 38, (p) => p.decel, () => null),
+            ]) : []),
+          ];
+          const matchCount = pl.matchCount ?? 0;
+          // The match line prints only when the week has a match AND some player has a recorded one.
+          const withMatch = matchCount > 0 && players.some((p) => p.match);
+          const outNames = (pl.notPlanned ?? []).map((x) => `${x.name} (${x.status === "injured" ? t.outInjured : t.outRehab})`).join(", ");
+          const stack = (key: number, texts: Array<{ s: string; bold?: boolean }>, right = false) => (
+            <View key={key}>
+              {texts.map((x, i) => (
+                <Text key={i} style={[x.bold ? fh(700) : fb(400), { fontSize: 7.5, textAlign: right ? "right" : "left", color: x.bold ? C.ink : C.mute }]}>{x.s}</Text>
+              ))}
+            </View>
+          );
           return (
             <>
-              {/* Per-player weekly load — individualised GPS + IMA load from each match unit. */}
+              {/* Per-player weekly load. With matches in the week, each cell stacks Training / Matches / Week. */}
               <Section title={t.plWeekly} break>
-                <Text style={[fb(400), { fontSize: 8, color: C.mute, marginBottom: 5, lineHeight: 1.35 }]}>{tx(t.plWeeklyLead)}</Text>
+                <Text style={[fb(400), { fontSize: 8, color: C.mute, marginBottom: 5, lineHeight: 1.35 }]}>{tx(withMatch ? t.plKxWeekLead(matchCount) : t.plWeeklyLead)}</Text>
+                {outNames ? (
+                  <Text style={[fb(400), { fontSize: 8.5, marginBottom: 6 }]}>
+                    <Text style={fb(600)}>{tx(`${t.notPlanned}:`)}</Text>{` ${tx(outNames)}`}
+                  </Text>
+                ) : null}
                 <Table
+                  dense={withMatch}
                   cols={[
                     { label: t.player, flex: 1 },
                     { label: t.role, width: 50 },
-                    { label: t.wk, width: 52, align: "right", strong: true },
-                    ...(pl.hasGps ? (pl.isKinexon ? [
-                      // Kinexon (indoor LPS) → its own distinctive variables.
-                      { label: t.dist, width: 40, align: "right" as const },
-                      { label: t.hsr, width: 36, align: "right" as const },
-                      { label: t.cod, width: 38, align: "right" as const },
-                      { label: t.coo, width: 38, align: "right" as const },
-                      { label: t.exert, width: 40, align: "right" as const },
-                      { label: t.mech, width: 42, align: "right" as const },
-                    ] : [
-                      { label: t.dist, width: 46, align: "right" as const },
-                      { label: t.hsr, width: 42, align: "right" as const },
-                      { label: t.acc, width: 38, align: "right" as const },
-                      { label: t.dec, width: 38, align: "right" as const },
-                    ]) : []),
+                    ...(withMatch ? [{ label: "", width: 50 }] : []),
+                    ...kxCols.map((c) => ({ label: c.label, width: c.width, align: "right" as const, strong: !withMatch && c.key === "pl" })),
                   ]}
                   rows={players.map((p) => [
                     tx(p.name),
                     roleOf(p.minutes),
-                    p.weeklyPl == null ? "-" : nf(p.weeklyPl),
-                    ...(pl.hasGps ? (pl.isKinexon ? [
-                      kmv(p.distance),
-                      p.hsr == null ? "-" : `${nf(p.hsr)}m`,
-                      p.cod == null ? "-" : nf(p.cod),
-                      p.coo == null ? "-" : nf(p.coo),
-                      p.exertions == null ? "-" : nf(p.exertions),
-                      p.mechLoad == null ? "-" : nf(p.mechLoad),
-                    ] : [
-                      kmv(p.distance),
-                      p.hsr == null ? "-" : `${nf(p.hsr)}m`,
-                      p.accel == null ? "-" : nf(p.accel),
-                      p.decel == null ? "-" : nf(p.decel),
-                    ]) : []),
+                    ...(withMatch ? [stack(0, [{ s: t.rowTrain }, { s: t.rowMatch(matchCount) }, { s: t.rowWeek, bold: true }])] : []),
+                    ...kxCols.map((c, i) => {
+                      const train = c.train(p), match = p.match ? c.match(p.match) : null;
+                      if (!withMatch) return c.fmt(train);
+                      const week = train == null && match == null ? null : (train ?? 0) + (match ?? 0);
+                      return stack(i + 1, [{ s: c.fmt(train) }, { s: c.fmt(match) }, { s: c.fmt(week), bold: true }], true);
+                    }),
                   ])}
                 />
               </Section>

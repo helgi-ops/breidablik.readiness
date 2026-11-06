@@ -13,7 +13,8 @@ import PreseasonStartWeekCard, { type PreseasonComputed } from "@/components/coa
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { DAY_TYPE_LABEL, dayTypeFromText, type EnoughDayType } from "@/lib/micropulse/sessionEnough";
-import { buildPlayerWeekLoad, dayTargetNote, PLAYER_WEEK_VAR_LABEL, type PlayerWeekDay } from "@/lib/micropulse/weekSetup/playerWeekLoad";
+import { buildPlayerWeekLoad, dayTargetNote, outStatusOf, PLAYER_WEEK_VAR_LABEL, type PlayerWeekDay } from "@/lib/micropulse/weekSetup/playerWeekLoad";
+import { kinexonMatchLine, type KinexonPlayerLoad, type KinexonWeekValues } from "@/lib/integrations/kinexon/weekPlanLoad";
 import { dayIdea, LOAD_BAND_META, rpeRange } from "@/lib/micropulse/dayIdeas";
 import { parseMdOffset, mdOffsetForDate } from "@/lib/micropulse/readinessOutlook/assemble";
 import type { PlannedDay } from "@/lib/micropulse/readinessOutlook";
@@ -1526,7 +1527,9 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         // GPS + IMA column is a WEEKLY total (per-session baseline × this), to match "Week PL".
         const weekMult = dayRatios.reduce((a, b) => a + b, 0);
         const wk = (v: number | null): number | null => (v == null ? null : Math.round(v * weekMult));
-        const mapped = pls.map((p) => {
+        // Injured and rehab players get no plan (they are named on the PDF instead).
+        const notPlanned = pls.flatMap((p) => { const status = outStatusOf(p.injuryStatus); return status ? [{ name: p.name.trim(), status }] : []; });
+        const mapped = pls.filter((p) => !outStatusOf(p.injuryStatus)).map((p) => {
           const mu = p.matchUnit; const rb = p.recentBaseline;
           // Per-session typical GPS + IMA load: the player's recent TRAINING baseline first
           // (works without matches), the match unit as fallback.
@@ -1546,6 +1549,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
             // Columns are WEEKLY totals; pl stays the per-session baseline (unused by the table now).
             weeklyPl, pl, distance: wk(distance), hsr: wk(hsr), accel: wk(accel), decel: wk(decel), perDay,
             cod: null as number | null, coo: null as number | null, exertions: null as number | null, mechLoad: null as number | null,
+            match: null as KinexonWeekValues | null, matchesRecorded: null as number | null,
           };
         }).filter((p) => p.pl != null || p.weeklyPl != null);
         if (mapped.length) {
@@ -1560,10 +1564,18 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
               const kj = await kres.json();
               if (kj?.isKinexon && Array.isArray(kj.players)) {
                 isKinexon = true;
-                const kPlayers = kj.players as Array<{ name: string; cod: number | null; coo: number | null; exertions: number | null; mechLoad: number | null; duration: number | null }>;
+                const kPlayers = kj.players as Array<{ name: string; cod: number | null; coo: number | null; exertions: number | null; mechLoad: number | null; duration: number | null; match?: KinexonPlayerLoad["match"] }>;
                 const kByName = new Map(kPlayers.map((p) => [p.name, p]));
                 // Kinexon variables are per-session means — scale to weekly like the others.
-                for (const p of mapped) { const k = kByName.get(p.name); if (k) { p.cod = wk(k.cod); p.coo = wk(k.coo); p.exertions = wk(k.exertions); p.mechLoad = wk(k.mechLoad); } }
+                const kxMatchCount = days.filter((d) => d.kind === "match").length;
+                for (const p of mapped) {
+                  const k = kByName.get(p.name);
+                  if (!k) continue;
+                  p.cod = wk(k.cod); p.coo = wk(k.coo); p.exertions = wk(k.exertions); p.mechLoad = wk(k.mechLoad);
+                  // The week's matches: the player's own recorded match mean × the matches this week.
+                  p.match = kinexonMatchLine(k.match, kxMatchCount);
+                  p.matchesRecorded = k.match?.matches ?? null;
+                }
                 // Team average session duration (per-session minutes) — for the day-card length.
                 const durVals = kPlayers.map((p) => p.duration).filter((x): x is number => x != null && x > 0);
                 teamDuration = durVals.length ? durVals.reduce((a, b) => a + b, 0) / durVals.length : null;
@@ -1656,7 +1668,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
               }),
             };
           }
-          playerLoad = { players: mapped, trainDays, hasGps, isKinexon, kinexonMd, detail };
+          playerLoad = { players: mapped, trainDays, hasGps, isKinexon, kinexonMd, detail, matchCount: days.filter((d) => d.kind === "match").length, notPlanned };
         }
       }
     } catch { /* best-effort — PDF stays team-level */ }
