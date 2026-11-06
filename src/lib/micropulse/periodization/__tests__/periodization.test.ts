@@ -1,7 +1,7 @@
 import { test } from "vitest";
 import { buildPlayerBlock } from "@/lib/micropulse/periodization/playerBlock";
 import assert from "node:assert/strict";
-import { holdsStandardWeek, blockDeloadOf, deloadWeekIndex, detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, seedBlockDays, recommendBlockGoal, blockGoalFromSeason, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
+import { activeValdTrimLift, nextValdTrimLiftLog, holdsStandardWeek, blockDeloadOf, deloadWeekIndex, detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, seedBlockDays, recommendBlockGoal, blockGoalFromSeason, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
 
 // A full Pro (GPS + IMA) match unit — running spine + the mechanical/IMA axis (Acc/Dec B2–3, stride, dir).
 const UNIT: MatchUnitAbs = { dist: 12564, hsr: 988, load: 1184, accdec: 259, accHiEff: 40, decHiEff: 52, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
@@ -285,12 +285,114 @@ test("strengthDefaultForBlock: research %1RM defaults per phase, with citations"
   assert.match(strengthDefaultForBlock("Transmutation", false).velocity.en, /0\.50–0\.75/);
 });
 
-test("valdVolumeCap: status → volume cap %, hamstring flag surfaced", () => {
-  assert.equal(valdVolumeCap("green", "green").capPct, 100);
-  assert.equal(valdVolumeCap("yellow", "yellow").capPct, 85);
-  assert.match(valdVolumeCap("yellow", "yellow").note.en, /hamstring/);
-  assert.equal(valdVolumeCap("red", null).capPct, 70);
-  assert.equal(valdVolumeCap(null, null).capPct, null);
+test("valdVolumeCap: only a recent jump test below own level trims", () => {
+  const v = (cmjFlag: string | null, cmjAgeDays: number | null, hamstringFlag: string | null = null, hamstringAgeDays: number | null = null) => valdVolumeCap({ cmjFlag, cmjAgeDays, hamstringFlag, hamstringAgeDays });
+  assert.equal(v("green", 2).capPct, 100);
+  assert.equal(v("yellow", 2).capPct, 85);
+  assert.equal(v("red", 7).capPct, 70);
+  assert.match(v("red", 2).note.en, /lifts it/); // the counterfactual
+  // Too old: no status, no cap, and the note says how old.
+  assert.equal(v("red", 8).capPct, null);
+  assert.equal(v("red", 8).status, null);
+  assert.match(v("red", 8).note.en, /8 days ago/);
+  // Tested, but too few tests to have a flag.
+  assert.equal(v(null, 2).capPct, null);
+  assert.equal(v(null, null).capPct, null);
+});
+
+test("valdVolumeCap: a left/right strength gap is a watch item, never a trim", () => {
+  const old = valdVolumeCap({ cmjFlag: null, cmjAgeDays: 23, hamstringFlag: "red", hamstringAgeDays: 686 });
+  assert.equal(old.capPct, null);
+  assert.equal(old.status, null);
+  assert.match(old.note.en, /Hamstring.*686 days ago.*doesn't trim/);
+  assert.match(old.note.is, /686/);
+  const fresh = valdVolumeCap({ cmjFlag: "green", cmjAgeDays: 1, hamstringFlag: "red", hamstringAgeDays: 1 });
+  assert.equal(fresh.capPct, 100);
+});
+
+test("valdTrimLift log: append-only, undo marks the entry, newest standing lift wins", () => {
+  const a = nextValdTrimLiftLog(null, { playerId: "p", weekStart: "2026-04-13", reason: "first" }, "c1", "t1");
+  assert.equal(activeValdTrimLift(a, "p", "2026-04-13")?.reason, "first");
+  assert.equal(activeValdTrimLift(a, "p", "2026-04-20"), null);
+  assert.equal(activeValdTrimLift(a, "q", "2026-04-13"), null);
+  const b = nextValdTrimLiftLog(a, { playerId: "p", weekStart: "2026-04-13", undo: true }, "c2", "t2");
+  assert.equal(b.length, 1);
+  assert.equal(b[0].reason, "first");
+  assert.equal(b[0].undoneBy, "c2");
+  assert.equal(activeValdTrimLift(b, "p", "2026-04-13"), null);
+  const c = nextValdTrimLiftLog(b, { playerId: "p", weekStart: "2026-04-13", reason: "second" }, "c1", "t3");
+  assert.equal(c.length, 2);
+  assert.equal(activeValdTrimLift(c, "p", "2026-04-13")?.reason, "second");
+});
+
+// ── The VALD trim on a player's block ────────────────────────
+const TRIM_FIX = ["2026-04-18", "2026-04-25", "2026-05-02", "2026-05-09"];
+const trimPlayer = (capPct: number | null, lift?: { weekStart: string }) => {
+  const m = (typical: number | null) => ({ typical });
+  return { name: "P", position: null, vald: { capPct, lift }, matchUnit: { nNearFull: 6, confidence: "high", load: m(900), hsr: m(500), distance: m(10000), accel: m(60), decel: m(60), accHiEff: m(20), decHiEff: m(30), stride: m(300), rhie: m(3), symmetry: m(1), metPower: m(10), imaFr: m(800), imaCod: m(300) } } as never;
+};
+const TRIM_PLAN = { teamBaseline: { avg: { sessions: 0 } }, positionBaselines: [], fixtures: TRIM_FIX } as never;
+const TRIM_ARGS = { blkStart: "2026-04-13", blkWeeks: 4, phaseLabel: { en: "x", is: "x" }, matchDates: TRIM_FIX, goal: "realize" as const, deload: { weekStart: null, light: true }, hold: true };
+const TRIM_AXES = ["pctRunning", "pctHsr", "pctMech", "pctAccDec23", "pctStride", "pctFr", "pctCod", "pctAccel", "pctDecel"] as const;
+
+test("VALD trim: this week's training lands on the cap on every axis, in a held block too", () => {
+  const free = buildPlayerBlock(TRIM_PLAN, trimPlayer(null), { ...TRIM_ARGS, asOf: "2026-04-22" });
+  for (const cap of [85, 70]) {
+    const r = buildPlayerBlock(TRIM_PLAN, trimPlayer(cap), { ...TRIM_ARGS, asOf: "2026-04-22" });
+    assert.deepEqual(r.valdTrim, { weekIndex: 1, weekStart: "2026-04-20", capPct: cap, state: "applied" });
+    for (const k of TRIM_AXES) assert.ok(Math.abs(r.block.weeks[1][k]! / free.block.weeks[1][k]! - cap / 100) < 0.02, `${k} at ${cap}`);
+    assert.match(r.block.weeks[1].capNote!.en, new RegExp(`${cap}% this week`));
+  }
+});
+
+test("VALD trim: other weeks and match days are untouched, so past weeks never get rewritten", () => {
+  const free = buildPlayerBlock(TRIM_PLAN, trimPlayer(null), { ...TRIM_ARGS, asOf: "2026-04-22" });
+  const r = buildPlayerBlock(TRIM_PLAN, trimPlayer(70), { ...TRIM_ARGS, asOf: "2026-04-22" });
+  for (const i of [0, 2, 3]) assert.deepEqual(r.block.weeks[i], free.block.weeks[i]);
+  const matchDay = (w: { days: Array<{ type: string }> }) => w.days.find((d) => d.type === "match");
+  assert.deepEqual(matchDay(r.block.weeks[1]), matchDay(free.block.weeks[1]));
+  assert.equal(r.block.weeks[1].restDays, free.block.weeks[1].restDays);
+});
+
+test("VALD trim: a capped player is never heavier than an uncapped one, on the ramp either", () => {
+  const ramp = { ...TRIM_ARGS, hold: false, blkWeeks: 4, asOf: "2026-04-22" };
+  const free = buildPlayerBlock(TRIM_PLAN, trimPlayer(null), ramp).block.weeks;
+  const capped = buildPlayerBlock(TRIM_PLAN, trimPlayer(70), ramp).block.weeks;
+  for (let i = 0; i < free.length; i++) for (const k of TRIM_AXES) assert.ok(capped[i][k]! <= free[i][k]!, `week ${i} ${k}`);
+});
+
+test("VALD trim: no cut without a current week in the block, a real cap, or when the coach lifted it", () => {
+  const free = buildPlayerBlock(TRIM_PLAN, trimPlayer(null), TRIM_ARGS);
+  const same = (p: never, asOf?: string) => {
+    const r = buildPlayerBlock(TRIM_PLAN, p, { ...TRIM_ARGS, asOf });
+    assert.deepEqual(r.block.weeks, free.block.weeks);
+    return r.valdTrim;
+  };
+  assert.equal(same(trimPlayer(70)), null);                    // no date given
+  assert.equal(same(trimPlayer(70), "2026-06-01"), null);      // today isn't in this block
+  assert.equal(same(trimPlayer(100), "2026-04-22"), null);     // full training
+  assert.equal(same(trimPlayer(null), "2026-04-22"), null);    // no recent test
+  assert.equal(same(trimPlayer(70, { weekStart: "2026-04-20" }), "2026-04-22")?.state, "lifted");
+  // A lift from an earlier week doesn't carry over.
+  assert.equal(buildPlayerBlock(TRIM_PLAN, trimPlayer(70, { weekStart: "2026-04-13" }), { ...TRIM_ARGS, asOf: "2026-04-22" }).valdTrim?.state, "applied");
+});
+
+test("VALD trim: doesn't stack on a planned unload", () => {
+  const lightArgs = { ...TRIM_ARGS, deload: { weekStart: "2026-04-20", light: true }, asOf: "2026-04-22" };
+  const light = buildPlayerBlock(TRIM_PLAN, trimPlayer(null), lightArgs).block.weeks[1];
+  // 85% is above the light week's 80% volume: volume stays, speed still comes down.
+  const c85 = buildPlayerBlock(TRIM_PLAN, trimPlayer(85), lightArgs).block.weeks[1];
+  assert.equal(c85.pctRunning, light.pctRunning);
+  assert.ok(Math.abs(c85.pctHsr! / light.pctHsr! - 0.85) < 0.02);
+  // 70% takes volume the rest of the way down: 0.8 → 0.7 of normal, not 0.8 × 0.7.
+  const c70 = buildPlayerBlock(TRIM_PLAN, trimPlayer(70), lightArgs).block.weeks[1];
+  assert.ok(Math.abs(c70.pctRunning! / light.pctRunning! - 0.875) < 0.02);
+  // A deep deload is already below any cap.
+  const deepArgs = { ...TRIM_ARGS, hold: false, deload: { weekStart: "2026-04-20", light: false }, asOf: "2026-04-22" };
+  const deep = buildPlayerBlock(TRIM_PLAN, trimPlayer(null), deepArgs).block.weeks;
+  const r = buildPlayerBlock(TRIM_PLAN, trimPlayer(70), deepArgs);
+  assert.equal(r.valdTrim?.state, "deload");
+  assert.deepEqual(r.block.weeks, deep);
 });
 
 test("teamAverages: squad baseline overall + match-day subset from the data that exists", () => {

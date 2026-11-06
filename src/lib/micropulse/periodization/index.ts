@@ -671,7 +671,7 @@ const CAL_FOCUS: Record<CalType, Bi> = {
   match: { en: "Practice match = the reference unit (100%).", is: "Æfingaleikur = viðmiðunareiningin (100%)." },
   rest: { en: "Full day off — passive recovery.", is: "Heill frídagur — óvirk endurheimt." },
 };
-const mondayOfIso = (iso: string) => { const d = new Date(`${iso}T00:00:00Z`); const dow = (d.getUTCDay() + 6) % 7; return new Date(d.getTime() - dow * 86_400_000).toISOString().slice(0, 10); };
+export const mondayOfIso = (iso: string) => { const d = new Date(`${iso}T00:00:00Z`); const dow = (d.getUTCDay() + 6) % 7; return new Date(d.getTime() - dow * 86_400_000).toISOString().slice(0, 10); };
 
 // ── PROGRESSIVE-OVERLOAD RAMP (harvested from src/lib/micropulse/progressiveOverload) ──────────────
 // The weekly overload is DIFFERENTIATED per KPI, not one flat multiplier: volume (distance / Player Load)
@@ -764,9 +764,10 @@ export function buildCalendarBlock(opts: {
    *  keyed by ISO date — authoritative for non-match days; the day's loads recompute from the chosen type. */
   typeOverrides?: Record<string, CalType>;
   /** Per-PLAYER individualisation (same skeleton, individual numbers): `maxMult` caps the weekly
-   *  multiplier (readiness-to-load / VALD cap); `loadScale` trims every training day (minutes-based —
-   *  high-minute starters carry load from matches); `emphasis` biases the running (`hsr`) and mechanical
-   *  (`mech`) day-type shares by position (Figueiredo). Match days stay the exact unit (100%). */
+   *  multiplier; `loadScale` trims every training day; `emphasis` biases the running (`hsr`) and mechanical
+   *  (`mech`) day-type shares by position (Figueiredo). Match days stay the exact unit (100%).
+   *  `buildPlayerBlock` no longer sets `maxMult`/`loadScale`: its alignment would rescale them away, so the
+   *  VALD trim is applied after alignment instead (playerBlock.ts). */
   maxMult?: number; loadScale?: number; emphasis?: { hsr?: number; mech?: number; dir?: { fwd?: number; back?: number; lat?: number } };
   /** The off-season phase boundary (ISO). When a block spans it, days ON/AFTER it belong to the
    *  off-season DEVELOPMENT build, not the in-season microcycle: they drop the MD countup label and
@@ -1198,18 +1199,49 @@ export function strengthDefaultForBlock(phaseEn: string, isDeload: boolean): Str
 }
 
 // ───────────────────── VALD readiness-to-load (volume cap) ─────────────────────
-export type ValdCap = { status: "green" | "yellow" | "red" | null; capPct: number | null; note: Bi };
-/** Turn the player's VALD daily snapshot status into a volume cap (readiness to LOAD, not the daily
- *  readiness colour). Green = full, yellow = trim, red = reduce; hamstring/groin flag surfaced. */
-export function valdVolumeCap(status: string | null, hamstringFlag: string | null): ValdCap {
-  const s = (status ?? "").toLowerCase();
+/** A coach's decision to lift the trim for one player's week. Append-only and server-stamped (the audit
+ *  trail): undoing it marks the entry, it never removes it. Lives in season_plans.overrides.valdTrimLifts. */
+export type ValdTrimLift = { playerId: string; weekStart: string; reason: string; by: string; at: string; undoneBy?: string; undoneAt?: string };
+export type ValdCap = { status: "green" | "yellow" | "red" | null; capPct: number | null; note: Bi; lift?: ValdTrimLift | null };
+export const VALD_TRIM_CITE: Bi = {
+  en: "Jump test as a read of neuromuscular state: Claudino 2017. The 85% and 70% levels are a coaching rule, not a number from a study.",
+  is: "Hoppróf sem mæling á taugavöðvaástandi: Claudino 2017. 85% og 70% eru þjálfunarregla, ekki tala úr rannsókn.",
+};
+const daysAgo = (n: number): Bi => n <= 0 ? { en: "today", is: "í dag" } : n === 1 ? { en: "yesterday", is: "í gær" } : { en: `${n} days ago`, is: `fyrir ${n} dögum` };
+/** Turn the player's latest jump test into a volume cap (readiness to LOAD, not the daily readiness colour).
+ *  Only a RECENT CMJ below their own level trims: that is fatigue a lighter week can answer. A left/right
+ *  strength gap is not, and the tests behind it can be years old, so it is named as a watch item only. */
+export function valdVolumeCap(input: { cmjFlag: string | null; cmjAgeDays: number | null; hamstringFlag: string | null; hamstringAgeDays: number | null; freshDays?: number }): ValdCap {
+  const freshDays = input.freshDays ?? 7;
+  const age = input.cmjAgeDays;
+  const fresh = age != null && age <= freshDays;
+  const f = (input.cmjFlag ?? "").toLowerCase();
+  const s = fresh && (f === "green" || f === "yellow" || f === "red") ? f : null;
   const cap = s === "green" ? 100 : s === "yellow" ? 85 : s === "red" ? 70 : null;
-  const hamAmber = (hamstringFlag ?? "").toLowerCase() === "yellow" || (hamstringFlag ?? "").toLowerCase() === "red";
-  const note: Bi = cap == null ? { en: "No VALD force data — volume cap uses the squad default.", is: "Engin VALD kraftgögn — magn-þak notar sjálfgefið liðsgildi." }
-    : s === "green" ? { en: `Force ready — full volume${hamAmber ? " (watch hamstring)" : ""}.`, is: `Kraftur tilbúinn — fullt magn${hamAmber ? " (fylgstu með aftanláeri)" : ""}.` }
-      : s === "yellow" ? { en: `Trim volume to ~85% — force readiness amber${hamAmber ? " + hamstring flag" : ""}.`, is: `Minnka magn í ~85% — kraft-viðbragð gult${hamAmber ? " + aftanláeris-merki" : ""}.` }
-        : { en: `Reduce to ~70% — force readiness red${hamAmber ? " + hamstring flag" : ""}.`, is: `Minnka í ~70% — kraft-viðbragð rautt${hamAmber ? " + aftanláeris-merki" : ""}.` };
-  return { status: (s === "green" || s === "yellow" || s === "red") ? s : null, capPct: cap, note };
+  const ago = age != null ? daysAgo(age) : null;
+  const main: Bi = s === "red" ? { en: `Jump test well below own level (10%+, ${ago!.en}): training trimmed to ~70% this week. A new test back within 5% lifts it.`, is: `Hoppróf langt undir eigin getu (10%+, ${ago!.is}): æfingar lækkaðar í ~70% þessa viku. Nýtt próf innan við 5% frá eigin getu lyftir því.` }
+    : s === "yellow" ? { en: `Jump test below own level (5–10%, ${ago!.en}): training trimmed to ~85% this week. A new test back within 5% lifts it.`, is: `Hoppróf undir eigin getu (5–10%, ${ago!.is}): æfingar lækkaðar í ~85% þessa viku. Nýtt próf innan við 5% frá eigin getu lyftir því.` }
+      : s === "green" ? { en: `Jump test at own level (${ago!.en}): full training.`, is: `Hoppróf við eigin getu (${ago!.is}): fullt æfingamagn.` }
+        : age == null ? { en: "No jump test on file, so no trim.", is: "Ekkert hoppróf skráð, svo engin lækkun." }
+          : !fresh ? { en: `No jump test in the last ${freshDays} days (last one ${ago!.en}), so no trim. A new test updates this.`, is: `Ekkert hoppróf síðustu ${freshDays} daga (síðast ${ago!.is}), svo engin lækkun. Nýtt próf uppfærir þetta.` }
+            : { en: `Jump test ${ago!.en}, but too few recent tests to compare with own level, so no trim.`, is: `Hoppróf ${ago!.is}, en of fá nýleg próf til að bera saman við eigin getu, svo engin lækkun.` };
+  const ham = (input.hamstringFlag ?? "").toLowerCase();
+  const hamAgo = input.hamstringAgeDays != null ? daysAgo(input.hamstringAgeDays) : null;
+  const watch: Bi | null = ham === "yellow" || ham === "red"
+    ? { en: ` Hamstring left/right gap on the last strength test${hamAgo ? ` (${hamAgo.en})` : ""}: watch it, it doesn't trim volume.`, is: ` Munur á hægra og vinstra aftanlæri á síðasta styrkprófi${hamAgo ? ` (${hamAgo.is})` : ""}: fylgstu með, það lækkar ekki magn.` }
+    : null;
+  return { status: s as ValdCap["status"], capPct: cap, note: { en: main.en + (watch?.en ?? ""), is: main.is + (watch?.is ?? "") } };
+}
+/** The coach's standing lift for this player's week, if any (the newest one that wasn't undone). */
+export function activeValdTrimLift(log: ValdTrimLift[] | null | undefined, playerId: string, weekStart: string): ValdTrimLift | null {
+  return [...(log ?? [])].reverse().find((l) => l.playerId === playerId && l.weekStart === weekStart && !l.undoneAt) ?? null;
+}
+/** Append a lift to the log, or mark the standing one undone. Earlier entries are kept untouched. */
+export function nextValdTrimLiftLog(log: ValdTrimLift[] | null | undefined, action: { playerId: string; weekStart: string; reason?: string; undo?: boolean }, by: string, at: string): ValdTrimLift[] {
+  const prev = log ?? [];
+  if (!action.undo) return [...prev, { playerId: action.playerId, weekStart: action.weekStart, reason: action.reason ?? "", by, at }];
+  const active = activeValdTrimLift(prev, action.playerId, action.weekStart);
+  return prev.map((l) => (l === active ? { ...l, undoneBy: by, undoneAt: at } : l));
 }
 
 // ─────────────────────────────── MESO ───────────────────────────────

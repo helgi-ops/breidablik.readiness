@@ -46,7 +46,7 @@ export type PeriodizationHubPayload = {
   /** The scheduled block as the demo-format Mon–Sun calendar (rest days, the deload or light week, IMA per
    *  session). Replaces the old MD-list. */
   block: CalendarBlock | null;
-  /** The chosen players' individualised blocks (own match unit + VALD ceiling + minutes trim) — one clean
+  /** The chosen players' individualised blocks (own match unit + this week's VALD trim) — one clean
    *  page each. The coach picks Selected / All / a custom subset; players without a match unit + GKs are
    *  omitted here (kept in the summary table). */
   playerBlocks: HubPlayerBlock[];
@@ -482,8 +482,8 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
 
         <Provenance>{tx(t.foot)}</Provenance>
 
-        {/* PER-PLAYER BLOCKS (appendix) — one clean page per chosen player: own match unit, VALD ceiling +
-            minutes trim applied. A plan, not just a table row. */}
+        {/* PER-PLAYER BLOCKS (appendix) — one clean page per chosen player: own match unit, this week's VALD
+            trim applied. A plan, not just a table row. */}
         {playerBlocks.map((pbk, i) => (
           <Section key={i} break title={`${is ? "Einstaklings-lota" : "Individualised block"} - ${pbk.name}${pbk.position ? ` (${pbk.position})` : ""}`} hint={bi(pbk.note)} mt={0}>
             <CalWeeks block={pbk.block} lang={lang} />

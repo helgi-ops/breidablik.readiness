@@ -62,6 +62,7 @@ export async function GET(req: Request) {
       deload: activeMb ? { ...blockDeloadOf(activeMb)!, ...(deloadPin ? { weekStart: deloadPin } : {}) } : undefined,
       hold: holdsStandardWeek(activeMb?.inSeason, goal),
       friendlyMatches: winIsPreseason,
+      asOf,
     });
 
     const actuals = await loadBuildUpActuals(sb, {
