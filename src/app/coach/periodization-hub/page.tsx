@@ -17,7 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupView from "@/components/coach/WeekSetupView";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
-import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
+import { VALD_TRIM_CITE, mondayOfIso, buildMesoPlan, buildMesoBlocks, buildCalendarBlock, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ValdTrimLift, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput, type ExposureInput, type ShapeDirInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { exposuresFromTlyp, shapeDirsFromShape } from "@/lib/micropulse/trainingNeeds";
@@ -53,7 +53,7 @@ type Interval = { type: number; label: Bi; pctMas: number; kmh: number | null };
 type Vbt = { exercise: string; latestLoadKg: number | null; latestMeanV: number | null; zone: Bi; note: Bi } | null;
 type Gap = { key: string; severity: "missing" | "stale" | "ok"; message: Bi };
 type StrengthDefault = { quality: Bi; pct1rm: Bi; velocity: Bi; intent: Bi; cite: string };
-type Vald = { status: "green" | "yellow" | "red" | null; capPct: number | null; note: Bi };
+type Vald = { status: "green" | "yellow" | "red" | null; capPct: number | null; note: Bi; lift?: ValdTrimLift | null };
 type MatchUnitMetric = { typical: number | null; peak: number | null };
 type MatchUnit = { nNearFull: number; nInWindow: number; fellBack: boolean; confidence: "high" | "medium" | "low"; windowNote: Bi; minutesTypical: number | null; load: MatchUnitMetric; hsr: MatchUnitMetric; sprint: MatchUnitMetric; distance: MatchUnitMetric; accel: MatchUnitMetric; decel: MatchUnitMetric; accHiEff: MatchUnitMetric; decHiEff: MatchUnitMetric; stride: MatchUnitMetric; rhie: MatchUnitMetric; symmetry: MatchUnitMetric; metPower: MatchUnitMetric; imaCod: MatchUnitMetric; imaFr: MatchUnitMetric };
 type WeekTargetPlan = { phase: "preseason" | "inseason"; sessionCount: number; weeklyLoadTarget: number | null; perSessionLoad: number | null; matchMultiple: number | null; topUp: number | null; note: Bi; cite: string };
@@ -204,6 +204,40 @@ const imaLine = (d: CalDay, is: boolean, imaPro = false): string => {
   const dd = domDir(d.dir, is); if (dd) p.push(`${is ? "stefna" : "dir"} → ${dd}`);
   return p.join(" · ");
 };
+
+/** The coach's say over this week's VALD trim: lifting it asks for a reason, which is logged. */
+function ValdTrimControl({ is, lift, onLift, onUndo }: { is: boolean; lift: ValdTrimLift | null; onLift: (reason: string) => Promise<boolean>; onUndo: () => Promise<boolean> }) {
+  const [open, setOpen] = React.useState(false);
+  const [reason, setReason] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [failed, setFailed] = React.useState(false);
+  const run = async (fn: () => Promise<boolean>) => {
+    setBusy(true); setFailed(false);
+    const ok = await fn();
+    setBusy(false); setFailed(!ok);
+    if (ok) { setOpen(false); setReason(""); }
+  };
+  const btn = "mt-1.5 text-[12px] font-semibold text-[#2740e6] hover:underline disabled:opacity-50";
+  const failedMsg = failed && <div className="mt-1 text-[12px] text-[#a83e28]">{is ? "Tókst ekki að vista." : "Couldn't save."}</div>;
+  if (lift) return (
+    <div className="mt-1.5 text-[12px] text-slate-600">
+      {is ? "Ástæða þjálfara" : "Coach's reason"}: {lift.reason}
+      <div><button type="button" disabled={busy} onClick={() => void run(onUndo)} className={btn}>{is ? "Setja lækkun aftur á" : "Restore the trim"}</button></div>
+      {failedMsg}
+    </div>
+  );
+  if (!open) return <button type="button" onClick={() => setOpen(true)} className={btn}>{is ? "Hnekkja þessa viku" : "Lift for this week"}</button>;
+  return (
+    <div className="mt-1.5">
+      <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} aria-label={is ? "Ástæða" : "Reason"} placeholder={is ? "Ástæða (skráð)" : "Reason (logged)"} className="h-9 w-full rounded-lg border border-slate-300 px-2 text-[13px]" />
+      <div className="flex gap-3">
+        <button type="button" disabled={busy || reason.trim().length < 3} onClick={() => void run(() => onLift(reason.trim()))} className={btn}>{is ? "Hnekkja" : "Lift"}</button>
+        <button type="button" disabled={busy} onClick={() => setOpen(false)} className="mt-1.5 text-[12px] font-semibold text-slate-500 hover:underline">{is ? "Hætta við" : "Cancel"}</button>
+      </div>
+      {failedMsg}
+    </div>
+  );
+}
 
 export default function PeriodizationHubPage() {
   const [lang] = useLang();
@@ -591,6 +625,18 @@ export default function PeriodizationHubPage() {
     })();
   };
 
+  // Lift (or restore) this week's VALD trim for a player. The server stamps who + when and keeps the log.
+  const sendValdTrimLift = async (playerId: string, action: { reason?: string; undo?: boolean }): Promise<boolean> => {
+    if (!plan) return false;
+    const res = await fetch("/api/coach/periodization", {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() },
+      body: JSON.stringify({ seasonYear: plan.seasonYear, valdTrimLift: { playerId, weekStart: mondayOfIso(new Date().toISOString().slice(0, 10)), ...action } }),
+    }).catch(() => null);
+    if (!res?.ok) return false;
+    await load(preStart, seasonEnd); // the loader resolves the lift, so the block + the weekly target both follow
+    return true;
+  };
+
   async function savePlan() {
     if (!plan) return;
     setSaved(false);
@@ -847,8 +893,8 @@ export default function PeriodizationHubPage() {
   }, [steerData, selExposures, shapeDirs]);
   const steerActive = !!steer && !steerNeutral && steer.hasHard;
 
-  // Build ONE player's individualised block — his own match unit + position tilt + VALD ceiling + minutes
-  // trim, plus the optional weakness-steer bias. Reused for the on-screen selected player AND every player
+  // Build ONE player's individualised block — his own match unit + position tilt + this week's VALD trim
+  // plus the optional weakness-steer bias. Reused for the on-screen selected player AND every player
   // in the PDF export (so "computed from the Meso Cycle" holds for the whole squad).
   const computePlayerBlock = React.useCallback((pl: Player, steerArg: { active: boolean; steer: BuildUpSteer | null }) => {
     if (!plan || Object.keys(blkSkeleton).length === 0) return null;
@@ -856,7 +902,7 @@ export default function PeriodizationHubPage() {
     // "my build-up" view so the two can never drift (src/lib/.../playerBlock.ts).
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? undefined;
     return buildPlayerBlock(plan, pl, {
-      blkStart, blkWeeks: blkWeeksEff, blkBase, blkStep, phaseLabel: blkPhaseLabel, skeletonSets, typeOverrides, steer: steerArg, offseasonStart: offPhaseStart, goal: effectiveGoal, deload: blkDeload, hold: blkHold, camps: campRegions, friendlyMatches: blkIsPreseason,
+      blkStart, blkWeeks: blkWeeksEff, blkBase, blkStep, phaseLabel: blkPhaseLabel, skeletonSets, typeOverrides, steer: steerArg, offseasonStart: offPhaseStart, goal: effectiveGoal, deload: blkDeload, hold: blkHold, camps: campRegions, friendlyMatches: blkIsPreseason, asOf: new Date().toISOString().slice(0, 10),
     });
   }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkPhaseLabel, blkIsPreseason, effectiveGoal, blkDeload, blkHold, campRegions]);
 
@@ -890,7 +936,7 @@ export default function PeriodizationHubPage() {
     const wb = mesoBlocks.find((b) => b.start === win.blkStart);
     const wGoal: "accum" | "transmute" | "realize" = blockGoals[win.blkStart] ?? (wb?.goalKey && wb.goalKey !== "deload" ? wb.goalKey : "accum");
     const winIsPreseason = plan.phases.find((ph) => ph.start <= win.blkStart && win.blkStart < ph.end)?.key === "preseason";
-    return buildPlayerBlock(plan, player, { blkStart: win.blkStart, blkWeeks: win.blkWeeks, phaseLabel: win.phaseLabel, matchDates: win.matchDates, goal: wGoal, deload: blockDeloadOf(wb), hold: holdsStandardWeek(wb?.inSeason, wGoal), camps: campRegions, friendlyMatches: winIsPreseason });
+    return buildPlayerBlock(plan, player, { blkStart: win.blkStart, blkWeeks: win.blkWeeks, phaseLabel: win.phaseLabel, matchDates: win.matchDates, goal: wGoal, deload: blockDeloadOf(wb), hold: holdsStandardWeek(wb?.inSeason, wGoal), camps: campRegions, friendlyMatches: winIsPreseason, asOf: new Date().toISOString().slice(0, 10) });
   }, [player, plan, mesoBlocks, blockGoals, campRegions]);
 
   async function exportPlayerBlock() {
@@ -1113,7 +1159,7 @@ export default function PeriodizationHubPage() {
     // Per-player weekly PL target = that player's match unit (the TARGET/ceiling) × the in-season weekly
     // multiple — the planned weekly volume each player ramps TO from their current baseline (MAS = engine).
     const plWkMult = weeklyTrainingMultiple(standardTrainingDays(1));
-    const players = plan.players.map((p) => ({ name: p.name, position: p.position, masKmh: p.masKmh, matchUnitLoad: p.matchUnit.load.typical, matchUnitHsr: p.matchUnit.hsr.typical, matchUnitDistance: p.matchUnit.distance.typical, weeklyPlTarget: p.matchUnit.load.typical != null ? Math.round(p.matchUnit.load.typical * plWkMult) : null, baselinePl: p.recentBaseline?.playerLoad ?? null, baselineHsr: p.recentBaseline?.hsrM ?? null, baselineSessions: p.recentBaseline?.sessions ?? 0, nNearFull: p.matchUnit.nNearFull, matchUnitConf: p.matchUnit.confidence, valdCap: p.vald.capPct, gaps: p.gaps.filter((g) => g.severity !== "ok").length }));
+    const players = plan.players.map((p) => ({ name: p.name, position: p.position, masKmh: p.masKmh, matchUnitLoad: p.matchUnit.load.typical, matchUnitHsr: p.matchUnit.hsr.typical, matchUnitDistance: p.matchUnit.distance.typical, weeklyPlTarget: p.matchUnit.load.typical != null ? Math.round(p.matchUnit.load.typical * plWkMult) : null, baselinePl: p.recentBaseline?.playerLoad ?? null, baselineHsr: p.recentBaseline?.hsrM ?? null, baselineSessions: p.recentBaseline?.sessions ?? 0, nNearFull: p.matchUnit.nNearFull, matchUnitConf: p.matchUnit.confidence, valdCap: p.vald.lift ? null : p.vald.capPct, gaps: p.gaps.filter((g) => g.severity !== "ok").length }));
     const blocks = mesoBlocks.map((b) => ({ phase: b.phase, goal: b.goal, goalKey: b.goalKey, start: b.start, end: b.end, weeks: b.weeks, isDeload: b.isDeload, deloadWeekStart: b.deloadWeekStart, deloadNow: b.deloadNow, tmr: b.tmr, volumeTargetPct: b.volumeTargetPct, flag: b.flag }));
     // The individualised calendar block(s) — one clean page per player. The coach picks the set (Selected /
     // All / custom); eligible = has a match unit AND is not a GK (GKs use a separate model, kept in the
@@ -1125,13 +1171,12 @@ export default function PeriodizationHubPage() {
       : eligible.filter((p) => p.playerId === selId);
     const confIs = (c: string) => (c === "high" ? "há" : c === "medium" ? "miðlungs" : "lítil");
     const noteFor = (pb: NonNullable<ReturnType<typeof computePlayerBlock>>): Bi => {
-      const valdEn = pb.maxMult >= 1.4 ? "no VALD restriction (ceiling ×1.40)" : pb.maxMult >= 1.15 ? "VALD-capped to ×1.15" : "VALD maintenance (×1.00)";
-      const valdIs = pb.maxMult >= 1.4 ? "engin VALD-takmörkun (þak ×1,40)" : pb.maxMult >= 1.15 ? "VALD-þak ×1,15" : "VALD viðhald (×1,00)";
+      const t = pb.valdTrim;
+      const valdEn = !t ? "no VALD trim" : t.state === "applied" ? `VALD: training at ${t.capPct}% in the week of ${t.weekStart}, after a low jump test` : t.state === "lifted" ? `VALD trim lifted by the coach for the week of ${t.weekStart}` : "no VALD trim (already a deload week)";
+      const valdIs = !t ? "engin VALD-lækkun" : t.state === "applied" ? `VALD: æfingar í ${t.capPct}% vikuna ${t.weekStart}, eftir lágt hoppróf` : t.state === "lifted" ? `VALD-lækkun hnekkt af þjálfara vikuna ${t.weekStart}` : "engin VALD-lækkun (vikan er þegar niðurtröppun)";
       const unitEn = pb.useOwn ? `own match unit (n=${pb.nNearFull}, ${pb.confidence} confidence)` : `squad baseline — too few full matches (n=${pb.nNearFull})`;
       const unitIs = pb.useOwn ? `eigið leikviðmið (n=${pb.nNearFull}, ${confIs(pb.confidence)} vissa)` : `liðs-grunnlína — of fáir heilir leikir (n=${pb.nNearFull})`;
-      const minEn = pb.loadScale < 1 ? `minutes trim ×${pb.loadScale.toFixed(2)}${pb.avgMin != null ? ` (~${pb.avgMin}′/match)` : ""}` : "no minutes trim";
-      const minIs = pb.loadScale < 1 ? `mínútu-trim ×${pb.loadScale.toFixed(2)}${pb.avgMin != null ? ` (~${pb.avgMin}′/leik)` : ""}` : "engin mínútu-trim";
-      return { en: `${unitEn}; ${valdEn}; ${minEn}.`, is: `${unitIs}; ${valdIs}; ${minIs}.` };
+      return { en: `${unitEn}; ${valdEn}.`, is: `${unitIs}; ${valdIs}.` };
     };
     const playerBlocks: Array<{ name: string; position: string | null; note: Bi; block: CalendarBlock }> = [];
     for (const pl of chosen) {
@@ -3224,12 +3269,6 @@ export default function PeriodizationHubPage() {
             const bvDays = standardTrainingDays(1);
             const bvWkMult = weeklyTrainingMultiple(bvDays);
             const fmtKv = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
-            const squadLp = (p: typeof plist[number]) => {
-              const cap = p.vald.capPct; const mm = cap == null ? 1.4 : cap >= 100 ? 1.4 : cap >= 85 ? 1.15 : 1.0;
-              const am = p.recentMinutesAvg; const ls = am == null ? 1.0 : am >= 70 ? 0.9 : am >= 40 ? 0.95 : 1.0;
-              const up = Math.min(1.4, (blkBase + blkStepEff * Math.max(0, blkWeeks - 2)) / 100);
-              return up > 0 ? Math.round((1 - (Math.min(up, mm) * ls) / up) * 100) : 0;
-            };
             return (
           <section className={card}>
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -3245,15 +3284,14 @@ export default function PeriodizationHubPage() {
                   <th className="py-1.5 px-2 text-right font-semibold">{is ? "Grunnur /æf (%leik)" : "Baseline /sess (%match)"}</th>
                   <th className="py-1.5 px-2 text-right font-semibold">{is ? "Leik-mark" : "Match target"}</th>
                   <th className="py-1.5 px-2 text-right font-semibold">{is ? "Vika PL" : "Week PL"}</th>
-                  <th className="py-1.5 pr-2 text-right font-semibold" title={is ? "Hversu miklu léttari (−) rampurinn er vs fullur rampur, eftir VALD-þaki + mínútu-trimmi" : "How much lighter (−) the ramp is vs the full ramp, after the VALD cap + minutes trim"}>{is ? "Lota vs fullur rampur" : "Block vs full ramp"}</th>
-                  <th className="py-1.5 pr-2 text-right font-semibold">{is ? "VALD-þak" : "VALD cap"}</th>
+                  <th className="py-1.5 pr-2 text-right font-semibold" title={is ? "Hversu mikið æfingar eru lækkaðar þessa viku eftir lágt hoppróf síðustu 7 daga. Aðrar vikur og leikir breytast ekki." : "How much training is trimmed this week after a low jump test in the last 7 days. Other weeks and matches don't change."}>{is ? "VALD þessa viku" : "VALD this week"}</th>
                   <th className="py-1.5 pr-2 text-right font-semibold">{is ? "Mín./leik" : "Min/match"}</th>
                   <th className="py-1.5 pr-2 text-right font-semibold">MAS</th>
                   <th className="py-1.5 pl-2 font-semibold">{is ? "Gögn" : "Data"}</th>
                 </tr></thead>
                 <tbody>
                   {plist.map((p) => {
-                    const lp = squadLp(p); const cap = p.vald.capPct; const am = p.recentMinutesAvg;
+                    const cap = p.vald.capPct; const am = p.recentMinutesAvg;
                     const gk = /GK|MARK|KEEP/i.test(p.position ?? ""); const mu = p.matchUnit.load.typical; const bpl = p.recentBaseline?.playerLoad ?? null;
                     const pctM = bpl != null && mu != null && mu > 0 ? Math.round((bpl / mu) * 100) : null; const wk = mu != null ? Math.round(mu * bvWkMult) : null;
                     const pctColor = pctM == null ? "" : pctM >= 100 ? "text-[#15603a]" : pctM >= 60 ? "text-slate-600" : "text-[#7a5210]";
@@ -3266,8 +3304,7 @@ export default function PeriodizationHubPage() {
                         <td className="py-2 px-2 text-right tabular-nums">{bpl != null ? <>{fmtKv(bpl)} PL{pctM != null && <span className={`ml-1 font-semibold ${pctColor}`}>({pctM}%)</span>}</> : <span className="text-slate-500">{is ? "– engin GPS" : "– no GPS"}</span>}</td>
                         <td className="py-2 px-2 text-right tabular-nums text-slate-600">{gk ? (is ? "sérlíkan" : "GK model") : mu != null ? <>{mu} PL{p.matchUnit.hsr.typical != null ? ` · ${Math.round(p.matchUnit.hsr.typical)}m` : ""}{p.matchUnit.distance.typical != null ? ` · ${(p.matchUnit.distance.typical / 1000).toFixed(1)}km` : ""} <span className="text-slate-500">n{p.matchUnit.nNearFull}{p.matchUnit.confidence !== "high" ? ` (${p.matchUnit.confidence})` : ""}</span></> : "–"}</td>
                         <td className="py-2 px-2 text-right tabular-nums font-bold text-[#2740e6]">{gk ? "–" : wk != null ? fmtKv(wk) : "–"}</td>
-                        <td className={`py-2 pr-2 text-right font-bold tabular-nums ${lp > 0 ? "text-emerald-700" : lp < 0 ? "text-[#8a3220]" : "text-slate-500"}`}>{lp > 0 ? `−${lp}%` : lp < 0 ? `+${-lp}%` : "—"}</td>
-                        <td className="py-2 pr-2 text-right tabular-nums">{cap != null && cap < 100 ? <span className={`rounded px-1.5 py-0.5 text-[12px] font-semibold ${cap >= 85 ? "bg-amber-100 text-amber-800" : "bg-rose-100 text-rose-800"}`}>{cap}%</span> : <span className="text-slate-500">–</span>}</td>
+                        <td className="py-2 pr-2 text-right tabular-nums" title={is ? p.vald.note.is : p.vald.note.en}>{cap != null && cap < 100 ? (p.vald.lift ? <span className="text-slate-500">{is ? "hnekkt" : "lifted"}</span> : <span className={`rounded px-1.5 py-0.5 text-[12px] font-semibold ${cap >= 85 ? "bg-amber-100 text-amber-800" : "bg-rose-100 text-rose-800"}`}>−{100 - cap}%</span>) : <span className="text-slate-500">–</span>}</td>
                         <td className="py-2 pr-2 text-right tabular-nums text-slate-600">{am == null ? "–" : `${am}′`}</td>
                         <td className="py-2 pr-2 text-right tabular-nums text-slate-600">{p.masKmh != null ? p.masKmh : "–"}</td>
                         <td className={`py-2 pl-2 ${gaps ? "text-amber-800" : "text-emerald-700"}`}>{gaps ? (is ? `${gaps} vantar` : `${gaps} missing`) : (is ? "Í lagi" : "OK")}</td>
@@ -3673,10 +3710,10 @@ export default function PeriodizationHubPage() {
             ] : [];
             const gapCount = player ? player.gaps.filter((g) => g.severity !== "ok").length : 0;
             const pb = playerBlock;
-            const lighterTxt = !pb ? "" : pb.lighterPct > 0 ? (is ? `~${pb.lighterPct}% léttari en fullur rampur` : `~${pb.lighterPct}% lighter than the full ramp`) : pb.lighterPct < 0 ? (is ? `~${-pb.lighterPct}% þyngri en fullur rampur` : `~${-pb.lighterPct}% heavier than the full ramp`) : (is ? "á fullum rampi" : "on the full ramp");
+            const trimTxt = !pb ? "" : pb.valdTrim?.state === "applied" ? (is ? `æfingar lækkaðar í ${pb.valdTrim.capPct}% þessa viku eftir lágt hoppróf, restin af lotunni óbreytt` : `training is trimmed to ${pb.valdTrim.capPct}% this week after a low jump test, the rest of the block is unchanged`) : pb.valdTrim?.state === "lifted" ? (is ? "þjálfari hnekkti lækkun þessarar viku" : "the coach lifted this week's trim") : pb.valdTrim?.state === "deload" ? (is ? "vikan er þegar niðurtröppun, svo hoppprófið lækkar hana ekki meira" : "this week is already a deload, so the jump test takes nothing more off") : (is ? "lotan hans fylgir vikuviðmiði liðsins" : "his block follows the team's weekly level");
             const tiltTxt = !pb ? "" : pb.hsrEmph > 1.02 ? (is ? ", með háhraða yfir liðinu á hlaupadögum" : ", with HSR above the team on Locomotive days") : pb.hsrEmph < 0.98 ? (is ? ", meira vélrænt en liðið" : ", more mechanical than the team") : "";
             const emphLabel = preEmphasis ? (is ? (EMPH[preEmphasis.emphasis]?.is ?? preEmphasis.emphasis) : (EMPH[preEmphasis.emphasis]?.en ?? preEmphasis.emphasis)) : null;
-            const verdict = !player ? "" : `${player.name}: ${pb ? `${is ? "lotan hans er" : "his block is"} ${lighterTxt}${tiltTxt}.` : (is ? "lotan hans birtist þegar Mesó-lota er sett upp." : "his block appears once a Meso block is laid out.")}${emphLabel ? ` ${is ? "Styrktaráhersla" : "Strength emphasis"}: ${emphLabel}.` : ""}`;
+            const verdict = !player ? "" : `${player.name}: ${pb ? `${trimTxt}${pb.valdTrim ? "" : tiltTxt}.` : (is ? "lotan hans birtist þegar Mesó-lota er sett upp." : "his block appears once a Meso block is laid out.")}${emphLabel ? ` ${is ? "Styrktaráhersla" : "Strength emphasis"}: ${emphLabel}.` : ""}`;
             const mu = player?.matchUnit ?? null;
             const effPhase: "preseason" | "inseason" = phaseOverride ?? (player?.weekTargets.current ?? "inseason");
             // Pre-season recomputed with the coach's OWN session count (psSess) so the card matches the
@@ -3750,12 +3787,13 @@ export default function PeriodizationHubPage() {
                 <div className="text-[13px] text-slate-600">{wt ? `${wt.phase === "preseason" ? (is ? "Undirbúningur" : "Pre-season") : (is ? "Keppnistímabil" : "In-season")}${wt.matchMultiple != null ? ` · ${wt.matchMultiple}× ${is ? "leikur" : "match"}` : ""} · ${wt.sessionCount} ${is ? "æfingar" : "sessions"}` : ""}</div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                <div className="text-[12px] font-semibold text-slate-500">{is ? "Geta til að taka álag (VALD)" : "Readiness to load (VALD)"}</div>
+                <div className="text-[12px] font-semibold text-slate-500" title={`${is ? VALD_TRIM_CITE.is : VALD_TRIM_CITE.en} ${is ? "Ekki readiness-liturinn." : "Not the readiness colour."}`}>{is ? "Geta til að taka álag (VALD)" : "Readiness to load (VALD)"}</div>
                 <div className="mt-0.5 flex items-center gap-2 text-[20px] font-bold text-slate-900">
                   <span className="h-2.5 w-2.5 rounded-full" style={{ background: player.vald.status === "green" ? "#1c7a4a" : player.vald.status === "yellow" ? "#de9328" : player.vald.status === "red" ? "#a83e28" : "#94a3b8" }} />
-                  {player.vald.capPct != null ? `${is ? "Þak" : "Cap"} ${player.vald.capPct}%` : player.vald.status ? (is ? "Ekkert þak" : "No cap") : (is ? "Engin VALD-gögn" : "No VALD data")}
+                  {player.vald.capPct != null && player.vald.capPct < 100 ? (player.vald.lift ? (is ? "Lækkun hnekkt" : "Trim lifted") : (is ? `Æfingar í ${player.vald.capPct}%` : `Training at ${player.vald.capPct}%`)) : (is ? "Engin lækkun" : "No trim")}
                 </div>
-                <div className="text-[13px] text-slate-600">{pb && pb.maxMult < 1.4 ? (is ? `Toppur takmarkaður við ×${pb.maxMult.toFixed(2)}` : `Peak capped at ×${pb.maxMult.toFixed(2)}`) : (is ? "Magnþak — ekki readiness-liturinn" : "Volume cap — not the readiness colour")}</div>
+                <div className="text-[13px] text-slate-600">{is ? player.vald.note.is : player.vald.note.en}</div>
+                {player.vald.capPct != null && player.vald.capPct < 100 && <ValdTrimControl key={player.playerId} is={is} lift={player.vald.lift ?? null} onLift={(reason) => sendValdTrimLift(player.playerId, { reason })} onUndo={() => sendValdTrimLift(player.playerId, { undo: true })} />}
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                 <div className="text-[12px] font-semibold text-slate-500">{is ? "Styrktaráhersla" : "Strength emphasis"}</div>

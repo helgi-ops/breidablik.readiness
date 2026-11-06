@@ -7,13 +7,14 @@ import {
   valdVolumeCap, strengthDefaultForBlock, teamAverages, positionGroup, dataTier,
   classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, calibrateImaShares, type ImaShareCalibration,
   type SeasonPhase, type MesoBlock, type WeekLoad, type IntervalZone, type VbtRead, type DataGap,
-  mdOffsetLabel,
-  type ValdCap, type StrengthDefault, type TeamAverages, type SessionRow, type Bi, type TierRead, type MatchWeekType, type MatchAxes,
+  mdOffsetLabel, activeValdTrimLift,
+  type ValdCap, type ValdTrimLift, type StrengthDefault, type TeamAverages, type SessionRow, type Bi, type TierRead, type MatchWeekType, type MatchAxes,
   type PlayerMatchRow, type MatchUnit, type WeekTargetPlan, type MdDemandBucket, type MdDemandProfile,
 } from "./index";
 import { computePeakMovementSignature, sumClocks } from "@/lib/micropulse/peakMovementSignature";
 import { type ClockGrid } from "@/lib/micropulse/directionalSignature";
 import { imaCodTotal } from "@/lib/micropulse/catapultCapability";
+import { VALD_RUNTIME } from "@/lib/integrations/vald/config";
 
 /**
  * Assemble the periodization recommendation from the team's OWN data — read-only, composes the pure
@@ -26,7 +27,7 @@ export type PlayerPeriodization = {
   intervals: IntervalZone[]; vbt: VbtRead; strengthFallback: StrengthDefault | null;
   vald: ValdCap; gaps: DataGap[];
   matchUnit: MatchUnit; weekTargets: { preseason: WeekTargetPlan; inseason: WeekTargetPlan; current: "preseason" | "inseason" };
-  recentMinutesAvg: number | null; // mean match minutes over the last ~11 weeks — the minutes-based load trim
+  recentMinutesAvg: number | null; // mean match minutes over the last ~11 weeks — shown in the squad table
   /** Latest coach-set player_injuries.status ("injured" | "rehabilitation" | "rtp_training" | "cleared"); null = no record. */
   injuryStatus: string | null;
   /** The player's CURRENT baseline — mean per-session output over the last 28 days of TRAINING (non-match)
@@ -373,15 +374,19 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   }
 
   // Latest VALD daily snapshot per player (readiness to LOAD — volume cap; microplayer_id = player id).
-  const valdByPlayer = new Map<string, { status: string | null; hamstring: string | null; date: string }>();
+  // The snapshot date says when it was computed, not when the player was tested: read the test dates too.
+  const valdByPlayer = new Map<string, { cmjFlag: string | null; cmjAt: string | null; hamstring: string | null; hamstringAt: string | null; date: string }>();
   if (ids.length) {
     const { data: vs } = await sb.from("vald_daily_player_snapshot")
-      .select("microplayer_id, snapshot_date, overall_vald_status, hamstring_flag")
+      .select("microplayer_id, snapshot_date, neuromuscular_flag, latest_cmj_at, hamstring_flag, latest_nordbord_at")
       .eq("team_id", args.teamId).in("microplayer_id", ids).order("snapshot_date", { ascending: false });
-    for (const r of (vs ?? []) as Array<{ microplayer_id: string; snapshot_date: string; overall_vald_status: string | null; hamstring_flag: string | null }>) {
-      if (!valdByPlayer.has(r.microplayer_id)) valdByPlayer.set(r.microplayer_id, { status: r.overall_vald_status, hamstring: r.hamstring_flag, date: r.snapshot_date });
+    for (const r of (vs ?? []) as Array<{ microplayer_id: string; snapshot_date: string; neuromuscular_flag: string | null; latest_cmj_at: string | null; hamstring_flag: string | null; latest_nordbord_at: string | null }>) {
+      if (!valdByPlayer.has(r.microplayer_id)) valdByPlayer.set(r.microplayer_id, { cmjFlag: r.neuromuscular_flag, cmjAt: r.latest_cmj_at, hamstring: r.hamstring_flag, hamstringAt: r.latest_nordbord_at, date: r.snapshot_date });
     }
   }
+  // Coach lifts of the VALD trim (audit log on the season plan). Best-effort: a failed read lifts nothing.
+  const { data: liftRow } = await sb.from("season_plans").select("overrides").eq("team_id", args.teamId).eq("season_year", seasonYear).maybeSingle();
+  const valdTrimLifts = ((liftRow as { overrides?: { valdTrimLifts?: ValdTrimLift[] } } | null)?.overrides?.valdTrimLifts) ?? [];
   // The block "now" sits in → its strength quality is the no-VBT fallback default.
   const todayIso = new Date(todayMs).toISOString().slice(0, 10);
   const curBlock = blocks.find((b) => b.start <= todayIso && todayIso < b.end) ?? blocks.find((b) => !b.isDeload) ?? blocks[0] ?? null;
@@ -391,7 +396,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const currentWeekMatches = fixtures.filter((f) => { const t = Date.parse(`${f.date}T00:00:00Z`); return Number.isFinite(t) && t >= wkMonMs && t < wkMonMs + 7 * 86_400_000; }).length;
 
   // Match minutes → attach to the per-player match rows so the match-unit filter (near-full ≥80 min) works;
-  // also keep per-player minute rows to compute REAL recent minutes (the minutes-based load trim).
+  // also keep per-player minute rows to compute REAL recent minutes (the squad table).
   const minutesByKey = new Map<string, number>();
   const minutesByPlayer = new Map<string, Array<{ date: string; minutes: number }>>();
   if (ids.length) {
@@ -462,12 +467,15 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     const vbt = vbtByPlayer.get(p.id) ?? null;
     const vbtAge = vbt ? ageDays(vbt.date, todayMs) : null;
     const vs = valdByPlayer.get(p.id) ?? null;
-    const vald = valdVolumeCap(vs?.status ?? null, vs?.hamstring ?? null);
+    const vald: ValdCap = {
+      ...valdVolumeCap({ cmjFlag: vs?.cmjFlag ?? null, cmjAgeDays: ageDays(vs?.cmjAt ?? null, todayMs), hamstringFlag: vs?.hamstring ?? null, hamstringAgeDays: ageDays(vs?.hamstringAt ?? null, todayMs), freshDays: VALD_RUNTIME.freshness.cmjDays }),
+      lift: activeValdTrimLift(valdTrimLifts, p.id, mondayOf(todayIso)),
+    };
     const valdFresh = vs != null && (ageDays(vs.date, todayMs) ?? 999) <= 21;
     const vbtRead = strengthFromVbt(vbt?.exercise ?? null, vbt?.loadKg ?? null, vbt?.meanV ?? null);
     // The player's own match unit (median of near-full matches, per axis) + the weekly target it implies.
     const matchUnit = computeMatchUnit(matchRowByPlayer.get(p.id) ?? [], { asOfMs: todayMs });
-    const capPct = vald.capPct ?? 100;
+    const capPct = vald.lift ? 100 : vald.capPct ?? 100;
     const weekTargets = {
       preseason: weeklyTargetFromMatch(matchUnit.load.typical, { phase: "preseason", sessionCount: 5, readinessCapPct: capPct, minutesTypical: matchUnit.minutesTypical }),
       inseason: weeklyTargetFromMatch(matchUnit.load.typical, { phase: "inseason", sessionCount: 4, readinessCapPct: capPct, minutesTypical: matchUnit.minutesTypical, matches: currentWeekMatches }),

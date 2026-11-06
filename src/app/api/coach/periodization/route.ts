@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
+import { mondayOfIso, nextValdTrimLiftLog, type ValdTrimLift } from "@/lib/micropulse/periodization";
 
 export const runtime = "nodejs";
 
@@ -115,7 +116,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   let ctx; try { ctx = await authCoachTeam(req); } catch (e) { const m = e instanceof Error ? e.message : "Unauthorized"; return NextResponse.json({ ok: false, error: m }, { status: errStatus(m) }); }
-  const body = await req.json().catch(() => ({})) as { seasonYear?: number; name?: string; overrides?: Record<string, unknown>; blocks?: Array<Record<string, unknown>>; addFriendly?: string; opponent?: string; applyWeekSetup?: Array<{ week_start: string; system_key: string; intensity_target: number; notes?: string | null; days: Array<{ day_index: number; day_date: string; day_type: string; focus?: string | null; day_intent?: string | null }> }> };
+  const body = await req.json().catch(() => ({})) as { seasonYear?: number; name?: string; overrides?: Record<string, unknown>; valdTrimLift?: { playerId?: string; weekStart?: string; reason?: string; undo?: boolean }; blocks?: Array<Record<string, unknown>>; addFriendly?: string; opponent?: string; applyWeekSetup?: Array<{ week_start: string; system_key: string; intensity_target: number; notes?: string | null; days: Array<{ day_index: number; day_date: string; day_type: string; focus?: string | null; day_intent?: string | null }> }> };
 
   // Write the coach's block skeleton back into Week Setup (week_setups + week_plans) — the same tables the
   // Week Setup grid reads, so the two stay in sync. Matches → GAME, rest → OFF, sessions → TRAIN; the
@@ -201,7 +202,19 @@ export async function POST(req: Request) {
   // previously-saved preseasonStart / seasonEnd. Only the keys the caller sends are changed.
   const { data: existing } = await ctx.sb.from("season_plans").select("overrides").eq("team_id", ctx.teamId).eq("season_year", seasonYear).maybeSingle();
   const prevOverrides = ((existing as { overrides?: Record<string, unknown> } | null)?.overrides) ?? {};
-  const mergedOverrides = { ...prevOverrides, ...(body.overrides ?? {}) };
+  const mergedOverrides: Record<string, unknown> = { ...prevOverrides, ...(body.overrides ?? {}) };
+  // The VALD-trim lift log is append-only and server-stamped: an `overrides` patch can't rewrite it.
+  if (prevOverrides.valdTrimLifts) mergedOverrides.valdTrimLifts = prevOverrides.valdTrimLifts;
+  else delete mergedOverrides.valdTrimLifts;
+  if (body.valdTrimLift) {
+    const { playerId, weekStart, reason, undo } = body.valdTrimLift;
+    const why = String(reason ?? "").trim();
+    if (!playerId || !weekStart || !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) return NextResponse.json({ ok: false, error: "playerId and weekStart are required" }, { status: 400 });
+    if (!undo && (why.length < 3 || why.length > 300)) return NextResponse.json({ ok: false, error: "A reason is required (3-300 characters)" }, { status: 400 });
+    const { data: onTeam } = await ctx.sb.from("players").select("id").eq("id", playerId).eq("team_id", ctx.teamId).maybeSingle();
+    if (!onTeam) return NextResponse.json({ ok: false, error: "Player not on this team" }, { status: 400 });
+    mergedOverrides.valdTrimLifts = nextValdTrimLiftLog(prevOverrides.valdTrimLifts as ValdTrimLift[] | undefined, { playerId, weekStart: mondayOfIso(weekStart), reason: why, undo: !!undo }, ctx.userId, new Date().toISOString());
+  }
 
   const { data: planRow, error: upErr } = await ctx.sb.from("season_plans")
     .upsert({ team_id: ctx.teamId, season_year: seasonYear, name: body.name ?? null, overrides: mergedOverrides, created_by: ctx.userId, updated_at: new Date().toISOString() }, { onConflict: "team_id,season_year" })
