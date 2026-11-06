@@ -50,6 +50,12 @@ type CronBody = {
   dryRun?: boolean;
 };
 
+// CMJ reminders are OFF: no player has ever received one. Every attempt failed on
+// checkin_notification_log_reminder_type_check ('cmj_required' isn't allowed) and returned a 500.
+// Before turning this on: allow 'cmj_required' in that constraint, and fix the "missing" reason in
+// sendCmjReminder, which treats any player with no snapshot TODAY as having no CMJ data at all.
+const CMJ_REMINDERS_ENABLED = false;
+
 // Profiles dispatched on each cron tick. 'none' is intentionally excluded —
 // teams on that profile do not receive automated reminders.
 const ACTIVE_REMINDER_PROFILES: ReminderProfile[] = ["standard", "breidablik_custom"];
@@ -98,7 +104,7 @@ export async function POST(req: Request) {
     // CMJ reminder fires at the second checkin reminder window (10:00 Mon/Wed/Fri/Sat/Sun,
     // 13:00 Tue/Thu) — this corresponds to the breidablik_custom profile's "second" slot.
     const breidablikCheckin = profileSlots.find((p) => p.profile === "breidablik_custom")?.checkinSlot ?? null;
-    const isCmjSlot = breidablikCheckin?.reminderType === "second";
+    const isCmjSlot = CMJ_REMINDERS_ENABLED && breidablikCheckin?.reminderType === "second";
 
     const anyCheckinSlot = profileSlots.some((p) => p.checkinSlot);
     const anyRpeSlot = profileSlots.some((p) => p.rpeSlot);
