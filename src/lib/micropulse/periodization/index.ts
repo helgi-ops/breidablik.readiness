@@ -554,41 +554,65 @@ export const CAL_SHARE: Record<CalType, { dist: number; hsr: number; load: numbe
   match: { dist: 1, hsr: 1, load: 1, accdec: 1, stride: 1 },
   rest: { dist: 0, hsr: 0, load: 0, accdec: 0, stride: 0 },
 };
-// IMA TOTAL counts (accelerations, decelerations, CoD) per day-type, as a share of the match. Separate
-// from `accdec` above, which is for the Band 2–3 HIGH-INTENSITY subset (that can overshoot the match on a
-// mechanical day). Whole-session IMA totals don't: across 146 Breiðablik training days (2026, team median
-// per day vs near-full-match median) accel p10/25/50/75/90 = 29/40/51/59/70%, decel 35/43/60/72/82%,
-// CoD 31/42/57/64/72%. Each day-type is anchored to a percentile of the team's OWN distribution so the
-// plan stays achievable but ordered: Mechanical = p90 (the team's biggest mechanical day), Mixed = p75,
-// Locomotive and Top-up = p25, Activation = p10. Recalibrated 2026-11-05 (was accdec 1.30/0.85/0.40/…).
+// IMA TOTAL counts (accelerations, decelerations, CoD) per day-type, as a share of the match — the RESEARCH
+// STANDARD, one table for every team. Separate from `accdec` above, which is for the Band 2–3 HIGH-INTENSITY
+// subset (that can overshoot the match on a mechanical day). A share of the players' own match is the only
+// form that transfers between tracking systems: Silva 2022 (systematic review, 42 studies) could not pool
+// absolute counts because devices and thresholds differ.
+//   Stevens 2017 (Eredivisie, medium+high counts, accel / decel): MD-4 87/87%, MD-3 56/56%, MD-2 56/56%,
+//     MD-1 36/40%, non-starters' MD+1 56/56%. Same tracking system in training and match.
+//   Martín-García 2018 (La Liga reserve side, >3 m/s²): MD-4 71–72%, MD-3 62–69%, MD-2 56–61%, compensatory MD+1 80–86%.
+// Mapping onto day-types: Mechanical = the week's biggest acc/dec day, Mixed = mid-week, Activation = MD-1,
+// Top-up = non-starters' MD+1. Locomotive has NO measured value: it comes from Buchheit 2019's framework (a
+// running day is deliberately light on mechanical work), so it is labelled as framework, not measurement.
+// No study reports IMA CoD: it follows the same share as a mechanical-work proxy.
+// These studies DESCRIBE elite teams, they do not prove an optimum (Clemente 2019 says which ratio is best is
+// still unresearched), so each value carries a range in CAL_SHARE_IMA_REF. A week built from these shares
+// lands near the published 3.1–3.9 matches per week (Stevens, training + match).
+// Replaced team-percentile targets 2026-11-06: a team's own percentiles are circular as a target ("what you
+// usually do" becomes "what you should do"), so they are now only compared to this standard.
 export const CAL_SHARE_IMA: Record<CalType, { accel: number; decel: number; cod: number }> = {
-  mechanical: { accel: 0.70, decel: 0.82, cod: 0.72 },
-  mixed: { accel: 0.59, decel: 0.72, cod: 0.64 },
-  locomotive: { accel: 0.40, decel: 0.43, cod: 0.42 },
-  topup: { accel: 0.40, decel: 0.43, cod: 0.42 },
-  activation: { accel: 0.29, decel: 0.35, cod: 0.31 },
+  mechanical: { accel: 0.80, decel: 0.80, cod: 0.80 },
+  mixed: { accel: 0.60, decel: 0.60, cod: 0.60 },
+  topup: { accel: 0.55, decel: 0.55, cod: 0.55 },
+  locomotive: { accel: 0.50, decel: 0.50, cod: 0.50 },
+  activation: { accel: 0.38, decel: 0.38, cod: 0.38 },
   match: { accel: 1, decel: 1, cod: 1 },
   rest: { accel: 0, decel: 0, cod: 0 },
 };
 
+export type ImaVar = "accel" | "decel" | "cod";
+export type ImaTrainingDayType = "mechanical" | "mixed" | "locomotive" | "activation" | "topup";
+/** The published range behind each CAL_SHARE_IMA value, with how strong that evidence is. */
+export const CAL_SHARE_IMA_REF: Record<ImaTrainingDayType, { range: [number, number]; evidence: "measured" | "framework"; source: string }> = {
+  mechanical: { range: [0.70, 0.90], evidence: "measured", source: "Stevens 2017; Martín-García 2018" },
+  mixed: { range: [0.55, 0.70], evidence: "measured", source: "Stevens 2017; Martín-García 2018" },
+  topup: { range: [0.50, 0.85], evidence: "measured", source: "Stevens 2017; Martín-García 2018" },
+  activation: { range: [0.33, 0.43], evidence: "measured", source: "Stevens 2017" },
+  locomotive: { range: [0.45, 0.60], evidence: "framework", source: "Buchheit 2019" },
+};
+
 export type ImaShareTable = Record<CalType, { accel: number; decel: number; cod: number }>;
 export type ImaShareCalibration = {
+  /** The team's OWN norm per day-type (a comparison to the standard, never a target). */
   shares: ImaShareTable;
   /** "team" = every variable from this team's own data; "partial" = some vars fell back; "default". */
   source: "team" | "partial" | "default";
+  /** The variables actually read from this team's data. Any other variable just repeats the standard. */
+  ownVars: ImaVar[];
   /** Training days (team median per day) and near-full match rows the calibration read. */
   nDays: number; nMatchRows: number;
 };
-/** Minimum team training days with IMA (and near-full match rows) before a team gets its own shares. */
+/** Minimum team training days with IMA (and near-full match rows) before a team's own norm is shown. */
 export const IMA_CALIBRATION_MIN_DAYS = 30;
 export const IMA_CALIBRATION_MIN_MATCH_ROWS = 10;
 
 /**
- * Per-TEAM calibration of the calendar's IMA day-type shares — the same percentile rule as the default
- * table (Mechanical p90, Mixed p75, Locomotive + Top-up p25, Activation p10), read from THIS team's own
- * training days (team median per day ÷ the team's near-full-match median). A variable with too few days
- * or no match reference keeps the default share. Shares are clamped to [0.15, 1] (whole-session IMA totals
- * never exceed a match) and kept ordered. Pure.
+ * This TEAM's own norm for IMA totals, as a share of its match: Mechanical = p90 of its training days, Mixed
+ * = p75, Locomotive + Top-up = p25, Activation = p10 (team median per day ÷ the team's near-full-match
+ * median). A comparison to the research standard, NOT a target. A variable with too few days or no match
+ * reference keeps the standard value and is left out of `ownVars`. Shares are clamped to [0.15, 1] and kept
+ * ordered. Pure.
  */
 export function calibrateImaShares(
   dayMedians: Array<{ accel: number | null; decel: number | null; cod: number | null }>,
@@ -601,7 +625,8 @@ export function calibrateImaShares(
   };
   const clamp = (x: number) => Math.round(Math.min(1, Math.max(0.15, x)) * 100) / 100;
   const shares: ImaShareTable = JSON.parse(JSON.stringify(CAL_SHARE_IMA));
-  let own = 0, nDays = 0;
+  const ownVars: ImaVar[] = [];
+  let nDays = 0;
   for (const k of ["accel", "decel", "cod"] as const) {
     const ref = matchRef[k];
     const fr = dayMedians.map((d) => d[k]).filter((x): x is number => x != null && x > 0).map((x) => (ref && ref > 0 ? x / ref : NaN)).filter(Number.isFinite);
@@ -611,9 +636,29 @@ export function calibrateImaShares(
     shares.mechanical[k] = p90; shares.mixed[k] = Math.min(p75, p90);
     shares.locomotive[k] = Math.min(p25, shares.mixed[k]); shares.topup[k] = shares.locomotive[k];
     shares.activation[k] = Math.min(p10, shares.locomotive[k]);
-    own++;
+    ownVars.push(k);
   }
-  return { shares, source: own === 3 ? "team" : own > 0 ? "partial" : "default", nDays, nMatchRows };
+  return { shares, source: ownVars.length === 3 ? "team" : ownVars.length > 0 ? "partial" : "default", ownVars, nDays, nMatchRows };
+}
+
+export type ImaNormStatus = "below" | "within" | "above";
+export type ImaComparedDayType = "mechanical" | "mixed" | "activation";
+/**
+ * Where the team's own norm sits against the published range. Only the day-types whose own percentile stands
+ * for the same kind of day the studies measured: biggest day (p90), mid-week (p75), day before (p10).
+ * Locomotive has no measured range, and the team's Top-up value is a p25 rather than a measured MD+1 session,
+ * so neither can be compared fairly. Only variables read from the team's own data appear. Pure.
+ */
+export function compareImaNormToReference(cal: ImaShareCalibration): Record<ImaComparedDayType, Partial<Record<ImaVar, ImaNormStatus>>> {
+  const out: Record<ImaComparedDayType, Partial<Record<ImaVar, ImaNormStatus>>> = { mechanical: {}, mixed: {}, activation: {} };
+  for (const t of ["mechanical", "mixed", "activation"] as const) {
+    const [lo, hi] = CAL_SHARE_IMA_REF[t].range;
+    for (const k of cal.ownVars) {
+      const v = cal.shares[t][k];
+      out[t][k] = v < lo ? "below" : v > hi ? "above" : "within";
+    }
+  }
+  return out;
 }
 /** Tilt a match direction split (fwd/back/lat fractions) by position — the movement signature the
  *  block emphasises: wingers/forwards more forward + lateral; defenders more backward + lateral (covering);
@@ -725,8 +770,6 @@ export function buildCalendarBlock(opts: {
    *  build. Accumulation = higher volume / gentle taper; Transmutation = balanced / moderate taper;
    *  Realization = lower volume / deep taper + a roomier (fresher) week. Issurin 2010; Bosquet 2007. */
   goal?: RecGoalKey;
-  /** The team's own IMA day-type shares (calibrateImaShares); omitted → the default CAL_SHARE_IMA. */
-  imaShare?: ImaShareTable;
   /** Pre-season MATCH EXPOSURE (0–1): the fraction of a full match a FRIENDLY represents on a match day,
    *  because players build match fitness through partial minutes (a 60-min friendly ≈ 0.67). Scales the
    *  match-day load so it reads partial, not a full match. A number applies to every week; a function
@@ -913,8 +956,8 @@ export function buildCalendarBlock(opts: {
       // IMA Free Running (bands 5–8 distance) is fast running → same share/ramp/emphasis/match-cap as HSR.
       const fr = type === "rest" || opts.unit.fr == null ? null : isM ? Math.round(opts.unit.fr * mExp) : rnd(capRun(opts.unit.fr * sh.hsr * hsrEmph * fA("hsr"), opts.unit.fr) * cm, 10);
       // IMA totals (CoD, accelerations, decelerations) — the mechanical axis's ramp + emphasis, but their own
-      // calibrated day-type share (CAL_SHARE_IMA), not the B2–3 `accdec` share. No running cap.
-      const shI = (opts.imaShare ?? CAL_SHARE_IMA)[type];
+      // research-standard day-type share (CAL_SHARE_IMA), not the B2–3 `accdec` share. No running cap.
+      const shI = CAL_SHARE_IMA[type];
       const cod = type === "rest" || opts.unit.cod == null ? null : isM ? Math.round(opts.unit.cod * mExp) : Math.round(opts.unit.cod * shI.cod * mechEmph * fA("accdec") * cm);
       const mechDay = (v: number | null | undefined, share: number) => (type === "rest" || v == null ? null : isM ? Math.round(v * mExp) : Math.round(v * share * mechEmph * fA("accdec") * cm));
       const accel = mechDay(opts.unit.accel, shI.accel), decel = mechDay(opts.unit.decel, shI.decel);

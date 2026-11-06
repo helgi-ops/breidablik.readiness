@@ -17,7 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupView from "@/components/coach/WeekSetupView";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
-import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
+import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput, type ExposureInput, type ShapeDirInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { exposuresFromTlyp, shapeDirsFromShape } from "@/lib/micropulse/trainingNeeds";
@@ -64,7 +64,7 @@ type MdDemandProfile = { phases: MdDemandBucket[]; days: MdDemandBucket[] };
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes; md: MdDemandProfile };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
-type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; nextFirstFixture?: string | null; nextSeasonYear?: number | null; fixturesEstimated?: boolean; estimatedOpener?: string | null; nextFirstFixtureEstimated?: boolean; imaCalibration?: { shares: Record<CalType, { accel: number; decel: number; cod: number }>; source: "team" | "partial" | "default"; nDays: number; nMatchRows: number } };
+type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; nextFirstFixture?: string | null; nextSeasonYear?: number | null; fixturesEstimated?: boolean; estimatedOpener?: string | null; nextFirstFixtureEstimated?: boolean; imaCalibration?: ImaShareCalibration };
 
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
 const isoAdd = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_400_000).toISOString().slice(0, 10);
@@ -732,7 +732,7 @@ export default function PeriodizationHubPage() {
   const calBlock = React.useMemo(() => {
     if (!plan || Object.keys(blkSkeleton).length === 0) return null;
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
-    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeksEff, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [], offseasonStart: offPhaseStart ?? undefined, goal: effectiveGoal, camps: campRegions, imaShare: plan.imaCalibration?.shares });
+    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeksEff, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [], offseasonStart: offPhaseStart ?? undefined, goal: effectiveGoal, camps: campRegions });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkScope, selId, blkUnit, effectiveGoal, campRegions]);
 
@@ -2125,7 +2125,7 @@ export default function PeriodizationHubPage() {
                 if (ct) preTypeOv[iso] = ct;
               }
             }
-            const cal = buildCalendarBlock({ unit: blkUnit, startDate: preStart, numWeeks: preWeeks, scopeName: "__team__", phase: { en: "Pre-season", is: "Undirbúningur" }, baseOverloadPct: blkBase, stepPct: blkStep, matchDates: preFixtures, offDays: preOffDays, onDays: preOnDays, typeOverrides: preTypeOv, allFixtures: plan.fixtures ?? [], matchExposure: (wi) => preseasonMatchExposure(wi + 1, preWeeks), camps: campRegions, imaShare: plan.imaCalibration?.shares });
+            const cal = buildCalendarBlock({ unit: blkUnit, startDate: preStart, numWeeks: preWeeks, scopeName: "__team__", phase: { en: "Pre-season", is: "Undirbúningur" }, baseOverloadPct: blkBase, stepPct: blkStep, matchDates: preFixtures, offDays: preOffDays, onDays: preOnDays, typeOverrides: preTypeOv, allFixtures: plan.fixtures ?? [], matchExposure: (wi) => preseasonMatchExposure(wi + 1, preWeeks), camps: campRegions });
             // Set a pre-season day's day-type directly on the card (draft): Off or a training stimulus
             // (mechanical/locomotive/mixed/activation/top-up). Match days stay fixed to the fixture. Optimistic
             // overlay via savedPlans; persists the whole week to week_plans through the SAME applyWeekSetup path
@@ -2873,15 +2873,33 @@ export default function PeriodizationHubPage() {
                 </div>
               </div>
               <p className="mt-3 text-[12px] text-slate-500">{is ? "Talan = Player Load; „FR“ = IMA hraðhlaup (band 5–8, metrar) og „Skref“ = IMA hröð skref (band 6–8) fylgja hlaupa-ásnum; „CoD“ = IMA stefnubreytingar og „Acc/Dec“ = hröðun/hemlun (IMA á Pro) fylgja vélræna ásnum — þar sem gögnin eru til. Vikuálagið er stigvaxandi per mæligildi (magn hækkar hraðar en háhraði; hvert við leikþak — ⚑ sýnir hvað heldur vikunni). Lýsandi — upphafspunktur, ekki viðmið. Aldrei fleiri en 3 æfingar í röð. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021." : "The number = Player Load; \"FR\" = IMA Free Running (fast running, band 5–8, metres) and \"Stride\" = IMA Stride (fast strides, band 6–8) follow the running axis; \"CoD\" = IMA change of direction and \"Acc/Dec\" = accelerations/decelerations (IMA on Pro) follow the mechanical axis — where the feed carries them. Weekly overload ramps per-KPI (volume climbs faster than HSR; each ceilings at match — ⚑ shows what held the week). Descriptive — a starting point, not a norm. Never more than 3 sessions in a row. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021."}</p>
-              {plan.imaCalibration && (
-                <p className="mt-1 text-[11px] text-slate-400" title={is ? "Mechanical = p90 liðsins, Mixed = p75, Locomotive/Uppbót = p25, Virkjun = p10 (miðgildi liðs á æfingadegi ÷ miðgildi heils leiks)." : "Mechanical = your team's p90, Mixed = p75, Locomotive/Top-up = p25, Activation = p10 (team median per training day ÷ near-full-match median)."}>
-                  {plan.imaCalibration.source === "team"
-                    ? (is ? `Acc/Dec/CoD-hlutföll dagsgerða eru kvörðuð á ykkar eigin ${plan.imaCalibration.nDays} æfingadögum (og ${plan.imaCalibration.nMatchRows} heilum leikframmistöðum).` : `Acc/Dec/CoD day-type shares are calibrated on your own ${plan.imaCalibration.nDays} training days (and ${plan.imaCalibration.nMatchRows} near-full match appearances).`)
-                    : plan.imaCalibration.source === "partial"
-                      ? (is ? "Acc/Dec/CoD-hlutföll eru að hluta kvörðuð á ykkar gögnum; hinar breyturnar nota viðmiðunargildi þar til næg gögn eru komin." : "Acc/Dec/CoD shares are partly calibrated on your data; the rest use reference values until there's enough data.")
-                      : (is ? "Acc/Dec/CoD-hlutföll nota viðmiðunargildi þar til liðið á 30 æfingadaga með hreyfigögnum og 10 heilar leikframmistöður." : "Acc/Dec/CoD shares use reference values until your team has 30 training days with movement data and 10 near-full match appearances.")}
-                </p>
-              )}
+              {(() => {
+                const pct = (x: number) => Math.round(x * 100);
+                const std = CAL_SHARE_IMA;
+                const cal = plan.imaCalibration;
+                const own = cal?.ownVars ?? [];
+                const [lo, hi] = CAL_SHARE_IMA_REF.mechanical.range;
+                const name: Record<ImaVar, string> = { accel: "Acc", decel: "Dec", cod: "CoD" };
+                const cmp = cal ? compareImaNormToReference(cal).mechanical : {};
+                const list = (s: ImaNormStatus) => own.filter((k) => cmp[k] === s).map((k) => name[k]).join(", ");
+                const above = list("above"), below = list("below");
+                const rangeTxt = `${pct(lo)}–${pct(hi)}%`;
+                const verdict = is
+                  ? (!above && !below ? `innan birta bilsins ${rangeTxt}` : `${[above && `${above} yfir`, below && `${below} undir`].filter(Boolean).join(" og ")} birta bilinu ${rangeTxt}`)
+                  : (!above && !below ? `inside the published ${rangeTxt}` : `${[above && `${above} above`, below && `${below} below`].filter(Boolean).join(" and ")} the published ${rangeTxt}`);
+                return (
+                  <div className="mt-1 space-y-0.5 text-[12px] text-slate-500">
+                    <p>{is
+                      ? `Acc/Dec/CoD-markmið fylgja birtum rannsóknum: stærsti dagur um ${pct(std.mechanical.accel)}% af leik, miðja vikunnar um ${pct(std.mixed.accel)}%, hlaupadagur um ${pct(std.locomotive.accel)}%, dagurinn fyrir leik um ${pct(std.activation.accel)}%. Vikustigun bætist ofan á.`
+                      : `Acc/Dec/CoD targets follow published research: biggest day about ${pct(std.mechanical.accel)}% of a match, mid-week about ${pct(std.mixed.accel)}%, running day about ${pct(std.locomotive.accel)}%, day before about ${pct(std.activation.accel)}%. Weekly progression comes on top.`}</p>
+                    {cal && own.length > 0 && (
+                      <p>{is
+                        ? `Stærstu dagar liðsins ykkar ná ${own.map((k) => `${pct(cal.shares.mechanical[k])}%`).join(" / ")} af leik (${own.map((k) => name[k]).join("/")}): ${verdict}. Byggt á ${cal.nDays} æfingadögum og ${cal.nMatchRows} heilum leikframmistöðum.`
+                        : `Your team's biggest days reach ${own.map((k) => `${pct(cal.shares.mechanical[k])}%`).join(" / ")} of a match (${own.map((k) => name[k]).join("/")}): ${verdict}. Based on ${cal.nDays} training days and ${cal.nMatchRows} near-full match appearances.`}</p>
+                    )}
+                  </div>
+                );
+              })()}
               <details className="mt-3">
                 <summary className="cursor-pointer py-1 text-[13px] font-semibold text-[#2740e6]">{is ? "Hvað þýða dagsgerðirnar?" : "What the day-types mean"}</summary>
                 <ul className="mt-1.5 space-y-1 text-[13px] text-slate-700">
@@ -2892,6 +2910,9 @@ export default function PeriodizationHubPage() {
                   <li><b style={{ color: typeColor.topup }}>{typeName("topup")}</b> — {is ? "koma <60′ leikmönnum í vikumarkið; endurheimt fyrir byrjunarlið." : "bring <60′ players to the weekly target; recovery for starters."}</li>
                   <li><b style={{ color: typeColor.match }}>{typeName("match")}</b> — {is ? "leikkrafan sjálf (viðmiðunareiningin, 100%)." : "the match demand itself (the reference unit, 100%)."} · <b className="text-slate-600">{is ? "Frí" : "Off"}</b> — {is ? "heill frídagur." : "full rest day."}</li>
                 </ul>
+                <p className="mt-1.5 text-[12px] text-slate-500">{is
+                  ? "Acc/Dec/CoD-viðmiðin: rannsóknirnar lýsa því hvað úrvalslið gera, þær sanna ekki hvað er best. Þess vegna eru markmiðin miðgildi innan bils, hlutfall af leik liðsins sjálfs, því tölur milli mælitækja eru ekki sambærilegar. Hlaupadagurinn byggir á ráðleggingum sérfræðings, ekki mælingum, og engin rannsókn mælir IMA CoD beint, svo það fylgir sama hlutfalli. Stevens 2017 · Martín-García 2018 · Clemente 2019 · Silva 2022 · Buchheit 2019."
+                  : "The Acc/Dec/CoD reference: these studies describe what elite teams do, they do not prove what is best. So each target is a midpoint inside a range, as a share of your own match, because counts from different devices are not comparable. The running day rests on expert guidance rather than measurement, and no study measures IMA CoD directly, so it follows the same share. Stevens 2017 · Martín-García 2018 · Clemente 2019 · Silva 2022 · Buchheit 2019."}</p>
                 <p className="mt-1.5 text-[12px] text-slate-500">Issurin 2010 (block periodisation) · Owen 2017 (positional mesocycle, MD taper) · Oliveira 2019 (congested-week variants) · Oliveira 2021 (ACWR/monotony on sRPE+HSR) · Teixeira 2021 (monitoring) · Martín-García 2018 (%-of-match-demand). {is ? "Lýsandi — aldrei readiness-liturinn." : "Descriptive — never the readiness colour."}</p>
               </details>
               {mesoCalBlock && (mesoCalBlock.unit.accHiEff != null || mesoCalBlock.unit.stride != null || mesoCalBlock.unit.fr != null || mesoCalBlock.unit.cod != null || mesoCalBlock.unit.accel != null) && (
@@ -3821,7 +3842,7 @@ export default function PeriodizationHubPage() {
               decHiEff: mu.decHiEff.typical, stride: mu.stride.typical, dirFwd: null, dirBack: null, dirLat: null,
               rhie: mu.rhie.typical, symmetry: mu.symmetry.typical, metPower: mu.metPower.typical, fr: mu.imaFr?.typical ?? null, cod: mu.imaCod.typical ?? null, accel: mu.accel.typical, decel: mu.decel.typical };
             const microMon = (() => { const d = new Date(blkStart + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); })();
-            const microWk = (() => { const mb = buildCalendarBlock({ unit: microUnit, startDate: microMon, numWeeks: 2, scopeName: player.name, scopePos: player.position, baseOverloadPct: 100, imaShare: plan.imaCalibration?.shares }); return mb.weeks[1] ?? mb.weeks[0]; })();
+            const microWk = (() => { const mb = buildCalendarBlock({ unit: microUnit, startDate: microMon, numWeeks: 2, scopeName: player.name, scopePos: player.position, baseOverloadPct: 100 }); return mb.weeks[1] ?? mb.weeks[0]; })();
             const microDays = (microWk?.days ?? []).map((d) => ({ md: d.md, type: d.type, o: mdOffset(d.md) ?? 99 })).filter((d) => d.o >= -4 && d.o <= -1).sort((a, b) => a.o - b.o);
             const days: Array<{ md: string; type: CalType }> = microDays.length ? microDays.map((d) => ({ md: d.md, type: d.type })) : standardTrainingDays(1).map((md) => ({ md, type: "mixed" as CalType }));
             const TYPE_LABEL: Partial<Record<CalType, { en: string; is: string }>> = { mechanical: { en: "mech", is: "vélrænt" }, locomotive: { en: "loco", is: "hlaup" }, mixed: { en: "mixed", is: "blandað" }, activation: { en: "prime", is: "virkjun" }, rest: { en: "rest", is: "hvíld" }, topup: { en: "top-up", is: "áfylling" } };

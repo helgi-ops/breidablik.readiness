@@ -71,6 +71,7 @@ export const SESSION_SHARE_EXPONENT: Record<EnoughVar, number> = {
 export const ENOUGH_CITATIONS = [
   "Buchheit et al. 2024 — MD-day load as a share of the match",
   "Martín-García et al. 2018 — load across the microcycle",
+  "Stevens et al. 2017 — training load relative to match load",
   "Harper & McBurnie 2021 — braking / change-of-direction loading",
   "Malone et al. 2018 — fast-running exposure vs match demand",
   "Training:match ratios — PMC6747517",
@@ -87,9 +88,8 @@ export function dayShare(key: EnoughVar, matchPct: number): number {
  * session is judged on; the MD-day decides HOW BIG the target is. Mechanical days are about braking /
  * accelerations / changes of direction (running isn't the job); Locomotive days are about fast running /
  * strides; Mixed and Activation judge all five. Top-up (MD+1): starters recover, low-minute players are
- * judged against a top-up target. The Meso calendar's IMA day-type shares (CAL_SHARE_IMA, recalibrated to
- * the team's own percentiles) give similar magnitudes to the MD-day shares used here (e.g. MD-4 Mechanical
- * accelerations: calendar 70% of a match, this card ~71%), so plan and review agree.
+ * judged against a top-up target. The size still comes from the MD-day, while the Meso calendar's IMA shares
+ * (CAL_SHARE_IMA, the research standard) come from the day-type, so the two can differ on a given day.
  */
 export type EnoughDayType = "mechanical" | "locomotive" | "mixed" | "activation" | "topup";
 export const DAY_TYPE_LABEL: Record<EnoughDayType, Bi> = {

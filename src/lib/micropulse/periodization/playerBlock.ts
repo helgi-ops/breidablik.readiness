@@ -11,7 +11,7 @@
  * both satisfy it without importing across the client/server boundary.
  */
 import { buildCalendarBlock, positionGroup } from "./index";
-import type { Bi, CalType, CalendarBlock, CalWeek, ImaShareTable, MatchUnitAbs, RecGoalKey, TeamAverages } from "./index";
+import type { Bi, CalType, CalendarBlock, CalWeek, MatchUnitAbs, RecGoalKey, TeamAverages } from "./index";
 import { standardTrainingDays, weeklyKpiMultiple } from "./plannedVolume";
 import type { WeeklyLoadMetricKey } from "../externalLoad/weeklyLoadTypes";
 import type { BuildUpSteer } from "./buildUpSteer";
@@ -34,8 +34,6 @@ export interface PlayerBlockPlayer {
 }
 export interface PlayerBlockPlan {
   teamBaseline: { avg: TeamAverages };
-  /** The team's own calendar IMA day-type shares (optional — default table when absent). */
-  imaCalibration?: { shares: ImaShareTable } | null;
   positionBaselines: Array<{ key: number; avg: TeamAverages; label: Bi }>;
 }
 export interface PlayerBlockOpts {
@@ -189,7 +187,6 @@ export function buildPlayerBlock(plan: PlayerBlockPlan, pl: PlayerBlockPlayer, o
     unit, startDate: opts.blkStart, numWeeks: opts.blkWeeks, scopeName: pl.name, scopePos: pl.position,
     phase: opts.phaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeleton, typeOverrides: opts.typeOverrides,
     maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph, dir: steerActive && steer ? steer.dirEmph : undefined }, offseasonStart: opts.offseasonStart, goal: opts.goal, camps: opts.camps,
-    imaShare: plan.imaCalibration?.shares,
   });
 
   // ── Align the block's weekly VOLUME to the TEAM's ×match multiple PER VARIABLE ──

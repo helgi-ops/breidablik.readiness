@@ -795,15 +795,15 @@ describeIma("Meso calendar — IMA accelerations / decelerations", () => {
   });
 });
 
-describeIma("Meso calendar — IMA Acc/Dec/CoD calibrated to the team's own distribution", () => {
+describeIma("Meso calendar — IMA Acc/Dec/CoD follow the research standard", () => {
   itIma("week-1 targets = match × CAL_SHARE_IMA; ordered mechanical > mixed > locomotive > activation; never above match", () => {
     const unit = { dist: 10000, hsr: 800, load: 1000, accdec: 160, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null, accel: 100, decel: 100, cod: 100 };
     const b = buildCalendarBlock({ unit, startDate: "2026-09-07", numWeeks: 4, scopeName: "Team", scopePos: null, baseOverloadPct: 100 });
     const w1 = b.weeks[0].days;
     const by = (t: string) => w1.find((d) => d.type === t);
-    expectIma(by("mechanical")?.decel).toBe(82);
-    expectIma(by("mechanical")?.accel).toBe(70);
-    expectIma(by("activation")?.cod).toBe(31);
+    expectIma(by("mechanical")?.decel).toBe(80);
+    expectIma(by("mechanical")?.accel).toBe(80);
+    expectIma(by("activation")?.cod).toBe(38);
     const dec = (t: string) => by(t)?.decel ?? 0;
     expectIma(dec("mechanical")).toBeGreaterThan(dec("mixed"));
     expectIma(dec("mixed")).toBeGreaterThan(dec("locomotive"));
@@ -813,13 +813,14 @@ describeIma("Meso calendar — IMA Acc/Dec/CoD calibrated to the team's own dist
   });
 });
 
-import { calibrateImaShares, CAL_SHARE_IMA } from "../index";
-describeIma("calibrateImaShares — per-team calendar IMA shares", () => {
+import { calibrateImaShares, compareImaNormToReference, CAL_SHARE_IMA, CAL_SHARE_IMA_REF } from "../index";
+describeIma("calibrateImaShares — a team's own norm, compared to the standard", () => {
   const days = Array.from({ length: 100 }, (_, i) => ({ accel: 20 + i * 0.6, decel: 30 + i * 0.7, cod: 100 + i * 2 })); // uniform spreads
   const ref = { accel: 100, decel: 100, cod: 400 };
   itIma("uses the team's own p90/p75/p25/p10, ordered and clamped to ≤ 1", () => {
     const c = calibrateImaShares(days, ref, 40);
     expectIma(c.source).toBe("team");
+    expectIma(c.ownVars).toEqual(["accel", "decel", "cod"]);
     expectIma(c.shares.mechanical.accel).toBeCloseTo(0.73, 2);   // p90 of 20..79.4
     expectIma(c.shares.activation.decel).toBeCloseTo(0.37, 2);   // p10 of 30..99.3
     const d = (t: "mechanical" | "mixed" | "locomotive" | "activation") => c.shares[t].decel;
@@ -832,12 +833,37 @@ describeIma("calibrateImaShares — per-team calendar IMA shares", () => {
     expectIma(calibrateImaShares(days, ref, 3).shares).toEqual(CAL_SHARE_IMA);
     const partial = calibrateImaShares(days, { accel: 100, decel: 100, cod: null }, 40);
     expectIma(partial.source).toBe("partial");
+    expectIma(partial.ownVars).toEqual(["accel", "decel"]);
     expectIma(partial.shares.mechanical.cod).toBe(CAL_SHARE_IMA.mechanical.cod);
   });
-  itIma("buildCalendarBlock uses a team table when given", () => {
-    const unit = { dist: 10000, hsr: 800, load: 1000, accdec: 160, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null, decel: 100 };
-    const team = calibrateImaShares(days, ref, 40).shares;
-    const b = buildCalendarBlock({ unit, startDate: "2026-09-07", numWeeks: 2, scopeName: "Team", scopePos: null, baseOverloadPct: 100, imaShare: team });
-    expectIma(b.weeks[0].days.find((x) => x.type === "mechanical")?.decel).toBe(Math.round(100 * team.mechanical.decel));
+  itIma("every standard value lies inside its published range", () => {
+    for (const t of ["mechanical", "mixed", "locomotive", "activation", "topup"] as const) {
+      const [lo, hi] = CAL_SHARE_IMA_REF[t].range;
+      for (const k of ["accel", "decel", "cod"] as const) {
+        expectIma(CAL_SHARE_IMA[t][k]).toBeGreaterThanOrEqual(lo);
+        expectIma(CAL_SHARE_IMA[t][k]).toBeLessThanOrEqual(hi);
+      }
+    }
+    expectIma(CAL_SHARE_IMA_REF.locomotive.evidence).toBe("framework");
+  });
+  itIma("a week of standard shares stays near the published weekly range", () => {
+    const s = CAL_SHARE_IMA;
+    const week = 1 + s.topup.accel + s.mechanical.accel + s.mixed.accel + s.locomotive.accel + s.activation.accel;
+    expectIma(week).toBeGreaterThanOrEqual(3.1);
+    expectIma(week).toBeLessThanOrEqual(3.9);
+  });
+  itIma("compares the team's own norm to the range, above / within / below", () => {
+    const flat = (x: number) => Array.from({ length: 40 }, () => ({ accel: x, decel: x, cod: x }));
+    const r = { accel: 100, decel: 100, cod: 100 };
+    expectIma(compareImaNormToReference(calibrateImaShares(flat(95), r, 40)).mechanical.accel).toBe("above");
+    expectIma(compareImaNormToReference(calibrateImaShares(flat(80), r, 40)).mechanical.decel).toBe("within");
+    expectIma(compareImaNormToReference(calibrateImaShares(flat(50), r, 40)).mechanical.cod).toBe("below");
+  });
+  itIma("never presents a fallback variable as the team's own", () => {
+    const partial = calibrateImaShares(days, { accel: 100, decel: 100, cod: null }, 40);
+    const cmp = compareImaNormToReference(partial);
+    expectIma(cmp.mechanical.cod).toBeUndefined();
+    expectIma(cmp.mechanical.accel).toBeDefined();
+    expectIma(compareImaNormToReference(calibrateImaShares(days, ref, 3)).mechanical).toEqual({});
   });
 });
