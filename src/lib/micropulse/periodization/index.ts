@@ -9,7 +9,7 @@
  * number is sourced from the squad instead of assumptions (his frustration: "built with no data").
  */
 
-import { CAL_SHARE_IMA, CAL_SHARE_IMA_REF, type ImaTrainingDayType, type ImaVar } from "./imaStandard";
+import { CAL_SHARE_HI, CAL_SHARE_HI_REF, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, type HiEvidence, type HiVar, type ImaTrainingDayType, type ImaVar } from "./imaStandard";
 
 export type Bi = { en: string; is: string };
 
@@ -544,21 +544,21 @@ const DOW: Bi[] = [
   { en: "Mon", is: "Mán" }, { en: "Tue", is: "Þri" }, { en: "Wed", is: "Mið" }, { en: "Thu", is: "Fim" }, { en: "Fri", is: "Fös" }, { en: "Sat", is: "Lau" }, { en: "Sun", is: "Sun" },
 ];
 // Each day-type's SHARE of the match, per axis (Figueiredo dimension-specific). `accdec` = the Acc/Dec
-// Band 2–3 high-intensity subset (mechanical days over-shoot the match ≥1×; running days sit well under);
+// Band 2–3 high-intensity subset, kept equal to CAL_SHARE_HI.accHi (the research standard, ./imaStandard);
 // `stride` = the top-band free-running quality (highest on the Locomotive/running day). Keeping HSR and
 // mechanical on separate days protects the posterior chain (Buchheit).
 export const CAL_SHARE: Record<CalType, { dist: number; hsr: number; load: number; accdec: number; stride: number }> = {
-  mechanical: { dist: 0.45, hsr: 0.30, load: 1.10, accdec: 1.30, stride: 0.50 },
-  locomotive: { dist: 0.55, hsr: 0.70, load: 0.55, accdec: 0.40, stride: 0.90 },
-  mixed: { dist: 0.70, hsr: 0.55, load: 0.85, accdec: 0.85, stride: 0.75 },
-  activation: { dist: 0.30, hsr: 0.22, load: 0.40, accdec: 0.35, stride: 0.30 },
-  topup: { dist: 0.40, hsr: 0.35, load: 0.40, accdec: 0.40, stride: 0.35 },
+  mechanical: { dist: 0.45, hsr: 0.30, load: 1.10, accdec: 0.90, stride: 0.50 },
+  locomotive: { dist: 0.55, hsr: 0.70, load: 0.55, accdec: 0.45, stride: 0.90 },
+  mixed: { dist: 0.70, hsr: 0.55, load: 0.85, accdec: 0.65, stride: 0.75 },
+  activation: { dist: 0.30, hsr: 0.22, load: 0.40, accdec: 0.43, stride: 0.30 },
+  topup: { dist: 0.40, hsr: 0.35, load: 0.40, accdec: 0.70, stride: 0.35 },
   match: { dist: 1, hsr: 1, load: 1, accdec: 1, stride: 1 },
   rest: { dist: 0, hsr: 0, load: 0, accdec: 0, stride: 0 },
 };
 // The IMA Acc/Dec/CoD research standard lives in ./imaStandard (shared with "Did we do enough?").
-export { CAL_SHARE_IMA, CAL_SHARE_IMA_REF };
-export type { ImaVar, ImaTrainingDayType };
+export { CAL_SHARE_HI, CAL_SHARE_HI_REF, CAL_SHARE_IMA, CAL_SHARE_IMA_REF };
+export type { HiEvidence, HiVar, ImaVar, ImaTrainingDayType };
 
 export type ImaShareTable = Record<CalType, { accel: number; decel: number; cod: number }>;
 export type ImaShareCalibration = {
@@ -918,8 +918,8 @@ export function buildCalendarBlock(opts: {
       const load = type === "rest" || opts.unit.load == null ? null : isM ? Math.round(opts.unit.load * mExp) : Math.round(opts.unit.load * sh.load * mechEmph * fA("load") * cm);
       // Mechanical / IMA per-day targets (share × week factor); mechanical emphasis on the effort counts,
       // running emphasis on the free-running stride. Null on rest days or where the unit lacks the field.
-      const accHiEff = type === "rest" || opts.unit.accHiEff == null ? null : isM ? Math.round(opts.unit.accHiEff * mExp) : Math.round(opts.unit.accHiEff * sh.accdec * mechEmph * fA("accdec") * cm);
-      const decHiEff = type === "rest" || opts.unit.decHiEff == null ? null : isM ? Math.round(opts.unit.decHiEff * mExp) : Math.round(opts.unit.decHiEff * sh.accdec * mechEmph * fA("accdec") * cm);
+      const accHiEff = type === "rest" || opts.unit.accHiEff == null ? null : isM ? Math.round(opts.unit.accHiEff * mExp) : Math.round(opts.unit.accHiEff * CAL_SHARE_HI[type].accHi * mechEmph * fA("accdec") * cm);
+      const decHiEff = type === "rest" || opts.unit.decHiEff == null ? null : isM ? Math.round(opts.unit.decHiEff * mExp) : Math.round(opts.unit.decHiEff * CAL_SHARE_HI[type].decHi * mechEmph * fA("accdec") * cm);
       const stride = type === "rest" || opts.unit.stride == null ? null : isM ? Math.round(opts.unit.stride * mExp) : Math.round(capRun(opts.unit.stride * sh.stride * hsrEmph * fA("stride"), opts.unit.stride) * cm);
       // IMA Free Running (bands 5–8 distance) is fast running → same share/ramp/emphasis/match-cap as HSR.
       const fr = type === "rest" || opts.unit.fr == null ? null : isM ? Math.round(opts.unit.fr * mExp) : rnd(capRun(opts.unit.fr * sh.hsr * hsrEmph * fA("hsr"), opts.unit.fr) * cm, 10);

@@ -3,12 +3,14 @@
  * the week's matches counted. Pure, deterministic, IO-free. Descriptive planning, never the readiness colour.
  *
  * Training day:
- *   - Player Load, distance, HSR, sprint, Acc/Dec B2-3: the player's recent training baseline × the day's
- *     planned-load ratio (the week's MD-day taper). With no recent training, the player's match value × the
+ *   - Player Load, distance, HSR: the player's recent training baseline × the day's planned-load ratio (the
+ *     week's MD-day taper). With no recent training, the player's match value × the
  *     day's share of a match, never a full match on every training day.
  *   - IMA accelerations, decelerations, CoD, Free Running, Stride: the player's own match value × targetShare,
  *     the exact target "Did we do enough?" judges afterwards, so plan and review print the same number.
  *     Without a match value, an MD context or an IMA feed these fall back to baseline × ratio.
+ *   - Sprint, Acc/Dec B2-3: the player's own match value × the day-type's research standard (CAL_SHARE_HI), the
+ *     same table the Meso calendar plans its B2-3 efforts from. With no planned day-type: baseline × ratio.
  * Match: own match value × how much of it the player usually plays × the week's match count.
  * Week: training + matches.
  *
@@ -16,6 +18,7 @@
  */
 
 import { STARTER_MINUTES, TOPUP_MATCH_PCT, targetShare, type EnoughDayType, type EnoughVar } from "@/lib/micropulse/sessionEnough";
+import { CAL_SHARE_HI, type HiVar } from "@/lib/micropulse/periodization/imaStandard";
 
 export const PLAYER_WEEK_VARS = ["pl", "distance", "hsr", "sprint", "accel", "decel", "cod", "fr", "stride", "accHi", "decHi"] as const;
 export type PlayerWeekVar = (typeof PLAYER_WEEK_VARS)[number];
@@ -34,6 +37,9 @@ export const PLAYER_WEEK_VAR_LABEL: Record<PlayerWeekVar, { short: { en: string;
   accHi: { short: { en: "Acc B2-3", is: "Hröð. B2-3" }, plain: { en: "hard accelerations, bands 2-3", is: "kröftugar hraðaaukningar, bönd 2-3" } },
   decHi: { short: { en: "Dec B2-3", is: "Heml. B2-3" }, plain: { en: "hard braking, bands 2-3", is: "kröftugar hemlanir, bönd 2-3" } },
 };
+
+/** The GPS-derived variables on the day-type research standard. Available to every tier, so no IMA gate. */
+const HI_VAR: Partial<Record<PlayerWeekVar, HiVar>> = { sprint: "sprint", accHi: "accHi", decHi: "decHi" };
 
 /** The IMA variables that share a target with the post-training card. */
 const CARD_VAR: Partial<Record<PlayerWeekVar, EnoughVar>> = { accel: "imaAccel", decel: "imaDecel", cod: "imaCod", fr: "frDistance", stride: "strideHi" };
@@ -119,6 +125,14 @@ const present = (k: PlayerWeekVar, v: number | null | undefined): number | null 
 const cleaned = (vals: Partial<PlayerWeekValues> | null): Partial<PlayerWeekValues> | null =>
   vals && (Object.fromEntries(PLAYER_WEEK_VARS.map((k) => [k, present(k, vals[k])])) as PlayerWeekValues);
 
+/** The day-type's share for sprint / Acc-Dec B2-3, or null when it doesn't apply (no day-type; a recovering starter). */
+function hiShare(k: PlayerWeekVar, day: PlayerWeekDay, usualMinutes: number | null): number | null {
+  const v = HI_VAR[k];
+  if (!v || !day.dayType) return null;
+  if (day.dayType === "topup" && (usualMinutes ?? 0) >= STARTER_MINUTES) return null;
+  return CAL_SHARE_HI[day.dayType][v];
+}
+
 function buildRow(raw: PlayerWeekInput, days: PlayerWeekDay[], matchCount: number): PlayerWeekRow {
   const p = { ...raw, baseline: cleaned(raw.baseline), match: cleaned(raw.match) };
   // Recent training × the day's ratio; with no recent training, the match value × the day's share of a match.
@@ -135,7 +149,9 @@ function buildRow(raw: PlayerWeekInput, days: PlayerWeekDay[], matchCount: numbe
     for (const k of PLAYER_WEEK_VARS) {
       const card = CARD_VAR[k];
       const matchValue = p.match?.[k] ?? null;
-      const share = card && hasImaFeed && matchValue != null && day.ratio > 0 ? dayTarget(card, day, p.usualMinutes) : null;
+      const share = !(matchValue != null && matchValue > 0 && day.ratio > 0) ? null
+        : card ? (hasImaFeed ? dayTarget(card, day, p.usualMinutes) : null)
+        : hiShare(k, day, p.usualMinutes);
       const b = share != null ? (matchValue as number) * share : fromBase(k, day);
       out[k] = b == null ? null : Math.round(b);
     }
@@ -171,12 +187,22 @@ export function buildPlayerWeekLoad(input: { players: PlayerWeekInput[]; days: P
 
 /** One plain line on what a day's numbers mean, for the PDF's per-day tables. */
 export function dayTargetNote(day: PlayerWeekDay, hasIma = true): { en: string; is: string } {
-  if (!hasIma) return { en: "Each player's recent training load, scaled by the day's planned load.", is: "Nýlegt æfingaálag hvers leikmanns, kvarðað með áætluðu álagi dagsins." };
-  if (day.dayType && day.matchPct != null) {
-    const pct = Math.round(targetShare("imaAccel", day.matchPct, day.dayType).share * 100);
+  const hi = day.dayType ? CAL_SHARE_HI[day.dayType] : null;
+  const pctOf = (x: number) => Math.round(x * 100);
+  const hiNote = hi ? {
+    en: `Hard accelerations about ${pctOf(hi.accHi)}%, hard braking about ${pctOf(hi.decHi)}%, sprint about ${pctOf(hi.sprint)}% of a match.`,
+    is: `Kröftugar hraðaaukningar um ${pctOf(hi.accHi)}%, kröftugar hemlanir um ${pctOf(hi.decHi)}%, sprettur um ${pctOf(hi.sprint)}% af leik.`,
+  } : null;
+  if (!hasIma) {
+    const rest = { en: "The rest is recent training load, scaled by the day's planned load.", is: "Hitt er nýlegt æfingaálag, kvarðað með áætluðu álagi dagsins." };
+    return hiNote ? { en: `${hiNote.en} ${rest.en}`, is: `${hiNote.is} ${rest.is}` }
+      : { en: "Each player's recent training load, scaled by the day's planned load.", is: "Nýlegt æfingaálag hvers leikmanns, kvarðað með áætluðu álagi dagsins." };
+  }
+  if (day.dayType && day.matchPct != null && hiNote) {
+    const pct = pctOf(targetShare("imaAccel", day.matchPct, day.dayType).share);
     return {
-      en: `Accelerations, braking and changes of direction at about ${pct}% of each player's own match, the same target the post-training report judges.`,
-      is: `Hraðaaukningar, hemlanir og stefnubreytingar um ${pct}% af eigin leik hvers leikmanns, sama markmið og eftiræfingaskýrslan metur.`,
+      en: `Accelerations, braking and changes of direction at about ${pct}% of each player's own match, the same target the post-training report judges. ${hiNote.en}`,
+      is: `Hraðaaukningar, hemlanir og stefnubreytingar um ${pct}% af eigin leik hvers leikmanns, sama markmið og eftiræfingaskýrslan metur. ${hiNote.is}`,
     };
   }
   return { en: "Sized by the MD-day, because no day-type is planned.", is: "Stærðin ræðst af MD-deginum, því engin dagsgerð er skipulögð." };

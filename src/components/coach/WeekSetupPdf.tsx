@@ -97,6 +97,7 @@ const L = {
       ? `Each player's week: training days + expected matches = the week. A match line is the player's own match load at their usual minutes, × ${n} this week. Descriptive - a feed that lacks a metric shows "-".`
       : `Each player's week across the training days; no match this week. Descriptive - a feed that lacks a metric shows "-".`,
     rowTrain: "Training", rowMatch: (n: number) => `Matches ×${n}`, rowWeek: "Week",
+    sprintCaveat: "Sprint targets are the least certain: only the biggest day is measured, the rest are derived from it.",
     notPlanned: "Not in this plan", outInjured: "injured", outRehab: "in rehab", returning: "returning - follow the return ramp",
     plKxWeekLead: (n: number) => `Each player's week: training days + expected matches = the week. A match line is the mean of the player's own recorded matches, × ${n} this week. Kinexon records in the home arena, so a player with no recorded match shows "-" and the week is training only.`,
     plDays: "Detailed load - per day", plDaysLead: "Each day's plan for every player. Off and match days omitted.",
@@ -117,6 +118,7 @@ const L = {
       ? `Vika hvers leikmanns: æfingadagar + væntanlegir leikir = vikan. Leikjalínan er eigið leikálag leikmannsins miðað við venjulegar mínútur hans, × ${n} þessa viku. Lýsandi - mæling sem gögnin vantar sýnir "-".`
       : `Vika hvers leikmanns yfir æfingadagana; enginn leikur þessa viku. Lýsandi - mæling sem gögnin vantar sýnir "-".`,
     rowTrain: "Æfingar", rowMatch: (n: number) => `Leikir ×${n}`, rowWeek: "Vikan",
+    sprintCaveat: "Sprettmarkmiðin eru óvissust: aðeins stærsti dagurinn er mældur, hinir eru afleiddir af honum.",
     notPlanned: "Ekki í þessu plani", outInjured: "meiddur", outRehab: "í endurhæfingu", returning: "í endurkomu - fylgið endurkomuáætlun",
     plKxWeekLead: (n: number) => `Vika hvers leikmanns: æfingadagar + væntanlegir leikir = vikan. Leikjalínan er meðaltal skráðra leikja leikmannsins sjálfs, × ${n} þessa viku. Kinexon mælir í heimahöllinni, svo leikmaður án skráðs leiks sýnir "-" og vikan er þá bara æfingar.`,
     plDays: "Ítarlegt álag - eftir degi", plDaysLead: "Áætlun dagsins fyrir hvern leikmann. Frí- og leikdögum sleppt.",
@@ -438,7 +440,7 @@ function PlayerDetailPages({ detail, teamName, lang }: { detail: NonNullable<Non
           {simple((r) => r.perMatch)}
         </Section>
       )}
-      <Provenance>{tx(`${t.foot} Stevens 2017 · Martín-García 2018.`)}</Provenance>
+      <Provenance>{tx(`${t.foot} Stevens 2017 · Martín-García 2018 · Dalen 2019 · Gualtieri 2023. ${t.sprintCaveat}`)}</Provenance>
     </BrandPage>
   );
 }

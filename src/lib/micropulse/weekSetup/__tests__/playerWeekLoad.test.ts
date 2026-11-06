@@ -20,11 +20,35 @@ describe("training days", () => {
     expect(d.fr).toBe(Math.round(1300 * dayShare("frDistance", 60)));
     expect(d.stride).toBe(Math.round(390 * dayShare("strideHi", 60)));
   });
-  it("the other variables stay baseline × the day's planned ratio", () => {
+  it("Player Load, distance and HSR stay baseline × the day's planned ratio", () => {
     const d = one(player()).perDay[0];
     expect(d.pl).toBe(480);
     expect(d.distance).toBe(6000);
-    expect(d.accHi).toBe(24);
+    expect(d.hsr).toBe(360);
+  });
+  it("sprint and Acc/Dec B2-3 = own match × the day-type standard", () => {
+    const d = one(player()).perDay[0];
+    expect(d.accHi).toBe(36);
+    expect(d.decHi).toBe(40);
+    expect(d.sprint).toBe(20);
+    const mixed = one(player(), [{ ratio: 1, matchPct: 85, dayType: "mixed" }]).perDay[0];
+    expect(mixed.accHi).toBe(26);
+    expect(mixed.sprint).toBe(60);
+  });
+  it("the sprint standard runs the other way from the mechanical one: running day high, mechanical day low", () => {
+    const sprintOn = (dayType: PlayerWeekDay["dayType"]) => one(player(), [{ ratio: 1, matchPct: 60, dayType }]).perDay[0].sprint as number;
+    expect(sprintOn("locomotive")).toBeGreaterThan(sprintOn("mixed"));
+    expect(sprintOn("mixed")).toBeGreaterThan(sprintOn("mechanical"));
+  });
+  it("it needs no IMA feed: a Lite team gets it too", () => {
+    expect(one(player({ match: { ...MATCH, cod: null, fr: null, stride: null } })).perDay[0].accHi).toBe(36);
+  });
+  it("no match value, no day-type, or a recovering starter fall back to baseline × ratio", () => {
+    expect(one(player({ match: { ...MATCH, sprint: 0 } })).perDay[0].sprint).toBe(72);
+    expect(one(player(), [{ ratio: 1, matchPct: 60, dayType: null }]).perDay[0].accHi).toBe(20);
+    const topup: PlayerWeekDay = { ratio: 0.5, matchPct: 22, dayType: "topup" };
+    expect(one(player(), [topup]).perDay[0].accHi).toBe(10);
+    expect(one(player({ usualMinutes: 15 }), [topup]).perDay[0].accHi).toBe(28);
   });
   it("no match value on an IMA variable falls back to baseline × ratio", () => {
     const d = one(player({ match: { ...MATCH, accel: null } })).perDay[0];
@@ -44,7 +68,8 @@ describe("training days", () => {
     expect(r.week.accel).not.toBeNull();
   });
   it("a real 0 stays 0 on variables where it can happen, like sprint distance", () => {
-    expect(one(player({ baseline: { ...BASE, sprint: 0 } })).perDay[0].sprint).toBe(0);
+    const noDayType: PlayerWeekDay = { ratio: 1, matchPct: 60, dayType: null };
+    expect(one(player({ baseline: { ...BASE, sprint: 0 } }), [noDayType]).perDay[0].sprint).toBe(0);
   });
   it("no recent training: the match value × the day's share, not a full match on every day", () => {
     const d = one(player({ baseline: null })).perDay[0];
@@ -141,6 +166,9 @@ describe("the table", () => {
   it("the per-day note states the day's target", () => {
     expect(dayTargetNote(mech).en).toContain("about 80%");
     expect(dayTargetNote({ ratio: 1, matchPct: 50, dayType: null }).en).toContain("MD-day");
-    expect(dayTargetNote(mech, false).en).not.toContain("Accelerations");
+    expect(dayTargetNote(mech).en).toContain("sprint about 10%");
+    expect(dayTargetNote(mech, false).en).not.toContain("changes of direction");
+    expect(dayTargetNote(mech, false).en).toContain("Hard accelerations about 90%");
+    expect(dayTargetNote({ ratio: 1, matchPct: 50, dayType: null }, false).en).toContain("recent training load");
   });
 });

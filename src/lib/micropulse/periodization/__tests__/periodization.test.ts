@@ -402,10 +402,10 @@ test("buildCalendarBlock: reproduces the demo microcycle (Sat/Sun alternation, t
   assert.ok(b.weeks[5].restDays >= b.weeks[0].restDays);
   assert.ok(b.weeks[5].pctRunning! < b.weeks[3].pctRunning!);
   assert.equal(b.legend.length, 7);
-  // Mechanical / IMA axis: the match day carries the exact unit; a mechanical day over-shoots Acc/Dec B2–3
-  // (share 1.30) while the Locomotive day carries the highest stride and lower efforts (the split).
+  // Mechanical / IMA axis: the match day carries the exact unit; a mechanical day reaches the research standard
+  // for Acc/Dec B2–3 (90%) while the Locomotive day carries the highest stride and lower efforts (the split).
   assert.equal(w1match.accHiEff, 40); assert.equal(w1match.decHiEff, 52); assert.equal(w1match.stride, 300);
-  assert.equal(mech.accHiEff, Math.round(40 * 1.30)); // 52, over match's 40
+  assert.equal(mech.accHiEff, Math.round(40 * 0.90)); // 36, under match's 40
   const loco = b.weeks[0].days.find((d) => d.type === "locomotive")!;
   assert.ok(loco.stride! > mech.stride!);            // stride highest on the running day
   assert.ok(mech.accHiEff! > loco.accHiEff!);        // efforts highest on the mechanical day
@@ -865,5 +865,34 @@ describeIma("calibrateImaShares — a team's own norm, compared to the standard"
     expectIma(cmp.mechanical.cod).toBeUndefined();
     expectIma(cmp.mechanical.accel).toBeDefined();
     expectIma(compareImaNormToReference(calibrateImaShares(days, ref, 3)).mechanical).toEqual({});
+  });
+});
+
+import { CAL_SHARE, CAL_SHARE_HI, CAL_SHARE_HI_REF } from "../index";
+describeIma("Meso calendar — Acc/Dec B2-3 and sprint follow the research standard", () => {
+  const TYPES = ["mechanical", "mixed", "locomotive", "activation", "topup"] as const;
+  itIma("every value lies inside its published range, and every sprint value says what backs it", () => {
+    for (const t of TYPES) for (const k of ["accHi", "decHi", "sprint"] as const) {
+      const [lo, hi] = CAL_SHARE_HI_REF[t][k].range;
+      expectIma(CAL_SHARE_HI[t][k]).toBeGreaterThanOrEqual(lo);
+      expectIma(CAL_SHARE_HI[t][k]).toBeLessThanOrEqual(hi);
+    }
+    expectIma(CAL_SHARE_HI_REF.locomotive.sprint.evidence).toBe("measured");
+    expectIma(CAL_SHARE_HI_REF.mixed.sprint.evidence).toBe("derived");
+  });
+  itIma("a week of sprint shares sits inside the published weekly range", () => {
+    const week = TYPES.reduce((a, t) => a + CAL_SHARE_HI[t].sprint, 0);
+    expectIma(week).toBeGreaterThanOrEqual(0.03);
+    expectIma(week).toBeLessThanOrEqual(1.3);
+  });
+  itIma("the legacy accdec weights stay equal to the standard, so there is one source", () => {
+    for (const t of TYPES) expectIma(CAL_SHARE[t].accdec).toBe(CAL_SHARE_HI[t].accHi);
+  });
+  itIma("the calendar plans Acc/Dec B2-3 from it", () => {
+    const unit = { dist: 10000, hsr: 800, load: 1000, accdec: 200, accHiEff: 100, decHiEff: 100, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
+    const w1 = buildCalendarBlock({ unit, startDate: "2026-09-07", numWeeks: 4, scopeName: "Team", scopePos: null, baseOverloadPct: 100 }).weeks[0].days;
+    const mech = w1.find((d) => d.type === "mechanical");
+    expectIma(mech?.accHiEff).toBe(90);
+    expectIma(mech?.decHiEff).toBe(80);
   });
 });
