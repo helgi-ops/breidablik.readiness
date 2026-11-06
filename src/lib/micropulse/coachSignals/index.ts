@@ -8,6 +8,8 @@
  * becomes it. Rules decide; no AI. Bilingual EN/IS. IO-free / serialisable.
  */
 
+import { DAY_TYPE_LABEL, ENOUGH_LABEL, ENOUGH_UNIT, sessionOutliers, type SessionEnough } from "@/lib/micropulse/sessionEnough";
+
 export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
 export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load" | "post_match_recovery"
@@ -144,6 +146,52 @@ export function deriveSessionEnoughSignal(resp: SessionEnoughLite | null): Coach
       is: "Lýsandi — hreyfing æfingar vs kröfur leiks fyrir daginn; stilltu næstu æfingu, ekki readiness-litinn.",
     },
   };
+}
+
+/**
+ * Per-player chips for the few players who stood out from their squad on the last session (sessionOutliers).
+ * Level stays "watch": it sits on the Decision Summary card and never promotes anyone into Needs attention.
+ * Descriptive planning feedback about one session, never the readiness colour.
+ */
+export function derivePlayerSessionEnoughSignals(enough: SessionEnough | null | undefined): PlayerSignal[] {
+  if (!enough) return [];
+  const pct = (n: number) => (n > 300 ? ">300%" : `${n}%`);
+  const join = (xs: string[], and: string) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} ${and} ${xs[xs.length - 1]}` : xs.join(""));
+  const tagOf = (lang: "en" | "is") => [
+    [enough.mdLabel ?? "", enough.dayType ? DAY_TYPE_LABEL[enough.dayType][lang] : ""].filter(Boolean).join(" "),
+    enough.sessionDate ?? "",
+  ].filter(Boolean).join(" · ");
+  return sessionOutliers(enough).map((o) => {
+    const top = o.vars.slice(0, 2);
+    const line = (lang: "en" | "is", and: string, ofTarget: string, squad: string) =>
+      `${tagOf(lang)}: ${join(top.map((v) => `${ENOUGH_LABEL[v.key][lang].toLowerCase()} ${pct(v.pctOfTarget)}`), and)} ${ofTarget} (${squad} ${join(top.map((v) => pct(v.squadPct)), and)}).`;
+    const under = o.direction === "under";
+    return {
+      playerId: o.playerId,
+      signal: {
+        engine: "session_enough" as const,
+        level: "watch" as SignalLevel,
+        label: under
+          ? { en: "Under on last session", is: "Undir á síðustu æfingu" }
+          : { en: "Over on last session", is: "Yfir á síðustu æfingu" },
+        why: {
+          en: [line("en", "and", "of the day's target", "squad")],
+          is: [line("is", "og", "af markmiði dagsins", "hópurinn")],
+        },
+        confidence: o.refMatches >= 5 ? "high" : "moderate",
+        counterfactual: under && o.need
+          ? {
+              en: `~${o.need.count} more ${ENOUGH_UNIT[o.need.key].en} would have reached the day's target. One session's movement, not a readiness verdict.`,
+              is: `~${o.need.count} fleiri ${ENOUGH_UNIT[o.need.key].is} hefðu náð markmiði dagsins. Hreyfing á einni æfingu, ekki readiness-dómur.`,
+            }
+          : {
+              en: "Fine if planned; worth a look close to a match. One session's movement, not a readiness verdict.",
+              is: "Í lagi ef það var ætlunin; vert að skoða nálægt leik. Hreyfing á einni æfingu, ekki readiness-dómur.",
+            },
+        href: "/coach/post-training",
+      },
+    };
+  });
 }
 
 // ── form-vs-state → "genuine form dip" signal ────────────────────────────────

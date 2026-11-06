@@ -198,3 +198,77 @@ describe("day-type aware judging", () => {
     expect(r.players.find((p) => p.playerId === "b1")?.byVar.imaAccel.targetPct).toBe(55);
   });
 });
+
+import { sessionOutliers } from "@/lib/micropulse/sessionEnough";
+import { derivePlayerSessionEnoughSignals } from "@/lib/micropulse/coachSignals";
+
+describe("sessionOutliers — who stood out from the squad", () => {
+  // Mechanical day: target 80% of a match. `f` = share of a match on Acc/Dec/CoD.
+  const mech = (players: EnoughPlayerInput[]) => buildSessionEnough({ ...base, mdLabel: "MD-5", matchPct: 60, dayType: "mechanical", dayTypeSource: "meso", squadSize: players.length, players });
+  const squad = (n: number) => Array.from({ length: n }, (_, i) => player(`s${i}`, 60, 1, atMatchShare(0.8)));
+
+  it("names a player well under the target and the squad, with a counterfactual", () => {
+    const o = sessionOutliers(mech([...squad(9), player("low", 60, 1, atMatchShare(0.4))]));
+    expect(o.map((x) => [x.playerId, x.direction])).toEqual([["low", "under"]]);
+    expect(o[0].vars).toHaveLength(3);
+    expect(o[0].need?.count).toBeGreaterThan(0);
+  });
+
+  it("names a player well over the target and the squad", () => {
+    const o = sessionOutliers(mech([...squad(9), player("high", 60, 1, atMatchShare(1.3))]));
+    expect(o.map((x) => [x.playerId, x.direction])).toEqual([["high", "over"]]);
+    expect(o[0].need).toBeNull();
+  });
+
+  it("needs two movement types: one short type is not a story", () => {
+    const one = player("one", 60, 1, { ...atMatchShare(0.8), imaAccel: REF.imaAccel! * 0.3 });
+    expect(sessionOutliers(mech([...squad(9), one]))).toEqual([]);
+  });
+
+  it("doesn't name someone short of the target but in line with a light squad", () => {
+    const light = Array.from({ length: 10 }, (_, i) => player(`l${i}`, 60, 1, atMatchShare(0.5)));
+    expect(sessionOutliers(mech(light))).toEqual([]);
+  });
+
+  it("returns nothing past one third of the judged players", () => {
+    const lows = Array.from({ length: 4 }, (_, i) => player(`low${i}`, 60, 1, atMatchShare(0.3)));
+    expect(sessionOutliers(mech([...squad(6), ...lows]))).toEqual([]);
+  });
+
+  it("skips team-reference players and shortened sessions", () => {
+    const team = player("team", 60, 1, atMatchShare(0.3), { refSource: "team", refMatches: 1 });
+    const short = player("short", 60, 1, atMatchShare(0.2), { partial: true });
+    expect(sessionOutliers(mech([...squad(9), team, short]))).toEqual([]);
+  });
+
+  it("ignores a movement type nobody in the squad has on record", () => {
+    const noFr = (id: string, f: number) => player(id, 85, 1, { ...atMatchShare(f), frDistance: 0, strideHi: 0 });
+    const r = buildSessionEnough({ ...base, dayType: "locomotive", dayTypeSource: "meso", players: Array.from({ length: 6 }, (_, i) => noFr(`p${i}`, 0.6)) });
+    expect(sessionOutliers(r)).toEqual([]);
+  });
+
+  it("names nobody without a verdict", () => {
+    expect(sessionOutliers(null)).toEqual([]);
+    expect(sessionOutliers(emptyEnough("no_session"))).toEqual([]);
+  });
+
+  it("the signal says who, what and how to read it, in both languages, as a watch", () => {
+    const low = player("low", 60, 1, atMatchShare(0.4));
+    const [s] = derivePlayerSessionEnoughSignals(mech([...squad(9), low]));
+    expect(s.playerId).toBe("low");
+    expect(s.signal.engine).toBe("session_enough");
+    expect(s.signal.level).toBe("watch");
+    expect(s.signal.label.en).toBe("Under on last session");
+    expect(s.signal.why.en[0]).toContain("MD-5 Mechanical");
+    expect(s.signal.why.en[0]).toContain("of the day's target (squad");
+    expect(s.signal.why.is[0]).toContain("af markmiði dagsins");
+    expect(s.signal.counterfactual?.en).toContain("not a readiness verdict");
+    expect(derivePlayerSessionEnoughSignals(null)).toEqual([]);
+  });
+
+  it("caps an absurd percentage in the text", () => {
+    const wild = player("wild", 60, 1, atMatchShare(8));
+    const [s] = derivePlayerSessionEnoughSignals(mech([...squad(9), wild]));
+    expect(s.signal.why.en[0]).toContain(">300%");
+  });
+});

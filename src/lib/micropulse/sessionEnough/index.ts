@@ -47,7 +47,7 @@ export const ENOUGH_TECH: Record<EnoughVar, string> = {
 };
 
 /** Unit noun for "~N more … per player". */
-const UNIT: Record<EnoughVar, Bi> = {
+export const ENOUGH_UNIT: Record<EnoughVar, Bi> = {
   imaAccel: { en: "accelerations", is: "hraðaaukningar" },
   imaDecel: { en: "braking actions", is: "hemlanir" },
   imaCod: { en: "changes of direction", is: "stefnubreytingar" },
@@ -449,8 +449,8 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
     const need = Math.max(1, Math.ceil(cf.dayTarget * 0.85 - cf.actual));
     const L = ENOUGH_LABEL[cf.key];
     counterfactual = {
-      en: `~${need} more ${UNIT[cf.key].en} per player would have brought ${L.en.toLowerCase()} up to the day's target${verdict === "mostly" && shortVars.length === 1 ? " — and made this a yes" : ""}.`,
-      is: `~${need} fleiri ${UNIT[cf.key].is} á leikmann hefðu komið ${L.is.toLowerCase()} upp í markmið dagsins${verdict === "mostly" && shortVars.length === 1 ? " — og gert þetta að já" : ""}.`,
+      en: `~${need} more ${ENOUGH_UNIT[cf.key].en} per player would have brought ${L.en.toLowerCase()} up to the day's target${verdict === "mostly" && shortVars.length === 1 ? " — and made this a yes" : ""}.`,
+      is: `~${need} fleiri ${ENOUGH_UNIT[cf.key].is} á leikmann hefðu komið ${L.is.toLowerCase()} upp í markmið dagsins${verdict === "mostly" && shortVars.length === 1 ? " — og gert þetta að já" : ""}.`,
     };
   }
 
@@ -464,4 +464,55 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
     state: "ok", sessionDate, mdLabel, matchPct, dayType, dayTypeSource: input.dayTypeSource ?? null, focusNote, verdict, headline,
     facts: facts.slice(0, 3), counterfactual, overNote, team, players, week, confidence, citations: ENOUGH_CITATIONS,
   };
+}
+
+// ── Players who stood out from the squad on this session ──────────────────────
+/** Below this share of the squad's median on a movement type (and short of the target) = under. */
+export const OUTLIER_UNDER_VS_SQUAD = 0.8;
+/** Above this share of the squad's median on a movement type (and well over the target) = over. */
+export const OUTLIER_OVER_VS_SQUAD = 1.2;
+const OUTLIER_UNDER_PCT = 85, OUTLIER_OVER_PCT = 140, OUTLIER_MIN_VARS = 2;
+
+export type SessionOutlier = {
+  playerId: string;
+  name: string;
+  direction: "under" | "over";
+  refMatches: number;
+  vars: Array<{ key: EnoughVar; pctOfTarget: number; squadPct: number }>;
+  /** How many more of the furthest-short movement type would have reached the day's target (under only). */
+  need: { key: EnoughVar; count: number } | null;
+};
+
+/**
+ * The few players worth naming on Decision Summary: on at least two of the day's judged movement types they
+ * missed (or well overshot) the target AND stood out from their own squad. A session that was light for
+ * everyone isn't a per-player story, so past one third of the judged players it returns nothing; the team
+ * chip already says it. Judged against own matches only (a team reference is too weak to single a player out);
+ * shortened sessions and recovering starters are never named. Descriptive, never the readiness colour. Pure.
+ */
+export function sessionOutliers(enough: SessionEnough | null | undefined): SessionOutlier[] {
+  if (!enough || enough.state !== "ok" || !enough.verdict) return [];
+  // A squad median of 0 means nobody has that movement type on record, which says nothing about a player.
+  const squad = new Map(enough.team.filter((t) => t.focus && (t.pctOfTarget ?? 0) > 0).map((t) => [t.key, t.pctOfTarget as number]));
+  const judged = enough.players.filter((p) => !p.partial && !p.recovering && p.verdict !== "no_data");
+  const out: SessionOutlier[] = [];
+  for (const p of judged) {
+    if (p.refSource !== "own") continue;
+    const pick = (hit: (pct: number, squadPct: number) => boolean) => [...squad.entries()].flatMap(([key, squadPct]) => {
+      const pct = p.byVar[key].pctOfTarget;
+      return pct != null && hit(pct, squadPct) ? [{ key, pctOfTarget: pct, squadPct }] : [];
+    });
+    const under = pick((pct, s) => pct < OUTLIER_UNDER_PCT && pct <= s * OUTLIER_UNDER_VS_SQUAD);
+    const over = pick((pct, s) => pct > OUTLIER_OVER_PCT && pct >= s * OUTLIER_OVER_VS_SQUAD);
+    const direction = under.length >= OUTLIER_MIN_VARS ? "under" : over.length >= OUTLIER_MIN_VARS ? "over" : null;
+    if (!direction) continue;
+    const vars = (direction === "under" ? under : over).sort((a, b) => (direction === "under" ? a.pctOfTarget - b.pctOfTarget : b.pctOfTarget - a.pctOfTarget));
+    let need: SessionOutlier["need"] = null;
+    if (direction === "under") {
+      const c = p.byVar[vars[0].key];
+      if (c.dayTarget != null && c.actual != null) need = { key: vars[0].key, count: Math.max(1, Math.ceil(c.dayTarget * 0.85 - c.actual)) };
+    }
+    out.push({ playerId: p.playerId, name: p.name, direction, refMatches: p.refMatches, vars, need });
+  }
+  return out.length * 3 > judged.length ? [] : out;
 }

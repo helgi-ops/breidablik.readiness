@@ -126,6 +126,9 @@ export type DecisionSummaryRow = {
    *  (rpeExpectation engine). Descriptive planning feedback — never the colour. */
   _yesterday_rpe?: number | null;
   _yesterday_md_day?: string | null;
+  /** Set only when this player stood out from the squad on the last session ("Did we do enough?" outlier
+   *  rule). Text already localized by the dashboard. Descriptive planning feedback — never the colour. */
+  _last_session_enough?: { direction: "under" | "over"; label: string; text: string; tip: string } | null;
   /** Soft check-in-reliability note when the player's 28-day wellness SD is at
    *  either tail (near-constant OR erratic), so a flag may rest on an unreliable
    *  personal norm. Descriptive data-quality context — NEVER a verdict, never the
@@ -1942,6 +1945,23 @@ const RpeExpectationChip: FC<{ row: DecisionSummaryRow; lang?: Lang; compact?: b
   );
 };
 
+const SessionEnoughChip: FC<{ row: DecisionSummaryRow; compact?: boolean }> = ({ row, compact = false }) => {
+  const s = row._last_session_enough;
+  if (!s) return null;
+  const tone = s.direction === "under" ? "border-amber-300 bg-amber-50 text-amber-900" : "border-slate-200 bg-slate-50 text-slate-700";
+  return (
+    <div className="w-full mt-0.5">
+      <span
+        className={`inline-flex items-start gap-1 rounded border leading-snug ${tone} ${compact ? "px-1.5 py-0.5 text-[9px]" : "px-3 py-1.5 text-[12.5px]"}`}
+        title={s.tip}
+      >
+        <span className="font-semibold shrink-0">{s.label}:</span>
+        <span>{s.text}</span>
+      </span>
+    </div>
+  );
+};
+
 /** Compact readiness + load strip for player cards */
 const ReadinessLoadStrip: FC<{ row: DecisionSummaryRow; lang?: Lang }> = ({ row, lang = "EN" }) => {
   const readiness = getReadinessItems(row);
@@ -2136,6 +2156,15 @@ const ReadinessLoadDetail: FC<{
               {lang !== "IS" ? "Intensity vs plan" : "Ákefð vs áætlun"}
             </p>
             <RpeExpectationChip row={row} lang={lang} />
+          </div>
+        )}
+        {/* Movement vs the day's target, only for a player who stood out from the squad. */}
+        {row._last_session_enough && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">
+              {lang !== "IS" ? "Movement vs plan" : "Hreyfing vs áætlun"}
+            </p>
+            <SessionEnoughChip row={row} />
           </div>
         )}
         {/* Soft check-in-reliability note — descriptive only, never the verdict/colour.
@@ -2986,6 +3015,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
         {/* Yesterday's RPE vs planned intensity (rendered independently of the
             strip's early-return, so it shows whenever an RPE was logged). */}
         <RpeExpectationChip row={row} lang={lang} compact />
+        <SessionEnoughChip row={row} compact />
       </div>
     </div>
   );

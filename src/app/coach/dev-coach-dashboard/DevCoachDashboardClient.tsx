@@ -9345,6 +9345,19 @@ export default function CoachPage() {
                 // Yesterday's sRPE + MD-day → RPE-vs-plan chip (rpeExpectation engine).
                 _yesterday_rpe: rpeYesterday.byPlayer[r.player_id] ?? null,
                 _yesterday_md_day: rpeYesterday.mdDay,
+                // Stood out from the squad on the last session ("Did we do enough?"). Team-level
+                // session_enough has no playerId, so anything here is this player's own.
+                _last_session_enough: (() => {
+                  const s = (perPlayerSignals[String(r.player_id)] ?? []).find((x) => x.engine === "session_enough");
+                  if (!s) return null;
+                  const L = lang === "IS" ? "is" : "en";
+                  return {
+                    direction: s.label.en.startsWith("Under") ? ("under" as const) : ("over" as const),
+                    label: s.label[L],
+                    text: s.why[L][0] ?? "",
+                    tip: s.counterfactual?.[L] ?? "",
+                  };
+                })(),
                 _checkin_reliability: checkinReliability[r.player_id] ?? null,
                 // Team's planned day type for today (TRAIN/RECOVERY/GAME/OFF).
                 // Drives the OFF_DAY verdict override in the modal. Week Setup

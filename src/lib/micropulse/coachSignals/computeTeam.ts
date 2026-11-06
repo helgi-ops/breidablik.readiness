@@ -15,7 +15,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  deriveGamePlanFitSignal, derivePostTrainingSignal, deriveSessionEnoughSignal, deriveMatchMinutesSignal,
+  deriveGamePlanFitSignal, derivePostTrainingSignal, deriveSessionEnoughSignal, derivePlayerSessionEnoughSignals, deriveMatchMinutesSignal,
   deriveFormVsStateSignal, derivePlayerFormVsStateSignals,
   deriveRobustnessTeamSignal, derivePlayerRobustnessSignals,
   mergeRecoveryReads, deriveWearableRecoveryTeamSignal, derivePlayerWearableRecoverySignals,
@@ -134,7 +134,7 @@ export async function computeTeamSignals(sb: SupabaseClient, teamId: string, tod
   }
 
   const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), deriveSessionEnoughSignal(enoughRead), mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase, cccGate, loadAcwr, sprintDrop, strideFatigue].map((s) => ({ ...s, playerId: null }));
-  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers, ...cccGatePlayers, ...loadAcwrPlayers, ...sprintDropPlayers, ...strideFatiguePlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
+  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers, ...cccGatePlayers, ...loadAcwrPlayers, ...sprintDropPlayers, ...strideFatiguePlayers, ...derivePlayerSessionEnoughSignals(enoughRead)].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }
 
