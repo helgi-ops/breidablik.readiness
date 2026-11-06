@@ -1100,7 +1100,7 @@ export function recommendBlockGoal(opts: {
       // Runway to the next key fixture / congestion → peak & freshen.
       const r: Bi[] = [];
       if (nearKey) r.push(opts.phaseKey === "competitive"
-        ? { en: `Next fixture ~${opts.weeksToNextFixture} week(s) out — compete: hold the standard week and stay fresh.`, is: `Næsti leikur eftir ~${opts.weeksToNextFixture} viku(r) — keppni: haltu staðalvikunni og vertu ferskur.` }
+        ? { en: `${opts.weeksToNextFixture === 0 ? "Next fixture this week" : `Next fixture ~${opts.weeksToNextFixture} week(s) out`} — compete: hold the standard week and stay fresh.`, is: `${opts.weeksToNextFixture === 0 ? "Næsti leikur í þessari viku" : `Næsti leikur eftir ~${opts.weeksToNextFixture} viku(r)`} — keppni: haltu staðalvikunni og vertu ferskur.` }
         : { en: `Key fixture ~${opts.weeksToNextFixture} week(s) out — peak and taper (low volume, high intensity).`, is: `Mikilvægur leikur eftir ~${opts.weeksToNextFixture} viku(r) — toppaðu og trappaðu niður (lítið magn, mikil ákefð).` });
       if (congested) r.push({ en: "Congested run — hold freshness, don't accumulate.", is: "Þéttur leikjakafli — haltu ferskleika, ekki safna álagi." });
       if (opts.prevGoal !== "transmute" && opts.prevGoal !== "accum") r.push({ en: "Note: little build behind this — a short sharpening block, not a true peak.", is: "Athuga: lítil uppbygging að baki — stutt skerpingar-lota, ekki fullur toppur." });
