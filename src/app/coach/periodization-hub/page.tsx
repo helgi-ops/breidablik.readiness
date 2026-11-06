@@ -38,6 +38,8 @@ import { weeklyTargetFromMatch } from "@/lib/micropulse/periodization";
 import { upcomingInternationalBreaks, intlBreakKey, type IntlBreak } from "@/lib/micropulse/internationalBreaks";
 import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
 import { mdOffset } from "@/lib/micropulse/periodization/periodizationModel";
+import { buildDayDrillSheet } from "@/lib/micropulse/dayDrillSheet";
+import { fetchDrillLibrary } from "@/lib/micropulse/dayDrillLibraryFetch";
 import { recommendTestingSchedule, testsForBlock, TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
@@ -940,9 +942,17 @@ export default function PeriodizationHubPage() {
     return buildPlayerBlock(plan, player, { blkStart: win.blkStart, blkWeeks: win.blkWeeks, phaseLabel: win.phaseLabel, matchDates: win.matchDates, goal: wGoal, deload: blockDeloadOf(wb), hold: holdsStandardWeek(wb?.inSeason, wGoal), camps: campRegions, friendlyMatches: winIsPreseason, asOf: new Date().toISOString().slice(0, 10) });
   }, [player, plan, mesoBlocks, blockGoals, campRegions]);
 
+  // Drills by MD day for the PDFs (football): the coach's own library drills that fit each training day
+  // type of the block, beside the general ideas. Read at export time; an empty library leaves the ideas.
+  async function dayDrillsFor(block: CalendarBlock) {
+    if (isBasketball || (teamSport != null && teamSport.toLowerCase() !== "football")) return null;
+    const mb = mesoBlocks.find((b) => b.start <= block.startDate && block.startDate < b.end);
+    return buildDayDrillSheet({ days: block.weeks.flatMap((w) => w.days), rows: await fetchDrillLibrary(await authHeader()), phase: mb && !mb.inSeason ? "preseason" : "inseason" });
+  }
+
   async function exportPlayerBlock() {
     if (!playerBlock || !plan) return;
-    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: playerBlock.block, isKinexon }, is ? "IS" : "EN");
+    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: playerBlock.block, isKinexon, dayDrills: await dayDrillsFor(playerBlock.block) }, is ? "IS" : "EN");
   }
 
   // ── AUTO-SAVE the block skeleton to Week Setup on every edit ─────────────────────────────────────
@@ -1138,7 +1148,7 @@ export default function PeriodizationHubPage() {
   async function exportBlock() {
     const blk = mesoCalBlock; // player scope exports HIS block; team scope the team block
     if (!blk || !plan) return;
-    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: blk, isKinexon, fullMatchPl }, is ? "IS" : "EN");
+    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: blk, isKinexon, fullMatchPl, dayDrills: await dayDrillsFor(blk) }, is ? "IS" : "EN");
   }
 
   // Write the block skeleton back into Week Setup (week_setups + week_plans) so the two stay in sync.
@@ -1251,7 +1261,7 @@ export default function PeriodizationHubPage() {
       tier: plan.tier ? { label: plan.tier.label, loadSource: plan.tier.loadSource, confidence: plan.tier.confidence } : null,
       phases: plan.phases.map((ph) => ({ label: ph.label, start: ph.start, end: ph.end, weeks: ph.weeks, matches: ph.matches, rationale: ph.rationale })),
       congested: plan.congested ?? [], baselines, mdDemand, teamAxes: plan.teamBaseline?.axes ?? null, blocks,
-      block: calBlock, playerBlocks, mesoPlan, players, preseasonStart, plannedVolume, weeklyLoad,
+      block: calBlock, dayDrills: calBlock ? await dayDrillsFor(calBlock) : null, playerBlocks, mesoPlan, players, preseasonStart, plannedVolume, weeklyLoad,
     }, is ? "IS" : "EN");
   }
 

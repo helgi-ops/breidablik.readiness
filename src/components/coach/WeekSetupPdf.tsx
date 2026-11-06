@@ -24,7 +24,9 @@ export type WeekSetupPdfDay = {
   dose?: { load: number | null; srpe: number | null; kpis: Array<{ label: string; value: number; unit: string }> } | null;
   // Detailed coaching idea (train days, football): physical focus + planned load band + est. duration +
   // sRPE + on-pitch examples (resolved to the PDF's language). Omitted → the card shows the compact row.
-  idea?: { focus: string; band: string | null; bandColor: string | null; durationMin: number | null; srpe: number | null; pitch: Array<{ text: string; cite: string }> } | null;
+  // `drills` = the coach's own library drills that fit the day (rule-picked); `lowMinutes` = an MD+1 day,
+  // where those drills are for the players who played little.
+  idea?: { focus: string; band: string | null; bandColor: string | null; durationMin: number | null; srpe: number | null; pitch: Array<{ text: string; cite: string }>; drills?: Array<{ name: string; meta: string }>; lowMinutes?: boolean } | null;
   // Indoor teams (basketball / Kinexon) have no football day-idea — show the planned load
   // for the day instead: a band + the team's expected Player Load from the MD-day taper.
   dayLoad?: { band: string | null; bandColor: string | null; pl: number | null; durationMin: number | null } | null;
@@ -88,7 +90,7 @@ const toneOfHex = (hex: string | null | undefined): Tone => {
 const L = {
   EN: { title: "week plan", doc: "Week plan", prepared: "Prepared for the coaching staff · MicroPulse", phase: "Phase", wtype: "Week type",
     pre: "Pre-season start", week: "Week", anchor: "anchor", conf: "confidence", weekly: "Weekly load", sess: "Per session", testing: "Testing this week",
-    pl: "PL", srpe: "sRPE", match: "Match", off: "Off", min: "min", onPitch: "On the pitch", days: "The days", matchMult: "× match", ofMatch: "of one match",
+    pl: "PL", srpe: "sRPE", match: "Match", off: "Off", min: "min", onPitch: "On the pitch", ownDrills: "From your library", ownLowMin: "From your library, for the players who played little", ideas: "Ideas", days: "The days", matchMult: "× match", ofMatch: "of one match",
     trainDays: (n: number) => `${n} training day${n === 1 ? "" : "s"}`, matches: (n: number) => `${n} match${n === 1 ? "" : "es"}`, offDays: (n: number) => `${n} off`,
     legForce: "Force / mechanical", legVel: "Velocity / speed", legAct: "Activation / polish", legRec: "Recovery", legMatchOff: "Match / off",
     plWeekly: "Per-player weekly load", plWeeklyLead: "Weekly totals, individualised from each player's own recent session load (the main GPS + IMA variables) across the week's training days. Descriptive — a feed that lacks a metric shows \"-\".",
@@ -107,10 +109,10 @@ const L = {
     plKxMd: "Kinexon variables — per MD-day", plKxMdLead: "Team weekly total of each Kinexon variable, spread across the MD-days by the same taper. Descriptive.", metricCol: "Variable",
     player: "Player", role: "Role", wk: "Week PL", dist: "Dist", hsr: "HSR", acc: "Acc", dec: "Dec", cod: "CoD", coo: "CoO", exert: "Exert", mech: "Mech", conf2: "conf", total: "Total", starter: "starter", rot: "rotation", lowMin: "low-min",
     note: "Descriptive planning - a starting point per the day's focus, never a norm to obey, and never the readiness colour.",
-    foot: "Descriptive planning — the planned load (low/moderate/high), duration and on-pitch examples are a starting point per the day's focus, never a norm to obey, and never the readiness colour. planSessionLoad (Buchheit 2024) · small-sided games Hill-Haas 2011 · Lacome 2018 · López-Fernández 2019 · Foster (sRPE)." },
+    foot: "Descriptive planning — the planned load (low/moderate/high), duration and on-pitch examples are a starting point per the day's focus, never a norm to obey, and never the readiness colour. Drills from your library are picked by a rule, not AI: the day's type and the pitch size per player (Hill-Haas 2011). The ideas are examples; a citation covers the pitch size, bout length or load level, not the game itself. planSessionLoad (Buchheit 2024) · small-sided games Hill-Haas 2011 · Lacome 2018 · López-Fernández 2019 · Foster (sRPE)." },
   IS: { title: "vikuplan", doc: "Vikuplan", prepared: "Unnið fyrir þjálfarateymið · MicroPulse", phase: "Fasi", wtype: "Vikugerð",
     pre: "Undirbúningur — byrjun", week: "Vika", anchor: "grunnur", conf: "vissa", weekly: "Vikumark", sess: "Á æfingu", testing: "Mælingar þessa viku",
-    pl: "PL", srpe: "sRPE", match: "Leikur", off: "Frí", min: "mín", onPitch: "Á vellinum", days: "Dagarnir", matchMult: "× leikur", ofMatch: "af einum leik",
+    pl: "PL", srpe: "sRPE", match: "Leikur", off: "Frí", min: "mín", onPitch: "Á vellinum", ownDrills: "Úr þínu safni", ownLowMin: "Úr þínu safni, fyrir þá sem spiluðu lítið", ideas: "Hugmyndir", days: "Dagarnir", matchMult: "× leikur", ofMatch: "af einum leik",
     trainDays: (n: number) => `${n} æfingadag${n === 1 ? "ur" : "ar"}`, matches: (n: number) => `${n} leik${n === 1 ? "ur" : "ir"}`, offDays: (n: number) => `${n} frí`,
     legForce: "Kraftur / vélrænt", legVel: "Hraði", legAct: "Virkjun / fínpússun", legRec: "Endurheimt", legMatchOff: "Leikur / frí",
     plWeekly: "Vikulegt álag per leikmann", plWeeklyLead: "Vikusamtölur, einstaklingsmiðaðar frá nýlegu æfingaálagi hvers leikmanns (helstu GPS + IMA breyturnar) yfir æfingadaga vikunnar. Lýsandi — mæling sem gögnin vantar sýnir \"-\".",
@@ -129,7 +131,7 @@ const L = {
     plKxMd: "Kinexon breytur — eftir MD-degi", plKxMdLead: "Vikusamtala liðsins fyrir hverja Kinexon breytu, dreift á MD-dagana með sama taper. Lýsandi.", metricCol: "Breyta",
     player: "Leikmaður", role: "Hlutverk", wk: "Viku PL", dist: "Vegal.", hsr: "HSR", acc: "Hröð.", dec: "Heml.", cod: "Stefnubr.", coo: "Snún.", exert: "Átök", mech: "Vélr.", conf2: "vissa", total: "Alls", starter: "byrjun", rot: "skipt", lowMin: "lág-mín",
     note: "Lýsandi áætlun - upphafspunktur eftir áherslu dagsins, aldrei viðmið til að hlýða, og aldrei readiness-liturinn.",
-    foot: "Lýsandi áætlun — áætlað álag (lágt/miðlungs/hátt), lengd og vallar-dæmi eru upphafspunktur eftir áherslu dagsins, aldrei viðmið til að hlýða, og aldrei readiness-liturinn. planSessionLoad (Buchheit 2024) · fámennir leikir Hill-Haas 2011 · Lacome 2018 · López-Fernández 2019 · Foster (sRPE)." },
+    foot: "Lýsandi áætlun — áætlað álag (lágt/miðlungs/hátt), lengd og vallar-dæmi eru upphafspunktur eftir áherslu dagsins, aldrei viðmið til að hlýða, og aldrei readiness-liturinn. Drillur úr þínu safni eru valdar með reglu, ekki gervigreind: eftir tegund dagsins og svæði á leikmann (Hill-Haas 2011). Hugmyndirnar eru dæmi; heimild á við um svæðið, lotulengdina eða álagið, ekki leikinn sjálfan. planSessionLoad (Buchheit 2024) · fámennir leikir Hill-Haas 2011 · Lacome 2018 · López-Fernández 2019 · Foster (sRPE)." },
 } as const;
 
 function WeekDoc({ payload, lang }: { payload: WeekSetupPdfPayload; lang: Lang }) {
@@ -227,15 +229,29 @@ function WeekDoc({ payload, lang }: { payload: WeekSetupPdfPayload; lang: Lang }
                       {d.strength ? <Text style={[fb(400), { fontSize: 8, color: C.mute }]}>{tx(d.strength)}</Text> : null}
                     </View>
                   )}
+                  {d.kind === "train" && (d.idea?.drills ?? []).length > 0 && (
+                    <View style={{ marginTop: 4 }}>
+                      <Text style={[fb(700), { fontSize: 7, letterSpacing: 0.6, color: C.mute }]}>{tx(d.idea?.lowMinutes ? t.ownLowMin : t.ownDrills).toUpperCase()}</Text>
+                      {(d.idea?.drills ?? []).map((dr, j) => (
+                        <View key={j} style={{ flexDirection: "row", gap: 5, marginTop: 1.5 }}>
+                          <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: C.cobalt, marginTop: 4 }} />
+                          <Text style={[fb(600), { flex: 1, fontSize: 8, lineHeight: 1.3 }]}>
+                            {tx(dr.name)}
+                            {dr.meta ? <Text style={[fb(400), { color: C.mute }]}>{` ${tx(dr.meta)}`}</Text> : null}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
                   {d.kind === "train" && (d.idea?.pitch ?? []).length > 0 && (
                     <View style={{ marginTop: 4 }}>
-                      <Text style={[fb(700), { fontSize: 7, letterSpacing: 0.6, color: C.mute }]}>{t.onPitch.toUpperCase()}</Text>
+                      <Text style={[fb(700), { fontSize: 7, letterSpacing: 0.6, color: C.mute }]}>{((d.idea?.drills ?? []).length > 0 ? t.ideas : t.onPitch).toUpperCase()}</Text>
                       {(d.idea?.pitch ?? []).map((pp, j) => (
                         <View key={j} style={{ flexDirection: "row", gap: 5, marginTop: 1.5 }}>
                           <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: C.ink, marginTop: 4 }} />
                           <Text style={[fb(400), { flex: 1, fontSize: 8, lineHeight: 1.3 }]}>
                             {tx(pp.text)}
-                            {pp.cite ? <Text style={{ color: C.mute }}>{`  (${tx(pp.cite)})`}</Text> : null}
+                            {pp.cite ? <Text style={{ color: C.mute }}>{` (${tx(pp.cite)})`}</Text> : null}
                           </Text>
                         </View>
                       ))}

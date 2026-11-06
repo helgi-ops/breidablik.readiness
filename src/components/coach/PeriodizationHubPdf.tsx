@@ -15,6 +15,8 @@
  */
 
 import { Document, Text, View } from "@react-pdf/renderer";
+import { DayDrillsSection } from "@/components/coach/DayDrillsPdfSection";
+import type { DayDrillRow } from "@/lib/micropulse/dayDrillSheet";
 import { teamMatchUnitNote, type MatchAxes, type MatchUnitAbs, type CalendarBlock, type CalType, type CalDay, type MesoPlan, type Bi } from "@/lib/micropulse/periodization/index";
 import { BrandPage, Body, Bullets, C, Card, Chip, FactRow, Provenance, Section, StatGrid, TONE, Table, Verdict, clean, fb, fh, renderPdfBlob, saveBlob, type Tone } from "@/components/pdf/brand";
 
@@ -37,6 +39,8 @@ export type PeriodizationHubPayload = {
   teamUnit: MatchUnitAbs | null;
   /** A full match in Player Load (the near-full unit), named beside the squad value in `teamUnit`. */
   fullMatchPl?: number | null;
+  /** Drills + ideas per training day type of the team block (football); omitted → not printed. */
+  dayDrills?: DayDrillRow[] | null;
   tier: { label: Bi; loadSource: string; confidence: string } | null;
   phases: Array<{ label: Bi; start: string; end: string; weeks: number; matches: number; rationale: Bi }>;
   congested: Array<{ weekStart: string; matches: number }>;
@@ -449,6 +453,7 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
             <CalWeeks block={block} lang={lang} />
           </Section>
         )}
+        {block && <DayDrillsSection rows={payload.dayDrills} lang={lang} />}
 
         {/* PLAYERS */}
         {/* Keep the title + the table's (fixed, repeating) header from starting alone at a page foot. */}

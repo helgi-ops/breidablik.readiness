@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { dayIdea } from "../dayIdeas";
+import { dayIdea, pitchIdeasFor } from "../dayIdeas";
 
 test("dayIdea: in-season MD day → planned-load band/duration + in-season focus + cited SSG pitch example", () => {
   const mech = dayIdea({ stimulus: "mechanical", character: "MECHANICAL", mdDay: "MD-4", dayType: "TRAIN", focus: "MD-4 Mechanical", phase: "inseason" });
@@ -43,4 +43,27 @@ test("dayIdea: OFF and recovery days carry no load/pitch (OFF) or a low band (re
   assert.ok(rec.load != null && rec.load.band === "low"); // recovery is a low-load day
   assert.equal(rec.pitch.length, 0); // no SSG example for a recovery day
   assert.match(rec.focus.en, /recovery/i);
+});
+
+test("pitchIdeasFor: every training day carries several ideas, MD-1 and MD+1 included; a rest day none", () => {
+  for (const stimulus of ["mechanical", "locomotive", "mixed", "technical"] as const) {
+    assert.equal(pitchIdeasFor({ stimulus, phase: "inseason" }).length, 3);
+    assert.equal(pitchIdeasFor({ stimulus, phase: "preseason" }).length, 2);
+    // The day card keeps the first one, so the screens read as before.
+    assert.deepEqual(dayIdea({ stimulus, mdDay: "MD-3", dayType: "TRAIN", focus: null, phase: "inseason" }).pitch, pitchIdeasFor({ stimulus, phase: "inseason" }).slice(0, 1));
+  }
+  for (const character of ["ACTIVATION", "TOPUP", "RECOVERY"]) assert.ok(pitchIdeasFor({ stimulus: null, character }).length >= 2, character);
+  assert.equal(pitchIdeasFor({ stimulus: null, character: "OFF" }).length, 0);
+  assert.equal(pitchIdeasFor({ stimulus: null, character: null }).length, 0);
+});
+
+test("pitchIdeasFor: both languages on every idea, and a pitch size never prints without its citation", () => {
+  const all = [
+    ...(["mechanical", "locomotive", "mixed", "technical"] as const).flatMap((stimulus) => [...pitchIdeasFor({ stimulus, phase: "inseason" }), ...pitchIdeasFor({ stimulus, phase: "offseason" })]),
+    ...["ACTIVATION", "TOPUP", "RECOVERY"].flatMap((character) => pitchIdeasFor({ stimulus: null, character })),
+  ];
+  for (const p of all) {
+    for (const b of [p.form, p.area, p.bout]) assert.ok(b.en.trim() && b.is.trim(), p.form.en);
+    if (/m²/.test(p.area.en)) assert.match(p.cite, /Hill-Haas 2011/, p.form.en);
+  }
 });

@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { recommendWeekSessions, type WeekPlanDayInput } from "@/lib/micropulse/weekSetup/weekSessionPlan";
 import { dayIdea } from "@/lib/micropulse/dayIdeas";
-import { resolveDrillStimulus } from "@/lib/drill-stimulus";
+import { toDrillPickInput } from "@/lib/micropulse/dayDrillSheet";
 import { pickDrillsForDay, type DrillPickInput, type DaySessionType } from "@/lib/micropulse/pitchSession/dayDrillPicker";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
@@ -97,11 +97,7 @@ export async function GET(req: NextRequest) {
     .or(`and(owner_type.eq.team,team_id.eq.${teamId}),owner_type.eq.public`).is("deleted_at", null).limit(500);
   const drillRows = (drillData ?? []) as DrillRow[];
   const byId = new Map(drillRows.map((d) => [d.id, d]));
-  const pool: DrillPickInput[] = drillRows.map((d) => ({
-    id: d.id, name: d.drill_name, category: d.category,
-    stimulus: resolveDrillStimulus({ vel_b5: d.vel_b5, vel_b6: d.vel_b6, accel_b23: d.accel_b23, decel_b23: d.decel_b23, stimulus_type: (d.stimulus_type as string | null) ?? null }) as DaySessionType | null,
-    areaPerPlayerM2: d.area_per_player_m2, totalPlayers: d.total_players,
-  }));
+  const pool: DrillPickInput[] = drillRows.map((d) => toDrillPickInput({ ...d, stimulus_type: (d.stimulus_type as string | null) ?? null, duration_min: null }));
 
   // MD+1 TOP-UP squad split: players who played < 60 min in the LAST match (and DNPs) get the top-up
   // (loaded toward match demand); those who played ≥ 60 min recover. Injured/rehab players are excluded.

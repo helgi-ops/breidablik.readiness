@@ -16,11 +16,15 @@
  */
 
 import { Document, Text, View } from "@react-pdf/renderer";
+import { DayDrillsSection } from "@/components/coach/DayDrillsPdfSection";
+import type { DayDrillRow } from "@/lib/micropulse/dayDrillSheet";
 import { teamMatchUnitNote, type CalendarBlock, type CalType, type Bi } from "@/lib/micropulse/periodization/index";
 import { BrandPage, Bullets, C, Chip, FactRow, Provenance, Section, StatGrid, TONE, Table, Verdict, clean, fb, fh, renderPdfBlob, saveBlob, type Tone } from "@/components/pdf/brand";
 
 type Lang = "EN" | "IS";
-export type PeriodizationBlockPayload = { teamName: string; block: CalendarBlock; generatedAt?: string; isKinexon?: boolean; fullMatchPl?: number | null };
+export type PeriodizationBlockPayload = { teamName: string; block: CalendarBlock; generatedAt?: string; isKinexon?: boolean; fullMatchPl?: number | null;
+  /** Drills + ideas per training day type (football); omitted → the section isn't printed. */
+  dayDrills?: DayDrillRow[] | null };
 
 /** Day-type → kit tone (row tint + label colour). The day-type label is always printed next to it. */
 const CAL_TONE: Record<CalType, Tone | null> = { mechanical: "red", locomotive: "green", mixed: "cobalt", activation: "neutral", topup: "rtp", match: "amber", rest: null };
@@ -215,6 +219,7 @@ function BlockDoc({ payload, lang }: { payload: PeriodizationBlockPayload; lang:
         </Section>
         {block.notes.length > 0 && <View style={{ marginTop: 2 }} wrap={false}><Bullets items={block.notes.map((n) => bi(n))} size={8} /></View>}
         <Provenance>{tx(t.foot)}</Provenance>
+        <DayDrillsSection rows={payload.dayDrills} lang={lang} />
       </BrandPage>
     </Document>
   );
