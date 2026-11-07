@@ -159,12 +159,13 @@ export async function buildLoadPlanForTeam(
   const from = addDaysISO(sessionDate, -120);
   // buildLoadPlan needs ONE bit from raw_payload_json — the previous-club (pre-
   // transfer) flag — to keep those rows per-player while excluding them from team
-  // aggregates (matchRef, teamAcwr, baseline). Select ONLY that JSON field, not
-  // the whole blob: pulling every row's full raw_payload_json was ~11 MB for a
-  // 120-day squad window and stalled the request (the Pre-session report hung on
-  // "Loading"). isPrevClubRow still reads raw_payload_json.previous_club, so we
-  // rebuild a minimal { previous_club } object per row below.
-  const SELECT_COLS = "player_id, date, source, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, high_speed_distance, sprint_distance, accel_decel_efforts, previous_club:raw_payload_json->>previous_club";
+  // aggregates (matchRef, teamAcwr, baseline). Read it from the `is_previous_club`
+  // column, never from the JSON: pulling the full raw_payload_json was ~11 MB for
+  // a 120-day squad window (the Pre-session report hung on "Loading"), and even
+  // `raw_payload_json->>previous_club` detoasts every ~11 KB blob. isPrevClubRow
+  // still reads raw_payload_json.previous_club, so we rebuild a minimal
+  // { previous_club } object per row below.
+  const SELECT_COLS = "player_id, date, source, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, high_speed_distance, sprint_distance, accel_decel_efforts, is_previous_club";
   const PAGE = 1000;
   const loadRows: Array<Record<string, unknown>> = [];
   for (let offset = 0; ; offset += PAGE) {
@@ -179,11 +180,11 @@ export async function buildLoadPlanForTeam(
       .range(offset, offset + PAGE - 1);
     if (loadErr) throw new Error(loadErr.message);
     if (!page || page.length === 0) break;
-    // Reshape the pulled `previous_club` text back into the minimal raw_payload_json
+    // Reshape the `is_previous_club` flag back into the minimal raw_payload_json
     // shape isPrevClubRow expects, so the per-player-vs-team split is unchanged.
     for (const r of page as Array<Record<string, unknown>>) {
-      const { previous_club: prev, ...rest } = r;
-      loadRows.push({ ...rest, raw_payload_json: prev == null ? null : { previous_club: prev } });
+      const { is_previous_club: prev, ...rest } = r;
+      loadRows.push({ ...rest, raw_payload_json: prev === true ? { previous_club: "true" } : null });
     }
     if (page.length < PAGE) break;
   }

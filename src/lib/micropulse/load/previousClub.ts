@@ -19,30 +19,29 @@
  * query is dual-use — the same rows feed both a per-player and a team result, so
  * only the team roll-up gets filtered). Do NOT apply either to a per-player read.
  *
- * IMPORTANT — why `.or(is.null, neq.true)` and not `.not(...)`:
- * `raw_payload_json->>'previous_club'` is TEXT, and a normal row has the key
- * absent (NULL), not 'false'. So:
- *   - `.not(col, "is", "true")` → `NOT (col IS TRUE)` errors: "argument of IS
- *     TRUE must be type boolean, not type text".
- *   - `.not(col, "eq", "true")` → `NOT (col = 'true')`; for a NULL row that is
- *     `NOT NULL` = NULL, so PostgREST drops every normal (null-flag) row — i.e.
- *     it would wipe the real team data. Catastrophic.
- * The OR form keeps NULL rows (via is.null) and any non-'true' value, dropping
- * only the tagged previous-club rows — matching `col IS DISTINCT FROM 'true'`.
+ * IMPORTANT — filter on the `is_previous_club` column, never on the JSON:
+ * `is_previous_club` (boolean NOT NULL DEFAULT false) mirrors
+ * `raw_payload_json->>'previous_club' = 'true'` and is kept in sync by the
+ * trigger `trg_pled_set_is_previous_club` (migration 20261107190000).
+ * Filtering on `raw_payload_json->>previous_club` detoasts every row's
+ * raw_payload_json (~11 KB each since the Nov 2026 Catapult re-sync): 4.5 s vs
+ * 46 ms for 200 days of one squad, and statement timeouts. Same for SELECTing
+ * `raw_payload_json->>previous_club` — select `is_previous_club` instead.
+ * (Historical trap if you ever must touch the JSON text: a normal row has the
+ * key absent → NULL, so `.not(col, "eq", "true")` drops every normal row.)
  */
 
 /** SQL predicate (for tests / raw SQL): keep rows that are NOT previous-club. */
-export const EXCLUDE_PREV_CLUB_SQL = "(raw_payload_json->>'previous_club') is distinct from 'true'";
+export const EXCLUDE_PREV_CLUB_SQL = "is_previous_club is false";
 
 /**
  * supabase-js `.or(...)` argument that excludes previous-club rows from a team
- * aggregation query while keeping every normal (null-flag) row:
+ * aggregation query while keeping every normal row:
  *   query.or(EXCLUDE_PREV_CLUB_OR)
- * Generates `(raw_payload_json->>'previous_club' IS NULL OR
- *            raw_payload_json->>'previous_club' <> 'true')`.
+ * Generates `(is_previous_club IS FALSE)` — a plain column check, no detoast.
+ * (Kept as an `.or()` argument so existing callers need no change.)
  */
-export const EXCLUDE_PREV_CLUB_OR =
-  "raw_payload_json->>previous_club.is.null,raw_payload_json->>previous_club.neq.true";
+export const EXCLUDE_PREV_CLUB_OR = "is_previous_club.is.false";
 
 /** True when a fetched row is a previous-club (pre-transfer) session. */
 export const isPrevClubRow = (r: { raw_payload_json?: Record<string, unknown> | null } | null | undefined): boolean =>
