@@ -207,49 +207,56 @@ function buildAdCoupling(a: NonNullable<RawDecelInputs["accel_coupling"]>): Metr
   };
 }
 
+/**
+ * "Decel:Sprint coupling" (data key `sprint_coupling`, kept for stability).
+ *
+ * Since migration 20261107110000 the SQL engine's denominator is GPS sprint efforts (velocity band 6) on
+ * outdoor days; an indoor day has no sprint reading and is left out. Before that it was IMA Free Running
+ * band 7+8 strides (long continuous runs, not sprints), which is why the wording stays measured: the ratio
+ * says how much a player brakes relative to his sprinting, within his own norm — never an injury verdict.
+ *
+ * Direction is FLAG-driven (the engine flags on personal-z vs the player's own
+ * 28-day norm and only flags the LOW side). Absolute cut-points are not used.
+ */
 function buildDSprint(d: NonNullable<RawDecelInputs["sprint_coupling"]>): MetricLabel {
   const r = d.recent_ratio;
-  // No sprint/stride signal (e.g. Kinexon, or any team without IMA Free Running):
-  // the ratio is 0 only because there is no data, NOT because the player sprinted
-  // without braking. Return a no-data label so the AI never reads it as a concern.
+  const label = "Decel vs sprint coupling (GPS sprint efforts, outdoor days)";
+  // A within-player ratio is never an injury verdict — these phrases stay forbidden in any direction.
+  const neverSay = ["high-speed injury", "classic injury pattern", "sprint injury"];
+  // No outdoor GPS day in the window (indoor team, or no sprint column): the ratio is 0 only because
+  // there is no data, NOT because of a braking pattern. Return a no-data label so the AI never reads it as a concern.
   if (d.flag === "unknown") {
     return {
-      label: "Decel:Sprint coupling",
-      value_text: "no sprint/stride data — not assessed",
+      label,
+      value_text: "no outdoor GPS sprint data — not assessed",
       direction: "no_data",
       severity: "ok",
-      coach_phrase: "no sprint/stride data is available for this player, so decel:sprint coupling cannot be assessed",
-      forbidden_when_used: ["sprinting without braking", "classic injury pattern", "high-speed injury", "proportional braking", "choppy", "decel-heavy", "accel-heavy"],
+      coach_phrase: "no outdoor GPS sprint data is available for this player in the window, so this braking ratio cannot be assessed",
+      forbidden_when_used: [...neverSay, "proportional braking", "choppy", "decel-heavy", "accel-heavy"],
     };
   }
   let direction: MetricLabel["direction"];
   let severity: Severity;
   let coach_phrase: string;
-  if (r < 0.5 || d.flag === "red") {
-    direction = "below_healthy";
-    severity = r < 0.3 ? "concern" : "watch";
-    coach_phrase = `sprinting without proportional braking (D:Sprint ${r.toFixed(2)}) — classic high-speed injury pattern`;
-  } else if (r > 1.5 || d.flag === "yellow") {
-    direction = "above_healthy";
-    severity = "watch";
-    coach_phrase = `lots of braking relative to sprinting (D:Sprint ${r.toFixed(2)}) — may signal short, choppy movement`;
+  if (d.flag === "red" || d.flag === "yellow") {
+    direction = "below_baseline";
+    severity = d.flag === "red" ? "concern" : "watch";
+    coach_phrase = `less braking than usual relative to his sprint efforts on outdoor days (ratio ${r.toFixed(2)}, below his own norm) — more sprinting and fewer hard stops this week`;
   } else {
-    direction = "in_range";
+    direction = "at_baseline";
     severity = "ok";
-    coach_phrase = `decel and sprint volumes are proportional`;
+    coach_phrase = `braking and sprinting are in his usual proportion on outdoor days`;
   }
   return {
-    label: "Decel:Sprint coupling",
-    value_text: `${r.toFixed(2)} (healthy 0.5–1.5)`,
+    label,
+    value_text: `${r.toFixed(3)} (vs his own 28-day norm)`,
     direction,
     severity,
     coach_phrase,
     forbidden_when_used:
-      direction === "below_healthy"
-        ? ["healthy", "balanced", "proportional"]
-        : direction === "above_healthy"
-          ? ["sprinting without braking", "classic injury pattern"]
-          : ["choppy", "sprint without braking"],
+      direction === "below_baseline"
+        ? [...neverSay, "healthy", "balanced", "proportional", "usual proportion"]
+        : neverSay,
   };
 }
 

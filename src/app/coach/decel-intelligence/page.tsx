@@ -6,7 +6,8 @@
  * Surfaces 4 dimensions per player from the McBurnie framework:
  *   1. Overload exposure (cumulative 28-day vs personal baseline)
  *   2. Underload risk (recent 7-day vs match-day demand)
- *   3. Decel:Sprint coupling (must brake after sprinting)
+ *   3. Decel:Sprint coupling — high-intensity decels ÷ GPS sprint efforts
+ *      (velocity band 6), outdoor days only; indoor days have no sprint reading.
  *   4. Exposure concentration (single-day spike vs distributed volume)
  *
  * Reference: McBurnie, Harper, Jones & Dos'Santos 2022. Sports Medicine.
@@ -145,6 +146,8 @@ export default function CoachDecelIntelligencePage() {
 
       // Provider — drives the "awaiting data" copy on cards whose raw signal
       // (L/R CoD split, IMA Free Running strides) Kinexon doesn't export.
+      // (IMA FR strides = long continuous runs, not sprints; sprint exposure
+      // is GPS-sourced and works for any GPS provider.)
       const { data: teamRow } = await sb.from("teams").select("gps_provider").eq("id", tid).maybeSingle();
       setIsKinexon(String((teamRow as { gps_provider?: string } | null)?.gps_provider ?? "") === "kinexon");
 
@@ -345,8 +348,10 @@ export default function CoachDecelIntelligencePage() {
       const bits: string[] = [];
       const bitsIs: string[] = [];
       if (s?.sprint_coupling?.flag === "red" || s?.sprint_coupling?.flag === "yellow") {
-        bits.push("decel:sprint coupling below the player's own norm");
-        bitsIs.push("decel:sprint coupling undir eigin viðmiði");
+        // Data key is sprint_coupling, but the SQL denominator is IMA FR band 7+8
+        // strides = long continuous runs (≥24 s), not sprints. Label honestly.
+        bits.push("braking relative to long continuous runs below the player's own norm");
+        bitsIs.push("hemlun miðað við löng samfelld hlaup undir eigin viðmiði");
       }
       if (s?.accel_coupling?.flag === "red" || s?.accel_coupling?.flag === "yellow") {
         bits.push("decel:accel (A:D) coupling out of the 0.8–1.2 balance band");
@@ -580,16 +585,12 @@ export default function CoachDecelIntelligencePage() {
             (defensive scrambling pattern). Foundation balance metric.
           </li>
           <li>
-            <strong>Decel:Sprint coupling (McBurnie's primary risk metric):</strong> Decel
-            events divided by Catapult sprint event count (Vel B6+ Total # Efforts Gen 2,
-            not distance proxy). Healthy ≥0.8 (every sprint followed by at least one
-            high-intensity brake). Red if &lt;0.5 (sprinting without proportional braking).
-            <strong> Decel input prefers Decel B3+ Total # Efforts (Gen 2)</strong> when
-            populated — high-intensity-only events that match the eccentric demand of
-            sprint braking. Falls back to Decel B2-3 (combined) for historical data, but
-            note that the combined input inflates ratios (typical 5-15) so the McBurnie
-            thresholds rarely trigger. The per-team banner above shows which source is
-            currently in use.
+            <strong>Decel : Sprint coupling (GPS)</strong>: high-intensity decel events divided by GPS
+            sprint efforts (velocity band 6), on outdoor days only — an indoor day has no sprint reading
+            and is left out rather than read as zero sprints. Flagged on personal-z vs the player&apos;s
+            own 28-day norm of outdoor days (STEN ≤ 2.5 red, ≤ 3.5 yellow); needs 6 such days. Decel input
+            prefers high-intensity-only events (IMA Band 3 / Decel B3+ Gen 2) and falls back to
+            Decel B2-3 (combined) for historical data; the banner above shows which is in use.
           </li>
           <li>
             <strong>Exposure concentration:</strong> What % of 28-day cumulative volume happened in
@@ -612,6 +613,17 @@ export default function CoachDecelIntelligencePage() {
 }
 
 // ─── Player row ──────────────────────────────────────────────────────────
+
+/** The SQL function's metric_name for sprint_coupling, in plain words. An older engine named IMA FR band
+ *  7+8 strides as "sprint-cadence"; those are long continuous runs, so that wording is rewritten if it
+ *  ever shows up again. */
+function plainSprintCouplingMetric(name: string): string {
+  if (/band\s*7\s*\+\s*8/i.test(name)) return "Decels : strides in long continuous runs (≥24 s) — vs his own 28-day norm";
+  if (/no ima free running/i.test(name)) return "No long-run data (IMA Free Running) yet";
+  if (/gps sprint efforts/i.test(name)) return "High-intensity decels : GPS sprint efforts, outdoor days — vs his own 28-day norm";
+  if (/no outdoor gps day/i.test(name)) return "No outdoor GPS day in the last 7 days — no sprint reading";
+  return name;
+}
 
 function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }) {
   const [expanded, setExpanded] = React.useState(false);
@@ -692,17 +704,15 @@ function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }
           <PeakEffortWindowsCard playerId={row.player_id} />
 
           {/* Sprint Exposure — VOLUME-side companion to Sprint Speed Drop.
-              Bands 5-8 stride count over the last 7 days vs the player's
-              28-day match-day demand baseline (Malone 2018). Under 50%
-              flags hamstring injury risk from undertraining; over 150%
-              flags accumulated overload. Self-hides when no match-day
-              baseline is available yet. */}
+              GPS sprint distance in training over the last 7 days vs the
+              player's average per match (28 days; Malone 2017). Indoor /
+              no-GPS days show as "no sprint reading" — never filled from IMA
+              Free Running bands (those are long continuous runs, not sprints). */}
           <SprintExposureCard playerId={row.player_id} isKinexon={isKinexon} />
 
-          {/* IMA Free Running Bands 7-8 — the sprint-cadence stride volume
-              that now feeds the Decel:Sprint Coupling denominator (outdoor +
-              indoor). Shown here as the raw B7+8 readout so the coach can see
-              the actual stride volume behind the ratio. */}
+          {/* IMA Free Running Bands 7-8 — strides in the LONGEST continuous
+              runs (≥24 s), not sprint cadence. An inertial signal that works
+              indoors; the Decel:Sprint tile below reads GPS sprint efforts. */}
           <SprintCadenceBandsCard playerId={row.player_id} />
 
           {/* Player Load ACWR — Gabbett 2016 7-day acute / 28-day chronic ratio
@@ -749,7 +759,7 @@ function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }
               info="Ratio of decelerations to accelerations. Healthy athletes brake roughly as often as they accelerate (0.8–1.2). RED if <0.7 (one-sided, accel-heavy — sprint volume outpacing braking control, raises hamstring strain risk on the sprint side and ACL risk when forced to brake suddenly without preparation). RED if >2.0 (one-sided, brake-heavy — chronic eccentric load on quad and patellar tendon, with cumulative ACL exposure from repeated high-impact braking). The ASP personal-z (Osgnach 2023) catches drift from the player's own pattern even when the absolute ratio still looks fine."
             />
             <Detail
-              title="Decel : Sprint Coupling"
+              title="Decel : Sprint Coupling (GPS)"
               flag={s.sprint_coupling.flag}
               big={
                 s.sprint_coupling.personal_z != null
@@ -758,11 +768,11 @@ function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }
               }
               caption={
                 s.sprint_coupling.personal_z != null
-                  ? `${s.sprint_coupling.metric_name}\nRatio ${s.sprint_coupling.recent_ratio.toFixed(3)} · baseline ${s.sprint_coupling.baseline_days ?? 0} days · personal-z ${s.sprint_coupling.personal_z >= 0 ? "+" : ""}${s.sprint_coupling.personal_z.toFixed(2)}`
-                  : `Awaiting IMA Free Running Band 7/8 data — needs ≥6 days in the last 28 to set a personal baseline.`
+                  ? `${plainSprintCouplingMetric(s.sprint_coupling.metric_name)}\nRatio ${s.sprint_coupling.recent_ratio.toFixed(3)} · baseline ${s.sprint_coupling.baseline_days ?? 0} days · personal-z ${s.sprint_coupling.personal_z >= 0 ? "+" : ""}${s.sprint_coupling.personal_z.toFixed(2)}`
+                  : `Awaiting outdoor GPS days — needs ≥6 outdoor days with sprint efforts in the last 28 to set a personal baseline.`
               }
-              hint="McBurnie's primary risk metric, on a 1-10 STEN scale (mean 5.5). Red if STEN ≤ 2.5, watch if STEN ≤ 3.5 — decel:sprint coupling well below the player's own norm."
-              info="McBurnie's primary risk metric. Ratio of decelerations (IMA Band 3) to sprint-cadence strides (IMA Free Running Band 7+8) — an inertial signal that works outdoor and indoor alike. The absolute ratio magnitude is highly individual (stride mechanics, position, height), so the flag is set relative to the player's own norm: how far the recent 7-day coupling sits below their OWN 28-day daily-ratio baseline. That deviation is shown as a STEN (Standard Ten) score — a 1-10 scale with mean 5.5 and SD 2, so 5-6 is normal and below ~3 is the concern band. A player who sprints without proportional braking volume is exposing the knee (ACL via under-conditioned hamstring co-activation), quadriceps (eccentric overload on the next braking event) and ankle to forces they're not conditioned for. The hamstring is at risk on the sprint side, not the braking side. RED if STEN ≤ 2.5 (z ≤ −1.5) — coupling well below the player's norm. Yellow if STEN ≤ 3.5 (z ≤ −1.0)."
+              hint="Braking vs GPS sprint efforts on outdoor days, on a 1-10 STEN scale vs his own norm (mean 5.5). Red if STEN ≤ 2.5, watch if STEN ≤ 3.5. Indoor days carry no sprint reading and are left out."
+              info="Braking actions (decelerations) relative to GPS sprint efforts (velocity band 6), on outdoor days only — McBurnie 2022 frames deceleration load against sprint exposure. An indoor session has no sprint reading, so it is left out of the ratio and the baseline rather than counted as zero sprints. Flagged on personal-z against his own 28-day norm of outdoor days (at least 6). The internal key is still 'sprint_coupling'."
             />
             <Detail
               title="Exposure Concentration"

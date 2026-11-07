@@ -8,14 +8,18 @@
  * page fills a missing gap: "what did today's session actually deliver,
  * biomechanically?"
  *
- * Built on Catapult IMA Free Running 8-band stride distribution. Powered
- * by the deterministic loader in lib/micropulse/imaDayProfile/. The page
- * is a session-review surface — coach opens it after training to see
- * whether the planned cadence profile matched the captured profile.
+ * Built on Catapult IMA Free Running 8-band stride distribution. The 8
+ * bands are BOUT-DURATION bands (seconds of one continuous run: 0–8–12–15–
+ * 18–21–24–27 s), NOT speed or cadence bands — so bands 5–8 = long
+ * continuous runs (≥18 s), never sprinting / high-speed running
+ * (docs/ima-free-running-bands.md). Powered by the deterministic loader in
+ * lib/micropulse/imaDayProfile/. The page is a session-review surface —
+ * coach opens it after training to see whether the planned running mix
+ * (short bursts vs long runs) matched the captured one.
  *
  * Sport-science citations:
- *   - McBurnie 2022: IMA stride distribution forecasts hamstring/quad
- *     injuries better than GPS velocity bands alone.
+ *   - McBurnie 2022: stride / running-mechanics profiles add context GPS
+ *     distance alone doesn't show (stride length in sustained running).
  *   - Bishop 2020: L/R asymmetry > 15% on high-intensity CoD = 3× injury
  *     risk multiplier.
  *   - Buchheit 2014: stride norms are individual — per-player baselines
@@ -39,13 +43,17 @@ import TitanMovementIntelligence from "@/components/coach/TitanMovementIntellige
 import type { ImaSessionProfile, ImaPlayerDay, SessionType } from "@/lib/micropulse/imaDayProfile";
 import { strideVerdictBadge } from "@/lib/micropulse/strideLength/verdictBadge";
 import { CV_BY_KIND, FLAG_SD, type StrideResult } from "@/lib/micropulse/strideLength";
+import { freeRunningBandLabel } from "@/lib/integrations/catapult/freeRunningBands";
+import type { TeamLongRuns } from "@/lib/micropulse/longRuns/loader";
+import { longRunBandsTotal, type LongRunBand } from "@/lib/micropulse/longRuns";
+import type { ImaRunStatus } from "@/lib/micropulse/imaRunningLoad";
 
 const I18N = {
   pageTitle: { EN: "IMA Intelligence", IS: "IMA Intelligence" },
   citation: { EN: "McBurnie 2022 · Bishop 2020 · Buchheit 2014", IS: "McBurnie 2022 · Bishop 2020 · Buchheit 2014" },
   subtitle: {
-    EN: "Biomechanical view of a training day. 8-band stride distribution, sprint-strides vs personal baseline, and L/R asymmetry on high-intensity CoD.",
-    IS: "Lífaflfræðileg sýn á æfingadag. 8-banda stride dreifing, sprint-skref miðað við persónulega grunnlínu, og L/H ósamhverfa á háa intensity CoD.",
+    EN: "Biomechanical view of a training day: short bursts vs long continuous runs, long-run strides vs each player's usual, and left/right balance on hard changes of direction.",
+    IS: "Lífaflfræðileg sýn á æfingadag: stutt hlaup á móti löngum samfelldum hlaupum, skref í löngum hlaupum miðað við venju hvers leikmanns, og vinstri/hægri jafnvægi í hörðum stefnubreytingum.",
   },
   dateLabel: { EN: "Date", IS: "Dagsetning" },
   loading: { EN: "Loading…", IS: "Hleð…" },
@@ -57,7 +65,7 @@ const I18N = {
   },
   sessionShape: { EN: "Session shape", IS: "Mynstur æfingar" },
   totalStrides: { EN: "Total strides", IS: "Heildar stride" },
-  sprintStrides: { EN: "Sprint-strides (b5-8)", IS: "Sprett-strides (b5-8)" },
+  sprintStrides: { EN: "Long-run strides (18 s+)", IS: "Skref í löngum hlaupum (18 sek+)" },
   codBalance: { EN: "L/R CoD balance (high)", IS: "L/H CoD jafnvægi (há)" },
   codFlagged: { EN: "High-CoD asym. flagged", IS: "Há-CoD ósamh. flögg" },
   playersCaptured: { EN: "Players captured", IS: "Leikmenn með gögn" },
@@ -65,17 +73,17 @@ const I18N = {
   tierLow: { EN: "Low", IS: "Lág" },
   tierMedium: { EN: "Medium", IS: "Mið" },
   tierHigh: { EN: "High (injury-relevant)", IS: "Há (meiðsla-tengd)" },
-  bandDistribution: { EN: "Band distribution (team)", IS: "Band-dreifing (lið)" },
-  lowBand: { EN: "Low (b1-3)", IS: "Lág (b1-3)" },
-  midBand: { EN: "Mid (b4-6)", IS: "Mið (b4-6)" },
-  highBand: { EN: "High (b7-8)", IS: "Há (b7-8)" },
+  bandDistribution: { EN: "Run-length mix (team)", IS: "Hlaupalengd — dreifing (lið)" },
+  lowBand: { EN: "Short bursts (<15 s)", IS: "Stutt hlaup (<15 sek)" },
+  midBand: { EN: "Medium runs (15–24 s)", IS: "Miðlungs hlaup (15–24 sek)" },
+  highBand: { EN: "Longest runs (≥24 s)", IS: "Lengstu hlaup (≥24 sek)" },
   perPlayer: { EN: "Per-player breakdown", IS: "Sundurliðun per leikmann" },
   colPlayer: { EN: "Player", IS: "Leikmaður" },
   colTotal: { EN: "Total", IS: "Heild" },
-  colLow: { EN: "b1-3", IS: "b1-3" },
-  colMid: { EN: "b4-6", IS: "b4-6" },
-  colHigh: { EN: "b7-8", IS: "b7-8" },
-  colSprint: { EN: "Sprint (b5-8)", IS: "Sprint (b5-8)" },
+  colLow: { EN: "Short <15 s", IS: "Stutt <15 s" },
+  colMid: { EN: "Medium 15–24 s", IS: "Miðl. 15–24 s" },
+  colHigh: { EN: "Longest ≥24 s", IS: "Lengst ≥24 s" },
+  colSprint: { EN: "Long runs (18 s+)", IS: "Löng hlaup (18 s+)" },
   colSprintVsBaseline: { EN: "vs baseline", IS: "vs grunnlína" },
   colCod: { EN: "CoD L/R (high)", IS: "CoD L/H (há)" },
   colCodAsym: { EN: "CoD asym. (high)", IS: "CoD ósamh. (há)" },
@@ -86,12 +94,12 @@ const I18N = {
   openInDecel: { EN: "Decel Intelligence →", IS: "Decel Intelligence →" },
   howToRead: { EN: "How to read this", IS: "Hvernig á að lesa þetta" },
   legend1: {
-    EN: "IMA Free Running buckets each stride into 8 bands by IMU-derived velocity (0-8/8-12/.../27+ km/h). MicroPulse groups them as Low (1-3, walking → medium running), Mid (4-6, fast running → HSR), High (7-8, sprint and max sprint). Bands 5-8 together are the Sprint Exposure unit.",
-    IS: "IMA Free Running setur hvert skref í 8 bönd eftir IMU-mældu hraða (0-8/8-12/.../27+ km/klst). MicroPulse flokkar þau sem Lág (1-3, gangur → meðalhlaup), Mið (4-6, hröð hlaup → HSR), Há (7-8, sprint og max sprint). Bönd 5-8 saman eru Sprint Exposure einingin.",
+    EN: "IMA Free Running puts each continuous run into one of 8 bands by HOW LONG it lasted (0–8 / 8–12 / 12–15 / 15–18 / 18–21 / 21–24 / 24–27 / 27+ seconds) — not by speed. MicroPulse groups them as short bursts (bands 1–3, under 15 s), medium runs (4–6, 15–24 s) and longest runs (7–8, 24 s or more). Bands 5–8 together = long continuous runs (18 s or more): tempo, conditioning or long recovery runs. This is NOT sprinting — sprint and high-speed running come from GPS speed, not from these bands.",
+    IS: "IMA Free Running setur hvert samfellt hlaup í eitt af 8 böndum eftir því HVE LENGI það stóð (0–8 / 8–12 / 12–15 / 15–18 / 18–21 / 21–24 / 24–27 / 27+ sekúndur) — ekki eftir hraða. MicroPulse flokkar þau sem stutt hlaup (bönd 1–3, undir 15 sek), miðlungs hlaup (4–6, 15–24 sek) og lengstu hlaup (7–8, 24 sek eða lengur). Bönd 5–8 saman = löng samfelld hlaup (18 sek eða lengri): tempó-, úthalds- eða löng endurheimtarhlaup. Þetta eru EKKI sprettir — sprettir og hraðhlaup koma úr GPS-hraða, ekki úr þessum böndum.",
   },
   legend2: {
-    EN: "vs baseline compares today's bands 5-8 sum to the player's 14-day training-only average (matches excluded). 100% = typical day. < 70% = light. > 150% = heavy day, monitor recovery.",
-    IS: "vs grunnlína ber bönd 5-8 dagsins saman við 14-daga æfinga-grunnlínu (leikir undanskildir). 100% = típískur dagur. < 70% = léttur. > 150% = þungur dagur, fylgjast með endurheimt.",
+    EN: "vs baseline compares today's strides in long continuous runs (bands 5–8, 18 s+) to the player's 14-day training-only average (matches excluded). 100% = typical day. < 70% = light. > 150% = much more sustained running than usual, monitor recovery.",
+    IS: "vs grunnlína ber skref dagsins í löngum samfelldum hlaupum (bönd 5–8, 18 sek+) saman við 14-daga æfinga-grunnlínu (leikir undanskildir). 100% = típískur dagur. < 70% = léttur. > 150% = mun meira samfellt hlaup en venjulega, fylgjast með endurheimt.",
   },
   legend3: {
     EN: "CoD asymmetry > 15% on high-intensity Change-of-Direction events is a commonly-flagged imbalance associated with injury risk — a risk factor, not a validated predictor (the Bishop evidence is mainly single-leg-jump asymmetry). Flagged when total CoD ≥ 10 efforts.",
@@ -108,7 +116,7 @@ function t(key: keyof typeof I18N, lang: Lang): string {
 }
 
 const SESSION_COLOURS: Record<SessionType, { bg: string; border: string; text: string; chip: string }> = {
-  high_cadence: { bg: "bg-rose-50",    border: "border-rose-300",    text: "text-rose-900",    chip: "bg-rose-600 text-white" },
+  high_cadence: { bg: "bg-rose-50",  /* legacy key = long-run day */    border: "border-rose-300",    text: "text-rose-900",    chip: "bg-rose-600 text-white" },
   tactical:     { bg: "bg-blue-50",    border: "border-blue-300",    text: "text-blue-900",    chip: "bg-blue-600 text-white" },
   mixed:        { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-900", chip: "bg-emerald-600 text-white" },
   recovery:     { bg: "bg-slate-50",   border: "border-slate-300",   text: "text-slate-900",   chip: "bg-slate-600 text-white" },
@@ -124,7 +132,8 @@ function todayIso(): string {
 // already loaded in `profile`. The buried insight on this page is an acute
 // movement spike vs a player's own training norm — surface it at the top.
 // Spike threshold matches the existing rose row colouring (>= 150% of the
-// 14-day training-only baseline of high-cadence "sprint" strides).
+// 14-day training-only baseline of long-run strides — IMA FR bands 5–8, runs
+// ≥18 s; the field is still called `sprint_vs_baseline_pct` but it is NOT sprint).
 type ImaVerdict = {
   tone: "good" | "watch" | "concern" | "neutral";
   sentence: { EN: string; IS: string };
@@ -134,8 +143,8 @@ type ImaVerdict = {
 };
 
 const SUBTITLE_IMA = {
-  EN: "IMA = inertial movement — accel/decel and change-of-direction efforts measured by the pod, works indoors. This compares today's high-effort running to each player's own usual day.",
-  IS: "IMA = hröðunar-hreyfing — hröðun/hemlun og stefnubreytingar mældar af pod, virkar innandyra. Þetta ber hástreitu-hlaup dagsins saman við venjulegan dag hvers leikmanns.",
+  EN: "Measured by the pod (works indoors). This compares today's long continuous running — runs of 18 s or more — to each player's own usual training day. It is not a sprint measure.",
+  IS: "Mælt af pod (virkar innandyra). Þetta ber löng samfelld hlaup dagsins — hlaup 18 sek eða lengri — saman við venjulegan æfingadag hvers leikmanns. Þetta er ekki sprett-mæling.",
 } as const;
 
 function computeImaVerdict(profile: ImaSessionProfile): ImaVerdict {
@@ -181,8 +190,9 @@ function computeImaVerdict(profile: ImaSessionProfile): ImaVerdict {
           : `${coverage} leikmenn bornir saman við eigin venju`,
   };
 
-  // Driver tooltips carry the jargon + paper citation (Hulin 2014 / Gabbett 2017
-  // ACWR; Buchheit 2014 individual baselines).
+  // Driver tooltips carry the jargon + paper citation (Gabbett 2016 load-change
+  // framing; Buchheit 2014 individual baselines). No sprint citations: this is
+  // sustained-running volume, not sprint exposure.
   const drivers: VerdictDriver[] = spikes
     .slice()
     .sort((a, b) => (b.sprint_vs_baseline_pct ?? 0) - (a.sprint_vs_baseline_pct ?? 0))
@@ -194,12 +204,12 @@ function computeImaVerdict(profile: ImaSessionProfile): ImaVerdict {
       },
       tone: "concern" as const,
       tip: {
-        EN: `High-cadence (sprint, bands 5-8) running ${Math.round(
+        EN: `Strides in long continuous runs (18 s or more; IMA Free Running bands 5–8) at ${Math.round(
           p.sprint_vs_baseline_pct ?? 0,
-        )}% of his 14-day training-only baseline — an acute:chronic spike. Spread sprint exposure across the week (Hulin 2014; Gabbett 2017; per-player norms Buchheit 2014).`,
-        IS: `Háákefðar (sprint, bönd 5-8) hlaup ${Math.round(
+        )}% of his 14-day training-only baseline — a sharp jump in sustained running, not sprinting. Phase extra tempo/conditioning running in rather than spiking it (load-change framing Gabbett 2016; per-player norms Buchheit 2014).`,
+        IS: `Skref í löngum samfelldum hlaupum (18 sek+; IMA Free Running bönd 5–8) ${Math.round(
           p.sprint_vs_baseline_pct ?? 0,
-        )}% af 14-daga æfinga-grunnlínu — bráð:langvinn spike. Dreifðu sprett-álagi yfir vikuna (Hulin 2014; Gabbett 2017; persónulegar norm Buchheit 2014).`,
+        )}% af 14-daga æfinga-grunnlínu — snarpt stökk í samfelldu hlaupi, ekki sprettum. Innleiddu auka tempó-/úthaldshlaup smám saman frekar en í einu stökki (álagsbreyting Gabbett 2016; persónulegar norm Buchheit 2014).`,
       },
     }));
 
@@ -207,8 +217,8 @@ function computeImaVerdict(profile: ImaSessionProfile): ImaVerdict {
     return {
       tone: "good",
       sentence: {
-        EN: "Every player's high-effort running today was within their own normal range.",
-        IS: "Hástreitu-hlaup allra leikmanna í dag var innan þeirra eigin venju.",
+        EN: "Every player's long continuous running today was within their own normal range.",
+        IS: "Löng samfelld hlaup allra leikmanna í dag voru innan þeirra eigin venju.",
       },
       subtitle: SUBTITLE_IMA,
       confidence: { level, note: confNote },
@@ -220,8 +230,8 @@ function computeImaVerdict(profile: ImaSessionProfile): ImaVerdict {
   return {
     tone: "concern",
     sentence: {
-      EN: `${spikes.length} player${spikes.length === 1 ? "" : "s"} ran well above their own usual today — ${names}; everyone else was within range.`,
-      IS: `${spikes.length} leikm${spikes.length === 1 ? "aður" : "enn"} hlupu langt yfir sína venju í dag — ${names}; aðrir voru innan marka.`,
+      EN: `${spikes.length} player${spikes.length === 1 ? "" : "s"} did far more long continuous running than usual today — ${names}; everyone else was within range.`,
+      IS: `${spikes.length} leikm${spikes.length === 1 ? "aður" : "enn"} hlupu mun meira í löngum samfelldum hlaupum en venjulega í dag — ${names}; aðrir voru innan marka.`,
     },
     subtitle: SUBTITLE_IMA,
     confidence: { level, note: confNote },
@@ -374,7 +384,7 @@ export default function ImaIntelligencePage() {
 
       {/* Kinexon reports accel/decel/CoD as totals (shown in the Weekly IMA Load
           above), but not the per-stride IMA Free Running bands or directional/
-          intensity-tier CoD this page's session-shape, sprint-stride and L/R
+          intensity-tier CoD this page's session-shape, long-run-stride and L/R
           asymmetry reads need — so those Catapult-specific sections are replaced
           with an honest pointer to where Kinexon's movement data lives. */}
       {/* Kinexon indoor movement — its own change-of-direction & effort variables
@@ -395,8 +405,8 @@ export default function ImaIntelligencePage() {
           />
           <p className="mt-2 text-[11px] text-slate-400">
             {lang === "IS"
-              ? "Stride-bönd, sprett-skref og L/R CoD ósamhverfa eru ekki í Kinexon-útflutningi. Fullt Kinexon hreyfiálag er á "
-              : "Stride bands, sprint-strides and L/R CoD asymmetry aren't in a Kinexon export. Full Kinexon movement load is on the "}
+              ? "Hlaupalengdar-bönd, skref í löngum hlaupum og L/R CoD ósamhverfa eru ekki í Kinexon-útflutningi. Fullt Kinexon hreyfiálag er á "
+              : "Run-length bands, long-run strides and L/R CoD asymmetry aren't in a Kinexon export. Full Kinexon movement load is on the "}
             <a href="/coach/load-intelligence?tab=gps" className="underline">Full Kinexon metrics</a>
             {lang === "IS" ? " og " : " and "}
             <a href="/coach/decel-intelligence" className="underline">Deceleration Intelligence</a>
@@ -434,7 +444,7 @@ export default function ImaIntelligencePage() {
             );
           })()}
           <SessionProfileCard profile={profile} lang={lang} />
-          <ImaRunDistanceCard date={date} lang={lang} />
+          <LongRunsCard date={date} lang={lang} />
           <ImaStrideVerdictCard date={date} lang={lang} />
           <PerPlayerTable profile={profile} lang={lang} />
           <LegendCard lang={lang} />
@@ -444,24 +454,14 @@ export default function ImaIntelligencePage() {
   );
 }
 
-// ── IMA Free Running distance (per band 5-8 + total) ──────────────────────
+// ── Long runs (bouts ≥18 s) — the Free Running bands read as time bands ───
+// IMA Free Running bands 5–8 are BOUT-DURATION bands (B5 18–21 s … B8 27 s+), NOT speed — so the card shows,
+// per band, the four variables OpenField reports side by side: runs (Event Count), time (Total Duration),
+// distance (Total Distance, GPS only) and strides (Stride Count). Runs and time come from the inertial sensor and
+// read indoors too. The ACWR on long-run distance is a sustained-running volume-change descriptor (Gabbett
+// 2016), not sprint / HSR load. One card replaces the old "Long-run distance" + "Long runs" pair.
 
-type RunDistRow = {
-  player_id: string;
-  full_name: string;
-  band5: number;
-  band6: number;
-  band7: number;
-  band8: number;
-  total: number;
-  acwr: number | null;
-  status: "insufficient" | "low" | "optimal" | "high" | "spike";
-  confident: boolean;
-  z: number | null;
-  dominant_band: 5 | 6 | 7 | 8 | null;
-};
-
-const ACWR_STYLE: Record<RunDistRow["status"], { bg: string; text: string; label: (lang: Lang) => string }> = {
+const ACWR_STYLE: Record<ImaRunStatus, { bg: string; text: string; label: (lang: Lang) => string }> = {
   spike:        { bg: "#f1d3c8", text: "#8c3221", label: (l) => (l === "IS" ? "Spike" : "Spike") },
   high:         { bg: "#f3e0b4", text: "#9a6410", label: (l) => (l === "IS" ? "Hátt" : "High") },
   optimal:      { bg: "#d3e8da", text: "#16653d", label: (l) => (l === "IS" ? "Í lagi" : "OK") },
@@ -469,9 +469,68 @@ const ACWR_STYLE: Record<RunDistRow["status"], { bg: string; text: string; label
   insufficient: { bg: "#efece2", text: "#8b8676", label: (l) => (l === "IS" ? "Byggist" : "Building") },
 };
 
-function ImaRunDistanceCard({ date, lang }: { date: string; lang: Lang }) {
-  const [rows, setRows] = React.useState<RunDistRow[]>([]);
+const fmtInt = (n: number | null, is: boolean) => (n == null ? "—" : Math.round(n).toLocaleString(is ? "is-IS" : "en-GB"));
+const fmtMinSec = (s: number | null) => (s == null ? "—" : `${Math.floor(Math.round(s) / 60)}:${String(Math.round(s) % 60).padStart(2, "0")}`);
+const fmtS = (s: number | null) => (s == null ? "—" : `${Math.round(s)} s`);
+const fmtStride = (m: number | null, is: boolean) => (m == null ? "—" : m.toFixed(2).replace(".", is ? "," : "."));
+
+/** Runs · time · avg run · distance · strides · m/stride for bands 5–8, plus the "all long runs" line. */
+function LongRunBandTable({ bands, lang, compact = false }: { bands: LongRunBand[]; lang: Lang; compact?: boolean }) {
+  const is = lang === "IS";
+  const tot = longRunBandsTotal(bands);
+  const cell = compact ? "px-2 py-1" : "px-2 py-1.5";
+  const head = [
+    { k: "band", en: "Run length", is: "Lengd hlaups", left: true },
+    { k: "bouts", en: "Runs", is: "Hlaup", tip: { en: "Event Count: how many runs in this band", is: "Event Count: fjöldi hlaupa í bandinu" } },
+    { k: "seconds", en: "Time", is: "Tími", tip: { en: "Total Duration, min:s", is: "Total Duration, mín:sek" } },
+    { k: "mean", en: "Avg run", is: "Meðalhlaup", tip: { en: "Time ÷ runs. Should fall inside the band.", is: "Tími ÷ hlaup. Á að lenda innan bandsins." } },
+    { k: "dist", en: "Distance", is: "Vegalengd", tip: { en: "Total Distance (m). Needs GPS: — indoors.", is: "Total Distance (m). Þarf GPS: — innanhúss." } },
+    { k: "strides", en: "Strides", is: "Skref", tip: { en: "Stride Count", is: "Stride Count" } },
+    { k: "mps", en: "m/stride", is: "m/skref", tip: { en: "Distance ÷ strides. Needs GPS.", is: "Vegalengd ÷ skref. Þarf GPS." } },
+  ];
+  const outside = (b: LongRunBand) => b.meanBoutS != null && (b.meanBoutS < b.boundsS[0] - 1 || (b.boundsS[1] < 100 && b.meanBoutS > b.boundsS[1] + 1));
+  return (
+    <div className="overflow-x-auto">
+      <table className={`w-full ${compact ? "text-[12px]" : "text-sm"}`}>
+        <thead>
+          <tr className="border-b border-slate-200 text-[11px] uppercase tracking-wide text-slate-500">
+            {head.map((h) => (
+              <th key={h.k} className={`${cell} font-medium ${h.left ? "text-left" : "text-right"}`} title={h.tip ? (is ? h.tip.is : h.tip.en) : undefined}>{is ? h.is : h.en}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {bands.map((b) => (
+            <tr key={b.band} className="border-b border-slate-100">
+              <td className={`${cell} text-slate-700`} title={`IMA Free Running band ${b.band}`}>{freeRunningBandLabel(b.band, is ? "is" : "en")}</td>
+              <td className={`${cell} text-right tabular-nums`}>{fmtInt(b.bouts, is)}</td>
+              <td className={`${cell} text-right tabular-nums text-slate-600`}>{fmtMinSec(b.seconds)}</td>
+              <td className={`${cell} text-right tabular-nums ${outside(b) ? "text-amber-700" : "text-slate-600"}`}>{fmtS(b.meanBoutS)}</td>
+              <td className={`${cell} text-right tabular-nums text-slate-600`}>{fmtInt(b.distanceM, is)}</td>
+              <td className={`${cell} text-right tabular-nums text-slate-600`}>{fmtInt(b.strides, is)}</td>
+              <td className={`${cell} text-right tabular-nums text-slate-600`}>{fmtStride(b.metresPerStride, is)}</td>
+            </tr>
+          ))}
+          <tr className="font-semibold text-slate-900">
+            <td className={cell}>{is ? "Öll löng hlaup (18 sek+)" : "All long runs (18 s+)"}</td>
+            <td className={`${cell} text-right tabular-nums`}>{fmtInt(tot.bouts, is)}</td>
+            <td className={`${cell} text-right tabular-nums`}>{fmtMinSec(tot.seconds)}</td>
+            <td className={`${cell} text-right tabular-nums`}>{fmtS(tot.meanBoutS)}</td>
+            <td className={`${cell} text-right tabular-nums`}>{fmtInt(tot.distanceM, is)}</td>
+            <td className={`${cell} text-right tabular-nums`}>{fmtInt(tot.strides, is)}</td>
+            <td className={`${cell} text-right tabular-nums`}>{fmtStride(tot.metresPerStride, is)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function LongRunsCard({ date, lang }: { date: string; lang: Lang }) {
+  const [data, setData] = React.useState<TeamLongRuns | null>(null);
   const [loaded, setLoaded] = React.useState(false);
+  const [open, setOpen] = React.useState<string | null>(null);
+  const is = lang === "IS";
 
   React.useEffect(() => {
     let alive = true;
@@ -482,41 +541,47 @@ function ImaRunDistanceCard({ date, lang }: { date: string; lang: Lang }) {
         const { data: sess } = await sb.auth.getSession();
         const token = sess?.session?.access_token;
         if (!token) return;
-        const res = await fetch(`/api/coach/team/ima-run-distance?date=${date}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const json = await res.json();
-          if (alive) setRows((json.players ?? []) as RunDistRow[]);
-        }
-      } catch {
-        /* soft */
-      } finally {
-        if (alive) setLoaded(true);
-      }
+        const res = await fetch(`/api/coach/team/long-runs?date=${date}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) { const json = (await res.json()) as TeamLongRuns; if (alive) setData(json); }
+      } catch { /* soft */ } finally { if (alive) setLoaded(true); }
     })();
     return () => { alive = false; };
   }, [date]);
 
-  const heading = lang === "IS" ? "IMA Free Running vegalengd" : "IMA Free Running distance";
-  const sub = lang === "IS"
-    ? "Háákefðar hlaupavegalengd (m) eftir cadence-bandi 5-8 + samtals"
-    : "High-intensity running distance (m) by cadence band 5-8 + total";
-  const noData = lang === "IS" ? "Engin gögn fyrir þennan dag" : "No data for this day";
-
-  const m = (n: number) => Math.round(n).toLocaleString();
-  // Shade band columns 5→8 (increasing cadence) for quick visual scan.
-  const bandBg = ["bg-sky-50", "bg-indigo-50", "bg-violet-50", "bg-fuchsia-50"];
-
-  const spikes = rows.filter((r) => r.status === "spike");
-  const spikeMsg = lang === "IS"
-    ? `${spikes.length} ${spikes.length === 1 ? "leikmaður" : "leikmenn"} með háákefðar hlaupa-spike (ACWR ≥ 1.5). Dreifðu sprett-álaginu yfir vikuna.`
-    : `${spikes.length} player${spikes.length === 1 ? "" : "s"} in a high-intensity running spike (ACWR ≥ 1.5). Spread the sprint load across the week.`;
-  // Compact summary shown next to the "Show details" toggle so the collapsed
-  // section still says how many players and how many are spiking.
-  const distHint = spikes.length > 0
-    ? { EN: `${rows.length} players · ${spikes.length} in a spike`, IS: `${rows.length} leikmenn · ${spikes.length} í spike` }
-    : { EN: `${rows.length} players`, IS: `${rows.length} leikmenn` };
+  const heading = is ? "Löng hlaup" : "Long runs";
+  const sub = is
+    ? "Samfelld hlaup í 18 sek eða lengur, flokkuð eftir því hve lengi hvert hlaup stóð (ekki hraða). Fjöldi og tími mælast líka innanhúss; vegalengd þarf GPS."
+    : "Continuous runs of 18 s or more, grouped by how long each run lasted (not speed). Runs and time read indoors too; distance needs GPS.";
+  const t = data?.team;
+  const withBouts = (data?.players ?? []).filter((p) => p.today.bouts != null);
+  const hasBouts = withBouts.length > 0;
+  const mins = (s: number | null) => (s == null ? "—" : `${Math.round(s / 60)} ${is ? "mín" : "min"}`);
+  const pctTxt = (p: number | null) => (p == null ? "—" : `${p}%`);
+  const lead = !t || !hasBouts ? null : data!.isMatchDay
+    ? (is ? `Leikdagur: ${t.bouts} löng hlaup hjá ${t.n} leikmönnum.` : `Match day: ${t.bouts} long runs across ${t.n} players.`)
+    : t.pctBouts == null
+      ? (is ? `${t.bouts} löng hlaup hjá ${t.n} leikmönnum; ekkert leikviðmið enn.` : `${t.bouts} long runs across ${t.n} players; no match reference yet.`)
+      : (is ? `Liðið hljóp ${t.bouts} löng hlaup í dag, ${t.pctBouts}% af eigin leik (miðgildi).` : `The squad did ${t.bouts} long runs today, ${t.pctBouts}% of its own match (median).`);
+  const facts = !t || !hasBouts ? [] : [
+    is ? `Tími í löngum hlaupum: ${mins(t.seconds)} alls, ${pctTxt(t.pctSeconds)} af leik` : `Time in long runs: ${mins(t.seconds)} in total, ${pctTxt(t.pctSeconds)} of a match`,
+    is ? `Meðallengd hlaups: ${t.meanBoutS == null ? "—" : Math.round(t.meanBoutS)} sek` : `Average run: ${t.meanBoutS == null ? "—" : Math.round(t.meanBoutS)} s`,
+    t.strideVsMatchPct == null
+      ? (is ? (t.gpsToday ? "Skreflengd: of fáar GPS-æfingar enn" : "Skreflengd: engin GPS-mæling í dag") : (t.gpsToday ? "Stride length: too few GPS sessions yet" : "Stride length: no GPS reading today"))
+      : (is ? `Skreflengd á æfingum síðustu 8 vikur: ${t.strideVsMatchPct}% af leik (miðgildi)` : `Stride length in training, last 8 weeks: ${t.strideVsMatchPct}% of a match (median)`),
+  ];
+  const spikes = t?.spikes ?? [];
+  const spikeMsg = is
+    ? `${spikes.map((s) => s.name).join(", ")}: snarpt stökk í vegalengd í löngum hlaupum síðustu 7 daga miðað við síðustu 4 vikur. Dreifðu tempó- og úthaldshlaupum yfir vikuna.`
+    : `${spikes.map((s) => s.name).join(", ")}: a sharp jump in long-run distance over the last 7 days against the last 4 weeks. Spread the tempo and conditioning running across the week.`;
+  const gpsPlayers = withBouts.filter((p) => p.today.distanceM != null).length;
+  const distNote = !t ? "" : !t.gpsToday
+    ? (is ? "Engin GPS-mæling í dag (innanhúss): fjöldi, tími og skref sjást, vegalengd og m/skref ekki." : "No GPS reading today (indoors): runs, time and strides show, distance and m/stride don't.")
+    : gpsPlayers < withBouts.length
+      ? (is ? `Vegalengd og m/skref ná yfir ${gpsPlayers} af ${withBouts.length} leikmönnum (hinir án GPS).` : `Distance and m/stride cover ${gpsPlayers} of ${withBouts.length} players (the rest had no GPS).`)
+      : "";
+  const noData = is
+    ? "Engin bouts-gögn fyrir þennan dag. Fjöldi og tími hlaupa koma með Free Running duration- og event-breytunum í Catapult-samstillingunni; án þeirra sést hér ekkert."
+    : "No bout data for this day. Run counts and time come with the Free Running duration and event parameters in the Catapult sync; without them nothing shows here.";
 
   return (
     <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
@@ -524,70 +589,111 @@ function ImaRunDistanceCard({ date, lang }: { date: string; lang: Lang }) {
         <div className="text-xs uppercase tracking-wide text-slate-500">{heading}</div>
         <CoachTutorialButton slug="ima-free-running" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
       </div>
-      <div className="mb-3 text-[11px] text-slate-500">
-        {sub} · {lang === "IS" ? "ACWR = bráð (7d) ÷ langvinn (28d)" : "ACWR = acute (7d) ÷ chronic (28d)"}
-      </div>
-
-      {/* Spike summary (the verdict the coach reads first) */}
-      {loaded && spikes.length > 0 && (
-        <div className="mb-3 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
-          <span>⚠</span><span><b>{spikeMsg}</b></span>
-        </div>
-      )}
+      <div className="mb-3 text-[11px] text-slate-500">{sub}</div>
 
       {!loaded ? (
         <div className="py-4 text-center text-sm text-slate-500">…</div>
-      ) : rows.length === 0 ? (
-        <div className="py-4 text-center text-sm text-slate-500">{noData}</div>
+      ) : !hasBouts ? (
+        <div className="py-3 text-sm text-slate-500">{noData}</div>
       ) : (
-        <ShowDetails
-          label={{ EN: "Show distances by band", IS: "Sýna vegalengd eftir bandi" }}
-          hint={distHint}
-          className="mt-1 border-0 bg-transparent p-0"
-        >
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 text-[11px] uppercase tracking-wide text-slate-500">
-                <th className="px-2 py-1.5 text-left font-medium">{lang === "IS" ? "Leikmaður" : "Player"}</th>
-                <th className="px-2 py-1.5 text-right font-medium">Band 5</th>
-                <th className="px-2 py-1.5 text-right font-medium">Band 6</th>
-                <th className="px-2 py-1.5 text-right font-medium">Band 7</th>
-                <th className="px-2 py-1.5 text-right font-medium">Band 8</th>
-                <th className="px-2 py-1.5 text-right font-semibold text-slate-700">{lang === "IS" ? "Samtals" : "Total"}</th>
-                <th className="px-2 py-1.5 text-center font-medium" title="Acute:chronic workload ratio">ACWR</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => {
-                const st = ACWR_STYLE[r.status];
-                return (
-                  <tr key={r.player_id} className={`border-b border-slate-100 ${r.status === "spike" ? "bg-rose-50/40" : ""}`}>
-                    <td className="px-2 py-1.5 font-medium text-slate-800">{r.full_name}</td>
-                    {[r.band5, r.band6, r.band7, r.band8].map((v, i) => (
-                      <td key={i} className={`px-2 py-1.5 text-right tabular-nums text-slate-600 ${bandBg[i]}`}>
-                        {v > 0 ? m(v) : "·"}
-                      </td>
-                    ))}
-                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-slate-900">{m(r.total)}</td>
-                    <td className="px-2 py-1.5 text-center">
-                      <span
-                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums"
-                        style={{ backgroundColor: st.bg, color: st.text }}
-                        title={r.confident
-                          ? `${st.label(lang)} · ACWR ${r.acwr ?? "—"}`
-                          : (lang === "IS" ? "Of fá gögn enn fyrir áreiðanlegt hlutfall" : "Not enough history yet for a reliable ratio")}
-                      >
-                        {r.status === "insufficient" || r.acwr == null ? st.label(lang) : r.acwr.toFixed(2)}
-                      </span>
-                    </td>
+        <>
+          {spikes.length > 0 && (
+            <div className="mb-3 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+              <span>⚠</span><span><b>{spikeMsg}</b></span>
+            </div>
+          )}
+          <div className="text-[15px] font-semibold text-slate-900">{lead}</div>
+          <ul className="mt-2 space-y-0.5 text-[13px] text-slate-700">
+            {facts.map((f, i) => <li key={i}>· {f}</li>)}
+          </ul>
+          {data?.bandsAreTimeBands === false && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+              {is
+                ? "Böndin hjá þessu liði virðast ekki vera tímabönd (meðallengd hlaupa lendir utan marka). Merkingarnar „18 sek eða lengur“ eiga þá ekki við; athugaðu stillingar Free Running-banda í OpenField."
+                : "This team's bands don't look like time bands (mean run length falls outside the bounds). The \"18 s or more\" labels then don't apply; check the Free Running band settings in OpenField."}
+            </div>
+          )}
+
+          <div className="mt-4">
+            <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">{is ? "Liðið, eftir lengd hlaupa" : "The squad, by run length"}</div>
+            {t && <LongRunBandTable bands={t.bands} lang={lang} />}
+            {distNote && <div className="mt-1 text-[11px] text-slate-500">{distNote}</div>}
+          </div>
+
+          <ShowDetails
+            label={{ EN: "Show players", IS: "Sýna leikmenn" }}
+            hint={spikes.length > 0
+              ? { EN: `${withBouts.length} players · ${spikes.length} in a spike`, IS: `${withBouts.length} leikmenn · ${spikes.length} í spike` }
+              : { EN: `${withBouts.length} players`, IS: `${withBouts.length} leikmenn` }}
+            className="mt-3 border-0 bg-transparent p-0"
+          >
+            <div className="mb-2 text-[11px] text-slate-500">
+              {is
+                ? "Smelltu á leikmann til að sjá böndin hans. Viðmið = miðgildi eigin næstum-heilla leikja (≥80 mín; liðsins ef þeir eru færri en 3). Skref/leik = skreflengd í löngum hlaupum á GPS-æfingum síðustu 8 vikna sem hlutfall af eigin leik; þarf 50+ skref. ACWR = bráð (7 d) ÷ langvinn (28 d) vegalengd í löngum hlaupum: breyting á magni samfellds hlaups, ekki sprett- eða HSR-álag og ekki meiðslaspá (Gabbett 2016; Impellizzeri 2020). Lýsandi, aldrei readiness-liturinn."
+                : "Click a player to see his bands. Reference = median of the player's own near-full matches (≥80 min; the team's when fewer than 3). Stride vs match = stride length in long runs on GPS training days of the last 8 weeks as a share of his own match; needs 50+ strides. ACWR = acute (7 d) ÷ chronic (28 d) long-run distance: a change in sustained-running volume, not sprint or HSR load and not an injury predictor (Gabbett 2016; Impellizzeri 2020). Descriptive, never the readiness colour."}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-[11px] uppercase tracking-wide text-slate-500">
+                    <th className="px-2 py-1.5 text-left font-medium">{is ? "Leikmaður" : "Player"}</th>
+                    <th className="px-2 py-1.5 text-right font-medium">{is ? "Löng hlaup" : "Long runs"}</th>
+                    <th className="px-2 py-1.5 text-right font-medium">{is ? "% af leik" : "% of match"}</th>
+                    <th className="px-2 py-1.5 text-right font-medium">{is ? "Tími" : "Time"}</th>
+                    <th className="px-2 py-1.5 text-right font-medium">{is ? "Meðalhlaup" : "Avg run"}</th>
+                    <th className="px-2 py-1.5 text-right font-medium">{is ? "Vegalengd" : "Distance"}</th>
+                    <th className="px-2 py-1.5 text-right font-medium">{is ? "Skref" : "Strides"}</th>
+                    <th className="px-2 py-1.5 text-right font-medium">{is ? "m/skref" : "m/stride"}</th>
+                    <th className="px-2 py-1.5 text-right font-medium">{is ? "Skref/leik" : "Stride vs match"}</th>
+                    <th className="px-2 py-1.5 text-center font-medium" title={is ? "Bráð:langvinn hlutfall á vegalengd í löngum hlaupum (ekki sprett-álag)" : "Acute:chronic ratio on long-run distance (not sprint load)"}>ACWR</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        </ShowDetails>
+                </thead>
+                <tbody>
+                  {withBouts.map((p) => {
+                    const st = ACWR_STYLE[p.acwrStatus];
+                    const isOpen = open === p.playerId;
+                    const spike = p.acwrStatus === "spike" && p.acwrConfident;
+                    return (
+                      <React.Fragment key={p.playerId}>
+                        <tr
+                          className={`cursor-pointer border-b border-slate-100 hover:bg-slate-50 ${spike ? "bg-rose-50/40" : ""}`}
+                          onClick={() => setOpen(isOpen ? null : p.playerId)}
+                          aria-expanded={isOpen}
+                        >
+                          <td className="px-2 py-1.5 font-medium text-slate-800"><span className="mr-1 text-slate-400">{isOpen ? "▾" : "▸"}</span>{p.name}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">{p.today.bouts}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-slate-600" title={p.ref.source ? `${p.ref.source === "own" ? (is ? "eigin leikir" : "own matches") : (is ? "liðsviðmið" : "team reference")} · n=${p.ref.nMatches}` : undefined}>{pctTxt(p.pctBouts)}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{fmtMinSec(p.today.seconds)}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{fmtS(p.today.meanBoutS)}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{fmtInt(p.today.distanceM, is)}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{fmtInt(p.today.strides, is)}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{fmtStride(p.today.metresPerStride, is)}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-slate-600" title={p.strideTrainM != null && p.strideMatchM != null ? `${p.strideTrainM.toFixed(2)} m ${is ? "á æfingum" : "in training"} · ${p.strideMatchM.toFixed(2)} m ${is ? "í leik" : "in matches"} · ${p.strideTrainDays} ${is ? "æfingar" : "sessions"}` : undefined}>{pctTxt(p.strideVsMatchPct)}</td>
+                          <td className="px-2 py-1.5 text-center">
+                            <span
+                              className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums"
+                              style={{ backgroundColor: st.bg, color: st.text }}
+                              title={p.acwrConfident ? `${st.label(lang)} · ACWR ${p.acwr ?? "—"}` : (is ? "Of fá gögn enn fyrir áreiðanlegt hlutfall" : "Not enough history yet for a reliable ratio")}
+                            >
+                              {p.acwrStatus === "insufficient" || p.acwr == null ? st.label(lang) : p.acwr.toFixed(2)}
+                            </span>
+                          </td>
+                        </tr>
+                        {isOpen && (
+                          <tr className="border-b border-slate-100 bg-slate-50/60">
+                            <td colSpan={10} className="px-3 py-2">
+                              <LongRunBandTable bands={p.bands} lang={lang} compact />
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </ShowDetails>
+        </>
       )}
     </div>
   );
@@ -633,8 +739,8 @@ function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
 
   const heading = lang === "IS" ? "Skreflengd — er hann enn að ýta?" : "Stride length — is he still pushing?";
   const sub = lang === "IS"
-    ? "Háhraða vegalengd ÷ háhraðaskref (bönd 5-8), borið saman við hans eigin leiki/stórar æfingar · flaggað við 2,5 staðalfrávik"
-    : "High-cadence distance ÷ high-cadence strides (bands 5-8), vs his own matches/big sessions · flagged at 2.5 SD";
+    ? "Metrar á skref í löngum samfelldum hlaupum (18 sek+), borið saman við hans eigin leiki/stórar æfingar"
+    : "Metres per stride in his long continuous runs (18 s or more), vs his own matches/big sessions";
 
   // Drop the one risky combination: a "match" verdict inferred from distance
   // alone (no coach-entered minutes) — a hard training day would be mis-compared
@@ -669,8 +775,8 @@ function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
           foundation: what "what" this "why" is answering. */}
       <div className="mb-3 max-w-3xl text-[12px] leading-relaxed text-slate-600">
         {isIS
-          ? "Undir þreytu heldur leikmaður skreftíðni en skreflengd styttist — hann ýtir minna þótt fæturnir snúist jafn hratt. Hvorki GPS-vegalengd né skreftíðni ein sér sér þetta; hlutfallið gerir það."
-          : "Under fatigue a player keeps his stride frequency but stride length shortens — he pushes less though the legs turn over as fast. Neither GPS distance nor cadence alone sees it; the ratio does."}
+          ? "Undir þreytu styttist skreflengd þótt leikmaðurinn haldi áfram að hlaupa — hann ýtir minna í hverju skrefi. Heildarvegalengd ein sér sýnir það ekki; metrar á skref í lengri hlaupum hans gera það."
+          : "Under fatigue stride length tends to shorten even while a player keeps running — he pushes less with each stride. Total distance alone doesn't show it; metres per stride in his longer runs does."}
       </div>
 
       {indoorOnly && measured.length === 0 && (
@@ -689,8 +795,8 @@ function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
           <span>⚠</span>
           <span><b>
             {isIS
-              ? `${shortened.length} ${shortened.length === 1 ? "leikmaður" : "leikmenn"} með styttri skref en venjulega — hann ýtir minna þótt fæturnir snúist jafn hratt.`
-              : `${shortened.length} player${shortened.length === 1 ? "" : "s"} striding shorter than usual — pushing less though the legs turn over as fast.`}
+              ? `${shortened.length} ${shortened.length === 1 ? "leikmaður" : "leikmenn"} með styttri skref en venjulega í löngum hlaupum — ýtir minna í hverju skrefi.`
+              : `${shortened.length} player${shortened.length === 1 ? "" : "s"} striding shorter than usual in long runs — pushing less with each stride.`}
           </b></span>
         </div>
       )}
@@ -756,8 +862,8 @@ function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
                     <div>
                       {isIS ? "Aðferð: " : "Method: "}
                       {isIS
-                        ? "háhraða vegalengd ÷ háhraðaskref (IMA hlaupabönd 5–8)."
-                        : "high-cadence distance ÷ high-cadence strides (IMA free-running bands 5–8)."}
+                        ? "vegalengd ÷ skref í löngum samfelldum hlaupum (IMA Free Running bönd 5–8 = hlaup 18 sek+; bönd eftir lengd hlaups, ekki hraða)."
+                        : "distance ÷ strides in long continuous runs (IMA Free Running bands 5–8 = runs of 18 s+; bands are run length, not speed)."}
                     </div>
                     {r.normM != null && lowBound != null && highBound != null && (
                       <div>
@@ -779,7 +885,7 @@ function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
                         ? "Heimild: Catapult IMA Free Running (GPS-vegalengd) — mælist aðeins utandyra; innanhúss birtist enginn dómur."
                         : "Source: Catapult IMA Free Running (GPS distance) — measured outdoors only; no verdict indoors."}
                     </div>
-                    <div className="text-slate-400">Girard, Micallef &amp; Millet 2011; Morin o.fl. 2011.</div>
+                    <div className="text-slate-400">McBurnie 2022; Girard, Micallef &amp; Millet 2011; Morin o.fl. 2011.</div>
                   </div>
                 )}
               </div>

@@ -7,7 +7,7 @@ import "server-only";
  *  - Gate: football + Vector Pro (Catapult tier "full").
  *  - Match reference: each player's own near-full matches (selectNearFullMatches — the same rule as
  *    the periodization match unit), else the team's near-full matches.
- *  - MD-day: coach's Week setup first (resolveMdContext), then the fixture list (sizes fast running + strides).
+ *  - MD-day: coach's Week setup first (resolveMdContext), then the fixture list (sizes long-run distance + strides — IMA FR bands 5–8 = runs ≥18 s, not sprinting).
  *  - Day-type: Meso activation/top-up label → Week-setup pitch stimulus → Meso stimulus → MD+1 default
  *    (decides WHAT is judged, and sizes Acc/Dec/CoD from the calendar's standard).
  *  - Session: one effective row per player (manual overrides pod), previous-club rows excluded.
@@ -26,6 +26,7 @@ import { selectNearFullMatches } from "@/lib/micropulse/periodization";
 import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 import { imaCodTotal } from "@/lib/micropulse/catapultCapability";
+import { hasGpsReading, longRunsOf } from "@/lib/micropulse/longRuns";
 import {
   buildSessionEnough, emptyEnough, ENOUGH_VARS, dayTypeFromText, type EnoughDayType,
   type EnoughPlayerInput, type EnoughVar, type SessionEnough, type VarValues,
@@ -37,7 +38,7 @@ const MIN_TRAIN_MIN = 20;       // shorter rows are not a training session
 const PARTIAL_SHARE = 0.6;      // < 60% of the squad's median duration = shortened session
 const OWN_REF_MIN = 3;          // fewer own near-full matches → use the team reference
 
-const COLS = "player_id, date, source, ima_accel, ima_decel, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, ima_fr_band58_total_distance, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, fmp_total_duration_s, total_player_load, player_load_per_minute, session_duration_minutes";
+const COLS = "player_id, date, source, ima_accel, ima_decel, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, total_distance, ima_fr_band58_total_distance, ima_fr_band5_event_count, ima_fr_band6_event_count, ima_fr_band7_event_count, ima_fr_band8_event_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, fmp_total_duration_s, total_player_load, player_load_per_minute, session_duration_minutes";
 
 type Row = Record<string, unknown> & { player_id: string; date: string; source: string | null };
 
@@ -53,14 +54,16 @@ const median = (xs: number[]): number | null => {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 
-/** The five IMA variables from one load row. CoD = the six left/right columns (same as post-training/TLYP). */
+/** The six IMA variables from one load row. CoD = the six left/right columns (same as post-training/TLYP).
+ *  Long-run distance needs GPS: indoors the pod stores 0, which is a missing reading, not a 0 m session. */
 export function varsOf(r: Record<string, unknown>): VarValues {
   return {
     imaAccel: num(r.ima_accel),
     imaDecel: num(r.ima_decel),
     imaCod: imaCodTotal(r),
-    frDistance: num(r.ima_fr_band58_total_distance),
+    frDistance: hasGpsReading(r) ? num(r.ima_fr_band58_total_distance) : null,
     strideHi: sumOrNull([r.ima_fr_band6_stride_count, r.ima_fr_band7_stride_count, r.ima_fr_band8_stride_count].map(num)),
+    longRuns: longRunsOf(r).bouts,
   };
 }
 

@@ -104,7 +104,7 @@ const COPY: Record<Lang, CopyShape> = {
     intelligence: {
       title: "More than monitoring — a full intelligence stack.",
       sub: "Every signal below is computed daily, compared to each player's personal norm, and explained in plain language. Each one carries the research paper behind it.",
-      chips: ["Personal-norm readiness", "Day-over-day delta", "Sequence escalation", "Volatility", "ACWR", "GPS velocity bands", "Metabolic load", "Mechanical Load Index", "Decel : Accel coupling", "Decel : Sprint (STEN)", "IMA Free Running", "Indoor / FMP load", "Quadrant intelligence", "Neural load", "CMJ force-time", "VALD asymmetry", "Microcycle periodization", "Counterfactuals", "Physical assessment battery", "Return-to-play"],
+      chips: ["Personal-norm readiness", "Day-over-day delta", "Sequence escalation", "Volatility", "ACWR", "GPS velocity bands", "Metabolic load", "Mechanical Load Index", "Decel : Accel coupling", "Decel : Sprint coupling (GPS, STEN)", "IMA Free Running", "Indoor / FMP load", "Quadrant intelligence", "Neural load", "CMJ force-time", "VALD asymmetry", "Microcycle periodization", "Counterfactuals", "Physical assessment battery", "Return-to-play"],
     },
     cta: { title: "Ready to run smarter training days?", body: "Get your team started with MicroPulse today.", primary: "Start free", secondary: "Watch the intro" },
     footer: { copyright: "© 2026 MicroPulse. All rights reserved.", pricing: "Pricing", features: "Features", blog: "Blog", methodology: "Methodology" },
@@ -183,7 +183,7 @@ const COPY: Record<Lang, CopyShape> = {
     intelligence: {
       title: "Meira en eftirlit — heill greindarstafli.",
       sub: "Hvert merki hér að neðan er reiknað daglega, borið saman við persónulega norm hvers leikmanns og útskýrt á mannamáli. Hvert ber rannsóknina á bak við.",
-      chips: ["Persónuleg readiness", "Breyting frá í gær", "Sequence escalation", "Flökt", "ACWR", "GPS hraðabönd", "Efnaskiptaálag", "Mechanical Load Index", "Decel : Accel coupling", "Decel : Sprint (STEN)", "IMA Free Running", "Innanhúss / FMP álag", "Quadrant greind", "Taugaálag", "CMJ force-time", "VALD ósamhverfa", "Microcycle periodization", "Counterfactuals", "Líkamlegt mat", "Return-to-play"],
+      chips: ["Persónuleg readiness", "Breyting frá í gær", "Sequence escalation", "Flökt", "ACWR", "GPS hraðabönd", "Efnaskiptaálag", "Mechanical Load Index", "Decel : Accel coupling", "Decel : Sprint coupling (GPS, STEN)", "IMA Free Running", "Innanhúss / FMP álag", "Quadrant greind", "Taugaálag", "CMJ force-time", "VALD ósamhverfa", "Microcycle periodization", "Counterfactuals", "Líkamlegt mat", "Return-to-play"],
     },
     cta: { title: "Tilbúinn að keyra betri æfingardaga?", body: "Byrjaðu með MicroPulse í dag.", primary: "Byrjaðu ókeypis", secondary: "Horfðu á kynninguna" },
     footer: { copyright: "© 2026 MicroPulse. Öll réttindi áskilin.", pricing: "Verðlagning", features: "Eiginleikar", blog: "Greinum", methodology: "Aðferðafræði" },

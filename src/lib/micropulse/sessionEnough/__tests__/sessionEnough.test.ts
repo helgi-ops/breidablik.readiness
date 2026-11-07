@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildSessionEnough, dayShare, emptyEnough, type EnoughPlayerInput, type VarValues } from "@/lib/micropulse/sessionEnough";
 
-const REF: VarValues = { imaAccel: 70, imaDecel: 100, imaCod: 440, frDistance: 1300, strideHi: 390 };
+const REF: VarValues = { imaAccel: 70, imaDecel: 100, imaCod: 440, frDistance: 1300, strideHi: 390, longRuns: 11 };
 
 /** A player who did `f` × the MD-day's target on every variable (optionally overriding some). */
 function player(id: string, md: number, f: number, over: Partial<VarValues> = {}, extra: Partial<EnoughPlayerInput> = {}): EnoughPlayerInput {
@@ -70,7 +70,7 @@ describe("buildSessionEnough", () => {
   it("returns match_day / no_reference states", () => {
     expect(buildSessionEnough({ ...base, isMatchDay: true, players: [] }).state).toBe("match_day");
     const noRef = player("1", 85, 1);
-    noRef.matchRef = { imaAccel: null, imaDecel: null, imaCod: null, frDistance: null, strideHi: null };
+    noRef.matchRef = { imaAccel: null, imaDecel: null, imaCod: null, frDistance: null, strideHi: null, longRuns: null };
     expect(buildSessionEnough({ ...base, players: [noRef] }).state).toBe("no_reference");
     expect(emptyEnough("not_available").headline.en).toContain("Vector Pro");
   });
@@ -173,11 +173,19 @@ describe("day-type aware judging", () => {
     expect(accel?.timesMatch).toBe(1.5);
   });
 
-  it("Locomotive day: both running types well under → No", () => {
-    const low = { frDistance: REF.frDistance! * dayShare("frDistance", 85) * 0.4, strideHi: REF.strideHi! * dayShare("strideHi", 85) * 0.4 };
+  it("Locomotive day: the running types well under → No", () => {
+    const low = { frDistance: REF.frDistance! * dayShare("frDistance", 85) * 0.4, strideHi: REF.strideHi! * dayShare("strideHi", 85) * 0.4, longRuns: REF.longRuns! * dayShare("longRuns", 85) * 0.4 };
     const r = buildSessionEnough({ ...base, dayType: "locomotive", dayTypeSource: "week_setup", players: ["1", "2", "3"].map((id) => player(id, 85, 1.0, low)) });
     expect(r.verdict).toBe("no");
-    expect(r.team.filter((t) => t.focus).map((t) => t.key)).toEqual(["frDistance", "strideHi"]);
+    expect(r.team.filter((t) => t.focus).map((t) => t.key)).toEqual(["frDistance", "strideHi", "longRuns"]);
+  });
+
+  it("Indoor locomotive day: long-run distance is missing (not 0) and the bout count carries the verdict", () => {
+    const indoor = { frDistance: null, strideHi: REF.strideHi! * dayShare("strideHi", 85), longRuns: REF.longRuns! * dayShare("longRuns", 85) };
+    const r = buildSessionEnough({ ...base, dayType: "locomotive", dayTypeSource: "week_setup", players: ["1", "2", "3"].map((id) => player(id, 85, 1.0, indoor)) });
+    expect(r.team.find((t) => t.key === "frDistance")?.status).toBe("na");
+    expect(r.team.find((t) => t.key === "longRuns")?.status).toBe("on");
+    expect(r.verdict).toBe("yes");
   });
 
   it("Top-up day: starters recover (not judged), low-minute players judged against the top-up target", () => {

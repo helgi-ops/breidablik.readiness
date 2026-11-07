@@ -7,15 +7,21 @@
  *
  *   day target = player's match median × share
  *   share = Acc/Dec/CoD with a planned day-type: CAL_SHARE_IMA, the same standard the Meso calendar plans from
- *           fast running / strides, or no day-type: (matchPct of the MD-day)^(per-variable exponent)
+ *           long-run distance / strides, or no day-type: (matchPct of the MD-day)^(per-variable exponent)
  *
- * Five variables (the coach's IMA set): accelerations, decelerations (braking), change of direction,
- * IMA Free Running fast distance (band 5–8) and IMA Stride fast strides (band 6–8).
+ * Six variables (the coach's IMA set): accelerations, decelerations (braking), change of direction,
+ * IMA Free Running long-run distance (band 5–8), long-run strides (band 6–8) and long runs as a COUNT of
+ * bouts (band 5–8 event counts). The IMA Free Running bands are BOUT-DURATION bands — band 5–8 = continuous
+ * runs of ≥18 s, band 6–8 = ≥21 s — NOT speed or cadence bands, so these are SUSTAINED-RUNNING volume, not
+ * sprinting (docs/ima-free-running-bands.md). Strides and bout counts come from the inertial sensor, so they
+ * exist indoors; the distance needs GPS and is missing (not 0) indoors. Field keys `frDistance` / `strideHi`
+ * are kept for interface stability.
  *
  * Pure, deterministic, IO-free. Rules decide; no AI. Descriptive — NEVER the readiness colour.
  * Day shares: Stevens 2017 + Martín-García 2018 (Acc/Dec/CoD standard); Buchheit 2024 MD-day load
- * model (via planSessionLoad's matchPct); braking/CoD tissue load Harper & McBurnie 2021; fast running /
- * strides exposure Malone 2018; training:match ratios PMC6747517.
+ * model (via planSessionLoad's matchPct); braking/CoD tissue load Harper & McBurnie 2021; training:match
+ * ratios PMC6747517. (Malone 2018 sprint-exposure was cited here before; removed — it is about GPS
+ * sprinting, which these IMA long-run metrics are not.)
  */
 
 import { statusOf } from "@/lib/micropulse/loadPlan/plannedVsActual";
@@ -25,7 +31,7 @@ import { CAL_SHARE_IMA, CAL_SHARE_IMA_REF, type ImaVar } from "@/lib/micropulse/
 
 export type Bi = { en: string; is: string };
 
-export const ENOUGH_VARS = ["imaAccel", "imaDecel", "imaCod", "frDistance", "strideHi"] as const;
+export const ENOUGH_VARS = ["imaAccel", "imaDecel", "imaCod", "frDistance", "strideHi", "longRuns"] as const;
 export type EnoughVar = (typeof ENOUGH_VARS)[number];
 export type VarValues = Record<EnoughVar, number | null>;
 
@@ -33,8 +39,9 @@ export const ENOUGH_LABEL: Record<EnoughVar, Bi> = {
   imaAccel: { en: "Accelerations", is: "Hraðaaukningar" },
   imaDecel: { en: "Braking", is: "Hemlun" },
   imaCod: { en: "Changes of direction", is: "Stefnubreytingar" },
-  frDistance: { en: "Fast running", is: "Hraðhlaup" },
-  strideHi: { en: "Fast strides", is: "Hröð skref" },
+  frDistance: { en: "Long-run distance", is: "Vegalengd í löngum hlaupum" },
+  strideHi: { en: "Long-run strides", is: "Skref í löngum hlaupum" },
+  longRuns: { en: "Long runs", is: "Löng hlaup" },
 };
 
 /** The sensor term behind each plain label — shown in tooltips / details only. */
@@ -42,8 +49,9 @@ export const ENOUGH_TECH: Record<EnoughVar, string> = {
   imaAccel: "IMA accelerations (count)",
   imaDecel: "IMA decelerations (count)",
   imaCod: "IMA change of direction, left + right, all intensities (count)",
-  frDistance: "IMA Free Running distance, bands 5–8 (m)",
-  strideHi: "IMA Stride count, bands 6–8",
+  frDistance: "IMA Free Running distance, bands 5–8 = continuous runs ≥18 s (m) — not sprinting",
+  strideHi: "IMA Stride count, bands 6–8 = continuous runs ≥21 s — not sprint strides",
+  longRuns: "IMA Free Running bouts, bands 5–8 = number of continuous runs ≥18 s — inertial, so it exists indoors",
 };
 
 /** Unit noun for "~N more … per player". */
@@ -51,17 +59,20 @@ export const ENOUGH_UNIT: Record<EnoughVar, Bi> = {
   imaAccel: { en: "accelerations", is: "hraðaaukningar" },
   imaDecel: { en: "braking actions", is: "hemlanir" },
   imaCod: { en: "changes of direction", is: "stefnubreytingar" },
-  frDistance: { en: "m of fast running", is: "m af hraðhlaupi" },
-  strideHi: { en: "fast strides", is: "hröð skref" },
+  frDistance: { en: "m in long runs", is: "m í löngum hlaupum" },
+  strideHi: { en: "strides in long runs", is: "skref í löngum hlaupum" },
+  longRuns: { en: "long runs", is: "löng hlaup" },
 };
 
 /**
  * How a variable's single-session share scales with the day's load (share = (matchPct/100)^e).
  * All five read the periodization hub's KPI_TAPER_EXPONENT (one source for plan and review). The IMA
  * running pair there is calibrated on Breiðablik's own per-MD-day medians (2026, ~1,600 sessions) —
- * fast strides (band 6–8 includes sub-maximal running) stay high even on light days (~60% of a match
- * on MD-1), so their share is flatter (e<1); fast-running distance tapers a little harder than volume
- * (e=1.2). A typical MD-4 then reads ~on target, a light MD-1 does not read "short".
+ * long-run strides (band 6–8 = runs ≥21 s) stay high even on light days (~60% of a match
+ * on MD-1), so their share is flatter (e<1); long-run distance tapers a little harder than volume
+ * (e=1.2). A typical MD-4 then reads ~on target, a light MD-1 does not read "short". Long runs as a COUNT
+ * follow the day's load one to one (e=1.0): Breiðablik 2026 medians of own-match share were 64 / 55 / 47 /
+ * 39% on MD-5 / -4 / -2 / -1 against planned 60 / 68 / 50 / 32%.
  */
 export const SESSION_SHARE_EXPONENT: Record<EnoughVar, number> = {
   imaAccel: KPI_TAPER_EXPONENT.imaAccel ?? 0.9,
@@ -69,6 +80,7 @@ export const SESSION_SHARE_EXPONENT: Record<EnoughVar, number> = {
   imaCod: KPI_TAPER_EXPONENT.imaCod ?? 1.1,
   frDistance: KPI_TAPER_EXPONENT.imaFrDistance ?? 1.2,
   strideHi: KPI_TAPER_EXPONENT.imaStrideHi ?? 0.7,
+  longRuns: 1.0,
 };
 
 export const ENOUGH_CITATIONS = [
@@ -76,7 +88,6 @@ export const ENOUGH_CITATIONS = [
   "Martín-García et al. 2018 — load across the microcycle",
   "Stevens et al. 2017 — training load relative to match load",
   "Harper & McBurnie 2021 — braking / change-of-direction loading",
-  "Malone et al. 2018 — fast-running exposure vs match demand",
   "Training:match ratios — PMC6747517",
 ];
 
@@ -89,8 +100,8 @@ export function dayShare(key: EnoughVar, matchPct: number): number {
 /**
  * The planned day-type (from the coach's Week setup / Meso block). It decides WHICH movement types a
  * session is judged on, and HOW BIG the Acc/Dec/CoD target is (see targetShare). Mechanical days are about braking /
- * accelerations / changes of direction (running isn't the job); Locomotive days are about fast running /
- * strides; Mixed and Activation judge all five. Top-up (MD+1): starters recover, low-minute players are
+ * accelerations / changes of direction (running isn't the job); Locomotive days are about running volume
+ * (long continuous runs / their strides); Mixed and Activation judge all six. Top-up (MD+1): starters recover, low-minute players are
  * judged against a top-up target.
  */
 export type EnoughDayType = "mechanical" | "locomotive" | "mixed" | "activation" | "topup";
@@ -103,7 +114,7 @@ export const DAY_TYPE_LABEL: Record<EnoughDayType, Bi> = {
 };
 export const DAY_FOCUS: Record<EnoughDayType, readonly EnoughVar[]> = {
   mechanical: ["imaAccel", "imaDecel", "imaCod"],
-  locomotive: ["frDistance", "strideHi"],
+  locomotive: ["frDistance", "strideHi", "longRuns"],
   mixed: ENOUGH_VARS, activation: ENOUGH_VARS, topup: ENOUGH_VARS,
 };
 /** A planned day-type from a Meso focus label / Week-setup stimulus / legacy intent token. Pure. */
@@ -124,8 +135,8 @@ export type TargetBasis = "day_type" | "md";
 
 /**
  * The share of a match this session should deliver for one variable, and what set it. Acc/Dec/CoD with a
- * planned day-type read the same CAL_SHARE_IMA the Meso calendar plans from, so plan and review agree. Fast
- * running and strides stay on the MD-day taper (the calendar's running shares are not research-anchored yet),
+ * planned day-type read the same CAL_SHARE_IMA the Meso calendar plans from, so plan and review agree. Long-run
+ * distance and strides stay on the MD-day taper (the calendar's running shares are not research-anchored yet),
  * as does everything on a day with no planned day-type. Pure.
  */
 export function targetShare(key: EnoughVar, matchPct: number, dayType: EnoughDayType | null): { share: number; basis: TargetBasis } {
@@ -134,7 +145,7 @@ export function targetShare(key: EnoughVar, matchPct: number, dayType: EnoughDay
   return { share: dayShare(key, matchPct), basis: "md" };
 }
 
-/** Fast running / strides target for low-minute players on MD+1 (share of a match). Acc/Dec/CoD use CAL_SHARE_IMA.topup. */
+/** Long-run distance / strides target for low-minute players on MD+1 (share of a match). Acc/Dec/CoD use CAL_SHARE_IMA.topup. */
 export const TOPUP_MATCH_PCT = 40;
 /** Minutes in the last match at/above which a player is a starter recovering on a top-up day. */
 export const STARTER_MINUTES = 60;
@@ -166,7 +177,7 @@ export type EnoughInput = {
   players: EnoughPlayerInput[];
   /** Each training day since the last match, incl. this session (for "week so far"). */
   weekDays?: Array<{ matchPct: number; dayType: EnoughDayType | null }> | null;
-  /** The planned day-type and where it came from (null = unknown: all five judged, MD-only). */
+  /** The planned day-type and where it came from (null = unknown: all six judged, MD-only). */
   dayType?: EnoughDayType | null;
   dayTypeSource?: "week_setup" | "meso" | "md" | null;
 };
@@ -205,10 +216,10 @@ export type SessionEnough = {
   sessionDate: string | null;
   mdLabel: string | null;
   matchPct: number | null;
-  /** The planned day-type used to pick the judged movement types (null = all five, MD-only). */
+  /** The planned day-type used to pick the judged movement types (null = all six, MD-only). */
   dayType: EnoughDayType | null;
   dayTypeSource: "week_setup" | "meso" | "md" | null;
-  /** One plain line on what today's day-type is judged on (null when all five / unknown). */
+  /** One plain line on what today's day-type is judged on (null when all six / unknown). */
   focusNote: Bi | null;
   verdict: TeamVerdict | null;
   headline: Bi;
@@ -285,7 +296,7 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   const dayType = input.dayType ?? null;
   const isTopup = dayType === "topup";
   // Top-up: low-minute players are judged against the top-up target, not the MD+1 recovery level
-  // (Acc/Dec/CoD via CAL_SHARE_IMA.topup in targetShare; fast running / strides via TOPUP_MATCH_PCT).
+  // (Acc/Dec/CoD via CAL_SHARE_IMA.topup in targetShare; long runs / strides via TOPUP_MATCH_PCT).
   const matchPct = isTopup ? Math.max(input.matchPct ?? 0, TOPUP_MATCH_PCT) : input.matchPct;
   const focusSet = new Set<EnoughVar>(DAY_FOCUS[dayType ?? "mixed"]);
   const dtLabel = dayType ? DAY_TYPE_LABEL[dayType] : null;
@@ -313,9 +324,9 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   const focusNote: Bi | null = dayType === "mechanical"
     ? { en: `Mechanical day: judged on accelerations, braking and changes of direction, against about ${stdPct("mechanical")}% of a match (published range ${stdRange("mechanical")}). Running isn't the job today.`, is: `Mechanical-dagur: metið á hröðun, hemlun og stefnubreytingum, á móti um ${stdPct("mechanical")}% af leik (birt bil ${stdRange("mechanical")}). Hlaup er ekki verkefni dagsins.` }
     : dayType === "locomotive"
-      ? { en: "Locomotive day: judged on fast running and fast strides. Braking and cutting aren't the job today.", is: "Locomotive-dagur: metið á hraðhlaupi og hröðum skrefum. Hemlun og stefnubreytingar eru ekki verkefni dagsins." }
+      ? { en: "Locomotive day: judged on long continuous runs and their strides. Braking and cutting aren't the job today.", is: "Locomotive-dagur: metið á löngum samfelldum hlaupum og skrefum í þeim. Hemlun og stefnubreytingar eru ekki verkefni dagsins." }
       : dayType === "mixed" || dayType === "activation"
-        ? { en: `${DAY_TYPE_LABEL[dayType].en} day: accelerations, braking and changes of direction are judged against about ${stdPct(dayType)}% of a match (published range ${stdRange(dayType)}); fast running and strides against the MD-day.`, is: `${DAY_TYPE_LABEL[dayType].is}-dagur: hröðun, hemlun og stefnubreytingar eru metnar á móti um ${stdPct(dayType)}% af leik (birt bil ${stdRange(dayType)}); hraðhlaup og hröð skref á móti MD-deginum.` }
+        ? { en: `${DAY_TYPE_LABEL[dayType].en} day: accelerations, braking and changes of direction are judged against about ${stdPct(dayType)}% of a match (published range ${stdRange(dayType)}); long runs and their strides against the MD-day.`, is: `${DAY_TYPE_LABEL[dayType].is}-dagur: hröðun, hemlun og stefnubreytingar eru metnar á móti um ${stdPct(dayType)}% af leik (birt bil ${stdRange(dayType)}); löng hlaup og skref í þeim á móti MD-deginum.` }
       : isTopup && recoveringN === 0
         ? { en: `Top-up day: the players who trained are judged against a top-up target (${topupTarget.en}); starters (${STARTER_MINUTES}+ min last match) would be recovering.`, is: `Uppbótardagur: þeir sem æfðu eru metnir á móti uppbótarmarkmiði (${topupTarget.is}); byrjunarlið (${STARTER_MINUTES}+ mín í síðasta leik) væri í endurheimt.` }
       : isTopup
@@ -342,7 +353,7 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   const level: SessionEnough["confidence"]["level"] = cov >= 0.6 && ownShare >= 0.6 && input.mdSource ? "high" : cov >= 0.35 && ownShare >= 0.3 ? "moderate" : "low";
   const mdSrc: Bi = input.mdSource === "week_setup" ? { en: "MD-day from your week setup", is: "MD-dagur úr vikuskipulagi" }
     : input.mdSource === "fixtures" ? { en: "MD-day from the fixture list", is: "MD-dagur úr leikjaplani" } : { en: "no MD-day", is: "enginn MD-dagur" };
-  const dtSrc: Bi = !dtLabel ? { en: "no planned day-type (all five judged)", is: "engin skipulögð dagsgerð (allir fimm metnir)" }
+  const dtSrc: Bi = !dtLabel ? { en: "no planned day-type (all six judged)", is: "engin skipulögð dagsgerð (allir sex metnir)" }
     : input.dayTypeSource === "week_setup" ? { en: `${dtLabel.en} from your week setup`, is: `${dtLabel.is} úr vikuskipulagi` }
     : input.dayTypeSource === "meso" ? { en: `${dtLabel.en} from the Meso plan`, is: `${dtLabel.is} úr Meso-áætlun` }
     : { en: `${dtLabel.en} (MD+1 default)`, is: `${dtLabel.is} (sjálfgefið á MD+1)` };

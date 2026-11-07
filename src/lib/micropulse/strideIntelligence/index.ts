@@ -7,13 +7,24 @@
  * but the same data carry useful information outdoor too:
  *
  *   1. Cadence (volume-weighted avg stride rate) — declines under NM fatigue.
- *   2. Stride length proxy (HSR distance / high-velocity strides) — declining
- *      values indicate compensation patterns.
+ *   2. Stride length — session average (total distance ÷ total strides) plus
+ *      stride length in sustained running (IMA band 5–8 distance ÷ band 5–8
+ *      strides). Declining values indicate compensation patterns.
  *   3. L/R Change-of-Direction asymmetry (Bishop 2020) — >15% flag for
  *      injury risk and RTP clearance.
- *   4. GPS / IMA decoupling — if GPS reports high-speed running but IMA
- *      stride-load stays low, the player is moving fast without the usual
- *      mechanical cost (reduced effort, possibly fatigue or compensation).
+ *   4. GPS / IMA mix — share of GPS high-speed distance vs share of IMU load
+ *      that came in runs of 15 s or more (bands 4–8). A rise means more of his
+ *      fast running came in short efforts rather than long runs than usual.
+ *      Context only — NOT a fatigue marker on its own.
+ *
+ * IMPORTANT — what the IMA Free Running bands are: BOUT-DURATION bands
+ * (Breiðablik thresholds 0–8–12–15–18–21–24–27 s of one continuous run), NOT
+ * speed or cadence bands. Mean speed (~12–14 km/h) and stride rate (~87–93/min)
+ * are flat from band 4 to 8. Bands 5–8 = long continuous runs (≥18 s), NOT
+ * sprinting / high-speed / high cadence. Sprint/HSR comes from GPS velocity
+ * bands only. See docs/ima-free-running-bands.md. Several field names below
+ * ("hiVelocity", "imaHsr", "hiCadence") are legacy and kept for interface
+ * stability — the comments describe what they actually hold.
  *
  * The output of this module is a `StrideIntelligencePayload` that the
  * decision engine consumes alongside the existing internal/external/metabolic
@@ -23,14 +34,18 @@
  * References:
  *   - Bishop et al. 2020 — Asymmetry thresholds for screening tests in soccer.
  *   - Cardinale et al. 2017 — Cadence as NM fatigue indicator in team sport.
- *   - Catapult IMA white paper — Free Running stride detection bands.
+ *   - Catapult IMA white paper — Free Running bout detection (bout-duration bands).
+ *   - McBurnie et al. 2022 — stride/running mechanics as a within-player read.
  */
 
 export type StrideRow = {
   /** Per-band stride count (1..8). Null bands treated as 0. */
   strideCounts: (number | null | undefined)[];
-  /** Per-band avg stride rate (Hz). Null when band had no strides. */
+  /** Per-band average stride rate (strides per minute, Catapult V2). Null when the band had no strides. */
   strideRates: (number | null | undefined)[];
+  /** Per-band time in band (seconds). When present, cadence = strides ÷ time, which is immune to the zeros
+   *  the stored per-band average carries for bands without a bout. */
+  strideDurations?: (number | null | undefined)[];
   /** Per-band IMU player load contribution (a.u.). */
   stridePlayerLoads: (number | null | undefined)[];
 
@@ -38,8 +53,9 @@ export type StrideRow = {
   hsrDistance: number | null | undefined;
   /** Velocity Band 6 distance (m) — sprint coverage. */
   sprintDistance?: number | null | undefined;
-  /** IMA Free Running band 5-8 total distance (m) — high-intensity running
-   *  distance from the stride series, domain-consistent with band 5-8 strides. */
+  /** IMA Free Running band 5-8 total distance (m) — distance in LONG CONTINUOUS
+   *  RUNS (bouts ≥18 s), domain-consistent with band 5-8 strides. NOT high-speed
+   *  running despite the legacy field name. Null indoors (needs GPS). */
   imaHsrDistance?: number | null | undefined;
   /** Total distance covered (m). */
   totalDistance: number | null | undefined;
@@ -51,23 +67,28 @@ export type StrideRow = {
 
 export type StrideMetrics = {
   totalStrides: number;
+  /** Strides in bands 5–8 = long continuous runs (≥18 s). Legacy name — not velocity. */
   hiVelocityStrides: number;
+  /** IMU player load in bands 4–8 = runs of 15 s or more. Legacy name — not intensity. */
   highIntensityPlayerLoad: number;
   /** Volume-weighted avg stride rate across all 8 bands (Hz). null when no strides. */
   cadenceWeighted: number | null;
-  /** HSR meters / high-velocity strides (m/stride). Normal ~1.8–2.2 at sprint speed. */
+  /** Session-average stride length = total distance ÷ total strides (m/stride).
+   *  Legacy name ("Hsr") — see the v3 note in computeStrideMetrics. */
   strideLengthHsr: number | null;
-  /** IMA band 5-8 running distance (m) — high-intensity running dose. null when absent. */
+  /** IMA band 5-8 distance (m) — long-run distance (bouts ≥18 s). NOT HSR. null when absent. */
   imaHsrDistanceM: number | null;
-  /** True high-cadence stride length = IMA band 5-8 distance ÷ band 5-8 strides
-   *  (m/stride). Domain-consistent (both from the stride series), unlike the
-   *  session-average strideLengthHsr. null when the IMA distance is absent. */
+  /** Stride length in sustained running = IMA band 5-8 distance ÷ band 5-8
+   *  strides (m/stride). Domain-consistent (both from the stride series), unlike
+   *  the session-average strideLengthHsr. null when the IMA distance is absent.
+   *  Legacy name ("hiCadence") — bands 5–8 are long runs, not high cadence. */
   hiCadenceStrideLengthM: number | null;
   codLeftTotal: number;
   codRightTotal: number;
   /** |L - R| / ((L + R) / 2) × 100. null when total < MIN_COD_EVENTS. */
   codLrAsymmetryPct: number | null;
-  /** GPS-vs-IMA decoupling ratio. <0 means HSR distance way above stride load. */
+  /** GPS HSR share of distance − share of IMU load in runs ≥15 s (bands 4–8).
+   *  Positive = more fast running came outside long runs than in long-run load. */
   gpsImaDecoupling: number | null;
 };
 
@@ -151,32 +172,36 @@ export function computeStrideMetrics(row: StrideRow): StrideMetrics {
   const highIntensityPlayerLoad =
     (loads[3] ?? 0) + (loads[4] ?? 0) + (loads[5] ?? 0) + (loads[6] ?? 0) + (loads[7] ?? 0);
 
-  // Volume-weighted cadence: Σ(rate × count) / Σcount.
-  let weightedSum = 0;
+  // Cadence (strides per minute). From time in band when the sync carries it: strides ÷ seconds × 60 over
+  // the bands that have both. Else the stored per-band average, weighted by strides, counting only bands
+  // with a rate (a band without a bout stores 0 and would pull the mean down).
+  const durations = (row.strideDurations ?? []).map((v) => Number(v ?? 0));
+  let timedStrides = 0, timedSeconds = 0, weightedSum = 0, ratedStrides = 0;
   for (let i = 0; i < 8; i += 1) {
     const c = counts[i] ?? 0;
     const r = rates[i] ?? 0;
-    if (c > 0 && Number.isFinite(r) && Number.isFinite(c)) {
-      weightedSum += r * c;
-    }
+    const d = durations[i] ?? 0;
+    if (c > 0 && d > 0) { timedStrides += c; timedSeconds += d; }
+    if (c > 0 && r > 0 && Number.isFinite(r)) { weightedSum += r * c; ratedStrides += c; }
   }
-  const cadenceWeighted = totalStrides > 0 ? weightedSum / totalStrides : null;
+  const cadenceWeighted = timedSeconds > 0 ? (timedStrides / timedSeconds) * 60 : ratedStrides > 0 ? weightedSum / ratedStrides : null;
 
   // Average stride length across the whole session.
   //
   // Iteration history (kept for posterity so we don't repeat the mistake):
   //  v1: hsrDistance / (bands 5-8 strides) → 0.15 m/stride (too low).
-  //      Bands 5-8 are stride-RATE bands, not velocity bands — they capture
-  //      every fast-cadence step including high-cadence jogging.
+  //      Bands 5-8 are BOUT-DURATION bands (runs ≥18 s), not velocity bands
+  //      (earlier notes wrongly called them stride-RATE bands) — they hold
+  //      every stride of a long continuous run, whatever its speed.
   //  v2: sprintDistance / band-8 strides → 0.02 m/stride (worse).
-  //      Same root cause: band 8 = top stride-rate, NOT top velocity. A
-  //      player jogging at 3 m/s with 4 Hz cadence racks up band-8 strides
-  //      while contributing zero sprint distance.
+  //      Same root cause: band 8 = runs longer than 27 s, NOT top velocity.
+  //      A long tempo run racks up band-8 strides while contributing zero
+  //      sprint distance.
   //  v3 (current): totalDistance / totalStrides.
   //      Coach-friendly average stride length across the session. Normal
   //      range 0.8–1.4 m/stride for field-sport mixed-pace sessions
   //      (Buchheit 2014). A drop in this metric reflects shorter, more
-  //      frequent steps — a known fatigue / sprint-mechanic compensation
+  //      frequent steps — a known fatigue / running-mechanic compensation
   //      pattern (Mendiguchia 2020). Trends matter more than absolute
   //      values; baseline z-score flags individual decline.
   const totalDistForStride = Number(row.totalDistance ?? 0);
@@ -194,10 +219,10 @@ export function computeStrideMetrics(row: StrideRow): StrideMetrics {
       ? (Math.abs(codL - codR) / codAvg) * 100
       : null;
 
-  // GPS / IMA decoupling — does GPS show fast running without matching IMU load?
-  // We compare the share of HSR distance vs the share of high-band stride load.
-  // If HSR distance is high but high-band stride load is low for the same session,
-  // the ratio (HSR_share - HiLoad_share) is positive and growing → decoupling.
+  // GPS / IMA mix — share of GPS HSR distance vs share of IMU load in bands 4–8
+  // (runs of 15 s or more; bout-duration bands, NOT intensity bands). Positive
+  // and growing = more of his fast running came in short efforts rather than in
+  // long continuous runs than usual. Contextual, not a fatigue marker by itself.
   const hsrDist = Number(row.hsrDistance ?? 0);
   const totalDist = Number(row.totalDistance ?? 0);
   const totalPlayerLoad = nullSafeSum(loads);
@@ -208,10 +233,11 @@ export function computeStrideMetrics(row: StrideRow): StrideMetrics {
     gpsImaDecoupling = hsrShare - hiLoadShare;
   }
 
-  // True high-cadence stride length from the stride series itself: IMA band 5-8
-  // distance ÷ band 5-8 strides. Domain-consistent (both from the same cadence
-  // bands), so it avoids the v1 mistake of mixing GPS HSR distance with stride
-  // counts. null when the IMA band 5-8 distance hasn't been ingested yet.
+  // Stride length in sustained running from the stride series itself: IMA band
+  // 5-8 distance ÷ band 5-8 strides (long continuous runs ≥18 s). Domain-
+  // consistent (both from the same bout-duration bands), so it avoids the v1
+  // mistake of mixing GPS HSR distance with stride counts. null when the band
+  // 5-8 distance is absent (indoors / not yet ingested).
   const imaHsr = Number(row.imaHsrDistance ?? 0) || 0;
   const hiCadenceStrideLengthM =
     imaHsr > 0 && hiVelocityStrides > 0 ? imaHsr / hiVelocityStrides : null;
@@ -281,7 +307,7 @@ export function buildStrideIntelligence(
       const severity = severityFromZ(z);
       drivers.push({ driver: "STRIDE_CADENCE_DROP", z, value: metrics.cadenceWeighted, severity });
       reasons.push(
-        `Cadence ${metrics.cadenceWeighted.toFixed(2)} Hz — ${z.toFixed(1)}σ below personal baseline. NM fatigue indicator.`,
+        `Cadence ${metrics.cadenceWeighted.toFixed(0)} strides/min — ${z.toFixed(1)}σ below personal baseline. NM fatigue indicator.`,
       );
     }
   }
@@ -305,7 +331,7 @@ export function buildStrideIntelligence(
         severity,
       });
       reasons.push(
-        `Stride length at HSR is ${metrics.strideLengthHsr.toFixed(2)} m/stride — ${z.toFixed(1)}σ below baseline. Possible compensation pattern.`,
+        `Average stride length is ${metrics.strideLengthHsr.toFixed(2)} m/stride — ${z.toFixed(1)}σ below baseline. Possible compensation pattern.`,
       );
     }
   }
@@ -369,7 +395,7 @@ export function buildStrideIntelligence(
     }
   }
 
-  // 4. GPS-IMA decoupling — drifting positive vs personal baseline
+  // 4. GPS-IMA mix shift — drifting positive vs personal baseline (contextual)
   const dcBase = baselines?.gpsImaDecoupling;
   if (
     metrics.gpsImaDecoupling != null &&
@@ -389,7 +415,7 @@ export function buildStrideIntelligence(
         severity,
       });
       reasons.push(
-        `GPS-IMA decoupling +${z.toFixed(1)}σ above baseline — covering distance with reduced mechanical cost. Possible NM fatigue or compensation.`,
+        `GPS-IMA mix shift +${z.toFixed(1)}σ above baseline — more of his fast GPS running came in short efforts rather than long continuous runs than usual. Context, not a fatigue sign on its own.`,
       );
     }
   }

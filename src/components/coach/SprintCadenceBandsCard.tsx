@@ -3,16 +3,20 @@
 /**
  * src/components/coach/SprintCadenceBandsCard.tsx
  *
- * IMA Free Running Bands 7 + 8 — the two highest stride-cadence bands, i.e.
- * the strides taken at true sprint cadence. Sits in the Decel Intelligence
- * card stack next to Decel:Sprint Coupling because B7-8 stride volume is the
- * cleanest read on how much genuine sprint-cadence work a player is doing.
+ * LONGEST CONTINUOUS RUNS (≥24 s) — IMA Free Running bands 7 + 8, as strides.
  *
- * Mode-agnostic: IMA Free Running is an inertial signal — Catapult captures
- * it whether the vest has a GPS lock or not — so this works for outdoor
- * pitch sessions exactly as it does for indoor hall sessions. The data lives
- * in player_external_load_daily.ima_fr_band7/8_stride_count regardless of
- * the team's indoor/outdoor mode.
+ * The file/component name is historical ("sprint cadence") and kept so imports
+ * don't break. IMA Free Running bands are BOUT-DURATION bands: band 7 = runs
+ * lasting 24–27 s, band 8 = runs longer than 27 s. Mean speed in these bands is
+ * ~12–14 km/h and stride rate ~87–93/min — the same as bands 4–6 — so this is
+ * NOT sprinting and NOT high cadence (docs/ima-free-running-bands.md). Sprint
+ * volume lives on SprintExposureCard (GPS sprint distance).
+ *
+ * Why reframe instead of re-sourcing to GPS sprint efforts: this card sits
+ * directly under SprintExposureCard, which is GPS-sourced, so a GPS version
+ * here would duplicate it. It stays IMU-only, so it works indoors where GPS
+ * sprint is null. (The Decel:Sprint Coupling tile reads GPS sprint efforts
+ * since migration 20261107110000; these strides are no longer its denominator.)
  *
  * Reads player_external_load_daily directly (RLS lets a coach see their own
  * team's players) — no API route needed.
@@ -21,6 +25,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import { freeRunningBandLabel } from "@/lib/integrations/catapult/freeRunningBands";
 
 type DayRow = {
   date: string;
@@ -45,6 +50,7 @@ export default function SprintCadenceBandsCard({ playerId }: { playerId: string 
   const [lang] = useLang();
   const [data, setData] = useState<Loaded | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -111,56 +117,97 @@ export default function SprintCadenceBandsCard({ playerId }: { playerId: string 
 
   const total7d = data.sum7dB7 + data.sum7dB8;
   const total28d = data.sum28dB7 + data.sum28dB8;
+  const usualWeek = total28d / 4;
   const fmt = (n: number) => Math.round(n).toLocaleString("is-IS");
+  const IS = lang === "IS";
+
+  // Level 0 — plain verdict: this week's long-run volume vs his usual week.
+  const ratio = usualWeek > 0 ? total7d / usualWeek : null;
+  const verdict = (() => {
+    if (ratio == null) return IS ? "Engin löng hlaup síðustu 4 vikur" : "No long runs in the last 4 weeks";
+    if (total7d === 0) return IS ? "Engin löng samfelld hlaup þessa vikuna" : "No long continuous runs this week";
+    if (ratio >= 1.3) return IS ? "Meira af löngum hlaupum en venjulega þessa vikuna" : "More long continuous running than usual this week";
+    if (ratio <= 0.7) return IS ? "Minna af löngum hlaupum en venjulega þessa vikuna" : "Less long continuous running than usual this week";
+    return IS ? "Löng hlaup svipuð og venjulega þessa vikuna" : "Long continuous running about the same as usual this week";
+  })();
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-medium text-slate-900">
-            {lang === "IS" ? "Sprint-skref (IMA FR Bands 7-8)" : "Sprint Cadence Strides (IMA FR B7-8)"}
+            {IS ? "Lengstu samfelldu hlaupin (≥24 sek)" : "Longest continuous runs (≥24 s)"}
           </div>
           <div className="text-[11px] text-slate-500">
-            {lang === "IS"
-              ? "Hæstu cadence-bönd — raunveruleg sprett-skref. Virkar indoor og outdoor."
-              : "Highest cadence bands — true sprint-cadence strides. Works indoor and outdoor."}
+            {IS
+              ? "Skref í hlaupum sem standa í 24 sek eða lengur. Ekki sprettir. Virkar inni og úti."
+              : "Strides in runs lasting 24 s or more. Not sprinting. Works indoor and outdoor."}
           </div>
         </div>
       </div>
 
-      {/* B7 / B8 / total split */}
-      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-        <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
-          <div className="text-[9px] uppercase tracking-wide text-slate-500">Band 7 · 7d</div>
-          <div className="mt-0.5 text-sm font-bold tabular-nums text-slate-900">{fmt(data.sum7dB7)}</div>
-          <div className="text-[9px] text-slate-500">{lang === "IS" ? "skref" : "strides"}</div>
-        </div>
-        <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
-          <div className="text-[9px] uppercase tracking-wide text-slate-500">Band 8 · 7d</div>
-          <div className="mt-0.5 text-sm font-bold tabular-nums text-slate-900">{fmt(data.sum7dB8)}</div>
-          <div className="text-[9px] text-slate-500">{lang === "IS" ? "skref" : "strides"}</div>
-        </div>
-        <div className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1.5">
-          <div className="text-[9px] uppercase tracking-wide text-emerald-700">B7+8 · 7d</div>
-          <div className="mt-0.5 text-sm font-bold tabular-nums text-emerald-800">{fmt(total7d)}</div>
-          <div className="text-[9px] text-emerald-700">{lang === "IS" ? "sprett-skref" : "sprint strides"}</div>
-        </div>
-      </div>
+      {/* Level 0 — verdict */}
+      <p className="mt-3 text-sm font-semibold text-slate-900">{verdict}</p>
 
-      <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500">
-        <span>
-          {lang === "IS"
-            ? `28 daga samtals: ${fmt(total28d)} skref (B7 ${fmt(data.sum28dB7)} · B8 ${fmt(data.sum28dB8)})`
-            : `28-day total: ${fmt(total28d)} strides (B7 ${fmt(data.sum28dB7)} · B8 ${fmt(data.sum28dB8)})`}
-        </span>
-        <span>{data.daysWithData7d} / 7 {lang === "IS" ? "dagar" : "days"}</span>
-      </div>
+      {/* Level 1 — plain facts */}
+      <ul className="mt-1.5 list-disc pl-4 text-xs text-slate-600 leading-relaxed">
+        <li>
+          {IS
+            ? `${fmt(total7d)} skref í löngum hlaupum síðustu 7 daga (venjuleg vika hjá honum: ~${fmt(usualWeek)}).`
+            : `${fmt(total7d)} strides in long runs over the last 7 days (his usual week: ~${fmt(usualWeek)}).`}
+        </li>
+        <li>
+          {IS
+            ? `Mælt á ${data.daysWithData7d} af síðustu 7 dögum.`
+            : `Measured on ${data.daysWithData7d} of the last 7 days.`}
+        </li>
+        <li>
+          {IS
+            ? "Þetta er hlaupaúthald (tempó / löng endurheimtarhlaup), ekki spretthraði — sprettir eru á kortinu fyrir ofan (GPS)."
+            : "This is sustained running (tempo / long recovery runs), not sprint speed — sprinting is on the card above (GPS)."}
+        </li>
+      </ul>
 
-      <p className="mt-2 text-[10px] text-slate-500 leading-snug">
-        {lang === "IS"
-          ? "IMA Free Running bands 7-8 eru hæstu stride-cadence bönd Catapult — skrefin sem tekin eru á raunverulegum spretthraða. Hærra band 7+8 magn = meiri ósvikin sprett-útsetning, sem parast við Decel:Sprint Coupling hér fyrir ofan."
-          : "IMA Free Running bands 7-8 are Catapult's highest stride-cadence bands — strides taken at genuine sprint cadence. Higher B7+8 volume means more true sprint exposure, which pairs with the Decel:Sprint Coupling tile above."}
-      </p>
+      <button
+        type="button"
+        onClick={() => setShowDetails((v) => !v)}
+        className="mt-2 text-[11px] font-semibold text-slate-500 underline-offset-2 hover:underline"
+      >
+        {showDetails ? (IS ? "Fela nánar" : "Hide details") : (IS ? "Sýna nánar" : "Show details")}
+      </button>
+
+      {/* Level 2 — per-band split + source */}
+      {showDetails && (
+        <>
+          <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+            <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
+              <div className="text-[9px] uppercase tracking-wide text-slate-500">{freeRunningBandLabel(7, IS ? "is" : "en")} · 7d</div>
+              <div className="mt-0.5 text-sm font-bold tabular-nums text-slate-900">{fmt(data.sum7dB7)}</div>
+              <div className="text-[9px] text-slate-500">{IS ? "skref" : "strides"}</div>
+            </div>
+            <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
+              <div className="text-[9px] uppercase tracking-wide text-slate-500">{freeRunningBandLabel(8, IS ? "is" : "en")} · 7d</div>
+              <div className="mt-0.5 text-sm font-bold tabular-nums text-slate-900">{fmt(data.sum7dB8)}</div>
+              <div className="text-[9px] text-slate-500">{IS ? "skref" : "strides"}</div>
+            </div>
+            <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
+              <div className="text-[9px] uppercase tracking-wide text-slate-500">{IS ? "Samtals · 7d" : "Total · 7d"}</div>
+              <div className="mt-0.5 text-sm font-bold tabular-nums text-slate-900">{fmt(total7d)}</div>
+              <div className="text-[9px] text-slate-500">{IS ? "skref í löngum hlaupum" : "long-run strides"}</div>
+            </div>
+          </div>
+          <div className="mt-2 text-[10px] text-slate-500">
+            {IS
+              ? `28 daga samtals: ${fmt(total28d)} skref (24–27 sek ${fmt(data.sum28dB7)} · >27 sek ${fmt(data.sum28dB8)})`
+              : `28-day total: ${fmt(total28d)} strides (24–27 s ${fmt(data.sum28dB7)} · >27 s ${fmt(data.sum28dB8)})`}
+          </div>
+          <p className="mt-2 text-[10px] text-slate-500 leading-snug">
+            {IS
+              ? "Heimild: Catapult IMA Free Running, bönd 7–8 (V2). Böndin flokka hvert samfellt hlaup eftir LENGD í sekúndum (band 7 = 24–27 sek, band 8 = >27 sek), ekki eftir hraða eða skreftíðni — meðalhraði er ~12–14 km/klst og skreftíðni ~87–93/mín, sú sama og í böndum 4–6. Decel:Sprint Coupling reiturinn fyrir neðan les GPS-spretti, ekki þessa tölu."
+              : "Source: Catapult IMA Free Running, bands 7–8 (V2). The bands sort each continuous run by its LENGTH in seconds (band 7 = 24–27 s, band 8 = >27 s), not by speed or stride rate — mean speed is ~12–14 km/h and stride rate ~87–93/min, the same as bands 4–6. The Decel:Sprint Coupling tile below reads GPS sprint efforts, not this number."}
+          </p>
+        </>
+      )}
     </div>
   );
 }

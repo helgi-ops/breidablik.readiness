@@ -4,10 +4,16 @@
  * StrideIntelligenceCard
  *
  * Surfaces the four IMA-derived stride signals for a single player:
- *   - Cadence (weighted stride rate, Hz) with personal-z drift
- *   - Stride length at HSR (m/stride) — compression flag
+ *   - Cadence (stride rate, strides per minute) with personal-z drift
+ *   - Stride length (m/stride) — session average, or stride length in sustained
+ *     running (IMA FR band 5–8 = long continuous runs ≥18 s) when GPS distance exists
  *   - L/R Change-of-Direction asymmetry (Bishop 2020)
- *   - GPS-IMA decoupling (effort vs distance)
+ *   - GPS-IMA mix (GPS high-speed share vs IMU load share in runs ≥15 s)
+ *
+ * IMA Free Running bands are BOUT-DURATION bands, NOT speed/cadence bands —
+ * band 5–8 is never described as sprint / high-speed / high-cadence here
+ * (docs/ima-free-running-bands.md). API field names (strideLengthHsr,
+ * hiCadenceStrideLengthM, imaHsrDistanceM) are legacy and kept stable.
  *
  * Mode-agnostic — works indoor and outdoor as long as the Catapult vest
  * recorded IMA Free Running strides for the date.
@@ -81,7 +87,7 @@ function driverLabel(d: StrideDriverFlag["driver"]): string {
     case "COD_LR_ASYMMETRY":
       return "L/R asymmetry";
     case "GPS_IMA_DECOUPLING":
-      return "GPS-IMA decoupling";
+      return "GPS-IMA mix shift";
   }
 }
 
@@ -185,13 +191,13 @@ function MetricTile({
 // Single source of truth so REST-DAY and SESSION branches stay in sync.
 const STRIDE_TIPS = {
   cadence:
-    "Stride frequency in Hz (strides/sec), volume-weighted across all velocity bands. Higher = quicker turnover. A drop of ≥0.5 Hz vs baseline signals neuromuscular fatigue (Buchheit 2018) — usually before HSR distance drops.",
+    "Stride rate in strides per minute: strides ÷ time in the IMA Free Running bands (bands = how long each continuous run lasted, not speed). Higher = quicker turnover. A clear drop vs his own baseline signals neuromuscular fatigue (Buchheit 2018).",
   strideLength:
-    "Average stride length at high-speed running (>15 km/h), in metres/stride. Compression of ≥0.10 m vs baseline suggests posterior-chain fatigue or reduced power output — hamstring caution flag.",
+    "Metres covered per stride. When GPS distance exists it is stride length in sustained running — distance ÷ strides in long continuous runs (18 s or more; IMA Free Running bands 5–8), not sprinting. Otherwise it is the session average (total distance ÷ total strides). A clear drop vs his own baseline suggests fatigue or reduced push-off (McBurnie 2022).",
   asymmetry:
     "Side-to-side imbalance in high-intensity change-of-direction efforts: |Left − Right| ÷ average %. Bishop 2020 thresholds: <9% normal · 9–15% watch · 15–18% concern · >18% high-tier (≈3× ACL / hamstring injury risk).",
   decoupling:
-    "Gap between high-speed running distance and high-load stride detection (percentage points). Large gaps (>15 %pt) mean the player is producing effort that doesn't translate into distance — mechanical inefficiency or fatigue under load.",
+    "GPS high-speed share of distance minus the share of IMU load that came in runs of 15 s or more (IMA Free Running bands 4–8 — bout length, not speed), in percentage points. A rise means more of his fast running came in short efforts rather than long continuous runs than usual. Context only — not a fatigue sign on its own.",
 } as const;
 
 export default function StrideIntelligenceCard({ playerId, date: dateProp, isKinexon = false }: { playerId: string; date?: string; isKinexon?: boolean }) {
@@ -312,19 +318,19 @@ export default function StrideIntelligenceCard({ playerId, date: dateProp, isKin
               <MetricTile
                 title="Cadence"
                 value={cadenceBaseline?.mean ?? null}
-                unit="Hz"
+                unit="/min"
                 baselineMean={cadenceBaseline?.mean}
                 trendValues={trend.map((r) => r.cadenceWeighted)}
                 helper="14-day baseline · vol-weighted"
                 tooltip={STRIDE_TIPS.cadence}
               />
               <MetricTile
-                title="Stride length (HSR)"
+                title="Avg stride length"
                 value={strideLengthBaseline?.mean ?? null}
                 unit="m/stride"
                 baselineMean={strideLengthBaseline?.mean}
                 trendValues={trend.map((r) => r.strideLengthHsr)}
-                helper="14-day baseline · HSR/strides"
+                helper="14-day baseline · distance ÷ strides"
                 tooltip={STRIDE_TIPS.strideLength}
               />
               <MetricTile
@@ -337,14 +343,14 @@ export default function StrideIntelligenceCard({ playerId, date: dateProp, isKin
                 tooltip={STRIDE_TIPS.asymmetry}
               />
               <MetricTile
-                title="GPS-IMA decoupling"
+                title="GPS-IMA mix"
                 value={decouplingBaseline?.mean != null ? decouplingBaseline.mean * 100 : null}
                 unit="%pt"
                 baselineMean={decouplingBaseline?.mean != null ? decouplingBaseline.mean * 100 : null}
                 trendValues={trend.map((r) =>
                   r.gpsImaDecoupling != null ? r.gpsImaDecoupling * 100 : null,
                 )}
-                helper="14-day baseline · HSR−HiLoad"
+                helper="14-day baseline · fast share − long-run share"
                 tooltip={STRIDE_TIPS.decoupling}
               />
             </div>
@@ -419,7 +425,7 @@ export default function StrideIntelligenceCard({ playerId, date: dateProp, isKin
           <div className="mt-1 text-[11px] leading-snug text-slate-600">{sv.reason}</div>
           <div className="mt-1 text-[10px] text-slate-400">
             {sv.strideLengthM != null && sv.normM != null ? `${sv.strideLengthM} m vs his usual ${sv.normM} m · ` : ""}
-            band 5-8 distance ÷ strides · vs his own {sv.kind === "match" ? "matches" : "big sessions"} · 2.5 SD · Girard/Morin 2011
+            distance ÷ strides in long continuous runs (18 s+) · vs his own {sv.kind === "match" ? "matches" : "big sessions"} · 2.5 SD · McBurnie 2022, Girard/Morin 2011
           </div>
         </div>
       )}
@@ -458,21 +464,21 @@ export default function StrideIntelligenceCard({ playerId, date: dateProp, isKin
         <MetricTile
           title="Cadence"
           value={m.cadenceWeighted}
-          unit="Hz"
+          unit="/min"
           baselineMean={cadenceBaseline?.mean}
           trendValues={trend.map((r) => r.cadenceWeighted)}
-          helper="vol-weighted across bands"
+          helper="vol-weighted across all runs"
           tooltip={STRIDE_TIPS.cadence}
         />
         <MetricTile
-          title={m.hiCadenceStrideLengthM != null ? "Stride length (high-cadence)" : "Avg stride length"}
+          title={m.hiCadenceStrideLengthM != null ? "Stride length (long runs)" : "Avg stride length"}
           value={m.hiCadenceStrideLengthM ?? m.strideLengthHsr}
           unit="m/stride"
           baselineMean={strideLengthBaseline?.mean}
           trendValues={trend.map((r) => r.strideLengthHsr)}
           helper={
             m.hiCadenceStrideLengthM != null
-              ? "IMA band 5-8 distance ÷ band 5-8 strides"
+              ? "Distance ÷ strides in runs of 18 s+ (IMA band 5–8)"
               : "Total distance ÷ total strides (session avg)"
           }
           tooltip={STRIDE_TIPS.strideLength}
@@ -490,12 +496,12 @@ export default function StrideIntelligenceCard({ playerId, date: dateProp, isKin
           tooltip={STRIDE_TIPS.asymmetry}
         />
         <MetricTile
-          title="GPS-IMA decoupling"
+          title="GPS-IMA mix"
           value={m.gpsImaDecoupling != null ? m.gpsImaDecoupling * 100 : null}
           unit="%pt"
           baselineMean={decouplingBaseline?.mean != null ? decouplingBaseline.mean * 100 : null}
           trendValues={trend.map((r) => (r.gpsImaDecoupling != null ? r.gpsImaDecoupling * 100 : null))}
-          helper="HSR share − HiLoad share"
+          helper="fast share − long-run share"
           tooltip={STRIDE_TIPS.decoupling}
         />
       </div>

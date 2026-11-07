@@ -185,7 +185,7 @@ const INJ_I18N = {
   decelOverload: { EN: "Overload", IS: "Overload" },
   decelUnderload: { EN: "Underload", IS: "Underload" },
   decelAccelCoupling: { EN: "Decel : Accel", IS: "Decel : Accel" },
-  decelSprintCoupling: { EN: "Decel : Sprint", IS: "Decel : Sprint" },
+  decelSprintCoupling: { EN: "Decel : Sprint (GPS)", IS: "Decel : Sprettir (GPS)" },
   decelConcentration: { EN: "Concentration", IS: "Concentration" },
   // Tier 1+2 retro signals
   priorInjuriesHeading: { EN: "Prior injuries (last 180 days)", IS: "Fyrri meiðsli (síðustu 180 daga)" },

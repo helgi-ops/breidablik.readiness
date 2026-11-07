@@ -34,6 +34,14 @@ type DailyRow = {
   ima_fr_band6_total_player_load: number | null;
   ima_fr_band7_total_player_load: number | null;
   ima_fr_band8_total_player_load: number | null;
+  ima_fr_band1_total_duration?: number | null;
+  ima_fr_band2_total_duration?: number | null;
+  ima_fr_band3_total_duration?: number | null;
+  ima_fr_band4_total_duration?: number | null;
+  ima_fr_band5_total_duration?: number | null;
+  ima_fr_band6_total_duration?: number | null;
+  ima_fr_band7_total_duration?: number | null;
+  ima_fr_band8_total_duration?: number | null;
   velocity_band5_total_distance: number | null;
   velocity_band6_total_distance: number | null;
   ima_fr_band58_total_distance: number | null;
@@ -67,8 +75,14 @@ function rowToStrideRow(r: DailyRow): StrideRow {
       r.ima_fr_band1_total_player_load, r.ima_fr_band2_total_player_load, r.ima_fr_band3_total_player_load, r.ima_fr_band4_total_player_load,
       r.ima_fr_band5_total_player_load, r.ima_fr_band6_total_player_load, r.ima_fr_band7_total_player_load, r.ima_fr_band8_total_player_load,
     ],
+    strideDurations: [
+      r.ima_fr_band1_total_duration, r.ima_fr_band2_total_duration, r.ima_fr_band3_total_duration, r.ima_fr_band4_total_duration,
+      r.ima_fr_band5_total_duration, r.ima_fr_band6_total_duration, r.ima_fr_band7_total_duration, r.ima_fr_band8_total_duration,
+    ],
     hsrDistance: (Number(r.velocity_band5_total_distance ?? 0) || 0) + (Number(r.velocity_band6_total_distance ?? 0) || 0),
     sprintDistance: r.velocity_band6_total_distance,
+    // band 5–8 = distance in long continuous runs (bouts ≥18 s), NOT high-speed
+    // running — field name `imaHsrDistance` is legacy, kept for interface stability.
     imaHsrDistance: r.ima_fr_band58_total_distance,
     totalDistance: r.total_distance,
     codLeft:
@@ -132,6 +146,14 @@ export async function loadStrideIntelligence(
         "ima_fr_band6_total_player_load",
         "ima_fr_band7_total_player_load",
         "ima_fr_band8_total_player_load",
+        "ima_fr_band1_total_duration",
+        "ima_fr_band2_total_duration",
+        "ima_fr_band3_total_duration",
+        "ima_fr_band4_total_duration",
+        "ima_fr_band5_total_duration",
+        "ima_fr_band6_total_duration",
+        "ima_fr_band7_total_duration",
+        "ima_fr_band8_total_duration",
         "velocity_band5_total_distance",
         "velocity_band6_total_distance",
         "ima_fr_band58_total_distance",
