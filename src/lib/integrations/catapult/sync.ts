@@ -490,6 +490,38 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     // written explicitly. Null (not 0) when no band reported, so "we have no data"
     // stays distinguishable from "he ran zero high-cadence metres".
     ima_fr_band58_total_distance: sumBands58(row.externalLoad),
+    // Added Nov 2026 — band 1–4 distance, per-band time, event count and V1 stride
+    // rate, plus the verbatim Free Running payload. Lets us compute real speed per band
+    // (distance ÷ duration) and see exactly which Catapult key produced each number.
+    ima_fr_band1_total_distance: frDist(row.externalLoad.imaFrBand1TotalDistance, row.externalLoad.imaFrBand1StrideCount, gpsActive(row.externalLoad)),
+    ima_fr_band2_total_distance: frDist(row.externalLoad.imaFrBand2TotalDistance, row.externalLoad.imaFrBand2StrideCount, gpsActive(row.externalLoad)),
+    ima_fr_band3_total_distance: frDist(row.externalLoad.imaFrBand3TotalDistance, row.externalLoad.imaFrBand3StrideCount, gpsActive(row.externalLoad)),
+    ima_fr_band4_total_distance: frDist(row.externalLoad.imaFrBand4TotalDistance, row.externalLoad.imaFrBand4StrideCount, gpsActive(row.externalLoad)),
+    ima_fr_band1_total_duration: row.externalLoad.imaFrBand1TotalDuration ?? null,
+    ima_fr_band2_total_duration: row.externalLoad.imaFrBand2TotalDuration ?? null,
+    ima_fr_band3_total_duration: row.externalLoad.imaFrBand3TotalDuration ?? null,
+    ima_fr_band4_total_duration: row.externalLoad.imaFrBand4TotalDuration ?? null,
+    ima_fr_band5_total_duration: row.externalLoad.imaFrBand5TotalDuration ?? null,
+    ima_fr_band6_total_duration: row.externalLoad.imaFrBand6TotalDuration ?? null,
+    ima_fr_band7_total_duration: row.externalLoad.imaFrBand7TotalDuration ?? null,
+    ima_fr_band8_total_duration: row.externalLoad.imaFrBand8TotalDuration ?? null,
+    ima_fr_band1_event_count: row.externalLoad.imaFrBand1EventCount ?? null,
+    ima_fr_band2_event_count: row.externalLoad.imaFrBand2EventCount ?? null,
+    ima_fr_band3_event_count: row.externalLoad.imaFrBand3EventCount ?? null,
+    ima_fr_band4_event_count: row.externalLoad.imaFrBand4EventCount ?? null,
+    ima_fr_band5_event_count: row.externalLoad.imaFrBand5EventCount ?? null,
+    ima_fr_band6_event_count: row.externalLoad.imaFrBand6EventCount ?? null,
+    ima_fr_band7_event_count: row.externalLoad.imaFrBand7EventCount ?? null,
+    ima_fr_band8_event_count: row.externalLoad.imaFrBand8EventCount ?? null,
+    ima_fr_band1_avg_stride_rate_v1: row.externalLoad.imaFrBand1AvgStrideRateV1 ?? null,
+    ima_fr_band2_avg_stride_rate_v1: row.externalLoad.imaFrBand2AvgStrideRateV1 ?? null,
+    ima_fr_band3_avg_stride_rate_v1: row.externalLoad.imaFrBand3AvgStrideRateV1 ?? null,
+    ima_fr_band4_avg_stride_rate_v1: row.externalLoad.imaFrBand4AvgStrideRateV1 ?? null,
+    ima_fr_band5_avg_stride_rate_v1: row.externalLoad.imaFrBand5AvgStrideRateV1 ?? null,
+    ima_fr_band6_avg_stride_rate_v1: row.externalLoad.imaFrBand6AvgStrideRateV1 ?? null,
+    ima_fr_band7_avg_stride_rate_v1: row.externalLoad.imaFrBand7AvgStrideRateV1 ?? null,
+    ima_fr_band8_avg_stride_rate_v1: row.externalLoad.imaFrBand8AvgStrideRateV1 ?? null,
+    ima_fr_raw: row.externalLoad.imaFrRaw ?? null,
   }));
 
   if (!payload.length) return 0;

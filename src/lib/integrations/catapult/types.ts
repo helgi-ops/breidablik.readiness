@@ -209,6 +209,36 @@ export type CatapultSessionMetric = {
   imaFrBand6TotalDistance?: number | null;
   imaFrBand7TotalDistance?: number | null;
   imaFrBand8TotalDistance?: number | null;
+  imaFrBand1TotalDistance?: number | null;
+  imaFrBand2TotalDistance?: number | null;
+  imaFrBand3TotalDistance?: number | null;
+  imaFrBand4TotalDistance?: number | null;
+  imaFrBand1TotalDuration?: number | null;
+  imaFrBand2TotalDuration?: number | null;
+  imaFrBand3TotalDuration?: number | null;
+  imaFrBand4TotalDuration?: number | null;
+  imaFrBand5TotalDuration?: number | null;
+  imaFrBand6TotalDuration?: number | null;
+  imaFrBand7TotalDuration?: number | null;
+  imaFrBand8TotalDuration?: number | null;
+  imaFrBand1EventCount?: number | null;
+  imaFrBand2EventCount?: number | null;
+  imaFrBand3EventCount?: number | null;
+  imaFrBand4EventCount?: number | null;
+  imaFrBand5EventCount?: number | null;
+  imaFrBand6EventCount?: number | null;
+  imaFrBand7EventCount?: number | null;
+  imaFrBand8EventCount?: number | null;
+  imaFrBand1AvgStrideRateV1?: number | null;
+  imaFrBand2AvgStrideRateV1?: number | null;
+  imaFrBand3AvgStrideRateV1?: number | null;
+  imaFrBand4AvgStrideRateV1?: number | null;
+  imaFrBand5AvgStrideRateV1?: number | null;
+  imaFrBand6AvgStrideRateV1?: number | null;
+  imaFrBand7AvgStrideRateV1?: number | null;
+  imaFrBand8AvgStrideRateV1?: number | null;
+  /** Every Free Running key Catapult returned, verbatim (V1 + V2) — provenance. */
+  imaFrRaw?: Record<string, number> | null;
 };
 
 export type NormalizedExternalLoad = {
@@ -349,6 +379,36 @@ export type NormalizedExternalLoad = {
     imaFrBand6TotalDistance?: number | null;
     imaFrBand7TotalDistance?: number | null;
     imaFrBand8TotalDistance?: number | null;
+    imaFrBand1TotalDistance?: number | null;
+    imaFrBand2TotalDistance?: number | null;
+    imaFrBand3TotalDistance?: number | null;
+    imaFrBand4TotalDistance?: number | null;
+    imaFrBand1TotalDuration?: number | null;
+    imaFrBand2TotalDuration?: number | null;
+    imaFrBand3TotalDuration?: number | null;
+    imaFrBand4TotalDuration?: number | null;
+    imaFrBand5TotalDuration?: number | null;
+    imaFrBand6TotalDuration?: number | null;
+    imaFrBand7TotalDuration?: number | null;
+    imaFrBand8TotalDuration?: number | null;
+    imaFrBand1EventCount?: number | null;
+    imaFrBand2EventCount?: number | null;
+    imaFrBand3EventCount?: number | null;
+    imaFrBand4EventCount?: number | null;
+    imaFrBand5EventCount?: number | null;
+    imaFrBand6EventCount?: number | null;
+    imaFrBand7EventCount?: number | null;
+    imaFrBand8EventCount?: number | null;
+    imaFrBand1AvgStrideRateV1?: number | null;
+    imaFrBand2AvgStrideRateV1?: number | null;
+    imaFrBand3AvgStrideRateV1?: number | null;
+    imaFrBand4AvgStrideRateV1?: number | null;
+    imaFrBand5AvgStrideRateV1?: number | null;
+    imaFrBand6AvgStrideRateV1?: number | null;
+    imaFrBand7AvgStrideRateV1?: number | null;
+    imaFrBand8AvgStrideRateV1?: number | null;
+    /** Every Free Running key Catapult returned, verbatim (V1 + V2) — provenance. */
+    imaFrRaw?: Record<string, number> | null;
   };
   // DIAGNOSTIC ONLY — see CatapultSessionMetric.rawParams. rawPayload → the
   // bounded source param object stored in raw_payload_json; paramKeys → the

@@ -73,11 +73,13 @@ function eachDateInRange(dateFrom: string, dateTo: string): string[] {
   return dates;
 }
 
-async function runBackfill(dateFrom: string, dateTo: string, config?: CatapultConfig) {
+async function runBackfill(dateFrom: string, dateTo: string, config?: CatapultConfig, deadlineMs?: number) {
   const dates = eachDateInRange(dateFrom, dateTo);
   const results: BackfillEntry[] = [];
 
   for (const date of dates) {
+    // Auto mode: stop before the function's time limit and let the caller continue.
+    if (deadlineMs != null && Date.now() > deadlineMs) break;
     try {
       const result = await syncCatapultDailyMetrics(date, { config });
       results.push({ date, status: "ok", stored: result.storedCount });
@@ -115,8 +117,15 @@ async function handle(request: Request) {
     );
   }
 
+  // ?auto=1 — ONE URL for a whole season. Each request syncs day by day until ~240 s
+  // (inside maxDuration 300), then answers 307 to the same URL with dateFrom moved to
+  // the next unprocessed day and running totals carried in the query string. The
+  // browser follows the redirects on its own, so pasting a single link backfills e.g.
+  // Feb–Oct. Same per-day sync as the nightly job: idempotent upserts, manual GPS
+  // overrides protected. The 90-day cap applies only to the non-auto mode.
+  const auto = url.searchParams.get("auto") === "1";
   const dates = eachDateInRange(dateFrom, dateTo);
-  if (dates.length > 90) {
+  if (!auto && dates.length > 90) {
     return NextResponse.json(
       { ok: false, error: "Date range too large — max 90 days per backfill run" },
       { status: 400 }
@@ -171,6 +180,41 @@ async function handle(request: Request) {
     if (teamConfig) {
       config = teamConfig;
     }
+  }
+
+  if (auto) {
+    const startedAt = Date.now();
+    const results = await runBackfill(dateFrom, dateTo, config, startedAt + 240_000);
+    const errs = results.filter((r) => r.status === "error");
+    const prevDone = Number(url.searchParams.get("done") ?? 0) || 0;
+    const prevStored = Number(url.searchParams.get("stored") ?? 0) || 0;
+    const prevErrors = Number(url.searchParams.get("errs") ?? 0) || 0;
+    const done = prevDone + results.length;
+    const stored = prevStored + results.reduce((n, r) => n + (r.stored ?? 0), 0);
+    const errorCount = prevErrors + errs.length;
+    const last = results.at(-1)?.date ?? null;
+
+    if (last && last < dateTo) {
+      const next = new Date(`${last}T00:00:00.000Z`);
+      next.setUTCDate(next.getUTCDate() + 1);
+      const cont = new URL(request.url);
+      cont.searchParams.set("dateFrom", next.toISOString().slice(0, 10));
+      cont.searchParams.set("done", String(done));
+      cont.searchParams.set("stored", String(stored));
+      cont.searchParams.set("errs", String(errorCount));
+      return NextResponse.redirect(cont, 307);
+    }
+
+    return NextResponse.json({
+      ok: errorCount === 0,
+      mode: "auto",
+      finished: true,
+      range: { dateTo },
+      datesProcessed: done,
+      rowsStored: stored,
+      errors: errorCount,
+      lastChunkErrors: errs,
+    });
   }
 
   const results = await runBackfill(dateFrom, dateTo, config);

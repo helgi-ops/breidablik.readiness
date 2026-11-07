@@ -130,6 +130,46 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: true, date, activityId, results });
     }
 
+    // ?fr=1 → IMA Free Running check (Nov 2026). Probes every per-band Free Running
+    // parameter individually (which ones carry data, under which response keys — V1
+    // vs V2), then fetches them as one batch and computes the team's real mean speed
+    // per band = Σ Total Distance ÷ Σ Total Duration. If band 5 ≈ 18–21 km/h, band 6 ≈
+    // 21–24 … the OpenField thresholds are km/h speed bands. Descriptive, read-only.
+    if (url.searchParams.get("fr") === "1") {
+      const metrics = [
+        "Stride Count", "Average Stride Rate", "Average Stride Rate 1.0",
+        "Total Distance", "Total Duration", "Event Count", "Total Player Load",
+      ];
+      const names: string[] = [];
+      for (let b = 1; b <= 8; b++) for (const m of metrics) names.push(`IMA Free Running Band ${b} ${m}`);
+      const probe = await probeNamedStatsIndividually(activityId, names);
+
+      const rows = await fetchNamedStatsRaw(activityId, names, false);
+      const keys = Array.from(new Set(rows.flatMap((r) => Object.keys(r)))).sort();
+      const num = (v: unknown) => { const n = typeof v === "number" ? v : Number(v); return Number.isFinite(n) ? n : 0; };
+      const sumKey = (k: string | undefined) => (k ? rows.reduce((s, r) => s + num(r[k]), 0) : null);
+      const perBand = Array.from({ length: 8 }, (_, i) => {
+        const b = i + 1;
+        const re = (what: string) => new RegExp(`band_?${b}(?!\\d).*${what}`, "i");
+        const distKey = keys.find((k) => /free_?run/i.test(k) && re("total_distance").test(k));
+        const durKey = keys.find((k) => /free_?run/i.test(k) && re("total_duration").test(k));
+        const strideKey = keys.find((k) => /free_?run/i.test(k) && re("(total_strides|stride_count)").test(k));
+        const dist = sumKey(distKey), dur = sumKey(durKey), strides = sumKey(strideKey);
+        return {
+          band: b, distKey: distKey ?? null, durKey: durKey ?? null, strideKey: strideKey ?? null,
+          totalDistanceM: dist, totalDuration: dur, strides,
+          // Assumes duration in seconds; if the unit is minutes this reads 60× too high.
+          meanSpeedKmh: dist && dur ? Number(((dist / dur) * 3.6).toFixed(1)) : null,
+          metresPerStride: dist && strides ? Number((dist / strides).toFixed(2)) : null,
+        };
+      });
+      return NextResponse.json({
+        ok: true, date, activityId, athletes: rows.length,
+        freeRunningKeys: keys.filter((k) => /free_?run|freerunning/i.test(k)),
+        perBand, probe,
+      });
+    }
+
     // 1) Probe candidate rolling peak-period parameter names.
     const probe = await probePeakPeriodParameters(activityId);
     const available = probe.filter((r) => r.success && r.nonZeroAthletes > 0);

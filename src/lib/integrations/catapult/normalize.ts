@@ -1257,6 +1257,7 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       durationMinutes: normalizedIma.durationMinutes,
       // IMA Free Running 8-band pipeline (indoor stride detail)
       ...extractFreeRunningBands(flattenedRecord),
+      imaFrRaw: extractFreeRunningRaw(flattenedRecord),
     });
   }
 
@@ -1344,9 +1345,64 @@ function extractFreeRunningBands(flat: Record<string, unknown>): Record<string, 
         `ima_fr_band${band}_total_distance`,
       ];
       out[`imaFrBand${band}TotalDistance`] = firstNonZero(distAliases);
+    } else {
+      // Bands 1–4 distance (added Nov 2026) — needed to compute speed in every band.
+      out[`imaFrBand${band}TotalDistance`] = firstNonZero([
+        `ima_v2_free_run_band${band}_total_distance`,
+        `ima_v1_free_run_band${band}_total_distance`,
+        `imafreerunning_band${band}_total_distance`,
+        `IMA Free Running Band ${band} Total Distance`,
+        `ima_free_running_band${band}_total_distance`,
+      ]);
     }
+
+    // Per-band TIME in the band, as returned by Catapult (expected seconds).
+    // Distance ÷ duration = the band's real mean speed — the check that tells us
+    // whether the OpenField thresholds are km/h speed bands.
+    out[`imaFrBand${band}TotalDuration`] = firstNonZero([
+      `ima_v2_free_run_band${band}_total_duration`,
+      `ima_v1_free_run_band${band}_total_duration`,
+      `imafreerunning_band${band}_total_duration`,
+      `IMA Free Running Band ${band} Total Duration`,
+      `ima_free_running_band${band}_total_duration`,
+    ]);
+    // Event Count (number of free-running bouts). NOTE: the stride-count aliases above
+    // also accept *_event_count keys as a fallback, so until the fr=1 probe confirms
+    // the key layout this column and stride_count may hold the same number. The raw
+    // map (imaFrRaw) records exactly which keys Catapult sent.
+    out[`imaFrBand${band}EventCount`] = toInteger(firstNonZero([
+      `IMA Free Running Band ${band} Event Count`,
+      `ima_free_running_band${band}_event_count`,
+      `ima_v2_free_run_band${band}_event_count`,
+      `ima_v1_free_run_band${band}_event_count`,
+      `imafreerunning_band${band}_event_count`,
+    ]));
+    // V1 stride rate ("Average Stride Rate 1.0") — V1 keys ONLY, never V2, so the two
+    // algorithm versions are never mixed in one column.
+    out[`imaFrBand${band}AvgStrideRateV1`] = firstNonZero([
+      `ima_v1_free_run_band${band}_average_stride_rate`,
+      `IMA Free Running Band ${band} Average Stride Rate 1.0`,
+      `imafreerunning_band${band}_average_stride_rate`,
+    ]);
   }
   return out;
+}
+
+/**
+ * Every Free Running value Catapult returned for this athlete, verbatim, keyed by the
+ * exact response key (V1 "imafreerunning_*" / "ima_v1_free_run_*", V2
+ * "ima_v2_free_run_*", or display names). Stored as jsonb so we can always see which
+ * algorithm version and which key produced a stored number — the typed columns pick
+ * one alias each and would otherwise hide that.
+ */
+function extractFreeRunningRaw(flat: Record<string, unknown>): Record<string, number> | null {
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(flat)) {
+    if (!/free_?run|freerunning/i.test(k)) continue;
+    const n = toNumber(v);
+    if (n != null) out[k] = n;
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 function sumNullable(a: number | null | undefined, b: number | null | undefined): number | null {
@@ -1687,6 +1743,35 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       imaFrBand6TotalDistance: metric.imaFrBand6TotalDistance ?? null,
       imaFrBand7TotalDistance: metric.imaFrBand7TotalDistance ?? null,
       imaFrBand8TotalDistance: metric.imaFrBand8TotalDistance ?? null,
+      imaFrBand1TotalDistance: metric.imaFrBand1TotalDistance ?? null,
+      imaFrBand2TotalDistance: metric.imaFrBand2TotalDistance ?? null,
+      imaFrBand3TotalDistance: metric.imaFrBand3TotalDistance ?? null,
+      imaFrBand4TotalDistance: metric.imaFrBand4TotalDistance ?? null,
+      imaFrBand1TotalDuration: metric.imaFrBand1TotalDuration ?? null,
+      imaFrBand2TotalDuration: metric.imaFrBand2TotalDuration ?? null,
+      imaFrBand3TotalDuration: metric.imaFrBand3TotalDuration ?? null,
+      imaFrBand4TotalDuration: metric.imaFrBand4TotalDuration ?? null,
+      imaFrBand5TotalDuration: metric.imaFrBand5TotalDuration ?? null,
+      imaFrBand6TotalDuration: metric.imaFrBand6TotalDuration ?? null,
+      imaFrBand7TotalDuration: metric.imaFrBand7TotalDuration ?? null,
+      imaFrBand8TotalDuration: metric.imaFrBand8TotalDuration ?? null,
+      imaFrBand1EventCount: metric.imaFrBand1EventCount ?? null,
+      imaFrBand2EventCount: metric.imaFrBand2EventCount ?? null,
+      imaFrBand3EventCount: metric.imaFrBand3EventCount ?? null,
+      imaFrBand4EventCount: metric.imaFrBand4EventCount ?? null,
+      imaFrBand5EventCount: metric.imaFrBand5EventCount ?? null,
+      imaFrBand6EventCount: metric.imaFrBand6EventCount ?? null,
+      imaFrBand7EventCount: metric.imaFrBand7EventCount ?? null,
+      imaFrBand8EventCount: metric.imaFrBand8EventCount ?? null,
+      imaFrBand1AvgStrideRateV1: metric.imaFrBand1AvgStrideRateV1 ?? null,
+      imaFrBand2AvgStrideRateV1: metric.imaFrBand2AvgStrideRateV1 ?? null,
+      imaFrBand3AvgStrideRateV1: metric.imaFrBand3AvgStrideRateV1 ?? null,
+      imaFrBand4AvgStrideRateV1: metric.imaFrBand4AvgStrideRateV1 ?? null,
+      imaFrBand5AvgStrideRateV1: metric.imaFrBand5AvgStrideRateV1 ?? null,
+      imaFrBand6AvgStrideRateV1: metric.imaFrBand6AvgStrideRateV1 ?? null,
+      imaFrBand7AvgStrideRateV1: metric.imaFrBand7AvgStrideRateV1 ?? null,
+      imaFrBand8AvgStrideRateV1: metric.imaFrBand8AvgStrideRateV1 ?? null,
+      imaFrRaw: metric.imaFrRaw ?? null,
     },
   };
 }

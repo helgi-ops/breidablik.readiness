@@ -195,6 +195,42 @@ export const CATAPULT_FREE_RUNNING_PARAMETERS = [
   "IMA Free Running Band 6 Total Distance",
   "IMA Free Running Band 7 Total Distance",
   "IMA Free Running Band 8 Total Distance",
+
+  // Per-band TIME, EVENT COUNT, V1 stride rate and bands 1–4 DISTANCE (added Nov 2026).
+  // Purpose: verify what the bands actually are. Total Distance ÷ Total Duration gives
+  // the real mean speed in each band, so we can confirm whether the OpenField band
+  // thresholds (0–8–12–15–18–21–24–27 for Breidablik) are km/h speed bands. Average
+  // Stride Rate 1.0 is the V1 algorithm — stored separately so V1 and V2 are never
+  // mixed. All are in the org's Reporting_Parameters; the batch falls back to
+  // per-parameter probing, so an org without them simply skips them.
+  "IMA Free Running Band 1 Total Duration",
+  "IMA Free Running Band 2 Total Duration",
+  "IMA Free Running Band 3 Total Duration",
+  "IMA Free Running Band 4 Total Duration",
+  "IMA Free Running Band 5 Total Duration",
+  "IMA Free Running Band 6 Total Duration",
+  "IMA Free Running Band 7 Total Duration",
+  "IMA Free Running Band 8 Total Duration",
+  "IMA Free Running Band 1 Event Count",
+  "IMA Free Running Band 2 Event Count",
+  "IMA Free Running Band 3 Event Count",
+  "IMA Free Running Band 4 Event Count",
+  "IMA Free Running Band 5 Event Count",
+  "IMA Free Running Band 6 Event Count",
+  "IMA Free Running Band 7 Event Count",
+  "IMA Free Running Band 8 Event Count",
+  "IMA Free Running Band 1 Average Stride Rate 1.0",
+  "IMA Free Running Band 2 Average Stride Rate 1.0",
+  "IMA Free Running Band 3 Average Stride Rate 1.0",
+  "IMA Free Running Band 4 Average Stride Rate 1.0",
+  "IMA Free Running Band 5 Average Stride Rate 1.0",
+  "IMA Free Running Band 6 Average Stride Rate 1.0",
+  "IMA Free Running Band 7 Average Stride Rate 1.0",
+  "IMA Free Running Band 8 Average Stride Rate 1.0",
+  "IMA Free Running Band 1 Total Distance",
+  "IMA Free Running Band 2 Total Distance",
+  "IMA Free Running Band 3 Total Distance",
+  "IMA Free Running Band 4 Total Distance",
 ];
 
 // Football Movement Profile (FMP) — inertial sensor based, works indoors.
