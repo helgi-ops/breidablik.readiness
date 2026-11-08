@@ -1,0 +1,450 @@
+[
+  {
+    "check": "A_NO_AUTH",
+    "file": "src/app/api/client-invites/[token]/route.ts",
+    "reason": "The invite token is the credential. Returns only that invitation.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "A_NO_AUTH",
+    "file": "src/app/api/coach-invites/[token]/route.ts",
+    "reason": "The invite token is the credential. Returns only that invitation.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "A_NO_AUTH",
+    "file": "src/app/api/team-invites/[token]/route.ts",
+    "reason": "The invite token is the credential. Returns only that invite link.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "A_NO_AUTH",
+    "file": "src/app/api/coach-invites/[token]/accept/route.ts",
+    "reason": "Forwards the caller's own login to accept_coach_invitation, which checks the caller and the invited email.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "A_NO_AUTH",
+    "file": "src/app/api/integrations/polar/callback/route.ts",
+    "reason": "OAuth redirect from Polar. Protected by the state value and state cookie.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "A_NO_AUTH",
+    "file": "src/app/api/wearables/callback/route.ts",
+    "reason": "OAuth redirect from a wearable provider. Protected by the signed state value.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "A_NO_AUTH",
+    "file": "src/app/api/integrations-live/connections/callback/route.ts",
+    "reason": "Only flips an in-process status for the environment-credential integrations. Returns no team data.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "A_NO_AUTH",
+    "file": "src/app/api/integrations-live/webhooks/[provider]/route.ts",
+    "reason": "Provider webhook. processIncomingWebhook verifies the signature and refuses unsigned calls.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "A_NO_AUTH",
+    "file": "src/app/api/manifest/route.ts",
+    "reason": "Public web-app manifest. No team data.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "A_NO_AUTH",
+    "file": "src/app/api/public/demo-request/route.ts",
+    "reason": "Public demo form. Write only, returns no data.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "A_NO_AUTH",
+    "file": "src/app/api/stage4/ensure/route.ts",
+    "reason": "Forwards the caller's Authorization header to stage4/ensure-decision, which does the check.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "A_NO_AUTH",
+    "file": "src/app/api/coach/load-plan/ai-summary/route.ts",
+    "reason": "Retired stub. Always returns a null summary and touches no data.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/app/api/coach/adoption/route.ts",
+    "match": "usage_events",
+    "reason": "Cohort comparison across clubs. Only a gated aggregate leaves the server, never another team's rows.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/app/api/coach/basketball-fiba/route.ts",
+    "match": "const { data: allShots }",
+    "reason": "League shooting expectation from public FIBA box scores, returned only as zone averages.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/app/api/coach/scouting/opponent/route.ts",
+    "match": "team_match_stats",
+    "reason": "League benchmark. Only the aggregate is returned.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/app/api/coach/clinical-reports/[id]/confirm/route.ts",
+    "match": "injury_events",
+    "reason": "Deleted by report id after the route checked the coach has that report's team.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/app/api/coach/clinical-reports/[id]/confirm/route.ts",
+    "match": "player_risk_flags",
+    "reason": "Deleted by report id after the route checked the coach has that report's team.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/app/api/coach/drill-library/route.ts",
+    "match": "coach_media",
+    "reason": "Filtered by drill ids read from the team's own drill list.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/app/api/team/training-sessions/route.ts",
+    "match": "coach_media",
+    "reason": "Filtered by drill ids read from the team's own training sessions.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/app/api/coach/periodization/route.ts",
+    "match": "season_plan_blocks",
+    "reason": "Deleted by the plan id just returned from this team's upsert.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/app/api/coach/player/[id]/assign-recovery/route.ts",
+    "match": "recovery_protocols",
+    "reason": "Looked up by slug, then the next lines refuse a protocol scoped to another team.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/app/api/notifications/status/route.ts",
+    "match": "rpe_notification_log",
+    "reason": "Admin-only overview of all teams' reminder counts.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/app/api/notifications/rpe-autofill/route.ts",
+    "match": "week_plans",
+    "reason": "Secret-protected job that walks every team on purpose.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/app/api/notifications/rpe-autofill/route.ts",
+    "match": "players",
+    "reason": "Secret-protected job that walks every team on purpose.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/app/api/notifications/rpe-autofill/route.ts",
+    "match": "session_rpe_entries",
+    "reason": "Secret-protected job that walks every team on purpose.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/app/api/notifications/rpe-autofill/route.ts",
+    "match": "player_external_load_daily",
+    "reason": "Secret-protected job that walks every team on purpose.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/lib/micropulse/movementScreen/correctives/customLoader.ts",
+    "match": "corrective_exercises",
+    "reason": "The next lines keep only global rows and the requested team's rows.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/lib/micropulse/pipelineHealth/load.ts",
+    "match": "profiles",
+    "reason": "Admin health monitor and its cron walk every team on purpose.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/lib/teamMode.ts",
+    "match": "team_settings",
+    "reason": "Returns only the ids of teams and players with wellness switched off, used by reminder jobs.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/lib/teamMode.ts",
+    "match": "players",
+    "reason": "Returns only the ids of teams and players with wellness switched off, used by reminder jobs.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/lib/integrations/catapult/api.ts",
+    "match": "team_settings",
+    "reason": "Cron helper that lists which teams have a Catapult key. Never returned to a browser.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/lib/integrations/titan/sheetSync.ts",
+    "match": "team_integrations",
+    "reason": "Cron helper that lists which teams use Titan. Never returned to a browser.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "D_UNFILTERED_TEAM_TABLE",
+    "file": "src/lib/micropulse/illnessAutoClear/index.ts",
+    "match": "injury_events",
+    "reason": "Cron job that walks every team's illness rows on purpose.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "B_UNSCOPED_TENANT_ID",
+    "file": "src/app/api/coach/fitness-test/route.ts",
+    "reason": "The player lookup filters on the coach's team.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "B_UNSCOPED_TENANT_ID",
+    "file": "src/app/api/coach/hr-ex-test/route.ts",
+    "reason": "The player lookup filters on the coach's team.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "B_UNSCOPED_TENANT_ID",
+    "file": "src/app/api/coach/form-vs-state/route.ts",
+    "reason": "The player lookup and stat queries filter on the coach's team.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "B_UNSCOPED_TENANT_ID",
+    "file": "src/app/api/coach/periodization/route.ts",
+    "reason": "The next lines refuse a player who is not on this team.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "B_UNSCOPED_TENANT_ID",
+    "file": "src/app/api/coach/player-game-report/route.ts",
+    "reason": "Passed to computePlayerGameReport together with the coach's own team.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "B_UNSCOPED_TENANT_ID",
+    "file": "src/app/api/coach/player-game-report/basketball/route.ts",
+    "reason": "Queries filter on the coach's team.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "B_UNSCOPED_TENANT_ID",
+    "file": "src/app/api/coach/player-signature/route.ts",
+    "reason": "The player must be found in the coach's own roster.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "B_UNSCOPED_TENANT_ID",
+    "file": "src/app/api/coach/strength-periodization/route.ts",
+    "reason": "The player must be found in the coach's own roster.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "B_UNSCOPED_TENANT_ID",
+    "file": "src/app/api/coach/player-stats/player-shot-games/route.ts",
+    "reason": "Queries filter on the coach's team.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "B_UNSCOPED_TENANT_ID",
+    "file": "src/app/api/coach/player-stats/shot-chart/route.ts",
+    "reason": "Public league game id. The player id only filters that game's shots.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "B_UNSCOPED_TENANT_ID",
+    "file": "src/app/api/coach/team/match-intensity-halves/narrative/route.ts",
+    "reason": "The player must be in rows already filtered to the coach's team.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "B_UNSCOPED_TENANT_ID",
+    "file": "src/app/api/coach/total-player-analysis/route.ts",
+    "reason": "The loader filters on the coach's team.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "B_UNSCOPED_TENANT_ID",
+    "file": "src/app/api/coach/training-read/route.ts",
+    "reason": "Only narrows rows already filtered to the coach's team.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "F_MODULE_LET",
+    "file": "src/lib/catapult-pdf-parser-client.ts",
+    "reason": "Caches a loaded library. Holds no team data.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "F_MODULE_LET",
+    "file": "src/lib/push/webPush.ts",
+    "reason": "A configured flag. Holds no team data.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "F_MODULE_LET",
+    "file": "src/lib/supabaseClient.ts",
+    "reason": "The browser's own single client. Runs per browser, not on the server.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "DB_DEFINER_RPC",
+    "file": "db:is_admin",
+    "reason": "Row-level security helper about the caller. Policies need it, and it reveals nothing without a login.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "DB_DEFINER_RPC",
+    "file": "db:is_coach",
+    "reason": "Row-level security helper about the caller. Policies need it, and it reveals nothing without a login.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "DB_DEFINER_RPC",
+    "file": "db:is_elevated_staff",
+    "reason": "Row-level security helper about the caller. Policies need it, and it reveals nothing without a login.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "DB_DEFINER_RPC",
+    "file": "db:is_staff",
+    "reason": "Row-level security helper about the caller. Policies need it, and it reveals nothing without a login.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "DB_DEFINER_RPC",
+    "file": "db:coaches_team",
+    "reason": "Row-level security helper about the caller. Policies need it, and it reveals nothing without a login.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "DB_DEFINER_RPC",
+    "file": "db:coach_team_ids",
+    "reason": "Row-level security helper about the caller. Policies need it, and it reveals nothing without a login.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "DB_DEFINER_RPC",
+    "file": "db:my_player_id",
+    "reason": "Row-level security helper about the caller. Policies need it, and it reveals nothing without a login.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "DB_DEFINER_RPC",
+    "file": "db:player_accessible_to_current_coach",
+    "reason": "Row-level security helper about the caller. Policies need it, and it reveals nothing without a login.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "DB_USING_TRUE",
+    "file": "db:recovery_protocols",
+    "reason": "Global protocol catalogue, readable on purpose.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "DB_USING_TRUE",
+    "file": "db:sb_team_map",
+    "reason": "Reference map of public StatsBomb team names.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "DB_USING_TRUE",
+    "file": "db:workout_template_map",
+    "reason": "Reference map with no player data.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  },
+  {
+    "check": "B_UNSCOPED_TENANT_ID",
+    "file": "src/app/api/integrations/catapult/unmatched-athletes/route.ts",
+    "reason": "The next lines refuse a player who is not on the coach's team.",
+    "addedBy": "tenant audit review",
+    "addedAt": "2026-11-08"
+  }
+]

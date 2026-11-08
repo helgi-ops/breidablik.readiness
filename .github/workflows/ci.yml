@@ -33,6 +33,19 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit
 
+      # Can one team reach another team's data? A new high finding fails the build.
+      # Rules and how to handle a finding: docs/security/tenant-isolation.md
+      - name: Tenant isolation audit
+        run: npm run audit:tenant -- --no-db --out tenant-audit.md
+
+      - name: Upload tenant audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenant-audit
+          path: tenant-audit.md
+          if-no-files-found: ignore
+
       - name: Lint (non-blocking — legacy debt tracked separately)
         run: npm run lint
         continue-on-error: true
