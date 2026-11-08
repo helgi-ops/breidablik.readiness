@@ -68,6 +68,31 @@ About 85 files described bands 5–8 as sprint, high-cadence or HSR running. All
   demo teams still carry only stride counts and band 5–8 distance; their sync needs the same parameters before
   bouts show for them.
 
+## Long-run load as a Today signal (Nov 2026, done)
+
+`long_run_load` is the 20th `coach_signals` adapter (`src/lib/micropulse/longRuns/signalLoad.ts`, derives in
+`coachSignals/index.ts`, wired in `computeTeam.ts`). The measure is **time** in long continuous runs (bands 5–8,
+runs of ≥18 s at ~11 km/h), acute 7 days ÷ chronic 28 days against the player's **own** base
+(`computeImaRunningLoad`, rest days = 0, ≥14 run days in 28). Time comes from the inertial sensor, so the read
+exists indoors too; the distance ratio on the Long runs card does not.
+
+- **Spike:** per-player `elevated` chip at ≥1.5; 1.3–1.5 only counts toward the team cluster (≥3 → elevated,
+  2 → watch). Mirrors `load_acwr`.
+- **Deficit:** per-player `watch` chip at ≤0.5 when he was at training ≥2 of the 7 days, no data gap in the
+  window (a session row without Free Running durations blocks it: missing data looks like little running) and
+  the **squad is not itself light** (squad median ratio ≤0.6 = planned light week / off-season → one team line
+  "the squad as a whole has run ×0.5 of its usual", no names). Team: ≥3 individual deficits → elevated, 2 → watch.
+- **Surfaces:** Today team strip + attention-row pill (generic chip UI) and a "Running vs usual" pill in the
+  Decision Summary row (`_long_run_load`, mapped from `perPlayerSignals` like `_last_session_enough`). Href
+  `/coach/ima-intelligence`. Descriptive, never the readiness colour.
+- **Calibration** (`scripts/validate-long-run-load-signal.ts`, real data): Breiðablik 120 days to 2026-10-24 →
+  649 evaluable present player-days, strong spikes 8.6%, 1.3–1.5 climbs 9.6%, individual deficits 2.5%. HK 60
+  days to 2026-11-06 (3 team days, off-season) → individual deficits 10.3%; 11 would-be deficits on one day were
+  a squad-wide light week and became one team line. Demo Full 60 days → spikes 6.3%, deficits 0%.
+- **Citations:** Gabbett 2016 (rolling-average ratio as a change-size descriptor), Impellizzeri 2020 (not an
+  injury predictor), Buchheit & Laursen 2013 (continuous running at ~11 km/h = tempo / aerobic work, not HIIT or
+  sprinting).
+
 ## Still open
 
 - **`STRIDE_CADENCE_DROP`** compares the computed strides/min with the `stride_cadence_weighted` baseline from

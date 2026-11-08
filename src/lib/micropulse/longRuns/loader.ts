@@ -33,7 +33,8 @@ const BAND_COLS = [5, 6, 7, 8].flatMap((b) => [`ima_fr_band${b}_event_count`, `i
 const CHECK_COLS = [1, 2, 3, 4].flatMap((b) => [`ima_fr_band${b}_event_count`, `ima_fr_band${b}_total_duration`]);
 const COLS = ["player_id", "date", "source", "total_distance", "ima_fr_band58_total_distance", ...BAND_COLS, ...CHECK_COLS].join(", ");
 
-type Row = Record<string, unknown> & { player_id: string; date: string; source: string | null };
+export type LongRunRow = Record<string, unknown> & { player_id: string; date: string; source: string | null };
+type Row = LongRunRow;
 
 const addDays = (iso: string, d: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + d * DAY).toISOString().slice(0, 10);
 const median = (xs: number[]): number | null => {
@@ -80,9 +81,10 @@ export type TeamLongRuns = {
 /**
  * The squad's rows for the window, previous-club rows dropped (team roll-up). `EXCLUDE_PREV_CLUB_OR` filters on the
  * `is_previous_club` column (migration 20261107190000), so it costs nothing — never filter on the raw_payload_json key,
- * which detoasts every ~11 KB payload (4.5 s vs 46 ms for 200 days).
+ * which detoasts every ~11 KB payload (4.5 s vs 46 ms for 200 days). Exported for the Today coach-signal loader
+ * (`./signalLoad.ts`) so both read the same rows the same way.
  */
-async function fetchRows(sb: SupabaseClient, playerIds: string[], from: string, to: string): Promise<Row[]> {
+export async function fetchRows(sb: SupabaseClient, playerIds: string[], from: string, to: string): Promise<Row[]> {
   const out: Row[] = []; const PAGE = 1000;
   for (let page = 0; page < 20; page++) {
     const { data, error } = await sb.from("player_external_load_daily").select(COLS)

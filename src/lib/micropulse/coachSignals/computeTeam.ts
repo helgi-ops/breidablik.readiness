@@ -27,6 +27,7 @@ import {
   deriveLoadAcwrTeamSignal, derivePlayerLoadAcwrSignals,
   deriveSprintDropTeamSignal, derivePlayerSprintDropSignals,
   deriveStrideFatigueTeamSignal, derivePlayerStrideFatigueSignals,
+  deriveLongRunLoadTeamSignal, derivePlayerLongRunLoadSignals,
   type CoachSignal,
 } from "@/lib/micropulse/coachSignals";
 import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite, loadTeamPositionFitnessLite, loadTeamStrength1rmLite, loadTeamStrengthPhaseLite } from "@/lib/micropulse/coachSignals/newEngineLoads";
@@ -42,6 +43,7 @@ import { loadTeamCccGateSignals } from "@/lib/micropulse/ccc/signalLoad";
 import { loadTeamLoadAcwrSignals } from "@/lib/micropulse/playerLoadAcwr/signalLoad";
 import { loadTeamSprintDropSignals } from "@/lib/micropulse/sprintSpeedDrop/signalLoad";
 import { loadTeamStrideFatigueSignals } from "@/lib/micropulse/strideLength/signalLoad";
+import { loadTeamLongRunLoadSignals } from "@/lib/micropulse/longRuns/signalLoad";
 
 /** A signal with its owner — playerId null = team-level (chip strip), set = per-player (attention row). */
 export type OwnedSignal = CoachSignal & { playerId: string | null };
@@ -66,7 +68,7 @@ export async function computeTeamSignals(sb: SupabaseClient, teamId: string, tod
   const bodyComp = deriveBodyCompSignal(bodyCompLite);
   const speedZones = deriveSpeedZonesSignal(speedZonesLite);
 
-  const [posFitLite, strengthLite, strengthPhaseLite, cccGateReads, acwrReads, sprintDropReads, strideFatigueReads, enoughRead] = await Promise.all([
+  const [posFitLite, strengthLite, strengthPhaseLite, cccGateReads, acwrReads, sprintDropReads, strideFatigueReads, enoughRead, longRunReads] = await Promise.all([
     loadTeamPositionFitnessLite(sb, teamId).catch(() => []),
     loadTeamStrength1rmLite(sb, teamId).catch(() => []),
     loadTeamStrengthPhaseLite(sb, teamId).catch(() => ({ phase: null, needBodyComp: 0, total: 0, weeksToOpener: null })),
@@ -75,6 +77,7 @@ export async function computeTeamSignals(sb: SupabaseClient, teamId: string, tod
     loadTeamSprintDropSignals(sb, teamId, today).catch(() => []),
     loadTeamStrideFatigueSignals(sb, teamId, today).catch(() => []),
     loadSessionEnoughForSignal(sb, teamId, today).catch(() => null),
+    loadTeamLongRunLoadSignals(sb, teamId, today).catch(() => []),
   ]);
   const posFit = derivePositionFitnessSignal(posFitLite);
   const strength1rm = deriveStrength1rmSignal(strengthLite);
@@ -86,6 +89,9 @@ export async function computeTeamSignals(sb: SupabaseClient, teamId: string, tod
   const sprintDropPlayers = derivePlayerSprintDropSignals(sprintDropReads);
   const strideFatigue = deriveStrideFatigueTeamSignal(strideFatigueReads);
   const strideFatiguePlayers = derivePlayerStrideFatigueSignals(strideFatigueReads);
+  // Time in long continuous runs (≥18 s) vs own 4-week base — spike or deficit; indoors too.
+  const longRunLoad = deriveLongRunLoadTeamSignal(longRunReads);
+  const longRunLoadPlayers = derivePlayerLongRunLoadSignals(longRunReads);
 
   const cccGate = deriveCccGateTeamSignal(cccGateReads);
   const cccGatePlayers = derivePlayerCccGateSignals(cccGateReads);
@@ -133,8 +139,8 @@ export async function computeTeamSignals(sb: SupabaseClient, teamId: string, tod
     });
   }
 
-  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), deriveSessionEnoughSignal(enoughRead), mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase, cccGate, loadAcwr, sprintDrop, strideFatigue].map((s) => ({ ...s, playerId: null }));
-  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers, ...cccGatePlayers, ...loadAcwrPlayers, ...sprintDropPlayers, ...strideFatiguePlayers, ...derivePlayerSessionEnoughSignals(enoughRead)].map((x) => ({ ...x.signal, playerId: x.playerId }));
+  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), deriveSessionEnoughSignal(enoughRead), mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase, cccGate, loadAcwr, sprintDrop, strideFatigue, longRunLoad].map((s) => ({ ...s, playerId: null }));
+  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers, ...cccGatePlayers, ...loadAcwrPlayers, ...sprintDropPlayers, ...strideFatiguePlayers, ...longRunLoadPlayers, ...derivePlayerSessionEnoughSignals(enoughRead)].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }
 

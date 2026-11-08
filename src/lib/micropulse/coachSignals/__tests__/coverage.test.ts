@@ -9,9 +9,10 @@ import {
   deriveLoadAcwrTeamSignal, derivePlayerLoadAcwrSignals,
   deriveSprintDropTeamSignal, derivePlayerSprintDropSignals,
   deriveStrideFatigueTeamSignal, derivePlayerStrideFatigueSignals,
+  deriveLongRunLoadTeamSignal, derivePlayerLongRunLoadSignals,
   type FitnessTrendLite, type BodyCompLite, type SpeedZonesLite,
   type PositionFitnessLite, type CccGateReadLite, type LoadAcwrLite, type SprintDropLite,
-  type StrideFatigueLite,
+  type StrideFatigueLite, type LongRunLoadLite,
 } from "../index";
 
 const fit = (over: Partial<FitnessTrendLite> = {}): FitnessTrendLite =>
@@ -237,7 +238,7 @@ describe("derivePlayerSprintDropSignals (attention-row enrichment)", () => {
 const stf = (over: Partial<StrideFatigueLite> = {}): StrideFatigueLite =>
   ({ playerId: "p1", name: "Jón Þór", deltaPct: -7.8, kind: "match", confidence: 0.9, reason: "His strides are 7.8% shorter than his usual match pattern.", reasonIs: "Skrefin hans eru 7,8% styttri en venjulega í leik.", ...over });
 
-describe("deriveStrideFatigueTeamSignal (shortened high-cadence strides)", () => {
+describe("deriveStrideFatigueTeamSignal (shortened strides in long runs)", () => {
   it("no flagged player → steady (loader hands over shortened+confident only)", () => {
     expect(deriveStrideFatigueTeamSignal([]).level).toBe("steady");
   });
@@ -246,7 +247,10 @@ describe("deriveStrideFatigueTeamSignal (shortened high-cadence strides)", () =>
     expect(s.level).toBe("watch");
     expect(s.engine).toBe("stride_fatigue");
     expect(s.href).toBe("/coach/decel-intelligence");
-    expect(s.why.en[0]).toMatch(/shortened high-cadence strides vs their own norm/i);
+    expect(s.why.en[0]).toMatch(/shorter strides in long runs vs their own norm/i);
+    expect(s.why.en[0]).not.toMatch(/high-cadence|sprint/i);
+    expect(s.counterfactual?.en).toMatch(/long continuous runs/i);
+    expect(s.counterfactual?.en).not.toMatch(/high-cadence|IMA band/i);
     expect(s.counterfactual?.en).toMatch(/McBurnie 2022/);
     expect(s.counterfactual?.en.toLowerCase()).toMatch(/never the readiness colour/);
   });
@@ -295,5 +299,91 @@ describe("boundary — derive functions never import readiness/decision modules"
         expect(imports.some((p) => p.toLowerCase().includes(forbidden.toLowerCase()))).toBe(false);
       }
     }
+  });
+});
+
+// ── long_run_load: time in long continuous runs vs own 4-week base ──────────
+const lr = (over: Partial<LongRunLoadLite> = {}): LongRunLoadLite =>
+  ({ playerId: "p1", name: "Jón Jónsson", ratio: 1.86, direction: "spike", acuteSecDay: 133, chronicSecDay: 72, chronicDays: 18, presentDays7: 5, acuteGap: false, squadRatio: 1.0, ...over });
+const deficit = (over: Partial<LongRunLoadLite> = {}): LongRunLoadLite =>
+  lr({ playerId: "d1", name: "Ari Arason", ratio: 0.42, direction: "deficit", acuteSecDay: 45, chronicSecDay: 107, ...over });
+
+describe("deriveLongRunLoadTeamSignal (long-run time spike / deficit)", () => {
+  it("no flagged player → steady (the loader only hands over crossed reads, so [] = quiet)", () => {
+    expect(deriveLongRunLoadTeamSignal([]).level).toBe("steady");
+  });
+  it("a lone 1.3–1.5 climb stays steady at team level (over-flagging guard)", () => {
+    expect(deriveLongRunLoadTeamSignal([lr({ ratio: 1.4 })]).level).toBe("steady");
+  });
+  it("one strong spike (≥1.5) → elevated, cited, links to the Long runs card, beside the colour", () => {
+    const s = deriveLongRunLoadTeamSignal([lr()]);
+    expect(s.level).toBe("elevated");
+    expect(s.engine).toBe("long_run_load");
+    expect(s.href).toBe("/coach/ima-intelligence");
+    expect(s.why.en[0]).toMatch(/sharp jump in continuous running/i);
+    expect(s.why.en[0]).toMatch(/Jón/);
+    expect(s.counterfactual?.en).toMatch(/Gabbett 2016/);
+    expect(s.counterfactual?.en).toMatch(/Impellizzeri 2020/);
+    expect(s.counterfactual?.en.toLowerCase()).toMatch(/never the readiness colour/);
+  });
+  it("two 1.3–1.5 climbs → watch cluster; three → elevated", () => {
+    const two = [lr({ ratio: 1.35 }), lr({ playerId: "p2", name: "Ari", ratio: 1.4 })];
+    expect(deriveLongRunLoadTeamSignal(two).level).toBe("watch");
+    expect(deriveLongRunLoadTeamSignal([...two, lr({ playerId: "p3", name: "Óli", ratio: 1.31 })]).level).toBe("elevated");
+  });
+  it("deficits: one → steady at team level, two → watch, three → elevated, named in the why", () => {
+    expect(deriveLongRunLoadTeamSignal([deficit()]).level).toBe("steady");
+    const two = deriveLongRunLoadTeamSignal([deficit(), deficit({ playerId: "d2", name: "Óli Ólason" })]);
+    expect(two.level).toBe("watch");
+    expect(two.why.en[0]).toMatch(/half their usual or less/i);
+    expect(two.why.is[0]).toMatch(/helmingi minna/);
+    expect(deriveLongRunLoadTeamSignal([deficit(), deficit({ playerId: "d2" }), deficit({ playerId: "d3" })]).level).toBe("elevated");
+  });
+  it("a deficit with a data gap or too few present days does not count (loader guard re-checked)", () => {
+    expect(deriveLongRunLoadTeamSignal([deficit({ acuteGap: true }), deficit({ playerId: "d2", presentDays7: 1 })]).level).toBe("steady");
+  });
+  it("squad-wide light week: ≥3 would-be deficits while the squad median is ≤0.6 → one team line at watch, no names", () => {
+    const light = [deficit({ squadRatio: 0.45 }), deficit({ playerId: "d2", name: "Óli Ólason", squadRatio: 0.45 }), deficit({ playerId: "d3", name: "Páll Pálsson", squadRatio: 0.45 })];
+    const s = deriveLongRunLoadTeamSignal(light);
+    expect(s.level).toBe("watch");
+    expect(s.why.en[0]).toMatch(/squad as a whole/i);
+    expect(s.why.en[0]).not.toMatch(/Ari|Óli|Páll/);
+    expect(derivePlayerLongRunLoadSignals(light)).toHaveLength(0);
+    // two would-be deficits on a light week → nothing at all
+    expect(deriveLongRunLoadTeamSignal(light.slice(0, 2)).level).toBe("steady");
+  });
+  it("both sides firing → both lines in the why", () => {
+    const s = deriveLongRunLoadTeamSignal([lr(), deficit(), deficit({ playerId: "d2" })]);
+    expect(s.level).toBe("elevated");
+    expect(s.why.en).toHaveLength(2);
+  });
+  it("wording never calls long runs sprinting or HSR", () => {
+    const s = deriveLongRunLoadTeamSignal([lr(), deficit(), deficit({ playerId: "d2" })]);
+    const text = `${s.label.en} ${s.why.en.join(" ")} ${s.counterfactual?.en ?? ""}`.toLowerCase();
+    expect(text).not.toMatch(/\bsprint\b|\bhsr\b|high-speed running/);
+    expect(text).toMatch(/not sprinting/);
+  });
+});
+
+describe("derivePlayerLongRunLoadSignals (attention-row / Decision Summary enrichment)", () => {
+  it("one elevated chip per strong spike, one watch chip per deficit; a 1.3–1.5 climb is skipped", () => {
+    const rows = derivePlayerLongRunLoadSignals([lr(), lr({ playerId: "p2", ratio: 1.4 }), deficit()]);
+    expect(rows.map((r) => r.playerId)).toEqual(["p1", "d1"]);
+    expect(rows[0].signal.level).toBe("elevated");
+    expect(rows[0].signal.why.en[0]).toMatch(/×1\.86 — 7 d 2\.2 min\/day vs 28 d 1\.2 min\/day/);
+    expect(rows[0].signal.why.is[0]).toMatch(/×1,86 — 7 d 2,2 min\/dag/);
+    expect(rows[1].signal.level).toBe("watch");
+    expect(rows[1].signal.why.en[0]).toMatch(/well below his usual/i);
+    expect(rows[1].signal.why.en[0]).toMatch(/at training 5 of 7 days/);
+    expect(rows[1].signal.counterfactual?.en).toMatch(/10–15 min continuous run/);
+    expect(rows[1].signal.counterfactual?.en).toMatch(/planned taper/);
+    for (const r of rows) expect(r.signal.href).toBe("/coach/ima-intelligence");
+  });
+  it("a deficit with a data gap in the acute window gets no chip (missing data looks like little running)", () => {
+    expect(derivePlayerLongRunLoadSignals([deficit({ acuteGap: true })])).toHaveLength(0);
+  });
+  it("confidence: ≥18 run days in 28 → high, else moderate", () => {
+    expect(derivePlayerLongRunLoadSignals([lr({ chronicDays: 20 })])[0].signal.confidence).toBe("high");
+    expect(derivePlayerLongRunLoadSignals([lr({ chronicDays: 15 })])[0].signal.confidence).toBe("moderate");
   });
 });

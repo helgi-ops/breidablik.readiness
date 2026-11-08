@@ -9358,6 +9358,19 @@ export default function CoachPage() {
                     tip: s.counterfactual?.[L] ?? "",
                   };
                 })(),
+                // Time in long continuous runs (≥18 s) this week vs his own 4-week base — the
+                // long_run_load coach signal: a strong spike is `elevated`, a deficit is `watch`.
+                _long_run_load: (() => {
+                  const s = (perPlayerSignals[String(r.player_id)] ?? []).find((x) => x.engine === "long_run_load");
+                  if (!s) return null;
+                  const L = lang === "IS" ? "is" : "en";
+                  return {
+                    direction: s.level === "elevated" ? ("spike" as const) : ("deficit" as const),
+                    label: s.label[L],
+                    text: s.why[L][0] ?? "",
+                    tip: s.counterfactual?.[L] ?? "",
+                  };
+                })(),
                 _checkin_reliability: checkinReliability[r.player_id] ?? null,
                 // Team's planned day type for today (TRAIN/RECOVERY/GAME/OFF).
                 // Drives the OFF_DAY verdict override in the modal. Week Setup

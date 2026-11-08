@@ -129,6 +129,10 @@ export type DecisionSummaryRow = {
   /** Set only when this player stood out from the squad on the last session ("Did we do enough?" outlier
    *  rule). Text already localized by the dashboard. Descriptive planning feedback — never the colour. */
   _last_session_enough?: { direction: "under" | "over"; label: string; text: string; tip: string } | null;
+  /** Time in long continuous runs (≥18 s) this week vs the player's own 4-week base — a sharp jump ("spike")
+   *  or well below his usual while at training ("deficit"). From the `long_run_load` coach signal; text
+   *  already localized by the dashboard. Descriptive planning feedback — never the colour. */
+  _long_run_load?: { direction: "spike" | "deficit"; label: string; text: string; tip: string } | null;
   /** Soft check-in-reliability note when the player's 28-day wellness SD is at
    *  either tail (near-constant OR erratic), so a flag may rest on an unreliable
    *  personal norm. Descriptive data-quality context — NEVER a verdict, never the
@@ -1945,6 +1949,23 @@ const RpeExpectationChip: FC<{ row: DecisionSummaryRow; lang?: Lang; compact?: b
   );
 };
 
+const LongRunLoadChip: FC<{ row: DecisionSummaryRow; compact?: boolean }> = ({ row, compact = false }) => {
+  const s = row._long_run_load;
+  if (!s) return null;
+  const tone = s.direction === "spike" ? "border-[#e6c9c0] bg-[#f6e2dc] text-[#a83e28]" : "border-amber-300 bg-amber-50 text-amber-900";
+  return (
+    <div className="w-full mt-0.5">
+      <span
+        className={`inline-flex items-start gap-1 rounded border leading-snug ${tone} ${compact ? "px-1.5 py-0.5 text-[9px]" : "px-3 py-1.5 text-[12.5px]"}`}
+        title={s.tip}
+      >
+        <span className="font-semibold shrink-0">{s.label}:</span>
+        <span>{s.text}</span>
+      </span>
+    </div>
+  );
+};
+
 const SessionEnoughChip: FC<{ row: DecisionSummaryRow; compact?: boolean }> = ({ row, compact = false }) => {
   const s = row._last_session_enough;
   if (!s) return null;
@@ -2165,6 +2186,15 @@ const ReadinessLoadDetail: FC<{
               {lang !== "IS" ? "Movement vs plan" : "Hreyfing vs áætlun"}
             </p>
             <SessionEnoughChip row={row} />
+          </div>
+        )}
+        {/* Continuous running this week vs his own 4-week base (long_run_load signal). */}
+        {row._long_run_load && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">
+              {lang !== "IS" ? "Running vs usual" : "Hlaup vs venja"}
+            </p>
+            <LongRunLoadChip row={row} />
           </div>
         )}
         {/* Soft check-in-reliability note — descriptive only, never the verdict/colour.
@@ -3016,6 +3046,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
             strip's early-return, so it shows whenever an RPE was logged). */}
         <RpeExpectationChip row={row} lang={lang} compact />
         <SessionEnoughChip row={row} compact />
+        <LongRunLoadChip row={row} compact />
       </div>
     </div>
   );
