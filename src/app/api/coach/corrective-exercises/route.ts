@@ -54,9 +54,11 @@ const slugify = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300
 export async function GET(req: NextRequest) {
   const ctx = await requireCoach(req);
   if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
+  if (!ctx.teamId) return NextResponse.json({ ok: true, items: [] });
   const { data } = await ctx.sb
     .from("corrective_exercises")
     .select("slug, name, phase, active, team_id, definition")
+    .eq("team_id", ctx.teamId)
     .not("definition", "is", null)
     .order("created_at", { ascending: false });
   const rows = (data ?? []) as Array<{ slug: string; phase: string; team_id: string | null; definition: unknown }>;

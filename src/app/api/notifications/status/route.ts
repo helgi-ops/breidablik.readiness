@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { requireCoachUserId } from "@/lib/notifications/auth";
+import { requireAdminUser } from "@/lib/auth/requireAdmin";
 import { getCheckinComplianceSummary } from "@/lib/notifications/checkins";
 import { getDateKeyInTimezone, getOperationalTimezone } from "@/lib/notifications/schedule";
 import { getReminderSlotsForDateKey } from "@/lib/session-rpe/reminderConfig";
@@ -18,7 +18,8 @@ function isMissingRpeNotificationLogError(input: unknown) {
 export async function GET(req: Request) {
   try {
     const sb = getSupabaseAdmin();
-    await requireCoachUserId(sb, req);
+    // Reads every team's reminder counts, so it is an admin view.
+    await requireAdminUser(sb, req);
 
     const url = new URL(req.url);
     const timeZone = getOperationalTimezone();

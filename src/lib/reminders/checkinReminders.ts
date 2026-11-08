@@ -94,7 +94,7 @@ export async function getMissingPlayersForDate(
 
 export async function getCoachReminderStatus(
   sb: SupabaseClient,
-  args: { dateKey: string }
+  args: { dateKey: string; teamId: string }
 ): Promise<{
   dateKey: string;
   totalPlayers: number;
@@ -102,7 +102,7 @@ export async function getCoachReminderStatus(
   missing: number;
   lastManualSendAt: string | null;
 }> {
-  const { data: players, error: playersErr } = await sb.from("players").select("id");
+  const { data: players, error: playersErr } = await sb.from("players").select("id").eq("team_id", args.teamId);
   if (playersErr) throw new Error(playersErr.message);
 
   const playerIds = ((players ?? []) as IdRow[]).map((p) => p.id);
@@ -131,6 +131,7 @@ export async function getCoachReminderStatus(
     .select("sent_at")
     .eq("date_key", args.dateKey)
     .eq("reminder_type", "manual")
+    .in("player_id", playerIds)
     .order("sent_at", { ascending: false })
     .limit(1);
 

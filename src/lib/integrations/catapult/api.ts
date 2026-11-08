@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import "server-only";
 
 import type { CatapultActivity, CatapultAthlete } from "./types";
@@ -390,16 +391,16 @@ export async function getTeamsWithCatapultCredentials(): Promise<CatapultConfig[
 
 // ── Module-level config override for multi-team sync ──────────────
 // Set before calling fetch functions to route requests to the right org.
-let _activeConfig: CatapultConfig | null = null;
+// Kept per request, not in a module variable: overlapping requests must never use another team's Catapult key.
+const activeConfig = new AsyncLocalStorage<CatapultConfig | null>();
 
 /** Set the active Catapult config for subsequent API calls. Pass null to reset to env vars. */
 export function setActiveCatapultConfig(config: CatapultConfig | null): void {
-  _activeConfig = config;
+  activeConfig.enterWith(config);
 }
 
 function getConfig(): CatapultConfig {
-  if (_activeConfig) return _activeConfig;
-  return getConfigFromEnv();
+  return activeConfig.getStore() ?? getConfigFromEnv();
 }
 
 function asRecord(value: unknown): JsonObject | null {

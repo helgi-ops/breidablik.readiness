@@ -162,6 +162,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "catapultId and playerId are required." }, { status: 400 });
     }
 
+    // Only this team's players can take a mapping, or another team's player would receive this team's load.
+    const { data: onTeam } = await getAdminClient().from("players").select("id").eq("id", playerId).eq("team_id", teamId).maybeSingle();
+    if (!onTeam) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const record: CatapultAthleteMapRecord = {
       catapultAthleteId: catapultId,
       micropulsePlayerId: playerId,
