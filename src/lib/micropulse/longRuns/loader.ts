@@ -18,6 +18,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { selectNearFullMatches } from "@/lib/micropulse/periodization";
 import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
+import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 import { computeImaRunningLoad, type ImaDayRow, type ImaRunStatus } from "@/lib/micropulse/imaRunningLoad";
 import { bandsAreTimeBands, hasGpsReading, longRunBandsOf, longRunsOf, sumLongRunBands, type LongRunBand, type LongRuns } from "./index";
 
@@ -77,34 +78,24 @@ export type TeamLongRuns = {
 };
 
 /**
- * The squad's rows for the window, previous-club rows dropped. The usual `EXCLUDE_PREV_CLUB_OR` filter detoasts every
- * row's raw_payload_json (~11 KB each since the Nov 2026 re-sync; 4.5 s vs 46 ms for 200 days), so the previous-club
- * keys are read on their own through a partial index (migration 20261107180000) and dropped here.
+ * The squad's rows for the window, previous-club rows dropped (team roll-up). `EXCLUDE_PREV_CLUB_OR` filters on the
+ * `is_previous_club` column (migration 20261107190000), so it costs nothing — never filter on the raw_payload_json key,
+ * which detoasts every ~11 KB payload (4.5 s vs 46 ms for 200 days).
  */
 async function fetchRows(sb: SupabaseClient, playerIds: string[], from: string, to: string): Promise<Row[]> {
-  const prevKeys = async (): Promise<Set<string>> => {
-    const { data, error } = await sb.from("player_external_load_daily").select("player_id, date")
-      .in("player_id", playerIds).gte("date", from).lte("date", to).eq("raw_payload_json->>previous_club", "true");
+  const out: Row[] = []; const PAGE = 1000;
+  for (let page = 0; page < 20; page++) {
+    const { data, error } = await sb.from("player_external_load_daily").select(COLS)
+      .in("player_id", playerIds).in("source", ["catapult", "manual"]).or(EXCLUDE_PREV_CLUB_OR)
+      .gte("date", from).lte("date", to)
+      .order("date", { ascending: true }).order("player_id", { ascending: true }).order("source", { ascending: true })
+      .range(page * PAGE, page * PAGE + PAGE - 1);
     if (error) throw new Error(error.message);
-    return new Set(((data ?? []) as Array<{ player_id: string; date: string }>).map((r) => `${r.player_id}|${r.date}`));
-  };
-  const all = async (): Promise<Row[]> => {
-    const out: Row[] = []; const PAGE = 1000;
-    for (let page = 0; page < 20; page++) {
-      const { data, error } = await sb.from("player_external_load_daily").select(COLS)
-        .in("player_id", playerIds).in("source", ["catapult", "manual"])
-        .gte("date", from).lte("date", to)
-        .order("date", { ascending: true }).order("player_id", { ascending: true }).order("source", { ascending: true })
-        .range(page * PAGE, page * PAGE + PAGE - 1);
-      if (error) throw new Error(error.message);
-      const rows = (data ?? []) as unknown as Row[];
-      out.push(...rows);
-      if (rows.length < PAGE) break;
-    }
-    return out;
-  };
-  const [prev, rows] = await Promise.all([prevKeys(), all()]);
-  return oneRowPerPlayerDate(rows.filter((r) => !prev.has(`${r.player_id}|${r.date}`)));
+    const rows = (data ?? []) as unknown as Row[];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return oneRowPerPlayerDate(out);
 }
 
 export async function loadTeamLongRuns(sb: SupabaseClient, teamId: string, date: string): Promise<TeamLongRuns> {
