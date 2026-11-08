@@ -41,6 +41,10 @@ const COPY = {
     },
     success: "Account created. Check your email to verify and complete sign in.",
     successSession: "Account created. Head to the coach dashboard to get started.",
+    inviteTitle: "Coaches join a team by invitation",
+    inviteBody: "Ask a coach on the team to send you an invitation link. Starting a new team instead? You can create one here.",
+    inviteCreate: "Create a new team",
+    inviteInvalid: "This invitation was not found or is no longer active. Ask the team for a new one.",
   },
   IS: {
     brand: "MicroPulse",
@@ -73,6 +77,10 @@ const COPY = {
     },
     success: "Aðgangur búinn til. Athugaðu póstinn þinn til að staðfesta og klára innskráningu.",
     successSession: "Aðgangur búinn til. Farðu á þjálfarasvæðið til að byrja.",
+    inviteTitle: "Þjálfarar tengjast liði með boði",
+    inviteBody: "Biddu þjálfara liðsins að senda þér boðshlekk. Ætlarðu að stofna nýtt lið? Þú getur gert það hér.",
+    inviteCreate: "Stofna nýtt lið",
+    inviteInvalid: "Boðið fannst ekki eða er ekki lengur virkt. Biddu liðið um nýtt boð.",
   },
 };
 
@@ -82,6 +90,10 @@ function SignupForm() {
   const presetTeamId = searchParams.get("team_id") ?? "";
   const presetSport  = (searchParams.get("sport") ?? "") as Sport | "";
   const coachInviteToken = searchParams.get("coach_invite") ?? "";
+  const teamInviteToken = searchParams.get("team_invite") ?? "";
+  // A coach joins an existing team only with an invitation. The database enforces this (handle_new_user);
+  // the page just explains it. Team-less signups land on "create a new team".
+  const hasInvite = Boolean(coachInviteToken || teamInviteToken);
 
   // Backward-compat: pre-May-2026 PT client invitations emitted URLs of the
   // form /signup?invite=TOKEN&team_id=… which routed everyone through the
@@ -92,8 +104,10 @@ function SignupForm() {
   useEffect(() => {
     if (legacyClientInvite) {
       router.replace(`/invite/client/${encodeURIComponent(legacyClientInvite)}`);
+    } else if (!hasInvite && !presetTeamId) {
+      router.replace("/signup/create-team");
     }
-  }, [legacyClientInvite, router]);
+  }, [legacyClientInvite, hasInvite, presetTeamId, router]);
 
   const [lang, setLang] = useState<Lang>("IS");
   const t = COPY[lang];
@@ -116,8 +130,7 @@ function SignupForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [sport, setSport] = useState<Sport | null>(presetSport as Sport || null);
-  const [teams, setTeams] = useState<TeamRow[]>([]);
-  const [teamId, setTeamId] = useState(presetTeamId);
+  const [teamId, setTeamId] = useState("");
   const [presetTeamName, setPresetTeamName] = useState<string | null>(null);
   const [presetTeamGender, setPresetTeamGender] = useState<string | null>(null);
   const [inviteEmailLocked, setInviteEmailLocked] = useState(false);
@@ -154,37 +167,27 @@ function SignupForm() {
     })();
   }, [coachInviteToken]);
 
-  // If team_id is preset, look up its name and sport immediately
+  // Team-invite link: the link itself says which team this signup joins.
   useEffect(() => {
-    if (!presetTeamId) return;
+    if (!teamInviteToken || coachInviteToken) return;
     (async () => {
-      const { data } = await supabase
-        .from("teams").select("id, name, sport, gender").eq("id", presetTeamId).maybeSingle();
-      if (data) {
-        setPresetTeamName((data as TeamRow).name);
-        setPresetTeamGender((data as TeamRow).gender ?? null);
-        setSport((data as TeamRow).sport as Sport);
-        setTeamId(presetTeamId);
+      try {
+        const res = await fetch(`/api/team-invites/${encodeURIComponent(teamInviteToken)}`, { cache: "no-store" });
+        const json = await res.json();
+        const team = json?.team as TeamRow | null | undefined;
+        if (!res.ok || String(json?.invite?.targetRole ?? "").toUpperCase() !== "COACH" || !team) {
+          setInviteLookupError(json?.error ?? "not_found");
+          return;
+        }
+        setTeamId(team.id);
+        setPresetTeamName(team.name);
+        setPresetTeamGender(team.gender ?? null);
+        if (team.sport) setSport(team.sport as Sport);
+      } catch {
+        setInviteLookupError("network_error");
       }
     })();
-  }, [presetTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Load teams when sport is selected (only when no preset)
-  useEffect(() => {
-    if (presetTeamId) return; // locked to preset team
-    let alive = true;
-    async function loadTeams() {
-      if (!sport) { setTeams([]); setTeamId(""); return; }
-      const { data, error: fetchError } = await supabase
-        .from("teams").select("id, name, sport, gender").eq("sport", sport).order("name");
-      if (!alive) return;
-      if (fetchError) { console.warn("loadTeams error:", fetchError); setTeams([]); return; }
-      setTeams((data ?? []) as TeamRow[]);
-      setTeamId("");
-    }
-    loadTeams();
-    return () => { alive = false; };
-  }, [sport, presetTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [teamInviteToken, coachInviteToken]);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -194,7 +197,6 @@ function SignupForm() {
     if (!fullName.trim()) { setError(t.errors.name); return; }
     if (!email.trim() || !email.includes("@")) { setError(t.errors.email); return; }
     if (password.length < 6) { setError(t.errors.password); return; }
-    if (!sport) { setError(t.errors.sport); return; }
     if (!teamId) { setError(t.errors.team); return; }
 
     try {
@@ -211,10 +213,11 @@ function SignupForm() {
           data: {
             full_name: fullName.trim(),
             role: "COACH",
-            sport,
+            ...(sport ? { sport } : {}),
             team_id: teamId,
             product_plan: "FREE",
             ...(coachInviteToken ? { coach_invite_token: coachInviteToken } : {}),
+            ...(teamInviteToken ? { team_invite_token: teamInviteToken } : {}),
           },
           emailRedirectTo: typeof window !== "undefined"
             ? `${window.location.origin}/auth/redirect?next=${encodeURIComponent(nextPath)}`
@@ -246,7 +249,7 @@ function SignupForm() {
     }
   }
 
-  const canSubmit = Boolean(fullName.trim() && email.trim() && password && sport && teamId);
+  const canSubmit = Boolean(fullName.trim() && email.trim() && password && teamId);
 
   function teamLabel(team: TeamRow) {
     const genderStr = team.gender ? (t.genders as Record<string, string>)[team.gender] : null;
@@ -282,6 +285,18 @@ function SignupForm() {
           </div>
         </div>
 
+        {!hasInvite ? (
+          <div className="space-y-3 rounded-3xl border bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold">{t.inviteTitle}</h2>
+            <p className="text-sm text-neutral-600">{t.inviteBody}</p>
+            <Link
+              href="/signup/create-team"
+              className="block w-full rounded-2xl bg-neutral-900 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-neutral-700"
+            >
+              {t.inviteCreate}
+            </Link>
+          </div>
+        ) : (
         <form onSubmit={onSubmit} className="space-y-4 rounded-3xl border bg-white p-6 shadow-sm">
 
           {/* Full name */}
@@ -297,61 +312,25 @@ function SignupForm() {
             />
           </label>
 
-          {/* Sport — hidden when team is preset (sport auto-detected) */}
-          {!presetTeamId && !inviteEmailLocked && (
-            <label className="grid gap-1.5 text-sm">
-              <span className="text-neutral-700">{t.sport}</span>
-              <select
-                value={sport ?? ""}
-                onChange={(e) => setSport((e.target.value as Sport) || null)}
-                className="rounded-xl border px-3 py-2"
-                required
-              >
-                <option value="">{t.sportPlaceholder}</option>
-                <option value="football">{t.sports.football}</option>
-                <option value="basketball">{t.sports.basketball}</option>
-                <option value="handball">{t.sports.handball}</option>
-              </select>
-            </label>
-          )}
-
-          {/* Team — locked banner when preset or invite-driven, otherwise dropdown */}
-          {(presetTeamId || inviteEmailLocked) ? (
-            <div className="grid gap-1.5 text-sm">
-              <span className="text-neutral-700">{t.team}</span>
+          {/* Team comes from the invitation */}
+          <div className="grid gap-1.5 text-sm">
+            <span className="text-neutral-700">{t.team}</span>
+            {inviteLookupError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-red-700">{t.inviteInvalid}</div>
+            ) : (
               <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
                 <span className="text-emerald-600">✓</span>
                 <span className="font-medium text-emerald-800">
                   {presetTeamName
-                    ? teamLabel({ id: teamId || presetTeamId, name: presetTeamName, sport, gender: presetTeamGender })
+                    ? teamLabel({ id: teamId, name: presetTeamName, sport, gender: presetTeamGender })
                     : "…"}
                 </span>
                 <span className="ml-auto text-xs text-emerald-500">
-                  {inviteEmailLocked
-                    ? (lang === "IS" ? "Tengt við boð" : "From invite")
-                    : "Tengt við link"}
+                  {lang === "IS" ? "Tengt við boð" : "From invite"}
                 </span>
               </div>
-            </div>
-          ) : sport && (
-            <label className="grid gap-1.5 text-sm">
-              <span className="text-neutral-700">{t.team}</span>
-              <select
-                value={teamId}
-                onChange={(e) => setTeamId(e.target.value)}
-                className="rounded-xl border px-3 py-2"
-                required
-              >
-                <option value="">{t.teamPlaceholder}</option>
-                {teams.map((team) => (
-                  <option key={team.id} value={team.id}>{teamLabel(team)}</option>
-                ))}
-              </select>
-              {teams.length === 0 && (
-                <span className="text-xs text-neutral-400">{t.noTeams}</span>
-              )}
-            </label>
-          )}
+            )}
+          </div>
 
           {/* Email */}
           <label className="grid gap-1.5 text-sm">
@@ -369,13 +348,6 @@ function SignupForm() {
             {inviteEmailLocked && (
               <span className="text-xs text-emerald-600">
                 {lang === "IS" ? "Netfang tekið úr boði" : "Email locked by invite"}
-              </span>
-            )}
-            {inviteLookupError && (
-              <span className="text-xs text-red-600">
-                {lang === "IS"
-                  ? "Boðið fannst ekki eða er ekki lengur virkt."
-                  : "Invitation not found or no longer active."}
               </span>
             )}
           </label>
@@ -413,6 +385,7 @@ function SignupForm() {
             {loading ? t.submitting : t.submit}
           </button>
         </form>
+        )}
 
         <div className="mt-4 space-y-1 text-center text-sm text-neutral-600">
           <div>

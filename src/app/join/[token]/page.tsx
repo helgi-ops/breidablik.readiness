@@ -116,7 +116,7 @@ export default function JoinPage() {
   signupParams.set("team_invite", token);
 
   const signupUrl = isCoachInvite
-    ? `/signup?team_id=${team.id}&sport=${team.sport ?? ""}`
+    ? `/signup?team_invite=${encodeURIComponent(token)}`
     : `/login?${signupParams.toString()}`;
 
   return (

@@ -31,11 +31,12 @@ async function requireTeamAccess(req: Request, teamId: string | null | undefined
 
   if (!teamId) throw new Error("team_id required");
 
-  // staff bypass
+  // Staff bypass: role='staff' only. Coaches also have staff_users rows (role='coach') and must not reach other teams.
   const { data: staff } = await sb
     .from("staff_users")
     .select("user_id")
     .eq("user_id", userId)
+    .eq("role", "staff")
     .maybeSingle();
 
   if (!staff) {

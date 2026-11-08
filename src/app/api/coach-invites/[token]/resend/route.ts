@@ -47,8 +47,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
     return NextResponse.json({ error: "Not pending" }, { status: 409 });
   }
 
-  // Access: staff OR coach on the team OR original inviter
-  const { data: staff } = await sb.from("staff_users").select("user_id").eq("user_id", userId).maybeSingle();
+  // Access: staff (role='staff', not the coach rows in staff_users) OR coach on the team OR original inviter
+  const { data: staff } = await sb.from("staff_users").select("user_id").eq("user_id", userId).eq("role", "staff").maybeSingle();
   if (!staff && invite.invited_by !== userId) {
     const { data: access } = await sb
       .from("coach_teams")
