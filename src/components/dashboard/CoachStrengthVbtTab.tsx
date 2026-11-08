@@ -1,5 +1,6 @@
 "use client";
 
+import { authFetch } from "@/lib/client/authFetch";
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Lang } from "@/lib/lang";
@@ -113,7 +114,7 @@ export default function CoachStrengthVbtTab({ teamId, date, lang }: Props) {
     setLoading(true);
     setError(null);
 
-    fetch(`/api/coach/player-load/vbt?teamId=${teamId}&date=${date}`)
+    authFetch(`/api/coach/player-load/vbt?teamId=${teamId}&date=${date}`)
       .then((r) => r.json())
       .then((json) => {
         if (json.error) {
@@ -142,7 +143,7 @@ export default function CoachStrengthVbtTab({ teamId, date, lang }: Props) {
     setSyncing(true);
     setSyncResult(null);
     try {
-      const res = await fetch("/api/integrations/gymaware/sync", {
+      const res = await authFetch("/api/integrations/gymaware/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ teamId }),

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { syncPolarTeam } from "@/lib/integrations/polar/sync";
-import { resolveCoachTeamId } from "@/lib/server/integrations/polarStore";
-import { resolvePolarRouteUserId } from "../_auth";
+import { resolvePolarRouteUserId, resolvePolarTeamId } from "../_auth";
+import { authErrorToResponse } from "@/lib/auth/httpError";
 
 export const runtime = "nodejs";
 
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     };
 
     // Allow explicit teamId override (admin use), otherwise resolve from coach mapping
-    const teamId = body.teamId ?? (await resolveCoachTeamId(userId));
+    const teamId = await resolvePolarTeamId(req, userId, body.teamId);
     if (!teamId) {
       return NextResponse.json(
         { ok: false, error: "Coach is not assigned to any team — cannot sync Polar." },
@@ -37,6 +37,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, summary });
   } catch (err) {
+    const auth = authErrorToResponse(err);
+    if (auth) return auth;
     const message = err instanceof Error ? err.message : "sync_failed";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }

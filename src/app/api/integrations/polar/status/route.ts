@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import {
-  getPolarIntegrationByTeam,
-  resolveCoachTeamId,
-} from "@/lib/server/integrations/polarStore";
-import { resolvePolarRouteUserId } from "../_auth";
+import { getPolarIntegrationByTeam } from "@/lib/server/integrations/polarStore";
+import { resolvePolarRouteUserId, resolvePolarTeamId } from "../_auth";
+import { authErrorToResponse } from "@/lib/auth/httpError";
 
 export const runtime = "nodejs";
 
@@ -19,8 +17,7 @@ export async function GET(req: Request) {
     }
 
     const url = new URL(req.url);
-    const teamId =
-      url.searchParams.get("teamId") || (await resolveCoachTeamId(userId));
+    const teamId = await resolvePolarTeamId(req, userId, url.searchParams.get("teamId"));
 
     if (!teamId) {
       return NextResponse.json({
@@ -47,6 +44,8 @@ export async function GET(req: Request) {
       tokenExpiresAt: integration.access_token_expires_at,
     });
   } catch (err) {
+    const auth = authErrorToResponse(err);
+    if (auth) return auth;
     const message = err instanceof Error ? err.message : "status_failed";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }

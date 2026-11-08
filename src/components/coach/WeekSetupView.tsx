@@ -1,5 +1,6 @@
 "use client";
 
+import { authFetch } from "@/lib/client/authFetch";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
@@ -1339,7 +1340,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
       return;
     }
 
-    const res = await fetch("/api/coach/week-setup/apply", {
+    const res = await authFetch("/api/coach/week-setup/apply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

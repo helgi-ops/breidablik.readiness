@@ -21,6 +21,8 @@
 import { NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { computeLoadQuadrant } from "@/lib/client/loadQuadrant";
+import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
+import { authErrorToResponse } from "@/lib/auth/httpError";
 import { computeVolumeLoad } from "@/lib/client/volumeLoad";
 import { RETEST_DAYS } from "@/lib/client/oneRepMax";
 import { getPlayersOnBreak } from "@/lib/notifications/clientBreaks";
@@ -72,7 +74,17 @@ export async function GET(req: Request) {
   if (!["COACH", "ADMIN", "STAFF"].includes(role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const url = new URL(req.url);
-  const teamId = url.searchParams.get("team_id") || (prof as { team_id?: string } | null)?.team_id;
+  const requestedTeamId = url.searchParams.get("team_id");
+  if (requestedTeamId) {
+    try {
+      await requireCoachAccessForTeam(sb, req, requestedTeamId);
+    } catch (err) {
+      const authError = authErrorToResponse(err);
+      if (authError) return authError;
+      throw err;
+    }
+  }
+  const teamId = requestedTeamId || (prof as { team_id?: string } | null)?.team_id;
   if (!teamId) return NextResponse.json({ ok: true, clients: [] });
 
   // Check-in-off clients: the wellness-derived flags (red readiness, trending

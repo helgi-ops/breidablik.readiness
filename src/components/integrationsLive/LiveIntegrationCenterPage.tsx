@@ -1,5 +1,6 @@
 "use client";
 
+import { authFetch } from "@/lib/client/authFetch";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getAvailableProviderDescriptors, type IntegrationProviderKey } from "@/lib/micropulse/integrations";
 import type {
@@ -25,7 +26,7 @@ type LiveStatusResponse = {
 };
 
 async function postJson(path: string, body: Record<string, unknown>) {
-  const response = await fetch(path, {
+  const response = await authFetch(path, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -44,7 +45,7 @@ export default function LiveIntegrationCenterPage() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/integrations-live/status", { cache: "no-store" });
+      const response = await authFetch("/api/integrations-live/status", { cache: "no-store" });
       const json = (await response.json()) as { ok: boolean; error?: string } & Partial<LiveStatusResponse>;
       if (!json.ok) {
         setError(json.error ?? "Failed to load live integration status.");

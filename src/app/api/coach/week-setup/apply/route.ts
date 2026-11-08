@@ -2,6 +2,8 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
+import { authErrorToResponse } from "@/lib/auth/httpError";
 
 
 function toISODate(d: Date) {
@@ -72,15 +74,13 @@ export async function POST(req: Request) {
   }
 
   // Debug: sjá hvað UI er að senda inn
-  console.log("[week-setup/apply] payload", {
-    team_id,
-    week_start,
-    system_key,
-    intensity_target,
-    notes: notes ?? null,
-    days_count: Array.isArray(days) ? days.length : 0,
-    days_sample: Array.isArray(days) ? days.slice(0, 3) : null,
-  });
+  try {
+    await requireCoachAccessForTeam(supabase, req, team_id);
+  } catch (err) {
+    const auth = authErrorToResponse(err);
+    if (auth) return auth;
+    throw err;
+  }
 
   // 1) Upsert week_setups (ok)
   const { error: setupErr } = await supabase
@@ -146,8 +146,6 @@ export async function POST(req: Request) {
   const finalRows = planRows.map((r) =>
     onBreak(r.day_date) ? { ...r, day_type: "OFF", focus: "OFF", planned_load: 1, day_intent: null } : r
   );
-
-  console.log("[week-setup/apply] planRows", finalRows);
 
   const { error: planErr } = await supabase
     .from("week_plans")

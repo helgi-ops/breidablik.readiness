@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
+import { authErrorToResponse } from "@/lib/auth/httpError";
 import { computeExercisePBs, computeTodayVsPB, computeLoadBreakdowns, type VbtSetRow, type VbtPlayerSummary } from "@/lib/micropulse/vbtReadiness/personalBest";
 
 export const runtime = "nodejs";
@@ -21,6 +23,8 @@ export async function GET(req: Request) {
     if (!teamId) {
       return NextResponse.json({ error: "teamId required" }, { status: 400 });
     }
+
+    await requireCoachAccessForTeam(sb, req, teamId);
 
     // Get all players for the team
     const { data: players } = await sb
@@ -97,6 +101,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ date, players: summaries });
   } catch (err) {
+    const auth = authErrorToResponse(err);
+    if (auth) return auth;
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }

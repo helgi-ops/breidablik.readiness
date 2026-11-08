@@ -1,5 +1,6 @@
 "use client";
 
+import { authFetch } from "@/lib/client/authFetch";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useLang } from "@/lib/lang";
@@ -5786,7 +5787,7 @@ export default function PlayerClient() {
 
           if (playerByUser?.id) {
             // Repair the link silently so future loads work automatically
-            await supabase.from("profiles").update({ player_id: playerByUser.id }).eq("id", userId);
+            await authFetch("/api/player/link-player", { method: "POST" });
             setPlayerMeta(playerByUser as any);
             setPlayerStatus((playerByUser as any).status ?? "PENDING");
             return;
@@ -6749,8 +6750,15 @@ export default function PlayerClient() {
       if (!profile?.id) return;
       if (!selectedPlayerId) return setError("Veldu leikmann fyrst.");
 
-      const { error: uErr } = await supabase.from("profiles").update({ player_id: selectedPlayerId }).eq("id", profile.id);
-      if (uErr) return setError(uErr.message);
+      const res = await authFetch("/api/player/link-player", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId: selectedPlayerId }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        return setError(json?.error ?? "Ekki tókst að tengja leikmann.");
+      }
 
       window.location.reload();
     } catch (e: any) {

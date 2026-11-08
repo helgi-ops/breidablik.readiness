@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
+import { authErrorToResponse } from "@/lib/auth/httpError";
 import { computeWeeklyLoad } from "@/lib/micropulse/externalLoad/weeklyLoadTracker";
 import { WEEKLY_LOAD_METRICS_IMA } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
@@ -23,6 +26,8 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "teamId is required" }, { status: 400 });
     }
 
+    await requireCoachAccessForTeam(getSupabaseAdmin(), req, teamId);
+
     const result = await computeWeeklyLoad({
       teamId,
       date,
@@ -32,6 +37,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json(result);
   } catch (err) {
+    const auth = authErrorToResponse(err);
+    if (auth) return auth;
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }

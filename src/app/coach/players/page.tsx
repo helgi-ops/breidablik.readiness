@@ -1,5 +1,6 @@
 "use client";
 
+import { authFetch } from "@/lib/client/authFetch";
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
@@ -298,11 +299,11 @@ export default function CoachPlayersPage() {
       const linkedUserId = (playerRow as { user_id?: string | null } | null)?.user_id ?? null;
       if (linkedUserId) {
         // 3. Make sure profiles.player_id is set (handles retroactive data pre-trigger-fix)
-        await supabase
-          .from("profiles")
-          .update({ player_id: playerId, team_id: teamId })
-          .eq("id", linkedUserId)
-          .is("player_id", null); // only patch if not yet linked
+        await authFetch("/api/coach/players/link-profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ playerId }),
+        });
       }
 
       await loadPlayers(teamId);

@@ -1,15 +1,25 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { requireAdminUser } from "@/lib/auth/requireAdmin";
+import { authErrorToResponse } from "@/lib/auth/httpError";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/integrations/gymaware/debug?teamId=...
  *
- * Diagnostic endpoint: tests the GymAware API connection and returns raw debug info.
+ * Diagnostic endpoint: tests the GymAware API connection and returns raw debug info. Admin only.
  */
 export async function GET(req: Request) {
   const debug: Record<string, unknown> = { timestamp: new Date().toISOString() };
+
+  try {
+    await requireAdminUser(getSupabaseAdmin(), req);
+  } catch (err) {
+    const auth = authErrorToResponse(err);
+    if (auth) return auth;
+    throw err;
+  }
 
   try {
     const url = new URL(req.url);
@@ -39,8 +49,6 @@ export async function GET(req: Request) {
 
     const accountId = settings.account_id;
     const apiToken = settings.api_token;
-    debug.accountId = accountId;
-    debug.apiTokenLength = apiToken?.length ?? 0;
 
     const credentials = Buffer.from(`${accountId}:${apiToken}`).toString("base64");
     const baseUrl = "https://cloud.gymaware.com";

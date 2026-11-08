@@ -2,6 +2,9 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { resolvePlayerIdForUser } from "@/lib/notifications/auth";
+import { getPlayerTeamId, requireCoachAccessForTeam } from "@/lib/session-rpe/server";
+import { authErrorToResponse } from "@/lib/auth/httpError";
 
 
 async function authenticate(req: NextRequest) {
@@ -31,7 +34,7 @@ async function authenticate(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const result = await authenticate(req);
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: 401 });
-  const { supabase } = result;
+  const { supabase, uid } = result;
 
   const url = new URL(req.url);
   const playerId = url.searchParams.get("playerId");
@@ -43,6 +46,22 @@ export async function GET(req: NextRequest) {
 
   if (role !== "player" && role !== "coach") {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  }
+
+  // A player reads only their own chat; a coach only a player on a team they coach.
+  try {
+    if (role === "player") {
+      const ownPlayerId = await resolvePlayerIdForUser(supabase, uid);
+      if (ownPlayerId !== playerId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    } else {
+      const teamId = await getPlayerTeamId(supabase, playerId);
+      if (!teamId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      await requireCoachAccessForTeam(supabase, req, teamId);
+    }
+  } catch (err) {
+    const auth = authErrorToResponse(err);
+    if (auth) return auth;
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Unknown error" }, { status: 500 });
   }
 
   let query = supabase

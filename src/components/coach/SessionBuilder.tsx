@@ -1,5 +1,6 @@
 "use client";
 
+import { authFetch } from "@/lib/client/authFetch";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { downloadSessionPdf, type SessionPdfPlanMetric } from "./SessionPdf";
@@ -569,7 +570,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     (async () => {
       setMdLoading(true);
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `/api/coach/md-planning?teamId=${encodeURIComponent(
             teamId
           )}&mdDay=${encodeURIComponent(mdDay)}`

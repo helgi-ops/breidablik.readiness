@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
+import { authErrorToResponse } from "@/lib/auth/httpError";
 import { syncGymAware } from "@/lib/integrations/gymaware/sync";
 
 /**
@@ -23,6 +25,7 @@ export async function POST(req: Request) {
 
     // Verify team exists
     const sb = getSupabaseAdmin();
+    await requireCoachAccessForTeam(sb, req, teamId);
     const { data: team } = await sb.from("teams").select("id").eq("id", teamId).maybeSingle();
     if (!team) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
@@ -71,6 +74,8 @@ export async function POST(req: Request) {
       result,
     });
   } catch (err) {
+    const auth = authErrorToResponse(err);
+    if (auth) return auth;
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("GymAware sync error:", message);
     return NextResponse.json({ error: message }, { status: 500 });
@@ -92,6 +97,7 @@ export async function GET(req: Request) {
     }
 
     const sb = getSupabaseAdmin();
+    await requireCoachAccessForTeam(sb, req, teamId);
     const { data: settings } = await sb
       .from("gymaware_settings")
       .select("team_id, account_id, reference_exercise, sync_enabled, last_sync_at")
@@ -125,6 +131,8 @@ export async function GET(req: Request) {
       matchedAthletes: athleteCount ?? 0,
     });
   } catch (err) {
+    const auth = authErrorToResponse(err);
+    if (auth) return auth;
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }

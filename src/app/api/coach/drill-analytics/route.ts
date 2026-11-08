@@ -11,6 +11,8 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
+import { authErrorToResponse } from "@/lib/auth/httpError";
 
 
 type DrillUsage = {
@@ -31,13 +33,7 @@ export async function GET(req: NextRequest) {
 
     // Auth check
     const supabase = getSupabase();
-    const auth = req.headers.get("authorization") ?? "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    if (!token) return NextResponse.json({ ok: false, error: "Missing auth" }, { status: 401 });
-
-    const { data: userRes, error: uErr } = await supabase.auth.getUser(token);
-    if (uErr || !userRes?.user)
-      return NextResponse.json({ ok: false, error: "Invalid token" }, { status: 401 });
+    await requireCoachAccessForTeam(supabase, req, teamId);
 
     // Fetch all saved sessions for the team
     const { data: sessions, error } = await supabase
@@ -92,6 +88,8 @@ export async function GET(req: NextRequest) {
       drills: analytics,
     });
   } catch (e: unknown) {
+    const authError = authErrorToResponse(e);
+    if (authError) return authError;
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : String(e) },
       { status: 500 }

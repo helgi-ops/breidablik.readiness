@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import {
-  markPolarIntegrationRevoked,
-  resolveCoachTeamId,
-} from "@/lib/server/integrations/polarStore";
-import { resolvePolarRouteUserId } from "../_auth";
+import { markPolarIntegrationRevoked } from "@/lib/server/integrations/polarStore";
+import { resolvePolarRouteUserId, resolvePolarTeamId } from "../_auth";
+import { authErrorToResponse } from "@/lib/auth/httpError";
 
 export const runtime = "nodejs";
 
@@ -21,7 +19,7 @@ export async function POST(req: Request) {
     }
 
     const body = (await req.json().catch(() => ({}))) as { teamId?: string };
-    const teamId = body.teamId ?? (await resolveCoachTeamId(userId));
+    const teamId = await resolvePolarTeamId(req, userId, body.teamId);
     if (!teamId) {
       return NextResponse.json(
         { ok: false, error: "No team to disconnect" },
@@ -32,6 +30,8 @@ export async function POST(req: Request) {
     await markPolarIntegrationRevoked(teamId);
     return NextResponse.json({ ok: true, teamId });
   } catch (err) {
+    const auth = authErrorToResponse(err);
+    if (auth) return auth;
     const message = err instanceof Error ? err.message : "disconnect_failed";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }

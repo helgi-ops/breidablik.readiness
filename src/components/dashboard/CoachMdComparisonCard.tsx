@@ -1,5 +1,6 @@
 "use client";
 
+import { authFetch } from "@/lib/client/authFetch";
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import type { MdDay, MdMetricKey, MdComparisonResult, PlayerMdComparison, MdMetricScore, MdPlanningResult } from "@/lib/micropulse/externalLoad/mdComparisonTypes";
 import { MD_METRIC_LABELS } from "@/lib/micropulse/externalLoad/mdComparisonTypes";
@@ -215,7 +216,7 @@ export default function CoachMdComparisonCard({
     const params = new URLSearchParams({ teamId, date });
     if (mdOverride !== "auto") params.set("mdDay", mdOverride);
 
-    fetch(`/api/coach/session-comparison?${params}`)
+    authFetch(`/api/coach/session-comparison?${params}`)
       .then((r) => r.json())
       .then((json) => {
         if (json.error) setError(json.error);
@@ -235,7 +236,7 @@ export default function CoachMdComparisonCard({
 
     const params = new URLSearchParams({ teamId, mdDay: planningMd });
 
-    fetch(`/api/coach/md-planning?${params}`)
+    authFetch(`/api/coach/md-planning?${params}`)
       .then((r) => r.json())
       .then((json) => {
         if (json.error) setError(json.error);

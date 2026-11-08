@@ -8,6 +8,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { authFetch } from "@/lib/client/authFetch";
 import InstallPwaButton from "@/components/pwa/InstallPwaButton";
 import CoachPwaBottomNav from "@/components/pwa/CoachPwaBottomNav";
 import PWANotificationPrompt from "@/app/player/dev-player-dashboard/PWANotificationPrompt";
@@ -200,10 +201,15 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
   // refactor for a once-per-session action.
   async function handleSwitchTeam(team: CoachTeam) {
     try {
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth.user?.id;
-      if (!userId) return;
-      await supabase.from("profiles").update({ team_id: team.id }).eq("id", userId);
+      const res = await authFetch("/api/coach/switch-team", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamId: team.id }),
+      });
+      if (!res.ok) {
+        console.error("[CoachShell] team switch refused", res.status);
+        return;
+      }
       window.location.reload();
     } catch (err) {
       console.error("[CoachShell] team switch failed", err);

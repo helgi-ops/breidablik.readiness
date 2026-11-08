@@ -45,6 +45,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Not authorized for this team" }, { status: 403 });
   }
 
+  // A self-signed-up player has team_id set from the start. They see the team only once a coach has approved them.
+  if (String(profile.role ?? "").toUpperCase() === "PLAYER") {
+    const { data: playerRow } = await supabase
+      .from("players")
+      .select("status")
+      .eq("user_id", result.uid)
+      .eq("team_id", teamId)
+      .maybeSingle();
+    if (String((playerRow as { status?: string | null } | null)?.status ?? "").toUpperCase() !== "ACTIVE") {
+      return NextResponse.json({ error: "Not authorized for this team" }, { status: 403 });
+    }
+  }
+
   try {
     // 1. Fetch team info
     const { data: team, error: teamError } = await supabase

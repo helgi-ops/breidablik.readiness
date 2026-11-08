@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
+import { authErrorToResponse } from "@/lib/auth/httpError";
 import { computeMdComparison, type MdDay } from "@/lib/micropulse/externalLoad/mdComparison";
 
 export const runtime = "nodejs";
@@ -21,6 +24,8 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "teamId is required" }, { status: 400 });
     }
 
+    await requireCoachAccessForTeam(getSupabaseAdmin(), req, teamId);
+
     const result = await computeMdComparison({
       teamId,
       date,
@@ -29,6 +34,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json(result);
   } catch (err) {
+    const auth = authErrorToResponse(err);
+    if (auth) return auth;
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }

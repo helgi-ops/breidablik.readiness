@@ -1,5 +1,6 @@
 "use client";
 
+import { authFetch } from "@/lib/client/authFetch";
 import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { movementProfileLabel } from "@/lib/micropulse/movementProfile";
@@ -256,7 +257,7 @@ export default function CoachWeeklyLoadCard({
     if (viewMode === "player" && selectedPlayerId) {
       params.set("playerId", selectedPlayerId);
     }
-    fetch(`/api/coach/weekly-load?${params.toString()}`)
+    authFetch(`/api/coach/weekly-load?${params.toString()}`)
       .then((r) => r.json())
       .then((json) => {
         if (json.error) setError(json.error);

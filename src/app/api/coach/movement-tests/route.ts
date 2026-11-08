@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { loadMovementTests } from "@/lib/micropulse/movementScreen/loader";
+import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
+import { authErrorToResponse } from "@/lib/auth/httpError";
 
 export const runtime = "nodejs";
 
@@ -21,7 +23,17 @@ export async function GET(req: NextRequest) {
   if (!["COACH", "ADMIN", "STAFF"].includes(String(p.role ?? "").toUpperCase())) {
     return NextResponse.json({ error: "Coach role required" }, { status: 403 });
   }
-  const teamId = new URL(req.url).searchParams.get("team_id") ?? p.team_id ?? "";
+  const requested = new URL(req.url).searchParams.get("team_id");
+  if (requested) {
+    try {
+      await requireCoachAccessForTeam(sb, req, requested);
+    } catch (err) {
+      const auth = authErrorToResponse(err);
+      if (auth) return auth;
+      throw err;
+    }
+  }
+  const teamId = requested ?? p.team_id ?? "";
   const tests = await loadMovementTests(sb, teamId);
   return NextResponse.json({ ok: true, tests });
 }

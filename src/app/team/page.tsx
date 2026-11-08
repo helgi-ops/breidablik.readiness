@@ -1,5 +1,6 @@
 "use client";
 
+import { authFetch } from "@/lib/client/authFetch";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -191,12 +192,9 @@ export default function TeamPage() {
           if (playerTeamId) {
             effectiveTeamId = playerTeamId;
             // Self-heal: write the fixed team_id back to the profile so
-            // future requests are clean. If the write fails (RLS, etc.)
+            // future requests are clean. If the write fails
             // we still proceed with the in-memory fallback for this load.
-            await supabase
-              .from("profiles")
-              .update({ team_id: playerTeamId })
-              .eq("id", authData.user.id);
+            await authFetch("/api/player/link-player", { method: "POST" }).catch(() => undefined);
           }
         }
 

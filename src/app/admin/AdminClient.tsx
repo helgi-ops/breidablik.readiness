@@ -1,5 +1,6 @@
 "use client";
 
+import { authFetch } from "@/lib/client/authFetch";
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import PlayerOwnershipAdminPanel from "@/components/admin/PlayerOwnershipAdminPanel";
@@ -337,10 +338,11 @@ export default function AdminClient() {
     else {
       // Also update profile's team_id if user is linked
       if (moveTarget.user_id) {
-        await supabase
-          .from("profiles")
-          .update({ team_id: newTeamId })
-          .eq("id", moveTarget.user_id);
+        await authFetch("/api/admin/profile-team", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: moveTarget.user_id, teamId: newTeamId }),
+        });
       }
       showToast(toNone ? `„${moveTarget.full_name}" settur í ekkert lið` : `„${moveTarget.full_name}" færður`);
       await loadData();

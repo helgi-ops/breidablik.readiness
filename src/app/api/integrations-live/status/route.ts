@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { requireCoachUserId } from "@/lib/notifications/auth";
+import { authErrorToResponse } from "@/lib/auth/httpError";
 import {
   getAvailableProviderDescriptors,
 } from "@/lib/micropulse/integrations";
@@ -14,8 +17,9 @@ import {
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    await requireCoachUserId(getSupabaseAdmin(), req);
     const providers = getAvailableProviderDescriptors().map((descriptor) => descriptor.provider);
     for (const provider of providers) {
       refreshProviderRuntimeStatus(provider);
@@ -36,6 +40,8 @@ export async function GET() {
       healthSummary: summary,
     });
   } catch (error) {
+    const auth = authErrorToResponse(error);
+    if (auth) return auth;
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }

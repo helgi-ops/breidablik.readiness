@@ -12,6 +12,7 @@
  * console.error the red/amber set as the floor so the signal survives with no email.
  */
 
+import { isCronCall } from "@/lib/auth/cron";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { sendTransactionalEmail } from "@/lib/email/sendTransactionalEmail";
@@ -20,13 +21,6 @@ import { evaluateTeamHealth, isActionableHealth, shouldAlert, type HealthStatus 
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function isCronCall(req: Request): boolean {
-  const authz = req.headers.get("authorization") || "";
-  const secret = process.env.CRON_SECRET;
-  const reminder = process.env.REMINDER_CRON_SECRET;
-  return (!!secret && authz === `Bearer ${secret}`) || (!!reminder && authz === `Bearer ${reminder}`);
-}
 
 type Alert = { teamId: string; teamName: string; checkId: string; status: HealthStatus; en: string };
 
