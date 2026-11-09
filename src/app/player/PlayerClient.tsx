@@ -145,6 +145,11 @@ type Stage4PlanRow =
       // Basketball multi-week block: true on the LAST week of the block → a planned deload (extra set
       // reduction + label), independent of readiness. Absent/false on every normal week.
       deload_week?: boolean;
+
+      // The programme table the content was read from (date-ranged block, per-player override or the
+      // recurring base). The readiness re-resolve effect reads the same table, so it never swaps a block
+      // session for the recurring one.
+      template_table?: string | null;
     }
   | null;
 
@@ -4953,7 +4958,8 @@ export default function PlayerClient() {
       supabase
         .from("v_player_today_microdose_final")
         .select(
-          "player_id, entry_date, readiness_level, readiness_flag, planned_focus, final_planned_day_type, md_day, training_system, plan_title, plan_description, plan_structure, locked_at, is_locked",
+          // No plan_* columns: the lock content is never shown (see the note after `merged` below).
+          "player_id, entry_date, readiness_level, readiness_flag, planned_focus, final_planned_day_type, md_day, training_system, locked_at, is_locked",
         )
         .eq("player_id", playerId)
         .eq("entry_date", safeDay)
@@ -5052,7 +5058,6 @@ export default function PlayerClient() {
       readiness_level: string | null; readiness_flag: string | null;
       planned_focus: string | null; final_planned_day_type: string | null;
       md_day: string | null; training_system: string | null;
-      plan_title: string | null; plan_description: string | null; plan_structure: unknown;
       locked_at: string | null; is_locked: boolean | null;
     } | null;
     type ResolvedPlan = {
@@ -5143,6 +5148,8 @@ export default function PlayerClient() {
       // currently populated only with Breiðablik's rows) — a club that entered
       // its own strength programme must never receive another club's sessions.
       let teamHasCustomTable = tblName !== "microdose_templates";
+      // The table today's content comes from, after block + per-player resolution (see template_table).
+      let contentTable: string = tblName;
 
       if (resolvedTeamId && resolvedMdDay && resolvedReadiness) {
         // ── Per-player override resolution ────────────────────────────────────
@@ -5201,6 +5208,7 @@ export default function PlayerClient() {
 
         // A per-player override slug is still a custom (non-default) table.
         teamHasCustomTable = effectiveTblName !== "microdose_templates";
+        contentTable = effectiveTblName;
 
         const { data: templateRows, error: templateErr } = await supabase
           .from(effectiveTblName as any)
@@ -5298,22 +5306,44 @@ export default function PlayerClient() {
           : null,
         // Last week of a multi-week block → render drops an extra set (planned unload, not readiness).
         deload_week: deloadWeek,
+        template_table: contentTable,
       };
 
-      // Never render a SILENT blank: if the team-template re-resolution found nothing but the
-      // player has a LOCKED plan in _final (player-specific — player_microdose_plan_locks, not
-      // another club's row), fall back to that locked content so a plan that exists is shown.
-      // Logged (survives prod) so this failure class is visible, not invisible.
-      // Not for basketball: its session comes only from the coach's weekly split, and these locks are filled from the
-      // football chain, so a lock on a day with no authored block would show a session the coach never wrote.
-      const frStruct = fr?.plan_structure;
-      if (!isBasketball && (!merged.structure || (Array.isArray(merged.structure) && merged.structure.length === 0))
-        && fr?.is_locked && Array.isArray(frStruct) && frStruct.length) {
-        console.error("[form-plan] team-template miss for", { playerId, safeDay, md: resolvedMdDay, readiness: resolvedReadiness, tbl: tblName }, "— falling back to the locked _final plan");
-        merged.structure = frStruct;
-        merged.title = merged.title ?? fr.plan_title ?? null;
-        merged.description = merged.description ?? fr.plan_description ?? null;
-        merged.source = "FINAL_LOCK_FALLBACK";
+      // The daily lock's content (_final.plan_structure) is never shown. Until 2026-11-09 the check-in
+      // trigger filled every club's locks from Breiðablik's templates, so a lock is not proof the session is
+      // this team's (migration 20261109170000 now keeps locks team-scoped, but old rows remain).
+      // What the lock fallback legitimately did — give a team whose programme table missed or failed its own
+      // default session — is done here directly: the team's OWN rows in microdose_templates (exact
+      // MD-day, then GENERIC), read .eq("team_id"). Only teams that own rows there get anything; every
+      // other team gets an empty plan, then football falls to the library-built engine default.
+      // Not for basketball: its session comes only from the coach's weekly split.
+      const isEmpty = (s: unknown) => !s || (Array.isArray(s) && s.length === 0);
+      if (!isBasketball && isEmpty(merged.structure) && resolvedTeamId && resolvedMdDay && resolvedReadiness
+        && contentTable !== "microdose_templates") {
+        try {
+          const { data: ownRows } = await supabase
+            .from("microdose_templates")
+            .select("title, description, structure, structure_en, readiness_level, md_day, variant")
+            .eq("team_id", resolvedTeamId)
+            .in("md_day", [resolvedMdDay, "GENERIC"])
+            .eq("readiness_level", resolvedReadiness)
+            .eq("season_phase", sPhase)
+            .order("variant", { ascending: true });
+          type OwnRow = { title: string | null; description: string | null; structure: unknown; structure_en?: unknown; readiness_level: string | null; md_day?: string | null; variant?: string | null };
+          const rows = ((ownRows ?? []) as unknown as OwnRow[])
+            .map((r) => ({ ...r, structure: (lang === "EN" && r.structure_en) ? r.structure_en : r.structure }));
+          const own = selectTemplateOverrideCandidate(rows, resolvedVariant, resolvedMdDay);
+          if (own && !isEmpty(own.structure)) {
+            merged.title = own.title ?? null;
+            merged.description = own.description ?? null;
+            merged.structure = own.structure;
+            merged.source = "TEAM_DEFAULT_FALLBACK";
+            merged.template_table = "microdose_templates";
+          }
+        } catch { /* fall through to the empty plan */ }
+      }
+      if (isEmpty(merged.structure)) {
+        console.warn("[form-plan] no team session for", { playerId, safeDay, md: resolvedMdDay, readiness: resolvedReadiness, tbl: contentTable });
       }
 
       // Basketball: a weekday with no authored block (nor a GENERIC fallback) is a non-lifting day in the
@@ -6659,13 +6689,15 @@ export default function PlayerClient() {
         return;
       }
 
+      // The profile team, as fetchStage4Plan uses (plan.team_id can come from older decision rows).
       const overrideTeamId = (profile as any)?.team_id ?? null;
       const playerIdForOverride = (profile as any)?.player_id ?? null;
 
-      // Per-player override resolution (mirrors logic in fetchStage4Plan).
-      // If an active player override exists for today and covers this MD-day, use its table.
-      let effectiveOverrideTbl = templateTableName as string;
-      if (playerIdForOverride && day) {
+      // Read the SAME table fetchStage4Plan read the plan from (date-ranged block, per-player override
+      // or recurring base), so a block-week session is never swapped for the recurring one. Older plan
+      // objects without template_table fall back to the recurring base + per-player override check.
+      let effectiveOverrideTbl = (plan.template_table ?? templateTableName) as string;
+      if (!plan.template_table && playerIdForOverride && day) {
         try {
           const { data: overrideRow } = await supabase
             .from("custom_template_sets")
@@ -6710,18 +6742,18 @@ export default function PlayerClient() {
         variant?: string | null;
       }>;
 
-      // Fallback: if no exact md_day row was found for desired readiness, pick the first available
-      // row for this team+readiness so player view still follows the effective readiness flag.
-      if (!rows.length) {
+      // Fallback (as in fetchStage4Plan): a team with its own programme table but no row for this
+      // MD-day uses its own GENERIC session for the readiness. Never a row from another MD-day: that
+      // would put e.g. an MD+1 recovery session on an MD-4 day.
+      if (!rows.length && effectiveOverrideTbl !== "microdose_templates") {
         const { data: fallbackRows, error: fallbackErr } = await supabase
-          .from(templateTableName as any)
+          .from(effectiveOverrideTbl as any)
           .select("title, description, structure, structure_en, readiness_level, md_day, variant")
           .eq("team_id", overrideTeamId)
           .eq("readiness_level", desiredReadiness)
+          .eq("md_day", "GENERIC")
           .eq("season_phase", activeSeasonPhase)
-          .order("md_day", { ascending: true })
-          .order("variant", { ascending: true })
-          .limit(20);
+          .order("variant", { ascending: true });
 
         if (fallbackErr) {
           console.error("microdose_templates override fallback error:", fallbackErr.message);
@@ -6750,7 +6782,7 @@ export default function PlayerClient() {
     };
 
     run();
-  }, [supabase, plan?.md_day, plan?.variant, plan?.readiness_level, session?.md_day_resolved, flag, lang]);
+  }, [supabase, plan?.md_day, plan?.variant, plan?.readiness_level, plan?.template_table, session?.md_day_resolved, flag, lang]);
 
   async function linkPlayer() {
     try {

@@ -20,7 +20,7 @@ const SERVER_ROLES = new Set(["service_role", "postgres", "supabase_admin", "sup
 const cmdWrites = (cmd: string) => cmd !== "r";
 
 /** Turns the database catalog into findings. Pure, so each rule is unit-tested on a small catalog. */
-export function evaluateCatalog(c: DbCatalog, orphans: Record<string, number> = {}): Finding[] {
+export function evaluateCatalog(c: DbCatalog, orphans: Record<string, number> = {}, foreignContent: Record<string, number> = {}): Finding[] {
   const out: Finding[] = [];
   const tenant = new Set(c.tables.filter((t) => t.tenant).map((t) => t.name));
 
@@ -77,6 +77,11 @@ export function evaluateCatalog(c: DbCatalog, orphans: Record<string, number> = 
   for (const [table, n] of Object.entries(orphans)) {
     if (n > 0) out.push(makeFinding("DB_ORPHANS", "MEDIUM", `db:${table}`, 0, `${n} rows in ${table} carry a different team than the player, with no recorded membership.`, `orphans:${table}`));
   }
+  // Players' daily plan locks holding another team's session (the 2026-11-09 leak: the check-in trigger
+  // filled every club's locks from Breiðablik's templates). Fixed by 20261109170000; this keeps it fixed.
+  for (const [table, n] of Object.entries(foreignContent)) {
+    if (n > 0) out.push(makeFinding("DB_FOREIGN_PLAN_CONTENT", "HIGH", `db:${table}`, 0, `${n} rows in ${table} hold another team's training session.`, `foreign:${table}`));
+  }
   return out;
 }
 
@@ -85,5 +90,7 @@ export async function runDbChecks(sb: SupabaseClient): Promise<Finding[]> {
   if (error) throw new Error(`tenant_audit_catalog: ${error.message}`);
   const { data: orphans, error: orphanErr } = await sb.rpc("tenant_audit_orphans");
   if (orphanErr) throw new Error(`tenant_audit_orphans: ${orphanErr.message}`);
-  return evaluateCatalog(catalog as DbCatalog, (orphans ?? {}) as Record<string, number>);
+  const { data: foreign, error: foreignErr } = await sb.rpc("tenant_audit_foreign_plan_content");
+  if (foreignErr) throw new Error(`tenant_audit_foreign_plan_content: ${foreignErr.message}`);
+  return evaluateCatalog(catalog as DbCatalog, (orphans ?? {}) as Record<string, number>, (foreign ?? {}) as Record<string, number>);
 }

@@ -43,6 +43,11 @@ describe("database rules", () => {
     expect(checks({ functions: [{ name: "f", returns_trigger: false, anon_exec: true, authenticated_exec: true, checks_caller: true }] })).toEqual([["DB_DEFINER_RPC", "HIGH"]]);
     expect(checks({ functions: [{ name: "f", returns_trigger: false, anon_exec: false, authenticated_exec: true, checks_caller: false }] })).toEqual([["DB_DEFINER_RPC", "MEDIUM"]]);
   });
+  it("a plan lock holding another team's session is high (the 2026-11-09 leak)", () => {
+    const run = (n: number) => evaluateCatalog(clean, {}, { player_microdose_plan_locks: n }).map((f) => [f.check, f.severity]);
+    expect(run(13432)).toEqual([["DB_FOREIGN_PLAN_CONTENT", "HIGH"]]);
+    expect(run(0)).toEqual([]);
+  });
   it("ignores trigger functions and policies only for server roles", () => {
     expect(checks({ functions: [{ name: "f", returns_trigger: true, anon_exec: true, authenticated_exec: true, checks_caller: false }] })).toEqual([]);
     expect(checks({ policies: policy("true", "true", "*", ["service_role"]) })).toEqual([]);

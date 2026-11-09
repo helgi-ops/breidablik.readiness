@@ -20,6 +20,7 @@ export type CheckId =
   | "DB_INVITE_WRITE"
   | "DB_NEW_ELEVATED_ACCOUNT"
   | "DB_ORPHANS"
+  | "DB_FOREIGN_PLAN_CONTENT"
   | "DB_COACH_TEAMS_GAP";
 
 export type Finding = {

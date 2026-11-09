@@ -29,6 +29,17 @@ answers 404, so every name goes through `fitTableName` (`src/lib/micropulse/temp
 check on `custom_template_sets` refuse anything longer. Tables must also carry `structure_en`, because the Today read
 selects it. `create_custom_microdose_table` adds it when it runs, but tables it has not touched since 2026-11-09 can lack it.
 
+**Daily plan locks are never a content source.** `player_microdose_plan_locks` (written on check-in by
+`lock_player_microdose_plan`) records md_day + readiness, which `v_player_today_microdose_final` reads. Until
+2026-11-09 it filled every club's lock with Breiðablik's session, and `fetchStage4Plan` showed that lock when the
+team read found nothing (`FINAL_LOCK_FALLBACK`). Migration `20261109170000` keeps locks team-scoped (a guard
+trigger empties any other team's content) and the app no longer reads `plan_*` from `_final`. When the team's
+programme table misses or fails, the app reads the team's own `microdose_templates` rows instead
+(`TEAM_DEFAULT_FALLBACK`, team-scoped, so only teams that own rows there get anything). Everyone else gets an
+empty plan, then the engine default. The readiness re-resolve effect reads the same table the plan came from
+(`template_table`: block, per-player override or recurring base) and falls back only to that table's GENERIC row.
+`npm run audit:tenant` reports `DB_FOREIGN_PLAN_CONTENT` if a lock holds another team's session.
+
 **Key consequence:** layer 2 (any coach send) always wins over layer 3 (Custom Programmes). So a
 per-player Custom Programme is silently superseded on any date a session/block is sent. The send flows
 therefore preview this (see below) instead of failing silently.

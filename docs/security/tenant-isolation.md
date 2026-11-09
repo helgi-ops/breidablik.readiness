@@ -35,6 +35,7 @@ Most API routes use the service role, which skips row-level security (RLS). The 
 | DB_INVITE_WRITE | Users can write coach invitations directly | High |
 | DB_NEW_ELEVATED_ACCOUNT | A new admin or staff account. Each known one is in the baseline. | High |
 | DB_ORPHANS | Rows whose team differs from the player's, with no recorded move | Medium |
+| DB_FOREIGN_PLAN_CONTENT | A player's daily plan lock (`player_microdose_plan_locks`) holds another team's `microdose_templates` session (`tenant_audit_foreign_plan_content()`) | High |
 | DB_COACH_TEAMS_GAP | Coach profile pointing at a team with no `coach_teams` row | Medium |
 
 ## Allowed across teams on purpose
