@@ -55,6 +55,13 @@ type CronBody = {
 // Before turning this on: allow 'cmj_required' in that constraint, and fix the "missing" reason in
 // sendCmjReminder, which treats any player with no snapshot TODAY as having no CMJ data at all.
 const CMJ_REMINDERS_ENABLED = false;
+/**
+ * Email reminders are off until the coach decides to start them. They have never sent one: the database has no
+ * get_active_players_with_email function, email_reminder_log has other columns than the code writes, and
+ * RESEND_API_KEY was missing on the last send attempt. Each failed run answered 500 at the 09:00 and RPE slots.
+ * Turning this on means daily email to every active player with a login, so it needs all three fixed first.
+ */
+const EMAIL_REMINDERS_ENABLED = process.env.EMAIL_REMINDERS_ENABLED === "true";
 
 // Profiles dispatched on each cron tick. 'none' is intentionally excluded —
 // teams on that profile do not receive automated reminders.
@@ -98,8 +105,8 @@ export async function POST(req: Request) {
       rpeSlot: getCurrentRpeScheduledSlot({ timeZone, toleranceMinutes: 30, profile }),
     }));
 
-    const readinessEmailSlot = matchReadinessEmailSchedule({ now, timeZone, toleranceMinutes: 30 });
-    const rpeEmailSlot = matchRpeEmailSchedule({ now, timeZone, toleranceMinutes: 30 });
+    const readinessEmailSlot = EMAIL_REMINDERS_ENABLED ? matchReadinessEmailSchedule({ now, timeZone, toleranceMinutes: 30 }) : null;
+    const rpeEmailSlot = EMAIL_REMINDERS_ENABLED ? matchRpeEmailSchedule({ now, timeZone, toleranceMinutes: 30 }) : null;
 
     // CMJ reminder fires at the second checkin reminder window (10:00 Mon/Wed/Fri/Sat/Sun,
     // 13:00 Tue/Thu) — this corresponds to the breidablik_custom profile's "second" slot.

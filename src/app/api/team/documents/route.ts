@@ -61,12 +61,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Build public URLs for each document
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
-  const documents = (data ?? []).map((doc) => ({
-    ...doc,
-    url: `${supabaseUrl}/storage/v1/object/public/team-documents/${doc.file_path}`,
-  }));
+  // The bucket is private: each link works for one hour and only after the team check above.
+  const rows = data ?? [];
+  const { data: signed, error: signError } = rows.length
+    ? await supabase.storage.from("team-documents").createSignedUrls(rows.map((doc) => doc.file_path), 60 * 60)
+    : { data: [], error: null };
+  if (signError) {
+    return NextResponse.json({ error: signError.message }, { status: 500 });
+  }
+  const urlByPath = new Map((signed ?? []).map((item) => [item.path, item.signedUrl]));
+  const documents = rows.map((doc) => ({ ...doc, url: urlByPath.get(doc.file_path) ?? null }));
 
   return NextResponse.json({ documents });
 }
@@ -91,7 +95,8 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const teamId = formData.get("teamId") as string;
     const title = formData.get("title") as string;
-    const category = (formData.get("category") as string) || "general";
+    // The category becomes part of the storage path, so it must not be able to leave the team's folder.
+    const category = String(formData.get("category") ?? "").replace(/[^a-zA-Z0-9_-]/g, "") || "general";
     const file = formData.get("file") as File | null;
 
     if (!teamId || !title?.trim() || !file) {
@@ -123,10 +128,15 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    // The browser states the file type itself, so check the file's own first bytes too.
+    if (buffer.subarray(0, 5).toString("latin1") !== "%PDF-") {
+      return NextResponse.json({ error: "Only PDF files are allowed" }, { status: 400 });
+    }
+
     const { error: uploadError } = await supabase.storage
       .from("team-documents")
       .upload(filePath, buffer, {
-        contentType: file.type,
+        contentType: "application/pdf",
         upsert: false,
       });
 
