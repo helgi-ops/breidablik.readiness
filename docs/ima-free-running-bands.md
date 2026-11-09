@@ -180,3 +180,27 @@ rows reading "0 long runs" fell from 198 to 79; 121 Breiðablik rows (the two pl
 
 TypeScript mirrors the rule in `freeRunningBands.ts` (`boundsFit`, `fittingBounds`, `frReadingOf`); tests in
 `src/lib/integrations/catapult/__tests__/freeRunningBands.test.ts`.
+
+## Last band-number readers removed (9 Nov 2026, Lota 3)
+
+Migration `20261109200000_ima_fr_stride_views_tiers.sql`:
+
+- `player_stride_summary.hi_velocity_strides` = `ima_fr_ge18_stride_count` (was bands 5–8) and
+  `high_intensity_player_load` = `ima_fr_ge18_total_player_load` (was bands 4–8 = runs ≥15 s, legacy edges only).
+  Same for `player_indoor_stride_summary`. Names, order and types kept. null = no reading (3-band default, or no
+  Free Running data at all), where it used to be 0.
+- `refresh_stride_baselines()` body saved in git (it was DB-only) and re-run. `stride_gps_ima_decoupling` now uses
+  ≥18 s like the TypeScript path; its mean moved about 0.01 (squad −0.029 → −0.018). The other three stride
+  baselines did not change.
+- `get_mcburnie_decel_status` still counts `v_b78_days` from bands 7+8, but nothing reads that variable. Left as is.
+
+Code:
+
+- `strideIntelligence`: `hiVelocityStrides` / `highIntensityPlayerLoad` are `number | null` from the ≥18 s tier; no
+  band-number fallback. The GPS/IMA mix is null when the tier is null. Same rule in the stride-intel route.
+- Player game report: long-run keys (`ima_hsr`, `ima_hir5..8`) are averaged only over matches whose row is readable,
+  so the two players on the 3-band default don't get a false 0 in their season average or percentile.
+- Transfer report radar axes say "Runs <12 s / 12–18 s / 18–24 s / 24 s+" instead of B5–B8.
+- Removed: `LONG_RUN_BANDS`, `ImaRunningLoad.dominantBand` (and `dominant_band` on the unused ima-run-distance route).
+  `sumBands58` in sync stays as a provisional value; the trigger overwrites it.
+- `scripts/backfill-ima-from-feb.sh` no longer carries a fallback secret; it needs `CATAPULT_CRON_SECRET` in the env.

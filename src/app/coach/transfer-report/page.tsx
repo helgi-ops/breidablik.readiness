@@ -35,7 +35,8 @@ const ENGINE_CFG: Array<{ key: string; label: string; fmt: (v: number | null | u
 ];
 const DRIVER_CFG: Array<{ key: string; label: string; fmt: (v: number | null | undefined) => string }> = [
   { key: "ima_acc", label: "Acc", fmt: f1 }, { key: "ima_dec", label: "Dec", fmt: f1 }, { key: "cod", label: "CoD", fmt: f1 }, { key: "jumps", label: "Jumps", fmt: f1 },
-  { key: "ima_hir5", label: "B5", fmt: n0 }, { key: "ima_hir6", label: "B6", fmt: n0 }, { key: "ima_hir7", label: "B7", fmt: n0 }, { key: "ima_hir8", label: "B8", fmt: n0 },
+  // ima_hir5..8 = metres in runs of <12 / 12–18 / 18–24 / ≥24 s (run length, not band numbers or speed).
+  { key: "ima_hir5", label: "Runs <12 s", fmt: n0 }, { key: "ima_hir6", label: "Runs 12–18 s", fmt: n0 }, { key: "ima_hir7", label: "Runs 18–24 s", fmt: n0 }, { key: "ima_hir8", label: "Runs 24 s+", fmt: n0 },
 ];
 function buildRadar(cfg: typeof ENGINE_CFG, benchmarks: Record<string, Bench | undefined>, avail: Set<string> | null): RadarMetric[] {
   return cfg.filter((c) => !avail || avail.has(c.key)).map((c) => {

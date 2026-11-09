@@ -20,7 +20,11 @@ set -u
 
 # ── Config ────────────────────────────────────────────────────────────────
 BASE_URL="${BASE_URL:-https://app.micropulse.is}"
-CRON_SECRET="${CATAPULT_CRON_SECRET:-82815d0f0ef1510acc11025b1d63c853e0332bc5c9b9bc01}"
+CRON_SECRET="${CATAPULT_CRON_SECRET:-}"
+if [ -z "$CRON_SECRET" ]; then
+  echo "Set CATAPULT_CRON_SECRET in the environment first (never hard-code it here)." >&2
+  exit 1
+fi
 FROM="${BACKFILL_FROM:-2026-02-01}"
 TO="${BACKFILL_TO:-$(date +%Y-%m-%d)}"
 

@@ -16,8 +16,6 @@ import { bandsAtOrAbove, boundsOfRow, deriveFreeRunningBands, type FreeRunningBa
 
 /** A long run = one continuous run of at least this many seconds (a band edge in every Breiðablik config). */
 export const LONG_RUN_MIN_S = 18;
-/** @deprecated legacy-edge band numbers of long runs; use longRunBandNumbers(row) instead. */
-export const LONG_RUN_BANDS = [5, 6, 7, 8] as const;
 
 /** Band numbers holding runs ≥18 s for this row's edges (legacy 5–8, Nov-2026 config 6–8). */
 export function longRunBandNumbers(row: FreeRunningBandRow): number[] {

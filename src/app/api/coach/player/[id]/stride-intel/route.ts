@@ -174,7 +174,13 @@ export async function GET(
       (Number(r.velocity_band6_total_distance ?? 0) || 0);
     // Share of IMU load in runs ≥18 s (ima_fr_ge18 tier). Was ≥15 s = legacy bands 4–8; 15 s is not a
     // band edge in the Nov-2026 config, so the config-independent ≥18 s tier is used instead.
-    const hi = Number(r.ima_fr_ge18_total_player_load ?? 0) || 0;
+    // null tier = no reading for this row's band edges (e.g. Catapult's 3-band default): no mix that day,
+    // never a 0 that reads as "all running was short".
+    if (r.ima_fr_ge18_total_player_load == null) {
+      decouplingByDate.set(r.date, null);
+      continue;
+    }
+    const hi = Number(r.ima_fr_ge18_total_player_load) || 0;
     decouplingByDate.set(r.date, hsr / td - hi / tpl);
   }
 

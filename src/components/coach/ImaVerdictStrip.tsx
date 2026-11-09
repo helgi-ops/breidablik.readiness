@@ -3,8 +3,8 @@
 /**
  * ImaVerdictStrip — the Driver-axis companion to the LoadVerdictCard strip
  * (Engine axis). GPS = engine, IMA = driver (Niklas Virtanen). One plain line
- * summarising today's long continuous running (IMA Free Running bands 5–8 =
- * bouts ≥18 s; bout-duration bands, NOT sprint/high-speed) vs each player's
+ * summarising today's long continuous running (IMA Free Running runs ≥18 s, read
+ * from each session's own band edges; bout-duration, NOT sprint/high-speed) vs each player's
  * own baseline,
  * linking to the IMA Intelligence page — the exact mirror of the "Load →" strip
  * that links to Load Intelligence.
@@ -38,8 +38,8 @@ export default function ImaVerdictStrip({ lang, date }: { lang?: "IS" | "EN"; da
         if (!alive || !res.ok) return;
         const j = (await res.json()) as ImaResp;
         const players = (j.profile?.per_player ?? []).filter((p) => p.total_strides > 0);
-        // Same threshold the IMA page verdict uses: long-run strides (bands 5–8,
-        // runs ≥18 s; field name `sprint_vs_baseline_pct` is legacy) >= 150% of the
+        // Same threshold the IMA page verdict uses: long-run strides (runs ≥18 s,
+        // whatever band numbers hold them; field name `sprint_vs_baseline_pct` is legacy) >= 150% of the
         // player's 14-day training-only baseline = a jump in sustained running.
         const spikes = players.filter((p) => (p.sprint_vs_baseline_pct ?? 0) >= 150).map((p) => p.full_name);
         const shownDate = j.date ?? null;

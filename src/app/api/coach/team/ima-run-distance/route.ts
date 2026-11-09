@@ -134,8 +134,7 @@ export async function GET(req: NextRequest) {
         status: load.status,
         confident: load.confident,
         z: load.z,
-        dominant_band: load.dominantBand,
-        dominant_run_length: load.dominantRunLength, // config-independent; dominant_band is legacy-edges only
+        dominant_run_length: load.dominantRunLength, // config-independent (run length, not band number)
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);

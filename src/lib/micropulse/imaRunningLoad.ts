@@ -50,11 +50,6 @@ export type ImaRunningLoad = {
   confident: boolean;       // chronic window has enough real days to trust the ratio
   chronicDays: number;      // days WITH any long-run distance in the chronic window
   z: number | null;         // today vs the player's recent training-day distribution
-  /**
-   * @deprecated LEGACY edges only (5 = 18–21 s … 8 = 27 s+). Reads the band5–8 slots, which are 0 for sessions
-   * from 10 Nov 2026, so this is null for new-config days. Use dominantRunLength. Shape kept for API stability.
-   */
-  dominantBand: 5 | 6 | 7 | 8 | null;
   /** Run-length tier carrying the most long-run distance today, config-independent ("18-24" = runs 18–24 s, "24+" = runs ≥24 s). */
   dominantRunLength: "18-24" | "24+" | null;
 };
@@ -138,19 +133,6 @@ export function computeImaRunningLoad(rows: ImaDayRow[], refDateIso: string): Im
     if (l18 > 0 || l24 > 0) dominantRunLength = l24 > l18 ? "24+" : "18-24";
   }
 
-  // LEGACY: which band slot (legacy edges) carried the most distance today. Null for new-config days.
-  let dominantBand: ImaRunningLoad["dominantBand"] = null;
-  if (todayRow) {
-    const bands: Array<[5 | 6 | 7 | 8, number]> = [
-      [5, Number(todayRow.band5 ?? 0) || 0],
-      [6, Number(todayRow.band6 ?? 0) || 0],
-      [7, Number(todayRow.band7 ?? 0) || 0],
-      [8, Number(todayRow.band8 ?? 0) || 0],
-    ];
-    bands.sort((a, b) => b[1] - a[1]);
-    if (bands[0][1] > 0) dominantBand = bands[0][0];
-  }
-
   return {
     date: refDateIso,
     today: round(today, 0),
@@ -161,7 +143,6 @@ export function computeImaRunningLoad(rows: ImaDayRow[], refDateIso: string): Im
     confident,
     chronicDays,
     z,
-    dominantBand,
     dominantRunLength,
   };
 }

@@ -37,8 +37,8 @@ type StrideDriverFlag = {
 
 type StrideMetrics = {
   totalStrides: number;
-  hiVelocityStrides: number;
-  highIntensityPlayerLoad: number;
+  hiVelocityStrides: number | null;
+  highIntensityPlayerLoad: number | null;
   cadenceWeighted: number | null;
   strideLengthHsr: number | null;
   imaHsrDistanceM?: number | null;

@@ -75,11 +75,13 @@ export type StrideRow = {
 
 export type StrideMetrics = {
   totalStrides: number;
-  /** Strides in long continuous runs (≥18 s). Legacy name — not velocity. */
-  hiVelocityStrides: number;
+  /** Strides in long continuous runs (≥18 s). Legacy name — not velocity. null = no reading for this
+   *  row's band edges (never a band-number fallback). */
+  hiVelocityStrides: number | null;
   /** IMU player load in runs of 18 s or more. Legacy name — not intensity. Meaning shifted (Nov 2026):
-   *  was runs ≥15 s (legacy bands 4–8); 15 s is not a band edge in every config, so it is now ≥18 s. */
-  highIntensityPlayerLoad: number;
+   *  was runs ≥15 s (legacy bands 4–8); 15 s is not a band edge in every config, so it is now ≥18 s.
+   *  null = no reading. */
+  highIntensityPlayerLoad: number | null;
   /** Volume-weighted avg stride rate across all 8 bands (Hz). null when no strides. */
   cadenceWeighted: number | null;
   /** Session-average stride length = total distance ÷ total strides (m/stride).
@@ -177,16 +179,15 @@ export function computeStrideMetrics(row: StrideRow): StrideMetrics {
   const loads = row.stridePlayerLoads.map((v) => Number(v ?? 0));
 
   const totalStrides = counts.reduce((s, c) => s + (Number.isFinite(c) ? c : 0), 0);
-  // Runs ≥18 s: prefer the config-independent tier from the loader; the index fallback (bands 5–8) is
-  // only right under the legacy band edges.
+  // Runs ≥18 s from the config-independent tier (DB trigger reads each row's own band edges). null = no
+  // reading (e.g. Catapult's 3-band default has no 18 s edge) — never fall back to band numbers, which
+  // mean ≥18 s only under the legacy edges and read a false 0 on the 3-band default.
   const tierNum = (v: number | null | undefined): number | null => {
     const n = v == null ? NaN : Number(v);
     return Number.isFinite(n) ? n : null;
   };
-  const hiVelocityStrides =
-    tierNum(row.longRunStrides) ?? (counts[4] ?? 0) + (counts[5] ?? 0) + (counts[6] ?? 0) + (counts[7] ?? 0);
-  const highIntensityPlayerLoad =
-    tierNum(row.longRunPlayerLoad) ?? (loads[4] ?? 0) + (loads[5] ?? 0) + (loads[6] ?? 0) + (loads[7] ?? 0);
+  const hiVelocityStrides = tierNum(row.longRunStrides);
+  const highIntensityPlayerLoad = tierNum(row.longRunPlayerLoad);
 
   // Cadence (strides per minute). From time in band when the sync carries it: strides ÷ seconds × 60 over
   // the bands that have both. Else the stored per-band average, weighted by strides, counting only bands
@@ -244,7 +245,7 @@ export function computeStrideMetrics(row: StrideRow): StrideMetrics {
   const totalDist = Number(row.totalDistance ?? 0);
   const totalPlayerLoad = nullSafeSum(loads);
   let gpsImaDecoupling: number | null = null;
-  if (totalDist > 0 && totalPlayerLoad > 0) {
+  if (totalDist > 0 && totalPlayerLoad > 0 && highIntensityPlayerLoad != null) {
     const hsrShare = hsrDist / totalDist;
     const hiLoadShare = highIntensityPlayerLoad / totalPlayerLoad;
     gpsImaDecoupling = hsrShare - hiLoadShare;
@@ -257,7 +258,7 @@ export function computeStrideMetrics(row: StrideRow): StrideMetrics {
   // yet ingested).
   const imaHsr = Number(row.imaHsrDistance ?? 0) || 0;
   const hiCadenceStrideLengthM =
-    imaHsr > 0 && hiVelocityStrides > 0 ? imaHsr / hiVelocityStrides : null;
+    imaHsr > 0 && hiVelocityStrides != null && hiVelocityStrides > 0 ? imaHsr / hiVelocityStrides : null;
 
   return {
     totalStrides,

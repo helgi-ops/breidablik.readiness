@@ -13,7 +13,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sprintDistanceM } from "@/lib/micropulse/catapultCapability";
-import { sumBandsBetween } from "@/lib/integrations/catapult/freeRunningBands";
+import { frReadingOf, sumBandsBetween } from "@/lib/integrations/catapult/freeRunningBands";
 import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { loadMatchVerdicts, isContaminatedForBenchmark, verdictKey } from "@/lib/micropulse/matchRunningVerdicts";
 
@@ -55,7 +55,7 @@ const LOAD_COLUMNS =
   "accelerations, decelerations, max_velocity, ima_accel, ima_decel, " +
   "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
-  "ima_fr_band58_total_distance, ima_fr_band_bounds, ima_fr_ge24_total_distance, " +
+  "ima_fr_band58_total_distance, ima_fr_band_bounds, ima_fr_bounds_source, ima_fr_ge24_total_distance, " +
   "ima_fr_band1_total_distance, ima_fr_band2_total_distance, ima_fr_band3_total_distance, ima_fr_band4_total_distance, " +
   "ima_fr_band5_total_distance, ima_fr_band6_total_distance, ima_fr_band7_total_distance, ima_fr_band8_total_distance, " +
   "jumps, accel_decel_efforts, high_metabolic_load_distance_m, session_duration_minutes, velocity_band6_total_distance, player_load_per_minute, raw_payload_json";
@@ -277,7 +277,15 @@ export async function computePlayerGameReport(
   const isEstimated = (load: Record<string, unknown> | undefined): boolean =>
     !!(load?.raw_payload_json as { estimated?: boolean } | null)?.estimated;
 
-  const perPlayerP90Sums = new Map<string, { sums: Record<P90Key, number>; topSpeed: number; n: number }>();
+  // Long-run keys are averaged only over matches whose Free Running row is readable: a row on Catapult's
+  // 3-band default (no 18 s edge) or with unknown edges has no long-run reading, and counting it as 0 would
+  // drag the player's season average and percentile down (a false zero, not a measurement).
+  const LONG_RUN_KEYS = new Set<P90Key>(["ima_hsr", "ima_hir5", "ima_hir6", "ima_hir7", "ima_hir8"]);
+  const longRunsUnreadable = (load: Record<string, unknown>): boolean => {
+    const reading = frReadingOf(load);
+    return reading === "catapult_default" || reading === "unknown_edges";
+  };
+  const perPlayerP90Sums = new Map<string, { sums: Record<P90Key, number>; ns: Record<P90Key, number>; topSpeed: number; n: number }>();
   for (const date of matchDates) {
     for (const pid of playerIds) {
       const load = loadByKey.get(`${pid}|${date}`);
@@ -290,8 +298,20 @@ export async function computePlayerGameReport(
       const metrics = loadRowToMetrics(load);
       const p90 = per90(metrics, minutes);
       let acc = perPlayerP90Sums.get(pid);
-      if (!acc) { acc = { sums: Object.fromEntries(P90_KEYS.map((k) => [k, 0])) as Record<P90Key, number>, topSpeed: 0, n: 0 }; perPlayerP90Sums.set(pid, acc); }
-      for (const k of P90_KEYS) acc.sums[k] += p90[k];
+      if (!acc) {
+        acc = {
+          sums: Object.fromEntries(P90_KEYS.map((k) => [k, 0])) as Record<P90Key, number>,
+          ns: Object.fromEntries(P90_KEYS.map((k) => [k, 0])) as Record<P90Key, number>,
+          topSpeed: 0, n: 0,
+        };
+        perPlayerP90Sums.set(pid, acc);
+      }
+      const skipLongRuns = longRunsUnreadable(load);
+      for (const k of P90_KEYS) {
+        if (skipLongRuns && LONG_RUN_KEYS.has(k)) continue;
+        acc.sums[k] += p90[k];
+        acc.ns[k] += 1;
+      }
       acc.topSpeed = Math.max(acc.topSpeed, metrics.top_speed_kmh);
       acc.n += 1;
     }
@@ -303,7 +323,7 @@ export async function computePlayerGameReport(
   for (const k of benchKeys) sampleByMetric.set(k, []);
   for (const [id, acc] of perPlayerP90Sums.entries()) {
     if (acc.n === 0) continue;
-    for (const k of P90_KEYS) sampleByMetric.get(k)!.push({ id, value: acc.sums[k] / acc.n });
+    for (const k of P90_KEYS) if (acc.ns[k] > 0) sampleByMetric.get(k)!.push({ id, value: acc.sums[k] / acc.ns[k] });
     sampleByMetric.get("top_speed_kmh")!.push({ id, value: acc.topSpeed });
   }
 
@@ -347,13 +367,13 @@ export async function computePlayerGameReport(
   const gpsMatches = matches.filter((m) => m.has_gps && m.raw && m.minutes > 0);
   const acc = perPlayerP90Sums.get(playerId) ?? null;
   const seasonP90 = acc && acc.n > 0
-    ? Object.fromEntries(P90_KEYS.map((k) => [k, r1(acc.sums[k] / acc.n)])) as Record<P90Key, number>
+    ? Object.fromEntries(P90_KEYS.map((k) => [k, acc.ns[k] > 0 ? r1(acc.sums[k] / acc.ns[k]) : 0])) as Record<P90Key, number>
     : Object.fromEntries(P90_KEYS.map((k) => [k, 0])) as Record<P90Key, number>;
   // Season-best top speed excludes estimates — a PB must be a real measurement.
   const bestTopSpeed = gpsMatches.filter((m) => !m.estimated).reduce((mx, m) => Math.max(mx, m.raw!.top_speed_kmh), 0);
 
   const benchmarks: GameReport["benchmarks"] = {};
-  for (const k of P90_KEYS) benchmarks[k] = benchmark(k, acc && acc.n > 0 ? acc.sums[k] / acc.n : null);
+  for (const k of P90_KEYS) benchmarks[k] = benchmark(k, acc && acc.ns[k] > 0 ? acc.sums[k] / acc.ns[k] : null);
   benchmarks.top_speed_kmh = benchmark("top_speed_kmh", bestTopSpeed || null);
 
   const availableKeys = benchKeys.filter((k) => (sampleByMetric.get(k) ?? []).some((s) => s.value > 0));
