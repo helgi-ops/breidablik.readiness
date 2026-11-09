@@ -7,6 +7,8 @@ import {
   supabase,
 } from "@/lib/supabaseClient";
 import { useRouter, useSearchParams } from "next/navigation";
+import { sessionNeedsMfa } from "@/lib/auth/mfaClient";
+import MfaChallenge from "@/components/auth/MfaChallenge";
 
 type Mode = "signin" | "signup" | "reset";
 type Gender = "M" | "F";
@@ -111,6 +113,8 @@ export default function LoginInner() {
       : "";
 
   const [mode, setMode] = useState<Mode>("signin");
+  // Where to go once the two-step code is done. Set only for accounts with an authenticator app registered.
+  const [afterCode, setAfterCode] = useState<string | null>(null);
 
   // ✅ Auto-redirect if already logged in (critical for PWA keep-me-logged-in)
   useEffect(() => {
@@ -126,7 +130,12 @@ export default function LoginInner() {
         if (cancelled) return;
         const nextIsPlayerFlow = next === "/player" || next === "/player/checkin" || next === "/team";
         const finalNext = nextIsPlayerFlow ? landingPath : next;
-        router.replace(`/auth/redirect?next=${encodeURIComponent(finalNext)}`);
+        const target = `/auth/redirect?next=${encodeURIComponent(finalNext)}`;
+        if (await sessionNeedsMfa()) {
+          if (!cancelled) { setAfterCode(target); setCheckingSession(false); }
+          return;
+        }
+        router.replace(target);
       } catch {
         if (!cancelled) setCheckingSession(false);
       }
@@ -359,6 +368,10 @@ export default function LoginInner() {
         const finalNext = nextIsPlayerFlow ? landingPath : next;
 
         const target = `/auth/redirect?next=${encodeURIComponent(finalNext)}`;
+        if (await sessionNeedsMfa()) {
+          setAfterCode(target);
+          return;
+        }
         router.replace(target);
         router.refresh();
         return;
@@ -429,6 +442,19 @@ export default function LoginInner() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (afterCode) {
+    return (
+      <div style={{ padding: 16 }}>
+        <MfaChallenge
+          onVerified={() => {
+            router.replace(afterCode);
+            router.refresh();
+          }}
+        />
+      </div>
+    );
   }
 
   if (checkingSession) {

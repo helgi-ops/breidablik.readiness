@@ -5,6 +5,8 @@ export const dynamic = "force-dynamic";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { sessionNeedsMfa } from "@/lib/auth/mfaClient";
+import MfaChallenge from "@/components/auth/MfaChallenge";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -13,6 +15,7 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [needsCode, setNeedsCode] = useState(false);
 
   // Establish the recovery session, however the user arrived here.
   useEffect(() => {
@@ -67,6 +70,13 @@ export default function ResetPasswordPage() {
     setError(null);
     setLoading(true);
 
+    // Supabase refuses a password change from an account with an app until the code has been given.
+    if (await sessionNeedsMfa()) {
+      setLoading(false);
+      setNeedsCode(true);
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({
       password,
     });
@@ -80,6 +90,14 @@ export default function ResetPasswordPage() {
 
     // password sett → fara í role redirect
     router.replace("/auth/redirect");
+  }
+
+  if (needsCode) {
+    return (
+      <div style={{ padding: 16 }}>
+        <MfaChallenge onVerified={() => setNeedsCode(false)} />
+      </div>
+    );
   }
 
   if (!ready) {

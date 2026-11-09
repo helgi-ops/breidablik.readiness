@@ -3,10 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { sessionNeedsMfa } from "@/lib/auth/mfaClient";
+import MfaChallenge from "@/components/auth/MfaChallenge";
+import { useLang } from "@/lib/lang";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
+  const [needsCode, setNeedsCode] = useState(false);
+  const [lang] = useLang();
 
   useEffect(() => {
     async function checkAdmin() {
@@ -23,6 +28,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         router.replace("/");
         return;
       }
+      setNeedsCode(await sessionNeedsMfa());
       setChecking(false);
     }
     checkAdmin();
@@ -32,6 +38,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground text-sm">
         Sæki heimildir…
+      </div>
+    );
+  }
+
+  if (needsCode) {
+    return (
+      <div className="min-h-screen bg-background px-4">
+        <MfaChallenge onVerified={() => setNeedsCode(false)} />
       </div>
     );
   }
@@ -46,6 +60,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
           <nav className="flex items-center gap-3 text-sm text-muted-foreground">
             <a href="/admin/drill-upload" className="font-medium text-foreground hover:underline">⬆️ Hlaða í safn þjálfara</a>
+            <a href="/admin/security" className="hover:text-foreground transition-colors">{lang === "IS" ? "Öryggi" : "Security"}</a>
             <a href="/coach" className="hover:text-foreground transition-colors">← Þjálfari</a>
           </nav>
         </div>
