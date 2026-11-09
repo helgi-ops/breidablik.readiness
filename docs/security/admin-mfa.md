@@ -10,5 +10,32 @@ protected by two-step sign-in on the Supabase account.
 
 ## Enforcement
 
-Registering an app and the code step do not on their own stop a password-only session from reaching admin data.
-Enforcement is a separate step, switched on only after every admin has registered and tested sign-in.
+A session that has not entered its code (`aal` other than `aal2` in the token) is refused in three places:
+
+| Where | Rule | Code |
+|---|---|---|
+| API routes | token carries `app_metadata.mfa_required = true` | `src/proxy.ts`, `src/lib/auth/twoStep.ts`, cookie path in `src/lib/notifications/auth.ts` |
+| Browser database reads and writes | account has a verified app | PostgREST pre-request `public.enforce_two_step_sign_in()` |
+| Realtime tables (`match_schedule`, `player_coach_messages`) | account has a verified app | restrictive policy on `public.two_step_session_ok()` |
+
+The proxy only decodes the token, which is safe because it can only refuse: every route still verifies the token.
+The flag is set by hand on admin accounts; an admin added later needs it too:
+
+```sql
+update auth.users set raw_app_meta_data = raw_app_meta_data || '{"mfa_required": true}' where id = '<user id>';
+```
+
+The flag reaches the token at the next refresh, within an hour.
+
+The sign-in screen, the admin area and the password reset ask for the code before they read anything else.
+
+### Switching it off
+
+Each part stops on its own:
+
+- API routes: remove the flag, `update auth.users set raw_app_meta_data = raw_app_meta_data - 'mfa_required' where id = '<user id>';`
+- Database: `alter role authenticator reset pgrst.db_pre_request; notify pgrst, 'reload config';`
+- Realtime tables: drop the two `two_step_required` policies.
+
+If an admin is locked out, removing their factor in Supabase (see Lost device) lifts all three at once for the
+database, and removing the flag lifts the API check.

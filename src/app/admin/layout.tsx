@@ -11,12 +11,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const [checking, setChecking] = useState(true);
   const [needsCode, setNeedsCode] = useState(false);
+  const [recheck, setRecheck] = useState(0);
   const [lang] = useLang();
 
   useEffect(() => {
     async function checkAdmin() {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) { router.replace("/login"); return; }
+
+      // Code first: once two-step sign-in is enforced, a session without a code cannot read the profile below.
+      if (await sessionNeedsMfa()) {
+        setNeedsCode(true);
+        setChecking(false);
+        return;
+      }
 
       const { data: prof } = await supabase
         .from("profiles")
@@ -28,11 +36,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         router.replace("/");
         return;
       }
-      setNeedsCode(await sessionNeedsMfa());
+      setNeedsCode(false);
       setChecking(false);
     }
     checkAdmin();
-  }, [router]);
+  }, [router, recheck]);
 
   if (checking) {
     return (
@@ -45,7 +53,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (needsCode) {
     return (
       <div className="min-h-screen bg-background px-4">
-        <MfaChallenge onVerified={() => setNeedsCode(false)} />
+        <MfaChallenge onVerified={() => { setChecking(true); setNeedsCode(false); setRecheck((n) => n + 1); }} />
       </div>
     );
   }

@@ -3,6 +3,8 @@ import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { tokenNeedsCode } from "@/lib/auth/twoStep";
+import { needsMfaStep } from "@/lib/auth/mfaText";
 
 function bearerFromRequest(req: Request) {
   const auth = req.headers.get("authorization") || "";
@@ -35,6 +37,12 @@ async function getUserIdFromCookieSession(): Promise<string | null> {
 
   const { data, error } = await serverClient.auth.getUser();
   if (error || !data?.user?.id) return null;
+
+  // Two-step sign-in: a session that still owes a code gets no user (docs/security/admin-mfa.md).
+  const { data: sessionData } = await serverClient.auth.getSession();
+  if (tokenNeedsCode(sessionData.session?.access_token)) return null;
+  const { data: aal } = await serverClient.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (needsMfaStep(aal)) return null;
   return data.user.id;
 }
 
@@ -44,6 +52,8 @@ export async function getUserIdFromBearer(sb: SupabaseClient, req: Request): Pro
     return getUserIdFromCookieSession();
   }
 
+  // The proxy refuses these too; checked here as well so the helper never vouches for a session owing a code.
+  if (tokenNeedsCode(token)) return null;
   const { data, error } = await sb.auth.getUser(token);
   if (!error && data?.user?.id) return data.user.id;
 

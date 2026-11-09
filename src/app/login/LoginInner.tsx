@@ -113,8 +113,17 @@ export default function LoginInner() {
       : "";
 
   const [mode, setMode] = useState<Mode>("signin");
-  // Where to go once the two-step code is done. Set only for accounts with an authenticator app registered.
-  const [afterCode, setAfterCode] = useState<string | null>(null);
+  // True while an account with an authenticator app still owes its code. The landing page is worked out after the
+  // code, because before it the profile cannot be read once two-step sign-in is enforced.
+  const [afterCode, setAfterCode] = useState(false);
+
+  // Where to land: route through /auth/redirect so role-based routing is applied.
+  async function landingTarget(): Promise<string> {
+    const landingPath = await getLandingPath();
+    const nextIsPlayerFlow = next === "/player" || next === "/player/checkin" || next === "/team";
+    const finalNext = nextIsPlayerFlow ? landingPath : next;
+    return `/auth/redirect?next=${encodeURIComponent(finalNext)}`;
+  }
 
   // ✅ Auto-redirect if already logged in (critical for PWA keep-me-logged-in)
   useEffect(() => {
@@ -124,17 +133,14 @@ export default function LoginInner() {
         const { data: { session } } = await supabase.auth.getSession();
         if (cancelled) return;
         if (!session) { setCheckingSession(false); return; }
-        // Valid session exists — route through /auth/redirect so role-based routing is applied
-        if (cancelled) return;
-        const landingPath = await getLandingPath();
-        if (cancelled) return;
-        const nextIsPlayerFlow = next === "/player" || next === "/player/checkin" || next === "/team";
-        const finalNext = nextIsPlayerFlow ? landingPath : next;
-        const target = `/auth/redirect?next=${encodeURIComponent(finalNext)}`;
+        // Valid session exists — route through /auth/redirect so role-based routing is applied.
+        // Code first: once two-step sign-in is enforced, the landing lookup cannot read the profile without it.
         if (await sessionNeedsMfa()) {
-          if (!cancelled) { setAfterCode(target); setCheckingSession(false); }
+          if (!cancelled) { setAfterCode(true); setCheckingSession(false); }
           return;
         }
+        const target = await landingTarget();
+        if (cancelled) return;
         router.replace(target);
       } catch {
         if (!cancelled) setCheckingSession(false);
@@ -363,15 +369,11 @@ export default function LoginInner() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
-        const landingPath = await getLandingPath();
-        const nextIsPlayerFlow = next === "/player" || next === "/player/checkin" || next === "/team";
-        const finalNext = nextIsPlayerFlow ? landingPath : next;
-
-        const target = `/auth/redirect?next=${encodeURIComponent(finalNext)}`;
         if (await sessionNeedsMfa()) {
-          setAfterCode(target);
+          setAfterCode(true);
           return;
         }
+        const target = await landingTarget();
         router.replace(target);
         router.refresh();
         return;
@@ -448,8 +450,8 @@ export default function LoginInner() {
     return (
       <div style={{ padding: 16 }}>
         <MfaChallenge
-          onVerified={() => {
-            router.replace(afterCode);
+          onVerified={async () => {
+            router.replace(await landingTarget());
             router.refresh();
           }}
         />

@@ -63,9 +63,11 @@ describe("secondsUntilAllowed", () => {
 
 describe("proxy matcher", () => {
   const proxy = readFileSync(resolve(process.cwd(), "src/proxy.ts"), "utf8");
-  it("lists every limited path", () => {
+  it("covers every limited path", () => {
+    // The proxy runs on all API routes (two-step check), which includes every limited path.
+    expect(proxy).toContain('matcher: ["/api/:path*"]');
     for (const path of [...AI_WRITE_PATHS, ...AI_READ_PATHS, ...UPLOAD_PATHS, ...PUBLIC_FORM_PATHS, ...INVITE_PATHS]) {
-      expect(proxy).toContain(`"${path}"`);
+      expect(path.startsWith("/api/")).toBe(true);
     }
   });
 });
