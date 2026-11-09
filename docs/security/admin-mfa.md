@@ -10,6 +10,8 @@ protected by two-step sign-in on the Supabase account.
 
 ## Enforcement
 
+Switched on 2026-11-09 (`supabase/migrations/20261109183000_two_step_sign_in_switch_on.sql`). The only admin then was the coach's helgasport login, with two apps.
+
 A session that has not entered its code (`aal` other than `aal2` in the token) is refused in three places:
 
 | Where | Rule | Code |
