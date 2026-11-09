@@ -289,6 +289,11 @@ function aggregatedToDbRow(b: AggregatedRow, playerId: string, teamId: string) {
     ima_band2_decel_count: a.imaDecelBand2 ?? null,
     ima_band3_decel_count: a.imaDecelBand3 ?? null,
 
+    // IMA Free Running bands are BOUT-DURATION bands (seconds of one continuous run), not speed/cadence and
+    // NOT sprinting. Their EDGES CHANGE per team/date (legacy 0-8-12-15-18-21-24-27-100; Breiðablik from
+    // 10 Nov 2026 0-2.5-5-8-12-18-24-30-1000), so a band number is not a fixed run length. Raw per-band columns
+    // are written as exported; the DB trigger ima_fr_fill_tiers stamps ima_fr_band_bounds and fills the
+    // config-independent tiers ima_fr_ge18_* / ima_fr_ge24_*. See docs/ima-free-running-bands.md.
     ima_fr_band1_stride_count: a.imaFrBand1Strides ?? null,
     ima_fr_band2_stride_count: a.imaFrBand2Strides ?? null,
     ima_fr_band3_stride_count: a.imaFrBand3Strides ?? null,
@@ -303,6 +308,9 @@ function aggregatedToDbRow(b: AggregatedRow, playerId: string, teamId: string) {
     ima_fr_band8_total_distance: a.imaFrBand8Distance ?? null,
     // Total = explicit combined column if present, else the sum of the per-band
     // distances (so the total stays consistent however the report is exported).
+    // The "5-8" rollup only equals "metres in runs ≥18 s" under the legacy edges. The DB trigger overwrites
+    // ima_fr_band58_total_distance with ima_fr_ge18_total_distance whenever per-band distances are present
+    // (and nulls a bare rollup under a config where ≥18 s isn't band 5), so this value is a legacy fallback.
     ima_fr_band58_total_distance:
       a.imaFrBand58Distance ??
       (a.imaFrBand5Distance != null || a.imaFrBand6Distance != null ||

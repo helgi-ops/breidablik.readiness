@@ -21,13 +21,13 @@ export const MM_METRIC_GUIDE: Record<string, string> = {
   accelDecelRatio: "ratio of accelerating to braking; above 1 = more accelerating (front-foot, explosive), below 1 = more braking (reactive, stop-start)",
   codPerMin: "change-of-direction actions per minute — cuts and turns (the agility demand)",
   codLeftPct: "share of turns to the left vs right as a percentage; near 50% is balanced, a big skew is one-sided",
-  hiCadencePerMin: "fast, sprint-type running per minute (high-cadence strides)",
+  hiCadencePerMin: "strides per minute taken in long continuous runs lasting 18 seconds or more (sustained running volume — NOT sprinting, NOT high speed)",
   decelLow: "low-intensity decelerations (raw count for the match)",
   decelMed: "medium-intensity decelerations (raw count)",
   decelHigh: "high-intensity decelerations — the demanding braking end (raw count)",
-  stride6: "high-cadence stride band 6 (raw count)",
-  stride7: "high-cadence stride band 7 (raw count)",
-  stride8: "high-cadence stride band 8 — sprint cadence, the demanding end (raw count)",
+  stride6: "strides in continuous runs lasting 12-18 seconds (raw count; run length, not speed)",
+  stride7: "strides in continuous runs lasting 18-24 seconds (raw count; run length, not speed)",
+  stride8: "strides in the longest continuous runs, 24 seconds or more (raw count; sustained running, NOT sprinting)",
   codHigh: "high-intensity changes of direction (raw count)",
   codMed: "medium-intensity changes of direction (raw count)",
   codLow: "low-intensity changes of direction (raw count)",
@@ -104,6 +104,7 @@ const SHARED_RULES = `Hard rules:
 - The data_source field says which sensor these numbers come from — respect it exactly. Never call GPS data "IMA"/"the driver", and don't claim inertial detail (change of direction, left/right, braking split) unless a metric for it is actually present.
 - This is about HOW the player moved (movement style), not a match rating. Reference every metric by its plain meaning from metric_guide, in plain words — never raw jargon ("IMA", "band 8", "ACWR", "player load").
 - Descriptive, NOT predictive: describe the movement style and mechanical demand only. Never claim or imply injury risk, predict injury, or give medical, transfer, or recruitment advice. No training prescriptions.
+- Long-run strides (hiCadencePerMin, stride6-8) measure how long continuous runs lasted, not speed. Never call them sprinting, high-speed or high-cadence running; only GPS sprintPerMin / hsrPerMin / topSpeed describe speed.
 - Percentages are asymmetry, not volume. Ratios (accel:decel) are balance, not counts. "per minute" normalises for time on the pitch.`;
 
 export const COACH_SYSTEM = `You explain a football player's (or squad's) MOVEMENT comparison to a coach, from Catapult inertial-movement (IMA) data. Many coaches are new to this data, so be clear and instructive.
@@ -122,7 +123,7 @@ ${SHARED_RULES}
 
 Style:
 - Warm, factual and encouraging, never hyperbolic or competitive.
-- Open with one plain sentence on the main difference in how you moved, then a little detail: name one clear standout (e.g. more explosive, more agile, more sprint-running) and one neutral observation, both grounded in the numbers. If your left/right turning was lopsided, mention it plainly as something to be aware of — not a problem.
+- Open with one plain sentence on the main difference in how you moved, then a little detail: name one clear standout (e.g. more explosive, more agile, more long sustained runs) and one neutral observation, both grounded in the numbers. If your left/right turning was lopsided, mention it plainly as something to be aware of — not a problem.
 - 90-140 words, 2 short paragraphs, plain language a player reads in 20 seconds.
 - Write in the requested language only. Return prose only — no headings, no bullet points, no preamble.`;
 

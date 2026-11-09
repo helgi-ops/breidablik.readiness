@@ -70,7 +70,10 @@ export type LoadDaily = {
   accelEfforts: number | null; // high-intensity accel efforts
   decelEfforts: number | null; // high-intensity decel efforts
   strideCount: number | null; // running strides (all bands)
-  // IMA Free Running — high-velocity stride bands (counts)
+  // IMA Free Running stride counts by BOUT DURATION (not speed — docs/ima-free-running-bands.md):
+  // Read by run length from each row's own band edges (loadData.ts). Slot names are legacy:
+  // B6 = runs 18–24 s, B8 = runs ≥24 s; B5 / B7 are always null (18–21 s / 24–27 s have no edge in the
+  // Nov 2026 config). Before Nov 2026 they were B5 18–21 s … B8 27 s+. Long continuous runs, not sprints.
   strideB5: number | null;
   strideB6: number | null;
   strideB7: number | null;
@@ -340,12 +343,13 @@ function imaSessionSection(load: LoadDaily[]): DossierSection {
   const accelTot = sum(nums(load, (r) => r.accel));
   const decelTot = sum(nums(load, (r) => r.decel));
   const codTot = sum(nums(load, (r) => r.cod));
-  const frTot = sum(nums(load, (r) => r.strideB5)) + sum(nums(load, (r) => r.strideB6)) + sum(nums(load, (r) => r.strideB7)) + sum(nums(load, (r) => r.strideB8));
+  // Runs ≥18 s = 18–24 s (B6) + ≥24 s (B8); B5/B7 are null slots.
+  const frTot = sum(nums(load, (r) => r.strideB6)) + sum(nums(load, (r) => r.strideB8));
 
   const weekly: DossierTable = {
     caption: { en: "Weekly breakdown", is: "Vikuleg sundurliðun" },
-    columns: [{ en: "Week", is: "Vika" }, { en: "Sess", is: "Lotur" }, { en: "Acc", is: "Hröð." }, { en: "Dec", is: "Heml." }, { en: "CoD", is: "Stef." }, { en: "Stride B6", is: "Skref B6" }, { en: "B7", is: "B7" }, { en: "B8", is: "B8" }],
-    rows: byWeek(load).map(([wk, rs]) => [wk, String(rs.length), r0(sum(nums(rs, (r) => r.accel))), r0(sum(nums(rs, (r) => r.decel))), r0(sum(nums(rs, (r) => r.cod))), r0(sum(nums(rs, (r) => r.strideB6))), r0(sum(nums(rs, (r) => r.strideB7))), r0(sum(nums(rs, (r) => r.strideB8)))]),
+    columns: [{ en: "Week", is: "Vika" }, { en: "Sess", is: "Lotur" }, { en: "Acc", is: "Hröð." }, { en: "Dec", is: "Heml." }, { en: "CoD", is: "Stef." }, { en: "Strides 18–24 s", is: "Skref 18–24 sek" }, { en: "24 s+", is: "24+ sek" }],
+    rows: byWeek(load).map(([wk, rs]) => [wk, String(rs.length), r0(sum(nums(rs, (r) => r.accel))), r0(sum(nums(rs, (r) => r.decel))), r0(sum(nums(rs, (r) => r.cod))), r0(sum(nums(rs, (r) => r.strideB6))), r0(sum(nums(rs, (r) => r.strideB8)))]),
   };
 
   return {
@@ -355,7 +359,7 @@ function imaSessionSection(load: LoadDaily[]): DossierSection {
       ? { en: `${r0(accelTot)} accelerations, ${r0(decelTot)} decelerations, ${r0(codTot)} change-of-direction — how he moves, not how far.`, is: `${r0(accelTot)} hröðanir, ${r0(decelTot)} hemlanir, ${r0(codTot)} stefnubreytingar — hvernig hann hreyfir sig, ekki hversu langt.` }
       : null,
     facts: hasIma
-      ? [{ en: `High-velocity Free Running strides (bands 5-8): ${r0(frTot)}. Per-match IMA and the directional clock on the following pages.`, is: `Háhraða Free Running skref (bönd 5-8): ${r0(frTot)}. IMA per leik og stefnu-klukkan á næstu síðum.` }]
+      ? [{ en: `Strides in long continuous runs of 18 s or more: ${r0(frTot)} — sustained running, not sprints. Per-match IMA and the directional clock on the following pages.`, is: `Skref í löngum samfelldum hlaupum, 18 sek eða lengri: ${r0(frTot)} — samfellt hlaup, ekki sprettir. IMA per leik og stefnu-klukkan á næstu síðum.` }]
       : [{ en: "No IMA (inertial) data in the window.", is: "Engin IMA-gögn á tímabilinu." }],
     tables: hasIma ? [weekly] : [],
     confidence: conf(load.length),
@@ -417,8 +421,8 @@ function imaGameSection(load: LoadDaily[], matches: MatchRow[]): DossierSection 
 
   const perMatch: DossierTable = {
     caption: { en: "Every match (IMA)", is: "Allir leikir (IMA)" },
-    columns: [{ en: "Date", is: "Dags." }, { en: "Opp", is: "Andst." }, { en: "Acc", is: "Hröð." }, { en: "Dec", is: "Heml." }, { en: "CoD", is: "Stef." }, { en: "Stride B6-8", is: "Skref B6-8" }],
-    rows: [...matchRows].sort((a, b) => b.date.localeCompare(a.date)).map((r) => [r.date, shortOpp(oppByDate.get(r.date)?.opponent ?? null), r0(r.accel), r0(r.decel), r0(r.cod), r0((r.strideB6 ?? 0) + (r.strideB7 ?? 0) + (r.strideB8 ?? 0))]),
+    columns: [{ en: "Date", is: "Dags." }, { en: "Opp", is: "Andst." }, { en: "Acc", is: "Hröð." }, { en: "Dec", is: "Heml." }, { en: "CoD", is: "Stef." }, { en: "Strides in runs ≥18 s", is: "Skref í hlaupum ≥18 sek" }],
+    rows: [...matchRows].sort((a, b) => b.date.localeCompare(a.date)).map((r) => [r.date, shortOpp(oppByDate.get(r.date)?.opponent ?? null), r0(r.accel), r0(r.decel), r0(r.cod), r0((r.strideB6 ?? 0) + (r.strideB8 ?? 0))]),
   };
 
   return {
@@ -428,7 +432,7 @@ function imaGameSection(load: LoadDaily[], matches: MatchRow[]): DossierSection 
       ? { en: `Per match: ~${r0(accelMatch)} accelerations, ~${r0(decelMatch)} decelerations.`, is: `Á leik: ~${r0(accelMatch)} hröðanir, ~${r0(decelMatch)} hemlanir.` }
       : null,
     facts: hasIma
-      ? [{ en: "Accel / decel / change-of-direction and high-velocity strides per match.", is: "Hröðun / hemlun / stefnubreytingar og háhraðaskref á hvern leik." }]
+      ? [{ en: "Accel / decel / change-of-direction and strides in long continuous runs (18 s or more) per match.", is: "Hröðun / hemlun / stefnubreytingar og skref í löngum samfelldum hlaupum (18 sek eða lengri) á hvern leik." }]
       : [{ en: "No match IMA in the window.", is: "Engin leik-IMA á tímabilinu." }],
     tables: hasIma ? [perMatch] : [],
     confidence: conf(matchRows.length, 12, 4),

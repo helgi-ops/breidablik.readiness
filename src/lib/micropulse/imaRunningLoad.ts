@@ -1,11 +1,20 @@
 /**
- * IMA Free Running distance — load spike detection (ACWR + personal-z).
+ * Long-run distance — load spike detection (ACWR + personal-z).
  *
- * High-intensity running distance (IMA band 5-8) is a primary driver of
- * hamstring / soft-tissue injury, so a sharp week-to-week jump is a real risk
- * signal. This computes the acute:chronic workload ratio (Gabbett / Williams
- * rolling-average method) on the IMA band 5-8 distance, plus a personal z-score
- * of today's session vs the player's recent training days.
+ * IMA Free Running bands are BOUT-DURATION bands (seconds of one continuous
+ * run), NOT speed or cadence bands. Distance in runs ≥18 s (ima_fr_ge18, config-independent;
+ * was bands 5–8 under the legacy edges) therefore = metres covered
+ * in LONG CONTINUOUS RUNS (each bout ≥18 s): tempo/conditioning running or long
+ * recovery runs. It is NOT high-speed running and NOT sprint distance — mean
+ * speed is ~12–14 km/h and flat from ~15 s runs upward (docs/ima-free-running-bands.md,
+ * src/lib/integrations/catapult/freeRunningBands.ts). Sprint / HSR exposure lives
+ * in the GPS velocity columns, not here.
+ *
+ * A sharp week-to-week jump in sustained-running volume is still worth seeing,
+ * so this computes the acute:chronic workload ratio (Gabbett 2016 / Williams 2017
+ * rolling-average method) on ≥18 s run distance as a generic volume-change
+ * descriptor, plus a personal z-score of today's session vs the player's recent
+ * training days. Do not label the result HSR, sprint or high-intensity load.
  *
  * Confidence gate (manifesto): a 28-day chronic baseline needs enough real days
  * before the ratio means anything — with too few, we say "building" rather than
@@ -16,7 +25,13 @@
 
 export type ImaDayRow = {
   date: string;        // YYYY-MM-DD
-  total: number;       // IMA band 5-8 total distance (m)
+  total: number;       // distance (m) in long continuous runs ≥18 s (ima_fr_ge18_total_distance)
+  /** Metres in runs of 18–24 s (ge18 − ge24). Config-independent — preferred for dominantRunLength. */
+  long18to24?: number;
+  /** Metres in runs ≥24 s (ima_fr_ge24_total_distance). Config-independent. */
+  long24plus?: number;
+  // Legacy slots (legacy edges only: 18–21 / 21–24 / 24–27 / 27+ s). 0 for sessions from 10 Nov 2026,
+  // whose edges are 0-2.5-5-8-12-18-24-30 s — use long18to24 / long24plus instead.
   band5?: number;
   band6?: number;
   band7?: number;
@@ -27,15 +42,21 @@ export type ImaRunStatus = "insufficient" | "low" | "optimal" | "high" | "spike"
 
 export type ImaRunningLoad = {
   date: string;
-  today: number;            // today's IMA band 5-8 distance (m), 0 if none
+  today: number;            // today's long-run distance (bouts ≥18 s), metres, 0 if none
   acute7: number;           // mean daily over the last 7 days (rest days = 0)
   chronic28: number;        // mean daily over the last 28 days (rest days = 0)
   acwr: number | null;      // acute7 / chronic28
   status: ImaRunStatus;
   confident: boolean;       // chronic window has enough real days to trust the ratio
-  chronicDays: number;      // days WITH high-intensity running in the chronic window
+  chronicDays: number;      // days WITH any long-run distance in the chronic window
   z: number | null;         // today vs the player's recent training-day distribution
-  dominantBand: 5 | 6 | 7 | 8 | null; // band carrying the most distance today
+  /**
+   * @deprecated LEGACY edges only (5 = 18–21 s … 8 = 27 s+). Reads the band5–8 slots, which are 0 for sessions
+   * from 10 Nov 2026, so this is null for new-config days. Use dominantRunLength. Shape kept for API stability.
+   */
+  dominantBand: 5 | 6 | 7 | 8 | null;
+  /** Run-length tier carrying the most long-run distance today, config-independent ("18-24" = runs 18–24 s, "24+" = runs ≥24 s). */
+  dominantRunLength: "18-24" | "24+" | null;
 };
 
 // 0.8–1.3 = familiar load-change range (Gabbett 2016); >1.5 = large spike.
@@ -107,7 +128,17 @@ export function computeImaRunningLoad(rows: ImaDayRow[], refDateIso: string): Im
     z = sd > 0 ? round((today - mean) / sd, 1) : null;
   }
 
-  // Which band carried the most distance today.
+  // Which run-length tier carried the most distance today (config-independent).
+  let dominantRunLength: ImaRunningLoad["dominantRunLength"] = null;
+  if (todayRow) {
+    const l24 = Number(todayRow.long24plus ?? 0) || 0;
+    const l18 = todayRow.long18to24 != null
+      ? Number(todayRow.long18to24) || 0
+      : Math.max(0, (Number(todayRow.total) || 0) - l24);
+    if (l18 > 0 || l24 > 0) dominantRunLength = l24 > l18 ? "24+" : "18-24";
+  }
+
+  // LEGACY: which band slot (legacy edges) carried the most distance today. Null for new-config days.
   let dominantBand: ImaRunningLoad["dominantBand"] = null;
   if (todayRow) {
     const bands: Array<[5 | 6 | 7 | 8, number]> = [
@@ -131,5 +162,6 @@ export function computeImaRunningLoad(rows: ImaDayRow[], refDateIso: string): Im
     chronicDays,
     z,
     dominantBand,
+    dominantRunLength,
   };
 }

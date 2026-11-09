@@ -7,7 +7,7 @@ import "server-only";
  *  - Gate: football + Vector Pro (Catapult tier "full").
  *  - Match reference: each player's own near-full matches (selectNearFullMatches — the same rule as
  *    the periodization match unit), else the team's near-full matches.
- *  - MD-day: coach's Week setup first (resolveMdContext), then the fixture list (sizes long-run distance + strides — IMA FR bands 5–8 = runs ≥18 s, not sprinting).
+ *  - MD-day: coach's Week setup first (resolveMdContext), then the fixture list (sizes long-run distance + strides — IMA FR runs ≥18 s via the config-independent ima_fr_ge18_* tiers, not sprinting).
  *  - Day-type: Meso activation/top-up label → Week-setup pitch stimulus → Meso stimulus → MD+1 default
  *    (decides WHAT is judged, and sizes Acc/Dec/CoD from the calendar's standard).
  *  - Session: one effective row per player (manual overrides pod), previous-club rows excluded.
@@ -38,7 +38,7 @@ const MIN_TRAIN_MIN = 20;       // shorter rows are not a training session
 const PARTIAL_SHARE = 0.6;      // < 60% of the squad's median duration = shortened session
 const OWN_REF_MIN = 3;          // fewer own near-full matches → use the team reference
 
-const COLS = "player_id, date, source, ima_accel, ima_decel, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, total_distance, ima_fr_band58_total_distance, ima_fr_band5_event_count, ima_fr_band6_event_count, ima_fr_band7_event_count, ima_fr_band8_event_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, fmp_total_duration_s, total_player_load, player_load_per_minute, session_duration_minutes";
+const COLS = "player_id, date, source, ima_accel, ima_decel, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, total_distance, ima_fr_band58_total_distance, ima_fr_band_bounds, ima_fr_ge18_event_count, ima_fr_ge18_stride_count, ima_fr_band5_event_count, ima_fr_band6_event_count, ima_fr_band7_event_count, ima_fr_band8_event_count, fmp_total_duration_s, total_player_load, player_load_per_minute, session_duration_minutes";
 
 type Row = Record<string, unknown> & { player_id: string; date: string; source: string | null };
 
@@ -62,7 +62,9 @@ export function varsOf(r: Record<string, unknown>): VarValues {
     imaDecel: num(r.ima_decel),
     imaCod: imaCodTotal(r),
     frDistance: hasGpsReading(r) ? num(r.ima_fr_band58_total_distance) : null,
-    strideHi: sumOrNull([r.ima_fr_band6_stride_count, r.ima_fr_band7_stride_count, r.ima_fr_band8_stride_count].map(num)),
+    // Strides in runs ≥18 s (config-independent tier, backfilled for all history). Was legacy bands 6–8
+    // (≥21 s) before the band edges changed on 9 Nov 2026 — the new config has no 21 s edge.
+    strideHi: num(r.ima_fr_ge18_stride_count),
     longRuns: longRunsOf(r).bouts,
   };
 }

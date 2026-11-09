@@ -41,9 +41,10 @@ const PLAYER_LABELS: Record<DimensionKey, PlayerLabel> = {
   codLeftPct:      { en: "L / R balance", is: "V / H jafnvægi",
     infoEN: "Whether you turn more to your left or your right. Around 50% is even both ways — handy for spotting a one-sided habit.",
     infoIS: "Hvort þú snýrð meira til vinstri eða hægri. Um 50% er jafnt á báða vegu — gott til að sjá ef þú ert einhliða." },
-  hiCadencePerMin: { en: "Sprinting",   is: "Sprettur",    quality: true,
-    infoEN: "How much fast, sprint-type running you do per minute. Higher = more high-speed running in your game.",
-    infoIS: "Hversu mikið hratt sprett-hlaup þú tekur á mínútu. Hærra = meira hraðahlaup í leiknum þínum." },
+  // IMA Free Running runs ≥18 s (ima_fr_ge18; was bands 6–8 / ≥21 s before Nov 2026) — bout DURATION, not speed — see docs/ima-free-running-bands.md.
+  hiCadencePerMin: { en: "Long runs",   is: "Löng hlaup",  quality: true,
+    infoEN: "How many strides per minute you took in long continuous runs (18 s or longer). It measures how long you kept running, not how fast — sprinting comes from GPS.",
+    infoIS: "Hversu mörg skref á mínútu þú tókst í löngum samfelldum hlaupum (18 sek eða lengur). Mælir hversu lengi þú hljópst, ekki hversu hratt — sprettir koma úr GPS." },
 };
 const RADAR_ORDER: DimensionKey[] = ["totalPerMin", "accelDecelRatio", "codPerMin", "hiCadencePerMin", "codLeftPct"];
 

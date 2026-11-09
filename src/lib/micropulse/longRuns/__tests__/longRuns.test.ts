@@ -79,7 +79,8 @@ test("sumLongRunBands: adds players; stride length only over players with GPS", 
   assert.equal(team[0].distanceM, 423);
   assert.equal(Math.round(team[0].metresPerStride! * 100) / 100, 2.64);
   assert.equal(sumLongRunBands([indoor])[0].distanceM, null);
-  assert.equal(sumLongRunBands([])[0].bouts, null);
+  // Lines are keyed by run-length bounds taken from the inputs, so no input → no lines.
+  assert.deepEqual(sumLongRunBands([]), []);
 });
 
 test("longRunBandsTotal: the total line equals longRunsOf for one row", () => {
@@ -88,4 +89,62 @@ test("longRunBandsTotal: the total line equals longRunsOf for one row", () => {
   assert.equal(tot.bouts, all.bouts); assert.equal(tot.seconds, all.seconds); assert.equal(tot.strides, all.strides);
   assert.equal(tot.distanceM, all.distanceM); assert.equal(tot.metresPerStride, all.metresPerStride);
   assert.equal(longRunBandsTotal(longRunBandsOf(row({ ...WITH_DIST, total_distance: 0 }))).distanceM, null);
+});
+
+// ── Nov-2026 band edges (Breiðablik from 10 Nov 2026): 0-2.5-5-8-12-18-24-30-1000 → long runs (≥18 s) = bands 6–8.
+const NEW_BOUNDS = [0, 2.5, 5, 8, 12, 18, 24, 30, 1000];
+// Band 5 here is 12–18 s (NOT a long run); bands 6/7/8 = 18–24 / 24–30 / 30+ s.
+const NEW_ROW = row({ total_distance: 10500, ima_fr_band_bounds: NEW_BOUNDS,
+  ...band(1, 200, 300, 900, 1200), ...band(5, 9, 130, 190, 450),
+  ...band(6, 6, 120, 180, 470), ...band(7, 3, 80, 120, 330), ...band(8, 2, 70, 100, 290) });
+
+test("new edges: long runs = bands 6–8 (band 5 = 12–18 s is not counted)", () => {
+  const r = longRunsOf(NEW_ROW);
+  assert.equal(r.bouts, 11); // 6 + 3 + 2
+  assert.equal(r.seconds, 270);
+  assert.equal(r.strides, 400);
+  assert.equal(r.distanceM, 1090);
+  assert.equal(r.longestBand, 8);
+});
+
+test("new edges: longRunBandsOf returns 3 lines with the row's own bounds", () => {
+  const lines = longRunBandsOf(NEW_ROW);
+  assert.equal(lines.length, 3);
+  assert.deepEqual(lines.map((l) => l.band), [6, 7, 8]);
+  assert.deepEqual(lines.map((l) => l.boundsS), [[18, 24], [24, 30], [30, 1000]]);
+  assert.equal(lines[0].bouts, 6); assert.equal(lines[0].strides, 180); assert.equal(lines[0].distanceM, 470);
+  const tot = longRunBandsTotal(lines);
+  assert.equal(tot.bouts, longRunsOf(NEW_ROW).bouts); assert.equal(tot.strides, longRunsOf(NEW_ROW).strides);
+});
+
+test("new edges: bounds given as strings (numeric[] from PostgREST) are read the same", () => {
+  const lines = longRunBandsOf(row({ ...NEW_ROW, ima_fr_band_bounds: NEW_BOUNDS.map(String) }));
+  assert.deepEqual(lines.map((l) => l.band), [6, 7, 8]);
+});
+
+test("sumLongRunBands: legacy and new rows stay in separate lines, matched by bounds not band number", () => {
+  const legacy = longRunBandsOf(WITH_DIST); // 18–21, 21–24, 24–27, 27–100
+  const fresh = longRunBandsOf(NEW_ROW);   // 18–24, 24–30, 30–1000
+  const team = sumLongRunBands([legacy, fresh, fresh]);
+  assert.deepEqual(team.map((l) => l.boundsS), [[18, 21], [18, 24], [21, 24], [24, 27], [24, 30], [27, 100], [30, 1000]]);
+  const line = (lo: number, hi: number) => team.find((l) => l.boundsS[0] === lo && l.boundsS[1] === hi)!;
+  // Legacy band 6 (21–24 s) and new band 6 (18–24 s) are NOT added together.
+  assert.equal(line(21, 24).bouts, 3);
+  assert.equal(line(18, 24).bouts, 12); // new band 6 × 2 rows
+  assert.equal(line(18, 21).bouts, 5);
+  assert.equal(line(30, 1000).strides, 200);
+  // Every run is counted exactly once.
+  const allBouts = team.reduce((s, l) => s + (l.bouts ?? 0), 0);
+  assert.equal(allBouts, longRunsOf(WITH_DIST).bouts! + 2 * longRunsOf(NEW_ROW).bouts!);
+});
+
+test("longRunsOf: the stored ima_fr_ge18_* tier columns are preferred over summing bands", () => {
+  const withTier = row({ ...NEW_ROW, ima_fr_ge18_event_count: 99, ima_fr_ge18_total_duration: 999,
+    ima_fr_ge18_stride_count: 4321, ima_fr_ge18_total_distance: 2222 });
+  const r = longRunsOf(withTier);
+  assert.equal(r.bouts, 99); assert.equal(r.seconds, 999); assert.equal(r.strides, 4321); assert.equal(r.distanceM, 2222);
+  // Indoors the tier distance is still withheld (no GPS reading).
+  assert.equal(longRunsOf(row({ ...withTier, total_distance: 0 })).distanceM, null);
+  // The ge18 distance also beats the legacy band58 rollup.
+  assert.equal(longRunsOf(row({ ...withTier, ima_fr_band58_total_distance: 5 })).distanceM, 2222);
 });

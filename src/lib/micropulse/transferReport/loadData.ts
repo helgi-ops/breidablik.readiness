@@ -12,6 +12,7 @@ import { NextRequest } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 import { oneRowPerDate } from "@/lib/micropulse/load/oneRowPerDate";
+import { sumBandsBetween } from "@/lib/integrations/catapult/freeRunningBands";
 import { buildRtpAssessment } from "@/lib/micropulse/rtp/buildRtpAssessment";
 import { MAX_PLAUSIBLE_VELOCITY_KMH } from "@/lib/micropulse/dataQuality";
 import { loadRoster, loadAthleteSignals, athleteSquadInput } from "@/lib/micropulse/playerAnalysis/loadAthleteProfilesForTeam";
@@ -66,6 +67,7 @@ type LoadRow = {
   ima_fr_band1_stride_count: number | null; ima_fr_band2_stride_count: number | null; ima_fr_band3_stride_count: number | null;
   ima_fr_band4_stride_count: number | null; ima_fr_band5_stride_count: number | null; ima_fr_band6_stride_count: number | null;
   ima_fr_band7_stride_count: number | null; ima_fr_band8_stride_count: number | null;
+  ima_fr_band_bounds: Array<number | string> | null; ima_fr_ge24_stride_count: number | null;
   ima_clock_gen2: Record<string, { low?: number; medium?: number; high?: number }> | null;
 };
 
@@ -119,7 +121,7 @@ export async function loadTransferRawInput(teamId: string, playerId: string, day
 
   const rawLoad = await fetchAllPages<LoadRow>((from, to) => sb
     .from("player_external_load_daily")
-    .select("date, source, session_duration_minutes, total_distance, high_speed_distance, hir_dist, sprint_distance, velocity_band6_total_distance, max_velocity, total_player_load, player_load_per_minute, metabolic_power_peak, ima_accel, accelerations, ima_decel, decelerations, ima_cod, cod_events, ima_cod_left_low, ima_cod_left_medium, ima_cod_left_high, ima_cod_right_low, ima_cod_right_medium, ima_cod_right_high, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band3_stride_count, ima_fr_band4_stride_count, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, ima_clock_gen2")
+    .select("date, source, session_duration_minutes, total_distance, high_speed_distance, hir_dist, sprint_distance, velocity_band6_total_distance, max_velocity, total_player_load, player_load_per_minute, metabolic_power_peak, ima_accel, accelerations, ima_decel, decelerations, ima_cod, cod_events, ima_cod_left_low, ima_cod_left_medium, ima_cod_left_high, ima_cod_right_low, ima_cod_right_medium, ima_cod_right_high, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band3_stride_count, ima_fr_band4_stride_count, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, ima_fr_band_bounds, ima_fr_ge24_stride_count, ima_clock_gen2")
     .eq("player_id", playerId)
     .in("source", ["catapult", "manual", "titan", "kinexon"])
     .gte("date", start)
@@ -142,10 +144,18 @@ export async function loadTransferRawInput(teamId: string, playerId: string, day
     accelEfforts: num(r.accel_b2_3_tot_effs_gen2),
     decelEfforts: num(r.decel_b2_3_tot_effs_gen2),
     strideCount: strideSum(r),
-    strideB5: num(r.ima_fr_band5_stride_count),
-    strideB6: num(r.ima_fr_band6_stride_count),
-    strideB7: num(r.ima_fr_band7_stride_count),
-    strideB8: num(r.ima_fr_band8_stride_count),
+    // IMA FR bands are bout-duration bands (strides in continuous runs, not sprints) whose edges changed on
+    // 9 Nov 2026 (legacy 0-8-12-15-18-21-24-27-100 → 0-2.5-5-8-12-18-24-30-1000). Field names are kept, but
+    // they are now read by RUN LENGTH from the row's own edges so weeks/matches never mix configs:
+    //   strideB5 = null (18–21 s has no edge in the new config)
+    //   strideB6 = strides in runs of 18–24 s
+    //   strideB7 = null (24–27 s has no edge in the new config)
+    //   strideB8 = strides in runs ≥24 s (ima_fr_ge24_stride_count)
+    // So B5+B6+B7+B8 (and B6+B7+B8) = strides in runs ≥18 s.
+    strideB5: null,
+    strideB6: sumBandsBetween(r, "stride_count", 18, 24),
+    strideB7: null,
+    strideB8: num(r.ima_fr_ge24_stride_count) ?? sumBandsBetween(r, "stride_count", 24),
     clock: clockHigh(r.ima_clock_gen2),
   }));
 

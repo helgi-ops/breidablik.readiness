@@ -1,9 +1,21 @@
 /**
  * /api/coach/player/[id]/sprint-exposure
  *
- * Returns the weekly sprint exposure payload (IMA bands 5-8 acute vs
- * 28-day match-day demand baseline). VOLUME-side companion to Sprint
- * Speed Drop (QUALITY-side).
+ * Returns the weekly sprint exposure payload: GPS sprint distance in
+ * training over the last 7 days vs the player's average per-match sprint
+ * distance (28-day window). VOLUME-side companion to Sprint Speed Drop
+ * (QUALITY-side).
+ *
+ * Source is GPS (`sprint_distance`, else `velocity_band6_total_distance`).
+ * It used to be IMA Free Running bands 5–8, which are long continuous runs
+ * (≥18 s), not sprinting — see docs/ima-free-running-bands.md. Indoor days
+ * have no GPS and are reported as "no sprint reading" (`payload.noGpsDays7d`,
+ * `payload.todayNoGps`), never filled from IMA.
+ *
+ * JSON shape unchanged: { ok, playerId, date, payload, flag, text }.
+ * `payload.acuteSum7d` / `payload.matchDayDemand` are now METRES; new
+ * optional keys `payload.metric` ("gps_sprint_distance_m"), `noGpsDays7d`,
+ * `todayNoGps`.
  *
  * Auth: coach token, player must belong to coach's team.
  */

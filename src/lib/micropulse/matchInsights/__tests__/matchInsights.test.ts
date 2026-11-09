@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { pearson, MIN_CORRELATION_N } from "../correlation";
 import { winLossMovement } from "../winLoss";
 import type { MatchMetricRow } from "../winLoss";
-import { extendedMetricsForRow } from "../extendedMetrics";
+import { extendedMetricsForRow, EXTENDED_METRIC_LABELS } from "../extendedMetrics";
 import { buildMatchNarrative, summarizeResultCorrelations, summarizeStatMovement, summarizeWinLoss, summarizeFirstHalfFade } from "../narrative";
 import type { WinLossResult } from "../winLoss";
 import { latestMatchHalfCompare, type HalfPeriodRow } from "../../matchIntensityHalves";
@@ -87,7 +87,7 @@ describe("extendedMetricsForRow", () => {
     const row = {
       total_distance: 9000, high_speed_distance: 540, velocity_band6_total_distance: 180,
       max_velocity: 31, high_metabolic_load_distance_m: 900, ima_band3_decel_count: 18,
-      ima_cod_left_high: 6, ima_cod_right_high: 3, ima_fr_band8_stride_count: 45,
+      ima_cod_left_high: 6, ima_cod_right_high: 3, ima_fr_ge24_stride_count: 45,
       fmp_running_high_s: 300, fmp_total_duration_s: 6000, jumps: 9,
     };
     const m = extendedMetricsForRow(row, 90);
@@ -98,6 +98,31 @@ describe("extendedMetricsForRow", () => {
     expect(m.codHighPerMin).toBeCloseTo(9 / 90, 5); // (6+3)/90
     expect(m.fmpHighRunPct).toBeCloseTo(5, 5); // 300/6000*100
     expect(m.jumpsPerMin).toBeCloseTo(0.1, 5);
+    // = strides in long continuous runs (≥24 s tier), not sprint strides
+    expect(m.sprintStridesPerMin).toBeCloseTo(0.5, 5); // 45/90
+  });
+
+  it("reads ≥24 s strides by run length from the row's own band edges when the tier is missing", () => {
+    // Legacy edges 0-8-12-15-18-21-24-27-100: ≥24 s = bands 7+8.
+    const legacy = extendedMetricsForRow({ ima_fr_band7_stride_count: 30, ima_fr_band8_stride_count: 15 }, 90);
+    expect(legacy.sprintStridesPerMin).toBeCloseTo(45 / 90, 5);
+    // Nov-2026 edges 0-2.5-5-8-12-18-24-30-1000: ≥24 s = bands 7+8 too, but band 8 = 30 s+.
+    const nov = extendedMetricsForRow({
+      ima_fr_band_bounds: [0, 2.5, 5, 8, 12, 18, 24, 30, 1000],
+      ima_fr_band6_stride_count: 999, ima_fr_band7_stride_count: 20, ima_fr_band8_stride_count: 7,
+    }, 90);
+    expect(nov.sprintStridesPerMin).toBeCloseTo(27 / 90, 5);
+    // The DB tier wins when present.
+    const tier = extendedMetricsForRow({ ima_fr_ge24_stride_count: 9, ima_fr_band8_stride_count: 100 }, 90);
+    expect(tier.sprintStridesPerMin).toBeCloseTo(0.1, 5);
+  });
+
+  it("labels the IMA ≥24 s stride metric as long continuous runs, never sprinting", () => {
+    const l = EXTENDED_METRIC_LABELS.sprintStridesPerMin;
+    expect(l.en.toLowerCase()).not.toMatch(/sprint/);
+    expect(l.is.toLowerCase()).not.toMatch(/sprett/);
+    expect(l.en).toMatch(/24 s/);
+    expect(l.en).not.toMatch(/27/);
   });
 
   it("nulls absent sources and drops a >45 km/h max-velocity glitch (no fabricated 0)", () => {

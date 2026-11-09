@@ -70,12 +70,12 @@ export type CatapultMetricKey =
   | "imaDecelBand2"
   | "imaDecelBand3"
 
-  // ── IMA Free Running (Vector S7+ — stride detection bands 1-8) ──
+  // ── IMA Free Running (Vector S7+ — run-DURATION bands 1-8; edges vary per team/date, see ima_fr_band_bounds) ──
   | "imaFrBand1Strides" | "imaFrBand2Strides" | "imaFrBand3Strides" | "imaFrBand4Strides"
   | "imaFrBand5Strides" | "imaFrBand6Strides" | "imaFrBand7Strides" | "imaFrBand8Strides"
   | "imaFrBand1Rate"    | "imaFrBand2Rate"    | "imaFrBand3Rate"    | "imaFrBand4Rate"
   | "imaFrBand5Rate"    | "imaFrBand6Rate"    | "imaFrBand7Rate"    | "imaFrBand8Rate"
-  | "imaFrBand58Distance" // High-intensity running distance from the stride series (bands 5-8)
+  | "imaFrBand58Distance" // Distance in bands 5-8 as exported (= runs ≥18 s only under the legacy edges)
   | "imaFrBand5Distance" | "imaFrBand6Distance" | "imaFrBand7Distance" | "imaFrBand8Distance"
 
   // ── IMA Change of Direction Left/Right (Stride Intelligence asymmetry) ──
@@ -236,7 +236,10 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
   { key: "imaDecelBand3", label: "IMA Decel Band 3", unit: "count",
     aliases: ["ima deceleration band 3 count", "ima deceleration high band count", "ima decel band 3", "decel band 3 count"] },
 
-  // ─── IMA Free Running stride bands 1-8 (Vector S7+) ──────────────────
+  // ─── IMA Free Running bands 1-8 (Vector S7+) ─────────────────────────
+  // Bands are effort-DURATION bands in seconds (Catapult, Nov 2026), and their edges are configurable:
+  // legacy 0-8-12-15-18-21-24-27-100, Breiðablik from 10 Nov 2026 0-2.5-5-8-12-18-24-30-1000. Raw per-band
+  // values are stored as exported; the DB trigger computes ima_fr_ge18_* / ima_fr_ge24_* from the edges in force.
   // Stride counts
   { key: "imaFrBand1Strides", label: "IMA FR Band 1 Strides", unit: "count",
     aliases: ["ima free running band 1 total strides", "ima free run band 1 count", "ima free running band 1 count", "imafreerunning band 1 event count"] },
@@ -271,9 +274,9 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
     aliases: ["ima free running band 7 average stride rate", "ima free run band 7 rate", "imafreerunning band 7 average stride rate"] },
   { key: "imaFrBand8Rate", label: "IMA FR Band 8 Stride Rate", unit: "/s",
     aliases: ["ima free running band 8 average stride rate", "ima free run band 8 rate", "imafreerunning band 8 average stride rate"] },
-  // High-intensity running distance from the stride series (cadence bands 5-8).
-  // Domain-consistent with band 5-8 stride counts → enables a true high-cadence
-  // stride length (band58 distance ÷ band 5-8 strides).
+  // Distance in IMA Free Running bands 5-8 as exported. Under the legacy edges that is runs ≥18 s; under other
+  // edges it is not, so the DB trigger replaces ima_fr_band58_total_distance with ima_fr_ge18_total_distance
+  // when per-band distances are present. Long-run stride length = ge18 distance ÷ ge18 strides (not sprinting).
   { key: "imaFrBand58Distance", label: "IMA FR Band 5-8 Total Distance", unit: "m",
     aliases: [
       "ima free running band 5-8 total distance",
@@ -283,7 +286,7 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
       "ima free running band 5-8 distance",
       "ima fr band 5-8 total distance",
     ] },
-  // Per-band high-cadence running distance (summed into band58 total on ingest)
+  // Per-band free-running distance (summed into the band58 rollup on ingest; the trigger recomputes it per config)
   { key: "imaFrBand5Distance", label: "IMA FR Band 5 Total Distance", unit: "m",
     aliases: ["ima free running band 5 total distance", "ima free run band 5 distance", "imafreerunning band 5 total distance"] },
   { key: "imaFrBand6Distance", label: "IMA FR Band 6 Total Distance", unit: "m",

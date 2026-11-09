@@ -43,8 +43,9 @@ const QUALITY_SHORT: Record<QualityKey, Bi> = {
   distance: { en: "distance", is: "vegalengd" },
   hsr: { en: "high-speed running", is: "háhraðahlaup" },
   sprint: { en: "sprinting", is: "sprettir" },
-  stride: { en: "high-cadence running", is: "hátíðni hlaup" },
-  strideTop: { en: "top-speed running", is: "topphraða hlaup" },
+  // IMA FR bout-duration bands — sustained running, NOT high cadence / top speed.
+  stride: { en: "long continuous runs", is: "löng samfelld hlaup" },
+  strideTop: { en: "longest continuous runs", is: "lengstu samfelldu hlaupin" },
   accel: { en: "acceleration", is: "hröðun" },
   decel: { en: "braking", is: "hemlun" },
   decelHigh: { en: "hard braking", is: "hörð hemlun" },

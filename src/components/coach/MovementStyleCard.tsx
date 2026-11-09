@@ -2,7 +2,7 @@
 
 /**
  * Movement Style card — where a player sits on the linear ↔ multidirectional axis, read
- * squad-relative. Combines the two IMA feeds (change-of-direction clock vs fast free-running)
+ * squad-relative. Combines the two IMA feeds (change-of-direction clock vs long continuous free-running ≥18 s)
  * so it genuinely differentiates players, unlike the clock alone. ADI's linear-vs-
  * multidirectional distinction, IMA-native. A STYLE descriptor, not a quality. Reads
  * /api/coach/load/movement-style. Descriptive — never touches readiness. Bilingual EN/IS.
@@ -76,8 +76,8 @@ export default function MovementStyleCard({ players, playerId }: { players: Arra
         <span className="text-sm font-bold text-slate-800">{is ? "Hreyfistíll (línulegt ↔ fjölstefnu)" : "Movement Style (linear ↔ multidirectional)"}</span>
         <span className="cursor-help rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]"
           title={is
-            ? "Sameinar IMA-klukku (há-ákafar stefnubreytingar) og IMA free-running (hratt línulegt hlaup, bönd 5–8) í eitt stíl-hlutfall, lesið m.v. hópinn. Aðgreinir leikmenn (ólíkt klukkunni einni). STÍLL, ekki gæði — línulegur hlaupari er ekki verri. Proxy úr IMA, ekki W/kg."
-            : "Combines the IMA clock (high-intensity change-of-direction) with IMA free-running (fast linear running, bands 5–8) into one style ratio, read vs the squad. It differentiates players (unlike the clock alone). A STYLE, not a quality — a linear runner isn't worse. An IMA proxy, not W/kg."}>
+            ? "Sameinar IMA-klukku (há-ákafar stefnubreytingar) og IMA free-running (löng samfelld hlaup ≥18 sek) í eitt stíl-hlutfall, lesið m.v. hópinn. Aðgreinir leikmenn (ólíkt klukkunni einni). STÍLL, ekki gæði — línulegur hlaupari er ekki verri. Proxy úr IMA, ekki W/kg."
+            : "Combines the IMA clock (high-intensity change-of-direction) with IMA free-running (long continuous runs ≥18 s) into one style ratio, read vs the squad. It differentiates players (unlike the clock alone). A STYLE, not a quality — a linear runner isn't worse. An IMA proxy, not W/kg."}>
           {is ? "IMA-proxy ⓘ" : "IMA proxy ⓘ"}
         </span>
         {!playerId ? (
@@ -137,7 +137,7 @@ export default function MovementStyleCard({ players, playerId }: { players: Arra
 
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-500">
             <span>{is ? "Stefnubreytingar (há)" : "Direction changes (high)"}: <b className="tabular-nums text-slate-700">{Math.round(st.codLoad ?? 0)}</b></span>
-            <span>{is ? "Hratt línulegt PL" : "Fast linear PL"}: <b className="tabular-nums text-slate-700">{Math.round(st.linearFastLoad ?? 0)}</b></span>
+            <span>{is ? "PL í löngum hlaupum" : "Long-run PL"}: <b className="tabular-nums text-slate-700">{Math.round(st.linearFastLoad ?? 0)}</b></span>
             <span>{is ? "hlutfall" : "ratio"}: <b className="tabular-nums text-slate-700">{st.ratio ?? "—"}</b></span>
             {data?.squadRanked ? <span className="ml-auto">{is ? `m.v. ${data.squadRanked} leikmenn` : `vs ${data.squadRanked} players`}</span> : null}
           </div>

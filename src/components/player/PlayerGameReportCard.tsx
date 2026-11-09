@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { ProfileRadar, MatchTrendBars, ChartZoom, FormSummary, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
-import { computeForm } from "@/lib/micropulse/playerGameReport";
+import { computeForm, IMA_RUN_LENGTH_SPLIT } from "@/lib/micropulse/playerGameReport";
 import ShareMatchButton from "./ShareMatchButton";
 import type { ShareStats } from "@/lib/micropulse/shareCard/pickHeroStat";
 import { strideVerdictBadge } from "@/lib/micropulse/strideLength/verdictBadge";
@@ -63,11 +63,13 @@ const DRIVER: MetricCfg[] = [
   { key: "ima_dec", is: "Snöggar hemlanir", en: "Sharp decelerations", sis: "Hemlun", sen: "Dec", unit: "", fmt: f1 },
   { key: "cod", is: "Stefnubreytingar", en: "Change of direction", sis: "Stefnub.", sen: "CoD", unit: "", fmt: f1 },
   { key: "jumps", is: "Stökk", en: "Jumps", sis: "Stökk", sen: "Jumps", unit: "", fmt: f1 },
-  // High-intensity running broken into stride-rate bands B5-B8 (rising intensity).
-  { key: "ima_hir5", is: "Ákafahlaup band 5", en: "High-intensity running — band 5", sis: "B5", sen: "B5", unit: "m", fmt: n0 },
-  { key: "ima_hir6", is: "Ákafahlaup band 6", en: "High-intensity running — band 6", sis: "B6", sen: "B6", unit: "m", fmt: n0 },
-  { key: "ima_hir7", is: "Ákafahlaup band 7", en: "High-intensity running — band 7", sis: "B7", sen: "B7", unit: "m", fmt: n0 },
-  { key: "ima_hir8", is: "Ákafahlaup band 8", en: "High-intensity running — band 8", sis: "B8", sen: "B8", unit: "m", fmt: n0 },
+  // Continuous runs split by run length (IMA Free Running bands are BOUT-DURATION bands, not speed —
+  // docs/ima-free-running-bands.md). Legacy keys `ima_hir5..8` kept; they now mean runs
+  // <12 / 12–18 / 18–24 / ≥24 s (IMA_RUN_LENGTH_SPLIT, grouped from each row's own band edges).
+  ...IMA_RUN_LENGTH_SPLIT.map((x): MetricCfg => {
+    const short = x.loS === 0 ? `<${x.hiS}s` : Number.isFinite(x.hiS) ? `${x.loS}–${x.hiS}s` : `≥${x.loS}s`;
+    return { key: x.key, is: x.is, en: x.en, sis: short, sen: short, unit: "m", fmt: n0 };
+  }),
 ];
 const ALL: MetricCfg[] = [...ENGINE, ...DRIVER];
 
@@ -265,8 +267,8 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
               {showStrideDetails && (
                 <div className="mt-1.5 border-t border-zinc-200/70 pt-2 text-[11px] leading-snug text-zinc-500">
                   {isIS
-                    ? `Skreflengd = háhraða vegalengd ÷ háhraðaskref (IMA hlaupabönd 5–8). Borið saman við þína eigin leiki (${sv.historyN}); flaggað við 2,5 staðalfrávik. Girard/Morin 2011.`
-                    : `Stride length = high-cadence distance ÷ high-cadence strides (IMA free-running bands 5–8). Compared to your own matches (${sv.historyN}); flagged at 2.5 SD. Girard/Morin 2011.`}
+                    ? `Skreflengd = vegalengd ÷ skref í löngum samfelldum hlaupum (18 sek eða lengri, eftir lengd hlaups í IMA — ekki hraða). Borið saman við þína eigin leiki (${sv.historyN}); flaggað við 2,5 staðalfrávik. Girard/Morin 2011.`
+                    : `Stride length = distance ÷ strides in long continuous runs (18 s or more, from IMA free-running run length — not speed). Compared to your own matches (${sv.historyN}); flagged at 2.5 SD. Girard/Morin 2011.`}
                 </div>
               )}
             </div>

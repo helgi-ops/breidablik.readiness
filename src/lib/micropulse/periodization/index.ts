@@ -98,11 +98,12 @@ export type TeamAverages = {
   matchSprintM: number | null; matchAccel: number | null; matchDecel: number | null;
   // IMA CoD = Catapult's six left/right CoD buckets summed (imaCodTotal) per session. Match ref too.
   imaCod: number | null; matchImaCod: number | null;
-  // IMA Free Running fast distance (bands 5–8, m) per session + match ref. Pro/Catapult only.
+  // IMA Free Running long-run distance (bands 5–8 = continuous runs ≥18 s, m) per session + match ref.
+  // Bout-DURATION bands, not speed — NOT HSR/sprint (docs/ima-free-running-bands.md). Pro/Catapult only.
   imaFrDist: number | null; matchImaFrDist: number | null;
   // Richer mechanical/IMA axis (Figueiredo, Buchheit directional gap) — nullable, shown only when the
   // club's feed carries them. accel/decel Band 2–3 = high-INTENSITY effort counts; strideHi = top-band
-  // free-running stride count; rhie/symmetry/metabolic are presence-gated (absent even on some Pro feeds).
+  // strides in long continuous runs (runs ≥18 s, ima_fr_ge18; was legacy bands 6–8 = ≥21 s before Nov 2026; NOT sprint/high-cadence); rhie/symmetry/metabolic are presence-gated (absent even on some Pro feeds).
   accelHiEff: number | null; decelHiEff: number | null; strideHi: number | null;
   matchAccelHiEff: number | null; matchDecelHiEff: number | null; matchStrideHi: number | null;
   rhieBouts: number | null; runSymmetry: number | null; metabolicPower: number | null;
@@ -220,7 +221,7 @@ export function matchAxisTargets(b: TeamAverages): MatchAxes {
   ];
   if (mAccHi != null) mechMetrics.push({ metric: { en: "High-int accel eff (B2–3)", is: "Ákafar hröðunar-átök (B2–3)" }, matchValue: mAccHi.toString(), trainingCeiling: pct(mAccHi, 1.5)?.toString() ?? "–", band: "131–166%" });
   if (mDecHi != null) mechMetrics.push({ metric: { en: "High-int decel eff (B2–3)", is: "Ákafar hraðam.-átök (B2–3)" }, matchValue: mDecHi.toString(), trainingCeiling: pct(mDecHi, 1.2)?.toString() ?? "–", band: "108–134%" });
-  if (mStride != null) mechMetrics.push({ metric: { en: "Top-band strides", is: "Efstu-banda skref" }, matchValue: mStride.toString(), trainingCeiling: pct(mStride, 1.0)?.toString() ?? "–", band: "≈100%" });
+  if (mStride != null) mechMetrics.push({ metric: { en: "Long-run strides (runs ≥18 s)", is: "Skref í löngum hlaupum (≥18 sek)" }, matchValue: mStride.toString(), trainingCeiling: pct(mStride, 1.0)?.toString() ?? "–", band: "≈100%" });
   const mechanical: AxisTarget = {
     axis: "mechanical", label: { en: "Mechanical / IMA", is: "Vélrænt / IMA" },
     matchNote: { en: "Training OVER-shoots the match here — plan it, don't stack it on an HSR day.", is: "Æfingar fara YFIR leikkröfu hér — skipuleggðu, ekki stafla á háhraða-dag." },
@@ -265,7 +266,8 @@ export type PlayerMatchRow = {
   // IMA CoD = Catapult's six left/right change-of-direction buckets summed (imaCodTotal — the one CoD
   // definition app-wide; the aggregate ima_cod column is NULL in our feed). Pro/Catapult only.
   imaCod?: number | null;
-  // IMA Free Running fast distance (bands 5–8, m) — the running-side IMA companion to stride.
+  // IMA Free Running long-run distance (bands 5–8 = continuous runs ≥18 s, m) — the running-side IMA
+  // companion to stride. Sustained running, NOT sprint/HSR (that is GPS `hsr`/`sprint`).
   imaFr?: number | null;
 };
 export type MatchUnit = {
@@ -528,14 +530,14 @@ export type CalType = "mechanical" | "locomotive" | "mixed" | "activation" | "to
 /** The match reference unit, absolute. `dist/hsr/load/accdec` are the running + total-mechanical spine;
  *  the IMA fields are nullable and present only where the scope's feed carries them (tier/presence-gated):
  *  accHiEff/decHiEff = Acc/Dec Band 2–3 high-intensity effort counts (GPS-derivable → Core + Pro);
- *  stride = top-band free-running stride count (Pro/IMU); dirFwd/Back/Lat = the match direction split
+ *  stride = strides in long continuous runs (runs ≥18 s; was ≥21 s before Nov 2026; Pro/IMU — NOT sprint strides); dirFwd/Back/Lat = the match direction split
  *  (fractions, Pro/IMU); rhie/symmetry/metPower = presence-gated Pro capabilities (absent on some feeds). */
 export type MatchUnitAbs = {
   dist: number | null; hsr: number | null; load: number | null; accdec: number | null;
   accHiEff: number | null; decHiEff: number | null; stride: number | null;
   dirFwd: number | null; dirBack: number | null; dirLat: number | null;
   rhie: number | null; symmetry: number | null; metPower: number | null;
-  /** IMA Free Running fast distance (bands 5–8, m) per match — Pro/IMU; optional for older callers. */
+  /** IMA Free Running long-run distance (bands 5–8 = runs ≥18 s, m) per match — Pro/IMU; optional for older callers. */
   fr?: number | null;
   /** IMA CoD (change-of-direction events) per match — Pro/IMU; optional for older callers. */
   cod?: number | null;
@@ -567,9 +569,10 @@ const DOW: Bi[] = [
 ];
 // Each day-type's SHARE of the match, per axis (Figueiredo dimension-specific). `accdec` = the Acc/Dec
 // Band 2–3 high-intensity subset; `accdec`, `hsr` and `sprint` are kept equal to CAL_SHARE_HI (the research
-// standard, ./imaStandard). `fr` = IMA Free Running b5-8, a wider band than HSR that training carries far more of, so it
+// standard, ./imaStandard). `fr` = IMA Free Running b5-8 = distance in LONG CONTINUOUS RUNS (bouts ≥18 s —
+// bout-duration bands, NOT a speed band, so NOT HSR); training carries far more of it than HSR, so it
 // doesn't follow the HSR standard: these are its own weights, not yet on a standard;
-// `stride` = the top-band free-running quality (highest on the Locomotive/running day). Keeping HSR and
+// `stride` = strides in long continuous runs (runs ≥18 s; was ≥21 s before Nov 2026; highest on the Locomotive/running day). Keeping HSR and
 // mechanical on separate days protects the posterior chain (Buchheit).
 export const CAL_SHARE: Record<CalType, { dist: number; hsr: number; sprint: number; fr: number; load: number; accdec: number; stride: number }> = {
   mechanical: { dist: 0.45, hsr: 0.25, sprint: 0.10, fr: 0.30, load: 1.10, accdec: 0.90, stride: 0.50 },
@@ -695,8 +698,10 @@ export const mondayOfIso = (iso: string) => { const d = new Date(`${iso}T00:00:0
 
 // ── PROGRESSIVE-OVERLOAD RAMP (harvested from src/lib/micropulse/progressiveOverload) ──────────────
 // The weekly overload is DIFFERENTIATED per KPI, not one flat multiplier: volume (distance / Player Load)
-// climbs fastest, high-speed running + stride slowest with the tightest ceilings (hamstring exposure —
-// Malone 2017, Gabbett 2016), mechanical (accel/decel) sits between. Rates mirror the engine's WEEKLY_RATE.
+// climbs fastest, high-speed running (GPS) slowest with the tightest ceiling (hamstring exposure —
+// Malone 2017, Gabbett 2016), mechanical (accel/decel) sits between. The `stride` axis (IMA FR =
+// strides in long continuous runs ≥18 s; was ≥21 s before Nov 2026 — NOT sprint) is kept on a conservative 6%/wk rate as sustained-running
+// volume; the Malone/Gabbett hamstring citation applies to GPS HSR, not to it. Rates mirror the engine's WEEKLY_RATE.
 // Each axis ceilings at match demand ("build TO match, not beyond") for the running axes; the mechanical
 // axis keeps the Figueiredo over-shoot. Every week tags which rule bound it (self-explaining provenance).
 type CapReason = "rate" | "spike" | "ceiling";
@@ -1004,11 +1009,13 @@ export function buildCalendarBlock(opts: {
       const hsr = type === "rest" || opts.unit.hsr == null ? null : isM ? Math.round(opts.unit.hsr * mExp) : rnd(capRun(opts.unit.hsr * sh.hsr * hsrEmph * fA("hsr"), opts.unit.hsr) * cm, 5);
       const load = type === "rest" || opts.unit.load == null ? null : isM ? Math.round(opts.unit.load * mExp) : Math.round(opts.unit.load * sh.load * mechEmph * fA("load") * cm);
       // Mechanical / IMA per-day targets (share × week factor); mechanical emphasis on the effort counts,
-      // running emphasis on the free-running stride. Null on rest days or where the unit lacks the field.
+      // running emphasis on the long-run (sustained-running) stride. Null on rest days or where the unit lacks the field.
       const accHiEff = type === "rest" || opts.unit.accHiEff == null ? null : isM ? Math.round(opts.unit.accHiEff * mExp) : Math.round(opts.unit.accHiEff * CAL_SHARE_HI[type].accHi * mechEmph * fA("accdec") * cm);
       const decHiEff = type === "rest" || opts.unit.decHiEff == null ? null : isM ? Math.round(opts.unit.decHiEff * mExp) : Math.round(opts.unit.decHiEff * CAL_SHARE_HI[type].decHi * mechEmph * fA("accdec") * cm);
       const stride = type === "rest" || opts.unit.stride == null ? null : isM ? Math.round(opts.unit.stride * mExp) : Math.round(capRun(opts.unit.stride * sh.stride * hsrEmph * fA("stride"), opts.unit.stride) * cm);
-      // IMA Free Running (bands 5–8 distance) is fast running → same share/ramp/emphasis/match-cap as HSR.
+      // IMA Free Running (bands 5–8 distance) = long continuous runs (≥18 s), NOT fast running. It still rides
+      // the running-axis ramp/emphasis/match-cap (it is running volume planned on the Locomotive day) — kept
+      // as-is so plans don't shift; it is not an HSR proxy.
       const fr = type === "rest" || opts.unit.fr == null ? null : isM ? Math.round(opts.unit.fr * mExp) : rnd(capRun(opts.unit.fr * sh.fr * hsrEmph * fA("hsr"), opts.unit.fr) * cm, 10);
       // IMA totals (CoD, accelerations, decelerations) — the mechanical axis's ramp + emphasis, but their own
       // research-standard day-type share (CAL_SHARE_IMA), not the B2–3 `accdec` share. No running cap.
@@ -1066,7 +1073,7 @@ export function buildCalendarBlock(opts: {
       ? { en: "The match is the unit — at team level every training day is a share of the average player on a match day, subs included, scaled by the week multiplier.", is: "Leikurinn er einingin — hjá liðinu er hver æfingadagur hlutfall af meðalleikmanni á leikdegi, með varamönnum, skalað með vikumargfeldi." }
       : { en: "The match is the unit — every training day is a share of one near-full match, scaled by the week multiplier.", is: "Leikurinn er einingin — hver æfingadagur er hlutfall af einum næstum-heilum leik, skalað með vikumargfeldi." },
     { en: "Mechanical work over-shoots the match on load; HSR sits under it per session — never stack them on one day (Figueiredo; hamstring protection).", is: "Vélrænt fer yfir leikinn í álagi; háhraði er undir per æfingu — aldrei stafla þeim á einn dag (Figueiredo; aftanlæris-vernd)." },
-    { en: "Mechanical days load Acc/Dec Band 2–3 (high-intensity efforts) + strength; Locomotive days load free-running strides + HSR — the split that protects the posterior chain (Buchheit).", is: "Mechanical-dagar hlaða Acc/Dec Band 2–3 (ákafar átök) + styrk; Locomotive-dagar hlaða frjáls-hlaupa skref + háhraða — skiptingin sem verndar afturkeðjuna (Buchheit)." },
+    { en: "Mechanical days load Acc/Dec Band 2–3 (high-intensity efforts) + strength; Locomotive days load HSR + long continuous runs — the split that protects the posterior chain (Buchheit).", is: "Mechanical-dagar hlaða Acc/Dec Band 2–3 (ákafar átök) + styrk; Locomotive-dagar hlaða háhraða + löng samfelld hlaup — skiptingin sem verndar afturkeðjuna (Buchheit)." },
     { en: "A starting point anchored to the player's data, never a norm to obey (Little & Buchheit). Descriptive — never the readiness colour.", is: "Upphafspunktur festur í gögnum leikmannsins, aldrei viðmið til að hlýða (Little & Buchheit). Lýsandi — aldrei readiness-liturinn." },
   ];
   // When a goal was chosen, attach its gym scheme + a cited note on the volume/taper stance (explainability).

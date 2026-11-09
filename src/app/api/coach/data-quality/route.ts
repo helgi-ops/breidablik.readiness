@@ -46,11 +46,10 @@ interface LoadRow {
   max_velocity: number | null;
   ima_total: number | null;
   ima_fr_band1_stride_count: number | null;
+  ima_fr_band2_stride_count: number | null;
   ima_fr_band58_total_distance: number | null;
-  ima_fr_band5_stride_count: number | null;
-  ima_fr_band6_stride_count: number | null;
-  ima_fr_band7_stride_count: number | null;
-  ima_fr_band8_stride_count: number | null;
+  /** Strides in efforts ≥18 s — config-independent tier filled by the DB trigger (band edges change). */
+  ima_fr_ge18_stride_count: number | null;
   ima_cod_left_high: number | null;
   impacts: number | null;
   jumps: number | null;
@@ -62,7 +61,8 @@ interface LoadRow {
 const PRESENT: Record<SignalKey, (r: LoadRow) => boolean> = {
   gps: (r) => (r.total_distance ?? 0) > 0,
   ima: (r) => (r.ima_total ?? 0) > 0,
-  ima_strides: (r) => (r.ima_fr_band1_stride_count ?? 0) > 0,
+  // Short runs (band 1 = 0–8 s under legacy edges, 0–2.5 s under the Nov-2026 edges, so band 2 too).
+  ima_strides: (r) => (r.ima_fr_band1_stride_count ?? 0) > 0 || (r.ima_fr_band2_stride_count ?? 0) > 0,
   // Free-running distance is GPS-derived: null (not 0) indoors by design, so a
   // present reading is any non-null value. Coverage is scored on outdoor sessions.
   ima_run_distance: (r) => r.ima_fr_band58_total_distance != null,
@@ -80,20 +80,19 @@ function isOutdoor(r: LoadRow): boolean {
 }
 
 /**
- * Metres per high-cadence stride for one row — computed by the STRIDE ENGINE
+ * Metres per stride in long continuous runs (IMA FR efforts ≥18 s, read from the
+ * config-independent ima_fr_ge18_* tier — band numbers shift when the club changes its
+ * band edges; bout-duration bands, NOT sprint/high-cadence) for one row — computed by the STRIDE ENGINE
  * itself rather than re-derived here, so the data-quality check only ever sees a
  * value the engine would actually use (≥ MIN_STRIDES, real distance) and the two
  * can never disagree. null when there's nothing to judge.
  */
 function rowStrideLength(r: LoadRow): number | null {
-  const strides =
-    (Number(r.ima_fr_band5_stride_count ?? 0) || 0) +
-    (Number(r.ima_fr_band6_stride_count ?? 0) || 0) +
-    (Number(r.ima_fr_band7_stride_count ?? 0) || 0) +
-    (Number(r.ima_fr_band8_stride_count ?? 0) || 0);
+  const strides = Number(r.ima_fr_ge18_stride_count ?? 0) || 0;
   return strideLength({
     date: r.date,
     kind: "match", // irrelevant here — strideLength() only divides distance by strides
+    // (field names say "highCadence" for interface stability; the data is long-run distance/strides)
     highCadenceDistanceM:
       r.ima_fr_band58_total_distance != null ? Number(r.ima_fr_band58_total_distance) : null,
     highCadenceStrides: strides > 0 ? strides : null,
@@ -124,9 +123,8 @@ export async function GET(req: Request) {
     const since = new Date(Date.now() - windowDays * 86400000).toISOString().slice(0, 10);
     const COLS =
       "player_id, date, source, total_distance, max_velocity, ima_total, " +
-      "ima_fr_band1_stride_count, ima_fr_band58_total_distance, ima_cod_left_high, " +
-      "ima_fr_band5_stride_count, ima_fr_band6_stride_count, " +
-      "ima_fr_band7_stride_count, ima_fr_band8_stride_count, " +
+      "ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band58_total_distance, ima_cod_left_high, " +
+      "ima_fr_ge18_stride_count, " +
       "impacts, jumps, fmp_dynamic_high_s, avg_heart_rate";
 
     // Entitlement comes from the tier the system ALREADY resolves — not from a

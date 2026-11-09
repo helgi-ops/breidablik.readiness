@@ -15,7 +15,7 @@ const match = (date: string, distM: number, strides: number): StrideSession => (
   highCadenceStrides: strides,
 });
 
-// His prior full matches (minutes ≥ 80), band5-8 distance ÷ strides.
+// His prior full matches (minutes ≥ 80), band5-8 (long continuous runs, ≥18 s) distance ÷ strides.
 const HISTORY: StrideSession[] = [
   match("2026-05-08", 2340.84046, 997), // 2.348 m
   match("2026-05-17", 1961.72915, 865), // 2.268 m

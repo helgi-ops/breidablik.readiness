@@ -28,7 +28,8 @@ const SYSTEM = `You write a short, encouraging physical-performance summary addr
 Hard rules:
 - Use ONLY the numbers given in the user message. Never invent or estimate values.
 - Describe ONLY the metrics actually present in the data (see metric_guide) — different clubs capture different signals, so do not mention a metric that is absent (e.g. change of direction or jumps may not be provided).
-- Reference metrics by their plain meaning (distance covered, high-speed running, sprinting, accelerations/decelerations, hard efforts, high metabolic load, change of direction, top speed). No raw jargon ("band 5-8", "IMA", "ACWR").
+- Reference metrics by their plain meaning (distance covered, high-speed running, sprinting, accelerations/decelerations, hard efforts, high metabolic load, change of direction, long continuous runs, top speed). No raw jargon ("band 5-8", "IMA", "ACWR").
+- "Long continuous runs" (ima_hsr) is distance in runs lasting 18 seconds or more — sustained running volume, NOT speed. Never call it high-speed, high-intensity or sprint running; only hsr, sprint and top_speed_kmh describe speed.
 - Per-90 means "per 90 minutes" — comparable across matches. Percentile/rank is within your own squad.
 - Speak to the player in the second person, factual and positive but not hyperbolic. No medical or injury claims. No transfer-value or recruitment advice. No training prescriptions.
 - Name one clear strength and one area with room to grow, both grounded in the numbers.
@@ -46,7 +47,7 @@ const METRIC_GUIDE: Record<string, string> = {
   ima_dec: "explosive decelerations per 90",
   cod: "change-of-direction actions per 90",
   jumps: "jumps per 90",
-  ima_hsr: "high-intensity running metres per 90",
+  ima_hsr: "metres per 90 in long continuous runs lasting 18 s or more (sustained running, not sprinting)",
   efforts: "hard accelerations and decelerations combined, per 90",
   hml: "high metabolic load distance (intense running) per 90",
   top_speed_kmh: "peak sprint speed (km/h)",
@@ -86,8 +87,8 @@ export async function POST(req: Request) {
   // Keep only the metrics the club captures (top speed always kept — it's a peak).
   const availableKeys = report.availableKeys;
   const isAvail = (k: string) => k === "top_speed_kmh" || availableKeys.includes(k);
-  // The per-band HIR breakdown (ima_hir5-8) is a radar detail; the AI describes
-  // high-intensity running via the lumped `ima_hsr` only — keep the bands out.
+  // The per-run-length breakdown (ima_hir5-8) is a radar detail; the AI describes
+  // long continuous runs via the lumped `ima_hsr` only — keep the bands out.
   const HIDE = new Set(["ima_hir5", "ima_hir6", "ima_hir7", "ima_hir8"]);
   const pick = (obj: Record<string, unknown> | null | undefined) =>
     Object.fromEntries(Object.entries(obj ?? {}).filter(([k]) => isAvail(k) && !HIDE.has(k)));

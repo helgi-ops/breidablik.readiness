@@ -27,8 +27,9 @@ const LABEL: Record<Quality, { en: string; is: string; unit: string }> = {
   distance: { en: "Weekly distance", is: "Vikuvegalengd", unit: "m" },
   hsr: { en: "Weekly high-speed running", is: "Vikuháhraðahlaup", unit: "m" },
   sprint: { en: "Weekly sprinting", is: "Vikusprettur", unit: "m" },
-  stride: { en: "High-cadence strides (IMA)", is: "Hátíðni skref (IMA)", unit: "" },
-  strideTop: { en: "Top-speed strides (IMA)", is: "Topphraða skref (IMA)", unit: "" },
+  // IMA Free Running bout-duration bands — strides in long continuous runs, NOT sprint/top speed.
+  stride: { en: "Strides in long runs (18–24 s)", is: "Skref í löngum hlaupum (18–24 sek)", unit: "" },
+  strideTop: { en: "Strides in longest runs (≥24 s)", is: "Skref í lengstu hlaupum (≥24 sek)", unit: "" },
   accel: { en: "Accelerations (IMA)", is: "Hröðun (IMA)", unit: "" },
   decel: { en: "Decelerations (IMA)", is: "Hemlun (IMA)", unit: "" },
   decelHigh: { en: "High-intensity braking (IMA)", is: "Háákefðar hemlun (IMA)", unit: "" },

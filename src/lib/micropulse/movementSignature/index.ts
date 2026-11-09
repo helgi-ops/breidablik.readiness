@@ -9,9 +9,13 @@
  *
  * We model four inertial components, each compared to the player's OWN recent
  * norm (personal z-score, Robertson 2017), not an absolute or squad threshold:
- *   1. multidirectional       — IMA band 5-8 distance (change-of-direction volume)
+ *   1. multidirectional       — IMA Free Running band 5-8 distance = metres in
+ *                               LONG CONTINUOUS RUNS (bouts ≥18 s). The key name
+ *                               is legacy (kept for API stability): IMA FR bands
+ *                               are bout-duration bands, NOT change-of-direction,
+ *                               speed or cadence bands (docs/ima-free-running-bands.md).
  *   2. explosive              — accel + decel B2-3 effort counts (micro-actions)
- *   3. multidirectional_share — IMA distance / total distance (catches the
+ *   3. multidirectional_share — long-run distance / total distance (catches the
  *                               "same meters, different movement" case)
  *   4. decel_share            — decel / (accel + decel) efforts (braking signature)
  *
@@ -29,7 +33,7 @@
 export type MovementDayRow = {
   date: string;          // YYYY-MM-DD
   totalDistance: number; // m
-  imaDistance: number;   // IMA band 5-8 total distance, m
+  imaDistance: number;   // IMA band 5-8 total distance, m = long continuous runs (≥18 s bouts), not sprint/CoD
   accelEfforts: number;  // accel B2-3 effort count
   decelEfforts: number;  // decel B2-3 effort count
   /** Combined Gen2 accel+decel effort count — the Lite/Core fallback for the
@@ -54,9 +58,9 @@ export type ComponentKey =
   | "metabolic_share";
 
 export const COMPONENT_LABEL: Record<ComponentKey, string> = {
-  multidirectional: "Multidirectional running",
+  multidirectional: "Long continuous running",  // key legacy — IMA FR band 5–8 (runs ≥18 s)
   explosive: "Explosive efforts",
-  multidirectional_share: "Multidirectional share of work",
+  multidirectional_share: "Long-run share of work",
   decel_share: "Braking share",
   high_speed_share: "High-speed share of work",
   metabolic_share: "Metabolic-load share of work",
@@ -70,9 +74,9 @@ export type Bi = { EN: string; IS: string };
 // IS labels are lowercase nominative phrases with the possessive built in, so they
 // slot mid-sentence after a dash without case/gender agreement breaking.
 const PLAIN: Record<ComponentKey, { label: Bi; unit: string; pct: boolean }> = {
-  multidirectional: { label: { EN: "side-to-side / change-of-direction running", IS: "hlið-til-hliðar hlaup hans" }, unit: " m", pct: false },
+  multidirectional: { label: { EN: "running in long continuous runs (18 s or more)", IS: "hlaup hans í löngum samfelldum hlaupum (18 sek+)" }, unit: " m", pct: false },
   explosive: { label: { EN: "explosive bursts (hard accelerations + braking)", IS: "sprengikraftur hans (harðar hröðun + hemlun)" }, unit: "", pct: false },
-  multidirectional_share: { label: { EN: "share of his running that's side-to-side", IS: "hlutfall hlaups hans sem er hlið-til-hliðar" }, unit: "", pct: true },
+  multidirectional_share: { label: { EN: "share of his running done in long continuous runs", IS: "hlutfall hlaups hans í löngum samfelldum hlaupum" }, unit: "", pct: true },
   decel_share: { label: { EN: "share of his efforts that are hard braking", IS: "hlutfall átaka hans sem er hörð hemlun" }, unit: "", pct: true },
   high_speed_share: { label: { EN: "share of his running that's high-speed", IS: "hlutfall hlaups hans sem er háhraða" }, unit: "", pct: true },
   metabolic_share: { label: { EN: "share of his running at high metabolic load", IS: "hlutfall hlaups hans á háu efnaskipta-álagi" }, unit: "", pct: true },
@@ -323,6 +327,9 @@ export function computeMovementSignature(
     const recentStr = plainVal(top.key, top.today);
     const usualStr = plainVal(top.key, top.mean);
     const more = (top.z ?? 0) >= 0;
+    // IMA band 5–8 components are long continuous runs, not change-of-direction
+    // work — so the suggested action must talk about sustained running for them.
+    const longRun = top.key === "multidirectional" || top.key === "multidirectional_share";
     if (driftType === "shape") {
       headline = {
         EN: `He's covering his usual distance but moving differently — his ${pEN} has ${more ? "risen" : "dropped"} to ${recentStr} this week (he's usually around ${usualStr}).`,
@@ -332,10 +339,15 @@ export function computeMovementSignature(
         EN: "Same running volume, but the type of movement changed — a shift like this is easy to miss and means his body is doing something it isn't used to.",
         IS: "Sama hlaup-magn, en tegund hreyfingar breyttist — svona breyting er auðvelt að missa af og þýðir að líkaminn er að gera eitthvað sem hann er ekki vanur.",
       };
-      suggestedAction = {
-        EN: "Keep his total load, but ease his exposure to tight-space / change-of-direction work for 1-2 days, or phase the new demand in gradually.",
-        IS: "Haltu heildar-álaginu, en dragðu úr þröngu-rými / stefnubreytinga-vinnu í 1-2 daga, eða innleiða nýju kröfuna smám saman.",
-      };
+      suggestedAction = longRun
+        ? {
+            EN: "Keep his total load, but ease the long continuous running (tempo / conditioning runs) for 1-2 days, or phase the new demand in gradually.",
+            IS: "Haltu heildar-álaginu, en dragðu úr löngum samfelldum hlaupum (tempó- / úthaldshlaupum) í 1-2 daga, eða innleiða nýju kröfuna smám saman.",
+          }
+        : {
+            EN: "Keep his total load, but ease his exposure to tight-space / change-of-direction work for 1-2 days, or phase the new demand in gradually.",
+            IS: "Haltu heildar-álaginu, en dragðu úr þröngu-rými / stefnubreytinga-vinnu í 1-2 daga, eða innleiða nýju kröfuna smám saman.",
+          };
     } else if (driftType === "mixed") {
       headline = {
         EN: `He's doing more running AND moving differently than usual — his ${pEN} is up to ${recentStr} this week (usually around ${usualStr}).`,
@@ -345,19 +357,29 @@ export function computeMovementSignature(
         EN: "Both how much and how he's moving have jumped at once — the body has had less chance to adapt, so it's worth easing off.",
         IS: "Bæði hve mikið og hvernig hann hreyfir sig hefur breyst í einu — líkaminn hefur haft minni tíma til að aðlagast, svo það er vert að draga úr.",
       };
-      suggestedAction = {
-        EN: "Trim his overall load a touch and keep an eye on the change-of-direction demand for a day or two.",
-        IS: "Minnkaðu heildar-álagið aðeins og fylgstu með stefnubreytinga-kröfunni í einn til tvo daga.",
-      };
+      suggestedAction = longRun
+        ? {
+            EN: "Trim his overall load a touch and keep an eye on the long continuous running for a day or two.",
+            IS: "Minnkaðu heildar-álagið aðeins og fylgstu með löngu samfelldu hlaupunum í einn til tvo daga.",
+          }
+        : {
+            EN: "Trim his overall load a touch and keep an eye on the change-of-direction demand for a day or two.",
+            IS: "Minnkaðu heildar-álagið aðeins og fylgstu með stefnubreytinga-kröfunni í einn til tvo daga.",
+          };
     } else {
       headline = {
         EN: `He's doing noticeably more ${pEN} than he normally does — about ${recentStr} this week vs his usual ${usualStr}.`,
         IS: `Hann gerir áberandi meira en venjulega — ${pIS} er um ${recentStr} þessa viku (venjulega ${usualStr}).`,
       };
-      why = {
-        EN: "A sudden jump in this kind of high-intensity movement (not just total distance) is the main thing that catches players out, so it's worth a look.",
-        IS: "Skyndilegt stökk í svona háákefðar-hreyfingu (ekki bara heildarvegalengd) er helsta atriðið sem kemur leikmönnum í koll, svo það er vert að skoða.",
-      };
+      why = longRun
+        ? {
+            EN: "A sudden jump in one kind of running he isn't used to (not just total distance) is the main thing that catches players out, so it's worth a look.",
+            IS: "Skyndilegt stökk í hlaupategund sem hann er ekki vanur (ekki bara heildarvegalengd) er helsta atriðið sem kemur leikmönnum í koll, svo það er vert að skoða.",
+          }
+        : {
+            EN: "A sudden jump in this kind of high-intensity movement (not just total distance) is the main thing that catches players out, so it's worth a look.",
+            IS: "Skyndilegt stökk í svona háákefðar-hreyfingu (ekki bara heildarvegalengd) er helsta atriðið sem kemur leikmönnum í koll, svo það er vert að skoða.",
+          };
       suggestedAction = {
         EN: "Consider easing this demand for 1-2 days so the extra exposure is phased in rather than spiked.",
         IS: "Íhugaðu að draga úr þessari kröfu í 1-2 daga svo auka-útsetningin sé innleidd frekar en að rjúka upp.",

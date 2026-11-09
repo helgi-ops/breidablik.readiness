@@ -127,7 +127,7 @@ function dayIma(d: CalDay, is: boolean, unitStride: number | null): string {
   if (d.decHiEff != null) p.push(`Dec B2–3 ${d.decHiEff}`);
   // The ceiling marker attaches to the STRIDE value it refers to (built TO match, not beyond), not the dir.
   if (d.stride != null) p.push(`${is ? "Skref" : "Stride"} ${d.stride}${unitStride != null && d.stride >= unitStride && d.type !== "match" ? "†" : ""}`);
-  if (d.fr != null) p.push(`${is ? "Hraðhlaup" : "Free Running"} ${d.fr} m`);
+  if (d.fr != null) p.push(`${is ? "Löng hlaup (≥18 sek)" : "Long runs (≥18 s)"} ${d.fr} m`);
   if (d.cod != null) p.push(`${is ? "Stefnubr." : "CoD"} ${d.cod}`);
   const dd = domDir(d.dir, is); if (dd) p.push(`${is ? "stefna" : "dir"}: ${dd}`);
   return p.join("  ·  ");

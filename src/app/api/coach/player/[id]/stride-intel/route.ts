@@ -57,9 +57,11 @@ type TrendRow = {
   strideLengthHsr: number | null;
   codLrAsymmetryPct: number | null;
   gpsImaDecoupling: number | null;
-  /** IMA band 5-8 total distance (m) — high-intensity running dose. */
+  /** Distance (m) in long continuous runs (efforts ≥18 s, config-independent ima_fr_ge18 tier).
+   *  NOT high-speed running; field name is legacy, kept for consumers. */
   imaHsrDistanceM: number | null;
-  /** band 5-8 distance ÷ band 5-8 strides (m/stride). */
+  /** ≥18 s distance ÷ ≥18 s strides (m/stride) = stride length in sustained
+   *  running. Legacy field name ("hiCadence") — the bands are bout-duration bands. */
   hiCadenceStrideLengthM: number | null;
 };
 
@@ -130,10 +132,8 @@ export async function GET(
     .from("player_external_load_daily")
     .select(
       "date, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, " +
-        "ima_fr_band4_total_player_load, ima_fr_band5_total_player_load, ima_fr_band6_total_player_load, " +
-        "ima_fr_band7_total_player_load, ima_fr_band8_total_player_load, " +
-        "ima_fr_band58_total_distance, ima_fr_band5_stride_count, ima_fr_band6_stride_count, " +
-        "ima_fr_band7_stride_count, ima_fr_band8_stride_count",
+        "ima_fr_band58_total_distance, ima_fr_ge18_total_distance, ima_fr_ge18_stride_count, " +
+        "ima_fr_ge18_total_player_load",
     )
     .eq("player_id", playerId)
     .eq("source", "catapult")
@@ -146,29 +146,21 @@ export async function GET(
     total_player_load: number | null;
     velocity_band5_total_distance: number | null;
     velocity_band6_total_distance: number | null;
-    ima_fr_band4_total_player_load: number | null;
-    ima_fr_band5_total_player_load: number | null;
-    ima_fr_band6_total_player_load: number | null;
-    ima_fr_band7_total_player_load: number | null;
-    ima_fr_band8_total_player_load: number | null;
     ima_fr_band58_total_distance: number | null;
-    ima_fr_band5_stride_count: number | null;
-    ima_fr_band6_stride_count: number | null;
-    ima_fr_band7_stride_count: number | null;
-    ima_fr_band8_stride_count: number | null;
+    /** Config-independent tiers (DB trigger): efforts ≥18 s. Band numbers shift when edges change. */
+    ima_fr_ge18_total_distance: number | null;
+    ima_fr_ge18_stride_count: number | null;
+    ima_fr_ge18_total_player_load: number | null;
   };
 
   const decouplingByDate = new Map<string, number | null>();
   const imaHsrByDate = new Map<string, number | null>();
   const hiCadStrideLenByDate = new Map<string, number | null>();
   for (const r of (dailyRows as unknown as DailyRow[] | null) ?? []) {
-    // IMA high-intensity running distance + domain-consistent stride length.
-    const band58 = Number(r.ima_fr_band58_total_distance ?? 0) || 0;
-    const band58Strides =
-      (Number(r.ima_fr_band5_stride_count ?? 0) || 0) +
-      (Number(r.ima_fr_band6_stride_count ?? 0) || 0) +
-      (Number(r.ima_fr_band7_stride_count ?? 0) || 0) +
-      (Number(r.ima_fr_band8_stride_count ?? 0) || 0);
+    // Long-run distance (efforts ≥18 s, ima_fr_ge18 tier; NOT sprint/HSR) +
+    // domain-consistent stride length in sustained running.
+    const band58 = Number(r.ima_fr_ge18_total_distance ?? r.ima_fr_band58_total_distance ?? 0) || 0;
+    const band58Strides = Number(r.ima_fr_ge18_stride_count ?? 0) || 0;
     imaHsrByDate.set(r.date, band58 > 0 ? band58 : null);
     hiCadStrideLenByDate.set(r.date, band58 > 0 && band58Strides > 0 ? band58 / band58Strides : null);
 
@@ -180,12 +172,9 @@ export async function GET(
     }
     const hsr = (Number(r.velocity_band5_total_distance ?? 0) || 0) +
       (Number(r.velocity_band6_total_distance ?? 0) || 0);
-    const hi =
-      (Number(r.ima_fr_band4_total_player_load ?? 0) || 0) +
-      (Number(r.ima_fr_band5_total_player_load ?? 0) || 0) +
-      (Number(r.ima_fr_band6_total_player_load ?? 0) || 0) +
-      (Number(r.ima_fr_band7_total_player_load ?? 0) || 0) +
-      (Number(r.ima_fr_band8_total_player_load ?? 0) || 0);
+    // Share of IMU load in runs ≥18 s (ima_fr_ge18 tier). Was ≥15 s = legacy bands 4–8; 15 s is not a
+    // band edge in the Nov-2026 config, so the config-independent ≥18 s tier is used instead.
+    const hi = Number(r.ima_fr_ge18_total_player_load ?? 0) || 0;
     decouplingByDate.set(r.date, hsr / td - hi / tpl);
   }
 

@@ -263,7 +263,7 @@ const WEEKLY_IMA_VIDEO =
 
 // IMA Free Running distance card walkthrough (Vimeo). Accompanies the
 // 'ima-free-running' section how-to on the IMA Intelligence page — distance in
-// long continuous runs (IMA FR bands 5-8 = runs ≥18 s; bout-duration bands, not
+// long continuous runs (IMA FR runs ≥18 s; bout-duration bands, not
 // speed) + total + ACWR. 16:9 embed.
 const IMA_FREE_RUNNING_VIDEO =
   "https://player.vimeo.com/video/1213855401?h=8e52b262d2&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
@@ -1716,8 +1716,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Uppsafnað IMA-álag vikunnar borið saman við dæmigerða viku (byggt á 8 sögulegum vikum). Mælirinn sýnir hvar hópurinn stendur núna (Current), hvað er dæmigert (Typical) og hvar vikan endar ef haldið er áfram á sama hraða (Projected). „Day 4 of 7“ segir hvar í vikunni þú ert — þetta er course-correction mælir, sést á miðvikudegi meðan enn má breyta.",
           },
           {
-            en: "Eight sub-type cards break the week down by movement type: acceleration, deceleration, changes of direction (CoD) and strides in long continuous runs (21 s or more). So you see not just WHETHER the week is heavy but WHY — whether it's braking or change-of-direction piling up.",
-            is: "Átta undirtegundakort brjóta vikuna niður eftir hreyfitegund: hröðun, hemlun, stefnubreytingar (CoD) og skref í löngum samfelldum hlaupum (21 sek eða lengri). Þannig sérðu ekki bara HVORT vikan er þung heldur AF HVERJU — er það hemlun eða stefnubreytingar sem safnast upp.",
+            en: "Eight sub-type cards break the week down by movement type: acceleration, deceleration, changes of direction (CoD) and strides in long continuous runs (18 s or more). So you see not just WHETHER the week is heavy but WHY — whether it's braking or change-of-direction piling up.",
+            is: "Átta undirtegundakort brjóta vikuna niður eftir hreyfitegund: hröðun, hemlun, stefnubreytingar (CoD) og skref í löngum samfelldum hlaupum (18 sek eða lengri). Þannig sérðu ekki bara HVORT vikan er þung heldur AF HVERJU — er það hemlun eða stefnubreytingar sem safnast upp.",
           },
         ],
       },
@@ -1734,8 +1734,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Session Shape — the shape of the session", is: "Session Shape — lögun æfingarinnar" },
         body: [
           {
-            en: "One word for the shape of the day (Recovery / short / full) plus four tiles: total strides, strides in long continuous runs (18 s or more) and their share, L/R CoD balance at high intensity, and how many are flagged on high-CoD asymmetry (e.g. 8/19). CoD splits into three intensity tiers — only “High (injury-relevant)” genuinely matters (Bishop 2020). The run-length distribution (short bursts <15 s / medium runs 15–24 s / longest runs ≥24 s) shows the shape: mostly short bursts = typical football play; more long runs = more sustained, tempo-style running. These bands measure how long each run lasted, not speed — they are not sprinting.",
-            is: "Eitt orð um lögun dagsins (Recovery / short / full) auk fjögurra flísa: heildarskref, skref í löngum samfelldum hlaupum (18 sek eða lengri) og hlutfall þeirra, L/R CoD balance í háákefð, og fjöldi flaggaðra á há-CoD ósamhverfu (t.d. 8/19). CoD skiptist í þrjú ákefðarþrep — aðeins „High (injury-relevant)“ skiptir raunverulega máli (Bishop 2020). Dreifingin eftir lengd hlaupa (stutt hlaup <15 sek / meðallöng hlaup 15–24 sek / lengstu hlaupin ≥24 sek) sýnir lögunina: mest stutt hlaup = dæmigerður fótboltaleikur; fleiri löng hlaup = meira samfellt, tempó-hlaup. Böndin mæla hve lengi hvert hlaup stóð, ekki hraða — þetta eru ekki sprettir.",
+            en: "One word for the shape of the day (Recovery / short / full) plus four tiles: total strides, strides in long continuous runs (18 s or more) and their share, L/R CoD balance at high intensity, and how many are flagged on high-CoD asymmetry (e.g. 8/19). CoD splits into three intensity tiers — only “High (injury-relevant)” genuinely matters (Bishop 2020). The run-length distribution (short bursts <12 s / medium runs 12–24 s / longest runs ≥24 s) shows the shape: mostly short bursts = typical football play; more long runs = more sustained, tempo-style running. These bands measure how long each run lasted, not speed — they are not sprinting.",
+            is: "Eitt orð um lögun dagsins (Recovery / short / full) auk fjögurra flísa: heildarskref, skref í löngum samfelldum hlaupum (18 sek eða lengri) og hlutfall þeirra, L/R CoD balance í háákefð, og fjöldi flaggaðra á há-CoD ósamhverfu (t.d. 8/19). CoD skiptist í þrjú ákefðarþrep — aðeins „High (injury-relevant)“ skiptir raunverulega máli (Bishop 2020). Dreifingin eftir lengd hlaupa (stutt hlaup <12 sek / meðallöng hlaup 12–24 sek / lengstu hlaupin ≥24 sek) sýnir lögunina: mest stutt hlaup = dæmigerður fótboltaleikur; fleiri löng hlaup = meira samfellt, tempó-hlaup. Böndin mæla hve lengi hvert hlaup stóð, ekki hraða — þetta eru ekki sprettir.",
           },
         ],
       },
@@ -1743,8 +1743,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Free Running Distance & Stride Length", is: "Free Running Distance & Skreflengd" },
         body: [
           {
-            en: "IMA Free Running Distance is the distance (m) covered in long continuous runs of 18 s or more, split by run length (18–21 / 21–24 / 24–27 / 27+ s), with a total and ACWR (acute 7d ÷ chronic 28d). “Building” means load is accruing within safe bounds; a number like 0.52 shows a player well below his own norm (Gabbett).",
-            is: "IMA Free Running Distance er vegalengdin (m) í löngum samfelldum hlaupum, 18 sek eða lengri, sundurliðuð eftir lengd hlaups (18–21 / 21–24 / 24–27 / 27+ sek), með heild og ACWR (bráða 7d ÷ langtíma 28d). „Building“ þýðir að álagið er að byggjast upp innan öruggra marka; tala eins og 0,52 sýnir leikmann langt undir sinni venju (Gabbett).",
+            en: "IMA Free Running Distance is the distance (m) covered in long continuous runs of 18 s or more, split by run length (18–24 s and 24 s or more), with a total and ACWR (acute 7d ÷ chronic 28d). “Building” means load is accruing within safe bounds; a number like 0.52 shows a player well below his own norm (Gabbett).",
+            is: "IMA Free Running Distance er vegalengdin (m) í löngum samfelldum hlaupum, 18 sek eða lengri, sundurliðuð eftir lengd hlaups (18–24 sek og 24 sek eða lengur), með heild og ACWR (bráða 7d ÷ langtíma 28d). „Building“ þýðir að álagið er að byggjast upp innan öruggra marka; tala eins og 0,52 sýnir leikmann langt undir sinni venju (Gabbett).",
           },
           {
             en: "Stride Length is the cleverest signal on the page. Under fatigue a player keeps his stride frequency but the stride shortens — he pushes less though the legs turn over as fast. Neither GPS distance nor cadence alone sees this; the ratio (distance ÷ strides in long continuous runs of 18 s or more) does. Compared to his own matches/big sessions and flagged if it deviates by more than 2.5 standard deviations — hidden fatigue that output numbers miss.",
@@ -1756,8 +1756,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Per-player breakdown", is: "Leikmannataflan" },
         body: [
           {
-            en: "One row per player: total strides, the split by run length (short bursts <15 s / medium 15–24 s / longest ≥24 s), strides in long runs (18 s or more), the ratio to his own baseline (vs baseline %), and high-intensity CoD L/R with asymmetry-%. Each player expands to a full CoD breakdown (Low/Medium/High). The point of the whole page: “how” rather than “how much” — all compared to the player himself, and it works indoors where GPS does not.",
-            is: "Ein röð á leikmann: heildarskref, skipting eftir lengd hlaupa (stutt hlaup <15 sek / meðallöng 15–24 sek / lengstu ≥24 sek), skref í löngum hlaupum (18 sek eða lengri), hlutfall gagnvart sinni grunnlínu (vs baseline %), og há-ákefðar CoD L/R með ósamhverfu-%. Hægt að opna hvern leikmann til að sjá fulla CoD-sundurliðun (Low/Medium/High). Kjarni síðunnar: „hvernig“ frekar en „hversu mikið“ — allt borið saman við leikmanninn sjálfan, og virkar innanhúss þar sem GPS gerir það ekki.",
+            en: "One row per player: total strides, the split by run length (short bursts <12 s / medium 12–24 s / longest ≥24 s), strides in long runs (18 s or more), the ratio to his own baseline (vs baseline %), and high-intensity CoD L/R with asymmetry-%. Each player expands to a full CoD breakdown (Low/Medium/High). The point of the whole page: “how” rather than “how much” — all compared to the player himself, and it works indoors where GPS does not.",
+            is: "Ein röð á leikmann: heildarskref, skipting eftir lengd hlaupa (stutt hlaup <12 sek / meðallöng 12–24 sek / lengstu ≥24 sek), skref í löngum hlaupum (18 sek eða lengri), hlutfall gagnvart sinni grunnlínu (vs baseline %), og há-ákefðar CoD L/R með ósamhverfu-%. Hægt að opna hvern leikmann til að sjá fulla CoD-sundurliðun (Low/Medium/High). Kjarni síðunnar: „hvernig“ frekar en „hversu mikið“ — allt borið saman við leikmanninn sjálfan, og virkar innanhúss þar sem GPS gerir það ekki.",
           },
         ],
       },
@@ -1803,8 +1803,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "The sub-type cards — why, not just whether", is: "Undirtegundakortin — af hverju, ekki bara hvort" },
         body: [
           {
-            en: "Below the dial the week breaks down by movement type: total IMA, acceleration, deceleration, changes of direction, and strides in long continuous runs (21 s or more). Each is its own mini-dial against its own typical. So you don't just see that the week is heavy — you see what is driving it. If deceleration and CoD are the ones spiking while running strides sit normal, you cut the cutting and braking drills, not the running.",
-            is: "Undir mælinum brotnar vikan niður eftir hreyfitegund: heildar-IMA, hröðun, hemlun, stefnubreytingar, og skref í löngum samfelldum hlaupum (21 sek eða lengri). Hvert er sinn eigin smá-mælir gagnvart sinni eigin venju. Þannig sérðu ekki bara að vikan sé þung — þú sérð hvað keyrir hana. Ef hemlun og CoD eru það sem toppar meðan hlaupaskref sitja eðlileg, sleppirðu klippi- og hemlunaræfingum, ekki hlaupinu.",
+            en: "Below the dial the week breaks down by movement type: total IMA, acceleration, deceleration, changes of direction, and strides in long continuous runs (18 s or more). Each is its own mini-dial against its own typical. So you don't just see that the week is heavy — you see what is driving it. If deceleration and CoD are the ones spiking while running strides sit normal, you cut the cutting and braking drills, not the running.",
+            is: "Undir mælinum brotnar vikan niður eftir hreyfitegund: heildar-IMA, hröðun, hemlun, stefnubreytingar, og skref í löngum samfelldum hlaupum (18 sek eða lengri). Hvert er sinn eigin smá-mælir gagnvart sinni eigin venju. Þannig sérðu ekki bara að vikan sé þung — þú sérð hvað keyrir hana. Ef hemlun og CoD eru það sem toppar meðan hlaupaskref sitja eðlileg, sleppirðu klippi- og hemlunaræfingum, ekki hlaupinu.",
           },
         ],
       },
@@ -1824,8 +1824,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
     title: { en: "How to read long runs", is: "Hvernig á að lesa löng hlaup" },
     videoEmbedUrl: IMA_FREE_RUNNING_VIDEO,
     intro: {
-      en: "This card is about long, continuous running: every run of 18 seconds or more without a break. The pod sorts each run by how long it lasted, not how fast it was, into four bands: 18–21 s, 21–24 s, 24–27 s and 27 s or more (Catapult's IMA Free Running bands 5–8). For each band the card shows the four numbers OpenField reports side by side: how many runs, how much time, how much distance and how many strides. It answers “how much sustained running did he do, and how close is that to a match?”. It does not measure speed: sprinting comes from GPS.",
-      is: "Þetta spjald fjallar um löng, samfelld hlaup: öll hlaup sem stóðu 18 sekúndur eða lengur án hlés. Einingin flokkar hvert hlaup eftir því hve lengi það stóð, ekki hve hratt það var, í fjögur bönd: 18–21 sek, 21–24 sek, 24–27 sek og 27 sek eða lengur (IMA Free Running bönd 5–8 hjá Catapult). Fyrir hvert band sýnir spjaldið tölurnar fjórar sem OpenField gefur, hlið við hlið: fjölda hlaupa, tíma, vegalengd og skref. Það svarar „hversu mikið samfellt hlaup tók hann, og hve nálægt leik er það?“. Það mælir ekki hraða: sprettir koma úr GPS.",
+      en: "This card is about long, continuous running: every run of 18 seconds or more without a break. The pod sorts each run by how long it lasted, not how fast it was, into bands (Catapult's IMA Free Running bands). The band edges are set in OpenField; Breiðablik changed them on 9 Nov 2026 to 0–2.5–5–8–12–18–24–30 s, so long runs (18 s or more) now show as 18–24 s, 24–30 s and 30 s or more (older sessions keep their old split: 18–21, 21–24, 24–27, 27+ s). For each band the card shows the four numbers OpenField reports side by side: how many runs, how much time, how much distance and how many strides. It answers “how much sustained running did he do, and how close is that to a match?”. It does not measure speed: sprinting comes from GPS.",
+      is: "Þetta spjald fjallar um löng, samfelld hlaup: öll hlaup sem stóðu 18 sekúndur eða lengur án hlés. Einingin flokkar hvert hlaup eftir því hve lengi það stóð, ekki hve hratt það var, í bönd (IMA Free Running bönd hjá Catapult). Mörk bandanna eru stillt í OpenField; Breiðablik breytti þeim 9. nóv 2026 í 0–2,5–5–8–12–18–24–30 sek, svo löng hlaup (18 sek eða lengri) birtast nú sem 18–24 sek, 24–30 sek og 30 sek eða lengur (eldri æfingar halda gömlu skiptingunni: 18–21, 21–24, 24–27, 27+ sek). Fyrir hvert band sýnir spjaldið tölurnar fjórar sem OpenField gefur, hlið við hlið: fjölda hlaupa, tíma, vegalengd og skref. Það svarar „hversu mikið samfellt hlaup tók hann, og hve nálægt leik er það?“. Það mælir ekki hraða: sprettir koma úr GPS.",
     },
     sections: [
       {
@@ -1841,8 +1841,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "The band table: runs, time, distance, strides", is: "Bandtaflan: hlaup, tími, vegalengd, skref" },
         body: [
           {
-            en: "Each row is one band, and the columns are the four OpenField variables: Runs (Event Count), Time (Total Duration), Distance (Total Distance) and Strides (Stride Count). Avg run is time ÷ runs, and it should land inside the band, around 19–20 s in the 18–21 s row; that check is how you know these really are time bands. If it lands outside, the number turns amber and the card warns that the club's band settings may differ. Speed is much the same in every row, roughly 12–15 km/h, so a squad leaning on the 27 s+ row did longer tempo-style runs, not faster ones. The bottom line adds all four bands up.",
-            is: "Hver lína er eitt band og dálkarnir eru breyturnar fjórar úr OpenField: Hlaup (Event Count), Tími (Total Duration), Vegalengd (Total Distance) og Skref (Stride Count). Meðalhlaup er tími ÷ hlaup og á að lenda innan bandsins, um 19–20 sek í 18–21 sek línunni; á því sérðu að þetta eru í raun tímabönd. Ef það lendir utan verður talan amber og spjaldið varar við að bandastillingar liðsins geti verið aðrar. Hraðinn er svipaður í öllum línum, um 12–15 km/klst, svo lið sem hallar á 27+ sek línuna tók lengri tempó-hlaup, ekki hraðari. Neðsta línan leggur öll fjögur böndin saman.",
+            en: "Each row is one band, and the columns are the four OpenField variables: Runs (Event Count), Time (Total Duration), Distance (Total Distance) and Strides (Stride Count). Avg run is time ÷ runs, and it should land inside the band, e.g. around 20–21 s in the 18–24 s row; that check is how you know these really are time bands. If it lands outside, the number turns amber and the card warns that the club's band settings may differ. Speed is much the same in every row, roughly 12–15 km/h, so a squad leaning on the longest row did longer tempo-style runs, not faster ones. The bottom line adds all the long-run bands up.",
+            is: "Hver lína er eitt band og dálkarnir eru breyturnar fjórar úr OpenField: Hlaup (Event Count), Tími (Total Duration), Vegalengd (Total Distance) og Skref (Stride Count). Meðalhlaup er tími ÷ hlaup og á að lenda innan bandsins, t.d. um 20–21 sek í 18–24 sek línunni; á því sérðu að þetta eru í raun tímabönd. Ef það lendir utan verður talan amber og spjaldið varar við að bandastillingar liðsins geti verið aðrar. Hraðinn er svipaður í öllum línum, um 12–15 km/klst, svo lið sem hallar á lengstu línuna tók lengri tempó-hlaup, ekki hraðari. Neðsta línan leggur öll löngu-hlaupa-böndin saman.",
           },
         ],
       },
@@ -1852,6 +1852,15 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Runs, time and strides come from the pod's motion sensor, so they read indoors too. Distance and metres per stride need GPS; indoors they show “—”, never a zero that would drag the totals down. When only some players had GPS, the note under the table says how many the distance covers, and metres per stride is taken over those same players.",
             is: "Hlaup, tími og skref koma úr hreyfiskynjara einingarinnar, svo þau mælast líka innanhúss. Vegalengd og metrar á skref þurfa GPS; innanhúss sýna þau „—“, aldrei núll sem drægi heildina niður. Þegar aðeins hluti leikmanna var með GPS segir nótan undir töflunni hve marga vegalengdin nær yfir, og metrar á skref eru reiknaðir yfir sömu leikmenn.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Where the bands come from", is: "Hvaðan böndin koma" },
+        body: [
+          {
+            en: "Catapult confirmed it in writing (Nov 2026): IMA Free Running, which Catapult also calls Cadence, looks for a steady rhythm between peaks in the pod's PlayerLoad (that is, regular strides) and counts each unbroken stretch as one run. Each run is then put in a band by its length in seconds, not by speed. The band limits are set in OpenField under Settings → Bands and Catapult applies them when a session is processed; Breiðablik changed them on 9 Nov 2026 from 0–8–12–15–18–21–24–27 s to 0–2.5–5–8–12–18–24–30 s. MicroPulse reads every session with the limits it was recorded with, and long runs always means 18 s or more. Stride rate is strides per minute from the vertical accelerometer. For speed and sprinting, use the GPS velocity bands instead.",
+            is: "Catapult staðfesti þetta skriflega (nóv. 2026): IMA Free Running, sem Catapult kallar líka Cadence, leitar að jöfnum takti milli toppa í PlayerLoad einingarinnar (þ.e. reglulegum skrefum) og telur hvern óslitinn kafla sem eitt hlaup. Hvert hlaup fer svo í band eftir lengd í sekúndum, ekki hraða. Mörk bandanna eru stillt í OpenField undir Settings → Bands og Catapult beitir þeim þegar æfing er unnin; Breiðablik breytti þeim 9. nóv 2026 úr 0–8–12–15–18–21–24–27 sek í 0–2,5–5–8–12–18–24–30 sek. MicroPulse les hverja æfingu með þeim mörkum sem giltu þá, og löng hlaup þýða alltaf 18 sek eða lengri. Skreftíðni er skref á mínútu úr lóðrétta hröðunarmælinum. Fyrir hraða og spretti eru GPS-hraðaböndin rétta mælingin.",
           },
         ],
       },
@@ -1906,8 +1915,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Confidence, and Details", is: "Áreiðanleiki, og Nánar" },
         body: [
           {
-            en: "A “low conf · N” tag means the norm still rests on only N of his own matches or big sessions — under 8, it's part squad, so read it as a direction until it settles. Open “Details” for the S&C layer: the exact method (distance ÷ strides in long continuous runs of 18 s or more, IMA free-running bands 5–8 — run length, not speed), the flag threshold in metres for his kind of session, how mature the norm is, and the citations (Girard, Micallef & Millet 2011; Morin et al. 2011). The verdict is on top; the maths only appears when you ask for it.",
-            is: "„lítið öryggi · N“ merki þýðir að normið hvílir enn á aðeins N af hans eigin leikjum eða stórum æfingum — undir 8 er það að hluta úr hópnum, svo lestu það sem stefnu þar til það sest. Opnaðu „Nánar“ fyrir S&C-lagið: nákvæmu aðferðina (vegalengd ÷ skref í löngum samfelldum hlaupum, 18 sek eða lengri, IMA hlaupabönd 5–8 — lengd hlaups, ekki hraði), flagg-þröskuldinn í metrum fyrir hans tegund æfingar, hversu þroskað normið er, og heimildirnar (Girard, Micallef & Millet 2011; Morin o.fl. 2011). Dómurinn er efst; reikningurinn birtist aðeins þegar þú biður um hann.",
+            en: "A “low conf · N” tag means the norm still rests on only N of his own matches or big sessions — under 8, it's part squad, so read it as a direction until it settles. Open “Details” for the S&C layer: the exact method (distance ÷ strides in long continuous runs of 18 s or more, from IMA free-running run length — not speed), the flag threshold in metres for his kind of session, how mature the norm is, and the citations (Girard, Micallef & Millet 2011; Morin et al. 2011). The verdict is on top; the maths only appears when you ask for it.",
+            is: "„lítið öryggi · N“ merki þýðir að normið hvílir enn á aðeins N af hans eigin leikjum eða stórum æfingum — undir 8 er það að hluta úr hópnum, svo lestu það sem stefnu þar til það sest. Opnaðu „Nánar“ fyrir S&C-lagið: nákvæmu aðferðina (vegalengd ÷ skref í löngum samfelldum hlaupum, 18 sek eða lengri, eftir lengd hlaups í IMA — ekki hraða), flagg-þröskuldinn í metrum fyrir hans tegund æfingar, hversu þroskað normið er, og heimildirnar (Girard, Micallef & Millet 2011; Morin o.fl. 2011). Dómurinn er efst; reikningurinn birtist aðeins þegar þú biður um hann.",
           },
         ],
       },
@@ -1962,8 +1971,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "The five movement dimensions", is: "Hreyfivíddirnar fimm" },
         body: [
           {
-            en: "Each is shown “this match vs his usual.” IMA load/min = total movement work per minute. Accel:Decel = the balance of speeding up vs slowing down: above 1 = more front-foot (driving), below 1 = more reactive (braking) — this is the key dimension. CoD/min = changes of direction per minute. CoD left% = share of left turns (positional bias). Strides in long runs/min = strides taken in continuous runs of 21 s or more (sustained running, not sprinting).",
-            is: "Hver er sýnd „þessi leikur á móti venju hans“. IMA load/min = heildar hreyfivinna á mínútu. Accel:Decel = jafnvægi hröðunar og hemlunar: yfir 1 = meira á framfótinn (drífandi), undir 1 = meira viðbragð (hemlandi) — þetta er lykilvíddin. CoD/min = stefnubreytingar á mínútu. CoD left% = hlutdeild vinstri-beygja (stöðuhalli). Skref í löngum hlaupum/mín = skref í samfelldum hlaupum sem vara 21 sek eða lengur (samfellt hlaup, ekki sprettir).",
+            en: "Each is shown “this match vs his usual.” IMA load/min = total movement work per minute. Accel:Decel = the balance of speeding up vs slowing down: above 1 = more front-foot (driving), below 1 = more reactive (braking) — this is the key dimension. CoD/min = changes of direction per minute. CoD left% = share of left turns (positional bias). Strides in long runs/min = strides taken in continuous runs of 18 s or more (sustained running, not sprinting).",
+            is: "Hver er sýnd „þessi leikur á móti venju hans“. IMA load/min = heildar hreyfivinna á mínútu. Accel:Decel = jafnvægi hröðunar og hemlunar: yfir 1 = meira á framfótinn (drífandi), undir 1 = meira viðbragð (hemlandi) — þetta er lykilvíddin. CoD/min = stefnubreytingar á mínútu. CoD left% = hlutdeild vinstri-beygja (stöðuhalli). Skref í löngum hlaupum/mín = skref í samfelldum hlaupum sem vara 18 sek eða lengur (samfellt hlaup, ekki sprettir).",
           },
         ],
       },
@@ -1975,8 +1984,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Radar-línuritið leggur „þennan leik“ (blátt) ofan á „venju hans“ (grænt) á fimm ásunum, hver normaliseraður að stærra gildinu — svo formið sjálft sýnir muninn í einni mynd: er undirskriftin teygð í átt að löngum hlaupum, eða að hemlun? By-dimension súlurnar gefa raungildin.",
           },
           {
-            en: "Because a summary can hide where the difference sits, the S&C breakdown shows raw counts by intensity: deceleration (Low/Medium/High), change of direction (Low/Medium/High), and strides in long runs by run length (21–24 s, 24–27 s, 27 s+). The red high-intensity rows are the demanding end — a descriptive read of mechanical demand (McBurnie 2022), not injury prediction.",
-            is: "Þar sem samantekt getur falið hvar munurinn liggur sýnir S&C-sundurliðunin hráar tölur eftir ákefð: hemlun (Low/Medium/High), stefnubreytingar (Low/Medium/High) og skref í löngum hlaupum eftir lengd (21–24 sek, 24–27 sek, 27+ sek). Rauðu há-ákefðar línurnar eru krefjandi endinn — lýsandi mynd af vélrænni kröfu (McBurnie 2022), ekki meiðslaspá.",
+            en: "Because a summary can hide where the difference sits, the S&C breakdown shows raw counts by intensity: deceleration (Low/Medium/High), change of direction (Low/Medium/High), and strides in long runs by run length (12–18 s, 18–24 s, 24 s+). The red high-intensity rows are the demanding end — a descriptive read of mechanical demand (McBurnie 2022), not injury prediction.",
+            is: "Þar sem samantekt getur falið hvar munurinn liggur sýnir S&C-sundurliðunin hráar tölur eftir ákefð: hemlun (Low/Medium/High), stefnubreytingar (Low/Medium/High) og skref í löngum hlaupum eftir lengd (12–18 sek, 18–24 sek, 24+ sek). Rauðu há-ákefðar línurnar eru krefjandi endinn — lýsandi mynd af vélrænni kröfu (McBurnie 2022), ekki meiðslaspá.",
           },
         ],
       },

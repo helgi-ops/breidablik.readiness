@@ -45,6 +45,10 @@ type DailyRow = {
   velocity_band5_total_distance: number | null;
   velocity_band6_total_distance: number | null;
   ima_fr_band58_total_distance: number | null;
+  /** Config-independent tiers (DB trigger): efforts ≥18 s. Band numbers shift when the club's edges change. */
+  ima_fr_ge18_stride_count?: number | null;
+  ima_fr_ge18_total_player_load?: number | null;
+  ima_fr_ge18_total_distance?: number | null;
   total_distance: number | null;
   ima_cod_left_high: number | null;
   ima_cod_left_medium: number | null;
@@ -81,9 +85,11 @@ function rowToStrideRow(r: DailyRow): StrideRow {
     ],
     hsrDistance: (Number(r.velocity_band5_total_distance ?? 0) || 0) + (Number(r.velocity_band6_total_distance ?? 0) || 0),
     sprintDistance: r.velocity_band6_total_distance,
-    // band 5–8 = distance in long continuous runs (bouts ≥18 s), NOT high-speed
-    // running — field name `imaHsrDistance` is legacy, kept for interface stability.
-    imaHsrDistance: r.ima_fr_band58_total_distance,
+    // Runs ≥18 s from the config-independent tier (bands 5–8 under the legacy edges, 6–8 under the
+    // Nov-2026 edges) — long continuous runs, NOT high-speed running. Field name `imaHsrDistance` is legacy.
+    longRunStrides: r.ima_fr_ge18_stride_count ?? null,
+    longRunPlayerLoad: r.ima_fr_ge18_total_player_load ?? null,
+    imaHsrDistance: r.ima_fr_ge18_total_distance ?? r.ima_fr_band58_total_distance,
     totalDistance: r.total_distance,
     codLeft:
       (Number(r.ima_cod_left_high ?? 0) || 0) +
@@ -157,6 +163,9 @@ export async function loadStrideIntelligence(
         "velocity_band5_total_distance",
         "velocity_band6_total_distance",
         "ima_fr_band58_total_distance",
+        "ima_fr_ge18_stride_count",
+        "ima_fr_ge18_total_player_load",
+        "ima_fr_ge18_total_distance",
         "total_distance",
         "ima_cod_left_high",
         "ima_cod_left_medium",

@@ -19,6 +19,8 @@ import {
   findTeamMatchDates,
   getTeamIndoorMode,
   getTeamLoadTargetConfig,
+  IMA_STRIDE_TIER_COLS,
+  imaStrideTierOf,
 } from "./loadTargets";
 
 // Re-export types
@@ -101,10 +103,19 @@ type RawRow = {
   ima_cod_right_high: number | null;
   ima_cod_right_medium: number | null;
   ima_cod_right_low: number | null;
-  // High-cadence Free-Running stride bands (fast / sprint cadence)
+  // IMA Free Running per-band strides + the row's band edges (bout-DURATION bands, configurable — edges
+  // changed on 9 Nov 2026). The three stride tiles are read by run length via imaStrideTierOf
+  // (12–18 / 18–24 / ≥24 s) — sustained running, NOT sprint/high-cadence. Sprint = GPS velocity_band6.
+  ima_fr_band_bounds: Array<number | string> | null;
+  ima_fr_band1_stride_count: number | null;
+  ima_fr_band2_stride_count: number | null;
+  ima_fr_band3_stride_count: number | null;
+  ima_fr_band4_stride_count: number | null;
+  ima_fr_band5_stride_count: number | null;
   ima_fr_band6_stride_count: number | null;
   ima_fr_band7_stride_count: number | null;
   ima_fr_band8_stride_count: number | null;
+  ima_fr_ge24_stride_count: number | null;
   // Titan indoor IMU (basketball): jump + high-g impact counts, and the Movement-Profile
   // high-intensity duration (raw_payload_json.movement_profile.high).
   jumps: number | null;
@@ -147,9 +158,10 @@ function extractMetric(row: RawRow, key: WeeklyLoadMetricKey): number | null {
     case "imaAccel":          return row.ima_accel ?? row.accelerations;
     case "imaDecel":          return row.ima_decel ?? row.decelerations;
     case "imaCod":            return sumCod(row) ?? row.ima_cod ?? row.cod_events;
-    case "imaStrideBand6":    return row.ima_fr_band6_stride_count;
-    case "imaStrideBand7":    return row.ima_fr_band7_stride_count;
-    case "imaStrideBand8":    return row.ima_fr_band8_stride_count;
+    // Keys kept for stored targets; meaning is now by run length: 12–18 s / 18–24 s / ≥24 s.
+    case "imaStrideBand6":
+    case "imaStrideBand7":
+    case "imaStrideBand8":    return imaStrideTierOf(row as unknown as Record<string, unknown>, key);
     // Titan indoor IMU (basketball)
     case "jumps":             return row.jumps;
     case "impacts":           return row.impacts;
@@ -186,7 +198,7 @@ const SELECT_COLS = [
   "accelerations", "decelerations", "cod_events", "ima_cod",
   "ima_cod_left_high", "ima_cod_left_medium", "ima_cod_left_low",
   "ima_cod_right_high", "ima_cod_right_medium", "ima_cod_right_low",
-  "ima_fr_band6_stride_count", "ima_fr_band7_stride_count", "ima_fr_band8_stride_count",
+  ...IMA_STRIDE_TIER_COLS, // stride tiles by run length — need the row's band edges
   // Titan indoor IMU (basketball)
   "jumps", "impacts", "raw_payload_json",
   // Kinexon typed column promoted at ingestion (hmpd reads it before raw_payload_json).

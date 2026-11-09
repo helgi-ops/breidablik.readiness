@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
+import { sumBandsBetween } from "@/lib/integrations/catapult/freeRunningBands";
 
 export const runtime = "nodejs";
 
@@ -102,11 +103,24 @@ type DayMetrics = {
   accels: number;
   decels: number;
   max_vel_kmh: number;
-  ima_hsr: number; // band 5-8 total distance
-  band5: number;
-  band6: number;
-  band7: number;
-  band8: number;
+  // IMA Free Running bands are BOUT-DURATION bands, not speed bands (docs/ima-free-running-bands.md).
+  // Their edges change per team/date (Breiðablik from 10 Nov 2026: 0-2.5-5-8-12-18-24-30-1000), so a band
+  // number is not a fixed run length. `ima_hsr` keeps its legacy name for API stability but holds metres in
+  // LONG CONTINUOUS RUNS (efforts ≥18 s, config-independent ima_fr_ge18 tier) — NOT high-speed running.
+  // GPS high-speed/sprint = `hsr` / `sprint`.
+  ima_hsr: number; // metres in runs ≥18 s
+  /** Metres in runs of 18–24 s (ge18 − ge24). Config-independent — prefer this over band5/band6. */
+  long_18_24: number;
+  /** Metres in runs ≥24 s ("longest runs", ima_fr_ge24). Config-independent — prefer this over band7/band8. */
+  long_24_plus: number;
+  // Legacy run-length slots (names kept for API stability). Each is read by RUN LENGTH from the row's own
+  // edges (sumBandsBetween), never by band number. 18–24 s and ≥24 s are edges in every config; 21 s and 27 s
+  // are NOT edges in the Nov-2026 config, so from 10 Nov 2026 these four are 0 and the metres sit in
+  // long_18_24 / long_24_plus instead.
+  band5: number; // runs of 18–21 s (legacy edges only)
+  band6: number; // runs of 21–24 s (legacy edges only)
+  band7: number; // runs of 24–27 s (legacy edges only)
+  band8: number; // runs of 27 s+   (legacy edges only)
   ima_acc: number; // inertial accelerations
   ima_dec: number; // inertial decelerations
   cod: number;     // inertial change-of-direction events (L+R, all tiers)
@@ -139,8 +153,9 @@ export async function GET(req: NextRequest) {
         "ima_accel, ima_decel, " +
         "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
         "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
-        "ima_fr_band58_total_distance, ima_fr_band5_total_distance, ima_fr_band6_total_distance, " +
-        "ima_fr_band7_total_distance, ima_fr_band8_total_distance, jumps, players!inner(full_name, team_id)",
+        "ima_fr_band58_total_distance, ima_fr_ge18_total_distance, ima_fr_ge24_total_distance, ima_fr_band_bounds, " +
+        "ima_fr_band5_total_distance, ima_fr_band6_total_distance, ima_fr_band7_total_distance, " +
+        "ima_fr_band8_total_distance, jumps, players!inner(full_name, team_id)",
     )
     .eq("source", "catapult")
     .eq("players.team_id", ctx.teamId)
@@ -171,11 +186,13 @@ export async function GET(req: NextRequest) {
       accels: Math.round(num(r.accelerations)),
       decels: Math.round(num(r.decelerations)),
       max_vel_kmh: plausibleKmh(num(r.max_velocity)), // already km/h — do NOT ×3.6; clamp GPS glitches
-      ima_hsr: num(r.ima_fr_band58_total_distance),
-      band5: num(r.ima_fr_band5_total_distance),
-      band6: num(r.ima_fr_band6_total_distance),
-      band7: num(r.ima_fr_band7_total_distance),
-      band8: num(r.ima_fr_band8_total_distance),
+      ima_hsr: num(r.ima_fr_ge18_total_distance ?? r.ima_fr_band58_total_distance),
+      long_18_24: Math.max(0, num(r.ima_fr_ge18_total_distance ?? r.ima_fr_band58_total_distance) - num(r.ima_fr_ge24_total_distance)),
+      long_24_plus: num(r.ima_fr_ge24_total_distance),
+      band5: num(sumBandsBetween(r, "total_distance", 18, 21)),
+      band6: num(sumBandsBetween(r, "total_distance", 21, 24)),
+      band7: num(sumBandsBetween(r, "total_distance", 24, 27)),
+      band8: num(sumBandsBetween(r, "total_distance", 27)),
       ima_acc: Math.round(num(r.ima_accel)),
       ima_dec: Math.round(num(r.ima_decel)),
       cod: Math.round(
@@ -201,6 +218,8 @@ export async function GET(req: NextRequest) {
         decels: sum("decels"),
         max_vel_kmh: Math.round(Math.max(0, ...days.map((d) => d.max_vel_kmh)) * 10) / 10,
         ima_hsr: Math.round(sum("ima_hsr")),
+        long_18_24: Math.round(sum("long_18_24")),
+        long_24_plus: Math.round(sum("long_24_plus")),
         band5: Math.round(sum("band5")),
         band6: Math.round(sum("band6")),
         band7: Math.round(sum("band7")),
@@ -224,7 +243,8 @@ export async function GET(req: NextRequest) {
     { key: "sprint", labelIs: "Sprettur", labelEn: "Sprint", unit: "m", get: (p) => p.agg.sprint },
     { key: "maxvel", labelIs: "Hámarkshraði", labelEn: "Top speed", unit: "km/klst", get: (p) => p.agg.max_vel_kmh },
     { key: "mech", labelIs: "Hröðun+hemlun", labelEn: "Accel+decel", unit: "n", get: (p) => p.agg.accels + p.agg.decels },
-    { key: "ima", labelIs: "IMA háákefð", labelEn: "IMA HSR", unit: "m", get: (p) => p.agg.ima_hsr },
+    // "ima" axis = distance in long continuous runs (≥18 s, ima_fr_ge18 tier) — not high-speed.
+    { key: "ima", labelIs: "Löng samfelld hlaup", labelEn: "Long continuous runs", unit: "m", get: (p) => p.agg.ima_hsr },
   ];
   const pct = (val: number, all: number[]): number | null => {
     const xs = all.filter((v) => Number.isFinite(v));

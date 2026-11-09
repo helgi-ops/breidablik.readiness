@@ -9,9 +9,10 @@
  * biomechanically?"
  *
  * Built on Catapult IMA Free Running 8-band stride distribution. The 8
- * bands are BOUT-DURATION bands (seconds of one continuous run: 0–8–12–15–
- * 18–21–24–27 s), NOT speed or cadence bands — so bands 5–8 = long
- * continuous runs (≥18 s), never sprinting / high-speed running
+ * bands are BOUT-DURATION bands (seconds of one continuous run; edges are
+ * set in OpenField — legacy 0–8–12–15–18–21–24–27 s, from 10 Nov 2026
+ * 0–2.5–5–8–12–18–24–30 s), NOT speed or cadence bands. Runs ≥18 s
+ * (ima_fr_ge18) = long continuous runs, never sprinting / high-speed running
  * (docs/ima-free-running-bands.md). Powered by the deterministic loader in
  * lib/micropulse/imaDayProfile/. The page is a session-review surface —
  * coach opens it after training to see whether the planned running mix
@@ -74,14 +75,14 @@ const I18N = {
   tierMedium: { EN: "Medium", IS: "Mið" },
   tierHigh: { EN: "High (injury-relevant)", IS: "Há (meiðsla-tengd)" },
   bandDistribution: { EN: "Run-length mix (team)", IS: "Hlaupalengd — dreifing (lið)" },
-  lowBand: { EN: "Short bursts (<15 s)", IS: "Stutt hlaup (<15 sek)" },
-  midBand: { EN: "Medium runs (15–24 s)", IS: "Miðlungs hlaup (15–24 sek)" },
+  lowBand: { EN: "Short bursts (<12 s)", IS: "Stutt hlaup (<12 sek)" },
+  midBand: { EN: "Medium runs (12–24 s)", IS: "Miðlungs hlaup (12–24 sek)" },
   highBand: { EN: "Longest runs (≥24 s)", IS: "Lengstu hlaup (≥24 sek)" },
   perPlayer: { EN: "Per-player breakdown", IS: "Sundurliðun per leikmann" },
   colPlayer: { EN: "Player", IS: "Leikmaður" },
   colTotal: { EN: "Total", IS: "Heild" },
-  colLow: { EN: "Short <15 s", IS: "Stutt <15 s" },
-  colMid: { EN: "Medium 15–24 s", IS: "Miðl. 15–24 s" },
+  colLow: { EN: "Short <12 s", IS: "Stutt <12 s" },
+  colMid: { EN: "Medium 12–24 s", IS: "Miðl. 12–24 s" },
   colHigh: { EN: "Longest ≥24 s", IS: "Lengst ≥24 s" },
   colSprint: { EN: "Long runs (18 s+)", IS: "Löng hlaup (18 s+)" },
   colSprintVsBaseline: { EN: "vs baseline", IS: "vs grunnlína" },
@@ -94,12 +95,12 @@ const I18N = {
   openInDecel: { EN: "Decel Intelligence →", IS: "Decel Intelligence →" },
   howToRead: { EN: "How to read this", IS: "Hvernig á að lesa þetta" },
   legend1: {
-    EN: "IMA Free Running puts each continuous run into one of 8 bands by HOW LONG it lasted (0–8 / 8–12 / 12–15 / 15–18 / 18–21 / 21–24 / 24–27 / 27+ seconds) — not by speed. MicroPulse groups them as short bursts (bands 1–3, under 15 s), medium runs (4–6, 15–24 s) and longest runs (7–8, 24 s or more). Bands 5–8 together = long continuous runs (18 s or more): tempo, conditioning or long recovery runs. This is NOT sprinting — sprint and high-speed running come from GPS speed, not from these bands.",
-    IS: "IMA Free Running setur hvert samfellt hlaup í eitt af 8 böndum eftir því HVE LENGI það stóð (0–8 / 8–12 / 12–15 / 15–18 / 18–21 / 21–24 / 24–27 / 27+ sekúndur) — ekki eftir hraða. MicroPulse flokkar þau sem stutt hlaup (bönd 1–3, undir 15 sek), miðlungs hlaup (4–6, 15–24 sek) og lengstu hlaup (7–8, 24 sek eða lengur). Bönd 5–8 saman = löng samfelld hlaup (18 sek eða lengri): tempó-, úthalds- eða löng endurheimtarhlaup. Þetta eru EKKI sprettir — sprettir og hraðhlaup koma úr GPS-hraða, ekki úr þessum böndum.",
+    EN: "IMA Free Running puts each continuous run into one of 8 bands by HOW LONG it lasted — not by speed. The band edges are set in OpenField and changed on 9 Nov 2026 (now 0–2.5–5–8–12–18–24–30 s), so MicroPulse reads each session with the edges it was recorded with and groups runs by length: short bursts (under 12 s), medium runs (12–24 s) and longest runs (24 s or more). Long continuous runs = 18 s or more: tempo, conditioning or long recovery runs. This is NOT sprinting — sprint and high-speed running come from GPS speed, not from run length.",
+    IS: "IMA Free Running setur hvert samfellt hlaup í eitt af 8 böndum eftir því HVE LENGI það stóð — ekki eftir hraða. Mörk bandanna eru stillt í OpenField og var breytt 9. nóv 2026 (nú 0–2,5–5–8–12–18–24–30 sek), svo MicroPulse les hverja æfingu með þeim mörkum sem giltu þá og flokkar hlaup eftir lengd: stutt hlaup (undir 12 sek), miðlungs hlaup (12–24 sek) og lengstu hlaup (24 sek eða lengur). Löng samfelld hlaup = 18 sek eða lengri: tempó-, úthalds- eða löng endurheimtarhlaup. Þetta eru EKKI sprettir — sprettir og hraðhlaup koma úr GPS-hraða, ekki úr hlaupalengd.",
   },
   legend2: {
-    EN: "vs baseline compares today's strides in long continuous runs (bands 5–8, 18 s+) to the player's 14-day training-only average (matches excluded). 100% = typical day. < 70% = light. > 150% = much more sustained running than usual, monitor recovery.",
-    IS: "vs grunnlína ber skref dagsins í löngum samfelldum hlaupum (bönd 5–8, 18 sek+) saman við 14-daga æfinga-grunnlínu (leikir undanskildir). 100% = típískur dagur. < 70% = léttur. > 150% = mun meira samfellt hlaup en venjulega, fylgjast með endurheimt.",
+    EN: "vs baseline compares today's strides in long continuous runs (18 s+) to the player's 14-day training-only average (matches excluded). 100% = typical day. < 70% = light. > 150% = much more sustained running than usual, monitor recovery.",
+    IS: "vs grunnlína ber skref dagsins í löngum samfelldum hlaupum (18 sek+) saman við 14-daga æfinga-grunnlínu (leikir undanskildir). 100% = típískur dagur. < 70% = léttur. > 150% = mun meira samfellt hlaup en venjulega, fylgjast með endurheimt.",
   },
   legend3: {
     EN: "CoD asymmetry > 15% on high-intensity Change-of-Direction events is a commonly-flagged imbalance associated with injury risk — a risk factor, not a validated predictor (the Bishop evidence is mainly single-leg-jump asymmetry). Flagged when total CoD ≥ 10 efforts.",
@@ -132,8 +133,8 @@ function todayIso(): string {
 // already loaded in `profile`. The buried insight on this page is an acute
 // movement spike vs a player's own training norm — surface it at the top.
 // Spike threshold matches the existing rose row colouring (>= 150% of the
-// 14-day training-only baseline of long-run strides — IMA FR bands 5–8, runs
-// ≥18 s; the field is still called `sprint_vs_baseline_pct` but it is NOT sprint).
+// 14-day training-only baseline of long-run strides — IMA FR efforts
+// ≥18 s (ima_fr_ge18); the field is still called `sprint_vs_baseline_pct` but it is NOT sprint).
 type ImaVerdict = {
   tone: "good" | "watch" | "concern" | "neutral";
   sentence: { EN: string; IS: string };
@@ -204,10 +205,10 @@ function computeImaVerdict(profile: ImaSessionProfile): ImaVerdict {
       },
       tone: "concern" as const,
       tip: {
-        EN: `Strides in long continuous runs (18 s or more; IMA Free Running bands 5–8) at ${Math.round(
+        EN: `Strides in long continuous runs (18 s or more, by IMA Free Running run length) at ${Math.round(
           p.sprint_vs_baseline_pct ?? 0,
         )}% of his 14-day training-only baseline — a sharp jump in sustained running, not sprinting. Phase extra tempo/conditioning running in rather than spiking it (load-change framing Gabbett 2016; per-player norms Buchheit 2014).`,
-        IS: `Skref í löngum samfelldum hlaupum (18 sek+; IMA Free Running bönd 5–8) ${Math.round(
+        IS: `Skref í löngum samfelldum hlaupum (18 sek+, eftir lengd hlaups í IMA Free Running) ${Math.round(
           p.sprint_vs_baseline_pct ?? 0,
         )}% af 14-daga æfinga-grunnlínu — snarpt stökk í samfelldu hlaupi, ekki sprettum. Innleiddu auka tempó-/úthaldshlaup smám saman frekar en í einu stökki (álagsbreyting Gabbett 2016; persónulegar norm Buchheit 2014).`,
       },
@@ -455,7 +456,7 @@ export default function ImaIntelligencePage() {
 }
 
 // ── Long runs (bouts ≥18 s) — the Free Running bands read as time bands ───
-// IMA Free Running bands 5–8 are BOUT-DURATION bands (B5 18–21 s … B8 27 s+), NOT speed — so the card shows,
+// IMA Free Running bands are BOUT-DURATION bands (edges per row: ima_fr_band_bounds), NOT speed — so the card shows,
 // per band, the four variables OpenField reports side by side: runs (Event Count), time (Total Duration),
 // distance (Total Distance, GPS only) and strides (Stride Count). Runs and time come from the inertial sensor and
 // read indoors too. The ACWR on long-run distance is a sustained-running volume-change descriptor (Gabbett
@@ -474,7 +475,7 @@ const fmtMinSec = (s: number | null) => (s == null ? "—" : `${Math.floor(Math.
 const fmtS = (s: number | null) => (s == null ? "—" : `${Math.round(s)} s`);
 const fmtStride = (m: number | null, is: boolean) => (m == null ? "—" : m.toFixed(2).replace(".", is ? "," : "."));
 
-/** Runs · time · avg run · distance · strides · m/stride for bands 5–8, plus the "all long runs" line. */
+/** Runs · time · avg run · distance · strides · m/stride per long-run band (≥18 s, labelled from each band's own edges), plus the "all long runs" line. */
 function LongRunBandTable({ bands, lang, compact = false }: { bands: LongRunBand[]; lang: Lang; compact?: boolean }) {
   const is = lang === "IS";
   const tot = longRunBandsTotal(bands);
@@ -502,7 +503,7 @@ function LongRunBandTable({ bands, lang, compact = false }: { bands: LongRunBand
         <tbody>
           {bands.map((b) => (
             <tr key={b.band} className="border-b border-slate-100">
-              <td className={`${cell} text-slate-700`} title={`IMA Free Running band ${b.band}`}>{freeRunningBandLabel(b.band, is ? "is" : "en")}</td>
+              <td className={`${cell} text-slate-700`} title={`IMA Free Running band ${b.band}`}>{freeRunningBandLabel(1, is ? "is" : "en", b.boundsS)}</td>
               <td className={`${cell} text-right tabular-nums`}>{fmtInt(b.bouts, is)}</td>
               <td className={`${cell} text-right tabular-nums text-slate-600`}>{fmtMinSec(b.seconds)}</td>
               <td className={`${cell} text-right tabular-nums ${outside(b) ? "text-amber-700" : "text-slate-600"}`}>{fmtS(b.meanBoutS)}</td>
@@ -629,8 +630,8 @@ function LongRunsCard({ date, lang }: { date: string; lang: Lang }) {
           >
             <div className="mb-2 text-[11px] text-slate-500">
               {is
-                ? "Smelltu á leikmann til að sjá böndin hans. Viðmið = miðgildi eigin næstum-heilla leikja (≥80 mín; liðsins ef þeir eru færri en 3). Skref/leik = skreflengd í löngum hlaupum á GPS-æfingum síðustu 8 vikna sem hlutfall af eigin leik; þarf 50+ skref. ACWR = bráð (7 d) ÷ langvinn (28 d) vegalengd í löngum hlaupum: breyting á magni samfellds hlaups, ekki sprett- eða HSR-álag og ekki meiðslaspá (Gabbett 2016; Impellizzeri 2020). Lýsandi, aldrei readiness-liturinn."
-                : "Click a player to see his bands. Reference = median of the player's own near-full matches (≥80 min; the team's when fewer than 3). Stride vs match = stride length in long runs on GPS training days of the last 8 weeks as a share of his own match; needs 50+ strides. ACWR = acute (7 d) ÷ chronic (28 d) long-run distance: a change in sustained-running volume, not sprint or HSR load and not an injury predictor (Gabbett 2016; Impellizzeri 2020). Descriptive, never the readiness colour."}
+                ? "Smelltu á leikmann til að sjá böndin hans. Viðmið = miðgildi eigin næstum-heilla leikja (≥80 mín; liðsins ef þeir eru færri en 3). Skref/leik = skreflengd í löngum hlaupum á GPS-æfingum síðustu 8 vikna sem hlutfall af eigin leik; þarf 50+ skref. ACWR = bráð (7 d) ÷ langvinn (28 d) vegalengd í löngum hlaupum: breyting á magni samfellds hlaups, ekki sprett- eða HSR-álag og ekki meiðslaspá (Gabbett 2016; Impellizzeri 2020). Lýsandi, aldrei readiness-liturinn. Heimild: Catapult (nóv. 2026): Free Running-bönd eru lengd hvers hlaups í sekúndum, ekki hraði."
+                : "Click a player to see his bands. Reference = median of the player's own near-full matches (≥80 min; the team's when fewer than 3). Stride vs match = stride length in long runs on GPS training days of the last 8 weeks as a share of his own match; needs 50+ strides. ACWR = acute (7 d) ÷ chronic (28 d) long-run distance: a change in sustained-running volume, not sprint or HSR load and not an injury predictor (Gabbett 2016; Impellizzeri 2020). Descriptive, never the readiness colour. Source: Catapult (Nov 2026): Free Running bands are the length of each run in seconds, not speed."}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -862,8 +863,8 @@ function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
                     <div>
                       {isIS ? "Aðferð: " : "Method: "}
                       {isIS
-                        ? "vegalengd ÷ skref í löngum samfelldum hlaupum (IMA Free Running bönd 5–8 = hlaup 18 sek+; bönd eftir lengd hlaups, ekki hraða)."
-                        : "distance ÷ strides in long continuous runs (IMA Free Running bands 5–8 = runs of 18 s+; bands are run length, not speed)."}
+                        ? "vegalengd ÷ skref í löngum samfelldum hlaupum (hlaup 18 sek+ í IMA Free Running; flokkað eftir lengd hlaups, ekki hraða)."
+                        : "distance ÷ strides in long continuous runs (IMA Free Running runs of 18 s+; grouped by run length, not speed)."}
                     </div>
                     {r.normM != null && lowBound != null && highBound != null && (
                       <div>

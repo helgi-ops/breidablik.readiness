@@ -21,7 +21,7 @@ import { VERDICT_KINDS, type StrideResult } from "@/lib/micropulse/strideLength"
 import DPrimeSprintCostBlock from "@/components/coach/DPrimeSprintCostBlock";
 import type { CriticalSpeedRead, CsCombinedResult, CsTestRead, AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
 import { ProfileRadar, MatchTrendBars, ChartZoom, FormSummary, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
-import { computeForm } from "@/lib/micropulse/playerGameReport";
+import { computeForm, IMA_RUN_LENGTH_SPLIT } from "@/lib/micropulse/playerGameReport";
 
 type P90 = {
   total_distance: number; hsr: number; sprint: number; player_load: number;
@@ -228,17 +228,17 @@ function FootballGameReport() {
       { key: "accel", label: "Acc", fmt: f1 },
       { key: "decel", label: "Dec", fmt: f1 },
     ];
-    // Driver = inertial movement events + high-intensity running broken into
-    // stride-rate bands B5-B8 (the IMA analogue of GPS V5/V6).
+    // Driver = inertial movement events + continuous runs split by run length
+    // (IMA_RUN_LENGTH_SPLIT: ima_hir5..8 = runs <12 / 12–18 / 18–24 / ≥24 s, grouped from each row's own
+    // band edges — bout-duration, NOT speed; not an analogue of GPS V5/V6). Legacy keys ima_hir5..8 kept.
+    const runLenShort = (x: (typeof IMA_RUN_LENGTH_SPLIT)[number]) =>
+      x.loS === 0 ? `<${x.hiS}s` : Number.isFinite(x.hiS) ? `${x.loS}–${x.hiS}s` : `≥${x.loS}s`;
     const driverCfg: Cfg[] = [
       { key: "ima_acc", label: "Acc", fmt: f1 },
       { key: "ima_dec", label: "Dec", fmt: f1 },
       { key: "cod", label: "CoD", fmt: f1 },
       { key: "jumps", label: IS ? "Stökk" : "Jumps", fmt: f1 },
-      { key: "ima_hir5", label: "B5", fmt: n0 },
-      { key: "ima_hir6", label: "B6", fmt: n0 },
-      { key: "ima_hir7", label: "B7", fmt: n0 },
-      { key: "ima_hir8", label: "B8", fmt: n0 },
+      ...IMA_RUN_LENGTH_SPLIT.map((x) => ({ key: x.key, label: runLenShort(x), fmt: n0 })),
     ];
     const buildRadar = (cfg: Cfg[]): RadarMetric[] => cfg
       .filter((c) => !avail || avail.has(c.key))
@@ -512,7 +512,7 @@ function FootballGameReport() {
                             <li><b>Dec</b> — {IS ? "kröftug hemlun: hversu oft hann hemlar snöggt — hemlunar-álagið sem jafnt hlaup felur." : "hard decelerations: how often he brakes sharply — the braking load steady running hides."}</li>
                             <li><b>CoD</b> — {IS ? "stefnubreytingar: beygjur og snúningar. Liprari, meira snúnings-leikur sést hér." : "changes of direction: cuts and turns. A more agile, twisty game shows here."}</li>
                             <li><b>{IS ? "Stökk" : "Jumps"}</b> — {IS ? "stökk: frákast og lending (skallar, návígi)." : "jumps: take-offs and landings (headers, aerial duels)."}</li>
-                            <li><b>B5–B8</b> — {IS ? "skref-tíðni bönd: háákefðar hlaup skipt eftir styrk (B8 = sprett-tíðni) — IMA-mæling á hröðu hlaupi, eins og GPS hraða-svæði." : "stride-rate bands: high-cadence running split by intensity (B8 = sprint-cadence) — the IMA read on fast running, like GPS speed zones."}</li>
+                            <li><b>{"<12s … ≥24s"}</b> — {IS ? "samfelld hlaup, metrar skipt eftir lengd hlaups (<12, 12–18, 18–24 og 24+ sek; löng hlaup = 18 sek eða lengri). Mælir hve lengi hann hljóp í einu, ekki hraða — þetta eru ekki sprettir (sprettir koma úr GPS)." : "continuous runs, metres split by how long each run lasted (<12, 12–18, 18–24 and 24+ s; long runs = 18 s or more). It measures how long he kept running, not speed — this is not sprinting (sprints come from GPS)."}</li>
                           </ul>
                           <p className="mt-1.5 text-[10px] text-slate-400">{IS ? "Miðað við liðið. McBurnie 2022, Buchheit 2014." : "Compared to the squad. McBurnie 2022, Buchheit 2014."}</p>
                         </details>
@@ -646,7 +646,7 @@ function FootballGameReport() {
               </div>
 
               <div className="mt-4 border-t border-slate-200 pt-2 text-[9px] text-slate-400">
-                MicroPulse · micropulse.is · GPS = Catapult · IMA = inertial movement (accel/decel, change-of-direction, jumps) · {IS ? "per-90 = stillt á 90 mín" : "per-90 = normalised to 90 min"}
+                MicroPulse · micropulse.is · GPS = Catapult · IMA = inertial movement (accel/decel, change-of-direction, jumps, long continuous runs ≥18 s) · {IS ? "per-90 = stillt á 90 mín" : "per-90 = normalised to 90 min"}
               </div>
             </>
           )}

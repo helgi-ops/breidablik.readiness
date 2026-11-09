@@ -181,7 +181,7 @@ You will receive a JSON object with:
    from the relevant metric.
 
 6. Final sentence (only if needed): one concrete action — "spread high-intensity
-   work across more sessions", "add accel/sprint coupling drills", "monitor
+   work across more sessions", "pair braking work with accelerations", "monitor
    for the rest of the week".
 
 7. NEVER cite a number that is not in the input value_text or coach_phrase.

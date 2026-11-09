@@ -148,7 +148,7 @@ describe("buildTransferDossier", () => {
     expect(clockSec.tables[0].rows[0][0]).toBe("forward");
     expect(clockSec.pdfBreakBefore).toBe(true);
     expect(d.imaClock!.find((c) => c.dir === "12")!.label).toBe("forward");
-    expect(ima.facts.some((f) => f.en.includes("Free Running strides"))).toBe(true);
+    expect(ima.facts.some((f) => f.en.includes("Strides in long continuous runs of 18 s or more"))).toBe(true);
     // all five detail sections page-break in the PDF
     expect([gps, gpsGame, ima, imaGame, clockSec].every((s) => s.pdfBreakBefore)).toBe(true);
   });

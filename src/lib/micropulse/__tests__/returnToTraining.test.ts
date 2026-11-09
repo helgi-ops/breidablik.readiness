@@ -63,7 +63,7 @@ test("targets never exceed the healthy ceiling and locked qualities hold", () =>
 });
 
 test("injuryRiskProfile maps tissue → key re-injury qualities (incl. high-intensity braking)", () => {
-  assert.deepEqual(new Set(injuryRiskProfile(["hamstring"]).riskQualities), new Set(["hsr", "sprint", "strideTop", "decel", "decelHigh"]));
+  assert.deepEqual(new Set(injuryRiskProfile(["hamstring"]).riskQualities), new Set(["hsr", "sprint", "decel", "decelHigh"]));
   const head = injuryRiskProfile(["Concussion"]);
   assert.equal(head.category, "head");
   assert.equal(head.riskQualities.length, 0);

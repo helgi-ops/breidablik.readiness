@@ -16,7 +16,8 @@ import { downloadKsiReportPdf, type KsiPdfPlayer } from "@/components/coach/KsiR
 type Day = {
   date: string; duration_min: number; total_distance: number; hsr: number; sprint: number;
   player_load: number; accels: number; decels: number; max_vel_kmh: number;
-  ima_hsr: number; band5: number; band6: number; band7: number; band8: number;
+  // band5–8 are legacy slots (0 for sessions from 10 Nov 2026) — use long_18_24 / long_24_plus.
+  ima_hsr: number; long_18_24: number; long_24_plus: number; band5: number; band6: number; band7: number; band8: number;
   ima_acc: number; ima_dec: number; cod: number; jumps: number;
 };
 type Agg = Omit<Day, "date" | "duration_min" | "cod"> & { cod: number };
@@ -252,11 +253,12 @@ export default function KsiReportPage() {
     player: IS ? "Leikmaður" : "Player", sess: IS ? "Lotur" : "Sess",
     dist: IS ? "Vegalengd (km)" : "Dist (km)", hsr: "HSR (m)", sprint: IS ? "Sprettur (m)" : "Sprint (m)",
     acc: "Acc", dec: "Dec", pl: IS ? "Álag (PL)" : "Load (PL)",
-    ima: IS ? "IMA háákefð (m)" : "IMA HSR (m)",
+    // ima_hsr = metres in long continuous runs (IMA FR efforts ≥18 s, ima_fr_ge18) — NOT high-speed.
+    ima: IS ? "Löng hlaup ≥18 sek (m)" : "Long runs ≥18 s (m)",
     imaAcc: "IMA Acc", imaDec: "IMA Dec", cod: "IMA CoD", jumps: "IMA Jumps",
     perPlayer: IS ? "Sundurliðun per leikmann" : "Per-player breakdown",
     date: IS ? "Dags." : "Date", min: IS ? "Mín" : "Min", noData: IS ? "Engin GPS/IMA gögn á tímabilinu" : "No GPS/IMA data in this window",
-    bands: IS ? "IMA bönd 5·6·7·8 (m)" : "IMA bands 5·6·7·8 (m)",
+    bands: IS ? "Löng hlaup 18–24 sek · 24 sek+ (m)" : "Long runs 18–24 s · 24 s+ (m)",
     injuries: IS ? "Meiðsli / þættir að vita af" : "Injuries / factors to be aware of",
     program: IS ? "Einstaklings styrktar-/fyrirbyggjandi prógram" : "Individual strength / prevention programme",
     save: IS ? "Vista" : "Save", saving: IS ? "Vista…" : "Saving…", saved: IS ? "✓ Vistað" : "✓ Saved",
@@ -428,7 +430,7 @@ export default function KsiReportPage() {
               <div className="mb-1 flex items-baseline justify-between">
                 <div className="text-sm font-bold text-slate-900">{p.full_name}</div>
                 <div className="text-[11px] text-slate-500">
-                  {p.sessions} {t.sess.toLowerCase()} · {p.matches ?? 0} {t.matches} · {p.matchMinutes ?? 0} {t.minutes} · {km(p.agg.total_distance)} km · {t.bands}: {n0(p.agg.band5)}·{n0(p.agg.band6)}·{n0(p.agg.band7)}·{n0(p.agg.band8)}
+                  {p.sessions} {t.sess.toLowerCase()} · {p.matches ?? 0} {t.matches} · {p.matchMinutes ?? 0} {t.minutes} · {km(p.agg.total_distance)} km · {t.bands}: {n0(p.agg.long_18_24)} · {n0(p.agg.long_24_plus)}
                 </div>
               </div>
 
@@ -589,7 +591,7 @@ export default function KsiReportPage() {
           ))}
 
           <div className="mt-4 border-t border-slate-200 pt-2 text-[9px] text-slate-400">
-            MicroPulse · micropulse.is · GPS = Catapult velocity bands · IMA = Free Running band 5-8 (high-cadence running)
+            MicroPulse · micropulse.is · GPS = Catapult velocity bands · Long runs = IMA Free Running efforts ≥18 s (continuous runs — not sprinting)
           </div>
         </div>
       )}

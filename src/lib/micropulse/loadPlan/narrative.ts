@@ -111,7 +111,7 @@ export function buildLoadPlanNarrative(plan: NarrativePlan, checkedIn: number | 
   if (td?.target != null) bits.push(`~${fmt(td.target)} m total distance per player${td.pctOfMatch != null ? ` (${td.pctOfMatch}% of a match's ${fmt(td.matchRef)} m)` : ""}`);
   if (hsr?.target != null) bits.push(`~${fmt(hsr.target)} m high-speed running`);
   if (pl?.target != null) bits.push(`~${fmt(pl.target)} Player Load`);
-  if (ima?.target != null) bits.push(`~${fmt(ima.target)} m IMA high-intensity distance`);
+  if (ima?.target != null) bits.push(`~${fmt(ima.target)} m long-run distance (continuous runs ≥18 s)`);
   if (bits.length) narrative.push(`Per-player targets: ${bits.join(", ")}.${micro ? ` The match reference is the squad's average on its ${plan.matchDaysUsed} highest-load days.` : ""}`);
 
   // 3b) Expected internal load (session-RPE).

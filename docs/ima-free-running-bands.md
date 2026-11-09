@@ -2,6 +2,14 @@
 
 **Verdict:** the 8 IMA Free Running bands are **bout-duration bands (seconds of continuous running)**, not speed or cadence bands. That means bands 5–8 are long continuous runs of 18 s or more, not sprints.
 
+## Confirmed by Catapult (Nov 2026)
+
+Catapult support confirmed the following in writing. IMA Free Running (also called "Cadence") is a detection algorithm that looks for a consistent time between peaks in PlayerLoad. Running efforts are then broken down into **effort-length bands in terms of duration (seconds)**. Their example: "x free running efforts less than 2.5 s (band 1)".
+
+According to Catapult's support guide, cadence is computed from the vertical accelerometer as strides per minute. A frequency analysis finds the largest peaks, and the time between them is converted to cadence. The guide lists these outputs: number of events, time (s and %) spent free running, average stride rate, and event count across time intervals ("whether the free running events are generally short or longer in duration").
+
+The guide says strides/sec, but our data (~84–93) shows stride rate is returned in strides per **minute**.
+
 ## Evidence
 
 The evidence comes from the probe at `/api/integrations/catapult/debug-peak-period?date=2026-10-24&fr=1`, which covered 15 athletes. Breiðablik's OpenField thresholds are 0–8–12–15–18–21–24–27–100. Dividing time in each band by the number of bouts gives the mean bout length, and for one athlete it lands inside every band's bounds:
@@ -100,3 +108,40 @@ exists indoors too; the distance ratio on the Long runs card does not.
   refreshed on the corrected view the z-score mixes scales. The tooltip's "0.5 Hz" rule was dropped from the text.
 - **Other organisations:** they may have set up the bands differently in OpenField. Check
   `bandsAreTimeBands` / `deriveFreeRunningBands().boutLengthConsistent` before trusting the labels for a new club.
+
+## Band edges change: config per team and date (9 Nov 2026)
+
+On Catapult's advice, Breiðablik changed its OpenField IMA Free Running edges on 9 Nov 2026:
+
+- **Before:** 0-8-12-15-18-21-24-27-100 s.
+- **After:** 0-2.5-5-8-12-18-24-30-1000 s. The bottom bands match Catapult's default 0-2.5 / 2.5-5 / 5+.
+
+Catapult classifies bands **at processing time**. A stats query for 24 Oct, run after the change, still returned the old bands. That means the band number means different run lengths before and after the change.
+
+How MicroPulse handles it:
+
+- **`team_fr_band_config`** stores the edges per team with an `effective_from` date. Breiðablik's legacy edges apply from 2026-01-01 and the new ones from 2026-11-10. Teams without a row (HK, demos) get the legacy edges.
+- **`player_external_load_daily.ima_fr_band_bounds`** holds the edges each row was classified with.
+- **Tier columns `ima_fr_ge18_*` and `ima_fr_ge24_*`** count efforts of ≥18 s and ≥24 s. They are config-independent because 18 s and 24 s are edges in both configs. They are filled for all history.
+- **`ima_fr_band58_total_distance`** still means "metres in runs ≥18 s".
+- **Trigger `trg_ima_fr_fill_tiers`** stamps the bounds and computes the tiers on every write, whether from sync, CSV, manual entry or seeds.
+
+The edges common to both configs are 0, 8, 12, 18 and 24 s, so readers use run-length ranges built from those:
+
+| Range | Use |
+|---|---|
+| < 12 s | short bursts |
+| 12–24 s | medium runs |
+| ≥ 18 s | long runs |
+| ≥ 24 s | longest runs |
+
+Per-band readers go through `boundsOfRow`, `bandsBetween` and `sumBandsBetween` in `freeRunningBands.ts`. They never sum a band number across rows that were classified with different edges.
+
+Re-check these after a few weeks of new data:
+
+- the weekly-load stride tiles (now 12–18 / 18–24 / ≥24 s), their planned-volume exponents and their re-entry floors;
+- the "tactical day" cut-off on IMA day profiles (short runs are now < 12 s);
+- the GPS–IMA mix baseline (now ≥18 s, previously ≥15 s);
+- any targets coaches entered by hand on the stride tiles.
+
+If OpenField can reprocess older sessions with the new edges, a fresh backfill would make the whole season use one config. If so, update `team_fr_band_config` to match.

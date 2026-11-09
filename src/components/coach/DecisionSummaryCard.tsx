@@ -167,33 +167,44 @@ export type DecisionSummaryRow = {
   _sprint_today_kmh?: number | null;
   /** Personal-peak reference in km/h, for chip display. */
   _sprint_ref_kmh?: number | null;
-  /** Sprint Exposure band (Malone 2018) — weekly bands 5-8 stride volume
-   *  vs match-day demand baseline. Volume-side companion to Sprint Speed
-   *  Drop (which is quality-side).
-   *    UNDERLOAD  (< 50%)   → under-prepared (moderate exposure is protective; Malone 2017)
-   *    WATCH      (50–80%)  → playable but undertrained
-   *    SAFE       (80–130%) → familiar range
-   *    OVERLOAD   (> 150%)  → accumulated spike
+  /** Sprint Exposure band — GPS sprint distance in training over the last
+   *  7 days vs the player's average sprint distance per match (28 days).
+   *  Volume-side companion to Sprint Speed Drop (which is quality-side).
+   *  Source: lib/micropulse/sprintExposure (GPS `sprint_distance`, else
+   *  velocity band 6). It used to be IMA Free Running bands 5–8 strides —
+   *  those are long continuous runs (≥18 s), not sprinting — so the chip only
+   *  renders when `_sprint_exposure_source === "gps"` (see below).
+   *    UNDERLOAD  (< 50%)    → under-prepared (moderate exposure is protective; Malone 2017)
+   *    WATCH      (50–80%)   → playable but light
+   *    SAFE       (80–180%)  → normal football week
+   *    OVERLOAD   (> 180%)   → accumulated spike
    *  Surfaced as a chip in the Decision Summary card and gated into the
    *  "Needs attention" filter. Informational — does NOT modify today's
    *  verdict (Buchheit 2019: chronic-risk signals should inform, not
    *  override, acute decisions). */
   _sprint_exposure_band?: "UNDERLOAD" | "WATCH" | "SAFE" | "OVERLOAD" | "INSUFFICIENT_DATA" | null;
-  /** Exposure ratio (acuteSum7d ÷ matchDayDemand). 1.0 = matches demand. */
+  /** Exposure ratio (acuteSum7d ÷ matchDayDemand). 1.0 = one match's worth. */
   _sprint_exposure_ratio?: number | null;
-  /** Number of match days in the baseline (measured + GPS-estimated combined). */
+  /** Number of match days in the baseline. */
   _sprint_exposure_match_days?: number | null;
-  /** Subset of match days whose stride count came from real Catapult IMA
-   *  Free Running data (post-fix activities, post 2026-05-08 in Breiðablik). */
+  /** Legacy (IMA era): match days with real IMA data. Unused for GPS. */
   _sprint_exposure_match_days_measured?: number | null;
-  /** Subset of match days where the stride count was estimated from GPS V5+V6
-   *  sprint efforts using the player's own match-derived ratio. Older Catapult
-   *  activities can't be re-processed, so we estimate from GPS — same unit. */
+  /** Legacy (IMA era): match days estimated from GPS efforts. Always 0 for
+   *  the GPS-sourced payload. */
   _sprint_exposure_match_days_estimated?: number | null;
   /** Total match days on the team schedule in the 28-day window — used for
    *  the "5 scheduled, 3 captured" transparency line when matches were DNP /
    *  data gaps. Populated by the bulk fetch on dev-coach-dashboard. */
   _sprint_exposure_match_days_scheduled?: number | null;
+  /** NEW (Nov 2026): what the sprint-exposure numbers were computed from.
+   *  Set to "gps" when the populating code uses GPS sprint distance (e.g. the
+   *  payload's `metric === "gps_sprint_distance_m"`). The chip and the
+   *  needs-attention rule IGNORE the band unless this is "gps", so a caller
+   *  still feeding IMA band 5–8 strides can't present long-run volume as
+   *  sprinting. */
+  _sprint_exposure_source?: "gps" | null;
+  /** NEW: training days in the last 7 with no GPS (indoor) — "no sprint reading". */
+  _sprint_exposure_no_gps_days_7d?: number | null;
   /** Fatigue type hint: "normal" | "mechanical_fatigue" | "metabolic_fatigue" | "global_fatigue". */
   _today_fatigue_type?: string | null;
   /** PlayerLoad spike today vs 28d baseline (raw ratio, ~0–3). */
@@ -2926,9 +2937,12 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
         })()}
 
         {/* Sprint Exposure chip — Malone 2017 volume-side companion to the
-            Sprint Speed Drop chip above. UNDERLOAD (< 50% of match demand)
-            leaves players under-prepared (moderate exposure is protective);
-            OVERLOAD (> 150%) is an accumulated spike. Render only when:
+            Sprint Speed Drop chip above. GPS sprint distance in training (7d)
+            vs his average per match. UNDERLOAD (< 50%) leaves players
+            under-prepared (moderate exposure is protective); OVERLOAD
+            (> 180%) is an accumulated spike. Render only when:
+              - the numbers are GPS-sourced (_sprint_exposure_source === "gps")
+                — never IMA band 5–8 strides, which are long runs, not sprints
               - band is UNDERLOAD / WATCH / OVERLOAD (skip SAFE + INSUF_DATA)
               - verdict isn't RECOVERY / HOLD / OFF (no high-intensity work)
             Informational chip — does NOT modify today's verdict, mirroring
@@ -2936,6 +2950,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
         {(() => {
           const band = row._sprint_exposure_band;
           const ratio = row._sprint_exposure_ratio;
+          if (row._sprint_exposure_source !== "gps") return null;
           if (
             band == null ||
             band === "SAFE" ||
@@ -2954,12 +2969,10 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           }
           const pct = Math.round(ratio * 100);
           const matchDays = row._sprint_exposure_match_days ?? 0;
-          const matchDaysMeasured = row._sprint_exposure_match_days_measured ?? matchDays;
-          const matchDaysEstimated = row._sprint_exposure_match_days_estimated ?? 0;
           const matchDaysScheduled = row._sprint_exposure_match_days_scheduled ?? matchDays;
+          const noGpsDays = row._sprint_exposure_no_gps_days_7d ?? 0;
           const lowConfidence = matchDays <= 1;
           const dataGap = matchDaysScheduled > matchDays;
-          const hasGpsEstimate = matchDaysEstimated > 0;
           const isSevere = band === "UNDERLOAD" || band === "OVERLOAD";
           const tone = isSevere
             ? "border-rose-200 bg-rose-50 text-rose-900"
@@ -2968,17 +2981,17 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           const headline = (() => {
             if (band === "UNDERLOAD") {
               return lang === "IS"
-                ? `Of fáir sprettir í vikunni (aðeins ${pct}% miðað við leik)`
-                : `Not enough sprinting this week (only ${pct}% of match demand)`;
+                ? `Of fáir sprettir á æfingum vikunnar (aðeins ${pct}% af einum leik)`
+                : `Not enough sprinting in training this week (only ${pct}% of one match)`;
             }
             if (band === "OVERLOAD") {
               return lang === "IS"
-                ? `Of margir sprettir í vikunni (${pct}% miðað við leik)`
-                : `Too much sprinting this week (${pct}% of match demand)`;
+                ? `Mjög mikið sprettað á æfingum vikunnar (${pct}% af einum leik)`
+                : `A lot of sprinting in training this week (${pct}% of one match)`;
             }
             return lang === "IS"
-              ? `Sprett-magn aðeins lægra en venjulega (${pct}% af leik)`
-              : `Sprint volume slightly below normal (${pct}% of match demand)`;
+              ? `Sprettir á æfingum í léttari kantinum (${pct}% af einum leik)`
+              : `Sprinting in training on the light side (${pct}% of one match)`;
           })();
           const action = (() => {
             if (band === "UNDERLOAD") {
@@ -2995,22 +3008,12 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
               ? "Fylgjast með — bæta við smávegis ef leikur er á næstu leiti."
               : "Watch this — top up a bit if a match is coming up.";
           })();
-          // Confidence line — be transparent about how the baseline was
-          // built. Three layers, in priority order:
-          //   1. measured + estimated mix → say so ("2 measured + 1 GPS-estimated")
-          //   2. data gap (scheduled > observed) → say so ("3 of 5 matches")
-          //   3. genuinely 1 match → "low confidence"
+          // Confidence line — be transparent about how the numbers were
+          // built. Layers, in priority order:
+          //   1. data gap (scheduled > observed) → say so ("3 of 5 matches")
+          //   2. genuinely 1 match → "low confidence"
+          //   3. indoor / no-GPS training days → "no sprint reading" note
           const conf = (() => {
-            if (hasGpsEstimate) {
-              if (matchDaysMeasured === 0) {
-                return lang === "IS"
-                  ? `Byggt á ${matchDays} leik${matchDays === 1 ? "" : "jum"} (öll GPS-áætluð, eldri IMA gögn vantar).`
-                  : `Based on ${matchDays} match${matchDays === 1 ? "" : "es"} (all GPS-estimated — older IMA data missing).`;
-              }
-              return lang === "IS"
-                ? `Byggt á ${matchDays} leikjum (${matchDaysMeasured} mæld + ${matchDaysEstimated} GPS-áætluð).`
-                : `Based on ${matchDays} matches (${matchDaysMeasured} measured + ${matchDaysEstimated} GPS-estimated).`;
-            }
             if (dataGap) {
               return lang === "IS"
                 ? `Byggt á ${matchDays} af ${matchDaysScheduled} leikjum í síðustu 4 vikum (hinir vantar gögn).`
@@ -3021,12 +3024,17 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
                 ? "Bara 1 leikur til viðmiðunar — túlka með varúð."
                 : "Only 1 match in baseline — interpret with caution.";
             }
+            if (noGpsDays > 0) {
+              return lang === "IS"
+                ? `${noGpsDays} æfingadag${noGpsDays === 1 ? "ur" : "ar"} inni / án GPS — engin sprett-mæling, ekki talið með.`
+                : `${noGpsDays} indoor / no-GPS training day${noGpsDays === 1 ? "" : "s"} — no sprint reading, not counted.`;
+            }
             return null;
           })();
           return (
             <div
               className={`mt-3 inline-flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${tone}`}
-              title="Malone 2017: low sprint exposure leaves players under-prepared (moderate exposure is protective vs lower-limb injury); the strongest injury signal is large RAPID INCREASES in sprint/HSR (≈3–6× odds), not the level itself. < 50% of match demand = under-exposed; > 150% = an accumulated spike. Bands 5-8 of Catapult IMA Free Running are summed over the last 7 days and compared to the per-match average across the last 28 days."
+              title="GPS sprint distance (sprint_distance, else velocity band 6) summed over training days in the last 7 days, compared with his average sprint distance per match over the last 28 days. Indoor / no-GPS days give no sprint reading and are not counted. Malone 2017: low sprint exposure leaves players under-prepared (moderate exposure is protective vs lower-limb injury); the strongest injury signal is large RAPID INCREASES in sprint/HSR, not the level itself (Gabbett 2016). < 50% of one match = under-exposed; > 180% = an accumulated spike."
             >
               <span className="mt-0.5 shrink-0">📊</span>
               <span>
@@ -3190,7 +3198,7 @@ const DecisionSummaryCard: FC<{
   // glancing at the dashboard wants the acute count; chronic context
   // lives on the cards for when they drill into a specific player.
   //
-  // EXCEPTION: Sprint Exposure (Malone 2018) is technically a 7-day signal,
+  // EXCEPTION: Sprint Exposure (Malone 2017, GPS-sourced) is technically a 7-day signal,
   // but UNDERLOAD / OVERLOAD bands are actionable TODAY — the coach should
   // add (UNDERLOAD) or cap (OVERLOAD) sprint volume in the current session.
   // WATCH is excluded (50–80% is still close to demand). This keeps the
@@ -3199,7 +3207,9 @@ const DecisionSummaryCard: FC<{
     const action = resolveDisplayAction(row);
     if (action === "RECOVERY" || action === "MODIFIED" || action === "REDUCED" || action === "HOLD") return true;
     if (row._injury_status === "injured" || row._injury_status === "rehabilitation" || row._injury_status === "rtp_training") return true;
-    if (row._sprint_exposure_band === "UNDERLOAD" || row._sprint_exposure_band === "OVERLOAD") return true;
+    // Only GPS-sourced sprint exposure counts — IMA band 5–8 strides are long
+    // continuous runs, not sprints, and must not pull anyone into this filter.
+    if (row._sprint_exposure_source === "gps" && (row._sprint_exposure_band === "UNDERLOAD" || row._sprint_exposure_band === "OVERLOAD")) return true;
     return false;
   };
 

@@ -328,7 +328,9 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
   const rpeTablePlayers = data.players.filter((p) => p.rpeSubmitted).sort((a, b) => (b.rpe ?? -1) - (a.rpe ?? -1));
   const interpretText = rpeInterpretation(data.rpeTeamAvg, data.rpeSubmissionCount, data.players.length);
 
-  // IMA / stride page — sorted by sprint-strides desc, paginated like GPS
+  // IMA / stride page — sorted by long-run strides desc. `sprint_strides` is a legacy field name:
+  // it holds strides in IMA Free Running runs of 18 s+ (ima_fr_ge18; bout-duration bands,
+  // docs/ima-free-running-bands.md) — sustained running, NOT sprinting.
   const ima = data.ima;
   const imaPlayers: ImaPlayerDay[] = ima
     ? [...ima.per_player].filter((p) => p.total_strides > 0).sort((a, b) => b.sprint_strides - a.sprint_strides)
@@ -872,7 +874,7 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
                   </View>
                   <View style={postStyles.summaryBox}>
                     <Text style={postStyles.summaryVal}>{numFmt2(ima.team_sprint_strides, 0)} ({Math.round(ima.pct_sprint)}%)</Text>
-                    <Text style={postStyles.summaryLabel}>Sprint-strides (b5-8)</Text>
+                    <Text style={postStyles.summaryLabel}>Strides in long runs (18 s+)</Text>
                   </View>
                   <View style={postStyles.summaryBox}>
                     <Text style={postStyles.summaryVal}>
@@ -892,15 +894,15 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
                 <View style={postStyles.summaryRow}>
                   <View style={postStyles.summaryBox}>
                     <Text style={postStyles.summaryVal}>{Math.round(ima.pct_low)}%</Text>
-                    <Text style={postStyles.summaryLabel}>Low (b1-3)</Text>
+                    <Text style={postStyles.summaryLabel}>Short bursts (&lt;12 s)</Text>
                   </View>
                   <View style={postStyles.summaryBox}>
                     <Text style={postStyles.summaryVal}>{Math.round(ima.pct_mid)}%</Text>
-                    <Text style={postStyles.summaryLabel}>Mid (b4-6)</Text>
+                    <Text style={postStyles.summaryLabel}>Medium runs (12-24 s)</Text>
                   </View>
                   <View style={postStyles.summaryBox}>
                     <Text style={postStyles.summaryVal}>{Math.round(ima.pct_high)}%</Text>
-                    <Text style={postStyles.summaryLabel}>High (b7-8)</Text>
+                    <Text style={postStyles.summaryLabel}>Longest runs (24 s+)</Text>
                   </View>
                 </View>
               </View>
@@ -909,15 +911,15 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
 
           {/* Per-player IMA table */}
           <View style={postStyles.section}>
-            <Text style={postStyles.sectionTitle}>IMA eftir leikmann (raðað eftir sprint-strides b5-8)</Text>
+            <Text style={postStyles.sectionTitle}>Strides per player (sorted by strides in long runs 18 s+)</Text>
             <View style={postStyles.table}>
               <View style={postStyles.tHead}>
                 <Text style={[{ width: "20%", padding: 4, fontSize: 9 }, postStyles.hdr]}>Leikmaður</Text>
                 <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Total</Text>
-                <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>b1-3</Text>
-                <Text style={[{ width: "9%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>b4-6</Text>
-                <Text style={[{ width: "9%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>b7-8</Text>
-                <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Sprint b5-8</Text>
+                <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>&lt;12 s</Text>
+                <Text style={[{ width: "9%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>12-24 s</Text>
+                <Text style={[{ width: "9%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>24 s+</Text>
+                <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Long 18 s+</Text>
                 <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>vs grunnl.</Text>
                 <Text style={[{ width: "12%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>CoD L/R (há)</Text>
                 <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>CoD ósamh.</Text>
@@ -945,7 +947,7 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
             </View>
             {pgIdx === imaPages.length - 1 && (
               <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 6 }}>
-                IMA Free Running: 8-banda stride dreifing (Low b1-3 · Mid b4-6 · High b7-8). Sprint = bönd 5-8 vs persónuleg 14-daga grunnlína. CoD ósamhverfa &gt; 15% á háa intensity = aukin meiðslahætta (Bishop 2020).
+                IMA Free Running bands sort each continuous run by how long it lasted, not by speed: short bursts (&lt;12 s) · medium runs (12-24 s) · longest runs (24 s+). &quot;Long 18 s+&quot; = strides in runs of 18 s or more vs the player&apos;s own 14-day baseline - sustained running volume, not sprinting; sprint load comes from GPS. High-intensity CoD asymmetry &gt; 15% = raised injury risk (Bishop 2020).
               </Text>
             )}
           </View>

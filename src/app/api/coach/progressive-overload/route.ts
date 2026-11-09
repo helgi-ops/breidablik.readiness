@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
   const labels: Record<LoadKpi, string> = {
     totalDistance: "Total distance (m)", playerLoad: "Player Load", hsr: "High-speed distance (m)",
     sprint: "Sprint distance (m)", accel: "Accelerations (B2-3)", decel: "Decelerations (B2-3)",
-    efforts: "Hard efforts (accel+decel)", ima: "IMA high-intensity (m)",
+    efforts: "Hard efforts (accel+decel)", ima: "Long-run distance (m)", // IMA FR bands 5–8 = continuous runs ≥18 s — NOT sprint/HSR
     imaAccel: "IMA accelerations", imaDecel: "IMA decelerations", imaCod: "Change of direction", jumps: "Jumps",
   };
 

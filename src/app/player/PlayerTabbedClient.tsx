@@ -751,8 +751,10 @@ const RTT_QUALITY_LABEL: Record<string, { en: string; is: string }> = {
   distance:  { en: "running distance",   is: "hlaupavegalengd" },
   hsr:       { en: "high-speed running", is: "hraðahlaup" },
   sprint:    { en: "sprinting",          is: "sprettir" },
-  stride:    { en: "high-cadence running", is: "hátíðni hlaup" },
-  strideTop: { en: "top-speed running",   is: "topphraða hlaup" },
+  // stride / strideTop = IMA Free Running stride counts. Those bands measure how long a
+  // continuous run lasted (bout duration), not speed — so they are long runs, not sprints.
+  stride:    { en: "long continuous runs", is: "löng samfelld hlaup" },
+  strideTop: { en: "longest continuous runs", is: "lengstu samfelldu hlaupin" },
   accel:     { en: "accelerations",      is: "hröðun" },
   decel:     { en: "decelerations",      is: "hemlun" },
   decelHigh: { en: "hard braking",       is: "kröpp hemlun" },
@@ -1523,8 +1525,8 @@ function PlayerTodayRecapPortal({ activeTab, lang, clubThemeColor }: { activeTab
           )}
           {sv && (
             <div>{is
-              ? `Skreflengd = háhraða vegalengd ÷ háhraðaskref (IMA hlaupabönd 5–8). Borið saman við þína eigin leiki (${sv.historyN}); flaggað við 2,5 staðalfrávik. Girard/Morin 2011.`
-              : `Stride length = high-cadence distance ÷ high-cadence strides (IMA free-running bands 5–8). Compared to your own matches (${sv.historyN}); flagged at 2.5 SD. Girard/Morin 2011.`}</div>
+              ? `Skreflengd = vegalengd ÷ skref í löngum samfelldum hlaupum (18 sek eða lengri, eftir lengd hlaups í IMA — ekki hraða). Borið saman við þína eigin leiki (${sv.historyN}); flaggað við 2,5 staðalfrávik. Girard/Morin 2011.`
+              : `Stride length = distance ÷ strides in long continuous runs (18 s or more, from IMA free-running run length — not speed). Compared to your own matches (${sv.historyN}); flagged at 2.5 SD. Girard/Morin 2011.`}</div>
           )}
         </div>
       )}

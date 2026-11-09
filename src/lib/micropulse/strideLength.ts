@@ -3,9 +3,13 @@
  *
  * WHAT IT MEASURES
  * ----------------
- * Stride length = high-cadence distance ÷ high-cadence strides (IMA free-running
- * bands 5–8). Cadence tells you how FAST the legs turn over; stride length tells
- * you how much GROUND each stride covers — a proxy for force into the floor.
+ * Stride length in sustained running = distance ÷ strides in IMA free-running
+ * bands 5–8. Those bands are BOUT-DURATION bands, not speed/cadence bands: they
+ * hold the long continuous runs (each bout ≥18 s), NOT sprints and NOT
+ * high-cadence running (see src/lib/integrations/catapult/freeRunningBands.ts and
+ * docs/ima-free-running-bands.md). Stride rate tells you how often the legs turn
+ * over; stride length tells you how much GROUND each stride covers — a proxy for
+ * force into the floor during his longer runs.
  *
  * The pairing is what makes it useful. Under neuromuscular fatigue an athlete
  * characteristically MAINTAINS stride frequency while stride length SHORTENS: the
@@ -38,8 +42,10 @@
  * measure reliably. A metric that only works in one context is honest. A metric
  * that pretends to work everywhere is not.
  *
- * Refs: Girard, Micallef & Millet 2011 (sprint fatigue → stride length falls,
- *       frequency preserved); Morin et al. 2011 (stride mechanics & force output).
+ * Refs: McBurnie et al. 2022 (stride/running-mechanics change as a within-player
+ *       fatigue read); Girard, Micallef & Millet 2011 (under fatigue stride length
+ *       falls while frequency is preserved); Morin et al. 2011 (stride mechanics &
+ *       force output). Applied here to sustained-running strides, not sprinting.
  */
 
 export type SessionKind = "match" | "big_session" | "light_session";
@@ -63,11 +69,11 @@ export const CV_BY_KIND: Record<SessionKind, number> = {
  */
 export const VERDICT_KINDS: SessionKind[] = ["match", "big_session"];
 
-/** Minimum high-cadence strides for the ratio to be meaningful at all. */
+/** Minimum strides in long continuous runs (bands 5–8, bouts ≥18 s) for the ratio to be meaningful at all. */
 export const MIN_STRIDES = 50;
 
 /**
- * Physiologically possible stride length in the high-cadence bands, in metres.
+ * Physiologically possible stride length in sustained running (bands 5–8), in metres.
  * A value outside this is a data-quality artefact — a band or unit mis-config —
  * not an athlete, and the engine refuses its own number rather than issue a
  * fatigue verdict from nonsense. Elite match stride length sits ~1.9–2.7 m
@@ -107,9 +113,14 @@ export type StrideVerdict = "normal" | "shortened" | "lengthened" | "unmeasurabl
 export interface StrideSession {
   date: string;
   kind: SessionKind;
-  /** Summed distance in IMA free-running bands 5–8, metres. */
+  /**
+   * Summed distance in IMA free-running bands 5–8, metres = distance in LONG
+   * CONTINUOUS RUNS (bouts ≥18 s). The field name is legacy ("high cadence") and
+   * kept for interface stability — the bands are bout-duration bands, NOT
+   * cadence/speed bands, so this is not sprint or high-speed distance.
+   */
   highCadenceDistanceM: number | null;
-  /** Summed stride count in bands 5–8. */
+  /** Summed stride count in bands 5–8 = strides in long continuous runs (legacy name, see above). */
   highCadenceStrides: number | null;
 }
 
@@ -133,7 +144,7 @@ export interface StrideResult {
   /**
    * When verdict === "unmeasurable", WHY — so a surface can explain the absence
    * instead of hiding it. In particular `no_distance` = the session had
-   * high-cadence strides but no running distance (indoor, or GPS not captured):
+   * long-run strides (bands 5–8) but no running distance (indoor, or GPS not captured):
    * stride length in metres is GPS-derived and OUTDOOR-ONLY.
    */
   unmeasurableReason?: "no_distance" | "too_few_strides" | "light_session" | "no_history" | "implausible";
@@ -181,8 +192,8 @@ export function assessStrideLength(
   // light-session noise. He ran (strides present) but there is no running
   // distance, and stride length in metres is GPS-derived and OUTDOOR-ONLY:
   // indoors Catapult gives strides and cadence but no free-running distance.
-  // Any high-cadence strides at all + no distance = the indoor signature (don't
-  // require MIN_STRIDES here: an indoor session may have few sprint-band strides,
+  // Any long-run strides at all + no distance = the indoor signature (don't
+  // require MIN_STRIDES here: an indoor session may have few long-run strides,
   // but the honest reason it's unmeasurable is still "no GPS distance", not
   // "too few strides").
   // Indoors Catapult returns 0 (not null) for free-running distance while still
@@ -226,8 +237,8 @@ export function assessStrideLength(
       ...base,
       verdict: "unmeasurable",
       unmeasurableReason: "too_few_strides",
-      reason: `Fewer than ${MIN_STRIDES} high-cadence strides — too little running to measure stride length.`,
-      reasonIs: `Færri en ${MIN_STRIDES} háhraðaskref — of lítið hlaup til að mæla skreflengd.`,
+      reason: `Fewer than ${MIN_STRIDES} strides in long continuous runs (18 s or more) — too little sustained running to measure stride length.`,
+      reasonIs: `Færri en ${MIN_STRIDES} skref í löngum samfelldum hlaupum (18 sek eða lengri) — of lítið hlaup til að mæla skreflengd.`,
     };
   }
 
@@ -309,11 +320,11 @@ export function assessStrideLength(
       provisional,
       reason:
         `His strides are ${Math.abs(deltaPct)}% shorter than his usual ${kindEn.slice(0, -2)} ` +
-        `(${round(todayLen)} m vs ${round(norm)} m). He is turning his legs over as fast as ever ` +
-        `but covering less ground with each one — he is pushing less.${tail}`,
+        `(${round(todayLen)} m vs ${round(norm)} m) in his longer runs. He is ` +
+        `covering less ground with each stride — he is pushing less.${tail}`,
       reasonIs:
         `Skrefin hans eru ${Math.abs(deltaPct)}% styttri en venjulega í leik ` +
-        `(${round(todayLen)} m á móti ${round(norm)} m). Hann stígur jafn hratt og áður en ` +
+        `(${round(todayLen)} m á móti ${round(norm)} m) í löngum hlaupum. Hann ` +
         `kemst styttra með hverju skrefi — hann er að ýta minna.${tailIs}`,
     };
   }

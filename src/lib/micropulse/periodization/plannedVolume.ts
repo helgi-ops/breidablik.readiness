@@ -7,7 +7,7 @@
  *    (Martín-García et al. 2018 — weekly totals ≈ 3–5× a single match).
  *  - The within-week shape (MD-day %s) is Buchheit 2024's microcycle periodization, reused from
  *    `planSessionLoad` (MD-3 peak 85%, MD-4 68%, MD-2 50%, MD-1 32%).
- *  - CRITICAL per-KPI nuance: high-intensity metrics (HSR, sprint distance, high stride bands) are
+ *  - CRITICAL per-KPI nuance: high-intensity metrics (HSR, sprint distance — GPS) are
  *    CONCENTRATED on the high days (MD-4/MD-3) and taper to near-zero on MD-2/MD-1 — so their WEEKLY
  *    accumulation is a SMALLER multiple of a match than total distance / PlayerLoad (volume) is
  *    (Martín-García 2018; Oliva-Lozano 2020/2021 — session intensity distribution). Modelled with a
@@ -72,10 +72,17 @@ export const KPI_TAPER_EXPONENT: Partial<Record<WeeklyLoadMetricKey, number>> = 
   accelB23: 0.9, decelB23: 1.0,               // accel/decel COUNTS accumulate ≥ distance (training-dense)
   fmpDynamicHigh: 1.5, fmpDynamicMedium: 1.1, fmpRunningHigh: 1.5,
   imaTotal: 1.1, imaAccel: 0.9, imaDecel: 1.0, imaCod: 1.1,
+  // IMA FR stride tiles imaStrideBand6/7/8 = strides in continuous runs of 12–18 / 18–24 / ≥24 s (read by run
+  // length since Nov 2026; before that they were legacy bands 6–8 = 21–24 / 24–27 / 27+ s), NOT sprint/high-speed
+  // (docs/ima-free-running-bands.md). NOTE: the exponents below were set for the legacy meaning — re-check them
+  // against club data for the new run-length tiles. These exponents were originally borrowed from the
+  // GPS HSR/sprint taper; they are kept unchanged (a conservative assumption, not evidence for long-run
+  // strides) so existing week plans don't shift — revisit with club data.
   imaStrideBand6: 1.5, imaStrideBand7: 1.7, imaStrideBand8: 2.2,
-  // IMA running pair — calibrated on Breiðablik's per-MD-day medians (2026, ~1,600 sessions): fast strides
-  // (bands 6–8 include sub-maximal running) stay ~60% of a match even on MD-1 → flat (e<1, ~3.9× a match
-  // per week); fast-running distance (bands 5–8) tapers a little harder than volume (e=1.2, ~2.3×).
+  // IMA running pair — calibrated on Breiðablik's per-MD-day medians (2026, ~1,600 sessions): long-run
+  // strides (calibrated on legacy bands 6–8 = runs ≥21 s; imaStrideHi now = strides in runs ≥18 s — re-check) stay
+  // ~60% of a match even on MD-1 → flat (e<1, ~3.9× a match per week); long-run distance (runs ≥18 s,
+  // ima_fr_ge18) tapers a little harder than volume (e=1.2, ~2.3×).
   imaFrDistance: 1.2, imaStrideHi: 0.7,
 };
 
@@ -102,6 +109,8 @@ export const KPI_PATHWAY: Partial<Record<WeeklyLoadMetricKey, LoadPathway>> = {
   decelB23: "biomechanical", imaDecel: "biomechanical", imaCod: "biomechanical",
   velocityBand5: "biomechanical", velocityBand6: "biomechanical",
   fmpDynamicHigh: "biomechanical", fmpRunningHigh: "biomechanical",
+  // IMA FR long-continuous-run strides/distance (bout-duration bands, not speed). Kept on the conservative
+  // biomechanical ramp (repetitive stride loading on tissue) — NOT because they are top-end speed.
   imaStrideBand6: "biomechanical", imaStrideBand7: "biomechanical", imaStrideBand8: "biomechanical",
   imaFrDistance: "biomechanical", imaStrideHi: "biomechanical",
 };
@@ -132,7 +141,8 @@ export const KPI_TM_REF_RANGE: Partial<Record<WeeklyLoadMetricKey, [number, numb
   accelB23: [1.6, 3.9], decelB23: [0.6, 3.3],
   imaTotal: [1.6, 3.9], imaAccel: [1.6, 3.9], imaDecel: [0.6, 3.3], imaCod: [0.6, 3.3],
   fmpDynamicHigh: [0.2, 2.3], fmpDynamicMedium: [1.0, 2.5], fmpRunningHigh: [0.2, 2.3],
-  imaStrideBand6: [0.2, 2.3], imaStrideBand7: [0.1, 1.5], imaStrideBand8: [0.03, 1.5],
+  // No research T:M range for the IMA FR stride tiles (runs 12–18 / 18–24 / ≥24 s): they count strides in CONTINUOUS RUNS
+  // (bout-duration bands), not HSR/sprint, so the GPS HSR/sprint ranges they used to borrow don't apply.
 };
 
 /** The research T:M reference range for a KPI's weekly ×match multiple, or null if none. */
@@ -153,8 +163,8 @@ export function kpiTmRefRange(key: string): [number, number] | null {
 export const KPI_REENTRY_FLOOR: Partial<Record<WeeklyLoadMetricKey, number>> = {
   totalDistance: 0.80,   // aerobic volume — load high & early (~5.5 km/session re-entry at 4 sessions)
   velocityBand5: 0.65,   // HSR — load the aerobic-power base early (coach priority), but below distance
-  imaStrideBand6: 0.62,  // IMA HSR-equivalent cadence band
-  imaFrDistance: 0.62,   // IMA fast-running distance (bands 5–8) — the IMA HSR-equivalent
+  imaStrideBand6: 0.62,  // IMA strides in runs of 12–18 s (was 21–24 s before Nov 2026 — floor needs re-checking) — NOT an HSR proxy
+  imaFrDistance: 0.62,   // IMA long-run distance (runs ≥18 s, ima_fr_ge18) — aerobic running base, NOT HSR
   fmpRunningHigh: 0.62,  // FMP high-speed running
   // Accel/decel are training-dense from day one (SSGs/drills) → start higher than the generic re-entry.
   // Decel a touch lower than accel — it carries the highest tissue load (Harper & McBurnie 2021).

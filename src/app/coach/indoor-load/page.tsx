@@ -515,16 +515,16 @@ export default function CoachIndoorLoadPage() {
         gapWindow.setDate(gapWindow.getDate() - 28);
         const gapResp = await sb
           .from("player_external_load_daily")
-          .select("date, fmp_total_duration_s, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count")
+          .select("date, fmp_total_duration_s, ima_fr_ge18_stride_count")
           .in("player_id", playerIds)
           .gte("date", gapWindow.toISOString().slice(0, 10))
           .lt("total_distance", 50);
         const gapDays = new Set<string>();
         for (const g of (gapResp.data ?? []) as Array<Record<string, unknown>>) {
-          const strides =
-            Number(g.ima_fr_band6_stride_count ?? 0) +
-            Number(g.ima_fr_band7_stride_count ?? 0) +
-            Number(g.ima_fr_band8_stride_count ?? 0);
+          // Strides in long continuous runs (efforts ≥18 s; config-independent ima_fr_ge18 tier —
+          // band numbers shift when the club changes its band edges; bout-duration bands, not speed).
+          // Used only as "he ran with a pod on". (Was legacy bands 6–8 = ≥21 s; no 21 s edge any more.)
+          const strides = Number(g.ima_fr_ge18_stride_count ?? 0) || 0;
           if (strides > 0 && g.fmp_total_duration_s == null) gapDays.add(String(g.date));
         }
         setFmpGapDays(gapDays.size);

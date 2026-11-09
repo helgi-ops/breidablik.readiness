@@ -51,6 +51,7 @@ export async function loadPostTrainingForSignal(sb: SupabaseClient, teamId: stri
       hsr: num(r.velocity_band5_total_distance) || num(r.high_speed_distance),
       sprint: num(r.velocity_band6_total_distance) || num(r.sprint_distance),
       accel: num(r.accel_b2_3_tot_effs_gen2), decel: num(r.decel_b2_3_tot_effs_gen2),
+      // ima = IMA FR bands 5–8 = long continuous runs (≥18 s) — NOT sprint/HSR (those are hsr/sprint above).
       efforts: num(r.accel_decel_efforts), ima: num(r.ima_fr_band58_total_distance),
       imaAccel: num(r.ima_accel), imaDecel: num(r.ima_decel), imaCod: cod, jumps: num(r.jumps),
     });

@@ -10,9 +10,9 @@
  *           long-run distance / strides, or no day-type: (matchPct of the MD-day)^(per-variable exponent)
  *
  * Six variables (the coach's IMA set): accelerations, decelerations (braking), change of direction,
- * IMA Free Running long-run distance (band 5–8), long-run strides (band 6–8) and long runs as a COUNT of
- * bouts (band 5–8 event counts). The IMA Free Running bands are BOUT-DURATION bands — band 5–8 = continuous
- * runs of ≥18 s, band 6–8 = ≥21 s — NOT speed or cadence bands, so these are SUSTAINED-RUNNING volume, not
+ * IMA Free Running long-run distance, long-run strides and long runs as a COUNT of bouts — all three = continuous
+ * runs of ≥18 s (config-independent ima_fr_ge18_* tiers; strideHi was legacy bands 6–8 = ≥21 s before Nov 2026).
+ * The IMA Free Running bands are BOUT-DURATION bands — NOT speed or cadence bands, so these are SUSTAINED-RUNNING volume, not
  * sprinting (docs/ima-free-running-bands.md). Strides and bout counts come from the inertial sensor, so they
  * exist indoors; the distance needs GPS and is missing (not 0) indoors. Field keys `frDistance` / `strideHi`
  * are kept for interface stability.
@@ -49,9 +49,9 @@ export const ENOUGH_TECH: Record<EnoughVar, string> = {
   imaAccel: "IMA accelerations (count)",
   imaDecel: "IMA decelerations (count)",
   imaCod: "IMA change of direction, left + right, all intensities (count)",
-  frDistance: "IMA Free Running distance, bands 5–8 = continuous runs ≥18 s (m) — not sprinting",
-  strideHi: "IMA Stride count, bands 6–8 = continuous runs ≥21 s — not sprint strides",
-  longRuns: "IMA Free Running bouts, bands 5–8 = number of continuous runs ≥18 s — inertial, so it exists indoors",
+  frDistance: "IMA Free Running distance in continuous runs ≥18 s (m) — not sprinting",
+  strideHi: "IMA Stride count in continuous runs ≥18 s — not sprint strides",
+  longRuns: "IMA Free Running bouts = number of continuous runs ≥18 s — inertial, so it exists indoors",
 };
 
 /** Unit noun for "~N more … per player". */
@@ -68,7 +68,7 @@ export const ENOUGH_UNIT: Record<EnoughVar, Bi> = {
  * How a variable's single-session share scales with the day's load (share = (matchPct/100)^e).
  * All five read the periodization hub's KPI_TAPER_EXPONENT (one source for plan and review). The IMA
  * running pair there is calibrated on Breiðablik's own per-MD-day medians (2026, ~1,600 sessions) —
- * long-run strides (band 6–8 = runs ≥21 s) stay high even on light days (~60% of a match
+ * long-run strides (calibrated on legacy runs ≥21 s; now runs ≥18 s — re-check) stay high even on light days (~60% of a match
  * on MD-1), so their share is flatter (e<1); long-run distance tapers a little harder than volume
  * (e=1.2). A typical MD-4 then reads ~on target, a light MD-1 does not read "short". Long runs as a COUNT
  * follow the day's load one to one (e=1.0): Breiðablik 2026 medians of own-match share were 64 / 55 / 47 /

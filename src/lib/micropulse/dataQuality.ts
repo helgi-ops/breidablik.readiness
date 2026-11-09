@@ -66,7 +66,7 @@ export type SignalKey =
   | "gps"
   | "ima"
   | "ima_strides"
-  | "ima_run_distance" // free-running distance (bands 5-8) — GPS-derived, outdoor only
+  | "ima_run_distance" // free-running distance in long continuous runs (runs ≥18 s, ima_fr_ge18) — GPS-derived, outdoor only
   | "cod"
   | "impacts"
   | "jumps"
@@ -150,8 +150,8 @@ export interface FeedVerdict {
 const SIGNAL_LABEL: Record<SignalKey, { en: string; is: string }> = {
   gps: { en: "GPS", is: "GPS" },
   ima: { en: "IMA (movement)", is: "IMA (hreyfing)" },
-  ima_strides: { en: "IMA stride bands", is: "IMA skreftíðni" },
-  ima_run_distance: { en: "IMA running distance", is: "IMA hlaupavegalengd" },
+  ima_strides: { en: "IMA running strides", is: "IMA hlaupaskref" },
+  ima_run_distance: { en: "IMA long-run distance", is: "IMA vegal. í löngum hlaupum" },
   cod: { en: "Change of direction", is: "Stefnubreytingar" },
   impacts: { en: "Impacts", is: "Högg" },
   jumps: { en: "Jumps", is: "Stökk" },
@@ -269,7 +269,8 @@ export interface RowCheckInput {
   /** Pod minutes, for the intensity check. */
   podMinutes: number | null;
   /**
-   * Metres per high-cadence stride, ALREADY computed by the stride engine
+   * Metres per stride in long continuous runs (IMA FR bands 5–8, bouts ≥18 s —
+   * NOT sprint/high-cadence strides), ALREADY computed by the stride engine
    * (`strideLength()`), so this only ever sees a value the engine would actually
    * use — i.e. ≥ MIN_STRIDES with real distance. null = nothing to check.
    */

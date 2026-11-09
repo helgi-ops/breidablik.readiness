@@ -34,7 +34,7 @@ const WEEKLY_RATE: Record<LoadKpi, number> = {
   accel: 0.07,
   decel: 0.07,
   efforts: 0.07,
-  ima: 0.06,
+  ima: 0.06, // IMA FR bands 5–8 = long continuous runs (≥18 s) — sustained-running volume, NOT HSR/sprint
   imaAccel: 0.07,
   imaDecel: 0.07,
   imaCod: 0.06,
@@ -54,7 +54,7 @@ const VAL: Record<LoadKpi, (r: LoadRow) => number> = {
   accel: (r) => num(r.accel_b2_3_tot_effs_gen2),
   decel: (r) => num(r.decel_b2_3_tot_effs_gen2),
   efforts: (r) => num(r.accel_decel_efforts),
-  ima: (r) => num(r.ima_fr_band58_total_distance),
+  ima: (r) => num(r.ima_fr_band58_total_distance), // long-run distance (bout-duration bands), not sprint
   imaAccel: (r) => num(r.ima_accel),
   imaDecel: (r) => num(r.ima_decel),
   imaCod: (r) => num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low) + num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low),

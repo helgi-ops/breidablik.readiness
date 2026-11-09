@@ -10,6 +10,8 @@
  * (honest empty — never a fabricated zero).
  */
 
+import { sumBandsBetween } from "@/lib/integrations/catapult/freeRunningBands";
+
 export const EXTENDED_METRIC_KEYS = [
   // GPS
   "totalDistPerMin", "hsrPerMin", "sprintPerMin", "maxVel", "hmldPerMin",
@@ -31,7 +33,10 @@ export const EXTENDED_METRIC_LABELS: Record<string, { en: string; is: string }> 
   hmldPerMin:         { en: "High metabolic-load dist / min", is: "Efnaskipta-álag vegalengd / mín" },
   decelHighPerMin:    { en: "High-intensity decels / min",    is: "Háákefðar hemlanir / mín" },
   codHighPerMin:      { en: "High-intensity CoD / min",       is: "Háákefðar stefnubreytingar / mín" },
-  sprintStridesPerMin:{ en: "Sprint strides / min",           is: "Sprett-skref / mín" },
+  // Key name kept for API stability — it is NOT sprinting. Meaning shifted (Nov 2026): sprintStridesPerMin now
+  // = strides in continuous runs lasting ≥24 s (config-independent ima_fr_ge24 tier), not "band 8" — band
+  // edges change per team/date and the Nov-2026 config has no 27 s edge (docs/ima-free-running-bands.md).
+  sprintStridesPerMin:{ en: "Strides in longest runs (24 s+) / min", is: "Skref í lengstu hlaupum (24+ sek) / mín" },
   fmpHighRunPct:      { en: "High-intensity running time %",  is: "Háákefðar hlaupatími %" },
   jumpsPerMin:        { en: "Jumps / min",                    is: "Stökk / mín" },
 };
@@ -59,13 +64,16 @@ export function extendedMetricsForRow(row: ExtLoadRow, minutes: number): Record<
   return {
     totalDistPerMin: rate(row.total_distance, minutes),
     hsrPerMin: rate(row.high_speed_distance, minutes),
+    // GPS sprint (velocity band 6, else sprint_distance) — null indoors, never an IMA proxy.
     sprintPerMin: rate(row.velocity_band6_total_distance, minutes) ?? rate(row.sprint_distance, minutes),
     // Peak, not per-minute; drop GPS glitches (>45 km/h) everywhere else too.
     maxVel: maxV != null && maxV > 0 && maxV <= 45 ? maxV : null,
     hmldPerMin: rate(row.high_metabolic_load_distance_m, minutes),
     decelHighPerMin: rate(row.ima_band3_decel_count, minutes),
     codHighPerMin: codHigh != null ? rate(codHigh, minutes) : null,
-    sprintStridesPerMin: rate(row.ima_fr_band8_stride_count, minutes),
+    // Legacy key; = strides in continuous runs ≥24 s (sustained running, not sprints). Reads the DB tier
+    // ima_fr_ge24_stride_count; falls back to summing the row's own bands ≥24 s (by its ima_fr_band_bounds).
+    sprintStridesPerMin: rate(num(row.ima_fr_ge24_stride_count) ?? sumBandsBetween(row, "stride_count", 24), minutes),
     fmpHighRunPct: fmpHigh != null && fmpTot != null && fmpTot > 0 ? (fmpHigh / fmpTot) * 100 : null,
     jumpsPerMin: rate(row.jumps, minutes),
   };

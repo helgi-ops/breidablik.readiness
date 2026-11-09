@@ -3,8 +3,11 @@
  *
  * GET — biomechanical (IMA) view of a single training day for the
  * authenticated coach's team. Returns the team session profile plus a
- * per-player breakdown of 8-band stride distribution, sprint-stride
- * volume vs personal 14-day baseline, and high-intensity CoD asymmetry.
+ * per-player breakdown of 8-band stride distribution (bout-duration bands:
+ * short bursts / medium runs / longest runs), long-run strides (bands 5–8,
+ * bouts ≥18 s — NOT sprints; the JSON field is still `sprint_strides` /
+ * `sprint_vs_baseline_pct` for compatibility) vs personal 14-day baseline,
+ * and high-intensity CoD asymmetry.
  *
  * Powers the /coach/ima-intelligence page.
  */

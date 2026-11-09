@@ -9,18 +9,27 @@
  *
  * The answer matters because two players doing the same nominal session
  * can walk away with very different IMU profiles. A possession-heavy day
- * with rondos loads up bands 5-8 (quick-cadence work) without producing
- * GPS sprint distance. A linear running day inverts that. Coaches who
- * only look at GPS miss this — and miss the planning errors that follow
- * ("we said MD-3 high-cadence but we delivered MD-2 tempo work").
+ * with rondos puts almost every stride into short bursts (<12 s); a
+ * conditioning / tempo day puts a large share into long continuous runs
+ * (≥18 s). Coaches who only look at total distance miss this — and
+ * miss the planning errors that follow ("we said MD-3 short, sharp work
+ * but we delivered long tempo runs").
  *
  * Sport-science rationale:
- *   - Catapult IMA Free Running V2 buckets each detected stride by the
- *     IMU-derived velocity at that step. Bands 5-8 (18+ km/h equivalent)
- *     capture high-cadence work that's hamstring-relevant regardless of
- *     whether the player travelled forward at sprint speed.
- *   - McBurnie 2022: stride distribution forecasts hamstring/quad injury
- *     better than GPS velocity bands alone.
+ *   - Catapult IMA Free Running V2 buckets each free-running BOUT by how
+ *     long it lasted. They are BOUT-DURATION bands, NOT speed or cadence
+ *     bands: mean speed (~12–14 km/h) and stride rate (~87–93/min) are flat
+ *     above ~15 s. The band EDGES CHANGE per team/date (legacy
+ *     0–8–12–15–18–21–24–27–100; Breiðablik from 10 Nov 2026
+ *     0–2.5–5–8–12–18–24–30–1000), so the loader groups by RUN LENGTH from
+ *     each row's own edges, never by band number: short bursts <12 s, medium
+ *     runs 12–24 s, longest runs ≥24 s (edges common to every config), and
+ *     long continuous runs ≥18 s (ima_fr_ge18 tier) — NOT sprints. Sprint
+ *     exposure comes from GPS velocity bands, not from this module.
+ *     See docs/ima-free-running-bands.md and
+ *     src/lib/integrations/catapult/freeRunningBands.ts.
+ *   - McBurnie 2022: movement/stride profiles add context that GPS
+ *     distance alone does not show (used here descriptively).
  *   - Bishop 2020: L/R asymmetry > 15% in high-intensity CoD efforts
  *     is the strongest single predictor of non-contact lower-limb injury.
  *   - Buchheit 2014: stride norms are individual; per-player baseline
@@ -39,8 +48,11 @@
  */
 
 export type SessionType =
-  | "high_cadence"   // > 30% of strides in bands 5-8 (sprint-heavy)
-  | "tactical"       // > 60% of strides in bands 1-3 (low-intensity)
+  // NB: enum value "high_cadence" is legacy (kept for API stability). It now
+  // means a LONG-RUN day: > 30% of strides in long continuous runs (bouts
+  // ≥18 s). It is NOT a sprint / high-cadence day.
+  | "high_cadence"   // > 30% of strides in long continuous runs (≥18 s)
+  | "tactical"       // > 65% of strides in short bursts (<12 s; was <15 s before Nov 2026)
   | "mixed"          // balanced distribution
   | "recovery"       // < 1500 total strides (light day / off)
   | "no_data";
@@ -51,21 +63,25 @@ export type ImaPlayerDay = {
   source: string | null;
   /** Total IMA strides bands 1-8 captured that day. */
   total_strides: number;
-  /** Sum of bands 1-3 (walking → medium running). */
+  /** Strides in short bursts (bouts <12 s). Meaning shifted Nov 2026: was <15 s (legacy bands 1–3);
+   *  15 s is not an edge in every band config. */
   low_strides: number;
-  /** Sum of bands 4-6 (fast running → high-speed running). */
+  /** Strides in medium runs (bouts 12–24 s). Was 15–24 s (legacy bands 4–6) before Nov 2026. */
   mid_strides: number;
-  /** Sum of bands 7-8 (sprint → max sprint). */
+  /** Strides in the longest runs (bouts ≥24 s). */
   high_strides: number;
-  /** Bands 5-8 (the Sprint Exposure unit). */
+  /**
+   * Strides in LONG CONTINUOUS RUNS (bouts ≥18 s, ima_fr_ge18 tier). Field name is
+   * legacy ("sprint") and kept for API stability — this is NOT sprint exposure.
+   */
   sprint_strides: number;
-  /** Personal 14-day training-only avg of bands 5-8 — null if no baseline. */
+  /** Personal 14-day training-only avg of long-run strides (≥18 s) — null if no baseline. Legacy name. */
   sprint_baseline_avg: number | null;
-  /** Number of training days with IMA b5-8 > 0 that backed the baseline.
+  /** Number of training days with long-run (≥18 s) strides > 0 that backed the baseline.
    *  1 = low confidence (transition period after Catapult Free Running fix),
    *  2+ = standard. Surfaced in the UI so coaches can weight accordingly. */
   sprint_baseline_days: number;
-  /** Today's bands 5-8 ÷ baseline × 100. null if no baseline. */
+  /** Today's long-run strides (≥18 s) ÷ baseline × 100. null if no baseline. Legacy name. */
   sprint_vs_baseline_pct: number | null;
   // Change of Direction — three-tier breakdown (low / medium / high).
   // High-intensity asymmetry is the injury-relevant tier (Bishop 2020:
@@ -100,13 +116,13 @@ export type ImaSessionProfile = {
   team_mid_strides: number;
   team_high_strides: number;
   team_sprint_strides: number;
-  /** Pct of strides in bands 1-3 (low). */
+  /** Pct of strides in short bursts (<12 s; was <15 s before Nov 2026). */
   pct_low: number;
-  /** Pct of strides in bands 4-6 (mid). */
+  /** Pct of strides in medium runs (12–24 s; was 15–24 s before Nov 2026). */
   pct_mid: number;
-  /** Pct of strides in bands 7-8 (high). */
+  /** Pct of strides in the longest runs (≥24 s). */
   pct_high: number;
-  /** Pct of strides in bands 5-8 (sprint-relevant). */
+  /** Pct of strides in long continuous runs (≥18 s). Legacy name — not sprint. */
   pct_sprint: number;
   // Team-level CoD per-tier totals (L + R for each tier)
   team_cod_low_left: number;
@@ -144,8 +160,10 @@ export function asymmetryPct(left: number, right: number): number | null {
  *
  *  Thresholds tuned against Breiðablik historical data (May 2026):
  *    - Recovery: total strides < 1500 (light day / DNP / morning-only)
- *    - High-cadence: sprint band (5-8) > 30% of total
- *    - Tactical: low band (1-3) > 65% AND sprint < 15% (rondo-heavy)
+ *    - Long-run day ("high_cadence", legacy key): runs ≥18 s > 30% of total
+ *    - Tactical: short bursts > 65% AND long runs (≥18 s) < 15% (rondo-heavy).
+ *      Short bursts were <15 s when tuned; they are <12 s since Nov 2026 (band edges
+ *      changed), so the 65% cut-point may need re-checking on a few weeks of data.
  *    - Mixed: everything else (typical MD-2/MD-3 mixed session)
  */
 export function classifySession(
@@ -163,19 +181,19 @@ export function classifySession(
 export function sessionHeadline(type: SessionType, lang: "IS" | "EN" = "EN"): string {
   if (lang === "IS") {
     switch (type) {
-      case "high_cadence": return "Hraðasta æfingin — mikið af spretta/COD vinnu";
-      case "tactical": return "Tæknileg æfing — yfirgnæfandi low-intensity";
-      case "mixed": return "Blönduð æfing — eðlilegt MD-2/MD-3 dreifing";
+      case "high_cadence": return "Langhlaupsdagur — mikið af löngum samfelldum hlaupum (18 sek+)";
+      case "tactical": return "Taktísk æfing — nær eingöngu stutt hlaup";
+      case "mixed": return "Blönduð æfing — eðlileg MD-2/MD-3 dreifing";
       case "recovery": return "Endurheimt eða stuttur dagur";
-      case "no_data": return "Engin IMA gögn fyrir þennan dag";
+      case "no_data": return "Engin hlaupagögn fyrir þennan dag";
     }
   }
   switch (type) {
-    case "high_cadence": return "High-cadence day — lots of sprint / COD work";
-    case "tactical": return "Tactical day — predominantly low-intensity";
+    case "high_cadence": return "Long-run day — lots of continuous running (runs of 18 s or more)";
+    case "tactical": return "Tactical day — almost all short bursts of running";
     case "mixed": return "Mixed day — typical MD-2/MD-3 distribution";
     case "recovery": return "Recovery or short session";
-    case "no_data": return "No IMA data for this day";
+    case "no_data": return "No running data for this day";
   }
 }
 

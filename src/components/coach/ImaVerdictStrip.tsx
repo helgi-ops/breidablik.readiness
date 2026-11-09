@@ -3,7 +3,9 @@
 /**
  * ImaVerdictStrip — the Driver-axis companion to the LoadVerdictCard strip
  * (Engine axis). GPS = engine, IMA = driver (Niklas Virtanen). One plain line
- * summarising today's high-intensity movement vs each player's own baseline,
+ * summarising today's long continuous running (IMA Free Running bands 5–8 =
+ * bouts ≥18 s; bout-duration bands, NOT sprint/high-speed) vs each player's
+ * own baseline,
  * linking to the IMA Intelligence page — the exact mirror of the "Load →" strip
  * that links to Load Intelligence.
  *
@@ -36,8 +38,9 @@ export default function ImaVerdictStrip({ lang, date }: { lang?: "IS" | "EN"; da
         if (!alive || !res.ok) return;
         const j = (await res.json()) as ImaResp;
         const players = (j.profile?.per_player ?? []).filter((p) => p.total_strides > 0);
-        // Same threshold the IMA page verdict uses: high-cadence sprint running
-        // >= 150% of the player's 14-day training-only baseline = acute:chronic spike.
+        // Same threshold the IMA page verdict uses: long-run strides (bands 5–8,
+        // runs ≥18 s; field name `sprint_vs_baseline_pct` is legacy) >= 150% of the
+        // player's 14-day training-only baseline = a jump in sustained running.
         const spikes = players.filter((p) => (p.sprint_vs_baseline_pct ?? 0) >= 150).map((p) => p.full_name);
         const shownDate = j.date ?? null;
         const stale = !!(j.requestedDate && shownDate && shownDate !== j.requestedDate);
@@ -64,19 +67,19 @@ export default function ImaVerdictStrip({ lang, date }: { lang?: "IS" | "EN"; da
     : (is ? "í dag" : "today");
   const sentence = spiking
     ? (is
-        ? `${state.spikes.length} ${state.spikes.length === 1 ? "hljóp" : "hlupu"} mun meira háákefðar en venjulega ${when} — ${names}`
-        : `${state.spikes.length} did much more high-intensity running than usual ${when} — ${names}`)
+        ? `${state.spikes.length} ${state.spikes.length === 1 ? "hljóp" : "hlupu"} mun meira í löngum samfelldum hlaupum en venjulega ${when} — ${names}`
+        : `${state.spikes.length} did much more long continuous running than usual ${when} — ${names}`)
     : (is
-        ? `Háákefðar hlaup innan venju hjá öllum ${when}`
-        : `High-intensity running within range across the squad ${when}`);
+        ? `Löng samfelld hlaup innan venju hjá öllum ${when}`
+        : `Long continuous running within range across the squad ${when}`);
 
   return (
     <a
       href="/coach/ima-intelligence"
       className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
       title={is
-        ? "IMA = drifið (hröðun/hemlun, háákefðar átak), fylgir GPS-vélinni. Reglur ákveða — ekki AI · smelltu fyrir IMA Intelligence"
-        : "IMA = the driver (accel/decel, high-intensity efforts) to the GPS engine. Rules decide — not AI · open IMA Intelligence"}
+        ? "Skref í löngum samfelldum hlaupum (18 sek+, IMA Free Running) miðað við 14 daga venju leikmanns — ekki sprettir. Reglur ákveða — ekki AI · smelltu fyrir IMA Intelligence"
+        : "Strides in long continuous runs (18 s or more; IMA Free Running) vs each player's 14-day usual — not sprints. Rules decide — not AI · open IMA Intelligence"}
     >
       <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${tone}`}>{label}</span>
       <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-slate-800">{sentence}</span>

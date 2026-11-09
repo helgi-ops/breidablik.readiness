@@ -1736,9 +1736,11 @@ export default function CoachPage() {
     Record<string, { dropPct: number; todayKmh: number; refKmh: number }>
   >({});
   // Sprint Exposure per player (Malone 2018 — volume-side hamstring risk).
-  // Weekly sum of IMA bands 5-8 strides vs the player's match-day demand
-  // baseline (avg per match over last 28d). UNDERLOAD < 50% → 3× hamstring
-  // injury risk; OVERLOAD > 150% → accumulated spike. Companion to Sprint
+  // Weekly sum of GPS sprint metres (sprint_distance / velocity band 6) vs the
+  // player's match-day demand baseline (avg per match over last 28d). Indoor /
+  // no-GPS days = no sprint reading (never back-filled from IMA FR bands, which
+  // measure long continuous runs, not sprinting). UNDERLOAD < 50% → 3×
+  // hamstring injury risk; OVERLOAD → accumulated spike. Companion to Sprint
   // Speed Drop (quality side) — together they form full hamstring-injury
   // surveillance (Buchheit 2019: monitor both quality + volume).
   // Computed inline against the team-batched query for one round-trip.
@@ -1750,6 +1752,7 @@ export default function CoachPage() {
       matchDaysMeasured: number;
       matchDaysEstimated: number;
       matchDaysScheduled: number;
+      noGpsDays7d: number;
     }>
   >({});
   // ELITE-tier "Ask Claude for deeper analysis" button on the Coach
@@ -4320,8 +4323,9 @@ export default function CoachPage() {
   }, [coachVerified, coachTeamId, today]);
 
   // ── Bulk Sprint Exposure per player (Malone 2018 — volume-side) ──────
-  // Companion to Sprint Speed Drop above. Pulls last 28 days of IMA bands
-  // 5-8 stride counts + a UNION of week_plans (GAME day_type) and
+  // Companion to Sprint Speed Drop above. Pulls last 28 days of GPS sprint
+  // distance (sprint_distance / velocity band 6 — NOT IMA FR bands, which are
+  // long-continuous-run volume) + a UNION of week_plans (GAME day_type) and
   // match_player_minutes (≥30 min) to flag match days, then runs the pure
   // computeSprintExposure() per player. Using week_plans as the primary
   // source catches matches that aren't fully logged in match_player_minutes
@@ -4351,14 +4355,17 @@ export default function CoachPage() {
           return;
         }
 
-        // Bands 5-8 daily stride counts + GPS V5/V6 sprint-effort counts.
-        // GPS efforts serve as a fallback proxy on match days where IMA
-        // Free Running wasn't captured (older Catapult activities before
-        // they fixed the config). See loader.ts for full calibration logic.
+        // GPS sprint distance per day (Nov 2026 re-source): `sprint_distance`,
+        // else `velocity_band6_total_distance` (Core exposes sprint only as
+        // velocity band 6). IMA Free Running bands 5–8 are NOT used any more —
+        // they are bout-DURATION bands (strides in continuous runs ≥18 s), not
+        // sprinting (docs/ima-free-running-bands.md), so they are never a
+        // sprint proxy, not even as a fallback. Indoor / no-GPS days → null
+        // ("no sprint reading"). Mirrors sprintExposure/loader.ts.
         const { data: rows } = await supabase
           .from("player_external_load_daily")
           .select(
-            "player_id, date, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, velocity_band5_total_efforts_gen2, velocity_band6_total_efforts_gen2"
+            "player_id, date, sprint_distance, velocity_band6_total_distance, velocity_band6_total_efforts_gen2"
           )
           .in("player_id", playerIds)
           .eq("source", "catapult")
@@ -4414,64 +4421,55 @@ export default function CoachPage() {
           /* table optional on some tiers — proceed without match-day data */
         }
 
-        // Phase 1: shape raw per-player per-date facts (IMA strides + GPS
-        // V5+V6 sprint-effort counts). We need both before we can compute
-        // the per-player calibration ratio in Phase 2.
-        type RawRow = {
-          date: string;
-          imaSum: number;
-          v5v6Efforts: number;
-          isMatchDay: boolean;
-          isScheduledGame: boolean;
+        // Shape per-player per-date GPS sprint facts. Field names on
+        // DailySprintExposure are kept for interface stability:
+        // `hiBandStrides` = GPS sprint METRES, `v5v6Efforts` = GPS sprint
+        // effort count (display only). No estimation from other columns.
+        const gpsNum = (v: unknown): number | null => {
+          if (v == null) return null;
+          const n = Number(v);
+          return Number.isFinite(n) ? n : null;
         };
-        const rawByPlayer = new Map<string, Map<string, RawRow>>();
+        const rawByPlayer = new Map<string, Map<string, DailySprintExposure>>();
         for (const id of playerIds) rawByPlayer.set(id, new Map());
         for (const r of (rows ?? []) as Array<{
           player_id: string;
           date: string;
-          ima_fr_band5_stride_count: number | null;
-          ima_fr_band6_stride_count: number | null;
-          ima_fr_band7_stride_count: number | null;
-          ima_fr_band8_stride_count: number | null;
-          velocity_band5_total_efforts_gen2: number | null;
+          sprint_distance: number | null;
+          velocity_band6_total_distance: number | null;
           velocity_band6_total_efforts_gen2: number | null;
         }>) {
-          const b5 = Number(r.ima_fr_band5_stride_count ?? 0) || 0;
-          const b6 = Number(r.ima_fr_band6_stride_count ?? 0) || 0;
-          const b7 = Number(r.ima_fr_band7_stride_count ?? 0) || 0;
-          const b8 = Number(r.ima_fr_band8_stride_count ?? 0) || 0;
-          const v5e = Number(r.velocity_band5_total_efforts_gen2 ?? 0) || 0;
-          const v6e = Number(r.velocity_band6_total_efforts_gen2 ?? 0) || 0;
+          const sprintM = gpsNum(r.sprint_distance) ?? gpsNum(r.velocity_band6_total_distance);
           const playerMatchDays = matchDaysByPlayer.get(r.player_id);
           const map = rawByPlayer.get(r.player_id);
           if (!map) continue;
           map.set(r.date, {
             date: r.date,
-            imaSum: b5 + b6 + b7 + b8,
-            v5v6Efforts: v5e + v6e,
+            hiBandStrides: sprintM,
             isMatchDay: playerMatchDays?.has(r.date) ?? false,
             isScheduledGame: teamGameDays.has(r.date),
+            hiBandStridesEstimated: false,
+            v5v6Efforts: gpsNum(r.velocity_band6_total_efforts_gen2),
+            // A session row with no GPS sprint value = indoor / no satellite lock.
+            noGpsReading: sprintM == null,
           });
         }
-        // Inject scheduled game days that produced no row at all
+        // Inject scheduled game days that produced no row at all (no session
+        // logged — not an indoor reading, just missing).
         for (const [, map] of rawByPlayer) {
           for (const d of teamGameDays) {
             if (!map.has(d)) {
               map.set(d, {
                 date: d,
-                imaSum: 0,
-                v5v6Efforts: 0,
+                hiBandStrides: null,
                 isMatchDay: true,
                 isScheduledGame: true,
+                hiBandStridesEstimated: false,
               });
             }
           }
         }
 
-        // Phase 2: per-player calibration + GPS-fallback estimation.
-        // For each player, find match days where both IMA and GPS efforts
-        // are present, derive their personal strides-per-effort ratio,
-        // and estimate IMA on match days where only GPS is available.
         const out: Record<string, {
           band: "UNDERLOAD" | "WATCH" | "SAFE" | "OVERLOAD" | "INSUFFICIENT_DATA";
           ratio: number | null;
@@ -4479,54 +4477,11 @@ export default function CoachPage() {
           matchDaysMeasured: number;
           matchDaysEstimated: number;
           matchDaysScheduled: number;
+          noGpsDays7d: number;
         }> = {};
         for (const [pid, rawMap] of rawByPlayer) {
           if (rawMap.size === 0) continue;
-          const rawArr = Array.from(rawMap.values());
-          // Calibrate from this player's own IMA-complete match days
-          const calDays = rawArr.filter(
-            (r) => r.isMatchDay && r.imaSum > 0 && r.v5v6Efforts > 0,
-          );
-          let imaPerEffort: number | null = null;
-          if (calDays.length > 0) {
-            const totIma = calDays.reduce((s, r) => s + r.imaSum, 0);
-            const totEff = calDays.reduce((s, r) => s + r.v5v6Efforts, 0);
-            if (totEff > 0) imaPerEffort = totIma / totEff;
-          }
-          // Build final rows with GPS-derived match-day estimates
-          const daily: DailySprintExposure[] = rawArr
-            .map<DailySprintExposure>((r) => {
-              if (r.imaSum > 0) {
-                return {
-                  date: r.date,
-                  hiBandStrides: r.imaSum,
-                  isMatchDay: r.isMatchDay,
-                  isScheduledGame: r.isScheduledGame,
-                  hiBandStridesEstimated: false,
-                };
-              }
-              if (
-                r.isMatchDay &&
-                r.v5v6Efforts > 0 &&
-                imaPerEffort != null &&
-                imaPerEffort > 0
-              ) {
-                return {
-                  date: r.date,
-                  hiBandStrides: Math.round(r.v5v6Efforts * imaPerEffort),
-                  isMatchDay: true,
-                  isScheduledGame: r.isScheduledGame,
-                  hiBandStridesEstimated: true,
-                };
-              }
-              return {
-                date: r.date,
-                hiBandStrides: null,
-                isMatchDay: r.isMatchDay,
-                isScheduledGame: r.isScheduledGame,
-                hiBandStridesEstimated: false,
-              };
-            })
+          const daily: DailySprintExposure[] = Array.from(rawMap.values())
             .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
           const payload = computeSprintExposure(daily, today);
           out[pid] = {
@@ -4536,6 +4491,7 @@ export default function CoachPage() {
             matchDaysMeasured: payload.matchDaysMeasured,
             matchDaysEstimated: payload.matchDaysEstimated,
             matchDaysScheduled: payload.matchDaysScheduled,
+            noGpsDays7d: payload.noGpsDays7d ?? 0,
           };
         }
         if (alive) setPlayerSprintExposure(out);
@@ -6434,6 +6390,7 @@ export default function CoachPage() {
                 sprint: num(r.velocity_band6_total_distance) || num(r.sprint_distance),
                 accel: num(r.accel_b2_3_tot_effs_gen2), decel: num(r.decel_b2_3_tot_effs_gen2),
                 efforts: num(r.accel_decel_efforts),
+                // IMA FR bands 5–8 = distance in long continuous runs (≥18 s) — NOT sprint/HSR (that's hsr/sprint above).
                 ima: num(r.ima_fr_band58_total_distance),
                 imaAccel: num(r.ima_accel), imaDecel: num(r.ima_decel), imaCod: cod || null, jumps: num(r.jumps),
               });
@@ -9390,7 +9347,7 @@ export default function CoachPage() {
                 _sprint_today_kmh: playerSprintDrop[r.player_id]?.todayKmh ?? null,
                 _sprint_ref_kmh: playerSprintDrop[r.player_id]?.refKmh ?? null,
                 // Sprint Exposure (Malone 2018 — volume-side hamstring risk).
-                // Bands 5-8 weekly stride sum vs match-day demand baseline.
+                // GPS weekly sprint metres vs match-day demand baseline (not IMA FR bands).
                 // Surfaced as chip in DecisionSummaryCard + counts toward
                 // "Needs attention" filter for UNDERLOAD / OVERLOAD bands.
                 _sprint_exposure_band: playerSprintExposure[r.player_id]?.band ?? null,
@@ -9399,6 +9356,9 @@ export default function CoachPage() {
                 _sprint_exposure_match_days_measured: playerSprintExposure[r.player_id]?.matchDaysMeasured ?? null,
                 _sprint_exposure_match_days_estimated: playerSprintExposure[r.player_id]?.matchDaysEstimated ?? null,
                 _sprint_exposure_match_days_scheduled: playerSprintExposure[r.player_id]?.matchDaysScheduled ?? null,
+                // Built from GPS sprint metres above (never IMA bands) — unlocks the chip.
+                _sprint_exposure_source: playerSprintExposure[r.player_id] ? "gps" : null,
+                _sprint_exposure_no_gps_days_7d: playerSprintExposure[r.player_id]?.noGpsDays7d ?? null,
               };
 
               // Enrich with most recent GPS load from catapult history

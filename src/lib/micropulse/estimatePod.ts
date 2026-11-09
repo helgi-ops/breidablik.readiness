@@ -16,19 +16,34 @@
  * baseline/PR/season-best computations elsewhere.
  */
 
+import { boundsOfRow } from "@/lib/integrations/catapult/freeRunningBands";
+
 /** A fetched load row — mixed columns (numeric metrics + string ids + jsonb). */
 export type LoadRowLike = Record<string, unknown>;
 
-/** Numeric cumulative columns — scaled by minutes/90, rounded to 1 dp. */
+/** Numeric cumulative columns — scaled by minutes/90, rounded to 1 dp.
+ *  Every column is imputed from ITS OWN baseline (no cross-column proxying): GPS sprint/HSR
+ *  (sprint_distance, high_speed_distance, velocity_band5/6_*) come only from GPS history, and the
+ *  IMA Free Running columns come only from IMA FR history. IMA FR bands are bout-DURATION bands
+ *  (seconds of one continuous run, NOT sprinting — docs/ima-free-running-bands.md), so they are never
+ *  used to estimate sprint, and vice versa.
+ *
+ *  IMA FR band edges are configurable and changed on 9 Nov 2026 (legacy 0-8-12-15-18-21-24-27-100 →
+ *  0-2.5-5-8-12-18-24-30-1000), so a band NUMBER is not a fixed run length. Two kinds of FR column:
+ *   • run-length tiers (ima_fr_ge18_*, ima_fr_ge24_*, ima_fr_band58_total_distance = metres in runs ≥18 s)
+ *     mean the same thing in every row → imputed here like any other column, from all history;
+ *   • raw per-band columns (FR_BAND_NUM / FR_BAND_INT) → imputed ONLY from rows classified with one set of
+ *     edges (see `frReferenceBounds`), and the row is stamped with those edges (ima_fr_band_bounds) so the DB
+ *     trigger recomputes the tiers consistently. `ima_fr_band_bounds` is never averaged as a number. */
 export const CUM_NUM: string[] = [
   "total_distance", "high_speed_distance", "sprint_distance",
   "velocity_band5_total_distance", "velocity_band6_total_distance",
   "total_player_load", "player_load",
   "high_metabolic_load_distance_m", "metabolic_energy_kj",
   "explosive_distance", "hir_dist",
-  "ima_fr_band58_total_distance", "ima_fr_band5_total_distance", "ima_fr_band6_total_distance",
-  "ima_fr_band7_total_distance", "ima_fr_band8_total_distance",
-  "ima_fr_band6_total_player_load", "ima_fr_band7_total_player_load", "ima_fr_band8_total_player_load",
+  "ima_fr_band58_total_distance",
+  "ima_fr_ge18_total_duration", "ima_fr_ge18_total_distance", "ima_fr_ge18_total_player_load",
+  "ima_fr_ge24_total_duration", "ima_fr_ge24_total_distance", "ima_fr_ge24_total_player_load",
 ];
 
 /** Integer cumulative columns — scaled by minutes/90, rounded to whole numbers. */
@@ -42,10 +57,17 @@ export const CUM_INT: string[] = [
   "ima_cod_right_high", "ima_cod_right_medium", "ima_cod_right_low",
   "ima_band1_decel_count", "ima_band2_decel_count", "ima_band3_decel_count",
   "ima_band1_accel_count", "ima_band2_accel_count", "ima_band3_accel_count",
-  "ima_fr_band1_stride_count", "ima_fr_band2_stride_count", "ima_fr_band3_stride_count",
-  "ima_fr_band4_stride_count", "ima_fr_band5_stride_count",
-  "ima_fr_band6_stride_count", "ima_fr_band7_stride_count", "ima_fr_band8_stride_count",
+  "ima_fr_ge18_event_count", "ima_fr_ge18_stride_count",
+  "ima_fr_ge24_event_count", "ima_fr_ge24_stride_count",
 ];
+
+const FR_BANDS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+/** Raw per-band IMA FR numeric columns (scaled, 1 dp) — imputed only from same-edge rows. */
+export const FR_BAND_NUM: string[] = FR_BANDS.flatMap((b) =>
+  ["total_duration", "total_distance", "total_player_load"].map((f) => `ima_fr_band${b}_${f}`));
+/** Raw per-band IMA FR count columns (scaled, whole numbers) — imputed only from same-edge rows. */
+export const FR_BAND_INT: string[] = FR_BANDS.flatMap((b) =>
+  ["event_count", "stride_count"].map((f) => `ima_fr_band${b}_${f}`));
 
 /** Peak / rate columns — the player's AVERAGE peak, used as-is (never scaled). */
 export const PEAK: string[] = [
@@ -54,7 +76,24 @@ export const PEAK: string[] = [
 ];
 
 /** Every column the estimator reads/writes (for the SELECT in the route). */
-export const ESTIMATE_COLS: string[] = [...CUM_NUM, ...CUM_INT, ...PEAK];
+export const ESTIMATE_COLS: string[] = [...CUM_NUM, ...CUM_INT, ...FR_BAND_NUM, ...FR_BAND_INT, ...PEAK, "ima_fr_band_bounds"];
+
+const hasFrBands = (r: LoadRowLike): boolean =>
+  [...FR_BAND_NUM, ...FR_BAND_INT].some((c) => typeof r[c] === "number" && Number.isFinite(r[c] as number));
+const boundsKey = (b: readonly number[]): string => b.join(",");
+
+/**
+ * The band edges the estimated row's per-band columns are taken from. Squad rows are on the match date itself,
+ * so their edges are the ones in force that day — preferred. Otherwise the player's most recent row with band
+ * data. Null when no row carries per-band data.
+ */
+export function frReferenceBounds(personalRows: LoadRowLike[], squadRows: LoadRowLike[]): readonly number[] | null {
+  const squad = squadRows.find(hasFrBands);
+  if (squad) return boundsOfRow(squad);
+  const personal = personalRows.filter(hasFrBands)
+    .sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? "")))[0];
+  return personal ? boundsOfRow(personal) : null;
+}
 
 function avg(rows: LoadRowLike[], col: string): number | null {
   const vs = rows.map((r) => r[col]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
@@ -103,6 +142,25 @@ export function buildEstimateRow(inp: EstimateInput): EstimateResult {
   for (const col of CUM_NUM) { const { v, src } = base(col); if (v != null) { row[col] = round(v * factor, 1); mark(src); } }
   for (const col of CUM_INT) { const { v, src } = base(col); if (v != null) { row[col] = Math.round(v * factor); mark(src); } }
   for (const col of PEAK)    { const { v, src } = base(col); if (v != null) { row[col] = round(v, 2); mark(src); } }
+
+  // Per-band IMA FR columns: only from rows classified with the reference edges, never mixing configs.
+  const ref = frReferenceBounds(personalRows, squadRows);
+  if (ref) {
+    const same = (rows: LoadRowLike[]) => rows.filter((r) => hasFrBands(r) && boundsKey(boundsOfRow(r)) === boundsKey(ref));
+    const pSame = same(personalRows), sSame = same(squadRows);
+    const baseBand = (col: string): { v: number | null; src: "personal" | "squad" | null } => {
+      const p = avg(pSame, col);
+      if (p != null) return { v: p, src: "personal" };
+      const q = avg(sSame, col);
+      return q != null ? { v: q, src: "squad" } : { v: null, src: null };
+    };
+    let wroteBand = false;
+    for (const col of FR_BAND_NUM) { const { v, src } = baseBand(col); if (v != null) { row[col] = round(v * factor, 1); mark(src); wroteBand = true; } }
+    for (const col of FR_BAND_INT) { const { v, src } = baseBand(col); if (v != null) { row[col] = Math.round(v * factor); mark(src); wroteBand = true; } }
+    // Stamp the edges the bands were classified with (the DB trigger keeps writer-supplied bounds and
+    // recomputes ima_fr_ge18_* / ge24_* from these bands).
+    if (wroteBand) row.ima_fr_band_bounds = [...ref];
+  }
 
   const baselineUsed: EstimateResult["baselineUsed"] =
     usedPersonal && usedSquad ? "mixed" : usedPersonal ? "personal" : usedSquad ? "squad" : "none";

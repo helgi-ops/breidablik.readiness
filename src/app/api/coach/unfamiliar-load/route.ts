@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
     arr.push({
       date: String(r.date),
       totalDistance: num(r.total_distance),
-      imaDistance: num(r.ima_fr_band58_total_distance),
+      imaDistance: num(r.ima_fr_band58_total_distance), // long continuous runs (≥18 s), not sprint
       accelEfforts: num(r.accel_b2_3_tot_effs_gen2),
       decelEfforts: num(r.decel_b2_3_tot_effs_gen2),
       accelDecelEfforts: num(r.accel_decel_efforts),

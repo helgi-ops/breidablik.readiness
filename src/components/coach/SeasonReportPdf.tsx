@@ -94,7 +94,8 @@ const PHYS_LABEL: Record<string, { EN: string; IS: string }> = {
   hmldPerMin: { EN: "High metabolic-load / min", IS: "Hátt efnaskiptaálag / mín" },
   highDecelPerMin: { EN: "Braking (decel) / min", IS: "Hemlun / mín" },
   highCodPerMin: { EN: "High change-of-direction / min", IS: "Stefnubreytingar / mín" },
-  sprintStridesPerMin: { EN: "Sprint strides / min", IS: "Sprettskref / mín" },
+  // Legacy key: now = strides in continuous runs of 24 s+ (ima_fr_ge24), sustained running, not sprints.
+  sprintStridesPerMin: { EN: "Strides in longest runs (24 s+) / min", IS: "Skref í lengstu hlaupum (24+ sek) / mín" },
   jumpsPerMin: { EN: "Jumps / min", IS: "Stökk / mín" },
 };
 

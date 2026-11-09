@@ -34,17 +34,15 @@ interface StrideLoadRow {
   date: string;
   source?: string | null;
   ima_fr_band58_total_distance: number | null;
-  ima_fr_band5_stride_count: number | null;
-  ima_fr_band6_stride_count: number | null;
-  ima_fr_band7_stride_count: number | null;
-  ima_fr_band8_stride_count: number | null;
+  /** Config-independent tiers (DB trigger): efforts ≥18 s. Band numbers shift when the club's edges change. */
+  ima_fr_ge18_total_distance: number | null;
+  ima_fr_ge18_stride_count: number | null;
   total_distance: number | null;
 }
 
 const STRIDE_LOAD_COLS =
   "player_id, date, source, ima_fr_band58_total_distance, " +
-  "ima_fr_band5_stride_count, ima_fr_band6_stride_count, " +
-  "ima_fr_band7_stride_count, ima_fr_band8_stride_count, total_distance";
+  "ima_fr_ge18_total_distance, ima_fr_ge18_stride_count, total_distance";
 
 interface MinutesRow {
   player_id: string;
@@ -75,14 +73,10 @@ function startIsoFor(date: string, lookbackDays: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Sum the high-cadence stride bands (5–8) for one daily row. */
+/** Strides in long continuous runs (efforts ≥18 s — NOT sprint/cadence) for one daily row, from the
+ *  config-independent ima_fr_ge18 tier (bands 5–8 under the legacy edges, 6–8 under the Nov-2026 edges). */
 function bandStrides(r: StrideLoadRow): number {
-  return (
-    (Number(r.ima_fr_band5_stride_count ?? 0) || 0) +
-    (Number(r.ima_fr_band6_stride_count ?? 0) || 0) +
-    (Number(r.ima_fr_band7_stride_count ?? 0) || 0) +
-    (Number(r.ima_fr_band8_stride_count ?? 0) || 0)
-  );
+  return Number(r.ima_fr_ge18_stride_count ?? 0) || 0;
 }
 
 /**
@@ -96,7 +90,8 @@ export function buildStrideSessions(
 ): StrideSession[] {
   return oneRowPerDate(rows).map((r) => {
     const minutes = minutesByDate.has(r.date) ? minutesByDate.get(r.date)! : null;
-    const distance = r.ima_fr_band58_total_distance != null ? Number(r.ima_fr_band58_total_distance) : null;
+    const dist = r.ima_fr_ge18_total_distance ?? r.ima_fr_band58_total_distance;
+    const distance = dist != null ? Number(dist) : null;
     const strides = bandStrides(r);
     return {
       date: r.date,

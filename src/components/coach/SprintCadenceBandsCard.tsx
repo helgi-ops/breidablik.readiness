@@ -3,14 +3,18 @@
 /**
  * src/components/coach/SprintCadenceBandsCard.tsx
  *
- * LONGEST CONTINUOUS RUNS (≥24 s) — IMA Free Running bands 7 + 8, as strides.
+ * LONGEST CONTINUOUS RUNS (≥24 s) — IMA Free Running strides in runs of 24 s or more.
  *
  * The file/component name is historical ("sprint cadence") and kept so imports
- * don't break. IMA Free Running bands are BOUT-DURATION bands: band 7 = runs
- * lasting 24–27 s, band 8 = runs longer than 27 s. Mean speed in these bands is
- * ~12–14 km/h and stride rate ~87–93/min — the same as bands 4–6 — so this is
- * NOT sprinting and NOT high cadence (docs/ima-free-running-bands.md). Sprint
- * volume lives on SprintExposureCard (GPS sprint distance).
+ * don't break. IMA Free Running bands are BOUT-DURATION bands, and their EDGES
+ * CHANGE per team/date (legacy 0-8-12-15-18-21-24-27-100: ≥24 s = bands 7–8 as
+ * 24–27 s / 27 s+; Breiðablik from 10 Nov 2026 0-2.5-5-8-12-18-24-30-1000:
+ * ≥24 s = bands 7–8 as 24–30 s / 30 s+). The total reads the config-independent
+ * ima_fr_ge24_stride_count tier; the detail split groups by RUN LENGTH using each
+ * row's own ima_fr_band_bounds, so 24–27 s and 24–30 s are never added together.
+ * Mean speed in these runs is ~12–14 km/h and stride rate ~87–93/min — the same as
+ * medium runs — so this is NOT sprinting and NOT high cadence
+ * (docs/ima-free-running-bands.md). Sprint volume lives on SprintExposureCard (GPS).
  *
  * Why reframe instead of re-sourcing to GPS sprint efforts: this card sits
  * directly under SprintExposureCard, which is GPS-sourced, so a GPS version
@@ -25,20 +29,37 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { freeRunningBandLabel } from "@/lib/integrations/catapult/freeRunningBands";
+import {
+  bandsAtOrAbove,
+  boundsOfRow,
+  freeRunningBandLabel,
+  sumBandsBetween,
+} from "@/lib/integrations/catapult/freeRunningBands";
+
+/** Runs of this length or more = "longest runs" (an edge in every band config). */
+const LONGEST_RUN_MIN_S = 24;
 
 type DayRow = {
   date: string;
-  band7: number;
-  band8: number;
+  /** Strides in runs ≥24 s (ima_fr_ge24 tier, else summed from the row's own bands ≥24 s). */
+  total: number;
+};
+
+/** One run-length line of the detail split (e.g. "Runs of 24–27 s"), summed over rows with the same edges. */
+type SplitLine = {
+  key: string;
+  lo: number;
+  labelEn: string;
+  labelIs: string;
+  sum7d: number;
+  sum28d: number;
 };
 
 type Loaded = {
   days: DayRow[];
-  sum7dB7: number;
-  sum7dB8: number;
-  sum28dB7: number;
-  sum28dB8: number;
+  sum7d: number;
+  sum28d: number;
+  split: SplitLine[];
   daysWithData7d: number;
 };
 
@@ -65,7 +86,10 @@ export default function SprintCadenceBandsCard({ playerId }: { playerId: string 
 
         const { data: rows, error } = await supabase
           .from("player_external_load_daily")
-          .select("date, ima_fr_band7_stride_count, ima_fr_band8_stride_count")
+          .select(
+            "date, ima_fr_band_bounds, ima_fr_ge24_stride_count, " +
+              "ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count",
+          )
           .eq("player_id", playerId)
           .gte("date", toDateStr(from28))
           .lte("date", toDateStr(today))
@@ -78,28 +102,45 @@ export default function SprintCadenceBandsCard({ playerId }: { playerId: string 
           return;
         }
 
-        const days: DayRow[] = ((rows ?? []) as Array<{
-          date: string;
-          ima_fr_band7_stride_count: number | null;
-          ima_fr_band8_stride_count: number | null;
-        }>).map((r) => ({
-          date: r.date,
-          band7: Number(r.ima_fr_band7_stride_count ?? 0) || 0,
-          band8: Number(r.ima_fr_band8_stride_count ?? 0) || 0,
-        }));
-
-        let sum7dB7 = 0, sum7dB8 = 0, sum28dB7 = 0, sum28dB8 = 0, daysWithData7d = 0;
-        for (const d of days) {
-          sum28dB7 += d.band7;
-          sum28dB8 += d.band8;
-          if (d.date >= from7Str) {
-            sum7dB7 += d.band7;
-            sum7dB8 += d.band8;
-            if (d.band7 > 0 || d.band8 > 0) daysWithData7d += 1;
+        const typed = (rows ?? []) as unknown as Array<Record<string, unknown> & { date: string }>;
+        const days: DayRow[] = [];
+        const split = new Map<string, SplitLine>();
+        let sum7d = 0, sum28d = 0, daysWithData7d = 0;
+        for (const r of typed) {
+          const tier = Number(r.ima_fr_ge24_stride_count);
+          const total = Number.isFinite(tier) && r.ima_fr_ge24_stride_count != null
+            ? tier
+            : sumBandsBetween(r, "stride_count", LONGEST_RUN_MIN_S) ?? 0;
+          days.push({ date: r.date, total });
+          const in7d = r.date >= from7Str;
+          sum28d += total;
+          if (in7d) {
+            sum7d += total;
+            if (total > 0) daysWithData7d += 1;
+          }
+          // Detail split by run length under this row's own edges (never by band number across rows).
+          const bounds = boundsOfRow(r);
+          for (const b of bandsAtOrAbove(bounds, LONGEST_RUN_MIN_S) ?? []) {
+            const v = Number(r[`ima_fr_band${b}_stride_count`] ?? 0) || 0;
+            const lo = bounds[b - 1];
+            const hi = b === 8 ? "open" : String(bounds[b]);
+            const key = `${lo}-${hi}`;
+            const line = split.get(key) ?? {
+              key, lo,
+              labelEn: freeRunningBandLabel(b, "en", bounds),
+              labelIs: freeRunningBandLabel(b, "is", bounds),
+              sum7d: 0, sum28d: 0,
+            };
+            line.sum28d += v;
+            if (in7d) line.sum7d += v;
+            split.set(key, line);
           }
         }
+        const splitLines = Array.from(split.values())
+          .filter((l) => l.sum28d > 0)
+          .sort((a, b) => a.lo - b.lo || a.key.localeCompare(b.key));
 
-        setData({ days, sum7dB7, sum7dB8, sum28dB7, sum28dB8, daysWithData7d });
+        setData({ days, sum7d, sum28d, split: splitLines, daysWithData7d });
       } catch {
         /* silent — card just won't render */
       } finally {
@@ -113,10 +154,10 @@ export default function SprintCadenceBandsCard({ playerId }: { playerId: string 
   if (!data) return null;
 
   // Nothing captured at all in 28 days — hide rather than show an empty card.
-  if (data.sum28dB7 === 0 && data.sum28dB8 === 0) return null;
+  if (data.sum28d === 0) return null;
 
-  const total7d = data.sum7dB7 + data.sum7dB8;
-  const total28d = data.sum28dB7 + data.sum28dB8;
+  const total7d = data.sum7d;
+  const total28d = data.sum28d;
   const usualWeek = total28d / 4;
   const fmt = (n: number) => Math.round(n).toLocaleString("is-IS");
   const IS = lang === "IS";
@@ -180,16 +221,13 @@ export default function SprintCadenceBandsCard({ playerId }: { playerId: string 
       {showDetails && (
         <>
           <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-            <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
-              <div className="text-[9px] uppercase tracking-wide text-slate-500">{freeRunningBandLabel(7, IS ? "is" : "en")} · 7d</div>
-              <div className="mt-0.5 text-sm font-bold tabular-nums text-slate-900">{fmt(data.sum7dB7)}</div>
-              <div className="text-[9px] text-slate-500">{IS ? "skref" : "strides"}</div>
-            </div>
-            <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
-              <div className="text-[9px] uppercase tracking-wide text-slate-500">{freeRunningBandLabel(8, IS ? "is" : "en")} · 7d</div>
-              <div className="mt-0.5 text-sm font-bold tabular-nums text-slate-900">{fmt(data.sum7dB8)}</div>
-              <div className="text-[9px] text-slate-500">{IS ? "skref" : "strides"}</div>
-            </div>
+            {data.split.map((l) => (
+              <div key={l.key} className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
+                <div className="text-[9px] uppercase tracking-wide text-slate-500">{IS ? l.labelIs : l.labelEn} · 7d</div>
+                <div className="mt-0.5 text-sm font-bold tabular-nums text-slate-900">{fmt(l.sum7d)}</div>
+                <div className="text-[9px] text-slate-500">{IS ? "skref" : "strides"}</div>
+              </div>
+            ))}
             <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
               <div className="text-[9px] uppercase tracking-wide text-slate-500">{IS ? "Samtals · 7d" : "Total · 7d"}</div>
               <div className="mt-0.5 text-sm font-bold tabular-nums text-slate-900">{fmt(total7d)}</div>
@@ -198,13 +236,13 @@ export default function SprintCadenceBandsCard({ playerId }: { playerId: string 
           </div>
           <div className="mt-2 text-[10px] text-slate-500">
             {IS
-              ? `28 daga samtals: ${fmt(total28d)} skref (24–27 sek ${fmt(data.sum28dB7)} · >27 sek ${fmt(data.sum28dB8)})`
-              : `28-day total: ${fmt(total28d)} strides (24–27 s ${fmt(data.sum28dB7)} · >27 s ${fmt(data.sum28dB8)})`}
+              ? `28 daga samtals: ${fmt(total28d)} skref (${data.split.map((l) => `${l.labelIs.toLowerCase()} ${fmt(l.sum28d)}`).join(" · ")})`
+              : `28-day total: ${fmt(total28d)} strides (${data.split.map((l) => `${l.labelEn.toLowerCase()} ${fmt(l.sum28d)}`).join(" · ")})`}
           </div>
           <p className="mt-2 text-[10px] text-slate-500 leading-snug">
             {IS
-              ? "Heimild: Catapult IMA Free Running, bönd 7–8 (V2). Böndin flokka hvert samfellt hlaup eftir LENGD í sekúndum (band 7 = 24–27 sek, band 8 = >27 sek), ekki eftir hraða eða skreftíðni — meðalhraði er ~12–14 km/klst og skreftíðni ~87–93/mín, sú sama og í böndum 4–6. Decel:Sprint Coupling reiturinn fyrir neðan les GPS-spretti, ekki þessa tölu."
-              : "Source: Catapult IMA Free Running, bands 7–8 (V2). The bands sort each continuous run by its LENGTH in seconds (band 7 = 24–27 s, band 8 = >27 s), not by speed or stride rate — mean speed is ~12–14 km/h and stride rate ~87–93/min, the same as bands 4–6. The Decel:Sprint Coupling tile below reads GPS sprint efforts, not this number."}
+              ? "Heimild: Catapult IMA Free Running (V2), öll hlaup sem stóðu í 24 sek eða lengur. Böndin flokka hvert samfellt hlaup eftir LENGD í sekúndum, ekki eftir hraða eða skreftíðni — meðalhraði er ~12–14 km/klst og skreftíðni ~87–93/mín, sú sama og í miðlungslöngum hlaupum. Bandamörkin breyttust 10. nóv. 2026 (efsta bilið varð 24–30 sek og >30 sek í stað 24–27 og >27), svo sundurliðunin sýnir hvort tveggja; heildartalan (≥24 sek) er sambærileg yfir breytinguna. Decel:Sprint Coupling reiturinn fyrir neðan les GPS-spretti, ekki þessa tölu."
+              : "Source: Catapult IMA Free Running (V2), every run lasting 24 s or more. The bands sort each continuous run by its LENGTH in seconds, not by speed or stride rate — mean speed is ~12–14 km/h and stride rate ~87–93/min, the same as medium runs. The band edges changed on 10 Nov 2026 (the top split became 24–30 s and >30 s instead of 24–27 s and >27 s), so the split can show both; the total (≥24 s) compares across the change. The Decel:Sprint Coupling tile below reads GPS sprint efforts, not this number."}
           </p>
         </>
       )}

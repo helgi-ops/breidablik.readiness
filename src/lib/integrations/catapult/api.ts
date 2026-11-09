@@ -149,10 +149,20 @@ export const CATAPULT_DECEL_B3_PLUS_PARAMETERS = [
   "Deceleration B3+ Total # Efforts (Gen 2)",
 ];
 
-// IMA Free Running parameters — 8 stride velocity bands, IMU-only (works indoor)
-// User confirmed all 8 bands enabled in OpenField Reporting_Parameters (25 Apr 2026)
-// because Icelandic indoor halls are often 100m+ long, so high bands (7-8) capture
-// real sprint events. Each band gets 3 metrics: stride count, avg stride rate, player load.
+// IMA Free Running parameters — 8 bands, IMU-only (works indoor).
+//
+// WHAT THE BANDS ARE (confirmed by the fr=1 probe, 24 Oct 2026, 15 athletes): the bands
+// are BOUT-DURATION bands — how many seconds a continuous free-running bout lasted —
+// NOT speed or cadence bands. Breidablik's OpenField thresholds 0–8–12–15–18–21–24–27–100
+// are seconds. Evidence: total duration ÷ event count per band = 3.8, 10.1, 13.5, 16.6,
+// 19.6, 22.1, 25.9, 30.0 s — each inside its band's bounds — while mean speed (~12–13
+// km/h) and stride rate (~87–93 /min) are flat from band 4 to 8, and band 8 distance
+// (567 m) dwarfs GPS sprint distance (50 m) for the same athlete. So band 5–8 = "long
+// continuous runs (≥18 s)", not sprints. See freeRunningBands.ts.
+//
+// Catapult serves these from the V2 algorithm (ima_v2_free_run_* and imafreerunning_*);
+// every ima_v1_free_run_* key is 0 for our org. "Average Stride Rate 1.0" (V1) is NOT a
+// valid parameter name for this org (all 8 rejected by the probe) and was removed.
 export const CATAPULT_FREE_RUNNING_PARAMETERS = [
   "IMA Free Running Band 1 Stride Count",
   "IMA Free Running Band 1 Average Stride Rate",
@@ -179,7 +189,7 @@ export const CATAPULT_FREE_RUNNING_PARAMETERS = [
   "IMA Free Running Band 8 Average Stride Rate",
   "IMA Free Running Band 8 Total Player Load",
 
-  // Per-band DISTANCE (metres run within each cadence band) — bands 5–8 only,
+  // Per-band DISTANCE (metres run in efforts of that duration band) — bands 5–8 only,
   // the high-cadence / sprint-stride end, which is all the schema stores
   // (ima_fr_band5..8_total_distance + the 5–8 rollup).
   //
@@ -197,12 +207,12 @@ export const CATAPULT_FREE_RUNNING_PARAMETERS = [
   "IMA Free Running Band 7 Total Distance",
   "IMA Free Running Band 8 Total Distance",
 
-  // Per-band TIME, EVENT COUNT, V1 stride rate and bands 1–4 DISTANCE (added Nov 2026).
+  // Per-band TIME, EVENT COUNT and bands 1–4 DISTANCE (added Nov 2026).
   // Purpose: verify what the bands actually are. Total Distance ÷ Total Duration gives
   // the real mean speed in each band, so we can confirm whether the OpenField band
-  // thresholds (0–8–12–15–18–21–24–27 for Breidablik) are km/h speed bands. Average
-  // Stride Rate 1.0 is the V1 algorithm — stored separately so V1 and V2 are never
-  // mixed. All are in the org's Reporting_Parameters; the batch falls back to
+  // thresholds (0–8–12–15–18–21–24–27 for Breidablik) are km/h speed bands (they are
+  // not — Catapult confirmed Nov 2026: effort-duration bands in seconds). All are in the org's
+  // Reporting_Parameters; the batch falls back to
   // per-parameter probing, so an org without them simply skips them.
   "IMA Free Running Band 1 Total Duration",
   "IMA Free Running Band 2 Total Duration",
@@ -220,14 +230,6 @@ export const CATAPULT_FREE_RUNNING_PARAMETERS = [
   "IMA Free Running Band 6 Event Count",
   "IMA Free Running Band 7 Event Count",
   "IMA Free Running Band 8 Event Count",
-  "IMA Free Running Band 1 Average Stride Rate 1.0",
-  "IMA Free Running Band 2 Average Stride Rate 1.0",
-  "IMA Free Running Band 3 Average Stride Rate 1.0",
-  "IMA Free Running Band 4 Average Stride Rate 1.0",
-  "IMA Free Running Band 5 Average Stride Rate 1.0",
-  "IMA Free Running Band 6 Average Stride Rate 1.0",
-  "IMA Free Running Band 7 Average Stride Rate 1.0",
-  "IMA Free Running Band 8 Average Stride Rate 1.0",
   "IMA Free Running Band 1 Total Distance",
   "IMA Free Running Band 2 Total Distance",
   "IMA Free Running Band 3 Total Distance",

@@ -45,7 +45,8 @@ export const KPI_LABEL: Record<LoadKpi, string> = {
   accel: "Accelerations (B2-3)",
   decel: "Decelerations (B2-3)",
   efforts: "Hard efforts (accel+decel)",
-  ima: "IMA high-intensity (m)",
+  // IMA FR bands 5–8 = distance in long continuous runs (≥18 s; bout-duration bands) — NOT high-speed/sprint.
+  ima: "Long-run distance (m)",
   imaAccel: "IMA accelerations",
   imaDecel: "IMA decelerations",
   imaCod: "Change of direction",
@@ -94,7 +95,7 @@ const VAL: Record<LoadKpi, (r: LoadRow) => number> = {
   accel: (r) => num(r.accel_b2_3_tot_effs_gen2),
   decel: (r) => num(r.decel_b2_3_tot_effs_gen2),
   efforts: (r) => num(r.accel_decel_efforts),
-  ima: (r) => num(r.ima_fr_band58_total_distance),
+  ima: (r) => num(r.ima_fr_band58_total_distance), // long continuous runs (≥18 s), not sprint
   imaAccel: (r) => num(r.ima_accel),
   imaDecel: (r) => num(r.ima_decel),
   imaCod: (r) => num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low) + num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low),
@@ -109,6 +110,7 @@ function num(v: unknown): number {
 /** KPI emphasis by session type — re-weights the per-KPI target. */
 const EMPHASIS: Record<SessionLoadType, Partial<Record<LoadKpi, number>>> = {
   mechanical: { accel: 1.15, decel: 1.15, efforts: 1.15, hsr: 0.85, sprint: 0.8 },
+  // `ima` (long continuous runs) rides the running day — sustained running volume, not a sprint proxy.
   locomotive: { hsr: 1.15, sprint: 1.2, ima: 1.1, accel: 0.9, decel: 0.9, efforts: 0.9 },
   mixed: {},
 };
@@ -131,7 +133,7 @@ export type PlayerPlan = {
   accel: number | null;     // accel band 2-3 efforts
   decel: number | null;     // decel band 2-3 efforts
   efforts: number | null;   // combined accel+decel efforts (Lite/Core)
-  ima: number | null;       // IMA high-intensity / change-of-direction distance
+  ima: number | null;       // IMA FR long-run distance (bands 5–8 = continuous runs ≥18 s) — sustained running, NOT sprint/HSR
   imaAccel: number | null;  // IMA accelerations (Pro inertial count)
   imaDecel: number | null;  // IMA decelerations (Pro inertial count)
   imaCod: number | null;    // IMA change-of-direction events (Pro)

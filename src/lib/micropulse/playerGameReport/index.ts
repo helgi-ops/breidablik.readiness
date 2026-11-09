@@ -13,12 +13,24 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sprintDistanceM } from "@/lib/micropulse/catapultCapability";
+import { sumBandsBetween } from "@/lib/integrations/catapult/freeRunningBands";
 import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { loadMatchVerdicts, isContaminatedForBenchmark, verdictKey } from "@/lib/micropulse/matchRunningVerdicts";
 
 const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const r0 = (v: number) => Math.round(v);
 const r1 = (v: number) => Math.round(v * 10) / 10;
+
+/**
+ * What the legacy-named `ima_hir5..8` keys hold now: metres in runs of these lengths (seconds of one continuous
+ * run, from edges present in every band config). Plain labels for the radar (EN default, IS toggle).
+ */
+export const IMA_RUN_LENGTH_SPLIT = [
+  { key: "ima_hir5", loS: 0, hiS: 12, en: "Runs <12 s", is: "Hlaup <12 sek" },
+  { key: "ima_hir6", loS: 12, hiS: 18, en: "Runs 12–18 s", is: "Hlaup 12–18 sek" },
+  { key: "ima_hir7", loS: 18, hiS: 24, en: "Runs 18–24 s", is: "Hlaup 18–24 sek" },
+  { key: "ima_hir8", loS: 24, hiS: Number.POSITIVE_INFINITY, en: "Runs ≥24 s", is: "Hlaup ≥24 sek" },
+] as const;
 
 export const MIN_QUALIFY_MINUTES = 20; // ignore cameo appearances in the benchmark
 
@@ -43,8 +55,9 @@ const LOAD_COLUMNS =
   "accelerations, decelerations, max_velocity, ima_accel, ima_decel, " +
   "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
-  "ima_fr_band58_total_distance, ima_fr_band5_total_distance, ima_fr_band6_total_distance, " +
-  "ima_fr_band7_total_distance, ima_fr_band8_total_distance, " +
+  "ima_fr_band58_total_distance, ima_fr_band_bounds, ima_fr_ge24_total_distance, " +
+  "ima_fr_band1_total_distance, ima_fr_band2_total_distance, ima_fr_band3_total_distance, ima_fr_band4_total_distance, " +
+  "ima_fr_band5_total_distance, ima_fr_band6_total_distance, ima_fr_band7_total_distance, ima_fr_band8_total_distance, " +
   "jumps, accel_decel_efforts, high_metabolic_load_distance_m, session_duration_minutes, velocity_band6_total_distance, player_load_per_minute, raw_payload_json";
 
 function loadRowToMetrics(r: Record<string, unknown>): MatchMetrics {
@@ -64,13 +77,19 @@ function loadRowToMetrics(r: Record<string, unknown>): MatchMetrics {
       num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low),
     ),
     jumps: r0(num(r.jumps)),
+    // Legacy key names: `ima_hsr` / `ima_hir5..8` are NOT high-speed / high-intensity running.
+    // IMA Free Running bands are BOUT-DURATION bands (docs/ima-free-running-bands.md):
+    // Band edges are configurable and changed on 9 Nov 2026, so the split is read by RUN LENGTH from the
+    // row's own edges (IMA_RUN_LENGTH_SPLIT), never by band number:
+    // ima_hsr = metres in long continuous runs ≥18 s (config-aware rollup);
+    // ima_hir5..8 = metres in runs of <12 / 12–18 / 18–24 / ≥24 s (so hir7 + hir8 = ima_hsr).
+    // Before Nov 2026 they were legacy bands 5–8 = 18–21 / 21–24 / 24–27 / 27+ s.
+    // Sustained running, not sprinting — sprint = GPS above.
     ima_hsr: num(r.ima_fr_band58_total_distance),
-    // High-intensity running broken into Catapult stride-rate bands 5-8 (rising
-    // intensity) — the IMA analogue of GPS velocity bands V5/V6.
-    ima_hir5: num(r.ima_fr_band5_total_distance),
-    ima_hir6: num(r.ima_fr_band6_total_distance),
-    ima_hir7: num(r.ima_fr_band7_total_distance),
-    ima_hir8: num(r.ima_fr_band8_total_distance),
+    ima_hir5: num(sumBandsBetween(r, "total_distance", 0, 12)),
+    ima_hir6: num(sumBandsBetween(r, "total_distance", 12, 18)),
+    ima_hir7: num(sumBandsBetween(r, "total_distance", 18, 24)),
+    ima_hir8: num(r.ima_fr_ge24_total_distance ?? sumBandsBetween(r, "total_distance", 24)),
     top_speed_kmh: (() => { const v = num(r.max_velocity); return v > 45 ? 0 : v; })(),
     efforts: r0(num(r.accel_decel_efforts)),
     hml: num(r.high_metabolic_load_distance_m),

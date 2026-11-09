@@ -6,12 +6,12 @@
  * Surfaces the four IMA-derived stride signals for a single player:
  *   - Cadence (stride rate, strides per minute) with personal-z drift
  *   - Stride length (m/stride) — session average, or stride length in sustained
- *     running (IMA FR band 5–8 = long continuous runs ≥18 s) when GPS distance exists
+ *     running (IMA FR efforts ≥18 s = long continuous runs, ima_fr_ge18) when GPS distance exists
  *   - L/R Change-of-Direction asymmetry (Bishop 2020)
- *   - GPS-IMA mix (GPS high-speed share vs IMU load share in runs ≥15 s)
+ *   - GPS-IMA mix (GPS high-speed share vs IMU load share in runs ≥18 s; was ≥15 s before Nov 2026)
  *
  * IMA Free Running bands are BOUT-DURATION bands, NOT speed/cadence bands —
- * band 5–8 is never described as sprint / high-speed / high-cadence here
+ * long runs (≥18 s) are never described as sprint / high-speed / high-cadence here
  * (docs/ima-free-running-bands.md). API field names (strideLengthHsr,
  * hiCadenceStrideLengthM, imaHsrDistanceM) are legacy and kept stable.
  *
@@ -193,11 +193,11 @@ const STRIDE_TIPS = {
   cadence:
     "Stride rate in strides per minute: strides ÷ time in the IMA Free Running bands (bands = how long each continuous run lasted, not speed). Higher = quicker turnover. A clear drop vs his own baseline signals neuromuscular fatigue (Buchheit 2018).",
   strideLength:
-    "Metres covered per stride. When GPS distance exists it is stride length in sustained running — distance ÷ strides in long continuous runs (18 s or more; IMA Free Running bands 5–8), not sprinting. Otherwise it is the session average (total distance ÷ total strides). A clear drop vs his own baseline suggests fatigue or reduced push-off (McBurnie 2022).",
+    "Metres covered per stride. When GPS distance exists it is stride length in sustained running — distance ÷ strides in long continuous runs (18 s or more, from IMA Free Running run lengths), not sprinting. Otherwise it is the session average (total distance ÷ total strides). A clear drop vs his own baseline suggests fatigue or reduced push-off (McBurnie 2022).",
   asymmetry:
     "Side-to-side imbalance in high-intensity change-of-direction efforts: |Left − Right| ÷ average %. Bishop 2020 thresholds: <9% normal · 9–15% watch · 15–18% concern · >18% high-tier (≈3× ACL / hamstring injury risk).",
   decoupling:
-    "GPS high-speed share of distance minus the share of IMU load that came in runs of 15 s or more (IMA Free Running bands 4–8 — bout length, not speed), in percentage points. A rise means more of his fast running came in short efforts rather than long continuous runs than usual. Context only — not a fatigue sign on its own.",
+    "GPS high-speed share of distance minus the share of IMU load that came in runs of 18 s or more (IMA Free Running run length, not speed), in percentage points. A rise means more of his fast running came in short efforts rather than long continuous runs than usual. Context only — not a fatigue sign on its own.",
 } as const;
 
 export default function StrideIntelligenceCard({ playerId, date: dateProp, isKinexon = false }: { playerId: string; date?: string; isKinexon?: boolean }) {
@@ -478,7 +478,7 @@ export default function StrideIntelligenceCard({ playerId, date: dateProp, isKin
           trendValues={trend.map((r) => r.strideLengthHsr)}
           helper={
             m.hiCadenceStrideLengthM != null
-              ? "Distance ÷ strides in runs of 18 s+ (IMA band 5–8)"
+              ? "Distance ÷ strides in runs of 18 s+"
               : "Total distance ÷ total strides (session avg)"
           }
           tooltip={STRIDE_TIPS.strideLength}

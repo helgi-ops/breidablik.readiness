@@ -1294,23 +1294,20 @@ function extractFreeRunningBands(flat: Record<string, unknown>): Record<string, 
 
   const out: Record<string, number | null> = {};
   for (let band = 1; band <= 8; band++) {
-    // Stride count — try V2 first, fall through to V1 if V2 is 0.
+    // Stride count — V2 total_strides ONLY. It used to fall through to *_event_count
+    // when strides were 0, which put a bout count (e.g. 206) into a stride column
+    // (e.g. 1137). Event count now has its own column; V1 keys are all 0 for our org.
     const strideAliases = [
       `ima_v2_free_run_band${band}_total_strides`,
-      `ima_v2_free_run_band${band}_event_count`,
-      `ima_v1_free_run_band${band}_event_count`,
-      `imafreerunning_band${band}_event_count`,
       // Legacy / display-name fallbacks
       `IMA Free Running Band ${band} Stride Count`,
       `ima_free_running_band${band}_stride_count`,
       `imafreerunningband${band}stridecount`,
       `ima_fr_band${band}_stride_count`,
     ];
-    // Stride rate — V2 average_stride_rate
+    // Stride rate (strides/min) — V2 only, so V1 and V2 outputs are never mixed.
     const rateAliases = [
       `ima_v2_free_run_band${band}_average_stride_rate`,
-      `ima_v1_free_run_band${band}_average_stride_rate`,
-      `imafreerunning_band${band}_average_stride_rate`,
       // Legacy / display-name fallbacks
       `IMA Free Running Band ${band} Average Stride Rate`,
       `ima_free_running_band${band}_average_stride_rate`,
@@ -1331,8 +1328,9 @@ function extractFreeRunningBands(flat: Record<string, unknown>): Record<string, 
     out[`imaFrBand${band}AvgStrideRate`] = firstNonZero(rateAliases);
     out[`imaFrBand${band}TotalPlayerLoad`] = firstNonZero(loadAliases);
 
-    // Per-band DISTANCE — metres run inside this cadence band. Only bands 5–8 have
-    // storage (the high-cadence / sprint-stride end), so only those are emitted.
+    // Per-band DISTANCE — metres run in bouts whose length fell in this band. NOTE the
+    // bands are bout-DURATION bands (seconds), not cadence or speed: band 5–8 = long
+    // continuous runs (≥18 s for Breidablik), not sprints. See freeRunningBands.ts.
     if (band >= 5) {
       const distAliases = [
         `ima_v2_free_run_band${band}_total_distance`,
@@ -1357,8 +1355,8 @@ function extractFreeRunningBands(flat: Record<string, unknown>): Record<string, 
     }
 
     // Per-band TIME in the band, as returned by Catapult (expected seconds).
-    // Distance ÷ duration = the band's real mean speed — the check that tells us
-    // whether the OpenField thresholds are km/h speed bands.
+    // Bands are effort-DURATION bands in seconds (Catapult confirmed, Nov 2026), so
+    // duration ÷ event count = mean effort length, which must sit inside the band.
     out[`imaFrBand${band}TotalDuration`] = firstNonZero([
       `ima_v2_free_run_band${band}_total_duration`,
       `ima_v1_free_run_band${band}_total_duration`,
@@ -1366,19 +1364,19 @@ function extractFreeRunningBands(flat: Record<string, unknown>): Record<string, 
       `IMA Free Running Band ${band} Total Duration`,
       `ima_free_running_band${band}_total_duration`,
     ]);
-    // Event Count (number of free-running bouts). NOTE: the stride-count aliases above
-    // also accept *_event_count keys as a fallback, so until the fr=1 probe confirms
-    // the key layout this column and stride_count may hold the same number. The raw
-    // map (imaFrRaw) records exactly which keys Catapult sent.
+    // Event Count = number of free-running bouts whose length fell in this band (the
+    // bands are bout-duration bands — see freeRunningBands.ts). V2 key confirmed by the
+    // fr=1 probe (24 Oct 2026); duration ÷ events = mean bout length, which must sit
+    // inside the band's seconds bounds.
     out[`imaFrBand${band}EventCount`] = toInteger(firstNonZero([
+      `ima_v2_free_run_band${band}_event_count`,
       `IMA Free Running Band ${band} Event Count`,
       `ima_free_running_band${band}_event_count`,
-      `ima_v2_free_run_band${band}_event_count`,
-      `ima_v1_free_run_band${band}_event_count`,
-      `imafreerunning_band${band}_event_count`,
     ]));
-    // V1 stride rate ("Average Stride Rate 1.0") — V1 keys ONLY, never V2, so the two
-    // algorithm versions are never mixed in one column.
+    // V1 stride rate — V1 keys ONLY, never V2, so the two algorithm versions are never
+    // mixed in one column. For our org every V1 key is 0 (probe 24 Oct 2026) and the
+    // "Average Stride Rate 1.0" parameter is rejected, so this stays 0/null; kept so an
+    // org that does run V1 is still captured.
     out[`imaFrBand${band}AvgStrideRateV1`] = firstNonZero([
       `ima_v1_free_run_band${band}_average_stride_rate`,
       `IMA Free Running Band ${band} Average Stride Rate 1.0`,

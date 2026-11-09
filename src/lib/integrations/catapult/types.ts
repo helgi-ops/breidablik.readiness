@@ -202,7 +202,7 @@ export type CatapultSessionMetric = {
   imaFrBand8TotalPlayerLoad?: number | null;
 
   /**
-   * Metres run inside each high-cadence band (5-8). Never previously requested
+   * Metres run in efforts of IMA FR duration bands 5-8 (runs ≥18 s; bands are seconds, not cadence). Never previously requested
    * from Catapult, yet read by six features via ima_fr_band58_total_distance.
    */
   imaFrBand5TotalDistance?: number | null;
@@ -238,7 +238,7 @@ export type CatapultSessionMetric = {
   imaFrBand7AvgStrideRateV1?: number | null;
   imaFrBand8AvgStrideRateV1?: number | null;
   /** Every Free Running key Catapult returned, verbatim (V1 + V2) — provenance. */
-  imaFrRaw?: Record<string, number> | null;
+  imaFrRaw?: Record<string, number> | Array<Record<string, number>> | null;
 };
 
 export type NormalizedExternalLoad = {
@@ -408,7 +408,7 @@ export type NormalizedExternalLoad = {
     imaFrBand7AvgStrideRateV1?: number | null;
     imaFrBand8AvgStrideRateV1?: number | null;
     /** Every Free Running key Catapult returned, verbatim (V1 + V2) — provenance. */
-    imaFrRaw?: Record<string, number> | null;
+    imaFrRaw?: Record<string, number> | Array<Record<string, number>> | null;
   };
   // DIAGNOSTIC ONLY — see CatapultSessionMetric.rawParams. rawPayload → the
   // bounded source param object stored in raw_payload_json; paramKeys → the

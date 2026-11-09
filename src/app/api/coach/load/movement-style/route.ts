@@ -6,7 +6,9 @@ export const dynamic = "force-dynamic";
  *
  * Movement style (linear ↔ multidirectional) for the selected player, read squad-relative.
  * Combines the two IMA feeds: high-intensity change-of-direction (the ima_clock_gen2 high
- * tier) vs fast linear running (IMA free-running bands 5–8 PlayerLoad). ADI's linear-vs-
+ * tier) vs sustained linear running (IMA free-running PlayerLoad in efforts ≥18 s = long continuous
+ * runs, read from the config-independent ima_fr_ge18 tier because band edges change per team/date;
+ * bout-duration bands, NOT sprint/high-speed). ADI's linear-vs-
  * multidirectional distinction, IMA-native — see movementStyle.ts. Descriptive load context
  * — never touches the readiness colour, the load target, or the daily decision. Team-scoped.
  */
@@ -19,10 +21,8 @@ import { computeSquadStyle, type PlayerStyleInput } from "@/lib/micropulse/load/
 type Row = {
   player_id: string;
   ima_clock_gen2: Record<string, { high?: unknown }> | null;
-  ima_fr_band5_total_player_load: number | string | null;
-  ima_fr_band6_total_player_load: number | string | null;
-  ima_fr_band7_total_player_load: number | string | null;
-  ima_fr_band8_total_player_load: number | string | null;
+  /** PlayerLoad in free-running efforts ≥18 s (DB trigger, config-independent). */
+  ima_fr_ge18_total_player_load: number | string | null;
 };
 
 const n = (v: unknown): number => { const x = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN; return Number.isFinite(x) ? x : 0; };
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
   // Whole squad (team-scoped) so the selected player is placed against his peers.
   const rows = await fetchAllPages<Row>((from, to) => sb
     .from("player_external_load_daily")
-    .select("player_id, ima_clock_gen2, ima_fr_band5_total_player_load, ima_fr_band6_total_player_load, ima_fr_band7_total_player_load, ima_fr_band8_total_player_load")
+    .select("player_id, ima_clock_gen2, ima_fr_ge18_total_player_load")
     .eq("team_id", teamId)
     .in("source", ["catapult", "manual", "titan", "kinexon"])
     .gte("date", start)
@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
   const lin = new Map<string, number>();
   for (const r of rows ?? []) {
     cod.set(r.player_id, (cod.get(r.player_id) ?? 0) + clockHigh(r.ima_clock_gen2));
-    lin.set(r.player_id, (lin.get(r.player_id) ?? 0) + n(r.ima_fr_band5_total_player_load) + n(r.ima_fr_band6_total_player_load) + n(r.ima_fr_band7_total_player_load) + n(r.ima_fr_band8_total_player_load));
+    lin.set(r.player_id, (lin.get(r.player_id) ?? 0) + n(r.ima_fr_ge18_total_player_load));
   }
   const inputs: PlayerStyleInput[] = [...new Set([...cod.keys(), ...lin.keys()])].map((pid) => ({
     playerId: pid, codLoad: cod.get(pid) ?? 0, linearFastLoad: lin.get(pid) ?? 0,

@@ -48,7 +48,8 @@ async function sessionWorkbook(player: string, day: LoadDaily, drills: DrillRow[
   kv("High accel efforts", r1(day.accelEfforts, 0));
   kv("High decel efforts", r1(day.decelEfforts, 0));
   kv("Strides (total)", r1(day.strideCount, 0));
-  kv("Strides B6 / B7 / B8", [day.strideB6, day.strideB7, day.strideB8].map((x) => (x == null ? "–" : Math.round(x))).join(" / "));
+  // strideB6 = runs 18–24 s, strideB8 = runs ≥24 s (read by run length; strideB5/B7 are null slots).
+  kv("Strides in runs 18–24 s / 24 s+", [day.strideB6, day.strideB8].map((x) => (x == null ? "–" : Math.round(x))).join(" / "));
 
   const d = wb.addWorksheet("Drills");
   const cols = ["Period", "Order", "Duration (min)", "Distance (m)", "Player Load", "PL/min", "HIR (m)", "Max vel (km/h)", "IMA accel", "IMA decel", "IMA CoD", "Peak metab (W/kg)", "Jumps"];

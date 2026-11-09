@@ -11,8 +11,10 @@
  *
  * Two variants, chosen from what the club's data actually contains:
  *   • ima  (Pro/ELITE) — the true inertial driver: accel:decel balance, change of
- *     direction, L/R asymmetry, stride cadence. Citations: McBurnie 2022, di
- *     Prampero 2015, Buchheit 2014 norms.
+ *     direction, L/R asymmetry, strides in long continuous runs (IMA FR runs ≥18 s,
+ *     `ima_fr_ge18_stride_count` — bout-duration bands, not speed/cadence; band edges
+ *     are configurable, so tiers are read by run length; see docs/ima-free-running-bands.md). Citations: McBurnie 2022, di Prampero 2015,
+ *     Buchheit 2014 norms.
  *   • gps  (Core/Lite) — Lite units capture no IMA, so the fingerprint is built
  *     from GPS movement signals (player load, accel/decel efforts, high-speed +
  *     sprint running, top speed). A GPS movement read, not the inertial driver.
@@ -23,6 +25,7 @@ import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { loadMatchVerdicts, isContaminatedForBenchmark, verdictKey } from "@/lib/micropulse/matchRunningVerdicts";
 import type { MovementFingerprint, MatchMovementRow, MatchMovementResult, SubBands, MovementVariant } from "./types";
 import { EMPTY_SUB, movementDimensions } from "./types";
+import { sumBandsBetween } from "@/lib/integrations/catapult/freeRunningBands";
 
 // Re-export the client-safe types + dimension metadata from one place. The UI
 // imports directly from ./types to avoid pulling this server module in.
@@ -38,7 +41,12 @@ type RawRow = {
   ima_decel: number | null;
   ima_cod_left_high: number | null; ima_cod_left_medium: number | null; ima_cod_left_low: number | null;
   ima_cod_right_high: number | null; ima_cod_right_medium: number | null; ima_cod_right_low: number | null;
-  ima_fr_band6_stride_count: number | null; ima_fr_band7_stride_count: number | null; ima_fr_band8_stride_count: number | null;
+  // IMA Free Running (bout-duration bands; edges per row in ima_fr_band_bounds — changed 9 Nov 2026).
+  ima_fr_band_bounds: Array<number | string> | null;
+  ima_fr_band1_stride_count: number | null; ima_fr_band2_stride_count: number | null; ima_fr_band3_stride_count: number | null;
+  ima_fr_band4_stride_count: number | null; ima_fr_band5_stride_count: number | null; ima_fr_band6_stride_count: number | null;
+  ima_fr_band7_stride_count: number | null; ima_fr_band8_stride_count: number | null;
+  ima_fr_ge18_stride_count: number | null; ima_fr_ge24_stride_count: number | null;
   ima_band1_decel_count: number | null; ima_band2_decel_count: number | null; ima_band3_decel_count: number | null;
   // GPS (Core/Lite fallback)
   total_player_load: number | null;
@@ -63,7 +71,11 @@ function imaFingerprintOf(row: RawRow, minutes: number): { fp: MovementFingerpri
   const codLeft = n(row.ima_cod_left_high) + n(row.ima_cod_left_medium) + n(row.ima_cod_left_low);
   const codRight = n(row.ima_cod_right_high) + n(row.ima_cod_right_medium) + n(row.ima_cod_right_low);
   const codTotal = codLeft + codRight;
-  const hiCadence = n(row.ima_fr_band6_stride_count) + n(row.ima_fr_band7_stride_count) + n(row.ima_fr_band8_stride_count);
+  // Legacy name `hiCadence`: strides in continuous runs ≥18 s (config-independent tier; was legacy
+  // bands 6–8 = ≥21 s before Nov 2026 — no ≥21 s edge in the new config). Sustained running, NOT high
+  // cadence or sprinting.
+  const hiCadence = n(row.ima_fr_ge18_stride_count);
+  const fr = row as unknown as Record<string, unknown>;
   return {
     fp: {
       totalPerMin: row.ima_total == null ? null : perMin(n(row.ima_total), minutes),
@@ -83,9 +95,11 @@ function imaFingerprintOf(row: RawRow, minutes: number): { fp: MovementFingerpri
       decelLow: row.ima_band1_decel_count ?? null,
       decelMed: row.ima_band2_decel_count ?? null,
       decelHigh: row.ima_band3_decel_count ?? null,
-      stride6: row.ima_fr_band6_stride_count ?? null,
-      stride7: row.ima_fr_band7_stride_count ?? null,
-      stride8: row.ima_fr_band8_stride_count ?? null,
+      // Stride sub-bands by RUN LENGTH (edges common to every band config), not band number:
+      // stride6 = runs 12–18 s, stride7 = runs 18–24 s, stride8 = runs ≥24 s (longest).
+      stride6: sumBandsBetween(fr, "stride_count", 12, 18),
+      stride7: sumBandsBetween(fr, "stride_count", 18, 24),
+      stride8: row.ima_fr_ge24_stride_count ?? sumBandsBetween(fr, "stride_count", 24),
       codHigh: codTotal > 0 ? n(row.ima_cod_left_high) + n(row.ima_cod_right_high) : null,
       codMed: codTotal > 0 ? n(row.ima_cod_left_medium) + n(row.ima_cod_right_medium) : null,
       codLow: codTotal > 0 ? n(row.ima_cod_left_low) + n(row.ima_cod_right_low) : null,
@@ -124,7 +138,9 @@ const LOAD_COLS =
   "player_id, date, source, ima_total, ima_accel, ima_decel, " +
   "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
-  "ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, " +
+  "ima_fr_band_bounds, ima_fr_ge18_stride_count, ima_fr_ge24_stride_count, " +
+  "ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band3_stride_count, ima_fr_band4_stride_count, " +
+  "ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, " +
   "ima_band1_decel_count, ima_band2_decel_count, ima_band3_decel_count, " +
   "total_player_load, accel_decel_efforts, high_speed_distance, " +
   "velocity_band6_total_distance, sprint_distance, max_velocity, session_duration_minutes, player_load_per_minute, raw_payload_json";

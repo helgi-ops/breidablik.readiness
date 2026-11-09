@@ -9,6 +9,7 @@ import { aggregatePeriodsPerPlayer, writeSessionActuals, writePlayerDrillLoad, t
 import { extractMiiPeakPeriod } from "./miiPeakPeriod";
 import { boundRawPayload } from "./rawPayloadCapture";
 import type { CatapultAthlete, CatapultSyncResult } from "./types";
+import { boundsOnDate, tierTotals, FR_TIER_EDGES_S, type FrTierTotals } from "./freeRunningBands";
 
 function dateKey(input?: string | null): string {
   if (input && /^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
@@ -288,19 +289,39 @@ function mergeNormalizedRows(rows: AggregatedRow[]): AggregatedRow[] {
     current.externalLoad.fmpDynamicMediumS = sumNullable(current.externalLoad.fmpDynamicMediumS, row.externalLoad.fmpDynamicMediumS);
     current.externalLoad.fmpDynamicHighS = sumNullable(current.externalLoad.fmpDynamicHighS, row.externalLoad.fmpDynamicHighS);
     current.externalLoad.fmpTotalDurationS = sumNullable(current.externalLoad.fmpTotalDurationS, row.externalLoad.fmpTotalDurationS);
-    // IMA Free Running 8 bands: stride counts + load sum, stride rate takes max
+    // IMA Free Running 8 bands. Additive fields (strides, load, distance, time, bouts)
+    // are summed across a day's sessions. Stride rate is a per-minute average, so it is
+    // combined weighted by time in the band (falls back to max when time is missing).
+    // Before Nov 2026 only strides/load/rate were merged, so a second session's
+    // distance, time and bout counts were silently dropped.
     {
       const cur = current.externalLoad as unknown as Record<string, number | null | undefined>;
       const inc = row.externalLoad as unknown as Record<string, number | null | undefined>;
       for (let band = 1; band <= 8; band++) {
-        const sk = `imaFrBand${band}StrideCount`;
         const rk = `imaFrBand${band}AvgStrideRate`;
-        const lk = `imaFrBand${band}TotalPlayerLoad`;
-        cur[sk] = sumNullable(cur[sk], inc[sk]);
+        const dk = `imaFrBand${band}TotalDuration`;
         const a = cur[rk];
         const b = inc[rk];
-        cur[rk] = a != null && b != null ? Math.max(a, b) : (a ?? b ?? null);
-        cur[lk] = sumNullable(cur[lk], inc[lk]);
+        const da = cur[dk];
+        const db = inc[dk];
+        if (a != null && b != null) {
+          const wa = typeof da === "number" ? da : 0;
+          const wb = typeof db === "number" ? db : 0;
+          cur[rk] = wa + wb > 0 ? (a * wa + b * wb) / (wa + wb) : Math.max(a, b);
+        } else {
+          cur[rk] = a ?? b ?? null;
+        }
+        for (const field of ["StrideCount", "TotalPlayerLoad", "TotalDistance", "TotalDuration", "EventCount"]) {
+          const k = `imaFrBand${band}${field}`;
+          cur[k] = sumNullable(cur[k], inc[k]);
+        }
+      }
+      // Raw payload: keep every session's verbatim map (array) so provenance survives.
+      const curEl = current.externalLoad as unknown as { imaFrRaw?: unknown };
+      const incRaw = (row.externalLoad as unknown as { imaFrRaw?: unknown }).imaFrRaw;
+      if (incRaw != null) {
+        const prev = curEl.imaFrRaw;
+        curEl.imaFrRaw = prev == null ? incRaw : [...(Array.isArray(prev) ? prev : [prev]), incRaw];
       }
     }
   }
@@ -525,6 +546,68 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
   }));
 
   if (!payload.length) return 0;
+
+  // IMA Free Running "did not run" → null, not 0. When the FR algorithm was not active
+  // for the org/session (Breidablik before late Apr 2026), Catapult returns 0 for every
+  // band field. Storing 0 would say "he did no running bouts"; null says "no reading".
+  // Distance is already handled by frDist/sumBands58. ima_fr_raw keeps the verbatim zeros.
+  for (const p of payload as Array<Record<string, unknown>>) {
+    let ran = false;
+    for (let b = 1; b <= 8 && !ran; b++) {
+      for (const f of ["stride_count", "total_duration", "event_count", "total_player_load"]) {
+        const v = p[`ima_fr_band${b}_${f}`];
+        if (typeof v === "number" && v > 0) { ran = true; break; }
+      }
+    }
+    if (ran) continue;
+    for (let b = 1; b <= 8; b++) {
+      for (const f of ["stride_count", "avg_stride_rate", "total_player_load", "total_duration", "event_count", "avg_stride_rate_v1"]) {
+        const k = `ima_fr_band${b}_${f}`;
+        if (k in p) p[k] = null;
+      }
+    }
+  }
+
+  // IMA Free Running band edges in force for each row + config-independent run-length tiers.
+  // Catapult classifies bands at processing time with the org's OpenField edges, which change
+  // (Breiðablik: 0-8-…-27-100 → 0-2.5-5-8-12-18-24-30-1000 on 9 Nov 2026). Each row records the
+  // edges it was classified with, and ≥18 s / ≥24 s totals are computed here so readers never have to
+  // know which band number means what. ima_fr_band58_total_distance keeps its downstream meaning
+  // ("metres in runs ≥18 s"): bands 5–8 under the legacy edges, 6–8 under the new ones.
+  {
+    const teamIds = Array.from(new Set(payload.map((p) => p.team_id).filter((t): t is string => !!t)));
+    const configsByTeam = new Map<string, Array<{ effective_from: string; bounds_s: Array<number | string> }>>();
+    if (teamIds.length) {
+      const { data: cfg } = await sb
+        .from("team_fr_band_config")
+        .select("team_id, effective_from, bounds_s")
+        .in("team_id", teamIds);
+      for (const c of (cfg ?? []) as Array<{ team_id: string; effective_from: string; bounds_s: Array<number | string> }>) {
+        const list = configsByTeam.get(c.team_id) ?? [];
+        list.push(c);
+        configsByTeam.set(c.team_id, list);
+      }
+    }
+    for (const p of payload as Array<Record<string, unknown>>) {
+      const bounds = boundsOnDate(configsByTeam.get(String(p.team_id ?? "")), String(p.date));
+      const get = (band: number, field: keyof FrTierTotals) => {
+        const v = p[`ima_fr_band${band}_${field}`];
+        return typeof v === "number" ? v : null;
+      };
+      const hasFr = [1, 2, 3, 4, 5, 6, 7, 8].some((b) => get(b, "event_count") != null || get(b, "stride_count") != null || get(b, "total_duration") != null);
+      p.ima_fr_band_bounds = hasFr ? [...bounds] : null;
+      for (const edge of FR_TIER_EDGES_S) {
+        const t = hasFr ? tierTotals(get, bounds, edge) : null;
+        p[`ima_fr_ge${edge}_event_count`] = t?.event_count ?? null;
+        p[`ima_fr_ge${edge}_total_duration`] = t?.total_duration ?? null;
+        p[`ima_fr_ge${edge}_stride_count`] = t?.stride_count ?? null;
+        p[`ima_fr_ge${edge}_total_distance`] = t?.total_distance ?? null;
+        p[`ima_fr_ge${edge}_total_player_load`] = t?.total_player_load ?? null;
+      }
+      // Downstream "≥18 s distance" column, from the bounds in force (legacy → identical to before).
+      if (hasFr) p.ima_fr_band58_total_distance = p.ima_fr_ge18_total_distance ?? null;
+    }
+  }
 
   // Durable manual override: if a coach has entered a MANUAL GPS row for a
   // (player, date), that is an explicit correction of a forgot/broken pod. The

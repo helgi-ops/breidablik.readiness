@@ -39,6 +39,7 @@ import { getActiveWeeklyLoadMetrics, KINEXON_WEEKLY_METRIC_KEYS } from "./weekly
 import { KINEXON_CATALOG, readKinexonMetric, type KinexonMetric } from "@/lib/integrations/kinexon/metricCatalog";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 import { fetchAllPages } from "@/lib/supabasePaginate";
+import { sumBandsBetween } from "@/lib/integrations/catapult/freeRunningBands";
 import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
 import { planWeeklyTarget } from "@/lib/micropulse/periodization/planWeeklyTarget";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
@@ -155,9 +156,9 @@ function metricFromRow(row: Record<string, unknown>, key: WeeklyLoadMetricKey): 
       ];
       return parts.every((v) => v == null) ? null : parts.reduce((s: number, v) => s + (v ?? 0), 0);
     }
-    case "imaStrideBand6":    return get("ima_fr_band6_stride_count");
-    case "imaStrideBand7":    return get("ima_fr_band7_stride_count");
-    case "imaStrideBand8":    return get("ima_fr_band8_stride_count");
+    case "imaStrideBand6":
+    case "imaStrideBand7":
+    case "imaStrideBand8":    return imaStrideTierOf(row, key);
     // Titan indoor IMU (basketball). Movement-Profile buckets live in raw_payload_json.movement_profile.
     case "jumps":             return get("jumps");
     case "impacts":           return get("impacts");
@@ -177,6 +178,32 @@ function metricFromRow(row: Record<string, unknown>, key: WeeklyLoadMetricKey): 
       return m ? readKinexonMetric(row, m) : null;
     }
   }
+}
+
+/**
+ * The three IMA stride tiles, read by RUN LENGTH (seconds of one continuous run), not by band number.
+ * IMA Free Running bands are bout-duration bands whose edges are configurable; Breiðablik moved from
+ * 0-8-12-15-18-21-24-27-100 to 0-2.5-5-8-12-18-24-30-1000 on 9 Nov 2026, so "band 6" no longer means one
+ * run length. The tile keys stay (stored targets/templates are keyed by them) but their meaning is now
+ * config-independent, built from edges present in every config (12, 18, 24 s):
+ *   imaStrideBand6 = strides in runs of 12–18 s   (was band 6 = 21–24 s)
+ *   imaStrideBand7 = strides in runs of 18–24 s   (was band 7 = 24–27 s)
+ *   imaStrideBand8 = strides in runs ≥24 s        (was band 8 = ≥27 s; = ima_fr_ge24_stride_count)
+ * Sustained running, NOT sprinting (sprint = GPS velocity band 6). Needs the row's ima_fr_band_bounds and
+ * per-band stride columns (IMA_STRIDE_TIER_COLS). Null = no reading.
+ */
+export const IMA_STRIDE_TIER_COLS = [
+  "ima_fr_band_bounds",
+  "ima_fr_band1_stride_count", "ima_fr_band2_stride_count", "ima_fr_band3_stride_count", "ima_fr_band4_stride_count",
+  "ima_fr_band5_stride_count", "ima_fr_band6_stride_count", "ima_fr_band7_stride_count", "ima_fr_band8_stride_count",
+  "ima_fr_ge24_stride_count",
+] as const;
+
+export function imaStrideTierOf(row: Record<string, unknown>, key: "imaStrideBand6" | "imaStrideBand7" | "imaStrideBand8"): number | null {
+  if (key === "imaStrideBand6") return sumBandsBetween(row, "stride_count", 12, 18);
+  if (key === "imaStrideBand7") return sumBandsBetween(row, "stride_count", 18, 24);
+  const ge24 = row.ima_fr_ge24_stride_count;
+  return typeof ge24 === "number" && Number.isFinite(ge24) ? ge24 : sumBandsBetween(row, "stride_count", 24);
 }
 
 // Flat catalog lookup so a Kinexon weekly key resolves to its read recipe once.
@@ -202,7 +229,8 @@ const MATCH_DEMAND_SELECT_COLS = [
   "ima_total", "ima_accel", "ima_decel",
   "ima_cod_left_high", "ima_cod_left_medium", "ima_cod_left_low",
   "ima_cod_right_high", "ima_cod_right_medium", "ima_cod_right_low",
-  "ima_fr_band6_stride_count", "ima_fr_band7_stride_count", "ima_fr_band8_stride_count",
+  // IMA stride tiles by run length (12–18 / 18–24 / ≥24 s) — need the row's band edges, see imaStrideTierOf.
+  ...IMA_STRIDE_TIER_COLS,
   // Titan indoor IMU (basketball)
   "jumps", "impacts", "raw_payload_json",
   // FULL-game filter duration sources

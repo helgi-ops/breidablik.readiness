@@ -38,8 +38,7 @@ export function explainInjuryRiskWhy(triggeredRules: string[]): string[] {
   }
   if (
     triggeredRules.includes("STRIDE_CADENCE_DROP") ||
-    triggeredRules.includes("STRIDE_LENGTH_DROP") ||
-    triggeredRules.includes("GPS_IMA_DECOUPLING")
+    triggeredRules.includes("STRIDE_LENGTH_DROP")
   ) {
     lines.push("Stride mechanics differ from this athlete's normal pattern — possible NM fatigue or compensation.");
   }
@@ -89,7 +88,9 @@ export function explainInjuryRiskDrivers(triggeredRules: string[]): string[] {
   if (triggeredRules.includes("STRIDE_CADENCE_DROP")) drivers.push("Cadence below personal baseline");
   if (triggeredRules.includes("STRIDE_LENGTH_DROP")) drivers.push("Stride length compressing");
   if (triggeredRules.includes("COD_LR_ASYMMETRY")) drivers.push("Left/right cutting asymmetry");
-  if (triggeredRules.includes("GPS_IMA_DECOUPLING")) drivers.push("GPS-IMA decoupling (effort vs distance)");
+  // GPS-IMA mix shift is context (more short efforts vs long continuous runs than usual),
+  // not a fatigue sign — IMA FR bands are bout-duration bands. See docs/ima-free-running-bands.md.
+  if (triggeredRules.includes("GPS_IMA_DECOUPLING")) drivers.push("Running mix differs from usual (context only)");
   if (
     triggeredRules.includes("RUNNING_ASYMMETRY_RISING") ||
     triggeredRules.includes("RUNNING_ASYMMETRY_WITH_STRAIN")

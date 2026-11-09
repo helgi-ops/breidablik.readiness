@@ -153,7 +153,7 @@ const T = {
     aiNote: "Byggt af AI ur alagstolum leikmannsins - reglur velja tolurnar, AI ordar. Yfirfarid af thjalfara.",
     summary: "Álags-yfirlit (uppsafnað)", daily: "Dagleg sundurliðun",
     date: "Dags.", min: "Mín", dist: "Vegal. (km)", hsr: "HSR (m)", sprint: "Sprettur (m)", maxv: "Hám (km/klst)",
-    acc: "Acc", dec: "Dec", pl: "PL", ima: "IMA HSR (m)",
+    acc: "Acc", dec: "Dec", pl: "PL", ima: "Long runs 18 s+ (m)",
     foot: "MicroPulse - micropulse.is - Lysandi alags-skyrsla. Kerfid sendir ekkert ut; thjalfari yfirfer og sendir sjalfur.",
   },
   EN: {
@@ -172,7 +172,7 @@ const T = {
     radar: "Athletic profile", radarNote: "Each axis = the player's percentile within the squad over the window (0-100). Number = accrued value. Descriptive.",
     summary: "Load summary (accrued)", daily: "Daily breakdown",
     date: "Date", min: "Min", dist: "Dist (km)", hsr: "HSR (m)", sprint: "Sprint (m)", maxv: "Top (km/h)",
-    acc: "Acc", dec: "Dec", pl: "PL", ima: "IMA HSR (m)",
+    acc: "Acc", dec: "Dec", pl: "PL", ima: "Long runs 18 s+ (m)",
     foot: "MicroPulse - micropulse.is - Descriptive load report. The app transmits nothing; the coach reviews and sends it.",
   },
 } as const;

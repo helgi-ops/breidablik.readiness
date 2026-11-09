@@ -865,7 +865,7 @@ test("buildMesoBlocks: an off-season start later than season end makes a holiday
   assert.equal(noHol.filter((b) => b.start >= comp.end)[0].goalKey, "accum");
 });
 
-// ── IMA running pair (Free Running bands 5–8 distance + Stride bands 6–8) ───────────────
+// ── IMA running pair (Free Running bands 5–8 = long-run distance (runs ≥18 s) + Stride bands 6–8 = long-run strides) ──
 import { describe as describeIma, it as itIma, expect as expectIma } from "vitest";
 import { weeklyKpiMultiple as wkm, standardTrainingDays as stdDays } from "@/lib/micropulse/periodization/plannedVolume";
 describeIma("IMA Free Running + Stride in the periodization vocabulary", () => {
@@ -880,7 +880,7 @@ describeIma("IMA Free Running + Stride in the periodization vocabulary", () => {
     expectIma(t.imaFrDist).toBe(850);
     expectIma(t.matchImaFrDist).toBe(1300);
   });
-  itIma("weekly ×match: strides accumulate more than volume, fast running less", () => {
+  itIma("weekly ×match: long-run strides accumulate more than volume, long-run distance less", () => {
     const days = stdDays(1);
     const vol = wkm(days, "totalDistance");
     expectIma(wkm(days, "imaStrideHi")).toBeGreaterThan(vol);
@@ -890,7 +890,7 @@ describeIma("IMA Free Running + Stride in the periodization vocabulary", () => {
 
 describeIma("Meso calendar — IMA Free Running", () => {
   const unit = { dist: 10000, hsr: 800, load: 1000, accdec: 200, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
-  itIma("plans Free Running on training days like HSR (match = the unit, capped at match, rest = null)", () => {
+  itIma("plans long-run Free Running on training days on the running axis (match = the unit, capped at match, rest = null)", () => {
     const b = buildCalendarBlock({ unit: { ...unit, fr: 1300 }, startDate: "2026-09-07", numWeeks: 4, scopeName: "Team", scopePos: null, baseOverloadPct: 100 });
     const days = b.weeks.flatMap((w) => w.days);
     const train = days.filter((d) => d.type !== "match" && d.type !== "rest");

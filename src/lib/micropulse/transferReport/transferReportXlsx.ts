@@ -118,8 +118,9 @@ export async function buildTransferXlsx(raw: RawDossierInput): Promise<Buffer> {
 
   // ── Matches - IMA ──
   addTable(sheet(wb, "Matches - IMA"),
-    [{ header: "Date", width: 12 }, { header: "Opponent", width: 18 }, { header: "Accel", sum: "avg" }, { header: "Decel", sum: "avg" }, { header: "CoD", sum: "avg" }, { header: "Accel efforts", sum: "avg" }, { header: "Decel efforts", sum: "avg" }, { header: "Strides", sum: "avg" }, { header: "Stride B6", sum: "avg" }, { header: "Stride B7", sum: "avg" }, { header: "Stride B8", sum: "avg" }],
-    matches.map((l) => [l.date, oppByDate.get(l.date) ?? "", r1(l.accel, 0), r1(l.decel, 0), r1(l.cod, 0), r1(l.accelEfforts, 0), r1(l.decelEfforts, 0), r1(l.strideCount, 0), r1(l.strideB6, 0), r1(l.strideB7, 0), r1(l.strideB8, 0)]), 1);
+    [{ header: "Date", width: 12 }, { header: "Opponent", width: 18 }, { header: "Accel", sum: "avg" }, { header: "Decel", sum: "avg" }, { header: "CoD", sum: "avg" }, { header: "Accel efforts", sum: "avg" }, { header: "Decel efforts", sum: "avg" }, { header: "Strides", sum: "avg" }, { header: "Strides, runs 18–24 s", sum: "avg" }, { header: "Strides, longest runs (≥24 s)", sum: "avg" }],
+    // strideB6 = runs 18–24 s, strideB8 = runs ≥24 s (read by run length; strideB7 is no longer a readable range).
+    matches.map((l) => [l.date, oppByDate.get(l.date) ?? "", r1(l.accel, 0), r1(l.decel, 0), r1(l.cod, 0), r1(l.accelEfforts, 0), r1(l.decelEfforts, 0), r1(l.strideCount, 0), r1(l.strideB6, 0), r1(l.strideB8, 0)]), 1);
 
   // ── Matches - Output ──
   addTable(sheet(wb, "Matches - Output"),

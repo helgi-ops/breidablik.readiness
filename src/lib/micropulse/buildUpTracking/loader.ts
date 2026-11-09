@@ -27,9 +27,8 @@ const SELECT_COLS = [
   "velocity_band6_total_distance",
   "accel_b2_3_tot_effs_gen2",
   "decel_b2_3_tot_effs_gen2",
-  "ima_fr_band6_stride_count",
-  "ima_fr_band7_stride_count",
-  "ima_fr_band8_stride_count",
+  // Strides in runs ≥18 s — config-independent tier filled by the DB trigger from the row's own band edges.
+  "ima_fr_ge18_stride_count",
   // IMA drivers (context, no plan target)
   "ima_cod_left_high",
   "ima_cod_left_medium",
@@ -50,9 +49,7 @@ type Row = {
   velocity_band6_total_distance: number | null;
   accel_b2_3_tot_effs_gen2: number | null;
   decel_b2_3_tot_effs_gen2: number | null;
-  ima_fr_band6_stride_count: number | null;
-  ima_fr_band7_stride_count: number | null;
-  ima_fr_band8_stride_count: number | null;
+  ima_fr_ge18_stride_count: number | null;
   ima_cod_left_high: number | null;
   ima_cod_left_medium: number | null;
   ima_cod_left_low: number | null;
@@ -85,7 +82,10 @@ function kpiVals(r: Row): Partial<Record<BuildUpKpi, number | null>> {
     load: r.total_player_load ?? r.player_load,
     accHiEff: r.accel_b2_3_tot_effs_gen2,
     decHiEff: r.decel_b2_3_tot_effs_gen2,
-    stride: sumNull(r.ima_fr_band6_stride_count, r.ima_fr_band7_stride_count, r.ima_fr_band8_stride_count),
+    // Strides in long continuous runs (≥18 s). IMA FR bands are bout-DURATION bands whose edges changed on
+    // 9 Nov 2026, so read the config-independent ≥18 s tier (backfilled for all history), not band numbers.
+    // Was bands 6–8 (≥21 s) before Nov 2026 — there is no ≥21 s edge in the new config. NOT sprint strides.
+    stride: r.ima_fr_ge18_stride_count,
   };
 }
 

@@ -653,7 +653,7 @@ export default function MatchMovementComparison({
 
         {/* S&C drill-down — opt-in sub-band depth (kept out of the head-coach view). */}
         {subSeries.length > 0 && (
-          <ShowDetails label={{ EN: "S&C breakdown — raw sub-bands", IS: "S&C sundurliðun — hrá undir-bönd" }} hint={{ EN: "decel / CoD by intensity · stride bands 6-8", IS: "decel / CoD eftir styrk · skref-bönd 6-8" }}>
+          <ShowDetails label={{ EN: "S&C breakdown — raw sub-bands", IS: "S&C sundurliðun — hrá undir-bönd" }} hint={{ EN: "decel / CoD by intensity · strides by run length (12–18 / 18–24 / 24+ s)", IS: "decel / CoD eftir styrk · skref eftir lengd hlaups (12–18 / 18–24 / 24+ sek)" }}>
             <SubBandsBreakdown series={subSeries} is={is} />
           </ShowDetails>
         )}

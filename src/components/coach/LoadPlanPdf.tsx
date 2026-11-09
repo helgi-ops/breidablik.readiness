@@ -34,7 +34,7 @@ export type LoadPlanForPdf = {
 
 const LABEL: Record<string, string> = {
   totalDistance: "Total distance (m)", playerLoad: "Player Load", hsr: "High-speed distance (m)",
-  sprint: "Sprint distance (m)", accel: "Accelerations (B2-3)", decel: "Decelerations (B2-3)", ima: "IMA high-intensity (m)",
+  sprint: "Sprint distance (m)", accel: "Accelerations (B2-3)", decel: "Decelerations (B2-3)", ima: "Long-run distance (m)",
 };
 const fmt = (n: number | null | undefined) => (n == null ? "—" : Math.round(n).toLocaleString("en-US"));
 

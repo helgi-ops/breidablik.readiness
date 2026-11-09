@@ -4,7 +4,8 @@
  * GET — a per-player "movement narrative" (Unfamiliar Load, Phase 4). Tells the
  * story of how the player has been moving over the last ~4 weeks, in Niklas
  * Virtanen's Engine / Driver framing:
- *   - Engine (GPS):   total distance, HSR, sprint — physical capacity / volume
+ *   - Engine (GPS):   total distance, HSR (velocity band 5), sprint (velocity band 6) —
+ *                     physical capacity / volume. Sprint/HSR are GPS-only (null indoors).
  *   - Driver (IMA):   multidirectional, explosive, multidirectional share,
  *                     braking share — movement quality / role behaviour
  * Each metric is compared to the player's OWN prior norm (recent vs prior z),
@@ -62,6 +63,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const mdRows: MovementDayRow[] = all.map((r) => ({
     date: String(r.date),
     totalDistance: num(r.total_distance),
+    // IMA FR bands 5–8 = metres in long continuous runs (≥18 s) — not sprint/HSR (GPS engine above).
     imaDistance: num(r.ima_fr_band58_total_distance),
     accelEfforts: num(r.accel_b2_3_tot_effs_gen2),
     decelEfforts: num(r.decel_b2_3_tot_effs_gen2),

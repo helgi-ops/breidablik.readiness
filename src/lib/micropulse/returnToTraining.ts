@@ -45,13 +45,17 @@
  */
 
 export type QualityKey = "volume" | "distance" | "hsr" | "sprint" | "stride" | "strideTop" | "accel" | "decel" | "decelHigh" | "cod" | "efforts";
-// Pro/ELITE (IMA) variant — the movement axis comes from IMA bands. High-cadence
-// running from IMA Free Running (IMU stride-rate, NOT GPS) is split in two, so it
-// counts high-speed running even indoors where the pod gets no GPS lock:
-//   • "stride"    = band 6 — high but SUB-maximal cadence, unlocks earlier.
-//   • "strideTop" = bands 7+8 — TOP VELOCITY (max stride rate), the re-injury-
-//     critical top-end running; unlocks last among the running qualities.
-// Partitioned (no band double-counted); together they sum to full high-cadence.
+// Pro/ELITE (IMA) variant — the movement axis comes from IMA bands. IMA Free Running
+// bands are BOUT-DURATION bands (seconds of one continuous run), NOT speed/cadence
+// bands (docs/ima-free-running-bands.md), so these two qualities are SUSTAINED-RUNNING
+// volume (IMU stride counts, so they still count indoors without a GPS lock):
+//   • "stride"    = strides in long continuous runs of 18–24 s (ima_fr_ge18 − ge24; was band 6 / 21–24 s
+//                   before Nov 2026 — meaning shifted when the OpenField band edges changed).
+//   • "strideTop" = strides in the longest continuous runs (≥24 s, ima_fr_ge24).
+// Neither is sprinting or top velocity: sprint/HSR progression comes ONLY from the GPS
+// qualities "hsr" / "sprint", and those are never gated on (or replaced by) these.
+// Keys kept for interface stability. Partitioned (no run counted twice).
+// Order unchanged (stride/strideTop still unlock after sprint) so active RTP plans don't shift.
 export const QUALITY_ORDER: QualityKey[] = ["volume", "distance", "hsr", "sprint", "stride", "strideTop", "accel", "decel", "decelHigh", "cod"];
 // Core/Lite (GPS) variant — no IMA; the club sends accel_decel_efforts instead,
 // so the movement/agility axis is a single "efforts" quality. IMA Free Running
@@ -73,8 +77,8 @@ export type RttSession = {
   distance: number;   // total_distance (m)
   hsr: number;        // high_speed_distance (m)
   sprint: number;     // sprint_distance (m)
-  stride: number;     // high-cadence strides — IMA Free Running band 6 stride count (sub-maximal; IMU, indoor-capable; NOT GPS)
-  strideTop: number;  // top-speed strides — IMA Free Running bands 7+8 stride count (TOP VELOCITY; IMU, indoor-capable; NOT GPS)
+  stride: number;     // long-run strides — IMA Free Running stride count in runs of 18–24 s (IMU, indoor-capable; NOT sprint, NOT GPS)
+  strideTop: number;  // longest-run strides — IMA Free Running stride count in runs ≥24 s (IMU, indoor-capable; NOT top speed, NOT GPS)
   accel: number;      // IMA accelerations (count)
   decel: number;      // IMA decelerations (count)
   decelHigh: number;  // high-intensity braking (ima_band3_decel_count) — injury-critical
@@ -107,14 +111,14 @@ export function injuryRiskProfile(types: string[]): { category: string; riskQual
   const t = types.join(" ").toLowerCase();
   const m = (re: RegExp) => re.test(t);
   if (m(/concuss|head|hia|heilahrist|höfu|hofu|hnakk/)) return { category: "head", riskQualities: [], label: { en: "Head injury — symptom-limited return", is: "Höfuðáverki — einkenna-stýrð endurkoma" } };
-  if (m(/hamstring|ham\b|biceps femoris/)) return { category: "hamstring", riskQualities: ["hsr", "sprint", "strideTop", "decel", "decelHigh"], label: { en: "Hamstring — high-speed running & braking are the key re-injury qualities", is: "Aftanlæri — háhraðahlaup og hemlun eru lykil-endurmeiðsla-gæðin" } };
-  if (m(/calf|gastroc|soleus|achill/)) return { category: "calf", riskQualities: ["hsr", "sprint", "strideTop"], label: { en: "Calf/Achilles — high-speed & sprint running ramp slowly", is: "Kálfi/hásin — háhraði og sprettir aukast hægt" } };
+  if (m(/hamstring|ham\b|biceps femoris/)) return { category: "hamstring", riskQualities: ["hsr", "sprint", "decel", "decelHigh"], label: { en: "Hamstring — high-speed running & braking are the key re-injury qualities", is: "Aftanlæri — háhraðahlaup og hemlun eru lykil-endurmeiðsla-gæðin" } };
+  if (m(/calf|gastroc|soleus|achill/)) return { category: "calf", riskQualities: ["hsr", "sprint"], label: { en: "Calf/Achilles — high-speed & sprint running ramp slowly", is: "Kálfi/hásin — háhraði og sprettir aukast hægt" } };
   if (m(/quad|rectus femoris/)) return { category: "quad", riskQualities: ["sprint", "accel"], label: { en: "Quadriceps — sprinting & acceleration ramp slowly", is: "Framlæri — sprettir og hröðun aukast hægt" } };
   if (m(/groin|adduct/)) return { category: "groin", riskQualities: ["cod", "sprint"], label: { en: "Groin/adductor — change-of-direction & sprint ramp slowly", is: "Nári — stefnubreytingar og sprettir aukast hægt" } };
   if (m(/acl|knee|mcl|meniscus|patell/)) return { category: "knee", riskQualities: ["cod", "decel", "decelHigh", "accel"], label: { en: "Knee — change-of-direction & braking are the key re-injury qualities", is: "Hné — stefnubreytingar og hemlun eru lykil-endurmeiðsla-gæðin" } };
   if (m(/ankle|lateral ligament|syndesmo/)) return { category: "ankle", riskQualities: ["cod", "decel", "decelHigh"], label: { en: "Ankle — change-of-direction & braking ramp slowly", is: "Ökkli — stefnubreytingar og hemlun aukast hægt" } };
   if (m(/hip|flexor/)) return { category: "hip", riskQualities: ["sprint", "cod"], label: { en: "Hip — sprint & change-of-direction ramp slowly", is: "Mjöðm — sprettir og stefnubreytingar aukast hægt" } };
-  if (m(/muscle|strain|tear/)) return { category: "muscle", riskQualities: ["hsr", "sprint", "strideTop", "decelHigh"], label: { en: "Muscle strain — high-speed running & hard braking ramp slowly", is: "Vöðvatognun — háhraðahlaup og hörð hemlun aukast hægt" } };
+  if (m(/muscle|strain|tear/)) return { category: "muscle", riskQualities: ["hsr", "sprint", "decelHigh"], label: { en: "Muscle strain — high-speed running & hard braking ramp slowly", is: "Vöðvatognun — háhraðahlaup og hörð hemlun aukast hægt" } };
   return { category: "general", riskQualities: ["sprint", "cod"], label: { en: "Ramping the most re-injury-prone qualities slowly", is: "Aukum þau gæði sem eru mest endurmeiðsla-hætt hægt" } };
 }
 
@@ -267,8 +271,8 @@ const QLABEL: Record<QualityKey, { en: string; is: string; unit: string; dp: num
   distance:  { en: "Weekly distance", is: "Vikuvegalengd", unit: "m", dp: 0 },
   hsr:       { en: "Weekly high-speed running", is: "Vikuháhraðahlaup", unit: "m", dp: 0 },
   sprint:    { en: "Weekly sprinting", is: "Vikusprettur", unit: "m", dp: 0 },
-  stride:    { en: "Weekly high-cadence strides (IMA)", is: "Hátíðni skref/viku (IMA)", unit: "", dp: 0 },
-  strideTop: { en: "Weekly top-speed strides (IMA)", is: "Topphraða skref/viku (IMA)", unit: "", dp: 0 },
+  stride:    { en: "Weekly strides in long runs (18–24 s)", is: "Skref/viku í löngum hlaupum (18–24 sek)", unit: "", dp: 0 },
+  strideTop: { en: "Weekly strides in longest runs (≥24 s)", is: "Skref/viku í lengstu hlaupum (≥24 sek)", unit: "", dp: 0 },
   accel:     { en: "Weekly accelerations (IMA)", is: "Hröðun/viku (IMA)", unit: "", dp: 0 },
   decel:     { en: "Weekly decelerations (IMA)", is: "Hemlun/viku (IMA)", unit: "", dp: 0 },
   decelHigh: { en: "Weekly high-intensity braking (IMA)", is: "Háákefðar hemlun/viku (IMA)", unit: "", dp: 0 },
@@ -279,8 +283,9 @@ const QLABEL: Record<QualityKey, { en: string; is: string; unit: string; dp: num
 const QFIELD: Record<QualityKey, keyof RttSession> = { volume: "load", distance: "distance", hsr: "hsr", sprint: "sprint", stride: "stride", strideTop: "strideTop", accel: "accel", decel: "decel", decelHigh: "decelHigh", cod: "cod", efforts: "efforts" };
 // GPS-derived qualities — invalid (must be skipped) when the pod got no GPS lock.
 // PlayerLoad + IMA (volume/accel/decel/decelHigh/cod) stay valid indoors — and
-// stride/strideTop (IMA Free Running) are deliberately NOT here: they're the
-// high-speed running qualities that still count on an indoor GPS-less rehab session.
+// stride/strideTop (IMA Free Running) are deliberately NOT here: they're IMU stride
+// counts of sustained (long continuous) running that still count on an indoor GPS-less
+// rehab session. They are NOT high-speed running — indoors there is no sprint reading.
 const GPS_DERIVED = new Set<QualityKey>(["distance", "hsr", "sprint", "efforts"]);
 
 function percentile(sortedAsc: number[], p: number): number {

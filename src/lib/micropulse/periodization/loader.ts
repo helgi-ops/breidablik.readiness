@@ -134,14 +134,16 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const isKinexon = String((teamRow as { gps_provider?: string | null } | null)?.gps_provider ?? "").toLowerCase() === "kinexon";
 
   // Season daily GPS/IMA (paged past 1000) → weekly team Player Load curve + the squad baseline.
-  // Richer mechanical/IMA columns (Band 2–3 high-intensity effort counts, top-band free-running strides,
+  // Richer mechanical/IMA columns (Band 2–3 high-intensity effort counts, strides in long continuous runs — IMA FR
+  // runs ≥18 s via the config-independent `ima_fr_ge18_stride_count` tier (was legacy bands 6–8 = ≥21 s before
+  // the band edges changed on 9 Nov 2026; ge18 is backfilled for all history), NOT sprint strides —
   // RHIE / running symmetry / metabolic power) are pulled too — rendered only where the feed carries them.
   // Kinexon (indoor LPS) reports accel/decel as plain counts (accelerations/
   // decelerations), not Catapult IMA (ima_accel/ima_decel) — pulled too so the
   // accel/decel baseline populates for a Kinexon team (ima_* stay null there).
-  type Raw = { date: string; player_load: number | null; total_distance: number | null; velocity_band5_total_distance: number | null; velocity_band6_total_distance: number | null; ima_accel: number | null; ima_decel: number | null; accelerations: number | null; decelerations: number | null; player_load_per_minute: number | null; max_velocity: number | null; ima_clock_gen2: ClockGrid | null; player_id: string | null; accel_b2_3_tot_effs_gen2: number | null; decel_b2_3_tot_effs_gen2: number | null; ima_fr_band6_stride_count: number | null; ima_fr_band7_stride_count: number | null; ima_fr_band8_stride_count: number | null; ima_fr_band58_total_distance: number | null; ima_cod_left_high: number | null; ima_cod_left_medium: number | null; ima_cod_left_low: number | null; ima_cod_right_high: number | null; ima_cod_right_medium: number | null; ima_cod_right_low: number | null; rhie_bouts: number | null; running_symmetry: number | null; metabolic_power: number | null };
+  type Raw = { date: string; player_load: number | null; total_distance: number | null; velocity_band5_total_distance: number | null; velocity_band6_total_distance: number | null; ima_accel: number | null; ima_decel: number | null; accelerations: number | null; decelerations: number | null; player_load_per_minute: number | null; max_velocity: number | null; ima_clock_gen2: ClockGrid | null; player_id: string | null; accel_b2_3_tot_effs_gen2: number | null; decel_b2_3_tot_effs_gen2: number | null; ima_fr_ge18_stride_count: number | null; ima_fr_band58_total_distance: number | null; ima_cod_left_high: number | null; ima_cod_left_medium: number | null; ima_cod_left_low: number | null; ima_cod_right_high: number | null; ima_cod_right_medium: number | null; ima_cod_right_low: number | null; rhie_bouts: number | null; running_symmetry: number | null; metabolic_power: number | null };
   const daily = await fetchAllPages<Raw>((from, to) =>
-    sb.from("player_external_load_daily").select("date, player_id, player_load, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_accel, ima_decel, accelerations, decelerations, player_load_per_minute, max_velocity, ima_clock_gen2, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, ima_fr_band58_total_distance, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, rhie_bouts, running_symmetry, metabolic_power")
+    sb.from("player_external_load_daily").select("date, player_id, player_load, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_accel, ima_decel, accelerations, decelerations, player_load_per_minute, max_velocity, ima_clock_gen2, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_ge18_stride_count, ima_fr_band58_total_distance, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, rhie_bouts, running_symmetry, metabolic_power")
       .eq("team_id", args.teamId).gte("date", yStart).lte("date", yEnd).order("date").range(from, to));
   const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
   let dataStart: string | null = null, dataEnd: string | null = null;
@@ -161,8 +163,8 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     const noGps = hasNoGpsReading(num(r.player_load), num(r.total_distance));
     const gps = (v: unknown) => (noGps ? null : num(v));
     const v5 = gps(r.velocity_band5_total_distance), v6 = gps(r.velocity_band6_total_distance);
-    const strideHiParts = [num(r.ima_fr_band6_stride_count), num(r.ima_fr_band7_stride_count), num(r.ima_fr_band8_stride_count)].filter((x): x is number => x != null);
-    const strideHi = strideHiParts.length ? strideHiParts.reduce((a, b) => a + b, 0) : null;
+    // Strides in runs ≥18 s (ima_fr_band58_total_distance below = metres in those same runs).
+    const strideHi = num(r.ima_fr_ge18_stride_count);
     const hsr = v5 != null || v6 != null ? (v5 ?? 0) + (v6 ?? 0) : null;
     rawSessions.push({
       isMatch: matchDates.has(r.date), date: r.date,

@@ -29,9 +29,10 @@ const OWN_REF_MIN = 3;            // fewer own near-full matches → team refere
 const MIN_STRIDES = 50;           // a stride length needs this many strides in long runs (as strideLength.ts)
 const ACWR_DAYS = 28;             // computeImaRunningLoad's chronic window
 
-const BAND_COLS = [5, 6, 7, 8].flatMap((b) => [`ima_fr_band${b}_event_count`, `ima_fr_band${b}_total_duration`, `ima_fr_band${b}_stride_count`, `ima_fr_band${b}_total_distance`]);
-const CHECK_COLS = [1, 2, 3, 4].flatMap((b) => [`ima_fr_band${b}_event_count`, `ima_fr_band${b}_total_duration`]);
-const COLS = ["player_id", "date", "source", "total_distance", "ima_fr_band58_total_distance", ...BAND_COLS, ...CHECK_COLS].join(", ");
+// All 8 bands + the row's edges: which bands hold runs ≥18 s depends on the edges the row was classified with.
+const BAND_COLS = [1, 2, 3, 4, 5, 6, 7, 8].flatMap((b) => [`ima_fr_band${b}_event_count`, `ima_fr_band${b}_total_duration`, `ima_fr_band${b}_stride_count`, `ima_fr_band${b}_total_distance`]);
+const TIER_COLS = ["event_count", "total_duration", "stride_count", "total_distance"].map((k) => `ima_fr_ge18_${k}`);
+const COLS = ["player_id", "date", "source", "total_distance", "ima_fr_band58_total_distance", "ima_fr_band_bounds", ...TIER_COLS, ...BAND_COLS].join(", ");
 
 export type LongRunRow = Record<string, unknown> & { player_id: string; date: string; source: string | null };
 type Row = LongRunRow;

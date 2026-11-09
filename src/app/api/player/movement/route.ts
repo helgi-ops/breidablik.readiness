@@ -4,7 +4,9 @@
  * GET — a PLAYER-facing, motivating view of their own movement for a day, each
  * compared to the player's OWN recent normal (28-day mean of training days).
  * Capability-driven, branching on the signals his data actually carries:
- *   - IMA clubs (Pro S7): jumps, high-intensity actions, direction changes, IMA run.
+ *   - IMA clubs (Pro S7): jumps, high-intensity actions, direction changes, long-run
+ *     distance (`ima_run` = IMA Free Running bands 5–8 = metres in continuous runs ≥18 s;
+ *     bout-duration bands, not speed — see docs/ima-free-running-bands.md).
  *   - GPS-only clubs (Lite): high-speed running, sprint distance, high-intensity
  *     efforts, top speed — the data he genuinely gets, instead of an empty card.
  * Plain language, personal-norm framing; deliberately NOT the coach/S&C signals
@@ -43,6 +45,7 @@ const IMA_METRICS: MetricDef[] = [
   { key: "jumps", unit: "", value: (r) => num(r.jumps) },
   { key: "high_intensity", unit: "", value: (r) => num(r.accel_b2_3_tot_effs_gen2) + num(r.decel_b2_3_tot_effs_gen2) },
   { key: "cuts", unit: "", value: (r) => codSum(r) },
+  // Long continuous runs (≥18 s) — sustained running, NOT sprinting. Key kept for the client.
   { key: "ima_run", unit: "m", value: (r) => num(r.ima_fr_band58_total_distance) },
 ];
 

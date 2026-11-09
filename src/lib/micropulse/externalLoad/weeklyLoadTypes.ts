@@ -47,9 +47,16 @@ export const WEEKLY_LOAD_METRICS_INDOOR = [
 //     (`ima_cod_{left,right}_{high,medium,low}`); the tracker/targets sum those
 //     six into a total CoD count. So this is a first-class signal, not a proxy
 //     derived from accel/decel + clock.
-//   • Stride bands 6-8 — high-cadence Free-Running stride counts (the fast /
-//     sprint cadence bands, `ima_fr_band{6,7,8}_stride_count`): the running-
-//     intensity companion to the movement-event load.
+//   • Stride tiles — Free-Running stride counts by RUN LENGTH (seconds of one
+//     continuous run). IMA FR bands are bout-DURATION bands, NOT speed or cadence
+//     bands — sustained-running strides, not sprinting. Their edges are
+//     configurable and changed on 9 Nov 2026, so the tiles are read by run length
+//     from edges common to every config (loadTargets.imaStrideTierOf):
+//       imaStrideBand6 = runs 12–18 s · imaStrideBand7 = runs 18–24 s ·
+//       imaStrideBand8 = runs ≥24 s (ima_fr_ge24_stride_count).
+//     Keys keep their old names (stored targets). Before Nov 2026 they were
+//     legacy bands 6/7/8 = 21–24 / 24–27 / 27+ s. Sprint / high-speed exposure
+//     comes from GPS (velocityBand5/6). See docs/ima-free-running-bands.md.
 export const WEEKLY_LOAD_METRICS_IMA = [
   "imaTotal",
   "imaAccel",
@@ -68,8 +75,10 @@ export const WEEKLY_LOAD_METRICS_IMA = [
 export const WEEKLY_LOAD_METRICS = WEEKLY_LOAD_METRICS_OUTDOOR;
 
 // ─── IMA running KPIs (periodization vocabulary) ──────────────────────────────
-// The running-side IMA pair the periodization hub plans with, beside IMA CoD: IMA Free Running fast
-// distance (bands 5–8, `ima_fr_band58_total_distance`) and IMA Stride fast strides (bands 6–8 summed).
+// The running-side IMA pair the periodization hub plans with, beside IMA CoD: IMA Free Running long-run
+// distance (runs ≥18 s, `ima_fr_band58_total_distance` = ima_fr_ge18_total_distance) and IMA Stride long-run
+// strides (runs ≥18 s, `ima_fr_ge18_stride_count`; was legacy bands 6–8 = ≥21 s before Nov 2026 — no ≥21 s
+// edge exists in the new band config). Bout-duration bands — sustained running, NOT sprint/high-speed.
 // Part of the key vocabulary only — not a Weekly Load tracker tile set (the tracker shows the 3 bands).
 export const WEEKLY_LOAD_METRICS_IMA_RUN = ["imaFrDistance", "imaStrideHi"] as const;
 
@@ -193,13 +202,14 @@ export const WEEKLY_LOAD_LABELS: Record<WeeklyLoadMetricKey, { en: string; is: s
   imaAccel:         { en: "IMA Accel",       is: "IMA Hröðun",        unit: "#" },
   imaDecel:         { en: "IMA Decel",       is: "IMA Hemlun",        unit: "#" },
   imaCod:           { en: "IMA CoD",         is: "IMA Stefnubr.",     unit: "#" },
-  // High-cadence Free-Running stride bands (fast / sprint cadence)
-  imaStrideBand6:   { en: "Stride B6",       is: "Skref-band 6",      unit: "#" },
-  imaStrideBand7:   { en: "Stride B7",       is: "Skref-band 7",      unit: "#" },
-  imaStrideBand8:   { en: "Stride B8",       is: "Skref-band 8",      unit: "#" },
-  // IMA running pair (periodization): fast running distance + fast strides
-  imaFrDistance:    { en: "IMA Free Running", is: "IMA hraðhlaup",    unit: "m" },
-  imaStrideHi:      { en: "IMA Stride",      is: "IMA hröð skref",    unit: "#" },
+  // Free-Running stride tiles = strides by run length (bout-duration bands, NOT speed/cadence), read from
+  // edges common to every band config (see loadTargets.imaStrideTierOf).
+  imaStrideBand6:   { en: "Run strides 12–18 s", is: "Skref í 12–18 sek hlaupum", unit: "#" },
+  imaStrideBand7:   { en: "Run strides 18–24 s", is: "Skref í 18–24 sek hlaupum", unit: "#" },
+  imaStrideBand8:   { en: "Strides, longest runs (≥24 s)", is: "Skref í lengstu hlaupum (≥24 sek)", unit: "#" },
+  // IMA running pair (periodization): long-run distance + long-run strides (both runs ≥18 s)
+  imaFrDistance:    { en: "Long-run distance", is: "Vegal. í löngum hlaupum", unit: "m" },
+  imaStrideHi:      { en: "Long-run strides",  is: "Skref í löngum hlaupum",  unit: "#" },
   // Titan indoor IMU (basketball)
   jumps:            { en: "Jumps",           is: "Stökk",             unit: "#" },
   impacts:          { en: "Impacts",         is: "Högg",              unit: "#" },

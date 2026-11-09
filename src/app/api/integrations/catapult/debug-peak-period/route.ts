@@ -133,8 +133,8 @@ export async function GET(request: Request) {
     // ?fr=1 → IMA Free Running check (Nov 2026). Probes every per-band Free Running
     // parameter individually (which ones carry data, under which response keys — V1
     // vs V2), then fetches them as one batch and computes the team's real mean speed
-    // per band = Σ Total Distance ÷ Σ Total Duration. If band 5 ≈ 18–21 km/h, band 6 ≈
-    // 21–24 … the OpenField thresholds are km/h speed bands. Descriptive, read-only.
+    // per band = Σ Total Distance ÷ Σ Total Duration. Result (and Catapult's own answer,
+    // Nov 2026): the bands are effort-duration bands in seconds, not km/h. Read-only.
     if (url.searchParams.get("fr") === "1") {
       const metrics = [
         "Stride Count", "Average Stride Rate", "Average Stride Rate 1.0",
@@ -143,8 +143,19 @@ export async function GET(request: Request) {
       const names: string[] = [];
       for (let b = 1; b <= 8; b++) for (const m of metrics) names.push(`IMA Free Running Band ${b} ${m}`);
       const probe = await probeNamedStatsIndividually(activityId, names);
+      // Catapult rejects a WHOLE batch ("The given data was invalid.") if any one name is
+      // unknown to the org, so batch only the names the per-name probe accepted, and
+      // report the rejected ones so the exact bad name is visible.
+      const accepted = probe.filter((p) => p.ok).map((p) => p.name);
+      const rejected = probe.filter((p) => !p.ok).map((p) => ({ name: p.name, error: p.error }));
 
-      const rows = await fetchNamedStatsRaw(activityId, names, false);
+      let rows: Awaited<ReturnType<typeof fetchNamedStatsRaw>> = [];
+      let batchError: string | null = null;
+      try {
+        rows = accepted.length ? await fetchNamedStatsRaw(activityId, accepted, false) : [];
+      } catch (e) {
+        batchError = e instanceof Error ? e.message : String(e);
+      }
       const keys = Array.from(new Set(rows.flatMap((r) => Object.keys(r)))).sort();
       const num = (v: unknown) => { const n = typeof v === "number" ? v : Number(v); return Number.isFinite(n) ? n : 0; };
       const sumKey = (k: string | undefined) => (k ? rows.reduce((s, r) => s + num(r[k]), 0) : null);
@@ -165,6 +176,7 @@ export async function GET(request: Request) {
       });
       return NextResponse.json({
         ok: true, date, activityId, athletes: rows.length,
+        acceptedCount: accepted.length, rejected, batchError,
         freeRunningKeys: keys.filter((k) => /free_?run|freerunning/i.test(k)),
         perBand, probe,
       });

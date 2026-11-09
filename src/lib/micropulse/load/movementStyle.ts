@@ -3,12 +3,13 @@
  *
  * The IMA "clock" (direction-change events) reads almost identically for every player
  * (a systematic LF↔RB diagonal — it captures change-of-direction, not forward running),
- * so on its own it barely differentiates. IMA Free Running fills the gap: the fast stride
- * bands are the LINEAR running the clock misses. Their balance IS a player's style, and it
+ * so on its own it barely differentiates. IMA Free Running fills the gap: bands 5–8 are the
+ * LONG CONTINUOUS RUNS (bouts ≥18 s — bout-duration bands, NOT speed/cadence; see
+ * docs/ima-free-running-bands.md), i.e. the sustained linear running the clock misses. Their balance IS a player's style, and it
  * genuinely separates players (verified on Breiðablik: a ~3.7× spread, position-sensible).
  *
  * This is Andrew Gray's (ADI) linear-vs-multidirectional distinction, IMA-native:
- *   ratio = high-intensity direction-change load ÷ fast linear-running load
+ *   ratio = high-intensity direction-change load ÷ sustained linear-running load (long runs)
  * Higher ratio = more of his work is multidirectional (a cutter/turner); lower = a
  * straight-line runner. Read squad-relative (percentile) so it's "vs his peers", and it's
  * a STYLE descriptor, never a quality — a linear runner is not "worse" than a cutter.
@@ -29,7 +30,8 @@ export interface PlayerStyleInput {
   playerId: string;
   /** High-intensity direction-change events (sum of the clock's high tier, all directions). */
   codLoad: number | null;
-  /** Fast linear-running PlayerLoad (IMA free-running bands 5–8 = high cadence/velocity). */
+  /** Sustained linear-running PlayerLoad (IMA free-running bands 5–8 = long continuous runs ≥18 s;
+   *  bout-duration bands, NOT high cadence/velocity). Field name kept for interface stability. */
   linearFastLoad: number | null;
 }
 
@@ -54,8 +56,8 @@ export const MIN_SQUAD = 5;
 const CITATION = "Buchheit 2014 (IMA) · di Prampero (accel/decel cost) · ADI / Gray 2025 (linear vs multidirectional)";
 
 const CAVEAT: Bi = {
-  en: "Movement style is the balance of his high-intensity change-of-direction work (IMA clock) against his fast linear running (IMA free-running bands) — read as a percentile vs the squad. It's a STYLE, not a quality: a linear runner is not worse than a cutter. A proxy from IMA counts + PlayerLoad, not mechanical power W/kg. Descriptive — it never changes the readiness verdict or the daily plan.",
-  is: "Hreyfistíll er jafnvægið milli há-ákafra stefnubreytinga hans (IMA-klukka) og hraðs línulegs hlaups (IMA free-running bönd) — lesið sem percentíl m.v. hópinn. Þetta er STÍLL, ekki gæði: línulegur hlaupari er ekki verri en sá sem sker. Proxy úr IMA-talningum + PlayerLoad, ekki mechanical power W/kg. Lýsandi — breytir aldrei readiness-dómnum eða dagsáætluninni.",
+  en: "Movement style is the balance of his high-intensity change-of-direction work (IMA clock) against his sustained linear running (long continuous runs of 18 s or more, IMA free-running) — read as a percentile vs the squad. It's a STYLE, not a quality: a linear runner is not worse than a cutter. A proxy from IMA counts + PlayerLoad, not mechanical power W/kg. Descriptive — it never changes the readiness verdict or the daily plan.",
+  is: "Hreyfistíll er jafnvægið milli há-ákafra stefnubreytinga hans (IMA-klukka) og samfellds línulegs hlaups (löng samfelld hlaup, 18 sek eða lengur, IMA free-running) — lesið sem percentíl m.v. hópinn. Þetta er STÍLL, ekki gæði: línulegur hlaupari er ekki verri en sá sem sker. Proxy úr IMA-talningum + PlayerLoad, ekki mechanical power W/kg. Lýsandi — breytir aldrei readiness-dómnum eða dagsáætluninni.",
 };
 
 const num = (x: number | null | undefined): number | null => (typeof x === "number" && isFinite(x) ? x : null);

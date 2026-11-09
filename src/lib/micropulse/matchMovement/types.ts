@@ -5,7 +5,9 @@
  *
  * Two variants of the "movement fingerprint":
  *   • ima — the true DRIVER layer (Pro/ELITE): accel:decel balance, change of
- *     direction, L/R asymmetry, stride cadence. HOW a player moves.
+ *     direction, L/R asymmetry, strides in long continuous runs (IMA Free Running
+ *     runs ≥18 s; bout-duration bands, NOT speed — see
+ *     docs/ima-free-running-bands.md). HOW a player moves.
  *   • gps — the Core/Lite fallback: Lite units capture no IMA, so the fingerprint
  *     is built from GPS movement signals (player load, accel/decel efforts,
  *     high-speed + sprint running, top speed). Honestly a GPS movement read, NOT
@@ -52,10 +54,12 @@ export const MOVEMENT_DIMENSIONS: MovementDimension[] = [
     moreEN: "more left-side turns", moreIS: "meira vinstri", lessEN: "more right-side turns", lessIS: "meira hægri",
     whyMoreEN: "he turned to his left more (his side/role or the opponent)", whyMoreIS: "hann beygði meira til vinstri (hlið/hlutverk eða andstæðingur)",
     whyLessEN: "he turned to his right more (his side/role or the opponent)", whyLessIS: "hann beygði meira til hægri (hlið/hlutverk eða andstæðingur)" },
-  { key: "hiCadencePerMin", en: "High-cadence strides / min", is: "Háákefðar skref / mín", kind: "rate",
-    moreEN: "more high-cadence running", moreIS: "meira háákefðar hlaup", lessEN: "less high-cadence running", lessIS: "minna háákefðar hlaup",
-    whyMoreEN: "more sprint-type running", whyMoreIS: "meira sprett-tegundar hlaup",
-    whyLessEN: "less sprint-type running", whyLessIS: "minna sprett-tegundar hlaup" },
+  // Legacy key `hiCadencePerMin`: strides in continuous runs lasting ≥18 s (ima_fr_ge18_stride_count;
+  // was legacy bands 6–8 = ≥21 s before Nov 2026). Bout-duration bands — sustained running, NOT sprinting.
+  { key: "hiCadencePerMin", en: "Strides in long runs / min", is: "Skref í löngum hlaupum / mín", kind: "rate",
+    moreEN: "more long continuous running", moreIS: "meira af löngum samfelldum hlaupum", lessEN: "less long continuous running", lessIS: "minna af löngum samfelldum hlaupum",
+    whyMoreEN: "more long, sustained runs (18 s or more)", whyMoreIS: "fleiri löng, samfelld hlaup (18 sek eða lengri)",
+    whyLessEN: "fewer long, sustained runs (18 s or more)", whyLessIS: "færri löng, samfelld hlaup (18 sek eða lengri)" },
 ];
 
 /**
@@ -106,8 +110,8 @@ export const DIM_DEFS: Record<string, { en: string; is: string }> = {
                      is: "Hversu oft leikmaðurinn skiptir um stefnu á mínútu — lipurðar-krafan í leik hans." },
   codLeftPct:      { en: "Share of turns to the left vs right. Near 50% is balanced; a big skew flags a one-sided pattern.",
                      is: "Hlutfall vinstri vs hægri snúninga. Um 50% er jafnt; mikil skekkja bendir á einhliða mynstur." },
-  hiCadencePerMin: { en: "Fast, sprint-type running per minute (stride bands 6-8) — the IMA read on high-speed running.",
-                     is: "Hratt sprett-hlaup á mínútu (skref-bönd 6-8) — IMA-mæling á hröðu hlaupi." },
+  hiCadencePerMin: { en: "Strides per minute taken in long continuous runs lasting 18 s or more (IMA Free Running). It measures how long a run lasted, not how fast — this is not sprinting.",
+                     is: "Skref á mínútu í löngum samfelldum hlaupum sem vara 18 sek eða lengur (IMA Free Running). Mælir lengd hlaups, ekki hraða — þetta eru ekki sprettir." },
   workPerMin:      { en: "Overall physical workload per minute (GPS player load) — how hard the game was.",
                      is: "Heildar líkamlegt álag á mínútu (GPS) — hversu erfiður leikurinn var." },
   effortsPerMin:   { en: "Sharp accelerations and decelerations per minute — the agility / stop-start demand (the GPS stand-in for change of direction).",
@@ -136,7 +140,9 @@ export function whyWord(key: DimensionKey, rel: number, is: boolean): string {
 
 /**
  * S&C drill-down — raw per-match counts behind "Show details" (IMA variant only).
- * The high-intensity bands (decelHigh, codHigh, stride8) are the demanding end
+ * The high-intensity bands (decelHigh, codHigh) and the longest-run stride band
+ * (stride8 = runs ≥24 s, sustained running — not sprinting; stride6/7 = runs 12–18 s / 18–24 s,
+ * read by run length from the row's own band edges, which changed on 9 Nov 2026) are the end
  * that the summed fingerprint dimensions hide — a descriptive read of mechanical
  * demand, not an injury prediction. Raw counts (not per-minute) as S&C read them.
  */
@@ -158,8 +164,8 @@ export const SUB_BAND_GROUPS: Array<{
   { group: "cod", labelEN: "Change-of-direction by intensity", labelIS: "Stefnubreyting eftir styrk", bands: [
     { key: "codHigh", en: "High", is: "Há", high: true }, { key: "codMed", en: "Medium", is: "Miðl" }, { key: "codLow", en: "Low", is: "Lág" },
   ] },
-  { group: "stride", labelEN: "High-cadence stride bands", labelIS: "Háákefðar skref-bönd", bands: [
-    { key: "stride6", en: "Band 6", is: "Band 6" }, { key: "stride7", en: "Band 7", is: "Band 7" }, { key: "stride8", en: "Band 8 (sprint)", is: "Band 8 (sprettur)", high: true },
+  { group: "stride", labelEN: "Strides by run length", labelIS: "Skref eftir lengd hlaups", bands: [
+    { key: "stride6", en: "12–18 s", is: "12–18 sek" }, { key: "stride7", en: "18–24 s", is: "18–24 sek" }, { key: "stride8", en: "24 s+ (longest)", is: "24+ sek (lengstu)", high: true },
   ] },
 ];
 

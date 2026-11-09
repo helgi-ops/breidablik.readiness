@@ -7,6 +7,7 @@ import {
   type ImaPlayerDay,
   type ImaSessionProfile,
 } from "./index";
+import { sumBandsBetween } from "@/lib/integrations/catapult/freeRunningBands";
 
 type DailyRow = {
   player_id: string;
@@ -20,6 +21,10 @@ type DailyRow = {
   ima_fr_band6_stride_count: number | null;
   ima_fr_band7_stride_count: number | null;
   ima_fr_band8_stride_count: number | null;
+  /** Band edges (s) this row was classified with — band numbers shift when the club changes them. */
+  ima_fr_band_bounds: Array<number | string> | null;
+  /** Strides in efforts ≥18 s (config-independent tier filled by the DB trigger). */
+  ima_fr_ge18_stride_count: number | null;
   ima_cod_left_low: number | null;
   ima_cod_right_low: number | null;
   ima_cod_left_medium: number | null;
@@ -59,7 +64,7 @@ export async function loadImaDayProfile(
   const { data: rows } = await sb
     .from("player_external_load_daily")
     .select(
-      "player_id, date, source, ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band3_stride_count, ima_fr_band4_stride_count, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, ima_cod_left_low, ima_cod_right_low, ima_cod_left_medium, ima_cod_right_medium, ima_cod_left_high, ima_cod_right_high"
+      "player_id, date, source, ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band3_stride_count, ima_fr_band4_stride_count, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, ima_fr_band_bounds, ima_fr_ge18_stride_count, ima_cod_left_low, ima_cod_right_low, ima_cod_left_medium, ima_cod_right_medium, ima_cod_left_high, ima_cod_right_high"
     )
     .in("player_id", playerIds)
     .eq("source", "catapult")
@@ -99,11 +104,23 @@ export async function loadImaDayProfile(
       return cols.reduce((acc, c) => acc + (Number(r[c]) || 0), 0);
     };
 
-    const low = sum(today, "ima_fr_band1_stride_count", "ima_fr_band2_stride_count", "ima_fr_band3_stride_count");
-    const mid = sum(today, "ima_fr_band4_stride_count", "ima_fr_band5_stride_count", "ima_fr_band6_stride_count");
-    const high = sum(today, "ima_fr_band7_stride_count", "ima_fr_band8_stride_count");
-    const sprint = sum(today, "ima_fr_band5_stride_count", "ima_fr_band6_stride_count", "ima_fr_band7_stride_count", "ima_fr_band8_stride_count");
-    const total = low + mid + high;
+    // Tiers by RUN LENGTH, read from the row's own band edges (ima_fr_band_bounds) — never by band number,
+    // because the edges change (legacy 0-8-12-15-18-21-24-27-100; Breiðablik from 10 Nov 2026
+    // 0-2.5-5-8-12-18-24-30-1000). 12 s and 24 s are edges in every config:
+    //   short bursts <12 s · medium runs 12–24 s · longest runs ≥24 s.
+    const tier = (r: DailyRow | undefined, lo: number, hi?: number) =>
+      r ? sumBandsBetween(r, "stride_count", lo, hi) ?? 0 : 0;
+    const low = tier(today, 0, 12);
+    const mid = tier(today, 12, 24);
+    const high = tier(today, 24);
+    // Strides in long continuous runs (efforts ≥18 s, config-independent ima_fr_ge18 tier) — bout-duration
+    // bands, NOT sprint/speed bands. Variable/field name "sprint" is legacy.
+    const longRunStrides = (r: DailyRow): number =>
+      r.ima_fr_ge18_stride_count != null ? Number(r.ima_fr_ge18_stride_count) || 0 : tier(r, 18);
+    const sprint = today ? longRunStrides(today) : 0;
+    const total = sum(today,
+      "ima_fr_band1_stride_count", "ima_fr_band2_stride_count", "ima_fr_band3_stride_count", "ima_fr_band4_stride_count",
+      "ima_fr_band5_stride_count", "ima_fr_band6_stride_count", "ima_fr_band7_stride_count", "ima_fr_band8_stride_count");
 
     const codLeftLow = today ? Number(today.ima_cod_left_low) || 0 : 0;
     const codRightLow = today ? Number(today.ima_cod_right_low) || 0 : 0;
@@ -119,24 +136,17 @@ export async function loadImaDayProfile(
     const cod_asymmetry_medium_pct = codTotalMedium >= 10 ? asymmetryPct(codLeftMedium, codRightMedium) : null;
     const cod_asymmetry_pct = codTotalHigh >= 10 ? asymmetryPct(codLeftHigh, codRightHigh) : null;
 
-    // Personal sprint-strides baseline: avg of training-only days in the
-    // last 14 days where bands 5-8 sum was > 0. Match days excluded so the
-    // comparison answers "is today's training high/low for this player".
+    // Personal long-run-strides baseline (runs ≥18 s): avg of training-only days in the
+    // last 14 days where that count was > 0. Match days excluded so the
+    // comparison answers "is today's training high/low for this player". The ≥18 s tier
+    // is backfilled for all history, so the baseline is continuous across a band-edge change.
     const baselineRows = playerRows
       .filter(r =>
         r.date !== args.dateIso &&
         !matchDays.has(r.date) &&
-        (Number(r.ima_fr_band5_stride_count) || 0)
-          + (Number(r.ima_fr_band6_stride_count) || 0)
-          + (Number(r.ima_fr_band7_stride_count) || 0)
-          + (Number(r.ima_fr_band8_stride_count) || 0) > 0,
+        longRunStrides(r) > 0,
       );
-    const baselineValues = baselineRows.map(r =>
-      (Number(r.ima_fr_band5_stride_count) || 0)
-      + (Number(r.ima_fr_band6_stride_count) || 0)
-      + (Number(r.ima_fr_band7_stride_count) || 0)
-      + (Number(r.ima_fr_band8_stride_count) || 0)
-    );
+    const baselineValues = baselineRows.map(longRunStrides);
     // Baseline minimum is 1 day during the Catapult Free Running transition
     // (May 2026): many pre-fix training days have IMA = 0 so requiring 2
     // qualifying days would hide baselines for most of the squad. As more

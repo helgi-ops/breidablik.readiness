@@ -66,7 +66,7 @@ const PLAN_OPTIONS: Array<{
     value: "premium",
     label: "Premium",
     icon: "🟣",
-    desc: "Adds IMA Free Running stride bands + Metabolic Power + #MPE recovery time. Unlocks Indoor Load (FMP-driven) and Sharp Cut + MPE chips on Decel Intelligence.",
+    desc: "Adds IMA Free Running (strides and distance in long continuous runs, by run length) + Metabolic Power + #MPE recovery time. Unlocks Indoor Load (FMP-driven) and Sharp Cut + MPE chips on Decel Intelligence.",
     cls: "border-purple-300",
   },
 ];

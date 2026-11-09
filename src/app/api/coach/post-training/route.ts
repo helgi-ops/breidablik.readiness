@@ -74,6 +74,7 @@ export async function GET(req: NextRequest) {
       sprint: num(r.velocity_band6_total_distance) || num(r.sprint_distance),
       accel: num(r.accel_b2_3_tot_effs_gen2), decel: num(r.decel_b2_3_tot_effs_gen2),
       efforts: num(r.accel_decel_efforts),
+      // IMA FR bands 5–8 = distance in long continuous runs (≥18 s) — NOT sprint/HSR (GPS hsr/sprint above).
       ima: num(r.ima_fr_band58_total_distance),
       // Pro IMA counts (the indoor / basketball movement metrics).
       imaAccel: num(r.ima_accel), imaDecel: num(r.ima_decel), imaCod: cod, jumps: num(r.jumps),

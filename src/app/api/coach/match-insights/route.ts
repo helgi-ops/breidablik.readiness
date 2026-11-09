@@ -154,13 +154,17 @@ export async function GET(req: NextRequest) {
   };
 
   // ── Extended metrics (richer GPS + detailed IMA the fingerprint doesn't carry).
+  // Note: ima_fr_ge24_stride_count = strides in continuous runs ≥24 s (IMA FR bands are
+  // bout-duration bands whose edges change per team/date; the DB fills this config-independent tier)
+  // — sustained running, not sprinting. Sprint comes from GPS columns.
   // Reuse mm's minutes + contamination gate; pull the raw columns per player-match
   // and compute per-minute. Paged past the 1000-row cap.
   const playerIds = mm.players.map((p) => p.player_id);
   const extCols =
     "player_id, date, total_distance, high_speed_distance, velocity_band6_total_distance, sprint_distance, " +
     "max_velocity, high_metabolic_load_distance_m, ima_band3_decel_count, ima_cod_left_high, ima_cod_right_high, " +
-    "ima_fr_band8_stride_count, fmp_running_high_s, fmp_total_duration_s, jumps";
+    "ima_fr_ge24_stride_count, ima_fr_band_bounds, ima_fr_band7_stride_count, ima_fr_band8_stride_count, " +
+    "fmp_running_high_s, fmp_total_duration_s, jumps";
   const rawRows = mm.matchDates.length && playerIds.length
     ? await fetchAllPages<Record<string, unknown>>((from, to) =>
         supabase.from("player_external_load_daily").select(extCols)
