@@ -120,7 +120,7 @@ Catapult classifies bands **at processing time**. A stats query for 24 Oct, run 
 
 How MicroPulse handles it:
 
-- **`team_fr_band_config`** stores the edges per team with an `effective_from` date. Breiðablik's legacy edges apply from 2026-01-01 and the new ones from 2026-11-10. Teams without a row (HK, demos) get the legacy edges.
+- **`team_fr_band_config`** stores the edges per team with an `effective_from` date. Breiðablik's legacy edges apply from 2026-01-01 and the new ones from 2026-11-09. Since migration 20261109190000 this table is only the fallback; each row's own data decides first (see below). Teams without a row (HK, demos) get the legacy edges.
 - **`player_external_load_daily.ima_fr_band_bounds`** holds the edges each row was classified with.
 - **Tier columns `ima_fr_ge18_*` and `ima_fr_ge24_*`** count efforts of ≥18 s and ≥24 s. They are config-independent because 18 s and 24 s are edges in both configs. They are filled for all history.
 - **`ima_fr_band58_total_distance`** still means "metres in runs ≥18 s".
@@ -144,4 +144,39 @@ Re-check these after a few weeks of new data:
 - the GPS–IMA mix baseline (now ≥18 s, previously ≥15 s);
 - any targets coaches entered by hand on the stride tiles.
 
-If OpenField can reprocess older sessions with the new edges, a fresh backfill would make the whole season use one config. If so, update `team_fr_band_config` to match.
+## Edges read from each row's own data (9 Nov 2026)
+
+Stamping edges by team and date turned out to be wrong in two ways:
+
+- **Edges are per athlete in OpenField.** Two Breiðablik players, Dagur Örn Fjeldsted (80 of 80 sessions from
+  11 Jun) and Þorleifur Úlfarsson (41 of 41 from 9 Aug), were on Catapult's 3-band default (0–2.5 · 2.5–5 · 5+ s)
+  all season while the squad used the legacy edges. Their bands 4–8 were empty, so MicroPulse read them as
+  "0 long runs".
+- **Reprocessing changes old sessions.** Catapult is bulk-reprocessing Breiðablik's 2026 sessions with the new
+  edges, so a June session can come back in the new config.
+
+So the DB trigger `ima_fr_fill_tiers` (migration `20261109190000`) now decides each row's edges from its own data.
+A single run always lies inside its band, so the mean run of a band (time ÷ runs) does too. The trigger tries
+every known config (`ima_fr_presets()`: legacy, new, 3-band default, plus the team's `team_fr_band_config` rows)
+and keeps the one the row fits. `ima_fr_bounds_source` records how:
+
+| Source | When |
+|---|---|
+| `detected` | the row fits exactly one config |
+| `player` | it fits several (too few runs to tell) or has no runs + time; the same player's nearest `detected` row decides |
+| `config` | no such neighbour; the team config for the date |
+| `unknown` | it fits no known config; tiers are null |
+| `writer` | the writer set the edges itself (estimated rows, `estimatePod.ts`) |
+
+The 3-band default is stored as `{0,2.5,5,1000,1000,1000,1000,1000,1000}`. It has no 12, 18 or 24 s edge, so every
+run-length tier reads null ("no reading"), never 0. The Long runs card names those players; the Today signal and
+"Did we do enough?" treat them as a data gap. The trigger re-decides on insert, when a writer sets
+`ima_fr_band_bounds = null` (the Catapult sync always does), or when band values change on update. A re-sync after
+Catapult reprocesses therefore relabels itself; nothing has to be set by hand.
+
+Backfill result (9 Nov 2026): run counts, time and strides in runs ≥18 s are unchanged for every team; Breiðablik
+rows reading "0 long runs" fell from 198 to 79; 121 Breiðablik rows (the two players) and their demo copies now read
+"no reading". In the data no row fits none of the configs. HK is all legacy.
+
+TypeScript mirrors the rule in `freeRunningBands.ts` (`boundsFit`, `fittingBounds`, `frReadingOf`); tests in
+`src/lib/integrations/catapult/__tests__/freeRunningBands.test.ts`.

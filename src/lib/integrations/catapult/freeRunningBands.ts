@@ -30,15 +30,76 @@
  * LEGACY band edges in seconds (Breiðablik's original OpenField setting, used for every row before
  * 10 Nov 2026 and assumed for teams without a team_fr_band_config row). Index i = lower edge of band i+1.
  *
- * BAND EDGES CHANGE. Catapult applies them at processing time, and Breiðablik moved to
- * 0-2.5-5-8-12-18-24-30-1000 on 9 Nov 2026 (team_fr_band_config). So "band 5" is 18–21 s in old rows and
- * 12–18 s in new rows. Never hard-code a band number as a run length: read the row's own
- * `ima_fr_band_bounds`, or better, the config-independent tiers `ima_fr_ge18_*` / `ima_fr_ge24_*`
- * (efforts ≥18 s / ≥24 s), which the sync computes from the bounds in force.
+ * BAND EDGES CHANGE. Catapult applies them at processing time, per athlete, and Breiðablik moved to
+ * 0-2.5-5-8-12-18-24-30-1000 on 9 Nov 2026. So "band 5" is 18–21 s in old rows and 12–18 s in new rows.
+ * Never hard-code a band number as a run length: read the row's own `ima_fr_band_bounds`, or better, the
+ * tiers `ima_fr_ge18_*` / `ima_fr_ge24_*` (runs ≥18 s / ≥24 s). The DB trigger `ima_fr_fill_tiers` decides
+ * each row's edges from its own band means (migration 20261109190000; `ima_fr_bounds_source` says how)
+ * and fills the tiers. A row on Catapult's 3-band default has no 18 s edge: its tiers are null, never 0.
  */
 export const LEGACY_FR_BAND_BOUNDS_S = [0, 8, 12, 15, 18, 21, 24, 27, 100] as const;
 /** @deprecated name kept for existing imports — same as LEGACY_FR_BAND_BOUNDS_S. Prefer boundsOfRow(). */
 export const DEFAULT_FR_BAND_BOUNDS_S = LEGACY_FR_BAND_BOUNDS_S;
+
+/** Breiðablik's edges from 9 Nov 2026 (Catapult's advice: the default's short bands + longer ones). */
+export const NEW_FR_BAND_BOUNDS_S = [0, 2.5, 5, 8, 12, 18, 24, 30, 1000] as const;
+/**
+ * Catapult's 3-band default (0–2.5, 2.5–5, 5+ s), stored with bands 4–8 empty. It has no 18 s or 24 s
+ * edge, so long runs can't be read from it. Two Breiðablik players were on it all of 2026.
+ */
+export const CATAPULT_DEFAULT_FR_BAND_BOUNDS_S = [0, 2.5, 5, 1000, 1000, 1000, 1000, 1000, 1000] as const;
+/** Every config the DB trigger tries (mirrors public.ima_fr_presets()). */
+export const FR_PRESET_BOUNDS_S: ReadonlyArray<readonly number[]> = [LEGACY_FR_BAND_BOUNDS_S, NEW_FR_BAND_BOUNDS_S, CATAPULT_DEFAULT_FR_BAND_BOUNDS_S];
+
+/**
+ * Does every band with runs have its mean run (time ÷ runs) inside that band's edges (±0.25 s)?
+ * A single run always lies inside its band, so the mean of any number of runs does too. Mirrors
+ * public.ima_fr_bounds_fit(). True when no band carries runs + time (nothing contradicts it).
+ */
+export function boundsFit(row: FreeRunningBandRow, bounds: readonly number[]): boolean {
+  for (let band = 1; band <= 8; band++) {
+    const ev = num(row[`ima_fr_band${band}_event_count`]);
+    const du = num(row[`ima_fr_band${band}_total_duration`]);
+    if (ev == null || ev <= 0 || du == null) continue;
+    const mean = du / ev;
+    if (mean < bounds[band - 1] - 0.25 || mean > bounds[band] + 0.25) return false;
+  }
+  return true;
+}
+
+/** Does the row carry runs + time in any band (the evidence boundsFit needs)? */
+export function hasBoutEvidence(row: FreeRunningBandRow): boolean {
+  for (let band = 1; band <= 8; band++) {
+    const ev = num(row[`ima_fr_band${band}_event_count`]);
+    if (ev != null && ev > 0 && num(row[`ima_fr_band${band}_total_duration`]) != null) return true;
+  }
+  return false;
+}
+
+/** The candidate configs a row's own data fits (same rule as the DB trigger). Empty = fits none. */
+export function fittingBounds(
+  row: FreeRunningBandRow,
+  candidates: ReadonlyArray<readonly number[]> = FR_PRESET_BOUNDS_S,
+): Array<readonly number[]> {
+  return candidates.filter((b) => boundsFit(row, b));
+}
+
+const sameBounds = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((x, i) => Math.abs(x - b[i]) < 1e-9);
+
+export type FrReading = "ok" | "catapult_default" | "unknown_edges" | "no_fr";
+
+/**
+ * Can long runs (≥18 s) be read from this row? "catapult_default" = the athlete's OpenField setting is the
+ * 3-band default; "unknown_edges" = the row's band means fit no known config (or its edges have no 18 s edge).
+ */
+export function frReadingOf(row: FreeRunningBandRow): FrReading {
+  const b = row["ima_fr_band_bounds"];
+  if (!Array.isArray(b) || b.length !== 9) return "no_fr";
+  if (row["ima_fr_bounds_source"] === "unknown") return "unknown_edges";
+  const bounds = boundsOfRow(row);
+  if (bandsAtOrAbove(bounds, 18) != null) return "ok";
+  return sameBounds(bounds, CATAPULT_DEFAULT_FR_BAND_BOUNDS_S) ? "catapult_default" : "unknown_edges";
+}
 
 /** Run-length tiers that are band edges in every Breiðablik config, stored as ima_fr_ge{N}_* columns. */
 export const FR_TIER_EDGES_S = [18, 24] as const;

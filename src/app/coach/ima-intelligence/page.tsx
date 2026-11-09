@@ -580,6 +580,27 @@ function LongRunsCard({ date, lang }: { date: string; lang: Lang }) {
     : gpsPlayers < withBouts.length
       ? (is ? `Vegalengd og m/skref ná yfir ${gpsPlayers} af ${withBouts.length} leikmönnum (hinir án GPS).` : `Distance and m/stride cover ${gpsPlayers} of ${withBouts.length} players (the rest had no GPS).`)
       : "";
+  const noReading = data?.noReading ?? [];
+  const fmtD = (iso: string) => { const [, m, d] = iso.split("-"); return `${Number(d)}.${Number(m)}.`; };
+  const noReadingBox = noReading.length === 0 ? null : (
+    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+      <b>
+        {noReading.map((p) => p.name).join(", ")}
+        {is ? ": löng hlaup mælast ekki." : ": long runs can't be read."}
+      </b>{" "}
+      {noReading.every((p) => p.reason === "catapult_default")
+        ? (is
+          ? "Catapult flokkar hlaupin þeirra í sjálfgefnu 3 böndin (0–2,5 · 2,5–5 · 5+ sek), svo hlaup yfir 18 sek sjást ekki. Það er engin mæling, ekki 0 hlaup. Lagast þegar böndin eru leiðrétt í OpenField og æfingarnar endurunnar."
+          : "Catapult sorts their runs into the default 3 bands (0–2.5 · 2.5–5 · 5+ s), so runs of 18 s or more don't show. That is no reading, not 0 runs. Fixed once the bands are corrected in OpenField and the sessions reprocessed.")
+        : (is
+          ? "Bandamörkin í þeim æfingum passa ekki við neina þekkta stillingu, svo lengd hlaupa verður ekki lesin. Athugaðu Free Running-stillingar þeirra í OpenField."
+          : "The band edges in those sessions fit no known setting, so run lengths can't be read. Check their Free Running settings in OpenField.")}
+      <div className="mt-1 text-[11px] text-amber-800/80">
+        {noReading.map((p) => `${p.name}: ${p.sessions} ${is ? "æfingar" : "sessions"}, ${fmtD(p.from)}–${fmtD(p.to)}`).join(" · ")}
+        {is ? " (síðustu 28 dagar)" : " (last 28 days)"}
+      </div>
+    </div>
+  );
   const noData = is
     ? "Engin bouts-gögn fyrir þennan dag. Fjöldi og tími hlaupa koma með Free Running duration- og event-breytunum í Catapult-samstillingunni; án þeirra sést hér ekkert."
     : "No bout data for this day. Run counts and time come with the Free Running duration and event parameters in the Catapult sync; without them nothing shows here.";
@@ -595,7 +616,10 @@ function LongRunsCard({ date, lang }: { date: string; lang: Lang }) {
       {!loaded ? (
         <div className="py-4 text-center text-sm text-slate-500">…</div>
       ) : !hasBouts ? (
-        <div className="py-3 text-sm text-slate-500">{noData}</div>
+        <>
+          <div className="py-3 text-sm text-slate-500">{noData}</div>
+          {noReadingBox}
+        </>
       ) : (
         <>
           {spikes.length > 0 && (
@@ -607,6 +631,7 @@ function LongRunsCard({ date, lang }: { date: string; lang: Lang }) {
           <ul className="mt-2 space-y-0.5 text-[13px] text-slate-700">
             {facts.map((f, i) => <li key={i}>· {f}</li>)}
           </ul>
+          {noReadingBox}
           {data?.bandsAreTimeBands === false && (
             <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
               {is

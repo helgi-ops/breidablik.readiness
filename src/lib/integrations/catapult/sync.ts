@@ -9,7 +9,7 @@ import { aggregatePeriodsPerPlayer, writeSessionActuals, writePlayerDrillLoad, t
 import { extractMiiPeakPeriod } from "./miiPeakPeriod";
 import { boundRawPayload } from "./rawPayloadCapture";
 import type { CatapultAthlete, CatapultSyncResult } from "./types";
-import { boundsOnDate, tierTotals, FR_TIER_EDGES_S, type FrTierTotals } from "./freeRunningBands";
+import { FR_TIER_EDGES_S } from "./freeRunningBands";
 
 function dateKey(input?: string | null): string {
   if (input && /^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
@@ -505,11 +505,9 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     ima_fr_band6_total_distance: frDist(row.externalLoad.imaFrBand6TotalDistance, row.externalLoad.imaFrBand6StrideCount, gpsActive(row.externalLoad)),
     ima_fr_band7_total_distance: frDist(row.externalLoad.imaFrBand7TotalDistance, row.externalLoad.imaFrBand7StrideCount, gpsActive(row.externalLoad)),
     ima_fr_band8_total_distance: frDist(row.externalLoad.imaFrBand8TotalDistance, row.externalLoad.imaFrBand8StrideCount, gpsActive(row.externalLoad)),
-    // The 5-8 rollup — the single number loadPlan, estimatePod, playerGameReport,
-    // progressiveOverload, strideIntelligence and the IMA card all read as
-    // "high-intensity running distance". NOT a generated column, so it must be
-    // written explicitly. Null (not 0) when no band reported, so "we have no data"
-    // stays distinguishable from "he ran zero high-cadence metres".
+    // "Metres in runs ≥18 s" rollup read by loadPlan, estimatePod, playerGameReport and others.
+    // Provisional: the DB trigger ima_fr_fill_tiers overwrites it from the row's own edges (bands 6–8
+    // under the Nov 2026 edges, null on Catapult's 3-band default). Null (not 0) when no band reported.
     ima_fr_band58_total_distance: sumBands58(row.externalLoad),
     // Added Nov 2026 — band 1–4 distance, per-band time, event count and V1 stride
     // rate, plus the verbatim Free Running payload. Lets us compute real speed per band
@@ -568,44 +566,18 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     }
   }
 
-  // IMA Free Running band edges in force for each row + config-independent run-length tiers.
-  // Catapult classifies bands at processing time with the org's OpenField edges, which change
-  // (Breiðablik: 0-8-…-27-100 → 0-2.5-5-8-12-18-24-30-1000 on 9 Nov 2026). Each row records the
-  // edges it was classified with, and ≥18 s / ≥24 s totals are computed here so readers never have to
-  // know which band number means what. ima_fr_band58_total_distance keeps its downstream meaning
-  // ("metres in runs ≥18 s"): bands 5–8 under the legacy edges, 6–8 under the new ones.
-  {
-    const teamIds = Array.from(new Set(payload.map((p) => p.team_id).filter((t): t is string => !!t)));
-    const configsByTeam = new Map<string, Array<{ effective_from: string; bounds_s: Array<number | string> }>>();
-    if (teamIds.length) {
-      const { data: cfg } = await sb
-        .from("team_fr_band_config")
-        .select("team_id, effective_from, bounds_s")
-        .in("team_id", teamIds);
-      for (const c of (cfg ?? []) as Array<{ team_id: string; effective_from: string; bounds_s: Array<number | string> }>) {
-        const list = configsByTeam.get(c.team_id) ?? [];
-        list.push(c);
-        configsByTeam.set(c.team_id, list);
+  // IMA Free Running band edges + run-length tiers are decided in the DB, not here. Catapult classifies
+  // runs with each athlete's OpenField edges at processing time, and those differ by athlete (two Breiðablik
+  // players were on the 3-band default all of 2026) and change when sessions are reprocessed. The trigger
+  // ima_fr_fill_tiers reads the edges from the row's own band means (migration 20261109190000), so the
+  // sync sends ima_fr_band_bounds = null (= "decide again") and leaves the ≥18 s / ≥24 s tiers and the
+  // band58 rollup for it to fill.
+  for (const p of payload as Array<Record<string, unknown>>) {
+    p.ima_fr_band_bounds = null;
+    for (const edge of FR_TIER_EDGES_S) {
+      for (const f of ["event_count", "total_duration", "stride_count", "total_distance", "total_player_load"]) {
+        p[`ima_fr_ge${edge}_${f}`] = null;
       }
-    }
-    for (const p of payload as Array<Record<string, unknown>>) {
-      const bounds = boundsOnDate(configsByTeam.get(String(p.team_id ?? "")), String(p.date));
-      const get = (band: number, field: keyof FrTierTotals) => {
-        const v = p[`ima_fr_band${band}_${field}`];
-        return typeof v === "number" ? v : null;
-      };
-      const hasFr = [1, 2, 3, 4, 5, 6, 7, 8].some((b) => get(b, "event_count") != null || get(b, "stride_count") != null || get(b, "total_duration") != null);
-      p.ima_fr_band_bounds = hasFr ? [...bounds] : null;
-      for (const edge of FR_TIER_EDGES_S) {
-        const t = hasFr ? tierTotals(get, bounds, edge) : null;
-        p[`ima_fr_ge${edge}_event_count`] = t?.event_count ?? null;
-        p[`ima_fr_ge${edge}_total_duration`] = t?.total_duration ?? null;
-        p[`ima_fr_ge${edge}_stride_count`] = t?.stride_count ?? null;
-        p[`ima_fr_ge${edge}_total_distance`] = t?.total_distance ?? null;
-        p[`ima_fr_ge${edge}_total_player_load`] = t?.total_player_load ?? null;
-      }
-      // Downstream "≥18 s distance" column, from the bounds in force (legacy → identical to before).
-      if (hasFr) p.ima_fr_band58_total_distance = p.ima_fr_ge18_total_distance ?? null;
     }
   }
 

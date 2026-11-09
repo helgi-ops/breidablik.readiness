@@ -27,6 +27,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { frReadingOf } from "@/lib/integrations/catapult/freeRunningBands";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
 import {
@@ -50,6 +51,8 @@ interface LoadRow {
   ima_fr_band58_total_distance: number | null;
   /** Strides in efforts ≥18 s — config-independent tier filled by the DB trigger (band edges change). */
   ima_fr_ge18_stride_count: number | null;
+  ima_fr_band_bounds: Array<number | string> | null;
+  ima_fr_bounds_source: string | null;
   ima_cod_left_high: number | null;
   impacts: number | null;
   jumps: number | null;
@@ -124,7 +127,7 @@ export async function GET(req: Request) {
     const COLS =
       "player_id, date, source, total_distance, max_velocity, ima_total, " +
       "ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band58_total_distance, ima_cod_left_high, " +
-      "ima_fr_ge18_stride_count, " +
+      "ima_fr_ge18_stride_count, ima_fr_band_bounds, ima_fr_bounds_source, " +
       "impacts, jumps, fmp_dynamic_high_s, avg_heart_rate";
 
     // Entitlement comes from the tier the system ALREADY resolves — not from a
@@ -206,6 +209,20 @@ export async function GET(req: Request) {
     }
 
     rowIssues.sort((a, b) => b.date.localeCompare(a.date));
+
+    // Players whose IMA Free Running sessions can't give a long-run (≥18 s) reading: Catapult classified
+    // them with its 3-band default, or with edges that fit no known setting (migration 20261109190000).
+    const frUnread = new Map<string, { reason: "catapult_default" | "unknown_edges"; sessions: number; from: string; to: string }>();
+    for (const r of mine) {
+      const reading = frReadingOf(r as unknown as Record<string, unknown>);
+      if (reading !== "catapult_default" && reading !== "unknown_edges") continue;
+      const u = frUnread.get(r.player_id);
+      if (u) { u.sessions += 1; if (r.date < u.from) u.from = r.date; if (r.date > u.to) u.to = r.date; if (reading === "unknown_edges") u.reason = reading; }
+      else frUnread.set(r.player_id, { reason: reading, sessions: 1, from: r.date, to: r.date });
+    }
+    const freeRunningSettings = [...frUnread.entries()]
+      .map(([playerId, u]) => ({ playerId, fullName: nameOf.get(playerId) ?? null, ...u }))
+      .sort((a, b) => b.sessions - a.sessions);
     const sorted = sortFeeds(feeds);
 
     return NextResponse.json({
@@ -215,10 +232,12 @@ export async function GET(req: Request) {
       sessionsChecked: rows.length,
       feeds: sorted,
       // The one-line verdict, so the UI never has to derive it (and never disagrees).
-      healthy: sorted.every((f) => !f.actionable) && rowIssues.length === 0,
+      healthy: sorted.every((f) => !f.actionable) && rowIssues.length === 0 && freeRunningSettings.length === 0,
       actionableFeeds: sorted.filter((f) => f.actionable).length,
       rowIssues,
       blockingRows: rowIssues.filter((r) => r.issues.some((i) => i.severity === "block")).length,
+      // Long runs can't be read for these players (no 18 s band edge); fix in OpenField, then reprocess.
+      freeRunningSettings,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed";

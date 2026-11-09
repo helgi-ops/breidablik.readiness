@@ -7,7 +7,7 @@ import {
   type ImaPlayerDay,
   type ImaSessionProfile,
 } from "./index";
-import { sumBandsBetween } from "@/lib/integrations/catapult/freeRunningBands";
+import { frReadingOf, sumBandsBetween } from "@/lib/integrations/catapult/freeRunningBands";
 
 type DailyRow = {
   player_id: string;
@@ -23,6 +23,7 @@ type DailyRow = {
   ima_fr_band8_stride_count: number | null;
   /** Band edges (s) this row was classified with — band numbers shift when the club changes them. */
   ima_fr_band_bounds: Array<number | string> | null;
+  ima_fr_bounds_source?: string | null;
   /** Strides in efforts ≥18 s (config-independent tier filled by the DB trigger). */
   ima_fr_ge18_stride_count: number | null;
   ima_cod_left_low: number | null;
@@ -64,7 +65,7 @@ export async function loadImaDayProfile(
   const { data: rows } = await sb
     .from("player_external_load_daily")
     .select(
-      "player_id, date, source, ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band3_stride_count, ima_fr_band4_stride_count, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, ima_fr_band_bounds, ima_fr_ge18_stride_count, ima_cod_left_low, ima_cod_right_low, ima_cod_left_medium, ima_cod_right_medium, ima_cod_left_high, ima_cod_right_high"
+      "player_id, date, source, ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band3_stride_count, ima_fr_band4_stride_count, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, ima_fr_band_bounds, ima_fr_bounds_source, ima_fr_ge18_stride_count, ima_cod_left_low, ima_cod_right_low, ima_cod_left_medium, ima_cod_right_medium, ima_cod_left_high, ima_cod_right_high"
     )
     .in("player_id", playerIds)
     .eq("source", "catapult")
@@ -118,7 +119,11 @@ export async function loadImaDayProfile(
     const longRunStrides = (r: DailyRow): number =>
       r.ima_fr_ge18_stride_count != null ? Number(r.ima_fr_ge18_stride_count) || 0 : tier(r, 18);
     const sprint = today ? longRunStrides(today) : 0;
-    const total = sum(today,
+    // A row whose edges have no 12/18/24 s edge (Catapult's 3-band default) can't be split by run length:
+    // leave it out of the tier read (total 0 → excluded from the squad shares) rather than count its
+    // strides with none in any tier. The Long runs card names these players.
+    const reading = today ? frReadingOf(today) : "no_fr";
+    const total = reading === "catapult_default" || reading === "unknown_edges" ? 0 : sum(today,
       "ima_fr_band1_stride_count", "ima_fr_band2_stride_count", "ima_fr_band3_stride_count", "ima_fr_band4_stride_count",
       "ima_fr_band5_stride_count", "ima_fr_band6_stride_count", "ima_fr_band7_stride_count", "ima_fr_band8_stride_count");
 

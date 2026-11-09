@@ -21,6 +21,7 @@ import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 import { computeImaRunningLoad, type ImaDayRow, type ImaRunStatus } from "@/lib/micropulse/imaRunningLoad";
 import { bandsAreTimeBands, hasGpsReading, longRunBandsOf, longRunsOf, sumLongRunBands, type LongRunBand, type LongRuns } from "./index";
+import { frReadingOf } from "@/lib/integrations/catapult/freeRunningBands";
 
 const DAY = 86_400_000;
 const LOOKBACK_DAYS = 200;        // match reference window (selectNearFullMatches narrows to ~11 weeks)
@@ -32,7 +33,7 @@ const ACWR_DAYS = 28;             // computeImaRunningLoad's chronic window
 // All 8 bands + the row's edges: which bands hold runs ≥18 s depends on the edges the row was classified with.
 const BAND_COLS = [1, 2, 3, 4, 5, 6, 7, 8].flatMap((b) => [`ima_fr_band${b}_event_count`, `ima_fr_band${b}_total_duration`, `ima_fr_band${b}_stride_count`, `ima_fr_band${b}_total_distance`]);
 const TIER_COLS = ["event_count", "total_duration", "stride_count", "total_distance"].map((k) => `ima_fr_ge18_${k}`);
-const COLS = ["player_id", "date", "source", "total_distance", "ima_fr_band58_total_distance", "ima_fr_band_bounds", ...TIER_COLS, ...BAND_COLS].join(", ");
+const COLS = ["player_id", "date", "source", "total_distance", "ima_fr_band58_total_distance", "ima_fr_band_bounds", "ima_fr_bounds_source", ...TIER_COLS, ...BAND_COLS].join(", ");
 
 export type LongRunRow = Record<string, unknown> & { player_id: string; date: string; source: string | null };
 type Row = LongRunRow;
@@ -77,6 +78,12 @@ export type TeamLongRuns = {
     /** Players whose long-run distance ratio reads "spike" on a confident baseline. */
     spikes: Array<{ playerId: string; name: string; acwr: number }>;
   };
+  /**
+   * Players whose long runs can't be read in the last 28 days: their sessions were classified with edges
+   * that have no 18 s edge ("catapult_default" = Catapult's 3-band default in OpenField) or that fit no
+   * known config. They read as "no reading", never as 0 long runs. Fixed in OpenField, then reprocessed.
+   */
+  noReading: Array<{ playerId: string; name: string; reason: "catapult_default" | "unknown_edges"; sessions: number; from: string; to: string }>;
 };
 
 /**
@@ -105,7 +112,7 @@ export async function loadTeamLongRuns(sb: SupabaseClient, teamId: string, date:
   const { data: roster } = await sb.from("players").select("id, full_name").eq("team_id", teamId).eq("is_active", true);
   const players = (roster ?? []) as Array<{ id: string; full_name: string | null }>;
   const playerIds = players.map((p) => p.id);
-  const empty: TeamLongRuns = { date, isMatchDay: false, bandsAreTimeBands: null, players: [], team: { n: 0, bouts: null, seconds: null, meanBoutS: null, pctBouts: null, pctSeconds: null, strideVsMatchPct: null, gpsToday: false, bands: sumLongRunBands([]), spikes: [] } };
+  const empty: TeamLongRuns = { date, isMatchDay: false, bandsAreTimeBands: null, players: [], noReading: [], team: { n: 0, bouts: null, seconds: null, meanBoutS: null, pctBouts: null, pctSeconds: null, strideVsMatchPct: null, gpsToday: false, bands: sumLongRunBands([]), spikes: [] } };
   if (!playerIds.length) return empty;
 
   const from = addDays(date, -LOOKBACK_DAYS);
@@ -162,6 +169,21 @@ export async function loadTeamLongRuns(sb: SupabaseClient, teamId: string, date:
   });
   const teamRef = refOf(teamPool, "team");
 
+  // Players whose recent sessions can't give a long-run reading (edges without an 18 s edge).
+  const nameOf = (id: string) => (players.find((p) => p.id === id)?.full_name ?? "—").trim();
+  const unread = new Map<string, { reason: "catapult_default" | "unknown_edges"; sessions: number; from: string; to: string }>();
+  for (const r of rows) {
+    if (r.date < acwrFrom) continue;
+    const reading = frReadingOf(r);
+    if (reading !== "catapult_default" && reading !== "unknown_edges") continue;
+    const u = unread.get(r.player_id);
+    if (u) { u.sessions += 1; u.to = r.date; if (reading === "unknown_edges") u.reason = reading; }
+    else unread.set(r.player_id, { reason: reading, sessions: 1, from: r.date, to: r.date });
+  }
+  const noReading = [...unread.entries()]
+    .map(([playerId, u]) => ({ playerId, name: nameOf(playerId), ...u }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   const out: PlayerLongRuns[] = [];
   for (const r of rows.filter((x) => x.date === date)) {
     const today = longRunsOf(r);
@@ -188,8 +210,9 @@ export async function loadTeamLongRuns(sb: SupabaseClient, teamId: string, date:
   const bouts = sum(withBouts.map((p) => p.today.bouts)), seconds = sum(withBouts.map((p) => p.today.seconds));
   return {
     date, isMatchDay,
-    bandsAreTimeBands: bandsAreTimeBands(rows.filter((x) => x.date >= trainFrom)),
+    bandsAreTimeBands: bandsAreTimeBands(rows.filter((x) => x.date >= trainFrom && frReadingOf(x) === "ok")),
     players: out,
+    noReading,
     team: {
       n: out.length, bouts, seconds,
       meanBoutS: bouts != null && seconds != null && bouts > 0 ? seconds / bouts : null,
