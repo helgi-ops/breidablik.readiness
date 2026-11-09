@@ -386,6 +386,38 @@ export function generateRed(green: TemplateRecord): TemplateRecord {
 
 // ── Slug helper ───────────────────────────────────────────────────────────────
 
+/** Postgres cuts identifiers at this length without an error. PostgREST does not, so a longer name is a 404. */
+const PG_MAX_IDENTIFIER = 63;
+const TABLE_NAME_MARKER = "_microdose_templates";
+
+/** FNV-1a, 32 bit, as 8 hex characters. Synchronous, because the builder computes names in the browser. */
+function shortHash(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+/**
+ * A programme table name Postgres keeps whole. Names that fit are returned unchanged, so existing tables are still
+ * found. A longer name loses letters from the team part and gains a hash of the full name, which keeps it unique per
+ * week and per player. The "_microdose_templates..." tail stays, because the security migrations find these tables by
+ * that text. Without this, every week of a long-named team lands in one table and overwrites the week before.
+ */
+export function fitTableName(name: string): string {
+  if (name.length <= PG_MAX_IDENTIFIER) return name;
+  const hash = shortHash(name);
+  const at = name.lastIndexOf(TABLE_NAME_MARKER);
+  const tail = at > 0 ? name.slice(at) : "";
+  const room = PG_MAX_IDENTIFIER - tail.length - hash.length - 1;
+  if (at <= 0 || room < 1) {
+    return `${name.slice(0, PG_MAX_IDENTIFIER - hash.length - 1).replace(/_+$/, "")}_${hash}`;
+  }
+  return `${name.slice(0, Math.min(room, at)).replace(/_+$/, "")}_${hash}${tail}`;
+}
+
 export function buildTableName(setName: string, sport: string, gender?: string | null): string {
   const slugify = (s: string) =>
     s
@@ -402,5 +434,5 @@ export function buildTableName(setName: string, sport: string, gender?: string |
   const parts = [slugify(setName), slugify(sport)];
   if (genderSlug) parts.push(genderSlug);
   parts.push("microdose_templates");
-  return parts.join("_");
+  return fitTableName(parts.join("_"));
 }

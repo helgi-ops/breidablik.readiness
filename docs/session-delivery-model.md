@@ -24,6 +24,11 @@ The resolver is `fetchStage4Plan` in `src/app/player/PlayerClient.tsx` (~line 45
 4. Legacy `microdose_decisions` → assigned `workout_templates` → `v_player_session_today_v2` fallbacks.
 5. **Engine default** (`GET /api/player/today-strength-default`) — display-only, persists nothing.
 
+**Programme table names stay within 63 characters.** Postgres cuts longer identifiers without an error while PostgREST
+answers 404, so every name goes through `fitTableName` (`src/lib/micropulse/templateAutoGenerate.ts`). The RPCs and a
+check on `custom_template_sets` refuse anything longer. Tables must also carry `structure_en`, because the Today read
+selects it. `create_custom_microdose_table` adds it when it runs, but tables it has not touched since 2026-11-09 can lack it.
+
 **Key consequence:** layer 2 (any coach send) always wins over layer 3 (Custom Programmes). So a
 per-player Custom Programme is silently superseded on any date a session/block is sent. The send flows
 therefore preview this (see below) instead of failing silently.

@@ -10,6 +10,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
+import { fitTableName } from "@/lib/micropulse/templateAutoGenerate";
 
 
 /**
@@ -61,10 +62,12 @@ export async function GET(req: NextRequest) {
     === "personal_trainer";
 
   // ?table_name=xxx  →  return GREEN records for that table (for editing)
-  const table_name = req.nextUrl.searchParams.get("table_name");
-  if (table_name) {
-    if (!/^[a-z][a-z0-9_]*$/.test(table_name))
+  const requested_table_name = req.nextUrl.searchParams.get("table_name");
+  if (requested_table_name) {
+    if (!/^[a-z][a-z0-9_]*$/.test(requested_table_name))
       return NextResponse.json({ ok: false, error: "Ógilt table_name" }, { status: 400 });
+    // An open tab can still hold a name from before the 63-character fix.
+    const table_name = fitTableName(requested_table_name);
 
     // PT ownership check — the metadata row for this table must belong to
     // the calling trainer. Otherwise return 403 (don't leak existence with
@@ -186,8 +189,9 @@ export async function POST(req: NextRequest) {
   const set_name     = (body.set_name   ?? "").trim();
   const sport        = (body.sport      ?? "").trim();
   const gender       = body.gender === "M" || body.gender === "F" ? body.gender : null;
-  const table_name   = (body.table_name ?? "").trim().toLowerCase();
-  const md_days      = Array.isArray(body.md_days) ? body.md_days : [];
+  // The client computes this name, and an app it has cached may still send one too long for Postgres.
+  const table_name   = fitTableName((body.table_name ?? "").trim().toLowerCase());
+  const md_days     = Array.isArray(body.md_days) ? body.md_days : [];
   const records      = Array.isArray(body.records) ? body.records : [];
   const VALID_PHASES = ["preseason", "inseason", "playoffs", "offseason"] as const;
   // Default to "inseason" when the coach didn't pick a phase (e.g. a basketball weekly plan). This (a) makes
@@ -200,7 +204,7 @@ export async function POST(req: NextRequest) {
 
   // Optional player-scope payload — all four required together
   const player_id         = (body.player_id ?? "").trim() || null;
-  const parent_table_name = (body.parent_table_name ?? "").trim().toLowerCase() || null;
+  const parent_table_name = fitTableName((body.parent_table_name ?? "").trim().toLowerCase()) || null;
   const start_date        = (body.start_date ?? "").trim() || null;
   const end_date          = (body.end_date ?? "").trim() || null;
   const note              = (body.note ?? "").trim() || null;
@@ -319,7 +323,7 @@ export async function PATCH(req: NextRequest) {
   const auth = await getCoachTeam(req, body.team_id ?? null);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
 
-  const tableName = String(body.table_name ?? "");
+  const tableName = fitTableName(String(body.table_name ?? ""));
   if (!/^[a-z][a-z0-9_]*$/.test(tableName)) {
     return NextResponse.json({ ok: false, error: "Ógilt table_name" }, { status: 400 });
   }
@@ -359,7 +363,7 @@ export async function DELETE(req: NextRequest) {
   const auth = await getCoachTeam(req, body.team_id ?? null);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
 
-  const tableName = String(body.table_name ?? "");
+  const tableName = fitTableName(String(body.table_name ?? ""));
   if (!/^[a-z][a-z0-9_]*$/.test(tableName)) {
     return NextResponse.json({ ok: false, error: "Ógilt table_name" }, { status: 400 });
   }

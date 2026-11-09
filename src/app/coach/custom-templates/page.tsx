@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { generateYellow, generateRed, generateGreenPlus, buildTableName } from "@/lib/micropulse/templateAutoGenerate";
+import { generateYellow, generateRed, generateGreenPlus, buildTableName, fitTableName } from "@/lib/micropulse/templateAutoGenerate";
 import { STRUCTURE_HOWTO, structureLabel } from "@/lib/micropulse/structureHowTo";
 import type { TemplateBlock, TemplateRecord } from "@/lib/micropulse/templateAutoGenerate";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -3223,14 +3223,14 @@ export default function CustomTemplatesPage() {
     ? playerBuilderPlayerId.replace(/-/g, "").slice(0, 8)
     : "";
   const playerTableName = builderMode === "player" && playerBuilderPlayerId && playerBuilderStart
-    ? `${teamTableName}_player_${playerSlug}_${playerBuilderStart.replace(/-/g, "")}`
+    ? fitTableName(`${teamTableName}_player_${playerSlug}_${playerBuilderStart.replace(/-/g, "")}`)
     : "";
 
   // BLOCK mode (either sport): a date-ranged programme saved into its own per-block table. INFINITE mode
   // uses the recurring team table (no dates).
   const isBlockMode = builderMode === "team" && teamProgrammeMode === "block" && !!teamWeekStart;
   const weekTableName = isBlockMode
-    ? `${teamTableName}_week_${teamWeekStart.replace(/-/g, "")}`
+    ? fitTableName(`${teamTableName}_week_${teamWeekStart.replace(/-/g, "")}`)
     : teamTableName;
 
   const tableName = builderMode === "player"
