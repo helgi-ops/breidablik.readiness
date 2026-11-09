@@ -27,7 +27,7 @@ Most API routes use the service role, which skips row-level security (RLS). The 
 | G_FETCH_WITHOUT_BEARER | Browser API call with no login token | Low |
 | DB_RLS_OFF | Team table with RLS off that users can read | High |
 | DB_USING_TRUE | Policy open to every user, including `true OR ...` | High for writes, medium for reads |
-| DB_IS_STAFF_POLICY | Policy using `is_staff()`, which also matches ordinary coaches | High alone, medium beside a team check |
+| DB_IS_STAFF_POLICY | Policy using `is_staff()`, which also matches coaches and some player logins. No policy may use it. | High |
 | DB_PROFILES_GRANTS | Users can change `team_id`, `role`, `is_admin`, `player_id` or `user_id` on their profile | High |
 | DB_ANON_VIEW / DB_VIEW_OWNER_RIGHTS | View readable without a login, or running with its owner's rights | High |
 | DB_DEFINER_RPC | Definer function callable without a login (high), or by any user with no caller check (medium) | High / medium |
@@ -40,7 +40,8 @@ Most API routes use the service role, which skips row-level security (RLS). The 
 ## Allowed across teams on purpose
 
 - Admin accounts, and coaches of several teams through `coach_teams`.
-- `is_elevated_staff()`, which is real staff only. `is_staff()` is not this, because it also matches coaches.
+- `is_elevated_staff()`, which is real staff only. `is_staff()` is not this, because every `staff_users` row matches it. That includes coaches and 22 player logins, so it must not appear in a policy.
+- A team keeps rows it recorded (`team_id` is its own) for a player who has since left. A new club sees none of them without a grant or membership.
 - `player_data_grants` and `player_team_memberships`, including national-team upload.
 - `is_previous_club` rows, and demo teams seeded from Breiðablik.
 - Shared drills: `share_drill_with_team`, the public drill library and a coach's personal library.
@@ -53,6 +54,8 @@ Most API routes use the service role, which skips row-level security (RLS). The 
 3. **Never loosen a rule to silence one finding.** Add a test if a rule is truly wrong.
 
 The baseline (`security/tenant-audit.baseline.json`) freezes high findings that are known and still open, so they don't block unrelated work. Update it only in a reviewed commit, with `npm run audit:tenant:baseline`, and read the diff. An entry removed from the baseline is a fix. An entry added is a decision to live with a hole for now.
+
+Custom programme tables are created at runtime by `create_custom_microdose_table`, which locks each one through `secure_custom_programme_table`: row-level security on, read for the owning team, writes through the server only. Create them only through that function.
 
 After adding a table with `team_id` or `player_id`, run `npx tsx scripts/audit-tenant-isolation.ts --update-tables` so the source checks cover it.
 

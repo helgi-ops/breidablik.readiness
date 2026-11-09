@@ -32,8 +32,8 @@ describe("database rules", () => {
   it("does not read a column named true_x as open", () => {
     expect(checks({ policies: policy("(is_true_flag = team_id)") })).toEqual([]);
   });
-  it("rates is_staff with a team branch medium, alone high", () => {
-    expect(checks({ policies: policy("(coaches_team(team_id) OR is_staff())") })).toEqual([["DB_IS_STAFF_POLICY", "MEDIUM"]]);
+  it("rates is_staff high, with or without a team branch beside it", () => {
+    expect(checks({ policies: policy("(coaches_team(team_id) OR is_staff())") })).toEqual([["DB_IS_STAFF_POLICY", "HIGH"]]);
     expect(checks({ policies: policy("is_staff()") })).toEqual([["DB_IS_STAFF_POLICY", "HIGH"]]);
   });
   it("is_elevated_staff is not is_staff", () => {

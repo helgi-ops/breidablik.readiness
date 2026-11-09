@@ -15,7 +15,6 @@ export type DbCatalog = {
 
 const PRIVILEGED_PROFILE_COLUMNS = ["team_id", "role", "is_admin", "player_id", "user_id", "id"];
 const OPEN_EXPR = /^\(?\s*true\s*\)?$|\btrue\s+OR\b|\bOR\s+true\b/i;
-const TEAM_BRANCH = /team_id|player_id|coach_team_ids|coaches_team|user_id|my_player_id|auth\.uid/i;
 
 const SERVER_ROLES = new Set(["service_role", "postgres", "supabase_admin", "supabase_auth_admin"]);
 const cmdWrites = (cmd: string) => cmd !== "r";
@@ -40,10 +39,9 @@ export function evaluateCatalog(c: DbCatalog, orphans: Record<string, number> = 
       out.push(makeFinding("DB_USING_TRUE", cmdWrites(p.cmd) ? "HIGH" : "MEDIUM", `db:${p.table}`, 0, `Policy "${p.name}" on ${p.table} is open to every logged-in user.`, `${p.table}.${p.name}`));
     }
     const expr = `${p.using ?? ""} ${p.check ?? ""}`;
+    // No policy uses is_staff() any more (20261109100000). A team branch beside it does not help, because the OR opens the other teams anyway.
     if (/\bis_staff\(\)/.test(expr)) {
-      const stripped = expr.replace(/\bis_staff\(\)/g, "");
-      const hasBranch = TEAM_BRANCH.test(stripped);
-      out.push(makeFinding("DB_IS_STAFF_POLICY", hasBranch ? "MEDIUM" : "HIGH", `db:${p.table}`, 0, `Policy "${p.name}" on ${p.table} uses is_staff(), which also matches coaches, so it opens other teams.`, `${p.table}.${p.name}`));
+      out.push(makeFinding("DB_IS_STAFF_POLICY", "HIGH", `db:${p.table}`, 0, `Policy "${p.name}" on ${p.table} uses is_staff(), which also matches coaches and players, so it opens other teams. Use is_elevated_staff() or a team check.`, `${p.table}.${p.name}`));
     }
   }
   for (const col of c.profiles_update_columns) {

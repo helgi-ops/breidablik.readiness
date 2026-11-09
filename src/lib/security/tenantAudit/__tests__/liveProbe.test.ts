@@ -47,7 +47,15 @@ describe.skipIf(!EMAIL || !PASSWORD || !TEAM_A || !TEAM_B)("a coach of team A ag
     expect(data ?? []).toEqual([]);
   });
 
-  it.todo("cannot read team B's readiness entries (needs the is_staff() round)");
+  it("cannot read team B's readiness entries", async () => {
+    const { data } = await sb.from("readiness_entries").select("id").eq("team_id", TEAM_B!).limit(1);
+    expect(data ?? []).toEqual([]);
+  });
+
+  it("cannot change team B's settings", async () => {
+    const { data } = await sb.from("team_settings").update({ team_id: TEAM_B! }).eq("team_id", TEAM_B!).select("team_id");
+    expect(data ?? []).toEqual([]);
+  });
 
   it.each(["stage4_apply_override", "stage4_set_coach_override", "stage4_set_coach_variant", "lock_readiness_entry", "join_team_with_code"])("cannot call %s", async (fn) => {
     const { error } = await sb.rpc(fn, {});
