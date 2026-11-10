@@ -12,6 +12,10 @@
  * Six variables (the coach's IMA set): accelerations, decelerations (braking), change of direction,
  * IMA Free Running long-run distance, long-run strides and long runs as a COUNT of bouts — all three = continuous
  * runs of ≥18 s (config-independent ima_fr_ge18_* tiers; strideHi was legacy bands 6–8 = ≥21 s before Nov 2026).
+ * Only four decide the verdict: accelerations, braking, changes of direction and the long-run COUNT. Long-run
+ * distance and strides are shown for information (CONTEXT_ONLY_VARS): since Nov 2026 Breiðablik's top Free Running
+ * band runs to 1000 s, so warm-up jogs of several minutes count as long runs. Re-synced Jun–Oct 2026, that added
+ * +36.5% distance and +31.5% strides on training days but +0.7% in matches, while the count moved +3.5%.
  * The IMA Free Running bands are BOUT-DURATION bands — NOT speed or cadence bands, so these are SUSTAINED-RUNNING volume, not
  * sprinting (docs/ima-free-running-bands.md). Strides and bout counts come from the inertial sensor, so they
  * exist indoors; the distance needs GPS and is missing (not 0) indoors. Field keys `frDistance` / `strideHi`
@@ -34,6 +38,16 @@ export type Bi = { en: string; is: string };
 export const ENOUGH_VARS = ["imaAccel", "imaDecel", "imaCod", "frDistance", "strideHi", "longRuns"] as const;
 export type EnoughVar = (typeof ENOUGH_VARS)[number];
 export type VarValues = Record<EnoughVar, number | null>;
+
+/**
+ * Shown, never judged. Long-run distance and strides include multi-minute jogs (top Free Running band 30–1000 s),
+ * which a training's warm-up has and a match hardly does, so against the match they would make a session look
+ * fuller than it was. The long-run COUNT barely moves (one jog = one run) and stays judged.
+ */
+export const CONTEXT_ONLY_VARS: readonly EnoughVar[] = ["frDistance", "strideHi"];
+export const isContextOnly = (k: EnoughVar): boolean => CONTEXT_ONLY_VARS.includes(k);
+/** The variables that can decide a verdict. */
+export const JUDGED_VARS: readonly EnoughVar[] = ENOUGH_VARS.filter((k) => !isContextOnly(k));
 
 export const ENOUGH_LABEL: Record<EnoughVar, Bi> = {
   imaAccel: { en: "Accelerations", is: "Hraðaaukningar" },
@@ -101,8 +115,9 @@ export function dayShare(key: EnoughVar, matchPct: number): number {
  * The planned day-type (from the coach's Week setup / Meso block). It decides WHICH movement types a
  * session is judged on, and HOW BIG the Acc/Dec/CoD target is (see targetShare). Mechanical days are about braking /
  * accelerations / changes of direction (running isn't the job); Locomotive days are about running volume
- * (long continuous runs / their strides); Mixed and Activation judge all six. Top-up (MD+1): starters recover, low-minute players are
- * judged against a top-up target.
+ * (the number of long continuous runs); Mixed and Activation judge all four judged variables. Top-up (MD+1):
+ * starters recover, low-minute players are judged against a top-up target. Long-run distance / strides are never
+ * judged (CONTEXT_ONLY_VARS).
  */
 export type EnoughDayType = "mechanical" | "locomotive" | "mixed" | "activation" | "topup";
 export const DAY_TYPE_LABEL: Record<EnoughDayType, Bi> = {
@@ -114,8 +129,8 @@ export const DAY_TYPE_LABEL: Record<EnoughDayType, Bi> = {
 };
 export const DAY_FOCUS: Record<EnoughDayType, readonly EnoughVar[]> = {
   mechanical: ["imaAccel", "imaDecel", "imaCod"],
-  locomotive: ["frDistance", "strideHi", "longRuns"],
-  mixed: ENOUGH_VARS, activation: ENOUGH_VARS, topup: ENOUGH_VARS,
+  locomotive: ["longRuns"],
+  mixed: JUDGED_VARS, activation: JUDGED_VARS, topup: JUDGED_VARS,
 };
 /** A planned day-type from a Meso focus label / Week-setup stimulus / legacy intent token. Pure. */
 export function dayTypeFromText(text: string | null | undefined): EnoughDayType | null {
@@ -247,10 +262,14 @@ const listBi = (keys: EnoughVar[], lang: "en" | "is"): string => {
   return `${names.slice(0, -1).join(", ")} ${and} ${names[names.length - 1]}`;
 };
 
-/** Verdict from a set of per-variable statuses — same rule for a player and for the team. */
-function verdictOf(statuses: PvaStatus[]): "enough" | "partly" | "short" | null {
+/**
+ * Verdict from a set of per-variable statuses — same rule for a player and for the team. A day that judges a
+ * single variable (Locomotive: the long-run count) needs only that one: under → partly, well under → short.
+ */
+function verdictOf(statuses: PvaStatus[], minJudged = 2): "enough" | "partly" | "short" | null {
   const judged = statuses.filter((s) => s !== "na");
-  if (judged.length < 2) return null;
+  if (judged.length < minJudged || judged.length === 0) return null;
+  if (judged.length === 1) return judged[0] === "well_under" ? "short" : isShort(judged[0]) ? "partly" : "enough";
   const short = judged.filter(isShort).length;
   const wellUnder = judged.filter((s) => s === "well_under").length;
   if (short === 0) return "enough";
@@ -299,6 +318,7 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   // (Acc/Dec/CoD via CAL_SHARE_IMA.topup in targetShare; long runs / strides via TOPUP_MATCH_PCT).
   const matchPct = isTopup ? Math.max(input.matchPct ?? 0, TOPUP_MATCH_PCT) : input.matchPct;
   const focusSet = new Set<EnoughVar>(DAY_FOCUS[dayType ?? "mixed"]);
+  const minJudged = Math.min(2, focusSet.size);
   const dtLabel = dayType ? DAY_TYPE_LABEL[dayType] : null;
   const md = [mdLabel ?? "", dtLabel ? dtLabel.en : ""].filter(Boolean).join(" ");
   const mdIs = [mdLabel ?? "", dtLabel ? dtLabel.is : ""].filter(Boolean).join(" ");
@@ -311,7 +331,7 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
     // A recovering starter keeps the MD-day's recovery level for display: the top-up target isn't theirs.
     for (const k of ENOUGH_VARS) byVar[k] = compareVar(k, p.actual[k], p.matchRef[k], pct, focusSet.has(k), recovering ? null : dayType);
     const statuses = ENOUGH_VARS.filter((k) => focusSet.has(k)).map((k) => byVar[k].status);
-    const v = verdictOf(statuses);
+    const v = verdictOf(statuses, minJudged);
     const shortOn = ENOUGH_VARS.filter((k) => focusSet.has(k) && isShort(byVar[k].status));
     const verdict: PlayerVerdict = p.partial ? "partial_session" : recovering ? "recovery" : v ?? "no_data";
     return { playerId: p.playerId, name: p.name.trim(), verdict, byVar, shortOn, refSource: p.refSource, refMatches: p.refMatches, partial: p.partial, recovering, lastMatchMinutes: p.lastMatchMinutes ?? null };
@@ -324,9 +344,9 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   const focusNote: Bi | null = dayType === "mechanical"
     ? { en: `Mechanical day: judged on accelerations, braking and changes of direction, against about ${stdPct("mechanical")}% of a match (published range ${stdRange("mechanical")}). Running isn't the job today.`, is: `Mechanical-dagur: metið á hröðun, hemlun og stefnubreytingum, á móti um ${stdPct("mechanical")}% af leik (birt bil ${stdRange("mechanical")}). Hlaup er ekki verkefni dagsins.` }
     : dayType === "locomotive"
-      ? { en: "Locomotive day: judged on long continuous runs and their strides. Braking and cutting aren't the job today.", is: "Locomotive-dagur: metið á löngum samfelldum hlaupum og skrefum í þeim. Hemlun og stefnubreytingar eru ekki verkefni dagsins." }
+      ? { en: "Locomotive day: judged on the number of long continuous runs. Braking and cutting aren't the job today.", is: "Locomotive-dagur: metið á fjölda langra samfelldra hlaupa. Hemlun og stefnubreytingar eru ekki verkefni dagsins." }
       : dayType === "mixed" || dayType === "activation"
-        ? { en: `${DAY_TYPE_LABEL[dayType].en} day: accelerations, braking and changes of direction are judged against about ${stdPct(dayType)}% of a match (published range ${stdRange(dayType)}); long runs and their strides against the MD-day.`, is: `${DAY_TYPE_LABEL[dayType].is}-dagur: hröðun, hemlun og stefnubreytingar eru metnar á móti um ${stdPct(dayType)}% af leik (birt bil ${stdRange(dayType)}); löng hlaup og skref í þeim á móti MD-deginum.` }
+        ? { en: `${DAY_TYPE_LABEL[dayType].en} day: accelerations, braking and changes of direction are judged against about ${stdPct(dayType)}% of a match (published range ${stdRange(dayType)}); the number of long runs against the MD-day.`, is: `${DAY_TYPE_LABEL[dayType].is}-dagur: hröðun, hemlun og stefnubreytingar eru metnar á móti um ${stdPct(dayType)}% af leik (birt bil ${stdRange(dayType)}); fjöldi langra hlaupa á móti MD-deginum.` }
       : isTopup && recoveringN === 0
         ? { en: `Top-up day: the players who trained are judged against a top-up target (${topupTarget.en}); starters (${STARTER_MINUTES}+ min last match) would be recovering.`, is: `Uppbótardagur: þeir sem æfðu eru metnir á móti uppbótarmarkmiði (${topupTarget.is}); byrjunarlið (${STARTER_MINUTES}+ mín í síðasta leik) væri í endurheimt.` }
       : isTopup
@@ -369,14 +389,14 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
 
   // ── No MD context → describe "% of a match", no verdict ───────────────────────
   if (matchPct == null) {
-    const pm = team.map((t) => t.pctOfMatch).filter((x): x is number => x != null);
+    const pm = team.filter((t) => !isContextOnly(t.key)).map((t) => t.pctOfMatch).filter((x): x is number => x != null);
     const lo = pm.length ? Math.min(...pm) : null, hi = pm.length ? Math.max(...pm) : null;
     return {
       ...emptyEnough("no_md", { sessionDate, mdLabel: null, squad }),
       team, players, confidence, dayType, dayTypeSource: input.dayTypeSource ?? null, focusNote,
       facts: lo != null ? [{
-        en: `The session gave ${lo}–${hi}% of a match across the five movement types.`,
-        is: `Æfingin gaf ${lo}–${hi}% af leik yfir hreyfiþættina fimm.`,
+        en: `The session gave ${lo}–${hi}% of a match across the ${pm.length} movement types.`,
+        is: `Æfingin gaf ${lo}–${hi}% af leik yfir hreyfiþættina ${pm.length}.`,
       }, {
         en: "Tag the day in Week setup (or add the fixture) and this becomes a yes / no answer.",
         is: "Merktu daginn í vikuskipulagi (eða bættu leiknum við) og þá verður þetta já / nei svar.",
@@ -385,7 +405,7 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   }
 
   // ── Team verdict ────────────────────────────────────────────────────────────
-  const tv = verdictOf(team.filter((t) => t.focus).map((t) => t.status));
+  const tv = verdictOf(team.filter((t) => t.focus).map((t) => t.status), minJudged);
   if (!tv) return { ...emptyEnough("no_reference", { sessionDate, mdLabel, squad }), team, players, confidence, dayType, dayTypeSource: input.dayTypeSource ?? null, focusNote };
   const verdict: TeamVerdict = tv === "enough" ? "yes" : tv === "partly" ? "mostly" : "no";
   const shortVars = team.filter((t) => t.focus && isShort(t.status)).sort((a, b) => (a.pctOfTarget ?? 0) - (b.pctOfTarget ?? 0));
@@ -444,8 +464,8 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
       return { key: k, pctOfTarget: pct, status, timesMatch: times == null ? null : Math.round(times * 10) / 10, targetTimesMatch: Math.round(targetTimes * 10) / 10 };
     });
     week = { sessions: weekDays.length, vars };
-    const wShort = vars.filter((v) => isShort(v.status));
-    const wJudged = vars.filter((v) => v.status !== "na");
+    const wShort = vars.filter((v) => !isContextOnly(v.key) && isShort(v.status));
+    const wJudged = vars.filter((v) => !isContextOnly(v.key) && v.status !== "na");
     if (wJudged.length) {
       facts.push(wShort.length === 0
         ? { en: `Week so far (${weekDays.length} sessions since the match): on track on all ${wJudged.length} movement types.`, is: `Vikan hingað til (${weekDays.length} æfingar frá leik): á áætlun í öllum ${wJudged.length} hreyfiþáttum.` }
@@ -465,7 +485,7 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
     };
   }
 
-  const over = team.filter((t) => t.status === "well_over");
+  const over = team.filter((t) => t.focus && t.status === "well_over");
   const overNote: Bi | null = over.length ? {
     en: `More ${listBi(over.map((t) => t.key), "en")} than ${md} usually calls for (${over.map((t) => `${t.pctOfTarget}%`).join(", ")} of the day's target) — fine if planned, worth a look close to a match.`,
     is: `Meira af ${listBi(over.map((t) => t.key), "is")} en ${mdIs} kallar venjulega á (${over.map((t) => `${t.pctOfTarget}%`).join(", ")} af markmiði dagsins) — í lagi ef það var ætlunin, vert að skoða nálægt leik.`,

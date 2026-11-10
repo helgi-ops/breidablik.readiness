@@ -177,7 +177,21 @@ describe("day-type aware judging", () => {
     const low = { frDistance: REF.frDistance! * dayShare("frDistance", 85) * 0.4, strideHi: REF.strideHi! * dayShare("strideHi", 85) * 0.4, longRuns: REF.longRuns! * dayShare("longRuns", 85) * 0.4 };
     const r = buildSessionEnough({ ...base, dayType: "locomotive", dayTypeSource: "week_setup", players: ["1", "2", "3"].map((id) => player(id, 85, 1.0, low)) });
     expect(r.verdict).toBe("no");
-    expect(r.team.filter((t) => t.focus).map((t) => t.key)).toEqual(["frDistance", "strideHi", "longRuns"]);
+    expect(r.team.filter((t) => t.focus).map((t) => t.key)).toEqual(["longRuns"]);
+  });
+
+  it("Long-run distance and strides are info only: warm-up jogs can't make a session look enough", () => {
+    // Count well under, distance/strides inflated by multi-minute jogs (top band 30–1000 s).
+    const jogs = { frDistance: REF.frDistance! * 2, strideHi: REF.strideHi! * 2, longRuns: REF.longRuns! * dayShare("longRuns", 85) * 0.4 };
+    const loco = buildSessionEnough({ ...base, dayType: "locomotive", dayTypeSource: "week_setup", players: ["1", "2", "3"].map((id) => player(id, 85, 1.0, jogs)) });
+    expect(loco.verdict).toBe("no");
+    expect(loco.overNote).toBeNull();
+    // Mixed: everything on target except distance/strides well under → still yes.
+    const onTarget = { ...atMatchShare(0.6), frDistance: 0, strideHi: 0, longRuns: REF.longRuns! * dayShare("longRuns", 85) };
+    const mixed = buildSessionEnough({ ...base, dayType: "mixed", dayTypeSource: "meso", players: ["1", "2", "3"].map((id) => player(id, 85, 1.0, onTarget)) });
+    expect(mixed.verdict).toBe("yes");
+    expect(mixed.team.filter((t) => t.focus).map((t) => t.key)).toEqual(["imaAccel", "imaDecel", "imaCod", "longRuns"]);
+    expect(mixed.team.find((t) => t.key === "frDistance")?.focus).toBe(false);
   });
 
   it("Indoor locomotive day: long-run distance is missing (not 0) and the bout count carries the verdict", () => {

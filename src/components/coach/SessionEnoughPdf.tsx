@@ -7,7 +7,7 @@
 import { Text, View } from "@react-pdf/renderer";
 import { BrandPage, Bullets, Provenance, Section, Status, Table, Verdict, FactRow, fb, type Col, type Tone } from "@/components/pdf/brand";
 import type { PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
-import { DAY_TYPE_LABEL, ENOUGH_LABEL, ENOUGH_VARS, type PlayerVerdict, type SessionEnough, type TeamVerdict } from "@/lib/micropulse/sessionEnough";
+import { DAY_TYPE_LABEL, ENOUGH_LABEL, ENOUGH_VARS, isContextOnly, type PlayerVerdict, type SessionEnough, type TeamVerdict } from "@/lib/micropulse/sessionEnough";
 
 const VERDICT_TONE: Record<TeamVerdict, Tone> = { yes: "green", mostly: "amber", no: "red" };
 const VERDICT_LABEL: Record<TeamVerdict, string> = { yes: "Enough", mostly: "Mostly", no: "Not enough" };
@@ -32,7 +32,7 @@ export function SessionEnoughPdfPage({ enough, teamName, sessionDate }: { enough
 
   const cols: Col[] = [
     { label: "Player", flex: 1.6 },
-    ...ENOUGH_VARS.map((k): Col => ({ label: `${ENOUGH_LABEL[k].en}${enough.team.find((t) => t.key === k)?.focus === false ? " (not focus)" : ""} (session / target)`, flex: 1.15, align: "right" })),
+    ...ENOUGH_VARS.map((k): Col => ({ label: `${ENOUGH_LABEL[k].en}${isContextOnly(k) ? " (info only)" : enough.team.find((t) => t.key === k)?.focus === false ? " (not focus)" : ""} (session / target)`, flex: 1.15, align: "right" })),
     { label: "Verdict", width: 66 },
     { label: "Match reference", width: 92 },
   ];
@@ -68,7 +68,7 @@ export function SessionEnoughPdfPage({ enough, teamName, sessionDate }: { enough
         />
         {enough.focusNote ? <Text style={[fb(600), { fontSize: 8.5, marginBottom: 6 }]}>{enough.focusNote.en}</Text> : null}
         <FactRow
-          facts={enough.team.filter((t) => !v || t.focus).map((t) => ({
+          facts={enough.team.filter((t) => !isContextOnly(t.key) && (!v || t.focus)).map((t) => ({
             value: v ? (t.pctOfTarget == null ? "-" : `${t.pctOfTarget}%`) : (t.pctOfMatch == null ? "-" : `${t.pctOfMatch}%`),
             label: ENOUGH_LABEL[t.key].en,
             sub: v
@@ -106,7 +106,7 @@ export function SessionEnoughPdfPage({ enough, teamName, sessionDate }: { enough
       ) : null}
 
       <Provenance>
-        {`How it's calculated: each player's match reference = median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when fewer than 3). The planned day-type decides what is judged: Mechanical = accelerations, braking, CoD; Locomotive = long continuous runs (count, distance, strides); Mixed/Activation = all six; Top-up = starters (60+ min) recover, the rest are judged. It also sets the target for accelerations, braking and CoD, the same standard the Meso calendar plans from: Mechanical 80% of a match, Mixed 60%, Top-up 55%, Locomotive 50%, Activation 38% (studies of elite teams describe this, they don't prove it best; CoD follows the same share). Long-run distance and long-run strides are sized by the MD-day, as is everything with no planned day-type. Enough = ≥85% of target. Movement = IMA accelerations, decelerations, change of direction, distance (m) and strides in long continuous runs of 18 s or more (IMA Free Running). Runs are grouped by how long they lasted, not speed - they are not sprinting. Sources: ${enough.citations.join("; ")}.`}
+        {`How it's calculated: each player's match reference = median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when fewer than 3). The planned day-type decides what is judged: Mechanical = accelerations, braking, CoD; Locomotive = the number of long continuous runs; Mixed/Activation = accelerations, braking, CoD and the number of long runs; Top-up = starters (60+ min) recover, the rest are judged. It also sets the target for accelerations, braking and CoD, the same standard the Meso calendar plans from: Mechanical 80% of a match, Mixed 60%, Top-up 55%, Locomotive 50%, Activation 38% (studies of elite teams describe this, they don't prove it best; CoD follows the same share). Long-run distance and long-run strides are sized by the MD-day, as is everything with no planned day-type. Enough = ≥85% of target. Movement = IMA accelerations, decelerations, change of direction, distance (m) and strides in long continuous runs of 18 s or more (IMA Free Running). Runs are grouped by how long they lasted, not speed - they are not sprinting. Sources: ${enough.citations.join("; ")}.`}
       </Provenance>
     </BrandPage>
   );
