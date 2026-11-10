@@ -1410,7 +1410,10 @@ export default function CoachPage() {
   const PAGE_SIZE = 100;
 
   // Plan-based access control
-  const { isAtLeastPro, loading: planLoading } = usePlan();
+  const { isAtLeastPro, loading: planLoading, freeLocked } = usePlan();
+  // FREE clubs (freeLock.ts) see the readiness verdict on Today and nothing that needs Pro data: no GPS/load,
+  // sRPE, signals, team metrics, AI or load reports. The colour and its plain why are unchanged.
+  const basicOnly = freeLocked;
 
   type CoachTab = "today" | "squad" | "load" | "gps" | "md" | "library" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp";
   const VALID_TABS: ReadonlySet<CoachTab> = new Set([
@@ -8426,6 +8429,7 @@ export default function CoachPage() {
                     <FileText className="h-3.5 w-3.5" />
                     {pdfDownloading ? "Generating…" : "Readiness Risk"}
                   </Button>
+                  {!basicOnly && (<>
                   <Button
                     variant="outline"
                     size="sm"
@@ -8448,6 +8452,7 @@ export default function CoachPage() {
                     <Download className="h-3.5 w-3.5" />
                     {pdfPostDownloading ? "Generating…" : "Post-Training"}
                   </Button>
+                  </>)}
                 </div>
                 <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2.5">
                   {/* Shared day selector — empty = today / latest session. */}
@@ -8511,7 +8516,7 @@ export default function CoachPage() {
           {/* Titan indoor teams upload today's _synced_data right here on Today —
               the team data-source profile (gps_provider='titan') means we know
               they're on Titan, so no sidebar detour. */}
-          {gpsProvider === "titan" && coachTeamId ? <TitanTodayUploadCard lang={lang === "EN" ? "EN" : "IS"} /> : null}
+          {gpsProvider === "titan" && coachTeamId && !basicOnly ? <TitanTodayUploadCard lang={lang === "EN" ? "EN" : "IS"} /> : null}
           {/* Lota B / step B3: decision-first order is Command Center →
               Attention list → group table. The Daily Briefing (rich per-player
               attention rows: counterfactuals, driver chips, confidence, deltas)
@@ -8539,7 +8544,7 @@ export default function CoachPage() {
                   </div>
                   {catapultSyncMessage ? <div className="mt-1.5 text-xs text-slate-600">{catapultSyncMessage}</div> : null}
                 </div>
-                <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
+                <div className={`flex shrink-0 flex-wrap items-center gap-2 md:justify-end${basicOnly ? " hidden" : ""}`}>
                   {gpsProvider === "wimu" ? (
                     // WIMU is a manual SPRO CSV/Excel upload (no auto-sync API), so
                     // "sync" for a WIMU team means opening the upload page.
@@ -8912,7 +8917,7 @@ export default function CoachPage() {
                         team signal the old hand-rolled narrative box + tiles used,
                         so the verdict is computed once and can never diverge
                         (no new data, no new API — golden rule #1). */}
-                    {showLoadCards ? (
+                    {showLoadCards && !basicOnly ? (
                       <GpsOnlyLoadHero data={gpsLoadVerdict} lang={lang === "IS" ? "IS" : "EN"} />
                     ) : (
                     <TodayCommandCenter
@@ -8926,7 +8931,7 @@ export default function CoachPage() {
                       checkedIn={complianceSummary?.checkin.submitted ?? nFull}
                       total={teamSignal?.n_players ?? (nFull + nReduced + nRecovery)}
                       flaggedCount={nReduced + nRecovery}
-                      fatigueMix={(() => {
+                      fatigueMix={basicOnly ? null : (() => {
                         let mech = 0, metab = 0, global = 0;
                         for (const c of Object.values(playerComposites)) {
                           const ft = String((c as { fatigueType?: string | null })?.fatigueType ?? "").toLowerCase();
@@ -8936,7 +8941,7 @@ export default function CoachPage() {
                         }
                         return mech + metab + global > 0 ? { mech, metab, global } : null;
                       })()}
-                      rpeCompliance={complianceSummary?.rpe
+                      rpeCompliance={!basicOnly && complianceSummary?.rpe
                         ? { submitted: complianceSummary.rpe.submitted, missing: complianceSummary.rpe.missing }
                         : null}
                     />
@@ -8944,6 +8949,7 @@ export default function CoachPage() {
 
                     {/* The full per-player squad grid is a drill-down (one canonical home at
                         ?tab=squad) — reach it from the verdict here. Keeps Today decide-first. */}
+                    {!basicOnly && (
                     <div className="flex justify-end">
                       <button
                         type="button"
@@ -8953,13 +8959,15 @@ export default function CoachPage() {
                         {lang === "IS" ? "Sjá allan hópinn" : "See full squad"} <span aria-hidden>→</span>
                       </button>
                     </div>
+                    )}
 
                     {/* Background signal chips (game-plan-fit / session-vs-plan /
                         confirm-minutes). Exception-gated — silent unless one fires. */}
-                    <CoachSignalChips teamId={coachTeamId} lang={lang === "IS" ? "IS" : "EN"} signals={coachSignals} />
+                    {!basicOnly && <CoachSignalChips teamId={coachTeamId} lang={lang === "IS" ? "IS" : "EN"} signals={coachSignals} />}
 
                     {/* Team outlook + "Show team metrics" toggle. The S&C
                         drill-down (secondary tiles below) stays one click away. */}
+                    {!basicOnly && (
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
                         Team outlook: {teamOutlook.band}
@@ -8973,11 +8981,12 @@ export default function CoachPage() {
                         {showCommandCenterDetails ? "Hide team metrics" : "Show team metrics"}
                       </button>
                     </div>
+                    )}
 
                     {/* Secondary tiles — S&C drill-down. Hidden by
                         default so the morning brief stays scannable.
                         Coach toggles "Show team metrics" to see them. */}
-                    {showCommandCenterDetails ? (
+                    {showCommandCenterDetails && !basicOnly ? (
                       <>
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
                           {secondaryTiles.map((tile) => (
@@ -9045,7 +9054,7 @@ export default function CoachPage() {
                         now lives at the TOP of this card (moved 2026-05-27
                         so the coach reads the verdict before the tiles).
                         This wrapper kept for the ELITE AI button + result. */}
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+                    <div className={`rounded-2xl border border-slate-200 bg-white p-4 text-sm${basicOnly ? " hidden" : ""}`}>
                       {/* ELITE AI deeper-analysis button. Sends team facts to
                           Claude Haiku, which writes 2 paragraphs of context
                           and connections that the rule-based narrative can't
@@ -9215,8 +9224,9 @@ export default function CoachPage() {
                 category,
                 status: it.compactStatus || null,
                 reason: it.reasons[0] ?? it.compactStatus,
-                badges,
-                acwr: it.plSpike ?? null,
+                // FREE clubs: readiness only — no load badges, spike ratio, load chip or signal pills.
+                badges: basicOnly ? [] : badges,
+                acwr: basicOnly ? null : it.plSpike ?? null,
                 delta,
                 color: it.injury
                   ? (it.injury.kind === "rtp" ? "YELLOW" : "RED")
@@ -9228,11 +9238,11 @@ export default function CoachPage() {
                 stale: it.stale ?? false,
                 // Unfamiliar load — same alert-level spike threshold as the
                 // (previously hidden) badge; now surfaced as a row chip.
-                unfamiliarLoad: it.plSpike != null && it.plSpike >= PL_SPIKE_ALERT,
+                unfamiliarLoad: !basicOnly && it.plSpike != null && it.plSpike >= PL_SPIKE_ALERT,
                 // Per-player background signals (coach_signals) — e.g. a form
                 // dip. Advisory pills beside the readiness signals; localized +
                 // tooltip pre-resolved here so AttentionList stays presentational.
-                signals: (perPlayerSignals[String(it.playerId)] ?? []).map((sig) => ({
+                signals: (basicOnly ? [] : perPlayerSignals[String(it.playerId)] ?? []).map((sig) => ({
                   engine: sig.engine,
                   level: (sig.level === "steady" ? "watch" : sig.level) as "watch" | "elevated" | "task",
                   label: lang === "IS" ? sig.label.is : sig.label.en,
@@ -9270,6 +9280,7 @@ export default function CoachPage() {
                   data={drawerData}
                   onClose={() => setDrawerPlayerId(null)}
                   onShowScDetails={(pid) => { setScDetailPlayerId(pid); setDrawerPlayerId(null); }}
+                  basicOnly={basicOnly}
                 />
               </>
             );
@@ -9278,7 +9289,7 @@ export default function CoachPage() {
           {/* GPS Intelligence Only: load-based Decision Summary in place of the
               readiness one (the readiness version is hidden below for these
               teams, since there is no check-in to drive it). */}
-          {showLoadCards && <GpsOnlyLoadSummary data={gpsLoadVerdict} lang={lang === "IS" ? "IS" : "EN"} isKinexon={gpsProvider === "kinexon"} />}
+          {showLoadCards && !basicOnly && <GpsOnlyLoadSummary data={gpsLoadVerdict} lang={lang === "IS" ? "IS" : "EN"} isKinexon={gpsProvider === "kinexon"} />}
 
           {/* Provenance note — the board is showing the most recent check-in
               day (carried forward), because no check-ins have been logged yet
@@ -9294,6 +9305,19 @@ export default function CoachPage() {
           {/* Decision Summary — per-player today (readiness; full-suite teams) */}
           {rows.length > 0 && !gpsOnly && (
             <DecisionSummaryCard rows={rows.map((r) => {
+              // FREE clubs: the readiness row and injury status only — no GPS/load, sRPE, signal or VBT
+              // enrichment, so none of those chips can render.
+              if (basicOnly) {
+                return {
+                  ...r,
+                  _injury_status: playerInjuryStatus[r.player_id]?.status ?? null,
+                  _injury_rtp_stage: playerInjuryStatus[r.player_id]?.rtpStage ?? null,
+                  _injury_body_part: playerInjuryStatus[r.player_id]?.bodyPart ?? null,
+                  _injury_type: playerInjuryStatus[r.player_id]?.injuryType ?? null,
+                  _injury_estimated_return: playerInjuryStatus[r.player_id]?.estimatedReturn ?? null,
+                  _injury_severity: playerInjuryStatus[r.player_id]?.severity ?? null,
+                };
+              }
               // Match-minutes lookup (powers MD+1 hard-recovery guardrail)
               const matchMin = playerMatchMinutes[r.player_id] ?? null;
               const matchMinutesEnrichment = {
@@ -9568,8 +9592,9 @@ export default function CoachPage() {
               // the lighter Needs-attention drawer. The coach shouldn't have to
               // click "show details" to get the depth this surface is for. Needs
               // attention (AttentionList) still opens the drawer via drawerPlayerId.
-              onPlayerClick={(pid) => setScDetailPlayerId(pid)}
-              scDetailPlayerId={scDetailPlayerId}
+              // FREE clubs open the head-coach drawer instead (the S&C modal is Pro).
+              onPlayerClick={(pid) => (basicOnly ? setDrawerPlayerId(pid) : setScDetailPlayerId(pid))}
+              scDetailPlayerId={basicOnly ? null : scDetailPlayerId}
               onScDetailClose={() => setScDetailPlayerId(null)}
             />
           )}
@@ -9588,7 +9613,7 @@ export default function CoachPage() {
               outdoors too — confusingly showing "heavy indoor load" for what
               were really GPS sessions. Now: no GPS → indoor → show; GPS present
               → outdoor → hide. A manual outdoor/indoor override still wins. */}
-          {rows.length > 0 &&
+          {rows.length > 0 && !basicOnly &&
             effectiveTrainingMode === "indoor" &&
             (Object.keys(playerIndoorStatus).length > 0 || Object.keys(playerInjuryStatus).length > 0) && (
               <TeamIndoorBriefing

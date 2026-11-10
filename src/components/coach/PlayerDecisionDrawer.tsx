@@ -88,6 +88,9 @@ export type PlayerDecisionDrawerProps = {
   /** "Show details — S&C" — opens the existing rich S&C modal. When omitted the
    *  button is hidden (wired in step B4b). */
   onShowScDetails?: (playerId: string) => void;
+  /** FREE club (freeLock.ts): verdict, plain why, wellness, counterfactual, confidence and injury only.
+   *  Hides the robustness chip, unfamiliar-load banner, AI summary and the S&C drill-down. */
+  basicOnly?: boolean;
 };
 
 const COLOR: Record<DrawerColor, { bg: string; fg: string; soft: string; label: { EN: string; IS: string } }> = {
@@ -157,7 +160,7 @@ function loadBand(spike: number | null): { tone: DrawerColor; en: string; is: st
   };
 }
 
-export default function PlayerDecisionDrawer({ lang, open, data, onClose, onShowScDetails }: PlayerDecisionDrawerProps) {
+export default function PlayerDecisionDrawer({ lang, open, data, onClose, onShowScDetails, basicOnly = false }: PlayerDecisionDrawerProps) {
   const isIS = lang === "IS";
 
   // Close on Escape.
@@ -237,7 +240,7 @@ export default function PlayerDecisionDrawer({ lang, open, data, onClose, onShow
           ) : null}
           {/* Injury early-warning (Robustness watch #5) — a chip BESIDE the colour, not the verdict.
               Links to /coach/readiness-signals for the full "why". Silent until there's data. */}
-          <RobustnessChip playerId={data.playerId} lang={lang} />
+          {!basicOnly && <RobustnessChip playerId={data.playerId} lang={lang} />}
         </div>
 
         {/* Layer 1: plain why */}
@@ -290,7 +293,7 @@ export default function PlayerDecisionDrawer({ lang, open, data, onClose, onShow
         ) : null}
 
         {/* Unfamiliar-load banner — its own band, with the ≥70%→RED rule */}
-        {band && bandTone ? (
+        {band && bandTone && !basicOnly ? (
           <div
             className="mx-5 mt-4 rounded-xl border px-4 py-3"
             style={{ background: bandTone.soft, borderColor: `${bandTone.fg}33` }}
@@ -334,15 +337,15 @@ export default function PlayerDecisionDrawer({ lang, open, data, onClose, onShow
             + pattern) that otherwise lives in the Daily Briefing / S&C modal.
             Labelled as AI, self-hides when unavailable / non-ELITE. Brings the
             "why" depth into the drawer so the coach needn't navigate away. */}
-        <div className="mx-5 mt-4">
-          <PlayerSummaryCard
+        <div className={`mx-5 mt-4${basicOnly ? " hidden" : ""}`}>
+          {!basicOnly && <PlayerSummaryCard
             playerId={data.playerId}
             coachVerdict={{
               state: data.color,
               headline: data.verdictLabel,
               why_lines: data.reasons ?? undefined,
             }}
-          />
+          />}
         </div>
 
         {/* Confidence + baseline */}
@@ -381,7 +384,7 @@ export default function PlayerDecisionDrawer({ lang, open, data, onClose, onShow
         ) : null}
 
         {/* Layer 2 entry — Show details (S&C). Wired by the caller in B4b. */}
-        {onShowScDetails ? (
+        {onShowScDetails && !basicOnly ? (
           <div className="mt-auto px-5 py-4">
             <button
               type="button"
