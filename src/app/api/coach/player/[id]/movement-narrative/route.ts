@@ -49,7 +49,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { data: rows } = await sb
     .from("player_external_load_daily")
-    .select("date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_fr_band58_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, jumps")
+    .select("date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_fr_band58_total_distance, ima_fr_ge18_mp_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, jumps")
     .eq("player_id", playerId)
     .gte("date", windowStart)
     .lte("date", today)
@@ -65,6 +65,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     totalDistance: num(r.total_distance),
     // IMA FR bands 5–8 = metres in long continuous runs (≥18 s) — not sprint/HSR (GPS engine above).
     imaDistance: num(r.ima_fr_band58_total_distance),
+    imaMatchPaceDistance: r.ima_fr_ge18_mp_total_distance == null ? null : num(r.ima_fr_ge18_mp_total_distance), // long runs at match pace
     accelEfforts: num(r.accel_b2_3_tot_effs_gen2),
     decelEfforts: num(r.decel_b2_3_tot_effs_gen2),
   }));

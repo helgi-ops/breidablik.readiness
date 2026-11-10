@@ -34,6 +34,13 @@ export type MovementDayRow = {
   date: string;          // YYYY-MM-DD
   totalDistance: number; // m
   imaDistance: number;   // IMA band 5-8 total distance, m = long continuous runs (≥18 s bouts), not sprint/CoD
+  /**
+   * Metres in those long runs AT MATCH PACE (11 km/h+, `ima_fr_ge18_mp_total_distance`); null = pace unknown.
+   * When given, the long-run components read it instead of `imaDistance`: in training most long runs are jogs
+   * (docs/ima-free-running-bands.md "Pace: match pace vs jog"). `imaDistance` still decides whether the row has
+   * IMA at all (Pro vs Core/Lite component set). Undefined = the pre-Nov-2026 read, all long runs.
+   */
+  imaMatchPaceDistance?: number | null;
   accelEfforts: number;  // accel B2-3 effort count
   decelEfforts: number;  // decel B2-3 effort count
   /** Combined Gen2 accel+decel effort count — the Lite/Core fallback for the
@@ -58,9 +65,9 @@ export type ComponentKey =
   | "metabolic_share";
 
 export const COMPONENT_LABEL: Record<ComponentKey, string> = {
-  multidirectional: "Long continuous running",  // key legacy — IMA FR band 5–8 (runs ≥18 s)
+  multidirectional: "Long runs at match pace",  // key legacy — IMA FR runs ≥18 s at 11 km/h+ (all long runs when pace unknown)
   explosive: "Explosive efforts",
-  multidirectional_share: "Long-run share of work",
+  multidirectional_share: "Match-pace long-run share of work",
   decel_share: "Braking share",
   high_speed_share: "High-speed share of work",
   metabolic_share: "Metabolic-load share of work",
@@ -74,9 +81,9 @@ export type Bi = { EN: string; IS: string };
 // IS labels are lowercase nominative phrases with the possessive built in, so they
 // slot mid-sentence after a dash without case/gender agreement breaking.
 const PLAIN: Record<ComponentKey, { label: Bi; unit: string; pct: boolean }> = {
-  multidirectional: { label: { EN: "running in long continuous runs (18 s or more)", IS: "hlaup hans í löngum samfelldum hlaupum (18 sek+)" }, unit: " m", pct: false },
+  multidirectional: { label: { EN: "running in long runs at match pace (18 s+ at 11 km/h+)", IS: "hlaup hans í löngum hlaupum á leikhraða (18 sek+ á 11 km/klst+)" }, unit: " m", pct: false },
   explosive: { label: { EN: "explosive bursts (hard accelerations + braking)", IS: "sprengikraftur hans (harðar hröðun + hemlun)" }, unit: "", pct: false },
-  multidirectional_share: { label: { EN: "share of his running done in long continuous runs", IS: "hlutfall hlaups hans í löngum samfelldum hlaupum" }, unit: "", pct: true },
+  multidirectional_share: { label: { EN: "share of his running done in long runs at match pace", IS: "hlutfall hlaups hans í löngum hlaupum á leikhraða" }, unit: "", pct: true },
   decel_share: { label: { EN: "share of his efforts that are hard braking", IS: "hlutfall átaka hans sem er hörð hemlun" }, unit: "", pct: true },
   high_speed_share: { label: { EN: "share of his running that's high-speed", IS: "hlutfall hlaups hans sem er háhraða" }, unit: "", pct: true },
   metabolic_share: { label: { EN: "share of his running at high metabolic load", IS: "hlutfall hlaups hans á háu efnaskipta-álagi" }, unit: "", pct: true },
@@ -180,12 +187,21 @@ function sd(xs: number[], m: number): number {
   return Math.sqrt(xs.reduce((s, x) => s + (x - m) ** 2, 0) / xs.length);
 }
 
+/**
+ * The long-run metres a component reads: at match pace when the row carries it (0 is a real value — every long
+ * run was a jog), else all long runs. Null when the row has no long-run distance at all.
+ */
+function longRunMetres(r: MovementDayRow): number | null {
+  if (!(Number(r.imaDistance) > 0)) return null;
+  return r.imaMatchPaceDistance != null && Number.isFinite(Number(r.imaMatchPaceDistance)) ? Number(r.imaMatchPaceDistance) : Number(r.imaDistance);
+}
+
 /** Value of a component for one day, or null if the inputs aren't usable. */
 export function componentValue(key: ComponentKey, r: MovementDayRow): number | null {
   const efforts = (Number(r.accelEfforts) || 0) + (Number(r.decelEfforts) || 0);
   switch (key) {
     case "multidirectional":
-      return Number(r.imaDistance) > 0 ? Number(r.imaDistance) : null;
+      return longRunMetres(r);
     case "explosive": {
       // Pro: B2-3 accel+decel efforts. Core/Lite (no split): fall back to the
       // combined Gen2 effort count so the explosive spike still fires for them.
@@ -196,7 +212,7 @@ export function componentValue(key: ComponentKey, r: MovementDayRow): number | n
       // Pro only: needs real IMA distance. Returns null (not a constant 0) when
       // IMA is absent, so Core/Lite uses the high_speed/metabolic shares instead.
       return Number(r.totalDistance) > 0 && Number(r.imaDistance) > 0
-        ? Number(r.imaDistance) / Number(r.totalDistance) : null;
+        ? (longRunMetres(r) ?? 0) / Number(r.totalDistance) : null;
     case "decel_share":
       return efforts > 0 ? (Number(r.decelEfforts) || 0) / efforts : null;
     case "high_speed_share": {
@@ -341,8 +357,8 @@ export function computeMovementSignature(
       };
       suggestedAction = longRun
         ? {
-            EN: "Keep his total load, but ease the long continuous running (tempo / conditioning runs) for 1-2 days, or phase the new demand in gradually.",
-            IS: "Haltu heildar-álaginu, en dragðu úr löngum samfelldum hlaupum (tempó- / úthaldshlaupum) í 1-2 daga, eða innleiða nýju kröfuna smám saman.",
+            EN: "Keep his total load, but ease the long runs at match pace (interval / conditioning runs) for 1-2 days, or phase the new demand in gradually.",
+            IS: "Haltu heildar-álaginu, en dragðu úr löngum hlaupum á leikhraða (lotu- / úthaldshlaupum) í 1-2 daga, eða innleiða nýju kröfuna smám saman.",
           }
         : {
             EN: "Keep his total load, but ease his exposure to tight-space / change-of-direction work for 1-2 days, or phase the new demand in gradually.",
@@ -359,8 +375,8 @@ export function computeMovementSignature(
       };
       suggestedAction = longRun
         ? {
-            EN: "Trim his overall load a touch and keep an eye on the long continuous running for a day or two.",
-            IS: "Minnkaðu heildar-álagið aðeins og fylgstu með löngu samfelldu hlaupunum í einn til tvo daga.",
+            EN: "Trim his overall load a touch and keep an eye on the long runs at match pace for a day or two.",
+            IS: "Minnkaðu heildar-álagið aðeins og fylgstu með löngu hlaupunum á leikhraða í einn til tvo daga.",
           }
         : {
             EN: "Trim his overall load a touch and keep an eye on the change-of-direction demand for a day or two.",

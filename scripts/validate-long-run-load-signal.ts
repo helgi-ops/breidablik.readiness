@@ -8,6 +8,11 @@
  * --hk) repeats today for HK to show the time measure reads on indoor days.
  *
  *   npx tsx scripts/validate-long-run-load-signal.ts [--days 120] [--asof YYYY-MM-DD] [--team <uuid>] [--hk]
+ *       [--measure matchPace|all] [--min-chronic <s/day>]
+ *
+ * --measure all replays the pre-Nov-2026 measure (all long-run time, jogs included) for the before/after.
+ * `server-only` is not installed outside Next: run with NODE_PATH pointing at a folder holding an empty
+ * `server-only` package.
  *
  * Reads Supabase creds from .env.local. Descriptive only — never touches the colour.
  */
@@ -15,7 +20,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createClient } from "@supabase/supabase-js";
-import { evaluateTeamLongRunLoad, loadTeamLongRunLoadSignals } from "@/lib/micropulse/longRuns/signalLoad";
+import { evaluateTeamLongRunLoad, loadTeamLongRunLoadSignals, type LongRunMeasure } from "@/lib/micropulse/longRuns/signalLoad";
 import { deriveLongRunLoadTeamSignal, derivePlayerLongRunLoadSignals, isActionable } from "@/lib/micropulse/coachSignals";
 
 const BREIDABLIK = "94b52a06-0b83-48da-8664-639ec3486a0c";
@@ -41,19 +46,23 @@ async function main() {
   const asOf = arg("--asof") ?? new Date().toISOString().slice(0, 10);
   const days = Number(arg("--days") ?? 120);
   const teamId = arg("--team") ?? BREIDABLIK;
+  const measure = (arg("--measure") ?? "matchPace") as LongRunMeasure;
+  const minArg = arg("--min-chronic");
+  const opts = { measure, ...(minArg != null ? { minChronicSecDay: Number(minArg) } : {}) };
 
-  console.log(`\n=== long_run_load signal validation — team ${teamId} — ${days} days to ${asOf} ===\n`);
+  console.log(`\n=== long_run_load signal validation — team ${teamId} — ${days} days to ${asOf} — measure ${measure}${minArg != null ? `, min chronic ${minArg} s/day` : ""} ===\n`);
 
-  let presentDays = 0, evaluablePresent = 0, strong = 0, climbs = 0, deficits = 0, squadLightDeficits = 0, squadLightDays = 0, gaps = 0;
+  let basisAll = 0, presentDays = 0, evaluablePresent = 0, strong = 0, climbs = 0, deficits = 0, squadLightDeficits = 0, squadLightDays = 0, gaps = 0;
   const squadLight = (r: { squadRatio: number | null }) => r.squadRatio != null && r.squadRatio <= 0.6; // mirrors SQUAD_LIGHT_RATIO in the derive
   const t = Date.now();
   for (let i = days - 1; i >= 0; i--) {
     const d = addDays(asOf, -i);
-    const { reads } = await evaluateTeamLongRunLoad(sb, teamId, d);
+    const { reads } = await evaluateTeamLongRunLoad(sb, teamId, d, opts);
     const present = reads.filter((r) => r.presentToday);
     if (present.length < 6) continue; // not a team day
     presentDays += 1;
     evaluablePresent += present.length;
+    basisAll += present.filter((r) => r.basis === "all").length;
     strong += present.filter((r) => r.flagged && r.direction === "spike" && r.ratio >= 1.5).length;
     climbs += present.filter((r) => r.flagged && r.direction === "spike" && r.ratio < 1.5).length;
     const rawDef = present.filter((r) => r.flagged && r.direction === "deficit");
@@ -65,6 +74,7 @@ async function main() {
   const pct = (n: number) => evaluablePresent ? `${((100 * n) / evaluablePresent).toFixed(1)}%` : "—";
   console.log(`Team days evaluated     : ${presentDays}  (${Date.now() - t} ms)`);
   console.log(`Evaluable player-days   : ${evaluablePresent}  (present today, confident 28-day base)`);
+  console.log(`Read on all long runs    : ${basisAll}  (pace unknown in the 28-day window → all long-run time)`);
   console.log(`Strong spikes (≥1.5)    : ${strong}  → ${pct(strong)}   ${strong / Math.max(1, evaluablePresent) < 0.2 ? "within budget" : "OVER 20% — tighten"}`);
   console.log(`Climbs 1.3–1.5 (cluster): ${climbs}  → ${pct(climbs)}`);
   console.log(`Individual deficits     : ${deficits}  → ${pct(deficits)}   ${deficits / Math.max(1, evaluablePresent) < 0.2 ? "within budget" : "OVER 20% — tighten"}   (≤0.5 while the squad is NOT light)`);

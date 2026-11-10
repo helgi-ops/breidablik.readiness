@@ -33,7 +33,9 @@ const ACWR_DAYS = 28;             // computeImaRunningLoad's chronic window
 // All 8 bands + the row's edges: which bands hold runs ≥18 s depends on the edges the row was classified with.
 const BAND_COLS = [1, 2, 3, 4, 5, 6, 7, 8].flatMap((b) => [`ima_fr_band${b}_event_count`, `ima_fr_band${b}_total_duration`, `ima_fr_band${b}_stride_count`, `ima_fr_band${b}_total_distance`]);
 const TIER_COLS = ["event_count", "total_duration", "stride_count", "total_distance"].map((k) => `ima_fr_ge18_${k}`);
-const COLS = ["player_id", "date", "source", "total_distance", "ima_fr_band58_total_distance", "ima_fr_band_bounds", "ima_fr_bounds_source", ...TIER_COLS, ...BAND_COLS].join(", ");
+// The match-pace split the DB trigger stores (team floor applied); matchPaceOf falls back to the bands without them.
+const MP_COLS = ["event_count", "total_duration", "stride_count", "total_distance"].map((k) => `ima_fr_ge18_mp_${k}`);
+const COLS = ["player_id", "date", "source", "total_distance", "ima_fr_band58_total_distance", "ima_fr_band_bounds", "ima_fr_bounds_source", ...TIER_COLS, ...MP_COLS, ...BAND_COLS].join(", ");
 
 export type LongRunRow = Record<string, unknown> & { player_id: string; date: string; source: string | null };
 type Row = LongRunRow;

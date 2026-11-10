@@ -304,7 +304,7 @@ describe("boundary — derive functions never import readiness/decision modules"
 
 // ── long_run_load: time in long continuous runs vs own 4-week base ──────────
 const lr = (over: Partial<LongRunLoadLite> = {}): LongRunLoadLite =>
-  ({ playerId: "p1", name: "Jón Jónsson", ratio: 1.86, direction: "spike", acuteSecDay: 133, chronicSecDay: 72, chronicDays: 18, presentDays7: 5, acuteGap: false, squadRatio: 1.0, ...over });
+  ({ playerId: "p1", name: "Jón Jónsson", ratio: 1.86, direction: "spike", basis: "matchPace", acuteSecDay: 133, chronicSecDay: 72, chronicDays: 18, presentDays7: 5, acuteGap: false, squadRatio: 1.0, ...over });
 const deficit = (over: Partial<LongRunLoadLite> = {}): LongRunLoadLite =>
   lr({ playerId: "d1", name: "Ari Arason", ratio: 0.42, direction: "deficit", acuteSecDay: 45, chronicSecDay: 107, ...over });
 
@@ -320,7 +320,8 @@ describe("deriveLongRunLoadTeamSignal (long-run time spike / deficit)", () => {
     expect(s.level).toBe("elevated");
     expect(s.engine).toBe("long_run_load");
     expect(s.href).toBe("/coach/ima-intelligence");
-    expect(s.why.en[0]).toMatch(/sharp jump in continuous running/i);
+    expect(s.why.en[0]).toMatch(/sharp jump in long runs at match pace/i);
+    expect(s.why.is[0]).toMatch(/á leikhraða/);
     expect(s.why.en[0]).toMatch(/Jón/);
     expect(s.counterfactual?.en).toMatch(/Gabbett 2016/);
     expect(s.counterfactual?.en).toMatch(/Impellizzeri 2020/);
@@ -335,7 +336,7 @@ describe("deriveLongRunLoadTeamSignal (long-run time spike / deficit)", () => {
     expect(deriveLongRunLoadTeamSignal([deficit()]).level).toBe("steady");
     const two = deriveLongRunLoadTeamSignal([deficit(), deficit({ playerId: "d2", name: "Óli Ólason" })]);
     expect(two.level).toBe("watch");
-    expect(two.why.en[0]).toMatch(/half their usual or less/i);
+    expect(two.why.en[0]).toMatch(/half their usual or less in long runs at match pace/i);
     expect(two.why.is[0]).toMatch(/helmingi minna/);
     expect(deriveLongRunLoadTeamSignal([deficit(), deficit({ playerId: "d2" }), deficit({ playerId: "d3" })]).level).toBe("elevated");
   });
@@ -375,9 +376,17 @@ describe("derivePlayerLongRunLoadSignals (attention-row / Decision Summary enric
     expect(rows[1].signal.level).toBe("watch");
     expect(rows[1].signal.why.en[0]).toMatch(/well below his usual/i);
     expect(rows[1].signal.why.en[0]).toMatch(/at training 5 of 7 days/);
-    expect(rows[1].signal.counterfactual?.en).toMatch(/10–15 min continuous run/);
+    expect(rows[1].signal.counterfactual?.en).toMatch(/running at match pace in the next session/i);
     expect(rows[1].signal.counterfactual?.en).toMatch(/planned taper/);
     for (const r of rows) expect(r.signal.href).toBe("/coach/ima-intelligence");
+  });
+  it("pace unknown (indoors) → the chip says all long runs were counted, never 'match pace'", () => {
+    const [row] = derivePlayerLongRunLoadSignals([lr({ basis: "all" })]);
+    expect(row.signal.why.en[0]).toMatch(/pace unknown indoors, all counted/);
+    expect(row.signal.why.en[0]).not.toMatch(/at match pace/);
+    expect(row.signal.why.is[0]).toMatch(/hraði óþekktur innanhúss/);
+    const mixed = deriveLongRunLoadTeamSignal([lr(), lr({ playerId: "p2", name: "Ari", basis: "all" })]);
+    expect(mixed.why.en[0]).toMatch(/sharp jump in long runs \(/);
   });
   it("a deficit with a data gap in the acute window gets no chip (missing data looks like little running)", () => {
     expect(derivePlayerLongRunLoadSignals([deficit({ acuteGap: true })])).toHaveLength(0);

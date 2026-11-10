@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
   const rows = await fetchAllPages<Record<string, unknown>>((from, to) =>
     sb
       .from("player_external_load_daily")
-      .select("player_id, date, total_distance, ima_fr_band58_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, accel_decel_efforts, high_speed_distance, high_metabolic_load_distance_m")
+      .select("player_id, date, total_distance, ima_fr_band58_total_distance, ima_fr_ge18_mp_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, accel_decel_efforts, high_speed_distance, high_metabolic_load_distance_m")
       .in("player_id", playerIds)
       .in("source", ["catapult", "manual", "titan", "kinexon"])
       .gte("date", windowStart)
@@ -79,6 +79,8 @@ export async function GET(req: NextRequest) {
       date: String(r.date),
       totalDistance: num(r.total_distance),
       imaDistance: num(r.ima_fr_band58_total_distance), // long continuous runs (≥18 s), not sprint
+      // …of which at match pace (11 km/h+); null = pace unknown → the components fall back to all long runs
+      imaMatchPaceDistance: r.ima_fr_ge18_mp_total_distance == null ? null : num(r.ima_fr_ge18_mp_total_distance),
       accelEfforts: num(r.accel_b2_3_tot_effs_gen2),
       decelEfforts: num(r.decel_b2_3_tot_effs_gen2),
       accelDecelEfforts: num(r.accel_decel_efforts),

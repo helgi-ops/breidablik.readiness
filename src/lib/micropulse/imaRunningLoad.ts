@@ -48,7 +48,7 @@ export type ImaRunningLoad = {
   acwr: number | null;      // acute7 / chronic28
   status: ImaRunStatus;
   confident: boolean;       // chronic window has enough real days to trust the ratio
-  chronicDays: number;      // days WITH any long-run distance in the chronic window
+  chronicDays: number;      // days WITH any long-run distance in the chronic window (with `presenceDays`: days measured, 0 included)
   z: number | null;         // today vs the player's recent training-day distribution
   /** Run-length tier carrying the most long-run distance today, config-independent ("18-24" = runs 18–24 s, "24+" = runs ≥24 s). */
   dominantRunLength: "18-24" | "24+" | null;
@@ -75,7 +75,17 @@ function round(n: number, d = 2): number {
   return Math.round(n * f) / f;
 }
 
-export function computeImaRunningLoad(rows: ImaDayRow[], refDateIso: string): ImaRunningLoad {
+export type ImaRunningLoadOptions = {
+  /**
+   * Count chronic-window days by PRESENCE (a row exists for the day, 0 included) instead of days with a value
+   * above 0. For a measure that is legitimately 0 on most measured days — long runs AT MATCH PACE, which a
+   * normal training day rarely has — "days > 0" would leave almost nobody confident even with a full month of
+   * sessions. The caller passes a row only for days it actually measured (rest days have no row).
+   */
+  presenceDays?: boolean;
+};
+
+export function computeImaRunningLoad(rows: ImaDayRow[], refDateIso: string, opts: ImaRunningLoadOptions = {}): ImaRunningLoad {
   // Map date -> total (only rows up to and including the reference date).
   const byDate = new Map<string, ImaDayRow>();
   for (const r of rows ?? []) {
@@ -92,10 +102,12 @@ export function computeImaRunningLoad(rows: ImaDayRow[], refDateIso: string): Im
   for (let i = 0; i < CHRONIC_DAYS; i++) {
     const d = new Date(Date.parse(refDateIso + "T00:00:00Z") - i * 86_400_000)
       .toISOString().slice(0, 10);
-    const v = Number(byDate.get(d)?.total ?? 0) || 0;
+    const row = byDate.get(d);
+    const v = Number(row?.total ?? 0) || 0;
     chronicSum += v;
     if (i < ACUTE_DAYS) acuteSum += v;
-    if (v > 0) { chronicDays += 1; sessionTotals.push(v); }
+    if (v > 0) sessionTotals.push(v);
+    if (opts.presenceDays ? row != null : v > 0) chronicDays += 1;
   }
 
   const acute7 = acuteSum / ACUTE_DAYS;

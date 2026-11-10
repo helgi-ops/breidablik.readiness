@@ -76,7 +76,24 @@ About 85 files described bands 5–8 as sprint, high-cadence or HSR running. All
   demo teams still carry only stride counts and band 5–8 distance; their sync needs the same parameters before
   bouts show for them.
 
-## Long-run load as a Today signal (Nov 2026, done)
+## Long-run load as a Today signal (Nov 2026; OFF since 10 Nov 2026)
+
+**Off on Today** (`LONG_RUN_LOAD_ON_TODAY = false` in `signalLoad.ts`; the loader hands the derive an empty list,
+so no team chip and no Decision Summary pill). Replay, Breiðablik 150 days to 2026-10-31, share of present
+player-days:
+
+| Measure | Ratio p10 · p50 · p90 | Spike ≥1.5 | Deficit ≤0.5 |
+|---|---|---|---|
+| All long-run time (what shipped) | 0.62 · 0.98 · 1.41 | 7.6% | 4.6% |
+| Long-run time at match pace | 0.00 · 0.89 · 2.15 | 25.2% | 18.5% |
+| … with a 30 s/day floor on the usual | | 22.4% | 15.0% |
+
+All long-run time is steady only because jogs fill it, and its biggest days were jog days (5 Jul 2026). At match pace
+almost all the time comes from matches, so the 7 ÷ 28-day ratio follows whether he played the last match in full,
+which the coach already knows from minutes. Neither is a chip a coach should act on. The code stays (match-pace
+measure, `basis` "matchPace" / "all", presence-based confidence) and the script replays it
+(`--measure all|matchPace`, `--min-chronic`). The text below describes the chip as it was.
+
 
 `long_run_load` is the 20th `coach_signals` adapter (`src/lib/micropulse/longRuns/signalLoad.ts`, derives in
 `coachSignals/index.ts`, wired in `computeTeam.ts`). The measure is **time** in long continuous runs (bands 5–8,
@@ -257,5 +274,9 @@ average 160 s).
 - **Backfill check:** every ≥18 s / ≥24 s tier, band58 distance, the edges and `updated_at` identical before and after;
   3,005 rows got a match-pace reading. Breiðablik near-full match 14.1 of 15.5, training 0.7 of 5.6; HK match 9.6 of
   10.6 (GPS rows only).
+- **Unfamiliar load** (`movementSignature`, `/api/coach/unfamiliar-load`, the movement narrative): the two long-run
+  components read match-pace metres (`imaMatchPaceDistance`; 0 is a real value, null = pace unknown → all long runs).
+  Replay Breiðablik Jun–Oct 2026, 1,420 player-days: any drift 26.5% → 25.3%, a long-run component flagged
+  14.4% → 12.7%, sharp jumps 2.7% → 2.0%. Same sensitivity, now about running at match pace instead of jogs.
 - **Unchanged:** the match profile (game report, match movement, transfer report), stride quality (length, cadence,
   return-to-training) and indoor running volume keep reading all long runs.

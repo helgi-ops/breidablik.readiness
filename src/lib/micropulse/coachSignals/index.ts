@@ -1328,17 +1328,19 @@ export function derivePlayerStrideFatigueSignals(reads: StrideFatigueLite[]): Pl
 // ── long-run load → "time in long continuous runs vs own 4-week base" signal ──
 /**
  * One flagged player's long-run load read, minimised for the chip. The measure is
- * TIME in long continuous runs — IMA Free Running bands 5–8, i.e. runs of ≥18 s at
- * ~11 km/h: tempo / aerobic running, NOT sprinting or HSR (docs/ima-free-running-
- * bands.md). Acute 7 days ÷ chronic 28 days against the player's OWN base, so a
- * goalkeeper is read against himself. Time comes from the inertial sensor → the
- * read exists indoors too (HK's home games), unlike the GPS distance ratio.
+ * TIME in long runs (≥18 s without stopping) AT MATCH PACE — 11 km/h or faster, the
+ * slowest tenth of the team's own match long runs. Jogs (warm-up laps, jogging back
+ * between drills) don't count: they were most of the long-run time on a training
+ * day (docs/ima-free-running-bands.md "Pace: match pace vs jog"). Sustained running,
+ * NOT sprinting or HSR. Acute 7 days ÷ chronic 28 days against the player's OWN base,
+ * so a goalkeeper is read against himself. Pace needs GPS: a player with long runs
+ * of unknown pace in his window (indoors) is read on all his long-run time
+ * (`basis: "all"`), and the chip says so.
  *
  * The loader (`longRuns/signalLoad.ts`) only hands over players on a confident
- * base (≥14 run days in 28) who crossed a side: `spike` (ratio ≥1.3) or `deficit`
+ * base (≥14 measured days in 28) who crossed a side: `spike` (ratio ≥1.3) or `deficit`
  * (ratio ≤0.5 while present ≥2 days and no data gap in the acute window). So this
- * list IS the flagged set. Calibrated on Breiðablik: spike ≥1.5 ≈ 9% of evaluable
- * session-days, deficit ≤0.5 ≈ 11% of present-days — both inside the <20% budget.
+ * list IS the flagged set. Flag rates on Breiðablik Jun–Oct 2026: see signalLoad.ts.
  */
 export type LongRunLoadLite = {
   playerId: string;
@@ -1346,10 +1348,12 @@ export type LongRunLoadLite = {
   /** Acute 7-day ÷ chronic 28-day mean daily seconds in long runs. */
   ratio: number;
   direction: "spike" | "deficit";
+  /** What was measured: long-run time at match pace, or all long-run time when pace was unknown (indoors). */
+  basis: "matchPace" | "all";
   /** Mean seconds per day in long runs, acute (7 d) and chronic (28 d) windows. */
   acuteSecDay: number;
   chronicSecDay: number;
-  /** Days WITH long runs in the chronic window (≥14 by construction). */
+  /** Measured days in the chronic window (≥14 by construction). */
   chronicDays: number;
   /** Measured days in the acute window — a deficit needs ≥2 (he was there). */
   presentDays7: number;
@@ -1375,6 +1379,12 @@ const isSquadLight = (r: LongRunLoadLite) => r.squadRatio != null && r.squadRati
 const isLongRunDeficit = (r: LongRunLoadLite) => isRawLongRunDeficit(r) && !isSquadLight(r);
 const longRunConf = (rs: LongRunLoadLite[]): CoachSignal["confidence"] => (rs.some((r) => r.chronicDays >= 18) ? "high" : "moderate");
 const minPerDay = (sec: number) => `${(sec / 60).toFixed(1)} min`;
+/** "at match pace" when every read in the group is on match pace; "in long runs" otherwise (pace unknown indoors). */
+const longRunWhat = (rs: LongRunLoadLite[]): Bi => (rs.every((r) => r.basis === "matchPace")
+  ? { en: "long runs at match pace", is: "löngum hlaupum á leikhraða" }
+  : rs.every((r) => r.basis === "all")
+    ? { en: "long runs (pace unknown indoors, all counted)", is: "löngum hlaupum (hraði óþekktur innanhúss, öll talin)" }
+    : { en: "long runs", is: "löngum hlaupum" });
 const firstNames = (rs: LongRunLoadLite[]) => {
   const names = rs.map((r) => r.name.split(" ")[0]).slice(0, 3);
   const more = rs.length - names.length;
@@ -1382,8 +1392,8 @@ const firstNames = (rs: LongRunLoadLite[]) => {
 };
 
 const LONG_RUN_COUNTERFACTUAL: Bi = {
-  en: "Time in long continuous runs (≥18 s, ~11 km/h tempo running) over the last 7 days vs each player's own 28-day base — a change-size descriptor (Gabbett 2016), not an injury predictor (Impellizzeri 2020). Sustained running, not sprinting (Buchheit & Laursen 2013). A spike: spread tempo / conditioning running over the next sessions. Well below usual: a 10–15 min continuous run in the next session brings him back — unless this is the planned taper. Advisory, never the readiness colour.",
-  is: "Tími í löngum samfelldum hlaupum (≥18 sek, ~11 km/klst tempóhlaup) síðustu 7 daga vs eigin 28 daga grunn hvers leikmanns — lýsing á stærð breytingar (Gabbett 2016), ekki meiðslaspá (Impellizzeri 2020). Samfellt hlaup, ekki sprettir (Buchheit & Laursen 2013). Stökk: dreifðu tempó-/þolhlaupi á næstu æfingar. Vel undir venju: 10–15 mín samfellt hlaup á næstu æfingu kemur honum að venju — nema þetta sé skipulögð niðurtröppun. Til leiðbeiningar, aldrei readiness-liturinn.",
+  en: "Time in long runs (18 s or more without stopping) at match pace — 11 km/h or faster, the slowest tenth of the team's own match long runs — over the last 7 days vs each player's own 28-day base. Jogs (warm-up laps, jogging back between drills) don't count; where pace is unknown (indoors, no GPS) all long runs count. A change-size descriptor (Gabbett 2016), not an injury predictor (Impellizzeri 2020). Sustained running, not sprinting (Buchheit & Laursen 2013). A spike: spread match-pace running over the next sessions. Well below usual: running at match pace in the next session (runs of 18 s+ at 11 km/h or faster) brings him back — unless this is the planned taper. Advisory, never the readiness colour.",
+  is: "Tími í löngum hlaupum (18 sek eða lengur án þess að stoppa) á leikhraða — 11 km/klst eða hraðar, hægasti tíundi hluti langra hlaupa liðsins í leikjum — síðustu 7 daga vs eigin 28 daga grunn hvers leikmanns. Skokk (upphitunarhringir, skokk til baka milli æfinga) telst ekki með; þar sem hraði er óþekktur (innanhúss, ekkert GPS) teljast öll löng hlaup. Lýsing á stærð breytingar (Gabbett 2016), ekki meiðslaspá (Impellizzeri 2020). Samfellt hlaup, ekki sprettir (Buchheit & Laursen 2013). Stökk: dreifðu hlaupum á leikhraða á næstu æfingar. Vel undir venju: hlaup á leikhraða á næstu æfingu (hlaup 18 sek+ á 11 km/klst eða hraðar) kemur honum að venju — nema þetta sé skipulögð niðurtröppun. Til leiðbeiningar, aldrei readiness-liturinn.",
 };
 
 /**
@@ -1410,20 +1420,24 @@ export function deriveLongRunLoadTeamSignal(reads: LongRunLoadLite[]): CoachSign
   const whyEn: string[] = [];
   const whyIs: string[] = [];
   if (strong.length) {
-    whyEn.push(`${strong.length} with a sharp jump in continuous running (×${LONG_RUN_STRONG_RATIO}+ on their 4-week usual): ${firstNames(strong)}`);
-    whyIs.push(`${strong.length} með snarpt stökk í samfelldu hlaupi (×${LONG_RUN_STRONG_RATIO.toString().replace(".", ",")}+ á 4 vikna venju): ${firstNames(strong)}`);
+    const w = longRunWhat(strong);
+    whyEn.push(`${strong.length} with a sharp jump in ${w.en} (×${LONG_RUN_STRONG_RATIO}+ on their 4-week usual): ${firstNames(strong)}`);
+    whyIs.push(`${strong.length} með snarpt stökk í ${w.is} (×${LONG_RUN_STRONG_RATIO.toString().replace(".", ",")}+ á 4 vikna venju): ${firstNames(strong)}`);
   } else if (spikes.length >= 2) {
-    whyEn.push(`${spikes.length} running clearly more than their 4-week usual (×1.3+): ${firstNames(spikes)}`);
-    whyIs.push(`${spikes.length} hlaupa greinilega meira en 4 vikna venjan (×1,3+): ${firstNames(spikes)}`);
+    const w = longRunWhat(spikes);
+    whyEn.push(`${spikes.length} clearly above their 4-week usual in ${w.en} (×1.3+): ${firstNames(spikes)}`);
+    whyIs.push(`${spikes.length} greinilega yfir 4 vikna venju í ${w.is} (×1,3+): ${firstNames(spikes)}`);
   }
   if (deficits.length >= 2) {
-    whyEn.push(`${deficits.length} have run half their usual or less this week, though at training: ${firstNames(deficits)}`);
-    whyIs.push(`${deficits.length} hafa hlaupið helmingi minna en venjulega þessa viku, þótt þeir hafi mætt: ${firstNames(deficits)}`);
+    const w = longRunWhat(deficits);
+    whyEn.push(`${deficits.length} at half their usual or less in ${w.en} this week, though at training: ${firstNames(deficits)}`);
+    whyIs.push(`${deficits.length} með helmingi minna en venjulega í ${w.is} þessa viku, þótt þeir hafi mætt: ${firstNames(deficits)}`);
   }
   if (squadLightWeek) {
     const sq = squadLight[0].squadRatio as number;
-    whyEn.push(`The squad as a whole has run about ×${sq.toFixed(1)} of its 4-week usual this week — a planned light week or an irregular schedule; no one stands out`);
-    whyIs.push(`Hópurinn í heild hefur hlaupið um ×${sq.toFixed(1).replace(".", ",")} af 4 vikna venju þessa viku — skipulögð létt vika eða óregluleg dagskrá; enginn sker sig úr`);
+    const w = longRunWhat(squadLight);
+    whyEn.push(`The squad as a whole is at about ×${sq.toFixed(1)} of its 4-week usual in ${w.en} this week — a planned light week or an irregular schedule; no one stands out`);
+    whyIs.push(`Hópurinn í heild er um ×${sq.toFixed(1).replace(".", ",")} af 4 vikna venju í ${w.is} þessa viku — skipulögð létt vika eða óregluleg dagskrá; enginn sker sig úr`);
   }
 
   return {
@@ -1448,6 +1462,7 @@ export function derivePlayerLongRunLoadSignals(reads: LongRunLoadLite[]): Player
       const ratioEn = `×${r.ratio.toFixed(2)}`;
       const ratioIs = `×${r.ratio.toFixed(2).replace(".", ",")}`;
       const a = minPerDay(r.acuteSecDay), c = minPerDay(r.chronicSecDay);
+      const w = longRunWhat([r]);
       return {
         playerId: r.playerId,
         signal: {
@@ -1456,21 +1471,21 @@ export function derivePlayerLongRunLoadSignals(reads: LongRunLoadLite[]): Player
           label: LONG_RUN_LABEL,
           why: {
             en: [spike
-              ? `Sharp jump in continuous running ${ratioEn} — 7 d ${a}/day vs 28 d ${c}/day`
-              : `Well below his usual continuous running ${ratioEn} — 7 d ${a}/day vs 28 d ${c}/day (at training ${r.presentDays7} of 7 days)`],
+              ? `Sharp jump in ${w.en} ${ratioEn} — 7 d ${a}/day vs 28 d ${c}/day`
+              : `Well below his usual in ${w.en} ${ratioEn} — 7 d ${a}/day vs 28 d ${c}/day (at training ${r.presentDays7} of 7 days)`],
             is: [spike
-              ? `Snarpt stökk í samfelldu hlaupi ${ratioIs} — 7 d ${a.replace(".", ",")}/dag vs 28 d ${c.replace(".", ",")}/dag`
-              : `Vel undir eigin venju í samfelldu hlaupi ${ratioIs} — 7 d ${a.replace(".", ",")}/dag vs 28 d ${c.replace(".", ",")}/dag (mætti ${r.presentDays7} af 7 dögum)`],
+              ? `Snarpt stökk í ${w.is} ${ratioIs} — 7 d ${a.replace(".", ",")}/dag vs 28 d ${c.replace(".", ",")}/dag`
+              : `Vel undir eigin venju í ${w.is} ${ratioIs} — 7 d ${a.replace(".", ",")}/dag vs 28 d ${c.replace(".", ",")}/dag (mætti ${r.presentDays7} af 7 dögum)`],
           },
           confidence: longRunConf([r]),
           counterfactual: spike
             ? {
-              en: "His time in long continuous runs (≥18 s, tempo running) has jumped above his own 4-week base — a change-size descriptor (Gabbett 2016), not an injury verdict. Spread tempo / conditioning running over the next sessions; advisory, never the readiness colour.",
-              is: "Tími hans í löngum samfelldum hlaupum (≥18 sek, tempóhlaup) hefur hoppað yfir eigin 4 vikna grunn — lýsing á stærð breytingar (Gabbett 2016), ekki meiðsladómur. Dreifðu tempó-/þolhlaupi á næstu æfingar; til leiðbeiningar, aldrei readiness-liturinn.",
+              en: "His time in long runs (18 s+ without stopping) at match pace — 11 km/h or faster; jogs don't count — has jumped above his own 4-week base. A change-size descriptor (Gabbett 2016), not an injury verdict. Spread match-pace running over the next sessions; advisory, never the readiness colour.",
+              is: "Tími hans í löngum hlaupum (18 sek+ án þess að stoppa) á leikhraða — 11 km/klst eða hraðar; skokk telst ekki — hefur hoppað yfir eigin 4 vikna grunn. Lýsing á stærð breytingar (Gabbett 2016), ekki meiðsladómur. Dreifðu hlaupum á leikhraða á næstu æfingar; til leiðbeiningar, aldrei readiness-liturinn.",
             }
             : {
-              en: "He trained with the team but ran half his usual continuous running or less this week. A 10–15 min continuous run in the next session brings him back to his base — unless this is the planned taper. Sustained running, not sprinting; advisory, never the readiness colour.",
-              is: "Hann mætti á æfingar en hljóp helmingi minna en venjulega í samfelldu hlaupi þessa viku. 10–15 mín samfellt hlaup á næstu æfingu kemur honum að grunni — nema þetta sé skipulögð niðurtröppun. Samfellt hlaup, ekki sprettir; til leiðbeiningar, aldrei readiness-liturinn.",
+              en: "He trained with the team but did half his usual long running at match pace (18 s+ at 11 km/h or faster) or less this week. Running at match pace in the next session brings him back to his base — unless this is the planned taper. Sustained running, not sprinting; advisory, never the readiness colour.",
+              is: "Hann mætti á æfingar en hljóp helmingi minna en venjulega í löngum hlaupum á leikhraða (18 sek+ á 11 km/klst eða hraðar) þessa viku. Hlaup á leikhraða á næstu æfingu koma honum að grunni — nema þetta sé skipulögð niðurtröppun. Samfellt hlaup, ekki sprettir; til leiðbeiningar, aldrei readiness-liturinn.",
             },
           href: LONG_RUN_HREF,
         },
