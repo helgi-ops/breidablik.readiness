@@ -17,6 +17,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLang } from "@/lib/lang";
+import { usePlan, isFreeLockedHref, eliteFeatureForHref } from "@/lib/micropulse/product";
 import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
 import CoachAdoptionBubble from "@/components/coach/CoachAdoptionBubble";
 import {
@@ -58,6 +59,8 @@ export function CoachIconRail({
   onNavigate?: () => void;
 }) {
   const [lang] = useLang();
+  // Lock glyphs, same rules as the sidebar: FREE lock (freeLock.ts) + plan-gated routes (routeGating.ts).
+  const { freeLocked, hasFeature, loading: planLoading } = usePlan();
   const pathname = usePathname() ?? "";
   const isOnCoach = pathname === "/coach" && currentTab == null;
 
@@ -187,6 +190,8 @@ export function CoachIconRail({
             {open.links.map((l) => {
               const active = isLinkActive(l.href, pathname, currentTab);
               const badge = l.badgeKey === "pending" ? pendingCount : 0;
+              const eliteFeat = eliteFeatureForHref(l.href);
+              const locked = (freeLocked && isFreeLockedHref(l.href)) || (!planLoading && !!eliteFeat && !hasFeature(eliteFeat));
               return (
                 <li key={l.href}>
                   <Link
@@ -196,7 +201,12 @@ export function CoachIconRail({
                       active ? "border-primary bg-primary/5 font-semibold text-primary" : "border-transparent text-slate-700 hover:bg-slate-100"
                     }`}
                   >
-                    <span>{tt(l.label, lang)}</span>
+                    <span className="flex items-center gap-1.5">
+                      {tt(l.label, lang)}
+                      {locked && (
+                        <span className="text-[11px] leading-none text-violet-500" aria-label={lang === "IS" ? "Læstur eiginleiki" : "Locked feature"}>🔒</span>
+                      )}
+                    </span>
                     {badge > 0 && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${active ? "bg-primary/15 text-primary" : "bg-amber-500 text-white"}`}>{badge}</span>}
                   </Link>
                 </li>

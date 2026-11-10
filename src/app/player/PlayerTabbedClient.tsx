@@ -49,6 +49,7 @@ import PlayerSignalPackCard from "@/components/player/PlayerSignalPackCard";
 import PlayerRecoveryTodayCard from "@/components/player/PlayerRecoveryTodayCard";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
+import { isFreeLocked } from "@/lib/micropulse/product/freeLock";
 import { type PublishedSession, SessionCopy, dateLabel, sessionStats } from "@/components/team/sessionShared";
 
 type PlanTier = "FREE" | "PRO" | "ELITE";
@@ -2039,6 +2040,10 @@ const PWA_SECONDARY_TABS = [
   { key: "privacy"  as DevPlayerTab, tabKey: "privacy"  as const, Icon: IconShield,   minTier: "free"  as const, href: null as string | null },
 ];
 
+// FREE clubs (trial over, Nov 2026): these read GPS / match data, which is Pro. Free keeps Today, check-in,
+// sessions, chat, history and privacy. Personal-trainer teams are never locked (see freeLock.ts).
+const FREE_LOCKED_PLAYER_TABS = new Set<DevPlayerTab>(["gamereport", "movement", "stats"]);
+
 // Kept for backwards-compat with anything still importing the old name.
 const PWA_NAV_TAB_KEYS = [...PWA_PRIMARY_TABS, ...PWA_SECONDARY_TABS];
 void PWA_NAV_TAB_KEYS;
@@ -2050,10 +2055,13 @@ function PWABottomNav({
   unreadChatCount = 0,
   hideWellness = false,
   isBasketball = false,
+  freeLocked = false,
 }: {
   activeTab: DevPlayerTab;
   onChange: (tab: DevPlayerTab) => void;
   planTier: PlanTier;
+  /** FREE club team (freeLock.ts): match report, movement and stats are Pro too. */
+  freeLocked?: boolean;
   unreadChatCount?: number;
   /** GPS-only team mode: hide RPE (and any future wellness tabs) from
    *  the bottom nav. The slot stays balanced because primary tabs without
@@ -2077,7 +2085,8 @@ function PWABottomNav({
     (t) => (hideWellness ? t.key !== "rpe" : true) && (t.key === "scouting" ? isBasketball : true),
   );
 
-  function isLocked(tier: string) {
+  function isLocked(tier: string, key?: DevPlayerTab) {
+    if (freeLocked && key && FREE_LOCKED_PLAYER_TABS.has(key)) return true;
     return (tier === "pro" && !isAtLeastPro) || (tier === "elite" && !isElite);
   }
 
@@ -2106,7 +2115,7 @@ function PWABottomNav({
             const { key, tabKey, Icon, minTier, href } = entry;
             const labelOverride = (entry as { labelOverride?: { IS: string; EN: string } }).labelOverride;
             const label = labelOverride ? labelOverride[lang] : (tabs[tabKey] ?? tabKey);
-            const locked = isLocked(minTier);
+            const locked = isLocked(minTier, key);
             const isActive = tabIsActive(key, href);
             const showBadge = key === "chat" && unreadChatCount > 0 && !isActive;
             return (
@@ -2185,7 +2194,7 @@ function PWABottomNav({
                 const { key, tabKey, Icon, minTier, href } = entry;
                 const labelOverride = (entry as { labelOverride?: { IS: string; EN: string } }).labelOverride;
                 const label = labelOverride ? labelOverride[lang] : (tabs[tabKey] ?? tabKey);
-                const locked = isLocked(minTier);
+                const locked = isLocked(minTier, key);
                 const isActive = tabIsActive(key, href);
                 return (
                   <button
@@ -2271,6 +2280,8 @@ export default function DevPlayerClient() {
 
   // ── Plan tier + club branding + player info for chat ──────────────────────────────
   const [planTier, setPlanTier] = useState<PlanTier>("FREE");
+  // Only set once the team row is read, so a failed lookup never locks a paying team (freeLock.ts).
+  const [freeLocked, setFreeLocked] = useState(false);
   const [clubThemeColor, setClubThemeColor] = useState<string | null>(null);
   const [chatPlayerId, setChatPlayerId] = useState<string | null>(null);
   const [chatPlayerName, setChatPlayerName] = useState<string>("Leikmaður");
@@ -2301,12 +2312,14 @@ export default function DevPlayerClient() {
 
       const { data: team } = await supabase
         .from("teams")
-        .select("plan_tier, club_theme_color, sport")
+        .select("plan_tier, club_theme_color, sport, team_type")
         .eq("id", tid)
         .maybeSingle();
 
       if (alive && team) {
         setPlanTier(((team as any).plan_tier as PlanTier) ?? "FREE");
+        const access = team as { plan_tier?: string | null; team_type?: string | null };
+        setFreeLocked(isFreeLocked((access.plan_tier ?? "FREE") as PlanTier, access.team_type ?? null));
         setClubThemeColor((team as any).club_theme_color ?? null);
         setTeamIsBasketball(String((team as any).sport ?? "").toLowerCase() === "basketball");
       }
@@ -2327,7 +2340,7 @@ export default function DevPlayerClient() {
 
   // If on a locked tab, redirect to today
   useEffect(() => {
-    const proOnlyTabs = new Set<DevPlayerTab>(["dashboard", "risk", "rpe", "strength"]);
+    const proOnlyTabs = new Set<DevPlayerTab>(["dashboard", "risk", "rpe", "strength", ...(freeLocked ? FREE_LOCKED_PLAYER_TABS : [])]);
     const eliteOnlyTabs = new Set<DevPlayerTab>(["vald"]);
     const tabLocked =
       (!isAtLeastPro && proOnlyTabs.has(activeTab)) ||
@@ -2338,7 +2351,7 @@ export default function DevPlayerClient() {
       const next = params.toString();
       router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
     }
-  }, [activeTab, isAtLeastPro, isElite, pathname, router, searchParams]);
+  }, [activeTab, isAtLeastPro, isElite, freeLocked, pathname, router, searchParams]);
   const [dailyDecision, setDailyDecision] = useState<NormalizedPlayerDailyDecision>({
     playerState: "GRAY",
     sessionMode: "pending",
@@ -2889,7 +2902,7 @@ export default function DevPlayerClient() {
       </div>
       <PlayerPrivacyConsentPrompt />
       {/* PWA bottom navigation bar */}
-      {isPwa && <PWABottomNav activeTab={activeTab} onChange={setTab} planTier={planTier} unreadChatCount={unreadChatCount} hideWellness={hideWellness} isBasketball={teamIsBasketball} />}
+      {isPwa && <PWABottomNav activeTab={activeTab} onChange={setTab} planTier={planTier} unreadChatCount={unreadChatCount} hideWellness={hideWellness} isBasketball={teamIsBasketball} freeLocked={freeLocked} />}
     </>
   );
 }

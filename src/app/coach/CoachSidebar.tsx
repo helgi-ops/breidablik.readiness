@@ -28,7 +28,7 @@ import { useLang, type Lang } from "@/lib/lang";
 import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
-import { usePlan, eliteFeatureForHref } from "@/lib/micropulse/product";
+import { usePlan, eliteFeatureForHref, isFreeLockedHref } from "@/lib/micropulse/product";
 
 // ─── Bilingual link helper ──────────────────────────────────────────────────
 export type Bi = { EN: string; IS: string };
@@ -580,8 +580,14 @@ export function CoachSidebar({
 
   // ELITE-gated links get a lock glyph (stay visible for discoverability; the
   // click lands on the upgrade wall). Single source of truth = routeGating.ts.
-  const { hasFeature, loading: planLoading } = usePlan();
+  const { hasFeature, loading: planLoading, freeLocked } = usePlan();
   const lockedHrefs = new Set<string>();
+  // FREE clubs: every link the FREE lock walls gets the glyph too (freeLock.ts), including ?tab= links.
+  if (freeLocked) {
+    for (const l of [...communicationLinks, ...loadMonitoringLinks, ...gamesLinks, ...playersLinks, ...movementLinks, ...injuryMonitoringLinks, ...rehabProtocolLinks, ...performanceAnalyticsLinks, ...teamPlanningLinks, ...strengthTrainingLinks, ...programmeLibraryLinks, ...adminLinks]) {
+      if (isFreeLockedHref(l.href)) lockedHrefs.add(l.href);
+    }
+  }
   if (!planLoading) {
     // Includes team-planning links so Periodization Hub (Elite) and Week setup
     // (Pro) get a lock glyph for teams below their required plan.
@@ -751,6 +757,7 @@ export function CoachSidebar({
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
         {!hideWellness && (
           <Section
+            lockedHrefs={lockedHrefs}
             label={lang === "IS" ? "Samskipti" : "Communication"}
             links={communicationLinks}
             pathname={pathname}
@@ -760,6 +767,7 @@ export function CoachSidebar({
           />
         )}
         <Section
+            lockedHrefs={lockedHrefs}
           label={lang === "IS" ? "Álagseftirlit" : "Load Monitoring"}
           links={loadMonitoringForTier}
           pathname={pathname}
@@ -768,6 +776,7 @@ export function CoachSidebar({
           onNavigate={onNavigate}
         />
         <Section
+            lockedHrefs={lockedHrefs}
           label={lang === "IS" ? "Liðs-skipulag" : "Team Planning"}
           links={teamPlanningLinks}
           pathname={pathname}
@@ -809,6 +818,7 @@ export function CoachSidebar({
         )}
         {movementForTier.length > 0 && (
           <Section
+            lockedHrefs={lockedHrefs}
             label={lang === "IS" ? "Hreyfigreining" : "Movement Analysis"}
             links={movementForTier}
             pathname={pathname}
@@ -818,6 +828,7 @@ export function CoachSidebar({
           />
         )}
         <Section
+            lockedHrefs={lockedHrefs}
           label={lang === "IS" ? "Meiðslaeftirlit" : "Injury Monitoring"}
           links={injuryMonitoringForTier}
           pathname={pathname}
@@ -827,6 +838,7 @@ export function CoachSidebar({
         />
         {rehabProtocolForTier.length > 0 && (
           <Section
+            lockedHrefs={lockedHrefs}
             label={lang === "IS" ? "Endurhæfing" : "Rehab Protocols"}
             links={rehabProtocolForTier}
             pathname={pathname}
@@ -856,6 +868,7 @@ export function CoachSidebar({
           lockedHrefs={lockedHrefs}
         />
         <Section
+            lockedHrefs={lockedHrefs}
           label="Admin"
           // KSÍ Report is a football (KSÍ = Icelandic FOOTBALL federation) GPS/IMA call-up dossier —
           // hide it for a basketball team (adminLinks is otherwise rendered without the tier/sport filter).
@@ -868,6 +881,7 @@ export function CoachSidebar({
         />
         {isAdmin && (
           <Section
+            lockedHrefs={lockedHrefs}
             label="MicroPulse"
             links={superAdminLinks}
             pathname={pathname}

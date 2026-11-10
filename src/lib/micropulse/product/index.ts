@@ -22,3 +22,4 @@ export { usePlan } from "./usePlan";
 export type { UsePlanResult } from "./usePlan";
 export { ELITE_ROUTE_RULES, matchEliteRoute, eliteFeatureForHref, pathMatchesPrefix } from "./routeGating";
 export type { EliteRouteRule } from "./routeGating";
+export { isFreeLocked, isFreeLockedPath, isFreeLockedHref, FREE_COACH_ROUTES } from "./freeLock";

@@ -46,13 +46,17 @@ const ELITE_INCREMENTAL_FEATURES: MicroPulseFeatureKey[] = [
   "OPPOSITION_MATCH_ANALYTICS",
   "PLAYER_SEASON_ANALYTICS",
   "VALD_ASSESSMENT_SUITE",
+  // Season macro→meso planning cockpit — Elite-only (Week setup, the executor,
+  // stays Pro+).
+  "PERIODIZATION_HUB",
 ];
 
 // LITE = FREE + the subset of PRO that doesn't require Premium Catapult
-// data (B2-3 efforts or IMU bands). Coach dashboard, RPE/load tabs, week
-// setup, basic GPS load monitoring on standard Catapult Activity Reports
-// — yes. Mechanical Load Index and Metabolic Load Score depend on B2-3
-// efforts → these stay Pro-only and are filtered out of LITE_FEATURES.
+// data (B2-3 efforts or IMU bands). Coach dashboard, RPE/load tabs and
+// basic GPS load monitoring on standard Catapult Activity Reports — yes.
+// Week setup (the week planner) is Pro+, so it is NOT in Lite. Mechanical
+// Load Index and Metabolic Load Score depend on B2-3 efforts → these stay
+// Pro-only and are filtered out of LITE_FEATURES.
 const LITE_INCREMENTAL_FEATURES: MicroPulseFeatureKey[] = [
   "COACH_DASHBOARD",
   "SQUAD_OVERVIEW",
@@ -60,7 +64,7 @@ const LITE_INCREMENTAL_FEATURES: MicroPulseFeatureKey[] = [
   "LOAD_RPE_TAB",
   "GPS_LOAD_MONITORING",  // Volume-axis only on Lite (Gabbett 2016, Malone 2017)
   "YESTERDAY_LOAD",
-  "WEEK_SETUP",
+  // WEEK_SETUP intentionally NOT in Lite — the week planner is Pro+ (see FEATURE_MIN_PLAN).
   "ADAPTIVE_TRAINING_ENGINE",
   "PLAYER_VOLATILITY",
   "EXPLAINABLE_DECISIONS",
@@ -103,10 +107,10 @@ export const FEATURE_MIN_PLAN: Record<MicroPulseFeatureKey, MicroPulsePlanKey> =
   SQUAD_OVERVIEW: "LITE",
   INTELLIGENCE_TAB: "LITE",
   LOAD_RPE_TAB: "LITE",
-  WEEK_SETUP: "LITE",
   VALD_CMJ_MONITORING: "LITE",
-  // Pro-only — requires Premium Catapult (B2-3 efforts + IMU bands)
-  NEURAL_FATIGUE_MODEL: "PRO",
+  // Pro-only
+  WEEK_SETUP: "PRO",               // week planner — Pro and Elite
+  NEURAL_FATIGUE_MODEL: "PRO",     // requires Premium Catapult (B2-3 efforts + IMU bands)
   MECHANICAL_LOAD_INDEX: "PRO",
   METABOLIC_LOAD_SCORE: "PRO",
   PERFORMANCE_INTELLIGENCE: "ELITE",
@@ -123,4 +127,5 @@ export const FEATURE_MIN_PLAN: Record<MicroPulseFeatureKey, MicroPulsePlanKey> =
   OPPOSITION_MATCH_ANALYTICS: "ELITE",
   PLAYER_SEASON_ANALYTICS: "ELITE",
   VALD_ASSESSMENT_SUITE: "ELITE",
+  PERIODIZATION_HUB: "ELITE",      // season macro→meso planning cockpit — Elite only
 };

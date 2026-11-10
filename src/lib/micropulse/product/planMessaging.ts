@@ -38,6 +38,7 @@ const FEATURE_LABELS: Record<MicroPulseFeatureKey, string> = {
   OPPOSITION_MATCH_ANALYTICS: "Match & opponent analytics (StatsBomb / Wyscout)",
   PLAYER_SEASON_ANALYTICS: "Player season & transfer analytics (StatsBomb / Wyscout)",
   VALD_ASSESSMENT_SUITE: "VALD assessment suite — RTP, ForceFrame bands, Load-Velocity",
+  PERIODIZATION_HUB: "Periodization Hub — season macro→meso planning",
 };
 
 const MARKETING_FEATURES: Record<MicroPulsePlanKey, MicroPulseFeatureKey[]> = {
@@ -63,6 +64,7 @@ const MARKETING_FEATURES: Record<MicroPulsePlanKey, MicroPulseFeatureKey[]> = {
     "OPPOSITION_MATCH_ANALYTICS",
     "PLAYER_SEASON_ANALYTICS",
     "VALD_ASSESSMENT_SUITE",
+    "PERIODIZATION_HUB",
     "PERFORMANCE_INTELLIGENCE",
     "INJURY_RISK_MODEL",
     "LOAD_FORECASTING",

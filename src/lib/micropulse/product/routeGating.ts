@@ -1,8 +1,13 @@
 /**
- * ELITE route gating map — the single source of truth for which coach routes
- * require an ELITE plan, shared by the central gate in CoachShell and the lock
- * badges in CoachSidebar. Prefix-matched so dynamic segments (e.g.
- * /coach/rtp/[playerId]) are covered by their base path.
+ * Route gating map — the single source of truth for which coach routes are
+ * plan-gated, shared by the central gate in CoachShell and the lock badges in
+ * CoachSidebar. Prefix-matched so dynamic segments (e.g. /coach/rtp/[playerId])
+ * are covered by their base path.
+ *
+ * Most entries are ELITE (premium data integrations), but the map also carries
+ * sub-elite gates (e.g. Week setup = Pro). The required plan is NOT assumed to be
+ * Elite: callers derive it from FEATURE_MIN_PLAN[rule.feature], and `hasFeature`
+ * does the tier check — so a Pro-minimum rule correctly admits Pro and Elite.
  *
  * These are the premium data-integration surfaces: StatsBomb / Wyscout football
  * analytics + the deep VALD assessment suite. CMJ monitoring is deliberately NOT
@@ -37,12 +42,29 @@ const VALD_DESC: Bilingual = {
   EN: "Return-to-Play assessment, ForceFrame benchmark bands and Load-Velocity profiling. Available on the Elite plan.",
   IS: "Return-to-Play mat, ForceFrame viðmiðunarbönd og kraft-/hraðaprófun. Í boði á Elite-pakkanum.",
 };
+const PERIODIZATION_NAME: Bilingual = { EN: "Periodization Hub", IS: "Tímabilsskipulag" };
+const PERIODIZATION_DESC: Bilingual = {
+  EN: "The season macro→meso planning cockpit that sets the plan Week setup executes. Available on the Elite plan.",
+  IS: "Tímabils-skipulag (macro→meso) sem setur planið sem Vikuskipulag keyrir. Í boði á Elite-pakkanum.",
+};
+const WEEK_SETUP_NAME: Bilingual = { EN: "Week setup", IS: "Vikuskipulag" };
+const WEEK_SETUP_DESC: Bilingual = {
+  EN: "The weekly training planner (microdose, match-week logic, send-to-player). Available on the Pro and Elite plans.",
+  IS: "Vikulegur æfingaskipuleggjari (microdose, leikviku-rökvísi, senda á leikmann). Í boði á Pro- og Elite-pökkunum.",
+};
 
 /**
  * Ordered so the FIRST match wins. Keep base prefixes here; a more specific path
  * is caught by its base (e.g. /coach/rtp catches /coach/rtp/<playerId>).
  */
 export const ELITE_ROUTE_RULES: EliteRouteRule[] = [
+  // Team planning tier gates. These are NOT elite-only — the required plan is
+  // derived from FEATURE_MIN_PLAN[feature] (PERIODIZATION_HUB = Elite, WEEK_SETUP
+  // = Pro), and the upgrade wall / lock badge read that, so the map now covers
+  // sub-elite gates too. Keep the more specific prefix first: /coach/week-setup
+  // and /coach/periodization-hub don't overlap, so order between them is moot.
+  { prefix: "/coach/periodization-hub", feature: "PERIODIZATION_HUB", name: PERIODIZATION_NAME, description: PERIODIZATION_DESC },
+  { prefix: "/coach/week-setup", feature: "WEEK_SETUP", name: WEEK_SETUP_NAME, description: WEEK_SETUP_DESC },
   // Opposition & match analytics (StatsBomb / Wyscout)
   { prefix: "/coach/match-analysis", feature: "OPPOSITION_MATCH_ANALYTICS", name: OPP_NAME, description: OPP_DESC },
   { prefix: "/coach/match-insights", feature: "OPPOSITION_MATCH_ANALYTICS", name: OPP_NAME, description: OPP_DESC },

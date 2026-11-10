@@ -20,7 +20,7 @@ import { CoachIconRail } from "./CoachIconRail";
 import UsageTracker from "@/components/coach/UsageTracker";
 import CoachAdoptionBubble from "@/components/coach/CoachAdoptionBubble";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
-import { usePlan, matchEliteRoute } from "@/lib/micropulse/product";
+import { usePlan, matchEliteRoute, FEATURE_MIN_PLAN, isFreeLockedPath } from "@/lib/micropulse/product";
 import UpgradeWall from "@/components/micropulse/UpgradeWall";
 
 
@@ -73,20 +73,31 @@ function RefreshButton({ lang, className }: { lang: "IS" | "EN"; className?: str
   );
 }
 
+const FREE_WALL_NAME = { EN: "Not on the Free plan", IS: "Ekki í Free-áskrift" };
+const FREE_WALL_DESC = {
+  EN: "Your team is on the Free plan: players' daily check-in, today's readiness, the player list and messages. Load and GPS monitoring, week setup, strength programmes, reports and AI are on Pro and Elite.",
+  IS: "Liðið þitt er á Free-áskrift: dagleg innritun leikmanna, staða dagsins, leikmannalisti og skilaboð. Álags- og GPS-vöktun, vikuskipulag, styrktarprógrömm, skýrslur og gervigreind eru í Pro og Elite.",
+};
+
 export default function CoachShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const currentTab = useUrlTabParam();
   const isDisplayRoute = pathname?.startsWith("/coach/display");
   const [lang] = useLang();
 
-  // ELITE route gating — premium data pages (StatsBomb / Wyscout / deep VALD)
-  // require an Elite plan. Non-Elite teams get a locked upgrade wall in place of
-  // the page (the page's data fetches never run). While the plan resolves we
-  // render the page to avoid a wall-flash for real Elite teams. Advisory pages
-  // and CMJ monitoring are not in the gated set (see routeGating.ts).
-  const { hasFeature, loading: planLoading } = usePlan();
+  // Route gating — plan-gated pages (StatsBomb / Wyscout / deep VALD = Elite;
+  // Periodization Hub = Elite; Week setup = Pro). Teams below the route's
+  // required plan get a locked upgrade wall in place of the page (its data
+  // fetches never run); the wall shows the right tier via FEATURE_MIN_PLAN.
+  // While the plan resolves we render the page to avoid a wall-flash for teams
+  // that do have access. Advisory pages / CMJ monitoring are not gated (see
+  // routeGating.ts).
+  const { hasFeature, loading: planLoading, freeLocked } = usePlan();
   const eliteRule = matchEliteRoute(pathname);
   const walled = !!eliteRule && !planLoading && !hasFeature(eliteRule.feature);
+  // FREE lock: a FREE club keeps Today, players, availability, messages and settings; every other coach page
+  // shows the Pro wall (allow-list in freeLock.ts, so hub pages can't leak the pages they mount).
+  const freeWalled = !walled && freeLocked && isFreeLockedPath(pathname, currentTab);
 
   const [pendingCount, setPendingCount] = useState(0);
   const [notesCount, setNotesCount] = useState(0);
@@ -471,7 +482,9 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
               <PWANotificationPrompt />
             </div>
             {walled && eliteRule ? (
-              <UpgradeWall requiredPlan="ELITE" featureName={eliteRule.name} description={eliteRule.description} />
+              <UpgradeWall requiredPlan={FEATURE_MIN_PLAN[eliteRule.feature]} featureName={eliteRule.name} description={eliteRule.description} />
+            ) : freeWalled ? (
+              <UpgradeWall requiredPlan="PRO" featureName={FREE_WALL_NAME} description={FREE_WALL_DESC} />
             ) : (
               children
             )}

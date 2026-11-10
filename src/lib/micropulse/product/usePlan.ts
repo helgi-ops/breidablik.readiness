@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { hasFeature as _hasFeature, isAtLeastPro as _isAtLeastPro, isElite as _isElite } from "./hasFeature";
 import type { MicroPulseFeatureKey, MicroPulsePlanKey } from "./types";
+import { isFreeLocked } from "./freeLock";
 
 export type UsePlanResult = {
   plan: MicroPulsePlanKey;
@@ -11,6 +12,10 @@ export type UsePlanResult = {
   hasFeature: (feature: MicroPulseFeatureKey) => boolean;
   isAtLeastPro: boolean;
   isElite: boolean;
+  /** teams.team_type of the coach's active team (null until loaded / unknown). */
+  teamType: string | null;
+  /** FREE club team: locked to the FREE feature set (see freeLock.ts). False while loading. */
+  freeLocked: boolean;
 };
 
 const DEFAULT_PLAN: MicroPulsePlanKey = "FREE";
@@ -25,6 +30,10 @@ const DEFAULT_PLAN: MicroPulsePlanKey = "FREE";
  */
 export function usePlan(): UsePlanResult {
   const [plan, setPlan] = useState<MicroPulsePlanKey>(DEFAULT_PLAN);
+  const [teamType, setTeamType] = useState<string | null>(null);
+  // True only when the team row was actually read. A failed lookup falls back to FREE for the old feature
+  // checks, but must never lock a paying team out of the app (freeLocked needs a known team).
+  const [teamKnown, setTeamKnown] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -55,7 +64,7 @@ export function usePlan(): UsePlanResult {
         // Get plan_tier from teams
         const { data: team } = await supabase
           .from("teams")
-          .select("plan_tier")
+          .select("plan_tier, team_type")
           .eq("id", teamId)
           .maybeSingle();
 
@@ -65,6 +74,8 @@ export function usePlan(): UsePlanResult {
 
         if (!cancelled) {
           setPlan(resolved);
+          setTeamType((team?.team_type as string | null) ?? null);
+          setTeamKnown(!!team);
           setLoading(false);
         }
       } catch {
@@ -82,5 +93,7 @@ export function usePlan(): UsePlanResult {
     hasFeature: (feature: MicroPulseFeatureKey) => _hasFeature(plan, feature),
     isAtLeastPro: _isAtLeastPro(plan),
     isElite: _isElite(plan),
+    teamType,
+    freeLocked: !loading && teamKnown && isFreeLocked(plan, teamType),
   };
 }

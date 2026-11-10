@@ -20,6 +20,13 @@ describe("matchEliteRoute", () => {
     expect(matchEliteRoute("/coach/rtp")?.feature).toBe("VALD_ASSESSMENT_SUITE");
     expect(matchEliteRoute("/coach/rtp/6429def5-7816-47c3-bbd5-47b2fe822602")?.feature).toBe("VALD_ASSESSMENT_SUITE");
   });
+  it("gates Periodization Hub (Elite) and Week setup (Pro)", () => {
+    expect(matchEliteRoute("/coach/periodization-hub")?.feature).toBe("PERIODIZATION_HUB");
+    expect(matchEliteRoute("/coach/week-setup")?.feature).toBe("WEEK_SETUP");
+    expect(eliteFeatureForHref("/coach/periodization-hub")).toBe("PERIODIZATION_HUB");
+    expect(eliteFeatureForHref("/coach/week-setup")).toBe("WEEK_SETUP");
+  });
+
   it("does NOT gate excluded / ungated routes", () => {
     for (const p of ["/coach", "/coach/win-factors", "/coach/game-plan-fit", "/coach/readiness-signals", "/coach/reporting-center", "/coach/strength", "/coach/players", null, undefined, ""]) {
       expect(matchEliteRoute(p)).toBeNull();
@@ -57,5 +64,22 @@ describe("new ELITE feature keys — plan gating", () => {
     expect(hasFeature("LITE", "VALD_CMJ_MONITORING")).toBe(true);
     expect(hasFeature("PRO", "VALD_CMJ_MONITORING")).toBe(true);
     expect(hasFeature("FREE", "VALD_CMJ_MONITORING")).toBe(false);
+  });
+});
+
+describe("team-planning tier gates", () => {
+  it("Periodization Hub is Elite-only", () => {
+    expect(FEATURE_MIN_PLAN.PERIODIZATION_HUB).toBe("ELITE");
+    expect(hasFeature("FREE", "PERIODIZATION_HUB")).toBe(false);
+    expect(hasFeature("LITE", "PERIODIZATION_HUB")).toBe(false);
+    expect(hasFeature("PRO", "PERIODIZATION_HUB")).toBe(false);
+    expect(hasFeature("ELITE", "PERIODIZATION_HUB")).toBe(true);
+  });
+  it("Week setup is Pro and Elite (not Free/Lite)", () => {
+    expect(FEATURE_MIN_PLAN.WEEK_SETUP).toBe("PRO");
+    expect(hasFeature("FREE", "WEEK_SETUP")).toBe(false);
+    expect(hasFeature("LITE", "WEEK_SETUP")).toBe(false);
+    expect(hasFeature("PRO", "WEEK_SETUP")).toBe(true);
+    expect(hasFeature("ELITE", "WEEK_SETUP")).toBe(true);
   });
 });
