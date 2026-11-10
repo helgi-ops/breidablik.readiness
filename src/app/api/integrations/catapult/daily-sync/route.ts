@@ -3,18 +3,18 @@ import { getSupabaseServer as getAdminClient } from "@/lib/supabaseServer";
 import { syncCatapultDailyMetrics } from "@/lib/integrations/catapult";
 import { getTeamsWithCatapultCredentials, getConfigFromEnv } from "@/lib/integrations/catapult/api";
 import type { CatapultConfig } from "@/lib/integrations/catapult/api";
+import { isCatapultCronAuthorized } from "@/lib/integrations/catapult/cronAuth";
 import { sendTrainingDataReadyNotification } from "@/lib/push/sendTrainingDataReady";
 import { sendRpeReminderToMissingPlayers } from "@/lib/notifications/sendRpeReminder";
 import { getOperationalTimezone } from "@/lib/notifications/schedule";
 
 export const runtime = "nodejs";
+// The nightly run syncs two days for every Catapult team; give it the full Pro limit.
+export const maxDuration = 300;
 
+/** Cron / script auth (own secret or Vercel's shared CRON_SECRET), see cronAuth.ts. */
 function isAuthorized(request: Request): boolean {
-  const expected = process.env.CATAPULT_CRON_SECRET?.trim();
-  if (!expected) return true;
-  const url = new URL(request.url);
-  const provided = request.headers.get("x-cron-secret") || url.searchParams.get("secret") || "";
-  return provided === expected;
+  return isCatapultCronAuthorized(request);
 }
 
 function env(name: string) {
@@ -138,8 +138,13 @@ async function runSync(
     const url = new URL(request.url);
     const date = explicitDate ?? url.searchParams.get("date");
     const debugIma = url.searchParams.get("debugIma") === "1";
-    const skipPush = url.searchParams.get("skipPush") === "1";
-    const targetDate = date ?? new Date().toISOString().slice(0, 10);
+    // nightly=1 is the 02:00 Vercel cron (vercel.json): it syncs YESTERDAY and the day before (sessions
+    // uploaded to Catapult late) and never sends anything — no player pushes, no RPE reminder, no coach
+    // alerts (targetDate ≠ today skips those blocks; skipPush silences the anomaly push). Coach's call 2026-11-10.
+    const nightly = url.searchParams.get("nightly") === "1";
+    const skipPush = nightly || url.searchParams.get("skipPush") === "1";
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    const targetDate = date ?? (nightly ? dateMinusDaysIso(todayUtc, 1) : todayUtc);
 
     // daysBack lets a coach catch matches/sessions that were uploaded to
     // Catapult AFTER the day they were played. Common case: a Saturday
@@ -153,7 +158,7 @@ async function runSync(
       (url.searchParams.get("daysBack") != null
         ? Number(url.searchParams.get("daysBack"))
         : null);
-    const daysBack = Math.max(0, Math.min(14, Number.isFinite(daysBackParam) ? Number(daysBackParam) : 0));
+    const daysBack = Math.max(0, Math.min(14, Number.isFinite(daysBackParam) ? Number(daysBackParam) : nightly ? 1 : 0));
 
     // Build the list of dates to sync. Order: oldest → newest, so the
     // most recent date's notification push fires last (after the freshest
