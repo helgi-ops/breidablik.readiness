@@ -23,6 +23,8 @@ interface Team {
   created_at: string;
   player_count?: number;
   coach_name?: string | null;
+  /** When an admin last changed the plan (team_plan_changes), null = never logged. */
+  last_plan_change?: string | null;
 }
 
 // The data-source dropdown encodes provider + (for Catapult) the product tier in one value. The
@@ -190,6 +192,17 @@ export default function AdminClient() {
       .select("team_id, full_name, display_name")
       .eq("role", "coach");
 
+    // Last plan change per team (team_plan_changes, admin-only read). Newest first, so the first row per team wins.
+    const { data: planChanges } = await supabase
+      .from("team_plan_changes")
+      .select("team_id, changed_at")
+      .order("changed_at", { ascending: false })
+      .limit(1000);
+    const lastPlanChange: Record<string, string> = {};
+    for (const c of (planChanges ?? []) as Array<{ team_id: string; changed_at: string }>) {
+      if (!lastPlanChange[c.team_id]) lastPlanChange[c.team_id] = c.changed_at;
+    }
+
     // Load players
     const { data: playersRaw } = await supabase
       .from("players")
@@ -223,6 +236,7 @@ export default function AdminClient() {
       created_at: t.created_at,
       player_count: playerCountByTeam[t.id] ?? 0,
       coach_name: coachByTeam[t.id] ?? null,
+      last_plan_change: lastPlanChange[t.id] ?? null,
     }));
 
     const enrichedPlayers: Player[] = (playersRaw ?? []).map((p: any) => ({
@@ -256,12 +270,41 @@ export default function AdminClient() {
 
   // ── Team actions ───────────────────────────────────────────────────────────
 
+  // The plan is the real switch since Nov 2026: FREE locks a club to the Free base, PRO/ELITE opens it. So the
+  // change goes through the admin API, which reads the row back and logs who changed it; the page only says
+  // "saved" when the server confirms it. Cancelling leaves the dropdown on the old plan.
+  function confirmPlanChange(team: Team, tier: PlanTier) {
+    if (tier === team.plan_tier) return;
+    const label = formatTeamLabel(team, "IS");
+    const effect = tier === "FREE"
+      ? "Liðið sér þá aðeins grunninn: innskráningu leikmanna, lit dagsins, leikmannalista og skilaboð. Gagnasókn, sjálfvirkar sendingar og gervigreind stöðvast."
+      : "Allt sem fylgir planinu opnast fyrir liðið strax.";
+    setConfirm({
+      message: `Breyta plani „${label}" úr ${team.plan_tier} í ${tier}? ${effect}`,
+      onConfirm: async () => {
+        setConfirm(null);
+        await updatePlanTier(team.id, tier);
+      },
+    });
+  }
+
   async function updatePlanTier(teamId: string, tier: PlanTier) {
     setBusy(true);
-    const { error } = await supabase.from("teams").update({ plan_tier: tier }).eq("id", teamId);
-    if (error) { showToast("Villa við að uppfæra plan tier"); }
-    else { showToast("Plan tier uppfært"); await loadData(); }
-    setBusy(false);
+    try {
+      const res = await authFetch("/api/admin/team-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ team_id: teamId, plan_tier: tier }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; to?: string; logged?: boolean };
+      if (!res.ok || !j.ok) { showToast(`Plan ekki vistað: ${j.error ?? `villa ${res.status}`}`); return; }
+      showToast(j.logged === false ? `Plan vistað (${j.to}), en breytingin náðist ekki í skrána` : `Plan vistað: ${j.to}`);
+      await loadData();
+    } catch {
+      showToast("Plan ekki vistað: engin tenging við þjóninn");
+    } finally {
+      setBusy(false);
+    }
   }
 
   // Data source — routed through the admin API. The composite value encodes provider + Catapult plan
@@ -617,7 +660,7 @@ export default function AdminClient() {
                     <td className="px-4 py-3">
                       <select
                         value={team.plan_tier}
-                        onChange={(e) => updatePlanTier(team.id, e.target.value as PlanTier)}
+                        onChange={(e) => confirmPlanChange(team, e.target.value as PlanTier)}
                         disabled={busy}
                         className="rounded-md border border-zinc-200 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-zinc-300"
                       >
@@ -625,6 +668,11 @@ export default function AdminClient() {
                         <option value="PRO">PRO</option>
                         <option value="ELITE">ELITE</option>
                       </select>
+                      {team.last_plan_change && (
+                        <div className="mt-1 text-[11px] text-zinc-400">
+                          Breytt {new Date(team.last_plan_change).toLocaleDateString("is-IS", { day: "numeric", month: "short", year: "numeric" })}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <select
