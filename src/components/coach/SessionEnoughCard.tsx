@@ -79,6 +79,12 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
   });
 
   const stdTarget = enough.team.find((t) => t.focus && t.basis === "day_type");
+  // Long runs, shown not judged: "6 per player, 1 at match pace" (squad medians).
+  const lrN = enough.team.find((t) => t.key === "longRuns")?.actual ?? null;
+  const lrMp = enough.team.find((t) => t.key === "longRunsMp")?.actual ?? null;
+  const longRunLine = lrN == null ? null : lrMp == null
+    ? { en: `Long runs: ${lrN} per player, pace unknown (no GPS). Shown, not judged.`, is: `Löng hlaup: ${lrN} á leikmann, hraði óþekktur (ekkert GPS). Sýnt, ekki metið.` }
+    : { en: `Long runs: ${lrN} per player, ${lrMp} at match pace. Shown, not judged: in training most long runs are jogs.`, is: `Löng hlaup: ${lrN} á leikmann, ${lrMp} á leikhraða. Sýnt, ekki metið: á æfingu eru flest löng hlaup skokk.` };
 
   return (
     <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
@@ -88,7 +94,9 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
         {enough.dayType && <span className="rounded-md bg-[#2740e6]/10 px-2 py-0.5 text-xs font-semibold text-[#2740e6]" title={L({ en: "The planned day-type decides which movement types are judged, and how much of a match is expected in accelerations, braking and changes of direction.", is: "Skipulögð dagsgerð ræður hvaða hreyfiþættir eru metnir og hve mikils af leik er vænst í hröðun, hemlun og stefnubreytingum." })}>{L(DAY_TYPE_LABEL[enough.dayType])}</span>}
         {stdTarget?.targetPct != null ? (
           <span className="text-xs text-slate-400" title={L({ en: "The same standard the Meso calendar plans from (Stevens 2017, Martín-García 2018).", is: "Sami staðall og Meso-dagatalið notar (Stevens 2017, Martín-García 2018)." })}>
-            {L({ en: `about ${stdTarget.targetPct}% of a match in accelerations, braking, changes of direction`, is: `um ${stdTarget.targetPct}% af leik í hröðun, hemlun, stefnubreytingum` })}
+            {stdTarget.key === "hsr" || stdTarget.key === "sprint"
+              ? L({ en: `about ${stdTarget.targetPct}% of a match in high-speed running and sprinting`, is: `um ${stdTarget.targetPct}% af leik í háhraðahlaupi og sprettum` })
+              : L({ en: `about ${stdTarget.targetPct}% of a match in accelerations, braking, changes of direction`, is: `um ${stdTarget.targetPct}% af leik í hröðun, hemlun, stefnubreytingum` })}
           </span>
         ) : enough.matchPct != null && (
           <span className="text-xs text-slate-400" title={L({ en: "How big a session this MD-day should be, as a share of a match (Buchheit 2024).", is: "Hve stór æfing þessi MD-dagur á að vera, sem hlutfall af leik (Buchheit 2024)." })}>
@@ -123,8 +131,8 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
         <span className="text-[11px] text-slate-400">{L(enough.confidence.note)}</span>
       </div>
 
-      {/* Bars for the judged movement types — % of the day's target (marker = target). Long-run distance and
-          strides are info only (they include warm-up jogs) and live in the details below. */}
+      {/* Bars for the judged movement types — % of the day's target (marker = target). Long runs are info only
+          (in training most are jogs): one plain line under the bars, the numbers in the details below. */}
       <div className="mt-3 space-y-1.5">
         {enough.team.filter((t) => !isContextOnly(t.key)).map((t) => {
           const judgedVar = !!v && t.focus;
@@ -146,6 +154,8 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
           );
         })}
       </div>
+
+      {longRunLine && <p className="mt-2 text-[12px] text-slate-500" title={L({ en: "Long run = 18 s or more without stopping (IMA Free Running). Match pace = 11 km/h or faster, the slowest tenth of the team's own match long runs.", is: "Langt hlaup = 18 sek eða lengur án þess að stoppa (IMA Free Running). Leikhraði = 11 km/klst eða hraðar, hægasti tíundi hluti langra hlaupa liðsins í leikjum." })}>{L(longRunLine)}</p>}
 
       {/* (2) Behind the numbers */}
       <ShowDetails label={{ EN: "Show details — per player, week so far, how it's calculated", IS: "Sýna nánar — hver leikmaður, vikan, útreikningur" }}>
@@ -212,7 +222,7 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
               ))}
             </tbody>
           </table>
-          <p className="mt-1 text-[10px] text-slate-400">{L({ en: "Each cell: session / the day's target for that player. Colour: green ≥85% of target, amber 60–84%, red <60%. Faded columns are not judged today. Long-run distance and strides are never judged: they include warm-up jogs of several minutes.", is: "Hver reitur: æfing / markmið dagsins fyrir leikmanninn. Litur: grænn ≥85% af markmiði, gulur 60–84%, rauður <60%. Daufir dálkar eru ekki metnir í dag. Vegalengd og skref í löngum hlaupum eru aldrei metin: þau innihalda upphitunarskokk sem varir í nokkrar mínútur." })}</p>
+          <p className="mt-1 text-[10px] text-slate-400">{L({ en: "Each cell: session / the day's target for that player. Colour: green ≥85% of target, amber 60–84%, red <60%. Faded columns are not judged today. Long runs (count, at match pace, distance, strides) are never judged: in training most long runs are jogs.", is: "Hver reitur: æfing / markmið dagsins fyrir leikmanninn. Litur: grænn ≥85% af markmiði, gulur 60–84%, rauður <60%. Daufir dálkar eru ekki metnir í dag. Löng hlaup (fjöldi, á leikhraða, vegalengd, skref) eru aldrei metin: á æfingu eru flest löng hlaup skokk." })}</p>
         </div>
 
         {enough.week && (

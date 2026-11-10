@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildSessionEnough, dayShare, emptyEnough, type EnoughPlayerInput, type VarValues } from "@/lib/micropulse/sessionEnough";
 
-const REF: VarValues = { imaAccel: 70, imaDecel: 100, imaCod: 440, frDistance: 1300, strideHi: 390, longRuns: 11 };
+const REF: VarValues = { imaAccel: 70, imaDecel: 100, imaCod: 440, hsr: 900, sprint: 200, longRuns: 11, longRunsMp: 10, frDistance: 1300, strideHi: 390 };
 
 /** A player who did `f` × the MD-day's target on every variable (optionally overriding some). */
 function player(id: string, md: number, f: number, over: Partial<VarValues> = {}, extra: Partial<EnoughPlayerInput> = {}): EnoughPlayerInput {
@@ -70,7 +70,7 @@ describe("buildSessionEnough", () => {
   it("returns match_day / no_reference states", () => {
     expect(buildSessionEnough({ ...base, isMatchDay: true, players: [] }).state).toBe("match_day");
     const noRef = player("1", 85, 1);
-    noRef.matchRef = { imaAccel: null, imaDecel: null, imaCod: null, frDistance: null, strideHi: null, longRuns: null };
+    noRef.matchRef = { imaAccel: null, imaDecel: null, imaCod: null, hsr: null, sprint: null, longRuns: null, longRunsMp: null, frDistance: null, strideHi: null };
     expect(buildSessionEnough({ ...base, players: [noRef] }).state).toBe("no_reference");
     expect(emptyEnough("not_available").headline.en).toContain("Vector Pro");
   });
@@ -109,6 +109,12 @@ describe("targetShare — one standard for plan and review", () => {
     expect(targetShare("imaDecel", 85, "mixed")).toEqual({ share: 0.6, basis: "day_type" });
     expect(targetShare("imaCod", 32, "activation")).toEqual({ share: CAL_SHARE_IMA.activation.cod, basis: "day_type" });
   });
+  it("high-speed running and sprint with a day-type read the Week plan's CAL_SHARE_HI", () => {
+    expect(targetShare("hsr", 85, "locomotive")).toEqual({ share: 0.45, basis: "day_type" });
+    expect(targetShare("sprint", 60, "mechanical")).toEqual({ share: 0.10, basis: "day_type" });
+    expect(targetShare("hsr", 60, null)).toEqual({ share: dayShare("hsr", 60), basis: "md" });
+  });
+
   it("fast running and strides stay on the MD-day, as does everything with no day-type", () => {
     expect(targetShare("frDistance", 60, "mechanical")).toEqual({ share: dayShare("frDistance", 60), basis: "md" });
     expect(targetShare("strideHi", 85, "mixed")).toEqual({ share: dayShare("strideHi", 85), basis: "md" });
@@ -173,33 +179,49 @@ describe("day-type aware judging", () => {
     expect(accel?.timesMatch).toBe(1.5);
   });
 
-  it("Locomotive day: the running types well under → No", () => {
-    const low = { frDistance: REF.frDistance! * dayShare("frDistance", 85) * 0.4, strideHi: REF.strideHi! * dayShare("strideHi", 85) * 0.4, longRuns: REF.longRuns! * dayShare("longRuns", 85) * 0.4 };
+  it("Locomotive day: judged on high-speed running and sprint vs own match × 45% (CAL_SHARE_HI) → No when well under", () => {
+    const low = { hsr: REF.hsr! * 0.45 * 0.4, sprint: REF.sprint! * 0.45 * 0.4 };
     const r = buildSessionEnough({ ...base, dayType: "locomotive", dayTypeSource: "week_setup", players: ["1", "2", "3"].map((id) => player(id, 85, 1.0, low)) });
     expect(r.verdict).toBe("no");
-    expect(r.team.filter((t) => t.focus).map((t) => t.key)).toEqual(["longRuns"]);
+    expect(r.team.filter((t) => t.focus).map((t) => t.key)).toEqual(["hsr", "sprint"]);
+    expect(r.team.find((t) => t.key === "hsr")?.targetPct).toBe(45);
+    expect(r.team.find((t) => t.key === "hsr")?.basis).toBe("day_type");
+    expect(r.focusNote?.en).toMatch(/high-speed running and sprint distance/);
+    expect(r.focusNote?.en).toMatch(/most of them are jogs/);
   });
 
-  it("Long-run distance and strides are info only: warm-up jogs can't make a session look enough", () => {
-    // Count well under, distance/strides inflated by multi-minute jogs (top band 30–1000 s).
-    const jogs = { frDistance: REF.frDistance! * 2, strideHi: REF.strideHi! * 2, longRuns: REF.longRuns! * dayShare("longRuns", 85) * 0.4 };
+  it("Locomotive day on target at 45% of a match → yes, whatever the MD-day", () => {
+    const on = { hsr: REF.hsr! * 0.45, sprint: REF.sprint! * 0.45 };
+    const r = buildSessionEnough({ ...base, dayType: "locomotive", dayTypeSource: "week_setup", players: ["1", "2", "3"].map((id) => player(id, 85, 1.0, on)) });
+    expect(r.verdict).toBe("yes");
+  });
+
+  it("Long runs are info only: a session full of jogs can't look enough, and few long runs can't make it short", () => {
+    // Twice a match in long runs (jogs), but high-speed running and sprint well under → still No.
+    const jogs = { longRuns: REF.longRuns! * 2, longRunsMp: 0, frDistance: REF.frDistance! * 2, strideHi: REF.strideHi! * 2, hsr: REF.hsr! * 0.45 * 0.4, sprint: REF.sprint! * 0.45 * 0.4 };
     const loco = buildSessionEnough({ ...base, dayType: "locomotive", dayTypeSource: "week_setup", players: ["1", "2", "3"].map((id) => player(id, 85, 1.0, jogs)) });
     expect(loco.verdict).toBe("no");
     expect(loco.overNote).toBeNull();
-    // Mixed: everything on target except distance/strides well under → still yes.
-    const onTarget = { ...atMatchShare(0.6), frDistance: 0, strideHi: 0, longRuns: REF.longRuns! * dayShare("longRuns", 85) };
+    expect(loco.team.find((t) => t.key === "longRuns")?.focus).toBe(false);
+    // Mixed: Acc/Dec/CoD on target, no long runs at all → still yes.
+    const onTarget = { ...atMatchShare(0.6), longRuns: 0, longRunsMp: 0, frDistance: 0, strideHi: 0 };
     const mixed = buildSessionEnough({ ...base, dayType: "mixed", dayTypeSource: "meso", players: ["1", "2", "3"].map((id) => player(id, 85, 1.0, onTarget)) });
     expect(mixed.verdict).toBe("yes");
-    expect(mixed.team.filter((t) => t.focus).map((t) => t.key)).toEqual(["imaAccel", "imaDecel", "imaCod", "longRuns"]);
-    expect(mixed.team.find((t) => t.key === "frDistance")?.focus).toBe(false);
+    expect(mixed.team.filter((t) => t.focus).map((t) => t.key)).toEqual(["imaAccel", "imaDecel", "imaCod"]);
   });
 
-  it("Indoor locomotive day: long-run distance is missing (not 0) and the bout count carries the verdict", () => {
-    const indoor = { frDistance: null, strideHi: REF.strideHi! * dayShare("strideHi", 85), longRuns: REF.longRuns! * dayShare("longRuns", 85) };
+  it("Locomotive day with sprint missing: high-speed running decides alone", () => {
+    const r = buildSessionEnough({ ...base, dayType: "locomotive", dayTypeSource: "week_setup", players: ["1", "2", "3"].map((id) => player(id, 85, 1.0, { hsr: REF.hsr! * 0.45 * 0.7, sprint: null })) });
+    expect(r.team.find((t) => t.key === "sprint")?.status).toBe("na");
+    expect(r.verdict).toBe("mostly");
+  });
+
+  it("Indoor Locomotive day (no GPS): not judged, and says why — not 'too few matches'", () => {
+    const indoor = { hsr: null, sprint: null, longRunsMp: null, frDistance: null };
     const r = buildSessionEnough({ ...base, dayType: "locomotive", dayTypeSource: "week_setup", players: ["1", "2", "3"].map((id) => player(id, 85, 1.0, indoor)) });
-    expect(r.team.find((t) => t.key === "frDistance")?.status).toBe("na");
-    expect(r.team.find((t) => t.key === "longRuns")?.status).toBe("on");
-    expect(r.verdict).toBe("yes");
+    expect(r.verdict).toBeNull();
+    expect(r.headline.en).toMatch(/need GPS/);
+    expect(r.headline.is).toMatch(/innanhúss/);
   });
 
   it("Top-up day: starters recover (not judged), low-minute players judged against the top-up target", () => {

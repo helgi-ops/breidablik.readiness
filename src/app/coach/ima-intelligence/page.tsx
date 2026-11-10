@@ -47,7 +47,6 @@ import { CV_BY_KIND, FLAG_SD, type StrideResult } from "@/lib/micropulse/strideL
 import { freeRunningBandLabel } from "@/lib/integrations/catapult/freeRunningBands";
 import type { TeamLongRuns } from "@/lib/micropulse/longRuns/loader";
 import { longRunBandsTotal, type LongRunBand } from "@/lib/micropulse/longRuns";
-import type { ImaRunStatus } from "@/lib/micropulse/imaRunningLoad";
 
 const I18N = {
   pageTitle: { EN: "IMA Intelligence", IS: "IMA Intelligence" },
@@ -459,16 +458,10 @@ export default function ImaIntelligencePage() {
 // IMA Free Running bands are BOUT-DURATION bands (edges per row: ima_fr_band_bounds), NOT speed — so the card shows,
 // per band, the four variables OpenField reports side by side: runs (Event Count), time (Total Duration),
 // distance (Total Distance, GPS only) and strides (Stride Count). Runs and time come from the inertial sensor and
-// read indoors too. The ACWR on long-run distance is a sustained-running volume-change descriptor (Gabbett
-// 2016), not sprint / HSR load. One card replaces the old "Long-run distance" + "Long runs" pair.
-
-const ACWR_STYLE: Record<ImaRunStatus, { bg: string; text: string; label: (lang: Lang) => string }> = {
-  spike:        { bg: "#f1d3c8", text: "#8c3221", label: (l) => (l === "IS" ? "Spike" : "Spike") },
-  high:         { bg: "#f3e0b4", text: "#9a6410", label: (l) => (l === "IS" ? "Hátt" : "High") },
-  optimal:      { bg: "#d3e8da", text: "#16653d", label: (l) => (l === "IS" ? "Í lagi" : "OK") },
-  low:          { bg: "#E0F2FE", text: "#0369A1", label: (l) => (l === "IS" ? "Lágt" : "Low") },
-  insufficient: { bg: "#efece2", text: "#8b8676", label: (l) => (l === "IS" ? "Byggist" : "Building") },
-};
+// read indoors too. Since 10 Nov 2026 the card leads with PACE: how many long runs were at match pace (11 km/h+)
+// against his match, because in training most long runs are jogs. The old ACWR spike badge is gone: on all long
+// runs it flagged jog days, at match pace it follows match minutes (replay in longRuns/signalLoad.ts).
+// One card replaces the old "Long-run distance" + "Long runs" pair.
 
 const fmtInt = (n: number | null, is: boolean) => (n == null ? "—" : Math.round(n).toLocaleString(is ? "is-IS" : "en-GB"));
 const fmtMinSec = (s: number | null) => (s == null ? "—" : `${Math.floor(Math.round(s) / 60)}:${String(Math.round(s) % 60).padStart(2, "0")}`);
@@ -558,22 +551,28 @@ function LongRunsCard({ date, lang }: { date: string; lang: Lang }) {
   const hasBouts = withBouts.length > 0;
   const mins = (s: number | null) => (s == null ? "—" : `${Math.round(s / 60)} ${is ? "mín" : "min"}`);
   const pctTxt = (p: number | null) => (p == null ? "—" : `${p}%`);
-  const lead = !t || !hasBouts ? null : data!.isMatchDay
-    ? (is ? `Leikdagur: ${t.bouts} löng hlaup hjá ${t.n} leikmönnum.` : `Match day: ${t.bouts} long runs across ${t.n} players.`)
-    : t.pctBouts == null
-      ? (is ? `${t.bouts} löng hlaup hjá ${t.n} leikmönnum; ekkert leikviðmið enn.` : `${t.bouts} long runs across ${t.n} players; no match reference yet.`)
-      : (is ? `Liðið hljóp ${t.bouts} löng hlaup í dag, ${t.pctBouts}% af eigin leik (miðgildi).` : `The squad did ${t.bouts} long runs today, ${t.pctBouts}% of its own match (median).`);
+  // Plain first line, per player (medians): today's long runs and how many at match pace, against his match.
+  const pp = t?.perPlayer;
+  const paceTxt = !pp || pp.mpBouts == null
+    ? (is ? "hraði óþekktur (ekkert GPS)" : "pace unknown (no GPS)")
+    : (is ? `${pp.mpBouts} á leikhraða` : `${pp.mpBouts} at match pace`);
+  const matchTxt = !pp || pp.refBouts == null ? null
+    : pp.refMpBouts == null ? (is ? `Leikur: ${pp.refBouts}.` : `Match: ${pp.refBouts}.`)
+      : (is ? `Leikur: ${pp.refBouts}, ${pp.refMpBouts} á leikhraða.` : `Match: ${pp.refBouts}, ${pp.refMpBouts} at match pace.`);
+  const lead = !t || !hasBouts || !pp ? null : data!.isMatchDay
+    ? (is ? `Leikdagur: ${pp.bouts} löng hlaup á leikmann, ${paceTxt}.` : `Match day: ${pp.bouts} long runs per player, ${paceTxt}.`)
+    : (is ? `Æfing: ${pp.bouts} löng hlaup á leikmann, ${paceTxt}.` : `Training: ${pp.bouts} long runs per player, ${paceTxt}.`) + (matchTxt ? ` ${matchTxt}` : "");
   const facts = !t || !hasBouts ? [] : [
+    is
+      ? "Leikhraði = 11 km/klst eða hraðar, hægasti tíundi hluti langra hlaupa liðsins í leikjum. Á æfingu eru flest löng hlaup skokk (upphitunarhringir, skokk til baka milli æfinga), svo fjöldinn einn segir lítið um hlaupaálag."
+      : "Match pace = 11 km/h or faster, the slowest tenth of the team's own match long runs. In training most long runs are jogs (warm-up laps, jogging back between drills), so the count alone says little about running load.",
+    t.pctBouts == null ? null : (is ? `Allur fjöldi langra hlaupa: ${t.pctBouts}% af eigin leik (miðgildi)` : `All long runs: ${t.pctBouts}% of his own match (median)`),
     is ? `Tími í löngum hlaupum: ${mins(t.seconds)} alls, ${pctTxt(t.pctSeconds)} af leik` : `Time in long runs: ${mins(t.seconds)} in total, ${pctTxt(t.pctSeconds)} of a match`,
     is ? `Meðallengd hlaups: ${t.meanBoutS == null ? "—" : Math.round(t.meanBoutS)} sek` : `Average run: ${t.meanBoutS == null ? "—" : Math.round(t.meanBoutS)} s`,
     t.strideVsMatchPct == null
       ? (is ? (t.gpsToday ? "Skreflengd: of fáar GPS-æfingar enn" : "Skreflengd: engin GPS-mæling í dag") : (t.gpsToday ? "Stride length: too few GPS sessions yet" : "Stride length: no GPS reading today"))
       : (is ? `Skreflengd á æfingum síðustu 8 vikur: ${t.strideVsMatchPct}% af leik (miðgildi)` : `Stride length in training, last 8 weeks: ${t.strideVsMatchPct}% of a match (median)`),
-  ];
-  const spikes = t?.spikes ?? [];
-  const spikeMsg = is
-    ? `${spikes.map((s) => s.name).join(", ")}: snarpt stökk í vegalengd í löngum hlaupum síðustu 7 daga miðað við síðustu 4 vikur. Dreifðu tempó- og úthaldshlaupum yfir vikuna.`
-    : `${spikes.map((s) => s.name).join(", ")}: a sharp jump in long-run distance over the last 7 days against the last 4 weeks. Spread the tempo and conditioning running across the week.`;
+  ].filter((f): f is string => f != null);
   const gpsPlayers = withBouts.filter((p) => p.today.distanceM != null).length;
   const distNote = !t ? "" : !t.gpsToday
     ? (is ? "Engin GPS-mæling í dag (innanhúss): fjöldi, tími og skref sjást, vegalengd og m/skref ekki." : "No GPS reading today (indoors): runs, time and strides show, distance and m/stride don't.")
@@ -622,11 +621,6 @@ function LongRunsCard({ date, lang }: { date: string; lang: Lang }) {
         </>
       ) : (
         <>
-          {spikes.length > 0 && (
-            <div className="mb-3 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
-              <span>⚠</span><span><b>{spikeMsg}</b></span>
-            </div>
-          )}
           <div className="text-[15px] font-semibold text-slate-900">{lead}</div>
           <ul className="mt-2 space-y-0.5 text-[13px] text-slate-700">
             {facts.map((f, i) => <li key={i}>· {f}</li>)}
@@ -648,15 +642,13 @@ function LongRunsCard({ date, lang }: { date: string; lang: Lang }) {
 
           <ShowDetails
             label={{ EN: "Show players", IS: "Sýna leikmenn" }}
-            hint={spikes.length > 0
-              ? { EN: `${withBouts.length} players · ${spikes.length} in a spike`, IS: `${withBouts.length} leikmenn · ${spikes.length} í spike` }
-              : { EN: `${withBouts.length} players`, IS: `${withBouts.length} leikmenn` }}
+            hint={{ EN: `${withBouts.length} players`, IS: `${withBouts.length} leikmenn` }}
             className="mt-3 border-0 bg-transparent p-0"
           >
             <div className="mb-2 text-[11px] text-slate-500">
               {is
-                ? "Smelltu á leikmann til að sjá böndin hans. Viðmið = miðgildi eigin næstum-heilla leikja (≥80 mín; liðsins ef þeir eru færri en 3). Skref/leik = skreflengd í löngum hlaupum á GPS-æfingum síðustu 8 vikna sem hlutfall af eigin leik; þarf 50+ skref. ACWR = bráð (7 d) ÷ langvinn (28 d) vegalengd í löngum hlaupum: breyting á magni samfellds hlaups, ekki sprett- eða HSR-álag og ekki meiðslaspá (Gabbett 2016; Impellizzeri 2020). Lýsandi, aldrei readiness-liturinn. Heimild: Catapult (nóv. 2026): Free Running-bönd eru lengd hvers hlaups í sekúndum, ekki hraði."
-                : "Click a player to see his bands. Reference = median of the player's own near-full matches (≥80 min; the team's when fewer than 3). Stride vs match = stride length in long runs on GPS training days of the last 8 weeks as a share of his own match; needs 50+ strides. ACWR = acute (7 d) ÷ chronic (28 d) long-run distance: a change in sustained-running volume, not sprint or HSR load and not an injury predictor (Gabbett 2016; Impellizzeri 2020). Descriptive, never the readiness colour. Source: Catapult (Nov 2026): Free Running bands are the length of each run in seconds, not speed."}
+                ? "Smelltu á leikmann til að sjá böndin hans. Viðmið = miðgildi eigin næstum-heilla leikja (≥80 mín; liðsins ef þeir eru færri en 3). Skref/leik = skreflengd í löngum hlaupum á GPS-æfingum síðustu 8 vikna sem hlutfall af eigin leik; þarf 50+ skref. Á leikhraða = löng hlaup á 11 km/klst eða hraðar (þarf GPS), og % af sama fjölda í hans leik. Lýsandi, aldrei readiness-liturinn. Heimild: Catapult (nóv. 2026): Free Running-bönd eru lengd hvers hlaups í sekúndum, ekki hraði."
+                : "Click a player to see his bands. Reference = median of the player's own near-full matches (≥80 min; the team's when fewer than 3). Stride vs match = stride length in long runs on GPS training days of the last 8 weeks as a share of his own match; needs 50+ strides. At match pace = long runs at 11 km/h or faster (needs GPS), and % of the same count in his match. Descriptive, never the readiness colour. Source: Catapult (Nov 2026): Free Running bands are the length of each run in seconds, not speed."}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -671,18 +663,17 @@ function LongRunsCard({ date, lang }: { date: string; lang: Lang }) {
                     <th className="px-2 py-1.5 text-right font-medium">{is ? "Skref" : "Strides"}</th>
                     <th className="px-2 py-1.5 text-right font-medium">{is ? "m/skref" : "m/stride"}</th>
                     <th className="px-2 py-1.5 text-right font-medium">{is ? "Skref/leik" : "Stride vs match"}</th>
-                    <th className="px-2 py-1.5 text-center font-medium" title={is ? "Bráð:langvinn hlutfall á vegalengd í löngum hlaupum (ekki sprett-álag)" : "Acute:chronic ratio on long-run distance (not sprint load)"}>ACWR</th>
+                    <th className="px-2 py-1.5 text-right font-medium" title={is ? "Löng hlaup á 11 km/klst eða hraðar (þarf GPS)" : "Long runs at 11 km/h or faster (needs GPS)"}>{is ? "Á leikhraða" : "At match pace"}</th>
+                    <th className="px-2 py-1.5 text-right font-medium">{is ? "% af leik" : "% of match"}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {withBouts.map((p) => {
-                    const st = ACWR_STYLE[p.acwrStatus];
                     const isOpen = open === p.playerId;
-                    const spike = p.acwrStatus === "spike" && p.acwrConfident;
                     return (
                       <React.Fragment key={p.playerId}>
                         <tr
-                          className={`cursor-pointer border-b border-slate-100 hover:bg-slate-50 ${spike ? "bg-rose-50/40" : ""}`}
+                          className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
                           onClick={() => setOpen(isOpen ? null : p.playerId)}
                           aria-expanded={isOpen}
                         >
@@ -695,19 +686,12 @@ function LongRunsCard({ date, lang }: { date: string; lang: Lang }) {
                           <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{fmtInt(p.today.strides, is)}</td>
                           <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{fmtStride(p.today.metresPerStride, is)}</td>
                           <td className="px-2 py-1.5 text-right tabular-nums text-slate-600" title={p.strideTrainM != null && p.strideMatchM != null ? `${p.strideTrainM.toFixed(2)} m ${is ? "á æfingum" : "in training"} · ${p.strideMatchM.toFixed(2)} m ${is ? "í leik" : "in matches"} · ${p.strideTrainDays} ${is ? "æfingar" : "sessions"}` : undefined}>{pctTxt(p.strideVsMatchPct)}</td>
-                          <td className="px-2 py-1.5 text-center">
-                            <span
-                              className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums"
-                              style={{ backgroundColor: st.bg, color: st.text }}
-                              title={p.acwrConfident ? `${st.label(lang)} · ACWR ${p.acwr ?? "—"}` : (is ? "Of fá gögn enn fyrir áreiðanlegt hlutfall" : "Not enough history yet for a reliable ratio")}
-                            >
-                              {p.acwrStatus === "insufficient" || p.acwr == null ? st.label(lang) : p.acwr.toFixed(2)}
-                            </span>
-                          </td>
+                          <td className="px-2 py-1.5 text-right tabular-nums" title={p.today.matchPace == null ? (is ? "Hraði óþekktur (ekkert GPS)" : "Pace unknown (no GPS)") : undefined}>{p.today.matchPace == null ? "—" : p.today.matchPace.bouts}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-slate-600" title={p.ref.mpBouts != null ? `${is ? "Leikur" : "Match"}: ${p.ref.mpBouts}` : undefined}>{pctTxt(p.pctMpBouts)}</td>
                         </tr>
                         {isOpen && (
                           <tr className="border-b border-slate-100 bg-slate-50/60">
-                            <td colSpan={10} className="px-3 py-2">
+                            <td colSpan={11} className="px-3 py-2">
                               <LongRunBandTable bands={p.bands} lang={lang} compact />
                             </td>
                           </tr>

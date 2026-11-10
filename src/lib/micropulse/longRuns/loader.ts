@@ -11,7 +11,10 @@ import "server-only";
  *  - Band check: are this club's Free Running bands time bands at all (bandsAreTimeBands)?
  *  - Per band (5–8): runs · time · distance · strides for each player and summed for the team (longRunBandsOf),
  *    the four variables OpenField reports per band, side by side.
- *  - Volume change: acute:chronic ratio of long-run distance (computeImaRunningLoad, Gabbett 2016), GPS days only.
+ *  - Pace: how many of the long runs were at match pace (11 km/h+, `matchPace`), today and in his matches. In training
+ *    most long runs are jogs, so the count alone says little about running load (docs/ima-free-running-bands.md).
+ *  - No volume-change ratio since 10 Nov 2026: on all long runs it flagged jog days, at match pace it follows match
+ *    minutes (replay in ./signalLoad.ts). The card shows the numbers, not an alarm.
  *
  * READ-ONLY / descriptive — never the readiness colour.
  */
@@ -19,7 +22,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { selectNearFullMatches } from "@/lib/micropulse/periodization";
 import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
-import { computeImaRunningLoad, type ImaDayRow, type ImaRunStatus } from "@/lib/micropulse/imaRunningLoad";
 import { bandsAreTimeBands, hasGpsReading, longRunBandsOf, longRunsOf, sumLongRunBands, type LongRunBand, type LongRuns } from "./index";
 import { frReadingOf } from "@/lib/integrations/catapult/freeRunningBands";
 
@@ -28,7 +30,7 @@ const LOOKBACK_DAYS = 200;        // match reference window (selectNearFullMatch
 const TRAIN_WEEKS = 8;            // training stride-length window
 const OWN_REF_MIN = 3;            // fewer own near-full matches → team reference
 const MIN_STRIDES = 50;           // a stride length needs this many strides in long runs (as strideLength.ts)
-const ACWR_DAYS = 28;             // computeImaRunningLoad's chronic window
+const NO_READING_DAYS = 28;       // window for the "long runs can't be read" list
 
 // All 8 bands + the row's edges: which bands hold runs ≥18 s depends on the edges the row was classified with.
 const BAND_COLS = [1, 2, 3, 4, 5, 6, 7, 8].flatMap((b) => [`ima_fr_band${b}_event_count`, `ima_fr_band${b}_total_duration`, `ima_fr_band${b}_stride_count`, `ima_fr_band${b}_total_distance`]);
@@ -49,7 +51,12 @@ const median = (xs: number[]): number | null => {
 const roundOrNull = (x: number | null): number | null => (x == null ? null : Math.round(x));
 const pct = (a: number | null, ref: number | null): number | null => (a != null && ref != null && ref > 0 ? Math.round((a / ref) * 100) : null);
 
-export type LongRunRef = { bouts: number | null; seconds: number | null; metresPerStride: number | null; nMatches: number; source: "own" | "team" | null };
+export type LongRunRef = {
+  bouts: number | null; seconds: number | null; metresPerStride: number | null;
+  /** Median long runs at match pace in those matches (GPS matches only). */
+  mpBouts: number | null;
+  nMatches: number; source: "own" | "team" | null;
+};
 
 export type PlayerLongRuns = {
   playerId: string; name: string;
@@ -59,10 +66,10 @@ export type PlayerLongRuns = {
   pctBouts: number | null; pctSeconds: number | null;
   /** Training stride length in long runs (median, last 8 weeks, GPS days) as % of the match stride length. */
   strideVsMatchPct: number | null; strideTrainM: number | null; strideMatchM: number | null; strideTrainDays: number;
+  /** Today's long runs at match pace as % of his match's (null = pace unknown or no reference). */
+  pctMpBouts: number | null;
   /** Today's bands 5–8: runs · time · distance (GPS) · strides. */
   bands: LongRunBand[];
-  /** Acute (7 d) : chronic (28 d) long-run distance, GPS days only — a volume-change descriptor, not an injury predictor. */
-  acwr: number | null; acwrStatus: ImaRunStatus; acwrConfident: boolean;
 };
 
 export type TeamLongRuns = {
@@ -77,8 +84,8 @@ export type TeamLongRuns = {
     gpsToday: boolean;
     /** Bands 5–8 summed over the players; distance and m/stride over GPS players only. */
     bands: LongRunBand[];
-    /** Players whose long-run distance ratio reads "spike" on a confident baseline. */
-    spikes: Array<{ playerId: string; name: string; acwr: number }>;
+    /** Per-player medians for the plain first line: today's long runs and those at match pace, and the same in his matches. */
+    perPlayer: { bouts: number | null; mpBouts: number | null; refBouts: number | null; refMpBouts: number | null; nPace: number };
   };
   /**
    * Players whose long runs can't be read in the last 28 days: their sessions were classified with edges
@@ -114,7 +121,7 @@ export async function loadTeamLongRuns(sb: SupabaseClient, teamId: string, date:
   const { data: roster } = await sb.from("players").select("id, full_name").eq("team_id", teamId).eq("is_active", true);
   const players = (roster ?? []) as Array<{ id: string; full_name: string | null }>;
   const playerIds = players.map((p) => p.id);
-  const empty: TeamLongRuns = { date, isMatchDay: false, bandsAreTimeBands: null, players: [], noReading: [], team: { n: 0, bouts: null, seconds: null, meanBoutS: null, pctBouts: null, pctSeconds: null, strideVsMatchPct: null, gpsToday: false, bands: sumLongRunBands([]), spikes: [] } };
+  const empty: TeamLongRuns = { date, isMatchDay: false, bandsAreTimeBands: null, players: [], noReading: [], team: { n: 0, bouts: null, seconds: null, meanBoutS: null, pctBouts: null, pctSeconds: null, strideVsMatchPct: null, gpsToday: false, bands: sumLongRunBands([]), perPlayer: { bouts: null, mpBouts: null, refBouts: null, refMpBouts: null, nPace: 0 } } };
   if (!playerIds.length) return empty;
 
   const from = addDays(date, -LOOKBACK_DAYS);
@@ -132,17 +139,7 @@ export async function loadTeamLongRuns(sb: SupabaseClient, teamId: string, date:
   const isMatchDay = matchSet.has(date);
   const asOfMs = Date.parse(`${date}T00:00:00Z`);
   const trainFrom = addDays(date, -TRAIN_WEEKS * 7);
-  const acwrFrom = addDays(date, -(ACWR_DAYS - 1));
-
-  // Long-run distance per player per GPS day in the 28-day window (indoor days carry no distance → left out = 0).
-  const distRows = new Map<string, ImaDayRow[]>();
-  for (const r of rows) {
-    if (r.date < acwrFrom || !hasGpsReading(r)) continue;
-    const d = longRunsOf(r).distanceM;
-    if (d == null) continue;
-    if (!distRows.has(r.player_id)) distRows.set(r.player_id, []);
-    distRows.get(r.player_id)!.push({ date: r.date, total: d });
-  }
+  const readFrom = addDays(date, -(NO_READING_DAYS - 1));
 
   // Match reference per player (own near-full matches), and the team pool.
   type MRow = { date: string; minutes: number | null; lr: LongRuns };
@@ -167,6 +164,7 @@ export async function loadTeamLongRuns(sb: SupabaseClient, teamId: string, date:
     bouts: median(sel.map((m) => m.lr.bouts).filter((x): x is number => x != null && x > 0)),
     seconds: median(sel.map((m) => m.lr.seconds).filter((x): x is number => x != null && x > 0)),
     metresPerStride: median(sel.filter((m) => (m.lr.strides ?? 0) >= MIN_STRIDES).map((m) => m.lr.metresPerStride).filter((x): x is number => x != null && x > 0)),
+    mpBouts: median(sel.map((m) => m.lr.matchPace?.bouts).filter((x): x is number => x != null)),
     nMatches: sel.length, source,
   });
   const teamRef = refOf(teamPool, "team");
@@ -175,7 +173,7 @@ export async function loadTeamLongRuns(sb: SupabaseClient, teamId: string, date:
   const nameOf = (id: string) => (players.find((p) => p.id === id)?.full_name ?? "—").trim();
   const unread = new Map<string, { reason: "catapult_default" | "unknown_edges"; sessions: number; from: string; to: string }>();
   for (const r of rows) {
-    if (r.date < acwrFrom) continue;
+    if (r.date < readFrom) continue;
     const reading = frReadingOf(r);
     if (reading !== "catapult_default" && reading !== "unknown_edges") continue;
     const u = unread.get(r.player_id);
@@ -191,18 +189,16 @@ export async function loadTeamLongRuns(sb: SupabaseClient, teamId: string, date:
     const today = longRunsOf(r);
     if (today.bouts == null && today.strides == null) continue;
     const own = ownSel.get(r.player_id) ?? [];
-    const ref = own.length >= OWN_REF_MIN ? refOf(own, "own") : teamPool.length ? teamRef : { bouts: null, seconds: null, metresPerStride: null, nMatches: 0, source: null };
+    const ref: LongRunRef = own.length >= OWN_REF_MIN ? refOf(own, "own") : teamPool.length ? teamRef : { bouts: null, seconds: null, metresPerStride: null, mpBouts: null, nMatches: 0, source: null };
     const trainStride = (trainRows.get(r.player_id) ?? []).filter((t) => (t.strides ?? 0) >= MIN_STRIDES && t.metresPerStride != null).map((t) => t.metresPerStride as number);
     const strideTrainM = median(trainStride);
-    const dr = distRows.get(r.player_id) ?? [];
-    const load = dr.length ? computeImaRunningLoad(dr, date) : null;
     out.push({
       playerId: r.player_id, name: (players.find((p) => p.id === r.player_id)?.full_name ?? "—").trim(), today, ref,
       pctBouts: pct(today.bouts, ref.bouts), pctSeconds: pct(today.seconds, ref.seconds),
       strideTrainM, strideMatchM: ref.metresPerStride, strideTrainDays: trainStride.length,
       strideVsMatchPct: pct(strideTrainM, ref.metresPerStride),
+      pctMpBouts: pct(today.matchPace?.bouts ?? null, ref.mpBouts),
       bands: longRunBandsOf(r),
-      acwr: load?.acwr ?? null, acwrStatus: load?.status ?? "insufficient", acwrConfident: load?.confident ?? false,
     });
   }
   out.sort((a, b) => (b.today.bouts ?? -1) - (a.today.bouts ?? -1) || a.name.localeCompare(b.name));
@@ -223,9 +219,18 @@ export async function loadTeamLongRuns(sb: SupabaseClient, teamId: string, date:
       strideVsMatchPct: roundOrNull(median(out.map((p) => p.strideVsMatchPct).filter((x): x is number => x != null))),
       gpsToday: out.some((p) => p.today.distanceM != null),
       bands: sumLongRunBands(out.map((p) => p.bands)),
-      spikes: out.filter((p) => p.acwrStatus === "spike" && p.acwrConfident && p.acwr != null)
-        .map((p) => ({ playerId: p.playerId, name: p.name, acwr: p.acwr as number }))
-        .sort((a, b) => b.acwr - a.acwr),
+      perPlayer: (() => {
+        // Pace needs GPS: the match-pace medians use the players with a pace reading today.
+        const paced = withBouts.filter((p) => p.today.matchPace != null);
+        const med = (xs: Array<number | null | undefined>) => roundOrNull(median(xs.filter((x): x is number => x != null)));
+        return {
+          bouts: med(withBouts.map((p) => p.today.bouts)),
+          mpBouts: med(paced.map((p) => p.today.matchPace?.bouts)),
+          refBouts: med(withBouts.map((p) => p.ref.bouts)),
+          refMpBouts: med(paced.map((p) => p.ref.mpBouts)),
+          nPace: paced.length,
+        };
+      })(),
     },
   };
 }

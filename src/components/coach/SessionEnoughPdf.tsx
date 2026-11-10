@@ -30,15 +30,17 @@ export function SessionEnoughPdfPage({ enough, teamName, sessionDate }: { enough
   const rank: Record<PlayerVerdict, number> = { short: 0, partly: 1, enough: 2, recovery: 3, partial_session: 4, no_data: 5 };
   const players = [...enough.players].sort((a, b) => rank[a.verdict] - rank[b.verdict] || a.name.localeCompare(b.name));
 
+  // Print width: the judged types plus the long-run count and how many at match pace (distance / strides stay on screen).
+  const pdfVars = ENOUGH_VARS.filter((k) => k !== "frDistance" && k !== "strideHi");
   const cols: Col[] = [
     { label: "Player", flex: 1.6 },
-    ...ENOUGH_VARS.map((k): Col => ({ label: `${ENOUGH_LABEL[k].en}${isContextOnly(k) ? " (info only)" : enough.team.find((t) => t.key === k)?.focus === false ? " (not focus)" : ""} (session / target)`, flex: 1.15, align: "right" })),
+    ...pdfVars.map((k): Col => ({ label: `${ENOUGH_LABEL[k].en}${isContextOnly(k) ? " (info only)" : enough.team.find((t) => t.key === k)?.focus === false ? " (not focus)" : ""} (session / target)`, flex: 1.15, align: "right" })),
     { label: "Verdict", width: 66 },
     { label: "Match reference", width: 92 },
   ];
   const rows = players.map((p) => [
     p.name,
-    ...ENOUGH_VARS.map((k) => {
+    ...pdfVars.map((k) => {
       const x = p.byVar[k];
       return (
         <Text key={k} style={[fb(400), { fontSize: 8 }]}>
@@ -106,7 +108,7 @@ export function SessionEnoughPdfPage({ enough, teamName, sessionDate }: { enough
       ) : null}
 
       <Provenance>
-        {`How it's calculated: each player's match reference = median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when fewer than 3). The planned day-type decides what is judged: Mechanical = accelerations, braking, CoD; Locomotive = the number of long continuous runs; Mixed/Activation = accelerations, braking, CoD and the number of long runs; Top-up = starters (60+ min) recover, the rest are judged. It also sets the target for accelerations, braking and CoD, the same standard the Meso calendar plans from: Mechanical 80% of a match, Mixed 60%, Top-up 55%, Locomotive 50%, Activation 38% (studies of elite teams describe this, they don't prove it best; CoD follows the same share). Long-run distance and long-run strides are sized by the MD-day, as is everything with no planned day-type. Enough = ≥85% of target. Movement = IMA accelerations, decelerations, change of direction, distance (m) and strides in long continuous runs of 18 s or more (IMA Free Running). Runs are grouped by how long they lasted, not speed - they are not sprinting. Sources: ${enough.citations.join("; ")}.`}
+        {`How it's calculated: each player's match reference = median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when fewer than 3). The planned day-type decides what is judged: Mechanical, Mixed, Activation = accelerations, braking, CoD; Locomotive = high-speed running and sprint distance (GPS); Top-up = starters (60+ min) recover, the rest are judged. It also sets the target, the same standards the Meso calendar and Week plan plan from: accelerations, braking and CoD Mechanical 80% of a match, Mixed 60%, Top-up 55%, Locomotive 50%, Activation 38%; high-speed running and sprint on a Locomotive day 45% of his own match (studies of elite teams describe this, they don't prove it best; CoD follows the same share). Everything with no planned day-type is sized by the MD-day. Enough = ≥85% of target. Long runs (18 s or more without stopping, IMA Free Running) are shown, never judged: their count, how many were at match pace (11 km/h or faster), distance and strides. In training most long runs are jogs. Sources: ${enough.citations.join("; ")}.`}
       </Provenance>
     </BrandPage>
   );

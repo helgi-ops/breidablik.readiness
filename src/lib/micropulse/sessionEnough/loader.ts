@@ -22,7 +22,7 @@ import { resolveMdContext } from "@/lib/micropulse/loadPlan/forTeam";
 import { mdOffsetForDate } from "@/lib/micropulse/readinessOutlook/assemble";
 import { labelForOffset, mdOffset } from "@/lib/micropulse/periodization/periodizationModel";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
-import { selectNearFullMatches } from "@/lib/micropulse/periodization";
+import { hasNoGpsReading, selectNearFullMatches } from "@/lib/micropulse/periodization";
 import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 import { imaCodTotal } from "@/lib/micropulse/catapultCapability";
@@ -38,7 +38,7 @@ const MIN_TRAIN_MIN = 20;       // shorter rows are not a training session
 const PARTIAL_SHARE = 0.6;      // < 60% of the squad's median duration = shortened session
 const OWN_REF_MIN = 3;          // fewer own near-full matches → use the team reference
 
-const COLS = "player_id, date, source, ima_accel, ima_decel, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, total_distance, ima_fr_band58_total_distance, ima_fr_band_bounds, ima_fr_ge18_event_count, ima_fr_ge18_stride_count, ima_fr_band5_event_count, ima_fr_band6_event_count, ima_fr_band7_event_count, ima_fr_band8_event_count, fmp_total_duration_s, total_player_load, player_load_per_minute, session_duration_minutes";
+const COLS = "player_id, date, source, ima_accel, ima_decel, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, total_distance, ima_fr_band58_total_distance, ima_fr_band_bounds, ima_fr_ge18_event_count, ima_fr_ge18_stride_count, ima_fr_ge18_mp_event_count, velocity_band5_total_distance, velocity_band6_total_distance, ima_fr_band5_event_count, ima_fr_band6_event_count, ima_fr_band7_event_count, ima_fr_band8_event_count, fmp_total_duration_s, total_player_load, player_load_per_minute, session_duration_minutes";
 
 type Row = Record<string, unknown> & { player_id: string; date: string; source: string | null };
 
@@ -54,13 +54,21 @@ const median = (xs: number[]): number | null => {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 
-/** The six IMA variables from one load row. CoD = the six left/right columns (same as post-training/TLYP).
- *  Long-run distance needs GPS: indoors the pod stores 0, which is a missing reading, not a 0 m session. */
+/** The variables from one load row. CoD = the six left/right columns (same as post-training/TLYP).
+ *  Everything built on GPS (HSR, sprint, long-run distance, match pace) needs a GPS reading: indoors the pod stores
+ *  0 or a few metres, which is a missing reading, not a 0 m session. HSR = velocity bands 5+6 and sprint = band 6,
+ *  the same columns the periodization match unit reads, so the target and the session are the same measure. */
 export function varsOf(r: Record<string, unknown>): VarValues {
+  const gpsOk = hasGpsReading(r) && !hasNoGpsReading(num(r.total_player_load), num(r.total_distance));
+  const v5 = gpsOk ? num(r.velocity_band5_total_distance) : null, v6 = gpsOk ? num(r.velocity_band6_total_distance) : null;
   return {
     imaAccel: num(r.ima_accel),
     imaDecel: num(r.ima_decel),
     imaCod: imaCodTotal(r),
+    hsr: v5 != null || v6 != null ? (v5 ?? 0) + (v6 ?? 0) : null,
+    sprint: v6,
+    // Of the long runs, those at match pace (stored by the DB trigger; null = pace unknown).
+    longRunsMp: gpsOk ? num(r.ima_fr_ge18_mp_event_count) : null,
     frDistance: hasGpsReading(r) ? num(r.ima_fr_band58_total_distance) : null,
     // Strides in runs ≥18 s (config-independent tier, backfilled for all history). Was legacy bands 6–8
     // (≥21 s) before the band edges changed on 9 Nov 2026 — the new config has no 21 s edge.

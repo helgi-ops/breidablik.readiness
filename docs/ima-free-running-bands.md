@@ -278,5 +278,13 @@ average 160 s).
   components read match-pace metres (`imaMatchPaceDistance`; 0 is a real value, null = pace unknown → all long runs).
   Replay Breiðablik Jun–Oct 2026, 1,420 player-days: any drift 26.5% → 25.3%, a long-run component flagged
   14.4% → 12.7%, sharp jumps 2.7% → 2.0%. Same sensitivity, now about running at match pace instead of jogs.
+- **"Did we do enough?"** (`sessionEnough`): long runs are never judged any more. Locomotive days are judged on
+  high-speed running (velocity bands 5–6) and sprint distance (band 6) against his own match × 45%
+  (`CAL_SHARE_HI.locomotive`, Stevens 2017, Martín-García 2018: the table the Week plan already plans with); Mixed,
+  Activation and Top-up on accelerations, braking and changes of direction only. The card shows one line, "Long runs:
+  6 per player, 1 at match pace. Shown, not judged". Indoors (no GPS) a Locomotive day says it can't be judged and why.
+- **Long runs card** (IMA Intelligence): first line per player "Training: 10 long runs, 3 at match pace. Match: 15, 14
+  at match pace"; an "At match pace" column (count and % of his match). The ACWR column and the red spike banner are
+  gone, for the reason in the Today-signal section above.
 - **Unchanged:** the match profile (game report, match movement, transfer report), stride quality (length, cadence,
   return-to-training) and indoor running volume keep reading all long runs.

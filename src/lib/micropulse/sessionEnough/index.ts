@@ -6,20 +6,21 @@
  * running hotter than the day calls for is surfaced as a separate note, not as "not enough".
  *
  *   day target = player's match median × share
- *   share = Acc/Dec/CoD with a planned day-type: CAL_SHARE_IMA, the same standard the Meso calendar plans from
- *           long-run distance / strides, or no day-type: (matchPct of the MD-day)^(per-variable exponent)
+ *   share = with a planned day-type: Acc/Dec/CoD from CAL_SHARE_IMA, high-speed running / sprint from CAL_SHARE_HI —
+ *           the same standards the Meso calendar and the Week plan plan from, so plan and review agree;
+ *           no day-type: (matchPct of the MD-day)^(per-variable exponent)
  *
- * Six variables (the coach's IMA set): accelerations, decelerations (braking), change of direction,
- * IMA Free Running long-run distance, long-run strides and long runs as a COUNT of bouts — all three = continuous
- * runs of ≥18 s (config-independent ima_fr_ge18_* tiers; strideHi was legacy bands 6–8 = ≥21 s before Nov 2026).
- * Only four decide the verdict: accelerations, braking, changes of direction and the long-run COUNT. Long-run
- * distance and strides are shown for information (CONTEXT_ONLY_VARS): since Nov 2026 Breiðablik's top Free Running
- * band runs to 1000 s, so warm-up jogs of several minutes count as long runs. Re-synced Jun–Oct 2026, that added
- * +36.5% distance and +31.5% strides on training days but +0.7% in matches, while the count moved +3.5%.
- * The IMA Free Running bands are BOUT-DURATION bands — NOT speed or cadence bands, so these are SUSTAINED-RUNNING volume, not
- * sprinting (docs/ima-free-running-bands.md). Strides and bout counts come from the inertial sensor, so they
- * exist indoors; the distance needs GPS and is missing (not 0) indoors. Field keys `frDistance` / `strideHi`
- * are kept for interface stability.
+ * What decides the verdict depends on the day (DAY_FOCUS): accelerations, braking and changes of direction on
+ * Mechanical / Mixed / Activation / Top-up days; high-speed running and sprint distance (GPS velocity bands 5–6 and 6)
+ * on Locomotive days, against his own match × the Locomotive share (45/45%, Stevens 2017, Martín-García 2018).
+ *
+ * Long runs (IMA Free Running, continuous runs of ≥18 s) are shown, never judged (CONTEXT_ONLY_VARS): the count,
+ * the count AT MATCH PACE (11 km/h+, `longRunsMp`), distance and strides. Since 10 Nov 2026 the count no longer
+ * decides Locomotive days: in training most long runs are jogs (Breiðablik Jun–Oct 2026: 0.7 of 5.6 a training day
+ * at match pace, 14.1 of 15.5 in a near-full match), so "enough long runs" mostly measured warm-up laps and jogging
+ * back between drills, and there is no published training standard for long continuous runs to judge them against.
+ * The IMA Free Running bands are BOUT-DURATION bands, not speed bands (docs/ima-free-running-bands.md). Field keys
+ * `frDistance` / `strideHi` are kept for interface stability.
  *
  * Pure, deterministic, IO-free. Rules decide; no AI. Descriptive — NEVER the readiness colour.
  * Day shares: Stevens 2017 + Martín-García 2018 (Acc/Dec/CoD standard); Buchheit 2024 MD-day load
@@ -31,11 +32,11 @@
 import { statusOf } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import type { PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import { KPI_TAPER_EXPONENT } from "@/lib/micropulse/periodization/plannedVolume";
-import { CAL_SHARE_IMA, CAL_SHARE_IMA_REF, type ImaVar } from "@/lib/micropulse/periodization/imaStandard";
+import { CAL_SHARE_HI, CAL_SHARE_HI_REF, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, type HiVar, type ImaVar } from "@/lib/micropulse/periodization/imaStandard";
 
 export type Bi = { en: string; is: string };
 
-export const ENOUGH_VARS = ["imaAccel", "imaDecel", "imaCod", "frDistance", "strideHi", "longRuns"] as const;
+export const ENOUGH_VARS = ["imaAccel", "imaDecel", "imaCod", "hsr", "sprint", "longRuns", "longRunsMp", "frDistance", "strideHi"] as const;
 export type EnoughVar = (typeof ENOUGH_VARS)[number];
 export type VarValues = Record<EnoughVar, number | null>;
 
@@ -44,7 +45,7 @@ export type VarValues = Record<EnoughVar, number | null>;
  * which a training's warm-up has and a match hardly does, so against the match they would make a session look
  * fuller than it was. The long-run COUNT barely moves (one jog = one run) and stays judged.
  */
-export const CONTEXT_ONLY_VARS: readonly EnoughVar[] = ["frDistance", "strideHi"];
+export const CONTEXT_ONLY_VARS: readonly EnoughVar[] = ["longRuns", "longRunsMp", "frDistance", "strideHi"];
 export const isContextOnly = (k: EnoughVar): boolean => CONTEXT_ONLY_VARS.includes(k);
 /** The variables that can decide a verdict. */
 export const JUDGED_VARS: readonly EnoughVar[] = ENOUGH_VARS.filter((k) => !isContextOnly(k));
@@ -53,9 +54,12 @@ export const ENOUGH_LABEL: Record<EnoughVar, Bi> = {
   imaAccel: { en: "Accelerations", is: "Hraðaaukningar" },
   imaDecel: { en: "Braking", is: "Hemlun" },
   imaCod: { en: "Changes of direction", is: "Stefnubreytingar" },
+  hsr: { en: "High-speed running", is: "Háhraðahlaup" },
+  sprint: { en: "Sprint distance", is: "Sprettvegalengd" },
+  longRuns: { en: "Long runs", is: "Löng hlaup" },
+  longRunsMp: { en: "Long runs at match pace", is: "Löng hlaup á leikhraða" },
   frDistance: { en: "Long-run distance", is: "Vegalengd í löngum hlaupum" },
   strideHi: { en: "Long-run strides", is: "Skref í löngum hlaupum" },
-  longRuns: { en: "Long runs", is: "Löng hlaup" },
 };
 
 /** The sensor term behind each plain label — shown in tooltips / details only. */
@@ -63,9 +67,12 @@ export const ENOUGH_TECH: Record<EnoughVar, string> = {
   imaAccel: "IMA accelerations (count)",
   imaDecel: "IMA decelerations (count)",
   imaCod: "IMA change of direction, left + right, all intensities (count)",
-  frDistance: "IMA Free Running distance in continuous runs ≥18 s (m) — not sprinting",
-  strideHi: "IMA Stride count in continuous runs ≥18 s — not sprint strides",
-  longRuns: "IMA Free Running bouts = number of continuous runs ≥18 s — inertial, so it exists indoors",
+  hsr: "GPS distance in velocity bands 5–6 (m) — high-speed running; needs GPS",
+  sprint: "GPS distance in velocity band 6 (m) — sprinting; needs GPS",
+  longRuns: "IMA Free Running bouts = number of continuous runs ≥18 s, jogs included — inertial, so it exists indoors",
+  longRunsMp: "Of those, runs whose average pace is 11 km/h or faster (ima_fr_ge18_mp_event_count) — needs GPS",
+  frDistance: "IMA Free Running distance in continuous runs ≥18 s (m), jogs included — not sprinting",
+  strideHi: "IMA Stride count in continuous runs ≥18 s, jogs included — not sprint strides",
 };
 
 /** Unit noun for "~N more … per player". */
@@ -73,9 +80,12 @@ export const ENOUGH_UNIT: Record<EnoughVar, Bi> = {
   imaAccel: { en: "accelerations", is: "hraðaaukningar" },
   imaDecel: { en: "braking actions", is: "hemlanir" },
   imaCod: { en: "changes of direction", is: "stefnubreytingar" },
+  hsr: { en: "m of high-speed running", is: "m háhraðahlaups" },
+  sprint: { en: "m of sprinting", is: "m spretthlaups" },
+  longRuns: { en: "long runs", is: "löng hlaup" },
+  longRunsMp: { en: "long runs at match pace", is: "löng hlaup á leikhraða" },
   frDistance: { en: "m in long runs", is: "m í löngum hlaupum" },
   strideHi: { en: "strides in long runs", is: "skref í löngum hlaupum" },
-  longRuns: { en: "long runs", is: "löng hlaup" },
 };
 
 /**
@@ -92,15 +102,18 @@ export const SESSION_SHARE_EXPONENT: Record<EnoughVar, number> = {
   imaAccel: KPI_TAPER_EXPONENT.imaAccel ?? 0.9,
   imaDecel: KPI_TAPER_EXPONENT.imaDecel ?? 1.0,
   imaCod: KPI_TAPER_EXPONENT.imaCod ?? 1.1,
+  hsr: KPI_TAPER_EXPONENT.velocityBand5 ?? 1.5,
+  sprint: KPI_TAPER_EXPONENT.velocityBand6 ?? 2.2,
+  longRuns: 1.0,
+  longRunsMp: 1.0,
   frDistance: KPI_TAPER_EXPONENT.imaFrDistance ?? 1.2,
   strideHi: KPI_TAPER_EXPONENT.imaStrideHi ?? 0.7,
-  longRuns: 1.0,
 };
 
 export const ENOUGH_CITATIONS = [
   "Buchheit et al. 2024 — MD-day load as a share of the match",
   "Martín-García et al. 2018 — load across the microcycle",
-  "Stevens et al. 2017 — training load relative to match load",
+  "Stevens et al. 2017 — training load relative to match load (incl. high-speed running per MD-day)",
   "Harper & McBurnie 2021 — braking / change-of-direction loading",
   "Training:match ratios — PMC6747517",
 ];
@@ -113,11 +126,10 @@ export function dayShare(key: EnoughVar, matchPct: number): number {
 
 /**
  * The planned day-type (from the coach's Week setup / Meso block). It decides WHICH movement types a
- * session is judged on, and HOW BIG the Acc/Dec/CoD target is (see targetShare). Mechanical days are about braking /
- * accelerations / changes of direction (running isn't the job); Locomotive days are about running volume
- * (the number of long continuous runs); Mixed and Activation judge all four judged variables. Top-up (MD+1):
- * starters recover, low-minute players are judged against a top-up target. Long-run distance / strides are never
- * judged (CONTEXT_ONLY_VARS).
+ * session is judged on, and HOW BIG the target is (see targetShare). Mechanical, Mixed and Activation days are
+ * judged on braking / accelerations / changes of direction; Locomotive days on high-speed running and sprint
+ * distance (running is the job). Top-up (MD+1): starters recover, low-minute players are judged against a top-up
+ * target. Long runs are never judged (CONTEXT_ONLY_VARS).
  */
 export type EnoughDayType = "mechanical" | "locomotive" | "mixed" | "activation" | "topup";
 export const DAY_TYPE_LABEL: Record<EnoughDayType, Bi> = {
@@ -127,10 +139,11 @@ export const DAY_TYPE_LABEL: Record<EnoughDayType, Bi> = {
   activation: { en: "Activation", is: "Virkjun" },
   topup: { en: "Top-up", is: "Uppbót" },
 };
+const MECHANICAL_VARS: readonly EnoughVar[] = ["imaAccel", "imaDecel", "imaCod"];
 export const DAY_FOCUS: Record<EnoughDayType, readonly EnoughVar[]> = {
-  mechanical: ["imaAccel", "imaDecel", "imaCod"],
-  locomotive: ["longRuns"],
-  mixed: JUDGED_VARS, activation: JUDGED_VARS, topup: JUDGED_VARS,
+  mechanical: MECHANICAL_VARS,
+  locomotive: ["hsr", "sprint"],
+  mixed: MECHANICAL_VARS, activation: MECHANICAL_VARS, topup: MECHANICAL_VARS,
 };
 /** A planned day-type from a Meso focus label / Week-setup stimulus / legacy intent token. Pure. */
 export function dayTypeFromText(text: string | null | undefined): EnoughDayType | null {
@@ -146,21 +159,25 @@ export function dayTypeFromText(text: string | null | undefined): EnoughDayType 
 
 /** The Acc/Dec/CoD variables, which share the Meso calendar's research standard. */
 const IMA_STANDARD_VAR: Partial<Record<EnoughVar, ImaVar>> = { imaAccel: "accel", imaDecel: "decel", imaCod: "cod" };
+/** High-speed running and sprint, which share the Week plan's standard (CAL_SHARE_HI). */
+const HI_STANDARD_VAR: Partial<Record<EnoughVar, HiVar>> = { hsr: "hsr", sprint: "sprint" };
 export type TargetBasis = "day_type" | "md";
 
 /**
  * The share of a match this session should deliver for one variable, and what set it. Acc/Dec/CoD with a
- * planned day-type read the same CAL_SHARE_IMA the Meso calendar plans from, so plan and review agree. Long-run
- * distance and strides stay on the MD-day taper (the calendar's running shares are not research-anchored yet),
+ * planned day-type read the same CAL_SHARE_IMA the Meso calendar plans from, high-speed running and sprint the
+ * CAL_SHARE_HI the Week plan plans from, so plan and review agree. Long runs stay on the MD-day taper (shown only),
  * as does everything on a day with no planned day-type. Pure.
  */
 export function targetShare(key: EnoughVar, matchPct: number, dayType: EnoughDayType | null): { share: number; basis: TargetBasis } {
   const v = IMA_STANDARD_VAR[key];
   if (v && dayType) return { share: CAL_SHARE_IMA[dayType][v], basis: "day_type" };
+  const h = HI_STANDARD_VAR[key];
+  if (h && dayType) return { share: CAL_SHARE_HI[dayType][h], basis: "day_type" };
   return { share: dayShare(key, matchPct), basis: "md" };
 }
 
-/** Long-run distance / strides target for low-minute players on MD+1 (share of a match). Acc/Dec/CoD use CAL_SHARE_IMA.topup. */
+/** Long-run target for low-minute players on MD+1 (share of a match; shown only). Acc/Dec/CoD use CAL_SHARE_IMA.topup, HSR / sprint CAL_SHARE_HI.topup. */
 export const TOPUP_MATCH_PCT = 40;
 /** Minutes in the last match at/above which a player is a starter recovering on a top-up day. */
 export const STARTER_MINUTES = 60;
@@ -192,7 +209,7 @@ export type EnoughInput = {
   players: EnoughPlayerInput[];
   /** Each training day since the last match, incl. this session (for "week so far"). */
   weekDays?: Array<{ matchPct: number; dayType: EnoughDayType | null }> | null;
-  /** The planned day-type and where it came from (null = unknown: all six judged, MD-only). */
+  /** The planned day-type and where it came from (null = unknown: Acc/Dec/CoD judged, MD-only). */
   dayType?: EnoughDayType | null;
   dayTypeSource?: "week_setup" | "meso" | "md" | null;
 };
@@ -231,10 +248,10 @@ export type SessionEnough = {
   sessionDate: string | null;
   mdLabel: string | null;
   matchPct: number | null;
-  /** The planned day-type used to pick the judged movement types (null = all six, MD-only). */
+  /** The planned day-type used to pick the judged movement types (null = Acc/Dec/CoD, MD-only). */
   dayType: EnoughDayType | null;
   dayTypeSource: "week_setup" | "meso" | "md" | null;
-  /** One plain line on what today's day-type is judged on (null when all six / unknown). */
+  /** One plain line on what today's day-type is judged on (null when unknown). */
   focusNote: Bi | null;
   verdict: TeamVerdict | null;
   headline: Bi;
@@ -263,8 +280,8 @@ const listBi = (keys: EnoughVar[], lang: "en" | "is"): string => {
 };
 
 /**
- * Verdict from a set of per-variable statuses — same rule for a player and for the team. A day that judges a
- * single variable (Locomotive: the long-run count) needs only that one: under → partly, well under → short.
+ * Verdict from a set of per-variable statuses — same rule for a player and for the team. When only one variable
+ * could be judged (Locomotive with no sprint reading) it decides alone: under → partly, well under → short.
  */
 function verdictOf(statuses: PvaStatus[], minJudged = 2): "enough" | "partly" | "short" | null {
   const judged = statuses.filter((s) => s !== "na");
@@ -315,10 +332,11 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   const dayType = input.dayType ?? null;
   const isTopup = dayType === "topup";
   // Top-up: low-minute players are judged against the top-up target, not the MD+1 recovery level
-  // (Acc/Dec/CoD via CAL_SHARE_IMA.topup in targetShare; long runs / strides via TOPUP_MATCH_PCT).
+  // (Acc/Dec/CoD via CAL_SHARE_IMA.topup, HSR / sprint via CAL_SHARE_HI.topup in targetShare; long runs via TOPUP_MATCH_PCT).
   const matchPct = isTopup ? Math.max(input.matchPct ?? 0, TOPUP_MATCH_PCT) : input.matchPct;
   const focusSet = new Set<EnoughVar>(DAY_FOCUS[dayType ?? "mixed"]);
-  const minJudged = Math.min(2, focusSet.size);
+  // Three judged types need two readings; Locomotive's pair (HSR, sprint) can stand on one.
+  const minJudged = focusSet.size >= 3 ? 2 : 1;
   const dtLabel = dayType ? DAY_TYPE_LABEL[dayType] : null;
   const md = [mdLabel ?? "", dtLabel ? dtLabel.en : ""].filter(Boolean).join(" ");
   const mdIs = [mdLabel ?? "", dtLabel ? dtLabel.is : ""].filter(Boolean).join(" ");
@@ -340,13 +358,15 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   const recoveringN = players.filter((p) => p.recovering).length;
   const stdPct = (t: EnoughDayType) => Math.round(CAL_SHARE_IMA[t].accel * 100);
   const stdRange = (t: EnoughDayType) => `${Math.round(CAL_SHARE_IMA_REF[t].range[0] * 100)}–${Math.round(CAL_SHARE_IMA_REF[t].range[1] * 100)}%`;
+  const hiPct = (v: HiVar) => Math.round(CAL_SHARE_HI.locomotive[v] * 100);
+  const hiRange = (v: HiVar) => `${Math.round(CAL_SHARE_HI_REF.locomotive[v].range[0] * 100)}–${Math.round(CAL_SHARE_HI_REF.locomotive[v].range[1] * 100)}%`;
   const topupTarget: Bi = { en: `~${stdPct("topup")}% of a match in accelerations, braking and changes of direction`, is: `~${stdPct("topup")}% af leik í hröðun, hemlun og stefnubreytingum` };
   const focusNote: Bi | null = dayType === "mechanical"
     ? { en: `Mechanical day: judged on accelerations, braking and changes of direction, against about ${stdPct("mechanical")}% of a match (published range ${stdRange("mechanical")}). Running isn't the job today.`, is: `Mechanical-dagur: metið á hröðun, hemlun og stefnubreytingum, á móti um ${stdPct("mechanical")}% af leik (birt bil ${stdRange("mechanical")}). Hlaup er ekki verkefni dagsins.` }
     : dayType === "locomotive"
-      ? { en: "Locomotive day: judged on the number of long continuous runs. Braking and cutting aren't the job today.", is: "Locomotive-dagur: metið á fjölda langra samfelldra hlaupa. Hemlun og stefnubreytingar eru ekki verkefni dagsins." }
+      ? { en: `Locomotive day: judged on high-speed running and sprint distance, against about ${hiPct("hsr")}% of his own match (published range ${hiRange("hsr")}). Long runs are shown, not judged: in training most of them are jogs.`, is: `Locomotive-dagur: metið á háhraðahlaupi og sprettvegalengd, á móti um ${hiPct("hsr")}% af hans eigin leik (birt bil ${hiRange("hsr")}). Löng hlaup eru sýnd en ekki metin: á æfingu eru flest þeirra skokk.` }
       : dayType === "mixed" || dayType === "activation"
-        ? { en: `${DAY_TYPE_LABEL[dayType].en} day: accelerations, braking and changes of direction are judged against about ${stdPct(dayType)}% of a match (published range ${stdRange(dayType)}); the number of long runs against the MD-day.`, is: `${DAY_TYPE_LABEL[dayType].is}-dagur: hröðun, hemlun og stefnubreytingar eru metnar á móti um ${stdPct(dayType)}% af leik (birt bil ${stdRange(dayType)}); fjöldi langra hlaupa á móti MD-deginum.` }
+        ? { en: `${DAY_TYPE_LABEL[dayType].en} day: accelerations, braking and changes of direction are judged against about ${stdPct(dayType)}% of a match (published range ${stdRange(dayType)}).`, is: `${DAY_TYPE_LABEL[dayType].is}-dagur: hröðun, hemlun og stefnubreytingar eru metnar á móti um ${stdPct(dayType)}% af leik (birt bil ${stdRange(dayType)}).` }
       : isTopup && recoveringN === 0
         ? { en: `Top-up day: the players who trained are judged against a top-up target (${topupTarget.en}); starters (${STARTER_MINUTES}+ min last match) would be recovering.`, is: `Uppbótardagur: þeir sem æfðu eru metnir á móti uppbótarmarkmiði (${topupTarget.is}); byrjunarlið (${STARTER_MINUTES}+ mín í síðasta leik) væri í endurheimt.` }
       : isTopup
@@ -373,7 +393,7 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   const level: SessionEnough["confidence"]["level"] = cov >= 0.6 && ownShare >= 0.6 && input.mdSource ? "high" : cov >= 0.35 && ownShare >= 0.3 ? "moderate" : "low";
   const mdSrc: Bi = input.mdSource === "week_setup" ? { en: "MD-day from your week setup", is: "MD-dagur úr vikuskipulagi" }
     : input.mdSource === "fixtures" ? { en: "MD-day from the fixture list", is: "MD-dagur úr leikjaplani" } : { en: "no MD-day", is: "enginn MD-dagur" };
-  const dtSrc: Bi = !dtLabel ? { en: "no planned day-type (all six judged)", is: "engin skipulögð dagsgerð (allir sex metnir)" }
+  const dtSrc: Bi = !dtLabel ? { en: "no planned day-type (accelerations, braking and changes of direction judged)", is: "engin skipulögð dagsgerð (hröðun, hemlun og stefnubreytingar metnar)" }
     : input.dayTypeSource === "week_setup" ? { en: `${dtLabel.en} from your week setup`, is: `${dtLabel.is} úr vikuskipulagi` }
     : input.dayTypeSource === "meso" ? { en: `${dtLabel.en} from the Meso plan`, is: `${dtLabel.is} úr Meso-áætlun` }
     : { en: `${dtLabel.en} (MD+1 default)`, is: `${dtLabel.is} (sjálfgefið á MD+1)` };
@@ -406,7 +426,15 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
 
   // ── Team verdict ────────────────────────────────────────────────────────────
   const tv = verdictOf(team.filter((t) => t.focus).map((t) => t.status), minJudged);
-  if (!tv) return { ...emptyEnough("no_reference", { sessionDate, mdLabel, squad }), team, players, confidence, dayType, dayTypeSource: input.dayTypeSource ?? null, focusNote };
+  if (!tv) {
+    const out = { ...emptyEnough("no_reference", { sessionDate, mdLabel, squad }), team, players, confidence, dayType, dayTypeSource: input.dayTypeSource ?? null, focusNote };
+    // Locomotive with no GPS (indoors): HSR / sprint can't be read, which is not the same as "no match data".
+    const noGps = dayType === "locomotive" && team.filter((t) => t.focus).every((t) => t.actual == null);
+    return noGps ? { ...out, headline: {
+      en: "Not judged — a Locomotive day is judged on high-speed running and sprinting, which need GPS, and this session has no GPS reading (indoors).",
+      is: "Ekki metið — Locomotive-dagur er metinn á háhraðahlaupi og sprettum, sem þurfa GPS, og þessi æfing hefur ekkert GPS (innanhúss).",
+    } } : out;
+  }
   const verdict: TeamVerdict = tv === "enough" ? "yes" : tv === "partly" ? "mostly" : "no";
   const shortVars = team.filter((t) => t.focus && isShort(t.status)).sort((a, b) => (a.pctOfTarget ?? 0) - (b.pctOfTarget ?? 0));
   const judgedVars = team.filter((t) => t.focus && t.status !== "na");
