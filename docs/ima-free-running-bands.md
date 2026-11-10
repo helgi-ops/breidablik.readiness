@@ -204,3 +204,21 @@ Code:
 - Removed: `LONG_RUN_BANDS`, `ImaRunningLoad.dominantBand` (and `dominant_band` on the unused ima-run-distance route).
   `sumBands58` in sync stays as a provisional value; the trigger overwrites it.
 - `scripts/backfill-ima-from-feb.sh` no longer carries a fallback secret; it needs `CATAPULT_CRON_SECRET` in the env.
+
+## First reprocessed session: 24 Oct 2026 (10 Nov 2026)
+
+Catapult reprocessed Breiðablik vs KR (24 Oct 2026) with every athlete on the new edges. Compared against a full copy
+taken before (Catapult API payload + `archive.pled_20261024_before_reprocess`):
+
+- Runs ≥18 s and ≥24 s (count, time, distance) identical for the 13 players who were on the legacy edges. Total runs
+  and total run time identical, so nothing was lost above the old 100 s top edge.
+- The two players who were on the 3-band default now read (8 and 5 runs ≥18 s) instead of "no reading".
+- Everything else MicroPulse stores moved by 0.5% or less (session end re-trimmed by 1 s, HR zones +0.1 s). Raw keys
+  MicroPulse does not read moved more (acceleration-band distance/duration, non-gen2 effort counts filled in).
+
+Trigger fix (`20261110100000_ima_fr_upsert_redetect.sql`): on an upsert, Postgres runs the BEFORE INSERT half of the
+trigger first, so the UPDATE half saw already-detected edges and labelled them `writer`. Edges were right, but
+`writer` rows are never a player's reference row and an `unknown` row would have got tiers. Now an UPDATE that brings
+new edges detects again from the row's data; it is `writer` only when the edges disagree with the data (estimate-pod).
+A partial upsert that sends `ima_fr_band_bounds = null` without the band columns would still detect from too little
+data in the INSERT half; the Catapult sync always sends every band column.
