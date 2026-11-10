@@ -5,7 +5,7 @@ const h = vi.hoisted(() => ({
   wp: null as { day_type: string } | null,
   // Individualised by default: that is the path that builds + persists per player. Standard is
   // covered by its own test below (it stands aside / skips, so it must NOT build+persist generics).
-  teams: [{ id: "t1", strength_send_mode: "individualised", strength_auto_send: true }] as unknown[],
+  teams: [{ id: "t1", strength_send_mode: "individualised", strength_auto_send: true, plan_tier: "PRO" }] as unknown[],
   players: [{ id: "p1", full_name: "P One" }] as unknown[],
 }));
 
@@ -49,7 +49,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env.CRON_SECRET = CRON;
   h.wp = { day_type: "TRAIN" };
-  h.teams = [{ id: "t1", strength_send_mode: "individualised", strength_auto_send: true }];
+  h.teams = [{ id: "t1", strength_send_mode: "individualised", strength_auto_send: true, plan_tier: "PRO" }];
   coversMock.mockResolvedValue(false);
 });
 
@@ -71,6 +71,18 @@ describe("strength auto-send — never on a rest/unplanned day", () => {
     expect(persistMock).not.toHaveBeenCalled();
   });
 
+  it("never sends to a FREE club (trial over); a FREE personal-trainer practice still gets its send", async () => {
+    h.wp = { day_type: "TRAIN" };
+    h.teams = [{ id: "t1", strength_send_mode: "individualised", strength_auto_send: true, plan_tier: "FREE", team_type: "club_team" }];
+    await GET(req());
+    expect(buildMock).not.toHaveBeenCalled();
+    expect(persistMock).not.toHaveBeenCalled();
+
+    h.teams = [{ id: "t1", strength_send_mode: "individualised", strength_auto_send: true, plan_tier: "FREE", team_type: "personal_trainer" }];
+    await GET(req());
+    expect(buildMock).toHaveBeenCalledTimes(1);
+  });
+
   it("sends on a planned training day (persists an origin='auto' override)", async () => {
     h.wp = { day_type: "TRAIN" };
     const res = await GET(req());
@@ -80,7 +92,7 @@ describe("strength auto-send — never on a rest/unplanned day", () => {
   });
 
   it("Standard team with no covering Custom Programme: skips — never ships the generic template", async () => {
-    h.teams = [{ id: "t1", strength_send_mode: "standard", strength_auto_send: true }];
+    h.teams = [{ id: "t1", strength_send_mode: "standard", strength_auto_send: true, plan_tier: "PRO" }];
     coversMock.mockResolvedValue(false);
     h.wp = { day_type: "TRAIN" };
     const res = await GET(req());
@@ -93,7 +105,7 @@ describe("strength auto-send — never on a rest/unplanned day", () => {
   });
 
   it("Standard team whose Custom Programme covers the day: stands aside (no engine override)", async () => {
-    h.teams = [{ id: "t1", strength_send_mode: "standard", strength_auto_send: true }];
+    h.teams = [{ id: "t1", strength_send_mode: "standard", strength_auto_send: true, plan_tier: "PRO" }];
     coversMock.mockResolvedValue(true);
     h.wp = { day_type: "TRAIN" };
     const res = await GET(req());

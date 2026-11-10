@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
+import { getFreeLockedTeamIds } from "@/lib/micropulse/elite";
 
 /**
  * Week-setup reminder — a morning nudge to the coach when this week's plan hasn't
@@ -78,7 +79,8 @@ export async function runWeekSetupReminder(
     .from("teams")
     .select("id")
     .eq("strength_auto_send", true);
-  const teamRows = (teams ?? []) as Array<{ id: string }>;
+  const freeLocked = await getFreeLockedTeamIds(sb); // FREE clubs get no auto-send, so no reminder either
+  const teamRows = ((teams ?? []) as Array<{ id: string }>).filter((t) => !freeLocked.has(t.id));
 
   for (const team of teamRows) {
     res.teamsChecked++;

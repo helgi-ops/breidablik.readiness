@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServer as getAdminClient } from "@/lib/supabaseServer";
 import { syncBasketballTeam } from "@/lib/integrations/basketball/sync";
+import { getFreeLockedTeamIds } from "@/lib/micropulse/elite";
 
 export const runtime = "nodejs";
 
@@ -60,7 +61,8 @@ async function run(request: Request) {
     .eq("enabled", true);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-  const teamIds = (configs ?? []).map((c) => (c as { team_id: string }).team_id);
+  const freeLocked = await getFreeLockedTeamIds(sb); // FREE clubs are not synced
+  const teamIds = (configs ?? []).map((c) => (c as { team_id: string }).team_id).filter((id) => !freeLocked.has(id));
   const results = [];
   for (const teamId of teamIds) {
     try {

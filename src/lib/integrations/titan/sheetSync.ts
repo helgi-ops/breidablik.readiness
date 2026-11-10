@@ -14,6 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseTitanCsv } from "./parseSyncedData";
 import { ingestTitanRows, type TitanIngestResult } from "./ingestServer";
 import { isAllowedTitanSheetUrl } from "./sheetUrl";
+import { getFreeLockedTeamIds } from "@/lib/micropulse/elite";
 
 export { isAllowedTitanSheetUrl };
 
@@ -50,9 +51,11 @@ export async function getTeamsWithTitanSheet(sb: SupabaseClient): Promise<TitanS
     .from("team_integrations")
     .select("team_id, status, provider_metadata")
     .eq("provider", "titan");
+  const freeLocked = await getFreeLockedTeamIds(sb); // FREE clubs are not synced
   const out: TitanSheetConfig[] = [];
   for (const r of (data ?? []) as Array<{ team_id: string; status: string | null; provider_metadata: Record<string, unknown> | null }>) {
     if (String(r.status ?? "").toLowerCase() === "disabled") continue;
+    if (freeLocked.has(String(r.team_id))) continue;
     const url = r.provider_metadata && typeof r.provider_metadata.publishedCsvUrl === "string" ? r.provider_metadata.publishedCsvUrl : null;
     if (url && isAllowedTitanSheetUrl(url)) out.push({ teamId: String(r.team_id), publishedCsvUrl: url });
   }

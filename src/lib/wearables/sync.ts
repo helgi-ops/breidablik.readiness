@@ -10,6 +10,7 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getWearableProvider } from "./registry";
+import { getFreeLockedTeamIds } from "@/lib/micropulse/elite";
 import type {
   WearableConnectionState,
   WearableDailySummary,
@@ -295,15 +296,26 @@ export async function syncAllConnections(): Promise<{
   const sb = getAdminClient();
   const { data, error } = await sb
     .from("wearable_connections")
-    .select("id")
+    .select("id, profile_id")
     .eq("is_active", true);
 
   if (error || !data) {
     return { total: 0, ok: 0, failed: 0, errors: [error?.message ?? "no rows"] };
   }
 
+  // FREE clubs are not synced (paying + PT teams only). Team = the connection owner's current team.
+  const rows = data as Array<{ id: string; profile_id: string | null }>;
+  const freeLocked = await getFreeLockedTeamIds(sb);
+  const profileIds = [...new Set(rows.map((r) => r.profile_id).filter((p): p is string => !!p))];
+  const teamByProfile = new Map<string, string | null>();
+  if (freeLocked.size && profileIds.length) {
+    const { data: profs } = await sb.from("profiles").select("id, team_id").in("id", profileIds);
+    for (const p of (profs ?? []) as Array<{ id: string; team_id: string | null }>) teamByProfile.set(p.id, p.team_id);
+  }
+  const toSync = rows.filter((r) => !freeLocked.has(teamByProfile.get(r.profile_id ?? "") ?? ""));
+
   const results = await Promise.all(
-    (data as Array<{ id: string }>).map((row) => syncConnection(row.id)),
+    toSync.map((row) => syncConnection(row.id)),
   );
 
   const errors: string[] = [];

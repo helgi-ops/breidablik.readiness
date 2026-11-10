@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { computeTeamSignals, writeTeamSignals } from "@/lib/micropulse/coachSignals/computeTeam";
+import { getFreeLockedTeamIds } from "@/lib/micropulse/elite";
 
 function isAuthorized(req: Request): boolean {
   const accepted = [process.env.CRON_SECRET, process.env.SIGNALS_CRON_SECRET]
@@ -45,11 +46,14 @@ export async function GET(req: Request) {
   const { data: rosterTeams } = await sb.from("players").select("team_id").eq("is_active", true);
   const teamIds = Array.from(new Set(((rosterTeams ?? []) as Array<{ team_id: string | null }>)
     .map((r) => r.team_id).filter((t): t is string => !!t)));
+  // FREE clubs do not get signals (a PRO feature), so do not compute them.
+  const freeLocked = await getFreeLockedTeamIds(sb);
+  const teamIdsToRun = teamIds.filter((t) => !freeLocked.has(t));
 
   const results: Array<{ teamId: string; ok: boolean; signals?: number; error?: string }> = [];
   const CONCURRENCY = 3;
-  for (let i = 0; i < teamIds.length; i += CONCURRENCY) {
-    const chunk = teamIds.slice(i, i + CONCURRENCY);
+  for (let i = 0; i < teamIdsToRun.length; i += CONCURRENCY) {
+    const chunk = teamIdsToRun.slice(i, i + CONCURRENCY);
     const settled = await Promise.all(chunk.map(async (teamId) => {
       try {
         const signals = await computeTeamSignals(sb, teamId, today);
@@ -63,5 +67,5 @@ export async function GET(req: Request) {
   }
 
   const okCount = results.filter((r) => r.ok).length;
-  return NextResponse.json({ ok: results.every((r) => r.ok), asOf: today, teams: teamIds.length, computed: okCount, results });
+  return NextResponse.json({ ok: results.every((r) => r.ok), asOf: today, teams: teamIdsToRun.length, skippedFree: teamIds.length - teamIdsToRun.length, computed: okCount, results });
 }

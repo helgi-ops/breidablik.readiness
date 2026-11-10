@@ -8,6 +8,7 @@ import { isSubscriptionGone, sendWebPush, type NativePushSubscription } from "@/
 import { getGpsOnlyPlayerIds } from "@/lib/teamMode";
 import { getTeamsOnBreak } from "@/lib/notifications/teamBreaks";
 import { getPlayersOnBreak } from "@/lib/notifications/clientBreaks";
+import { getFreeLockedTeamIds } from "@/lib/micropulse/elite";
 
 type SubscriptionRow = {
   id: string;
@@ -168,8 +169,11 @@ export async function sendRpeReminderToMissingPlayers(
     getTeamsOnBreak(sb, args.dateKey),
     getPlayersOnBreak(sb, args.dateKey),
   ]);
+  // FREE clubs get no RPE reminder push (RPE is a Pro feature).
+  const freeLocked = await getFreeLockedTeamIds(sb);
   const missing = afterOffFilter.filter((p) =>
     !(p.team_id && breakTeams.has(String(p.team_id))) && !breakPlayers.has(String(p.player_id))
+    && !(p.team_id && freeLocked.has(String(p.team_id)))
   );
   const skippedGpsOnly = allMissing.length - afterGpsFilter.length;
   void skippedGpsOnly;

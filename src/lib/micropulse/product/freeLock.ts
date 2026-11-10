@@ -9,7 +9,8 @@
  * programme-library, match-hub), so a block-list of routes would leak through them.
  *
  * Personal-trainer teams are never locked (their own plan model), and PRO/ELITE teams never are.
- * The server uses the same definition: `isFreeLockedTier` in src/lib/micropulse/elite/index.ts.
+ * The server uses the same definition: `getFreeLockedTeamIds` in src/lib/micropulse/elite/index.ts (nightly
+ * jobs) and src/lib/security/freeLockApi.ts (API routes).
  */
 import { pathMatchesPrefix } from "./routeGating";
 import type { MicroPulsePlanKey } from "./types";

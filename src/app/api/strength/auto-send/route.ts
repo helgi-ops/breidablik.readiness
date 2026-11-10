@@ -24,6 +24,7 @@ import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockE
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
+import { getFreeLockedTeamIds } from "@/lib/micropulse/elite";
 
 export const runtime = "nodejs";
 // Raised from 60s: the old sequential loop timed out ~17/26 players. Players are now processed in
@@ -70,7 +71,9 @@ async function run(req: NextRequest) {
     .from("teams")
     .select("id, strength_send_mode, strength_auto_send")
     .eq("strength_auto_send", true);
-  const teamRows = (teams ?? []) as Array<{ id: string; strength_send_mode: string | null }>;
+  // FREE clubs get no automatic sends (paying + PT teams only).
+  const freeLocked = await getFreeLockedTeamIds(sb);
+  const teamRows = ((teams ?? []) as Array<{ id: string; strength_send_mode: string | null }>).filter((t) => !freeLocked.has(t.id));
 
   let sent = 0, skipped = 0, failed = 0;
   const perTeam: Array<{ teamId: string; sent: number; skipped: number; failed: number }> = [];

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseServer as getAdminClient } from "@/lib/supabaseServer";
 import { syncCatapultDailyMetrics } from "@/lib/integrations/catapult";
 import { getTeamsWithCatapultCredentials, getConfigFromEnv } from "@/lib/integrations/catapult/api";
+import { getFreeLockedTeamIds } from "@/lib/micropulse/elite";
 import type { CatapultConfig } from "@/lib/integrations/catapult/api";
 import { isCatapultCronAuthorized } from "@/lib/integrations/catapult/cronAuth";
 import { sendTrainingDataReadyNotification } from "@/lib/push/sendTrainingDataReady";
@@ -169,14 +170,17 @@ async function runSync(
     }
 
     // ── Collect all Catapult configs to sync ──────────────────────
-    const teamConfigs = await getTeamsWithCatapultCredentials();
+    const allTeamConfigs = await getTeamsWithCatapultCredentials();
+    // FREE clubs (trial over) are not synced; their stored data stays. Paying and PT teams are unaffected.
+    const freeLockedIds = await getFreeLockedTeamIds(getAdminClient());
+    const teamConfigs = allTeamConfigs.filter((tc) => !(tc.teamId && freeLockedIds.has(tc.teamId)));
     const configs: (CatapultConfig | undefined)[] = [];
 
     // Always include env-var config if present (backward compat for Breidablik)
     try {
       const envConfig = getConfigFromEnv();
       // Avoid duplicate if Breidablik is also in team_settings
-      const alreadyInDb = teamConfigs.some(tc => tc.orgId === envConfig.orgId);
+      const alreadyInDb = allTeamConfigs.some(tc => tc.orgId === envConfig.orgId);
       if (!alreadyInDb) {
         configs.push(undefined); // undefined = use env vars (legacy path)
       }

@@ -17,6 +17,7 @@ import { fetchAllPages } from "@/lib/supabasePaginate";
 import { isSubscriptionGone, sendWebPush, type NativePushSubscription } from "@/lib/push/webPush";
 import { detectPersonalBest, pbPushCopy, type PbMetric, type TestBest, type PersonalBest } from "@/lib/micropulse/personalBest";
 import { classifyBatteryTestType } from "@/lib/integrations/vald/battery";
+import { getFreeLockedTeamIds } from "@/lib/micropulse/elite";
 
 type Row = Record<string, unknown>;
 type Detected = { playerId: string; pb: PersonalBest };
@@ -153,7 +154,10 @@ export async function runPersonalBestDetection(
   // Opt-in gate.
   const { data: prefs } = await sb.from("player_notification_preferences").select("player_id")
     .eq("notification_type", "personal_best").eq("enabled", true).in("player_id", playerIds);
-  const optedIn = new Set(((prefs ?? []) as Row[]).map((p) => String(p.player_id)));
+  // FREE clubs get no personal-best push (the PB is still recorded).
+  const freeLocked = await getFreeLockedTeamIds(sb);
+  const optedIn = new Set(((prefs ?? []) as Row[]).map((p) => String(p.player_id))
+    .filter((pid) => !freeLocked.has(teamByPlayer.get(pid) ?? "")));
 
   // Latest active push subscription per player.
   const subsByPlayer = new Map<string, { id: string; sub: NativePushSubscription }>();

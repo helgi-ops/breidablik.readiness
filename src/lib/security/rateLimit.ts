@@ -115,7 +115,8 @@ export const INVITE_PATHS = [
   "/api/team-invites/:path*",
 ] as const;
 
-function toRegex(pattern: string): RegExp {
+/** `/api/x/:id/y` → regex; `/:path*` at the end matches the path and everything under it. */
+export function toRegex(pattern: string): RegExp {
   const body = pattern
     .replace(/\/:path\*$/, "(?:/.*)?")
     .replace(/:[a-zA-Z]+/g, "[^/]+");

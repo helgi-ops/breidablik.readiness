@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ensureAssignment } from "./loader";
 import { recommendMinutesRecovery, MD_PLUS_1_SLUG, MD_PLUS_3_SLUG } from "./minutesRecovery";
+import { getFreeLockedTeamIds } from "@/lib/micropulse/elite";
 
 /**
  * Minutes-driven recovery auto-trigger (MD+1 + MD+3).
@@ -75,7 +76,10 @@ export async function runMinutesRecoveryTrigger(
     }
   }
 
+  // FREE clubs get no automatic recovery messages (paying + PT teams only).
+  const freeLocked = await getFreeLockedTeamIds(sb);
   for (const m of matches as Array<{ team_id: string; match_date: string }>) {
+    if (freeLocked.has(m.team_id)) continue;
     const mdContext = m.match_date === md1Date ? "MD+1" : "MD+3";
     if (mdContext === "MD+1") result.matchesMd1 += 1; else result.matchesMd3 += 1;
     const sex = sexByTeam.get(m.team_id) ?? "unknown";

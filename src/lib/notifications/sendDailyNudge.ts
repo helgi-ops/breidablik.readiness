@@ -17,6 +17,7 @@ import { getTeamsOnBreak } from "@/lib/notifications/teamBreaks";
 import { getPlayersOnBreak } from "@/lib/notifications/clientBreaks";
 import { resolveMdContext } from "@/lib/micropulse/loadPlan/forTeam";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
+import { getFreeLockedTeamIds } from "@/lib/micropulse/elite";
 
 export type NudgeType = "daily_outlook" | "daily_recap";
 
@@ -118,8 +119,11 @@ export async function sendDailyNudge(
     }
   }
 
+  // FREE clubs get no daily nudge push (paying + PT teams only).
+  const freeLocked = await getFreeLockedTeamIds(sb);
   const targets = optedIn.filter((pid) => {
     const tid = teamByPlayer.get(pid) ?? null;
+    if (tid && freeLocked.has(tid)) return false;
     if (tid && (breakTeams.has(tid) || offTeams.has(tid))) return false;
     if (breakPlayers.has(pid)) return false;
     if (trainingTeams && !(tid && trainingTeams.has(tid))) return false;

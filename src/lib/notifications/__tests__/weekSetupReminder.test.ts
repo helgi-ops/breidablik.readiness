@@ -13,7 +13,7 @@ import { runWeekSetupReminder } from "../weekSetupReminder";
 const DATE = "2026-09-10";
 
 type Tables = {
-  teams?: Array<{ id: string }>;
+  teams?: Array<{ id: string; plan_tier?: string; team_type?: string }>;
   week_plans?: Array<{ day_date: string; day_type?: string }>;
   match_schedule?: Array<{ match_date: string }>;
   profiles?: Array<{ id: string; role: string | null }>;
@@ -61,7 +61,7 @@ function makeSb(tables: Tables): { sb: SupabaseClient; inserts: Record<string, u
 }
 
 const oneTeamNeedingSetup = (over: Partial<Tables> = {}): Tables => ({
-  teams: [{ id: "t1" }],
+  teams: [{ id: "t1", plan_tier: "PRO" }],
   week_plans: [], // no plan for today → needs setup
   profiles: [{ id: "c1", role: "coach" }],
   coach_teams: [],
@@ -86,6 +86,13 @@ describe("runWeekSetupReminder", () => {
     expect(inserts.coach_notification_log?.[0]).toMatchObject({
       profile_id: "c1", team_id: "t1", kind: "week_setup", signal_key: DATE,
     });
+  });
+
+  it("never reminds a FREE club (no auto-send there)", async () => {
+    const { sb } = makeSb(oneTeamNeedingSetup({ teams: [{ id: "t1", plan_tier: "FREE", team_type: "club_team" }] }));
+    const res = await runWeekSetupReminder(sb, { dateKey: DATE });
+    expect(res.teamsChecked).toBe(0);
+    expect(vi.mocked(sendWebPush)).not.toHaveBeenCalled();
   });
 
   it("skips when today's week_plans row is present", async () => {

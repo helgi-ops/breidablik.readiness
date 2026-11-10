@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ensureAssignment } from "./loader";
 import { isNightMatch } from "./nightMatch";
+import { getFreeLockedTeamIds } from "@/lib/micropulse/elite";
 
 /**
  * Stage 2 — auto-trigger recovery protocols based on yesterday's match load.
@@ -132,7 +133,10 @@ export async function runRecoveryAutoTrigger(
   tomorrowMorningDue.setUTCDate(tomorrowMorningDue.getUTCDate() + 1);
   tomorrowMorningDue.setUTCHours(8, 0, 0, 0);
 
+  // FREE clubs get no automatic recovery messages (paying + PT teams only).
+  const freeLocked = await getFreeLockedTeamIds(sb);
   for (const row of rows) {
+    if (freeLocked.has(teamByPlayer.get(row.player_id) ?? "")) continue;
     const pl = Number(row.total_player_load ?? 0);
     if (!Number.isFinite(pl) || pl <= 0) continue;
 
