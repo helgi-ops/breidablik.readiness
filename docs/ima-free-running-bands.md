@@ -80,7 +80,7 @@ About 85 files described bands 5–8 as sprint, high-cadence or HSR running. All
 
 `long_run_load` is the 20th `coach_signals` adapter (`src/lib/micropulse/longRuns/signalLoad.ts`, derives in
 `coachSignals/index.ts`, wired in `computeTeam.ts`). The measure is **time** in long continuous runs (bands 5–8,
-runs of ≥18 s at ~11 km/h), acute 7 days ÷ chronic 28 days against the player's **own** base
+runs of ≥18 s; at match pace since 10 Nov 2026, see "Pace: match pace vs jog"), acute 7 days ÷ chronic 28 days against the player's **own** base
 (`computeImaRunningLoad`, rest days = 0, ≥14 run days in 28). Time comes from the inertial sensor, so the read
 exists indoors too; the distance ratio on the Long runs card does not.
 
@@ -222,3 +222,40 @@ trigger first, so the UPDATE half saw already-detected edges and labelled them `
 new edges detects again from the row's data; it is `writer` only when the edges disagree with the data (estimate-pod).
 A partial upsert that sends `ima_fr_band_bounds = null` without the band columns would still detect from too little
 data in the INSERT half; the Catapult sync always sends every band column.
+
+## Pace: match pace vs jog (10 Nov 2026)
+
+The bands say how **long** a player ran without stopping, never how **fast**. Breiðablik, Jun–Oct 2026, rows on the
+new edges (1,211 training player-days, 261 match player-days, 143 near-full):
+
+| Runs of 18 s+ | Near-full match | Training day |
+|---|---|---|
+| Count | 15.5 | 5.6 |
+| Average pace | 12.2 km/h | 9.0 km/h |
+| Count at 11 km/h or faster | 14.1 (91%) | 0.7 (12%) |
+| Time at 11 km/h or faster | 342 s of 373 | 34 s of 237 |
+
+- Pace separates cleanly: 90% of training rows are slower than 10.4 km/h, 90% of match rows faster than 11.2 km/h.
+  Players' own match pace is tight (11.5–12.8 km/h). Cadence does not separate (training 84, match 88 strides/min).
+- Training long runs are mostly jogs: warm-up laps, jogging back between drills. The open top band (30–1000 s) holds
+  69% of training long-run time (median run 50 s at 9 km/h) against 20% in a match (36 s at 12 km/h).
+- The days with the most long-run time are jog days (5 Jul 2026: 523 s per player, none at match pace, 2.9 km in
+  total). Against high-speed running per day: match-pace count r = 0.69, all long runs 0.52, long-run time 0.33.
+
+**Rule:** a long run (one continuous run of 18 s+) counts as running **load** only when its band's average pace is at
+match pace, 11 km/h or faster (`MATCH_PACE_FLOOR_KMH`; per team `team_settings.fr_match_pace_floor_kmh`). Jogs stay
+visible, labelled as jogs, and never judge, set a target or raise an alarm. The rule needs no length cut, so it fixes
+the open top band at the root and still credits real interval runs (52 training rows had 30 s+ runs at match pace,
+average 160 s).
+
+- **Storage:** `ima_fr_ge18_mp_{event_count,total_duration,total_distance,stride_count}`, filled by `ima_fr_fill_tiers()`
+  (`20261110235000_ima_fr_match_pace.sql`, backfill `20261110235500`). Null = pace unknown (no GPS distance, e.g. HK's
+  indoor sessions, or no long-run reading); 0 = GPS present and every long run was slower. Pace is per band (band
+  distance ÷ band time), so one band mixing a fast and a slow run reads as their average.
+- **Code:** `matchPaceOf(row, floor)` and `longRunsOf(row).matchPace` in `src/lib/micropulse/longRuns/index.ts`
+  (columns first, the same rule from the row's own bands otherwise).
+- **Backfill check:** every ≥18 s / ≥24 s tier, band58 distance, the edges and `updated_at` identical before and after;
+  3,005 rows got a match-pace reading. Breiðablik near-full match 14.1 of 15.5, training 0.7 of 5.6; HK match 9.6 of
+  10.6 (GPS rows only).
+- **Unchanged:** the match profile (game report, match movement, transfer report), stride quality (length, cadence,
+  return-to-training) and indoor running volume keep reading all long runs.

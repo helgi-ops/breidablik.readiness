@@ -10,6 +10,12 @@
  * in band needs GPS and is null, not 0, when the session had none. Stride rate is strides ÷ time, never the
  * stored per-band average (zeros from bands without a bout pull that average down).
  *
+ * Pace (Nov 2026): the bands say how LONG a run was, not how fast. In a match almost every long run is at match
+ * pace (Breiðablik: 14.1 of 15.5 at 11 km/h+, average 12.2 km/h); on a training day almost none are (0.7 of 5.6,
+ * average 9.0 km/h: warm-up laps, jogging back between drills). So a long run counts as running LOAD only at
+ * match pace (`matchPace`, MATCH_PACE_FLOOR_KMH); the jogs stay visible but never judge, target or alarm
+ * (docs/ima-free-running-bands.md, "Pace: match pace vs jog").
+ *
  * Pure, IO-free. Descriptive — never the readiness colour.
  */
 import { bandsAtOrAbove, boundsOfRow, deriveFreeRunningBands, type FreeRunningBandRow } from "@/lib/integrations/catapult/freeRunningBands";
@@ -39,7 +45,19 @@ export type LongRuns = {
   metresPerStride: number | null;
   /** strides ÷ seconds × 60. */
   strideRatePerMin: number | null;
+  /** The long runs at match pace (`matchPaceOf`). Null = pace unknown (no GPS distance, e.g. indoors). */
+  matchPace: MatchPaceRuns | null;
 };
+
+/**
+ * A long run counts as running load at or above this pace (km/h): the slowest tenth of Breiðablik's own match
+ * long runs is 11.2 km/h, training long runs average 9.0. A team can set its own in
+ * `team_settings.fr_match_pace_floor_kmh` (the database trigger reads it).
+ */
+export const MATCH_PACE_FLOOR_KMH = 11;
+
+/** The long runs (≥18 s) run at match pace. Zero values = GPS present and every long run was slower. */
+export type MatchPaceRuns = { bouts: number; seconds: number; distanceM: number; strides: number };
 
 const num = (v: unknown): number | null => { const n = typeof v === "string" ? Number(v) : v; return typeof n === "number" && Number.isFinite(n) ? n : null; };
 const sumOrNull = (vals: Array<number | null>): number | null => { const v = vals.filter((x): x is number => x != null); return v.length ? v.reduce((s, x) => s + x, 0) : null; };
@@ -47,6 +65,40 @@ const ratio = (a: number | null, b: number | null): number | null => (a != null 
 
 /** Did the session have a GPS reading? Indoors the pod records Player Load and IMA but no distance. */
 export const hasGpsReading = (row: FreeRunningBandRow): boolean => (num(row.total_distance) ?? 0) > 0;
+
+/**
+ * The long runs at match pace in one row. Reads the stored `ima_fr_ge18_mp_*` columns (filled by the database
+ * trigger with the team's floor); without them it sums this row's long bands whose average pace (distance ÷ time)
+ * is at or above `floorKmh`, the same rule as the trigger. Null when the pace can't be known: no GPS distance
+ * (indoors), no long-run reading, or edges that fit no known config.
+ */
+export function matchPaceOf(row: FreeRunningBandRow, floorKmh: number = MATCH_PACE_FLOOR_KMH): MatchPaceRuns | null {
+  const stored = num(row.ima_fr_ge18_mp_event_count);
+  if (stored != null) {
+    return {
+      bouts: stored,
+      seconds: num(row.ima_fr_ge18_mp_total_duration) ?? 0,
+      distanceM: num(row.ima_fr_ge18_mp_total_distance) ?? 0,
+      strides: num(row.ima_fr_ge18_mp_stride_count) ?? 0,
+    };
+  }
+  if (!hasGpsReading(row) || row.ima_fr_bounds_source === "unknown") return null;
+  const bands = longRunBandNumbers(row);
+  const col = (band: number, k: string) => num(row[`ima_fr_band${band}_${k}`]);
+  if (!bands.length || bands.every((b) => col(b, "event_count") == null)) return null;
+  const out: MatchPaceRuns = { bouts: 0, seconds: 0, distanceM: 0, strides: 0 };
+  for (const b of bands) {
+    const dur = col(b, "total_duration") ?? 0;
+    const dist = col(b, "total_distance") ?? 0;
+    if (dur > 0 && dist > 0 && (dist / dur) * 3.6 >= floorKmh) {
+      out.bouts += col(b, "event_count") ?? 0;
+      out.seconds += dur;
+      out.distanceM += dist;
+      out.strides += col(b, "stride_count") ?? 0;
+    }
+  }
+  return out;
+}
 
 /** The long runs of one `player_external_load_daily` row (snake_case columns). */
 export function longRunsOf(row: FreeRunningBandRow): LongRuns {
@@ -67,6 +119,7 @@ export function longRunsOf(row: FreeRunningBandRow): LongRuns {
     strides, distanceM,
     metresPerStride: ratio(distanceM, strides),
     strideRatePerMin: seconds != null && seconds > 0 && strides != null ? (strides / seconds) * 60 : null,
+    matchPace: matchPaceOf(row),
   };
 }
 

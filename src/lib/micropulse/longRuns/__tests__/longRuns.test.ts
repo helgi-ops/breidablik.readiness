@@ -148,3 +148,55 @@ test("longRunsOf: the stored ima_fr_ge18_* tier columns are preferred over summi
   // The ge18 distance also beats the legacy band58 rollup.
   assert.equal(longRunsOf(row({ ...withTier, ima_fr_band58_total_distance: 5 })).distanceM, 2222);
 });
+
+// ── Match pace (Nov 2026): a long run counts as running load only at 11 km/h or faster ─────────────────────
+const NEW_EDGES = [0, 2.5, 5, 8, 12, 18, 24, 30, 1000];
+// A training day on the new edges: 18–24 s runs at 12 km/h (2 runs, 40 s, 133 m), 24–30 s at 9 km/h, and a
+// 6-minute warm-up jog in the open top band at 8.5 km/h.
+const TRAINING = row({ total_distance: 5200, ima_fr_band_bounds: NEW_EDGES,
+  ...band(6, 2, 40, 62, 133.3), ...band(7, 1, 27, 40, 67.5), ...band(8, 1, 360, 540, 850) });
+
+test("matchPaceOf: only the long bands at match pace count; the warm-up jog does not", async () => {
+  const { matchPaceOf, MATCH_PACE_FLOOR_KMH } = await import("../index");
+  assert.equal(MATCH_PACE_FLOOR_KMH, 11);
+  const mp = matchPaceOf(TRAINING)!;
+  assert.equal(mp.bouts, 2);
+  assert.equal(mp.seconds, 40);
+  assert.equal(mp.strides, 62);
+  assert.equal(Math.round(mp.distanceM), 133);
+  // All long runs: 4 runs, 427 s. At match pace: 2 runs, 40 s.
+  const all = longRunsOf(TRAINING);
+  assert.equal(all.bouts, 4);
+  assert.equal(all.seconds, 427);
+  assert.deepEqual(all.matchPace, mp);
+});
+
+test("matchPaceOf: a lower team floor counts the 9 km/h band too", async () => {
+  const { matchPaceOf } = await import("../index");
+  assert.equal(matchPaceOf(TRAINING, 9)!.bouts, 3);
+});
+
+test("matchPaceOf: indoors (no GPS distance) the pace is unknown, not 0", async () => {
+  const { matchPaceOf } = await import("../index");
+  assert.equal(matchPaceOf(row({ ...TRAINING, total_distance: 0 })), null);
+  assert.equal(longRunsOf(row({ ...TRAINING, total_distance: 0 })).matchPace, null);
+});
+
+test("matchPaceOf: all jogging = 0 at match pace, not missing", async () => {
+  const { matchPaceOf } = await import("../index");
+  const jog = row({ total_distance: 2900, ima_fr_band_bounds: NEW_EDGES, ...band(6, 2, 42, 60, 100), ...band(8, 2, 500, 700, 1150) });
+  assert.deepEqual(matchPaceOf(jog), { bouts: 0, seconds: 0, distanceM: 0, strides: 0 });
+});
+
+test("matchPaceOf: the stored columns win (the trigger used the team's own floor)", async () => {
+  const { matchPaceOf } = await import("../index");
+  const stored = row({ ...TRAINING, ima_fr_ge18_mp_event_count: 3, ima_fr_ge18_mp_total_duration: 67,
+    ima_fr_ge18_mp_total_distance: 200.8, ima_fr_ge18_mp_stride_count: 102 });
+  assert.deepEqual(matchPaceOf(stored), { bouts: 3, seconds: 67, distanceM: 200.8, strides: 102 });
+});
+
+test("matchPaceOf: no reading for edges that fit no known config or the 3-band default", async () => {
+  const { matchPaceOf } = await import("../index");
+  assert.equal(matchPaceOf(row({ ...TRAINING, ima_fr_bounds_source: "unknown" })), null);
+  assert.equal(matchPaceOf(row({ ...TRAINING, ima_fr_band_bounds: [0, 2.5, 5, 1000, 1000, 1000, 1000, 1000, 1000] })), null);
+});
