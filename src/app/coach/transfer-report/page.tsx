@@ -23,6 +23,7 @@ import { ProfileRadar, MatchTrendBars, type RadarMetric, type TrendBar } from "@
 import type { TransferDossier, DossierSection, Confidence, ClockPoint } from "@/lib/micropulse/transferReport";
 import type { TransferAiSummary } from "@/lib/micropulse/transferReport/ai";
 import { DIRECTIONS } from "@/lib/micropulse/directionalSignature";
+import { DRIVER_AXES } from "@/lib/micropulse/playerGameReport";
 
 // Engine (GPS volume) + Driver (IMA movement) radar axes — mirrors Player Game Report.
 type Bench = { percentile: number; player: number | null };
@@ -33,11 +34,10 @@ const ENGINE_CFG: Array<{ key: string; label: string; fmt: (v: number | null | u
   { key: "top_speed_kmh", label: "Speed", fmt: f1 }, { key: "hml", label: "HML", fmt: n0 }, { key: "efforts", label: "Efforts", fmt: f1 },
   { key: "accel", label: "Acc", fmt: f1 }, { key: "decel", label: "Dec", fmt: f1 },
 ];
-const DRIVER_CFG: Array<{ key: string; label: string; fmt: (v: number | null | undefined) => string }> = [
-  { key: "ima_acc", label: "Acc", fmt: f1 }, { key: "ima_dec", label: "Dec", fmt: f1 }, { key: "cod", label: "CoD", fmt: f1 }, { key: "jumps", label: "Jumps", fmt: f1 },
-  // ima_hir5..8 = metres in runs of <12 / 12–18 / 18–24 / ≥24 s (run length, not band numbers or speed).
-  { key: "ima_hir5", label: "Runs <12 s", fmt: n0 }, { key: "ima_hir6", label: "Runs 12–18 s", fmt: n0 }, { key: "ima_hir7", label: "Runs 18–24 s", fmt: n0 }, { key: "ima_hir8", label: "Runs 24 s+", fmt: n0 },
-];
+// Shared with the Player Game Report: all + hard accelerations, braking and changes of direction, jumps, and one
+// long-run axis (runs of 18 s or more; not sprinting). English short labels, like ENGINE_CFG above.
+const DRIVER_CFG: Array<{ key: string; label: string; fmt: (v: number | null | undefined) => string }> =
+  DRIVER_AXES.map((a) => ({ key: a.key, label: a.short.en, fmt: a.dp === 0 ? n0 : f1 }));
 function buildRadar(cfg: typeof ENGINE_CFG, benchmarks: Record<string, Bench | undefined>, avail: Set<string> | null): RadarMetric[] {
   return cfg.filter((c) => !avail || avail.has(c.key)).map((c) => {
     const b = benchmarks[c.key];

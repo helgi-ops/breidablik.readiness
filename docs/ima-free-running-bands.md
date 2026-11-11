@@ -215,7 +215,7 @@ Code:
 
 - `strideIntelligence`: `hiVelocityStrides` / `highIntensityPlayerLoad` are `number | null` from the ≥18 s tier; no
   band-number fallback. The GPS/IMA mix is null when the tier is null. Same rule in the stride-intel route.
-- Player game report: long-run keys (`ima_hsr`, `ima_hir5..8`) are averaged only over matches whose row is readable,
+- Player game report: the long-run key (`ima_hsr`; `ima_hir5..8` removed 11 Nov 2026) is averaged only over matches whose row is readable,
   so the two players on the 3-band default don't get a false 0 in their season average or percentile.
 - Transfer report radar axes say "Runs <12 s / 12–18 s / 18–24 s / 24 s+" instead of B5–B8.
 - Removed: `LONG_RUN_BANDS`, `ImaRunningLoad.dominantBand` (and `dominant_band` on the unused ima-run-distance route).
@@ -328,3 +328,17 @@ On all long runs MD-3 looked like a full match of long running (98%, strides 126
   they describe the session's shape, not load.
 - **Player app movement card**: the long-run tile reads metres at match pace and is named "Long runs at match pace"
   (it was labelled "High-speed running", which it never was).
+
+## Game report radar: one long-run axis (11 Nov 2026)
+
+The IMA ("Driver") radar in the Player Game Report, the player app's game report and the Transfer report had four
+Free Running axes (metres in runs <12 / 12–18 / 18–24 / ≥24 s). In a match they say one thing: Breiðablik Apr–Oct
+2026, 23 players, 18–24 s vs ≥24 s r = 0.89, each against runs ≥18 s 0.94 / 0.98. A player short of long runs
+collapsed on half the chart.
+
+Now one shared list, `DRIVER_AXES` (`src/lib/micropulse/playerGameReport/index.ts`), 8 axes: Acc · Hard acc · Dec ·
+Hard dec · CoD · Sharp CoD · Jumps · Long runs. The hard axes are the top IMA band (`ima_band3_accel_count`,
+`ima_band3_decel_count`, `ima_cod_left_high + ima_cod_right_high`); a row without the column is no reading, never
+0. Hard vs all: accelerations r = 0.72, braking 0.54, turns 0.55 (83% of turns are gentle), so they add what the
+totals hide. Long runs = metres in runs of 18 s or more, all long runs (in a match ~91% are at match pace; the
+match-pace columns only exist from June 2026), independent of accelerations (r = 0.01) and turns (0.18).

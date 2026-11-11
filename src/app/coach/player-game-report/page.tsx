@@ -21,7 +21,7 @@ import { VERDICT_KINDS, type StrideResult } from "@/lib/micropulse/strideLength"
 import DPrimeSprintCostBlock from "@/components/coach/DPrimeSprintCostBlock";
 import type { CriticalSpeedRead, CsCombinedResult, CsTestRead, AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
 import { ProfileRadar, MatchTrendBars, ChartZoom, FormSummary, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
-import { computeForm, IMA_RUN_LENGTH_SPLIT } from "@/lib/micropulse/playerGameReport";
+import { computeForm, DRIVER_AXES } from "@/lib/micropulse/playerGameReport";
 
 type P90 = {
   total_distance: number; hsr: number; sprint: number; player_load: number;
@@ -228,18 +228,9 @@ function FootballGameReport() {
       { key: "accel", label: "Acc", fmt: f1 },
       { key: "decel", label: "Dec", fmt: f1 },
     ];
-    // Driver = inertial movement events + continuous runs split by run length
-    // (IMA_RUN_LENGTH_SPLIT: ima_hir5..8 = runs <12 / 12–18 / 18–24 / ≥24 s, grouped from each row's own
-    // band edges — bout-duration, NOT speed; not an analogue of GPS V5/V6). Legacy keys ima_hir5..8 kept.
-    const runLenShort = (x: (typeof IMA_RUN_LENGTH_SPLIT)[number]) =>
-      x.loS === 0 ? `<${x.hiS}s` : Number.isFinite(x.hiS) ? `${x.loS}–${x.hiS}s` : `≥${x.loS}s`;
-    const driverCfg: Cfg[] = [
-      { key: "ima_acc", label: "Acc", fmt: f1 },
-      { key: "ima_dec", label: "Dec", fmt: f1 },
-      { key: "cod", label: "CoD", fmt: f1 },
-      { key: "jumps", label: IS ? "Stökk" : "Jumps", fmt: f1 },
-      ...IMA_RUN_LENGTH_SPLIT.map((x) => ({ key: x.key, label: runLenShort(x), fmt: n0 })),
-    ];
+    // Driver = HOW he moves: each movement as all efforts + its high-intensity band, jumps, and ONE long-run
+    // axis (DRIVER_AXES, shared with the player app and the transfer report).
+    const driverCfg: Cfg[] = DRIVER_AXES.map((a) => ({ key: a.key, label: IS ? a.short.is : a.short.en, fmt: a.dp === 0 ? n0 : f1 }));
     const buildRadar = (cfg: Cfg[]): RadarMetric[] => cfg
       .filter((c) => !avail || avail.has(c.key))
       .map((c) => {
@@ -470,9 +461,9 @@ function FootballGameReport() {
                   {charts.radarDriver.length >= 3 && (
                     <div className="pgr-section mb-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-[11px] leading-relaxed text-slate-600">
                       {IS ? (
-                        <><span className="font-semibold text-emerald-700">Vél (GPS)</span> = hve mikið leikmaðurinn skilar — vegalengd, háhraði, sprettir, hraði (hráa aflið, eins og hestöfl). <span className="font-semibold text-violet-700">Stýring (IMA)</span> = hvernig hann hreyfir sig — snöggar hröðunir/hemlanir, stefnubreytingar, stökk. Tveir leikmenn geta haft sömu vél en gjörólíka stýringu. <span className="text-slate-400">(hugmynd: Niklas Virtanen, &bdquo;Data as a language&ldquo;, Catapult)</span></>
+                        <><span className="font-semibold text-emerald-700">Vél (GPS)</span> = hve mikið leikmaðurinn skilar — vegalengd, háhraði, sprettir, hraði (hráa aflið, eins og hestöfl). <span className="font-semibold text-violet-700">Stýring (IMA)</span> = hvernig hann hreyfir sig — hröðunir og hemlanir (allar og kröftugustu), stefnubreytingar, stökk og löng hlaup. Tveir leikmenn geta haft sömu vél en gjörólíka stýringu. <span className="text-slate-400">(hugmynd: Niklas Virtanen, &bdquo;Data as a language&ldquo;, Catapult)</span></>
                       ) : (
-                        <><span className="font-semibold text-emerald-700">Engine (GPS)</span> = how much the player brings — distance, high-speed running, sprints, top speed (the raw output, like horsepower). <span className="font-semibold text-violet-700">Driver (IMA)</span> = how he moves — sharp accelerations/decelerations, changes of direction, jumps. Two players can have the same engine but a very different driver. <span className="text-slate-400">(concept: Niklas Virtanen, “Data as a language”, Catapult)</span></>
+                        <><span className="font-semibold text-emerald-700">Engine (GPS)</span> = how much the player brings — distance, high-speed running, sprints, top speed (the raw output, like horsepower). <span className="font-semibold text-violet-700">Driver (IMA)</span> = how he moves — accelerations and braking (all, and the hardest), changes of direction, jumps and long runs. Two players can have the same engine but a very different driver. <span className="text-slate-400">(concept: Niklas Virtanen, “Data as a language”, Catapult)</span></>
                       )}
                     </div>
                   )}
@@ -508,13 +499,16 @@ function FootballGameReport() {
                             </span>
                           </summary>
                           <ul className="mt-1.5 space-y-1 text-[11px] leading-snug text-slate-600">
-                            <li><b>Acc</b> — {IS ? "snöggar hröðunir: hversu oft hann sprengir sig upp í meiri hraða (alvöru spretti, ekki jafnt hlaup)." : "sharp accelerations: how often he explodes up to a higher speed (genuine bursts, not steady running)."}</li>
-                            <li><b>Dec</b> — {IS ? "kröftug hemlun: hversu oft hann hemlar snöggt — hemlunar-álagið sem jafnt hlaup felur." : "hard decelerations: how often he brakes sharply — the braking load steady running hides."}</li>
-                            <li><b>CoD</b> — {IS ? "stefnubreytingar: beygjur og snúningar. Liprari, meira snúnings-leikur sést hér." : "changes of direction: cuts and turns. A more agile, twisty game shows here."}</li>
+                            <li><b>{IS ? "Hröðun" : "Acc"}</b> — {IS ? "allar hraðaaukningar sem pod-inn nemur, á 90 mín." : "every acceleration the pod picks up, per 90 min."}</li>
+                            <li><b>{IS ? "Kröftug hröð." : "Hard acc"}</b> — {IS ? "bara þær kröftugustu (efsta IMA-bandið): alvöru sprengikraftur, ekki jafnt hlaup." : "only the hardest ones (top IMA band): real explosive bursts, not steady running."}</li>
+                            <li><b>{IS ? "Hemlun" : "Dec"}</b> — {IS ? "allar hemlanir á 90 mín." : "every braking effort, per 90 min."}</li>
+                            <li><b>{IS ? "Kröftug heml." : "Hard dec"}</b> — {IS ? "snöggustu hemlanirnar (efsta bandið): mesta álagið á vöðva og sinar." : "the sharpest stops (top band): the heaviest load on muscles and tendons."}</li>
+                            <li><b>{IS ? "Stefnubr." : "CoD"}</b> — {IS ? "allar beygjur og snúningar. Flestar eru mjúkar (um 8 af hverjum 10)." : "every cut and turn. Most are gentle (about 8 in 10)."}</li>
+                            <li><b>{IS ? "Snarpar stefnubr." : "Sharp CoD"}</b> — {IS ? "bara snörpustu beygjurnar (efsta bandið, báðar hliðar): liprasti leikurinn sést hér." : "only the sharpest cuts (top band, both sides): the most agile game shows here."}</li>
                             <li><b>{IS ? "Stökk" : "Jumps"}</b> — {IS ? "stökk: frákast og lending (skallar, návígi)." : "jumps: take-offs and landings (headers, aerial duels)."}</li>
-                            <li><b>{"<12s … ≥24s"}</b> — {IS ? "samfelld hlaup, metrar skipt eftir lengd hlaups (<12, 12–18, 18–24 og 24+ sek; löng hlaup = 18 sek eða lengri). Mælir hve lengi hann hljóp í einu, ekki hraða — þetta eru ekki sprettir (sprettir koma úr GPS)." : "continuous runs, metres split by how long each run lasted (<12, 12–18, 18–24 and 24+ s; long runs = 18 s or more). It measures how long he kept running, not speed — this is not sprinting (sprints come from GPS)."}</li>
+                            <li><b>{IS ? "Löng hlaup" : "Long runs"}</b> — {IS ? "metrar í hlaupum sem stóðu 18 sek eða lengur. Í leik eru nær öll á leikhraða. Mælir úthaldshlaup, ekki spretti (sprettir koma úr GPS)." : "metres in runs that lasted 18 s or more. In a match almost all are at match pace. It shows sustained running, not sprinting (sprints come from GPS)."}</li>
                           </ul>
-                          <p className="mt-1.5 text-[10px] text-slate-400">{IS ? "Miðað við liðið. McBurnie 2022, Buchheit 2014." : "Compared to the squad. McBurnie 2022, Buchheit 2014."}</p>
+                          <p className="mt-1.5 text-[10px] text-slate-400">{IS ? "Miðað við liðið, hver ás = hlutfallsröð leikmannsins í hópnum. McBurnie 2022, Harper & McBurnie 2021, Buchheit 2014." : "Compared to the squad: each axis is the player's percentile in the group. McBurnie 2022, Harper & McBurnie 2021, Buchheit 2014."}</p>
                         </details>
                       </div>
                     )}

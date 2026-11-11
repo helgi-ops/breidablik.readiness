@@ -68,9 +68,12 @@ export async function POST(req: NextRequest) {
     player_load: "overall mechanical workload per 90",
     accel: "accelerations per 90",
     decel: "decelerations per 90",
-    ima_acc: "explosive accelerations per 90",
-    ima_dec: "explosive decelerations per 90",
-    cod: "change-of-direction actions per 90",
+    ima_acc: "accelerations per 90 (all intensities, inertial sensor)",
+    ima_acc_hi: "hard accelerations per 90 (top IMA intensity band only)",
+    ima_dec: "braking efforts per 90 (all intensities, inertial sensor)",
+    ima_dec_hi: "hard braking efforts per 90 (top IMA intensity band only)",
+    cod: "change-of-direction actions per 90 (all intensities; most are gentle)",
+    cod_hi: "sharp changes of direction per 90 (top IMA intensity band, both sides)",
     jumps: "jumps per 90",
     ima_hsr: "metres per 90 in long continuous runs lasting 18 s or more (sustained running, not sprinting)",
     efforts: "hard accelerations and decelerations combined, per 90",
@@ -80,11 +83,8 @@ export async function POST(req: NextRequest) {
 
   // Keep only the metrics the club captures — so the AI never describes a
   // flat-zero column a Core/Lite team doesn't measure.
-  // The per-run-length breakdown (ima_hir5-8) is a radar detail; the AI describes
-  // long continuous runs via the lumped `ima_hsr` only — keep the bands out.
-  const HIDE = new Set(["ima_hir5", "ima_hir6", "ima_hir7", "ima_hir8"]);
   const pick = (obj: Record<string, unknown> | null | undefined) =>
-    Object.fromEntries(Object.entries(obj ?? {}).filter(([k]) => isAvail(k) && !HIDE.has(k)));
+    Object.fromEntries(Object.entries(obj ?? {}).filter(([k]) => isAvail(k)));
 
   const facts = {
     player: { name: player.full_name, position: player.position ?? "unknown", age: player.age ?? "unknown" },

@@ -13,7 +13,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sprintDistanceM } from "@/lib/micropulse/catapultCapability";
-import { frReadingOf, sumBandsBetween } from "@/lib/integrations/catapult/freeRunningBands";
+import { frReadingOf } from "@/lib/integrations/catapult/freeRunningBands";
 import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { loadMatchVerdicts, isContaminatedForBenchmark, verdictKey } from "@/lib/micropulse/matchRunningVerdicts";
 
@@ -22,22 +22,33 @@ const r0 = (v: number) => Math.round(v);
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
 /**
- * What the legacy-named `ima_hir5..8` keys hold now: metres in runs of these lengths (seconds of one continuous
- * run, from edges present in every band config). Plain labels for the radar (EN default, IS toggle).
+ * The IMA ("Driver") radar: HOW the player moves, one list for the coach report, the player app and the
+ * transfer report. Each movement shown as all efforts + the high-intensity band beside it, plus jumps and ONE
+ * long-run axis. Free Running used to fill four axes (metres in runs <12 / 12–18 / 18–24 / ≥24 s), but in a
+ * match they say one thing (Breiðablik Apr–Oct 2026, 23 players: 18–24 s vs ≥24 s r = 0.89, each vs runs ≥18 s
+ * 0.94 / 0.98), so a player short of long runs collapsed on half the chart. The freed axes carry intensity:
+ * hard vs all accelerations r = 0.72, hard vs all braking 0.54, sharp vs all turns 0.55 (83% of turns are gentle).
+ * `ima_hsr` (legacy name) = metres in runs of 18 s or more, ALL long runs: in a match ~91% are at match pace, and
+ * the match-pace columns only exist from June 2026. Sustained running, not sprinting (sprint = GPS).
  */
-export const IMA_RUN_LENGTH_SPLIT = [
-  { key: "ima_hir5", loS: 0, hiS: 12, en: "Runs <12 s", is: "Hlaup <12 sek" },
-  { key: "ima_hir6", loS: 12, hiS: 18, en: "Runs 12–18 s", is: "Hlaup 12–18 sek" },
-  { key: "ima_hir7", loS: 18, hiS: 24, en: "Runs 18–24 s", is: "Hlaup 18–24 sek" },
-  { key: "ima_hir8", loS: 24, hiS: Number.POSITIVE_INFINITY, en: "Runs ≥24 s", is: "Hlaup ≥24 sek" },
+export const DRIVER_AXES = [
+  { key: "ima_acc", short: { en: "Acc", is: "Hröðun" }, plain: { en: "Accelerations", is: "Hraðaaukningar" }, unit: "", dp: 1 },
+  { key: "ima_acc_hi", short: { en: "Hard acc", is: "Kröftug hröð." }, plain: { en: "Hard accelerations", is: "Kröftugar hraðaaukningar" }, unit: "", dp: 1 },
+  { key: "ima_dec", short: { en: "Dec", is: "Hemlun" }, plain: { en: "Braking efforts", is: "Hemlanir" }, unit: "", dp: 1 },
+  { key: "ima_dec_hi", short: { en: "Hard dec", is: "Kröftug heml." }, plain: { en: "Hard braking", is: "Kröftugar hemlanir" }, unit: "", dp: 1 },
+  { key: "cod", short: { en: "CoD", is: "Stefnubr." }, plain: { en: "Changes of direction", is: "Stefnubreytingar" }, unit: "", dp: 1 },
+  { key: "cod_hi", short: { en: "Sharp CoD", is: "Snarpar stefnubr." }, plain: { en: "Sharp changes of direction", is: "Snarpar stefnubreytingar" }, unit: "", dp: 1 },
+  { key: "jumps", short: { en: "Jumps", is: "Stökk" }, plain: { en: "Jumps", is: "Stökk" }, unit: "", dp: 1 },
+  { key: "ima_hsr", short: { en: "Long runs", is: "Löng hlaup" }, plain: { en: "Long runs (18 s or more)", is: "Löng hlaup (18 sek eða lengri)" }, unit: "m", dp: 0 },
 ] as const;
+export type DriverAxis = (typeof DRIVER_AXES)[number];
 
 export const MIN_QUALIFY_MINUTES = 20; // ignore cameo appearances in the benchmark
 
 export const P90_KEYS = [
   "total_distance", "hsr", "sprint", "player_load",
   "accel", "decel", "ima_acc", "ima_dec", "cod", "jumps", "ima_hsr",
-  "ima_hir5", "ima_hir6", "ima_hir7", "ima_hir8",
+  "ima_acc_hi", "ima_dec_hi", "cod_hi",
   "efforts", "hml",
 ] as const;
 export type P90Key = (typeof P90_KEYS)[number];
@@ -46,13 +57,14 @@ type MatchMetrics = {
   total_distance: number; hsr: number; sprint: number; player_load: number;
   accel: number; decel: number; ima_acc: number; ima_dec: number;
   cod: number; jumps: number; ima_hsr: number; top_speed_kmh: number;
-  ima_hir5: number; ima_hir6: number; ima_hir7: number; ima_hir8: number;
+  /** High-intensity IMA bands; null = the row has no reading (column absent), never counted as 0. */
+  ima_acc_hi: number | null; ima_dec_hi: number | null; cod_hi: number | null;
   efforts: number; hml: number;
 };
 
 const LOAD_COLUMNS =
   "player_id, date, source, total_distance, high_speed_distance, sprint_distance, total_player_load, " +
-  "accelerations, decelerations, max_velocity, ima_accel, ima_decel, " +
+  "accelerations, decelerations, max_velocity, ima_accel, ima_decel, ima_band3_accel_count, ima_band3_decel_count, " +
   "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
   "ima_fr_band58_total_distance, ima_fr_band_bounds, ima_fr_bounds_source, ima_fr_ge24_total_distance, " +
@@ -60,7 +72,10 @@ const LOAD_COLUMNS =
   "ima_fr_band5_total_distance, ima_fr_band6_total_distance, ima_fr_band7_total_distance, ima_fr_band8_total_distance, " +
   "jumps, accel_decel_efforts, high_metabolic_load_distance_m, session_duration_minutes, velocity_band6_total_distance, player_load_per_minute, raw_payload_json";
 
-function loadRowToMetrics(r: Record<string, unknown>): MatchMetrics {
+const numOrNull = (v: unknown): number | null => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+
+export function loadRowToMetrics(r: Record<string, unknown>): MatchMetrics {
+  const codHiL = numOrNull(r.ima_cod_left_high), codHiR = numOrNull(r.ima_cod_right_high);
   return {
     total_distance: num(r.total_distance),
     hsr: num(r.high_speed_distance),
@@ -77,33 +92,31 @@ function loadRowToMetrics(r: Record<string, unknown>): MatchMetrics {
       num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low),
     ),
     jumps: r0(num(r.jumps)),
-    // Legacy key names: `ima_hsr` / `ima_hir5..8` are NOT high-speed / high-intensity running.
-    // IMA Free Running bands are BOUT-DURATION bands (docs/ima-free-running-bands.md):
-    // Band edges are configurable and changed on 9 Nov 2026, so the split is read by RUN LENGTH from the
-    // row's own edges (IMA_RUN_LENGTH_SPLIT), never by band number:
-    // ima_hsr = metres in long continuous runs ≥18 s (config-aware rollup);
-    // ima_hir5..8 = metres in runs of <12 / 12–18 / 18–24 / ≥24 s (so hir7 + hir8 = ima_hsr).
-    // Before Nov 2026 they were legacy bands 5–8 = 18–21 / 21–24 / 24–27 / 27+ s.
-    // Sustained running, not sprinting — sprint = GPS above.
+    // High-intensity IMA bands (Catapult IMA band 3 = high; CoD high both sides).
+    ima_acc_hi: numOrNull(r.ima_band3_accel_count),
+    ima_dec_hi: numOrNull(r.ima_band3_decel_count),
+    cod_hi: codHiL == null && codHiR == null ? null : (codHiL ?? 0) + (codHiR ?? 0),
+    // Legacy key name: `ima_hsr` is NOT high-speed running. IMA Free Running bands are BOUT-DURATION bands
+    // (docs/ima-free-running-bands.md): ima_hsr = metres in long continuous runs ≥18 s (config-aware rollup,
+    // read from the row's own band edges). Sustained running, not sprinting — sprint = GPS above.
     ima_hsr: num(r.ima_fr_band58_total_distance),
-    ima_hir5: num(sumBandsBetween(r, "total_distance", 0, 12)),
-    ima_hir6: num(sumBandsBetween(r, "total_distance", 12, 18)),
-    ima_hir7: num(sumBandsBetween(r, "total_distance", 18, 24)),
-    ima_hir8: num(r.ima_fr_ge24_total_distance ?? sumBandsBetween(r, "total_distance", 24)),
     top_speed_kmh: (() => { const v = num(r.max_velocity); return v > 45 ? 0 : v; })(),
     efforts: r0(num(r.accel_decel_efforts)),
     hml: num(r.high_metabolic_load_distance_m),
   };
 }
 
+/** Per-90 values. A high-intensity band with no reading comes out NaN here and is skipped by every average
+ *  (see `hasReading`); in a match row it is shown as 0 only for display. */
 function per90(metrics: MatchMetrics, minutes: number): Record<P90Key, number> {
   const f = minutes > 0 ? 90 / minutes : 0;
+  const hi = (v: number | null) => (v == null ? Number.NaN : r1(v * f));
   return {
     total_distance: r0(metrics.total_distance * f), hsr: r0(metrics.hsr * f), sprint: r0(metrics.sprint * f),
     player_load: r0(metrics.player_load * f), accel: r1(metrics.accel * f), decel: r1(metrics.decel * f),
     ima_acc: r1(metrics.ima_acc * f), ima_dec: r1(metrics.ima_dec * f), cod: r1(metrics.cod * f),
     jumps: r1(metrics.jumps * f), ima_hsr: r0(metrics.ima_hsr * f),
-    ima_hir5: r0(metrics.ima_hir5 * f), ima_hir6: r0(metrics.ima_hir6 * f), ima_hir7: r0(metrics.ima_hir7 * f), ima_hir8: r0(metrics.ima_hir8 * f),
+    ima_acc_hi: hi(metrics.ima_acc_hi), ima_dec_hi: hi(metrics.ima_dec_hi), cod_hi: hi(metrics.cod_hi),
     efforts: r1(metrics.efforts * f), hml: r0(metrics.hml * f),
   };
 }
@@ -280,7 +293,8 @@ export async function computePlayerGameReport(
   // Long-run keys are averaged only over matches whose Free Running row is readable: a row on Catapult's
   // 3-band default (no 18 s edge) or with unknown edges has no long-run reading, and counting it as 0 would
   // drag the player's season average and percentile down (a false zero, not a measurement).
-  const LONG_RUN_KEYS = new Set<P90Key>(["ima_hsr", "ima_hir5", "ima_hir6", "ima_hir7", "ima_hir8"]);
+  // The high-intensity bands follow the same rule: a row without the column has no reading (NaN from per90).
+  const LONG_RUN_KEYS = new Set<P90Key>(["ima_hsr"]);
   const longRunsUnreadable = (load: Record<string, unknown>): boolean => {
     const reading = frReadingOf(load);
     return reading === "catapult_default" || reading === "unknown_edges";
@@ -309,6 +323,7 @@ export async function computePlayerGameReport(
       const skipLongRuns = longRunsUnreadable(load);
       for (const k of P90_KEYS) {
         if (skipLongRuns && LONG_RUN_KEYS.has(k)) continue;
+        if (!Number.isFinite(p90[k])) continue;
         acc.sums[k] += p90[k];
         acc.ns[k] += 1;
       }

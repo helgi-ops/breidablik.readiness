@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { ProfileRadar, MatchTrendBars, ChartZoom, FormSummary, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
-import { computeForm, IMA_RUN_LENGTH_SPLIT } from "@/lib/micropulse/playerGameReport";
+import { computeForm, DRIVER_AXES } from "@/lib/micropulse/playerGameReport";
 import ShareMatchButton from "./ShareMatchButton";
 import type { ShareStats } from "@/lib/micropulse/shareCard/pickHeroStat";
 import { strideVerdictBadge } from "@/lib/micropulse/strideLength/verdictBadge";
@@ -58,19 +58,11 @@ const ENGINE: MetricCfg[] = [
   { key: "accel", is: "Hröðun (GPS)", en: "Accelerations (GPS)", sis: "Hröðun", sen: "Acc", unit: "", fmt: f1 },
   { key: "decel", is: "Hemlun (GPS)", en: "Decelerations (GPS)", sis: "Hemlun", sen: "Dec", unit: "", fmt: f1 },
 ];
-const DRIVER: MetricCfg[] = [
-  { key: "ima_acc", is: "Snöggar hröðunir", en: "Sharp accelerations", sis: "Hröðun", sen: "Acc", unit: "", fmt: f1 },
-  { key: "ima_dec", is: "Snöggar hemlanir", en: "Sharp decelerations", sis: "Hemlun", sen: "Dec", unit: "", fmt: f1 },
-  { key: "cod", is: "Stefnubreytingar", en: "Change of direction", sis: "Stefnub.", sen: "CoD", unit: "", fmt: f1 },
-  { key: "jumps", is: "Stökk", en: "Jumps", sis: "Stökk", sen: "Jumps", unit: "", fmt: f1 },
-  // Continuous runs split by run length (IMA Free Running bands are BOUT-DURATION bands, not speed —
-  // docs/ima-free-running-bands.md). Legacy keys `ima_hir5..8` kept; they now mean runs
-  // <12 / 12–18 / 18–24 / ≥24 s (IMA_RUN_LENGTH_SPLIT, grouped from each row's own band edges).
-  ...IMA_RUN_LENGTH_SPLIT.map((x): MetricCfg => {
-    const short = x.loS === 0 ? `<${x.hiS}s` : Number.isFinite(x.hiS) ? `${x.loS}–${x.hiS}s` : `≥${x.loS}s`;
-    return { key: x.key, is: x.is, en: x.en, sis: short, sen: short, unit: "m", fmt: n0 };
-  }),
-];
+// DRIVER_AXES is shared with the coach report and the transfer report: all + hard accelerations, braking and
+// changes of direction, jumps, and one long-run axis (runs of 18 s or more; not sprinting).
+const DRIVER: MetricCfg[] = DRIVER_AXES.map((a): MetricCfg => ({
+  key: a.key, is: a.plain.is, en: a.plain.en, sis: a.short.is, sen: a.short.en, unit: a.unit, fmt: a.dp === 0 ? n0 : f1,
+}));
 const ALL: MetricCfg[] = [...ENGINE, ...DRIVER];
 
 export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "EN" }) {
