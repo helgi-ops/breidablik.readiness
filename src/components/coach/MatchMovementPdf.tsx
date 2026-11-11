@@ -10,29 +10,15 @@
  * descriptive movement read (Niklas: Engine = GPS output, Driver = IMA how) —
  * NOT an injury-risk score. Variant-aware: IMA dims for Pro, GPS dims for
  * Core/Lite (no new data — reuses the computeMatchMovement result).
+ *
+ * Squad numbers come from `squadVsUsual` (touchline warm-up rows out, as on screen);
+ * "outside the usual range" is `significanceThreshold` — long runs 50%, others 20%.
  */
 
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
-import { movementDimensions, DIM_DEFS } from "@/lib/micropulse/matchMovement/types";
-import type { MatchMovementResult, MatchMovementRow, MovementDimension, MovementFingerprint } from "@/lib/micropulse/matchMovement/types";
-
-function meanFp(rows: MatchMovementRow[], dims: MovementDimension[]): MovementFingerprint {
-  const out: MovementFingerprint = {};
-  for (const d of dims) {
-    const vals = rows.map((r) => r.fingerprint[d.key]).filter((v): v is number => v != null);
-    out[d.key] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-  }
-  return out;
-}
-
-/** % (or points, for pct-kind dims) that `cur` sits away from `base` (the norm). */
-function relDev(cur: number | null | undefined, base: number | null | undefined, kind: MovementDimension["kind"]): number | null {
-  if (cur == null || base == null) return null;
-  return kind === "pct" ? cur - base : base !== 0 ? ((cur - base) / base) * 100 : 0;
-}
-function sigThreshold(kind: MovementDimension["kind"]): number {
-  return kind === "pct" ? 10 : 20;
-}
+import { movementDimensions, DIM_DEFS, significanceThreshold } from "@/lib/micropulse/matchMovement/types";
+import type { MatchMovementResult, MovementDimension } from "@/lib/micropulse/matchMovement/types";
+import { squadVsUsual, relDeviation, longRunsLine } from "@/lib/micropulse/matchMovement/squadSummary";
 function fmtDev(rel: number | null, kind: MovementDimension["kind"]): string {
   if (rel == null) return "—";
   const m = Math.round(rel);
@@ -41,9 +27,9 @@ function fmtDev(rel: number | null, kind: MovementDimension["kind"]): string {
 }
 // Neutral, distance-from-usual palette (NOT good/bad): above usual = cobalt,
 // below usual = gold, within the usual range = muted.
-function devColor(rel: number | null, kind: MovementDimension["kind"]): string {
+function devColor(rel: number | null, key: string): string {
   if (rel == null) return "#a9a493";
-  if (Math.abs(rel) < sigThreshold(kind)) return "#8a8676";
+  if (Math.abs(rel) < significanceThreshold(key)) return "#8a8676";
   return rel > 0 ? "#2740e6" : "#b0700f";
 }
 
@@ -74,6 +60,7 @@ const s = StyleSheet.create({
   hdrCell: { padding: 3, fontSize: 7.5, fontWeight: 700 },
   cell: { padding: 3, fontSize: 8, fontWeight: 700, textAlign: "right", fontFamily: "Helvetica" },
   nameCell: { padding: 3, fontSize: 8 },
+  note: { marginTop: 5, fontSize: 8, color: "#4b4638" },
   legend: { marginTop: 10, fontSize: 7.5, color: "#6b6658", lineHeight: 1.4 },
   aiBox: { marginTop: 10, borderLeft: "3 solid #2740e6", backgroundColor: "#f2f4fd", paddingVertical: 6, paddingHorizontal: 8 },
   aiLabel: { fontSize: 8, fontWeight: 700, color: "#2740e6", marginBottom: 2 },
@@ -93,12 +80,10 @@ export async function downloadMatchMovementPdf(
 ) {
   const is = lang === "IS";
   const dims = movementDimensions(result.variant);
-  const matchRows = result.rows.filter((r) => r.match_date === squadMatch);
-  const squadThis = meanFp(matchRows, dims);
-  const squadNorm = meanFp(result.rows, dims); // season average = the squad's usual
-  const playerRows = matchRows
-    .filter((r) => Object.values(r.fingerprint).some((v) => v != null))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  // Squad this match vs the squad's usual (warm-up rows out, estimates out of the usual).
+  const sq = squadVsUsual(result, squadMatch);
+  const playerRows = sq.counted;
+  const lrLine = longRunsLine(sq.longRuns, is);
 
   const nameW = "24%";
   const colW = `${Math.round(76 / Math.max(1, dims.length))}%`;
@@ -120,22 +105,19 @@ export async function downloadMatchMovementPdf(
         {/* Team headline: squad this match vs the squad's usual */}
         <Text style={s.sectionTitle}>{is ? "Hvernig liðið hreyfði sig vs venjan" : "How the squad moved vs its usual"}</Text>
         <View>
-          {dims.map((d) => {
-            const cur = squadThis[d.key] ?? null;
-            const base = squadNorm[d.key] ?? null;
-            const rel = relDev(cur, base, d.kind);
-            const sig = rel != null && Math.abs(rel) >= sigThreshold(d.kind);
+          {sq.dims.map(({ d, cur, base, rel, flagged: sig }) => {
             const word = rel == null ? "" : rel > 0 ? (is ? d.moreIS : d.moreEN) : (is ? d.lessIS : d.lessEN);
             return (
               <View key={d.key} style={s.teamRow}>
                 <Text style={s.teamDim}>{is ? d.is : d.en}</Text>
                 <Text style={s.teamVal}>{cur != null ? cur.toFixed(d.kind === "ratio" ? 2 : 1) : "—"}<Text style={{ color: "#c9c4b6" }}> / {base != null ? base.toFixed(d.kind === "ratio" ? 2 : 1) : "—"}</Text></Text>
-                <Text style={[s.teamDev, { color: devColor(rel, d.kind) }]}>{fmtDev(rel, d.kind)}</Text>
+                <Text style={[s.teamDev, { color: devColor(rel, d.key) }]}>{fmtDev(rel, d.kind)}</Text>
                 <Text style={s.teamWord}>{sig ? word : (is ? "eins og venjulega" : "as usual")}</Text>
               </View>
             );
           })}
         </View>
+        {lrLine ? <Text style={s.note}>{lrLine}</Text> : null}
 
         {/* AI summary — the same narrative the "Explain" button writes on screen.
             Labelled as AI and written from the numbers above (manifesto). */}
@@ -162,13 +144,18 @@ export async function downloadMatchMovementPdf(
               <View key={r.player_id} style={i % 2 === 0 ? s.tRow : s.tRowAlt}>
                 <Text style={[s.nameCell, { width: nameW }]}>{r.name}</Text>
                 {dims.map((d) => {
-                  const rel = relDev(r.fingerprint[d.key], norm[d.key], d.kind);
-                  return <Text key={d.key} style={[s.cell, { width: colW, color: devColor(rel, d.kind) }]}>{fmtDev(rel, d.kind)}</Text>;
+                  const rel = relDeviation(r.fingerprint[d.key], norm[d.key], d.kind);
+                  return <Text key={d.key} style={[s.cell, { width: colW, color: devColor(rel, d.key) }]}>{fmtDev(rel, d.kind)}</Text>;
                 })}
               </View>
             );
           })}
         </View>
+        {sq.notCounted.length ? (
+          <Text style={s.note}>
+            {(is ? "Ekki talið með (upphitun á hliðarlínu, ekki leikhreyfing): " : "Not counted (touchline warm-up, not match movement): ") + sq.notCounted.map((r) => r.name).join(", ") + "."}
+          </Text>
+        ) : null}
 
         {/* Explainability — the same plain per-dimension definitions the coach
             sees on screen, so the export explains its numbers (manifesto). */}
@@ -184,8 +171,8 @@ export async function downloadMatchMovementPdf(
         })}
         <Text style={s.legend}>
           {is
-            ? "Lestur: hver mælikvarði er borinn saman við venju leikmannsins (eða liðsins). Frávik = fjarlægð frá venju, EKKI meiðslaáhætta. Kóbalt = yfir venju, gull = undir venju, dauft = innan venjulegs bils. „Venja“ = meðaltal leikmanns yfir leiki. Engine (GPS) = hversu mikið; Driver (IMA) = hvernig hann hreyfist. Staðlað á mínútu. Reglur reikna — ekki AI. Buchheit 2014 (persónuleg viðmið), di Prampero 2015."
-            : "How to read it: each dimension is compared to the player's (or squad's) usual. Deviation = distance from usual, NOT an injury-risk score. Cobalt = above usual, gold = below usual, muted = within the usual range. \"Norm\" = the player's match average. Engine (GPS) = how much; Driver (IMA) = how they move. Normalised per minute. Rules compute — not AI. Buchheit 2014 (personal norms), di Prampero 2015."}
+            ? "Lestur: hver mælikvarði er borinn saman við venju leikmannsins (eða liðsins). Frávik = fjarlægð frá venju, EKKI meiðslaáhætta. Kóbalt = yfir venju, gull = undir venju, dauft = innan venjulegs bils (20% frá venju; vinstri/hægri 10 stig). Löng hlaup sveiflast um 30% milli leikja að eðlisfari, svo þau teljast öðruvísi fyrst við 50%; þau segja hve lengi hann hélt áfram að hlaupa, ekki hve hratt. „Venja“ = meðaltal leikmanns yfir leiki. Engine (GPS) = hversu mikið; Driver (IMA) = hvernig hann hreyfist. Staðlað á mínútu. Reglur reikna — ekki AI. Buchheit 2014 (persónuleg viðmið), di Prampero 2015."
+            : "How to read it: each dimension is compared to the player's (or squad's) usual. Deviation = distance from usual, NOT an injury-risk score. Cobalt = above usual, gold = below usual, muted = within the usual range (20% from usual; left/right 10 pts). Long runs swing about 30% between matches by nature, so they count as different only at 50%; they say how long he kept running, not how fast. \"Norm\" = the player's match average. Engine (GPS) = how much; Driver (IMA) = how they move. Normalised per minute. Rules compute — not AI. Buchheit 2014 (personal norms), di Prampero 2015."}
         </Text>
       </Page>
     </Document>,

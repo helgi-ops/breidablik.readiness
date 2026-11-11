@@ -18,6 +18,7 @@ import ShowDetails from "@/components/common/ShowDetails";
 import { CompareRadar, ChartZoom } from "@/components/coach/PlayerGameReportCharts";
 import {
   SUB_BAND_GROUPS,
+  significanceThreshold,
   fmtDim,
   whyWord,
   dimByKey,
@@ -44,9 +45,9 @@ function deviation(key: DimensionKey, cur: number | null, base: number | null): 
   const rel = dim.kind === "pct" ? cur - base : base !== 0 ? ((cur - base) / base) * 100 : 0;
   return { rel, abs: Math.abs(rel) };
 }
+/** Outside the usual range — one rule with the PDF (long runs 50%, others 20%, left/right 10 pts). */
 function isSignificant(key: DimensionKey, abs: number): boolean {
-  const dim = dimByKey(key)!;
-  return dim.kind === "pct" ? abs >= 10 : abs >= 20;
+  return abs >= significanceThreshold(key);
 }
 function dirWord(key: DimensionKey, rel: number, is: boolean): string {
   const d = dimByKey(key)!;

@@ -364,3 +364,18 @@ A row with no reading on either side is hidden, not drawn as 0. The minutes behi
 (this match vs his mean minutes over the norm's matches, `minutesAverages`) are stated on top,
 because the counts are raw, not per minute. The AI narrative gets the same three keys and the
 usual minutes. Red stays only on hard braking and sharp changes of direction.
+
+## Match Movement: long runs are "different" only at 50% (11 Nov 2026)
+
+One rule for the screen and the PDF, `significanceThreshold` in `matchMovement/types.ts`: long runs
+(strides in runs of 18 s or more, per minute) count as different from usual at 50%, other rates at 20%,
+left/right at 10 points. Long runs are a count of ~15 runs a match, so they swing far more between
+matches by nature (median distance from own usual 30% Breiðablik / 23% HK, vs 8–14% for IMA load and
+change of direction). At 20% they were "different" in 68% of Breiðablik player-matches and led the PDF
+headline in 14 of 30 matches; at 50% it is 30% and 5 of 30.
+
+The PDF's squad numbers come from `squadVsUsual` (`matchMovement/squadSummary.ts`): touchline warm-up
+rows are left out of this match and of the squad's usual (as on screen), estimates out of the usual,
+and the players left out are named. Under the squad table one plain line: long runs per 90 min this
+match and at match pace, against the squad's usual (pooled: all runs ÷ all minutes × 90; hidden
+without a run count).

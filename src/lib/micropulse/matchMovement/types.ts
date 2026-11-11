@@ -132,6 +132,20 @@ export function dimByKey(key: string): MovementDimension | undefined {
   return DIM_BY_KEY.get(key);
 }
 
+/**
+ * How far from usual a dimension must sit before it is called "different" (screen + PDF, one rule).
+ * Percent for rates/ratios, points for percentages. Long runs get their own, wider line: they are a
+ * count of ~15 runs a match, so they swing far more between matches by nature. Measured 11 Nov 2026,
+ * player vs own match norm, warm-up rows out: median distance from usual 30% (Breiðablik) / 23% (HK)
+ * for long runs vs 13% / 10% for IMA load and 8% / 12% for change of direction. At 20% long runs were
+ * "different" in 68% of Breiðablik player-matches and led the squad headline in 14 of 30 matches.
+ */
+export const LONG_RUN_SIGNIFICANCE_PCT = 50;
+export function significanceThreshold(key: DimensionKey): number {
+  if (key === "hiCadencePerMin") return LONG_RUN_SIGNIFICANCE_PCT;
+  return dimByKey(key)?.kind === "pct" ? 10 : 20;
+}
+
 /** The coaching interpretation of a signed deviation on a dimension (layer 1). */
 export function whyWord(key: DimensionKey, rel: number, is: boolean): string {
   const d = dimByKey(key)!;
