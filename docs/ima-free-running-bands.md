@@ -379,3 +379,7 @@ rows are left out of this match and of the squad's usual (as on screen), estimat
 and the players left out are named. Under the squad table one plain line: long runs per 90 min this
 match and at match pace, against the squad's usual (pooled: all runs ÷ all minutes × 90; hidden
 without a run count).
+
+Same day, Accel : Decel got its own line too: 30%. It is the ratio of two counts, so the noise of
+both adds up (median distance from own usual 23% Breiðablik / 17% HK, 75th percentile 34% / 29%);
+at 20% it was "different" in 53% / 42% of player-matches.

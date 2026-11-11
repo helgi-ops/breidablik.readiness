@@ -45,7 +45,7 @@ function deviation(key: DimensionKey, cur: number | null, base: number | null): 
   const rel = dim.kind === "pct" ? cur - base : base !== 0 ? ((cur - base) / base) * 100 : 0;
   return { rel, abs: Math.abs(rel) };
 }
-/** Outside the usual range — one rule with the PDF (long runs 50%, others 20%, left/right 10 pts). */
+/** Outside the usual range — one rule with the PDF (long runs 50%, accel:decel 30%, others 20%, left/right 10 pts). */
 function isSignificant(key: DimensionKey, abs: number): boolean {
   return abs >= significanceThreshold(key);
 }

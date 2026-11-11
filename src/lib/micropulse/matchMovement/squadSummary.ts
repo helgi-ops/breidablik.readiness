@@ -4,7 +4,8 @@
  * - This match = the match's rows minus touchline warm-up rows (a substitute's warm-up is real load
  *   but not match movement; the screen and the engine's norms leave it out too).
  * - Usual = every match row that is neither a warm-up row nor an estimate (as the per-player norms).
- * - "Different from usual" uses `significanceThreshold` (long runs 50%, others 20%, left/right 10 pts).
+ * - "Different from usual" uses `significanceThreshold` (long runs 50%, accel:decel 30%, others 20%,
+ *   left/right 10 pts).
  * - Long runs in plain numbers: runs of 18 s or more per 90 minutes, pooled (all runs ÷ all minutes),
  *   and how many of them at match pace (≥11 km/h, GPS only). Null without a count (rows before the
  *   June 2026 re-sync) — never shown as 0.

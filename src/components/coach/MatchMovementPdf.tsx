@@ -12,7 +12,7 @@
  * Core/Lite (no new data — reuses the computeMatchMovement result).
  *
  * Squad numbers come from `squadVsUsual` (touchline warm-up rows out, as on screen);
- * "outside the usual range" is `significanceThreshold` — long runs 50%, others 20%.
+ * "outside the usual range" is `significanceThreshold` — long runs 50%, accel:decel 30%, others 20%.
  */
 
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
@@ -171,8 +171,8 @@ export async function downloadMatchMovementPdf(
         })}
         <Text style={s.legend}>
           {is
-            ? "Lestur: hver mælikvarði er borinn saman við venju leikmannsins (eða liðsins). Frávik = fjarlægð frá venju, EKKI meiðslaáhætta. Kóbalt = yfir venju, gull = undir venju, dauft = innan venjulegs bils (20% frá venju; vinstri/hægri 10 stig). Löng hlaup sveiflast um 30% milli leikja að eðlisfari, svo þau teljast öðruvísi fyrst við 50%; þau segja hve lengi hann hélt áfram að hlaupa, ekki hve hratt. „Venja“ = meðaltal leikmanns yfir leiki. Engine (GPS) = hversu mikið; Driver (IMA) = hvernig hann hreyfist. Staðlað á mínútu. Reglur reikna — ekki AI. Buchheit 2014 (persónuleg viðmið), di Prampero 2015."
-            : "How to read it: each dimension is compared to the player's (or squad's) usual. Deviation = distance from usual, NOT an injury-risk score. Cobalt = above usual, gold = below usual, muted = within the usual range (20% from usual; left/right 10 pts). Long runs swing about 30% between matches by nature, so they count as different only at 50%; they say how long he kept running, not how fast. \"Norm\" = the player's match average. Engine (GPS) = how much; Driver (IMA) = how they move. Normalised per minute. Rules compute — not AI. Buchheit 2014 (personal norms), di Prampero 2015."}
+            ? "Lestur: hver mælikvarði er borinn saman við venju leikmannsins (eða liðsins). Frávik = fjarlægð frá venju, EKKI meiðslaáhætta. Kóbalt = yfir venju, gull = undir venju, dauft = innan venjulegs bils (20% frá venju; vinstri/hægri 10 stig). Hröðun : Hemlun er hlutfall tveggja talna og sveiflast meira, svo það telst öðruvísi við 30%. Löng hlaup sveiflast um 30% milli leikja að eðlisfari, svo þau teljast öðruvísi fyrst við 50%; þau segja hve lengi hann hélt áfram að hlaupa, ekki hve hratt. „Venja“ = meðaltal leikmanns yfir leiki. Engine (GPS) = hversu mikið; Driver (IMA) = hvernig hann hreyfist. Staðlað á mínútu. Reglur reikna — ekki AI. Buchheit 2014 (persónuleg viðmið), di Prampero 2015."
+            : "How to read it: each dimension is compared to the player's (or squad's) usual. Deviation = distance from usual, NOT an injury-risk score. Cobalt = above usual, gold = below usual, muted = within the usual range (20% from usual; left/right 10 pts). Accel : Decel is a ratio of two counts and swings more, so it counts as different at 30%. Long runs swing about 30% between matches by nature, so they count as different only at 50%; they say how long he kept running, not how fast. \"Norm\" = the player's match average. Engine (GPS) = how much; Driver (IMA) = how they move. Normalised per minute. Rules compute — not AI. Buchheit 2014 (personal norms), di Prampero 2015."}
         </Text>
       </Page>
     </Document>,

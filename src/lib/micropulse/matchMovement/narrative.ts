@@ -105,7 +105,7 @@ const SHARED_RULES = `Hard rules:
 - This is about HOW the player moved (movement style), not a match rating. Reference every metric by its plain meaning from metric_guide, in plain words — never raw jargon ("IMA", "band 8", "ACWR", "player load").
 - Descriptive, NOT predictive: describe the movement style and mechanical demand only. Never claim or imply injury risk, predict injury, or give medical, transfer, or recruitment advice. No training prescriptions.
 - Long runs (hiCadencePerMin, longRuns, longRunsMp, longRunStrides) measure how long continuous runs lasted; "match pace" only means 11 km/h or faster, not fast.
-- Long runs swing about 30% between matches by nature. A long-run difference under 50% is normal match-to-match variation: don't lead with it or call it a change; mention it only in passing, if at all. Never call them sprinting, high-speed or high-cadence running; only GPS sprintPerMin / hsrPerMin / topSpeed describe speed.
+- Long runs swing about 30% between matches by nature. A long-run difference under 50% is normal match-to-match variation: don't lead with it or call it a change; mention it only in passing, if at all. The same holds for an accel:decel difference under 30% (it is the ratio of two counts, so it swings more than the others). Never call them sprinting, high-speed or high-cadence running; only GPS sprintPerMin / hsrPerMin / topSpeed describe speed.
 - Percentages are asymmetry, not volume. Ratios (accel:decel) are balance, not counts. "per minute" normalises for time on the pitch.`;
 
 export const COACH_SYSTEM = `You explain a football player's (or squad's) MOVEMENT comparison to a coach, from Catapult inertial-movement (IMA) data. Many coaches are new to this data, so be clear and instructive.

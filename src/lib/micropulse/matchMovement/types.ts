@@ -139,10 +139,15 @@ export function dimByKey(key: string): MovementDimension | undefined {
  * player vs own match norm, warm-up rows out: median distance from usual 30% (Breiðablik) / 23% (HK)
  * for long runs vs 13% / 10% for IMA load and 8% / 12% for change of direction. At 20% long runs were
  * "different" in 68% of Breiðablik player-matches and led the squad headline in 14 of 30 matches.
+ * Accel : Decel is a ratio of two counts, so the noise of both adds up: median distance from usual
+ * 23% (Breiðablik) / 17% (HK), 75th percentile 34% / 29%. At 20% it was "different" in 53% / 42% of
+ * player-matches; at 30% about a third, like the other dimensions.
  */
 export const LONG_RUN_SIGNIFICANCE_PCT = 50;
+export const ACCEL_DECEL_SIGNIFICANCE_PCT = 30;
 export function significanceThreshold(key: DimensionKey): number {
   if (key === "hiCadencePerMin") return LONG_RUN_SIGNIFICANCE_PCT;
+  if (key === "accelDecelRatio") return ACCEL_DECEL_SIGNIFICANCE_PCT;
   return dimByKey(key)?.kind === "pct" ? 10 : 20;
 }
 

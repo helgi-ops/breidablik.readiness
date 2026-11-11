@@ -17,8 +17,11 @@ const result = (rows: MatchMovementRow[]): MatchMovementResult => ({
 });
 
 describe("significance thresholds", () => {
-  it("long runs need 50%, rates 20%, left/right 10 points", () => {
+  it("long runs need 50%, accel:decel 30%, rates 20%, left/right 10 points", () => {
     expect(significanceThreshold("hiCadencePerMin")).toBe(50);
+    expect(significanceThreshold("accelDecelRatio")).toBe(30);
+    expect(isOutsideUsual("accelDecelRatio", 25)).toBe(false);
+    expect(isOutsideUsual("accelDecelRatio", -34)).toBe(true);
     expect(significanceThreshold("totalPerMin")).toBe(20);
     expect(significanceThreshold("codLeftPct")).toBe(10);
     expect(isOutsideUsual("hiCadencePerMin", 30)).toBe(false);
