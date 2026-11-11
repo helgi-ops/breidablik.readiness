@@ -16,15 +16,24 @@ import { type ClockGrid } from "@/lib/micropulse/directionalSignature";
 import { imaCodTotal } from "@/lib/micropulse/catapultCapability";
 import { longRunLoadMetres, longRunLoadStrides } from "@/lib/micropulse/longRuns";
 import { VALD_RUNTIME } from "@/lib/integrations/vald/config";
+import { resolveMas, type MasResolved } from "@/lib/micropulse/load/speedZonesData";
+import { masSourceLabel, latestTestsByPlayer, freshestAerobicDate, type LatestTest } from "./fitnessTestRead";
 
 /**
  * Assemble the periodization recommendation from the team's OWN data — read-only, composes the pure
- * engine. Descriptive planning; never reads or writes the readiness colour. MAS from a max running
- * test (4-min ≈ vVO₂max/MAS proxy, Bellenger 2015); strength from the latest VBT set.
+ * engine. Descriptive planning; never reads or writes the readiness colour. MAS from the shared
+ * resolver over every recorded fitness test (Conditioning's store + the 4-min running tests; a 30-15 IFT
+ * gives an estimate, Buchheit 2008); strength from the latest VBT set.
  */
 export type PlayerPeriodization = {
   playerId: string; name: string; position: string | null;
-  masKmh: number | null; masSource: string | null; masAgeDays: number | null;
+  /** MAS from the shared resolver (`resolveMas`, the same as Conditioning's speed zones): the freshest measured
+   *  MAS (VAMEVAL / beep / 4-min run) beats a 30-15 IFT estimate (VIFT × 0.86). masSource = the test's plain name. */
+  masKmh: number | null; masSource: string | null; masSourceIs: string | null; masEstimated: boolean; masAgeDays: number | null;
+  /** Days since the freshest aerobic test of ANY kind (incl. Yo-Yo, which gives no MAS) — drives "due now". */
+  aerobicTestAgeDays: number | null;
+  /** Latest result per recorded test type (all nine Conditioning tests), newest first. */
+  latestTests: LatestTest[];
   intervals: IntervalZone[]; vbt: VbtRead; strengthFallback: StrengthDefault | null;
   vald: ValdCap; gaps: DataGap[];
   matchUnit: MatchUnit; weekTargets: { preseason: WeekTargetPlan; inseason: WeekTargetPlan; current: "preseason" | "inseason" };
@@ -348,19 +357,14 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     }
   }
 
-  // Latest max running test per player (MAS proxy). speed_m_per_min → km/h.
-  const runByPlayer = new Map<string, { masKmh: number; date: string; name: string }>();
-  if (ids.length) {
-    const { data: rt } = await sb.from("player_running_test")
-      .select("player_id, test_date, test_name, speed_m_per_min, distance_m, duration_s")
-      .eq("team_id", args.teamId).order("test_date", { ascending: false });
-    for (const r of (rt ?? []) as Array<{ player_id: string; test_date: string; test_name: string | null; speed_m_per_min: number | null; distance_m: number | null; duration_s: number | null }>) {
-      if (runByPlayer.has(r.player_id)) continue; // latest wins (ordered desc)
-      const kmh = r.speed_m_per_min != null ? r.speed_m_per_min * 0.06
-        : r.distance_m != null && r.duration_s ? (r.distance_m / r.duration_s) * 3.6 : null;
-      if (kmh != null && kmh > 0) runByPlayer.set(r.player_id, { masKmh: Math.round(kmh * 10) / 10, date: r.test_date, name: r.test_name ?? "run test" });
-    }
-  }
+  // MAS per player from the shared resolver (both test stores, provenance-ranked) + every recorded fitness
+  // test, so a result entered on Conditioning (any of the nine tests) reaches the plan.
+  const masByPlayer = ids.length ? await resolveMas(args.teamId, sb) : new Map<string, MasResolved>();
+  const latestTests = ids.length
+    ? latestTestsByPlayer(await fetchAllPages<{ player_id: string | null; test_date: string | null; test_type: string | null; result_value: number | null; result_unit: string | null }>((from, to) =>
+        sb.from("player_fitness_test").select("player_id, test_date, test_type, result_value, result_unit")
+          .eq("team_id", args.teamId).order("test_date", { ascending: false }).range(from, to)))
+    : new Map<string, LatestTest[]>();
   // Any Critical Speed test for the squad? (Breiðablik has none → the gap panel says so.)
   const { count: csCount } = await sb.from("player_cs_test").select("id", { count: "exact", head: true }).eq("team_id", args.teamId);
   const hasCsTest = (csCount ?? 0) > 0;
@@ -469,8 +473,11 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   }
 
   const out: PlayerPeriodization[] = players.map((p) => {
-    const run = runByPlayer.get(p.id) ?? null;
-    const masAge = run ? ageDays(run.date, todayMs) : null;
+    const mas = masByPlayer.get(p.id) ?? null;
+    const masAge = mas ? ageDays(mas.date, todayMs) : null;
+    const masLabel = mas ? masSourceLabel(mas.source) : null;
+    const tests = latestTests.get(p.id) ?? [];
+    const aerobicAge = ageDays(freshestAerobicDate(tests, [mas?.date]), todayMs);
     const vbt = vbtByPlayer.get(p.id) ?? null;
     const vbtAge = vbt ? ageDays(vbt.date, todayMs) : null;
     const vs = valdByPlayer.get(p.id) ?? null;
@@ -491,13 +498,14 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
     return {
       playerId: p.id, name: p.full_name ?? "Player", position: p.position ?? null,
-      masKmh: run?.masKmh ?? null, masSource: run?.name ?? null, masAgeDays: masAge,
-      intervals: intervalSpeedsFromMas(run?.masKmh ?? null),
+      masKmh: mas?.masKmh ?? null, masSource: masLabel?.label.en ?? null, masSourceIs: masLabel?.label.is ?? null,
+      masEstimated: masLabel?.estimated ?? false, masAgeDays: masAge, aerobicTestAgeDays: aerobicAge, latestTests: tests,
+      intervals: intervalSpeedsFromMas(mas?.masKmh ?? null),
       vbt: vbtRead,
       strengthFallback: vbtRead ? null : (curBlock ? strengthDefaultForBlock(curBlock.phase.en, curBlock.isDeload) : null),
       vald,
       matchUnit, weekTargets, recentMinutesAvg: recentMinutesAvgOf(p.id), injuryStatus: injuryStatusByPlayer.get(p.id) ?? null, recentBaseline: recentBaselineOf(p.id),
-      gaps: dataReadiness({ hasCsTest, masAgeDays: masAge, vbtAgeDays: vbtAge, hasValdThisBlock: valdFresh }),
+      gaps: dataReadiness({ hasCsTest, masAgeDays: masAge, masTest: masLabel ? { ...masLabel.label, estimated: masLabel.estimated } : null, aerobicTestAgeDays: aerobicAge, vbtAgeDays: vbtAge, hasValdThisBlock: valdFresh }),
     };
   });
 

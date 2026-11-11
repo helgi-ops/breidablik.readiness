@@ -771,6 +771,18 @@ test("dataReadiness: names the gaps (no CS test, stale VBT) instead of faking", 
   assert.ok(gaps.find((g) => g.key === "vald" && g.severity === "missing"));
 });
 
+test("dataReadiness: names the test the MAS came from, marks an estimate, and staleness reads any aerobic test", () => {
+  const est = dataReadiness({ hasCsTest: false, masAgeDays: 20, masTest: { en: "30-15 IFT", is: "30-15 IFT", estimated: true }, vbtAgeDays: 10, hasValdThisBlock: true });
+  assert.ok(est.find((g) => g.key === "cs" && /30-15 IFT estimate of MAS/.test(g.message.en) && /áætlun/.test(g.message.is)));
+  const measured = dataReadiness({ hasCsTest: false, masAgeDays: 20, masTest: { en: "Beep test (20 m MSFT)", is: "Bíp-test (20 m)", estimated: false }, vbtAgeDays: 10, hasValdThisBlock: true });
+  assert.ok(measured.find((g) => g.key === "cs" && /Beep test/.test(g.message.en) && !/estimate/.test(g.message.en)));
+  // An old MAS but a fresh Yo-Yo: the squad WAS tested — no "stale" gap.
+  const freshYoYo = dataReadiness({ hasCsTest: false, masAgeDays: 200, aerobicTestAgeDays: 7, vbtAgeDays: 10, hasValdThisBlock: true });
+  assert.equal(freshYoYo.some((g) => g.key === "mas"), false);
+  const old = dataReadiness({ hasCsTest: false, masAgeDays: 200, aerobicTestAgeDays: 120, vbtAgeDays: 10, hasValdThisBlock: true });
+  assert.ok(old.find((g) => g.key === "mas" && /120 days/.test(g.message.en)));
+});
+
 // ── Fixture-aware block goals (in-season blocks follow the calendar, not odd/even) ──
 test("buildMesoBlocks: without competitiveStart keeps the mechanical accum→transmute↔realize order", () => {
   const blocks = buildMesoBlocks("2026-03-01", "2026-06-21", [], 4, 650, ["2026-04-05", "2026-04-12", "2026-05-03"]);

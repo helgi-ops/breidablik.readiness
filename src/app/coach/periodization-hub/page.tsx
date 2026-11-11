@@ -40,7 +40,8 @@ import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVol
 import { mdOffset } from "@/lib/micropulse/periodization/periodizationModel";
 import { buildDayDrillSheet } from "@/lib/micropulse/dayDrillSheet";
 import { fetchResearchDrills } from "@/lib/micropulse/dayDrillLibraryFetch";
-import { recommendTestingSchedule, testsForBlock, TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
+import { recommendTestingSchedule, testsForBlock, TEST_SHORT, testShortName, AEROBIC_TESTS, DEFAULT_AEROBIC_TEST, isAerobicMode, type TestKey, type AerobicMode } from "@/lib/micropulse/periodization/testingSchedule";
+import FitnessTestCard from "@/components/coach/FitnessTestCard";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
 type Bi = { en: string; is: string };
@@ -60,7 +61,8 @@ type MatchUnitMetric = { typical: number | null; peak: number | null };
 type MatchUnit = { nNearFull: number; nInWindow: number; fellBack: boolean; confidence: "high" | "medium" | "low"; windowNote: Bi; minutesTypical: number | null; load: MatchUnitMetric; hsr: MatchUnitMetric; sprint: MatchUnitMetric; distance: MatchUnitMetric; accel: MatchUnitMetric; decel: MatchUnitMetric; accHiEff: MatchUnitMetric; decHiEff: MatchUnitMetric; stride: MatchUnitMetric; rhie: MatchUnitMetric; symmetry: MatchUnitMetric; metPower: MatchUnitMetric; imaCod: MatchUnitMetric; imaFr: MatchUnitMetric };
 type WeekTargetPlan = { phase: "preseason" | "inseason"; sessionCount: number; weeklyLoadTarget: number | null; perSessionLoad: number | null; matchMultiple: number | null; topUp: number | null; note: Bi; cite: string };
 type RecentBaseline = { sessions: number; playerLoad: number | null; hsrM: number | null; distanceM: number | null; sprintM: number | null };
-type Player = { playerId: string; name: string; position: string | null; masKmh: number | null; masSource: string | null; masAgeDays: number | null; intervals: Interval[]; vbt: Vbt; strengthFallback: StrengthDefault | null; vald: Vald; gaps: Gap[]; matchUnit: MatchUnit; weekTargets: { preseason: WeekTargetPlan; inseason: WeekTargetPlan; current: "preseason" | "inseason" }; recentMinutesAvg: number | null; recentBaseline: RecentBaseline | null };
+type LatestTest = { type: string; label: Bi; value: number; unit: string; date: string };
+type Player = { playerId: string; name: string; position: string | null; masKmh: number | null; masSource: string | null; masSourceIs?: string | null; masEstimated?: boolean; masAgeDays: number | null; aerobicTestAgeDays?: number | null; latestTests?: LatestTest[]; intervals: Interval[]; vbt: Vbt; strengthFallback: StrengthDefault | null; vald: Vald; gaps: Gap[]; matchUnit: MatchUnit; weekTargets: { preseason: WeekTargetPlan; inseason: WeekTargetPlan; current: "preseason" | "inseason" }; recentMinutesAvg: number | null; recentBaseline: RecentBaseline | null };
 type TeamAvg = { sessions: number; players: number; distanceM: number | null; hsrM: number | null; sprintM: number | null; maxKmh: number | null; playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null; direction: { forward: number; backward: number; lateral: number } | null; matchSessions: number; matchDistanceM: number | null; matchHsrM: number | null; matchPlayerLoad: number | null; matchSprintM: number | null; matchAccel: number | null; matchDecel: number | null; imaCod: number | null; matchImaCod: number | null; imaFrDist: number | null; matchImaFrDist: number | null; accelHiEff: number | null; decelHiEff: number | null; strideHi: number | null; matchAccelHiEff: number | null; matchDecelHiEff: number | null; matchStrideHi: number | null; rhieBouts: number | null; runSymmetry: number | null; metabolicPower: number | null };
 type AxisMetric = { metric: Bi; matchValue: string; trainingCeiling: string; band: string };
 type Axis = { axis: "running" | "mechanical" | "internal"; label: Bi; matchNote: Bi; metrics: AxisMetric[]; flag: Bi | null };
@@ -335,6 +337,9 @@ export default function PeriodizationHubPage() {
   // Scheduled performance tests (dates pinned to test types) — shared with Week Setup via the API.
   const [scheduledTests, setScheduledTests] = React.useState<{ id: string; test_key: TestKey; test_date: string; note: string | null }[]>([]);
   const [testAddKey, setTestAddKey] = React.useState<TestKey>("aerobic");
+  // The team's aerobic test (one of the six Conditioning tests) — names every "Aerobic" chip + protocol.
+  const [aerobicTest, setAerobicTest] = React.useState<AerobicMode>(DEFAULT_AEROBIC_TEST);
+  const [showTestEntry, setShowTestEntry] = React.useState(false); // Players tab: record-a-test form open
   const [testAddDate, setTestAddDate] = React.useState<string>(() => new Date().toISOString().slice(0, 10));
   const [testShowAll, setTestShowAll] = React.useState(false); // Testing tab: show every block, not just the next three
   const [testFocus, setTestFocus] = React.useState<string | null>(null); // Testing tab: block (start ISO) clicked on the strip
@@ -428,6 +433,7 @@ export default function PeriodizationHubPage() {
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) { setErr(j.error ?? "Failed"); return; }
       setPlan(j.plan as Plan);
+      if (isAerobicMode((j as { aerobicTest?: unknown }).aerobicTest)) setAerobicTest((j as { aerobicTest: AerobicMode }).aerobicTest);
       // Track the loaded season year (first load resolves `viewYear` to the current season).
       viewYearRef.current = (j.plan as Plan).seasonYear;
       setViewYear((j.plan as Plan).seasonYear);
@@ -517,6 +523,8 @@ export default function PeriodizationHubPage() {
   // Live-sync: any fixture change (this tab or another open tab / the Fixtures page / Week Setup) refetches
   // so the Macro anchors + Meso block re-derive without a manual reload. RLS scopes events to this team.
   useMatchScheduleRealtime("hub", React.useCallback(() => { void load(preStart, seasonEnd); }, [load, preStart, seasonEnd]), !!plan);
+  // A fitness test recorded on the Players tab → reload, so the new MAS + interval speeds show.
+  const reloadAfterTest = React.useCallback(() => { void load(preStart, seasonEnd); }, [load, preStart, seasonEnd]);
 
   // Declared team breaks (frí) — the SAME source Week Setup locks on; the macro reads them so a real
   // break becomes its own re-load block (and a break day is a rest day in the block map).
@@ -623,6 +631,20 @@ export default function PeriodizationHubPage() {
         await fetch("/api/coach/periodization", {
           method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() },
           body: JSON.stringify({ seasonYear: plan.seasonYear, overrides: overridesPayload(c) }),
+        });
+      } catch { /* best-effort persist */ }
+    })();
+  };
+
+  // Pick the team's aerobic test and persist it to this season's plan (Week setup reads the same choice).
+  const changeAerobicTest = (k: AerobicMode) => {
+    setAerobicTest(k);
+    if (!plan) return;
+    (async () => {
+      try {
+        await fetch("/api/coach/periodization", {
+          method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() },
+          body: JSON.stringify({ seasonYear: plan.seasonYear, overrides: { aerobicTest: k } }),
         });
       } catch { /* best-effort persist */ }
     })();
@@ -1820,12 +1842,12 @@ export default function PeriodizationHubPage() {
                   <a href="?tab=testing" onClick={(e) => { e.preventDefault(); setTab("testing"); }} className="font-semibold text-[#2740e6] hover:underline">{is ? "Skipuleggja →" : "Schedule →"}</a>,
                   <div className="relative h-6">
                     {blocks.map((b) => {
-                      const bt = testsForBlock(b.goalKey, { hasVald, hasGps });
+                      const bt = testsForBlock(b.goalKey, { hasVald, hasGps, aerobicMode: aerobicTest });
                       if (!bt.protocols.length) return null;
                       return <span key={`r${b.index}`} title={`${is ? "Ráðlagt" : "Recommended"} · ${shortDate(b.start, is)}\n${is ? bt.when.is : bt.when.en}\n${bt.protocols.map((p) => (is ? p.name.is : p.name.en)).join(", ")}`} className="absolute top-1/2 h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[1px] border-2 border-[#1C7A4A] bg-white" style={{ left: `${pctOf(b.start) + (0.5 / spanDays) * 100}%` }} />;
                     })}
                     {schedClusters.map((c, ci) => (
-                      <span key={`s${ci}`} title={c.days.map((d) => `${shortDate(d.date, is)}: ${d.keys.map((k) => (is ? TEST_SHORT[k].is : TEST_SHORT[k].en)).join(", ")}`).join("\n")} className="absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1" style={{ left: `${c.pct + (0.5 / spanDays) * 100}%` }}>
+                      <span key={`s${ci}`} title={c.days.map((d) => `${shortDate(d.date, is)}: ${d.keys.map((k) => (is ? testShortName(k, aerobicTest).is : testShortName(k, aerobicTest).en)).join(", ")}`).join("\n")} className="absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1" style={{ left: `${c.pct + (0.5 / spanDays) * 100}%` }}>
                         <span className="h-[10px] w-[10px] rotate-45 rounded-[1px] border-2 border-[#1C7A4A] bg-[#1C7A4A]" />
                         {c.tests > 1 && <span className="text-[11px] font-bold text-[#15603A]">×{c.tests}</span>}
                       </span>
@@ -2233,7 +2255,7 @@ export default function PeriodizationHubPage() {
             const matchLoadUnit = tka.totalPlayerLoad ?? plan.matchLoad; // PL match unit for the budget
             const hasVald = plan.players.some((p) => p.vald.status != null);
             const hasGps = plan.tier.loadSource === "gps";
-            const tests = recommendTestingSchedule({ preseasonWeeks: preWeeks, hasGps, hasVald });
+            const tests = recommendTestingSchedule({ preseasonWeeks: preWeeks, hasGps, hasVald, aerobicMode: aerobicTest });
             const typeColor: Record<string, string> = { mechanical: "#A83E28", locomotive: "#15603A", mixed: "#1B2DA8", activation: "#475569", topup: "#55389E", match: "#7A4A06", rest: "#64748B" };
             const tint: Record<string, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#F0EAF7", match: "#FBEFDD", rest: "#F8FAFC" };
             const typeName = (t: string): string => t === "mechanical" ? (is ? "Mekanískt" : "Mechanical") : t === "locomotive" ? (is ? "Hlaup" : "Locomotive") : t === "mixed" ? (is ? "Blandað" : "Mixed") : t === "activation" ? (is ? "Virkjun" : "Activation") : t === "topup" ? (is ? "Áfylling" : "Top-up") : t === "match" ? (is ? "Leikur" : "Match") : (is ? "Frí" : "Off");
@@ -2496,7 +2518,7 @@ export default function PeriodizationHubPage() {
                 )}
                 {(weekTests.length > 0 || weekFx.length > 0) && (
                   <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
-                    {weekTests.map((tp) => <span key={tp.protocol.key} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700" title={is ? tp.protocol.name.is : tp.protocol.name.en}>{is ? TEST_SHORT[tp.protocol.key].is : TEST_SHORT[tp.protocol.key].en}</span>)}
+                    {weekTests.map((tp) => <span key={tp.protocol.key} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700" title={is ? tp.protocol.name.is : tp.protocol.name.en}>{is ? testShortName(tp.protocol.key, aerobicTest).is : testShortName(tp.protocol.key, aerobicTest).en}</span>)}
                     {weekFx.map((d) => <span key={d} className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">{is ? "Æfingaleikur" : "Friendly"} {shortDate(d, is)}</span>)}
                   </div>
                 )}
@@ -2780,7 +2802,7 @@ export default function PeriodizationHubPage() {
             }
             const todayPct = mesoBlocks.length && utc(todayIso) >= d0 && utc(todayIso) < d1 ? pctOf(todayIso) : null;
             const trendWord = (t: MesoBlock["loadTrend"]) => t === "rising" ? (is ? "↗ hækkandi" : "↗ rising") : t === "falling" ? (is ? "↘ lækkandi" : "↘ falling") : t === "steady" ? (is ? "→ stöðugt" : "→ steady") : "—";
-            const bt = sel ? testsForBlock(sel.goalKey, { hasVald: plan.players.some((p) => p.vald.status != null), hasGps: plan.tier.loadSource === "gps" }) : null;
+            const bt = sel ? testsForBlock(sel.goalKey, { hasVald: plan.players.some((p) => p.vald.status != null), hasGps: plan.tier.loadSource === "gps", aerobicMode: aerobicTest }) : null;
             const blockScheduled = sel ? scheduledTests.filter((s) => s.test_date >= sel.start && s.test_date < sel.end).sort((a, c) => a.test_date.localeCompare(c.test_date)) : [];
             const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
 
@@ -3157,7 +3179,7 @@ export default function PeriodizationHubPage() {
                   </div>
                   {blockScheduled.length > 0 ? (
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      {blockScheduled.map((s) => <span key={s.id} className="inline-flex items-center gap-1.5 rounded-full bg-[#1C7A4A] px-2 py-0.5 text-[12px] font-semibold text-white"><span className="h-2 w-2 rotate-45 bg-white" />{shortDate(s.test_date, is)} · {is ? TEST_SHORT[s.test_key].is : TEST_SHORT[s.test_key].en}</span>)}
+                      {blockScheduled.map((s) => <span key={s.id} className="inline-flex items-center gap-1.5 rounded-full bg-[#1C7A4A] px-2 py-0.5 text-[12px] font-semibold text-white"><span className="h-2 w-2 rotate-45 bg-white" />{shortDate(s.test_date, is)} · {is ? testShortName(s.test_key, aerobicTest).is : testShortName(s.test_key, aerobicTest).en}</span>)}
                     </div>
                   ) : <p className="mt-1 text-[12px] text-slate-500">{is ? "Engin próf skráð í þessari lotu." : "No tests scheduled in this block."}</p>}
                   {bt.protocols.length > 0 && (<>
@@ -3376,7 +3398,7 @@ export default function PeriodizationHubPage() {
             const hasVald = plan.players.some((p) => p.vald.status != null);
             const hasGps = plan.tier.loadSource === "gps";
             const keys = Object.keys(TEST_SHORT) as TestKey[];
-            const nameOf = (k: TestKey) => (is ? TEST_SHORT[k].is : TEST_SHORT[k].en);
+            const nameOf = (k: TestKey) => (is ? testShortName(k, aerobicTest).is : testShortName(k, aerobicTest).en);
             const GC: Record<BlockGoalKey, string> = { accum: "#2740E6", transmute: "#7A5CC4", realize: "#1C7A4A", deload: "#DE9328" };
             const DAY = 86_400_000;
             const utc = (iso: string) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
@@ -3396,7 +3418,7 @@ export default function PeriodizationHubPage() {
             const baseIdx = nowIdx >= 0 ? nowIdx : firstFuture >= 0 ? firstFuture : Math.max(0, mesoBlocks.length - 1);
             const focusIdx = testFocus ? Math.max(0, mesoBlocks.findIndex((b) => b.start === testFocus)) : baseIdx;
             const visible = testShowAll ? mesoBlocks : mesoBlocks.slice(focusIdx, focusIdx + 3);
-            const recFor = (b: MesoBlock) => testsForBlock(b.goalKey, { hasVald, hasGps });
+            const recFor = (b: MesoBlock) => testsForBlock(b.goalKey, { hasVald, hasGps, aerobicMode: aerobicTest });
             // "Missing" = recommended protocols in the current + next two blocks with no date yet.
             const gap = mesoBlocks.slice(baseIdx, baseIdx + 3).reduce((n, b) => n + recFor(b).protocols.filter((p) => !scheduledIn(p.key, b)).length, 0);
             const next = upcoming[0] ?? null;
@@ -3428,7 +3450,7 @@ export default function PeriodizationHubPage() {
             const schedByDate = new Map<string, TestKey[]>();
             for (const s of sorted) { if (utc(s.test_date) < d0 || utc(s.test_date) >= d1) continue; schedByDate.set(s.test_date, [...(schedByDate.get(s.test_date) ?? []), s.test_key]); }
             // Every protocol the schedule can recommend (for the reference list).
-            const allProtocols = (["accum", "transmute", "realize", "deload"] as const).flatMap((g) => testsForBlock(g, { hasVald, hasGps }).protocols)
+            const allProtocols = (["accum", "transmute", "realize", "deload"] as const).flatMap((g) => testsForBlock(g, { hasVald, hasGps, aerobicMode: aerobicTest }).protocols)
               .filter((p, i, arr) => arr.findIndex((x) => x.key === p.key) === i);
             const moveTest = async (s: { id: string; test_key: TestKey; test_date: string }, v: string) => { if (v && v !== s.test_date) { await unscheduleTest(s.id); await scheduleTest(s.test_key, v); } };
 
@@ -3462,6 +3484,29 @@ export default function PeriodizationHubPage() {
                     </div>
                   </div>
                 </section>
+
+                {/* 1b — WHICH AEROBIC TEST: the same six tests Conditioning records. The choice names the
+                    "Aerobic" chips + protocol here and in Week setup; results of ANY test still count. */}
+                {(() => {
+                  const opt = AEROBIC_TESTS.find((o) => o.key === aerobicTest) ?? AEROBIC_TESTS[0];
+                  const tested = plan.players.filter((p) => (p.latestTests ?? []).some((t) => t.type === aerobicTest)).length;
+                  return (
+                    <section className={card}>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <h2 className={h2}>{is ? "Þolpróf liðsins" : "The team's aerobic test"}</h2>
+                        <select value={aerobicTest} onChange={(e) => { if (isAerobicMode(e.target.value)) changeAerobicTest(e.target.value); }} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[13px] font-semibold text-slate-900">
+                          {AEROBIC_TESTS.map((o) => <option key={o.key} value={o.key}>{is ? o.label.is : o.label.en}</option>)}
+                        </select>
+                        <span className="text-[12px] text-slate-500">{is ? `${tested} af ${plan.players.length} leikmönnum með niðurstöðu` : `${tested} of ${plan.players.length} players have a result`}</span>
+                      </div>
+                      <p className="mt-2 text-[13px] text-slate-700">{is ? opt.note.is : opt.note.en}</p>
+                      <p className="mt-1 text-[12px] text-slate-500">{is
+                        ? "Sömu sex þolpróf og á Conditioning. Hraðinn (MAS) hvers leikmanns kemur úr nýjasta hraðaprófi hans, hvaða prófi sem er; mælt MAS gengur fyrir áætlun úr 30-15. Niðurstöður eru skráðar á Conditioning eða á Players-flipanum hér."
+                        : "The same six aerobic tests as Conditioning. Each player's speed (MAS) comes from his latest speed test of any kind; a measured MAS beats a 30-15 estimate. Record results on Conditioning or on the Players tab here."}
+                        <span className="text-slate-400"> · {opt.cite}</span></p>
+                    </section>
+                  );
+                })()}
 
                 {/* 2 — SEASON STRIP: blocks + tests on one date axis */}
                 {mesoBlocks.length > 0 && (
@@ -3634,11 +3679,12 @@ export default function PeriodizationHubPage() {
             {plan && (() => {
               const preWeeks = Math.max(1, plan.phases.find((p) => p.key === "preseason")?.weeks ?? 6);
               const hasVald = plan.players.some((p) => p.vald.status != null);
-              const schedule = recommendTestingSchedule({ preseasonWeeks: preWeeks, hasGps: plan.tier.loadSource === "gps", hasVald });
+              const schedule = recommendTestingSchedule({ preseasonWeeks: preWeeks, hasGps: plan.tier.loadSource === "gps", hasVald, aerobicMode: aerobicTest });
               // "Due now" counts from current staleness (re-test the players who are missing/old).
               const STALE = 42; // days
               const dueBy: Partial<Record<TestKey, number>> = {
-                aerobic: plan.players.filter((p) => p.masAgeDays == null || p.masAgeDays > STALE).length,
+                // Any aerobic test counts (a recent Yo-Yo means he WAS tested, though it gives no MAS).
+                aerobic: plan.players.filter((p) => { const a = p.aerobicTestAgeDays ?? p.masAgeDays; return a == null || a > STALE; }).length,
                 maxStrength: plan.players.filter((p) => !p.vbt).length,
                 cmj: plan.players.filter((p) => p.vald.status == null).length,
               };
@@ -3718,7 +3764,7 @@ export default function PeriodizationHubPage() {
             };
             const chips: Array<{ label: string; tone: Tone; title: string }> = player ? [
               { label: is ? "Leikviðmið" : "Match unit", tone: player.matchUnit.load.typical == null ? "bad" : player.matchUnit.confidence === "low" ? "warn" : "ok", title: is ? player.matchUnit.windowNote.is : player.matchUnit.windowNote.en },
-              { label: "MAS", tone: player.masKmh == null ? "bad" : player.masAgeDays != null && player.masAgeDays > 42 ? "warn" : "ok", title: player.masKmh == null ? (is ? "Ekkert þolpróf" : "No endurance test") : `${player.masKmh} km/h${player.masAgeDays != null ? ` · ${player.masAgeDays} ${is ? "daga gamalt" : "days old"}` : ""}` },
+              { label: "MAS", tone: player.masKmh == null ? "bad" : player.masAgeDays != null && player.masAgeDays > 42 ? "warn" : "ok", title: player.masKmh == null ? (is ? "Ekkert hraðapróf (MAS)" : "No speed test (MAS)") : `${player.masKmh} km/h · ${is ? (player.masSourceIs ?? player.masSource ?? "") : (player.masSource ?? "")}${player.masEstimated ? (is ? " (áætlun)" : " (estimate)") : ""}${player.masAgeDays != null ? ` · ${player.masAgeDays} ${is ? "daga gamalt" : "days old"}` : ""}` },
               { label: "VBT", tone: player.vbt ? "ok" : player.strengthFallback ? "warn" : "bad", title: player.vbt ? player.vbt.exercise : player.strengthFallback ? (is ? "Rannsóknarviðmið í stað VBT" : "Research default instead of VBT") : (is ? "Enginn VBT-prófíll" : "No VBT profile") },
               { label: `VALD${player.vald.status ? ` · ${player.vald.status}` : ""}`, tone: player.vald.status === "green" ? "ok" : player.vald.status === "yellow" ? "warn" : player.vald.status === "red" ? "bad" : "none", title: is ? player.vald.note.is : player.vald.note.en },
             ] : [];
@@ -4256,12 +4302,22 @@ export default function PeriodizationHubPage() {
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Þolþjálfun — interval-hraði (Type 1–5)" : "Endurance — interval speeds (Type 1–5)"}</div>
                   {player.masKmh != null ? (
                     <>
-                      <p className="mt-1 text-[12px] text-slate-600">{is ? "MAS" : "MAS"}: <b>{player.masKmh} km/klst</b> <span className="text-slate-500">· {player.masSource}{player.masAgeDays != null ? ` · ${player.masAgeDays}d` : ""}</span></p>
+                      <p className="mt-1 text-[12px] text-slate-600">MAS: <b>{player.masKmh} {is ? "km/klst" : "km/h"}</b> <span className="text-slate-500">· {is ? (player.masSourceIs ?? player.masSource) : player.masSource}{player.masAgeDays != null ? ` · ${is ? `${player.masAgeDays} daga gamalt` : `${player.masAgeDays} days old`}` : ""}</span>
+                        {player.masEstimated && <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900" title={is ? "MAS reiknað úr 30-15 IFT (VIFT × 0,86, Buchheit 2008) — ekki mælt beint." : "MAS worked out from the 30-15 IFT (VIFT × 0.86, Buchheit 2008), not measured directly."}>{is ? "áætlun" : "estimate"}</span>}</p>
                       <table className="mt-1 w-full text-[12px] text-slate-700">
                         <tbody>{player.intervals.map((z) => <tr key={z.type}><td className="py-0.5 pr-2 text-slate-500">T{z.type} · {is ? z.label.is : z.label.en}</td><td className="py-0.5 text-right font-semibold tabular-nums">{z.kmh} km/klst</td><td className="py-0.5 pl-2 text-right text-[11px] text-slate-500">{z.pctMas}% MAS</td></tr>)}</tbody>
                       </table>
                     </>
-                  ) : <p className="mt-1 text-[12px] text-slate-500">{is ? "Ekkert þolpróf — sjá gögn-tilbúnaðar spjaldið." : "No endurance test — see the data-readiness panel."}</p>}
+                  ) : <p className="mt-1 text-[12px] text-slate-500">{(player.latestTests ?? []).length
+                    ? (is ? "Ekkert hraðapróf (MAS) — interval fellur á sjálfgefið liðsgildi. Yo-Yo gefur vegalengd, ekki hraða." : "No speed test (MAS) — intervals fall back to the squad default. A Yo-Yo gives a distance, not a speed.")
+                    : (is ? "Ekkert þolpróf — sjá gögn-tilbúnaðar spjaldið." : "No endurance test — see the data-readiness panel.")}</p>}
+                  {(player.latestTests ?? []).length > 0 && (
+                    <p className="mt-2 text-[11px] text-slate-600"><span className="font-semibold text-slate-500">{is ? "Nýjustu próf" : "Latest tests"}:</span>{" "}
+                      {(player.latestTests ?? []).map((t) => `${is ? t.label.is : t.label.en} ${is ? String(t.value).replace(".", ",") : t.value} ${t.unit} (${shortDate(t.date, is)})`).join(" · ")}</p>
+                  )}
+                  <button type="button" onClick={() => setShowTestEntry((v) => !v)} className="mt-2 text-[12px] font-semibold text-[#2740e6] hover:underline">
+                    {showTestEntry ? (is ? "Loka skráningu" : "Close") : (is ? "Skrá þolpróf" : "Record a fitness test")} {showTestEntry ? "▴" : "▾"}
+                  </button>
                 </div>
                 {/* Strength from his VBT */}
                 <div className="rounded-lg bg-slate-50 p-3">
@@ -4279,6 +4335,19 @@ export default function PeriodizationHubPage() {
                     </>
                   ) : <p className="mt-1 text-[12px] text-slate-500">{is ? "Enginn VBT prófíll." : "No VBT profile."}</p>}
                 </div>
+                {/* Record a result without leaving the hub — the same form + store as Conditioning. Saving
+                    reloads the plan, so the new MAS / interval speeds show straight away. */}
+                {showTestEntry && (
+                  <div className="sm:col-span-2">
+                    <FitnessTestCard
+                      key={player.playerId}
+                      players={plan.players.map((p) => ({ id: p.playerId, name: p.name }))}
+                      playerId={player.playerId}
+                      defaultType={aerobicTest}
+                      onSaved={reloadAfterTest}
+                    />
+                  </div>
+                )}
               </div>
             )}
 

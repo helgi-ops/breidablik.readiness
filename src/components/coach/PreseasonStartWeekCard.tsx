@@ -16,13 +16,13 @@ import { useLang } from "@/lib/lang";
 import { preseasonStartRamp, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
 import { distributeWeekKpis, type PerDayKpiTarget } from "@/lib/micropulse/periodization/preseasonWeekPlan";
 import { teamKpiAvg } from "@/lib/micropulse/periodization/preseasonKpiMap";
-import { recommendTestingSchedule } from "@/lib/micropulse/periodization/testingSchedule";
+import { recommendTestingSchedule, isAerobicMode, type AerobicMode } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 import type { MatchUnit } from "@/lib/micropulse/periodization";
 
 type Phase = { key: string; start: string; end: string; weeks: number };
 type Player = { playerId: string; name: string; matchUnit: MatchUnit; vald?: { status: string | null } | null };
-type Plan = { phases: Phase[]; matchLoad: number | null; matchSrpe: number | null; tier: { loadSource: "gps" | "srpe" | "none" }; players: Player[] };
+type Plan = { phases: Phase[]; matchLoad: number | null; matchSrpe: number | null; tier: { loadSource: "gps" | "srpe" | "none" }; players: Player[]; aerobicTest?: AerobicMode | null };
 
 export type PreseasonTestDue = { name: string; kind: "baseline" | "retest" | "end" | "weekly"; priority: "core" | "recommended" };
 export type PreseasonComputed = { weekIndex: number; preWeeks: number; row: PreseasonWeekTarget; perDay: PerDayKpiTarget[]; tests: PreseasonTestDue[] };
@@ -36,7 +36,8 @@ async function fetchPeriodization(signal: AbortSignal): Promise<Plan | null> {
       if (!tok) return null;
       const res = await fetch(`/api/coach/periodization`, { headers: { Authorization: `Bearer ${tok}` }, signal });
       const j = await res.json().catch(() => null);
-      if (res.ok && j?.ok) return j.plan as Plan;
+      // The team's chosen aerobic test (Periodization Hub) rides along, so "Testing this week" names it.
+      if (res.ok && j?.ok) return { ...(j.plan as Plan), aerobicTest: isAerobicMode(j.aerobicTest) ? j.aerobicTest : null };
     } catch {
       if (signal.aborted) return null; // component unmounted — stop
       // otherwise fall through to a retry
@@ -89,7 +90,7 @@ export default function PreseasonStartWeekCard({ teamId, weekStart, intents, onC
   const tests = React.useMemo<PreseasonTestDue[]>(() => {
     if (!info || !plan) return [];
     const hasVald = plan.players.some((p) => p.vald?.status != null);
-    const schedule = recommendTestingSchedule({ preseasonWeeks: info.preWeeks, hasGps: plan.tier.loadSource === "gps", hasVald });
+    const schedule = recommendTestingSchedule({ preseasonWeeks: info.preWeeks, hasGps: plan.tier.loadSource === "gps", hasVald, aerobicMode: plan.aerobicTest });
     return schedule
       .filter((tp) => tp.weeks.includes(info.weekIndex))
       .map((tp) => {

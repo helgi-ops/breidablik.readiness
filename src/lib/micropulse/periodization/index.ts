@@ -1583,18 +1583,27 @@ export type DataGap = { key: string; severity: "missing" | "stale" | "ok"; messa
 /** Name the gap rather than fake a number — the manifesto's confidence idea applied to planning. */
 export function dataReadiness(input: {
   hasCsTest: boolean; masAgeDays: number | null;   // endurance
+  /** The test the MAS came from (plain name) and whether it is an estimate (30-15 IFT × 0.86). */
+  masTest?: { en: string; is: string; estimated: boolean } | null;
+  /** Days since the freshest aerobic test of any kind (a Yo-Yo counts, though it gives no MAS). */
+  aerobicTestAgeDays?: number | null;
   vbtAgeDays: number | null;                        // strength
   hasValdThisBlock: boolean;                        // volume caps
 }): DataGap[] {
   const gaps: DataGap[] = [];
+  const t = input.masTest ?? null;
+  const testEn = t ? `the ${t.en}${t.estimated ? " estimate of" : ""} MAS` : "the running-test MAS";
+  const testIs = t ? `MAS úr ${t.is}${t.estimated ? " (áætlun)" : ""}` : "MAS úr hlaupaprófi";
   if (!input.hasCsTest) gaps.push({
     key: "cs", severity: input.masAgeDays != null ? "ok" : "missing",
     message: input.masAgeDays != null
-      ? { en: `No Critical Speed test — using the running-test MAS (${input.masAgeDays}d old) for interval speeds.`, is: `Enginn Critical Speed prófun — nota MAS úr hlaupaprófi (${input.masAgeDays}d) fyrir interval-hraða.` }
-      : { en: "No Critical Speed or running test — endurance intervals fall back to the squad default.", is: "Ekkert Critical Speed eða hlaupapróf — interval fellur á sjálfgefið liðsgildi." },
+      ? { en: `No Critical Speed test — using ${testEn} (${input.masAgeDays}d old) for interval speeds.`, is: `Enginn Critical Speed prófun — nota ${testIs} (${input.masAgeDays}d) fyrir interval-hraða.` }
+      : { en: "No Critical Speed or running-speed test — endurance intervals fall back to the squad default.", is: "Ekkert Critical Speed eða hraðapróf — interval fellur á sjálfgefið liðsgildi." },
   });
-  if (input.masAgeDays != null && input.masAgeDays > 90) gaps.push({
-    key: "mas", severity: "stale", message: { en: `Endurance test is ${input.masAgeDays} days old — refresh for accurate interval speeds.`, is: `Þolpróf er ${input.masAgeDays} daga gamalt — endurnýja fyrir nákvæma interval-hraða.` },
+  // Staleness reads the freshest aerobic test of any kind (a recent Yo-Yo means the squad WAS tested).
+  const aerAge = input.aerobicTestAgeDays ?? input.masAgeDays;
+  if (aerAge != null && aerAge > 90) gaps.push({
+    key: "mas", severity: "stale", message: { en: `Endurance test is ${aerAge} days old — refresh for accurate interval speeds.`, is: `Þolpróf er ${aerAge} daga gamalt — endurnýja fyrir nákvæma interval-hraða.` },
   });
   if (input.vbtAgeDays == null) gaps.push({
     key: "vbt", severity: "missing", message: { en: "No VBT profile — strength loads fall back to %1RM estimates.", is: "Enginn VBT prófíll — styrktarálag fellur á %1RM ágiskun." },

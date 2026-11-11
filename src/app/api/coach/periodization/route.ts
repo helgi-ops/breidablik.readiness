@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
 import { mondayOfIso, nextValdTrimLiftLog, type ValdTrimLift } from "@/lib/micropulse/periodization";
+import { isAerobicMode, DEFAULT_AEROBIC_TEST, type AerobicMode } from "@/lib/micropulse/periodization/testingSchedule";
 
 export const runtime = "nodejs";
 
@@ -111,7 +112,15 @@ export async function GET(req: Request) {
       preWeek1Kpi: nx.preWeek1Kpi && typeof nx.preWeek1Kpi === "object" ? nx.preWeek1Kpi : null,
     };
   }
-  return NextResponse.json({ ok: true, plan, deloadCadence, savedWindow, savedWindowNext, weekPlans });
+  // The team's aerobic test (one of the six registry tests). The loaded season's choice wins; otherwise the
+  // newest season that set one, so a choice carries over the calendar rollover. Default 30-15 IFT.
+  let aerobicTest: AerobicMode | null = isAerobicMode((ov as { aerobicTest?: unknown }).aerobicTest) ? (ov as { aerobicTest: AerobicMode }).aerobicTest : null;
+  if (!aerobicTest) {
+    const { data: anyRows } = await ctx.sb.from("season_plans").select("season_year, aerobic_test:overrides->>aerobicTest")
+      .eq("team_id", ctx.teamId).not("overrides->>aerobicTest", "is", null).order("season_year", { ascending: false }).limit(5);
+    for (const r of (anyRows ?? []) as Array<{ aerobic_test: string | null }>) if (isAerobicMode(r.aerobic_test)) { aerobicTest = r.aerobic_test; break; }
+  }
+  return NextResponse.json({ ok: true, plan, deloadCadence, savedWindow, savedWindowNext, weekPlans, aerobicTest: aerobicTest ?? DEFAULT_AEROBIC_TEST, aerobicTestSaved: aerobicTest != null });
 }
 
 export async function POST(req: Request) {
@@ -203,6 +212,10 @@ export async function POST(req: Request) {
   const { data: existing } = await ctx.sb.from("season_plans").select("overrides").eq("team_id", ctx.teamId).eq("season_year", seasonYear).maybeSingle();
   const prevOverrides = ((existing as { overrides?: Record<string, unknown> } | null)?.overrides) ?? {};
   const mergedOverrides: Record<string, unknown> = { ...prevOverrides, ...(body.overrides ?? {}) };
+  // The aerobic test must be one of the six registry tests; anything else keeps the saved choice.
+  if (body.overrides && "aerobicTest" in body.overrides && !isAerobicMode(body.overrides.aerobicTest)) {
+    if (prevOverrides.aerobicTest !== undefined) mergedOverrides.aerobicTest = prevOverrides.aerobicTest; else delete mergedOverrides.aerobicTest;
+  }
   // The VALD-trim lift log is append-only and server-stamped: an `overrides` patch can't rewrite it.
   if (prevOverrides.valdTrimLifts) mergedOverrides.valdTrimLifts = prevOverrides.valdTrimLifts;
   else delete mergedOverrides.valdTrimLifts;

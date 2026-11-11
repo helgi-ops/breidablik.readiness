@@ -7,6 +7,7 @@
  * pure maths (ASR, floors, band reclassification, %-of-capacity) lives in `speedZones.ts`.
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 import { deriveFitnessTest } from "@/lib/micropulse/load/fitnessTests";
@@ -46,8 +47,8 @@ function masSourceForType(testType: string | null | undefined): MasSource | null
  * lower tier, not wired here (it needs a per-player curve fit) — a null MAS is honest, a guessed
  * one is not.
  */
-export async function resolveMas(teamId: string): Promise<Map<string, MasResolved>> {
-  const sb = getSupabaseServer();
+export async function resolveMas(teamId: string, client?: SupabaseClient): Promise<Map<string, MasResolved>> {
+  const sb = client ?? getSupabaseServer();
 
   const [ftRes, rtRes] = await Promise.all([
     sb.from("player_fitness_test")

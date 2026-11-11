@@ -12,10 +12,52 @@
  * Pure, deterministic, null-safe. No readiness/decision/load-target import (boundary-tested).
  */
 
+import { FITNESS_TESTS } from "@/lib/micropulse/load/fitnessTests";
+
 type Bi = { en: string; is: string };
 
 export type TestKey = "aerobic" | "cmj" | "maxStrength" | "nordbord" | "sprint";
-export type AerobicMode = "ift_30_15" | "yoyo_ir1" | "vameval";
+
+/**
+ * The team's aerobic test — one of the six aerobic tests in the shared fitness-test registry
+ * (`load/fitnessTests.ts`, the same list Conditioning records). The keys ARE the registry keys, so a
+ * result recorded on Conditioning and the test the hub schedules are the same thing.
+ */
+export const AEROBIC_TEST_KEYS = ["ift_30_15", "yo_yo_ir1", "yo_yo_ir2", "msft_beep", "mas_vameval", "mas_run_4min"] as const;
+export type AerobicMode = (typeof AEROBIC_TEST_KEYS)[number];
+export const DEFAULT_AEROBIC_TEST: AerobicMode = "ift_30_15";
+
+export function isAerobicMode(x: unknown): x is AerobicMode {
+  return typeof x === "string" && (AEROBIC_TEST_KEYS as readonly string[]).includes(x);
+}
+
+/** What the test's number can honestly set: a running speed (MAS → interval speeds), an intermittent
+ *  speed (VIFT → %VIFT), or a capacity trend only (Yo-Yo: distance, no speed). */
+export type AerobicOutput = "mas" | "vift" | "capacity";
+const AEROBIC_OUTPUT: Record<AerobicMode, AerobicOutput> = {
+  ift_30_15: "vift", yo_yo_ir1: "capacity", yo_yo_ir2: "capacity",
+  msft_beep: "mas", mas_vameval: "mas", mas_run_4min: "mas",
+};
+
+export type AerobicTestOption = { key: AerobicMode; label: Bi; output: AerobicOutput; note: Bi; cite: string };
+
+/** The picker list — names + citations straight from the registry, plus what each test gives the plan. */
+export const AEROBIC_TESTS: AerobicTestOption[] = AEROBIC_TEST_KEYS.map((key) => {
+  const def = FITNESS_TESTS[key];
+  const output = AEROBIC_OUTPUT[key];
+  const note: Bi = output === "mas"
+    ? { en: "Gives a running speed (MAS), so interval speeds follow the result.", is: "Gefur hlaupahraða (MAS), svo millibilshraðar fylgja niðurstöðunni." }
+    : output === "vift"
+      ? { en: "Gives VIFT for %VIFT intervals; the MAS shown from it is an estimate (× 0.86).", is: "Gefur VIFT fyrir %VIFT-millibil; MAS sem af því er reiknað er áætlun (× 0,86)." }
+      : { en: "Gives a distance, not a speed. It tracks capacity; interval speeds stay on the last speed test or the squad default.", is: "Gefur vegalengd, ekki hraða. Það fylgist með getu; millibilshraðar haldast á síðasta hraðaprófi eða sjálfgefnu liðsgildi." };
+  return { key, label: def.label, output, note, cite: def.citation };
+});
+
+/** Short name of a test for the chips: the aerobic chip names the team's chosen test. */
+export function testShortName(key: TestKey, aerobicMode?: AerobicMode | null): Bi {
+  if (key === "aerobic" && aerobicMode) return FITNESS_TESTS[aerobicMode].label;
+  return TEST_SHORT[key];
+}
 
 export interface TestProtocol {
   key: TestKey;
@@ -33,13 +75,35 @@ export interface TestPlan {
   priority: "core" | "recommended";
 }
 
+const STANDARDISE: Bi = { en: "Standardise: same surface + footwear, ≥48 h rested, same time of day, full progressive warm-up.", is: "Staðlaðu: sama undirlag + skór, ≥48 klst hvíld, sami tími dags, full stigvaxandi upphitun." };
+
+/** A protocol built from the registry entry (name, hint, result, citation) — used for the tests that have
+ *  no hand-written protocol below, so no protocol text is invented. */
+function registryProtocol(mode: AerobicMode): TestProtocol {
+  const def = FITNESS_TESTS[mode];
+  const output = AEROBIC_OUTPUT[mode];
+  return {
+    key: "aerobic",
+    name: def.label,
+    measures: def.hint,
+    prescribes: output === "mas"
+      ? { en: "MAS → interval speeds (%MAS) for running prescription.", is: "MAS → millibilshraða (%MAS) fyrir hlaupaáætlun." }
+      : { en: "A capacity trend across the season. It gives no running speed, so interval speeds stay on the last speed test.", is: "Getu-þróun yfir tímabilið. Gefur engan hlaupahraða, svo millibilshraðar haldast á síðasta hraðaprófi." },
+    how: [
+      STANDARDISE,
+      { en: `Record: ${def.resultLabel.en}.`, is: `Skráðu: ${def.resultLabel.is}.` },
+    ],
+    cite: def.citation,
+  };
+}
+
 const aerobicProtocol = (mode: AerobicMode): TestProtocol => {
-  if (mode === "yoyo_ir1") {
+  if (mode === "yo_yo_ir1") {
     return {
       key: "aerobic",
       name: { en: "Yo-Yo IR1", is: "Yo-Yo IR1" },
       measures: { en: "High-intensity intermittent running capacity (total distance).", is: "Geta í ákafri endurtekinni hlaupavinnu (heildarvegalengd)." },
-      prescribes: { en: "Aerobic base + a proxy for MAS to set running-zone speeds.", is: "Þolgrunn + MAS-nálgun til að stilla hlaupasvæði." },
+      prescribes: { en: "A capacity trend across the season. It gives no running speed, so interval speeds stay on the last speed test.", is: "Getu-þróun yfir tímabilið. Gefur engan hlaupahraða, svo millibilshraðar haldast á síðasta hraðaprófi." },
       how: [
         { en: "Standardise: same surface + footwear, ≥48 h rested, same time of day, full progressive warm-up.", is: "Staðlaðu: sama undirlag + skór, ≥48 klst hvíld, sami tími dags, full stigvaxandi upphitun." },
         { en: "20 m shuttles to the beeps with a 10 m active recovery jog each turn; stop at the 2nd failure to reach the line.", is: "20 m shuttles eftir píptóni með 10 m virkri hvíld á hverjum snúningi; hættu við 2. sinn sem línan næst ekki." },
@@ -48,7 +112,7 @@ const aerobicProtocol = (mode: AerobicMode): TestProtocol => {
       cite: "Bangsbo 2008; Krustrup 2003",
     };
   }
-  if (mode === "vameval") {
+  if (mode === "mas_vameval") {
     return {
       key: "aerobic",
       name: { en: "VAMEVAL", is: "VAMEVAL" },
@@ -62,6 +126,7 @@ const aerobicProtocol = (mode: AerobicMode): TestProtocol => {
       cite: "Cazorla 1990; di Prampero 1986",
     };
   }
+  if (mode !== "ift_30_15") return registryProtocol(mode);
   return {
     key: "aerobic",
     name: { en: "30-15 IFT", is: "30-15 IFT" },
@@ -138,7 +203,7 @@ export interface TestingScheduleOpts {
   preseasonWeeks: number;
   hasGps?: boolean;         // GPS team → sprint/HSR testing is more actionable
   hasVald?: boolean;        // VALD ForceDecks/NordBord available
-  aerobicMode?: AerobicMode; // the team's preferred aerobic test (default 30-15 IFT)
+  aerobicMode?: AerobicMode | null; // the team's chosen aerobic test (default 30-15 IFT)
 }
 
 /**
@@ -152,7 +217,7 @@ export function recommendTestingSchedule(opts: TestingScheduleOpts): TestPlan[] 
   const plans: TestPlan[] = [];
 
   plans.push({
-    protocol: aerobicProtocol(opts.aerobicMode ?? "ift_30_15"),
+    protocol: aerobicProtocol(opts.aerobicMode ?? DEFAULT_AEROBIC_TEST),
     weeks: bounds,
     cadence: { en: "Baseline in week 1, then re-test every ~3-4 weeks (block boundaries).", is: "Grunnmæling í viku 1, svo endurtaka á ~3-4 vikna fresti (lotuskil)." },
     priority: "core",
@@ -213,8 +278,8 @@ export interface BlockTesting {
  * re-checks speed; Realization is monitoring-only (no fatiguing tests into matches); the deload week
  * is the low-fatigue window to re-profile strength + CMJ. Descriptive — the coach schedules it.
  */
-export function testsForBlock(goal: BlockTestGoal, opts: { hasVald?: boolean; hasGps?: boolean; aerobicMode?: AerobicMode } = {}): BlockTesting {
-  const aer = aerobicProtocol(opts.aerobicMode ?? "ift_30_15");
+export function testsForBlock(goal: BlockTestGoal, opts: { hasVald?: boolean; hasGps?: boolean; aerobicMode?: AerobicMode | null } = {}): BlockTesting {
+  const aer = aerobicProtocol(opts.aerobicMode ?? DEFAULT_AEROBIC_TEST);
   const vald = opts.hasVald !== false;
   if (goal === "accum") {
     return {

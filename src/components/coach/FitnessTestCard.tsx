@@ -37,14 +37,20 @@ type TestRow = {
 };
 type Resp = { ok: boolean; tests?: TestRow[] };
 
-export default function FitnessTestCard({ players, playerId }: { players: Array<{ id: string; name: string }>; playerId?: string }) {
+export default function FitnessTestCard({ players, playerId, defaultType, onSaved }: {
+  players: Array<{ id: string; name: string }>; playerId?: string;
+  /** Test preselected in the entry form (the Periodization Hub passes the team's aerobic test). */
+  defaultType?: FitnessTestType;
+  /** Called after a result is saved (the hub reloads its plan so the new MAS shows). */
+  onSaved?: () => void;
+}) {
   const [lang] = useLang();
   const is = lang === "IS";
   const [selInternal, setSelInternal] = React.useState("");
   const sel = playerId ?? selInternal; // controlled by the page when playerId is passed
   const [tests, setTests] = React.useState<TestRow[] | null>(null);
   const [loading, setLoading] = React.useState(false);
-  const [type, setType] = React.useState<FitnessTestType>("yo_yo_ir1");
+  const [type, setType] = React.useState<FitnessTestType>(defaultType ?? "yo_yo_ir1");
   const [val, setVal] = React.useState("");
   const [date, setDate] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -77,6 +83,7 @@ export default function FitnessTestCard({ players, playerId }: { players: Array<
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) { setMsg(j.error ?? "Error"); return; }
       setVal(""); setDate(""); await load();
+      onSaved?.();
     } finally { setBusy(false); }
   }
 
