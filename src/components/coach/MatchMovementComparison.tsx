@@ -72,13 +72,24 @@ function meanFp(rows: MatchMovementRow[], dims: MovementDimension[]): MovementFi
 }
 
 type Series = { label: string; fp: MovementFingerprint; barClass: string };
-type SubSeries = { label: string; sub: SubBands; barClass: string };
+type SubSeries = { label: string; sub: SubBands; barClass: string; minutes: number | null };
 
-/** S&C drill-down — raw per-match sub-band counts, grouped, high-intensity flagged. */
+/** S&C drill-down — raw per-match sub-band counts, grouped, high-intensity flagged.
+ * A band with no reading on any side is hidden (never drawn as 0); raw counts are
+ * not per minute, so the minutes behind each side are stated on top. */
 function SubBandsBreakdown({ series, is }: { series: SubSeries[]; is: boolean }) {
+  const minutesLine = series
+    .map((s) => `${s.label} ${s.minutes == null ? "—" : Math.round(s.minutes)} ${is ? "mín" : "min"}`)
+    .join(" · ");
+  const groups = SUB_BAND_GROUPS
+    .map((g) => ({ ...g, bands: g.bands.filter((b) => series.some((s) => s.sub[b.key] != null)) }))
+    .filter((g) => g.bands.length > 0);
   return (
     <div className="space-y-3">
-      {SUB_BAND_GROUPS.map((g) => (
+      <p className="text-[11px] text-slate-500">
+        {minutesLine}. {is ? "Hráar tölur, ekki á mínútu." : "Raw counts, not per minute."}
+      </p>
+      {groups.map((g) => (
         <div key={g.group}>
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? g.labelIS : g.labelEN}</div>
           <div className="space-y-1.5">
@@ -111,8 +122,8 @@ function SubBandsBreakdown({ series, is }: { series: SubSeries[]; is: boolean })
       ))}
       <p className="text-[10px] leading-snug text-slate-400">
         {is
-          ? "Hráar tölur per leik. Háákefðar decel-ar / CoD / sprett-bönd (rautt) eru krefjandi endinn sem summan í fingrafarinu felur — lýsandi vélræn krafa (McBurnie 2022), ekki meiðsla-spá."
-          : "Raw per-match counts. High-intensity decels / CoD / sprint bands (red) are the demanding end the summed fingerprint hides — a descriptive read of mechanical demand (McBurnie 2022), not an injury prediction."}
+          ? "Rautt = kröftug hemlun og snarpar stefnubreytingar, krefjandi endinn sem summan í hreyfi-einkenninu felur. Löng hlaup segja hve lengi hann hélt áfram að hlaupa, ekki hve hratt; leikhraði = 11 km/klst+ (þarf GPS). McBurnie 2022. Lýsandi, ekki meiðsla-spá."
+          : "Red = hard braking and sharp changes of direction, the demanding end the summed signature hides. Long runs say how long he kept running, not how fast; match pace = 11 km/h+ (needs GPS). McBurnie 2022. Descriptive, not an injury prediction."}
       </p>
     </div>
   );
@@ -283,8 +294,8 @@ export default function MatchMovementComparison({
         { label: is ? "Hans venja" : "His usual", fp: norm, barClass: "bg-slate-400" },
       ];
       if (!isGps && data.subAverages[effPlayerId]) subSeries = [
-        { label: is ? "Þessi leikur" : "This match", sub: latest.sub, barClass: "bg-indigo-500" },
-        { label: is ? "Hans venja" : "His usual", sub: data.subAverages[effPlayerId], barClass: "bg-slate-400" },
+        { label: is ? "Þessi leikur" : "This match", sub: latest.sub, barClass: "bg-indigo-500", minutes: latest.minutes },
+        { label: is ? "Hans venja" : "His usual", sub: data.subAverages[effPlayerId], barClass: "bg-slate-400", minutes: data.minutesAverages?.[effPlayerId] ?? null },
       ];
       const devs = DIMS
         .map((d) => ({ d, dev: deviation(d.key, latest.fingerprint[d.key], norm[d.key]) }))
@@ -315,8 +326,8 @@ export default function MatchMovementComparison({
         { label: fmtDate(b.match_date, is), fp: b.fingerprint, barClass: "bg-emerald-500" },
       ];
       if (!isGps) subSeries = [
-        { label: fmtDate(a.match_date, is), sub: a.sub, barClass: "bg-indigo-500" },
-        { label: fmtDate(b.match_date, is), sub: b.sub, barClass: "bg-emerald-500" },
+        { label: fmtDate(a.match_date, is), sub: a.sub, barClass: "bg-indigo-500", minutes: a.minutes },
+        { label: fmtDate(b.match_date, is), sub: b.sub, barClass: "bg-emerald-500", minutes: b.minutes },
       ];
       const diffs = DIMS
         .map((d) => ({ d, dev: deviation(d.key, b.fingerprint[d.key], a.fingerprint[d.key]) }))
@@ -653,7 +664,7 @@ export default function MatchMovementComparison({
 
         {/* S&C drill-down — opt-in sub-band depth (kept out of the head-coach view). */}
         {subSeries.length > 0 && (
-          <ShowDetails label={{ EN: "S&C breakdown — raw sub-bands", IS: "S&C sundurliðun — hrá undir-bönd" }} hint={{ EN: "decel / CoD by intensity · strides by run length (12–18 / 18–24 / 24+ s)", IS: "decel / CoD eftir styrk · skref eftir lengd hlaups (12–18 / 18–24 / 24+ sek)" }}>
+          <ShowDetails label={{ EN: "S&C breakdown — raw sub-bands", IS: "S&C sundurliðun — hrá undir-bönd" }} hint={{ EN: "braking / changes of direction by intensity · long runs", IS: "hemlun / stefnubreytingar eftir styrk · löng hlaup" }}>
             <SubBandsBreakdown series={subSeries} is={is} />
           </ShowDetails>
         )}

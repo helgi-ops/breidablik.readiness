@@ -60,7 +60,7 @@ export async function POST(req: Request) {
       const norm = data.playerAverages[player.id];
       const subNorm = data.subAverages[player.id] ?? null;
       if (!norm) return NextResponse.json({ error: "Your usual is still forming (needs more matches)" }, { status: 422 });
-      bEntry = { label: `${usualLabel} (average across your matches)`, fingerprint: norm, sub: subNorm };
+      bEntry = { label: `${usualLabel} (average across your matches)`, minutes: data.minutesAverages[player.id] != null ? Math.round(data.minutesAverages[player.id]!) : undefined, fingerprint: norm, sub: subNorm };
     }
 
     const facts = buildComparisonFacts(

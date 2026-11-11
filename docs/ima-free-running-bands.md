@@ -342,3 +342,25 @@ Hard dec · CoD · Sharp CoD · Jumps · Long runs. The hard axes are the top IM
 0. Hard vs all: accelerations r = 0.72, braking 0.54, turns 0.55 (83% of turns are gentle), so they add what the
 totals hide. Long runs = metres in runs of 18 s or more, all long runs (in a match ~91% are at match pace; the
 match-pace columns only exist from June 2026), independent of accelerations (r = 0.01) and turns (0.18).
+
+## Player Match Movement: long runs as runs (11 Nov 2026)
+
+The movement signature keeps its one long-run dimension (strides in runs of 18 s or more, per minute):
+strides exist on every row, indoors and before the June re-sync too, and track metres, count and
+seconds at r = 0.99–1.00 (Breiðablik matches Jun–Oct, 158 player-matches of 60+ min).
+
+The S&C breakdown no longer shows strides in 12–18 / 18–24 / 24+ s runs (the 24+ s band was red and
+labelled "high-intensity", which it is not: it says how long a run lasted, and one run more or less
+swings it from 0 to ~60 strides). It now shows **Long runs (18 s or more)** as three rows, this match
+against his usual, never red:
+
+| Row | Column | Shown when |
+|---|---|---|
+| Long runs | `ima_fr_ge18_event_count` | the row has a count (re-synced rows) |
+| …of which at match pace | `ima_fr_ge18_mp_event_count` | GPS speed present |
+| Strides in long runs | `ima_fr_ge18_stride_count` | always |
+
+A row with no reading on either side is hidden, not drawn as 0. The minutes behind each side
+(this match vs his mean minutes over the norm's matches, `minutesAverages`) are stated on top,
+because the counts are raw, not per minute. The AI narrative gets the same three keys and the
+usual minutes. Red stays only on hard braking and sharp changes of direction.

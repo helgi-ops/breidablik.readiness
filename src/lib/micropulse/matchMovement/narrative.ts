@@ -25,9 +25,9 @@ export const MM_METRIC_GUIDE: Record<string, string> = {
   decelLow: "low-intensity decelerations (raw count for the match)",
   decelMed: "medium-intensity decelerations (raw count)",
   decelHigh: "high-intensity decelerations — the demanding braking end (raw count)",
-  stride6: "strides in continuous runs lasting 12-18 seconds (raw count; run length, not speed)",
-  stride7: "strides in continuous runs lasting 18-24 seconds (raw count; run length, not speed)",
-  stride8: "strides in the longest continuous runs, 24 seconds or more (raw count; sustained running, NOT sprinting)",
+  longRuns: "number of long continuous runs lasting 18 seconds or more (raw count; run length, not speed)",
+  longRunsMp: "how many of those long runs were at match pace, 11 km/h or faster (raw count; null when GPS speed is missing)",
+  longRunStrides: "strides taken in those long runs (raw count; sustained running volume, NOT sprinting)",
   codHigh: "high-intensity changes of direction (raw count)",
   codMed: "medium-intensity changes of direction (raw count)",
   codLow: "low-intensity changes of direction (raw count)",
@@ -104,7 +104,7 @@ const SHARED_RULES = `Hard rules:
 - The data_source field says which sensor these numbers come from — respect it exactly. Never call GPS data "IMA"/"the driver", and don't claim inertial detail (change of direction, left/right, braking split) unless a metric for it is actually present.
 - This is about HOW the player moved (movement style), not a match rating. Reference every metric by its plain meaning from metric_guide, in plain words — never raw jargon ("IMA", "band 8", "ACWR", "player load").
 - Descriptive, NOT predictive: describe the movement style and mechanical demand only. Never claim or imply injury risk, predict injury, or give medical, transfer, or recruitment advice. No training prescriptions.
-- Long-run strides (hiCadencePerMin, stride6-8) measure how long continuous runs lasted, not speed. Never call them sprinting, high-speed or high-cadence running; only GPS sprintPerMin / hsrPerMin / topSpeed describe speed.
+- Long runs (hiCadencePerMin, longRuns, longRunsMp, longRunStrides) measure how long continuous runs lasted; "match pace" only means 11 km/h or faster, not fast. Never call them sprinting, high-speed or high-cadence running; only GPS sprintPerMin / hsrPerMin / topSpeed describe speed.
 - Percentages are asymmetry, not volume. Ratios (accel:decel) are balance, not counts. "per minute" normalises for time on the pitch.`;
 
 export const COACH_SYSTEM = `You explain a football player's (or squad's) MOVEMENT comparison to a coach, from Catapult inertial-movement (IMA) data. Many coaches are new to this data, so be clear and instructive.

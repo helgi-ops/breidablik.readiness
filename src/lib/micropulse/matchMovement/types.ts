@@ -140,21 +140,24 @@ export function whyWord(key: DimensionKey, rel: number, is: boolean): string {
 
 /**
  * S&C drill-down — raw per-match counts behind "Show details" (IMA variant only).
- * The high-intensity bands (decelHigh, codHigh) and the longest-run stride band
- * (stride8 = runs ≥24 s, sustained running — not sprinting; stride6/7 = runs 12–18 s / 18–24 s,
- * read by run length from the row's own band edges, which changed on 9 Nov 2026) are the end
- * that the summed fingerprint dimensions hide — a descriptive read of mechanical
- * demand, not an injury prediction. Raw counts (not per-minute) as S&C read them.
+ * The high-intensity bands (decelHigh, codHigh) are the demanding end that the summed
+ * fingerprint dimensions hide — a descriptive read of mechanical demand, not an injury
+ * prediction. Long runs (IMA Free Running, runs ≥18 s) are shown as RUNS: how many, how
+ * many of them at match pace (≥11 km/h, GPS only), and the strides behind the signature's
+ * long-run dimension. They say how long he kept running, not how fast, so none is flagged
+ * high-intensity (until 11 Nov 2026 this group was strides in 12–18 / 18–24 / 24+ s runs,
+ * with the 24+ s band wrongly in red). Raw counts (not per-minute) as S&C read them;
+ * null = no reading (count before the June 2026 re-sync, match pace indoors).
  */
 export type SubBands = {
   decelLow: number | null; decelMed: number | null; decelHigh: number | null;
-  stride6: number | null; stride7: number | null; stride8: number | null;
+  longRuns: number | null; longRunsMp: number | null; longRunStrides: number | null;
   codHigh: number | null; codMed: number | null; codLow: number | null;
 };
 export type SubKey = keyof SubBands;
 
 export const SUB_BAND_GROUPS: Array<{
-  group: "decel" | "stride" | "cod";
+  group: "decel" | "longRuns" | "cod";
   labelEN: string; labelIS: string;
   bands: Array<{ key: SubKey; en: string; is: string; high?: boolean }>;
 }> = [
@@ -164,15 +167,17 @@ export const SUB_BAND_GROUPS: Array<{
   { group: "cod", labelEN: "Change-of-direction by intensity", labelIS: "Stefnubreyting eftir styrk", bands: [
     { key: "codHigh", en: "High", is: "Há", high: true }, { key: "codMed", en: "Medium", is: "Miðl" }, { key: "codLow", en: "Low", is: "Lág" },
   ] },
-  { group: "stride", labelEN: "Strides by run length", labelIS: "Skref eftir lengd hlaups", bands: [
-    { key: "stride6", en: "12–18 s", is: "12–18 sek" }, { key: "stride7", en: "18–24 s", is: "18–24 sek" }, { key: "stride8", en: "24 s+ (longest)", is: "24+ sek (lengstu)", high: true },
+  { group: "longRuns", labelEN: "Long runs (18 s or more)", labelIS: "Löng hlaup (18 sek eða lengri)", bands: [
+    { key: "longRuns", en: "Long runs", is: "Löng hlaup" },
+    { key: "longRunsMp", en: "…of which at match pace", is: "…þar af á leikhraða" },
+    { key: "longRunStrides", en: "Strides in long runs", is: "Skref í löngum hlaupum" },
   ] },
 ];
 
 /** All-null sub-bands — used by the GPS variant, which has no IMA sub-band depth. */
 export const EMPTY_SUB: SubBands = {
   decelLow: null, decelMed: null, decelHigh: null,
-  stride6: null, stride7: null, stride8: null,
+  longRuns: null, longRunsMp: null, longRunStrides: null,
   codHigh: null, codMed: null, codLow: null,
 };
 
@@ -199,6 +204,8 @@ export type MatchMovementResult = {
   playerAverages: Record<string, MovementFingerprint>;
   /** Per-player mean of each sub-band across their matches (S&C drill-down norm). */
   subAverages: Record<string, SubBands>;
+  /** Per-player mean minutes over the same matches the norm uses (raw counts need it to be read fairly). */
+  minutesAverages: Record<string, number | null>;
   players: Array<{ player_id: string; name: string; position: string | null; matches: number }>;
 };
 

@@ -25,7 +25,6 @@ import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { loadMatchVerdicts, isContaminatedForBenchmark, verdictKey } from "@/lib/micropulse/matchRunningVerdicts";
 import type { MovementFingerprint, MatchMovementRow, MatchMovementResult, SubBands, MovementVariant } from "./types";
 import { EMPTY_SUB, movementDimensions } from "./types";
-import { sumBandsBetween } from "@/lib/integrations/catapult/freeRunningBands";
 
 // Re-export the client-safe types + dimension metadata from one place. The UI
 // imports directly from ./types to avoid pulling this server module in.
@@ -41,12 +40,11 @@ type RawRow = {
   ima_decel: number | null;
   ima_cod_left_high: number | null; ima_cod_left_medium: number | null; ima_cod_left_low: number | null;
   ima_cod_right_high: number | null; ima_cod_right_medium: number | null; ima_cod_right_low: number | null;
-  // IMA Free Running (bout-duration bands; edges per row in ima_fr_band_bounds — changed 9 Nov 2026).
-  ima_fr_band_bounds: Array<number | string> | null;
-  ima_fr_band1_stride_count: number | null; ima_fr_band2_stride_count: number | null; ima_fr_band3_stride_count: number | null;
-  ima_fr_band4_stride_count: number | null; ima_fr_band5_stride_count: number | null; ima_fr_band6_stride_count: number | null;
-  ima_fr_band7_stride_count: number | null; ima_fr_band8_stride_count: number | null;
-  ima_fr_ge18_stride_count: number | null; ima_fr_ge24_stride_count: number | null;
+  // IMA Free Running, runs ≥18 s (config-independent tier columns; see docs/ima-free-running-bands.md).
+  // Count = re-synced rows only; _mp_ = at match pace (≥11 km/h), null when GPS speed is missing.
+  ima_fr_ge18_stride_count: number | null;
+  ima_fr_ge18_event_count?: number | null;
+  ima_fr_ge18_mp_event_count?: number | null;
   ima_band1_decel_count: number | null; ima_band2_decel_count: number | null; ima_band3_decel_count: number | null;
   // GPS (Core/Lite fallback)
   total_player_load: number | null;
@@ -67,7 +65,7 @@ const perMin = (v: number, min: number): number | null => (min > 0 ? v / min : n
 
 const EMPTY_RAW: MatchMovementRow["raw"] = { imaTotal: null, codTotal: null, codLeft: null, codRight: null, hiCadence: null };
 
-function imaFingerprintOf(row: RawRow, minutes: number): { fp: MovementFingerprint; raw: MatchMovementRow["raw"]; sub: SubBands } {
+export function imaFingerprintOf(row: RawRow, minutes: number): { fp: MovementFingerprint; raw: MatchMovementRow["raw"]; sub: SubBands } {
   const codLeft = n(row.ima_cod_left_high) + n(row.ima_cod_left_medium) + n(row.ima_cod_left_low);
   const codRight = n(row.ima_cod_right_high) + n(row.ima_cod_right_medium) + n(row.ima_cod_right_low);
   const codTotal = codLeft + codRight;
@@ -75,7 +73,6 @@ function imaFingerprintOf(row: RawRow, minutes: number): { fp: MovementFingerpri
   // bands 6–8 = ≥21 s before Nov 2026 — no ≥21 s edge in the new config). Sustained running, NOT high
   // cadence or sprinting.
   const hiCadence = n(row.ima_fr_ge18_stride_count);
-  const fr = row as unknown as Record<string, unknown>;
   return {
     fp: {
       totalPerMin: row.ima_total == null ? null : perMin(n(row.ima_total), minutes),
@@ -95,11 +92,11 @@ function imaFingerprintOf(row: RawRow, minutes: number): { fp: MovementFingerpri
       decelLow: row.ima_band1_decel_count ?? null,
       decelMed: row.ima_band2_decel_count ?? null,
       decelHigh: row.ima_band3_decel_count ?? null,
-      // Stride sub-bands by RUN LENGTH (edges common to every band config), not band number:
-      // stride6 = runs 12–18 s, stride7 = runs 18–24 s, stride8 = runs ≥24 s (longest).
-      stride6: sumBandsBetween(fr, "stride_count", 12, 18),
-      stride7: sumBandsBetween(fr, "stride_count", 18, 24),
-      stride8: row.ima_fr_ge24_stride_count ?? sumBandsBetween(fr, "stride_count", 24),
+      // Long runs (≥18 s) as RUNS: count, of which at match pace, and the strides behind the
+      // signature's long-run dimension. null = no reading (never drawn as 0).
+      longRuns: row.ima_fr_ge18_event_count ?? null,
+      longRunsMp: row.ima_fr_ge18_mp_event_count ?? null,
+      longRunStrides: row.ima_fr_ge18_stride_count ?? null,
       codHigh: codTotal > 0 ? n(row.ima_cod_left_high) + n(row.ima_cod_right_high) : null,
       codMed: codTotal > 0 ? n(row.ima_cod_left_medium) + n(row.ima_cod_right_medium) : null,
       codLow: codTotal > 0 ? n(row.ima_cod_left_low) + n(row.ima_cod_right_low) : null,
@@ -138,9 +135,7 @@ const LOAD_COLS =
   "player_id, date, source, ima_total, ima_accel, ima_decel, " +
   "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
-  "ima_fr_band_bounds, ima_fr_ge18_stride_count, ima_fr_ge24_stride_count, " +
-  "ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band3_stride_count, ima_fr_band4_stride_count, " +
-  "ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, " +
+  "ima_fr_ge18_stride_count, ima_fr_ge18_event_count, ima_fr_ge18_mp_event_count, " +
   "ima_band1_decel_count, ima_band2_decel_count, ima_band3_decel_count, " +
   "total_player_load, accel_decel_efforts, high_speed_distance, " +
   "velocity_band6_total_distance, sprint_distance, max_velocity, session_duration_minutes, player_load_per_minute, raw_payload_json";
@@ -151,7 +146,7 @@ const MIN_MINUTES = 20;
 const MAX_MATCH_MINUTES = 200;
 
 const emptyResult = (teamId: string): MatchMovementResult =>
-  ({ teamId, variant: "ima", matchDates: [], rows: [], playerAverages: {}, subAverages: {}, players: [] });
+  ({ teamId, variant: "ima", matchDates: [], rows: [], playerAverages: {}, subAverages: {}, minutesAverages: {}, players: [] });
 
 export async function computeMatchMovement(args: { teamId: string; sinceDays?: number }): Promise<MatchMovementResult> {
   const { teamId, sinceDays = 400 } = args;
@@ -275,8 +270,9 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   }
   const playerAverages: Record<string, MovementFingerprint> = {};
   const subAverages: Record<string, SubBands> = {};
+  const minutesAverages: Record<string, number | null> = {};
   const playerList: MatchMovementResult["players"] = [];
-  const SUB_KEYS: Array<keyof SubBands> = ["decelLow", "decelMed", "decelHigh", "stride6", "stride7", "stride8", "codHigh", "codMed", "codLow"];
+  const SUB_KEYS: Array<keyof SubBands> = ["decelLow", "decelMed", "decelHigh", "longRuns", "longRunsMp", "longRunStrides", "codHigh", "codMed", "codLow"];
   for (const [pid, prs] of byPlayer) {
     // The "norm" excludes estimates so an estimate never feeds a player's baseline.
     const realPrs = prs.filter((r) => !r.estimated);
@@ -294,6 +290,7 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
       return vals.length ? vals.reduce((s, x) => s + x, 0) / vals.length : null;
     };
     subAverages[pid] = Object.fromEntries(SUB_KEYS.map((k) => [k, subMean(k)])) as SubBands;
+    minutesAverages[pid] = normPrs.length ? normPrs.reduce((s, r) => s + r.minutes, 0) / normPrs.length : null;
     const meta = nameById.get(pid);
     playerList.push({ player_id: pid, name: meta?.name ?? "—", position: meta?.position ?? null, matches: prs.length });
   }
@@ -306,5 +303,5 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   // (future) fixture.
   const matchDatesWithData = matchDates.filter((d) => rows.some((r) => r.match_date === d));
 
-  return { teamId, variant, matchDates: matchDatesWithData, rows, playerAverages, subAverages, players: playerList };
+  return { teamId, variant, matchDates: matchDatesWithData, rows, playerAverages, subAverages, minutesAverages, players: playerList };
 }

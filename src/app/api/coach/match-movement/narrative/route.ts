@@ -107,7 +107,7 @@ export async function POST(req: Request) {
         const n = data.players.find((p) => p.player_id === playerId)?.matches ?? 0;
         facts = { player: name, ...buildComparisonFacts(
           { label: `${name} — this match (${fmtDate(a.match_date)})`, minutes: a.minutes, fingerprint: a.fingerprint, sub: a.sub },
-          { label: `${name} — his usual (average of ${n} matches)`, fingerprint: norm, sub: subNorm },
+          { label: `${name} — his usual (average of ${n} matches)`, minutes: data.minutesAverages[playerId] != null ? Math.round(data.minutesAverages[playerId]!) : undefined, fingerprint: norm, sub: subNorm },
           data.variant,
         ) };
       }
