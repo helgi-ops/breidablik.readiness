@@ -65,3 +65,19 @@ describe("hideGpsTile", () => {
     expect(hideGpsTile({ measured_no_gps: false }, 0)).toBe(false);
   });
 });
+
+describe("long runs on a drill", () => {
+  it("shows the count with its strides and carries the jogs caveat", () => {
+    const d = { long_runs: 0.9, long_run_strides: 34.3 };
+    const [l] = drillMovementLines(d);
+    expect(l.key).toBe("longRuns");
+    expect(movementValueText(l, d, "EN")).toBe("0.9 · 34 strides");
+    expect(movementValueText(l, d, "IS")).toBe("0.9 · 34 skref");
+    expect(l.note?.en).toMatch(/Jogs included/);
+    expect(l.perMin).toBeNull();
+  });
+  it("is hidden when there were none or no reading", () => {
+    expect(drillMovementLines({ long_runs: 0, long_run_strides: 0 })).toEqual([]);
+    expect(drillMovementLines({ long_runs: null })).toEqual([]);
+  });
+});

@@ -5,7 +5,7 @@ import { fetchActivitiesForDate, fetchActivityStats, fetchActivityStatsBatch, fe
 import type { CatapultConfig } from "./api";
 import { mapCatapultAthleteToPlayer, upsertCatapultAthleteMapping } from "./mapAthletes";
 import { aggregateCatapultMetrics, normalizeCatapultActivityStats, normalizeCatapultPeriodStats, toNormalizedExternalLoad, mergeImaClock } from "./normalize";
-import { aggregatePeriodsPerPlayer, writeSessionActuals, writePlayerDrillLoad, type PeriodRow } from "@/lib/micropulse/drillActuals";
+import { aggregatePeriodsPerPlayer, applyLongRuns, loadDayBandBounds, writeSessionActuals, writePlayerDrillLoad, type PeriodRow } from "@/lib/micropulse/drillActuals";
 import { extractMiiPeakPeriod } from "./miiPeakPeriod";
 import { boundRawPayload } from "./rawPayloadCapture";
 import type { CatapultAthlete, CatapultSyncResult } from "./types";
@@ -821,9 +821,20 @@ async function _syncCatapultDailyMetricsInner(
           periodRows.push(...normalizeCatapultPeriodStats({ payload }));
         } catch { /* this activity has no queryable periods — skip */ }
       }
+      // Long runs (≥18 s) per drill: count with the band edges of each player's day row (stored above by
+      // storeExternalLoadRows; the DB trigger sets them). Unknown edges → stays null, never 0.
+      const sbActuals = getSupabaseAdmin();
+      if (periodRows.some((r) => r.frBands)) {
+        const playerIds = [...new Set(periodRows.map((r) => athleteToPlayer.get(r.athleteKey)).filter((x): x is string => !!x))];
+        const bounds = await loadDayBandBounds(sbActuals, targetDate, playerIds);
+        const withLongRuns = applyLongRuns(periodRows, (k) => {
+          const pid = athleteToPlayer.get(k);
+          return pid ? bounds.get(pid) ?? null : null;
+        });
+        periodRows.splice(0, periodRows.length, ...withLongRuns);
+      }
       const groups = aggregatePeriodsPerPlayer(periodRows);
       if (groups.length) {
-        const sbActuals = getSupabaseAdmin();
         const res = await writeSessionActuals(sbActuals, sourceTeamId, targetDate, groups);
         // Per-PLAYER per-drill rows (the raw periodRows before the squad-mean
         // collapse), reusing the same period→drill match + athlete→player map.

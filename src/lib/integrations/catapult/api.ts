@@ -99,6 +99,15 @@ export const CATAPULT_PERIOD_IMA_RAW_PARAMETERS = [
   "ima_band7_jump_count", "ima_band8_jump_count",
 ];
 
+// RAW IMA Free Running counts per band for the PER-PERIOD query: the run count and the strides in each
+// band (V2 keys, the ones the daily path reads). Verified live on HK, Nov 2026: both come back per period,
+// indoors too; per-band distance and time read 0 per period (session level only), so they aren't asked.
+// Long runs per drill = the bands at or above 18 s under the athlete's own edges (drillActuals.applyLongRuns).
+export const CATAPULT_PERIOD_FR_RAW_PARAMETERS = Array.from({ length: 8 }, (_, i) => i + 1).flatMap((b) => [
+  `ima_v2_free_run_band${b}_event_count`,
+  `ima_v2_free_run_band${b}_total_strides`,
+]);
+
 // RAW metabolic (FMP) distance for the per-period query — the display-name
 // metabolic params also return 0 here, but the raw fmp_* HMLD field computes
 // per-period. Kept short: only the high-metabolic-load-distance the drill card shows.
@@ -1064,6 +1073,10 @@ export async function fetchActivityPeriodStats(activityId: string): Promise<unkn
   // (the display-name IMA/metabolic params return 0 for this org and the default
   // group isn't expanded per-period — see CATAPULT_PERIOD_IMA_RAW_PARAMETERS).
   const attempts: string[][] = [
+    // Richest first: + the Free Running band counts (long runs per drill). An org that rejects them
+    // falls through to the sets below, which are exactly the earlier behaviour.
+    [...CATAPULT_BASE_PARAMETERS, ...CATAPULT_PERIOD_IMA_RAW_PARAMETERS, ...CATAPULT_PERIOD_FR_RAW_PARAMETERS, ...CATAPULT_PERIOD_METABOLIC_RAW_PARAMETERS, ...CATAPULT_IMA_PARAMETERS, ...CATAPULT_METABOLIC_PARAMETERS],
+    [...CATAPULT_BASE_PARAMETERS, ...CATAPULT_PERIOD_IMA_RAW_PARAMETERS, ...CATAPULT_PERIOD_FR_RAW_PARAMETERS, ...CATAPULT_PERIOD_METABOLIC_RAW_PARAMETERS],
     [...CATAPULT_BASE_PARAMETERS, ...CATAPULT_PERIOD_IMA_RAW_PARAMETERS, ...CATAPULT_PERIOD_METABOLIC_RAW_PARAMETERS, ...CATAPULT_IMA_PARAMETERS, ...CATAPULT_METABOLIC_PARAMETERS],
     [...CATAPULT_BASE_PARAMETERS, ...CATAPULT_PERIOD_IMA_RAW_PARAMETERS, ...CATAPULT_PERIOD_METABOLIC_RAW_PARAMETERS],
     [...CATAPULT_BASE_PARAMETERS, ...CATAPULT_IMA_PARAMETERS, ...CATAPULT_METABOLIC_PARAMETERS],

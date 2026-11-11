@@ -25,7 +25,7 @@ const metrics = (o: Partial<Record<string, number>>) => ({
   metabolic_power_avg: null, metabolic_power_peak: null, duration_min: null, ima_accel: null, ima_decel: null,
   ima_cod_total: null, high_ima: null, jumps: null,
   ima_accel_low: null, ima_accel_med: null, ima_accel_high: null, ima_decel_low: null, ima_decel_med: null, ima_decel_high: null,
-  ima_cod_left: null, ima_cod_right: null, ima_cod_med: null, ima_cod_low: null, ...o,
+  ima_cod_left: null, ima_cod_right: null, ima_cod_med: null, ima_cod_low: null, long_runs: null, long_run_strides: null, ...o,
 } as PeriodRow["metrics"]);
 
 describe("writePlayerDrillLoad", () => {

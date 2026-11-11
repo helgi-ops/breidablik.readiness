@@ -12,6 +12,9 @@
  * write-back logic below is shared and provider-agnostic.
  */
 
+import { bandsAtOrAbove } from "@/lib/integrations/catapult/freeRunningBands";
+import { LONG_RUN_MIN_S } from "@/lib/micropulse/longRuns";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept any Supabase client (admin or server)
 type Sb = any;
 
@@ -51,6 +54,11 @@ export type PeriodMetrics = {
   ima_cod_right: number | null;
   ima_cod_med: number | null;        // left + right, medium (hard = high_ima)
   ima_cod_low: number | null;        // left + right, low
+  // Long runs (IMA Free Running, runs lasting ≥18 s) and the strides in them. Counted from the per-band
+  // run counts with the player's own band edges (applyLongRuns). Per drill Catapult gives no distance or
+  // time for these runs, so their pace is unknown: jogs included, never running load.
+  long_runs: number | null;
+  long_run_strides: number | null;
 };
 
 /** The IMA detail keys (stored on player_drill_load and drill_library under the same names). */
@@ -60,12 +68,16 @@ export const IMA_DETAIL_KEYS = [
   "ima_cod_left", "ima_cod_right", "ima_cod_med", "ima_cod_low",
 ] as const satisfies readonly (keyof PeriodMetrics)[];
 
+/** Long-run keys (same names on player_drill_load and drill_library). */
+export const LONG_RUN_KEYS = ["long_runs", "long_run_strides"] as const satisfies readonly (keyof PeriodMetrics)[];
+
 export const PERIOD_METRIC_KEYS: (keyof PeriodMetrics)[] = [
   "player_load", "player_load_per_min", "distance_m", "hir_total", "vel_b5", "vel_b6",
   "max_velocity", "accel_b23", "decel_b23", "accel_total", "decel_total", "hmld_m",
   "metabolic_power_avg", "metabolic_power_peak", "duration_min",
   "ima_accel", "ima_decel", "ima_cod_total", "high_ima", "jumps",
   ...IMA_DETAIL_KEYS,
+  ...LONG_RUN_KEYS,
 ];
 
 /** Metrics that need a satellite lock. Indoors they read 0 — a missing reading, not a 0-metre drill. */
@@ -94,7 +106,68 @@ export type PeriodRow = {
   /** Athlete identity — used to count squad coverage and average per player. */
   athleteKey: string;
   metrics: PeriodMetrics;
+  /** Raw IMA Free Running counts per band (index 0 = band 1 … 7 = band 8), when the source sent them.
+   *  Turned into long_runs / long_run_strides by `applyLongRuns` once the athlete's band edges are known. */
+  frBands?: FrPeriodBands;
 };
+
+export type FrPeriodBands = { events: Array<number | null>; strides: Array<number | null> };
+
+/**
+ * Long runs (≥18 s) and their strides for one period, from its per-band counts and the band edges the
+ * athlete's session was classified with. Null when the edges have no 18 s edge (Catapult's 3-band default)
+ * or the source sent no band counts — a missing reading, never 0.
+ */
+export function longRunsFromBands(fr: FrPeriodBands | undefined, bounds: readonly number[] | null): { long_runs: number | null; long_run_strides: number | null } {
+  const none = { long_runs: null, long_run_strides: null };
+  if (!fr || !bounds) return none;
+  const bands = bandsAtOrAbove(bounds, LONG_RUN_MIN_S);
+  if (!bands) return none;
+  const sum = (xs: Array<number | null>) => {
+    const v = bands.map((b) => xs[b - 1]).filter((x): x is number => typeof x === "number" && Number.isFinite(x));
+    return v.length ? v.reduce((a, b) => a + b, 0) : null;
+  };
+  return { long_runs: sum(fr.events), long_run_strides: sum(fr.strides) };
+}
+
+/**
+ * The band edges of a player's day row (player_external_load_daily), or null when they can't be trusted:
+ * missing, malformed, or `ima_fr_bounds_source = 'unknown'` (the row fits no known config). A drill is part
+ * of the same session, so Catapult classified its runs with the same edges as the day.
+ */
+export function boundsFromDayRow(row: { ima_fr_band_bounds?: unknown; ima_fr_bounds_source?: unknown } | null | undefined): number[] | null {
+  if (!row || row.ima_fr_bounds_source === "unknown") return null;
+  const b = row.ima_fr_band_bounds;
+  if (!Array.isArray(b) || b.length !== 9) return null;
+  const n = b.map((x) => (typeof x === "string" ? Number(x) : x));
+  return n.every((x) => typeof x === "number" && Number.isFinite(x)) ? (n as number[]) : null;
+}
+
+/** Each player's band edges on a date (catapult day rows), keyed by player id. Best-effort: empty on error. */
+export async function loadDayBandBounds(sb: Sb, dateISO: string, playerIds: string[]): Promise<Map<string, number[] | null>> {
+  const out = new Map<string, number[] | null>();
+  if (!playerIds.length) return out;
+  const { data, error } = await sb
+    .from("player_external_load_daily")
+    .select("player_id, ima_fr_band_bounds, ima_fr_bounds_source")
+    .eq("date", dateISO)
+    .eq("source", "catapult")
+    .in("player_id", playerIds);
+  if (error) return out;
+  for (const r of (data ?? []) as Array<{ player_id: string; ima_fr_band_bounds: unknown; ima_fr_bounds_source: unknown }>) {
+    out.set(r.player_id, boundsFromDayRow(r));
+  }
+  return out;
+}
+
+/** Fill long_runs / long_run_strides on every period row whose athlete's band edges are known. */
+export function applyLongRuns(rows: PeriodRow[], boundsFor: (athleteKey: string) => readonly number[] | null): PeriodRow[] {
+  return rows.map((r) => {
+    if (!r.frBands) return r;
+    const lr = longRunsFromBands(r.frBands, boundsFor(r.athleteKey));
+    return { ...r, metrics: { ...r.metrics, ...lr } };
+  });
+}
 
 /** A period aggregated across the squad → mean per player. */
 export type PeriodGroup = {
@@ -190,6 +263,9 @@ export function csvRawToMetrics(raw: Record<string, string>): PeriodMetrics {
     ima_cod_right: sumN(num(raw.imaCodRightHigh), num(raw.imaCodRightMedium), num(raw.imaCodRightLow)),
     ima_cod_med: sum2(num(raw.imaCodLeftMedium), num(raw.imaCodRightMedium)),
     ima_cod_low: sum2(num(raw.imaCodLeftLow), num(raw.imaCodRightLow)),
+    // The OpenField CSV export has no per-band run counts and no band edges → no long runs per drill.
+    long_runs: null,
+    long_run_strides: null,
   };
 }
 
@@ -382,6 +458,7 @@ const TEMPLATE_MAP: Array<[keyof PeriodMetrics, string]> = [
   ["high_ima", "high_ima"],
   ["jumps", "jump_count"],
   ...IMA_DETAIL_KEYS.map((k) => [k, k] as [keyof PeriodMetrics, string]),
+  ...LONG_RUN_KEYS.map((k) => [k, k] as [keyof PeriodMetrics, string]),
 ];
 
 const GPS_KEY_SET = new Set<keyof PeriodMetrics>(GPS_METRIC_KEYS);

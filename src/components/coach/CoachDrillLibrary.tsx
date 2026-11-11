@@ -161,6 +161,8 @@ export type Drill = {
   ima_cod_right?: number | null;
   ima_cod_med?: number | null;
   ima_cod_low?: number | null;
+  long_runs?: number | null;
+  long_run_strides?: number | null;
   measured_on?: string | null;
   measured_players?: number | null;
   measured_no_gps?: boolean | null;
@@ -2378,7 +2380,7 @@ function DrillMovementBlock({ d, lang }: { d: Drill; lang: Lang }) {
           </div>
           <div className="space-y-0.5">
             {lines.map((l) => (
-              <div key={l.key} className="flex justify-between gap-2" title={l.tech}>
+              <div key={l.key} className="flex justify-between gap-2" title={l.note ? `${lang === "IS" ? l.note.is : l.note.en} — ${l.tech}` : l.tech}>
                 <span className="text-gray-500">{lang === "IS" ? l.label.is : l.label.en}</span>
                 <span className="font-medium tabular-nums">{movementValueText(l, d, lang)}</span>
               </div>
@@ -2421,6 +2423,12 @@ function DrillMovementDetail({ d, lang }: { d: Drill; lang: Lang }) {
                 {IS ? "Lág / mið / hörð" : "Low / medium / hard"}: {r(l.bands.low)} / {r(l.bands.med)} / {r(l.bands.hard)}
               </div>
             )}
+            {l.key === "longRuns" && l.strides != null && (
+              <div className="mt-0.5 text-xs text-slate-500">
+                {IS ? "Skref í þeim" : "Strides in them"}: {r(l.strides)}
+              </div>
+            )}
+            {l.note && <div className="mt-0.5 text-xs text-slate-500">{IS ? l.note.is : l.note.en}</div>}
             {l.key === "cod" && left != null && (
               <div className="mt-0.5 text-xs text-slate-500">
                 {IS ? "Vinstri / hægri" : "Left / right"}: {r(d.ima_cod_left ?? null)} / {r(d.ima_cod_right ?? null)} ({left}% / {100 - left}%)

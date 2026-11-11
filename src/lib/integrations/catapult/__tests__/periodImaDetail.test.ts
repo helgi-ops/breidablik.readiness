@@ -56,3 +56,24 @@ describe("normalizeCatapultPeriodStats — IMA detail per drill", () => {
     }
   });
 });
+
+describe("normalizeCatapultPeriodStats — Free Running bands per drill", () => {
+  it("keeps the per-band run counts and strides raw (edges applied later), 0 as a real reading", () => {
+    const [r] = normalizeCatapultPeriodStats({
+      payload: [periodRow({
+        ima_v2_free_run_band5_event_count: 1, ima_v2_free_run_band5_total_strides: 30,
+        ima_v2_free_run_band6_event_count: 0, ima_v2_free_run_band6_total_strides: 0,
+        ima_v2_free_run_band1_event_count: 7, ima_v2_free_run_band1_total_strides: 70,
+      })],
+    });
+    expect(r.frBands?.events[0]).toBe(7);
+    expect(r.frBands?.events[4]).toBe(1);
+    expect(r.frBands?.events[5]).toBe(0);
+    expect(r.frBands?.strides[4]).toBe(30);
+    expect(r.metrics.long_runs).toBeNull(); // not yet: needs the athlete's band edges
+  });
+  it("no band counts sent → no frBands", () => {
+    const [r] = normalizeCatapultPeriodStats({ payload: [periodRow({})] });
+    expect(r.frBands).toBeUndefined();
+  });
+});

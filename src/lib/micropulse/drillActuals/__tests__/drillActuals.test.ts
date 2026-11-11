@@ -6,6 +6,9 @@ import {
   isSessionTotalName,
   periodHasNoGps,
   templatePatchFromActual,
+  longRunsFromBands,
+  applyLongRuns,
+  boundsFromDayRow,
   PERIOD_METRIC_KEYS,
   IMA_DETAIL_KEYS,
   type DrillActual,
@@ -154,7 +157,7 @@ describe("templatePatchFromActual", () => {
     metabolic_power_avg: null, metabolic_power_peak: null, duration_min: null, ima_accel: null, ima_decel: null,
     ima_cod_total: null, high_ima: null, jumps: null,
     ima_accel_low: null, ima_accel_med: null, ima_accel_high: null, ima_decel_low: null, ima_decel_med: null, ima_decel_high: null,
-    ima_cod_left: null, ima_cod_right: null, ima_cod_med: null, ima_cod_low: null,
+    ima_cod_left: null, ima_cod_right: null, ima_cod_med: null, ima_cod_low: null, long_runs: null, long_run_strides: null,
     n_players: 11, matched_by: "name", period_name: "Rondo", ...o,
   });
 
@@ -186,5 +189,52 @@ describe("templatePatchFromActual", () => {
 
   it("returns null when there is nothing to write", () => {
     expect(templatePatchFromActual(base({}), "2026-11-05")).toBeNull();
+  });
+});
+
+describe("long runs per drill (≥18 s under the player's own band edges)", () => {
+  const LEGACY = [0, 8, 12, 15, 18, 21, 24, 27, 100];
+  const NEW = [0, 2.5, 5, 8, 12, 18, 24, 30, 1000];
+  const CATAPULT_DEFAULT = [0, 2.5, 5, 1000, 1000, 1000, 1000, 1000, 1000];
+  const fr = { events: [9, 5, 3, 2, 1, 1, 0, 0], strides: [90, 60, 40, 30, 20, 25, 0, 0] };
+
+  it("counts bands 5–8 under the legacy edges and 6–8 under the new ones", () => {
+    expect(longRunsFromBands(fr, LEGACY)).toEqual({ long_runs: 2, long_run_strides: 45 });
+    expect(longRunsFromBands(fr, NEW)).toEqual({ long_runs: 1, long_run_strides: 25 });
+  });
+  it("is null, not 0, without an 18 s edge, without edges, or without band counts", () => {
+    expect(longRunsFromBands(fr, CATAPULT_DEFAULT)).toEqual({ long_runs: null, long_run_strides: null });
+    expect(longRunsFromBands(fr, null)).toEqual({ long_runs: null, long_run_strides: null });
+    expect(longRunsFromBands(undefined, LEGACY)).toEqual({ long_runs: null, long_run_strides: null });
+  });
+  it("0 runs of 18 s+ is a real 0", () => {
+    expect(longRunsFromBands({ events: [4, 1, 0, 0, 0, 0, 0, 0], strides: [40, 9, 0, 0, 0, 0, 0, 0] }, LEGACY)).toEqual({ long_runs: 0, long_run_strides: 0 });
+  });
+  it("applyLongRuns uses each athlete's own edges, then averages per player", () => {
+    const base = csvRowsToPeriodRows([
+      { periodName: "Rondo", athleteId: "A", athleteName: "A", raw: { playerLoad: "50", totalDistance: "0" } },
+      { periodName: "Rondo", athleteId: "B", athleteName: "B", raw: { playerLoad: "60", totalDistance: "0" } },
+    ]).map((r) => ({ ...r, frBands: fr }));
+    const rows = applyLongRuns(base, (k) => (k === "A" ? LEGACY : NEW));
+    expect(rows.map((r) => r.metrics.long_runs)).toEqual([2, 1]);
+    expect(aggregatePeriodsPerPlayer(rows)[0].perPlayer.long_runs).toBe(1.5);
+  });
+  it("boundsFromDayRow trusts only well-formed, known edges", () => {
+    expect(boundsFromDayRow({ ima_fr_band_bounds: LEGACY, ima_fr_bounds_source: "detected" })).toEqual(LEGACY);
+    expect(boundsFromDayRow({ ima_fr_band_bounds: ["0", "8", "12", "15", "18", "21", "24", "27", "100"], ima_fr_bounds_source: "player" })).toEqual(LEGACY);
+    expect(boundsFromDayRow({ ima_fr_band_bounds: LEGACY, ima_fr_bounds_source: "unknown" })).toBeNull();
+    expect(boundsFromDayRow({ ima_fr_band_bounds: null })).toBeNull();
+    expect(boundsFromDayRow(null)).toBeNull();
+  });
+  it("an indoor drill's long runs reach the drill template", () => {
+    const groups = aggregatePeriodsPerPlayer(applyLongRuns(
+      csvRowsToPeriodRows([{ periodName: "Rondo", athleteId: "A", athleteName: "A", raw: { playerLoad: "50", totalDistance: "0" } }]).map((r) => ({ ...r, frBands: fr })),
+      () => LEGACY,
+    ));
+    const { items } = matchPeriodsToItems([{ drill_id: "d1", drill_name: "Rondo" }], groups);
+    const patch = templatePatchFromActual(items[0].actual!, "2026-11-05")!;
+    expect(patch.long_runs).toBe(2);
+    expect(patch.long_run_strides).toBe(45);
+    expect(patch.measured_no_gps).toBe(true);
   });
 });

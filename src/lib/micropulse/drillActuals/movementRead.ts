@@ -11,6 +11,7 @@
  */
 
 import { ENOUGH_LABEL } from "@/lib/micropulse/sessionEnough";
+import { LONG_RUN_CITATIONS } from "@/lib/micropulse/longRuns";
 
 type Bi = { en: string; is: string };
 type Lang = "EN" | "IS";
@@ -33,6 +34,8 @@ export type DrillMovementInput = {
   ima_cod_right?: number | null;
   ima_cod_med?: number | null;
   ima_cod_low?: number | null;
+  long_runs?: number | null;
+  long_run_strides?: number | null;
   duration_min?: number | null;
   distance_m?: number | null;
   measured_on?: string | null;
@@ -40,7 +43,7 @@ export type DrillMovementInput = {
   measured_no_gps?: boolean | null;
 };
 
-export type MovementKey = "accel" | "decel" | "cod" | "jumps";
+export type MovementKey = "accel" | "decel" | "cod" | "jumps" | "longRuns";
 
 export type MovementLine = {
   key: MovementKey;
@@ -54,6 +57,10 @@ export type MovementLine = {
   perMin: number | null;
   /** Sensor term — tooltip / details only. */
   tech: string;
+  /** Long runs only: strides taken in those runs. */
+  strides?: number | null;
+  /** A plain caveat shown with the line at the detail level. */
+  note?: Bi;
 };
 
 const fin = (v: number | null | undefined): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -63,6 +70,7 @@ export const MOVEMENT_LABEL: Record<MovementKey, Bi> = {
   decel: ENOUGH_LABEL.imaDecel,
   cod: ENOUGH_LABEL.imaCod,
   jumps: { en: "Jumps", is: "Stökk" },
+  longRuns: { en: "Long runs (18 s+)", is: "Löng hlaup (18 s+)" },
 };
 
 export const MOVEMENT_TECH: Record<MovementKey, string> = {
@@ -70,12 +78,20 @@ export const MOVEMENT_TECH: Record<MovementKey, string> = {
   decel: "IMA decelerations, Catapult intensity bands 1–3 (count)",
   cod: "IMA change of direction, left + right, bands 1–3 (count)",
   jumps: "IMA jumps, bands 1–8 (count)",
+  longRuns: "IMA Free Running: continuous runs lasting 18 s or more (count, the bands at or above the 18 s edge of the player's own band edges) and the strides in them",
+};
+
+/** Why long runs on a drill are not running load: per drill there is no distance or time for them. */
+export const LONG_RUN_DRILL_NOTE: Bi = {
+  en: "Jogs included. Per drill Catapult gives no distance or time for these runs, so their pace is unknown and they don't count as running load.",
+  is: "Skokk meðtalið. Á hverja drillu gefur Catapult hvorki vegalengd né tíma þessara hlaupa, svo hraðinn er óþekktur og þau teljast ekki sem hlaupaálag.",
 };
 
 export const MOVEMENT_CITATIONS = [
   "Harper & McBurnie 2021 — braking and change of direction carry the highest tissue load",
   "Gaudino et al. 2014; Casamichana & Castellano 2010 — smaller pitches raise accelerations, braking and turns",
   "Bishop et al. 2020 — reading left vs right (on a drill, the side split mostly follows the drill's design)",
+  ...LONG_RUN_CITATIONS,
 ];
 
 const bandsOf = (low: number | null, med: number | null, hard: number | null) =>
@@ -109,6 +125,14 @@ export function drillMovementLines(d: DrillMovementInput): MovementLine[] {
   if (jumps != null && jumps > 0) {
     out.push({ key: "jumps", label: MOVEMENT_LABEL.jumps, value: jumps, hard: null, bands: null, perMin: perMin(jumps), tech: MOVEMENT_TECH.jumps });
   }
+
+  const longRuns = fin(d.long_runs);
+  if (longRuns != null && longRuns > 0) {
+    out.push({
+      key: "longRuns", label: MOVEMENT_LABEL.longRuns, value: longRuns, hard: null, bands: null, perMin: null,
+      tech: MOVEMENT_TECH.longRuns, strides: fin(d.long_run_strides), note: LONG_RUN_DRILL_NOTE,
+    });
+  }
   return out;
 }
 
@@ -127,6 +151,8 @@ export function movementValueText(line: MovementLine, d: DrillMovementInput, lan
   if (line.key === "cod") {
     const left = codLeftPct(d);
     if (left != null) parts.push(lang === "IS" ? `${left}% til vinstri` : `${left}% to the left`);
+  } else if (line.key === "longRuns") {
+    if (line.strides != null && line.strides > 0) parts.push(lang === "IS" ? `${round(line.strides)} skref` : `${round(line.strides)} strides`);
   } else if (line.hard != null && line.hard > 0) {
     parts.push(lang === "IS" ? `${round(line.hard)} harðar` : `${round(line.hard)} hard`);
   }

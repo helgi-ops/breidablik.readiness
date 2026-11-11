@@ -925,10 +925,17 @@ export function normalizeCatapultPeriodStats(args: { payload: unknown }): Period
     // set matches the athlete-daily set (Pro/Vector Pro only — 0/absent on Core).
     const ima = normalizeImaMetrics(f, playerLoad);
     const met = extractMetabolicMetrics(f);
+    // Free Running counts per band (requested as CATAPULT_PERIOD_FR_RAW_PARAMETERS). Kept raw: which bands
+    // are "long runs" (≥18 s) depends on the athlete's band edges, applied later (drillActuals.applyLongRuns).
+    // 0 is a real reading here (no run of that length), absent = not sent.
+    const frEvents = Array.from({ length: 8 }, (_, i) => extractMetric(f, [`ima_v2_free_run_band${i + 1}_event_count`]));
+    const frStrides = Array.from({ length: 8 }, (_, i) => extractMetric(f, [`ima_v2_free_run_band${i + 1}_total_strides`]));
+    const frBands = frEvents.some((v) => v != null) || frStrides.some((v) => v != null) ? { events: frEvents, strides: frStrides } : undefined;
     out.push({
       periodName,
       order: orderByName.get(norm)!,
       athleteKey: athleteId,
+      ...(frBands ? { frBands } : {}),
       metrics: {
         player_load: playerLoad,
         player_load_per_min: extractMetric(f, ["player_load_per_minute", "player_load_per_min"]) ?? ima.playerLoadPerMin ?? null,
@@ -972,6 +979,8 @@ export function normalizeCatapultPeriodStats(args: { payload: unknown }): Period
         ima_cod_right: nz(ima.imaCodRight),
         ima_cod_med: nz(sum2(ima.imaCodLeftMedium ?? null, ima.imaCodRightMedium ?? null)),
         ima_cod_low: nz(sum2(ima.imaCodLeftLow ?? null, ima.imaCodRightLow ?? null)),
+        long_runs: null,        // filled by drillActuals.applyLongRuns from frBands + the athlete's edges
+        long_run_strides: null,
       },
     });
   }
