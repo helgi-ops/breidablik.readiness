@@ -100,6 +100,25 @@ export function matchPaceOf(row: FreeRunningBandRow, floorKmh: number = MATCH_PA
   return out;
 }
 
+/**
+ * Long-run LOAD of one row: the number every plan, target, ramp and review compares (load plan, progressive
+ * overload, post-training planned vs actual, the periodization hub's match unit and day targets). Metres in long
+ * runs at match pace; only when the pace can't be known (the match-pace column is null: indoors, no reading)
+ * does it fall back to all long-run metres, the same rule as Unfamiliar load. 0 = GPS present and every long
+ * run was a jog, a real value.
+ */
+export function longRunLoadMetres(row: { ima_fr_ge18_mp_total_distance?: unknown; ima_fr_band58_total_distance?: unknown } | Record<string, unknown>): number | null {
+  return num(row.ima_fr_ge18_mp_total_distance) ?? num(row.ima_fr_band58_total_distance);
+}
+
+/** Strides in long runs at match pace (same rule as `longRunLoadMetres`; falls back to all ≥18 s strides). */
+export function longRunLoadStrides(row: { ima_fr_ge18_mp_stride_count?: unknown; ima_fr_ge18_stride_count?: unknown } | Record<string, unknown>): number | null {
+  return num(row.ima_fr_ge18_mp_stride_count) ?? num(row.ima_fr_ge18_stride_count);
+}
+
+/** The columns `longRunLoadMetres` / `longRunLoadStrides` read, for a Supabase select list. */
+export const LONG_RUN_LOAD_COLS = "ima_fr_ge18_mp_total_distance, ima_fr_ge18_mp_stride_count";
+
 /** The long runs of one `player_external_load_daily` row (snake_case columns). */
 export function longRunsOf(row: FreeRunningBandRow): LongRuns {
   const col = (band: number, k: string) => num(row[`ima_fr_band${band}_${k}`]);

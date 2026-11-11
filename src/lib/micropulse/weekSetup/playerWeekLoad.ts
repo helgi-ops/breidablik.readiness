@@ -36,8 +36,8 @@ export const PLAYER_WEEK_VAR_LABEL: Record<PlayerWeekVar, { short: { en: string;
   cod: { short: { en: "CoD", is: "Stefnubr." }, plain: { en: "changes of direction", is: "stefnubreytingar" } },
   // IMA Free Running bands are bout-DURATION bands; fr and stride = continuous runs ≥18 s (stride was ≥21 s before Nov 2026). Long-run volume,
   // NOT sprinting (sprint = the GPS `sprint` row above).
-  fr: { short: { en: "Long-run m", is: "Langhl. m" }, plain: { en: "distance in long continuous runs (≥18 s), IMA Free Running", is: "vegalengd í löngum samfelldum hlaupum (≥18 sek), IMA Free Running" } },
-  stride: { short: { en: "Long-run strides", is: "Langhl. skref" }, plain: { en: "strides in long continuous runs (≥18 s), IMA Free Running", is: "skref í löngum samfelldum hlaupum (≥18 sek), IMA Free Running" } },
+  fr: { short: { en: "Long-run m", is: "Langhl. m" }, plain: { en: "distance in long continuous runs at match pace (≥18 s, 11 km/h+), IMA Free Running", is: "vegalengd í löngum samfelldum hlaupum á leikhraða (≥18 sek, 11 km/klst+), IMA Free Running" } },
+  stride: { short: { en: "Long-run strides", is: "Langhl. skref" }, plain: { en: "strides in long continuous runs at match pace (≥18 s, 11 km/h+), IMA Free Running", is: "skref í löngum samfelldum hlaupum á leikhraða (≥18 sek, 11 km/klst+), IMA Free Running" } },
   accHi: { short: { en: "Acc B2-3", is: "Hröð. B2-3" }, plain: { en: "hard accelerations, bands 2-3", is: "kröftugar hraðaaukningar, bönd 2-3" } },
   decHi: { short: { en: "Dec B2-3", is: "Heml. B2-3" }, plain: { en: "hard braking, bands 2-3", is: "kröftugar hemlanir, bönd 2-3" } },
 };

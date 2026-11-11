@@ -37,7 +37,7 @@ export const KPI_LABEL: Record<BuildUpKpi, Bi> = {
   load: { en: "Player load", is: "Player load" },
   accHiEff: { en: "Accel B2–3", is: "Hröðun B2–3" },
   decHiEff: { en: "Decel B2–3", is: "Hemlun B2–3" },
-  stride: { en: "Long-run strides", is: "Skref í löngum hlaupum" },
+  stride: { en: "Long-run strides at match pace", is: "Skref í löngum hlaupum á leikhraða" },
 };
 
 export type Confidence = "high" | "moderate" | "low";

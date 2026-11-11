@@ -76,9 +76,9 @@ export const WEEKLY_LOAD_METRICS = WEEKLY_LOAD_METRICS_OUTDOOR;
 
 // ─── IMA running KPIs (periodization vocabulary) ──────────────────────────────
 // The running-side IMA pair the periodization hub plans with, beside IMA CoD: IMA Free Running long-run
-// distance (runs ≥18 s, `ima_fr_band58_total_distance` = ima_fr_ge18_total_distance) and IMA Stride long-run
-// strides (runs ≥18 s, `ima_fr_ge18_stride_count`; was legacy bands 6–8 = ≥21 s before Nov 2026 — no ≥21 s
-// edge exists in the new band config). Bout-duration bands — sustained running, NOT sprint/high-speed.
+// distance and IMA Stride long-run strides (runs ≥18 s) AT MATCH PACE (11 km/h+, `ima_fr_ge18_mp_*`, read via
+// longRuns `longRunLoadMetres` / `longRunLoadStrides`; all long runs only when pace is unknown, e.g. indoors).
+// Bout-duration bands — sustained running, NOT sprint/high-speed. Jog-pace long runs are not a target.
 // Part of the key vocabulary only — not a Weekly Load tracker tile set (the tracker shows the 3 bands).
 export const WEEKLY_LOAD_METRICS_IMA_RUN = ["imaFrDistance", "imaStrideHi"] as const;
 
@@ -207,9 +207,10 @@ export const WEEKLY_LOAD_LABELS: Record<WeeklyLoadMetricKey, { en: string; is: s
   imaStrideBand6:   { en: "Run strides 12–18 s", is: "Skref í 12–18 sek hlaupum", unit: "#" },
   imaStrideBand7:   { en: "Run strides 18–24 s", is: "Skref í 18–24 sek hlaupum", unit: "#" },
   imaStrideBand8:   { en: "Strides, longest runs (≥24 s)", is: "Skref í lengstu hlaupum (≥24 sek)", unit: "#" },
-  // IMA running pair (periodization): long-run distance + long-run strides (both runs ≥18 s)
-  imaFrDistance:    { en: "Long-run distance", is: "Vegal. í löngum hlaupum", unit: "m" },
-  imaStrideHi:      { en: "Long-run strides",  is: "Skref í löngum hlaupum",  unit: "#" },
+  // IMA running pair (periodization): long-run distance + long-run strides (both runs ≥18 s, at match pace
+  // 11 km/h+ since Nov 2026: in training most long runs are jogs, which are not a target)
+  imaFrDistance:    { en: "Long runs at match pace", is: "Löng hlaup á leikhraða", unit: "m" },
+  imaStrideHi:      { en: "Long-run strides at match pace",  is: "Skref í löngum hlaupum á leikhraða",  unit: "#" },
   // Titan indoor IMU (basketball)
   jumps:            { en: "Jumps",           is: "Stökk",             unit: "#" },
   impacts:          { en: "Impacts",         is: "Högg",              unit: "#" },

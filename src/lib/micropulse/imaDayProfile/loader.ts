@@ -8,6 +8,7 @@ import {
   type ImaSessionProfile,
 } from "./index";
 import { frReadingOf, sumBandsBetween } from "@/lib/integrations/catapult/freeRunningBands";
+import { longRunLoadStrides } from "@/lib/micropulse/longRuns";
 
 type DailyRow = {
   player_id: string;
@@ -26,6 +27,8 @@ type DailyRow = {
   ima_fr_bounds_source?: string | null;
   /** Strides in efforts ≥18 s (config-independent tier filled by the DB trigger). */
   ima_fr_ge18_stride_count: number | null;
+  /** Strides in efforts ≥18 s at match pace (11 km/h+); null = pace unknown (indoors). */
+  ima_fr_ge18_mp_stride_count: number | null;
   ima_cod_left_low: number | null;
   ima_cod_right_low: number | null;
   ima_cod_left_medium: number | null;
@@ -65,7 +68,7 @@ export async function loadImaDayProfile(
   const { data: rows } = await sb
     .from("player_external_load_daily")
     .select(
-      "player_id, date, source, ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band3_stride_count, ima_fr_band4_stride_count, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, ima_fr_band_bounds, ima_fr_bounds_source, ima_fr_ge18_stride_count, ima_cod_left_low, ima_cod_right_low, ima_cod_left_medium, ima_cod_right_medium, ima_cod_left_high, ima_cod_right_high"
+      "player_id, date, source, ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band3_stride_count, ima_fr_band4_stride_count, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, ima_fr_band_bounds, ima_fr_bounds_source, ima_fr_ge18_stride_count, ima_fr_ge18_mp_stride_count, ima_cod_left_low, ima_cod_right_low, ima_cod_left_medium, ima_cod_right_medium, ima_cod_left_high, ima_cod_right_high"
     )
     .in("player_id", playerIds)
     .eq("source", "catapult")
@@ -119,6 +122,11 @@ export async function loadImaDayProfile(
     const longRunStrides = (r: DailyRow): number =>
       r.ima_fr_ge18_stride_count != null ? Number(r.ima_fr_ge18_stride_count) || 0 : tier(r, 18);
     const sprint = today ? longRunStrides(today) : 0;
+    // The "more than usual" comparison reads long runs AT MATCH PACE (11 km/h+): in training most long runs are
+    // jogs, and a jog day used to read as a spike (Breiðablik Jun–Oct 2026: flags on 60 of 79 training days on
+    // all long runs, 25 at match pace, the jog days gone). All long runs only when the pace is unknown (indoors).
+    const loadStrides = (r: DailyRow): number => longRunLoadStrides(r) ?? longRunStrides(r);
+    const long_run_load_strides = today ? loadStrides(today) : 0;
     // A row whose edges have no 12/18/24 s edge (Catapult's 3-band default) can't be split by run length:
     // leave it out of the tier read (total 0 → excluded from the squad shares) rather than count its
     // strides with none in any tier. The Long runs card names these players.
@@ -149,9 +157,9 @@ export async function loadImaDayProfile(
       .filter(r =>
         r.date !== args.dateIso &&
         !matchDays.has(r.date) &&
-        longRunStrides(r) > 0,
+        loadStrides(r) > 0,
       );
-    const baselineValues = baselineRows.map(longRunStrides);
+    const baselineValues = baselineRows.map(loadStrides);
     // Baseline minimum is 1 day during the Catapult Free Running transition
     // (May 2026): many pre-fix training days have IMA = 0 so requiring 2
     // qualifying days would hide baselines for most of the squad. As more
@@ -162,7 +170,7 @@ export async function loadImaDayProfile(
       ? baselineValues.reduce((s, v) => s + v, 0) / sprint_baseline_days
       : null;
     const sprint_vs_baseline_pct = sprint_baseline_avg != null && sprint_baseline_avg > 0
-      ? (sprint / sprint_baseline_avg) * 100
+      ? (long_run_load_strides / sprint_baseline_avg) * 100
       : null;
 
     return {
@@ -174,6 +182,7 @@ export async function loadImaDayProfile(
       mid_strides: mid,
       high_strides: high,
       sprint_strides: sprint,
+      long_run_load_strides,
       sprint_baseline_avg,
       sprint_baseline_days,
       sprint_vs_baseline_pct,

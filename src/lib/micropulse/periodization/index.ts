@@ -221,7 +221,7 @@ export function matchAxisTargets(b: TeamAverages): MatchAxes {
   ];
   if (mAccHi != null) mechMetrics.push({ metric: { en: "High-int accel eff (B2–3)", is: "Ákafar hröðunar-átök (B2–3)" }, matchValue: mAccHi.toString(), trainingCeiling: pct(mAccHi, 1.5)?.toString() ?? "–", band: "131–166%" });
   if (mDecHi != null) mechMetrics.push({ metric: { en: "High-int decel eff (B2–3)", is: "Ákafar hraðam.-átök (B2–3)" }, matchValue: mDecHi.toString(), trainingCeiling: pct(mDecHi, 1.2)?.toString() ?? "–", band: "108–134%" });
-  if (mStride != null) mechMetrics.push({ metric: { en: "Long-run strides (runs ≥18 s)", is: "Skref í löngum hlaupum (≥18 sek)" }, matchValue: mStride.toString(), trainingCeiling: pct(mStride, 1.0)?.toString() ?? "–", band: "≈100%" });
+  if (mStride != null) mechMetrics.push({ metric: { en: "Long-run strides at match pace (runs ≥18 s, 11 km/h+)", is: "Skref í löngum hlaupum á leikhraða (≥18 sek, 11 km/klst+)" }, matchValue: mStride.toString(), trainingCeiling: pct(mStride, 1.0)?.toString() ?? "–", band: "≈100%" });
   const mechanical: AxisTarget = {
     axis: "mechanical", label: { en: "Mechanical / IMA", is: "Vélrænt / IMA" },
     matchNote: { en: "Training OVER-shoots the match here — plan it, don't stack it on an HSR day.", is: "Æfingar fara YFIR leikkröfu hér — skipuleggðu, ekki stafla á háhraða-dag." },

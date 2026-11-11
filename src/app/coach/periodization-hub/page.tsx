@@ -201,8 +201,8 @@ const imaLine = (d: CalDay, is: boolean, imaPro = false): string => {
   if (d.accel != null || d.decel != null) p.push(`${imaPro ? "IMA " : ""}Acc/Dec ${d.accel ?? "–"}/${d.decel ?? "–"}`);
   if (d.accHiEff != null) p.push(`Acc B2–3 ${d.accHiEff}`);
   if (d.decHiEff != null) p.push(`Dec B2–3 ${d.decHiEff}`);
-  if (d.stride != null) p.push(`${is ? "Langhl.-skref" : "Long-run strides"} ${d.stride}`);
-  if (d.fr != null) p.push(`${is ? "Löng hlaup" : "Long runs"} ${d.fr} m`);
+  if (d.stride != null) p.push(`${is ? "Langhl.-skref á leikhraða" : "Long-run strides at match pace"} ${d.stride}`);
+  if (d.fr != null) p.push(`${is ? "Löng hlaup á leikhraða" : "Long runs at match pace"} ${d.fr} m`);
   if (d.cod != null) p.push(`${is ? "Stefnubr." : "CoD"} ${d.cod}`);
   const dd = domDir(d.dir, is); if (dd) p.push(`${is ? "stefna" : "dir"} → ${dd}`);
   return p.join(" · ");
@@ -2936,8 +2936,8 @@ export default function PeriodizationHubPage() {
                                   <span className="w-full truncate text-[12px] font-bold" style={{ color: typeColor[cd.type] }}>{typeName(cd.type)}</span>
                                   <span className="text-[11px] tabular-nums text-slate-600">{dash(cd.load)}</span>
                                   {(cd.accel != null || cd.decel != null) && <span className="text-[10px] tabular-nums text-slate-500" title={plan?.tier?.tier === "pro" ? (is ? "IMA hröðun / hemlun, fjöldi" : "IMA accelerations / decelerations, count") : (is ? "Hröðun / hemlun (GPS), fjöldi" : "Accelerations / decelerations (GPS), count")}>Acc/Dec {cd.accel ?? "–"}/{cd.decel ?? "–"}</span>}
-                                  {cd.fr != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "Vegalengd í löngum samfelldum hlaupum (≥18 sek; IMA Free Running), metrar — ekki sprettir" : "Distance in long continuous runs (≥18 s; IMA Free Running), metres — not sprinting"}>FR {cd.fr} m</span>}
-                                  {cd.stride != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "Skref í löngum samfelldum hlaupum (≥18 sek; IMA Free Running), fjöldi — ekki sprett-skref" : "Strides in long continuous runs (≥18 s; IMA Free Running), count — not sprint strides"}>{is ? "Skref" : "Stride"} {cd.stride}</span>}
+                                  {cd.fr != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "Vegalengd í löngum samfelldum hlaupum á leikhraða (≥18 sek, 11 km/klst+; IMA Free Running), metrar. Skokk telst ekki með. Ekki sprettir" : "Distance in long continuous runs at match pace (≥18 s, 11 km/h+; IMA Free Running), metres. Jogs do not count. Not sprinting"}>FR {cd.fr} m</span>}
+                                  {cd.stride != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "Skref í löngum samfelldum hlaupum á leikhraða (≥18 sek, 11 km/klst+; IMA Free Running), fjöldi. Skokk telst ekki með" : "Strides in long continuous runs at match pace (≥18 s, 11 km/h+; IMA Free Running), count. Jogs do not count"}>{is ? "Skref" : "Stride"} {cd.stride}</span>}
                                   {cd.cod != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "IMA stefnubreytingar, fjöldi" : "IMA CoD (change of direction), count"}>CoD {cd.cod}</span>}
                                 </>) : <span className="text-[11px] text-slate-500">—</span>}
                               </button>
@@ -3853,8 +3853,8 @@ export default function PeriodizationHubPage() {
               { en: imaSrc ? "Accelerations (IMA)" : "Accelerations (B2–3)", is: imaSrc ? "Hröðun (IMA)" : "Hröðun (B2–3)", u: "#", tf: "accel", mf: "matchAccel", pm: mu.accel.typical },
               { en: imaSrc ? "Decelerations (IMA)" : "Decelerations (B2–3)", is: imaSrc ? "Hemlun (IMA)" : "Hemlun (B2–3)", u: "#", tf: "decel", mf: "matchDecel", pm: mu.decel.typical },
               { en: "IMA CoD (change of direction)", is: "IMA stefnubreytingar", u: "#", tf: "imaCod", mf: "matchImaCod", pm: mu.imaCod.typical },
-              { en: "Long-run distance (runs ≥18 s)", is: "Vegal. í löngum hlaupum (≥18 sek)", u: "m", tf: "imaFrDist", mf: "matchImaFrDist", pm: mu.imaFr?.typical ?? null },
-              { en: "Long-run strides (runs ≥18 s)", is: "Skref í löngum hlaupum (≥18 sek, IMA Free Running)", u: "#", tf: "strideHi", mf: "matchStrideHi", pm: mu.stride?.typical ?? null },
+              { en: "Long runs at match pace (runs ≥18 s, 11 km/h+)", is: "Löng hlaup á leikhraða (≥18 sek, 11 km/klst+)", u: "m", tf: "imaFrDist", mf: "matchImaFrDist", pm: mu.imaFr?.typical ?? null },
+              { en: "Long-run strides at match pace (runs ≥18 s, 11 km/h+)", is: "Skref í löngum hlaupum á leikhraða (≥18 sek, 11 km/klst+)", u: "#", tf: "strideHi", mf: "matchStrideHi", pm: mu.stride?.typical ?? null },
             ] as const).filter((r) => r.pm != null);
             // ONE representative 7-day microcycle (recovery MD+1/+2 + build MD-4…MD-1). The profile holds a
             // bucket for EVERY MD-offset the season ever saw (incl. long-gap MD-5/MD-6 and MD+3), but those
@@ -4126,8 +4126,8 @@ export default function PeriodizationHubPage() {
               { k: "accelB23", en: imaSrc ? "Accelerations (IMA)" : "Accelerations (B2–3)", is: imaSrc ? "Hröðun (IMA)" : "Hröðun (B2–3)", u: "#" },
               { k: "decelB23", en: imaSrc ? "Decelerations (IMA)" : "Decelerations (B2–3)", is: imaSrc ? "Hemlun (IMA)" : "Hemlun (B2–3)", u: "#" },
               { k: "imaCod", en: "IMA CoD (change of direction)", is: "IMA stefnubreytingar", u: "#" },
-              { k: "imaFrDistance", en: "Long-run distance (runs ≥18 s)", is: "Vegal. í löngum hlaupum (≥18 sek)", u: "m" },
-              { k: "imaStrideHi", en: "Long-run strides (runs ≥18 s)", is: "Skref í löngum hlaupum (≥18 sek, IMA Free Running)", u: "#" },
+              { k: "imaFrDistance", en: "Long runs at match pace (runs ≥18 s, 11 km/h+)", is: "Löng hlaup á leikhraða (≥18 sek, 11 km/klst+)", u: "m" },
+              { k: "imaStrideHi", en: "Long-run strides at match pace (runs ≥18 s, 11 km/h+)", is: "Skref í löngum hlaupum á leikhraða (≥18 sek, 11 km/klst+)", u: "#" },
             ] as const).filter((r) => (matchKpiAvg as Partial<Record<string, number>>)[r.k] != null);
             // Weakness-steer (the "Individualised build-up" card) biases the ramp: the axes he's behind on
             // ramp to a HIGHER peak. "Neutral ramp (no bias)" (steerNeutral) switches it off → a uniform ramp.
@@ -4449,8 +4449,8 @@ export default function PeriodizationHubPage() {
                         {(day.accel != null || day.decel != null) && <span>{plan.tier.tier === "pro" ? "IMA " : ""}Acc/Dec: <b className="tabular-nums">{day.accel ?? "–"}/{day.decel ?? "–"}</b></span>}
                         {day.accHiEff != null && <span>Acc B2–3: <b className="tabular-nums">{day.accHiEff}</b></span>}
                         {day.decHiEff != null && <span>Dec B2–3: <b className="tabular-nums">{day.decHiEff}</b></span>}
-                        {day.stride != null && <span>{is ? "Langhl.-skref" : "Long-run strides"}: <b className="tabular-nums">{day.stride}</b></span>}
-                        {day.fr != null && <span>{is ? "Löng hlaup" : "Long runs"}: <b className="tabular-nums">{day.fr} m</b></span>}
+                        {day.stride != null && <span>{is ? "Langhl.-skref á leikhraða" : "Long-run strides at match pace"}: <b className="tabular-nums">{day.stride}</b></span>}
+                        {day.fr != null && <span>{is ? "Löng hlaup á leikhraða" : "Long runs at match pace"}: <b className="tabular-nums">{day.fr} m</b></span>}
                         {day.cod != null && <span>{is ? "Stefnubr." : "CoD"}: <b className="tabular-nums">{day.cod}</b></span>}
                         {day.dir && <span>{is ? "stefna" : "dir"} → <b>{domDir(day.dir, is)}</b></span>}
                       </div>
@@ -4473,7 +4473,7 @@ export default function PeriodizationHubPage() {
                   <span>{is ? "Hraðam." : "Decel"}: <b className="tabular-nums">{a.decel ?? "–"}</b></span>
                   {a.accelHiEff != null && <span>Acc B2–3: <b className="tabular-nums">{a.accelHiEff}</b></span>}
                   {a.decelHiEff != null && <span>Dec B2–3: <b className="tabular-nums">{a.decelHiEff}</b></span>}
-                  {a.strideHi != null && <span title={is ? "Skref í löngum samfelldum hlaupum (≥18 sek) — ekki sprettir" : "Strides in long continuous runs (≥18 s) — not sprinting"}>{is ? "Langhl.-skref" : "Long-run strides"}: <b className="tabular-nums">{a.strideHi}</b></span>}
+                  {a.strideHi != null && <span title={is ? "Skref í löngum samfelldum hlaupum á leikhraða (≥18 sek, 11 km/klst+). Skokk telst ekki með. Ekki sprettir" : "Strides in long continuous runs at match pace (≥18 s, 11 km/h+). Jogs do not count. Not sprinting"}>{is ? "Langhl.-skref á leikhraða" : "Long-run strides at match pace"}: <b className="tabular-nums">{a.strideHi}</b></span>}
                   {a.rhieBouts != null && <span>RHIE: <b className="tabular-nums">{a.rhieBouts}</b></span>}
                   {a.runSymmetry != null && <span>{is ? "Samhverfa" : "Symmetry"}: <b className="tabular-nums">{a.runSymmetry}</b></span>}
                   {a.metabolicPower != null && <span>{is ? "Efnaafl" : "Met power"}: <b className="tabular-nums">{a.metabolicPower}</b></span>}

@@ -16,8 +16,9 @@
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { isLongRunSpike } from "@/lib/micropulse/imaDayProfile";
 
-type ImaPlayer = { full_name: string; sprint_vs_baseline_pct: number | null; total_strides: number };
+type ImaPlayer = { full_name: string; sprint_vs_baseline_pct: number | null; long_run_load_strides?: number | null; total_strides: number };
 type ImaResp = { profile?: { per_player?: ImaPlayer[] }; date?: string; requestedDate?: string };
 
 export default function ImaVerdictStrip({ lang, date }: { lang?: "IS" | "EN"; date?: string }) {
@@ -38,10 +39,10 @@ export default function ImaVerdictStrip({ lang, date }: { lang?: "IS" | "EN"; da
         if (!alive || !res.ok) return;
         const j = (await res.json()) as ImaResp;
         const players = (j.profile?.per_player ?? []).filter((p) => p.total_strides > 0);
-        // Same threshold the IMA page verdict uses: long-run strides (runs ≥18 s,
-        // whatever band numbers hold them; field name `sprint_vs_baseline_pct` is legacy) >= 150% of the
-        // player's 14-day training-only baseline = a jump in sustained running.
-        const spikes = players.filter((p) => (p.sprint_vs_baseline_pct ?? 0) >= 150).map((p) => p.full_name);
+        // Same rule the IMA page verdict uses (`isLongRunSpike`): long-run strides at match pace (runs ≥18 s at
+        // 11 km/h+; field name `sprint_vs_baseline_pct` is legacy) >= 150% of the player's 14-day training-only
+        // baseline and at least 100 of them = a jump in sustained running.
+        const spikes = players.filter(isLongRunSpike).map((p) => p.full_name);
         const shownDate = j.date ?? null;
         const stale = !!(j.requestedDate && shownDate && shownDate !== j.requestedDate);
         setState({ spikes, evaluated: players.length, shownDate, stale });
@@ -67,8 +68,8 @@ export default function ImaVerdictStrip({ lang, date }: { lang?: "IS" | "EN"; da
     : (is ? "í dag" : "today");
   const sentence = spiking
     ? (is
-        ? `${state.spikes.length} ${state.spikes.length === 1 ? "hljóp" : "hlupu"} mun meira í löngum samfelldum hlaupum en venjulega ${when} — ${names}`
-        : `${state.spikes.length} did much more long continuous running than usual ${when} — ${names}`)
+        ? `${state.spikes.length} ${state.spikes.length === 1 ? "hljóp" : "hlupu"} mun meira í löngum hlaupum á leikhraða en venjulega ${when} — ${names}`
+        : `${state.spikes.length} did much more long running at match pace than usual ${when} — ${names}`)
     : (is
         ? `Löng samfelld hlaup innan venju hjá öllum ${when}`
         : `Long continuous running within range across the squad ${when}`);

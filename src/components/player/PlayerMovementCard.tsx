@@ -17,7 +17,7 @@ const DESC: Record<string, { en: string; is: string }> = {
   jumps: { en: "How many times you jumped.", is: "Hversu oft þú stökkst." },
   high_intensity: { en: "Explosive, high-effort movements.", is: "Sprengikraftur og kröftugar hreyfingar." },
   cuts: { en: "Sharp changes of direction.", is: "Snöggar stefnubreytingar." },
-  ima_run: { en: "Distance you ran at high speed.", is: "Vegalengd sem þú hljópst á miklum hraða." },
+  ima_run: { en: "Metres in runs of 18 seconds or more at match pace (11 km/h or faster). Jogging does not count.", is: "Metrar í hlaupum sem stóðu 18 sekúndur eða lengur á leikhraða (11 km/klst eða hraðar). Skokk telst ekki með." },
   hsr: { en: "Distance you ran at high speed.", is: "Vegalengd sem þú hljópst á miklum hraða." },
   sprint: { en: "Distance covered sprinting flat-out.", is: "Vegalengd á fullum spretti." },
   efforts: { en: "Number of hard, high-intensity actions.", is: "Fjöldi kröftugra, háákefðar hreyfinga." },
@@ -38,7 +38,7 @@ const LABEL: Record<string, { en: string; is: string }> = {
   jumps: { en: "Jumps", is: "Stökk" },
   high_intensity: { en: "High-intensity actions", is: "Háákefðar hreyfingar" },
   cuts: { en: "Direction changes", is: "Stefnubreytingar" },
-  ima_run: { en: "High-speed running", is: "Háhraðahlaup" },
+  ima_run: { en: "Long runs at match pace", is: "Löng hlaup á leikhraða" },
   // GPS (Lite)
   hsr: { en: "High-speed running", is: "Háhraðahlaup" },
   sprint: { en: "Sprint distance", is: "Sprettvegalengd" },

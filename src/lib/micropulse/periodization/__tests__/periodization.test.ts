@@ -880,10 +880,10 @@ describeIma("IMA Free Running + Stride in the periodization vocabulary", () => {
     expectIma(t.imaFrDist).toBe(850);
     expectIma(t.matchImaFrDist).toBe(1300);
   });
-  itIma("weekly ×match: long-run strides accumulate more than volume, long-run distance less", () => {
+  itIma("weekly ×match: long runs at match pace (strides and metres = the same runs) taper together, below volume", () => {
     const days = stdDays(1);
     const vol = wkm(days, "totalDistance");
-    expectIma(wkm(days, "imaStrideHi")).toBeGreaterThan(vol);
+    expectIma(wkm(days, "imaStrideHi")).toBe(wkm(days, "imaFrDistance"));
     expectIma(wkm(days, "imaFrDistance")).toBeLessThan(vol);
   });
 });

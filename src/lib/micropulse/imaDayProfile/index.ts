@@ -75,13 +75,16 @@ export type ImaPlayerDay = {
    * legacy ("sprint") and kept for API stability — this is NOT sprint exposure.
    */
   sprint_strides: number;
-  /** Personal 14-day training-only avg of long-run strides (≥18 s) — null if no baseline. Legacy name. */
+  /** Today's strides in long runs AT MATCH PACE (≥18 s, 11 km/h+; all long runs when pace is unknown) — the
+   *  number `sprint_vs_baseline_pct` compares. */
+  long_run_load_strides: number;
+  /** Personal 14-day training-only avg of long-run strides at match pace (≥18 s, 11 km/h+) — null if no baseline. Legacy name. */
   sprint_baseline_avg: number | null;
   /** Number of training days with long-run (≥18 s) strides > 0 that backed the baseline.
    *  1 = low confidence (transition period after Catapult Free Running fix),
    *  2+ = standard. Surfaced in the UI so coaches can weight accordingly. */
   sprint_baseline_days: number;
-  /** Today's long-run strides (≥18 s) ÷ baseline × 100. null if no baseline. Legacy name. */
+  /** Today's long-run strides at match pace ÷ baseline × 100. null if no baseline. Legacy name. */
   sprint_vs_baseline_pct: number | null;
   // Change of Direction — three-tier breakdown (low / medium / high).
   // High-intensity asymmetry is the injury-relevant tier (Bishop 2020:
@@ -150,6 +153,14 @@ export type ImaSessionProfile = {
 };
 
 /** Asymmetry % using Bishop 2020 formula: |L-R| ÷ max(L,R) × 100. */
+/** "Far more long running than usual": strides in long runs at match pace at ≥150% of the player's own 14-day
+ *  training norm AND at least 100 of them (≈230 m at match pace), so a tiny norm can't turn two runs into a spike. */
+export const LONG_RUN_SPIKE_PCT = 150;
+export const LONG_RUN_SPIKE_MIN_STRIDES = 100;
+export function isLongRunSpike(p: { sprint_vs_baseline_pct: number | null; long_run_load_strides?: number | null }): boolean {
+  return (p.sprint_vs_baseline_pct ?? 0) >= LONG_RUN_SPIKE_PCT && (p.long_run_load_strides ?? 0) >= LONG_RUN_SPIKE_MIN_STRIDES;
+}
+
 export function asymmetryPct(left: number, right: number): number | null {
   const max = Math.max(left, right);
   if (max <= 0) return null;

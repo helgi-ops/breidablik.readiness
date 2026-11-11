@@ -18,6 +18,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAuthedPlayerId } from "@/lib/session-rpe/server";
+import { longRunLoadMetres } from "@/lib/micropulse/longRuns";
 
 export const runtime = "nodejs";
 
@@ -45,8 +46,9 @@ const IMA_METRICS: MetricDef[] = [
   { key: "jumps", unit: "", value: (r) => num(r.jumps) },
   { key: "high_intensity", unit: "", value: (r) => num(r.accel_b2_3_tot_effs_gen2) + num(r.decel_b2_3_tot_effs_gen2) },
   { key: "cuts", unit: "", value: (r) => codSum(r) },
-  // Long continuous runs (≥18 s) — sustained running, NOT sprinting. Key kept for the client.
-  { key: "ima_run", unit: "m", value: (r) => num(r.ima_fr_band58_total_distance) },
+  // Long continuous runs (≥18 s) at match pace (11 km/h+): jogs are not load; all long runs when pace is
+  // unknown (indoors). Sustained running, NOT sprinting. Key kept for the client.
+  { key: "ima_run", unit: "m", value: (r) => longRunLoadMetres(r) ?? 0 },
 ];
 
 // Titan indoor-IMU signals — the variables the player's Titan sensor genuinely produces:
@@ -73,7 +75,7 @@ const GPS_METRICS: MetricDef[] = [
 const SELECT = "date, source, jumps, impacts, player_load, total_player_load, raw_payload_json, "
   + "accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, "
   + "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, "
-  + "ima_fr_band58_total_distance, high_speed_distance, sprint_distance, accel_decel_efforts, max_velocity";
+  + "ima_fr_band58_total_distance, ima_fr_ge18_mp_total_distance, high_speed_distance, sprint_distance, accel_decel_efforts, max_velocity";
 
 export async function GET(req: Request) {
   const sb = getSupabaseAdmin();

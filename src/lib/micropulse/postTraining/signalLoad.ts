@@ -19,6 +19,7 @@ import { imaCodTotal } from "@/lib/micropulse/catapultCapability";
 import { buildLoadPlanForTeam } from "@/lib/micropulse/loadPlan/forTeam";
 import { loadSessionEnough } from "@/lib/micropulse/sessionEnough/loader";
 import type { SessionEnough } from "@/lib/micropulse/sessionEnough";
+import { longRunLoadMetres } from "@/lib/micropulse/longRuns";
 
 export type PostTrainingSignalInput = {
   ok: boolean;
@@ -41,7 +42,7 @@ export async function loadPostTrainingForSignal(sb: SupabaseClient, teamId: stri
   if (!sessionDate) return { ok: true, sessionDate: null, plannedVsActual: null };
 
   const { data: gpsRows } = await sb.from("player_external_load_daily")
-    .select("player_id, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, high_speed_distance, sprint_distance, accel_decel_efforts, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low")
+    .select("player_id, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, ima_fr_ge18_mp_total_distance, high_speed_distance, sprint_distance, accel_decel_efforts, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low")
     .in("player_id", playerIds).eq("date", sessionDate);
   const actualById = new Map<string, ActualKpis>();
   for (const r of (gpsRows ?? []) as Array<Record<string, unknown>>) {
@@ -51,8 +52,8 @@ export async function loadPostTrainingForSignal(sb: SupabaseClient, teamId: stri
       hsr: num(r.velocity_band5_total_distance) || num(r.high_speed_distance),
       sprint: num(r.velocity_band6_total_distance) || num(r.sprint_distance),
       accel: num(r.accel_b2_3_tot_effs_gen2), decel: num(r.decel_b2_3_tot_effs_gen2),
-      // ima = IMA FR bands 5–8 = long continuous runs (≥18 s) — NOT sprint/HSR (those are hsr/sprint above).
-      efforts: num(r.accel_decel_efforts), ima: num(r.ima_fr_band58_total_distance),
+      // ima = long continuous runs (≥18 s) at match pace (11 km/h+) — NOT sprint/HSR (those are hsr/sprint above).
+      efforts: num(r.accel_decel_efforts), ima: longRunLoadMetres(r),
       imaAccel: num(r.ima_accel), imaDecel: num(r.ima_decel), imaCod: cod, jumps: num(r.jumps),
     });
   }

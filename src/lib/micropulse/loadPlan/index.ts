@@ -24,6 +24,7 @@
 import { planSessionLoad, type PlannedSessionLoad, type SessionLoadType } from "@/lib/micropulse/plannedSessionLoad";
 import { isPrevClubRow } from "@/lib/micropulse/load/previousClub";
 import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
+import { longRunLoadMetres } from "@/lib/micropulse/longRuns";
 
 export type LoadKpi =
   | "totalDistance" | "playerLoad" | "hsr" | "sprint" | "accel" | "decel" | "ima"
@@ -46,7 +47,7 @@ export const KPI_LABEL: Record<LoadKpi, string> = {
   decel: "Decelerations (B2-3)",
   efforts: "Hard efforts (accel+decel)",
   // IMA FR bands 5–8 = distance in long continuous runs (≥18 s; bout-duration bands) — NOT high-speed/sprint.
-  ima: "Long-run distance (m)",
+  ima: "Long runs at match pace (m)",
   imaAccel: "IMA accelerations",
   imaDecel: "IMA decelerations",
   imaCod: "Change of direction",
@@ -63,6 +64,8 @@ export type LoadRow = {
   accel_b2_3_tot_effs_gen2: number | null;
   decel_b2_3_tot_effs_gen2: number | null;
   ima_fr_band58_total_distance: number | null;
+  /** Metres in long runs at match pace (11 km/h+); null = pace unknown (indoors). */
+  ima_fr_ge18_mp_total_distance?: number | null;
   // Genuine IMA event columns (Pro only).
   ima_accel: number | null;
   ima_decel: number | null;
@@ -95,7 +98,8 @@ const VAL: Record<LoadKpi, (r: LoadRow) => number> = {
   accel: (r) => num(r.accel_b2_3_tot_effs_gen2),
   decel: (r) => num(r.decel_b2_3_tot_effs_gen2),
   efforts: (r) => num(r.accel_decel_efforts),
-  ima: (r) => num(r.ima_fr_band58_total_distance), // long continuous runs (≥18 s), not sprint
+  // long continuous runs (≥18 s) AT MATCH PACE (11 km/h+): jogs are not load; all long runs only when pace is unknown
+  ima: (r) => longRunLoadMetres(r) ?? 0,
   imaAccel: (r) => num(r.ima_accel),
   imaDecel: (r) => num(r.ima_decel),
   imaCod: (r) => num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low) + num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low),

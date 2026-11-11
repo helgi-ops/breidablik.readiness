@@ -79,11 +79,13 @@ export const KPI_TAPER_EXPONENT: Partial<Record<WeeklyLoadMetricKey, number>> = 
   // GPS HSR/sprint taper; they are kept unchanged (a conservative assumption, not evidence for long-run
   // strides) so existing week plans don't shift — revisit with club data.
   imaStrideBand6: 1.5, imaStrideBand7: 1.7, imaStrideBand8: 2.2,
-  // IMA running pair — calibrated on Breiðablik's per-MD-day medians (2026, ~1,600 sessions): long-run
-  // strides (calibrated on legacy bands 6–8 = runs ≥21 s; imaStrideHi now = strides in runs ≥18 s — re-check) stay
-  // ~60% of a match even on MD-1 → flat (e<1, ~3.9× a match per week); long-run distance (runs ≥18 s,
-  // ima_fr_ge18) tapers a little harder than volume (e=1.2, ~2.3×).
-  imaFrDistance: 1.2, imaStrideHi: 0.7,
+  // IMA running pair = long runs (≥18 s) AT MATCH PACE (11 km/h+) since Nov 2026. Long-run distance keeps
+  // e=1.2 (a little harder than volume, ~2.1× a match in a 1-match week). Strides were 0.7 ("stay ~60% of a match
+  // even on MD-1"), but that flat taper was the warm-up and recovery JOGS: at match pace strides and metres are
+  // the same runs (Breiðablik Jun–Oct 2026, % of a near-full match by MD-day, strides = metres within 1 point:
+  // MD-4 15, MD-3 4, MD-2 11, MD-1 8), so they taper together. No published training standard exists for long
+  // continuous runs; the level is a planning assumption, shown as such.
+  imaFrDistance: 1.2, imaStrideHi: 1.2,
 };
 
 /**

@@ -200,3 +200,17 @@ test("matchPaceOf: no reading for edges that fit no known config or the 3-band d
   assert.equal(matchPaceOf(row({ ...TRAINING, ima_fr_bounds_source: "unknown" })), null);
   assert.equal(matchPaceOf(row({ ...TRAINING, ima_fr_band_bounds: [0, 2.5, 5, 1000, 1000, 1000, 1000, 1000, 1000] })), null);
 });
+
+test("longRunLoadMetres / longRunLoadStrides: match pace first, 0 is real, all long runs only when pace is unknown", async () => {
+  const { longRunLoadMetres, longRunLoadStrides } = await import("../index");
+  const base = { ima_fr_band58_total_distance: 1200, ima_fr_ge18_stride_count: 500 };
+  assert.equal(longRunLoadMetres({ ...base, ima_fr_ge18_mp_total_distance: 300 }), 300);
+  assert.equal(longRunLoadStrides({ ...base, ima_fr_ge18_mp_stride_count: 120 }), 120);
+  // every long run was a jog: 0, not the jog metres
+  assert.equal(longRunLoadMetres({ ...base, ima_fr_ge18_mp_total_distance: 0 }), 0);
+  assert.equal(longRunLoadStrides({ ...base, ima_fr_ge18_mp_stride_count: 0 }), 0);
+  // pace unknown (indoors / no reading) → all long runs, as before
+  assert.equal(longRunLoadMetres({ ...base, ima_fr_ge18_mp_total_distance: null }), 1200);
+  assert.equal(longRunLoadStrides(base), 500);
+  assert.equal(longRunLoadMetres({}), null);
+});

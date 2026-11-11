@@ -41,7 +41,7 @@ import KinexonMetricsPanel from "@/components/coach/KinexonMetricsPanel";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import ShowDetails from "@/components/common/ShowDetails";
 import TitanMovementIntelligence from "@/components/coach/TitanMovementIntelligence";
-import type { ImaSessionProfile, ImaPlayerDay, SessionType } from "@/lib/micropulse/imaDayProfile";
+import { isLongRunSpike, type ImaSessionProfile, type ImaPlayerDay, type SessionType } from "@/lib/micropulse/imaDayProfile";
 import { strideVerdictBadge } from "@/lib/micropulse/strideLength/verdictBadge";
 import { CV_BY_KIND, FLAG_SD, type StrideResult } from "@/lib/micropulse/strideLength";
 import { freeRunningBandLabel } from "@/lib/integrations/catapult/freeRunningBands";
@@ -98,8 +98,8 @@ const I18N = {
     IS: "IMA Free Running setur hvert samfellt hlaup í eitt af 8 böndum eftir því HVE LENGI það stóð — ekki eftir hraða. Mörk bandanna eru stillt í OpenField og var breytt 9. nóv 2026 (nú 0–2,5–5–8–12–18–24–30 sek), svo MicroPulse les hverja æfingu með þeim mörkum sem giltu þá og flokkar hlaup eftir lengd: stutt hlaup (undir 12 sek), miðlungs hlaup (12–24 sek) og lengstu hlaup (24 sek eða lengur). Löng samfelld hlaup = 18 sek eða lengri: tempó-, úthalds- eða löng endurheimtarhlaup. Þetta eru EKKI sprettir — sprettir og hraðhlaup koma úr GPS-hraða, ekki úr hlaupalengd.",
   },
   legend2: {
-    EN: "vs baseline compares today's strides in long continuous runs (18 s+) to the player's 14-day training-only average (matches excluded). 100% = typical day. < 70% = light. > 150% = much more sustained running than usual, monitor recovery.",
-    IS: "vs grunnlína ber skref dagsins í löngum samfelldum hlaupum (18 sek+) saman við 14-daga æfinga-grunnlínu (leikir undanskildir). 100% = típískur dagur. < 70% = léttur. > 150% = mun meira samfellt hlaup en venjulega, fylgjast með endurheimt.",
+    EN: "vs baseline compares today's strides in long continuous runs AT MATCH PACE (18 s+, 11 km/h or faster; jogs do not count) to the player's 14-day training-only average (matches excluded). Indoors, where pace is unknown, all long runs count. 100% = typical day. < 70% = light. > 150% (and at least 100 strides) = much more sustained running than usual, monitor recovery.",
+    IS: "vs grunnlína ber skref dagsins í löngum samfelldum hlaupum Á LEIKHRAÐA (18 sek+, 11 km/klst eða hraðar; skokk telst ekki með) saman við 14-daga æfinga-grunnlínu (leikir undanskildir). Innandyra, þar sem hraðinn er óþekktur, telja öll löng hlaup. 100% = típískur dagur. < 70% = léttur. > 150% (og a.m.k. 100 skref) = mun meira samfellt hlaup en venjulega, fylgjast með endurheimt.",
   },
   legend3: {
     EN: "CoD asymmetry > 15% on high-intensity Change-of-Direction events is a commonly-flagged imbalance associated with injury risk — a risk factor, not a validated predictor (the Bishop evidence is mainly single-leg-jump asymmetry). Flagged when total CoD ≥ 10 efforts.",
@@ -131,9 +131,9 @@ function todayIso(): string {
 // Plain-language headline computed deterministically from the per-player day
 // already loaded in `profile`. The buried insight on this page is an acute
 // movement spike vs a player's own training norm — surface it at the top.
-// Spike threshold matches the existing rose row colouring (>= 150% of the
-// 14-day training-only baseline of long-run strides — IMA FR efforts
-// ≥18 s (ima_fr_ge18); the field is still called `sprint_vs_baseline_pct` but it is NOT sprint).
+// Spike = `isLongRunSpike`: >= 150% of the 14-day training-only baseline of long-run strides AT MATCH PACE
+// (IMA FR efforts ≥18 s at 11 km/h+, ima_fr_ge18_mp; all long runs when pace is unknown) and at least 100 of
+// them. Jog days no longer read as spikes. The field is still called `sprint_vs_baseline_pct` but it is NOT sprint.
 type ImaVerdict = {
   tone: "good" | "watch" | "concern" | "neutral";
   sentence: { EN: string; IS: string };
@@ -143,8 +143,8 @@ type ImaVerdict = {
 };
 
 const SUBTITLE_IMA = {
-  EN: "Measured by the pod (works indoors). This compares today's long continuous running — runs of 18 s or more — to each player's own usual training day. It is not a sprint measure.",
-  IS: "Mælt af pod (virkar innandyra). Þetta ber löng samfelld hlaup dagsins — hlaup 18 sek eða lengri — saman við venjulegan æfingadag hvers leikmanns. Þetta er ekki sprett-mæling.",
+  EN: "Measured by the pod. This compares today's long continuous running at match pace (runs of 18 s or more at 11 km/h or faster; jogs do not count, indoors all long runs count) to each player's own usual training day. It is not a sprint measure.",
+  IS: "Mælt af pod. Þetta ber löng samfelld hlaup dagsins á leikhraða (hlaup 18 sek eða lengri á 11 km/klst eða hraðar; skokk telst ekki með, innandyra telja öll löng hlaup) saman við venjulegan æfingadag hvers leikmanns. Þetta er ekki sprett-mæling.",
 } as const;
 
 function computeImaVerdict(profile: ImaSessionProfile): ImaVerdict {
@@ -168,7 +168,7 @@ function computeImaVerdict(profile: ImaSessionProfile): ImaVerdict {
     };
   }
 
-  const spikes = withBaseline.filter((p) => (p.sprint_vs_baseline_pct ?? 0) >= 150);
+  const spikes = withBaseline.filter(isLongRunSpike);
 
   // Confidence from coverage (players captured) + baseline maturity.
   const thinBaseline = withBaseline.every((p) => p.sprint_baseline_days <= 1);
@@ -204,10 +204,10 @@ function computeImaVerdict(profile: ImaSessionProfile): ImaVerdict {
       },
       tone: "concern" as const,
       tip: {
-        EN: `Strides in long continuous runs (18 s or more, by IMA Free Running run length) at ${Math.round(
+        EN: `${p.long_run_load_strides} strides in long continuous runs at match pace (18 s or more at 11 km/h+, by IMA Free Running run length), ${Math.round(
           p.sprint_vs_baseline_pct ?? 0,
-        )}% of his 14-day training-only baseline — a sharp jump in sustained running, not sprinting. Phase extra tempo/conditioning running in rather than spiking it (load-change framing Gabbett 2016; per-player norms Buchheit 2014).`,
-        IS: `Skref í löngum samfelldum hlaupum (18 sek+, eftir lengd hlaups í IMA Free Running) ${Math.round(
+        )}% of the player's 14-day training-only baseline — a sharp jump in sustained running, not sprinting. Phase extra tempo/conditioning running in rather than spiking it (load-change framing Gabbett 2016; per-player norms Buchheit 2014).`,
+        IS: `${p.long_run_load_strides} skref í löngum samfelldum hlaupum á leikhraða (18 sek+ á 11 km/klst+, eftir lengd hlaups í IMA Free Running), ${Math.round(
           p.sprint_vs_baseline_pct ?? 0,
         )}% af 14-daga æfinga-grunnlínu — snarpt stökk í samfelldu hlaupi, ekki sprettum. Innleiddu auka tempó-/úthaldshlaup smám saman frekar en í einu stökki (álagsbreyting Gabbett 2016; persónulegar norm Buchheit 2014).`,
       },
@@ -217,8 +217,8 @@ function computeImaVerdict(profile: ImaSessionProfile): ImaVerdict {
     return {
       tone: "good",
       sentence: {
-        EN: "Every player's long continuous running today was within their own normal range.",
-        IS: "Löng samfelld hlaup allra leikmanna í dag voru innan þeirra eigin venju.",
+        EN: "Every player's long running at match pace today was within their own normal range.",
+        IS: "Löng hlaup allra leikmanna á leikhraða í dag voru innan þeirra eigin venju.",
       },
       subtitle: SUBTITLE_IMA,
       confidence: { level, note: confNote },
@@ -230,8 +230,8 @@ function computeImaVerdict(profile: ImaSessionProfile): ImaVerdict {
   return {
     tone: "concern",
     sentence: {
-      EN: `${spikes.length} player${spikes.length === 1 ? "" : "s"} did far more long continuous running than usual today — ${names}; everyone else was within range.`,
-      IS: `${spikes.length} leikm${spikes.length === 1 ? "aður" : "enn"} hlupu mun meira í löngum samfelldum hlaupum en venjulega í dag — ${names}; aðrir voru innan marka.`,
+      EN: `${spikes.length} player${spikes.length === 1 ? "" : "s"} did far more long running at match pace than usual today — ${names}; everyone else was within range.`,
+      IS: `${spikes.length} leikm${spikes.length === 1 ? "aður" : "enn"} hlupu mun meira í löngum hlaupum á leikhraða en venjulega í dag — ${names}; aðrir voru innan marka.`,
     },
     subtitle: SUBTITLE_IMA,
     confidence: { level, note: confNote },
@@ -1161,7 +1161,7 @@ function PlayerRow({
   const baselinePct = player.sprint_vs_baseline_pct;
   const baselineColor =
     baselinePct == null ? "text-slate-400" :
-    baselinePct >= 150 ? "text-rose-600 font-semibold" :
+    isLongRunSpike(player) ? "text-rose-600 font-semibold" :
     baselinePct >= 130 ? "text-amber-600 font-semibold" :
     baselinePct < 70 ? "text-blue-600" :
     "text-slate-700";

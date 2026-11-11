@@ -23,6 +23,7 @@
  */
 
 import { LOAD_KPIS, KPI_LABEL, type LoadKpi, type LoadRow } from "@/lib/micropulse/loadPlan";
+import { longRunLoadMetres } from "@/lib/micropulse/longRuns";
 
 export { LOAD_KPIS, KPI_LABEL };
 export type { LoadKpi };
@@ -54,7 +55,7 @@ const VAL: Record<LoadKpi, (r: LoadRow) => number> = {
   accel: (r) => num(r.accel_b2_3_tot_effs_gen2),
   decel: (r) => num(r.decel_b2_3_tot_effs_gen2),
   efforts: (r) => num(r.accel_decel_efforts),
-  ima: (r) => num(r.ima_fr_band58_total_distance), // long-run distance (bout-duration bands), not sprint
+  ima: (r) => longRunLoadMetres(r) ?? 0, // long runs (≥18 s) at match pace (11 km/h+); all long runs only when pace is unknown
   imaAccel: (r) => num(r.ima_accel),
   imaDecel: (r) => num(r.ima_decel),
   imaCod: (r) => num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low) + num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low),

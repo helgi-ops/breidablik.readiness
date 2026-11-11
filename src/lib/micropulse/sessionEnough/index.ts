@@ -90,11 +90,9 @@ export const ENOUGH_UNIT: Record<EnoughVar, Bi> = {
 
 /**
  * How a variable's single-session share scales with the day's load (share = (matchPct/100)^e).
- * All five read the periodization hub's KPI_TAPER_EXPONENT (one source for plan and review). The IMA
- * running pair there is calibrated on Breiðablik's own per-MD-day medians (2026, ~1,600 sessions) —
- * long-run strides (calibrated on legacy runs ≥21 s; now runs ≥18 s — re-check) stay high even on light days (~60% of a match
- * on MD-1), so their share is flatter (e<1); long-run distance tapers a little harder than volume
- * (e=1.2). A typical MD-4 then reads ~on target, a light MD-1 does not read "short". Long runs as a COUNT
+ * All read the periodization hub's KPI_TAPER_EXPONENT (one source for plan and review). The IMA running pair
+ * (long runs at match pace, Nov 2026) tapers at e=1.2 for both metres and strides: the old flat stride taper
+ * (e=0.7, "~60% of a match on MD-1") was the jogs. Context-only here, never judged. Long runs as a COUNT
  * follow the day's load one to one (e=1.0): Breiðablik 2026 medians of own-match share were 64 / 55 / 47 /
  * 39% on MD-5 / -4 / -2 / -1 against planned 60 / 68 / 50 / 32%.
  */
@@ -107,7 +105,7 @@ export const SESSION_SHARE_EXPONENT: Record<EnoughVar, number> = {
   longRuns: 1.0,
   longRunsMp: 1.0,
   frDistance: KPI_TAPER_EXPONENT.imaFrDistance ?? 1.2,
-  strideHi: KPI_TAPER_EXPONENT.imaStrideHi ?? 0.7,
+  strideHi: KPI_TAPER_EXPONENT.imaStrideHi ?? 1.2,
 };
 
 export const ENOUGH_CITATIONS = [

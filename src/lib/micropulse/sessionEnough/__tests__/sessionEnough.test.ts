@@ -15,7 +15,7 @@ const base = { sessionDate: "2026-10-22", mdLabel: "MD-3", matchPct: 85, mdSourc
 describe("dayShare", () => {
   it("is the matchPct fraction raised to the variable's exponent", () => {
     expect(dayShare("imaDecel", 50)).toBeCloseTo(0.5, 5);           // e = 1
-    expect(dayShare("strideHi", 32)).toBeGreaterThan(0.32);          // flatter than volume
+    expect(dayShare("strideHi", 32)).toBeCloseTo(dayShare("frDistance", 32), 5); // same runs at match pace
     expect(dayShare("frDistance", 32)).toBeLessThan(0.32);           // tapers harder
   });
 });

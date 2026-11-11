@@ -5,6 +5,7 @@ import { oneRowPerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { loadPlayerLoadAcwr } from "@/lib/micropulse/playerLoadAcwr/loader";
 import type { BuildUpAcwr, BuildUpKpi, WeekActual } from "./index";
 import { BUILD_UP_KPIS } from "./index";
+import { longRunLoadStrides } from "@/lib/micropulse/longRuns";
 
 /**
  * Actuals side of build-up tracking. Reads `player_external_load_daily` over the
@@ -29,6 +30,7 @@ const SELECT_COLS = [
   "decel_b2_3_tot_effs_gen2",
   // Strides in runs ≥18 s — config-independent tier filled by the DB trigger from the row's own band edges.
   "ima_fr_ge18_stride_count",
+  "ima_fr_ge18_mp_stride_count",
   // IMA drivers (context, no plan target)
   "ima_cod_left_high",
   "ima_cod_left_medium",
@@ -50,6 +52,7 @@ type Row = {
   accel_b2_3_tot_effs_gen2: number | null;
   decel_b2_3_tot_effs_gen2: number | null;
   ima_fr_ge18_stride_count: number | null;
+  ima_fr_ge18_mp_stride_count: number | null;
   ima_cod_left_high: number | null;
   ima_cod_left_medium: number | null;
   ima_cod_left_low: number | null;
@@ -85,7 +88,8 @@ function kpiVals(r: Row): Partial<Record<BuildUpKpi, number | null>> {
     // Strides in long continuous runs (≥18 s). IMA FR bands are bout-DURATION bands whose edges changed on
     // 9 Nov 2026, so read the config-independent ≥18 s tier (backfilled for all history), not band numbers.
     // Was bands 6–8 (≥21 s) before Nov 2026 — there is no ≥21 s edge in the new config. NOT sprint strides.
-    stride: r.ima_fr_ge18_stride_count,
+    // At match pace (11 km/h+) like the plan it is tracked against; all long runs only when pace is unknown.
+    stride: longRunLoadStrides(r),
   };
 }
 

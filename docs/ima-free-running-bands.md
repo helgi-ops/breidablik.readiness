@@ -288,3 +288,43 @@ average 160 s).
   gone, for the reason in the Today-signal section above.
 - **Unchanged:** the match profile (game report, match movement, transfer report), stride quality (length, cadence,
   return-to-training) and indoor running volume keep reading all long runs.
+
+## Plan targets and reviews read match pace too (11 Nov 2026, Lota 3)
+
+One read for every surface that plans, targets, ramps or compares long runs: `longRunLoadMetres(row)` and
+`longRunLoadStrides(row)` (`src/lib/micropulse/longRuns/index.ts`) = metres / strides in long runs at match pace,
+all long runs only when the pace is unknown (null match-pace column, e.g. indoors). Both sides of every comparison
+switch together, so a target and its actual never mix jogs with match-pace runs.
+
+Breiðablik Jun–Oct 2026, % of a near-full match (119 matches: 1,194 m / 495 strides in all long runs, 1,024 m / 440
+at match pace), mean per player-day:
+
+| Day | Metres, all long runs | Metres, at match pace | Strides, all | Strides, at match pace |
+|---|---|---|---|---|
+| MD-4 | 66% | 15% | 83% | 15% |
+| MD-3 | 98% | 4% | 126% | 4% |
+| MD-2 | 50% | 11% | 64% | 11% |
+| MD-1 | 45% | 8% | 58% | 8% |
+| MD+1 | 50% | 10% | 63% | 10% |
+| Match day (all who played) | 80% | 83% | 81% | 82% |
+
+On all long runs MD-3 looked like a full match of long running (98%, strides 126%); at match pace it was 4%. A
+1-match week of training was 2.6× a match on all long runs and 0.4× at match pace.
+
+- **Periodization hub** (`periodization/loader.ts`): the match unit, training averages, Meso calendar cells and
+  Player Demands read match pace (`imaFrDist`, `strideHi`); labels say "at match pace". Taper: strides 0.7 → 1.2, the
+  same as metres. The flat 0.7 came from strides "staying ~60% of a match on MD-1", which was the jogs; at match pace
+  strides and metres are the same runs and track each other within 1 point on every MD-day. Weekly target in a
+  1-match week: 2.14× a match for both. No published standard exists for long continuous runs in training; the
+  level stays a planning assumption.
+- **Load plan / pre-session / post-training planned vs actual / progressive overload** (`loadPlan`, `postTraining`,
+  `progressiveOverload`): the `ima` KPI = metres in long runs at match pace.
+- **Build-up tracking**: the stride KPI = long-run strides at match pace.
+- **IMA Intelligence headline + row colour** (`imaDayProfile`, `isLongRunSpike`): "far more long running than usual"
+  compares long-run strides AT MATCH PACE with the player's own 14-day training norm, ≥150% AND at least 100 strides.
+  Replay Breiðablik Jun–Oct 2026, 79 training days: a flag on 60 days on all long runs (17% of players a day), 25 at
+  match pace (7%). The jog days (6 and 9 Jun: 8 flags each, ~0 strides at match pace) are gone; the flags left sit on
+  running days (15–16 Jul, 6 Oct). The stride shares on the page (short / medium / longest runs) still read all runs:
+  they describe the session's shape, not load.
+- **Player app movement card**: the long-run tile reads metres at match pace and is named "Long runs at match pace"
+  (it was labelled "High-speed running", which it never was).

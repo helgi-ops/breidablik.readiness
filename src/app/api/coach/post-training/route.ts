@@ -17,6 +17,7 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { buildPlannedVsActual, type ActualKpis, type PlanForCompare } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import { imaCodTotal } from "@/lib/micropulse/catapultCapability";
 import { loadSessionEnough } from "@/lib/micropulse/sessionEnough/loader";
+import { longRunLoadMetres } from "@/lib/micropulse/longRuns";
 
 export const runtime = "nodejs";
 
@@ -61,7 +62,7 @@ export async function GET(req: NextRequest) {
   // Actual KPIs per player for that session date.
   const { data: gpsRows } = await sb
     .from("player_external_load_daily")
-    .select("player_id, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, high_speed_distance, sprint_distance, accel_decel_efforts, ima_accel, ima_decel, jumps, impacts, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low")
+    .select("player_id, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, ima_fr_ge18_mp_total_distance, high_speed_distance, sprint_distance, accel_decel_efforts, ima_accel, ima_decel, jumps, impacts, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low")
     .in("player_id", playerIds)
     .eq("date", sessionDate);
   const actualById = new Map<string, ActualKpis>();
@@ -75,7 +76,7 @@ export async function GET(req: NextRequest) {
       accel: num(r.accel_b2_3_tot_effs_gen2), decel: num(r.decel_b2_3_tot_effs_gen2),
       efforts: num(r.accel_decel_efforts),
       // IMA FR bands 5–8 = distance in long continuous runs (≥18 s) — NOT sprint/HSR (GPS hsr/sprint above).
-      ima: num(r.ima_fr_band58_total_distance),
+      ima: longRunLoadMetres(r), // long runs at match pace (11 km/h+); all long runs only when pace is unknown
       // Pro IMA counts (the indoor / basketball movement metrics).
       imaAccel: num(r.ima_accel), imaDecel: num(r.ima_decel), imaCod: cod, jumps: num(r.jumps),
       impacts: num(r.impacts),
