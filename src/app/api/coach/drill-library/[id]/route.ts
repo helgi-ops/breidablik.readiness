@@ -50,6 +50,8 @@ const NUMERIC_FIELDS = [
   "jump_count",
   "ima_cod_total",
   "high_ima",
+  "ima_accel",
+  "ima_decel",
 ] as const;
 
 const EDITABLE_FIELDS = [

@@ -4,6 +4,11 @@ import {
   aggregatePeriodsPerPlayer,
   matchPeriodsToItems,
   isSessionTotalName,
+  periodHasNoGps,
+  templatePatchFromActual,
+  PERIOD_METRIC_KEYS,
+  IMA_DETAIL_KEYS,
+  type DrillActual,
   type SessionItem,
 } from "../index";
 
@@ -97,5 +102,89 @@ describe("matchPeriodsToItems", () => {
     const once = matchPeriodsToItems(items, groups).items;
     const twice = matchPeriodsToItems(once, groups).items;
     expect(twice[0].actual).toEqual(once[0].actual);
+  });
+});
+
+// ── IMA detail + indoor rule (2026-11) ───────────────────────────────────────
+
+function imaRow(period: string, athlete: string, raw: Record<string, number>) {
+  return { periodName: period, athleteId: athlete, athleteName: athlete, raw: Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, String(v)])) };
+}
+
+describe("CSV → IMA detail per drill", () => {
+  it("keeps accel/decel by band and CoD by side, and averages them per player", () => {
+    const groups = aggregatePeriodsPerPlayer(csvRowsToPeriodRows([
+      imaRow("Rondo", "A", { playerLoad: 80, totalDistance: 0, imaAccelBand1: 6, imaAccelBand2: 2, imaAccelBand3: 2, imaDecelBand3: 4,
+        imaCodLeftHigh: 1, imaCodLeftMedium: 3, imaCodLeftLow: 10, imaCodRightHigh: 1, imaCodRightMedium: 1, imaCodRightLow: 4 }),
+      imaRow("Rondo", "B", { playerLoad: 100, totalDistance: 0, imaAccelBand1: 4, imaAccelBand2: 2, imaAccelBand3: 0, imaDecelBand3: 2,
+        imaCodLeftHigh: 1, imaCodLeftMedium: 1, imaCodLeftLow: 6, imaCodRightHigh: 3, imaCodRightMedium: 3, imaCodRightLow: 8 }),
+    ]));
+    const p = groups[0].perPlayer;
+    expect(p.ima_accel).toBe(8);          // (10 + 6) / 2
+    expect([p.ima_accel_low, p.ima_accel_med, p.ima_accel_high]).toEqual([5, 2, 1]);
+    expect(p.ima_decel_high).toBe(3);
+    expect(p.ima_cod_left).toBe(11);      // (14 + 8) / 2
+    expect(p.ima_cod_right).toBe(10);     // (6 + 14) / 2
+    expect((p.ima_cod_left ?? 0) + (p.ima_cod_right ?? 0)).toBe(p.ima_cod_total);
+  });
+  it("every IMA detail key rides through aggregation and the per-player write", () => {
+    for (const k of IMA_DETAIL_KEYS) expect(PERIOD_METRIC_KEYS).toContain(k);
+  });
+});
+
+describe("periodHasNoGps", () => {
+  it("is true for load with no distance, false outdoors or without a distance column", () => {
+    expect(periodHasNoGps(80, 0)).toBe(true);
+    expect(periodHasNoGps(80, 12)).toBe(true);
+    expect(periodHasNoGps(80, 217)).toBe(false); // outdoor tactic drill
+    expect(periodHasNoGps(80, null)).toBe(false); // no distance column (basketball)
+    expect(periodHasNoGps(0, 0)).toBe(false);     // nothing recorded
+  });
+  it("flags an indoor drill's actual", () => {
+    const groups = aggregatePeriodsPerPlayer(csvRowsToPeriodRows([imaRow("Rondo", "A", { playerLoad: 80, totalDistance: 0 })]));
+    const { items } = matchPeriodsToItems([{ drill_id: "d1", drill_name: "Rondo" }], groups);
+    expect(items[0].actual?.no_gps).toBe(true);
+  });
+});
+
+describe("templatePatchFromActual", () => {
+  const base = (o: Partial<DrillActual>): DrillActual => ({
+    player_load: null, player_load_per_min: null, distance_m: null, hir_total: null, vel_b5: null, vel_b6: null,
+    max_velocity: null, accel_b23: null, decel_b23: null, accel_total: null, decel_total: null, hmld_m: null,
+    metabolic_power_avg: null, metabolic_power_peak: null, duration_min: null, ima_accel: null, ima_decel: null,
+    ima_cod_total: null, high_ima: null, jumps: null,
+    ima_accel_low: null, ima_accel_med: null, ima_accel_high: null, ima_decel_low: null, ima_decel_med: null, ima_decel_high: null,
+    ima_cod_left: null, ima_cod_right: null, ima_cod_med: null, ima_cod_low: null,
+    n_players: 11, matched_by: "name", period_name: "Rondo", ...o,
+  });
+
+  it("indoors: writes load + IMA, leaves every GPS column alone, records where it came from", () => {
+    const p = templatePatchFromActual(base({ player_load: 74, duration_min: 15, distance_m: 0, hir_total: 0, vel_b5: 0, max_velocity: 0,
+      accel_b23: 0, ima_accel: 12, ima_decel: 19, ima_cod_left: 30, ima_cod_right: 27, no_gps: true }), "2026-11-05")!;
+    expect(p.player_load).toBe(74);
+    expect(p.player_load_per_min).toBeCloseTo(4.93, 2);
+    expect(p.ima_accel).toBe(12);
+    expect(p.ima_cod_left).toBe(30);
+    for (const col of ["distance_m", "hir_total", "vel_b5", "vel_b5_avg", "max_velocity", "accel_b23", "accel_b23_avg"]) expect(p).not.toHaveProperty(col);
+    expect(p.measured_on).toBe("2026-11-05");
+    expect(p.measured_players).toBe(11);
+    expect(p.measured_no_gps).toBe(true);
+  });
+
+  it("outdoors: writes GPS and IMA, measured_no_gps false", () => {
+    const p = templatePatchFromActual(base({ player_load: 142, distance_m: 641, ima_accel: 13 }), "2026-09-12")!;
+    expect(p.distance_m).toBe(641);
+    expect(p.ima_accel).toBe(13);
+    expect(p.measured_no_gps).toBe(false);
+  });
+
+  it("an older actual without the no_gps flag is still treated as indoors when distance is ~0", () => {
+    const p = templatePatchFromActual(base({ player_load: 74, distance_m: 0 }), null)!;
+    expect(p).not.toHaveProperty("distance_m");
+    expect(p).not.toHaveProperty("measured_on");
+  });
+
+  it("returns null when there is nothing to write", () => {
+    expect(templatePatchFromActual(base({}), "2026-11-05")).toBeNull();
   });
 });

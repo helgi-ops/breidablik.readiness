@@ -13,6 +13,14 @@ import {
 import DrillPdfImporter from "./DrillPdfImporter";
 import { useLang, type Lang } from "@/lib/lang";
 import type { ResolvedMedia } from "@/lib/micropulse/library/media";
+import {
+  drillMovementLines,
+  movementValueText,
+  measuredSourceText,
+  codLeftPct,
+  hideGpsTile,
+  MOVEMENT_CITATIONS,
+} from "@/lib/micropulse/drillActuals/movementRead";
 
 // ── Football categories ──
 type FootballCategory =
@@ -140,6 +148,22 @@ export type Drill = {
   jump_count: number | null;
   ima_cod_total: number | null;
   high_ima: number | null;
+  // ── IMA movement (measured from a synced session; may be absent on older rows) ──
+  ima_accel?: number | null;
+  ima_decel?: number | null;
+  ima_accel_low?: number | null;
+  ima_accel_med?: number | null;
+  ima_accel_high?: number | null;
+  ima_decel_low?: number | null;
+  ima_decel_med?: number | null;
+  ima_decel_high?: number | null;
+  ima_cod_left?: number | null;
+  ima_cod_right?: number | null;
+  ima_cod_med?: number | null;
+  ima_cod_low?: number | null;
+  measured_on?: string | null;
+  measured_players?: number | null;
+  measured_no_gps?: boolean | null;
   diagram_url: string | null;
   video_url: string | null;
   cup_principle: string | null;
@@ -436,6 +460,8 @@ type FormState = {
   jump_count: number | null;
   ima_cod_total: number | null;
   high_ima: number | null;
+  ima_accel: number | null;
+  ima_decel: number | null;
 };
 
 const emptyForm: FormState = {
@@ -471,6 +497,8 @@ const emptyForm: FormState = {
   jump_count: null,
   ima_cod_total: null,
   high_ima: null,
+  ima_accel: null,
+  ima_decel: null,
 };
 
 /** Classify a drill's video_url for in-modal embedding: YouTube/Vimeo → player iframe,
@@ -777,6 +805,8 @@ export default function CoachDrillLibrary({
       jump_count: d.jump_count,
       ima_cod_total: d.ima_cod_total,
       high_ima: d.high_ima,
+      ima_accel: d.ima_accel ?? null,
+      ima_decel: d.ima_decel ?? null,
     });
     setModalOpen(true);
   }
@@ -816,6 +846,8 @@ export default function CoachDrillLibrary({
       jump_count: d.jump_count,
       ima_cod_total: d.ima_cod_total,
       high_ima: d.high_ima,
+      ima_accel: d.ima_accel ?? null,
+      ima_decel: d.ima_decel ?? null,
     });
     setModalOpen(true);
   }
@@ -1296,8 +1328,8 @@ export default function CoachDrillLibrary({
                         <Metric label="PL" value={n(d.player_load, 0)} />
                         <Metric label="PL/min" value={n(d.player_load_per_min, 1)} />
                         <Metric label="Dur (min)" value={n(d.duration_min, 1)} />
-                        <Metric label="Dist (m)" value={n(d.distance_m, 0)} />
-                        {isFootball && <Metric label="HIR" value={n(d.hir_total, 0)} />}
+                        {!hideGpsTile(d, d.distance_m) && <Metric label="Dist (m)" value={n(d.distance_m, 0)} />}
+                        {isFootball && !hideGpsTile(d, d.hir_total) && <Metric label="HIR" value={n(d.hir_total, 0)} />}
                         {isFootball && (
                           <Metric
                             label={t.field}
@@ -1316,21 +1348,14 @@ export default function CoachDrillLibrary({
                             value={d.hmld_m != null ? `${n(d.hmld_m, 0)}m` : "–"}
                           />
                         )}
-                        {isFootball && <Metric label="Acc B2-3 Avg" value={n(d.accel_b23_avg, 0)} />}
-                        {isFootball && <Metric label="Dec B2-3 Avg" value={n(d.decel_b23_avg, 0)} />}
+                        {isFootball && !hideGpsTile(d, d.accel_b23_avg) && <Metric label="Acc B2-3 Avg" value={n(d.accel_b23_avg, 0)} />}
+                        {isFootball && !hideGpsTile(d, d.decel_b23_avg) && <Metric label="Dec B2-3 Avg" value={n(d.decel_b23_avg, 0)} />}
                         {isFootball && d.max_velocity != null && <Metric label="Max km/h" value={n(d.max_velocity, 1)} />}
-                        {isFootball && <Metric label="MetPwr" value={d.metabolic_power_avg != null ? `${n(d.metabolic_power_avg, 1)}W/kg` : "–"} />}
-                        {/* IMA "Driver" metrics — show for football when present (calibrated
-                            from a performed session). Hidden when absent so the glance stays clean. */}
-                        {isFootball && d.ima_cod_total != null && <Metric label="COD" value={n(d.ima_cod_total, 0)} />}
-                        {isFootball && d.high_ima != null && <Metric label="High-IMA" value={n(d.high_ima, 0)} />}
-                        {isFootball && d.jump_count != null && d.jump_count > 0 && <Metric label="Jumps" value={n(d.jump_count, 0)} />}
-                        {!isFootball && <Metric label="IMA Accel" value={n(d.accel_total, 0)} />}
-                        {!isFootball && <Metric label="IMA Decel" value={n(d.decel_total, 0)} />}
-                        {!isFootball && <Metric label="Jumps" value={n(d.jump_count, 0)} />}
-                        {!isFootball && <Metric label="COD" value={n(d.ima_cod_total, 0)} />}
-                        {!isFootball && <Metric label="High-IMA" value={n(d.high_ima, 0)} />}
+                        {isFootball && !hideGpsTile(d, d.metabolic_power_avg) && <Metric label="MetPwr" value={d.metabolic_power_avg != null ? `${n(d.metabolic_power_avg, 1)}W/kg` : "–"} />}
                       </div>
+                      {/* Movement (IMA) — inertial, so real indoors too. Plain words, per player, with
+                          where the numbers came from. Hidden when nothing was measured. */}
+                      <DrillMovementBlock d={isFootball ? d : basketballMovement(d)} lang={lang} />
 
                       <div className="mt-3 flex gap-1 text-xs">
                         {canEditDrill(d) && (
@@ -1800,36 +1825,14 @@ export default function CoachDrillLibrary({
                           value={`${n(detail.max_velocity, 1)} km/h`}
                         />
                       )}
-                      {!isFootball && <DetailRow label="IMA COD total" value={detail.ima_cod_total != null ? (isScaled ? `${sv(detail.ima_cod_total, 0)} (↔ ${n(detail.ima_cod_total, 0)})` : n(detail.ima_cod_total, 0)) : "–"} />}
-                      {!isFootball && <DetailRow label="High-IMA (≥3.5 m/s²)" value={detail.high_ima != null ? (isScaled ? `${sv(detail.high_ima, 0)} (↔ ${n(detail.high_ima, 0)})` : n(detail.high_ima, 0)) : "–"} />}
                     </Section>
                   </>
                 );
               })()}
 
-              {/* IMA — the "Driver" layer (Niklas Virtanen: GPS is the Engine, IMA
-                  is the Driver). Change-of-direction + high-intensity IMA + jumps
-                  matter most in football, so surface them here too (not only for
-                  indoor sports). Pro / Vector Pro only — stay "–" on Core. */}
-              {isFootball && (
-                <Section title="IMA · Driver (change of direction)">
-                  <DetailRow
-                    label="IMA CoD total"
-                    value={detail.ima_cod_total != null ? n(detail.ima_cod_total, 0) : "–"}
-                  />
-                  <DetailRow
-                    label="High-IMA (≥3.5 m/s²)"
-                    value={detail.high_ima != null ? n(detail.high_ima, 0) : "–"}
-                  />
-                  <DetailRow label="Jumps" value={detail.jump_count != null ? n(detail.jump_count, 0) : "–"} />
-                </Section>
-              )}
-
-              {!isFootball && (
-                <Section title="Jumps (Catapult BMP)">
-                  <DetailRow label="Jump Count" value={n(detail.jump_count, 0)} />
-                </Section>
-              )}
+              {/* IMA — the "Driver" layer (GPS is the Engine, IMA the Driver). Inertial, so it is
+                  real indoors. By intensity, left vs right, per minute, sensor terms and citations. */}
+              <DrillMovementDetail d={isFootball ? detail : basketballMovement(detail)} lang={lang} />
 
               {isFootball && (
                 <Section title={`Metabolic Power (Osgnach 2010)${detail.metabolic_estimated ? ` · ${t.metabolicEstimated}` : ""}`}>
@@ -2176,13 +2179,25 @@ export default function CoachDrillLibrary({
                   />
                 </Field>
               )}
-              <Field label={isFootball ? "Accel total (count)" : "IMA Accel (count)"}>
+              <Field label={lang === "IS" ? "Hraðaaukningar, IMA (fjöldi)" : "Accelerations, IMA (count)"}>
+                <NumInput
+                  value={form.ima_accel}
+                  onChange={(v) => setForm({ ...form, ima_accel: v })}
+                />
+              </Field>
+              <Field label={lang === "IS" ? "Hemlun, IMA (fjöldi)" : "Braking, IMA (count)"}>
+                <NumInput
+                  value={form.ima_decel}
+                  onChange={(v) => setForm({ ...form, ima_decel: v })}
+                />
+              </Field>
+              <Field label="Accel total (count)">
                 <NumInput
                   value={form.accel_total}
                   onChange={(v) => setForm({ ...form, accel_total: v })}
                 />
               </Field>
-              <Field label={isFootball ? "Decel total (count)" : "IMA Decel (count)"}>
+              <Field label="Decel total (count)">
                 <NumInput
                   value={form.decel_total}
                   onChange={(v) => setForm({ ...form, decel_total: v })}
@@ -2340,6 +2355,88 @@ function DetailRow({
       <span className="text-slate-500">{label}</span>
       <span className={`font-medium ${color}`}>{value}</span>
     </div>
+  );
+}
+
+/** Basketball drills typed in before the IMA columns existed kept accelerations in accel_total /
+ *  decel_total (labelled "IMA" on the old card). Read the real IMA columns first, those as fallback. */
+function basketballMovement(d: Drill): Drill {
+  return { ...d, ima_accel: d.ima_accel ?? d.accel_total, ima_decel: d.ima_decel ?? d.decel_total };
+}
+
+/** The card's movement block: plain lines per player + where the numbers came from. */
+function DrillMovementBlock({ d, lang }: { d: Drill; lang: Lang }) {
+  const lines = drillMovementLines(d);
+  const source = measuredSourceText(d, lang);
+  if (!lines.length && !source) return null;
+  return (
+    <div className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs">
+      {lines.length > 0 && (
+        <>
+          <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            {lang === "IS" ? "Hreyfing, á leikmann" : "Movement, per player"}
+          </div>
+          <div className="space-y-0.5">
+            {lines.map((l) => (
+              <div key={l.key} className="flex justify-between gap-2" title={l.tech}>
+                <span className="text-gray-500">{lang === "IS" ? l.label.is : l.label.en}</span>
+                <span className="font-medium tabular-nums">{movementValueText(l, d, lang)}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {source && <div className="mt-1 text-[10px] text-slate-500">{source}</div>}
+    </div>
+  );
+}
+
+/** Detail panel: by intensity, left vs right, per minute, sensor terms and citations. */
+function DrillMovementDetail({ d, lang }: { d: Drill; lang: Lang }) {
+  const lines = drillMovementLines(d);
+  const source = measuredSourceText(d, lang);
+  const IS = lang === "IS";
+  const r = (v: number | null) => (v == null ? "–" : Math.abs(v) >= 10 ? String(Math.round(v)) : String(Math.round(v * 10) / 10));
+  const left = codLeftPct(d);
+  return (
+    <Section title={IS ? "Hreyfing (IMA) · á leikmann" : "Movement (IMA) · per player"}>
+      {lines.length === 0 ? (
+        <div className="px-3 py-2 text-sm text-slate-500">
+          {IS
+            ? "Engar hreyfitölur enn. Þær koma þegar æfing með þessari drillu er samstillt: æfingunni skipt í lotur í OpenField, æfing byggð hér þann dag og lotan heitir sama nafni og drillan."
+            : "No movement numbers yet. They arrive when a session with this drill syncs: the session split into periods in OpenField, a session built here for that day, and the period named exactly like the drill."}
+        </div>
+      ) : (
+        lines.map((l) => (
+          <div key={l.key} className="px-3 py-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">{IS ? l.label.is : l.label.en}</span>
+              <span className="font-medium text-slate-900">
+                {r(l.value)}
+                {l.perMin != null && <span className="ml-1 text-xs font-normal text-slate-500">({r(l.perMin)}/{IS ? "mín" : "min"})</span>}
+              </span>
+            </div>
+            {l.bands && (
+              <div className="mt-0.5 text-xs text-slate-500">
+                {IS ? "Lág / mið / hörð" : "Low / medium / hard"}: {r(l.bands.low)} / {r(l.bands.med)} / {r(l.bands.hard)}
+              </div>
+            )}
+            {l.key === "cod" && left != null && (
+              <div className="mt-0.5 text-xs text-slate-500">
+                {IS ? "Vinstri / hægri" : "Left / right"}: {r(d.ima_cod_left ?? null)} / {r(d.ima_cod_right ?? null)} ({left}% / {100 - left}%)
+              </div>
+            )}
+            <div className="mt-0.5 text-[10px] text-slate-400">{l.tech}</div>
+          </div>
+        ))
+      )}
+      {source && <div className="px-3 py-2 text-xs text-slate-500">{source}</div>}
+      {lines.length > 0 && (
+        <div className="px-3 py-2 text-[10px] leading-snug text-slate-400">
+          {(IS ? "Heimildir: " : "Sources: ") + MOVEMENT_CITATIONS.join(" · ")}
+        </div>
+      )}
+    </Section>
   );
 }
 

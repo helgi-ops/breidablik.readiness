@@ -37,16 +37,54 @@ export type PeriodMetrics = {
   ima_accel: number | null;
   ima_decel: number | null;
   ima_cod_total: number | null;
-  high_ima: number | null;           // high-intensity IMA events (≥3.5 m/s²)
+  high_ima: number | null;           // hard changes of direction (IMA CoD left + right, band 3)
   jumps: number | null;
+  // IMA detail (added 2026-11). Catapult intensity bands: 1 = low, 2 = medium, 3 = hard.
+  // Inertial, so real indoors where GPS has no lock. low + med + high = the total.
+  ima_accel_low: number | null;
+  ima_accel_med: number | null;
+  ima_accel_high: number | null;
+  ima_decel_low: number | null;
+  ima_decel_med: number | null;
+  ima_decel_high: number | null;
+  ima_cod_left: number | null;       // all intensities; left + right = ima_cod_total
+  ima_cod_right: number | null;
+  ima_cod_med: number | null;        // left + right, medium (hard = high_ima)
+  ima_cod_low: number | null;        // left + right, low
 };
+
+/** The IMA detail keys (stored on player_drill_load and drill_library under the same names). */
+export const IMA_DETAIL_KEYS = [
+  "ima_accel_low", "ima_accel_med", "ima_accel_high",
+  "ima_decel_low", "ima_decel_med", "ima_decel_high",
+  "ima_cod_left", "ima_cod_right", "ima_cod_med", "ima_cod_low",
+] as const satisfies readonly (keyof PeriodMetrics)[];
 
 export const PERIOD_METRIC_KEYS: (keyof PeriodMetrics)[] = [
   "player_load", "player_load_per_min", "distance_m", "hir_total", "vel_b5", "vel_b6",
   "max_velocity", "accel_b23", "decel_b23", "accel_total", "decel_total", "hmld_m",
   "metabolic_power_avg", "metabolic_power_peak", "duration_min",
   "ima_accel", "ima_decel", "ima_cod_total", "high_ima", "jumps",
+  ...IMA_DETAIL_KEYS,
 ];
+
+/** Metrics that need a satellite lock. Indoors they read 0 — a missing reading, not a 0-metre drill. */
+export const GPS_METRIC_KEYS = [
+  "distance_m", "hir_total", "vel_b5", "vel_b6", "max_velocity",
+  "accel_b23", "decel_b23", "accel_total", "decel_total",
+  "hmld_m", "metabolic_power_avg", "metabolic_power_peak",
+] as const satisfies readonly (keyof PeriodMetrics)[];
+
+/** Squad-mean distance under this, with real Player Load, = no GPS reading for that drill (indoors).
+ *  Same idea as `hasNoGpsReading` in periodization (200 m for a whole day); a drill is shorter, and an
+ *  outdoor static drill (free kicks, tactics) still logs tens of metres. HK indoor drills read 0 m. */
+export const NO_GPS_DRILL_MAX_M = 20;
+
+/** True when a drill/period has Player Load but (almost) no distance: indoors, no satellite lock.
+ *  A feed without a distance column at all (null) is not this case. */
+export function periodHasNoGps(playerLoad: number | null, distanceM: number | null): boolean {
+  return playerLoad != null && playerLoad > 0 && distanceM != null && distanceM < NO_GPS_DRILL_MAX_M;
+}
 
 /** One athlete's numbers for one period of a performed session. */
 export type PeriodRow = {
@@ -72,6 +110,8 @@ export type DrillActual = PeriodMetrics & {
   n_players: number;
   matched_by: "name" | "order";
   period_name: string;
+  /** Indoors: Player Load but no distance → GPS metrics are a missing reading (absent on older actuals). */
+  no_gps?: boolean;
 };
 
 export type SessionItem = {
@@ -140,6 +180,16 @@ export function csvRawToMetrics(raw: Record<string, string>): PeriodMetrics {
     ),
     high_ima: sum2(num(raw.imaCodLeftHigh), num(raw.imaCodRightHigh)),
     jumps: null,
+    ima_accel_low: num(raw.imaAccelBand1),
+    ima_accel_med: num(raw.imaAccelBand2),
+    ima_accel_high: num(raw.imaAccelBand3),
+    ima_decel_low: num(raw.imaDecelBand1),
+    ima_decel_med: num(raw.imaDecelBand2),
+    ima_decel_high: num(raw.imaDecelBand3),
+    ima_cod_left: sumN(num(raw.imaCodLeftHigh), num(raw.imaCodLeftMedium), num(raw.imaCodLeftLow)),
+    ima_cod_right: sumN(num(raw.imaCodRightHigh), num(raw.imaCodRightMedium), num(raw.imaCodRightLow)),
+    ima_cod_med: sum2(num(raw.imaCodLeftMedium), num(raw.imaCodRightMedium)),
+    ima_cod_low: sum2(num(raw.imaCodLeftLow), num(raw.imaCodRightLow)),
   };
 }
 
@@ -192,7 +242,9 @@ export function aggregatePeriodsPerPlayer(rows: PeriodRow[]): PeriodGroup[] {
 }
 
 function toActual(g: PeriodGroup, matched_by: "name" | "order"): DrillActual {
-  return { ...g.perPlayer, n_players: g.nPlayers, matched_by, period_name: g.periodName };
+  const actual: DrillActual = { ...g.perPlayer, n_players: g.nPlayers, matched_by, period_name: g.periodName };
+  if (periodHasNoGps(g.perPlayer.player_load, g.perPlayer.distance_m)) actual.no_gps = true;
+  return actual;
 }
 
 /**
@@ -293,7 +345,7 @@ export async function writeSessionActuals(
 
   // Calibrate the drill_library templates from the measured actuals so the
   // drills themselves carry a real load for the next session they're used in.
-  const templatesUpdated = await updateDrillTemplatesFromActuals(sb, items);
+  const templatesUpdated = await updateDrillTemplatesFromActuals(sb, items, dateISO);
 
   return { ok: true, matched: matchedCount, sessionId: chosen.id, templatesUpdated, matchByNorm };
 }
@@ -304,47 +356,70 @@ export async function writeSessionActuals(
  * once it's been performed. Maps the actual metric keys onto the template
  * columns; only writes the values we have. Returns how many templates updated.
  */
-export async function updateDrillTemplatesFromActuals(sb: Sb, items: SessionItem[]): Promise<number> {
+/** actual metric key → drill_library column. */
+const TEMPLATE_MAP: Array<[keyof PeriodMetrics, string]> = [
+  ["player_load", "player_load"],
+  ["distance_m", "distance_m"],
+  ["duration_min", "duration_min"],
+  ["hir_total", "hir_total"],
+  ["vel_b5", "vel_b5"],
+  ["vel_b6", "vel_b6"],
+  ["max_velocity", "max_velocity"],
+  ["accel_b23", "accel_b23"],
+  ["accel_b23", "accel_b23_avg"],   // the drill card shows the per-player avg
+  ["decel_b23", "decel_b23"],
+  ["decel_b23", "decel_b23_avg"],
+  ["vel_b5", "vel_b5_avg"],
+  ["vel_b6", "vel_b6_avg"],
+  ["accel_total", "accel_total"],
+  ["decel_total", "decel_total"],
+  ["hmld_m", "hmld_m"],
+  ["metabolic_power_avg", "metabolic_power_avg"],
+  ["metabolic_power_peak", "metabolic_power_peak"],
+  ["ima_accel", "ima_accel"],
+  ["ima_decel", "ima_decel"],
+  ["ima_cod_total", "ima_cod_total"],
+  ["high_ima", "high_ima"],
+  ["jumps", "jump_count"],
+  ...IMA_DETAIL_KEYS.map((k) => [k, k] as [keyof PeriodMetrics, string]),
+];
+
+const GPS_KEY_SET = new Set<keyof PeriodMetrics>(GPS_METRIC_KEYS);
+
+/**
+ * The drill_library patch for one matched actual (pure). Only present values are written. An indoor
+ * actual (`no_gps`) leaves every GPS column as it was — its zeros are a missing reading and would wipe a
+ * real outdoor profile — while Player Load, duration and IMA are written. Records where the numbers came
+ * from (date, players, indoors) so the card can say so. Returns null when there is nothing to write.
+ */
+export function templatePatchFromActual(a: DrillActual, dateISO: string | null): Record<string, number | string | boolean | null> | null {
+  const noGps = a.no_gps === true || periodHasNoGps(a.player_load, a.distance_m);
+  const patch: Record<string, number | string | boolean | null> = {};
+  for (const [mk, col] of TEMPLATE_MAP) {
+    if (noGps && GPS_KEY_SET.has(mk)) continue;
+    const v = a[mk];
+    if (v != null) patch[col] = v;
+  }
+  // Derive PL/min if we have both but the source didn't provide it.
+  if (a.player_load_per_min != null) patch.player_load_per_min = a.player_load_per_min;
+  else if (a.player_load != null && a.duration_min != null && a.duration_min > 0) {
+    patch.player_load_per_min = Math.round((a.player_load / a.duration_min) * 100) / 100;
+  }
+  if (!Object.keys(patch).length) return null;
+  if (dateISO) patch.measured_on = dateISO;
+  if (a.n_players > 0) patch.measured_players = a.n_players;
+  patch.measured_no_gps = noGps;
+  return patch;
+}
+
+export async function updateDrillTemplatesFromActuals(sb: Sb, items: SessionItem[], dateISO: string | null = null): Promise<number> {
   let updated = 0;
   for (const it of items) {
     const a = it.actual;
     const drillId = it.drill_id;
     if (!a || !drillId) continue;
-    // actual metric key → drill_library column. Only present values are written.
-    const MAP: Array<[keyof PeriodMetrics, string]> = [
-      ["player_load", "player_load"],
-      ["distance_m", "distance_m"],
-      ["duration_min", "duration_min"],
-      ["hir_total", "hir_total"],
-      ["vel_b5", "vel_b5"],
-      ["vel_b6", "vel_b6"],
-      ["max_velocity", "max_velocity"],
-      ["accel_b23", "accel_b23"],
-      ["accel_b23", "accel_b23_avg"],   // the drill card shows the per-player avg
-      ["decel_b23", "decel_b23"],
-      ["decel_b23", "decel_b23_avg"],
-      ["vel_b5", "vel_b5_avg"],
-      ["vel_b6", "vel_b6_avg"],
-      ["accel_total", "accel_total"],
-      ["decel_total", "decel_total"],
-      ["hmld_m", "hmld_m"],
-      ["metabolic_power_avg", "metabolic_power_avg"],
-      ["metabolic_power_peak", "metabolic_power_peak"],
-      ["ima_cod_total", "ima_cod_total"],
-      ["high_ima", "high_ima"],
-      ["jumps", "jump_count"],
-    ];
-    const patch: Record<string, number | string | null> = {};
-    for (const [mk, col] of MAP) {
-      const v = a[mk];
-      if (v != null) patch[col] = v;
-    }
-    // Derive PL/min if we have both but the source didn't provide it.
-    if (a.player_load_per_min != null) patch.player_load_per_min = a.player_load_per_min;
-    else if (a.player_load != null && a.duration_min != null && a.duration_min > 0) {
-      patch.player_load_per_min = Math.round((a.player_load / a.duration_min) * 100) / 100;
-    }
-    if (!Object.keys(patch).length) continue;
+    const patch = templatePatchFromActual(a, dateISO);
+    if (!patch) continue;
     patch.updated_at = new Date().toISOString();
     const { error } = await sb.from("drill_library").update(patch).eq("id", drillId);
     if (!error) updated += 1;

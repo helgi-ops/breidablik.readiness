@@ -783,6 +783,14 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
   const imaCodRightHigh   = sumByLevel(codRightEntries, "high",   "3");
   const imaCodRightMedium = sumByLevel(codRightEntries, "medium", "2");
   const imaCodRightLow    = sumByLevel(codRightEntries, "low",    "1");
+  // Same split for accelerations and braking (raw ima_band{1,2,3}_{accel,decel}_count, or the
+  // "IMA Accel/Decel High/Medium/Low" display params). Per-drill actuals keep these.
+  const imaAccelHigh   = sumByLevel(accelEntries, "high",   "3");
+  const imaAccelMedium = sumByLevel(accelEntries, "medium", "2");
+  const imaAccelLow    = sumByLevel(accelEntries, "low",    "1");
+  const imaDecelHigh   = sumByLevel(decelEntries, "high",   "3");
+  const imaDecelMedium = sumByLevel(decelEntries, "medium", "2");
+  const imaDecelLow    = sumByLevel(decelEntries, "low",    "1");
 
   const imaTotal = nullIfZero(
     toInteger(
@@ -810,6 +818,12 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
     imaCodRightHigh,
     imaCodRightMedium,
     imaCodRightLow,
+    imaAccelHigh,
+    imaAccelMedium,
+    imaAccelLow,
+    imaDecelHigh,
+    imaDecelMedium,
+    imaDecelLow,
     imaTotal,
     codEvents,
     impacts,
@@ -946,6 +960,18 @@ export function normalizeCatapultPeriodStats(args: { payload: unknown }): Period
         ima_cod_total: nz(ima.imaCod ?? sum2(ima.imaCodLeft ?? null, ima.imaCodRight ?? null)),
         high_ima: nz(sum2(ima.imaCodLeftHigh ?? null, ima.imaCodRightHigh ?? null)),
         jumps: nz(ima.jumps),
+        // IMA detail — computed by normalizeImaMetrics from the raw band counts already requested
+        // (CATAPULT_PERIOD_IMA_RAW_PARAMETERS); no extra Catapult parameters. Band 1/2/3 = low/medium/hard.
+        ima_accel_low: nz(ima.imaAccelLow),
+        ima_accel_med: nz(ima.imaAccelMedium),
+        ima_accel_high: nz(ima.imaAccelHigh),
+        ima_decel_low: nz(ima.imaDecelLow),
+        ima_decel_med: nz(ima.imaDecelMedium),
+        ima_decel_high: nz(ima.imaDecelHigh),
+        ima_cod_left: nz(ima.imaCodLeft),
+        ima_cod_right: nz(ima.imaCodRight),
+        ima_cod_med: nz(sum2(ima.imaCodLeftMedium ?? null, ima.imaCodRightMedium ?? null)),
+        ima_cod_low: nz(sum2(ima.imaCodLeftLow ?? null, ima.imaCodRightLow ?? null)),
       },
     });
   }

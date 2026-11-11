@@ -16,7 +16,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import type { DrillActual } from "@/lib/micropulse/drillActuals";
+import { periodHasNoGps, type DrillActual } from "@/lib/micropulse/drillActuals";
+import { movementSummaryText } from "@/lib/micropulse/drillActuals/movementRead";
 import { profileFromDrillLoadRow, mergeLoadFactors, DEFAULT_LOAD_FACTORS, type LoadFactors } from "@/lib/micropulse/load/drillLoadProfile";
 import { classifyDrillStimulus, stimulusColorClasses, type StimulusType } from "@/lib/drill-stimulus";
 import type { Drill } from "./CoachDrillLibrary";
@@ -43,6 +44,8 @@ const SL_COPY = {
     err: "Villa",
     balTitle: "Álagsjafnvægi — planað vs raun", balHighSpeed: "Háhraða", balMuscular: "Vöðva–liða", balMatch: "eins og planað", balDiverge: "vék frá plani", balOfPlan: "af plani", balNoBaseline: "plan of lágt til að bera saman", balLowPlan: "plan of lágt", balPlanned: "Planað", balDelivered: "Raun",
     balNote: "Aðeins háhraða/vélræn kerfi leysast úr daglegu GPS. Mohr-viðmið — lýsandi, aldrei viðbragðsliturinn.",
+    balNeedsGps: (n: number, m: number) => `${n} af ${m} drillum voru án GPS (inni), svo ekki er hægt að bera háhraða- og vöðvaálag saman við plan. Hreyfitölurnar (IMA) undir hverri drillu eru raunverulegar.`,
+    noGps: "inni, engin GPS",
   },
   EN: {
     title: "Saved sessions", loading: "Loading…", empty: "No saved sessions yet.",
@@ -62,6 +65,8 @@ const SL_COPY = {
     err: "Error",
     balTitle: "Load balance — planned vs delivered", balHighSpeed: "High-speed", balMuscular: "Muscular–joint", balMatch: "as planned", balDiverge: "diverged", balOfPlan: "of plan", balNoBaseline: "plan too low to compare", balLowPlan: "plan too low", balPlanned: "Planned", balDelivered: "Delivered",
     balNote: "Only the high-speed / mechanical systems resolve from daily GPS. Mohr heuristic — descriptive, never the readiness colour.",
+    balNeedsGps: (n: number, m: number) => `${n} of ${m} drills had no GPS (indoors), so high-speed and muscular load can't be compared with the plan. The movement numbers (IMA) under each drill are real.`,
+    noGps: "indoors, no GPS",
   },
 } as const;
 
@@ -559,7 +564,9 @@ function PerDrillBars({ session, drillMap, lang }: { session: SavedSession; dril
     const planned = numMetric(drill?.player_load) * it.sets;
     const delivered = it.actual ? numMetric(it.actual.player_load) : null;
     const stim = drillStimulus(drill);
-    return { name: it.drill_name, sets: it.sets, planned, delivered, stim, matchedBy: it.actual?.matched_by ?? null };
+    const noGps = !!it.actual && (it.actual.no_gps === true || periodHasNoGps(it.actual.player_load, it.actual.distance_m));
+    const movement = it.actual ? movementSummaryText(it.actual, lang) : null;
+    return { name: it.drill_name, sets: it.sets, planned, delivered, stim, matchedBy: it.actual?.matched_by ?? null, noGps, movement };
   });
   const max = Math.max(1, ...rows.map((r) => Math.max(r.planned, r.delivered ?? 0)));
   return (
@@ -571,10 +578,12 @@ function PerDrillBars({ session, drillMap, lang }: { session: SavedSession; dril
             <span className="shrink-0 tabular-nums text-slate-500">
               {Math.round(r.planned)} → {r.delivered == null ? "–" : Math.round(r.delivered)}
               {r.matchedBy && <span className={`ml-1 rounded px-1 py-0.5 text-[9px] font-semibold ${r.matchedBy === "name" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{r.matchedBy === "name" ? (lang === "IS" ? "nafn" : "name") : (lang === "IS" ? "röð" : "order")}</span>}
+              {r.noGps && <span className="ml-1 rounded bg-slate-100 px-1 py-0.5 text-[9px] font-semibold text-slate-600">{SL_COPY[lang].noGps}</span>}
             </span>
           </div>
           <div className="h-1 w-full rounded bg-slate-200"><div className="h-full rounded bg-slate-300" style={{ width: `${(r.planned / max) * 100}%` }} /></div>
           <div className="mt-0.5 h-1.5 w-full rounded bg-slate-100"><div className="h-full rounded" style={{ width: `${((r.delivered ?? 0) / max) * 100}%`, backgroundColor: r.delivered == null ? "transparent" : (r.stim ? STIM_HEX[r.stim] : "#2740e6") }} /></div>
+          {r.movement && <div className="mt-0.5 text-[10px] leading-snug text-slate-500" title="IMA (Catapult inertial movement analysis), per player">{r.movement}</div>}
         </div>
       ))}
     </div>
@@ -596,6 +605,9 @@ function LoadBalanceComparison({ session, lang, factors }: { session: SavedSessi
     }, null, factors);
     const del = { vel_b5: 0, vel_b6: 0, accel_b23: 0, decel_b23: 0, accel_total: 0, decel_total: 0, distance_m: 0, duration_min: 0 };
     let anyActual = false;
+    const withActual = (session.items ?? []).filter((it) => it.actual);
+    const noGpsCount = withActual.filter((it) => it.actual && (it.actual.no_gps === true || periodHasNoGps(it.actual.player_load, it.actual.distance_m))).length;
+    if (noGpsCount > 0) return { rows: [], worst: null, anyComparable: false, needsGps: { n: noGpsCount, m: withActual.length } };
     for (const it of session.items ?? []) {
       const a = it.actual; if (!a) continue; anyActual = true;
       del.vel_b5 += numMetric(a.vel_b5); del.vel_b6 += numMetric(a.vel_b6);
@@ -618,10 +630,18 @@ function LoadBalanceComparison({ session, lang, factors }: { session: SavedSessi
     const off = rows.filter((r) => r.band === "under" || r.band === "over");
     const worst = off.slice().sort((a, b) => Math.abs((b.pct ?? 100) - 100) - Math.abs((a.pct ?? 100) - 100))[0] ?? null;
     const anyComparable = rows.some((r) => r.pct != null);
-    return { rows, worst, anyComparable };
+    return { rows, worst, anyComparable, needsGps: null as { n: number; m: number } | null };
   }, [session, factors]);
 
   if (!cmp) return null;
+  if (cmp.needsGps) {
+    return (
+      <div className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3">
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.balTitle}</span>
+        <div className="mt-1 text-[11px] leading-snug text-slate-600">{t.balNeedsGps(cmp.needsGps.n, cmp.needsGps.m)}</div>
+      </div>
+    );
+  }
   const label = (c: "anaerobic" | "muscular") => (c === "anaerobic" ? t.balHighSpeed : t.balMuscular);
   const bandColor = (b: string) => (b === "on" ? "text-emerald-700" : b === "under" ? "text-orange-700" : b === "over" ? "text-red-700" : "text-slate-400");
   const fmtPct = (pct: number) => (pct > 250 ? ">250%" : `${pct}%`);
