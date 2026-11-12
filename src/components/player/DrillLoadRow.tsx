@@ -6,6 +6,10 @@
  * full Engine (GPS) / Driver (IMA) breakdown behind a per-row toggle. Shared by
  * the sessions view (`SessionDrillList`) and the Dashboard "load per drill" card
  * (`PlayerDrillLoadCard`) so the two can never drift.
+ *
+ * Long runs = IMA Free Running runs of 18 s or more (bands chosen from the day's
+ * band edges, see `applyLongRuns`). Per drill their pace is unknown, so they
+ * include jogs and are shown as movement, never as hard running.
  */
 
 /** The player's own per-drill actual load for a single drill/period. */
@@ -13,7 +17,13 @@ export type DrillLoadEntry = {
   drill_name: string;
   matched: boolean;
   engine: { distance_m: number | null; hir_total: number | null; sprint_m: number | null; player_load: number | null } | null;
-  driver: { cod: number | null; high_ima: number | null } | null;
+  driver: {
+    cod: number | null;
+    high_ima: number | null;
+    /** Runs of 18 s+ in this drill; null when not measured (CSV, older syncs, no 18 s band edge). */
+    long_runs?: number | null;
+    long_run_strides?: number | null;
+  } | null;
   duration_min: number | null;
 };
 
@@ -36,6 +46,8 @@ export default function DrillLoadRow({ entry, lang, open, onToggle }: {
   const locale = is ? "is-IS" : "en-GB";
   const fmt = (v: number | null | undefined) => (v == null ? "–" : Math.round(v).toLocaleString(locale));
   const dl = entry;
+  const longRuns = dl.driver?.long_runs ?? null;
+  const longRunWord = (n: number) => (is ? (Math.round(n) === 1 ? "langt hlaup" : "löng hlaup") : (Math.round(n) === 1 ? "long run" : "long runs"));
   return (
     <div className="rounded-lg border border-[#d9ece2] bg-[#f4faf6] px-3 py-2.5">
       <div className="flex items-center justify-between gap-2">
@@ -43,6 +55,7 @@ export default function DrillLoadRow({ entry, lang, open, onToggle }: {
           <span className="mr-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-[#1c7a4a]">{is ? "Þitt álag" : "Your load"}</span>
           {dl.engine?.distance_m != null && <span className="font-bold tabular-nums text-zinc-900">{fmt(dl.engine.distance_m)} m</span>}
           {dl.engine?.hir_total != null && <span className="text-zinc-500"> · {fmt(dl.engine.hir_total)} m {is ? "hraðahlaup" : "hard running"}</span>}
+          {longRuns != null && Math.round(longRuns) > 0 && <span className="text-zinc-500"> · {fmt(longRuns)} {longRunWord(longRuns)}</span>}
         </div>
         <button type="button" onClick={onToggle} className="shrink-0 text-[11px] font-semibold text-[#2740e6]">
           {open ? (is ? "Fela" : "Hide") : (is ? "Nánar" : "Details")}
@@ -65,7 +78,17 @@ export default function DrillLoadRow({ entry, lang, open, onToggle }: {
               <div className="mt-1 grid grid-cols-4 gap-1.5">
                 <MiniStat label={is ? "Stefnubr." : "Change of dir."} value={fmt(dl.driver.cod)} unit="" />
                 <MiniStat label={is ? "Hátt IMA" : "High-IMA"} value={fmt(dl.driver.high_ima)} unit="" />
+                {longRuns != null && <MiniStat label={is ? "Löng hlaup" : "Long runs"} value={fmt(longRuns)} unit="" />}
+                {longRuns != null && <MiniStat label={is ? "Skref í þeim" : "Their strides"} value={fmt(dl.driver.long_run_strides)} unit="" />}
               </div>
+              {longRuns != null && (
+                <p className="mt-1 text-[10px] leading-snug text-zinc-500">
+                  {is
+                    ? "Löng hlaup = hlaup sem vara 18 sek eða lengur. Skokk meðtalið, því hraðinn er ekki mældur í hverri drillu – teljast ekki sem hraðahlaup."
+                    : "Long runs = runs lasting 18 s or more. Jogs included, as pace isn't measured per drill – they don't count as hard running."}
+                  {" "}<span className="text-zinc-400">(McBurnie et al. 2022)</span>
+                </p>
+              )}
             </div>
           )}
         </div>

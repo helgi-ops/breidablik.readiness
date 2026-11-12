@@ -28,6 +28,8 @@ type Row = {
   player_load: number | null;
   ima_cod_total: number | null;
   high_ima: number | null;
+  long_runs: number | null;
+  long_run_strides: number | null;
   duration_min: number | null;
 };
 
@@ -64,7 +66,7 @@ export async function GET(req: Request) {
 
     // The player's own per-drill rows for this session (fallback by date for
     // rows written before saved_session_id was resolved).
-    const cols = "drill_id, period_norm, period_order, distance_m, hir_total, vel_b6, player_load, ima_cod_total, high_ima, duration_min";
+    const cols = "drill_id, period_norm, period_order, distance_m, hir_total, vel_b6, player_load, ima_cod_total, high_ima, long_runs, long_run_strides, duration_min";
     let rows: Row[] = [];
     {
       const { data } = await sb.from("player_drill_load").select(cols).eq("player_id", playerId).eq("saved_session_id", sessionId);
@@ -102,8 +104,8 @@ export async function GET(req: Request) {
       const engine = anyOf(numOrNull(r.distance_m), numOrNull(r.hir_total), numOrNull(r.vel_b6), numOrNull(r.player_load))
         ? { distance_m: numOrNull(r.distance_m), hir_total: numOrNull(r.hir_total), sprint_m: numOrNull(r.vel_b6), player_load: numOrNull(r.player_load) }
         : null;
-      const driver = anyOf(numOrNull(r.ima_cod_total), numOrNull(r.high_ima))
-        ? { cod: numOrNull(r.ima_cod_total), high_ima: numOrNull(r.high_ima) }
+      const driver = anyOf(numOrNull(r.ima_cod_total), numOrNull(r.high_ima), numOrNull(r.long_runs))
+        ? { cod: numOrNull(r.ima_cod_total), high_ima: numOrNull(r.high_ima), long_runs: numOrNull(r.long_runs), long_run_strides: numOrNull(r.long_run_strides) }
         : null;
       if (engine || driver) hasAnyData = true;
       return { drill_name: name, matched: !!(engine || driver), engine, driver, duration_min: numOrNull(r.duration_min) };
