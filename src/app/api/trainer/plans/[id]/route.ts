@@ -97,7 +97,7 @@ export async function GET(
     const { data: sessions, error: sessErr } = await sb
       .from("individual_training_sessions")
       .select(
-        "id, week_number, day_of_week, session_name, session_type, estimated_duration_min, notes, sort_order, individual_training_prescriptions(id, exercise_id, sets, reps, load_type, load_value, rpe_target, tempo, rest_seconds, duration_min, hr_zone_target, pace_target, work_seconds, rest_work_seconds, interval_count, notes, sort_order, exercise_library(name, name_is, exercise_type, category))"
+        "id, week_number, day_of_week, session_name, session_type, estimated_duration_min, notes, sort_order, individual_training_prescriptions(id, exercise_id, sets, reps, load_type, load_value, rpe_target, tempo, rest_seconds, duration_min, hr_zone_target, pace_target, work_seconds, rest_work_seconds, interval_count, notes, sort_order, vbt, exercise_library(name, name_is, exercise_type, category))"
       )
       .eq("plan_id", id)
       .order("week_number")
@@ -155,6 +155,7 @@ export async function GET(
           intervalCount: rx.interval_count,
           notes: rx.notes,
           sortOrder: rx.sort_order,
+          vbt: rx.vbt ?? null,
         })),
       })),
     });

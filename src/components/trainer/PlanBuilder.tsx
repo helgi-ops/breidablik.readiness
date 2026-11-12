@@ -12,6 +12,8 @@ import {
   type IsoExercise,
   formatRange,
 } from "@/lib/micropulse/isometrics/protocols";
+import VbtMethodPicker from "./VbtMethodPicker";
+import type { VbtDraft } from "@/lib/micropulse/vbtMethods";
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -49,6 +51,8 @@ export interface Exercise {
   velocityLoss?: number;
   /** VBT: training zone */
   velocityZone?: VelocityZone;
+  /** Bar-speed method (Weakley et al. 2021, Table 5) — sanitised when the plan is assigned. */
+  vbt?: VbtDraft;
   /** Movement classification carried from the library pick (for the build-time audit). */
   movementFamily?: MovementFamily | null;
   movementPattern?: MovementPattern | null;
@@ -317,13 +321,7 @@ const VELOCITY_ZONES: Record<Exclude<VelocityZone, "custom">, VelocityZoneConfig
   },
 };
 
-/** General V1RM (velocity at 1RM) reference per exercise — from Weakley et al. 2021, Table 2 */
-const V1RM_REFERENCE: Record<string, number> = {
-  "Back Squat": 0.30, "Front Squat": 0.30, "Leg Press": 0.21,
-  "Bench Press": 0.17, "Overhead Press": 0.19,
-  "Deadlift": 0.15, "Trap Bar Deadlift": 0.15, "Romanian Deadlift": 0.15,
-  "Hip Thrust": 0.25, "Bent Over Row": 0.50, "Pull Up": 0.47,
-};
+// Bar speed at a one-rep max (Weakley et al. 2021, Table 2) lives in V1RM_TABLE2 (@/lib/micropulse/vbtMethods).
 
 const VL_THRESHOLD_OPTIONS = [5, 10, 15, 20, 25, 30] as const;
 
@@ -415,6 +413,8 @@ export default function PlanBuilder({
   const [isoPickerSessionIdx, setIsoPickerSessionIdx] = useState<number | null>(
     null
   );
+  // Bar-speed method pickers opened without a method yet (key = week-session-group-slot).
+  const [vbtOpen, setVbtOpen] = useState<Set<string>>(() => new Set());
 
   /* ── Initialize weeks structure ──────────────────────── */
 
@@ -1652,6 +1652,36 @@ export default function PlanBuilder({
                                               </div>
                                             </div>
                                           )}
+
+                                          {/* Bar-speed method (Weakley et al. 2021, Table 5) */}
+                                          {(() => {
+                                            const vKey = `${currentWeekIndex}-${sessionIdx}-${groupIdx}-${slotIdx}`;
+                                            const show = !!ex.vbt || vbtOpen.has(vKey);
+                                            return (
+                                              <div className="col-span-3 sm:col-span-6">
+                                                {show ? (
+                                                  <VbtMethodPicker
+                                                    compact
+                                                    idPrefix={`pb-vbt-${vKey}`}
+                                                    lang={isIS ? "IS" : "EN"}
+                                                    value={ex.vbt}
+                                                    onChange={(v) => {
+                                                      updateExercise(currentWeekIndex, sessionIdx, groupIdx, slotIdx, { vbt: v });
+                                                      if (!v) setVbtOpen((prev) => { const n = new Set(prev); n.delete(vKey); return n; });
+                                                    }}
+                                                  />
+                                                ) : (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setVbtOpen((prev) => new Set(prev).add(vKey))}
+                                                    className="text-[11px] font-semibold text-[#2740e6] hover:underline"
+                                                  >
+                                                    {isIS ? "+ Hraðastýrð aðferð" : "+ Bar-speed method"}
+                                                  </button>
+                                                )}
+                                              </div>
+                                            );
+                                          })()}
 
                                           {/* Notes */}
                                           <div className="col-span-3 sm:col-span-6">

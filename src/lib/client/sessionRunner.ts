@@ -10,6 +10,7 @@
  */
 
 import { buildSessionBlocks, type GroupKind } from "./sessionGrouping";
+import { sanitizeVbtPrescription, type VbtPrescription } from "@/lib/micropulse/vbtMethods";
 
 export const DEFAULT_REST_SECONDS = 120;
 
@@ -25,6 +26,8 @@ export type PlanRow = {
   description?: string | null;
   description_is?: string | null;
   video_url?: string | null;
+  /** Bar-speed method (Weakley et al. 2021, Table 5) as stored; sanitised when the run is built. */
+  vbt?: unknown;
 };
 
 export type LoggedSet = {
@@ -55,6 +58,8 @@ export type RunExercise = {
   description: string | null;
   descriptionIs: string | null;
   videoUrl: string | null;
+  /** The coach's bar-speed rule for this exercise, if any. */
+  vbt: VbtPrescription | null;
 };
 
 export type RunBlock = {
@@ -132,6 +137,7 @@ export function buildRunnerBlocks(rows: PlanRow[], last: Map<string, LastTime>):
         description: r.description ?? null,
         descriptionIs: r.description_is ?? null,
         videoUrl: r.video_url ?? null,
+        vbt: sanitizeVbtPrescription(r.vbt),
         // No weight known → bodyweight; the client can still add one.
         sets: Array.from({ length: nSets }, () => ({
           weight_kg: startKg,

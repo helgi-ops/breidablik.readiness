@@ -24,6 +24,7 @@ import {
   roundsIn, skipBlock, summarize, toPayload, updateSet,
   type LoggedSet, type PlanRow, type Position, type RunBlock, type RunExercise, type RunSet,
 } from "@/lib/client/sessionRunner";
+import { formatVbtForPlayer } from "@/lib/micropulse/vbtMethods";
 
 type Lang = "IS" | "EN";
 type Phase = "loading" | "run" | "rest" | "finish";
@@ -407,6 +408,17 @@ export default function SessionRunner({ lang, planRows, sessionName, onManual }:
     if (ex.last) parts.push(`${t.last} ${ex.last.is_bodyweight ? t.bodyweight : `${ex.last.weight_kg ?? "–"} kg`} × ${ex.last.reps ?? "–"}`);
     return parts.join(" · ");
   };
+  // The coach's bar-speed rule (Weakley et al. 2021, Table 5) — headline + first fact.
+  const vbtLine = (ex: RunExercise) => {
+    if (!ex.vbt) return null;
+    const c = formatVbtForPlayer(ex.vbt, lang);
+    return (
+      <div className="mt-0.5 rounded-lg bg-[#2740e6]/5 px-2.5 py-1.5 text-[13px] leading-snug text-[#1f33b8]">
+        <span className="font-semibold">{IS ? "Stangarhraði" : "Bar speed"}:</span> {c.headline}
+        {c.facts[0] && <span className="mt-0.5 block text-[12px] text-slate-600">{c.facts[0]}</span>}
+      </div>
+    );
+  };
 
   return (
     <div className={`${shell} bg-background text-slate-900`} style={padding}>
@@ -455,6 +467,7 @@ export default function SessionRunner({ lang, planRows, sessionName, onManual }:
                     {open && (
                       <>
                         {lastLine(ex) && <div className="text-[13px] text-slate-600">{lastLine(ex)}</div>}
+                        {vbtLine(ex)}
                         {editor(ex, i)}
                         <ExerciseInfo name={ex.name} description={ex.description} descriptionIs={ex.descriptionIs} videoUrl={ex.videoUrl} />
                       </>
@@ -471,6 +484,7 @@ export default function SessionRunner({ lang, planRows, sessionName, onManual }:
               <div>
                 <h1 className="font-display text-[26px] font-extrabold leading-tight tracking-tight">{ex.name}</h1>
                 {lastLine(ex) && <div className="mt-0.5 text-[13px] text-slate-700">{lastLine(ex)}</div>}
+                {vbtLine(ex)}
               </div>
               <div className="space-y-1.5">
                 {ex.sets.map((s, i) => i === pos.round ? (

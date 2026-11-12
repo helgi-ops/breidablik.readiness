@@ -40,6 +40,7 @@ import ClientProgrammeOverview from "@/components/player/ClientProgrammeOverview
 import ClientMoveSessionButton from "@/components/player/ClientMoveSessionButton";
 import ClientMoveSessionControl from "@/components/player/ClientMoveSessionControl";
 import MethodologyLink from "@/components/common/MethodologyLink";
+import { sanitizeVbtPrescription, formatVbtForPlayer } from "@/lib/micropulse/vbtMethods";
 
 type TodayResp = {
   ok: true;
@@ -76,6 +77,8 @@ type TodayResp = {
       cluster_rest?: string; set_rest?: string;
       target_kg?: number | null; target_stale?: boolean; target_auto?: boolean;
       description?: string | null; description_is?: string | null; video_url?: string | null;
+      /** Bar-speed method (Weakley et al. 2021, Table 5), sanitised server-side. */
+      vbt?: unknown;
     }> }>;
     retest_due?: string[];
     needs_test?: string[];
@@ -305,8 +308,10 @@ export default function ClientTodayPage() {
                         {g.rows.map((r, i) => {
                           if (shown >= CAP) return null;
                           shown += 1;
+                          const vbt = sanitizeVbtPrescription(r.vbt);
                           return (
-                            <div key={i} className="flex items-baseline justify-between gap-3 text-sm border-b border-slate-100 pb-1.5 last:border-0">
+                            <div key={i} className="border-b border-slate-100 pb-1.5 last:border-0">
+                            <div className="flex items-baseline justify-between gap-3 text-sm">
                               <span className="flex min-w-0 items-center gap-1 font-medium text-slate-800">
                                 {grouped && <span className="shrink-0 text-[11px] font-semibold text-indigo-400">{g.tag}{i + 1}</span>}
                                 <span className="truncate">{r.exercise}</span>
@@ -319,6 +324,12 @@ export default function ClientTodayPage() {
                                   : (r.pct1rm ? ` · ${Math.round(r.pct1rm * 100)}%1RM` : "")}
                                 {r.velocity ? ` · ${r.velocity} m/s` : ""}
                               </span>
+                            </div>
+                            {vbt && (
+                              <p className="mt-0.5 text-[11.5px] leading-snug text-[#1f33b8]">
+                                <span className="font-semibold">{lang === "IS" ? "Stangarhraði" : "Bar speed"}:</span> {formatVbtForPlayer(vbt, lang === "IS" ? "IS" : "EN").headline}
+                              </p>
+                            )}
                             </div>
                           );
                         })}

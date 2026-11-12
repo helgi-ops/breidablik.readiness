@@ -80,3 +80,18 @@ describe("sessionRunner", () => {
     expect(summarize(b).liftedKg).toBe(110 * 3 + 30 * 5);
   });
 });
+
+describe("sessionRunner — bar-speed method (Weakley et al. 2021, Table 5)", () => {
+  it("carries a valid method onto the exercise and drops an incomplete one", () => {
+    const rows: PlanRow[] = [
+      { exercise: "Back squat", sets: 4, reps: "5", vbt: { method: "fixed_set_vl", velocityLossPct: 20 } },
+      { exercise: "Bench press", sets: 3, reps: "5", vbt: { method: "fixed_set_vl_rep_cap", velocityLossPct: 10 } },
+      { exercise: "Row", sets: 3, reps: "8" },
+    ];
+    const blocks = buildRunnerBlocks(rows, none);
+    const ex = blocks.flatMap((b) => b.exercises);
+    expect(ex[0].vbt).toEqual({ method: "fixed_set_vl", velocityLossPct: 20 });
+    expect(ex[1].vbt).toBeNull();
+    expect(ex[2].vbt).toBeNull();
+  });
+});

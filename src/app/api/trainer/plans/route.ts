@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
 import { adaptStructure, clampFreq, type PlanWeekLike } from "@/lib/trainer/sessionFrequency";
+import { toDbLoadType } from "@/lib/trainer/planLoadType";
+import { sanitizeVbtPrescription } from "@/lib/micropulse/vbtMethods";
 
 /* ── helpers ─────────────────────────────────────────── */
 
@@ -307,7 +309,8 @@ export async function POST(req: Request) {
                 sort_order: exercise.sortOrder || 0,
                 sets: exerciseTweak?.sets ?? exercise.sets,
                 reps: exerciseTweak?.reps ?? exercise.reps,
-                load_type: exercise.loadType,
+                // Plan-builder values ("kg", "%1RM", …) mapped to the DB check-constraint vocabulary.
+                load_type: toDbLoadType(exercise.loadType),
                 load_value: exerciseTweak?.loadValue ?? exercise.loadValue,
                 rpe_target: exerciseTweak?.rpeTarget ?? exercise.rpeTarget,
                 tempo: exercise.tempo,
@@ -321,6 +324,8 @@ export async function POST(req: Request) {
                 notes: exercise.notes || null,
                 group_label: exercise._groupLabel ?? null,
                 method: exercise._method ?? null,
+                // Bar-speed method (Weakley et al. 2021, Table 5); incomplete → null.
+                vbt: sanitizeVbtPrescription(exercise.vbt),
               },
             ]);
 
