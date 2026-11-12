@@ -47,6 +47,8 @@ const PlayerMatchMovementCard = dynamic(() => import("@/components/player/Player
 import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
 import PlayerSignalPackCard from "@/components/player/PlayerSignalPackCard";
 import PlayerRecoveryTodayCard from "@/components/player/PlayerRecoveryTodayCard";
+import PlayerTopSpeedDueCard from "@/components/player/PlayerTopSpeedDueCard";
+import ClientErrorBoundary from "@/components/util/ClientErrorBoundary";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
 import { isFreeLocked } from "@/lib/micropulse/product/freeLock";
@@ -1106,6 +1108,11 @@ function PlayerSignalPackPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
       <PlayerRecoveryTodayCard playerId={ids.playerId} lang={lang === "IS" ? "IS" : "EN"} />
       {/* Exception-only supporting signals (self-hides on clean days). */}
       <PlayerSignalPackCard playerId={ids.playerId} teamId={ids.teamId} lang={lang === "IS" ? "IS" : "EN"} />
+      {/* "Top speed due" — same reminder the coach sees (10 / 21 days since 90% of own top speed).
+          Self-hides when there is nothing to say; boundaried so it can never blank Today. */}
+      <ClientErrorBoundary>
+        <PlayerTopSpeedDueCard lang={lang === "IS" ? "IS" : "EN"} />
+      </ClientErrorBoundary>
     </div>,
     mountNode,
   );

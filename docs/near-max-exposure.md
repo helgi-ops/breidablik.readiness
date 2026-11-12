@@ -48,8 +48,27 @@ most-flagged on 45% of days. Off-season (no GPS since 24 Oct) → nobody flagged
   months)", then the evidence and "advisory, never the readiness colour".
 - Confidence: high when top speed rests on 30+ measured days or a sprint test, else moderate.
 
-Not built: player-app display or notification, a planned-week suggestion (e.g. MD-3), a 95% mark.
-`resolveMss` (speed zones) still uses the all-time best day.
+## What the player sees
+
+The same reminder on the player's own Today (`PlayerTopSpeedDueCard`, in the signal slot under the session),
+only when flagged. Route `/api/player/near-max` (self-scoped) → `loadPlayerNearMax` → `formatNearMaxForPlayer`
+(`nearMaxExposure/playerCopy.ts`).
+
+- One sentence: "12 days since you last ran near your top speed."
+- Facts: the last such run (speed and date), the speed that counts, and "Your coach sees this reminder too and
+  decides when a fast run fits the week." After a long gap: build back over a few sessions, not straight to a
+  flat-out sprint. The card never tells a player to go and sprint alone.
+- How sure, then "Behind the numbers": where the top speed comes from, indoor days, the studies, and "It does
+  not change your readiness colour."
+
+Same read as the coach: `loadTeamNearMaxSignals` and `loadPlayerNearMax` share `loadRosterReads`, and the
+player read applies the sprint-speed-drop rule too. `scripts/validate-near-max-signal.ts --parity <date>`
+compares the two for a whole team (0 differences on four Breiðablik days and on HK). A FREE club's players get
+no card, because their coach does not see the signal either. No push or email is sent.
+
+Not built: a notification to the player, a planned-week suggestion (e.g. MD-3), a 95% mark.
+`resolveMss` (speed zones) still uses the all-time best day, so the Movement card's top speed can be a little
+higher than the top speed this reminder uses.
 
 ## Related fix (same day)
 

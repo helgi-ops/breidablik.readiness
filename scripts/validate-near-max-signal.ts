@@ -3,8 +3,9 @@
  *
  * Replays the ACTUAL loader (`loadTeamNearMaxSignals`) for every day in a window and prints how many
  * outfield players would have been flagged per day: "due" (>10 d since a day at ≥90% of top speed) and
- * "long gap" (>21 d). Expected on Breiðablik's 2026 season (the data the marks were chosen on): about 6
- * flagged per day at 10 d, about 3 of them at 21 d. Then prints today's chip for the team.
+ * "long gap" (>21 d). Measured on Breiðablik's 2026 season (the data the marks were chosen on, May–Oct, every
+ * 3rd day): 4.2 flagged per day, 1.5 of them in a long gap. Then prints today's chip for the team, and checks
+ * that the player-app read (`loadPlayerNearMax`) agrees with the coach read for every flagged player.
  *
  *   npx tsx scripts/validate-near-max-signal.ts [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--step 3] [--team <uuid>]
  *
@@ -16,8 +17,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createClient } from "@supabase/supabase-js";
-import { loadTeamNearMaxSignals } from "@/lib/micropulse/nearMaxExposure/signalLoad";
-import { deriveNearMaxTeamSignal, derivePlayerNearMaxSignals } from "@/lib/micropulse/coachSignals";
+import { loadTeamNearMaxSignals, loadPlayerNearMax } from "@/lib/micropulse/nearMaxExposure/signalLoad";
+import { loadTeamSprintDropSignals } from "@/lib/micropulse/sprintSpeedDrop/signalLoad";
+import { formatNearMaxForPlayer } from "@/lib/micropulse/nearMaxExposure/playerCopy";
+import { deriveNearMaxTeamSignal, derivePlayerNearMaxSignals, dropDueWhereSprintSuppressed } from "@/lib/micropulse/coachSignals";
 
 const BREIDABLIK = "94b52a06-0b83-48da-8664-639ec3486a0c";
 
@@ -69,6 +72,26 @@ async function main() {
   console.log(`\ntoday (${today}): ${now.length} flagged → team chip ${chip.level}`);
   for (const line of chip.why.en) console.log(`  ${line}`);
   for (const p of derivePlayerNearMaxSignals(now).slice(0, 3)) console.log(`  · ${p.signal.why.en.join(" ")} | ${p.signal.counterfactual?.en.split(". ")[0]}.`);
+
+  // Player app vs coach: the same players, the same level, on a chosen day (default today).
+  const parityDay = arg("--parity") ?? today;
+  const { data: roster } = await sb.from("players").select("id").eq("team_id", team).eq("is_active", true);
+  const coach = new Map(
+    dropDueWhereSprintSuppressed(await loadTeamNearMaxSignals(sb, team, parityDay), await loadTeamSprintDropSignals(sb, team, parityDay))
+      .map((r) => [r.playerId, r] as const),
+  );
+  let agree = 0, differ = 0, cards = 0;
+  let sample: string | null = null;
+  for (const p of (roster ?? []) as Array<{ id: string }>) {
+    const mine = await loadPlayerNearMax(sb, p.id, parityDay);
+    const card = mine ? formatNearMaxForPlayer(mine) : null;
+    const c = coach.get(p.id);
+    if ((card?.level ?? null) === (c?.level ?? null) && (card == null || mine?.daysSince === c?.daysSince)) agree += 1; else differ += 1;
+    if (card) { cards += 1; sample ??= `${card.verdict.en} | ${card.facts.map((f) => f.en).join(" | ")} | ${card.confidence.en}`; }
+  }
+  console.log(`\nplayer app vs coach on ${parityDay}: ${agree} agree, ${differ} differ (${cards} player cards, ${coach.size} coach pills)`);
+  if (sample) console.log(`  sample card (no name): ${sample}`);
+  if (differ > 0) process.exitCode = 1;
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

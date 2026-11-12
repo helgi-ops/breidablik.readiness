@@ -11,8 +11,8 @@
  *     injuries): no match hamstring injuries when >95% exposures happened at D-2. Observational, not causal.
  *   - Edouard P et al. 2019, Sport Perform Sci Rep 48 — sprinting as a "vaccine" for hamstring injury.
  * None of them gives a day count. The two marks below are MicroPulse's, chosen by the coach on Breiðablik's
- * 2026 season (23 players, 627 days at ≥90%): median gap between such days 5 d, 75% of gaps ≤ 9 d; on a
- * typical in-season day ~6 of ~20 outfield players are past 10 d and ~3 past 21 d.
+ * 2026 season (23 players, 627 days at ≥90%): median gap between such days 5 d, 75% of gaps ≤ 9 d; replayed
+ * with the real loader, a typical in-season day has 4.2 players past 10 d, 1.5 of them past 21 d.
  *
  * Top speed (the coach's choice) = the THIRD-fastest measured GPS day in the last 12 months, so one GPS spike
  * can't set it (median best day 32.4 km/h vs third-best 31.2); a measured sprint test wins when it is higher.
