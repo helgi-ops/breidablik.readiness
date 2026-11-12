@@ -12,6 +12,7 @@
 import type { Bi } from "@/lib/micropulse/load/peakPeriod";
 import type { PreseasonEmphasis } from "./preseasonEmphasis";
 import type { InSeasonStrengthMode } from "./inSeasonStrengthMode";
+import type { VbtDraft } from "@/lib/micropulse/vbtMethods";
 
 export type SeasonPhaseKey = "preseason" | "competitive" | "offseason";
 export type StrengthGoal = "recondition_maintain" | "build_sequence" | "retain";
@@ -48,7 +49,10 @@ export interface CoachBlockRule { quality?: BiOverride; pct1rm?: BiOverride; sch
    *  across the training week, the default) or "traditional" (concentrate the weekly volume onto
    *  1–4 chosen lift days, the rest Off — the coach marks lift/Off days per MD day on the Send tab).
    *  Unset = the team default (which itself defaults to microdose). Descriptive planning only. */
-  mode?: InSeasonStrengthMode }
+  mode?: InSeasonStrengthMode;
+  /** Bar-speed (VBT) method for this block's main lifts — Weakley et al. 2021, Table 5. Opt-in, unset =
+   *  none. Stored as the coach left it; every reader runs `sanitizeVbtPrescription` (incomplete → dropped). */
+  vbt?: VbtDraft }
 /** The full sparse rule map a team stores — only customised cells are present. */
 export interface CoachStrengthRules {
   block?: Partial<Record<string, CoachBlockRule>>; // key = `${goalKey}:${phase}`

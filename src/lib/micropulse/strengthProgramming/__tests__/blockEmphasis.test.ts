@@ -186,3 +186,19 @@ describe("applyBlockToSession — in-season fixture-density sub-phase dose", () 
     expect(out!.blockEmphasis?.subPhaseKey).toBeUndefined();
   });
 });
+
+describe("applyBlockToSession — coach's bar-speed method", () => {
+  it("carries a valid method, sanitised", () => {
+    const out = applyBlockToSession(session([block("COMPOUND", 3)]), "transmute", "competitive",
+      { vbt: { method: "fixed_set_vl", velocityLossPct: 20, repCap: 5 } });
+    expect(out!.blockEmphasis?.vbt).toEqual({ method: "fixed_set_vl", velocityLossPct: 20 });
+  });
+
+  it("drops an incomplete or unknown method", () => {
+    const a = applyBlockToSession(session([block("COMPOUND", 3)]), "transmute", "competitive",
+      { vbt: { method: "fixed_set_vl_rep_cap", velocityLossPct: 10 } });
+    expect(a!.blockEmphasis?.vbt).toBeUndefined();
+    const b = applyBlockToSession(session([block("COMPOUND", 3)]), "transmute", "competitive", null);
+    expect(b!.blockEmphasis?.vbt).toBeUndefined();
+  });
+});

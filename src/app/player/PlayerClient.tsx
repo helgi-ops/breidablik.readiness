@@ -24,6 +24,7 @@ import { formatLoadBandClass, formatSessionTypeLabel, getSessionLoadBand } from 
 import { SESSION_TYPES, type SessionType } from "@/lib/session-rpe/types";
 import { buildPerformanceIntelligenceDecision } from "@/lib/micropulse/performanceIntelligence";
 import { structureHowTo, structureLabel, structureVideo } from "@/lib/micropulse/structureHowTo";
+import { readVbtPlayerCard, type VbtPlayerCard } from "@/lib/micropulse/vbtMethods";
 import { oneRowPerDate, oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { buildExplainableReadinessDecision } from "@/lib/micropulse/readiness";
 import { buildPlayerRiskTrend, type PlayerRiskTrend } from "@/lib/micropulse/performanceIntelligence/riskTrend";
@@ -2257,6 +2258,8 @@ type SessionBlock = {
   restBetween?: string;
   /** The coach's authored block prescription (quality · %1RM · scheme · setups), pre-localized. */
   prescription?: string;
+  /** The coach's bar-speed method for this block (Weakley et al. 2021, Table 5), pre-localized. */
+  vbt?: VbtPlayerCard;
 };
 
 /** Structure-library methods where the whole block is performed as one round
@@ -2309,7 +2312,8 @@ function buildSessionBlocks(
     const rounds = typeof b?.rest_between_rounds === "string" ? b.rest_between_rounds : undefined;
     const restBetween = typeof b?.rest_between_sets === "string" ? b.rest_between_sets : undefined;
     const prescription = typeof b?.prescription === "string" ? b.prescription : undefined;
-    return { title, accent, priority, segments, structureId: sid, howTo, methodLabel: structureLabel(sid), rounds, restBetween, prescription };
+    const vbt = readVbtPlayerCard(b?.vbt) ?? undefined;
+    return { title, accent, priority, segments, structureId: sid, howTo, methodLabel: structureLabel(sid), rounds, restBetween, prescription, vbt };
   });
 
   return { blocks, hiddenCount, totalBlocks: sorted.length };
@@ -2956,6 +2960,16 @@ function SessionFocusScreen({
               {kicker}
             </div>
 
+            {/* The coach's bar-speed rule for this block (main lifts). */}
+            {block?.vbt ? (
+              <div className="rounded-xl border border-[#2740e6]/20 bg-[#2740e6]/5 px-3.5 py-2.5 text-[12.5px] leading-snug text-[#1f33b8]">
+                <span className="font-semibold">{isIS ? "Stangarhraði" : "Bar speed"}:</span> {block.vbt.headline}
+                {block.vbt.facts.slice(0, 2).map((f) => (
+                  <span key={f} className="mt-0.5 block text-[12px] text-zinc-600">{f}</span>
+                ))}
+              </div>
+            ) : null}
+
             {/* How to perform — the method's execution guide for this block. */}
             {block?.howTo && block.howTo.length > 0 ? (
               <div className="rounded-xl border border-zinc-200 bg-zinc-50">
@@ -3395,6 +3409,9 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
       howToMethods.push({ key: b.structureId, label: b.methodLabel ?? b.title, steps: b.howTo });
     }
   }
+  // The coach's bar-speed method (one per session) — its steps join the how-to list.
+  const vbtCard = workBlocks.find((b) => b.vbt)?.vbt ?? null;
+  if (vbtCard) howToMethods.push({ key: `vbt:${vbtCard.key}`, label: vbtCard.label, steps: [...vbtCard.steps, vbtCard.note] });
 
   // Completed → collapse to a "done" card (not re-doable until reopened).
   if (completed) {
@@ -3491,6 +3508,16 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
             </div>
           ) : null;
         })()}
+
+        {/* Coach's bar-speed rule (Weakley et al. 2021, Table 5) — the one thing to watch on the main lifts. */}
+        {vbtCard ? (
+          <div className="border-b border-zinc-100 bg-[#2740e6]/5 px-4 py-2 text-[12px] leading-snug text-[#1f33b8]">
+            <span className="font-semibold">{isIS ? "Stangarhraði" : "Bar speed"}:</span> {vbtCard.headline}
+            {vbtCard.facts.slice(0, 2).map((f) => (
+              <span key={f} className="mt-0.5 block text-[11.5px] text-zinc-600">{f}</span>
+            ))}
+          </div>
+        ) : null}
 
         {/* One exercise row (shared by the corrective + strength sections). */}
         {(() => {

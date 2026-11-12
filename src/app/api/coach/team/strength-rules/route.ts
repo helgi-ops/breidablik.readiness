@@ -14,6 +14,21 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
 import type { CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
+import { sanitizeVbtPrescription } from "@/lib/micropulse/vbtMethods";
+
+/** Clean each block cell's bar-speed method; an incomplete or unknown one is dropped (never stored). */
+function sanitizeRulesVbt(rules: CoachStrengthRules): CoachStrengthRules {
+  if (!rules.block || typeof rules.block !== "object") return rules;
+  const block: CoachStrengthRules["block"] = {};
+  for (const [key, cell] of Object.entries(rules.block)) {
+    if (!cell || typeof cell !== "object") continue;
+    const { vbt, ...rest } = cell;
+    const clean = vbt === undefined ? null : sanitizeVbtPrescription(vbt);
+    const next = clean ? { ...rest, vbt: clean } : rest;
+    if (Object.keys(next).length) block[key] = next;
+  }
+  return { ...rules, block };
+}
 
 export const runtime = "nodejs";
 
@@ -63,7 +78,7 @@ export async function PUT(req: Request) {
   const ctx = await requireCoachTeam(req, body.teamId ?? null);
   if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
 
-  const rules = body.rules && typeof body.rules === "object" ? body.rules : {};
+  const rules = sanitizeRulesVbt(body.rules && typeof body.rules === "object" ? body.rules : {});
 
   const { error } = await ctx.sb
     .from("coach_strength_rules")

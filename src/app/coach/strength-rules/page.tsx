@@ -19,6 +19,8 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
+import VbtMethodPicker from "@/components/trainer/VbtMethodPicker";
+import type { VbtDraft } from "@/lib/micropulse/vbtMethods";
 import {
   strengthForBlockGoal,
   strengthConfigForPhase,
@@ -159,6 +161,18 @@ export default function StrengthRulesPage() {
       const p = pruneBi(val); if (p) (cell as Record<string, unknown>)[field] = p; else delete (cell as Record<string, unknown>)[field];
       if (Object.keys(cell).length) phaseMap[phase] = cell; else delete phaseMap[phase];
       return { ...prev, phase: phaseMap };
+    });
+  };
+  // Bar-speed method per block (Weakley et al. 2021, Table 5). Kept as the coach left it; the PUT route
+  // and every reader sanitise it, so an incomplete pick is dropped rather than sent.
+  const setBlockVbt = (key: string, vbt: VbtDraft | undefined) => {
+    setSaved(false);
+    setRules((prev) => {
+      const block = { ...(prev.block ?? {}) };
+      const cell: CoachBlockRule = { ...(block[key] ?? {}) };
+      if (vbt) cell.vbt = vbt; else delete cell.vbt;
+      if (Object.keys(cell).length) block[key] = cell; else delete block[key];
+      return { ...prev, block };
     });
   };
   const resetBlockCell = (key: string) => { setSaved(false); setRules((p) => { const block = { ...(p.block ?? {}) }; delete block[key]; return { ...p, block }; }); };
@@ -393,6 +407,25 @@ export default function StrengthRulesPage() {
               })}
             </tbody>
           </table>
+        </div>
+        <div className="mt-4 border-t border-slate-100 pt-3">
+          <h3 className="text-[14px] font-bold text-slate-900">{isEN ? "Bar-speed method — main lifts" : "Hraðastýring — aðallyftur"}</h3>
+          <p className="text-[12px] text-slate-500">
+            {isEN
+              ? "Optional. Players see one plain rule on the block with the main lifts (squat, deadlift, hip thrust, cleans, loaded jumps), e.g. “Stop the set when bar speed drops 10% from your fastest rep.” Needs a bar-speed device; the app doesn't measure. Weakley et al. 2021, Table 5."
+              : "Valkvætt. Leikmenn sjá eina einfalda reglu á blokkinni með aðallyftunum (hnébeygja, réttstaða, mjaðmalyfta, clean, hopp með þyngd), t.d. „Hættu settinu þegar stangarhraðinn fellur um 10% frá hraðustu endurtekningunni.“ Þarf stangarhraðamæli; appið mælir ekki. Weakley o.fl. 2021, tafla 5."}
+          </p>
+          <div className="mt-2 divide-y divide-slate-100">
+            {BLOCK_GOALS.map((goal) => {
+              const key = `${goal}:${blockPhase}`;
+              return (
+                <div key={`vbt-${key}`} className="grid grid-cols-1 gap-2 py-2.5 sm:grid-cols-[150px_minmax(0,1fr)]">
+                  <span className="inline-flex items-center gap-2 text-[13px] font-bold text-slate-900"><span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: GOAL_COLOR[goal] }} />{isEN ? GOAL_LABEL[goal] : GOAL_IS[goal]}</span>
+                  <VbtMethodPicker idPrefix={`vbt-${goal}-${blockPhase}`} lang={isEN ? "EN" : "IS"} value={rules.block?.[key]?.vbt} onChange={(v) => setBlockVbt(key, v)} />
+                </div>
+              );
+            })}
+          </div>
         </div>
         <p className="mt-2 text-[12px] text-slate-500">{isEN ? "Traditional? Pick the lift days and mark the rest Off in Structure per MD day on the Daily session." : "Hefðbundið? Veldu lyftidagana og merktu hina „Off“ í Uppsetningu per MD-dag á Æfingu dagsins."}</p>
       </section>

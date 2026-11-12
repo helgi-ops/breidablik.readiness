@@ -20,6 +20,7 @@ import type { BlockGoalKey, SeasonPhaseKey, CoachBlockRule, StrengthMethodKey } 
 import { strengthForBlockGoal } from "./seasonPhaseStrength";
 import { traditionalLiftDayScale } from "./inSeasonStrengthMode";
 import { SUBPHASE_DOSE_SCALE, subPhaseInfo, type InSeasonSubPhaseKey } from "@/lib/micropulse/periodization/inSeasonSubPhase";
+import { sanitizeVbtPrescription, type VbtPrescription } from "@/lib/micropulse/vbtMethods";
 
 export type BlockEmphasis = {
   goalKey: BlockGoalKey;
@@ -38,6 +39,9 @@ export type BlockEmphasis = {
   /** Traditional weekly-volume equate: the per-lift-day set multiplier applied so the dropped Off
    *  days' volume is preserved on this lift day (>1 only on a traditional lift day with Off days). */
   volumeScale?: number;
+  /** The coach's bar-speed method for this block's main lifts (sanitised; absent = none). Weakley et al.
+   *  2021, Table 5. Instruction only — the app does not measure bar speed. */
+  vbt?: VbtPrescription;
 };
 
 const BLOCK_LABEL: Record<BlockGoalKey, Bi> = {
@@ -146,9 +150,11 @@ export function applyBlockToSession(
     : goalKey === "accum" ? { en: "In-season re-accumulation — hold volume, bias compound heavier to rebuild a strength base.", is: "Endur-uppsöfnun á tímabili — haltu magni, þyngdu grunnæfingar til að endurbyggja styrk-grunn." }
     : { en: "Strength–power — the day's default expression; keep bar speed high (velocity-loss cap).", is: "Styrkur–kraftur — sjálfgefin tjáning dagsins; haltu stangarhraða háum (hraðatap-þak)." };
 
+  const vbt = sanitizeVbtPrescription(override?.vbt);
   const blockEmphasis: BlockEmphasis = {
     goalKey, blockLabel: label, quality: scheme.quality, intent: scheme.scheme, applied, cite: CITE,
     pct1rm: scheme.pct1rm, methods: scheme.methods,
+    ...(vbt ? { vbt } : {}),
     ...(scaled > 0 ? { volumeScale: liftScale } : {}),
     ...(subPhase ? { subPhaseKey: subPhase } : {}),
     ...(subScaled > 0 ? { subPhaseScale: subScale } : {}),

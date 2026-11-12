@@ -17,8 +17,18 @@
  * re-applied on top (the caller passes adjust=null for a coach-sent session).
  */
 
-import type { StrengthSession } from "./types";
+import type { StrengthSession, SessionBlock, ExerciseCategory } from "./types";
 import { EXERCISES_BY_ID } from "./exerciseLibrary";
+import { formatVbtForPlayer, type VbtPlayerCard } from "@/lib/micropulse/vbtMethods";
+
+/** Blocks that get the coach's bar-speed method: the main barbell / loaded-jump lifts. Accessory,
+ *  upper-body, unilateral, isometric and corrective work keep their own dose. */
+const VBT_CATEGORIES = new Set<ExerciseCategory>(["COMPOUND_STRENGTH", "EXPLOSIVE_OLYMPIC", "BALLISTIC"]);
+
+/** True when a block holds at least one lift the bar-speed method applies to. */
+export function blockTakesVbt(b: Pick<SessionBlock, "exercises">): boolean {
+  return b.exercises.some((ex) => VBT_CATEGORIES.has(ex.category));
+}
 
 /** One item in the Today card structure (matches blockItemToRawString in PlayerClient). */
 export type TodayStructureItem = {
@@ -43,6 +53,9 @@ export type TodayStructureBlock = {
   /** The coach's authored block prescription (quality · %1RM · scheme · setups), pre-localized —
    *  surfaced on the first strength block so the player sees the rule the coach set. */
   prescription?: string;
+  /** The coach's bar-speed method (Weakley et al. 2021, Table 5), pre-localised — on the blocks with
+   *  main lifts only. PlayerClient renders it via `readVbtPlayerCard`. */
+  vbt?: VbtPlayerCard;
 };
 
 /**
@@ -78,11 +91,13 @@ export function strengthSessionToTodayStructure(
       }]
     : [];
 
+  const vbtCard = session.blockEmphasis?.vbt ? formatVbtForPlayer(session.blockEmphasis.vbt, lang) : null;
   const strengthBlocks: TodayStructureBlock[] = session.blocks
     .filter((b) => b.exercises.length > 0)
     .map((b) => ({
       block: (isIS ? b.titleIS : b.titleEN) || b.titleEN || b.titleIS || "Block",
       ...(b.structureId ? { structureId: b.structureId } : {}),
+      ...(vbtCard && blockTakesVbt(b) ? { vbt: vbtCard } : {}),
       items: b.exercises.map((ex) => {
         // The dose "method" line surfaces intensity (RPE / %1RM / %MVC) and any
         // cluster/VBT cue; the modification reason (why this was swapped) rides

@@ -8,6 +8,7 @@ import { EXERCISE_LIBRARY } from "@/lib/micropulse/strengthProgramming/exerciseL
 import { targetKgForPercent, type WorkingEntry } from "@/lib/micropulse/strengthProgramming/oneRmFromLogs";
 import { rpeAutoregulate } from "@/lib/micropulse/strengthProgramming/rpeAutoregulate";
 import { playerBlockLean } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
+import { formatVbtForCoach } from "@/lib/micropulse/vbtMethods";
 import type { BlockGoalKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { canonicalLift } from "@/lib/client/oneRepMax";
 
@@ -205,6 +206,11 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
               <span className="font-semibold text-[#7a5cc4]">{lang === "IS" ? be.quality.is : be.quality.en}</span>
             </div>
             <p className="mt-1 text-slate-700">{lang === "IS" ? be.applied.is : be.applied.en}</p>
+            {be.vbt && (
+              <p className="mt-1 text-slate-700">
+                <span className="font-semibold">{t("Bar speed (main lifts)", "Stangarhraði (aðallyftur)")}:</span> {formatVbtForCoach(be.vbt, lang === "IS" ? "IS" : "EN")}
+              </p>
+            )}
             {lean && (
               <p className="mt-1 flex items-start gap-1.5 text-slate-700">
                 <span className="mt-0.5 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-800">{t("His lean", "Hans halli")}</span>

@@ -181,3 +181,30 @@ describe("strengthSessionToTodayStructure", () => {
     }
   });
 });
+
+describe("strengthSessionToTodayStructure — coach's bar-speed method (Weakley et al. 2021, Table 5)", () => {
+  const blockEmphasis = {
+    goalKey: "transmute" as const,
+    blockLabel: { en: "Transmutation", is: "Umbreyting" },
+    quality: { en: "Strength–power", is: "Styrkur–kraftur" },
+    intent: { en: "3–5 × 3–5", is: "3–5 × 3–5" },
+    applied: { en: "", is: "" },
+    cite: "x",
+    vbt: { method: "fixed_set_vl_rep_cap" as const, velocityLossPct: 10, repCap: 5 },
+  };
+
+  it("rides only on blocks with main lifts, localised", () => {
+    const out = strengthSessionToTodayStructure(makeSession({ blockEmphasis }), "EN");
+    expect(out[0].vbt).toBeUndefined(); // movement prep
+    expect(out[1].vbt?.headline).toBe("Stop the set when bar speed drops 10% from your fastest rep."); // ballistic
+    const is = strengthSessionToTodayStructure(makeSession({ blockEmphasis }), "IS");
+    expect(is[1].vbt?.headline).toContain("stangarhraðinn fellur um 10%");
+  });
+
+  it("is absent without a coach rule", () => {
+    const { vbt: _drop, ...noVbt } = blockEmphasis;
+    void _drop;
+    const out = strengthSessionToTodayStructure(makeSession({ blockEmphasis: noVbt }), "EN");
+    expect(out.every((b) => b.vbt === undefined)).toBe(true);
+  });
+});

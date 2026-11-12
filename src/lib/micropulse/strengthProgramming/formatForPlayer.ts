@@ -8,6 +8,8 @@
  */
 
 import type { StrengthSession } from "./types";
+import { blockTakesVbt } from "./toTodayStructure";
+import { formatVbtForPlayer } from "@/lib/micropulse/vbtMethods";
 
 /**
  * Render a session as a player-facing text message.
@@ -50,6 +52,9 @@ export function formatSessionForPlayer(
         const short = note.length > 140 ? note.slice(0, 137) + "…" : note;
         lines.push(`  ${short}`);
       }
+      // The coach's bar-speed method replaces the per-lift "stop @ −N%v" on the blocks it applies to.
+      const vbtHere = session.blockEmphasis?.vbt && blockTakesVbt(block) ? session.blockEmphasis.vbt : null;
+      if (vbtHere) lines.push(`  ⏱ ${formatVbtForPlayer(vbtHere, lang).headline}`);
       for (const ex of block.exercises) {
         const name = lang === "IS" ? ex.nameIS : ex.nameEN;
         const doseBits: string[] = [
@@ -58,7 +63,7 @@ export function formatSessionForPlayer(
           `rest ${ex.dose.rest}`,
         ];
         if (ex.dose.intraRepRestSec) doseBits.push(`cluster ${ex.dose.intraRepRestSec}s`);
-        if (ex.dose.velocityLossCap) doseBits.push(`stop @ −${ex.dose.velocityLossCap}%v`);
+        if (ex.dose.velocityLossCap && !vbtHere) doseBits.push(`stop @ −${ex.dose.velocityLossCap}%v`);
         lines.push(`  • ${name}  —  ${doseBits.join(" · ")}`);
         if (ex.dose.cue) lines.push(`      → ${ex.dose.cue}`);
         if (ex.modificationReason) {

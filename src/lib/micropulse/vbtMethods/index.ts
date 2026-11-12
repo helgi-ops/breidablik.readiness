@@ -45,6 +45,10 @@ export interface VbtPrescription {
   totalReps?: number;
 }
 
+/** What an editor holds while the coach is still filling numbers in. Stored rules may carry a draft;
+ *  every reader runs `sanitizeVbtPrescription`, so an incomplete draft never reaches a player. */
+export type VbtDraft = { method: VbtMethodKey } & Partial<Omit<VbtPrescription, "method">>;
+
 export interface VbtMethod {
   key: VbtMethodKey;
   /** Row in Weakley et al. 2021, Table 5. */
@@ -343,7 +347,7 @@ export function vbtParamsFor(method: VbtMethodKey): VbtParamKey[] {
 }
 
 /** Params still needed for the closest-to-complete required group (empty = valid). For picker UIs. */
-export function missingVbtParams(p: Partial<VbtPrescription> & { method: VbtMethodKey }): VbtParamKey[] {
+export function missingVbtParams(p: VbtDraft): VbtParamKey[] {
   const m = VBT_METHOD_BY_KEY[p.method];
   let best: VbtParamKey[] | null = null;
   for (const group of m.requires) {
