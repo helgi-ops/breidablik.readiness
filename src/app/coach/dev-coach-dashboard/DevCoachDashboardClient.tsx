@@ -4312,8 +4312,9 @@ export default function CoachPage() {
           if (dropPct < 3) continue; // sub-3% is normal noise
           out[pid] = {
             dropPct: Number(dropPct.toFixed(1)),
-            todayKmh: Number((todayRow.mv * 3.6).toFixed(1)),
-            refKmh: Number((ref * 3.6).toFixed(1)),
+            // max_velocity / max_vel are stored in km/h — no conversion.
+            todayKmh: Number(todayRow.mv.toFixed(1)),
+            refKmh: Number(ref.toFixed(1)),
           };
         }
         if (alive) setPlayerSprintDrop(out);

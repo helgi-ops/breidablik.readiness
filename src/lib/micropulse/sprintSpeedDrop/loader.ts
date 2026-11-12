@@ -13,7 +13,7 @@ import {
  *
  * NOTE on column duality: API sync writes to `max_velocity`, CSV/PDF upload
  * writes to `max_vel`. We coalesce both via two columns then prefer max(.,.).
- * Both are in m/s.
+ * Both are in km/h (see `clampMaxVelocityKmh` in catapult/normalize.ts).
  */
 export async function loadSprintDrop(
   sb: SupabaseClient,

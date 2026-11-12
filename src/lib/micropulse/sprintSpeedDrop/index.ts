@@ -52,7 +52,8 @@ export type SprintBand =
 export type DailySprint = {
   /** ISO date YYYY-MM-DD. */
   date: string;
-  /** Session max velocity in m/s (Catapult convention). null = no session. */
+  /** Session max velocity in km/h, as stored in `max_velocity` / `max_vel` (the `Ms` suffix on these
+   *  field names is historical — the values were never m/s). null = no session. */
   maxVelocityMs: number | null;
   /** High-speed running distance in metres for the same session. Used to gate
    *  out low-volume days where the player simply didn't sprint. null = unknown. */
@@ -60,9 +61,9 @@ export type DailySprint = {
 };
 
 export type SprintDropPayload = {
-  /** Personal-reference max sprint speed (m/s). Top-3 mean over 28d. */
+  /** Personal-reference max sprint speed (km/h). Top-3 mean over 28d. */
   referenceMs: number | null;
-  /** Today's max sprint speed (m/s). null when no HSR-meaningful session today. */
+  /** Today's max sprint speed (km/h). null when no HSR-meaningful session today. */
   todayMs: number | null;
   /** (reference - today) / reference × 100. Negative = today exceeded reference. */
   dropPct: number | null;
@@ -279,16 +280,17 @@ export function buildSprintDropSignalFlag(payload: SprintDropPayload): SprintDro
   };
 }
 
-/** Convert m/s to km/h (rounded to 1 decimal) for coach-friendly display. */
-export function msToKmh(ms: number): number {
-  return Math.round(ms * 3.6 * 10) / 10;
+/** Round a stored speed (already km/h) to 1 decimal for display. It used to multiply by 3.6 as if the
+ *  value were m/s, which showed ~3.6× too fast ("102.9 vs 117.8 km/h"); the drop % was unaffected. */
+export function roundKmh(kmh: number): number {
+  return Math.round(kmh * 10) / 10;
 }
 
 /** Coach-facing one-liner suitable for Decision Summary. */
 export function formatSprintDropReason(flag: SprintDropDriverFlag): string {
   const drop = flag.dropPct.toFixed(1);
-  const ref = msToKmh(flag.referenceMs).toFixed(1);
-  const today = msToKmh(flag.todayMs).toFixed(1);
+  const ref = roundKmh(flag.referenceMs).toFixed(1);
+  const today = roundKmh(flag.todayMs).toFixed(1);
   if (flag.severity === "high") {
     return `Sprint speed −${drop}% vs personal peak (${today} vs ${ref} km/h) — high hamstring-injury risk band. Avoid maximal sprint exposure today.`;
   }

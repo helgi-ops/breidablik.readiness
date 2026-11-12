@@ -200,7 +200,7 @@ describe("derivePlayerLoadAcwrSignals (attention-row enrichment)", () => {
 });
 
 const sd = (over: Partial<SprintDropLite> = {}): SprintDropLite =>
-  ({ playerId: "p1", name: "Jón Þór", sustainedDropPct: 13.5, recentMeanMs: 8.0, referenceMs: 9.25, severity: "high", refSessionCount: 6, ...over });
+  ({ playerId: "p1", name: "Jón Þór", sustainedDropPct: 13.5, recentMeanMs: 28.8, referenceMs: 33.3, severity: "high", refSessionCount: 6, ...over });
 
 describe("deriveSprintDropTeamSignal (sustained max-velocity suppression)", () => {
   it("no flagged player → steady (loader hands over sustained ≥7% only, so [] = quiet)", () => {

@@ -1156,9 +1156,9 @@ export type SprintDropLite = {
   name: string;
   /** (reference − 3-session mean) / reference × 100. Positive = slower than peak. */
   sustainedDropPct: number;
-  /** Mean max-velocity of the last up-to-3 HSR sessions (m/s). */
+  /** Mean max-velocity of the last up-to-3 HSR sessions (km/h, as stored; `Ms` suffix is historical). */
   recentMeanMs: number;
-  /** Personal top-3 reference max-velocity (m/s). */
+  /** Personal top-3 reference max-velocity (km/h, as stored). */
   referenceMs: number;
   severity: "watch" | "high";
   /** HSR-meaningful sessions in the 28-day reference window (confidence gate). */
@@ -1169,7 +1169,8 @@ const SPRINT_DROP_HREF = "/coach/decel-intelligence";
 const SPRINT_DROP_LABEL: Bi = { en: "Sprint speed drop", is: "Sprettfall" };
 /** A "strong" drop (a real per-player chip) is the HIGH band (sustained > 12%). */
 const isStrongSprintDrop = (r: SprintDropLite) => r.severity === "high";
-const kmh = (ms: number) => Math.round(ms * 3.6 * 10) / 10;
+/** Stored speeds are already km/h — round only (a ×3.6 here once showed "117.8 km/h"). */
+const kmh = (v: number) => Math.round(v * 10) / 10;
 
 /**
  * Team-level sprint-speed-drop chip. Conservative like load_acwr/robustness: a
