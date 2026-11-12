@@ -12,11 +12,11 @@
  *
  * The visible tab set depends on mode (teams.team_type), mirroring the sidebar's
  * football-coach vs personal-trainer split:
- *   - football coach: Programmes · Isometric · Recovery
+ *   - football coach: Programmes · Isometric · Bar-speed methods · Recovery
  *     (a SHELF of reusable programme templates + read-only reference protocols. The team's live
  *      Custom programmes + today's session + build rules + LV all live in the separate
  *      Strength Training hub at /coach/strength-hub — this hub is content you pull from.)
- *   - personal trainer: Starter · Custom · Exercise library
+ *   - personal trainer: Starter · Custom · Exercise library · Bar-speed methods
  * PT-only tabs are never shown to a football coach and vice-versa.
  *
  * Deep-linkable: /coach/programme-library?tab=custom. Default = first tab for the
@@ -44,6 +44,7 @@ const Bodies = {
   programmes: nextDynamic(() => import("../templates/page"), { ssr: false, loading: TabLoading }),
   custom: nextDynamic(() => import("../custom-templates/page"), { ssr: false, loading: TabLoading }),
   isometric: nextDynamic(() => import("../isometric-protocols/page"), { ssr: false, loading: TabLoading }),
+  vbt: nextDynamic(() => import("../vbt-methods/page"), { ssr: false, loading: TabLoading }),
   recovery: nextDynamic(() => import("../recovery-protocols/page"), { ssr: false, loading: TabLoading }),
   starter: nextDynamic(() => import("../starter-templates/page"), { ssr: false, loading: TabLoading }),
   exercises: nextDynamic(() => import("../my-exercises/page"), { ssr: false, loading: TabLoading }),
@@ -55,6 +56,7 @@ const TAB_LABEL: Record<TabKey, { EN: string; IS: string }> = {
   programmes: { EN: "Programmes", IS: "Prógrömm" },
   custom: { EN: "Custom Training Programmes", IS: "Sérsniðin æfingakerfi" },
   isometric: { EN: "Isometric protocols", IS: "Ísómetrísk prótocol" },
+  vbt: { EN: "Bar-speed methods", IS: "Hraðastýrðar aðferðir" },
   recovery: { EN: "Recovery protocols", IS: "Recovery protocols" },
   starter: { EN: "Starter templates", IS: "Tilbúin kerfi" },
   exercises: { EN: "Exercise library", IS: "Æfingasafn" },
@@ -65,12 +67,12 @@ const TAB_LABEL: Record<TabKey, { EN: string; IS: string }> = {
 // coach pulls from / consults. The team's own live Custom programmes live in the Strength Training
 // hub (/coach/strength-hub?tab=custom), not here, since they drive delivery.
 // PT has no separate strength hub, so the PT set keeps Custom here (its strength home).
-const FOOTBALL_TABS: TabKey[] = ["programmes", "isometric", "recovery"];
-const PT_TABS: TabKey[] = ["starter", "custom", "exercises"];
+const FOOTBALL_TABS: TabKey[] = ["programmes", "isometric", "vbt", "recovery"];
+const PT_TABS: TabKey[] = ["starter", "custom", "exercises", "vbt"];
 
 // Read-only reference libraries (cited protocols) — a different kind of thing from the
 // authored programmes. Used to set off a "Reference" group in the tab bar.
-const REFERENCE_TABS = new Set<TabKey>(["isometric", "recovery"]);
+const REFERENCE_TABS = new Set<TabKey>(["isometric", "vbt", "recovery"]);
 
 function Hub() {
   const [lang] = useLang();
