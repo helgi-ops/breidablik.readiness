@@ -14,7 +14,7 @@ export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
 export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load" | "post_match_recovery"
   | "fitness_trend" | "body_comp" | "speed_zones" | "position_fitness" | "strength_1rm" | "strength_phase" | "wearable_recovery"
-  | "ccc_gate" | "load_acwr" | "sprint_speed_drop" | "stride_fatigue" | "session_enough" | "long_run_load";
+  | "ccc_gate" | "load_acwr" | "sprint_speed_drop" | "stride_fatigue" | "session_enough" | "long_run_load" | "near_max_exposure";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -1241,6 +1241,110 @@ export function derivePlayerSprintDropSignals(reads: SprintDropLite[]): PlayerSi
         href: SPRINT_DROP_HREF,
       },
     }));
+}
+
+// ── near-top-speed exposure → "no run at 90% of top speed for a while" signal ──
+/**
+ * One flagged player: more than 10 days ("due") or 21 days ("long_gap") since a GPS day at ≥90% of the
+ * player's own top speed. The loader hands over only flagged, currently-training outfield players who are
+ * not injured / in rehab (see `nearMaxExposure`). Speeds are km/h. Weakly anchored day marks: the research
+ * is weekly (Malone 2017) or per turnaround (Buchheit 2023); 10 / 21 days are the coach's choice on
+ * Breiðablik 2026 data — said in the copy.
+ */
+export type NearMaxLite = {
+  playerId: string;
+  name: string;
+  level: "due" | "long_gap";
+  /** Days since the last ≥90% day; null = none in the last 12 months of GPS. */
+  daysSince: number | null;
+  lastKmh: number | null;
+  /** The player's top speed and where it comes from. */
+  refKmh: number;
+  refSource: "gps_third_best" | "sprint_test";
+  /** 90% of top speed — the speed that resets the flag. */
+  targetKmh: number;
+  confidence: "high" | "moderate";
+};
+
+const NEAR_MAX_HREF = "/coach/hsr-intelligence";
+const NEAR_MAX_LABEL: Bi = { en: "Top speed due", is: "Tími á hámarkshraða" };
+const f1 = (v: number, lang: "en" | "is") => (lang === "is" ? v.toFixed(1).replace(".", ",") : v.toFixed(1));
+/** Longest gap first; "never" (null) leads. */
+const byGapDesc = (a: NearMaxLite, b: NearMaxLite) => (b.daysSince ?? Infinity) - (a.daysSince ?? Infinity);
+const NEAR_MAX_EVIDENCE: Bi = {
+  en: "Reaching near top speed regularly is associated with fewer hamstring injuries, and a sudden jump after a long gap raises risk (Malone 2017; Buchheit 2023; Edouard 2019). The 10- and 21-day marks are MicroPulse's, set on Breiðablik's 2026 data. Advisory, never the readiness colour.",
+  is: "Reglulegur sprettur nálægt hámarkshraða tengist færri aftanlærismeiðslum, og snögg aukning eftir langt hlé eykur áhættu (Malone 2017; Buchheit 2023; Edouard 2019). 10 og 21 dags mörkin eru val MicroPulse, stillt á gögn Breiðabliks 2026. Til leiðbeiningar, aldrei readiness-liturinn.",
+};
+
+/**
+ * A player whose sprint speed is in a sustained HIGH drop is being told to avoid flat-out sprints — don't
+ * also tell the coach a top-speed run is "due". The long-gap read stays (its advice is "build back in steps").
+ */
+export function dropDueWhereSprintSuppressed(reads: NearMaxLite[], sprintDrops: SprintDropLite[]): NearMaxLite[] {
+  const suppressed = new Set(sprintDrops.filter((r) => r.severity === "high").map((r) => r.playerId));
+  return reads.filter((r) => !(r.level === "due" && suppressed.has(r.playerId)));
+}
+
+/** Team chip: names everyone past 10 days, longest gap first. Watch only — a planning prompt, not an alarm. */
+export function deriveNearMaxTeamSignal(reads: NearMaxLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "near_max_exposure", level: "steady", label: NEAR_MAX_LABEL, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: NEAR_MAX_HREF };
+  if (reads.length === 0) return base;
+  const sorted = [...reads].sort(byGapDesc);
+  const shown = sorted.slice(0, 4);
+  const more = sorted.length - shown.length;
+  const list = (lang: "en" | "is") =>
+    shown.map((r) => `${r.name.split(" ")[0]} (${r.daysSince == null ? (lang === "is" ? "aldrei" : "never") : `${r.daysSince} d`})`).join(", ") + (more > 0 ? ` +${more}` : "");
+  const long = sorted.filter((r) => r.level === "long_gap").length;
+  const n = sorted.length;
+  return {
+    ...base, level: "watch",
+    confidence: sorted.every((r) => r.confidence === "high") ? "high" : "moderate",
+    why: {
+      en: [
+        `${n} ${n === 1 ? "hasn't" : "haven't"} reached 90% of top speed in 10+ days: ${list("en")}`,
+        ...(long > 0 ? [`${long} of them 21+ days — build back in steps, not straight to a flat-out sprint.`] : []),
+      ],
+      is: [
+        `${n} ${n === 1 ? "hefur" : "hafa"} ekki náð 90% af hámarkshraða í 10+ daga: ${list("is")}`,
+        ...(long > 0 ? [`${long} þeirra 21+ dag — byggðu upp í áföngum, ekki beint í hámarkssprett.`] : []),
+      ],
+    },
+    counterfactual: {
+      en: `One training run at 90% of a player's own top speed clears that player. ${NEAR_MAX_EVIDENCE.en}`,
+      is: `Einn sprettur á æfingu á 90% af eigin hámarkshraða hreinsar þann leikmann. ${NEAR_MAX_EVIDENCE.is}`,
+    },
+  };
+}
+
+/** Per-player pill for both marks (the coach asked for a flag on the player). */
+export function derivePlayerNearMaxSignals(reads: NearMaxLite[]): PlayerSignal[] {
+  return reads.map((r) => {
+    const src: Bi = r.refSource === "sprint_test"
+      ? { en: "sprint test", is: "sprettpróf" }
+      : { en: "3rd-fastest GPS day in 12 months", is: "3. hraðasti GPS dagur á 12 mánuðum" };
+    const last: Bi = r.daysSince == null
+      ? { en: `No run at 90% of top speed in the last 12 months of GPS (top speed ${f1(r.refKmh, "en")} km/h)`, is: `Enginn sprettur á 90% af hámarkshraða í GPS gögnum síðustu 12 mánaða (hámarkshraði ${f1(r.refKmh, "is")} km/klst)` }
+      : { en: `Last at 90% of top speed: ${r.daysSince} days ago${r.lastKmh != null ? ` (${f1(r.lastKmh, "en")} km/h that day)` : ""}`, is: `Síðast á 90% af hámarkshraða: fyrir ${r.daysSince} dögum${r.lastKmh != null ? ` (${f1(r.lastKmh, "is")} km/klst þann dag)` : ""}` };
+    const longGap = r.level === "long_gap";
+    return {
+      playerId: r.playerId,
+      signal: {
+        engine: "near_max_exposure" as const,
+        level: "watch" as SignalLevel,
+        label: NEAR_MAX_LABEL,
+        why: {
+          en: [last.en, ...(longGap ? ["Long gap. Build back in steps, not straight to a flat-out sprint."] : [])],
+          is: [last.is, ...(longGap ? ["Langt hlé. Byggðu upp í áföngum, ekki beint í hámarkssprett."] : [])],
+        },
+        confidence: r.confidence,
+        counterfactual: {
+          en: `A run at ${f1(r.targetKmh, "en")}+ km/h resets this: 90% of a ${f1(r.refKmh, "en")} km/h top speed (${src.en}). ${NEAR_MAX_EVIDENCE.en}`,
+          is: `Sprettur á ${f1(r.targetKmh, "is")}+ km/klst núllstillir þetta: 90% af ${f1(r.refKmh, "is")} km/klst hámarkshraða (${src.is}). ${NEAR_MAX_EVIDENCE.is}`,
+        },
+        href: NEAR_MAX_HREF,
+      },
+    };
+  });
 }
 
 // ── stride-length fatigue → "strides in long runs shortened vs own norm" signal ─

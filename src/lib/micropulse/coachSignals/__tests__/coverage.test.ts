@@ -10,9 +10,10 @@ import {
   deriveSprintDropTeamSignal, derivePlayerSprintDropSignals,
   deriveStrideFatigueTeamSignal, derivePlayerStrideFatigueSignals,
   deriveLongRunLoadTeamSignal, derivePlayerLongRunLoadSignals,
+  deriveNearMaxTeamSignal, derivePlayerNearMaxSignals, dropDueWhereSprintSuppressed,
   type FitnessTrendLite, type BodyCompLite, type SpeedZonesLite,
   type PositionFitnessLite, type CccGateReadLite, type LoadAcwrLite, type SprintDropLite,
-  type StrideFatigueLite, type LongRunLoadLite,
+  type StrideFatigueLite, type LongRunLoadLite, type NearMaxLite,
 } from "../index";
 
 const fit = (over: Partial<FitnessTrendLite> = {}): FitnessTrendLite =>
@@ -394,5 +395,51 @@ describe("derivePlayerLongRunLoadSignals (attention-row / Decision Summary enric
   it("confidence: ≥18 run days in 28 → high, else moderate", () => {
     expect(derivePlayerLongRunLoadSignals([lr({ chronicDays: 20 })])[0].signal.confidence).toBe("high");
     expect(derivePlayerLongRunLoadSignals([lr({ chronicDays: 15 })])[0].signal.confidence).toBe("moderate");
+  });
+});
+
+// ── near_max_exposure: days since a run at ≥90% of own top speed ────────────
+const nm = (over: Partial<NearMaxLite> = {}): NearMaxLite =>
+  ({ playerId: "p1", name: "Jón Þór", level: "due", daysSince: 12, lastKmh: 29.4, refKmh: 31.2, refSource: "gps_third_best", targetKmh: 28.1, confidence: "high", ...over });
+
+describe("deriveNearMaxTeamSignal (no run at 90% of top speed for a while)", () => {
+  it("nobody flagged → steady", () => {
+    expect(deriveNearMaxTeamSignal([]).level).toBe("steady");
+  });
+  it("names everyone past 10 days, longest gap first, as a watch", () => {
+    const s = deriveNearMaxTeamSignal([nm(), nm({ playerId: "p2", name: "Ari Már", level: "long_gap", daysSince: 23 })]);
+    expect(s.engine).toBe("near_max_exposure");
+    expect(s.level).toBe("watch");
+    expect(s.href).toBe("/coach/hsr-intelligence");
+    expect(s.why.en[0]).toBe("2 haven't reached 90% of top speed in 10+ days: Ari (23 d), Jón (12 d)");
+    expect(s.why.en[1]).toMatch(/1 of them 21\+ days/);
+    expect(s.why.is[0]).toBe("2 hafa ekki náð 90% af hámarkshraða í 10+ daga: Ari (23 d), Jón (12 d)");
+    expect(s.counterfactual?.en).toMatch(/Malone 2017; Buchheit 2023; Edouard 2019/);
+    expect(s.counterfactual?.en.toLowerCase()).toMatch(/never the readiness colour/);
+  });
+});
+
+describe("derivePlayerNearMaxSignals / dropDueWhereSprintSuppressed", () => {
+  it("a pill for both marks, with the numbers and what resets it", () => {
+    const rows = derivePlayerNearMaxSignals([nm(), nm({ playerId: "p2", level: "long_gap", daysSince: 23 })]);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].signal.level).toBe("watch");
+    expect(rows[0].signal.why.en).toEqual(["Last at 90% of top speed: 12 days ago (29.4 km/h that day)"]);
+    expect(rows[0].signal.why.is).toEqual(["Síðast á 90% af hámarkshraða: fyrir 12 dögum (29,4 km/klst þann dag)"]);
+    expect(rows[0].signal.counterfactual?.en).toMatch(/^A run at 28\.1\+ km\/h resets this: 90% of a 31\.2 km\/h top speed \(3rd-fastest GPS day in 12 months\)\./);
+    expect(rows[1].signal.why.en[1]).toMatch(/Long gap\. Build back in steps/);
+    expect(rows[0].signal.counterfactual?.en.toLowerCase()).toMatch(/never the readiness colour/);
+  });
+  it("no gendered wording and no jargon in the copy", () => {
+    const all = derivePlayerNearMaxSignals([nm(), nm({ daysSince: null, lastKmh: null, level: "long_gap", refSource: "sprint_test" })])
+      .flatMap((r) => [...r.signal.why.en, r.signal.counterfactual?.en ?? ""]).join(" ");
+    expect(all).not.toMatch(/\b(his|her|MSS|Vmax)\b/);
+    expect(all).toMatch(/sprint test/);
+  });
+  it("a sustained HIGH sprint-speed drop removes the 'due' prompt but keeps a long gap", () => {
+    const drops = [sd({ playerId: "p1", severity: "high" }), sd({ playerId: "p2", severity: "high" }), sd({ playerId: "p3", severity: "watch" })];
+    const kept = dropDueWhereSprintSuppressed(
+      [nm(), nm({ playerId: "p2", level: "long_gap", daysSince: 30 }), nm({ playerId: "p3" })], drops);
+    expect(kept.map((r) => r.playerId)).toEqual(["p2", "p3"]);
   });
 });
