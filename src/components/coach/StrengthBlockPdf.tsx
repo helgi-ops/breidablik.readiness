@@ -24,12 +24,12 @@ const METHOD_BLURB: Record<BlockMethod, Record<Lang, string>> = {
     IS: "Beinar settur — kláraðu allar settur af æfingu áður en þú ferð í næstu. Aðal-lyftur (skyggðar) þyngjast vikulega og reps lækka; aukaæfingar nota tvöfalda framvindu (bættu álagi þegar toppi reps er náð).",
   },
   contrast: {
-    EN: "Contrast pairs: one heavy strength lift (A1) straight into an explosive / plyometric (A2) with NO rest between — the heavy lift primes the nervous system so A2 is more powerful. Rest 2–5 min after the pair, then repeat (3–6 sets). Every A2 rep is maximal intent; stop the set if speed drops.",
-    IS: "Contrast pör: ein þung styrktarlyfta (A1) beint í sprengikraft / plyo (A2) ÁN hvíldar á milli — þunga lyftan kveikir á taugakerfinu svo A2 verður kraftmeiri. Hvíldu 2–5 mín eftir parið og endurtaktu (3–6 settur). Hver A2 rep með hámarks ásetningi; stoppaðu settuna ef hraðinn dettur.",
+    EN: "Contrast pairs: one heavy strength lift (A1) straight into an explosive / plyometric (A2) with NO rest between — the heavy lift may help A2 feel more powerful, and the pair trains strength and speed in one go. Rest 2–5 min after the pair, then repeat (3–6 sets). Every A2 rep is maximal intent; stop the set if speed drops.",
+    IS: "Contrast pör: ein þung styrktarlyfta (A1) beint í sprengikraft / plyo (A2) ÁN hvíldar á milli — þunga lyftan getur hjálpað A2 að verða kraftmeiri, og parið þjálfar styrk og hraða í einu. Hvíldu 2–5 mín eftir parið og endurtaktu (3–6 settur). Hver A2 rep með hámarks ásetningi; stoppaðu settuna ef hraðinn dettur.",
   },
   french_contrast: {
-    EN: "French Contrast complex: the four exercises run back-to-back as ONE set — A1 heavy → A2 plyometric → A3 loaded jump → A4 reactive — with only 15–30 sec between (post-activation potentiation). Rest 3–5 min after A4, then repeat (3–5 sets). The most complete and most demanding power method — it needs a strength base underneath it.",
-    IS: "French Contrast flétta: æfingarnar fjórar gerðar samfellt sem EIN setta — A1 þungt → A2 plyo → A3 hlaðið stökk → A4 viðbragð — með aðeins 15–30 sek á milli (post-activation potentiation). Hvíldu 3–5 mín eftir A4 og endurtaktu (3–5 settur). Fullkomnasta og kröfuharðasta kraftaðferðin — hún þarf styrktargrunn undir sér.",
+    EN: "French Contrast complex: the four exercises run back-to-back as ONE set — A1 heavy → A2 plyometric → A3 loaded jump → A4 reactive — with only 15–30 sec between; the idea is that the heavy lift helps the fast moves that follow. Rest 3–5 min after A4, then repeat (3–5 sets). The most complete and most demanding power method — it needs a strength base underneath it.",
+    IS: "French Contrast flétta: æfingarnar fjórar gerðar samfellt sem EIN setta — A1 þungt → A2 plyo → A3 hlaðið stökk → A4 viðbragð — með aðeins 15–30 sek á milli; hugmyndin er að þunga lyftan hjálpi hröðu æfingunum sem fylgja. Hvíldu 3–5 mín eftir A4 og endurtaktu (3–5 settur). Fullkomnasta og kröfuharðasta kraftaðferðin — hún þarf styrktargrunn undir sér.",
   },
 };
 
