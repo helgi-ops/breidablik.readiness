@@ -374,7 +374,7 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
   {
     id: "french-contrast",
     label: "French Contrast",
-    description: "4 exercises in sequence: heavy strength → plyometric → light-loaded power → assisted/accelerated plyometric. Optimal PAP.",
+    description: "4 exercises in sequence: heavy strength → plyometric → light-loaded power → assisted/accelerated plyometric.",
     blocks: [
       {
         block: "A. French Contrast",
@@ -399,7 +399,7 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
   {
     id: "contrast",
     label: "Contrast",
-    description: "Heavy strength set followed immediately by an explosive/plyometric. Uses PAP to boost power output.",
+    description: "Heavy strength set followed immediately by an explosive/plyometric. Trains strength and speed in one go.",
     blocks: [
       {
         block: "A. Contrast",

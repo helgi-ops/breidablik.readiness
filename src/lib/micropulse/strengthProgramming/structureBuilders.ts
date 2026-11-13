@@ -315,8 +315,8 @@ export function buildStructuredBlocks(key: StructureKey, md: MdContext): Session
       type: "FRENCH_CONTRAST",
       exercises: [heavy, plyo],
       structureId: sid,
-      noteEN: "Pair each round: heavy lift 3 reps → 30s rest → matched plyo 3-5 → 2-3 min. 3 rounds. Post-activation potentiation (Cormie 2011).",
-      noteIS: "Paraðu hvern hring: þung lyfta 3 endur → 30s → plyo 3-5 → 2-3 mín. 3 hringir. Post-activation potentiation (Cormie 2011).",
+      noteEN: "Pair each round: heavy lift 3 reps → 30s rest → matched plyo 3-5 → 2-3 min. 3 rounds. Strength and speed in one pair (Cormie 2011; Cormier 2020).",
+      noteIS: "Paraðu hvern hring: þung lyfta 3 endur → 30s → plyo 3-5 → 2-3 mín. 3 hringir. Styrkur og hraði í einu pari (Cormie 2011; Cormier 2020).",
     };
     return compact([prep, block, ...prevention]) as SessionBlock[];
   }

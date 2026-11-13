@@ -212,7 +212,7 @@ export const EXERCISE_DB: Record<string, ExerciseEntry> = {
         "Hámarks effort í hvert skipti",
         "Lóð fer létt upp — ekki toga hægt",
       ],
-      goal: "Auka max force og rate of force development (RFD). Virkjar posterior chain og undirbýr taugakerfið fyrir sprengikraft — neural primer + power builder.",
+      goal: "Auka max force og rate of force development (RFD). Virkjar posterior chain og byggir upp sprengikraft.",
     },
     EN: {
       execution: [
@@ -227,7 +227,7 @@ export const EXERCISE_DB: Record<string, ExerciseEntry> = {
         "Maximum effort every rep",
         "Bar should feel light going up — don't pull slow",
       ],
-      goal: "Increase max force and rate of force development (RFD). Activates the posterior chain and primes the nervous system for explosive output — neural primer + power builder.",
+      goal: "Increase max force and rate of force development (RFD). Activates the posterior chain and builds explosive power.",
     },
   },
 
