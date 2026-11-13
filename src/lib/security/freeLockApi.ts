@@ -62,6 +62,7 @@ export const FREE_BLOCKED_READ_PATHS = [
   "/api/coach/unfamiliar-load",
   "/api/coach/player/:id/trend-forecast",
   "/api/coach/player/:id/robustness-watch",
+  "/api/coach/goal-plans/:id/preview",
 ] as const;
 
 const TABLE = [

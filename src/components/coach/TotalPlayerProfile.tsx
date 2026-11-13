@@ -20,6 +20,7 @@ import MovementScreenTpaCard from "@/components/coach/MovementScreenTpaCard";
 import IndividualisedPlanCard from "@/components/coach/IndividualisedPlanCard";
 import UnifiedDeficitLedgerCard from "@/components/coach/UnifiedDeficitLedgerCard";
 import StrengthPlanCard from "@/components/coach/StrengthPlanCard";
+import GoalPlanPreviewCard from "@/components/coach/GoalPlanPreviewCard";
 import { QUALITY_BY_ID, type AthleteProfile, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { classifyFitness, fitnessBenchmarkFor, MAS_BENCHMARK, BAND_LABEL, type FitnessClassification } from "@/lib/micropulse/load/fitnessTestBenchmarks";
 import type { PlayerAnalysis } from "@/lib/micropulse/playerAnalysis";
@@ -744,6 +745,10 @@ export default function TotalPlayerProfile({ onPlayerChange }: { onPlayerChange?
               strength/power/asymmetry deficits → emphasis + VBT targeting. Silent
               until a strength-feeding deficit exists. Never the readiness colour. */}
           <StrengthPlanCard playerId={sel} isEN={lang !== "IS"} />
+
+          {/* Goal plans (lota 1): coach-only preview of the 8-week add-on MicroPulse would suggest for top speed /
+              acceleration / braking / vertical jump. Nothing is saved or sent. Never the readiness colour. */}
+          <GoalPlanPreviewCard key={sel} playerId={sel} isEN={lang !== "IS"} />
 
           {/* Coverage + drill-downs */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">

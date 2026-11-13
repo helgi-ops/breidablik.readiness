@@ -66,13 +66,13 @@ export const SPEED_REFS: Record<SpeedRefKey, SpeedRef> = {
   moran2021: { key: "moran2021", short: "Moran 2021", cite: "Moran J et al. Effects of vertically and horizontally orientated plyometric training on physical performance: a meta-analytical comparison. Sports Med 2021.", verifiedFrom: "abstract" },
   loturco2016: { key: "loturco2016", short: "Loturco 2016", cite: "Loturco I et al. Jump squat is more related to sprinting and jumping abilities than Olympic push press; training study in elite U-20 soccer players. PLoS One 2016.", verifiedFrom: "abstract" },
   paradisis2006: { key: "paradisis2006", short: "Paradisis 2006", cite: "Paradisis GP, Cooke CB. The effects of sprint running training on sloping surfaces. J Strength Cond Res 2006;20(4):767–777.", verifiedFrom: "abstract" },
-  alcaraz2018: { key: "alcaraz2018", short: "Alcaraz 2018", cite: "Alcaraz PE et al. The effectiveness of resisted sled training (RST) for sprint performance: a systematic review and meta-analysis. Sports Med 2018. doi:10.1007/s40279-018-0947-8", verifiedFrom: "abstract" },
+  alcaraz2018: { key: "alcaraz2018", short: "Alcaraz 2018", cite: "Alcaraz PE, Carlos-Vivas J, Oponjuru BO, Martínez-Rodríguez A. The effectiveness of resisted sled training (RST) for sprint performance: a systematic review and meta-analysis. Sports Med 2018;48:2143–2165. doi:10.1007/s40279-018-0947-8", verifiedFrom: "full_text" },
   myrvang2024: { key: "myrvang2024", short: "Myrvang 2024", cite: "Myrvang S, van den Tillaar R. The longitudinal effects of resisted and assisted sprint training on sprint kinematics, acceleration, and maximum velocity: a systematic review and meta-analysis. Sports Med Open 2024;10:110.", verifiedFrom: "full_text" },
   ishoi2018: { key: "ishoi2018", short: "Ishøi 2018", cite: "Ishøi L et al. Effects of the Nordic Hamstring exercise on sprint capacity in male football players: a randomized controlled trial. J Sports Sci 2018. doi:10.1080/02640414.2017.1409609", verifiedFrom: "abstract" },
   lin2026: { key: "lin2026", short: "Lin 2026", cite: "Lin et al. Acute and long-term effects of hip thrust training on athletic performance: a systematic review and meta-analysis. PeerJ 2026.", verifiedFrom: "abstract" },
   haugen2015: { key: "haugen2015", short: "Haugen 2015", cite: "Haugen T et al. Sprint conditioning of junior soccer players: effects of training intensity and technique supervision. PLoS One 2015;10(3):e0121827.", verifiedFrom: "abstract" },
   ronnestad2011: { key: "ronnestad2011", short: "Rønnestad 2011", cite: "Rønnestad BR, Nymark BS, Raastad T. Effects of in-season strength maintenance training frequency in professional soccer players. J Strength Cond Res 2011.", verifiedFrom: "abstract" },
-  seitz2014: { key: "seitz2014", short: "Seitz 2014", cite: "Seitz LB et al. Increases in lower-body strength transfer positively to sprint performance: a systematic review with meta-analysis. Sports Med 2014. doi:10.1007/s40279-014-0227-1 (re-analysed in Sports Med 2022: effect sizes over-estimated).", verifiedFrom: "abstract" },
+  seitz2014: { key: "seitz2014", short: "Seitz 2014", cite: "Seitz LB, Reyes A, Tran TT, Sáez de Villarreal E, Haff GG. Increases in lower-body strength transfer positively to sprint performance: a systematic review with meta-analysis. Sports Med 2014;44:1693–1702. doi:10.1007/s40279-014-0227-1 (re-analysed in Sports Med 2022: effect sizes over-estimated).", verifiedFrom: "full_text" },
   weyand2000: { key: "weyand2000", short: "Weyand 2000", cite: "Weyand PG et al. Faster top running speeds are achieved with greater ground forces not more rapid leg movements. J Appl Physiol 2000;89.", verifiedFrom: "abstract" },
   malone2017: { key: "malone2017", short: "Malone 2017", cite: "Malone S et al. High chronic training loads and exposure to bouts of maximal velocity running reduce injury risk in elite Gaelic football. J Sci Med Sport 2017;20:250–254.", verifiedFrom: "abstract" },
   buchheit2023: { key: "buchheit2023", short: "Buchheit 2023", cite: "Buchheit M, Settembre M, Hader K, McHugh D. Exposures to near-to-maximal speed running bouts during different turnarounds in elite football: association with match hamstring injuries. Biol Sport 2023.", verifiedFrom: "abstract" },
@@ -534,8 +534,8 @@ export const SPEED_METHODS: SpeedMethod[] = [
     key: "resisted_sled",
     label: { en: "Sled sprints", is: "Sleðasprettir" },
     summary: {
-      en: "Sprints pulling a sled or wearing a weighted vest. They improve the start, not top speed.",
-      is: "Sprettir með sleða eða þyngdarvesti. Þeir bæta startið, ekki hámarkshraða.",
+      en: "Sprints pulling a sled or wearing a weighted vest. They help the start about as much as the same sprints without a sled, and do not raise top speed.",
+      is: "Sprettir með sleða eða þyngdarvesti. Þeir hjálpa startinu álíka mikið og sömu sprettir án sleða og hækka ekki hámarkshraða.",
     },
     evidence: "accel",
     dose: {
@@ -546,15 +546,15 @@ export const SPEED_METHODS: SpeedMethod[] = [
       {
         ref: "alcaraz2018",
         text: {
-          en: "Meta-analysis: sled training improved the start (effect 0.61) but not the top-speed phase (0.27, not significant).",
-          is: "Safngreining: sleðaþjálfun bætti startið (áhrif 0,61) en ekki hámarkshraðafasann (0,27, ómarktækt).",
+          en: "Meta-analysis (13 studies): the first 10 m got 2.3% faster (effect 0.61) and top speed did not change clearly, but against the same sprints without a sled the difference was trivial (0.09, not significant).",
+          is: "Safngreining (13 rannsóknir): fyrstu 10 m urðu 2,3% hraðari (áhrif 0,61) og hámarkshraði breyttist ekki skýrt, en miðað við sömu spretti án sleða var munurinn hverfandi (0,09, ómarktækt).",
         },
       },
       {
         ref: "myrvang2024",
         text: {
-          en: "21 studies: sled training beat normal sprinting only over 10 m; no difference in top speed.",
-          is: "21 rannsókn: sleði var betri en venjulegir sprettir aðeins á 10 m; enginn munur á hámarkshraða.",
+          en: "21 studies of resisted and assisted sprints (sled, vest, parachute, slope, towing): resisted sprints had a small edge over normal sprinting at 10 m only; none at 20 m or in top speed.",
+          is: "21 rannsókn á sprettum með mótstöðu og aðstoð (sleði, vesti, fallhlíf, brekka, dráttur): mótstaða gaf lítið forskot á venjulega spretti aðeins á 10 m; ekkert á 20 m né í hámarkshraða.",
         },
       },
     ],
