@@ -7,7 +7,35 @@ export type ScheduledSlot = {
   slotKey: string;
   label: string;
   localTime: string;
+  /** Minutes since the slot's time (negative if the cron fired early). */
+  minutesSinceSlot: number;
 };
+
+// ─── Spread the morning push ─────────────────────────────────────────────
+// On 2026-11-11 and 2026-11-13 about 50 check-in pushes left at 09:00 in the same
+// minute; players opened the app together and the database stalled for 2–3 minutes
+// (statement and auth timeouts), so Today failed to load for some of them.
+// The 09:00 slot now goes out in five shares, 2 minutes apart (09:00–09:08), one cron
+// tick each (vercel.json). A player always lands in the same share. Each tick sends
+// every share that is due by then, so a late or skipped tick is caught up by the next;
+// checkin_notification_log stops anyone getting it twice.
+
+/** Slot times (local) whose push is spread. Other slots have one cron tick, so they send at once. */
+export const SPREAD_SLOT_TIMES: ReadonlySet<string> = new Set(["09:00"]);
+export const SPREAD_WINDOW_MINUTES = 10;
+export const SPREAD_STEP_MINUTES = 2;
+
+/** Minutes after the slot time this player's push is due: 0, 2, 4, 6 or 8. */
+export function spreadOffsetMinutes(playerId: string): number {
+  const shares = SPREAD_WINDOW_MINUTES / SPREAD_STEP_MINUTES;
+  const n = Number.parseInt(playerId.replace(/-/g, "").slice(0, 8), 16);
+  return (Number.isFinite(n) ? n % shares : 0) * SPREAD_STEP_MINUTES;
+}
+
+/** Is this player's share due at this point of a spread slot? */
+export function isDueInSpread(playerId: string, minutesSinceSlot: number): boolean {
+  return spreadOffsetMinutes(playerId) <= minutesSinceSlot;
+}
 
 const WEEKDAY_LABELS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
@@ -133,6 +161,7 @@ export function getCurrentScheduledSlot(args?: {
         slotKey: `${dayLabel}_${hhmm.replace(":", "")}`,
         label: `${dayLabel.toUpperCase()} ${hhmm}`,
         localTime: hhmm,
+        minutesSinceSlot: minuteOfDay - slotMinute,
       };
     }
   }

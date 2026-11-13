@@ -6,9 +6,11 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
+  SPREAD_SLOT_TIMES,
   getCurrentScheduledSlot,
   getDateKeyInTimezone,
   getOperationalTimezone,
+  isDueInSpread,
   type ReminderProfile,
 } from "@/lib/notifications/schedule";
 import { sendReminderToMissingPlayers } from "@/lib/notifications/sendReminder";
@@ -174,12 +176,15 @@ export async function POST(req: Request) {
 
     for (const { profile, checkinSlot, rpeSlot } of profileSlots) {
       if (checkinSlot) {
+        // 09:00 goes out in shares over 10 minutes (see SPREAD_SLOT_TIMES in schedule.ts).
+        const spread = SPREAD_SLOT_TIMES.has(checkinSlot.localTime);
         const result = await sendReminderToMissingPlayers(sb, {
           reminderType: checkinSlot.reminderType,
           scheduledSlot: checkinSlot.slotKey,
           dateKey,
           timeZone,
           profile,
+          isDue: spread ? (playerId) => isDueInSpread(playerId, checkinSlot.minutesSinceSlot) : undefined,
         });
         checkinResults.push({
           profile,

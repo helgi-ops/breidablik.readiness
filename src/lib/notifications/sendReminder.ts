@@ -143,6 +143,8 @@ export async function sendReminderToMissingPlayers(
     dateKey: string;
     timeZone: string;
     profile?: ReminderProfile;
+    /** Spread slots only: players whose share is not due yet are left for a later tick. */
+    isDue?: (playerId: string) => boolean;
   }
 ) {
   const missing = await getMissingPlayersForToday(sb, {
@@ -150,7 +152,7 @@ export async function sendReminderToMissingPlayers(
     timeZone: args.timeZone,
     profile: args.profile,
   });
-  const missingPlayers = missing.players;
+  const missingPlayers = args.isDue ? missing.players.filter((p) => args.isDue!(p.id)) : missing.players;
 
   const subscriptionsByPlayer = await getLatestActiveSubscriptionByPlayer(
     sb,
