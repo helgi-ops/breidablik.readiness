@@ -4377,6 +4377,10 @@ export default function PlayerClient() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
+  // Bumped to re-run the Today load (the "Try again" button, and one automatic retry
+  // when the load fails — e.g. a short database overload right after a reminder push).
+  const [reloadKey, setReloadKey] = useState(0);
+  const autoRetriedRef = useRef(false);
 
   const [profile, setProfile] = useState<ProfileRow | null>(null);
 
@@ -6476,9 +6480,17 @@ export default function PlayerClient() {
           loadSessionRpeHistory(),
           loadSessionRpeStatus(),
         ]);
+        autoRetriedRef.current = false;
       } catch (e: any) {
         console.error("PlayerPage load error:", e);
         setError(e?.message ?? "Óþekkt villa.");
+        // One quiet retry: most failures here are a brief overload (statement
+        // timeouts), and the page used to fall through to the "no wellness data"
+        // card even when the player HAD checked in.
+        if (!autoRetriedRef.current) {
+          autoRetriedRef.current = true;
+          setTimeout(() => setReloadKey((k) => k + 1), 3000);
+        }
       } finally {
         setLoading(false);
       }
@@ -6488,7 +6500,7 @@ export default function PlayerClient() {
     // NB: `lang` is intentionally NOT a dependency — it's read via langRef inside,
     // so toggling language re-renders (localized strings update) WITHOUT re-running
     // this whole fetch chain. Data does not depend on language.
-  }, [supabase, day, adminConfigSnapshot]);
+  }, [supabase, day, adminConfigSnapshot, reloadKey]);
 
   // App icon badge: show a dot when today's check-in is missing, clear it once done.
   // Works on iOS 16.4+ PWA, Android Chrome, desktop Chromium.
@@ -6906,6 +6918,28 @@ export default function PlayerClient() {
             </div>
             <div className="text-base font-semibold text-zinc-900">{isRejectedCopy.title}</div>
             <div className="mt-2 text-sm text-zinc-500 leading-relaxed">{isRejectedCopy.body}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!plan && error) {
+    // The load failed (not "no check-in"): say so honestly and offer a retry, instead
+    // of telling a player who already checked in that they haven't.
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-start justify-center pt-16 px-4">
+        <div className="w-full max-w-sm">
+          <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm p-6 text-center">
+            <div className="text-base font-semibold text-zinc-900">{t.misc.loadErrTitle}</div>
+            <div className="mt-2 text-sm text-zinc-500 leading-relaxed">{t.misc.loadErrBody}</div>
+            <button
+              type="button"
+              onClick={() => setReloadKey((k) => k + 1)}
+              className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white hover:bg-zinc-700 transition-colors"
+            >
+              {t.misc.loadErrBtn}
+            </button>
           </div>
         </div>
       </div>

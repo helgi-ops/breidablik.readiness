@@ -131,6 +131,9 @@ export const PLAYER_COPY = {
       noDataTitle: "Engar líðansgögn í dag",
       noDataBody: "Þú hefur ekki skráð líðan þína í dag enn. Skráðu líðan til að fá dagleg ráð og þjálfunaráætlun.",
       noDataBtn: "Skrá líðan núna",
+      loadErrTitle: "Ekki tókst að hlaða deginum",
+      loadErrBody: "Kerfið er upptekið í augnablikinu. Þetta tengist ekki innskráningunni þinni. Reyndu aftur eftir smá stund.",
+      loadErrBtn: "Reyna aftur",
     },
     postTraining: {
       kicker: "Eftir æfingu",
@@ -303,6 +306,9 @@ export const PLAYER_COPY = {
       noDataTitle: "No wellness data today",
       noDataBody: "You haven't submitted your wellness today. Submit to receive daily guidance and your training plan.",
       noDataBtn: "Submit wellness now",
+      loadErrTitle: "Couldn't load today",
+      loadErrBody: "The system is busy right now. This has nothing to do with your check-in. Try again in a moment.",
+      loadErrBtn: "Try again",
     },
     postTraining: {
       kicker: "After session",
