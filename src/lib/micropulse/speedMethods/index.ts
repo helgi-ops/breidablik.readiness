@@ -47,7 +47,9 @@ export type SpeedRefKey =
   | "buchheit2023"
   | "wang2026"
   | "oliver2024"
-  | "gomezpiqueras2024";
+  | "gomezpiqueras2024"
+  | "cormier2020"
+  | "thapa2024";
 
 export type SpeedRef = { key: SpeedRefKey; short: string; cite: string; verifiedFrom: VerifiedFrom };
 
@@ -75,6 +77,8 @@ export const SPEED_REFS: Record<SpeedRefKey, SpeedRef> = {
   wang2026: { key: "wang2026", short: "Wang 2026", cite: "Wang Y, Zhang M, Luo Z. Effects of various exercise interventions on sprint performance and jump height in soccer players: a systematic review and network meta-analysis. J Sports Sci Med 2026;25:405–445. doi:10.52082/jssm.2026.405", verifiedFrom: "full_text" },
   oliver2024: { key: "oliver2024", short: "Oliver 2024", cite: "Oliver JL, Ramachandran AK, Singh U, Ramirez-Campillo R, Lloyd RS. The effects of strength, plyometric and combined training on strength, power and speed characteristics in high-level, highly trained male youth soccer players: a systematic review and meta-analysis. Sports Med 2024;54:623–643. doi:10.1007/s40279-023-01944-8", verifiedFrom: "full_text" },
   gomezpiqueras2024: { key: "gomezpiqueras2024", short: "Gómez-Piqueras 2024", cite: "Gómez-Piqueras P, Alcaraz PE. If you want to prevent hamstring injuries in soccer, run fast: a narrative review about practical considerations of sprint training. Sports 2024;12:134. doi:10.3390/sports12050134 (narrative review plus one professional club's own practice, not a trial).", verifiedFrom: "full_text" },
+  cormier2020: { key: "cormier2020", short: "Cormier 2020", cite: "Cormier P, Freitas TT, Rubio-Arias JÁ, Alcaraz PE. Complex and contrast training: does strength and power training sequence affect performance-based adaptations in team sports? A systematic review and meta-analysis. J Strength Cond Res 2020;34(5):1461–1479.", verifiedFrom: "full_text" },
+  thapa2024: { key: "thapa2024", short: "Thapa 2024", cite: "Thapa RK, Weldon A, Freitas TT, Boullosa D, Afonso J, Granacher U, Ramirez-Campillo R. What do we know about complex-contrast training? A systematic scoping review. Sports Med Open 2024;10:104.", verifiedFrom: "full_text" },
 };
 
 // ─── Methods ──────────────────────────────────────────────────────────────
@@ -98,6 +102,7 @@ export type SpeedMethodKey =
   | "heavy_strength"
   | "plyometrics"
   | "jump_squat"
+  | "contrast_pairs"
   | "uphill_downhill"
   | "accel_sprints"
   | "resisted_sled"
@@ -227,6 +232,13 @@ export const SPEED_METHODS: SpeedMethod[] = [
         text: {
           en: "Programmes that combined sprinting with strength or power work improved sprints of 30 m and longer.",
           is: "Prógrömm sem sameinuðu spretti og styrk eða kraft bættu spretti á 30 m og lengra.",
+        },
+      },
+      {
+        ref: "cormier2020",
+        text: {
+          en: "Team sports, all heavy lifts first and all fast work after: sprint times improved moderately more than in control groups (effect 0.51). Studies that paired the lift with sprints, not only jumps, may give more speed.",
+          is: "Hópíþróttir, allar þungu lyfturnar fyrst og öll hraða vinnan á eftir: sprettir bötnuðu miðlungs meira en hjá viðmiðunarhópum (áhrif 0,51). Rannsóknir sem pöruðu lyftuna við spretti, ekki bara hopp, gætu gefið meiri hraða.",
         },
       },
     ],
@@ -391,6 +403,64 @@ export const SPEED_METHODS: SpeedMethod[] = [
     caution: {
       en: "Measured over 5–30 m from a standing start, not top speed alone.",
       is: "Mælt á 5–30 m frá kyrrstöðu, ekki hámarkshraði einn og sér.",
+    },
+  },
+  {
+    key: "contrast_pairs",
+    label: { en: "Heavy lift paired with a jump or sprint", is: "Þung lyfta pöruð við hopp eða sprett" },
+    summary: {
+      en: "A heavy lift, then a fast move, set by set (in MicroPulse: Contrast and French Contrast). Improved 10–40 m sprints in team sports; pair it with a sprint, not only a jump, if speed is the goal.",
+      is: "Þung lyfta og svo hröð æfing, sett fyrir sett (í MicroPulse: Contrast og French Contrast). Bætti 10–40 m spretti í hópíþróttum; paraðu við sprett, ekki bara hopp, ef markmiðið er hraði.",
+    },
+    evidence: "some",
+    dose: {
+      en: "Heavy lift under 85% of max · fast move straight after or up to 3 min later · 3 sets · 2× a week · longer than 6 weeks",
+      is: "Þung lyfta undir 85% af hámarki · hröð æfing strax eða allt að 3 mín síðar · 3 sett · 2× í viku · lengur en 6 vikur",
+    },
+    findings: [
+      {
+        ref: "cormier2020",
+        text: {
+          en: "27 studies in team sports. Heavy then fast, set by set: sprint times improved moderately more than in control groups (effect 0.69), about 4.7% on average. All heavy first, then all fast: also moderate (0.51), about 1.3%. The two orders did not differ significantly.",
+          is: "27 rannsóknir í hópíþróttum. Þungt og svo hratt, sett fyrir sett: sprettir bötnuðu miðlungs meira en hjá viðmiðunarhópum (áhrif 0,69), um 4,7% að meðaltali. Allt þungt fyrst, svo allt hratt: líka miðlungs (0,51), um 1,3%. Ekki marktækur munur á röðunum tveimur.",
+        },
+      },
+      {
+        ref: "cormier2020",
+        text: {
+          en: "Set-by-set pairs did better with a heavy lift under 85% of max, programmes longer than 6 weeks and elite players.",
+          is: "Pörun sett fyrir sett gaf meira með þungu lyftunni undir 85% af hámarki, prógrömmum lengri en 6 vikur og hjá afreksleikmönnum.",
+        },
+      },
+      {
+        ref: "cormier2020",
+        text: {
+          en: "In one study of highly trained footballers (Kobal 2017) players got slower after both orders when the programme had no sprinting in it.",
+          is: "Í einni rannsókn á vel þjálfuðum fótboltamönnum (Kobal 2017) urðu leikmenn hægari eftir báðar raðirnar þegar engir sprettir voru í prógramminu.",
+        },
+      },
+      {
+        ref: "thapa2024",
+        text: {
+          en: "68 studies, 1,821 people: the evidence is of low certainty. No study measured on the day whether the heavy lift actually made the fast move stronger, so that idea is not shown to explain the gains.",
+          is: "68 rannsóknir, 1.821 þátttakandi: vissan er lítil. Engin rannsókn mældi á æfingunni hvort þunga lyftan gerði hröðu æfinguna í raun sterkari, svo ekki er sýnt að sú hugmynd skýri bætinguna.",
+        },
+      },
+      {
+        ref: "thapa2024",
+        text: {
+          en: "The usual set-up: 2 sessions a week at least 48 h apart, heavy lifts at 85% of max or more, 3 sets, 6–8 weeks. Rest between the lift and the fast move ranged from none to 8 minutes; 3 minutes was most common.",
+          is: "Algengasta uppsetning: 2 æfingar á viku með minnst 48 klst á milli, þungar lyftur á 85% af hámarki eða meira, 3 sett, 6–8 vikur. Hvíld milli lyftu og hraðrar æfingar var frá engri upp í 8 mínútur; 3 mínútur voru algengastar.",
+        },
+      },
+    ],
+    howTo: [
+      { en: "Pick a fast move that looks like the lift: squat → jump, hip lift → bound, or squat → short sprint.", is: "Veldu hraða æfingu sem líkist lyftunni: hnébeygja → stökk, mjaðmalyfta → hopp fram, eða hnébeygja → stuttur sprettur." },
+      { en: "Every fast rep at full effort; if it slows, rest longer or stop.", is: "Hver hröð endurtekning á fullu; ef hún hægist, hvíldu lengur eða hættu." },
+    ],
+    caution: {
+      en: "Sprints were timed from a standing start, so this is the start and top speed together. Doing the fast move before the heavy lift has not been studied enough to compare. Research papers call MicroPulse's set-by-set Contrast \"complex\" training.",
+      is: "Sprettir voru tímamældir frá kyrrstöðu, svo þetta er start og hámarkshraði saman. Hröð æfing á undan þungu lyftunni hefur ekki verið rannsökuð nóg til samanburðar. Í rannsóknum heitir Contrast í MicroPulse (sett fyrir sett) „complex“ þjálfun.",
     },
   },
   {

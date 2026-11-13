@@ -12,14 +12,14 @@
 export const STRUCTURE_HOWTO: Record<string, string[]> = {
   "french-contrast": [
     "Do the four exercises back-to-back as one set: A1 heavy → A2 plyometric → A3 light-loaded power → A4 assisted/accelerated plyometric.",
-    "Only 15–30 sec between exercises — just enough to walk to the next station. The short gap is what makes the muscle fire harder (post-activation potentiation).",
+    "Only 15–30 sec between exercises — just enough to walk to the next station. The idea is that the heavy lift helps the fast moves that follow.",
     "After A4, rest 3–5 min fully. That long rest is essential — it lets you repeat at full quality.",
     "Repeat for 3–5 sets. Keep every rep explosive; stop the set if bar/jump speed drops.",
   ],
   contrast: [
     "Pair one heavy strength lift (A1) with one explosive/plyometric (A2).",
     "Do A1 for 1–5 heavy reps, then go straight into A2 for 3–6 fast reps — no rest between them.",
-    "Rest 2–5 min after the pair, then repeat. The heavy lift primes the nervous system so A2 is more powerful.",
+    "Rest 2–5 min after the pair, then repeat. The heavy lift may help A2 feel more powerful, and the pair trains strength and speed in one go.",
     "3–6 sets total. Every A2 rep must be maximal intent — if it slows, rest longer or stop.",
   ],
   regular: [

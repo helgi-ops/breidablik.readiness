@@ -60,6 +60,29 @@ daily decisions.
 Wang 2026) do not show sprint training alone clearly beating normal training over 30–40 m; the evidence is
 strongest when strength goes with it. The verdict (sprints + strength together) is unchanged.
 
+### Added 2026-11-13 (third batch: heavy-lift pairs, both read in full)
+
+- **Cormier 2020** (J Strength Cond Res, meta-analysis, 27 studies in team sports). Set-by-set heavy → fast
+  ("complex" in the paper) improved sprint vs control by a moderate amount (SMD −0.69, mean −4.7%); all heavy
+  first, then all fast ("contrast" in the paper) also moderate (−0.51, −1.3%); no significant difference
+  between the two orders. Set-by-set did better with the heavy lift <85% 1RM, >6 weeks and elite players.
+  Kobal 2017 (in the review): highly trained footballers got slower after both when there was no sprinting.
+  Sprints were 10–40 m from standing.
+- **Thapa 2024** (Sports Med Open, scoping review, 68 studies, 1,821 participants, 145 female). Low certainty;
+  no study measured potentiation during the sessions, so it is not shown to explain the gains. Usual set-up:
+  2×/week ≥48 h apart, ≥85% 1RM, 3 sets, 6–8 weeks; A1→A2 rest reported in 57% of studies, 0–480 s, 180 s
+  most common.
+- Used for: new card `contrast_pairs` ("some", standing-start caveat) and one Cormier finding on
+  `strength_plus_sprint`. Plans unchanged.
+
+**Naming:** MicroPulse "Contrast" (A1 heavy → A2 fast, set by set) is Cormier's "complex". The card says so.
+
+**How-to text softened** (`structureHowTo.ts`, shown to coaches in the builder and to players on Today):
+Contrast and French Contrast no longer claim the heavy lift "primes the nervous system" / "post-activation
+potentiation" as fact. Rests, sets and order unchanged. Still claiming it (not changed): `StrengthBlockPdf.tsx`
+(coach WIP at the time), `src/app/player/exerciseDatabase.ts`, the Potentiation Cluster text in
+`PlayerClient.tsx`, and the Complex/Contrast descriptions in `seasonPhaseStrength.ts`.
+
 ## The plans
 
 No study tested these exact plans. The doses come from the cited studies; the week is MicroPulse's

@@ -135,6 +135,15 @@ describe("speed plans", () => {
     expect(SPEED_METHOD_BY_KEY.flying_sprints.evidence).toBe("some");
   });
 
+  it("heavy-lift pairs are 'some' and carry the standing-start caveat (Cormier 2020; Thapa 2024)", () => {
+    const m = SPEED_METHOD_BY_KEY.contrast_pairs;
+    expect(m.evidence).toBe("some");
+    expect(m.caution && filled(m.caution)).toBe(true);
+    expect(m.caution!.en).toMatch(/standing start/);
+    const refs = new Set(m.findings.map((f) => f.ref));
+    expect(refs.has("cormier2020") && refs.has("thapa2024")).toBe(true);
+  });
+
   it("each plan has both languages, 2–3 facts and sources", () => {
     for (const p of SPEED_PLANS) {
       expect(filled(p.title) && filled(p.who) && filled(p.verdict), p.key).toBe(true);
