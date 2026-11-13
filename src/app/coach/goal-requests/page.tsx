@@ -12,6 +12,10 @@ export const dynamic = "force-dynamic";
  * date the player sees each day's session on Today (lota 3). It pauses itself when the player is marked injured /
  * in rehab / returning to training, and the coach restarts it here (at the paused week, or week 1 after a long
  * break). Nothing is sent (no push).
+ *
+ * Lota 4: progress and outcome for a running, paused, finished or stopped plan — sessions the player ticked, the
+ * test results (the coach enters them; jump height also comes from VALD), the change against the plan's "clear
+ * change" mark, GPS as context only, and a PDF of the whole plan.
  */
 
 import * as React from "react";
@@ -29,6 +33,7 @@ import {
   type GoalPlanRow,
   type GoalPlanStatus,
 } from "@/lib/micropulse/goalPlan/requests";
+import { MEASURE_DEF, PHASE_LABEL, QUALITY_MEASURES, type GoalMeasure, type GoalProgress, type ResultPhase } from "@/lib/micropulse/goalPlan/outcome";
 
 const QUALITY: Record<GoalQuality, Bi> = {
   top_speed: { en: "Top speed", is: "Hámarkshraði" },
@@ -56,6 +61,7 @@ type Review = {
   events: GoalPlanEventRow[];
   weekView: { week: number; sessions: { slot: string; focus: Bi; date: string | null; md: string | null }[]; weekKnown: boolean } | null;
   resumeDefault: number | null;
+  progress: GoalProgress | null;
 };
 
 async function authed(path: string, init?: RequestInit) {
@@ -325,6 +331,8 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
 
       {msg ? <p className="text-[12px] text-[#a83e28]">{msg}</p> : null}
 
+      {data.progress ? <ProgressPanel id={id} data={data} progress={data.progress} isEN={isEN} onChanged={onChanged} /> : null}
+
       {data.events.length ? (
         <details className="border-t border-slate-100 pt-2">
           <summary className="cursor-pointer text-[12px] font-medium text-primary">{T("History", "Saga")}</summary>
@@ -339,5 +347,138 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
         </details>
       ) : null}
     </section>
+  );
+}
+
+const OUTCOME_STYLE = {
+  improved: "bg-[#2740e6]/10 text-[#2740e6]",
+  no_clear_change: "bg-slate-100 text-slate-600",
+  worse: "bg-[#de9328]/15 text-[#8a5a12]",
+  waiting: "bg-slate-100 text-slate-500",
+} as const;
+
+/** Lota 4: what the 8 weeks did — ticks, tests, outcome — plus result entry and the PDF. */
+function ProgressPanel({ id, data, progress, isEN, onChanged }: { id: string; data: Review; progress: GoalProgress; isEN: boolean; onChanged: () => void }) {
+  const L = (b: Bi) => (isEN ? b.en : b.is);
+  const T = (en: string, is: string) => (isEN ? en : is);
+  const { row, plan } = data;
+  const measures = QUALITY_MEASURES[row.quality];
+  const [measure, setMeasure] = React.useState<GoalMeasure>(measures[0]);
+  const [phase, setPhase] = React.useState<ResultPhase>(() => (row.status === "completed" || (data.weekView?.week ?? 0) >= 7 ? "retest" : "baseline"));
+  const [value, setValue] = React.useState("");
+  const [date, setDate] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [note, setNote] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [msg, setMsg] = React.useState<string | null>(null);
+  const o = progress.outcome;
+  const def = MEASURE_DEF[measure];
+  const canEnter = row.status === "approved" || row.status === "paused" || row.status === "completed";
+  const outcomeLabel = o.state === "improved" ? T("Clear change", "Skýr breyting")
+    : o.state === "no_clear_change" ? T("No clear change", "Engin skýr breyting")
+      : o.state === "worse" ? T("Changed the wrong way", "Breyting í ranga átt") : T("Waiting for tests", "Bíður prófa");
+  const main = o.measures.find((m) => m.measure === o.main) ?? null;
+
+  const add = async () => {
+    setBusy(true); setMsg(null);
+    const { res, j } = await authed(`/api/coach/goal-plans/requests/${encodeURIComponent(id)}/results`, {
+      method: "POST", body: JSON.stringify({ measure, phase, value: Number(value.replace(",", ".")), testDate: date, note: note || undefined }),
+    });
+    setBusy(false);
+    if (!res.ok) { setMsg(String(j.error ?? res.status)); return; }
+    onChanged();
+  };
+  const remove = async (resultId: string) => {
+    setBusy(true); setMsg(null);
+    const { res, j } = await authed(`/api/coach/goal-plans/requests/${encodeURIComponent(id)}/results?resultId=${encodeURIComponent(resultId)}`, { method: "DELETE" });
+    setBusy(false);
+    if (!res.ok) { setMsg(String(j.error ?? res.status)); return; }
+    onChanged();
+  };
+  const pdf = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      const { downloadGoalPlanPdf } = await import("@/components/coach/GoalPlanPdf");
+      await downloadGoalPlanPdf({
+        playerName: data.playerName, status: row.status, startDate: row.start_date, endDate: row.end_date, coachNote: row.coach_note,
+        plan, progress, events: data.events,
+      }, isEN ? "EN" : "IS");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2.5 border-t border-slate-100 pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{T("Progress and outcome", "Framvinda og niðurstaða")}</p>
+        <button type="button" disabled={busy} onClick={pdf} className="rounded-lg border border-slate-300 px-2.5 py-1 text-[12px] font-medium text-slate-700 disabled:opacity-50">{T("PDF", "PDF")}</button>
+      </div>
+      <div className="flex flex-wrap items-start gap-2">
+        <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${OUTCOME_STYLE[o.state]}`}>{outcomeLabel}</span>
+        <p className="min-w-0 flex-1 text-[13.5px] font-semibold leading-snug text-slate-900">{L(o.verdict)}</p>
+      </div>
+      <ul className="space-y-0.5 text-[12.5px] text-slate-700">
+        <li>{L(progress.adherence.line)}</li>
+        {main ? <li>{T(`Clear change from ${MEASURE_DEF[main.measure].clearPct}%`, `Skýr breyting frá ${MEASURE_DEF[main.measure].clearPct}%`)} · {L(MEASURE_DEF[main.measure].clearBasis)}.</li> : <li>{L(plan.tests.what)}</li>}
+      </ul>
+
+      {progress.results.length ? (
+        <ul className="space-y-1 rounded-lg border border-slate-200 p-2">
+          {progress.results.map((r) => (
+            <li key={r.id} className="flex flex-wrap items-center gap-x-2 text-[12px] text-slate-700">
+              <span className="font-semibold">{L(MEASURE_DEF[r.measure].label)}</span>
+              <span className="text-slate-500">{L(PHASE_LABEL[r.phase])} · {fmtDate(r.test_date, isEN)}</span>
+              <span className="font-display font-semibold">{r.value.toFixed(MEASURE_DEF[r.measure].decimals)} {MEASURE_DEF[r.measure].unit}</span>
+              <span className="text-[11px] text-slate-400">{r.source === "vald" ? r.note ?? "VALD" : r.note ?? ""}</span>
+              {r.source === "coach" && canEnter ? (
+                <button type="button" disabled={busy} onClick={() => remove(r.id)} className="ml-auto text-[11px] text-[#a83e28] disabled:opacity-50">{T("Remove", "Fjarlægja")}</button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {canEnter ? (
+        <div className="space-y-2 rounded-lg bg-slate-50 p-2.5">
+          <p className="text-[12px] font-semibold text-slate-800">{T("Enter a test result", "Skrá prófniðurstöðu")}</p>
+          <div className="flex flex-wrap gap-2">
+            {measures.length > 1 ? (
+              <select value={measure} onChange={(e) => setMeasure(e.target.value as GoalMeasure)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]">
+                {measures.map((m) => <option key={m} value={m}>{L(MEASURE_DEF[m].label)}</option>)}
+              </select>
+            ) : <span className="self-center text-[12.5px] font-medium text-slate-700">{L(def.label)}</span>}
+            <select value={phase} onChange={(e) => setPhase(e.target.value as ResultPhase)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]">
+              <option value="baseline">{L(PHASE_LABEL.baseline)}</option>
+              <option value="retest">{L(PHASE_LABEL.retest)}</option>
+            </select>
+            <label className="flex items-center gap-1 text-[12px] text-slate-600">
+              <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder={def.better === "lower" ? "1.85" : def.unit === "cm" ? "38.5" : "31.2"} className="w-20 rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]" />
+              {def.unit}
+            </label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]" />
+          </div>
+          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={280} placeholder={T("Note (optional): gates, video app, best of 3…", "Athugasemd (valfrjáls): tímahlið, myndbandsforrit, besti af 3…")} className="block w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]" />
+          <button type="button" disabled={busy || !value.trim()} onClick={add} className="rounded-lg bg-primary px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50">{T("Save result", "Vista niðurstöðu")}</button>
+          <p className="text-[11px] text-slate-500">
+            {T(`${def.better === "lower" ? "Lower is better" : "Higher is better"}. ${row.quality === "jump" ? "Jump height from VALD shows on its own; enter it here only when tested another way. " : ""}A later entry for the same test replaces the earlier one in the outcome; every entry is kept in the history.`,
+              `${def.better === "lower" ? "Lægra er betra" : "Hærra er betra"}. ${row.quality === "jump" ? "Stökkhæð úr VALD birtist sjálfkrafa; skráðu hér aðeins ef prófað var öðruvísi. " : ""}Seinni skráning á sama próf kemur í stað þeirrar fyrri í niðurstöðunni; allar skráningar eru vistaðar í sögunni.`)}
+          </p>
+        </div>
+      ) : null}
+
+      <details className="text-[11.5px] text-slate-600">
+        <summary className="cursor-pointer font-medium text-primary">{T("Show details", "Sýna nánar")}</summary>
+        <ul className="mt-1.5 list-inside list-disc space-y-1">
+          {o.measures.map((m) => <li key={m.measure}>{L(m.line)}</li>)}
+          {progress.gps ? <li>{L(progress.gps.line)}</li> : null}
+          <li>{L(plan.tests.change)}</li>
+          <li>{T(`Counted up to ${fmtDate(progress.until, true)}. A session counts as due once its day has passed; the player ticks done or not done on Today.`, `Talið til ${fmtDate(progress.until, false)}. Æfing telst á dagskrá þegar dagurinn er liðinn; leikmaðurinn merkir búið eða ekki gert á Í dag.`)}</li>
+          <li>{T("Rules compare the tests; there is no AI here.", "Reglur bera prófin saman; hér er engin gervigreind.")}</li>
+        </ul>
+      </details>
+      {msg ? <p className="text-[12px] text-[#a83e28]">{msg}</p> : null}
+    </div>
   );
 }

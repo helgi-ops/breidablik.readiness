@@ -16,6 +16,7 @@
 
 import { PLAN_WEEKS, QUALITY_LABEL } from "./common";
 import type { Bi, GoalBlock, GoalPlan, GoalQuality, GoalSession, GoalSessionSlot } from "./types";
+import type { Adherence, DueSession, GoalOutcome, SessionMark } from "./outcome";
 
 // ─── Dates ─────────────────────────────────────────────────────────────────
 
@@ -242,8 +243,8 @@ export type GoalTodayStatus = "approved" | "paused";
 export type GoalTodayCard = {
   quality: GoalQuality;
   title: Bi;
-  /** "not_started" | "on" (weeks 1–8) | "paused". */
-  state: "not_started" | "on" | "paused";
+  /** "not_started" | "on" (weeks 1–8) | "paused" | "finished" (up to 14 days after the last week, lota 4). */
+  state: "not_started" | "on" | "paused" | "finished";
   week: number;
   weeksTotal: number;
   weekLabel: Bi | null;
@@ -256,9 +257,11 @@ export type GoalTodayCard = {
     minutes: number;
     version: SessionVersion;
     blocks: { what: Bi; dose: Bi; supervised: boolean }[];
+    /** The player's tick on it (lota 4). */
+    mark: SessionMark["status"] | null;
   };
-  /** `past` = its day is behind today (MicroPulse does not record whether it was done). */
-  thisWeek: { slot: GoalSessionSlot; focus: Bi; date: string | null; day: Bi | null; isToday: boolean; past: boolean }[];
+  /** `past` = its day is behind today; `mark` = the player's tick; `canMark` = placed on today or earlier. */
+  thisWeek: { slot: GoalSessionSlot; focus: Bi; date: string | null; day: Bi | null; isToday: boolean; past: boolean; mark: SessionMark["status"] | null; canMark: boolean }[];
   supervision: Bi | null;
   coachNote: string | null;
   details: Bi[];
@@ -304,10 +307,27 @@ export type GoalTodayInput = {
   colour: DayColour | null;
   coachNote: string | null;
   pausedWeek?: number | null;
+  /** The player's ticks on this plan (lota 4). */
+  marks?: SessionMark[];
 };
 
 function sessionsOfWeek(plan: GoalPlan, week: number): GoalSession[] {
   return plan.weeks.find((w) => w.week === week)?.sessions ?? [];
+}
+
+/**
+ * Every session the rules placed from week 1 up to `untilIso` (for adherence), each week placed exactly as the
+ * Today card placed it (`placementFor`). A resumed plan's early weeks fall on its virtual dates; ticks are matched
+ * by week and slot, so that does not change the count much.
+ */
+export function placedSessionsUpTo(plan: GoalPlan, quality: GoalQuality, startDate: string, untilIso: string, cal: TeamCalendar): DueSession[] {
+  const last = Math.min(PLAN_WEEKS, planWeekOn(startDate, untilIso));
+  const out: DueSession[] = [];
+  for (let w = 1; w <= last; w++) {
+    const p = placementFor(plan, quality, startDate, addDays(startDate, (w - 1) * 7), cal);
+    for (const s of p?.placed ?? []) if (s.date <= untilIso) out.push({ week: w, slot: s.slot, date: s.date });
+  }
+  return out;
 }
 
 /** This week's (and last week's, for the Sunday → Monday gap) placement. */
@@ -370,9 +390,13 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
   const todays = placement.placed.find((p) => p.date === todayIso) ?? null;
   const weekRow = plan.weeks.find((w) => w.week === week) ?? null;
 
+  const markOf = (slot: GoalSessionSlot) => input.marks?.find((m) => m.week === week && m.slot === slot)?.status ?? null;
   const thisWeek = sessions.map((s) => {
     const p = placement.placed.find((x) => x.slot === s.slot) ?? null;
-    return { slot: s.slot, focus: s.focus, date: p?.date ?? null, day: p ? weekdayOnly(p.date) : null, isToday: p?.date === todayIso, past: !!p && p.date < todayIso };
+    return {
+      slot: s.slot, focus: s.focus, date: p?.date ?? null, day: p ? weekdayOnly(p.date) : null, isToday: p?.date === todayIso, past: !!p && p.date < todayIso,
+      mark: markOf(s.slot), canMark: !!p && p.date <= todayIso,
+    };
   }).sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999")); // in day order; a left-out session last
 
   const weekFactParts = placement.placed.map((p) => ({ en: `${weekdayOnly(p.date).en} (${p.slot})`, is: `${weekdayOnly(p.date).is} (${p.slot})` }));
@@ -398,6 +422,7 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
     today = {
       slot: s.slot, focus: s.focus, minutes: v.version === "full" ? s.minutes : Math.max(5, Math.round(s.minutes / 2)), version: v.version,
       blocks: v.blocks.map((b) => ({ what: b.what, dose: b.dose, supervised: b.supervised === true })),
+      mark: markOf(s.slot),
     };
     const name = `${cap(slotName(s.slot)).en}: ${s.focus.en}`;
     const nameIs = `${cap(slotName(s.slot)).is}: ${s.focus.is}`;
@@ -441,5 +466,49 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
     thisWeek,
     supervision: today && today.version !== "skip" ? (plan.youthLevel ? plan.supervision : today.blocks.some((b) => b.supervised) ? plan.supervision : null) : null,
     details,
+  };
+}
+
+// ─── Lota 4: the finished card ─────────────────────────────────────────────
+
+export type GoalFinishedInput = {
+  quality: GoalQuality;
+  plan: GoalPlan;
+  endDate: string;
+  todayIso: string;
+  outcome: GoalOutcome;
+  adherence: Adherence;
+  coachNote: string | null;
+};
+
+/** After the last week: what changed (from the coach's tests or VALD), how many sessions were ticked, what next. */
+export function buildGoalFinishedCard(input: GoalFinishedInput): GoalTodayCard | null {
+  const { plan, quality, outcome } = input;
+  if (plan.status !== "ok") return null;
+  const q = QUALITY_LABEL[quality];
+  const title: Bi = { en: `My goal: ${q.en.toLowerCase()}`, is: `Markmiðið mitt: ${q.is.toLowerCase()}` };
+  const done: Bi = { en: "Your 8 weeks are done.", is: "Vikurnar 8 eru búnar." };
+  const verdict: Bi = outcome.state === "waiting"
+    ? { en: `${done.en} Last step: the retest with your coach.`, is: `${done.is} Síðasta skrefið: endurprófið með þjálfaranum.` }
+    : { en: `${done.en} ${outcome.verdict.en}`, is: `${done.is} ${outcome.verdict.is}` };
+  const main = outcome.measures.find((m) => m.measure === outcome.main) ?? null;
+  const facts: Bi[] = [
+    input.adherence.due ? input.adherence.line : null,
+    outcome.state === "waiting"
+      ? plan.tests.what
+      : main
+        ? { en: "The plan compares your week-1 test with your week-8 retest; a small change is read as no clear change.", is: "Áætlunin ber saman prófið í viku 1 og endurprófið í viku 8; lítil breyting er lesin sem engin skýr breyting." }
+        : null,
+    { en: "Want to keep going? Ask for a new goal under Today → See more → My goal.", is: "Viltu halda áfram? Biddu um nýtt markmið undir Í dag → Skoða meira → Markmiðið mitt." },
+  ].filter((f): f is Bi => !!f).slice(0, 3);
+  const details: Bi[] = [
+    ...outcome.measures.filter((m) => m.measure !== outcome.main).map((m) => m.line),
+    plan.tests.change,
+    { en: "Rules compare the tests; there is no AI here. The plan never changed your check-in colour or the team's session.", is: "Reglur bera prófin saman; hér er engin gervigreind. Áætlunin breytti aldrei litnum þínum né æfingu liðsins." },
+    { en: `Sources: ${plan.refs.map((r) => r.short).join(", ")}.`, is: `Heimildir: ${plan.refs.map((r) => r.short).join(", ")}.` },
+  ];
+  return {
+    quality, title, state: "finished", week: PLAN_WEEKS, weeksTotal: PLAN_WEEKS, weekLabel: null,
+    verdict, facts, today: null, thisWeek: [], supervision: null, coachNote: input.coachNote, details,
   };
 }

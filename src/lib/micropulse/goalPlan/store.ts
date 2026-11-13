@@ -26,7 +26,8 @@ import {
 } from "./requests";
 import type { GoalPlan, GoalQuality } from "./types";
 import { PLAN_WEEKS } from "./common";
-import { planWeekOn } from "./today";
+import { planWeekOn, type SessionVersion } from "./today";
+import { parseResultInput, type GoalResult, type SessionMark } from "./outcome";
 
 type Sb = SupabaseClient;
 
@@ -313,4 +314,85 @@ export async function openGoalForPlayer(sb: Sb, teamId: string, playerId: string
     .eq("team_id", teamId).eq("player_id", playerId).in("status", OPEN_STATUSES).limit(1).maybeSingle();
   if (error) throw new Error(error.message);
   return (data as { id: string; quality: GoalQuality; status: GoalPlanStatus } | null) ?? null;
+}
+
+// ─── Lota 4: ticks and test results ────────────────────────────────────────
+
+/** The player's latest plan that is open, or finished within `finishedDays` (for the finished card). */
+export async function latestGoalWithPlan(sb: Sb, playerId: string, todayIso: string, finishedDays: number): Promise<GoalPlanRow | null> {
+  const open = await activeGoalWithPlan(sb, playerId);
+  if (open) return open;
+  const since = new Date(Date.parse(`${todayIso}T00:00:00Z`) - finishedDays * 86_400_000).toISOString().slice(0, 10);
+  const { data, error } = await sb.from("player_goal_plans").select(ROW_COLS)
+    .eq("player_id", playerId).eq("status", "completed").gte("end_date", since)
+    .order("end_date", { ascending: false }).limit(1).maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as unknown as GoalPlanRow | null) ?? null;
+}
+
+export async function goalSessionMarks(sb: Sb, planId: string): Promise<SessionMark[]> {
+  const { data, error } = await sb.from("player_goal_plan_sessions").select("week, slot, status, session_date").eq("plan_id", planId);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as { week: number; slot: SessionMark["slot"]; status: SessionMark["status"]; session_date: string }[])
+    .map((r) => ({ week: Number(r.week), slot: r.slot, status: r.status, session_date: String(r.session_date).slice(0, 10) }));
+}
+
+/**
+ * The player ticks a session as done / not done, or clears the tick. The caller has already checked, from the
+ * server's own placement, that this (week, slot) is placed on `date`, today or earlier this week.
+ */
+export async function markGoalSession(
+  sb: Sb,
+  args: { row: { id: string; team_id: string; player_id: string }; week: number; slot: SessionMark["slot"]; date: string; status: SessionMark["status"] | "clear"; version: SessionVersion | null; userId: string },
+): Promise<void> {
+  if (args.status === "clear") {
+    const { error } = await sb.from("player_goal_plan_sessions").delete().eq("plan_id", args.row.id).eq("week", args.week).eq("slot", args.slot);
+    if (error) throw new Error(error.message);
+    return;
+  }
+  const { error } = await sb.from("player_goal_plan_sessions").upsert({
+    plan_id: args.row.id, team_id: args.row.team_id, player_id: args.row.player_id, week: args.week, slot: args.slot,
+    session_date: args.date, status: args.status, version: args.version, marked_by: args.userId, updated_at: new Date().toISOString(),
+  }, { onConflict: "plan_id,week,slot" });
+  if (error) throw new Error(error.message);
+}
+
+export async function goalResults(sb: Sb, planId: string): Promise<GoalResult[]> {
+  const { data, error } = await sb.from("player_goal_plan_results").select("id, measure, phase, value, test_date, note")
+    .eq("plan_id", planId).order("test_date", { ascending: true });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as { id: string; measure: GoalResult["measure"]; phase: GoalResult["phase"]; value: number | string; test_date: string; note: string | null }[])
+    .map((r) => ({ id: r.id, measure: r.measure, phase: r.phase, value: Number(r.value), test_date: String(r.test_date).slice(0, 10), note: r.note, source: "coach" as const }));
+}
+
+/** Results can be entered while a plan runs, is paused, or after it finished. */
+const RESULT_STATUSES: GoalPlanStatus[] = ["approved", "paused", "completed"];
+
+/** The coach enters a test result (start or retest). Checked against the plan's tests and dates; logged. */
+export async function addGoalResult(sb: Sb, args: { teamId: string; planId: string; coachUserId: string; body: unknown }): Promise<{ id: string }> {
+  const row = await loadTeamRow(sb, args.teamId, args.planId);
+  if (!RESULT_STATUSES.includes(row.status) || !row.start_date || !row.end_date) {
+    throw new GoalPlanError(409, "Results can be entered once the plan is approved.");
+  }
+  const parsed = parseResultInput(args.body, { quality: row.quality, startDate: row.start_date, endDate: row.end_date, todayIso: todayIso() });
+  if (!parsed.ok) throw new GoalPlanError(400, parsed.error);
+  const v = parsed.value;
+  const { data, error } = await sb.from("player_goal_plan_results").insert({
+    plan_id: row.id, team_id: row.team_id, player_id: row.player_id, measure: v.measure, phase: v.phase, value: v.value,
+    test_date: v.testDate, note: v.note, entered_by: args.coachUserId,
+  }).select("id").single();
+  if (error) throw new Error(error.message);
+  await logEvent(sb, row, "result_added", { userId: args.coachUserId, role: "coach" }, v.note, { measure: v.measure, phase: v.phase, value: v.value, test_date: v.testDate });
+  return { id: (data as { id: string }).id };
+}
+
+/** The coach removes a result entered by mistake; logged with the value that was removed. */
+export async function removeGoalResult(sb: Sb, args: { teamId: string; planId: string; resultId: string; coachUserId: string }): Promise<void> {
+  const row = await loadTeamRow(sb, args.teamId, args.planId);
+  const { data, error } = await sb.from("player_goal_plan_results").delete()
+    .eq("id", args.resultId).eq("plan_id", row.id).select("measure, phase, value, test_date");
+  if (error) throw new Error(error.message);
+  const gone = (data ?? [])[0] as { measure: string; phase: string; value: number; test_date: string } | undefined;
+  if (!gone) throw new GoalPlanError(404, "That result is not on this plan.");
+  await logEvent(sb, row, "result_removed", { userId: args.coachUserId, role: "coach" }, null, gone);
 }

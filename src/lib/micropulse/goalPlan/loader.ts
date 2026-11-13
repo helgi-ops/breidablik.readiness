@@ -41,7 +41,7 @@ const SINGLE_LEG_TESTS = ["SLJ", "SLDJ", "SLISOSQT", "SLCMJ", "SLCMRJ", "SLHJ"];
 const WEAKER_LEG_PCT = 10;
 const COD_WINDOW_DAYS = 14;
 /** GPS feeds that carry a real top speed (same list as the "Top speed due" chip). */
-const GPS_SOURCES = ["catapult", "manual", "titan", "kinexon", "wimu"];
+export const GPS_SOURCES = ["catapult", "manual", "titan", "kinexon", "wimu"];
 /** A test older than this does not pick the start (MicroPulse rule). */
 const MAX_TEST_AGE_DAYS = 365;
 

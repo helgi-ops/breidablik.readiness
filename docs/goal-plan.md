@@ -1,9 +1,10 @@
 # Goal plans ("I want to improve my top speed / acceleration / braking / jump")
 
-Status: **lota 1 + 1b + 2 + 3 shipped 2026-11-13.** A player can ask; the coach approves, changes the start or
+Status: **lotur 1 + 1b + 2 + 3 + 4 shipped 2026-11-13.** A player can ask; the coach approves, changes the start or
 declines. From its start date the plan's sessions show on the player's Today, placed around the team's matches, in a
-lighter version on a yellow day and skipped on red. It pauses itself on injury and ends after 8 weeks. Nothing is sent
-(no push, no email).
+lighter version on a yellow day and skipped on red. The player ticks each session done / not done. It pauses itself on
+injury and ends after 8 weeks; then the coach's tests (and VALD jump height) give the outcome, shown to the player for
+14 days and printable as a PDF. Nothing is sent (no push, no email).
 
 ## What it does
 
@@ -170,8 +171,57 @@ The coach's review of an approved plan shows the plan week and where this week's
 
 Player-facing errors now carry Icelandic text (`error_is`).
 
+## Lota 4: ticks, tests, outcome, PDF (2026-11-13)
+
+Migration `20261113220000_player_goal_plan_progress.sql`: two tables, read-only from the browser
+(`can_read_goal_plan`), written only by `store.ts` with the service role; two new history kinds
+(`result_added`, `result_removed`).
+
+- **Tick (adherence).** `player_goal_plan_sessions`, one row per plan · week · slot. On Today the player marks today's
+  session "Mark as done" / "Couldn't do it", answers "Did you do session A (Tue)?" for earlier days this week, and
+  can tick a red/yellow skip day as "Skipped". `POST /api/player/goal-plan/today` places the week on the server and
+  refuses a slot not placed on today or earlier (409), a finished plan (409) and a bad body (400). The version that
+  day (full / lighter / skip, from the v8 colour, only read) is stored for information.
+- **Adherence** = sessions the rules placed on a day that has passed (today's only once ticked), counted week by week
+  with the same placement the Today card used (`placedSessionsUpTo`). "11 of 16 sessions ticked as done, 1 not done,
+  4 not ticked."
+- **Test results.** `player_goal_plan_results`, entered by the coach on `/coach/goal-requests`
+  (`POST/DELETE /api/coach/goal-plans/requests/[id]/results`): start (week 1) or retest (week 8), only the plan's own
+  tests, a plausible value, dated 4 weeks before the start to 3 weeks after the end. A later entry for the same test
+  replaces the earlier one in the outcome; every entry and removal stays in the history.
+  - Jump height also comes straight from **VALD** (CMJ, the mean of each test's valid trials, Claudino 2017): the
+    latest test from 4 weeks before the start to the end of week 1 = start, from week 7 to 2 weeks after = retest.
+    Not copied into the table. On the same day a coach entry wins.
+- **Outcome** (`outcome.ts`, pure): retest vs start against the mark the plan already printed —
+
+  | Quality | Test(s), main first | "Clear change" from |
+  |---|---|---|
+  | Top speed | flying 20 m, else a top-speed test (km/h) | 1% (MicroPulse rule) |
+  | Acceleration | 10 m from standing | 2% (MicroPulse rule; no paper gives one) |
+  | Braking | cut test, then 10 m | 3% cut test (MicroPulse rule: the cut's extra time varied 12–21% within one session in the trial), 2% 10 m |
+  | Jump | jump height (CMJ) | 2% (MicroPulse rule; the trials used about 0.6–1.2 cm) |
+
+  Below the mark = "no clear change"; beyond it the wrong way is said plainly. Never "caused" or "prevented".
+- **GPS context, never the verdict.** Top speed: fastest days (same validity filter as the top-speed signal). Braking:
+  `max_deceleration` (Marvin 2024: GPS deceleration in game-like drills was the only direct braking measure in the
+  studies). Same-length windows: the 4 weeks before the start vs plan weeks 5–8, mean of the top 3 days, nothing
+  with fewer than 3 days. **Breiðablik's Catapult rows almost never carry `max_deceleration`** (11 of 2,823 in a year);
+  Keflavík, Grindavík, Fylkir and Þór do. So for Breiðablik the braking line is usually absent.
+- **End of plan.** The plan still completes on its own after week 8. The player's Today card then shows the finished
+  card for 14 days: the outcome in their own numbers (or "Last step: the retest with your coach" and the test named),
+  sessions ticked, and how to ask for a new goal (a new request is the restart; one open goal at a time).
+- **Coach.** `/coach/goal-requests` → "Progress and outcome" for a running, paused, finished or stopped plan: the
+  verdict, sessions ticked, the mark, the results list (remove a coach entry), result entry, "Show details" (each
+  test's line, GPS context, how it is counted) and **PDF** (`GoalPlanPdf.tsx`, brand kit: outcome verdict → facts →
+  results → why this plan → the 8 weeks → safety → limits → history → sources).
+
+Verified: Demo GPS Pro end to end (approve → ticks incl. refused future slot → results incl. refused wrong test and
+future date, remove → outcome 1.92 → 1.87 s, 2.6% faster, clear change → end → finished card → no card after 14 days;
+cleanup to 0 rows). Real data read-only: VALD jump start found for a Breiðablik player (42.6 cm, mean of 3), GPS top
+speed context (30.8 vs 29.7 km/h), Keflavík braking context (5.5 m/s²). About 0.1–0.2 s per read.
+
 ## Next (not built)
 
-- Lota 4: a "done" tick per session (adherence is not recorded yet; the card only shows which days are past).
-- Lota 4: retests, end of plan, restart, PDF. Idea: `max_deceleration` from Catapult as a direct braking outcome
-  (Marvin 2024 notes GPS decelerations are the only direct braking measure in the literature).
+- A push or reminder to tick sessions or book the retest: needs the coach's OK (nothing is sent today).
+- Breiðablik braking context needs `max_deceleration` in their Catapult export.
+- A player-side history of finished goals (today a finished goal shows 14 days, then only the coach sees it).

@@ -9,6 +9,9 @@
  *
  * Reads `/api/player/goal-plan/today`, which places the week's sessions around the team's matches and picks today's
  * version from the check-in colour (only read). Silent when there is no plan, on any error, and for FREE clubs.
+ *
+ * Lota 4: the player ticks a session as done / not done (POST, only sessions placed on today or earlier this week),
+ * and after the last week the card shows the outcome for 14 days.
  */
 
 import * as React from "react";
@@ -18,6 +21,29 @@ import type { Bi } from "@/lib/micropulse/goalPlan/types";
 
 export default function PlayerGoalTodayCard({ lang = "EN" }: { lang?: "IS" | "EN" }) {
   const [card, setCard] = React.useState<GoalTodayCard | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+
+  const mark = React.useCallback(async (slot: string, status: "done" | "skipped" | "clear") => {
+    setBusy(true); setErr(null);
+    try {
+      const { data: { session } } = await getSupabaseClient().auth.getSession();
+      const token = session?.access_token;
+      if (!token) return;
+      const res = await fetch("/api/player/goal-plan/today", {
+        method: "POST", cache: "no-store",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ slot, status }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { card?: GoalTodayCard | null; error?: string; error_is?: string | null };
+      if (!res.ok) { setErr((lang === "IS" ? j.error_is : null) ?? j.error ?? String(res.status)); return; }
+      if (j.card && j.card.verdict) setCard(j.card);
+    } catch {
+      setErr(lang === "IS" ? "Tókst ekki að vista. Reyndu aftur." : "Couldn't save. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }, [lang]);
 
   React.useEffect(() => {
     let alive = true;
@@ -37,7 +63,7 @@ export default function PlayerGoalTodayCard({ lang = "EN" }: { lang?: "IS" | "EN
   }, []);
 
   if (!card) return null;
-  return <GoalTodayCardView card={card} lang={lang} />;
+  return <GoalTodayCardView card={card} lang={lang} onMark={mark} busy={busy} error={err} />;
 }
 
 const VERSION_STYLE = {
@@ -47,11 +73,19 @@ const VERSION_STYLE = {
 } as const;
 
 /** The card itself, given its data (split out so it can be rendered without a login). */
-export function GoalTodayCardView({ card, lang = "EN" }: { card: GoalTodayCard; lang?: "IS" | "EN" }) {
+export function GoalTodayCardView({ card, lang = "EN", onMark, busy = false, error = null }: {
+  card: GoalTodayCard;
+  lang?: "IS" | "EN";
+  onMark?: (slot: string, status: "done" | "skipped" | "clear") => void;
+  busy?: boolean;
+  error?: string | null;
+}) {
   const IS = lang === "IS";
   const L = (b: Bi | null | undefined) => (b ? (IS ? b.is : b.en) : "");
   const T = (en: string, is: string) => (IS ? is : en);
   const t = card.today;
+  // Sessions earlier this week that were placed but not ticked yet (today's has its own buttons).
+  const unticked = card.thisWeek.filter((s) => s.canMark && !s.isToday && !s.mark);
 
   return (
     <div data-player-card="goal-plan" className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5">
@@ -59,6 +93,8 @@ export function GoalTodayCardView({ card, lang = "EN" }: { card: GoalTodayCard; 
         <span className="text-sm font-bold text-zinc-900">{L(card.title)}</span>
         {card.state === "on" ? (
           <span className="font-display text-[12px] font-semibold text-zinc-500">{T(`week ${card.week} of ${card.weeksTotal}`, `vika ${card.week} af ${card.weeksTotal}`)}</span>
+        ) : card.state === "finished" ? (
+          <span className="font-display text-[12px] font-semibold text-zinc-500">{T("finished", "lokið")}</span>
         ) : null}
         <span
           className="rounded-full bg-zinc-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-500"
@@ -102,8 +138,57 @@ export function GoalTodayCardView({ card, lang = "EN" }: { card: GoalTodayCard; 
             <p className="mt-2 text-[11.5px] text-zinc-600">{T("Half the sets of each, and stop well short of your limit.", "Helmingur settanna í hverju, og hættu vel áður en þú nærð hámarki.")}</p>
           ) : null}
           {card.supervision ? <p className="mt-2 text-[11.5px] text-zinc-600">{L(card.supervision)}</p> : null}
+          {onMark ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-200 pt-2.5">
+              {t.mark === "done" ? (
+                <>
+                  <span className="rounded-full bg-[#2740e6]/10 px-2.5 py-1 text-[12px] font-semibold text-[#2740e6]">✓ {T("Done", "Búið")}</span>
+                  <button type="button" disabled={busy} onClick={() => onMark(t.slot, "clear")} className="text-[11.5px] font-medium text-zinc-500 underline-offset-2 hover:underline disabled:opacity-50">{T("Undo", "Afturkalla")}</button>
+                </>
+              ) : t.mark === "skipped" ? (
+                <>
+                  <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[12px] font-semibold text-zinc-600">{T("Not done today", "Ekki gert í dag")}</span>
+                  <button type="button" disabled={busy} onClick={() => onMark(t.slot, "clear")} className="text-[11.5px] font-medium text-zinc-500 underline-offset-2 hover:underline disabled:opacity-50">{T("Undo", "Afturkalla")}</button>
+                </>
+              ) : (
+                <>
+                  <button type="button" disabled={busy} onClick={() => onMark(t.slot, "done")} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12.5px] font-semibold text-white disabled:opacity-50">{T("Mark as done", "Merkja búið")}</button>
+                  <button type="button" disabled={busy} onClick={() => onMark(t.slot, "skipped")} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-[12.5px] font-medium text-zinc-700 disabled:opacity-50">{T("Couldn't do it", "Náði því ekki")}</button>
+                </>
+              )}
+            </div>
+          ) : null}
         </div>
       ) : null}
+
+      {onMark && t && t.version === "skip" ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[12.5px] text-zinc-700">
+          {t.mark ? (
+            <>
+              <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[12px] font-semibold text-zinc-600">{t.mark === "done" ? `✓ ${T("Done", "Búið")}` : T("Ticked as not done", "Merkt ekki gerð")}</span>
+              <button type="button" disabled={busy} onClick={() => onMark(t.slot, "clear")} className="text-[11.5px] font-medium text-zinc-500 underline-offset-2 hover:underline disabled:opacity-50">{T("Undo", "Afturkalla")}</button>
+            </>
+          ) : (
+            <>
+              <span>{T("Tick it off so your coach sees it was skipped:", "Merktu hana svo þjálfarinn sjái að henni var sleppt:")}</span>
+              <button type="button" disabled={busy} onClick={() => onMark(t.slot, "skipped")} className="rounded-md border border-zinc-300 px-2 py-0.5 text-[11.5px] font-medium text-zinc-600 disabled:opacity-50">{T("Skipped", "Sleppt")}</button>
+            </>
+          )}
+        </div>
+      ) : null}
+
+      {onMark && unticked.length ? (
+        <div className="mt-3 space-y-1.5">
+          {unticked.map((s) => (
+            <div key={s.slot} className="flex flex-wrap items-center gap-2 text-[12.5px] text-zinc-700">
+              <span>{T(`Did you do session ${s.slot}${s.day ? ` (${s.day.en})` : ""}?`, `Gerðirðu æfingu ${s.slot}${s.day ? ` (${s.day.is})` : ""}?`)}</span>
+              <button type="button" disabled={busy} onClick={() => onMark(s.slot, "done")} className="rounded-md border border-[#2740e6]/40 px-2 py-0.5 text-[11.5px] font-semibold text-[#2740e6] disabled:opacity-50">{T("Yes", "Já")}</button>
+              <button type="button" disabled={busy} onClick={() => onMark(s.slot, "skipped")} className="rounded-md border border-zinc-300 px-2 py-0.5 text-[11.5px] font-medium text-zinc-600 disabled:opacity-50">{T("No", "Nei")}</button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {error ? <p className="mt-2 text-[12px] text-[#a83e28]">{error}</p> : null}
 
       {card.thisWeek.length ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -112,7 +197,7 @@ export function GoalTodayCardView({ card, lang = "EN" }: { card: GoalTodayCard; 
               key={s.slot}
               className={`rounded-lg border px-2 py-1 text-[11px] ${s.isToday ? "border-[#2740e6] bg-[#2740e6]/5 font-semibold text-[#2740e6]" : s.past ? "border-zinc-200 text-zinc-400" : "border-zinc-200 text-zinc-700"}`}
             >
-              {s.slot} · {s.day ? L(s.day) : T("no day", "enginn dagur")}
+              {s.mark === "done" ? "✓ " : ""}{s.slot} · {s.day ? L(s.day) : T("no day", "enginn dagur")}
             </span>
           ))}
         </div>

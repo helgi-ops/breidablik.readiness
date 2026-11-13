@@ -40,7 +40,7 @@ export type GoalPlanRow = {
 
 export type GoalPlanEventRow = {
   id: string;
-  kind: "requested" | "cancelled" | "approved" | "declined" | "start_changed" | "stopped" | "paused" | "resumed" | "completed";
+  kind: "requested" | "cancelled" | "approved" | "declined" | "start_changed" | "stopped" | "paused" | "resumed" | "completed" | "result_added" | "result_removed";
   actor_role: "player" | "coach" | "system";
   reason: string | null;
   detail: Record<string, unknown>;
@@ -66,6 +66,8 @@ export const EVENT_LABEL: Record<GoalPlanEventRow["kind"], Bi> = {
   paused: { en: "Paused", is: "Sett í bið" },
   resumed: { en: "Resumed", is: "Haldið áfram" },
   completed: { en: "Finished", is: "Lokið" },
+  result_added: { en: "Test result entered", is: "Prófniðurstaða skráð" },
+  result_removed: { en: "Test result removed", is: "Prófniðurstaða fjarlægð" },
 };
 
 /** What the player is told when a quality cannot be asked for now (plain, second person, no jargon). */

@@ -302,7 +302,7 @@ describe("never touches the colour or Today's session", () => {
       if (f === "store.ts") {
         const tables = [...src.matchAll(/\.from\("([a-z_]+)"\)/g)].map((m) => m[1]);
         expect(tables.length).toBeGreaterThan(0);
-        for (const t of tables) expect(["player_goal_plans", "player_goal_plan_events"]).toContain(t);
+        for (const t of tables) expect(["player_goal_plans", "player_goal_plan_events", "player_goal_plan_sessions", "player_goal_plan_results"]).toContain(t);
       } else {
         expect(src).not.toMatch(/\.insert\(|\.upsert\(|\.update\(|\.delete\(/);
       }
@@ -317,6 +317,7 @@ describe("never touches the colour or Today's session", () => {
       "src/app/api/coach/goal-plans/requests/route.ts",
       "src/app/api/coach/goal-plans/requests/[id]/route.ts",
       "src/app/api/coach/goal-plans/requests/[id]/decision/route.ts",
+      "src/app/api/coach/goal-plans/requests/[id]/results/route.ts",
       "src/app/api/coach/goal-plans/[id]/preview/route.ts",
     ]) {
       expect(await codeOf(resolve(process.cwd(), r))).not.toMatch(/player_today_strength_override|readiness_entries|\.insert\(|\.update\(|\.delete\(/);

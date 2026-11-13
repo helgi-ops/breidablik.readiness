@@ -12,10 +12,12 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { UNAVAILABLE_STATUS } from "./loader";
-import { activeGoalWithPlan, listTeamGoals, playerCurrentGoal, syncGoalStatuses, type GoalListItem } from "./store";
-import { addDays, buildGoalTodayCard, mondayOf, placementFor, planWeekOn, toDayColour, toTeamDayType, type GoalTodayCard, type TeamCalendar } from "./today";
-import type { GoalPlan } from "./types";
+import { GoalPlanError, goalSessionMarks, latestGoalWithPlan, listTeamGoals, markGoalSession, playerCurrentGoal, syncGoalStatuses, type GoalListItem } from "./store";
+import { addDays, buildGoalFinishedCard, buildGoalTodayCard, mondayOf, placementFor, planWeekOn, sessionForColour, toDayColour, type GoalTodayCard, type TeamCalendar } from "./today";
+import type { GoalPlan, GoalSessionSlot } from "./types";
 import type { GoalPlanStatus } from "./requests";
+import { FINISHED_CARD_DAYS } from "./outcome";
+import { loadGoalProgress, loadTeamCalendarRange } from "./progressLoader";
 
 type Sb = SupabaseClient;
 
@@ -49,35 +51,27 @@ export async function playerCurrentGoalSynced(sb: Sb, playerId: string) {
 /** The team week around `todayIso`: last week (for the Sunday → Monday gap) to 5 days after this Sunday. */
 export async function loadTeamCalendar(sb: Sb, teamId: string, todayIso: string): Promise<TeamCalendar> {
   const monday = mondayOf(todayIso);
-  const from = addDays(monday, -11);
-  const to = addDays(monday, 6 + 5);
-  const [fixtures, plans] = await Promise.all([
-    sb.from("match_schedule").select("match_date").eq("team_id", teamId).gte("match_date", from).lte("match_date", to),
-    sb.from("week_plans").select("day_date, day_type").eq("team_id", teamId).gte("day_date", from).lte("day_date", to),
-  ]);
-  const games = new Set<string>();
-  for (const r of (fixtures.data ?? []) as { match_date: string | null }[]) if (r.match_date) games.add(String(r.match_date).slice(0, 10));
-  const days: TeamCalendar["days"] = {};
-  for (const r of (plans.data ?? []) as { day_date: string; day_type: string | null }[]) {
-    const t = toTeamDayType(r.day_type);
-    if (!t) continue;
-    const d = String(r.day_date).slice(0, 10);
-    days[d] = t;
-    if (t === "game") games.add(d);
-  }
-  return { days, games: [...games] };
+  return loadTeamCalendarRange(sb, teamId, addDays(monday, -11), addDays(monday, 6 + 5));
 }
 
 /**
- * The player's goal card for Today, or null (no approved / paused plan, plan over, or a blocked plan).
- * Pauses or ends the plan first when the rules say so.
+ * The player's goal card for Today, or null (no plan, a blocked plan, or finished more than 14 days ago).
+ * Pauses or ends the plan first when the rules say so. After the last week: the finished card (lota 4).
  */
 export async function loadGoalToday(sb: Sb, teamId: string, playerId: string, todayIso: string): Promise<GoalTodayCard | null> {
-  const row = await activeGoalWithPlan(sb, playerId);
+  const row = await latestGoalWithPlan(sb, playerId, todayIso, FINISHED_CARD_DAYS);
   if (!row || !row.plan || !row.start_date || row.team_id !== teamId) return null;
   const [synced] = row.status === "approved"
     ? await syncGoalStatuses(sb, [row], await unavailablePlayerIds(sb, [playerId]), todayIso)
     : [row];
+  if (synced.status === "completed") {
+    if (!row.end_date || addDays(row.end_date, FINISHED_CARD_DAYS) < todayIso) return null;
+    const progress = await loadGoalProgress(sb, teamId, { ...row, status: "completed" }, todayIso);
+    if (!progress) return null;
+    return buildGoalFinishedCard({
+      quality: row.quality, plan: row.plan, endDate: row.end_date, todayIso, outcome: progress.outcome, adherence: progress.adherence, coachNote: row.coach_note,
+    });
+  }
   if (synced.status !== "approved" && synced.status !== "paused") return null;
 
   if (synced.status === "paused") {
@@ -87,14 +81,48 @@ export async function loadGoalToday(sb: Sb, teamId: string, playerId: string, to
     });
   }
 
-  const [cal, colourRes] = await Promise.all([
+  const [cal, colourRes, marks] = await Promise.all([
     loadTeamCalendar(sb, teamId, todayIso),
     sb.from("v_coach_readiness_today_v8").select("final_color").eq("player_id", playerId).eq("entry_date", todayIso).limit(1).maybeSingle(),
+    goalSessionMarks(sb, row.id),
   ]);
   const colour = toDayColour((colourRes.data as { final_color?: string | null } | null)?.final_color);
   return buildGoalTodayCard({
-    quality: row.quality, status: "approved", plan: row.plan, startDate: row.start_date, todayIso, cal, colour, coachNote: row.coach_note,
+    quality: row.quality, status: "approved", plan: row.plan, startDate: row.start_date, todayIso, cal, colour, coachNote: row.coach_note, marks,
   });
+}
+
+/**
+ * The player ticks one of this week's sessions (done / not done / clear). Only an approved plan, only a session the
+ * rules placed this week on today or earlier: the server places the week itself, so the browser can't tick a day
+ * that wasn't offered. Returns the refreshed card.
+ */
+export async function markGoalToday(
+  sb: Sb,
+  args: { teamId: string; playerId: string; userId: string; body: unknown; todayIso: string },
+): Promise<GoalTodayCard | null> {
+  const b = (args.body ?? {}) as Record<string, unknown>;
+  const slot = b.slot === "A" || b.slot === "B" || b.slot === "C" ? (b.slot as GoalSessionSlot) : null;
+  const status = b.status === "done" || b.status === "skipped" || b.status === "clear" ? b.status : null;
+  if (!slot || !status) throw new GoalPlanError(400, "Pick a session and done / not done.", "Veldu æfingu og búið / ekki gert.");
+  const row = await latestGoalWithPlan(sb, args.playerId, args.todayIso, 0);
+  if (!row || row.status !== "approved" || !row.plan || !row.start_date || row.team_id !== args.teamId) {
+    throw new GoalPlanError(409, "There is no running goal plan to tick.", "Engin markmiðsáætlun í gangi til að merkja.");
+  }
+  const week = planWeekOn(row.start_date, args.todayIso);
+  const cal = await loadTeamCalendar(sb, args.teamId, args.todayIso);
+  const placed = placementFor(row.plan, row.quality, row.start_date, args.todayIso, cal)?.placed.find((p) => p.slot === slot) ?? null;
+  if (!placed || placed.date > args.todayIso) {
+    throw new GoalPlanError(409, "That session isn't on today or earlier this week.", "Sú æfing er ekki í dag eða fyrr í vikunni.");
+  }
+  let version: ReturnType<typeof sessionForColour>["version"] | null = null;
+  if (status !== "clear") {
+    const { data } = await sb.from("v_coach_readiness_today_v8").select("final_color").eq("player_id", args.playerId).eq("entry_date", placed.date).limit(1).maybeSingle();
+    const session = row.plan.weeks.find((w) => w.week === week)?.sessions.find((s) => s.slot === slot);
+    if (session) version = sessionForColour(session, toDayColour((data as { final_color?: string | null } | null)?.final_color)).version;
+  }
+  await markGoalSession(sb, { row, week, slot, date: placed.date, status, version, userId: args.userId });
+  return loadGoalToday(sb, args.teamId, args.playerId, args.todayIso);
 }
 
 export type CoachWeekView = {

@@ -8,6 +8,9 @@
  * Lota 3: an approved plan also returns `weekView` (plan week today + where this week's sessions land); a paused
  * plan returns `resumeDefault` (the week it picks up at by default).
  *
+ * Lota 4: an approved, paused, finished or stopped plan also returns `progress` — the test results (coach entries +
+ * VALD jump height), the outcome against the "clear change" mark, sessions ticked, and GPS context.
+ *
  * Coach of the plan's team only. Read-only. FREE-locked teams get 402.
  */
 
@@ -18,6 +21,7 @@ import { authErrorToResponse } from "@/lib/auth/httpError";
 import { GoalPlanError, loadGoalReview } from "@/lib/micropulse/goalPlan/store";
 import { coachWeekView } from "@/lib/micropulse/goalPlan/todayLoader";
 import { resumeDefaultWeek } from "@/lib/micropulse/goalPlan/requests";
+import { loadGoalProgress } from "@/lib/micropulse/goalPlan/progressLoader";
 
 export const runtime = "nodejs";
 
@@ -30,9 +34,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const start = new URL(req.url).searchParams.get("start");
     const review = await loadGoalReview(sb, teamId, id, start && /^[a-z_]{1,40}$/.test(start) ? start : null);
     const todayIso = new Date().toISOString().slice(0, 10);
-    const weekView = await coachWeekView(sb, teamId, review.row, todayIso);
+    const [weekView, progress] = await Promise.all([
+      coachWeekView(sb, teamId, review.row, todayIso),
+      loadGoalProgress(sb, teamId, review.row, todayIso),
+    ]);
     const resumeDefault = review.row.status === "paused" ? resumeDefaultWeek(review.row.paused_week, review.row.paused_at, todayIso) : null;
-    return NextResponse.json({ ok: true, ...review, weekView, resumeDefault });
+    return NextResponse.json({ ok: true, ...review, weekView, resumeDefault, progress });
   } catch (e) {
     if (e instanceof GoalPlanError) return NextResponse.json({ error: e.message }, { status: e.status });
     return authErrorToResponse(e) ?? NextResponse.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 500 });
