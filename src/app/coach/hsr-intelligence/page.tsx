@@ -618,6 +618,12 @@ export default function HsrIntelligencePage() {
             <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
               <div className="font-semibold text-slate-700">{tt("helpHeader", lang)}</div>
               <p className="mt-1">{tt("help", lang)}</p>
+              <p className="mt-2">
+                {lang === "IS" ? "Hvað á að æfa til að bæta hámarkshraða? " : "What to train to raise top speed? "}
+                <Link href="/coach/programme-library?tab=speed" className="font-semibold text-[#2740e6] hover:underline">
+                  {lang === "IS" ? "Aðferðir og áætlanir →" : "Methods and plans →"}
+                </Link>
+              </p>
             </div>
           </CardContent>
         </Card>

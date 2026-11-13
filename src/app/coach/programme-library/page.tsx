@@ -45,6 +45,7 @@ const Bodies = {
   custom: nextDynamic(() => import("../custom-templates/page"), { ssr: false, loading: TabLoading }),
   isometric: nextDynamic(() => import("../isometric-protocols/page"), { ssr: false, loading: TabLoading }),
   vbt: nextDynamic(() => import("../vbt-methods/page"), { ssr: false, loading: TabLoading }),
+  speed: nextDynamic(() => import("../speed-methods/page"), { ssr: false, loading: TabLoading }),
   recovery: nextDynamic(() => import("../recovery-protocols/page"), { ssr: false, loading: TabLoading }),
   starter: nextDynamic(() => import("../starter-templates/page"), { ssr: false, loading: TabLoading }),
   exercises: nextDynamic(() => import("../my-exercises/page"), { ssr: false, loading: TabLoading }),
@@ -57,6 +58,7 @@ const TAB_LABEL: Record<TabKey, { EN: string; IS: string }> = {
   custom: { EN: "Custom Training Programmes", IS: "Sérsniðin æfingakerfi" },
   isometric: { EN: "Isometric protocols", IS: "Ísómetrísk prótocol" },
   vbt: { EN: "Bar-speed methods", IS: "Hraðastýrðar aðferðir" },
+  speed: { EN: "Top speed", IS: "Hámarkshraði" },
   recovery: { EN: "Recovery protocols", IS: "Recovery protocols" },
   starter: { EN: "Starter templates", IS: "Tilbúin kerfi" },
   exercises: { EN: "Exercise library", IS: "Æfingasafn" },
@@ -67,12 +69,12 @@ const TAB_LABEL: Record<TabKey, { EN: string; IS: string }> = {
 // coach pulls from / consults. The team's own live Custom programmes live in the Strength Training
 // hub (/coach/strength-hub?tab=custom), not here, since they drive delivery.
 // PT has no separate strength hub, so the PT set keeps Custom here (its strength home).
-const FOOTBALL_TABS: TabKey[] = ["programmes", "isometric", "vbt", "recovery"];
-const PT_TABS: TabKey[] = ["starter", "custom", "exercises", "vbt"];
+const FOOTBALL_TABS: TabKey[] = ["programmes", "isometric", "vbt", "speed", "recovery"];
+const PT_TABS: TabKey[] = ["starter", "custom", "exercises", "vbt", "speed"];
 
 // Read-only reference libraries (cited protocols) — a different kind of thing from the
 // authored programmes. Used to set off a "Reference" group in the tab bar.
-const REFERENCE_TABS = new Set<TabKey>(["isometric", "vbt", "recovery"]);
+const REFERENCE_TABS = new Set<TabKey>(["isometric", "vbt", "speed", "recovery"]);
 
 function Hub() {
   const [lang] = useLang();
