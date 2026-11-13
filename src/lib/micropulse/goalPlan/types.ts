@@ -129,6 +129,11 @@ export type GoalPlanInput = {
   } | null;
   /** Weaker leg from a VALD single-leg test (≥10% asymmetry), when one exists. */
   weakerLeg: { side: "left" | "right"; asymPct: number; test: string; date: string | null } | null;
+  /**
+   * The coach's choice of start (a branch key), logged with a reason. Used only when it is one of the starts the
+   * safety rules allow for this player (`allowedStarts`); anything else falls back to the rule's start.
+   */
+  startOverride?: string | null;
 };
 
 // ─── Output ────────────────────────────────────────────────────────────────
@@ -144,6 +149,10 @@ export type GoalPlan = {
   /** Layer 1: 2–3 plain facts — the why. */
   facts: Bi[];
   branch: { key: string; label: Bi; why: Bi } | null;
+  /** The start (one of `allowedStarts`); the branch key may add more (top speed adds the gym emphasis). */
+  start: string | null;
+  /** Set when the coach chose a different start than the rule: both branch keys. */
+  startOverride: { rule: string; chosen: string } | null;
   /** "If X had been Y → a different start." */
   counterfactual: Bi | null;
   evidence: GoalEvidence;

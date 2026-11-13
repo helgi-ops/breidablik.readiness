@@ -21,14 +21,24 @@ import {
   blockReason,
   blockedText,
   isYouth,
+  pickStart,
   sessionsPerWeek,
   trimSessions,
 } from "./common";
-import { TOP_SPEED_SAFETY, strengthEmphasis, topSpeedReasons, topSpeedRefs, topSpeedStart, topSpeedWeeks } from "./topSpeed";
-import { buildAccelerationParts } from "./acceleration";
-import { buildBrakingParts } from "./braking";
-import { buildJumpParts } from "./jump";
-import type { Bi, GoalEvidence, GoalPlan, GoalPlanInput, GoalRef, GoalWeek } from "./types";
+import {
+  TOP_SPEED_SAFETY,
+  TOP_SPEED_START_LABEL,
+  strengthEmphasis,
+  topSpeedAllowed,
+  topSpeedReasons,
+  topSpeedRefs,
+  topSpeedStart,
+  topSpeedWeeks,
+} from "./topSpeed";
+import { ACCEL_START_LABEL, accelAllowed, accelStart, buildAccelerationParts } from "./acceleration";
+import { BRAKING_START_LABEL, brakingAllowed, brakingStart, buildBrakingParts } from "./braking";
+import { JUMP_START_LABEL, buildJumpParts, jumpAllowed, jumpStart } from "./jump";
+import type { Bi, GoalEvidence, GoalPlan, GoalPlanInput, GoalQuality, GoalRef, GoalWeek } from "./types";
 
 export * from "./types";
 export { QUALITY_LABEL, EVIDENCE_LABEL, isYouth, PLAN_WEEKS } from "./common";
@@ -38,6 +48,8 @@ export type GoalParts = {
   verdict: Bi;
   facts: Bi[];
   branch: { key: string; label: Bi; why: Bi };
+  /** The start the plan uses (rule's or the coach's allowed choice). */
+  start: string;
   counterfactual: Bi | null;
   evidence: GoalEvidence;
   confidence: { level: "high" | "moderate" | "low"; used: Bi[]; missing: Bi[] };
@@ -50,7 +62,7 @@ export type GoalParts = {
 };
 
 function topSpeedParts(input: GoalPlanInput): GoalParts {
-  const start = topSpeedStart(input);
+  const start = pickStart(input, topSpeedStart(input), topSpeedAllowed(input));
   const emphasis = strengthEmphasis(input);
   const why = topSpeedReasons(input, start, emphasis);
   const used: Bi[] = [];
@@ -72,9 +84,10 @@ function topSpeedParts(input: GoalPlanInput): GoalParts {
     ],
     branch: {
       key: `${start}_${emphasis}`,
-      label: start === "build_first" ? { en: "Build up first", is: "Uppbygging fyrst" } : { en: "Ready for flying sprints", is: "Tilbúinn í fljúgandi spretti" },
+      label: TOP_SPEED_START_LABEL[start],
       why: why.startWhy,
     },
+    start,
     counterfactual: why.counterfactual,
     evidence: "researched",
     confidence: { level, used, missing },
@@ -92,6 +105,42 @@ function topSpeedParts(input: GoalPlanInput): GoalParts {
     ],
     refs: topSpeedRefs(),
   };
+}
+
+/** The rule's start for this player, before any coach choice. */
+export function ruleStart(input: GoalPlanInput): string {
+  switch (input.quality) {
+    case "top_speed": return topSpeedStart(input);
+    case "acceleration": return accelStart(input);
+    case "braking": return brakingStart(input);
+    case "jump": return jumpStart(input);
+  }
+}
+
+const START_LABELS: Record<GoalQuality, Record<string, Bi>> = {
+  top_speed: TOP_SPEED_START_LABEL,
+  acceleration: ACCEL_START_LABEL,
+  braking: BRAKING_START_LABEL,
+  jump: JUMP_START_LABEL,
+};
+
+/**
+ * The starts a coach may choose for this player, rule's start first. The safety rules decide the list: under 18
+ * keeps the youth level, a player already braking hard a lot gets technique only, and flying sprints from week 1
+ * need a fast run within the long-gap limit.
+ */
+export function allowedStarts(input: GoalPlanInput): { key: string; label: Bi; rule: boolean }[] {
+  const keys: string[] = (() => {
+    switch (input.quality) {
+      case "top_speed": return topSpeedAllowed(input);
+      case "acceleration": return accelAllowed(input);
+      case "braking": return brakingAllowed(input);
+      case "jump": return jumpAllowed(input);
+    }
+  })();
+  const rule = ruleStart(input);
+  const ordered = [rule, ...keys.filter((k) => k !== rule)].filter((k) => keys.includes(k));
+  return ordered.map((key) => ({ key, label: START_LABELS[input.quality][key], rule: key === rule }));
 }
 
 function partsFor(input: GoalPlanInput): GoalParts {
@@ -125,6 +174,8 @@ export function buildGoalPlan(input: GoalPlanInput): GoalPlan {
       verdict: { en: `${QUALITY_LABEL[input.quality].en}: no plan now.`, is: `${QUALITY_LABEL[input.quality].is}: engin áætlun núna.` },
       facts: [text],
       branch: null,
+      start: null,
+      startOverride: null,
       counterfactual: null,
       evidence: "rule_of_thumb",
       confidence: { level: "low", used: [], missing: [] },
@@ -136,6 +187,23 @@ export function buildGoalPlan(input: GoalPlanInput): GoalPlan {
     };
   }
   const p = partsFor(input);
+  // The coach chose another allowed start: the data-based "why" no longer explains the start, so it is replaced
+  // by a plain note that the coach chose it (the reason is logged with the decision), and the "what would change
+  // it" line is dropped.
+  const rule = ruleStart(input);
+  const overridden = p.start !== rule;
+  if (overridden) {
+    const ruleLabel = START_LABELS[input.quality][rule];
+    const coachWhy: Bi = {
+      en: `The coach chose this start ("${p.branch.label.en}") instead of the rule's suggestion ("${ruleLabel.en}"). The safety rules still apply.`,
+      is: `Þjálfarinn valdi þetta upphaf („${p.branch.label.is}") í stað tillögu reglunnar („${ruleLabel.is}"). Öryggisreglurnar gilda áfram.`,
+    };
+    const old = p.branch.why;
+    const i = p.facts.findIndex((f) => f.en === old.en);
+    p.facts = i >= 0 ? p.facts.map((f, j) => (j === i ? coachWhy : f)) : [coachWhy, ...p.facts];
+    p.branch = { ...p.branch, why: coachWhy };
+    p.counterfactual = null;
+  }
   const facts = youth
     ? [...p.facts.slice(0, 2), input.ageYears == null
         ? { en: "Age not on record, so the plan uses the easier level and a coach is there for every session. Add the date of birth to change this.", is: "Aldur ekki skráður, svo áætlunin notar léttara stigið og þjálfari er við hverja æfingu. Skráðu fæðingardag til að breyta því." }
@@ -148,6 +216,8 @@ export function buildGoalPlan(input: GoalPlanInput): GoalPlan {
     verdict: p.verdict,
     facts,
     branch: p.branch,
+    start: p.start,
+    startOverride: overridden ? { rule, chosen: p.start } : null,
     counterfactual: p.counterfactual,
     evidence: p.evidence,
     confidence: p.confidence,

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useLang } from "@/lib/lang";
 import { PLAYER_COPY } from "./playerCopy";
 import { createPortal } from "react-dom";
+import PlayerGoalSheet from "@/components/player/PlayerGoalSheet";
 import Link from "next/link";
 import PlayerClient from "./PlayerClient";
 import { TodayOutlookTeaser, type TodayLoad } from "./TodayOutlook";
@@ -661,6 +662,8 @@ function AteCommandCardPortal({ activeTab, clubThemeColor, lang }: { activeTab: 
 
 function TodayMorePortal({ activeTab, lang, onOpen, isBasketball }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; onOpen: (tab: DevPlayerTab) => void; isBasketball?: boolean }) {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+  // "My goal" sheet (goal plan request). Reads nothing until opened, so Today's first load is unchanged.
+  const [goalOpen, setGoalOpen] = useState(false);
   const is = lang === "IS";
 
   useEffect(() => {
@@ -734,7 +737,20 @@ function TodayMorePortal({ activeTab, lang, onOpen, isBasketball }: { activeTab:
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={() => setGoalOpen(true)}
+          className="flex w-full items-center gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-left shadow-sm transition hover:bg-zinc-50"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600"><IconActivity active={false} /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-zinc-900">{is ? "Markmiðið mitt" : "My goal"}</span>
+            <span className="block truncate text-xs text-zinc-500">{is ? "Biddu um 8 vikna áætlun: hraði, hröðun, bremsun eða stökk" : "Ask for an 8-week plan: speed, acceleration, braking or jump"}</span>
+          </span>
+          <span className="text-lg leading-none text-zinc-300">›</span>
+        </button>
       </div>
+      {goalOpen ? <PlayerGoalSheet lang={lang} onClose={() => setGoalOpen(false)} /> : null}
     </div>,
     mountNode,
   );

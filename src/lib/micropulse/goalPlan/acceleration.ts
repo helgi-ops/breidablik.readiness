@@ -22,7 +22,7 @@
  */
 
 import { SPEED_REFS } from "@/lib/micropulse/speedMethods";
-import { BAND_LABEL, WHEN, expandWeeks, isYouth, weekLabel } from "./common";
+import { BAND_LABEL, WHEN, expandWeeks, isYouth, pickStart, weekLabel } from "./common";
 import type { GoalParts } from "./index";
 import type { Bi, GoalBlock, GoalMethod, GoalPlanInput, GoalRef, GoalSession } from "./types";
 
@@ -105,6 +105,18 @@ export const ACCEL_METHODS: GoalMethod[] = [
 ];
 
 export type AccelStart = "youth" | "strength_first" | "starts_first" | "balanced";
+
+export const ACCEL_START_LABEL: Record<AccelStart, Bi> = {
+  youth: { en: "Youth level", is: "Unglingastig" },
+  strength_first: { en: "Strength first", is: "Styrkur fyrst" },
+  starts_first: { en: "Starts first", is: "Stört fyrst" },
+  balanced: { en: "Balanced", is: "Jafnvægi" },
+};
+
+/** Starts the coach may choose: under 18 (or age unknown) always stays on the youth level. */
+export function accelAllowed(input: GoalPlanInput): AccelStart[] {
+  return isYouth(input.ageYears) ? ["youth"] : ["strength_first", "starts_first", "balanced"];
+}
 
 export function accelStart(input: GoalPlanInput): AccelStart {
   if (isYouth(input.ageYears)) return "youth"; // Wang K 2026: sprints + hops for youth, whatever the strength test
@@ -199,7 +211,7 @@ export function accelWeeks(start: AccelStart, youth: boolean) {
 
 export function buildAccelerationParts(input: GoalPlanInput): GoalParts {
   const youth = isYouth(input.ageYears);
-  const start = accelStart(input);
+  const start = pickStart(input, accelStart(input), accelAllowed(input));
   const s = input.strength;
   const t = input.sprintTimes;
   const used: Bi[] = [];
@@ -233,13 +245,6 @@ export function buildAccelerationParts(input: GoalPlanInput): GoalParts {
           ? { en: "If the strength test had been average or below, the plan would start with strength and sled sprints.", is: "Ef styrkprófið hefði verið í meðallagi eða undir byrjaði áætlunin á styrk og sleðasprettum." }
           : { en: "With a force-plate strength test on record, the plan would lean either to strength or to fast starts.", is: "Með styrkmælingu á kraftplötu skráða myndi áætlunin halla annaðhvort að styrk eða hröðum störtum." };
 
-  const START_LABEL: Record<AccelStart, Bi> = {
-    youth: { en: "Youth level", is: "Unglingastig" },
-    strength_first: { en: "Strength first", is: "Styrkur fyrst" },
-    starts_first: { en: "Starts first", is: "Stört fyrst" },
-    balanced: { en: "Balanced", is: "Jafnvægi" },
-  };
-
   return {
     verdict:
       start === "youth"
@@ -254,7 +259,8 @@ export function buildAccelerationParts(input: GoalPlanInput): GoalParts {
       { en: "Short sprints improve the first 10 m in trials. A sled helps about as much as the same sprints without one, and does not raise top speed (Alcaraz 2018; Petrakos 2016).", is: "Stuttir sprettir bæta fyrstu 10 m í rannsóknum. Sleði hjálpar álíka mikið og sömu sprettir án hans og hækkar ekki hámarkshraða (Alcaraz 2018; Petrakos 2016)." },
       { en: "Getting stronger went with faster short sprints in training studies (Seitz 2014). Choosing the start from a strength test is MicroPulse's rule, not tested.", is: "Aukinn styrkur fór saman við hraðari stutta spretti í þjálfunarrannsóknum (Seitz 2014). Að velja upphafið út frá styrkprófi er regla MicroPulse, ekki prófuð." },
     ],
-    branch: { key: start, label: START_LABEL[start], why: startWhy },
+    branch: { key: start, label: ACCEL_START_LABEL[start], why: startWhy },
+    start,
     counterfactual,
     evidence: "partly",
     confidence: { level: used.length === 2 ? "high" : used.length === 1 ? "moderate" : "low", used, missing },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildGoalPlan, PLAN_WEEKS } from "../index";
+import { allowedStarts, buildGoalPlan, PLAN_WEEKS } from "../index";
 import { ACCEL_METHODS, ACCEL_REFS, accelStart } from "../acceleration";
 import { JUMP_METHODS, JUMP_REFS, jumpStart } from "../jump";
 import { BRAKING_METHODS, BRAKING_REFS, brakingStart } from "../braking";
@@ -287,14 +287,95 @@ describe("sources", () => {
 });
 
 describe("never touches the colour or Today's session", () => {
-  it("the engine has no DB or Today-override reference", async () => {
-    const { readFileSync, readdirSync } = await import("node:fs");
+  const codeOf = async (path: string) => {
+    const { readFileSync } = await import("node:fs");
+    // Code only: the doc comments name the table on purpose ("never writes …").
+    return readFileSync(path, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  };
+  it("the engine has no DB writes or Today-override reference; only store.ts writes, and only the goal tables", async () => {
+    const { readdirSync } = await import("node:fs");
     const { resolve } = await import("node:path");
     const dir = resolve(process.cwd(), "src/lib/micropulse/goalPlan");
     for (const f of readdirSync(dir).filter((x) => x.endsWith(".ts"))) {
-      // Code only: the doc comments name the table on purpose ("never writes …").
-      const src = readFileSync(resolve(dir, f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-      expect(src).not.toMatch(/player_today_strength_override|readiness_entries|\.insert\(|\.upsert\(|\.update\(|\.delete\(/);
+      const src = await codeOf(resolve(dir, f));
+      expect(src).not.toMatch(/player_today_strength_override|readiness_entries/);
+      if (f === "store.ts") {
+        const tables = [...src.matchAll(/\.from\("([a-z_]+)"\)/g)].map((m) => m[1]);
+        expect(tables.length).toBeGreaterThan(0);
+        for (const t of tables) expect(["player_goal_plans", "player_goal_plan_events"]).toContain(t);
+      } else {
+        expect(src).not.toMatch(/\.insert\(|\.upsert\(|\.update\(|\.delete\(/);
+      }
+    }
+  });
+  it("the goal routes never name Today's session or the readiness entries", async () => {
+    const { resolve } = await import("node:path");
+    for (const r of [
+      "src/app/api/player/goal-plan/route.ts",
+      "src/app/api/coach/goal-plans/requests/route.ts",
+      "src/app/api/coach/goal-plans/requests/[id]/route.ts",
+      "src/app/api/coach/goal-plans/requests/[id]/decision/route.ts",
+      "src/app/api/coach/goal-plans/[id]/preview/route.ts",
+    ]) {
+      expect(await codeOf(resolve(process.cwd(), r))).not.toMatch(/player_today_strength_override|readiness_entries|\.insert\(|\.update\(|\.delete\(/);
+    }
+  });
+});
+
+describe("coach's choice of start (lota 2)", () => {
+  it("lists only safe starts: youth keeps the youth level, heavy braking keeps technique only, no flying sprints after a long gap", () => {
+    expect(allowedStarts(base({ quality: "acceleration", ageYears: 16 })).map((s) => s.key)).toEqual(["youth"]);
+    expect(allowedStarts(base({ quality: "jump", ageYears: null })).map((s) => s.key)).toEqual(["youth"]);
+    expect(allowedStarts(base({ quality: "braking", braking: { overloadFlag: "red", codAsymHighPct: null, codLean: null } })).map((s) => s.key)).toEqual(["technique_only"]);
+    expect(allowedStarts(base({ quality: "top_speed", topSpeed: ts(30) })).map((s) => s.key)).toEqual(["build_first"]);
+    expect(allowedStarts(base({ quality: "top_speed", topSpeed: null })).map((s) => s.key)).toEqual(["build_first"]);
+    const mid = allowedStarts(base({ quality: "top_speed", topSpeed: ts(15) }));
+    expect(mid.map((s) => s.key)).toEqual(["build_first", "ready"]);
+    expect(mid[0].rule).toBe(true);
+  });
+  it("an unsafe choice falls back to the rule's start", () => {
+    const youth = buildGoalPlan(base({ quality: "acceleration", ageYears: 16, startOverride: "strength_first" }));
+    expect(youth.start).toBe("youth");
+    expect(youth.startOverride).toBeNull();
+    expect(youth.weeks.some((w) => w.sessions.some((s) => s.blocks.some((b) => b.method === "resisted_sled")))).toBe(false);
+    const brake = buildGoalPlan(base({ quality: "braking", braking: { overloadFlag: "yellow", codAsymHighPct: null, codLean: null }, startOverride: "standard" }));
+    expect(brake.start).toBe("technique_only");
+    const fly = buildGoalPlan(base({ quality: "top_speed", topSpeed: ts(40), startOverride: "ready" }));
+    expect(fly.start).toBe("build_first");
+    expect(buildGoalPlan(base({ quality: "jump", startOverride: "nonsense" })).startOverride).toBeNull();
+  });
+  it("an allowed choice is used, said plainly, and drops the data-based 'what would change it'", () => {
+    const p = buildGoalPlan(base({ quality: "top_speed", topSpeed: ts(15), startOverride: "ready" }));
+    expect(p.start).toBe("ready");
+    expect(p.startOverride).toEqual({ rule: "build_first", chosen: "ready" });
+    expect(p.facts[0].en).toMatch(/The coach chose this start/);
+    expect(p.branch?.why.en).toMatch(/The coach chose this start/);
+    expect(p.counterfactual).toBeNull();
+    const same = buildGoalPlan(base({ quality: "top_speed", topSpeed: ts(15), startOverride: "build_first" }));
+    expect(same.startOverride).toBeNull();
+  });
+  it("every allowed start, for every player shape, keeps the safety limits", () => {
+    const shapes: Partial<GoalPlanInput>[] = [
+      {}, { topSpeed: ts(4), strength: strong }, { topSpeed: ts(15), strength: weak },
+      { braking: { overloadFlag: "red", codAsymHighPct: 22, codLean: "left" } },
+      { cmj: { heightCm: 38, rsiMod: 0.4, date: "2026-10-01", heightBand: "average", rsiBand: "below" }, strength: strong },
+    ];
+    for (const q of GOAL_QUALITIES) for (const sh of shapes) for (const age of [24, 16, null]) {
+      const input = base({ ...sh, quality: q, ageYears: age });
+      for (const st of allowedStarts(input)) {
+        const p = buildGoalPlan({ ...input, startOverride: st.key });
+        if (!ok(p)) continue;
+        expect(p.start).toBe(st.key);
+        for (const w of p.weeks) for (const s of w.sessions) {
+          expect(s.minutes).toBeLessThanOrEqual(MAX_SESSION_MINUTES);
+          expect(s.blocks.reduce((m, b) => m + (b.flatOutM ?? 0), 0)).toBeLessThanOrEqual(MAX_FLYING_M_PER_SESSION);
+          for (const b of s.blocks) {
+            if (p.youthLevel) expect(b.supervised).toBe(true);
+            if (p.youthLevel) expect(b.method).not.toBe("resisted_sled");
+            if (b.dropJumps || b.hardStops || (b.flatOutM ?? 0) > 0) expect(b.supervised).toBe(true);
+          }
+        }
+      }
     }
   });
 });

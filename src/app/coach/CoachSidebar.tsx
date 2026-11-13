@@ -37,7 +37,7 @@ export const tt = (b: Bi, lang: Lang) => (lang === "IS" ? b.IS : b.EN);
 // `badgeKey` lets a link opt into one of the live counts the sidebar already
 // fetches (currently just "pending" = pending player approvals). The Section
 // component reads the count from a `badges` prop and renders the pill.
-export type SidebarLink = { href: string; label: Bi; badgeKey?: "pending" };
+export type SidebarLink = { href: string; label: Bi; badgeKey?: "pending" | "goals" };
 
 export const communicationLinks: SidebarLink[] = [
   { href: "/coach/conversations", label: { EN: "Conversations", IS: "Samtöl" } },
@@ -254,6 +254,8 @@ export const strengthTrainingLinks: SidebarLink[] = [
   { href: "/coach/strength-hub?tab=rules",    label: { EN: "Training principles",        IS: "Þjálfunarprinsipp" } },
   // LV Profile = ELITE add-on; ramp-test 1RM prediction (González-Badillo 2010, Banyard 2017).
   { href: "/coach/strength-hub?tab=profiles", label: { EN: "Load-Velocity Profile", IS: "Kraft-/hraðapróf" } },
+  // Players' goal requests (top speed / acceleration / braking / jump): the coach approves the 8-week add-on.
+  { href: "/coach/goal-requests",             label: { EN: "Player goal requests",  IS: "Markmiðsbeiðnir leikmanna" }, badgeKey: "goals" },
 ];
 
 export const programmeLibraryLinks: SidebarLink[] = [
@@ -325,7 +327,7 @@ function Section({
   onNavigate?: () => void;
   /** Live counts the sidebar fetches; rendered as a pill on links whose
    *  `badgeKey` matches a key here (currently only "pending"). */
-  badges?: { pending?: number };
+  badges?: { pending?: number; goals?: number };
   /** Hrefs the current plan can't open (ELITE-gated). Rendered with a lock
    *  glyph — the link stays visible for discoverability; clicking lands on the
    *  upgrade wall (the "locked preview"). */
@@ -530,6 +532,7 @@ export function CoachSidebar({
   isAdmin,
   notesCount,
   pendingCount,
+  goalsCount = 0,
   currentTab,
   currentTeamId,
   catapultDataTier,
@@ -543,6 +546,8 @@ export function CoachSidebar({
   isAdmin: boolean;
   notesCount: number;
   pendingCount: number;
+  /** Players' goal requests waiting for an answer (badge on "Player goal requests"). */
+  goalsCount?: number;
   /** The current `?tab=` URL param. Passed in (rather than read via
    *  useSearchParams) because the parent shell already reads it via a
    *  Suspense-safe window.location helper. */
@@ -793,6 +798,7 @@ export function CoachSidebar({
           lang={lang}
           onNavigate={onNavigate}
           lockedHrefs={lockedHrefs}
+          badges={{ goals: goalsCount }}
         />
         {gamesForTier.length > 0 && (
           <Section

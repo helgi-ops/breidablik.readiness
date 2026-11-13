@@ -31,7 +31,8 @@ import { loadDsiForTeam, squadThresholdsFromMap } from "@/lib/micropulse/strengt
 import { deriveDsiForPlayer } from "@/lib/micropulse/strengthProgramming/deriveDsi";
 import { asymPct, favoredSide } from "@/lib/micropulse/codAsymmetry";
 import { buildGoalPlan } from "./index";
-import type { GoalPlan, GoalPlanInput, GoalSport, StrengthBand } from "./types";
+import { blockReason } from "./common";
+import type { GoalBlockReason, GoalPlan, GoalPlanInput, GoalQuality, GoalSport, StrengthBand } from "./types";
 import { GOAL_QUALITIES } from "./types";
 
 const UNAVAILABLE_STATUS = ["injured", "rehabilitation", "rtp_training"];
@@ -121,7 +122,10 @@ export type GoalPlanPreview = {
   plans: GoalPlan[];
 };
 
-export async function loadGoalPlanPreview(sb: Sb, teamId: string, playerId: string, todayIso: string): Promise<GoalPlanPreview> {
+export type GoalPlanBase = { playerId: string; name: string | null; base: Omit<GoalPlanInput, "quality"> };
+
+/** Everything the engine reads about one player (all four qualities share it). Read-only. */
+export async function loadGoalPlanBase(sb: Sb, teamId: string, playerId: string, todayIso: string): Promise<GoalPlanBase> {
   const [{ data: pRow }, { data: tRow }] = await Promise.all([
     sb.from("players").select("id, full_name, position, is_active, date_of_birth").eq("id", playerId).eq("team_id", teamId).maybeSingle(),
     sb.from("teams").select("sport, gender").eq("id", teamId).maybeSingle(),
@@ -231,10 +235,40 @@ export async function loadGoalPlanPreview(sb: Sb, teamId: string, playerId: stri
     weakerLeg: weakerLegFromBattery(rtp),
   };
 
+  return { playerId, name: player.full_name, base };
+}
+
+export async function loadGoalPlanPreview(sb: Sb, teamId: string, playerId: string, todayIso: string): Promise<GoalPlanPreview> {
+  const { name, base } = await loadGoalPlanBase(sb, teamId, playerId, todayIso);
   return {
     playerId,
-    name: player.full_name,
+    name,
     todayIso,
     plans: GOAL_QUALITIES.map((quality) => buildGoalPlan({ ...base, quality })),
   };
+}
+
+/**
+ * Light read for the player's request screen: which qualities can be asked for now. Reads only the player row,
+ * the team's sport and open injuries, so opening the screen stays cheap. The full engine read runs again when
+ * the request is sent (it also catches a return-to-train plan this light read does not see).
+ */
+export async function loadGoalEligibility(sb: Sb, teamId: string, playerId: string): Promise<{ quality: GoalQuality; blocked: GoalBlockReason | null }[]> {
+  const [{ data: pRow }, { data: tRow }, { data: inj }] = await Promise.all([
+    sb.from("players").select("position, is_active").eq("id", playerId).eq("team_id", teamId).maybeSingle(),
+    sb.from("teams").select("sport").eq("id", teamId).maybeSingle(),
+    sb.from("player_injuries").select("status").eq("player_id", playerId).in("status", UNAVAILABLE_STATUS).limit(1),
+  ]);
+  const player = pRow as { position: string | null; is_active: boolean | null } | null;
+  if (!player) throw new Error("Player not on this team");
+  const sport = toSport((tRow as { sport: string | null } | null)?.sport);
+  const unavailable = ((inj as unknown[] | null) ?? []).length > 0;
+  return GOAL_QUALITIES.map((quality) => ({
+    quality,
+    blocked: blockReason({
+      quality, todayIso: "", sport, isGoalkeeper: positionGroup(player.position).key === 0,
+      isActive: player.is_active !== false, ageYears: null, unavailable, inSeason: true,
+      topSpeed: null, sprintTimes: null, cmj: null, strength: null, braking: null, weakerLeg: null,
+    }),
+  }));
 }

@@ -4,6 +4,8 @@
  * GET — what MicroPulse WOULD suggest if this player asked to improve top speed, acceleration, braking or vertical
  * jump: four 8-week add-on plans built by rules from the player's own data (`buildGoalPlan`). Coach-only preview.
  *
+ * Also returns the player's open goal request / plan (lota 2), so the card can link to the review.
+ *
  * Lota 1 (Nov 2026): read-only. Nothing is stored, nothing reaches the player, no notification. It never reads or
  * writes the readiness colour, "Today's session" (`player_today_strength_override`), a load target or the daily
  * decision. No AI. FREE-locked teams get 402 (freeLockApi).
@@ -12,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { loadGoalPlanPreview } from "@/lib/micropulse/goalPlan/loader";
+import { openGoalForPlayer } from "@/lib/micropulse/goalPlan/store";
 
 export const runtime = "nodejs";
 
@@ -34,10 +37,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const todayIso = new Date().toISOString().slice(0, 10);
   try {
-    const preview = await loadGoalPlanPreview(sb, teamId, playerId, todayIso);
+    const [preview, openGoal] = await Promise.all([
+      loadGoalPlanPreview(sb, teamId, playerId, todayIso),
+      openGoalForPlayer(sb, teamId, playerId).catch(() => null),
+    ]);
     return NextResponse.json({
       ok: true,
       ...preview,
+      openGoal,
       note: "Preview only: nothing is saved or sent to the player. Rules decide, no AI. Never changes the readiness colour or Today's session.",
     });
   } catch (e) {

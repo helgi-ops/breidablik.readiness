@@ -36,9 +36,9 @@ const EV_STYLE: Record<GoalPlan["evidence"], string> = {
 
 export default function GoalPlanPreviewCard({ playerId, isEN }: { playerId: string; isEN: boolean }) {
   const [plans, setPlans] = React.useState<GoalPlan[] | null>(null);
+  const [openGoal, setOpenGoal] = React.useState<{ id: string; quality: GoalQuality; status: string } | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
   const [tab, setTab] = React.useState<GoalQuality>("top_speed");
-  const [open, setOpen] = React.useState(false);
   const L = (b: Bi) => (isEN ? b.en : b.is);
   const T = (en: string, is: string) => (isEN ? en : is);
 
@@ -55,6 +55,7 @@ export default function GoalPlanPreviewCard({ playerId, isEN }: { playerId: stri
         if (res.status === 402) { setErr("locked"); return; }
         if (!res.ok || !Array.isArray(j.plans)) { setErr(String(j.error ?? res.status)); return; }
         setPlans(j.plans as GoalPlan[]);
+        setOpenGoal((j.openGoal ?? null) as typeof openGoal);
       } catch (e) { if (alive) setErr(e instanceof Error ? e.message : "error"); }
     })();
     return () => { alive = false; };
@@ -70,13 +71,21 @@ export default function GoalPlanPreviewCard({ playerId, isEN }: { playerId: stri
         <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{T("Preview: nothing is sent to the player", "Forskoðun: ekkert fer til leikmanns")}</span>
       </div>
       <p className="mt-0.5 text-[11px] text-slate-500">{T("If the player asked to improve one of these, this 8-week add-on would be suggested from the player's own data. Rules, not AI.", "Ef leikmaðurinn bæði um að bæta eitt af þessu yrði þessi 8 vikna viðbót lögð til út frá gögnum leikmannsins. Reglur, ekki gervigreind.")}</p>
+      {openGoal ? (
+        <a href={`/coach/goal-requests?id=${encodeURIComponent(openGoal.id)}`} className="mt-2 block rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-[12px] text-slate-800 hover:bg-primary/10">
+          <span className="font-semibold">{openGoal.status === "requested"
+            ? T(`The player asked for a ${L(QUALITY[openGoal.quality]).toLowerCase()} plan.`, `Leikmaðurinn bað um áætlun í ${L(QUALITY[openGoal.quality]).toLowerCase()}.`)
+            : T(`${L(QUALITY[openGoal.quality])} plan is ${openGoal.status === "paused" ? "paused" : "approved"}.`, `Áætlun í ${L(QUALITY[openGoal.quality]).toLowerCase()} er ${openGoal.status === "paused" ? "í bið" : "samþykkt"}.`)}</span>{" "}
+          <span className="text-primary">{openGoal.status === "requested" ? T("Review it →", "Fara yfir →") : T("Open →", "Opna →")}</span>
+        </a>
+      ) : null}
 
       <div className="mt-3 flex flex-wrap gap-1.5" role="tablist">
         {(Object.keys(QUALITY) as GoalQuality[]).map((q) => {
           const p = plans?.find((x) => x.quality === q);
           const active = q === tab;
           return (
-            <button key={q} type="button" role="tab" aria-selected={active} onClick={() => { setTab(q); setOpen(false); }}
+            <button key={q} type="button" role="tab" aria-selected={active} onClick={() => setTab(q)}
               className={`rounded-lg border px-2.5 py-1 text-[12px] font-medium ${active ? "border-primary bg-primary text-white" : "border-slate-200 text-slate-700 hover:bg-slate-50"}`}>
               {L(QUALITY[q])}{p?.status === "blocked" ? <span className={active ? "text-white/70" : "text-slate-400"}> · {T("not now", "ekki núna")}</span> : null}
             </button>
@@ -87,8 +96,22 @@ export default function GoalPlanPreviewCard({ playerId, isEN }: { playerId: stri
       {err ? <p className="mt-3 text-[12px] text-[#a83e28]">{T("Couldn't load the preview.", "Tókst ekki að sækja forskoðunina.")} ({err})</p> : null}
       {!plans && !err ? <p className="mt-3 text-[12px] text-slate-400">{T("Reading the player's data…", "Les gögn leikmannsins…")}</p> : null}
 
-      {plan ? (
-        <div className="mt-3">
+      {plan ? <div className="mt-3"><GoalPlanView key={plan.quality} plan={plan} isEN={isEN} /></div> : null}
+    </section>
+  );
+}
+
+/**
+ * One plan, layered: the plan in one sentence → 2–3 plain facts + evidence/confidence → what would change it and
+ * missing data → "Show details" (weeks, tests, safety, limits, sources). Shared by the preview card and the coach's
+ * review of a player's request.
+ */
+export function GoalPlanView({ plan, isEN }: { plan: GoalPlan; isEN: boolean }) {
+  const [open, setOpen] = React.useState(false);
+  const L = (b: Bi) => (isEN ? b.en : b.is);
+  const T = (en: string, is: string) => (isEN ? en : is);
+  return (
+        <div>
           <p className="text-[14px] font-semibold leading-snug text-slate-900">{L(plan.verdict)}</p>
           {plan.status === "ok" ? (
             <>
@@ -113,8 +136,6 @@ export default function GoalPlanPreviewCard({ playerId, isEN }: { playerId: stri
             </>
           ) : null}
         </div>
-      ) : null}
-    </section>
   );
 }
 

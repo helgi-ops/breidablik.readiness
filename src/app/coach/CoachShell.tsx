@@ -79,6 +79,18 @@ const FREE_WALL_DESC = {
   IS: "Liðið þitt er á Free-áskrift: dagleg innritun leikmanna, staða dagsins, leikmannalisti og skilaboð. Álags- og GPS-vöktun, vikuskipulag, styrktarprógrömm, skýrslur og gervigreind eru í Pro og Elite.",
 };
 
+/** Players' goal requests waiting for an answer, or null when the read fails (the badge then keeps its value). */
+async function fetchGoalsCount(): Promise<number | null> {
+  try {
+    const res = await authFetch("/api/coach/goal-plans/requests?count=1", { cache: "no-store" });
+    if (!res.ok) return null;
+    const j = (await res.json()) as { pending?: unknown };
+    return typeof j.pending === "number" ? j.pending : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function CoachShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const currentTab = useUrlTabParam();
@@ -100,6 +112,9 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
   const freeWalled = !walled && freeLocked && isFreeLockedPath(pathname, currentTab);
 
   const [pendingCount, setPendingCount] = useState(0);
+  // Players' goal requests waiting for an answer. Server route (the table has no browser writes and the count needs
+  // the coach's team check); a failed read keeps 0.
+  const [goalsCount, setGoalsCount] = useState(0);
   const [notesCount, setNotesCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -182,6 +197,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
         setPendingCount(pendRes.count ?? 0);
         setNotesCount(notesRes.count ?? 0);
       } catch { /* transient — keep defaults, a refresh re-fetches */ }
+      void fetchGoalsCount().then((n) => { if (alive && n != null) setGoalsCount(n); });
 
       // No-GPS indoor teams: hide the GPS-only Monitoring cluster. Resolve sport via resolveTeamSport so a
       // basketball team with no team_settings row yet (falls back to teams.sport) is still recognised.
@@ -283,6 +299,8 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
       if (!alive) return;
       setPendingCount(pendRes.count ?? 0);
       setNotesCount(notesRes.count ?? 0);
+      const goals = await fetchGoalsCount();
+      if (alive && goals != null) setGoalsCount(goals);
     };
     const interval = setInterval(refresh, 60_000);
     return () => { alive = false; clearInterval(interval); };
@@ -408,6 +426,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
             isAdmin={isAdmin}
             notesCount={notesCount}
             pendingCount={pendingCount}
+            goalsCount={goalsCount}
             currentTab={currentTab}
             currentTeamId={currentTeamId}
             catapultDataTier={catapultDataTier}
@@ -459,6 +478,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
                 isAdmin={isAdmin}
                 notesCount={notesCount}
                 pendingCount={pendingCount}
+                goalsCount={goalsCount}
                 currentTab={currentTab}
                 currentTeamId={currentTeamId}
                 catapultDataTier={catapultDataTier}

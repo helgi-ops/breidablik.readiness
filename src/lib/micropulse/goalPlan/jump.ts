@@ -14,7 +14,7 @@
 
 import { SPEED_REFS } from "@/lib/micropulse/speedMethods";
 import { ACCEL_REFS } from "./acceleration";
-import { BAND_LABEL, WHEN, expandWeeks, isYouth, weekLabel } from "./common";
+import { BAND_LABEL, WHEN, expandWeeks, isYouth, pickStart, weekLabel } from "./common";
 import type { GoalParts } from "./index";
 import type { Bi, GoalBlock, GoalMethod, GoalPlanInput, GoalRef, GoalSession } from "./types";
 
@@ -88,6 +88,11 @@ export const JUMP_METHODS: GoalMethod[] = [
 ];
 
 export type JumpStart = "youth" | "strength_first" | "fast_jumps" | "combined";
+
+/** Starts the coach may choose: under 18 (or age unknown) always stays on the youth hops. */
+export function jumpAllowed(input: GoalPlanInput): JumpStart[] {
+  return isYouth(input.ageYears) ? ["youth"] : ["strength_first", "fast_jumps", "combined"];
+}
 
 export function jumpStart(input: GoalPlanInput): JumpStart {
   if (isYouth(input.ageYears)) return "youth";
@@ -222,7 +227,7 @@ export function jumpWeeks(start: JumpStart) {
   ]);
 }
 
-const START_LABEL: Record<JumpStart, Bi> = {
+export const JUMP_START_LABEL: Record<JumpStart, Bi> = {
   youth: { en: "Youth level", is: "Unglingastig" },
   strength_first: { en: "Strength first", is: "Styrkur fyrst" },
   fast_jumps: { en: "Fast short-contact jumps", is: "Hröð hopp með stuttri snertingu" },
@@ -230,7 +235,7 @@ const START_LABEL: Record<JumpStart, Bi> = {
 };
 
 export function buildJumpParts(input: GoalPlanInput): GoalParts {
-  const start = jumpStart(input);
+  const start = pickStart(input, jumpStart(input), jumpAllowed(input));
   const s = input.strength;
   const c = input.cmj;
   const used: Bi[] = [];
@@ -280,7 +285,8 @@ export function buildJumpParts(input: GoalPlanInput): GoalParts {
         : { en: "In trials, 60–100 foot contacts a session worked as well as double that (Ebben), and a plan matched to the player beat one mix for everyone (Jiménez-Reyes 2017).", is: "Í rannsóknum dugðu 60–100 snertingar á æfingu jafn vel og tvöfalt meira (Ebben), og áætlun sniðin að leikmanninum skilaði meiru en ein blanda fyrir alla (Jiménez-Reyes 2017)." },
       { en: "Choosing the start from the strength and jump tests was not tested in any study: that choice is MicroPulse's rule.", is: "Að velja upphafið út frá styrk- og stökkprófum var ekki prófað í neinni rannsókn: það val er regla MicroPulse." },
     ],
-    branch: { key: start, label: START_LABEL[start], why: startWhy },
+    branch: { key: start, label: JUMP_START_LABEL[start], why: startWhy },
+    start,
     counterfactual,
     evidence: "partly",
     confidence: { level: used.length >= 2 ? "high" : used.length === 1 ? "moderate" : "low", used, missing },

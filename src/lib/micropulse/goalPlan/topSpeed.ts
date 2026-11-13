@@ -82,6 +82,22 @@ const sessionA = (focus: Bi, blocks: GoalBlock[]): GoalSession => ({ slot: "A", 
 /** Out of season only: a second top-speed session, shorter. */
 const sessionC = (blocks: GoalBlock[]): GoalSession => ({ slot: "C", focus: { en: "Sprint (short)", is: "Sprettir (stutt)" }, when: WHEN.off_day, minutes: 12, blocks });
 
+/**
+ * Starts the coach may choose. Build-up first is always allowed. Flying sprints from week 1 only when a run at 90%
+ * of top speed was within the long-gap limit (LONG_GAP_DAYS, 21 days): past that the plan itself turns the next speed
+ * session into build-up runs, so a coach cannot skip the build-up.
+ */
+export const TOP_SPEED_START_LABEL: Record<TopSpeedStart, Bi> = {
+  build_first: { en: "Build up first", is: "Uppbygging fyrst" },
+  ready: { en: "Ready for flying sprints", is: "Tilbúinn í fljúgandi spretti" },
+};
+
+export function topSpeedAllowed(input: GoalPlanInput): TopSpeedStart[] {
+  const t = input.topSpeed;
+  const recent = !!t && t.daysSince != null && t.daysSince <= LONG_GAP_DAYS;
+  return recent ? ["build_first", "ready"] : ["build_first"];
+}
+
 export function topSpeedStart(input: GoalPlanInput): TopSpeedStart {
   const t = input.topSpeed;
   if (!t || t.daysSince == null || t.daysSince > DUE_DAYS) return "build_first";

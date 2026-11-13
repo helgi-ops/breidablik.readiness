@@ -33,6 +33,12 @@ export const EVIDENCE_LABEL: Record<"researched" | "partly" | "rule_of_thumb", B
 };
 
 /** Under 18, or age unknown (unknown is never read as adult). */
+/** The coach's start when the safety rules allow it, else the rule's start. */
+export function pickStart<T extends string>(input: GoalPlanInput, rule: T, allowed: readonly T[]): T {
+  const o = input.startOverride;
+  return o && (allowed as readonly string[]).includes(o) ? (o as T) : rule;
+}
+
 export function isYouth(ageYears: number | null): boolean {
   return ageYears == null || ageYears < ADULT_AGE;
 }

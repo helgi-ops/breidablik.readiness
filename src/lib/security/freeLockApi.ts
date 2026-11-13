@@ -36,6 +36,8 @@ export const FREE_BLOCKED_SEND_PATHS = [
   "/api/integrations/kinexon/upload",
   "/api/integrations/titan/upload",
   "/api/integrations/wimu/upload",
+  "/api/coach/goal-plans/requests/:id/decision",
+  "/api/player/goal-plan",
 ] as const;
 
 /** Data pulls from vendors (any method: some are GET). Cron callers carry a secret, not a login, so they pass. */
@@ -63,6 +65,8 @@ export const FREE_BLOCKED_READ_PATHS = [
   "/api/coach/player/:id/trend-forecast",
   "/api/coach/player/:id/robustness-watch",
   "/api/coach/goal-plans/:id/preview",
+  "/api/coach/goal-plans/requests",
+  "/api/coach/goal-plans/requests/:id",
 ] as const;
 
 const TABLE = [

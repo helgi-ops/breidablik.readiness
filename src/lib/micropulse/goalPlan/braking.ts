@@ -23,7 +23,7 @@
  */
 
 import { COD_CONCERN_PCT } from "@/lib/micropulse/codAsymmetry";
-import { WHEN, expandWeeks, weekLabel } from "./common";
+import { WHEN, expandWeeks, pickStart, weekLabel } from "./common";
 import type { GoalParts } from "./index";
 import type { Bi, GoalBlock, GoalMethod, GoalPlanInput, GoalRef, GoalSession } from "./types";
 
@@ -79,6 +79,16 @@ export const BRAKING_METHODS: GoalMethod[] = [
 ];
 
 export type BrakingStart = "technique_only" | "standard";
+
+export const BRAKING_START_LABEL: Record<BrakingStart, Bi> = {
+  technique_only: { en: "Technique only", is: "Aðeins tækni" },
+  standard: { en: "Tested progression", is: "Prófaður stigi" },
+};
+
+/** Starts the coach may choose: a player already braking hard a lot gets no extra hard stops, so technique only. */
+export function brakingAllowed(input: GoalPlanInput): BrakingStart[] {
+  return brakingStart(input) === "technique_only" ? ["technique_only"] : ["standard", "technique_only"];
+}
 
 export function brakingStart(input: GoalPlanInput): BrakingStart {
   const f = input.braking?.overloadFlag;
@@ -217,7 +227,7 @@ export function brakingWeeks(start: BrakingStart, weakerLeg: GoalPlanInput["weak
 }
 
 export function buildBrakingParts(input: GoalPlanInput): GoalParts {
-  const start = brakingStart(input);
+  const start = pickStart(input, brakingStart(input), brakingAllowed(input));
   const b = input.braking;
   const used: Bi[] = [];
   const missing: Bi[] = [];
@@ -250,9 +260,10 @@ export function buildBrakingParts(input: GoalPlanInput): GoalParts {
     facts,
     branch: {
       key: start,
-      label: start === "technique_only" ? { en: "Technique only", is: "Aðeins tækni" } : { en: "Tested progression", is: "Prófaður stigi" },
+      label: BRAKING_START_LABEL[start],
       why: startWhy,
     },
+    start,
     counterfactual: start === "technique_only"
       ? { en: "If hard braking over the last 4 weeks had been at the usual level, the plan would build up to full-effort stops from week 3.", is: "Ef harðar bremsur síðustu 4 vikur hefðu verið á venjulegu stigi byggðist áætlunin upp í stopp á fullu frá viku 3." }
       : { en: "If the player had been braking hard much more than usual, the plan would stay at 50–75% technique with no extra hard stops.", is: "Ef leikmaðurinn hefði bremsað hart mun meira en venjulega héldist áætlunin á 50–75% tækni án auka harðra stoppa." },

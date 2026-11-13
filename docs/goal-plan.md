@@ -1,6 +1,7 @@
 # Goal plans ("I want to improve my top speed / acceleration / braking / jump")
 
-Status: **lota 1 + 1b shipped 2026-11-13. Coach preview only.** Nothing is stored and nothing reaches a player.
+Status: **lota 1 + 1b + 2 shipped 2026-11-13.** A player can ask; the coach approves, changes the start or declines.
+The approved plan does not reach Today yet (lota 3). Nothing is sent (no push, no email).
 
 ## What it does
 
@@ -77,9 +78,50 @@ associated with more overuse injuries — not "a sudden rise".
 `GET /api/coach/goal-plans/[id]/preview`: coach of the player's team only, FREE-locked (402). The card sits on the
 ELITE-gated Total Player Analysis page.
 
+## Lota 2: request and approval (2026-11-13)
+
+Flow:
+1. **Player:** Today → See more → **My goal** (`PlayerGoalSheet`, reads nothing until opened). The player picks a
+   quality (blocked ones are greyed with a plain reason) and adds an optional note.
+2. `POST /api/player/goal-plan` reads the player from the token, runs the full engine read and refuses a blocked
+   quality (422). It stores the rule's proposal (`proposal`) for the audit trail. **One open goal per player**: a
+   partial unique index gives 409.
+3. **Coach:** sidebar → Strength Training Intelligence → **Player goal requests** (`/coach/goal-requests`, badge =
+   number waiting). Total Player Analysis' goal card links there when the player has an open goal. The review
+   rebuilds the plan from today's data.
+4. The coach approves (first Monday within 28 days), declines (reason required) or stops an approved plan
+   (reason required).
+5. The coach may choose **another start, only from `allowedStarts`**, and must give a reason (≥5 characters). The
+   safety rules decide the list:
+   - under 18 / age unknown keeps the youth level;
+   - McBurnie yellow/red keeps braking at technique only;
+   - flying sprints from week 1 need a run at 90% within 21 days.
+
+   An unsafe choice falls back to the rule. The plan then says "The coach chose this start…" and drops the
+   data-based counterfactual.
+6. Approval **rebuilds the plan on the server and freezes it** in `plan` (engine + content version). The browser
+   never sends a plan. The player sees "approved, starts <date>" plus the coach's note, or the decline reason.
+
+Tables (migration `20261113170000_player_goal_plans.sql`):
+
+| Table | What it holds |
+|---|---|
+| `player_goal_plans` | status `requested → approved / declined / cancelled` (paused / completed reserved for lota 3–4), proposal, frozen plan, start override, dates, notes, reason |
+| `player_goal_plan_events` | audit trail: who (player / coach), what, why |
+
+Access:
+- **Reads:** `can_read_goal_plan` (definer) allows admin, a coach of the team (profiles or `coach_teams`), and the
+  player themselves. There is no `staff_users` shortcut.
+- **Writes:** server only (service role, `store.ts`). Tested: a player can't read a teammate's or another team's
+  row, and a coach of another team can't read the team's rows.
+- **FREE lock:** FREE-locked teams get 402. The player route checks `is_free_locked_team`; the coach routes are in
+  `freeLockApi`.
+
+Plan tier: PRO and up (any team that isn't FREE-locked). The Total Player Analysis card itself stays on the ELITE
+page; the request page and review are PRO.
+
 ## Next (not built)
 
-- Lota 2: player request → coach approves (plans frozen at approval), with tables + migration.
 - Lota 3: Today card for the player, day placement, pause on injury/RTT, lighter version on yellow.
 - Lota 4: retests, end of plan, restart, PDF. Idea: `max_deceleration` from Catapult as a direct braking outcome
   (Marvin 2024 notes GPS decelerations are the only direct braking measure in the literature).
