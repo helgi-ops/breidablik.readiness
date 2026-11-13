@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
+import { verifiedUserIdFromToken } from "@/lib/auth/verifyAccessToken";
 
 /**
  * Send push notifications to recipients based on sender role.
@@ -156,18 +157,18 @@ async function authenticate(req: NextRequest) {
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!token) return { error: "Vantar auðkenningu" };
 
-  const { data: userRes, error: uErr } = await supabase.auth.getUser(token);
-  if (uErr || !userRes?.user) return { error: "Ógilt token" };
+  const uid = await verifiedUserIdFromToken(supabase, token);
+  if (!uid) return { error: "Ógilt token" };
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("role, team_id, player_id")
-    .eq("id", userRes.user.id)
+    .eq("id", uid)
     .maybeSingle();
 
   if (!profile) return { error: "Profile not found" };
 
-  return { uid: userRes.user.id, profile, supabase };
+  return { uid, profile, supabase };
 }
 
 /**

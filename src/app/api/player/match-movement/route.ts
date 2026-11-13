@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { computeMatchMovement } from "@/lib/micropulse/matchMovement";
 import { movementDimensions, type DimensionKey, type MovementFingerprint } from "@/lib/micropulse/matchMovement/types";
+import { verifiedUserIdFromToken } from "@/lib/auth/verifyAccessToken";
 
 export const runtime = "nodejs";
 
@@ -20,9 +21,8 @@ export async function GET(req: Request) {
     const auth = req.headers.get("authorization") ?? "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const { data: userRes, error: uErr } = await sb.auth.getUser(token);
-    if (uErr || !userRes?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const uid = userRes.user.id;
+    const uid = await verifiedUserIdFromToken(sb, token);
+    if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     // Resolve THIS player from auth (never a param) + his team.
     const { data: pl } = await sb.from("players").select("id, team_id").eq("user_id", uid).maybeSingle();

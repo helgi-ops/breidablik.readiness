@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { tokenNeedsCode } from "@/lib/auth/twoStep";
 import { needsMfaStep } from "@/lib/auth/mfaText";
+import { verifiedUserIdFromToken } from "@/lib/auth/verifyAccessToken";
 
 function bearerFromRequest(req: Request) {
   const auth = req.headers.get("authorization") || "";
@@ -46,7 +47,18 @@ async function getUserIdFromCookieSession(): Promise<string | null> {
   return data.user.id;
 }
 
-export async function getUserIdFromBearer(sb: SupabaseClient, req: Request): Promise<string | null> {
+/**
+ * The signed-in user's id from the request's Bearer token (or the cookie session when there is none).
+ *
+ * The token is verified locally (signature + expiry, see verifiedUserIdFromToken) instead of calling Supabase Auth on
+ * every request. Pass `requireLiveSession: true` where a signed-out session must stop working at once rather than
+ * when its token expires (admin routes).
+ */
+export async function getUserIdFromBearer(
+  sb: SupabaseClient,
+  req: Request,
+  opts?: { requireLiveSession?: boolean },
+): Promise<string | null> {
   const token = bearerFromRequest(req);
   if (!token) {
     return getUserIdFromCookieSession();
@@ -54,8 +66,13 @@ export async function getUserIdFromBearer(sb: SupabaseClient, req: Request): Pro
 
   // The proxy refuses these too; checked here as well so the helper never vouches for a session owing a code.
   if (tokenNeedsCode(token)) return null;
-  const { data, error } = await sb.auth.getUser(token);
-  if (!error && data?.user?.id) return data.user.id;
+  if (opts?.requireLiveSession) {
+    const { data, error } = await sb.auth.getUser(token);
+    if (!error && data?.user?.id) return data.user.id;
+  } else {
+    const userId = await verifiedUserIdFromToken(sb, token);
+    if (userId) return userId;
+  }
 
   return getUserIdFromCookieSession();
 }
@@ -78,7 +95,32 @@ export async function requireCoachUserId(sb: SupabaseClient, req: Request): Prom
   return userId;
 }
 
+/**
+ * user id → player id, kept 60 s per server instance. Every player API route resolves this, so one app open
+ * repeated the same `players` lookup ~8 times (13 Nov 2026, 09:01). Only found links are cached, so a player who
+ * links their account is picked up on the next request; a re-link to another player shows within a minute.
+ */
+const PLAYER_LINK_TTL_MS = 60_000;
+const PLAYER_LINK_MAX = 1000;
+const playerLinkCache = new Map<string, { playerId: string; at: number }>();
+
+/** Test hook. */
+export function resetPlayerLinkCache() {
+  playerLinkCache.clear();
+}
+
 export async function resolvePlayerIdForUser(sb: SupabaseClient, userId: string): Promise<string | null> {
+  const hit = playerLinkCache.get(userId);
+  if (hit && Date.now() - hit.at < PLAYER_LINK_TTL_MS) return hit.playerId;
+  const found = await lookupPlayerIdForUser(sb, userId);
+  if (found) {
+    if (playerLinkCache.size >= PLAYER_LINK_MAX) playerLinkCache.clear();
+    playerLinkCache.set(userId, { playerId: found, at: Date.now() });
+  }
+  return found;
+}
+
+async function lookupPlayerIdForUser(sb: SupabaseClient, userId: string): Promise<string | null> {
   const { data: byPlayers, error: byPlayersErr } = await sb.from("players").select("id").eq("user_id", userId).maybeSingle();
   if (byPlayersErr) throw new Error(byPlayersErr.message);
 

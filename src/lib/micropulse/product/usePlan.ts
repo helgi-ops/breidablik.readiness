@@ -42,7 +42,8 @@ export function usePlan(): UsePlanResult {
 
     async function fetchPlan() {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
         if (!user) {
           if (!cancelled) { setPlan(DEFAULT_PLAN); setLoading(false); }
           return;

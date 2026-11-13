@@ -13,7 +13,8 @@ export async function isAdminUser(sb: SupabaseClient, userId: string): Promise<b
 
 /** Throws "Unauthorized" / "Forbidden" (see authErrorToResponse). Returns the admin's user id. */
 export async function requireAdminUser(sb: SupabaseClient, req: Request): Promise<string> {
-  const userId = await getUserIdFromBearer(sb, req);
+  // Live session check: a signed-out admin session stops working at once, not when its token expires.
+  const userId = await getUserIdFromBearer(sb, req, { requireLiveSession: true });
   if (!userId) throw new Error("Unauthorized");
   if (!(await isAdminUser(sb, userId))) throw new Error("Forbidden");
   return userId;

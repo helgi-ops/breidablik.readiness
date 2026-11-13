@@ -212,7 +212,8 @@ export default function PlayerCheckinPage() {
       setError(null);
       setLoading(true);
 
-      const { data: authRes, error: authErr } = await supabase.auth.getUser();
+      // Local session read: this page is where the reminder push lands, so it must not add an Auth round-trip.
+      const { data: authRes, error: authErr } = await supabase.auth.getSession();
       if (cancelled) return;
 
       if (authErr) {
@@ -221,10 +222,7 @@ export default function PlayerCheckinPage() {
         return;
       }
 
-      const user = authRes?.user;
-
-      // ✅ DEBUG: STRAX EFTIR getUser()
-      console.log("CHECKIN auth.uid:", user?.id ?? null);
+      const user = authRes?.session?.user;
 
       if (!user) {
         setLoading(false);

@@ -8,7 +8,7 @@ import type { Finding } from "./types";
  */
 
 const AUTH_MARKER =
-  /requireCoachAccessForTeam|requireCoachUserId|requireAuthedPlayerId|getUserIdFromBearer|authCoach\(|\.auth\.getUser\(|isCronCall|CRON_SECRET|verifyTerraSignature|WEBHOOK_SECRET|requireAdmin/;
+  /requireCoachAccessForTeam|requireCoachUserId|requireAuthedPlayerId|getUserIdFromBearer|verifiedUserIdFromToken\(|authCoach\(|\.auth\.getUser\(|isCronCall|CRON_SECRET|verifyTerraSignature|WEBHOOK_SECRET|requireAdmin/;
 
 const TEAM_SCOPE_MARKER =
   /requireCoachAccessForTeam|from\(\s*["']coach_teams["']\s*\)|coaches_team|getPlayerTeamId|requireAdmin|isCronCall|CRON_SECRET|resolvePolarTeamId|team_id\s*!==|!==\s*[\w.]*[tT]eam(?:_?[iI]d)?\b/;

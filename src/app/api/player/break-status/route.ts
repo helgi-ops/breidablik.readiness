@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServer as admin } from "@/lib/supabaseServer";
 import { getTeamReturnPhase } from "@/lib/notifications/teamBreaks";
+import { verifiedUserIdFromToken } from "@/lib/auth/verifyAccessToken";
 
 export const runtime = "nodejs";
 
@@ -16,9 +17,9 @@ export async function GET(req: Request) {
   const token = a.startsWith("Bearer ") ? a.slice(7) : "";
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const sb = admin();
-  const { data: u } = await sb.auth.getUser(token);
-  if (!u?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { data: p } = await sb.from("players").select("id, team_id").eq("user_id", u.user.id).maybeSingle();
+  const userId = await verifiedUserIdFromToken(sb, token);
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { data: p } = await sb.from("players").select("id, team_id").eq("user_id", userId).maybeSingle();
   if (!p) return NextResponse.json({ error: "Not a player account" }, { status: 403 });
   const player = p as { id: string; team_id: string | null };
   if (!player.team_id) return NextResponse.json({ ok: true, on_break: false, break: null, returnPhase: null });

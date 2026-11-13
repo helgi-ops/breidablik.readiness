@@ -13,6 +13,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { computeMatchMovement } from "@/lib/micropulse/matchMovement";
 import { buildComparisonFacts, callMatchMovementAI, PLAYER_SYSTEM } from "@/lib/micropulse/matchMovement/narrative";
+import { verifiedUserIdFromToken } from "@/lib/auth/verifyAccessToken";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -27,9 +28,8 @@ export async function POST(req: Request) {
     const auth = req.headers.get("authorization") ?? "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const { data: userRes, error: uErr } = await sb.auth.getUser(token);
-    if (uErr || !userRes?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const uid = userRes.user.id;
+    const uid = await verifiedUserIdFromToken(sb, token);
+    if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return NextResponse.json({ error: "AI not configured" }, { status: 503 });

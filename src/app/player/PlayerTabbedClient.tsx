@@ -2298,8 +2298,8 @@ export default function DevPlayerClient() {
   useEffect(() => {
     let alive = true;
     async function loadPlanTier() {
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth.user?.id;
+      const { data: auth } = await supabase.auth.getSession();
+      const userId = auth.session?.user?.id;
       if (!userId) return;
 
       const { data: prof } = await supabase

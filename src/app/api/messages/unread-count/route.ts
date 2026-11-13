@@ -5,6 +5,7 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { resolvePlayerIdForUser } from "@/lib/notifications/auth";
 import { getPlayerTeamId, requireCoachAccessForTeam } from "@/lib/session-rpe/server";
 import { authErrorToResponse } from "@/lib/auth/httpError";
+import { verifiedUserIdFromToken } from "@/lib/auth/verifyAccessToken";
 
 
 async function authenticate(req: NextRequest) {
@@ -13,18 +14,18 @@ async function authenticate(req: NextRequest) {
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!token) return { error: "Vantar auðkenningu" };
 
-  const { data: userRes, error: uErr } = await supabase.auth.getUser(token);
-  if (uErr || !userRes?.user) return { error: "Ógilt token" };
+  const uid = await verifiedUserIdFromToken(supabase, token);
+  if (!uid) return { error: "Ógilt token" };
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("role, team_id, player_id")
-    .eq("id", userRes.user.id)
+    .eq("id", uid)
     .maybeSingle();
 
   if (!profile) return { error: "Profile not found" };
 
-  return { uid: userRes.user.id, profile, supabase };
+  return { uid, profile, supabase };
 }
 
 /**

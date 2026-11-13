@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifiedUserIdFromToken } from "@/lib/auth/verifyAccessToken";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -47,8 +48,7 @@ export async function POST(req: Request) {
       }
     );
 
-    const { data: userData, error: userErr } = await supabase.auth.getUser(token);
-    if (userErr || !userData?.user?.id) {
+    if (!(await verifiedUserIdFromToken(supabase, token))) {
       return NextResponse.json({ ok: false, error: "Invalid token" }, { status: 401 });
     }
 

@@ -6,7 +6,7 @@
  * (`aal` is not "aal2") is refused. Every other token passes, so ordinary coaches and players are untouched.
  *
  * These helpers only DECODE the token. That is safe here because they can only refuse: a forged token without the
- * flag still has to pass the route's own `auth.getUser(token)` check, and a real token cannot drop the flag
+ * flag still has to pass the route's own signature check (`verifiedUserIdFromToken` or `auth.getUser`), and a real token cannot drop the flag
  * without breaking its signature. Runs in the proxy, so no Node-only APIs.
  */
 

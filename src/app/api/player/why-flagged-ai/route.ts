@@ -30,6 +30,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { getQuestion } from "@/lib/coach-qa/questions";
 import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
+import { verifiedUserIdFromToken } from "@/lib/auth/verifyAccessToken";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const CLAUDE_MODEL      = "claude-haiku-4-5-20251001";
@@ -45,10 +46,9 @@ async function resolvePlayerContext(
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
   if (!token) return { error: "Missing auth", status: 401 };
 
-  const { data: userRes, error: uErr } = await supabase.auth.getUser(token);
-  if (uErr || !userRes?.user) return { error: "Invalid token", status: 401 };
+  const userId = await verifiedUserIdFromToken(supabase, token);
+  if (!userId) return { error: "Invalid token", status: 401 };
 
-  const userId = userRes.user.id;
   const { data: prof } = await supabase
     .from("profiles")
     .select("player_id, team_id")

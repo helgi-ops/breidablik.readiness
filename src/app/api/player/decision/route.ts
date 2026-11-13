@@ -20,6 +20,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { buildOnePlayerDecision } from "@/lib/micropulse/playerDecision";
+import { verifiedUserIdFromToken } from "@/lib/auth/verifyAccessToken";
 
 export const runtime = "nodejs";
 
@@ -47,10 +48,9 @@ async function resolvePlayerContext(
   if (!token) return { error: "Missing auth", status: 401 };
 
   const sb = getAdminClient();
-  const { data: userRes, error: uErr } = await sb.auth.getUser(token);
-  if (uErr || !userRes?.user) return { error: "Invalid token", status: 401 };
+  const userId = await verifiedUserIdFromToken(sb, token);
+  if (!userId) return { error: "Invalid token", status: 401 };
 
-  const userId = userRes.user.id;
   const { data: prof } = await sb
     .from("profiles")
     .select("player_id, team_id")

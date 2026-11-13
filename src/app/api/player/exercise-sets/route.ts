@@ -18,6 +18,7 @@
 
 import { NextResponse } from "next/server";
 import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
+import { verifiedUserIdFromToken } from "@/lib/auth/verifyAccessToken";
 
 export const runtime = "nodejs";
 
@@ -28,8 +29,7 @@ async function requirePlayer(req: Request) {
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!token) return { error: "Unauthorized", status: 401 } as const;
   const sb = getAdmin();
-  const { data: u } = await sb.auth.getUser(token);
-  const userId = u?.user?.id;
+  const userId = await verifiedUserIdFromToken(sb, token);
   if (!userId) return { error: "Unauthorized", status: 401 } as const;
   const { data: player } = await sb
     .from("players").select("id, team_id").eq("user_id", userId).maybeSingle();

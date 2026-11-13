@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { resolvePlayerIdForUser } from "@/lib/notifications/auth";
 import { getPlayerTeamId, requireCoachAccessForTeam } from "@/lib/session-rpe/server";
+import { verifiedUserIdFromToken } from "@/lib/auth/verifyAccessToken";
 
 /** The player themself, or a coach of the player's team. */
 async function mayMarkThread(sb: SupabaseClient, req: Request, ownPlayerId: string | null, playerId: string): Promise<boolean> {
@@ -30,14 +31,14 @@ export async function POST(req: NextRequest) {
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!token) return NextResponse.json({ error: "Vantar auðkenningu" }, { status: 401 });
 
-  const { data: userRes, error: uErr } = await supabase.auth.getUser(token);
-  if (uErr || !userRes?.user) return NextResponse.json({ error: "Ógilt token" }, { status: 401 });
+  const uid = await verifiedUserIdFromToken(supabase, token);
+  if (!uid) return NextResponse.json({ error: "Ógilt token" }, { status: 401 });
 
   const body = await req.json();
   const { messageIds, playerId, date } = body;
 
   const now = new Date().toISOString();
-  const ownPlayerId = await resolvePlayerIdForUser(supabase, userRes.user.id);
+  const ownPlayerId = await resolvePlayerIdForUser(supabase, uid);
 
   if (messageIds?.length) {
     const { data: rows, error: readErr } = await supabase
