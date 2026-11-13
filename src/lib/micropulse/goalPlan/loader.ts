@@ -35,7 +35,7 @@ import { blockReason } from "./common";
 import type { GoalBlockReason, GoalPlan, GoalPlanInput, GoalQuality, GoalSport, StrengthBand } from "./types";
 import { GOAL_QUALITIES } from "./types";
 
-const UNAVAILABLE_STATUS = ["injured", "rehabilitation", "rtp_training"];
+export const UNAVAILABLE_STATUS = ["injured", "rehabilitation", "rtp_training"];
 /** Single-leg VALD tests whose L/R gap can name a weaker leg (Bishop 2018: ≥10% worth acting on). */
 const SINGLE_LEG_TESTS = ["SLJ", "SLDJ", "SLISOSQT", "SLCMJ", "SLCMRJ", "SLHJ"];
 const WEAKER_LEG_PCT = 10;

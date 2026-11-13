@@ -8,8 +8,10 @@ export const dynamic = "force-dynamic";
  * the safety rules allow (with a logged reason), sets the start date, and approves or declines. Approved plans can be
  * stopped with a reason. Every step is in the plan's history (audit trail).
  *
- * The plan is an add-on on its own card: it never changes the readiness colour or Today's session. In lota 2 the
- * player only sees the answer on their request screen; the plan reaches Today in lota 3. Nothing is sent (no push).
+ * The plan is an add-on on its own card: it never changes the readiness colour or Today's session. From its start
+ * date the player sees each day's session on Today (lota 3). It pauses itself when the player is marked injured /
+ * in rehab / returning to training, and the coach restarts it here (at the paused week, or week 1 after a long
+ * break). Nothing is sent (no push).
  */
 
 import * as React from "react";
@@ -52,6 +54,8 @@ type Review = {
   ruleStart: string | null;
   starts: { key: string; label: Bi; rule: boolean }[];
   events: GoalPlanEventRow[];
+  weekView: { week: number; sessions: { slot: string; focus: Bi; date: string | null; md: string | null }[]; weekKnown: boolean } | null;
+  resumeDefault: number | null;
 };
 
 async function authed(path: string, init?: RequestInit) {
@@ -153,6 +157,7 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
   const [startDate, setStartDate] = React.useState(() => nextMonday(new Date().toISOString().slice(0, 10)));
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
+  const [fromWeek, setFromWeek] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     let alive = true;
@@ -175,10 +180,15 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
   const changed = !!chosen && !!data.ruleStart && chosen !== data.ruleStart;
   const reasonOk = reason.trim().length >= REASON_MIN;
 
-  const decide = async (action: "approve" | "decline" | "stop") => {
+  const pausedWeek = Math.max(1, row.paused_week ?? 1);
+  const resumeWeek = fromWeek ?? data.resumeDefault ?? 1;
+  const resumeNeedsReason = resumeWeek > (data.resumeDefault ?? 1);
+
+  const decide = async (action: "approve" | "decline" | "stop" | "resume") => {
     setBusy(true); setMsg(null);
     const body = action === "approve"
       ? { action, startDate, start: chosen, reason: changed ? reason : undefined, noteToPlayer: note || undefined }
+      : action === "resume" ? { action, startDate, fromWeek: resumeWeek, reason: reason || undefined, noteToPlayer: note || undefined }
       : action === "decline" ? { action, reason, noteToPlayer: note || undefined } : { action, reason };
     const { res, j } = await authed(`/api/coach/goal-plans/requests/${encodeURIComponent(id)}/decision`, { method: "POST", body: JSON.stringify(body) });
     setBusy(false);
@@ -234,7 +244,7 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
             <button type="button" disabled={busy || !reasonOk} onClick={() => decide("decline")}
               className="rounded-lg border border-slate-300 px-3 py-1.5 text-[13px] font-medium text-slate-700 disabled:opacity-50">{T("Decline", "Hafna")}</button>
           </div>
-          <p className="text-[11px] text-slate-500">{T("The player sees the answer on their request screen. The plan reaches Today in the next step (not yet built); nothing is sent.", "Leikmaðurinn sér svarið á beiðnaskjánum. Áætlunin birtist á Today í næsta skrefi (ekki komið); ekkert er sent.")}</p>
+          <p className="text-[11px] text-slate-500">{T("The player sees the answer on their request screen, and from the start date each day's session on Today. Nothing is sent (no push).", "Leikmaðurinn sér svarið á beiðnaskjánum og frá upphafsdegi æfingu hvers dags á Today. Ekkert er sent (engin tilkynning).")}</p>
         </div>
       ) : null}
 
@@ -246,7 +256,66 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
         </div>
       ) : null}
 
-      {row.status === "approved" || row.status === "paused" ? (
+      {row.status === "approved" && data.weekView ? (
+        <div className="space-y-1.5 border-t border-slate-100 pt-3">
+          <p className="text-[12px] font-semibold text-slate-800">
+            {data.weekView.week < 1
+              ? T(`Starts ${fmtDate(row.start_date, true)}.`, `Hefst ${fmtDate(row.start_date, false)}.`)
+              : T(`Week ${data.weekView.week} of 8 — where this week's sessions land`, `Vika ${data.weekView.week} af 8 — hvar æfingar vikunnar lenda`)}
+          </p>
+          {data.weekView.sessions.length ? (
+            <ul className="space-y-0.5 text-[12px] text-slate-700">
+              {data.weekView.sessions.map((s) => (
+                <li key={s.slot}>
+                  <span className="font-semibold">{s.slot}</span> · {L(s.focus)} · {s.date
+                    ? `${new Date(`${s.date}T12:00:00Z`).toLocaleDateString(isEN ? "en-GB" : "is-IS", { weekday: "short", day: "numeric", month: "short" })}${s.md ? ` (${s.md})` : ""}`
+                    : T("no free day this week (left out)", "enginn laus dagur þessa viku (sleppt)")}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="text-[11px] text-slate-500">
+            {T("Rules place the sessions: never on a match day, the day before or after, a rest or recovery day; at least 2 days apart. The player sees the lighter version on a yellow day and skips it on red.", "Reglur raða æfingunum: aldrei á leikdegi, deginum fyrir eða eftir, hvíldar- eða endurheimtardegi; minnst 2 dagar á milli. Leikmaðurinn sér léttari útgáfu á gulum degi og sleppir henni á rauðum.")}
+            {data.weekView.weekKnown ? "" : T(" This week's training days are not set, so any day away from a match counts.", " Æfingadagar vikunnar eru ekki settir, svo allir dagar fjarri leik teljast með.")}
+          </p>
+        </div>
+      ) : null}
+
+      {row.status === "paused" ? (
+        <div className="space-y-3 border-t border-slate-100 pt-3">
+          <p className="text-[12.5px] text-slate-800">
+            {T(`Paused in week ${pausedWeek}${row.paused_at ? ` on ${fmtDate(row.paused_at, true)}` : ""}: the player was marked injured, in rehab or returning to training. Only you restart it.`,
+              `Sett í bið í viku ${pausedWeek}${row.paused_at ? ` ${fmtDate(row.paused_at, false)}` : ""}: leikmaðurinn var skráður meiddur, í endurhæfingu eða í endurkomu. Aðeins þú setur hana aftur af stað.`)}
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <label className="block text-[12px] text-slate-700">
+              <span className="font-semibold">{T("Pick up at week", "Halda áfram í viku")}</span>
+              <select value={resumeWeek} onChange={(e) => setFromWeek(Number(e.target.value))} className="mt-1 block rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]">
+                {Array.from({ length: pausedWeek }, (_, i) => i + 1).map((w) => (
+                  <option key={w} value={w}>{w}{w === data.resumeDefault ? T(" (rule's suggestion)", " (tillaga reglunnar)") : ""}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-[12px] text-slate-700">
+              <span className="font-semibold">{T("From Monday", "Frá mánudegi")}</span>
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1 block rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]" />
+            </label>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            {T("After a break of more than 21 days the rule restarts from week 1. Picking up later than the suggestion needs a reason.", "Eftir hlé lengra en 21 dagur byrjar reglan aftur í viku 1. Að halda áfram seinna en tillagan segir þarf ástæðu.")}
+          </p>
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={500}
+            placeholder={resumeNeedsReason ? T("Why pick up later than the suggestion? (required)", "Af hverju seinna en tillagan? (skylda)") : T("Reason (optional to restart, required to stop)", "Ástæða (valfrjáls til að halda áfram, skylda til að stöðva)")}
+            className="block w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]" />
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder={T("Note to the player (optional)", "Skilaboð til leikmanns (valfrjálst)")} className="block w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]" />
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={busy || (resumeNeedsReason && !reasonOk)} onClick={() => decide("resume")} className="rounded-lg bg-primary px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50">{T("Restart the plan", "Halda áætluninni áfram")}</button>
+            <button type="button" disabled={busy || !reasonOk} onClick={() => decide("stop")} className="rounded-lg border border-[#a83e28]/40 px-3 py-1.5 text-[13px] font-medium text-[#a83e28] disabled:opacity-50">{T("Stop the plan", "Stöðva áætlunina")}</button>
+          </div>
+        </div>
+      ) : null}
+
+      {row.status === "approved" ? (
         <div className="space-y-2 border-t border-slate-100 pt-3">
           {row.coach_note ? <p className="text-[12px] text-slate-600"><span className="font-semibold">{T("Your note to the player:", "Skilaboð þín til leikmanns:")}</span> {row.coach_note}</p> : null}
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={500} placeholder={T("Reason to stop the plan", "Ástæða til að stöðva áætlunina")} className="block w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]" />

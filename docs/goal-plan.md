@@ -1,7 +1,9 @@
 # Goal plans ("I want to improve my top speed / acceleration / braking / jump")
 
-Status: **lota 1 + 1b + 2 shipped 2026-11-13.** A player can ask; the coach approves, changes the start or declines.
-The approved plan does not reach Today yet (lota 3). Nothing is sent (no push, no email).
+Status: **lota 1 + 1b + 2 + 3 shipped 2026-11-13.** A player can ask; the coach approves, changes the start or
+declines. From its start date the plan's sessions show on the player's Today, placed around the team's matches, in a
+lighter version on a yellow day and skipped on red. It pauses itself on injury and ends after 8 weeks. Nothing is sent
+(no push, no email).
 
 ## What it does
 
@@ -106,7 +108,7 @@ Tables (migration `20261113170000_player_goal_plans.sql`):
 
 | Table | What it holds |
 |---|---|
-| `player_goal_plans` | status `requested → approved / declined / cancelled` (paused / completed reserved for lota 3–4), proposal, frozen plan, start override, dates, notes, reason |
+| `player_goal_plans` | status `requested → approved / declined / cancelled`, `approved ↔ paused`, `approved → completed`; proposal, frozen plan, start override, dates, notes, reason, pause week |
 | `player_goal_plan_events` | audit trail: who (player / coach), what, why |
 
 Access:
@@ -120,8 +122,56 @@ Access:
 Plan tier: PRO and up (any team that isn't FREE-locked). The Total Player Analysis card itself stays on the ELITE
 page; the request page and review are PRO.
 
+## Lota 3: on the player's Today (2026-11-13)
+
+Card: `PlayerGoalTodayCard` in the deferred Today slot below the session (with the recovery and "Top speed due"
+cards), so Today's first load is unchanged. It reads `GET /api/player/goal-plan/today` and is silent with no plan, on
+an error, and for FREE clubs. Pure rules in `today.ts`; server reads in `todayLoader.ts`.
+
+**Day placement** (`placeWeek`, MicroPulse rules, no study):
+- Candidates are the team's TRAIN days in `week_plans`. A week with no TRAIN day set counts every day not marked
+  off / recovery / game.
+- Never on a match day, MD-1 or MD+1 (matches from `match_schedule` + week_plans GAME; labels in the same order as the
+  strength engine's MD context). Sessions at least 2 days apart, also across Sunday → Monday.
+- Preferred days per quality:
+
+  | Quality | Session A | Session B |
+  |---|---|---|
+  | Top speed | MD-3, MD-4 | gym: MD+2, MD-4 |
+  | Acceleration, jump | MD-3, MD-4, MD+3 | gym: MD+2, MD-4 |
+  | Braking | MD+3, MD+2 | MD-2 |
+
+  No match near: weekday order (A Tue/Wed, B Thu/Fri).
+- When not all fit, A wins over B. A session with no free day is left out, not made up. A week the team is off says
+  "the team is not training", not "busy match week".
+
+**Today's version** (the colour is only read, from `v_coach_readiness_today_v8.final_color`):
+
+| Colour | Version |
+|---|---|
+| Green | Full session |
+| No check-in | Full session, with "check in first" |
+| Yellow | Lighter: no flat-out or sled sprints, hard stops, box drops or tests; the rest at half the sets. A session that is all such work is skipped |
+| Red | Skip; not made up |
+
+**Pause and end** (`syncGoalStatuses` in `store.ts`, applied lazily whenever the plan is read: player Today, player
+request screen, coach list):
+- Approved and the player is in `player_injuries` as injured / rehabilitation / rtp_training → `paused`, with
+  `paused_at` and `paused_week` (migration `20261113200000_player_goal_plans_pause.sql`). Event `paused` (system).
+- After `end_date` → `completed`, event `completed` (system). The player can then ask for a new goal.
+- Only the coach restarts a paused plan (`/coach/goal-requests` → "Restart the plan", decision action `resume`):
+  - picks a week up to the paused week; the rule suggests the paused week, or week 1 after more than 21 days;
+  - picking a later week than the suggestion needs a reason;
+  - refused while the player is still marked unavailable.
+
+  The start date moves back so the chosen week lands on the restart Monday.
+
+The coach's review of an approved plan shows the plan week and where this week's sessions land (`weekView`).
+
+Player-facing errors now carry Icelandic text (`error_is`).
+
 ## Next (not built)
 
-- Lota 3: Today card for the player, day placement, pause on injury/RTT, lighter version on yellow.
+- Lota 4: a "done" tick per session (adherence is not recorded yet; the card only shows which days are past).
 - Lota 4: retests, end of plan, restart, PDF. Idea: `max_deceleration` from Catapult as a direct braking outcome
   (Marvin 2024 notes GPS decelerations are the only direct braking measure in the literature).

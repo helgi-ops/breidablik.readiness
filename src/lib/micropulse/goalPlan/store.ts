@@ -15,27 +15,33 @@ import {
   DECISION_FROM,
   OPEN_STATUSES,
   PLAYER_BLOCK_TEXT,
+  RESUME_FROM_START_AFTER_DAYS,
   parseDecision,
   planEndDate,
+  resumeDefaultWeek,
+  resumedStartDate,
   type GoalPlanEventRow,
   type GoalPlanRow,
   type GoalPlanStatus,
 } from "./requests";
 import type { GoalPlan, GoalQuality } from "./types";
+import { PLAN_WEEKS } from "./common";
+import { planWeekOn } from "./today";
 
 type Sb = SupabaseClient;
 
 /** An error with the HTTP status the route should answer with. */
 export class GoalPlanError extends Error {
-  constructor(public status: number, message: string) {
+  /** `is` = the Icelandic text, for errors the player can see. */
+  constructor(public status: number, message: string, public is: string | null = null) {
     super(message);
   }
 }
 
 const ROW_COLS =
-  "id, team_id, player_id, quality, status, player_note, proposal, plan, engine_version, content_version, start_override, start_date, end_date, coach_note, decision_reason, requested_at, reviewed_at, closed_at";
+  "id, team_id, player_id, quality, status, player_note, proposal, plan, engine_version, content_version, start_override, start_date, end_date, coach_note, decision_reason, requested_at, reviewed_at, closed_at, paused_at, paused_week";
 const LIGHT_COLS =
-  "id, team_id, player_id, quality, status, player_note, start_override, start_date, end_date, coach_note, decision_reason, requested_at, reviewed_at, closed_at";
+  "id, team_id, player_id, quality, status, player_note, start_override, start_date, end_date, coach_note, decision_reason, requested_at, reviewed_at, closed_at, paused_at, paused_week";
 
 async function logEvent(
   sb: Sb,
@@ -53,6 +59,52 @@ async function logEvent(
 }
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+
+// ─── Lota 3: automatic pause and end ───────────────────────────────────────
+
+type SyncRow = { id: string; team_id: string; player_id: string; status: GoalPlanStatus; start_date: string | null; end_date: string | null; closed_at?: string | null; paused_at?: string | null; paused_week?: number | null };
+
+/**
+ * Applies the two automatic changes to approved plans, lazily whenever a plan is read:
+ *   - the 8 weeks are over (today after `end_date`) → completed;
+ *   - the player is marked injured / in rehab / in return-to-train (`unavailable`, read by the caller) → paused,
+ *     with the plan week, so the coach can pick it up there. Only a coach restarts it.
+ * Optimistic: each update only applies while the row is still "approved". Returns the rows with their new status.
+ */
+export async function syncGoalStatuses<T extends SyncRow>(sb: Sb, rows: T[], unavailable: Set<string>, today: string = todayIso()): Promise<T[]> {
+  const out: T[] = [];
+  for (const r of rows) {
+    if (r.status !== "approved" || !r.start_date) { out.push(r); continue; }
+    const now = new Date().toISOString();
+    if (r.end_date && today > r.end_date) {
+      const { data, error } = await sb.from("player_goal_plans").update({ status: "completed", closed_at: now, updated_at: now })
+        .eq("id", r.id).eq("status", "approved").select("id");
+      if (error) throw new Error(error.message);
+      if (data?.length) await logEvent(sb, r, "completed", { userId: null, role: "system" }, null, { end_date: r.end_date });
+      out.push({ ...r, status: "completed", closed_at: now });
+      continue;
+    }
+    if (unavailable.has(r.player_id)) {
+      const week = Math.max(0, Math.min(PLAN_WEEKS, planWeekOn(r.start_date, today)));
+      const { data, error } = await sb.from("player_goal_plans").update({ status: "paused", paused_at: now, paused_week: week, updated_at: now })
+        .eq("id", r.id).eq("status", "approved").select("id");
+      if (error) throw new Error(error.message);
+      if (data?.length) await logEvent(sb, r, "paused", { userId: null, role: "system" }, "Marked injured, in rehab or returning to training.", { week });
+      out.push({ ...r, status: "paused", paused_at: now, paused_week: week });
+      continue;
+    }
+    out.push(r);
+  }
+  return out;
+}
+
+/** The player's approved or paused plan with the frozen plan (for the Today card). */
+export async function activeGoalWithPlan(sb: Sb, playerId: string): Promise<GoalPlanRow | null> {
+  const { data, error } = await sb.from("player_goal_plans").select(ROW_COLS)
+    .eq("player_id", playerId).in("status", ["approved", "paused"]).limit(1).maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as unknown as GoalPlanRow | null) ?? null;
+}
 
 // ─── Player ────────────────────────────────────────────────────────────────
 
@@ -76,7 +128,7 @@ export async function createGoalRequest(
   const { base } = await loadGoalPlanBase(sb, args.teamId, args.playerId, todayIso());
   const proposal = buildGoalPlan({ ...base, quality: args.quality });
   if (proposal.status === "blocked" && proposal.blocked) {
-    throw new GoalPlanError(422, PLAYER_BLOCK_TEXT[proposal.blocked.reason].en);
+    throw new GoalPlanError(422, PLAYER_BLOCK_TEXT[proposal.blocked.reason].en, PLAYER_BLOCK_TEXT[proposal.blocked.reason].is);
   }
   const { data, error } = await sb.from("player_goal_plans").insert({
     team_id: args.teamId, player_id: args.playerId, quality: args.quality, status: "requested",
@@ -84,7 +136,7 @@ export async function createGoalRequest(
     requested_by: args.userId,
   }).select("id, team_id, player_id").single();
   if (error) {
-    if ((error as { code?: string }).code === "23505") throw new GoalPlanError(409, "You already have a goal open.");
+    if ((error as { code?: string }).code === "23505") throw new GoalPlanError(409, "You already have a goal open.", "Þú ert nú þegar með opið markmið.");
     throw new Error(error.message);
   }
   const row = data as { id: string; team_id: string; player_id: string };
@@ -101,7 +153,7 @@ export async function cancelGoalRequest(sb: Sb, args: { playerId: string; userId
     .select("id, team_id, player_id");
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as { id: string; team_id: string; player_id: string }[];
-  if (!rows.length) throw new GoalPlanError(409, "There is no request waiting to withdraw.");
+  if (!rows.length) throw new GoalPlanError(409, "There is no request waiting to withdraw.", "Engin beiðni bíður sem hægt er að draga til baka.");
   for (const r of rows) await logEvent(sb, r, "cancelled", { userId: args.userId, role: "player" }, null);
 }
 
@@ -211,6 +263,27 @@ export async function decideGoal(
       await logEvent(sb, row, "start_changed", actor, d.reason, { rule: plan.startOverride.rule, chosen: plan.startOverride.chosen });
     }
     await logEvent(sb, row, "approved", actor, null, { start_date: d.startDate, start: plan.start });
+    return { status: "approved" };
+  }
+
+  if (d.action === "resume") {
+    if (input.unavailable) {
+      throw new GoalPlanError(409, "The player is still marked injured, in rehab or returning to training. Clear that first.");
+    }
+    const pausedWeek = Math.max(1, row.paused_week ?? 1);
+    const def = resumeDefaultWeek(row.paused_week, row.paused_at, today);
+    if (d.fromWeek > pausedWeek) throw new GoalPlanError(400, `The plan can pick up at week ${pausedWeek} at the latest (where it paused).`);
+    if (d.fromWeek > def && !d.reason) {
+      throw new GoalPlanError(400, `After a break of more than ${RESUME_FROM_START_AFTER_DAYS} days the plan restarts from week 1; picking up later needs a reason (at least 5 characters).`);
+    }
+    const start = resumedStartDate(d.startDate, d.fromWeek);
+    const { data, error } = await sb.from("player_goal_plans").update({
+      status: "approved", start_date: start, end_date: planEndDate(start), paused_at: null, paused_week: null,
+      coach_note: d.noteToPlayer ?? row.coach_note, updated_at: now,
+    }).eq("id", row.id).eq("status", "paused").select("id");
+    if (error) throw new Error(error.message);
+    if (!data?.length) throw new GoalPlanError(409, "This plan changed meanwhile; reload.");
+    await logEvent(sb, row, "resumed", actor, d.reason, { from_week: d.fromWeek, resume_monday: d.startDate, default_week: def });
     return { status: "approved" };
   }
 

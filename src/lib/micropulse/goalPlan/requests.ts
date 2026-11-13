@@ -33,6 +33,9 @@ export type GoalPlanRow = {
   requested_at: string;
   reviewed_at: string | null;
   closed_at: string | null;
+  /** Set while paused (lota 3): when, and which plan week the player was in. */
+  paused_at?: string | null;
+  paused_week?: number | null;
 };
 
 export type GoalPlanEventRow = {
@@ -118,7 +121,28 @@ export function cleanPlayerNote(v: unknown): string | null {
 export type GoalDecision =
   | { action: "approve"; startDate: string; start: string | null; reason: string | null; noteToPlayer: string | null }
   | { action: "decline"; reason: string; noteToPlayer: string | null }
-  | { action: "stop"; reason: string };
+  | { action: "stop"; reason: string }
+  | { action: "resume"; startDate: string; fromWeek: number; reason: string | null; noteToPlayer: string | null };
+
+/** After a pause longer than this the plan restarts from week 1 by default (MicroPulse rule; same 21 days as the
+ *  top-speed long gap). */
+export const RESUME_FROM_START_AFTER_DAYS = 21;
+
+/**
+ * The week a paused plan picks up at by default: the week it paused in, or week 1 after a long break. The coach may
+ * go back further; going further than this needs a reason, and never past the paused week.
+ */
+export function resumeDefaultWeek(pausedWeek: number | null | undefined, pausedAt: string | null | undefined, todayIso: string): number {
+  const w = Math.max(1, Math.min(PLAN_WEEKS, pausedWeek ?? 1));
+  if (!pausedAt) return w;
+  const days = Math.round((toDate(todayIso).getTime() - toDate(pausedAt.slice(0, 10)).getTime()) / DAY_MS);
+  return days > RESUME_FROM_START_AFTER_DAYS ? 1 : w;
+}
+
+/** The plan's (virtual) first Monday when it picks up at `fromWeek` on `resumeMonday`. */
+export function resumedStartDate(resumeMonday: string, fromWeek: number): string {
+  return toIso(new Date(toDate(resumeMonday).getTime() - (fromWeek - 1) * 7 * DAY_MS));
+}
 
 /**
  * Checks a coach's decision body. `ruleStart` is the engine's start for this player; choosing another start needs a
@@ -138,12 +162,18 @@ export function parseDecision(body: unknown, todayIso: string, ruleStart: string
     if (!hasReason) return { ok: false, error: `A reason is needed to stop a plan (at least ${REASON_MIN} characters).` };
     return { ok: true, value: { action: "stop", reason: reason! } };
   }
-  if (b.action !== "approve") return { ok: false, error: "Unknown action." };
+  if (b.action !== "approve" && b.action !== "resume") return { ok: false, error: "Unknown action." };
   const startDate = typeof b.startDate === "string" ? b.startDate : "";
   if (!isMonday(startDate)) return { ok: false, error: "The plan starts on a Monday." };
   const ahead = Math.round((toDate(startDate).getTime() - toDate(todayIso).getTime()) / DAY_MS);
-  if (ahead < 0) return { ok: false, error: "The start date is in the past." };
+  // A restart may pick up this week's Monday (up to 6 days back); a new plan starts today or later.
+  if (ahead < (b.action === "resume" ? -6 : 0)) return { ok: false, error: "The start date is in the past." };
   if (ahead > START_MAX_DAYS_AHEAD) return { ok: false, error: `The start must be within ${START_MAX_DAYS_AHEAD} days.` };
+  if (b.action === "resume") {
+    const fromWeek = typeof b.fromWeek === "number" && Number.isInteger(b.fromWeek) ? b.fromWeek : NaN;
+    if (!(fromWeek >= 1 && fromWeek <= PLAN_WEEKS)) return { ok: false, error: `Pick a week from 1 to ${PLAN_WEEKS}.` };
+    return { ok: true, value: { action: "resume", startDate, fromWeek, reason: hasReason ? reason : null, noteToPlayer } };
+  }
   const start = typeof b.start === "string" && b.start ? b.start : null;
   const changed = !!start && !!ruleStart && start !== ruleStart;
   if (changed && !hasReason) return { ok: false, error: `Changing the start needs a reason (at least ${REASON_MIN} characters).` };
@@ -155,4 +185,5 @@ export const DECISION_FROM: Record<GoalDecision["action"], GoalPlanStatus[]> = {
   approve: ["requested"],
   decline: ["requested"],
   stop: ["approved", "paused"],
+  resume: ["paused"],
 };

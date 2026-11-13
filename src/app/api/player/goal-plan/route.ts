@@ -12,38 +12,19 @@
 
 import { NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
-import { getPlayerTeamId, requireAuthedPlayerId } from "@/lib/session-rpe/server";
-import { authErrorToResponse } from "@/lib/auth/httpError";
 import { loadGoalEligibility } from "@/lib/micropulse/goalPlan/loader";
-import { GoalPlanError, cancelGoalRequest, createGoalRequest, playerCurrentGoal } from "@/lib/micropulse/goalPlan/store";
+import { cancelGoalRequest, createGoalRequest } from "@/lib/micropulse/goalPlan/store";
+import { playerCurrentGoalSynced } from "@/lib/micropulse/goalPlan/todayLoader";
+import { goalFail, requireGoalPlayer } from "./_shared";
 import { PLAYER_BLOCK_TEXT, cleanPlayerNote, isGoalQuality } from "@/lib/micropulse/goalPlan/requests";
 
 export const runtime = "nodejs";
 
-type Sb = ReturnType<typeof getSupabaseServer>;
-
-async function resolvePlayer(sb: Sb, req: Request) {
-  const { userId, playerId } = await requireAuthedPlayerId(sb, req);
-  const teamId = await getPlayerTeamId(sb, playerId);
-  if (!teamId) throw new GoalPlanError(403, "No team");
-  const { data: locked } = await sb.rpc("is_free_locked_team", { p_team_id: teamId });
-  if (locked === true) throw new GoalPlanError(402, "Not on this plan");
-  return { userId, playerId, teamId };
-}
-
-function fail(e: unknown) {
-  if (e instanceof GoalPlanError) return NextResponse.json({ error: e.message }, { status: e.status });
-  if (e instanceof Error && e.message === "Authenticated user is not mapped to a player") {
-    return NextResponse.json({ error: "Not a player account" }, { status: 403 });
-  }
-  return authErrorToResponse(e) ?? NextResponse.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 500 });
-}
-
 export async function GET(req: Request) {
   try {
     const sb = getSupabaseServer();
-    const { playerId, teamId } = await resolvePlayer(sb, req);
-    const [eligibility, current] = await Promise.all([loadGoalEligibility(sb, teamId, playerId), playerCurrentGoal(sb, playerId)]);
+    const { playerId, teamId } = await requireGoalPlayer(sb, req);
+    const [eligibility, current] = await Promise.all([loadGoalEligibility(sb, teamId, playerId), playerCurrentGoalSynced(sb, playerId)]);
     return NextResponse.json({
       ok: true,
       eligibility: eligibility.map((e) => ({ quality: e.quality, blocked: e.blocked, blockedText: e.blocked ? PLAYER_BLOCK_TEXT[e.blocked] : null })),
@@ -51,35 +32,36 @@ export async function GET(req: Request) {
         id: current.id, quality: current.quality, status: current.status, note: current.player_note,
         requestedAt: current.requested_at, startDate: current.start_date, endDate: current.end_date,
         coachNote: current.coach_note,
+        pausedWeek: current.status === "paused" ? current.paused_week ?? null : null,
         // A decline reason is for the player; a reason for changing the start is the coach's own note.
         declineReason: current.status === "declined" ? current.decision_reason : null,
       },
     });
   } catch (e) {
-    return fail(e);
+    return goalFail(e);
   }
 }
 
 export async function POST(req: Request) {
   try {
     const sb = getSupabaseServer();
-    const { userId, playerId, teamId } = await resolvePlayer(sb, req);
+    const { userId, playerId, teamId } = await requireGoalPlayer(sb, req);
     const body = (await req.json().catch(() => ({}))) as { quality?: unknown; note?: unknown };
-    if (!isGoalQuality(body.quality)) return NextResponse.json({ error: "Pick top speed, acceleration, braking or vertical jump." }, { status: 400 });
+    if (!isGoalQuality(body.quality)) return NextResponse.json({ error: "Pick top speed, acceleration, braking or vertical jump.", error_is: "Veldu hámarkshraða, hröðun, bremsun eða lóðrétt stökk." }, { status: 400 });
     const res = await createGoalRequest(sb, { teamId, playerId, userId, quality: body.quality, note: cleanPlayerNote(body.note) });
     return NextResponse.json({ ok: true, id: res.id });
   } catch (e) {
-    return fail(e);
+    return goalFail(e);
   }
 }
 
 export async function DELETE(req: Request) {
   try {
     const sb = getSupabaseServer();
-    const { userId, playerId } = await resolvePlayer(sb, req);
+    const { userId, playerId } = await requireGoalPlayer(sb, req);
     await cancelGoalRequest(sb, { playerId, userId });
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return fail(e);
+    return goalFail(e);
   }
 }

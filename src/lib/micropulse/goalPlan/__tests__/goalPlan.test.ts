@@ -312,6 +312,8 @@ describe("never touches the colour or Today's session", () => {
     const { resolve } = await import("node:path");
     for (const r of [
       "src/app/api/player/goal-plan/route.ts",
+      "src/app/api/player/goal-plan/_shared.ts",
+      "src/app/api/player/goal-plan/today/route.ts",
       "src/app/api/coach/goal-plans/requests/route.ts",
       "src/app/api/coach/goal-plans/requests/[id]/route.ts",
       "src/app/api/coach/goal-plans/requests/[id]/decision/route.ts",

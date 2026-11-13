@@ -49,6 +49,7 @@ import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
 import PlayerSignalPackCard from "@/components/player/PlayerSignalPackCard";
 import PlayerRecoveryTodayCard from "@/components/player/PlayerRecoveryTodayCard";
 import PlayerTopSpeedDueCard from "@/components/player/PlayerTopSpeedDueCard";
+import PlayerGoalTodayCard from "@/components/player/PlayerGoalTodayCard";
 import ClientErrorBoundary from "@/components/util/ClientErrorBoundary";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
@@ -1120,6 +1121,11 @@ function PlayerSignalPackPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
 
   return createPortal(
     <div className="mt-3 space-y-3">
+      {/* The player's goal plan (lota 3): an add-on below the day's session, never the session itself.
+          Self-hides when there is no approved plan; boundaried so it can never blank Today. */}
+      <ClientErrorBoundary>
+        <PlayerGoalTodayCard lang={lang === "IS" ? "IS" : "EN"} />
+      </ClientErrorBoundary>
       {/* Always-on daily recovery readout (self-hides when no watch data). */}
       <PlayerRecoveryTodayCard playerId={ids.playerId} lang={lang === "IS" ? "IS" : "EN"} />
       {/* Exception-only supporting signals (self-hides on clean days). */}

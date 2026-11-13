@@ -2,8 +2,8 @@
 
 /**
  * "My goal" (lota 2): the player asks to improve one quality (top speed, acceleration, braking, vertical jump).
- * The coach reviews a plan built by rules from the player's own data and approves or declines it. In lota 2 the
- * player only sees the request and the answer; the plan itself reaches Today in lota 3.
+ * The coach reviews a plan built by rules from the player's own data and approves or declines it. Once approved,
+ * each day's session shows on Today (PlayerGoalTodayCard, lota 3); this sheet shows the status and the answer.
  *
  * Opened from Today → See more. It reads nothing until it is opened, so Today's first load is unchanged.
  * Plain words only: no sport-science terms, no colour, no load numbers.
@@ -25,6 +25,7 @@ type Current = {
   endDate: string | null;
   coachNote: string | null;
   declineReason: string | null;
+  pausedWeek?: number | null;
 };
 
 const QUALITY: Record<GoalQuality, { label: Bi; sub: Bi }> = {
@@ -81,12 +82,16 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
     return () => { alive = false; };
   }, [reload]);
 
+  /** The server's message in the player's language (Icelandic when the server has it). */
+  const errText = (j: Record<string, unknown>, fallback: string) =>
+    String((is && typeof j.error_is === "string" && j.error_is) || (typeof j.error === "string" && j.error) || fallback);
+
   const send = async () => {
     if (!pick) return;
     setBusy(true); setMsg(null);
     const { res, j } = await call("POST", { quality: pick, note: note.trim() || undefined });
     setBusy(false);
-    if (!res.ok) { setMsg(String(j.error ?? T("Could not send. Try again.", "Tókst ekki að senda. Reyndu aftur."))); return; }
+    if (!res.ok) { setMsg(errText(j, T("Could not send. Try again.", "Tókst ekki að senda. Reyndu aftur."))); return; }
     setPick(null); setNote(""); setReload((n) => n + 1);
   };
 
@@ -94,7 +99,7 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
     setBusy(true); setMsg(null);
     const { res, j } = await call("DELETE");
     setBusy(false);
-    if (!res.ok) { setMsg(String(j.error ?? T("Could not withdraw. Try again.", "Tókst ekki að draga til baka. Reyndu aftur."))); return; }
+    if (!res.ok) { setMsg(errText(j, T("Could not withdraw. Try again.", "Tókst ekki að draga til baka. Reyndu aftur."))); return; }
     setReload((n) => n + 1);
   };
 
@@ -122,9 +127,9 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
               {current.status === "requested" ? (
                 <p className="mt-1 text-sm text-slate-700">{T(`Asked on ${fmtDate(current.requestedAt, false)}. Waiting for your coach to look at it.`, `Beðið um ${fmtDate(current.requestedAt, true)}. Bíður þess að þjálfarinn skoði það.`)}</p>
               ) : current.status === "approved" ? (
-                <p className="mt-1 text-sm text-slate-700">{T(`Your coach said yes. The 8 weeks start ${fmtDate(current.startDate, false)}.`, `Þjálfarinn sagði já. Vikurnar 8 hefjast ${fmtDate(current.startDate, true)}.`)}</p>
+                <p className="mt-1 text-sm text-slate-700">{T(`Your coach said yes. The 8 weeks run ${fmtDate(current.startDate, false)} – ${fmtDate(current.endDate, false)}. Each day's session shows on Today.`, `Þjálfarinn sagði já. Vikurnar 8 standa ${fmtDate(current.startDate, true)} – ${fmtDate(current.endDate, true)}. Æfing hvers dags birtist á Í dag.`)}</p>
               ) : (
-                <p className="mt-1 text-sm text-slate-700">{T("Your coach has paused the plan for now.", "Þjálfarinn hefur sett áætlunina í bið í bili.")}</p>
+                <p className="mt-1 text-sm text-slate-700">{T(`Paused${current.pausedWeek ? ` in week ${current.pausedWeek}` : ""} while you are injured or coming back. Your coach restarts it.`, `Í bið${current.pausedWeek ? ` í viku ${current.pausedWeek}` : ""} á meðan meiðsli eða endurkoma standa yfir. Þjálfarinn setur hana aftur af stað.`)}</p>
               )}
               {current.note ? <p className="mt-2 text-xs text-slate-500">{T("Your note:", "Þín athugasemd:")} {current.note}</p> : null}
               {current.coachNote ? <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700"><span className="font-semibold">{T("From your coach:", "Frá þjálfaranum:")}</span> {current.coachNote}</p> : null}
@@ -138,9 +143,15 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
 
         {state === "ready" && !open ? (
           <div className="space-y-3">
+            {current?.status === "completed" ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                <div className="font-semibold">{T(`Your 8 weeks of ${L(QUALITY[current.quality].label).toLowerCase()} finished on ${fmtDate(current.endDate, false)}.`, `8 vikna áætluninni (${L(QUALITY[current.quality].label).toLowerCase()}) lauk ${fmtDate(current.endDate, true)}.`)}</div>
+                <p className="mt-1">{T("You can ask for a new goal below.", "Þú getur beðið um nýtt markmið hér fyrir neðan.")}</p>
+              </div>
+            ) : null}
             {current?.status === "declined" ? (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                <div className="font-semibold">{T(`Your coach said not now to ${L(QUALITY[current.quality].label).toLowerCase()}.`, `Þjálfarinn sagði ekki núna við ${L(QUALITY[current.quality].label).toLowerCase()}.`)}</div>
+                <div className="font-semibold">{T(`Your coach said not now to ${L(QUALITY[current.quality].label).toLowerCase()}.`, `Þjálfarinn sagði ekki núna (${L(QUALITY[current.quality].label).toLowerCase()}).`)}</div>
                 {current.declineReason ? <p className="mt-1">{current.declineReason}</p> : null}
                 {current.coachNote ? <p className="mt-1">{current.coachNote}</p> : null}
               </div>
