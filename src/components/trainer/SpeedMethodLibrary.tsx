@@ -160,6 +160,11 @@ function PlanView({ plan, lang }: { plan: SpeedPlan; lang: Lang }) {
       <p className="rounded-lg border border-[#de9328]/40 bg-[#de9328]/5 px-3 py-2 text-xs text-slate-700">{L(SPEED_PLAN_BASIS)}</p>
 
       <div className="space-y-3">
+        {plan.alternatives && (
+          <p className="text-xs font-semibold text-slate-700">
+            {lang === "IS" ? "Tvær útgáfur af sömu viku: veldu þá sem passar við vikuna þína." : "Two versions of the same week: pick the one that matches your week."}
+          </p>
+        )}
         {plan.weeks.map((w) => (
           <div key={w.label.en} className="rounded-xl border border-slate-200 bg-white">
             <div className="border-b border-slate-100 px-4 py-2 font-[family-name:var(--font-display)] text-sm font-semibold text-slate-900">
@@ -171,6 +176,11 @@ function PlanView({ plan, lang }: { plan: SpeedPlan; lang: Lang }) {
                   <div>
                     <div className="text-sm font-semibold text-slate-900">{L(s.dayLabel)}</div>
                     <div className="text-xs text-slate-500">{L(s.focus)}</div>
+                    {s.subgroup && (
+                      <div className="mt-1 inline-block rounded-full border border-[#de9328]/40 bg-[#de9328]/10 px-2 py-0.5 text-[11px] font-medium text-[#8a5a12]">
+                        {L(s.subgroup)}
+                      </div>
+                    )}
                   </div>
                   <ul className="min-w-0 space-y-1">
                     {s.blocks.map((b, i) => (

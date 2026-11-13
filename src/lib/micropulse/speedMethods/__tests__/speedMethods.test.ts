@@ -115,10 +115,24 @@ describe("speed plans", () => {
     }
   });
 
-  it("the in-season week counts the match and wraps to next week", () => {
+  it("each in-season version counts the match, wraps to next week and leaves subgroups out", () => {
     const p = SPEED_PLANS.find((x) => x.key === "in_season")!;
-    // MD-4 Tue (1) → MD-2 Thu (3) → match Sat (5) → next Tue (8).
-    expect(topSpeedGaps(p)).toEqual([2, 2, 3]);
+    expect(p.alternatives).toBe(true);
+    // Standard: MD-3 Wed (2) → match Sat (5) → next Wed (9). Tactical: MD-2 Thu (3) → Sat (5) → next Thu (10).
+    expect(topSpeedGaps(p)).toEqual([3, 4, 2, 5]);
+    const subgroups = p.weeks.flatMap((w) => w.sessions.filter((s) => s.subgroup));
+    expect(subgroups.length).toBeGreaterThan(0);
+    for (const s of subgroups) expect(filled(s.subgroup!)).toBe(true);
+  });
+
+  it("a player on the standard week who also does the MD-2 top-up would be 1 day apart, so the top-up is subgroup-only", () => {
+    const p = SPEED_PLANS.find((x) => x.key === "in_season")!;
+    const md2 = p.weeks[0].sessions.find((s) => s.day === 3)!;
+    expect(md2.subgroup).toBeDefined();
+  });
+
+  it("flying sprints are labelled 'some', not 'best' (Nicholson 2022; Wang 2026)", () => {
+    expect(SPEED_METHOD_BY_KEY.flying_sprints.evidence).toBe("some");
   });
 
   it("each plan has both languages, 2–3 facts and sources", () => {

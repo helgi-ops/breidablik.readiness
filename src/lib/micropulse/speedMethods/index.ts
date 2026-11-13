@@ -44,7 +44,10 @@ export type SpeedRefKey =
   | "seitz2014"
   | "weyand2000"
   | "malone2017"
-  | "buchheit2023";
+  | "buchheit2023"
+  | "wang2026"
+  | "oliver2024"
+  | "gomezpiqueras2024";
 
 export type SpeedRef = { key: SpeedRefKey; short: string; cite: string; verifiedFrom: VerifiedFrom };
 
@@ -69,6 +72,9 @@ export const SPEED_REFS: Record<SpeedRefKey, SpeedRef> = {
   weyand2000: { key: "weyand2000", short: "Weyand 2000", cite: "Weyand PG et al. Faster top running speeds are achieved with greater ground forces not more rapid leg movements. J Appl Physiol 2000;89.", verifiedFrom: "abstract" },
   malone2017: { key: "malone2017", short: "Malone 2017", cite: "Malone S et al. High chronic training loads and exposure to bouts of maximal velocity running reduce injury risk in elite Gaelic football. J Sci Med Sport 2017;20:250–254.", verifiedFrom: "abstract" },
   buchheit2023: { key: "buchheit2023", short: "Buchheit 2023", cite: "Buchheit M, Settembre M, Hader K, McHugh D. Exposures to near-to-maximal speed running bouts during different turnarounds in elite football: association with match hamstring injuries. Biol Sport 2023.", verifiedFrom: "abstract" },
+  wang2026: { key: "wang2026", short: "Wang 2026", cite: "Wang Y, Zhang M, Luo Z. Effects of various exercise interventions on sprint performance and jump height in soccer players: a systematic review and network meta-analysis. J Sports Sci Med 2026;25:405–445. doi:10.52082/jssm.2026.405", verifiedFrom: "full_text" },
+  oliver2024: { key: "oliver2024", short: "Oliver 2024", cite: "Oliver JL, Ramachandran AK, Singh U, Ramirez-Campillo R, Lloyd RS. The effects of strength, plyometric and combined training on strength, power and speed characteristics in high-level, highly trained male youth soccer players: a systematic review and meta-analysis. Sports Med 2024;54:623–643. doi:10.1007/s40279-023-01944-8", verifiedFrom: "full_text" },
+  gomezpiqueras2024: { key: "gomezpiqueras2024", short: "Gómez-Piqueras 2024", cite: "Gómez-Piqueras P, Alcaraz PE. If you want to prevent hamstring injuries in soccer, run fast: a narrative review about practical considerations of sprint training. Sports 2024;12:134. doi:10.3390/sports12050134 (narrative review plus one professional club's own practice, not a trial).", verifiedFrom: "full_text" },
 };
 
 // ─── Methods ──────────────────────────────────────────────────────────────
@@ -122,10 +128,10 @@ export const SPEED_METHODS: SpeedMethod[] = [
     key: "flying_sprints",
     label: { en: "Flying sprints", is: "Fljúgandi sprettir" },
     summary: {
-      en: "Build up over 20–40 m, then run 10–30 m flat out. The most direct way to train top speed.",
-      is: "Byggðu upp hraða á 20–40 m og hlauptu svo 10–30 m á fullum hraða. Beinasta leiðin til að þjálfa hámarkshraða.",
+      en: "Build up over 20–40 m, then run 10–30 m flat out. The most direct way to train top speed; the evidence is strongest when strength work goes with it.",
+      is: "Byggðu upp hraða á 20–40 m og hlauptu svo 10–30 m á fullum hraða. Beinasta leiðin til að þjálfa hámarkshraða; gögnin eru sterkust þegar styrkur fylgir með.",
     },
-    evidence: "best",
+    evidence: "some",
     dose: {
       en: "3–5 runs of 10–30 m at full speed · 4+ min rest · 50–150 m in all · 48–72 h to the next one",
       is: "3–5 sprettir 10–30 m á fullum hraða · 4+ mín hvíld · 50–150 m alls · 48–72 klst í næsta",
@@ -159,12 +165,34 @@ export const SPEED_METHODS: SpeedMethod[] = [
           is: "Í 48 rannsóknum hafði sértæk sprettþjálfun mest áhrif á 31 m og lengra.",
         },
       },
+      {
+        ref: "wang2026",
+        text: {
+          en: "31 trials in footballers: sprint training ranked first for 30 m but was not clearly better than normal training (−0.16 s, uncertain). At 40 m no method beat normal training.",
+          is: "31 rannsókn á fótboltamönnum: sprettþjálfun var efst á 30 m en ekki greinilega betri en venjulegar æfingar (−0,16 s, óvisst). Á 40 m var engin aðferð betri en venjulegar æfingar.",
+        },
+      },
+      {
+        ref: "gomezpiqueras2024",
+        text: {
+          en: "About 70% of match sprints start on the move, so flying sprints match the game. One professional club's practice: 45 m flying runs (15 m build-up + 30 m fast).",
+          is: "Um 70% spretta í leik byrja á ferð, svo fljúgandi sprettir líkjast leiknum. Vinnulag eins atvinnuliðs: 45 m fljúgandi sprettir (15 m aðhlaup + 30 m hratt).",
+        },
+      },
+      {
+        ref: "haugen2019",
+        text: {
+          en: "Rule of thumb among sprint coaches: 1–2 minutes of rest for every second spent at full speed.",
+          is: "Þumalputtaregla sprettþjálfara: 1–2 mínútna hvíld fyrir hverja sekúndu á fullum hraða.",
+        },
+      },
     ],
     howTo: [
       { en: "Do them early in the session, after a full warm-up, while players are fresh.", is: "Hafðu þá snemma á æfingu, eftir góða upphitun, meðan leikmenn eru ferskir." },
       { en: "Mark the build-up and the fast zone with cones; time the zone or read top speed from GPS.", is: "Merktu aðhlaup og hraðasvæði með keilum; taktu tímann á svæðinu eða lestu hámarkshraða úr GPS." },
       { en: "Start short (10 m fast zone, 20 m build-up) and lengthen over the weeks.", is: "Byrjaðu stutt (10 m hraðasvæði, 20 m aðhlaup) og lengdu yfir vikurnar." },
       { en: "Stop when speed drops or the running looks tight.", is: "Hættu þegar hraðinn dettur eða hlaupið stífnar." },
+      { en: "Make it more game-like over the weeks: straight runs, then curved runs, then a finishing drill with no opponents (up to 40 m), then attack-against-defence games (Gómez-Piqueras 2024).", is: "Gerðu þá leiklíkari yfir vikurnar: beinir sprettir, svo sveigðir, svo skotæfing án mótherja (mest 40 m), svo sókn á móti vörn (Gómez-Piqueras 2024)." },
     ],
   },
   {
@@ -240,6 +268,20 @@ export const SPEED_METHODS: SpeedMethod[] = [
         },
       },
       {
+        ref: "wang2026",
+        text: {
+          en: "31 trials in footballers: heavy strength training was the best method for 5 m (−0.09 s) and 20 m (−0.13 s), and the only one clearly better than normal training at 30 m (−0.13 s).",
+          is: "31 rannsókn á fótboltamönnum: þungur styrkur var besta aðferðin á 5 m (−0,09 s) og 20 m (−0,13 s), og sú eina sem var greinilega betri en venjulegar æfingar á 30 m (−0,13 s).",
+        },
+      },
+      {
+        ref: "oliver2024",
+        text: {
+          en: "34 studies, 1,396 elite youth players: strength, jump or combined training gave moderate gains over the first 10 m (0.74–1.01) but only small gains over 15–40 m (0.40–0.59).",
+          is: "34 rannsóknir, 1.396 ungir afreksleikmenn: styrkur, hopp eða blanda gaf miðlungs bætingu á fyrstu 10 m (0,74–1,01) en aðeins litla á 15–40 m (0,40–0,59).",
+        },
+      },
+      {
         ref: "weyand2000",
         text: {
           en: "Faster runners reach higher top speeds by pushing harder into the ground, not by moving their legs faster.",
@@ -291,6 +333,13 @@ export const SPEED_METHODS: SpeedMethod[] = [
         },
       },
       {
+        ref: "oliver2024",
+        text: {
+          en: "Elite youth players: jump training gave a small but consistent gain over 15–40 m (0.42). Most of those jumps were upward and slow; top speed needs short ground contact and a forward push.",
+          is: "Ungir afreksleikmenn: hopp gáfu litla en stöðuga bætingu á 15–40 m (0,42). Flest hoppin voru upp á við og hæg; hámarkshraði þarf stutta snertingu og lárétta spyrnu.",
+        },
+      },
+      {
         ref: "haugen2019",
         text: {
           en: "Sprint coaches use bounding, hurdle jumps and skipping with very short ground contacts; demanding on the Achilles.",
@@ -301,6 +350,7 @@ export const SPEED_METHODS: SpeedMethod[] = [
     howTo: [
       { en: "Quality over volume: short ground contact, and stop when jumps get slow or heavy.", is: "Gæði fram yfir magn: stutt snerting, og hættu þegar hoppin hægjast eða þyngjast." },
       { en: "Count foot contacts and build them up over the weeks.", is: "Teldu snertingar og byggðu þær upp yfir vikurnar." },
+      { en: "For top speed, pick quick, stiff jumps (pogo hops, bounds, low hurdles), not deep drop jumps (Oliver 2024).", is: "Fyrir hámarkshraða, veldu snögg og stíf hopp (pogo, skrefstökk, lágar grindur), ekki djúp fallhopp (Oliver 2024)." },
     ],
     caution: {
       en: "High jump volumes load the Achilles and calves; build up gradually.",
@@ -563,6 +613,13 @@ export const SPEED_METHODS: SpeedMethod[] = [
           is: "Hópar sem æfðu bara með liðinu bættu ekki hámarkshraðafasann.",
         },
       },
+      {
+        ref: "wang2026",
+        text: {
+          en: "Over 40 m, no method in 31 trials was clearly better than normal team training: the gain over longer sprints is hard to show.",
+          is: "Á 40 m var engin aðferð í 31 rannsókn greinilega betri en venjulegar liðsæfingar: bætingin á lengri sprettum er erfitt að sýna.",
+        },
+      },
     ],
     howTo: [],
   },
@@ -598,6 +655,10 @@ export const SPEED_CAVEATS: Bi[] = [
   {
     en: "Many studies time 30–40 m from a standing start, which mixes the start and top speed.",
     is: "Margar rannsóknir mæla 30–40 m frá kyrrstöðu, sem blandar saman starti og hámarkshraða.",
+  },
+  {
+    en: "Over 30 m the evidence is thin: in a 2026 analysis of 31 trials, no method was clearly better than normal training at 40 m (Wang 2026).",
+    is: "Yfir 30 m eru gögnin þunn: í greiningu 31 rannsóknar 2026 var engin aðferð greinilega betri en venjulegar æfingar á 40 m (Wang 2026).",
   },
   {
     en: "Most trials are small (often 7–12 players a group) and short (6–10 weeks).",
@@ -636,8 +697,16 @@ export const SPEED_SAFETY: Bi[] = [
     is: "Minnst 48 klst milli hámarkshraðaæfinga (leikur telst sem ein).",
   },
   {
-    en: "Running near top speed regularly is associated with fewer hamstring injuries; a sudden jump after a long gap is associated with more (Malone 2017; Buchheit 2023).",
-    is: "Reglulegir sprettir nálægt hámarkshraða tengjast færri aftanlærismeiðslum; snögg aukning eftir langt hlé tengist fleiri (Malone 2017; Buchheit 2023).",
+    en: "Running near top speed regularly is associated with fewer hamstring injuries; a sudden jump after a long gap, or too much, is associated with more (Malone 2017; Buchheit 2023; Gómez-Piqueras 2024).",
+    is: "Reglulegir sprettir nálægt hámarkshraða tengjast færri aftanlærismeiðslum; snögg aukning eftir langt hlé, eða of mikið, tengist fleiri (Malone 2017; Buchheit 2023; Gómez-Piqueras 2024).",
+  },
+  {
+    en: "Players who play little need extra sprints: after the match or on MD+1/MD+2 (one club's practice, Gómez-Piqueras 2024).",
+    is: "Þeir sem spila lítið þurfa aukaspretti: eftir leik eða á MD+1/MD+2 (vinnulag eins félags, Gómez-Piqueras 2024).",
+  },
+  {
+    en: "On a speed day close to the match, keep braking low: long run-outs, no sharp stops or turns (Gómez-Piqueras 2024).",
+    is: "Á hraðadegi nálægt leik, haltu bremsum í lágmarki: langt útrennsli, engin snögg stopp eða snúningar (Gómez-Piqueras 2024).",
   },
 ];
 
@@ -664,6 +733,8 @@ export type SpeedSession = {
   dayLabel: Bi;
   focus: Bi;
   blocks: SpeedBlock[];
+  /** Only part of the squad does this session (e.g. players who did not play). Left out of the 48 h check. */
+  subgroup?: Bi;
 };
 
 export type SpeedWeek = { label: Bi; sessions: SpeedSession[] };
@@ -678,6 +749,8 @@ export type SpeedPlan = {
   facts: Bi[];
   /** Match day (0 = Monday) when the plan sits around a weekly match. */
   matchDay?: number;
+  /** The weeks are alternative versions of one repeating week (pick one), not weeks in a row. */
+  alternatives?: boolean;
   weeks: SpeedWeek[];
   refs: SpeedRefKey[];
 };
@@ -756,6 +829,32 @@ const heavy = (sets: string, reps: string): Bi => ({
 const session = (day: number, focus: Bi, blocks: SpeedBlock[]): SpeedSession => ({ day, dayLabel: DAY[day], focus, blocks });
 
 const SPEED_FOCUS: Bi = { en: "Speed + strength", is: "Hraði + styrkur" };
+
+const IN_SEASON_LIFTS: SpeedBlock = {
+  ...lifts({ en: "Squat or trap-bar deadlift 2–3 × 3–5 heavy, low volume", is: "Hnébeygja eða trap bar 2–3 × 3–5 þungt, lítið magn" }),
+  what: { en: "Gym: heavy legs", is: "Salur: þungar fætur" },
+};
+
+/** MD-2 top-up for players who missed the main top-speed session. */
+const TOP_UP: SpeedBlock = {
+  method: "flying_sprints",
+  topSpeed: true,
+  flatOutM: 40,
+  what: { en: "Flying sprints", is: "Fljúgandi sprettir" },
+  dose: {
+    en: `1–2 × 20 m at 95–100% · 30 m build-up · full rest · more than ${LONG_GAP_DAYS} days since 90%: 2–3 build-up runs at 80–90% instead`,
+    is: `1–2 × 20 m á 95–100% · 30 m aðhlaup · full hvíld · meira en ${LONG_GAP_DAYS} dagar síðan 90%: 2–3 uppbyggingarsprettir á 80–90% í staðinn`,
+  },
+};
+
+/** MD+2 (Monday after a Saturday match): sprints for players who did not play (Gómez-Piqueras 2024). */
+const NON_STARTERS: SpeedSession = {
+  day: 0,
+  dayLabel: { en: "MD+2", is: "MD+2" },
+  focus: { en: "Sprints for those who did not play", is: "Sprettir fyrir þá sem spiluðu ekki" },
+  subgroup: { en: "Only players who did not play (or played under 30 min)", is: "Aðeins þeir sem spiluðu ekki (eða undir 30 mín)" },
+  blocks: [{ ...flying(3, 20, "20–30") }],
+};
 const JUMP_FOCUS: Bi = { en: "Start + jumps + power", is: "Start + hopp + kraftur" };
 
 export const SPEED_PLANS: SpeedPlan[] = [
@@ -769,50 +868,77 @@ export const SPEED_PLANS: SpeedPlan[] = [
     },
     facts: [
       {
-        en: "MD-4: flying sprints early in the pitch session, then strength in the gym after.",
-        is: "MD-4: fljúgandi sprettir snemma á æfingu, svo styrkur í sal á eftir.",
+        en: "Two versions, to match your week in Periodization Hub: standard week = flying sprints at the start of MD-3; Tactical Periodization = speed day on MD-2.",
+        is: "Tvær útgáfur, eftir vikunni þinni í Periodization Hub: venjuleg vika = fljúgandi sprettir í byrjun MD-3; taktísk periodisering = hraðadagur á MD-2.",
       },
       {
-        en: "MD-2 (optional): one or two fast runs for players the \"Top speed due\" flag names, or who did not play.",
-        is: "MD-2 (valfrjálst): einn eða tveir hraðir sprettir fyrir þá sem „Tími á hámarkshraða\" nefnir, eða spiluðu ekki.",
+        en: "Strength in the gym on MD-4, once a week: that holds pre-season speed; once every second week does not (Rønnestad 2011).",
+        is: "Styrkur í sal á MD-4, einu sinni í viku: það heldur hraða undirbúningstímabilsins; önnur hver vika gerir það ekki (Rønnestad 2011).",
       },
       {
-        en: "One strength session a week holds pre-season speed; one every second week does not (Rønnestad 2011).",
-        is: "Ein styrktaræfing á viku heldur hraða undirbúningstímabilsins; önnur hver vika gerir það ekki (Rønnestad 2011).",
+        en: "Players who did not play get their sprints on MD+2 (Gómez-Piqueras 2024).",
+        is: "Þeir sem spiluðu ekki fá sína spretti á MD+2 (Gómez-Piqueras 2024).",
       },
     ],
     matchDay: 5,
+    alternatives: true,
     weeks: [
       {
-        label: { en: "Every week", is: "Hver vika" },
+        label: { en: "Standard week (Periodization Hub default)", is: "Venjuleg vika (sjálfgefið í Periodization Hub)" },
         sessions: [
+          NON_STARTERS,
           {
             day: 1,
             dayLabel: { en: "MD-4", is: "MD-4" },
-            focus: { en: "Top speed + strength", is: "Hámarkshraði + styrkur" },
+            focus: { en: "Strength", is: "Styrkur" },
+            blocks: [IN_SEASON_LIFTS, jumpSquat(3), jumps("40–60")],
+          },
+          {
+            day: 2,
+            dayLabel: { en: "MD-3", is: "MD-3" },
+            focus: { en: "Top speed, at the start of the session", is: "Hámarkshraði, í byrjun æfingar" },
             blocks: [
-              flying(4, 20, "20–30"),
-              lifts({ en: "Squat or trap-bar deadlift 2–3 × 3–5 heavy", is: "Hnébeygja eða trap bar 2–3 × 3–5 þungt" }),
-              jumpSquat(3),
-              jumps("40–60"),
+              {
+                ...flying(4, 20, "20–30"),
+                what: {
+                  en: "Flying sprints, straight after the warm-up (if speed is down after the gym the day before, move the gym to after this session)",
+                  is: "Fljúgandi sprettir, strax eftir upphitun (ef hraðinn er niðri eftir salinn daginn áður, færðu salinn aftur fyrir þessa æfingu)",
+                },
+              },
             ],
           },
           {
             day: 3,
-            dayLabel: { en: "MD-2 (optional)", is: "MD-2 (valfrjálst)" },
-            focus: { en: "Top-up for those who need it", is: "Viðbót fyrir þá sem þurfa" },
+            dayLabel: { en: "MD-2", is: "MD-2" },
+            focus: { en: "Top-up", is: "Viðbót" },
+            subgroup: {
+              en: "Only players who missed MD-3 or the \"Top speed due\" flag names",
+              is: "Aðeins þeir sem misstu af MD-3 eða „Tími á hámarkshraða\" nefnir",
+            },
+            blocks: [TOP_UP],
+          },
+        ],
+      },
+      {
+        label: { en: "Tactical Periodization week", is: "Taktísk periodisering" },
+        sessions: [
+          NON_STARTERS,
+          {
+            day: 1,
+            dayLabel: { en: "MD-4", is: "MD-4" },
+            focus: { en: "Strength (tension day)", is: "Styrkur (tension-dagur)" },
+            blocks: [IN_SEASON_LIFTS, jumpSquat(3), jumps("40–60")],
+          },
+          {
+            day: 3,
+            dayLabel: { en: "MD-2", is: "MD-2" },
+            focus: { en: "Speed day: short, fast, long rests", is: "Hraðadagur: stutt, hratt, langar hvíldir" },
             blocks: [
               {
-                method: "flying_sprints",
-                topSpeed: true,
-                flatOutM: 40,
-                what: {
-                  en: "Flying sprints for players the \"Top speed due\" flag names, or who did not play",
-                  is: "Fljúgandi sprettir fyrir þá sem „Tími á hámarkshraða\" nefnir, eða spiluðu ekki",
-                },
+                ...flying(4, 20, "20–30"),
                 dose: {
-                  en: `1–2 × 20 m at 95–100% · 30 m build-up · full rest · more than ${LONG_GAP_DAYS} days since 90%: 2–3 build-up runs at 80–90% instead`,
-                  is: `1–2 × 20 m á 95–100% · 30 m aðhlaup · full hvíld · meira en ${LONG_GAP_DAYS} dagar síðan 90%: 2–3 uppbyggingarsprettir á 80–90% í staðinn`,
+                  en: `4 × 20 m flat out · 20–30 m build-up · 4+ min rest · long run-out, no sharp stops · more than ${LONG_GAP_DAYS} days since 90%: 2–3 build-up runs at 80–90% instead`,
+                  is: `4 × 20 m á fullu · 20–30 m aðhlaup · 4+ mín hvíld · langt útrennsli, engin snögg stopp · meira en ${LONG_GAP_DAYS} dagar síðan 90%: 2–3 uppbyggingarsprettir á 80–90% í staðinn`,
                 },
               },
             ],
@@ -820,7 +946,7 @@ export const SPEED_PLANS: SpeedPlan[] = [
         ],
       },
     ],
-    refs: ["haugen2019", "ronnestad2011", "loturco2016", "buchheit2023", "nicholson2022", "saez2012"],
+    refs: ["haugen2019", "ronnestad2011", "gomezpiqueras2024", "loturco2016", "buchheit2023", "nicholson2022", "saez2012"],
   },
   {
     key: "pre_season",
@@ -979,13 +1105,16 @@ export function hasTopSpeed(s: SpeedSession): boolean {
 }
 
 /**
- * Days between consecutive top-speed exposures across the plan, weeks laid end to end (the last week wraps
- * to the first week of the next cycle for a repeating in-season week). A match counts as an exposure.
+ * Days between consecutive top-speed exposures. Sessions for a subgroup only (e.g. non-starters) are left
+ * out; a match counts as an exposure. Weeks in a row are laid end to end; a plan around a weekly match wraps
+ * its last week into the next cycle. Alternative weeks (`alternatives`) are each checked as their own
+ * repeating week, and the gaps are returned together.
  */
 export function topSpeedGaps(plan: SpeedPlan): number[] {
+  if (plan.alternatives) return plan.weeks.flatMap((w) => topSpeedGaps({ ...plan, alternatives: false, weeks: [w] }));
   const days: number[] = [];
   plan.weeks.forEach((w, wi) => {
-    const inWeek = w.sessions.filter(hasTopSpeed).map((s) => s.day);
+    const inWeek = w.sessions.filter((s) => !s.subgroup && hasTopSpeed(s)).map((s) => s.day);
     if (plan.matchDay != null) inWeek.push(plan.matchDay);
     for (const d of [...new Set(inWeek)].sort((a, b) => a - b)) days.push(wi * 7 + d);
   });

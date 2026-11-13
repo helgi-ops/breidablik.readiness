@@ -20,7 +20,7 @@ import {
   type Bi,
   type SpeedPlanKey,
 } from "@/lib/micropulse/speedMethods";
-import { BrandPage, Bullets, C, Provenance, Section, Table, Verdict, clean, fb, fh, fileSafe, renderPdfBlob, saveBlob } from "@/components/pdf/brand";
+import { BrandPage, Bullets, C, Provenance, Section, Table, Verdict, clean, fb, fh, fileSafe, renderPdfBlob, saveBlob, TONE } from "@/components/pdf/brand";
 
 type Lang = "EN" | "IS";
 
@@ -47,9 +47,17 @@ export function SpeedPlanDoc({ planKey, lang }: { planKey: SpeedPlanKey; lang: L
           <Bullets items={plan.facts.map(L)} />
         </Section>
 
-        <Section title={IS ? "Vika fyrir viku" : "Week by week"} hint={IS ? "Hlaupin fyrst, salurinn á eftir. Fljúgandi = aðhlaup og svo hraðasvæði á fullum hraða." : "Running first, gym after. Flying = a build-up, then a fast zone at full speed."}>
+        <Section title={IS ? "Vika fyrir viku" : "Week by week"} hint={
+            plan.alternatives
+              ? IS
+                ? "Tvær útgáfur af sömu viku: veldu þá sem passar við vikuna þína. Fljúgandi = aðhlaup og svo hraðasvæði á fullum hraða."
+                : "Two versions of the same week: pick the one that matches your week. Flying = a build-up, then a fast zone at full speed."
+              : IS
+                ? "Hlaupin fyrst, salurinn á eftir. Fljúgandi = aðhlaup og svo hraðasvæði á fullum hraða."
+                : "Running first, gym after. Flying = a build-up, then a fast zone at full speed."
+          }>
           {plan.weeks.map((w) => (
-            <View key={w.label.en} style={{ marginBottom: 8 }}>
+            <View key={w.label.en} wrap={false} style={{ marginBottom: 8 }}>
               <Text style={[fh(700), { fontSize: 10, marginBottom: 4 }]}>{L(w.label)}</Text>
               <Table
                 cols={[
@@ -63,6 +71,7 @@ export function SpeedPlanDoc({ planKey, lang }: { planKey: SpeedPlanKey; lang: L
                       <View key="d">
                         <Text style={[fh(700), { fontSize: 8.5 }]}>{L(s.dayLabel)}</Text>
                         <Text style={[fb(400), { fontSize: 7.5, color: C.mute }]}>{L(s.focus)}</Text>
+                        {s.subgroup ? <Text style={[fb(600), { fontSize: 7.5, color: TONE.amber.text, marginTop: 2 }]}>{L(s.subgroup)}</Text> : null}
                       </View>
                     ) : (
                       ""
