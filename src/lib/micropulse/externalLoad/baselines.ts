@@ -82,13 +82,31 @@ export function getHirDistance(row: CatapultDailyLoadRow | null | undefined): nu
   return (row.velocityBand5TotalDistance ?? 0) + (row.velocityBand6TotalDistance ?? 0);
 }
 
+/**
+ * The `player_external_load_daily` columns `normalizeCatapultDailyLoadRow` (and the `oneRowPerDate` dedupe) read.
+ * Select THIS instead of `*`: a row averages ~40 KB, almost all of it `raw_payload_json` (~45 KB as JSON) and
+ * `ima_fr_raw`, and the only part of the blob used here is `movement_profile` (Titan indoor). A player's Today
+ * load read ~2.5 MB of blobs per open with `*` (13 Nov 2026, during the 09:01 statement timeouts).
+ * Keep in sync with the normaliser — src/lib/micropulse/externalLoad/__tests__/dailyLoadSelect.test.ts checks it.
+ */
+// One string literal (not an array .join) so supabase-js can type the selected row.
+export const CATAPULT_DAILY_LOAD_SELECT =
+  "player_id,team_id,date,source,total_distance,hir_dist,max_vel,max_velocity,accelerations,decelerations,total_player_load,player_load,player_load_per_minute,velocity_band5_total_distance,velocity_band6_total_distance,accel_b2_3_tot_effs_gen2,decel_b2_3_tot_effs_gen2,tot_as,tot_ds,fmp_dynamic_medium_s,fmp_dynamic_high_s,fmp_running_high_s,fmp_total_duration_s,ima_total,jumps,impacts,movement_profile:raw_payload_json->movement_profile";
+
+type MovementProfile = { settled?: number; low?: number; mid?: number; high?: number } | null;
+
 export function normalizeCatapultDailyLoadRow(row: RawExternalLoadRow): CatapultDailyLoadRow | null {
   const playerId = typeof row.player_id === "string" ? row.player_id : typeof row.playerId === "string" ? row.playerId : null;
   const date = typeof row.date === "string" ? row.date : null;
   if (!playerId || !date) return null;
 
   // Titan indoor Movement Profile — minutes per activity level, stored in raw_payload_json.movement_profile.
-  const mp = (row as { raw_payload_json?: { movement_profile?: { settled?: number; low?: number; mid?: number; high?: number } | null } | null }).raw_payload_json?.movement_profile ?? null;
+  // Read from the full blob when a caller selected `*`, or from the `movement_profile` alias in
+  // CATAPULT_DAILY_LOAD_SELECT.
+  const mp =
+    (row as { raw_payload_json?: { movement_profile?: MovementProfile } | null }).raw_payload_json?.movement_profile ??
+    (row as { movement_profile?: MovementProfile }).movement_profile ??
+    null;
 
   return {
     playerId,
@@ -135,7 +153,7 @@ export async function fetchCatapultDailyLoadRows(args: {
   const buildQuery = (withTeamFilter: boolean) => {
     let query = supabase
       .from("player_external_load_daily")
-      .select("*")
+      .select(CATAPULT_DAILY_LOAD_SELECT)
       .in("source", ["catapult", "manual", "titan", "kinexon"])
       .eq("player_id", args.playerId)
       .gte("date", startDate)

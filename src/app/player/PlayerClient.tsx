@@ -42,7 +42,7 @@ import PlayerDrillLoadCard from "@/components/player/PlayerDrillLoadCard";
 import ClientErrorBoundary from "@/components/util/ClientErrorBoundary";
 import PlayerRobustnessCard from "@/components/player/PlayerRobustnessCard";
 import type { CatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
-import { normalizeCatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
+import { CATAPULT_DAILY_LOAD_SELECT, normalizeCatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import {
   CatapultMetricKey,
   computeCatapultMetricAverage,
@@ -54,6 +54,7 @@ import {
 } from "@/lib/integrations/catapult/metricCatalog";
 // Session delivery removed (localStorage-only prototype, not in use)
 import {
+  ADMIN_CONFIG_STORAGE_KEY,
   buildRuntimeRulesFromAdminConfig,
   createDefaultAdminConfigSnapshot,
   getProtectedPlayerTags,
@@ -4376,6 +4377,9 @@ export default function PlayerClient() {
   }, [searchParams]);
 
   const [loading, setLoading] = useState(true);
+  // Flips once, when the first Today load has finished. Secondary reads wait for it so they do not compete with
+  // the verdict/session wave for the database right as the player opens the app.
+  const [firstLoadDone, setFirstLoadDone] = useState(false);
   const [error, setError] = useState<string>("");
   // Bumped to re-run the Today load (the "Try again" button, and one automatic retry
   // when the load fails — e.g. a short database overload right after a reminder push).
@@ -4503,7 +4507,16 @@ export default function PlayerClient() {
   const [finalRecommendationDecision, setFinalRecommendationDecision] = useState<FinalRecommendationDecision | null>(null);
   const [sessionDraft, setSessionDraft] = useState<SessionDraft | null>(null);
   // Session workflow state removed (feature removed)
-  const [adminConfigSnapshot, setAdminConfigSnapshot] = useState<AdminConfigSnapshot>(createDefaultAdminConfigSnapshot());
+  // Read storage once, in the initializer. Setting a freshly parsed object from a mount effect changed the
+  // snapshot's identity right after the first render, and since the main Today load depends on it, every open
+  // ran that whole load twice (found 13 Nov 2026 while tracing the 09:01 database timeouts).
+  const [adminConfigSnapshot, setAdminConfigSnapshot] = useState<AdminConfigSnapshot>(() => {
+    try {
+      return loadAdminConfigSnapshotFromStorage();
+    } catch {
+      return createDefaultAdminConfigSnapshot(); // storage blocked (private mode)
+    }
+  });
   const [teamPlanTier, setTeamPlanTier] = useState<"FREE" | "PRO" | "ELITE">("FREE");
   const [clubThemeColor, setClubThemeColor] = useState<string | null>(null);
 
@@ -4556,9 +4569,11 @@ export default function PlayerClient() {
   }, [catapultHistory, isTitanLoad]);
 
   useEffect(() => {
-    const load = () => setAdminConfigSnapshot(loadAdminConfigSnapshotFromStorage());
-    load();
-    const onStorage = () => load();
+    // Only a real change from another tab replaces the snapshot (see the initializer above).
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== null && e.key !== ADMIN_CONFIG_STORAGE_KEY) return;
+      setAdminConfigSnapshot(loadAdminConfigSnapshotFromStorage());
+    };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
@@ -4671,16 +4686,12 @@ export default function PlayerClient() {
       histStart.setUTCDate(histStart.getUTCDate() - 34);
       const catapultStartDate = histStart.toISOString().slice(0, 10);
 
-      const [{ data: todayRows }, { data: histRows }, { data: teamRows }] = await Promise.all([
+      // The day's own row comes out of the history window (it ends on targetDate), so no separate read.
+      // Explicit columns, not `*`: the raw Catapult blob is ~45 KB per row and Today only needs these.
+      const [{ data: histRows }, { data: teamRows }] = await Promise.all([
         supabase
           .from("player_external_load_daily")
-          .select("*")
-          .in("source", ["catapult", "manual", "titan", "kinexon"])
-          .eq("player_id", playerId)
-          .eq("date", targetDate),
-        supabase
-          .from("player_external_load_daily")
-          .select("*")
+          .select(CATAPULT_DAILY_LOAD_SELECT)
           .in("source", ["catapult", "manual", "titan", "kinexon"])
           .eq("player_id", playerId)
           .gte("date", catapultStartDate)
@@ -4688,11 +4699,12 @@ export default function PlayerClient() {
           .order("date", { ascending: true }),
         supabase
           .from("player_external_load_daily")
-          .select("*")
+          .select(CATAPULT_DAILY_LOAD_SELECT)
           .in("source", ["catapult", "manual", "titan", "kinexon"])
           .eq("team_id", profile.team_id)
           .eq("date", targetDate),
       ]);
+      const todayRows = ((histRows ?? []) as Array<{ date: string }>).filter((r) => String(r.date) === targetDate);
 
       // One effective row per date/player-date first: a coach's MANUAL GPS entry
       // overrides the catapult reading for that day. Dedupe on the raw rows (they
@@ -4751,7 +4763,7 @@ export default function PlayerClient() {
   useEffect(() => {
     const playerId = profile?.player_id ?? selectedPlayerId;
     const dateStr = sanitizeDay(day);
-    if (!playerId || !dateStr) return;
+    if (!playerId || !dateStr || !firstLoadDone) return;
 
     let cancelled = false;
     setGpsDurationLoading(true);
@@ -4799,7 +4811,7 @@ export default function PlayerClient() {
     })();
 
     return () => { cancelled = true; };
-  }, [profile?.player_id, selectedPlayerId, supabase, day]);
+  }, [profile?.player_id, selectedPlayerId, supabase, day, firstLoadDone]);
 
   async function ensureStage4Decision(playerId: string, dayInput: string) {
     const safeDay = sanitizeDay(dayInput);
@@ -5766,10 +5778,11 @@ export default function PlayerClient() {
       setOverrideAuditErr("");
 
       try {
-        const { data: auth, error: aErr } = await supabase.auth.getUser();
+        // Session read is local (no /auth/v1/user round-trip); the data reads below are still guarded by RLS.
+        const { data: auth, error: aErr } = await supabase.auth.getSession();
         if (aErr) throw new Error(aErr.message);
 
-        const userId = auth?.user?.id;
+        const userId = auth?.session?.user?.id;
         if (!userId) throw new Error("Ekki innskráður.");
 
         const { data: prof, error: pErr } = await supabase
@@ -5899,7 +5912,7 @@ export default function PlayerClient() {
         const teamCatapultQuery = prof.team_id
           ? supabase
               .from("player_external_load_daily")
-              .select("*")
+              .select(CATAPULT_DAILY_LOAD_SELECT)
               .in("source", ["catapult", "manual", "titan", "kinexon"])
               .eq("team_id", prof.team_id)
               .eq("date", safeDay)
@@ -5923,15 +5936,10 @@ export default function PlayerClient() {
             .eq("player_id", prof.player_id)
             .eq("entry_date", safeDay)
             .maybeSingle(),
+          // History window ends on safeDay, so today's row is taken from it (no separate read).
           supabase
             .from("player_external_load_daily")
-            .select("*")
-            .in("source", ["catapult", "manual", "titan", "kinexon"])
-            .eq("player_id", prof.player_id)
-            .eq("date", safeDay),
-          supabase
-            .from("player_external_load_daily")
-            .select("*")
+            .select(CATAPULT_DAILY_LOAD_SELECT)
             .in("source", ["catapult", "manual", "titan", "kinexon"])
             .eq("player_id", prof.player_id)
             .gte("date", catapultStartDate)
@@ -6166,7 +6174,6 @@ export default function PlayerClient() {
         // destructuring, same processing below — only the network ordering changed.
         const [
           { data: mrow, error: mErr },
-          { data: catapultTodayRows, error: catapultTodayErr },
           { data: catapultHistoryRows, error: catapultHistoryErr },
           { data: catapultTeamRows, error: catapultTeamErr },
           { data: trendRows, error: trendErr },
@@ -6174,8 +6181,10 @@ export default function PlayerClient() {
 
         if (mErr) console.error("readiness_entries metrics error:", mErr.message);
         setMetrics((mrow as any) ?? null);
-        if (catapultTodayErr) console.error("player catapult today error:", catapultTodayErr.message);
         if (catapultHistoryErr) console.error("player catapult history error:", catapultHistoryErr.message);
+        const catapultTodayRows = ((catapultHistoryRows ?? []) as Array<{ date: string }>).filter(
+          (r) => String(r.date) === safeDay,
+        );
 
         // One effective row per date/player-date: a manual coach entry overrides
         // the catapult reading for that day. Dedupe on raw rows (they carry
@@ -6493,6 +6502,7 @@ export default function PlayerClient() {
         }
       } finally {
         setLoading(false);
+        setFirstLoadDone(true);
       }
     };
 
@@ -6682,6 +6692,7 @@ export default function PlayerClient() {
     let alive = true;
     const run = async () => {
       const playerId = profile?.player_id ?? selectedPlayerId;
+      if (!firstLoadDone) return;
       if (!playerId || day !== todayISO()) { setRpeDoneAt(null); return; }
       const { data } = await supabase
         .from("session_rpe_entries")
@@ -6697,7 +6708,7 @@ export default function PlayerClient() {
     };
     run();
     return () => { alive = false; };
-  }, [profile?.player_id, selectedPlayerId, supabase, day]);
+  }, [profile?.player_id, selectedPlayerId, supabase, day, firstLoadDone]);
 
   useEffect(() => {
     const run = async () => {

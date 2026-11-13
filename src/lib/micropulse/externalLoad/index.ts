@@ -28,6 +28,7 @@ export {
   getDecelLoad,
   getDensityStress,
   normalizeCatapultDailyLoadRow,
+  CATAPULT_DAILY_LOAD_SELECT,
 } from "./baselines";
 export { computeCatapultExternalLoadSignals, computeHidTrend, computeResidualDecel, CATAPULT_SIGNAL_WEIGHTS } from "./signals";
 export type { HidTrendResult } from "./types";
