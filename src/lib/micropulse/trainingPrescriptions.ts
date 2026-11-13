@@ -13,6 +13,8 @@
  * fmp_run_high, fmp_dyn_high, fmp_dyn_med, ima_accel, ima_decel, ima_cod, ima_jumps.
  */
 
+import { FLYING_RUN_PHRASE, FLYING_SPRINT_DOSE, range } from "@/lib/micropulse/speedMethods/flyingDose";
+
 export type PrescriptionKey =
   | "top_speed" | "fmp_run_high" | "fmp_dyn_high" | "fmp_dyn_med"
   | "ima_accel" | "ima_decel" | "ima_cod" | "ima_jumps"
@@ -36,10 +38,10 @@ export const PRESCRIPTIONS: Record<PrescriptionKey, Prescription> = {
   top_speed: {
     quality: { EN: "Top-speed sprinting", IS: "Hámarkshraða-spretti" },
     method: {
-      EN: "Expose to near-maximal sprinting weekly — flying 20–40 m runs reaching ≥90% of top speed. Builds the speed reserve and protects the hamstrings against match sprints.",
-      IS: "Útsettu fyrir nær-hámarks spretti vikulega — fljúgandi 20–40 m spretti í ≥90% hámarkshraða. Byggir hraða-forða og ver aftanlæri fyrir leik-sprettum.",
+      EN: `Expose to top-speed sprinting at least once a week — flying sprints: ${FLYING_RUN_PHRASE.en}, ${range(FLYING_SPRINT_DOSE.spacingH)} h between sessions. Builds the speed reserve and protects the hamstrings against match sprints.`,
+      IS: `Útsettu fyrir hámarkshraða-spretti minnst einu sinni í viku — fljúgandi sprettir: ${FLYING_RUN_PHRASE.is}, ${range(FLYING_SPRINT_DOSE.spacingH)} klst milli æfinga. Byggir hraða-forða og ver aftanlæri fyrir leik-sprettum.`,
     },
-    cite: "Malone 2017; Buchheit 2014",
+    cite: `${FLYING_SPRINT_DOSE.cite}; Malone 2017; Buchheit 2014`,
   },
   fmp_run_high: {
     quality: { EN: "High-speed running", IS: "Háhraðahlaupi" },

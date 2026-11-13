@@ -10,6 +10,8 @@
  * the point. Citations are real S&C references.
  */
 
+import { FLYING_REPS_X_ZONE, FLYING_SPRINT_DOSE, range } from "@/lib/micropulse/speedMethods/flyingDose";
+
 export type LoadQuality = "decel" | "cod" | "sprint" | "jumps" | "accel";
 
 export type RobustnessDrill = {
@@ -116,9 +118,12 @@ export const ROBUSTNESS_DRILLS: RobustnessDrill[] = [
     cue: { en: "Tall posture, punch the knee up, snap the foot down under the hip.", is: "Hár líkami, lyftu hné, sláðu fæti niður undir mjöðm." },
     dose: "3 × 20m", evidence: "Sprint technique" },
   { id: "sprint_strides", quality: "sprint", unilateral: false,
-    name: { en: "Flying strides (build-ups)", is: "Fljúgandi skref (build-ups)" },
-    cue: { en: "Accelerate to ~90% over 20–30m and relax — exposure to top speed.", is: "Hraðaðu í ~90% á 20–30m og slakaðu — útsetning fyrir hámarkshraða." },
-    dose: "4 × 25m", evidence: "Speed exposure (Malone 2017)" },
+    name: { en: "Flying sprints", is: "Fljúgandi sprettir" },
+    cue: {
+      en: `Build up over ${range(FLYING_SPRINT_DOSE.buildUpM)} m, hold full speed for ${range(FLYING_SPRINT_DOSE.fastZoneM)} m, ${FLYING_SPRINT_DOSE.minRestMin}+ min rest — regular exposure to top speed.`,
+      is: `Byggðu upp hraða á ${range(FLYING_SPRINT_DOSE.buildUpM)} m, haltu fullum hraða í ${range(FLYING_SPRINT_DOSE.fastZoneM)} m, ${FLYING_SPRINT_DOSE.minRestMin}+ mín hvíld — regluleg útsetning fyrir hámarkshraða.`,
+    },
+    dose: FLYING_REPS_X_ZONE, evidence: `Speed exposure (${FLYING_SPRINT_DOSE.cite}; Malone 2017)` },
   { id: "sprint_hip_flexor", quality: "sprint", unilateral: true,
     name: { en: "Wall drive holds", is: "Veggdrif-stöður" },
     cue: { en: "Drive one knee up against a wall, hold a strong sprint position.", is: "Drífðu eitt hné upp í vegg, haltu sterkri sprettstöðu." },

@@ -16,8 +16,10 @@
 
 import type { Bi } from "@/lib/micropulse/load/peakPeriod";
 import { LONG_GAP_DAYS } from "@/lib/micropulse/nearMaxExposure";
+import { FLYING_DOSE_LINE, FLYING_SPRINT_DOSE, range } from "./flyingDose";
 
 export type { Bi };
+export { FLYING_DOSE_LINE, FLYING_RUN_PHRASE, FLYING_REPS_X_ZONE, FLYING_SPRINT_DOSE } from "./flyingDose";
 
 // ─── References ───────────────────────────────────────────────────────────
 
@@ -133,14 +135,11 @@ export const SPEED_METHODS: SpeedMethod[] = [
     key: "flying_sprints",
     label: { en: "Flying sprints", is: "Fljúgandi sprettir" },
     summary: {
-      en: "Build up over 20–40 m, then run 10–30 m flat out. The most direct way to train top speed; the evidence is strongest when strength work goes with it.",
-      is: "Byggðu upp hraða á 20–40 m og hlauptu svo 10–30 m á fullum hraða. Beinasta leiðin til að þjálfa hámarkshraða; gögnin eru sterkust þegar styrkur fylgir með.",
+      en: `Build up over ${range(FLYING_SPRINT_DOSE.buildUpM)} m, then run ${range(FLYING_SPRINT_DOSE.fastZoneM)} m flat out. The most direct way to train top speed; the evidence is strongest when strength work goes with it.`,
+      is: `Byggðu upp hraða á ${range(FLYING_SPRINT_DOSE.buildUpM)} m og hlauptu svo ${range(FLYING_SPRINT_DOSE.fastZoneM)} m á fullum hraða. Beinasta leiðin til að þjálfa hámarkshraða; gögnin eru sterkust þegar styrkur fylgir með.`,
     },
     evidence: "some",
-    dose: {
-      en: "3–5 runs of 10–30 m at full speed · 4+ min rest · 50–150 m in all · 48–72 h to the next one",
-      is: "3–5 sprettir 10–30 m á fullum hraða · 4+ mín hvíld · 50–150 m alls · 48–72 klst í næsta",
-    },
+    dose: FLYING_DOSE_LINE,
     findings: [
       {
         ref: "haugen2019",
@@ -781,9 +780,9 @@ export const SPEED_SAFETY: Bi[] = [
 ];
 
 /** Most metres run flat out in one session (Haugen 2019: 50–150 m, build-up excluded). */
-export const MAX_FLYING_M_PER_SESSION = 150;
+export const MAX_FLYING_M_PER_SESSION = FLYING_SPRINT_DOSE.sessionM.max;
 /** Fewest days between two top-speed sessions (48 h). */
-export const MIN_DAYS_BETWEEN_TOP_SPEED = 2;
+export const MIN_DAYS_BETWEEN_TOP_SPEED = FLYING_SPRINT_DOSE.spacingH.min / 24;
 
 export type SpeedBlock = {
   method: SpeedMethodKey;

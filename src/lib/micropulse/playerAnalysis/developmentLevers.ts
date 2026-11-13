@@ -14,15 +14,16 @@
 
 import type { QualityId, AthleteProfile } from "./athleteProfile";
 import type { PlayerAnalysis, Category } from "./index";
+import { FLYING_RUN_PHRASE, FLYING_SPRINT_DOSE } from "@/lib/micropulse/speedMethods/flyingDose";
 
 export type Lever = { en: string; is: string; cite?: string };
 
 /** One S&C lever per athlete quality — the training that generally raises it. */
 export const ATHLETE_LEVERS: Record<QualityId, Lever> = {
   speed: {
-    en: "Expose him to true top-speed running — flying sprints (20–40 m) at 95–100% and sprint-mechanics drills. Max speed only improves when it is regularly reached.",
-    is: "Láttu hann ná raunverulegum hámarkshraða — fljúgandi spretti (20–40 m) á 95–100% og spretttækni-æfingar. Hámarkshraði batnar bara þegar hann er reglulega snertur.",
-    cite: "Haugen 2019 (sprint exposure)",
+    en: `Expose him to true top-speed running — flying sprints (${FLYING_RUN_PHRASE.en}) and sprint-mechanics drills. Max speed only improves when it is regularly reached.`,
+    is: `Láttu hann ná raunverulegum hámarkshraða — fljúgandi spretti (${FLYING_RUN_PHRASE.is}) og spretttækni-æfingar. Hámarkshraði batnar bara þegar hann er reglulega snertur.`,
+    cite: `${FLYING_SPRINT_DOSE.cite} (sprint exposure)`,
   },
   acceleration: {
     en: "Short accelerations from a standstill (10–20 m), resisted sprints / sled pushes and plyometrics build first-step explosiveness.",

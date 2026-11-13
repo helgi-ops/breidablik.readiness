@@ -19,6 +19,7 @@
  */
 
 import type { PlayerAssessmentProfile, MetricReading } from "./interpret";
+import { FLYING_RUN_PHRASE, FLYING_SPRINT_DOSE } from "@/lib/micropulse/speedMethods/flyingDose";
 
 export type FocusPriority = "high" | "medium";
 
@@ -79,8 +80,8 @@ const FOCUS_RULES: FocusRule[] = [
     metricCodes: ["sprint_20m_s", "sprint_30m_s", "sprint_40m_s", "flying_10m_s", "flying_20m_s", "max_velocity_ms"],
     rationaleEN: "Top-speed metrics sit below the player's age band or have regressed — the player reaches a velocity ceiling earlier than peers.",
     rationaleIS: "Hámarkshraða-mælingar eru undir aldursflokki eða hafa versnað — leikmaðurinn nær hraðaþaki fyrr en jafnaldrar.",
-    emphasisEN: "Flying sprints (20–30 m build-ups), wicket runs for stride mechanics, and high-speed posterior-chain exposure.",
-    emphasisIS: "Fljúgandi sprettir (20–30 m uppbygging), wicket-hlaup fyrir skreftækni, og aftari-keðju álag á háum hraða.",
+    emphasisEN: `Flying sprints (${FLYING_RUN_PHRASE.en}; ${FLYING_SPRINT_DOSE.cite}), wicket runs for stride mechanics, and high-speed posterior-chain exposure.`,
+    emphasisIS: `Fljúgandi sprettir (${FLYING_RUN_PHRASE.is}; ${FLYING_SPRINT_DOSE.cite}), wicket-hlaup fyrir skreftækni, og aftari-keðju álag á háum hraða.`,
   },
   {
     code: "reactive_strength",
