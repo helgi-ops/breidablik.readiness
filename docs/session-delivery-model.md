@@ -90,3 +90,8 @@ seconds, the item's `vlCap`, the block's `vbt` card) always win; lota 7's lines 
 line, and only for heavy squat/deadlift, RDL, loaded jump squat, weightlifting pulls and the Nordic. Free-text
 template lines get a table only for an exact library lift with sets × reps. Derived at render time, never stored.
 The serializer adds one optional field, `vlCap` (speed-loss stop from `ExerciseDose.velocityLossCap`).
+
+**Rest timer (2026-11-14):** the between-sets timer in "Start session" reads the RAW item's `rest`
+(`ParsedExercise.restText` → `restSecondsFromText`, lower end of a range: "2-3 min" = 2:00). A contrast/complex step
+uses the block's "between sets" rest, else the longest member rest. Then the rest written in the line's text, then
+90 s as before. The player can still add +30 s.

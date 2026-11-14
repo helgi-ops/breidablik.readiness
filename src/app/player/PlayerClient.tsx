@@ -25,7 +25,7 @@ import { SESSION_TYPES, type SessionType } from "@/lib/session-rpe/types";
 import { buildPerformanceIntelligenceDecision } from "@/lib/micropulse/performanceIntelligence";
 import { structureHowTo, structureLabel, structureVideo } from "@/lib/micropulse/structureHowTo";
 import { readVbtPlayerCard, type VbtPlayerCard } from "@/lib/micropulse/vbtMethods";
-import { rxForTodayItem } from "@/lib/micropulse/strengthProgramming/todayLiftRx";
+import { restSecondsFromText, rxForTodayItem } from "@/lib/micropulse/strengthProgramming/todayLiftRx";
 import type { LiftRx } from "@/lib/micropulse/goalPlan/liftRx";
 import { LiftRxDetails } from "@/components/trainer/LiftRxTable";
 import { oneRowPerDate, oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
@@ -1037,6 +1037,8 @@ type ParsedExercise = {
   /** Lota 8: "All the details" (load, how hard, rep speed, rest, bar-speed lines), read from the RAW item at render
    *  time (`rxForTodayItem`); absent when the line has nothing to add. Never stored. */
   rx?: LiftRx;
+  /** The session's own rest between sets ("90s", "2-3 min"), read from the RAW item — drives the rest timer. */
+  restText?: string;
 };
 
 type ExerciseRecommendationContext = Omit<ExerciseRecommendationInput, "originalExerciseName">;
@@ -2317,8 +2319,11 @@ function buildSessionBlocks(
     // parse drops. `rawKept` lines up 1:1 with `items` (same filter as safeStringList).
     const rawKept = (Array.isArray(b?.items) ? (b.items as unknown[]) : []).filter((v) => !!blockItemToRawString(v));
     const parsed = items.map(parseExerciseItem).map((p, i) => {
-      const rx = rxForTodayItem(rawKept[i], p, b);
-      return rx ? { ...p, rx } : p;
+      const raw = rawKept[i] as Record<string, unknown> | string | undefined;
+      const rx = rxForTodayItem(raw, p, b);
+      const r = raw && typeof raw === "object" ? raw.rest : undefined;
+      const restText = typeof r === "string" || typeof r === "number" ? String(r) : undefined;
+      return rx || restText ? { ...p, ...(rx ? { rx } : {}), ...(restText ? { restText } : {}) } : p;
     });
     const segments = groupIntoSegments(parsed);
     // Carry the method's "how to perform" through to the player, keyed by the
@@ -2814,7 +2819,15 @@ function SessionFocusScreen({
   const stats = reducedEx ? parseFocusStats(reducedEx) : null;
   const complexSets = cur?.kind === "complex" ? parseComplexSets(cur.members, cur.restNote) : null;
   const setCount = cur?.kind === "complex" ? complexSets : stats?.sets ?? null;
-  const restSeconds = restSecondsFromStat(cur?.kind === "single" ? stats?.rest ?? null : null);
+  // Between-sets timer: the session's own rest first (the RAW item's rest; for a complex, the block's "between
+  // sets" rest, else the longest member rest), then a rest written in the line's text, then 90 s.
+  const restSeconds =
+    cur?.kind === "single"
+      ? restSecondsFromText(reducedEx?.restText) ?? restSecondsFromStat(stats?.rest ?? null)
+      : cur?.kind === "complex"
+        ? restSecondsFromText(cur.restNote) ??
+          (cur.members.map((m) => restSecondsFromText(m.restText)).filter((x): x is number => x != null).sort((a, b) => b - a)[0] ?? 90)
+        : 90;
 
   // Loggable only for a single canonical barbell lift on a non-VBT team.
   const liftCanon = baseEx ? canonicalLift(baseEx.name) : null;

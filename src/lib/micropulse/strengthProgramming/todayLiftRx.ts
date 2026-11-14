@@ -156,6 +156,24 @@ export function restFromText(rest: unknown): RxLine | null {
   return sess(t, t);
 }
 
+/**
+ * Rest in whole seconds from a session's rest text, for the between-sets timer: "90s" → 90, "2-3 min" → 120 (the
+ * lower end; the player can add time), "1:30" → 90, "rest 2 min between sets" → 120. Null when there is no rest in it.
+ */
+export function restSecondsFromText(text: unknown): number | null {
+  if (typeof text === "number") return text > 0 && text <= 900 ? Math.round(text) : null;
+  if (typeof text !== "string") return null;
+  const t = text.trim();
+  if (!t || /^[—–-]+$/.test(t)) return null;
+  const clock = /\b(\d{1,2}):([0-5]\d)\b/.exec(t);
+  if (clock) return Number(clock[1]) * 60 + Number(clock[2]) || null;
+  const m = /(\d+(?:\.\d+)?)(?:\s*[–-]\s*\d+(?:\.\d+)?)?\s*(s|sec|secs|seconds|sek|m|min|mins|minutes|mín)\b/i.exec(t);
+  if (!m) return /^\d+$/.test(t) ? restSecondsFromText(Number(t)) : null;
+  const n = Number(m[1]);
+  const sec = /^m/i.test(m[2]) ? n * 60 : n;
+  return sec > 0 && sec <= 900 ? Math.round(sec) : null;
+}
+
 /** Load, how hard and rep speed from the session's method line ("85% 1RM / RPE 8 · Cluster …"). */
 export function readMethod(method: unknown): { load: RxLine | null; effort: RxLine | null; tempo: RxLine | null } {
   const text = typeof method === "string" ? method : "";

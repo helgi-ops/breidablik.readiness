@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { EXERCISE_LIBRARY } from "../exerciseLibrary";
-import { readMethod, restFromText, rxForTodayItem, TODAY_PROFILE_BY_ID } from "../todayLiftRx";
+import { readMethod, restFromText, restSecondsFromText, rxForTodayItem, TODAY_PROFILE_BY_ID } from "../todayLiftRx";
 import { strengthSessionToTodayStructure } from "../toTodayStructure";
 import { RX_REFS, type LiftRx, type RxLine } from "@/lib/micropulse/goalPlan/liftRx";
 import { formatVbtForPlayer } from "@/lib/micropulse/vbtMethods";
@@ -147,6 +147,38 @@ describe("reading the session's words", () => {
     expect(restFromText("—")).toBeNull();
     expect(restFromText("")).toBeNull();
     expect(restFromText(undefined)).toBeNull();
+  });
+});
+
+describe("rest timer reads the session's rest", () => {
+  it("seconds from the rest text (lower end of a range)", () => {
+    expect(restSecondsFromText("90s")).toBe(90);
+    expect(restSecondsFromText("3 min")).toBe(180);
+    expect(restSecondsFromText("2-3 min")).toBe(120);
+    expect(restSecondsFromText("2–3 min")).toBe(120);
+    expect(restSecondsFromText("90–120s")).toBe(90);
+    expect(restSecondsFromText("20-30s")).toBe(20);
+    expect(restSecondsFromText("60–90s")).toBe(60);
+    expect(restSecondsFromText("2 mín")).toBe(120);
+    expect(restSecondsFromText("45 sek")).toBe(45);
+    expect(restSecondsFromText("1:30")).toBe(90);
+    expect(restSecondsFromText("75")).toBe(75);
+    expect(restSecondsFromText(120)).toBe(120);
+  });
+  it("finds the rest inside a block note, not the set count", () => {
+    expect(restSecondsFromText("4 sets · rest 2-3 min between sets")).toBe(120);
+    expect(restSecondsFromText("rest 90s between sets")).toBe(90);
+    expect(restSecondsFromText("3 rounds")).toBeNull();
+    expect(restSecondsFromText("5 sets")).toBeNull();
+  });
+  it("no rest → null (the timer falls back)", () => {
+    for (const x of ["—", "-", "", "   ", null, undefined, 0, "Max effort"]) expect(restSecondsFromText(x), String(x)).toBeNull();
+  });
+  it("every library default rest gives a timer", () => {
+    for (const e of EXERCISE_LIBRARY) for (const d of Object.values(e.defaultDosing)) {
+      if (!d || /^—$/.test(d.rest)) continue;
+      expect(restSecondsFromText(d.rest), `${e.id} ${d.rest}`).toBeGreaterThan(0);
+    }
   });
 });
 
