@@ -10,7 +10,7 @@ import { SPEED_PLANS } from "@/lib/micropulse/speedMethods";
  * method (heavy-then-fast by definition) and are not checked here.
  */
 const STRENGTH = new Set(["heavy_strength", "eccentric_strength", "hip_thrust", "nordic"]);
-const POWER = new Set(["accel_sprints", "resisted_sled", "bounds", "jump_squat", "rebound_jumps", "drop_jumps", "youth_hops", "plyometrics", "flying_sprints", "decel_technique", "landing_drills"]);
+const POWER = new Set(["accel_sprints", "resisted_sled", "bounds", "jump_squat", "rebound_jumps", "drop_jumps", "squat_cmj_jumps", "youth_hops", "plyometrics", "flying_sprints", "decel_technique", "landing_drills"]);
 
 type Block = { method: string; what: { en: string }; test?: boolean };
 function powerAfterStrength(blocks: Block[]): string | null {

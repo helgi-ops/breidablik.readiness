@@ -368,6 +368,20 @@ team plan per quality + explicit under-18 rules** (the youth level is under "Ind
   reviews found more with ≥8 weeks (Thapa 2021) and suggest >10 weeks, >20 sessions, >50 jumps a session (Sáez de
   Villarreal 2009). `GOAL_CONTENT_VERSION` → 2026-11-14.
 
+## "Speed & power" lota 4, step 1: jump doses (2026-11-14, coach approved)
+
+- Jump team plans (in season, pre-season) run **8 weeks** (tests weeks 1, 4, 8; week 8 lighter). Every full-week
+  jump session reaches about **55 foot contacts** (`ADULT_SESSION_CONTACTS`): the tested rebound/drop jumps first
+  get topped up with squat jumps + countermovement jumps (`jumpMix` / `withTopUp`, new method `squat_cmj_jumps`,
+  basis "review": Sáez de Villarreal 2009 Table 3 mix 1.46 vs one type 0.40–0.66; Markovic 2007 no clear
+  difference by programme type).
+- Adult individual jump starts (= player goal plans) session A, weeks 1–6, get the same top-up (minutes 15 → 20).
+  New goal plans only; approved plans keep their frozen copy. `GOAL_CONTENT_VERSION` → 2026-11-14.2.
+  Session C (short, out of season) and weeks 7–8 unchanged. Youth jump unchanged.
+- Acceleration and braking team blocks stay 6 weeks (what those trials tested).
+- `__tests__/goldenWeeks.test.ts` hashes every other goal plan's weeks (accel, braking, top speed, youth jump) so
+  the library's levels/swaps (steps 2–3) cannot change a player's plan by accident.
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

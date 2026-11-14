@@ -25,12 +25,12 @@ const teamPlans = plans.filter((p) => p.key !== "individual");
 const texts = (p: QualityPlan): Bi[] => [p.title, p.who, p.verdict, ...p.facts, ...p.limits, p.basis];
 
 describe("Speed & power plans (lota 2)", () => {
-  it("three plans per quality, team plans are 6 weeks with a test in the first and last week", () => {
+  it("three plans per quality; team plans are 6 weeks (jump: 8) with a test in the first and last week", () => {
     for (const q of LIBRARY_QUALITIES) for (const k of QUALITY_PLAN_KEYS) expect(qualityPlan(q, k).quality).toBe(q);
     expect(teamPlans).toHaveLength(6);
     for (const p of teamPlans) {
       const weekCount = p.weeks.reduce((n, w) => n + (/[–-]\s?\d/.test(w.label.en.split(":")[0]) ? 2 : 1), 0);
-      expect(weekCount, p.title.en).toBe(6);
+      expect(weekCount, p.title.en).toBe(p.quality === "jump" ? 8 : 6);
       const tested = (w: QualityPlan["weeks"][number]) => w.sessions.some((s) => s.blocks.some((b) => b.test));
       expect(tested(p.weeks[0]), p.title.en).toBe(true);
       expect(tested(p.weeks[p.weeks.length - 1]), p.title.en).toBe(true);
@@ -125,6 +125,38 @@ describe("Speed & power plans (lota 2)", () => {
     expect(all).toMatch(/120 foot contacts/);
     expect(all).toMatch(/One quality at a time/);
     expect(all).toMatch(/MD-1/);
+  });
+});
+
+describe("jump sessions reach 50–60 foot contacts (lota 4)", () => {
+  const contacts = (blocks: { contacts?: number; test?: boolean; method: string }[]) =>
+    blocks.reduce((n, b) => n + (b.test || b.method === "squat_bar_speed" ? 0 : b.contacts ?? 0), 0);
+
+  it("team plans: every full week's jump session has 50–60 contacts; the light last week fewer", () => {
+    for (const p of teamPlans.filter((x) => x.quality === "jump")) {
+      p.weeks.forEach((w, i) => {
+        for (const s of w.sessions) {
+          const n = contacts(s.blocks);
+          if (i === p.weeks.length - 1) expect(n, `${p.title.en} ${w.label.en}`).toBeLessThan(50);
+          else {
+            expect(n, `${p.title.en} ${w.label.en}`).toBeGreaterThanOrEqual(50);
+            expect(n, `${p.title.en} ${w.label.en}`).toBeLessThanOrEqual(60);
+          }
+        }
+      });
+    }
+  });
+
+  it("adult individual starts: session A in weeks 1–6 has 50–60 contacts; youth unchanged", () => {
+    for (const st of ["combined", "strength_first", "fast_jumps"]) {
+      individualWeeks("jump", st).slice(0, 6).forEach((w) => {
+        const a = w.sessions.find((s) => s.slot === "A")!;
+        const n = contacts(a.blocks);
+        expect(n, `${st} ${w.label.en}`).toBeGreaterThanOrEqual(50);
+        expect(n, `${st} ${w.label.en}`).toBeLessThanOrEqual(60);
+      });
+    }
+    expect(individualWeeks("jump", "youth").flatMap((w) => w.sessions.flatMap((s) => s.blocks)).some((b) => b.method === "squat_cmj_jumps")).toBe(false);
   });
 });
 

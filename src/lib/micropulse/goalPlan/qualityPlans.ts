@@ -297,76 +297,94 @@ const BRAKING_PRE_SEASON: QualityPlan = {
 const J = JUMP_BLOCKS;
 const sq = (i: number): GoalBlock => J.squatSpeed(J.TESTED_SQUAT_DOSE[i][0], J.TESTED_SQUAT_DOSE[i][1]);
 
+// Lota 4 (coach, 2026-11-15): jump team blocks run 8 weeks and every jump session reaches about 55 foot contacts
+// (rebound jumps as tested, topped up with squat + countermovement jumps). Tests in weeks 1, 4 and 8.
+const JUMP_WEEK_LABEL = (i: number): Bi =>
+  i === 0 ? wk("Week 1: test + start", "Vika 1: mæling + byrjun")
+    : i === 3 ? wk("Week 4: test", "Vika 4: mæling")
+      : i === 7 ? wk("Week 8: lighter + test", "Vika 8: léttari + mæling")
+        : wk(`Week ${i + 1}`, `Vika ${i + 1}`);
+const JUMP_TEST_WEEK = (i: number) => i === 0 || i === 3 || i === 7;
+/** In season: rebound sets per week (fewer than the trial's 5–7) and which tested squat dose (index into TESTED_SQUAT_DOSE). */
+const JUMP_IN_SEASON_REBOUND = [3, 4, 4, 5, 5, 5, 5, 3];
+const JUMP_IN_SEASON_SQUAT = [0, 1, 2, 3, 3, 4, 4, -1];
+/** Pre-season: the trial's rebound sets for weeks 1–5, held at 7 for weeks 6–7, week 8 lighter (MicroPulse). */
+const JUMP_PRE_SEASON_REBOUND = [5, 5, 6, 6, 7, 7, 7, 4];
+const JUMP_PRE_SEASON_SQUAT = [0, 1, 2, 3, 4, 4, 4, 5];
+const lightSquat = (): GoalBlock => J.squatSpeed("2 × 3, fast", "2 × 3, hratt");
+const jumpSession = (i: number, sets: number): GoalBlock[] => {
+  const light = i === 7;
+  const jumps = light ? [J.rebound(sets), J.jumpMix(2)] : J.withTopUp([J.rebound(sets)]);
+  return [...(JUMP_TEST_WEEK(i) ? [J.cmjTest] : []), ...jumps];
+};
+
 const JUMP_IN_SEASON: QualityPlan = {
   quality: "jump",
   key: "in_season",
   start: null,
-  title: { en: "Jump height in season: a 6-week block", is: "Stökkhæð á tímabili: 6 vikna blokk" },
+  title: { en: "Jump height in season: an 8-week block", is: "Stökkhæð á tímabili: 8 vikna blokk" },
   who: { en: "Football team in season, match on Saturday (MD). One quality at a time.", is: "Fótboltalið á tímabili, leikur á laugardegi (MD). Einn eiginleiki í einu." },
   verdict: {
-    en: "Rebound jumps after the warm-up on MD-4 and squats by bar speed in the gym the same day, for 6 weeks.",
-    is: "Endurkastshopp eftir upphitun á MD-4 og hnébeygja eftir stangarhraða í sal sama dag, í 6 vikur.",
+    en: "About 55 jumps after the warm-up on MD-4 and squats by bar speed in the gym the same day, for 8 weeks.",
+    is: "Um 55 hopp eftir upphitun á MD-4 og hnébeygja eftir stangarhraða í sal sama dag, í 8 vikur.",
   },
   facts: [
     { en: "In one 6-week trial, jumps plus squats raised jump height +12.2% against +7.2% for jumps only (Sánchez-Sixto 2021); across many studies, weights added little on average.", is: "Í einni 6 vikna rannsókn hækkuðu hopp ásamt hnébeygju stökkið um 12,2% á móti 7,2% fyrir hopp ein (Sánchez-Sixto 2021); í mörgum rannsóknum bættu lyftingar litlu við að meðaltali." },
-    { en: "In season the jumps are fewer than in the trial (3–5 sets instead of 5–7), once a week, so expect a smaller gain.", is: "Á tímabili eru hoppin færri en í rannsókninni (3–5 sett í stað 5–7), einu sinni í viku, svo búast má við minni bætingu." },
-    { en: "Jump test in week 1 and week 6, same device each time.", is: "Stökkpróf í viku 1 og viku 6, sama tæki í hvert sinn." },
+    { en: "8 weeks and over 50 jumps a session: reviews found more with longer blocks and more jumps (Thapa 2021, Sáez de Villarreal 2009). Once a week in season, so expect a smaller gain than in pre-season.", is: "8 vikur og yfir 50 hopp á æfingu: yfirlit fundu meira með lengri blokkum og fleiri hoppum (Thapa 2021, Sáez de Villarreal 2009). Einu sinni í viku á tímabili, svo búast má við minni bætingu en á undirbúningstímabili." },
+    { en: "Jump test in weeks 1, 4 and 8, same device each time.", is: "Stökkpróf í vikum 1, 4 og 8, sama tæki í hvert sinn." },
   ],
   basis: TEAM_PLAN_BASIS,
   matchDay: MATCH_DAY,
-  weeks: [
-    { label: wk("Week 1: test + start", "Vika 1: mæling + byrjun"), sessions: [
-      { day: 1, dayLabel: MD4, focus: { en: "Test + jumps, then gym", is: "Mæling + hopp, svo salur" }, blocks: [J.cmjTest, J.rebound(3), sq(0)] },
-    ] },
-    { label: wk("Week 2", "Vika 2"), sessions: [
-      { day: 1, dayLabel: MD4, focus: { en: "Jumps, then gym", is: "Hopp, svo salur" }, blocks: [J.rebound(4), sq(1)] },
-    ] },
-    { label: wk("Week 3", "Vika 3"), sessions: [
-      { day: 1, dayLabel: MD4, focus: { en: "Jumps, then gym", is: "Hopp, svo salur" }, blocks: [J.rebound(4), sq(2)] },
-    ] },
-    { label: wk("Weeks 4–5", "Vikur 4–5"), sessions: [
-      { day: 1, dayLabel: MD4, focus: { en: "Jumps, then gym", is: "Hopp, svo salur" }, blocks: [J.rebound(5), sq(3)] },
-    ] },
-    { label: wk("Week 6: lighter + test", "Vika 6: léttari + mæling"), sessions: [
-      { day: 1, dayLabel: MD4, focus: { en: "Test + jumps, light gym", is: "Mæling + hopp, léttur salur" }, blocks: [J.cmjTest, J.rebound(3), J.squatSpeed("2 × 3, fast", "2 × 3, hratt")] },
-    ] },
-  ],
+  weeks: JUMP_IN_SEASON_REBOUND.map((sets, i) => {
+    const sqi = JUMP_IN_SEASON_SQUAT[i];
+    const test = JUMP_TEST_WEEK(i);
+    return {
+      label: JUMP_WEEK_LABEL(i),
+      sessions: [{
+        day: 1,
+        dayLabel: MD4,
+        focus: i === 7 ? { en: "Test + jumps, light gym", is: "Mæling + hopp, léttur salur" } : test ? { en: "Test + jumps, then gym", is: "Mæling + hopp, svo salur" } : { en: "Jumps, then gym", is: "Hopp, svo salur" },
+        blocks: [...jumpSession(i, sets), sqi < 0 ? lightSquat() : sq(sqi)],
+      }],
+    };
+  }),
   limits: [
-    { en: "The weekly doses come mostly from one 6-week trial in women's basketball (Sánchez-Sixto 2021); the lower in-season volume is MicroPulse's.", is: "Vikuskammtarnir koma að mestu úr einni 6 vikna rannsókn í kvennakörfubolta (Sánchez-Sixto 2021); minna magn á tímabili er MicroPulse." },
+    { en: "The weekly doses come mostly from one 6-week trial in women's basketball (Sánchez-Sixto 2021); the 8 weeks, the lower in-season volume and the extra jump types are MicroPulse's, from the reviews.", is: "Vikuskammtarnir koma að mestu úr einni 6 vikna rannsókn í kvennakörfubolta (Sánchez-Sixto 2021); 8 vikurnar, minna magn á tímabili og auka hopptegundirnar eru MicroPulse, úr yfirlitunum." },
   ],
-  refs: ["sanchezsixto2021", "saezdevillarreal2009", "ma2025", "bedoya2015", "jimenezreyes2017", "marshall2021"],
+  refs: ["sanchezsixto2021", "saezdevillarreal2009", "thapa2021", "ma2025", "bedoya2015", "jimenezreyes2017", "marshall2021"],
 };
 
 const JUMP_PRE_SEASON: QualityPlan = {
   quality: "jump",
   key: "pre_season",
   start: null,
-  title: { en: "Jump height in pre-season: 6 weeks", is: "Stökkhæð á undirbúningstímabili: 6 vikur" },
+  title: { en: "Jump height in pre-season: 8 weeks", is: "Stökkhæð á undirbúningstímabili: 8 vikur" },
   who: { en: "Football team in pre-season, alongside normal team training.", is: "Fótboltalið á undirbúningstímabili, samhliða venjulegum liðsæfingum." },
   verdict: {
-    en: "The tested 6-week programme twice a week: rebound jumps building from 5 to 7 sets, then squats that get heavier as the bar slows.",
-    is: "Prófaða 6 vikna áætlunin tvisvar í viku: endurkastshopp sem fara úr 5 í 7 sett, svo hnébeygja sem þyngist eftir því sem stöngin hægist.",
+    en: "Twice a week for 8 weeks: about 55 jumps (rebound jumps building from 5 to 7 sets, plus squat and countermovement jumps), then squats that get heavier as the bar slows.",
+    is: "Tvisvar í viku í 8 vikur: um 55 hopp (endurkastshopp sem fara úr 5 í 7 sett, auk hoppa úr hnébeygjustöðu og CMJ-hoppa), svo hnébeygja sem þyngist eftir því sem stöngin hægist.",
   },
   facts: [
     { en: "Jumps plus squats: +12.2% in 6 weeks, against +7.2% for jumps plus drop jumps (Sánchez-Sixto 2021).", is: "Hopp ásamt hnébeygju: +12,2% á 6 vikum, á móti +7,2% fyrir hopp ásamt fallhoppum (Sánchez-Sixto 2021)." },
-    { en: "Without a gym, drop jumps can replace the squats (the +7.2% pairing): boxes from 20 to 40 cm.", is: "Án salar geta fallhopp komið í stað hnébeygjunnar (+7,2% samsetningin): kassar frá 20 upp í 40 cm." },
-    { en: "Jump test in week 1 and week 6, same device each time.", is: "Stökkpróf í viku 1 og viku 6, sama tæki í hvert sinn." },
+    { en: "Over 50 jumps a session and a mix of jump types went with bigger gains across studies (Sáez de Villarreal 2009).", is: "Yfir 50 hopp á æfingu og blanda af hopptegundum fóru saman við meiri bætingu milli rannsókna (Sáez de Villarreal 2009)." },
+    { en: "Jump test in weeks 1, 4 and 8, same device each time.", is: "Stökkpróf í vikum 1, 4 og 8, sama tæki í hvert sinn." },
   ],
   basis: TEAM_PLAN_BASIS,
   matchDay: null,
-  weeks: [0, 1, 2, 3, 4, 5].map((i) => {
-    const test = i === 0 || i === 5;
-    const rb = J.rebound(J.TESTED_REBOUND_SETS[i]);
+  weeks: JUMP_PRE_SEASON_REBOUND.map((sets, i) => {
+    const test = JUMP_TEST_WEEK(i);
+    const gym = sq(JUMP_PRE_SEASON_SQUAT[i]);
     return {
-      label: i === 0 ? wk("Week 1: test + start", "Vika 1: mæling + byrjun") : i === 5 ? wk("Week 6: test", "Vika 6: mæling") : wk(`Week ${i + 1}`, `Vika ${i + 1}`),
+      label: JUMP_WEEK_LABEL(i),
       sessions: [
-        { day: 0, dayLabel: MON, focus: test ? { en: "Test + jumps, then gym", is: "Mæling + hopp, svo salur" } : { en: "Jumps, then gym", is: "Hopp, svo salur" }, blocks: test ? [J.cmjTest, rb, sq(i)] : [rb, sq(i)] },
-        { day: 3, dayLabel: THU, focus: { en: "Jumps, then gym", is: "Hopp, svo salur" }, blocks: [rb, sq(i)] },
+        { day: 0, dayLabel: MON, focus: test ? { en: "Test + jumps, then gym", is: "Mæling + hopp, svo salur" } : { en: "Jumps, then gym", is: "Hopp, svo salur" }, blocks: [...jumpSession(i, sets), gym] },
+        { day: 3, dayLabel: THU, focus: { en: "Jumps, then gym", is: "Hopp, svo salur" }, blocks: [...(i === 7 ? [J.rebound(sets), J.jumpMix(2)] : J.withTopUp([J.rebound(sets)])), gym] },
       ],
     };
   }),
   limits: [
-    { en: "One 6-week trial in women's basketball (Sánchez-Sixto 2021); results in footballers may differ.", is: "Ein 6 vikna rannsókn í kvennakörfubolta (Sánchez-Sixto 2021); niðurstöður hjá fótboltafólki gætu verið aðrar." },
+    { en: "One 6-week trial in women's basketball (Sánchez-Sixto 2021); weeks 7–8 and the extra jump types are MicroPulse's, from the reviews. Results in footballers may differ.", is: "Ein 6 vikna rannsókn í kvennakörfubolta (Sánchez-Sixto 2021); vikur 7–8 og auka hopptegundirnar eru MicroPulse, úr yfirlitunum. Niðurstöður hjá fótboltafólki gætu verið aðrar." },
+    { en: "Without a gym, drop jumps (boxes 20 to 40 cm) can replace the squats: the +7.2% pairing in the same trial.", is: "Án salar geta fallhopp (kassar 20 upp í 40 cm) komið í stað hnébeygjunnar: +7,2% samsetningin í sömu rannsókn." },
     { en: "Players short of strength may gain more from lifting heavy first (Jiménez-Reyes 2017): see \"Individual\".", is: "Leikmenn sem vantar styrk gætu grætt meira á því að lyfta þungt fyrst (Jiménez-Reyes 2017): sjá „Einstaklingur\"." },
   ],
   refs: ["sanchezsixto2021", "saezdevillarreal2009", "markovic2007", "jimenezreyes2017", "marshall2021", "bedoya2015"],

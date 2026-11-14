@@ -67,6 +67,24 @@ export const JUMP_METHODS: GoalMethod[] = [
     ],
   },
   {
+    key: "squat_cmj_jumps",
+    label: { en: "Squat jumps and countermovement jumps", is: "Hopp úr hnébeygjustöðu og CMJ-hopp" },
+    summary: { en: "Two plain jump types that bring a session to about 55 foot contacts: one from a still squat, one with a quick dip.", is: "Tvær einfaldar hopptegundir sem fylla æfinguna upp í um 55 snertingar: önnur úr kyrri hnébeygjustöðu, hin með snöggri beygju." },
+    basis: "review",
+    dose: { en: "2–4 × 5 of each, body weight · about 55 foot contacts in the session with the other jumps", is: "2–4 × 5 af hvoru, eigin þyngd · um 55 snertingar á æfingunni ásamt hinum hoppunum" },
+    howTo: [
+      { en: "First in the jump block, after the warm-up: they also prepare the legs for the faster jumps.", is: "Fyrst í hoppunum, eftir upphitun: þau undirbúa líka fæturna fyrir hraðari hoppin." },
+      { en: "Squat jump: sink into a squat, hold still, then jump as high as possible without dipping first.", is: "Hopp úr hnébeygjustöðu: farðu niður í hnébeygju, haltu kyrru, hoppaðu svo eins hátt og hægt er án þess að dýfa þér fyrst." },
+      { en: "Countermovement jump: stand tall, dip quickly and jump straight up, arms the same way every time.", is: "CMJ-hopp: réttu úr þér, beygðu þig snöggt og hoppaðu beint upp, hendur eins í hvert sinn." },
+      { en: "Land soft on both feet, reset, next rep. 1 min between sets.", is: "Lentu mjúkt á báðum fótum, stilltu þig af, næsta endurtekning. 1 mín milli setta." },
+      { en: "Every landing counts as a foot contact. Stop the set when the jumps get lower.", is: "Hver lending telst sem snerting. Hættu settinu þegar hoppin lækka." },
+    ],
+    findings: [
+      { ref: "saezdevillarreal2009", text: { en: "Across studies, programmes that mixed squat jumps, countermovement jumps and drop jumps went with the biggest gain (effect 1.46, about 6 cm), against 0.40–0.66 for one jump type alone. Only 11 groups used that mix.", is: "Milli rannsókna fóru áætlanir sem blönduðu hoppum úr hnébeygjustöðu, CMJ-hoppum og fallhoppum saman við mesta bætingu (áhrif 1,46, um 6 cm), á móti 0,40–0,66 fyrir eina hopptegund. Aðeins 11 hópar notuðu þá blöndu." } },
+      { ref: "markovic2007", text: { en: "Another review found no clear difference between kinds of jump programme (drop jumps, countermovement jumps or a mix).", is: "Annað yfirlit fann engan skýran mun milli tegunda hoppáætlana (fallhopp, CMJ-hopp eða blanda)." } },
+    ],
+  },
+  {
     key: "drop_jumps",
     label: { en: "Drop jumps", is: "Fallhopp" },
     summary: { en: "Step off a low box, land and jump up at once. Box height rises over the weeks.", is: "Stígðu af lágum kassa, lentu og hoppaðu strax upp. Kassinn hækkar yfir vikurnar." },
@@ -169,6 +187,34 @@ const rebound = (sets: number): GoalBlock => ({
   dose: { en: `${sets} × 5 · short contact, full height · 1 min between sets`, is: `${sets} × 5 · stutt snerting, full hæð · 1 mín milli setta` },
 });
 
+/** An adult jump session's foot contacts (lota 4, coach's choice 2026-11-15): over 50 a session went with bigger gains
+ *  (Sáez de Villarreal 2009). Squat + countermovement jumps top the tested rebound/drop jumps up to this. */
+export const ADULT_SESSION_CONTACTS = 55;
+
+/** Squat jumps + countermovement jumps, `sets` sets of 5 in all (squat jumps get the odd set). */
+const jumpMix = (sets: number): GoalBlock => {
+  const sj = Math.ceil(sets / 2);
+  const cmj = sets - sj;
+  return {
+    method: "squat_cmj_jumps",
+    contacts: sets * 5,
+    what: cmj > 0 ? { en: "Squat jumps + countermovement jumps", is: "Hopp úr hnébeygjustöðu + CMJ-hopp" } : { en: "Squat jumps", is: "Hopp úr hnébeygjustöðu" },
+    dose: {
+      en: `${sj} × 5 squat jumps (hold still at the bottom, then jump)${cmj > 0 ? ` · ${cmj} × 5 countermovement jumps` : ""} · body weight · 1 min between sets`,
+      is: `${sj} × 5 hopp úr hnébeygjustöðu (kyrr í botni, svo upp)${cmj > 0 ? ` · ${cmj} × 5 CMJ-hopp` : ""} · eigin þyngd · 1 mín milli setta`,
+    },
+  };
+};
+
+/** The squat/countermovement top-up that brings `already` foot contacts to about ADULT_SESSION_CONTACTS (none if already there). */
+const topUp = (already: number): GoalBlock[] => {
+  const sets = Math.round((ADULT_SESSION_CONTACTS - already) / 5);
+  return sets > 0 ? [jumpMix(sets)] : [];
+};
+const contactsIn = (blocks: GoalBlock[]) => blocks.reduce((n, b) => n + (b.test ? 0 : b.contacts ?? 0), 0);
+/** Tested jumps plus the top-up first (lower intensity first, then the fast jumps). */
+const withTopUp = (jumps: GoalBlock[]): GoalBlock[] => [...topUp(contactsIn(jumps)), ...jumps];
+
 const drop = (sets: number, reps: number, cm: number): GoalBlock => ({
   method: "drop_jumps",
   dropJumps: true,
@@ -209,11 +255,11 @@ function youthHops(stage: 1 | 2 | 3 | 4): GoalBlock {
   return { method: "youth_hops", contacts: r.contacts, dropJumps: r.drop, what: { en: "Hops (body weight only)", is: "Hopp (aðeins eigin þyngd)" }, dose: { en: r.en, is: r.is } };
 }
 
-const sessA = (blocks: GoalBlock[], test = false): GoalSession => ({
+const sessA = (blocks: GoalBlock[], test = false, minutes = 15): GoalSession => ({
   slot: "A",
   focus: test ? { en: "Test + jumps", is: "Mæling + hopp" } : { en: "Jumps", is: "Hopp" },
   when: WHEN.warmup_any,
-  minutes: 15,
+  minutes,
   blocks,
 });
 
@@ -233,7 +279,7 @@ const TESTED_SQUAT_DOSE: Array<[string, string]> = [
 ];
 
 /** The plan's building blocks and the tested weekly doses, shared with the Programme Library team plans (`qualityPlans.ts`). */
-export const JUMP_BLOCKS = { rebound, drop, squatSpeed, heavy, cmjTest, youthHops, TESTED_REBOUND_SETS, TESTED_DROP_DOSE, TESTED_SQUAT_DOSE };
+export const JUMP_BLOCKS = { rebound, drop, squatSpeed, heavy, cmjTest, youthHops, jumpMix, withTopUp, TESTED_REBOUND_SETS, TESTED_DROP_DOSE, TESTED_SQUAT_DOSE };
 
 export function jumpWeeks(start: JumpStart) {
   if (start === "youth") {
@@ -260,21 +306,21 @@ export function jumpWeeks(start: JumpStart) {
     if (start === "fast_jumps") {
       const [s, r, cm] = dropDose[i];
       return [
-        sessA([...(testWeek ? [cmjTest] : []), drop(s, r, cm), rebound(reboundSets[i])], testWeek),
+        sessA([...(testWeek ? [cmjTest] : []), ...withTopUp([drop(s, r, cm), rebound(reboundSets[i])])], testWeek, 20),
         sessB({ en: "Gym: fast + keep strength", is: "Salur: hratt + halda styrk" }, [{ method: "squat_bar_speed", what: { en: "Light jump squats", is: "Hnébeygjuhopp með léttri þyngd" }, dose: { en: "3 × 5, fast", is: "3 × 5, hratt" } }, heavy(true)]),
         sessC([rebound(3)]),
       ];
     }
     if (start === "strength_first") {
       return [
-        sessA([...(testWeek ? [cmjTest] : []), rebound(reboundSets[i])], testWeek),
+        sessA([...(testWeek ? [cmjTest] : []), ...withTopUp([rebound(reboundSets[i])])], testWeek, 20),
         sessB({ en: "Gym: strength", is: "Salur: styrkur" }, [heavy(i === 5)]),
         sessC([rebound(3)]),
       ];
     }
     const [en, is] = squatDose[i];
     return [
-      sessA([...(testWeek ? [cmjTest] : []), rebound(reboundSets[i])], testWeek),
+      sessA([...(testWeek ? [cmjTest] : []), ...withTopUp([rebound(reboundSets[i])])], testWeek, 20),
       sessB({ en: "Gym: squats by bar speed", is: "Salur: hnébeygja eftir stangarhraða" }, [squatSpeed(en, is)]),
       sessC([rebound(3)]),
     ];
@@ -344,7 +390,7 @@ export function buildJumpParts(input: GoalPlanInput): GoalParts {
       startWhy,
       start === "youth"
         ? { en: "In youth soccer, plyometrics raised jump height in most trials; raise the number of jumps or their height, never both at once (Bedoya 2015).", is: "Hjá unglingum í fótbolta hækkuðu hopp stökkhæð í flestum rannsóknum; fjölgaðu hoppum eða hækkaðu þau, aldrei hvoru tveggja í einu (Bedoya 2015)." }
-        : { en: "In trials, 60–100 foot contacts a session worked as well as double that (Ebben), and a plan matched to the player beat one mix for everyone (Jiménez-Reyes 2017).", is: "Í rannsóknum dugðu 60–100 snertingar á æfingu jafn vel og tvöfalt meira (Ebben), og áætlun sniðin að leikmanninum skilaði meiru en ein blanda fyrir alla (Jiménez-Reyes 2017)." },
+        : { en: "About 55 foot contacts in the main jump session: over 50 a session went with bigger gains across studies (Sáez de Villarreal 2009), and a plan matched to the player beat one mix for everyone (Jiménez-Reyes 2017).", is: "Um 55 snertingar á aðalhoppæfingunni: yfir 50 á æfingu fóru saman við meiri bætingu milli rannsókna (Sáez de Villarreal 2009), og áætlun sniðin að leikmanninum skilaði meiru en ein blanda fyrir alla (Jiménez-Reyes 2017)." },
       { en: "Choosing the start from the strength and jump tests was not tested in any study: that choice is MicroPulse's rule.", is: "Að velja upphafið út frá styrk- og stökkprófum var ekki prófað í neinni rannsókn: það val er regla MicroPulse." },
     ],
     branch: { key: start, label: JUMP_START_LABEL[start], why: startWhy },
@@ -364,7 +410,7 @@ export function buildJumpParts(input: GoalPlanInput): GoalParts {
     ],
     limits: [
       { en: "No study tested choosing the start from the strength and jump tests: that choice is MicroPulse's rule.", is: "Engin rannsókn prófaði að velja upphafið út frá styrk- og stökkprófum: það val er regla MicroPulse." },
-      { en: "The adult weekly doses come mostly from one 6-week trial in women's basketball (Sánchez-Sixto 2021); weeks 7–8 are MicroPulse's.", is: "Vikuskammtar fullorðinna koma að mestu úr einni 6 vikna rannsókn í kvennakörfubolta (Sánchez-Sixto 2021); vikur 7–8 eru MicroPulse." },
+      { en: "The adult weekly doses come mostly from one 6-week trial in women's basketball (Sánchez-Sixto 2021); weeks 7–8 and the squat and countermovement jumps that bring a session to about 55 contacts are MicroPulse's, from the reviews.", is: "Vikuskammtar fullorðinna koma að mestu úr einni 6 vikna rannsókn í kvennakörfubolta (Sánchez-Sixto 2021); vikur 7–8 og hoppin úr hnébeygjustöðu og CMJ-hoppin sem fylla æfinguna upp í um 55 snertingar eru MicroPulse, úr yfirlitunum." },
       { en: "Reviews found bigger gains with longer blocks and more sessions (Sáez de Villarreal 2009, Thapa 2021); 8 weeks at two sessions a week is still at the low end.", is: "Yfirlit fundu meiri bætingu með lengri blokkum og fleiri æfingum (Sáez de Villarreal 2009, Thapa 2021); 8 vikur með tveimur æfingum á viku eru enn í neðri kantinum." },
       { en: "Youth evidence is mostly from boys, and its certainty is low (Wang K 2026).", is: "Gögn um unglinga eru mest frá strákum og vissan er lítil (Wang K 2026)." },
     ],

@@ -114,7 +114,7 @@ describe("\"How to run it\" on every method card", () => {
   const all = LIBRARY_QUALITIES.flatMap((q) => QUALITY_LIBRARIES[q].methods.map((m) => ({ q, m })));
 
   it("every method has 3–5 distinct lines in English and Icelandic", () => {
-    expect(all).toHaveLength(13);
+    expect(all).toHaveLength(14);
     for (const { q, m } of all) {
       const h = m.howTo ?? [];
       expect(h.length, `${q}/${m.key}`).toBeGreaterThanOrEqual(3);
