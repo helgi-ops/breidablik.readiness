@@ -6,7 +6,8 @@ import "server-only";
  *   - Ticks and coach results: the goal tables.
  *   - Jump height: VALD force plates, CMJ, the mean of each test's valid trials (Claudino 2017), in the window around
  *     the start (4 weeks before to week 1) and around the end (week 7 to 2 weeks after). Copied nowhere.
- *   - GPS context: top speed (the same validity filter as the top-speed signal) or peak deceleration, per day.
+ *   - GPS context, per day: top speed (the same validity filter as the top-speed signal); braking / acceleration as
+ *     the count of top-band efforts (IMA Dec / Acc band 3) when the player has it, otherwise the peak in m/s².
  *   - The team calendar over the plan, to count the sessions the rules placed (adherence).
  */
 
@@ -17,7 +18,7 @@ import { aggregateTrialsByTest } from "@/lib/micropulse/vald/trialAggregate";
 import { GPS_SOURCES } from "./loader";
 import { goalResults, goalSessionMarks } from "./store";
 import { addDays, placedSessionsUpTo, toTeamDayType, type TeamCalendar } from "./today";
-import { adherence, goalOutcome, gpsContext, type GoalProgress, type GoalResult, type GpsContext, type GpsDay } from "./outcome";
+import { adherence, effortDays, goalOutcome, gpsContext, type GoalProgress, type GoalResult, type GpsDay, type GpsKind, type GpsMetric } from "./outcome";
 import type { GoalPlanRow } from "./requests";
 
 type Sb = SupabaseClient;
@@ -69,29 +70,30 @@ export async function valdJumpResults(sb: Sb, playerId: string, startDate: strin
   return out;
 }
 
-async function gpsDays(sb: Sb, playerId: string, kind: GpsContext["kind"], from: string, to: string): Promise<GpsDay[]> {
+async function gpsDays(sb: Sb, playerId: string, kind: GpsKind, from: string, to: string): Promise<{ metric: GpsMetric; days: GpsDay[] }> {
   if (kind === "top_speed") {
     const rows = await fetchAllPages<Record<string, unknown>>((a, b) =>
       sb.from("player_external_load_daily").select("date, max_velocity, max_vel, player_load, total_distance")
         .eq("player_id", playerId).in("source", GPS_SOURCES).gte("date", from).lte("date", to).order("date", { ascending: true }).range(a, b));
-    return mergeSpeedDays(rows.map((r) => ({
+    const days = mergeSpeedDays(rows.map((r) => ({
       date: String(r.date ?? "").slice(0, 10),
       maxVelocity: r.max_velocity == null ? null : Number(r.max_velocity), maxVel: r.max_vel == null ? null : Number(r.max_vel),
       playerLoad: r.player_load == null ? null : Number(r.player_load), totalDistance: r.total_distance == null ? null : Number(r.total_distance),
     }))).map((d) => ({ date: d.date, value: d.kmh }));
+    return { metric: "peak", days };
   }
+  // Braking / acceleration: top-band effort counts (Breiðablik, HK) or the peak in m/s² (Keflavík, Fylkir …).
+  const [band3Col, peakCol] = kind === "braking"
+    ? ["ima_band3_decel_count", "max_deceleration"] as const
+    : ["ima_band3_accel_count", "max_acceleration"] as const;
   const rows = await fetchAllPages<Record<string, unknown>>((a, b) =>
-    sb.from("player_external_load_daily").select("date, max_deceleration")
+    sb.from("player_external_load_daily").select(`date, ${band3Col}, ${peakCol}`)
       .eq("player_id", playerId).in("source", GPS_SOURCES).gte("date", from).lte("date", to).order("date", { ascending: true }).range(a, b));
-  const byDate = new Map<string, number>();
-  for (const r of rows) {
-    // Deceleration may be stored as a positive or a negative number; implausible spikes are dropped.
-    const v = Math.abs(Number(r.max_deceleration));
-    if (!Number.isFinite(v) || v <= 0 || v > 12) continue;
-    const d = String(r.date ?? "").slice(0, 10);
-    byDate.set(d, Math.max(byDate.get(d) ?? 0, v));
-  }
-  return [...byDate.entries()].map(([date, value]) => ({ date, value }));
+  return effortDays(rows.map((r) => ({
+    date: String(r.date ?? ""),
+    band3: r[band3Col] == null ? null : Number(r[band3Col]),
+    peak: r[peakCol] == null ? null : Number(r[peakCol]),
+  })));
 }
 
 /** Progress of an approved, paused, finished or stopped plan. null before approval. */
@@ -100,13 +102,14 @@ export async function loadGoalProgress(sb: Sb, teamId: string, row: GoalPlanRow,
   if (!["approved", "paused", "completed", "cancelled"].includes(row.status)) return null;
   const stopAt = row.status === "paused" ? row.paused_at?.slice(0, 10) : row.status === "cancelled" ? row.closed_at?.slice(0, 10) : null;
   const until = [todayIso, row.end_date, stopAt].filter((d): d is string => !!d).sort()[0];
-  const gpsKind: GpsContext["kind"] | null = row.quality === "top_speed" ? "top_speed" : row.quality === "braking" ? "braking" : null;
-  const [marks, coach, vald, cal, days] = await Promise.all([
+  const gpsKind: GpsKind | null = row.quality === "top_speed" || row.quality === "braking" || row.quality === "acceleration" ? row.quality : null;
+  const noGps = { metric: "peak" as GpsMetric, days: [] as GpsDay[] };
+  const [marks, coach, vald, cal, gps] = await Promise.all([
     goalSessionMarks(sb, row.id),
     goalResults(sb, row.id),
     row.quality === "jump" ? valdJumpResults(sb, row.player_id, row.start_date, row.end_date, todayIso).catch(() => [] as GoalResult[]) : Promise.resolve([] as GoalResult[]),
     loadTeamCalendarRange(sb, teamId, addDays(row.start_date, -11), addDays(until, 11)),
-    gpsKind ? gpsDays(sb, row.player_id, gpsKind, addDays(row.start_date, -28), until).catch(() => [] as GpsDay[]) : Promise.resolve([] as GpsDay[]),
+    gpsKind ? gpsDays(sb, row.player_id, gpsKind, addDays(row.start_date, -28), until).catch(() => noGps) : Promise.resolve(noGps),
   ]);
   const results = [...vald, ...coach].sort((a, b) => a.test_date.localeCompare(b.test_date));
   const due = until >= row.start_date ? placedSessionsUpTo(row.plan, row.quality, row.start_date, until, cal) : [];
@@ -115,7 +118,7 @@ export async function loadGoalProgress(sb: Sb, teamId: string, row: GoalPlanRow,
     outcome: goalOutcome(row.quality, results),
     adherence: adherence(due, marks, todayIso),
     marks,
-    gps: gpsKind ? gpsContext(gpsKind, days, row.start_date, row.end_date, until) : null,
+    gps: gpsKind ? gpsContext(gpsKind, gps.days, row.start_date, row.end_date, until, gps.metric) : null,
     until,
   };
 }

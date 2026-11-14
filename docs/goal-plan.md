@@ -202,11 +202,17 @@ Migration `20261113220000_player_goal_plan_progress.sql`: two tables, read-only 
   | Jump | jump height (CMJ) | 2% (MicroPulse rule; the trials used about 0.6–1.2 cm) |
 
   Below the mark = "no clear change"; beyond it the wrong way is said plainly. Never "caused" or "prevented".
-- **GPS context, never the verdict.** Top speed: fastest days (same validity filter as the top-speed signal). Braking:
-  `max_deceleration` (Marvin 2024: GPS deceleration in game-like drills was the only direct braking measure in the
-  studies). Same-length windows: the 4 weeks before the start vs plan weeks 5–8, mean of the top 3 days, nothing
-  with fewer than 3 days. **Breiðablik's Catapult rows almost never carry `max_deceleration`** (11 of 2,823 in a year);
-  Keflavík, Grindavík, Fylkir and Þór do. So for Breiðablik the braking line is usually absent.
+- **GPS context, never the verdict.** Top speed: fastest days (same validity filter as the top-speed signal).
+  Braking and acceleration (lota 4b): the count of hard efforts in Catapult's top band, **IMA Dec / Acc band 3**
+  (`ima_band3_decel_count` / `ima_band3_accel_count`), when the player has any band-3 day; otherwise the peak in m/s²
+  (`max_deceleration` / `max_acceleration`). Teams carry one or the other, never both (12 months: Breiðablik 2,757 of
+  2,823 days band 3 and 11 peak; HK and the Demo Pro teams band 3 only; Keflavík, Grindavík, Fylkir, Þór, Afturelding
+  peak only), and the two are never mixed in one line. The band-3 line says it is a count of how often, not how hard.
+  A day with more than 40 band-3 efforts is dropped as a recording fault (MicroPulse rule: 99th percentile 15 decel /
+  18 accel a day; days of 45–200 sit beside implausible totals). `decel_b3_plus_tot_effs_gen2` is empty everywhere
+  and not used. Marvin 2024: GPS deceleration in game-like drills was the only direct braking measure in the
+  studies. Same-length windows: the 4 weeks before the start vs plan weeks 5–8, mean of the top 3 days, nothing
+  with fewer than 3 days.
 - **End of plan.** The plan still completes on its own after week 8. The player's Today card then shows the finished
   card for 14 days: the outcome in their own numbers (or "Last step: the retest with your coach" and the test named),
   sessions ticked, and how to ask for a new goal (a new request is the restart; one open goal at a time).
@@ -223,5 +229,4 @@ speed context (30.8 vs 29.7 km/h), Keflavík braking context (5.5 m/s²). About 
 ## Next (not built)
 
 - A push or reminder to tick sessions or book the retest: needs the coach's OK (nothing is sent today).
-- Breiðablik braking context needs `max_deceleration` in their Catapult export.
 - A player-side history of finished goals (today a finished goal shows 14 days, then only the coach sees it).

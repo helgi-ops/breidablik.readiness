@@ -6,9 +6,11 @@
  *   - The change is read against a fixed "clear change" mark per measure. Below it = no clear change. The marks are
  *     the ones the plan already printed in its tests section (1% top speed, 2% for 10 m and jump height), and a
  *     MicroPulse rule for the cut test (3%), where the trial only says the cut cost varied 12–21% within one session.
- *   - GPS is CONTEXT, never the verdict: fastest days for top speed and hardest braking from the GPS units (Marvin
- *     2024 points out that peak and mean deceleration from GPS in game-like drills was the only direct braking
- *     measure in the studies). Matches and drills move those numbers, so they never decide the outcome.
+ *   - GPS is CONTEXT, never the verdict: fastest days for top speed; for braking and acceleration the count of hard
+ *     efforts in the units' top band (Catapult IMA Dec / Acc band 3) when the player has it, otherwise the peak in
+ *     m/s² (Marvin 2024 points out that GPS deceleration in game-like drills was the only direct braking measure in
+ *     the studies). Teams carry one or the other, never mixed in one line. Matches and drills move those numbers, so
+ *     they never decide the outcome.
  *   - Adherence: sessions the rules placed on a day that has passed, and how many the player ticked as done.
  *
  * Wording: changes are "faster / higher / no clear change"; nothing here says the plan caused or prevented anything.
@@ -213,8 +215,12 @@ export function goalOutcome(quality: GoalQuality, rows: GoalResult[]): GoalOutco
 // ─── GPS context (never the verdict) ───────────────────────────────────────
 
 export type GpsDay = { date: string; value: number };
+export type GpsKind = "top_speed" | "acceleration" | "braking";
+/** "peak" = the day's highest value (km/h, or m/s² for braking / acceleration); "band3" = count of top-band efforts. */
+export type GpsMetric = "peak" | "band3";
 export type GpsContext = {
-  kind: "top_speed" | "braking";
+  kind: GpsKind;
+  metric: GpsMetric;
   /** Mean of the 3 highest days in each window; null with fewer than 3 days. */
   before: number | null;
   during: number | null;
@@ -231,28 +237,81 @@ const meanTop = (xs: number[]) => {
 };
 
 /**
+ * A day with more top-band efforts than this is dropped as a recording fault (MicroPulse rule). Across all GPS
+ * rows the 99th percentile is 15 decelerations / 18 accelerations a day and the next real-looking day is 32; days
+ * of 45–200 sit beside implausible totals (e.g. 200 hard decelerations in 4.2 km).
+ */
+export const BAND3_MAX_PER_DAY = 40;
+/** Peak deceleration / acceleration above this (m/s²) is dropped as a spike. */
+export const PEAK_MS2_MAX = 12;
+
+export type GpsEffortRow = { date: string; band3: number | null; peak: number | null };
+
+/**
+ * One value per day for braking or acceleration. Band 3 counts when the player has any band-3 day in the rows
+ * (0 is a real day), otherwise the peak in m/s² (stored positive or negative). Never both in one series. The
+ * highest value wins when a day has two rows (a manual upload beside the Catapult row).
+ */
+export function effortDays(rows: GpsEffortRow[]): { metric: GpsMetric; days: GpsDay[] } {
+  const metric: GpsMetric = rows.some((r) => r.band3 != null && Number.isFinite(r.band3)) ? "band3" : "peak";
+  const byDate = new Map<string, number>();
+  for (const r of rows) {
+    let v: number;
+    if (metric === "band3") {
+      if (r.band3 == null) continue;
+      v = Number(r.band3);
+      if (!Number.isFinite(v) || v < 0 || v > BAND3_MAX_PER_DAY) continue;
+    } else {
+      if (r.peak == null) continue;
+      v = Math.abs(Number(r.peak));
+      if (!Number.isFinite(v) || v <= 0 || v > PEAK_MS2_MAX) continue;
+    }
+    const d = r.date.slice(0, 10);
+    byDate.set(d, Math.max(byDate.get(d) ?? -1, v));
+  }
+  return { metric, days: [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, value]) => ({ date, value })) };
+}
+
+const GPS_WHAT: Record<GpsKind, Record<GpsMetric, Bi>> = {
+  top_speed: {
+    peak: { en: "Fastest GPS days", is: "Hröðustu GPS-dagar" },
+    band3: { en: "Fastest GPS days", is: "Hröðustu GPS-dagar" },
+  },
+  braking: {
+    peak: { en: "Hardest GPS braking", is: "Harðasta bremsun í GPS" },
+    band3: { en: "Hard braking from the GPS units (Catapult's top band, Dec band 3)", is: "Harðar bremsanir úr GPS-tækjunum (efsta þrep Catapult, Dec band 3)" },
+  },
+  acceleration: {
+    peak: { en: "Hardest GPS acceleration", is: "Mesta hröðun í GPS" },
+    band3: { en: "Hard accelerations from the GPS units (Catapult's top band, Acc band 3)", is: "Harðar hraðaaukningar úr GPS-tækjunum (efsta þrep Catapult, Acc band 3)" },
+  },
+};
+
+/**
  * Same-length windows so neither side gets more chances: the 4 weeks before the start vs plan weeks 5–8 (up to
  * today). Mean of the 3 highest days in each.
  */
-export function gpsContext(kind: GpsContext["kind"], days: GpsDay[], startDate: string, endDate: string, todayIso: string): GpsContext | null {
+export function gpsContext(kind: GpsKind, days: GpsDay[], startDate: string, endDate: string, todayIso: string, metric: GpsMetric = "peak"): GpsContext | null {
+  const m: GpsMetric = kind === "top_speed" ? "peak" : metric;
   const bFrom = addDays(startDate, -28), bTo = addDays(startDate, -1);
   const dFrom = addDays(startDate, 28), dTo = endDate < todayIso ? endDate : todayIso;
   const before = days.filter((d) => d.date >= bFrom && d.date <= bTo).map((d) => d.value);
   const during = dTo >= dFrom ? days.filter((d) => d.date >= dFrom && d.date <= dTo).map((d) => d.value) : [];
   if (!before.length && !during.length) return null;
   const b = meanTop(before), d = meanTop(during);
-  const unit = kind === "top_speed" ? "km/h" : "m/s²";
-  const what: Bi = kind === "top_speed"
-    ? { en: "Fastest GPS days", is: "Hröðustu GPS-dagar" }
-    : { en: "Hardest GPS braking", is: "Harðasta bremsun í GPS" };
-  const v = (x: number | null, is: boolean) => (x == null ? (is ? "of fáir dagar" : "too few days") : `${is ? fmtIs(x, 1) : fmt(x, 1)} ${unit}`);
-  return {
-    kind, before: b, during: d, beforeDays: before.length, duringDays: during.length,
-    line: {
-      en: `${what.en} (mean of the top 3): ${v(b, false)} in the 4 weeks before the start, ${v(d, false)} in weeks 5–8. Context only: matches and drills move these, so they don't decide the outcome.`,
-      is: `${what.is} (meðaltal 3 hæstu): ${v(b, true)} á 4 vikunum fyrir upphaf, ${v(d, true)} í vikum 5–8. Aðeins samhengi: leikir og æfingar hreyfa þessar tölur, svo þær ráða ekki niðurstöðunni.`,
-    },
-  };
+  const unit: Bi = m === "band3" ? { en: "a day", is: "á dag" } : kind === "top_speed" ? { en: "km/h", is: "km/h" } : { en: "m/s²", is: "m/s²" };
+  const what = GPS_WHAT[kind][m];
+  const v = (x: number | null, is: boolean) => (x == null ? (is ? "of fáir dagar" : "too few days") : `${is ? fmtIs(x, 1) : fmt(x, 1)} ${is ? unit.is : unit.en}`);
+  const line: Bi = m === "band3"
+    ? {
+        en: `${what.en}, mean of the 3 highest days: ${v(b, false)} in the 4 weeks before the start, ${v(d, false)} in weeks 5–8. A count of how often, not how hard. Context only: minutes played and the type of session move this number, so it doesn't decide the outcome.`,
+        is: `${what.is}, meðaltal 3 hæstu daga: ${v(b, true)} á 4 vikunum fyrir upphaf, ${v(d, true)} í vikum 5–8. Talning á hve oft, ekki hve fast. Aðeins samhengi: spilaðar mínútur og tegund æfingar hreyfa þessa tölu, svo hún ræður ekki niðurstöðunni.`,
+      }
+    : {
+        en: `${what.en} (mean of the top 3): ${v(b, false)} in the 4 weeks before the start, ${v(d, false)} in weeks 5–8. Context only: matches and drills move these, so they don't decide the outcome.`,
+        is: `${what.is} (meðaltal 3 hæstu): ${v(b, true)} á 4 vikunum fyrir upphaf, ${v(d, true)} í vikum 5–8. Aðeins samhengi: leikir og æfingar hreyfa þessar tölur, svo þær ráða ekki niðurstöðunni.`,
+      };
+  return { kind, metric: m, before: b, during: d, beforeDays: before.length, duringDays: during.length, line };
 }
 
 // ─── Adherence ─────────────────────────────────────────────────────────────

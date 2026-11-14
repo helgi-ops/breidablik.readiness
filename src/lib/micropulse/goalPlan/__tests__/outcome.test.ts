@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildGoalPlan } from "../index";
 import {
-  GOAL_MEASURES, MEASURE_DEF, QUALITY_MEASURES, adherence, goalOutcome, gpsContext, measureOutcome, parseResultInput,
+  BAND3_MAX_PER_DAY, GOAL_MEASURES, MEASURE_DEF, QUALITY_MEASURES, adherence, effortDays, goalOutcome, gpsContext, measureOutcome, parseResultInput,
   type GoalResult,
 } from "../outcome";
 import { addDays, buildGoalFinishedCard, buildGoalTodayCard, placedSessionsUpTo, placementFor, type TeamCalendar, type TeamDayType } from "../today";
@@ -134,6 +134,59 @@ describe("GPS context", () => {
     expect(g.before).toBeNull();
     expect(g.line.en).toMatch(/too few days/);
     expect(gpsContext("braking", [], START, END, END)).toBeNull();
+  });
+  it("peak braking keeps the m/s² line", () => {
+    const g = gpsContext("braking", days, START, END, END)!;
+    expect(g.metric).toBe("peak");
+    expect(g.line.en).toMatch(/^Hardest GPS braking .* m\/s²/);
+    expect(g.line.is).toMatch(/^Harðasta bremsun í GPS/);
+  });
+  it("top speed is always the peak, whatever metric is passed", () => {
+    expect(gpsContext("top_speed", days, START, END, END, "band3")!.metric).toBe("peak");
+  });
+});
+
+describe("GPS effort days (band 3 or peak)", () => {
+  const d = (i: number) => addDays(START, i);
+  it("band 3 wins when the player has it; 0 is a real day; faults over the cap are dropped", () => {
+    const { metric, days } = effortDays([
+      { date: d(-20), band3: 4, peak: null },
+      { date: d(-19), band3: 0, peak: null },
+      { date: d(-18), band3: BAND3_MAX_PER_DAY + 1, peak: null },
+      { date: d(-17), band3: 163, peak: null },
+      { date: d(-16), band3: null, peak: -5.5 },
+    ]);
+    expect(metric).toBe("band3");
+    expect(days).toEqual([{ date: d(-20), value: 4 }, { date: d(-19), value: 0 }]);
+  });
+  it("two rows on one day: the higher one", () => {
+    const { days } = effortDays([{ date: d(-20), band3: 3, peak: null }, { date: d(-20), band3: 7, peak: null }]);
+    expect(days).toEqual([{ date: d(-20), value: 7 }]);
+  });
+  it("no band 3 at all: peak m/s², sign ignored, spikes dropped", () => {
+    const { metric, days } = effortDays([
+      { date: d(-20), band3: null, peak: -5.5 },
+      { date: d(-19), band3: null, peak: 4.2 },
+      { date: d(-18), band3: null, peak: 15 },
+      { date: d(-17), band3: null, peak: null },
+    ]);
+    expect(metric).toBe("peak");
+    expect(days).toEqual([{ date: d(-20), value: 5.5 }, { date: d(-19), value: 4.2 }]);
+  });
+  it("band 3 line: a count a day, never m/s², says how often not how hard", () => {
+    const days = [...[8, 9, 11, 3].map((v, i) => ({ date: d(-20 + i), value: v })), ...[12, 10, 11].map((v, i) => ({ date: d(30 + i), value: v }))];
+    const b = gpsContext("braking", days, START, END, END, "band3")!;
+    expect(b).toMatchObject({ metric: "band3", before: 9.3, during: 11 });
+    expect(b.line.en).toMatch(/Dec band 3/);
+    expect(b.line.en).toMatch(/9\.3 a day .* 11\.0 a day/);
+    expect(b.line.is).toMatch(/9,3 á dag .* 11,0 á dag/);
+    expect(`${b.line.en} ${b.line.is}`).not.toMatch(/m\/s²/);
+    expect(b.line.en).toMatch(/how often, not how hard/);
+    expect(b.line.is).toMatch(/hve oft, ekki hve fast/);
+    const a = gpsContext("acceleration", days, START, END, END, "band3")!;
+    expect(a.line.en).toMatch(/^Hard accelerations .* Acc band 3/);
+    expect(a.line.is).toMatch(/^Harðar hraðaaukningar/);
+    expect(gpsContext("acceleration", days, START, END, END)!.line.en).toMatch(/^Hardest GPS acceleration .* m\/s²/);
   });
 });
 
