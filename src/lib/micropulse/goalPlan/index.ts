@@ -37,7 +37,7 @@ import {
   TOP_SPEED_LEVEL_CHANGES,
 } from "./topSpeed";
 import { DEFAULT_LEVEL, LEVEL_BASIS, LEVEL_CHANGES, TRAINING_LEVELS, type TrainingLevel } from "./levels";
-import { SWAP_NOTE, applySwaps, swapMark, validateSwaps, type SwapChoices, type SwapSlotKey } from "./swaps";
+import { ADULT_ONLY_SWAPS, SWAP_NOTE, applySwaps, swapMark, validateSwaps, type SwapChoices, type SwapSlotKey } from "./swaps";
 import { ACCEL_START_LABEL, accelAllowed, accelStart, buildAccelerationParts } from "./acceleration";
 import { BRAKING_START_LABEL, brakingAllowed, brakingStart, buildBrakingParts } from "./braking";
 import { JUMP_START_LABEL, buildJumpParts, jumpAllowed, jumpStart } from "./jump";
@@ -263,6 +263,8 @@ export function buildGoalPlan(input: GoalPlanInput): GoalPlan {
   // so a plan without swaps is exactly what it was.
   let weeks = applySupervision(trimSessions(p.weeks, perWeek), youth);
   const wanted = validateSwaps(input.quality, input.swaps) ?? {};
+  // Lota 6: no study tested weightlifting pulls in under-18s, so the team's pull swap is not used for youth.
+  if (youth && wanted.jump_squat_load && (ADULT_ONLY_SWAPS as readonly string[]).includes(wanted.jump_squat_load)) delete wanted.jump_squat_load;
   const used: SwapChoices = {};
   if (Object.keys(wanted).length > 0) {
     weeks = applySwaps({ weeks }, input.quality, wanted, { onlySwapped: true }).weeks;

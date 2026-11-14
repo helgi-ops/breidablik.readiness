@@ -29,7 +29,8 @@ export type SwapSlotKey =
 /** Whole-phrase replacements, applied in order to the exercise name and the dose line. */
 type Edits = { en: [string, string][]; is: [string, string][] };
 
-export type SwapOption = { key: string; label: Bi; edits: Edits };
+/** `note`: shown next to the option in the picker (e.g. "teach it first"), never in the plan itself. */
+export type SwapOption = { key: string; label: Bi; note?: Bi; edits: Edits };
 
 type BlockLike = { method: string; what: Bi; dose: Bi; test?: boolean };
 
@@ -43,6 +44,9 @@ export type SwapSlot = {
 };
 
 export const PLANNED = "planned";
+
+/** Options never used in an under-18 goal plan: no study in the library tested weightlifting pulls in youth (lota 6). */
+export const ADULT_ONLY_SWAPS = ["jump_shrug", "hang_high_pull"] as const;
 
 const planned = (label: Bi): SwapOption => ({ key: PLANNED, label, edits: { en: [], is: [] } });
 
@@ -78,7 +82,7 @@ export const SWAP_SLOTS: SwapSlot[] = [
   },
   {
     key: "jump_squat_load",
-    label: { en: "Load for the jump squats", is: "Þyngd í hnébeygjuhoppum" },
+    label: { en: "Jump squats: load or exercise", is: "Hnébeygjuhopp: þyngd eða æfing" },
     qualities: ["acceleration", "jump", "top_speed"],
     match: (b) => b.what.en === "Light jump squats",
     options: [
@@ -105,6 +109,25 @@ export const SWAP_SLOTS: SwapSlot[] = [
         edits: {
           en: [["Light jump squats", "Light jump squats with a trap bar"]],
           is: [["Hnébeygjuhopp með léttri þyngd", "Hnébeygjuhopp með léttri trap bar-stöng"]],
+        },
+      },
+      // Weightlifting pulls (lota 6, `PULLING_DERIVATIVES` card): only here, never for jumps or bounds.
+      {
+        key: "jump_shrug",
+        label: { en: "Jump shrug", is: "Jump shrug (stökk-axlalyfta)" },
+        note: { en: "Teach it first, with an empty bar.", is: "Kenndu hana fyrst, með tóma stöng." },
+        edits: {
+          en: [["Light jump squats", "Jump shrugs"]],
+          is: [["Hnébeygjuhopp með léttri þyngd", "Jump shrug (stökk-axlalyfta)"]],
+        },
+      },
+      {
+        key: "hang_high_pull",
+        label: { en: "Hang high pull", is: "Hang high pull" },
+        note: { en: "Teach it first; for players who already do the jump shrug well.", is: "Kenndu hana fyrst; fyrir þá sem gera jump shrug vel." },
+        edits: {
+          en: [["Light jump squats", "Hang high pulls"]],
+          is: [["Hnébeygjuhopp með léttri þyngd", "Hang high pull"]],
         },
       },
     ],

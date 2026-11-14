@@ -41,6 +41,38 @@ export const ACCEL_REFS: Record<string, GoalRef> = {
   mendiguchia2020: { ...SPEED_REFS.mendiguchia2020 },
   loturco2016: { ...SPEED_REFS.loturco2016 },
   seitz2014: { ...SPEED_REFS.seitz2014 },
+  hernandezbelmonte2022: { ...SPEED_REFS.hernandezbelmonte2022 },
+  randell2011: { ...SPEED_REFS.randell2011 },
+  jukic2022: { key: "jukic2022", short: "Jukic 2022", cite: "Jukic I, Helms ER, McGuigan MR, García-Ramos A. Using cluster and rest redistribution set structures as alternatives to resistance training prescription method based on velocity loss thresholds. PeerJ 2022;10:e13195. doi:10.7717/peerj.13195", verifiedFrom: "full_text" },
+  berton2022: { key: "berton2022", short: "Berton 2022", cite: "Berton R, Silva DD, Santos ML, Silva CMP, Tricoli V. Weightlifting derivatives vs. plyometric exercises: effects on unloaded and loaded vertical jumps and sprint performance. PLoS One 2022;17(9):e0274962. doi:10.1371/journal.pone.0274962", verifiedFrom: "full_text" },
+  suchomel2022: { key: "suchomel2022", short: "Suchomel 2022", cite: "Suchomel TJ, McKeever SM, Nolen JD, Comfort P. Muscle architectural and force-velocity curve adaptations following 10 weeks of training with weightlifting catching and pulling derivatives. J Sports Sci Med 2022;21:504–516. doi:10.52082/jssm.2022.504", verifiedFrom: "full_text" },
+  suchomel2017: { key: "suchomel2017", short: "Suchomel 2017", cite: "Suchomel TJ, Comfort P, Lake JP. Enhancing the force–velocity profile of athletes using weightlifting derivatives. Strength Cond J 2017;39(1):10–20.", verifiedFrom: "full_text" },
+};
+
+/**
+ * Weightlifting pulls (lota 6): a card in the acceleration and jump libraries and a swap option for the light jump
+ * squats (`swaps.ts`). Never in a plan by default; never a swap for jumps or bounds (the one head-to-head trial favoured jumps).
+ */
+export const PULLING_DERIVATIVES: GoalMethod = {
+  key: "pulling_derivatives",
+  label: { en: "Weightlifting pulls (jump shrug, high pull)", is: "Tog úr lyftingum (jump shrug, high pull)" },
+  summary: { en: "Fast pulls from Olympic lifting, without catching the bar. An option for the light jump squats once taught; not a replacement for jumps.", is: "Hröð tog úr ólympískum lyftingum, án þess að grípa stöngina. Valkostur í stað léttra hnébeygjuhoppa þegar búið er að kenna þau; koma ekki í stað hoppa." },
+  basis: "trial",
+  dose: { en: "3 × 3–5, fast · empty bar at first, add weight only while the jump stays high · 1–2× a week", is: "3 × 3–5, hratt · tóm stöng fyrst, þyngdu aðeins meðan hoppið helst hátt · 1–2× í viku" },
+  howTo: [
+    { en: "In the gym, first, before the heavy lifts, with a coach watching.", is: "Í salnum, fyrst, á undan þungu lyftunum, með þjálfara sem fylgist með." },
+    { en: "Teach in this order: mid-thigh pull from blocks, then jump shrug, then hang high pull. Start with an empty bar or a stick.", is: "Kenndu í þessari röð: tog frá miðju læri af kubbum, svo jump shrug, svo hang high pull. Byrjaðu með tóma stöng eða prik." },
+    { en: "Jump shrug: bar just above the knees, short dip, jump as high as possible and shrug; land soft in an athletic stance.", is: "Jump shrug: stöngin rétt fyrir ofan hné, stutt beygja, hoppað eins hátt og hægt er og axlirnar dregnar upp; lent mjúkt í íþróttastöðu." },
+    { en: "Hang high pull: same start, then lead with the elbows so the bar reaches the chest; lower it under control.", is: "Hang high pull: sama byrjun, svo leiða olnbogarnir svo stöngin nái upp að bringu; látin síga stýrt niður." },
+    { en: "The papers load these at 30–45% of a hang power clean max. Without that max: add weight only while every rep stays fast and high.", is: "Í greinunum er þyngdin 30–45% af hámarki í hang power clean. Án þess hámarks: bættu aðeins við þyngd meðan hver endurtekning helst hröð og há." },
+  ],
+  findings: [
+    { ref: "berton2022", text: { en: "45 trained men new to the lifts, 8 weeks after 4 weeks of learning: jumps improved the squat jump (+7.8%) and 5–20 m sprints; the weightlifting group (pulls plus a power clean, from blocks) did not improve significantly in either.", is: "45 vanir karlar sem kunnu ekki lyfturnar, 8 vikur eftir 4 vikna kennslu: hopp bættu hnébeygjuhopp (+7,8%) og 5–20 m spretti; lyftingahópurinn (tog og power clean af kubbum) bætti hvorugt marktækt." } },
+    { ref: "suchomel2022", text: { en: "27 experienced male lifters, 10 weeks: pulls without a catch gave small-to-moderate gains in countermovement-jump power (effects 0.25–0.81); the same lifts with a catch gave trivial ones. Sprints were not measured.", is: "27 vanir karlkyns lyftarar, 10 vikur: tog án grips gaf litla til miðlungs bætingu á krafti í CMJ (áhrif 0,25–0,81); sömu lyftur með gripi nánast enga. Sprettir voru ekki mældir." } },
+    { ref: "garciavalverde2022", text: { en: "34 studies: Olympic lifts plus normal lifting made sprints faster (effect −0.44). Effects are before-after, without a control group.", is: "34 rannsóknir: ólympískar lyftingar ásamt venjulegum lyftingum gerðu spretti hraðari (áhrif −0,44). Áhrifin eru fyrir-eftir, án samanburðarhóps." } },
+    { ref: "suchomel2017", text: { en: "Review: the jump shrug and hang high pull move faster than the hang power clean; suggested load 30–45% of the hang power clean max. Expert guidance, not a training trial.", is: "Yfirlit: jump shrug og hang high pull eru hraðari en hang power clean; ráðlögð þyngd 30–45% af hámarki í hang power clean. Ráðlegging sérfræðinga, ekki þjálfunarrannsókn." } },
+  ],
+  caution: { en: "Not a replacement for jumps or bounds: in the one trial that compared them, jumps did better. No study here tested these pulls in under-18s, in women or in season.", is: "Kemur ekki í stað hoppa eða skrefstökka: í einu rannsókninni sem bar þau saman gáfu hoppin meira. Engin rannsókn hér prófaði þessi tog hjá yngri en 18 ára, konum eða á keppnistímabili." },
 };
 
 export const ACCEL_METHODS: GoalMethod[] = [
@@ -93,13 +125,17 @@ export const ACCEL_METHODS: GoalMethod[] = [
       { en: "Squat or trap-bar deadlift: pick the one the player does with good technique.", is: "Hnébeygja eða trap bar: veldu þá sem leikmaðurinn gerir með góðri tækni." },
       { en: "Warm up with 2–3 lighter sets, then 3–4 × 3–5 at a weight the player could lift 1–2 more times (about 75–85% of max).", is: "Hitaðu upp með 2–3 léttari settum, svo 3–4 × 3–5 með þyngd sem leikmaðurinn gæti lyft 1–2 sinnum oftar (um 75–85% af hámarki)." },
       { en: "Rest 2–3 min between sets. Add weight only when every rep keeps depth and technique.", is: "Hvíld 2–3 mín milli setta. Bættu aðeins við þyngd þegar hver endurtekning heldur dýpt og tækni." },
+      { en: "Keep sets short: stop at about half the reps the player could do, or split each set into 2s with 30 s rest. With a bar-speed device: stop when the bar has slowed by about 10–20%.", is: "Haltu settunum stuttum: hættu við um helming þeirra endurtekninga sem leikmaðurinn gæti gert, eða skiptu settinu í tvennur með 30 s hvíld. Með stangarhraðamæli: hættu þegar stöngin hefur hægt á sér um 10–20%." },
     ],
     findings: [
       { ref: "seitz2014", text: { en: "15 trials: sprints got 3.1% faster in training groups and did not change in controls; more strength gain went with more sprint gain (r = −0.77). Two sessions a week did better than more, and 60–85% of max did best. Almost all tests were under 30 m. A 2022 re-analysis found the effect sizes inflated.", is: "15 rannsóknir: sprettir urðu 3,1% hraðari í þjálfunarhópum og breyttust ekki hjá samanburðarhópum; meiri styrktarbæting fór saman við meiri sprettbætingu (r = −0,77). Tvær æfingar á viku gáfu betra en fleiri, og 60–85% af hámarki best. Nær öll prófin voru undir 30 m. Endurgreining 2022 fann áhrifastærðirnar ofmetnar." } },
       { ref: "wisloff2004", text: { en: "17 elite footballers: stronger half squat went with faster 10 m (r = 0.94). A link, not proof that lifting makes you faster.", is: "17 afreksfótboltamenn: sterkari hálf-hnébeygja fór saman við hraðari 10 m (r = 0,94). Tengsl, ekki sönnun þess að lyftingar geri þig hraðari." } },
       { ref: "garciavalverde2022", text: { en: "34 studies: Olympic pulls plus normal lifting made sprints faster (effect −0.44); 2 days a week or fewer did as well as more (−0.50). Effects are before-after, without a control group.", is: "34 rannsóknir: ólympískar togæfingar ásamt venjulegum lyftingum gerðu spretti hraðari (áhrif −0,44); 2 dagar í viku eða færri dugðu eins vel (−0,50). Áhrifin eru fyrir-eftir, án samanburðarhóps." } },
       { ref: "liao2021", text: { en: "Choosing the weight by bar speed or by % of max made no difference to 10 m (0.01 s).", is: "Að velja þyngd eftir stangarhraða eða % af hámarki breytti engu fyrir 10 m (0,01 s)." } },
+      { ref: "hernandezbelmonte2022", text: { en: "10 studies, 308 trained men: stopping sets early (at most 25% bar-speed loss, about half the reps possible) gave bigger gains within the group in sprint (effect 0.35 vs 0.05) and jump (0.59 vs 0.36) with about half the reps. Compared directly, the difference was not significant (sprint p = 0.12, jump p = 0.23).", is: "10 rannsóknir, 308 vanir karlar: að hætta settinu snemma (mest 25% hraðatap á stöng, um helmingur mögulegra endurtekninga) gaf meiri bætingu innan hópsins í spretti (áhrif 0,35 á móti 0,05) og stökki (0,59 á móti 0,36) með um helmingi færri endurtekningum. Í beinum samanburði var munurinn ekki marktækur (sprettur p = 0,12, stökk p = 0,23)." } },
+      { ref: "jukic2022", text: { en: "One session, 31 trained men (Smith machine): sets of 6 split into 2s with 30 s rest, or 9 sets of 2 with 45 s rest, kept more reps under a 20% bar-speed loss than straight sets of 6. A way to keep sets short without a device; no training effect was measured.", is: "Ein æfing, 31 vanur karlmaður (Smith-vél): 6 endurtekninga sett brotin í tvennur með 30 s hvíld, eða 9 sett af 2 með 45 s hvíld, héldu fleiri endurtekningum innan við 20% hraðatap en venjuleg sett af 6. Leið til að halda settum stuttum án mælis; áhrif á þjálfun voru ekki mæld." } },
     ],
+    caution: { en: "The bar-speed studies were almost all on men and mostly on a Smith machine.", is: "Rannsóknirnar á stangarhraða voru nær allar á körlum og flestar á Smith-vél." },
   },
   {
     key: "bounds",
@@ -129,11 +165,14 @@ export const ACCEL_METHODS: GoalMethod[] = [
       { en: "Light bar or dumbbells: the jump must stay fast. If it slows, the weight is too heavy.", is: "Létt stöng eða handlóð: hoppið verður að vera hratt. Ef það hægist er þyngdin of mikil." },
       { en: "Short dip, then jump as high and fast as possible. Land soft, reset, next rep.", is: "Stutt beygja, svo hoppað eins hátt og hratt og hægt er. Lent mjúkt, stillt sig af, næsta endurtekning." },
       { en: "3–4 × 5. Stop the set when the jumps get lower.", is: "3–4 × 5. Hættu settinu þegar hoppin lækka." },
+      { en: "With a bar-speed device: show the player the speed after every jump.", is: "Með stangarhraðamæli: sýndu leikmanninum hraðann eftir hvert hopp." },
     ],
     findings: [
       { ref: "loturco2016", text: { en: "U-20 footballers: jump squats went with faster sprints; push press did not.", is: "U-20 fótboltamenn: hnébeygjuhopp fóru saman við hraðari spretti; push press ekki." } },
+      { ref: "randell2011", text: { en: "13 professional rugby players, 6 weeks: those shown their bar speed after every jump squat cut 30 m from 4.20 to 4.14 s; the others did not improve. Only 30 m and the long jump differed significantly between the groups.", is: "13 atvinnumenn í ruðningi, 6 vikur: þeir sem sáu stangarhraðann eftir hvert hnébeygjuhopp bættu 30 m úr 4,20 í 4,14 s; hinir bættu sig ekki. Aðeins 30 m og langstökk voru marktækt ólík milli hópanna." } },
     ],
   },
+  PULLING_DERIVATIVES,
 ];
 
 export type AccelStart = "youth" | "strength_first" | "starts_first" | "balanced";

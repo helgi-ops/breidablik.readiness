@@ -20,7 +20,7 @@
  */
 
 import { SPEED_REFS } from "@/lib/micropulse/speedMethods";
-import { ACCEL_REFS } from "./acceleration";
+import { ACCEL_REFS, PULLING_DERIVATIVES } from "./acceleration";
 import { BAND_LABEL, WHEN, expandWeeks, isYouth, pickStart, weekLabel } from "./common";
 import type { GoalParts } from "./index";
 import { JUMP_LEVEL_CONTACTS, type TrainingLevel } from "./levels";
@@ -42,6 +42,14 @@ export const JUMP_REFS: Record<string, GoalRef> = {
   thapa2021: { key: "thapa2021", short: "Thapa 2021", cite: "Thapa RK, Lum D, Moran J, Ramirez-Campillo R. Effects of complex training on sprint, jump, and change of direction ability of soccer players: a systematic review and meta-analysis. Front Psychol 2021;11:627869. doi:10.3389/fpsyg.2020.627869", verifiedFrom: "full_text" },
   ma2025: { key: "ma2025", short: "Ma 2025", cite: "Ma S, Xu Y, Xu S. Effects of physical training programs on healthy athletes' vertical jump height: a systematic review with meta-analysis. J Sports Sci Med 2025;24:236–257. doi:10.52082/jssm.2025.236", verifiedFrom: "full_text" },
   ramirezcampillo2020: { key: "ramirezcampillo2020", short: "Ramirez-Campillo 2020", cite: "Ramirez-Campillo R, Castillo D, Raya-González J, et al. Effects of plyometric jump training on jump and sprint performance in young male soccer players: a systematic review and meta-analysis. Sports Med 2020;50(12):2125–2143. doi:10.1007/s40279-020-01337-1", verifiedFrom: "abstract" },
+  hernandezbelmonte2022: ACCEL_REFS.hernandezbelmonte2022,
+  jukic2022: ACCEL_REFS.jukic2022,
+  berton2022: ACCEL_REFS.berton2022,
+  suchomel2022: ACCEL_REFS.suchomel2022,
+  suchomel2017: ACCEL_REFS.suchomel2017,
+  garciavalverde2022: ACCEL_REFS.garciavalverde2022,
+  parejablanco2017: { key: "parejablanco2017", short: "Pareja-Blanco 2017", cite: "Pareja-Blanco F, Sánchez-Medina L, Suárez-Arrones L, González-Badillo JJ. Effects of velocity loss during resistance training on performance in professional soccer players. Int J Sports Physiol Perform 2017;12(4):512–519. doi:10.1123/ijspp.2016-0170", verifiedFrom: "full_text" },
+  gonzalezbadillo2015: { key: "gonzalezbadillo2015", short: "González-Badillo 2015", cite: "González-Badillo JJ, Pareja-Blanco F, Rodríguez-Rosell D, Abad-Herencia JL, del Ojo-López JJ, Sánchez-Medina L. Effects of velocity-based resistance training on young soccer players of different ages. J Strength Cond Res 2015;29(5):1329–1338.", verifiedFrom: "full_text" },
   oxfeldt2019: { key: "oxfeldt2019", short: "Oxfeldt 2019", cite: "Oxfeldt M, Overgaard K, Hvid LG, et al. Effects of plyometric training on jumping, sprint performance, and lower body muscle strength in healthy adults: a systematic review and meta-analyses. Scand J Med Sci Sports 2019;29(10):1453–1465. doi:10.1111/sms.13487", verifiedFrom: "abstract" },
 };
 
@@ -114,12 +122,15 @@ export const JUMP_METHODS: GoalMethod[] = [
       { en: "Full depth, controlled down, every rep as fast as possible up.", is: "Full dýpt, stýrt niður, hver endurtekning eins hratt og hægt er upp." },
       { en: "With a bar-speed device: a weight that moves at about 1.0 m/s in weeks 1–2, 0.9 m/s in week 3 and 0.8 m/s from week 4, as in the tested programme.", is: "Með stangarhraðamæli: þyngd sem hreyfist á um 1,0 m/s í vikum 1–2, 0,9 m/s í viku 3 og 0,8 m/s frá viku 4, eins og í prófuðu áætluninni." },
       { en: "No device: start at about 50–60% of max and add a little each week while the bar still moves fast.", is: "Enginn mælir: byrjaðu á um 50–60% af hámarki og bættu aðeins við í hverri viku meðan stöngin hreyfist enn hratt." },
+      { en: "Stop each set before the bar slows much: with a device, at about a 15% speed loss (as in a trial with professional footballers).", is: "Hættu hverju setti áður en stöngin hægir mikið á sér: með mæli við um 15% hraðatap (eins og í rannsókn á atvinnumönnum í fótbolta)." },
     ],
     findings: [
       { ref: "sanchezsixto2021", text: { en: "Squats kept force up while jumps alone lowered it; the combined group jumped more (12.2% vs 7.2%).", is: "Hnébeygjan hélt kraftinum uppi en hopp ein lækkuðu hann; samsetti hópurinn stökk hærra (12,2% á móti 7,2%)." } },
       { ref: "saezdevillarreal2009", text: { en: "Across 56 studies, adding weight training to jumps did not raise jump height more on average (effect 0.76 against 0.68 for jumps alone).", is: "Í 56 rannsóknum hækkuðu lyftingar ofan á hopp stökkið ekki meira að meðaltali (áhrif 0,76 á móti 0,68 fyrir hopp ein)." } },
       { ref: "ma2025", text: { en: "44 studies of athletes: pairing a lift with a similar jump in the same session raised the countermovement jump 2.9 cm more than jumps alone; weights alone and jumps alone did about the same (0.2 cm apart).", is: "44 rannsóknir á íþróttafólki: lyfta pöruð við svipað hopp á sömu æfingu hækkaði CMJ um 2,9 cm meira en hopp ein; lyftingar einar og hopp ein gáfu svipað (0,2 cm munur)." } },
+      { ref: "parejablanco2017", text: { en: "16 professional footballers, 6 weeks, full squats at about 50–70% of max chosen by bar speed (Smith machine): stopping each set at a 15% speed loss raised the jump (33.7 → 35.5 cm) while stopping at 30% did not (34.4 → 33.5 cm), with about 40% fewer reps. Neither group got faster over 30 m.", is: "16 atvinnumenn í fótbolta, 6 vikur, djúp hnébeygja á um 50–70% af hámarki valin eftir stangarhraða (Smith-vél): að hætta hverju setti við 15% hraðatap hækkaði stökkið (33,7 → 35,5 cm) en að hætta við 30% ekki (34,4 → 33,5 cm), með um 40% færri endurtekningum. Hvorugur hópurinn varð hraðari á 30 m." } },
     ],
+    caution: { en: "The bar-speed studies were almost all on men and mostly on a Smith machine.", is: "Rannsóknirnar á stangarhraða voru nær allar á körlum og flestar á Smith-vél." },
   },
   {
     key: "heavy_strength",
@@ -132,12 +143,16 @@ export const JUMP_METHODS: GoalMethod[] = [
       { en: "Squat or trap-bar deadlift: pick the one the player does with good technique.", is: "Hnébeygja eða trap bar: veldu þá sem leikmaðurinn gerir með góðri tækni." },
       { en: "Warm up with 2–3 lighter sets, then 3–4 × 3–5 at 80–90% of max, 2–3 min between sets.", is: "Hitaðu upp með 2–3 léttari settum, svo 3–4 × 3–5 á 80–90% af hámarki, 2–3 mín milli setta." },
       { en: "Add weight only when every rep keeps depth and technique.", is: "Bættu aðeins við þyngd þegar hver endurtekning heldur dýpt og tækni." },
+      { en: "Keep sets short: stop at about half the reps the player could do, or split each set into 2s with 30 s rest. With a bar-speed device: stop when the bar has slowed by about 10–20%.", is: "Haltu settunum stuttum: hættu við um helming þeirra endurtekninga sem leikmaðurinn gæti gert, eða skiptu settinu í tvennur með 30 s hvíld. Með stangarhraðamæli: hættu þegar stöngin hefur hægt á sér um 10–20%." },
     ],
     findings: [
       { ref: "jimenezreyes2017", text: { en: "Adult footballers and rugby players short of force trained mostly heavy for 9 weeks: squat jump +14.2%, all 22 improved. A plan matched to the profile beat the same mixed plan for everyone (+2.3%).", is: "Fullorðnir fótbolta- og ruðningsleikmenn sem vantaði kraft æfðu mest þungt í 9 vikur: hnébeygjuhopp +14,2%, allir 22 bættu sig. Áætlun sniðin að prófílnum skilaði meiru en sama blandaða áætlunin fyrir alla (+2,3%)." } },
       { ref: "thapa2021", text: { en: "Male footballers (10 studies): heavy lifts (mostly 80–90% of max) paired with jumps raised the countermovement jump more than football training alone (effect 0.96), more so in blocks of 8 weeks or longer (1.54 against 0.40). Not compared with jumps alone; no injuries were reported.", is: "Knattspyrnumenn (10 rannsóknir): þungar lyftur (mest 80–90% af hámarki) paraðar við hopp hækkuðu CMJ meira en fótboltaæfingar einar (áhrif 0,96), og meira í blokkum sem stóðu 8 vikur eða lengur (1,54 á móti 0,40). Ekki borið saman við hopp ein; engin meiðsli voru skráð." } },
       { ref: "marshall2021", text: { en: "Review: being strong comes before heavy-then-fast pairs (contrast) pay off.", is: "Yfirlit: styrkur þarf að vera til staðar áður en þungt-svo-hratt pör (contrast) skila sér." } },
+      { ref: "hernandezbelmonte2022", text: { en: "10 studies, 308 trained men: stopping sets early (at most 25% bar-speed loss, about half the reps possible) gave bigger gains within the group in sprint (effect 0.35 vs 0.05) and jump (0.59 vs 0.36) with about half the reps. Compared directly, the difference was not significant (sprint p = 0.12, jump p = 0.23).", is: "10 rannsóknir, 308 vanir karlar: að hætta settinu snemma (mest 25% hraðatap á stöng, um helmingur mögulegra endurtekninga) gaf meiri bætingu innan hópsins í spretti (áhrif 0,35 á móti 0,05) og stökki (0,59 á móti 0,36) með um helmingi færri endurtekningum. Í beinum samanburði var munurinn ekki marktækur (sprettur p = 0,12, stökk p = 0,23)." } },
+      { ref: "jukic2022", text: { en: "One session, 31 trained men (Smith machine): sets of 6 split into 2s with 30 s rest, or 9 sets of 2 with 45 s rest, kept more reps under a 20% bar-speed loss than straight sets of 6. A way to keep sets short without a device; no training effect was measured.", is: "Ein æfing, 31 vanur karlmaður (Smith-vél): 6 endurtekninga sett brotin í tvennur með 30 s hvíld, eða 9 sett af 2 með 45 s hvíld, héldu fleiri endurtekningum innan við 20% hraðatap en venjuleg sett af 6. Leið til að halda settum stuttum án mælis; áhrif á þjálfun voru ekki mæld." } },
     ],
+    caution: { en: "The bar-speed studies were almost all on men and mostly on a Smith machine.", is: "Rannsóknirnar á stangarhraða voru nær allar á körlum og flestar á Smith-vél." },
   },
   {
     key: "youth_hops",
@@ -157,8 +172,10 @@ export const JUMP_METHODS: GoalMethod[] = [
       { ref: "wangk2026", text: { en: "Youth soccer (55 trials for jumping): mixed neuromuscular training ranked first and strength plus plyometrics second. Low certainty; few trials reported injuries or safety.", is: "Unglingar í fótbolta (55 rannsóknir á stökki): blönduð taugavöðvaþjálfun var efst og styrkur ásamt hoppum næst. Lítil vissa; fáar rannsóknir skráðu meiðsli eða öryggi." } },
       { ref: "oliver2024", text: { en: "High-level boys (25 studies): strength, jump and combined training all raised the countermovement jump about equally (effects 0.86–1.00).", is: "Afreksstrákar (25 rannsóknir): styrkur, hopp og blanda hækkuðu CMJ öll álíka mikið (áhrif 0,86–1,00)." } },
       { ref: "lloyd2012", text: { en: "Youth model: strength is a priority at every age; power work grows from the start of adolescence.", is: "Unglingalíkan: styrkur er forgangsatriði á öllum aldri; kraftþjálfun vex frá byrjun unglingsára." } },
+      { ref: "gonzalezbadillo2015", text: { en: "Elite U16 and U18 footballers, 26 weeks in season, 2× a week: squats at moderate weight with few reps, far from failure, plus jumps and sprints. U16 raised the jump (35.4 → 39.1 cm) more than an older team that did no lifting; 20 m was unclear. Teams were not randomised and maturity was not measured.", is: "Afreksleikmenn U16 og U18 í fótbolta, 26 vikur á tímabili, 2× í viku: hnébeygja með miðlungsþyngd og fáum endurtekningum, langt frá þreytu, auk hoppa og spretta. U16 bætti stökkið (35,4 → 39,1 cm) meira en eldra lið sem lyfti ekki; 20 m var óljóst. Liðum var ekki skipt af handahófi og þroski var ekki mældur." } },
     ],
   },
+  PULLING_DERIVATIVES,
 ];
 
 export type JumpStart = "youth" | "strength_first" | "fast_jumps" | "combined";

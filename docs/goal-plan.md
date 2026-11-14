@@ -469,6 +469,35 @@ The coach asked for the library's levels and swaps in player goal plans ("settu 
   speed zones, swaps change only the swapped blocks, invalid swaps ignored, approval level parsing);
   `sessionOrder.test.ts` now runs top speed over all levels.
 
+## "Speed & power" lota 6: bar speed (VBT) and weightlifting pulls (2026-11-14)
+
+The coach asked whether `research/Velocity Based Training` and `research/Weightlifting Derivatives` could make the
+plans better. Chosen: bar speed on the cards only (no device setting, no per-block line); pulls as a swap + a card.
+**No plan's numbers changed** (golden hashes unchanged); `GOAL_CONTENT_VERSION` 2026-11-14.4 because new goal plans
+list more sources.
+
+- **Bar speed on the gym cards** (acceleration + jump `heavy_strength`, acceleration `jump_squat`, jump
+  `squat_bar_speed`, top-speed `heavy_strength` / `jump_squat`): one "How to run it" line each ("keep sets short:
+  about half the reps possible, or 2s with 30 s rest; with a device, stop at about 10–20% speed loss"; jump squats:
+  "with a device, show the speed after every jump"; squat by bar speed: "stop at about 15%"). No target speed is
+  given for jump squats (no study tested one). Speed-loss cards carry a caution: studies almost all men, mostly
+  Smith machine.
+- **New refs (all read in full)**: Pareja-Blanco 2017 (16 pro footballers, VL15 vs VL30: CMJ 33.7→35.5 vs
+  34.4→33.5 cm, no 30 m change), Hernández-Belmonte 2022 (10 studies, 308 men; between-group sprint p = 0.12, jump
+  p = 0.23), Randell 2011 (13 rugby players, feedback: 30 m 4.20→4.14 s; only 30 m and long jump significant),
+  Jukic 2022 (acute, clusters keep reps under 20% loss), González-Badillo 2015 (U16/U18, on the youth hops card),
+  Berton 2022 (pulls vs jumps in novices: jumps won), Suchomel 2022 (pulls vs catch in experienced men),
+  Suchomel 2017 (loads 30–45% of hang power clean max). `hernandezbelmonte2022` / `randell2011` live in
+  `SPEED_REFS` and are copied into `ACCEL_REFS`.
+- **Card `pulling_derivatives`** (`PULLING_DERIVATIVES` in `acceleration.ts`, also in `JUMP_METHODS`): basis
+  "trial", Berton and Suchomel side by side, teaching order mid-thigh pull → jump shrug → hang high pull, caution
+  "not a replacement for jumps or bounds; nothing in under-18s, women or in season". Never a plan block.
+- **Swaps**: `jump_squat_load` (now "Jump squats: load or exercise") gets `jump_shrug` and `hang_high_pull`, each
+  with a `note` ("teach it first") shown in the picker (`SwapOption.note`, `SwapBlock`). `ADULT_ONLY_SWAPS`: an
+  under-18 goal plan never gets a pull even when the team chose one (top speed's youth plan has jump squats);
+  other team swaps still apply to youth.
+- Tests: `__tests__/vbtAndPulls.test.ts`; `qualityLibrary.test.ts` card count 14 → 16.
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

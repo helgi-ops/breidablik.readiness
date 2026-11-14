@@ -52,7 +52,9 @@ export type SpeedRefKey =
   | "oliver2024"
   | "gomezpiqueras2024"
   | "cormier2020"
-  | "thapa2024";
+  | "thapa2024"
+  | "hernandezbelmonte2022"
+  | "randell2011";
 
 export type SpeedRef = { key: SpeedRefKey; short: string; cite: string; verifiedFrom: VerifiedFrom };
 
@@ -81,6 +83,8 @@ export const SPEED_REFS: Record<SpeedRefKey, SpeedRef> = {
   oliver2024: { key: "oliver2024", short: "Oliver 2024", cite: "Oliver JL, Ramachandran AK, Singh U, Ramirez-Campillo R, Lloyd RS. The effects of strength, plyometric and combined training on strength, power and speed characteristics in high-level, highly trained male youth soccer players: a systematic review and meta-analysis. Sports Med 2024;54:623–643. doi:10.1007/s40279-023-01944-8", verifiedFrom: "full_text" },
   gomezpiqueras2024: { key: "gomezpiqueras2024", short: "Gómez-Piqueras 2024", cite: "Gómez-Piqueras P, Alcaraz PE. If you want to prevent hamstring injuries in soccer, run fast: a narrative review about practical considerations of sprint training. Sports 2024;12:134. doi:10.3390/sports12050134 (narrative review plus one professional club's own practice, not a trial).", verifiedFrom: "full_text" },
   cormier2020: { key: "cormier2020", short: "Cormier 2020", cite: "Cormier P, Freitas TT, Rubio-Arias JÁ, Alcaraz PE. Complex and contrast training: does strength and power training sequence affect performance-based adaptations in team sports? A systematic review and meta-analysis. J Strength Cond Res 2020;34(5):1461–1479.", verifiedFrom: "full_text" },
+  hernandezbelmonte2022: { key: "hernandezbelmonte2022", short: "Hernández-Belmonte 2022", cite: "Hernández-Belmonte A, Pallarés JG. Effects of velocity loss threshold during resistance training on strength and athletic adaptations: a systematic review with meta-analysis. Appl Sci 2022;12(9):4425. doi:10.3390/app12094425", verifiedFrom: "full_text" },
+  randell2011: { key: "randell2011", short: "Randell 2011", cite: "Randell AD, Cronin JB, Keogh JWL, Gill ND, Pedersen MC. Effect of instantaneous performance feedback during 6 weeks of velocity-based resistance training on sport-specific performance tests. J Strength Cond Res 2011;25(1):87–93.", verifiedFrom: "full_text" },
   thapa2024: { key: "thapa2024", short: "Thapa 2024", cite: "Thapa RK, Weldon A, Freitas TT, Boullosa D, Afonso J, Granacher U, Ramirez-Campillo R. What do we know about complex-contrast training? A systematic scoping review. Sports Med Open 2024;10:104.", verifiedFrom: "full_text" },
 };
 
@@ -307,10 +311,18 @@ export const SPEED_METHODS: SpeedMethod[] = [
           is: "Aukinn styrkur í hnébeygju fylgdi hraðari sprettum (15 rannsóknir). Endurgreining 2022 fann að tölurnar voru ofmetnar, svo taktu stærð tengslanna með fyrirvara.",
         },
       },
+      {
+        ref: "hernandezbelmonte2022",
+        text: {
+          en: "10 studies, 308 trained men: stopping sets early (at most 25% bar-speed loss, about half the reps possible) improved sprints within the group (effect 0.35) where longer sets did not (0.05), with about half the reps. Compared directly, the difference was not significant (sprint p = 0.12, jump p = 0.23). Men only.",
+          is: "10 rannsóknir, 308 vanir karlar: að hætta settinu snemma (mest 25% hraðatap á stöng, um helmingur mögulegra endurtekninga) bætti spretti innan hópsins (áhrif 0,35) en lengri sett ekki (0,05), með um helmingi færri endurtekningum. Í beinum samanburði var munurinn ekki marktækur (sprettur p = 0,12, stökk p = 0,23). Aðeins karlar.",
+        },
+      },
     ],
     howTo: [
       { en: "Sprint first and lift after, or lift on a day with no speed work the next day.", is: "Sprettu fyrst og lyftu svo, eða lyftu á degi þar sem enginn hraði er daginn eftir." },
       { en: "Over the weeks: heavier with fewer reps, then shift towards fast, light lifts and jumps.", is: "Yfir vikurnar: þyngra með færri endurtekningum, svo meira yfir í hraðar, léttar lyftur og stökk." },
+      { en: "Keep sets short: stop at about half the reps the player could do. With a bar-speed device: stop when the bar has slowed by about 10–20%.", is: "Haltu settunum stuttum: hættu við um helming þeirra endurtekninga sem leikmaðurinn gæti gert. Með stangarhraðamæli: hættu þegar stöngin hefur hægt á sér um 10–20%." },
     ],
     caution: {
       en: "Heavy lifting can blunt sprint speed for a day or two (Haugen 2019).",
@@ -396,9 +408,17 @@ export const SPEED_METHODS: SpeedMethod[] = [
           is: "Sprettþjálfarar nota hraðar lyftur upp að um 60% af hámarki til að byggja kraft.",
         },
       },
+      {
+        ref: "randell2011",
+        text: {
+          en: "13 professional rugby players, 6 weeks: those shown their bar speed after every jump squat cut 30 m from 4.20 to 4.14 s; the others did not improve (4.25 to 4.26 s). Only 30 m and the long jump differed significantly between the groups.",
+          is: "13 atvinnumenn í ruðningi, 6 vikur: þeir sem sáu stangarhraðann eftir hvert hnébeygjuhopp bættu 30 m úr 4,20 í 4,14 s; hinir bættu sig ekki (4,25 í 4,26 s). Aðeins 30 m og langstökk voru marktækt ólík milli hópanna.",
+        },
+      },
     ],
     howTo: [
       { en: "Pick a load the player can still jump fast with; if a bar-speed device is used, keep the bar fast.", is: "Veldu þyngd sem leikmaðurinn getur enn stokkið hratt með; ef stangarhraðamælir er notaður, haltu stönginni hraðri." },
+      { en: "With a bar-speed device: show the player the speed after every jump.", is: "Með stangarhraðamæli: sýndu leikmanninum hraðann eftir hvert hopp." },
     ],
     caution: {
       en: "Measured over 5–30 m from a standing start, not top speed alone.",

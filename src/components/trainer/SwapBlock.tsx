@@ -97,6 +97,11 @@ export function SwapBlock({
               </button>
             ))}
           </div>
+          {slot.options.filter((o) => o.note).map((o) => (
+            <p key={o.key} className="mt-1 text-[11px] text-slate-600">
+              <span className="font-medium">{L(o.label)}:</span> {L(o.note!)}
+            </p>
+          ))}
           <p className="mt-1 text-[11px] text-slate-500">
             {IS
               ? "Skiptin gilda um þessa æfingu alls staðar í áætlunum eiginleikans. Skammturinn breytist ekki."
