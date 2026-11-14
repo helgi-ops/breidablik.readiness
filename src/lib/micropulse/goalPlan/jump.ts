@@ -5,6 +5,13 @@
  * Marshall 2021 (training sequences), Jiménez-Reyes 2017 (individualised by force–velocity profile),
  * Lloyd & Oliver 2012 (Youth Physical Development model), Sánchez-Sixto 2021 (female basketball).
  *
+ * Added Nov 2026 (lota 3), read in full: Sáez de Villarreal 2009 (56-study meta-analysis of plyometric variables),
+ * Markovic 2007 (26-study meta-analysis), Pardos-Mainer 2021 (female soccer, strength vs plyometric), Thapa 2021
+ * (complex training in soccer), Ma 2025 (training programmes vs vertical jump, network meta-analysis), plus the jump
+ * results of Oliver 2024. Abstract only (paywalled): Ramirez-Campillo 2020 (young male soccer), Oxfeldt 2019
+ * (healthy adults). Net effect: jumps alone work; weights on top add little on average except when a lift and a
+ * similar jump are paired in the same session (Ma 2025); longer blocks and more sessions go with bigger gains.
+ *
  * Start (MicroPulse rule): the only TESTED data-based choice is Jiménez-Reyes' loaded squat-jump force–velocity
  * profile, which MicroPulse does not measure. So the start uses the force-plate numbers it has, in the same
  * spirit: strength low → strength first; strong but jumps slow off the ground → fast short-contact jumps; else
@@ -28,6 +35,13 @@ export const JUMP_REFS: Record<string, GoalRef> = {
   suchomel2020: ACCEL_REFS.suchomel2020,
   wangk2026: ACCEL_REFS.wangk2026,
   oliver2024: { ...SPEED_REFS.oliver2024 },
+  saezdevillarreal2009: { key: "saezdevillarreal2009", short: "Sáez de Villarreal 2009", cite: "Sáez-Sáez de Villarreal E, Kellis E, Kraemer WJ, Izquierdo M. Determining variables of plyometric training for improving vertical jump height performance: a meta-analysis. J Strength Cond Res 2009;23(2):495–506.", verifiedFrom: "full_text" },
+  markovic2007: { key: "markovic2007", short: "Markovic 2007", cite: "Markovic G. Does plyometric training improve vertical jump height? A meta-analytical review. Br J Sports Med 2007;41(6):349–355. doi:10.1136/bjsm.2007.035113", verifiedFrom: "full_text" },
+  pardosmainer2021: { key: "pardosmainer2021", short: "Pardos-Mainer 2021", cite: "Pardos-Mainer E, Lozano D, Torrontegui-Duarte M, Cartón-Llorente A, Roso-Moliner A. Effects of strength vs. plyometric training programs on vertical jumping, linear sprint and change of direction speed performance in female soccer players: a systematic review and meta-analysis. Int J Environ Res Public Health 2021;18(2):401. doi:10.3390/ijerph18020401", verifiedFrom: "full_text" },
+  thapa2021: { key: "thapa2021", short: "Thapa 2021", cite: "Thapa RK, Lum D, Moran J, Ramirez-Campillo R. Effects of complex training on sprint, jump, and change of direction ability of soccer players: a systematic review and meta-analysis. Front Psychol 2021;11:627869. doi:10.3389/fpsyg.2020.627869", verifiedFrom: "full_text" },
+  ma2025: { key: "ma2025", short: "Ma 2025", cite: "Ma S, Xu Y, Xu S. Effects of physical training programs on healthy athletes' vertical jump height: a systematic review with meta-analysis. J Sports Sci Med 2025;24:236–257. doi:10.52082/jssm.2025.236", verifiedFrom: "full_text" },
+  ramirezcampillo2020: { key: "ramirezcampillo2020", short: "Ramirez-Campillo 2020", cite: "Ramirez-Campillo R, Castillo D, Raya-González J, et al. Effects of plyometric jump training on jump and sprint performance in young male soccer players: a systematic review and meta-analysis. Sports Med 2020;50(12):2125–2143. doi:10.1007/s40279-020-01337-1", verifiedFrom: "abstract" },
+  oxfeldt2019: { key: "oxfeldt2019", short: "Oxfeldt 2019", cite: "Oxfeldt M, Overgaard K, Hvid LG, et al. Effects of plyometric training on jumping, sprint performance, and lower body muscle strength in healthy adults: a systematic review and meta-analyses. Scand J Med Sci Sports 2019;29(10):1453–1465. doi:10.1111/sms.13487", verifiedFrom: "abstract" },
 };
 
 export const JUMP_METHODS: GoalMethod[] = [
@@ -37,8 +51,19 @@ export const JUMP_METHODS: GoalMethod[] = [
     summary: { en: "Jump, land and jump straight up again: short ground contact, full height.", is: "Hoppa, lenda og hoppa strax upp aftur: stutt snerting, full hæð." },
     basis: "trial",
     dose: { en: "5–7 × 5 · 1 min between sets", is: "5–7 × 5 · 1 mín milli setta" },
+    howTo: [
+      { en: "Early in the session, after the warm-up and before running or the gym.", is: "Snemma á æfingu, eftir upphitun og á undan hlaupum eða salnum." },
+      { en: "5 jumps in a row: land on the front of the foot and leave the ground again at once, every jump as high as possible.", is: "5 hopp í röð: lent á framfæti og farið strax upp aftur, hvert hopp eins hátt og hægt er." },
+      { en: "Cue (coach's practice): \"the ground is hot\": short contact, but full height.", is: "Leiðbeining (reynsla þjálfara): „jörðin er heit\": stutt snerting en full hæð." },
+      { en: "1 min between sets. Stop the set when contacts get long or the jumps get lower.", is: "1 mín milli setta. Hættu settinu þegar snertingar lengjast eða hoppin lækka." },
+    ],
     findings: [
       { ref: "sanchezsixto2021", text: { en: "Female basketball players, 6 weeks, twice a week: rebound jumps plus squats raised CMJ 12.2%; rebound jumps plus drop jumps 7.2%; no change without them.", is: "Körfuboltakonur, 6 vikur, tvisvar í viku: endurkastshopp ásamt hnébeygju hækkuðu CMJ um 12,2%; endurkastshopp ásamt fallhoppum 7,2%; engin breyting án þeirra." } },
+      { ref: "saezdevillarreal2009", text: { en: "56 studies: jump training raised jump height by about 3.9 cm (effect 0.84), against 0.8 cm in controls. Longer blocks, more sessions and more jumps a session went with bigger gains; the authors suggest over 10 weeks, over 20 sessions and over 50 jumps a session, mixing squat jumps, countermovement jumps and drop jumps.", is: "56 rannsóknir: hoppþjálfun hækkaði stökkið um u.þ.b. 3,9 cm (áhrif 0,84), á móti 0,8 cm hjá samanburðarhópum. Lengri blokkir, fleiri æfingar og fleiri hopp á æfingu fóru saman við meiri bætingu; höfundar mæla með yfir 10 vikum, yfir 20 æfingum og yfir 50 hoppum á æfingu, og blöndu af hnébeygjuhoppum, CMJ-hoppum og fallhoppum." } },
+      { ref: "markovic2007", text: { en: "26 studies, 1,024 people: jump training raised the countermovement jump by 8.7% (effect 0.88). More sessions in total went with bigger gains in some jump tests; the total number of foot contacts did not. Most studies were of low quality.", is: "26 rannsóknir, 1.024 þátttakendur: hoppþjálfun hækkaði CMJ um 8,7% (áhrif 0,88). Fleiri æfingar alls fóru saman við meiri bætingu í sumum stökkprófum; heildarfjöldi snertinga ekki. Flestar rannsóknirnar voru af litlum gæðum." } },
+      { ref: "pardosmainer2021", text: { en: "Women's football (12 studies): jump training raised the jump clearly more than in controls (effect 0.81); slow strength training alone barely did (0.13). Too few studies to set a dose.", is: "Kvennafótbolti (12 rannsóknir): hoppþjálfun hækkaði stökkið greinilega meira en hjá samanburðarhópum (áhrif 0,81); hægur styrkur einn og sér varla (0,13). Of fáar rannsóknir til að ákveða skammt." } },
+      { ref: "ramirezcampillo2020", text: { en: "Young male footballers (33 studies, 1,499 players): jump training improved jump tests (effects 0.60–0.98).", is: "Ungir knattspyrnumenn (33 rannsóknir, 1.499 leikmenn): hoppþjálfun bætti stökkpróf (áhrif 0,60–0,98)." } },
+      { ref: "oxfeldt2019", text: { en: "Healthy adults (25 studies): 4–12 weeks of jump training gave a small-to-moderate gain in jump height (effect 0.45).", is: "Heilbrigðir fullorðnir (25 rannsóknir): 4–12 vikna hoppþjálfun gaf litla til miðlungs bætingu á stökkhæð (áhrif 0,45)." } },
     ],
   },
   {
@@ -47,8 +72,15 @@ export const JUMP_METHODS: GoalMethod[] = [
     summary: { en: "Step off a low box, land and jump up at once. Box height rises over the weeks.", is: "Stígðu af lágum kassa, lentu og hoppaðu strax upp. Kassinn hækkar yfir vikurnar." },
     basis: "trial",
     dose: { en: "3–4 × 3–6 · box 20 → 40 cm", is: "3–4 × 3–6 · kassi 20 → 40 cm" },
+    howTo: [
+      { en: "Box 20 cm in week 1, raised step by step to 40 cm by week 4, as in the tested programme.", is: "Kassi 20 cm í viku 1, hækkaður smám saman í 40 cm í viku 4, eins og í prófuðu áætluninni." },
+      { en: "Step off the box (don't jump off), land on both feet and jump straight up, as high as possible.", is: "Stígðu af kassanum (ekki hoppa af honum), lentu á báðum fótum og hoppaðu beint upp, eins hátt og hægt er." },
+      { en: "If the heels slam down or the player sinks deep on landing, the box is too high: go back one height.", is: "Ef hælarnir skella niður eða leikmaðurinn sígur djúpt í lendingu er kassinn of hár: farðu eina hæð niður." },
+      { en: "Before the gym, with a coach watching. Quality over number: stop when the jumps get lower.", is: "Á undan salnum, með þjálfara að fylgjast með. Gæði fram yfir fjölda: hættu þegar hoppin lækka." },
+    ],
     findings: [
       { ref: "sanchezsixto2021", text: { en: "Box 20 cm in week 1 up to 40 cm by week 4, 3–4 × 3–6, alongside rebound jumps: CMJ +7.2% in 6 weeks.", is: "Kassi 20 cm í viku 1 upp í 40 cm í viku 4, 3–4 × 3–6, ásamt endurkastshoppum: CMJ +7,2% á 6 vikum." } },
+      { ref: "saezdevillarreal2009", text: { en: "Across studies, box height made no clear difference to the gain. The authors favour lower boxes because they allow more jumps, and say they likely carry less injury risk; that was not measured.", is: "Milli rannsókna skipti hæð kassans ekki skýru máli fyrir bætinguna. Höfundar mæla með lægri kössum því þeir leyfa fleiri hopp, og telja þá líklega bera minni meiðslahættu; það var ekki mælt." } },
     ],
     caution: { en: "Under 18: no drop jumps before the last two weeks of the youth level, with a coach there.", is: "Undir 18 ára: engin fallhopp fyrr en í síðustu tveimur vikum unglingastigsins, og þjálfari á staðnum." },
   },
@@ -58,8 +90,16 @@ export const JUMP_METHODS: GoalMethod[] = [
     summary: { en: "Full squats with a weight you can still move fast, getting heavier over the weeks.", is: "Djúp hnébeygja með þyngd sem enn má hreyfa hratt, þyngist yfir vikurnar." },
     basis: "trial",
     dose: { en: "3 × 6 (fast, about 50–65% of max) → 3–4 × 3–4 (heavier)", is: "3 × 6 (hratt, um 50–65% af hámarki) → 3–4 × 3–4 (þyngra)" },
+    howTo: [
+      { en: "In the gym. If there are jumps the same day, the jumps come first.", is: "Í salnum. Ef hopp eru sama dag koma hoppin fyrst." },
+      { en: "Full depth, controlled down, every rep as fast as possible up.", is: "Full dýpt, stýrt niður, hver endurtekning eins hratt og hægt er upp." },
+      { en: "With a bar-speed device: a weight that moves at about 1.0 m/s in weeks 1–2, 0.9 m/s in week 3 and 0.8 m/s from week 4, as in the tested programme.", is: "Með stangarhraðamæli: þyngd sem hreyfist á um 1,0 m/s í vikum 1–2, 0,9 m/s í viku 3 og 0,8 m/s frá viku 4, eins og í prófuðu áætluninni." },
+      { en: "No device: start at about 50–60% of max and add a little each week while the bar still moves fast.", is: "Enginn mælir: byrjaðu á um 50–60% af hámarki og bættu aðeins við í hverri viku meðan stöngin hreyfist enn hratt." },
+    ],
     findings: [
       { ref: "sanchezsixto2021", text: { en: "Squats kept force up while jumps alone lowered it; the combined group jumped more (12.2% vs 7.2%).", is: "Hnébeygjan hélt kraftinum uppi en hopp ein lækkuðu hann; samsetti hópurinn stökk hærra (12,2% á móti 7,2%)." } },
+      { ref: "saezdevillarreal2009", text: { en: "Across 56 studies, adding weight training to jumps did not raise jump height more on average (effect 0.76 against 0.68 for jumps alone).", is: "Í 56 rannsóknum hækkuðu lyftingar ofan á hopp stökkið ekki meira að meðaltali (áhrif 0,76 á móti 0,68 fyrir hopp ein)." } },
+      { ref: "ma2025", text: { en: "44 studies of athletes: pairing a lift with a similar jump in the same session raised the countermovement jump 2.9 cm more than jumps alone; weights alone and jumps alone did about the same (0.2 cm apart).", is: "44 rannsóknir á íþróttafólki: lyfta pöruð við svipað hopp á sömu æfingu hækkaði CMJ um 2,9 cm meira en hopp ein; lyftingar einar og hopp ein gáfu svipað (0,2 cm munur)." } },
     ],
   },
   {
@@ -68,8 +108,15 @@ export const JUMP_METHODS: GoalMethod[] = [
     summary: { en: "Heavy squats or deadlifts for players whose strength test is low.", is: "Þungar hnébeygjur eða réttstöðulyftur fyrir leikmenn með lágt styrkpróf." },
     basis: "trial",
     dose: { en: "3–4 × 3–5 at 80–90% of max", is: "3–4 × 3–5 á 80–90% af hámarki" },
+    howTo: [
+      { en: "In the gym, after any jumps (power first, strength after).", is: "Í salnum, á eftir hoppum ef þau eru (kraftur fyrst, styrkur á eftir)." },
+      { en: "Squat or trap-bar deadlift: pick the one the player does with good technique.", is: "Hnébeygja eða trap bar: veldu þá sem leikmaðurinn gerir með góðri tækni." },
+      { en: "Warm up with 2–3 lighter sets, then 3–4 × 3–5 at 80–90% of max, 2–3 min between sets.", is: "Hitaðu upp með 2–3 léttari settum, svo 3–4 × 3–5 á 80–90% af hámarki, 2–3 mín milli setta." },
+      { en: "Add weight only when every rep keeps depth and technique.", is: "Bættu aðeins við þyngd þegar hver endurtekning heldur dýpt og tækni." },
+    ],
     findings: [
       { ref: "jimenezreyes2017", text: { en: "Adult footballers and rugby players short of force trained mostly heavy for 9 weeks: squat jump +14.2%, all 22 improved. A plan matched to the profile beat the same mixed plan for everyone (+2.3%).", is: "Fullorðnir fótbolta- og ruðningsleikmenn sem vantaði kraft æfðu mest þungt í 9 vikur: hnébeygjuhopp +14,2%, allir 22 bættu sig. Áætlun sniðin að prófílnum skilaði meiru en sama blandaða áætlunin fyrir alla (+2,3%)." } },
+      { ref: "thapa2021", text: { en: "Male footballers (10 studies): heavy lifts (mostly 80–90% of max) paired with jumps raised the countermovement jump more than football training alone (effect 0.96), more so in blocks of 8 weeks or longer (1.54 against 0.40). Not compared with jumps alone; no injuries were reported.", is: "Knattspyrnumenn (10 rannsóknir): þungar lyftur (mest 80–90% af hámarki) paraðar við hopp hækkuðu CMJ meira en fótboltaæfingar einar (áhrif 0,96), og meira í blokkum sem stóðu 8 vikur eða lengur (1,54 á móti 0,40). Ekki borið saman við hopp ein; engin meiðsli voru skráð." } },
       { ref: "marshall2021", text: { en: "Review: being strong comes before heavy-then-fast pairs (contrast) pay off.", is: "Yfirlit: styrkur þarf að vera til staðar áður en þungt-svo-hratt pör (contrast) skila sér." } },
     ],
   },
@@ -79,9 +126,17 @@ export const JUMP_METHODS: GoalMethod[] = [
     summary: { en: "Body-weight hops that build from 56 to about 110 foot contacts over 8 weeks.", is: "Hopp með eigin þyngd sem byggjast upp úr 56 í um 110 snertingar á 8 vikum." },
     basis: "review",
     dose: { en: "Start 50–60 contacts, never over 80–120 · body weight only · 72 h between sessions", is: "Byrja á 50–60 snertingum, aldrei yfir 80–120 · aðeins eigin þyngd · 72 klst milli æfinga" },
+    howTo: [
+      { en: "Body weight only, on grass or a sprung floor, with a coach watching every set.", is: "Aðeins eigin þyngd, á grasi eða fjaðrandi gólfi, með þjálfara sem fylgist með hverju setti." },
+      { en: "Teach the landing first: soft, quiet, knees over the toes.", is: "Kenndu lendinguna fyrst: mjúk, hljóðlát, hné yfir tám." },
+      { en: "Start at about 56 foot contacts. Raise the number of jumps or their height, never both in the same week.", is: "Byrjaðu á um 56 snertingum. Fjölgaðu hoppum eða hækkaðu þau, aldrei hvoru tveggja í sömu vikunni." },
+      { en: "At least 72 h between hop sessions and never over 120 foot contacts a session.", is: "Minnst 72 klst milli hoppæfinga og aldrei yfir 120 snertingar á æfingu." },
+      { en: "Stop the set when landings get noisy or the knees fall in.", is: "Hættu settinu þegar lendingar verða háværar eða hnén falla inn." },
+    ],
     findings: [
       { ref: "bedoya2015", text: { en: "Review of 7 youth soccer trials (10–17 y): plyometrics raised CMJ in most. Raise the number of jumps or their height, never both at once.", is: "Yfirlit 7 rannsókna á unglingum í fótbolta (10–17 ára): hopp hækkuðu CMJ í flestum. Fjölgaðu hoppum eða hækkaðu þau, aldrei hvoru tveggja í einu." } },
       { ref: "wangk2026", text: { en: "Youth soccer (55 trials for jumping): mixed neuromuscular training ranked first and strength plus plyometrics second. Low certainty; few trials reported injuries or safety.", is: "Unglingar í fótbolta (55 rannsóknir á stökki): blönduð taugavöðvaþjálfun var efst og styrkur ásamt hoppum næst. Lítil vissa; fáar rannsóknir skráðu meiðsli eða öryggi." } },
+      { ref: "oliver2024", text: { en: "High-level boys (25 studies): strength, jump and combined training all raised the countermovement jump about equally (effects 0.86–1.00).", is: "Afreksstrákar (25 rannsóknir): styrkur, hopp og blanda hækkuðu CMJ öll álíka mikið (áhrif 0,86–1,00)." } },
       { ref: "lloyd2012", text: { en: "Youth model: strength is a priority at every age; power work grows from the start of adolescence.", is: "Unglingalíkan: styrkur er forgangsatriði á öllum aldri; kraftþjálfun vex frá byrjun unglingsára." } },
     ],
   },
@@ -310,6 +365,7 @@ export function buildJumpParts(input: GoalPlanInput): GoalParts {
     limits: [
       { en: "No study tested choosing the start from the strength and jump tests: that choice is MicroPulse's rule.", is: "Engin rannsókn prófaði að velja upphafið út frá styrk- og stökkprófum: það val er regla MicroPulse." },
       { en: "The adult weekly doses come mostly from one 6-week trial in women's basketball (Sánchez-Sixto 2021); weeks 7–8 are MicroPulse's.", is: "Vikuskammtar fullorðinna koma að mestu úr einni 6 vikna rannsókn í kvennakörfubolta (Sánchez-Sixto 2021); vikur 7–8 eru MicroPulse." },
+      { en: "Reviews found bigger gains with longer blocks and more sessions (Sáez de Villarreal 2009, Thapa 2021); 8 weeks at two sessions a week is still at the low end.", is: "Yfirlit fundu meiri bætingu með lengri blokkum og fleiri æfingum (Sáez de Villarreal 2009, Thapa 2021); 8 vikur með tveimur æfingum á viku eru enn í neðri kantinum." },
       { en: "Youth evidence is mostly from boys, and its certainty is low (Wang K 2026).", is: "Gögn um unglinga eru mest frá strákum og vissan er lítil (Wang K 2026)." },
     ],
     refs: Object.values(JUMP_REFS),

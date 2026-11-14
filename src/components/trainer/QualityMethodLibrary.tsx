@@ -83,6 +83,14 @@ function MethodCard({ m, refs, lang }: { m: GoalMethod; refs: Record<string, Goa
               })}
             </ul>
           </div>
+          {m.howTo && m.howTo.length > 0 && (
+            <div>
+              <div className="font-semibold text-slate-900">{lang === "IS" ? "Hvernig" : "How to run it"}</div>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {m.howTo.map((h) => <li key={h.en}>{L(h)}</li>)}
+              </ul>
+            </div>
+          )}
           {m.caution && <p className="text-slate-500">{L(m.caution)}</p>}
           <div>
             <div className="font-semibold text-slate-900">{lang === "IS" ? "Heimildir" : "References"}</div>

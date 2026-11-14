@@ -109,3 +109,43 @@ describe("quality method libraries (Speed & power tab)", () => {
     }
   });
 });
+
+describe("\"How to run it\" on every method card", () => {
+  const all = LIBRARY_QUALITIES.flatMap((q) => QUALITY_LIBRARIES[q].methods.map((m) => ({ q, m })));
+
+  it("every method has 3–5 distinct lines in English and Icelandic", () => {
+    expect(all).toHaveLength(13);
+    for (const { q, m } of all) {
+      const h = m.howTo ?? [];
+      expect(h.length, `${q}/${m.key}`).toBeGreaterThanOrEqual(3);
+      expect(h.length, `${q}/${m.key}`).toBeLessThanOrEqual(5);
+      expect(new Set(h.map((x) => x.en)).size).toBe(h.length);
+      for (const x of h) {
+        expect(x.en.trim().length, `${m.key}: ${x.en}`).toBeGreaterThan(15);
+        expect(x.is.trim().length, `${m.key}: ${x.is}`).toBeGreaterThan(15);
+        expect(x.is).not.toMatch(/\((ur|n|a|i)\)/);
+      }
+    }
+  });
+
+  it("follows the wording rules (injury, sled) and puts power before strength", () => {
+    for (const { m } of all) for (const x of m.howTo ?? []) {
+      expect(x.en).not.toMatch(/\b(prevents?|predicts?|causes?)\b/i);
+      expect(x.is).not.toMatch(/\b(kemur í veg fyrir|spáir|veldur)\b/i);
+      for (const s of x.en.split(/[.;:]/)) if (/sled/i.test(s) && /\b(better|beat|more effective|upgrade)\b/i.test(s)) expect(s).toMatch(/\b(no|not)\b/i);
+    }
+    const strengthCards = all.filter(({ m }) => m.key === "heavy_strength" || m.key === "eccentric_strength");
+    for (const { q, m } of strengthCards) expect((m.howTo ?? []).some((x) => /first/.test(x.en) && /after/.test(x.en)), `${q}/${m.key}`).toBe(true);
+    const jumpSquat = all.find(({ m }) => m.key === "jump_squat")!.m;
+    expect(jumpSquat.howTo![0].en).toMatch(/before the heavy lifts/);
+  });
+
+  it("keeps the doses the card already states (no new numbers)", () => {
+    const youth = all.find(({ m }) => m.key === "youth_hops")!.m.howTo!.map((x) => x.en).join(" ");
+    expect(youth).toMatch(/120 foot contacts/);
+    expect(youth).toMatch(/72 h/);
+    const drop = all.find(({ m }) => m.key === "drop_jumps")!.m.howTo!.map((x) => x.en).join(" ");
+    expect(drop).toMatch(/20 cm/);
+    expect(drop).toMatch(/40 cm/);
+  });
+});

@@ -66,12 +66,12 @@ function sessionB(emphasis: SessionBEmphasis, light: boolean): GoalSession {
             { method: "jump_squat", what: { en: "Light jump squats", is: "Hnébeygjuhopp með léttri þyngd" }, dose: { en: `${light ? 2 : 4} × 5, fast`, is: `${light ? 2 : 4} × 5, hratt` } },
           ]
         : [
-            { method: "heavy_strength", what: { en: "Heavy legs", is: "Þungar fætur" }, dose: { en: light ? "Squat or trap-bar deadlift 2 × 3" : "Squat or trap-bar deadlift 2–3 × 3–5 heavy", is: light ? "Hnébeygja eða trap bar 2 × 3" : "Hnébeygja eða trap bar 2–3 × 3–5 þungt" } },
             { method: "jump_squat", what: { en: "Light jump squats", is: "Hnébeygjuhopp með léttri þyngd" }, dose: { en: `${light ? 2 : 3} × 5, fast`, is: `${light ? 2 : 3} × 5, hratt` } },
+            { method: "heavy_strength", what: { en: "Heavy legs", is: "Þungar fætur" }, dose: { en: light ? "Squat or trap-bar deadlift 2 × 3" : "Squat or trap-bar deadlift 2–3 × 3–5 heavy", is: light ? "Hnébeygja eða trap bar 2 × 3" : "Hnébeygja eða trap bar 2–3 × 3–5 þungt" } },
           ];
   return {
     slot: "B",
-    focus: emphasis === "strength" ? { en: "Gym: strength", is: "Salur: styrkur" } : emphasis === "power" ? { en: "Gym: fast and light", is: "Salur: hratt og létt" } : { en: "Gym: strength + fast", is: "Salur: styrkur + hratt" },
+    focus: emphasis === "strength" ? { en: "Gym: strength", is: "Salur: styrkur" } : emphasis === "power" ? { en: "Gym: fast and light", is: "Salur: hratt og létt" } : { en: "Gym: fast + strength", is: "Salur: hratt + styrkur" },
     when: WHEN.gym_day,
     minutes: 20,
     blocks,

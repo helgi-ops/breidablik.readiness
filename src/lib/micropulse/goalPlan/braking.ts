@@ -46,6 +46,13 @@ export const BRAKING_METHODS: GoalMethod[] = [
     summary: { en: "Short runs into a stop, a cut or a turn, with a cue after every rep: stops first, then cuts, then reacting to a partner.", is: "Stutt hlaup inn í stopp, stefnubreytingu eða snúning, með leiðbeiningu eftir hverja endurtekningu: stopp fyrst, svo stefnubreytingar, svo viðbrögð við mótherja." },
     basis: "trial",
     dose: { en: "2 × 20 min a week in place of the warm-up · 30–60 s between full-effort reps · 2 min between drills", is: "2 × 20 mín á viku í stað upphitunar · 30–60 s milli endurtekninga á fullu · 2 mín milli æfinga" },
+    howTo: [
+      { en: "In place of the team warm-up, twice a week, at least 2 days apart (MD+3 and MD-2).", is: "Í stað upphitunar liðsins, tvisvar í viku, minnst 2 dögum á milli (MD+3 og MD-2)." },
+      { en: "Cones mark the run-in and the stop or cut point: 5 m in the first weeks, up to 10–20 m later.", is: "Keilur merkja aðhlaupið og stopp- eða beygjustaðinn: 5 m fyrstu vikurnar, upp í 10–20 m síðar." },
+      { en: "Over the weeks: stops first, then planned cuts, then cuts on a partner's signal.", is: "Yfir vikurnar: stopp fyrst, svo fyrirfram ákveðnar stefnubreytingar, svo stefnubreytingar eftir merki félaga." },
+      { en: "A short cue after every rep: \"slam on the brakes and drop the hips\", \"push the ground away\", \"face where you are going\".", is: "Stutt leiðbeining eftir hverja endurtekningu: „bremsaðu fast og lækkaðu mjaðmirnar\", „ýttu jörðinni frá þér\", „snúðu þér þangað sem þú ert að fara\"." },
+      { en: "30–60 s between full-effort reps, 2 min between drills. Stop when the stops get sloppy (knee falls in, long sliding steps).", is: "30–60 s milli endurtekninga á fullu, 2 mín milli æfinga. Hættu þegar stoppin verða ónákvæm (hnéð fellur inn, löng rennandi skref)." },
+    ],
     findings: [
       { ref: "dossantos2019", text: { en: "Youth soccer (U17), 6 weeks: 70° cut time −9 to −12%, cutting technique score better by 23–34%; the control group's technique did not change.", is: "Unglingar í fótbolta (U17), 6 vikur: tími í 70° stefnubreytingu −9 til −12%, tækniskor betra um 23–34%; tækni samanburðarhópsins breyttist ekki." } },
       { ref: "dossantos2021", text: { en: "Amateur men, 6 weeks: 180° turn 0.096 s faster (about 3.5%) and braking force pointed more forward; no change in the control group.", is: "Áhugamenn, 6 vikur: 180° snúningur 0,096 s hraðari (um 3,5%) og bremsukrafturinn beindist meira fram; engin breyting í samanburðarhópnum." } },
@@ -60,6 +67,13 @@ export const BRAKING_METHODS: GoalMethod[] = [
     summary: { en: "Jump, land and hold still on one or both legs: control before speed.", is: "Hoppa, lenda og halda kyrru á öðrum eða báðum fótum: stjórn á undan hraða." },
     basis: "trial",
     dose: { en: "10–12 m of each drill · both legs equal", is: "10–12 m af hverri æfingu · báðir fætur jafnt" },
+    howTo: [
+      { en: "After the braking drills, on grass or turf.", is: "Á eftir bremsuæfingunum, á grasi eða gervigrasi." },
+      { en: "Broad jumps, then single-leg hop-and-hold forward and in a zig-zag, about 10 m of each.", is: "Langstökk, svo einfótahopp-og-halda fram og í sikk-sakk, um 10 m af hverju." },
+      { en: "Hold every landing still before the next hop: knee over the toes, hips back, a quiet foot.", is: "Haltu hverri lendingu kyrri áður en næsta hopp kemur: hné yfir tám, mjaðmir aftur, hljóðlát lending." },
+      { en: "Both legs the same. If one leg is clearly weaker, one extra set on that leg.", is: "Báðir fætur jafnt. Ef annar fóturinn er greinilega veikari, eitt auka sett á hann." },
+      { en: "Stop when the player can no longer hold the landing still.", is: "Hættu þegar leikmaðurinn nær ekki lengur að halda lendingunni kyrri." },
+    ],
     findings: [
       { ref: "dossantos2021", text: { en: "Part of the tested sessions: broad jumps, single-leg hop-and-hold forward and zig-zag, 10–12 m each.", is: "Hluti af prófuðu æfingunum: langstökk, einfótahopp-og-halda fram og í sikk-sakk, 10–12 m hvert." } },
       { ref: "asadi2016", text: { en: "Meta-analysis: plyometric training improved change-of-direction tests (effect 0.96); a mix of jump types worked best. Braking itself was not measured.", is: "Safngreining: hoppþjálfun bætti stefnubreytingarpróf (áhrif 0,96); blanda af hopptegundum virkaði best. Bremsan sjálf var ekki mæld." } },
@@ -71,6 +85,12 @@ export const BRAKING_METHODS: GoalMethod[] = [
     summary: { en: "Front-of-thigh strength while lowering goes with better braking; slow-lowering work helped sharp turns most in adolescents.", is: "Styrkur framan á læri á niðurleið fer saman við betri bremsun; æfingar með hægri niðurleið hjálpuðu mest í kröppum snúningum hjá unglingum." },
     basis: "review",
     dose: { en: "Split squat with a 3 s lowering, 3 × 6 each leg, in the team gym session", is: "Framstigsbeygja með 3 s niðurleið, 3 × 6 hvor fótur, á styrktaræfingu liðsins" },
+    howTo: [
+      { en: "In the team gym session, after any jumps (power first, strength after).", is: "Á styrktaræfingu liðsins, á eftir hoppum ef þau eru (kraftur fyrst, styrkur á eftir)." },
+      { en: "Split squat: 3 s on the way down, normal speed up, 3 × 6 each leg.", is: "Framstigsbeygja: 3 s á leiðinni niður, venjulegur hraði upp, 3 × 6 hvor fótur." },
+      { en: "Start with body weight or light dumbbells. Add weight when every rep holds the 3 s and the knee stays in line.", is: "Byrjaðu með eigin þyngd eða léttum handlóðum. Bættu við þyngd þegar hver endurtekning heldur 3 s og hnéð helst í línu." },
+      { en: "Not the day before a match: legs are often sore after slow-lowering work, most in the first weeks.", is: "Ekki daginn fyrir leik: fætur eru oft aumir eftir æfingar með hægri niðurleið, mest fyrstu vikurnar." },
+    ],
     findings: [
       { ref: "harper2022", text: { en: "Review: eccentric thigh strength is the most consistent link with braking (r about 0.5–0.75), but only from snapshots, so cause is not shown. No exercise or dose is given: the dose here is MicroPulse's.", is: "Yfirlit: styrkur framan á læri á niðurleið tengist bremsun stöðugast (r um 0,5–0,75), en aðeins úr þversniðsrannsóknum, svo orsök er ekki sýnd. Engin æfing eða skammtur er gefinn: skammturinn hér er MicroPulse." } },
       { ref: "chen2025", text: { en: "Adolescents: work with a slow (about 3 s) or extra-loaded lowering ranked first for cutting overall (effect −1.40) and for turns of 90° or more, but had no clear effect in cuts under 90°. Based on few studies.", is: "Unglingar: æfingar með hægri (um 3 s) eða þyngdri niðurleið voru efstar fyrir stefnubreytingar í heild (áhrif −1,40) og fyrir snúninga 90° eða meira, en höfðu engin skýr áhrif í beygjum undir 90°. Byggt á fáum rannsóknum." } },

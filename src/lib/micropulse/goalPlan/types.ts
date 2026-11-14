@@ -40,6 +40,8 @@ export type GoalMethod = {
   basis: "trial" | "review" | "rule";
   dose: Bi;
   findings: GoalFinding[];
+  /** "How to run it": set-up, cues, rest and stop rules, from the doses above. Lines not taken from a study say so. */
+  howTo?: Bi[];
   caution?: Bi;
 };
 

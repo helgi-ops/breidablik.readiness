@@ -7,7 +7,7 @@ import type { Bi, GoalBlock, GoalBlockReason, GoalPlanInput, GoalQuality, GoalSe
 
 export const GOAL_ENGINE_VERSION = "goal-plan-1";
 /** Bump when a dose, a method or a source changes. A plan approved earlier keeps its frozen copy. */
-export const GOAL_CONTENT_VERSION = "2026-11-13";
+export const GOAL_CONTENT_VERSION = "2026-11-14";
 
 export const PLAN_WEEKS = 8;
 /** In-season add-on sessions a week (MicroPulse rule, not from a study). */

@@ -165,10 +165,10 @@ export const QUALITY_WHY: Record<GoalQuality, QualityWhy> = {
       },
       {
         text: {
-          en: "Jumps plus heavy squats beat jumps alone: +12.2% against +7.2% in 6 weeks.",
-          is: "Hopp ásamt þungri hnébeygju gáfu meira en hopp ein: +12,2% á móti +7,2% á 6 vikum.",
+          en: "Jump training raised jump height by about 4 cm across 56 studies; longer blocks did more.",
+          is: "Hoppþjálfun hækkaði stökkið um u.þ.b. 4 cm í 56 rannsóknum; lengri blokkir gerðu meira.",
         },
-        refs: ["sanchezsixto2021"],
+        refs: ["saezdevillarreal2009"],
       },
       {
         text: {

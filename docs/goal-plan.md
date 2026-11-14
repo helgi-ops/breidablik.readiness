@@ -350,6 +350,24 @@ team plan per quality + explicit under-18 rules** (the youth level is under "Ind
   60–340 m and never at youth level, youth ≤120 contacts and all supervised, hard blocks supervised, individual =
   goal-plan weeks, wording rules.
 
+## "Speed & power" lota 3: how-to lines, power-first order, jump papers (2026-11-14)
+
+- `GoalMethod.howTo?: Bi[]`: 3–5 "How to run it" lines on all 13 acceleration/braking/jump method cards, rendered
+  under "Hvernig" in `QualityMethodLibrary.tsx` (same as the top-speed cards). They reuse the card's own doses; a
+  cue that is coaching practice, not a study, says so. Not in the PDFs (top speed's PDF has none either).
+- Coach's rule: power before strength in a session. Fixed where heavy lifts came before jump squats or jumps:
+  acceleration "balanced" gym session (goal plan + in-season team plan), top-speed goal plan "balanced" gym session,
+  top-speed library in-season MD-4. `__tests__/sessionOrder.test.ts` checks every plan (contrast and
+  strength-plus-sprint pairs are their own method and not checked).
+- Jump evidence (8 papers the coach sent). Read in full: Sáez de Villarreal 2009, Markovic 2007, Pardos-Mainer 2021,
+  Thapa 2021, Ma 2025, Oliver 2024 (jump results). Abstract only (paywalled): Ramirez-Campillo 2020, Oxfeldt 2019.
+  The jump verdict changed: jumps alone reliably work; weights on top add little on average, except a lift paired
+  with a similar jump in the same session (Ma 2025, +2.9 cm CMJ). The old "jumps + squats beat jumps alone" was one
+  trial (Sánchez-Sixto 2021) and is now worded as that.
+- Dose questions for the coach (NOT changed): team blocks are 6 weeks / 12 sessions and ~34–59 contacts a session;
+  reviews found more with ≥8 weeks (Thapa 2021) and suggest >10 weeks, >20 sessions, >50 jumps a session (Sáez de
+  Villarreal 2009). `GOAL_CONTENT_VERSION` → 2026-11-14.
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

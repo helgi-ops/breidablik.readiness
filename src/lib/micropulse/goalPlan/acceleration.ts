@@ -49,6 +49,13 @@ export const ACCEL_METHODS: GoalMethod[] = [
     summary: { en: "10–20 m flat out from a standing start: the most direct way to train the first steps.", is: "10–20 m á fullu frá kyrrstöðu: beinasta leiðin til að þjálfa fyrstu skrefin." },
     basis: "trial",
     dose: { en: "4–6 × 10–20 m · 2–3 min rest", is: "4–6 × 10–20 m · 2–3 mín hvíld" },
+    howTo: [
+      { en: "Early in the session, straight after a full warm-up, before anything tiring.", is: "Snemma á æfingu, strax eftir fulla upphitun, á undan öllu sem þreytir." },
+      { en: "Cones at the start line and at 10 m (or 20 m). Start from a split stance, the same start every time.", is: "Keilur á byrjunarlínu og við 10 m (eða 20 m). Byrjað úr skrefstöðu, sama start í hvert sinn." },
+      { en: "Every rep flat out. Walk back and rest 2–3 min, so each sprint is as fast as the first.", is: "Hver sprettur á fullu. Gengið til baka og hvílt í 2–3 mín, svo hver sprettur sé jafn hraður og sá fyrsti." },
+      { en: "Cue (coach's practice): \"push the ground back\" and stay low for the first steps.", is: "Leiðbeining (reynsla þjálfara): „ýttu jörðinni aftur\" og vertu lágur í fyrstu skrefunum." },
+      { en: "Stop when a rep is clearly slower or the player is no longer going flat out.", is: "Hættu þegar sprettur er greinilega hægari eða leikmaðurinn fer ekki lengur á fullu." },
+    ],
     findings: [
       { ref: "mendiguchia2020", text: { en: "Sprint training in footballers: 5 m time −3.4% and 20 m −2.6%.", is: "Sprettþjálfun hjá fótboltamönnum: 5 m tími −3,4% og 20 m −2,6%." } },
       { ref: "haugen2019", text: { en: "Best-practice guide: 10–50 m at over 98% effort, 2–7 min rest, 100–300 m a session.", is: "Viðmið: 10–50 m á yfir 98% átaki, 2–7 mín hvíld, 100–300 m á æfingu." } },
@@ -60,6 +67,12 @@ export const ACCEL_METHODS: GoalMethod[] = [
     summary: { en: "Short sprints pulling a sled. They help the start about as much as the same sprints without a sled, and do not raise top speed.", is: "Stuttir sprettir með sleða. Þeir hjálpa startinu álíka mikið og sömu sprettir án sleða og hækka ekki hámarkshraða." },
     basis: "trial",
     dose: { en: "4–5 × 15–20 m (60–100 m) · load that slows the run by 15–30% · 3 min rest · plus normal sprints", is: "4–5 × 15–20 m (60–100 m) · þyngd sem hægir hlaupið um 15–30% · 3 mín hvíld · auk venjulegra spretta" },
+    howTo: [
+      { en: "On grass or turf, harness at the hips. Use the same surface each time: the surface changes how heavy the sled feels.", is: "Á grasi eða gervigrasi, belti um mjaðmir. Notaðu sama undirlag í hvert sinn: undirlagið breytir því hve þungur sleðinn er." },
+      { en: "Find the load in a test run: time 20 m with and without the sled; with it, the run should take 15–30% longer.", is: "Finndu þyngdina í prufuhlaupi: taktu tíma á 20 m með og án sleða; með sleðanum á hlaupið að taka 15–30% lengri tíma." },
+      { en: "4–5 × 15–20 m with 3 min rest, then the normal sprints, so the last runs are without the sled.", is: "4–5 × 15–20 m með 3 mín hvíld, svo venjulegu sprettirnir, svo síðustu hlaupin séu án sleða." },
+      { en: "If the player stands up tall or the stride breaks down, the sled is too heavy: take weight off (coach's practice).", is: "Ef leikmaðurinn réttir úr sér eða skrefið brotnar niður er sleðinn of þungur: taktu af þyngd (reynsla þjálfara)." },
+    ],
     findings: [
       { ref: "alcaraz2018", text: { en: "13 studies: the first 10 m got 2.3% faster (effect 0.61), but no faster than with the same sprints without a sled (0.09, not significant). Over 20% of body weight did no better than lighter, and is not for inexperienced players.", is: "13 rannsóknir: fyrstu 10 m urðu 2,3% hraðari (áhrif 0,61), en ekki hraðari en með sömu sprettum án sleða (0,09, ómarktækt). Yfir 20% af líkamsþyngd gerði ekki betur en léttara og er ekki fyrir óvana leikmenn." } },
       { ref: "petrakos2016", text: { en: "11 studies, loads up to a 30% slow-down: sled sprints were no more effective than normal sprints. Blocks that worked: 6+ weeks, 2–3 a week, 60–340 m a session. Gains in season were smaller than in pre-season.", is: "11 rannsóknir, þyngdir upp í 30% hægingu: sleðasprettir voru ekki árangursríkari en venjulegir sprettir. Það sem virkaði: 6+ vikur, 2–3 í viku, 60–340 m á æfingu. Bæting á keppnistímabili var minni en á undirbúningstímabili." } },
@@ -74,6 +87,12 @@ export const ACCEL_METHODS: GoalMethod[] = [
     summary: { en: "Stronger legs go with faster first steps; lifting heavy is the strength-first part of the plan.", is: "Sterkari fætur fylgja hraðari fyrstu skrefum; þungar lyftur eru styrkurinn-fyrst hluti áætlunarinnar." },
     basis: "trial",
     dose: { en: "Squat or trap-bar deadlift 3–4 × 3–5 at about 75–85% of max · 2–3 min rest · 2 × a week", is: "Hnébeygja eða trap bar 3–4 × 3–5 á um 75–85% af hámarki · 2–3 mín hvíld · 2 × í viku" },
+    howTo: [
+      { en: "On a gym day at least 2 days before a match. Jumps and jump squats come first in the session, heavy lifts after.", is: "Á styrktardegi minnst 2 dögum fyrir leik. Hopp og hnébeygjuhopp koma fyrst á æfingunni, þungar lyftur á eftir." },
+      { en: "Squat or trap-bar deadlift: pick the one the player does with good technique.", is: "Hnébeygja eða trap bar: veldu þá sem leikmaðurinn gerir með góðri tækni." },
+      { en: "Warm up with 2–3 lighter sets, then 3–4 × 3–5 at a weight the player could lift 1–2 more times (about 75–85% of max).", is: "Hitaðu upp með 2–3 léttari settum, svo 3–4 × 3–5 með þyngd sem leikmaðurinn gæti lyft 1–2 sinnum oftar (um 75–85% af hámarki)." },
+      { en: "Rest 2–3 min between sets. Add weight only when every rep keeps depth and technique.", is: "Hvíld 2–3 mín milli setta. Bættu aðeins við þyngd þegar hver endurtekning heldur dýpt og tækni." },
+    ],
     findings: [
       { ref: "seitz2014", text: { en: "15 trials: sprints got 3.1% faster in training groups and did not change in controls; more strength gain went with more sprint gain (r = −0.77). Two sessions a week did better than more, and 60–85% of max did best. Almost all tests were under 30 m. A 2022 re-analysis found the effect sizes inflated.", is: "15 rannsóknir: sprettir urðu 3,1% hraðari í þjálfunarhópum og breyttust ekki hjá samanburðarhópum; meiri styrktarbæting fór saman við meiri sprettbætingu (r = −0,77). Tvær æfingar á viku gáfu betra en fleiri, og 60–85% af hámarki best. Nær öll prófin voru undir 30 m. Endurgreining 2022 fann áhrifastærðirnar ofmetnar." } },
       { ref: "wisloff2004", text: { en: "17 elite footballers: stronger half squat went with faster 10 m (r = 0.94). A link, not proof that lifting makes you faster.", is: "17 afreksfótboltamenn: sterkari hálf-hnébeygja fór saman við hraðari 10 m (r = 0,94). Tengsl, ekki sönnun þess að lyftingar geri þig hraðari." } },
@@ -87,6 +106,12 @@ export const ACCEL_METHODS: GoalMethod[] = [
     summary: { en: "Short, springy jumps forward: the fast part of the starts-first branch.", is: "Stutt, fjaðrandi stökk áfram: hraði hlutinn í „stört fyrst\"-greininni." },
     basis: "review",
     dose: { en: "Forward bounds 3–5 × 8 contacts · or hurdle hops 3–5 × 5 contacts", is: "Skrefstökk 3–5 × 8 snertingar · eða grindahopp 3–5 × 5 snertingar" },
+    howTo: [
+      { en: "On grass or turf, after the sprints and before the gym.", is: "Á grasi eða gervigrasi, á eftir sprettunum og á undan salnum." },
+      { en: "Forward bounds: long, springy strides, 8 foot contacts a set, landing on the front of the foot.", is: "Skrefstökk: löng, fjaðrandi skref, 8 snertingar í setti, lent á framfæti." },
+      { en: "Hurdle hops: 5 low hurdles in a row, off the ground again as fast as possible after each one.", is: "Grindahopp: 5 lágar grindur í röð, upp aftur eins hratt og hægt er eftir hverja." },
+      { en: "Walk back between sets. Stop the set when ground contacts get long and heavy.", is: "Gengið til baka milli setta. Hættu settinu þegar snertingar verða langar og þungar." },
+    ],
     findings: [
       { ref: "wangk2026", text: { en: "Youth soccer (20 trials for 5–10 m): hops plus short sprints or planned cuts ranked first for acceleration (effect 1.20); strength alone was uncertain in youth. Low certainty; few trials reported injuries or safety.", is: "Unglingar í fótbolta (20 rannsóknir á 5–10 m): hopp ásamt stuttum sprettum eða fyrirfram ákveðnum stefnubreytingum voru efst fyrir hröðun (áhrif 1,20); styrkur einn og sér var óviss hjá unglingum. Lítil vissa; fáar rannsóknir skráðu meiðsli eða öryggi." } },
       { ref: "hicks2020", text: { en: "Review template for \"force at high speed\": bounds 3–5 × 8, hurdle hops 3–5 × 5, week 4 lighter. Not tested as written.", is: "Sniðmát úr yfirliti fyrir „kraft á miklum hraða\": skrefstökk 3–5 × 8, grindahopp 3–5 × 5, vika 4 léttari. Ekki prófað eins og það er skrifað." } },
@@ -98,6 +123,12 @@ export const ACCEL_METHODS: GoalMethod[] = [
     summary: { en: "Fast jumps with a light bar: power for the first steps.", is: "Hröð hopp með léttri stöng: kraftur fyrir fyrstu skrefin." },
     basis: "trial",
     dose: { en: "3–4 × 5, fast, light load", is: "3–4 × 5, hratt, létt þyngd" },
+    howTo: [
+      { en: "In the gym, first, before the heavy lifts.", is: "Í salnum, fyrst, á undan þungu lyftunum." },
+      { en: "Light bar or dumbbells: the jump must stay fast. If it slows, the weight is too heavy.", is: "Létt stöng eða handlóð: hoppið verður að vera hratt. Ef það hægist er þyngdin of mikil." },
+      { en: "Short dip, then jump as high and fast as possible. Land soft, reset, next rep.", is: "Stutt beygja, svo hoppað eins hátt og hratt og hægt er. Lent mjúkt, stillt sig af, næsta endurtekning." },
+      { en: "3–4 × 5. Stop the set when the jumps get lower.", is: "3–4 × 5. Hættu settinu þegar hoppin lækka." },
+    ],
     findings: [
       { ref: "loturco2016", text: { en: "U-20 footballers: jump squats went with faster sprints; push press did not.", is: "U-20 fótboltamenn: hnébeygjuhopp fóru saman við hraðari spretti; push press ekki." } },
     ],
@@ -172,11 +203,12 @@ function gym(start: AccelStart, light: boolean, youth: boolean): GoalSession {
     return { slot: "B", focus: { en: "Gym: technique strength", is: "Salur: tæknistyrkur" }, when: WHEN.gym_day, minutes: 20, blocks: [heavy] };
   }
   const jumpSq: GoalBlock = { method: "jump_squat", what: { en: "Light jump squats", is: "Hnébeygjuhopp með léttri þyngd" }, dose: { en: `${light ? 2 : 4} × 5, fast`, is: `${light ? 2 : 4} × 5, hratt` } };
-  const blocks = start === "strength_first" ? [heavy] : start === "starts_first" ? [jumpSq, heavy] : [heavy, jumpSq];
+  // Power before strength in the same session (coach's rule): jump squats always come before the heavy lifts.
+  const blocks = start === "strength_first" ? [heavy] : [jumpSq, heavy];
   if (start === "starts_first" && !light) blocks[1] = { ...heavy, dose: { en: "Squat or trap-bar deadlift 2–3 × 3–5", is: "Hnébeygja eða trap bar 2–3 × 3–5" } };
   return {
     slot: "B",
-    focus: start === "strength_first" ? { en: "Gym: strength", is: "Salur: styrkur" } : start === "starts_first" ? { en: "Gym: fast", is: "Salur: hratt" } : { en: "Gym: strength + fast", is: "Salur: styrkur + hratt" },
+    focus: start === "strength_first" ? { en: "Gym: strength", is: "Salur: styrkur" } : start === "starts_first" ? { en: "Gym: fast", is: "Salur: hratt" } : { en: "Gym: fast + strength", is: "Salur: hratt + styrkur" },
     when: WHEN.gym_day,
     minutes: 20,
     blocks,

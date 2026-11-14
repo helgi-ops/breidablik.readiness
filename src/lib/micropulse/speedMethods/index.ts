@@ -960,7 +960,7 @@ export const SPEED_PLANS: SpeedPlan[] = [
             day: 1,
             dayLabel: { en: "MD-4", is: "MD-4" },
             focus: { en: "Strength", is: "Styrkur" },
-            blocks: [IN_SEASON_LIFTS, jumpSquat(3), jumps("40–60")],
+            blocks: [jumps("40–60"), jumpSquat(3), IN_SEASON_LIFTS],
           },
           {
             day: 2,
@@ -996,7 +996,7 @@ export const SPEED_PLANS: SpeedPlan[] = [
             day: 1,
             dayLabel: { en: "MD-4", is: "MD-4" },
             focus: { en: "Strength (tension day)", is: "Styrkur (tension-dagur)" },
-            blocks: [IN_SEASON_LIFTS, jumpSquat(3), jumps("40–60")],
+            blocks: [jumps("40–60"), jumpSquat(3), IN_SEASON_LIFTS],
           },
           {
             day: 3,

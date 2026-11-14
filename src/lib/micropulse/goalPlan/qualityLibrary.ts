@@ -123,27 +123,28 @@ export const QUALITY_LIBRARIES: Record<LibraryQuality, QualityLibrary> = {
     quality: "jump",
     title: { en: "Jump height: what works", is: "Stökkhæð: hvað virkar" },
     verdict: {
-      en: "Jumps plus heavy squats raise jump height more than jumps alone; players short of strength gain most from lifting heavy first.",
-      is: "Hopp ásamt þungri hnébeygju hækka stökkið meira en hopp ein; leikmenn sem vantar styrk græða mest á því að lyfta þungt fyrst.",
+      en: "Jump training reliably raises jump height; weights on top add a little at most, and players short of strength gain most from lifting heavy first.",
+      is: "Hoppþjálfun hækkar stökkið áreiðanlega; lyftingar ofan á bæta lítið við í mesta lagi, og leikmenn sem vantar styrk græða mest á því að lyfta þungt fyrst.",
     },
     facts: [
       {
-        text: { en: "Jumps plus squats: +12.2% against +7.2% with jumps alone, in 6 weeks.", is: "Hopp ásamt hnébeygju: +12,2% á móti +7,2% með hoppum einum, á 6 vikum." },
-        refs: ["sanchezsixto2021"],
+        text: { en: "Across 56 studies, jumps raised jump height by about 4 cm; longer blocks, more sessions and more jumps a session went with bigger gains.", is: "Í 56 rannsóknum hækkuðu hopp stökkið um u.þ.b. 4 cm; lengri blokkir, fleiri æfingar og fleiri hopp á æfingu fóru saman við meiri bætingu." },
+        refs: ["saezdevillarreal2009", "markovic2007"],
+      },
+      {
+        text: { en: "Weights on top of jumps added nothing on average in one review, and 2.9 cm when a lift and a similar jump were paired in the same session in another.", is: "Lyftingar ofan á hopp bættu engu við að meðaltali í einu yfirliti, og 2,9 cm þegar lyfta og svipað hopp voru pöruð á sömu æfingu í öðru." },
+        refs: ["saezdevillarreal2009", "ma2025"],
       },
       {
         text: { en: "Players short of force who trained mostly heavy all jumped higher (+14.2% in 9 weeks).", is: "Leikmenn sem vantaði kraft og æfðu mest þungt stukku allir hærra (+14,2% á 9 vikum)." },
         refs: ["jimenezreyes2017"],
       },
-      {
-        text: { en: "In young footballers, jumps raised jump height in most trials: raise the number of jumps or their height, never both at once.", is: "Hjá unglingum í fótbolta hækkuðu hopp stökkið í flestum rannsóknum: fjölgaðu hoppum eða hækkaðu þau, aldrei hvoru tveggja í einu." },
-        refs: ["bedoya2015"],
-      },
     ],
     methods: JUMP_METHODS,
     refs: JUMP_REFS,
     caveats: [
-      { en: "The adult weekly doses come mostly from one 6-week trial in women's basketball (Sánchez-Sixto 2021).", is: "Vikuskammtar fullorðinna koma að mestu úr einni 6 vikna rannsókn í kvennakörfubolta (Sánchez-Sixto 2021)." },
+      { en: "The adult weekly doses come mostly from one 6-week trial in women's basketball (Sánchez-Sixto 2021). Reviews found bigger gains with longer blocks and more sessions (Sáez de Villarreal 2009, Thapa 2021).", is: "Vikuskammtar fullorðinna koma að mestu úr einni 6 vikna rannsókn í kvennakörfubolta (Sánchez-Sixto 2021). Yfirlit fundu meiri bætingu með lengri blokkum og fleiri æfingum (Sáez de Villarreal 2009, Thapa 2021)." },
+      { en: "Most jump studies are small and of low quality, and the reviews disagree on whether weights add to jumps.", is: "Flestar stökkrannsóknir eru litlar og af litlum gæðum, og yfirlitin eru ósammála um hvort lyftingar bæti við hoppin." },
       { en: "Youth evidence is mostly from boys, and its certainty is low.", is: "Gögn um unglinga eru mest frá strákum og vissan er lítil." },
       { en: "No study tested choosing the start from the strength and jump tests: that choice is MicroPulse's rule.", is: "Engin rannsókn prófaði að velja upphafið út frá styrk- og stökkprófum: það val er regla MicroPulse." },
     ],

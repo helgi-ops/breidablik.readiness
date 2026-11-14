@@ -113,10 +113,10 @@ const optional = (b: GoalBlock): GoalBlock => ({ ...b, what: { en: `${b.what.en}
 // ─── Acceleration ──────────────────────────────────────────────────────────
 
 const A = ACCEL_BLOCKS;
-/** Heavy legs + light jump squats: the goal plan's "balanced" gym session. */
+/** Light jump squats, then heavy legs (power before strength): the goal plan's "balanced" gym session. */
 const accelGym = (light: boolean): GoalBlock[] => A.gym("balanced", light, false).blocks;
-const accelHeavy = (light: boolean): GoalBlock => accelGym(light)[0];
-const jumpSquats = (light: boolean): GoalBlock => accelGym(light)[1];
+const jumpSquats = (light: boolean): GoalBlock => accelGym(light)[0];
+const accelHeavy = (light: boolean): GoalBlock => accelGym(light)[1];
 
 const ACCEL_IN_SEASON: QualityPlan = {
   quality: "acceleration",
@@ -137,13 +137,13 @@ const ACCEL_IN_SEASON: QualityPlan = {
   matchDay: MATCH_DAY,
   weeks: [
     { label: wk("Week 1: test + starts", "Vika 1: mæling + stört"), sessions: [
-      { day: 1, dayLabel: MD4, focus: { en: "Test + starts, then gym", is: "Mæling + stört, svo salur" }, blocks: [A.test10, A.starts("4", "10"), accelHeavy(false), jumpSquats(false)] },
+      { day: 1, dayLabel: MD4, focus: { en: "Test + starts, then gym", is: "Mæling + stört, svo salur" }, blocks: [A.test10, A.starts("4", "10"), jumpSquats(false), accelHeavy(false)] },
     ] },
     { label: wk("Weeks 2–3", "Vikur 2–3"), sessions: [
-      { day: 1, dayLabel: MD4, focus: { en: "Starts, then gym", is: "Stört, svo salur" }, blocks: [optional(A.sled(4, 15)), A.starts("4", "10–15"), accelHeavy(false), jumpSquats(false)] },
+      { day: 1, dayLabel: MD4, focus: { en: "Starts, then gym", is: "Stört, svo salur" }, blocks: [optional(A.sled(4, 15)), A.starts("4", "10–15"), jumpSquats(false), accelHeavy(false)] },
     ] },
     { label: wk("Weeks 4–5", "Vikur 4–5"), sessions: [
-      { day: 1, dayLabel: MD4, focus: { en: "Starts, then gym", is: "Stört, svo salur" }, blocks: [optional(A.sled(5, 20)), A.starts("5", "15–20"), accelHeavy(false), jumpSquats(false)] },
+      { day: 1, dayLabel: MD4, focus: { en: "Starts, then gym", is: "Stört, svo salur" }, blocks: [optional(A.sled(5, 20)), A.starts("5", "15–20"), jumpSquats(false), accelHeavy(false)] },
     ] },
     { label: wk("Week 6: lighter + test", "Vika 6: léttari + mæling"), sessions: [
       { day: 1, dayLabel: MD4, focus: { en: "Test + starts, light gym", is: "Mæling + stört, léttur salur" }, blocks: [A.test10, A.starts("2", "10"), accelHeavy(true)] },
@@ -308,7 +308,7 @@ const JUMP_IN_SEASON: QualityPlan = {
     is: "Endurkastshopp eftir upphitun á MD-4 og hnébeygja eftir stangarhraða í sal sama dag, í 6 vikur.",
   },
   facts: [
-    { en: "Jumps plus squats raised jump height more than jumps alone: +12.2% against +7.2% in 6 weeks (Sánchez-Sixto 2021).", is: "Hopp ásamt hnébeygju hækkuðu stökkið meira en hopp ein: +12,2% á móti +7,2% á 6 vikum (Sánchez-Sixto 2021)." },
+    { en: "In one 6-week trial, jumps plus squats raised jump height +12.2% against +7.2% for jumps only (Sánchez-Sixto 2021); across many studies, weights added little on average.", is: "Í einni 6 vikna rannsókn hækkuðu hopp ásamt hnébeygju stökkið um 12,2% á móti 7,2% fyrir hopp ein (Sánchez-Sixto 2021); í mörgum rannsóknum bættu lyftingar litlu við að meðaltali." },
     { en: "In season the jumps are fewer than in the trial (3–5 sets instead of 5–7), once a week, so expect a smaller gain.", is: "Á tímabili eru hoppin færri en í rannsókninni (3–5 sett í stað 5–7), einu sinni í viku, svo búast má við minni bætingu." },
     { en: "Jump test in week 1 and week 6, same device each time.", is: "Stökkpróf í viku 1 og viku 6, sama tæki í hvert sinn." },
   ],
@@ -334,7 +334,7 @@ const JUMP_IN_SEASON: QualityPlan = {
   limits: [
     { en: "The weekly doses come mostly from one 6-week trial in women's basketball (Sánchez-Sixto 2021); the lower in-season volume is MicroPulse's.", is: "Vikuskammtarnir koma að mestu úr einni 6 vikna rannsókn í kvennakörfubolta (Sánchez-Sixto 2021); minna magn á tímabili er MicroPulse." },
   ],
-  refs: ["sanchezsixto2021", "bedoya2015", "jimenezreyes2017", "marshall2021"],
+  refs: ["sanchezsixto2021", "saezdevillarreal2009", "ma2025", "bedoya2015", "jimenezreyes2017", "marshall2021"],
 };
 
 const JUMP_PRE_SEASON: QualityPlan = {
@@ -369,7 +369,7 @@ const JUMP_PRE_SEASON: QualityPlan = {
     { en: "One 6-week trial in women's basketball (Sánchez-Sixto 2021); results in footballers may differ.", is: "Ein 6 vikna rannsókn í kvennakörfubolta (Sánchez-Sixto 2021); niðurstöður hjá fótboltafólki gætu verið aðrar." },
     { en: "Players short of strength may gain more from lifting heavy first (Jiménez-Reyes 2017): see \"Individual\".", is: "Leikmenn sem vantar styrk gætu grætt meira á því að lyfta þungt fyrst (Jiménez-Reyes 2017): sjá „Einstaklingur\"." },
   ],
-  refs: ["sanchezsixto2021", "jimenezreyes2017", "marshall2021", "bedoya2015"],
+  refs: ["sanchezsixto2021", "saezdevillarreal2009", "markovic2007", "jimenezreyes2017", "marshall2021", "bedoya2015"],
 };
 
 // ─── Individual: the goal plan's own 8 weeks ───────────────────────────────
@@ -388,7 +388,7 @@ export const INDIVIDUAL_STARTS: Record<LibraryQuality, { key: StartKey; label: B
     { key: "technique_only", label: BRAKING_START_LABEL.technique_only, who: { en: "For a player already braking hard more than usual over 4 weeks: technique at 50–75% only, no extra hard stops.", is: "Fyrir leikmann sem bremsar nú þegar harðar en venjulega í 4 vikur: aðeins tækni á 50–75%, engin auka hörð stopp." } },
   ],
   jump: [
-    { key: "combined", label: JUMP_START_LABEL.combined, who: { en: "Rebound jumps plus squats by bar speed: the pairing that did best (+12.2%).", is: "Endurkastshopp ásamt hnébeygju eftir stangarhraða: samsetningin sem gaf mest (+12,2%)." } },
+    { key: "combined", label: JUMP_START_LABEL.combined, who: { en: "Rebound jumps plus squats by bar speed: the pairing that did best in its trial (+12.2%).", is: "Endurkastshopp ásamt hnébeygju eftir stangarhraða: samsetningin sem gaf mest í sinni rannsókn (+12,2%)." } },
     { key: "strength_first", label: JUMP_START_LABEL.strength_first, who: { en: "For a player whose strength test is average or below: rebound jumps plus heavy lifts.", is: "Fyrir leikmann með styrkpróf í meðallagi eða undir: endurkastshopp ásamt þungum lyftum." } },
     { key: "fast_jumps", label: JUMP_START_LABEL.fast_jumps, who: { en: "For a strong player who is slow off the ground: drop jumps and rebound jumps, strength kept.", is: "Fyrir sterkan leikmann sem er hægur upp af jörðinni: fallhopp og endurkastshopp, styrknum haldið." } },
     { key: "youth", label: JUMP_START_LABEL.youth, who: { en: "Under 18 or age not on record: body-weight hops building from 56 contacts; drop jumps only in the last weeks.", is: "Undir 18 ára eða aldur ekki skráður: hopp með eigin þyngd sem byggjast upp frá 56 snertingum; fallhopp aðeins í síðustu vikunum." } },
