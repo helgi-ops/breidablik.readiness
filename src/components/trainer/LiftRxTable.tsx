@@ -31,6 +31,7 @@ const SOURCE_STYLE: Record<RxLine["source"], string> = {
   plan_study: "bg-emerald-50 text-emerald-800",
   other_study: "bg-sky-50 text-sky-800",
   micropulse: "bg-slate-100 text-slate-600",
+  session: "bg-indigo-50 text-indigo-800",
 };
 
 function Source({ line, lang }: { line: RxLine; lang: Lang }) {
@@ -44,16 +45,18 @@ function Source({ line, lang }: { line: RxLine; lang: Lang }) {
   );
 }
 
-function Lift({ r, lang, player }: { r: LiftRx; lang: Lang; player: boolean }) {
+function Lift({ r, lang, player, bare }: { r: LiftRx; lang: Lang; player: boolean; bare: boolean }) {
   const L = (x: Bi) => (lang === "IS" ? x.is : x.en);
   const rows = (player ? RX_PLAYER_ROWS : RX_ROW_ORDER).filter((k) => r.rows[k]);
   const bar = player ? r.barSpeed.filter((x) => x.key !== "none") : r.barSpeed;
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-2">
-      <div className="text-[12px] font-semibold text-slate-900">
-        {L(r.exercise)} <span className="font-normal text-slate-500">· {L(RX_SETS_LABEL)} {r.sets} × {r.reps}</span>
-      </div>
-      <dl className="mt-1 grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)]">
+      {!bare && (
+        <div className="text-[12px] font-semibold text-slate-900">
+          {L(r.exercise)} <span className="font-normal text-slate-500">· {L(RX_SETS_LABEL)} {r.sets} × {r.reps}</span>
+        </div>
+      )}
+      <dl className={`${bare ? "" : "mt-1 "}grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)]`}>
         {rows.map((k) => (
           <div key={k} className="contents">
             <dt className="text-[11px] font-medium text-slate-500">{L(RX_ROW_LABEL[k])}</dt>
@@ -94,8 +97,9 @@ function Lift({ r, lang, player }: { r: LiftRx; lang: Lang; player: boolean }) {
   );
 }
 
-/** "All the details" for one block's lifts; renders nothing for a block without lifts. */
-export function LiftRxDetails({ rx, lang, player = false }: { rx: LiftRx[] | undefined; lang: Lang; player?: boolean }) {
+/** "All the details" for one block's lifts; renders nothing for a block without lifts. `bare` drops the exercise +
+ *  sets × reps header (the Today row already shows both, with the readiness cut). */
+export function LiftRxDetails({ rx, lang, player = false, bare = false }: { rx: LiftRx[] | undefined; lang: Lang; player?: boolean; bare?: boolean }) {
   const [open, setOpen] = useState(false);
   if (!rx?.length) return null;
   const L = (x: Bi) => (lang === "IS" ? x.is : x.en);
@@ -112,7 +116,7 @@ export function LiftRxDetails({ rx, lang, player = false }: { rx: LiftRx[] | und
       {open && (
         <div className="mt-1.5 space-y-1.5">
           {rx.map((r, i) => (
-            <Lift key={i} r={r} lang={lang} player={player} />
+            <Lift key={i} r={r} lang={lang} player={player} bare={bare} />
           ))}
         </div>
       )}

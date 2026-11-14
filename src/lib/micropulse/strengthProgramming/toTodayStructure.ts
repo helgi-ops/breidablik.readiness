@@ -43,6 +43,9 @@ export type TodayStructureItem = {
   /** Safe swap options (the exercise's curated `alternatives`, localized) the
    *  player may switch to on the Today card. Absent = no player swap offered. */
   alternatives?: { id: string; name: string }[];
+  /** Speed loss (%) at which the set stops (`ExerciseDose.velocityLossCap`) — read by the player's "All the details"
+   *  (lota 8, `todayLiftRx.ts`). Absent on sessions sent before 2026-11-14. */
+  vlCap?: number;
 };
 
 export type TodayStructureBlock = {
@@ -112,6 +115,7 @@ export function strengthSessionToTodayStructure(
         };
         if (methodBits) item.method = methodBits;
         if (note) item.note = note;
+        if (ex.dose.velocityLossCap) item.vlCap = ex.dose.velocityLossCap;
         // Stamp the library id + curated safe alternatives so the player can swap
         // this exercise on the Today card (safe options only). Corrective items have
         // no library id, so they carry no swap.

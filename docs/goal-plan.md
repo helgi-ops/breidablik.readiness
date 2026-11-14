@@ -530,6 +530,14 @@ changed** (`what` / `dose` untouched, golden hashes unchanged). `GOAL_CONTENT_VE
 - Tests: `__tests__/liftRx.test.ts` (every plan × level × start; sets × reps, % and rest match the dose; sources;
   no m/s target on jump squats; youth ≤75%; no RIR/RPE/1RM or injury words; stored goal plan has no `rx`).
 
+## Lota 8: the same table on the player's Today session (2026-11-14)
+
+`rxForProfile(profile)` (liftRx.ts) exposes the lota 7 profile lines outside a plan (intermediate level, never a light
+week). `strengthProgramming/todayLiftRx.ts` reads each Today item and fills only what the session leaves open; new
+source `session` ("Set in this session"), new bar line `coach` (the coach's bar-speed rule), new profile `general`,
+new ref Zourdos 2016 (RPE → reps left, read in full). See `docs/session-delivery-model.md`. Tests:
+`strengthProgramming/__tests__/todayLiftRx.test.ts`.
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

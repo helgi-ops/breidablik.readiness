@@ -25,6 +25,9 @@ import { SESSION_TYPES, type SessionType } from "@/lib/session-rpe/types";
 import { buildPerformanceIntelligenceDecision } from "@/lib/micropulse/performanceIntelligence";
 import { structureHowTo, structureLabel, structureVideo } from "@/lib/micropulse/structureHowTo";
 import { readVbtPlayerCard, type VbtPlayerCard } from "@/lib/micropulse/vbtMethods";
+import { rxForTodayItem } from "@/lib/micropulse/strengthProgramming/todayLiftRx";
+import type { LiftRx } from "@/lib/micropulse/goalPlan/liftRx";
+import { LiftRxDetails } from "@/components/trainer/LiftRxTable";
 import { oneRowPerDate, oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { buildExplainableReadinessDecision } from "@/lib/micropulse/readiness";
 import { buildPlayerRiskTrend, type PlayerRiskTrend } from "@/lib/micropulse/performanceIntelligence/riskTrend";
@@ -1031,6 +1034,9 @@ type ParsedExercise = {
   /** Contrast/complex category ("heavy" | "explosive" | "strength" | "plyo")
    *  captured from a "B1. Heavy: <exercise>" line — drives the swap options. */
   category?: string | null;
+  /** Lota 8: "All the details" (load, how hard, rep speed, rest, bar-speed lines), read from the RAW item at render
+   *  time (`rxForTodayItem`); absent when the line has nothing to add. Never stored. */
+  rx?: LiftRx;
 };
 
 type ExerciseRecommendationContext = Omit<ExerciseRecommendationInput, "originalExerciseName">;
@@ -1216,7 +1222,7 @@ function ExerciseInfoModal({
   const exInfo = lookupExercise(ex.name);
   const desc = exInfo ? (isIS ? exInfo.IS : exInfo.EN) : null;
 
-  const hasContent = !!(ex.note || desc || methodGuide || blockGoal);
+  const hasContent = !!(ex.note || desc || methodGuide || blockGoal || ex.rx);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end" onClick={onClose}>
@@ -1262,6 +1268,9 @@ function ExerciseInfoModal({
               <div className="text-sm text-zinc-700 leading-relaxed">{ex.note}</div>
             </div>
           ) : null}
+
+          {/* Lota 8: load, how hard, rep speed, rest and the bar-speed lines for this lift. */}
+          {ex.rx ? <LiftRxDetails rx={[ex.rx]} lang={isIS ? "IS" : "EN"} player bare /> : null}
 
           {/* Exercise-specific: Execution steps */}
           {desc ? (
@@ -2304,7 +2313,13 @@ function buildSessionBlocks(
     // Keep ORIGINAL sets×reps here; the readiness reduction is applied at render
     // (card shows struck-original → adjusted; focus screen shows the adjusted
     // value) via reduceExercise() so the "was 4 → 3" can be surfaced.
-    const parsed = items.map(parseExerciseItem);
+    // Lota 8: each line's full details come from the RAW item (rest, load, RPE, speed loss), which the string
+    // parse drops. `rawKept` lines up 1:1 with `items` (same filter as safeStringList).
+    const rawKept = (Array.isArray(b?.items) ? (b.items as unknown[]) : []).filter((v) => !!blockItemToRawString(v));
+    const parsed = items.map(parseExerciseItem).map((p, i) => {
+      const rx = rxForTodayItem(rawKept[i], p, b);
+      return rx ? { ...p, rx } : p;
+    });
     const segments = groupIntoSegments(parsed);
     // Carry the method's "how to perform" through to the player, keyed by the
     // structureId the coach's builder stamped on this block.
@@ -3532,6 +3547,7 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
                 <div className="min-w-0 flex-1">
                   <div className="text-[15px] font-semibold leading-snug text-zinc-900">{rest}</div>
                   {desc ? <div className="mt-0.5 text-xs text-zinc-500">{desc}</div> : null}
+                  {ex.rx ? <LiftRxDetails rx={[ex.rx]} lang={isIS ? "IS" : "EN"} player bare /> : null}
                   {videoUrl ? (
                     <button
                       type="button"

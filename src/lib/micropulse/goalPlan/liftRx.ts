@@ -21,14 +21,16 @@ import type { TrainingLevel } from "./levels";
 import { swapMark } from "./swaps";
 import type { Bi, GoalPlan, GoalQuality, GoalRef } from "./types";
 
-/** Where a number comes from. `study` lines are resolved by `withRx` into `plan_study` / `other_study`. */
-export type RxSource = "plan_study" | "other_study" | "micropulse";
+/** Where a number comes from. `study` lines are resolved by `withRx` into `plan_study` / `other_study`. `session` =
+ *  read from the session the coach (or the engine) sent to the player's Today (lota 8, `todayLiftRx.ts`). */
+export type RxSource = "plan_study" | "other_study" | "micropulse" | "session";
 export type RxLine = { text: Bi; source: RxSource; refs?: string[] };
 
 export type RxRowKey = "load" | "effort" | "tempo" | "rest" | "warmup" | "progression" | "frequency" | "order" | "note";
-export type RxBarKey = "target" | "stop" | "adjust" | "feedback" | "none";
+export type RxBarKey = "target" | "stop" | "adjust" | "feedback" | "coach" | "none";
 
-export type LiftProfile = "heavy" | "technique" | "rdl" | "jump_squat" | "pull" | "nordic" | "eccentric" | "squat_fast" | "youth";
+/** `general` = a Today lift with no profile (lota 8): only the session's own lines, nothing filled in. */
+export type LiftProfile = "heavy" | "technique" | "rdl" | "jump_squat" | "pull" | "nordic" | "eccentric" | "squat_fast" | "youth" | "general";
 
 /** One lift's full prescription. */
 export type LiftRx = {
@@ -63,6 +65,7 @@ export const RX_BAR_LABEL: Record<RxBarKey, Bi> = {
   stop: { en: "Stop the set", is: "Hætta setti" },
   adjust: { en: "Change the weight", is: "Breyta þyngd" },
   feedback: { en: "Feedback", is: "Endurgjöf" },
+  coach: { en: "Your coach's rule", is: "Regla þjálfarans" },
   none: { en: "Not used", is: "Ekki notaður" },
 };
 
@@ -74,6 +77,7 @@ export const RX_SOURCE_LABEL: Record<RxSource, Bi> = {
   plan_study: { en: "From the studies behind this method", is: "Úr rannsóknunum á bak við aðferðina" },
   other_study: { en: "From another study", is: "Úr annarri rannsókn" },
   micropulse: { en: "MicroPulse guide, not tested", is: "Viðmið MicroPulse, ekki prófað" },
+  session: { en: "Set in this session", is: "Sett í þessari æfingu" },
 };
 
 /** Lines a player sees on Today (plain, no sources): the rest stay with the coach. */
@@ -104,6 +108,12 @@ const NEW_REFS: Record<string, GoalRef> = {
     key: "cuthbert2021",
     short: "Cuthbert 2021",
     cite: "Cuthbert M, Haff GG, Arent SM, Ripley N, McMahon JJ, Evans M, Comfort P. Effects of variations in resistance training frequency on strength development in well-trained populations and implications for in-season athlete training: a systematic review and meta-analysis. Sports Med 2021;51:1967–1982.",
+    verifiedFrom: "full_text",
+  },
+  zourdos2016: {
+    key: "zourdos2016",
+    short: "Zourdos 2016",
+    cite: "Zourdos MC, Klemp A, Dolan C, Quiles JM, Schau KA, Jo E, Helms E, Esgro B, Duncan S, Garcia Merino S, Blanco R. Novel resistance training-specific rating of perceived exertion scale measuring repetitions in reserve. J Strength Cond Res 2016;30(1):267–275.",
     verifiedFrom: "full_text",
   },
   cormie2007: {
@@ -440,6 +450,23 @@ export function rxForBlock(b: BlockIn, ctx: RxContext): LiftRx[] {
     out.push({ profile, exercise: { en: cap(nameEn), is: cap(nameIs) }, sets: seg.sets, reps: seg.reps, ...built });
   });
   return out;
+}
+
+/** The lift profiles a single session line can be read as (lota 8): no plan, so no level ramp or light week. */
+export type SessionLiftProfile = "heavy" | "rdl" | "jump_squat" | "pull" | "nordic";
+
+/**
+ * MicroPulse's full lines for one lift outside a plan (lota 8, Today's session): the same profiles as the plans, read at
+ * the intermediate level and never as a light week. The caller keeps only the lines the session itself leaves open.
+ */
+export function rxForProfile(profile: SessionLiftProfile): Pick<LiftRx, "rows" | "barSpeed"> {
+  const seg: Segment = { name: "", sets: "", reps: "", rest: "" };
+  const ctx: RxContext = { quality: "acceleration", level: "intermediate", youth: false };
+  return profile === "heavy" ? heavyRx(seg, ctx, undefined)
+    : profile === "rdl" ? rdlRx()
+    : profile === "jump_squat" ? jumpSquatRx(undefined)
+    : profile === "pull" ? pullRx()
+    : nordicRx();
 }
 
 // ─── Order, frequency and sources across a plan ──────────────────────────────────────────────────────────────────

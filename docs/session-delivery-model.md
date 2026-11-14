@@ -79,3 +79,14 @@ Do not add a sixth un-namespaced writer to `player_today_strength_override`. A n
 set an `origin`, and check `today-conflicts` (or call `summarizeDeliveryConflicts`) so the coach sees what
 it replaces. Never write the readiness colour from any of these — they are descriptive
 (see CLAUDE.md "Canonical verdict source").
+
+## "All the details" per lift on Today (lota 8, 2026-11-14)
+
+Not a writer and not a source: a read-only view on whatever layer won. `buildSessionBlocks` (PlayerClient) keeps the
+RAW items next to the parsed lines and calls `rxForTodayItem` (`strengthProgramming/todayLiftRx.ts`) for each one; the
+row on the Today card and the ⓘ sheet in "Start session" show `LiftRxDetails` (player view: load, how hard, speed of
+each rep, rest, bar-speed lines). The session's own numbers (rest, % of max, kg, RPE → reps left, a slow lowering in
+seconds, the item's `vlCap`, the block's `vbt` card) always win; lota 7's lines for the lift's profile only fill an open
+line, and only for heavy squat/deadlift, RDL, loaded jump squat, weightlifting pulls and the Nordic. Free-text
+template lines get a table only for an exact library lift with sets × reps. Derived at render time, never stored.
+The serializer adds one optional field, `vlCap` (speed-loss stop from `ExerciseDose.velocityLossCap`).
