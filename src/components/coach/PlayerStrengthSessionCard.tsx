@@ -8,7 +8,10 @@ import { EXERCISE_LIBRARY } from "@/lib/micropulse/strengthProgramming/exerciseL
 import { targetKgForPercent, type WorkingEntry } from "@/lib/micropulse/strengthProgramming/oneRmFromLogs";
 import { rpeAutoregulate } from "@/lib/micropulse/strengthProgramming/rpeAutoregulate";
 import { playerBlockLean } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
-import { formatVbtForCoach } from "@/lib/micropulse/vbtMethods";
+import { formatVbtForCoach, formatVbtForPlayer } from "@/lib/micropulse/vbtMethods";
+import { rxForPrescribed } from "@/lib/micropulse/strengthProgramming/todayLiftRx";
+import { blockTakesVbt } from "@/lib/micropulse/strengthProgramming/toTodayStructure";
+import { LiftRxDetails } from "@/components/trainer/LiftRxTable";
 import type { BlockGoalKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { canonicalLift } from "@/lib/client/oneRepMax";
 
@@ -370,6 +373,13 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                           {ex.rationale}
                         </p>
                       )}
+                      {(() => {
+                        // The same "All the details" table the player sees on Today, with where each line comes from.
+                        const L = lang === "IS" ? "IS" : "EN";
+                        const vbt = session.blockEmphasis?.vbt && blockTakesVbt(block) ? formatVbtForPlayer(session.blockEmphasis.vbt, L) : null;
+                        const rx = rxForPrescribed(ex, vbt, L);
+                        return rx ? <LiftRxDetails rx={[rx]} lang={L} bare /> : null;
+                      })()}
                     </li>
                   ))}
                 </ul>

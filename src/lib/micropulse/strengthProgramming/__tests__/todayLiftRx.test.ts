@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { EXERCISE_LIBRARY } from "../exerciseLibrary";
-import { readMethod, restFromText, restSecondsFromText, rxForTodayItem, TODAY_PROFILE_BY_ID } from "../todayLiftRx";
+import { readMethod, restFromText, restSecondsFromText, rxForPrescribed, rxForTodayItem, TODAY_PROFILE_BY_ID } from "../todayLiftRx";
 import { strengthSessionToTodayStructure } from "../toTodayStructure";
 import { RX_REFS, type LiftRx, type RxLine } from "@/lib/micropulse/goalPlan/liftRx";
 import { formatVbtForPlayer } from "@/lib/micropulse/vbtMethods";
@@ -231,6 +231,24 @@ describe("real Today items", () => {
     expect(squat.barSpeed).toEqual([{ key: "coach", line: { text: { en: vbt.headline, is: vbt.headline }, source: "session" } }]);
     const row = rxForTodayItem({ name: "Single-arm DB row", sets: 3, reps: "8 each side", rest: "75s", method: "RPE 8", exerciseId: "ex_db_row" }, line("Single-arm DB row"), block)!;
     expect(row.barSpeed).toEqual([]);
+  });
+});
+
+describe("the coach's /coach/strength card shows the player's table", () => {
+  it("rxForPrescribed = rxForTodayItem on the item the send writes, for every library dose, with and without a bar-speed rule", () => {
+    const vbt = formatVbtForPlayer({ method: "fixed_set_vl", velocityLossPct: 20 } as never, "EN");
+    for (const e of EXERCISE_LIBRARY) for (const [md, dose] of Object.entries(e.defaultDosing)) {
+      if (!dose) continue;
+      const ex = { exerciseId: e.id, nameEN: e.nameEN, nameIS: e.nameIS, category: e.category, dose };
+      const block = { id: "b", titleEN: "B", titleIS: "B", type: "COMPOUND", exercises: [ex] };
+      for (const withVbt of [false, true]) {
+        const session = { blocks: [block], ...(withVbt ? { blockEmphasis: { quality: { en: "Q", is: "Q" }, intent: { en: "I", is: "I" }, vbt: { method: "fixed_set_vl", velocityLossPct: 20 } } } : {}) };
+        const sent = strengthSessionToTodayStructure(session as never, "EN")[0];
+        const player = rxForTodayItem(sent.items[0], line(sent.items[0].name, `${dose.sets}×${dose.reps}`), sent);
+        const coach = rxForPrescribed(ex as never, sent.vbt ? vbt : null, "EN");
+        expect(coach, `${e.id} ${md} vbt=${withVbt}`).toEqual(player);
+      }
+    }
   });
 });
 

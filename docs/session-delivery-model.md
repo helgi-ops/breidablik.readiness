@@ -95,3 +95,7 @@ The serializer adds one optional field, `vlCap` (speed-loss stop from `ExerciseD
 (`ParsedExercise.restText` → `restSecondsFromText`, lower end of a range: "2-3 min" = 2:00). A contrast/complex step
 uses the block's "between sets" rest, else the longest member rest. Then the rest written in the line's text, then
 90 s as before. The player can still add +30 s.
+
+**Coach view (2026-11-14):** the /coach/strength card (`PlayerStrengthSessionCard`) shows the same table under each
+exercise via `rxForPrescribed` (the item shaped exactly as the send writes it, with the block's bar-speed card when
+`blockTakesVbt`), in coach mode: every line with where it comes from. A test holds coach table = player table.

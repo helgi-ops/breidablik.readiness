@@ -19,9 +19,9 @@
  */
 
 import { EXERCISE_LIBRARY, EXERCISES_BY_ID } from "./exerciseLibrary";
-import type { Exercise, ExerciseCategory } from "./types";
+import type { Exercise, ExerciseCategory, PrescribedExercise } from "./types";
 import { rxForProfile, type LiftRx, type RxBarKey, type RxLine, type RxRowKey, type SessionLiftProfile } from "@/lib/micropulse/goalPlan/liftRx";
-import { readVbtPlayerCard } from "@/lib/micropulse/vbtMethods";
+import { readVbtPlayerCard, type VbtPlayerCard } from "@/lib/micropulse/vbtMethods";
 
 /** Library exercises read as one of the plans' lift profiles. Anything else gets only the session's own lines. */
 export const TODAY_PROFILE_BY_ID: Record<string, SessionLiftProfile> = {
@@ -271,4 +271,23 @@ export function rxForTodayItem(raw: unknown, parsed: ParsedTodayLine, block: unk
     rows,
     barSpeed,
   };
+}
+
+/**
+ * The same table for an exercise in a built `StrengthSession` (the coach's /coach/strength card): the item is shaped
+ * exactly as `strengthSessionToTodayStructure` sends it, so the coach sees what the player will see. `vbt` = the
+ * block's bar-speed card when the block takes it (`blockTakesVbt`), else null.
+ */
+export function rxForPrescribed(ex: PrescribedExercise, vbt: VbtPlayerCard | null, lang: "EN" | "IS"): LiftRx | null {
+  const name = (lang === "IS" ? ex.nameIS : ex.nameEN) || ex.nameEN || ex.nameIS;
+  const item = {
+    name,
+    sets: ex.dose.sets,
+    reps: ex.dose.reps,
+    rest: ex.dose.rest,
+    method: [ex.dose.intensity, ex.dose.cue].filter(Boolean).join(" · "),
+    exerciseId: ex.exerciseId,
+    ...(ex.dose.velocityLossCap ? { vlCap: ex.dose.velocityLossCap } : {}),
+  };
+  return rxForTodayItem(item, { name, setsReps: `${ex.dose.sets}×${ex.dose.reps}`, isHeader: false }, vbt ? { vbt } : {});
 }
