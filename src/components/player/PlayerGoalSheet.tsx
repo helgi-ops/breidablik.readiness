@@ -11,6 +11,9 @@
  * Lota 7: when the player picks a quality, the rules check whether another one is a clear weakness (bottom third of
  * the same position on the team) while the picked one is not, and if so suggest it. The player decides (switch or
  * keep); the coach sees the same read and the choice. Read once, on the first pick.
+ *
+ * Lota 7b: for the picked (or suggested) quality, one plain line on why it matters in a game, and behind a click
+ * what improves it, each line with its study (`qualityWhy.ts`, fixed text, not AI).
  */
 
 import * as React from "react";
@@ -19,6 +22,7 @@ import type { Bi, GoalQuality } from "@/lib/micropulse/goalPlan/types";
 import { PLAYER_NOTE_MAX } from "@/lib/micropulse/goalPlan/requests";
 import type { GoalHistoryItem } from "@/lib/micropulse/goalPlan/history";
 import { Q_DAT, type PriorityView } from "@/lib/micropulse/goalPlan/priority";
+import { QUALITY_WHY, WHY_FOOTER, refShort, whyTitles } from "@/lib/micropulse/goalPlan/qualityWhy";
 
 type Suggestion = { suggested: GoalQuality; view: PriorityView } | null;
 
@@ -60,6 +64,36 @@ const fmtDate = (iso: string | null, is: boolean) =>
 const fmtDay = (iso: string, is: boolean) =>
   new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString(is ? "is-IS" : "en-GB", { day: "numeric", month: "short", year: "numeric" });
 
+/** Lota 7b: why a quality matters (visible) → what improves it, with sources (behind a click). */
+function WhyBlock({ q, is, framed = true }: { q: GoalQuality; is: boolean; framed?: boolean }) {
+  const [open, setOpen] = React.useState(false);
+  const L = (b: Bi) => (is ? b.is : b.en);
+  const w = QUALITY_WHY[q];
+  const t = whyTitles(q);
+  const src = (refs: string[]) => {
+    const r = refShort(refs);
+    return r ? <span className="text-slate-400"> {r}</span> : null;
+  };
+  return (
+    <div className={framed ? "rounded-xl border border-slate-200 p-3" : "border-t border-primary/15 pt-2"} data-testid="goal-why" data-quality={q}>
+      <p className="text-xs font-semibold text-slate-800">{L(t.matters)}</p>
+      <p className="mt-0.5 text-xs text-slate-700">{L(w.matters.text)}{src(w.matters.refs)}</p>
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="mt-1.5 text-xs font-medium text-primary">
+        {L(t.improves)} {open ? "▴" : "▾"}
+      </button>
+      {open ? (
+        <div className="mt-1 space-y-1">
+          <ul className="list-disc space-y-0.5 pl-4 text-xs text-slate-700">
+            {w.improves.map((l, i) => <li key={i}>{L(l.text)}{src(l.refs)}</li>)}
+          </ul>
+          {w.limit ? <p className="text-xs text-slate-600">{L(w.limit.text)}{src(w.limit.refs)}</p> : null}
+          <p className="text-[11px] text-slate-400">{L(WHY_FOOTER)}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** Lota 7: "your data points more to …" — verdict → two facts → switch / keep → details behind a toggle. */
 function SuggestionCard({ s, from, is, onSwitch, onKeep }: { s: NonNullable<Suggestion>; from: GoalQuality; is: boolean; onSwitch: () => void; onKeep: () => void }) {
   const [open, setOpen] = React.useState(false);
@@ -70,7 +104,8 @@ function SuggestionCard({ s, from, is, onSwitch, onKeep }: { s: NonNullable<Sugg
       <ul className="mt-1 space-y-0.5 text-xs text-slate-700">
         {s.view.facts.map((f, i) => <li key={i}>{L(f)}</li>)}
       </ul>
-      <p className="mt-1 text-xs text-slate-500">{L(s.view.sub)}</p>
+      <div className="mt-2"><WhyBlock q={s.suggested} is={is} framed={false} /></div>
+      <p className="mt-2 text-xs text-slate-500">{L(s.view.sub)}</p>
       <div className="mt-2 flex flex-wrap gap-2">
         <button type="button" onClick={onSwitch} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white">{L(s.view.switchLabel)}</button>
         <button type="button" onClick={onKeep} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700">{L(s.view.keepLabel)}</button>
@@ -279,8 +314,8 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
                   const s = suggestions?.[pick] ?? null;
                   const target = s ? (eligibility ?? []).find((e) => e.quality === s.suggested) : null;
                   if (sugState === "loading") return <p className="text-xs text-slate-400">{T("Checking your data…", "Les gögnin þín…")}</p>;
-                  if (!s || !target || target.blocked) return null;
-                  if (kept) return <p className="text-xs text-slate-500">{T(`You kept ${L(QUALITY[pick].label).toLowerCase()}. Your coach sees the suggestion and your choice.`, `Þú hélst ${Q_DAT[pick]}. Þjálfarinn sér tillöguna og val þitt.`)}</p>;
+                  if (!s || !target || target.blocked) return <WhyBlock key={pick} q={pick} is={is} />;
+                  if (kept) return <><WhyBlock key={pick} q={pick} is={is} /><p className="text-xs text-slate-500">{T(`You kept ${L(QUALITY[pick].label).toLowerCase()}. Your coach sees the suggestion and your choice.`, `Þú hélst ${Q_DAT[pick]}. Þjálfarinn sér tillöguna og val þitt.`)}</p></>;
                   return <SuggestionCard s={s} from={pick} is={is} onSwitch={() => { setSwitchedFrom(pick); setPick(s.suggested); setKept(false); }} onKeep={() => setKept(true)} />;
                 })()}
                 {switchedFrom ? <p className="text-xs text-slate-500">{T(`Switched from ${L(QUALITY[switchedFrom].label).toLowerCase()}. Your coach sees the suggestion and your choice.`, `Skipt úr ${Q_DAT[switchedFrom]}. Þjálfarinn sér tillöguna og val þitt.`)}</p> : null}

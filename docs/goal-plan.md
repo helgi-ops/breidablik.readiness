@@ -299,6 +299,20 @@ that instead. The player decides; the coach sees the same read and what the play
 - Verified on Demo GPS Pro: kept and switched requests stored and read back as the coach sees them; cleanup to 0
   rows. Real teams read only. About 0.7 s per read from a laptop.
 
+## Lota 7b: why each quality matters, for the player (2026-11-14)
+
+Helgi: explain to the player why a quality is worth improving and what improves it (explainability for the player).
+
+- `qualityWhy.ts` (pure, fixed text, not AI): per quality one **"why it matters"** line (shown without a click) and
+  3–4 **"what improves it"** lines behind "What improves …?", each with its study. Braking also says what the research
+  does not show yet (Marvin 2024). Every line uses a study the plans already cite, read through the same reference
+  maps (`SPEED_REFS`, `ACCEL_REFS`, `BRAKING_REFS`, `JUMP_REFS`), so a short name can't drift from its citation.
+- Injury lines say "associated with" (top speed: Malone 2017, Buchheit 2023) or "may help, not proven" (braking:
+  McBurnie 2022). The sled line keeps the plans' rule: no better than the same sprints without one (Alcaraz 2018).
+- Where: under the picker for the picked quality, and inside the suggestion card for the suggested quality.
+- Tests (`qualityWhy.test.ts`): every line cites a known study, no prevent/predict/cause wording, no jargon or
+  placeholders, titles in both languages.
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).
