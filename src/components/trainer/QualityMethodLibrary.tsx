@@ -22,16 +22,19 @@ import {
   type QualityLibrary,
 } from "@/lib/micropulse/goalPlan/qualityLibrary";
 import {
-  INDIVIDUAL_STARTS,
   QUALITY_PLAN_KEYS,
   QUALITY_PLAN_RULES,
   QUALITY_PLAN_TAB,
+  individualStarts,
+  isYouthStart,
   qualityPlan,
   type QualityPlan,
   type QualityPlanKey,
 } from "@/lib/micropulse/goalPlan/qualityPlans";
 import type { Bi, GoalMethod, GoalRef } from "@/lib/micropulse/goalPlan/types";
 import { VERIFIED_LABEL } from "@/lib/micropulse/speedMethods";
+import type { TrainingLevel } from "@/lib/micropulse/goalPlan/levels";
+import LevelPicker from "@/components/trainer/LevelPicker";
 
 type Lang = "IS" | "EN";
 
@@ -105,6 +108,7 @@ function MethodCard({ m, refs, lang }: { m: GoalMethod; refs: Record<string, Goa
 }
 
 function PlanView({ plan, lib, lang }: { plan: QualityPlan; lib: QualityLibrary; lang: Lang }) {
+  // `plan` is already the chosen level: its title, facts and limits name the level (lota 4).
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -197,12 +201,15 @@ function PlanView({ plan, lib, lang }: { plan: QualityPlan; lib: QualityLibrary;
   );
 }
 
-function PlansSection({ lib, lang }: { lib: QualityLibrary; lang: Lang }) {
+type LevelProps = { level: TrainingLevel; onLevel: (lv: TrainingLevel) => void; levelBusy?: boolean };
+
+function PlansSection({ lib, lang, level, onLevel, levelBusy }: { lib: QualityLibrary; lang: Lang } & LevelProps) {
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   const [key, setKey] = useState<QualityPlanKey>("in_season");
-  const starts = INDIVIDUAL_STARTS[lib.quality];
+  const starts = individualStarts(lib.quality, level);
   const [start, setStart] = useState<string>(starts[0].key);
-  const plan = qualityPlan(lib.quality, key, start);
+  const plan = qualityPlan(lib.quality, key, start, level);
+  const youth = key === "individual" && isYouthStart(plan.start);
   return (
     <section className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
       <h3 className="font-[family-name:var(--font-display)] text-base font-semibold text-slate-900">
@@ -232,10 +239,10 @@ function PlansSection({ lib, lang }: { lib: QualityLibrary; lang: Lang }) {
               <button
                 key={s.key}
                 type="button"
-                aria-pressed={s.key === start}
+                aria-pressed={s.key === plan.start}
                 onClick={() => setStart(s.key)}
                 className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${
-                  s.key === start ? "border-[#2740e6] bg-white text-[#2740e6]" : "border-slate-300 bg-white text-slate-600"
+                  s.key === plan.start ? "border-[#2740e6] bg-white text-[#2740e6]" : "border-slate-300 bg-white text-slate-600"
                 }`}
               >
                 {L(s.label)}
@@ -244,8 +251,9 @@ function PlansSection({ lib, lang }: { lib: QualityLibrary; lang: Lang }) {
           </div>
         </div>
       )}
+      <LevelPicker level={level} onChange={onLevel} lang={lang} youth={youth} disabled={levelBusy} />
       <div className="mt-3">
-        <PlanView key={`${plan.key}-${plan.start ?? ""}`} plan={plan} lib={lib} lang={lang} />
+        <PlanView key={`${plan.key}-${plan.start ?? ""}-${youth ? "youth" : level}`} plan={plan} lib={lib} lang={lang} />
       </div>
       <div className="mt-4 rounded-lg border border-[#de9328]/40 bg-white px-3 py-2">
         <div className="text-xs font-semibold text-slate-900">{lang === "IS" ? "Reglur í öllum áætlunum" : "Rules in every plan"}</div>
@@ -257,7 +265,7 @@ function PlansSection({ lib, lang }: { lib: QualityLibrary; lang: Lang }) {
   );
 }
 
-export default function QualityMethodLibrary({ lib, lang }: { lib: QualityLibrary; lang: Lang }) {
+export default function QualityMethodLibrary({ lib, lang, level, onLevel, levelBusy }: { lib: QualityLibrary; lang: Lang } & LevelProps) {
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   return (
     <div>
@@ -276,7 +284,7 @@ export default function QualityMethodLibrary({ lib, lang }: { lib: QualityLibrar
         </ul>
       </div>
 
-      <PlansSection lib={lib} lang={lang} />
+      <PlansSection lib={lib} lang={lang} level={level} onLevel={onLevel} levelBusy={levelBusy} />
 
       {BASIS_ORDER.map((b) => {
         const group = methodsByBasis(lib, b);

@@ -382,6 +382,32 @@ team plan per quality + explicit under-18 rules** (the youth level is under "Ind
 - `__tests__/goldenWeeks.test.ts` hashes every other goal plan's weeks (accel, braking, top speed, youth jump) so
   the library's levels/swaps (steps 2–3) cannot change a player's plan by accident.
 
+## "Speed & power" lota 4, step 2: beginner · intermediate · advanced (2026-11-14, coach approved)
+
+- `goalPlan/levels.ts`: `TrainingLevel`, labels, who each level is for (MicroPulse guidance, said so),
+  `LEVEL_BASIS` ("the studies tested the intermediate level; beginner/advanced are MicroPulse's, within the doses the
+  studies used"), `LEVEL_CHANGES` (one line per quality per level), `JUMP_LEVEL_CONTACTS` (50 / 55 / 70).
+- **Intermediate = the plans as they were, word for word.** `goldenWeeks.test.ts` also hashes every library plan at
+  intermediate (team plans, individual starts, the three top-speed plans).
+- Builders take an optional `level` (default intermediate): `accelWeeks`, `brakingWeeks`, `jumpWeeks`, plus the team
+  plans in `qualityPlans.ts` (now functions of level, cached) and the top-speed plans (`speedPlan(key, level)` in
+  `speedMethods/index.ts`, built from per-level number tables; `SPEED_PLANS` = intermediate).
+  Player goal plans call without a level, so they stay at intermediate (levels for goal plans = next lota).
+- What changes:
+  - Top speed: beginner 2 build-up weeks at 90–95%, flying zones 10–15 m, technique-first lifts; advanced 20–30 m
+    zones, never over 150 m flat out, heavier lifts.
+  - Acceleration: beginner one sprint fewer, all 10 m, no sled, low bounds, technique-first lifts; advanced one sprint
+    and one sled run more (sled still 60–340 m), single-leg bounds, lifts at 80–90%.
+  - Braking: the drills never change; only effort/pace (`EFFORT` table: beginner ~2 more weeks at 50–75%, advanced
+    full effort / reacting a week sooner) and landings (two-leg / single-leg).
+  - Jump: beginner ~50 contacts, one rebound set fewer, landings held still, no drop jumps (fast-jumps start not
+    offered), technique-first squat; advanced ~70 contacts, drop jumps 30–40 cm from week 3, squat one tested step
+    heavier.
+- Youth start ignores the level (picker hidden, youth note shown). All safety tests run on every level.
+- UI: `LevelPicker` under the plan tabs (both libraries); level kept per quality in `SpeedPowerLibrary` (saved per
+  team in step 3). Non-intermediate plans name the level in the title, put `LEVEL_CHANGES` first among the facts and
+  `LEVEL_BASIS` first among the limits. `SpeedPlanPdf` now takes the plan object (`leveled` adds the level basis).
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

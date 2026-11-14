@@ -24,6 +24,7 @@
 import { SPEED_REFS } from "@/lib/micropulse/speedMethods";
 import { BAND_LABEL, WHEN, expandWeeks, isYouth, pickStart, weekLabel } from "./common";
 import type { GoalParts } from "./index";
+import type { TrainingLevel } from "./levels";
 import type { Bi, GoalBlock, GoalMethod, GoalPlanInput, GoalRef, GoalSession } from "./types";
 
 export const ACCEL_REFS: Record<string, GoalRef> = {
@@ -181,6 +182,25 @@ const bounds = (sets: number): GoalBlock => ({
   dose: { en: `${sets} × 8 contacts`, is: `${sets} × 8 snertingar` },
 });
 
+/** Beginner level: fewer, lower bounds. */
+const lowBounds = (sets: number): GoalBlock => ({
+  method: "bounds",
+  contacts: sets * 8,
+  what: { en: "Low, short forward bounds", is: "Lág, stutt skrefstökk áfram" },
+  dose: { en: `${sets} × 8 contacts · low and quick, land softly`, is: `${sets} × 8 snertingar · lágt og snöggt, mjúk lending` },
+});
+
+/** Advanced level: single-leg bounds. */
+const singleLegBounds = (sets: number): GoalBlock => ({
+  method: "bounds",
+  contacts: sets * 12,
+  what: { en: "Single-leg bounds", is: "Einfóta skrefstökk" },
+  dose: { en: `${sets} × 6 each leg`, is: `${sets} × 6 hvor fótur` },
+});
+
+/** Reps as a whole number string, moved by `d` and never under 2. */
+const bump = (reps: string, d: number): string => String(Math.max(2, Number(reps) + d));
+
 const test10: GoalBlock = {
   method: "accel_sprints",
   test: true,
@@ -189,23 +209,28 @@ const test10: GoalBlock = {
   dose: { en: "2–3 × 10 m from a standing start · full rest · best counts · same start, shoes and surface each time", is: "2–3 × 10 m frá kyrrstöðu · full hvíld · besti gildir · sama start, skór og undirlag í hvert sinn" },
 };
 
-function gym(start: AccelStart, light: boolean, youth: boolean): GoalSession {
+function gym(start: AccelStart, light: boolean, youth: boolean, level: TrainingLevel = "intermediate"): GoalSession {
+  const adult = !youth && start !== "youth";
+  const technique = youth || (adult && level === "beginner");
   const heavy: GoalBlock = {
     method: "heavy_strength",
-    what: youth ? { en: "Leg strength, technique first", is: "Fótastyrkur, tækni fyrst" } : { en: "Heavy legs", is: "Þungar fætur" },
+    what: technique ? { en: "Leg strength, technique first", is: "Fótastyrkur, tækni fyrst" } : { en: "Heavy legs", is: "Þungar fætur" },
     dose: light
       ? { en: "Squat or trap-bar deadlift 2 × 3", is: "Hnébeygja eða trap bar 2 × 3" }
-      : youth
+      : technique
         ? { en: "Squat or trap-bar deadlift 3 × 5, technique first, a weight that leaves 2–3 reps in reserve", is: "Hnébeygja eða trap bar 3 × 5, tækni fyrst, þyngd sem skilur 2–3 endurtekningar eftir" }
-        : { en: "Squat or trap-bar deadlift 3–4 × 3–5 at about 75–85% of max · 2–3 min rest", is: "Hnébeygja eða trap bar 3–4 × 3–5 á um 75–85% af hámarki · 2–3 mín hvíld" },
+        : adult && level === "advanced"
+          ? { en: "Squat or trap-bar deadlift 4 × 3–5 at about 80–90% of max · 3 min rest", is: "Hnébeygja eða trap bar 4 × 3–5 á um 80–90% af hámarki · 3 mín hvíld" }
+          : { en: "Squat or trap-bar deadlift 3–4 × 3–5 at about 75–85% of max · 2–3 min rest", is: "Hnébeygja eða trap bar 3–4 × 3–5 á um 75–85% af hámarki · 2–3 mín hvíld" },
   };
   if (start === "youth") {
     return { slot: "B", focus: { en: "Gym: technique strength", is: "Salur: tæknistyrkur" }, when: WHEN.gym_day, minutes: 20, blocks: [heavy] };
   }
-  const jumpSq: GoalBlock = { method: "jump_squat", what: { en: "Light jump squats", is: "Hnébeygjuhopp með léttri þyngd" }, dose: { en: `${light ? 2 : 4} × 5, fast`, is: `${light ? 2 : 4} × 5, hratt` } };
+  const jsSets = light ? 2 : level === "beginner" ? 3 : 4;
+  const jumpSq: GoalBlock = { method: "jump_squat", what: { en: "Light jump squats", is: "Hnébeygjuhopp með léttri þyngd" }, dose: { en: `${jsSets} × 5, fast`, is: `${jsSets} × 5, hratt` } };
   // Power before strength in the same session (coach's rule): jump squats always come before the heavy lifts.
   const blocks = start === "strength_first" ? [heavy] : [jumpSq, heavy];
-  if (start === "starts_first" && !light) blocks[1] = { ...heavy, dose: { en: "Squat or trap-bar deadlift 2–3 × 3–5", is: "Hnébeygja eða trap bar 2–3 × 3–5" } };
+  if (start === "starts_first" && !light && level === "intermediate") blocks[1] = { ...heavy, dose: { en: "Squat or trap-bar deadlift 2–3 × 3–5", is: "Hnébeygja eða trap bar 2–3 × 3–5" } };
   return {
     slot: "B",
     focus: start === "strength_first" ? { en: "Gym: strength", is: "Salur: styrkur" } : start === "starts_first" ? { en: "Gym: fast", is: "Salur: hratt" } : { en: "Gym: fast + strength", is: "Salur: hratt + styrkur" },
@@ -215,32 +240,44 @@ function gym(start: AccelStart, light: boolean, youth: boolean): GoalSession {
   };
 }
 
-function pitch(start: AccelStart, phase: "base" | "build" | "light" | "test", youth: boolean): GoalSession {
+function pitch(start: AccelStart, phase: "base" | "build" | "light" | "test", youth: boolean, level: TrainingLevel = "intermediate"): GoalSession {
   const len = phase === "build" ? "15–20" : "10–15";
   let blocks: GoalBlock[];
-  // Sled volume: base 4 × 15 = 60 m, build 5 × 20 = 100 m, lighter week 3 × 15 = 45 m.
-  const sledBlock = () => (phase === "light" ? sled(3, 15) : phase === "build" ? sled(5, 20) : sled(4, 15));
+  // Levels (adults only): beginner = one sprint fewer, all 10 m, no sled, low bounds; advanced = one sprint and one
+  // sled run more, single-leg bounds. Intermediate is the plan as it was.
+  const beg = level === "beginner";
+  const adv = level === "advanced";
+  const r = (reps: string) => (beg ? bump(reps, -1) : adv ? bump(reps, 1) : reps);
+  const m = (metres: string) => (beg ? "10" : metres);
+  const bnd = (sets: number) => (beg ? lowBounds(Math.max(2, sets - 1)) : adv ? singleLegBounds(sets) : bounds(sets));
+  // Sled volume: base 4 × 15 = 60 m, build 5 × 20 = 100 m, lighter week 3 × 15 = 45 m (advanced: one run more).
+  const sledBlock = () => {
+    const [n, metres] = phase === "light" ? [3, 15] : phase === "build" ? [5, 20] : [4, 15];
+    return sled(adv ? n + 1 : n, metres);
+  };
   if (phase === "test") blocks = [test10, starts("2", "10")];
   else if (start === "youth" || youth) blocks = [starts(phase === "light" ? "3" : "5", len), bounds(2)];
-  else if (start === "strength_first") blocks = [sledBlock(), starts(phase === "light" ? "2" : "3", "10")];
-  else if (start === "starts_first") blocks = [starts(phase === "light" ? "3" : phase === "build" ? "6" : "5", len), bounds(phase === "light" ? 2 : phase === "build" ? 4 : 3)];
-  else blocks = [sledBlock(), starts(phase === "light" ? "2" : "3", len)];
+  else if (start === "strength_first") blocks = beg ? [starts(phase === "light" ? "3" : "4", "10")] : [sledBlock(), starts(r(phase === "light" ? "2" : "3"), "10")];
+  else if (start === "starts_first") blocks = [starts(r(phase === "light" ? "3" : phase === "build" ? "6" : "5"), m(len)), bnd(phase === "light" ? 2 : phase === "build" ? 4 : 3)];
+  else blocks = beg ? [starts(phase === "light" ? "3" : "4", "10")] : [sledBlock(), starts(r(phase === "light" ? "2" : "3"), len)];
   const hasSled = blocks.some((b) => b.method === "resisted_sled");
   return { slot: "A", focus: phase === "test" ? { en: "Test + starts", is: "Mæling + stört" } : hasSled ? { en: "Sled + starts", is: "Sleði + stört" } : { en: "Starts", is: "Stört" }, when: WHEN.warmup_any, minutes: hasSled ? 20 : 15, blocks };
 }
 
 /** The plan's building blocks, shared with the Programme Library team plans (`qualityPlans.ts`) so the doses match. */
-export const ACCEL_BLOCKS = { starts, sled, bounds, test10, gym };
+export const ACCEL_BLOCKS = { starts, sled, bounds, lowBounds, singleLegBounds, bump, test10, gym };
 
-const offSeason = (): GoalSession => ({ slot: "C", focus: { en: "Starts (short)", is: "Stört (stutt)" }, when: WHEN.off_day, minutes: 10, blocks: [starts("4", "10")] });
+const offSeason = (level: TrainingLevel): GoalSession => ({ slot: "C", focus: { en: "Starts (short)", is: "Stört (stutt)" }, when: WHEN.off_day, minutes: 10, blocks: [starts(level === "beginner" ? "3" : level === "advanced" ? "5" : "4", "10")] });
 
-export function accelWeeks(start: AccelStart, youth: boolean) {
+/** The goal plan's 8 weeks. `level` is for the Programme Library; player goal plans use intermediate (the default). */
+export function accelWeeks(start: AccelStart, youth: boolean, level: TrainingLevel = "intermediate") {
+  const lv: TrainingLevel = youth || start === "youth" ? "intermediate" : level;
   return expandWeeks([
-    { weeks: [1], label: (w) => weekLabel(w, "test + starts", "mæling + stört"), sessions: [pitch(start, "test", youth), gym(start, false, youth), offSeason()] },
-    { weeks: [2, 3], label: (w) => weekLabel(w, "", ""), sessions: [pitch(start, "base", youth), gym(start, false, youth), offSeason()] },
-    { weeks: [4], label: (w) => weekLabel(w, "lighter", "léttari"), sessions: [pitch(start, "light", youth), gym(start, true, youth)] },
-    { weeks: [5, 6, 7], label: (w) => weekLabel(w, "", ""), sessions: [pitch(start, "build", youth), gym(start, false, youth), offSeason()] },
-    { weeks: [8], label: (w) => weekLabel(w, "test", "mæling"), sessions: [pitch(start, "test", youth), gym(start, true, youth)] },
+    { weeks: [1], label: (w) => weekLabel(w, "test + starts", "mæling + stört"), sessions: [pitch(start, "test", youth, lv), gym(start, false, youth, lv), offSeason(lv)] },
+    { weeks: [2, 3], label: (w) => weekLabel(w, "", ""), sessions: [pitch(start, "base", youth, lv), gym(start, false, youth, lv), offSeason(lv)] },
+    { weeks: [4], label: (w) => weekLabel(w, "lighter", "léttari"), sessions: [pitch(start, "light", youth, lv), gym(start, true, youth, lv)] },
+    { weeks: [5, 6, 7], label: (w) => weekLabel(w, "", ""), sessions: [pitch(start, "build", youth, lv), gym(start, false, youth, lv), offSeason(lv)] },
+    { weeks: [8], label: (w) => weekLabel(w, "test", "mæling"), sessions: [pitch(start, "test", youth, lv), gym(start, true, youth, lv)] },
   ]);
 }
 

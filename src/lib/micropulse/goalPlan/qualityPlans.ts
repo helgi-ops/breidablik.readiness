@@ -19,6 +19,7 @@ import { BRAKING_BLOCKS, BRAKING_START_LABEL, brakingWeeks, type BrakingStart } 
 import { JUMP_BLOCKS, JUMP_START_LABEL, jumpWeeks, type JumpStart } from "./jump";
 import { PLAN_BASIS, applySupervision } from "./common";
 import type { LibraryQuality } from "./qualityLibrary";
+import { DEFAULT_LEVEL, JUMP_LEVEL_CONTACTS, LEVEL_BASIS, LEVEL_CHANGES, LEVEL_LABEL, TRAINING_LEVELS, type TrainingLevel } from "./levels";
 import type { Bi, GoalBlock, GoalWeek } from "./types";
 
 export type QualityPlanKey = "in_season" | "pre_season" | "individual";
@@ -110,187 +111,266 @@ const THU: Bi = { en: "Thursday", is: "Fimmtudagur" };
 const wk = (en: string, is: string): Bi => ({ en, is });
 const optional = (b: GoalBlock): GoalBlock => ({ ...b, what: { en: `${b.what.en} (optional)`, is: `${b.what.is} (valfrjálst)` } });
 
+// ─── Levels ────────────────────────────────────────────────────────────────
+
+/**
+ * A non-intermediate team plan: its own verdict; facts = what the level changes + the plan's test line; the level
+ * basis first among the limits; the level named in the title. Intermediate is returned untouched.
+ */
+function leveled(plan: QualityPlan, lv: TrainingLevel, verdict: Record<Exclude<TrainingLevel, "intermediate">, Bi>): QualityPlan {
+  if (lv === "intermediate") return plan;
+  return {
+    ...plan,
+    title: { en: `${plan.title.en} · ${LEVEL_LABEL[lv].en}`, is: `${plan.title.is} · ${LEVEL_LABEL[lv].is}` },
+    verdict: verdict[lv],
+    facts: [LEVEL_CHANGES[plan.quality][lv], plan.facts[plan.facts.length - 1]],
+    limits: [LEVEL_BASIS, ...plan.limits],
+  };
+}
+
+const byLevel = <T>(lv: TrainingLevel, beginner: T, intermediate: T, advanced: T): T =>
+  lv === "beginner" ? beginner : lv === "advanced" ? advanced : intermediate;
+
 // ─── Acceleration ──────────────────────────────────────────────────────────
 
 const A = ACCEL_BLOCKS;
-/** Light jump squats, then heavy legs (power before strength): the goal plan's "balanced" gym session. */
-const accelGym = (light: boolean): GoalBlock[] => A.gym("balanced", light, false).blocks;
-const jumpSquats = (light: boolean): GoalBlock => accelGym(light)[0];
-const accelHeavy = (light: boolean): GoalBlock => accelGym(light)[1];
+/** Light jump squats, then heavy legs (power before strength): the goal plan's "balanced" gym session, by level. */
+const accelGym = (light: boolean, lv: TrainingLevel): GoalBlock[] => A.gym("balanced", light, false, lv).blocks;
+/** Starts by level: beginner one fewer and 10 m only; advanced one more. */
+const lvStarts = (lv: TrainingLevel, reps: string, metres: string): GoalBlock =>
+  byLevel(lv, A.starts(A.bump(reps, -1), "10"), A.starts(reps, metres), A.starts(A.bump(reps, 1), metres));
+/** Sled by level: none for beginners; one run more for advanced (still inside 60–340 m). */
+const lvSled = (lv: TrainingLevel, reps: number, metres: number): GoalBlock[] =>
+  byLevel(lv, [], [A.sled(reps, metres)], [A.sled(reps + 1, metres)]);
+/** Bounds by level: low and one set fewer (min 2) / as tested / single-leg. */
+const lvBounds = (lv: TrainingLevel, sets: number): GoalBlock =>
+  byLevel(lv, A.lowBounds(Math.max(2, sets - 1)), A.bounds(sets), A.singleLegBounds(sets));
 
-const ACCEL_IN_SEASON: QualityPlan = {
-  quality: "acceleration",
-  key: "in_season",
-  start: null,
-  title: { en: "Acceleration in season: a 6-week block", is: "Hröðun á tímabili: 6 vikna blokk" },
-  who: { en: "Football team in season, match on Saturday (MD). One quality at a time.", is: "Fótboltalið á tímabili, leikur á laugardegi (MD). Einn eiginleiki í einu." },
-  verdict: {
-    en: "Short sprints from a standing start after the warm-up on MD-4, and heavy legs in the gym the same day, for 6 weeks.",
-    is: "Stuttir sprettir frá kyrrstöðu eftir upphitun á MD-4, og þungar fætur í sal sama dag, í 6 vikur.",
-  },
-  facts: [
-    { en: "MD-4 is the force and accel-decel day in both Periodization Hub week models, so the block fits either week.", is: "MD-4 er kraft- og hröðunar/bremsudagurinn í báðum vikulíkönum Periodization Hub, svo blokkin passar í hvora vikuna sem er." },
-    { en: "Sled sprints are optional: they helped the first steps about as much as the same sprints without a sled (Alcaraz 2018; Petrakos 2016).", is: "Sleðasprettir eru valfrjálsir: þeir hjálpuðu fyrstu skrefunum álíka mikið og sömu sprettir án sleða (Alcaraz 2018; Petrakos 2016)." },
-    { en: "Timed 10 m in week 1 and week 6. Expect smaller gains in season than in pre-season.", is: "Tímamældur 10 m í viku 1 og viku 6. Búast má við minni bætingu á tímabili en á undirbúningstímabili." },
-  ],
-  basis: TEAM_PLAN_BASIS,
-  matchDay: MATCH_DAY,
-  weeks: [
-    { label: wk("Week 1: test + starts", "Vika 1: mæling + stört"), sessions: [
-      { day: 1, dayLabel: MD4, focus: { en: "Test + starts, then gym", is: "Mæling + stört, svo salur" }, blocks: [A.test10, A.starts("4", "10"), jumpSquats(false), accelHeavy(false)] },
-    ] },
-    { label: wk("Weeks 2–3", "Vikur 2–3"), sessions: [
-      { day: 1, dayLabel: MD4, focus: { en: "Starts, then gym", is: "Stört, svo salur" }, blocks: [optional(A.sled(4, 15)), A.starts("4", "10–15"), jumpSquats(false), accelHeavy(false)] },
-    ] },
-    { label: wk("Weeks 4–5", "Vikur 4–5"), sessions: [
-      { day: 1, dayLabel: MD4, focus: { en: "Starts, then gym", is: "Stört, svo salur" }, blocks: [optional(A.sled(5, 20)), A.starts("5", "15–20"), jumpSquats(false), accelHeavy(false)] },
-    ] },
-    { label: wk("Week 6: lighter + test", "Vika 6: léttari + mæling"), sessions: [
-      { day: 1, dayLabel: MD4, focus: { en: "Test + starts, light gym", is: "Mæling + stört, léttur salur" }, blocks: [A.test10, A.starts("2", "10"), accelHeavy(true)] },
-    ] },
-  ],
-  limits: [
-    { en: "Once a week is less than the 2–3 a week in the trials, so expect smaller gains (Petrakos 2016).", is: "Einu sinni í viku er minna en 2–3 á viku í rannsóknunum, svo búast má við minni bætingu (Petrakos 2016)." },
-    { en: "Sled sprints are not shown to beat the same sprints without a sled.", is: "Sleðasprettir eru ekki sýndir betri en sömu sprettir án sleða." },
-  ],
-  refs: ["mendiguchia2020", "haugen2019", "alcaraz2018", "petrakos2016", "seitz2014", "loturco2016"],
-};
+function accelInSeason(lv: TrainingLevel): QualityPlan {
+  const gym = (light: boolean) => accelGym(light, lv);
+  const plan: QualityPlan = {
+    quality: "acceleration",
+    key: "in_season",
+    start: null,
+    title: { en: "Acceleration in season: a 6-week block", is: "Hröðun á tímabili: 6 vikna blokk" },
+    who: { en: "Football team in season, match on Saturday (MD). One quality at a time.", is: "Fótboltalið á tímabili, leikur á laugardegi (MD). Einn eiginleiki í einu." },
+    verdict: {
+      en: "Short sprints from a standing start after the warm-up on MD-4, and heavy legs in the gym the same day, for 6 weeks.",
+      is: "Stuttir sprettir frá kyrrstöðu eftir upphitun á MD-4, og þungar fætur í sal sama dag, í 6 vikur.",
+    },
+    facts: [
+      { en: "MD-4 is the force and accel-decel day in both Periodization Hub week models, so the block fits either week.", is: "MD-4 er kraft- og hröðunar/bremsudagurinn í báðum vikulíkönum Periodization Hub, svo blokkin passar í hvora vikuna sem er." },
+      { en: "Sled sprints are optional: they helped the first steps about as much as the same sprints without a sled (Alcaraz 2018; Petrakos 2016).", is: "Sleðasprettir eru valfrjálsir: þeir hjálpuðu fyrstu skrefunum álíka mikið og sömu sprettir án sleða (Alcaraz 2018; Petrakos 2016)." },
+      { en: "Timed 10 m in week 1 and week 6. Expect smaller gains in season than in pre-season.", is: "Tímamældur 10 m í viku 1 og viku 6. Búast má við minni bætingu á tímabili en á undirbúningstímabili." },
+    ],
+    basis: TEAM_PLAN_BASIS,
+    matchDay: MATCH_DAY,
+    weeks: [
+      { label: wk("Week 1: test + starts", "Vika 1: mæling + stört"), sessions: [
+        { day: 1, dayLabel: MD4, focus: { en: "Test + starts, then gym", is: "Mæling + stört, svo salur" }, blocks: [A.test10, lvStarts(lv, "4", "10"), ...gym(false)] },
+      ] },
+      { label: wk("Weeks 2–3", "Vikur 2–3"), sessions: [
+        { day: 1, dayLabel: MD4, focus: { en: "Starts, then gym", is: "Stört, svo salur" }, blocks: [...lvSled(lv, 4, 15).map(optional), lvStarts(lv, "4", "10–15"), ...gym(false)] },
+      ] },
+      { label: wk("Weeks 4–5", "Vikur 4–5"), sessions: [
+        { day: 1, dayLabel: MD4, focus: { en: "Starts, then gym", is: "Stört, svo salur" }, blocks: [...lvSled(lv, 5, 20).map(optional), lvStarts(lv, "5", "15–20"), ...gym(false)] },
+      ] },
+      { label: wk("Week 6: lighter + test", "Vika 6: léttari + mæling"), sessions: [
+        { day: 1, dayLabel: MD4, focus: { en: "Test + starts, light gym", is: "Mæling + stört, léttur salur" }, blocks: [A.test10, lvStarts(lv, "2", "10"), gym(true)[1]] },
+      ] },
+    ],
+    limits: [
+      { en: "Once a week is less than the 2–3 a week in the trials, so expect smaller gains (Petrakos 2016).", is: "Einu sinni í viku er minna en 2–3 á viku í rannsóknunum, svo búast má við minni bætingu (Petrakos 2016)." },
+      { en: "Sled sprints are not shown to beat the same sprints without a sled.", is: "Sleðasprettir eru ekki sýndir betri en sömu sprettir án sleða." },
+    ],
+    refs: ["mendiguchia2020", "haugen2019", "alcaraz2018", "petrakos2016", "seitz2014", "loturco2016"],
+  };
+  return leveled(plan, lv, {
+    beginner: {
+      en: "Short 10 m sprints from a standing start after the warm-up on MD-4, and leg strength with technique first in the gym the same day, for 6 weeks. No sled.",
+      is: "Stuttir 10 m sprettir frá kyrrstöðu eftir upphitun á MD-4, og fótastyrkur með tækni fyrst í sal sama dag, í 6 vikur. Enginn sleði.",
+    },
+    advanced: {
+      en: "One more sprint each session than the intermediate level after the warm-up on MD-4, an optional sled, and heavier legs in the gym the same day, for 6 weeks.",
+      is: "Einum spretti fleira á æfingu en á miðlungsstigi eftir upphitun á MD-4, valfrjáls sleði, og þyngri fætur í sal sama dag, í 6 vikur.",
+    },
+  });
+}
 
-const ACCEL_PRE_SEASON: QualityPlan = {
-  quality: "acceleration",
-  key: "pre_season",
-  start: null,
-  title: { en: "Acceleration in pre-season: 6 weeks", is: "Hröðun á undirbúningstímabili: 6 vikur" },
-  who: { en: "Football team in pre-season, alongside normal team training.", is: "Fótboltalið á undirbúningstímabili, samhliða venjulegum liðsæfingum." },
-  verdict: {
-    en: "Two acceleration days a week for 6 weeks, 72 hours apart: sled, starts and heavy legs on day 1; starts, bounds and jump squats on day 2.",
-    is: "Tveir hröðunardagar á viku í 6 vikur, 72 klst á milli: sleði, stört og þungar fætur á degi 1; stört, skrefstökk og hnébeygjuhopp á degi 2.",
-  },
-  facts: [
-    { en: "Sled volume builds from 60 to 120 m a session, inside the 60–340 m that worked (Petrakos 2016). It is an option, not an upgrade: sprints without a sled did as well.", is: "Sleðamagnið vex úr 60 í 120 m á æfingu, innan 60–340 m sem virkaði (Petrakos 2016). Sleðinn er valkostur, ekki betri leið: sprettir án sleða gerðu jafn vel." },
-    { en: "Two gym sessions a week did as well as more for sprint gains (Seitz 2014).", is: "Tvær styrktaræfingar á viku dugðu eins vel og fleiri fyrir sprettbætingu (Seitz 2014)." },
-    { en: "Timed 10 m in week 1 and week 6.", is: "Tímamældur 10 m í viku 1 og viku 6." },
-  ],
-  basis: TEAM_PLAN_BASIS,
-  matchDay: null,
-  weeks: [
-    { label: wk("Week 1: test + start", "Vika 1: mæling + byrjun"), sessions: [
-      { day: 0, dayLabel: MON, focus: { en: "Test + sled + starts, then gym", is: "Mæling + sleði + stört, svo salur" }, blocks: [A.test10, A.sled(4, 15), A.starts("4", "10"), accelHeavy(false)] },
-      { day: 3, dayLabel: THU, focus: { en: "Starts + bounds + jump squats", is: "Stört + skrefstökk + hnébeygjuhopp" }, blocks: [A.starts("5", "10–15"), A.bounds(3), jumpSquats(false)] },
-    ] },
-    { label: wk("Weeks 2–3", "Vikur 2–3"), sessions: [
-      { day: 0, dayLabel: MON, focus: { en: "Sled + starts, then gym", is: "Sleði + stört, svo salur" }, blocks: [A.sled(5, 20), A.starts("4", "10–20"), accelHeavy(false)] },
-      { day: 3, dayLabel: THU, focus: { en: "Starts + bounds + jump squats", is: "Stört + skrefstökk + hnébeygjuhopp" }, blocks: [A.starts("6", "10–20"), A.bounds(4), jumpSquats(false)] },
-    ] },
-    { label: wk("Weeks 4–5", "Vikur 4–5"), sessions: [
-      { day: 0, dayLabel: MON, focus: { en: "Sled + starts, then gym", is: "Sleði + stört, svo salur" }, blocks: [A.sled(6, 20), A.starts("4", "15–20"), accelHeavy(false)] },
-      { day: 3, dayLabel: THU, focus: { en: "Starts + bounds + jump squats", is: "Stört + skrefstökk + hnébeygjuhopp" }, blocks: [A.starts("6", "15–20"), A.bounds(5), jumpSquats(false)] },
-    ] },
-    { label: wk("Week 6: lighter + test", "Vika 6: léttari + mæling"), sessions: [
-      { day: 0, dayLabel: MON, focus: { en: "Test + starts, light gym", is: "Mæling + stört, léttur salur" }, blocks: [A.test10, A.starts("3", "10"), accelHeavy(true)] },
-      { day: 3, dayLabel: THU, focus: { en: "Starts + bounds (short)", is: "Stört + skrefstökk (stutt)" }, blocks: [A.starts("4", "10–15"), A.bounds(2)] },
-    ] },
-  ],
-  limits: [
-    { en: "Sled sprints are not shown to beat the same sprints without a sled (Alcaraz 2018; Petrakos 2016).", is: "Sleðasprettir eru ekki sýndir betri en sömu sprettir án sleða (Alcaraz 2018; Petrakos 2016)." },
-    { en: "The strength-to-sprint link is from group results, and a 2022 re-analysis found Seitz 2014's effect sizes inflated.", is: "Tengsl styrks og spretta byggja á hópniðurstöðum, og endurgreining 2022 fann áhrifastærðir Seitz 2014 ofmetnar." },
-  ],
-  refs: ["mendiguchia2020", "haugen2019", "alcaraz2018", "petrakos2016", "seitz2014", "hicks2020", "loturco2016"],
-};
+function accelPreSeason(lv: TrainingLevel): QualityPlan {
+  const [jumpSquats, heavy] = accelGym(false, lv);
+  const lightHeavy = accelGym(true, lv)[1];
+  const sledFocus = (withSled: Bi, without: Bi): Bi => (lv === "beginner" ? without : withSled);
+  const plan: QualityPlan = {
+    quality: "acceleration",
+    key: "pre_season",
+    start: null,
+    title: { en: "Acceleration in pre-season: 6 weeks", is: "Hröðun á undirbúningstímabili: 6 vikur" },
+    who: { en: "Football team in pre-season, alongside normal team training.", is: "Fótboltalið á undirbúningstímabili, samhliða venjulegum liðsæfingum." },
+    verdict: {
+      en: "Two acceleration days a week for 6 weeks, 72 hours apart: sled, starts and heavy legs on day 1; starts, bounds and jump squats on day 2.",
+      is: "Tveir hröðunardagar á viku í 6 vikur, 72 klst á milli: sleði, stört og þungar fætur á degi 1; stört, skrefstökk og hnébeygjuhopp á degi 2.",
+    },
+    facts: [
+      { en: "Sled volume builds from 60 to 120 m a session, inside the 60–340 m that worked (Petrakos 2016). It is an option, not an upgrade: sprints without a sled did as well.", is: "Sleðamagnið vex úr 60 í 120 m á æfingu, innan 60–340 m sem virkaði (Petrakos 2016). Sleðinn er valkostur, ekki betri leið: sprettir án sleða gerðu jafn vel." },
+      { en: "Two gym sessions a week did as well as more for sprint gains (Seitz 2014).", is: "Tvær styrktaræfingar á viku dugðu eins vel og fleiri fyrir sprettbætingu (Seitz 2014)." },
+      { en: "Timed 10 m in week 1 and week 6.", is: "Tímamældur 10 m í viku 1 og viku 6." },
+    ],
+    basis: TEAM_PLAN_BASIS,
+    matchDay: null,
+    weeks: [
+      { label: wk("Week 1: test + start", "Vika 1: mæling + byrjun"), sessions: [
+        { day: 0, dayLabel: MON, focus: sledFocus({ en: "Test + sled + starts, then gym", is: "Mæling + sleði + stört, svo salur" }, { en: "Test + starts, then gym", is: "Mæling + stört, svo salur" }), blocks: [A.test10, ...lvSled(lv, 4, 15), lvStarts(lv, "4", "10"), heavy] },
+        { day: 3, dayLabel: THU, focus: { en: "Starts + bounds + jump squats", is: "Stört + skrefstökk + hnébeygjuhopp" }, blocks: [lvStarts(lv, "5", "10–15"), lvBounds(lv, 3), jumpSquats] },
+      ] },
+      { label: wk("Weeks 2–3", "Vikur 2–3"), sessions: [
+        { day: 0, dayLabel: MON, focus: sledFocus({ en: "Sled + starts, then gym", is: "Sleði + stört, svo salur" }, { en: "Starts, then gym", is: "Stört, svo salur" }), blocks: [...lvSled(lv, 5, 20), lvStarts(lv, "4", "10–20"), heavy] },
+        { day: 3, dayLabel: THU, focus: { en: "Starts + bounds + jump squats", is: "Stört + skrefstökk + hnébeygjuhopp" }, blocks: [lvStarts(lv, "6", "10–20"), lvBounds(lv, 4), jumpSquats] },
+      ] },
+      { label: wk("Weeks 4–5", "Vikur 4–5"), sessions: [
+        { day: 0, dayLabel: MON, focus: sledFocus({ en: "Sled + starts, then gym", is: "Sleði + stört, svo salur" }, { en: "Starts, then gym", is: "Stört, svo salur" }), blocks: [...lvSled(lv, 6, 20), lvStarts(lv, "4", "15–20"), heavy] },
+        { day: 3, dayLabel: THU, focus: { en: "Starts + bounds + jump squats", is: "Stört + skrefstökk + hnébeygjuhopp" }, blocks: [lvStarts(lv, "6", "15–20"), lvBounds(lv, 5), jumpSquats] },
+      ] },
+      { label: wk("Week 6: lighter + test", "Vika 6: léttari + mæling"), sessions: [
+        { day: 0, dayLabel: MON, focus: { en: "Test + starts, light gym", is: "Mæling + stört, léttur salur" }, blocks: [A.test10, lvStarts(lv, "3", "10"), lightHeavy] },
+        { day: 3, dayLabel: THU, focus: { en: "Starts + bounds (short)", is: "Stört + skrefstökk (stutt)" }, blocks: [lvStarts(lv, "4", "10–15"), lvBounds(lv, 2)] },
+      ] },
+    ],
+    limits: [
+      { en: "Sled sprints are not shown to beat the same sprints without a sled (Alcaraz 2018; Petrakos 2016).", is: "Sleðasprettir eru ekki sýndir betri en sömu sprettir án sleða (Alcaraz 2018; Petrakos 2016)." },
+      { en: "The strength-to-sprint link is from group results, and a 2022 re-analysis found Seitz 2014's effect sizes inflated.", is: "Tengsl styrks og spretta byggja á hópniðurstöðum, og endurgreining 2022 fann áhrifastærðir Seitz 2014 ofmetnar." },
+    ],
+    refs: ["mendiguchia2020", "haugen2019", "alcaraz2018", "petrakos2016", "seitz2014", "hicks2020", "loturco2016"],
+  };
+  return leveled(plan, lv, {
+    beginner: {
+      en: "Two acceleration days a week for 6 weeks, 72 hours apart: 10 m starts and leg strength with technique first on day 1; starts, low bounds and light jump squats on day 2. No sled.",
+      is: "Tveir hröðunardagar á viku í 6 vikur, 72 klst á milli: 10 m stört og fótastyrkur með tækni fyrst á degi 1; stört, lág skrefstökk og létt hnébeygjuhopp á degi 2. Enginn sleði.",
+    },
+    advanced: {
+      en: "Two acceleration days a week for 6 weeks, 72 hours apart: more sled and starts plus heavy legs on day 1; starts, single-leg bounds and jump squats on day 2.",
+      is: "Tveir hröðunardagar á viku í 6 vikur, 72 klst á milli: meiri sleði og fleiri stört auk þungra fóta á degi 1; stört, einfóta skrefstökk og hnébeygjuhopp á degi 2.",
+    },
+  });
+}
 
 // ─── Braking ───────────────────────────────────────────────────────────────
 
 const B = BRAKING_BLOCKS;
-const QUARTER: Bi = { en: "75% effort, planned", is: "75% átak, fyrirfram ákveðið" };
 
-/** Dos'Santos 2019's 6 weeks as two sessions a week: [session 1 blocks, session 2 blocks] per week. */
-function brakingSixWeeks(withGym: boolean): Array<[GoalBlock[], GoalBlock[]]> {
-  const lands = B.landings(null);
+/** Dos'Santos 2019's 6 weeks as two sessions a week: [session 1 blocks, session 2 blocks] per week. The level changes
+ *  effort and pace (weeks 2–5) and the landings, never the drills. */
+function brakingSixWeeks(withGym: boolean, lv: TrainingLevel): Array<[GoalBlock[], GoalBlock[]]> {
+  const lands = B.landings(null, lv);
+  const E = B.EFFORT[lv];
   const second = (blocks: GoalBlock[]): GoalBlock[] => (withGym ? [...blocks, lands, B.eccentric(null)] : [...blocks, lands]);
   const first = (blocks: GoalBlock[]): GoalBlock[] => (withGym ? [...blocks, B.eccentric(null)] : blocks);
   return [
     [first([B.cutTest, B.CUES, B.drills(B.W1.slice(0, 2), B.SUB)]), second([B.drills(B.W1, B.SUB)])],
-    [first([B.CUES, B.drills(B.W1, QUARTER)]), second([B.drills(B.W2, B.FULL)])],
-    [first([B.CUES, B.drills(B.W3A, B.FULL)]), second([B.drills(B.W3B, B.FULL)])],
-    [first([B.CUES, B.drills(B.W4A, B.FULL)]), second([B.drills(B.W4B, B.REACT)])],
-    [first([B.CUES, B.drills(B.W5A, B.REACT)]), second([B.drills(B.W5B, B.REACT)])],
+    [first([B.CUES, B.drills(B.W1, E[0][0])]), second([B.drills(B.W2, E[0][1])])],
+    [first([B.CUES, B.drills(B.W3A, E[1][0])]), second([B.drills(B.W3B, E[1][1])])],
+    [first([B.CUES, B.drills(B.W4A, E[2][0])]), second([B.drills(B.W4B, E[2][1])])],
+    [first([B.CUES, B.drills(B.W5A, E[3][0])]), second([B.drills(B.W5B, E[3][1])])],
     [[B.cutTest, B.CUES, B.drills(B.W7, B.FULL)], [lands]],
   ];
 }
 
-const BRAKING_WEEK_LABELS: Bi[] = [
+const brakingWeekLabels = (lv: TrainingLevel): Bi[] => [
   wk("Week 1: test + stops first", "Vika 1: mæling + stopp fyrst"),
-  wk("Week 2: stops first", "Vika 2: stopp fyrst"),
-  wk("Week 3: full effort", "Vika 3: fullt átak"),
-  wk("Week 4: full effort + signals", "Vika 4: fullt átak + merki"),
-  wk("Week 5: reacting to a partner", "Vika 5: viðbrögð við félaga"),
+  ...B.EFFORT_LABEL[lv].map(([en, is], i) => wk(`Week ${i + 2}: ${en}`, `Vika ${i + 2}: ${is}`)),
   wk("Week 6: lighter + test", "Vika 6: léttari + mæling"),
 ];
 
 const DRILL_FOCUS: Bi = { en: "In place of the warm-up: braking drills", is: "Í stað upphitunar: bremsuæfingar" };
 const DRILL_FOCUS_2: Bi = { en: "In place of the warm-up: braking + landings", is: "Í stað upphitunar: bremsun + lendingar" };
 
-const BRAKING_IN_SEASON: QualityPlan = {
-  quality: "braking",
-  key: "in_season",
-  start: null,
-  title: { en: "Braking in season: a 6-week block", is: "Bremsun á tímabili: 6 vikna blokk" },
-  who: { en: "Football team in season, match on Saturday (MD). One quality at a time.", is: "Fótboltalið á tímabili, leikur á laugardegi (MD). Einn eiginleiki í einu." },
-  verdict: {
-    en: "The tested programme: 2 × 20 minutes a week in place of the warm-up on MD-4 and MD-2, from easy stops to reacting to a partner.",
-    is: "Prófaða áætlunin: 2 × 20 mínútur á viku í stað upphitunar á MD-4 og MD-2, frá léttum stoppum upp í viðbrögð við félaga.",
-  },
-  facts: [
-    { en: "Youth footballers who did this for 6 weeks cut 9–12% faster with better technique (Dos'Santos 2019).", is: "Unglingar í fótbolta sem gerðu þetta í 6 vikur urðu 9–12% hraðari í stefnubreytingum með betri tækni (Dos'Santos 2019)." },
-    { en: "It replaces the warm-up, so it adds little time. MD-4 and MD-3 already carry the team's most braking; never on MD-1.", is: "Það kemur í stað upphitunar, svo það bætir litlum tíma við. MD-4 og MD-3 bera nú þegar mesta bremsuálag liðsins; aldrei á MD-1." },
-    { en: "Cut test in week 1 and week 6.", is: "Stefnubreytingarpróf í viku 1 og viku 6." },
-  ],
-  basis: TEAM_PLAN_BASIS,
-  matchDay: MATCH_DAY,
-  weeks: brakingSixWeeks(false).map(([s1, s2], i) => ({
-    label: BRAKING_WEEK_LABELS[i],
-    sessions: [
-      { day: 1, dayLabel: MD4, focus: DRILL_FOCUS, blocks: s1 },
-      { day: 3, dayLabel: MD2, focus: DRILL_FOCUS_2, blocks: s2 },
+function brakingInSeason(lv: TrainingLevel): QualityPlan {
+  const labels = brakingWeekLabels(lv);
+  const plan: QualityPlan = {
+    quality: "braking",
+    key: "in_season",
+    start: null,
+    title: { en: "Braking in season: a 6-week block", is: "Bremsun á tímabili: 6 vikna blokk" },
+    who: { en: "Football team in season, match on Saturday (MD). One quality at a time.", is: "Fótboltalið á tímabili, leikur á laugardegi (MD). Einn eiginleiki í einu." },
+    verdict: {
+      en: "The tested programme: 2 × 20 minutes a week in place of the warm-up on MD-4 and MD-2, from easy stops to reacting to a partner.",
+      is: "Prófaða áætlunin: 2 × 20 mínútur á viku í stað upphitunar á MD-4 og MD-2, frá léttum stoppum upp í viðbrögð við félaga.",
+    },
+    facts: [
+      { en: "Youth footballers who did this for 6 weeks cut 9–12% faster with better technique (Dos'Santos 2019).", is: "Unglingar í fótbolta sem gerðu þetta í 6 vikur urðu 9–12% hraðari í stefnubreytingum með betri tækni (Dos'Santos 2019)." },
+      { en: "It replaces the warm-up, so it adds little time. MD-4 and MD-3 already carry the team's most braking; never on MD-1.", is: "Það kemur í stað upphitunar, svo það bætir litlum tíma við. MD-4 og MD-3 bera nú þegar mesta bremsuálag liðsins; aldrei á MD-1." },
+      { en: "Cut test in week 1 and week 6.", is: "Stefnubreytingarpróf í viku 1 og viku 6." },
     ],
-  })),
-  limits: [
-    { en: "In adults, trials have not shown braking itself getting better, but none of them trained braking on purpose (Marvin 2024).", is: "Hjá fullorðnum hafa rannsóknir ekki sýnt að bremsunin sjálf batni, en engin þeirra æfði bremsun sérstaklega (Marvin 2024)." },
-    { en: "The reacting-to-a-partner weeks were part of the programme but were not measured on their own. No trial measured injuries.", is: "Vikurnar með viðbrögðum við félaga voru hluti af áætluninni en voru ekki mældar sérstaklega. Engin rannsókn mældi meiðsli." },
-  ],
-  refs: ["dossantos2019", "dossantos2021", "silva2022", "marvin2024", "asadi2016"],
-};
+    basis: TEAM_PLAN_BASIS,
+    matchDay: MATCH_DAY,
+    weeks: brakingSixWeeks(false, lv).map(([s1, s2], i) => ({
+      label: labels[i],
+      sessions: [
+        { day: 1, dayLabel: MD4, focus: DRILL_FOCUS, blocks: s1 },
+        { day: 3, dayLabel: MD2, focus: DRILL_FOCUS_2, blocks: s2 },
+      ],
+    })),
+    limits: [
+      { en: "In adults, trials have not shown braking itself getting better, but none of them trained braking on purpose (Marvin 2024).", is: "Hjá fullorðnum hafa rannsóknir ekki sýnt að bremsunin sjálf batni, en engin þeirra æfði bremsun sérstaklega (Marvin 2024)." },
+      { en: "The reacting-to-a-partner weeks were part of the programme but were not measured on their own. No trial measured injuries.", is: "Vikurnar með viðbrögðum við félaga voru hluti af áætluninni en voru ekki mældar sérstaklega. Engin rannsókn mældi meiðsli." },
+    ],
+    refs: ["dossantos2019", "dossantos2021", "silva2022", "marvin2024", "asadi2016"],
+  };
+  return leveled(plan, lv, {
+    beginner: {
+      en: "The tested drills, 2 × 20 minutes a week in place of the warm-up on MD-4 and MD-2, with two more weeks at 50–75% effort before full effort.",
+      is: "Prófuðu æfingarnar, 2 × 20 mínútur á viku í stað upphitunar á MD-4 og MD-2, með tveimur vikum til viðbótar á 50–75% átaki áður en fullt átak tekur við.",
+    },
+    advanced: {
+      en: "The tested drills, 2 × 20 minutes a week in place of the warm-up on MD-4 and MD-2, reaching full effort and reacting to a partner a week sooner.",
+      is: "Prófuðu æfingarnar, 2 × 20 mínútur á viku í stað upphitunar á MD-4 og MD-2, með fullu átaki og viðbrögðum við félaga viku fyrr.",
+    },
+  });
+}
 
-const BRAKING_PRE_SEASON: QualityPlan = {
-  quality: "braking",
-  key: "pre_season",
-  start: null,
-  title: { en: "Braking in pre-season: 6 weeks", is: "Bremsun á undirbúningstímabili: 6 vikur" },
-  who: { en: "Football team in pre-season, alongside normal team training.", is: "Fótboltalið á undirbúningstímabili, samhliða venjulegum liðsæfingum." },
-  verdict: {
-    en: "The same tested 6-week drills twice a week in place of the warm-up, plus landings and slow-lowering leg strength twice a week in the gym.",
-    is: "Sömu prófuðu 6 vikna æfingarnar tvisvar í viku í stað upphitunar, auk lendinga og fótastyrks með hægri niðurleið tvisvar í viku í sal.",
-  },
-  facts: [
-    { en: "The drills follow Dos'Santos 2019 and 2021 week by week: stops at 50–75%, then full effort, then reacting to a partner.", is: "Æfingarnar fylgja Dos'Santos 2019 og 2021 viku fyrir viku: stopp á 50–75%, svo fullt átak, svo viðbrögð við félaga." },
-    { en: "Thigh strength while lowering is the clearest link with good braking (Harper 2022). A link, not proof.", is: "Styrkur framan á læri á niðurleið tengist góðri bremsun skýrast (Harper 2022). Tengsl, ekki sönnun." },
-    { en: "Cut test in week 1 and week 6.", is: "Stefnubreytingarpróf í viku 1 og viku 6." },
-  ],
-  basis: TEAM_PLAN_BASIS,
-  matchDay: null,
-  weeks: brakingSixWeeks(true).map(([s1, s2], i) => ({
-    label: BRAKING_WEEK_LABELS[i],
-    sessions: [
-      { day: 0, dayLabel: MON, focus: { en: "Braking drills, then gym", is: "Bremsuæfingar, svo salur" }, blocks: s1 },
-      { day: 3, dayLabel: THU, focus: { en: "Braking + landings, then gym", is: "Bremsun + lendingar, svo salur" }, blocks: s2 },
+function brakingPreSeason(lv: TrainingLevel): QualityPlan {
+  const labels = brakingWeekLabels(lv);
+  const plan: QualityPlan = {
+    quality: "braking",
+    key: "pre_season",
+    start: null,
+    title: { en: "Braking in pre-season: 6 weeks", is: "Bremsun á undirbúningstímabili: 6 vikur" },
+    who: { en: "Football team in pre-season, alongside normal team training.", is: "Fótboltalið á undirbúningstímabili, samhliða venjulegum liðsæfingum." },
+    verdict: {
+      en: "The same tested 6-week drills twice a week in place of the warm-up, plus landings and slow-lowering leg strength twice a week in the gym.",
+      is: "Sömu prófuðu 6 vikna æfingarnar tvisvar í viku í stað upphitunar, auk lendinga og fótastyrks með hægri niðurleið tvisvar í viku í sal.",
+    },
+    facts: [
+      { en: "The drills follow Dos'Santos 2019 and 2021 week by week: stops at 50–75%, then full effort, then reacting to a partner.", is: "Æfingarnar fylgja Dos'Santos 2019 og 2021 viku fyrir viku: stopp á 50–75%, svo fullt átak, svo viðbrögð við félaga." },
+      { en: "Thigh strength while lowering is the clearest link with good braking (Harper 2022). A link, not proof.", is: "Styrkur framan á læri á niðurleið tengist góðri bremsun skýrast (Harper 2022). Tengsl, ekki sönnun." },
+      { en: "Cut test in week 1 and week 6.", is: "Stefnubreytingarpróf í viku 1 og viku 6." },
     ],
-  })),
-  limits: [
-    { en: "Slow-lowering strength helped sharp turns (90° or more) in adolescents, not shallow cuts, and rests on few studies (Chen 2025).", is: "Styrkur með hægri niðurleið hjálpaði í kröppum snúningum (90° eða meira) hjá unglingum, ekki í grunnum beygjum, og byggir á fáum rannsóknum (Chen 2025)." },
-    { en: "In adults, trials have not shown braking itself getting better (Marvin 2024). No trial measured injuries.", is: "Hjá fullorðnum hafa rannsóknir ekki sýnt að bremsunin sjálf batni (Marvin 2024). Engin rannsókn mældi meiðsli." },
-  ],
-  refs: ["dossantos2019", "dossantos2021", "harper2022", "chen2025", "asadi2016", "marvin2024"],
-};
+    basis: TEAM_PLAN_BASIS,
+    matchDay: null,
+    weeks: brakingSixWeeks(true, lv).map(([s1, s2], i) => ({
+      label: labels[i],
+      sessions: [
+        { day: 0, dayLabel: MON, focus: { en: "Braking drills, then gym", is: "Bremsuæfingar, svo salur" }, blocks: s1 },
+        { day: 3, dayLabel: THU, focus: { en: "Braking + landings, then gym", is: "Bremsun + lendingar, svo salur" }, blocks: s2 },
+      ],
+    })),
+    limits: [
+      { en: "Slow-lowering strength helped sharp turns (90° or more) in adolescents, not shallow cuts, and rests on few studies (Chen 2025).", is: "Styrkur með hægri niðurleið hjálpaði í kröppum snúningum (90° eða meira) hjá unglingum, ekki í grunnum beygjum, og byggir á fáum rannsóknum (Chen 2025)." },
+      { en: "In adults, trials have not shown braking itself getting better (Marvin 2024). No trial measured injuries.", is: "Hjá fullorðnum hafa rannsóknir ekki sýnt að bremsunin sjálf batni (Marvin 2024). Engin rannsókn mældi meiðsli." },
+    ],
+    refs: ["dossantos2019", "dossantos2021", "harper2022", "chen2025", "asadi2016", "marvin2024"],
+  };
+  return leveled(plan, lv, {
+    beginner: {
+      en: "The same tested drills twice a week in place of the warm-up, two more weeks at 50–75% effort, landings on both legs, and slow-lowering leg strength in the gym.",
+      is: "Sömu prófuðu æfingarnar tvisvar í viku í stað upphitunar, tvær vikur til viðbótar á 50–75% átaki, lendingar á báðum fótum, og fótastyrkur með hægri niðurleið í sal.",
+    },
+    advanced: {
+      en: "The same tested drills twice a week in place of the warm-up, reacting to a partner a week sooner, single-leg landings, and slow-lowering leg strength in the gym.",
+      is: "Sömu prófuðu æfingarnar tvisvar í viku í stað upphitunar, viðbrögð við félaga viku fyrr, einfóta lendingar, og fótastyrkur með hægri niðurleið í sal.",
+    },
+  });
+}
 
 // ─── Jump ──────────────────────────────────────────────────────────────────
 
@@ -312,83 +392,113 @@ const JUMP_IN_SEASON_SQUAT = [0, 1, 2, 3, 3, 4, 4, -1];
 const JUMP_PRE_SEASON_REBOUND = [5, 5, 6, 6, 7, 7, 7, 4];
 const JUMP_PRE_SEASON_SQUAT = [0, 1, 2, 3, 4, 4, 4, 5];
 const lightSquat = (): GoalBlock => J.squatSpeed("2 × 3, fast", "2 × 3, hratt");
-const jumpSession = (i: number, sets: number): GoalBlock[] => {
-  const light = i === 7;
-  const jumps = light ? [J.rebound(sets), J.jumpMix(2)] : J.withTopUp([J.rebound(sets)]);
-  return [...(JUMP_TEST_WEEK(i) ? [J.cmjTest] : []), ...jumps];
+/** The week's jumps (no test). Beginner: one rebound set fewer (min 3), about 50 contacts, landings held still.
+ *  Advanced: drop jumps from week 3 (30 cm, 40 cm from week 5), about 70 contacts. Week 8 is light at every level. */
+const jumpBlocks = (i: number, sets: number, lv: TrainingLevel): GoalBlock[] => {
+  const r = lv === "beginner" ? Math.max(3, sets - 1) : sets;
+  if (i === 7) return [J.rebound(r), J.jumpMix(2, lv === "beginner")];
+  const drops = lv === "advanced" && i >= 2 ? [J.drop(2, 5, i < 4 ? 30 : 40)] : [];
+  return J.withTopUp([...drops, J.rebound(r)], JUMP_LEVEL_CONTACTS[lv].target, lv === "beginner");
 };
+const jumpSession = (i: number, sets: number, lv: TrainingLevel): GoalBlock[] => [...(JUMP_TEST_WEEK(i) ? [J.cmjTest] : []), ...jumpBlocks(i, sets, lv)];
+/** The gym block: beginner squats with technique first; advanced one tested squat step heavier. */
+const jumpGym = (lv: TrainingLevel, idx: number, light: boolean): GoalBlock =>
+  lv === "beginner" ? J.techSquat(light) : idx < 0 ? lightSquat() : sq(lv === "advanced" ? Math.min(idx + 1, J.TESTED_SQUAT_DOSE.length - 1) : idx);
 
-const JUMP_IN_SEASON: QualityPlan = {
-  quality: "jump",
-  key: "in_season",
-  start: null,
-  title: { en: "Jump height in season: an 8-week block", is: "Stökkhæð á tímabili: 8 vikna blokk" },
-  who: { en: "Football team in season, match on Saturday (MD). One quality at a time.", is: "Fótboltalið á tímabili, leikur á laugardegi (MD). Einn eiginleiki í einu." },
-  verdict: {
-    en: "About 55 jumps after the warm-up on MD-4 and squats by bar speed in the gym the same day, for 8 weeks.",
-    is: "Um 55 hopp eftir upphitun á MD-4 og hnébeygja eftir stangarhraða í sal sama dag, í 8 vikur.",
-  },
-  facts: [
-    { en: "In one 6-week trial, jumps plus squats raised jump height +12.2% against +7.2% for jumps only (Sánchez-Sixto 2021); across many studies, weights added little on average.", is: "Í einni 6 vikna rannsókn hækkuðu hopp ásamt hnébeygju stökkið um 12,2% á móti 7,2% fyrir hopp ein (Sánchez-Sixto 2021); í mörgum rannsóknum bættu lyftingar litlu við að meðaltali." },
-    { en: "8 weeks and over 50 jumps a session: reviews found more with longer blocks and more jumps (Thapa 2021, Sáez de Villarreal 2009). Once a week in season, so expect a smaller gain than in pre-season.", is: "8 vikur og yfir 50 hopp á æfingu: yfirlit fundu meira með lengri blokkum og fleiri hoppum (Thapa 2021, Sáez de Villarreal 2009). Einu sinni í viku á tímabili, svo búast má við minni bætingu en á undirbúningstímabili." },
-    { en: "Jump test in weeks 1, 4 and 8, same device each time.", is: "Stökkpróf í vikum 1, 4 og 8, sama tæki í hvert sinn." },
-  ],
-  basis: TEAM_PLAN_BASIS,
-  matchDay: MATCH_DAY,
-  weeks: JUMP_IN_SEASON_REBOUND.map((sets, i) => {
-    const sqi = JUMP_IN_SEASON_SQUAT[i];
-    const test = JUMP_TEST_WEEK(i);
-    return {
-      label: JUMP_WEEK_LABEL(i),
-      sessions: [{
-        day: 1,
-        dayLabel: MD4,
-        focus: i === 7 ? { en: "Test + jumps, light gym", is: "Mæling + hopp, léttur salur" } : test ? { en: "Test + jumps, then gym", is: "Mæling + hopp, svo salur" } : { en: "Jumps, then gym", is: "Hopp, svo salur" },
-        blocks: [...jumpSession(i, sets), sqi < 0 ? lightSquat() : sq(sqi)],
-      }],
-    };
-  }),
-  limits: [
-    { en: "The weekly doses come mostly from one 6-week trial in women's basketball (Sánchez-Sixto 2021); the 8 weeks, the lower in-season volume and the extra jump types are MicroPulse's, from the reviews.", is: "Vikuskammtarnir koma að mestu úr einni 6 vikna rannsókn í kvennakörfubolta (Sánchez-Sixto 2021); 8 vikurnar, minna magn á tímabili og auka hopptegundirnar eru MicroPulse, úr yfirlitunum." },
-  ],
-  refs: ["sanchezsixto2021", "saezdevillarreal2009", "thapa2021", "ma2025", "bedoya2015", "jimenezreyes2017", "marshall2021"],
-};
+function jumpInSeason(lv: TrainingLevel): QualityPlan {
+  const plan: QualityPlan = {
+    quality: "jump",
+    key: "in_season",
+    start: null,
+    title: { en: "Jump height in season: an 8-week block", is: "Stökkhæð á tímabili: 8 vikna blokk" },
+    who: { en: "Football team in season, match on Saturday (MD). One quality at a time.", is: "Fótboltalið á tímabili, leikur á laugardegi (MD). Einn eiginleiki í einu." },
+    verdict: {
+      en: "About 55 jumps after the warm-up on MD-4 and squats by bar speed in the gym the same day, for 8 weeks.",
+      is: "Um 55 hopp eftir upphitun á MD-4 og hnébeygja eftir stangarhraða í sal sama dag, í 8 vikur.",
+    },
+    facts: [
+      { en: "In one 6-week trial, jumps plus squats raised jump height +12.2% against +7.2% for jumps only (Sánchez-Sixto 2021); across many studies, weights added little on average.", is: "Í einni 6 vikna rannsókn hækkuðu hopp ásamt hnébeygju stökkið um 12,2% á móti 7,2% fyrir hopp ein (Sánchez-Sixto 2021); í mörgum rannsóknum bættu lyftingar litlu við að meðaltali." },
+      { en: "8 weeks and over 50 jumps a session: reviews found more with longer blocks and more jumps (Thapa 2021, Sáez de Villarreal 2009). Once a week in season, so expect a smaller gain than in pre-season.", is: "8 vikur og yfir 50 hopp á æfingu: yfirlit fundu meira með lengri blokkum og fleiri hoppum (Thapa 2021, Sáez de Villarreal 2009). Einu sinni í viku á tímabili, svo búast má við minni bætingu en á undirbúningstímabili." },
+      { en: "Jump test in weeks 1, 4 and 8, same device each time.", is: "Stökkpróf í vikum 1, 4 og 8, sama tæki í hvert sinn." },
+    ],
+    basis: TEAM_PLAN_BASIS,
+    matchDay: MATCH_DAY,
+    weeks: JUMP_IN_SEASON_REBOUND.map((sets, i) => {
+      const test = JUMP_TEST_WEEK(i);
+      return {
+        label: JUMP_WEEK_LABEL(i),
+        sessions: [{
+          day: 1,
+          dayLabel: MD4,
+          focus: i === 7 ? { en: "Test + jumps, light gym", is: "Mæling + hopp, léttur salur" } : test ? { en: "Test + jumps, then gym", is: "Mæling + hopp, svo salur" } : { en: "Jumps, then gym", is: "Hopp, svo salur" },
+          blocks: [...jumpSession(i, sets, lv), jumpGym(lv, JUMP_IN_SEASON_SQUAT[i], i === 7)],
+        }],
+      };
+    }),
+    limits: [
+      { en: "The weekly doses come mostly from one 6-week trial in women's basketball (Sánchez-Sixto 2021); the 8 weeks, the lower in-season volume and the extra jump types are MicroPulse's, from the reviews.", is: "Vikuskammtarnir koma að mestu úr einni 6 vikna rannsókn í kvennakörfubolta (Sánchez-Sixto 2021); 8 vikurnar, minna magn á tímabili og auka hopptegundirnar eru MicroPulse, úr yfirlitunum." },
+    ],
+    refs: ["sanchezsixto2021", "saezdevillarreal2009", "thapa2021", "ma2025", "bedoya2015", "jimenezreyes2017", "marshall2021"],
+  };
+  return leveled(plan, lv, {
+    beginner: {
+      en: "About 50 jumps after the warm-up on MD-4, every landing held still and no drop jumps, with squats (technique first) in the gym the same day, for 8 weeks.",
+      is: "Um 50 hopp eftir upphitun á MD-4, hverri lendingu haldið kyrri og engin fallhopp, með hnébeygju (tækni fyrst) í sal sama dag, í 8 vikur.",
+    },
+    advanced: {
+      en: "About 70 jumps after the warm-up on MD-4, with drop jumps from 30–40 cm boxes from week 3, and squats by bar speed one step heavier the same day, for 8 weeks.",
+      is: "Um 70 hopp eftir upphitun á MD-4, með fallhoppum af 30–40 cm kössum frá viku 3, og hnébeygja eftir stangarhraða einu skrefi þyngri sama dag, í 8 vikur.",
+    },
+  });
+}
 
-const JUMP_PRE_SEASON: QualityPlan = {
-  quality: "jump",
-  key: "pre_season",
-  start: null,
-  title: { en: "Jump height in pre-season: 8 weeks", is: "Stökkhæð á undirbúningstímabili: 8 vikur" },
-  who: { en: "Football team in pre-season, alongside normal team training.", is: "Fótboltalið á undirbúningstímabili, samhliða venjulegum liðsæfingum." },
-  verdict: {
-    en: "Twice a week for 8 weeks: about 55 jumps (rebound jumps building from 5 to 7 sets, plus squat and countermovement jumps), then squats that get heavier as the bar slows.",
-    is: "Tvisvar í viku í 8 vikur: um 55 hopp (endurkastshopp sem fara úr 5 í 7 sett, auk hoppa úr hnébeygjustöðu og CMJ-hoppa), svo hnébeygja sem þyngist eftir því sem stöngin hægist.",
-  },
-  facts: [
-    { en: "Jumps plus squats: +12.2% in 6 weeks, against +7.2% for jumps plus drop jumps (Sánchez-Sixto 2021).", is: "Hopp ásamt hnébeygju: +12,2% á 6 vikum, á móti +7,2% fyrir hopp ásamt fallhoppum (Sánchez-Sixto 2021)." },
-    { en: "Over 50 jumps a session and a mix of jump types went with bigger gains across studies (Sáez de Villarreal 2009).", is: "Yfir 50 hopp á æfingu og blanda af hopptegundum fóru saman við meiri bætingu milli rannsókna (Sáez de Villarreal 2009)." },
-    { en: "Jump test in weeks 1, 4 and 8, same device each time.", is: "Stökkpróf í vikum 1, 4 og 8, sama tæki í hvert sinn." },
-  ],
-  basis: TEAM_PLAN_BASIS,
-  matchDay: null,
-  weeks: JUMP_PRE_SEASON_REBOUND.map((sets, i) => {
-    const test = JUMP_TEST_WEEK(i);
-    const gym = sq(JUMP_PRE_SEASON_SQUAT[i]);
-    return {
-      label: JUMP_WEEK_LABEL(i),
-      sessions: [
-        { day: 0, dayLabel: MON, focus: test ? { en: "Test + jumps, then gym", is: "Mæling + hopp, svo salur" } : { en: "Jumps, then gym", is: "Hopp, svo salur" }, blocks: [...jumpSession(i, sets), gym] },
-        { day: 3, dayLabel: THU, focus: { en: "Jumps, then gym", is: "Hopp, svo salur" }, blocks: [...(i === 7 ? [J.rebound(sets), J.jumpMix(2)] : J.withTopUp([J.rebound(sets)])), gym] },
-      ],
-    };
-  }),
-  limits: [
-    { en: "One 6-week trial in women's basketball (Sánchez-Sixto 2021); weeks 7–8 and the extra jump types are MicroPulse's, from the reviews. Results in footballers may differ.", is: "Ein 6 vikna rannsókn í kvennakörfubolta (Sánchez-Sixto 2021); vikur 7–8 og auka hopptegundirnar eru MicroPulse, úr yfirlitunum. Niðurstöður hjá fótboltafólki gætu verið aðrar." },
-    { en: "Without a gym, drop jumps (boxes 20 to 40 cm) can replace the squats: the +7.2% pairing in the same trial.", is: "Án salar geta fallhopp (kassar 20 upp í 40 cm) komið í stað hnébeygjunnar: +7,2% samsetningin í sömu rannsókn." },
-    { en: "Players short of strength may gain more from lifting heavy first (Jiménez-Reyes 2017): see \"Individual\".", is: "Leikmenn sem vantar styrk gætu grætt meira á því að lyfta þungt fyrst (Jiménez-Reyes 2017): sjá „Einstaklingur\"." },
-  ],
-  refs: ["sanchezsixto2021", "saezdevillarreal2009", "markovic2007", "jimenezreyes2017", "marshall2021", "bedoya2015"],
-};
+function jumpPreSeason(lv: TrainingLevel): QualityPlan {
+  const plan: QualityPlan = {
+    quality: "jump",
+    key: "pre_season",
+    start: null,
+    title: { en: "Jump height in pre-season: 8 weeks", is: "Stökkhæð á undirbúningstímabili: 8 vikur" },
+    who: { en: "Football team in pre-season, alongside normal team training.", is: "Fótboltalið á undirbúningstímabili, samhliða venjulegum liðsæfingum." },
+    verdict: {
+      en: "Twice a week for 8 weeks: about 55 jumps (rebound jumps building from 5 to 7 sets, plus squat and countermovement jumps), then squats that get heavier as the bar slows.",
+      is: "Tvisvar í viku í 8 vikur: um 55 hopp (endurkastshopp sem fara úr 5 í 7 sett, auk hoppa úr hnébeygjustöðu og CMJ-hoppa), svo hnébeygja sem þyngist eftir því sem stöngin hægist.",
+    },
+    facts: [
+      { en: "Jumps plus squats: +12.2% in 6 weeks, against +7.2% for jumps plus drop jumps (Sánchez-Sixto 2021).", is: "Hopp ásamt hnébeygju: +12,2% á 6 vikum, á móti +7,2% fyrir hopp ásamt fallhoppum (Sánchez-Sixto 2021)." },
+      { en: "Over 50 jumps a session and a mix of jump types went with bigger gains across studies (Sáez de Villarreal 2009).", is: "Yfir 50 hopp á æfingu og blanda af hopptegundum fóru saman við meiri bætingu milli rannsókna (Sáez de Villarreal 2009)." },
+      { en: "Jump test in weeks 1, 4 and 8, same device each time.", is: "Stökkpróf í vikum 1, 4 og 8, sama tæki í hvert sinn." },
+    ],
+    basis: TEAM_PLAN_BASIS,
+    matchDay: null,
+    weeks: JUMP_PRE_SEASON_REBOUND.map((sets, i) => {
+      const test = JUMP_TEST_WEEK(i);
+      const gym = jumpGym(lv, JUMP_PRE_SEASON_SQUAT[i], i === 7);
+      return {
+        label: JUMP_WEEK_LABEL(i),
+        sessions: [
+          { day: 0, dayLabel: MON, focus: test ? { en: "Test + jumps, then gym", is: "Mæling + hopp, svo salur" } : { en: "Jumps, then gym", is: "Hopp, svo salur" }, blocks: [...jumpSession(i, sets, lv), gym] },
+          { day: 3, dayLabel: THU, focus: { en: "Jumps, then gym", is: "Hopp, svo salur" }, blocks: [...jumpBlocks(i, sets, lv), gym] },
+        ],
+      };
+    }),
+    limits: [
+      { en: "One 6-week trial in women's basketball (Sánchez-Sixto 2021); weeks 7–8 and the extra jump types are MicroPulse's, from the reviews. Results in footballers may differ.", is: "Ein 6 vikna rannsókn í kvennakörfubolta (Sánchez-Sixto 2021); vikur 7–8 og auka hopptegundirnar eru MicroPulse, úr yfirlitunum. Niðurstöður hjá fótboltafólki gætu verið aðrar." },
+      { en: "Without a gym, drop jumps (boxes 20 to 40 cm) can replace the squats: the +7.2% pairing in the same trial.", is: "Án salar geta fallhopp (kassar 20 upp í 40 cm) komið í stað hnébeygjunnar: +7,2% samsetningin í sömu rannsókn." },
+      { en: "Players short of strength may gain more from lifting heavy first (Jiménez-Reyes 2017): see \"Individual\".", is: "Leikmenn sem vantar styrk gætu grætt meira á því að lyfta þungt fyrst (Jiménez-Reyes 2017): sjá „Einstaklingur\"." },
+    ],
+    refs: ["sanchezsixto2021", "saezdevillarreal2009", "markovic2007", "jimenezreyes2017", "marshall2021", "bedoya2015"],
+  };
+  return leveled(plan, lv, {
+    beginner: {
+      en: "Twice a week for 8 weeks: about 50 jumps with every landing held still and no drop jumps, then squats with technique first.",
+      is: "Tvisvar í viku í 8 vikur: um 50 hopp þar sem hverri lendingu er haldið kyrri og engin fallhopp, svo hnébeygja með tækni fyrst.",
+    },
+    advanced: {
+      en: "Twice a week for 8 weeks: about 70 jumps with drop jumps from 30–40 cm boxes from week 3, then squats one step heavier as the bar slows.",
+      is: "Tvisvar í viku í 8 vikur: um 70 hopp með fallhoppum af 30–40 cm kössum frá viku 3, svo hnébeygja einu skrefi þyngri eftir því sem stöngin hægist.",
+    },
+  });
+}
 
 // ─── Individual: the goal plan's own 8 weeks ───────────────────────────────
 
@@ -413,6 +523,22 @@ export const INDIVIDUAL_STARTS: Record<LibraryQuality, { key: StartKey; label: B
   ],
 };
 
+/** Start descriptions that name a sled, said again for the beginner level (which has no sled). */
+const BEGINNER_START_WHO: Partial<Record<LibraryQuality, Partial<Record<StartKey, Bi>>>> = {
+  acceleration: {
+    strength_first: { en: "For a player whose strength test is average or below: strength first, with short sprints (no sled at the beginner level).", is: "Fyrir leikmann með styrkpróf í meðallagi eða undir: styrkur fyrst, með stuttum sprettum (enginn sleði á byrjendastigi)." },
+    balanced: { en: "When there is no strength test: strength mixed with fast starts (no sled at the beginner level).", is: "Þegar engin styrkmæling er til: styrkur í bland við hröð stört (enginn sleði á byrjendastigi)." },
+  },
+};
+
+/** The starts a level offers: the fast-jumps start (drop jumps for a strong player) is not offered to beginners. */
+export function individualStarts(quality: LibraryQuality, level: TrainingLevel = DEFAULT_LEVEL): { key: StartKey; label: Bi; who: Bi }[] {
+  return INDIVIDUAL_STARTS[quality].filter((s) => !(level === "beginner" && quality === "jump" && s.key === "fast_jumps"));
+}
+
+/** The youth start is its own level: no level picker, always the youth plan. */
+export const isYouthStart = (start: string | null | undefined): boolean => start === "youth";
+
 const INDIVIDUAL_TEST: Record<LibraryQuality, Bi> = {
   acceleration: { en: "Timed 10 m in week 1 and week 8.", is: "Tímamældur 10 m í viku 1 og viku 8." },
   braking: { en: "Cut test in week 1 and week 8.", is: "Stefnubreytingarpróf í viku 1 og viku 8." },
@@ -431,14 +557,15 @@ const QUALITY_TITLE: Record<LibraryQuality, Bi> = {
   jump: { en: "Jump height", is: "Stökkhæð" },
 };
 
-/** The goal plan's 8 weeks for one start, all three session slots (C is out of season only, as its "when" says). */
-export function individualWeeks(quality: LibraryQuality, start: string): GoalWeek[] {
-  const youth = start === "youth";
+/** The goal plan's 8 weeks for one start and level, all three session slots (C is out of season only, as its "when" says). */
+export function individualWeeks(quality: LibraryQuality, start: string, level: TrainingLevel = DEFAULT_LEVEL): GoalWeek[] {
+  const youth = isYouthStart(start);
+  const lv = youth ? DEFAULT_LEVEL : level;
   const raw = quality === "acceleration"
-    ? accelWeeks(start as AccelStart, youth)
+    ? accelWeeks(start as AccelStart, youth, lv)
     : quality === "braking"
-      ? brakingWeeks(start as BrakingStart, null)
-      : jumpWeeks(start as JumpStart);
+      ? brakingWeeks(start as BrakingStart, null, lv)
+      : jumpWeeks(start as JumpStart, lv);
   return applySupervision(raw, youth);
 }
 
@@ -448,18 +575,45 @@ const SLOT_LABEL: Record<"A" | "B" | "C", Bi> = {
   C: { en: "Session C", is: "Æfing C" },
 };
 
-export function individualPlan(quality: LibraryQuality, start?: string | null): QualityPlan {
-  const options = INDIVIDUAL_STARTS[quality];
+export function individualPlan(quality: LibraryQuality, start?: string | null, level: TrainingLevel = DEFAULT_LEVEL): QualityPlan {
+  const options = individualStarts(quality, level);
   const pick = options.find((o) => o.key === start) ?? options[0];
-  const weeks: QualityWeek[] = individualWeeks(quality, pick.key).map((w) => ({
+  const lv = isYouthStart(pick.key) ? DEFAULT_LEVEL : level;
+  const weeks: QualityWeek[] = individualWeeks(quality, pick.key, lv).map((w) => ({
     label: w.label,
     sessions: w.sessions.map((s) => ({ day: null, dayLabel: SLOT_LABEL[s.slot], focus: s.focus, when: s.when, blocks: s.blocks })),
   }));
+  const testLine = pick.key === "technique_only"
+    ? { en: "No cut test in this start: it only teaches technique, and the GPS hard-braking count is checked each week.", is: "Ekkert stefnubreytingarpróf í þessu upphafi: það kennir aðeins tækni, og fjöldi harðra bremsa úr GPS er skoðaður í hverri viku." }
+    : INDIVIDUAL_TEST[quality];
+  const base = { en: `${QUALITY_TITLE[quality].en}, individual: 8 weeks (${pick.label.en})`, is: `${QUALITY_TITLE[quality].is}, einstaklingur: 8 vikur (${pick.label.is})` };
+  if (lv !== "intermediate") {
+    return {
+      quality,
+      key: "individual",
+      start: pick.key,
+      title: { en: `${base.en} · ${LEVEL_LABEL[lv].en}`, is: `${base.is} · ${LEVEL_LABEL[lv].is}` },
+      who: {
+        en: `One player, on top of team training: the goal plan's weeks at the ${LEVEL_LABEL[lv].en.toLowerCase()} level. A player's goal plan uses the intermediate level for now.`,
+        is: `Einn leikmaður, ofan á liðsæfingar: vikur markmiðsáætlunarinnar á ${lv === "beginner" ? "byrjendastigi" : "framhaldsstigi"}. Markmiðsáætlun leikmanns notar miðlungsstigið í bili.`,
+      },
+      verdict: {
+        en: "Two short sessions a week on top of team training for 8 weeks (a third out of season).",
+        is: "Tvær stuttar æfingar á viku ofan á liðsæfingar í 8 vikur (þriðja utan tímabils).",
+      },
+      facts: [(lv === "beginner" && BEGINNER_START_WHO[quality]?.[pick.key]) || pick.who, LEVEL_CHANGES[quality][lv], testLine],
+      basis: PLAN_BASIS,
+      matchDay: null,
+      weeks,
+      limits: [LEVEL_BASIS],
+      refs: INDIVIDUAL_REFS[quality],
+    };
+  }
   return {
     quality,
     key: "individual",
     start: pick.key,
-    title: { en: `${QUALITY_TITLE[quality].en}, individual: 8 weeks (${pick.label.en})`, is: `${QUALITY_TITLE[quality].is}, einstaklingur: 8 vikur (${pick.label.is})` },
+    title: base,
     who: { en: "One player, on top of team training: the same plan a player's goal plan uses.", is: "Einn leikmaður, ofan á liðsæfingar: sama áætlun og markmiðsáætlun leikmanns notar." },
     verdict: {
       en: "Two short sessions a week on top of team training for 8 weeks (a third out of season).",
@@ -468,9 +622,7 @@ export function individualPlan(quality: LibraryQuality, start?: string | null): 
     facts: [
       pick.who,
       { en: "In a player's goal plan, MicroPulse picks this start from the player's own tests; the coach can change it with a reason.", is: "Í markmiðsáætlun leikmanns velur MicroPulse upphafið út frá prófum leikmannsins; þjálfarinn getur breytt því með rökstuðningi." },
-      pick.key === "technique_only"
-        ? { en: "No cut test in this start: it only teaches technique, and the GPS hard-braking count is checked each week.", is: "Ekkert stefnubreytingarpróf í þessu upphafi: það kennir aðeins tækni, og fjöldi harðra bremsa úr GPS er skoðaður í hverri viku." }
-        : INDIVIDUAL_TEST[quality],
+      testLine,
     ],
     basis: PLAN_BASIS,
     matchDay: null,
@@ -486,23 +638,38 @@ function supervised(plan: QualityPlan): QualityPlan {
   return { ...plan, weeks: plan.weeks.map((w) => ({ ...w, sessions: w.sessions.map((s) => ({ ...s, blocks: s.blocks.map(mark) })) })) };
 }
 
-const TEAM_PLANS: Record<LibraryQuality, { in_season: QualityPlan; pre_season: QualityPlan }> = {
-  acceleration: { in_season: supervised(ACCEL_IN_SEASON), pre_season: supervised(ACCEL_PRE_SEASON) },
-  braking: { in_season: supervised(BRAKING_IN_SEASON), pre_season: supervised(BRAKING_PRE_SEASON) },
-  jump: { in_season: supervised(JUMP_IN_SEASON), pre_season: supervised(JUMP_PRE_SEASON) },
+const TEAM_BUILDERS: Record<LibraryQuality, Record<"in_season" | "pre_season", (lv: TrainingLevel) => QualityPlan>> = {
+  acceleration: { in_season: accelInSeason, pre_season: accelPreSeason },
+  braking: { in_season: brakingInSeason, pre_season: brakingPreSeason },
+  jump: { in_season: jumpInSeason, pre_season: jumpPreSeason },
 };
 
-/** One plan; `start` only matters for "individual" (unknown → the first start). */
-export function qualityPlan(quality: LibraryQuality, key: QualityPlanKey, start?: string | null): QualityPlan {
-  return key === "individual" ? individualPlan(quality, start) : TEAM_PLANS[quality][key];
+const TEAM_CACHE = new Map<string, QualityPlan>();
+function teamPlan(quality: LibraryQuality, key: "in_season" | "pre_season", level: TrainingLevel): QualityPlan {
+  const k = `${quality}:${key}:${level}`;
+  let p = TEAM_CACHE.get(k);
+  if (!p) {
+    p = supervised(TEAM_BUILDERS[quality][key](level));
+    TEAM_CACHE.set(k, p);
+  }
+  return p;
 }
 
-/** Every plan, every individual start included (for tests and PDF checks). */
-export function allQualityPlans(): QualityPlan[] {
+/** One plan at one level (default intermediate = the plans as built from the studies). `start` only matters for
+ *  "individual" (unknown → the first start the level offers). */
+export function qualityPlan(quality: LibraryQuality, key: QualityPlanKey, start?: string | null, level: TrainingLevel = DEFAULT_LEVEL): QualityPlan {
+  return key === "individual" ? individualPlan(quality, start, level) : teamPlan(quality, key, level);
+}
+
+/** Every plan at the given levels (default: all three), every individual start the level offers (youth once, at
+ *  intermediate: it has no levels). For tests and PDF checks. */
+export function allQualityPlans(levels: TrainingLevel[] = TRAINING_LEVELS): QualityPlan[] {
   const out: QualityPlan[] = [];
-  for (const q of ["acceleration", "braking", "jump"] as LibraryQuality[]) {
-    out.push(TEAM_PLANS[q].in_season, TEAM_PLANS[q].pre_season);
-    for (const s of INDIVIDUAL_STARTS[q]) out.push(individualPlan(q, s.key));
+  for (const lv of levels) {
+    for (const q of ["acceleration", "braking", "jump"] as LibraryQuality[]) {
+      out.push(teamPlan(q, "in_season", lv), teamPlan(q, "pre_season", lv));
+      for (const s of individualStarts(q, lv)) if (!isYouthStart(s.key) || lv === DEFAULT_LEVEL) out.push(individualPlan(q, s.key, lv));
+    }
   }
   return out;
 }

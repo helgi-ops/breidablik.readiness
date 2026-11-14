@@ -12,21 +12,21 @@ import {
   SPEED_EVIDENCE_LABEL,
   SPEED_METHOD_BY_KEY,
   SPEED_PLAN_BASIS,
-  SPEED_PLAN_BY_KEY,
   SPEED_REFS,
   SPEED_SAFETY,
   VERIFIED_LABEL,
   planMethodKeys,
   type Bi,
-  type SpeedPlanKey,
+  type SpeedPlan,
 } from "@/lib/micropulse/speedMethods";
+import { LEVEL_BASIS } from "@/lib/micropulse/goalPlan/levels";
 import { BrandPage, Bullets, C, Provenance, Section, Table, Verdict, clean, fb, fh, fileSafe, renderPdfBlob, saveBlob, TONE } from "@/components/pdf/brand";
 
 type Lang = "EN" | "IS";
 
-export function SpeedPlanDoc({ planKey, lang }: { planKey: SpeedPlanKey; lang: Lang }) {
+/** `leveled`: a beginner or advanced version (lota 4), so the basis line says those levels are MicroPulse's. */
+export function SpeedPlanDoc({ plan, lang, leveled = false }: { plan: SpeedPlan; lang: Lang; leveled?: boolean }) {
   const L = (b: Bi) => clean(lang === "IS" ? b.is : b.en);
-  const plan = SPEED_PLAN_BY_KEY[planKey];
   const IS = lang === "IS";
   const methods = planMethodKeys(plan).map((k) => SPEED_METHOD_BY_KEY[k]);
   const refKeys = [...new Set([...plan.refs, "malone2017" as const, "buchheit2023" as const])];
@@ -41,7 +41,7 @@ export function SpeedPlanDoc({ planKey, lang }: { planKey: SpeedPlanKey; lang: L
         subtitle={L(plan.who)}
         note={IS ? "Samsetning MicroPulse úr skömmtum rannsóknanna · ekki prófuð sem heild" : "MicroPulse's combination of doses from the studies · not tested as a whole"}
       >
-        <Verdict tone="cobalt" label={IS ? "Áætlunin" : "The plan"} headline={L(plan.verdict)} body={L(SPEED_PLAN_BASIS)} />
+        <Verdict tone="cobalt" label={IS ? "Áætlunin" : "The plan"} headline={L(plan.verdict)} body={leveled ? `${L(SPEED_PLAN_BASIS)} ${L(LEVEL_BASIS)}` : L(SPEED_PLAN_BASIS)} />
 
         <Section title={IS ? "Í stuttu máli" : "In short"}>
           <Bullets items={plan.facts.map(L)} />
@@ -120,8 +120,7 @@ export function SpeedPlanDoc({ planKey, lang }: { planKey: SpeedPlanKey; lang: L
   );
 }
 
-export async function downloadSpeedPlanPdf(planKey: SpeedPlanKey, lang: Lang) {
-  const plan = SPEED_PLAN_BY_KEY[planKey];
-  const blob = await renderPdfBlob(() => <SpeedPlanDoc planKey={planKey} lang={lang} />);
+export async function downloadSpeedPlanPdf(plan: SpeedPlan, lang: Lang, leveled = false) {
+  const blob = await renderPdfBlob(() => <SpeedPlanDoc plan={plan} lang={lang} leveled={leveled} />);
   saveBlob(blob, `${fileSafe(lang === "IS" ? plan.title.is : plan.title.en).toLowerCase()}.pdf`);
 }

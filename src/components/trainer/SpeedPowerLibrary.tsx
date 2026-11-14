@@ -11,6 +11,7 @@ import SpeedMethodLibrary from "@/components/trainer/SpeedMethodLibrary";
 import QualityMethodLibrary from "@/components/trainer/QualityMethodLibrary";
 import { QUALITY_LIBRARIES } from "@/lib/micropulse/goalPlan/qualityLibrary";
 import { GOAL_QUALITIES, type Bi, type GoalQuality } from "@/lib/micropulse/goalPlan/types";
+import { DEFAULT_LEVEL, type TrainingLevel } from "@/lib/micropulse/goalPlan/levels";
 
 type Lang = "IS" | "EN";
 
@@ -23,6 +24,14 @@ const PILL: Record<GoalQuality, Bi> = {
 
 export default function SpeedPowerLibrary({ lang }: { lang: Lang }) {
   const [q, setQ] = useState<GoalQuality>("top_speed");
+  // Level per quality (lota 4). Starts at intermediate: the plans as built from the studies.
+  const [levels, setLevels] = useState<Record<GoalQuality, TrainingLevel>>({
+    top_speed: DEFAULT_LEVEL,
+    acceleration: DEFAULT_LEVEL,
+    braking: DEFAULT_LEVEL,
+    jump: DEFAULT_LEVEL,
+  });
+  const setLevel = (lv: TrainingLevel) => setLevels((prev) => ({ ...prev, [q]: lv }));
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   return (
     <div>
@@ -43,8 +52,8 @@ export default function SpeedPowerLibrary({ lang }: { lang: Lang }) {
         ))}
       </div>
       {q === "top_speed"
-        ? <SpeedMethodLibrary lang={lang} />
-        : <QualityMethodLibrary key={q} lib={QUALITY_LIBRARIES[q]} lang={lang} />}
+        ? <SpeedMethodLibrary lang={lang} level={levels.top_speed} onLevel={setLevel} />
+        : <QualityMethodLibrary key={q} lib={QUALITY_LIBRARIES[q]} lang={lang} level={levels[q]} onLevel={setLevel} />}
     </div>
   );
 }

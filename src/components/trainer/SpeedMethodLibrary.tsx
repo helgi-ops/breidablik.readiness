@@ -17,6 +17,7 @@ import {
   SPEED_METHODS,
   SPEED_PLAN_BASIS,
   SPEED_PLANS,
+  speedPlan,
   SPEED_REFS,
   SPEED_SAFETY,
   SPEED_VERDICT,
@@ -27,6 +28,8 @@ import {
   type SpeedPlanKey,
 } from "@/lib/micropulse/speedMethods";
 import type { Bi } from "@/lib/micropulse/load/peakPeriod";
+import type { TrainingLevel } from "@/lib/micropulse/goalPlan/levels";
+import LevelPicker from "@/components/trainer/LevelPicker";
 
 type Lang = "IS" | "EN";
 
@@ -112,7 +115,7 @@ function MethodCard({ m, lang }: { m: SpeedMethod; lang: Lang }) {
   );
 }
 
-function PlanView({ plan, lang }: { plan: SpeedPlan; lang: Lang }) {
+function PlanView({ plan, lang, level }: { plan: SpeedPlan; lang: Lang; level: TrainingLevel }) {
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -122,7 +125,7 @@ function PlanView({ plan, lang }: { plan: SpeedPlan; lang: Lang }) {
     setErr(null);
     try {
       const { downloadSpeedPlanPdf } = await import("@/components/coach/SpeedPlanPdf");
-      await downloadSpeedPlanPdf(plan.key, lang);
+      await downloadSpeedPlanPdf(plan, lang, level !== "intermediate");
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -211,10 +214,10 @@ const PLAN_TAB: Record<SpeedPlanKey, Bi> = {
   individual: { en: "Individual", is: "Einstaklingur" },
 };
 
-export default function SpeedMethodLibrary({ lang }: { lang: Lang }) {
+export default function SpeedMethodLibrary({ lang, level, onLevel, levelBusy }: { lang: Lang; level: TrainingLevel; onLevel: (lv: TrainingLevel) => void; levelBusy?: boolean }) {
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   const [planKey, setPlanKey] = useState<SpeedPlanKey>("in_season");
-  const plan = SPEED_PLANS.find((p) => p.key === planKey) ?? SPEED_PLANS[0];
+  const plan = speedPlan(planKey, level);
 
   return (
     <div>
@@ -253,8 +256,9 @@ export default function SpeedMethodLibrary({ lang }: { lang: Lang }) {
             </button>
           ))}
         </div>
+        <LevelPicker level={level} onChange={onLevel} lang={lang} disabled={levelBusy} />
         <div className="mt-3">
-          <PlanView key={plan.key} plan={plan} lang={lang} />
+          <PlanView key={`${plan.key}-${level}`} plan={plan} lang={lang} level={level} />
         </div>
         <div className="mt-4 rounded-lg border border-[#de9328]/40 bg-white px-3 py-2">
           <div className="text-xs font-semibold text-slate-900">{lang === "IS" ? "Reglur í öllum áætlunum" : "Rules in every plan"}</div>

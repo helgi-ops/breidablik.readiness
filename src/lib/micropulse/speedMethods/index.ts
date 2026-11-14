@@ -17,6 +17,7 @@
 import type { Bi } from "@/lib/micropulse/load/peakPeriod";
 import { LONG_GAP_DAYS } from "@/lib/micropulse/nearMaxExposure";
 import { FLYING_DOSE_LINE, FLYING_SPRINT_DOSE, range } from "./flyingDose";
+import { DEFAULT_LEVEL, LEVEL_CHANGES, LEVEL_LABEL, TRAINING_LEVELS, type TrainingLevel } from "@/lib/micropulse/goalPlan/levels";
 
 export type { Bi };
 export { FLYING_DOSE_LINE, FLYING_RUN_PHRASE, FLYING_REPS_X_ZONE, FLYING_SPRINT_DOSE } from "./flyingDose";
@@ -899,35 +900,72 @@ const session = (day: number, focus: Bi, blocks: SpeedBlock[]): SpeedSession => 
 
 const SPEED_FOCUS: Bi = { en: "Speed + strength", is: "Hraði + styrkur" };
 
-const IN_SEASON_LIFTS: SpeedBlock = {
-  ...lifts({ en: "Squat or trap-bar deadlift 2–3 × 3–5 heavy, low volume", is: "Hnébeygja eða trap bar 2–3 × 3–5 þungt, lítið magn" }),
-  what: { en: "Gym: heavy legs", is: "Salur: þungar fætur" },
-};
+// ─── Plans by level (lota 4, step 2) ───────────────────────────────────────
+// Each plan is built from a small number table per level. The intermediate rows hold the numbers the plans had
+// before levels existed (a golden test pins them word for word); beginner and advanced are MicroPulse's, within the
+// doses the studies used and never over 150 m flat out a session (MAX_FLYING_M_PER_SESSION).
+
+type Fly = [reps: number, metres: number, buildUp: string];
+type Effort = "90" | "90–95" | "full";
+type StartsP = [reps: number, metres: string, effort: Effort, rest?: boolean];
+
+const fly = ([r, m, b]: Fly): SpeedBlock => flying(r, m, b);
+const st = ([reps, m, effort, rest]: StartsP): SpeedBlock =>
+  starts({
+    en: `${reps} × ${m} m at ${effort === "full" ? "full effort" : `${effort}%`}${rest ? " · 3 min rest" : ""}`,
+    is: `${reps} × ${m} m á ${effort === "full" ? "fullu" : `${effort}%`}${rest ? " · 3 mín hvíld" : ""}`,
+  });
+/** Beginner lifting: technique first, reps left in reserve. */
+const techLifts = (sets: string, reps: string): Bi => ({
+  en: `Squat or trap-bar deadlift ${sets} × ${reps}, technique first, 2–3 reps in reserve · Romanian deadlift 2 × 8`,
+  is: `Hnébeygja eða trap bar ${sets} × ${reps}, tækni fyrst, 2–3 endurtekningar eftir · rúmensk réttstöðulyfta 2 × 8`,
+});
+
+const inSeasonLifts = (dose: Bi, what: Bi): SpeedBlock => ({ ...lifts(dose), what });
 
 /** MD-2 top-up for players who missed the main top-speed session. */
-const TOP_UP: SpeedBlock = {
+const topUp = (m: number): SpeedBlock => ({
   method: "flying_sprints",
   topSpeed: true,
-  flatOutM: 40,
+  flatOutM: 2 * m,
   what: { en: "Flying sprints", is: "Fljúgandi sprettir" },
   dose: {
-    en: `1–2 × 20 m at 95–100% · 30 m build-up · full rest · more than ${LONG_GAP_DAYS} days since 90%: 2–3 build-up runs at 80–90% instead`,
-    is: `1–2 × 20 m á 95–100% · 30 m aðhlaup · full hvíld · meira en ${LONG_GAP_DAYS} dagar síðan 90%: 2–3 uppbyggingarsprettir á 80–90% í staðinn`,
+    en: `1–2 × ${m} m at 95–100% · 30 m build-up · full rest · more than ${LONG_GAP_DAYS} days since 90%: 2–3 build-up runs at 80–90% instead`,
+    is: `1–2 × ${m} m á 95–100% · 30 m aðhlaup · full hvíld · meira en ${LONG_GAP_DAYS} dagar síðan 90%: 2–3 uppbyggingarsprettir á 80–90% í staðinn`,
   },
-};
+});
 
 /** MD+2 (Monday after a Saturday match): sprints for players who did not play (Gómez-Piqueras 2024). */
-const NON_STARTERS: SpeedSession = {
+const nonStarters = (f: Fly): SpeedSession => ({
   day: 0,
   dayLabel: { en: "MD+2", is: "MD+2" },
   focus: { en: "Sprints for those who did not play", is: "Sprettir fyrir þá sem spiluðu ekki" },
   subgroup: { en: "Only players who did not play (or played under 30 min)", is: "Aðeins þeir sem spiluðu ekki (eða undir 30 mín)" },
-  blocks: [{ ...flying(3, 20, "20–30") }],
-};
+  blocks: [{ ...fly(f) }],
+});
 const JUMP_FOCUS: Bi = { en: "Start + jumps + power", is: "Start + hopp + kraftur" };
 
-export const SPEED_PLANS: SpeedPlan[] = [
-  {
+type InSeasonP = { fly: Fly; ns: Fly; topUpM: number; jumps: string; js: number; lifts: SpeedBlock };
+
+const IN_SEASON_P: Record<TrainingLevel, InSeasonP> = {
+  beginner: {
+    fly: [3, 10, "20–30"], ns: [3, 10, "20–30"], topUpM: 10, jumps: "30–40", js: 2,
+    lifts: inSeasonLifts({ en: "Squat or trap-bar deadlift 2–3 × 5, technique first, 2–3 reps in reserve", is: "Hnébeygja eða trap bar 2–3 × 5, tækni fyrst, 2–3 endurtekningar eftir" }, { en: "Gym: leg strength, technique first", is: "Salur: fótastyrkur, tækni fyrst" }),
+  },
+  intermediate: {
+    fly: [4, 20, "20–30"], ns: [3, 20, "20–30"], topUpM: 20, jumps: "40–60", js: 3,
+    lifts: inSeasonLifts({ en: "Squat or trap-bar deadlift 2–3 × 3–5 heavy, low volume", is: "Hnébeygja eða trap bar 2–3 × 3–5 þungt, lítið magn" }, { en: "Gym: heavy legs", is: "Salur: þungar fætur" }),
+  },
+  advanced: {
+    fly: [4, 30, "30–40"], ns: [3, 30, "30–40"], topUpM: 30, jumps: "60–80", js: 4,
+    lifts: inSeasonLifts({ en: "Squat or trap-bar deadlift 3 × 3–5 heavy, low volume", is: "Hnébeygja eða trap bar 3 × 3–5 þungt, lítið magn" }, { en: "Gym: heavy legs", is: "Salur: þungar fætur" }),
+  },
+};
+
+function inSeasonPlan(lv: TrainingLevel): SpeedPlan {
+  const P = IN_SEASON_P[lv];
+  const [r, m, b] = P.fly;
+  return {
     key: "in_season",
     title: { en: "In season: one match a week", is: "Á tímabili: einn leikur í viku" },
     who: { en: "Football team in season, match on Saturday (MD).", is: "Fótboltalið á tímabili, leikur á laugardegi (MD)." },
@@ -955,12 +993,12 @@ export const SPEED_PLANS: SpeedPlan[] = [
       {
         label: { en: "Standard week (Periodization Hub default)", is: "Venjuleg vika (sjálfgefið í Periodization Hub)" },
         sessions: [
-          NON_STARTERS,
+          nonStarters(P.ns),
           {
             day: 1,
             dayLabel: { en: "MD-4", is: "MD-4" },
             focus: { en: "Strength", is: "Styrkur" },
-            blocks: [jumps("40–60"), jumpSquat(3), IN_SEASON_LIFTS],
+            blocks: [jumps(P.jumps), jumpSquat(P.js), P.lifts],
           },
           {
             day: 2,
@@ -968,7 +1006,7 @@ export const SPEED_PLANS: SpeedPlan[] = [
             focus: { en: "Top speed, at the start of the session", is: "Hámarkshraði, í byrjun æfingar" },
             blocks: [
               {
-                ...flying(4, 20, "20–30"),
+                ...fly(P.fly),
                 what: {
                   en: "Flying sprints, straight after the warm-up (if speed is down after the gym the day before, move the gym to after this session)",
                   is: "Fljúgandi sprettir, strax eftir upphitun (ef hraðinn er niðri eftir salinn daginn áður, færðu salinn aftur fyrir þessa æfingu)",
@@ -984,19 +1022,19 @@ export const SPEED_PLANS: SpeedPlan[] = [
               en: "Only players who missed MD-3 or the \"Top speed due\" flag names",
               is: "Aðeins þeir sem misstu af MD-3 eða „Tími á hámarkshraða\" nefnir",
             },
-            blocks: [TOP_UP],
+            blocks: [topUp(P.topUpM)],
           },
         ],
       },
       {
         label: { en: "Tactical Periodization week", is: "Taktísk periodisering" },
         sessions: [
-          NON_STARTERS,
+          nonStarters(P.ns),
           {
             day: 1,
             dayLabel: { en: "MD-4", is: "MD-4" },
             focus: { en: "Strength (tension day)", is: "Styrkur (tension-dagur)" },
-            blocks: [jumps("40–60"), jumpSquat(3), IN_SEASON_LIFTS],
+            blocks: [jumps(P.jumps), jumpSquat(P.js), P.lifts],
           },
           {
             day: 3,
@@ -1004,10 +1042,10 @@ export const SPEED_PLANS: SpeedPlan[] = [
             focus: { en: "Speed day: short, fast, long rests", is: "Hraðadagur: stutt, hratt, langar hvíldir" },
             blocks: [
               {
-                ...flying(4, 20, "20–30"),
+                ...fly(P.fly),
                 dose: {
-                  en: `4 × 20 m flat out · 20–30 m build-up · 4+ min rest · long run-out, no sharp stops · more than ${LONG_GAP_DAYS} days since 90%: 2–3 build-up runs at 80–90% instead`,
-                  is: `4 × 20 m á fullu · 20–30 m aðhlaup · 4+ mín hvíld · langt útrennsli, engin snögg stopp · meira en ${LONG_GAP_DAYS} dagar síðan 90%: 2–3 uppbyggingarsprettir á 80–90% í staðinn`,
+                  en: `${r} × ${m} m flat out · ${b} m build-up · 4+ min rest · long run-out, no sharp stops · more than ${LONG_GAP_DAYS} days since 90%: 2–3 build-up runs at 80–90% instead`,
+                  is: `${r} × ${m} m á fullu · ${b} m aðhlaup · 4+ mín hvíld · langt útrennsli, engin snögg stopp · meira en ${LONG_GAP_DAYS} dagar síðan 90%: 2–3 uppbyggingarsprettir á 80–90% í staðinn`,
                 },
               },
             ],
@@ -1016,8 +1054,39 @@ export const SPEED_PLANS: SpeedPlan[] = [
       },
     ],
     refs: ["haugen2019", "ronnestad2011", "gomezpiqueras2024", "loturco2016", "buchheit2023", "nicholson2022", "saez2012"],
+  };
+}
+
+type PreWeekP = { strides?: string; starts?: StartsP; fly?: Fly; lifts: Bi; nordics?: string; jumps: string; starts2?: StartsP; js?: number };
+type PreSeasonP = { w1: PreWeekP; w2: PreWeekP; w34: PreWeekP; w5: PreWeekP; w6: PreWeekP };
+
+const PRE_SEASON_P: Record<TrainingLevel, PreSeasonP> = {
+  beginner: {
+    w1: { strides: "4", starts: [4, "20", "90"], lifts: techLifts("3", "6"), nordics: "2 × 3", jumps: "40", starts2: [4, "10–20", "90"], js: 2 },
+    w2: { strides: "5", starts: [4, "20", "90–95"], lifts: techLifts("3", "6"), nordics: "2 × 4", jumps: "40", js: 2 },
+    w34: { starts: [3, "20", "full", true], fly: [3, 10, "20–30"], lifts: techLifts("3", "5"), nordics: "2 × 5", jumps: "60", starts2: [4, "10–20", "full"], js: 3 },
+    w5: { starts: [3, "20", "full"], fly: [4, 15, "20–30"], lifts: techLifts("3", "5"), nordics: "3 × 4", jumps: "60", starts2: [4, "10–20", "full"], js: 3 },
+    w6: { fly: [3, 10, "30"], lifts: techLifts("2", "5"), jumps: "30" },
   },
-  {
+  intermediate: {
+    w1: { strides: "4", starts: [4, "20", "90"], lifts: heavy("3", "6"), nordics: "2 × 4", jumps: "60", starts2: [4, "10–20", "90"], js: 3 },
+    w2: { strides: "5", starts: [4, "20", "full"], lifts: heavy("3", "6"), nordics: "2 × 5", jumps: "60", js: 3 },
+    w34: { starts: [4, "30", "full", true], fly: [3, 20, "20–30"], lifts: heavy("4", "4"), nordics: "3 × 5", jumps: "80", starts2: [5, "10–20", "full"], js: 4 },
+    w5: { starts: [3, "30", "full"], fly: [4, 30, "30–40"], lifts: heavy("4", "3"), nordics: "3 × 5", jumps: "100", starts2: [5, "10–20", "full"], js: 4 },
+    w6: { fly: [3, 20, "30"], lifts: heavy("2", "3"), jumps: "40" },
+  },
+  advanced: {
+    w1: { strides: "5", starts: [4, "20", "90"], lifts: heavy("3", "6"), nordics: "2 × 5", jumps: "60", starts2: [4, "10–20", "90"], js: 3 },
+    w2: { strides: "5", starts: [5, "20", "full"], lifts: heavy("4", "5"), nordics: "3 × 5", jumps: "80", js: 4 },
+    w34: { starts: [4, "30", "full", true], fly: [4, 20, "20–30"], lifts: heavy("4", "4"), nordics: "3 × 5", jumps: "100", starts2: [6, "10–20", "full"], js: 4 },
+    w5: { starts: [3, "30", "full"], fly: [5, 30, "30–40"], lifts: heavy("5", "3"), nordics: "3 × 6", jumps: "100", starts2: [6, "10–20", "full"], js: 5 },
+    w6: { fly: [3, 30, "30–40"], lifts: heavy("2", "3"), jumps: "40" },
+  },
+};
+
+function preSeasonPlan(lv: TrainingLevel): SpeedPlan {
+  const { w1, w2, w34, w5, w6 } = PRE_SEASON_P[lv];
+  return {
     key: "pre_season",
     title: { en: "Pre-season: 6 weeks", is: "Undirbúningstímabil: 6 vikur" },
     who: { en: "Football team in pre-season, alongside normal team training.", is: "Fótboltalið á undirbúningstímabili, samhliða venjulegum liðsæfingum." },
@@ -1043,42 +1112,79 @@ export const SPEED_PLANS: SpeedPlan[] = [
       {
         label: { en: "Week 1: build-up", is: "Vika 1: uppbygging" },
         sessions: [
-          session(0, SPEED_FOCUS, [strides("4"), starts({ en: "4 × 20 m at 90%", is: "4 × 20 m á 90%" }), lifts(heavy("3", "6")), nordics("2 × 4")]),
-          session(3, JUMP_FOCUS, [jumps("60"), starts({ en: "4 × 10–20 m at 90%", is: "4 × 10–20 m á 90%" }), jumpSquat(3)]),
+          session(0, SPEED_FOCUS, [strides(w1.strides!), st(w1.starts!), lifts(w1.lifts), nordics(w1.nordics!)]),
+          session(3, JUMP_FOCUS, [jumps(w1.jumps), st(w1.starts2!), jumpSquat(w1.js!)]),
         ],
       },
       {
         label: { en: "Week 2: build-up + test", is: "Vika 2: uppbygging + mæling" },
         sessions: [
-          session(0, SPEED_FOCUS, [strides("5"), starts({ en: "4 × 20 m at full effort", is: "4 × 20 m á fullu" }), lifts(heavy("3", "6")), nordics("2 × 5")]),
-          session(3, JUMP_FOCUS, [speedTest(2, 20), jumps("60"), jumpSquat(3)]),
+          session(0, SPEED_FOCUS, [strides(w2.strides!), st(w2.starts!), lifts(w2.lifts), nordics(w2.nordics!)]),
+          session(3, JUMP_FOCUS, [speedTest(2, 20), jumps(w2.jumps), jumpSquat(w2.js!)]),
         ],
       },
       {
         label: { en: "Weeks 3–4: speed", is: "Vikur 3–4: hraði" },
         sessions: [
-          session(0, SPEED_FOCUS, [starts({ en: "4 × 30 m at full effort · 3 min rest", is: "4 × 30 m á fullu · 3 mín hvíld" }), flying(3, 20, "20–30"), lifts(heavy("4", "4")), nordics("3 × 5")]),
-          session(3, JUMP_FOCUS, [jumps("80"), starts({ en: "5 × 10–20 m at full effort", is: "5 × 10–20 m á fullu" }), jumpSquat(4)]),
+          session(0, SPEED_FOCUS, [st(w34.starts!), fly(w34.fly!), lifts(w34.lifts), nordics(w34.nordics!)]),
+          session(3, JUMP_FOCUS, [jumps(w34.jumps), st(w34.starts2!), jumpSquat(w34.js!)]),
         ],
       },
       {
         label: { en: "Week 5: peak", is: "Vika 5: hámark" },
         sessions: [
-          session(0, SPEED_FOCUS, [starts({ en: "3 × 30 m at full effort", is: "3 × 30 m á fullu" }), flying(4, 30, "30–40"), lifts(heavy("4", "3")), nordics("3 × 5")]),
-          session(3, JUMP_FOCUS, [jumps("100"), starts({ en: "5 × 10–20 m at full effort", is: "5 × 10–20 m á fullu" }), jumpSquat(4)]),
+          session(0, SPEED_FOCUS, [st(w5.starts!), fly(w5.fly!), lifts(w5.lifts), nordics(w5.nordics!)]),
+          session(3, JUMP_FOCUS, [jumps(w5.jumps), st(w5.starts2!), jumpSquat(w5.js!)]),
         ],
       },
       {
         label: { en: "Week 6: ease off + test", is: "Vika 6: minna magn + mæling" },
         sessions: [
-          session(0, SPEED_FOCUS, [flying(3, 20, "30"), lifts(heavy("2", "3"))]),
-          session(3, JUMP_FOCUS, [speedTest(3, 20), jumps("40")]),
+          session(0, SPEED_FOCUS, [fly(w6.fly!), lifts(w6.lifts)]),
+          session(3, JUMP_FOCUS, [speedTest(3, 20), jumps(w6.jumps)]),
         ],
       },
     ],
     refs: ["mendiguchia2020", "kotzamanidis2005", "haugen2019", "saez2012", "loturco2016", "nicholson2022"],
+  };
+}
+
+type IndWeekP = { strides?: string; starts?: StartsP; fly0?: Fly; lifts: Bi; nordics?: string; starts3?: StartsP; fly3?: Fly; jumps: string; js: number };
+type IndividualP = { w12: IndWeekP; w3: IndWeekP; w4: IndWeekP; w56: IndWeekP; w7: IndWeekP; w8: { fly0: Fly; jumps: string; js: number } };
+
+const INDIVIDUAL_P: Record<TrainingLevel, IndividualP> = {
+  beginner: {
+    w12: { strides: "4", starts: [4, "20", "90–95"], lifts: techLifts("3", "6"), nordics: "2 × 3", jumps: "40", js: 2 },
+    w3: { fly0: [3, 10, "20"], lifts: techLifts("3", "5"), nordics: "2 × 4", starts3: [3, "20", "full"], fly3: [3, 10, "20"], jumps: "60", js: 3 },
+    w4: { starts: [3, "20", "full"], fly0: [3, 10, "20–30"], lifts: techLifts("3", "5"), nordics: "2 × 5", fly3: [4, 10, "20–30"], jumps: "60", js: 3 },
+    w56: { starts: [3, "20", "full"], fly0: [4, 15, "20–30"], lifts: techLifts("3", "5"), nordics: "3 × 4", fly3: [3, 15, "20–30"], jumps: "80", js: 3 },
+    w7: { fly0: [3, 10, "30"], lifts: techLifts("2", "5"), fly3: [2, 15, "30"], jumps: "40", js: 2 },
+    w8: { fly0: [2, 10, "30"], jumps: "30", js: 2 },
   },
-  {
+  intermediate: {
+    w12: { strides: "4–6", starts: [4, "20", "90"], lifts: heavy("3", "6"), nordics: "2 × 4", jumps: "60", js: 3 },
+    w3: { fly0: [3, 10, "20"], lifts: heavy("4", "4"), nordics: "3 × 4", starts3: [3, "20", "full"], fly3: [4, 10, "20"], jumps: "80", js: 4 },
+    w4: { starts: [3, "20", "full"], fly0: [4, 15, "20–30"], lifts: heavy("4", "4"), nordics: "3 × 5", fly3: [4, 15, "20–30"], jumps: "80", js: 4 },
+    w56: { starts: [3, "20", "full"], fly0: [4, 20, "30"], lifts: heavy("4", "3"), nordics: "3 × 5", fly3: [3, 30, "30–40"], jumps: "100", js: 4 },
+    w7: { fly0: [3, 20, "30"], lifts: heavy("2", "3"), fly3: [2, 30, "30–40"], jumps: "60", js: 3 },
+    w8: { fly0: [2, 20, "30"], jumps: "40", js: 2 },
+  },
+  advanced: {
+    w12: { strides: "5–6", starts: [5, "20", "90"], lifts: heavy("4", "5"), nordics: "2 × 5", jumps: "80", js: 4 },
+    w3: { fly0: [3, 20, "20–30"], lifts: heavy("4", "4"), nordics: "3 × 5", starts3: [4, "20", "full"], fly3: [4, 20, "20–30"], jumps: "100", js: 4 },
+    w4: { starts: [3, "20", "full"], fly0: [4, 20, "30"], lifts: heavy("5", "3"), nordics: "3 × 5", fly3: [4, 25, "30"], jumps: "100", js: 5 },
+    w56: { starts: [3, "30", "full"], fly0: [4, 30, "30–40"], lifts: heavy("5", "3"), nordics: "3 × 6", fly3: [5, 30, "30–40"], jumps: "120", js: 5 },
+    w7: { fly0: [3, 30, "30–40"], lifts: heavy("2", "3"), fly3: [2, 30, "30–40"], jumps: "60", js: 3 },
+    w8: { fly0: [2, 30, "30–40"], jumps: "40", js: 2 },
+  },
+};
+
+function individualSpeedPlan(lv: TrainingLevel): SpeedPlan {
+  const { w12, w3, w4, w56, w7, w8 } = INDIVIDUAL_P[lv];
+  const SPRINT: Bi = { en: "Sprint", is: "Sprettir" };
+  const HEAVY: Bi = { en: "Gym: heavy", is: "Salur: þungt" };
+  const FAST: Bi = { en: "Gym: fast", is: "Salur: hratt" };
+  return {
     key: "individual",
     title: { en: "Individual: 8 weeks", is: "Einstaklingur: 8 vikur" },
     who: { en: "One player or client training with a coach, 4 days a week.", is: "Einn leikmaður eða skjólstæðingur sem æfir með þjálfara, 4 daga í viku." },
@@ -1104,60 +1210,130 @@ export const SPEED_PLANS: SpeedPlan[] = [
       {
         label: { en: "Weeks 1–2: build-up", is: "Vikur 1–2: uppbygging" },
         sessions: [
-          session(0, { en: "Sprint", is: "Sprettir" }, [strides("4–6"), starts({ en: "4 × 20 m at 90%", is: "4 × 20 m á 90%" })]),
-          session(1, { en: "Gym: heavy", is: "Salur: þungt" }, [lifts(heavy("3", "6")), nordics("2 × 4")]),
-          session(3, { en: "Sprint", is: "Sprettir" }, [strides("4–6"), starts({ en: "4 × 20 m at 90%", is: "4 × 20 m á 90%" })]),
-          session(4, { en: "Gym: fast", is: "Salur: hratt" }, [jumps("60"), jumpSquat(3)]),
+          session(0, SPRINT, [strides(w12.strides!), st(w12.starts!)]),
+          session(1, HEAVY, [lifts(w12.lifts), nordics(w12.nordics!)]),
+          session(3, SPRINT, [strides(w12.strides!), st(w12.starts!)]),
+          session(4, FAST, [jumps(w12.jumps), jumpSquat(w12.js)]),
         ],
       },
       {
         label: { en: "Week 3: test + short flying sprints", is: "Vika 3: mæling + stuttir fljúgandi sprettir" },
         sessions: [
-          session(0, { en: "Test + sprint", is: "Mæling + sprettir" }, [speedTest(2, 20), flying(3, 10, "20")]),
-          session(1, { en: "Gym: heavy", is: "Salur: þungt" }, [lifts(heavy("4", "4")), nordics("3 × 4")]),
-          session(3, { en: "Sprint", is: "Sprettir" }, [starts({ en: "3 × 20 m at full effort", is: "3 × 20 m á fullu" }), flying(4, 10, "20")]),
-          session(4, { en: "Gym: fast", is: "Salur: hratt" }, [jumps("80"), jumpSquat(4)]),
+          session(0, { en: "Test + sprint", is: "Mæling + sprettir" }, [speedTest(2, 20), fly(w3.fly0!)]),
+          session(1, HEAVY, [lifts(w3.lifts), nordics(w3.nordics!)]),
+          session(3, SPRINT, [st(w3.starts3!), fly(w3.fly3!)]),
+          session(4, FAST, [jumps(w3.jumps), jumpSquat(w3.js)]),
         ],
       },
       {
         label: { en: "Week 4", is: "Vika 4" },
         sessions: [
-          session(0, { en: "Sprint", is: "Sprettir" }, [starts({ en: "3 × 20 m at full effort", is: "3 × 20 m á fullu" }), flying(4, 15, "20–30")]),
-          session(1, { en: "Gym: heavy", is: "Salur: þungt" }, [lifts(heavy("4", "4")), nordics("3 × 5")]),
-          session(3, { en: "Sprint", is: "Sprettir" }, [flying(4, 15, "20–30")]),
-          session(4, { en: "Gym: fast", is: "Salur: hratt" }, [jumps("80"), jumpSquat(4)]),
+          session(0, SPRINT, [st(w4.starts!), fly(w4.fly0!)]),
+          session(1, HEAVY, [lifts(w4.lifts), nordics(w4.nordics!)]),
+          session(3, SPRINT, [fly(w4.fly3!)]),
+          session(4, FAST, [jumps(w4.jumps), jumpSquat(w4.js)]),
         ],
       },
       {
         label: { en: "Weeks 5–6", is: "Vikur 5–6" },
         sessions: [
-          session(0, { en: "Sprint", is: "Sprettir" }, [starts({ en: "3 × 20 m at full effort", is: "3 × 20 m á fullu" }), flying(4, 20, "30")]),
-          session(1, { en: "Gym: heavy", is: "Salur: þungt" }, [lifts(heavy("4", "3")), nordics("3 × 5")]),
-          session(3, { en: "Sprint", is: "Sprettir" }, [flying(3, 30, "30–40")]),
-          session(4, { en: "Gym: fast", is: "Salur: hratt" }, [jumps("100"), jumpSquat(4)]),
+          session(0, SPRINT, [st(w56.starts!), fly(w56.fly0!)]),
+          session(1, HEAVY, [lifts(w56.lifts), nordics(w56.nordics!)]),
+          session(3, SPRINT, [fly(w56.fly3!)]),
+          session(4, FAST, [jumps(w56.jumps), jumpSquat(w56.js)]),
         ],
       },
       {
         label: { en: "Week 7: ease off", is: "Vika 7: minna magn" },
         sessions: [
-          session(0, { en: "Sprint", is: "Sprettir" }, [flying(3, 20, "30")]),
-          session(1, { en: "Gym: heavy", is: "Salur: þungt" }, [lifts(heavy("2", "3"))]),
-          session(3, { en: "Sprint", is: "Sprettir" }, [flying(2, 30, "30–40")]),
-          session(4, { en: "Gym: fast", is: "Salur: hratt" }, [jumps("60"), jumpSquat(3)]),
+          session(0, SPRINT, [fly(w7.fly0!)]),
+          session(1, HEAVY, [lifts(w7.lifts)]),
+          session(3, SPRINT, [fly(w7.fly3!)]),
+          session(4, FAST, [jumps(w7.jumps), jumpSquat(w7.js)]),
         ],
       },
       {
         label: { en: "Week 8: test", is: "Vika 8: mæling" },
         sessions: [
-          session(0, { en: "Sprint", is: "Sprettir" }, [flying(2, 20, "30")]),
-          session(1, { en: "Gym: light", is: "Salur: létt" }, [jumps("40"), jumpSquat(2)]),
+          session(0, SPRINT, [fly(w8.fly0)]),
+          session(1, { en: "Gym: light", is: "Salur: létt" }, [jumps(w8.jumps), jumpSquat(w8.js)]),
           session(3, { en: "Test", is: "Mæling" }, [speedTest(3, 20)]),
         ],
       },
     ],
     refs: ["haugen2019", "mendiguchia2020", "nicholson2022", "saez2012", "loturco2016", "ronnestad2011"],
+  };
+}
+
+/** Verdicts for the beginner and advanced versions (intermediate keeps the plan's own). */
+const SPEED_LEVEL_VERDICT: Record<SpeedPlanKey, Record<Exclude<TrainingLevel, "intermediate">, Bi>> = {
+  in_season: {
+    beginner: {
+      en: "One short top-speed session (10 m flying sprints) and one technique-first strength session a week; start with two weeks of build-up runs at 90–95%.",
+      is: "Ein stutt hámarkshraðaæfing (10 m fljúgandi sprettir) og ein styrktaræfing með tækni fyrst á viku; byrjaðu á tveimur vikum af uppbyggingarsprettum á 90–95%.",
+    },
+    advanced: {
+      en: "One top-speed session with longer flying sprints (4 × 30 m) and one heavy strength session a week keep speed up through the season.",
+      is: "Ein hámarkshraðaæfing með lengri fljúgandi sprettum (4 × 30 m) og ein þung styrktaræfing á viku halda hraðanum í gegnum tímabilið.",
+    },
   },
-];
+  pre_season: {
+    beginner: {
+      en: "Two speed-and-strength days a week for 6 weeks: two build-up weeks at 90–95%, then short flying sprints (10–15 m), with technique-first lifting.",
+      is: "Tveir hraða- og styrktardagar á viku í 6 vikur: tvær uppbyggingarvikur á 90–95%, svo stuttir fljúgandi sprettir (10–15 m), með lyftingum þar sem tæknin kemur fyrst.",
+    },
+    advanced: {
+      en: "Two speed-and-strength days a week for 6 weeks: longer flying sprints (20–30 m, up to 150 m a session) and heavier lifts, 72 hours apart.",
+      is: "Tveir hraða- og styrktardagar á viku í 6 vikur: lengri fljúgandi sprettir (20–30 m, mest 150 m á æfingu) og þyngri lyftingar, 72 klst á milli.",
+    },
+  },
+  individual: {
+    beginner: {
+      en: "Two sprint days and two gym days a week: build up at 90–95% for 2 weeks, run short flying sprints (10–15 m) for 4, then ease off and test.",
+      is: "Tveir sprettdagar og tveir salardagar á viku: uppbygging á 90–95% í 2 vikur, stuttir fljúgandi sprettir (10–15 m) í 4, svo minna magn og mæling.",
+    },
+    advanced: {
+      en: "Two sprint days and two gym days a week: build up for 2 weeks, run flying sprints of 20–30 m (up to 150 m a session) for 4, then ease off and test.",
+      is: "Tveir sprettdagar og tveir salardagar á viku: uppbygging í 2 vikur, fljúgandi sprettir á 20–30 m (mest 150 m á æfingu) í 4, svo minna magn og mæling.",
+    },
+  },
+};
+
+/** The plan's fact kept at every level (the test line, or the non-starters line in season). */
+const SPEED_KEEP_FACT: Record<SpeedPlanKey, number> = { in_season: 2, pre_season: 2, individual: 0 };
+
+const SPEED_BUILDERS: Record<SpeedPlanKey, (lv: TrainingLevel) => SpeedPlan> = {
+  in_season: inSeasonPlan,
+  pre_season: preSeasonPlan,
+  individual: individualSpeedPlan,
+};
+
+const SPEED_CACHE = new Map<string, SpeedPlan>();
+
+/** One top-speed plan at one level (default intermediate = the plans as built from the studies). */
+export function speedPlan(key: SpeedPlanKey, level: TrainingLevel = DEFAULT_LEVEL): SpeedPlan {
+  const k = `${key}:${level}`;
+  const hit = SPEED_CACHE.get(k);
+  if (hit) return hit;
+  const base = SPEED_BUILDERS[key](level);
+  const plan: SpeedPlan = level === "intermediate"
+    ? base
+    : {
+        ...base,
+        title: { en: `${base.title.en} · ${LEVEL_LABEL[level].en}`, is: `${base.title.is} · ${LEVEL_LABEL[level].is}` },
+        verdict: SPEED_LEVEL_VERDICT[key][level],
+        facts: [LEVEL_CHANGES.top_speed[level], base.facts[SPEED_KEEP_FACT[key]]],
+      };
+  SPEED_CACHE.set(k, plan);
+  return plan;
+}
+
+export const SPEED_PLANS: SpeedPlan[] = (["in_season", "pre_season", "individual"] as SpeedPlanKey[]).map((k) => speedPlan(k));
+
+/** Every top-speed plan at every level (for tests and PDF checks). */
+export function allSpeedPlans(levels: TrainingLevel[] = TRAINING_LEVELS): SpeedPlan[] {
+  return levels.flatMap((lv) => (["in_season", "pre_season", "individual"] as SpeedPlanKey[]).map((k) => speedPlan(k, lv)));
+}
 
 export const SPEED_PLAN_BY_KEY: Record<SpeedPlanKey, SpeedPlan> = Object.fromEntries(
   SPEED_PLANS.map((p) => [p.key, p]),

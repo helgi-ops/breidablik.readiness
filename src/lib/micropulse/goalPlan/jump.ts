@@ -23,6 +23,7 @@ import { SPEED_REFS } from "@/lib/micropulse/speedMethods";
 import { ACCEL_REFS } from "./acceleration";
 import { BAND_LABEL, WHEN, expandWeeks, isYouth, pickStart, weekLabel } from "./common";
 import type { GoalParts } from "./index";
+import { JUMP_LEVEL_CONTACTS, type TrainingLevel } from "./levels";
 import type { Bi, GoalBlock, GoalMethod, GoalPlanInput, GoalRef, GoalSession } from "./types";
 
 export const JUMP_REFS: Record<string, GoalRef> = {
@@ -191,8 +192,9 @@ const rebound = (sets: number): GoalBlock => ({
  *  (Sáez de Villarreal 2009). Squat + countermovement jumps top the tested rebound/drop jumps up to this. */
 export const ADULT_SESSION_CONTACTS = 55;
 
-/** Squat jumps + countermovement jumps, `sets` sets of 5 in all (squat jumps get the odd set). */
-const jumpMix = (sets: number): GoalBlock => {
+/** Squat jumps + countermovement jumps, `sets` sets of 5 in all (squat jumps get the odd set). `hold` (beginner
+ *  level): every landing held still, to teach landing first. */
+const jumpMix = (sets: number, hold = false): GoalBlock => {
   const sj = Math.ceil(sets / 2);
   const cmj = sets - sj;
   return {
@@ -200,20 +202,20 @@ const jumpMix = (sets: number): GoalBlock => {
     contacts: sets * 5,
     what: cmj > 0 ? { en: "Squat jumps + countermovement jumps", is: "Hopp úr hnébeygjustöðu + CMJ-hopp" } : { en: "Squat jumps", is: "Hopp úr hnébeygjustöðu" },
     dose: {
-      en: `${sj} × 5 squat jumps (hold still at the bottom, then jump)${cmj > 0 ? ` · ${cmj} × 5 countermovement jumps` : ""} · body weight · 1 min between sets`,
-      is: `${sj} × 5 hopp úr hnébeygjustöðu (kyrr í botni, svo upp)${cmj > 0 ? ` · ${cmj} × 5 CMJ-hopp` : ""} · eigin þyngd · 1 mín milli setta`,
+      en: `${sj} × 5 squat jumps (hold still at the bottom, then jump)${cmj > 0 ? ` · ${cmj} × 5 countermovement jumps` : ""} · body weight${hold ? " · land and hold still for 2 s" : ""} · 1 min between sets`,
+      is: `${sj} × 5 hopp úr hnébeygjustöðu (kyrr í botni, svo upp)${cmj > 0 ? ` · ${cmj} × 5 CMJ-hopp` : ""} · eigin þyngd${hold ? " · lentu og haltu kyrru í 2 s" : ""} · 1 mín milli setta`,
     },
   };
 };
 
-/** The squat/countermovement top-up that brings `already` foot contacts to about ADULT_SESSION_CONTACTS (none if already there). */
-const topUp = (already: number): GoalBlock[] => {
-  const sets = Math.round((ADULT_SESSION_CONTACTS - already) / 5);
-  return sets > 0 ? [jumpMix(sets)] : [];
+/** The squat/countermovement top-up that brings `already` foot contacts to about `target` (none if already there). */
+const topUp = (already: number, target = ADULT_SESSION_CONTACTS, hold = false): GoalBlock[] => {
+  const sets = Math.round((target - already) / 5);
+  return sets > 0 ? [jumpMix(sets, hold)] : [];
 };
 const contactsIn = (blocks: GoalBlock[]) => blocks.reduce((n, b) => n + (b.test ? 0 : b.contacts ?? 0), 0);
 /** Tested jumps plus the top-up first (lower intensity first, then the fast jumps). */
-const withTopUp = (jumps: GoalBlock[]): GoalBlock[] => [...topUp(contactsIn(jumps)), ...jumps];
+const withTopUp = (jumps: GoalBlock[], target = ADULT_SESSION_CONTACTS, hold = false): GoalBlock[] => [...topUp(contactsIn(jumps), target, hold), ...jumps];
 
 const drop = (sets: number, reps: number, cm: number): GoalBlock => ({
   method: "drop_jumps",
@@ -233,6 +235,15 @@ const heavy = (light: boolean): GoalBlock => ({
   method: "heavy_strength",
   what: { en: "Heavy legs", is: "Þungar fætur" },
   dose: light ? { en: "Squat or trap-bar deadlift 2 × 3", is: "Hnébeygja eða trap bar 2 × 3" } : { en: "Squat or trap-bar deadlift 3–4 × 3–5 at 80–90% of max", is: "Hnébeygja eða trap bar 3–4 × 3–5 á 80–90% af hámarki" },
+});
+
+/** Beginner level: squat with technique first (in place of squats by bar speed or heavy lifts). */
+const techSquat = (light: boolean): GoalBlock => ({
+  method: "heavy_strength",
+  what: { en: "Squat, technique first", is: "Hnébeygja, tækni fyrst" },
+  dose: light
+    ? { en: "2 × 5, light", is: "2 × 5, létt" }
+    : { en: "3 × 6 at a light-to-moderate weight, 2–3 reps in reserve", is: "3 × 6 með léttri til miðlungs þyngd, 2–3 endurtekningar eftir" },
 });
 
 const cmjTest: GoalBlock = {
@@ -279,9 +290,18 @@ const TESTED_SQUAT_DOSE: Array<[string, string]> = [
 ];
 
 /** The plan's building blocks and the tested weekly doses, shared with the Programme Library team plans (`qualityPlans.ts`). */
-export const JUMP_BLOCKS = { rebound, drop, squatSpeed, heavy, cmjTest, youthHops, jumpMix, withTopUp, TESTED_REBOUND_SETS, TESTED_DROP_DOSE, TESTED_SQUAT_DOSE };
+export const JUMP_BLOCKS = { rebound, drop, squatSpeed, heavy, techSquat, cmjTest, youthHops, jumpMix, withTopUp, TESTED_REBOUND_SETS, TESTED_DROP_DOSE, TESTED_SQUAT_DOSE };
 
-export function jumpWeeks(start: JumpStart) {
+/** Advanced level: drop jumps added from week 3 (30 cm, then 40 cm from week 5), weeks 3–7 only. */
+const advancedDrops = (i: number): GoalBlock[] => (i >= 2 && i < 7 ? [drop(2, 5, i < 4 ? 30 : 40)] : []);
+
+/**
+ * The goal plan's 8 weeks. `level` is for the Programme Library; player goal plans use intermediate (the default).
+ * Beginner: one rebound set fewer, about 50 contacts with every landing held still, technique-first squats (the
+ * fast-jumps start is not offered at this level). Advanced: about 70 contacts, drop jumps from week 3, squats one
+ * step heavier. Youth ignores the level.
+ */
+export function jumpWeeks(start: JumpStart, level: TrainingLevel = "intermediate") {
   if (start === "youth") {
     const strengthYouth = sessB({ en: "Strength (light)", is: "Styrkur (létt)" }, [{
       method: "heavy_strength",
@@ -298,40 +318,48 @@ export function jumpWeeks(start: JumpStart) {
       { weeks: [8], label: (w) => weekLabel(w, "test", "mæling"), sessions: [sessA([cmjTest, youthHops(1)], true), strengthYouth] },
     ]);
   }
-  const reboundSets = TESTED_REBOUND_SETS;
+  const beg = level === "beginner";
+  const adv = level === "advanced";
+  const target = JUMP_LEVEL_CONTACTS[level].target;
+  const reboundSets = beg ? TESTED_REBOUND_SETS.map((n) => Math.max(3, n - 1)) : TESTED_REBOUND_SETS;
   const dropDose = TESTED_DROP_DOSE;
   const squatDose = TESTED_SQUAT_DOSE;
+  const topped = (jumps: GoalBlock[]) => withTopUp(jumps, target, beg);
+  const lightGym = (): GoalBlock => (beg ? techSquat(true) : heavy(true));
   const week = (i: number): GoalSession[] => {
     const testWeek = i === 0 || i === 3;
     if (start === "fast_jumps") {
       const [s, r, cm] = dropDose[i];
       return [
-        sessA([...(testWeek ? [cmjTest] : []), ...withTopUp([drop(s, r, cm), rebound(reboundSets[i])])], testWeek, 20),
-        sessB({ en: "Gym: fast + keep strength", is: "Salur: hratt + halda styrk" }, [{ method: "squat_bar_speed", what: { en: "Light jump squats", is: "Hnébeygjuhopp með léttri þyngd" }, dose: { en: "3 × 5, fast", is: "3 × 5, hratt" } }, heavy(true)]),
+        sessA([...(testWeek ? [cmjTest] : []), ...topped([drop(s, r, cm), rebound(reboundSets[i])])], testWeek, 20),
+        sessB({ en: "Gym: fast + keep strength", is: "Salur: hratt + halda styrk" }, [{ method: "squat_bar_speed", what: { en: "Light jump squats", is: "Hnébeygjuhopp með léttri þyngd" }, dose: { en: "3 × 5, fast", is: "3 × 5, hratt" } }, lightGym()]),
         sessC([rebound(3)]),
       ];
     }
+    const extra = adv ? advancedDrops(i) : [];
     if (start === "strength_first") {
       return [
-        sessA([...(testWeek ? [cmjTest] : []), ...withTopUp([rebound(reboundSets[i])])], testWeek, 20),
-        sessB({ en: "Gym: strength", is: "Salur: styrkur" }, [heavy(i === 5)]),
+        sessA([...(testWeek ? [cmjTest] : []), ...topped([...extra, rebound(reboundSets[i])])], testWeek, 20),
+        sessB({ en: "Gym: strength", is: "Salur: styrkur" }, [beg ? techSquat(false) : heavy(i === 5)]),
         sessC([rebound(3)]),
       ];
     }
-    const [en, is] = squatDose[i];
+    const [en, is] = squatDose[adv ? Math.min(i + 1, squatDose.length - 1) : i];
     return [
-      sessA([...(testWeek ? [cmjTest] : []), ...withTopUp([rebound(reboundSets[i])])], testWeek, 20),
-      sessB({ en: "Gym: squats by bar speed", is: "Salur: hnébeygja eftir stangarhraða" }, [squatSpeed(en, is)]),
+      sessA([...(testWeek ? [cmjTest] : []), ...topped([...extra, rebound(reboundSets[i])])], testWeek, 20),
+      beg
+        ? sessB({ en: "Gym: squat, technique first", is: "Salur: hnébeygja, tækni fyrst" }, [techSquat(false)])
+        : sessB({ en: "Gym: squats by bar speed", is: "Salur: hnébeygja eftir stangarhraða" }, [squatSpeed(en, is)]),
       sessC([rebound(3)]),
     ];
   };
   const light: GoalSession[] = start === "fast_jumps"
-    ? [sessA([drop(2, 3, 30), rebound(3)]), sessB({ en: "Gym: light", is: "Salur: létt" }, [heavy(true)])]
-    : [sessA([rebound(3)]), sessB({ en: "Gym: light", is: "Salur: létt" }, [start === "combined" ? squatSpeed("2 × 3, fast", "2 × 3, hratt") : heavy(true)])];
+    ? [sessA([drop(2, 3, 30), rebound(3)]), sessB({ en: "Gym: light", is: "Salur: létt" }, [lightGym()])]
+    : [sessA([rebound(3)]), sessB({ en: "Gym: light", is: "Salur: létt" }, [start === "combined" && !beg ? squatSpeed("2 × 3, fast", "2 × 3, hratt") : lightGym()])];
   return expandWeeks([
     ...[0, 1, 2, 3, 4, 5].map((i) => ({ weeks: [i + 1], label: (w: number) => weekLabel(w, i === 0 ? "test + start" : i === 3 ? "test" : "", i === 0 ? "mæling + byrjun" : i === 3 ? "mæling" : ""), sessions: week(i) })),
     { weeks: [7], label: (w) => weekLabel(w, "ease off", "minna magn"), sessions: light },
-    { weeks: [8], label: (w) => weekLabel(w, "test", "mæling"), sessions: [sessA([cmjTest, rebound(2)], true), sessB({ en: "Gym: light", is: "Salur: létt" }, [heavy(true)])] },
+    { weeks: [8], label: (w) => weekLabel(w, "test", "mæling"), sessions: [sessA([cmjTest, rebound(2)], true), sessB({ en: "Gym: light", is: "Salur: létt" }, [lightGym()])] },
   ]);
 }
 

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { allQualityPlans, INDIVIDUAL_STARTS, individualWeeks } from "../qualityPlans";
 import { LIBRARY_QUALITIES } from "../qualityLibrary";
 import { topSpeedWeeks } from "../topSpeed";
-import { SPEED_PLANS } from "@/lib/micropulse/speedMethods";
+import { allSpeedPlans } from "@/lib/micropulse/speedMethods";
+import { TRAINING_LEVELS } from "../levels";
 
 /**
  * Coach's rule: in a session with both power and strength work, the power (sprints, jumps, bounds, jump squats)
@@ -25,8 +26,8 @@ describe("power before strength in every session", () => {
     for (const p of allQualityPlans()) for (const w of p.weeks) for (const s of w.sessions) {
       expect(powerAfterStrength(s.blocks), `${p.title.en} · ${w.label.en}`).toBeNull();
     }
-    for (const q of LIBRARY_QUALITIES) for (const st of INDIVIDUAL_STARTS[q]) for (const w of individualWeeks(q, st.key)) for (const s of w.sessions) {
-      expect(powerAfterStrength(s.blocks), `${q} ${st.key} · ${w.label.en}`).toBeNull();
+    for (const lv of TRAINING_LEVELS) for (const q of LIBRARY_QUALITIES) for (const st of INDIVIDUAL_STARTS[q]) for (const w of individualWeeks(q, st.key, lv)) for (const s of w.sessions) {
+      expect(powerAfterStrength(s.blocks), `${lv} ${q} ${st.key} · ${w.label.en}`).toBeNull();
     }
   });
 
@@ -39,7 +40,7 @@ describe("power before strength in every session", () => {
   });
 
   it("top-speed library plans", () => {
-    for (const p of SPEED_PLANS) for (const w of p.weeks) for (const s of w.sessions) {
+    for (const p of allSpeedPlans()) for (const w of p.weeks) for (const s of w.sessions) {
       expect(powerAfterStrength(s.blocks), `${p.title.en} · ${w.label.en}`).toBeNull();
     }
   });

@@ -25,6 +25,7 @@
 import { COD_CONCERN_PCT } from "@/lib/micropulse/codAsymmetry";
 import { WHEN, expandWeeks, pickStart, weekLabel } from "./common";
 import type { GoalParts } from "./index";
+import type { TrainingLevel } from "./levels";
 import type { Bi, GoalBlock, GoalMethod, GoalPlanInput, GoalRef, GoalSession } from "./types";
 
 export const BRAKING_REFS: Record<string, GoalRef> = {
@@ -125,8 +126,27 @@ const drills = (rows: DrillRow[], effort: Bi): GoalBlock => ({
 });
 
 const SUB: Bi = { en: "50–75% effort, planned", is: "50–75% átak, fyrirfram ákveðið" };
+const QUARTER: Bi = { en: "75% effort, planned", is: "75% átak, fyrirfram ákveðið" };
 const FULL: Bi = { en: "full effort, planned", is: "fullt átak, fyrirfram ákveðið" };
 const REACT: Bi = { en: "full effort, reacting", is: "fullt átak, viðbrögð" };
+
+/**
+ * Effort for the two sessions of weeks 2–5 of the tested progression, by level. Intermediate is Dos'Santos 2019 as
+ * the plan had it; beginner stays at 50–75% about two weeks longer; advanced reaches full effort and reacting to a
+ * partner a week sooner. The drills never change with the level, only effort and pace (MicroPulse).
+ */
+const EFFORT: Record<TrainingLevel, Array<[Bi, Bi]>> = {
+  beginner: [[SUB, QUARTER], [QUARTER, QUARTER], [FULL, FULL], [FULL, REACT]],
+  intermediate: [[QUARTER, FULL], [FULL, FULL], [FULL, REACT], [REACT, REACT]],
+  advanced: [[QUARTER, FULL], [FULL, REACT], [REACT, REACT], [REACT, REACT]],
+};
+
+/** Week names for weeks 2–5 of the tested progression, by level. */
+const EFFORT_LABEL: Record<TrainingLevel, Array<[string, string]>> = {
+  beginner: [["stops first", "stopp fyrst"], ["75% effort", "75% átak"], ["full effort", "fullt átak"], ["full effort + signals", "fullt átak + merki"]],
+  intermediate: [["stops first", "stopp fyrst"], ["full effort", "fullt átak"], ["full effort + signals", "fullt átak + merki"], ["reacting to a partner", "viðbrögð við félaga"]],
+  advanced: [["stops first + full effort", "stopp fyrst + fullt átak"], ["full effort + signals", "fullt átak + merki"], ["reacting to a partner", "viðbrögð við félaga"], ["reacting to a partner", "viðbrögð við félaga"]],
+};
 
 const CUES: GoalBlock = {
   method: "decel_technique",
@@ -134,14 +154,42 @@ const CUES: GoalBlock = {
   dose: { en: "\"Slam on the brakes and drop the hips\" · \"push the ground away\" · \"face where you are going\"", is: "„Bremsaðu fast og lækkaðu mjaðmirnar\" · „ýttu jörðinni frá þér\" · „snúðu þér þangað sem þú ert að fara\"" },
 };
 
-const landings = (weakerLeg: GoalPlanInput["weakerLeg"]): GoalBlock => ({
-  method: "landing_drills",
-  contacts: 30,
-  what: { en: "Landings and hop-and-hold", is: "Lendingar og hopp-og-halda" },
-  dose: weakerLeg
-    ? { en: `Broad jumps, single-leg hop-and-hold forward and zig-zag, 10 m each · one extra set on the ${weakerLeg.side} leg`, is: `Langstökk, einfótahopp-og-halda fram og í sikk-sakk, 10 m hvert · eitt auka sett á ${weakerLeg.side === "left" ? "vinstri" : "hægri"} fæti` }
-    : { en: "Broad jumps, single-leg hop-and-hold forward and zig-zag, 10 m each · both legs equal", is: "Langstökk, einfótahopp-og-halda fram og í sikk-sakk, 10 m hvert · báðir fætur jafnt" },
-});
+const landings = (weakerLeg: GoalPlanInput["weakerLeg"], level: TrainingLevel = "intermediate"): GoalBlock => {
+  const extra = weakerLeg
+    ? { en: ` · one extra set on the ${weakerLeg.side} leg`, is: ` · eitt auka sett á ${weakerLeg.side === "left" ? "vinstri" : "hægri"} fæti` }
+    : null;
+  if (level === "beginner") {
+    // Beginner: landings on both legs first; single-leg only once every two-leg landing holds still (MicroPulse).
+    return {
+      method: "landing_drills",
+      contacts: 30,
+      what: { en: "Landings and hop-and-hold on both legs", is: "Lendingar og hopp-og-halda á báðum fótum" },
+      dose: {
+        en: `Broad jumps, two-leg hop-and-hold forward and zig-zag, 10 m each · single-leg only once every landing holds still${extra?.en ?? ""}`,
+        is: `Langstökk, tvífóta hopp-og-halda fram og í sikk-sakk, 10 m hvert · einfóta aðeins þegar hver lending helst kyrr${extra?.is ?? ""}`,
+      },
+    };
+  }
+  if (level === "advanced") {
+    return {
+      method: "landing_drills",
+      contacts: 36,
+      what: { en: "Single-leg landings and hop-and-hold", is: "Einfóta lendingar og hopp-og-halda" },
+      dose: {
+        en: `Single-leg hop-and-hold forward, zig-zag and sideways, 12 m each${extra?.en ?? " · both legs equal"}`,
+        is: `Einfótahopp-og-halda fram, í sikk-sakk og til hliðar, 12 m hvert${extra?.is ?? " · báðir fætur jafnt"}`,
+      },
+    };
+  }
+  return {
+    method: "landing_drills",
+    contacts: 30,
+    what: { en: "Landings and hop-and-hold", is: "Lendingar og hopp-og-halda" },
+    dose: weakerLeg
+      ? { en: `Broad jumps, single-leg hop-and-hold forward and zig-zag, 10 m each${extra!.en}`, is: `Langstökk, einfótahopp-og-halda fram og í sikk-sakk, 10 m hvert${extra!.is}` }
+      : { en: "Broad jumps, single-leg hop-and-hold forward and zig-zag, 10 m each · both legs equal", is: "Langstökk, einfótahopp-og-halda fram og í sikk-sakk, 10 m hvert · báðir fætur jafnt" },
+  };
+};
 
 const eccentric = (weakerLeg: GoalPlanInput["weakerLeg"]): GoalBlock => ({
   method: "eccentric_strength",
@@ -224,10 +272,13 @@ const W7: DrillRow[] = [
 ];
 
 /** The plan's building blocks (Dos'Santos sessions), shared with the Programme Library team plans (`qualityPlans.ts`). */
-export const BRAKING_BLOCKS = { drills, landings, eccentric, cutTest, CUES, SUB, FULL, REACT, W1, W2, W3A, W3B, W4A, W4B, W5A, W5B, W7 };
+export const BRAKING_BLOCKS = { drills, landings, eccentric, cutTest, CUES, SUB, QUARTER, FULL, REACT, EFFORT, EFFORT_LABEL, W1, W2, W3A, W3B, W4A, W4B, W5A, W5B, W7 };
 
-export function brakingWeeks(start: BrakingStart, weakerLeg: GoalPlanInput["weakerLeg"]) {
-  const lands = landings(weakerLeg);
+/** The goal plan's 8 weeks. `level` is for the Programme Library; player goal plans use intermediate (the default). */
+export function brakingWeeks(start: BrakingStart, weakerLeg: GoalPlanInput["weakerLeg"], level: TrainingLevel = "intermediate") {
+  const lands = landings(weakerLeg, level);
+  const E = EFFORT[level];
+  const N = EFFORT_LABEL[level];
   const ecc = eccentric(weakerLeg);
   if (start === "technique_only") {
     // Already a lot of hard braking: the weeks 1–2 drills at 50–75% all the way, no full-effort stops added.
@@ -240,10 +291,10 @@ export function brakingWeeks(start: BrakingStart, weakerLeg: GoalPlanInput["weak
   }
   return expandWeeks([
     { weeks: [1], label: (w) => weekLabel(w, "test + stops first", "mæling + stopp fyrst"), sessions: [sessA([cutTest, CUES, drills(W1.slice(0, 2), SUB)], true), sessB([drills(W1, SUB), lands, ecc]), sessC([lands])] },
-    { weeks: [2], label: (w) => weekLabel(w, "stops first", "stopp fyrst"), sessions: [sessA([CUES, drills(W1, { en: "75% effort, planned", is: "75% átak, fyrirfram ákveðið" })]), sessB([drills(W2, FULL), lands, ecc]), sessC([lands])] },
-    { weeks: [3], label: (w) => weekLabel(w, "full effort", "fullt átak"), sessions: [sessA([CUES, drills(W3A, FULL)]), sessB([drills(W3B, FULL), lands, ecc]), sessC([lands])] },
-    { weeks: [4], label: (w) => weekLabel(w, "full effort + signals", "fullt átak + merki"), sessions: [sessA([CUES, drills(W4A, FULL)]), sessB([drills(W4B, REACT), lands, ecc]), sessC([lands])] },
-    { weeks: [5, 6], label: (w) => weekLabel(w, "reacting to a partner", "viðbrögð við félaga"), sessions: [sessA([CUES, drills(W5A, REACT)]), sessB([drills(W5B, REACT), lands, ecc]), sessC([lands])] },
+    { weeks: [2], label: (w) => weekLabel(w, N[0][0], N[0][1]), sessions: [sessA([CUES, drills(W1, E[0][0])]), sessB([drills(W2, E[0][1]), lands, ecc]), sessC([lands])] },
+    { weeks: [3], label: (w) => weekLabel(w, N[1][0], N[1][1]), sessions: [sessA([CUES, drills(W3A, E[1][0])]), sessB([drills(W3B, E[1][1]), lands, ecc]), sessC([lands])] },
+    { weeks: [4], label: (w) => weekLabel(w, N[2][0], N[2][1]), sessions: [sessA([CUES, drills(W4A, E[2][0])]), sessB([drills(W4B, E[2][1]), lands, ecc]), sessC([lands])] },
+    { weeks: [5, 6], label: (w) => weekLabel(w, N[3][0], N[3][1]), sessions: [sessA([CUES, drills(W5A, E[3][0])]), sessB([drills(W5B, E[3][1]), lands, ecc]), sessC([lands])] },
     { weeks: [7], label: (w) => weekLabel(w, "ease off", "minna magn"), sessions: [sessA([CUES, drills(W7, FULL)]), sessB([lands])] },
     { weeks: [8], label: (w) => weekLabel(w, "test", "mæling"), sessions: [sessA([cutTest, CUES], true), sessB([lands])] },
   ]);

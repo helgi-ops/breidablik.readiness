@@ -10,6 +10,8 @@ import {
   SPEED_PLAN_BASIS,
   SPEED_PLANS,
   SPEED_REFS,
+  allSpeedPlans,
+  speedPlan,
   SPEED_SAFETY,
   SPEED_VERDICT,
   flatOutMetres,
@@ -17,6 +19,9 @@ import {
   topSpeedGaps,
   type Bi,
 } from "../index";
+
+/** Every plan at every level (lota 4): the safety checks run on all of them. */
+const PLANS = allSpeedPlans();
 
 const filled = (b: Bi) => b.en.trim().length > 0 && b.is.trim().length > 0;
 
@@ -34,7 +39,7 @@ function allText(): string[] {
     m.findings.forEach((f) => push(f.text));
     m.howTo.forEach(push);
   }
-  for (const p of SPEED_PLANS) {
+  for (const p of PLANS) {
     [p.title, p.who, p.verdict].forEach(push);
     p.facts.forEach(push);
     for (const w of p.weeks) {
@@ -87,14 +92,14 @@ describe("speed methods library", () => {
 
 describe("speed plans", () => {
   it("every block points at a method that exists", () => {
-    for (const p of SPEED_PLANS)
+    for (const p of PLANS)
       for (const w of p.weeks)
         for (const s of w.sessions)
           for (const b of s.blocks) expect(SPEED_METHOD_BY_KEY[b.method], `${p.key}: ${b.method}`).toBeDefined();
   });
 
   it("only methods with top-speed evidence carry a top-speed run", () => {
-    for (const p of SPEED_PLANS)
+    for (const p of PLANS)
       for (const w of p.weeks)
         for (const s of w.sessions)
           for (const b of s.blocks)
@@ -102,13 +107,13 @@ describe("speed plans", () => {
   });
 
   it("no session runs more than 150 m flat out", () => {
-    for (const p of SPEED_PLANS)
+    for (const p of PLANS)
       for (const w of p.weeks)
         for (const s of w.sessions) expect(flatOutMetres(s), `${p.key} ${w.label.en} ${s.dayLabel.en}`).toBeLessThanOrEqual(MAX_FLYING_M_PER_SESSION);
   });
 
   it("top-speed sessions are at least 48 h apart (a match counts as one)", () => {
-    for (const p of SPEED_PLANS) {
+    for (const p of PLANS) {
       const gaps = topSpeedGaps(p);
       expect(gaps.length, p.key).toBeGreaterThan(0);
       for (const g of gaps) expect(g, p.key).toBeGreaterThanOrEqual(MIN_DAYS_BETWEEN_TOP_SPEED);
@@ -145,7 +150,7 @@ describe("speed plans", () => {
   });
 
   it("each plan has both languages, 2–3 facts and sources", () => {
-    for (const p of SPEED_PLANS) {
+    for (const p of PLANS) {
       expect(filled(p.title) && filled(p.who) && filled(p.verdict), p.key).toBe(true);
       expect(p.facts.length, p.key).toBeGreaterThanOrEqual(2);
       expect(p.facts.length, p.key).toBeLessThanOrEqual(3);
@@ -155,10 +160,49 @@ describe("speed plans", () => {
   });
 
   it("plans that build up test top speed", () => {
-    for (const key of ["pre_season", "individual"] as const) {
-      const p = SPEED_PLANS.find((x) => x.key === key)!;
+    for (const key of ["pre_season", "individual"] as const) for (const p of PLANS.filter((x) => x.key === key)) {
       const tests = p.weeks.flatMap((w) => w.sessions.flatMap((s) => s.blocks.filter((b) => b.test)));
-      expect(tests.length, key).toBeGreaterThanOrEqual(2);
+      expect(tests.length, p.title.en).toBeGreaterThanOrEqual(2);
+    }
+  });
+});
+
+describe("speed plans by level (lota 4)", () => {
+  const flyM = (p: ReturnType<typeof speedPlan>) =>
+    p.weeks.flatMap((w) => w.sessions.flatMap((s) => s.blocks.filter((b) => b.method === "flying_sprints" && b.topSpeed && !b.test)));
+
+  it("intermediate is the default and is exactly the plans as they were", () => {
+    for (const p of SPEED_PLANS) expect(speedPlan(p.key, "intermediate")).toBe(p);
+    for (const p of SPEED_PLANS) expect(speedPlan(p.key)).toBe(p);
+  });
+
+  it("beginner: flying zones of 15 m at most, and the first two weeks have no flying sprints", () => {
+    for (const k of ["in_season", "pre_season", "individual"] as const) {
+      for (const b of flyM(speedPlan(k, "beginner"))) expect(Number(/× (\d+) m/.exec(b.dose.en)?.[1]), b.dose.en).toBeLessThanOrEqual(15);
+    }
+    for (const k of ["pre_season", "individual"] as const) {
+      const p = speedPlan(k, "beginner");
+      const early = p.key === "individual" ? [p.weeks[0]] : [p.weeks[0], p.weeks[1]];
+      for (const w of early) for (const s of w.sessions) for (const b of s.blocks) expect(b.topSpeed && !b.test, `${k} ${w.label.en}`).toBeFalsy();
+    }
+  });
+
+  it("advanced: longer flying zones but never over 150 m flat out a session", () => {
+    for (const k of ["in_season", "pre_season", "individual"] as const) {
+      const adv = Math.max(...flyM(speedPlan(k, "advanced")).map((b) => b.flatOutM ?? 0));
+      const mid = Math.max(...flyM(speedPlan(k, "intermediate")).map((b) => b.flatOutM ?? 0));
+      expect(adv, k).toBeGreaterThanOrEqual(mid);
+      for (const w of speedPlan(k, "advanced").weeks) for (const s of w.sessions) expect(flatOutMetres(s)).toBeLessThanOrEqual(MAX_FLYING_M_PER_SESSION);
+    }
+  });
+
+  it("beginner and advanced name the level, say what changes and keep the test line", () => {
+    for (const lv of ["beginner", "advanced"] as const) for (const base of SPEED_PLANS) {
+      const p = speedPlan(base.key, lv);
+      expect(p.title.en).toMatch(lv === "beginner" ? /Beginner$/ : /Advanced$/);
+      expect(p.facts[0].en).toMatch(lv === "beginner" ? /^Beginner:/ : /^Advanced:/);
+      expect(p.verdict.en).not.toBe(base.verdict.en);
+      expect(p.weeks.length).toBe(base.weeks.length);
     }
   });
 });
