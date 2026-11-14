@@ -13,6 +13,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import type { Bi, GoalQuality } from "@/lib/micropulse/goalPlan/types";
 import { PLAYER_NOTE_MAX } from "@/lib/micropulse/goalPlan/requests";
+import type { GoalHistoryItem } from "@/lib/micropulse/goalPlan/history";
 
 type Eligibility = { quality: GoalQuality; blocked: string | null; blockedText: Bi | null };
 type Current = {
@@ -35,9 +36,9 @@ const QUALITY: Record<GoalQuality, { label: Bi; sub: Bi }> = {
   jump: { label: { en: "Vertical jump", is: "Lóðrétt stökk" }, sub: { en: "Jump higher", is: "Stökkva hærra" } },
 };
 
-async function call(method: "GET" | "POST" | "DELETE", body?: unknown) {
+async function call(method: "GET" | "POST" | "DELETE", body?: unknown, path = "/api/player/goal-plan") {
   const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? "";
-  const res = await fetch("/api/player/goal-plan", {
+  const res = await fetch(path, {
     method,
     cache: "no-store",
     headers: { Authorization: `Bearer ${tok}`, ...(body ? { "Content-Type": "application/json" } : {}) },
@@ -49,6 +50,35 @@ async function call(method: "GET" | "POST" | "DELETE", body?: unknown) {
 
 const fmtDate = (iso: string | null, is: boolean) =>
   iso ? new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso).toLocaleDateString(is ? "is-IS" : "en-GB", { weekday: "short", day: "numeric", month: "short" }) : "";
+const fmtDay = (iso: string, is: boolean) =>
+  new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString(is ? "is-IS" : "en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+/** One earlier goal (lota 5): verdict → sessions ticked + coach's note → test lines behind "Show details". */
+function HistoryItem({ item, is }: { item: GoalHistoryItem; is: boolean }) {
+  const [open, setOpen] = React.useState(false);
+  const L = (b: Bi) => (is ? b.is : b.en);
+  return (
+    <li className="rounded-xl border border-slate-200 p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+        <span className="text-sm font-semibold text-slate-900">{L(item.title)}</span>
+        <span className="text-xs text-slate-500">{fmtDay(item.startDate, is)} – {fmtDay(item.lastDay, is)}</span>
+      </div>
+      <p className="mt-1 text-sm font-medium text-slate-800">{L(item.verdict)}</p>
+      <ul className="mt-1 space-y-0.5 text-xs text-slate-600">
+        {item.facts.map((f, i) => <li key={i}>{L(f)}</li>)}
+      </ul>
+      {item.coachNote ? <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700"><span className="font-semibold">{is ? "Frá þjálfaranum:" : "From your coach:"}</span> {item.coachNote}</p> : null}
+      <button type="button" onClick={() => setOpen((o) => !o)} className="mt-2 text-xs font-medium text-primary">
+        {open ? (is ? "Fela nánar" : "Hide details") : (is ? "Sýna nánar" : "Show details")}
+      </button>
+      {open ? (
+        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-slate-600">
+          {item.details.map((d, i) => <li key={i}>{L(d)}</li>)}
+        </ul>
+      ) : null}
+    </li>
+  );
+}
 
 export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN"; onClose: () => void }) {
   const is = lang === "IS";
@@ -63,6 +93,24 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
   const [reload, setReload] = React.useState(0);
+  const [historyCount, setHistoryCount] = React.useState(0);
+  const [history, setHistory] = React.useState<GoalHistoryItem[] | null>(null);
+  const [historyState, setHistoryState] = React.useState<"closed" | "loading" | "open" | "error">("closed");
+
+  /** Earlier goals are read only when the player opens them. */
+  const toggleHistory = async () => {
+    if (historyState === "open") { setHistoryState("closed"); return; }
+    if (history) { setHistoryState("open"); return; }
+    setHistoryState("loading");
+    try {
+      const { res, j } = await call("GET", undefined, "/api/player/goal-plan/history");
+      if (!res.ok) { setHistoryState("error"); return; }
+      setHistory((j.items ?? []) as GoalHistoryItem[]);
+      setHistoryState("open");
+    } catch {
+      setHistoryState("error");
+    }
+  };
 
   React.useEffect(() => {
     let alive = true;
@@ -74,6 +122,7 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
         if (!res.ok) { setState("error"); return; }
         setEligibility((j.eligibility ?? []) as Eligibility[]);
         setCurrent((j.current ?? null) as Current | null);
+        setHistoryCount(Number(j.historyCount ?? 0) || 0);
         setState("ready");
       } catch {
         if (alive) setState("error");
@@ -186,6 +235,22 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
         ) : null}
 
         {msg ? <p className="mt-3 text-sm text-[#a83e28]">{msg}</p> : null}
+
+        {state === "ready" && historyCount > 0 ? (
+          <div className="mt-5 border-t border-slate-200 pt-3">
+            <button type="button" onClick={toggleHistory} aria-expanded={historyState === "open"} className="flex w-full items-center justify-between text-left text-sm font-semibold text-slate-700">
+              <span>{T(`Earlier goals (${historyCount})`, `Fyrri markmið (${historyCount})`)}</span>
+              <span className="text-slate-400">{historyState === "open" ? "▴" : "▾"}</span>
+            </button>
+            {historyState === "loading" ? <p className="mt-2 text-sm text-slate-400">{T("Loading…", "Sæki…")}</p> : null}
+            {historyState === "error" ? <p className="mt-2 text-sm text-[#a83e28]">{T("Couldn't load. Try again.", "Tókst ekki að sækja. Reyndu aftur.")}</p> : null}
+            {historyState === "open" && history ? (
+              history.length
+                ? <ul className="mt-2 space-y-2">{history.map((h) => <HistoryItem key={h.id} item={h} is={is} />)}</ul>
+                : <p className="mt-2 text-sm text-slate-500">{T("No earlier goals.", "Engin fyrri markmið.")}</p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );

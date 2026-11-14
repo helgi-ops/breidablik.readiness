@@ -330,6 +330,27 @@ export async function latestGoalWithPlan(sb: Sb, playerId: string, todayIso: str
   return (data as unknown as GoalPlanRow | null) ?? null;
 }
 
+// ─── Lota 5: the player's history ──────────────────────────────────────────
+
+/** Plans that ran (finished, or stopped after approval) on the player's current team, newest first. */
+export async function playerGoalHistoryRows(sb: Sb, teamId: string, playerId: string, limit: number): Promise<GoalPlanRow[]> {
+  const { data, error } = await sb.from("player_goal_plans").select(ROW_COLS)
+    .eq("team_id", teamId).eq("player_id", playerId).in("status", ["completed", "cancelled"])
+    .not("start_date", "is", null).not("plan", "is", null)
+    .order("end_date", { ascending: false }).limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as GoalPlanRow[];
+}
+
+/** How many earlier goals the player has (for the sheet's "Earlier goals (n)" button). Light: a count only. */
+export async function playerGoalHistoryCount(sb: Sb, teamId: string, playerId: string): Promise<number> {
+  const { count, error } = await sb.from("player_goal_plans").select("id", { count: "exact", head: true })
+    .eq("team_id", teamId).eq("player_id", playerId).in("status", ["completed", "cancelled"])
+    .not("start_date", "is", null).not("plan", "is", null);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
 export async function goalSessionMarks(sb: Sb, planId: string): Promise<SessionMark[]> {
   const { data, error } = await sb.from("player_goal_plan_sessions").select("week, slot, status, session_date").eq("plan_id", planId);
   if (error) throw new Error(error.message);

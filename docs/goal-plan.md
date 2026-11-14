@@ -1,10 +1,11 @@
 # Goal plans ("I want to improve my top speed / acceleration / braking / jump")
 
-Status: **lotur 1 + 1b + 2 + 3 + 4 shipped 2026-11-13.** A player can ask; the coach approves, changes the start or
+Status: **lotur 1 + 1b + 2 + 3 + 4 shipped 2026-11-13; 4b + 5 on 2026-11-14.** A player can ask; the coach approves, changes the start or
 declines. From its start date the plan's sessions show on the player's Today, placed around the team's matches, in a
 lighter version on a yellow day and skipped on red. The player ticks each session done / not done. It pauses itself on
 injury and ends after 8 weeks; then the coach's tests (and VALD jump height) give the outcome, shown to the player for
-14 days and printable as a PDF. Nothing is sent (no push, no email).
+14 days and printable as a PDF; after that the player keeps it under "Earlier goals". Nothing is sent (no push, no
+email).
 
 ## What it does
 
@@ -226,7 +227,26 @@ future date, remove → outcome 1.92 → 1.87 s, 2.6% faster, clear change → e
 cleanup to 0 rows). Real data read-only: VALD jump start found for a Breiðablik player (42.6 cm, mean of 3), GPS top
 speed context (30.8 vs 29.7 km/h), Keflavík braking context (5.5 m/s²). About 0.1–0.2 s per read.
 
+## Lota 5: the player's earlier goals (2026-11-14)
+
+Helgi picked "player history" for lota 5 (reminders stay unbuilt: they need the coach's OK).
+
+- **Where:** Today → See more → My goal → **"Earlier goals (n)"** at the bottom of the sheet. The sheet's first load
+  reads a count only (`historyCount` on `GET /api/player/goal-plan`); the list (`GET /api/player/goal-plan/history`,
+  read only) is fetched when the player opens it.
+- **What counts:** plans that ran on the player's **current team**: finished after 8 weeks, or stopped by the coach
+  after approval (`isHistoryRow`: has a start date). Withdrawn and declined requests never ran, so they are not
+  history (a decline still shows for 21 days as before). Newest first, at most 8 (`HISTORY_MAX`).
+- **Layered read per goal** (`history.ts`, pure): (0) verdict in the player's own numbers, the same outcome the coach
+  sees ("All 8 weeks done. 10 m: 1.92 → 1.87 s, 2.6% faster — a clear change", or "No retest was entered", or "Your
+  coach stopped the plan in week 3"); (1) sessions ticked + the coach's note to the player; (2) behind "Show details":
+  the other test lines, how a change is read, "rules, no AI".
+- **Not shown to the player:** the coach's reason for stopping (it was entered as the coach's own reason, never labelled
+  as a message to the player), GPS numbers, colour.
+- Progress is the coach panel's `loadGoalProgress` with `{ gps: false }`. Verified on Demo GPS Pro: a finished plan, a
+  stopped plan and a withdrawn request → 2 items (the withdrawn one left out), the stop reason not in the payload, 0 for
+  another team, about 0.3 s; cleanup to 0 rows.
+
 ## Next (not built)
 
 - A push or reminder to tick sessions or book the retest: needs the coach's OK (nothing is sent today).
-- A player-side history of finished goals (today a finished goal shows 14 days, then only the coach sees it).

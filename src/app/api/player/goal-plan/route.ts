@@ -1,7 +1,8 @@
 /**
  * /api/player/goal-plan — the player's own goal request (lota 2).
  *
- * GET    which qualities can be asked for now + the player's open (or recently closed) goal. Light read.
+ * GET    which qualities can be asked for now + the player's open (or recently closed) goal + how many earlier goals
+ *        there are (a count; the list itself is /history, read only when opened). Light read.
  * POST   { quality, note? } ask for an 8-week add-on plan. One open goal at a time (409). The rules build the
  *        proposal from the player's own data and store it; the coach approves, changes or declines it.
  * DELETE withdraw a request the coach has not answered yet.
@@ -13,7 +14,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { loadGoalEligibility } from "@/lib/micropulse/goalPlan/loader";
-import { cancelGoalRequest, createGoalRequest } from "@/lib/micropulse/goalPlan/store";
+import { cancelGoalRequest, createGoalRequest, playerGoalHistoryCount } from "@/lib/micropulse/goalPlan/store";
 import { playerCurrentGoalSynced } from "@/lib/micropulse/goalPlan/todayLoader";
 import { goalFail, requireGoalPlayer } from "./_shared";
 import { PLAYER_BLOCK_TEXT, cleanPlayerNote, isGoalQuality } from "@/lib/micropulse/goalPlan/requests";
@@ -24,9 +25,14 @@ export async function GET(req: Request) {
   try {
     const sb = getSupabaseServer();
     const { playerId, teamId } = await requireGoalPlayer(sb, req);
-    const [eligibility, current] = await Promise.all([loadGoalEligibility(sb, teamId, playerId), playerCurrentGoalSynced(sb, playerId)]);
+    const [eligibility, current, historyCount] = await Promise.all([
+      loadGoalEligibility(sb, teamId, playerId),
+      playerCurrentGoalSynced(sb, playerId),
+      playerGoalHistoryCount(sb, teamId, playerId).catch(() => 0),
+    ]);
     return NextResponse.json({
       ok: true,
+      historyCount,
       eligibility: eligibility.map((e) => ({ quality: e.quality, blocked: e.blocked, blockedText: e.blocked ? PLAYER_BLOCK_TEXT[e.blocked] : null })),
       current: current && {
         id: current.id, quality: current.quality, status: current.status, note: current.player_note,

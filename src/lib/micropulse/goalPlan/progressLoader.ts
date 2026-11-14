@@ -16,7 +16,8 @@ import { fetchAllPages } from "@/lib/supabasePaginate";
 import { mergeSpeedDays } from "@/lib/micropulse/nearMaxExposure";
 import { aggregateTrialsByTest } from "@/lib/micropulse/vald/trialAggregate";
 import { GPS_SOURCES } from "./loader";
-import { goalResults, goalSessionMarks } from "./store";
+import { goalResults, goalSessionMarks, playerGoalHistoryRows } from "./store";
+import { HISTORY_MAX, buildGoalHistoryItem, isHistoryRow, type GoalHistoryItem } from "./history";
 import { addDays, placedSessionsUpTo, toTeamDayType, type TeamCalendar } from "./today";
 import { adherence, effortDays, goalOutcome, gpsContext, type GoalProgress, type GoalResult, type GpsDay, type GpsKind, type GpsMetric } from "./outcome";
 import type { GoalPlanRow } from "./requests";
@@ -97,12 +98,15 @@ async function gpsDays(sb: Sb, playerId: string, kind: GpsKind, from: string, to
 }
 
 /** Progress of an approved, paused, finished or stopped plan. null before approval. */
-export async function loadGoalProgress(sb: Sb, teamId: string, row: GoalPlanRow, todayIso: string): Promise<GoalProgress | null> {
+export async function loadGoalProgress(
+  sb: Sb, teamId: string, row: GoalPlanRow, todayIso: string, opts: { gps?: boolean } = {},
+): Promise<GoalProgress | null> {
   if (!row.plan || !row.start_date || !row.end_date || row.plan.status !== "ok") return null;
   if (!["approved", "paused", "completed", "cancelled"].includes(row.status)) return null;
   const stopAt = row.status === "paused" ? row.paused_at?.slice(0, 10) : row.status === "cancelled" ? row.closed_at?.slice(0, 10) : null;
   const until = [todayIso, row.end_date, stopAt].filter((d): d is string => !!d).sort()[0];
-  const gpsKind: GpsKind | null = row.quality === "top_speed" || row.quality === "braking" || row.quality === "acceleration" ? row.quality : null;
+  const wantGps = opts.gps !== false;
+  const gpsKind: GpsKind | null = wantGps && (row.quality === "top_speed" || row.quality === "braking" || row.quality === "acceleration") ? row.quality : null;
   const noGps = { metric: "peak" as GpsMetric, days: [] as GpsDay[] };
   const [marks, coach, vald, cal, gps] = await Promise.all([
     goalSessionMarks(sb, row.id),
@@ -121,4 +125,22 @@ export async function loadGoalProgress(sb: Sb, teamId: string, row: GoalPlanRow,
     gps: gpsKind ? gpsContext(gpsKind, gps.days, row.start_date, row.end_date, until, gps.metric) : null,
     until,
   };
+}
+
+/**
+ * Lota 5: the player's earlier goals (finished, or stopped after approval) on their current team, newest first.
+ * Same outcome and adherence as the coach's panel; no GPS on the player side.
+ */
+export async function loadGoalHistory(sb: Sb, teamId: string, playerId: string, todayIso: string): Promise<GoalHistoryItem[]> {
+  const rows = (await playerGoalHistoryRows(sb, teamId, playerId, HISTORY_MAX)).filter(isHistoryRow);
+  const items = await Promise.all(rows.map(async (row) => {
+    const p = await loadGoalProgress(sb, teamId, row, todayIso, { gps: false });
+    if (!p || !row.plan || !row.start_date || !row.end_date) return null;
+    return buildGoalHistoryItem({
+      id: row.id, quality: row.quality, status: row.status, startDate: row.start_date, endDate: row.end_date,
+      closedAt: row.closed_at, coachNote: row.coach_note, outcome: p.outcome, adherence: p.adherence,
+      testsWhat: row.plan.tests.what, testsChange: row.plan.tests.change,
+    });
+  }));
+  return items.filter((x): x is GoalHistoryItem => !!x);
 }
