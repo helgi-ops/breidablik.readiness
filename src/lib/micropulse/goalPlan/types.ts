@@ -12,6 +12,7 @@
 import type { Bi } from "@/lib/micropulse/load/peakPeriod";
 import type { TrainingLevel } from "./levels";
 import type { SwapChoices, SwapMark } from "./swaps";
+import type { LiftRx } from "./liftRx";
 
 export type { Bi };
 
@@ -70,6 +71,9 @@ export type GoalBlock = {
   test?: boolean;
   /** Set only on a block the coach's team swap changed (lota 5): the planned exercise is kept here. */
   swap?: SwapMark;
+  /** Gym lifts only (lota 7): every training variable, with where each number comes from. Never stored: derived on
+   *  read from the frozen block by `goalPlanWithRx` (it would triple the stored plan, read every morning on Today). */
+  rx?: LiftRx[];
 };
 
 export type GoalSessionSlot = "A" | "B" | "C";

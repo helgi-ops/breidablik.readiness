@@ -20,6 +20,7 @@ import {
   type SpeedPlan,
 } from "@/lib/micropulse/speedMethods";
 import { LEVEL_BASIS } from "@/lib/micropulse/goalPlan/levels";
+import { LiftRxSection } from "@/components/coach/LiftRxPdf";
 import { SWAP_NOTE, SWAPPED_BY_COACH, hasSwaps, swapMark } from "@/lib/micropulse/goalPlan/swaps";
 import { BrandPage, Bullets, C, Provenance, Section, Table, Verdict, clean, fb, fh, fileSafe, renderPdfBlob, saveBlob, TONE } from "@/components/pdf/brand";
 
@@ -96,6 +97,8 @@ export function SpeedPlanDoc({ plan, lang, leveled = false }: { plan: SpeedPlan;
             </View>
           ))}
         </Section>
+
+        <LiftRxSection plan={plan} lang={lang} />
 
         <Section title={IS ? "Reglur sem gilda alltaf" : "Rules that always apply"}>
           <Bullets items={SPEED_SAFETY.map(L)} tone="amber" />

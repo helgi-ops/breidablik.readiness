@@ -498,6 +498,38 @@ list more sources.
   other team swaps still apply to youth.
 - Tests: `__tests__/vbtAndPulls.test.ts`; `qualityLibrary.test.ts` card count 14 → 16.
 
+## "Speed & power" lota 7: every training variable for the gym lifts (2026-11-14)
+
+The coach asked for the strength part to be "very detailed, with all the acute variables, VBT ones too". Chosen:
+scope = the four "Speed & power" qualities (library, goal plans, PDFs; not the team Strength hub, not PT); bar speed
+always as its own "With a bar-speed device" lines; every number labelled where it comes from. **No plan's numbers
+changed** (`what` / `dose` untouched, golden hashes unchanged). `GOAL_CONTENT_VERSION` 2026-11-14.5.
+
+- **`goalPlan/liftRx.ts`** (pure): `rxForBlock(block, ctx)` reads a gym block (method + exercise + the dose line,
+  swaps included) and returns `LiftRx[]`: load, how hard, speed of each rep, rest, warm-up, when to add weight, how
+  often, order in the gym, note, plus bar-speed lines (target, stop the set, adjust, feedback, or "not used"). Nine
+  lift profiles: heavy, technique-first, Romanian deadlift, jump squat, pull (jump shrug / hang high pull), Nordic,
+  slow-eccentric split squat, squat by bar speed, youth. `%` and rest are read from the dose when it states them,
+  so the table can never disagree with the short line. `withRx(plan, ctx)` adds `rx` to the blocks and computes order
+  ("power first, strength after") and frequency from the week.
+- **Source on every line**: "From the studies behind this method" (the ref is on the method card), "From another
+  study" (ref read in full, `RX_REFS`), or "MicroPulse guide, not tested". New refs, all read in full: Vanderka 2020
+  (jump squats with speed feedback, 3 min rest, ~45% of 3RM), Weakley 2021 (±0.06 m/s → change load 4–5%; in-season
+  speed loss <20%, power work 10%), Thompson 2021 (players differ >10% at heavy squat loads → use the player's own
+  speed, no group table), Cuthbert 2021 (frequency matters little when volume matches; 1×/wk keeps strength),
+  Cormie 2007 (jump squat power peaks at body weight). Pareja-Blanco 2017 gives the bar-speed squat targets
+  (1.0 m/s ≈ 55–60%, 0.9 ≈ 65%, 0.8 ≈ 70%) and 4 min rest; Ishøi 2018 now `verifiedFrom: "full_text"`.
+- **Never stored.** Storing `rx` made goal plans about 3× bigger (top speed 21.9 → 72.7 kB), and Today reads the
+  plan every morning (see the morning DB overload). `goalPlanWithRx(plan)` derives it on read from the frozen blocks:
+  coach preview (`GoalPlanView`), `GoalPlanPdf`, and `buildGoalTodayCard` (today's week only, so only today's lifts
+  reach the player payload). Older approved plans get the table too.
+- **Where it shows**: "All the details" toggle under each gym block (`LiftRxDetails` in `LiftRxTable.tsx`) in the
+  library (`SwapBlock`), goal preview and the player's goal card; the player sees four plain rows (load, how hard,
+  rep speed, rest) and the device lines, no sources. PDFs get a "Strength: every variable" section
+  (`LiftRxPdf.tsx`, one table per distinct lift + the sources), before "Rules that always apply".
+- Tests: `__tests__/liftRx.test.ts` (every plan × level × start; sets × reps, % and rest match the dose; sources;
+  no m/s target on jump squats; youth ≤75%; no RIR/RPE/1RM or injury words; stored goal plan has no `rx`).
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

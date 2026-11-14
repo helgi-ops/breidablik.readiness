@@ -13,6 +13,8 @@ import type { Bi, GoalPlan } from "@/lib/micropulse/goalPlan/types";
 import { QUALITY_LABEL } from "@/lib/micropulse/goalPlan/common";
 import { LEVEL_LABEL } from "@/lib/micropulse/goalPlan/levels";
 import { SWAPPED_BY_COACH } from "@/lib/micropulse/goalPlan/swaps";
+import { LiftRxSection } from "@/components/coach/LiftRxPdf";
+import { goalPlanWithRx } from "@/lib/micropulse/goalPlan/liftRx";
 import { EVENT_LABEL, STATUS_LABEL, type GoalPlanEventRow, type GoalPlanStatus } from "@/lib/micropulse/goalPlan/requests";
 import { MEASURE_DEF, PHASE_LABEL, type GoalProgress } from "@/lib/micropulse/goalPlan/outcome";
 import { BrandPage, Bullets, C, FactRow, Provenance, Section, Table, Verdict, clean, fb, fh, fileSafe, renderPdfBlob, saveBlob, type Tone } from "@/components/pdf/brand";
@@ -37,7 +39,8 @@ export function GoalPlanDoc({ d, lang }: { d: GoalPlanPdfData; lang: Lang }) {
   const IS = lang === "IS";
   const L = (b: Bi) => clean(IS ? b.is : b.en);
   const T = (en: string, is: string) => (IS ? is : en);
-  const { plan, progress } = d;
+  const { progress } = d;
+  const plan = goalPlanWithRx(d.plan);
   const q = QUALITY_LABEL[plan.quality];
   const name = d.playerName ?? T("Player", "Leikmaður");
   const o = progress?.outcome ?? null;
@@ -136,6 +139,8 @@ export function GoalPlanDoc({ d, lang }: { d: GoalPlanPdfData; lang: Lang }) {
             </View>
           ))}
         </Section>
+
+        <LiftRxSection plan={plan} lang={lang} />
 
         <Section title={T("Rules that always apply", "Reglur sem gilda alltaf")}>
           <Bullets items={plan.safety.map(L)} tone="amber" />

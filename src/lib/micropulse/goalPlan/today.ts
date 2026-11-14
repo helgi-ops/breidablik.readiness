@@ -16,6 +16,7 @@
 
 import { PLAN_WEEKS, QUALITY_LABEL } from "./common";
 import type { Bi, GoalBlock, GoalPlan, GoalQuality, GoalSession, GoalSessionSlot } from "./types";
+import { rxContextOf, withRx, type LiftRx } from "./liftRx";
 import type { Adherence, DueSession, GoalOutcome, SessionMark } from "./outcome";
 
 // ─── Dates ─────────────────────────────────────────────────────────────────
@@ -257,7 +258,7 @@ export type GoalTodayCard = {
     minutes: number;
     version: SessionVersion;
     /** `swapped`: the team swapped this exercise (lota 5); the dose is the planned one. */
-    blocks: { what: Bi; dose: Bi; supervised: boolean; swapped?: boolean }[];
+    blocks: { what: Bi; dose: Bi; supervised: boolean; swapped?: boolean; rx?: LiftRx[] }[];
     /** The player's tick on it (lota 4). */
     mark: SessionMark["status"] | null;
   };
@@ -385,7 +386,8 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
   }
   if (week > PLAN_WEEKS) return null;
 
-  const sessions = sessionsOfWeek(plan, week);
+  // Lota 7: today's lifts get their full set of variables, derived from the frozen blocks (never stored).
+  const sessions = withRx({ weeks: [{ sessions: sessionsOfWeek(plan, week) }] }, rxContextOf(plan)).weeks[0].sessions;
   const placement = placementFor(plan, quality, input.startDate, todayIso, input.cal)!;
   const bySlot = new Map(sessions.map((s) => [s.slot, s]));
   const todays = placement.placed.find((p) => p.date === todayIso) ?? null;
@@ -422,7 +424,7 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
     const v = sessionForColour(s, input.colour);
     today = {
       slot: s.slot, focus: s.focus, minutes: v.version === "full" ? s.minutes : Math.max(5, Math.round(s.minutes / 2)), version: v.version,
-      blocks: v.blocks.map((b) => ({ what: b.what, dose: b.dose, supervised: b.supervised === true, ...(b.swap?.swapped ? { swapped: true } : {}) })),
+      blocks: v.blocks.map((b) => ({ what: b.what, dose: b.dose, supervised: b.supervised === true, ...(b.swap?.swapped ? { swapped: true } : {}), ...(b.rx?.length ? { rx: b.rx } : {}) })),
       mark: markOf(s.slot),
     };
     const name = `${cap(slotName(s.slot)).en}: ${s.focus.en}`;

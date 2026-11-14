@@ -32,6 +32,7 @@ import type { TrainingLevel } from "@/lib/micropulse/goalPlan/levels";
 import LevelPicker from "@/components/trainer/LevelPicker";
 import { SwapBlock, SwapNote, type OnSwap } from "@/components/trainer/SwapBlock";
 import { applySwaps, hasSwaps, type SwapChoices } from "@/lib/micropulse/goalPlan/swaps";
+import { withRx } from "@/lib/micropulse/goalPlan/liftRx";
 
 type Lang = "IS" | "EN";
 
@@ -122,7 +123,8 @@ type SwapProps = { swaps: SwapChoices; onSwap?: OnSwap; busy?: boolean };
 
 function PlanView({ plan: base, lang, level, swaps, onSwap, busy: saving }: { plan: SpeedPlan; lang: Lang; level: TrainingLevel } & SwapProps) {
   // The swaps change only the library's copy; the dose and flat-out metres never change.
-  const plan = useMemo(() => applySwaps(base, "top_speed", swaps), [base, swaps]);
+  // Lota 7: every gym lift gets its full set of variables (the dose line itself does not change).
+  const plan = useMemo(() => withRx(applySwaps(base, "top_speed", swaps), { quality: "top_speed", level, youth: false }), [base, swaps, level]);
   const swapped = hasSwaps(plan);
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   const [busy, setBusy] = useState(false);

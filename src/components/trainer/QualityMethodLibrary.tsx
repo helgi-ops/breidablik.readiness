@@ -37,6 +37,7 @@ import type { TrainingLevel } from "@/lib/micropulse/goalPlan/levels";
 import LevelPicker from "@/components/trainer/LevelPicker";
 import { SwapBlock, SwapNote, type OnSwap } from "@/components/trainer/SwapBlock";
 import { applySwaps, hasSwaps, type SwapChoices } from "@/lib/micropulse/goalPlan/swaps";
+import { withRx } from "@/lib/micropulse/goalPlan/liftRx";
 
 type Lang = "IS" | "EN";
 
@@ -113,13 +114,19 @@ function PlanView({
   plan: base,
   lib,
   lang,
+  level,
+  youth,
   swaps,
   onSwap,
   busy: saving,
-}: { plan: QualityPlan; lib: QualityLibrary; lang: Lang } & SwapProps) {
+}: { plan: QualityPlan; lib: QualityLibrary; lang: Lang; level: TrainingLevel; youth: boolean } & SwapProps) {
   // `base` is already the chosen level: its title, facts and limits name the level (lota 4). The team's swaps are
   // applied to this copy only (step 3); the dose and counters never change.
-  const plan = useMemo(() => applySwaps(base, lib.quality, swaps), [base, lib.quality, swaps]);
+  // Lota 7: every gym lift gets its full set of variables (the dose line itself does not change).
+  const plan = useMemo(
+    () => withRx(applySwaps(base, lib.quality, swaps), { quality: lib.quality, level, youth }),
+    [base, lib.quality, swaps, level, youth],
+  );
   const swapped = hasSwaps(plan);
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   const [busy, setBusy] = useState(false);
@@ -265,7 +272,7 @@ function PlansSection({ lib, lang, level, onLevel, levelBusy, swaps, onSwap }: {
       )}
       <LevelPicker level={level} onChange={onLevel} lang={lang} youth={youth} disabled={levelBusy} />
       <div className="mt-3">
-        <PlanView key={`${plan.key}-${plan.start ?? ""}-${youth ? "youth" : level}`} plan={plan} lib={lib} lang={lang} swaps={swaps} onSwap={onSwap} busy={levelBusy} />
+        <PlanView key={`${plan.key}-${plan.start ?? ""}-${youth ? "youth" : level}`} plan={plan} lib={lib} lang={lang} level={level} youth={youth} swaps={swaps} onSwap={onSwap} busy={levelBusy} />
       </div>
       <div className="mt-4 rounded-lg border border-[#de9328]/40 bg-white px-3 py-2">
         <div className="text-xs font-semibold text-slate-900">{lang === "IS" ? "Reglur í öllum áætlunum" : "Rules in every plan"}</div>

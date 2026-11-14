@@ -9,6 +9,8 @@
 import { useState } from "react";
 import { PLANNED, SWAP_NOTE, SWAPPED_BY_COACH, SWAP_SLOT_BY_KEY, swapMark, type SwapSlotKey } from "@/lib/micropulse/goalPlan/swaps";
 import type { Bi } from "@/lib/micropulse/goalPlan/types";
+import type { LiftRx } from "@/lib/micropulse/goalPlan/liftRx";
+import { LiftRxDetails } from "@/components/trainer/LiftRxTable";
 
 type Lang = "IS" | "EN";
 
@@ -20,7 +22,7 @@ export function SwapBlock({
   onSwap,
   disabled = false,
 }: {
-  b: { what: Bi; dose: Bi; test?: boolean };
+  b: { what: Bi; dose: Bi; test?: boolean; rx?: LiftRx[] };
   lang: Lang;
   onSwap?: OnSwap;
   disabled?: boolean;
@@ -57,6 +59,7 @@ export function SwapBlock({
         )}
       </div>
       <span className="block text-xs text-slate-600">{L(b.dose)}</span>
+      <LiftRxDetails rx={b.rx} lang={lang} />
       {mark?.swapped && (
         <span className="block text-[11px] text-slate-500">
           {IS ? "Í áætluninni: " : "Planned: "}

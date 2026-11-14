@@ -13,6 +13,8 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import type { Bi, GoalPlan, GoalQuality, GoalWeek } from "@/lib/micropulse/goalPlan/types";
 import { LEVEL_LABEL } from "@/lib/micropulse/goalPlan/levels";
 import { SWAPPED_BY_COACH } from "@/lib/micropulse/goalPlan/swaps";
+import { LiftRxDetails } from "@/components/trainer/LiftRxTable";
+import { goalPlanWithRx } from "@/lib/micropulse/goalPlan/liftRx";
 
 const QUALITY: Record<GoalQuality, Bi> = {
   top_speed: { en: "Top speed", is: "Hámarkshraði" },
@@ -108,7 +110,9 @@ export default function GoalPlanPreviewCard({ playerId, isEN }: { playerId: stri
  * missing data → "Show details" (weeks, tests, safety, limits, sources). Shared by the preview card and the coach's
  * review of a player's request.
  */
-export function GoalPlanView({ plan, isEN }: { plan: GoalPlan; isEN: boolean }) {
+export function GoalPlanView({ plan: stored, isEN }: { plan: GoalPlan; isEN: boolean }) {
+  // Lota 7: every gym lift's full set of variables, derived from the frozen blocks.
+  const plan = React.useMemo(() => goalPlanWithRx(stored), [stored]);
   const [open, setOpen] = React.useState(false);
   const L = (b: Bi) => (isEN ? b.en : b.is);
   const T = (en: string, is: string) => (isEN ? en : is);
@@ -190,6 +194,7 @@ function Details({ plan, L, T }: { plan: GoalPlan; L: (b: Bi) => string; T: (en:
                       ) : null}
                       {b.supervised ? <span className="ml-1 rounded bg-primary/10 px-1 text-[10px] text-primary">{T("coach there", "þjálfari á staðnum")}</span> : null}
                       {b.test ? <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-600">{T("test", "mæling")}</span> : null}
+                      <LiftRxDetails rx={b.rx} lang={T("EN", "IS") as "EN" | "IS"} />
                     </div>
                   ))}
                 </td>

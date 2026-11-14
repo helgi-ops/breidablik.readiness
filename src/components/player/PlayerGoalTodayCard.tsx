@@ -18,6 +18,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import type { GoalTodayCard } from "@/lib/micropulse/goalPlan/today";
 import type { Bi } from "@/lib/micropulse/goalPlan/types";
+import { LiftRxDetails } from "@/components/trainer/LiftRxTable";
 
 export default function PlayerGoalTodayCard({ lang = "EN" }: { lang?: "IS" | "EN" }) {
   const [card, setCard] = React.useState<GoalTodayCard | null>(null);
@@ -132,6 +133,7 @@ export function GoalTodayCardView({ card, lang = "EN", onMark, busy = false, err
                 {b.supervised ? <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{T("with a coach", "með þjálfara")}</span> : null}
                 {b.swapped ? <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{T("chosen by your coach", "valið af þjálfara")}</span> : null}
                 <span className="block text-zinc-600">{L(b.dose)}</span>
+                <LiftRxDetails rx={b.rx} lang={lang} player />
               </li>
             ))}
           </ul>

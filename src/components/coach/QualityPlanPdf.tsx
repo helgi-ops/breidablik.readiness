@@ -14,6 +14,7 @@ import { QUALITY_PLAN_RULES, planMethodKeys, type QualityPlan } from "@/lib/micr
 import type { Bi } from "@/lib/micropulse/goalPlan/types";
 import { SWAP_NOTE, SWAPPED_BY_COACH, hasSwaps, swapMark } from "@/lib/micropulse/goalPlan/swaps";
 import { VERIFIED_LABEL } from "@/lib/micropulse/speedMethods";
+import { LiftRxSection } from "@/components/coach/LiftRxPdf";
 import { BrandPage, Bullets, C, Provenance, Section, Table, Verdict, clean, fb, fh, fileSafe, renderPdfBlob, saveBlob } from "@/components/pdf/brand";
 
 type Lang = "EN" | "IS";
@@ -93,6 +94,8 @@ export function QualityPlanDoc({ plan, lang }: { plan: QualityPlan; lang: Lang }
             </View>
           ))}
         </Section>
+
+        <LiftRxSection plan={plan} lang={lang} />
 
         <Section title={IS ? "Reglur sem gilda alltaf" : "Rules that always apply"}>
           <Bullets items={QUALITY_PLAN_RULES.map(L)} tone="amber" />

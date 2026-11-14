@@ -18,6 +18,7 @@ import type { Bi } from "@/lib/micropulse/load/peakPeriod";
 import { LONG_GAP_DAYS } from "@/lib/micropulse/nearMaxExposure";
 import { FLYING_DOSE_LINE, FLYING_SPRINT_DOSE, range } from "./flyingDose";
 import { DEFAULT_LEVEL, LEVEL_CHANGES, LEVEL_LABEL, TRAINING_LEVELS, type TrainingLevel } from "@/lib/micropulse/goalPlan/levels";
+import type { LiftRx } from "@/lib/micropulse/goalPlan/liftRx";
 
 export type { Bi };
 export { FLYING_DOSE_LINE, FLYING_RUN_PHRASE, FLYING_REPS_X_ZONE, FLYING_SPRINT_DOSE } from "./flyingDose";
@@ -71,7 +72,7 @@ export const SPEED_REFS: Record<SpeedRefKey, SpeedRef> = {
   paradisis2006: { key: "paradisis2006", short: "Paradisis 2006", cite: "Paradisis GP, Cooke CB. The effects of sprint running training on sloping surfaces. J Strength Cond Res 2006;20(4):767–777.", verifiedFrom: "abstract" },
   alcaraz2018: { key: "alcaraz2018", short: "Alcaraz 2018", cite: "Alcaraz PE, Carlos-Vivas J, Oponjuru BO, Martínez-Rodríguez A. The effectiveness of resisted sled training (RST) for sprint performance: a systematic review and meta-analysis. Sports Med 2018;48:2143–2165. doi:10.1007/s40279-018-0947-8", verifiedFrom: "full_text" },
   myrvang2024: { key: "myrvang2024", short: "Myrvang 2024", cite: "Myrvang S, van den Tillaar R. The longitudinal effects of resisted and assisted sprint training on sprint kinematics, acceleration, and maximum velocity: a systematic review and meta-analysis. Sports Med Open 2024;10:110.", verifiedFrom: "full_text" },
-  ishoi2018: { key: "ishoi2018", short: "Ishøi 2018", cite: "Ishøi L et al. Effects of the Nordic Hamstring exercise on sprint capacity in male football players: a randomized controlled trial. J Sports Sci 2018. doi:10.1080/02640414.2017.1409609", verifiedFrom: "abstract" },
+  ishoi2018: { key: "ishoi2018", short: "Ishøi 2018", cite: "Ishøi L, Hölmich P, Aagaard P, Thorborg K, Bandholm T, Serner A. Effects of the Nordic Hamstring exercise on sprint capacity in male football players: a randomized controlled trial. J Sports Sci 2018;36(14):1663–1672. doi:10.1080/02640414.2017.1409609", verifiedFrom: "full_text" },
   lin2026: { key: "lin2026", short: "Lin 2026", cite: "Lin et al. Acute and long-term effects of hip thrust training on athletic performance: a systematic review and meta-analysis. PeerJ 2026.", verifiedFrom: "abstract" },
   haugen2015: { key: "haugen2015", short: "Haugen 2015", cite: "Haugen T et al. Sprint conditioning of junior soccer players: effects of training intensity and technique supervision. PLoS One 2015;10(3):e0121827.", verifiedFrom: "abstract" },
   ronnestad2011: { key: "ronnestad2011", short: "Rønnestad 2011", cite: "Rønnestad BR, Nymark BS, Raastad T. Effects of in-season strength maintenance training frequency in professional soccer players. J Strength Cond Res 2011.", verifiedFrom: "abstract" },
@@ -815,6 +816,8 @@ export type SpeedBlock = {
   flatOutM?: number;
   /** A speed test (flying 10–20 m or GPS top speed). */
   test?: boolean;
+  /** Gym lifts only (lota 7), added by `withRx` on the page; the plan itself never sets it. */
+  rx?: LiftRx[];
 };
 
 export type SpeedSession = {
