@@ -16,6 +16,10 @@ export const dynamic = "force-dynamic";
  * Lota 4: progress and outcome for a running, paused, finished or stopped plan — sessions the player ticked, the
  * test results (the coach enters them; jump height also comes from VALD), the change against the plan's "clear
  * change" mark, GPS as context only, and a PDF of the whole plan.
+ *
+ * Lota 7: if MicroPulse suggested another quality when the player asked (a clear weakness in their position while
+ * the pick was not), the review shows that suggestion and whether the player switched or kept their pick, as stored
+ * when the request was sent.
  */
 
 import * as React from "react";
@@ -35,6 +39,7 @@ import {
 } from "@/lib/micropulse/goalPlan/requests";
 import { MEASURE_DEF, PHASE_LABEL, QUALITY_MEASURES, type GoalMeasure, type GoalProgress, type ResultPhase } from "@/lib/micropulse/goalPlan/outcome";
 import { TEST_NEED_LABEL, retestWhen, type GoalTestNeed } from "@/lib/micropulse/goalPlan/testsDue";
+import { coachPriorityText, isPrioritySnapshot } from "@/lib/micropulse/goalPlan/priority";
 
 const QUALITY: Record<GoalQuality, Bi> = {
   top_speed: { en: "Top speed", is: "Hámarkshraði" },
@@ -235,6 +240,8 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
         <p className="text-[11px] text-slate-500">{T(`The plan as approved (content ${plan.contentVersion}).`, `Áætlunin eins og hún var samþykkt (efni ${plan.contentVersion}).`)}</p>
       ) : null}
 
+      <PriorityNote events={data.events} isEN={isEN} />
+
       <GoalPlanView key={`${plan.quality}-${plan.branch?.key ?? ""}`} plan={plan} isEN={isEN} />
 
       {row.status === "requested" && plan.status === "ok" ? (
@@ -363,6 +370,29 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
         </details>
       ) : null}
     </section>
+  );
+}
+
+/** Lota 7: the "most to gain" suggestion the player saw, from the "requested" event. Nothing when there was none. */
+function PriorityNote({ events, isEN }: { events: GoalPlanEventRow[]; isEN: boolean }) {
+  const [open, setOpen] = React.useState(false);
+  const L = (b: Bi) => (isEN ? b.en : b.is);
+  const raw = events.find((e) => e.kind === "requested")?.detail as Record<string, unknown> | null | undefined;
+  const snap = raw?.priority;
+  if (!isPrioritySnapshot(snap)) return null;
+  const t = coachPriorityText(snap);
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" data-testid="goal-priority-note">
+      <p className="text-[12.5px] text-slate-800">{L(t.line)}</p>
+      <button type="button" onClick={() => setOpen((o) => !o)} className="mt-1 text-[11.5px] font-medium text-primary">
+        {open ? (isEN ? "Hide details" : "Fela nánar") : (isEN ? "Show details" : "Sýna nánar")}
+      </button>
+      {open ? (
+        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11.5px] text-slate-600">
+          {t.details.map((d, i) => <li key={i}>{L(d)}</li>)}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 

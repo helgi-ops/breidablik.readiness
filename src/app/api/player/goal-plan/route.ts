@@ -3,7 +3,8 @@
  *
  * GET    which qualities can be asked for now + the player's open (or recently closed) goal + how many earlier goals
  *        there are (a count; the list itself is /history, read only when opened). Light read.
- * POST   { quality, note? } ask for an 8-week add-on plan. One open goal at a time (409). The rules build the
+ * POST   { quality, note?, switchedFrom? } ask for an 8-week add-on plan. `switchedFrom` = the quality the player had
+ *        picked when they pressed "Switch" on the suggestion (lota 7); the suggestion is read again server-side. One open goal at a time (409). The rules build the
  *        proposal from the player's own data and store it; the coach approves, changes or declines it.
  * DELETE withdraw a request the coach has not answered yet.
  *
@@ -16,6 +17,8 @@ import { getSupabaseServer } from "@/lib/supabaseServer";
 import { loadGoalEligibility } from "@/lib/micropulse/goalPlan/loader";
 import { cancelGoalRequest, createGoalRequest, playerGoalHistoryCount } from "@/lib/micropulse/goalPlan/store";
 import { playerCurrentGoalSynced } from "@/lib/micropulse/goalPlan/todayLoader";
+import { loadPlayerPriority } from "@/lib/micropulse/goalPlan/priorityLoader";
+import { prioritySnapshot } from "@/lib/micropulse/goalPlan/priority";
 import { goalFail, requireGoalPlayer } from "./_shared";
 import { PLAYER_BLOCK_TEXT, cleanPlayerNote, isGoalQuality } from "@/lib/micropulse/goalPlan/requests";
 
@@ -52,9 +55,16 @@ export async function POST(req: Request) {
   try {
     const sb = getSupabaseServer();
     const { userId, playerId, teamId } = await requireGoalPlayer(sb, req);
-    const body = (await req.json().catch(() => ({}))) as { quality?: unknown; note?: unknown };
+    const body = (await req.json().catch(() => ({}))) as { quality?: unknown; note?: unknown; switchedFrom?: unknown };
     if (!isGoalQuality(body.quality)) return NextResponse.json({ error: "Pick top speed, acceleration, braking or vertical jump.", error_is: "Veldu hámarkshraða, hröðun, bremsun eða lóðrétt stökk." }, { status: 400 });
-    const res = await createGoalRequest(sb, { teamId, playerId, userId, quality: body.quality, note: cleanPlayerNote(body.note) });
+    const quality = body.quality;
+    // Lota 7: the suggestion is read again here (not taken from the body) and stored with the request for the coach.
+    // If the read fails, the request still goes through without it.
+    const switchedFrom = isGoalQuality(body.switchedFrom) ? body.switchedFrom : null;
+    const priority = await loadPlayerPriority(sb, teamId, playerId, new Date().toISOString().slice(0, 10))
+      .then((p) => (p ? prioritySnapshot(p.reads, p.metric, quality, switchedFrom) : null))
+      .catch(() => null);
+    const res = await createGoalRequest(sb, { teamId, playerId, userId, quality, note: cleanPlayerNote(body.note), priority });
     return NextResponse.json({ ok: true, id: res.id });
   } catch (e) {
     return goalFail(e);

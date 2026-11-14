@@ -7,6 +7,10 @@
  *
  * Opened from Today → See more. It reads nothing until it is opened, so Today's first load is unchanged.
  * Plain words only: no sport-science terms, no colour, no load numbers.
+ *
+ * Lota 7: when the player picks a quality, the rules check whether another one is a clear weakness (bottom third of
+ * the same position on the team) while the picked one is not, and if so suggest it. The player decides (switch or
+ * keep); the coach sees the same read and the choice. Read once, on the first pick.
  */
 
 import * as React from "react";
@@ -14,6 +18,9 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import type { Bi, GoalQuality } from "@/lib/micropulse/goalPlan/types";
 import { PLAYER_NOTE_MAX } from "@/lib/micropulse/goalPlan/requests";
 import type { GoalHistoryItem } from "@/lib/micropulse/goalPlan/history";
+import { Q_DAT, type PriorityView } from "@/lib/micropulse/goalPlan/priority";
+
+type Suggestion = { suggested: GoalQuality; view: PriorityView } | null;
 
 type Eligibility = { quality: GoalQuality; blocked: string | null; blockedText: Bi | null };
 type Current = {
@@ -52,6 +59,33 @@ const fmtDate = (iso: string | null, is: boolean) =>
   iso ? new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso).toLocaleDateString(is ? "is-IS" : "en-GB", { weekday: "short", day: "numeric", month: "short" }) : "";
 const fmtDay = (iso: string, is: boolean) =>
   new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString(is ? "is-IS" : "en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+/** Lota 7: "your data points more to …" — verdict → two facts → switch / keep → details behind a toggle. */
+function SuggestionCard({ s, from, is, onSwitch, onKeep }: { s: NonNullable<Suggestion>; from: GoalQuality; is: boolean; onSwitch: () => void; onKeep: () => void }) {
+  const [open, setOpen] = React.useState(false);
+  const L = (b: Bi) => (is ? b.is : b.en);
+  return (
+    <div className="rounded-xl border border-primary/30 bg-primary/5 p-3" data-testid="goal-suggestion" data-from={from} data-suggested={s.suggested}>
+      <p className="text-sm font-semibold text-slate-900">{L(s.view.verdict)}</p>
+      <ul className="mt-1 space-y-0.5 text-xs text-slate-700">
+        {s.view.facts.map((f, i) => <li key={i}>{L(f)}</li>)}
+      </ul>
+      <p className="mt-1 text-xs text-slate-500">{L(s.view.sub)}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button type="button" onClick={onSwitch} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white">{L(s.view.switchLabel)}</button>
+        <button type="button" onClick={onKeep} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700">{L(s.view.keepLabel)}</button>
+      </div>
+      <button type="button" onClick={() => setOpen((o) => !o)} className="mt-2 text-xs font-medium text-primary">
+        {open ? (is ? "Fela nánar" : "Hide details") : (is ? "Sýna nánar" : "Show details")}
+      </button>
+      {open ? (
+        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-slate-600">
+          {s.view.details.map((d, i) => <li key={i}>{L(d)}</li>)}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
 
 /** One earlier goal (lota 5): verdict → sessions ticked + coach's note → test lines behind "Show details". */
 function HistoryItem({ item, is }: { item: GoalHistoryItem; is: boolean }) {
@@ -96,6 +130,26 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
   const [historyCount, setHistoryCount] = React.useState(0);
   const [history, setHistory] = React.useState<GoalHistoryItem[] | null>(null);
   const [historyState, setHistoryState] = React.useState<"closed" | "loading" | "open" | "error">("closed");
+  const [suggestions, setSuggestions] = React.useState<Record<GoalQuality, Suggestion> | null>(null);
+  const [sugState, setSugState] = React.useState<"idle" | "loading" | "ready" | "error">("idle");
+  /** The quality the player had picked when they pressed "Switch" (sent so the coach sees it). */
+  const [switchedFrom, setSwitchedFrom] = React.useState<GoalQuality | null>(null);
+  const [kept, setKept] = React.useState(false);
+
+  /** The suggestion read runs once, on the first pick. A failed read just shows nothing. */
+  const choose = async (q: GoalQuality) => {
+    setPick(q); setSwitchedFrom(null); setKept(false);
+    if (sugState !== "idle") return;
+    setSugState("loading");
+    try {
+      const { res, j } = await call("GET", undefined, "/api/player/goal-plan/suggestion");
+      if (!res.ok) { setSugState("error"); return; }
+      setSuggestions((j.byQuality ?? null) as Record<GoalQuality, Suggestion> | null);
+      setSugState("ready");
+    } catch {
+      setSugState("error");
+    }
+  };
 
   /** Earlier goals are read only when the player opens them. */
   const toggleHistory = async () => {
@@ -138,10 +192,10 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
   const send = async () => {
     if (!pick) return;
     setBusy(true); setMsg(null);
-    const { res, j } = await call("POST", { quality: pick, note: note.trim() || undefined });
+    const { res, j } = await call("POST", { quality: pick, note: note.trim() || undefined, switchedFrom: switchedFrom ?? undefined });
     setBusy(false);
     if (!res.ok) { setMsg(errText(j, T("Could not send. Try again.", "Tókst ekki að senda. Reyndu aftur."))); return; }
-    setPick(null); setNote(""); setReload((n) => n + 1);
+    setPick(null); setNote(""); setSwitchedFrom(null); setKept(false); setReload((n) => n + 1);
   };
 
   const withdraw = async () => {
@@ -211,7 +265,7 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
                 const disabled = !!e.blocked;
                 const active = pick === e.quality;
                 return (
-                  <button key={e.quality} type="button" disabled={disabled} onClick={() => setPick(e.quality)}
+                  <button key={e.quality} type="button" disabled={disabled} onClick={() => void choose(e.quality)}
                     className={`rounded-xl border px-4 py-3 text-left transition ${active ? "border-primary bg-primary/5" : "border-slate-200 bg-white hover:bg-slate-50"} disabled:cursor-not-allowed disabled:opacity-60`}>
                     <span className="block text-sm font-semibold text-slate-900">{L(q.label)}</span>
                     <span className="block text-xs text-slate-500">{disabled && e.blockedText ? L(e.blockedText) : L(q.sub)}</span>
@@ -221,6 +275,15 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
             </div>
             {pick ? (
               <>
+                {(() => {
+                  const s = suggestions?.[pick] ?? null;
+                  const target = s ? (eligibility ?? []).find((e) => e.quality === s.suggested) : null;
+                  if (sugState === "loading") return <p className="text-xs text-slate-400">{T("Checking your data…", "Les gögnin þín…")}</p>;
+                  if (!s || !target || target.blocked) return null;
+                  if (kept) return <p className="text-xs text-slate-500">{T(`You kept ${L(QUALITY[pick].label).toLowerCase()}. Your coach sees the suggestion and your choice.`, `Þú hélst ${Q_DAT[pick]}. Þjálfarinn sér tillöguna og val þitt.`)}</p>;
+                  return <SuggestionCard s={s} from={pick} is={is} onSwitch={() => { setSwitchedFrom(pick); setPick(s.suggested); setKept(false); }} onKeep={() => setKept(true)} />;
+                })()}
+                {switchedFrom ? <p className="text-xs text-slate-500">{T(`Switched from ${L(QUALITY[switchedFrom].label).toLowerCase()}. Your coach sees the suggestion and your choice.`, `Skipt úr ${Q_DAT[switchedFrom]}. Þjálfarinn sér tillöguna og val þitt.`)}</p> : null}
                 <label className="block text-sm text-slate-700">
                   <span className="text-xs font-semibold">{T("Anything your coach should know? (optional)", "Eitthvað sem þjálfarinn ætti að vita? (valfrjálst)")}</span>
                   <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={PLAYER_NOTE_MAX} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />

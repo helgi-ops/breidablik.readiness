@@ -52,7 +52,7 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-function toSport(raw: string | null | undefined): GoalSport {
+export function toSport(raw: string | null | undefined): GoalSport {
   const s = String(raw ?? "").trim().toLowerCase();
   if (s === "football" || s === "soccer") return "football";
   if (s === "basketball") return "basketball";

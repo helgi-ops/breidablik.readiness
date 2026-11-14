@@ -267,6 +267,38 @@ Helgi picked "reminder to the coach" (nothing to players). Without a start test 
 - Verified on Demo GPS Pro: day 5 without a start test → start test; week 7 without a retest → retest; finished with
   a retest and week 5 → nothing; another team 0; not in the threshold-alert set; digest line present; cleanup to 0.
 
+## Lota 7: "your data points more to …" (2026-11-14)
+
+Helgi: a player picks top speed, but the data says their main weakness is something else, so the system suggests
+that instead. The player decides; the coach sees the same read and what the player did.
+
+- **Rule** (`priority.ts`, pure, rules not AI): each quality gets one number per player, ranked against the same
+  position on the team (whole team when fewer than 4 share it) with Total Player Analysis' own percentile, pools and
+  confidence (`buildAthleteProfile`). A suggestion shows only when another quality is in the **bottom third (≤30th
+  percentile)** and the picked one is in the **top half (≥50th)** (`CHOSEN_MIN_PCTL`). Two candidates → the lowest.
+  Never for a blocked quality (top speed for goalkeepers / basketball), a low-confidence read, or a pick with no
+  number. Goalkeepers are ranked only against goalkeepers (none of our teams has 4, so they get no suggestion).
+- **Numbers:** top speed = 3rd-fastest GPS day in 12 months or a faster sprint test (the plan's own reference); jump
+  = latest CMJ on the force plates ≤12 months, mean of its jumps; acceleration / braking = **Acc / Dec band 3 per 90
+  min of GPS time**, 12 months, ≥3 days. GPS time = stored session length, else PlayerLoad ÷ PlayerLoad per minute
+  (Breiðablik has a session length on only 73 of 2,844 days; the derived minutes cover 98%). A day counts with 20–150
+  min (stubs and all-day files out) and ≤40 band-3 efforts. A team with no band 3 (Keflavík) uses the 3rd-highest day
+  in m/s². One column per team, never mixed.
+- **Why "top half":** on 2026-11-14 the first rule ("pick not in the bottom third") suggested something on 45% of
+  Breiðablik's picks (18 of 25 players), HK 26%, Keflavík 23%. A stricter weakness mark (20th) changed almost nothing;
+  requiring the pick to be in the top half did: Breiðablik 35%, HK 22%, Keflavík 15%. Helgi chose that.
+- **Player** (My goal sheet): on the first pick the sheet reads `/api/player/goal-plan/suggestion` (read only, own
+  numbers and percentiles only, never another player's). Card: verdict → two facts → "Switch to …" / "Keep …" →
+  details (how each number is counted, band 3 = how often not how hard, the comparison group, what would make the
+  suggestion go away, the rule). Nothing new when there is no suggestion.
+- **Coach** (Goal requests): the POST reads the suggestion again server-side (the body only says which quality the
+  player switched from) and stores a snapshot on the "requested" event (`detail.priority`): "MicroPulse suggested
+  acceleration (18th percentile in position). The player kept top speed (64th)." or "… first picked top speed and
+  switched." The four numbers sit behind "Show details". Stored when sent, so it does not change later. If the read
+  fails the request still goes through without it. No DB change.
+- Verified on Demo GPS Pro: kept and switched requests stored and read back as the coach sees them; cleanup to 0
+  rows. Real teams read only. About 0.7 s per read from a laptop.
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

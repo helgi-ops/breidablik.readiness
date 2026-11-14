@@ -28,6 +28,7 @@ import type { GoalPlan, GoalQuality } from "./types";
 import { PLAN_WEEKS } from "./common";
 import { planWeekOn, type SessionVersion } from "./today";
 import { parseResultInput, type GoalResult, type SessionMark } from "./outcome";
+import type { GoalPrioritySnapshot } from "./priority";
 
 type Sb = SupabaseClient;
 
@@ -124,7 +125,11 @@ export async function playerCurrentGoal(sb: Sb, playerId: string): Promise<Omit<
 
 export async function createGoalRequest(
   sb: Sb,
-  args: { teamId: string; playerId: string; userId: string; quality: GoalQuality; note: string | null },
+  args: {
+    teamId: string; playerId: string; userId: string; quality: GoalQuality; note: string | null;
+    /** Lota 7: the "most to gain" suggestion the player saw and what they did (null = none shown). */
+    priority?: GoalPrioritySnapshot | null;
+  },
 ): Promise<{ id: string }> {
   const { base } = await loadGoalPlanBase(sb, args.teamId, args.playerId, todayIso());
   const proposal = buildGoalPlan({ ...base, quality: args.quality });
@@ -141,7 +146,9 @@ export async function createGoalRequest(
     throw new Error(error.message);
   }
   const row = data as { id: string; team_id: string; player_id: string };
-  await logEvent(sb, row, "requested", { userId: args.userId, role: "player" }, null, { quality: args.quality, rule_start: proposal.start });
+  await logEvent(sb, row, "requested", { userId: args.userId, role: "player" }, null, {
+    quality: args.quality, rule_start: proposal.start, ...(args.priority ? { priority: args.priority } : {}),
+  });
   return { id: row.id };
 }
 
