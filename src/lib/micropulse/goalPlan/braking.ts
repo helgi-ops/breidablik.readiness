@@ -274,7 +274,7 @@ const W7: DrillRow[] = [
 /** The plan's building blocks (Dos'Santos sessions), shared with the Programme Library team plans (`qualityPlans.ts`). */
 export const BRAKING_BLOCKS = { drills, landings, eccentric, cutTest, CUES, SUB, QUARTER, FULL, REACT, EFFORT, EFFORT_LABEL, W1, W2, W3A, W3B, W4A, W4B, W5A, W5B, W7 };
 
-/** The goal plan's 8 weeks. `level` is for the Programme Library; player goal plans use intermediate (the default). */
+/** The goal plan's 8 weeks. `level`: the Programme Library's or the coach's choice for a goal plan (lota 5); intermediate is the default. */
 export function brakingWeeks(start: BrakingStart, weakerLeg: GoalPlanInput["weakerLeg"], level: TrainingLevel = "intermediate") {
   const lands = landings(weakerLeg, level);
   const E = EFFORT[level];
@@ -343,7 +343,7 @@ export function buildBrakingParts(input: GoalPlanInput): GoalParts {
       : { en: "If the player had been braking hard much more than usual, the plan would stay at 50–75% technique with no extra hard stops.", is: "Ef leikmaðurinn hefði bremsað hart mun meira en venjulega héldist áætlunin á 50–75% tækni án auka harðra stoppa." },
     evidence: "partly",
     confidence: { level: used.length === 2 ? "high" : used.length === 1 ? "moderate" : "low", used, missing },
-    weeks: brakingWeeks(start, input.weakerLeg),
+    weeks: brakingWeeks(start, input.weakerLeg, input.level ?? "intermediate"),
     tests: {
       weeks: start === "technique_only" ? [] : [1, 8],
       what: start === "technique_only"

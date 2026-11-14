@@ -296,7 +296,7 @@ export const JUMP_BLOCKS = { rebound, drop, squatSpeed, heavy, techSquat, cmjTes
 const advancedDrops = (i: number): GoalBlock[] => (i >= 2 && i < 7 ? [drop(2, 5, i < 4 ? 30 : 40)] : []);
 
 /**
- * The goal plan's 8 weeks. `level` is for the Programme Library; player goal plans use intermediate (the default).
+ * The goal plan's 8 weeks. `level`: the Programme Library's or the coach's choice for a goal plan (lota 5); intermediate is the default.
  * Beginner: one rebound set fewer, about 50 contacts with every landing held still, technique-first squats (the
  * fast-jumps start is not offered at this level). Advanced: about 70 contacts, drop jumps from week 3, squats one
  * step heavier. Youth ignores the level.
@@ -426,7 +426,7 @@ export function buildJumpParts(input: GoalPlanInput): GoalParts {
     counterfactual,
     evidence: "partly",
     confidence: { level: used.length >= 2 ? "high" : used.length === 1 ? "moderate" : "low", used, missing },
-    weeks: jumpWeeks(start),
+    weeks: jumpWeeks(start, input.level ?? "intermediate"),
     tests: {
       weeks: [1, 4, 8],
       what: { en: "Jump test (CMJ) in weeks 1, 4 and 8, same device each time. Gains often show 1–2 weeks after the last hard week (Ebben), so test again a week after the plan ends too.", is: "Stökkpróf (CMJ) í vikum 1, 4 og 8, sama tæki í hvert sinn. Bæting sést oft 1–2 vikum eftir síðustu erfiðu vikuna (Ebben), svo prófaðu líka aftur viku eftir að áætluninni lýkur." },

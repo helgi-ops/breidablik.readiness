@@ -31,10 +31,10 @@ describe("power before strength in every session", () => {
     }
   });
 
-  it("top-speed goal plan, every start and gym emphasis", () => {
-    for (const start of ["build_first", "ready"] as const) for (const e of ["strength", "power", "balanced"] as const) {
-      for (const w of topSpeedWeeks(start, e)) for (const s of w.sessions) {
-        expect(powerAfterStrength(s.blocks), `${start}/${e} · ${w.label.en}`).toBeNull();
+  it("top-speed goal plan, every start, gym emphasis and level", () => {
+    for (const lv of TRAINING_LEVELS) for (const start of ["build_first", "ready"] as const) for (const e of ["strength", "power", "balanced"] as const) {
+      for (const w of topSpeedWeeks(start, e, lv)) for (const s of w.sessions) {
+        expect(powerAfterStrength(s.blocks), `${lv} ${start}/${e} · ${w.label.en}`).toBeNull();
       }
     }
   });

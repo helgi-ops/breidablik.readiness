@@ -10,6 +10,8 @@
  */
 
 import type { Bi } from "@/lib/micropulse/load/peakPeriod";
+import type { TrainingLevel } from "./levels";
+import type { SwapChoices, SwapMark } from "./swaps";
 
 export type { Bi };
 
@@ -66,6 +68,8 @@ export type GoalBlock = {
   supervised?: boolean;
   /** A test that measures progress. */
   test?: boolean;
+  /** Set only on a block the coach's team swap changed (lota 5): the planned exercise is kept here. */
+  swap?: SwapMark;
 };
 
 export type GoalSessionSlot = "A" | "B" | "C";
@@ -136,6 +140,11 @@ export type GoalPlanInput = {
    * safety rules allow for this player (`allowedStarts`); anything else falls back to the rule's start.
    */
   startOverride?: string | null;
+  /** The coach's level for this plan (lota 5; default the team's saved level, else intermediate). Ignored under 18
+   *  and when the level is not offered for the start (`allowedLevels`). */
+  level?: TrainingLevel | null;
+  /** The team's saved exercise swaps for this quality (Programme Library). Only the exercise changes, never the dose. */
+  swaps?: SwapChoices | null;
 };
 
 // ─── Output ────────────────────────────────────────────────────────────────
@@ -172,4 +181,8 @@ export type GoalPlan = {
   /** "What the research does not show": honest limits, behind "Show details". */
   limits: Bi[];
   refs: GoalRef[];
+  /** The level the plan was built at (lota 5). Absent on plans approved before levels existed = intermediate. */
+  level?: TrainingLevel;
+  /** The team swaps the plan was built with (lota 5). Absent or empty = none. */
+  swaps?: SwapChoices;
 };

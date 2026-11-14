@@ -11,6 +11,8 @@
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import type { Bi, GoalPlan, GoalQuality, GoalWeek } from "@/lib/micropulse/goalPlan/types";
+import { LEVEL_LABEL } from "@/lib/micropulse/goalPlan/levels";
+import { SWAPPED_BY_COACH } from "@/lib/micropulse/goalPlan/swaps";
 
 const QUALITY: Record<GoalQuality, Bi> = {
   top_speed: { en: "Top speed", is: "Hámarkshraði" },
@@ -123,6 +125,12 @@ export function GoalPlanView({ plan, isEN }: { plan: GoalPlan; isEN: boolean }) 
                 <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">{L(CONF[plan.confidence.level])}</span>
                 <span className="text-slate-500">{T(`${plan.sessionsPerWeek} short sessions a week · 8 weeks`, `${plan.sessionsPerWeek} stuttar æfingar á viku · 8 vikur`)}</span>
                 {plan.youthLevel ? <span className="rounded bg-[#de9328]/15 px-1.5 py-0.5 text-[#8a5a12]">{T("Easier level, coach at every session", "Léttara stig, þjálfari við hverja æfingu")}</span> : null}
+                {!plan.youthLevel && plan.level ? <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">{T("Level", "Stig")}: {L(LEVEL_LABEL[plan.level])}</span> : null}
+                {swapCount(plan) > 0 ? (
+                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">
+                    {T(`${swapCount(plan)} exercise${swapCount(plan) === 1 ? "" : "s"} swapped by the coach`, `${swapCount(plan)} ${swapCount(plan) === 1 ? "æfingu" : "æfingum"} skipt af þjálfara`)}
+                  </span>
+                ) : null}
               </div>
               {plan.counterfactual ? <p className="mt-2 text-[11.5px] text-slate-500"><span className="font-semibold">{T("What would change it:", "Hvað myndi breyta því:")}</span> {L(plan.counterfactual)}</p> : null}
               {plan.confidence.missing.length ? (
@@ -137,6 +145,11 @@ export function GoalPlanView({ plan, isEN }: { plan: GoalPlan; isEN: boolean }) 
           ) : null}
         </div>
   );
+}
+
+/** How many different exercises the team's swaps changed in this plan (lota 5). */
+function swapCount(plan: GoalPlan): number {
+  return Object.keys(plan.swaps ?? {}).length;
 }
 
 function Details({ plan, L, T }: { plan: GoalPlan; L: (b: Bi) => string; T: (en: string, is: string) => string }) {
@@ -170,6 +183,11 @@ function Details({ plan, L, T }: { plan: GoalPlan; L: (b: Bi) => string; T: (en:
                   {s.blocks.map((b, bi) => (
                     <div key={bi} className={bi ? "mt-1" : ""}>
                       <span className="font-medium">{L(b.what)}</span>: {L(b.dose)}
+                      {b.swap?.swapped ? (
+                        <span className="ml-1 rounded bg-primary/10 px-1 text-[10px] text-primary">
+                          {L(SWAPPED_BY_COACH)} · {T("planned", "í áætlun")}: {L(b.swap.planned)}
+                        </span>
+                      ) : null}
                       {b.supervised ? <span className="ml-1 rounded bg-primary/10 px-1 text-[10px] text-primary">{T("coach there", "þjálfari á staðnum")}</span> : null}
                       {b.test ? <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-600">{T("test", "mæling")}</span> : null}
                     </div>

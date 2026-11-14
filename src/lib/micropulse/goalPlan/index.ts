@@ -34,7 +34,10 @@ import {
   topSpeedRefs,
   topSpeedStart,
   topSpeedWeeks,
+  TOP_SPEED_LEVEL_CHANGES,
 } from "./topSpeed";
+import { DEFAULT_LEVEL, LEVEL_BASIS, LEVEL_CHANGES, TRAINING_LEVELS, type TrainingLevel } from "./levels";
+import { SWAP_NOTE, applySwaps, swapMark, validateSwaps, type SwapChoices, type SwapSlotKey } from "./swaps";
 import { ACCEL_START_LABEL, accelAllowed, accelStart, buildAccelerationParts } from "./acceleration";
 import { BRAKING_START_LABEL, brakingAllowed, brakingStart, buildBrakingParts } from "./braking";
 import { JUMP_START_LABEL, buildJumpParts, jumpAllowed, jumpStart } from "./jump";
@@ -91,7 +94,7 @@ function topSpeedParts(input: GoalPlanInput): GoalParts {
     counterfactual: why.counterfactual,
     evidence: "researched",
     confidence: { level, used, missing },
-    weeks: topSpeedWeeks(start, emphasis),
+    weeks: topSpeedWeeks(start, emphasis, input.level ?? "intermediate"),
     tests: {
       weeks: testWeeks,
       what: { en: `Flying 20 m or GPS top speed in week ${testWeeks[0]} and week 8.`, is: `Fljúgandi 20 m eða hámarkshraði úr GPS í viku ${testWeeks[0]} og viku 8.` },
@@ -143,6 +146,40 @@ export function allowedStarts(input: GoalPlanInput): { key: string; label: Bi; r
   return ordered.map((key) => ({ key, label: START_LABELS[input.quality][key], rule: key === rule }));
 }
 
+/** The start the plan will use: the coach's choice when the safety rules allow it, else the rule's. */
+export function chosenStart(input: GoalPlanInput): string {
+  const o = input.startOverride;
+  return o && allowedStarts(input).some((s) => s.key === o) ? o : ruleStart(input);
+}
+
+/**
+ * The levels a coach may pick for this player and start (lota 5). Under 18: none, the youth rules hold at every level.
+ * The fast-jumps start is built on drop jumps, so it is not offered at beginner (as in the Programme Library).
+ */
+export function allowedLevels(input: GoalPlanInput, start: string = chosenStart(input)): TrainingLevel[] {
+  if (isYouth(input.ageYears)) return [];
+  if (input.quality === "jump" && start === "fast_jumps") return TRAINING_LEVELS.filter((l) => l !== "beginner");
+  return TRAINING_LEVELS;
+}
+
+/** The coach's level when it is offered for this start, else intermediate (the plan as built from the studies). */
+export function resolveLevel(input: GoalPlanInput, start: string = chosenStart(input)): TrainingLevel {
+  const want = input.level ?? DEFAULT_LEVEL;
+  return allowedLevels(input, start).includes(want) ? want : DEFAULT_LEVEL;
+}
+
+/** What the level changes against intermediate, for this quality's goal plan. */
+export function levelChange(quality: GoalQuality, level: Exclude<TrainingLevel, "intermediate">): Bi {
+  return quality === "top_speed" ? TOP_SPEED_LEVEL_CHANGES[level] : LEVEL_CHANGES[quality][level];
+}
+
+/**
+ * Which fact the level line takes the place of: the one the level makes less true or less central. Top speed keeps
+ * its two "why" facts and gives up "expect small gains"; the others give up their dose fact (the jump fact names
+ * about 55 contacts, which no longer holds, so it is dropped; the others move to "what the research does not show").
+ */
+const LEVEL_FACT_SLOT: Record<GoalQuality, number> = { top_speed: 2, acceleration: 1, braking: 1, jump: 1 };
+
 function partsFor(input: GoalPlanInput): GoalParts {
   switch (input.quality) {
     case "top_speed": return topSpeedParts(input);
@@ -169,6 +206,8 @@ export function buildGoalPlan(input: GoalPlanInput): GoalPlan {
     const text = blockedText(reason);
     return {
       ...base,
+      level: DEFAULT_LEVEL,
+      swaps: {},
       status: "blocked",
       blocked: { reason, text },
       verdict: { en: `${QUALITY_LABEL[input.quality].en}: no plan now.`, is: `${QUALITY_LABEL[input.quality].is}: engin áætlun núna.` },
@@ -186,7 +225,9 @@ export function buildGoalPlan(input: GoalPlanInput): GoalPlan {
       refs: [],
     };
   }
-  const p = partsFor(input);
+  // Level (lota 5): the coach's choice when offered for this start; youth and fast jumps at beginner fall back.
+  const level = resolveLevel(input);
+  const p = partsFor({ ...input, level });
   // The coach chose another allowed start: the data-based "why" no longer explains the start, so it is replaced
   // by a plain note that the coach chose it (the reason is logged with the decision), and the "what would change
   // it" line is dropped.
@@ -204,11 +245,33 @@ export function buildGoalPlan(input: GoalPlanInput): GoalPlan {
     p.branch = { ...p.branch, why: coachWhy };
     p.counterfactual = null;
   }
-  const facts = youth
+  let facts = youth
     ? [...p.facts.slice(0, 2), input.ageYears == null
         ? { en: "Age not on record, so the plan uses the easier level and a coach is there for every session. Add the date of birth to change this.", is: "Aldur ekki skráður, svo áætlunin notar léttara stigið og þjálfari er við hverja æfingu. Skráðu fæðingardag til að breyta því." }
         : { en: `Under 18 (${input.ageYears}), so the plan uses the easier level and a coach is there for every session.`, is: `Undir 18 ára (${input.ageYears}), svo áætlunin notar léttara stigið og þjálfari er við hverja æfingu.` }]
     : p.facts.slice(0, 3);
+  let limits = p.limits;
+  if (level !== "intermediate") {
+    const i = LEVEL_FACT_SLOT[input.quality];
+    const replaced = facts[i];
+    const line = levelChange(input.quality, level);
+    facts = i < facts.length ? facts.map((f, j) => (j === i ? line : f)) : [...facts, line];
+    limits = [LEVEL_BASIS, ...(replaced && input.quality !== "jump" ? [replaced] : []), ...limits];
+  }
+
+  // Team swaps (lota 5): only the exercise changes, never the dose or the counters; only swapped blocks are marked,
+  // so a plan without swaps is exactly what it was.
+  let weeks = applySupervision(trimSessions(p.weeks, perWeek), youth);
+  const wanted = validateSwaps(input.quality, input.swaps) ?? {};
+  const used: SwapChoices = {};
+  if (Object.keys(wanted).length > 0) {
+    weeks = applySwaps({ weeks }, input.quality, wanted, { onlySwapped: true }).weeks;
+    for (const w of weeks) for (const s of w.sessions) for (const b of s.blocks) {
+      const m = swapMark(b);
+      if (m?.swapped) used[m.slot as SwapSlotKey] = m.option;
+    }
+    if (Object.keys(used).length > 0) limits = [...limits, SWAP_NOTE];
+  }
   return {
     ...base,
     status: "ok",
@@ -221,10 +284,12 @@ export function buildGoalPlan(input: GoalPlanInput): GoalPlan {
     counterfactual: p.counterfactual,
     evidence: p.evidence,
     confidence: p.confidence,
-    weeks: applySupervision(trimSessions(p.weeks, perWeek), youth),
+    weeks,
     tests: p.tests,
     safety: [...p.safety, ...COMMON_SAFETY],
-    limits: p.limits,
+    limits,
     refs: p.refs,
+    level,
+    swaps: used,
   };
 }

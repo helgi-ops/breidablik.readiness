@@ -256,7 +256,8 @@ export type GoalTodayCard = {
     focus: Bi;
     minutes: number;
     version: SessionVersion;
-    blocks: { what: Bi; dose: Bi; supervised: boolean }[];
+    /** `swapped`: the team swapped this exercise (lota 5); the dose is the planned one. */
+    blocks: { what: Bi; dose: Bi; supervised: boolean; swapped?: boolean }[];
     /** The player's tick on it (lota 4). */
     mark: SessionMark["status"] | null;
   };
@@ -421,7 +422,7 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
     const v = sessionForColour(s, input.colour);
     today = {
       slot: s.slot, focus: s.focus, minutes: v.version === "full" ? s.minutes : Math.max(5, Math.round(s.minutes / 2)), version: v.version,
-      blocks: v.blocks.map((b) => ({ what: b.what, dose: b.dose, supervised: b.supervised === true })),
+      blocks: v.blocks.map((b) => ({ what: b.what, dose: b.dose, supervised: b.supervised === true, ...(b.swap?.swapped ? { swapped: true } : {}) })),
       mark: markOf(s.slot),
     };
     const name = `${cap(slotName(s.slot)).en}: ${s.focus.en}`;

@@ -11,6 +11,8 @@
 import { Document, Text, View } from "@react-pdf/renderer";
 import type { Bi, GoalPlan } from "@/lib/micropulse/goalPlan/types";
 import { QUALITY_LABEL } from "@/lib/micropulse/goalPlan/common";
+import { LEVEL_LABEL } from "@/lib/micropulse/goalPlan/levels";
+import { SWAPPED_BY_COACH } from "@/lib/micropulse/goalPlan/swaps";
 import { EVENT_LABEL, STATUS_LABEL, type GoalPlanEventRow, type GoalPlanStatus } from "@/lib/micropulse/goalPlan/requests";
 import { MEASURE_DEF, PHASE_LABEL, type GoalProgress } from "@/lib/micropulse/goalPlan/outcome";
 import { BrandPage, Bullets, C, FactRow, Provenance, Section, Table, Verdict, clean, fb, fh, fileSafe, renderPdfBlob, saveBlob, type Tone } from "@/components/pdf/brand";
@@ -109,6 +111,7 @@ export function GoalPlanDoc({ d, lang }: { d: GoalPlanPdfData; lang: Lang }) {
 
         <Section title={T("Why this plan", "Af hverju þessi áætlun")}>
           <Bullets items={[...new Set([L(plan.verdict), ...plan.facts.map(L), ...(plan.branch ? [L(plan.branch.why)] : []), ...(plan.counterfactual ? [L(plan.counterfactual)] : [])])]} />
+          {!plan.youthLevel && plan.level ? <Provenance>{`${T("Level", "Stig")}: ${L(LEVEL_LABEL[plan.level])}`}</Provenance> : null}
           {d.coachNote ? <Provenance>{`${T("Coach's note to the player:", "Skilaboð þjálfara til leikmanns:")} ${clean(d.coachNote)}`}</Provenance> : null}
         </Section>
 
@@ -125,7 +128,7 @@ export function GoalPlanDoc({ d, lang }: { d: GoalPlanPdfData; lang: Lang }) {
                 ]}
                 rows={w.sessions.flatMap((s) => s.blocks.map((b, i) => [
                   i === 0 ? `${s.slot} · ${L(s.focus)}` : "",
-                  L(b.what),
+                  b.swap?.swapped ? `${L(b.what)} (${L(SWAPPED_BY_COACH)}; ${T("planned", "í áætlun")}: ${L(b.swap.planned)})` : L(b.what),
                   L(b.dose),
                 ]))}
                 rowTone={(i) => (w.sessions.flatMap((s) => s.blocks)[i]?.test ? "cobalt" : null)}

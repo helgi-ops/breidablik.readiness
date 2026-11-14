@@ -10,8 +10,8 @@
  * - Swaps replace whole phrases (never word by word, because of Icelandic case endings), in both languages.
  * - Tests, the tested braking drills (Dos'Santos), flying sprints, Nordic curls, the squat by bar speed (its speed
  *   numbers only hold for that lift), drop jumps and the youth hops are never swappable.
- * - Goal plans never pass through here: a player's frozen plan is never changed. GoalBlock gets no new fields;
- *   the swap mark lives only on the library's copy of a plan.
+ * - Goal plans (lota 5) take the team's swaps when the plan is built or approved, and only swapped blocks get a mark
+ *   (`onlySwapped`), so a goal plan without swaps is byte-for-byte what it was. A frozen, approved plan never changes.
  */
 
 import type { Bi, GoalQuality } from "./types";
@@ -299,10 +299,16 @@ export function swapMark(b: object): SwapMark | undefined {
 type PlanLike<B extends BlockLike> = { weeks: { sessions: { blocks: B[] }[] }[] };
 
 /**
- * The library's copy of a plan with the team's swaps applied. Every swappable block carries a `swap` mark (so the
- * page can offer "Swap"); swapped blocks get the new exercise name and dose wording. Everything else is copied as is.
+ * A copy of a plan with the team's swaps applied. Swapped blocks get the new exercise name and dose wording and a
+ * `swap` mark. In the library every swappable block is marked (so the page can offer "Swap"); with `onlySwapped`
+ * (goal plans) a block that was not swapped is copied untouched. Everything else is copied as is.
  */
-export function applySwaps<B extends BlockLike, P extends PlanLike<B>>(plan: P, quality: GoalQuality, choices: SwapChoices): P {
+export function applySwaps<B extends BlockLike, P extends PlanLike<B>>(
+  plan: P,
+  quality: GoalQuality,
+  choices: SwapChoices,
+  opts: { onlySwapped?: boolean } = {},
+): P {
   return {
     ...plan,
     weeks: plan.weeks.map((w) => ({
@@ -315,7 +321,7 @@ export function applySwaps<B extends BlockLike, P extends PlanLike<B>>(plan: P, 
           const opt = slot.options.find((o) => o.key === choices[slot.key]) ?? slot.options[0];
           const swapped = opt.key !== PLANNED;
           const mark: SwapMark = { slot: slot.key, option: opt.key, swapped, planned: slot.options[0].label };
-          if (!swapped) return { ...b, swap: mark };
+          if (!swapped) return opts.onlySwapped ? b : { ...b, swap: mark };
           return {
             ...b,
             what: { en: replaceAll(b.what.en, opt.edits.en), is: replaceAll(b.what.is, opt.edits.is) },

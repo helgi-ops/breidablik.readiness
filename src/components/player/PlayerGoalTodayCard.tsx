@@ -130,6 +130,7 @@ export function GoalTodayCardView({ card, lang = "EN", onMark, busy = false, err
               <li key={i} className="text-[12.5px] leading-snug text-zinc-700">
                 <span className="font-semibold text-zinc-900">{L(b.what)}</span>
                 {b.supervised ? <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{T("with a coach", "með þjálfara")}</span> : null}
+                {b.swapped ? <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{T("chosen by your coach", "valið af þjálfara")}</span> : null}
                 <span className="block text-zinc-600">{L(b.dose)}</span>
               </li>
             ))}

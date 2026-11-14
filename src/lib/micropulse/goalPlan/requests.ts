@@ -8,6 +8,7 @@
 import type { Bi, GoalBlockReason, GoalPlan, GoalQuality } from "./types";
 import { GOAL_QUALITIES } from "./types";
 import { PLAN_WEEKS } from "./common";
+import { isTrainingLevel, type TrainingLevel } from "./levels";
 
 export type GoalPlanStatus = "requested" | "approved" | "declined" | "cancelled" | "paused" | "completed";
 
@@ -121,7 +122,7 @@ export function cleanPlayerNote(v: unknown): string | null {
 }
 
 export type GoalDecision =
-  | { action: "approve"; startDate: string; start: string | null; reason: string | null; noteToPlayer: string | null }
+  | { action: "approve"; startDate: string; start: string | null; reason: string | null; noteToPlayer: string | null; level: TrainingLevel | null }
   | { action: "decline"; reason: string; noteToPlayer: string | null }
   | { action: "stop"; reason: string }
   | { action: "resume"; startDate: string; fromWeek: number; reason: string | null; noteToPlayer: string | null };
@@ -179,7 +180,11 @@ export function parseDecision(body: unknown, todayIso: string, ruleStart: string
   const start = typeof b.start === "string" && b.start ? b.start : null;
   const changed = !!start && !!ruleStart && start !== ruleStart;
   if (changed && !hasReason) return { ok: false, error: `Changing the start needs a reason (at least ${REASON_MIN} characters).` };
-  return { ok: true, value: { action: "approve", startDate, start: changed ? start : null, reason: changed ? reason : null, noteToPlayer } };
+  // Lota 5: the coach's level (null = the team's saved level). Whether it is offered for the start is checked on the
+  // server against the player's data (`allowedLevels`).
+  if (b.level != null && !isTrainingLevel(b.level)) return { ok: false, error: "Unknown level." };
+  const level = b.level == null ? null : (b.level as TrainingLevel);
+  return { ok: true, value: { action: "approve", startDate, start: changed ? start : null, reason: changed ? reason : null, noteToPlayer, level } };
 }
 
 /** Which statuses each decision may act on. */

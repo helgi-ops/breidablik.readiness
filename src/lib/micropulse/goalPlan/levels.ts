@@ -7,7 +7,7 @@
  * the lines below say who each level is for, as guidance, not as a rule from a study. Under 18 the youth rules hold
  * at every level, and the youth start in "Individual" is its own level (no picker).
  *
- * Player goal plans do not use levels yet: they stay at intermediate until the next lota.
+ * Player goal plans use the same levels since lota 5 (the coach picks one at approval; `allowedLevels`).
  */
 
 import type { Bi, GoalQuality } from "./types";

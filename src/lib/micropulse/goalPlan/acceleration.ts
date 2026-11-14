@@ -269,7 +269,7 @@ export const ACCEL_BLOCKS = { starts, sled, bounds, lowBounds, singleLegBounds, 
 
 const offSeason = (level: TrainingLevel): GoalSession => ({ slot: "C", focus: { en: "Starts (short)", is: "Stört (stutt)" }, when: WHEN.off_day, minutes: 10, blocks: [starts(level === "beginner" ? "3" : level === "advanced" ? "5" : "4", "10")] });
 
-/** The goal plan's 8 weeks. `level` is for the Programme Library; player goal plans use intermediate (the default). */
+/** The goal plan's 8 weeks. `level`: the Programme Library's or the coach's choice for a goal plan (lota 5); intermediate is the default. */
 export function accelWeeks(start: AccelStart, youth: boolean, level: TrainingLevel = "intermediate") {
   const lv: TrainingLevel = youth || start === "youth" ? "intermediate" : level;
   return expandWeeks([
@@ -336,7 +336,7 @@ export function buildAccelerationParts(input: GoalPlanInput): GoalParts {
     counterfactual,
     evidence: "partly",
     confidence: { level: used.length === 2 ? "high" : used.length === 1 ? "moderate" : "low", used, missing },
-    weeks: accelWeeks(start, youth),
+    weeks: accelWeeks(start, youth, input.level ?? "intermediate"),
     tests: {
       weeks: [1, 8],
       what: { en: "Timed 10 m from a standing start in week 1 and week 8. Hand timing is not precise enough: use timing gates or a video app.", is: "Tímamældur 10 m frá kyrrstöðu í viku 1 og viku 8. Handtímataka er ekki nógu nákvæm: notaðu tímahlið eða myndbandsforrit." },

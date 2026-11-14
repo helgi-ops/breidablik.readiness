@@ -11,6 +11,7 @@ import { DUE_DAYS, LONG_GAP_DAYS } from "@/lib/micropulse/nearMaxExposure";
 import { MAX_FLYING_M_PER_SESSION, SPEED_REFS, type SpeedRefKey } from "@/lib/micropulse/speedMethods";
 import { BAND_LABEL, WHEN, expandWeeks, weekLabel } from "./common";
 import type { Bi, GoalBlock, GoalPlanInput, GoalRef, GoalSession, GoalWeek } from "./types";
+import type { TrainingLevel } from "./levels";
 
 export type TopSpeedStart = "build_first" | "ready";
 export type SessionBEmphasis = "strength" | "power" | "balanced";
@@ -50,10 +51,45 @@ const speedTest = (reps: number): GoalBlock => ({
   },
 });
 
-/** Session B by emphasis. `light` = test week / ease-off week. */
-function sessionB(emphasis: SessionBEmphasis, light: boolean): GoalSession {
-  const blocks: GoalBlock[] =
-    emphasis === "strength"
+/** Beginner: the heavy lift is done technique first (same exercise, lighter, reps in reserve). */
+const techLegs = (light: boolean): GoalBlock => ({
+  method: "heavy_strength",
+  what: { en: "Leg strength, technique first", is: "Fótastyrkur, tækni fyrst" },
+  dose: light
+    ? { en: "Squat or trap-bar deadlift 2 × 5, technique first", is: "Hnébeygja eða trap bar 2 × 5, tækni fyrst" }
+    : { en: "Squat or trap-bar deadlift 3 × 5, technique first, 2–3 reps in reserve", is: "Hnébeygja eða trap bar 3 × 5, tækni fyrst, 2–3 endurtekningar eftir" },
+});
+
+/** Session B by emphasis. `light` = test week / ease-off week. Level (lota 5): beginner lifts technique first and
+ *  jumps less; advanced lifts one set heavier and jumps more. Intermediate is the plan as it was. */
+function sessionB(emphasis: SessionBEmphasis, light: boolean, level: TrainingLevel = "intermediate"): GoalSession {
+  const beg = level === "beginner";
+  const adv = level === "advanced";
+  const plyo = light ? (beg ? 30 : adv ? 50 : 40) : beg ? 40 : adv ? 80 : 60;
+  const blocks: GoalBlock[] = beg && emphasis !== "power"
+    ? [
+        ...(emphasis === "balanced" ? [{ method: "jump_squat", what: { en: "Light jump squats", is: "Hnébeygjuhopp með léttri þyngd" }, dose: { en: "2 × 5, fast", is: "2 × 5, hratt" } } as GoalBlock] : []),
+        techLegs(light),
+        ...(emphasis === "strength" ? [{ method: "nordic", what: { en: "Nordic curls (for the hamstrings, not for speed)", is: "Nordic (fyrir aftanlærið, ekki fyrir hraða)" }, dose: { en: "2 × 3", is: "2 × 3" } } as GoalBlock] : []),
+      ]
+    : adv && emphasis === "strength"
+      ? [
+          { method: "heavy_strength", what: { en: "Heavy legs", is: "Þungar fætur" }, dose: light
+            ? { en: "Squat or trap-bar deadlift 2 × 3 heavy", is: "Hnébeygja eða trap bar 2 × 3 þungt" }
+            : { en: "Squat or trap-bar deadlift 4 × 3–5 heavy · Romanian deadlift 3 × 6", is: "Hnébeygja eða trap bar 4 × 3–5 þungt · rúmensk réttstöðulyfta 3 × 6" } },
+          { method: "nordic", what: { en: "Nordic curls (for the hamstrings, not for speed)", is: "Nordic (fyrir aftanlærið, ekki fyrir hraða)" }, dose: { en: light ? "2 × 3" : "3 × 4", is: light ? "2 × 3" : "3 × 4" } },
+        ]
+    : (beg || adv) && emphasis === "power"
+      ? [
+          { method: "plyometrics", contacts: plyo, what: { en: "Jumps and forward bounds", is: "Hopp og skrefstökk áfram" }, dose: { en: `${plyo} foot contacts`, is: `${plyo} snertingar` } },
+          { method: "jump_squat", what: { en: "Light jump squats", is: "Hnébeygjuhopp með léttri þyngd" }, dose: { en: `${light ? 2 : beg ? 3 : 5} × 5, fast`, is: `${light ? 2 : beg ? 3 : 5} × 5, hratt` } },
+        ]
+    : adv && emphasis === "balanced"
+      ? [
+          { method: "jump_squat", what: { en: "Light jump squats", is: "Hnébeygjuhopp með léttri þyngd" }, dose: { en: `${light ? 2 : 4} × 5, fast`, is: `${light ? 2 : 4} × 5, hratt` } },
+          { method: "heavy_strength", what: { en: "Heavy legs", is: "Þungar fætur" }, dose: { en: light ? "Squat or trap-bar deadlift 2 × 3" : "Squat or trap-bar deadlift 3–4 × 3–5 heavy", is: light ? "Hnébeygja eða trap bar 2 × 3" : "Hnébeygja eða trap bar 3–4 × 3–5 þungt" } },
+        ]
+    : emphasis === "strength"
       ? [
           { method: "heavy_strength", what: { en: "Heavy legs", is: "Þungar fætur" }, dose: light
             ? { en: "Squat or trap-bar deadlift 2 × 3 heavy", is: "Hnébeygja eða trap bar 2 × 3 þungt" }
@@ -115,25 +151,53 @@ export function strengthEmphasis(input: GoalPlanInput): SessionBEmphasis {
   return "balanced";
 }
 
-export function topSpeedWeeks(start: TopSpeedStart, emphasis: SessionBEmphasis): GoalWeek[] {
-  const B = sessionB(emphasis, false);
-  const Blight = sessionB(emphasis, true);
+/**
+ * Flying zone per level (lota 5): beginner runs shorter zones (10–15 m), advanced longer zones (15–30 m) and one run
+ * more in session A outside the ease-off week, never over the flat-out cap. Intermediate is the plan as it was.
+ * The speed test is the same at every level (same test each time).
+ */
+const ZONE: Record<TrainingLevel, Record<number, number>> = {
+  beginner: { 10: 10, 15: 10, 20: 15, 30: 15 },
+  intermediate: { 10: 10, 15: 15, 20: 20, 30: 30 },
+  advanced: { 10: 15, 15: 20, 20: 25, 30: 30 },
+};
+
+export const TOP_SPEED_LEVEL_CHANGES: Record<Exclude<TrainingLevel, "intermediate">, Bi> = {
+  beginner: {
+    en: "Beginner: flying sprints over 10–15 m instead of up to 30 m, the same number of runs, with technique-first lifting and fewer jumps.",
+    is: "Byrjandi: fljúgandi sprettir á 10–15 m í stað allt að 30 m, jafnmargir sprettir, með lyftingum þar sem tæknin kemur fyrst og færri hoppum.",
+  },
+  advanced: {
+    en: `Advanced: flying sprints over 15–30 m and one run more in the main session, never more than ${MAX_FLYING_M_PER_SESSION} m flat out, with heavier lifts and more jumps.`,
+    is: `Framhald: fljúgandi sprettir á 15–30 m og einum spretti fleira á aðalæfingunni, aldrei meira en ${MAX_FLYING_M_PER_SESSION} m á fullu, með þyngri lyftingum og fleiri hoppum.`,
+  },
+};
+
+export function topSpeedWeeks(start: TopSpeedStart, emphasis: SessionBEmphasis, level: TrainingLevel = "intermediate"): GoalWeek[] {
+  const fly = (reps: number, metres: number, buildUp: string, extra = false): GoalBlock => {
+    const m = ZONE[level][metres] ?? metres;
+    let r = level === "advanced" && extra ? reps + 1 : reps;
+    while (r > 1 && r * m > MAX_FLYING_M_PER_SESSION) r -= 1;
+    return flying(r, m, buildUp);
+  };
+  const B = sessionB(emphasis, false, level);
+  const Blight = sessionB(emphasis, true, level);
   const rows =
     start === "build_first"
       ? [
           { weeks: [1, 2], label: (w: number) => weekLabel(w, "build-up", "uppbygging"), sessions: [sessionA({ en: "Build-up runs", is: "Uppbyggingarsprettir" }, [buildUps("4–6"), starts90]), B, sessionC([buildUps("4")])] },
-          { weeks: [3], label: (w: number) => weekLabel(w, "test + short flying sprints", "mæling + stuttir fljúgandi sprettir"), sessions: [sessionA({ en: "Test + sprint", is: "Mæling + sprettir" }, [speedTest(2), flying(3, 10, "20")]), B, sessionC([flying(3, 10, "20")])] },
-          { weeks: [4], label: (w: number) => weekLabel(w, "", ""), sessions: [sessionA({ en: "Sprint", is: "Sprettir" }, [flying(4, 15, "20–30")]), B, sessionC([flying(3, 15, "20–30")])] },
-          { weeks: [5, 6], label: (w: number) => weekLabel(w, "", ""), sessions: [sessionA({ en: "Sprint", is: "Sprettir" }, [flying(4, 20, "30")]), B, sessionC([flying(3, 20, "30")])] },
-          { weeks: [7], label: (w: number) => weekLabel(w, "ease off", "minna magn"), sessions: [sessionA({ en: "Sprint", is: "Sprettir" }, [flying(3, 20, "30")]), Blight] },
+          { weeks: [3], label: (w: number) => weekLabel(w, "test + short flying sprints", "mæling + stuttir fljúgandi sprettir"), sessions: [sessionA({ en: "Test + sprint", is: "Mæling + sprettir" }, [speedTest(2), fly(3, 10, "20", true)]), B, sessionC([fly(3, 10, "20")])] },
+          { weeks: [4], label: (w: number) => weekLabel(w, "", ""), sessions: [sessionA({ en: "Sprint", is: "Sprettir" }, [fly(4, 15, "20–30", true)]), B, sessionC([fly(3, 15, "20–30")])] },
+          { weeks: [5, 6], label: (w: number) => weekLabel(w, "", ""), sessions: [sessionA({ en: "Sprint", is: "Sprettir" }, [fly(4, 20, "30", true)]), B, sessionC([fly(3, 20, "30")])] },
+          { weeks: [7], label: (w: number) => weekLabel(w, "ease off", "minna magn"), sessions: [sessionA({ en: "Sprint", is: "Sprettir" }, [fly(3, 20, "30")]), Blight] },
           { weeks: [8], label: (w: number) => weekLabel(w, "test", "mæling"), sessions: [sessionA({ en: "Test", is: "Mæling" }, [speedTest(3)]), Blight] },
         ]
       : [
-          { weeks: [1], label: (w: number) => weekLabel(w, "test + short flying sprints", "mæling + stuttir fljúgandi sprettir"), sessions: [sessionA({ en: "Test + sprint", is: "Mæling + sprettir" }, [speedTest(2), flying(3, 10, "20")]), B, sessionC([flying(3, 10, "20")])] },
-          { weeks: [2, 3], label: (w: number) => weekLabel(w, "", ""), sessions: [sessionA({ en: "Sprint", is: "Sprettir" }, [flying(4, 15, "20–30")]), B, sessionC([flying(3, 15, "20–30")])] },
-          { weeks: [4, 5], label: (w: number) => weekLabel(w, "", ""), sessions: [sessionA({ en: "Sprint", is: "Sprettir" }, [flying(4, 20, "30")]), B, sessionC([flying(3, 20, "30")])] },
-          { weeks: [6], label: (w: number) => weekLabel(w, "", ""), sessions: [sessionA({ en: "Sprint", is: "Sprettir" }, [flying(3, 30, "30–40")]), B, sessionC([flying(3, 20, "30")])] },
-          { weeks: [7], label: (w: number) => weekLabel(w, "ease off", "minna magn"), sessions: [sessionA({ en: "Sprint", is: "Sprettir" }, [flying(3, 20, "30")]), Blight] },
+          { weeks: [1], label: (w: number) => weekLabel(w, "test + short flying sprints", "mæling + stuttir fljúgandi sprettir"), sessions: [sessionA({ en: "Test + sprint", is: "Mæling + sprettir" }, [speedTest(2), fly(3, 10, "20", true)]), B, sessionC([fly(3, 10, "20")])] },
+          { weeks: [2, 3], label: (w: number) => weekLabel(w, "", ""), sessions: [sessionA({ en: "Sprint", is: "Sprettir" }, [fly(4, 15, "20–30", true)]), B, sessionC([fly(3, 15, "20–30")])] },
+          { weeks: [4, 5], label: (w: number) => weekLabel(w, "", ""), sessions: [sessionA({ en: "Sprint", is: "Sprettir" }, [fly(4, 20, "30", true)]), B, sessionC([fly(3, 20, "30")])] },
+          { weeks: [6], label: (w: number) => weekLabel(w, "", ""), sessions: [sessionA({ en: "Sprint", is: "Sprettir" }, [fly(3, 30, "30–40", true)]), B, sessionC([fly(3, 20, "30")])] },
+          { weeks: [7], label: (w: number) => weekLabel(w, "ease off", "minna magn"), sessions: [sessionA({ en: "Sprint", is: "Sprettir" }, [fly(3, 20, "30")]), Blight] },
           { weeks: [8], label: (w: number) => weekLabel(w, "test", "mæling"), sessions: [sessionA({ en: "Test", is: "Mæling" }, [speedTest(3)]), Blight] },
         ];
   return expandWeeks(rows);

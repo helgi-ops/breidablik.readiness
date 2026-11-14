@@ -32,6 +32,7 @@ import { deriveDsiForPlayer } from "@/lib/micropulse/strengthProgramming/deriveD
 import { asymPct, favoredSide } from "@/lib/micropulse/codAsymmetry";
 import { buildGoalPlan } from "./index";
 import { blockReason } from "./common";
+import { loadTeamQualityPrefs } from "./teamPrefs";
 import type { GoalBlockReason, GoalPlan, GoalPlanInput, GoalQuality, GoalSport, StrengthBand } from "./types";
 import { GOAL_QUALITIES } from "./types";
 
@@ -239,12 +240,16 @@ export async function loadGoalPlanBase(sb: Sb, teamId: string, playerId: string,
 }
 
 export async function loadGoalPlanPreview(sb: Sb, teamId: string, playerId: string, todayIso: string): Promise<GoalPlanPreview> {
-  const { name, base } = await loadGoalPlanBase(sb, teamId, playerId, todayIso);
+  const [{ name, base }, prefs] = await Promise.all([
+    loadGoalPlanBase(sb, teamId, playerId, todayIso),
+    loadTeamQualityPrefs(sb, teamId),
+  ]);
   return {
     playerId,
     name,
     todayIso,
-    plans: GOAL_QUALITIES.map((quality) => buildGoalPlan({ ...base, quality })),
+    // Lota 5: at the team's saved level, with the team's swaps (what an approval would start from).
+    plans: GOAL_QUALITIES.map((quality) => buildGoalPlan({ ...base, quality, level: prefs[quality].level, swaps: prefs[quality].swaps })),
   };
 }
 

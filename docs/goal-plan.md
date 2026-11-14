@@ -427,7 +427,7 @@ team plan per quality + explicit under-18 rules** (the youth level is under "Ind
   Never swappable: tests (incl. the 10 m test's start), the tested braking drills and landings, flying sprints,
   Nordic, squat by bar speed, drop jumps, youth hops.
 - `applySwaps(plan, quality, choices)` returns the library's copy with a `swap` mark on swappable blocks
-  (`swapMark(b)`); `GoalBlock` has no new field and goal plans never pass through it (golden test unchanged).
+  (`swapMark(b)`). Since lota 5 goal plans use it too, marking only swapped blocks (golden test unchanged).
   The page and PDF say "swapped by coach", show the planned exercise and `SWAP_NOTE` ("not tested in the studies;
   the dose is the same").
 - Table `team_quality_plan_prefs` (team, quality, level, swaps, updated_by/at; migration `20261114170000`):
@@ -437,6 +437,37 @@ team plan per quality + explicit under-18 rules** (the youth level is under "Ind
   change, shows who changed it last; without a team (or 401/402) the choices hold on the screen and it says so.
 - Tests: `__tests__/swaps.test.ts` (every option changes both languages, keeps numbers/counters, never touches the
   never-swappable blocks, validation).
+
+## "Speed & power" lota 5: levels and team swaps in player goal plans (2026-11-14)
+
+The coach asked for the library's levels and swaps in player goal plans ("settu stig og skipti í markmið leikmanna").
+
+- **Level, picked per player at approval.** `/coach/goal-requests` shows a Level select under the start select
+  (`levels` from `allowedLevels`). Default = the team's saved level for that quality (`team_quality_plan_prefs`,
+  via `loadTeamQualityPrefs` in `teamPrefs.ts`); the coach can change it for this player, no reason needed (it is
+  a dose choice, not overriding a rule). Under 18 or age unknown: no level (the youth plan is its own level).
+  Jump with the `fast_jumps` start: no beginner (that start is for players who already have a strength base).
+  An unknown or not-allowed level is refused (`parseDecision` "Unknown level.", `decideGoal` 422).
+- **Swaps, as the team saved them.** The team's swaps for the quality are applied when the plan is built
+  (`applySwaps(..., { onlySwapped: true })`): only swapped blocks change and get `GoalBlock.swap`; the dose
+  numbers, counters and safety fields never change. Swaps are not per player; the coach changes them in the
+  Programme Library. `SWAP_NOTE` goes into `limits` when any block was swapped.
+- **What the plan stores.** `GoalPlan.level` and `GoalPlan.swaps` (only the slots that changed a block). Old
+  plans have neither = intermediate, no swaps. The approved event's `detail` logs `level`, `team_level` and
+  `swaps`. Frozen at approval like everything else: a later library change never touches an approved plan.
+- **Engine.** `buildGoalPlan` → `resolveLevel(input)` → `partsFor({ ...input, level })` → the level builders
+  (`topSpeedWeeks(start, emphasis, level)`, `accelWeeks`, `brakingWeeks`, `jumpWeeks`). A non-intermediate
+  level replaces one fact with its level line (`LEVEL_FACT_SLOT`) and puts `LEVEL_BASIS` ("the studies tested the
+  middle level") first in `limits`. Top speed got its own levels here (zone 10–15 m beginner, 15–30 m advanced
+  with one extra rep in session A, still ≤150 m flat out; gym B by level, power before strength).
+  Intermediate with no swaps is the old plan exactly (golden hashes unchanged). `GOAL_CONTENT_VERSION` 2026-11-14.3.
+- **Shown in.** Coach plan view (`GoalPlanPreviewCard`: level chip, "N exercises swapped by the coach", "swapped
+  by coach · planned: X" on the block), the goal PDF (level line, "(swapped by coach; planned: X)") and the
+  player's Today goal card ("chosen by your coach" on a swapped block).
+- Tests: `__tests__/goalPlanLevels.test.ts` (intermediate = old plan, youth ignores level, fast_jumps without
+  beginner, every level × start × shape keeps the safety limits incl. sled 45–340 m and never at beginner, top
+  speed zones, swaps change only the swapped blocks, invalid swaps ignored, approval level parsing);
+  `sessionOrder.test.ts` now runs top speed over all levels.
 
 ## Next (not built)
 

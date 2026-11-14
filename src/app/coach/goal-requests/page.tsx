@@ -40,6 +40,7 @@ import {
 import { MEASURE_DEF, PHASE_LABEL, QUALITY_MEASURES, type GoalMeasure, type GoalProgress, type ResultPhase } from "@/lib/micropulse/goalPlan/outcome";
 import { TEST_NEED_LABEL, retestWhen, type GoalTestNeed } from "@/lib/micropulse/goalPlan/testsDue";
 import { coachPriorityText, isPrioritySnapshot } from "@/lib/micropulse/goalPlan/priority";
+import { DEFAULT_LEVEL, LEVEL_BASIS, LEVEL_LABEL, LEVEL_WHO, LEVEL_YOUTH_NOTE, type TrainingLevel } from "@/lib/micropulse/goalPlan/levels";
 
 const QUALITY: Record<GoalQuality, Bi> = {
   top_speed: { en: "Top speed", is: "Hámarkshraði" },
@@ -68,6 +69,9 @@ type Review = {
   plan: GoalPlan;
   ruleStart: string | null;
   starts: { key: string; label: Bi; rule: boolean }[];
+  /** Lota 5: levels offered for the chosen start (empty under 18), and the team's saved level and swaps. */
+  levels?: TrainingLevel[];
+  teamPref?: { level: TrainingLevel; swaps: Record<string, string> };
   events: GoalPlanEventRow[];
   weekView: { week: number; sessions: { slot: string; focus: Bi; date: string | null; md: string | null }[]; weekKnown: boolean } | null;
   resumeDefault: number | null;
@@ -177,6 +181,8 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
   const L = (b: Bi) => (isEN ? b.en : b.is);
   const T = (en: string, is: string) => (isEN ? en : is);
   const [start, setStart] = React.useState<string | null>(null);
+  // Lota 5: null = the team's saved level (Programme Library).
+  const [level, setLevel] = React.useState<TrainingLevel | null>(null);
   const [data, setData] = React.useState<Review | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
   const [reason, setReason] = React.useState("");
@@ -189,7 +195,10 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
   React.useEffect(() => {
     let alive = true;
     (async () => {
-      const q = start ? `?start=${encodeURIComponent(start)}` : "";
+      const qs = new URLSearchParams();
+      if (start) qs.set("start", start);
+      if (level) qs.set("level", level);
+      const q = qs.toString() ? `?${qs}` : "";
       const { res, j } = await authed(`/api/coach/goal-plans/requests/${encodeURIComponent(id)}${q}`);
       if (!alive) return;
       if (!res.ok) { setErr(String(j.error ?? res.status)); return; }
@@ -197,7 +206,7 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
       setData(j as unknown as Review);
     })();
     return () => { alive = false; };
-  }, [id, start]);
+  }, [id, start, level]);
 
   if (err) return <p className="text-[13px] text-[#a83e28]">{T("Couldn't load this request.", "Tókst ekki að sækja beiðnina.")} ({err})</p>;
   if (!data) return <p className="text-[13px] text-slate-400">{T("Reading the player's data…", "Les gögn leikmannsins…")}</p>;
@@ -214,7 +223,7 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
   const decide = async (action: "approve" | "decline" | "stop" | "resume") => {
     setBusy(true); setMsg(null);
     const body = action === "approve"
-      ? { action, startDate, start: chosen, reason: changed ? reason : undefined, noteToPlayer: note || undefined }
+      ? { action, startDate, start: chosen, reason: changed ? reason : undefined, noteToPlayer: note || undefined, level: plan.level ?? null }
       : action === "resume" ? { action, startDate, fromWeek: resumeWeek, reason: reason || undefined, noteToPlayer: note || undefined }
       : action === "decline" ? { action, reason, noteToPlayer: note || undefined } : { action, reason };
     const { res, j } = await authed(`/api/coach/goal-plans/requests/${encodeURIComponent(id)}/decision`, { method: "POST", body: JSON.stringify(body) });
@@ -254,6 +263,29 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
               </select>
               <span className="mt-0.5 block text-[11px] text-slate-500">{T("Only starts the safety rules allow for this player are listed.", "Aðeins upphöf sem öryggisreglurnar leyfa fyrir þennan leikmann eru í boði.")}</span>
             </label>
+          ) : null}
+          {data.levels && data.levels.length > 0 ? (
+            <label className="block text-[12px] text-slate-700">
+              <span className="font-semibold">{T("Level", "Stig")}</span>
+              <select value={plan.level ?? DEFAULT_LEVEL} onChange={(e) => setLevel(e.target.value as TrainingLevel)} className="mt-1 block w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]">
+                {data.levels.map((lv) => (
+                  <option key={lv} value={lv}>
+                    {L(LEVEL_LABEL[lv])}{data.teamPref?.level === lv ? T(" (team's level)", " (stig liðsins)") : ""}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-0.5 block text-[11px] text-slate-500">
+                {L(LEVEL_WHO[plan.level ?? DEFAULT_LEVEL])} {L(LEVEL_BASIS)}
+              </span>
+            </label>
+          ) : plan.youthLevel ? (
+            <p className="text-[11px] text-slate-500">{L(LEVEL_YOUTH_NOTE)}</p>
+          ) : null}
+          {data.teamPref && Object.keys(data.teamPref.swaps).length > 0 ? (
+            <p className="text-[11px] text-slate-500">
+              {T("The team's exercise swaps from the Programme Library are used (marked in the plan). Change them there.",
+                "Æfingaskipti liðsins úr æfingasafninu eru notuð (merkt í áætluninni). Breyttu þeim þar.")}
+            </p>
           ) : null}
           <label className="block text-[12px] text-slate-700">
             <span className="font-semibold">{T("First week starts (Monday)", "Fyrsta vika hefst (mánudagur)")}</span>

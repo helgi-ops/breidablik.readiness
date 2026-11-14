@@ -9,7 +9,9 @@ import "server-only";
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { allowedStarts, buildGoalPlan, ruleStart } from "./index";
+import { allowedLevels, allowedStarts, buildGoalPlan, ruleStart } from "./index";
+import { loadTeamQualityPrefs, type TeamQualityPref } from "./teamPrefs";
+import type { TrainingLevel } from "./levels";
 import { loadGoalPlanBase } from "./loader";
 import {
   DECISION_FROM,
@@ -131,8 +133,13 @@ export async function createGoalRequest(
     priority?: GoalPrioritySnapshot | null;
   },
 ): Promise<{ id: string }> {
-  const { base } = await loadGoalPlanBase(sb, args.teamId, args.playerId, todayIso());
-  const proposal = buildGoalPlan({ ...base, quality: args.quality });
+  const [{ base }, prefs] = await Promise.all([
+    loadGoalPlanBase(sb, args.teamId, args.playerId, todayIso()),
+    loadTeamQualityPrefs(sb, args.teamId),
+  ]);
+  // Lota 5: the proposal starts from the team's saved level and swaps (Programme Library).
+  const pref = prefs[args.quality];
+  const proposal = buildGoalPlan({ ...base, quality: args.quality, level: pref.level, swaps: pref.swaps });
   if (proposal.status === "blocked" && proposal.blocked) {
     throw new GoalPlanError(422, PLAYER_BLOCK_TEXT[proposal.blocked.reason].en, PLAYER_BLOCK_TEXT[proposal.blocked.reason].is);
   }
@@ -210,25 +217,41 @@ export type GoalReview = {
   plan: GoalPlan;
   ruleStart: string | null;
   starts: ReturnType<typeof allowedStarts>;
+  /** Lota 5: the levels the coach may pick for the chosen start (empty under 18 or once decided). */
+  levels: TrainingLevel[];
+  /** The team's saved level and swaps for this quality (the default the plan starts from). */
+  teamPref: TeamQualityPref;
   events: GoalPlanEventRow[];
 };
 
-export async function loadGoalReview(sb: Sb, teamId: string, planId: string, chosenStart: string | null): Promise<GoalReview> {
+export async function loadGoalReview(
+  sb: Sb,
+  teamId: string,
+  planId: string,
+  chosenStart: string | null,
+  chosenLevel: TrainingLevel | null = null,
+): Promise<GoalReview> {
   const row = await loadTeamRow(sb, teamId, planId);
-  const [{ data: evs, error }, { name, base }] = await Promise.all([
+  const [{ data: evs, error }, { name, base }, prefs] = await Promise.all([
     sb.from("player_goal_plan_events").select("id, kind, actor_role, reason, detail, created_at").eq("plan_id", planId).order("created_at", { ascending: true }),
     loadGoalPlanBase(sb, teamId, row.player_id, todayIso()),
+    loadTeamQualityPrefs(sb, teamId),
   ]);
   if (error) throw new Error(error.message);
   const input = { ...base, quality: row.quality };
+  const teamPref = prefs[row.quality];
   const live = row.status === "requested";
-  const plan = live || !row.plan ? buildGoalPlan({ ...input, startOverride: chosenStart }) : row.plan;
+  // Lota 5: a waiting request is previewed at the coach's level (default the team's) with the team's swaps.
+  const liveInput = { ...input, startOverride: chosenStart, level: chosenLevel ?? teamPref.level, swaps: teamPref.swaps };
+  const plan = live || !row.plan ? buildGoalPlan(liveInput) : row.plan;
   return {
     row,
     playerName: name,
     plan,
     ruleStart: ruleStart(input),
     starts: live ? allowedStarts(input) : [],
+    levels: live ? allowedLevels(liveInput) : [],
+    teamPref,
     events: (evs ?? []) as GoalPlanEventRow[],
   };
 }
@@ -239,8 +262,12 @@ export async function decideGoal(
 ): Promise<{ status: GoalPlanStatus }> {
   const row = await loadTeamRow(sb, args.teamId, args.planId);
   const today = todayIso();
-  const { base } = await loadGoalPlanBase(sb, args.teamId, row.player_id, today);
+  const [{ base }, prefs] = await Promise.all([
+    loadGoalPlanBase(sb, args.teamId, row.player_id, today),
+    loadTeamQualityPrefs(sb, args.teamId),
+  ]);
   const input = { ...base, quality: row.quality };
+  const teamPref = prefs[row.quality];
   const rule = ruleStart(input);
   const parsed = parseDecision(args.body, today, rule);
   if (!parsed.ok) throw new GoalPlanError(400, parsed.error);
@@ -255,8 +282,13 @@ export async function decideGoal(
     if (d.start && !allowedStarts(input).some((s) => s.key === d.start)) {
       throw new GoalPlanError(422, "That start is not allowed for this player by the safety rules.");
     }
+    // Lota 5: the coach's level must be one offered for this player and start; the swaps are the team's saved ones.
+    const forStart = { ...input, startOverride: d.start };
+    if (d.level && !allowedLevels(forStart).includes(d.level)) {
+      throw new GoalPlanError(422, "That level is not offered for this player and start (under 18, or drop jumps at beginner).");
+    }
     // Rebuilt here from fresh data: the server never trusts a plan sent from the browser.
-    const plan = buildGoalPlan({ ...input, startOverride: d.start });
+    const plan = buildGoalPlan({ ...forStart, level: d.level ?? teamPref.level, swaps: teamPref.swaps });
     if (plan.status !== "ok") {
       throw new GoalPlanError(409, `No plan can be approved now: ${plan.blocked?.text.en ?? "blocked"}`);
     }
@@ -270,7 +302,11 @@ export async function decideGoal(
     if (plan.startOverride) {
       await logEvent(sb, row, "start_changed", actor, d.reason, { rule: plan.startOverride.rule, chosen: plan.startOverride.chosen });
     }
-    await logEvent(sb, row, "approved", actor, null, { start_date: d.startDate, start: plan.start });
+    await logEvent(sb, row, "approved", actor, null, {
+      start_date: d.startDate, start: plan.start,
+      // Lota 5: the level and swaps the plan was frozen with, and the team's saved level it started from.
+      level: plan.level ?? "intermediate", team_level: teamPref.level, swaps: plan.swaps ?? {},
+    });
     return { status: "approved" };
   }
 

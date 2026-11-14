@@ -1,7 +1,8 @@
 /**
  * /api/coach/goal-plans/requests/[id]/decision — the coach answers a goal request (lota 2).
  *
- * POST { action: "approve", startDate (a Monday, within 28 days), start? (branch key), reason?, noteToPlayer? }
+ * POST { action: "approve", startDate (a Monday, within 28 days), start? (branch key), reason?, noteToPlayer?,
+ *        level? (lota 5: beginner|intermediate|advanced, default the team's saved level; must be offered for the start) }
  *      { action: "decline", reason, noteToPlayer? }
  *      { action: "stop", reason }               (an approved or paused plan)
  *
