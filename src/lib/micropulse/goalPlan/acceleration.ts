@@ -197,6 +197,9 @@ function pitch(start: AccelStart, phase: "base" | "build" | "light" | "test", yo
   return { slot: "A", focus: phase === "test" ? { en: "Test + starts", is: "Mæling + stört" } : hasSled ? { en: "Sled + starts", is: "Sleði + stört" } : { en: "Starts", is: "Stört" }, when: WHEN.warmup_any, minutes: hasSled ? 20 : 15, blocks };
 }
 
+/** The plan's building blocks, shared with the Programme Library team plans (`qualityPlans.ts`) so the doses match. */
+export const ACCEL_BLOCKS = { starts, sled, bounds, test10, gym };
+
 const offSeason = (): GoalSession => ({ slot: "C", focus: { en: "Starts (short)", is: "Stört (stutt)" }, when: WHEN.off_day, minutes: 10, blocks: [starts("4", "10")] });
 
 export function accelWeeks(start: AccelStart, youth: boolean) {

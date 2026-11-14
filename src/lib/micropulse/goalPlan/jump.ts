@@ -165,6 +165,21 @@ const sessA = (blocks: GoalBlock[], test = false): GoalSession => ({
 const sessB = (focus: Bi, blocks: GoalBlock[]): GoalSession => ({ slot: "B", focus, when: WHEN.gym_day, minutes: 20, blocks });
 const sessC = (blocks: GoalBlock[]): GoalSession => ({ slot: "C", focus: { en: "Jumps (short)", is: "Hopp (stutt)" }, when: WHEN.off_day, minutes: 10, blocks });
 
+// Sánchez-Sixto 2021: weeks 1–6 as tested (drop-jump boxes 20, 25, 30, 40, 40, 40 cm; rebound sets 5, 5, 6, 6, 7, 4).
+const TESTED_REBOUND_SETS = [5, 5, 6, 6, 7, 4];
+const TESTED_DROP_DOSE: Array<[number, number, number]> = [[3, 6, 20], [3, 6, 25], [3, 6, 30], [3, 4, 40], [4, 4, 40], [3, 3, 40]];
+const TESTED_SQUAT_DOSE: Array<[string, string]> = [
+  ["3 × 6, fast (bar about 1.0 m/s, roughly 50–60% of max)", "3 × 6, hratt (stöng um 1,0 m/s, u.þ.b. 50–60% af hámarki)"],
+  ["3 × 6, fast (bar about 1.0 m/s)", "3 × 6, hratt (stöng um 1,0 m/s)"],
+  ["3 × 6, a little heavier (bar about 0.9 m/s)", "3 × 6, aðeins þyngra (stöng um 0,9 m/s)"],
+  ["3 × 4, heavier (bar about 0.8 m/s)", "3 × 4, þyngra (stöng um 0,8 m/s)"],
+  ["4 × 4 (bar about 0.8 m/s)", "4 × 4 (stöng um 0,8 m/s)"],
+  ["3 × 3 (bar about 0.8 m/s)", "3 × 3 (stöng um 0,8 m/s)"],
+];
+
+/** The plan's building blocks and the tested weekly doses, shared with the Programme Library team plans (`qualityPlans.ts`). */
+export const JUMP_BLOCKS = { rebound, drop, squatSpeed, heavy, cmjTest, youthHops, TESTED_REBOUND_SETS, TESTED_DROP_DOSE, TESTED_SQUAT_DOSE };
+
 export function jumpWeeks(start: JumpStart) {
   if (start === "youth") {
     const strengthYouth = sessB({ en: "Strength (light)", is: "Styrkur (létt)" }, [{
@@ -182,17 +197,9 @@ export function jumpWeeks(start: JumpStart) {
       { weeks: [8], label: (w) => weekLabel(w, "test", "mæling"), sessions: [sessA([cmjTest, youthHops(1)], true), strengthYouth] },
     ]);
   }
-  // Sánchez-Sixto 2021: weeks 1–6 as tested (drop-jump boxes 20, 25, 30, 40, 40, 40 cm; rebound sets 5, 5, 6, 6, 7, 4).
-  const reboundSets = [5, 5, 6, 6, 7, 4];
-  const dropDose: Array<[number, number, number]> = [[3, 6, 20], [3, 6, 25], [3, 6, 30], [3, 4, 40], [4, 4, 40], [3, 3, 40]];
-  const squatDose: Array<[string, string]> = [
-    ["3 × 6, fast (bar about 1.0 m/s, roughly 50–60% of max)", "3 × 6, hratt (stöng um 1,0 m/s, u.þ.b. 50–60% af hámarki)"],
-    ["3 × 6, fast (bar about 1.0 m/s)", "3 × 6, hratt (stöng um 1,0 m/s)"],
-    ["3 × 6, a little heavier (bar about 0.9 m/s)", "3 × 6, aðeins þyngra (stöng um 0,9 m/s)"],
-    ["3 × 4, heavier (bar about 0.8 m/s)", "3 × 4, þyngra (stöng um 0,8 m/s)"],
-    ["4 × 4 (bar about 0.8 m/s)", "4 × 4 (stöng um 0,8 m/s)"],
-    ["3 × 3 (bar about 0.8 m/s)", "3 × 3 (stöng um 0,8 m/s)"],
-  ];
+  const reboundSets = TESTED_REBOUND_SETS;
+  const dropDose = TESTED_DROP_DOSE;
+  const squatDose = TESTED_SQUAT_DOSE;
   const week = (i: number): GoalSession[] => {
     const testWeek = i === 0 || i === 3;
     if (start === "fast_jumps") {

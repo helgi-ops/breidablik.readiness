@@ -328,7 +328,27 @@ first.
   library and a player's plan can't disagree. Coach-only; nothing is sent to players.
 - Tests (`qualityLibrary.test.ts`): same method arrays as the plans, every reference resolves, every method in one
   group, no prevent/predict/cause, a sled is never better than sprints, no jargon in the verdict/facts.
-- Lota 2 (not built): team / pre-season / individual plans and a PDF for the three new qualities.
+- Lota 2: see below.
+
+## Programme Library "Speed & power" tab, lota 2: plans + PDF (2026-11-14)
+
+Coach's choices: in season = a **6-week block** (what the trials tested), not a fixed maintenance week; **one adult
+team plan per quality + explicit under-18 rules** (the youth level is under "Individual").
+
+- `goalPlan/qualityPlans.ts` (pure): per quality, In season (6 weeks, match Saturday, MD-4 = the force /
+  accel-decel day in both Periodization Hub week models; braking adds MD-2 as in the goal plan), Pre-season
+  (6 weeks, Monday + Thursday) and Individual (the goal plan's own 8 weeks for the chosen start, via
+  `accelWeeks` / `brakingWeeks` / `jumpWeeks` + `applySupervision`). Team plans are built from the goal plans' own
+  blocks (`ACCEL_BLOCKS`, `BRAKING_BLOCKS`, `JUMP_BLOCKS`, exported for this; goal-plan output unchanged).
+- Braking = Dos'Santos 2019's 6 weeks as two sessions in place of the warm-up; jump pre-season = Sánchez-Sixto
+  2021's tested rebound sets and bar-speed squats; jump in season uses fewer sets (MicroPulse's). Acceleration sled
+  is optional in season, 60–120 m in pre-season (inside Petrakos' 60–340 m).
+- UI: "Three plans" box between the facts and the methods (`QualityMethodLibrary.tsx`), start picker under
+  Individual, "Rules in every plan" (MD-1/MD+1, one quality at a time, U18 limits, colour read-only).
+- PDF: `components/coach/QualityPlanPdf.tsx` on the shared brand kit.
+- Tests (`qualityPlans.test.ts`): methods/refs resolve, no MD-1/MD+1, ≥2 days apart (72 h in pre-season), sled
+  60–340 m and never at youth level, youth ≤120 contacts and all supervised, hard blocks supervised, individual =
+  goal-plan weeks, wording rules.
 
 ## Next (not built)
 

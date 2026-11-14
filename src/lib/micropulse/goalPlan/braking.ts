@@ -203,6 +203,9 @@ const W7: DrillRow[] = [
   { en: "8 × 5 m into a side-step (60°), 5 m out into a stop", is: "8 × 5 m inn í hliðarskref (60°), 5 m út í stopp", hardStops: 4 },
 ];
 
+/** The plan's building blocks (Dos'Santos sessions), shared with the Programme Library team plans (`qualityPlans.ts`). */
+export const BRAKING_BLOCKS = { drills, landings, eccentric, cutTest, CUES, SUB, FULL, REACT, W1, W2, W3A, W3B, W4A, W4B, W5A, W5B, W7 };
+
 export function brakingWeeks(start: BrakingStart, weakerLeg: GoalPlanInput["weakerLeg"]) {
   const lands = landings(weakerLeg);
   const ecc = eccentric(weakerLeg);
