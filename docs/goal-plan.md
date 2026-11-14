@@ -1,6 +1,6 @@
 # Goal plans ("I want to improve my top speed / acceleration / braking / jump")
 
-Status: **lotur 1 + 1b + 2 + 3 + 4 shipped 2026-11-13; 4b + 5 on 2026-11-14.** A player can ask; the coach approves, changes the start or
+Status: **lotur 1 + 1b + 2 + 3 + 4 shipped 2026-11-13; 4b + 5 + 6 on 2026-11-14.** A player can ask; the coach approves, changes the start or
 declines. From its start date the plan's sessions show on the player's Today, placed around the team's matches, in a
 lighter version on a yellow day and skipped on red. The player ticks each session done / not done. It pauses itself on
 injury and ends after 8 weeks; then the coach's tests (and VALD jump height) give the outcome, shown to the player for
@@ -247,6 +247,26 @@ Helgi picked "player history" for lota 5 (reminders stay unbuilt: they need the 
   stopped plan and a withdrawn request → 2 items (the withdrawn one left out), the stop reason not in the payload, 0 for
   another team, about 0.3 s; cleanup to 0 rows.
 
+## Lota 6: reminding the coach about tests (2026-11-14)
+
+Helgi picked "reminder to the coach" (nothing to players). Without a start test and a retest a plan has no outcome.
+
+- **Rule** (`testsDue.ts`, pure): *start test missing* while approved from the start date to the end of week 3
+  (start + 20 d) with no start result on any of the plan's tests; *retest due* while approved from week 7 (start +
+  42 d), or finished within the 3 weeks a retest can still be entered (`RESULT_AFTER_END_DAYS`), with no retest.
+  Retest wins if both are missing. Paused, stopped and declined plans are never asked about. VALD jump height counts
+  (read live), so a jump plan with a fresh CMJ needs nothing typed. The windows are MicroPulse's, said on the chip.
+- **Where it shows** (`loadTeamGoalTestsDue`, read only):
+  - Today chip + **morning digest**: coach signal `goal_tests`, level `task`, confidence high (facts, not estimates),
+    one line ("Retest due: Jón (top speed, 4 days left) · Start test missing: Anna (vertical jump)") because the
+    digest shows a signal's first line only. Links to `/coach/goal-requests`. The digest opts in with
+    `computeAdminSignals(..., { includeGoalTests: true })`; **threshold push alerts do not** (a test to book is a
+    morning to-do, not an alert). The digest is still the coach's own opt-in on /coach/settings.
+  - **Goal requests page**: a tag per plan ("Retest due · 4 days left", "Start test missing") and "n tests to enter"
+    in the header (`testDue` on each list item).
+- Verified on Demo GPS Pro: day 5 without a start test → start test; week 7 without a retest → retest; finished with
+  a retest and week 5 → nothing; another team 0; not in the threshold-alert set; digest line present; cleanup to 0.
+
 ## Next (not built)
 
-- A push or reminder to tick sessions or book the retest: needs the coach's OK (nothing is sent today).
+- A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

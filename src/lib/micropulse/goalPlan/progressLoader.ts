@@ -16,10 +16,11 @@ import { fetchAllPages } from "@/lib/supabasePaginate";
 import { mergeSpeedDays } from "@/lib/micropulse/nearMaxExposure";
 import { aggregateTrialsByTest } from "@/lib/micropulse/vald/trialAggregate";
 import { GPS_SOURCES } from "./loader";
-import { goalResults, goalSessionMarks, playerGoalHistoryRows } from "./store";
+import { goalResults, goalResultsForPlans, goalSessionMarks, playerGoalHistoryRows, teamGoalTestCandidates } from "./store";
+import { buildGoalTestDue, inTestWindow, type GoalTestDue } from "./testsDue";
 import { HISTORY_MAX, buildGoalHistoryItem, isHistoryRow, type GoalHistoryItem } from "./history";
 import { addDays, placedSessionsUpTo, toTeamDayType, type TeamCalendar } from "./today";
-import { adherence, effortDays, goalOutcome, gpsContext, type GoalProgress, type GoalResult, type GpsDay, type GpsKind, type GpsMetric } from "./outcome";
+import { RESULT_AFTER_END_DAYS, adherence, effortDays, goalOutcome, gpsContext, type GoalProgress, type GoalResult, type GpsDay, type GpsKind, type GpsMetric } from "./outcome";
 import type { GoalPlanRow } from "./requests";
 
 type Sb = SupabaseClient;
@@ -125,6 +126,25 @@ export async function loadGoalProgress(
     gps: gpsKind ? gpsContext(gpsKind, gps.days, row.start_date, row.end_date, until, gps.metric) : null,
     until,
   };
+}
+
+/**
+ * Lota 6: the team's plans that still need a start test or a retest from the coach (Goal requests page, Today
+ * chip, morning digest). Read only. Jump height counts when VALD has it.
+ */
+export async function loadTeamGoalTestsDue(sb: Sb, teamId: string, todayIso: string): Promise<GoalTestDue[]> {
+  const cands = (await teamGoalTestCandidates(sb, teamId, addDays(todayIso, -RESULT_AFTER_END_DAYS)))
+    .filter((p) => inTestWindow(p, todayIso));
+  if (!cands.length) return [];
+  const coach = await goalResultsForPlans(sb, cands.map((p) => p.id));
+  const out = await Promise.all(cands.map(async (p) => {
+    const vald = p.quality === "jump" && p.start_date && p.end_date
+      ? await valdJumpResults(sb, p.player_id, p.start_date, p.end_date, todayIso).catch(() => [] as GoalResult[])
+      : [];
+    return buildGoalTestDue(p, [...vald, ...(coach.get(p.id) ?? [])], todayIso);
+  }));
+  return out.filter((x): x is GoalTestDue => !!x)
+    .sort((a, b) => (a.need === b.need ? a.daysToEnd - b.daysToEnd : a.need === "retest" ? -1 : 1));
 }
 
 /**

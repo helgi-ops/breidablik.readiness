@@ -34,6 +34,7 @@ import {
   type GoalPlanStatus,
 } from "@/lib/micropulse/goalPlan/requests";
 import { MEASURE_DEF, PHASE_LABEL, QUALITY_MEASURES, type GoalMeasure, type GoalProgress, type ResultPhase } from "@/lib/micropulse/goalPlan/outcome";
+import { TEST_NEED_LABEL, retestWhen, type GoalTestNeed } from "@/lib/micropulse/goalPlan/testsDue";
 
 const QUALITY: Record<GoalQuality, Bi> = {
   top_speed: { en: "Top speed", is: "Hámarkshraði" },
@@ -51,7 +52,11 @@ const STATUS_STYLE: Record<GoalPlanStatus, string> = {
   completed: "bg-slate-100 text-slate-500",
 };
 
-type ListItem = Omit<GoalPlanRow, "proposal" | "plan" | "engine_version" | "content_version"> & { player_name: string | null };
+type ListItem = Omit<GoalPlanRow, "proposal" | "plan" | "engine_version" | "content_version"> & {
+  player_name: string | null;
+  /** Lota 6: the start test or retest still to enter (server rule, testsDue.ts). */
+  testDue?: { need: GoalTestNeed; daysToEnd: number } | null;
+};
 type Review = {
   row: GoalPlanRow;
   playerName: string | null;
@@ -103,6 +108,7 @@ export default function GoalRequestsPage() {
   }, [reload]);
 
   const waiting = items?.filter((i) => i.status === "requested").length ?? 0;
+  const testsDue = items?.filter((i) => i.testDue).length ?? 0;
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-4 md:p-6">
@@ -112,6 +118,11 @@ export default function GoalRequestsPage() {
           {err ? null : items == null ? T("Loading…", "Sæki…") : waiting
             ? T(`${waiting} waiting for your answer.`, `${waiting} bíða svars.`)
             : T("Nothing waiting for an answer.", "Ekkert bíður svars.")}
+          {!err && testsDue ? (
+            <span className="ml-1 font-medium text-[#de9328]">
+              {T(` ${testsDue} test${testsDue === 1 ? "" : "s"} to enter.`, ` ${testsDue} próf að skrá.`)}
+            </span>
+          ) : null}
         </p>
       </div>
       <PagePurpose
@@ -139,6 +150,11 @@ export default function GoalRequestsPage() {
                     <span className={`rounded px-1.5 py-0.5 font-medium ${STATUS_STYLE[i.status]}`}>{L(STATUS_LABEL[i.status])}</span>
                     {fmtDate(i.requested_at, isEN)}
                   </span>
+                  {i.testDue ? (
+                    <span className="mt-1 inline-block rounded bg-[#de9328]/15 px-1.5 py-0.5 text-[11px] font-medium text-[#8a5a12]">
+                      {L(TEST_NEED_LABEL[i.testDue.need])}{i.testDue.need === "retest" ? ` · ${L(retestWhen(i.testDue.daysToEnd))}` : ""}
+                    </span>
+                  ) : null}
                 </button>
               </li>
             ))}

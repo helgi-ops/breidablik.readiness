@@ -9,12 +9,14 @@
  */
 
 import { DAY_TYPE_LABEL, ENOUGH_LABEL, ENOUGH_UNIT, sessionOutliers, type SessionEnough } from "@/lib/micropulse/sessionEnough";
+import { QUALITY_LABEL } from "@/lib/micropulse/goalPlan/common";
+import { retestWhen, type GoalTestDue } from "@/lib/micropulse/goalPlan/testsDue";
 
 export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
 export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load" | "post_match_recovery"
   | "fitness_trend" | "body_comp" | "speed_zones" | "position_fitness" | "strength_1rm" | "strength_phase" | "wearable_recovery"
-  | "ccc_gate" | "load_acwr" | "sprint_speed_drop" | "stride_fatigue" | "session_enough" | "long_run_load" | "near_max_exposure";
+  | "ccc_gate" | "load_acwr" | "sprint_speed_drop" | "stride_fatigue" | "session_enough" | "long_run_load" | "near_max_exposure" | "goal_tests";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -1596,4 +1598,44 @@ export function derivePlayerLongRunLoadSignals(reads: LongRunLoadLite[]): Player
         },
       };
     });
+}
+
+// ── goal_tests: player goal plans that need a start test or a retest (lota 6) ──
+const GOAL_TESTS_LABEL: Bi = { en: "Goal plan tests", is: "Próf í markmiðsáætlunum" };
+const GOAL_TESTS_HREF = "/coach/goal-requests";
+
+/**
+ * Team chip (a task): players whose 8-week goal plan needs a start test (weeks 1–3) or a retest (week 7 to 3 weeks
+ * after the end). Without both there is no outcome, only sessions ticked. Facts, not estimates, so confidence is
+ * high. Nothing goes to the player. Advisory; never the readiness colour.
+ */
+export function deriveGoalTestsSignal(reads: GoalTestDue[]): CoachSignal {
+  const base: CoachSignal = { engine: "goal_tests", level: "steady", label: GOAL_TESTS_LABEL, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: GOAL_TESTS_HREF };
+  if (reads.length === 0) return base;
+  const first = (n: string) => n.split(" ")[0];
+  const list = (rows: GoalTestDue[], lang: "en" | "is", withWhen: boolean) => {
+    const shown = rows.slice(0, 4);
+    const more = rows.length - shown.length;
+    return shown.map((r) => `${first(r.name)} (${QUALITY_LABEL[r.quality][lang].toLowerCase()}${withWhen ? `, ${retestWhen(r.daysToEnd)[lang]}` : ""})`).join(", ") + (more > 0 ? ` +${more}` : "");
+  };
+  const retest = reads.filter((r) => r.need === "retest");
+  const baseline = reads.filter((r) => r.need === "baseline");
+  return {
+    ...base, level: "task", confidence: "high",
+    // One line: the morning digest shows only a signal's first line, and both lists must reach the coach.
+    why: {
+      en: [[
+        ...(retest.length ? [`Retest due: ${list(retest, "en", true)}`] : []),
+        ...(baseline.length ? [`Start test missing: ${list(baseline, "en", false)}`] : []),
+      ].join(" · ")],
+      is: [[
+        ...(retest.length ? [`Endurpróf á dagskrá: ${list(retest, "is", true)}`] : []),
+        ...(baseline.length ? [`Upphafspróf vantar: ${list(baseline, "is", false)}`] : []),
+      ].join(" · ")],
+    },
+    counterfactual: {
+      en: "Enter the test under Goal requests → Progress and outcome and the reminder goes away. Jump height comes from VALD on its own. Without a start test and a retest a plan has no outcome, only sessions ticked. Test windows are MicroPulse's: start test weeks 1–3, retest from week 7 to 3 weeks after the end.",
+      is: "Skráðu prófið undir Markmiðsbeiðnir → Framvinda og niðurstaða og áminningin hverfur. Stökkhæð kemur sjálfkrafa úr VALD. Án upphafsprófs og endurprófs fær áætlun enga niðurstöðu, aðeins merktar æfingar. Gluggarnir eru val MicroPulse: upphafspróf í vikum 1–3, endurpróf frá viku 7 til 3 vikum eftir lok.",
+    },
+  };
 }

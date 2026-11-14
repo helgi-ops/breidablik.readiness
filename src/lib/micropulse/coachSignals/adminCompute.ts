@@ -12,6 +12,7 @@ import {
   deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal,
   derivePositionFitnessSignal, deriveStrength1rmSignal, deriveStrengthPhaseSignal,
   deriveSessionEnoughSignal,
+  deriveGoalTestsSignal,
   type CoachSignal,
 } from "@/lib/micropulse/coachSignals";
 import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite, loadTeamPositionFitnessLite, loadTeamStrength1rmLite, loadTeamStrengthPhaseLite } from "@/lib/micropulse/coachSignals/newEngineLoads";
@@ -22,6 +23,7 @@ import { loadTeamWearableRecovery } from "@/lib/micropulse/wearableRecovery/team
 import { loadTeamHrLoadSignals } from "@/lib/micropulse/hrLoad/signalLoad";
 import { loadTeamRecoveryWatch } from "@/lib/micropulse/recoveryWatch/teamLoad";
 import { loadSessionEnoughForSignal } from "@/lib/micropulse/postTraining/signalLoad";
+import { loadTeamGoalTestsDue } from "@/lib/micropulse/goalPlan/progressLoader";
 
 /** A signal with its owner — playerId null = team-level, set = per-player. */
 export type OwnedSignal = CoachSignal & { playerId: string | null };
@@ -47,8 +49,10 @@ export async function computeAdminSignals(
   teamId: string,
   today: string,
   /** includeSessionEnough: add yesterday's "Did we do enough?" read (Vector Pro football). The morning
-   *  digest opts in; threshold push-alerts do not (a light session is a review item, not an alert). */
-  opts?: { includeSessionEnough?: boolean },
+   *  digest opts in; threshold push-alerts do not (a light session is a review item, not an alert).
+   *  includeGoalTests: player goal plans that need a start test or a retest (lota 6). The morning digest opts
+   *  in; threshold push-alerts do not (a test to book is a morning to-do, not an alert). */
+  opts?: { includeSessionEnough?: boolean; includeGoalTests?: boolean },
 ): Promise<OwnedSignal[]> {
   const [formReads, robustReads, hrvReads, wearableReads, hrLoadReads, recoveryReads, fitTrendLite, bodyCompLite, speedZonesLite] = await Promise.all([
     loadTeamFormReads(sb, teamId).catch(() => []),
@@ -122,8 +126,11 @@ export async function computeAdminSignals(
   const enough = opts?.includeSessionEnough
     ? deriveSessionEnoughSignal(await loadSessionEnoughForSignal(sb, teamId, today).catch(() => null))
     : null;
+  const goalTests = opts?.includeGoalTests
+    ? deriveGoalTestsSignal(await loadTeamGoalTestsDue(sb, teamId, today).catch(() => []))
+    : null;
 
-  const team: OwnedSignal[] = [mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase, ...(enough ? [enough] : [])].map((s) => ({ ...s, playerId: null }));
+  const team: OwnedSignal[] = [mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase, ...(enough ? [enough] : []), ...(goalTests ? [goalTests] : [])].map((s) => ({ ...s, playerId: null }));
   const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }

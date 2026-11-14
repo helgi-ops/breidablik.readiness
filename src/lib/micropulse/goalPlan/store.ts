@@ -330,6 +330,41 @@ export async function latestGoalWithPlan(sb: Sb, playerId: string, todayIso: str
   return (data as unknown as GoalPlanRow | null) ?? null;
 }
 
+// ─── Lota 6: tests the coach still has to enter ────────────────────────────
+
+export type GoalTestCandidate = {
+  id: string; player_id: string; quality: GoalQuality; status: GoalPlanStatus;
+  start_date: string | null; end_date: string | null; name: string | null;
+};
+
+/** Approved plans, and plans finished on or after `finishedSince`, on one team (light columns, with names). */
+export async function teamGoalTestCandidates(sb: Sb, teamId: string, finishedSince: string): Promise<GoalTestCandidate[]> {
+  const cols = "id, player_id, quality, status, start_date, end_date, players(full_name)";
+  const [{ data: a, error: e1 }, { data: c, error: e2 }] = await Promise.all([
+    sb.from("player_goal_plans").select(cols).eq("team_id", teamId).eq("status", "approved"),
+    sb.from("player_goal_plans").select(cols).eq("team_id", teamId).eq("status", "completed").gte("end_date", finishedSince),
+  ]);
+  if (e1) throw new Error(e1.message);
+  if (e2) throw new Error(e2.message);
+  return ([...(a ?? []), ...(c ?? [])] as unknown as (Omit<GoalTestCandidate, "name"> & { players?: { full_name: string | null } | null })[])
+    .map(({ players, ...r }) => ({ ...r, name: players?.full_name ?? null }));
+}
+
+/** Coach-entered results for several plans at once. */
+export async function goalResultsForPlans(sb: Sb, planIds: string[]): Promise<Map<string, GoalResult[]>> {
+  const out = new Map<string, GoalResult[]>();
+  if (!planIds.length) return out;
+  const { data, error } = await sb.from("player_goal_plan_results").select("id, plan_id, measure, phase, value, test_date, note")
+    .in("plan_id", planIds);
+  if (error) throw new Error(error.message);
+  for (const r of (data ?? []) as Array<{ id: string; plan_id: string; measure: GoalResult["measure"]; phase: GoalResult["phase"]; value: number | string; test_date: string; note: string | null }>) {
+    const list = out.get(r.plan_id) ?? [];
+    list.push({ id: r.id, measure: r.measure, phase: r.phase, value: Number(r.value), test_date: String(r.test_date).slice(0, 10), note: r.note, source: "coach" });
+    out.set(r.plan_id, list);
+  }
+  return out;
+}
+
 // ─── Lota 5: the player's history ──────────────────────────────────────────
 
 /** Plans that ran (finished, or stopped after approval) on the player's current team, newest first. */

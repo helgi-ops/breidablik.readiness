@@ -187,7 +187,7 @@ export async function runCoachMorningDigest(
     if (tier !== "PRO" && tier !== "ELITE") { res.teamsBelowTier++; continue; }
 
     // 3. Compose from fresh, tokenless signals.
-    const signals = await computeAdminSignals(sb, teamId, dateKey, { includeSessionEnough: true }).catch(() => [] as OwnedSignal[]);
+    const signals = await computeAdminSignals(sb, teamId, dateKey, { includeSessionEnough: true, includeGoalTests: true }).catch(() => [] as OwnedSignal[]);
     const digest = buildMorningDigest(signals);
 
     // Email addresses for this team's coaches (auth.users via RPC).
@@ -246,7 +246,7 @@ export async function runCoachMorningDigest(
 // ── Preview / send-test (coach-triggered, no dedupe, respects tier upstream) ──
 /** Compose today's digest for a team without sending — for the Settings preview. */
 export async function previewDigest(sb: SupabaseClient, teamId: string, dateKey: string): Promise<Digest> {
-  const signals = await computeAdminSignals(sb, teamId, dateKey, { includeSessionEnough: true }).catch(() => [] as OwnedSignal[]);
+  const signals = await computeAdminSignals(sb, teamId, dateKey, { includeSessionEnough: true, includeGoalTests: true }).catch(() => [] as OwnedSignal[]);
   return buildMorningDigest(signals);
 }
 
