@@ -10,7 +10,7 @@
  * reference: nothing here is sent to a player.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   BASIS_INTRO,
   BASIS_LABEL,
@@ -35,6 +35,8 @@ import type { Bi, GoalMethod, GoalRef } from "@/lib/micropulse/goalPlan/types";
 import { VERIFIED_LABEL } from "@/lib/micropulse/speedMethods";
 import type { TrainingLevel } from "@/lib/micropulse/goalPlan/levels";
 import LevelPicker from "@/components/trainer/LevelPicker";
+import { SwapBlock, SwapNote, type OnSwap } from "@/components/trainer/SwapBlock";
+import { applySwaps, hasSwaps, type SwapChoices } from "@/lib/micropulse/goalPlan/swaps";
 
 type Lang = "IS" | "EN";
 
@@ -107,8 +109,18 @@ function MethodCard({ m, refs, lang }: { m: GoalMethod; refs: Record<string, Goa
   );
 }
 
-function PlanView({ plan, lib, lang }: { plan: QualityPlan; lib: QualityLibrary; lang: Lang }) {
-  // `plan` is already the chosen level: its title, facts and limits name the level (lota 4).
+function PlanView({
+  plan: base,
+  lib,
+  lang,
+  swaps,
+  onSwap,
+  busy: saving,
+}: { plan: QualityPlan; lib: QualityLibrary; lang: Lang } & SwapProps) {
+  // `base` is already the chosen level: its title, facts and limits name the level (lota 4). The team's swaps are
+  // applied to this copy only (step 3); the dose and counters never change.
+  const plan = useMemo(() => applySwaps(base, lib.quality, swaps), [base, lib.quality, swaps]);
+  const swapped = hasSwaps(plan);
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -154,6 +166,7 @@ function PlanView({ plan, lib, lang }: { plan: QualityPlan; lib: QualityLibrary;
       </ul>
 
       <p className="rounded-lg border border-[#de9328]/40 bg-[#de9328]/5 px-3 py-2 text-xs text-slate-700">{L(plan.basis)}</p>
+      {swapped && <SwapNote lang={lang} />}
 
       <div className="space-y-3">
         {plan.weeks.map((w) => (
@@ -171,10 +184,7 @@ function PlanView({ plan, lib, lang }: { plan: QualityPlan; lib: QualityLibrary;
                   </div>
                   <ul className="min-w-0 space-y-1">
                     {s.blocks.map((b, i) => (
-                      <li key={i} className="text-sm">
-                        <span className={`font-medium ${b.test ? "text-[#2740e6]" : "text-slate-800"}`}>{L(b.what)}</span>
-                        <span className="block text-xs text-slate-600">{L(b.dose)}</span>
-                      </li>
+                      <SwapBlock key={i} b={b} lang={lang} onSwap={onSwap} disabled={saving} />
                     ))}
                   </ul>
                 </div>
@@ -202,8 +212,10 @@ function PlanView({ plan, lib, lang }: { plan: QualityPlan; lib: QualityLibrary;
 }
 
 type LevelProps = { level: TrainingLevel; onLevel: (lv: TrainingLevel) => void; levelBusy?: boolean };
+/** The team's swaps for this quality (lota 4, step 3). `busy` while a change is being saved. */
+type SwapProps = { swaps: SwapChoices; onSwap?: OnSwap; busy?: boolean };
 
-function PlansSection({ lib, lang, level, onLevel, levelBusy }: { lib: QualityLibrary; lang: Lang } & LevelProps) {
+function PlansSection({ lib, lang, level, onLevel, levelBusy, swaps, onSwap }: { lib: QualityLibrary; lang: Lang } & LevelProps & SwapProps) {
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   const [key, setKey] = useState<QualityPlanKey>("in_season");
   const starts = individualStarts(lib.quality, level);
@@ -253,7 +265,7 @@ function PlansSection({ lib, lang, level, onLevel, levelBusy }: { lib: QualityLi
       )}
       <LevelPicker level={level} onChange={onLevel} lang={lang} youth={youth} disabled={levelBusy} />
       <div className="mt-3">
-        <PlanView key={`${plan.key}-${plan.start ?? ""}-${youth ? "youth" : level}`} plan={plan} lib={lib} lang={lang} />
+        <PlanView key={`${plan.key}-${plan.start ?? ""}-${youth ? "youth" : level}`} plan={plan} lib={lib} lang={lang} swaps={swaps} onSwap={onSwap} busy={levelBusy} />
       </div>
       <div className="mt-4 rounded-lg border border-[#de9328]/40 bg-white px-3 py-2">
         <div className="text-xs font-semibold text-slate-900">{lang === "IS" ? "Reglur í öllum áætlunum" : "Rules in every plan"}</div>
@@ -265,7 +277,15 @@ function PlansSection({ lib, lang, level, onLevel, levelBusy }: { lib: QualityLi
   );
 }
 
-export default function QualityMethodLibrary({ lib, lang, level, onLevel, levelBusy }: { lib: QualityLibrary; lang: Lang } & LevelProps) {
+export default function QualityMethodLibrary({
+  lib,
+  lang,
+  level,
+  onLevel,
+  levelBusy,
+  swaps,
+  onSwap,
+}: { lib: QualityLibrary; lang: Lang } & LevelProps & SwapProps) {
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   return (
     <div>
@@ -284,7 +304,7 @@ export default function QualityMethodLibrary({ lib, lang, level, onLevel, levelB
         </ul>
       </div>
 
-      <PlansSection lib={lib} lang={lang} level={level} onLevel={onLevel} levelBusy={levelBusy} />
+      <PlansSection lib={lib} lang={lang} level={level} onLevel={onLevel} levelBusy={levelBusy} swaps={swaps} onSwap={onSwap} />
 
       {BASIS_ORDER.map((b) => {
         const group = methodsByBasis(lib, b);

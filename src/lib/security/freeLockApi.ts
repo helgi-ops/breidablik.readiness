@@ -67,6 +67,7 @@ export const FREE_BLOCKED_READ_PATHS = [
   "/api/coach/goal-plans/:id/preview",
   "/api/coach/goal-plans/requests",
   "/api/coach/goal-plans/requests/:id",
+  "/api/coach/team/quality-plan-prefs",
 ] as const;
 
 const TABLE = [

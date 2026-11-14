@@ -8,7 +8,7 @@
  * Coach-only reference: nothing here is sent to a player.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   SPEED_CAVEATS,
   SPEED_EVIDENCE_LABEL,
@@ -30,6 +30,8 @@ import {
 import type { Bi } from "@/lib/micropulse/load/peakPeriod";
 import type { TrainingLevel } from "@/lib/micropulse/goalPlan/levels";
 import LevelPicker from "@/components/trainer/LevelPicker";
+import { SwapBlock, SwapNote, type OnSwap } from "@/components/trainer/SwapBlock";
+import { applySwaps, hasSwaps, type SwapChoices } from "@/lib/micropulse/goalPlan/swaps";
 
 type Lang = "IS" | "EN";
 
@@ -115,7 +117,13 @@ function MethodCard({ m, lang }: { m: SpeedMethod; lang: Lang }) {
   );
 }
 
-function PlanView({ plan, lang, level }: { plan: SpeedPlan; lang: Lang; level: TrainingLevel }) {
+/** The team's swaps for top speed (lota 4, step 3). `busy` while a change is being saved. */
+type SwapProps = { swaps: SwapChoices; onSwap?: OnSwap; busy?: boolean };
+
+function PlanView({ plan: base, lang, level, swaps, onSwap, busy: saving }: { plan: SpeedPlan; lang: Lang; level: TrainingLevel } & SwapProps) {
+  // The swaps change only the library's copy; the dose and flat-out metres never change.
+  const plan = useMemo(() => applySwaps(base, "top_speed", swaps), [base, swaps]);
+  const swapped = hasSwaps(plan);
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -161,6 +169,7 @@ function PlanView({ plan, lang, level }: { plan: SpeedPlan; lang: Lang; level: T
       </ul>
 
       <p className="rounded-lg border border-[#de9328]/40 bg-[#de9328]/5 px-3 py-2 text-xs text-slate-700">{L(SPEED_PLAN_BASIS)}</p>
+      {swapped && <SwapNote lang={lang} />}
 
       <div className="space-y-3">
         {plan.alternatives && (
@@ -187,10 +196,7 @@ function PlanView({ plan, lang, level }: { plan: SpeedPlan; lang: Lang; level: T
                   </div>
                   <ul className="min-w-0 space-y-1">
                     {s.blocks.map((b, i) => (
-                      <li key={i} className="text-sm">
-                        <span className={`font-medium ${b.test ? "text-[#2740e6]" : "text-slate-800"}`}>{L(b.what)}</span>
-                        <span className="block text-xs text-slate-600">{L(b.dose)}</span>
-                      </li>
+                      <SwapBlock key={i} b={b} lang={lang} onSwap={onSwap} disabled={saving} />
                     ))}
                   </ul>
                 </div>
@@ -214,7 +220,14 @@ const PLAN_TAB: Record<SpeedPlanKey, Bi> = {
   individual: { en: "Individual", is: "Einstaklingur" },
 };
 
-export default function SpeedMethodLibrary({ lang, level, onLevel, levelBusy }: { lang: Lang; level: TrainingLevel; onLevel: (lv: TrainingLevel) => void; levelBusy?: boolean }) {
+export default function SpeedMethodLibrary({
+  lang,
+  level,
+  onLevel,
+  levelBusy,
+  swaps,
+  onSwap,
+}: { lang: Lang; level: TrainingLevel; onLevel: (lv: TrainingLevel) => void; levelBusy?: boolean; swaps: SwapChoices; onSwap?: OnSwap }) {
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   const [planKey, setPlanKey] = useState<SpeedPlanKey>("in_season");
   const plan = speedPlan(planKey, level);
@@ -258,7 +271,7 @@ export default function SpeedMethodLibrary({ lang, level, onLevel, levelBusy }: 
         </div>
         <LevelPicker level={level} onChange={onLevel} lang={lang} disabled={levelBusy} />
         <div className="mt-3">
-          <PlanView key={`${plan.key}-${level}`} plan={plan} lang={lang} level={level} />
+          <PlanView key={`${plan.key}-${level}`} plan={plan} lang={lang} level={level} swaps={swaps} onSwap={onSwap} busy={levelBusy} />
         </div>
         <div className="mt-4 rounded-lg border border-[#de9328]/40 bg-white px-3 py-2">
           <div className="text-xs font-semibold text-slate-900">{lang === "IS" ? "Reglur í öllum áætlunum" : "Rules in every plan"}</div>

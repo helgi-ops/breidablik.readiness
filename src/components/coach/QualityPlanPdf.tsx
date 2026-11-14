@@ -12,6 +12,7 @@ import { Document, Text, View } from "@react-pdf/renderer";
 import { BASIS_LABEL, QUALITY_LIBRARIES } from "@/lib/micropulse/goalPlan/qualityLibrary";
 import { QUALITY_PLAN_RULES, planMethodKeys, type QualityPlan } from "@/lib/micropulse/goalPlan/qualityPlans";
 import type { Bi } from "@/lib/micropulse/goalPlan/types";
+import { SWAP_NOTE, SWAPPED_BY_COACH, hasSwaps, swapMark } from "@/lib/micropulse/goalPlan/swaps";
 import { VERIFIED_LABEL } from "@/lib/micropulse/speedMethods";
 import { BrandPage, Bullets, C, Provenance, Section, Table, Verdict, clean, fb, fh, fileSafe, renderPdfBlob, saveBlob } from "@/components/pdf/brand";
 
@@ -34,6 +35,13 @@ export function QualityPlanDoc({ plan, lang }: { plan: QualityPlan; lang: Lang }
   const lib = QUALITY_LIBRARIES[plan.quality];
   const methods = planMethodKeys(plan).map((k) => lib.methods.find((m) => m.key === k)).filter((m) => m != null);
   const individual = plan.key === "individual";
+  // Coach's swaps (lota 4, step 3): a swapped exercise is named as such, with the planned one beside it.
+  const swapped = hasSwaps(plan);
+  const whatCell = (b: { what: Bi }) => {
+    const m = swapMark(b);
+    if (!m?.swapped) return L(b.what);
+    return `${L(b.what)} (${L(SWAPPED_BY_COACH)}; ${IS ? "í áætlun" : "planned"}: ${L(m.planned)})`;
+  };
 
   return (
     <Document title={L(plan.title)}>
@@ -45,7 +53,7 @@ export function QualityPlanDoc({ plan, lang }: { plan: QualityPlan; lang: Lang }
         subtitle={L(plan.who)}
         note={IS ? "Samsetning MicroPulse úr skömmtum rannsóknanna · ekki prófuð sem heild" : "MicroPulse's combination of doses from the studies · not tested as a whole"}
       >
-        <Verdict tone="cobalt" label={IS ? "Áætlunin" : "The plan"} headline={L(plan.verdict)} body={L(plan.basis)} />
+        <Verdict tone="cobalt" label={IS ? "Áætlunin" : "The plan"} headline={L(plan.verdict)} body={swapped ? `${L(plan.basis)} ${L(SWAP_NOTE)}` : L(plan.basis)} />
 
         <Section title={IS ? "Í stuttu máli" : "In short"}>
           <Bullets items={plan.facts.map(L)} />
@@ -76,7 +84,7 @@ export function QualityPlanDoc({ plan, lang }: { plan: QualityPlan; lang: Lang }
                     ) : (
                       ""
                     ),
-                    L(b.what),
+                    whatCell(b),
                     L(b.dose),
                   ]),
                 )}

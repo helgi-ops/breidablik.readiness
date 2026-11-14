@@ -408,6 +408,36 @@ team plan per quality + explicit under-18 rules** (the youth level is under "Ind
   team in step 3). Non-intermediate plans name the level in the title, put `LEVEL_CHANGES` first among the facts and
   `LEVEL_BASIS` first among the limits. `SpeedPlanPdf` now takes the plan object (`leveled` adds the level basis).
 
+## "Speed & power" lota 4, step 3: exercise swaps, saved for the team (2026-11-14, coach approved)
+
+- `goalPlan/swaps.ts`: the swap registry. Each slot matches blocks by method + planned wording, lists the planned
+  exercise first, then the alternatives. A swap replaces whole phrases in both languages (never word by word,
+  Icelandic case endings) in the exercise name and dose line. **Only the exercise changes**: method, dose numbers and
+  every counter (flat-out m, contacts, sled m, hard stops) stay, so every safety check is unchanged.
+  | Slot | Qualities | Options |
+  |---|---|---|
+  | heavy_legs | accel, jump, top speed | squat or trap bar (planned) · back squat · trap-bar deadlift · front squat · leg press |
+  | jump_squat_load | accel, jump, top speed | any light load (planned) · bar · dumbbells · trap bar |
+  | bounds | accel | forward bounds (planned) · hurdle hops · power skips |
+  | rebound_jumps | jump | rebound jumps (planned) · over low hurdles · tuck jumps |
+  | squat_cmj | jump | CMJ (planned) · box jumps (step down) |
+  | sled | accel | sled (planned) · hill sprints |
+  | start | accel, top speed | standing (planned) · split stance · falling · three-point |
+  | eccentric_single_leg | braking | split squat (planned) · reverse lunge · single-leg box squat |
+  Never swappable: tests (incl. the 10 m test's start), the tested braking drills and landings, flying sprints,
+  Nordic, squat by bar speed, drop jumps, youth hops.
+- `applySwaps(plan, quality, choices)` returns the library's copy with a `swap` mark on swappable blocks
+  (`swapMark(b)`); `GoalBlock` has no new field and goal plans never pass through it (golden test unchanged).
+  The page and PDF say "swapped by coach", show the planned exercise and `SWAP_NOTE` ("not tested in the studies;
+  the dose is the same").
+- Table `team_quality_plan_prefs` (team, quality, level, swaps, updated_by/at; migration `20261114170000`):
+  read-only for coaches of the team and admins (`can_read_team_coach_prefs`, no staff_users), writes via service role.
+  Route `/api/coach/team/quality-plan-prefs` (GET / POST, `requireCoachAccessForTeam`, level and swaps validated by
+  `isTrainingLevel` / `validateSwaps`; FREE-locked). `SpeedPowerLibrary` reads it once, saves each level / swap
+  change, shows who changed it last; without a team (or 401/402) the choices hold on the screen and it says so.
+- Tests: `__tests__/swaps.test.ts` (every option changes both languages, keeps numbers/counters, never touches the
+  never-swappable blocks, validation).
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

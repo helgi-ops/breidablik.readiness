@@ -20,6 +20,7 @@ import {
   type SpeedPlan,
 } from "@/lib/micropulse/speedMethods";
 import { LEVEL_BASIS } from "@/lib/micropulse/goalPlan/levels";
+import { SWAP_NOTE, SWAPPED_BY_COACH, hasSwaps, swapMark } from "@/lib/micropulse/goalPlan/swaps";
 import { BrandPage, Bullets, C, Provenance, Section, Table, Verdict, clean, fb, fh, fileSafe, renderPdfBlob, saveBlob, TONE } from "@/components/pdf/brand";
 
 type Lang = "EN" | "IS";
@@ -30,6 +31,13 @@ export function SpeedPlanDoc({ plan, lang, leveled = false }: { plan: SpeedPlan;
   const IS = lang === "IS";
   const methods = planMethodKeys(plan).map((k) => SPEED_METHOD_BY_KEY[k]);
   const refKeys = [...new Set([...plan.refs, "malone2017" as const, "buchheit2023" as const])];
+  // Coach's swaps (lota 4, step 3): a swapped exercise is named as such, with the planned one beside it.
+  const swapped = hasSwaps(plan);
+  const whatCell = (b: { what: Bi }) => {
+    const m = swapMark(b);
+    if (!m?.swapped) return L(b.what);
+    return `${L(b.what)} (${L(SWAPPED_BY_COACH)}; ${IS ? "í áætlun" : "planned"}: ${L(m.planned)})`;
+  };
 
   return (
     <Document title={L(plan.title)}>
@@ -41,7 +49,7 @@ export function SpeedPlanDoc({ plan, lang, leveled = false }: { plan: SpeedPlan;
         subtitle={L(plan.who)}
         note={IS ? "Samsetning MicroPulse úr skömmtum rannsóknanna · ekki prófuð sem heild" : "MicroPulse's combination of doses from the studies · not tested as a whole"}
       >
-        <Verdict tone="cobalt" label={IS ? "Áætlunin" : "The plan"} headline={L(plan.verdict)} body={leveled ? `${L(SPEED_PLAN_BASIS)} ${L(LEVEL_BASIS)}` : L(SPEED_PLAN_BASIS)} />
+        <Verdict tone="cobalt" label={IS ? "Áætlunin" : "The plan"} headline={L(plan.verdict)} body={[L(SPEED_PLAN_BASIS), leveled ? L(LEVEL_BASIS) : null, swapped ? L(SWAP_NOTE) : null].filter(Boolean).join(" ")} />
 
         <Section title={IS ? "Í stuttu máli" : "In short"}>
           <Bullets items={plan.facts.map(L)} />
@@ -76,7 +84,7 @@ export function SpeedPlanDoc({ plan, lang, leveled = false }: { plan: SpeedPlan;
                     ) : (
                       ""
                     ),
-                    L(b.what),
+                    whatCell(b),
                     L(b.dose),
                   ]),
                 )}
