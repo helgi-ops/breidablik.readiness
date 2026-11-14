@@ -2,13 +2,13 @@
 export const dynamic = "force-dynamic";
 
 import { useLang } from "@/lib/lang";
-import SpeedMethodLibrary from "@/components/trainer/SpeedMethodLibrary";
+import SpeedPowerLibrary from "@/components/trainer/SpeedPowerLibrary";
 
 export default function CoachSpeedMethodsPage() {
   const [lang] = useLang();
   return (
     <div className="mx-auto w-full max-w-6xl p-4">
-      <SpeedMethodLibrary lang={lang === "IS" ? "IS" : "EN"} />
+      <SpeedPowerLibrary lang={lang === "IS" ? "IS" : "EN"} />
     </div>
   );
 }

@@ -313,6 +313,23 @@ Helgi: explain to the player why a quality is worth improving and what improves 
 - Tests (`qualityWhy.test.ts`): every line cites a known study, no prevent/predict/cause wording, no jargon or
   placeholders, titles in both languages.
 
+## Programme Library "Speed & power" tab, lota 1 (2026-11-14)
+
+Helgi: the library had a tab for top speed only; the other goals need one too. Chosen: one tab, four pills; methods
+first.
+
+- The tab `speed` is now **"Speed & power" / "Hraði og kraftur"** (key and links unchanged) with pills Top speed ·
+  Acceleration · Braking · Jump (`SpeedPowerLibrary.tsx`). Top speed shows the existing library unchanged (methods,
+  three plans, PDF).
+- Acceleration, braking and jump (`QualityMethodLibrary.tsx`, data `goalPlan/qualityLibrary.ts`): verdict, 2–3 plain
+  facts with their study, method cards grouped Tested → From a review → MicroPulse rule (dose in one line; findings,
+  "full paper / abstract only" and full citations behind "Show details"), then "What the research does not show".
+- The methods are the goal plans' own `ACCEL_METHODS` / `BRAKING_METHODS` / `JUMP_METHODS` and reference maps, so the
+  library and a player's plan can't disagree. Coach-only; nothing is sent to players.
+- Tests (`qualityLibrary.test.ts`): same method arrays as the plans, every reference resolves, every method in one
+  group, no prevent/predict/cause, a sled is never better than sprints, no jargon in the verdict/facts.
+- Lota 2 (not built): team / pre-season / individual plans and a PDF for the three new qualities.
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

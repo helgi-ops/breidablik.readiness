@@ -58,7 +58,7 @@ const TAB_LABEL: Record<TabKey, { EN: string; IS: string }> = {
   custom: { EN: "Custom Training Programmes", IS: "Sérsniðin æfingakerfi" },
   isometric: { EN: "Isometric protocols", IS: "Ísómetrísk prótocol" },
   vbt: { EN: "Bar-speed methods", IS: "Hraðastýrðar aðferðir" },
-  speed: { EN: "Top speed", IS: "Hámarkshraði" },
+  speed: { EN: "Speed & power", IS: "Hraði og kraftur" },
   recovery: { EN: "Recovery protocols", IS: "Recovery protocols" },
   starter: { EN: "Starter templates", IS: "Tilbúin kerfi" },
   exercises: { EN: "Exercise library", IS: "Æfingasafn" },
