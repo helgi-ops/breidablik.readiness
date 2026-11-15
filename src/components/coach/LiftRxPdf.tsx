@@ -3,7 +3,7 @@
  * (load, how hard, rep speed, rest, warm-up, when to add weight, how often, and the bar-speed device lines), each
  * line with where its number comes from, then the sources those lines cite. Sets × reps stay in the week tables.
  *
- * Shared by QualityPlanPdf, SpeedPlanPdf and GoalPlanPdf. Styling: shared MicroPulse PDF kit (src/components/pdf/brand.tsx).
+ * Shared by QualityPlanPdf, SpeedPlanPdf, GoalPlanPdf and OffWeekPlanPdf (its own `hint`). Styling: shared MicroPulse PDF kit (src/components/pdf/brand.tsx).
  */
 
 import { Text, View } from "@react-pdf/renderer";
@@ -26,7 +26,7 @@ import { C, Provenance, Section, Table, clean, fh } from "@/components/pdf/brand
 type Lang = "EN" | "IS";
 type PlanWithRx = { weeks: { sessions: { blocks: { rx?: LiftRx[] }[] }[] }[] };
 
-export function LiftRxSection({ plan, lang }: { plan: PlanWithRx; lang: Lang }) {
+export function LiftRxSection({ plan, lang, hint }: { plan: PlanWithRx; lang: Lang; hint?: Bi }) {
   const lifts = distinctLifts(plan);
   if (!lifts.length) return null;
   const L = (b: Bi) => clean(lang === "IS" ? b.is : b.en);
@@ -39,7 +39,7 @@ export function LiftRxSection({ plan, lang }: { plan: PlanWithRx; lang: Lang }) 
   return (
     <Section
       title={IS ? "Styrkur: allar breytur" : "Strength: every variable"}
-      hint={IS ? "Ein tafla á hverja lyftu; sett × endurtekningar standa í vikutöflunum." : "One table per lift; sets × reps are in the week tables."}
+      hint={hint ? L(hint) : IS ? "Ein tafla á hverja lyftu; sett × endurtekningar standa í vikutöflunum." : "One table per lift; sets × reps are in the week tables."}
       break
     >
       {lifts.map((r, i) => (

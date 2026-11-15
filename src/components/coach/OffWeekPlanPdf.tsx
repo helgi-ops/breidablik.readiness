@@ -7,8 +7,11 @@
  */
 
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
+import { LiftRxSection } from "@/components/coach/LiftRxPdf";
+import { rxForOffWeekPlan } from "@/lib/micropulse/offWeek/liftRx";
 
 type Bi = { en: string; is: string };
+const RX_HINT: Bi = { en: "One table per lift; sets × reps are in the days.", is: "Ein tafla á hverja lyftu; sett × endurtekningar standa við dagana." };
 type OffWeekDay = { dayIndex: number; type: string; title: Bi; blocks: Array<{ label: Bi; prescription: Bi }>; note: Bi };
 type OffWeekPlan = { days: OffWeekDay[]; summary: Bi; caveat: Bi; why: Bi[] };
 export type OffWeekPlayerPlan = { playerId: string; name: string; position: string | null; plan: OffWeekPlan };
@@ -65,6 +68,8 @@ function PlayerPage({ p, lang, teamName }: { p: OffWeekPlayerPlan; lang: "EN" | 
       ))}
       <Text style={s.key}>{lang === "IS" ? "RPE = áreynsla 1–10 · MAS = hámarks loftháð hraði (úr þínu prófi)" : "RPE = effort 1–10 · MAS = maximal aerobic speed (from your test)"}</Text>
       <Text style={s.caveat}>{t(p.plan.caveat)}</Text>
+      {/* "All the details" for the strength lifts: the same table as the app (offWeek/liftRx), on its own page. */}
+      <LiftRxSection plan={{ weeks: [{ sessions: [{ blocks: [{ rx: rxForOffWeekPlan(p.plan, lang) }] }] }] }} lang={lang} hint={RX_HINT} />
     </Page>
   );
 }
