@@ -489,13 +489,13 @@ export async function GET(req: Request) {
         const session = sessionRow as { id: string; session_name: string };
         const { data: rxRows } = await sb
           .from("individual_training_prescriptions")
-          .select("exercise_id, sort_order, sets, reps, load_type, load_value, rest_seconds, rpe_target, notes, group_label, method, vbt")
+          .select("exercise_id, sort_order, sets, reps, load_type, load_value, rest_seconds, rpe_target, tempo, notes, group_label, method, vbt")
           .eq("session_id", session.id)
           .order("sort_order", { ascending: true });
         const rx = ((rxRows ?? []) as Array<{
           exercise_id: string | null; sets: number | null; reps: string | null;
           load_type: string | null; load_value: number | null; rest_seconds: number | null;
-          rpe_target: number | null; group_label: string | null; method: string | null; vbt: unknown;
+          rpe_target: number | null; tempo: string | null; notes: string | null; group_label: string | null; method: string | null; vbt: unknown;
         }>);
 
         // Resolve exercise names in one round trip.
@@ -531,6 +531,11 @@ export async function GET(req: Request) {
             video_url: d?.video ?? null,
             // Bar-speed method (Weakley et al. 2021, Table 5), localised on the client.
             vbt: sanitizeVbtPrescription(r.vbt),
+            // Read by the client's "All the details" table (ptLiftRx); load_type rides in `method` above.
+            load_value: r.load_value,
+            rpe_target: r.rpe_target,
+            tempo: r.tempo,
+            notes: r.notes,
           };
         });
       }

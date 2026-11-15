@@ -202,10 +202,19 @@ export type ParsedTodayLine = { name: string; setsReps: string | null; isHeader:
 const ROWS: RxRowKey[] = ["load", "effort", "tempo", "rest"];
 
 /**
+ * Structured values a caller already read (the PT plans, `ptLiftRx.ts`): a rep-speed line from a tempo code, a
+ * target bar speed and the speed to stop the set at (m/s), and the trainer's bar-speed rule for THIS exercise (shown
+ * whatever the lift, unlike the Today block rule that only the main lifts take). Today itself passes none of these.
+ */
+export type RxItemExtra = { tempo?: RxLine | null; target?: number | null; cut?: number | null; coachVbt?: VbtPlayerCard | null };
+
+const fmtMs = (v: number) => String(Math.round(v * 100) / 100);
+
+/**
  * The "All the details" table for one Today item, or null when there is nothing to add (a header, warm-up or
  * mobility, an unknown free-text line, or a line with no load, effort, speed or rest).
  */
-export function rxForTodayItem(raw: unknown, parsed: ParsedTodayLine, block: unknown): LiftRx | null {
+export function rxForTodayItem(raw: unknown, parsed: ParsedTodayLine, block: unknown, extra?: RxItemExtra): LiftRx | null {
   if (parsed.isHeader || !parsed.name.trim()) return null;
   const isObj = raw != null && typeof raw === "object";
   const item = (isObj ? raw : {}) as Record<string, unknown>;
@@ -227,21 +236,45 @@ export function rxForTodayItem(raw: unknown, parsed: ParsedTodayLine, block: unk
     const pick: Record<string, RxLine | null | undefined> = {
       load: own.load ?? (hasRpe ? null : base?.rows.load),
       effort: own.effort ?? base?.rows.effort,
-      tempo: own.tempo ?? base?.rows.tempo,
+      tempo: extra?.tempo ?? own.tempo ?? base?.rows.tempo,
       rest: rest ?? base?.rows.rest,
     };
     for (const k of ROWS) if (pick[k]) rows[k] = pick[k]!;
 
     const vl = typeof item.vlCap === "number" && item.vlCap > 0 && item.vlCap <= 50 ? item.vlCap : null;
-    const coach = readVbtPlayerCard((block as Record<string, unknown> | null)?.vbt);
+    const coach = extra?.coachVbt ?? readVbtPlayerCard((block as Record<string, unknown> | null)?.vbt);
     const takesVbt = profile === "heavy" || profile === "jump_squat" || profile === "pull" || (lib != null && VBT_CATEGORIES.has(lib.category));
-    if (coach && takesVbt) {
+    if (coach && (takesVbt || extra?.coachVbt)) {
       barSpeed = [{ key: "coach", line: sess(coach.headline, coach.headline) }];
-    } else if (base) {
-      barSpeed = base.barSpeed.map((x) => (x.key === "stop" && vl ? { key: "stop", line: vlStop(vl) } : x));
-      if (vl && !barSpeed.some((x) => x.key === "stop") && !barSpeed.some((x) => x.key === "none")) barSpeed.push({ key: "stop", line: vlStop(vl) });
-    } else if (vl) {
-      barSpeed = [{ key: "stop", line: vlStop(vl) }];
+    } else {
+      if (base) {
+        barSpeed = base.barSpeed.map((x) => (x.key === "stop" && vl ? { key: "stop", line: vlStop(vl) } : x));
+        if (vl && !barSpeed.some((x) => x.key === "stop") && !barSpeed.some((x) => x.key === "none")) barSpeed.push({ key: "stop", line: vlStop(vl) });
+      } else if (vl) {
+        barSpeed = [{ key: "stop", line: vlStop(vl) }];
+      }
+      // A target speed the session states means a device is used: it replaces "not used" and the general target.
+      const target = extra?.target != null && extra.target > 0 && extra.target < 3 ? extra.target : null;
+      if (target != null) {
+        const t = fmtMs(target);
+        const line = { key: "target" as const, line: sess(`About ${t} m/s on each rep.`, `Um ${isNum(t)} m/s í hverri endurtekningu.`) };
+        barSpeed = barSpeed.filter((x) => x.key !== "none");
+        const i = barSpeed.findIndex((x) => x.key === "target");
+        if (i >= 0) barSpeed[i] = line;
+        else barSpeed.unshift(line);
+        const cut = extra?.cut != null && extra.cut > 0 && extra.cut < target ? extra.cut : null;
+        if (cut != null) {
+          const c = fmtMs(cut);
+          const pct = Math.round((1 - cut / target) * 100);
+          const stop = { key: "stop" as const, line: sess(
+            `Stop the set when a rep drops below about ${c} m/s (about ${pct}% under the target).`,
+            `Hættu settinu þegar endurtekning fer undir um ${isNum(c)} m/s (um ${pct}% undir markhraða).`,
+          ) };
+          const j = barSpeed.findIndex((x) => x.key === "stop");
+          if (j >= 0) barSpeed[j] = stop;
+          else barSpeed.splice(barSpeed.findIndex((x) => x.key === "target") + 1, 0, stop);
+        }
+      }
     }
   } else {
     // A free-text template line: only an exact library lift with a profile, and only with sets × reps.

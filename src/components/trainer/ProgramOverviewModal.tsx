@@ -8,8 +8,13 @@
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { ptInputFromPlanExercise, rxForPtLift } from "@/lib/micropulse/strengthProgramming/ptLiftRx";
+import { LiftRxDetails } from "./LiftRxTable";
 
-type Exercise = { name?: string; name_is?: string; sets: number; reps: string; loadType?: string; loadValue?: number; velocityTarget?: number; rpeTarget?: number };
+type Exercise = {
+  name?: string; name_is?: string; sets: number; reps: string; loadType?: string; loadValue?: number; velocityTarget?: number; rpeTarget?: number;
+  tempo?: string; restSeconds?: number; notes?: string; vbt?: unknown;
+};
 type Group = { label: string; exercises: Exercise[] };
 type Session = { name?: string; method?: string; bodySplit?: string; dayOfWeek?: number; groups?: Group[]; exercises?: Exercise[] };
 type Week = { week: number; sessions: Session[] };
@@ -105,10 +110,15 @@ export default function ProgramOverviewModal({ teamId, templateId, templateName,
                                     {g.label && <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{g.label}</div>}
                                     {(g.exercises ?? []).map((e, ei) => {
                                       const ld = loadStr(e);
+                                      // The client's "All the details" table, with where each line comes from (coach view).
+                                      const rx = rxForPtLift(ptInputFromPlanExercise(e), isIS ? "IS" : "EN");
                                       return (
-                                        <div key={ei} className="flex items-baseline justify-between gap-3 text-[13px]">
-                                          <span className="text-slate-700">{(isIS && e.name_is) ? e.name_is : (e.name || (isIS ? "Æfing" : "Exercise"))}</span>
-                                          <span className="shrink-0 tabular-nums text-slate-500">{e.sets}×{e.reps}{ld ? ` · ${ld}` : ""}</span>
+                                        <div key={ei}>
+                                          <div className="flex items-baseline justify-between gap-3 text-[13px]">
+                                            <span className="text-slate-700">{(isIS && e.name_is) ? e.name_is : (e.name || (isIS ? "Æfing" : "Exercise"))}</span>
+                                            <span className="shrink-0 tabular-nums text-slate-500">{e.sets}×{e.reps}{ld ? ` · ${ld}` : ""}</span>
+                                          </div>
+                                          {rx ? <LiftRxDetails rx={[rx]} lang={isIS ? "IS" : "EN"} bare /> : null}
                                         </div>
                                       );
                                     })}

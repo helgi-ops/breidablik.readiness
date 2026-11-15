@@ -13,6 +13,8 @@ import {
   formatRange,
 } from "@/lib/micropulse/isometrics/protocols";
 import VbtMethodPicker from "./VbtMethodPicker";
+import { LiftRxDetails } from "./LiftRxTable";
+import { ptInputFromPlanExercise, rxForPtLift } from "@/lib/micropulse/strengthProgramming/ptLiftRx";
 import type { VbtDraft } from "@/lib/micropulse/vbtMethods";
 
 /* ── Types ───────────────────────────────────────────── */
@@ -1703,6 +1705,16 @@ export default function PlanBuilder({
                                               className="w-full border rounded px-1.5 py-1 text-gray-500 focus:outline-none focus:ring-1 focus:ring-black"
                                             />
                                           </div>
+
+                                          {/* What the client will see under "All the details", with each line's source. */}
+                                          {(() => {
+                                            const rx = rxForPtLift(ptInputFromPlanExercise(ex), isIS ? "IS" : "EN");
+                                            return rx ? (
+                                              <div className="col-span-3 sm:col-span-6">
+                                                <LiftRxDetails rx={[rx]} lang={isIS ? "IS" : "EN"} bare />
+                                              </div>
+                                            ) : null;
+                                          })()}
                                         </div>
                                       </div>
                                     )}

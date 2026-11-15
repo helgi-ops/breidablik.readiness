@@ -99,3 +99,13 @@ uses the block's "between sets" rest, else the longest member rest. Then the res
 **Coach view (2026-11-14):** the /coach/strength card (`PlayerStrengthSessionCard`) shows the same table under each
 exercise via `rxForPrescribed` (the item shaped exactly as the send writes it, with the block's bar-speed card when
 `blockTakesVbt`), in coach mode: every line with where it comes from. A test holds coach table = player table.
+
+**PT plans (2026-11-15):** the same table in the PT plans, through `strengthProgramming/ptLiftRx.ts` (`rxForPtLift`).
+Client: each row of the plan on the /client home card (`/api/client/today` now also sends the prescription's
+`load_value`, `rpe_target`, `tempo` and `notes`; individual plans and Explosive Power rows). Trainer, coach mode with
+sources: under each lift in the plan builder (live while editing) and in the plan overview (`ProgramOverviewModal`).
+The plan's own numbers win: % / kg / RPE from the load fields or the notes ("80% 1RM", "VBT 0.65 m/s (cut 0.5525,
+0.15)" → target and stop speed), the tempo code in plain words ("3010", "X0X0", "ISO 45s"), "controlled", rest in
+seconds (0 = straight on, no line). A load of 0 is "not set"; a bar-speed load stays out because the client never gets
+it (the assign route stores no velocity), so trainer view = client view (tested). Jumps, throws, sprints, planks and
+plyo push-ups get no table. Not a Today source and not a writer.

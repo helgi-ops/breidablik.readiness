@@ -41,6 +41,8 @@ import ClientMoveSessionButton from "@/components/player/ClientMoveSessionButton
 import ClientMoveSessionControl from "@/components/player/ClientMoveSessionControl";
 import MethodologyLink from "@/components/common/MethodologyLink";
 import { sanitizeVbtPrescription, formatVbtForPlayer } from "@/lib/micropulse/vbtMethods";
+import { ptInputFromClientRow, rxForPtLift } from "@/lib/micropulse/strengthProgramming/ptLiftRx";
+import { LiftRxDetails } from "@/components/trainer/LiftRxTable";
 
 type TodayResp = {
   ok: true;
@@ -79,6 +81,9 @@ type TodayResp = {
       description?: string | null; description_is?: string | null; video_url?: string | null;
       /** Bar-speed method (Weakley et al. 2021, Table 5), sanitised server-side. */
       vbt?: unknown;
+      /** Individual plan: the trainer's own numbers, read by "All the details" (ptLiftRx). */
+      load_value?: number | null; rpe_target?: number | null; tempo?: string | null; notes?: string | null;
+      dropoff?: number | null;
     }> }>;
     retest_due?: string[];
     needs_test?: string[];
@@ -330,6 +335,11 @@ export default function ClientTodayPage() {
                                 <span className="font-semibold">{lang === "IS" ? "Stangarhraði" : "Bar speed"}:</span> {formatVbtForPlayer(vbt, lang === "IS" ? "IS" : "EN").headline}
                               </p>
                             )}
+                            {(() => {
+                              const L = lang === "IS" ? "IS" : "EN";
+                              const rx = rxForPtLift(ptInputFromClientRow(r), L);
+                              return rx ? <LiftRxDetails rx={[rx]} lang={L} player bare /> : null;
+                            })()}
                             </div>
                           );
                         })}
