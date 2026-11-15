@@ -30,7 +30,8 @@ const KICKER: Record<QualityPlan["quality"], Bi> = {
   jump: { en: "JUMP HEIGHT · PLAN", is: "STÖKKHÆÐ · ÁÆTLUN" },
 };
 
-export function QualityPlanDoc({ plan, lang }: { plan: QualityPlan; lang: Lang }) {
+/** `forPlayer`: the player the coach picked in the library; their name heads the paper. */
+export function QualityPlanDoc({ plan, lang, forPlayer = null }: { plan: QualityPlan; lang: Lang; forPlayer?: string | null }) {
   const L = (b: Bi) => clean(lang === "IS" ? b.is : b.en);
   const IS = lang === "IS";
   const lib = QUALITY_LIBRARIES[plan.quality];
@@ -48,9 +49,9 @@ export function QualityPlanDoc({ plan, lang }: { plan: QualityPlan; lang: Lang }
     <Document title={L(plan.title)}>
       <BrandPage
         doc={L(DOC[plan.quality])}
-        context={IS ? "Fyrir þjálfara" : "For the coach"}
-        title={L(plan.title)}
-        kicker={L(KICKER[plan.quality])}
+        context={forPlayer ?? (IS ? "Fyrir þjálfara" : "For the coach")}
+        title={forPlayer ?? L(plan.title)}
+        kicker={forPlayer ? L(plan.title) : L(KICKER[plan.quality])}
         subtitle={L(plan.who)}
         note={IS ? "Samsetning MicroPulse úr skömmtum rannsóknanna · ekki prófuð sem heild" : "MicroPulse's combination of doses from the studies · not tested as a whole"}
       >
@@ -132,7 +133,8 @@ export function QualityPlanDoc({ plan, lang }: { plan: QualityPlan; lang: Lang }
   );
 }
 
-export async function downloadQualityPlanPdf(plan: QualityPlan, lang: Lang) {
-  const blob = await renderPdfBlob(() => <QualityPlanDoc plan={plan} lang={lang} />);
-  saveBlob(blob, `${fileSafe(lang === "IS" ? plan.title.is : plan.title.en).toLowerCase()}.pdf`);
+export async function downloadQualityPlanPdf(plan: QualityPlan, lang: Lang, forPlayer: string | null = null) {
+  const blob = await renderPdfBlob(() => <QualityPlanDoc plan={plan} lang={lang} forPlayer={forPlayer} />);
+  const title = lang === "IS" ? plan.title.is : plan.title.en;
+  saveBlob(blob, `${fileSafe(forPlayer ? `${title} ${forPlayer}` : title).toLowerCase()}.pdf`);
 }

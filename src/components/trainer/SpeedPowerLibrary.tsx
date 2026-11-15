@@ -8,6 +8,9 @@
  * Lota 4: the coach picks a level per quality and can swap exercises; both are saved for the team
  * (`/api/coach/team/quality-plan-prefs`). If saving is not possible (no team, FREE lock), the choices still work on
  * this screen and the page says they are not saved.
+ *
+ * 2026-11-15: "For a player" — the coach can pick a player: the PDFs then carry the player's name, and the player's
+ * own goal plan for this quality can be sent to their app (GoalPlanSendPanel). Nothing is sent without that button.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -18,6 +21,7 @@ import { GOAL_QUALITIES, type Bi, type GoalQuality } from "@/lib/micropulse/goal
 import { DEFAULT_LEVEL, type TrainingLevel } from "@/lib/micropulse/goalPlan/levels";
 import { PLANNED, type SwapChoices, type SwapSlotKey } from "@/lib/micropulse/goalPlan/swaps";
 import { authFetch } from "@/lib/client/authFetch";
+import GoalPlanSendPanel, { type RosterPlayer } from "@/components/trainer/GoalPlanSendPanel";
 
 type Lang = "IS" | "EN";
 
@@ -51,6 +55,28 @@ export default function SpeedPowerLibrary({ lang }: { lang: Lang }) {
   const [saveErr, setSaveErr] = useState(false);
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   const IS = lang === "IS";
+  // "For a player": the roster (null = not available, e.g. FREE lock or no team) and the picked player.
+  const [roster, setRoster] = useState<RosterPlayer[] | null>(null);
+  const [pid, setPid] = useState<string>("");
+  const [rosterTick, setRosterTick] = useState(0);
+  const player = roster?.find((p) => p.id === pid) ?? null;
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await authFetch("/api/coach/goal-plans/start", { cache: "no-store" });
+        if (!res.ok) throw new Error(String(res.status));
+        const j = (await res.json()) as { players?: RosterPlayer[] };
+        if (alive) setRoster(j.players ?? []);
+      } catch {
+        if (alive) setRoster(null);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [rosterTick]);
 
   useEffect(() => {
     let alive = true;
@@ -152,8 +178,46 @@ export default function SpeedPowerLibrary({ lang }: { lang: Lang }) {
           {status}
         </p>
       )}
+      {roster && roster.length > 0 ? (
+        <section className="mb-5 rounded-xl border border-[#2740e6]/25 bg-white p-4">
+          <label className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+            <span className="font-semibold">{IS ? "Fyrir leikmann" : "For a player"}</span>
+            <select value={pid} onChange={(e) => setPid(e.target.value)} className="min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm">
+              <option value="">{IS ? "Enginn (almennt plan)" : "None (general plan)"}</option>
+              {roster.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.openGoal ? (IS ? " · með opið markmið" : " · has an open goal") : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          {player ? (
+            <div className="mt-3">
+              <p className="mb-2 text-xs text-slate-500">
+                {IS
+                  ? `PDF-in í áætlununum hér fyrir neðan bera nafnið ${player.name}. Planið hér er það sem fer í appið.`
+                  : `The PDFs in the plans further down carry ${player.name}'s name. The plan here is what goes to the app.`}
+              </p>
+              <GoalPlanSendPanel
+                key={`${player.id}-${q}`}
+                player={player}
+                quality={q}
+                level={cur.level}
+                lang={lang}
+                onSent={() => setRosterTick((n) => n + 1)}
+              />
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-slate-500">
+              {IS
+                ? "Veldu leikmann til að fá nafnið á PDF-ið og senda planið í appið."
+                : "Pick a player to put the name on the PDF and send the plan to their app."}
+            </p>
+          )}
+        </section>
+      ) : null}
       {q === "top_speed" ? (
-        <SpeedMethodLibrary lang={lang} level={cur.level} onLevel={setLevel} levelBusy={busy} swaps={cur.swaps} onSwap={onSwap} />
+        <SpeedMethodLibrary lang={lang} level={cur.level} onLevel={setLevel} levelBusy={busy} swaps={cur.swaps} onSwap={onSwap} forPlayer={player?.name ?? null} />
       ) : (
         <QualityMethodLibrary
           key={q}
@@ -164,6 +228,7 @@ export default function SpeedPowerLibrary({ lang }: { lang: Lang }) {
           levelBusy={busy}
           swaps={cur.swaps}
           onSwap={onSwap}
+          forPlayer={player?.name ?? null}
         />
       )}
     </div>

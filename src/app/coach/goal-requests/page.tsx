@@ -29,7 +29,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import { GoalPlanView } from "@/components/coach/GoalPlanPreviewCard";
 import type { Bi, GoalPlan, GoalQuality } from "@/lib/micropulse/goalPlan/types";
 import {
-  EVENT_LABEL,
+  eventLabel,
   REASON_MIN,
   STATUS_LABEL,
   nextMonday,
@@ -239,7 +239,9 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
         <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${STATUS_STYLE[row.status]}`}>{L(STATUS_LABEL[row.status])}</span>
       </div>
       <p className="text-[12px] text-slate-500">
-        {T(`Asked ${fmtDate(row.requested_at, true)}`, `Beðið um ${fmtDate(row.requested_at, false)}`)}
+        {data.events.some((e) => e.kind === "requested" && e.actor_role === "coach")
+          ? T(`Started by the coach ${fmtDate(row.requested_at, true)}`, `Þjálfari setti af stað ${fmtDate(row.requested_at, false)}`)
+          : T(`Asked ${fmtDate(row.requested_at, true)}`, `Beðið um ${fmtDate(row.requested_at, false)}`)}
         {row.start_date ? ` · ${T(`Weeks ${fmtDate(row.start_date, true)} – ${fmtDate(row.end_date, true)}`, `Vikur ${fmtDate(row.start_date, false)} – ${fmtDate(row.end_date, false)}`)}` : ""}
       </p>
       {row.player_note ? <p className="rounded-lg bg-slate-50 px-3 py-2 text-[12.5px] text-slate-700"><span className="font-semibold">{T("Player's note:", "Athugasemd leikmanns:")}</span> {row.player_note}</p> : null}
@@ -394,7 +396,7 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
           <ul className="mt-1.5 space-y-1">
             {data.events.map((e) => (
               <li key={e.id} className="text-[11.5px] text-slate-600">
-                <span className="text-slate-400">{fmtDate(e.created_at, isEN)}</span> · {L(EVENT_LABEL[e.kind])}
+                <span className="text-slate-400">{fmtDate(e.created_at, isEN)}</span> · {L(eventLabel(e))}
                 {e.reason ? <span className="text-slate-500"> · {e.reason}</span> : null}
               </li>
             ))}

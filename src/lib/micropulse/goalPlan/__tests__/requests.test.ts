@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanPlayerNote, isGoalQuality, isMonday, nextMonday, parseDecision, planEndDate, PLAYER_BLOCK_TEXT, PLAYER_NOTE_MAX } from "../requests";
+import { cleanPlayerNote, COACH_STARTED_LABEL, EVENT_LABEL, eventLabel, isGoalQuality, isMonday, nextMonday, parseDecision, planEndDate, PLAYER_BLOCK_TEXT, PLAYER_NOTE_MAX } from "../requests";
 
 const TODAY = "2026-11-13"; // a Friday
 
@@ -65,5 +65,20 @@ describe("player input", () => {
       expect(t.is).not.toMatch(/\(ur\)|\(n\)|\(a\)/);
       expect(`${t.en} ${t.is}`).not.toMatch(/ACWR|IMTP|RSI|DSI|eccentric|plyometric/i);
     }
+  });
+});
+
+describe("a plan the coach started (Programme Library, 2026-11-15)", () => {
+  it("the history says the coach started it, never that the player asked", () => {
+    expect(eventLabel({ kind: "requested", actor_role: "coach" })).toBe(COACH_STARTED_LABEL);
+    expect(eventLabel({ kind: "requested", actor_role: "player" })).toBe(EVENT_LABEL.requested);
+    expect(eventLabel({ kind: "approved", actor_role: "coach" })).toBe(EVENT_LABEL.approved);
+    expect(COACH_STARTED_LABEL.is).not.toMatch(/\(ur\)|\(n\)/);
+  });
+  it("the start is checked like an approval: a Monday, not in the past, within 28 days", () => {
+    expect(parseDecision({ action: "approve", startDate: "2026-11-16" }, TODAY, "build_first").ok).toBe(true);
+    expect(parseDecision({ action: "approve", startDate: "2026-11-09" }, TODAY, "build_first").ok).toBe(false);
+    expect(parseDecision({ action: "approve", startDate: "2026-11-17" }, TODAY, "build_first").ok).toBe(false);
+    expect(parseDecision({ action: "approve", startDate: "2026-11-16", start: "ready" }, TODAY, "build_first").ok).toBe(false);
   });
 });

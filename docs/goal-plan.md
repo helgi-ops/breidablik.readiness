@@ -538,6 +538,23 @@ source `session` ("Set in this session"), new bar line `coach` (the coach's bar-
 new ref Zourdos 2016 (RPE → reps left, read in full). See `docs/session-delivery-model.md`. Tests:
 `strengthProgramming/__tests__/todayLiftRx.test.ts`.
 
+## The coach starts a plan from the Programme Library (2026-11-15)
+
+The coach asked for Óli Valur's top speed plan to go to his app with his name on the PDF. On the "Speed & power" tab the
+coach can pick a player ("For a player"):
+
+- **PDF with the name:** every library plan's PDF (in season, pre-season, individual; all four qualities) carries the
+  player's name as the masthead and running header (`SpeedPlanPdf` / `QualityPlanPdf`, `forPlayer`).
+- **Send to the app:** `GoalPlanSendPanel` shows the player's OWN goal plan for that quality, built from their data by
+  the same rules as a player's request (start, the library's level, the team's swaps), with the start, first Monday and
+  a note. "Send" → `POST /api/coach/goal-plans/start` → `startGoalByCoach` (store.ts): same checks as approving a
+  request (one open goal, safe starts only, offered levels, rebuilt and frozen on the server), written as **approved in
+  one step** so the player never sees a "waiting" request they did not make. Events: `requested` by the coach
+  (`detail.by_coach`, `source: programme_library`) + `approved`; history and PDF read it as "Coach started the plan"
+  (`eventLabel`). Approval logic is shared with `decideGoal` (`approvedPlan`, `approvalCols`, `logApproval`).
+- The goal plan is an add-on (2 sessions a week, on the team's training days), so for top speed it differs from the
+  library's 4-day "Individual" plan; the panel says so. Nothing else is sent (no push, no email). FREE-locked: 402.
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

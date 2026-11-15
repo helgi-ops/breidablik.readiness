@@ -71,6 +71,13 @@ export const EVENT_LABEL: Record<GoalPlanEventRow["kind"], Bi> = {
   result_removed: { en: "Test result removed", is: "Prófniðurstaða fjarlægð" },
 };
 
+/** A plan the coach started from the Programme Library has a "requested" event by the coach, not the player. */
+export const COACH_STARTED_LABEL: Bi = { en: "Coach started the plan", is: "Þjálfari setti áætlunina af stað" };
+
+export function eventLabel(e: Pick<GoalPlanEventRow, "kind" | "actor_role">): Bi {
+  return e.kind === "requested" && e.actor_role === "coach" ? COACH_STARTED_LABEL : EVENT_LABEL[e.kind];
+}
+
 /** What the player is told when a quality cannot be asked for now (plain, second person, no jargon). */
 export const PLAYER_BLOCK_TEXT: Record<GoalBlockReason, Bi> = {
   injured_or_rtt: { en: "Not while you are injured or coming back. Ask again when you are back in full training.", is: "Ekki á meðan meiðsli eða endurkoma standa yfir. Biddu aftur þegar full þjálfun er hafin á ný." },

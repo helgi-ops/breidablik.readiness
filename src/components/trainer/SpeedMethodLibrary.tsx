@@ -121,7 +121,7 @@ function MethodCard({ m, lang }: { m: SpeedMethod; lang: Lang }) {
 /** The team's swaps for top speed (lota 4, step 3). `busy` while a change is being saved. */
 type SwapProps = { swaps: SwapChoices; onSwap?: OnSwap; busy?: boolean };
 
-function PlanView({ plan: base, lang, level, swaps, onSwap, busy: saving }: { plan: SpeedPlan; lang: Lang; level: TrainingLevel } & SwapProps) {
+function PlanView({ plan: base, lang, level, swaps, onSwap, busy: saving, forPlayer }: { plan: SpeedPlan; lang: Lang; level: TrainingLevel; forPlayer?: string | null } & SwapProps) {
   // The swaps change only the library's copy; the dose and flat-out metres never change.
   // Lota 7: every gym lift gets its full set of variables (the dose line itself does not change).
   const plan = useMemo(() => withRx(applySwaps(base, "top_speed", swaps), { quality: "top_speed", level, youth: false }), [base, swaps, level]);
@@ -135,7 +135,7 @@ function PlanView({ plan: base, lang, level, swaps, onSwap, busy: saving }: { pl
     setErr(null);
     try {
       const { downloadSpeedPlanPdf } = await import("@/components/coach/SpeedPlanPdf");
-      await downloadSpeedPlanPdf(plan, lang, level !== "intermediate");
+      await downloadSpeedPlanPdf(plan, lang, level !== "intermediate", forPlayer ?? null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -156,7 +156,7 @@ function PlanView({ plan: base, lang, level, swaps, onSwap, busy: saving }: { pl
           disabled={busy}
           className="shrink-0 rounded-lg bg-[#2740e6] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
         >
-          {busy ? (lang === "IS" ? "Bý til PDF…" : "Making PDF…") : (lang === "IS" ? "Sækja PDF" : "Download PDF")}
+          {busy ? (lang === "IS" ? "Bý til PDF…" : "Making PDF…") : forPlayer ? (lang === "IS" ? `Sækja PDF · ${forPlayer}` : `Download PDF · ${forPlayer}`) : (lang === "IS" ? "Sækja PDF" : "Download PDF")}
         </button>
       </div>
       {err && <p className="text-xs text-red-700">{err}</p>}
@@ -229,7 +229,8 @@ export default function SpeedMethodLibrary({
   levelBusy,
   swaps,
   onSwap,
-}: { lang: Lang; level: TrainingLevel; onLevel: (lv: TrainingLevel) => void; levelBusy?: boolean; swaps: SwapChoices; onSwap?: OnSwap }) {
+  forPlayer,
+}: { lang: Lang; level: TrainingLevel; onLevel: (lv: TrainingLevel) => void; levelBusy?: boolean; swaps: SwapChoices; onSwap?: OnSwap; forPlayer?: string | null }) {
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   const [planKey, setPlanKey] = useState<SpeedPlanKey>("in_season");
   const plan = speedPlan(planKey, level);
@@ -273,7 +274,7 @@ export default function SpeedMethodLibrary({
         </div>
         <LevelPicker level={level} onChange={onLevel} lang={lang} disabled={levelBusy} />
         <div className="mt-3">
-          <PlanView key={`${plan.key}-${level}`} plan={plan} lang={lang} level={level} swaps={swaps} onSwap={onSwap} busy={levelBusy} />
+          <PlanView key={`${plan.key}-${level}`} plan={plan} lang={lang} level={level} swaps={swaps} onSwap={onSwap} busy={levelBusy} forPlayer={forPlayer} />
         </div>
         <div className="mt-4 rounded-lg border border-[#de9328]/40 bg-white px-3 py-2">
           <div className="text-xs font-semibold text-slate-900">{lang === "IS" ? "Reglur í öllum áætlunum" : "Rules in every plan"}</div>

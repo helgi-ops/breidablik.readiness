@@ -26,8 +26,9 @@ import { BrandPage, Bullets, C, Provenance, Section, Table, Verdict, clean, fb, 
 
 type Lang = "EN" | "IS";
 
-/** `leveled`: a beginner or advanced version (lota 4), so the basis line says those levels are MicroPulse's. */
-export function SpeedPlanDoc({ plan, lang, leveled = false }: { plan: SpeedPlan; lang: Lang; leveled?: boolean }) {
+/** `leveled`: a beginner or advanced version (lota 4), so the basis line says those levels are MicroPulse's.
+ *  `forPlayer`: the player the coach picked in the library; their name heads the paper. */
+export function SpeedPlanDoc({ plan, lang, leveled = false, forPlayer = null }: { plan: SpeedPlan; lang: Lang; leveled?: boolean; forPlayer?: string | null }) {
   const L = (b: Bi) => clean(lang === "IS" ? b.is : b.en);
   const IS = lang === "IS";
   const methods = planMethodKeys(plan).map((k) => SPEED_METHOD_BY_KEY[k]);
@@ -44,9 +45,9 @@ export function SpeedPlanDoc({ plan, lang, leveled = false }: { plan: SpeedPlan;
     <Document title={L(plan.title)}>
       <BrandPage
         doc={IS ? "Hámarkshraði" : "Top speed plan"}
-        context={IS ? "Fyrir þjálfara" : "For the coach"}
-        title={L(plan.title)}
-        kicker={IS ? "HÁMARKSHRAÐI · ÁÆTLUN" : "TOP SPEED · PLAN"}
+        context={forPlayer ?? (IS ? "Fyrir þjálfara" : "For the coach")}
+        title={forPlayer ?? L(plan.title)}
+        kicker={forPlayer ? `${IS ? "HÁMARKSHRAÐI" : "TOP SPEED"} · ${L(plan.title)}` : IS ? "HÁMARKSHRAÐI · ÁÆTLUN" : "TOP SPEED · PLAN"}
         subtitle={L(plan.who)}
         note={IS ? "Samsetning MicroPulse úr skömmtum rannsóknanna · ekki prófuð sem heild" : "MicroPulse's combination of doses from the studies · not tested as a whole"}
       >
@@ -131,7 +132,8 @@ export function SpeedPlanDoc({ plan, lang, leveled = false }: { plan: SpeedPlan;
   );
 }
 
-export async function downloadSpeedPlanPdf(plan: SpeedPlan, lang: Lang, leveled = false) {
-  const blob = await renderPdfBlob(() => <SpeedPlanDoc plan={plan} lang={lang} leveled={leveled} />);
-  saveBlob(blob, `${fileSafe(lang === "IS" ? plan.title.is : plan.title.en).toLowerCase()}.pdf`);
+export async function downloadSpeedPlanPdf(plan: SpeedPlan, lang: Lang, leveled = false, forPlayer: string | null = null) {
+  const blob = await renderPdfBlob(() => <SpeedPlanDoc plan={plan} lang={lang} leveled={leveled} forPlayer={forPlayer} />);
+  const title = lang === "IS" ? plan.title.is : plan.title.en;
+  saveBlob(blob, `${fileSafe(forPlayer ? `${title} ${forPlayer}` : title).toLowerCase()}.pdf`);
 }

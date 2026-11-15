@@ -119,7 +119,8 @@ function PlanView({
   swaps,
   onSwap,
   busy: saving,
-}: { plan: QualityPlan; lib: QualityLibrary; lang: Lang; level: TrainingLevel; youth: boolean } & SwapProps) {
+  forPlayer,
+}: { plan: QualityPlan; lib: QualityLibrary; lang: Lang; level: TrainingLevel; youth: boolean; forPlayer?: string | null } & SwapProps) {
   // `base` is already the chosen level: its title, facts and limits name the level (lota 4). The team's swaps are
   // applied to this copy only (step 3); the dose and counters never change.
   // Lota 7: every gym lift gets its full set of variables (the dose line itself does not change).
@@ -137,7 +138,7 @@ function PlanView({
     setErr(null);
     try {
       const { downloadQualityPlanPdf } = await import("@/components/coach/QualityPlanPdf");
-      await downloadQualityPlanPdf(plan, lang);
+      await downloadQualityPlanPdf(plan, lang, forPlayer ?? null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -158,7 +159,7 @@ function PlanView({
           disabled={busy}
           className="shrink-0 rounded-lg bg-[#2740e6] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
         >
-          {busy ? (lang === "IS" ? "Bý til PDF…" : "Making PDF…") : (lang === "IS" ? "Sækja PDF" : "Download PDF")}
+          {busy ? (lang === "IS" ? "Bý til PDF…" : "Making PDF…") : forPlayer ? (lang === "IS" ? `Sækja PDF · ${forPlayer}` : `Download PDF · ${forPlayer}`) : (lang === "IS" ? "Sækja PDF" : "Download PDF")}
         </button>
       </div>
       {err && <p className="text-xs text-red-700">{err}</p>}
@@ -222,7 +223,7 @@ type LevelProps = { level: TrainingLevel; onLevel: (lv: TrainingLevel) => void; 
 /** The team's swaps for this quality (lota 4, step 3). `busy` while a change is being saved. */
 type SwapProps = { swaps: SwapChoices; onSwap?: OnSwap; busy?: boolean };
 
-function PlansSection({ lib, lang, level, onLevel, levelBusy, swaps, onSwap }: { lib: QualityLibrary; lang: Lang } & LevelProps & SwapProps) {
+function PlansSection({ lib, lang, level, onLevel, levelBusy, swaps, onSwap, forPlayer }: { lib: QualityLibrary; lang: Lang; forPlayer?: string | null } & LevelProps & SwapProps) {
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   const [key, setKey] = useState<QualityPlanKey>("in_season");
   const starts = individualStarts(lib.quality, level);
@@ -272,7 +273,7 @@ function PlansSection({ lib, lang, level, onLevel, levelBusy, swaps, onSwap }: {
       )}
       <LevelPicker level={level} onChange={onLevel} lang={lang} youth={youth} disabled={levelBusy} />
       <div className="mt-3">
-        <PlanView key={`${plan.key}-${plan.start ?? ""}-${youth ? "youth" : level}`} plan={plan} lib={lib} lang={lang} level={level} youth={youth} swaps={swaps} onSwap={onSwap} busy={levelBusy} />
+        <PlanView key={`${plan.key}-${plan.start ?? ""}-${youth ? "youth" : level}`} plan={plan} lib={lib} lang={lang} level={level} youth={youth} swaps={swaps} onSwap={onSwap} busy={levelBusy} forPlayer={forPlayer} />
       </div>
       <div className="mt-4 rounded-lg border border-[#de9328]/40 bg-white px-3 py-2">
         <div className="text-xs font-semibold text-slate-900">{lang === "IS" ? "Reglur í öllum áætlunum" : "Rules in every plan"}</div>
@@ -292,7 +293,8 @@ export default function QualityMethodLibrary({
   levelBusy,
   swaps,
   onSwap,
-}: { lib: QualityLibrary; lang: Lang } & LevelProps & SwapProps) {
+  forPlayer,
+}: { lib: QualityLibrary; lang: Lang; forPlayer?: string | null } & LevelProps & SwapProps) {
   const L = (b: Bi) => (lang === "IS" ? b.is : b.en);
   return (
     <div>
@@ -311,7 +313,7 @@ export default function QualityMethodLibrary({
         </ul>
       </div>
 
-      <PlansSection lib={lib} lang={lang} level={level} onLevel={onLevel} levelBusy={levelBusy} swaps={swaps} onSwap={onSwap} />
+      <PlansSection lib={lib} lang={lang} level={level} onLevel={onLevel} levelBusy={levelBusy} swaps={swaps} onSwap={onSwap} forPlayer={forPlayer} />
 
       {BASIS_ORDER.map((b) => {
         const group = methodsByBasis(lib, b);

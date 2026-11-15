@@ -321,6 +321,7 @@ describe("never touches the colour or Today's session", () => {
       "src/app/api/coach/goal-plans/requests/[id]/decision/route.ts",
       "src/app/api/coach/goal-plans/requests/[id]/results/route.ts",
       "src/app/api/coach/goal-plans/[id]/preview/route.ts",
+      "src/app/api/coach/goal-plans/start/route.ts",
     ]) {
       expect(await codeOf(resolve(process.cwd(), r))).not.toMatch(/player_today_strength_override|readiness_entries|\.insert\(|\.update\(|\.delete\(/);
     }

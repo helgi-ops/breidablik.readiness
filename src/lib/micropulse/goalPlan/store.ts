@@ -22,6 +22,7 @@ import {
   planEndDate,
   resumeDefaultWeek,
   resumedStartDate,
+  type GoalDecision,
   type GoalPlanEventRow,
   type GoalPlanRow,
   type GoalPlanStatus,
@@ -256,6 +257,120 @@ export async function loadGoalReview(
   };
 }
 
+type ApproveDecision = Extract<GoalDecision, { action: "approve" }>;
+type GoalInput = Parameters<typeof allowedStarts>[0];
+
+/**
+ * The plan an approval freezes, rebuilt here from fresh data (the server never trusts a plan sent from the browser):
+ * only a start the safety rules allow, only a level offered for this player and start, the team's saved swaps.
+ */
+function approvedPlan(input: GoalInput, teamPref: TeamQualityPref, d: ApproveDecision): GoalPlan {
+  if (d.start && !allowedStarts(input).some((s) => s.key === d.start)) {
+    throw new GoalPlanError(422, "That start is not allowed for this player by the safety rules.", "Öryggisreglurnar leyfa ekki þetta upphaf fyrir leikmanninn.");
+  }
+  const forStart = { ...input, startOverride: d.start };
+  if (d.level && !allowedLevels(forStart).includes(d.level)) {
+    throw new GoalPlanError(422, "That level is not offered for this player and start (under 18, or drop jumps at beginner).", "Þetta stig er ekki í boði fyrir leikmanninn og upphafið (undir 18 ára, eða fallstökk á byrjendastigi).");
+  }
+  const plan = buildGoalPlan({ ...forStart, level: d.level ?? teamPref.level, swaps: teamPref.swaps });
+  if (plan.status !== "ok") {
+    throw new GoalPlanError(409, `No plan can be approved now: ${plan.blocked?.text.en ?? "blocked"}`, `Ekki hægt að samþykkja áætlun núna: ${plan.blocked?.text.is ?? "lokað"}`);
+  }
+  return plan;
+}
+
+const approvalCols = (plan: GoalPlan, d: ApproveDecision, coachUserId: string, now: string) => ({
+  status: "approved" as const, plan, engine_version: plan.engineVersion, content_version: plan.contentVersion,
+  start_override: plan.startOverride?.chosen ?? null, start_date: d.startDate, end_date: planEndDate(d.startDate),
+  coach_note: d.noteToPlayer, decision_reason: d.reason, reviewed_by: coachUserId, reviewed_at: now, updated_at: now,
+});
+
+async function logApproval(
+  sb: Sb, row: { id: string; team_id: string; player_id: string }, actor: { userId: string; role: "coach" },
+  plan: GoalPlan, d: ApproveDecision, teamPref: TeamQualityPref,
+) {
+  if (plan.startOverride) {
+    await logEvent(sb, row, "start_changed", actor, d.reason, { rule: plan.startOverride.rule, chosen: plan.startOverride.chosen });
+  }
+  await logEvent(sb, row, "approved", actor, null, {
+    start_date: d.startDate, start: plan.start,
+    // Lota 5: the level and swaps the plan was frozen with, and the team's saved level it started from.
+    level: plan.level ?? "intermediate", team_level: teamPref.level, swaps: plan.swaps ?? {},
+  });
+}
+
+// ─── The coach starts a plan from the Programme Library (2026-11-15) ────────
+
+export type CoachStartPreview = {
+  playerName: string | null;
+  /** The plan as it would start now (fresh data, the chosen start and level, the team's swaps). */
+  plan: GoalPlan;
+  ruleStart: string | null;
+  starts: ReturnType<typeof allowedStarts>;
+  levels: TrainingLevel[];
+  teamPref: TeamQualityPref;
+  /** An open goal blocks a new one (one at a time). */
+  openGoal: { id: string; quality: GoalQuality; status: GoalPlanStatus } | null;
+};
+
+/** What the coach would send: built from the player's own data, same rules as a player's request. Read-only. */
+export async function loadCoachStartPreview(
+  sb: Sb, teamId: string, playerId: string, quality: GoalQuality, chosenStart: string | null, chosenLevel: TrainingLevel | null,
+): Promise<CoachStartPreview> {
+  const [{ name, base }, prefs, openGoal] = await Promise.all([
+    loadGoalPlanBase(sb, teamId, playerId, todayIso()),
+    loadTeamQualityPrefs(sb, teamId),
+    openGoalForPlayer(sb, teamId, playerId),
+  ]);
+  const input = { ...base, quality };
+  const teamPref = prefs[quality];
+  const live = { ...input, startOverride: chosenStart, level: chosenLevel ?? teamPref.level, swaps: teamPref.swaps };
+  return {
+    playerName: name, plan: buildGoalPlan(live), ruleStart: ruleStart(input),
+    starts: allowedStarts(input), levels: allowedLevels(live), teamPref, openGoal,
+  };
+}
+
+/**
+ * The coach starts a goal plan for a player without a request from them: the same checks and frozen plan as an
+ * approval, written in one step as "approved" (the player never sees a "waiting" request they did not make). The
+ * audit trail says the coach started it. Nothing is sent (no push, no email); the player sees it on Today.
+ */
+export async function startGoalByCoach(
+  sb: Sb,
+  args: { teamId: string; playerId: string; coachUserId: string; quality: GoalQuality; body: unknown },
+): Promise<{ id: string; status: "approved" }> {
+  const today = todayIso();
+  const [{ base }, prefs, open] = await Promise.all([
+    loadGoalPlanBase(sb, args.teamId, args.playerId, today),
+    loadTeamQualityPrefs(sb, args.teamId),
+    openGoalForPlayer(sb, args.teamId, args.playerId),
+  ]);
+  if (open) throw new GoalPlanError(409, "This player already has an open goal plan.", "Leikmaðurinn er nú þegar með opið markmiðsplan.");
+  const input = { ...base, quality: args.quality };
+  const teamPref = prefs[args.quality];
+  const rule = ruleStart(input);
+  const b = args.body && typeof args.body === "object" ? (args.body as Record<string, unknown>) : {};
+  const parsed = parseDecision({ ...b, action: "approve" }, today, rule);
+  if (!parsed.ok) throw new GoalPlanError(400, parsed.error);
+  const d = parsed.value as ApproveDecision;
+  const plan = approvedPlan(input, teamPref, d);
+  const now = new Date().toISOString();
+  const { data, error } = await sb.from("player_goal_plans").insert({
+    team_id: args.teamId, player_id: args.playerId, quality: args.quality, player_note: null, proposal: plan,
+    requested_by: args.coachUserId, ...approvalCols(plan, d, args.coachUserId, now),
+  }).select("id, team_id, player_id").single();
+  if (error) {
+    if ((error as { code?: string }).code === "23505") throw new GoalPlanError(409, "This player already has an open goal plan.", "Leikmaðurinn er nú þegar með opið markmiðsplan.");
+    throw new Error(error.message);
+  }
+  const row = data as { id: string; team_id: string; player_id: string };
+  const actor = { userId: args.coachUserId, role: "coach" as const };
+  await logEvent(sb, row, "requested", actor, null, { quality: args.quality, rule_start: rule, by_coach: true, source: "programme_library" });
+  await logApproval(sb, row, actor, plan, d, teamPref);
+  return { id: row.id, status: "approved" };
+}
+
 export async function decideGoal(
   sb: Sb,
   args: { teamId: string; planId: string; coachUserId: string; body: unknown },
@@ -279,34 +394,12 @@ export async function decideGoal(
   const actor = { userId: args.coachUserId, role: "coach" as const };
 
   if (d.action === "approve") {
-    if (d.start && !allowedStarts(input).some((s) => s.key === d.start)) {
-      throw new GoalPlanError(422, "That start is not allowed for this player by the safety rules.");
-    }
-    // Lota 5: the coach's level must be one offered for this player and start; the swaps are the team's saved ones.
-    const forStart = { ...input, startOverride: d.start };
-    if (d.level && !allowedLevels(forStart).includes(d.level)) {
-      throw new GoalPlanError(422, "That level is not offered for this player and start (under 18, or drop jumps at beginner).");
-    }
-    // Rebuilt here from fresh data: the server never trusts a plan sent from the browser.
-    const plan = buildGoalPlan({ ...forStart, level: d.level ?? teamPref.level, swaps: teamPref.swaps });
-    if (plan.status !== "ok") {
-      throw new GoalPlanError(409, `No plan can be approved now: ${plan.blocked?.text.en ?? "blocked"}`);
-    }
-    const { data, error } = await sb.from("player_goal_plans").update({
-      status: "approved", plan, engine_version: plan.engineVersion, content_version: plan.contentVersion,
-      start_override: plan.startOverride?.chosen ?? null, start_date: d.startDate, end_date: planEndDate(d.startDate),
-      coach_note: d.noteToPlayer, decision_reason: d.reason, reviewed_by: args.coachUserId, reviewed_at: now, updated_at: now,
-    }).eq("id", row.id).eq("status", "requested").select("id");
+    const plan = approvedPlan(input, teamPref, d);
+    const { data, error } = await sb.from("player_goal_plans").update(approvalCols(plan, d, args.coachUserId, now))
+      .eq("id", row.id).eq("status", "requested").select("id");
     if (error) throw new Error(error.message);
     if (!data?.length) throw new GoalPlanError(409, "Someone else answered this request first.");
-    if (plan.startOverride) {
-      await logEvent(sb, row, "start_changed", actor, d.reason, { rule: plan.startOverride.rule, chosen: plan.startOverride.chosen });
-    }
-    await logEvent(sb, row, "approved", actor, null, {
-      start_date: d.startDate, start: plan.start,
-      // Lota 5: the level and swaps the plan was frozen with, and the team's saved level it started from.
-      level: plan.level ?? "intermediate", team_level: teamPref.level, swaps: plan.swaps ?? {},
-    });
+    await logApproval(sb, row, actor, plan, d, teamPref);
     return { status: "approved" };
   }
 

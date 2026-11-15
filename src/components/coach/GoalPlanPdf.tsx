@@ -15,7 +15,7 @@ import { LEVEL_LABEL } from "@/lib/micropulse/goalPlan/levels";
 import { SWAPPED_BY_COACH } from "@/lib/micropulse/goalPlan/swaps";
 import { LiftRxSection } from "@/components/coach/LiftRxPdf";
 import { goalPlanWithRx } from "@/lib/micropulse/goalPlan/liftRx";
-import { EVENT_LABEL, STATUS_LABEL, type GoalPlanEventRow, type GoalPlanStatus } from "@/lib/micropulse/goalPlan/requests";
+import { eventLabel, STATUS_LABEL, type GoalPlanEventRow, type GoalPlanStatus } from "@/lib/micropulse/goalPlan/requests";
 import { MEASURE_DEF, PHASE_LABEL, type GoalProgress } from "@/lib/micropulse/goalPlan/outcome";
 import { BrandPage, Bullets, C, FactRow, Provenance, Section, Table, Verdict, clean, fb, fh, fileSafe, renderPdfBlob, saveBlob, type Tone } from "@/components/pdf/brand";
 
@@ -155,7 +155,7 @@ export function GoalPlanDoc({ d, lang }: { d: GoalPlanPdfData; lang: Lang }) {
             <Table
               dense
               cols={[{ label: T("Date", "Dags."), width: 80 }, { label: T("What", "Hvað"), flex: 1 }, { label: T("Reason", "Ástæða"), flex: 2 }]}
-              rows={d.events.map((e) => [dateOf(e.created_at, lang), L(EVENT_LABEL[e.kind]), e.reason ? clean(e.reason) : ""])}
+              rows={d.events.map((e) => [dateOf(e.created_at, lang), L(eventLabel(e)), e.reason ? clean(e.reason) : ""])}
             />
           </Section>
         ) : null}
