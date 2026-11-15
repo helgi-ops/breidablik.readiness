@@ -15,6 +15,7 @@ import type { OffWeekPlayerPlan } from "@/components/coach/OffWeekPlanPdf";
 import { formatTeamLabel } from "@/lib/teamLabels";
 import { LiftRxDetails } from "@/components/trainer/LiftRxTable";
 import { rxForOffWeekPlan } from "@/lib/micropulse/offWeek/liftRx";
+import { nextPicked, packFilename } from "@/lib/micropulse/offWeek/selection";
 
 type CompletionPlayer = { playerId: string; name: string; position: string | null; total: number; completed: number };
 type CompletionData = { weekStart: string | null; players: CompletionPlayer[]; summary?: { players: number; totalDays: number; doneDays: number } };
@@ -31,6 +32,8 @@ export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string 
   const [days, setDays] = useState(7);
   const [gym, setGym] = useState<"gym" | "bodyweight">("gym");
   const [players, setPlayers] = useState<OffWeekPlayerPlan[]>([]);
+  // The ticked players: "Send" and the PDF go to these only. null = not chosen yet → everyone on load.
+  const [picked, setPicked] = useState<Set<string> | null>(null);
   const [resolvedTeamName, setResolvedTeamName] = useState<string | null>(null); // the coach's own team name, from the API (works for non-admins too)
   const [scope, setScope] = useState<"squad" | "player">(focusPlayerId ? "player" : "squad"); // when a player is in focus, default to just him
   const [focusPid, setFocusPid] = useState<string | null>(focusPlayerId); // the single player in scope — the roster dropdown can change it
@@ -74,6 +77,7 @@ export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string 
   useEffect(() => {
     if (!open) return;
     setComp(null); setSentMsg(null);
+    setPicked(null); // another team / scope → everyone picked again
     void generate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId, focusPid, scope]);
@@ -87,7 +91,9 @@ export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string 
       const res = await fetch(`/api/coach/team/off-week?days=${days}&gym=${gym}${teamParam}${pidParam}`, { headers: { Authorization: `Bearer ${tk}` } });
       const j = await res.json().catch(() => null);
       if (!res.ok || !j?.ok) { setErr(j?.error ?? t("Failed.", "Mistókst.")); return; }
-      setPlayers((j.players ?? []) as OffWeekPlayerPlan[]);
+      const next = (j.players ?? []) as OffWeekPlayerPlan[];
+      setPlayers(next);
+      setPicked((prev) => nextPicked(prev, next.map((x) => x.playerId)));
       setResolvedTeamName((j.teamName as string | null) ?? null);
     } finally { setLoading(false); }
   };
@@ -98,12 +104,21 @@ export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string 
     await downloadOffWeekPlanPdf(subset, lang, filename, teamName ?? undefined);
   };
 
+  const selected = picked ? players.filter((p) => picked.has(p.playerId)) : players;
+  const allPicked = selected.length === players.length;
+  const togglePick = (id: string) => setPicked((prev) => {
+    const s = new Set(prev ?? players.map((p) => p.playerId));
+    if (s.has(id)) s.delete(id); else s.add(id);
+    return s;
+  });
+
   const sendToApp = async () => {
+    if (selected.length === 0) return;
     setSending(true); setErr(null); setSentMsg(null);
     try {
       const tk = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
       if (!tk) { setErr(t("Not signed in.", "Ekki innskráð(ur).")); return; }
-      const res = await fetch(`/api/coach/team/off-week`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ days, gym, ...(role === "admin" && teamId ? { teamId } : {}), ...(scope === "player" && focusPid ? { playerIds: [focusPid] } : {}) }) });
+      const res = await fetch(`/api/coach/team/off-week`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ days, gym, ...(role === "admin" && teamId ? { teamId } : {}), playerIds: selected.map((p) => p.playerId) }) }); // exactly the ticked players
       const j = await res.json().catch(() => null);
       if (!res.ok || !j?.ok) { setErr(j?.error ?? t("Send failed.", "Sending mistókst.")); return; }
       setSentMsg(t(`Sent to ${j.sent} players' app.`, `Sent í app ${j.sent} leikmanna.`));
@@ -229,8 +244,8 @@ export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string 
               <button type="button" onClick={generate} disabled={loading} className="rounded bg-slate-900 px-2.5 py-1 font-semibold text-white disabled:opacity-50">{loading ? t("Generating…", "Bý til…") : t("Regenerate", "Endurgera")}</button>
               {players.length > 0 && (
                 <div className="ml-auto flex items-center gap-2">
-                  <button type="button" onClick={() => dl(players, "off-week-team-pack.pdf")} className="rounded border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-700">{t("Team pack (PDF)", "Liðs-pakki (PDF)")}</button>
-                  <button type="button" onClick={sendToApp} disabled={sending} className="rounded bg-[#1c7a4a] px-2.5 py-1 font-semibold text-white disabled:opacity-50">{sending ? t("Sending…", "Sendi…") : t("Send to players' app", "Senda í app leikmanna")}</button>
+                  <button type="button" onClick={() => dl(selected, packFilename(selected.length, players.length))} disabled={selected.length === 0} className="rounded border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-700 disabled:opacity-50">{allPicked ? t("Team pack (PDF)", "Liðs-pakki (PDF)") : `PDF (${selected.length})`}</button>
+                  <button type="button" onClick={sendToApp} disabled={sending || selected.length === 0} className="rounded bg-[#1c7a4a] px-2.5 py-1 font-semibold text-white disabled:opacity-50">{sending ? t("Sending…", "Sendi…") : allPicked ? t("Send to players' app", "Senda í app leikmanna") : t(`Send to ${selected.length} players' app`, `Senda í app ${selected.length} leikmanna`)}</button>
                 </div>
               )}
             </div>
@@ -238,11 +253,24 @@ export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string 
             {sentMsg && <p className="mt-2 rounded bg-[#1c7a4a]/10 px-2 py-1 text-xs text-[#1c7a4a]">{sentMsg}</p>}
             {err && <p className="mt-2 rounded bg-[#a83e28]/10 px-2 py-1 text-xs text-[#a83e28]">{err}</p>}
 
-            <div className="mt-3 max-h-[60vh] space-y-2 overflow-y-auto">
-              {players.map((p) => (
-                <div key={p.playerId} className="rounded-lg border border-slate-200 p-2.5">
+            {players.length > 1 && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                <span className="font-semibold">{t(`${selected.length} of ${players.length} picked`, `${selected.length} af ${players.length} valdir`)}</span>
+                <button type="button" onClick={() => setPicked(new Set(players.map((p) => p.playerId)))} disabled={allPicked} className="rounded border border-slate-300 bg-white px-2 py-0.5 font-semibold text-slate-700 disabled:opacity-50">{t("Pick all", "Velja alla")}</button>
+                <button type="button" onClick={() => setPicked(new Set())} disabled={selected.length === 0} className="rounded border border-slate-300 bg-white px-2 py-0.5 font-semibold text-slate-700 disabled:opacity-50">{t("Clear", "Hreinsa val")}</button>
+              </div>
+            )}
+
+            <div className="mt-2 max-h-[60vh] space-y-2 overflow-y-auto">
+              {players.map((p) => {
+                const on = picked ? picked.has(p.playerId) : true;
+                return (
+                <div key={p.playerId} className={`rounded-lg border border-slate-200 p-2.5 ${on ? "" : "opacity-60"}`}>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold text-slate-900">{p.name} {p.position && <span className="text-[11px] font-normal text-slate-400">· {p.position}</span>}</span>
+                    <label className="flex min-w-0 cursor-pointer items-center gap-2">
+                      <input type="checkbox" checked={on} onChange={() => togglePick(p.playerId)} aria-label={p.name} className="h-4 w-4 accent-[#2740e6]" />
+                      <span className="text-sm font-semibold text-slate-900">{p.name} {p.position && <span className="text-[11px] font-normal text-slate-400">· {p.position}</span>}</span>
+                    </label>
                     <button type="button" onClick={() => dl([p])} className="rounded bg-[#2740e6] px-2 py-0.5 text-[11px] font-semibold text-white">PDF</button>
                   </div>
                   <p className="mt-0.5 text-[11px] text-slate-600">{lang === "IS" ? p.plan.summary.is : p.plan.summary.en}</p>
@@ -252,11 +280,12 @@ export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string 
                   {/* The strength lifts' "All the details" — coach view, each line says where it comes from. */}
                   <LiftRxDetails rx={rxForOffWeekPlan(p.plan, lang === "IS" ? "IS" : "EN")} lang={lang === "IS" ? "IS" : "EN"} />
                 </div>
-              ))}
+                );
+              })}
               {!loading && players.length === 0 && !err && <p className="text-xs text-slate-400">{t("No players.", "Engir leikmenn.")}</p>}
             </div>
 
-            <p className="mt-3 text-[10px] text-slate-400">{t("Send to the players' app (they see it in Strength, works offline once opened) or hand out the PDF.", "Sendu í app leikmanna (sést undir Styrk, virkar án nets þegar opnað) eða deildu PDF-inu.")}</p>
+            <p className="mt-3 text-[10px] text-slate-400">{t("Send to the players' app (they see it in Strength, works offline once opened) or hand out the PDF. Only the ticked players get it; the others keep what they already have.", "Sendu í app leikmanna (sést undir Styrk, virkar án nets þegar opnað) eða deildu PDF-inu. Aðeins hakaðir leikmenn fá það; hinir halda því sem þeir hafa þegar fengið.")}</p>
             </>
             )}
           </div>
