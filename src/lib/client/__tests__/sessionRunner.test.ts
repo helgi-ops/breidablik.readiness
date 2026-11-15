@@ -95,3 +95,23 @@ describe("sessionRunner — bar-speed method (Weakley et al. 2021, Table 5)", ()
     expect(ex[2].vbt).toBeNull();
   });
 });
+
+describe("sessionRunner — \"All the details\" table", () => {
+  it("shows the same table as the /client card for each lift", async () => {
+    const { rxForPtLift, ptInputFromClientRow } = await import("@/lib/micropulse/strengthProgramming/ptLiftRx");
+    const rows: PlanRow[] = [
+      { exercise: "Back Squat", sets: 4, reps: "3", method: "pct_1rm", load_value: 0, set_rest: "120 sec", notes: "Back Squat · 80% 1RM · VBT 0.65 m/s (cut 0.5525, 0.15)" },
+      { exercise: "Trap-bar deadlift", sets: 3, reps: "3", target_kg: 110, set_rest: "180 sec", tempo: "3010" },
+      { exercise: "Box jump", sets: 3, reps: "5" },
+    ];
+    const ex = buildRunnerBlocks(rows, none).flatMap((b) => b.exercises);
+    for (const lang of ["EN", "IS"] as const) {
+      ex.forEach((e, i) => {
+        const card = rxForPtLift(ptInputFromClientRow(rows[i] as unknown as Record<string, unknown>), lang);
+        expect(e.rxInput ? rxForPtLift(e.rxInput, lang) : null).toEqual(card);
+      });
+    }
+    expect(rxForPtLift(ex[0].rxInput!, "EN")).not.toBeNull();
+    expect(rxForPtLift(ex[2].rxInput!, "EN")).toBeNull(); // jumps get no table
+  });
+});

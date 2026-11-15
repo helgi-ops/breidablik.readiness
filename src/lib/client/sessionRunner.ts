@@ -11,6 +11,7 @@
 
 import { buildSessionBlocks, type GroupKind } from "./sessionGrouping";
 import { sanitizeVbtPrescription, type VbtPrescription } from "@/lib/micropulse/vbtMethods";
+import { ptInputFromClientRow, type PtLiftInput } from "@/lib/micropulse/strengthProgramming/ptLiftRx";
 
 export const DEFAULT_REST_SECONDS = 120;
 
@@ -28,6 +29,15 @@ export type PlanRow = {
   video_url?: string | null;
   /** Bar-speed method (Weakley et al. 2021, Table 5) as stored; sanitised when the run is built. */
   vbt?: unknown;
+  /** The plan's own numbers, read by the "All the details" table (ptLiftRx). */
+  method?: string | null;
+  load_value?: number | null;
+  rpe_target?: number | null;
+  pct1rm?: number | null;
+  tempo?: string | null;
+  notes?: string | null;
+  velocity?: unknown;
+  dropoff?: number | null;
 };
 
 export type LoggedSet = {
@@ -60,6 +70,8 @@ export type RunExercise = {
   videoUrl: string | null;
   /** The coach's bar-speed rule for this exercise, if any. */
   vbt: VbtPrescription | null;
+  /** The plan row as read for the "All the details" table (same as the /client card). */
+  rxInput?: PtLiftInput;
 };
 
 export type RunBlock = {
@@ -138,6 +150,7 @@ export function buildRunnerBlocks(rows: PlanRow[], last: Map<string, LastTime>):
         descriptionIs: r.description_is ?? null,
         videoUrl: r.video_url ?? null,
         vbt: sanitizeVbtPrescription(r.vbt),
+        rxInput: ptInputFromClientRow(r as unknown as Record<string, unknown>),
         // No weight known → bodyweight; the client can still add one.
         sets: Array.from({ length: nSets }, () => ({
           weight_kg: startKg,

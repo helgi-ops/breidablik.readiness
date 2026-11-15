@@ -25,6 +25,8 @@ import {
   type LoggedSet, type PlanRow, type Position, type RunBlock, type RunExercise, type RunSet,
 } from "@/lib/client/sessionRunner";
 import { formatVbtForPlayer } from "@/lib/micropulse/vbtMethods";
+import { rxForPtLift } from "@/lib/micropulse/strengthProgramming/ptLiftRx";
+import { LiftRxDetails } from "@/components/trainer/LiftRxTable";
 
 type Lang = "IS" | "EN";
 type Phase = "loading" | "run" | "rest" | "finish";
@@ -419,6 +421,11 @@ export default function SessionRunner({ lang, planRows, sessionName, onManual }:
       </div>
     );
   };
+  // "All the details" — the same plain table as the /client card (ptLiftRx), player view.
+  const rxDetails = (ex: RunExercise) => {
+    const rx = ex.rxInput ? rxForPtLift(ex.rxInput, lang) : null;
+    return rx ? <LiftRxDetails rx={[rx]} lang={lang} player bare /> : null;
+  };
 
   return (
     <div className={`${shell} bg-background text-slate-900`} style={padding}>
@@ -468,6 +475,7 @@ export default function SessionRunner({ lang, planRows, sessionName, onManual }:
                       <>
                         {lastLine(ex) && <div className="text-[13px] text-slate-600">{lastLine(ex)}</div>}
                         {vbtLine(ex)}
+                        {rxDetails(ex)}
                         {editor(ex, i)}
                         <ExerciseInfo name={ex.name} description={ex.description} descriptionIs={ex.descriptionIs} videoUrl={ex.videoUrl} />
                       </>
@@ -485,6 +493,7 @@ export default function SessionRunner({ lang, planRows, sessionName, onManual }:
                 <h1 className="font-display text-[26px] font-extrabold leading-tight tracking-tight">{ex.name}</h1>
                 {lastLine(ex) && <div className="mt-0.5 text-[13px] text-slate-700">{lastLine(ex)}</div>}
                 {vbtLine(ex)}
+                {rxDetails(ex)}
               </div>
               <div className="space-y-1.5">
                 {ex.sets.map((s, i) => i === pos.round ? (
