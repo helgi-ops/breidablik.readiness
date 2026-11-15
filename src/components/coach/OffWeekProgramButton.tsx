@@ -13,6 +13,8 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import type { OffWeekPlayerPlan } from "@/components/coach/OffWeekPlanPdf";
 import { formatTeamLabel } from "@/lib/teamLabels";
+import { LiftRxDetails } from "@/components/trainer/LiftRxTable";
+import { rxForOffWeekPlan } from "@/lib/micropulse/offWeek/liftRx";
 
 type CompletionPlayer = { playerId: string; name: string; position: string | null; total: number; completed: number };
 type CompletionData = { weekStart: string | null; players: CompletionPlayer[]; summary?: { players: number; totalDays: number; doneDays: number } };
@@ -247,6 +249,8 @@ export const OffWeekProgramButton: FC<{ teamId?: string; focusPlayerId?: string 
                   <ul className="mt-1 space-y-0.5">
                     {p.plan.why.map((w, i) => <li key={i} className="text-[11px] text-[#4a3a7a]">• {lang === "IS" ? w.is : w.en}</li>)}
                   </ul>
+                  {/* The strength lifts' "All the details" — coach view, each line says where it comes from. */}
+                  <LiftRxDetails rx={rxForOffWeekPlan(p.plan, lang === "IS" ? "IS" : "EN")} lang={lang === "IS" ? "IS" : "EN"} />
                 </div>
               ))}
               {!loading && players.length === 0 && !err && <p className="text-xs text-slate-400">{t("No players.", "Engir leikmenn.")}</p>}

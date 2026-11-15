@@ -9,9 +9,12 @@
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import { LiftRxDetails } from "@/components/trainer/LiftRxTable";
+import { rxForOffWeekBlock } from "@/lib/micropulse/offWeek/liftRx";
+import type { OffWeekLift } from "@/lib/micropulse/offWeek/plan";
 
 type Bi = { en: string; is: string };
-type Day = { dayIndex: number; type: string; title: Bi; blocks: Array<{ label: Bi; prescription: Bi }>; note: Bi };
+type Day = { dayIndex: number; type: string; title: Bi; blocks: Array<{ label: Bi; prescription: Bi; lifts?: OffWeekLift[] }>; note: Bi };
 type Plan = { days: Day[]; summary: Bi; caveat: Bi; why: Bi[] } | null;
 
 const TAG: Record<string, string> = { strength: "bg-indigo-100 text-indigo-700", run: "bg-emerald-100 text-emerald-700", combined: "bg-violet-100 text-violet-700", rest: "bg-zinc-100 text-zinc-500" };
@@ -99,9 +102,13 @@ export default function PlayerOffWeek() {
             </div>
             <ul className="mt-1.5 space-y-1">
               {d.blocks.map((b, i) => (
-                <li key={i} className="flex gap-2 text-[12px]">
-                  <span className="w-24 shrink-0 text-zinc-500">{t(b.label)}</span>
-                  <span className="flex-1 text-zinc-800">{t(b.prescription)}</span>
+                <li key={i} className="text-[12px]">
+                  <div className="flex gap-2">
+                    <span className="w-24 shrink-0 text-zinc-500">{t(b.label)}</span>
+                    <span className="min-w-0 flex-1 text-zinc-800">{t(b.prescription)}</span>
+                  </div>
+                  {/* "All the details" — the same table as Today / PT plans (offWeek/liftRx), player view. */}
+                  {b.lifts?.length ? <LiftRxDetails rx={rxForOffWeekBlock(b, is ? "IS" : "EN")} lang={is ? "IS" : "EN"} player /> : null}
                 </li>
               ))}
             </ul>

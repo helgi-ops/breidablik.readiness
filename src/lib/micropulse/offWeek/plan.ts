@@ -37,11 +37,25 @@ export interface OffWeekInputs {
   readinessNote?: string | null;             // e.g. carrying a niggle → lighten
 }
 
+/** One lift in a strength block, as data, so the "All the details" table (offWeek/liftRx) can read it.
+ *  Language-free: `name` is the exercise library's English name, `cue` is plain English the table reads
+ *  ("controlled", "fast intent"). Plans sent before 2026-11-15 have none — they show the text only. */
+export interface OffWeekLift {
+  name: string;
+  sets: number;
+  reps: string;
+  rpe?: string | null;   // "7", "7–8"
+  kg?: number | null;    // ~78% of a logged 1RM, only for the lift that 1RM belongs to
+  cue?: string | null;
+}
+
+export interface OffWeekBlock { label: Bi; prescription: Bi; lifts?: OffWeekLift[] }
+
 export interface OffWeekDay {
   dayIndex: number;
   type: "strength" | "run" | "combined" | "rest";
   title: Bi;
-  blocks: Array<{ label: Bi; prescription: Bi }>;
+  blocks: OffWeekBlock[];
   note: Bi;
 }
 
@@ -96,24 +110,42 @@ function shapeSlots(base: Slot[], needs: PlayerNeeds): Slot[] {
   return slots;
 }
 
-function strengthBlocks(inp: OffWeekInputs): Array<{ label: Bi; prescription: Bi }> {
+function strengthBlocks(inp: OffWeekInputs): OffWeekBlock[] {
   const { needs, oneRepMaxes, gymAccess } = inp;
   const has1rm = !!oneRepMaxes && Object.keys(oneRepMaxes).length > 0;
   const kg = (lift: string): string => {
     const v = oneRepMaxes?.[lift]; return v && v > 0 ? ` (~${round5(v * 0.78)} kg)` : "";
   };
-  const blocks: Array<{ label: Bi; prescription: Bi }> = [];
+  const kgOf = (...lifts: string[]): number | null => {
+    for (const l of lifts) { const v = oneRepMaxes?.[l]; if (v && v > 0) return round5(v * 0.78); }
+    return null;
+  };
+  const blocks: OffWeekBlock[] = [];
 
   if (gymAccess === "bodyweight" || !has1rm) {
     // Bodyweight maintenance circuit — no gym needed.
-    blocks.push({ label: { en: "Lower body", is: "Neðri líkami" }, prescription: { en: "Bulgarian split squat 3×8/leg · single-leg RDL 3×8/leg — controlled, RPE 7", is: "Búlgarskt klofstökk 3×8/fót · einfætt RDL 3×8/fót — stjórnað, RPE 7" } });
+    blocks.push({ label: { en: "Lower body", is: "Neðri líkami" }, prescription: { en: "Bulgarian split squat 3×8/leg · single-leg RDL 3×8/leg — controlled, RPE 7", is: "Búlgarskt klofstökk 3×8/fót · einfætt RDL 3×8/fót — stjórnað, RPE 7" },
+      lifts: [
+        { name: "Bulgarian split squat", sets: 3, reps: "8/leg", rpe: "7", cue: "controlled" },
+        { name: "Single-leg RDL", sets: 3, reps: "8/leg", rpe: "7", cue: "controlled" },
+      ] });
     blocks.push({ label: { en: "Push / pull", is: "Ýta / toga" }, prescription: { en: "Push-ups 3×max-2 · inverted row or band row 3×10", is: "Armbeygjur 3×hámark-2 · öfug róður eða teygju-róður 3×10" } });
   } else {
     const lean = needs.strengthLean ?? "balanced";
     const scheme = lean === "hypertrophy" ? "3×8–10 @ RPE 7–8" : lean === "max_strength" ? "4×3–5 @ RPE 8" : lean === "power" ? "5×3 explosive @ RPE 7 (fast intent)" : "3×5 @ RPE 7";
     const schemeIs = lean === "hypertrophy" ? "3×8–10 @ RPE 7–8" : lean === "max_strength" ? "4×3–5 @ RPE 8" : lean === "power" ? "5×3 sprengikraftur @ RPE 7 (hratt)" : "3×5 @ RPE 7";
-    blocks.push({ label: { en: "Main lower lift", is: "Aðal fótalyfta" }, prescription: { en: `Squat or trap-bar deadlift ${scheme}${kg("squat") || kg("trap_bar_deadlift") || kg("deadlift")}`, is: `Hnébeygja eða trap-bar réttstöðulyfta ${schemeIs}${kg("squat") || kg("trap_bar_deadlift") || kg("deadlift")}` } });
-    blocks.push({ label: { en: "Upper", is: "Efri líkami" }, prescription: { en: `Bench or press + a row, ${scheme}${kg("bench")}`, is: `Bekkpressa eða pressa + róður, ${schemeIs}${kg("bench")}` } });
+    // The same scheme as data: sets × reps, RPE and the intent cue.
+    const dose = lean === "hypertrophy" ? { sets: 3, reps: "8–10", rpe: "7–8", cue: null }
+      : lean === "max_strength" ? { sets: 4, reps: "3–5", rpe: "8", cue: null }
+      : lean === "power" ? { sets: 5, reps: "3", rpe: "7", cue: "fast intent" }
+      : { sets: 3, reps: "5", rpe: "7", cue: null };
+    blocks.push({ label: { en: "Main lower lift", is: "Aðal fótalyfta" }, prescription: { en: `Squat or trap-bar deadlift ${scheme}${kg("squat") || kg("trap_bar_deadlift") || kg("deadlift")}`, is: `Hnébeygja eða trap-bar réttstöðulyfta ${schemeIs}${kg("squat") || kg("trap_bar_deadlift") || kg("deadlift")}` },
+      lifts: [
+        { name: "Back squat", ...dose, kg: kgOf("squat") },
+        { name: "Trap-bar deadlift", ...dose, kg: kgOf("trap_bar_deadlift", "deadlift") },
+      ] });
+    blocks.push({ label: { en: "Upper", is: "Efri líkami" }, prescription: { en: `Bench or press + a row, ${scheme}${kg("bench")}`, is: `Bekkpressa eða pressa + róður, ${schemeIs}${kg("bench")}` },
+      lifts: [{ name: "Bench press", ...dose, kg: kgOf("bench") }] });
   }
 
   // Deficit-driven emphasis (always low-load, injury-prevention).
@@ -121,8 +153,10 @@ function strengthBlocks(inp: OffWeekInputs): Array<{ label: Bi; prescription: Bi
   const hasEcc = def.some((d) => /eccentric|hamstring|nordic/.test(d));
   const hasAdd = def.some((d) => /adductor|groin|copenhagen/.test(d));
   const hasUni = def.some((d) => /unilateral|asymmetr/.test(d));
-  if (hasEcc) blocks.push({ label: { en: "Hamstring (eccentric)", is: "Aftanlæri (eccentric)" }, prescription: { en: "Nordic hamstring 3×5 (slow lower) — van Dyk 2019", is: "Nordic aftanlæri 3×5 (hægt niður) — van Dyk 2019" } });
-  if (hasAdd) blocks.push({ label: { en: "Adductor", is: "Innanlæri" }, prescription: { en: "Copenhagen plank 3×20–30 s/side — Harøy 2019", is: "Copenhagen planki 3×20–30 s/hlið — Harøy 2019" } });
+  if (hasEcc) blocks.push({ label: { en: "Hamstring (eccentric)", is: "Aftanlæri (eccentric)" }, prescription: { en: "Nordic hamstring 3×5 (slow lower) — van Dyk 2019", is: "Nordic aftanlæri 3×5 (hægt niður) — van Dyk 2019" },
+    lifts: [{ name: "Nordic hamstring", sets: 3, reps: "5", cue: "controlled" }] });
+  if (hasAdd) blocks.push({ label: { en: "Adductor", is: "Innanlæri" }, prescription: { en: "Copenhagen plank 3×20–30 s/side — Harøy 2019", is: "Copenhagen planki 3×20–30 s/hlið — Harøy 2019" },
+    lifts: [{ name: "Copenhagen adduction", sets: 3, reps: "20–30 s/side", cue: "controlled" }] });
   if (hasUni && gymAccess === "gym") blocks.push({ label: { en: "Unilateral / symmetry", is: "Einfætt / samhverfa" }, prescription: { en: "Extra single-leg set on the weaker side (3×8)", is: "Auka einfætt sett á veikari hlið (3×8)" } });
   return blocks;
 }
