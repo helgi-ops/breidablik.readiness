@@ -100,7 +100,14 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
   const rows = s ? (s.enabled ? s.players : testers) : [];
 
   const verdict = (st: State) => {
-    if (!st.hasList) return T("Players can't choose yet: the team list needs at least 2 exercises in a group.", "Leikmenn geta ekki valið enn: æfingalisti liðsins þarf a.m.k. 2 æfingar í flokki.");
+    // Lota 4: without a team list the switch only lets 8-week goals start without approval.
+    if (!st.hasList) {
+      if (st.enabled) return T("On: players start 8-week goals without your approval.", "Kveikt: leikmenn byrja 8 vikna markmið án samþykkis þíns.");
+      if (st.testing === 0) return T("Off: players ask for 8-week goals and you approve them.", "Slökkt: leikmenn biðja um 8 vikna markmið og þú samþykkir.");
+      return st.testing === 1
+        ? T("Off for the team; on for 1 test player.", "Slökkt fyrir liðið; kveikt fyrir 1 prufuleikmann.")
+        : T(`Off for the team; on for ${st.testing} test players.`, `Slökkt fyrir liðið; kveikt fyrir ${st.testing} prufuleikmenn.`);
+    }
     if (!st.enabled) {
       if (st.testing === 0) return T("Off: players use your list in your order.", "Slökkt: leikmenn fá listann þinn í þinni röð.");
       return st.testing === 1
@@ -123,6 +130,13 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
       {s ? (
         <>
           <p className="mt-1 text-[15px] font-semibold text-slate-900">{verdict(s)}</p>
+          {!s.hasList ? (
+            <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[12px] text-slate-600">
+              <li>{T("When on, a player's 8-week goal (top speed, acceleration, braking, jump) starts the next Monday without your approval. You see it in the list above and can stop it with a reason.", "Þegar kveikt er byrjar 8 vikna markmið leikmanns (hámarkshraði, hröðun, bremsun, stökk) næsta mánudag án samþykkis þíns. Þú sérð það í listanum hér fyrir ofan og getur stöðvað með ástæðu.")}</li>
+              <li>{T("Same plan and safety rules as when you approve with no changes. Injured or returning players can't start one; under-18s get the youth plan.", "Sama áætlun og öryggisreglur og þegar þú samþykkir án breytinga. Meiddir eða leikmenn í endurkomu geta ekki byrjað; undir 18 ára fá unglingaáætlun.")}</li>
+              <li>{T("Exercise picks and a strength goal come too once the team has an exercise list (Strength → Exercise palette, at least 2 exercises in a group).", "Æfingaval og styrktarmarkmið bætast við þegar liðið er komið með æfingalista (Styrkur → Æfingasafn, a.m.k. 2 æfingar í flokki).")}</li>
+            </ul>
+          ) : (
           <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[12px] text-slate-600">
             <li>{T("Players choose from your team list (Strength → Exercise palette). Their picks go first in that group; you see every pick here.", "Leikmenn velja af æfingalista liðsins (Styrkur → Æfingasafn). Valið fer fremst í flokknum; þú sérð allt val hér.")}</li>
             <li>{T("No approval: a pick counts from the player's next session sent. Sets, reps and rest don't change, and the Nordic / Copenhagen block stays.", "Ekkert samþykki: valið gildir frá næstu æfingu sem leikmaður fær. Sett, endurtekningar og hvíld breytast ekki og Nordic / Copenhagen haldast.")}</li>
@@ -130,20 +144,23 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
             <li>{T("Safety rules still win (e.g. a sore lower back swaps the deadlift that day). Applies to individualised sessions.", "Öryggisreglur ráða áfram (t.d. aumur mjóhryggur skiptir út réttstöðulyftu þann dag). Gildir um einstaklingsmiðaðar æfingar.")}</li>
             <li>{T("8-week goals (top speed, acceleration, braking, jump) start the next Monday without your approval. You see them in the list above and can stop one with a reason. Injured or returning players still can't start one; under-18s get the youth plan.", "8 vikna markmið (hámarkshraði, hröðun, bremsun, stökk) byrja næsta mánudag án samþykkis þíns. Þú sérð þau í listanum hér fyrir ofan og getur stöðvað með ástæðu. Meiddir eða leikmenn í endurkomu geta ekki byrjað; undir 18 ára fá unglingaáætlun.")}</li>
           </ul>
+          )}
 
-          {s.hasList ? (
-            <label className="mt-3 flex items-center gap-2 text-[13px] text-slate-800">
-              <input type="checkbox" checked={s.enabled} disabled={busy}
-                onChange={async (e) => { const m = await put({ action: "enable", enabled: e.target.checked }); if (m) setErr(m); }} />
-              {T("Players choose for themselves: exercises from the team list, a strength goal, and 8-week goals without approval", "Leikmenn velja sjálfir: æfingar af æfingalista liðsins, styrktarmarkmið og 8 vikna markmið án samþykkis")}
-            </label>
-          ) : null}
+          <label className="mt-3 flex items-center gap-2 text-[13px] text-slate-800">
+            <input type="checkbox" checked={s.enabled} disabled={busy}
+              onChange={async (e) => { const m = await put({ action: "enable", enabled: e.target.checked }); if (m) setErr(m); }} />
+            {s.hasList
+              ? T("Players choose for themselves: exercises from the team list, a strength goal, and 8-week goals without approval", "Leikmenn velja sjálfir: æfingar af æfingalista liðsins, styrktarmarkmið og 8 vikna markmið án samþykkis")
+              : T("Players start 8-week goals without my approval", "Leikmenn byrja 8 vikna markmið án samþykkis míns")}
+          </label>
 
-          {s.hasList && !s.enabled ? (
+          {!s.enabled ? (
             <div className="mt-3 rounded-lg border border-dashed border-slate-300 p-3" data-testid="picks-test">
               <p className="text-[12px] font-semibold text-slate-800">{T("Test with one player first", "Prófaðu fyrst með einum leikmanni")}</p>
               <p className="mt-0.5 text-[12px] text-slate-600">
-                {T("Only this player sees “My exercises & goal”, and their 8-week goal starts without approval; the rest of the team sees nothing new.", "Aðeins þessi leikmaður sér „Mínar æfingar og markmið“ og 8 vikna markmið leikmannsins byrjar án samþykkis; restin af liðinu sér ekkert nýtt.")}
+                {s.hasList
+                  ? T("Only this player sees “My exercises & goal”, and their 8-week goal starts without approval; the rest of the team sees nothing new.", "Aðeins þessi leikmaður sér „Mínar æfingar og markmið“ og 8 vikna markmið leikmannsins byrjar án samþykkis; restin af liðinu sér ekkert nýtt.")
+                  : T("Only this player's 8-week goal starts without approval; the rest of the team asks as before.", "Aðeins 8 vikna markmið þessa leikmanns byrjar án samþykkis; restin af liðinu biður um eins og áður.")}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <select value={testPick} onChange={(e) => setTestPick(e.target.value)} disabled={busy}

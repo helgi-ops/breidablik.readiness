@@ -23,7 +23,7 @@ import { loadPlayerPriority } from "@/lib/micropulse/goalPlan/priorityLoader";
 import { prioritySnapshot } from "@/lib/micropulse/goalPlan/priority";
 import { goalFail, requireGoalPlayer } from "./_shared";
 import { PLAYER_BLOCK_TEXT, autoStartDate, cleanPlayerNote, isGoalQuality, playerMayWithdraw } from "@/lib/micropulse/goalPlan/requests";
-import { playerChoicesOnFor } from "@/lib/micropulse/strengthProgramming/playerPicksStore";
+import { goalsWithoutApprovalFor } from "@/lib/micropulse/strengthProgramming/playerPicksStore";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -37,7 +37,7 @@ export async function GET(req: Request) {
       loadGoalEligibility(sb, teamId, playerId),
       playerCurrentGoalSynced(sb, playerId),
       playerGoalHistoryCount(sb, teamId, playerId).catch(() => 0),
-      playerChoicesOnFor(sb, teamId, playerId).catch(() => false),
+      goalsWithoutApprovalFor(sb, teamId, playerId).catch(() => false),
     ]);
     return NextResponse.json({
       ok: true,
@@ -76,7 +76,7 @@ export async function POST(req: Request) {
       .then((p) => (p ? prioritySnapshot(p.reads, p.metric, quality, switchedFrom) : null))
       .catch(() => null);
     // Read on the server, never from the body. A failed read falls back to the request + approval flow.
-    const autoStart = await playerChoicesOnFor(sb, teamId, playerId).catch(() => false);
+    const autoStart = await goalsWithoutApprovalFor(sb, teamId, playerId).catch(() => false);
     const res = await createGoalRequest(sb, { teamId, playerId, userId, quality, note: cleanPlayerNote(body.note), priority, autoStart });
     return NextResponse.json({ ok: true, id: res.id, status: res.status });
   } catch (e) {

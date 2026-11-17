@@ -13,6 +13,25 @@ import {
   eventLabel,
   playerMayWithdraw,
 } from "../requests";
+import { choicesOn, goalsWithoutApproval } from "../../strengthProgramming/playerPicksStore";
+
+describe("which switch does what (lota 4: every team, list or not)", () => {
+  const withList = { slots: {}, hasList: true };
+  const noList = { slots: {}, hasList: false };
+  it("8-week goals start without approval on the team switch or the test player, with or without a list", () => {
+    for (const cfg of [withList, noList]) {
+      expect(goalsWithoutApproval({ ...cfg, enabled: true }, null)).toBe(true);
+      expect(goalsWithoutApproval({ ...cfg, enabled: false }, { testEnabled: true })).toBe(true);
+      expect(goalsWithoutApproval({ ...cfg, enabled: false }, { testEnabled: false })).toBe(false);
+      expect(goalsWithoutApproval({ ...cfg, enabled: false }, null)).toBe(false);
+    }
+  });
+  it("exercise picks and the strength goal still need the team list", () => {
+    expect(choicesOn({ ...withList, enabled: true }, null)).toBe(true);
+    expect(choicesOn({ ...noList, enabled: true }, null)).toBe(false);
+    expect(choicesOn({ ...noList, enabled: false }, { testEnabled: true })).toBe(false);
+  });
+});
 
 describe("start date", () => {
   it("the Monday on or after today", () => {
@@ -55,7 +74,7 @@ describe("wiring", () => {
   const store = readFileSync(join(root, "src/lib/micropulse/goalPlan/store.ts"), "utf8");
 
   it("the player route reads the switch on the server and never takes autoStart from the body", () => {
-    expect(route).toMatch(/const autoStart = await playerChoicesOnFor\(sb, teamId, playerId\)/);
+    expect(route).toMatch(/const autoStart = await goalsWithoutApprovalFor\(sb, teamId, playerId\)/);
     expect(route).not.toMatch(/body\.autoStart/);
   });
 

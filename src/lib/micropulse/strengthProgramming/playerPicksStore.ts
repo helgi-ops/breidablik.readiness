@@ -76,18 +76,25 @@ export async function readTeamPickConfig(sb: SupabaseClient, teamId: string): Pr
   return { slots, enabled: !!row?.player_picks_enabled, hasList: pickableSlots(slots).length > 0 };
 }
 
-/** Is picking on for this player? The team switch, or the coach's one-player test. Needs the team's list. */
+/** Is picking (and the strength goal) on for this player? The team switch, or the coach's one-player test. Needs
+ *  the team's list. */
 export function choicesOn(cfg: TeamRow, row: Pick<PlayerPicksRow, "testEnabled"> | null | undefined): boolean {
   return cfg.hasList && (cfg.enabled || !!row?.testEnabled);
 }
 
+/** Do 8-week goals start without approval for this player? The same switch, but NO list needed (lota 4,
+ *  2026-11-17: every team can use it, not only teams with an exercise list). */
+export function goalsWithoutApproval(cfg: Pick<TeamRow, "enabled">, row: Pick<PlayerPicksRow, "testEnabled"> | null | undefined): boolean {
+  return cfg.enabled || !!row?.testEnabled;
+}
+
 /**
- * Read-only: are player choices on for this player? Lota 3 (2026-11-17): the same switch also lets the player's
- * 8-week goal plan start without the coach's approval (goalPlan/store.ts `createGoalRequest({ autoStart })`).
+ * Read-only: does this player's 8-week goal plan start without the coach's approval (goalPlan/store.ts
+ * `createGoalRequest({ autoStart })`)? The player-choices switch (team or one-player test); since lota 4 no team
+ * exercise list is needed.
  */
-export async function playerChoicesOnFor(sb: SupabaseClient, teamId: string, playerId: string): Promise<boolean> {
+export async function goalsWithoutApprovalFor(sb: SupabaseClient, teamId: string, playerId: string): Promise<boolean> {
   const cfg = await readTeamPickConfig(sb, teamId);
-  if (!cfg.hasList) return false;
   if (cfg.enabled) return true;
   const { data, error } = await sb.from("player_strength_picks").select("test_enabled")
     .eq("player_id", playerId).eq("team_id", teamId).maybeSingle();
@@ -295,15 +302,12 @@ export async function setGoalLock(
   return readPlayerPicks(sb, args.playerId, args.teamId, args.slots);
 }
 
-/** Coach turns picks + goal on (or off) for ONE player to test, while the team switch is off. Needs the list. */
+/** Coach turns player choices on (or off) for ONE player to test, while the team switch is off. Without a team list
+ *  only the 8-week goal changes (starts without approval); picks and the strength goal need the list. */
 export async function setTestPlayer(
   sb: SupabaseClient,
   args: { playerId: string; teamId: string; on: boolean; actor: PickActor },
 ): Promise<void> {
-  const cfg = await readTeamPickConfig(sb, args.teamId);
-  if (args.on && !cfg.hasList) {
-    throw new PicksError(409, "The team list needs at least 2 exercises in a group first.", "Æfingalisti liðsins þarf fyrst a.m.k. 2 æfingar í einhverjum flokki.");
-  }
   const prior = await existingRow(sb, args.playerId);
   const sameTeam = prior?.team_id === args.teamId;
   if (!sameTeam && !args.on) return; // nothing on for this team
@@ -323,14 +327,26 @@ export async function setTestPlayer(
   await logEvent(sb, { teamId: args.teamId, playerId: args.playerId, kind: args.on ? "test_on" : "test_off", actor: args.actor });
 }
 
-/** Coach turns player picks on or off for the team. Needs the team's list (a palette row). */
+/**
+ * Coach turns player choices on or off for the team. Since lota 4 no list is needed: without one only the 8-week
+ * goals change (start without approval). A team with no palette row gets one holding just the switch (empty slots
+ * and MD structures, which every reader treats exactly like no row).
+ */
 export async function setTeamEnabled(sb: SupabaseClient, args: { teamId: string; enabled: boolean; actor: PickActor }): Promise<void> {
   const cfg = await readTeamPickConfig(sb, args.teamId);
-  if (args.enabled && !cfg.hasList) {
-    throw new PicksError(409, "The team list needs at least 2 exercises in a group first.", "Æfingalisti liðsins þarf fyrst a.m.k. 2 æfingar í einhverjum flokki.");
-  }
   if (cfg.enabled === args.enabled) return;
-  const { error } = await sb.from("team_strength_palette").update({ player_picks_enabled: args.enabled }).eq("team_id", args.teamId);
+  const { data: updated, error } = await sb.from("team_strength_palette").update({ player_picks_enabled: args.enabled })
+    .eq("team_id", args.teamId).select("team_id");
   if (error) throw new Error(error.message);
+  if (!updated?.length) {
+    if (!args.enabled) return;
+    // No palette row yet: insert one with only the switch; a row written meanwhile is left alone and switched on.
+    const { error: e2 } = await sb.from("team_strength_palette").insert({ team_id: args.teamId, player_picks_enabled: true });
+    if (e2 && (e2 as { code?: string }).code !== "23505") throw new Error(e2.message);
+    if (e2) {
+      const { error: e3 } = await sb.from("team_strength_palette").update({ player_picks_enabled: true }).eq("team_id", args.teamId);
+      if (e3) throw new Error(e3.message);
+    }
+  }
   await logEvent(sb, { teamId: args.teamId, playerId: null, kind: args.enabled ? "enabled" : "disabled", actor: args.actor });
 }

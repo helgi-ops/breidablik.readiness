@@ -562,8 +562,10 @@ and can stop a plan.
 
 - **Switch:** the same one as exercise picks and the strength goal: `team_strength_palette.player_picks_enabled`, or the
   coach's one-player test `player_strength_picks.test_enabled` ("Test with one player first" on `/coach/goal-requests`).
-  Read on the server in the player route (`playerChoicesOnFor`), never from the body; a failed read falls back to the
-  request + approval flow. Needs the team's exercise list (same as picks).
+  Read on the server in the player route (`goalsWithoutApprovalFor`), never from the body; a failed read falls back to
+  the request + approval flow. Since lota 4 (same day) **no exercise list is needed**: every team can switch it on;
+  without a list only the 8-week goals change (picks and the strength goal still need the list). A team with no
+  palette row gets one holding only the switch (empty slots / MD structures = same as no row for every reader).
 - **What starts:** `createGoalRequest({ autoStart: true })` → `startGoalByPlayer` builds the plan an approval with no
   changes would freeze (`approvedPlan`: rule start, the team's saved level and swaps, the same safety checks — injured /
   returning still 422, under 18 youth plans), starting the Monday on or after today (`autoStartDate`). Row
