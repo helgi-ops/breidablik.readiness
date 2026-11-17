@@ -81,6 +81,20 @@ export function choicesOn(cfg: TeamRow, row: Pick<PlayerPicksRow, "testEnabled">
   return cfg.hasList && (cfg.enabled || !!row?.testEnabled);
 }
 
+/**
+ * Read-only: are player choices on for this player? Lota 3 (2026-11-17): the same switch also lets the player's
+ * 8-week goal plan start without the coach's approval (goalPlan/store.ts `createGoalRequest({ autoStart })`).
+ */
+export async function playerChoicesOnFor(sb: SupabaseClient, teamId: string, playerId: string): Promise<boolean> {
+  const cfg = await readTeamPickConfig(sb, teamId);
+  if (!cfg.hasList) return false;
+  if (cfg.enabled) return true;
+  const { data, error } = await sb.from("player_strength_picks").select("test_enabled")
+    .eq("player_id", playerId).eq("team_id", teamId).maybeSingle();
+  if (error) throw new Error(error.message);
+  return !!(data as { test_enabled?: boolean } | null)?.test_enabled;
+}
+
 /** The groups a player can choose in, with the team's exercises (coach's order). */
 export function pickGroups(slots: PaletteSlots): PickGroup[] {
   return pickableSlots(slots).map((slot) => ({

@@ -37,6 +37,8 @@ export type GoalPlanRow = {
   /** Set while paused (lota 3): when, and which plan week the player was in. */
   paused_at?: string | null;
   paused_week?: number | null;
+  /** Started without the coach's approval (player choices on, 2026-11-17). */
+  auto_started?: boolean;
 };
 
 export type GoalPlanEventRow = {
@@ -74,8 +76,35 @@ export const EVENT_LABEL: Record<GoalPlanEventRow["kind"], Bi> = {
 /** A plan the coach started from the Programme Library has a "requested" event by the coach, not the player. */
 export const COACH_STARTED_LABEL: Bi = { en: "Coach started the plan", is: "Þjálfari setti áætlunina af stað" };
 
+/** A plan that started without approval (player choices on) has an "approved" event by the system. */
+export const AUTO_STARTED_EVENT_LABEL: Bi = { en: "Started right away (player's choice)", is: "Fór strax af stað (val leikmanns)" };
+/** Short tag for the coach's list. */
+export const AUTO_STARTED_TAG: Bi = { en: "Player's choice", is: "Val leikmanns" };
+
 export function eventLabel(e: Pick<GoalPlanEventRow, "kind" | "actor_role">): Bi {
-  return e.kind === "requested" && e.actor_role === "coach" ? COACH_STARTED_LABEL : EVENT_LABEL[e.kind];
+  if (e.kind === "requested" && e.actor_role === "coach") return COACH_STARTED_LABEL;
+  if (e.kind === "approved" && e.actor_role === "system") return AUTO_STARTED_EVENT_LABEL;
+  return EVENT_LABEL[e.kind];
+}
+
+/**
+ * Lota 3 of player choices (2026-11-17): when choices are on for the player, a goal starts without approval on the
+ * Monday on or after today (same rule start, level and swaps an approval with no changes would freeze).
+ */
+export function autoStartDate(todayIso: string): string {
+  return nextMonday(todayIso);
+}
+
+/**
+ * Can the player take their goal back? A request the coach has not answered, or a plan that started without
+ * approval and has not begun yet. Once it runs, only the coach stops it.
+ */
+export function playerMayWithdraw(
+  row: Pick<GoalPlanRow, "status" | "start_date"> & { auto_started?: boolean | null },
+  todayIso: string,
+): boolean {
+  if (row.status === "requested") return true;
+  return row.status === "approved" && !!row.auto_started && !!row.start_date && row.start_date > todayIso;
 }
 
 /** What the player is told when a quality cannot be asked for now (plain, second person, no jargon). */

@@ -38,6 +38,10 @@ type Current = {
   coachNote: string | null;
   declineReason: string | null;
   pausedWeek?: number | null;
+  /** Started without the coach's approval (player choices on). */
+  autoStarted?: boolean;
+  /** A waiting request, or an auto-started plan that has not begun. */
+  canWithdraw?: boolean;
 };
 
 const QUALITY: Record<GoalQuality, { label: Bi; sub: Bi }> = {
@@ -163,6 +167,8 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
   const [msg, setMsg] = React.useState<string | null>(null);
   const [reload, setReload] = React.useState(0);
   const [historyCount, setHistoryCount] = React.useState(0);
+  // Player choices on: a new goal starts without approval, on this Monday (server's date).
+  const [autoStart, setAutoStart] = React.useState<{ on: boolean; date: string | null }>({ on: false, date: null });
   const [history, setHistory] = React.useState<GoalHistoryItem[] | null>(null);
   const [historyState, setHistoryState] = React.useState<"closed" | "loading" | "open" | "error">("closed");
   const [suggestions, setSuggestions] = React.useState<Record<GoalQuality, Suggestion> | null>(null);
@@ -212,6 +218,7 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
         setEligibility((j.eligibility ?? []) as Eligibility[]);
         setCurrent((j.current ?? null) as Current | null);
         setHistoryCount(Number(j.historyCount ?? 0) || 0);
+        setAutoStart({ on: j.autoStart === true, date: typeof j.autoStartDate === "string" ? j.autoStartDate : null });
         setState("ready");
       } catch {
         if (alive) setState("error");
@@ -264,6 +271,8 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
               <div className="text-sm font-semibold text-slate-900">{L(QUALITY[current.quality].label)}</div>
               {current.status === "requested" ? (
                 <p className="mt-1 text-sm text-slate-700">{T(`Asked on ${fmtDate(current.requestedAt, false)}. Waiting for your coach to look at it.`, `Beðið um ${fmtDate(current.requestedAt, true)}. Bíður þess að þjálfarinn skoði það.`)}</p>
+              ) : current.status === "approved" && current.autoStarted ? (
+                <p className="mt-1 text-sm text-slate-700">{T(`Your plan is set. The 8 weeks run ${fmtDate(current.startDate, false)} – ${fmtDate(current.endDate, false)}. Each day's session shows on Today. Your coach sees it.`, `Áætlunin þín er klár. Vikurnar 8 standa ${fmtDate(current.startDate, true)} – ${fmtDate(current.endDate, true)}. Æfing hvers dags birtist á Í dag. Þjálfarinn sér hana.`)}</p>
               ) : current.status === "approved" ? (
                 <p className="mt-1 text-sm text-slate-700">{T(`Your coach said yes. The 8 weeks run ${fmtDate(current.startDate, false)} – ${fmtDate(current.endDate, false)}. Each day's session shows on Today.`, `Þjálfarinn sagði já. Vikurnar 8 standa ${fmtDate(current.startDate, true)} – ${fmtDate(current.endDate, true)}. Æfing hvers dags birtist á Í dag.`)}</p>
               ) : (
@@ -274,6 +283,10 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
             </div>
             {current.status === "requested" ? (
               <button type="button" disabled={busy} onClick={withdraw} className="text-sm font-medium text-slate-500 underline disabled:opacity-50">{T("Withdraw the request", "Draga beiðnina til baka")}</button>
+            ) : current.canWithdraw ? (
+              <button type="button" disabled={busy} onClick={withdraw} className="text-sm font-medium text-slate-500 underline disabled:opacity-50">{T("Cancel before it starts", "Hætta við áður en hún byrjar")}</button>
+            ) : current.status === "approved" && current.autoStarted ? (
+              <p className="text-xs text-slate-500">{T("To stop it, talk to your coach.", "Talaðu við þjálfarann ef þú vilt hætta.")}</p>
             ) : null}
             <p className="text-xs text-slate-500">{T("One goal at a time.", "Eitt markmið í einu.")}</p>
           </div>
@@ -323,9 +336,13 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
                   <span className="text-xs font-semibold">{T("Anything your coach should know? (optional)", "Eitthvað sem þjálfarinn ætti að vita? (valfrjálst)")}</span>
                   <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={PLAYER_NOTE_MAX} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
                 </label>
-                <p className="text-xs text-slate-500">{T("What happens next: MicroPulse builds an 8-week plan from your own data (two short extra sessions a week), and your coach says yes or no.", "Hvað gerist næst: MicroPulse býr til 8 vikna áætlun út frá þínum gögnum (tvær stuttar aukaæfingar á viku) og þjálfarinn segir já eða nei.")}</p>
+                {autoStart.on ? (
+                  <p className="text-xs text-slate-500">{T(`What happens next: MicroPulse builds an 8-week plan from your own data (two short extra sessions a week). It starts ${autoStart.date ? fmtDate(autoStart.date, false) : "on Monday"}; your coach sees it and can stop it.`, `Hvað gerist næst: MicroPulse býr til 8 vikna áætlun út frá þínum gögnum (tvær stuttar aukaæfingar á viku). Hún byrjar ${autoStart.date ? fmtDate(autoStart.date, true) : "á mánudaginn"}; þjálfarinn sér hana og getur stöðvað hana.`)}</p>
+                ) : (
+                  <p className="text-xs text-slate-500">{T("What happens next: MicroPulse builds an 8-week plan from your own data (two short extra sessions a week), and your coach says yes or no.", "Hvað gerist næst: MicroPulse býr til 8 vikna áætlun út frá þínum gögnum (tvær stuttar aukaæfingar á viku) og þjálfarinn segir já eða nei.")}</p>
+                )}
                 <button type="button" disabled={busy} onClick={send} className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
-                  {busy ? T("Sending…", "Sendi…") : T("Ask my coach", "Biðja þjálfarann")}
+                  {busy ? T("Sending…", "Sendi…") : autoStart.on ? T("Start my plan", "Byrja áætlunina") : T("Ask my coach", "Biðja þjálfarann")}
                 </button>
               </>
             ) : null}

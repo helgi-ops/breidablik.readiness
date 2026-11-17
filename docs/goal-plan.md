@@ -555,6 +555,26 @@ coach can pick a player ("For a player"):
 - The goal plan is an add-on (2 sessions a week, on the team's training days), so for top speed it differs from the
   library's 4-day "Individual" plan; the panel says so. Nothing else is sent (no push, no email). FREE-locked: 402.
 
+## Goals start without approval when player choices are on (2026-11-17)
+
+Lota 3 of "player choices" (picks → strength goal → this). Helgi decided: no coach approval; the coach sees everything
+and can stop a plan.
+
+- **Switch:** the same one as exercise picks and the strength goal: `team_strength_palette.player_picks_enabled`, or the
+  coach's one-player test `player_strength_picks.test_enabled` ("Test with one player first" on `/coach/goal-requests`).
+  Read on the server in the player route (`playerChoicesOnFor`), never from the body; a failed read falls back to the
+  request + approval flow. Needs the team's exercise list (same as picks).
+- **What starts:** `createGoalRequest({ autoStart: true })` → `startGoalByPlayer` builds the plan an approval with no
+  changes would freeze (`approvedPlan`: rule start, the team's saved level and swaps, the same safety checks — injured /
+  returning still 422, under 18 youth plans), starting the Monday on or after today (`autoStartDate`). Row
+  `auto_started = true`; events `requested` (player, `detail.auto_start`) + `approved` (actor_role `system`,
+  `detail.auto`), shown as "Started right away (player's choice)". No push, no email.
+- **Player:** button "Start my plan" with the start date; once set, "Cancel before it starts" until the first Monday
+  (`playerMayWithdraw`), then "talk to your coach".
+- **Coach:** "Player's choice" tag in the list, a count in the header, a note on the plan; stop with a reason as before.
+  Pause on injury, the Today card, ticks, tests and outcome are unchanged.
+- Tests: `__tests__/autoStart.test.ts`.
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

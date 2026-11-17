@@ -16,6 +16,7 @@ import { loadGoalPlanBase } from "./loader";
 import {
   DECISION_FROM,
   OPEN_STATUSES,
+  autoStartDate,
   PLAYER_BLOCK_TEXT,
   RESUME_FROM_START_AFTER_DAYS,
   parseDecision,
@@ -44,9 +45,9 @@ export class GoalPlanError extends Error {
 }
 
 const ROW_COLS =
-  "id, team_id, player_id, quality, status, player_note, proposal, plan, engine_version, content_version, start_override, start_date, end_date, coach_note, decision_reason, requested_at, reviewed_at, closed_at, paused_at, paused_week";
+  "id, team_id, player_id, quality, status, player_note, proposal, plan, engine_version, content_version, start_override, start_date, end_date, coach_note, decision_reason, requested_at, reviewed_at, closed_at, paused_at, paused_week, auto_started";
 const LIGHT_COLS =
-  "id, team_id, player_id, quality, status, player_note, start_override, start_date, end_date, coach_note, decision_reason, requested_at, reviewed_at, closed_at, paused_at, paused_week";
+  "id, team_id, player_id, quality, status, player_note, start_override, start_date, end_date, coach_note, decision_reason, requested_at, reviewed_at, closed_at, paused_at, paused_week, auto_started";
 
 async function logEvent(
   sb: Sb,
@@ -132,10 +133,13 @@ export async function createGoalRequest(
     teamId: string; playerId: string; userId: string; quality: GoalQuality; note: string | null;
     /** Lota 7: the "most to gain" suggestion the player saw and what they did (null = none shown). */
     priority?: GoalPrioritySnapshot | null;
+    /** Player choices are on for this player (read by the caller): the plan starts without the coach's approval. */
+    autoStart?: boolean;
   },
-): Promise<{ id: string }> {
+): Promise<{ id: string; status: "requested" | "approved" }> {
+  const today = todayIso();
   const [{ base }, prefs] = await Promise.all([
-    loadGoalPlanBase(sb, args.teamId, args.playerId, todayIso()),
+    loadGoalPlanBase(sb, args.teamId, args.playerId, today),
     loadTeamQualityPrefs(sb, args.teamId),
   ]);
   // Lota 5: the proposal starts from the team's saved level and swaps (Programme Library).
@@ -144,6 +148,7 @@ export async function createGoalRequest(
   if (proposal.status === "blocked" && proposal.blocked) {
     throw new GoalPlanError(422, PLAYER_BLOCK_TEXT[proposal.blocked.reason].en, PLAYER_BLOCK_TEXT[proposal.blocked.reason].is);
   }
+  if (args.autoStart) return startGoalByPlayer(sb, { ...args, input: { ...base, quality: args.quality }, teamPref: pref, today });
   const { data, error } = await sb.from("player_goal_plans").insert({
     team_id: args.teamId, player_id: args.playerId, quality: args.quality, status: "requested",
     player_note: args.note, proposal, engine_version: proposal.engineVersion, content_version: proposal.contentVersion,
@@ -157,20 +162,61 @@ export async function createGoalRequest(
   await logEvent(sb, row, "requested", { userId: args.userId, role: "player" }, null, {
     quality: args.quality, rule_start: proposal.start, ...(args.priority ? { priority: args.priority } : {}),
   });
-  return { id: row.id };
+  return { id: row.id, status: "requested" };
 }
 
-/** The player withdraws a request the coach has not answered yet. */
+/**
+ * Player choices on (lota 3, 2026-11-17): the player's goal starts without approval. The plan is the one an approval
+ * with no changes would freeze (rule start, the team's level and swaps, the same safety checks in `approvedPlan`),
+ * starting the next Monday. Logged as requested (player) + approved (system, auto). No push, no email.
+ */
+async function startGoalByPlayer(
+  sb: Sb,
+  args: { teamId: string; playerId: string; userId: string; quality: GoalQuality; note: string | null; priority?: GoalPrioritySnapshot | null; input: GoalInput; teamPref: TeamQualityPref; today: string },
+): Promise<{ id: string; status: "approved" }> {
+  const d: ApproveDecision = { action: "approve", startDate: autoStartDate(args.today), start: null, reason: null, noteToPlayer: null, level: null };
+  const plan = approvedPlan(args.input, args.teamPref, d);
+  const now = new Date().toISOString();
+  const { data, error } = await sb.from("player_goal_plans").insert({
+    team_id: args.teamId, player_id: args.playerId, quality: args.quality, player_note: args.note, proposal: plan,
+    requested_by: args.userId, auto_started: true, ...approvalCols(plan, d, null, now),
+  }).select("id, team_id, player_id").single();
+  if (error) {
+    if ((error as { code?: string }).code === "23505") throw new GoalPlanError(409, "You already have a goal open.", "Þú ert nú þegar með opið markmið.");
+    throw new Error(error.message);
+  }
+  const row = data as { id: string; team_id: string; player_id: string };
+  await logEvent(sb, row, "requested", { userId: args.userId, role: "player" }, null, {
+    quality: args.quality, rule_start: plan.start, auto_start: true, ...(args.priority ? { priority: args.priority } : {}),
+  });
+  await logApproval(sb, row, { userId: null, role: "system" }, plan, d, args.teamPref, { auto: true });
+  return { id: row.id, status: "approved" };
+}
+
+/**
+ * The player withdraws a request the coach has not answered yet, or (player choices on) a plan that started without
+ * approval and has not begun (`playerMayWithdraw`). Once a plan runs only the coach stops it.
+ */
 export async function cancelGoalRequest(sb: Sb, args: { playerId: string; userId: string }): Promise<void> {
   const now = new Date().toISOString();
-  const { data, error } = await sb.from("player_goal_plans")
-    .update({ status: "cancelled", closed_at: now, updated_at: now })
+  const today = todayIso();
+  const cancel = { status: "cancelled", closed_at: now, updated_at: now };
+  const { data, error } = await sb.from("player_goal_plans").update(cancel)
     .eq("player_id", args.playerId).eq("status", "requested")
     .select("id, team_id, player_id");
   if (error) throw new Error(error.message);
-  const rows = (data ?? []) as { id: string; team_id: string; player_id: string }[];
-  if (!rows.length) throw new GoalPlanError(409, "There is no request waiting to withdraw.", "Engin beiðni bíður sem hægt er að draga til baka.");
-  for (const r of rows) await logEvent(sb, r, "cancelled", { userId: args.userId, role: "player" }, null);
+  let rows = (data ?? []) as { id: string; team_id: string; player_id: string }[];
+  let beforeStart = false;
+  if (!rows.length) {
+    const { data: d2, error: e2 } = await sb.from("player_goal_plans").update(cancel)
+      .eq("player_id", args.playerId).eq("status", "approved").eq("auto_started", true).gt("start_date", today)
+      .select("id, team_id, player_id");
+    if (e2) throw new Error(e2.message);
+    rows = (d2 ?? []) as { id: string; team_id: string; player_id: string }[];
+    beforeStart = rows.length > 0;
+  }
+  if (!rows.length) throw new GoalPlanError(409, "There is nothing to withdraw. Once a plan has started, your coach can stop it.", "Ekkert að draga til baka. Þegar áætlun er byrjuð getur þjálfarinn stöðvað hana.");
+  for (const r of rows) await logEvent(sb, r, "cancelled", { userId: args.userId, role: "player" }, null, beforeStart ? { before_start: true } : {});
 }
 
 // ─── Coach ─────────────────────────────────────────────────────────────────
@@ -279,15 +325,15 @@ function approvedPlan(input: GoalInput, teamPref: TeamQualityPref, d: ApproveDec
   return plan;
 }
 
-const approvalCols = (plan: GoalPlan, d: ApproveDecision, coachUserId: string, now: string) => ({
+const approvalCols = (plan: GoalPlan, d: ApproveDecision, coachUserId: string | null, now: string) => ({
   status: "approved" as const, plan, engine_version: plan.engineVersion, content_version: plan.contentVersion,
   start_override: plan.startOverride?.chosen ?? null, start_date: d.startDate, end_date: planEndDate(d.startDate),
   coach_note: d.noteToPlayer, decision_reason: d.reason, reviewed_by: coachUserId, reviewed_at: now, updated_at: now,
 });
 
 async function logApproval(
-  sb: Sb, row: { id: string; team_id: string; player_id: string }, actor: { userId: string; role: "coach" },
-  plan: GoalPlan, d: ApproveDecision, teamPref: TeamQualityPref,
+  sb: Sb, row: { id: string; team_id: string; player_id: string }, actor: { userId: string | null; role: "coach" | "system" },
+  plan: GoalPlan, d: ApproveDecision, teamPref: TeamQualityPref, extra: Record<string, unknown> = {},
 ) {
   if (plan.startOverride) {
     await logEvent(sb, row, "start_changed", actor, d.reason, { rule: plan.startOverride.rule, chosen: plan.startOverride.chosen });
@@ -295,7 +341,7 @@ async function logApproval(
   await logEvent(sb, row, "approved", actor, null, {
     start_date: d.startDate, start: plan.start,
     // Lota 5: the level and swaps the plan was frozen with, and the team's saved level it started from.
-    level: plan.level ?? "intermediate", team_level: teamPref.level, swaps: plan.swaps ?? {},
+    level: plan.level ?? "intermediate", team_level: teamPref.level, swaps: plan.swaps ?? {}, ...extra,
   });
 }
 

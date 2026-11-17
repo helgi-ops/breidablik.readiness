@@ -13,6 +13,9 @@ export const dynamic = "force-dynamic";
  * in rehab / returning to training, and the coach restarts it here (at the paused week, or week 1 after a long
  * break). Nothing is sent (no push).
  *
+ * Player choices on (lota 3, 2026-11-17; team switch or one-player test in the panel at the bottom): a player's goal
+ * starts the next Monday without approval, tagged "Player's choice"; the coach sees it here and can stop it.
+ *
  * Lota 4: progress and outcome for a running, paused, finished or stopped plan — sessions the player ticked, the
  * test results (the coach enters them; jump height also comes from VALD), the change against the plan's "clear
  * change" mark, GPS as context only, and a PDF of the whole plan.
@@ -30,6 +33,7 @@ import PlayerExercisePicksPanel from "@/components/coach/PlayerExercisePicksPane
 import { GoalPlanView } from "@/components/coach/GoalPlanPreviewCard";
 import type { Bi, GoalPlan, GoalQuality } from "@/lib/micropulse/goalPlan/types";
 import {
+  AUTO_STARTED_TAG,
   eventLabel,
   REASON_MIN,
   STATUS_LABEL,
@@ -119,6 +123,8 @@ export default function GoalRequestsPage() {
 
   const waiting = items?.filter((i) => i.status === "requested").length ?? 0;
   const testsDue = items?.filter((i) => i.testDue).length ?? 0;
+  // Player choices on: goals that started without approval and are still open (the coach can stop them).
+  const autoOpen = items?.filter((i) => i.auto_started && (i.status === "approved" || i.status === "paused")).length ?? 0;
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-4 md:p-6">
@@ -128,6 +134,11 @@ export default function GoalRequestsPage() {
           {err ? null : items == null ? T("Loading…", "Sæki…") : waiting
             ? T(`${waiting} waiting for your answer.`, `${waiting} bíða svars.`)
             : T("Nothing waiting for an answer.", "Ekkert bíður svars.")}
+          {!err && autoOpen ? (
+            <span className="ml-1">
+              {T(` ${autoOpen} started by the player's choice (no approval needed; you can stop it).`, ` ${autoOpen} fóru af stað að vali leikmanns (án samþykkis; þú getur stöðvað).`)}
+            </span>
+          ) : null}
           {!err && testsDue ? (
             <span className="ml-1 font-medium text-[#de9328]">
               {T(` ${testsDue} test${testsDue === 1 ? "" : "s"} to enter.`, ` ${testsDue} próf að skrá.`)}
@@ -136,8 +147,8 @@ export default function GoalRequestsPage() {
         </p>
       </div>
       <PagePurpose
-        en="answer players who asked to improve one quality: the rules build an 8-week add-on plan from the player's own data, and you approve it, choose another start (with a reason) or decline it. It never changes the readiness colour or Today's session."
-        is="svara leikmönnum sem báðu um að bæta einn þátt: reglurnar búa til 8 vikna viðbót út frá gögnum leikmannsins og þú samþykkir, velur annað upphaf (með ástæðu) eða hafnar. Breytir aldrei readiness-litnum eða æfingu dagsins."
+        en="answer players who asked to improve one quality: the rules build an 8-week add-on plan from the player's own data, and you approve it, choose another start (with a reason) or decline it. When player choices are on (below), the plan starts the next Monday without approval and you see it here and can stop it. It never changes the readiness colour or Today's session."
+        is="svara leikmönnum sem báðu um að bæta einn þátt: reglurnar búa til 8 vikna viðbót út frá gögnum leikmannsins og þú samþykkir, velur annað upphaf (með ástæðu) eða hafnar. Þegar val leikmanna er á (hér fyrir neðan) byrjar áætlunin næsta mánudag án samþykkis; þú sérð hana hér og getur stöðvað hana. Breytir aldrei readiness-litnum eða æfingu dagsins."
       />
       {err ? <p className="text-[13px] text-[#a83e28]">{err}</p> : null}
 
@@ -158,6 +169,7 @@ export default function GoalRequestsPage() {
                   <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
                     {L(QUALITY[i.quality])}
                     <span className={`rounded px-1.5 py-0.5 font-medium ${STATUS_STYLE[i.status]}`}>{L(STATUS_LABEL[i.status])}</span>
+                    {i.auto_started ? <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">{L(AUTO_STARTED_TAG)}</span> : null}
                     {fmtDate(i.requested_at, isEN)}
                   </span>
                   {i.testDue ? (
@@ -248,6 +260,11 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
         {row.start_date ? ` · ${T(`Weeks ${fmtDate(row.start_date, true)} – ${fmtDate(row.end_date, true)}`, `Vikur ${fmtDate(row.start_date, false)} – ${fmtDate(row.end_date, false)}`)}` : ""}
       </p>
       {row.player_note ? <p className="rounded-lg bg-slate-50 px-3 py-2 text-[12.5px] text-slate-700"><span className="font-semibold">{T("Player's note:", "Athugasemd leikmanns:")}</span> {row.player_note}</p> : null}
+      {row.auto_started && (row.status === "approved" || row.status === "paused") ? (
+        <p className="rounded-lg bg-primary/5 px-3 py-2 text-[12.5px] text-slate-700">
+          {T("Started by the player's choice, without approval: the same rules and safety checks as an approval with no changes (the rule's start, the team's level and swaps). You can stop it below with a reason.", "Fór af stað að vali leikmanns, án samþykkis: sömu reglur og öryggisathuganir og samþykki án breytinga (upphaf reglunnar, stig og skipti liðsins). Þú getur stöðvað hana hér fyrir neðan með ástæðu.")}
+        </p>
+      ) : null}
       {row.status === "requested" ? (
         <p className="text-[11px] text-slate-500">{T("Built from today's data. The plan is frozen when you approve it.", "Byggt á gögnum dagsins. Áætlunin er fryst þegar þú samþykkir.")}</p>
       ) : row.plan ? (

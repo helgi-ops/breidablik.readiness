@@ -128,13 +128,14 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
             <li>{T("No approval: a pick counts from the player's next session sent. Sets, reps and rest don't change, and the Nordic / Copenhagen block stays.", "Ekkert samþykki: valið gildir frá næstu æfingu sem leikmaður fær. Sett, endurtekningar og hvíld breytast ekki og Nordic / Copenhagen haldast.")}</li>
             <li>{T("A goal adds one set of the matching exercise on its day (stronger legs / hamstrings: MD-4; explosive: MD-4 and MD-3). Not on a yellow or red day, in a two-match week, or after a safety swap.", "Markmið bætir við einu setti af samsvarandi æfingu á sínum degi (sterkari fætur / aftan í læri: MD-4; sprengikraftur: MD-4 og MD-3). Ekki á gulum eða rauðum degi, í viku með tveimur leikjum eða eftir öryggisskipti.")}</li>
             <li>{T("Safety rules still win (e.g. a sore lower back swaps the deadlift that day). Applies to individualised sessions.", "Öryggisreglur ráða áfram (t.d. aumur mjóhryggur skiptir út réttstöðulyftu þann dag). Gildir um einstaklingsmiðaðar æfingar.")}</li>
+            <li>{T("8-week goals (top speed, acceleration, braking, jump) start the next Monday without your approval. You see them in the list above and can stop one with a reason. Injured or returning players still can't start one; under-18s get the youth plan.", "8 vikna markmið (hámarkshraði, hröðun, bremsun, stökk) byrja næsta mánudag án samþykkis þíns. Þú sérð þau í listanum hér fyrir ofan og getur stöðvað með ástæðu. Meiddir eða leikmenn í endurkomu geta ekki byrjað; undir 18 ára fá unglingaáætlun.")}</li>
           </ul>
 
           {s.hasList ? (
             <label className="mt-3 flex items-center gap-2 text-[13px] text-slate-800">
               <input type="checkbox" checked={s.enabled} disabled={busy}
                 onChange={async (e) => { const m = await put({ action: "enable", enabled: e.target.checked }); if (m) setErr(m); }} />
-              {T("Players may pick exercises from the team list", "Leikmenn mega velja æfingar af æfingalista liðsins")}
+              {T("Players choose for themselves: exercises from the team list, a strength goal, and 8-week goals without approval", "Leikmenn velja sjálfir: æfingar af æfingalista liðsins, styrktarmarkmið og 8 vikna markmið án samþykkis")}
             </label>
           ) : null}
 
@@ -142,7 +143,7 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
             <div className="mt-3 rounded-lg border border-dashed border-slate-300 p-3" data-testid="picks-test">
               <p className="text-[12px] font-semibold text-slate-800">{T("Test with one player first", "Prófaðu fyrst með einum leikmanni")}</p>
               <p className="mt-0.5 text-[12px] text-slate-600">
-                {T("Only this player sees “My exercises & goal”; the rest of the team sees nothing.", "Aðeins þessi leikmaður sér „Mínar æfingar og markmið“; restin af liðinu sér ekkert.")}
+                {T("Only this player sees “My exercises & goal”, and their 8-week goal starts without approval; the rest of the team sees nothing new.", "Aðeins þessi leikmaður sér „Mínar æfingar og markmið“ og 8 vikna markmið leikmannsins byrjar án samþykkis; restin af liðinu sér ekkert nýtt.")}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <select value={testPick} onChange={(e) => setTestPick(e.target.value)} disabled={busy}
