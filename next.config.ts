@@ -52,6 +52,10 @@ const nextConfig: NextConfig = {
     removeConsole: { exclude: ["error"] },
   },
   experimental: {
+    // Vercel's build machine (8 GB) ran out of memory twice while webpack compiled (06c65e8 on 2026-11-13,
+    // b26e8dd on 2026-11-17: "build worker exited with signal: SIGKILL"). This lowers webpack's peak memory
+    // for a slightly longer build.
+    webpackMemoryOptimizations: true,
     // Disable Turbopack persistence to avoid SST filesystem writes
     turbopackFileSystemCacheForDev: false,
     turbopackFileSystemCacheForBuild: false,
