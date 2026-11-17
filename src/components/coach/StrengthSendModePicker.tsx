@@ -40,7 +40,8 @@ export default function StrengthSendModePicker({
   return (
     <>
       <span className="text-sm font-semibold text-slate-800">{t("Session mode:", "Æfingahamur:")}</span>
-      <div className="inline-flex max-w-full flex-wrap overflow-hidden rounded-lg border border-slate-300 shadow-sm" role="group" aria-label={t("Session mode", "Æfingahamur")}>
+      {/* Phone: one mode per row, full width; wider: one segmented row. */}
+      <div className="flex w-full flex-col overflow-hidden rounded-lg border border-slate-300 shadow-sm sm:inline-flex sm:w-auto sm:flex-row" role="group" aria-label={t("Session mode", "Æfingahamur")}>
         {SEND_MODES.map((m, i) => (
           <button
             key={m}
@@ -48,7 +49,7 @@ export default function StrengthSendModePicker({
             onClick={() => onMode(m)}
             aria-pressed={mode === m}
             data-testid={`send-mode-${m}`}
-            className={`px-3 py-2 text-sm font-semibold transition sm:px-4 ${i > 0 ? "border-l border-slate-300" : ""} ${mode === m ? "bg-indigo-700 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}
+            className={`px-3 py-2 text-left text-sm font-semibold transition sm:px-4 sm:text-center ${i > 0 ? "border-t border-slate-300 sm:border-l sm:border-t-0" : ""} ${mode === m ? "bg-indigo-700 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}
           >
             {L(SEND_MODE_TEXT[m].label)}
           </button>
