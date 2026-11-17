@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { blockFromPlan } from "../resolveCurrentBlock";
+import { blockFromPlan, seasonPlanCandidates } from "../resolveCurrentBlock";
 import { buildMesoBlocks } from "@/lib/micropulse/periodization";
 
 // Minimal plan shapes — blockFromPlan only reads phases/loadCurve/matchLoad*/fixtures.
@@ -46,5 +46,33 @@ describe("blockFromPlan — the meso block containing today", () => {
     const r = blockFromPlan(plan, 4, mid);
     expect(r).not.toBeNull();
     expect(r!.phase).toBe("preseason");
+  });
+});
+
+describe("seasonPlanCandidates — which season plan holds today (2026-11-17)", () => {
+  const r2026 = { season_year: 2026, overrides: { preseasonStart: "2026-02-02", seasonEnd: "2026-10-24", offseasonStart: "2026-10-25" } };
+  const r2027 = { season_year: 2027, overrides: { preseasonStart: "2026-11-30", seasonEnd: "2027-10-26" } };
+
+  it("this year's row first, then next year's (a pre-season that opens in Nov/Dec)", () => {
+    expect(seasonPlanCandidates("2026-12-05", [r2027, r2026])).toEqual([
+      { seasonYear: 2026, ov: r2026.overrides },
+      { seasonYear: 2027, ov: r2027.overrides },
+    ]);
+  });
+
+  it("no row this year → this year with no overrides (the old behaviour), next year's only if saved", () => {
+    expect(seasonPlanCandidates("2026-06-01", [])).toEqual([{ seasonYear: 2026, ov: {} }]);
+    expect(seasonPlanCandidates("2026-12-05", [r2027])).toEqual([
+      { seasonYear: 2026, ov: {} },
+      { seasonYear: 2027, ov: r2027.overrides },
+    ]);
+  });
+
+  it("the year comes from the date asked about, not the clock", () => {
+    expect(seasonPlanCandidates("2027-03-01", [r2026, r2027])[0]).toEqual({ seasonYear: 2027, ov: r2027.overrides });
+  });
+
+  it("a bad date → nothing to try", () => {
+    expect(seasonPlanCandidates("", [r2026])).toEqual([]);
   });
 });
