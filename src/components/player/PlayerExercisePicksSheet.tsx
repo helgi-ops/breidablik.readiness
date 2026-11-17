@@ -1,22 +1,34 @@
 "use client";
 
 /**
- * "My exercises" (player exercise picks, lota 1, 2026-11-17): the player chooses which of the team's exercises they
- * want in their own strength session. Opened from Today → See more, and only shown when the coach has turned it on
- * for the team.
+ * "My exercises & goal" (2026-11-17): the player picks ONE strength goal (lota 2) and which of the team's exercises
+ * they want in their own strength session (lota 1). Opened from Today → See more, and only shown when the coach has
+ * turned it on for the team, or for this one player (test).
  *
- * Layered read: one sentence (what this does) → three plain facts (when it applies, the dose doesn't change, safety
- * swaps still win) → the groups with the team's exercises as buttons (1st / 2nd choice). A group the coach locked
- * shows "Your coach chose this" and can't be changed. Plain words only; no sport-science terms.
+ * Layered read: one sentence (what this does) → plain facts → the goal buttons (with what each one does) → the
+ * groups with the team's exercises as buttons (1st / 2nd choice). What the coach locked shows "Your coach chose
+ * this" and can't be changed. Plain words only; no sport-science terms.
  */
 
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Group = { slot: string; label: { en: string; is: string }; max: number; options: { id: string; nameEN: string; nameIS: string }[] };
+type Goal = { id: string; en: string; is: string; whatEN: string; whatIS: string };
 type State =
   | { ok: true; enabled: false }
-  | { ok: true; enabled: true; groups: Group[]; picks: Record<string, string[]>; locked: string[]; updatedAt: string | null; updatedByRole: "player" | "coach" | null };
+  | {
+      ok: true;
+      enabled: true;
+      groups: Group[];
+      picks: Record<string, string[]>;
+      locked: string[];
+      goals: Goal[];
+      goal: string | null;
+      goalLocked: boolean;
+      updatedAt: string | null;
+      updatedByRole: "player" | "coach" | null;
+    };
 
 const API = "/api/player/strength-picks";
 
@@ -32,10 +44,11 @@ async function call(method: "GET" | "PUT", body?: unknown) {
   return { res, j };
 }
 
-/** Is the feature on for this player's team? Read lazily (after Today has loaded) and remembered (12 h when on,
- *  2 h when off, so a coach turning it on shows up the same day), so Today's morning load gets no extra request on
- *  most opens. */
-const CACHE_KEY = "mp_strength_picks_on_v1";
+/** Is the feature on for this player (team switch or the coach's one-player test)? Read lazily (after Today has
+ *  loaded) and remembered (12 h when on, 2 h when off, so a coach turning it on shows up the same day), so Today's
+ *  morning load gets no extra request on most opens. v2 (lota 2): a fresh read for everyone after the test switch
+ *  shipped. */
+const CACHE_KEY = "mp_strength_picks_on_v2";
 const cacheMs = (on: boolean) => (on ? 12 : 2) * 60 * 60 * 1000;
 function readCache(): boolean | null {
   if (typeof window === "undefined") return null;
@@ -89,10 +102,12 @@ export default function PlayerExercisePicksSheet({ lang, onClose }: { lang?: "IS
     return () => { alive = false; };
   }, []);
 
-  const save = async (slot: string, ids: string[]) => {
-    setBusy(slot); setMsg(null); setSaved(false);
+  const save = async (slot: string, ids: string[]) => put(slot, { slot, ids });
+  const saveGoal = async (goal: string | null) => put("goal", { goal });
+  const put = async (key: string, body: unknown) => {
+    setBusy(key); setMsg(null); setSaved(false);
     try {
-      const { res, j } = await call("PUT", { slot, ids });
+      const { res, j } = await call("PUT", body);
       if (!res.ok) { setMsg(String((is ? j.error_is : null) ?? j.error ?? T("Could not save.", "Tókst ekki að vista."))); return; }
       setState(j as unknown as State);
       setSaved(true);
@@ -113,8 +128,8 @@ export default function PlayerExercisePicksSheet({ lang, onClose }: { lang?: "IS
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{T("My exercises", "Mínar æfingar")}</div>
-            <h2 className="mt-0.5 text-lg font-semibold text-slate-900">{T("Choose the exercises you want in your strength session", "Veldu æfingarnar sem þú vilt í styrktaræfingunni þinni")}</h2>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{T("My exercises & goal", "Mínar æfingar og markmið")}</div>
+            <h2 className="mt-0.5 text-lg font-semibold text-slate-900">{T("Choose your goal and the exercises you want in your strength session", "Veldu markmið og æfingarnar sem þú vilt í styrktaræfingunni þinni")}</h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-100" aria-label={T("Close", "Loka")}>✕</button>
         </div>
@@ -129,13 +144,41 @@ export default function PlayerExercisePicksSheet({ lang, onClose }: { lang?: "IS
         {typeof state === "object" && state.enabled ? (
           <div className="space-y-4">
             <p className="text-sm font-medium text-slate-800">
-              {T("Pick from the list your coach made. Your picks go first when your session is built.", "Veldu af listanum sem þjálfarinn þinn gerði. Valið þitt fer fremst þegar æfingin þín er sett saman.")}
+              {T("Your goal adds one extra set on the right day; your picks go first when your session is built.", "Markmiðið bætir við einu setti á réttum degi; valið þitt fer fremst þegar æfingin þín er sett saman.")}
             </p>
             <ul className="list-disc space-y-0.5 pl-4 text-xs text-slate-600">
               <li>{T("It counts from the next session you get (not one already sent today).", "Það gildir frá næstu æfingu sem þú færð (ekki þeirri sem er þegar komin í dag).")}</li>
-              <li>{T("Sets, reps and rest don't change, only which exercise.", "Sett, endurtekningar og hvíld breytast ekki, aðeins hvaða æfing.")}</li>
-              <li>{T("If something is sore or you need a lighter day, the app may swap an exercise for that day to keep you safe.", "Ef eitthvað er aumt eða þú þarft léttari dag getur appið skipt um æfingu þann dag til að gæta öryggis.")}</li>
+              <li>{T("Your picks change which exercise, not the sets, reps or rest.", "Valið breytir hvaða æfing það er, ekki settum, endurtekningum eða hvíld.")}</li>
+              <li>{T("No extra set on a light or recovery day, in a week with two matches, or if something is sore: then the app keeps you safe first.", "Ekkert aukasett á léttum degi eða endurheimtardegi, í viku með tveimur leikjum eða ef eitthvað er aumt: þá gætir appið öryggis fyrst.")}</li>
             </ul>
+
+            <section className="rounded-xl border border-slate-200 p-3" data-testid="goal-group">
+              <div className="flex items-baseline justify-between gap-2">
+                <h3 className="text-sm font-semibold text-slate-900">{T("My goal", "Markmiðið mitt")}</h3>
+                <span className="text-[11px] text-slate-400">{state.goalLocked ? T("Your coach chose this", "Þjálfarinn þinn valdi þetta") : T("Pick 1", "Veldu 1")}</span>
+              </div>
+              <div className="mt-2 grid gap-2">
+                {state.goals.map((g) => {
+                  const on = state.goal === g.id;
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      disabled={state.goalLocked || busy === "goal"}
+                      onClick={() => saveGoal(on ? null : g.id)}
+                      aria-pressed={on}
+                      className={`rounded-xl border px-3 py-2 text-left transition disabled:opacity-60 ${on ? "border-[#2740e6] bg-[#2740e6] text-white" : "border-slate-300 bg-white text-slate-800 hover:bg-slate-50"}`}
+                    >
+                      <span className="block text-sm font-semibold">{is ? g.is : g.en}</span>
+                      <span className={`block text-xs ${on ? "text-white/85" : "text-slate-500"}`}>{is ? g.whatIS : g.whatEN}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {!state.goal && !state.goalLocked ? (
+                <p className="mt-1.5 text-[11px] text-slate-400">{T("No goal: your session stays as your coach planned it.", "Ekkert markmið: æfingin er eins og þjálfarinn skipulagði hana.")}</p>
+              ) : null}
+            </section>
 
             {state.groups.map((g) => {
               const current = state.picks[g.slot] ?? [];

@@ -23,7 +23,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MdContext, PlayerStrengthSnapshot, SessionCorrective } from "../strengthProgramming/types";
 import type { PaletteSlots } from "../strengthProgramming/palette";
 import type { MdStructures } from "../strengthProgramming/structures";
-import type { PlayerExercisePicks } from "../strengthProgramming/playerPicks";
+import type { PlayerExercisePicks, StrengthGoal } from "../strengthProgramming/playerPicks";
 import { loadSprintExposure } from "@/lib/micropulse/sprintExposure/loader";
 import {
   fetchTeamContext,
@@ -68,7 +68,7 @@ export type PlayerContext = {
   teamId: string | null;
   /** Stubbed null in Stage 1 (see domains.fetchVbtDecrement). */
   vbtDecrement: number | null;
-  teamConfig: Domain<{ sport: string | null; seasonPhase: string | null; palette: PaletteSlots; mdStructures: MdStructures; playerPicks?: PlayerExercisePicks }>;
+  teamConfig: Domain<{ sport: string | null; seasonPhase: string | null; palette: PaletteSlots; mdStructures: MdStructures; playerPicks?: PlayerExercisePicks; playerGoal?: StrengthGoal }>;
   externalLoad: Domain<{
     sprintDropPct: number | null;
     sprintBand: PlayerStrengthSnapshot["sprintExposureBand"];
@@ -123,7 +123,7 @@ export async function buildPlayerContext(
     valdAsym,
     teamContext,
     matchExposure,
-    playerPicks,
+    playerChoices,
   ] = await Promise.all([
     fetchSprintSpeedDrop(sb, playerId, todayIso),
     loadSprintExposure(sb, { playerId, todayIso, teamId: teamId ?? undefined }),
@@ -161,7 +161,8 @@ export async function buildPlayerContext(
         seasonPhase: teamContext.seasonPhase,
         palette: teamPalette.slots,
         mdStructures: teamPalette.mdStructures,
-        ...(playerPicks ? { playerPicks } : {}),
+        ...(playerChoices?.picks ? { playerPicks: playerChoices.picks } : {}),
+        ...(playerChoices?.goal ? { playerGoal: playerChoices.goal } : {}),
       },
       status: statusOf(
         teamContext.sport != null || teamContext.seasonPhase != null || Object.keys(teamPalette.slots).length > 0,

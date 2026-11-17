@@ -478,7 +478,7 @@ export function applyAdaptationRules(
   // The reconciled deficit ledger (movement screen + VALD + IMA …) can bias the
   // session toward a strength emphasis. Moderate+ confidence only (hints don't
   // reach here — the loader filters). Descriptive; the coach can override.
-  applyLedgerEmphasisRules(blocks, snap, audit);
+  applyLedgerEmphasisRules(blocks, snap, audit, contras, trace);
 
   return audit;
 }
@@ -495,9 +495,18 @@ const EMPHASIS_CATEGORY: Record<string, PrescribedExercise["category"]> = {
   plyometric: "PLYOMETRIC", unilateral: "UNILATERAL_STRENGTH", eccentric: "POSTERIOR_CHAIN", max_strength: "COMPOUND_STRENGTH",
 };
 
-function applyLedgerEmphasisRules(blocks: SessionBlock[], snap: PlayerStrengthSnapshot, audit: AppliedAdaptation[]): void {
+function applyLedgerEmphasisRules(
+  blocks: SessionBlock[],
+  snap: PlayerStrengthSnapshot,
+  audit: AppliedAdaptation[],
+  contras: ReadonlySet<ContraIndication> | readonly ContraIndication[] = [],
+  trace?: AdaptationTrace,
+): void {
   const emphases = snap.ledgerEmphases ?? [];
   if (!emphases.length || !blocks.length) return;
+  // A recovery / hold day was emptied by Rule 10 — never add an accessory back onto it (2026-11-17).
+  if (snap.verdict === "HOLD" || snap.verdict === "RECOVERY") return;
+  const contraSet = new Set<ContraIndication>(contras);
 
   for (const emphasis of emphases) {
     const spec = LEDGER_EMPHASIS_EX[emphasis];
@@ -505,6 +514,11 @@ function applyLedgerEmphasisRules(blocks: SessionBlock[], snap: PlayerStrengthSn
     if (!spec.gate.includes(snap.mdContext)) continue;     // wrong MD-day for this quality
     // Acute deload wins: don't add eccentric braking load on a high decel-burden streak.
     if (emphasis === "eccentric" && snap.decelBurdenHighStreakDays >= 3) continue;
+    // Safety wins (2026-11-17): never add back what a safety rule took out today (e.g. the Nordic on a sore
+    // hamstring), nor an exercise that is not suitable for today's condition.
+    if (trace?.banned.has(spec.id)) continue;
+    const specContras = getExercise(spec.id).contraindications ?? [];
+    if (specContras.some((c) => contraSet.has(c))) continue;
 
     const category = EMPHASIS_CATEGORY[emphasis];
     const already = findExerciseByCategory(blocks, category);

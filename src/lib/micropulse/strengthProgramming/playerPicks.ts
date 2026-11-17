@@ -10,6 +10,7 @@
  * Limits we set: only exercises on the team's list; at most 2 per group (1 for upper body); only groups where
  * the list offers a real choice (≥ 2 exercises). Isometrics are not a player choice. The coach can change a
  * player's picks or lock a group (`locked`), and the switch for the team is off until the coach turns it on.
+ * The coach can also turn it on for ONE player to test (`test_enabled` on the player's row, lota 2).
  */
 import type { PaletteSlots } from "./palette";
 
@@ -109,4 +110,62 @@ export function effectivePool(slot: PickSlot | string, palette: PaletteSlots, pi
 /** True when the id is one of the player's picks for the slot. */
 export function isPlayerPick(slot: string, id: string, picks: PlayerExercisePicks | null | undefined): boolean {
   return isPickSlot(slot) && (picks?.[slot] ?? []).includes(id);
+}
+
+// ─── Strength goal (lota 2, 2026-11-17) ───────────────────────────────────
+// The player picks ONE goal; on the goal's days the matching exercise in Today's session gets one more set.
+// Never on a light / recovery day, in a two-match week, or when a safety rule changed that exercise. Muscle
+// size (hypertrophy) is not offered: it needs more weekly volume than an in-season microdose, and we have no
+// source for an in-season rule.
+
+export const STRENGTH_GOALS = ["stronger", "power", "robust"] as const;
+export type StrengthGoal = (typeof STRENGTH_GOALS)[number];
+export const isStrengthGoal = (s: unknown): s is StrengthGoal => typeof s === "string" && (STRENGTH_GOALS as readonly string[]).includes(s);
+
+/** The days a goal adds its set (the week's heavier days, well before the match). */
+export const GOAL_DAYS: Record<StrengthGoal, readonly string[]> = {
+  stronger: ["MD-4"],
+  power: ["MD-4", "MD-3"],
+  robust: ["MD-4"],
+};
+
+/** Plain names + what the goal does, for players and coaches (no jargon). */
+export const STRENGTH_GOAL_LABEL: Record<StrengthGoal, { en: string; is: string; whatEN: string; whatIS: string }> = {
+  stronger: {
+    en: "Stronger legs",
+    is: "Sterkari fætur",
+    whatEN: "One more set of your main leg lift, 4 days before a match.",
+    whatIS: "Eitt sett í viðbót af aðal-fótalyftunni, 4 dögum fyrir leik.",
+  },
+  power: {
+    en: "More explosive",
+    is: "Meiri sprengikraftur",
+    whatEN: "One more set of your first jump or fast lift, 3–4 days before a match.",
+    whatIS: "Eitt sett í viðbót af fyrstu hopp- eða hraðalyftunni, 3–4 dögum fyrir leik.",
+  },
+  robust: {
+    en: "Stronger hamstrings",
+    is: "Sterkari aftan í læri",
+    whatEN: "One more set of Nordics, 4 days before a match. Nordic training is associated with fewer hamstring injuries.",
+    whatIS: "Eitt sett í viðbót af Nordic, 4 dögum fyrir leik. Nordic-þjálfun tengist færri meiðslum aftan í læri.",
+  },
+};
+
+/** The goal a stored value stands for (anything else → none). */
+export function sanitizeGoal(raw: unknown): StrengthGoal | null {
+  return isStrengthGoal(raw) ? raw : null;
+}
+
+/** Validate a goal save (`null` clears it). A player can't change a goal the coach locked. */
+export function validateGoal(
+  raw: unknown,
+  goalLocked: boolean,
+  opts: { coach?: boolean } = {},
+): { ok: true; goal: StrengthGoal | null } | { ok: false; error: { code: "locked" | "unknown_goal"; en: string; is: string } } {
+  if (!opts.coach && goalLocked) {
+    return { ok: false, error: { code: "locked", en: "Your coach chose your goal.", is: "Þjálfarinn þinn valdi markmiðið þitt." } };
+  }
+  if (raw === null || raw === "" || raw === undefined) return { ok: true, goal: null };
+  if (!isStrengthGoal(raw)) return { ok: false, error: { code: "unknown_goal", en: "Unknown goal.", is: "Óþekkt markmið." } };
+  return { ok: true, goal: raw };
 }

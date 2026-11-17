@@ -1,12 +1,16 @@
 /**
- * /api/coach/team/player-strength-picks — the coach's view of the players' exercise picks (player exercise picks,
- * lota 1, 2026-11-17).
+ * /api/coach/team/player-strength-picks — the coach's view of the players' exercise picks (lota 1) and strength
+ * goals + one-player test (lota 2), 2026-11-17.
  *
- * GET → { ok, enabled, hasList, groups, players: [{ id, name, picks, locked, updatedAt, updatedByRole }], picked, total }
+ * GET → { ok, enabled, hasList, groups, goals, players: [{ id, name, picks, locked, goal, goalLocked, testEnabled,
+ *         updatedAt, updatedByRole }], picked, withGoal, testing, total }
  * PUT one of:
  *   { action: "enable", enabled }                         → the team switch (off by default)
+ *   { action: "test", playerId, on }                      → turn it on / off for ONE player (test) while the team is off
  *   { action: "set", playerId, slot, ids, reason }        → change a player's picks for a group (reason kept)
  *   { action: "lock", playerId, slot, locked, reason }    → lock / unlock a group for a player (reason kept)
+ *   { action: "goal", playerId, goal, reason }            → change a player's goal (null clears; reason kept)
+ *   { action: "goal_lock", playerId, locked, reason }     → lock / unlock a player's goal (reason kept)
  *
  * Coach of the team only (requireCoachAccessForTeam; the team is read on the server, never from the body); the
  * player must be on that team. FREE-locked teams get 402. Writes only through playerPicksStore. Nothing is sent to
@@ -17,16 +21,27 @@ import { NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
 import { authErrorToResponse } from "@/lib/auth/httpError";
-import { PICK_REASON_MIN, isPickSlot, validatePlayerPick } from "@/lib/micropulse/strengthProgramming/playerPicks";
+import {
+  GOAL_DAYS,
+  PICK_REASON_MIN,
+  STRENGTH_GOALS,
+  STRENGTH_GOAL_LABEL,
+  isPickSlot,
+  validateGoal,
+  validatePlayerPick,
+} from "@/lib/micropulse/strengthProgramming/playerPicks";
 import {
   PicksError,
   pickGroups,
   readPlayerPicks,
   readTeamPickConfig,
   readTeamPicks,
+  saveGoal,
   savePicks,
+  setGoalLock,
   setLock,
   setTeamEnabled,
+  setTestPlayer,
 } from "@/lib/micropulse/strengthProgramming/playerPicksStore";
 
 export const runtime = "nodejs";
@@ -55,12 +70,18 @@ async function teamState(sb: Sb, teamId: string) {
       name: (p.full_name ?? "").trim() || "—",
       picks: r?.picks ?? {},
       locked: r?.locked ?? [],
+      goal: r?.goal ?? null,
+      goalLocked: r?.goalLocked ?? false,
+      testEnabled: r?.testEnabled ?? false,
       updatedAt: r?.updatedAt ?? null,
       updatedByRole: r?.updatedByRole ?? null,
     };
   });
   const picked = players.filter((p) => Object.keys(p.picks).length > 0).length;
-  return { ok: true, enabled: cfg.enabled, hasList: cfg.hasList, groups: pickGroups(cfg.slots), players, picked, total: players.length };
+  const withGoal = players.filter((p) => p.goal).length;
+  const testing = players.filter((p) => p.testEnabled).length;
+  const goals = STRENGTH_GOALS.map((id) => ({ id, ...STRENGTH_GOAL_LABEL[id], days: GOAL_DAYS[id] }));
+  return { ok: true, enabled: cfg.enabled, hasList: cfg.hasList, groups: pickGroups(cfg.slots), goals, players, picked, withGoal, testing, total: players.length };
 }
 
 export async function GET(req: Request) {
@@ -92,18 +113,39 @@ export async function PUT(req: Request) {
       return NextResponse.json(await teamState(sb, teamId));
     }
 
-    if (body.action !== "set" && body.action !== "lock") return NextResponse.json({ error: "Unknown action" }, { status: 400 });
-
-    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
-    if (reason.length < PICK_REASON_MIN) {
-      return NextResponse.json({ error: "Add a short reason (kept in the history).", error_is: "Skrifaðu stutta ástæðu (vistuð í sögunni)." }, { status: 400 });
+    if (!["set", "lock", "goal", "goal_lock", "test"].includes(String(body.action))) {
+      return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
+
     const playerId = typeof body.playerId === "string" ? body.playerId : "";
     const { data: player, error: pErr } = await sb.from("players").select("id").eq("id", playerId).eq("team_id", teamId).maybeSingle();
     if (pErr) throw new Error(pErr.message);
     if (!player) return NextResponse.json({ error: "Player is not on your team", error_is: "Leikmaður er ekki í liðinu þínu" }, { status: 404 });
 
+    // The coach's own test switch for one player needs no reason (it changes nothing until the player chooses).
+    if (body.action === "test") {
+      if (typeof body.on !== "boolean") return NextResponse.json({ error: "on must be true or false" }, { status: 400 });
+      await setTestPlayer(sb, { playerId, teamId, on: body.on, actor });
+      return NextResponse.json(await teamState(sb, teamId));
+    }
+
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    if (reason.length < PICK_REASON_MIN) {
+      return NextResponse.json({ error: "Add a short reason (kept in the history).", error_is: "Skrifaðu stutta ástæðu (vistuð í sögunni)." }, { status: 400 });
+    }
+
     const cfg = await readTeamPickConfig(sb, teamId);
+    if (body.action === "goal") {
+      const g = validateGoal(body.goal, false, { coach: true });
+      if (!g.ok) return NextResponse.json({ error: g.error.en, error_is: g.error.is, code: g.error.code }, { status: 400 });
+      await saveGoal(sb, { playerId, teamId, slots: cfg.slots, goal: g.goal, actor, reason });
+      return NextResponse.json(await teamState(sb, teamId));
+    }
+    if (body.action === "goal_lock") {
+      if (typeof body.locked !== "boolean") return NextResponse.json({ error: "locked must be true or false" }, { status: 400 });
+      await setGoalLock(sb, { playerId, teamId, slots: cfg.slots, locked: body.locked, actor, reason });
+      return NextResponse.json(await teamState(sb, teamId));
+    }
     if (body.action === "set") {
       const current = await readPlayerPicks(sb, playerId, teamId, cfg.slots);
       const v = validatePlayerPick(String(body.slot ?? ""), body.ids, cfg.slots, current.locked, { coach: true });

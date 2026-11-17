@@ -117,6 +117,8 @@ export type PrescribedExercise = {
   isAdaptiveAddition?: boolean;
   /** The player chose this exercise from the team's list (player exercise picks, 2026-11-17). */
   playerPick?: true;
+  /** One more set because of the player's own strength goal (lota 2, 2026-11-17). */
+  playerGoal?: true;
   /** Brief sport-science rationale shown in UI tooltip. */
   rationale?: string;
 };
@@ -285,6 +287,10 @@ export type PlayerStrengthSnapshot = {
    *  first in their group when the palette fills the session; safety rules still win. Individualised mode
    *  only. Absent = no picks (2026-11-17). */
   playerExercisePicks?: import("./playerPicks").PlayerExercisePicks;
+  /** The player's own strength goal (same switch as the picks). On the goal's days the matching exercise gets
+   *  one more set, unless readiness / safety / a two-match week says no. Individualised mode only. Absent = no
+   *  goal (lota 2, 2026-11-17). */
+  playerStrengthGoal?: import("./playerPicks").StrengthGoal;
 };
 
 /** A screen-driven corrective rendered into the daily session's front block. Bi

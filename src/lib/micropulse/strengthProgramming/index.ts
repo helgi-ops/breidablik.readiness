@@ -46,6 +46,7 @@ import { md1MinutesTier, type Md1Tier } from "./md1Tier";
 import { applyAdaptationRules, newAdaptationTrace, type AdaptationTrace } from "./adaptationRules";
 import { EXERCISE_LIBRARY as LIBRARY, getExercise as lookupExercise } from "./exerciseLibrary";
 import { effectivePool, isPlayerPick, type PlayerExercisePicks } from "./playerPicks";
+import { applyPlayerGoal } from "./playerGoal";
 import {
   slotForCategory,
   PALETTE_UNILATERAL_ASYMMETRY_PCT,
@@ -654,6 +655,12 @@ export function buildStrengthSession(
   // dose is already MD/readiness-tuned) and before coach overrides (coach's last word).
   if (individualised && snap.teamPalette) {
     audit.push(...applyTeamPalette(tmpl.blocks, snap.teamPalette, snap, trace));
+  }
+
+  // The player's own strength goal: +1 set of the matching exercise on the goal's days (individualised only).
+  // After the team list (which keeps the template dose), before the coach's manual swaps (coach's last word).
+  if (individualised) {
+    audit.push(...applyPlayerGoal(tmpl.blocks, snap, (id) => safetyRulesOut(id, trace), (id) => trace.pinned.has(id)));
   }
 
   if (downgradedFrom && effective) {

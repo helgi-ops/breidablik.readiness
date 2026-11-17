@@ -51,5 +51,7 @@ export function strengthView(ctx: PlayerContext): PlayerStrengthSnapshot {
     seasonPhase: cfg.seasonPhase,
     // The player's own picks from the team list — only present when the coach turned picks on.
     ...(cfg.playerPicks ? { playerExercisePicks: cfg.playerPicks } : {}),
+    // The player's own strength goal (same switch; lota 2).
+    ...(cfg.playerGoal ? { playerStrengthGoal: cfg.playerGoal } : {}),
   };
 }
