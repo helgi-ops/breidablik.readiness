@@ -43,8 +43,8 @@ import { buildMd1Primer } from "./mdTemplates/md1Primer";
 import { buildMdPlus1Recovery } from "./mdTemplates/mdPlus1Recovery";
 import { buildMdPlus1IsoLower } from "./mdTemplates/mdPlus1IsoLower";
 import { md1MinutesTier, type Md1Tier } from "./md1Tier";
-import { applyAdaptationRules } from "./adaptationRules";
-import { getExercise as lookupExercise } from "./exerciseLibrary";
+import { applyAdaptationRules, newAdaptationTrace, type AdaptationTrace } from "./adaptationRules";
+import { EXERCISE_LIBRARY as LIBRARY, getExercise as lookupExercise } from "./exerciseLibrary";
 import {
   slotForCategory,
   PALETTE_UNILATERAL_ASYMMETRY_PCT,
@@ -56,7 +56,7 @@ import { buildStructuredBlocks } from "./structureBuilders";
 
 export * from "./types";
 export { EXERCISE_LIBRARY, EXERCISES_BY_ID, getExercise, getExercisesByCategory } from "./exerciseLibrary";
-export { applyAdaptationRules } from "./adaptationRules";
+export { applyAdaptationRules, newAdaptationTrace, type AdaptationTrace } from "./adaptationRules";
 export { md1MinutesTier, type Md1Tier } from "./md1Tier";
 
 /** Pick the base micro-dose template for the player's MD context.
@@ -202,6 +202,29 @@ function applyCoachOverrides(
   return applied;
 }
 
+/** Exercise ids today's safety rules rule out: the trace's bans plus every library exercise whose
+ *  contraindications hit today's contras. Sorted; empty when nothing fired. */
+function blockedIds(trace: AdaptationTrace): string[] {
+  const out = new Set(trace.banned);
+  if (trace.contras.size > 0) {
+    for (const ex of LIBRARY) {
+      if ((ex.contraindications ?? []).some((c) => trace.contras.has(c))) out.add(ex.id);
+    }
+  }
+  return [...out].sort();
+}
+
+/** True when a list candidate may NOT be placed today: a safety rule took it out, it is
+ *  contraindicated by today's state, or a safety rule already placed it (no duplicate). */
+function safetyRulesOut(id: string, trace: AdaptationTrace | undefined): boolean {
+  if (!trace) return false;
+  if (trace.banned.has(id) || trace.pinned.has(id)) return true;
+  if (trace.contras.size === 0) return false;
+  let lib;
+  try { lib = lookupExercise(id); } catch { return false; }
+  return (lib.contraindications ?? []).some((c) => trace.contras.has(c));
+}
+
 /** Substitute the coach's team palette into the template's power/strength slots.
  *  The engine keeps the TEMPLATE's MD-tuned dose (periodisation stays intact) and
  *  only swaps WHICH exercise fills each slot to the coach's chosen pool. Symmetry
@@ -209,11 +232,17 @@ function applyCoachOverrides(
  *  the player is asymmetric (loads the weaker side) and the BILATERAL pool when
  *  symmetric — falling back to the exercise's own slot pool, then to the template
  *  exercise, so a slot is never left empty. Runs in individualised mode only.
- *  Mutates `blocks`; returns the audit entries for what it changed. */
+ *
+ *  Safety (2026-11-17, `trace` from applyAdaptationRules): the palette never replaces an
+ *  exercise a safety rule swapped in or added, and never places an exercise a safety rule
+ *  took out or that today's state contraindicates — it moves on to the next pick, and when
+ *  the pool runs out the rule's exercise stays. Mutates `blocks`; returns the audit entries
+ *  for what it changed. */
 function applyTeamPalette(
   blocks: SessionBlock[],
   palette: PaletteSlots,
   snap: PlayerStrengthSnapshot,
+  trace?: AdaptationTrace,
 ): AppliedAdaptation[] {
   const audit: AppliedAdaptation[] = [];
   // Substitute whenever the coach has picked ANY exercise (including an
@@ -231,15 +260,19 @@ function applyTeamPalette(
   const preferUnilateral = asym != null && asym >= PALETTE_UNILATERAL_ASYMMETRY_PCT;
   // Per-slot cursor so a second exercise in the same slot takes the coach's second
   // pick (not a duplicate of the first); when the pool is exhausted we leave the
-  // template exercise in place.
+  // template exercise in place. A pick the safety rules rule out is passed over
+  // (the cursor moves on), never placed.
   const cursor: Partial<Record<PaletteSlot, number>> = {};
+  let filled = 0;
   let symmetryDrove = false;
 
   const pickFrom = (slot: PaletteSlot): string | null => {
     const pool = palette[slot] ?? [];
-    const i = cursor[slot] ?? 0;
-    if (i >= pool.length) return null;
+    let i = cursor[slot] ?? 0;
+    while (i < pool.length && safetyRulesOut(pool[i], trace)) i++;
+    if (i >= pool.length) { cursor[slot] = i; return null; }
     cursor[slot] = i + 1;
+    filled++;
     return pool[i];
   };
 
@@ -251,6 +284,8 @@ function applyTeamPalette(
       // MOBILITY and the injury-prevention posterior/adductor block (Nordic van Dyk,
       // Copenhagen Harøy — non-negotiable) own no slot, so they are never substituted.
       if (!nativeSlot) continue;
+      // A safety rule put this exercise here (a swap-in or an added set) — keep it.
+      if (ex.isAdaptiveAddition || trace?.pinned.has(ex.exerciseId)) continue;
 
       // Lower-body strength: the SYMMETRY read chooses which pool fills the slot —
       // unilateral when the player is asymmetric (loads the weaker side), bilateral
@@ -297,7 +332,8 @@ function applyTeamPalette(
     }
   }
 
-  const swaps = Object.values(cursor).reduce((s, n) => s + (n ?? 0), 0);
+  // Picks actually drawn from the pool (a pick equal to the template exercise counts as filled).
+  const swaps = filled;
   if (swaps > 0) {
     audit.push({
       ruleId: "TEAM_PALETTE_APPLIED",
@@ -557,13 +593,15 @@ export function buildStrengthSession(
   // emphases are dropped so the deficit-driven accessories don't fire — readiness /
   // load / soreness rules still apply (they are the MD/readiness tuning, not the
   // per-player individualisation).
-  const audit = applyAdaptationRules(tmpl.blocks, individualised ? snap : { ...snap, ledgerEmphases: [] });
+  // The trace records what the safety rules did, so the palette below can't undo it.
+  const trace = newAdaptationTrace();
+  const audit = applyAdaptationRules(tmpl.blocks, individualised ? snap : { ...snap, ledgerEmphases: [] }, trace);
 
   // Substitute the coach's team palette into the power/strength slots (individualised
   // mode only). Symmetry chooses uni vs bi lower-body. Runs after adaptation (so the
   // dose is already MD/readiness-tuned) and before coach overrides (coach's last word).
   if (individualised && snap.teamPalette) {
-    audit.push(...applyTeamPalette(tmpl.blocks, snap.teamPalette, snap));
+    audit.push(...applyTeamPalette(tmpl.blocks, snap.teamPalette, snap, trace));
   }
 
   if (downgradedFrom && effective) {
@@ -624,6 +662,7 @@ export function buildStrengthSession(
 
   // Strip empty blocks (where rules removed everything).
   const blocks = tmpl.blocks.filter((b) => b.exercises.length > 0);
+  const blocked = blockedIds(trace);
 
   const summary = buildSummary(blocks, snap, audit.length);
 
@@ -687,5 +726,7 @@ export function buildStrengthSession(
     // The per-MD Off/lift map — so the meso layer can equate the weekly volume onto the
     // traditional lift days (the dropped Off days' volume is piled onto the lift days).
     mdStructures: snap.mdStructures,
+    // What today's safety rules rule out — the serializer keeps these out of the swap options.
+    blockedExerciseIds: blocked.length > 0 ? blocked : undefined,
   };
 }

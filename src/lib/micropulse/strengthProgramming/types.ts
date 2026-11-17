@@ -177,6 +177,10 @@ export type StrengthSession = {
    *  the bounded volume tilt applied for it — set by applyBlockToSession (the meso layer). Absent when
    *  no block context was supplied (fully backwards-compatible). */
   blockEmphasis?: import("./blockEmphasis").BlockEmphasis;
+  /** Exercises today's safety rules rule out for this player (taken out / swapped away, or a library
+   *  contraindication hit by today's soreness / decel streak / sprint drop). The serializer drops them
+   *  from the player's swap options, so a swap can't bring them back. Absent = none (2026-11-17). */
+  blockedExerciseIds?: string[];
 };
 
 /** Audit trail of which adaptation rules fired. */

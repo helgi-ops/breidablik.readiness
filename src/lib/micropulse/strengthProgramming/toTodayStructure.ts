@@ -74,6 +74,8 @@ export function strengthSessionToTodayStructure(
   // The coach's whole chosen pool (all slots) — used to restrict a player's safe
   // swaps to exercises the coach actually selected. Empty set = no restriction.
   const palettePool = new Set<string>(Object.values(session.teamPalette ?? {}).flat().filter((x): x is string => typeof x === "string"));
+  // What today's safety rules rule out (soreness, decel streak, sprint drop …) — never offered as a swap.
+  const blocked = new Set<string>(session.blockedExerciseIds ?? []);
 
   // Screen-driven correctives lead the session as one movement-prep / activation
   // block (name + dose + cue→method + source→note) — the same item shape, so the
@@ -124,7 +126,7 @@ export function strengthSessionToTodayStructure(
           item.exerciseId = lib.id;
           const resolved = (lib.alternatives ?? [])
             .map((id) => EXERCISES_BY_ID.get(id))
-            .filter((a): a is NonNullable<typeof a> => !!a && a.id !== lib.id);
+            .filter((a): a is NonNullable<typeof a> => !!a && a.id !== lib.id && !blocked.has(a.id));
           // STRICT palette binding: when the coach has set a pool, only offer
           // alternatives that are IN it — never fall back to the full safe list,
           // or the player would see exercises the coach didn't approve. An empty

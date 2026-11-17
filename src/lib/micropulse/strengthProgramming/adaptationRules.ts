@@ -123,8 +123,26 @@ function reduceVolume(
   return true;
 }
 
+/** What the safety rules did in one build, so later layers (the team palette, a player's own exercise
+ *  picks) can never undo it (2026-11-17):
+ *   • `pinned`  — exercises a safety rule swapped IN (e.g. front squat for a sore lower back). The palette
+ *                 leaves these positions alone and never places them a second time.
+ *   • `banned`  — exercises a safety rule took OUT or swapped AWAY today. Never brought back by a list.
+ *   • `contras` — today's contraindications (soreness, decel streak, sprint drop …); a list candidate whose
+ *                 library `contraindications` hit one is skipped.
+ *  Filled by `applyAdaptationRules` when the caller passes it; absent = the old behaviour. */
+export type AdaptationTrace = {
+  pinned: Set<string>;
+  banned: Set<string>;
+  contras: Set<ContraIndication>;
+};
+
+export function newAdaptationTrace(): AdaptationTrace {
+  return { pinned: new Set(), banned: new Set(), contras: new Set() };
+}
+
 /** Build the contraindication set from snapshot data. */
-function buildContraindications(snap: PlayerStrengthSnapshot): Set<ContraIndication> {
+export function buildContraindications(snap: PlayerStrengthSnapshot): Set<ContraIndication> {
   const out = new Set<ContraIndication>();
 
   if (snap.injuryStatus === "injured" || snap.injuryStatus === "rehabilitation") {
@@ -158,9 +176,16 @@ function buildContraindications(snap: PlayerStrengthSnapshot): Set<ContraIndicat
 export function applyAdaptationRules(
   blocks: SessionBlock[],
   snap: PlayerStrengthSnapshot,
+  trace?: AdaptationTrace,
 ): AppliedAdaptation[] {
   const audit: AppliedAdaptation[] = [];
   const contras = buildContraindications(snap);
+  if (trace) for (const c of contras) trace.contras.add(c);
+  // Safety bookkeeping (no-ops without a trace): a ban holds whenever the rule's
+  // condition fires, whether or not the exercise was in today's template, so a
+  // later list can't bring it in either.
+  const ban = (...ids: string[]) => { if (trace) for (const id of ids) trace.banned.add(id); };
+  const pin = (id: string) => { if (trace) trace.pinned.add(id); };
 
   // ── RULE 1: Injury — block session entirely ──────────────────────────
   // The session builder should NOT call this engine for actively injured
@@ -181,8 +206,10 @@ export function applyAdaptationRules(
   // Evidence: Nordic adds eccentric load; on sore tissue → swap to iso
   // long-duration hamstring bridge (Lim 2020).
   if (contras.has("sore_hamstrings") || contras.has("hamstring_injury")) {
+    ban("ex_nordic_curl", "ex_b_stance_rdl");
     if (swapExercise(blocks, "ex_nordic_curl", "ex_iso_ham_bridge_long",
         "Swapped from Nordic — sore hamstrings (eccentric load contraindicated)")) {
+      pin("ex_iso_ham_bridge_long");
       audit.push({
         ruleId: "SORE_HAM_NORDIC_SWAP",
         triggerEN: "Sore hamstrings",
@@ -209,6 +236,7 @@ export function applyAdaptationRules(
   // Evidence: McBurnie 2022 — eccentric load accumulates fatigue; 3+ HIGH
   // days indicates need for concentric-dominant work.
   if (contras.has("high_decel_burden")) {
+    ban("ex_nordic_curl", "ex_trap_bar_dl");
     // Drop Nordic if still present
     if (removeExercise(blocks, "ex_nordic_curl")) {
       audit.push({
@@ -223,6 +251,7 @@ export function applyAdaptationRules(
     // Swap trap-bar DL → hip thrust (eliminates eccentric)
     if (swapExercise(blocks, "ex_trap_bar_dl", "ex_hip_thrust",
         "Swapped from Trap-bar DL — decel burden HIGH (concentric-dominant preferred)")) {
+      pin("ex_hip_thrust");
       audit.push({
         ruleId: "DECEL_BURDEN_DL_SWAP",
         triggerEN: `Decel burden HIGH ${snap.decelBurdenHighStreakDays} days`,
@@ -239,8 +268,10 @@ export function applyAdaptationRules(
   // Max-velocity work elevates hamstring injury risk; use iso (same joint
   // angle, no max-velocity demand).
   if (contras.has("sprint_speed_dropped")) {
+    ban("ex_mid_thigh_pull_dynamic", "ex_depth_jump");
     if (swapExercise(blocks, "ex_mid_thigh_pull_dynamic", "ex_imtp_iso",
         `Swapped from dynamic mid-thigh pull — sprint speed dropped ${snap.sprintSpeedDropPct?.toFixed(1)}% vs peak`)) {
+      pin("ex_imtp_iso");
       audit.push({
         ruleId: "SPRINT_DROP_MTP_SWAP",
         triggerEN: `Sprint speed −${snap.sprintSpeedDropPct?.toFixed(1)}% vs peak`,
@@ -339,6 +370,7 @@ export function applyAdaptationRules(
 
   // ── RULE 8: Sore groin — drop Copenhagen ─────────────────────────────
   if (contras.has("sore_groin") || contras.has("groin_injury")) {
+    ban("ex_copenhagen");
     if (removeExercise(blocks, "ex_copenhagen")) {
       audit.push({
         ruleId: "SORE_GROIN_COPENHAGEN_REMOVE",
@@ -353,8 +385,10 @@ export function applyAdaptationRules(
 
   // ── RULE 9: Sore lower back — swap trap-bar DL → front squat ─────────
   if (contras.has("sore_lower_back")) {
+    ban("ex_trap_bar_dl");
     if (swapExercise(blocks, "ex_trap_bar_dl", "ex_front_squat",
         "Swapped from Trap-bar DL — sore lower back (reduces spinal load)")) {
+      pin("ex_front_squat");
       audit.push({
         ruleId: "SORE_LB_DL_SWAP",
         triggerEN: "Sore lower back",

@@ -2,10 +2,13 @@
  * POST /api/player/exercise-swap
  *
  * Player swaps one prescribed exercise on today's session for one of its CURATED
- * SAFE ALTERNATIVES (Exercise.alternatives) — used when the sent exercise isn't
- * quite right for them (equipment, comfort, a niggle). Safe-only: the target must
- * be in the original exercise's `alternatives`, so a swap can never land on a
- * mechanically inappropriate lift.
+ * SAFE ALTERNATIVES — used when the sent exercise isn't quite right for them
+ * (equipment, comfort, a niggle). Safe-only: the target must be one of the options
+ * stored on that very item when the session was sent (the exercise's curated
+ * `alternatives`, already narrowed to the coach's palette and with anything today's
+ * safety rules rule out removed — `toTodayStructure`). Since 2026-11-17 the route
+ * checks the stored item, not just the library, so a swap can't bring back an
+ * exercise the coach left out or a safety rule took out.
  *
  * Two effects, atomic from the player's view:
  *   1. Logs the swap in player_exercise_swaps (the coach's window + durable record).
@@ -35,15 +38,6 @@ function exName(id: string, isIS: boolean): string {
   return ex ? (isIS ? ex.nameIS : ex.nameEN) || ex.nameEN : id;
 }
 
-/** Safe alternatives for the player card (curated `alternatives`, localized). */
-function safeAlternatives(id: string, isIS: boolean): { id: string; name: string }[] {
-  const ex = EXERCISES_BY_ID.get(id);
-  return (ex?.alternatives ?? [])
-    .map((altId) => EXERCISES_BY_ID.get(altId))
-    .filter((a): a is NonNullable<typeof a> => !!a && a.id !== id)
-    .map((a) => ({ id: a.id, name: (isIS ? a.nameIS : a.nameEN) || a.nameEN }));
-}
-
 export async function POST(req: Request) {
   try {
     const sb = getSupabaseAdmin();
@@ -60,15 +54,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Missing block/position/from/to" }, { status: 400 });
     }
 
-    // Safety gate: the target MUST be a curated alternative of the original.
     const from = EXERCISES_BY_ID.get(fromExerciseId);
     const to = EXERCISES_BY_ID.get(toExerciseId);
     if (!from || !to) return NextResponse.json({ ok: false, error: "Unknown exercise" }, { status: 400 });
-    if (!(from.alternatives ?? []).includes(toExerciseId)) {
+
+    // Safety gate: the stored item at (block, position) must be the exercise the player
+    // is swapping FROM, and the target must be one of the options stored on it.
+    const stored = await readItem(sb, playerId, date, block, position);
+    if (!stored || stored.item.exerciseId !== fromExerciseId) {
+      return NextResponse.json({ ok: false, error: "That exercise is not on today's session" }, { status: 409 });
+    }
+    const offered = (stored.item.alternatives ?? []).filter((a) => a && typeof a.id === "string");
+    if (!offered.some((a) => a.id === toExerciseId)) {
       return NextResponse.json({ ok: false, error: "Not a safe alternative for this exercise" }, { status: 400 });
     }
 
     const teamId = await getPlayerTeamId(sb, playerId);
+
+    // Keep the coach-sent exercise as the slot's origin across repeat swaps, so DELETE
+    // restores what the coach sent (not the player's previous swap).
+    const { data: prior } = await sb
+      .from("player_exercise_swaps")
+      .select("from_exercise_id")
+      .eq("player_id", playerId).eq("entry_date", date).eq("block", block).eq("position", position)
+      .maybeSingle();
+    const originId = (prior as { from_exercise_id?: string } | null)?.from_exercise_id ?? fromExerciseId;
 
     // 1. Log the swap (durable record + coach visibility).
     const { error: logErr } = await sb.from("player_exercise_swaps").upsert(
@@ -78,9 +88,9 @@ export async function POST(req: Request) {
         entry_date: date,
         block,
         position,
-        from_exercise_id: fromExerciseId,
+        from_exercise_id: originId,
         to_exercise_id: toExerciseId,
-        from_name: exName(fromExerciseId, isIS),
+        from_name: exName(originId, isIS),
         to_name: exName(toExerciseId, isIS),
         updated_at: new Date().toISOString(),
       },
@@ -88,12 +98,17 @@ export async function POST(req: Request) {
     );
     if (logErr) return NextResponse.json({ ok: false, error: logErr.message }, { status: 500 });
 
-    // 2. Rewrite the matching item in today's structure so the card updates now.
+    // 2. Rewrite the matching item in today's structure so the card updates now. The
+    // options stay the ones the session was sent with (the exercise swapped away goes
+    // back in so the player can swap back) — same list the card shows (PlayerClient doSwap).
     const applied = await rewriteStructure(sb, playerId, date, block, position, {
       toId: toExerciseId,
       fromId: fromExerciseId,
       newName: exName(toExerciseId, isIS),
-      alternatives: safeAlternatives(toExerciseId, isIS),
+      alternatives: [
+        { id: fromExerciseId, name: stored.item.name || exName(fromExerciseId, isIS) },
+        ...offered.filter((a) => a.id !== toExerciseId && a.id !== fromExerciseId),
+      ],
       note: isIS
         ? `Þú skiptir úr ${exName(fromExerciseId, true)} (öruggur valkostur)`
         : `You swapped from ${exName(fromExerciseId, false)} (safe alternative)`,
@@ -137,11 +152,21 @@ export async function DELETE(req: Request) {
     const fromId = (row as { from_exercise_id?: string } | null)?.from_exercise_id ?? null;
     let applied = false;
     if (fromId) {
+      // Restore the coach-sent exercise with the same options the item carries now (the
+      // send-time list: palette-bound, safety-filtered), current exercise swapped back in.
+      const stored = await readItem(sb, playerId, date, block, position);
+      const cur = stored?.item;
+      const alternatives = cur
+        ? [
+            ...(cur.exerciseId && cur.exerciseId !== fromId ? [{ id: cur.exerciseId, name: cur.name || exName(cur.exerciseId, isIS) }] : []),
+            ...(cur.alternatives ?? []).filter((a) => a && a.id !== fromId && a.id !== cur.exerciseId),
+          ]
+        : [];
       applied = await rewriteStructure(sb, playerId, date, block, position, {
         toId: fromId,
         fromId,
         newName: exName(fromId, isIS),
-        alternatives: safeAlternatives(fromId, isIS),
+        alternatives,
         note: undefined, // clears the player-swap note
       });
     }
@@ -151,6 +176,27 @@ export async function DELETE(req: Request) {
     const code = message === "Unauthorized" ? 401 : /not mapped/i.test(message) ? 403 : 500;
     return NextResponse.json({ ok: false, error: message }, { status: code });
   }
+}
+
+/** The stored today-structure item at (block, position), or null. */
+async function readItem(
+  sb: ReturnType<typeof getSupabaseAdmin>,
+  playerId: string,
+  date: string,
+  block: string,
+  position: number,
+): Promise<{ item: TodayStructureItem } | null> {
+  const { data } = await sb
+    .from("player_today_strength_override")
+    .select("structure")
+    .eq("player_id", playerId)
+    .eq("entry_date", date)
+    .maybeSingle();
+  const structure = (data as { structure?: TodayStructureBlock[] } | null)?.structure;
+  if (!Array.isArray(structure)) return null;
+  const b = structure.find((x) => x.block === block);
+  if (!b || !Array.isArray(b.items) || position < 0 || position >= b.items.length) return null;
+  return { item: b.items[position] as TodayStructureItem };
 }
 
 /** Replace one item in the stored today-structure by (block, position). Matches the
