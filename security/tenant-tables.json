@@ -100,6 +100,8 @@
   "player_season_stats",
   "player_session_rpe",
   "player_strength_completions",
+  "player_strength_pick_events",
+  "player_strength_picks",
   "player_strength_set_log",
   "player_team_memberships",
   "player_template_assignments",

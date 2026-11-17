@@ -6,6 +6,7 @@ import { useLang } from "@/lib/lang";
 import { PLAYER_COPY } from "./playerCopy";
 import { createPortal } from "react-dom";
 import PlayerGoalSheet from "@/components/player/PlayerGoalSheet";
+import PlayerExercisePicksSheet, { useStrengthPicksEnabled } from "@/components/player/PlayerExercisePicksSheet";
 import Link from "next/link";
 import PlayerClient from "./PlayerClient";
 import { TodayOutlookTeaser, type TodayLoad } from "./TodayOutlook";
@@ -665,6 +666,9 @@ function TodayMorePortal({ activeTab, lang, onOpen, isBasketball }: { activeTab:
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   // "My goal" sheet (goal plan request). Reads nothing until opened, so Today's first load is unchanged.
   const [goalOpen, setGoalOpen] = useState(false);
+  // "My exercises" (player exercise picks): shown only when the coach turned it on; checked lazily, cached.
+  const [picksOpen, setPicksOpen] = useState(false);
+  const picksOn = useStrengthPicksEnabled();
   const is = lang === "IS";
 
   useEffect(() => {
@@ -750,8 +754,23 @@ function TodayMorePortal({ activeTab, lang, onOpen, isBasketball }: { activeTab:
           </span>
           <span className="text-lg leading-none text-zinc-300">›</span>
         </button>
+        {picksOn ? (
+          <button
+            type="button"
+            onClick={() => setPicksOpen(true)}
+            className="flex w-full items-center gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-left shadow-sm transition hover:bg-zinc-50"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600"><IconActivity active={false} /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-zinc-900">{is ? "Mínar æfingar" : "My exercises"}</span>
+              <span className="block truncate text-xs text-zinc-500">{is ? "Veldu æfingar í styrktaræfinguna þína" : "Choose the exercises in your strength session"}</span>
+            </span>
+            <span className="text-lg leading-none text-zinc-300">›</span>
+          </button>
+        ) : null}
       </div>
       {goalOpen ? <PlayerGoalSheet lang={lang} onClose={() => setGoalOpen(false)} /> : null}
+      {picksOpen ? <PlayerExercisePicksSheet lang={lang} onClose={() => setPicksOpen(false)} /> : null}
     </div>,
     mountNode,
   );

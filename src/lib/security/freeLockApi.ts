@@ -38,6 +38,8 @@ export const FREE_BLOCKED_SEND_PATHS = [
   "/api/integrations/wimu/upload",
   "/api/coach/goal-plans/requests/:id/decision",
   "/api/player/goal-plan",
+  "/api/player/strength-picks",
+  "/api/coach/team/player-strength-picks",
 ] as const;
 
 /** Data pulls from vendors (any method: some are GET). Cron callers carry a secret, not a login, so they pass. */
@@ -69,6 +71,8 @@ export const FREE_BLOCKED_READ_PATHS = [
   "/api/coach/goal-plans/requests/:id",
   "/api/coach/goal-plans/start",
   "/api/coach/team/quality-plan-prefs",
+  "/api/player/strength-picks",
+  "/api/coach/team/player-strength-picks",
 ] as const;
 
 const TABLE = [

@@ -49,5 +49,7 @@ export function strengthView(ctx: PlayerContext): PlayerStrengthSnapshot {
     lastMatchDnp: ctx.matchExposure.data.lastMatchDnp,
     sport: cfg.sport,
     seasonPhase: cfg.seasonPhase,
+    // The player's own picks from the team list — only present when the coach turned picks on.
+    ...(cfg.playerPicks ? { playerExercisePicks: cfg.playerPicks } : {}),
   };
 }

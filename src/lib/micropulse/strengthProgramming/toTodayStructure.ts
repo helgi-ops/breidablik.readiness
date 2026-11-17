@@ -108,7 +108,8 @@ export function strengthSessionToTodayStructure(
         // cluster/VBT cue; the modification reason (why this was swapped) rides
         // as the note so the player sees the "why" the manifesto requires.
         const methodBits = [ex.dose.intensity, ex.dose.cue].filter(Boolean).join(" · ");
-        const note = ex.modificationReason?.trim() || undefined;
+        // A player's own pick (from the team list) reads "Your pick" on their card.
+        const note = ex.playerPick ? (isIS ? "Þitt val" : "Your pick") : ex.modificationReason?.trim() || undefined;
         const item: TodayStructureItem = {
           name: (isIS ? ex.nameIS : ex.nameEN) || ex.nameEN || ex.nameIS,
           sets: ex.dose.sets,

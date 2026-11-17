@@ -26,6 +26,7 @@ import * as React from "react";
 import { useLang } from "@/lib/lang";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import PagePurpose from "@/components/coach/PagePurpose";
+import PlayerExercisePicksPanel from "@/components/coach/PlayerExercisePicksPanel";
 import { GoalPlanView } from "@/components/coach/GoalPlanPreviewCard";
 import type { Bi, GoalPlan, GoalQuality } from "@/lib/micropulse/goalPlan/types";
 import {
@@ -173,6 +174,8 @@ export default function GoalRequestsPage() {
           </div>
         </div>
       ) : null}
+
+      <PlayerExercisePicksPanel isEN={isEN} />
     </div>
   );
 }

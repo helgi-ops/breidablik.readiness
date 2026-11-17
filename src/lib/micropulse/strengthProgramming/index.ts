@@ -45,6 +45,7 @@ import { buildMdPlus1IsoLower } from "./mdTemplates/mdPlus1IsoLower";
 import { md1MinutesTier, type Md1Tier } from "./md1Tier";
 import { applyAdaptationRules, newAdaptationTrace, type AdaptationTrace } from "./adaptationRules";
 import { EXERCISE_LIBRARY as LIBRARY, getExercise as lookupExercise } from "./exerciseLibrary";
+import { effectivePool, isPlayerPick, type PlayerExercisePicks } from "./playerPicks";
 import {
   slotForCategory,
   PALETTE_UNILATERAL_ASYMMETRY_PCT,
@@ -266,8 +267,15 @@ function applyTeamPalette(
   let filled = 0;
   let symmetryDrove = false;
 
+  // The player's own picks (when the coach turned picks on) go first in their group, then the rest of the
+  // coach's list in the coach's order. No picks → exactly the coach's list.
+  const picks: PlayerExercisePicks | undefined = snap.playerExercisePicks;
+  const pools: Partial<Record<PaletteSlot, string[]>> = {};
+  const poolOf = (slot: PaletteSlot) => (pools[slot] ??= effectivePool(slot, palette, picks));
+  const usedPicks: string[] = [];
+
   const pickFrom = (slot: PaletteSlot): string | null => {
-    const pool = palette[slot] ?? [];
+    const pool = poolOf(slot);
     let i = cursor[slot] ?? 0;
     while (i < pool.length && safetyRulesOut(pool[i], trace)) i++;
     if (i >= pool.length) { cursor[slot] = i; return null; }
@@ -311,7 +319,13 @@ function applyTeamPalette(
         usedSlot = nativeSlot;
         chosenId = pickFrom(nativeSlot);
       }
-      if (!chosenId || chosenId === ex.exerciseId) continue;
+      if (!chosenId) continue;
+      const mine = isPlayerPick(usedSlot, chosenId, picks);
+      if (mine) usedPicks.push(chosenId);
+      if (chosenId === ex.exerciseId) {
+        if (mine) block.exercises[p] = { ...ex, playerPick: true };
+        continue;
+      }
 
       let newEx;
       try { newEx = lookupExercise(chosenId); } catch { continue; }
@@ -324,10 +338,15 @@ function applyTeamPalette(
         nameIS: newEx.nameIS,
         category: newEx.category,
         dose,
-        modificationReason: usedSlot === "unilateral_strength" && symmetryDrove
-          ? `Team palette (unilateral — ${asym?.toFixed(0)}% L/R asymmetry, ${asymSource})`
-          : "Team palette (coach's chosen pool)",
+        modificationReason: mine
+          ? usedSlot === "unilateral_strength" && symmetryDrove
+            ? `Player's pick from the team list (one leg at a time — ${asym?.toFixed(0)}% L/R asymmetry, ${asymSource})`
+            : "Player's pick from the team list"
+          : usedSlot === "unilateral_strength" && symmetryDrove
+            ? `Team palette (unilateral — ${asym?.toFixed(0)}% L/R asymmetry, ${asymSource})`
+            : "Team palette (coach's chosen pool)",
         rationale: newEx.evidence,
+        ...(mine ? { playerPick: true as const } : {}),
       };
     }
   }
@@ -344,6 +363,7 @@ function applyTeamPalette(
       evidence: "Coach-curated exercise pool — the coach picks WHICH lifts, the engine keeps the periodised dose.",
     });
   }
+  if (usedPicks.length > 0) audit.push(playerPickAudit(usedPicks));
   if (symmetryDrove) {
     audit.push({
       ruleId: "PALETTE_SYMMETRY_UNILATERAL",
@@ -357,14 +377,36 @@ function applyTeamPalette(
   return audit;
 }
 
+/** Audit line for the player's own picks that made it into the session (only when at least one did). */
+function playerPickAudit(ids: string[]): AppliedAdaptation {
+  const names = (lang: "en" | "is") => ids.map((id) => {
+    try { const e = lookupExercise(id); return lang === "is" ? e.nameIS || e.nameEN : e.nameEN; } catch { return id; }
+  }).join(", ");
+  return {
+    ruleId: "PLAYER_PICK_APPLIED",
+    triggerEN: `Player's own picks from the team list: ${names("en")}`,
+    triggerIS: `Val leikmanns af lista liðsins: ${names("is")}`,
+    actionEN: "Used the player's picks first in their group; the dose, the injury-prevention block and the safety rules are unchanged.",
+    actionIS: "Notaði val leikmanns fyrst í flokknum; skammtur, meiðslaforvörn og öryggisreglur óbreytt.",
+    evidence: "Choice within limits the coach sets (the team list); choice may support motivation and adherence (self-determination theory, Ntoumanis et al. 2021 meta-analysis).",
+  };
+}
+
+/** The upper-body pool for this player: their pick first (if any), then the team list; minus anything today's
+ *  safety rules rule out. */
+function upperPool(snap: PlayerStrengthSnapshot, trace?: AdaptationTrace): string[] {
+  const palette = snap.teamPalette ?? {};
+  return effectivePool("upper_body", palette, snap.playerExercisePicks).filter((id) => !safetyRulesOut(id, trace));
+}
+
 /** Append an upper-body block from the team palette, gated by sport + season phase
  *  into three tiers: basketball → PRIMARY (2 lifts, before the injury-prevention
  *  block); football pre-season → ACCESSORY (2 lifts, at the end); football in-season
  *  → MAINTENANCE (1 lift, ≤2 sets, at the end — keeps upper strength without adding
  *  fatigue). Taper days (MD-2/1/+1) and an empty upper palette → nothing. Mutates
  *  `blocks`. */
-function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot, md1Tier: Md1Tier | null = null): AppliedAdaptation[] {
-  const upperPicks = snap.teamPalette?.upper_body ?? [];
+function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot, md1Tier: Md1Tier | null = null, trace?: AdaptationTrace): AppliedAdaptation[] {
+  const upperPicks = upperPool(snap, trace);
   // MD-4 / MD-3 are strength days; on MD+1 the LOW tier (DNP / < 30 min) is a
   // rebuild day, so it takes the same season-gated upper add.
   const strengthDay = snap.mdContext === "MD-4" || snap.mdContext === "MD-3"
@@ -384,7 +426,11 @@ function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot, m
     if (!base) continue;
     // Maintenance keeps it low-volume: cap at 2 sets.
     const dose = tier === "maintenance" ? { ...base, sets: Math.min(base.sets, 2) } : base;
-    exercises.push({ exerciseId: lib.id, nameEN: lib.nameEN, nameIS: lib.nameIS, category: lib.category, dose, rationale: lib.evidence });
+    const mine = isPlayerPick("upper_body", lib.id, snap.playerExercisePicks);
+    exercises.push({
+      exerciseId: lib.id, nameEN: lib.nameEN, nameIS: lib.nameIS, category: lib.category, dose, rationale: lib.evidence,
+      ...(mine ? { playerPick: true as const, modificationReason: "Player's pick from the team list" } : {}),
+    });
   }
   if (exercises.length === 0) return [];
 
@@ -400,6 +446,7 @@ function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot, m
     : "Viðhald á keppnistímabili — ein æfing, lítið magn, heldur efri-líkama styrk án þreytu.";
 
   const block: SessionBlock = { id: "upper-body", titleEN, titleIS, type: "ACCESSORY", exercises, noteEN, noteIS };
+  const picked = exercises.filter((e) => e.playerPick).map((e) => e.exerciseId);
 
   if (tier === "primary") {
     const idx = blocks.findIndex((b) => b.type === "POSTERIOR" || b.type === "ADDUCTOR");
@@ -416,7 +463,7 @@ function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot, m
     : tier === "accessory" ? `Fótbolti undirbúningstímabil — efri-líkama auki (${snap.mdContext})`
     : `Fótbolti keppnistímabil — létt efri-líkama viðhald (${snap.mdContext})`;
 
-  return [{
+  return [...(picked.length ? [playerPickAudit(picked)] : []), {
     ruleId: "UPPER_BODY_ADDED",
     triggerEN,
     triggerIS,
@@ -430,8 +477,8 @@ function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot, m
  *  is on protective iso only, so the day's real strength stimulus is the upper
  *  block (2 lifts, MD-4 dose). Palette-first; falls back to a canonical push/pull
  *  when the coach hasn't curated an upper pool (clearly noted). Mutates `blocks`. */
-function appendMdPlus1UpperStrength(blocks: SessionBlock[], snap: PlayerStrengthSnapshot): AppliedAdaptation[] {
-  const picks = snap.teamPalette?.upper_body ?? [];
+function appendMdPlus1UpperStrength(blocks: SessionBlock[], snap: PlayerStrengthSnapshot, trace?: AdaptationTrace): AppliedAdaptation[] {
+  const picks = upperPool(snap, trace);
   const usedDefault = picks.length === 0;
   const ids = (usedDefault ? ["ex_db_bench_press", "ex_db_row"] : picks).slice(0, 2);
 
@@ -441,9 +488,14 @@ function appendMdPlus1UpperStrength(blocks: SessionBlock[], snap: PlayerStrength
     try { lib = lookupExercise(id); } catch { continue; }
     const base = lib.defaultDosing["MD-4"] ?? lib.defaultDosing["MD-3"] ?? Object.values(lib.defaultDosing)[0];
     if (!base) continue;
-    exercises.push({ exerciseId: lib.id, nameEN: lib.nameEN, nameIS: lib.nameIS, category: lib.category, dose: base, rationale: lib.evidence });
+    const mine = !usedDefault && isPlayerPick("upper_body", lib.id, snap.playerExercisePicks);
+    exercises.push({
+      exerciseId: lib.id, nameEN: lib.nameEN, nameIS: lib.nameIS, category: lib.category, dose: base, rationale: lib.evidence,
+      ...(mine ? { playerPick: true as const, modificationReason: "Player's pick from the team list" } : {}),
+    });
   }
   if (exercises.length === 0) return [];
+  const picked = exercises.filter((e) => e.playerPick).map((e) => e.exerciseId);
 
   blocks.push({
     id: "mdplus1-upper",
@@ -459,7 +511,7 @@ function appendMdPlus1UpperStrength(blocks: SessionBlock[], snap: PlayerStrength
       : "Spilaði 60+ mín → neðri líkami endurheimtist (aðeins iso) meðan óþreyttur efri líkami æfir, úr palette liðsins.",
   });
 
-  return [{
+  return [...(picked.length ? [playerPickAudit(picked)] : []), {
     ruleId: "MDPLUS1_UPPER_STRENGTH",
     triggerEN: `Played ≥ 60 min (${snap.lastMatchMinutes ?? "?"} min) — MD+1 recovery day`,
     triggerIS: `Spilaði ≥ 60 mín (${snap.lastMatchMinutes ?? "?"} mín) — MD+1 endurheimtardagur`,
@@ -648,15 +700,15 @@ export function buildStrengthSession(
   if (individualised) {
     if (md1Tier === "high") {
       // HOLD still strips (Rule 10); RECOVERY at 60+ min keeps the fresh-upper add.
-      if (snap.verdict !== "HOLD") audit.push(...appendMdPlus1UpperStrength(tmpl.blocks, snap));
+      if (snap.verdict !== "HOLD") audit.push(...appendMdPlus1UpperStrength(tmpl.blocks, snap, trace));
     } else if (md1Tier === "low") {
       // A DNP / <30 min player flagged RECOVERY/HOLD for a non-load reason (illness
       // etc.) is genuinely recovery-stripped — don't add an upper block on top.
       if (snap.verdict !== "RECOVERY" && snap.verdict !== "HOLD") {
-        audit.push(...appendUpperBody(tmpl.blocks, snap, md1Tier));
+        audit.push(...appendUpperBody(tmpl.blocks, snap, md1Tier, trace));
       }
     } else {
-      audit.push(...appendUpperBody(tmpl.blocks, snap, md1Tier));
+      audit.push(...appendUpperBody(tmpl.blocks, snap, md1Tier, trace));
     }
   }
 

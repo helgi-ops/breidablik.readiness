@@ -115,6 +115,8 @@ export type PrescribedExercise = {
   modificationReason?: string | null;
   /** Whether this is added by an adaptation rule (not in base template). */
   isAdaptiveAddition?: boolean;
+  /** The player chose this exercise from the team's list (player exercise picks, 2026-11-17). */
+  playerPick?: true;
   /** Brief sport-science rationale shown in UI tooltip. */
   rationale?: string;
 };
@@ -279,6 +281,10 @@ export type PlayerStrengthSnapshot = {
    *  mode lays that method out instead of the built-in template. Absent / default
    *  / other days → the built-in template. Does not apply in standard mode. */
   mdStructures?: import("./structures").MdStructures;
+  /** The player's own picks from the team list (only when the coach turned picks on for the team). They go
+   *  first in their group when the palette fills the session; safety rules still win. Individualised mode
+   *  only. Absent = no picks (2026-11-17). */
+  playerExercisePicks?: import("./playerPicks").PlayerExercisePicks;
 };
 
 /** A screen-driven corrective rendered into the daily session's front block. Bi

@@ -23,6 +23,7 @@ import { loadPlayerMovementScreens } from "@/lib/micropulse/movementScreen/loade
 import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import { sanitizePaletteSlots, type PaletteSlots } from "../strengthProgramming/palette";
 import { sanitizeMdStructures, type MdStructures } from "../strengthProgramming/structures";
+import { sanitizePicks, type PlayerExercisePicks } from "../strengthProgramming/playerPicks";
 
 /** Corrective compensation → the strength emphasis it corroborates (CONFIRM-vs-ADD
  *  de-dup when the strength blocks already emphasise the same quality). */
@@ -72,6 +73,25 @@ export async function fetchTeamPalette(sb: SupabaseClient, teamId: string | null
     return { slots: sanitizePaletteSlots(row?.slots), mdStructures: sanitizeMdStructures(row?.md_structures) };
   } catch {
     return { slots: {}, mdStructures: {} };
+  }
+}
+
+/** The player's own exercise picks from the team list (2026-11-17) — only when the coach turned picks on for
+ *  the team and the row belongs to that team. Picks no longer on the list are dropped. One small read for a
+ *  player who never picked (most players). Fail-safe: any error → no picks (the coach's list as before). */
+export async function fetchPlayerExercisePicks(sb: SupabaseClient, playerId: string, teamId: string | null): Promise<PlayerExercisePicks | undefined> {
+  if (!teamId) return undefined;
+  try {
+    const { data: row } = await sb.from("player_strength_picks").select("picks").eq("player_id", playerId).eq("team_id", teamId).maybeSingle();
+    const raw = (row as { picks?: unknown } | null)?.picks;
+    if (!raw) return undefined;
+    const { data: team } = await sb.from("team_strength_palette").select("slots, player_picks_enabled").eq("team_id", teamId).maybeSingle();
+    const t = team as { slots?: unknown; player_picks_enabled?: boolean } | null;
+    if (!t?.player_picks_enabled) return undefined;
+    const picks = sanitizePicks(raw, sanitizePaletteSlots(t.slots));
+    return Object.keys(picks).length > 0 ? picks : undefined;
+  } catch {
+    return undefined;
   }
 }
 

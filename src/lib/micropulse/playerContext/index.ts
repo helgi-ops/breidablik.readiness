@@ -23,10 +23,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MdContext, PlayerStrengthSnapshot, SessionCorrective } from "../strengthProgramming/types";
 import type { PaletteSlots } from "../strengthProgramming/palette";
 import type { MdStructures } from "../strengthProgramming/structures";
+import type { PlayerExercisePicks } from "../strengthProgramming/playerPicks";
 import { loadSprintExposure } from "@/lib/micropulse/sprintExposure/loader";
 import {
   fetchTeamContext,
   fetchTeamPalette,
+  fetchPlayerExercisePicks,
   fetchScreenCorrectives,
   fetchLedgerEmphases,
   fetchSprintSpeedDrop,
@@ -66,7 +68,7 @@ export type PlayerContext = {
   teamId: string | null;
   /** Stubbed null in Stage 1 (see domains.fetchVbtDecrement). */
   vbtDecrement: number | null;
-  teamConfig: Domain<{ sport: string | null; seasonPhase: string | null; palette: PaletteSlots; mdStructures: MdStructures }>;
+  teamConfig: Domain<{ sport: string | null; seasonPhase: string | null; palette: PaletteSlots; mdStructures: MdStructures; playerPicks?: PlayerExercisePicks }>;
   externalLoad: Domain<{
     sprintDropPct: number | null;
     sprintBand: PlayerStrengthSnapshot["sprintExposureBand"];
@@ -121,6 +123,7 @@ export async function buildPlayerContext(
     valdAsym,
     teamContext,
     matchExposure,
+    playerPicks,
   ] = await Promise.all([
     fetchSprintSpeedDrop(sb, playerId, todayIso),
     loadSprintExposure(sb, { playerId, todayIso, teamId: teamId ?? undefined }),
@@ -139,6 +142,7 @@ export async function buildPlayerContext(
     fetchValdAsymmetry(sb, playerId, todayIso),
     fetchTeamContext(sb, teamId, todayIso),
     fetchLastMatchMinutes(sb, teamId, playerId, todayIso),
+    fetchPlayerExercisePicks(sb, playerId, teamId),
   ]);
 
   const wellnessAvailable =
@@ -157,6 +161,7 @@ export async function buildPlayerContext(
         seasonPhase: teamContext.seasonPhase,
         palette: teamPalette.slots,
         mdStructures: teamPalette.mdStructures,
+        ...(playerPicks ? { playerPicks } : {}),
       },
       status: statusOf(
         teamContext.sport != null || teamContext.seasonPhase != null || Object.keys(teamPalette.slots).length > 0,
