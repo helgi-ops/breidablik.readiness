@@ -18,7 +18,7 @@ flowchart TD
   P["Team palette — HVAÐA æfingar<br/>pool per slot"]
   S["Per-MD structures — HVERNIG<br/>aðferð dagsins (French contrast, cluster…)"]
   R["Training principles — Á HVAÐA ákefð/gæðum<br/>%1RM · gæði · scheme"]
-  B["buildStrengthSession — vélin les samhengið og fléttar lögin<br/>Sjálfvirkt: MD-dagur · readiness-litur · DSI/F-V · blokk<br/>1) aðferð úr structures · 2) fyllir slott úr palette<br/>3) mildar á readiness+DSI (gult lækkar, aldrei þyngir) · 4) principles-forskrift ofan á"]
+  B["buildStrengthSession — vélin les samhengið og fléttar lögin<br/>Sjálfvirkt: MD-dagur · readiness-litur · DSI/F-V · blokk<br/>1) aðferð úr structures · 2) fyllir slott úr palette<br/>3) mildar á readiness (gult lækkar, aldrei þyngir); gögn leikmanns geta bætt við einni æfingu (lágur DSI → hopp á MD-4), DSI breytir ekki skammti · markmið leikmanns +1 sett bara á undirb./hvíldartímabili · 4) principles-forskrift ofan á"]
   O["Æfing dagsins — leikmaður<br/>Æfingar (palette) í aðferð dagsins (structures), á forskrift blokkar (principles), mildað á readiness"]
   P --> B
   S --> B

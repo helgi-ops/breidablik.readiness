@@ -256,7 +256,11 @@ export async function setLock(
 /** Save the player's strength goal (already validated by the caller; null clears it). */
 export async function saveGoal(
   sb: SupabaseClient,
-  args: { playerId: string; teamId: string; slots: PaletteSlots; goal: StrengthGoal | null; actor: PickActor; reason?: string | null },
+  args: {
+    playerId: string; teamId: string; slots: PaletteSlots; goal: StrengthGoal | null; actor: PickActor; reason?: string | null;
+    /** What the force-plate tests suggested when the goal was chosen (null = no suggestion). Kept in the history. */
+    dsiSuggested?: StrengthGoal | null;
+  },
 ): Promise<PlayerPicksRow> {
   const prior = await existingRow(sb, args.playerId);
   const sameTeam = prior?.team_id === args.teamId;
@@ -274,7 +278,7 @@ export async function saveGoal(
     { onConflict: "player_id" },
   );
   if (error) throw new Error(error.message);
-  await logEvent(sb, { teamId: args.teamId, playerId: args.playerId, kind: "goal_set", before, after: args.goal, actor: args.actor, reason: args.reason });
+  await logEvent(sb, { teamId: args.teamId, playerId: args.playerId, kind: "goal_set", before, after: { goal: args.goal, dsiSuggested: args.dsiSuggested ?? null }, actor: args.actor, reason: args.reason });
   return readPlayerPicks(sb, args.playerId, args.teamId, args.slots);
 }
 

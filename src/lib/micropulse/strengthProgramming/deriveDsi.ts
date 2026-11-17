@@ -24,6 +24,10 @@ export interface DsiCoverageInput {
   imtpPeakForceN: number | null; // isometric term — IMTP trial-mean peak force
   cmjTrialCount?: number | null;
   imtpTrialCount?: number | null;
+  /** Date of each latest test (YYYY-MM-DD) — only the goal suggestion reads them (it ignores tests older than
+   *  12 months); the DSI read itself does not (2026-11-17). */
+  cmjTestDate?: string | null;
+  imtpTestDate?: string | null;
 }
 
 export type DsiCoverage = "full" | "cmj_only" | "imtp_only" | "none";

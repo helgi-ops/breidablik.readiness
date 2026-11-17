@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveAutoMdContext } from "../loader";
+import { fetchMdContextInfo } from "../../playerContext/domains";
 
 /** Stub matching the two query chains fetchMdContext now uses, run together via Promise.all:
  *   match_schedule → .select().eq().gte().lte()  → { data: [{ match_date }] }
@@ -92,5 +93,24 @@ describe("resolveAutoMdContext → fetchMdContext — post-match aware, fixture-
 
   it("MARGIN: last game 4 ago + next in 5 → MD+4 (recovery-side) wins over MD-5", async () => {
     expect(await resolveAutoMdContext(sb({ fixtures: ["2026-09-06", "2026-09-15"] }), "team1", "2026-09-10")).toBe("MD+4");
+  });
+});
+
+describe("fetchMdContextInfo — \"no match nearby\" (2026-11-17: in pre-/off-season every strength session is a goal day)", () => {
+  it("nothing scheduled from 4 days back to 5 ahead → MD-3 + noMatchNearby", async () => {
+    expect(await fetchMdContextInfo(sb({ plans: [{ day_date: "2026-09-10", day_type: "TRAIN" }] }), "team1", "2026-09-10", null))
+      .toEqual({ mdContext: "MD-3", noMatchNearby: true });
+  });
+  it("a real MD-3 (game in 3 days) is not \"no match nearby\"", async () => {
+    expect(await fetchMdContextInfo(sb({ fixtures: ["2026-09-13"] }), "team1", "2026-09-10", null))
+      .toEqual({ mdContext: "MD-3", noMatchNearby: false });
+  });
+  it("a coach-chosen MD day and no team are never \"no match nearby\"", async () => {
+    expect(await fetchMdContextInfo(sb({}), "team1", "2026-09-10", "MD-3")).toEqual({ mdContext: "MD-3", noMatchNearby: false });
+    expect(await fetchMdContextInfo(sb({}), null, "2026-09-10", null)).toEqual({ mdContext: "MD-3", noMatchNearby: false });
+  });
+  it("a game 5 days ahead or 4 days back is near", async () => {
+    expect((await fetchMdContextInfo(sb({ fixtures: ["2026-09-15"] }), "team1", "2026-09-10", null)).noMatchNearby).toBe(false);
+    expect((await fetchMdContextInfo(sb({ fixtures: ["2026-09-06"] }), "team1", "2026-09-10", null)).noMatchNearby).toBe(false);
   });
 });

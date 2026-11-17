@@ -53,5 +53,8 @@ export function strengthView(ctx: PlayerContext): PlayerStrengthSnapshot {
     ...(cfg.playerPicks ? { playerExercisePicks: cfg.playerPicks } : {}),
     // The player's own strength goal (same switch; lota 2).
     ...(cfg.playerGoal ? { playerStrengthGoal: cfg.playerGoal } : {}),
+    // No match near (pre-/off-season: every strength session is a goal day). Only when true, so the snapshot is
+    // unchanged otherwise.
+    ...(ctx.microcycle.data.noMatchNearby ? { noMatchNearby: true as const } : {}),
   };
 }

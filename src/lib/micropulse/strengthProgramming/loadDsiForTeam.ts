@@ -12,6 +12,7 @@ import "server-only";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 import { BATTERY_CODES } from "@/lib/integrations/vald/battery";
 import { squadDsiThresholds, type DsiCoverageInput, type SquadDsiThresholds } from "./deriveDsi";
+import { suggestGoalFromDsi, type GoalSuggestion } from "./goalSuggestion";
 
 type Sb = { from: (t: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -20,7 +21,7 @@ function latestTrialMean<R extends { microplayer_id?: string | null; raw_test_id
   rows: R[],
   valueOf: (r: R) => number | null,
   countsRow: (r: R) => boolean,
-): Map<string, { value: number; trialCount: number }> {
+): Map<string, { value: number; trialCount: number; date: string | null }> {
   // newest-first per player → first raw_test_id seen is the latest test
   const latestTestByPlayer = new Map<string, string>();
   const byPlayer = new Map<string, R[]>();
@@ -30,12 +31,15 @@ function latestTrialMean<R extends { microplayer_id?: string | null; raw_test_id
     if (!latestTestByPlayer.has(pid)) latestTestByPlayer.set(pid, String(r.raw_test_id));
     (byPlayer.get(pid) ?? byPlayer.set(pid, []).get(pid)!).push(r);
   }
-  const out = new Map<string, { value: number; trialCount: number }>();
+  const out = new Map<string, { value: number; trialCount: number; date: string | null }>();
   for (const [pid, list] of byPlayer) {
     const testId = latestTestByPlayer.get(pid);
     const trials = list.filter((r) => String(r.raw_test_id) === testId && countsRow(r));
     const vals = trials.map(valueOf).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
-    if (vals.length) out.set(pid, { value: vals.reduce((a, b) => a + b, 0) / vals.length, trialCount: vals.length });
+    const date = trials.find((r) => r.test_timestamp)?.test_timestamp ?? null;
+    if (vals.length) {
+      out.set(pid, { value: vals.reduce((a, b) => a + b, 0) / vals.length, trialCount: vals.length, date: date ? String(date).slice(0, 10) : null });
+    }
   }
   return out;
 }
@@ -89,6 +93,9 @@ export async function loadDsiForTeam(sb: Sb, teamId: string): Promise<Map<string
       imtpPeakForceN: i?.value ?? null,
       cmjTrialCount: c?.trialCount ?? null,
       imtpTrialCount: i?.trialCount ?? null,
+      // Test dates (2026-11-17): only the goal suggestion reads them (12-month limit); the DSI read does not.
+      cmjTestDate: c?.date ?? null,
+      imtpTestDate: i?.date ?? null,
     });
   }
   return out;
@@ -103,4 +110,22 @@ export function squadThresholdsFromMap(map: Map<string, DsiCoverageInput>): Squa
     }
   }
   return squadDsiThresholds(ratios);
+}
+
+/** The DSI goal suggestion for each player on the team (2026-11-17): the same squad read as the coach's DSI chip,
+ *  tests within 12 months. Any failure → no suggestions (everything else works as before). */
+export async function loadDsiGoalSuggestions(sb: Sb, teamId: string, todayIso: string): Promise<Map<string, GoalSuggestion>> {
+  const out = new Map<string, GoalSuggestion>();
+  try {
+    const map = await loadDsiForTeam(sb, teamId);
+    const squad = squadThresholdsFromMap(map);
+    if (!squad) return out;
+    for (const [id, inp] of map) {
+      const s = suggestGoalFromDsi(inp, squad, todayIso);
+      if (s) out.set(id, s);
+    }
+  } catch {
+    // no suggestions
+  }
+  return out;
 }

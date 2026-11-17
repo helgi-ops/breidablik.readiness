@@ -522,8 +522,21 @@ export async function fetchMdContext(
   todayIso: string,
   override: MdContext | null,
 ): Promise<MdContext> {
-  if (override) return override;
-  if (!teamId) return "MD-3"; // safest default
+  return (await fetchMdContextInfo(sb, teamId, todayIso, override)).mdContext;
+}
+
+/** Same MD context, plus whether it came from "no match from 4 days back to 5 days ahead" (the MD-3 default).
+ *  A coach-chosen MD day, no team, or a read error is never "no match nearby" (2026-11-17: in pre-/off-season the
+ *  player's strength goal counts every strength session as a goal day when no match is near). */
+export async function fetchMdContextInfo(
+  sb: SupabaseClient,
+  teamId: string | null,
+  todayIso: string,
+  override: MdContext | null,
+): Promise<{ mdContext: MdContext; noMatchNearby: boolean }> {
+  if (override) return { mdContext: override, noMatchNearby: false };
+  const md = (mdContext: MdContext) => ({ mdContext, noMatchNearby: false });
+  if (!teamId) return md("MD-3"); // safest default
   try {
     const todayMs = new Date(`${todayIso}T00:00:00Z`).getTime();
     const DAY = 24 * 60 * 60 * 1000;
@@ -551,12 +564,12 @@ export async function fetchMdContext(
     for (const r of (plans.data ?? []) as Array<{ day_date: string; day_type: string | null }>) {
       if (String(r.day_type ?? "").toUpperCase() === "GAME") gameDates.add(r.day_date);
     }
-    if (gameDates.size === 0) return "MD-3"; // nothing scheduled either side → safe default
+    if (gameDates.size === 0) return { mdContext: "MD-3", noMatchNearby: true }; // nothing scheduled either side → safe default
 
     const offsets = [...gameDates].map((d) =>
       Math.round((new Date(`${d}T00:00:00Z`).getTime() - todayMs) / DAY),
     );
-    if (offsets.includes(0)) return "OFF"; // matchday — no strength
+    if (offsets.includes(0)) return md("OFF"); // matchday — no strength
 
     const nextIn = offsets.filter((o) => o > 0).sort((a, b) => a - b)[0] ?? null;          // days to next game
     const lastAgo = offsets.filter((o) => o < 0).map((o) => -o).sort((a, b) => a - b)[0] ?? null; // days since last game
@@ -568,15 +581,15 @@ export async function fetchMdContext(
     // (e.g. day-2 of a 7-day week stays MD+2, not MD-5). MD-5 therefore only fires when
     // there is a game in 5 days and no recent match in the last 4 (a build day after a
     // long gap); MD+4 only when a match was 4 days ago and nothing is imminent.
-    if (lastAgo === 1) return "MD+1";
-    if (nextIn !== null && nextIn >= 1 && nextIn <= 4) return (`MD-${nextIn}` as MdContext);
-    if (lastAgo === 2) return "MD+2";
-    if (lastAgo === 3) return "MD+3";
-    if (lastAgo === 4) return "MD+4";
-    if (nextIn === 5) return "MD-5";
-    return "MD-3";
+    if (lastAgo === 1) return md("MD+1");
+    if (nextIn !== null && nextIn >= 1 && nextIn <= 4) return md(`MD-${nextIn}` as MdContext);
+    if (lastAgo === 2) return md("MD+2");
+    if (lastAgo === 3) return md("MD+3");
+    if (lastAgo === 4) return md("MD+4");
+    if (nextIn === 5) return md("MD-5");
+    return md("MD-3");
   } catch {
-    return "MD-3";
+    return md("MD-3");
   }
 }
 

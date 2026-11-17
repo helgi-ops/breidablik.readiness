@@ -3,11 +3,18 @@
  * matching exercise on the goal's days; no goal = the session exactly as before; never on a lighter / recovery day,
  * in a two-match week, on a braking streak, or on a safety swap) and the deficit-ledger safety fix (an emphasis never
  * adds back what a safety rule took out, nor anything on a recovery day).
+ *
+ * Season (2026-11-17): the extra set only in pre-season / off-season (the season plan first, then the week setup;
+ * unknown → maintenance), not in a light or taper block; with no match near, every strength session in pre-/off-season
+ * is a goal day; never more than +1 set (no stacking with the Accumulation +1 or a deficit-ledger addition).
+ * The engine tests below run in an off-season Accumulation block unless they say otherwise.
  */
 import { describe, it, expect } from "vitest";
 import { buildStrengthSession } from "../index";
 import { strengthSessionToTodayStructure } from "../toTodayStructure";
 import { GOAL_DAYS, sanitizeGoal, validateGoal, type StrengthGoal } from "../playerPicks";
+import { applyBlockToSession } from "../blockEmphasis";
+import { goalSeasonOf, withGoalSeason } from "../playerGoal";
 import type { PaletteSlots } from "../palette";
 import type { PlayerStrengthSnapshot, MdContext } from "../types";
 
@@ -37,6 +44,7 @@ const snap = (over: Partial<PlayerStrengthSnapshot> = {}): PlayerStrengthSnapsho
   isCongestedWeek: false,
   teamPalette: PALETTE,
   seasonPhase: "in_season",
+  goalSeason: { phase: "offseason", blockGoal: "accum" },
   ...over,
 });
 type S = ReturnType<typeof buildStrengthSession>;
@@ -175,5 +183,99 @@ describe("deficit-ledger emphasis never undoes safety (fix 2026-11-17)", () => {
   it("a green day still gets the emphasis as before", () => {
     const s = buildStrengthSession(snap({ codAsymmetryPct: null, ledgerEmphases: ["plyometric"] }));
     expect(rule(s, "LEDGER_EMPHASIS_ADD") ?? rule(s, "LEDGER_EMPHASIS_CONFIRM")).toBeDefined();
+  });
+});
+
+describe("season: the extra set is building, so only in pre-season and off-season (2026-11-17)", () => {
+  const goals: StrengthGoal[] = ["stronger", "power", "robust"];
+  const inSeason = { goalSeason: { phase: "competitive" as const, blockGoal: "transmute" as const } };
+
+  it("in season: the session is exactly the maintenance session, with the reason, on every goal day", () => {
+    for (const g of goals) {
+      for (const md of GOAL_DAYS[g] as MdContext[]) {
+        const base = buildStrengthSession(snap({ ...inSeason, mdContext: md }));
+        const s = buildStrengthSession(snap({ ...inSeason, mdContext: md, playerStrengthGoal: g }));
+        expect(s!.blocks).toEqual(base!.blocks);
+        expect(goalEx(s)).toEqual([]);
+        expect(rule(s, "PLAYER_GOAL_PAUSED")?.actionEN).toMatch(/maintenance/);
+      }
+    }
+  });
+
+  it("pre-season gets the set like off-season", () => {
+    const s = buildStrengthSession(snap({ goalSeason: { phase: "preseason", blockGoal: "accum" }, playerStrengthGoal: "stronger" }));
+    expect(goalEx(s)).toHaveLength(1);
+  });
+
+  it("the season plan wins over the week setup; without a plan the week setup decides; unknown = maintenance", () => {
+    expect(goalSeasonOf({ goalSeason: { phase: "competitive", blockGoal: null }, seasonPhase: "preseason" })).toBe("maintain");
+    expect(goalSeasonOf({ goalSeason: { phase: "offseason", blockGoal: null }, seasonPhase: "inseason" })).toBe("build");
+    expect(goalSeasonOf({ seasonPhase: "preseason" })).toBe("build");
+    expect(goalSeasonOf({ seasonPhase: "offseason" })).toBe("build");
+    expect(goalSeasonOf({ seasonPhase: "inseason" })).toBe("maintain");
+    expect(goalSeasonOf({ seasonPhase: "in_season" })).toBe("maintain");
+    expect(goalSeasonOf({ seasonPhase: "playoffs" })).toBe("maintain");
+    expect(goalSeasonOf({ seasonPhase: null })).toBe("unknown");
+    expect(goalSeasonOf({})).toBe("unknown");
+
+    const unknown = buildStrengthSession(snap({ goalSeason: null, seasonPhase: null, playerStrengthGoal: "stronger" }));
+    expect(goalEx(unknown)).toEqual([]);
+    expect(rule(unknown, "PLAYER_GOAL_PAUSED")?.actionEN).toMatch(/maintenance/);
+    const weekSetup = buildStrengthSession(snap({ goalSeason: null, seasonPhase: "preseason", playerStrengthGoal: "stronger" }));
+    expect(goalEx(weekSetup)).toHaveLength(1);
+  });
+
+  it("a light week or a taper block in the plan: no extra set", () => {
+    for (const blockGoal of ["deload", "realize"] as const) {
+      const s = buildStrengthSession(snap({ goalSeason: { phase: "preseason", blockGoal }, playerStrengthGoal: "stronger" }));
+      expect(goalEx(s)).toEqual([]);
+      expect(rule(s, "PLAYER_GOAL_PAUSED")?.actionEN).toMatch(/light week|taper/);
+    }
+  });
+
+  it("no match near, pre-/off-season: every strength session is a goal day (stronger on MD-3)", () => {
+    const base = buildStrengthSession(snap({ mdContext: "MD-3", noMatchNearby: true }));
+    const s = buildStrengthSession(snap({ mdContext: "MD-3", noMatchNearby: true, playerStrengthGoal: "stronger" }));
+    const [g] = goalEx(s);
+    expect(g).toBeDefined();
+    expect(g.dose.sets).toBe(sets(base, g.exerciseId)! + 1);
+    // With a match near, MD-3 is still not a "stronger" day.
+    expect(goalEx(buildStrengthSession(snap({ mdContext: "MD-3", playerStrengthGoal: "stronger" })))).toEqual([]);
+  });
+
+  it("no match near in season: still maintenance, nothing changes", () => {
+    const base = buildStrengthSession(snap({ ...inSeason, mdContext: "MD-3", noMatchNearby: true }));
+    const s = buildStrengthSession(snap({ ...inSeason, mdContext: "MD-3", noMatchNearby: true, playerStrengthGoal: "stronger" }));
+    expect(s).toEqual(base);
+  });
+
+  it("microdose: the Accumulation +1 skips the goal's exercise, so it gets +1 set, never +2", () => {
+    const base = applyBlockToSession(buildStrengthSession(snap({ playerStrengthGoal: undefined })), "accum", "offseason")!;
+    const s = applyBlockToSession(buildStrengthSession(snap({ playerStrengthGoal: "stronger" })), "accum", "offseason")!;
+    const [g] = goalEx(s);
+    expect(g).toBeDefined();
+    // Same sets as the Accumulation session without a goal: one extra set, from the goal instead of the block.
+    expect(g.dose.sets).toBe(sets(base, g.exerciseId));
+    const plain = buildStrengthSession(snap())!;
+    expect(g.dose.sets).toBe(sets(plain, g.exerciseId)! + 1);
+  });
+
+  it("microdose: no goal set on a day the player's data already added an exercise", () => {
+    const emphases = ["plyometric", "unilateral", "eccentric", "max_strength"];
+    const added = emphases.filter((e) => rule(buildStrengthSession(snap({ ledgerEmphases: [e] })), "LEDGER_EMPHASIS_ADD"));
+    expect(added.length).toBeGreaterThan(0);
+    for (const e of added) {
+      const s = buildStrengthSession(snap({ ledgerEmphases: [e], playerStrengthGoal: "stronger" }));
+      expect(goalEx(s)).toEqual([]);
+      expect(rule(s, "PLAYER_GOAL_PAUSED")?.actionEN).toMatch(/already added/);
+    }
+  });
+
+  it("withGoalSeason: only a player with a goal and a resolved block gets it; otherwise the same snapshot", () => {
+    const noGoal = snap({ goalSeason: undefined });
+    expect(withGoalSeason(noGoal, { phase: "offseason", goalKey: "accum" })).toBe(noGoal);
+    const withGoal = snap({ goalSeason: undefined, playerStrengthGoal: "power" });
+    expect(withGoalSeason(withGoal, null)).toBe(withGoal);
+    expect(withGoalSeason(withGoal, { phase: "competitive", goalKey: "transmute" }).goalSeason).toEqual({ phase: "competitive", blockGoal: "transmute" });
   });
 });

@@ -291,6 +291,18 @@ export type PlayerStrengthSnapshot = {
    *  one more set, unless readiness / safety / a two-match week says no. Individualised mode only. Absent = no
    *  goal (lota 2, 2026-11-17). */
   playerStrengthGoal?: import("./playerPicks").StrengthGoal;
+  /** Today's place in the season plan (resolveCurrentBlock), set by the send routes / coach preview before the
+   *  build. The goal's extra set is building, so it only comes in pre-season / off-season, and not in a light
+   *  (deload) or taper (realize) block. Absent → the week setup's `seasonPhase` decides; unknown → maintenance
+   *  (2026-11-17). */
+  goalSeason?: {
+    phase: import("./seasonPhaseStrength").SeasonPhaseKey;
+    blockGoal: import("./seasonPhaseStrength").BlockGoalKey | null;
+  } | null;
+  /** True when no match is scheduled from 4 days back to 5 days ahead (the MD day then defaults to MD-3). In
+   *  pre-/off-season every strength session is then a goal day. Absent = a match is near, or the coach chose the
+   *  MD day by hand (2026-11-17). */
+  noMatchNearby?: true;
 };
 
 /** A screen-driven corrective rendered into the daily session's front block. Bi

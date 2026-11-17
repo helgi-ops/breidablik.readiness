@@ -23,6 +23,7 @@ import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgrammi
 import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
+import { withGoalSeason } from "@/lib/micropulse/strengthProgramming/playerGoal";
 import { resolveTeamCustomTable, customProgrammeCoversDay } from "@/lib/micropulse/strengthProgramming/customProgrammeActive";
 import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
@@ -199,7 +200,8 @@ export async function POST(req: NextRequest) {
         return { playerId: p.id, playerName, status: "sent", reason: "Custom Programme" };
       }
 
-      let session = buildStrengthSession(snapshot, swapsByPlayer.get(p.id) ?? [], { mode });
+      // The player's goal adds its set only in pre-/off-season (today's block, 2026-11-17).
+      let session = buildStrengthSession(withGoalSeason(snapshot, coachBlock), swapsByPlayer.get(p.id) ?? [], { mode });
       if (!session) {
         return { playerId: p.id, playerName, status: "skipped", reason: "Off-day / unsupported context" };
       }

@@ -114,15 +114,18 @@ export function isPlayerPick(slot: string, id: string, picks: PlayerExercisePick
 
 // ─── Strength goal (lota 2, 2026-11-17) ───────────────────────────────────
 // The player picks ONE goal; on the goal's days the matching exercise in Today's session gets one more set.
-// Never on a light / recovery day, in a two-match week, or when a safety rule changed that exercise. Muscle
-// size (hypertrophy) is not offered: it needs more weekly volume than an in-season microdose, and we have no
-// source for an in-season rule.
+// Only in pre-season and off-season: in season the session is maintenance and the goal is kept (coach's rule,
+// 2026-11-17). With no match within 5 days every strength session is a goal day. Never on a light / recovery
+// day, in a two-match week, or when a safety rule changed that exercise; never more than +1 set (see
+// playerGoal.ts). Muscle size (hypertrophy) is not offered: it needs more weekly volume than a microdose, and we
+// have no source for an in-season rule.
 
 export const STRENGTH_GOALS = ["stronger", "power", "robust"] as const;
 export type StrengthGoal = (typeof STRENGTH_GOALS)[number];
 export const isStrengthGoal = (s: unknown): s is StrengthGoal => typeof s === "string" && (STRENGTH_GOALS as readonly string[]).includes(s);
 
-/** The days a goal adds its set (the week's heavier days, well before the match). */
+/** The days a goal adds its set in a week with a match (the week's heavier days, well before the match). With no
+ *  match near, in pre-/off-season, every strength session counts. */
 export const GOAL_DAYS: Record<StrengthGoal, readonly string[]> = {
   stronger: ["MD-4"],
   power: ["MD-4", "MD-3"],
@@ -134,20 +137,20 @@ export const STRENGTH_GOAL_LABEL: Record<StrengthGoal, { en: string; is: string;
   stronger: {
     en: "Stronger legs",
     is: "Sterkari fætur",
-    whatEN: "One more set of your main leg lift, 4 days before a match.",
-    whatIS: "Eitt sett í viðbót af aðal-fótalyftunni, 4 dögum fyrir leik.",
+    whatEN: "One more set of your main leg lift on the week's heavy day.",
+    whatIS: "Eitt sett í viðbót af aðal-fótalyftunni á þyngsta degi vikunnar.",
   },
   power: {
     en: "More explosive",
     is: "Meiri sprengikraftur",
-    whatEN: "One more set of your first jump or fast lift, 3–4 days before a match.",
-    whatIS: "Eitt sett í viðbót af fyrstu hopp- eða hraðalyftunni, 3–4 dögum fyrir leik.",
+    whatEN: "One more set of your first jump or fast lift on the week's strength days.",
+    whatIS: "Eitt sett í viðbót af fyrstu hopp- eða hraðalyftunni á styrktardögum vikunnar.",
   },
   robust: {
     en: "Stronger hamstrings",
     is: "Sterkari aftan í læri",
-    whatEN: "One more set of Nordics, 4 days before a match. Nordic training is associated with fewer hamstring injuries.",
-    whatIS: "Eitt sett í viðbót af Nordic, 4 dögum fyrir leik. Nordic-þjálfun tengist færri meiðslum aftan í læri.",
+    whatEN: "One more set of Nordics on the week's heavy day. Nordic training is associated with fewer hamstring injuries.",
+    whatIS: "Eitt sett í viðbót af Nordic á þyngsta degi vikunnar. Nordic-þjálfun tengist færri meiðslum aftan í læri.",
   },
 };
 

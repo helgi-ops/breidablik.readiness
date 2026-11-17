@@ -12,19 +12,61 @@
  * exercise today. Safety rules, readiness and the coach's own changes always win. The +1 set is the coach's
  * limit, not from a study.
  *
+ * Season (2026-11-17, coach's rule): the extra set is BUILDING, so it only comes in pre-season and off-season.
+ * In season the session is maintenance (microdose) and the goal is kept for the next build phase. The phase is
+ * read from the season plan (`snap.goalSeason`, set by the send routes from resolveCurrentBlock); without a plan,
+ * from the week setup (`snap.seasonPhase`); unknown → maintenance. A light week (deload) or a taper block in the
+ * plan → no extra set. With no match within 5 days (`snap.noMatchNearby`) in pre-/off-season, every strength
+ * session is a goal day. Never more than +1 set: no goal set on a day the player's own data already added an
+ * exercise (deficit ledger), and the Accumulation block's +1 skips the goal's exercise (blockEmphasis.ts).
+ *
  * Runs AFTER the team list (which keeps the template's dose) and BEFORE the coach's manual swaps.
  */
 
 import type { AppliedAdaptation, PlayerStrengthSnapshot, SessionBlock } from "./types";
+import type { BlockGoalKey, SeasonPhaseKey } from "./seasonPhaseStrength";
 import { SLOT_CATEGORIES } from "./palette";
 import { GOAL_DAYS, STRENGTH_GOAL_LABEL, type StrengthGoal } from "./playerPicks";
 
 const NORDIC = "ex_nordic_curl";
 
+export type GoalSeason = "build" | "maintain" | "unknown";
+
+/** Which part of the year the goal's extra set sees: the season plan first, then the week setup. */
+export function goalSeasonOf(snap: Pick<PlayerStrengthSnapshot, "goalSeason" | "seasonPhase">): GoalSeason {
+  const planned = snap.goalSeason?.phase ?? null;
+  if (planned) return planned === "competitive" ? "maintain" : "build";
+  const week = String(snap.seasonPhase ?? "").toLowerCase().replace(/[^a-z]/g, "");
+  if (week === "preseason" || week === "offseason") return "build";
+  if (week === "inseason" || week === "playoffs" || week === "competitive") return "maintain";
+  return "unknown";
+}
+
+/** The snapshot with today's season-plan block on it, for the goal's extra set. Only for a player with a goal
+ *  and a resolved block — otherwise the snapshot is returned unchanged. */
+export function withGoalSeason<T extends PlayerStrengthSnapshot>(
+  snap: T,
+  block: { phase: SeasonPhaseKey; goalKey: BlockGoalKey | null } | null | undefined,
+): T {
+  if (!snap.playerStrengthGoal || !block) return snap;
+  return { ...snap, goalSeason: { phase: block.phase, blockGoal: block.goalKey ?? null } };
+}
+
+/** True when today is one of the goal's days: in pre-/off-season with no match within 5 days, every strength
+ *  session; otherwise the goal's MD days. */
+export function isGoalDay(
+  goal: StrengthGoal,
+  snap: Pick<PlayerStrengthSnapshot, "mdContext" | "noMatchNearby">,
+  season: GoalSeason,
+): boolean {
+  if (season === "build" && snap.noMatchNearby) return true;
+  return GOAL_DAYS[goal].includes(snap.mdContext);
+}
+
 const GOAL_EVIDENCE: Record<StrengthGoal, string> = {
-  stronger: "Player's own goal within the coach's limits (+1 set on the week's heavy day; the limit is the coach's, not from a study). Choice may support motivation and adherence (Ntoumanis et al. 2021).",
-  power: "Player's own goal within the coach's limits (+1 set of the first power exercise, MD-4/MD-3; the limit is the coach's, not from a study). Choice may support motivation and adherence (Ntoumanis et al. 2021).",
-  robust: "Player's own goal within the coach's limits (+1 set of Nordics on MD-4). Nordic training is associated with fewer hamstring injuries (van Dyk et al. 2019 meta-analysis). Choice may support adherence (Ntoumanis et al. 2021).",
+  stronger: "Player's own goal within the coach's limits (+1 set on the week's heavy day, pre-season and off-season only; the limit is the coach's, not from a study). Choice may support motivation and adherence (Ntoumanis et al. 2021).",
+  power: "Player's own goal within the coach's limits (+1 set of the first power exercise, MD-4/MD-3, pre-season and off-season only; the limit is the coach's, not from a study). Choice may support motivation and adherence (Ntoumanis et al. 2021).",
+  robust: "Player's own goal within the coach's limits (+1 set of Nordics on MD-4, pre-season and off-season only). Nordic training is associated with fewer hamstring injuries (van Dyk et al. 2019 meta-analysis). Choice may support adherence (Ntoumanis et al. 2021).",
 };
 
 function targetCategories(goal: StrengthGoal): readonly string[] | null {
@@ -45,7 +87,8 @@ export function applyPlayerGoal(
 ): AppliedAdaptation[] {
   const goal = snap.playerStrengthGoal;
   if (!goal) return [];
-  if (!GOAL_DAYS[goal].includes(snap.mdContext)) return []; // not one of the goal's days: nothing to say
+  const season = goalSeasonOf(snap);
+  if (!isGoalDay(goal, snap, season)) return []; // not one of the goal's days: nothing to say
   const label = STRENGTH_GOAL_LABEL[goal];
 
   const paused = (en: string, is: string): AppliedAdaptation[] => [{
@@ -57,11 +100,34 @@ export function applyPlayerGoal(
     evidence: GOAL_EVIDENCE[goal],
   }];
 
+  if (season === "maintain") {
+    return paused(
+      "in season the session is maintenance; the goal is kept for pre-season",
+      "á tímabili er æfingin viðhald; markmiðið er geymt fyrir undirbúningstímabil",
+    );
+  }
+  if (season === "unknown") {
+    return paused(
+      "the season plan doesn't say pre-season or off-season, so the session stays maintenance",
+      "tímabilaplanið segir ekki undirbúnings- eða hvíldartímabil, svo æfingin er viðhald",
+    );
+  }
+  const blockGoal = snap.goalSeason?.blockGoal ?? null;
+  if (blockGoal === "deload") return paused("a light week in the season plan", "létt vika í tímabilaplaninu");
+  if (blockGoal === "realize") {
+    return paused("a taper block in the season plan (easing off before matches)", "niðurtröppun í tímabilaplaninu (léttir fyrir leiki)");
+  }
+
   if (snap.verdict === "HOLD" || snap.verdict === "RECOVERY") return paused("today is a recovery day", "í dag er endurheimtardagur");
   if (snap.verdict === "MODIFIED" || snap.verdict === "REDUCED") return paused("readiness says keep it lighter today", "standið segir léttari dag í dag");
   if (snap.isCongestedWeek) return paused("two matches within 7 days", "tveir leikir á 7 dögum");
   if (goal === "robust" && snap.decelBurdenHighStreakDays >= 3) {
     return paused("several days in a row with a lot of braking", "nokkrir dagar í röð með mikla hemlun");
+  }
+
+  // Microdose: never more than one extra on a day. The player's own data (deficit ledger) already added one.
+  if (blocks.some((b) => b.exercises.some((e) => e.isAdaptiveAddition))) {
+    return paused("the player's data already added an exercise today", "gögn leikmannsins bættu þegar við æfingu í dag");
   }
 
   const cats = targetCategories(goal);

@@ -21,6 +21,7 @@ import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgrammi
 import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
+import { withGoalSeason } from "@/lib/micropulse/strengthProgramming/playerGoal";
 import { customProgrammeCoversDay } from "@/lib/micropulse/strengthProgramming/customProgrammeActive";
 import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
@@ -173,7 +174,12 @@ export async function POST(
   // (2026-11-17 fix: they were dropped on send). Individualised only, like the card; a swap applies only while the
   // swapped-out exercise is still in that slot.
   const coachOverrides = mode === "individualised" ? await loadCoachOverrides(supabase, { playerId, dateIso: todayIso }) : [];
-  let session = buildStrengthSession(snapshot, coachOverrides, { mode });
+  // Today's block is read BEFORE the build: the player's goal adds its set only in pre-/off-season (2026-11-17).
+  const [coachRules, coachBlock] = await Promise.all([
+    loadCoachStrengthRules(supabase, teamId),
+    resolveCurrentBlock(supabase, teamId, todayIso),
+  ]);
+  let session = buildStrengthSession(withGoalSeason(snapshot, coachBlock), coachOverrides, { mode });
   if (!session) {
     return NextResponse.json(
       { error: "No strength session prescribed today (off-day, MD+2 or unsupported context)." },
@@ -181,10 +187,6 @@ export async function POST(
     );
   }
   // MESO layer: tilt toward today's block + apply the coach's authored rule, before send/persist.
-  const [coachRules, coachBlock] = await Promise.all([
-    loadCoachStrengthRules(supabase, teamId),
-    resolveCurrentBlock(supabase, teamId, todayIso),
-  ]);
   if (coachBlock) {
     session = applyBlockToSession(session, coachBlock.goalKey, coachBlock.phase, coachRules?.block?.[`${coachBlock.goalKey}:${coachBlock.phase}`], coachBlock.subPhase) ?? session;
   }

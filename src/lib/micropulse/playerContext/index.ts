@@ -41,7 +41,7 @@ import {
   fetchVbtDecrement,
   fetchFoster,
   fetchCongestion,
-  fetchMdContext,
+  fetchMdContextInfo,
   fetchLastMatchMinutes,
 } from "./domains";
 import { strengthView } from "./views/strengthView";
@@ -82,7 +82,8 @@ export type PlayerContext = {
   verdict: Domain<{ action: PlayerStrengthSnapshot["verdict"] }>;
   injury: Domain<{ status: PlayerStrengthSnapshot["injuryStatus"] }>;
   conditioning: Domain<{ fosterMonotony: number | null; fosterStrain: number | null; isCongestedWeek: boolean }>;
-  microcycle: Domain<{ mdContext: MdContext }>;
+  /** noMatchNearby only when true (no match from 4 days back to 5 ahead; never on a coach-chosen MD day). */
+  microcycle: Domain<{ mdContext: MdContext; noMatchNearby?: true }>;
   /** Minutes in the most recent match before today — the MD+1 recovery-tier read. */
   matchExposure: Domain<{ lastMatchMinutes: number | null; lastMatchDnp: boolean }>;
   movementDeficit: Domain<{ ledgerEmphases: string[]; correctives: SessionCorrective[]; correctiveEmphases: string[] }>;
@@ -116,7 +117,7 @@ export async function buildPlayerContext(
     vbtDecrement,
     foster,
     isCongestedWeek,
-    mdContext,
+    mdInfo,
     ledgerEmphases,
     screenCorrectives,
     teamPalette,
@@ -135,7 +136,7 @@ export async function buildPlayerContext(
     fetchVbtDecrement(sb, playerId, todayIso),
     fetchFoster(sb, playerId, todayIso),
     fetchCongestion(sb, playerId, todayIso),
-    fetchMdContext(sb, teamId, todayIso, args.mdContextOverride ?? null),
+    fetchMdContextInfo(sb, teamId, todayIso, args.mdContextOverride ?? null),
     fetchLedgerEmphases(sb, playerId),
     fetchScreenCorrectives(sb, playerId),
     fetchTeamPalette(sb, teamId),
@@ -193,7 +194,10 @@ export async function buildPlayerContext(
       status: statusOf(foster.monotony != null),
     },
     // MD context always resolves (defaults to MD-3), so it is never "missing".
-    microcycle: { data: { mdContext }, status: statusOf(true) },
+    microcycle: {
+      data: { mdContext: mdInfo.mdContext, ...(mdInfo.noMatchNearby ? { noMatchNearby: true as const } : {}) },
+      status: statusOf(true),
+    },
     matchExposure: {
       data: { lastMatchMinutes: matchExposure.minutes, lastMatchDnp: matchExposure.isDnp },
       status: statusOf(matchExposure.minutes != null || matchExposure.isDnp),

@@ -8,6 +8,10 @@
  * Layered read: one sentence (what this does) → plain facts → the goal buttons (with what each one does) → the
  * groups with the team's exercises as buttons (1st / 2nd choice). What the coach locked shows "Your coach chose
  * this" and can't be changed. Plain words only; no sport-science terms.
+ *
+ * Season (2026-11-17): the goal's extra set comes only in pre-season and off-season; in season the session is
+ * maintenance and the goal is kept. When the player's force-plate tests suggest a goal (DSI against the team, rules
+ * not AI) the sheet says so and marks that button "Suggested" — the player still chooses.
  */
 
 import * as React from "react";
@@ -15,6 +19,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Group = { slot: string; label: { en: string; is: string }; max: number; options: { id: string; nameEN: string; nameIS: string }[] };
 type Goal = { id: string; en: string; is: string; whatEN: string; whatIS: string };
+type Suggestion = { goal: string; reasonEN: string; reasonIS: string; cmjDate: string; imtpDate: string; tested: number; confidence: "high" | "moderate"; source: string };
 type State =
   | { ok: true; enabled: false }
   | {
@@ -26,6 +31,7 @@ type State =
       goals: Goal[];
       goal: string | null;
       goalLocked: boolean;
+      suggestion?: Suggestion | null;
       updatedAt: string | null;
       updatedByRole: "player" | "coach" | null;
     };
@@ -144,9 +150,11 @@ export default function PlayerExercisePicksSheet({ lang, onClose }: { lang?: "IS
         {typeof state === "object" && state.enabled ? (
           <div className="space-y-4">
             <p className="text-sm font-medium text-slate-800">
-              {T("Your goal adds one extra set on the right day; your picks go first when your session is built.", "Markmiðið bætir við einu setti á réttum degi; valið þitt fer fremst þegar æfingin þín er sett saman.")}
+              {T("In pre-season and off-season your goal adds one extra set on the right day; your picks go first when your session is built.", "Á undirbúnings- og hvíldartímabili bætir markmiðið við einu setti á réttum degi; valið þitt fer fremst þegar æfingin þín er sett saman.")}
             </p>
             <ul className="list-disc space-y-0.5 pl-4 text-xs text-slate-600">
+              <li>{T("In season your session is maintenance: no extra set. Your goal is kept and adds its set again in pre-season.", "Á tímabili er æfingin viðhald: ekkert aukasett. Markmiðið þitt er geymt og bætir við setti aftur á undirbúningstímabili.")}</li>
+              <li>{T("With no match in the next days, every strength session counts as a goal day.", "Ef enginn leikur er næstu daga telst hver styrktaræfing markmiðsdagur.")}</li>
               <li>{T("It counts from the next session you get (not one already sent today).", "Það gildir frá næstu æfingu sem þú færð (ekki þeirri sem er þegar komin í dag).")}</li>
               <li>{T("Your picks change which exercise, not the sets, reps or rest.", "Valið breytir hvaða æfing það er, ekki settum, endurtekningum eða hvíld.")}</li>
               <li>{T("No extra set on a light or recovery day, in a week with two matches, or if something is sore: then the app keeps you safe first.", "Ekkert aukasett á léttum degi eða endurheimtardegi, í viku með tveimur leikjum eða ef eitthvað er aumt: þá gætir appið öryggis fyrst.")}</li>
@@ -157,9 +165,25 @@ export default function PlayerExercisePicksSheet({ lang, onClose }: { lang?: "IS
                 <h3 className="text-sm font-semibold text-slate-900">{T("My goal", "Markmiðið mitt")}</h3>
                 <span className="text-[11px] text-slate-400">{state.goalLocked ? T("Your coach chose this", "Þjálfarinn þinn valdi þetta") : T("Pick 1", "Veldu 1")}</span>
               </div>
+              {state.suggestion ? (() => {
+                const sg = state.suggestion;
+                const label = state.goals.find((g) => g.id === sg.goal);
+                return (
+                  <div className="mt-2 rounded-lg border border-[#2740e6]/25 bg-[#2740e6]/5 px-3 py-2" data-testid="goal-suggestion">
+                    <p className="text-sm font-semibold text-slate-900">
+                      {T("Your force-plate tests suggest: ", "Kraftplötuprófin þín benda á: ")}{label ? (is ? label.is : label.en) : sg.goal}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-600">{is ? sg.reasonIS : sg.reasonEN}</p>
+                    <p className="mt-1 text-[11px] text-slate-400" title={sg.source}>
+                      {T(`A suggestion from rules, not AI · jump test ${sg.cmjDate}, pull test ${sg.imtpDate} · you choose`, `Tillaga út frá reglum, ekki gervigreind · stökkpróf ${sg.cmjDate}, togpróf ${sg.imtpDate} · þú velur`)}
+                    </p>
+                  </div>
+                );
+              })() : null}
               <div className="mt-2 grid gap-2">
                 {state.goals.map((g) => {
                   const on = state.goal === g.id;
+                  const suggested = state.suggestion?.goal === g.id;
                   return (
                     <button
                       key={g.id}
@@ -169,7 +193,12 @@ export default function PlayerExercisePicksSheet({ lang, onClose }: { lang?: "IS
                       aria-pressed={on}
                       className={`rounded-xl border px-3 py-2 text-left transition disabled:opacity-60 ${on ? "border-[#2740e6] bg-[#2740e6] text-white" : "border-slate-300 bg-white text-slate-800 hover:bg-slate-50"}`}
                     >
-                      <span className="block text-sm font-semibold">{is ? g.is : g.en}</span>
+                      <span className="flex items-center gap-2 text-sm font-semibold">
+                        {is ? g.is : g.en}
+                        {suggested ? (
+                          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${on ? "bg-white/20 text-white" : "bg-[#2740e6]/10 text-[#2740e6]"}`}>{T("Suggested", "Tillaga")}</span>
+                        ) : null}
+                      </span>
                       <span className={`block text-xs ${on ? "text-white/85" : "text-slate-500"}`}>{is ? g.whatIS : g.whatEN}</span>
                     </button>
                   );

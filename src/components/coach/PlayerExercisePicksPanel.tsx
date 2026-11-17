@@ -7,6 +7,9 @@
  *
  * Layered read: one sentence (how many have chosen / off / testing) → plain facts → the switch + one-player test →
  * the player × (goal, groups) table (click a cell to change or lock).
+ *
+ * 2026-11-17: the goal's extra set only in pre-season / off-season (in season = maintenance), and the goal cell shows
+ * what the player's force-plate tests suggest ("DSI suggests: …", rules not AI) next to what the player chose.
  */
 
 import * as React from "react";
@@ -15,6 +18,7 @@ import { PICK_REASON_MIN } from "@/lib/micropulse/strengthProgramming/playerPick
 
 type Group = { slot: string; label: { en: string; is: string }; max: number; options: { id: string; nameEN: string; nameIS: string }[] };
 type Goal = { id: string; en: string; is: string; whatEN: string; whatIS: string };
+type Suggestion = { goal: string; reasonEN: string; reasonIS: string; cmjDate: string; imtpDate: string; tested: number; confidence: "high" | "moderate"; source: string };
 type PlayerRow = {
   id: string;
   name: string;
@@ -23,6 +27,7 @@ type PlayerRow = {
   goal: string | null;
   goalLocked: boolean;
   testEnabled: boolean;
+  suggestion?: Suggestion | null;
   updatedAt: string | null;
   updatedByRole: "player" | "coach" | null;
 };
@@ -140,7 +145,9 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
           <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[12px] text-slate-600">
             <li>{T("Players choose from your team list (Strength → Exercise palette). Their picks go first in that group; you see every pick here.", "Leikmenn velja af æfingalista liðsins (Styrkur → Æfingasafn). Valið fer fremst í flokknum; þú sérð allt val hér.")}</li>
             <li>{T("No approval: a pick counts from the player's next session sent. Sets, reps and rest don't change, and the Nordic / Copenhagen block stays.", "Ekkert samþykki: valið gildir frá næstu æfingu sem leikmaður fær. Sett, endurtekningar og hvíld breytast ekki og Nordic / Copenhagen haldast.")}</li>
-            <li>{T("A goal adds one set of the matching exercise on its day (stronger legs / hamstrings: MD-4; explosive: MD-4 and MD-3). Not on a yellow or red day, in a two-match week, or after a safety swap.", "Markmið bætir við einu setti af samsvarandi æfingu á sínum degi (sterkari fætur / aftan í læri: MD-4; sprengikraftur: MD-4 og MD-3). Ekki á gulum eða rauðum degi, í viku með tveimur leikjum eða eftir öryggisskipti.")}</li>
+            <li>{T("In pre-season and off-season a goal adds one set of the matching exercise on its day (stronger legs / hamstrings: MD-4; explosive: MD-4 and MD-3; with no match within 5 days, every strength day). In season the session is maintenance: no extra set, the goal is kept.", "Á undirbúnings- og hvíldartímabili bætir markmið við einu setti af samsvarandi æfingu á sínum degi (sterkari fætur / aftan í læri: MD-4; sprengikraftur: MD-4 og MD-3; enginn leikur innan 5 daga: hver styrktardagur). Á tímabili er æfingin viðhald: ekkert aukasett, markmiðið er geymt.")}</li>
+            <li>{T("Never more than one extra set: not on top of the build block's extra set, not on a day the player's data already added an exercise, a light or taper week, a yellow or red day, a two-match week, or after a safety swap.", "Aldrei meira en eitt aukasett: ekki ofan á aukasett uppbyggingarblokkar, ekki þegar gögn leikmannsins bættu þegar við æfingu, í léttri viku eða niðurtröppun, á gulum eða rauðum degi, í viku með tveimur leikjum eða eftir öryggisskipti.")}</li>
+            <li>{T("“DSI suggests” = the player's force-plate tests (jump ÷ mid-thigh pull) against the team: lower third → explosive, upper third → stronger legs, tests within 12 months. A suggestion from rules, not AI; the player chooses.", "„DSI bendir á“ = kraftplötupróf leikmannsins (stökk ÷ tog) borin saman við liðið: neðsti þriðjungur → sprengikraftur, efsti þriðjungur → sterkari fætur, próf innan 12 mánaða. Tillaga út frá reglum, ekki gervigreind; leikmaðurinn velur.")}</li>
             <li>{T("Safety rules still win (e.g. a sore lower back swaps the deadlift that day). Applies to individualised sessions.", "Öryggisreglur ráða áfram (t.d. aumur mjóhryggur skiptir út réttstöðulyftu þann dag). Gildir um einstaklingsmiðaðar æfingar.")}</li>
             <li>{T("8-week goals (top speed, acceleration, braking, jump) start the next Monday without your approval. You see them in the list above and can stop one with a reason. Injured or returning players still can't start one; under-18s get the youth plan.", "8 vikna markmið (hámarkshraði, hröðun, bremsun, stökk) byrja næsta mánudag án samþykkis þíns. Þú sérð þau í listanum hér fyrir ofan og getur stöðvað með ástæðu. Meiddir eða leikmenn í endurkomu geta ekki byrjað; undir 18 ára fá unglingaáætlun.")}</li>
           </ul>
@@ -214,6 +221,11 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
                           <button type="button" onClick={() => setEdit(edit?.playerId === p.id && edit.slot === GOAL_CELL ? null : { playerId: p.id, slot: GOAL_CELL })}
                             className={`w-full rounded px-1.5 py-1 text-left hover:bg-slate-50 ${edit?.playerId === p.id && edit.slot === GOAL_CELL ? "bg-[#2740e6]/5" : ""}`}>
                             {p.goal ? <span className="block text-slate-800">{goalName(p.goal)}</span> : <span className="text-slate-400">{T("none", "ekkert")}</span>}
+                            {p.suggestion ? (
+                              <span className="mt-0.5 block text-[10px] text-slate-500" title={`${isEN ? p.suggestion.reasonEN : p.suggestion.reasonIS} (${p.suggestion.cmjDate} / ${p.suggestion.imtpDate}, ${p.suggestion.tested} ${T("tested", "prófaðir")}). ${p.suggestion.source}`}>
+                                {T("DSI suggests: ", "DSI bendir á: ")}{goalName(p.suggestion.goal)}
+                              </span>
+                            ) : null}
                             {p.goalLocked ? <span className="mt-0.5 block text-[10px] font-semibold text-[#de9328]">{T("Locked", "Læst")}</span> : null}
                           </button>
                         </td>
@@ -345,6 +357,16 @@ function GoalEditor({ isEN, player, goals, busy, onSave, onClose }: {
         </button>
       </div>
       {goal ? <p className="text-[12px] text-slate-600">{(() => { const g = goals.find((x) => x.id === goal); return g ? (isEN ? g.whatEN : g.whatIS) : null; })()}</p> : null}
+      {player.suggestion ? (
+        <p className="text-[12px] text-slate-600" data-testid="coach-goal-suggestion">
+          <span className="font-semibold">{T("DSI suggests: ", "DSI bendir á: ")}{(() => { const g = goals.find((x) => x.id === player.suggestion!.goal); return g ? (isEN ? g.en : g.is) : player.suggestion!.goal; })()}</span>
+          {" — "}{isEN ? player.suggestion.reasonEN : player.suggestion.reasonIS}
+          <span className="block text-[11px] text-slate-400">
+            {T(`Jump test ${player.suggestion.cmjDate}, pull test ${player.suggestion.imtpDate}; ${player.suggestion.tested} tested on the team; ${player.suggestion.confidence === "high" ? "3+ good tries in both" : "few tries, treat as provisional"}. Rules, not AI.`,
+              `Stökkpróf ${player.suggestion.cmjDate}, togpróf ${player.suggestion.imtpDate}; ${player.suggestion.tested} prófaðir í liðinu; ${player.suggestion.confidence === "high" ? "3+ góðar tilraunir í báðum" : "fáar tilraunir, bráðabirgða"}. Reglur, ekki gervigreind.`)}
+          </span>
+        </p>
+      ) : null}
       <label className="block text-[12px] text-slate-700">
         <span className="font-semibold">{T("Reason (required, kept in the history)", "Ástæða (skylda, vistuð í sögunni)")}</span>
         <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500}

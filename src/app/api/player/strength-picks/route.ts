@@ -2,7 +2,7 @@
  * /api/player/strength-picks — the player chooses which of the team's exercises they want in their own strength
  * session (player exercise picks, lota 1) and one strength goal (lota 2), 2026-11-17.
  *
- * GET → { ok, enabled, groups, picks, locked, goals, goal, goalLocked, updatedAt, updatedByRole }. `enabled: false`
+ * GET → { ok, enabled, groups, picks, locked, goals, goal, goalLocked, suggestion, updatedAt, updatedByRole }. `enabled: false`
  *       when the coach has not turned picks on for the team or for this player (test), or the team has no list —
  *       the sheet then says so and offers nothing.
  * PUT { slot, ids } → saves one group (first choice first; [] clears it) and returns the same shape.
@@ -12,6 +12,9 @@
  * 402. Checks: known group, a group with a real choice, every id on the team's list for that group, at most the
  * group's max, group not locked by the coach. Applies from the next session sent; nothing is sent (no push, no
  * email) and Today's session already sent is not changed. Writes only through playerPicksStore.
+ *
+ * `suggestion` (2026-11-17): the goal the player's force-plate tests (DSI, against the team) suggest, or null. Rules,
+ * not AI; the player still chooses. What was suggested is kept in the goal's history.
  */
 
 import { NextResponse } from "next/server";
@@ -28,6 +31,8 @@ import {
   saveGoal,
   savePicks,
 } from "@/lib/micropulse/strengthProgramming/playerPicksStore";
+import { loadDsiGoalSuggestions } from "@/lib/micropulse/strengthProgramming/loadDsiForTeam";
+import type { GoalSuggestion } from "@/lib/micropulse/strengthProgramming/goalSuggestion";
 
 export const runtime = "nodejs";
 
@@ -52,13 +57,20 @@ function fail(e: unknown) {
 
 const GOALS = STRENGTH_GOALS.map((id) => ({ id, ...STRENGTH_GOAL_LABEL[id], days: GOAL_DAYS[id] }));
 
-async function state(sb: Sb, playerId: string, teamId: string) {
+const today = () => new Date().toISOString().slice(0, 10);
+
+async function suggestionFor(sb: Sb, playerId: string, teamId: string): Promise<GoalSuggestion | null> {
+  return (await loadDsiGoalSuggestions(sb, teamId, today())).get(playerId) ?? null;
+}
+
+async function state(sb: Sb, playerId: string, teamId: string, known?: GoalSuggestion | null) {
   const cfg = await readTeamPickConfig(sb, teamId);
   const row = await readPlayerPicks(sb, playerId, teamId, cfg.slots);
   if (!choicesOn(cfg, row)) return { ok: true, enabled: false as const };
   const { testEnabled: _t, ...mine } = row;
   void _t;
-  return { ok: true, enabled: true as const, groups: pickGroups(cfg.slots), goals: GOALS, ...mine };
+  const suggestion = known !== undefined ? known : await suggestionFor(sb, playerId, teamId);
+  return { ok: true, enabled: true as const, groups: pickGroups(cfg.slots), goals: GOALS, ...mine, suggestion };
 }
 
 export async function GET(req: Request) {
@@ -86,8 +98,9 @@ export async function PUT(req: Request) {
     if ("goal" in body) {
       const g = validateGoal(body.goal, current.goalLocked);
       if (!g.ok) return NextResponse.json({ error: g.error.en, error_is: g.error.is, code: g.error.code }, { status: g.error.code === "locked" ? 403 : 400 });
-      await saveGoal(sb, { playerId, teamId, slots: cfg.slots, goal: g.goal, actor: { role: "player", userId } });
-      return NextResponse.json(await state(sb, playerId, teamId));
+      const suggestion = await suggestionFor(sb, playerId, teamId);
+      await saveGoal(sb, { playerId, teamId, slots: cfg.slots, goal: g.goal, actor: { role: "player", userId }, dsiSuggested: suggestion?.goal ?? null });
+      return NextResponse.json(await state(sb, playerId, teamId, suggestion));
     }
     const v = validatePlayerPick(String(body.slot ?? ""), body.ids, cfg.slots, current.locked);
     if (!v.ok) return NextResponse.json({ error: v.error.en, error_is: v.error.is, code: v.error.code }, { status: v.error.code === "locked" ? 403 : 400 });

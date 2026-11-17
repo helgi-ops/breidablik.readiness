@@ -19,6 +19,8 @@ import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import type { BlockGoalKey, SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
+import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
+import { withGoalSeason } from "@/lib/micropulse/strengthProgramming/playerGoal";
 import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
 
 export const runtime = "nodejs";
@@ -115,9 +117,17 @@ export async function GET(
   // layers) — exactly what Standard delivers when no Custom Programme covers the day. Default
   // (individualised) previews the palette + per-player build. Coach block is applied either way.
   const previewMode = req.nextUrl.searchParams.get("mode") === "standard" ? "standard" : "individualised";
+  // The player's goal adds its set only in pre-/off-season (2026-11-17), so the preview needs today's place in the
+  // season plan: the block the page passed, or — only for a player with a goal and no block/phase passed — the plan.
+  const passedPhase = phaseRaw === "preseason" || phaseRaw === "offseason" || phaseRaw === "competitive";
+  const goalBlock = blockGoal && passedPhase
+    ? { phase: blockPhase, goalKey: blockGoal }
+    : snapshot.playerStrengthGoal && previewMode === "individualised"
+      ? await resolveCurrentBlock(supabase, auth.teamId, todayIso)
+      : null;
   const built = previewMode === "standard"
     ? buildStrengthSession(snapshot, [], { mode: "standard" })
-    : buildStrengthSession(snapshot, coachOverrides);
+    : buildStrengthSession(withGoalSeason(snapshot, goalBlock), coachOverrides);
   const session = applyBlockToSession(built, blockGoal, blockPhase, blockOverride, subPhase);
 
   return NextResponse.json({

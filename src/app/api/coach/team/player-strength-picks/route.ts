@@ -3,7 +3,8 @@
  * goals + one-player test (lota 2), 2026-11-17.
  *
  * GET → { ok, enabled, hasList, groups, goals, players: [{ id, name, picks, locked, goal, goalLocked, testEnabled,
- *         updatedAt, updatedByRole }], picked, withGoal, testing, total }
+ *         suggestion, updatedAt, updatedByRole }], picked, withGoal, testing, total }
+ *       `suggestion` (2026-11-17): the goal the player's force-plate tests (DSI, against the team) suggest, or null.
  * PUT one of:
  *   { action: "enable", enabled }                         → the team switch (off by default)
  *   { action: "test", playerId, on }                      → turn it on / off for ONE player (test) while the team is off
@@ -43,6 +44,7 @@ import {
   setTeamEnabled,
   setTestPlayer,
 } from "@/lib/micropulse/strengthProgramming/playerPicksStore";
+import { loadDsiGoalSuggestions } from "@/lib/micropulse/strengthProgramming/loadDsiForTeam";
 
 export const runtime = "nodejs";
 
@@ -62,7 +64,10 @@ async function teamState(sb: Sb, teamId: string) {
   const cfg = await readTeamPickConfig(sb, teamId);
   const { data, error } = await sb.from("players").select("id, full_name").eq("team_id", teamId).eq("is_active", true).order("full_name");
   if (error) throw new Error(error.message);
-  const rows = await readTeamPicks(sb, teamId, cfg.slots);
+  const [rows, suggestions] = await Promise.all([
+    readTeamPicks(sb, teamId, cfg.slots),
+    loadDsiGoalSuggestions(sb, teamId, new Date().toISOString().slice(0, 10)),
+  ]);
   const players = ((data ?? []) as { id: string; full_name: string | null }[]).map((p) => {
     const r = rows.get(p.id);
     return {
@@ -73,6 +78,7 @@ async function teamState(sb: Sb, teamId: string) {
       goal: r?.goal ?? null,
       goalLocked: r?.goalLocked ?? false,
       testEnabled: r?.testEnabled ?? false,
+      suggestion: suggestions.get(p.id) ?? null,
       updatedAt: r?.updatedAt ?? null,
       updatedByRole: r?.updatedByRole ?? null,
     };
@@ -138,7 +144,8 @@ export async function PUT(req: Request) {
     if (body.action === "goal") {
       const g = validateGoal(body.goal, false, { coach: true });
       if (!g.ok) return NextResponse.json({ error: g.error.en, error_is: g.error.is, code: g.error.code }, { status: 400 });
-      await saveGoal(sb, { playerId, teamId, slots: cfg.slots, goal: g.goal, actor, reason });
+      const suggested = (await loadDsiGoalSuggestions(sb, teamId, new Date().toISOString().slice(0, 10))).get(playerId)?.goal ?? null;
+      await saveGoal(sb, { playerId, teamId, slots: cfg.slots, goal: g.goal, actor, reason, dsiSuggested: suggested });
       return NextResponse.json(await teamState(sb, teamId));
     }
     if (body.action === "goal_lock") {

@@ -92,6 +92,8 @@ export function applyBlockToSession(
   const blocks: SessionBlock[] = session.blocks.map((b) => {
     if (delta === "none" || !VOLUME_TYPES.has(b.type)) return b;
     const exercises = b.exercises.map((ex) => {
+      // Microdose: never more than +1 set on an exercise. The player's goal already added one (2026-11-17).
+      if (delta === "add" && ex.playerGoal) return ex;
       const before = ex.dose.sets;
       const after =
         delta === "halve" ? clampSets(before / 2)
