@@ -48,6 +48,7 @@ import { EXERCISE_LIBRARY as LIBRARY, getExercise as lookupExercise } from "./ex
 import { effectivePool, isPlayerPick, type PlayerExercisePicks } from "./playerPicks";
 import { applyPlayerGoal } from "./playerGoal";
 import { applyGoalPlanGym } from "./goalPlanGym";
+import { takesPart, type SendMode } from "./sendMode";
 import {
   slotForCategory,
   PALETTE_UNILATERAL_ASYMMETRY_PCT,
@@ -528,13 +529,28 @@ function appendMdPlus1UpperStrength(blocks: SessionBlock[], snap: PlayerStrength
   }];
 }
 
+/** Drop the player's own input when they don't take part under the build's mode. A snapshot without
+ *  `playerChoiceAccess` (built by hand) is used as given. */
+function withoutPlayerInputUnlessTakingPart(snap: PlayerStrengthSnapshot, mode: SendMode | undefined): PlayerStrengthSnapshot {
+  const access = snap.playerChoiceAccess;
+  if (!access) return snap;
+  const buildMode: SendMode = mode ?? (access.teamMode === "individualised_goals" ? "individualised_goals" : "individualised");
+  if (takesPart(buildMode, access)) return snap;
+  if (!snap.playerExercisePicks && !snap.playerStrengthGoal && !snap.goalPlanGym) return snap;
+  const rest = { ...snap };
+  delete rest.playerExercisePicks;
+  delete rest.playerStrengthGoal;
+  delete rest.goalPlanGym;
+  return rest;
+}
+
 /** Main entry — build a complete strength session for one player.
  *  `coachOverrides` is optional and applied after adaptation rules so the
  *  coach has the final word over any engine substitution. */
 export function buildStrengthSession(
   snapIn: PlayerStrengthSnapshot,
   coachOverrides: CoachOverride[] = [],
-  opts: { mode?: "individualised" | "standard" } = {},
+  opts: { mode?: SendMode } = {},
 ): StrengthSession | null {
   // Send mode. "individualised" (default) = data + screen driven: the MD template,
   // readiness/MD-tuned, PLUS the player's screen corrective block + deficit-ledger
@@ -543,6 +559,11 @@ export function buildStrengthSession(
   // week-setup (MD) + readiness (verdict/wellness); "standard" just skips the
   // individualisation. The coach chooses (team default, per-send override).
   const individualised = opts.mode !== "standard";
+  // "individualised_goals" (2026-11-17) = individualised + the player's own input (picks, strength goal, the 8-week
+  // goal's gym session). Whether a player takes part is decided here, once, from the mode of this build (or the
+  // team's mode when none is given) and the coach's setting for the player (sendMode.ts). Not taking part → that
+  // input is dropped before anything is built, so the session is exactly the data + screen session.
+  snapIn = withoutPlayerInputUnlessTakingPart(snapIn, opts.mode);
 
   // BASKETBALL: an indoor team has no football MD microcycle, so the taper templates (MD-2 light, MD-1
   // primer, MD+1 recovery) don't apply. A non-rest training day is a full STRENGTH day → normalise the

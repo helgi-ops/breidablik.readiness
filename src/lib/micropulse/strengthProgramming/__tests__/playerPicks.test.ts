@@ -187,14 +187,17 @@ describe("write boundary", () => {
     const { readFileSync } = await import("node:fs");
     return readFileSync(path, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   };
-  it("only playerPicksStore writes, and only the picks tables + the team switch; never Today or readiness", async () => {
+  it("only playerPicksStore writes, and only the picks tables; the team list and send mode are only read; never Today or readiness", async () => {
     const { resolve } = await import("node:path");
     const store = await codeOf(resolve(process.cwd(), "src/lib/micropulse/strengthProgramming/playerPicksStore.ts"));
     expect(store).not.toMatch(/player_today_strength_override|readiness_entries/);
     const tables = [...store.matchAll(/\.from\("([a-z_]+)"\)/g)].map((m) => m[1]);
-    for (const t of tables) expect(["player_strength_picks", "player_strength_pick_events", "team_strength_palette"]).toContain(t);
-    // team_strength_palette: only the switch column is ever updated.
-    expect(store).toMatch(/\.update\(\{ player_picks_enabled: args\.enabled \}\)/);
+    for (const t of tables) expect(["player_strength_picks", "player_strength_pick_events", "team_strength_palette", "teams"]).toContain(t);
+    // Three send modes (2026-11-17): the team's mode is the switch; the store only READS teams and the palette.
+    for (const t of ["teams", "team_strength_palette"]) {
+      for (const m of store.matchAll(new RegExp(`\\.from\\("${t}"\\)([^;]*)`, "g"))) expect(m[1]).not.toMatch(/\.(update|insert|upsert|delete)\(/);
+    }
+    expect(store).not.toMatch(/player_picks_enabled:/);
     for (const r of [
       "src/lib/micropulse/strengthProgramming/playerPicks.ts",
       "src/app/api/player/strength-picks/route.ts",

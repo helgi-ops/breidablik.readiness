@@ -15,21 +15,23 @@ import {
 } from "../requests";
 import { choicesOn, goalsWithoutApproval } from "../../strengthProgramming/playerPicksStore";
 
-describe("which switch does what (lota 4: every team, list or not)", () => {
-  const withList = { slots: {}, hasList: true };
-  const noList = { slots: {}, hasList: false };
-  it("8-week goals start without approval on the team switch or the test player, with or without a list", () => {
+describe("who takes part (three send modes, 2026-11-17: the team's mode is the switch)", () => {
+  const withList = { hasList: true };
+  const noList = { hasList: false };
+  it("8-week goals start without approval for players who take part, with or without a list", () => {
     for (const cfg of [withList, noList]) {
-      expect(goalsWithoutApproval({ ...cfg, enabled: true }, null)).toBe(true);
-      expect(goalsWithoutApproval({ ...cfg, enabled: false }, { testEnabled: true })).toBe(true);
-      expect(goalsWithoutApproval({ ...cfg, enabled: false }, { testEnabled: false })).toBe(false);
-      expect(goalsWithoutApproval({ ...cfg, enabled: false }, null)).toBe(false);
+      expect(goalsWithoutApproval({ ...cfg, mode: "individualised_goals" }, null)).toBe(true);
+      expect(goalsWithoutApproval({ ...cfg, mode: "individualised_goals" }, { choicesOff: true })).toBe(false);
+      expect(goalsWithoutApproval({ ...cfg, mode: "individualised" }, { testEnabled: true })).toBe(true);
+      expect(goalsWithoutApproval({ ...cfg, mode: "individualised" }, { testEnabled: false })).toBe(false);
+      expect(goalsWithoutApproval({ ...cfg, mode: "individualised" }, null)).toBe(false);
+      expect(goalsWithoutApproval({ ...cfg, mode: "standard" }, { testEnabled: true })).toBe(false);
     }
   });
   it("exercise picks and the strength goal still need the team list", () => {
-    expect(choicesOn({ ...withList, enabled: true }, null)).toBe(true);
-    expect(choicesOn({ ...noList, enabled: true }, null)).toBe(false);
-    expect(choicesOn({ ...noList, enabled: false }, { testEnabled: true })).toBe(false);
+    expect(choicesOn({ ...withList, mode: "individualised_goals" }, null)).toBe(true);
+    expect(choicesOn({ ...noList, mode: "individualised_goals" }, null)).toBe(false);
+    expect(choicesOn({ ...noList, mode: "individualised" }, { testEnabled: true })).toBe(false);
   });
 });
 

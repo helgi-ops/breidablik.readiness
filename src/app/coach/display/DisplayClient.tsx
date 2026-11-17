@@ -352,7 +352,8 @@ export default function DisplayClient() {
       // Open in the team's send mode unless the coach has toggled it here.
       try {
         const { data: teamRow } = await supabase.from("teams").select("strength_send_mode").eq("id", tId).maybeSingle();
-        if ((teamRow as { strength_send_mode?: string } | null)?.strength_send_mode === "individualised") {
+        const teamMode = (teamRow as { strength_send_mode?: string } | null)?.strength_send_mode;
+        if (teamMode === "individualised" || teamMode === "individualised_goals") {
           setViewMode((prev) => (viewModeTouched ? prev : "individualised"));
         }
       } catch {

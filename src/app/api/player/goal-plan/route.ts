@@ -6,8 +6,9 @@
  * POST   { quality, note?, switchedFrom? } ask for an 8-week add-on plan. `switchedFrom` = the quality the player had
  *        picked when they pressed "Switch" on the suggestion (lota 7); the suggestion is read again server-side. One open goal at a time (409). The rules build the
  *        proposal from the player's own data and store it; the coach approves, changes or declines it.
- *        Player choices on (team switch or the coach's one-player test, 2026-11-17): the plan starts the next Monday
- *        without approval (same rules and safety checks); the coach sees it and can stop it.
+ *        Only a player who takes part (team on "Individualised + goals", or the coach let them in; three send modes,
+ *        2026-11-17) can start one; it starts the next Monday without approval (same rules and safety checks); the
+ *        coach sees it and can stop it. Others get 403.
  * DELETE withdraw a request the coach has not answered yet, or a plan that started without approval and has not begun.
  *
  * The player is read from their own token, never from the body. Nothing here sends anything, reads or writes the
@@ -42,7 +43,8 @@ export async function GET(req: Request) {
     return NextResponse.json({
       ok: true,
       historyCount,
-      // Player choices on: a new goal starts without approval, on this Monday.
+      // The player takes part (three send modes, 2026-11-17): a new goal starts without approval, on this Monday.
+      // Not taking part → the sheet shows no goal list (a running or earlier goal still shows).
       autoStart,
       autoStartDate: autoStart ? autoStartDate(today()) : null,
       eligibility: eligibility.map((e) => ({ quality: e.quality, blocked: e.blocked, blockedText: e.blocked ? PLAYER_BLOCK_TEXT[e.blocked] : null })),
@@ -75,8 +77,16 @@ export async function POST(req: Request) {
     const priority = await loadPlayerPriority(sb, teamId, playerId, new Date().toISOString().slice(0, 10))
       .then((p) => (p ? prioritySnapshot(p.reads, p.metric, quality, switchedFrom) : null))
       .catch(() => null);
-    // Read on the server, never from the body. A failed read falls back to the request + approval flow.
-    const autoStart = await goalsWithoutApprovalFor(sb, teamId, playerId).catch(() => false);
+    // Read on the server, never from the body. Three send modes (2026-11-17): a player starts a goal only when they
+    // take part under the team's mode (or the coach let them in); it then starts without approval.
+    const autoStart = await goalsWithoutApprovalFor(sb, teamId, playerId).catch(() => null);
+    if (autoStart === null) return NextResponse.json({ error: "Could not check. Try again.", error_is: "Tókst ekki að athuga. Reyndu aftur." }, { status: 503 });
+    if (!autoStart) {
+      return NextResponse.json({
+        error: "Choosing your own goal isn't on for you right now. Your coach turns it on.",
+        error_is: "Að velja þér markmið er ekki opið fyrir þig núna. Þjálfarinn opnar það.",
+      }, { status: 403 });
+    }
     const res = await createGoalRequest(sb, { teamId, playerId, userId, quality, note: cleanPlayerNote(body.note), priority, autoStart });
     return NextResponse.json({ ok: true, id: res.id, status: res.status });
   } catch (e) {

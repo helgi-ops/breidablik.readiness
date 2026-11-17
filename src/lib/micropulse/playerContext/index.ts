@@ -24,6 +24,7 @@ import type { MdContext, PlayerStrengthSnapshot, SessionCorrective } from "../st
 import type { PaletteSlots } from "../strengthProgramming/palette";
 import type { MdStructures } from "../strengthProgramming/structures";
 import type { PlayerExercisePicks, StrengthGoal } from "../strengthProgramming/playerPicks";
+import type { PlayerChoiceAccess } from "../strengthProgramming/types";
 import { loadSprintExposure } from "@/lib/micropulse/sprintExposure/loader";
 import {
   fetchTeamContext,
@@ -68,7 +69,12 @@ export type PlayerContext = {
   teamId: string | null;
   /** Stubbed null in Stage 1 (see domains.fetchVbtDecrement). */
   vbtDecrement: number | null;
-  teamConfig: Domain<{ sport: string | null; seasonPhase: string | null; palette: PaletteSlots; mdStructures: MdStructures; playerPicks?: PlayerExercisePicks; playerGoal?: StrengthGoal }>;
+  teamConfig: Domain<{
+    sport: string | null; seasonPhase: string | null; palette: PaletteSlots; mdStructures: MdStructures;
+    playerPicks?: PlayerExercisePicks; playerGoal?: StrengthGoal;
+    /** The team's send mode + the coach's setting for this player: decides whether the player's choices are used. */
+    playerChoiceAccess?: PlayerChoiceAccess;
+  }>;
   externalLoad: Domain<{
     sprintDropPct: number | null;
     sprintBand: PlayerStrengthSnapshot["sprintExposureBand"];
@@ -164,6 +170,9 @@ export async function buildPlayerContext(
         mdStructures: teamPalette.mdStructures,
         ...(playerChoices?.picks ? { playerPicks: playerChoices.picks } : {}),
         ...(playerChoices?.goal ? { playerGoal: playerChoices.goal } : {}),
+        ...(teamId
+          ? { playerChoiceAccess: { teamMode: teamContext.sendMode ?? "individualised", on: !!playerChoices?.on, off: !!playerChoices?.off } }
+          : {}),
       },
       status: statusOf(
         teamContext.sport != null || teamContext.seasonPhase != null || Object.keys(teamPalette.slots).length > 0,

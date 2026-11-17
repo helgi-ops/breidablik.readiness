@@ -2,10 +2,14 @@ import "server-only";
 
 /**
  * Player exercise picks (lota 1) + strength goal and one-player test (lota 2), 2026-11-17: database work.
- * Server-only, the ONLY writer of `player_strength_picks` / `player_strength_pick_events` /
- * `team_strength_palette.player_picks_enabled`. Called
+ * Server-only, the ONLY writer of `player_strength_picks` / `player_strength_pick_events`. Called
  * from the player and coach routes AFTER their own auth and team checks, with the service-role client. Every
  * change writes an event (who, what, why).
+ *
+ * Who takes part (three send modes, 2026-11-17): the team's send mode (`teams.strength_send_mode`, read here, written by
+ * the send-mode route) is the one switch. On "individualised_goals" everyone takes part unless the coach took them out
+ * (`choices_off`); on "individualised" only players the coach let in (`test_enabled`); on "standard" nobody
+ * (`sendMode.ts` takesPart). The old team switch `team_strength_palette.player_picks_enabled` is no longer read.
  *
  * Never writes the readiness colour, `player_today_strength_override` or any Today source: the engine reads the
  * picks while it builds the session the existing writers send (playerContext → fetchPlayerExercisePicks).
@@ -14,6 +18,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sanitizePaletteSlots, type PaletteSlots } from "./palette";
 import { EXERCISES_BY_ID } from "./exerciseLibrary";
+import { normalizeSendMode, takesPart, type SendMode } from "./sendMode";
 import {
   PICK_MAX,
   PICK_SLOT_LABEL,
@@ -48,8 +53,10 @@ export type PlayerPicksRow = {
   goal: StrengthGoal | null;
   /** The coach chose the goal; the player can't change it. */
   goalLocked: boolean;
-  /** The coach turned picks + goal on for this one player (test) while the team switch is off. */
+  /** The coach let this player take part while the team is on another mode (e.g. a test). */
   testEnabled: boolean;
+  /** The coach took this player out while the team is on the goals mode. */
+  choicesOff: boolean;
   updatedAt: string | null;
   updatedByRole: "player" | "coach" | null;
 };
@@ -60,46 +67,66 @@ type RawRow = {
   strength_goal?: unknown;
   goal_locked?: boolean | null;
   test_enabled?: boolean | null;
+  choices_off?: boolean | null;
   updated_at?: string | null;
   updated_by_role?: string | null;
 };
-const ROW_COLS = "picks, locked_slots, strength_goal, goal_locked, test_enabled, updated_at, updated_by_role";
+const ROW_COLS = "picks, locked_slots, strength_goal, goal_locked, test_enabled, choices_off, updated_at, updated_by_role";
 
-type TeamRow = { slots: PaletteSlots; enabled: boolean; hasList: boolean };
+type TeamRow = {
+  slots: PaletteSlots;
+  /** The team's send mode (the one switch for player choices). */
+  mode: SendMode;
+  /** The team is on the goals mode (everyone takes part unless taken out). */
+  enabled: boolean;
+  hasList: boolean;
+};
 
-/** The team's list + switch. No palette row → no list, switch off. */
+/** The team's list + send mode. No palette row → no list. */
 export async function readTeamPickConfig(sb: SupabaseClient, teamId: string): Promise<TeamRow> {
-  const { data, error } = await sb.from("team_strength_palette").select("slots, player_picks_enabled").eq("team_id", teamId).maybeSingle();
-  if (error) throw new Error(error.message);
-  const row = data as { slots?: unknown; player_picks_enabled?: boolean } | null;
-  const slots = sanitizePaletteSlots(row?.slots);
-  return { slots, enabled: !!row?.player_picks_enabled, hasList: pickableSlots(slots).length > 0 };
+  const [pal, team] = await Promise.all([
+    sb.from("team_strength_palette").select("slots").eq("team_id", teamId).maybeSingle(),
+    sb.from("teams").select("strength_send_mode").eq("id", teamId).maybeSingle(),
+  ]);
+  if (pal.error) throw new Error(pal.error.message);
+  if (team.error) throw new Error(team.error.message);
+  const slots = sanitizePaletteSlots((pal.data as { slots?: unknown } | null)?.slots);
+  const mode = normalizeSendMode((team.data as { strength_send_mode?: string } | null)?.strength_send_mode);
+  return { slots, mode, enabled: mode === "individualised_goals", hasList: pickableSlots(slots).length > 0 };
 }
 
-/** Is picking (and the strength goal) on for this player? The team switch, or the coach's one-player test. Needs
- *  the team's list. */
-export function choicesOn(cfg: TeamRow, row: Pick<PlayerPicksRow, "testEnabled"> | null | undefined): boolean {
-  return cfg.hasList && (cfg.enabled || !!row?.testEnabled);
+type Setting = Pick<PlayerPicksRow, "testEnabled" | "choicesOff">;
+const settingOf = (row: Partial<Setting> | null | undefined) => ({ on: !!row?.testEnabled, off: !!row?.choicesOff });
+
+/** Does this player take part under the team's mode (goals, 8-week goals without approval)? */
+export function playerTakesPart(cfg: Pick<TeamRow, "mode">, row: Partial<Setting> | null | undefined): boolean {
+  return takesPart(cfg.mode, settingOf(row));
 }
 
-/** Do 8-week goals start without approval for this player? The same switch, but NO list needed (lota 4,
- *  2026-11-17: every team can use it, not only teams with an exercise list). */
-export function goalsWithoutApproval(cfg: Pick<TeamRow, "enabled">, row: Pick<PlayerPicksRow, "testEnabled"> | null | undefined): boolean {
-  return cfg.enabled || !!row?.testEnabled;
+/** Are exercise picks and the strength goal on for this player? They take part, and the team has a list. */
+export function choicesOn(cfg: Pick<TeamRow, "mode" | "hasList">, row: Partial<Setting> | null | undefined): boolean {
+  return cfg.hasList && playerTakesPart(cfg, row);
+}
+
+/** Do 8-week goals start without approval for this player? They take part; no team list needed (lota 4). */
+export function goalsWithoutApproval(cfg: Pick<TeamRow, "mode">, row: Partial<Setting> | null | undefined): boolean {
+  return playerTakesPart(cfg, row);
 }
 
 /**
- * Read-only: does this player's 8-week goal plan start without the coach's approval (goalPlan/store.ts
- * `createGoalRequest({ autoStart })`)? The player-choices switch (team or one-player test); since lota 4 no team
- * exercise list is needed.
+ * Read-only: does this player take part under the team's send mode? Decides whether they may start an 8-week goal
+ * (and whether it starts without approval: goalPlan/store.ts `createGoalRequest({ autoStart })`).
  */
 export async function goalsWithoutApprovalFor(sb: SupabaseClient, teamId: string, playerId: string): Promise<boolean> {
-  const cfg = await readTeamPickConfig(sb, teamId);
-  if (cfg.enabled) return true;
-  const { data, error } = await sb.from("player_strength_picks").select("test_enabled")
-    .eq("player_id", playerId).eq("team_id", teamId).maybeSingle();
-  if (error) throw new Error(error.message);
-  return !!(data as { test_enabled?: boolean } | null)?.test_enabled;
+  const [team, row] = await Promise.all([
+    sb.from("teams").select("strength_send_mode").eq("id", teamId).maybeSingle(),
+    sb.from("player_strength_picks").select("test_enabled, choices_off").eq("player_id", playerId).eq("team_id", teamId).maybeSingle(),
+  ]);
+  if (team.error) throw new Error(team.error.message);
+  if (row.error) throw new Error(row.error.message);
+  const mode = normalizeSendMode((team.data as { strength_send_mode?: string } | null)?.strength_send_mode);
+  const r = row.data as { test_enabled?: boolean; choices_off?: boolean } | null;
+  return takesPart(mode, { on: !!r?.test_enabled, off: !!r?.choices_off });
 }
 
 /** The groups a player can choose in, with the team's exercises (coach's order). */
@@ -122,6 +149,7 @@ function toRow(raw: RawRow | null, slots: PaletteSlots): PlayerPicksRow {
     goal: sanitizeGoal(raw?.strength_goal),
     goalLocked: !!raw?.goal_locked,
     testEnabled: !!raw?.test_enabled,
+    choicesOff: !!raw?.choices_off,
     updatedAt: raw?.updated_at ?? null,
     updatedByRole: raw?.updated_by_role === "player" || raw?.updated_by_role === "coach" ? raw.updated_by_role : null,
   };
@@ -173,7 +201,7 @@ async function logEvent(
 
 /** A row that belongs to ANOTHER team (the player moved) is never edited: the picks are per team. When a write
  *  lands on a row from another team, everything from the old team (picks, locks, goal, test) is cleared. */
-const FRESH_TEAM = { strength_goal: null, goal_locked: false, test_enabled: false };
+const FRESH_TEAM = { strength_goal: null, goal_locked: false, test_enabled: false, choices_off: false };
 
 async function existingRow(sb: SupabaseClient, playerId: string) {
   const { data, error } = await sb
@@ -331,26 +359,38 @@ export async function setTestPlayer(
   await logEvent(sb, { teamId: args.teamId, playerId: args.playerId, kind: args.on ? "test_on" : "test_off", actor: args.actor });
 }
 
-/**
- * Coach turns player choices on or off for the team. Since lota 4 no list is needed: without one only the 8-week
- * goals change (start without approval). A team with no palette row gets one holding just the switch (empty slots
- * and MD structures, which every reader treats exactly like no row).
- */
-export async function setTeamEnabled(sb: SupabaseClient, args: { teamId: string; enabled: boolean; actor: PickActor }): Promise<void> {
-  const cfg = await readTeamPickConfig(sb, args.teamId);
-  if (cfg.enabled === args.enabled) return;
-  const { data: updated, error } = await sb.from("team_strength_palette").update({ player_picks_enabled: args.enabled })
-    .eq("team_id", args.teamId).select("team_id");
+/** Coach takes ONE player out of the goals mode (or puts them back), with a reason kept in the history. */
+export async function setPlayerOut(
+  sb: SupabaseClient,
+  args: { playerId: string; teamId: string; out: boolean; actor: PickActor; reason: string },
+): Promise<void> {
+  const prior = await existingRow(sb, args.playerId);
+  const sameTeam = prior?.team_id === args.teamId;
+  if (!sameTeam && !args.out) return; // nothing to put back on this team
+  const { error } = await sb.from("player_strength_picks").upsert(
+    {
+      player_id: args.playerId,
+      team_id: args.teamId,
+      ...(sameTeam ? {} : { picks: {}, locked_slots: [], ...FRESH_TEAM }),
+      choices_off: args.out,
+      updated_by: args.actor.userId,
+      updated_by_role: args.actor.role,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "player_id" },
+  );
   if (error) throw new Error(error.message);
-  if (!updated?.length) {
-    if (!args.enabled) return;
-    // No palette row yet: insert one with only the switch; a row written meanwhile is left alone and switched on.
-    const { error: e2 } = await sb.from("team_strength_palette").insert({ team_id: args.teamId, player_picks_enabled: true });
-    if (e2 && (e2 as { code?: string }).code !== "23505") throw new Error(e2.message);
-    if (e2) {
-      const { error: e3 } = await sb.from("team_strength_palette").update({ player_picks_enabled: true }).eq("team_id", args.teamId);
-      if (e3) throw new Error(e3.message);
-    }
-  }
-  await logEvent(sb, { teamId: args.teamId, playerId: null, kind: args.enabled ? "enabled" : "disabled", actor: args.actor });
+  await logEvent(sb, { teamId: args.teamId, playerId: args.playerId, kind: args.out ? "player_out" : "player_in", actor: args.actor, reason: args.reason });
+}
+
+/** The team's send mode changed to or from the goals mode: kept in the history (who, when, which modes). The mode
+ *  itself is written by the send-mode route (`teams.strength_send_mode`). */
+export async function logTeamModeChange(
+  sb: SupabaseClient,
+  args: { teamId: string; from: SendMode; to: SendMode; actor: PickActor },
+): Promise<void> {
+  const was = args.from === "individualised_goals";
+  const now = args.to === "individualised_goals";
+  if (was === now) return;
+  await logEvent(sb, { teamId: args.teamId, playerId: null, kind: now ? "enabled" : "disabled", before: { mode: args.from }, after: { mode: args.to }, actor: args.actor });
 }

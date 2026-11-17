@@ -15,6 +15,7 @@
  * never the readiness colour.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { normalizeSendMode, type SendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { loadCoachOverridesForPlayers, loadPlayerStrengthSnapshot, resolveAutoMdContext } from "@/lib/micropulse/strengthProgramming/loader";
 import { resolveTeamCustomTable, customProgrammeCoversDay } from "@/lib/micropulse/strengthProgramming/customProgrammeActive";
@@ -82,7 +83,8 @@ async function run(req: NextRequest) {
   const perTeam: Array<{ teamId: string; sent: number; skipped: number; failed: number }> = [];
 
   for (const team of teamRows) {
-    const mode: "individualised" | "standard" = team.strength_send_mode === "standard" ? "standard" : "individualised";
+    // Three modes (2026-11-17): standard / individualised / individualised + goals (players take part; sendMode.ts).
+    const mode: SendMode = normalizeSendMode(team.strength_send_mode);
 
     // Only send on a planned training day. No week_plans row for today (week not set
     // up) ⇒ the MD engine would default to MD-3 and fabricate a session; an explicit
@@ -108,10 +110,10 @@ async function run(req: NextRequest) {
     const [coachRules, coachBlock, swapsByPlayer, goalGym] = await Promise.all([
       loadCoachStrengthRules(sb, team.id),
       resolveCurrentBlock(sb, team.id, todayIso),
-      // The coach's swaps for today (strength card), one read per team (fix 2026-11-17). Individualised only.
-      loadCoachOverridesForPlayers(sb, { playerIds: mode === "individualised" ? rows.map((r) => r.id) : [], dateIso: todayIso }),
+      // The coach's swaps for today (strength card), one read per team (fix 2026-11-17). Individualised modes only.
+      loadCoachOverridesForPlayers(sb, { playerIds: mode !== "standard" ? rows.map((r) => r.id) : [], dateIso: todayIso }),
       // The 8-week goal plans' gym session B goes into today's session in pre-/off-season ("one session, one whole").
-      loadGoalPlanGym(sb, team.id, todayIso, mode === "individualised" ? rows.map((r) => r.id) : []),
+      loadGoalPlanGym(sb, team.id, todayIso, mode !== "standard" ? rows.map((r) => r.id) : []),
     ]);
     // Standard mode: the team's authored Custom Programme table + the day's team MD (team-level). When it
     // covers a player we stand aside — no engine override — so their Today resolution serves it; still push.

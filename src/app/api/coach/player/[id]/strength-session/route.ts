@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import type { SendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { loadPlayerStrengthSnapshot, loadCoachOverrides } from "@/lib/micropulse/strengthProgramming/loader";
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
@@ -122,6 +123,10 @@ export async function GET(
   // layers) — exactly what Standard delivers when no Custom Programme covers the day. Default
   // (individualised) previews the palette + per-player build. Coach block is applied either way.
   const previewMode = req.nextUrl.searchParams.get("mode") === "standard" ? "standard" : "individualised";
+  // Individualised with or without goals (2026-11-17): ?mode=individualised / individualised_goals previews that mode;
+  // no mode → the team's mode decides whether the player's own input is used (sendMode.ts).
+  const modeParam = req.nextUrl.searchParams.get("mode");
+  const individualMode: SendMode | undefined = modeParam === "individualised" || modeParam === "individualised_goals" ? modeParam : undefined;
   // The player's goal adds its set only in pre-/off-season (2026-11-17), so the preview needs today's place in the
   // season plan: the block the page passed, or — only for a player with a goal and no block/phase passed — the plan.
   const passedPhase = phaseRaw === "preseason" || phaseRaw === "offseason" || phaseRaw === "competitive";
@@ -132,7 +137,7 @@ export async function GET(
       : null;
   const built = previewMode === "standard"
     ? buildStrengthSession(snapshotIn, [], { mode: "standard" })
-    : buildStrengthSession(withGoalSeason(snapshot, goalBlock), coachOverrides);
+    : buildStrengthSession(withGoalSeason(snapshot, goalBlock), coachOverrides, { mode: individualMode });
   const session = applyBlockToSession(built, blockGoal, blockPhase, blockOverride, subPhase);
 
   return NextResponse.json({

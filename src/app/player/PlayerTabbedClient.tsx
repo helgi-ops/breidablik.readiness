@@ -666,9 +666,10 @@ function TodayMorePortal({ activeTab, lang, onOpen, isBasketball }: { activeTab:
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   // "My goal" sheet (goal plan request). Reads nothing until opened, so Today's first load is unchanged.
   const [goalOpen, setGoalOpen] = useState(false);
-  // "My exercises" (player exercise picks): shown only when the coach turned it on; checked lazily, cached.
+  // "My exercises" (player exercise picks) and "My goal": shown only when the player takes part under the team's send
+  // mode ("My goal" also when they have a goal plan to look at); checked lazily, cached (2026-11-17).
   const [picksOpen, setPicksOpen] = useState(false);
-  const picksOn = useStrengthPicksEnabled();
+  const { picks: picksOn, goal: goalOn } = useStrengthPicksEnabled();
   const is = lang === "IS";
 
   useEffect(() => {
@@ -742,7 +743,7 @@ function TodayMorePortal({ activeTab, lang, onOpen, isBasketball }: { activeTab:
             </button>
           );
         })}
-        <button
+        {goalOn ? <button
           type="button"
           onClick={() => setGoalOpen(true)}
           className="flex w-full items-center gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-left shadow-sm transition hover:bg-zinc-50"
@@ -750,10 +751,10 @@ function TodayMorePortal({ activeTab, lang, onOpen, isBasketball }: { activeTab:
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600"><IconActivity active={false} /></span>
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold text-zinc-900">{is ? "Markmiðið mitt" : "My goal"}</span>
-            <span className="block truncate text-xs text-zinc-500">{is ? "Biddu um 8 vikna áætlun: hraði, hröðun, bremsun eða stökk" : "Ask for an 8-week plan: speed, acceleration, braking or jump"}</span>
+            <span className="block truncate text-xs text-zinc-500">{is ? "Veldu 8 vikna áætlun: hraði, hröðun, bremsun eða stökk" : "Choose an 8-week plan: speed, acceleration, braking or jump"}</span>
           </span>
           <span className="text-lg leading-none text-zinc-300">›</span>
-        </button>
+        </button> : null}
         {picksOn ? (
           <button
             type="button"

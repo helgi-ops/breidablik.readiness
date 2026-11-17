@@ -13,6 +13,7 @@ import { rxForPrescribed } from "@/lib/micropulse/strengthProgramming/todayLiftR
 import { blockTakesVbt } from "@/lib/micropulse/strengthProgramming/toTodayStructure";
 import { LiftRxDetails } from "@/components/trainer/LiftRxTable";
 import type { BlockGoalKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
+import type { SendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
 import { canonicalLift } from "@/lib/client/oneRepMax";
 
 type LoggedSet = { session_date: string; exercise_name: string; canonical_lift: string | null; rpe: number | null; is_warmup: boolean };
@@ -44,7 +45,7 @@ import type {
  * Self-hides when the player is OFF, on a match day or has an active injury
  * (returns null instead of rendering an empty container).
  */
-export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: string[]; blockGoalKey?: string | null; blockPhase?: string | null; playerEmphasis?: string | null; mode?: "individualised" | "standard" }> = ({ playerId, paletteIds, blockGoalKey, blockPhase, playerEmphasis, mode }) => {
+export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: string[]; blockGoalKey?: string | null; blockPhase?: string | null; playerEmphasis?: string | null; mode?: SendMode }> = ({ playerId, paletteIds, blockGoalKey, blockPhase, playerEmphasis, mode }) => {
   const [lang] = useLang();
   const [session, setSession] = useState<StrengthSession | null>(null);
   const [loading, setLoading] = useState(true);
@@ -106,7 +107,8 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
         if (blockGoalKey) { p.set("block", blockGoalKey); if (blockPhase) p.set("phase", blockPhase); }
         // Standard mode previews the GENERIC built-in template (no team palette) — what players
         // get when no Custom Programme covers. Individualised (default) previews the palette build.
-        if (mode === "standard") p.set("mode", "standard");
+        // Individualised + goals (2026-11-17) previews with the player's own goal / picks when they take part.
+        if (mode) p.set("mode", mode);
         const qs = p.toString() ? `?${p}` : "";
         const res = await fetch(`/api/coach/player/${playerId}/strength-session${qs}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -678,6 +680,8 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                           md: md === "AUTO" ? undefined : md.replace("MD-", "").replace("MD+", "+"),
                           note: coachNote.trim() || undefined,
                           lang,
+                          // The mode the card previews is the mode sent (2026-11-17); absent → the team's mode.
+                          ...(mode ? { mode } : {}),
                         }),
                       });
                       const json = await res.json().catch(() => ({}));

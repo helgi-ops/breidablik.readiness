@@ -28,6 +28,7 @@ import { withGoalPlanGym } from "@/lib/micropulse/strengthProgramming/goalPlanGy
 import { loadGoalPlanGym } from "@/lib/micropulse/goalPlan/gymLoader";
 import { resolveTeamCustomTable, customProgrammeCoversDay } from "@/lib/micropulse/strengthProgramming/customProgrammeActive";
 import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
+import { isSendMode, normalizeSendMode, type SendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
 
 export const runtime = "nodejs";
@@ -121,7 +122,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  let body: { md?: string; note?: string; lang?: "IS" | "EN"; mode?: "individualised" | "standard"; playerIds?: string[] } = {};
+  let body: { md?: string; note?: string; lang?: "IS" | "EN"; mode?: SendMode; playerIds?: string[] } = {};
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -135,8 +136,9 @@ export async function POST(req: NextRequest) {
 
   // Send mode: the request overrides the team default (teams.strength_send_mode).
   const { data: teamRow } = await supabase.from("teams").select("strength_send_mode").eq("id", auth.teamId).maybeSingle();
-  const teamDefault = (teamRow as { strength_send_mode?: string } | null)?.strength_send_mode === "standard" ? "standard" : "individualised";
-  const mode: "individualised" | "standard" = body.mode === "standard" || body.mode === "individualised" ? body.mode : teamDefault;
+  // Three modes (2026-11-17): standard / individualised / individualised + goals (players take part; sendMode.ts).
+  const teamDefault = normalizeSendMode((teamRow as { strength_send_mode?: string } | null)?.strength_send_mode);
+  const mode: SendMode = isSendMode(body.mode) ? body.mode : teamDefault;
 
   // Get the active players on the coach's team (optionally narrowed to a sent-to subset/group).
   let playersQuery = supabase
@@ -167,9 +169,10 @@ export async function POST(req: NextRequest) {
     resolveCurrentBlock(supabase, auth.teamId, todayIso),
     // The coach's swaps for today (strength card) go with each session; one read for the squad (fix 2026-11-17).
     // Individualised only, like the card (no ids → no read).
-    loadCoachOverridesForPlayers(supabase, { playerIds: mode === "individualised" ? playerRows.map((r) => r.id) : [], dateIso: todayIso }),
-    // The 8-week goal plans' gym session B goes into today's session in pre-/off-season ("one session, one whole").
-    loadGoalPlanGym(supabase, auth.teamId, todayIso, mode === "individualised" ? playerRows.map((r) => r.id) : []),
+    loadCoachOverridesForPlayers(supabase, { playerIds: mode !== "standard" ? playerRows.map((r) => r.id) : [], dateIso: todayIso }),
+    // The 8-week goal plans' gym session B goes into today's session in pre-/off-season ("one session, one whole"),
+    // for the players who take part under this mode (the engine drops it for the others).
+    loadGoalPlanGym(supabase, auth.teamId, todayIso, mode !== "standard" ? playerRows.map((r) => r.id) : []),
   ]);
   // Standard mode: the team's authored Custom Programme table + week phase (resolved once). When it
   // covers a player's day we stand aside and let their Today resolution serve it (readiness-reactive).

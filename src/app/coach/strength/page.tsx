@@ -28,6 +28,8 @@ import { pdf } from "@react-pdf/renderer";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { positionGroup, positionGroupsForSport } from "@/lib/micropulse/positionStyle";
 import PlayerStrengthSessionCard from "@/components/coach/PlayerStrengthSessionCard";
+import StrengthSendModePicker from "@/components/coach/StrengthSendModePicker";
+import { normalizeSendMode, type SendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
 import StrengthSessionPdf, { type StrengthSessionPdfData } from "@/components/coach/StrengthSessionPdf";
 import { useLang } from "@/lib/lang";
 import type { StrengthSession, MdContext, PlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/types";
@@ -112,8 +114,10 @@ export default function CoachStrengthPage() {
   const [bulkResult, setBulkResult] = useState<{ sent: number; skipped: number; failed: number } | null>(null);
   const [bulkNote, setBulkNote] = useState("");
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
-  // Send mode: the team default (teams.strength_send_mode), overridable per send.
-  const [sendMode, setSendMode] = useState<"individualised" | "standard">("individualised");
+  // Send mode: the team default (teams.strength_send_mode), overridable per send. Three modes (2026-11-17):
+  // standard / individualised / individualised + goals (players take part; sendMode.ts). teamMode = the saved one.
+  const [sendMode, setSendMode] = useState<SendMode>("individualised");
+  const [teamMode, setTeamMode] = useState<SendMode | null>(null);
   // Whether the team has an ACTIVE Custom Programme. Standard mode delivers that programme;
   // without one the engine fallback is a GENERIC template (team palette is individualised-only),
   // so we warn in Standard. null = not yet loaded.
@@ -169,7 +173,8 @@ export default function CoachStrengthPage() {
         if (alive) {
           const tr = teamRow as { name?: string; strength_send_mode?: string; strength_auto_send?: boolean } | null;
           setTeamName(tr?.name ?? "Team");
-          setSendMode(tr?.strength_send_mode === "standard" ? "standard" : "individualised");
+          setSendMode(normalizeSendMode(tr?.strength_send_mode));
+          setTeamMode(normalizeSendMode(tr?.strength_send_mode));
           setAutoSend(!!tr?.strength_auto_send);
         }
         const { data: pl } = await sb
@@ -327,7 +332,7 @@ export default function CoachStrengthPage() {
       const q = new URLSearchParams();
       if (sendMdOverride !== "AUTO") q.set("md", sendMdOverride.replace("MD-", ""));
       if (blockKeyForSum) { q.set("block", blockKeyForSum); if (blockPhaseForSum) q.set("phase", blockPhaseForSum); }
-      if (sendMode === "standard") q.set("mode", "standard");
+      q.set("mode", sendMode);
       const qs = q.toString() ? `?${q}` : "";
       setDaySum(Object.fromEntries(players.map((p) => [p.id, "loading" as const])));
       const queue = [...players];
@@ -443,7 +448,7 @@ export default function CoachStrengthPage() {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ mode: sendMode }),
       });
-      if (res.ok) { setDefaultSaved(true); setTimeout(() => setDefaultSaved(false), 2500); }
+      if (res.ok) { setTeamMode(sendMode); setDefaultSaved(true); setTimeout(() => setDefaultSaved(false), 2500); }
     } finally {
       setSavingDefault(false);
     }
@@ -715,48 +720,15 @@ export default function CoachStrengthPage() {
       <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
         <h2 className="text-[15px] font-bold text-slate-900">{t("Send today's session", "Senda æfingu dagsins")}</h2>
         <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
-          <span className="text-sm font-semibold text-slate-800">{t("Session mode:", "Æfingahamur:")}</span>
-          <div className="inline-flex overflow-hidden rounded-lg border border-slate-300 shadow-sm">
-            {(["individualised", "standard"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setSendMode(m)}
-                aria-pressed={sendMode === m}
-                className={`px-4 py-2 text-sm font-semibold transition ${m === "standard" ? "border-l border-slate-300" : ""} ${sendMode === m ? "bg-indigo-700 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}
-              >
-                {m === "individualised"
-                  ? t("Individualised (data + screen)", "Einstaklingsmiðað (gögn + skimun)")
-                  : t("Standard (Custom Programme)", "Staðlað (Sérsniðið æfingakerfi)")}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={saveTeamDefault}
-            disabled={savingDefault}
-            className="text-[11px] font-medium text-indigo-700 hover:underline disabled:opacity-50"
-          >
-            {defaultSaved ? t("✓ Saved as team default", "✓ Vistað sem sjálfgefið") : t("Set as team default", "Gera að sjálfgefnu")}
-          </button>
-          {/* What each mode does — both shown so the choice is clear before clicking;
-              the active one is emphasised. */}
-          <div className="w-full space-y-1 text-[11px] leading-snug">
-            <div className={sendMode === "individualised" ? "text-slate-700" : "text-slate-500"}>
-              <span className="font-semibold text-slate-800">{t("Individualised", "Einstaklingsmiðað")}:</span>{" "}
-              {t(
-                "each player gets their OWN session — tuned to readiness + MD, plus their movement-screen corrective and deficit-ledger emphases, built from your team exercise palette.",
-                "hver leikmaður fær SÍNA eigin æfingu — stillt að readiness + MD, ásamt skimunar-corrective og halla-áherslum, byggð úr æfingasafni liðsins.",
-              )}
-            </div>
-            <div className={sendMode === "standard" ? "text-slate-700" : "text-slate-500"}>
-              <span className="font-semibold text-slate-800">{t("Standard", "Staðlað")}:</span>{" "}
-              {t(
-                "everyone gets the SAME session — your team's active Custom Programme for the day (still readiness/MD-tuned). Without one, players get a generic built-in template and the team palette isn't applied.",
-                "allir fá SÖMU æfingu — virkt æfingakerfi liðsins fyrir daginn (áfram readiness/MD-stillt). Án þess fá leikmenn generic innbyggt sniðmát og team palette er ekki notað.",
-              )}
-            </div>
-          </div>
+          <StrengthSendModePicker
+            lang={lang === "IS" ? "IS" : "EN"}
+            mode={sendMode}
+            teamMode={teamMode}
+            onMode={setSendMode}
+            onSaveDefault={saveTeamDefault}
+            saving={savingDefault}
+            saved={defaultSaved}
+          />
           {sendMode === "standard" && hasActiveCustom === false && upcomingBlock && (
             <div className="w-full rounded-md border border-sky-300 bg-sky-50 p-2 text-[11px] text-sky-900">
               {t(
@@ -778,7 +750,7 @@ export default function CoachStrengthPage() {
           )}
           {/* Individualised only reaches the player when SENT (the view-time fallback is the generic
               standard template, not the palette-driven individualised build). Nudge to turn on Auto-send. */}
-          {sendMode === "individualised" && !autoSend && (
+          {sendMode !== "standard" && !autoSend && (
             <div className="w-full rounded-md border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-900">
               {t(
                 "⚠ In Individualised mode, players only get their individualised session when it's sent. Turn on Auto-send below (or press Send each strength day) — without a send, their Today shows the generic built-in template instead, not their palette-driven individualised session.",

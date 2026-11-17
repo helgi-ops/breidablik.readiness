@@ -286,11 +286,11 @@ export type PlayerStrengthSnapshot = {
    *  mode lays that method out instead of the built-in template. Absent / default
    *  / other days → the built-in template. Does not apply in standard mode. */
   mdStructures?: import("./structures").MdStructures;
-  /** The player's own picks from the team list (only when the coach turned picks on for the team). They go
-   *  first in their group when the palette fills the session; safety rules still win. Individualised mode
-   *  only. Absent = no picks (2026-11-17). */
+  /** The player's own picks from the team list. They go first in their group when the palette fills the session;
+   *  safety rules still win. Used only when the player takes part under the build's send mode (see
+   *  `playerChoiceAccess`). Absent = no picks (2026-11-17). */
   playerExercisePicks?: import("./playerPicks").PlayerExercisePicks;
-  /** The player's own strength goal (same switch as the picks). On the goal's days the matching exercise gets
+  /** The player's own strength goal (same rule as the picks). On the goal's days the matching exercise gets
    *  one more set, unless readiness / safety / a two-match week says no. Individualised mode only. Absent = no
    *  goal (lota 2, 2026-11-17). */
   playerStrengthGoal?: import("./playerPicks").StrengthGoal;
@@ -310,6 +310,19 @@ export type PlayerStrengthSnapshot = {
    *  routes / coach preview from `goalPlan/gymLoader.ts`). Merged into the session only in pre-/off-season
    *  (goalPlanGym.ts). Absent = no plan, or session B isn't today ("One session, one whole", 2026-11-17). */
   goalPlanGym?: import("./goalPlanGym").GoalPlanGym;
+  /** The team's send mode + the coach's setting for this player (2026-11-17). When present, the engine uses the
+   *  player's own input (picks, strength goal, goal plan gym session) only if the player takes part under the mode of
+   *  the build (`sendMode.ts` takesPart). Absent (hand-built snapshots) → the input is used as given. */
+  playerChoiceAccess?: PlayerChoiceAccess;
+};
+
+/** See `PlayerStrengthSnapshot.playerChoiceAccess`. */
+export type PlayerChoiceAccess = {
+  teamMode: import("./sendMode").SendMode;
+  /** The coach let this player in on another mode (test). */
+  on: boolean;
+  /** The coach took this player out of the goals mode. */
+  off: boolean;
 };
 
 /** A screen-driven corrective rendered into the daily session's front block. Bi

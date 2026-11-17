@@ -3769,7 +3769,7 @@ export default function CustomTemplatesPage() {
         </div>
         <div className="mt-2 max-w-2xl space-y-1">
           <p className="text-sm text-muted-foreground">
-            Build your own microdose programme. You define the green version — the system handles yellow and red.
+            Build your own programme: short microdoses or full sessions, as long as you want. You define the green version — the system handles yellow and red.
           </p>
           <p className="text-xs text-muted-foreground">
             This customises the player&apos;s <span className="font-medium">periodised Today session</span> (by MD-day &amp; readiness). A per-player programme applies over a date range. Note: a coach-sent <a href="/coach/strength?tab=week" className="font-medium text-[#7a5cc4] underline">strength session or 4-week block</a> is a locked override that sits <em>above</em> this for any date it&apos;s sent.
@@ -4364,7 +4364,7 @@ export default function CustomTemplatesPage() {
                     ? "Choose which days you want to edit. Selected days overwrite existing data. You can also add new days."
                     : teamSport === "basketball"
                       ? "Which weekday does each session land on? Build your weekly strength split (e.g. Mon / Wed / Fri)."
-                      : "Which microdose days do you want to define in your programme?"}
+                      : "Which match days (MD) do you want to define in your programme?"}
                   {existingDays.length > 0 && (
                     <span className="ml-1 text-amber-600 font-medium">
                       — {existingDays.length} day(s) already exist.
@@ -4497,7 +4497,7 @@ export default function CustomTemplatesPage() {
                     <div className="mt-3.5 grid gap-3 sm:grid-cols-2">
                       <div>
                         <div className="mb-1.5 text-[11.5px] font-semibold text-[#5c6066]">Title</div>
-                        <Input value={currentGreen.title} onChange={(e) => updateGreen(currentDay, { title: e.target.value })} placeholder="🟢 GENERIC — Classic Microdose" />
+                        <Input value={currentGreen.title} onChange={(e) => updateGreen(currentDay, { title: e.target.value })} placeholder="🟢 GENERIC — Strength session" />
                       </div>
                       <div>
                         <div className="mb-1.5 text-[11.5px] font-semibold text-[#5c6066]">Description <span className="font-normal text-[#a3a196]">(optional)</span></div>

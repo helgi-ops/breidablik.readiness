@@ -2,9 +2,11 @@
  * /api/player/strength-picks — the player chooses which of the team's exercises they want in their own strength
  * session (player exercise picks, lota 1) and one strength goal (lota 2), 2026-11-17.
  *
- * GET → { ok, enabled, groups, picks, locked, goals, goal, goalLocked, suggestion, updatedAt, updatedByRole }. `enabled: false`
- *       when the coach has not turned picks on for the team or for this player (test), or the team has no list —
- *       the sheet then says so and offers nothing.
+ * GET → { ok, enabled, goalRow, groups, picks, locked, goals, goal, goalLocked, suggestion, updatedAt, updatedByRole }.
+ *       `enabled: false` when the player doesn't take part under the team's send mode (sendMode.ts: "Individualised +
+ *       goals", unless the coach took them out, or let in on another mode), or the team has no list — the sheet then
+ *       says so and offers nothing. `goalRow` (2026-11-17): show the "My goal" row on Today — the player takes part,
+ *       or has a goal plan (running or earlier) to look at.
  * PUT { slot, ids } → saves one group (first choice first; [] clears it) and returns the same shape.
  * PUT { goal }      → saves the goal ("stronger" | "power" | "robust" | null) and returns the same shape.
  *
@@ -25,6 +27,7 @@ import { GOAL_DAYS, STRENGTH_GOALS, STRENGTH_GOAL_LABEL, validateGoal, validateP
 import {
   PicksError,
   choicesOn,
+  playerTakesPart,
   pickGroups,
   readPlayerPicks,
   readTeamPickConfig,
@@ -63,14 +66,21 @@ async function suggestionFor(sb: Sb, playerId: string, teamId: string): Promise<
   return (await loadDsiGoalSuggestions(sb, teamId, today())).get(playerId) ?? null;
 }
 
+/** Has the player any 8-week goal plan on this team (running, waiting or earlier)? One small read. Fail → false. */
+async function hasGoalPlan(sb: Sb, playerId: string, teamId: string): Promise<boolean> {
+  const { data, error } = await sb.from("player_goal_plans").select("id").eq("player_id", playerId).eq("team_id", teamId).limit(1);
+  return !error && (data ?? []).length > 0;
+}
+
 async function state(sb: Sb, playerId: string, teamId: string, known?: GoalSuggestion | null) {
   const cfg = await readTeamPickConfig(sb, teamId);
   const row = await readPlayerPicks(sb, playerId, teamId, cfg.slots);
-  if (!choicesOn(cfg, row)) return { ok: true, enabled: false as const };
-  const { testEnabled: _t, ...mine } = row;
-  void _t;
+  const goalRow = playerTakesPart(cfg, row) || (await hasGoalPlan(sb, playerId, teamId));
+  if (!choicesOn(cfg, row)) return { ok: true, enabled: false as const, goalRow };
+  const { testEnabled: _t, choicesOff: _o, ...mine } = row;
+  void _t; void _o;
   const suggestion = known !== undefined ? known : await suggestionFor(sb, playerId, teamId);
-  return { ok: true, enabled: true as const, groups: pickGroups(cfg.slots), goals: GOALS, ...mine, suggestion };
+  return { ok: true, enabled: true as const, goalRow, groups: pickGroups(cfg.slots), goals: GOALS, ...mine, suggestion };
 }
 
 export async function GET(req: Request) {

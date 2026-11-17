@@ -297,7 +297,7 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
             {current?.status === "completed" ? (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
                 <div className="font-semibold">{T(`Your 8 weeks of ${L(QUALITY[current.quality].label).toLowerCase()} finished on ${fmtDate(current.endDate, false)}.`, `8 vikna áætluninni (${L(QUALITY[current.quality].label).toLowerCase()}) lauk ${fmtDate(current.endDate, true)}.`)}</div>
-                <p className="mt-1">{T("You can ask for a new goal below.", "Þú getur beðið um nýtt markmið hér fyrir neðan.")}</p>
+                {autoStart.on ? <p className="mt-1">{T("You can ask for a new goal below.", "Þú getur beðið um nýtt markmið hér fyrir neðan.")}</p> : null}
               </div>
             ) : null}
             {current?.status === "declined" ? (
@@ -307,7 +307,13 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
                 {current.coachNote ? <p className="mt-1">{current.coachNote}</p> : null}
               </div>
             ) : null}
-            <div className="grid gap-2">
+            {/* Three send modes (2026-11-17): a player chooses a goal only when the coach has them take part. */}
+            {!autoStart.on ? (
+              <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" data-testid="goal-not-on">
+                {T("Choosing your own goal isn't on for you right now. Your coach turns it on.", "Að velja þér markmið er ekki opið fyrir þig núna. Þjálfarinn opnar það.")}
+              </p>
+            ) : null}
+            {autoStart.on ? <div className="grid gap-2">
               {(eligibility ?? []).map((e) => {
                 const q = QUALITY[e.quality];
                 const disabled = !!e.blocked;
@@ -320,8 +326,8 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
                   </button>
                 );
               })}
-            </div>
-            {pick ? (
+            </div> : null}
+            {autoStart.on && pick ? (
               <>
                 {(() => {
                   const s = suggestions?.[pick] ?? null;

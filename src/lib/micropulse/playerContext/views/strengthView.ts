@@ -49,10 +49,12 @@ export function strengthView(ctx: PlayerContext): PlayerStrengthSnapshot {
     lastMatchDnp: ctx.matchExposure.data.lastMatchDnp,
     sport: cfg.sport,
     seasonPhase: cfg.seasonPhase,
-    // The player's own picks from the team list — only present when the coach turned picks on.
+    // The player's own picks from the team list (whenever the player has a row on this team).
     ...(cfg.playerPicks ? { playerExercisePicks: cfg.playerPicks } : {}),
-    // The player's own strength goal (same switch; lota 2).
+    // The player's own strength goal (lota 2).
     ...(cfg.playerGoal ? { playerStrengthGoal: cfg.playerGoal } : {}),
+    // Whether those choices are used: the send mode decides in the engine (sendMode.ts, 2026-11-17).
+    ...(cfg.playerChoiceAccess ? { playerChoiceAccess: cfg.playerChoiceAccess } : {}),
     // No match near (pre-/off-season: every strength session is a goal day). Only when true, so the snapshot is
     // unchanged otherwise.
     ...(ctx.microcycle.data.noMatchNearby ? { noMatchNearby: true as const } : {}),

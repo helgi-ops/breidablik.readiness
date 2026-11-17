@@ -1,11 +1,15 @@
 "use client";
 
 /**
- * "Players' exercise picks & goals" (2026-11-17) on Player goals: the coach turns picks on for the team (or for ONE
- * player to test), sees every player's strength goal (lota 2) and picks (lota 1), and can change either or lock it
- * (with a reason, kept in the history). No approval step: a choice applies from the player's next session sent.
+ * "Players' exercise picks & goals" (2026-11-17) on Player goals: who takes part, every player's strength goal
+ * (lota 2) and picks (lota 1); the coach can change either or lock it (with a reason, kept in the history). No
+ * approval step: a choice applies from the player's next session sent.
  *
- * Layered read: one sentence (how many have chosen / off / testing) → plain facts → the switch + one-player test →
+ * Three send modes (2026-11-17): the team's mode (strength send page) is the switch. On "Individualised + goals"
+ * everyone takes part and the coach can take a player out (reason kept); on "Individualised" the coach can let one
+ * player in (e.g. a test); on "Standard" nobody chooses. Rules: strengthProgramming/sendMode.ts.
+ *
+ * Layered read: one sentence (mode + how many take part / have chosen) → plain facts → who takes part →
  * the player × (goal, groups) table (click a cell to change or lock).
  *
  * 2026-11-17: the goal's extra set only in pre-season / off-season (in season = maintenance), and the goal cell shows
@@ -14,7 +18,9 @@
 
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import Link from "next/link";
 import { PICK_REASON_MIN } from "@/lib/micropulse/strengthProgramming/playerPicks";
+import { SEND_MODE_TEXT, type SendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
 
 type Group = { slot: string; label: { en: string; is: string }; max: number; options: { id: string; nameEN: string; nameIS: string }[] };
 type Goal = { id: string; en: string; is: string; whatEN: string; whatIS: string };
@@ -27,12 +33,17 @@ type PlayerRow = {
   goal: string | null;
   goalLocked: boolean;
   testEnabled: boolean;
+  choicesOff: boolean;
+  takesPart: boolean;
   suggestion?: Suggestion | null;
   updatedAt: string | null;
   updatedByRole: "player" | "coach" | null;
 };
 type State = {
+  mode: SendMode;
   enabled: boolean;
+  taking: number;
+  out: number;
   hasList: boolean;
   groups: Group[];
   goals: Goal[];
@@ -65,6 +76,8 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
   const [busy, setBusy] = React.useState(false);
   const [edit, setEdit] = React.useState<{ playerId: string; slot: string } | null>(null);
   const [testPick, setTestPick] = React.useState("");
+  const [outPick, setOutPick] = React.useState("");
+  const [outReason, setOutReason] = React.useState("");
 
   React.useEffect(() => {
     let alive = true;
@@ -101,29 +114,24 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
     return g ? (isEN ? g.en : g.is) : null;
   };
   const testers = s ? s.players.filter((p) => p.testEnabled) : [];
-  // Team on → every player; team off → only the players the coach is testing with.
-  const rows = s ? (s.enabled ? s.players : testers) : [];
+  const outs = s ? s.players.filter((p) => p.choicesOff) : [];
+  // Only the players who take part under the team's mode.
+  const rows = s ? s.players.filter((p) => p.takesPart) : [];
+  const modeName = (m: SendMode) => (isEN ? SEND_MODE_TEXT[m].label.en : SEND_MODE_TEXT[m].label.is);
 
   const verdict = (st: State) => {
-    // Lota 4: without a team list the switch only lets 8-week goals start without approval.
-    if (!st.hasList) {
-      if (st.enabled) return T("On: players start 8-week goals without your approval.", "Kveikt: leikmenn byrja 8 vikna markmið án samþykkis þíns.");
-      if (st.testing === 0) return T("Off: players ask for 8-week goals and you approve them.", "Slökkt: leikmenn biðja um 8 vikna markmið og þú samþykkir.");
-      return st.testing === 1
-        ? T("Off for the team; on for 1 test player.", "Slökkt fyrir liðið; kveikt fyrir 1 prufuleikmann.")
-        : T(`Off for the team; on for ${st.testing} test players.`, `Slökkt fyrir liðið; kveikt fyrir ${st.testing} prufuleikmenn.`);
+    if (st.mode !== "individualised_goals") {
+      const base = T(`Players choose nothing: the team's mode is ${modeName(st.mode)}.`, `Leikmenn velja ekkert: hamur liðsins er ${modeName(st.mode)}.`);
+      if (st.mode === "standard" || st.taking === 0) return base;
+      return st.taking === 1
+        ? T(`${base.slice(0, -1)}; 1 player you let in takes part.`, `${base.slice(0, -1)}; 1 leikmaður sem þú hleyptir inn tekur þátt.`)
+        : T(`${base.slice(0, -1)}; ${st.taking} players you let in take part.`, `${base.slice(0, -1)}; ${st.taking} leikmenn sem þú hleyptir inn taka þátt.`);
     }
-    if (!st.enabled) {
-      if (st.testing === 0) return T("Off: players use your list in your order.", "Slökkt: leikmenn fá listann þinn í þinni röð.");
-      return st.testing === 1
-        ? T("Off for the team; on for 1 test player.", "Slökkt fyrir liðið; kveikt fyrir 1 prufuleikmann.")
-        : T(`Off for the team; on for ${st.testing} test players.`, `Slökkt fyrir liðið; kveikt fyrir ${st.testing} prufuleikmenn.`);
-    }
-    const a = st.picked === 1
-      ? T(`1 of ${st.total} players has picked exercises`, `1 af ${st.total} leikmönnum hefur valið æfingar`)
-      : T(`${st.picked} of ${st.total} players have picked exercises`, `${st.picked} af ${st.total} leikmönnum hafa valið æfingar`);
-    const b = st.withGoal === 1 ? T("1 has a goal", "1 er með markmið") : T(`${st.withGoal} have a goal`, `${st.withGoal} eru með markmið`);
-    return `${a}; ${b}.`;
+    const a = T(`${st.taking} of ${st.total} players take part`, `${st.taking} af ${st.total} leikmönnum taka þátt`);
+    if (!st.hasList) return `${a}.`;
+    const b = st.picked === 1 ? T("1 has picked exercises", "1 hefur valið æfingar") : T(`${st.picked} have picked exercises`, `${st.picked} hafa valið æfingar`);
+    const c = st.withGoal === 1 ? T("1 has a goal", "1 er með markmið") : T(`${st.withGoal} have a goal`, `${st.withGoal} eru með markmið`);
+    return `${a}; ${b}; ${c}.`;
   };
 
   return (
@@ -137,7 +145,7 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
           <p className="mt-1 text-[15px] font-semibold text-slate-900">{verdict(s)}</p>
           {!s.hasList ? (
             <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[12px] text-slate-600">
-              <li>{T("When on, a player's 8-week goal (top speed, acceleration, braking, jump) starts the next Monday without your approval. You see it in the list above and can stop it with a reason.", "Þegar kveikt er byrjar 8 vikna markmið leikmanns (hámarkshraði, hröðun, bremsun, stökk) næsta mánudag án samþykkis þíns. Þú sérð það í listanum hér fyrir ofan og getur stöðvað með ástæðu.")}</li>
+              <li>{T("A player who takes part starts an 8-week goal (top speed, acceleration, braking, jump) themselves; it starts the next Monday without your approval. You see it in the list above and can stop it with a reason. Players who don't take part can't start one.", "Leikmaður sem tekur þátt byrjar sjálfur 8 vikna markmið (hámarkshraði, hröðun, bremsun, stökk) næsta mánudag án samþykkis þíns. Þú sérð það í listanum hér fyrir ofan og getur stöðvað með ástæðu. Leikmenn sem taka ekki þátt geta ekki byrjað.")}</li>
               <li>{T("Same plan and safety rules as when you approve with no changes. Injured or returning players can't start one; under-18s get the youth plan.", "Sama áætlun og öryggisreglur og þegar þú samþykkir án breytinga. Meiddir eða leikmenn í endurkomu geta ekki byrjað; undir 18 ára fá unglingaáætlun.")}</li>
               <li>{T("Exercise picks and a strength goal come too once the team has an exercise list (Strength → Exercise palette, at least 2 exercises in a group).", "Æfingaval og styrktarmarkmið bætast við þegar liðið er komið með æfingalista (Styrkur → Æfingasafn, a.m.k. 2 æfingar í flokki).")}</li>
             </ul>
@@ -149,25 +157,64 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
             <li>{T("Never more than one extra set: not on top of the build block's extra set, not on a day the player's data already added an exercise, a light or taper week, a yellow or red day, a two-match week, or after a safety swap.", "Aldrei meira en eitt aukasett: ekki ofan á aukasett uppbyggingarblokkar, ekki þegar gögn leikmannsins bættu þegar við æfingu, í léttri viku eða niðurtröppun, á gulum eða rauðum degi, í viku með tveimur leikjum eða eftir öryggisskipti.")}</li>
             <li>{T("“DSI suggests” = the player's force-plate tests (jump ÷ mid-thigh pull) against the team: lower third → explosive, upper third → stronger legs, tests within 12 months. A suggestion from rules, not AI; the player chooses.", "„DSI bendir á“ = kraftplötupróf leikmannsins (stökk ÷ tog) borin saman við liðið: neðsti þriðjungur → sprengikraftur, efsti þriðjungur → sterkari fætur, próf innan 12 mánaða. Tillaga út frá reglum, ekki gervigreind; leikmaðurinn velur.")}</li>
             <li>{T("Safety rules still win (e.g. a sore lower back swaps the deadlift that day). Applies to individualised sessions.", "Öryggisreglur ráða áfram (t.d. aumur mjóhryggur skiptir út réttstöðulyftu þann dag). Gildir um einstaklingsmiðaðar æfingar.")}</li>
-            <li>{T("8-week goals (top speed, acceleration, braking, jump) start the next Monday without your approval. You see them in the list above and can stop one with a reason. Injured or returning players still can't start one; under-18s get the youth plan.", "8 vikna markmið (hámarkshraði, hröðun, bremsun, stökk) byrja næsta mánudag án samþykkis þíns. Þú sérð þau í listanum hér fyrir ofan og getur stöðvað með ástæðu. Meiddir eða leikmenn í endurkomu geta ekki byrjað; undir 18 ára fá unglingaáætlun.")}</li>
+            <li>{T("8-week goals (top speed, acceleration, braking, jump) start the next Monday without your approval, and their gym session goes into the day's strength session in pre- and off-season. You see them in the list above and can stop one with a reason. Injured or returning players still can't start one; under-18s get the youth plan.", "8 vikna markmið (hámarkshraði, hröðun, bremsun, stökk) byrja næsta mánudag án samþykkis þíns, og salur-hluti þeirra fer inn í styrktaræfingu dagsins á undirbúnings- og hvíldartímabili. Þú sérð þau í listanum hér fyrir ofan og getur stöðvað með ástæðu. Meiddir eða leikmenn í endurkomu geta ekki byrjað; undir 18 ára fá unglingaáætlun.")}</li>
           </ul>
           )}
 
-          <label className="mt-3 flex items-center gap-2 text-[13px] text-slate-800">
-            <input type="checkbox" checked={s.enabled} disabled={busy}
-              onChange={async (e) => { const m = await put({ action: "enable", enabled: e.target.checked }); if (m) setErr(m); }} />
-            {s.hasList
-              ? T("Players choose for themselves: exercises from the team list, a strength goal, and 8-week goals without approval", "Leikmenn velja sjálfir: æfingar af æfingalista liðsins, styrktarmarkmið og 8 vikna markmið án samþykkis")
-              : T("Players start 8-week goals without my approval", "Leikmenn byrja 8 vikna markmið án samþykkis míns")}
-          </label>
+          {/* The switch is the team's send mode (strength send page). */}
+          <p className="mt-3 text-[13px] text-slate-800" data-testid="picks-mode">
+            {s.mode === "individualised_goals"
+              ? T("On: the team's mode is Individualised + goals. ", "Kveikt: hamur liðsins er Einstaklingsmiðað + markmið. ")
+              : T("To let the whole team choose, set Individualised + goals as the team's mode. ", "Til að leyfa öllu liðinu að velja, gerðu Einstaklingsmiðað + markmið að ham liðsins. ")}
+            <Link href="/coach/strength" className="font-semibold text-[#2740e6] underline">{T("Strength send page", "Sendingarsíða styrktaræfinga")}</Link>
+          </p>
 
-          {!s.enabled ? (
+          {s.mode === "individualised_goals" ? (
+            <div className="mt-3 rounded-lg border border-dashed border-slate-300 p-3" data-testid="picks-out">
+              <p className="text-[12px] font-semibold text-slate-800">{T("Take a player out", "Taka leikmann út")}</p>
+              <p className="mt-0.5 text-[12px] text-slate-600">
+                {T("That player gets the data + screen session without their own goal or picks, and can't start a new 8-week goal. A goal already running finishes as its own card. The reason is kept in the history.",
+                  "Sá leikmaður fær æfingu út frá gögnum og skimun án eigin markmiðs og vals og getur ekki byrjað nýtt 8 vikna markmið. Markmið sem er í gangi klárast sem sér spjald. Ástæðan er vistuð í sögunni.")}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <select value={outPick} onChange={(e) => setOutPick(e.target.value)} disabled={busy}
+                  className="min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-[13px]">
+                  <option value="">{T("Choose a player…", "Veldu leikmann…")}</option>
+                  {s.players.filter((p) => !p.choicesOff).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <input value={outReason} onChange={(e) => setOutReason(e.target.value)} maxLength={500} disabled={busy}
+                  placeholder={T("Reason (required)", "Ástæða (skylda)")}
+                  className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-[13px]" />
+                <button type="button" disabled={busy || !outPick || outReason.trim().length < PICK_REASON_MIN}
+                  onClick={async () => { const m = await put({ action: "out", playerId: outPick, out: true, reason: outReason }); if (m) setErr(m); else { setOutPick(""); setOutReason(""); } }}
+                  className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50">
+                  {T("Take out", "Taka út")}
+                </button>
+              </div>
+              {outs.length > 0 ? (
+                <ul className="mt-2 space-y-1">
+                  {outs.map((p) => (
+                    <li key={p.id} className="flex flex-wrap items-center gap-2 text-[12px] text-slate-700">
+                      <span className="font-medium">{p.name}</span>
+                      <span className="text-slate-400">{T("out", "úti")}</span>
+                      <button type="button" disabled={busy || outReason.trim().length < PICK_REASON_MIN}
+                        title={T("Write a reason above first", "Skrifaðu ástæðu fyrir ofan fyrst")}
+                        onClick={async () => { const m = await put({ action: "out", playerId: p.id, out: false, reason: outReason }); if (m) setErr(m); else setOutReason(""); }}
+                        className="rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+                        {T("Put back", "Setja aftur inn")}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : s.mode === "individualised" ? (
             <div className="mt-3 rounded-lg border border-dashed border-slate-300 p-3" data-testid="picks-test">
-              <p className="text-[12px] font-semibold text-slate-800">{T("Test with one player first", "Prófaðu fyrst með einum leikmanni")}</p>
+              <p className="text-[12px] font-semibold text-slate-800">{T("Let one player take part", "Hleypa einum leikmanni inn")}</p>
               <p className="mt-0.5 text-[12px] text-slate-600">
                 {s.hasList
-                  ? T("Only this player sees “My exercises & goal”, and their 8-week goal starts without approval; the rest of the team sees nothing new.", "Aðeins þessi leikmaður sér „Mínar æfingar og markmið“ og 8 vikna markmið leikmannsins byrjar án samþykkis; restin af liðinu sér ekkert nýtt.")
-                  : T("Only this player's 8-week goal starts without approval; the rest of the team asks as before.", "Aðeins 8 vikna markmið þessa leikmanns byrjar án samþykkis; restin af liðinu biður um eins og áður.")}
+                  ? T("Only this player sees “My goal” and “My exercises & goal”, and their goal goes into their strength session; the rest of the team sees nothing new. Good for a test.", "Aðeins þessi leikmaður sér „Markmiðið mitt“ og „Mínar æfingar og markmið“, og markmiðið fer inn í styrktaræfinguna; restin af liðinu sér ekkert nýtt. Hentar sem prufa.")
+                  : T("Only this player can start an 8-week goal (without approval); the rest of the team sees nothing new. Good for a test.", "Aðeins þessi leikmaður getur byrjað 8 vikna markmið (án samþykkis); restin af liðinu sér ekkert nýtt. Hentar sem prufa.")}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <select value={testPick} onChange={(e) => setTestPick(e.target.value)} disabled={busy}
@@ -178,7 +225,7 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
                 <button type="button" disabled={busy || !testPick}
                   onClick={async () => { const m = await put({ action: "test", playerId: testPick, on: true }); if (m) setErr(m); else setTestPick(""); }}
                   className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50">
-                  {T("Turn on for this player", "Kveikja fyrir þennan leikmann")}
+                  {T("Let this player in", "Hleypa þessum leikmanni inn")}
                 </button>
               </div>
               {testers.length > 0 ? (
@@ -189,7 +236,7 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
                       <button type="button" disabled={busy}
                         onClick={async () => { const m = await put({ action: "test", playerId: p.id, on: false }); if (m) setErr(m); }}
                         className="rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-                        {T("Turn off", "Slökkva")}
+                        {T("Take out", "Taka út")}
                       </button>
                     </li>
                   ))}
@@ -215,7 +262,7 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
                         <td className="border-b border-slate-100 py-1.5 pr-2 font-medium text-slate-900">
                           {p.name}
                           {p.updatedByRole === "coach" ? <span className="ml-1 text-[10px] font-normal text-slate-400">{T("(you changed)", "(þú breyttir)")}</span> : null}
-                          {p.testEnabled ? <span className="ml-1 rounded bg-[#2740e6]/10 px-1 text-[10px] font-semibold text-[#2740e6]">{T("test", "prufa")}</span> : null}
+                          {p.testEnabled && s.mode !== "individualised_goals" ? <span className="ml-1 rounded bg-[#2740e6]/10 px-1 text-[10px] font-semibold text-[#2740e6]">{T("let in", "hleypt inn")}</span> : null}
                         </td>
                         <td className="border-b border-slate-100 px-2 py-1.5">
                           <button type="button" onClick={() => setEdit(edit?.playerId === p.id && edit.slot === GOAL_CELL ? null : { playerId: p.id, slot: GOAL_CELL })}

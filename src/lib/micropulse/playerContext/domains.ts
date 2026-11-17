@@ -24,6 +24,7 @@ import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/corrective
 import { sanitizePaletteSlots, type PaletteSlots } from "../strengthProgramming/palette";
 import { sanitizeMdStructures, type MdStructures } from "../strengthProgramming/structures";
 import { sanitizeGoal, sanitizePicks, type PlayerExercisePicks, type StrengthGoal } from "../strengthProgramming/playerPicks";
+import { normalizeSendMode, type SendMode } from "../strengthProgramming/sendMode";
 
 /** Corrective compensation → the strength emphasis it corroborates (CONFIRM-vs-ADD
  *  de-dup when the strength blocks already emphasise the same quality). */
@@ -39,11 +40,13 @@ const COMP_EMPHASIS: Record<string, string> = {
 };
 
 /** Team sport + current-week season phase — gates the upper-body block. Fail-safe. */
-export async function fetchTeamContext(sb: SupabaseClient, teamId: string | null, todayIso: string): Promise<{ sport: string | null; seasonPhase: string | null }> {
+export async function fetchTeamContext(sb: SupabaseClient, teamId: string | null, todayIso: string): Promise<{ sport: string | null; seasonPhase: string | null; sendMode?: SendMode }> {
   if (!teamId) return { sport: null, seasonPhase: null };
   try {
-    const { data: team } = await sb.from("teams").select("sport").eq("id", teamId).maybeSingle();
+    // The team's send mode rides on the same read (2026-11-17): it decides whether players take part.
+    const { data: team } = await sb.from("teams").select("sport, strength_send_mode").eq("id", teamId).maybeSingle();
     const sport = ((team as { sport?: string | null } | null)?.sport ?? null) as string | null;
+    const sendMode = normalizeSendMode((team as { strength_send_mode?: string | null } | null)?.strength_send_mode);
     // Monday of the current week (UTC) — matches how week setup keys rows.
     const d = new Date(`${todayIso}T00:00:00Z`);
     const mon = new Date(d);
@@ -56,7 +59,7 @@ export async function fetchTeamContext(sb: SupabaseClient, teamId: string | null
       .eq("week_start_date", weekStart)
       .maybeSingle();
     const seasonPhase = ((wk as { season_phase?: string | null } | null)?.season_phase ?? null) as string | null;
-    return { sport, seasonPhase };
+    return { sport, seasonPhase, sendMode };
   } catch {
     return { sport: null, seasonPhase: null };
   }
@@ -76,36 +79,33 @@ export async function fetchTeamPalette(sb: SupabaseClient, teamId: string | null
   }
 }
 
-/** The player's own choices (2026-11-17): exercise picks from the team list (lota 1) and a strength goal (lota 2).
- *  Only when the coach turned picks on for the team OR for this one player (test), and the row belongs to that
- *  team. Picks no longer on the list are dropped. One small read for a player who never chose anything (most
- *  players). Fail-safe: any error → nothing (the coach's list as before, no goal). */
+/** The player's own choices (2026-11-17): exercise picks from the team list (lota 1), a strength goal (lota 2), and
+ *  the coach's per-player setting (let in on another mode / taken out of the goals mode). Read for every player with
+ *  a row on this team; WHETHER the choices are used is decided by the send mode in the engine (`sendMode.ts`
+ *  takesPart), so the coach's mode for a send applies the same way everywhere. Picks no longer on the list are
+ *  dropped. Fail-safe: any error → nothing (the coach's list as before, no goal). */
 export async function fetchPlayerExercisePicks(
   sb: SupabaseClient,
   playerId: string,
   teamId: string | null,
-): Promise<{ picks?: PlayerExercisePicks; goal?: StrengthGoal } | undefined> {
+): Promise<{ picks?: PlayerExercisePicks; goal?: StrengthGoal; on: boolean; off: boolean } | undefined> {
   if (!teamId) return undefined;
   try {
     const { data: row } = await sb
       .from("player_strength_picks")
-      .select("picks, strength_goal, test_enabled")
+      .select("picks, strength_goal, test_enabled, choices_off")
       .eq("player_id", playerId)
       .eq("team_id", teamId)
       .maybeSingle();
-    const r = row as { picks?: unknown; strength_goal?: unknown; test_enabled?: boolean } | null;
+    const r = row as { picks?: unknown; strength_goal?: unknown; test_enabled?: boolean; choices_off?: boolean } | null;
     if (!r) return undefined;
+    const setting = { on: !!r.test_enabled, off: !!r.choices_off };
     const goal = sanitizeGoal(r.strength_goal);
     const hasPicks = !!r.picks && typeof r.picks === "object" && Object.keys(r.picks as object).length > 0;
-    if (!hasPicks && !goal) return undefined;
-    const { data: team } = await sb.from("team_strength_palette").select("slots, player_picks_enabled").eq("team_id", teamId).maybeSingle();
-    const t = team as { slots?: unknown; player_picks_enabled?: boolean } | null;
-    if (!t || !(t.player_picks_enabled || r.test_enabled)) return undefined;
-    const picks = sanitizePicks(r.picks, sanitizePaletteSlots(t.slots));
-    const out: { picks?: PlayerExercisePicks; goal?: StrengthGoal } = {};
-    if (Object.keys(picks).length > 0) out.picks = picks;
-    if (goal) out.goal = goal;
-    return out.picks || out.goal ? out : undefined;
+    if (!hasPicks) return goal ? { goal, ...setting } : setting;
+    const { data: team } = await sb.from("team_strength_palette").select("slots").eq("team_id", teamId).maybeSingle();
+    const picks = sanitizePicks(r.picks, sanitizePaletteSlots((team as { slots?: unknown } | null)?.slots));
+    return { ...(Object.keys(picks).length > 0 ? { picks } : {}), ...(goal ? { goal } : {}), ...setting };
   } catch {
     return undefined;
   }

@@ -2,12 +2,14 @@
  * /api/coach/team/player-strength-picks — the coach's view of the players' exercise picks (lota 1) and strength
  * goals + one-player test (lota 2), 2026-11-17.
  *
- * GET → { ok, enabled, hasList, groups, goals, players: [{ id, name, picks, locked, goal, goalLocked, testEnabled,
- *         suggestion, updatedAt, updatedByRole }], picked, withGoal, testing, total }
+ * GET → { ok, mode, enabled, hasList, groups, goals, players: [{ id, name, picks, locked, goal, goalLocked, testEnabled,
+ *         choicesOff, takesPart, suggestion, updatedAt, updatedByRole }], picked, withGoal, testing, out, taking, total }
+ *       `mode` (2026-11-17): the team's send mode, the one switch for player choices (set on the strength send page);
+ *       `enabled` = the team is on the goals mode.
  *       `suggestion` (2026-11-17): the goal the player's force-plate tests (DSI, against the team) suggest, or null.
  * PUT one of:
- *   { action: "enable", enabled }                         → the team switch (off by default)
- *   { action: "test", playerId, on }                      → turn it on / off for ONE player (test) while the team is off
+ *   { action: "test", playerId, on }                      → let ONE player take part while the team is on another mode
+ *   { action: "out", playerId, out, reason }              → take ONE player out of the goals mode / put back (reason kept)
  *   { action: "set", playerId, slot, ids, reason }        → change a player's picks for a group (reason kept)
  *   { action: "lock", playerId, slot, locked, reason }    → lock / unlock a group for a player (reason kept)
  *   { action: "goal", playerId, goal, reason }            → change a player's goal (null clears; reason kept)
@@ -41,7 +43,8 @@ import {
   savePicks,
   setGoalLock,
   setLock,
-  setTeamEnabled,
+  playerTakesPart,
+  setPlayerOut,
   setTestPlayer,
 } from "@/lib/micropulse/strengthProgramming/playerPicksStore";
 import { loadDsiGoalSuggestions } from "@/lib/micropulse/strengthProgramming/loadDsiForTeam";
@@ -78,6 +81,8 @@ async function teamState(sb: Sb, teamId: string) {
       goal: r?.goal ?? null,
       goalLocked: r?.goalLocked ?? false,
       testEnabled: r?.testEnabled ?? false,
+      choicesOff: r?.choicesOff ?? false,
+      takesPart: playerTakesPart(cfg, r),
       suggestion: suggestions.get(p.id) ?? null,
       updatedAt: r?.updatedAt ?? null,
       updatedByRole: r?.updatedByRole ?? null,
@@ -86,8 +91,10 @@ async function teamState(sb: Sb, teamId: string) {
   const picked = players.filter((p) => Object.keys(p.picks).length > 0).length;
   const withGoal = players.filter((p) => p.goal).length;
   const testing = players.filter((p) => p.testEnabled).length;
+  const out = players.filter((p) => p.choicesOff).length;
+  const taking = players.filter((p) => p.takesPart).length;
   const goals = STRENGTH_GOALS.map((id) => ({ id, ...STRENGTH_GOAL_LABEL[id], days: GOAL_DAYS[id] }));
-  return { ok: true, enabled: cfg.enabled, hasList: cfg.hasList, groups: pickGroups(cfg.slots), goals, players, picked, withGoal, testing, total: players.length };
+  return { ok: true, mode: cfg.mode, enabled: cfg.enabled, out, taking, hasList: cfg.hasList, groups: pickGroups(cfg.slots), goals, players, picked, withGoal, testing, total: players.length };
 }
 
 export async function GET(req: Request) {
@@ -113,13 +120,15 @@ export async function PUT(req: Request) {
     if (!body) return NextResponse.json({ error: "Bad body" }, { status: 400 });
     const actor = { role: "coach" as const, userId: coachUserId };
 
+    // The team switch is the team's send mode now (strength send page, 2026-11-17).
     if (body.action === "enable") {
-      if (typeof body.enabled !== "boolean") return NextResponse.json({ error: "enabled must be true or false" }, { status: 400 });
-      await setTeamEnabled(sb, { teamId, enabled: body.enabled, actor });
-      return NextResponse.json(await teamState(sb, teamId));
+      return NextResponse.json({
+        error: "Choose \"Individualised + goals\" as the team's mode on the strength send page.",
+        error_is: "Veldu „Einstaklingsmiðað + markmið“ sem ham liðsins á sendingarsíðu styrktaræfinga.",
+      }, { status: 400 });
     }
 
-    if (!["set", "lock", "goal", "goal_lock", "test"].includes(String(body.action))) {
+    if (!["set", "lock", "goal", "goal_lock", "test", "out"].includes(String(body.action))) {
       return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
 
@@ -138,6 +147,12 @@ export async function PUT(req: Request) {
     const reason = typeof body.reason === "string" ? body.reason.trim() : "";
     if (reason.length < PICK_REASON_MIN) {
       return NextResponse.json({ error: "Add a short reason (kept in the history).", error_is: "Skrifaðu stutta ástæðu (vistuð í sögunni)." }, { status: 400 });
+    }
+
+    if (body.action === "out") {
+      if (typeof body.out !== "boolean") return NextResponse.json({ error: "out must be true or false" }, { status: 400 });
+      await setPlayerOut(sb, { playerId, teamId, out: body.out, actor, reason });
+      return NextResponse.json(await teamState(sb, teamId));
     }
 
     const cfg = await readTeamPickConfig(sb, teamId);

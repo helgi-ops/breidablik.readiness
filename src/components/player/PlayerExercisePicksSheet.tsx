@@ -50,42 +50,43 @@ async function call(method: "GET" | "PUT", body?: unknown) {
   return { res, j };
 }
 
-/** Is the feature on for this player (team switch or the coach's one-player test)? Read lazily (after Today has
- *  loaded) and remembered (12 h when on, 2 h when off, so a coach turning it on shows up the same day), so Today's
- *  morning load gets no extra request on most opens. v2 (lota 2): a fresh read for everyone after the test switch
- *  shipped. */
-const CACHE_KEY = "mp_strength_picks_on_v2";
-const cacheMs = (on: boolean) => (on ? 12 : 2) * 60 * 60 * 1000;
-function readCache(): boolean | null {
+/** Which Today rows the player sees: "My exercises & goal" (picks on) and "My goal" (the player takes part under the
+ *  team's send mode, or has a goal plan to look at; three send modes, 2026-11-17). Read lazily (after Today has
+ *  loaded) and remembered (12 h when something is on, 2 h when not, so a coach turning it on shows up the same day),
+ *  so Today's morning load gets no extra request on most opens. v3: a fresh read for everyone after the modes shipped. */
+const CACHE_KEY = "mp_strength_picks_on_v3";
+type Rows = { picks: boolean; goal: boolean };
+const cacheMs = (r: Rows) => (r.picks || r.goal ? 12 : 2) * 60 * 60 * 1000;
+function readCache(): Rows | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(CACHE_KEY);
-    const hit = raw ? (JSON.parse(raw) as { v: boolean; at: number }) : null;
-    return hit && Date.now() - hit.at < cacheMs(hit.v) ? hit.v : null;
+    const hit = raw ? (JSON.parse(raw) as { v: Rows; at: number }) : null;
+    return hit && hit.v && Date.now() - hit.at < cacheMs(hit.v) ? { picks: !!hit.v.picks, goal: !!hit.v.goal } : null;
   } catch {
     return null; // no storage: read from the server below
   }
 }
 
-export function useStrengthPicksEnabled(): boolean {
+export function useStrengthPicksEnabled(): Rows {
   // The Today "See more" rows render only on the client (portal after mount), so reading storage here is safe.
-  const [cached] = React.useState<boolean | null>(readCache);
-  const [on, setOn] = React.useState(cached ?? false);
+  const [cached] = React.useState<Rows | null>(readCache);
+  const [rows, setRows] = React.useState<Rows>(cached ?? { picks: false, goal: false });
   React.useEffect(() => {
     if (cached != null) return;
     let alive = true;
     const t = window.setTimeout(async () => {
       try {
         const { res, j } = await call("GET");
-        const v = res.ok && j.enabled === true;
-        if (!alive) return;
-        setOn(v);
+        if (!res.ok || !alive) return;
+        const v: Rows = { picks: j.enabled === true, goal: j.goalRow === true };
+        setRows(v);
         try { window.localStorage.setItem(CACHE_KEY, JSON.stringify({ v, at: Date.now() })); } catch { /* ignore */ }
       } catch { /* stay hidden */ }
     }, 6000);
     return () => { alive = false; window.clearTimeout(t); };
   }, [cached]);
-  return on;
+  return rows;
 }
 
 export default function PlayerExercisePicksSheet({ lang, onClose }: { lang?: "IS" | "EN"; onClose: () => void }) {

@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isSendMode, normalizeSendMode, type SendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { loadCoachOverrides, loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/loader";
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
@@ -132,7 +133,7 @@ export async function POST(
     return NextResponse.json({ error: "Player not in your team" }, { status: 403 });
   }
 
-  let body: { md?: string; note?: string; lang?: "IS" | "EN"; mode?: "individualised" | "standard" } = {};
+  let body: { md?: string; note?: string; lang?: "IS" | "EN"; mode?: SendMode } = {};
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -144,8 +145,9 @@ export async function POST(
   const teamId = (playerRow as { team_id: string }).team_id;
   // Send mode: request overrides the team default (teams.strength_send_mode).
   const { data: teamRow } = await supabase.from("teams").select("strength_send_mode").eq("id", teamId).maybeSingle();
-  const teamDefault = (teamRow as { strength_send_mode?: string } | null)?.strength_send_mode === "standard" ? "standard" : "individualised";
-  const mode: "individualised" | "standard" = body.mode === "standard" || body.mode === "individualised" ? body.mode : teamDefault;
+  // Three modes (2026-11-17): standard / individualised / individualised + goals (players take part; sendMode.ts).
+  const teamDefault = normalizeSendMode((teamRow as { strength_send_mode?: string } | null)?.strength_send_mode);
+  const mode: SendMode = isSendMode(body.mode) ? body.mode : teamDefault;
 
   const todayIso = new Date().toISOString().slice(0, 10);
   const snapshot = await loadPlayerStrengthSnapshot(supabase, {
@@ -175,13 +177,13 @@ export async function POST(
   // The coach's swaps for today (made on the strength card) go with the session, exactly as the card shows them
   // (2026-11-17 fix: they were dropped on send). Individualised only, like the card; a swap applies only while the
   // swapped-out exercise is still in that slot.
-  const coachOverrides = mode === "individualised" ? await loadCoachOverrides(supabase, { playerId, dateIso: todayIso }) : [];
+  const coachOverrides = mode !== "standard" ? await loadCoachOverrides(supabase, { playerId, dateIso: todayIso }) : [];
   // Today's block is read BEFORE the build: the player's goal adds its set only in pre-/off-season (2026-11-17).
   // The 8-week goal plan's gym session B goes into today's session in pre-/off-season ("one session, one whole").
   const [coachRules, coachBlock, goalGym] = await Promise.all([
     loadCoachStrengthRules(supabase, teamId),
     resolveCurrentBlock(supabase, teamId, todayIso),
-    mode === "individualised" ? loadGoalPlanGym(supabase, teamId, todayIso, [playerId]) : Promise.resolve(new Map()),
+    mode !== "standard" ? loadGoalPlanGym(supabase, teamId, todayIso, [playerId]) : Promise.resolve(new Map()),
   ]);
   let session = buildStrengthSession(withGoalSeason(withGoalPlanGym(snapshot, goalGym.get(playerId)), coachBlock), coachOverrides, { mode });
   if (!session) {
