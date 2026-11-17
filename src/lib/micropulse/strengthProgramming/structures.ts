@@ -253,3 +253,72 @@ export function sanitizeMdStructures(raw: unknown): MdStructures {
   }
   return out;
 }
+
+/* ── Weeks without a match (2026-11-17) ─────────────────────────────────────────────────────────────────────────
+ * With no match from 4 days back to 5 ahead there is no MD countdown, so every strength day used to read as MD-3.
+ * The coach now says, per weekday, what kind of day it is in such a week. The METHOD still comes from the MD rows
+ * above (one place to pick a method): a strength day builds as MD-4, a power day as MD-3, a light day as MD-2.
+ * Persisted in team_strength_palette.no_match_week (jsonb). Applies to the individualised modes only; a week with a
+ * match, or a day the coach set by hand, is unchanged. */
+
+export const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+export type Weekday = (typeof WEEKDAYS)[number];
+
+export const NO_MATCH_DAY_KINDS = ["strength", "power", "light", "rest"] as const;
+export type NoMatchDayKind = (typeof NO_MATCH_DAY_KINDS)[number];
+
+export type NoMatchWeek = Partial<Record<Weekday, NoMatchDayKind>>;
+
+/** The MD row whose method a no-match day uses. */
+export const NO_MATCH_DAY_MD: Record<Exclude<NoMatchDayKind, "rest">, MdContext> = {
+  strength: "MD-4",
+  power: "MD-3",
+  light: "MD-2",
+};
+
+export const NO_MATCH_DAY_LABEL: Record<NoMatchDayKind, { en: string; is: string }> = {
+  strength: { en: "Strength day", is: "Styrktardagur" },
+  power: { en: "Power day", is: "Sprengikraftsdagur" },
+  light: { en: "Light day", is: "Léttur dagur" },
+  rest: { en: "Rest", is: "Hvíld" },
+};
+
+export const WEEKDAY_LABEL: Record<Weekday, { en: string; is: string; enShort: string; isShort: string }> = {
+  mon: { en: "Monday", is: "mánudagur", enShort: "Mon", isShort: "Mán" },
+  tue: { en: "Tuesday", is: "þriðjudagur", enShort: "Tue", isShort: "Þri" },
+  wed: { en: "Wednesday", is: "miðvikudagur", enShort: "Wed", isShort: "Mið" },
+  thu: { en: "Thursday", is: "fimmtudagur", enShort: "Thu", isShort: "Fim" },
+  fri: { en: "Friday", is: "föstudagur", enShort: "Fri", isShort: "Fös" },
+  sat: { en: "Saturday", is: "laugardagur", enShort: "Sat", isShort: "Lau" },
+  sun: { en: "Sunday", is: "sunnudagur", enShort: "Sun", isShort: "Sun" },
+};
+
+const isNoMatchDayKind = (v: unknown): v is NoMatchDayKind =>
+  typeof v === "string" && (NO_MATCH_DAY_KINDS as readonly string[]).includes(v);
+
+/** Keep only weekday → kind entries; anything else is dropped (unset = as before). */
+export function sanitizeNoMatchWeek(raw: unknown): NoMatchWeek {
+  const out: NoMatchWeek = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const d of WEEKDAYS) {
+    const v = (raw as Record<string, unknown>)[d];
+    if (isNoMatchDayKind(v)) out[d] = v;
+  }
+  return out;
+}
+
+/** The weekday of a YYYY-MM-DD date (calendar date, no time zone shift). Null for a bad date. */
+export function weekdayOf(iso: string): Weekday | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso ?? ""));
+  if (!m) return null;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (Number.isNaN(d.getTime())) return null;
+  return WEEKDAYS[(d.getUTCDay() + 6) % 7];
+}
+
+/** What the coach set for this date's weekday in a week without a match, or null when unset. */
+export function noMatchDayFor(iso: string, week: NoMatchWeek | null | undefined): NoMatchDayKind | null {
+  if (!week) return null;
+  const wd = weekdayOf(iso);
+  return wd ? (week[wd] ?? null) : null;
+}

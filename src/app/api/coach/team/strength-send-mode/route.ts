@@ -14,7 +14,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { resolveAutoMdContext } from "@/lib/micropulse/strengthProgramming/loader";
+import { fetchMdContextInfo } from "@/lib/micropulse/playerContext/domains";
+import { noMatchDayFor, sanitizeNoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
 import { isSendMode, normalizeSendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
 import { logTeamModeChange } from "@/lib/micropulse/strengthProgramming/playerPicksStore";
 
@@ -44,8 +45,15 @@ export async function GET(req: NextRequest) {
   // The MD the auto (week_plans) path would send today — so the send UI can show
   // the REAL MD, never the PDF-preview control's value.
   const todayIso = new Date().toISOString().slice(0, 10);
-  const autoMd = await resolveAutoMdContext(supabase, auth.teamId, todayIso);
-  return NextResponse.json({ ok: true, mode: normalizeSendMode(row.strength_send_mode), autoSend: !!row.strength_auto_send, autoMd });
+  const info = await fetchMdContextInfo(supabase, auth.teamId, todayIso, null);
+  const autoMd = info.mdContext;
+  // A week without a match (2026-11-17): what the coach's weekday plan says today is (individualised modes use it).
+  let autoNoMatchDay: string | null = null;
+  if (info.noMatchNearby) {
+    const { data: pal } = await supabase.from("team_strength_palette").select("no_match_week").eq("team_id", auth.teamId).maybeSingle();
+    autoNoMatchDay = noMatchDayFor(todayIso, sanitizeNoMatchWeek((pal as { no_match_week?: unknown } | null)?.no_match_week));
+  }
+  return NextResponse.json({ ok: true, mode: normalizeSendMode(row.strength_send_mode), autoSend: !!row.strength_auto_send, autoMd, autoNoMatchDay });
 }
 
 export async function POST(req: NextRequest) {

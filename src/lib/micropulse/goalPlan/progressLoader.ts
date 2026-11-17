@@ -20,16 +20,19 @@ import { goalResults, goalResultsForPlans, goalSessionMarks, playerGoalHistoryRo
 import { buildGoalTestDue, inTestWindow, type GoalTestDue } from "./testsDue";
 import { HISTORY_MAX, buildGoalHistoryItem, isHistoryRow, type GoalHistoryItem } from "./history";
 import { addDays, placedSessionsUpTo, toTeamDayType, type TeamCalendar } from "./today";
+import { sanitizeNoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
 import { RESULT_AFTER_END_DAYS, adherence, effortDays, goalOutcome, gpsContext, type GoalProgress, type GoalResult, type GpsDay, type GpsKind, type GpsMetric } from "./outcome";
 import type { GoalPlanRow } from "./requests";
 
 type Sb = SupabaseClient;
 
-/** The team's training-week days and matches between two dates. */
+/** The team's training-week days and matches between two dates, plus the coach's weekday plan for weeks without a
+ *  match (strength send; it steers which day session B goes on when no match is near). */
 export async function loadTeamCalendarRange(sb: Sb, teamId: string, from: string, to: string): Promise<TeamCalendar> {
-  const [fixtures, plans] = await Promise.all([
+  const [fixtures, plans, palette] = await Promise.all([
     sb.from("match_schedule").select("match_date").eq("team_id", teamId).gte("match_date", from).lte("match_date", to),
     sb.from("week_plans").select("day_date, day_type").eq("team_id", teamId).gte("day_date", from).lte("day_date", to).limit(1000),
+    sb.from("team_strength_palette").select("no_match_week").eq("team_id", teamId).maybeSingle(),
   ]);
   const games = new Set<string>();
   for (const r of (fixtures.data ?? []) as { match_date: string | null }[]) if (r.match_date) games.add(String(r.match_date).slice(0, 10));
@@ -41,7 +44,9 @@ export async function loadTeamCalendarRange(sb: Sb, teamId: string, from: string
     days[d] = t;
     if (t === "game") games.add(d);
   }
-  return { days, games: [...games] };
+  // A read error (e.g. the column not there yet) just means no weekday plan: placement as before.
+  const noMatchWeek = sanitizeNoMatchWeek((palette.data as { no_match_week?: unknown } | null)?.no_match_week);
+  return Object.keys(noMatchWeek).length ? { days, games: [...games], noMatchWeek } : { days, games: [...games] };
 }
 
 /** VALD CMJ jump height as start / retest rows (mean of the test's trials). */

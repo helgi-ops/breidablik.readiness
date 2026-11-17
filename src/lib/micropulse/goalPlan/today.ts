@@ -20,6 +20,7 @@ import { PLAN_WEEKS, QUALITY_LABEL } from "./common";
 import type { Bi, GoalBlock, GoalPlan, GoalQuality, GoalSession, GoalSessionSlot } from "./types";
 import { rxContextOf, withRx, type LiftRx } from "./liftRx";
 import type { Adherence, DueSession, GoalOutcome, SessionMark } from "./outcome";
+import { noMatchDayFor, type NoMatchDayKind, type NoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
 
 // ─── Dates ─────────────────────────────────────────────────────────────────
 
@@ -70,6 +71,9 @@ export type TeamCalendar = {
   days: Record<string, TeamDayType>;
   /** Match dates (fixture list + training-week GAME days). */
   games: string[];
+  /** The coach's weekday plan for weeks without a match (strength send, 2026-11-17). With no match near, session B
+   *  (gym) goes first on a strength day, then a power day; a light or rest day only when no other day is free. */
+  noMatchWeek?: NoMatchWeek;
 };
 
 export function toTeamDayType(raw: string | null | undefined): TeamDayType | null {
@@ -152,11 +156,20 @@ function candidates(monday: string, cal: TeamCalendar): { days: { date: string; 
   return { days, weekKnown, teamDays };
 }
 
-function rank(quality: GoalQuality, slot: GoalSessionSlot, day: { date: string; md: string | null }): number {
+/** Session B with no match near, by the coach's weekday plan: a strength day can hold the gym lifts in the strength
+ *  session; a power day next; unset as before; a light or rest day has no heavy lift, so last. */
+const NO_MATCH_B_RANK: Record<NoMatchDayKind, number> = { strength: 0, power: 1, light: 50, rest: 50 };
+
+function rank(quality: GoalQuality, slot: GoalSessionSlot, day: { date: string; md: string | null }, cal?: TeamCalendar): number {
   const prefs = PREFS[quality][slot] ?? [];
   const i = day.md ? prefs.indexOf(day.md) : -1;
   if (i >= 0) return i;
-  return 10 + WEEKDAY_PREF[slot].indexOf(weekdayIdx(day.date));
+  const wd = WEEKDAY_PREF[slot].indexOf(weekdayIdx(day.date));
+  if (slot === "B" && !day.md) {
+    const kind = noMatchDayFor(day.date, cal?.noMatchWeek);
+    if (kind) return NO_MATCH_B_RANK[kind] === 50 ? 50 + wd : NO_MATCH_B_RANK[kind];
+  }
+  return 10 + wd;
 }
 
 /**
@@ -186,7 +199,7 @@ export function placeWeek(args: {
         if (p == null) return;
         placedN += 1;
         priority += (slots.length - k) * 1_000;
-        cost += rank(args.quality, slots[k], days[p]) * (slots.length - k); // earlier slots weigh more
+        cost += rank(args.quality, slots[k], days[p], args.cal) * (slots.length - k); // earlier slots weigh more
       });
       const score = placedN * 100_000 + priority - cost;
       if (score > best.score) best = { score, pick: [...pick] };

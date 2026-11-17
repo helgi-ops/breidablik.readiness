@@ -15,6 +15,9 @@
  *   - Recovery day (red) → nothing merged (the goal card says skip). Yellow → half the sets (the plan's own yellow rule).
  *   - In season → nothing here; the plan stays its own card.
  *   - Never more than +1 set: the strength goal's extra set and the Accumulation +1 skip a goal-plan exercise.
+ *   - The day's structure ("Structure per MD day") is the frame, the goal keeps its own dose (2026-11-17): a goal lift
+ *     takes the plan's sets / reps / % / rest and nothing else from the slot (no cluster rest, no velocity cap). A day
+ *     whose structure has no heavy lift (isometric, primer, taper) takes nothing: session B stays on the goal card.
  *
  * Runs after the team list and before the player's strength goal and the coach's manual swaps (coach's last word).
  */
@@ -129,6 +132,12 @@ export function applyGoalPlanGym(
   if (season !== "build") return []; // in season (or unknown): the plan is its own card, as before — nothing to say
   if (snap.verdict === "HOLD" || snap.verdict === "RECOVERY") return kept("today is a recovery day", "í dag er endurheimtardagur");
   const yellow = snap.verdict === "MODIFIED" || snap.verdict === "REDUCED";
+  // The structure is the frame: no heavy lift today (isometric / primer / taper day) → nothing on top of it.
+  if (!blocks.some((b) => b.exercises.some((e) => e.category === "COMPOUND_STRENGTH"))) {
+    return yellow
+      ? kept("yellow day: today's structure was stepped down and has no heavy lift", "gulur dagur: uppsetning dagsins var létt og er án þungrar lyftu")
+      : kept("today's structure has no heavy lift", "uppsetning dagsins er án þungrar lyftu");
+  }
 
   // Plan every lift first (all or nothing), then write.
   type Step = { lift: GoalPlanGymLift; at: { b: number; i: number } | null; id: string; power: boolean };
@@ -174,16 +183,18 @@ export function applyGoalPlanGym(
       nameEN: lib.nameEN,
       nameIS: lib.nameIS,
       category: lib.category,
+      // The goal's own dose, nothing inherited from the slot (a cluster's intra-set rest or a velocity cap would mix
+      // two prescriptions on one lift).
       dose: {
-        ...(base?.dose ?? { intensity: "", rest: "2 min" }),
         sets,
         reps: step.lift.reps.replace(/–/g, "-"),
-        intensity: step.lift.intensity ?? base?.dose.intensity ?? "",
-        rest: step.lift.rest ?? base?.dose.rest ?? "2 min",
+        intensity: step.lift.intensity ?? "",
+        rest: step.lift.rest ?? "2 min",
+        intraRepRestSec: null,
         cue: step.lift.cue ?? undefined,
       },
       goalPlan: { quality: g.quality, week: g.week },
-      modificationReason: `${tag.en}${base && base.exerciseId !== lib.id ? ` — in place of ${base.nameEN}` : base ? "" : " — added"}${yellow ? " · yellow day: half the sets" : ""}`,
+      modificationReason: `${tag.en}${base && base.exerciseId !== lib.id ? ` — in place of ${base.nameEN}` : base ? "" : " — added"} · the goal's own dose${yellow ? " · yellow day: half the sets" : ""}`,
     };
     if (step.at) blocks[step.at.b].exercises[step.at.i] = ex;
     else added.push({ step, ex });

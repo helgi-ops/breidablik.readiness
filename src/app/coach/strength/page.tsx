@@ -29,12 +29,13 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { positionGroup, positionGroupsForSport } from "@/lib/micropulse/positionStyle";
 import PlayerStrengthSessionCard from "@/components/coach/PlayerStrengthSessionCard";
 import StrengthSendModePicker from "@/components/coach/StrengthSendModePicker";
+import NoMatchWeekEditor from "@/components/coach/NoMatchWeekEditor";
 import { normalizeSendMode, type SendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
 import StrengthSessionPdf, { type StrengthSessionPdfData } from "@/components/coach/StrengthSessionPdf";
 import { useLang } from "@/lib/lang";
 import type { StrengthSession, MdContext, PlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/types";
 import type { PaletteSlot, PaletteSlots } from "@/lib/micropulse/strengthProgramming/palette";
-import { readinessDowngrade, STRUCTURE_LABEL, STRUCTURE_SCHEME, STRUCTURE_DEMAND, STRUCTURE_FAMILY, STRUCTURE_ISO_MODE, type StructureKey, type MdStructures } from "@/lib/micropulse/strengthProgramming/structures";
+import { readinessDowngrade, STRUCTURE_LABEL, STRUCTURE_SCHEME, STRUCTURE_DEMAND, STRUCTURE_FAMILY, STRUCTURE_ISO_MODE, NO_MATCH_DAY_LABEL, type StructureKey, type MdStructures, type NoMatchWeek, type NoMatchDayKind } from "@/lib/micropulse/strengthProgramming/structures";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import { ISO_MODE_LABELS, ISO_MODE_CITATION } from "@/lib/micropulse/isometrics/protocols";
 
@@ -96,6 +97,8 @@ export default function CoachStrengthPage() {
   // MD for today (from the send-mode endpoint) so the send UI shows the real value.
   const [sendMdOverride, setSendMdOverride] = useState<MdContext | "AUTO">("AUTO");
   const [autoMd, setAutoMd] = useState<MdContext | null>(null);
+  // A week without a match: what the coach's weekday plan says today is (null = a match is near, or unset).
+  const [autoNoMatchDay, setAutoNoMatchDay] = useState<NoMatchDayKind | null>(null);
   const [teamName, setTeamName] = useState<string>("");
   // Season-phase + in-season-mode context banner (ties the Micro-dose page to the Periodization Hub).
   type Bi = { en: string; is: string };
@@ -138,6 +141,8 @@ export default function CoachStrengthPage() {
   const [paletteSaved, setPaletteSaved] = useState(false);
   // Per-MD training structure (method) the coach ties to each configurable MD day.
   const [mdStructures, setMdStructures] = useState<MdStructures>({});
+  // Weeks without a match: weekday → strength / power / light / rest (2026-11-17). Saved with the structures.
+  const [noMatchWeek, setNoMatchWeek] = useState<NoMatchWeek>({});
   const [structureOptions, setStructureOptions] = useState<StructureOptionGroup[]>([]);
   const [savingStructures, setSavingStructures] = useState(false);
   const [structuresSaved, setStructuresSaved] = useState(false);
@@ -211,6 +216,7 @@ export default function CoachStrengthPage() {
         setPaletteSlots((json.slots ?? {}) as PaletteSlots);
         setSlotOptions((json.slotOptions ?? []) as SlotOptionGroup[]);
         setMdStructures((json.mdStructures ?? {}) as MdStructures);
+        setNoMatchWeek((json.noMatchWeek ?? {}) as NoMatchWeek);
         setStructureOptions((json.structureOptions ?? []) as StructureOptionGroup[]);
       } catch {
         // silent
@@ -231,6 +237,7 @@ export default function CoachStrengthPage() {
         if (!res.ok) return;
         const json = await res.json();
         if (alive && json.autoMd) setAutoMd(json.autoMd as MdContext);
+        if (alive) setAutoNoMatchDay((json.autoNoMatchDay ?? null) as NoMatchDayKind | null);
       } catch {
         // silent
       }
@@ -535,11 +542,12 @@ export default function CoachStrengthPage() {
       const res = await fetch("/api/coach/team/strength-palette", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ mdStructures }),
+        body: JSON.stringify({ mdStructures, noMatchWeek }),
       });
       if (res.ok) {
         const json = await res.json().catch(() => ({}));
         setMdStructures((json.mdStructures ?? mdStructures) as MdStructures);
+        setNoMatchWeek((json.noMatchWeek ?? noMatchWeek) as NoMatchWeek);
         setStructuresSaved(true);
         setTimeout(() => setStructuresSaved(false), 2500);
       }
@@ -791,6 +799,13 @@ export default function CoachStrengthPage() {
             <option value="MD+3">MD+3</option>
             <option value="MD+4">MD+4</option>
           </select>
+          {sendMdOverride === "AUTO" && autoNoMatchDay && sendMode !== "standard" ? (
+            <span className="rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-700" data-testid="send-day-no-match">
+              {autoNoMatchDay === "rest"
+                ? t("No match this week: today is rest (no strength session)", "Enginn leikur í vikunni: hvíld í dag (engin styrktaræfing)")
+                : t(`No match this week: today is a ${NO_MATCH_DAY_LABEL[autoNoMatchDay].en.toLowerCase()}`, `Enginn leikur í vikunni: ${NO_MATCH_DAY_LABEL[autoNoMatchDay].is.toLowerCase()} í dag`)}
+            </span>
+          ) : null}
           {sendMdMismatch ? (
             <span className="rounded bg-amber-50 px-2 py-0.5 font-medium text-amber-800">
               ⚠ {t(`Overriding the schedule — plan says ${autoMd}, you selected ${sendMdOverride}`, `Yfirskrifar vikuplan — plan segir ${autoMd}, þú valdir ${sendMdOverride}`)}
@@ -1116,6 +1131,7 @@ export default function CoachStrengthPage() {
                         );
                       })}
                     </div>
+                    <NoMatchWeekEditor lang={lang === "IS" ? "IS" : "EN"} value={noMatchWeek} onChange={setNoMatchWeek} mdStructures={mdStructures} />
                     <div className="mt-2 flex items-center gap-2">
                       <button
                         type="button"

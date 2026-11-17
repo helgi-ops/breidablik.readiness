@@ -5,11 +5,14 @@
  * pool the coach picks so the individualised / auto session builds from THEIR
  * exercises. GET returns the saved palette + the eligible library options per slot;
  * POST replaces the palette (validated to eligible ids). Auth: coach token only.
+ *
+ * Also the structure per MD day (md_structures) and, since 2026-11-17, the weekday plan for weeks without a match
+ * (no_match_week: weekday → strength / power / light / rest). Each field saves independently.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { PALETTE_SLOTS, SLOT_LABEL, exercisesForSlot, sanitizePaletteSlots } from "@/lib/micropulse/strengthProgramming/palette";
-import { STRUCTURES_ALLOWED_BY_MD, DEFAULT_STRUCTURE_BY_MD, STRUCTURE_LABEL, sanitizeMdStructures } from "@/lib/micropulse/strengthProgramming/structures";
+import { STRUCTURES_ALLOWED_BY_MD, DEFAULT_STRUCTURE_BY_MD, STRUCTURE_LABEL, sanitizeMdStructures, sanitizeNoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
 
 export const runtime = "nodejs";
 
@@ -50,24 +53,27 @@ export async function GET(req: NextRequest) {
   const supabase = getSupabase();
   const auth = await getCoachAuth(req, supabase);
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const { data } = await supabase.from("team_strength_palette").select("slots, md_structures").eq("team_id", auth.teamId).maybeSingle();
-  const row = data as { slots?: unknown; md_structures?: unknown } | null;
+  const { data, error } = await supabase.from("team_strength_palette").select("slots, md_structures, no_match_week").eq("team_id", auth.teamId).maybeSingle();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const row = data as { slots?: unknown; md_structures?: unknown; no_match_week?: unknown } | null;
   const slots = sanitizePaletteSlots(row?.slots);
   const mdStructures = sanitizeMdStructures(row?.md_structures);
-  return NextResponse.json({ ok: true, slots, slotOptions: slotOptions(), mdStructures, structureOptions: structureOptions() });
+  const noMatchWeek = sanitizeNoMatchWeek(row?.no_match_week);
+  return NextResponse.json({ ok: true, slots, slotOptions: slotOptions(), mdStructures, structureOptions: structureOptions(), noMatchWeek });
 }
 
 export async function POST(req: NextRequest) {
   const supabase = getSupabase();
   const auth = await getCoachAuth(req, supabase);
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const body = (await req.json().catch(() => ({}))) as { slots?: unknown; mdStructures?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { slots?: unknown; mdStructures?: unknown; noMatchWeek?: unknown };
   // Merge-friendly: only overwrite the field(s) the caller sent, so the palette UI
   // and the structure UI can save independently.
   const patch: Record<string, unknown> = { team_id: auth.teamId, updated_by: auth.userId, updated_at: new Date().toISOString() };
   if ("slots" in body) patch.slots = sanitizePaletteSlots(body.slots);
   if ("mdStructures" in body) patch.md_structures = sanitizeMdStructures(body.mdStructures);
+  if ("noMatchWeek" in body) patch.no_match_week = sanitizeNoMatchWeek(body.noMatchWeek);
   const { error } = await supabase.from("team_strength_palette").upsert(patch, { onConflict: "team_id" });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, slots: patch.slots, mdStructures: patch.md_structures });
+  return NextResponse.json({ ok: true, slots: patch.slots, mdStructures: patch.md_structures, noMatchWeek: patch.no_match_week });
 }

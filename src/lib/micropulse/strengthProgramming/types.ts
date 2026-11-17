@@ -306,6 +306,10 @@ export type PlayerStrengthSnapshot = {
    *  pre-/off-season every strength session is then a goal day. Absent = a match is near, or the coach chose the
    *  MD day by hand (2026-11-17). */
   noMatchNearby?: true;
+  /** The coach's weekday plan for weeks without a match (team_strength_palette.no_match_week): strength / power /
+   *  light day or rest. Used only with `noMatchNearby` in the individualised modes; a strength day builds as MD-4,
+   *  power as MD-3, light as MD-2 (structures.ts). Absent / empty = as before (MD-3) (2026-11-17). */
+  noMatchWeek?: import("./structures").NoMatchWeek;
   /** Today's gym session B of the player's 8-week goal plan, when the plan places it on this day (set by the send
    *  routes / coach preview from `goalPlan/gymLoader.ts`). Merged into the session only in pre-/off-season
    *  (goalPlanGym.ts). Absent = no plan, or session B isn't today ("One session, one whole", 2026-11-17). */

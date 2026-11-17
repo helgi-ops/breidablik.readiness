@@ -55,7 +55,7 @@ import {
   type PaletteSlot,
   type PaletteSlots,
 } from "./palette";
-import { DEFAULT_STRUCTURE_BY_MD, STRUCTURES_ALLOWED_BY_MD, STRUCTURE_LABEL, readinessDowngrade, isRestDay, type StructureKey } from "./structures";
+import { DEFAULT_STRUCTURE_BY_MD, STRUCTURES_ALLOWED_BY_MD, STRUCTURE_LABEL, readinessDowngrade, isRestDay, noMatchDayFor, weekdayOf, NO_MATCH_DAY_MD, NO_MATCH_DAY_LABEL, WEEKDAY_LABEL, type MdStructures, type NoMatchDayKind, type StructureKey } from "./structures";
 import { buildStructuredBlocks } from "./structureBuilders";
 
 export * from "./types";
@@ -565,6 +565,24 @@ export function buildStrengthSession(
   // input is dropped before anything is built, so the session is exactly the data + screen session.
   snapIn = withoutPlayerInputUnlessTakingPart(snapIn, opts.mode);
 
+  // A week without a match (2026-11-17): the coach's weekday plan says what kind of day today is. Rest → no
+  // session; strength / power / light → built as MD-4 / MD-3 / MD-2, so that MD row's method applies. A rest marker
+  // on that MD row belongs to match weeks (the traditional lift days) and is not used here, nor is its volume
+  // concentration. Football, individualised modes, no match near and no hand-picked MD day (noMatchNearby) only.
+  let noMatchKind: Exclude<NoMatchDayKind, "rest"> | null = null;
+  if (individualised && snapIn.noMatchNearby && String(snapIn.sport ?? "").toLowerCase() !== "basketball") {
+    const kind = noMatchDayFor(snapIn.todayIso, snapIn.noMatchWeek);
+    if (kind === "rest") return null;
+    if (kind) {
+      noMatchKind = kind;
+      const methodsOnly: MdStructures = {};
+      for (const [md, v] of Object.entries(snapIn.mdStructures ?? {})) {
+        if (v && !isRestDay(v)) methodsOnly[md as MdContext] = v;
+      }
+      snapIn = { ...snapIn, mdContext: NO_MATCH_DAY_MD[kind], mdStructures: methodsOnly };
+    }
+  }
+
   // BASKETBALL: an indoor team has no football MD microcycle, so the taper templates (MD-2 light, MD-1
   // primer, MD+1 recovery) don't apply. A non-rest training day is a full STRENGTH day → normalise the
   // context to MD-4 so the engine builds a full strength template, then the usual per-player layers (team
@@ -695,6 +713,20 @@ export function buildStrengthSession(
     audit.push(...applyPlayerGoal(tmpl.blocks, snap, (id) => safetyRulesOut(id, trace), (id) => trace.pinned.has(id)));
   }
 
+  if (noMatchKind) {
+    const wd = weekdayOf(snap.todayIso);
+    const k = NO_MATCH_DAY_LABEL[noMatchKind];
+    const method = effective ? STRUCTURE_LABEL[effective] : null;
+    audit.push({
+      ruleId: "NO_MATCH_WEEK_DAY",
+      triggerEN: `No match this week: ${wd ? WEEKDAY_LABEL[wd].en : "today"} is set as a ${k.en.toLowerCase()}`,
+      triggerIS: `Enginn leikur í vikunni: ${wd ? WEEKDAY_LABEL[wd].is : "dagurinn"} er stilltur sem ${k.is.toLowerCase()}`,
+      actionEN: `Built with the ${snap.mdContext} setup${method ? ` (${method.en})` : ""}, then tuned to today.`,
+      actionIS: `Sett upp eftir ${snap.mdContext} uppsetningunni${method ? ` (${method.is})` : ""} og stillt að deginum.`,
+      evidence: "The coach's weekday plan for weeks without a match (Structure per MD day). Which day is strength, power or light is the coach's call, not from a study.",
+    });
+  }
+
   if (downgradedFrom && effective) {
     const from = STRUCTURE_LABEL[downgradedFrom];
     const to = STRUCTURE_LABEL[effective];
@@ -798,7 +830,7 @@ export function buildStrengthSession(
     playerId: snap.playerId,
     playerName: snap.playerName,
     mdContext: snap.mdContext,
-    contextLabel: isBasketball ? "Strength" : snap.mdContext,
+    contextLabel: isBasketball ? "Strength" : noMatchKind ? NO_MATCH_DAY_LABEL[noMatchKind].en : snap.mdContext,
     templateId: tmpl.id,
     durationMin: estimateDuration(blocks),
     vbtAutoRegulated: snap.vbtDecrement != null,

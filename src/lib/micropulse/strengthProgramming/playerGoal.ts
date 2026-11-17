@@ -53,13 +53,13 @@ export function withGoalSeason<T extends PlayerStrengthSnapshot>(
 }
 
 /** True when today is one of the goal's days: in pre-/off-season with no match within 5 days, every strength
- *  session; otherwise the goal's MD days. */
+ *  session except a day the coach set as light (built as MD-2, 2026-11-17); otherwise the goal's MD days. */
 export function isGoalDay(
   goal: StrengthGoal,
   snap: Pick<PlayerStrengthSnapshot, "mdContext" | "noMatchNearby">,
   season: GoalSeason,
 ): boolean {
-  if (season === "build" && snap.noMatchNearby) return true;
+  if (season === "build" && snap.noMatchNearby) return snap.mdContext !== "MD-2" && snap.mdContext !== "MD-1";
   return GOAL_DAYS[goal].includes(snap.mdContext);
 }
 

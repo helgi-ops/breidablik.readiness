@@ -22,7 +22,7 @@ import { buildStrengthPlan } from "@/lib/micropulse/unifiedDeficits/strengthPlan
 import { loadPlayerMovementScreens } from "@/lib/micropulse/movementScreen/loader";
 import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import { sanitizePaletteSlots, type PaletteSlots } from "../strengthProgramming/palette";
-import { sanitizeMdStructures, type MdStructures } from "../strengthProgramming/structures";
+import { sanitizeMdStructures, sanitizeNoMatchWeek, type MdStructures, type NoMatchWeek } from "../strengthProgramming/structures";
 import { sanitizeGoal, sanitizePicks, type PlayerExercisePicks, type StrengthGoal } from "../strengthProgramming/playerPicks";
 import { normalizeSendMode, type SendMode } from "../strengthProgramming/sendMode";
 
@@ -68,14 +68,24 @@ export async function fetchTeamContext(sb: SupabaseClient, teamId: string | null
 /** The team's strength palette (per-slot exercise pool the coach chose). Empty
  *  when unset — the engine then falls back to the built-in template exercises.
  *  Fail-safe: any error → empty palette. */
-export async function fetchTeamPalette(sb: SupabaseClient, teamId: string | null): Promise<{ slots: PaletteSlots; mdStructures: MdStructures }> {
-  if (!teamId) return { slots: {}, mdStructures: {} };
+export async function fetchTeamPalette(
+  sb: SupabaseClient,
+  teamId: string | null,
+): Promise<{ slots: PaletteSlots; mdStructures: MdStructures; noMatchWeek: NoMatchWeek }> {
+  if (!teamId) return { slots: {}, mdStructures: {}, noMatchWeek: {} };
   try {
-    const { data } = await sb.from("team_strength_palette").select("slots, md_structures").eq("team_id", teamId).maybeSingle();
-    const row = data as { slots?: unknown; md_structures?: unknown } | null;
-    return { slots: sanitizePaletteSlots(row?.slots), mdStructures: sanitizeMdStructures(row?.md_structures) };
+    // The weekday plan for weeks without a match (2026-11-17) is read in the same row. Should that column be
+    // missing, the palette and MD setup still load (the weekday plan is then simply unset).
+    let res = await sb.from("team_strength_palette").select("slots, md_structures, no_match_week").eq("team_id", teamId).maybeSingle();
+    if (res.error) res = await sb.from("team_strength_palette").select("slots, md_structures").eq("team_id", teamId).maybeSingle();
+    const row = res.data as { slots?: unknown; md_structures?: unknown; no_match_week?: unknown } | null;
+    return {
+      slots: sanitizePaletteSlots(row?.slots),
+      mdStructures: sanitizeMdStructures(row?.md_structures),
+      noMatchWeek: sanitizeNoMatchWeek(row?.no_match_week),
+    };
   } catch {
-    return { slots: {}, mdStructures: {} };
+    return { slots: {}, mdStructures: {}, noMatchWeek: {} };
   }
 }
 

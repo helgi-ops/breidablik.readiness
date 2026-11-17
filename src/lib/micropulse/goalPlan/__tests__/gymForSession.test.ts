@@ -119,8 +119,13 @@ describe("into the strength session", () => {
   });
 
   it("yellow day → half the sets; red day → nothing merged, with a reason", () => {
-    const y = buildStrengthSession(withGoalPlanGym(snap({ verdict: "MODIFIED" }), gym!));
+    // MD-3: yellow steps French contrast to contrast, which keeps a heavy lift → merged at half the sets.
+    const y = buildStrengthSession(withGoalPlanGym(snap({ mdContext: "MD-3", verdict: "MODIFIED" }), gym!));
     expect(rule(y, "GOAL_PLAN_GYM_MERGED")?.actionEN).toMatch(/half the sets/);
+    // MD-4: yellow steps the cluster to an overcoming isometric (no heavy lift) → B stays on the card, with why.
+    const y4 = buildStrengthSession(withGoalPlanGym(snap({ verdict: "MODIFIED" }), gym!));
+    expect(all(y4).some((e) => e.goalPlan)).toBe(false);
+    expect(rule(y4, "GOAL_PLAN_GYM_KEPT_APART")?.actionEN).toMatch(/yellow day: today's structure was stepped down/);
     const red = buildStrengthSession(withGoalPlanGym(snap({ verdict: "RECOVERY" }), gym!));
     expect(all(red).some((e) => e.goalPlan)).toBe(false);
   });
@@ -140,6 +145,32 @@ describe("into the strength session", () => {
     expect(all(s).filter((e) => e.goalPlan).some((e) => e.playerGoal)).toBe(false);
     const tilted = applyBlockToSession(s, "accum", "preseason");
     expect(all(tilted).filter((e) => e.goalPlan).map((e) => e.dose.sets)).toEqual(before);
+  });
+
+  it("the day's structure is the frame: the goal's lift keeps its own dose, nothing from the slot (no cluster rest, no velocity cap)", () => {
+    for (const key of ["cluster_max_strength", "cluster_hypertrophy", "contrast", "straight_sets"] as const) {
+      const s = buildStrengthSession(withGoalPlanGym(snap({ mdStructures: { "MD-4": key } }), gym!));
+      const goal = all(s).filter((e) => e.goalPlan);
+      expect(goal.length).toBeGreaterThan(0);
+      for (const e of goal) {
+        expect(e.dose.intraRepRestSec ?? null).toBeNull();
+        expect(e.dose.velocityLossCap ?? null).toBeNull();
+        expect(e.modificationReason).toMatch(/the goal's own dose/);
+      }
+      const heavy = goal.find((e) => e.category === "COMPOUND_STRENGTH")!;
+      expect(heavy.dose.intensity).toBe(gym!.lifts[1].intensity);
+    }
+  });
+
+  it("a structure with no heavy lift (isometric / primer) takes nothing: B stays on the goal card, with the reason", () => {
+    for (const [md, key] of [["MD-4", "overcoming_isometric"], ["MD-4", "yielding_isometric"], ["MD-3", "iso_pap_primer"], ["MD-3", "potentiation_cluster"], ["MD-3", "power_contrast"]] as const) {
+      const base = buildStrengthSession(snap({ mdContext: md, mdStructures: { [md]: key } }));
+      const s = buildStrengthSession(withGoalPlanGym(snap({ mdContext: md, mdStructures: { [md]: key } }), gym!));
+      expect(all(s).some((e) => e.goalPlan)).toBe(false);
+      expect(all(s).length).toBe(all(base).length);
+      expect(rule(s, "GOAL_PLAN_GYM_KEPT_APART")?.actionEN).toMatch(/no heavy lift/);
+      expect(rule(s, "GOAL_PLAN_GYM_KEPT_APART")?.actionIS).toMatch(/án þungrar lyftu/);
+    }
   });
 
   it("the player's card item carries the goal tag and the marker the goal card reads", () => {

@@ -58,5 +58,7 @@ export function strengthView(ctx: PlayerContext): PlayerStrengthSnapshot {
     // No match near (pre-/off-season: every strength session is a goal day). Only when true, so the snapshot is
     // unchanged otherwise.
     ...(ctx.microcycle.data.noMatchNearby ? { noMatchNearby: true as const } : {}),
+    // The coach's weekday plan for weeks without a match (used by the engine only with noMatchNearby).
+    ...(cfg.noMatchWeek ? { noMatchWeek: cfg.noMatchWeek } : {}),
   };
 }
