@@ -16,7 +16,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { loadPlayerStrengthSnapshot, resolveAutoMdContext } from "@/lib/micropulse/strengthProgramming/loader";
+import { loadCoachOverridesForPlayers, loadPlayerStrengthSnapshot, resolveAutoMdContext } from "@/lib/micropulse/strengthProgramming/loader";
 import { resolveTeamCustomTable, customProgrammeCoversDay } from "@/lib/micropulse/strengthProgramming/customProgrammeActive";
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
@@ -102,9 +102,11 @@ async function run(req: NextRequest) {
     let ts = 0, tk = 0, tf = 0;
 
     // The coach's meso block + authored rule for today (team-level — one lookup per team).
-    const [coachRules, coachBlock] = await Promise.all([
+    const [coachRules, coachBlock, swapsByPlayer] = await Promise.all([
       loadCoachStrengthRules(sb, team.id),
       resolveCurrentBlock(sb, team.id, todayIso),
+      // The coach's swaps for today (strength card), one read per team (fix 2026-11-17). Individualised only.
+      loadCoachOverridesForPlayers(sb, { playerIds: mode === "individualised" ? rows.map((r) => r.id) : [], dateIso: todayIso }),
     ]);
     // Standard mode: the team's authored Custom Programme table + the day's team MD (team-level). When it
     // covers a player we stand aside — no engine override — so their Today resolution serves it; still push.
@@ -135,7 +137,7 @@ async function run(req: NextRequest) {
         if (mode === "standard") return "skipped";
 
         const snapshot = await loadPlayerStrengthSnapshot(sb, { playerId: p.id, playerName: p.full_name ?? undefined, teamId: team.id, todayIso });
-        let session = buildStrengthSession(snapshot, [], { mode });
+        let session = buildStrengthSession(snapshot, swapsByPlayer.get(p.id) ?? [], { mode });
         if (!session || session.blocks.length === 0) return "skipped"; // off-day / injured / recovery
         // MESO layer: tilt toward today's block + apply the coach's authored rule, before persist.
         if (coachBlock) {

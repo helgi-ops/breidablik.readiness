@@ -38,6 +38,16 @@ async function loadOneRepMaxesFromLogs(sb: SupabaseClient, playerId: string): Pr
   return Object.keys(out).length ? out : null;
 }
 
+type OverrideRow = { player_id: string; block_id: string; position: number; original_exercise_id: string | null; override_exercise_id: string; notes: string | null };
+const OVERRIDE_COLS = "player_id, block_id, position, original_exercise_id, override_exercise_id, notes";
+const toOverride = (r: OverrideRow): CoachOverride => ({
+  blockId: r.block_id,
+  position: r.position,
+  overrideExerciseId: r.override_exercise_id,
+  notes: r.notes,
+  originalExerciseId: r.original_exercise_id,
+});
+
 /** Load coach manual exercise overrides for one player on one date. */
 export async function loadCoachOverrides(
   sb: SupabaseClient,
@@ -46,21 +56,40 @@ export async function loadCoachOverrides(
   try {
     const { data } = await sb
       .from("strength_session_overrides")
-      .select("block_id, position, override_exercise_id, notes")
+      .select(OVERRIDE_COLS)
       .eq("player_id", args.playerId)
       .eq("override_date", args.dateIso);
-    return ((data ?? []) as Array<{
-      block_id: string; position: number;
-      override_exercise_id: string; notes: string | null;
-    }>).map((r) => ({
-      blockId: r.block_id,
-      position: r.position,
-      overrideExerciseId: r.override_exercise_id,
-      notes: r.notes,
-    }));
+    return ((data ?? []) as OverrideRow[]).map(toOverride);
   } catch {
     return [];
   }
+}
+
+/**
+ * The coach's manual swaps for several players on one date, in ONE read (team send, 09:00 auto-send). Players
+ * with none are absent. Fail-safe: an error → no swaps (the session as built).
+ */
+export async function loadCoachOverridesForPlayers(
+  sb: SupabaseClient,
+  args: { playerIds: string[]; dateIso: string },
+): Promise<Map<string, CoachOverride[]>> {
+  const out = new Map<string, CoachOverride[]>();
+  if (!args.playerIds.length) return out;
+  try {
+    const { data } = await sb
+      .from("strength_session_overrides")
+      .select(OVERRIDE_COLS)
+      .in("player_id", args.playerIds)
+      .eq("override_date", args.dateIso);
+    for (const r of (data ?? []) as OverrideRow[]) {
+      const list = out.get(r.player_id) ?? [];
+      list.push(toOverride(r));
+      out.set(r.player_id, list);
+    }
+  } catch {
+    // no swaps
+  }
+  return out;
 }
 
 /** The week_plans-derived MD context for a team today (no override). Exposed so

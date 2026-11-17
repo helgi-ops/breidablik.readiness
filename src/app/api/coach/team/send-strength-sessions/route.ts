@@ -16,7 +16,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/loader";
+import { loadCoachOverridesForPlayers, loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/loader";
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { formatSessionForPlayer } from "@/lib/micropulse/strengthProgramming/formatForPlayer";
 import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
@@ -159,9 +159,12 @@ export async function POST(req: NextRequest) {
 
   // The coach's meso block + authored rule for today (team-level — shared by all players). The pure
   // tilt is applied to each built session before it's sent/persisted; null plan/rule → unchanged.
-  const [coachRules, coachBlock] = await Promise.all([
+  const [coachRules, coachBlock, swapsByPlayer] = await Promise.all([
     loadCoachStrengthRules(supabase, auth.teamId),
     resolveCurrentBlock(supabase, auth.teamId, todayIso),
+    // The coach's swaps for today (strength card) go with each session; one read for the squad (fix 2026-11-17).
+    // Individualised only, like the card (no ids → no read).
+    loadCoachOverridesForPlayers(supabase, { playerIds: mode === "individualised" ? playerRows.map((r) => r.id) : [], dateIso: todayIso }),
   ]);
   // Standard mode: the team's authored Custom Programme table + week phase (resolved once). When it
   // covers a player's day we stand aside and let their Today resolution serve it (readiness-reactive).
@@ -196,7 +199,7 @@ export async function POST(req: NextRequest) {
         return { playerId: p.id, playerName, status: "sent", reason: "Custom Programme" };
       }
 
-      let session = buildStrengthSession(snapshot, [], { mode });
+      let session = buildStrengthSession(snapshot, swapsByPlayer.get(p.id) ?? [], { mode });
       if (!session) {
         return { playerId: p.id, playerName, status: "skipped", reason: "Off-day / unsupported context" };
       }

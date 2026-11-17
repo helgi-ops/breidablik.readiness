@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/loader";
+import { loadCoachOverrides, loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/loader";
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { formatSessionForPlayer } from "@/lib/micropulse/strengthProgramming/formatForPlayer";
 import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
@@ -169,7 +169,11 @@ export async function POST(
     return NextResponse.json({ ok: true, delivery: "custom_programme" });
   }
 
-  let session = buildStrengthSession(snapshot, [], { mode });
+  // The coach's swaps for today (made on the strength card) go with the session, exactly as the card shows them
+  // (2026-11-17 fix: they were dropped on send). Individualised only, like the card; a swap applies only while the
+  // swapped-out exercise is still in that slot.
+  const coachOverrides = mode === "individualised" ? await loadCoachOverrides(supabase, { playerId, dateIso: todayIso }) : [];
+  let session = buildStrengthSession(snapshot, coachOverrides, { mode });
   if (!session) {
     return NextResponse.json(
       { error: "No strength session prescribed today (off-day, MD+2 or unsupported context)." },

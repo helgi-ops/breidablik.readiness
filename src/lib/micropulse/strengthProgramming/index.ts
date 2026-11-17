@@ -167,6 +167,10 @@ export type CoachOverride = {
   overrideExerciseId: string;
   /** Optional coach note explaining the swap (shows in UI as the reason). */
   notes?: string | null;
+  /** The exercise the coach swapped out (2026-11-17). When given, the swap only applies while that exercise is
+   *  still at (blockId, position): a swap made on another MD-day preview, or before the session changed, never
+   *  replaces a different exercise. */
+  originalExerciseId?: string | null;
 };
 
 function applyCoachOverrides(
@@ -179,6 +183,7 @@ function applyCoachOverrides(
     const block = blocks.find((b) => b.id === ov.blockId);
     if (!block) continue;
     if (ov.position < 0 || ov.position >= block.exercises.length) continue;
+    if (ov.originalExerciseId && block.exercises[ov.position].exerciseId !== ov.originalExerciseId) continue;
     let newEx;
     try {
       newEx = lookupExercise(ov.overrideExerciseId);

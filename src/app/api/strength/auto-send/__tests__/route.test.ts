@@ -22,6 +22,8 @@ vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: (t: st
 vi.mock("@/lib/micropulse/strengthProgramming/loader", () => ({
   loadPlayerStrengthSnapshot: vi.fn(async () => ({})),
   resolveAutoMdContext: vi.fn(async () => "MD-3"),
+  // The coach's daily swaps (2026-11-17): none in these tests.
+  loadCoachOverridesForPlayers: vi.fn(async () => new Map()),
 }));
 const buildMock = vi.fn(() => ({ blocks: [{}], mdContext: "MD-3", durationMin: 30 }));
 vi.mock("@/lib/micropulse/strengthProgramming", () => ({ buildStrengthSession: () => buildMock() }));
