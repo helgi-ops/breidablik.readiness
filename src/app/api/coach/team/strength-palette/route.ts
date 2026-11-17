@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { PALETTE_SLOTS, SLOT_LABEL, exercisesForSlot, sanitizePaletteSlots } from "@/lib/micropulse/strengthProgramming/palette";
-import { STRUCTURES_ALLOWED_BY_MD, DEFAULT_STRUCTURE_BY_MD, STRUCTURE_LABEL, sanitizeMdStructures, sanitizeNoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
+import { STRUCTURES_ALLOWED_BY_MD, DEFAULT_STRUCTURE_BY_MD, STRUCTURE_LABEL, sanitizeMdStructures, sanitizeNoMatchWeek, noMatchWeekToStore } from "@/lib/micropulse/strengthProgramming/structures";
 
 export const runtime = "nodejs";
 
@@ -72,8 +72,17 @@ export async function POST(req: NextRequest) {
   const patch: Record<string, unknown> = { team_id: auth.teamId, updated_by: auth.userId, updated_at: new Date().toISOString() };
   if ("slots" in body) patch.slots = sanitizePaletteSlots(body.slots);
   if ("mdStructures" in body) patch.md_structures = sanitizeMdStructures(body.mdStructures);
-  if ("noMatchWeek" in body) patch.no_match_week = sanitizeNoMatchWeek(body.noMatchWeek);
+  if ("noMatchWeek" in body) {
+    // Keep when the days last changed (`since`): goal plans re-place session B by it only from the next week.
+    const { data: cur } = await supabase.from("team_strength_palette").select("no_match_week").eq("team_id", auth.teamId).maybeSingle();
+    patch.no_match_week = noMatchWeekToStore(body.noMatchWeek, (cur as { no_match_week?: unknown } | null)?.no_match_week, new Date().toISOString().slice(0, 10));
+  }
   const { error } = await supabase.from("team_strength_palette").upsert(patch, { onConflict: "team_id" });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, slots: patch.slots, mdStructures: patch.md_structures, noMatchWeek: patch.no_match_week });
+  return NextResponse.json({
+    ok: true,
+    slots: patch.slots,
+    mdStructures: patch.md_structures,
+    noMatchWeek: "no_match_week" in patch ? sanitizeNoMatchWeek(patch.no_match_week) : undefined,
+  });
 }

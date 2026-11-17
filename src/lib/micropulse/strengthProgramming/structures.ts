@@ -307,6 +307,23 @@ export function sanitizeNoMatchWeek(raw: unknown): NoMatchWeek {
   return out;
 }
 
+/** The date the weekday plan was last changed (stored as `since` in the same jsonb), or null. The 8-week goal plans
+ *  place session B by the plan only from the week AFTER this date, so a week already under way keeps its days. */
+export function noMatchWeekSince(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const v = (raw as Record<string, unknown>).since;
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+}
+
+/** The jsonb to store: the days, plus `since` = today when the days changed (else the stored `since` stays). */
+export function noMatchWeekToStore(nextRaw: unknown, storedRaw: unknown, todayIso: string): NoMatchWeek & { since?: string } {
+  const next = sanitizeNoMatchWeek(nextRaw);
+  const stored = sanitizeNoMatchWeek(storedRaw);
+  const same = WEEKDAYS.every((d) => next[d] === stored[d]);
+  const since = same ? noMatchWeekSince(storedRaw) : todayIso;
+  return since ? { ...next, since } : next;
+}
+
 /** The weekday of a YYYY-MM-DD date (calendar date, no time zone shift). Null for a bad date. */
 export function weekdayOf(iso: string): Weekday | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso ?? ""));

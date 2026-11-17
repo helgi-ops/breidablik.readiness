@@ -30,6 +30,8 @@
 
 import type {
   AppliedAdaptation,
+  ExerciseCategory,
+  ExerciseDose,
   MdContext,
   PlayerStrengthSnapshot,
   PrescribedExercise,
@@ -44,7 +46,7 @@ import { buildMdPlus1Recovery } from "./mdTemplates/mdPlus1Recovery";
 import { buildMdPlus1IsoLower } from "./mdTemplates/mdPlus1IsoLower";
 import { md1MinutesTier, type Md1Tier } from "./md1Tier";
 import { applyAdaptationRules, newAdaptationTrace, type AdaptationTrace } from "./adaptationRules";
-import { EXERCISE_LIBRARY as LIBRARY, getExercise as lookupExercise } from "./exerciseLibrary";
+import { EXERCISE_LIBRARY as LIBRARY, EXERCISES_BY_ID, getExercise as lookupExercise } from "./exerciseLibrary";
 import { effectivePool, isPlayerPick, type PlayerExercisePicks } from "./playerPicks";
 import { applyPlayerGoal } from "./playerGoal";
 import { applyGoalPlanGym } from "./goalPlanGym";
@@ -234,6 +236,15 @@ function safetyRulesOut(id: string, trace: AdaptationTrace | undefined): boolean
   return (lib.contraindications ?? []).some((c) => trace.contras.has(c));
 }
 
+/** A lift's own library dose for the day (nearest dosed day when that day has none). */
+function ownDose(ex: { defaultDosing: Partial<Record<MdContext, ExerciseDose>> }, md: MdContext): ExerciseDose | null {
+  for (const m of [md, "MD-3", "MD-4", "MD-2", "MD-1"] as MdContext[]) {
+    const d = ex.defaultDosing[m];
+    if (d) return d;
+  }
+  return null;
+}
+
 /** Substitute the coach's team palette into the template's power/strength slots.
  *  The engine keeps the TEMPLATE's MD-tuned dose (periodisation stays intact) and
  *  only swaps WHICH exercise fills each slot to the coach's chosen pool. Symmetry
@@ -267,11 +278,16 @@ function applyTeamPalette(
   const asym = cod == null && vald == null ? null : Math.max(cod ?? 0, vald ?? 0);
   const asymSource = vald != null && (cod == null || vald >= cod) ? "VALD" : "IMA CoD";
   const preferUnilateral = asym != null && asym >= PALETTE_UNILATERAL_ASYMMETRY_PCT;
-  // Per-slot cursor so a second exercise in the same slot takes the coach's second
+  // Per-slot "used" set so a second exercise in the same slot takes the coach's next
   // pick (not a duplicate of the first); when the pool is exhausted we leave the
-  // template exercise in place. A pick the safety rules rule out is passed over
-  // (the cursor moves on), never placed.
-  const cursor: Partial<Record<PaletteSlot, number>> = {};
+  // template exercise in place. A pick the safety rules rule out is passed over,
+  // never placed.
+  // The power slot holds four kinds (Olympic pull, plyometric, ballistic, med ball) and
+  // a method's positions are of one kind each (French contrast: heavy → plyo → loaded
+  // jump → throw; power contrast: loaded pull → plyo). So each power position takes the
+  // first pick of ITS kind in the coach's order, and only when the list has none of
+  // that kind the next pick of any kind (2026-11-17: the structure is the frame).
+  const used: Partial<Record<PaletteSlot, Set<string>>> = {};
   let filled = 0;
   let symmetryDrove = false;
 
@@ -282,14 +298,15 @@ function applyTeamPalette(
   const poolOf = (slot: PaletteSlot) => (pools[slot] ??= effectivePool(slot, palette, picks));
   const usedPicks: string[] = [];
 
-  const pickFrom = (slot: PaletteSlot): string | null => {
-    const pool = poolOf(slot);
-    let i = cursor[slot] ?? 0;
-    while (i < pool.length && safetyRulesOut(pool[i], trace)) i++;
-    if (i >= pool.length) { cursor[slot] = i; return null; }
-    cursor[slot] = i + 1;
+  const pickFrom = (slot: PaletteSlot, preferCategory?: ExerciseCategory): string | null => {
+    const taken = (used[slot] ??= new Set<string>());
+    const open = poolOf(slot).filter((id) => !taken.has(id) && !safetyRulesOut(id, trace));
+    if (!open.length) return null;
+    const sameKind = preferCategory ? open.find((id) => EXERCISES_BY_ID.get(id)?.category === preferCategory) : undefined;
+    const id = sameKind ?? open[0];
+    taken.add(id);
     filled++;
-    return pool[i];
+    return id;
   };
 
   for (const block of blocks) {
@@ -325,7 +342,7 @@ function applyTeamPalette(
         }
       } else {
         usedSlot = nativeSlot;
-        chosenId = pickFrom(nativeSlot);
+        chosenId = pickFrom(nativeSlot, nativeSlot === "power_explosive" ? ex.category : undefined);
       }
       if (!chosenId) continue;
       const mine = isPlayerPick(usedSlot, chosenId, picks);
@@ -337,8 +354,16 @@ function applyTeamPalette(
 
       let newEx;
       try { newEx = lookupExercise(chosenId); } catch { continue; }
-      // Keep the template's MD-tuned dose; fall back to the new exercise's own default.
-      const dose = ex.dose ?? newEx.defaultDosing[snap.mdContext];
+      // Keep the template's MD-tuned dose (sets, rest: the method's periodisation). When the
+      // new lift is of another kind than the position (no pick of that kind on the list), its
+      // reps / load / cue come from the lift itself, never another kind's ("4-6 kg each side"
+      // of a throw on a jump shrug).
+      const own = ownDose(newEx, snap.mdContext);
+      const dose = !ex.dose
+        ? own
+        : newEx.category !== ex.category && own
+          ? { ...ex.dose, reps: own.reps, intensity: own.intensity, cue: own.cue, intraRepRestSec: ex.dose.intraRepRestSec }
+          : ex.dose;
       if (!dose) continue;
       block.exercises[p] = {
         exerciseId: newEx.id,

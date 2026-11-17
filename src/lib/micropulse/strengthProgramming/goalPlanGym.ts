@@ -73,6 +73,9 @@ const HINGE_FAMILY = new Set(["ex_rdl", "ex_b_stance_rdl", "ex_single_leg_rdl"])
 type Target = {
   /** Which team exercise this lift takes the place of. */
   matches: (ex: PrescribedExercise) => boolean;
+  /** Among those, the one of the same kind first (a jump squat takes the loaded-jump spot, not the box jump's), so
+   *  the lift never ends up twice in the session. */
+  prefer?: (ex: PrescribedExercise) => boolean;
   /** Keep the team's exercise when it already is one of these; otherwise this library lift. */
   keep: (id: string) => boolean;
   fallbackId: string;
@@ -82,10 +85,10 @@ type Target = {
 function targetFor(l: GoalPlanGymLift): Target {
   switch (l.profile) {
     case "jump_squat":
-      return { matches: (e) => POWER_CATS.includes(e.category), keep: (id) => id === "ex_trap_bar_jump_squat", fallbackId: "ex_trap_bar_jump_squat", power: true };
+      return { matches: (e) => POWER_CATS.includes(e.category), prefer: (e) => e.exerciseId === "ex_trap_bar_jump_squat" || e.category === "BALLISTIC", keep: (id) => id === "ex_trap_bar_jump_squat", fallbackId: "ex_trap_bar_jump_squat", power: true };
     case "pull": {
       const id = l.preferId && EXERCISES_BY_ID.has(l.preferId) ? l.preferId : "ex_hang_high_pull";
-      return { matches: (e) => POWER_CATS.includes(e.category), keep: (x) => x === id, fallbackId: id, power: true };
+      return { matches: (e) => POWER_CATS.includes(e.category), prefer: (e) => e.exerciseId === id || e.category === "EXPLOSIVE_OLYMPIC", keep: (x) => x === id, fallbackId: id, power: true };
     }
     case "eccentric":
       return { matches: (e) => e.category === "UNILATERAL_STRENGTH" && !HINGE_FAMILY.has(e.exerciseId), keep: (id) => SPLIT_FAMILY.has(id), fallbackId: "ex_bulgarian_ss", power: false };
@@ -146,13 +149,16 @@ export function applyGoalPlanGym(
   for (const lift of g.lifts) {
     const t = targetFor(lift);
     let at: Step["at"] = null;
-    for (let b = 0; b < blocks.length && !at; b++) {
-      for (let i = 0; i < blocks[b].exercises.length; i++) {
-        const ex = blocks[b].exercises[i];
-        if (used.has(`${b}:${i}`) || !t.matches(ex)) continue;
-        at = { b, i };
-        break;
+    for (const pass of t.prefer ? [t.prefer, null] : [null]) {
+      for (let b = 0; b < blocks.length && !at; b++) {
+        for (let i = 0; i < blocks[b].exercises.length; i++) {
+          const ex = blocks[b].exercises[i];
+          if (used.has(`${b}:${i}`) || !t.matches(ex) || (pass && !pass(ex))) continue;
+          at = { b, i };
+          break;
+        }
       }
+      if (at) break;
     }
     if (at) {
       const ex = blocks[at.b].exercises[at.i];

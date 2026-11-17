@@ -20,7 +20,7 @@ import { goalResults, goalResultsForPlans, goalSessionMarks, playerGoalHistoryRo
 import { buildGoalTestDue, inTestWindow, type GoalTestDue } from "./testsDue";
 import { HISTORY_MAX, buildGoalHistoryItem, isHistoryRow, type GoalHistoryItem } from "./history";
 import { addDays, placedSessionsUpTo, toTeamDayType, type TeamCalendar } from "./today";
-import { sanitizeNoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
+import { noMatchWeekSince, sanitizeNoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
 import { RESULT_AFTER_END_DAYS, adherence, effortDays, goalOutcome, gpsContext, type GoalProgress, type GoalResult, type GpsDay, type GpsKind, type GpsMetric } from "./outcome";
 import type { GoalPlanRow } from "./requests";
 
@@ -45,8 +45,11 @@ export async function loadTeamCalendarRange(sb: Sb, teamId: string, from: string
     if (t === "game") games.add(d);
   }
   // A read error (e.g. the column not there yet) just means no weekday plan: placement as before.
-  const noMatchWeek = sanitizeNoMatchWeek((palette.data as { no_match_week?: unknown } | null)?.no_match_week);
-  return Object.keys(noMatchWeek).length ? { days, games: [...games], noMatchWeek } : { days, games: [...games] };
+  const raw = (palette.data as { no_match_week?: unknown } | null)?.no_match_week;
+  const noMatchWeek = sanitizeNoMatchWeek(raw);
+  if (!Object.keys(noMatchWeek).length) return { days, games: [...games] };
+  const since = noMatchWeekSince(raw);
+  return since ? { days, games: [...games], noMatchWeek, noMatchWeekSince: since } : { days, games: [...games], noMatchWeek };
 }
 
 /** VALD CMJ jump height as start / retest rows (mean of the test's trials). */

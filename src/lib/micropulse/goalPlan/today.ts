@@ -74,6 +74,9 @@ export type TeamCalendar = {
   /** The coach's weekday plan for weeks without a match (strength send, 2026-11-17). With no match near, session B
    *  (gym) goes first on a strength day, then a power day; a light or rest day only when no other day is free. */
   noMatchWeek?: NoMatchWeek;
+  /** When that plan last changed: it places session B only from the following week, so a week under way keeps its
+   *  days (and the ticks already counted stay where they were). Absent = it applies to every week. */
+  noMatchWeekSince?: string;
 };
 
 export function toTeamDayType(raw: string | null | undefined): TeamDayType | null {
@@ -165,7 +168,8 @@ function rank(quality: GoalQuality, slot: GoalSessionSlot, day: { date: string; 
   const i = day.md ? prefs.indexOf(day.md) : -1;
   if (i >= 0) return i;
   const wd = WEEKDAY_PREF[slot].indexOf(weekdayIdx(day.date));
-  if (slot === "B" && !day.md) {
+  const planLive = !cal?.noMatchWeekSince || mondayOf(day.date) > mondayOf(cal.noMatchWeekSince);
+  if (slot === "B" && !day.md && planLive) {
     const kind = noMatchDayFor(day.date, cal?.noMatchWeek);
     if (kind) return NO_MATCH_B_RANK[kind] === 50 ? 50 + wd : NO_MATCH_B_RANK[kind];
   }

@@ -118,3 +118,25 @@ describe("where the 8-week goal's session B goes in a no-match week", () => {
     expect(placeWeek({ quality: "jump", slots: ["A", "B"], monday: MON, cal: onlyPower }).placed.find((x) => x.slot === "B")?.date).toBe(addDays(MON, 3));
   });
 });
+
+describe("a week under way keeps its days for session B", () => {
+  it("the plan places B by the weekday plan only from the week after it changed", () => {
+    const days: TeamCalendar["days"] = {};
+    for (const w of [0, 7]) for (let i = 0; i < 5; i++) days[addDays(MON, w + i)] = "train";
+    const noMatchWeek = sanitizeNoMatchWeek({ mon: "strength", thu: "light" });
+    const thisWeek = placeWeek({ quality: "acceleration", slots: ["B"], monday: MON, cal: { days, games: [], noMatchWeek, noMatchWeekSince: addDays(MON, 1) } });
+    expect(thisWeek.placed[0].date).toBe(addDays(MON, 3)); // as before: Thursday
+    const nextWeek = placeWeek({ quality: "acceleration", slots: ["B"], monday: addDays(MON, 7), cal: { days, games: [], noMatchWeek, noMatchWeekSince: addDays(MON, 1) } });
+    expect(nextWeek.placed[0].date).toBe(addDays(MON, 7)); // the strength day
+  });
+
+  it("stores `since` only when the days change", async () => {
+    const { noMatchWeekToStore, noMatchWeekSince } = await import("../structures");
+    const a = noMatchWeekToStore({ mon: "strength" }, {}, "2026-11-17");
+    expect(a).toEqual({ mon: "strength", since: "2026-11-17" });
+    expect(noMatchWeekToStore({ mon: "strength" }, a, "2026-11-20")).toEqual(a);
+    expect(noMatchWeekToStore({ mon: "power" }, a, "2026-11-20").since).toBe("2026-11-20");
+    expect(noMatchWeekSince({ since: "bad" })).toBeNull();
+    expect(sanitizeNoMatchWeek(a)).toEqual({ mon: "strength" });
+  });
+});

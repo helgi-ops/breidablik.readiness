@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildStrengthSession } from "../index";
+import { buildStrengthSession, EXERCISES_BY_ID } from "../index";
 import type { PlayerStrengthSnapshot, MdContext } from "../types";
 
 const snap = (over: Partial<PlayerStrengthSnapshot> = {}): PlayerStrengthSnapshot => ({
@@ -196,5 +196,38 @@ describe("team strength palette → buildStrengthSession", () => {
     );
     expect(allEx(s)).toContain("ex_box_jump");
     expect(audit(s, "TEAM_PALETTE_APPLIED")).toBe(true);
+  });
+});
+
+describe("power positions take a lift of their own kind (2026-11-17: the structure is the frame)", () => {
+  const POWER = ["EXPLOSIVE_OLYMPIC", "PLYOMETRIC", "BALLISTIC", "MED_BALL"];
+  const LIST = ["ex_jump_shrug", "ex_mid_thigh_pull_dynamic", "ex_db_snatch", "ex_box_jump", "ex_depth_jump", "ex_trap_bar_jump_squat", "ex_mb_rotational_throw"];
+  const powerOf = (s: ReturnType<typeof buildStrengthSession>) =>
+    (s?.blocks ?? []).flatMap((b) => b.exercises).filter((e) => POWER.includes(e.category));
+
+  it("French contrast / power contrast: each power position keeps its kind; the coach's order decides within a kind", () => {
+    for (const [md, key] of [["MD-4", "french_contrast"], ["MD-2", "power_contrast"], ["MD-3", "contrast"]] as const) {
+      const base = powerOf(buildStrengthSession(snap({ mdContext: md, mdStructures: { [md]: key } })));
+      const s = powerOf(buildStrengthSession(snap({ mdContext: md, mdStructures: { [md]: key }, teamPalette: { power_explosive: LIST } })));
+      expect(s.map((e) => e.category)).toEqual(base.map((e) => e.category));
+      // Within a kind: the coach's picks of that kind, in the coach's order.
+      const taken = new Set<string>();
+      for (const e of s) {
+        const want = LIST.find((id) => !taken.has(id) && EXERCISES_BY_ID.get(id)?.category === e.category);
+        expect(e.exerciseId).toBe(want);
+        taken.add(e.exerciseId);
+      }
+    }
+  });
+
+  it("no pick of that kind on the list → the next pick, with its own reps / load, not the position's", () => {
+    const base = buildStrengthSession(snap({ mdContext: "MD-2", mdStructures: { "MD-2": "power_contrast" } }));
+    const plyo = powerOf(base).find((e) => e.category === "PLYOMETRIC")!;
+    const s = buildStrengthSession(snap({ mdContext: "MD-2", mdStructures: { "MD-2": "power_contrast" }, teamPalette: { power_explosive: ["ex_jump_shrug", "ex_mid_thigh_pull_dynamic"] } }));
+    const placed = powerOf(s);
+    expect(placed.every((e) => e.category === "EXPLOSIVE_OLYMPIC")).toBe(true);
+    const inPlyoSpot = placed[powerOf(base).indexOf(plyo)];
+    expect(inPlyoSpot.dose.intensity).not.toBe(plyo.dose.intensity);
+    expect(inPlyoSpot.dose.sets).toBe(plyo.dose.sets);
   });
 });

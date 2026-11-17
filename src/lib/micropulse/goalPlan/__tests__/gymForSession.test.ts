@@ -162,6 +162,15 @@ describe("into the strength session", () => {
     }
   });
 
+  it("the goal's jump squat takes the loaded-jump spot of French contrast (never twice in the session)", () => {
+    const pal = { ...PALETTE, power_explosive: ["ex_box_jump", "ex_trap_bar_jump_squat", "ex_mb_rotational_throw"] };
+    const s = buildStrengthSession(withGoalPlanGym(snap({ mdStructures: { "MD-4": "french_contrast" }, teamPalette: pal }), gym!));
+    const ids = all(s).map((e) => e.exerciseId);
+    expect(ids.filter((id) => id === "ex_trap_bar_jump_squat").length).toBe(1);
+    expect(ids).toContain("ex_box_jump");
+    expect(all(s).find((e) => e.exerciseId === "ex_trap_bar_jump_squat")?.goalPlan).toBeTruthy();
+  });
+
   it("a structure with no heavy lift (isometric / primer) takes nothing: B stays on the goal card, with the reason", () => {
     for (const [md, key] of [["MD-4", "overcoming_isometric"], ["MD-4", "yielding_isometric"], ["MD-3", "iso_pap_primer"], ["MD-3", "potentiation_cluster"], ["MD-3", "power_contrast"]] as const) {
       const base = buildStrengthSession(snap({ mdContext: md, mdStructures: { [md]: key } }));
