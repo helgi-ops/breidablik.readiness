@@ -37,7 +37,9 @@ import {
 } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 
 const BLOCK_GOALS: BlockGoalKey[] = ["accum", "transmute", "realize", "deload"];
-const BLOCK_PHASES: SeasonPhaseKey[] = ["preseason", "competitive"];
+// Off-season blocks are delivered with their own `goal:offseason` rule (resolveCurrentBlock), so the coach must be
+// able to author them here — before 2026-11-17 the tab was missing and an off-season team could never get its rule.
+const BLOCK_PHASES: SeasonPhaseKey[] = ["preseason", "competitive", "offseason"];
 const CONFIG_PHASES: SeasonPhaseKey[] = ["preseason", "competitive", "offseason"];
 const GOAL_LABEL: Record<BlockGoalKey, string> = { accum: "Accumulation", transmute: "Transmutation", realize: "Realization", deload: "Deload" };
 const PHASE_LABEL: Record<SeasonPhaseKey, { EN: string; IS: string }> = {
@@ -90,11 +92,13 @@ export default function StrengthRulesPage() {
         const j = await res.json().catch(() => null);
         if (!alive || !res.ok || !j?.ok) return;
         const ph = j.phase as SeasonPhaseKey | undefined;
-        if (ph === "preseason" || ph === "competitive" || ph === "offseason") { setNowPhase(ph); if (ph === "preseason") setBlockPhase("preseason"); }
+        if (ph === "preseason" || ph === "competitive" || ph === "offseason") { setNowPhase(ph); setBlockPhase(ph); }
         const cb = j.currentBlock as { goalKey?: string; blockPhase?: string } | null;
         if (cb?.goalKey && (BLOCK_GOALS as string[]).includes(cb.goalKey)) {
-          const bp = cb.blockPhase === "preseason" ? "preseason" : "competitive";
+          // The engine reads the rule keyed by the block's own phase (off-season included), so open that tab.
+          const bp: SeasonPhaseKey = cb.blockPhase === "preseason" || cb.blockPhase === "offseason" ? cb.blockPhase : "competitive";
           setNowBlock({ goal: cb.goalKey as BlockGoalKey, phase: bp });
+          setBlockPhase(bp);
         }
       } catch { /* the "Now" marks are optional */ }
     })();
