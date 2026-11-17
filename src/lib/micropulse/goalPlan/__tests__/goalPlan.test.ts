@@ -298,7 +298,16 @@ describe("never touches the colour or Today's session", () => {
     const dir = resolve(process.cwd(), "src/lib/micropulse/goalPlan");
     for (const f of readdirSync(dir).filter((x) => x.endsWith(".ts"))) {
       const src = await codeOf(resolve(dir, f));
-      expect(src).not.toMatch(/player_today_strength_override|readiness_entries/);
+      expect(src).not.toMatch(/readiness_entries/);
+      // "One session, one whole" (2026-11-17): only todayLoader.ts READS today's coach-sent session, to see whether it
+      // holds session B. Nothing in goalPlan ever writes it (the send routes do, through the strength engine).
+      if (f === "todayLoader.ts") {
+        const refs = [...src.matchAll(/\.from\("player_today_strength_override"\)\.([a-z]+)\(/g)].map((m) => m[1]);
+        expect(refs.length).toBeGreaterThan(0);
+        for (const op of refs) expect(op).toBe("select");
+      } else {
+        expect(src).not.toMatch(/player_today_strength_override/);
+      }
       if (f === "store.ts") {
         const tables = [...src.matchAll(/\.from\("([a-z_]+)"\)/g)].map((m) => m[1]);
         expect(tables.length).toBeGreaterThan(0);

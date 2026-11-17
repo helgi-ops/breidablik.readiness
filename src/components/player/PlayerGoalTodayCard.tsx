@@ -99,9 +99,11 @@ export function GoalTodayCardView({ card, lang = "EN", onMark, busy = false, err
         ) : null}
         <span
           className="rounded-full bg-zinc-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-500"
-          title={T("Extra to the team's session. It never changes it or your colour.", "Aukalega við æfingu liðsins. Breytir henni aldrei né litnum þínum.")}
+          title={t?.inSession
+            ? T("Session B's gym lifts are in today's strength session, in place of the matching exercises. It never changes your colour.", "Lyftur æfingar B eru í styrktaræfingu dagsins, í stað samsvarandi æfinga. Breytir aldrei litnum þínum.")
+            : T("Extra to the team's session. It never changes it or your colour.", "Aukalega við æfingu liðsins. Breytir henni aldrei né litnum þínum.")}
         >
-          {T("Add-on", "Viðbót")}
+          {t?.inSession ? T("In today's session", "Í æfingu dagsins") : T("Add-on", "Viðbót")}
         </span>
       </div>
 
@@ -118,14 +120,22 @@ export function GoalTodayCardView({ card, lang = "EN", onMark, busy = false, err
         </ul>
       ) : null}
 
-      {t && t.version !== "skip" && t.blocks.length ? (
+      {t && t.version !== "skip" && (t.blocks.length || t.inSession) ? (
         <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50/60 p-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[13px] font-semibold text-zinc-900">{T(`Session ${t.slot}`, `Æfing ${t.slot}`)}: {L(t.focus)}</span>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${VERSION_STYLE[t.version]}`}>
-              {t.version === "lighter" ? T("Lighter version", "Léttari útgáfa") : T("Full session", "Öll æfingin")} · {T(`~${t.minutes} min`, `~${t.minutes} mín`)}
-            </span>
+            {t.inSession && !t.blocks.length ? null : (
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${VERSION_STYLE[t.version]}`}>
+                {t.version === "lighter" ? T("Lighter version", "Léttari útgáfa") : T("Full session", "Öll æfingin")} · {T(`~${t.minutes} min`, `~${t.minutes} mín`)}
+              </span>
+            )}
           </div>
+          {t.inSession ? (
+            <p className="mt-2 text-[12.5px] leading-snug text-zinc-700">
+              {T("Gym part: in your strength session today (Today's session), power first.", "Salur-hlutinn: í styrktaræfingunni þinni í dag (Æfing dagsins), kraftur fyrst.")}
+              {!t.blocks.length && !t.mark ? ` ${T("Session B counts as done when you finish that session.", "Æfing B telst búin þegar þú klárar þá æfingu.")}` : ""}
+            </p>
+          ) : null}
           <ul className="mt-2 space-y-1.5">
             {t.blocks.map((b, i) => (
               <li key={i} className="text-[12.5px] leading-snug text-zinc-700">

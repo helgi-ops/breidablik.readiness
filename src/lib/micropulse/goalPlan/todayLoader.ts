@@ -18,6 +18,7 @@ import type { GoalPlan, GoalSessionSlot } from "./types";
 import type { GoalPlanStatus } from "./requests";
 import { FINISHED_CARD_DAYS } from "./outcome";
 import { loadGoalProgress, loadTeamCalendarRange } from "./progressLoader";
+import { rxContextOf, withRx } from "./liftRx";
 
 type Sb = SupabaseClient;
 
@@ -81,15 +82,66 @@ export async function loadGoalToday(sb: Sb, teamId: string, playerId: string, to
     });
   }
 
-  const [cal, colourRes, marks] = await Promise.all([
+  const [cal, colourRes, marks, inSession] = await Promise.all([
     loadTeamCalendar(sb, teamId, todayIso),
     sb.from("v_coach_readiness_today_v8").select("final_color").eq("player_id", playerId).eq("entry_date", todayIso).limit(1).maybeSingle(),
     goalSessionMarks(sb, row.id),
+    goalGymInTodaySession(sb, playerId, todayIso),
   ]);
   const colour = toDayColour((colourRes.data as { final_color?: string | null } | null)?.final_color);
   return buildGoalTodayCard({
     quality: row.quality, status: "approved", plan: row.plan, startDate: row.start_date, todayIso, cal, colour, coachNote: row.coach_note, marks,
+    gymInSession: !!inSession && inSession.quality === row.quality && inSession.week === planWeekOn(row.start_date, todayIso),
   });
+}
+
+/**
+ * "One session, one whole" (2026-11-17): the goal-plan session B the coach-sent strength session for `dateIso` holds
+ * (`goalPlan` on its items, written by the serializer), or null. Read-only; a failed read → null (the card then shows
+ * session B as before).
+ */
+export async function goalGymInTodaySession(sb: Sb, playerId: string, dateIso: string): Promise<{ quality: string; week: number } | null> {
+  try {
+    const { data } = await sb.from("player_today_strength_override").select("structure").eq("player_id", playerId).eq("entry_date", dateIso).maybeSingle();
+    const blocks = ((data as { structure?: unknown } | null)?.structure ?? []) as { items?: { goalPlan?: { quality?: string; week?: number; slot?: string } }[] }[];
+    if (!Array.isArray(blocks)) return null;
+    for (const b of blocks) {
+      for (const it of Array.isArray(b?.items) ? b.items : []) {
+        const g = it?.goalPlan;
+        if (g && g.slot === "B" && typeof g.quality === "string" && Number.isFinite(Number(g.week))) return { quality: g.quality, week: Number(g.week) };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The player finished today's strength session and it held session B (all of it: every block a gym lift) → session B
+ * counts as done. Never overwrites a tick the player made; a B with work left outside the gym (braking drills) is left
+ * for the player to tick. Errors are swallowed: finishing the strength session must never fail on this.
+ */
+export async function tickGoalFromStrengthSession(sb: Sb, args: { playerId: string; userId: string; dateIso: string }): Promise<void> {
+  try {
+    const inSession = await goalGymInTodaySession(sb, args.playerId, args.dateIso);
+    if (!inSession) return;
+    const row = await latestGoalWithPlan(sb, args.playerId, args.dateIso, 0);
+    if (!row || row.status !== "approved" || !row.plan || !row.start_date || row.quality !== inSession.quality) return;
+    const week = planWeekOn(row.start_date, args.dateIso);
+    if (week !== inSession.week) return;
+    const session = row.plan.weeks.find((w) => w.week === week)?.sessions.find((s) => s.slot === "B");
+    if (!session) return;
+    const withLifts = withRx({ weeks: [{ sessions: [session] }] }, rxContextOf(row.plan)).weeks[0].sessions[0];
+    if (withLifts.blocks.some((b) => !b.rx?.length)) return; // work left outside the gym: the player ticks it
+    const marks = await goalSessionMarks(sb, row.id);
+    if (marks.some((m) => m.week === week && m.slot === "B")) return;
+    const { data } = await sb.from("v_coach_readiness_today_v8").select("final_color").eq("player_id", args.playerId).eq("entry_date", args.dateIso).limit(1).maybeSingle();
+    const version = sessionForColour(session, toDayColour((data as { final_color?: string | null } | null)?.final_color)).version;
+    await markGoalSession(sb, { row, week, slot: "B", date: args.dateIso, status: "done", version, userId: args.userId });
+  } catch {
+    /* finishing the strength session never fails on the goal tick */
+  }
 }
 
 /**

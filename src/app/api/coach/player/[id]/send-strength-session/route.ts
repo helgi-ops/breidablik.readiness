@@ -22,6 +22,8 @@ import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockE
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
 import { withGoalSeason } from "@/lib/micropulse/strengthProgramming/playerGoal";
+import { withGoalPlanGym } from "@/lib/micropulse/strengthProgramming/goalPlanGym";
+import { loadGoalPlanGym } from "@/lib/micropulse/goalPlan/gymLoader";
 import { customProgrammeCoversDay } from "@/lib/micropulse/strengthProgramming/customProgrammeActive";
 import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
@@ -175,11 +177,13 @@ export async function POST(
   // swapped-out exercise is still in that slot.
   const coachOverrides = mode === "individualised" ? await loadCoachOverrides(supabase, { playerId, dateIso: todayIso }) : [];
   // Today's block is read BEFORE the build: the player's goal adds its set only in pre-/off-season (2026-11-17).
-  const [coachRules, coachBlock] = await Promise.all([
+  // The 8-week goal plan's gym session B goes into today's session in pre-/off-season ("one session, one whole").
+  const [coachRules, coachBlock, goalGym] = await Promise.all([
     loadCoachStrengthRules(supabase, teamId),
     resolveCurrentBlock(supabase, teamId, todayIso),
+    mode === "individualised" ? loadGoalPlanGym(supabase, teamId, todayIso, [playerId]) : Promise.resolve(new Map()),
   ]);
-  let session = buildStrengthSession(withGoalSeason(snapshot, coachBlock), coachOverrides, { mode });
+  let session = buildStrengthSession(withGoalSeason(withGoalPlanGym(snapshot, goalGym.get(playerId)), coachBlock), coachOverrides, { mode });
   if (!session) {
     return NextResponse.json(
       { error: "No strength session prescribed today (off-day, MD+2 or unsupported context)." },

@@ -16,6 +16,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAuthedPlayerId, getPlayerTeamId } from "@/lib/session-rpe/server";
+import { tickGoalFromStrengthSession } from "@/lib/micropulse/goalPlan/todayLoader";
 
 function resolveDate(raw: string | null): string {
   return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : new Date().toISOString().slice(0, 10);
@@ -48,8 +49,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const sb = getSupabaseAdmin();
   let playerId: string;
+  let userId: string;
   try {
-    ({ playerId } = await requireAuthedPlayerId(sb, req));
+    ({ playerId, userId } = await requireAuthedPlayerId(sb, req));
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Unauthorized" }, { status: 401 });
   }
@@ -68,6 +70,8 @@ export async function POST(req: Request) {
         { onConflict: "player_id,entry_date" },
       );
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    // "One session, one whole" (2026-11-17): today's session held the 8-week goal's gym session B → it counts as done.
+    await tickGoalFromStrengthSession(sb, { playerId, userId, dateIso: date });
   } else {
     const { error } = await sb
       .from("player_strength_completions")

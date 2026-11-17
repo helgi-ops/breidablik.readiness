@@ -86,14 +86,14 @@ describe("every send carries the day's swaps", () => {
   it("one player: loads today's swaps (individualised, like the card) and builds with them", () => {
     const src = read("src/app/api/coach/player/[id]/send-strength-session/route.ts");
     expect(src).toMatch(/loadCoachOverrides\(supabase, \{ playerId, dateIso: todayIso \}\)/);
-    expect(src).toMatch(/buildStrengthSession\(withGoalSeason\(snapshot, coachBlock\), coachOverrides, \{ mode \}\)/);
+    expect(src).toMatch(/buildStrengthSession\(withGoalSeason\(withGoalPlanGym\(snapshot, goalGym\.get\(playerId\)\), coachBlock\), coachOverrides, \{ mode \}\)/);
   });
 
   it("team send and the 09:00 auto-send: one read for the squad, each player built with their swaps", () => {
     for (const p of ["src/app/api/coach/team/send-strength-sessions/route.ts", "src/app/api/strength/auto-send/route.ts"]) {
       const src = read(p);
       expect(src).toMatch(/loadCoachOverridesForPlayers\(/);
-      expect(src).toMatch(/buildStrengthSession\(withGoalSeason\(snapshot, coachBlock\), swapsByPlayer\.get\(p\.id\) \?\? \[\], \{ mode \}\)/);
+      expect(src).toMatch(/buildStrengthSession\(withGoalSeason\(withGoalPlanGym\(snapshot, goalGym\.get\(p\.id\)\), coachBlock\), swapsByPlayer\.get\(p\.id\) \?\? \[\], \{ mode \}\)/);
       expect(src).not.toMatch(/buildStrengthSession\(snapshot, \[\], \{ mode \}\)/);
     }
   });

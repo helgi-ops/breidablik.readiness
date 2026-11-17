@@ -24,6 +24,8 @@ import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockE
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
 import { withGoalSeason } from "@/lib/micropulse/strengthProgramming/playerGoal";
+import { withGoalPlanGym } from "@/lib/micropulse/strengthProgramming/goalPlanGym";
+import { loadGoalPlanGym } from "@/lib/micropulse/goalPlan/gymLoader";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
 import { getFreeLockedTeamIds } from "@/lib/micropulse/elite";
 
@@ -103,11 +105,13 @@ async function run(req: NextRequest) {
     let ts = 0, tk = 0, tf = 0;
 
     // The coach's meso block + authored rule for today (team-level — one lookup per team).
-    const [coachRules, coachBlock, swapsByPlayer] = await Promise.all([
+    const [coachRules, coachBlock, swapsByPlayer, goalGym] = await Promise.all([
       loadCoachStrengthRules(sb, team.id),
       resolveCurrentBlock(sb, team.id, todayIso),
       // The coach's swaps for today (strength card), one read per team (fix 2026-11-17). Individualised only.
       loadCoachOverridesForPlayers(sb, { playerIds: mode === "individualised" ? rows.map((r) => r.id) : [], dateIso: todayIso }),
+      // The 8-week goal plans' gym session B goes into today's session in pre-/off-season ("one session, one whole").
+      loadGoalPlanGym(sb, team.id, todayIso, mode === "individualised" ? rows.map((r) => r.id) : []),
     ]);
     // Standard mode: the team's authored Custom Programme table + the day's team MD (team-level). When it
     // covers a player we stand aside — no engine override — so their Today resolution serves it; still push.
@@ -139,7 +143,7 @@ async function run(req: NextRequest) {
 
         const snapshot = await loadPlayerStrengthSnapshot(sb, { playerId: p.id, playerName: p.full_name ?? undefined, teamId: team.id, todayIso });
         // The player's goal adds its set only in pre-/off-season (today's block, 2026-11-17).
-        let session = buildStrengthSession(withGoalSeason(snapshot, coachBlock), swapsByPlayer.get(p.id) ?? [], { mode });
+        let session = buildStrengthSession(withGoalSeason(withGoalPlanGym(snapshot, goalGym.get(p.id)), coachBlock), swapsByPlayer.get(p.id) ?? [], { mode });
         if (!session || session.blocks.length === 0) return "skipped"; // off-day / injured / recovery
         // MESO layer: tilt toward today's block + apply the coach's authored rule, before persist.
         if (coachBlock) {

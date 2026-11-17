@@ -21,6 +21,8 @@ import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coa
 import type { BlockGoalKey, SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
 import { withGoalSeason } from "@/lib/micropulse/strengthProgramming/playerGoal";
+import { withGoalPlanGym } from "@/lib/micropulse/strengthProgramming/goalPlanGym";
+import { loadGoalPlanGym } from "@/lib/micropulse/goalPlan/gymLoader";
 import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
 
 export const runtime = "nodejs";
@@ -88,7 +90,7 @@ export async function GET(
   const mdOverride = parseMdOverride(req.nextUrl.searchParams.get("md"));
   const todayIso = new Date().toISOString().slice(0, 10);
 
-  const [snapshot, coachOverrides, coachRules] = await Promise.all([
+  const [snapshotIn, coachOverrides, coachRules, goalGym] = await Promise.all([
     loadPlayerStrengthSnapshot(supabase, {
       playerId,
       playerName: (playerRow as { full_name: string | null }).full_name ?? undefined,
@@ -98,7 +100,10 @@ export async function GET(
     }),
     loadCoachOverrides(supabase, { playerId, dateIso: todayIso }),
     loadCoachStrengthRules(supabase, auth.teamId),
+    // The 8-week goal plan's gym session B, when the plan places it today ("one session, one whole", 2026-11-17).
+    req.nextUrl.searchParams.get("mode") === "standard" ? Promise.resolve(new Map()) : loadGoalPlanGym(supabase, auth.teamId, todayIso, [playerId]),
   ]);
+  const snapshot = withGoalPlanGym(snapshotIn, goalGym.get(playerId));
 
   // MESO layer — tilt the built (micro) session toward the meso block it sits in. The block is
   // computed ONCE upstream (the Micro-dose page's batch context) and passed as ?block=/?phase= so the
@@ -122,11 +127,11 @@ export async function GET(
   const passedPhase = phaseRaw === "preseason" || phaseRaw === "offseason" || phaseRaw === "competitive";
   const goalBlock = blockGoal && passedPhase
     ? { phase: blockPhase, goalKey: blockGoal }
-    : snapshot.playerStrengthGoal && previewMode === "individualised"
+    : (snapshot.playerStrengthGoal || snapshot.goalPlanGym) && previewMode === "individualised"
       ? await resolveCurrentBlock(supabase, auth.teamId, todayIso)
       : null;
   const built = previewMode === "standard"
-    ? buildStrengthSession(snapshot, [], { mode: "standard" })
+    ? buildStrengthSession(snapshotIn, [], { mode: "standard" })
     : buildStrengthSession(withGoalSeason(snapshot, goalBlock), coachOverrides);
   const session = applyBlockToSession(built, blockGoal, blockPhase, blockOverride, subPhase);
 

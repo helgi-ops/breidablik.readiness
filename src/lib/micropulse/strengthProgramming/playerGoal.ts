@@ -42,13 +42,13 @@ export function goalSeasonOf(snap: Pick<PlayerStrengthSnapshot, "goalSeason" | "
   return "unknown";
 }
 
-/** The snapshot with today's season-plan block on it, for the goal's extra set. Only for a player with a goal
- *  and a resolved block — otherwise the snapshot is returned unchanged. */
+/** The snapshot with today's season-plan block on it, for the goal's extra set and the 8-week goal plan's gym
+ *  session. Only for a player with either and a resolved block — otherwise the snapshot is returned unchanged. */
 export function withGoalSeason<T extends PlayerStrengthSnapshot>(
   snap: T,
   block: { phase: SeasonPhaseKey; goalKey: BlockGoalKey | null } | null | undefined,
 ): T {
-  if (!snap.playerStrengthGoal || !block) return snap;
+  if ((!snap.playerStrengthGoal && !snap.goalPlanGym) || !block) return snap;
   return { ...snap, goalSeason: { phase: block.phase, blockGoal: block.goalKey ?? null } };
 }
 
@@ -137,7 +137,8 @@ export function applyPlayerGoal(
       const matches = cats ? cats.includes(ex.category) : ex.exerciseId === NORDIC;
       if (!matches) continue;
       // A safety swap or an engine addition is never pumped; an exercise today's safety rules rule out neither.
-      if (ex.isAdaptiveAddition || isPinned(ex.exerciseId) || isRuledOut(ex.exerciseId)) continue;
+      // An 8-week goal plan lift already carries the plan's dose: never a second extra on it.
+      if (ex.isAdaptiveAddition || ex.goalPlan || isPinned(ex.exerciseId) || isRuledOut(ex.exerciseId)) continue;
       block.exercises[i] = {
         ...ex,
         dose: { ...ex.dose, sets: ex.dose.sets + 1 },

@@ -24,6 +24,8 @@ import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockE
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
 import { withGoalSeason } from "@/lib/micropulse/strengthProgramming/playerGoal";
+import { withGoalPlanGym } from "@/lib/micropulse/strengthProgramming/goalPlanGym";
+import { loadGoalPlanGym } from "@/lib/micropulse/goalPlan/gymLoader";
 import { resolveTeamCustomTable, customProgrammeCoversDay } from "@/lib/micropulse/strengthProgramming/customProgrammeActive";
 import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
@@ -160,12 +162,14 @@ export async function POST(req: NextRequest) {
 
   // The coach's meso block + authored rule for today (team-level — shared by all players). The pure
   // tilt is applied to each built session before it's sent/persisted; null plan/rule → unchanged.
-  const [coachRules, coachBlock, swapsByPlayer] = await Promise.all([
+  const [coachRules, coachBlock, swapsByPlayer, goalGym] = await Promise.all([
     loadCoachStrengthRules(supabase, auth.teamId),
     resolveCurrentBlock(supabase, auth.teamId, todayIso),
     // The coach's swaps for today (strength card) go with each session; one read for the squad (fix 2026-11-17).
     // Individualised only, like the card (no ids → no read).
     loadCoachOverridesForPlayers(supabase, { playerIds: mode === "individualised" ? playerRows.map((r) => r.id) : [], dateIso: todayIso }),
+    // The 8-week goal plans' gym session B goes into today's session in pre-/off-season ("one session, one whole").
+    loadGoalPlanGym(supabase, auth.teamId, todayIso, mode === "individualised" ? playerRows.map((r) => r.id) : []),
   ]);
   // Standard mode: the team's authored Custom Programme table + week phase (resolved once). When it
   // covers a player's day we stand aside and let their Today resolution serve it (readiness-reactive).
@@ -201,7 +205,7 @@ export async function POST(req: NextRequest) {
       }
 
       // The player's goal adds its set only in pre-/off-season (today's block, 2026-11-17).
-      let session = buildStrengthSession(withGoalSeason(snapshot, coachBlock), swapsByPlayer.get(p.id) ?? [], { mode });
+      let session = buildStrengthSession(withGoalSeason(withGoalPlanGym(snapshot, goalGym.get(p.id)), coachBlock), swapsByPlayer.get(p.id) ?? [], { mode });
       if (!session) {
         return { playerId: p.id, playerName, status: "skipped", reason: "Off-day / unsupported context" };
       }

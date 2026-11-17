@@ -93,7 +93,7 @@ export function applyBlockToSession(
     if (delta === "none" || !VOLUME_TYPES.has(b.type)) return b;
     const exercises = b.exercises.map((ex) => {
       // Microdose: never more than +1 set on an exercise. The player's goal already added one (2026-11-17).
-      if (delta === "add" && ex.playerGoal) return ex;
+      if (delta === "add" && (ex.playerGoal || ex.goalPlan)) return ex;
       const before = ex.dose.sets;
       const after =
         delta === "halve" ? clampSets(before / 2)
@@ -117,6 +117,7 @@ export function applyBlockToSession(
     ? blocks.map((b) => {
         if (!SCALE_TYPES.has(b.type)) return b;
         const exercises = b.exercises.map((ex) => {
+          if (ex.goalPlan) return ex; // the 8-week goal plan's dose is the dose (2026-11-17)
           const after = clampSets(ex.dose.sets * liftScale);
           if (after === ex.dose.sets) return ex;
           scaled += 1;

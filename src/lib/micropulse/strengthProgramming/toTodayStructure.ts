@@ -46,7 +46,12 @@ export type TodayStructureItem = {
   /** Speed loss (%) at which the set stops (`ExerciseDose.velocityLossCap`) — read by the player's "All the details"
    *  (lota 8, `todayLiftRx.ts`). Absent on sessions sent before 2026-11-14. */
   vlCap?: number;
+  /** Part of the player's 8-week goal plan, session B (gym) — "One session, one whole" (2026-11-17). */
+  goalPlan?: { quality: string; week: number; slot: "B" };
 };
+
+const GOAL_PLAN_EN: Record<string, string> = { top_speed: "top speed", acceleration: "acceleration", braking: "braking", jump: "jump" };
+const GOAL_PLAN_IS: Record<string, string> = { top_speed: "hámarkshraði", acceleration: "hröðun", braking: "bremsun", jump: "stökkkraftur" };
 
 export type TodayStructureBlock = {
   block: string;
@@ -113,6 +118,7 @@ export function strengthSessionToTodayStructure(
         const tags = [
           ex.playerPick ? (isIS ? "Þitt val" : "Your pick") : null,
           ex.playerGoal ? (isIS ? "Þitt markmið: +1 sett" : "Your goal: +1 set") : null,
+          ex.goalPlan ? (isIS ? `8 vikna markmiðið þitt: ${GOAL_PLAN_IS[ex.goalPlan.quality]}, vika ${ex.goalPlan.week}` : `Your 8-week goal: ${GOAL_PLAN_EN[ex.goalPlan.quality]}, week ${ex.goalPlan.week}`) : null,
         ].filter(Boolean);
         const note = tags.length > 0 ? tags.join(" · ") : ex.modificationReason?.trim() || undefined;
         const item: TodayStructureItem = {
@@ -124,6 +130,8 @@ export function strengthSessionToTodayStructure(
         if (methodBits) item.method = methodBits;
         if (note) item.note = note;
         if (ex.dose.velocityLossCap) item.vlCap = ex.dose.velocityLossCap;
+        // The goal card reads this to know session B's gym part is inside today's session.
+        if (ex.goalPlan) item.goalPlan = { quality: ex.goalPlan.quality, week: ex.goalPlan.week, slot: "B" };
         // Stamp the library id + curated safe alternatives so the player can swap
         // this exercise on the Today card (safe options only). Corrective items have
         // no library id, so they carry no swap.

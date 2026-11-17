@@ -119,6 +119,9 @@ export type PrescribedExercise = {
   playerPick?: true;
   /** One more set because of the player's own strength goal (lota 2, 2026-11-17). */
   playerGoal?: true;
+  /** Part of the player's 8-week goal plan, session B (gym), merged into the team session ("One session, one whole",
+   *  2026-11-17, goalPlanGym.ts). The goal's dose is the dose: no other extra set lands on it. */
+  goalPlan?: { quality: "top_speed" | "acceleration" | "braking" | "jump"; week: number };
   /** Brief sport-science rationale shown in UI tooltip. */
   rationale?: string;
 };
@@ -303,6 +306,10 @@ export type PlayerStrengthSnapshot = {
    *  pre-/off-season every strength session is then a goal day. Absent = a match is near, or the coach chose the
    *  MD day by hand (2026-11-17). */
   noMatchNearby?: true;
+  /** Today's gym session B of the player's 8-week goal plan, when the plan places it on this day (set by the send
+   *  routes / coach preview from `goalPlan/gymLoader.ts`). Merged into the session only in pre-/off-season
+   *  (goalPlanGym.ts). Absent = no plan, or session B isn't today ("One session, one whole", 2026-11-17). */
+  goalPlanGym?: import("./goalPlanGym").GoalPlanGym;
 };
 
 /** A screen-driven corrective rendered into the daily session's front block. Bi

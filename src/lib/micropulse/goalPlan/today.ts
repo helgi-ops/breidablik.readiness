@@ -11,7 +11,9 @@
  *      the sets); red = skip it.
  *   3. The card copy, layered: verdict → 2–3 plain facts → the session → "behind the plan".
  *
- * The add-on is its own card. It never changes Today's session, the colour or a load target.
+ * The add-on is its own card. It never changes the colour or a load target. In pre-/off-season session B's gym lifts
+ * go into the coach-sent strength session instead ("one session, one whole", 2026-11-17, strengthProgramming/
+ * goalPlanGym.ts); the card then names that and keeps only what is left outside the gym (`gymInSession`).
  */
 
 import { PLAN_WEEKS, QUALITY_LABEL } from "./common";
@@ -261,6 +263,9 @@ export type GoalTodayCard = {
     blocks: { what: Bi; dose: Bi; supervised: boolean; swapped?: boolean; rx?: LiftRx[] }[];
     /** The player's tick on it (lota 4). */
     mark: SessionMark["status"] | null;
+    /** Session B's gym lifts are inside today's strength session (pre-/off-season, "one session, one whole",
+     *  2026-11-17): `blocks` then holds only what is left for outside the gym (often nothing). */
+    inSession?: true;
   };
   /** `past` = its day is behind today; `mark` = the player's tick; `canMark` = placed on today or earlier. */
   thisWeek: { slot: GoalSessionSlot; focus: Bi; date: string | null; day: Bi | null; isToday: boolean; past: boolean; mark: SessionMark["status"] | null; canMark: boolean }[];
@@ -311,6 +316,13 @@ export type GoalTodayInput = {
   pausedWeek?: number | null;
   /** The player's ticks on this plan (lota 4). */
   marks?: SessionMark[];
+  /** Today's strength session (coach-sent) holds session B's gym lifts of this plan week (2026-11-17). */
+  gymInSession?: boolean;
+};
+
+const IN_SESSION_FACT: Bi = {
+  en: "Pre-season and off-season: your goal's gym lifts are part of the team strength session, in place of the matching exercises. One session, not two.",
+  is: "Undirbúnings- og hvíldartímabil: lyftur markmiðsins eru hluti af styrktaræfingu liðsins, í stað samsvarandi æfinga. Ein æfing, ekki tvær.",
 };
 
 function sessionsOfWeek(plan: GoalPlan, week: number): GoalSession[] {
@@ -422,14 +434,24 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
   if (todays && bySlot.get(todays.slot)) {
     const s = bySlot.get(todays.slot)!;
     const v = sessionForColour(s, input.colour);
+    // "One session, one whole": session B's gym lifts (the blocks with a lift prescription) are in today's strength
+    // session; only the rest (bounds, braking drills) is left here.
+    const inSession = input.gymInSession === true && s.slot === "B" && v.version !== "skip";
+    const shown = inSession ? v.blocks.filter((b) => !b.rx?.length) : v.blocks;
     today = {
       slot: s.slot, focus: s.focus, minutes: v.version === "full" ? s.minutes : Math.max(5, Math.round(s.minutes / 2)), version: v.version,
-      blocks: v.blocks.map((b) => ({ what: b.what, dose: b.dose, supervised: b.supervised === true, ...(b.swap?.swapped ? { swapped: true } : {}), ...(b.rx?.length ? { rx: b.rx } : {}) })),
+      blocks: shown.map((b) => ({ what: b.what, dose: b.dose, supervised: b.supervised === true, ...(b.swap?.swapped ? { swapped: true } : {}), ...(b.rx?.length ? { rx: b.rx } : {}) })),
       mark: markOf(s.slot),
+      ...(inSession ? { inSession: true as const } : {}),
     };
     const name = `${cap(slotName(s.slot)).en}: ${s.focus.en}`;
     const nameIs = `${cap(slotName(s.slot)).is}: ${s.focus.is}`;
-    if (v.version === "skip") {
+    if (inSession) {
+      const f = { en: s.focus.en.charAt(0).toLowerCase() + s.focus.en.slice(1), is: s.focus.is.charAt(0).toLowerCase() + s.focus.is.slice(1) };
+      verdict = shown.length
+        ? { en: `Today: session B (${f.en}). The gym part is in your strength session; the rest is below.`, is: `Í dag: æfing B (${f.is}). Salur-hlutinn er í styrktaræfingunni þinni; restin er hér fyrir neðan.` }
+        : { en: `Today, session B (${f.en}) is part of your strength session (Today's session).`, is: `Í dag er æfing B (${f.is}) hluti af styrktaræfingunni þinni (Æfing dagsins).` };
+    } else if (v.version === "skip") {
       verdict = input.colour === "red"
         ? { en: `Skip today's goal session (${s.focus.en}). Red day: rest comes first.`, is: `Slepptu markmiðsæfingunni í dag (${s.focus.is}). Rauður dagur: hvíld gengur fyrir.` }
         : { en: `Skip today's goal session (${s.focus.en}). Yellow day, and it is all flat-out work.`, is: `Slepptu markmiðsæfingunni í dag (${s.focus.is}). Gulur dagur, og hún er öll á fullu.` };
@@ -453,7 +475,9 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
     }
   }
 
-  const facts = [weekFact, colourFact ?? unplacedFact ?? DAY_RULE, ...(colourFact && unplacedFact ? [unplacedFact] : [])]
+  const facts = (today?.inSession
+    ? [weekFact, IN_SESSION_FACT, colourFact]
+    : [weekFact, colourFact ?? unplacedFact ?? DAY_RULE, ...(colourFact && unplacedFact ? [unplacedFact] : [])])
     .filter((f): f is Bi => !!f).slice(0, 3);
   if (!placement.weekKnown) details.unshift(WEEK_UNSET);
   details.unshift(DAY_RULE);

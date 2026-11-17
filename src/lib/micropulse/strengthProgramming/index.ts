@@ -47,6 +47,7 @@ import { applyAdaptationRules, newAdaptationTrace, type AdaptationTrace } from "
 import { EXERCISE_LIBRARY as LIBRARY, getExercise as lookupExercise } from "./exerciseLibrary";
 import { effectivePool, isPlayerPick, type PlayerExercisePicks } from "./playerPicks";
 import { applyPlayerGoal } from "./playerGoal";
+import { applyGoalPlanGym } from "./goalPlanGym";
 import {
   slotForCategory,
   PALETTE_UNILATERAL_ASYMMETRY_PCT,
@@ -664,6 +665,11 @@ export function buildStrengthSession(
 
   // The player's own strength goal: +1 set of the matching exercise on the goal's days (individualised only).
   // After the team list (which keeps the template dose), before the coach's manual swaps (coach's last word).
+  // The player's 8-week goal plan, session B (gym): in pre-/off-season its lifts take the place of the matching team
+  // exercises on the day the plan places it. Before the strength goal, so that +1 set skips a goal-plan lift.
+  if (individualised) {
+    audit.push(...applyGoalPlanGym(tmpl.blocks, snap, (id) => safetyRulesOut(id, trace), (id) => trace.pinned.has(id)));
+  }
   if (individualised) {
     audit.push(...applyPlayerGoal(tmpl.blocks, snap, (id) => safetyRulesOut(id, trace), (id) => trace.pinned.has(id)));
   }
