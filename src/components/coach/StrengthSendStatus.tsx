@@ -56,6 +56,8 @@ export default function StrengthSendStatus({ lang }: { lang: "IS" | "EN" }) {
   if (today.state === "missing") {
     if (!data.autoSend) { line = t("Automatic send is off today.", "Sjálfvirk sending er ekki á í dag."); tone = "wait"; }
     else if (nowUtc < "09:15") { line = t("Today's sessions go out automatically at 09:00.", "Æfingar dagsins fara sjálfkrafa út kl. 09:00."); tone = "wait"; }
+    // No earlier day logged either: the log is new for this team (started 2026-11-18, or auto-send just turned on).
+    else if (!anyLogged) { line = t("The send log starts with the next 09:00 send.", "Sendingaskráin byrjar með næstu sendingu kl. 09:00."); tone = "wait"; }
     else { line = t("Today's automatic send hasn't run. Send today's sessions by hand.", "Sjálfvirka sendingin hefur ekki farið í dag. Sendu æfingar dagsins handvirkt."); tone = "warn"; }
   } else {
     const at = hhmm(today.ranAt);
