@@ -21,6 +21,10 @@
  * exercise (deficit ledger), and the Accumulation block's +1 skips the goal's exercise (blockEmphasis.ts).
  *
  * Runs AFTER the team list (which keeps the template's dose) and BEFORE the coach's manual swaps.
+ *
+ * Goals step 3 (2026-11-18): only "robust" (Stronger hamstrings) is still a goal a player can have. "stronger" and
+ * "power" are retired (the 8-week gym goals replace them) and never reach this step: the one input
+ * (playerContext/domains.ts → `activeGoal`) drops them. The engine keeps handling all three so its rules stay tested.
  */
 
 import type { AppliedAdaptation, PlayerStrengthSnapshot, SessionBlock } from "./types";

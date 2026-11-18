@@ -647,6 +647,28 @@ routes and the team prefs route take them. Database checks widened by
   four pitch goals only: the gym goals have no library page yet. Coaches approve them on Goal requests.
 - **Tests:** `__tests__/gymGoalsDelivery.test.ts`.
 
+## Gym-only goals, step 3: the old +1-set picks retired, DSI points at the 8-week goals (2026-11-18)
+
+- **Retired:** the "+1 set" strength goals "Stronger legs" (`stronger`) and "More explosive" (`power`) on
+  `player_strength_picks.strength_goal`. The 8-week goals Maximal strength / Explosive power replace them.
+  "Stronger hamstrings" (`robust`, +1 Nordic set on MD-4) stays: no 8-week goal covers it.
+  - `playerPicks.ts`: `ACTIVE_STRENGTH_GOALS = ["robust"]`; `validateGoal` refuses the retired two (code `retired`,
+    player and coach); both picks routes list only active goals.
+  - One engine input: `playerContext/domains.ts` reads the goal through `activeGoal`, so a stored retired goal never
+    reaches `applyPlayerGoal` (the engine itself is unchanged and its tests still pin all three).
+  - Stored values are not rewritten (Arnór's `power` on Breiðablik stays in the row). The sheets show a plain line:
+    "Your earlier goal … no longer adds a set" (`retiredGoalNote`). Effect for Arnór: his 8-week gym goal no longer gets
+    a "More explosive" +1 set beside it.
+- **DSI suggestion** (`goalSuggestion.ts`): lower third → `explosive`, upper third → `max_strength` (was power /
+  stronger), same thirds, same 12-month test limit. Shown on **My goal** (`GET /api/player/goal-plan` →
+  `dsiSuggestion`, only for a player who can start a goal now, with no open plan, and only if that goal is not blocked
+  for them): a box above the list + a "Suggested" tag on the button. Removed from the "My exercises & goal" sheet. The
+  coach's picks panel still shows "DSI suggests: … (8-week goal)". No longer stored in the `goal_set` event (it is not
+  about that goal any more).
+- **Real data (18 Nov):** Breiðablik has 9 players with both tests, but every mid-thigh pull is from Dec 2024 (>12
+  months), so no one gets a suggestion until the pull is retested. The Demo team has no pull tests.
+- **Tests:** `playerGoal.test.ts` (limits, retired goals, wiring), `goalSuggestion.test.ts`.
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

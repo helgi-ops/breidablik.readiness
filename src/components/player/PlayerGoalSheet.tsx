@@ -14,6 +14,10 @@
  *
  * Lota 7b: for the picked (or suggested) quality, one plain line on why it matters in a game, and behind a click
  * what improves it, each line with its study (`qualityWhy.ts`, fixed text, not AI).
+ *
+ * Goals step 3 (2026-11-18): when the player's force-plate tests point to a gym goal (DSI against the team: lower
+ * third → Explosive power, upper third → Maximal strength), the list opens with that suggestion and marks the button
+ * "Suggested". Rules, not AI; the player chooses. It replaces the suggestion the retired "+1 set" goal had.
  */
 
 import * as React from "react";
@@ -25,6 +29,8 @@ import { Q_DAT, type PriorityView } from "@/lib/micropulse/goalPlan/priority";
 import { QUALITY_WHY, WHY_FOOTER, refShort, whyTitles } from "@/lib/micropulse/goalPlan/qualityWhy";
 
 type Suggestion = { suggested: GoalQuality; view: PriorityView } | null;
+/** The force-plate (DSI) suggestion of a gym goal (goalSuggestion.ts). */
+type DsiSuggestion = { goal: GoalQuality; reasonEN: string; reasonIS: string; cmjDate: string; imtpDate: string; confidence: "high" | "moderate"; source: string };
 
 type Eligibility = { quality: GoalQuality; blocked: string | null; blockedText: Bi | null };
 type Current = {
@@ -178,6 +184,7 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
   const [historyCount, setHistoryCount] = React.useState(0);
   // Player choices on: a new goal starts without approval, on this Monday (server's date).
   const [autoStart, setAutoStart] = React.useState<{ on: boolean; date: string | null }>({ on: false, date: null });
+  const [dsi, setDsi] = React.useState<DsiSuggestion | null>(null);
   const [history, setHistory] = React.useState<GoalHistoryItem[] | null>(null);
   const [historyState, setHistoryState] = React.useState<"closed" | "loading" | "open" | "error">("closed");
   const [suggestions, setSuggestions] = React.useState<Record<GoalQuality, Suggestion> | null>(null);
@@ -228,6 +235,7 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
         setCurrent((j.current ?? null) as Current | null);
         setHistoryCount(Number(j.historyCount ?? 0) || 0);
         setAutoStart({ on: j.autoStart === true, date: typeof j.autoStartDate === "string" ? j.autoStartDate : null });
+        setDsi((j.dsiSuggestion ?? null) as DsiSuggestion | null);
         setState("ready");
       } catch {
         if (alive) setState("error");
@@ -322,15 +330,29 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
                 {T("Choosing your own goal isn't on for you right now. Your coach turns it on.", "Að velja þér markmið er ekki opið fyrir þig núna. Þjálfarinn opnar það.")}
               </p>
             ) : null}
+            {autoStart.on && dsi ? (
+              <div className="rounded-xl border border-primary/25 bg-primary/5 px-3 py-2" data-testid="goal-dsi-suggestion" data-goal={dsi.goal}>
+                <p className="text-sm font-semibold text-slate-900">{T("Your force-plate tests suggest: ", "Kraftplötuprófin þín benda á: ")}{L(QUALITY[dsi.goal].label)}</p>
+                <p className="mt-0.5 text-xs text-slate-700">{is ? dsi.reasonIS : dsi.reasonEN}</p>
+                <p className="mt-1 text-[11px] text-slate-500" title={dsi.source}>
+                  {T(`A suggestion from rules, not AI · jump test ${fmtDay(dsi.cmjDate, false)}, pull test ${fmtDay(dsi.imtpDate, false)}${dsi.confidence === "high" ? "" : " · few tries, treat as a first read"} · you choose`,
+                    `Tillaga út frá reglum, ekki gervigreind · stökkpróf ${fmtDay(dsi.cmjDate, true)}, togpróf ${fmtDay(dsi.imtpDate, true)}${dsi.confidence === "high" ? "" : " · fáar tilraunir, fyrsta mat"} · þú velur`)}
+                </p>
+              </div>
+            ) : null}
             {autoStart.on ? <div className="grid gap-2">
               {(eligibility ?? []).map((e) => {
                 const q = QUALITY[e.quality];
                 const disabled = !!e.blocked;
                 const active = pick === e.quality;
+                const suggested = !disabled && dsi?.goal === e.quality;
                 return (
                   <button key={e.quality} type="button" disabled={disabled} onClick={() => void choose(e.quality)}
                     className={`rounded-xl border px-4 py-3 text-left transition ${active ? "border-primary bg-primary/5" : "border-slate-200 bg-white hover:bg-slate-50"} disabled:cursor-not-allowed disabled:opacity-60`}>
-                    <span className="block text-sm font-semibold text-slate-900">{L(q.label)}</span>
+                    <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                      {L(q.label)}
+                      {suggested ? <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">{T("Suggested", "Tillaga")}</span> : null}
+                    </span>
                     <span className="block text-xs text-slate-500">{disabled && e.blockedText ? L(e.blockedText) : L(q.sub)}</span>
                   </button>
                 );

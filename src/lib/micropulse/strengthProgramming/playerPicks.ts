@@ -119,10 +119,22 @@ export function isPlayerPick(slot: string, id: string, picks: PlayerExercisePick
 // day, in a two-match week, or when a safety rule changed that exercise; never more than +1 set (see
 // playerGoal.ts). Muscle size (hypertrophy) is not offered: it needs more weekly volume than a microdose, and we
 // have no source for an in-season rule.
+//
+// Goals step 3 (2026-11-18): "Stronger legs" (stronger) and "More explosive" (power) are RETIRED — the 8-week gym
+// goals Maximal strength / Explosive power replace them, and the force-plate (DSI) suggestion now points there
+// (goalSuggestion.ts, shown on My goal). Only "Stronger hamstrings" (robust, +1 Nordic set) can still be chosen: no
+// 8-week goal covers it. A stored retired goal stays in the row as it was (nobody's value is rewritten) but the
+// engine never reads it (`activeGoal` at the one input, playerContext/domains.ts) and the sheets say it no longer
+// adds a set.
 
 export const STRENGTH_GOALS = ["stronger", "power", "robust"] as const;
 export type StrengthGoal = (typeof STRENGTH_GOALS)[number];
 export const isStrengthGoal = (s: unknown): s is StrengthGoal => typeof s === "string" && (STRENGTH_GOALS as readonly string[]).includes(s);
+/** The goals a player or coach can still choose (2026-11-18). */
+export const ACTIVE_STRENGTH_GOALS = ["robust"] as const satisfies readonly StrengthGoal[];
+export type ActiveStrengthGoal = (typeof ACTIVE_STRENGTH_GOALS)[number];
+export const isActiveStrengthGoal = (s: unknown): s is ActiveStrengthGoal =>
+  typeof s === "string" && (ACTIVE_STRENGTH_GOALS as readonly string[]).includes(s);
 
 /** The days a goal adds its set in a week with a match (the week's heavier days, well before the match). With no
  *  match near, in pre-/off-season, every strength session counts. */
@@ -154,9 +166,25 @@ export const STRENGTH_GOAL_LABEL: Record<StrengthGoal, { en: string; is: string;
   },
 };
 
-/** The goal a stored value stands for (anything else → none). */
+/** The goal a stored value stands for (anything else → none). Retired goals included: for display only. */
 export function sanitizeGoal(raw: unknown): StrengthGoal | null {
   return isStrengthGoal(raw) ? raw : null;
+}
+
+/** The goal the engine uses: an active goal, else none (a retired "stronger" / "power" adds nothing, 2026-11-18). */
+export function activeGoal(raw: unknown): ActiveStrengthGoal | null {
+  return isActiveStrengthGoal(raw) ? raw : null;
+}
+
+/** A stored retired goal → the line the player / coach sees; anything else → null. */
+export function retiredGoalNote(raw: unknown): { en: string; is: string } | null {
+  const g = sanitizeGoal(raw);
+  if (!g || isActiveStrengthGoal(g)) return null;
+  const l = STRENGTH_GOAL_LABEL[g];
+  return {
+    en: `Your earlier goal “${l.en}” no longer adds a set. Strength and explosive goals are now 8-week plans under My goal.`,
+    is: `Fyrra markmiðið „${l.is}“ bætir ekki lengur við setti. Styrktar- og sprengikraftsmarkmið eru nú 8 vikna áætlanir undir Markmiðið mitt.`,
+  };
 }
 
 /** Validate a goal save (`null` clears it). A player can't change a goal the coach locked. */
@@ -164,11 +192,14 @@ export function validateGoal(
   raw: unknown,
   goalLocked: boolean,
   opts: { coach?: boolean } = {},
-): { ok: true; goal: StrengthGoal | null } | { ok: false; error: { code: "locked" | "unknown_goal"; en: string; is: string } } {
+): { ok: true; goal: ActiveStrengthGoal | null } | { ok: false; error: { code: "locked" | "unknown_goal" | "retired"; en: string; is: string } } {
   if (!opts.coach && goalLocked) {
     return { ok: false, error: { code: "locked", en: "Your coach chose your goal.", is: "Þjálfarinn þinn valdi markmiðið þitt." } };
   }
   if (raw === null || raw === "" || raw === undefined) return { ok: true, goal: null };
-  if (!isStrengthGoal(raw)) return { ok: false, error: { code: "unknown_goal", en: "Unknown goal.", is: "Óþekkt markmið." } };
+  if (isStrengthGoal(raw) && !isActiveStrengthGoal(raw)) {
+    return { ok: false, error: { code: "retired", en: "That goal is now an 8-week plan: open My goal.", is: "Það markmið er nú 8 vikna áætlun: opnaðu Markmiðið mitt." } };
+  }
+  if (!isActiveStrengthGoal(raw)) return { ok: false, error: { code: "unknown_goal", en: "Unknown goal.", is: "Óþekkt markmið." } };
   return { ok: true, goal: raw };
 }

@@ -2,7 +2,10 @@
  * /api/player/goal-plan — the player's own goal request (lota 2).
  *
  * GET    which qualities can be asked for now + the player's open (or recently closed) goal + how many earlier goals
- *        there are (a count; the list itself is /history, read only when opened). Light read.
+ *        there are (a count; the list itself is /history, read only when opened). Light read. `dsiSuggestion`
+ *        (goals step 3, 2026-11-18): the 8-week gym goal the player's force-plate tests suggest (DSI against the team:
+ *        lower third → explosive, upper third → max_strength; goalSuggestion.ts), only for a player who can start a
+ *        goal now; null otherwise. Rules, not AI; the player chooses.
  * POST   { quality, note?, switchedFrom? } ask for an 8-week add-on plan. `switchedFrom` = the quality the player had
  *        picked when they pressed "Switch" on the suggestion (lota 7); the suggestion is read again server-side. One open goal at a time (409). The rules build the
  *        proposal from the player's own data and store it; the coach approves, changes or declines it.
@@ -25,6 +28,7 @@ import { prioritySnapshot } from "@/lib/micropulse/goalPlan/priority";
 import { goalFail, requireGoalPlayer } from "./_shared";
 import { PLAYER_BLOCK_TEXT, autoStartDate, cleanPlayerNote, isGoalQuality, playerMayWithdraw } from "@/lib/micropulse/goalPlan/requests";
 import { goalsWithoutApprovalFor } from "@/lib/micropulse/strengthProgramming/playerPicksStore";
+import { loadDsiGoalSuggestions } from "@/lib/micropulse/strengthProgramming/loadDsiForTeam";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -34,12 +38,18 @@ export async function GET(req: Request) {
   try {
     const sb = getSupabaseServer();
     const { playerId, teamId } = await requireGoalPlayer(sb, req);
-    const [eligibility, current, historyCount, autoStart] = await Promise.all([
+    const [eligibility, current, historyCount, autoStart, dsi] = await Promise.all([
       loadGoalEligibility(sb, teamId, playerId),
       playerCurrentGoalSynced(sb, playerId),
       playerGoalHistoryCount(sb, teamId, playerId).catch(() => 0),
       goalsWithoutApprovalFor(sb, teamId, playerId).catch(() => false),
+      // Fail-safe: any error → no suggestion (loadDsiGoalSuggestions never throws).
+      loadDsiGoalSuggestions(sb, teamId, today()),
     ]);
+    const open = !!current && (current.status === "requested" || current.status === "approved" || current.status === "paused");
+    const sug = autoStart && !open ? dsi.get(playerId) ?? null : null;
+    // Only a goal the player can pick right now (not blocked by injury / return / age).
+    const dsiSuggestion = sug && eligibility.some((e) => e.quality === sug.goal && !e.blocked) ? sug : null;
     return NextResponse.json({
       ok: true,
       historyCount,
@@ -47,6 +57,7 @@ export async function GET(req: Request) {
       // Not taking part → the sheet shows no goal list (a running or earlier goal still shows).
       autoStart,
       autoStartDate: autoStart ? autoStartDate(today()) : null,
+      dsiSuggestion,
       eligibility: eligibility.map((e) => ({ quality: e.quality, blocked: e.blocked, blockedText: e.blocked ? PLAYER_BLOCK_TEXT[e.blocked] : null })),
       current: current && {
         id: current.id, quality: current.quality, status: current.status, note: current.player_note,

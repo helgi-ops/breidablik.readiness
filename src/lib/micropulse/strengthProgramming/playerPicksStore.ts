@@ -49,7 +49,8 @@ export type PickGroup = {
 export type PlayerPicksRow = {
   picks: PlayerExercisePicks;
   locked: PickSlot[];
-  /** The player's strength goal (lota 2), null = none. */
+  /** The player's strength goal (lota 2) as stored, null = none. May be a retired one (2026-11-18): use
+   *  `activeGoal` / `retiredGoalNote` (playerPicks.ts) before showing or using it. */
   goal: StrengthGoal | null;
   /** The coach chose the goal; the player can't change it. */
   goalLocked: boolean;
@@ -281,13 +282,13 @@ export async function setLock(
   return readPlayerPicks(sb, args.playerId, args.teamId, args.slots);
 }
 
-/** Save the player's strength goal (already validated by the caller; null clears it). */
+/** Save the player's strength goal (already validated by the caller: an active goal or null, which clears it). Until
+ *  2026-11-18 the history also kept what the force-plate tests suggested (`dsiSuggested`); that suggestion now names
+ *  the 8-week gym goals (goalSuggestion.ts), so it is no longer stored with this goal. */
 export async function saveGoal(
   sb: SupabaseClient,
   args: {
     playerId: string; teamId: string; slots: PaletteSlots; goal: StrengthGoal | null; actor: PickActor; reason?: string | null;
-    /** What the force-plate tests suggested when the goal was chosen (null = no suggestion). Kept in the history. */
-    dsiSuggested?: StrengthGoal | null;
   },
 ): Promise<PlayerPicksRow> {
   const prior = await existingRow(sb, args.playerId);
@@ -306,7 +307,7 @@ export async function saveGoal(
     { onConflict: "player_id" },
   );
   if (error) throw new Error(error.message);
-  await logEvent(sb, { teamId: args.teamId, playerId: args.playerId, kind: "goal_set", before, after: { goal: args.goal, dsiSuggested: args.dsiSuggested ?? null }, actor: args.actor, reason: args.reason });
+  await logEvent(sb, { teamId: args.teamId, playerId: args.playerId, kind: "goal_set", before, after: { goal: args.goal }, actor: args.actor, reason: args.reason });
   return readPlayerPicks(sb, args.playerId, args.teamId, args.slots);
 }
 

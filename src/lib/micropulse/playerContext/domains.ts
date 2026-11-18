@@ -23,7 +23,7 @@ import { loadPlayerMovementScreens } from "@/lib/micropulse/movementScreen/loade
 import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import { sanitizePaletteSlots, type PaletteSlots } from "../strengthProgramming/palette";
 import { sanitizeMdStructures, sanitizeNoMatchWeek, type MdStructures, type NoMatchWeek } from "../strengthProgramming/structures";
-import { sanitizeGoal, sanitizePicks, type PlayerExercisePicks, type StrengthGoal } from "../strengthProgramming/playerPicks";
+import { activeGoal, sanitizePicks, type PlayerExercisePicks, type StrengthGoal } from "../strengthProgramming/playerPicks";
 import { normalizeSendMode, type SendMode } from "../strengthProgramming/sendMode";
 
 /** Corrective compensation → the strength emphasis it corroborates (CONFIRM-vs-ADD
@@ -93,7 +93,8 @@ export async function fetchTeamPalette(
  *  the coach's per-player setting (let in on another mode / taken out of the goals mode). Read for every player with
  *  a row on this team; WHETHER the choices are used is decided by the send mode in the engine (`sendMode.ts`
  *  takesPart), so the coach's mode for a send applies the same way everywhere. Picks no longer on the list are
- *  dropped. Fail-safe: any error → nothing (the coach's list as before, no goal). */
+ *  dropped. Fail-safe: any error → nothing (the coach's list as before, no goal). Only an ACTIVE goal is passed on: a
+ *  retired "Stronger legs" / "More explosive" (goals step 3, 2026-11-18) is left in the row but adds nothing. */
 export async function fetchPlayerExercisePicks(
   sb: SupabaseClient,
   playerId: string,
@@ -110,7 +111,7 @@ export async function fetchPlayerExercisePicks(
     const r = row as { picks?: unknown; strength_goal?: unknown; test_enabled?: boolean; choices_off?: boolean } | null;
     if (!r) return undefined;
     const setting = { on: !!r.test_enabled, off: !!r.choices_off };
-    const goal = sanitizeGoal(r.strength_goal);
+    const goal = activeGoal(r.strength_goal);
     const hasPicks = !!r.picks && typeof r.picks === "object" && Object.keys(r.picks as object).length > 0;
     if (!hasPicks) return goal ? { goal, ...setting } : setting;
     const { data: team } = await sb.from("team_strength_palette").select("slots").eq("team_id", teamId).maybeSingle();

@@ -14,6 +14,10 @@
  *
  * 2026-11-17: the goal's extra set only in pre-season / off-season (in season = maintenance), and the goal cell shows
  * what the player's force-plate tests suggest ("DSI suggests: …", rules not AI) next to what the player chose.
+ *
+ * Goals step 3 (2026-11-18): "Stronger legs" / "More explosive" are retired; only "Stronger hamstrings" can be set.
+ * The DSI line now names the 8-week gym goal (Maximal strength / Explosive power) the player sees on My goal. A
+ * retired goal still stored shows as a muted line (it adds nothing).
  */
 
 import * as React from "react";
@@ -32,6 +36,8 @@ type PlayerRow = {
   locked: string[];
   goal: string | null;
   goalLocked: boolean;
+  /** A retired goal still stored (2026-11-18), or null. */
+  retiredGoal?: { en: string; is: string } | null;
   testEnabled: boolean;
   choicesOff: boolean;
   takesPart: boolean;
@@ -54,6 +60,12 @@ type State = {
   total: number;
 };
 const GOAL_CELL = "__goal";
+/** The 8-week gym goal a DSI suggestion names (goalSuggestion.ts, since 2026-11-18). */
+const DSI_GOAL: Record<string, { en: string; is: string }> = {
+  explosive: { en: "Explosive power (8-week goal)", is: "Sprengikraftur (8 vikna markmið)" },
+  max_strength: { en: "Maximal strength (8-week goal)", is: "Hámarksstyrkur (8 vikna markmið)" },
+};
+const dsiGoalLabel = (id: string, isEN: boolean) => (DSI_GOAL[id] ? (isEN ? DSI_GOAL[id].en : DSI_GOAL[id].is) : id);
 
 const API = "/api/coach/team/player-strength-picks";
 
@@ -113,6 +125,7 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
     const g = s?.goals.find((x) => x.id === id);
     return g ? (isEN ? g.en : g.is) : null;
   };
+  const dsiGoalName = (id: string) => dsiGoalLabel(id, isEN);
   const testers = s ? s.players.filter((p) => p.testEnabled) : [];
   const outs = s ? s.players.filter((p) => p.choicesOff) : [];
   // Only the players who take part under the team's mode.
@@ -145,7 +158,7 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
           <p className="mt-1 text-[15px] font-semibold text-slate-900">{verdict(s)}</p>
           {!s.hasList ? (
             <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[12px] text-slate-600">
-              <li>{T("A player who takes part starts an 8-week goal (top speed, acceleration, braking, jump) themselves; it starts the next Monday without your approval. You see it in the list above and can stop it with a reason. Players who don't take part can't start one.", "Leikmaður sem tekur þátt byrjar sjálfur 8 vikna markmið (hámarkshraði, hröðun, bremsun, stökk) næsta mánudag án samþykkis þíns. Þú sérð það í listanum hér fyrir ofan og getur stöðvað með ástæðu. Leikmenn sem taka ekki þátt geta ekki byrjað.")}</li>
+              <li>{T("A player who takes part starts an 8-week goal (top speed, acceleration, braking, jump, maximal strength, explosive power, strength + power) themselves; it starts the next Monday without your approval. You see it in the list above and can stop it with a reason. Players who don't take part can't start one.", "Leikmaður sem tekur þátt byrjar sjálfur 8 vikna markmið (hámarkshraði, hröðun, bremsun, stökk, hámarksstyrkur, sprengikraftur, styrkur + sprengikraftur) næsta mánudag án samþykkis þíns. Þú sérð það í listanum hér fyrir ofan og getur stöðvað með ástæðu. Leikmenn sem taka ekki þátt geta ekki byrjað.")}</li>
               <li>{T("Same plan and safety rules as when you approve with no changes. Injured or returning players can't start one; under-18s get the youth plan.", "Sama áætlun og öryggisreglur og þegar þú samþykkir án breytinga. Meiddir eða leikmenn í endurkomu geta ekki byrjað; undir 18 ára fá unglingaáætlun.")}</li>
               <li>{T("Exercise picks and a strength goal come too once the team has an exercise list (Strength → Exercise palette, at least 2 exercises in a group).", "Æfingaval og styrktarmarkmið bætast við þegar liðið er komið með æfingalista (Styrkur → Æfingasafn, a.m.k. 2 æfingar í flokki).")}</li>
             </ul>
@@ -153,11 +166,12 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
           <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[12px] text-slate-600">
             <li>{T("Players choose from your team list (Strength → Exercise palette). Their picks go first in that group; you see every pick here.", "Leikmenn velja af æfingalista liðsins (Styrkur → Æfingasafn). Valið fer fremst í flokknum; þú sérð allt val hér.")}</li>
             <li>{T("No approval: a pick counts from the player's next session sent. Sets, reps and rest don't change, and the Nordic / Copenhagen block stays.", "Ekkert samþykki: valið gildir frá næstu æfingu sem leikmaður fær. Sett, endurtekningar og hvíld breytast ekki og Nordic / Copenhagen haldast.")}</li>
-            <li>{T("In pre-season and off-season a goal adds one set of the matching exercise on its day (stronger legs / hamstrings: MD-4; explosive: MD-4 and MD-3; with no match within 5 days, every strength day). In season the session is maintenance: no extra set, the goal is kept.", "Á undirbúnings- og hvíldartímabili bætir markmið við einu setti af samsvarandi æfingu á sínum degi (sterkari fætur / aftan í læri: MD-4; sprengikraftur: MD-4 og MD-3; enginn leikur innan 5 daga: hver styrktardagur). Á tímabili er æfingin viðhald: ekkert aukasett, markmiðið er geymt.")}</li>
+            <li>{T("In pre-season and off-season the “Stronger hamstrings” goal adds one set of Nordics on MD-4 (with no match within 5 days, every strength day). In season the session is maintenance: no extra set, the goal is kept.", "Á undirbúnings- og hvíldartímabili bætir markmiðið „Sterkari aftan í læri“ við einu setti af Nordic á MD-4 (enginn leikur innan 5 daga: hver styrktardagur). Á tímabili er æfingin viðhald: ekkert aukasett, markmiðið er geymt.")}</li>
+            <li>{T("“Stronger legs” and “More explosive” are retired (since 18 Nov): the 8-week goals Maximal strength and Explosive power replace them. A player who had one keeps it on record, but it no longer adds a set.", "„Sterkari fætur“ og „Meiri sprengikraftur“ eru hætt (frá 18. nóv.): 8 vikna markmiðin Hámarksstyrkur og Sprengikraftur koma í staðinn. Leikmaður sem var með slíkt heldur því skráðu, en það bætir ekki lengur við setti.")}</li>
             <li>{T("Never more than one extra set: not on top of the build block's extra set, not on a day the player's data already added an exercise, a light or taper week, a yellow or red day, a two-match week, or after a safety swap.", "Aldrei meira en eitt aukasett: ekki ofan á aukasett uppbyggingarblokkar, ekki þegar gögn leikmannsins bættu þegar við æfingu, í léttri viku eða niðurtröppun, á gulum eða rauðum degi, í viku með tveimur leikjum eða eftir öryggisskipti.")}</li>
-            <li>{T("“DSI suggests” = the player's force-plate tests (jump ÷ mid-thigh pull) against the team: lower third → explosive, upper third → stronger legs, tests within 12 months. A suggestion from rules, not AI; the player chooses.", "„DSI bendir á“ = kraftplötupróf leikmannsins (stökk ÷ tog) borin saman við liðið: neðsti þriðjungur → sprengikraftur, efsti þriðjungur → sterkari fætur, próf innan 12 mánaða. Tillaga út frá reglum, ekki gervigreind; leikmaðurinn velur.")}</li>
+            <li>{T("“DSI suggests” = the 8-week gym goal the player's force-plate tests (jump ÷ mid-thigh pull) point to, against the team: lower third → Explosive power, upper third → Maximal strength, middle → nothing, both tests within 12 months. The player sees it on My goal and chooses. Rules, not AI.", "„DSI bendir á“ = 8 vikna salarmarkmiðið sem kraftplötupróf leikmannsins (stökk ÷ tog) benda á, borin saman við liðið: neðsti þriðjungur → Sprengikraftur, efsti þriðjungur → Hámarksstyrkur, miðjan → ekkert, bæði próf innan 12 mánaða. Leikmaðurinn sér það undir Markmiðið mitt og velur. Reglur, ekki gervigreind.")}</li>
             <li>{T("Safety rules still win (e.g. a sore lower back swaps the deadlift that day). Applies to individualised sessions.", "Öryggisreglur ráða áfram (t.d. aumur mjóhryggur skiptir út réttstöðulyftu þann dag). Gildir um einstaklingsmiðaðar æfingar.")}</li>
-            <li>{T("8-week goals (top speed, acceleration, braking, jump) start the next Monday without your approval, and their gym session goes into the day's strength session in pre- and off-season. You see them in the list above and can stop one with a reason. Injured or returning players still can't start one; under-18s get the youth plan.", "8 vikna markmið (hámarkshraði, hröðun, bremsun, stökk) byrja næsta mánudag án samþykkis þíns, og salur-hluti þeirra fer inn í styrktaræfingu dagsins á undirbúnings- og hvíldartímabili. Þú sérð þau í listanum hér fyrir ofan og getur stöðvað með ástæðu. Meiddir eða leikmenn í endurkomu geta ekki byrjað; undir 18 ára fá unglingaáætlun.")}</li>
+            <li>{T("8-week goals (top speed, acceleration, braking, jump, maximal strength, explosive power, strength + power) start the next Monday without your approval, and their gym lifts go into the day's strength session in pre- and off-season. You see them in the list above and can stop one with a reason. Injured or returning players still can't start one; under-18s get the youth plan.", "8 vikna markmið (hámarkshraði, hröðun, bremsun, stökk, hámarksstyrkur, sprengikraftur, styrkur + sprengikraftur) byrja næsta mánudag án samþykkis þíns, og lyftur þeirra fara inn í styrktaræfingu dagsins á undirbúnings- og hvíldartímabili. Þú sérð þau í listanum hér fyrir ofan og getur stöðvað með ástæðu. Meiddir eða leikmenn í endurkomu geta ekki byrjað; undir 18 ára fá unglingaáætlun.")}</li>
           </ul>
           )}
 
@@ -268,9 +282,10 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
                           <button type="button" onClick={() => setEdit(edit?.playerId === p.id && edit.slot === GOAL_CELL ? null : { playerId: p.id, slot: GOAL_CELL })}
                             className={`w-full rounded px-1.5 py-1 text-left hover:bg-slate-50 ${edit?.playerId === p.id && edit.slot === GOAL_CELL ? "bg-[#2740e6]/5" : ""}`}>
                             {p.goal ? <span className="block text-slate-800">{goalName(p.goal)}</span> : <span className="text-slate-400">{T("none", "ekkert")}</span>}
+                            {p.retiredGoal ? <span className="mt-0.5 block text-[10px] text-slate-400" title={isEN ? p.retiredGoal.en : p.retiredGoal.is}>{T("old goal retired", "gamalt markmið hætt")}</span> : null}
                             {p.suggestion ? (
                               <span className="mt-0.5 block text-[10px] text-slate-500" title={`${isEN ? p.suggestion.reasonEN : p.suggestion.reasonIS} (${p.suggestion.cmjDate} / ${p.suggestion.imtpDate}, ${p.suggestion.tested} ${T("tested", "prófaðir")}). ${p.suggestion.source}`}>
-                                {T("DSI suggests: ", "DSI bendir á: ")}{goalName(p.suggestion.goal)}
+                                {T("DSI suggests: ", "DSI bendir á: ")}{dsiGoalName(p.suggestion.goal)}
                               </span>
                             ) : null}
                             {p.goalLocked ? <span className="mt-0.5 block text-[10px] font-semibold text-[#de9328]">{T("Locked", "Læst")}</span> : null}
@@ -404,9 +419,10 @@ function GoalEditor({ isEN, player, goals, busy, onSave, onClose }: {
         </button>
       </div>
       {goal ? <p className="text-[12px] text-slate-600">{(() => { const g = goals.find((x) => x.id === goal); return g ? (isEN ? g.whatEN : g.whatIS) : null; })()}</p> : null}
+      {player.retiredGoal ? <p className="text-[12px] text-slate-500">{isEN ? player.retiredGoal.en : player.retiredGoal.is}</p> : null}
       {player.suggestion ? (
         <p className="text-[12px] text-slate-600" data-testid="coach-goal-suggestion">
-          <span className="font-semibold">{T("DSI suggests: ", "DSI bendir á: ")}{(() => { const g = goals.find((x) => x.id === player.suggestion!.goal); return g ? (isEN ? g.en : g.is) : player.suggestion!.goal; })()}</span>
+          <span className="font-semibold">{T("DSI suggests: ", "DSI bendir á: ")}{dsiGoalLabel(player.suggestion.goal, isEN)}</span>
           {" — "}{isEN ? player.suggestion.reasonEN : player.suggestion.reasonIS}
           <span className="block text-[11px] text-slate-400">
             {T(`Jump test ${player.suggestion.cmjDate}, pull test ${player.suggestion.imtpDate}; ${player.suggestion.tested} tested on the team; ${player.suggestion.confidence === "high" ? "3+ good tries in both" : "few tries, treat as provisional"}. Rules, not AI.`,

@@ -2,28 +2,30 @@
  * /api/player/strength-picks — the player chooses which of the team's exercises they want in their own strength
  * session (player exercise picks, lota 1) and one strength goal (lota 2), 2026-11-17.
  *
- * GET → { ok, enabled, goalRow, groups, picks, locked, goals, goal, goalLocked, suggestion, updatedAt, updatedByRole }.
+ * GET → { ok, enabled, goalRow, groups, picks, locked, goals, goal, goalLocked, retiredGoal, updatedAt, updatedByRole }.
  *       `enabled: false` when the player doesn't take part under the team's send mode (sendMode.ts: "Individualised +
  *       goals", unless the coach took them out, or let in on another mode), or the team has no list — the sheet then
  *       says so and offers nothing. `goalRow` (2026-11-17): show the "My goal" row on Today — the player takes part,
  *       or has a goal plan (running or earlier) to look at.
  * PUT { slot, ids } → saves one group (first choice first; [] clears it) and returns the same shape.
- * PUT { goal }      → saves the goal ("stronger" | "power" | "robust" | null) and returns the same shape.
+ * PUT { goal }      → saves the goal ("robust" | null) and returns the same shape. Goals step 3 (2026-11-18):
+ *                     "stronger" / "power" are retired (400 code "retired"); the 8-week gym goals replace them.
+ *                     `goals` lists only the goals that can still be chosen; `goal` is the active goal or null;
+ *                     `retiredGoal` is the line for a retired goal still stored (it adds nothing), or null.
  *
  * The player comes from the login token, never the body; the team is the player's own team. FREE-locked teams get
  * 402. Checks: known group, a group with a real choice, every id on the team's list for that group, at most the
  * group's max, group not locked by the coach. Applies from the next session sent; nothing is sent (no push, no
  * email) and Today's session already sent is not changed. Writes only through playerPicksStore.
  *
- * `suggestion` (2026-11-17): the goal the player's force-plate tests (DSI, against the team) suggest, or null. Rules,
- * not AI; the player still chooses. What was suggested is kept in the goal's history.
+ * The force-plate (DSI) suggestion moved to My goal on 2026-11-18 (/api/player/goal-plan): it names an 8-week gym goal.
  */
 
 import { NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { getPlayerTeamId, requireAuthedPlayerId } from "@/lib/session-rpe/server";
 import { authErrorToResponse } from "@/lib/auth/httpError";
-import { GOAL_DAYS, STRENGTH_GOALS, STRENGTH_GOAL_LABEL, validateGoal, validatePlayerPick } from "@/lib/micropulse/strengthProgramming/playerPicks";
+import { ACTIVE_STRENGTH_GOALS, GOAL_DAYS, STRENGTH_GOAL_LABEL, activeGoal, retiredGoalNote, validateGoal, validatePlayerPick } from "@/lib/micropulse/strengthProgramming/playerPicks";
 import {
   PicksError,
   choicesOn,
@@ -34,8 +36,6 @@ import {
   saveGoal,
   savePicks,
 } from "@/lib/micropulse/strengthProgramming/playerPicksStore";
-import { loadDsiGoalSuggestions } from "@/lib/micropulse/strengthProgramming/loadDsiForTeam";
-import type { GoalSuggestion } from "@/lib/micropulse/strengthProgramming/goalSuggestion";
 
 export const runtime = "nodejs";
 
@@ -58,13 +58,7 @@ function fail(e: unknown) {
   return authErrorToResponse(e) ?? NextResponse.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 500 });
 }
 
-const GOALS = STRENGTH_GOALS.map((id) => ({ id, ...STRENGTH_GOAL_LABEL[id], days: GOAL_DAYS[id] }));
-
-const today = () => new Date().toISOString().slice(0, 10);
-
-async function suggestionFor(sb: Sb, playerId: string, teamId: string): Promise<GoalSuggestion | null> {
-  return (await loadDsiGoalSuggestions(sb, teamId, today())).get(playerId) ?? null;
-}
+const GOALS = ACTIVE_STRENGTH_GOALS.map((id) => ({ id, ...STRENGTH_GOAL_LABEL[id], days: GOAL_DAYS[id] }));
 
 /** Has the player any 8-week goal plan on this team (running, waiting or earlier)? One small read. Fail → false. */
 async function hasGoalPlan(sb: Sb, playerId: string, teamId: string): Promise<boolean> {
@@ -72,15 +66,17 @@ async function hasGoalPlan(sb: Sb, playerId: string, teamId: string): Promise<bo
   return !error && (data ?? []).length > 0;
 }
 
-async function state(sb: Sb, playerId: string, teamId: string, known?: GoalSuggestion | null) {
+async function state(sb: Sb, playerId: string, teamId: string) {
   const cfg = await readTeamPickConfig(sb, teamId);
   const row = await readPlayerPicks(sb, playerId, teamId, cfg.slots);
   const goalRow = playerTakesPart(cfg, row) || (await hasGoalPlan(sb, playerId, teamId));
   if (!choicesOn(cfg, row)) return { ok: true, enabled: false as const, goalRow };
   const { testEnabled: _t, choicesOff: _o, ...mine } = row;
   void _t; void _o;
-  const suggestion = known !== undefined ? known : await suggestionFor(sb, playerId, teamId);
-  return { ok: true, enabled: true as const, goalRow, groups: pickGroups(cfg.slots), goals: GOALS, ...mine, suggestion };
+  return {
+    ok: true, enabled: true as const, goalRow, groups: pickGroups(cfg.slots), goals: GOALS, ...mine,
+    goal: activeGoal(row.goal), retiredGoal: retiredGoalNote(row.goal),
+  };
 }
 
 export async function GET(req: Request) {
@@ -108,9 +104,8 @@ export async function PUT(req: Request) {
     if ("goal" in body) {
       const g = validateGoal(body.goal, current.goalLocked);
       if (!g.ok) return NextResponse.json({ error: g.error.en, error_is: g.error.is, code: g.error.code }, { status: g.error.code === "locked" ? 403 : 400 });
-      const suggestion = await suggestionFor(sb, playerId, teamId);
-      await saveGoal(sb, { playerId, teamId, slots: cfg.slots, goal: g.goal, actor: { role: "player", userId }, dsiSuggested: suggestion?.goal ?? null });
-      return NextResponse.json(await state(sb, playerId, teamId, suggestion));
+      await saveGoal(sb, { playerId, teamId, slots: cfg.slots, goal: g.goal, actor: { role: "player", userId } });
+      return NextResponse.json(await state(sb, playerId, teamId));
     }
     const v = validatePlayerPick(String(body.slot ?? ""), body.ids, cfg.slots, current.locked);
     if (!v.ok) return NextResponse.json({ error: v.error.en, error_is: v.error.is, code: v.error.code }, { status: v.error.code === "locked" ? 403 : 400 });

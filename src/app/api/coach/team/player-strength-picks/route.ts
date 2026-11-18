@@ -6,13 +6,16 @@
  *         choicesOff, takesPart, suggestion, updatedAt, updatedByRole }], picked, withGoal, testing, out, taking, total }
  *       `mode` (2026-11-17): the team's send mode, the one switch for player choices (set on the strength send page);
  *       `enabled` = the team is on the goals mode.
- *       `suggestion` (2026-11-17): the goal the player's force-plate tests (DSI, against the team) suggest, or null.
+ *       `suggestion`: the 8-week gym goal the player's force-plate tests (DSI, against the team) suggest
+ *       ("explosive" | "max_strength", since 2026-11-18), or null. Rules, not AI; the player chooses on My goal.
+ *       Goals step 3 (2026-11-18): `goals` = the goals that can still be chosen (Stronger hamstrings); `goal` = the
+ *       player's active goal or null; `retiredGoal` = the line for a retired goal still stored, or null.
  * PUT one of:
  *   { action: "test", playerId, on }                      → let ONE player take part while the team is on another mode
  *   { action: "out", playerId, out, reason }              → take ONE player out of the goals mode / put back (reason kept)
  *   { action: "set", playerId, slot, ids, reason }        → change a player's picks for a group (reason kept)
  *   { action: "lock", playerId, slot, locked, reason }    → lock / unlock a group for a player (reason kept)
- *   { action: "goal", playerId, goal, reason }            → change a player's goal (null clears; reason kept)
+ *   { action: "goal", playerId, goal, reason }            → change a player's goal ("robust" or null; reason kept)
  *   { action: "goal_lock", playerId, locked, reason }     → lock / unlock a player's goal (reason kept)
  *
  * Coach of the team only (requireCoachAccessForTeam; the team is read on the server, never from the body); the
@@ -25,11 +28,13 @@ import { getSupabaseServer } from "@/lib/supabaseServer";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
 import { authErrorToResponse } from "@/lib/auth/httpError";
 import {
+  ACTIVE_STRENGTH_GOALS,
   GOAL_DAYS,
   PICK_REASON_MIN,
-  STRENGTH_GOALS,
   STRENGTH_GOAL_LABEL,
+  activeGoal,
   isPickSlot,
+  retiredGoalNote,
   validateGoal,
   validatePlayerPick,
 } from "@/lib/micropulse/strengthProgramming/playerPicks";
@@ -78,7 +83,8 @@ async function teamState(sb: Sb, teamId: string) {
       name: (p.full_name ?? "").trim() || "—",
       picks: r?.picks ?? {},
       locked: r?.locked ?? [],
-      goal: r?.goal ?? null,
+      goal: activeGoal(r?.goal),
+      retiredGoal: retiredGoalNote(r?.goal),
       goalLocked: r?.goalLocked ?? false,
       testEnabled: r?.testEnabled ?? false,
       choicesOff: r?.choicesOff ?? false,
@@ -93,7 +99,7 @@ async function teamState(sb: Sb, teamId: string) {
   const testing = players.filter((p) => p.testEnabled).length;
   const out = players.filter((p) => p.choicesOff).length;
   const taking = players.filter((p) => p.takesPart).length;
-  const goals = STRENGTH_GOALS.map((id) => ({ id, ...STRENGTH_GOAL_LABEL[id], days: GOAL_DAYS[id] }));
+  const goals = ACTIVE_STRENGTH_GOALS.map((id) => ({ id, ...STRENGTH_GOAL_LABEL[id], days: GOAL_DAYS[id] }));
   return { ok: true, mode: cfg.mode, enabled: cfg.enabled, out, taking, hasList: cfg.hasList, groups: pickGroups(cfg.slots), goals, players, picked, withGoal, testing, total: players.length };
 }
 
@@ -159,8 +165,7 @@ export async function PUT(req: Request) {
     if (body.action === "goal") {
       const g = validateGoal(body.goal, false, { coach: true });
       if (!g.ok) return NextResponse.json({ error: g.error.en, error_is: g.error.is, code: g.error.code }, { status: 400 });
-      const suggested = (await loadDsiGoalSuggestions(sb, teamId, new Date().toISOString().slice(0, 10))).get(playerId)?.goal ?? null;
-      await saveGoal(sb, { playerId, teamId, slots: cfg.slots, goal: g.goal, actor, reason, dsiSuggested: suggested });
+      await saveGoal(sb, { playerId, teamId, slots: cfg.slots, goal: g.goal, actor, reason });
       return NextResponse.json(await teamState(sb, teamId));
     }
     if (body.action === "goal_lock") {

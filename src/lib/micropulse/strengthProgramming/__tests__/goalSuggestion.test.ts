@@ -1,6 +1,7 @@
 /**
- * DSI suggests a strength goal (2026-11-17): lower third of the team → "More explosive", upper third → "Stronger legs",
- * middle → nothing; never "Stronger hamstrings"; nothing without a team read, a missing test, or a test over 12 months.
+ * DSI suggests an 8-week gym goal (2026-11-17; pointed at the 8-week goals on 2026-11-18, goals step 3): lower third
+ * of the team → "Explosive power", upper third → "Maximal strength", middle → nothing; never a pitch goal and never the
+ * retired "+1 set" goals; nothing without a team read, a missing test, or a test over 12 months.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -22,14 +23,17 @@ const player = (ratio: number, over: Partial<DsiSuggestionInput> = {}): DsiSugge
 });
 
 describe("what DSI suggests", () => {
-  it("lower third → More explosive; upper third → Stronger legs; middle → nothing", () => {
-    expect(suggestGoalFromDsi(player(0.72), squad, today)?.goal).toBe("power");
-    expect(suggestGoalFromDsi(player(0.93), squad, today)?.goal).toBe("stronger");
+  it("lower third → Explosive power; upper third → Maximal strength; middle → nothing", () => {
+    expect(suggestGoalFromDsi(player(0.72), squad, today)?.goal).toBe("explosive");
+    expect(suggestGoalFromDsi(player(0.93), squad, today)?.goal).toBe("max_strength");
     expect(suggestGoalFromDsi(player(0.83), squad, today)).toBeNull();
   });
 
-  it("never suggests Stronger hamstrings", () => {
-    for (let r = 0.5; r <= 1.2; r += 0.01) expect(suggestGoalFromDsi(player(r), squad, today)?.goal).not.toBe("robust");
+  it("only ever one of the two 8-week gym goals (never a pitch goal, never a retired +1-set goal)", () => {
+    for (let r = 0.5; r <= 1.2; r += 0.01) {
+      const g = suggestGoalFromDsi(player(r), squad, today)?.goal;
+      if (g) expect(["explosive", "max_strength"]).toContain(g);
+    }
   });
 
   it("carries the plain reason, the test dates, the team size and how sure it is", () => {
@@ -57,7 +61,7 @@ describe("when DSI says nothing", () => {
 
   it("a test older than 12 months", () => {
     expect(suggestGoalFromDsi(player(0.72, { imtpTestDate: "2025-11-01" }), squad, today)).toBeNull();
-    expect(suggestGoalFromDsi(player(0.72, { cmjTestDate: "2025-11-17" }), squad, today)?.goal).toBe("power"); // exactly 365 days
+    expect(suggestGoalFromDsi(player(0.72, { cmjTestDate: "2025-11-17" }), squad, today)?.goal).toBe("explosive"); // exactly 365 days
   });
 });
 
@@ -65,20 +69,22 @@ describe("wiring", () => {
   const root = join(__dirname, "..", "..", "..", "..", "..");
   const read = (p: string) => readFileSync(join(root, p), "utf8");
 
-  it("both picks routes return the suggestion and keep what was suggested in the goal's history", () => {
-    const player = read("src/app/api/player/strength-picks/route.ts");
-    expect(player).toMatch(/loadDsiGoalSuggestions/);
-    expect(player).toMatch(/dsiSuggested: suggestion\?\.goal \?\? null/);
-    const coach = read("src/app/api/coach/team/player-strength-picks/route.ts");
-    expect(coach).toMatch(/suggestion: suggestions\.get\(p\.id\) \?\? null/);
-    expect(coach).toMatch(/dsiSuggested: suggested/);
-    const store = read("src/lib/micropulse/strengthProgramming/playerPicksStore.ts");
-    expect(store).toMatch(/after: \{ goal: args\.goal, dsiSuggested: args\.dsiSuggested \?\? null \}/);
+  it("My goal gets the suggestion, only for a player who can start a goal now and only for a goal they can pick", () => {
+    const route = read("src/app/api/player/goal-plan/route.ts");
+    expect(route).toMatch(/loadDsiGoalSuggestions/);
+    expect(route).toMatch(/const sug = autoStart && !open \? dsi\.get\(playerId\) \?\? null : null;/);
+    expect(route).toMatch(/e\.quality === sug\.goal && !e\.blocked/);
+    // The request still takes the goal from the body only: the suggestion never decides.
+    expect(route).not.toMatch(/quality: (sug|dsi)/);
   });
 
-  it("the suggestion never decides the goal: the player's save takes the goal from the body only", () => {
+  it("the coach's picks panel still shows the suggestion; the picks routes no longer store it with the hamstring goal", () => {
+    const coach = read("src/app/api/coach/team/player-strength-picks/route.ts");
+    expect(coach).toMatch(/suggestion: suggestions\.get\(p\.id\) \?\? null/);
+    expect(coach).not.toMatch(/dsiSuggested/);
     const player = read("src/app/api/player/strength-picks/route.ts");
-    expect(player).toMatch(/goal: g\.goal/);
-    expect(player).not.toMatch(/goal: suggestion/);
+    expect(player).not.toMatch(/loadDsiGoalSuggestions|dsiSuggested/);
+    const store = read("src/lib/micropulse/strengthProgramming/playerPicksStore.ts");
+    expect(store).toMatch(/after: \{ goal: args\.goal \}/);
   });
 });

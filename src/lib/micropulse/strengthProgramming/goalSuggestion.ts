@@ -1,5 +1,5 @@
 /**
- * DSI suggests a strength goal (2026-11-17). Pure — no DB.
+ * DSI suggests an 8-week gym goal (2026-11-17; pointed at the 8-week goals on 2026-11-18, goals step 3). Pure — no DB.
  *
  * The coach's rule: the force-plate tests SUGGEST a goal; the player chooses; the coach sees both. Rules, not AI.
  *
@@ -8,16 +8,18 @@
  * 8-week goal plans use), never against the textbook 0.6 / 0.8 cut: the stored CMJ peak sits above that band, so an
  * absolute cut would call nearly everyone "max strength". Splitting the team into thirds is our rule, not a study's.
  *
- *   lower third → "More explosive" (strong for how explosive they are: fast force is the next gain)
- *   upper third → "Stronger legs"  (already uses their strength fast: more strength is the next gain)
- *   middle      → no suggestion    (both qualities are in balance — the player picks freely)
+ *   lower third → "Explosive power"   (strong for how explosive they are: fast force is the next gain)
+ *   upper third → "Maximal strength"  (already uses their strength fast: more strength is the next gain)
+ *   middle      → no suggestion       (both qualities are in balance — the player picks freely)
  *
- * "Stronger hamstrings" is never suggested from DSI (DSI says nothing about hamstrings). No suggestion when the team
- * read is missing (fewer than 4 tested), when either test is missing, or when either test is older than 12 months.
+ * Until 2026-11-18 this pointed at the old "+1 set" goals (More explosive / Stronger legs), now retired. The 8-week
+ * plan itself also reads DSI to pick where it starts (gymGoals.ts); this is only the suggestion of WHICH goal. No
+ * suggestion when the team read is missing (fewer than 4 tested), when either test is missing, or when either test is
+ * older than 12 months.
  */
 
 import { deriveDsiForPlayer, type DsiCoverageInput, type SquadDsiThresholds } from "./deriveDsi";
-import type { StrengthGoal } from "./playerPicks";
+import type { GoalQuality } from "@/lib/micropulse/goalPlan/types";
 
 /** A test older than this does not suggest anything (the player may have changed since). */
 export const SUGGESTION_MAX_TEST_AGE_DAYS = 365;
@@ -26,7 +28,8 @@ export const DSI_SUGGESTION_SOURCE =
   "Dynamic Strength Index: jump (CMJ) peak force ÷ mid-thigh pull (IMTP) peak force (Suchomel et al. 2016), compared within the team (thirds — our rule, not from a study).";
 
 export type GoalSuggestion = {
-  goal: Extract<StrengthGoal, "power" | "stronger">;
+  /** The 8-week gym goal the tests point to. */
+  goal: Extract<GoalQuality, "explosive" | "max_strength">;
   reasonEN: string;
   reasonIS: string;
   /** Dates of the two tests the suggestion rests on (YYYY-MM-DD). */
@@ -73,7 +76,7 @@ export function suggestGoalFromDsi(
   if (read.dsi.tier === "ballistic") {
     return {
       ...base,
-      goal: "power",
+      goal: "explosive",
       reasonEN: "Your force-plate tests show a lot of strength for how explosive you are (lower third of your team). Getting more explosive is the next step.",
       reasonIS: "Kraftplötuprófin þín sýna mikinn styrk miðað við sprengikraft (neðsti þriðjungur liðsins). Meiri sprengikraftur er næsta skref.",
     };
@@ -81,7 +84,7 @@ export function suggestGoalFromDsi(
   if (read.dsi.tier === "max_strength") {
     return {
       ...base,
-      goal: "stronger",
+      goal: "max_strength",
       reasonEN: "Your force-plate tests show you already use your strength fast (upper third of your team). More strength is the next step.",
       reasonIS: "Kraftplötuprófin þín sýna að þú nýtir styrkinn hratt nú þegar (efsti þriðjungur liðsins). Meiri styrkur er næsta skref.",
     };

@@ -10,8 +10,11 @@
  * this" and can't be changed. Plain words only; no sport-science terms.
  *
  * Season (2026-11-17): the goal's extra set comes only in pre-season and off-season; in season the session is
- * maintenance and the goal is kept. When the player's force-plate tests suggest a goal (DSI against the team, rules
- * not AI) the sheet says so and marks that button "Suggested" — the player still chooses.
+ * maintenance and the goal is kept.
+ *
+ * Goals step 3 (2026-11-18): "Stronger legs" and "More explosive" are retired (the 8-week gym goals on My goal replace
+ * them, and the force-plate suggestion moved there). Only "Stronger hamstrings" is offered here; a retired goal still
+ * stored gets one line saying it no longer adds a set.
  */
 
 import * as React from "react";
@@ -19,7 +22,6 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Group = { slot: string; label: { en: string; is: string }; max: number; options: { id: string; nameEN: string; nameIS: string }[] };
 type Goal = { id: string; en: string; is: string; whatEN: string; whatIS: string };
-type Suggestion = { goal: string; reasonEN: string; reasonIS: string; cmjDate: string; imtpDate: string; tested: number; confidence: "high" | "moderate"; source: string };
 type State =
   | { ok: true; enabled: false }
   | {
@@ -31,7 +33,8 @@ type State =
       goals: Goal[];
       goal: string | null;
       goalLocked: boolean;
-      suggestion?: Suggestion | null;
+      /** A retired goal still stored (2026-11-18): one line saying it no longer adds a set. */
+      retiredGoal?: { en: string; is: string } | null;
       updatedAt: string | null;
       updatedByRole: "player" | "coach" | null;
     };
@@ -159,32 +162,20 @@ export default function PlayerExercisePicksSheet({ lang, onClose }: { lang?: "IS
               <li>{T("It counts from the next session you get (not one already sent today).", "Það gildir frá næstu æfingu sem þú færð (ekki þeirri sem er þegar komin í dag).")}</li>
               <li>{T("Your picks change which exercise, not the sets, reps or rest.", "Valið breytir hvaða æfing það er, ekki settum, endurtekningum eða hvíld.")}</li>
               <li>{T("No extra set on a light or recovery day, in a week with two matches, or if something is sore: then the app keeps you safe first.", "Ekkert aukasett á léttum degi eða endurheimtardegi, í viku með tveimur leikjum eða ef eitthvað er aumt: þá gætir appið öryggis fyrst.")}</li>
+              <li>{T("Want to get stronger or more explosive? Those are 8-week plans now: open My goal on Today.", "Viltu verða sterkari eða sprengikraftsmeiri? Það eru nú 8 vikna áætlanir: opnaðu Markmiðið mitt á Í dag.")}</li>
             </ul>
 
             <section className="rounded-xl border border-slate-200 p-3" data-testid="goal-group">
               <div className="flex items-baseline justify-between gap-2">
                 <h3 className="text-sm font-semibold text-slate-900">{T("My goal", "Markmiðið mitt")}</h3>
-                <span className="text-[11px] text-slate-400">{state.goalLocked ? T("Your coach chose this", "Þjálfarinn þinn valdi þetta") : T("Pick 1", "Veldu 1")}</span>
+                <span className="text-[11px] text-slate-400">{state.goalLocked ? T("Your coach chose this", "Þjálfarinn þinn valdi þetta") : T("On or off", "Af eða á")}</span>
               </div>
-              {state.suggestion ? (() => {
-                const sg = state.suggestion;
-                const label = state.goals.find((g) => g.id === sg.goal);
-                return (
-                  <div className="mt-2 rounded-lg border border-[#2740e6]/25 bg-[#2740e6]/5 px-3 py-2" data-testid="goal-suggestion">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {T("Your force-plate tests suggest: ", "Kraftplötuprófin þín benda á: ")}{label ? (is ? label.is : label.en) : sg.goal}
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-600">{is ? sg.reasonIS : sg.reasonEN}</p>
-                    <p className="mt-1 text-[11px] text-slate-400" title={sg.source}>
-                      {T(`A suggestion from rules, not AI · jump test ${sg.cmjDate}, pull test ${sg.imtpDate} · you choose`, `Tillaga út frá reglum, ekki gervigreind · stökkpróf ${sg.cmjDate}, togpróf ${sg.imtpDate} · þú velur`)}
-                    </p>
-                  </div>
-                );
-              })() : null}
+              {state.retiredGoal ? (
+                <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600" data-testid="retired-goal">{is ? state.retiredGoal.is : state.retiredGoal.en}</p>
+              ) : null}
               <div className="mt-2 grid gap-2">
                 {state.goals.map((g) => {
                   const on = state.goal === g.id;
-                  const suggested = state.suggestion?.goal === g.id;
                   return (
                     <button
                       key={g.id}
@@ -194,12 +185,7 @@ export default function PlayerExercisePicksSheet({ lang, onClose }: { lang?: "IS
                       aria-pressed={on}
                       className={`rounded-xl border px-3 py-2 text-left transition disabled:opacity-60 ${on ? "border-[#2740e6] bg-[#2740e6] text-white" : "border-slate-300 bg-white text-slate-800 hover:bg-slate-50"}`}
                     >
-                      <span className="flex items-center gap-2 text-sm font-semibold">
-                        {is ? g.is : g.en}
-                        {suggested ? (
-                          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${on ? "bg-white/20 text-white" : "bg-[#2740e6]/10 text-[#2740e6]"}`}>{T("Suggested", "Tillaga")}</span>
-                        ) : null}
-                      </span>
+                      <span className="block text-sm font-semibold">{is ? g.is : g.en}</span>
                       <span className={`block text-xs ${on ? "text-white/85" : "text-slate-500"}`}>{is ? g.whatIS : g.whatEN}</span>
                     </button>
                   );

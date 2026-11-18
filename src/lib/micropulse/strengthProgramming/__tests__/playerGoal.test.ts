@@ -1,5 +1,6 @@
 /**
- * Player strength goal (lota 2, 2026-11-17): the limits (goal values, coach lock), the engine (+1 set of the
+ * Player strength goal (lota 2, 2026-11-17; goals step 3 on 2026-11-18 retired "stronger" / "power" — the engine
+ * tests below still use them to pin the step's rules, but only "robust" can reach the engine now): the limits (goal values, coach lock), the engine (+1 set of the
  * matching exercise on the goal's days; no goal = the session exactly as before; never on a lighter / recovery day,
  * in a two-match week, on a braking streak, or on a safety swap) and the deficit-ledger safety fix (an emphasis never
  * adds back what a safety rule took out, nor anything on a recovery day).
@@ -12,7 +13,9 @@
 import { describe, it, expect } from "vitest";
 import { buildStrengthSession } from "../index";
 import { strengthSessionToTodayStructure } from "../toTodayStructure";
-import { GOAL_DAYS, sanitizeGoal, validateGoal, type StrengthGoal } from "../playerPicks";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { GOAL_DAYS, activeGoal, retiredGoalNote, sanitizeGoal, validateGoal, type StrengthGoal } from "../playerPicks";
 import { applyBlockToSession } from "../blockEmphasis";
 import { goalSeasonOf, withGoalSeason } from "../playerGoal";
 import type { PaletteSlots } from "../palette";
@@ -56,19 +59,55 @@ const rule = (s: S, id: string) => (s?.appliedAdaptations ?? []).find((a) => a.r
 const sore = (...areas: string[]) => ({ sleepQuality: null, muscleSoreness: null, fatigueEnergy: null, stressMood: null, soreAreas: areas });
 
 describe("limits", () => {
-  it("only the three goals; null clears; anything else is unknown", () => {
-    expect(validateGoal("stronger", false)).toEqual({ ok: true, goal: "stronger" });
+  it("only Stronger hamstrings can be chosen (goals step 3, 2026-11-18); null clears; anything else is unknown", () => {
+    expect(validateGoal("robust", false)).toEqual({ ok: true, goal: "robust" });
     expect(validateGoal(null, false)).toEqual({ ok: true, goal: null });
     expect(validateGoal("hypertrophy", false).ok).toBe(false);
     expect(sanitizeGoal("muscle")).toBeNull();
     expect(sanitizeGoal("robust")).toBe("robust");
   });
 
+  it("Stronger legs / More explosive are retired: neither the player nor the coach can set them", () => {
+    for (const g of ["stronger", "power"]) {
+      for (const coach of [false, true]) {
+        const v = validateGoal(g, false, { coach });
+        expect(v.ok).toBe(false);
+        if (!v.ok) expect(v.error.code).toBe("retired");
+      }
+    }
+  });
+
   it("a player can't change a goal the coach locked; the coach can", () => {
-    const p = validateGoal("power", true);
+    const p = validateGoal("robust", true);
     expect(p.ok).toBe(false);
     if (!p.ok) expect(p.error.code).toBe("locked");
-    expect(validateGoal("power", true, { coach: true }).ok).toBe(true);
+    expect(validateGoal("robust", true, { coach: true }).ok).toBe(true);
+  });
+});
+
+describe("retired goals stay stored but add nothing (goals step 3, 2026-11-18)", () => {
+  it("the engine input keeps only an active goal; a stored retired goal gets a plain line", () => {
+    expect(activeGoal("robust")).toBe("robust");
+    expect(activeGoal("power")).toBeNull();
+    expect(activeGoal("stronger")).toBeNull();
+    expect(activeGoal(null)).toBeNull();
+    expect(retiredGoalNote("power")?.en).toMatch(/More explosive.*no longer adds a set/);
+    expect(retiredGoalNote("stronger")?.is).toMatch(/Sterkari fætur.*bætir ekki lengur við setti/);
+    expect(retiredGoalNote("robust")).toBeNull();
+    expect(retiredGoalNote(null)).toBeNull();
+  });
+
+  it("wiring: the one engine input reads the goal through activeGoal; both picks routes offer only active goals", () => {
+    const root = join(__dirname, "..", "..", "..", "..", "..");
+    const read = (f: string) => readFileSync(join(root, f), "utf8");
+    expect(read("src/lib/micropulse/playerContext/domains.ts")).toMatch(/const goal = activeGoal\(r\.strength_goal\);/);
+    expect(read("src/lib/micropulse/playerContext/domains.ts")).not.toMatch(/sanitizeGoal/);
+    for (const f of ["src/app/api/player/strength-picks/route.ts", "src/app/api/coach/team/player-strength-picks/route.ts"]) {
+      const src = read(f);
+      expect(src).toMatch(/ACTIVE_STRENGTH_GOALS\.map/);
+      expect(src).not.toMatch(/\bSTRENGTH_GOALS\.map/);
+      expect(src).toMatch(/retiredGoalNote\(/);
+    }
   });
 });
 
