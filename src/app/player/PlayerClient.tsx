@@ -5923,12 +5923,25 @@ export default function PlayerClient() {
           mon.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
           const weekStart = mon.toISOString().slice(0, 10);
 
-          const [teamRes, wsRes, ctRes] = await Promise.all([
+          const accessToken = auth?.session?.access_token ?? null;
+          const [teamRes, wsRes, ctRes, planPhase] = await Promise.all([
             supabase.from("teams").select("plan_tier, club_theme_color, sport, strength_auto_send, strength_send_mode").eq("id", prof.team_id).maybeSingle(),
             supabase.from("coach_week_setup").select("season_phase").eq("team_id", prof.team_id).eq("week_start_date", weekStart).maybeSingle(),
             // The RECURRING team programme (no date window) is the base table. Week-dated basketball plans
             // (start_date set) are NOT chosen here — fetchStage4Plan picks the one whose week covers today.
             supabase.from("custom_template_sets").select("table_name").eq("team_id", prof.team_id).is("player_id", null).is("start_date", null).order("is_active", { ascending: false }).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+            // The week's phase by the shared rule (saved, else the season plan's — weekSetup/weekPhase.ts), so the
+            // programme rows read here match the phase the strength engine builds with. Used only when the week
+            // has no saved phase; any failure → the old default (in season).
+            (async (): Promise<string | null> => {
+              if (!accessToken) return null;
+              try {
+                const r = await fetch(`/api/week-phase?week=${weekStart}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+                if (!r.ok) return null;
+                const j = (await r.json()) as { phase?: string | null };
+                return typeof j.phase === "string" ? j.phase : null;
+              } catch { return null; }
+            })(),
           ]);
 
           const teamRow = teamRes.data;
@@ -5944,9 +5957,10 @@ export default function PlayerClient() {
           resolvedIsBasketball = String((teamRow as { sport?: string | null } | null)?.sport ?? "").toLowerCase() === "basketball";
           setTeamIsBasketball(resolvedIsBasketball);
 
-          const sp = (wsRes.data as any)?.season_phase;
+          const savedSp = (wsRes.data as { season_phase?: string | null } | null)?.season_phase ?? "";
           const validPhases = ["preseason", "inseason", "playoffs", "offseason"];
-          if (validPhases.includes(sp)) {
+          const sp = validPhases.includes(savedSp) ? savedSp : planPhase;
+          if (sp && validPhases.includes(sp)) {
             resolvedSeasonPhase = sp;
             setActiveSeasonPhase(sp);
           }

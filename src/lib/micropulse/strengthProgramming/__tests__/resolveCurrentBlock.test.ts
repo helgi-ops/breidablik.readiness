@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { blockFromPlan, seasonPlanCandidates } from "../resolveCurrentBlock";
 import { buildMesoBlocks } from "@/lib/micropulse/periodization";
 
+const addDay = (iso: string, n: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+
 // Minimal plan shapes — blockFromPlan only reads phases/loadCurve/matchLoad*/fixtures.
 const emptyPlan = { phases: [] as any[], loadCurve: [] as any[], matchLoad: null, matchLoadTeam: null, fixtures: [] as string[] };
 
@@ -46,6 +48,35 @@ describe("blockFromPlan — the meso block containing today", () => {
     const r = blockFromPlan(plan, 4, mid);
     expect(r).not.toBeNull();
     expect(r!.phase).toBe("preseason");
+  });
+});
+
+describe("blockFromPlan — a block's end date belongs to the next block (2026-11-18)", () => {
+  const phases = [
+    { key: "preseason", label: { en: "", is: "" }, start: "2026-01-05", end: "2026-03-02", weeks: 8, matches: 0, rationale: { en: "", is: "" } },
+    { key: "competitive", label: { en: "", is: "" }, start: "2026-03-02", end: "2026-11-02", weeks: 35, matches: 20, rationale: { en: "", is: "" } },
+  ];
+  const loadCurve = Array.from({ length: 44 }, (_, i) => {
+    const d = new Date(Date.UTC(2026, 0, 5)); d.setUTCDate(d.getUTCDate() + i * 7);
+    return { weekStart: d.toISOString().slice(0, 10), load: 2000, readiness: null };
+  });
+  const fixtures = loadCurve.slice(8).map((w) => w.weekStart);
+  const plan = { phases, loadCurve, matchLoad: 1800, matchLoadTeam: 1800, fixtures } as unknown as Parameters<typeof blockFromPlan>[0];
+  const blocks = buildMesoBlocks(phases[0].start, phases[phases.length - 1].end, loadCurve as unknown as Parameters<typeof buildMesoBlocks>[2], 4, 1800, fixtures);
+
+  it("blocks are back to back (end = next start), so the boundary day is the NEXT block's first day", () => {
+    expect(blocks.length).toBeGreaterThan(1);
+    expect(blocks[0].end).toBe(blocks[1].start);
+    const r = blockFromPlan(plan, 4, blocks[1].start);
+    expect(r).not.toBeNull();
+    expect(r!.label).toEqual(blocks[1].phase);
+    expect(blockFromPlan(plan, 4, addDay(blocks[1].start, -1))!.label).toEqual(blocks[0].phase);
+  });
+
+  it("the plan's last day keeps its block, unless strict (then next season's plan is tried first)", () => {
+    const last = blocks[blocks.length - 1];
+    expect(blockFromPlan(plan, 4, last.end)).not.toBeNull();
+    expect(blockFromPlan(plan, 4, last.end, [], null, true)).toBeNull();
   });
 });
 

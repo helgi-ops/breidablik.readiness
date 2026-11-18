@@ -25,6 +25,7 @@ import { sanitizePaletteSlots, type PaletteSlots } from "../strengthProgramming/
 import { sanitizeMdStructures, sanitizeNoMatchWeek, type MdStructures, type NoMatchWeek } from "../strengthProgramming/structures";
 import { activeGoal, sanitizePicks, type PlayerExercisePicks, type StrengthGoal } from "../strengthProgramming/playerPicks";
 import { normalizeSendMode, type SendMode } from "../strengthProgramming/sendMode";
+import { resolveWeekPhase } from "@/lib/micropulse/weekSetup/weekPhaseServer";
 
 /** Corrective compensation → the strength emphasis it corroborates (CONFIRM-vs-ADD
  *  de-dup when the strength blocks already emphasise the same quality). */
@@ -47,18 +48,9 @@ export async function fetchTeamContext(sb: SupabaseClient, teamId: string | null
     const { data: team } = await sb.from("teams").select("sport, strength_send_mode").eq("id", teamId).maybeSingle();
     const sport = ((team as { sport?: string | null } | null)?.sport ?? null) as string | null;
     const sendMode = normalizeSendMode((team as { strength_send_mode?: string | null } | null)?.strength_send_mode);
-    // Monday of the current week (UTC) — matches how week setup keys rows.
-    const d = new Date(`${todayIso}T00:00:00Z`);
-    const mon = new Date(d);
-    mon.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-    const weekStart = mon.toISOString().slice(0, 10);
-    const { data: wk } = await sb
-      .from("coach_week_setup")
-      .select("season_phase")
-      .eq("team_id", teamId)
-      .eq("week_start_date", weekStart)
-      .maybeSingle();
-    const seasonPhase = ((wk as { season_phase?: string | null } | null)?.season_phase ?? null) as string | null;
+    // The week's phase: the coach's saved one (Week setup), else the season plan's (2026-11-18 — before, an
+    // unsaved week had no phase here, so pre-season weeks planned from the Periodization Hub built as in-season).
+    const { phase: seasonPhase } = await resolveWeekPhase(sb, teamId, todayIso);
     return { sport, seasonPhase, sendMode };
   } catch {
     return { sport: null, seasonPhase: null };

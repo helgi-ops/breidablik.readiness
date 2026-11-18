@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveWeekPhase } from "@/lib/micropulse/weekSetup/weekPhaseServer";
 
 /**
  * customProgrammeActive — does the team have an authored Custom Programme that covers TODAY for a player?
@@ -17,21 +18,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * Reference: PlayerClient.tsx:5402-5432 (season_phase + team table), :4849-4878 (per-player window + read).
  */
 
-const VALID_PHASES = ["preseason", "inseason", "playoffs", "offseason"] as const;
 const DEFAULT_TABLE = "microdose_templates";
 // Basketball plans strength as a weekly split keyed by weekday — the slot is today's weekday, not the
 // football MD tag the send routes pass. Keep this array IDENTICAL to custom-templates WEEKDAYS +
 // PlayerClient BB_WEEKDAY_CODES so the stand-aside check agrees with what the player actually resolves.
 const BB_WEEKDAY_CODES = ["MÁN", "ÞRI", "MIÐ", "FIM", "FÖS", "LAU", "SUN"];
 const bbWeekdaySlot = (todayIso: string): string => BB_WEEKDAY_CODES[(new Date(`${todayIso}T00:00:00Z`).getUTCDay() + 6) % 7];
-
-/** Monday (ISO) of the week containing `todayIso` — matches PlayerClient's week_start_date key. */
-function mondayOf(todayIso: string): string {
-  const d = new Date(`${todayIso}T00:00:00Z`);
-  const dow = d.getUTCDay();
-  d.setUTCDate(d.getUTCDate() - ((dow + 6) % 7));
-  return d.toISOString().slice(0, 10);
-}
 
 export type TeamCtx = {
   /** The week's season_phase (always resolved, default "inseason"). */
@@ -55,13 +47,13 @@ export async function resolveTeamCustomTable(
   todayIso: string,
 ): Promise<TeamCtx> {
   try {
-    const weekStart = mondayOf(todayIso);
-    const [wsRes, teamRes] = await Promise.all([
-      sb.from("coach_week_setup").select("season_phase").eq("team_id", teamId).eq("week_start_date", weekStart).maybeSingle(),
+    // The week's phase: the coach's saved one, else the season plan's, else in season — the same rule the
+    // player's Today reads its programme with (2026-11-18).
+    const [wk, teamRes] = await Promise.all([
+      resolveWeekPhase(sb, teamId, todayIso),
       sb.from("teams").select("sport").eq("id", teamId).maybeSingle(),
     ]);
-    const sp = (wsRes.data as { season_phase?: string } | null)?.season_phase;
-    const seasonPhase = (VALID_PHASES as readonly string[]).includes(sp ?? "") ? (sp as string) : "inseason";
+    const seasonPhase: string = wk.phase ?? "inseason";
     const isBasketball = String((teamRes.data as { sport?: string } | null)?.sport ?? "").toLowerCase() === "basketball";
 
     // The active team table (either sport): a date-ranged BLOCK whose window covers today wins; else the

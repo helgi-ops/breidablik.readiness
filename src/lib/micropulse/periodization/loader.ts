@@ -75,27 +75,33 @@ const mondayOf = (iso: string) => {
 };
 const ageDays = (iso: string | null, todayMs: number) => (iso ? Math.round((todayMs - Date.parse(iso)) / 86_400_000) : null);
 
-export async function loadPeriodization(sb: SupabaseClient, args: { teamId: string; seasonYear?: number; preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; deloadCadence?: number | null; blockWeeksByStart?: Record<string, number> | null; deloadByStart?: Record<string, string> | null }): Promise<PeriodizationPlan> {
-  const todayMs = Date.now();
-  const seasonYear = args.seasonYear ?? new Date().getUTCFullYear();
-  // A season can OPEN in the PRIOR calendar year — pre-season often starts in Nov/Dec. When the coach set a
-  // pre-season start before Jan 1, widen the window back to it so the whole season (that pre-season → the
-  // competition → the off-season) loads under this season year, instead of the calendar year clipping it.
+type SeasonFixture = { date: string; competition: string | null; isHome: boolean | null; isFriendly: boolean | null };
+
+/**
+ * A season's date window and fixtures — the input to its macro phases (`detectSeasonPhases`). Shared by the full
+ * plan below and the lean week-phase read (`weekSetup/weekPhaseServer.ts`), so both find the same phases.
+ * A season can OPEN in the PRIOR calendar year — pre-season often starts in Nov/Dec. When the coach set a
+ * pre-season start before Jan 1, the window widens back to it so the whole season (that pre-season → the
+ * competition → the off-season) loads under this season year, instead of the calendar year clipping it.
+ * KSÍ publishes the fixture list late: when the season has NO fixtures of its own yet, the opener is ESTIMATED
+ * from last season's first competitive game (+1 year) — a single in-memory fixture, never written, replaced the
+ * moment the coach adds a real one.
+ */
+export async function loadSeasonFixtures(
+  sb: SupabaseClient,
+  args: { teamId: string; seasonYear: number; preseasonStart?: string | null },
+): Promise<{ yStart: string; yEnd: string; fixtures: SeasonFixture[]; fixturesEstimated: boolean; estimatedOpener: string | null }> {
+  const { seasonYear } = args;
   const yStartBase = `${seasonYear}-01-01`;
   const yStart = args.preseasonStart && /^\d{4}-\d{2}-\d{2}$/.test(args.preseasonStart) && args.preseasonStart < yStartBase ? args.preseasonStart : yStartBase;
   const yEnd = `${seasonYear}-12-31`;
 
-  // Fixtures → macro phases.
   const { data: fxData } = await sb.from("match_schedule")
     .select("match_date, competition, is_home, is_friendly").eq("team_id", args.teamId)
     .gte("match_date", yStart).lte("match_date", yEnd).order("match_date");
-  let fixtures = ((fxData ?? []) as Array<{ match_date: string; competition: string | null; is_home: boolean | null; is_friendly: boolean | null }>)
+  let fixtures: SeasonFixture[] = ((fxData ?? []) as Array<{ match_date: string; competition: string | null; is_home: boolean | null; is_friendly: boolean | null }>)
     .map((f) => ({ date: f.match_date, competition: f.competition, isHome: f.is_home, isFriendly: f.is_friendly }));
 
-  // KSÍ publishes the fixture list late. When a season has NO fixtures of its own yet, ESTIMATE the opener
-  // from last season's first competitive game (+1 year), so pre-season → competition can be planned now. A
-  // single synthetic fixture (in-memory only — never written); it's replaced automatically the moment the
-  // coach adds a real fixture. The coach corrects the estimate when the real schedule arrives.
   let fixturesEstimated = false;
   let estimatedOpener: string | null = null;
   if (fixtures.length === 0) {
@@ -111,6 +117,34 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
       fixturesEstimated = true;
     }
   }
+  return { yStart, yEnd, fixtures, fixturesEstimated, estimatedOpener };
+}
+
+/**
+ * The first date of the season's own load data (GPS rows, or sRPE sessions with a load) in its window — the
+ * pre-season start `detectSeasonPhases` falls back to when the coach set none. Reads one row per source; the full
+ * plan finds the same date while it walks every row.
+ */
+export async function loadSeasonDataStart(sb: SupabaseClient, args: { teamId: string; yStart: string; yEnd: string }): Promise<string | null> {
+  const [gps, rpe] = await Promise.all([
+    sb.from("player_external_load_daily").select("date").eq("team_id", args.teamId)
+      .gte("date", args.yStart).lte("date", args.yEnd).order("date", { ascending: true }).limit(1),
+    // The plan counts an sRPE row when session_load_au > 0, or (no session_load_au) RPE × minutes > 0.
+    sb.from("player_session_rpe").select("session_date").eq("team_id", args.teamId)
+      .gte("session_date", args.yStart).lte("session_date", args.yEnd)
+      .or("session_load_au.gt.0,and(session_load_au.is.null,rpe.gt.0,duration_min.gt.0)")
+      .order("session_date", { ascending: true }).limit(1),
+  ]);
+  const a = ((gps.data ?? []) as Array<{ date: string | null }>)[0]?.date ?? null;
+  const b = ((rpe.data ?? []) as Array<{ session_date: string | null }>)[0]?.session_date ?? null;
+  return a && b ? (a < b ? a : b) : (a ?? b);
+}
+
+export async function loadPeriodization(sb: SupabaseClient, args: { teamId: string; seasonYear?: number; preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; deloadCadence?: number | null; blockWeeksByStart?: Record<string, number> | null; deloadByStart?: Record<string, string> | null }): Promise<PeriodizationPlan> {
+  const todayMs = Date.now();
+  const seasonYear = args.seasonYear ?? new Date().getUTCFullYear();
+  // Fixtures → macro phases (window + fixtures shared with the lean week-phase read).
+  const { yStart, yEnd, fixtures, fixturesEstimated, estimatedOpener } = await loadSeasonFixtures(sb, { teamId: args.teamId, seasonYear, preseasonStart: args.preseasonStart });
 
   // The NEXT season's first competitive game (after this year's window): lets the upcoming pre-season be
   // planned all the way to the real opener (e.g. early April next year) instead of a fixed 10 weeks.

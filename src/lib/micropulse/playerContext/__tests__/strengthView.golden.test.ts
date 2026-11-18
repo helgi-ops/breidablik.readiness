@@ -147,7 +147,8 @@ describe("buildPlayerContext → strengthView (wiring)", () => {
   it("populated direct tables flow through the relocated fetchers", async () => {
     const sb = makeFakeSb({
       teams: [{ sport: "football" }],
-      coach_week_setup: [{ season_phase: "in_season" }],
+      // A saved phase (the stored values are preseason / inseason / playoffs / offseason).
+      coach_week_setup: [{ season_phase: "inseason" }],
       // one Catapult row carries CoD + decel-band columns (sprint stays null — no valid mv/hsr).
       player_external_load_daily: [{ date: "2026-09-11", source: "catapult", ima_cod_left_high: 10, ima_cod_right_high: 6, decel_burden_band: "high", max_velocity: null, max_vel: null, high_speed_distance: null }],
       readiness_entries: [{ entry_date: "2026-09-11", sleep_quality: 4, muscle_soreness: 2, fatigue_energy: 3, stress_mood: 4, sore_areas: ["hamstring"], notes: null }],
@@ -164,7 +165,7 @@ describe("buildPlayerContext → strengthView (wiring)", () => {
     expect(snap.mdContext).toBe("MD-1");           // GAME in 1 day
     expect(snap.isCongestedWeek).toBe(true);       // 2 matches ≥60 min in the ±7d window
     expect(snap.sport).toBe("football");
-    expect(snap.seasonPhase).toBe("in_season");
+    expect(snap.seasonPhase).toBe("inseason");
     expect(snap.codAsymmetryPct).toBe(40);         // |10-6|/10*100
     expect(snap.codWeakerSide).toBe("R");          // right side has fewer CoD
     expect(snap.decelBurdenBand).toBe("high");

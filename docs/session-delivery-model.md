@@ -18,7 +18,11 @@ The resolver is `fetchStage4Plan` in `src/app/player/PlayerClient.tsx` (~line 45
    column records which one, so a surface can name what's on a date.
 3. **Periodised team microdose** — view `v_player_today_microdose_final` re-resolved from the team's
    template table, filtered by `team_id + md_day + readiness_level + season_phase`. **This is the
-   "Today's session" auto layer — good for pre-season / in-season.** It is customised by:
+   "Today's session" auto layer — good for pre-season / in-season.** The `season_phase` is the week's phase by
+   ONE rule (`src/lib/micropulse/weekSetup/weekPhase.ts`, since 2026-11-18): the coach's saved phase in Week setup,
+   else the season plan's phase for that week (Today asks `/api/week-phase`), else in season. The strength engine
+   and the Standard-mode stand-aside check read the same rule. When several team-level sets exist, the one marked
+   active wins, else the newest. It is customised by:
    - **Custom Programmes** (a.k.a. custom microdose templates): a team-level custom table swaps the
      default `microdose_templates`; a **per-player** `custom_template_sets` row swaps it for one player
      over a **date range** when today's MD-day is in the set's `md_days` (`PlayerClient.tsx:4688-4724`).
@@ -28,7 +32,8 @@ The resolver is `fetchStage4Plan` in `src/app/player/PlayerClient.tsx` (~line 45
 **Programme table names stay within 63 characters.** Postgres cuts longer identifiers without an error while PostgREST
 answers 404, so every name goes through `fitTableName` (`src/lib/micropulse/templateAutoGenerate.ts`). The RPCs and a
 check on `custom_template_sets` refuse anything longer. Tables must also carry `structure_en`, because the Today read
-selects it. `create_custom_microdose_table` adds it when it runs, but tables it has not touched since 2026-11-09 can lack it.
+selects it. `create_custom_microdose_table` adds it when it runs; the four older tables that lacked it got an empty
+column on 2026-11-18 (`20261118130000_preseason_programme_ready.sql`).
 
 **Daily plan locks are never a content source.** `player_microdose_plan_locks` (written on check-in by
 `lock_player_microdose_plan`) records md_day + readiness, which `v_player_today_microdose_final` reads. Until

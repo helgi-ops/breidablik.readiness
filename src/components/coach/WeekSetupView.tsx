@@ -29,6 +29,7 @@ import { type StimulusType } from "@/lib/drill-stimulus";
 import { TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import { expectedWeekShape } from "@/lib/micropulse/weekSetup/gameDensity";
+import { macroPhaseForWeek } from "@/lib/micropulse/weekSetup/weekPhase";
 import type { SportId } from "@/lib/micropulse/sportProfiles";
 
 // shadcn/ui
@@ -287,18 +288,8 @@ function intentFromWeekPlan(dayType: string | null, dayIntent: string | null, fo
   return "FORCE"; // a training day with no recognisable stimulus
 }
 
-// Map the Macro season phase that covers a week → the Week-setup Season pill. Macro keys are
-// preseason / competitive / offseason (from detectSeasonPhases); the pill also has playoffs (manual).
-function macroPhaseForWeek(weekStart: string, phases: Array<{ key: string; start: string; end: string }>): SeasonPhase | null {
-  if (!phases.length) return null;
-  const weekEnd = addDays(weekStart, 6);
-  const map: Record<string, SeasonPhase> = { preseason: "preseason", competitive: "inseason", offseason: "offseason" };
-  const hit =
-    phases.find((p) => p.start <= weekStart && weekStart <= p.end) ??      // week starts inside a phase
-    phases.find((p) => p.start <= weekEnd && weekEnd <= p.end) ??           // week ends inside a phase
-    phases.find((p) => weekStart <= p.start && p.start <= weekEnd);          // a phase starts mid-week
-  return hit ? (map[hit.key] ?? null) : null;
-}
+// The Macro season phase covering a week → the Season pill: macroPhaseForWeek (weekSetup/weekPhase.ts), the
+// same rule the strength engine and the player's Today use when the coach saved no phase on the week.
 
 function matchAnchoredIntents(weekStart: string, weekEnd: string, matchDates: (string | undefined)[]): NoMatchIntent[] | null {
   const inWeek = matchesInWeek(weekStart, weekEnd, matchDates);
@@ -931,7 +922,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
   // a fixture: a coach expects to land on this week and page forward to the match week
   // with the < > arrows themselves.
 
-  // Macro season phases — fetched once per team; used to auto-fill the Season pill (below).
+  // The off-season build start (the coach's saved season window) — fetched once per team.
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -941,14 +932,31 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         if (!session?.access_token) return;
         const res = await fetch(`/api/coach/periodization`, { headers: { Authorization: `Bearer ${session.access_token}` } });
         const j = await res.json().catch(() => null);
-        const phases = (j?.plan?.phases ?? []) as Array<{ key: string; start: string; end: string }>;
-        if (alive && Array.isArray(phases)) setMacroPhases(phases.map((p) => ({ key: p.key, start: p.start, end: p.end })));
         const obs = (j?.savedWindow as { offseasonStart?: string | null } | undefined)?.offseasonStart;
         if (alive && obs) setOffBuildStart(obs);
-      } catch { /* soft — Season pill just stays manual */ }
+      } catch { /* soft */ }
     })();
     return () => { alive = false; };
   }, [teamId]);
+
+  // Macro season phases around the week shown — this season's plan and next season's (a pre-season that opens in
+  // Nov/Dec belongs to the season it leads into), from /api/week-phase, the same read the strength engine uses.
+  // Used to auto-fill the Season pill (below).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!teamId || !weekStart) return;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch(`/api/week-phase?week=${weekStart}&plan=1`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const j = await res.json().catch(() => null);
+        const phases = (j?.phases ?? []) as Array<{ key: string; start: string; end: string }>;
+        if (alive && Array.isArray(phases)) setMacroPhases(phases.map((p) => ({ key: p.key, start: p.start, end: p.end })));
+      } catch { /* soft — Season pill just stays manual */ }
+    })();
+    return () => { alive = false; };
+  }, [teamId, weekStart]);
 
   // When Macro phases arrive (or the week changes) and the coach hasn't saved a Season for this week,
   // fill the pill from the Macro phase. Only fills a null value, so a manual pick is never overridden.
