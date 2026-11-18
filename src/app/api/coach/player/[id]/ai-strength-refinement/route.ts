@@ -8,7 +8,7 @@
  *   • Today's prescribed session (engine output)
  *   • Last 14 days of readiness_entries — especially the `notes` free-text
  *     field where players write soreness / sleep / personal context
- *   • Last 14 days of athlete_decision_history (verdict streaks)
+ *   • Last 14 days of the canonical readiness colour (v_coach_readiness_today_v8.final_color; colour streaks)
  *   • Sprint Speed Drop, Sprint Exposure, CoD asymmetry, decel burden,
  *     Foster Strain (all pre-computed in the snapshot)
  *   • Active injury / RTP status
@@ -102,14 +102,15 @@ async function loadAiContext(
       .lte("entry_date", todayIso)
       .order("entry_date", { ascending: false })
       .limit(14),
-    // Verdict streaks
+    // Colour streaks: the canonical colour (fix 2026-11-18: this read athlete_decision_history.verdict_action,
+    // a column that never existed, so the AI always got an empty history).
     supabase
-      .from("athlete_decision_history")
-      .select("decision_date, verdict_action")
+      .from("v_coach_readiness_today_v8")
+      .select("entry_date, final_color, is_imputed")
       .eq("player_id", playerId)
-      .gte("decision_date", start14)
-      .lte("decision_date", todayIso)
-      .order("decision_date", { ascending: false })
+      .gte("entry_date", start14)
+      .lte("entry_date", todayIso)
+      .order("entry_date", { ascending: false })
       .limit(14),
     // Recent matches with minutes (load context)
     supabase
@@ -130,7 +131,7 @@ async function loadAiContext(
       notes: string | null; total_score: number | null;
     }>,
     decisions: (decisionHistory.data ?? []) as Array<{
-      decision_date: string; verdict_action: string | null;
+      entry_date: string; final_color: string | null; is_imputed: boolean | null;
     }>,
     matches: (recentMatches.data ?? []) as Array<{
       match_date: string; minutes_played: number | null;
@@ -163,14 +164,14 @@ Context:
 - 13 sport-science rules have already fired (sore-hamstring swap, decel-burden swap, sprint-drop iso swap, CoD asymmetry unilateral, VBT load reduction, verdict-driven volume cut, etc.).
 - Your job is the NUANCE layer the rule engine can't see: free-text wellness notes, multi-day patterns, holistic synthesis.
 
-You will receive structured JSON: the prescribed session, the player's last 14 days of readiness entries (including free-text \`notes\`), recent verdict streaks, match minutes, and current signal values.
+You will receive structured JSON: the prescribed session, the player's last 14 days of readiness entries (including free-text \`notes\`), recent readiness-colour streaks (green / yellow / red), match minutes, and current signal values.
 
 ═══════ HARD RULES ═══════
 
 1. SUGGEST 0–3 swaps. EMPTY array is a valid response — don't manufacture changes.
 2. Each suggested exercise MUST be one of the IDs listed in available_exercises. Server validates this — invalid IDs are dropped.
 3. Each suggestion MUST stay in the SAME category as the current exercise (compound→compound, posterior→posterior, etc.). Categories are listed.
-4. Each suggestion MUST cite specific signals it relied on (e.g. ["readiness note 2026-05-11: 'mjóhryggur stífur'", "verdict streak: MODIFIED x3"]).
+4. Each suggestion MUST cite specific signals it relied on (e.g. ["readiness note 2026-05-11: 'mjóhryggur stífur'", "readiness colour: yellow x3"]).
 5. Reasons must be 1 line, plain coach English, no marketing language, no jargon the coach hasn't seen.
 6. NEVER suggest changes that conflict with the engine's already-fired rules (e.g. don't re-add Nordic if the engine swapped it for iso ham).
 7. NEVER invent player names or signal values not in the input.
@@ -262,9 +263,10 @@ function buildUserPayload(
       is_congested_week: snapshot.isCongestedWeek,
     },
     wellness_14d: readinessTrim,
-    verdict_history_14d: ctx.decisions.map((d) => ({
-      date: d.decision_date,
-      verdict: d.verdict_action,
+    readiness_colour_14d: ctx.decisions.map((d) => ({
+      date: d.entry_date,
+      colour: d.final_color,
+      ...(d.is_imputed ? { imputed: true } : {}),
     })),
     recent_matches: ctx.matches.map((m) => ({
       date: m.match_date,

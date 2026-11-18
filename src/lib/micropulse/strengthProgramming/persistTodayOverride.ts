@@ -30,6 +30,9 @@ export async function persistTodayStrengthOverride(
     /** Which entry point created this send (session|bulk|corrective|auto|block). Tags the row so
      *  coach surfaces can name what's on a date; see docs/session-delivery-model.md. */
     origin?: "session" | "bulk" | "corrective" | "auto" | "block" | null;
+    /** The check-in colour the session was built with (GREEN / YELLOW / RED), or null = built without one.
+     *  Automatic sends record it so Today can say whether the session follows today's check-in yet. */
+    readinessLevel?: "GREEN" | "YELLOW" | "RED" | null;
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const structure = strengthSessionToTodayStructure(args.session, args.lang);
@@ -40,10 +43,9 @@ export async function persistTodayStrengthOverride(
     team_id: args.teamId,
     entry_date: args.dateIso,
     md_context: args.session.mdContext,
-    // buildStrengthSession is already tuned to the player's verdict, so we don't
-    // carry a readiness_level that would trigger a second set-reduction — the
-    // render path suppresses adjust for coach-sent sessions.
-    readiness_level: null as string | null,
+    // The colour the session was BUILT with (provenance only). buildStrengthSession is already tuned to it, and
+    // the player's render path never reads this column for a set reduction (it suppresses adjust for coach-sent).
+    readiness_level: args.readinessLevel ?? null,
     title: args.title ?? (args.lang === "IS" ? "Styrktaræfing frá þjálfara" : "Coach strength session"),
     description: args.description ?? (args.lang === "IS" ? args.session.summaryIS : args.session.summaryEN) ?? null,
     structure,

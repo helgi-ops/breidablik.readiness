@@ -151,7 +151,7 @@ describe("buildPlayerContext → strengthView (wiring)", () => {
       // one Catapult row carries CoD + decel-band columns (sprint stays null — no valid mv/hsr).
       player_external_load_daily: [{ date: "2026-09-11", source: "catapult", ima_cod_left_high: 10, ima_cod_right_high: 6, decel_burden_band: "high", max_velocity: null, max_vel: null, high_speed_distance: null }],
       readiness_entries: [{ entry_date: "2026-09-11", sleep_quality: 4, muscle_soreness: 2, fatigue_energy: 3, stress_mood: 4, sore_areas: ["hamstring"], notes: null }],
-      athlete_decision_history: [{ verdict_action: "FULL", decision_date: "2026-09-11" }],
+      v_coach_readiness_today_v8: [{ final_color: "green", is_imputed: false }],
       player_injuries: [{ status: "injured" }],
       session_rpe_entries: [{ session_load: 100 }, { session_load: 200 }, { session_load: 300 }],
       match_player_minutes: [{ match_date: "2026-09-08", minutes_played: 90 }, { match_date: "2026-09-12", minutes_played: 90 }],

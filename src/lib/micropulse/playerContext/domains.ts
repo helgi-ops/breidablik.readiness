@@ -414,27 +414,44 @@ export async function fetchWellness(
   }
 }
 
-/** Latest verdict from athlete_decision_history. */
+/**
+ * Today's readiness for the strength engine = the player's canonical colour for THIS date
+ * (`v_coach_readiness_today_v8.final_color`, CLAUDE.md "Canonical verdict source"), read only, never set.
+ * green → FULL, yellow → MODIFIED, red → RECOVERY; no check-in today (or an imputed one) → null, which the
+ * engine builds as a normal day.
+ *
+ * Fix 2026-11-18: this used to read `athlete_decision_history.verdict_action`, a column that never existed, so
+ * the query always failed and every strength session (coach-sent and automatic) was built as if no check-in
+ * had been made: the yellow / red rules never fired. It also took the latest row of ANY age; now only today counts.
+ */
 export async function fetchVerdict(
   sb: SupabaseClient,
   playerId: string,
   todayIso: string,
 ): Promise<PlayerStrengthSnapshot["verdict"]> {
   try {
-    const { data } = await sb
-      .from("athlete_decision_history")
-      .select("verdict_action, decision_date")
+    const { data, error } = await sb
+      .from("v_coach_readiness_today_v8")
+      .select("final_color, is_imputed")
       .eq("player_id", playerId)
-      .lte("decision_date", todayIso)
-      .order("decision_date", { ascending: false })
-      .limit(1);
-    if (!data || data.length === 0) return null;
-    const v = String((data[0] as { verdict_action: string }).verdict_action ?? "").toUpperCase();
-    if (v === "FULL" || v === "MODIFIED" || v === "REDUCED" || v === "RECOVERY" || v === "HOLD") return v;
-    return null;
+      .eq("entry_date", todayIso)
+      .maybeSingle();
+    if (error || !data) return null;
+    const row = data as { final_color?: string | null; is_imputed?: boolean | null };
+    if (row.is_imputed) return null;
+    return verdictFromColour(row.final_color);
   } catch {
     return null;
   }
+}
+
+/** The canonical colour as the strength engine's verdict. Unknown → null (a normal day). */
+export function verdictFromColour(colour: string | null | undefined): PlayerStrengthSnapshot["verdict"] {
+  const c = String(colour ?? "").trim().toLowerCase();
+  if (c === "green" || c === "green_plus") return "FULL";
+  if (c === "yellow") return "MODIFIED";
+  if (c === "red") return "RECOVERY";
+  return null;
 }
 
 /** Active injury status. */

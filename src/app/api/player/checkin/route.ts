@@ -18,9 +18,10 @@ export const runtime = "nodejs";
  * from the body), so a player can only write their own entry.
  */
 
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAuthedPlayerId } from "@/lib/session-rpe/server";
+import { refreshAutoSessionAfterCheckin } from "@/lib/micropulse/strengthProgramming/autoSession";
 
 const isIsoDate = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
 const SCORE_FIELDS = ["fatigue_energy", "sleep_quality", "sleep_duration", "stress_mood", "muscle_soreness"] as const;
@@ -70,6 +71,13 @@ export async function POST(req: Request) {
     const { error: noteErr } = await sb.from("readiness_entries").update({ notes }).eq("id", data.id);
     if (noteErr) console.warn("CHECKIN note update failed (column may not exist):", noteErr.message);
   }
+
+  // Today's AUTOMATIC strength session (sent 09:00, before most check-ins) is rebuilt from this check-in if the
+  // player has not started it (2026-11-18). Coach-sent sessions are never touched. Waits up to 4 s so Today
+  // usually opens on the new session; otherwise it finishes after the response. A failure never fails the check-in.
+  const refresh = refreshAutoSessionAfterCheckin(sb, playerId, data.entry_date as string);
+  await Promise.race([refresh, new Promise((r) => setTimeout(r, 4000))]);
+  after(() => refresh);
 
   return NextResponse.json({ ok: true, id: data.id, entry_date: data.entry_date });
 }

@@ -215,13 +215,15 @@ describe("wiring", () => {
     for (const p of [
       "src/app/api/coach/player/[id]/send-strength-session/route.ts",
       "src/app/api/coach/team/send-strength-sessions/route.ts",
-      "src/app/api/strength/auto-send/route.ts",
+      // The 09:00 auto-send and the check-in rebuild share one builder (2026-11-18).
+      "src/lib/micropulse/strengthProgramming/autoSession.ts",
       "src/app/api/coach/player/[id]/strength-session/route.ts",
     ]) {
       const src = read(p);
       expect(src).toMatch(/loadGoalPlanGym\(/);
       expect(src).toMatch(/withGoalPlanGym\(/);
     }
+    expect(read("src/app/api/strength/auto-send/route.ts")).toMatch(/buildAutoSession\(sb, autoCtx, p\)/);
   });
   it("finishing the strength session ticks B", () => {
     expect(read("src/app/api/player/strength-completion/route.ts")).toMatch(/tickGoalFromStrengthSession/);

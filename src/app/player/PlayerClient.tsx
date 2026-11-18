@@ -123,6 +123,29 @@ type GenericMsg =
   | null;
 
 // ✅ Stage-4 decision row (normalized for UI)
+
+/**
+ * Provenance for an AUTOMATIC session (origin "auto", 2026-11-18). It is built at 09:00 from the coach's plan,
+ * usually before the check-in, and rebuilt from the check-in while the player has not started it.
+ * `builtWith` = the check-in colour it was built with (null = none); `checkedIn` = today has a check-in.
+ */
+function autoSentBanner(builtWith: string | null, checkedIn: boolean, isIS: boolean): { coachSentTitle: string; coachSentSubtext: string } {
+  const title = isIS ? "Áætlun þjálfarans" : "Your coach's plan";
+  if (builtWith) {
+    return { coachSentTitle: title, coachSentSubtext: isIS
+      ? "MicroPulse setti þessa æfingu saman eftir áætlun þjálfarans og lagaði hana að innskráningunni þinni í dag."
+      : "MicroPulse built this session from your coach's plan and adjusted it to your check-in today." };
+  }
+  if (checkedIn) {
+    return { coachSentTitle: title, coachSentSubtext: isIS
+      ? "MicroPulse setti þessa æfingu saman eftir áætlun þjálfarans fyrir innskráninguna þína. Hún breytist ekki eftir að þú byrjar á henni."
+      : "MicroPulse built this session from your coach's plan before your check-in. It doesn't change once you've started it." };
+  }
+  return { coachSentTitle: title, coachSentSubtext: isIS
+    ? "MicroPulse setti þessa æfingu saman eftir áætlun þjálfarans. Skráðu þig inn og hún lagast að stöðunni þinni í dag."
+    : "MicroPulse built this session from your coach's plan. Check in and it adjusts to how you are today." };
+}
+
 type Stage4PlanRow =
   | {
       decision_id: string | null;
@@ -155,6 +178,11 @@ type Stage4PlanRow =
       // recurring base). The readiness re-resolve effect reads the same table, so it never swaps a block
       // session for the recurring one.
       template_table?: string | null;
+
+      // Coach-sent row only: which entry point wrote it ("auto" = the 09:00 automatic send) and the check-in colour
+      // it was built with (null = before any check-in). Provenance for the "Sent by your coach" banner (2026-11-18).
+      sent_origin?: string | null;
+      sent_built_with?: string | null;
     }
   | null;
 
@@ -2461,6 +2489,8 @@ type TodaySessionOpts = {
   /** Override the "sent by coach" banner subtext (e.g. a coach note, or a
    *  supplement-appropriate line instead of the default "replaces …"). */
   coachSentSubtext?: string | null;
+  /** Banner title override (automatic sends say "Your coach's plan", not "Sent by your coach"). */
+  coachSentTitle?: string | null;
   /** Keep the coach's authored block order (don't re-sort by priority). */
   preserveOrder?: boolean;
 };
@@ -3489,7 +3519,7 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
           <div className="px-4 py-3" style={{ background: "#eef1fe" }}>
             <div className="flex items-center gap-1.5 text-sm font-bold" style={{ color: "#2740e6" }}>
               <span aria-hidden>✓</span>
-              {isIS ? "Sent af þjálfara" : "Sent by your coach"}
+              {opts.coachSentTitle?.trim() ? opts.coachSentTitle : isIS ? "Sent af þjálfara" : "Sent by your coach"}
             </div>
             <div className="mt-1 text-[13px] leading-relaxed" style={{ color: "#2740e6", opacity: 0.9 }}>
               {opts.coachSentSubtext?.trim()
@@ -5022,7 +5052,7 @@ export default function PlayerClient() {
       swallow(
         supabase
           .from("player_today_strength_override")
-          .select("player_id, team_id, entry_date, md_context, title, description, structure, summary, source, origin, created_at")
+          .select("player_id, team_id, entry_date, md_context, title, description, structure, summary, source, origin, readiness_level, created_at")
           .eq("player_id", playerId)
           .eq("entry_date", safeDay)
           .maybeSingle(),
@@ -5071,6 +5101,7 @@ export default function PlayerClient() {
         structure?: unknown;
         summary?: string | null;
         origin?: string | null;
+        readiness_level?: string | null;
       } | null;
       const ovStructure = ov?.structure;
       // An AUTO send (origin='auto') is NOT a deliberate coach send — on a rest day
@@ -5097,6 +5128,8 @@ export default function PlayerClient() {
           title: ov.title ?? null,
           description: ov.description ?? null,
           structure: ovStructure,
+          sent_origin: ov.origin ?? null,
+          sent_built_with: ov.readiness_level ?? null,
         } as Stage4PlanRow;
       }
     } catch {
@@ -8079,6 +8112,9 @@ export default function PlayerClient() {
                     return plan?.deload_week ? { ...a, setReduction: Math.min(2, a.setReduction + 1) } : a;
                   })(),
                   sentByCoach: plan?.source === "COACH_SENT",
+                  ...(plan?.source === "COACH_SENT" && String(plan?.sent_origin ?? "").toLowerCase() === "auto"
+                    ? autoSentBanner(plan?.sent_built_with ?? null, Boolean(coachFinalFlag), lang === "IS")
+                    : {}),
                 }}
               />
             )}

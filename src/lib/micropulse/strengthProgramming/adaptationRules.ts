@@ -137,6 +137,19 @@ export type AdaptationTrace = {
   contras: Set<ContraIndication>;
 };
 
+
+/** Today's check-in in plain words (the verdict comes from the canonical colour, playerContext fetchVerdict). */
+function checkinWordEN(v: PlayerStrengthSnapshot["verdict"]): string {
+  if (v === "MODIFIED") return "Today's check-in: yellow";
+  if (v === "RECOVERY") return "Today's check-in: red";
+  return `Today's readiness: ${String(v ?? "").toLowerCase()}`;
+}
+function checkinWordIS(v: PlayerStrengthSnapshot["verdict"]): string {
+  if (v === "MODIFIED") return "Innskráning í dag: gul";
+  if (v === "RECOVERY") return "Innskráning í dag: rauð";
+  return `Standið í dag: ${String(v ?? "").toLowerCase()}`;
+}
+
 export function newAdaptationTrace(): AdaptationTrace {
   return { pinned: new Set(), banned: new Set(), contras: new Set() };
 }
@@ -410,10 +423,10 @@ export function applyAdaptationRules(
   if (snap.verdict === "HOLD" || (snap.verdict === "RECOVERY" && !md1High)) {
     audit.push({
       ruleId: "VERDICT_BLOCK",
-      triggerEN: `Today's verdict: ${snap.verdict}`,
-      triggerIS: `Verdict í dag: ${snap.verdict}`,
-      actionEN: "Strength session not prescribed — mobility/recovery only.",
-      actionIS: "Engin styrktaræfing — mobility/recovery eingöngu.",
+      triggerEN: checkinWordEN(snap.verdict),
+      triggerIS: checkinWordIS(snap.verdict),
+      actionEN: "Recovery day: warm-up and mobility only, no strength work.",
+      actionIS: "Endurheimtardagur: upphitun og liðleiki eingöngu, engin styrktaræfing.",
       evidence: "Acute readiness override — engine respects daily decision.",
     });
     // Strip out compound + posterior + unilateral; keep prep + mobility
@@ -427,15 +440,15 @@ export function applyAdaptationRules(
   if (snap.verdict === "REDUCED" || snap.verdict === "MODIFIED") {
     let changed = false;
     for (const cat of ["COMPOUND_STRENGTH", "POSTERIOR_CHAIN", "UNILATERAL_STRENGTH"] as const) {
-      if (reduceVolume(blocks, cat, 0.7, "Volume reduced 30% — REDUCED verdict")) changed = true;
+      if (reduceVolume(blocks, cat, 0.7, "Fewer sets: yellow check-in today")) changed = true;
     }
     if (changed) {
       audit.push({
         ruleId: "VERDICT_REDUCED_VOLUME",
-        triggerEN: `Today's verdict: ${snap.verdict}`,
-        triggerIS: `Verdict í dag: ${snap.verdict}`,
-        actionEN: "Volume reduced 30% across main blocks",
-        actionIS: "Volume lækkað um 30% á aðalblokkum",
+        triggerEN: checkinWordEN(snap.verdict),
+        triggerIS: checkinWordIS(snap.verdict),
+        actionEN: "About 30% fewer sets on the main lifts.",
+        actionIS: "Um 30% færri settum á aðallyftunum.",
         evidence: "Volume modulation matches readiness state (Gabbett 2017).",
       });
     }

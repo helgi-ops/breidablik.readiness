@@ -12,7 +12,8 @@ The resolver is `fetchStage4Plan` in `src/app/player/PlayerClient.tsx` (~line 45
    today, it becomes the Æfing dagsins card and suppresses the whole strength card below.
    (`PlayerClient.tsx:6331`, `:7286`.)
 2. **Coach-sent strength override** — `player_today_strength_override` (`source = 'coach_sent'`), one row
-   per `(player_id, entry_date)`, locked ("sent = seen"), no readiness re-adjust. **This is the layer
+   per `(player_id, entry_date)`, locked ("sent = seen"; one exception for `origin = 'auto'`, below), no
+   readiness re-adjust on the player's side. **This is the layer
    every explicit coach *send* lands on.** Five entry points write it (see below); the new `origin`
    column records which one, so a surface can name what's on a date.
 3. **Periodised team microdose** — view `v_player_today_microdose_final` re-resolved from the team's
@@ -55,9 +56,25 @@ All share `unique(player_id, entry_date)` and `source='coach_sent'`; last write 
 | `POST /api/coach/player/[id]/send-strength-block` | `block` | 12–16 dated rows | none (previews conflicts) |
 | `POST /api/coach/movement-screen/corrective` | `corrective` | 1 day | none |
 | `GET|POST /api/strength/auto-send` (cron) | `auto` | 1 day, opted-in teams | **skip-if-exists** |
+| `POST /api/player/checkin` (rebuild) | `auto` (same row) | 1 day, that player | only an untouched `auto` row |
 
 Shared writer: `persistTodayStrengthOverride` (`src/lib/micropulse/strengthProgramming/persistTodayOverride.ts`),
 which now takes an `origin`. The block route upserts inline but with the same columns/conflict key.
+
+## Readiness in a sent session (2026-11-18)
+
+Every engine-built session (any origin) is built with today's **canonical colour** read from
+`v_coach_readiness_today_v8.final_color` for that date (`fetchVerdict`, read only; an imputed row or no check-in =
+a normal day). Until 2026-11-18 this read a column that never existed, so no sent session ever followed readiness.
+Yellow = the method one step down only when that is really lighter (never more loaded reps, reps or exercises
+than green; otherwise today's method) plus fewer sets; red = warm-up and mobility only (no upper-body lift).
+`readiness_level` on the row records the colour the session was built with (provenance; nothing re-adjusts on it).
+
+**The automatic session follows the check-in.** The 09:00 send runs before most check-ins. When the player checks
+in, `refreshAutoSessionAfterCheckin` (`strengthProgramming/autoSession.ts`, the same builder as the cron) rebuilds
+today's row **only if** its origin is `auto` and the player has not started it (no completion, set log or exercise
+swap today). Same row, same origin, no push. Coach sends by hand stay locked. The player's banner says which:
+"Your coach's plan … adjusted to your check-in today" / "… check in and it adjusts".
 
 ## Collision preview
 

@@ -577,6 +577,55 @@ export function buildStrengthSession(
   coachOverrides: CoachOverride[] = [],
   opts: { mode?: SendMode } = {},
 ): StrengthSession | null {
+  const s = buildStrengthSessionCore(snapIn, coachOverrides, opts, false);
+  if (!s || !s.appliedAdaptations.some((a) => a.ruleId === "STRUCTURE_READINESS_DOWNGRADE")) return s;
+  // Yellow step-down cap (2026-11-18, coach's call): a yellow day steps the method down one rung only when the lower
+  // rung really is lighter. If it would mean more loaded reps, more reps in all, or more exercises than the same day
+  // on green (e.g. contrast 3×3 @85% → cluster 2×12 @80%), today's method stays and the yellow set cut lightens it.
+  // Loaded reps are counted on their own: dropping the jumps must not buy a heavier main lift.
+  const green = buildStrengthSessionCore({ ...snapIn, verdict: "FULL" }, coachOverrides, opts, false);
+  if (!green) return s;
+  const a = workOf(s), g = workOf(green);
+  if (a.loadedReps <= g.loadedReps && a.reps <= g.reps && a.exercises <= g.exercises) return s;
+  const kept = buildStrengthSessionCore(snapIn, coachOverrides, opts, true);
+  if (!kept) return s;
+  const from = s.appliedAdaptations.find((x) => x.ruleId === "STRUCTURE_READINESS_DOWNGRADE");
+  kept.appliedAdaptations.push({
+    ruleId: "STRUCTURE_READINESS_DOWNGRADE_SKIPPED",
+    triggerEN: "Today's check-in: yellow",
+    triggerIS: "Innskráning í dag: gul",
+    actionEN: "Kept today's method with fewer sets: the lighter method would have meant more work than a green day.",
+    actionIS: "Hélt aðferð dagsins með færri settum: léttari aðferðin hefði þýtt meiri vinnu en grænn dagur.",
+    evidence: `The coach's rule: a yellow day is never more work than a green one (${from?.actionEN ?? "step-down"}).`,
+  });
+  return kept;
+}
+
+/** Working volume (warm-up and mobility left out): reps (sets × reps; a timed hold = 1 per set), the loaded part of
+ *  them (a % of max or an RPE), and exercises. */
+function workOf(s: StrengthSession): { reps: number; loadedReps: number; exercises: number } {
+  let reps = 0, loadedReps = 0, exercises = 0;
+  for (const b of s.blocks) {
+    if (b.type === "PREP" || b.type === "MOBILITY") continue;
+    for (const e of b.exercises) {
+      exercises++;
+      const r = String(e.dose.reps ?? "");
+      const timed = /^\s*\d+\s*s\b/.test(r);
+      const m = /^\s*(\d+)(?:\s*[-–]\s*(\d+))?/.exec(r);
+      const n = e.dose.sets * (timed || !m ? 1 : Number(m[2] ?? m[1]));
+      reps += n;
+      if (/%|RPE/i.test(String(e.dose.intensity ?? ""))) loadedReps += n;
+    }
+  }
+  return { reps, loadedReps, exercises };
+}
+
+function buildStrengthSessionCore(
+  snapIn: PlayerStrengthSnapshot,
+  coachOverrides: CoachOverride[],
+  opts: { mode?: SendMode },
+  noReadinessDowngrade: boolean,
+): StrengthSession | null {
   // Send mode. "individualised" (default) = data + screen driven: the MD template,
   // readiness/MD-tuned, PLUS the player's screen corrective block + deficit-ledger
   // emphases + F-V driver. "standard" = the same MD template, still readiness/MD-
@@ -700,7 +749,7 @@ export function buildStrengthSession(
   // applies on top of whatever method results.
   const yellow = snap.verdict === "MODIFIED" || snap.verdict === "REDUCED";
   let downgradedFrom: StructureKey | undefined;
-  if (individualised && effective && yellow) {
+  if (individualised && effective && yellow && !noReadinessDowngrade) {
     const lower = readinessDowngrade(effective, snap.mdContext);
     if (lower && lower !== effective) { downgradedFrom = effective; effective = lower; }
   }
@@ -757,8 +806,8 @@ export function buildStrengthSession(
     const to = STRUCTURE_LABEL[effective];
     audit.push({
       ruleId: "STRUCTURE_READINESS_DOWNGRADE",
-      triggerEN: `Yellow readiness on ${snap.mdContext} (planned ${from.en})`,
-      triggerIS: `Gul readiness á ${snap.mdContext} (áætlað ${from.is})`,
+      triggerEN: `Today's check-in: yellow (${snap.mdContext}, planned ${from.en})`,
+      triggerIS: `Innskráning í dag: gul (${snap.mdContext}, áætlað ${from.is})`,
       actionEN: `Stepped the method down from ${from.en} to ${to.en} — lower neural/coordination demand for a day the player isn't fully recovered.`,
       actionIS: `Lækkaði aðferðina úr ${from.en} í ${to.en} — minna tauga-/samhæfingarálag þegar leikmaður er ekki fullendurheimtur.`,
       evidence: "Readiness-driven method downgrade — same principle as the set-reduction: reduce demand when the athlete is under-recovered.",
@@ -803,7 +852,8 @@ export function buildStrengthSession(
       if (snap.verdict !== "RECOVERY" && snap.verdict !== "HOLD") {
         audit.push(...appendUpperBody(tmpl.blocks, snap, md1Tier, trace));
       }
-    } else {
+    } else if (snap.verdict !== "RECOVERY" && snap.verdict !== "HOLD") {
+      // Red check-in = warm-up and mobility only: no upper-body lift either (coach's call, 2026-11-18).
       audit.push(...appendUpperBody(tmpl.blocks, snap, md1Tier, trace));
     }
   }

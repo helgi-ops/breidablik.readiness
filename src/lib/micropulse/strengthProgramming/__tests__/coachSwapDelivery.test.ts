@@ -90,11 +90,14 @@ describe("every send carries the day's swaps", () => {
   });
 
   it("team send and the 09:00 auto-send: one read for the squad, each player built with their swaps", () => {
-    for (const p of ["src/app/api/coach/team/send-strength-sessions/route.ts", "src/app/api/strength/auto-send/route.ts"]) {
-      const src = read(p);
-      expect(src).toMatch(/loadCoachOverridesForPlayers\(/);
-      expect(src).toMatch(/buildStrengthSession\(withGoalSeason\(withGoalPlanGym\(snapshot, goalGym\.get\(p\.id\)\), coachBlock\), swapsByPlayer\.get\(p\.id\) \?\? \[\], \{ mode \}\)/);
-      expect(src).not.toMatch(/buildStrengthSession\(snapshot, \[\], \{ mode \}\)/);
-    }
+    const team = read("src/app/api/coach/team/send-strength-sessions/route.ts");
+    expect(team).toMatch(/loadCoachOverridesForPlayers\(/);
+    expect(team).toMatch(/buildStrengthSession\(withGoalSeason\(withGoalPlanGym\(snapshot, goalGym\.get\(p\.id\)\), coachBlock\), swapsByPlayer\.get\(p\.id\) \?\? \[\], \{ mode \}\)/);
+    expect(team).not.toMatch(/buildStrengthSession\(snapshot, \[\], \{ mode \}\)/);
+    // The auto-send (and the check-in rebuild) build through autoSession.ts: one team read, the player's swaps.
+    const auto = read("src/lib/micropulse/strengthProgramming/autoSession.ts");
+    expect(auto).toMatch(/loadCoachOverridesForPlayers\(/);
+    expect(auto).toMatch(/ctx\.swapsByPlayer\.get\(player\.id\) \?\? \[\]/);
+    expect(read("src/app/api/strength/auto-send/route.ts")).toMatch(/loadAutoTeamContext\(sb, \{ teamId: team\.id, mode, todayIso, playerIds: rows\.map/);
   });
 });

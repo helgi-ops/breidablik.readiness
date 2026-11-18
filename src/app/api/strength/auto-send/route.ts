@@ -17,16 +17,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeSendMode, type SendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { loadCoachOverridesForPlayers, loadPlayerStrengthSnapshot, resolveAutoMdContext } from "@/lib/micropulse/strengthProgramming/loader";
+import { resolveAutoMdContext } from "@/lib/micropulse/strengthProgramming/loader";
+import { buildAutoSession, loadAutoTeamContext } from "@/lib/micropulse/strengthProgramming/autoSession";
 import { resolveTeamCustomTable, customProgrammeCoversDay } from "@/lib/micropulse/strengthProgramming/customProgrammeActive";
-import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
-import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
-import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
-import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
-import { withGoalSeason } from "@/lib/micropulse/strengthProgramming/playerGoal";
-import { withGoalPlanGym } from "@/lib/micropulse/strengthProgramming/goalPlanGym";
-import { loadGoalPlanGym } from "@/lib/micropulse/goalPlan/gymLoader";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
 import { getFreeLockedTeamIds } from "@/lib/micropulse/elite";
 
@@ -106,15 +100,9 @@ async function run(req: NextRequest) {
     const rows = (players ?? []) as Array<{ id: string; full_name: string | null }>;
     let ts = 0, tk = 0, tf = 0;
 
-    // The coach's meso block + authored rule for today (team-level — one lookup per team).
-    const [coachRules, coachBlock, swapsByPlayer, goalGym] = await Promise.all([
-      loadCoachStrengthRules(sb, team.id),
-      resolveCurrentBlock(sb, team.id, todayIso),
-      // The coach's swaps for today (strength card), one read per team (fix 2026-11-17). Individualised modes only.
-      loadCoachOverridesForPlayers(sb, { playerIds: mode !== "standard" ? rows.map((r) => r.id) : [], dateIso: todayIso }),
-      // The 8-week goal plans' gym session B goes into today's session in pre-/off-season ("one session, one whole").
-      loadGoalPlanGym(sb, team.id, todayIso, mode !== "standard" ? rows.map((r) => r.id) : []),
-    ]);
+    // Team-level inputs (coach's block + rule, swaps, 8-week goal lifts), one read per team. The same builder
+    // rebuilds an untouched automatic session when the player checks in (autoSession.ts, 2026-11-18).
+    const autoCtx = await loadAutoTeamContext(sb, { teamId: team.id, mode, todayIso, playerIds: rows.map((r) => r.id) });
     // Standard mode: the team's authored Custom Programme table + the day's team MD (team-level). When it
     // covers a player we stand aside — no engine override — so their Today resolution serves it; still push.
     const teamCustom = mode === "standard" ? await resolveTeamCustomTable(sb, team.id, todayIso) : null;
@@ -143,16 +131,12 @@ async function run(req: NextRequest) {
         // manually, where the UI warns). Individualised is unaffected (it builds the palette session).
         if (mode === "standard") return "skipped";
 
-        const snapshot = await loadPlayerStrengthSnapshot(sb, { playerId: p.id, playerName: p.full_name ?? undefined, teamId: team.id, todayIso });
-        // The player's goal adds its set only in pre-/off-season (today's block, 2026-11-17).
-        let session = buildStrengthSession(withGoalSeason(withGoalPlanGym(snapshot, goalGym.get(p.id)), coachBlock), swapsByPlayer.get(p.id) ?? [], { mode });
-        if (!session || session.blocks.length === 0) return "skipped"; // off-day / injured / recovery
-        // MESO layer: tilt toward today's block + apply the coach's authored rule, before persist.
-        if (coachBlock) {
-          session = applyBlockToSession(session, coachBlock.goalKey, coachBlock.phase, coachRules?.block?.[`${coachBlock.goalKey}:${coachBlock.phase}`], coachBlock.subPhase) ?? session;
-        }
+        // Built with today's check-in when there is one; otherwise a normal day, rebuilt at check-in.
+        const built = await buildAutoSession(sb, autoCtx, p);
+        if (!built) return "skipped"; // off-day / injured
+        const { session, readinessLevel } = built;
 
-        const persisted = await persistTodayStrengthOverride(sb, { session, playerId: p.id, teamId: team.id, dateIso: todayIso, lang: "EN", origin: "auto" });
+        const persisted = await persistTodayStrengthOverride(sb, { session, playerId: p.id, teamId: team.id, dateIso: todayIso, lang: "EN", origin: "auto", readinessLevel });
         if (!persisted.ok) return "failed";
         void notifyPlayer(sb, p.id, `Strength session (${session.contextLabel ?? session.mdContext}, ~${session.durationMin} min)`);
         return "sent";
