@@ -16,9 +16,27 @@ import type { LiftRx } from "./liftRx";
 
 export type { Bi };
 
-export type GoalQuality = "top_speed" | "acceleration" | "braking" | "jump";
+export type GoalQuality = "top_speed" | "acceleration" | "braking" | "jump" | "max_strength" | "explosive" | "strength_power";
 
-export const GOAL_QUALITIES: GoalQuality[] = ["top_speed", "acceleration", "braking", "jump"];
+/** The four goals with a running / jumping session (A) on the goal card and a gym session (B). */
+export type PitchQuality = "top_speed" | "acceleration" | "braking" | "jump";
+export const PITCH_QUALITIES: PitchQuality[] = ["top_speed", "acceleration", "braking", "jump"];
+
+/** Gym-only goals (2026-11-18): no extra session; their lifts go into the team strength session. */
+export type GymQuality = "max_strength" | "explosive" | "strength_power";
+export const GYM_ONLY_QUALITIES: GymQuality[] = ["max_strength", "explosive", "strength_power"];
+
+export const GOAL_QUALITIES: GoalQuality[] = [...PITCH_QUALITIES, ...GYM_ONLY_QUALITIES];
+
+export const isGymQuality = (q: GoalQuality): q is GymQuality => (GYM_ONLY_QUALITIES as string[]).includes(q);
+export const isPitchQuality = (q: GoalQuality): q is PitchQuality => (PITCH_QUALITIES as string[]).includes(q);
+
+/**
+ * The goals a player can ask for or a coach can start today. The gym-only goals are a coach preview until their
+ * delivery ships (step 2 of the 2026-11-18 plan: database checks, placement, merge into the strength session).
+ */
+export const OPEN_GOAL_QUALITIES: GoalQuality[] = [...PITCH_QUALITIES];
+export const isOpenGoalQuality = (x: unknown): x is GoalQuality => typeof x === "string" && (OPEN_GOAL_QUALITIES as string[]).includes(x);
 
 export type GoalSport = "football" | "basketball" | "other";
 

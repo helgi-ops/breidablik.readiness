@@ -3,6 +3,7 @@ import { allowedStarts, buildGoalPlan, PLAN_WEEKS } from "../index";
 import { ACCEL_METHODS, ACCEL_REFS, accelStart } from "../acceleration";
 import { JUMP_METHODS, JUMP_REFS, jumpStart } from "../jump";
 import { BRAKING_METHODS, BRAKING_REFS, brakingStart } from "../braking";
+import { GYM_METHODS } from "../gymGoals";
 import { MAX_SESSION_MINUTES } from "../common";
 import { MAX_FLYING_M_PER_SESSION } from "@/lib/micropulse/speedMethods";
 import type { Bi, GoalPlan, GoalPlanInput, GoalQuality } from "../types";
@@ -275,6 +276,10 @@ describe("sources", () => {
       acceleration: ACCEL_METHODS.map((m) => m.key),
       jump: JUMP_METHODS.map((m) => m.key),
       braking: BRAKING_METHODS.map((m) => m.key),
+      // Gym-only goals: their cards, plus the jump test (the jump plan's rebound-jumps test block).
+      max_strength: GYM_METHODS.map((m) => m.key),
+      explosive: [...GYM_METHODS.map((m) => m.key), "rebound_jumps"],
+      strength_power: [...GYM_METHODS.map((m) => m.key), "rebound_jumps"],
     };
     for (const p of allPlans().filter(ok)) for (const w of p.weeks) for (const s of w.sessions) for (const b of s.blocks) expect(known[p.quality]).toContain(b.method);
   });

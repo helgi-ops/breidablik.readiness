@@ -121,7 +121,7 @@ export type PrescribedExercise = {
   playerGoal?: true;
   /** Part of the player's 8-week goal plan, session B (gym), merged into the team session ("One session, one whole",
    *  2026-11-17, goalPlanGym.ts). The goal's dose is the dose: no other extra set lands on it. */
-  goalPlan?: { quality: "top_speed" | "acceleration" | "braking" | "jump"; week: number };
+  goalPlan?: { quality: import("@/lib/micropulse/goalPlan/types").GoalQuality; week: number };
   /** Brief sport-science rationale shown in UI tooltip. */
   rationale?: string;
 };

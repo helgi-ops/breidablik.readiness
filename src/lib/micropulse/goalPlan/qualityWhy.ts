@@ -11,6 +11,7 @@
 import { SPEED_REFS } from "@/lib/micropulse/speedMethods";
 import { ACCEL_REFS } from "./acceleration";
 import { BRAKING_REFS } from "./braking";
+import { GYM_REFS } from "./gymGoals";
 import { JUMP_REFS } from "./jump";
 import type { Bi, GoalQuality, GoalRef } from "./types";
 
@@ -25,7 +26,7 @@ export type QualityWhy = {
   limit: WhyLine | null;
 };
 
-const ALL_REFS: Record<string, GoalRef> = { ...SPEED_REFS, ...ACCEL_REFS, ...BRAKING_REFS, ...JUMP_REFS };
+const ALL_REFS: Record<string, GoalRef> = { ...SPEED_REFS, ...ACCEL_REFS, ...BRAKING_REFS, ...JUMP_REFS, ...GYM_REFS };
 
 export const QUALITY_WHY: Record<GoalQuality, QualityWhy> = {
   top_speed: {
@@ -187,12 +188,150 @@ export const QUALITY_WHY: Record<GoalQuality, QualityWhy> = {
     ],
     limit: null,
   },
+  max_strength: {
+    matters: {
+      text: {
+        en: "Strength is the base for sprinting, jumping and winning duels. In elite footballers, stronger legs went with both higher jumps and faster sprints.",
+        is: "Styrkur er grunnurinn að sprettum, stökkum og að vinna einvígi. Hjá afreksfótboltamönnum fóru sterkari fætur saman við bæði hærra stökk og hraðari spretti.",
+      },
+      refs: ["wisloff2004", "stone2002"],
+    },
+    improves: [
+      {
+        text: {
+          en: "Heavy squats or trap-bar deadlifts at 75–90% of max: in a 10-week trial the squat max rose about 31%.",
+          is: "Þungar hnébeygjur eða trap bar-lyftur á 75–90% af hámarki: í 10 vikna rannsókn hækkaði hámarkið um u.þ.b. 31%.",
+        },
+        refs: ["cormie2010a"],
+      },
+      {
+        text: {
+          en: "Two days a week is enough: spreading the same work over more days did no better.",
+          is: "Tveir dagar í viku duga: að dreifa sömu vinnu á fleiri daga gerði ekki betur.",
+        },
+        refs: ["cuthbert2021"],
+      },
+      {
+        text: {
+          en: "Never to failure: stopping sets early gave the same or bigger gains with about half the reps.",
+          is: "Aldrei í þrot: að hætta settum snemma gaf sömu eða meiri bætingu með um helmingi færri endurtekningum.",
+        },
+        refs: ["hernandezbelmonte2022"],
+      },
+      {
+        text: {
+          en: "In season, one heavy session a week kept strength for 12 weeks in a study the review cites.",
+          is: "Á keppnistímabili hélt ein þung æfing á viku styrknum í 12 vikur í rannsókn sem yfirlitið vísar í.",
+        },
+        refs: ["cuthbert2021"],
+      },
+    ],
+    limit: {
+      text: {
+        en: "What the research does not show: a strength level after which getting stronger stops helping.",
+        is: "Það sem rannsóknir sýna ekki: styrkstig þar sem meiri styrkur hættir að hjálpa.",
+      },
+      refs: ["stone2002"],
+    },
+  },
+  explosive: {
+    matters: {
+      text: {
+        en: "Explosive power is how fast your legs turn force into movement: the first step, the jump, the push-off in a duel. In a 10-week trial, training it also made 40 m sprints faster.",
+        is: "Sprengikraftur er hve hratt fæturnir breyta krafti í hreyfingu: fyrsta skrefið, stökkið, spyrnan í einvígi. Í 10 vikna rannsókn gerði þjálfun hans líka 40 m spretti hraðari.",
+      },
+      refs: ["cormie2010a"],
+    },
+    improves: [
+      {
+        text: {
+          en: "Jump squats with body weight and with a light load (about 30% of max), every jump as high as possible: jump power rose about 18% in 10 weeks.",
+          is: "Hnébeygjuhopp með eigin þyngd og léttri þyngd (um 30% af hámarki), hvert hopp eins hátt og hægt er: stökkafl hækkaði um u.þ.b. 18% á 10 vikum.",
+        },
+        refs: ["cormie2010a"],
+      },
+      {
+        text: {
+          en: "Light loads: the load that gave the most power was about 20–37% of max, body weight counted.",
+          is: "Léttar þyngdir: þyngdin sem gaf mest afl var um 20–37% af hámarki, líkamsþyngd talin með.",
+        },
+        refs: ["smilios2013"],
+      },
+      {
+        text: {
+          en: "Keep some heavy lifting: without it, strength fell during a power block.",
+          is: "Haltu þungum lyftum inni: án þeirra lækkaði styrkurinn í kraftblokk.",
+        },
+        refs: ["cormie2010b"],
+      },
+      {
+        text: {
+          en: "Short of strength? Heavy squats raised the jump as much as jump squats did, plus the strength, so the plan may start with strength.",
+          is: "Vantar styrk? Þung hnébeygja hækkaði stökkið jafnmikið og hnébeygjuhopp, auk styrksins, svo áætlunin getur byrjað á styrk.",
+        },
+        refs: ["cormie2010a"],
+      },
+    ],
+    limit: {
+      text: {
+        en: "What the research does not show: that choosing the start from the strength test and the strength-to-jump ratio (DSI) works better. That choice is MicroPulse's rule.",
+        is: "Það sem rannsóknir sýna ekki: að betra sé að velja upphafið út frá styrkprófi og hlutfalli styrks og stökks (DSI). Það val er regla MicroPulse.",
+      },
+      refs: ["suchomel2020"],
+    },
+  },
+  strength_power: {
+    matters: {
+      text: {
+        en: "Strength is how much force your legs have; power is how fast you use it. Both matter for sprints, jumps and duels, and stronger players tend to jump higher and sprint faster.",
+        is: "Styrkur er hve mikinn kraft fæturnir hafa; sprengikraftur er hve hratt þú nýtir hann. Hvort tveggja skiptir máli í sprettum, stökkum og einvígjum, og sterkari leikmenn stökkva að jafnaði hærra og hlaupa hraðar.",
+      },
+      refs: ["stone2002"],
+    },
+    improves: [
+      {
+        text: {
+          en: "Heavy squats raised the max most; heavy squats and jump squats raised the jump about the same.",
+          is: "Þung hnébeygja hækkaði hámarkið mest; þung hnébeygja og hnébeygjuhopp hækkuðu stökkið álíka mikið.",
+        },
+        refs: ["cormie2010a"],
+      },
+      {
+        text: {
+          en: "Read the strength and jump tests together: a low strength-to-jump ratio often means a strong pull, not a weak jump.",
+          is: "Lestu styrk- og stökkprófin saman: lágt hlutfall styrks og stökks þýðir oft sterkt tog, ekki veikt stökk.",
+        },
+        refs: ["suchomel2020"],
+      },
+      {
+        text: {
+          en: "Weightlifting pulls with the usual lifts raised the jump and the sprint about as much as the usual lifts alone.",
+          is: "Ólympísk tog með venjulegum lyftum hækkuðu stökk og bættu spretti álíka og venjulegu lyfturnar einar.",
+        },
+        refs: ["garciavalverde2022"],
+      },
+      {
+        text: {
+          en: "Two days a week, never to failure.",
+          is: "Tveir dagar í viku, aldrei í þrot.",
+        },
+        refs: ["cuthbert2021", "hernandezbelmonte2022"],
+      },
+    ],
+    limit: {
+      text: {
+        en: "What the research does not show: that a strength block before a power block beats power training alone.",
+        is: "Það sem rannsóknir sýna ekki: að styrkblokk á undan kraftblokk sé betri en kraftþjálfun ein.",
+      },
+      refs: ["marshall2021"],
+    },
+  },
 };
 
 /** "Why top speed matters" / "Af hverju skiptir hámarkshraði máli?" and "What improves it?". */
-const NOM_IS: Record<GoalQuality, string> = { top_speed: "hámarkshraði", acceleration: "hröðun", braking: "bremsun", jump: "stökkhæð" };
-const ACC_IS: Record<GoalQuality, string> = { top_speed: "hámarkshraða", acceleration: "hröðun", braking: "bremsun", jump: "stökkhæð" };
-const EN: Record<GoalQuality, string> = { top_speed: "top speed", acceleration: "acceleration", braking: "braking", jump: "jump height" };
+const NOM_IS: Record<GoalQuality, string> = { top_speed: "hámarkshraði", acceleration: "hröðun", braking: "bremsun", jump: "stökkhæð", max_strength: "hámarksstyrkur", explosive: "sprengikraftur", strength_power: "styrkur og sprengikraftur" };
+const ACC_IS: Record<GoalQuality, string> = { top_speed: "hámarkshraða", acceleration: "hröðun", braking: "bremsun", jump: "stökkhæð", max_strength: "hámarksstyrk", explosive: "sprengikraft", strength_power: "styrk og sprengikraft" };
+const EN: Record<GoalQuality, string> = { top_speed: "top speed", acceleration: "acceleration", braking: "braking", jump: "jump height", max_strength: "maximal strength", explosive: "explosive power", strength_power: "strength and power" };
 
 export function whyTitles(q: GoalQuality): { matters: Bi; improves: Bi } {
   return {

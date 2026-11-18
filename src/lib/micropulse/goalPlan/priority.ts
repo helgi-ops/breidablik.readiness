@@ -35,7 +35,7 @@ import {
 import { positionGroup } from "@/lib/micropulse/positionStyle";
 import { LOOKBACK_DAYS, MIN_REF_DAYS, mergeSpeedDays, referenceTopSpeed, type SpeedRow } from "@/lib/micropulse/nearMaxExposure";
 import { BAND3_MAX_PER_DAY, PEAK_MS2_MAX } from "./outcome";
-import { GOAL_QUALITIES, type Bi, type GoalQuality } from "./types";
+import { PITCH_QUALITIES, type Bi, type GoalQuality, type PitchQuality } from "./types";
 
 export { WEAKNESS_PCTL };
 /** The picked quality must be at least this percentile for a suggestion (MicroPulse rule, the coach's choice). */
@@ -72,7 +72,8 @@ export type PriorityPlayerRaw = {
   jumps: PriorityJumpTest[];
 };
 
-const QUALITY_TO_ID: Record<GoalQuality, QualityId> = {
+/** The "weakest quality" read covers the four pitch goals only; the gym-only goals are suggested from DSI (2026-11-18). */
+const QUALITY_TO_ID: Record<PitchQuality, QualityId> = {
   top_speed: "speed",
   acceleration: "acceleration",
   braking: "deceleration",
@@ -208,7 +209,7 @@ export function priorityReads(team: PriorityTeam, playerId: string, blocked: Par
   const pool = team.players.filter((p) => isGk(p.position, team.sport) === gk);
   const toSignals = (v: Partial<Record<GoalQuality, MetricSample>>): AthleteSignalSet => {
     const s: AthleteSignalSet = {};
-    for (const q of GOAL_QUALITIES) if (v[q]) s[QUALITY_TO_ID[q]] = v[q];
+    for (const q of PITCH_QUALITIES) if (v[q]) s[QUALITY_TO_ID[q]] = v[q];
     return s;
   };
   const profile = buildAthleteProfile(
@@ -216,7 +217,7 @@ export function priorityReads(team: PriorityTeam, playerId: string, blocked: Par
     playerId,
   );
   if (!profile) return null;
-  return GOAL_QUALITIES.map((quality) => {
+  return PITCH_QUALITIES.map((quality): PriorityRead => {
     const r = profile.qualities.find((x) => x.id === QUALITY_TO_ID[quality])!;
     // A squad read with fewer than 4 players is no group at all.
     const thin = r.poolSize < MIN_POSITION_POOL;
@@ -247,7 +248,7 @@ export function goalPriority(reads: PriorityRead[], chosen: GoalQuality, metric:
   if (mine.pctl! < CHOSEN_MIN_PCTL) return { ...base, suggested: null, reason: "chosen_below_middle", view: null };
   const cands = reads
     .filter((r) => r.quality !== chosen && usable(r) && weak(r))
-    .sort((a, b) => (a.pctl! - b.pctl!) || GOAL_QUALITIES.indexOf(a.quality) - GOAL_QUALITIES.indexOf(b.quality));
+    .sort((a, b) => (a.pctl! - b.pctl!) || (PITCH_QUALITIES as GoalQuality[]).indexOf(a.quality) - (PITCH_QUALITIES as GoalQuality[]).indexOf(b.quality));
   const s = cands[0];
   if (!s) return { ...base, suggested: null, reason: "no_clear_weakness", view: null };
   return { ...base, suggested: s.quality, reason: "suggest", view: priorityView(s, mine, metric) };
@@ -256,17 +257,21 @@ export function goalPriority(reads: PriorityRead[], chosen: GoalQuality, metric:
 // ── Words ───────────────────────────────────────────────────────────────────
 
 /** English quality in running text. */
-const Q_EN: Record<GoalQuality, string> = { top_speed: "top speed", acceleration: "acceleration", braking: "braking", jump: "vertical jump" };
+const Q_EN: Record<GoalQuality, string> = { top_speed: "top speed", acceleration: "acceleration", braking: "braking", jump: "vertical jump", max_strength: "maximal strength", explosive: "explosive power", strength_power: "strength + power" };
 /** Icelandic accusative ("benda á …", "skipta í …", "valdi …"). */
-const Q_ACC: Record<GoalQuality, string> = { top_speed: "hámarkshraða", acceleration: "hröðun", braking: "bremsun", jump: "lóðrétt stökk" };
+const Q_ACC: Record<GoalQuality, string> = { top_speed: "hámarkshraða", acceleration: "hröðun", braking: "bremsun", jump: "lóðrétt stökk", max_strength: "hámarksstyrk", explosive: "sprengikraft", strength_power: "styrk og sprengikraft" };
 /** Icelandic dative ("halda …", "í …", "stakk upp á …"). */
-export const Q_DAT: Record<GoalQuality, string> = { top_speed: "hámarkshraða", acceleration: "hröðun", braking: "bremsun", jump: "lóðréttu stökki" };
+export const Q_DAT: Record<GoalQuality, string> = { top_speed: "hámarkshraða", acceleration: "hröðun", braking: "bremsun", jump: "lóðréttu stökki", max_strength: "hámarksstyrk", explosive: "sprengikrafti", strength_power: "styrk og sprengikrafti" };
 
 const MEASURE: Record<GoalQuality, Record<EffortMetric, Bi>> = {
   top_speed: { band3: { en: "Top speed", is: "Hámarkshraði" }, peak: { en: "Top speed", is: "Hámarkshraði" } },
   acceleration: { band3: { en: "Hard accelerations", is: "Harðar hraðaaukningar" }, peak: { en: "Hardest acceleration", is: "Mesta hröðun" } },
   braking: { band3: { en: "Hard braking", is: "Harðar bremsanir" }, peak: { en: "Hardest braking", is: "Harðasta bremsun" } },
   jump: { band3: { en: "Jump height", is: "Stökkhæð" }, peak: { en: "Jump height", is: "Stökkhæð" } },
+  // Not read by the weakest-quality rule (pitch goals only); here so every goal has a name.
+  max_strength: { band3: { en: "Strength test", is: "Styrkpróf" }, peak: { en: "Strength test", is: "Styrkpróf" } },
+  explosive: { band3: { en: "Jump height", is: "Stökkhæð" }, peak: { en: "Jump height", is: "Stökkhæð" } },
+  strength_power: { band3: { en: "Strength and jump tests", is: "Styrk- og stökkpróf" }, peak: { en: "Strength and jump tests", is: "Styrk- og stökkpróf" } },
 };
 
 export function measureName(q: GoalQuality, metric: EffortMetric): Bi {
@@ -394,7 +399,8 @@ export function prioritySnapshot(
 
 export function isPrioritySnapshot(v: unknown): v is GoalPrioritySnapshot {
   const s = v as GoalPrioritySnapshot | null;
-  return !!s && s.v === 1 && GOAL_QUALITIES.includes(s.firstPick) && GOAL_QUALITIES.includes(s.suggested)
+  const pitch = PITCH_QUALITIES as GoalQuality[];
+  return !!s && s.v === 1 && pitch.includes(s.firstPick) && pitch.includes(s.suggested)
     && (s.outcome === "switched" || s.outcome === "kept") && Array.isArray(s.reads);
 }
 

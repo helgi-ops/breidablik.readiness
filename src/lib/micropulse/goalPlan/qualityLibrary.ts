@@ -14,9 +14,11 @@
 import { ACCEL_METHODS, ACCEL_REFS } from "./acceleration";
 import { BRAKING_METHODS, BRAKING_REFS } from "./braking";
 import { JUMP_METHODS, JUMP_REFS } from "./jump";
-import type { Bi, GoalMethod, GoalQuality, GoalRef } from "./types";
+import type { Bi, GoalMethod, GoalRef } from "./types";
 
-export type LibraryQuality = Exclude<GoalQuality, "top_speed">;
+/** The three pitch goals with their own library page (top speed has `speedMethods`; the gym-only goals use the
+ *  heavy-strength / jump-squat / pull cards in `gymGoals.ts`). */
+export type LibraryQuality = "acceleration" | "braking" | "jump";
 
 export const LIBRARY_QUALITIES: LibraryQuality[] = ["acceleration", "braking", "jump"];
 

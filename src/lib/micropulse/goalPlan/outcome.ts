@@ -19,8 +19,8 @@
 import { QUALITY_LABEL } from "./common";
 import type { Bi, GoalQuality, GoalSessionSlot } from "./types";
 
-export type GoalMeasure = "flying_20m_s" | "top_speed_kmh" | "sprint_10m_s" | "cut_test_s" | "cmj_cm";
-export const GOAL_MEASURES: GoalMeasure[] = ["flying_20m_s", "top_speed_kmh", "sprint_10m_s", "cut_test_s", "cmj_cm"];
+export type GoalMeasure = "flying_20m_s" | "top_speed_kmh" | "sprint_10m_s" | "cut_test_s" | "cmj_cm" | "imtp_nkg" | "lift_test_kg";
+export const GOAL_MEASURES: GoalMeasure[] = ["flying_20m_s", "top_speed_kmh", "sprint_10m_s", "cut_test_s", "cmj_cm", "imtp_nkg", "lift_test_kg"];
 
 export type MeasureDef = {
   label: Bi;
@@ -58,6 +58,17 @@ export const MEASURE_DEF: Record<GoalMeasure, MeasureDef> = {
     clearBasis: { en: "MicroPulse rule (the trials used about 0.6–1.2 cm)", is: "Regla MicroPulse (rannsóknirnar notuðu um 0,6–1,2 cm)" },
     decimals: 1, min: 5, max: 90,
   },
+  // The gym-only goals (2026-11-18). The database check on `measure` is widened with their delivery (step 2).
+  imtp_nkg: {
+    label: { en: "Mid-thigh pull (force plates)", is: "Tog frá miðju læri (kraftplata)" }, unit: "N/kg", better: "higher", clearPct: 5,
+    clearBasis: { en: "MicroPulse rule (the force plates vary a little day to day)", is: "Regla MicroPulse (kraftplatan sveiflast aðeins milli daga)" },
+    decimals: 1, min: 10, max: 70,
+  },
+  lift_test_kg: {
+    label: { en: "Lift test (heaviest 3–5 reps)", is: "Lyftupróf (þyngst 3–5 sinnum)" }, unit: "kg", better: "higher", clearPct: 5,
+    clearBasis: { en: "MicroPulse rule (a lift test varies a little day to day; same lift and set-up both times)", is: "Regla MicroPulse (lyftupróf sveiflast aðeins milli daga; sama lyfta og uppsetning í bæði skiptin)" },
+    decimals: 1, min: 10, max: 400,
+  },
 };
 
 /** The measures each quality's tests use, the main one first. */
@@ -66,6 +77,9 @@ export const QUALITY_MEASURES: Record<GoalQuality, GoalMeasure[]> = {
   acceleration: ["sprint_10m_s"],
   braking: ["cut_test_s", "sprint_10m_s"],
   jump: ["cmj_cm"],
+  max_strength: ["imtp_nkg", "lift_test_kg"],
+  explosive: ["cmj_cm"],
+  strength_power: ["cmj_cm", "imtp_nkg", "lift_test_kg"],
 };
 
 export type ResultPhase = "baseline" | "retest";

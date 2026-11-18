@@ -49,6 +49,9 @@ const QUALITY: Record<GoalQuality, { label: Bi; sub: Bi }> = {
   acceleration: { label: { en: "Acceleration", is: "Hröðun" }, sub: { en: "Quicker first steps", is: "Snarpari fyrstu skref" } },
   braking: { label: { en: "Braking", is: "Bremsun" }, sub: { en: "Stop and turn more sharply", is: "Stoppa og snúa snarpar" } },
   jump: { label: { en: "Vertical jump", is: "Lóðrétt stökk" }, sub: { en: "Jump higher", is: "Stökkva hærra" } },
+  max_strength: { label: { en: "Maximal strength", is: "Hámarksstyrkur" }, sub: { en: "Stronger legs", is: "Sterkari fætur" } },
+  explosive: { label: { en: "Explosive power", is: "Sprengikraftur" }, sub: { en: "Use your strength faster", is: "Nýta styrkinn hraðar" } },
+  strength_power: { label: { en: "Strength + power", is: "Styrkur + sprengikraftur" }, sub: { en: "Stronger and faster off the ground", is: "Sterkari og snarpari af stað" } },
 };
 
 async function call(method: "GET" | "POST" | "DELETE", body?: unknown, path = "/api/player/goal-plan") {

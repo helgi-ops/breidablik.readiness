@@ -7,7 +7,8 @@ import { TRAINING_LEVELS, type TrainingLevel } from "../levels";
 import { RX_REFS, distinctLifts, goalPlanWithRx, rxForBlock, rxRefsUsed, withRx, type LiftRx, type RxContext, type RxLine } from "../liftRx";
 import { applySwaps, type SwapChoices } from "../swaps";
 import type { Bi, GoalPlanInput, GoalQuality } from "../types";
-import { GOAL_QUALITIES } from "../types";
+import { GOAL_QUALITIES, isGymQuality } from "../types";
+import { GYM_METHODS as GYM_GOAL_METHODS } from "../gymGoals";
 
 /**
  * Lota 7: every gym lift carries its full set of variables, read from the block itself. The plan's text never
@@ -106,7 +107,10 @@ describe("every gym lift gets its full set of variables (lota 7)", () => {
   it("'from the studies behind this method' only when the method's own card cites that study", () => {
     const cardRefs = (q: GoalQuality, method: string) =>
       new Set<string>(
-        (q === "top_speed" ? SPEED_METHODS.find((m) => m.key === method)?.findings : QUALITY_LIBRARIES[q].methods.find((m) => m.key === method)?.findings)?.map((f) => f.ref as string) ?? [],
+        (q === "top_speed"
+          ? SPEED_METHODS.find((m) => m.key === method)?.findings
+          : (isGymQuality(q) ? GYM_GOAL_METHODS : QUALITY_LIBRARIES[q].methods).find((m) => m.key === method)?.findings
+        )?.map((f) => f.ref as string) ?? [],
       );
     for (const { ctx, out } of RX) for (const b of blocks(out)) for (const r of b.rx ?? []) {
       const refs = cardRefs(ctx.quality, r.profile === "pull" ? "pulling_derivatives" : b.method);

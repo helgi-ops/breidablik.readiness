@@ -577,6 +577,44 @@ and can stop a plan.
   Pause on injury, the Today card, ticks, tests and outcome are unchanged.
 - Tests: `__tests__/autoStart.test.ts`.
 
+## Gym-only goals, step 1: Maximal strength, Explosive power, Strength + power (2026-11-18, coach preview only)
+
+Three 8-week goals with no running session: both goal days (A and B) are lifts for the team's strength session. They
+are meant to replace the +1 set "Stronger legs" / "More explosive" picks (step 3); "Stronger hamstrings" stays.
+Step 1 ships the rules and the coach's preview card only: `OPEN_GOAL_QUALITIES` (types.ts) still lists the four pitch
+goals, so the player's picker, the request / start routes (`isGoalQuality` in requests.ts), the team prefs route and
+the Speed & power library do not offer them. The database checks on `player_goal_plans.quality`,
+`team_quality_plan_prefs.quality` and `player_goal_plan_results.measure` are widened in step 2, with the delivery.
+
+- **Module:** `gymGoals.ts` (one file for the three, not three files: they share doses, tests and sources).
+  `GYM_REFS`, `GYM_METHODS` (heavy strength, jump squats, the pulls card, the strength test).
+- **Doses (read in full):** Cormie 2010a (heavy squats 90/75/80%, 5 min rest: squat max +31% vs +4.5%; jump and
+  40 m about the same in both groups), Cormie 2010b (jump squats 7×6 at body weight + 5×5 at 30%; strength fell
+  without heavy lifting, so a short heavy lift stays in every power plan), Smilios 2013 (most power at 20–37% of max
+  with body mass counted), Cuthbert 2021 (frequency), Stone 2002 (associations only, no target strength).
+  Never above 90% of max; beginner never above 85%; under 18 technique-first at about 60% (never above 75%),
+  body-weight jumps only, no heavy lift test.
+- **Weeks:** 1–6 build, 7 eases off, 8 tests. Two goal days a week in and out of season (`GYM_GOAL_SESSIONS`).
+- **Starts (MicroPulse rule; strength test first, DSI second, per Suchomel 2020):**
+  - Maximal strength: `heavy` (adult) or `youth`.
+  - Explosive power: weak pull (below / average) → `strength_first` (3 heavier weeks, then jump squats); no pull test
+    and a high DSI → `strength_first`; else `power`.
+  - Strength + power: weak pull or high DSI → `strength_led`; strong (or no) pull and a low DSI → `power_led`; else
+    `even`.
+  - Force-plate reads older than 12 months are not used (the ratio included, which the loader does not drop): the
+    plan names "a new force-plate test" as missing. Every Breiðablik force-plate test is from Dec 2024, so today no
+    Breiðablik player gets a DSI-based start.
+- **Tests:** strength = mid-thigh pull on the plates or the heaviest 3–5 reps on the main lift (weeks 1, 8); jump
+  test weeks 1, 4, 8 (Explosive power). New measures `imtp_nkg`, `lift_test_kg` (5% = clear change, MicroPulse rule).
+- **Swaps:** heavy-leg swaps apply to all three; jump-squat swaps to Explosive power and Strength + power.
+- **Lift lines:** `liftRx` reads them unchanged; body-weight jump squats get their own lines (no added weight,
+  Cormie 2010a). The weakest-quality suggestion (`priority.ts`) stays with the four pitch goals.
+- **Tests:** `__tests__/gymGoals.test.ts` (starts, youth, levels, power before strength, ≤90%, test weeks, golden
+  hashes). The four pitch goals' golden hashes did not move.
+- **What the research does not show** (on every plan): the dose trials were men, mostly not team sport, out of
+  season, 3×/week; choosing by strength test + DSI is untested; strength-then-power blocks were not tested against
+  power alone (Marshall 2021 is order within a session).
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

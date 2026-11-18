@@ -7,13 +7,16 @@ import type { Bi, GoalBlock, GoalBlockReason, GoalPlanInput, GoalQuality, GoalSe
 
 export const GOAL_ENGINE_VERSION = "goal-plan-1";
 /** Bump when a dose, a method or a source changes. A plan approved earlier keeps its frozen copy. */
-export const GOAL_CONTENT_VERSION = "2026-11-14.5";
+export const GOAL_CONTENT_VERSION = "2026-11-18.1";
 
 export const PLAN_WEEKS = 8;
 /** In-season add-on sessions a week (MicroPulse rule, not from a study). */
 export const IN_SEASON_SESSIONS = 2;
 /** Out of season (MicroPulse rule, not from a study). */
 export const OFF_SEASON_SESSIONS = 3;
+/** The gym-only goals: two goal days a week inside the team strength session, in and out of season (MicroPulse rule;
+ *  Cuthbert 2021 found no gain from spreading the same work over more days). */
+export const GYM_GOAL_SESSIONS = 2;
 /** Most minutes one add-on session takes (MicroPulse rule). */
 export const MAX_SESSION_MINUTES = 20;
 /** Under this age everything hard is supervised and the easier level is used. */
@@ -24,6 +27,9 @@ export const QUALITY_LABEL: Record<GoalQuality, Bi> = {
   acceleration: { en: "Acceleration", is: "Hröðun" },
   braking: { en: "Braking", is: "Bremsun" },
   jump: { en: "Vertical jump", is: "Lóðrétt stökk" },
+  max_strength: { en: "Maximal strength", is: "Hámarksstyrkur" },
+  explosive: { en: "Explosive power", is: "Sprengikraftur" },
+  strength_power: { en: "Strength + power", is: "Styrkur + sprengikraftur" },
 };
 
 export const EVIDENCE_LABEL: Record<"researched" | "partly" | "rule_of_thumb", Bi> = {

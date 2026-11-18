@@ -15,7 +15,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
 import { authErrorToResponse } from "@/lib/auth/httpError";
-import { GOAL_QUALITIES, type GoalQuality } from "@/lib/micropulse/goalPlan/types";
+import { OPEN_GOAL_QUALITIES, type GoalQuality } from "@/lib/micropulse/goalPlan/types";
 import { DEFAULT_LEVEL, isTrainingLevel, type TrainingLevel } from "@/lib/micropulse/goalPlan/levels";
 import { validateSwaps, type SwapChoices } from "@/lib/micropulse/goalPlan/swaps";
 
@@ -24,7 +24,8 @@ export const runtime = "nodejs";
 type Row = { quality: string; level: string; swaps: unknown; updated_by: string | null; updated_at: string };
 type Pref = { level: TrainingLevel; swaps: SwapChoices; updatedAt: string; updatedBy: string | null };
 
-const isQuality = (q: unknown): q is GoalQuality => typeof q === "string" && (GOAL_QUALITIES as string[]).includes(q);
+// The database check holds the four open goals; the gym-only goals get team prefs with their delivery.
+const isQuality = (q: unknown): q is GoalQuality => typeof q === "string" && (OPEN_GOAL_QUALITIES as string[]).includes(q);
 
 async function names(sb: SupabaseClient, ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map();

@@ -112,11 +112,18 @@ const BANNED_MD = new Set(["MD", "MD-1", "MD+1"]);
 /** Preferred match days per quality and session (best first). Anything else allowed ranks after these. */
 const MID_WEEK = ["MD-3", "MD-4", "MD+3", "MD-5", "MD+4", "MD-2", "MD+2"];
 const GYM_DAY = ["MD+2", "MD-4", "MD+3", "MD-2", "MD-3", "MD-5", "MD+4"];
+const GYM_HEAVY = ["MD-4", "MD+2", "MD+3", "MD-5", "MD+4", "MD-3"];
+const GYM_SECOND = ["MD-2", "MD-3", "MD+3", "MD-4", "MD-5", "MD+4", "MD+2"];
 const PREFS: Record<GoalQuality, Partial<Record<GoalSessionSlot, string[]>>> = {
   top_speed: { A: ["MD-3", "MD-4", "MD-5", "MD+3", "MD+4", "MD-2", "MD+2"], B: GYM_DAY },
   acceleration: { A: MID_WEEK, B: GYM_DAY },
   jump: { A: MID_WEEK, B: GYM_DAY },
   braking: { A: ["MD+3", "MD+2", "MD+4", "MD-4", "MD-5", "MD-3"], B: ["MD-2", "MD-3", "MD-4", "MD-5"] },
+  // Gym-only goals (2026-11-18): both days are team strength days, the heavier one further from the match. Placement
+  // for these ships in step 2; until then no player can hold one.
+  max_strength: { A: GYM_HEAVY, B: GYM_SECOND },
+  explosive: { A: GYM_HEAVY, B: GYM_SECOND },
+  strength_power: { A: GYM_HEAVY, B: GYM_SECOND },
 };
 /** No match near: weekday order (0 = Mon). */
 const WEEKDAY_PREF: Record<GoalSessionSlot, number[]> = {

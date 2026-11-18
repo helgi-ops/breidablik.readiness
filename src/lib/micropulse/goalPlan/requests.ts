@@ -6,7 +6,7 @@
  */
 
 import type { Bi, GoalBlockReason, GoalPlan, GoalQuality } from "./types";
-import { GOAL_QUALITIES } from "./types";
+import { isOpenGoalQuality } from "./types";
 import { PLAN_WEEKS } from "./common";
 import { isTrainingLevel, type TrainingLevel } from "./levels";
 
@@ -123,8 +123,13 @@ export const REASON_MIN = 5;
 /** How far ahead the coach may set the start (MicroPulse rule). */
 export const START_MAX_DAYS_AHEAD = 28;
 
+/**
+ * A quality a player may ask for or a coach may start. Since 2026-11-18 this is the OPEN list: the three gym-only goals
+ * exist for the coach's preview but cannot be requested or started until their delivery ships (the database check
+ * on `player_goal_plans.quality` would also refuse them).
+ */
 export function isGoalQuality(v: unknown): v is GoalQuality {
-  return typeof v === "string" && (GOAL_QUALITIES as string[]).includes(v);
+  return isOpenGoalQuality(v);
 }
 
 const DAY_MS = 86_400_000;

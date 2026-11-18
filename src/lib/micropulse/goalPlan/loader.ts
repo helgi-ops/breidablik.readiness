@@ -34,7 +34,7 @@ import { buildGoalPlan } from "./index";
 import { blockReason } from "./common";
 import { loadTeamQualityPrefs } from "./teamPrefs";
 import type { GoalBlockReason, GoalPlan, GoalPlanInput, GoalQuality, GoalSport, StrengthBand } from "./types";
-import { GOAL_QUALITIES } from "./types";
+import { GOAL_QUALITIES, OPEN_GOAL_QUALITIES } from "./types";
 
 export const UNAVAILABLE_STATUS = ["injured", "rehabilitation", "rtp_training"];
 /** Single-leg VALD tests whose L/R gap can name a weaker leg (Bishop 2018: ≥10% worth acting on). */
@@ -268,7 +268,8 @@ export async function loadGoalEligibility(sb: Sb, teamId: string, playerId: stri
   if (!player) throw new Error("Player not on this team");
   const sport = toSport((tRow as { sport: string | null } | null)?.sport);
   const unavailable = ((inj as unknown[] | null) ?? []).length > 0;
-  return GOAL_QUALITIES.map((quality) => ({
+  // Only the goals a player may ask for (the gym-only goals open with their delivery, step 2 of 2026-11-18).
+  return OPEN_GOAL_QUALITIES.map((quality) => ({
     quality,
     blocked: blockReason({
       quality, todayIso: "", sport, isGoalkeeper: positionGroup(player.position).key === 0,

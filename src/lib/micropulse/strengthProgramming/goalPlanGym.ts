@@ -23,6 +23,7 @@
  */
 
 import type { AppliedAdaptation, ExerciseCategory, PlayerStrengthSnapshot, PrescribedExercise, SessionBlock } from "./types";
+import type { GoalQuality } from "@/lib/micropulse/goalPlan/types";
 import { EXERCISES_BY_ID } from "./exerciseLibrary";
 import { goalSeasonOf } from "./playerGoal";
 
@@ -47,7 +48,7 @@ export type GoalPlanGymLift = {
 
 export type GoalPlanGym = {
   planId: string;
-  quality: "top_speed" | "acceleration" | "braking" | "jump";
+  quality: GoalQuality;
   week: number;
   weeksTotal: number;
   labelEN: string;
@@ -60,6 +61,9 @@ const QUALITY_NAME: Record<GoalPlanGym["quality"], { en: string; is: string }> =
   acceleration: { en: "acceleration", is: "hröðun" },
   braking: { en: "braking", is: "bremsun" },
   jump: { en: "jump", is: "stökkkraftur" },
+  max_strength: { en: "maximal strength", is: "hámarksstyrkur" },
+  explosive: { en: "explosive power", is: "sprengikraftur" },
+  strength_power: { en: "strength + power", is: "styrkur + sprengikraftur" },
 };
 
 export const GOAL_PLAN_GYM_EVIDENCE =

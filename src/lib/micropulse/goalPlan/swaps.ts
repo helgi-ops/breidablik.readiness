@@ -54,7 +54,7 @@ export const SWAP_SLOTS: SwapSlot[] = [
   {
     key: "heavy_legs",
     label: { en: "Heavy leg lift", is: "Þung fótalyfta" },
-    qualities: ["acceleration", "jump", "top_speed"],
+    qualities: ["acceleration", "jump", "top_speed", "max_strength", "explosive", "strength_power"],
     match: (b) => b.method === "heavy_strength" && b.dose.en.startsWith("Squat or trap-bar deadlift"),
     options: [
       planned({ en: "Squat or trap-bar deadlift", is: "Hnébeygja eða trap bar" }),
@@ -83,7 +83,7 @@ export const SWAP_SLOTS: SwapSlot[] = [
   {
     key: "jump_squat_load",
     label: { en: "Jump squats: load or exercise", is: "Hnébeygjuhopp: þyngd eða æfing" },
-    qualities: ["acceleration", "jump", "top_speed"],
+    qualities: ["acceleration", "jump", "top_speed", "explosive", "strength_power"],
     match: (b) => b.what.en === "Light jump squats",
     options: [
       planned({ en: "Any light load", is: "Hvaða létt þyngd sem er" }),

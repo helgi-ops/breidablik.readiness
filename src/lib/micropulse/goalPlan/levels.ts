@@ -102,6 +102,36 @@ export const LEVEL_CHANGES: Record<GoalQuality, Record<Exclude<TrainingLevel, "i
       is: "Framhald: um 70 snertingar á æfingu (60–80), fallhopp af 30–40 cm kössum frá viku 3, og hnébeygja einu skrefi þyngri.",
     },
   },
+  max_strength: {
+    beginner: {
+      en: "Beginner: technique-first squats for the first 3 weeks, then heavy days at 75–85% of max, never above 85%.",
+      is: "Byrjandi: hnébeygja þar sem tæknin kemur fyrst fyrstu 3 vikurnar, svo þungir dagar á 75–85% af hámarki, aldrei yfir 85%.",
+    },
+    advanced: {
+      en: "Advanced: one more set on the heavy day from week 2; the loads stay the same (never above 90% of max).",
+      is: "Framhald: einu setti fleira á þunga deginum frá viku 2; þyngdirnar haldast (aldrei yfir 90% af hámarki).",
+    },
+  },
+  explosive: {
+    beginner: {
+      en: "Beginner: jump squats with body weight only for the first 2 power weeks, and technique-first squats in place of the heavy lift.",
+      is: "Byrjandi: hnébeygjuhopp með eigin þyngd eingöngu fyrstu 2 kraftvikurnar, og hnébeygja þar sem tæknin kemur fyrst í stað þungu lyftunnar.",
+    },
+    advanced: {
+      en: "Advanced: one more set of jump squats on both days; the loads stay light and fast.",
+      is: "Framhald: einu setti fleira af hnébeygjuhoppum báða dagana; þyngdirnar haldast léttar og hraðar.",
+    },
+  },
+  strength_power: {
+    beginner: {
+      en: "Beginner: technique-first squats for the first 3 weeks and body-weight jump squats for the first 2, then 75–85% of max.",
+      is: "Byrjandi: hnébeygja þar sem tæknin kemur fyrst fyrstu 3 vikurnar og hnébeygjuhopp með eigin þyngd fyrstu 2, svo 75–85% af hámarki.",
+    },
+    advanced: {
+      en: "Advanced: one more set on the heavy day from week 2 and one more set of jump squats.",
+      is: "Framhald: einu setti fleira á þunga deginum frá viku 2 og einu setti fleira af hnébeygjuhoppum.",
+    },
+  },
 };
 
 /** Foot contacts in one adult jump session, by level (intermediate = ADULT_SESSION_CONTACTS in jump.ts). */

@@ -21,6 +21,7 @@ import {
   blockReason,
   blockedText,
   isYouth,
+  GYM_GOAL_SESSIONS,
   pickStart,
   sessionsPerWeek,
   trimSessions,
@@ -41,7 +42,21 @@ import { ADULT_ONLY_SWAPS, SWAP_NOTE, applySwaps, swapMark, validateSwaps, type 
 import { ACCEL_START_LABEL, accelAllowed, accelStart, buildAccelerationParts } from "./acceleration";
 import { BRAKING_START_LABEL, brakingAllowed, brakingStart, buildBrakingParts } from "./braking";
 import { JUMP_START_LABEL, buildJumpParts, jumpAllowed, jumpStart } from "./jump";
-import type { Bi, GoalEvidence, GoalPlan, GoalPlanInput, GoalQuality, GoalRef, GoalWeek } from "./types";
+import {
+  EXPLOSIVE_START_LABEL,
+  MAX_STRENGTH_START_LABEL,
+  STRENGTH_POWER_START_LABEL,
+  buildExplosiveParts,
+  buildMaxStrengthParts,
+  buildStrengthPowerParts,
+  explosiveAllowed,
+  explosiveStart,
+  maxStrengthAllowed,
+  maxStrengthStart,
+  strengthPowerAllowed,
+  strengthPowerStart,
+} from "./gymGoals";
+import { isGymQuality, type Bi, type GoalEvidence, type GoalPlan, type GoalPlanInput, type GoalQuality, type GoalRef, type GoalWeek } from "./types";
 
 export * from "./types";
 export { QUALITY_LABEL, EVIDENCE_LABEL, isYouth, PLAN_WEEKS } from "./common";
@@ -117,6 +132,9 @@ export function ruleStart(input: GoalPlanInput): string {
     case "acceleration": return accelStart(input);
     case "braking": return brakingStart(input);
     case "jump": return jumpStart(input);
+    case "max_strength": return maxStrengthStart(input);
+    case "explosive": return explosiveStart(input);
+    case "strength_power": return strengthPowerStart(input);
   }
 }
 
@@ -125,6 +143,9 @@ const START_LABELS: Record<GoalQuality, Record<string, Bi>> = {
   acceleration: ACCEL_START_LABEL,
   braking: BRAKING_START_LABEL,
   jump: JUMP_START_LABEL,
+  max_strength: MAX_STRENGTH_START_LABEL,
+  explosive: EXPLOSIVE_START_LABEL,
+  strength_power: STRENGTH_POWER_START_LABEL,
 };
 
 /**
@@ -139,6 +160,9 @@ export function allowedStarts(input: GoalPlanInput): { key: string; label: Bi; r
       case "acceleration": return accelAllowed(input);
       case "braking": return brakingAllowed(input);
       case "jump": return jumpAllowed(input);
+      case "max_strength": return maxStrengthAllowed(input);
+      case "explosive": return explosiveAllowed(input);
+      case "strength_power": return strengthPowerAllowed(input);
     }
   })();
   const rule = ruleStart(input);
@@ -178,7 +202,7 @@ export function levelChange(quality: GoalQuality, level: Exclude<TrainingLevel, 
  * its two "why" facts and gives up "expect small gains"; the others give up their dose fact (the jump fact names
  * about 55 contacts, which no longer holds, so it is dropped; the others move to "what the research does not show").
  */
-const LEVEL_FACT_SLOT: Record<GoalQuality, number> = { top_speed: 2, acceleration: 1, braking: 1, jump: 1 };
+const LEVEL_FACT_SLOT: Record<GoalQuality, number> = { top_speed: 2, acceleration: 1, braking: 1, jump: 1, max_strength: 1, explosive: 1, strength_power: 1 };
 
 function partsFor(input: GoalPlanInput): GoalParts {
   switch (input.quality) {
@@ -186,12 +210,16 @@ function partsFor(input: GoalPlanInput): GoalParts {
     case "acceleration": return buildAccelerationParts(input);
     case "braking": return buildBrakingParts(input);
     case "jump": return buildJumpParts(input);
+    case "max_strength": return buildMaxStrengthParts(input);
+    case "explosive": return buildExplosiveParts(input);
+    case "strength_power": return buildStrengthPowerParts(input);
   }
 }
 
 export function buildGoalPlan(input: GoalPlanInput): GoalPlan {
   const youth = isYouth(input.ageYears);
-  const perWeek = sessionsPerWeek(input.inSeason);
+  // The gym-only goals are two days a week inside the team strength session, in and out of season.
+  const perWeek = isGymQuality(input.quality) ? GYM_GOAL_SESSIONS : sessionsPerWeek(input.inSeason);
   const reason = blockReason(input);
   const base = {
     quality: input.quality,

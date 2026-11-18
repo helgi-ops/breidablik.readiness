@@ -13,7 +13,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { loadPlayerPriority } from "@/lib/micropulse/goalPlan/priorityLoader";
-import { GOAL_QUALITIES } from "@/lib/micropulse/goalPlan/types";
+import { OPEN_GOAL_QUALITIES } from "@/lib/micropulse/goalPlan/types";
 import { goalFail, requireGoalPlayer } from "../_shared";
 
 export const runtime = "nodejs";
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
     const sb = getSupabaseServer();
     const { playerId, teamId } = await requireGoalPlayer(sb, req);
     const read = await loadPlayerPriority(sb, teamId, playerId, new Date().toISOString().slice(0, 10));
-    const byQuality = Object.fromEntries(GOAL_QUALITIES.map((q) => {
+    const byQuality = Object.fromEntries(OPEN_GOAL_QUALITIES.map((q) => {
       const p = read?.byQuality[q];
       return [q, p?.suggested && p.view ? { suggested: p.suggested, view: p.view } : null];
     }));

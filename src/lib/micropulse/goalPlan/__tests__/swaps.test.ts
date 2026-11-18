@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { allQualityPlans } from "../qualityPlans";
 import { allSpeedPlans } from "../../speedMethods";
-import type { Bi, GoalQuality } from "../types";
+import { GYM_ONLY_QUALITIES, type Bi, type GoalPlanInput, type GoalQuality } from "../types";
+import { buildGoalPlan } from "../index";
 import {
   PLANNED,
   SWAP_NOTE,
@@ -21,6 +22,16 @@ type AnyPlan = { weeks: { sessions: { blocks: AnyBlock[] }[] }[] };
 const PLANS: { quality: GoalQuality; plan: AnyPlan }[] = [
   ...allQualityPlans().map((p) => ({ quality: p.quality as GoalQuality, plan: p as unknown as AnyPlan })),
   ...allSpeedPlans().map((p) => ({ quality: "top_speed" as GoalQuality, plan: p as unknown as AnyPlan })),
+  // The gym-only goals have no team plan in the library: their adult goal plans, every start.
+  ...GYM_ONLY_QUALITIES.flatMap((quality) =>
+    ["heavy", "strength_first", "power", "strength_led", "even", "power_led"].map((startOverride) => {
+      const input: GoalPlanInput = {
+        quality, todayIso: "2026-11-18", sport: "football", isGoalkeeper: false, isActive: true, ageYears: 24, unavailable: false,
+        inSeason: false, topSpeed: null, sprintTimes: null, cmj: null, strength: null, braking: null, weakerLeg: null, startOverride,
+      };
+      return { quality: quality as GoalQuality, plan: buildGoalPlan(input) as unknown as AnyPlan };
+    }),
+  ),
 ];
 
 const blocks = (p: AnyPlan) => p.weeks.flatMap((w) => w.sessions.flatMap((s) => s.blocks));

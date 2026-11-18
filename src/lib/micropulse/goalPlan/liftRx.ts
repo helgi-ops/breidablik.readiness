@@ -15,11 +15,12 @@ import { SPEED_METHODS, SPEED_REFS } from "@/lib/micropulse/speedMethods";
 import { VBT_LOAD_STEP_PCT, VBT_TOLERANCE_MS } from "@/lib/micropulse/vbtMethods";
 import { ACCEL_REFS } from "./acceleration";
 import { BRAKING_REFS } from "./braking";
+import { GYM_METHODS, GYM_REFS } from "./gymGoals";
 import { JUMP_REFS } from "./jump";
 import { QUALITY_LIBRARIES } from "./qualityLibrary";
 import type { TrainingLevel } from "./levels";
 import { swapMark } from "./swaps";
-import type { Bi, GoalPlan, GoalQuality, GoalRef } from "./types";
+import { isGymQuality, type Bi, type GoalPlan, type GoalQuality, type GoalRef } from "./types";
 
 /** Where a number comes from. `study` lines are resolved by `withRx` into `plan_study` / `other_study`. `session` =
  *  read from the session the coach (or the engine) sent to the player's Today (lota 8, `todayLiftRx.ts`). */
@@ -137,6 +138,7 @@ export const RX_REFS: Record<string, GoalRef> = {
   gonzalezbadillo2015: JUMP_REFS.gonzalezbadillo2015,
   chen2025: BRAKING_REFS.chen2025,
   ishoi2018: SPEED_REFS.ishoi2018,
+  cormie2010a: GYM_REFS.cormie2010a,
 };
 
 // ─── Building blocks ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -330,6 +332,21 @@ function jumpSquatRx(swapOption: string | undefined): Built {
   };
 }
 
+/** Body-weight jump squats (the gym-only goals, 2026-11-18): Cormie 2010a's programme used them on 2 of its 3 days. */
+function bodyJumpSquatRx(): Built {
+  return {
+    rows: {
+      load: S("Body weight only, no added weight: the tested programme used body-weight jump squats on 2 of its 3 days a week.", "Eigin þyngd eingöngu, engin aukaþyngd: prófaða áætlunin notaði hnébeygjuhopp með eigin þyngd 2 af 3 dögum vikunnar.", "cormie2010a"),
+      effort: M("Every jump as high as possible; stop the set when the jumps get lower.", "Hvert hopp eins hátt og hægt er; hættu settinu þegar hoppin lækka."),
+      tempo: M("Short dip, then jump at once as high as possible; land soft and reset before the next one.", "Stutt beygja, síðan strax upp eins hátt og hægt er; lentu mjúkt og núllstilltu fyrir næsta."),
+      rest: S("About 3 min (full rest), as in the tested programme.", "Um 3 mín (full hvíld), eins og í prófuðu áætluninni.", "cormie2010a"),
+      warmup: M("A few easy jumps first.", "Nokkur létt hopp fyrst."),
+      progression: M("No added weight in this block; the plan adds sets week by week while the jumps keep their height.", "Engin aukaþyngd í þessari blokk; áætlunin bætir við settum viku fyrir viku meðan hoppin halda hæð."),
+    },
+    barSpeed: NOT_USED("No bar: watch the jump height instead.", "Engin stöng: fylgstu frekar með hæð hoppsins."),
+  };
+}
+
 function pullRx(): Built {
   return {
     rows: {
@@ -441,7 +458,7 @@ export function rxForBlock(b: BlockIn, ctx: RxContext): LiftRx[] {
       profile === "heavy" ? heavyRx(seg, ctx, swapOption)
       : profile === "technique" ? techniqueRx(seg, ctx)
       : profile === "rdl" ? rdlRx()
-      : profile === "jump_squat" ? jumpSquatRx(swapOption)
+      : profile === "jump_squat" ? (/^Body-weight jump squats/.test(b.what.en) && !swapOption ? bodyJumpSquatRx() : jumpSquatRx(swapOption))
       : profile === "pull" ? pullRx()
       : profile === "nordic" ? nordicRx()
       : profile === "eccentric" ? eccentricRx()
@@ -485,7 +502,8 @@ function methodRefs(quality: GoalQuality, method: string): Set<string> {
     const m = SPEED_METHODS.find((x) => x.key === method);
     return new Set((m?.findings ?? []).map((f) => f.ref as string));
   }
-  const m = QUALITY_LIBRARIES[quality].methods.find((x) => x.key === method);
+  const methods = isGymQuality(quality) ? GYM_METHODS : QUALITY_LIBRARIES[quality].methods;
+  const m = methods.find((x) => x.key === method);
   return new Set((m?.findings ?? []).map((f) => f.ref));
 }
 

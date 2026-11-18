@@ -52,6 +52,9 @@ const QUALITY: Record<GoalQuality, Bi> = {
   acceleration: { en: "Acceleration", is: "Hröðun" },
   braking: { en: "Braking", is: "Bremsun" },
   jump: { en: "Vertical jump", is: "Lóðrétt stökk" },
+  max_strength: { en: "Maximal strength", is: "Hámarksstyrkur" },
+  explosive: { en: "Explosive power", is: "Sprengikraftur" },
+  strength_power: { en: "Strength + power", is: "Styrkur + sprengikraftur" },
 };
 
 const STATUS_STYLE: Record<GoalPlanStatus, string> = {

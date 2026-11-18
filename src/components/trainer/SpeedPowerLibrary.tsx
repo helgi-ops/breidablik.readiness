@@ -17,7 +17,7 @@ import { useCallback, useEffect, useState } from "react";
 import SpeedMethodLibrary from "@/components/trainer/SpeedMethodLibrary";
 import QualityMethodLibrary from "@/components/trainer/QualityMethodLibrary";
 import { QUALITY_LIBRARIES } from "@/lib/micropulse/goalPlan/qualityLibrary";
-import { GOAL_QUALITIES, type Bi, type GoalQuality } from "@/lib/micropulse/goalPlan/types";
+import { PITCH_QUALITIES, type Bi, type PitchQuality } from "@/lib/micropulse/goalPlan/types";
 import { DEFAULT_LEVEL, type TrainingLevel } from "@/lib/micropulse/goalPlan/levels";
 import { PLANNED, type SwapChoices, type SwapSlotKey } from "@/lib/micropulse/goalPlan/swaps";
 import { authFetch } from "@/lib/client/authFetch";
@@ -25,7 +25,7 @@ import GoalPlanSendPanel, { type RosterPlayer } from "@/components/trainer/GoalP
 
 type Lang = "IS" | "EN";
 
-const PILL: Record<GoalQuality, Bi> = {
+const PILL: Record<PitchQuality, Bi> = {
   top_speed: { en: "Top speed", is: "Hámarkshraði" },
   acceleration: { en: "Acceleration", is: "Hröðun" },
   braking: { en: "Braking", is: "Bremsun" },
@@ -33,7 +33,7 @@ const PILL: Record<GoalQuality, Bi> = {
 };
 
 type Pref = { level: TrainingLevel; swaps: SwapChoices; updatedAt: string | null; updatedBy: string | null };
-type Prefs = Record<GoalQuality, Pref>;
+type Prefs = Record<PitchQuality, Pref>;
 /** loading → saved (team prefs read) | local (cannot save: choices hold on this screen only). */
 type Store = "loading" | "saved" | "local";
 
@@ -48,7 +48,7 @@ function when(iso: string, lang: Lang): string {
 }
 
 export default function SpeedPowerLibrary({ lang }: { lang: Lang }) {
-  const [q, setQ] = useState<GoalQuality>("top_speed");
+  const [q, setQ] = useState<PitchQuality>("top_speed");
   const [prefs, setPrefs] = useState<Prefs>(emptyPrefs);
   const [store, setStore] = useState<Store>("loading");
   const [saving, setSaving] = useState(false);
@@ -84,11 +84,11 @@ export default function SpeedPowerLibrary({ lang }: { lang: Lang }) {
       try {
         const res = await authFetch(API, { cache: "no-store" });
         if (!res.ok) throw new Error(String(res.status));
-        const j = (await res.json()) as { prefs?: Partial<Record<GoalQuality, Pref>> };
+        const j = (await res.json()) as { prefs?: Partial<Record<PitchQuality, Pref>> };
         if (!alive) return;
         setPrefs((prev) => {
           const next = { ...prev };
-          for (const k of GOAL_QUALITIES) if (j.prefs?.[k]) next[k] = { ...EMPTY, ...j.prefs[k] };
+          for (const k of PITCH_QUALITIES) if (j.prefs?.[k]) next[k] = { ...EMPTY, ...j.prefs[k] };
           return next;
         });
         setStore("saved");
@@ -102,7 +102,7 @@ export default function SpeedPowerLibrary({ lang }: { lang: Lang }) {
   }, []);
 
   const save = useCallback(
-    async (quality: GoalQuality, patch: { level?: TrainingLevel; swaps?: SwapChoices }) => {
+    async (quality: PitchQuality, patch: { level?: TrainingLevel; swaps?: SwapChoices }) => {
       // The screen changes at once; the team copy follows.
       setPrefs((prev) => ({ ...prev, [quality]: { ...prev[quality], ...patch } }));
       if (store !== "saved") return;
@@ -158,7 +158,7 @@ export default function SpeedPowerLibrary({ lang }: { lang: Lang }) {
   return (
     <div>
       <div className="mb-5 flex flex-wrap gap-1.5" role="tablist" aria-label={IS ? "Eiginleiki" : "Quality"}>
-        {GOAL_QUALITIES.map((k) => (
+        {PITCH_QUALITIES.map((k) => (
           <button
             key={k}
             type="button"

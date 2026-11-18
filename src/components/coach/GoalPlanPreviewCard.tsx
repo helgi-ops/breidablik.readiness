@@ -10,7 +10,7 @@
  */
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import type { Bi, GoalPlan, GoalQuality, GoalWeek } from "@/lib/micropulse/goalPlan/types";
+import { isGymQuality, type Bi, type GoalPlan, type GoalQuality, type GoalWeek } from "@/lib/micropulse/goalPlan/types";
 import { LEVEL_LABEL } from "@/lib/micropulse/goalPlan/levels";
 import { SWAPPED_BY_COACH } from "@/lib/micropulse/goalPlan/swaps";
 import { LiftRxDetails } from "@/components/trainer/LiftRxTable";
@@ -21,6 +21,9 @@ const QUALITY: Record<GoalQuality, Bi> = {
   acceleration: { en: "Acceleration", is: "Hröðun" },
   braking: { en: "Braking", is: "Bremsun" },
   jump: { en: "Vertical jump", is: "Lóðrétt stökk" },
+  max_strength: { en: "Maximal strength", is: "Hámarksstyrkur" },
+  explosive: { en: "Explosive power", is: "Sprengikraftur" },
+  strength_power: { en: "Strength + power", is: "Styrkur + sprengikraftur" },
 };
 const EVIDENCE: Record<GoalPlan["evidence"], Bi> = {
   researched: { en: "Researched", is: "Rannsakað" },
@@ -127,7 +130,9 @@ export function GoalPlanView({ plan: stored, isEN }: { plan: GoalPlan; isEN: boo
               <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10.5px]">
                 <span className={`rounded px-1.5 py-0.5 font-medium ${EV_STYLE[plan.evidence]}`}>{L(EVIDENCE[plan.evidence])}</span>
                 <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">{L(CONF[plan.confidence.level])}</span>
-                <span className="text-slate-500">{T(`${plan.sessionsPerWeek} short sessions a week · 8 weeks`, `${plan.sessionsPerWeek} stuttar æfingar á viku · 8 vikur`)}</span>
+                <span className="text-slate-500">{isGymQuality(plan.quality)
+                  ? T(`${plan.sessionsPerWeek} goal days a week in the team strength session · 8 weeks`, `${plan.sessionsPerWeek} markmiðsdagar á viku í styrktaræfingu liðsins · 8 vikur`)
+                  : T(`${plan.sessionsPerWeek} short sessions a week · 8 weeks`, `${plan.sessionsPerWeek} stuttar æfingar á viku · 8 vikur`)}</span>
                 {plan.youthLevel ? <span className="rounded bg-[#de9328]/15 px-1.5 py-0.5 text-[#8a5a12]">{T("Easier level, coach at every session", "Léttara stig, þjálfari við hverja æfingu")}</span> : null}
                 {!plan.youthLevel && plan.level ? <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">{T("Level", "Stig")}: {L(LEVEL_LABEL[plan.level])}</span> : null}
                 {swapCount(plan) > 0 ? (
