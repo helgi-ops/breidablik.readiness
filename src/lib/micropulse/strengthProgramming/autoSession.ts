@@ -26,6 +26,7 @@ import { loadCoachOverridesForPlayers, loadPlayerStrengthSnapshot } from "./load
 import { persistTodayStrengthOverride } from "./persistTodayOverride";
 import { normalizeSendMode, type SendMode } from "./sendMode";
 import { markRebuilt } from "./sendLog";
+import { asAppLang, sessionLangFor } from "./playerLanguage";
 import { loadGoalPlanGym } from "@/lib/micropulse/goalPlan/gymLoader";
 import type { StrengthSession } from "./types";
 
@@ -118,8 +119,8 @@ export async function refreshAutoSessionAfterCheckin(sb: SupabaseClient, playerI
     if ((done.count ?? 0) + (sets.count ?? 0) + (swaps.count ?? 0) > 0) return "started";
 
     const [{ data: team }, { data: player }] = await Promise.all([
-      sb.from("teams").select("strength_send_mode").eq("id", row.team_id).maybeSingle(),
-      sb.from("players").select("id, full_name").eq("id", playerId).maybeSingle(),
+      sb.from("teams").select("strength_send_mode, default_language").eq("id", row.team_id).maybeSingle(),
+      sb.from("players").select("id, full_name, app_language").eq("id", playerId).maybeSingle(),
     ]);
     const mode = normalizeSendMode((team as { strength_send_mode?: string | null } | null)?.strength_send_mode);
     if (mode === "standard" || !player) return "not_auto";
@@ -129,7 +130,9 @@ export async function refreshAutoSessionAfterCheckin(sb: SupabaseClient, playerI
     // Nothing to build now (e.g. an injury logged since 09:00): leave the row; the Today card handles injury.
     if ("skip" in built) return "no_session";
 
-    const persisted = await persistTodayStrengthOverride(sb, { session: built.session, playerId, teamId: row.team_id, dateIso, lang: "EN", origin: "auto", readinessLevel: built.readinessLevel });
+    const persisted = await persistTodayStrengthOverride(sb, { session: built.session, playerId, teamId: row.team_id, dateIso, origin: "auto", readinessLevel: built.readinessLevel,
+      // Same language rule as the 09:00 send: the player's app language, else the team's, else English (D).
+      lang: sessionLangFor((player as { app_language?: string | null }).app_language, asAppLang((team as { default_language?: string | null } | null)?.default_language) ?? "EN") });
     if (!persisted.ok) return "failed";
     await markRebuilt(sb, { teamId: row.team_id, playerId, date: dateIso, level: built.readinessLevel });
     return "rebuilt";

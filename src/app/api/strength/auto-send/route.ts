@@ -20,6 +20,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { resolveAutoMdContext } from "@/lib/micropulse/strengthProgramming/loader";
 import { buildAutoSession, loadAutoTeamContext } from "@/lib/micropulse/strengthProgramming/autoSession";
 import { playerRow, teamRow, writeSendLog, type SendLogRow } from "@/lib/micropulse/strengthProgramming/sendLog";
+import { asAppLang, loadPlayerLanguages, type AppLang } from "@/lib/micropulse/strengthProgramming/playerLanguage";
 import { resolveTeamCustomTable, customProgrammeCoversDay } from "@/lib/micropulse/strengthProgramming/customProgrammeActive";
 import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
@@ -68,11 +69,11 @@ async function run(req: NextRequest) {
 
   const { data: teams } = await sb
     .from("teams")
-    .select("id, strength_send_mode, strength_auto_send")
+    .select("id, strength_send_mode, strength_auto_send, default_language")
     .eq("strength_auto_send", true);
   // FREE clubs get no automatic sends (paying + PT teams only).
   const freeLocked = await getFreeLockedTeamIds(sb);
-  const teamRows = ((teams ?? []) as Array<{ id: string; strength_send_mode: string | null }>).filter((t) => !freeLocked.has(t.id));
+  const teamRows = ((teams ?? []) as Array<{ id: string; strength_send_mode: string | null; default_language?: string | null }>).filter((t) => !freeLocked.has(t.id));
 
   let sent = 0, skipped = 0, failed = 0;
   const perTeam: Array<{ teamId: string; sent: number; skipped: number; failed: number }> = [];
@@ -110,6 +111,9 @@ async function run(req: NextRequest) {
     // Team-level inputs (coach's block + rule, swaps, 8-week goal lifts), one read per team. The same builder
     // rebuilds an untouched automatic session when the player checks in (autoSession.ts, 2026-11-18).
     const autoCtx = await loadAutoTeamContext(sb, { teamId: team.id, mode, todayIso, playerIds: rows.map((r) => r.id) });
+    // Each player's session (and push) in the language they use the app in; else the team's default, else English (D).
+    const langs = await loadPlayerLanguages(sb, rows.map((r) => r.id));
+    const teamLang: AppLang = asAppLang(team.default_language) ?? "EN";
     // Standard mode: the team's authored Custom Programme table + the day's team MD (team-level). When it
     // covers a player we stand aside — no engine override — so their Today resolution serves it; still push.
     const teamCustom = mode === "standard" ? await resolveTeamCustomTable(sb, team.id, todayIso) : null;
@@ -118,6 +122,7 @@ async function run(req: NextRequest) {
     // One player's send — pure per-player, returns a status. Run in bounded-concurrency batches so a
     // full squad finishes well inside maxDuration (the old sequential loop timed out ~17/26 at 60s).
     const runPlayer = async (p: { id: string; full_name: string | null }): Promise<"sent" | "skipped" | "failed"> => {
+      const lang = langs.get(p.id) ?? teamLang;
       try {
         // Never overwrite what the coach already sent today (review gate).
         const { data: existing } = await sb
@@ -132,7 +137,7 @@ async function run(req: NextRequest) {
         // Custom Programme covers today → don't write an engine override; just nudge. Layer-3 serves it.
         // Basketball keys by weekday (not the football MD tag), so it runs even when teamMd is absent.
         if (teamCustom && (teamCustom.isBasketball || teamMd) && (await customProgrammeCoversDay(sb, { teamId: team.id, playerId: p.id, mdDay: teamMd ?? "", todayIso, ctx: teamCustom }))) {
-          void notifyPlayer(sb, p.id, "Your strength session is ready");
+          void notifyPlayer(sb, p.id, lang === "IS" ? "Styrktaræfing dagsins er tilbúin" : "Your strength session is ready");
           log(p.id, "sent", "custom_programme");
           return "sent";
         }
@@ -148,10 +153,12 @@ async function run(req: NextRequest) {
         if ("skip" in built) { log(p.id, "skipped", built.skip); return "skipped"; } // injured / no session today
         const { session, readinessLevel } = built;
 
-        const persisted = await persistTodayStrengthOverride(sb, { session, playerId: p.id, teamId: team.id, dateIso: todayIso, lang: "EN", origin: "auto", readinessLevel });
+        const persisted = await persistTodayStrengthOverride(sb, { session, playerId: p.id, teamId: team.id, dateIso: todayIso, lang, origin: "auto", readinessLevel });
         if (!persisted.ok) { log(p.id, "failed", persisted.error ?? "save failed"); return "failed"; }
         log(p.id, "sent", null, readinessLevel);
-        void notifyPlayer(sb, p.id, `Strength session (${session.contextLabel ?? session.mdContext}, ~${session.durationMin} min)`);
+        void notifyPlayer(sb, p.id, lang === "IS"
+          ? `Styrktaræfing dagsins (~${session.durationMin} mín)`
+          : `Strength session (${session.contextLabel ?? session.mdContext}, ~${session.durationMin} min)`);
         return "sent";
       } catch (e) { log(p.id, "failed", e instanceof Error ? e.message : "error"); return "failed"; }
     };

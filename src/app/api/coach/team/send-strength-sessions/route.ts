@@ -14,6 +14,7 @@
  * Auth: coach token only.
  */
 
+import { loadPlayerLanguages } from "@/lib/micropulse/strengthProgramming/playerLanguage";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { loadCoachOverridesForPlayers, loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/loader";
@@ -131,7 +132,8 @@ export async function POST(req: NextRequest) {
   // Optional subset (a position group or a hand-picked set). Omitted/empty → the whole team.
   const subset = Array.isArray(body.playerIds) ? body.playerIds.filter((x) => typeof x === "string" && x) : null;
   const mdOverride = parseMdOverride(body.md);
-  const lang: "IS" | "EN" = body.lang === "EN" ? "EN" : "IS";
+  // The coach's UI language: the fallback when a player's app language isn't known yet (D, 2026-11-18).
+  const coachLang: "IS" | "EN" = body.lang === "EN" ? "EN" : "IS";
   const note = body.note?.trim().slice(0, 300) ?? "";
 
   // Send mode: the request overrides the team default (teams.strength_send_mode).
@@ -178,12 +180,16 @@ export async function POST(req: NextRequest) {
   // covers a player's day we stand aside and let their Today resolution serve it (readiness-reactive).
   const teamCustom = mode === "standard" ? await resolveTeamCustomTable(supabase, auth.teamId, todayIso) : null;
 
+  const langs = await loadPlayerLanguages(supabase, playerRows.map((r) => r.id));
+
   type SendResult = { playerId: string; playerName: string; status: "sent" | "skipped" | "failed"; reason?: string };
 
   // One player's send — pure per-player. Run in bounded-concurrency batches (not one-at-a-time) so a
   // full squad finishes inside maxDuration instead of timing out part-way.
   const runPlayer = async (p: { id: string; full_name: string | null; team_id: string }): Promise<SendResult> => {
     const playerName = p.full_name ?? p.id;
+    // The message, push and Today card in the language the player uses the app in.
+    const lang = langs.get(p.id) ?? coachLang;
     try {
       const snapshot = await loadPlayerStrengthSnapshot(supabase, {
         playerId: p.id,

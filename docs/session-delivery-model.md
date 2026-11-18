@@ -95,6 +95,16 @@ and the check-in rebuild. So the card a player sees at 08:30 is the session that
 Breiðablik 2026-11-18: 23 of 23 identical). Until 09:00 Today labels it "Preview · your coach's plan"; a card from
 another layer (e.g. the team programme) gets "Preview … may differ". Layer order unchanged; nothing persisted.
 
+## Language of a sent session (2026-11-18)
+
+A sent session is stored in ONE language (`structure`, `title`, `summary`), so it is built in the language the
+player uses the app in: `players.app_language`, reported by the player app (`PUT /api/player/language`, only when it
+changes). Fallbacks when it isn't known yet: the coach's UI language for a hand send (per-player / bulk), the team's
+`default_language` else English for the 09:00 send and the check-in rebuild. Message and push follow the same
+language. A player who switches language later sees today's already-sent session in the old language (swaps match
+the stored block titles, so the row is not rewritten). The movement-screen corrective send keeps the coach's
+language (coach-written text).
+
 ## Collision preview
 
 `GET /api/coach/player/[id]/today-conflicts?dates=…` (admin-aware) returns, for a set of target dates:

@@ -4516,6 +4516,23 @@ export default function PlayerClient() {
   // the one localized default-session fetch, which reads langRef at call time).
   const langRef = useRef(lang);
   useEffect(() => { langRef.current = lang; }, [lang]);
+  // Tell the server which language this player uses the app in, so sent strength sessions are stored in it
+  // (players.app_language, D 2026-11-18). Only when it differs from what this browser last reported.
+  useEffect(() => {
+    const pid = profile?.player_id;
+    if (!pid) return;
+    const key = `mp_lang_reported:${pid}`;
+    try { if (window.localStorage.getItem(key) === lang) return; } catch { return; }
+    let cancelled = false;
+    void authFetch("/api/player/language", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lang }),
+    })
+      .then((r) => { if (r.ok && !cancelled) { try { window.localStorage.setItem(key, lang); } catch { /* private mode */ } } })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [profile?.player_id, lang]);
   const requestDataRefresh = useCallback((minGapMs = 0) => {
     const now = Date.now();
     if (now - lastRefreshRef.current < minGapMs) return;
