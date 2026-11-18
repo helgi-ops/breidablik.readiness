@@ -12,6 +12,7 @@
 
 import Link from "next/link";
 import { SEND_MODES, SEND_MODE_TEXT, type SendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
+import StrengthSendStatus from "./StrengthSendStatus";
 
 export default function StrengthSendModePicker({
   lang,
@@ -81,6 +82,8 @@ export default function StrengthSendModePicker({
           </Link>
         </div>
       ) : null}
+      {/* What the 09:00 automatic send did today (send log, 2026-11-18). */}
+      <StrengthSendStatus lang={lang} />
     </>
   );
 }

@@ -19,6 +19,7 @@ import { normalizeSendMode, type SendMode } from "@/lib/micropulse/strengthProgr
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { resolveAutoMdContext } from "@/lib/micropulse/strengthProgramming/loader";
 import { buildAutoSession, loadAutoTeamContext } from "@/lib/micropulse/strengthProgramming/autoSession";
+import { playerRow, teamRow, writeSendLog, type SendLogRow } from "@/lib/micropulse/strengthProgramming/sendLog";
 import { resolveTeamCustomTable, customProgrammeCoversDay } from "@/lib/micropulse/strengthProgramming/customProgrammeActive";
 import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
@@ -93,12 +94,18 @@ async function run(req: NextRequest) {
     const dayType = String((wpRow as { day_type?: string } | null)?.day_type ?? "").trim().toUpperCase();
     if (!wpRow || dayType === "OFF") {
       perTeam.push({ teamId: team.id, sent: 0, skipped: 0, failed: 0 });
+      // The send log says why (the coach sees it on /coach/strength; no week = in the morning digest too).
+      await writeSendLog(sb, [teamRow(team.id, todayIso, "not_sent", !wpRow ? "no_week_plan" : "off_day")]);
       continue;
     }
 
     const { data: players } = await sb.from("players").select("id, full_name").eq("team_id", team.id).eq("is_active", true);
     const rows = (players ?? []) as Array<{ id: string; full_name: string | null }>;
     let ts = 0, tk = 0, tf = 0;
+    // One send-log row per player (written once per team, after the batches). C, 2026-11-18.
+    const logRows: SendLogRow[] = [teamRow(team.id, todayIso, "sent", null)];
+    const log = (pid: string, status: "sent" | "skipped" | "failed", reason: string | null, level: SendLogRow["readiness_level"] = null) =>
+      logRows.push(playerRow(team.id, todayIso, pid, status, reason, level));
 
     // Team-level inputs (coach's block + rule, swaps, 8-week goal lifts), one read per team. The same builder
     // rebuilds an untouched automatic session when the player checks in (autoSession.ts, 2026-11-18).
@@ -115,13 +122,18 @@ async function run(req: NextRequest) {
         // Never overwrite what the coach already sent today (review gate).
         const { data: existing } = await sb
           .from("player_today_strength_override")
-          .select("player_id").eq("player_id", p.id).eq("entry_date", todayIso).maybeSingle();
-        if (existing) return "skipped";
+          .select("player_id, origin").eq("player_id", p.id).eq("entry_date", todayIso).maybeSingle();
+        if (existing) {
+          // A second run the same morning keeps the first run's log row; a coach's own send is named.
+          if ((existing as { origin?: string | null }).origin !== "auto") log(p.id, "skipped", "already_sent");
+          return "skipped";
+        }
 
         // Custom Programme covers today → don't write an engine override; just nudge. Layer-3 serves it.
         // Basketball keys by weekday (not the football MD tag), so it runs even when teamMd is absent.
         if (teamCustom && (teamCustom.isBasketball || teamMd) && (await customProgrammeCoversDay(sb, { teamId: team.id, playerId: p.id, mdDay: teamMd ?? "", todayIso, ctx: teamCustom }))) {
           void notifyPlayer(sb, p.id, "Your strength session is ready");
+          log(p.id, "sent", "custom_programme");
           return "sent";
         }
 
@@ -129,18 +141,19 @@ async function run(req: NextRequest) {
         // built-in template (team palette is individualised-only), so auto-send must NOT silently
         // push it to the squad. Skip these players — the coach builds a Custom Programme (or sends
         // manually, where the UI warns). Individualised is unaffected (it builds the palette session).
-        if (mode === "standard") return "skipped";
+        if (mode === "standard") { log(p.id, "skipped", "standard_no_programme"); return "skipped"; }
 
         // Built with today's check-in when there is one; otherwise a normal day, rebuilt at check-in.
         const built = await buildAutoSession(sb, autoCtx, p);
-        if (!built) return "skipped"; // off-day / injured
+        if ("skip" in built) { log(p.id, "skipped", built.skip); return "skipped"; } // injured / no session today
         const { session, readinessLevel } = built;
 
         const persisted = await persistTodayStrengthOverride(sb, { session, playerId: p.id, teamId: team.id, dateIso: todayIso, lang: "EN", origin: "auto", readinessLevel });
-        if (!persisted.ok) return "failed";
+        if (!persisted.ok) { log(p.id, "failed", persisted.error ?? "save failed"); return "failed"; }
+        log(p.id, "sent", null, readinessLevel);
         void notifyPlayer(sb, p.id, `Strength session (${session.contextLabel ?? session.mdContext}, ~${session.durationMin} min)`);
         return "sent";
-      } catch { return "failed"; }
+      } catch (e) { log(p.id, "failed", e instanceof Error ? e.message : "error"); return "failed"; }
     };
 
     for (let i = 0; i < rows.length; i += SEND_CONCURRENCY) {
@@ -148,6 +161,7 @@ async function run(req: NextRequest) {
       for (const r of batch) { if (r === "sent") ts++; else if (r === "skipped") tk++; else tf++; }
     }
     sent += ts; skipped += tk; failed += tf;
+    await writeSendLog(sb, logRows);
     perTeam.push({ teamId: team.id, sent: ts, skipped: tk, failed: tf });
   }
 

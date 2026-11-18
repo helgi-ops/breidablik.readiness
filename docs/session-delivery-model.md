@@ -76,6 +76,17 @@ today's row **only if** its origin is `auto` and the player has not started it (
 swap today). Same row, same origin, no push. Coach sends by hand stay locked. The player's banner says which:
 "Your coach's plan … adjusted to your check-in today" / "… check in and it adjusts".
 
+## Send log (2026-11-18)
+
+`strength_send_log` (migration 20261118110000) records what the 09:00 auto-send did: one `team` row per team per day
+(`sent`, or `not_sent` with `no_week_plan` / `off_day`) and one row per player (`sent`; `skipped` with
+`already_sent` / `injured` / `no_session` / `standard_no_programme`; `failed` with a short error). A check-in rebuild
+stamps `rebuilt_at` + the colour. Written only by the server (`strengthProgramming/sendLog.ts`, best effort, never
+fails a send); a second run the same morning keeps the first run's rows. Read by `GET /api/coach/team/strength-send-log`
+→ `StrengthSendStatus` under the send-mode picker on /coach/strength ("Sent to 21 players · 2 injured · 0 failed ·
+09:00", failed players named, skipped + last 7 days behind "Show details"), and by the morning digest when yesterday
+had a failed save. The week-not-set case is also pushed at ~08:00 by `weekSetupReminder.ts`. Descriptive only.
+
 ## Collision preview
 
 `GET /api/coach/player/[id]/today-conflicts?dates=…` (admin-aware) returns, for a set of target dates:

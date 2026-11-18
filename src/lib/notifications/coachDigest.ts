@@ -5,6 +5,7 @@ import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
 import { sendTransactionalEmail } from "@/lib/email/sendTransactionalEmail";
 import { getTeamPlanTier } from "@/lib/micropulse/elite";
 import { computeAdminSignals, type OwnedSignal } from "@/lib/micropulse/coachSignals/adminCompute";
+import { sendLogDigestItems, summarizeSendLog, type SendLogRow } from "@/lib/micropulse/strengthProgramming/sendLog";
 
 /**
  * Coach morning digest — proactive-delivery Addition 1 (docs/tasks/proactive-delivery-brief.md).
@@ -32,7 +33,7 @@ export type Digest = {
 };
 
 /** Compose the digest from a team's computed signals. Pure. */
-export function buildMorningDigest(signals: OwnedSignal[]): Digest {
+export function buildMorningDigest(signals: OwnedSignal[], extra: DigestItem[] = []): Digest {
   // "Did we do enough?" is a standing first line whenever yesterday's session was judged — including a
   // "yes" — so the coach gets the answer every morning. It still counts toward the summary by its level.
   const enough = signals.find((s) => s.engine === "session_enough" && s.playerId == null && (s.why?.en?.[0] ?? "") !== "");
@@ -48,13 +49,14 @@ export function buildMorningDigest(signals: OwnedSignal[]): Digest {
       (CONF_RANK[a.confidence ?? "low"] ?? 9) - (CONF_RANK[b.confidence ?? "low"] ?? 9),
     );
 
-  const items: DigestItem[] = [...enoughItem, ...pool.filter((s) => s !== enough).map((s) => ({
+  // `extra` = things to act on from outside the signals (yesterday's failed automatic strength send): first.
+  const items: DigestItem[] = [...extra, ...enoughItem, ...pool.filter((s) => s !== enough).map((s) => ({
     label: { en: s.label?.en ?? "", is: s.label?.is ?? s.label?.en ?? "" },
     why: { en: s.why?.en?.[0] ?? "", is: s.why?.is?.[0] ?? s.why?.en?.[0] ?? "" },
     href: s.href ?? "/coach",
   }))];
 
-  const nAction = actionable.length;
+  const nAction = actionable.length + extra.length;
   const nWatch = watch.length;
   if (nAction > 0) {
     return {
@@ -79,8 +81,24 @@ export function buildMorningDigest(signals: OwnedSignal[]): Digest {
       en: "All steady — nothing needs action today.",
       is: "Allt í jafnvægi — ekkert kallar á aðgerð í dag.",
     },
-    items: enoughItem,
+    items: [...extra, ...enoughItem],
   };
+}
+
+/** Yesterday's automatic strength send, when something failed: one digest item (send log, 2026-11-18). */
+export async function strengthSendIssue(sb: SupabaseClient, teamId: string, dateKey: string): Promise<DigestItem[]> {
+  try {
+    const d = new Date(`${dateKey}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - 1);
+    const yesterday = d.toISOString().slice(0, 10);
+    const { data } = await sb
+      .from("strength_send_log")
+      .select("team_id, send_date, subject_key, player_id, status, reason, readiness_level, rebuilt_at, created_at")
+      .eq("team_id", teamId).eq("send_date", yesterday);
+    return sendLogDigestItems(summarizeSendLog((data ?? []) as SendLogRow[], yesterday));
+  } catch {
+    return [];
+  }
 }
 
 /** English push payload (kept short). */
@@ -188,7 +206,7 @@ export async function runCoachMorningDigest(
 
     // 3. Compose from fresh, tokenless signals.
     const signals = await computeAdminSignals(sb, teamId, dateKey, { includeSessionEnough: true, includeGoalTests: true }).catch(() => [] as OwnedSignal[]);
-    const digest = buildMorningDigest(signals);
+    const digest = buildMorningDigest(signals, await strengthSendIssue(sb, teamId, dateKey));
 
     // Email addresses for this team's coaches (auth.users via RPC).
     const emailByCoach = new Map<string, string>();
@@ -247,7 +265,7 @@ export async function runCoachMorningDigest(
 /** Compose today's digest for a team without sending — for the Settings preview. */
 export async function previewDigest(sb: SupabaseClient, teamId: string, dateKey: string): Promise<Digest> {
   const signals = await computeAdminSignals(sb, teamId, dateKey, { includeSessionEnough: true, includeGoalTests: true }).catch(() => [] as OwnedSignal[]);
-  return buildMorningDigest(signals);
+  return buildMorningDigest(signals, await strengthSendIssue(sb, teamId, dateKey));
 }
 
 /** Deliver a one-off test digest to a single coach (the caller). No log row — tests never dedupe. */

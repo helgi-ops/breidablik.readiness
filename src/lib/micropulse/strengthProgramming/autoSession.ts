@@ -25,6 +25,7 @@ import { withGoalPlanGym } from "./goalPlanGym";
 import { loadCoachOverridesForPlayers, loadPlayerStrengthSnapshot } from "./loader";
 import { persistTodayStrengthOverride } from "./persistTodayOverride";
 import { normalizeSendMode, type SendMode } from "./sendMode";
+import { markRebuilt } from "./sendLog";
 import { loadGoalPlanGym } from "@/lib/micropulse/goalPlan/gymLoader";
 import type { StrengthSession } from "./types";
 
@@ -65,12 +66,15 @@ export type AutoSession = {
 
 const LEVEL_OF_VERDICT = { FULL: "GREEN", MODIFIED: "YELLOW", REDUCED: "YELLOW", RECOVERY: "RED", HOLD: "RED" } as const;
 
-/** One player's automatic session (individualised modes), or null (rest day, injured: nothing to send). */
+/** Why there is no session to send (the send log names it). */
+export type AutoSkip = { skip: "injured" | "no_session" };
+
+/** One player's automatic session (individualised modes), or why there is none (rest day, injured). */
 export async function buildAutoSession(
   sb: SupabaseClient,
   ctx: AutoTeamContext,
   player: { id: string; full_name: string | null },
-): Promise<AutoSession | null> {
+): Promise<AutoSession | AutoSkip> {
   const snapshot = await loadPlayerStrengthSnapshot(sb, { playerId: player.id, playerName: player.full_name ?? undefined, teamId: ctx.teamId, todayIso: ctx.todayIso });
   // The player's goal adds its set only in pre-/off-season (today's block, 2026-11-17).
   let session = buildStrengthSession(
@@ -78,7 +82,9 @@ export async function buildAutoSession(
     ctx.swapsByPlayer.get(player.id) ?? [],
     { mode: ctx.mode },
   );
-  if (!session || session.blocks.length === 0) return null;
+  if (!session || session.blocks.length === 0) {
+    return { skip: session?.appliedAdaptations.some((a) => a.ruleId === "INJURY_BLOCK") ? "injured" : "no_session" };
+  }
   // MESO layer: tilt toward today's block + apply the coach's authored rule.
   const b = ctx.coachBlock;
   if (b) session = applyBlockToSession(session, b.goalKey, b.phase, ctx.coachRules?.block?.[`${b.goalKey}:${b.phase}`], b.subPhase) ?? session;
@@ -121,10 +127,12 @@ export async function refreshAutoSessionAfterCheckin(sb: SupabaseClient, playerI
     const ctx = await loadAutoTeamContext(sb, { teamId: row.team_id, mode, todayIso: dateIso, playerIds: [playerId] });
     const built = await buildAutoSession(sb, ctx, player as { id: string; full_name: string | null });
     // Nothing to build now (e.g. an injury logged since 09:00): leave the row; the Today card handles injury.
-    if (!built) return "no_session";
+    if ("skip" in built) return "no_session";
 
     const persisted = await persistTodayStrengthOverride(sb, { session: built.session, playerId, teamId: row.team_id, dateIso, lang: "EN", origin: "auto", readinessLevel: built.readinessLevel });
-    return persisted.ok ? "rebuilt" : "failed";
+    if (!persisted.ok) return "failed";
+    await markRebuilt(sb, { teamId: row.team_id, playerId, date: dateIso, level: built.readinessLevel });
+    return "rebuilt";
   } catch {
     return "failed";
   }
