@@ -19,8 +19,16 @@
  *     none of the per-player individualisation layers (which a bare Lite team has
  *     no data for anyway).
  *
+ * Teams with the 09:00 automatic send in an individualised mode (B, 2026-11-18): for today this builds the SAME
+ * session the send will build (`buildAutoSession`, one builder), so the card before 09:00 is a true preview, not a
+ * different session that is swapped out at 09:00. `autoPreview: true` until 09:00 lets Today label it. Still
+ * display-only: nothing persisted, no push, the Today layer order is unchanged (this stays the last fallback).
+ *
  * Auth: player bearer token (same as the other /api/player routes).
  */
+
+/** Iceland is on UTC: the 09:00 send is 09:00 UTC. */
+const AUTO_SEND_AT = "09:00";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
@@ -31,6 +39,8 @@ import { strengthSessionToTodayStructure } from "@/lib/micropulse/strengthProgra
 import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
+import { buildAutoSession, loadAutoTeamContext } from "@/lib/micropulse/strengthProgramming/autoSession";
+import { normalizeSendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
 
 export const runtime = "nodejs";
 
@@ -64,6 +74,37 @@ export async function GET(req: NextRequest) {
     const dayType = String((wp as { day_type?: string }).day_type ?? "").trim().toUpperCase();
     if (dayType === "OFF") {
       return NextResponse.json({ ok: false, reason: "off_day" });
+    }
+
+    // Automatic send on, individualised: preview exactly what 09:00 sends (and what a check-in rebuild builds).
+    if (teamId && day === todayIso()) {
+      const { data: team } = await sb.from("teams").select("strength_auto_send, strength_send_mode").eq("id", teamId).maybeSingle();
+      const t = team as { strength_auto_send?: boolean | null; strength_send_mode?: string | null } | null;
+      const mode = normalizeSendMode(t?.strength_send_mode);
+      if (t?.strength_auto_send && mode !== "standard") {
+        const [{ data: player }, ctx] = await Promise.all([
+          sb.from("players").select("id, full_name").eq("id", playerId).maybeSingle(),
+          loadAutoTeamContext(sb, { teamId, mode, todayIso: day, playerIds: [playerId] }),
+        ]);
+        const built = await buildAutoSession(sb, ctx, (player as { id: string; full_name: string | null } | null) ?? { id: playerId, full_name: null });
+        if ("skip" in built) {
+          // Injured / no strength today: the send skips this player too, so there is nothing to preview.
+          return NextResponse.json({ ok: true, structure: null, reason: built.skip === "injured" ? "empty" : "no-session" });
+        }
+        const structure = strengthSessionToTodayStructure(built.session, lang);
+        if (!structure.length) return NextResponse.json({ ok: true, structure: null, reason: "empty" });
+        const s = built.session;
+        return NextResponse.json({
+          ok: true,
+          structure,
+          mdContext: s.mdContext,
+          title: lang === "IS" ? "Áætlun þjálfarans" : "Your coach's plan",
+          description: (lang === "IS" ? s.summaryIS : s.summaryEN) ?? null,
+          summary: (lang === "IS" ? s.summaryIS : s.summaryEN) ?? null,
+          durationMin: s.durationMin ?? null,
+          autoPreview: new Date().toISOString().slice(11, 16) < AUTO_SEND_AT,
+        });
+      }
     }
 
     const snapshot = await loadPlayerStrengthSnapshot(sb, {

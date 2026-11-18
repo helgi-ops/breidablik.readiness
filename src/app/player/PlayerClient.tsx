@@ -1,5 +1,6 @@
 "use client";
 
+import { autoSendPreviewNote } from "@/lib/micropulse/strengthProgramming/autoSendPreview";
 import { authFetch } from "@/lib/client/authFetch";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
@@ -183,6 +184,8 @@ type Stage4PlanRow =
       // it was built with (null = before any check-in). Provenance for the "Sent by your coach" banner (2026-11-18).
       sent_origin?: string | null;
       sent_built_with?: string | null;
+      // Engine default only: built exactly as the 09:00 automatic send will build it, before that send (B, 2026-11-18).
+      auto_preview?: boolean | null;
     }
   | null;
 
@@ -2491,6 +2494,8 @@ type TodaySessionOpts = {
   coachSentSubtext?: string | null;
   /** Banner title override (automatic sends say "Your coach's plan", not "Sent by your coach"). */
   coachSentTitle?: string | null;
+  /** Before the 09:00 automatic send: says this card is a preview (B, 2026-11-18). Not shown on a coach-sent card. */
+  previewNote?: { title: string; text: string } | null;
   /** Keep the coach's authored block order (don't re-sort by priority). */
   preserveOrder?: boolean;
 };
@@ -3528,6 +3533,16 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
                 ? "Þessi æfing kemur í stað æfingar dagsins og er stillt að stöðunni þinni í dag."
                 : "This replaces today's default session and is tuned to how you are today."}
             </div>
+          </div>
+        ) : null}
+        {/* Before the 09:00 automatic send: what this card is (a preview), so the 09:00 session is no surprise. */}
+        {!opts.sentByCoach && opts.previewNote ? (
+          <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-3" data-testid="today-preview-note">
+            <div className="flex items-center gap-1.5 text-sm font-bold text-zinc-800">
+              <span aria-hidden>🕘</span>
+              {opts.previewNote.title}
+            </div>
+            <div className="mt-1 text-[13px] leading-relaxed text-zinc-600">{opts.previewNote.text}</div>
           </div>
         ) : null}
         {/* Adjustment banner */}
@@ -4578,6 +4593,8 @@ export default function PlayerClient() {
   });
   const [teamPlanTier, setTeamPlanTier] = useState<"FREE" | "PRO" | "ELITE">("FREE");
   const [clubThemeColor, setClubThemeColor] = useState<string | null>(null);
+  // The team's 09:00 automatic strength send is on in an individualised mode: before 09:00 Today's card is a preview.
+  const [teamAutoSendIndividual, setTeamAutoSendIndividual] = useState(false);
 
   // Titan (indoor IMU) team → its "Player Load" is the IMU Load Index; relabel the tile so it reads
   // the same as the movement card ("Load Index") instead of the GPS term "Total Player Load".
@@ -5890,7 +5907,7 @@ export default function PlayerClient() {
           const weekStart = mon.toISOString().slice(0, 10);
 
           const [teamRes, wsRes, ctRes] = await Promise.all([
-            supabase.from("teams").select("plan_tier, club_theme_color, sport").eq("id", prof.team_id).maybeSingle(),
+            supabase.from("teams").select("plan_tier, club_theme_color, sport, strength_auto_send, strength_send_mode").eq("id", prof.team_id).maybeSingle(),
             supabase.from("coach_week_setup").select("season_phase").eq("team_id", prof.team_id).eq("week_start_date", weekStart).maybeSingle(),
             // The RECURRING team programme (no date window) is the base table. Week-dated basketball plans
             // (start_date set) are NOT chosen here — fetchStage4Plan picks the one whose week covers today.
@@ -5902,6 +5919,10 @@ export default function PlayerClient() {
           if (tier === "PRO" || tier === "ELITE") setTeamPlanTier(tier);
           else setTeamPlanTier("FREE");
           setClubThemeColor((teamRow as any)?.club_theme_color ?? null);
+          {
+            const tr = teamRow as { strength_auto_send?: boolean | null; strength_send_mode?: string | null } | null;
+            setTeamAutoSendIndividual(!!tr?.strength_auto_send && String(tr?.strength_send_mode ?? "individualised") !== "standard");
+          }
           // Basketball teams deliver strength by Week Setup session type (see fetchStage4Plan).
           resolvedIsBasketball = String((teamRow as { sport?: string | null } | null)?.sport ?? "").toLowerCase() === "basketball";
           setTeamIsBasketball(resolvedIsBasketball);
@@ -6077,6 +6098,7 @@ export default function PlayerClient() {
                 title?: string | null;
                 description?: string | null;
                 summary?: string | null;
+                autoPreview?: boolean | null;
               } | null;
               // No positive evidence of a planned training day ⇒ a rest state, never a
               // fabricated MD-3 session. "off_day" = coach marked OFF; "no_planned_day"
@@ -6104,6 +6126,7 @@ export default function PlayerClient() {
                   title: def.title ?? null,
                   description: def.description ?? null,
                   structure: def.structure,
+                  auto_preview: def.autoPreview === true,
                 } as Stage4PlanRow;
                 setPlanIsFallback(false);
               }
@@ -8115,6 +8138,13 @@ export default function PlayerClient() {
                   ...(plan?.source === "COACH_SENT" && String(plan?.sent_origin ?? "").toLowerCase() === "auto"
                     ? autoSentBanner(plan?.sent_built_with ?? null, Boolean(coachFinalFlag), lang === "IS")
                     : {}),
+                  previewNote: plan?.source === "COACH_SENT" ? null : autoSendPreviewNote({
+                    autoTeam: teamAutoSendIndividual,
+                    isToday: day === todayISO(),
+                    nowHHMM: new Date().toISOString().slice(11, 16),
+                    sameAsSend: plan?.source === "ENGINE_DEFAULT" && plan?.auto_preview === true,
+                    isIS: lang === "IS",
+                  }),
                 }}
               />
             )}

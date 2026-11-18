@@ -87,6 +87,14 @@ fails a send); a second run the same morning keeps the first run's rows. Read by
 09:00", failed players named, skipped + last 7 days behind "Show details"), and by the morning digest when yesterday
 had a failed save. The week-not-set case is also pushed at ~08:00 by `weekSetupReminder.ts`. Descriptive only.
 
+## Before 09:00: a preview, not a different session (2026-11-18)
+
+On a team with the automatic send on in an individualised mode, the engine default (`today-strength-default`, the
+last fallback layer, display-only) builds today's card with `buildAutoSession`, the same builder as the 09:00 send
+and the check-in rebuild. So the card a player sees at 08:30 is the session that arrives at 09:00 (checked on
+Breiðablik 2026-11-18: 23 of 23 identical). Until 09:00 Today labels it "Preview · your coach's plan"; a card from
+another layer (e.g. the team programme) gets "Preview … may differ". Layer order unchanged; nothing persisted.
+
 ## Collision preview
 
 `GET /api/coach/player/[id]/today-conflicts?dates=…` (admin-aware) returns, for a set of target dates:
