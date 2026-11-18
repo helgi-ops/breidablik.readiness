@@ -238,7 +238,7 @@ export const QUALITY_WHY: Record<GoalQuality, QualityWhy> = {
     matters: {
       text: {
         en: "Explosive power is how fast your legs turn force into movement: the first step, the jump, the push-off in a duel. In a 10-week trial, training it also made 40 m sprints faster.",
-        is: "Sprengikraftur er hve hratt fæturnir breyta krafti í hreyfingu: fyrsta skrefið, stökkið, spyrnan í einvígi. Í 10 vikna rannsókn gerði þjálfun hans líka 40 m spretti hraðari.",
+        is: "Sprengikraftur er hve hratt fæturnir breyta krafti í hreyfingu: fyrsta skrefið, stökkið, spyrnan í einvígi. Í 10 vikna rannsókn gerði þjálfun sprengikrafts líka 40 m spretti hraðari.",
       },
       refs: ["cormie2010a"],
     },

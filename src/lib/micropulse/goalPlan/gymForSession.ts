@@ -30,7 +30,8 @@ function liftOf(b: GoalBlock, rx: LiftRx): GoalPlanGymLift | null {
   const pct = /(\d+(?:–\d+)?)% of (?:the squat |your )?max/.exec(doseEn)?.[1] ?? /(\d+(?:–\d+)?)% of (?:the squat |your )?max/.exec(loadEn)?.[1] ?? null;
   const rir = /(\d+(?:–\d+)?) reps? in reserve/.exec(doseEn)?.[1] ?? null;
   const ms = /about (\d\.\d) m\/s/.exec(doseEn)?.[1] ?? null;
-  const intensity = pct ? `${pct}% 1RM` : rir ? `RIR ${rir}` : ms ? `${ms} m/s` : null;
+  // "Bodyweight" is the engine's own word (exerciseLibrary); without it the body-weight jump squats showed no load.
+  const intensity = pct ? `${pct}% 1RM` : rir ? `RIR ${rir}` : ms ? `${ms} m/s` : /body weight/.test(doseEn) ? "Bodyweight" : null;
   const restMin = /(\d+(?:–\d+)?) min/.exec(rx.rows.rest?.text.en ?? "")?.[1] ?? null;
   const eachLeg = /each leg/.test(doseEn);
   const down = /(\d+) s down/.exec(doseEn)?.[1] ?? null;

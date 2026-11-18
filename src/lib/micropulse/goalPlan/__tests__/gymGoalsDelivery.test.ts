@@ -135,6 +135,20 @@ describe("into the strength session", () => {
     expect(items[0].note).toMatch(/Your 8-week goal: strength \+ power, week 2/);
   });
 
+  it("every goal lift carries a load: body-weight jump squats say so (dry run 2026-11-18)", () => {
+    for (const q of GYM_ONLY_QUALITIES) {
+      const plan = buildGoalPlan(input(q));
+      for (const s of placementFor(plan, q, START, MON, cal)!.placed) {
+        const g = goalPlanGymFor({ planId: "x", quality: q, plan, startDate: START, todayIso: s.date, cal })!;
+        for (const l of g.lifts) expect(l.intensity, `${q} ${s.slot} ${l.nameEN}`).toBeTruthy();
+      }
+    }
+    const ex = buildGoalPlan(input("explosive"));
+    const b = placementFor(ex, "explosive", START, MON, cal)!.placed.find((s) => s.slot === "B")!;
+    const g = goalPlanGymFor({ planId: "x", quality: "explosive", plan: ex, startDate: START, todayIso: b.date, cal })!;
+    expect(g.lifts.find((l) => l.profile === "jump_squat")?.intensity).toBe("Bodyweight");
+  });
+
   it("in season → the session exactly as without a goal", () => {
     const plan = buildGoalPlan(input("max_strength"));
     const aDay = placementFor(plan, "max_strength", START, MON, cal)!.placed[0].date;

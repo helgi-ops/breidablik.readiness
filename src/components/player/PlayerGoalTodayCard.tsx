@@ -17,7 +17,7 @@
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import type { GoalTodayCard } from "@/lib/micropulse/goalPlan/today";
-import type { Bi } from "@/lib/micropulse/goalPlan/types";
+import { isGymQuality, type Bi } from "@/lib/micropulse/goalPlan/types";
 import { LiftRxDetails } from "@/components/trainer/LiftRxTable";
 
 export default function PlayerGoalTodayCard({ lang = "EN" }: { lang?: "IS" | "EN" }) {
@@ -85,6 +85,8 @@ export function GoalTodayCardView({ card, lang = "EN", onMark, busy = false, err
   const L = (b: Bi | null | undefined) => (b ? (IS ? b.is : b.en) : "");
   const T = (en: string, is: string) => (IS ? is : en);
   const t = card.today;
+  // Gym-only goals are never an extra session: their lifts go into the team strength session.
+  const gymOnly = isGymQuality(card.quality);
   // Sessions earlier this week that were placed but not ticked yet (today's has its own buttons).
   const unticked = card.thisWeek.filter((s) => s.canMark && !s.isToday && !s.mark);
 
@@ -101,9 +103,11 @@ export function GoalTodayCardView({ card, lang = "EN", onMark, busy = false, err
           className="rounded-full bg-zinc-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-500"
           title={t?.inSession
             ? T("Your goal's gym lifts are in today's strength session, in place of the matching exercises. It never changes your colour.", "Lyftur markmiðsins eru í styrktaræfingu dagsins, í stað samsvarandi æfinga. Breytir aldrei litnum þínum.")
-            : T("Extra to the team's session. It never changes it or your colour.", "Aukalega við æfingu liðsins. Breytir henni aldrei né litnum þínum.")}
+            : gymOnly
+              ? T("The goal's lifts go into the team strength session on its goal days. It never changes your colour.", "Lyftur markmiðsins fara inn í styrktaræfingu liðsins á markmiðsdögum. Breytir aldrei litnum þínum.")
+              : T("Extra to the team's session. It never changes it or your colour.", "Aukalega við æfingu liðsins. Breytir henni aldrei né litnum þínum.")}
         >
-          {t?.inSession ? T("In today's session", "Í æfingu dagsins") : T("Add-on", "Viðbót")}
+          {t?.inSession ? T("In today's session", "Í æfingu dagsins") : gymOnly ? T("Team gym session", "Styrktaræfing liðsins") : T("Add-on", "Viðbót")}
         </span>
       </div>
 
