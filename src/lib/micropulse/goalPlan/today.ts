@@ -359,9 +359,16 @@ export type GoalTodayInput = {
   marks?: SessionMark[];
   /** Today's strength session (coach-sent) holds this plan week's gym lifts (2026-11-17): the slot merged, or true = B. */
   gymInSession?: boolean | GoalSessionSlot;
-  /** The team's season today, for the gym-only goals (`goalSeasonOf`): "maintain" (in season, or not known) = the
-   *  card only says what holds; nothing is added. Ignored for the pitch goals. Absent = build. */
+  /** The team's season today (`goalSeasonOf`). Gym-only goals: "maintain" (in season, or not known) = the card only
+   *  says what holds; nothing is added. Pitch goals: "maintain" leaves out session C, the short out-of-season session
+   *  (2026-11-18). Absent = build. */
   season?: "build" | "maintain";
+};
+
+/** Session C is out of season only (`WHEN.off_day`): in season a plan built out of season goes on with A and B. */
+const C_LEFT_OUT: Bi = {
+  en: "In season: the short third session is left out; sessions A and B go on.",
+  is: "Á tímabili: stuttu þriðju æfingunni er sleppt; æfingar A og B halda áfram.",
 };
 
 const IN_SESSION_FACT: Bi = {
@@ -380,36 +387,43 @@ const HOLD_FACTS: Bi[] = [
 const partName = (quality: GoalQuality, slot: GoalSessionSlot): Bi =>
   isGymQuality(quality) ? { en: `goal day ${slot === "A" ? 1 : 2}`, is: `markmiðsdagur ${slot === "A" ? 1 : 2}` } : slotName(slot);
 
-function sessionsOfWeek(plan: GoalPlan, week: number): GoalSession[] {
-  return plan.weeks.find((w) => w.week === week)?.sessions ?? [];
+/** True when the plan holds a session C (built out of season). Plans without one never need the season read. */
+export function planHasSessionC(plan: Pick<GoalPlan, "weeks">): boolean {
+  return plan.weeks.some((w) => w.sessions.some((s) => s.slot === "C"));
+}
+
+/** One week's sessions; in season ("maintain") session C is left out (out of season only, 2026-11-18). */
+function sessionsOfWeek(plan: GoalPlan, week: number, season?: "build" | "maintain"): GoalSession[] {
+  const all = plan.weeks.find((w) => w.week === week)?.sessions ?? [];
+  return season === "maintain" ? all.filter((s) => s.slot !== "C") : all;
 }
 
 /**
  * Every session the rules placed from week 1 up to `untilIso` (for adherence), each week placed exactly as the
  * Today card placed it (`placementFor`). A resumed plan's early weeks fall on its virtual dates; ticks are matched
- * by week and slot, so that does not change the count much.
+ * by week and slot, so that does not change the count much. `season` as on the card: in season session C is not due.
  */
-export function placedSessionsUpTo(plan: GoalPlan, quality: GoalQuality, startDate: string, untilIso: string, cal: TeamCalendar): DueSession[] {
+export function placedSessionsUpTo(plan: GoalPlan, quality: GoalQuality, startDate: string, untilIso: string, cal: TeamCalendar, season?: "build" | "maintain"): DueSession[] {
   const last = Math.min(PLAN_WEEKS, planWeekOn(startDate, untilIso));
   const out: DueSession[] = [];
   for (let w = 1; w <= last; w++) {
-    const p = placementFor(plan, quality, startDate, addDays(startDate, (w - 1) * 7), cal);
+    const p = placementFor(plan, quality, startDate, addDays(startDate, (w - 1) * 7), cal, season);
     for (const s of p?.placed ?? []) if (s.date <= untilIso) out.push({ week: w, slot: s.slot, date: s.date });
   }
   return out;
 }
 
 /** This week's (and last week's, for the Sunday → Monday gap) placement. */
-export function placementFor(plan: GoalPlan, quality: GoalQuality, startDate: string, todayIso: string, cal: TeamCalendar): WeekPlacement | null {
+export function placementFor(plan: GoalPlan, quality: GoalQuality, startDate: string, todayIso: string, cal: TeamCalendar, season?: "build" | "maintain"): WeekPlacement | null {
   const week = planWeekOn(startDate, todayIso);
   if (week < 1 || week > PLAN_WEEKS) return null;
   const monday = mondayOf(todayIso);
   let prevLast: string | null = null;
   if (week > 1) {
-    const prev = placeWeek({ quality, slots: sessionsOfWeek(plan, week - 1).map((s) => s.slot), monday: addDays(monday, -7), cal });
+    const prev = placeWeek({ quality, slots: sessionsOfWeek(plan, week - 1, season).map((s) => s.slot), monday: addDays(monday, -7), cal });
     prevLast = prev.placed.length ? prev.placed[prev.placed.length - 1].date : null;
   }
-  return placeWeek({ quality, slots: sessionsOfWeek(plan, week).map((s) => s.slot), monday, cal, prevLast });
+  return placeWeek({ quality, slots: sessionsOfWeek(plan, week, season).map((s) => s.slot), monday, cal, prevLast });
 }
 
 export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null {
@@ -468,8 +482,9 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
   }
 
   // Lota 7: today's lifts get their full set of variables, derived from the frozen blocks (never stored).
-  const sessions = withRx({ weeks: [{ sessions: sessionsOfWeek(plan, week) }] }, rxContextOf(plan)).weeks[0].sessions;
-  const placement = placementFor(plan, quality, input.startDate, todayIso, input.cal)!;
+  const sessions = withRx({ weeks: [{ sessions: sessionsOfWeek(plan, week, input.season) }] }, rxContextOf(plan)).weeks[0].sessions;
+  const placement = placementFor(plan, quality, input.startDate, todayIso, input.cal, input.season)!;
+  const cLeftOut = input.season === "maintain" && sessionsOfWeek(plan, week).some((s) => s.slot === "C");
   const bySlot = new Map(sessions.map((s) => [s.slot, s]));
   const todays = placement.placed.find((p) => p.date === todayIso) ?? null;
   const weekRow = plan.weeks.find((w) => w.week === week) ?? null;
@@ -552,9 +567,10 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
 
   const facts = (today?.inSession
     ? [weekFact, IN_SESSION_FACT, colourFact]
-    : [weekFact, colourFact ?? unplacedFact ?? DAY_RULE, ...(colourFact && unplacedFact ? [unplacedFact] : [])])
+    : [weekFact, colourFact ?? unplacedFact ?? DAY_RULE, ...(colourFact && unplacedFact ? [unplacedFact] : []), cLeftOut ? C_LEFT_OUT : null])
     .filter((f): f is Bi => !!f).slice(0, 3);
   if (!placement.weekKnown) details.unshift(WEEK_UNSET);
+  if (cLeftOut) details.unshift(C_LEFT_OUT);
   details.unshift(DAY_RULE);
 
   return {

@@ -5,7 +5,8 @@
  * Pure, deterministic, client-safe. No DB, no AI: rules decide. The loader (`loader.ts`, server-only) reads
  * the data; this file only decides.
  *
- * The plan is an add-on on its own card: two short sessions a week in season. It never writes "Today's
+ * The plan is an add-on on its own card: two short sessions a week in season, up to three out of season (a short
+ * session C; the season is read when the plan is built, 2026-11-18). It never writes "Today's
  * session" (`player_today_strength_override`), the readiness colour, a load target or a daily decision.
  * Lota 1 (Nov 2026): coach preview only; nothing reaches a player.
  */
@@ -15,6 +16,7 @@ import {
   GOAL_CONTENT_VERSION,
   GOAL_ENGINE_VERSION,
   PLAN_BASIS,
+  PLAN_BASIS_OUT_OF_SEASON,
   QUALITY_LABEL,
   SUPERVISION,
   applySupervision,
@@ -221,6 +223,7 @@ export function buildGoalPlan(input: GoalPlanInput): GoalPlan {
   // The gym-only goals are two days a week inside the team strength session, in and out of season.
   const perWeek = isGymQuality(input.quality) ? GYM_GOAL_SESSIONS : sessionsPerWeek(input.inSeason);
   const reason = blockReason(input);
+  const outOfSeason = perWeek > GYM_GOAL_SESSIONS;
   const base = {
     quality: input.quality,
     engineVersion: GOAL_ENGINE_VERSION,
@@ -228,7 +231,7 @@ export function buildGoalPlan(input: GoalPlanInput): GoalPlan {
     sessionsPerWeek: perWeek,
     youthLevel: youth,
     supervision: youth ? SUPERVISION.youth : SUPERVISION.adult,
-    basis: PLAN_BASIS,
+    basis: outOfSeason ? PLAN_BASIS_OUT_OF_SEASON : PLAN_BASIS,
   };
   if (reason) {
     const text = blockedText(reason);
@@ -302,11 +305,20 @@ export function buildGoalPlan(input: GoalPlanInput): GoalPlan {
     }
     if (Object.keys(used).length > 0) limits = [...limits, SWAP_NOTE];
   }
+  // Out of season the builders' session C stays in: the verdict says so (the quality verdicts name the two main sessions).
+  const cWeeks = weeks.filter((w) => w.sessions.some((s) => s.slot === "C"));
+  const cMin = cWeeks[0]?.sessions.find((s) => s.slot === "C")?.minutes ?? null;
+  const verdict: Bi = cWeeks.length
+    ? {
+        en: `${p.verdict.en} Out of season: plus a short third session${cMin ? ` (about ${cMin} min)` : ""} in ${cWeeks.length} of the ${weeks.length} weeks.`,
+        is: `${p.verdict.is} Utan tímabils: auk stuttrar þriðju æfingar${cMin ? ` (um ${cMin} mín)` : ""} í ${cWeeks.length} af ${weeks.length} vikum.`,
+      }
+    : p.verdict;
   return {
     ...base,
     status: "ok",
     blocked: null,
-    verdict: p.verdict,
+    verdict,
     facts,
     branch: p.branch,
     start: p.start,

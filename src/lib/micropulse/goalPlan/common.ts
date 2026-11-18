@@ -7,7 +7,7 @@ import type { Bi, GoalBlock, GoalBlockReason, GoalPlanInput, GoalQuality, GoalSe
 
 export const GOAL_ENGINE_VERSION = "goal-plan-1";
 /** Bump when a dose, a method or a source changes. A plan approved earlier keeps its frozen copy. */
-export const GOAL_CONTENT_VERSION = "2026-11-18.1";
+export const GOAL_CONTENT_VERSION = "2026-11-18.2";
 
 export const PLAN_WEEKS = 8;
 /** In-season add-on sessions a week (MicroPulse rule, not from a study). */
@@ -51,6 +51,15 @@ export function isYouth(ageYears: number | null): boolean {
 
 export function sessionsPerWeek(inSeason: boolean): number {
   return inSeason ? IN_SEASON_SESSIONS : OFF_SEASON_SESSIONS;
+}
+
+/**
+ * The team's season (`goalSeasonOf`) → is the plan built as the in-season version? Only pre-season and off-season
+ * ("build") count as out of season; in season and not known count as in season (2026-11-18: before, every plan was
+ * built as the in-season version).
+ */
+export function inSeasonFor(season: "build" | "maintain" | "unknown" | null | undefined): boolean {
+  return season !== "build";
 }
 
 const BLOCKED_TEXT: Record<GoalBlockReason, Bi> = {
@@ -124,6 +133,11 @@ export const COMMON_SAFETY: Bi[] = [
 export const PLAN_BASIS: Bi = {
   en: "No study tested this exact plan. The doses come from the studies cited; choosing the start from the player's data and fitting it into the week is MicroPulse's work. Two sessions a week in season is MicroPulse's rule.",
   is: "Engin rannsókn prófaði nákvæmlega þessa áætlun. Skammtarnir koma úr rannsóknunum sem vísað er í; að velja upphafið út frá gögnum leikmannsins og raða því í vikuna er MicroPulse. Tvær æfingar á viku á tímabili er regla MicroPulse.",
+};
+/** The same, for a plan built out of season (with the short session C). */
+export const PLAN_BASIS_OUT_OF_SEASON: Bi = {
+  en: "No study tested this exact plan. The doses come from the studies cited; choosing the start from the player's data and fitting it into the week is MicroPulse's work. Up to three sessions a week out of season (two in season) is MicroPulse's rule.",
+  is: "Engin rannsókn prófaði nákvæmlega þessa áætlun. Skammtarnir koma úr rannsóknunum sem vísað er í; að velja upphafið út frá gögnum leikmannsins og raða því í vikuna er MicroPulse. Allt að þrjár æfingar á viku utan tímabils (tvær á tímabili) er regla MicroPulse.",
 };
 
 export const BAND_LABEL: Record<StrengthBand, Bi> = {

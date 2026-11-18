@@ -22,7 +22,8 @@ import { GPS_SOURCES } from "./loader";
 import { goalResults, goalResultsForPlans, goalSessionMarks, playerGoalHistoryRows, teamGoalTestCandidates } from "./store";
 import { buildGoalTestDue, inTestWindow, type GoalTestDue } from "./testsDue";
 import { HISTORY_MAX, buildGoalHistoryItem, isHistoryRow, type GoalHistoryItem } from "./history";
-import { addDays, placedSessionsUpTo, toTeamDayType, type TeamCalendar } from "./today";
+import { addDays, placedSessionsUpTo, planHasSessionC, toTeamDayType, type TeamCalendar } from "./today";
+import { goalSeasonForTeam } from "./season";
 import { noMatchWeekSince, sanitizeNoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
 import { RESULT_AFTER_END_DAYS, adherence, effortDays, goalOutcome, gpsContext, type GoalProgress, type GoalResult, type GpsDay, type GpsKind, type GpsMetric } from "./outcome";
 import type { GoalPlanRow } from "./requests";
@@ -168,15 +169,17 @@ export async function loadGoalProgress(
   const wantGps = opts.gps !== false;
   const gpsKind: GpsKind | null = wantGps && (row.quality === "top_speed" || row.quality === "braking" || row.quality === "acceleration") ? row.quality : null;
   const noGps = { metric: "peak" as GpsMetric, days: [] as GpsDay[] };
-  const [marks, coach, vald, cal, gps] = await Promise.all([
+  const [marks, coach, vald, cal, gps, season] = await Promise.all([
     goalSessionMarks(sb, row.id),
     goalResults(sb, row.id),
     valdGoalResults(sb, row.quality, row.player_id, row.start_date, row.end_date, todayIso),
     loadTeamCalendarRange(sb, teamId, addDays(row.start_date, -11), addDays(until, 11)),
     gpsKind ? gpsDays(sb, row.player_id, gpsKind, addDays(row.start_date, -28), until).catch(() => noGps) : Promise.resolve(noGps),
+    // Session C (out of season only) is due by the same rule as the Today card (season on `until`).
+    planHasSessionC(row.plan) ? goalSeasonForTeam(sb, teamId, until) : Promise.resolve(undefined),
   ]);
   const results = [...vald, ...coach].sort((a, b) => a.test_date.localeCompare(b.test_date));
-  const due = until >= row.start_date ? placedSessionsUpTo(row.plan, row.quality, row.start_date, until, cal) : [];
+  const due = until >= row.start_date ? placedSessionsUpTo(row.plan, row.quality, row.start_date, until, cal, season) : [];
   return {
     results,
     outcome: goalOutcome(row.quality, results),

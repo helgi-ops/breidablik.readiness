@@ -11,7 +11,8 @@ email).
 
 `buildGoalPlan(input)` (`src/lib/micropulse/goalPlan/`) turns one player's own data into an 8-week **add-on**
 plan for one quality. In season that is 2 short sessions a week, out of season up to 3. Both numbers are MicroPulse
-rules, not from a study. The coach sees all four plans on Total Player Analysis ("Goal plans" card, after the
+rules, not from a study. The season is read when the plan is built (since 2026-11-18, see "Built by the real
+season" below; before, every plan was built as the in-season version). The coach sees all four plans on Total Player Analysis ("Goal plans" card, after the
 strength plan).
 
 - Rules decide; there is no AI.
@@ -668,6 +669,33 @@ routes and the team prefs route take them. Database checks widened by
 - **Real data (18 Nov):** Breiðablik has 9 players with both tests, but every mid-thigh pull is from Dec 2024 (>12
   months), so no one gets a suggestion until the pull is retested. The Demo team has no pull tests.
 - **Tests:** `playerGoal.test.ts` (limits, retired goals, wiring), `goalSuggestion.test.ts`.
+
+## Built by the real season (2026-11-18)
+
+Arnór's and Óli's plans (started in off-season, running into pre-season) were in-season plans: 2 a week, "a short add-on
+in season". Cause: `inSeason: true` was hard-coded in `loadGoalPlanBase`, so the builders' session C was always trimmed.
+
+- **New plans:** `loadGoalPlanBase` reads `goalSeasonForTeam` (`goalPlan/season.ts`; moved from `todayLoader.ts`):
+  the coach's season-plan block, else the week's phase (`resolveWeekPhase`), by `goalSeasonOf`. Pre-/off-season
+  ("build") → `inSeason: false` (`inSeasonFor`): the four pitch goals get 3 a week = A and B unchanged + the short
+  session C (10–12 min, `WHEN.off_day`) in 6 of the 8 weeks. In season or not known → 2 a week, as before. Gym-only
+  goals stay at 2 (`GYM_GOAL_SESSIONS`).
+- **Wording:** the verdict gets "Out of season: plus a short third session (about N min) in X of the 8 weeks"; the
+  basis is `PLAN_BASIS_OUT_OF_SEASON` ("up to three a week out of season (two in season)"); acceleration's
+  "short add-on in season" / "expect smaller gains in season" lines are in-season only. `GOAL_CONTENT_VERSION`
+  2026-11-18.2.
+- **Season starts mid-plan:** session C is out of season only. `sessionsOfWeek(plan, week, season)` leaves C out when
+  the team is in season ("maintain") on the day read; the card says "the short third session is left out". Today
+  (`loadGoalToday`), ticks (`markGoalToday`), the coach's week view and adherence (`loadGoalProgress`, season on
+  `until`) pass the season (`goalSeasonForPlan`: read only for gym-only goals and plans with a C). The merge of B
+  into the strength session (`gymForSession.ts`) runs only out of season, where all slots are placed, so it is unchanged.
+- **Placement in a match week:** C needs a third day ≥2 days from A and B and never MD, MD-1 or MD+1. A week with a
+  Saturday match has room for two (e.g. 30 Nov: B Mon MD-5, A Wed MD-3): C then shows as "no free day this week, left
+  out, not made up". In weeks without a match it lands (dry run: 7 / 14 Dec, 4 Jan).
+- **Stored plans unchanged:** approved plans keep their frozen copy (A and B only); with no C the season is not read
+  and the card is identical (dry run on Arnór and Óli). The `loadGoalEligibility` / priority `inSeason: true` only feed
+  `blockReason`, which does not read the season.
+- **Tests:** `seasonPlan.test.ts`.
 
 ## Next (not built)
 

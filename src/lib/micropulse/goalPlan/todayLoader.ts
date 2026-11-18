@@ -14,10 +14,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { UNAVAILABLE_STATUS } from "./loader";
 import { GoalPlanError, goalSessionMarks, latestGoalWithPlan, listTeamGoals, markGoalSession, playerCurrentGoal, syncGoalStatuses, type GoalListItem } from "./store";
 import { addDays, buildGoalFinishedCard, buildGoalTodayCard, mondayOf, placementFor, planWeekOn, sessionForColour, toDayColour, type GoalTodayCard, type TeamCalendar } from "./today";
-import { isGymQuality, type GoalPlan, type GoalQuality, type GoalSessionSlot } from "./types";
-import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
-import { goalSeasonOf } from "@/lib/micropulse/strengthProgramming/playerGoal";
-import { fetchTeamContext } from "@/lib/micropulse/playerContext/domains";
+import type { GoalPlan, GoalQuality, GoalSessionSlot } from "./types";
+import { goalSeasonForPlan } from "./season";
 import type { GoalPlanStatus } from "./requests";
 import { FINISHED_CARD_DAYS } from "./outcome";
 import { loadGoalProgress, loadTeamCalendarRange } from "./progressLoader";
@@ -90,7 +88,7 @@ export async function loadGoalToday(sb: Sb, teamId: string, playerId: string, to
     sb.from("v_coach_readiness_today_v8").select("final_color").eq("player_id", playerId).eq("entry_date", todayIso).limit(1).maybeSingle(),
     goalSessionMarks(sb, row.id),
     goalGymInTodaySession(sb, playerId, todayIso),
-    isGymQuality(row.quality) ? goalSeasonForTeam(sb, teamId, todayIso) : Promise.resolve(undefined),
+    goalSeasonForPlan(sb, teamId, { quality: row.quality, plan: row.plan }, todayIso),
   ]);
   const colour = toDayColour((colourRes.data as { final_color?: string | null } | null)?.final_color);
   const merged = !!inSession && inSession.quality === row.quality && inSession.week === planWeekOn(row.start_date, todayIso);
@@ -101,20 +99,8 @@ export async function loadGoalToday(sb: Sb, teamId: string, playerId: string, to
   });
 }
 
-/**
- * The team's season today for the gym-only goals, by the same rule the strength engine merges by (`goalSeasonOf`): the
- * coach's season-plan block first, else the week setup. In season or not known → "maintain" (nothing added). Read-only;
- * a failed read → "maintain".
- */
-export async function goalSeasonForTeam(sb: Sb, teamId: string, todayIso: string): Promise<"build" | "maintain"> {
-  try {
-    const [block, ctx] = await Promise.all([resolveCurrentBlock(sb, teamId, todayIso), fetchTeamContext(sb, teamId, todayIso)]);
-    const season = goalSeasonOf({ goalSeason: block ? { phase: block.phase, blockGoal: block.goalKey } : undefined, seasonPhase: ctx.seasonPhase });
-    return season === "build" ? "build" : "maintain";
-  } catch {
-    return "maintain";
-  }
-}
+/** Moved to `season.ts` (2026-11-18): new plans and session C read it too. */
+export { goalSeasonForTeam } from "./season";
 
 /**
  * "One session, one whole" (2026-11-17): the goal-plan session the coach-sent strength session for `dateIso` holds
@@ -186,8 +172,11 @@ export async function markGoalToday(
     throw new GoalPlanError(409, "There is no running goal plan to tick.", "Engin markmiðsáætlun í gangi til að merkja.");
   }
   const week = planWeekOn(row.start_date, args.todayIso);
-  const cal = await loadTeamCalendar(sb, args.teamId, args.todayIso);
-  const placed = placementFor(row.plan, row.quality, row.start_date, args.todayIso, cal)?.placed.find((p) => p.slot === slot) ?? null;
+  const [cal, season] = await Promise.all([
+    loadTeamCalendar(sb, args.teamId, args.todayIso),
+    goalSeasonForPlan(sb, args.teamId, { quality: row.quality, plan: row.plan }, args.todayIso),
+  ]);
+  const placed = placementFor(row.plan, row.quality, row.start_date, args.todayIso, cal, season)?.placed.find((p) => p.slot === slot) ?? null;
   if (!placed || placed.date > args.todayIso) {
     throw new GoalPlanError(409, "That session isn't on today or earlier this week.", "Sú æfing er ekki í dag eða fyrr í vikunni.");
   }
@@ -217,8 +206,11 @@ export async function coachWeekView(
   if (row.status !== "approved" || !row.plan || !row.start_date) return null;
   const week = planWeekOn(row.start_date, todayIso);
   if (week < 1 || week > row.plan.weeks.length) return { week, sessions: [], weekKnown: true };
-  const cal = await loadTeamCalendar(sb, teamId, todayIso);
-  const placement = placementFor(row.plan, row.quality, row.start_date, todayIso, cal);
+  const [cal, season] = await Promise.all([
+    loadTeamCalendar(sb, teamId, todayIso),
+    goalSeasonForPlan(sb, teamId, { quality: row.quality, plan: row.plan }, todayIso),
+  ]);
+  const placement = placementFor(row.plan, row.quality, row.start_date, todayIso, cal, season);
   const sessions = (row.plan.weeks.find((w) => w.week === week)?.sessions ?? []).map((s) => {
     const p = placement?.placed.find((x) => x.slot === s.slot) ?? null;
     return { slot: s.slot, focus: s.focus, date: p?.date ?? null, md: p?.md ?? null };

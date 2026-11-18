@@ -17,6 +17,8 @@ import "server-only";
  *   - Sprint times: latest physical assessment with a 5/10/20 m time.
  *   - Braking: McBurnie hard-braking status (28 d vs own usual) + high-speed cutting L/R over 14 days.
  *   - Injury: `player_injuries` (injured / rehab / return-to-train) or the RTT read says currently injured.
+ *   - Season (2026-11-18): `goalSeasonForTeam` (season-plan block, else the week's phase). Pre-/off-season → the
+ *     out-of-season plan; in season or not known → the in-season plan.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -31,7 +33,8 @@ import { loadDsiForTeam, squadThresholdsFromMap } from "@/lib/micropulse/strengt
 import { deriveDsiForPlayer } from "@/lib/micropulse/strengthProgramming/deriveDsi";
 import { asymPct, favoredSide } from "@/lib/micropulse/codAsymmetry";
 import { buildGoalPlan } from "./index";
-import { blockReason } from "./common";
+import { blockReason, inSeasonFor } from "./common";
+import { goalSeasonForTeam } from "./season";
 import { loadTeamQualityPrefs } from "./teamPrefs";
 import type { GoalBlockReason, GoalPlan, GoalPlanInput, GoalQuality, GoalSport, StrengthBand } from "./types";
 import { GOAL_QUALITIES, OPEN_GOAL_QUALITIES } from "./types";
@@ -127,9 +130,11 @@ export type GoalPlanBase = { playerId: string; name: string | null; base: Omit<G
 
 /** Everything the engine reads about one player (all four qualities share it). Read-only. */
 export async function loadGoalPlanBase(sb: Sb, teamId: string, playerId: string, todayIso: string): Promise<GoalPlanBase> {
-  const [{ data: pRow }, { data: tRow }] = await Promise.all([
+  const [{ data: pRow }, { data: tRow }, season] = await Promise.all([
     sb.from("players").select("id, full_name, position, is_active, date_of_birth").eq("id", playerId).eq("team_id", teamId).maybeSingle(),
     sb.from("teams").select("sport, gender").eq("id", teamId).maybeSingle(),
+    // The team's season today (2026-11-18): pre-/off-season builds the out-of-season plan (up to 3 a week, session C).
+    goalSeasonForTeam(sb, teamId, todayIso),
   ]);
   const player = pRow as { id: string; full_name: string | null; position: string | null; is_active: boolean | null; date_of_birth: string | null } | null;
   if (!player) throw new Error("Player not on this team");
@@ -227,7 +232,7 @@ export async function loadGoalPlanBase(sb: Sb, teamId: string, playerId: string,
     isActive: player.is_active !== false,
     ageYears: age,
     unavailable: injured,
-    inSeason: true,
+    inSeason: inSeasonFor(season),
     topSpeed,
     sprintTimes,
     cmj,

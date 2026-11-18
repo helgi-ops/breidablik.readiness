@@ -388,8 +388,11 @@ export function buildAccelerationParts(input: GoalPlanInput): GoalParts {
     ],
     limits: [
       { en: "Sled sprints are not shown to beat the same sprints without a sled (Alcaraz 2018; Petrakos 2016).", is: "Sleðasprettir eru ekki sýndir betri en sömu sprettir án sleða (Alcaraz 2018; Petrakos 2016)." },
-      { en: "The sled volume here (60–100 m) is at the bottom of what worked (60–340 m, Petrakos 2016) and under the >160 m that did best in Alcaraz 2018, because this is a short add-on in season.", is: "Sleðamagnið hér (60–100 m) er neðst í því sem virkaði (60–340 m, Petrakos 2016) og undir >160 m sem gaf best í Alcaraz 2018, því þetta er stutt viðbót á keppnistímabili." },
-      { en: "Expect smaller gains in season than in pre-season (Petrakos 2016).", is: "Búast má við minni bætingu á keppnistímabili en á undirbúningstímabili (Petrakos 2016)." },
+      input.inSeason
+        ? { en: "The sled volume here (60–100 m) is at the bottom of what worked (60–340 m, Petrakos 2016) and under the >160 m that did best in Alcaraz 2018, because this is a short add-on in season.", is: "Sleðamagnið hér (60–100 m) er neðst í því sem virkaði (60–340 m, Petrakos 2016) og undir >160 m sem gaf best í Alcaraz 2018, því þetta er stutt viðbót á keppnistímabili." }
+        : { en: "The sled volume here (60–100 m) is at the bottom of what worked (60–340 m, Petrakos 2016) and under the >160 m that did best in Alcaraz 2018, because this is a short add-on to the team's training.", is: "Sleðamagnið hér (60–100 m) er neðst í því sem virkaði (60–340 m, Petrakos 2016) og undir >160 m sem gaf best í Alcaraz 2018, því þetta er stutt viðbót við æfingar liðsins." },
+      // Only in season: out of season the gains in the trials were the larger ones (Petrakos 2016).
+      ...(input.inSeason ? [{ en: "Expect smaller gains in season than in pre-season (Petrakos 2016).", is: "Búast má við minni bætingu á keppnistímabili en á undirbúningstímabili (Petrakos 2016)." }] : []),
       { en: "The strength-to-sprint link is from group results, and a 2022 re-analysis found Seitz 2014's effect sizes inflated.", is: "Tengsl styrks og spretta byggja á hópniðurstöðum, og endurgreining 2022 fann áhrifastærðir Seitz 2014 ofmetnar." },
       { en: "No study tested choosing the start from a strength test, and none sets an age limit for sleds: both are MicroPulse's rules.", is: "Engin rannsókn prófaði að velja upphafið út frá styrkprófi og engin setur aldursmörk fyrir sleða: hvort tveggja eru reglur MicroPulse." },
     ],
