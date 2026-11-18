@@ -267,7 +267,11 @@ export type Weekday = (typeof WEEKDAYS)[number];
 export const NO_MATCH_DAY_KINDS = ["strength", "power", "light", "rest"] as const;
 export type NoMatchDayKind = (typeof NO_MATCH_DAY_KINDS)[number];
 
-export type NoMatchWeek = Partial<Record<Weekday, NoMatchDayKind>>;
+/** One week's moves (2026-11-18, E): weekday → kind for that week only, e.g. the strength day moved to Tue because Mon
+ *  is a day off that week. Keyed by the week's Monday (YYYY-MM-DD). Wins over the weekday plan for that week. */
+export type NoMatchWeekMoves = Record<string, Partial<Record<Weekday, NoMatchDayKind>>>;
+
+export type NoMatchWeek = Partial<Record<Weekday, NoMatchDayKind>> & { weeks?: NoMatchWeekMoves };
 
 /** The MD row whose method a no-match day uses. */
 export const NO_MATCH_DAY_MD: Record<Exclude<NoMatchDayKind, "rest">, MdContext> = {
@@ -296,7 +300,7 @@ export const WEEKDAY_LABEL: Record<Weekday, { en: string; is: string; enShort: s
 const isNoMatchDayKind = (v: unknown): v is NoMatchDayKind =>
   typeof v === "string" && (NO_MATCH_DAY_KINDS as readonly string[]).includes(v);
 
-/** Keep only weekday → kind entries; anything else is dropped (unset = as before). */
+/** Keep only weekday → kind entries (+ valid one-week moves); anything else is dropped (unset = as before). */
 export function sanitizeNoMatchWeek(raw: unknown): NoMatchWeek {
   const out: NoMatchWeek = {};
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
@@ -304,7 +308,34 @@ export function sanitizeNoMatchWeek(raw: unknown): NoMatchWeek {
     const v = (raw as Record<string, unknown>)[d];
     if (isNoMatchDayKind(v)) out[d] = v;
   }
+  const weeks = sanitizeWeekMoves((raw as Record<string, unknown>).weeks);
+  if (Object.keys(weeks).length) out.weeks = weeks;
   return out;
+}
+
+/** One-week moves: Monday date → weekday → kind. Bad keys / values dropped. */
+export function sanitizeWeekMoves(raw: unknown): NoMatchWeekMoves {
+  const out: NoMatchWeekMoves = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (weekdayOf(k) !== "mon" || !v || typeof v !== "object" || Array.isArray(v)) continue;
+    const days: Partial<Record<Weekday, NoMatchDayKind>> = {};
+    for (const d of WEEKDAYS) {
+      const x = (v as Record<string, unknown>)[d];
+      if (isNoMatchDayKind(x)) days[d] = x;
+    }
+    if (Object.keys(days).length) out[k] = days;
+  }
+  return out;
+}
+
+/** Drop moves for weeks that ended more than a week before `todayIso` (keeps the jsonb small). */
+export function pruneWeekMoves(moves: NoMatchWeekMoves, todayIso: string): NoMatchWeekMoves {
+  const cut = mondayOfIso(todayIso);
+  const d = new Date(`${cut}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 7);
+  const keepFrom = d.toISOString().slice(0, 10);
+  return Object.fromEntries(Object.entries(moves).filter(([k]) => k >= keepFrom));
 }
 
 /** The date the weekday plan was last changed (stored as `since` in the same jsonb), or null. The 8-week goal plans
@@ -315,13 +346,17 @@ export function noMatchWeekSince(raw: unknown): string | null {
   return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
 }
 
-/** The jsonb to store: the days, plus `since` = today when the days changed (else the stored `since` stays). */
+/** The jsonb to store: the days, plus `since` = today when the days changed (else the stored `since` stays).
+ *  One-week moves are always the STORED ones (they are saved on their own; a page holding an older copy must not
+ *  undo them). */
 export function noMatchWeekToStore(nextRaw: unknown, storedRaw: unknown, todayIso: string): NoMatchWeek & { since?: string } {
-  const next = sanitizeNoMatchWeek(nextRaw);
+  const { weeks: _ignored, ...next } = sanitizeNoMatchWeek(nextRaw);
+  void _ignored;
   const stored = sanitizeNoMatchWeek(storedRaw);
   const same = WEEKDAYS.every((d) => next[d] === stored[d]);
   const since = same ? noMatchWeekSince(storedRaw) : todayIso;
-  return since ? { ...next, since } : next;
+  const weeks = pruneWeekMoves(stored.weeks ?? {}, todayIso);
+  return { ...next, ...(Object.keys(weeks).length ? { weeks } : {}), ...(since ? { since } : {}) };
 }
 
 /** The weekday of a YYYY-MM-DD date (calendar date, no time zone shift). Null for a bad date. */
@@ -333,9 +368,25 @@ export function weekdayOf(iso: string): Weekday | null {
   return WEEKDAYS[(d.getUTCDay() + 6) % 7];
 }
 
-/** What the coach set for this date's weekday in a week without a match, or null when unset. */
+/** Monday (YYYY-MM-DD) of the week a date falls in; the date itself when it isn't a valid date. */
+export function mondayOfIso(iso: string): string {
+  const wd = weekdayOf(iso);
+  if (!wd) return iso;
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - WEEKDAYS.indexOf(wd));
+  return d.toISOString().slice(0, 10);
+}
+
+/** A one-week move for this date (the coach moved a day for that week only), or null. */
+export function noMatchMoveFor(iso: string, week: NoMatchWeek | null | undefined): NoMatchDayKind | null {
+  const wd = weekdayOf(iso);
+  return wd ? (week?.weeks?.[mondayOfIso(iso)]?.[wd] ?? null) : null;
+}
+
+/** What the coach set for this date in a week without a match: that week's move, else the weekday plan; null = unset. */
 export function noMatchDayFor(iso: string, week: NoMatchWeek | null | undefined): NoMatchDayKind | null {
   if (!week) return null;
   const wd = weekdayOf(iso);
-  return wd ? (week[wd] ?? null) : null;
+  if (!wd) return null;
+  return noMatchMoveFor(iso, week) ?? week[wd] ?? null;
 }

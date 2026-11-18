@@ -105,6 +105,17 @@ language. A player who switches language later sees today's already-sent session
 the stored block titles, so the row is not rewritten). The movement-screen corrective send keeps the coach's
 language (coach-written text).
 
+## Weekday plan vs the week set up (2026-11-18)
+
+In a week without a match the individualised modes build each day from the weekday plan
+(`team_strength_palette.no_match_week`). When a strength / power day of that plan is OFF in Week setup, that session
+used to vanish silently. `noMatchCheck.ts` names it (Week setup banner for the week shown; under the weekday plan on
+/coach/strength for the next 4 weeks) and suggests the nearest free training day (not set, or a light day). The fix is a
+**move for that week only**, stored in `no_match_week.weeks[<Monday>]` (`from` day → rest, `to` day → the kind) via
+`POST /api/coach/team/no-match-week`, with Undo. `noMatchDayFor` reads the week's move first, so the engine, the
+send-mode line and the goal plans (even in a week already under way) all follow it. Saving the weekday plan never
+touches saved moves (`noMatchWeekToStore` keeps the stored ones); moves older than a week are pruned.
+
 ## Collision preview
 
 `GET /api/coach/player/[id]/today-conflicts?dates=…` (admin-aware) returns, for a set of target dates:

@@ -24,7 +24,7 @@ import { PLAN_WEEKS, QUALITY_LABEL } from "./common";
 import { isGymQuality, type Bi, type GoalBlock, type GoalPlan, type GoalQuality, type GoalSession, type GoalSessionSlot } from "./types";
 import { rxContextOf, withRx, type LiftRx } from "./liftRx";
 import type { Adherence, DueSession, GoalOutcome, SessionMark } from "./outcome";
-import { noMatchDayFor, type NoMatchDayKind, type NoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
+import { noMatchDayFor, noMatchMoveFor, type NoMatchDayKind, type NoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
 
 // ─── Dates ─────────────────────────────────────────────────────────────────
 
@@ -187,8 +187,10 @@ function rank(quality: GoalQuality, slot: GoalSessionSlot, day: { date: string; 
   const wd = WEEKDAY_PREF[slot].indexOf(weekdayIdx(day.date));
   const planLive = !cal?.noMatchWeekSince || mondayOf(day.date) > mondayOf(cal.noMatchWeekSince);
   const byKind = noMatchRank(quality, slot);
-  if (byKind && !day.md && planLive) {
-    const kind = noMatchDayFor(day.date, cal?.noMatchWeek);
+  // A day the coach moved for that week only (E, 2026-11-18) counts even in a week already under way.
+  const moved = noMatchMoveFor(day.date, cal?.noMatchWeek);
+  if (byKind && !day.md && (planLive || moved)) {
+    const kind = moved ?? noMatchDayFor(day.date, cal?.noMatchWeek);
     if (kind) return byKind[kind] === 50 ? 50 + wd : byKind[kind];
   }
   return 10 + wd;

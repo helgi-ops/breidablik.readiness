@@ -9,6 +9,8 @@
  * Saved with the same "Save structures" button (team_strength_palette.no_match_week). Rules: structures.ts.
  */
 
+import { useState } from "react";
+import NoMatchWeekCheck from "./NoMatchWeekCheck";
 import {
   DEFAULT_STRUCTURE_BY_MD,
   NO_MATCH_DAY_KINDS,
@@ -56,6 +58,7 @@ export default function NoMatchWeekEditor({
   };
 
   const setCount = WEEKDAYS.filter((d) => value[d]).length;
+  const [todayIso] = useState(() => new Date().toISOString().slice(0, 10));
 
   return (
     <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3" data-testid="no-match-week">
@@ -102,6 +105,8 @@ export default function NoMatchWeekEditor({
       {setCount === 0 ? (
         <div className="mt-2 text-[11px] text-slate-500">{t("Nothing set: every strength day in such a week reads as MD-3.", "Ekkert stillt: hver styrktardagur í slíkri viku telst MD-3.")}</div>
       ) : null}
+      {/* The next 4 weeks against this plan (unsaved edits included): a strength / power day that is a day off. */}
+      <NoMatchWeekCheck lang={lang} from={todayIso} days={28} plan={value} />
     </div>
   );
 }

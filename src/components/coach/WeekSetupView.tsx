@@ -1,5 +1,6 @@
 "use client";
 
+import NoMatchWeekCheck from "@/components/coach/NoMatchWeekCheck";
 import { authFetch } from "@/lib/client/authFetch";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -1902,6 +1903,10 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           </button>
         </div>
       )}
+
+      {/* Weekday strength plan vs this week (E, 2026-11-18): a strength / power day that is a day off this week, in a
+          week without a match, is named here with a one-click move for this week only. Renders nothing when fine. */}
+      {teamId ? <NoMatchWeekCheck lang={isIS ? "IS" : "EN"} from={weekStart} days={7} refreshKey={`${weekStart}|${ok ?? ""}`} showPlanLink /> : null}
 
       {/* Missing team id (edge) */}
       {(!teamId || teamId.trim().length === 0) && (
