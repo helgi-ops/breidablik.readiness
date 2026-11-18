@@ -58,10 +58,10 @@ function every(q: GymQuality): GoalPlan[] {
 const ALL = GYM_ONLY_QUALITIES.flatMap(every);
 
 describe("gym-only goals: who and when", () => {
-  it("are not open to players or coaches yet (delivery ships in step 2)", () => {
+  it("are open to players and coaches since their delivery shipped (step 2)", () => {
     for (const q of GYM_ONLY_QUALITIES) {
-      expect(OPEN_GOAL_QUALITIES).not.toContain(q);
-      expect(isOpenGoalQuality(q)).toBe(false);
+      expect(OPEN_GOAL_QUALITIES).toContain(q);
+      expect(isOpenGoalQuality(q)).toBe(true);
     }
     expect(isOpenGoalQuality("jump")).toBe(true);
   });

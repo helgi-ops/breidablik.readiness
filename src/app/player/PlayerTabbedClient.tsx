@@ -751,7 +751,7 @@ function TodayMorePortal({ activeTab, lang, onOpen, isBasketball }: { activeTab:
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600"><IconActivity active={false} /></span>
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold text-zinc-900">{is ? "Markmiðið mitt" : "My goal"}</span>
-            <span className="block truncate text-xs text-zinc-500">{is ? "Veldu 8 vikna áætlun: hraði, hröðun, bremsun eða stökk" : "Choose an 8-week plan: speed, acceleration, braking or jump"}</span>
+            <span className="block truncate text-xs text-zinc-500">{is ? "Veldu 8 vikna áætlun: hraði, hröðun, bremsun, stökk eða styrkur" : "Choose an 8-week plan: speed, acceleration, braking, jump or strength"}</span>
           </span>
           <span className="text-lg leading-none text-zinc-300">›</span>
         </button> : null}

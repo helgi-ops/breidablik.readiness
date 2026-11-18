@@ -58,7 +58,7 @@ export const MEASURE_DEF: Record<GoalMeasure, MeasureDef> = {
     clearBasis: { en: "MicroPulse rule (the trials used about 0.6–1.2 cm)", is: "Regla MicroPulse (rannsóknirnar notuðu um 0,6–1,2 cm)" },
     decimals: 1, min: 5, max: 90,
   },
-  // The gym-only goals (2026-11-18). The database check on `measure` is widened with their delivery (step 2).
+  // The gym-only goals (2026-11-18). The mid-thigh pull is read live from VALD (progressLoader); the lift test is typed by the coach.
   imtp_nkg: {
     label: { en: "Mid-thigh pull (force plates)", is: "Tog frá miðju læri (kraftplata)" }, unit: "N/kg", better: "higher", clearPct: 5,
     clearBasis: { en: "MicroPulse rule (the force plates vary a little day to day)", is: "Regla MicroPulse (kraftplatan sveiflast aðeins milli daga)" },

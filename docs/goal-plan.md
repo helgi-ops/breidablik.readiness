@@ -615,6 +615,38 @@ the Speed & power library do not offer them. The database checks on `player_goal
   season, 3×/week; choosing by strength test + DSI is untested; strength-then-power blocks were not tested against
   power alone (Marshall 2021 is order within a session).
 
+## Gym-only goals, step 2: delivery (2026-11-18)
+
+The three gym-only goals are open: `OPEN_GOAL_QUALITIES` = all seven, so the player's picker, the request / start
+routes and the team prefs route take them. Database checks widened by
+`supabase/migrations/20261118091500_gym_only_goal_qualities.sql` (quality on `player_goal_plans` and
+`team_quality_plan_prefs`, measure `imtp_nkg` / `lift_test_kg` on `player_goal_plan_results`; no data change).
+
+- **Placement** (`today.ts` `rank`): both goal days use the coach's weekday plan when no match is near (MicroPulse rule):
+  day 1 (A) on a strength day, then a power day; day 2 (B) on a power day for Explosive power and Strength + power,
+  a second strength day for Maximal strength; light / rest last. In a match week: A from MD-4, B from MD-2 (`PREFS`),
+  2 days apart, never MD / MD-1 / MD+1. The pitch goals are unchanged (the weekday plan still steers only their B).
+- **Into the strength session** (`gymForSession.ts`): a gym-only goal merges whichever of its sessions is placed today;
+  the pitch goals still merge B only. `GoalPlanGym.slot` → `PrescribedExercise.goalPlan.slot` → the Today item's
+  `goalPlan.slot` (`toTodayStructure.ts`; absent = B on rows sent before). `goalPlanGym.ts` rules unchanged (in
+  place of the matching lift, all or nothing, yellow half the sets, red none, in season nothing); its "why" line names
+  "goal day 1 / 2".
+- **Today card** (`today.ts`, `todayLoader.ts`): the card reads the slot the sent session holds
+  (`goalGymInTodaySession`) and shows "In today's session" for that day; the automatic tick on finishing the strength
+  session ticks that slot (a test-week day keeps its test on the card, so the player ticks it). Gym-only goals are
+  named "Goal day 1 / 2" (pills "Day 1 / 2"). In season, or season not known, the card is the hold card: "your team
+  strength session holds what you built", no session, nothing to tick. Season = `goalSeasonForTeam`: the coach's
+  season-plan block (`resolveCurrentBlock`), else the week setup's season phase, by the same rule as the merge
+  (`goalSeasonOf`). The 8-week count keeps running in season.
+- **Results** (`progressLoader.ts`): mid-thigh pull read live from VALD (`vald_test_metrics`, IMTP relative peak
+  force, trial mean, same windows as jump height); jump height for Explosive power and Strength + power. The lift test
+  is typed by the coach on Goal requests (the form lists each plan's measures).
+- **Copy:** player picker subs say "in the team gym session"; "What happens next" says two goal days inside the team
+  strength session; "My goal" row names strength; PDF stat "Goal days a week · Inside the team strength session".
+- **Not in step 2:** the coach's "Send to a player" in the Programme Library (Speed & power pills) still lists the
+  four pitch goals only: the gym goals have no library page yet. Coaches approve them on Goal requests.
+- **Tests:** `__tests__/gymGoalsDelivery.test.ts`.
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

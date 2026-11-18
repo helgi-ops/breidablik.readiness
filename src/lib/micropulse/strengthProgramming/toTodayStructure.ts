@@ -46,12 +46,19 @@ export type TodayStructureItem = {
   /** Speed loss (%) at which the set stops (`ExerciseDose.velocityLossCap`) — read by the player's "All the details"
    *  (lota 8, `todayLiftRx.ts`). Absent on sessions sent before 2026-11-14. */
   vlCap?: number;
-  /** Part of the player's 8-week goal plan, session B (gym) — "One session, one whole" (2026-11-17). */
-  goalPlan?: { quality: string; week: number; slot: "B" };
+  /** Part of the player's 8-week goal plan — "One session, one whole" (2026-11-17). `slot`: the plan session merged
+   *  (B for the pitch goals; A or B for the gym-only goals, 2026-11-18). */
+  goalPlan?: { quality: string; week: number; slot: "A" | "B" | "C" };
 };
 
-const GOAL_PLAN_EN: Record<string, string> = { top_speed: "top speed", acceleration: "acceleration", braking: "braking", jump: "jump" };
-const GOAL_PLAN_IS: Record<string, string> = { top_speed: "hámarkshraði", acceleration: "hröðun", braking: "bremsun", jump: "stökkkraftur" };
+const GOAL_PLAN_EN: Record<string, string> = {
+  top_speed: "top speed", acceleration: "acceleration", braking: "braking", jump: "jump",
+  max_strength: "maximal strength", explosive: "explosive power", strength_power: "strength + power",
+};
+const GOAL_PLAN_IS: Record<string, string> = {
+  top_speed: "hámarkshraði", acceleration: "hröðun", braking: "bremsun", jump: "stökkkraftur",
+  max_strength: "hámarksstyrkur", explosive: "sprengikraftur", strength_power: "styrkur + sprengikraftur",
+};
 
 export type TodayStructureBlock = {
   block: string;
@@ -130,8 +137,8 @@ export function strengthSessionToTodayStructure(
         if (methodBits) item.method = methodBits;
         if (note) item.note = note;
         if (ex.dose.velocityLossCap) item.vlCap = ex.dose.velocityLossCap;
-        // The goal card reads this to know session B's gym part is inside today's session.
-        if (ex.goalPlan) item.goalPlan = { quality: ex.goalPlan.quality, week: ex.goalPlan.week, slot: "B" };
+        // The goal card reads this to know the plan session's gym part is inside today's session.
+        if (ex.goalPlan) item.goalPlan = { quality: ex.goalPlan.quality, week: ex.goalPlan.week, slot: ex.goalPlan.slot ?? "B" };
         // Stamp the library id + curated safe alternatives so the player can swap
         // this exercise on the Today card (safe options only). Corrective items have
         // no library id, so they carry no swap.

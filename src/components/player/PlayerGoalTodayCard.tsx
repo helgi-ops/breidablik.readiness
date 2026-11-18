@@ -100,7 +100,7 @@ export function GoalTodayCardView({ card, lang = "EN", onMark, busy = false, err
         <span
           className="rounded-full bg-zinc-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-500"
           title={t?.inSession
-            ? T("Session B's gym lifts are in today's strength session, in place of the matching exercises. It never changes your colour.", "Lyftur æfingar B eru í styrktaræfingu dagsins, í stað samsvarandi æfinga. Breytir aldrei litnum þínum.")
+            ? T("Your goal's gym lifts are in today's strength session, in place of the matching exercises. It never changes your colour.", "Lyftur markmiðsins eru í styrktaræfingu dagsins, í stað samsvarandi æfinga. Breytir aldrei litnum þínum.")
             : T("Extra to the team's session. It never changes it or your colour.", "Aukalega við æfingu liðsins. Breytir henni aldrei né litnum þínum.")}
         >
           {t?.inSession ? T("In today's session", "Í æfingu dagsins") : T("Add-on", "Viðbót")}
@@ -123,7 +123,7 @@ export function GoalTodayCardView({ card, lang = "EN", onMark, busy = false, err
       {t && t.version !== "skip" && (t.blocks.length || t.inSession) ? (
         <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50/60 p-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[13px] font-semibold text-zinc-900">{T(`Session ${t.slot}`, `Æfing ${t.slot}`)}: {L(t.focus)}</span>
+            <span className="text-[13px] font-semibold text-zinc-900">{t.name ? L(t.name) : T(`Session ${t.slot}`, `Æfing ${t.slot}`)}: {L(t.focus)}</span>
             {t.inSession && !t.blocks.length ? null : (
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${VERSION_STYLE[t.version]}`}>
                 {t.version === "lighter" ? T("Lighter version", "Léttari útgáfa") : T("Full session", "Öll æfingin")} · {T(`~${t.minutes} min`, `~${t.minutes} mín`)}
@@ -133,7 +133,7 @@ export function GoalTodayCardView({ card, lang = "EN", onMark, busy = false, err
           {t.inSession ? (
             <p className="mt-2 text-[12.5px] leading-snug text-zinc-700">
               {T("Gym part: in your strength session today (Today's session), power first.", "Salur-hlutinn: í styrktaræfingunni þinni í dag (Æfing dagsins), kraftur fyrst.")}
-              {!t.blocks.length && !t.mark ? ` ${T("Session B counts as done when you finish that session.", "Æfing B telst búin þegar þú klárar þá æfingu.")}` : ""}
+              {!t.blocks.length && !t.mark ? ` ${T("It counts as done when you finish that session.", "Það telst búið þegar þú klárar þá æfingu.")}` : ""}
             </p>
           ) : null}
           <ul className="mt-2 space-y-1.5">
@@ -194,7 +194,7 @@ export function GoalTodayCardView({ card, lang = "EN", onMark, busy = false, err
         <div className="mt-3 space-y-1.5">
           {unticked.map((s) => (
             <div key={s.slot} className="flex flex-wrap items-center gap-2 text-[12.5px] text-zinc-700">
-              <span>{T(`Did you do session ${s.slot}${s.day ? ` (${s.day.en})` : ""}?`, `Gerðirðu æfingu ${s.slot}${s.day ? ` (${s.day.is})` : ""}?`)}</span>
+              <span>{T(`Did you do ${s.ask?.en ?? `session ${s.slot}`}${s.day ? ` (${s.day.en})` : ""}?`, `Gerðirðu ${s.ask?.is ?? `æfingu ${s.slot}`}${s.day ? ` (${s.day.is})` : ""}?`)}</span>
               <button type="button" disabled={busy} onClick={() => onMark(s.slot, "done")} className="rounded-md border border-[#2740e6]/40 px-2 py-0.5 text-[11.5px] font-semibold text-[#2740e6] disabled:opacity-50">{T("Yes", "Já")}</button>
               <button type="button" disabled={busy} onClick={() => onMark(s.slot, "skipped")} className="rounded-md border border-zinc-300 px-2 py-0.5 text-[11.5px] font-medium text-zinc-600 disabled:opacity-50">{T("No", "Nei")}</button>
             </div>
@@ -210,7 +210,7 @@ export function GoalTodayCardView({ card, lang = "EN", onMark, busy = false, err
               key={s.slot}
               className={`rounded-lg border px-2 py-1 text-[11px] ${s.isToday ? "border-[#2740e6] bg-[#2740e6]/5 font-semibold text-[#2740e6]" : s.past ? "border-zinc-200 text-zinc-400" : "border-zinc-200 text-zinc-700"}`}
             >
-              {s.mark === "done" ? "✓ " : ""}{s.slot} · {s.day ? L(s.day) : T("no day", "enginn dagur")}
+              {s.mark === "done" ? "✓ " : ""}{s.tag ? L(s.tag) : s.slot} · {s.day ? L(s.day) : T("no day", "enginn dagur")}
             </span>
           ))}
         </div>

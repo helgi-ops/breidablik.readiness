@@ -120,8 +120,9 @@ export type PrescribedExercise = {
   /** One more set because of the player's own strength goal (lota 2, 2026-11-17). */
   playerGoal?: true;
   /** Part of the player's 8-week goal plan, session B (gym), merged into the team session ("One session, one whole",
-   *  2026-11-17, goalPlanGym.ts). The goal's dose is the dose: no other extra set lands on it. */
-  goalPlan?: { quality: import("@/lib/micropulse/goalPlan/types").GoalQuality; week: number };
+   *  2026-11-17, goalPlanGym.ts). The goal's dose is the dose: no other extra set lands on it. `slot`: which plan
+   *  session (the gym-only goals merge A or B, 2026-11-18); absent = B. */
+  goalPlan?: { quality: import("@/lib/micropulse/goalPlan/types").GoalQuality; week: number; slot?: import("@/lib/micropulse/goalPlan/types").GoalSessionSlot };
   /** Brief sport-science rationale shown in UI tooltip. */
   rationale?: string;
 };
@@ -310,9 +311,10 @@ export type PlayerStrengthSnapshot = {
    *  light day or rest. Used only with `noMatchNearby` in the individualised modes; a strength day builds as MD-4,
    *  power as MD-3, light as MD-2 (structures.ts). Absent / empty = as before (MD-3) (2026-11-17). */
   noMatchWeek?: import("./structures").NoMatchWeek;
-  /** Today's gym session B of the player's 8-week goal plan, when the plan places it on this day (set by the send
-   *  routes / coach preview from `goalPlan/gymLoader.ts`). Merged into the session only in pre-/off-season
-   *  (goalPlanGym.ts). Absent = no plan, or session B isn't today ("One session, one whole", 2026-11-17). */
+  /** Today's gym session of the player's 8-week goal plan (session B; either session for the gym-only goals), when
+   *  the plan places it on this day (set by the send routes / coach preview from `goalPlan/gymLoader.ts`). Merged into
+   *  the session only in pre-/off-season (goalPlanGym.ts). Absent = no plan, or no gym session today ("One session,
+   *  one whole", 2026-11-17). */
   goalPlanGym?: import("./goalPlanGym").GoalPlanGym;
   /** The team's send mode + the coach's setting for this player (2026-11-17). When present, the engine uses the
    *  player's own input (picks, strength goal, goal plan gym session) only if the player takes part under the mode of

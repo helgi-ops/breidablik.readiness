@@ -1,9 +1,10 @@
 /**
  * "One session, one whole" (2026-11-17). Pure and client-safe.
  *
- * Reads the gym lifts of today's session B from a player's 8-week goal plan, for the strength engine to place in the
- * team strength session (`strengthProgramming/goalPlanGym.ts`). Only on the day the plan's rules place session B
- * (`placementFor`: never MD, MD-1 or MD+1, at least 2 days from session A). Each lift's numbers come from the plan's
+ * Reads the gym lifts of today's goal session from a player's 8-week goal plan, for the strength engine to place in the
+ * team strength session (`strengthProgramming/goalPlanGym.ts`). Only on the day the plan's rules place it
+ * (`placementFor`: never MD, MD-1 or MD+1, at least 2 days apart). The pitch goals merge session B only (session A is
+ * the running session); the gym-only goals (2026-11-18) merge whichever of their two sessions falls today. Each lift's numbers come from the plan's
  * own lines (`withRx`): sets × reps from the dose, % of max / rest / tempo from the lift's prescription.
  *
  * The non-lift blocks of session B (bounds, braking drills) are not here: they stay on the goal card.
@@ -13,7 +14,7 @@ import { PLAN_WEEKS } from "./common";
 import { rxContextOf, withRx, type LiftRx } from "./liftRx";
 import { placementFor, planWeekOn, type TeamCalendar } from "./today";
 import { swapMark } from "./swaps";
-import type { GoalBlock, GoalPlan, GoalQuality } from "./types";
+import { isGymQuality, type GoalBlock, type GoalPlan, type GoalQuality } from "./types";
 import type { GoalGymProfile, GoalPlanGym, GoalPlanGymLift } from "@/lib/micropulse/strengthProgramming/goalPlanGym";
 
 /** A pull swap names its lift (Programme Library, lota 6). */
@@ -53,7 +54,7 @@ function liftOf(b: GoalBlock, rx: LiftRx): GoalPlanGymLift | null {
   };
 }
 
-/** Today's session B gym lifts, or null (no plan running, B isn't today, or it holds no gym lift). */
+/** Today's goal-session gym lifts, or null (no plan running, no gym session today, or it holds no gym lift). */
 export function goalPlanGymFor(args: {
   planId: string;
   quality: GoalQuality;
@@ -66,16 +67,18 @@ export function goalPlanGymFor(args: {
   if (plan.status !== "ok") return null;
   const week = planWeekOn(startDate, todayIso);
   if (week < 1 || week > PLAN_WEEKS) return null;
-  const placed = placementFor(plan, quality, startDate, todayIso, args.cal)?.placed.find((p) => p.slot === "B") ?? null;
-  if (!placed || placed.date !== todayIso) return null;
+  const gymOnly = isGymQuality(quality);
+  const placed = placementFor(plan, quality, startDate, todayIso, args.cal)?.placed.find((p) => p.date === todayIso && (gymOnly || p.slot === "B")) ?? null;
+  if (!placed) return null;
   const sessions = withRx({ weeks: [{ sessions: plan.weeks.find((w) => w.week === week)?.sessions ?? [] }] }, rxContextOf(plan)).weeks[0].sessions;
-  const b = sessions.find((s) => s.slot === "B");
+  const b = sessions.find((s) => s.slot === placed.slot);
   if (!b) return null;
   const lifts = b.blocks.flatMap((blk) => (blk.rx ?? []).map((rx) => liftOf(blk, rx))).filter((l): l is GoalPlanGymLift => !!l);
   if (!lifts.length) return null;
   return {
     planId: args.planId,
     quality,
+    slot: placed.slot,
     week,
     weeksTotal: PLAN_WEEKS,
     labelEN: b.focus.en,

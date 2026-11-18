@@ -49,10 +49,16 @@ const QUALITY: Record<GoalQuality, { label: Bi; sub: Bi }> = {
   acceleration: { label: { en: "Acceleration", is: "Hröðun" }, sub: { en: "Quicker first steps", is: "Snarpari fyrstu skref" } },
   braking: { label: { en: "Braking", is: "Bremsun" }, sub: { en: "Stop and turn more sharply", is: "Stoppa og snúa snarpar" } },
   jump: { label: { en: "Vertical jump", is: "Lóðrétt stökk" }, sub: { en: "Jump higher", is: "Stökkva hærra" } },
-  max_strength: { label: { en: "Maximal strength", is: "Hámarksstyrkur" }, sub: { en: "Stronger legs", is: "Sterkari fætur" } },
-  explosive: { label: { en: "Explosive power", is: "Sprengikraftur" }, sub: { en: "Use your strength faster", is: "Nýta styrkinn hraðar" } },
-  strength_power: { label: { en: "Strength + power", is: "Styrkur + sprengikraftur" }, sub: { en: "Stronger and faster off the ground", is: "Sterkari og snarpari af stað" } },
+  // Gym-only goals (2026-11-18): no extra session, the lifts go into the team strength session.
+  max_strength: { label: { en: "Maximal strength", is: "Hámarksstyrkur" }, sub: { en: "Stronger legs · in the team gym session", is: "Sterkari fætur · í styrktaræfingu liðsins" } },
+  explosive: { label: { en: "Explosive power", is: "Sprengikraftur" }, sub: { en: "Use your strength faster · in the team gym session", is: "Nýta styrkinn hraðar · í styrktaræfingu liðsins" } },
+  strength_power: { label: { en: "Strength + power", is: "Styrkur + sprengikraftur" }, sub: { en: "Both · in the team gym session", is: "Hvort tveggja · í styrktaræfingu liðsins" } },
 };
+const GYM_ONLY = new Set<GoalQuality>(["max_strength", "explosive", "strength_power"]);
+/** What the plan adds to the week, for the "What happens next" line. */
+const weekShape = (q: GoalQuality): Bi => GYM_ONLY.has(q)
+  ? { en: "two goal days a week inside the team strength session, no extra session; it builds in pre-season and off-season and holds in season", is: "tveir markmiðsdagar á viku inni í styrktaræfingu liðsins, engin aukaæfing; byggir upp á undirbúnings- og hvíldartímabili og heldur á tímabili" }
+  : { en: "two short extra sessions a week", is: "tvær stuttar aukaæfingar á viku" };
 
 async function call(method: "GET" | "POST" | "DELETE", body?: unknown, path = "/api/player/goal-plan") {
   const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? "";
@@ -346,9 +352,9 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
                   <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={PLAYER_NOTE_MAX} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
                 </label>
                 {autoStart.on ? (
-                  <p className="text-xs text-slate-500">{T(`What happens next: MicroPulse builds an 8-week plan from your own data (two short extra sessions a week). It starts ${autoStart.date ? fmtDate(autoStart.date, false) : "on Monday"}; your coach sees it and can stop it.`, `Hvað gerist næst: MicroPulse býr til 8 vikna áætlun út frá þínum gögnum (tvær stuttar aukaæfingar á viku). Hún byrjar ${autoStart.date ? fmtDate(autoStart.date, true) : "á mánudaginn"}; þjálfarinn sér hana og getur stöðvað hana.`)}</p>
+                  <p className="text-xs text-slate-500">{T(`What happens next: MicroPulse builds an 8-week plan from your own data (${weekShape(pick).en}). It starts ${autoStart.date ? fmtDate(autoStart.date, false) : "on Monday"}; your coach sees it and can stop it.`, `Hvað gerist næst: MicroPulse býr til 8 vikna áætlun út frá þínum gögnum (${weekShape(pick).is}). Hún byrjar ${autoStart.date ? fmtDate(autoStart.date, true) : "á mánudaginn"}; þjálfarinn sér hana og getur stöðvað hana.`)}</p>
                 ) : (
-                  <p className="text-xs text-slate-500">{T("What happens next: MicroPulse builds an 8-week plan from your own data (two short extra sessions a week), and your coach says yes or no.", "Hvað gerist næst: MicroPulse býr til 8 vikna áætlun út frá þínum gögnum (tvær stuttar aukaæfingar á viku) og þjálfarinn segir já eða nei.")}</p>
+                  <p className="text-xs text-slate-500">{T(`What happens next: MicroPulse builds an 8-week plan from your own data (${weekShape(pick).en}), and your coach says yes or no.`, `Hvað gerist næst: MicroPulse býr til 8 vikna áætlun út frá þínum gögnum (${weekShape(pick).is}) og þjálfarinn segir já eða nei.`)}</p>
                 )}
                 <button type="button" disabled={busy} onClick={send} className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
                   {busy ? T("Sending…", "Sendi…") : autoStart.on ? T("Start my plan", "Byrja áætlunina") : T("Ask my coach", "Biðja þjálfarann")}

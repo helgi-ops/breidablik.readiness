@@ -14,10 +14,14 @@
  * The add-on is its own card. It never changes the colour or a load target. In pre-/off-season session B's gym lifts
  * go into the coach-sent strength session instead ("one session, one whole", 2026-11-17, strengthProgramming/
  * goalPlanGym.ts); the card then names that and keeps only what is left outside the gym (`gymInSession`).
+ *
+ * Gym-only goals (maximal strength, explosive power, strength + power, 2026-11-18): no extra session at all. Both
+ * goal days sit on team strength days and their lifts go into the strength session. In season the card only says the
+ * team's session holds what was built (`season: "maintain"`): nothing is added.
  */
 
 import { PLAN_WEEKS, QUALITY_LABEL } from "./common";
-import type { Bi, GoalBlock, GoalPlan, GoalQuality, GoalSession, GoalSessionSlot } from "./types";
+import { isGymQuality, type Bi, type GoalBlock, type GoalPlan, type GoalQuality, type GoalSession, type GoalSessionSlot } from "./types";
 import { rxContextOf, withRx, type LiftRx } from "./liftRx";
 import type { Adherence, DueSession, GoalOutcome, SessionMark } from "./outcome";
 import { noMatchDayFor, type NoMatchDayKind, type NoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
@@ -119,8 +123,7 @@ const PREFS: Record<GoalQuality, Partial<Record<GoalSessionSlot, string[]>>> = {
   acceleration: { A: MID_WEEK, B: GYM_DAY },
   jump: { A: MID_WEEK, B: GYM_DAY },
   braking: { A: ["MD+3", "MD+2", "MD+4", "MD-4", "MD-5", "MD-3"], B: ["MD-2", "MD-3", "MD-4", "MD-5"] },
-  // Gym-only goals (2026-11-18): both days are team strength days, the heavier one further from the match. Placement
-  // for these ships in step 2; until then no player can hold one.
+  // Gym-only goals (2026-11-18): both days are team strength days, the heavier one further from the match.
   max_strength: { A: GYM_HEAVY, B: GYM_SECOND },
   explosive: { A: GYM_HEAVY, B: GYM_SECOND },
   strength_power: { A: GYM_HEAVY, B: GYM_SECOND },
@@ -169,6 +172,13 @@ function candidates(monday: string, cal: TeamCalendar): { days: { date: string; 
 /** Session B with no match near, by the coach's weekday plan: a strength day can hold the gym lifts in the strength
  *  session; a power day next; unset as before; a light or rest day has no heavy lift, so last. */
 const NO_MATCH_B_RANK: Record<NoMatchDayKind, number> = { strength: 0, power: 1, light: 50, rest: 50 };
+/** Gym-only goals, both sessions, no match near (MicroPulse rule, 2026-11-18): day 1 (the heavy day) on a strength
+ *  day; day 2 on a power day when the goal has a power side (explosive, strength + power), else a second strength day. */
+const NO_MATCH_POWER_FIRST: Record<NoMatchDayKind, number> = { power: 0, strength: 1, light: 50, rest: 50 };
+function noMatchRank(quality: GoalQuality, slot: GoalSessionSlot): Record<NoMatchDayKind, number> | null {
+  if (isGymQuality(quality)) return slot === "B" && quality !== "max_strength" ? NO_MATCH_POWER_FIRST : NO_MATCH_B_RANK;
+  return slot === "B" ? NO_MATCH_B_RANK : null;
+}
 
 function rank(quality: GoalQuality, slot: GoalSessionSlot, day: { date: string; md: string | null }, cal?: TeamCalendar): number {
   const prefs = PREFS[quality][slot] ?? [];
@@ -176,9 +186,10 @@ function rank(quality: GoalQuality, slot: GoalSessionSlot, day: { date: string; 
   if (i >= 0) return i;
   const wd = WEEKDAY_PREF[slot].indexOf(weekdayIdx(day.date));
   const planLive = !cal?.noMatchWeekSince || mondayOf(day.date) > mondayOf(cal.noMatchWeekSince);
-  if (slot === "B" && !day.md && planLive) {
+  const byKind = noMatchRank(quality, slot);
+  if (byKind && !day.md && planLive) {
     const kind = noMatchDayFor(day.date, cal?.noMatchWeek);
-    if (kind) return NO_MATCH_B_RANK[kind] === 50 ? 50 + wd : NO_MATCH_B_RANK[kind];
+    if (kind) return byKind[kind] === 50 ? 50 + wd : byKind[kind];
   }
   return 10 + wd;
 }
@@ -280,6 +291,8 @@ export type GoalTodayCard = {
   /** Today's session, already in today's version; null when there is none today. */
   today: null | {
     slot: GoalSessionSlot;
+    /** "Session B" / "Goal day 2" (the gym-only goals number their days). Absent on old cards = "Session <slot>". */
+    name?: Bi;
     focus: Bi;
     minutes: number;
     version: SessionVersion;
@@ -287,12 +300,14 @@ export type GoalTodayCard = {
     blocks: { what: Bi; dose: Bi; supervised: boolean; swapped?: boolean; rx?: LiftRx[] }[];
     /** The player's tick on it (lota 4). */
     mark: SessionMark["status"] | null;
-    /** Session B's gym lifts are inside today's strength session (pre-/off-season, "one session, one whole",
-     *  2026-11-17): `blocks` then holds only what is left for outside the gym (often nothing). */
+    /** The session's gym lifts are inside today's strength session (pre-/off-season, "one session, one whole",
+     *  2026-11-17): `blocks` then holds only what is left for outside the gym (often nothing; a test for the
+     *  gym-only goals). */
     inSession?: true;
   };
   /** `past` = its day is behind today; `mark` = the player's tick; `canMark` = placed on today or earlier. */
-  thisWeek: { slot: GoalSessionSlot; focus: Bi; date: string | null; day: Bi | null; isToday: boolean; past: boolean; mark: SessionMark["status"] | null; canMark: boolean }[];
+  /** `tag`: the short pill label ("B" / "Day 2"); `ask`: the session in "Did you do …?" (Icelandic accusative). */
+  thisWeek: { slot: GoalSessionSlot; tag?: Bi; ask?: Bi; focus: Bi; date: string | null; day: Bi | null; isToday: boolean; past: boolean; mark: SessionMark["status"] | null; canMark: boolean }[];
   supervision: Bi | null;
   coachNote: string | null;
   details: Bi[];
@@ -340,14 +355,28 @@ export type GoalTodayInput = {
   pausedWeek?: number | null;
   /** The player's ticks on this plan (lota 4). */
   marks?: SessionMark[];
-  /** Today's strength session (coach-sent) holds session B's gym lifts of this plan week (2026-11-17). */
-  gymInSession?: boolean;
+  /** Today's strength session (coach-sent) holds this plan week's gym lifts (2026-11-17): the slot merged, or true = B. */
+  gymInSession?: boolean | GoalSessionSlot;
+  /** The team's season today, for the gym-only goals (`goalSeasonOf`): "maintain" (in season, or not known) = the
+   *  card only says what holds; nothing is added. Ignored for the pitch goals. Absent = build. */
+  season?: "build" | "maintain";
 };
 
 const IN_SESSION_FACT: Bi = {
   en: "Pre-season and off-season: your goal's gym lifts are part of the team strength session, in place of the matching exercises. One session, not two.",
   is: "Undirbúnings- og hvíldartímabil: lyftur markmiðsins eru hluti af styrktaræfingu liðsins, í stað samsvarandi æfinga. Ein æfing, ekki tvær.",
 };
+const HOLD_VERDICT: Bi = {
+  en: "In season: your team strength session holds what you built. Nothing extra this week.",
+  is: "Á tímabili: styrktaræfing liðsins heldur því sem þú byggðir upp. Ekkert aukalega þessa viku.",
+};
+const HOLD_FACTS: Bi[] = [
+  { en: "Keep the same weights in the team session; no extra sets.", is: "Haltu sömu þyngdum í æfingu liðsins; engin aukasett." },
+  { en: "The goal builds again in pre-season and off-season, when its lifts go into the team strength session.", is: "Markmiðið byggir aftur upp á undirbúnings- og hvíldartímabili, þegar lyftur þess fara inn í styrktaræfingu liðsins." },
+];
+/** "goal day 1" / "session B": the gym-only goals have no session A on the pitch, so their days are numbered. */
+const partName = (quality: GoalQuality, slot: GoalSessionSlot): Bi =>
+  isGymQuality(quality) ? { en: `goal day ${slot === "A" ? 1 : 2}`, is: `markmiðsdagur ${slot === "A" ? 1 : 2}` } : slotName(slot);
 
 function sessionsOfWeek(plan: GoalPlan, week: number): GoalSession[] {
   return plan.weeks.find((w) => w.week === week)?.sessions ?? [];
@@ -413,14 +442,28 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
     return {
       ...base, state: "not_started", week: 0, weekLabel: null,
       verdict: { en: `Your 8 weeks start on ${start.en}.`, is: `Vikurnar 8 hefjast ${start.is}.` },
-      facts: [
-        { en: `${plan.sessionsPerWeek} short extra sessions a week, on days that fit around the team's matches.`, is: `${plan.sessionsPerWeek} stuttar aukaæfingar á viku, á dögum sem passa við leiki liðsins.` },
-        { en: "Each day's session shows here on Today.", is: "Æfing hvers dags birtist hér á Í dag." },
-      ],
+      facts: isGymQuality(quality)
+        ? [
+            { en: `${plan.sessionsPerWeek} goal days a week, inside the team strength session: no extra session.`, is: `${plan.sessionsPerWeek} markmiðsdagar á viku, inni í styrktaræfingu liðsins: engin aukaæfing.` },
+            { en: "Built in pre-season and off-season; in season the team session holds it.", is: "Byggt upp á undirbúnings- og hvíldartímabili; á tímabili heldur æfing liðsins því." },
+          ]
+        : [
+            { en: `${plan.sessionsPerWeek} short extra sessions a week, on days that fit around the team's matches.`, is: `${plan.sessionsPerWeek} stuttar aukaæfingar á viku, á dögum sem passa við leiki liðsins.` },
+            { en: "Each day's session shows here on Today.", is: "Æfing hvers dags birtist hér á Í dag." },
+          ],
       today: null, thisWeek: [], supervision: null,
     };
   }
   if (week > PLAN_WEEKS) return null;
+
+  // Gym-only goal in season (or season not known): nothing is added; the team's session holds what was built.
+  if (isGymQuality(quality) && input.season === "maintain") {
+    return {
+      ...base, state: "on", week, weekLabel: plan.weeks.find((w) => w.week === week)?.label ?? null,
+      verdict: HOLD_VERDICT, facts: HOLD_FACTS, today: null, thisWeek: [], supervision: null,
+      details: [{ en: "The season comes from the coach's season plan (or the week setup). Not known counts as in season.", is: "Tímabilið kemur úr tímabilsáætlun þjálfarans (eða vikuuppsetningu). Óþekkt telst sem á tímabili." }, ...details],
+    };
+  }
 
   // Lota 7: today's lifts get their full set of variables, derived from the frozen blocks (never stored).
   const sessions = withRx({ weeks: [{ sessions: sessionsOfWeek(plan, week) }] }, rxContextOf(plan)).weeks[0].sessions;
@@ -430,15 +473,19 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
   const weekRow = plan.weeks.find((w) => w.week === week) ?? null;
 
   const markOf = (slot: GoalSessionSlot) => input.marks?.find((m) => m.week === week && m.slot === slot)?.status ?? null;
+  const gymOnly = isGymQuality(quality);
+  const tagOf = (slot: GoalSessionSlot): Bi => (gymOnly ? { en: `Day ${slot === "A" ? 1 : 2}`, is: `Dagur ${slot === "A" ? 1 : 2}` } : { en: slot, is: slot });
   const thisWeek = sessions.map((s) => {
     const p = placement.placed.find((x) => x.slot === s.slot) ?? null;
     return {
-      slot: s.slot, focus: s.focus, date: p?.date ?? null, day: p ? weekdayOnly(p.date) : null, isToday: p?.date === todayIso, past: !!p && p.date < todayIso,
+      slot: s.slot, tag: tagOf(s.slot),
+      ask: gymOnly ? { en: `goal day ${s.slot === "A" ? 1 : 2}`, is: `markmiðsdag ${s.slot === "A" ? 1 : 2}` } : { en: `session ${s.slot}`, is: `æfingu ${s.slot}` },
+      focus: s.focus, date: p?.date ?? null, day: p ? weekdayOnly(p.date) : null, isToday: p?.date === todayIso, past: !!p && p.date < todayIso,
       mark: markOf(s.slot), canMark: !!p && p.date <= todayIso,
     };
   }).sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999")); // in day order; a left-out session last
 
-  const weekFactParts = placement.placed.map((p) => ({ en: `${weekdayOnly(p.date).en} (${p.slot})`, is: `${weekdayOnly(p.date).is} (${p.slot})` }));
+  const weekFactParts = placement.placed.map((p) => ({ en: `${weekdayOnly(p.date).en} (${tagOf(p.slot).en.toLowerCase()})`, is: `${weekdayOnly(p.date).is} (${tagOf(p.slot).is.toLowerCase()})` }));
   const weekFact: Bi = placement.placed.length
     ? { en: `This week: ${weekFactParts.map((x) => x.en).join(", ")}.`, is: `Þessi vika: ${weekFactParts.map((x) => x.is).join(", ")}.` }
     : placement.teamDays === 0
@@ -446,8 +493,8 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
       : { en: "This week has no free day for the goal (busy match week), so it rests.", is: "Þessi vika hefur engan lausan dag fyrir markmiðið (þétt leikjavika), svo það hvílir." };
   const unplacedFact: Bi | null = placement.placed.length && placement.unplaced.length
     ? {
-        en: `${cap(slotName(placement.unplaced[0])).en}${placement.unplaced.length > 1 ? ` and ${placement.unplaced.slice(1).join(", ")}` : ""} has no free day this week, so it is left out, not made up.`,
-        is: `${cap(slotName(placement.unplaced[0])).is}${placement.unplaced.length > 1 ? ` og ${placement.unplaced.slice(1).join(", ")}` : ""} á engan lausan dag þessa viku, svo henni er sleppt, ekki unnin upp.`,
+        en: `${cap(partName(quality, placement.unplaced[0])).en}${placement.unplaced.length > 1 ? ` and ${placement.unplaced.slice(1).join(", ")}` : ""} has no free day this week, so it is left out, not made up.`,
+        is: `${cap(partName(quality, placement.unplaced[0])).is}${placement.unplaced.length > 1 ? ` og ${placement.unplaced.slice(1).join(", ")}` : ""} á engan lausan dag þessa viku, svo ${gymOnly ? "honum er sleppt, ekki unninn" : "henni er sleppt, ekki unnin"} upp.`,
       }
     : null;
 
@@ -458,23 +505,25 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
   if (todays && bySlot.get(todays.slot)) {
     const s = bySlot.get(todays.slot)!;
     const v = sessionForColour(s, input.colour);
-    // "One session, one whole": session B's gym lifts (the blocks with a lift prescription) are in today's strength
-    // session; only the rest (bounds, braking drills) is left here.
-    const inSession = input.gymInSession === true && s.slot === "B" && v.version !== "skip";
+    // "One session, one whole": the session's gym lifts (the blocks with a lift prescription) are in today's strength
+    // session; only the rest (bounds, braking drills, a test) is left here.
+    const inSlot = input.gymInSession === true ? "B" : input.gymInSession || null;
+    const inSession = inSlot === s.slot && v.version !== "skip";
     const shown = inSession ? v.blocks.filter((b) => !b.rx?.length) : v.blocks;
     today = {
-      slot: s.slot, focus: s.focus, minutes: v.version === "full" ? s.minutes : Math.max(5, Math.round(s.minutes / 2)), version: v.version,
+      slot: s.slot, name: cap(partName(quality, s.slot)), focus: s.focus, minutes: v.version === "full" ? s.minutes : Math.max(5, Math.round(s.minutes / 2)), version: v.version,
       blocks: shown.map((b) => ({ what: b.what, dose: b.dose, supervised: b.supervised === true, ...(b.swap?.swapped ? { swapped: true } : {}), ...(b.rx?.length ? { rx: b.rx } : {}) })),
       mark: markOf(s.slot),
       ...(inSession ? { inSession: true as const } : {}),
     };
-    const name = `${cap(slotName(s.slot)).en}: ${s.focus.en}`;
-    const nameIs = `${cap(slotName(s.slot)).is}: ${s.focus.is}`;
+    const pn = partName(quality, s.slot);
+    const name = `${cap(pn).en}: ${s.focus.en}`;
+    const nameIs = `${cap(pn).is}: ${s.focus.is}`;
     if (inSession) {
       const f = { en: s.focus.en.charAt(0).toLowerCase() + s.focus.en.slice(1), is: s.focus.is.charAt(0).toLowerCase() + s.focus.is.slice(1) };
       verdict = shown.length
-        ? { en: `Today: session B (${f.en}). The gym part is in your strength session; the rest is below.`, is: `Í dag: æfing B (${f.is}). Salur-hlutinn er í styrktaræfingunni þinni; restin er hér fyrir neðan.` }
-        : { en: `Today, session B (${f.en}) is part of your strength session (Today's session).`, is: `Í dag er æfing B (${f.is}) hluti af styrktaræfingunni þinni (Æfing dagsins).` };
+        ? { en: `Today: ${pn.en} (${f.en}). The gym part is in your strength session; the rest is below.`, is: `Í dag: ${pn.is} (${f.is}). Salur-hlutinn er í styrktaræfingunni þinni; restin er hér fyrir neðan.` }
+        : { en: `Today, ${pn.en} (${f.en}) is part of your strength session (Today's session).`, is: `Í dag er ${pn.is} (${f.is}) hluti af styrktaræfingunni þinni (Æfing dagsins).` };
     } else if (v.version === "skip") {
       verdict = input.colour === "red"
         ? { en: `Skip today's goal session (${s.focus.en}). Red day: rest comes first.`, is: `Slepptu markmiðsæfingunni í dag (${s.focus.is}). Rauður dagur: hvíld gengur fyrir.` }
@@ -489,7 +538,7 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
     const next = placement.placed.find((p) => p.date > todayIso) ?? null;
     if (next) {
       const s = bySlot.get(next.slot)!;
-      verdict = { en: `No goal session today. Next: ${weekdayOnly(next.date).en}, ${slotName(next.slot).en} (${s.focus.en}).`, is: `Engin markmiðsæfing í dag. Næst: ${weekdayOnly(next.date).is}, ${slotName(next.slot).is} (${s.focus.is}).` };
+      verdict = { en: `No goal session today. Next: ${weekdayOnly(next.date).en}, ${partName(quality, next.slot).en} (${s.focus.en}).`, is: `Engin markmiðsæfing í dag. Næst: ${weekdayOnly(next.date).is}, ${partName(quality, next.slot).is} (${s.focus.is}).` };
     } else if (placement.placed.length) {
       verdict = { en: "No goal session today. This week's sessions are behind you; next week's show on Monday.", is: "Engin markmiðsæfing í dag. Æfingar vikunnar eru búnar; næsta vika birtist á mánudag." };
     } else if (placement.teamDays === 0) {

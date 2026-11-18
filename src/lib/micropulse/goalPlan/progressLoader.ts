@@ -6,6 +6,8 @@ import "server-only";
  *   - Ticks and coach results: the goal tables.
  *   - Jump height: VALD force plates, CMJ, the mean of each test's valid trials (Claudino 2017), in the window around
  *     the start (4 weeks before to week 1) and around the end (week 7 to 2 weeks after). Copied nowhere.
+ *   - Mid-thigh pull (gym-only goals, 2026-11-18): VALD IMTP relative peak force, the mean of the test's trials (the
+ *     same read as the RTP assessment), same two windows. Copied nowhere.
  *   - GPS context, per day: top speed (the same validity filter as the top-speed signal); braking / acceleration as
  *     the count of top-band efforts (IMA Dec / Acc band 3) when the player has it, otherwise the peak in m/s².
  *   - The team calendar over the plan, to count the sessions the rules placed (adherence).
@@ -15,6 +17,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 import { mergeSpeedDays } from "@/lib/micropulse/nearMaxExposure";
 import { aggregateTrialsByTest } from "@/lib/micropulse/vald/trialAggregate";
+import { BATTERY_CODES, batteryMetricMean } from "@/lib/integrations/vald/battery";
 import { GPS_SOURCES } from "./loader";
 import { goalResults, goalResultsForPlans, goalSessionMarks, playerGoalHistoryRows, teamGoalTestCandidates } from "./store";
 import { buildGoalTestDue, inTestWindow, type GoalTestDue } from "./testsDue";
@@ -23,6 +26,7 @@ import { addDays, placedSessionsUpTo, toTeamDayType, type TeamCalendar } from ".
 import { noMatchWeekSince, sanitizeNoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
 import { RESULT_AFTER_END_DAYS, adherence, effortDays, goalOutcome, gpsContext, type GoalProgress, type GoalResult, type GpsDay, type GpsKind, type GpsMetric } from "./outcome";
 import type { GoalPlanRow } from "./requests";
+import type { GoalQuality } from "./types";
 
 type Sb = SupabaseClient;
 
@@ -80,6 +84,53 @@ export async function valdJumpResults(sb: Sb, playerId: string, startDate: strin
   return out;
 }
 
+/** VALD IMTP relative peak force (N/kg) as start / retest rows: the trial mean of each test, the same windows as jump
+ *  height (4 weeks before the start to week 1; week 7 to 2 weeks after the end). */
+export async function valdImtpResults(sb: Sb, playerId: string, startDate: string, endDate: string, todayIso: string): Promise<GoalResult[]> {
+  const from = addDays(startDate, -28);
+  const to = addDays(endDate, 14) < todayIso ? addDays(endDate, 14) : todayIso;
+  const { data, error } = await sb.from("vald_test_metrics")
+    .select("raw_test_id, test_timestamp, metric_code, limb, value")
+    .eq("microplayer_id", playerId).eq("test_type", "IMTP").in("metric_code", [...BATTERY_CODES.imtpRelForcePeak])
+    .gte("test_timestamp", `${from}T00:00:00Z`).lte("test_timestamp", `${to}T23:59:59Z`)
+    .order("test_timestamp", { ascending: false }).limit(800);
+  if (error) throw new Error(error.message);
+  type R = { raw_test_id: string | null; test_timestamp: string; metric_code: string; limb: string; value: number | string | null };
+  const byTest = new Map<string, R[]>();
+  for (const r of (data ?? []) as R[]) {
+    const k = r.raw_test_id ?? r.test_timestamp;
+    byTest.set(k, [...(byTest.get(k) ?? []), r]);
+  }
+  const tests = [...byTest.entries()].map(([k, rows]) => {
+    const vals = rows.map((r) => ({ ...r, value: r.value == null ? null : Number(r.value) }));
+    const v = batteryMetricMean(vals, BATTERY_CODES.imtpRelForcePeak, "Trial") ?? batteryMetricMean(vals, BATTERY_CODES.imtpRelForcePeak, "Both");
+    const n = vals.filter((r) => r.limb === "Trial").length || 1;
+    return { id: `vald:${k}`, date: rows[0].test_timestamp.slice(0, 10), nkg: v, n };
+  }).filter((t): t is { id: string; date: string; nkg: number; n: number } => t.nkg != null && t.nkg > 0)
+    .sort((a, b) => b.date.localeCompare(a.date)); // newest first, as the jump read
+  const out: GoalResult[] = [];
+  const base = tests.find((t) => t.date >= from && t.date <= addDays(startDate, 6));
+  const re = tests.find((t) => t.date >= addDays(startDate, 42) && t.date <= to);
+  const row = (t: typeof tests[number], phase: GoalResult["phase"]): GoalResult => ({
+    id: t.id, measure: "imtp_nkg", phase, value: Math.round(t.nkg * 10) / 10, test_date: t.date,
+    note: `VALD, mean of ${t.n} pull${t.n === 1 ? "" : "s"}`, source: "vald",
+  });
+  if (base) out.push(row(base, "baseline"));
+  if (re) out.push(row(re, "retest"));
+  return out;
+}
+
+/** The force-plate results a plan's tests use, read live (never copied): jump height and / or the mid-thigh pull. */
+export async function valdGoalResults(sb: Sb, quality: GoalQuality, playerId: string, startDate: string, endDate: string, todayIso: string): Promise<GoalResult[]> {
+  const jump = quality === "jump" || quality === "explosive" || quality === "strength_power";
+  const pull = quality === "max_strength" || quality === "strength_power";
+  const [j, p] = await Promise.all([
+    jump ? valdJumpResults(sb, playerId, startDate, endDate, todayIso).catch(() => [] as GoalResult[]) : Promise.resolve([] as GoalResult[]),
+    pull ? valdImtpResults(sb, playerId, startDate, endDate, todayIso).catch(() => [] as GoalResult[]) : Promise.resolve([] as GoalResult[]),
+  ]);
+  return [...j, ...p];
+}
+
 async function gpsDays(sb: Sb, playerId: string, kind: GpsKind, from: string, to: string): Promise<{ metric: GpsMetric; days: GpsDay[] }> {
   if (kind === "top_speed") {
     const rows = await fetchAllPages<Record<string, unknown>>((a, b) =>
@@ -120,7 +171,7 @@ export async function loadGoalProgress(
   const [marks, coach, vald, cal, gps] = await Promise.all([
     goalSessionMarks(sb, row.id),
     goalResults(sb, row.id),
-    row.quality === "jump" ? valdJumpResults(sb, row.player_id, row.start_date, row.end_date, todayIso).catch(() => [] as GoalResult[]) : Promise.resolve([] as GoalResult[]),
+    valdGoalResults(sb, row.quality, row.player_id, row.start_date, row.end_date, todayIso),
     loadTeamCalendarRange(sb, teamId, addDays(row.start_date, -11), addDays(until, 11)),
     gpsKind ? gpsDays(sb, row.player_id, gpsKind, addDays(row.start_date, -28), until).catch(() => noGps) : Promise.resolve(noGps),
   ]);
@@ -138,7 +189,7 @@ export async function loadGoalProgress(
 
 /**
  * Lota 6: the team's plans that still need a start test or a retest from the coach (Goal requests page, Today
- * chip, morning digest). Read only. Jump height counts when VALD has it.
+ * chip, morning digest). Read only. Jump height and the mid-thigh pull count when VALD has them.
  */
 export async function loadTeamGoalTestsDue(sb: Sb, teamId: string, todayIso: string): Promise<GoalTestDue[]> {
   const cands = (await teamGoalTestCandidates(sb, teamId, addDays(todayIso, -RESULT_AFTER_END_DAYS)))
@@ -146,9 +197,7 @@ export async function loadTeamGoalTestsDue(sb: Sb, teamId: string, todayIso: str
   if (!cands.length) return [];
   const coach = await goalResultsForPlans(sb, cands.map((p) => p.id));
   const out = await Promise.all(cands.map(async (p) => {
-    const vald = p.quality === "jump" && p.start_date && p.end_date
-      ? await valdJumpResults(sb, p.player_id, p.start_date, p.end_date, todayIso).catch(() => [] as GoalResult[])
-      : [];
+    const vald = p.start_date && p.end_date ? await valdGoalResults(sb, p.quality, p.player_id, p.start_date, p.end_date, todayIso) : [];
     return buildGoalTestDue(p, [...vald, ...(coach.get(p.id) ?? [])], todayIso);
   }));
   return out.filter((x): x is GoalTestDue => !!x)

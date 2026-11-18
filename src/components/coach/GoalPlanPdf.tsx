@@ -9,7 +9,7 @@
  */
 
 import { Document, Text, View } from "@react-pdf/renderer";
-import type { Bi, GoalPlan } from "@/lib/micropulse/goalPlan/types";
+import { isGymQuality, type Bi, type GoalPlan } from "@/lib/micropulse/goalPlan/types";
 import { QUALITY_LABEL } from "@/lib/micropulse/goalPlan/common";
 import { LEVEL_LABEL } from "@/lib/micropulse/goalPlan/levels";
 import { SWAPPED_BY_COACH } from "@/lib/micropulse/goalPlan/swaps";
@@ -69,7 +69,9 @@ export function GoalPlanDoc({ d, lang }: { d: GoalPlanPdfData; lang: Lang }) {
           tone: (main.read === "clearer" ? "cobalt" : main.read === "worse" ? "amber" : undefined) as Tone | undefined,
         }
       : null,
-    { value: `${plan.sessionsPerWeek}×`, label: T("Sessions a week", "Æfingar á viku"), sub: T("Add-on to team training", "Viðbót við æfingar liðsins") },
+    isGymQuality(plan.quality)
+      ? { value: `${plan.sessionsPerWeek}×`, label: T("Goal days a week", "Markmiðsdagar á viku"), sub: T("Inside the team strength session", "Inni í styrktaræfingu liðsins") }
+      : { value: `${plan.sessionsPerWeek}×`, label: T("Sessions a week", "Æfingar á viku"), sub: T("Add-on to team training", "Viðbót við æfingar liðsins") },
   ].filter((f): f is NonNullable<typeof f> => !!f);
 
   return (

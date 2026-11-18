@@ -23,7 +23,7 @@
  */
 
 import type { AppliedAdaptation, ExerciseCategory, PlayerStrengthSnapshot, PrescribedExercise, SessionBlock } from "./types";
-import type { GoalQuality } from "@/lib/micropulse/goalPlan/types";
+import { isGymQuality, type GoalQuality, type GoalSessionSlot } from "@/lib/micropulse/goalPlan/types";
 import { EXERCISES_BY_ID } from "./exerciseLibrary";
 import { goalSeasonOf } from "./playerGoal";
 
@@ -49,6 +49,8 @@ export type GoalPlanGymLift = {
 export type GoalPlanGym = {
   planId: string;
   quality: GoalQuality;
+  /** The plan session merged today: B for the pitch goals; A or B for the gym-only goals (2026-11-18). Absent = B. */
+  slot?: GoalSessionSlot;
   week: number;
   weeksTotal: number;
   labelEN: string;
@@ -124,14 +126,20 @@ export function applyGoalPlanGym(
   const g = snap.goalPlanGym;
   if (!g || !g.lifts.length) return [];
   const q = QUALITY_NAME[g.quality];
-  const trigEN = `8-week goal: ${q.en}, week ${g.week} of ${g.weeksTotal}, session B (gym)`;
-  const trigIS = `8 vikna markmið: ${q.is}, vika ${g.week} af ${g.weeksTotal}, æfing B (salur)`;
+  const slot = g.slot ?? "B";
+  // Gym-only goals have no pitch session: their two goal days are "goal day 1 / 2" (A / B).
+  const gymOnly = isGymQuality(g.quality);
+  const part = gymOnly
+    ? { en: `goal day ${slot === "A" ? 1 : 2}`, is: `markmiðsdagur ${slot === "A" ? 1 : 2}` }
+    : { en: `session ${slot} (gym)`, is: `æfing ${slot} (salur)` };
+  const trigEN = `8-week goal: ${q.en}, week ${g.week} of ${g.weeksTotal}, ${part.en}`;
+  const trigIS = `8 vikna markmið: ${q.is}, vika ${g.week} af ${g.weeksTotal}, ${part.is}`;
   const kept = (en: string, is: string): AppliedAdaptation[] => [{
     ruleId: "GOAL_PLAN_GYM_KEPT_APART",
     triggerEN: trigEN,
     triggerIS: trigIS,
-    actionEN: `Session B stays on the goal card: ${en}.`,
-    actionIS: `Æfing B er áfram á markmiðsspjaldinu: ${is}.`,
+    actionEN: `${gymOnly ? "The goal's lifts stay" : `Session ${slot} stays`} on the goal card: ${en}.`,
+    actionIS: `${gymOnly ? "Lyftur markmiðsins eru áfram" : `Æfing ${slot} er áfram`} á markmiðsspjaldinu: ${is}.`,
     evidence: GOAL_PLAN_GYM_EVIDENCE,
   }];
 
@@ -203,7 +211,7 @@ export function applyGoalPlanGym(
         intraRepRestSec: null,
         cue: step.lift.cue ?? undefined,
       },
-      goalPlan: { quality: g.quality, week: g.week },
+      goalPlan: { quality: g.quality, week: g.week, slot },
       modificationReason: `${tag.en}${base && base.exerciseId !== lib.id ? ` — in place of ${base.nameEN}` : base ? "" : " — added"} · the goal's own dose${yellow ? " · yellow day: half the sets" : ""}`,
     };
     if (step.at) blocks[step.at.b].exercises[step.at.i] = ex;

@@ -32,10 +32,10 @@ export const isGymQuality = (q: GoalQuality): q is GymQuality => (GYM_ONLY_QUALI
 export const isPitchQuality = (q: GoalQuality): q is PitchQuality => (PITCH_QUALITIES as string[]).includes(q);
 
 /**
- * The goals a player can ask for or a coach can start today. The gym-only goals are a coach preview until their
- * delivery ships (step 2 of the 2026-11-18 plan: database checks, placement, merge into the strength session).
+ * The goals a player can ask for or a coach can start today: all seven since the gym-only goals' delivery shipped
+ * (step 2 of the 2026-11-18 plan: database checks, placement, merge into the strength session, tests).
  */
-export const OPEN_GOAL_QUALITIES: GoalQuality[] = [...PITCH_QUALITIES];
+export const OPEN_GOAL_QUALITIES: GoalQuality[] = [...GOAL_QUALITIES];
 export const isOpenGoalQuality = (x: unknown): x is GoalQuality => typeof x === "string" && (OPEN_GOAL_QUALITIES as string[]).includes(x);
 
 export type GoalSport = "football" | "basketball" | "other";
