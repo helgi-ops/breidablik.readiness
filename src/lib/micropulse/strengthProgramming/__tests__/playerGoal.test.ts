@@ -293,10 +293,11 @@ describe("season: the extra set is building, so only in pre-season and off-seaso
     const s = applyBlockToSession(buildStrengthSession(snap({ playerStrengthGoal: "stronger" })), "accum", "offseason")!;
     const [g] = goalEx(s);
     expect(g).toBeDefined();
-    // Same sets as the Accumulation session without a goal: one extra set, from the goal instead of the block.
-    expect(g.dose.sets).toBe(sets(base, g.exerciseId));
     const plain = buildStrengthSession(snap())!;
+    // One extra set, from the goal, never a second one from the block.
     expect(g.dose.sets).toBe(sets(plain, g.exerciseId)! + 1);
+    // Since the week rule (2026-11-19) the block adds no set to a heavy lift either: the week's heavy sets are fixed.
+    expect(sets(base, g.exerciseId)).toBe(g.dose.weekRule ? sets(plain, g.exerciseId) : g.dose.sets);
   });
 
   it("microdose: no goal set on a day the player's data already added an exercise", () => {

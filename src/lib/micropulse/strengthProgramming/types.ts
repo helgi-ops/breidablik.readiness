@@ -58,6 +58,9 @@ export type ExerciseDose = {
   velocityLossCap?: VelocityLossCap;
   /** Coaching cue / focus point. */
   cue?: string;
+  /** The sets were set by the week rule (weekRule.ts): the week's heavy sets are fixed, so the block's extra set
+   *  is not added on top. Rides on the dose so it survives the team-list substitution (which keeps the dose). */
+  weekRule?: true;
 };
 
 /** A canonical exercise in the library. */

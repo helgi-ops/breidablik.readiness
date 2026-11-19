@@ -72,9 +72,15 @@ describe("the engine", () => {
     expect(Object.values(s.mdStructures ?? {})).not.toContain("rest");
   });
 
-  it("unchanged: unset day, a match near (or a hand-picked day), standard mode, basketball", () => {
-    const base = buildStrengthSession(snap({ todayIso: addDays(MON, 5) }));
-    expect(buildStrengthSession(nm(addDays(MON, 5)))).toEqual({ ...base, appliedAdaptations: base!.appliedAdaptations });
+  it("unchanged: a team with no weekday plan, a match near (or a hand-picked day), standard mode, basketball", () => {
+    // No weekday plan at all → the day is built as before (the MD-3 default).
+    const base = buildStrengthSession(snap({ todayIso: addDays(MON, 5), noMatchNearby: true }));
+    expect(buildStrengthSession(snap({ todayIso: addDays(MON, 5), noMatchNearby: true, noMatchWeek: {} }))).toEqual(base);
+    expect(rule(base, "WEEK_RULE_HEAVY_SETS")).toBeUndefined();
+    // A weekday the plan leaves out (Saturday) is a light day since the week rule (2026-11-19); before, a full MD-3 session.
+    const sat = buildStrengthSession(nm(addDays(MON, 5)))!;
+    expect(sat.mdContext).toBe("MD-2");
+    expect(rule(sat, "WEEK_RULE_LIGHT_DAY")?.triggerEN).toMatch(/not in the weekday plan/);
     // A match near: noMatchNearby is absent → the MD day stands.
     expect(buildStrengthSession(snap({ noMatchWeek: WEEK }))).toEqual(buildStrengthSession(snap()));
     // Standard mode: the team's own programme, no weekday plan.

@@ -93,7 +93,8 @@ export function applyBlockToSession(
     if (delta === "none" || !VOLUME_TYPES.has(b.type)) return b;
     const exercises = b.exercises.map((ex) => {
       // Microdose: never more than +1 set on an exercise. The player's goal already added one (2026-11-17).
-      if (delta === "add" && (ex.playerGoal || ex.goalPlan)) return ex;
+      // Nor on a lift whose sets the week rule set: the week's heavy sets are fixed (2026-11-19).
+      if (delta === "add" && (ex.playerGoal || ex.goalPlan || ex.dose.weekRule)) return ex;
       const before = ex.dose.sets;
       const after =
         delta === "halve" ? clampSets(before / 2)
