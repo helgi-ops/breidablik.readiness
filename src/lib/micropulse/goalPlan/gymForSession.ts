@@ -14,7 +14,7 @@ import { PLAN_WEEKS } from "./common";
 import { rxContextOf, withRx, type LiftRx } from "./liftRx";
 import { placementFor, planWeekOn, type TeamCalendar } from "./today";
 import { swapMark } from "./swaps";
-import { isGymQuality, type GoalBlock, type GoalPlan, type GoalQuality } from "./types";
+import { isGymQuality, type GoalBlock, type GoalPlan, type GoalQuality, type GoalSession, type GoalSessionSlot } from "./types";
 import type { GoalGymProfile, GoalPlanGym, GoalPlanGymLift } from "@/lib/micropulse/strengthProgramming/goalPlanGym";
 
 /** A pull swap names its lift (Programme Library, lota 6). */
@@ -22,24 +22,45 @@ const PULL_ID: Record<string, string> = { jump_shrug: "ex_jump_shrug", hang_high
 
 const GYM_PROFILES = new Set<GoalGymProfile>(["heavy", "technique", "rdl", "jump_squat", "pull", "nordic", "eccentric", "squat_fast", "youth"]);
 
+/** The rest line in the engine's own form ("3 min", "90s", "90s–2 min"); null when it gives no time (Nordic: the
+ *  partner's set). Seconds were missed before 2026-11-18, so the braking split squat got the default 2 min, not 90 s. */
+function restOf(en: string): string | null {
+  const both = /(\d+) s–(\d+(?:–\d+)?) min/.exec(en);
+  if (both) return `${both[1]}s–${both[2]} min`;
+  const min = /(\d+(?:–\d+)?) min/.exec(en)?.[1];
+  if (min) return `${min} min`;
+  const sec = /(\d+) s\b/.exec(en)?.[1];
+  return sec ? `${sec}s` : null;
+}
+
 function liftOf(b: GoalBlock, rx: LiftRx): GoalPlanGymLift | null {
   if (!GYM_PROFILES.has(rx.profile as GoalGymProfile)) return null;
   const profile = rx.profile as GoalGymProfile;
   const doseEn = b.dose.en;
   const loadEn = rx.rows.load?.text.en ?? "";
   const pct = /(\d+(?:–\d+)?)% of (?:the squat |your )?max/.exec(doseEn)?.[1] ?? /(\d+(?:–\d+)?)% of (?:the squat |your )?max/.exec(loadEn)?.[1] ?? null;
-  const rir = /(\d+(?:–\d+)?) reps? in reserve/.exec(doseEn)?.[1] ?? null;
+  const rir = /(\d+(?:–\d+)?) reps? in reserve/.exec(doseEn)?.[1] ?? /could lift (\d+(?:–\d+)?) more times/.exec(loadEn)?.[1] ?? null;
   const ms = /about (\d\.\d) m\/s/.exec(doseEn)?.[1] ?? null;
-  // "Bodyweight" is the engine's own word (exerciseLibrary); without it the body-weight jump squats showed no load.
-  const intensity = pct ? `${pct}% 1RM` : rir ? `RIR ${rir}` : ms ? `${ms} m/s` : /body weight/.test(doseEn) ? "Bodyweight" : null;
-  const restMin = /(\d+(?:–\d+)?) min/.exec(rx.rows.rest?.text.en ?? "")?.[1] ?? null;
+  // "Bodyweight" is the engine's own word (exerciseLibrary); without it the body-weight jump squats showed no load. The
+  // load line is read too (2026-11-18): the braking split squat ("Body weight or light dumbbells") showed no load.
+  const sameAs = /the same weight as (last week|last time or less)/i.exec(loadEn)?.[1] ?? null;
+  const intensity = pct ? `${pct}% 1RM`
+    : rir ? `RIR ${rir}`
+    : ms ? `${ms} m/s`
+    : /^Body weight or light dumbbells/.test(loadEn) ? "Bodyweight or light DBs"
+    : /body weight/i.test(doseEn) || /^Body weight\b/.test(loadEn) ? "Bodyweight"
+    // A light week with no number in the plan (the fast squat's week 7): the load is last week's.
+    : sameAs ? `Same weight as ${sameAs}`
+    : null;
   const eachLeg = /each leg/.test(doseEn);
   const down = /(\d+) s down/.exec(doseEn)?.[1] ?? null;
   const weaker = /a 4th set on the (left|right) leg/.exec(doseEn)?.[1] ?? null;
+  const same = sameAs && intensity !== `Same weight as ${sameAs}` ? sameAs : null;
   const cue = [
     profile === "jump_squat" || profile === "pull" || profile === "squat_fast" ? "as fast as possible" : null,
     down ? `${down} s down` : null,
     weaker ? `4th set on the ${weaker} leg` : null,
+    same ? `same weight as ${same}` : null,
   ].filter(Boolean).join(" · ") || null;
   const swap = swapMark(b)?.option;
   return {
@@ -50,9 +71,18 @@ function liftOf(b: GoalBlock, rx: LiftRx): GoalPlanGymLift | null {
     sets: rx.sets,
     reps: eachLeg ? `${rx.reps} each leg` : rx.reps,
     intensity,
-    rest: restMin ? `${restMin} min` : null,
+    rest: restOf(rx.rows.rest?.text.en ?? ""),
     cue,
   };
+}
+
+/** The gym lifts of one plan session (week · slot), or null when it holds none. */
+export function gymLiftsOf(plan: GoalPlan, week: number, slot: GoalSessionSlot): { session: GoalSession; lifts: GoalPlanGymLift[] } | null {
+  const sessions = withRx({ weeks: [{ sessions: plan.weeks.find((w) => w.week === week)?.sessions ?? [] }] }, rxContextOf(plan)).weeks[0].sessions;
+  const session = sessions.find((s) => s.slot === slot);
+  if (!session) return null;
+  const lifts = session.blocks.flatMap((blk) => (blk.rx ?? []).map((rx) => liftOf(blk, rx))).filter((l): l is GoalPlanGymLift => !!l);
+  return lifts.length ? { session, lifts } : null;
 }
 
 /** Today's goal-session gym lifts, or null (no plan running, no gym session today, or it holds no gym lift). */
@@ -71,11 +101,9 @@ export function goalPlanGymFor(args: {
   const gymOnly = isGymQuality(quality);
   const placed = placementFor(plan, quality, startDate, todayIso, args.cal)?.placed.find((p) => p.date === todayIso && (gymOnly || p.slot === "B")) ?? null;
   if (!placed) return null;
-  const sessions = withRx({ weeks: [{ sessions: plan.weeks.find((w) => w.week === week)?.sessions ?? [] }] }, rxContextOf(plan)).weeks[0].sessions;
-  const b = sessions.find((s) => s.slot === placed.slot);
-  if (!b) return null;
-  const lifts = b.blocks.flatMap((blk) => (blk.rx ?? []).map((rx) => liftOf(blk, rx))).filter((l): l is GoalPlanGymLift => !!l);
-  if (!lifts.length) return null;
+  const read = gymLiftsOf(plan, week, placed.slot);
+  if (!read) return null;
+  const { session: b, lifts } = read;
   return {
     planId: args.planId,
     quality,

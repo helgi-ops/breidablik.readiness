@@ -438,13 +438,30 @@ function upperPool(snap: PlayerStrengthSnapshot, trace?: AdaptationTrace): strin
  *  → MAINTENANCE (1 lift, ≤2 sets, at the end — keeps upper strength without adding
  *  fatigue). Taper days (MD-2/1/+1) and an empty upper palette → nothing. Mutates
  *  `blocks`. */
-function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot, md1Tier: Md1Tier | null = null, trace?: AdaptationTrace): AppliedAdaptation[] {
+type UpperPlan = { block: SessionBlock; primary: boolean; audit: AppliedAdaptation[] };
+
+/** Puts a built upper-body block in the session (`buildUpperBody`). Mutates `blocks`. */
+function appendUpperBody(blocks: SessionBlock[], upper: UpperPlan | null): AppliedAdaptation[] {
+  if (!upper || upper.block.exercises.length === 0) return [];
+  if (upper.primary) {
+    const idx = blocks.findIndex((b) => b.type === "POSTERIOR" || b.type === "ADDUCTOR");
+    if (idx >= 0) blocks.splice(idx, 0, upper.block);
+    else blocks.push(upper.block);
+  } else {
+    blocks.push(upper.block);
+  }
+  return upper.audit;
+}
+
+/** The upper-body block, built before the goal-plan merge (2026-11-18) so a lower-body goal lift can take one of its
+ *  spots; put in the session later by `appendUpperBody`, after the coach's swaps, as before. */
+function buildUpperBody(snap: PlayerStrengthSnapshot, md1Tier: Md1Tier | null = null, trace?: AdaptationTrace): UpperPlan | null {
   const upperPicks = upperPool(snap, trace);
   // MD-4 / MD-3 are strength days; on MD+1 the LOW tier (DNP / < 30 min) is a
   // rebuild day, so it takes the same season-gated upper add.
   const strengthDay = snap.mdContext === "MD-4" || snap.mdContext === "MD-3"
     || (snap.mdContext === "MD+1" && md1Tier === "low");
-  if (upperPicks.length === 0 || !strengthDay) return [];
+  if (upperPicks.length === 0 || !strengthDay) return null;
 
   const isBasketball = String(snap.sport ?? "").toLowerCase() === "basketball";
   const isPreseason = String(snap.seasonPhase ?? "").toLowerCase() === "preseason";
@@ -465,7 +482,7 @@ function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot, m
       ...(mine ? { playerPick: true as const, modificationReason: "Player's pick from the team list" } : {}),
     });
   }
-  if (exercises.length === 0) return [];
+  if (exercises.length === 0) return null;
 
   const titleEN = tier === "primary" ? "Upper body (primary)" : tier === "accessory" ? "Upper body (accessory)" : "Upper body (maintenance)";
   const titleIS = tier === "primary" ? "Efri líkami (aðal)" : tier === "accessory" ? "Efri líkami (auka)" : "Efri líkami (viðhald)";
@@ -481,14 +498,6 @@ function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot, m
   const block: SessionBlock = { id: "upper-body", titleEN, titleIS, type: "ACCESSORY", exercises, noteEN, noteIS };
   const picked = exercises.filter((e) => e.playerPick).map((e) => e.exerciseId);
 
-  if (tier === "primary") {
-    const idx = blocks.findIndex((b) => b.type === "POSTERIOR" || b.type === "ADDUCTOR");
-    if (idx >= 0) blocks.splice(idx, 0, block);
-    else blocks.push(block);
-  } else {
-    blocks.push(block);
-  }
-
   const triggerEN = tier === "primary" ? `Basketball — upper body is primary (${snap.mdContext})`
     : tier === "accessory" ? `Football pre-season — upper-body accessory (${snap.mdContext})`
     : `Football in-season — light upper-body maintenance (${snap.mdContext})`;
@@ -496,14 +505,14 @@ function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot, m
     : tier === "accessory" ? `Fótbolti undirbúningstímabil — efri-líkama auki (${snap.mdContext})`
     : `Fótbolti keppnistímabil — létt efri-líkama viðhald (${snap.mdContext})`;
 
-  return [...(picked.length ? [playerPickAudit(picked)] : []), {
+  return { block, primary: tier === "primary", audit: [...(picked.length ? [playerPickAudit(picked)] : []), {
     ruleId: "UPPER_BODY_ADDED",
     triggerEN,
     triggerIS,
     actionEN: `Added an upper-body ${tier} block from the team palette (${exercises.length} exercise${exercises.length === 1 ? "" : "s"}).`,
     actionIS: `Bætti við efri-líkama ${tier === "primary" ? "aðal" : tier === "accessory" ? "auka" : "viðhalds"} blokk úr palette liðsins (${exercises.length} æfing${exercises.length === 1 ? "" : "ar"}).`,
     evidence: "Sport + season-phase context: primary for basketball, a pre-season accessory and a light in-season maintenance dose for football.",
-  }];
+  }] };
 }
 
 /** MD+1 HIGH tier (played ≥ 60 min): the upper body is FRESH while the lower body
@@ -780,8 +789,14 @@ function buildStrengthSessionCore(
   // After the team list (which keeps the template dose), before the coach's manual swaps (coach's last word).
   // The player's 8-week goal plan, session B (gym): in pre-/off-season its lifts take the place of the matching team
   // exercises on the day the plan places it. Before the strength goal, so that +1 set skips a goal-plan lift.
+  // The upper-body block is built here (it reads only the team list, the picks and today's safety rules) so the goal's
+  // lower-body lift can take one of its spots; it is put in the session further down, after the coach's swaps.
+  // MD+1 HIGH (played 60+) has its own upper block; a red / hold day has none.
+  const upper = individualised && md1Tier !== "high" && snap.verdict !== "RECOVERY" && snap.verdict !== "HOLD"
+    ? buildUpperBody(snap, md1Tier, trace)
+    : null;
   if (individualised) {
-    audit.push(...applyGoalPlanGym(tmpl.blocks, snap, (id) => safetyRulesOut(id, trace), (id) => trace.pinned.has(id)));
+    audit.push(...applyGoalPlanGym(tmpl.blocks, snap, (id) => safetyRulesOut(id, trace), (id) => trace.pinned.has(id), upper ? [upper.block] : []));
   }
   if (individualised) {
     audit.push(...applyPlayerGoal(tmpl.blocks, snap, (id) => safetyRulesOut(id, trace), (id) => trace.pinned.has(id)));
@@ -846,15 +861,11 @@ function buildStrengthSessionCore(
     if (md1Tier === "high") {
       // HOLD still strips (Rule 10); RECOVERY at 60+ min keeps the fresh-upper add.
       if (snap.verdict !== "HOLD") audit.push(...appendMdPlus1UpperStrength(tmpl.blocks, snap, trace));
-    } else if (md1Tier === "low") {
-      // A DNP / <30 min player flagged RECOVERY/HOLD for a non-load reason (illness
-      // etc.) is genuinely recovery-stripped — don't add an upper block on top.
-      if (snap.verdict !== "RECOVERY" && snap.verdict !== "HOLD") {
-        audit.push(...appendUpperBody(tmpl.blocks, snap, md1Tier, trace));
-      }
-    } else if (snap.verdict !== "RECOVERY" && snap.verdict !== "HOLD") {
-      // Red check-in = warm-up and mobility only: no upper-body lift either (coach's call, 2026-11-18).
-      audit.push(...appendUpperBody(tmpl.blocks, snap, md1Tier, trace));
+    } else {
+      // Built above (`upper`). MD+1 LOW: a DNP / <30 min player flagged RECOVERY/HOLD for a non-load reason (illness
+      // etc.) is genuinely recovery-stripped — no upper block on top. Red check-in = warm-up and mobility only: no
+      // upper-body lift either (coach's call, 2026-11-18).
+      audit.push(...appendUpperBody(tmpl.blocks, upper));
     }
   }
 

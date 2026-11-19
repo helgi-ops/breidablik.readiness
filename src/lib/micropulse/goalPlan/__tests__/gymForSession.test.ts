@@ -171,6 +171,76 @@ describe("into the strength session", () => {
     expect(all(s).find((e) => e.exerciseId === "ex_trap_bar_jump_squat")?.goalPlan).toBeTruthy();
   });
 
+  // 2026-11-18 demo: the plan's 4-set jump squat took a 2-set contrast spot → the session grew 23 → 26 sets.
+  it("never more sets than the team exercise it takes the place of: the session never grows", () => {
+    const sets = (s: S) => all(s).reduce((n, e) => n + e.dose.sets, 0);
+    const pal = { ...PALETTE, power_explosive: ["ex_box_jump", "ex_trap_bar_jump_squat", "ex_mb_rotational_throw"] };
+    let cappedSeen = false;
+    for (const q of ["acceleration", "top_speed", "jump", "explosive", "max_strength", "strength_power"] as GoalQuality[]) {
+      const { gym: g } = gymFor(q);
+      if (!g) continue;
+      for (const md of ["MD-4", "MD-3"] as MdContext[]) {
+        for (const key of ["french_contrast", "contrast", "straight_sets", "cluster_max_strength"] as const) {
+          const o = { mdContext: md, mdStructures: { [md]: key }, teamPalette: pal };
+          const base = buildStrengthSession(snap(o));
+          const s = buildStrengthSession(withGoalPlanGym(snap(o), g));
+          if (!rule(s, "GOAL_PLAN_GYM_MERGED")) continue;
+          const added = all(s).length - all(base).length;
+          if (added === 0) expect(sets(s), `${q} ${md} ${key}`).toBeLessThanOrEqual(sets(base));
+          for (const e of all(s).filter((x) => x.goalPlan && /the team's \d sets/.test(x.modificationReason ?? ""))) {
+            cappedSeen = true;
+            expect(e.dose.sets).toBeGreaterThanOrEqual(1);
+          }
+        }
+      }
+    }
+    expect(cappedSeen).toBe(true);
+    // The reason says so, with the plan's own number.
+    const s = buildStrengthSession(withGoalPlanGym(snap({ mdStructures: { "MD-4": "french_contrast" }, teamPalette: pal }), gym!));
+    const r = rule(s, "GOAL_PLAN_GYM_MERGED");
+    if (all(s).some((e) => e.goalPlan && /the team's/.test(e.modificationReason ?? ""))) {
+      expect(r?.actionEN).toMatch(/sets as the team's exercise; the plan says/);
+      expect(r?.actionIS).toMatch(/sett eins og æfing liðsins; áætlunin segir/);
+    }
+  });
+
+  it("braking: the split squat takes a spot — a single-leg lift, else the second upper-body exercise, else the main lift; never added", () => {
+    const { gym: g } = gymFor("braking");
+    // Two upper-body exercises (as Breiðablik's accessory block): the dumbbell one goes, the barbell press stays.
+    const two = { ...PALETTE, unilateral_strength: [] as string[], upper_body: ["ex_db_bench_press", "ex_bb_bench_press"] };
+    let sawUpper = false;
+    let sawMain = false;
+    for (const md of ["MD-4", "MD-3"] as MdContext[]) {
+      // Pre-season: the upper-body accessory block takes two lifts from the list (one when the list has one).
+      for (const pal of [two, { ...PALETTE, unilateral_strength: [] as string[] }]) {
+        const o = { mdContext: md, teamPalette: pal, seasonPhase: "preseason" };
+        const base = buildStrengthSession(snap(o));
+        const s = buildStrengthSession(withGoalPlanGym(snap(o), g!));
+        if (!rule(s, "GOAL_PLAN_GYM_MERGED")) continue;
+        expect(all(s).length, md).toBe(all(base).length);
+        expect(rule(s, "GOAL_PLAN_GYM_MERGED")!.actionEN).not.toMatch(/added/);
+        const split = all(s).find((e) => e.goalPlan)!;
+        expect(split.exerciseId).toMatch(/split_squat|_ss$/);
+        expect(split.dose.intensity).toBe("Bodyweight or light DBs");
+        expect(split.dose.rest).toBe("90s");
+        const upperBase = all(base).filter((e) => e.category === "UPPER_BODY");
+        const upperNow = all(s).filter((e) => e.category === "UPPER_BODY");
+        if (upperBase.length >= 2) {
+          sawUpper = true;
+          expect(upperNow.length).toBe(upperBase.length - 1);
+          expect(upperNow.some((e) => e.exerciseId.startsWith("ex_bb_"))).toBe(true);
+          // The heavy lift and the contrast stay as the team's.
+          expect(all(s).filter((e) => e.category === "COMPOUND_STRENGTH").length).toBe(all(base).filter((e) => e.category === "COMPOUND_STRENGTH").length);
+        } else if (!all(base).some((e) => e.category === "UNILATERAL_STRENGTH")) {
+          sawMain = true;
+          expect(all(s).filter((e) => e.category === "COMPOUND_STRENGTH").length).toBe(all(base).filter((e) => e.category === "COMPOUND_STRENGTH").length - 1);
+        }
+      }
+    }
+    expect(sawUpper).toBe(true);
+    expect(sawMain).toBe(true);
+  });
+
   it("a structure with no heavy lift (isometric / primer) takes nothing: B stays on the goal card, with the reason", () => {
     for (const [md, key] of [["MD-4", "overcoming_isometric"], ["MD-4", "yielding_isometric"], ["MD-3", "iso_pap_primer"], ["MD-3", "potentiation_cluster"], ["MD-3", "power_contrast"]] as const) {
       const base = buildStrengthSession(snap({ mdContext: md, mdStructures: { [md]: key } }));

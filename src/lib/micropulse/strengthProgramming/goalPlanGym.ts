@@ -16,7 +16,8 @@
  *   - In season → nothing here; the plan stays its own card.
  *   - Never more than +1 set: the strength goal's extra set and the Accumulation +1 skip a goal-plan exercise.
  *   - The day's structure ("Structure per MD day") is the frame, the goal keeps its own dose (2026-11-17): a goal lift
- *     takes the plan's sets / reps / % / rest and nothing else from the slot (no cluster rest, no velocity cap). A day
+ *     takes the plan's sets / reps / % / rest and nothing else from the slot (no cluster rest, no velocity cap) — but
+ *     never more sets than the exercise it takes the place of (2026-11-18), so the session never grows. A day
  *     whose structure has no heavy lift (isometric, primer, taper) takes nothing: session B stays on the goal card.
  *
  * Runs after the team list and before the player's strength goal and the coach's manual swaps (coach's last word).
@@ -76,35 +77,58 @@ const SQUAT_FAMILY = new Set(["ex_back_squat", "ex_front_squat", "ex_trap_bar_dl
 const SPLIT_FAMILY = new Set(["ex_bulgarian_ss", "ex_ffe_split_squat"]);
 const HINGE_FAMILY = new Set(["ex_rdl", "ex_b_stance_rdl", "ex_single_leg_rdl"]);
 
+type Match = (ex: PrescribedExercise) => boolean;
 type Target = {
-  /** Which team exercise this lift takes the place of. */
-  matches: (ex: PrescribedExercise) => boolean;
-  /** Among those, the one of the same kind first (a jump squat takes the loaded-jump spot, not the box jump's), so
-   *  the lift never ends up twice in the session. */
-  prefer?: (ex: PrescribedExercise) => boolean;
+  /** Which team exercise this lift takes the place of, best first. Every lift tries its first choice before any lift
+   *  takes a second choice, so a later lift's own slot is never taken by an earlier lift's fallback. The first choice
+   *  is the same kind (a jump squat takes the loaded-jump spot, not the box jump's), so a lift never ends up twice. */
+  tiers: Match[];
   /** Keep the team's exercise when it already is one of these; otherwise this library lift. */
   keep: (id: string) => boolean;
   fallbackId: string;
   power: boolean;
 };
 
-function targetFor(l: GoalPlanGymLift): Target {
+const isPower: Match = (e) => POWER_CATS.includes(e.category);
+
+/** @param spareUpper  the session's second upper-body exercise, when it has two or more (null otherwise) */
+function targetFor(l: GoalPlanGymLift, spareUpper: PrescribedExercise | null): Target {
   switch (l.profile) {
     case "jump_squat":
-      return { matches: (e) => POWER_CATS.includes(e.category), prefer: (e) => e.exerciseId === "ex_trap_bar_jump_squat" || e.category === "BALLISTIC", keep: (id) => id === "ex_trap_bar_jump_squat", fallbackId: "ex_trap_bar_jump_squat", power: true };
+      return { tiers: [(e) => isPower(e) && (e.exerciseId === "ex_trap_bar_jump_squat" || e.category === "BALLISTIC"), isPower], keep: (id) => id === "ex_trap_bar_jump_squat", fallbackId: "ex_trap_bar_jump_squat", power: true };
     case "pull": {
       const id = l.preferId && EXERCISES_BY_ID.has(l.preferId) ? l.preferId : "ex_hang_high_pull";
-      return { matches: (e) => POWER_CATS.includes(e.category), prefer: (e) => e.exerciseId === id || e.category === "EXPLOSIVE_OLYMPIC", keep: (x) => x === id, fallbackId: id, power: true };
+      return { tiers: [(e) => isPower(e) && (e.exerciseId === id || e.category === "EXPLOSIVE_OLYMPIC"), isPower], keep: (x) => x === id, fallbackId: id, power: true };
     }
     case "eccentric":
-      return { matches: (e) => e.category === "UNILATERAL_STRENGTH" && !HINGE_FAMILY.has(e.exerciseId), keep: (id) => SPLIT_FAMILY.has(id), fallbackId: "ex_bulgarian_ss", power: false };
+      // The braking goal's slow-lowering split squat (2026-11-18, the coach's choice): a single-leg lift's spot first;
+      // with none, the second of two upper-body exercises (the contrast and the heavy lift stay as they are); with
+      // neither, the main lift. Before, it was added on top (+3 sets) at the end of the contrast block.
+      return {
+        tiers: [
+          (e) => e.category === "UNILATERAL_STRENGTH" && !HINGE_FAMILY.has(e.exerciseId),
+          (e) => spareUpper != null && e === spareUpper,
+          (e) => e.category === "COMPOUND_STRENGTH",
+        ],
+        keep: (id) => SPLIT_FAMILY.has(id),
+        fallbackId: "ex_bulgarian_ss",
+        power: false,
+      };
     case "rdl":
-      return { matches: (e) => HINGE_FAMILY.has(e.exerciseId), keep: (id) => id === "ex_rdl", fallbackId: "ex_rdl", power: false };
+      return { tiers: [(e) => HINGE_FAMILY.has(e.exerciseId)], keep: (id) => id === "ex_rdl", fallbackId: "ex_rdl", power: false };
     case "nordic":
-      return { matches: (e) => e.exerciseId === "ex_nordic_curl", keep: (id) => id === "ex_nordic_curl", fallbackId: "ex_nordic_curl", power: false };
+      return { tiers: [(e) => e.exerciseId === "ex_nordic_curl"], keep: (id) => id === "ex_nordic_curl", fallbackId: "ex_nordic_curl", power: false };
     default: // heavy, technique, squat_fast, youth → the main two-leg lift
-      return { matches: (e) => e.category === "COMPOUND_STRENGTH", keep: (id) => SQUAT_FAMILY.has(id), fallbackId: "ex_trap_bar_dl", power: false };
+      return { tiers: [(e) => e.category === "COMPOUND_STRENGTH"], keep: (id) => SQUAT_FAMILY.has(id), fallbackId: "ex_trap_bar_dl", power: false };
   }
+}
+
+/** The upper-body exercise a lower-body goal lift may take the place of: only when the session has two or more, and
+ *  then the accessory one (not a barbell lift), so the main press stays. */
+function spareUpperOf(blocks: SessionBlock[]): PrescribedExercise | null {
+  const upper = blocks.flatMap((b) => b.exercises).filter((e) => e.category === "UPPER_BODY");
+  if (upper.length < 2) return null;
+  return upper.find((e) => !e.exerciseId.startsWith("ex_bb_")) ?? upper[upper.length - 1];
 }
 
 /** First number of "3–4" (the lower end: microdose), never under 1. */
@@ -116,12 +140,15 @@ function setsOf(s: string): number {
 /**
  * @param isRuledOut  today's safety rules rule this exercise out (banned / not suitable today)
  * @param isPinned    a safety rule put this exercise here (a safety swap) — never replaced
+ * @param later       blocks the engine puts in the session after this step (the upper-body block): a lift may take a
+ *                    spot in them (mutated in place), never anything else
  */
 export function applyGoalPlanGym(
   blocks: SessionBlock[],
   snap: PlayerStrengthSnapshot,
   isRuledOut: (id: string) => boolean,
   isPinned: (id: string) => boolean,
+  later: SessionBlock[] = [],
 ): AppliedAdaptation[] {
   const g = snap.goalPlanGym;
   if (!g || !g.lifts.length) return [];
@@ -156,31 +183,40 @@ export function applyGoalPlanGym(
 
   // Plan every lift first (all or nothing), then write.
   type Step = { lift: GoalPlanGymLift; at: { b: number; i: number } | null; id: string; power: boolean };
-  const used = new Set<string>(); // "b:i" already taken by an earlier lift
+  const used = new Set<string>(); // "b:i" already taken by another lift
   const steps: Step[] = [];
-  for (const lift of g.lifts) {
-    const t = targetFor(lift);
-    let at: Step["at"] = null;
-    for (const pass of t.prefer ? [t.prefer, null] : [null]) {
-      for (let b = 0; b < blocks.length && !at; b++) {
-        for (let i = 0; i < blocks[b].exercises.length; i++) {
-          const ex = blocks[b].exercises[i];
-          if (used.has(`${b}:${i}`) || !t.matches(ex) || (pass && !pass(ex))) continue;
-          at = { b, i };
+  // Spots are looked for in today's blocks and in the blocks still to come (indexes past `blocks` are `later`).
+  const pool = [...blocks, ...later];
+  const spareUpper = spareUpperOf(pool);
+  const targets = g.lifts.map((lift) => targetFor(lift, spareUpper));
+  const spots: Step["at"][] = g.lifts.map(() => null);
+  // Round by round: every lift's first choice, then every lift's second choice, …
+  for (let tier = 0; tier < Math.max(...targets.map((t) => t.tiers.length)); tier++) {
+    for (let k = 0; k < targets.length; k++) {
+      const match = targets[k].tiers[tier];
+      if (spots[k] || !match) continue;
+      for (let b = 0; b < pool.length && !spots[k]; b++) {
+        for (let i = 0; i < pool[b].exercises.length; i++) {
+          if (used.has(`${b}:${i}`) || !match(pool[b].exercises[i])) continue;
+          spots[k] = { b, i };
+          used.add(`${b}:${i}`);
           break;
         }
       }
-      if (at) break;
     }
+  }
+  for (let k = 0; k < g.lifts.length; k++) {
+    const lift = g.lifts[k];
+    const t = targets[k];
+    const at = spots[k];
     if (at) {
-      const ex = blocks[at.b].exercises[at.i];
+      const ex = pool[at.b].exercises[at.i];
       // A safety swap holds this slot: never replaced.
       if (ex.isAdaptiveAddition || isPinned(ex.exerciseId)) {
         return kept("a safety rule changed that exercise today", "öryggisregla breytti þeirri æfingu í dag");
       }
-      used.add(`${at.b}:${at.i}`);
     }
-    const id = at && t.keep(blocks[at.b].exercises[at.i].exerciseId) ? blocks[at.b].exercises[at.i].exerciseId : t.fallbackId;
+    const id = at && t.keep(pool[at.b].exercises[at.i].exerciseId) ? pool[at.b].exercises[at.i].exerciseId : t.fallbackId;
     if (isRuledOut(id) || !EXERCISES_BY_ID.has(id)) {
       return kept("a safety rule rules one of its lifts out today", "öryggisregla útilokar eina lyftu hennar í dag");
     }
@@ -193,9 +229,14 @@ export function applyGoalPlanGym(
   const added: { step: Step; ex: PrescribedExercise }[] = [];
   for (const step of steps) {
     const lib = EXERCISES_BY_ID.get(step.id)!;
-    const base = step.at ? blocks[step.at.b].exercises[step.at.i] : null;
+    const base = step.at ? pool[step.at.b].exercises[step.at.i] : null;
     const planSets = setsOf(step.lift.sets);
-    const sets = yellow ? Math.max(1, Math.ceil(planSets / 2)) : planSets;
+    const target = yellow ? Math.max(1, Math.ceil(planSets / 2)) : planSets;
+    // Never more sets than the team exercise it takes the place of (2026-11-18): the day's structure sets the volume,
+    // so the session never grows (a 4-set jump squat in a 2-set contrast spot gets 2). Reps, load and rest stay the plan's.
+    const slotSets = base && Number.isFinite(base.dose.sets) && base.dose.sets >= 1 ? Math.round(base.dose.sets) : null;
+    const sets = slotSets != null ? Math.min(target, slotSets) : target;
+    const capped = sets < target;
     const ex: PrescribedExercise = {
       exerciseId: lib.id,
       nameEN: lib.nameEN,
@@ -207,19 +248,22 @@ export function applyGoalPlanGym(
         sets,
         reps: step.lift.reps.replace(/–/g, "-"),
         intensity: step.lift.intensity ?? "",
-        rest: step.lift.rest ?? "2 min",
+        // A plan line with no time (the Nordic: the partner's set is the rest) keeps the slot's rest.
+        rest: step.lift.rest ?? base?.dose.rest ?? "2 min",
         intraRepRestSec: null,
         cue: step.lift.cue ?? undefined,
       },
       goalPlan: { quality: g.quality, week: g.week, slot },
-      modificationReason: `${tag.en}${base && base.exerciseId !== lib.id ? ` — in place of ${base.nameEN}` : base ? "" : " — added"} · the goal's own dose${yellow ? " · yellow day: half the sets" : ""}`,
+      modificationReason: `${tag.en}${base && base.exerciseId !== lib.id ? ` — in place of ${base.nameEN}` : base ? "" : " — added"} · the goal's own dose${capped ? `, the team's ${sets} sets` : ""}${yellow ? " · yellow day: half the sets" : ""}`,
     };
-    if (step.at) blocks[step.at.b].exercises[step.at.i] = ex;
+    if (step.at) pool[step.at.b].exercises[step.at.i] = ex;
     else added.push({ step, ex });
     const what = `${lib.nameEN} ${sets} × ${ex.dose.reps}`;
     const whatIS = `${lib.nameIS || lib.nameEN} ${sets} × ${ex.dose.reps}`;
-    lines.push(base && base.exerciseId !== lib.id ? `${what} in place of ${base.nameEN}` : base ? `${what} (the plan's dose)` : `${what} (added: nothing in that slot)`);
-    linesIS.push(base && base.exerciseId !== lib.id ? `${whatIS} í stað ${base.nameIS || base.nameEN}` : base ? `${whatIS} (skammtur áætlunarinnar)` : `${whatIS} (bætt við: ekkert í því sæti)`);
+    const capEN = capped ? ` (${sets} sets as the team's exercise; the plan says ${step.lift.sets})` : "";
+    const capIS = capped ? ` (${sets} sett eins og æfing liðsins; áætlunin segir ${step.lift.sets})` : "";
+    lines.push(base && base.exerciseId !== lib.id ? `${what} in place of ${base.nameEN}${capEN}` : base ? `${what}${capEN || " (the plan's dose)"}` : `${what} (added: nothing in that slot)`);
+    linesIS.push(base && base.exerciseId !== lib.id ? `${whatIS} í stað ${base.nameIS || base.nameEN}${capIS}` : base ? `${whatIS}${capIS || " (skammtur áætlunarinnar)"}` : `${whatIS} (bætt við: ekkert í því sæti)`);
   }
 
   // Lifts with no team exercise to take the place of: power first in the session, the rest after the main lift.

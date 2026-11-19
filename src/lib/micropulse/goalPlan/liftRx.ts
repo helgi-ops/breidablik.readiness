@@ -239,7 +239,8 @@ function heavyRx(seg: Segment, ctx: RxContext, swapOption: string | undefined): 
   const legPress = swapOption === "leg_press";
   return {
     rows: {
-      load: light ? M("Light week: the same weight as last week, fewer sets.", "Létt vika: sama þyngd og síðast, færri sett.") : load,
+      // The range is named so the session shows a load on the light week too (2026-11-18: it showed "2 × 3" and no %).
+      load: light ? M(`Light week: the same weight as last week (about ${range}% of max), fewer sets.`, `Létt vika: sama þyngd og síðast (um ${range}% af hámarki), færri sett.`) : load,
       effort: S("Never to failure. Stopping sets early (about half the reps possible) gave the same or bigger gains with about half the reps.", "Aldrei í þrot. Að hætta settum snemma (um helmingur mögulegra endurtekninga) gaf sömu eða meiri bætingu með um helmingi færri endurtekningum.", "hernandezbelmonte2022"),
       tempo: DOWN_UP,
       rest: restMin
