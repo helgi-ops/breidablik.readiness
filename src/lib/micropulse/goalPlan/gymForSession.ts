@@ -12,7 +12,7 @@
 
 import { PLAN_WEEKS } from "./common";
 import { rxContextOf, withRx, type LiftRx } from "./liftRx";
-import { placementFor, planWeekOn, type TeamCalendar } from "./today";
+import { placementFor, planWeekOn, teamDaysOfWeek, type TeamCalendar } from "./today";
 import { swapMark } from "./swaps";
 import { isGymQuality, type GoalBlock, type GoalPlan, type GoalQuality, type GoalSession, type GoalSessionSlot } from "./types";
 import type { GoalGymProfile, GoalPlanGym, GoalPlanGymLift } from "@/lib/micropulse/strengthProgramming/goalPlanGym";
@@ -99,8 +99,20 @@ export function goalPlanGymFor(args: {
   const week = planWeekOn(startDate, todayIso);
   if (week < 1 || week > PLAN_WEEKS) return null;
   const gymOnly = isGymQuality(quality);
-  const placed = placementFor(plan, quality, startDate, todayIso, args.cal)?.placed.find((p) => p.date === todayIso && (gymOnly || p.slot === "B")) ?? null;
-  if (!placed) return null;
+  const gymSessions = (placementFor(plan, quality, startDate, todayIso, args.cal)?.placed ?? []).filter((p) => gymOnly || p.slot === "B");
+  const placed = gymSessions.find((p) => p.date === todayIso) ?? null;
+  if (!placed) {
+    // No goal gym session today. When the week holds one on another day, the engine may give back today the sets that
+    // day cannot hold (week rule, 2026-11-19): it gets those sessions and the week's team days, and decides by rule.
+    const weekDays = teamDaysOfWeek(todayIso, args.cal);
+    if (!weekDays.some((d) => d.date === todayIso)) return null;
+    const sessions = gymSessions.flatMap((p) => {
+      const lifts = gymLiftsOf(plan, week, p.slot)?.lifts ?? [];
+      return lifts.length ? [{ slot: p.slot, date: p.date, md: p.md, lifts }] : [];
+    });
+    if (!sessions.length) return null;
+    return { planId: args.planId, quality, week, weeksTotal: PLAN_WEEKS, labelEN: "", labelIS: "", lifts: [], giveBack: { sessions, weekDays } };
+  }
   const read = gymLiftsOf(plan, week, placed.slot);
   if (!read) return null;
   const { session: b, lifts } = read;

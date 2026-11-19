@@ -49,8 +49,9 @@ import { applyAdaptationRules, newAdaptationTrace, type AdaptationTrace } from "
 import { EXERCISE_LIBRARY as LIBRARY, EXERCISES_BY_ID, getExercise as lookupExercise } from "./exerciseLibrary";
 import { effectivePool, isPlayerPick, type PlayerExercisePicks } from "./playerPicks";
 import { applyPlayerGoal } from "./playerGoal";
-import { applyGoalPlanGym } from "./goalPlanGym";
-import { applyNearMatchDose, applyWeekRule, matchWeekHeavyReps, nearMatchAudit, noMatchWeekRule, weekRuleAudit, weekRuleLightAudit, weekRuleSeasonOf, type NoMatchWeekRule } from "./weekRule";
+import { applyGoalGiveBack, applyGoalPlanGym, type GoalLiftResult, type GoalOwedLift } from "./goalPlanGym";
+import { applyNearMatchDose, applyWeekRule, matchWeekHeavyReps, nearMatchAudit, noMatchWeekRule, weekRuleAudit, weekRuleLightAudit, weekRuleSeasonOf, type NoMatchWeekRule, type WeekRuleSeason } from "./weekRule";
+import { applyPreventionRule, matchWeekPrevention, noMatchWeekPrevention, preventionAudit } from "./preventionRule";
 import { takesPart, type SendMode } from "./sendMode";
 import {
   slotForCategory,
@@ -630,6 +631,74 @@ function workOf(s: StrengthSession): { reps: number; loadedReps: number; exercis
   return { reps, loadedReps, exercises };
 }
 
+/** Another day of this week by the week rule alone: the MD day it is built as, and its heavy reps (null = not a heavy
+ *  day). A day with no match near follows the coach's weekday plan. Null = no session that day by the rule. */
+function ruleDayOf(snap: PlayerStrengthSnapshot, date: string, md: string | null, season: WeekRuleSeason): { md: MdContext; reps: number | null } | null {
+  if (md) return { md: md as MdContext, reps: matchWeekHeavyReps(md as MdContext, season) };
+  const rule = noMatchWeekRule(date, snap.noMatchWeek, season);
+  if (!rule || rule.kind === "rest") return null;
+  return { md: NO_MATCH_DAY_MD[rule.kind], reps: rule.heavyReps };
+}
+
+/** The frame of an MD day by the rule alone: the team's method for that day with the week rule's heavy reps. Nothing
+ *  of the player's day (readiness, team list, safety rules) is in it. Null = the team does not lift that day. */
+function ruleFrameFor(snap: PlayerStrengthSnapshot, md: MdContext, dayReps: number | null): SessionBlock[] | null {
+  const pick = snap.mdStructures?.[md];
+  if (isRestDay(pick)) return null;
+  const dayDefault = DEFAULT_STRUCTURE_BY_MD[md];
+  const chosen = pick && (STRUCTURES_ALLOWED_BY_MD[md] ?? []).includes(pick) ? pick : undefined;
+  const effective = chosen ?? dayDefault;
+  const structured = effective && effective !== dayDefault ? buildStructuredBlocks(effective, md) : null;
+  const blocks = structured && structured.length > 0 ? structured : pickTemplate(md)?.blocks ?? null;
+  if (!blocks) return null;
+  if (dayReps != null) applyWeekRule(blocks, dayReps, snap.mdRepsPerSet?.[md] ?? null);
+  return blocks;
+}
+
+/**
+ * The week rule's give-back for the player's 8-week goal (2026-11-19). Forward only, by rule: nothing is read from what
+ * the player did. For each of the week's goal gym sessions on another day, that day's frame says how many sets each
+ * lift gets there (a spot holds no more than the team exercise's sets; a heavy lift no more than the day's heavy
+ * reps). What the plan says beyond that is owed, and is done on ONE day: the week's heavy day without a goal session
+ * that holds the most heavy reps (the earliest of equals). Empty when today is not that day, or nothing is owed.
+ */
+function goalGiveBackOwed(snap: PlayerStrengthSnapshot, todayHeavyReps: number | null, season: WeekRuleSeason, upper: SessionBlock | null): GoalOwedLift[] {
+  const g = snap.goalPlanGym;
+  const gb = g?.giveBack;
+  if (!g || !gb || todayHeavyReps == null) return [];
+  const goalDates = new Set(gb.sessions.map((x) => x.date));
+  let best: { date: string; reps: number } | null = null;
+  for (const d of gb.weekDays) {
+    if (goalDates.has(d.date)) continue;
+    const day = ruleDayOf(snap, d.date, d.md, season);
+    if (!day || day.reps == null || isRestDay(snap.mdStructures?.[day.md])) continue;
+    if (!best || day.reps > best.reps || (day.reps === best.reps && d.date < best.date)) best = { date: d.date, reps: day.reps };
+  }
+  if (!best || best.date !== snap.todayIso) return [];
+
+  const owed = new Map<string, GoalOwedLift & { reps: number }>();
+  for (const x of gb.sessions) {
+    const day = ruleDayOf(snap, x.date, x.md, season);
+    const frame = day ? ruleFrameFor(snap, day.md, day.reps) : null;
+    if (!day || !frame) continue;
+    const results: GoalLiftResult[] = [];
+    const later = upper ? [JSON.parse(JSON.stringify(upper)) as SessionBlock] : [];
+    const goalDay: PlayerStrengthSnapshot = { ...snap, mdContext: day.md, verdict: "FULL", goalPlanGym: { ...g, slot: x.slot, lifts: x.lifts, giveBack: undefined } };
+    const said = applyGoalPlanGym(frame, goalDay, () => false, () => false, later, { results, dayHeavyReps: day.reps });
+    // Not in that day's session (its method has no heavy lift): the plan session is done from the goal card, in full.
+    if (!said.some((a) => a.ruleId === "GOAL_PLAN_GYM_MERGED")) continue;
+    for (const r of results) {
+      if (r.sets >= r.planSets) continue;
+      const owedSets = r.planSets - r.sets;
+      const reps = owedSets * (Number(/^\s*(\d+)/.exec(r.lift.reps)?.[1]) || 1);
+      // Two sessions owing the same kind of lift: the one that owes more reps (the first of equals).
+      const prev = owed.get(r.lift.profile);
+      if (!prev || reps > prev.reps) owed.set(r.lift.profile, { lift: r.lift, owedSets, fromSlot: x.slot, reps });
+    }
+  }
+  return [...owed.values()].map((o) => ({ lift: o.lift, owedSets: o.owedSets, fromSlot: o.fromSlot }));
+}
+
 function buildStrengthSessionCore(
   snapIn: PlayerStrengthSnapshot,
   coachOverrides: CoachOverride[],
@@ -784,9 +853,12 @@ function buildStrengthSessionCore(
   // The week rule sets today's heavy lower-body reps from the day's place in the week, before the readiness rules
   // (which may still take sets off). Individualised modes, football only (basketball has no MD week).
   const weekAudit: AppliedAdaptation[] = [];
+  const season = weekRuleSeasonOf(snap);
+  /** Today's heavy reps by the week rule; null = not a heavy day (or the rule does not run: standard, basketball). */
+  let todayHeavyReps: number | null = null;
   if (individualised && !isBasketball) {
-    const season = weekRuleSeasonOf(snap);
     const dayReps = noMatchRule ? noMatchRule.heavyReps : snap.noMatchNearby ? null : matchWeekHeavyReps(snap.mdContext, season);
+    todayHeavyReps = dayReps;
     if (dayReps != null) {
       // The coach's reps a set for this day, when set (a week without a match builds as MD-4 / MD-3, so it follows).
       const applied = applyWeekRule(tmpl.blocks, dayReps, snap.mdRepsPerSet?.[snap.mdContext] ?? null);
@@ -799,6 +871,15 @@ function buildStrengthSessionCore(
     if (noMatchLight || (!snap.noMatchNearby && (snap.mdContext === "MD-2" || snap.mdContext === "MD-1"))) {
       const near = applyNearMatchDose(tmpl.blocks);
       if (near) weekAudit.push(nearMatchAudit(snap.mdContext, near, noMatchLight));
+    }
+    // Prevention: Nordic and Copenhagen once a week, each on its own heavy day with the week's reps (never the same
+    // eccentric work two days in a row). A team with no weekday plan in a week without a match is left as it was.
+    const preventionToday = noMatchRule
+      ? noMatchWeekPrevention(snap.todayIso, snap.noMatchWeek, season)
+      : snap.noMatchNearby ? null : matchWeekPrevention(snap.mdContext, (d) => isRestDay(snap.mdStructures?.[d]));
+    if (preventionToday) {
+      const prevention = preventionAudit(snap.mdContext, applyPreventionRule(tmpl.blocks, preventionToday), !!noMatchRule);
+      if (prevention) weekAudit.push(prevention);
     }
   }
 
@@ -824,7 +905,12 @@ function buildStrengthSessionCore(
     ? buildUpperBody(snap, md1Tier, trace)
     : null;
   if (individualised) {
-    audit.push(...applyGoalPlanGym(tmpl.blocks, snap, (id) => safetyRulesOut(id, trace), (id) => trace.pinned.has(id), upper ? [upper.block] : []));
+    audit.push(...applyGoalPlanGym(tmpl.blocks, snap, (id) => safetyRulesOut(id, trace), (id) => trace.pinned.has(id), upper ? [upper.block] : [], { dayHeavyReps: todayHeavyReps }));
+    // The week rule's give-back: on the week's other heavy day, the sets the goal day could not hold.
+    const owed = goalGiveBackOwed(snap, todayHeavyReps, season, upper?.block ?? null);
+    if (owed.length) {
+      audit.push(...applyGoalGiveBack(tmpl.blocks, snap, owed, (id) => safetyRulesOut(id, trace), (id) => trace.pinned.has(id), upper ? [upper.block] : [], todayHeavyReps));
+    }
   }
   if (individualised) {
     audit.push(...applyPlayerGoal(tmpl.blocks, snap, (id) => safetyRulesOut(id, trace), (id) => trace.pinned.has(id)));

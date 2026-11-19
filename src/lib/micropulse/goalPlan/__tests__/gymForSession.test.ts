@@ -67,8 +67,11 @@ describe("reading session B's gym lifts", () => {
     expect(gym!.lifts.map((l) => l.profile)).toEqual(["jump_squat", "heavy"]);
     expect(gym!.week).toBe(1);
     expect(gym!.lifts[1].intensity).toMatch(/% 1RM$/);
+    // Another day holds no goal lifts of its own: only the week's session B, for the week rule's give-back.
     const other = [0, 1, 2, 3, 4].map(day).find((d) => d !== bDay)!;
-    expect(goalPlanGymFor({ planId: "p", quality: "acceleration", plan, startDate: MON, todayIso: other, cal })).toBeNull();
+    const off = goalPlanGymFor({ planId: "p", quality: "acceleration", plan, startDate: MON, todayIso: other, cal });
+    expect(off?.lifts ?? []).toEqual([]);
+    expect(off?.giveBack?.sessions.map((x) => [x.slot, x.date])).toEqual([["B", bDay]]);
   });
 
   it("braking: only the slow-lowering split squat (the drills stay on the card)", () => {

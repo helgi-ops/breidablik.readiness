@@ -47,9 +47,10 @@ describe("coach MD→structure choice → buildStrengthSession", () => {
     expect(hasAudit(s, "STRUCTURE_APPLIED")).toBe(true);
     // Contrast pairs a heavy lift with a plyometric — the plyo default is present.
     expect(allEx(s)).toContain("ex_box_jump");
-    // Injury-prevention survives the rebuild (non-negotiable).
+    // Injury-prevention survives the rebuild (non-negotiable): Nordic on MD-4, Copenhagen on MD-3 (week rule).
     expect(allEx(s)).toContain("ex_nordic_curl");
-    expect(allEx(s)).toContain("ex_copenhagen");
+    const md3 = buildStrengthSession(snap({ mdContext: "MD-3" as MdContext, mdStructures: { "MD-3": "contrast" } }));
+    expect(allEx(md3)).toContain("ex_copenhagen");
   });
 
   it("French contrast on MD-4 lays out the 4-part complex (dose falls back from MD-3)", () => {

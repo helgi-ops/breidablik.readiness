@@ -20,6 +20,12 @@
  *     never more sets than the exercise it takes the place of (2026-11-18), so the session never grows. A day
  *     whose structure has no heavy lift (isometric, primer, taper) takes nothing: session B stays on the goal card.
  *
+ *   - Inside the week rule (2026-11-19, weekRule.ts): a heavy goal lift that takes the place of the day's heavy lift
+ *     gets no more sets than the day's heavy reps hold at the plan's reps a set (9 heavy reps and a plan of 3 × 6 → 2 × 6),
+ *     so a goal never lifts a day above the week's reps. And the sets a goal lift could not get on its goal day (the
+ *     spot is smaller than the plan) come back on the week's other heavy day, again in place of the matching team
+ *     exercise: `applyGoalGiveBack`. The plan's weekly work is kept inside the week's heavy days; no session grows.
+ *
  * Runs after the team list and before the player's strength goal and the coach's manual swaps (coach's last word).
  */
 
@@ -27,6 +33,7 @@ import type { AppliedAdaptation, ExerciseCategory, PlayerStrengthSnapshot, Presc
 import { isGymQuality, type GoalQuality, type GoalSessionSlot } from "@/lib/micropulse/goalPlan/types";
 import { EXERCISES_BY_ID } from "./exerciseLibrary";
 import { goalSeasonOf } from "./playerGoal";
+import { HEAVY_REPS_MAX } from "./weekRule";
 
 /** The lift profiles a goal plan's gym block is read as (`goalPlan/liftRx.ts`). */
 export type GoalGymProfile = "heavy" | "technique" | "rdl" | "jump_squat" | "pull" | "nordic" | "eccentric" | "squat_fast" | "youth";
@@ -47,6 +54,13 @@ export type GoalPlanGymLift = {
   cue: string | null;
 };
 
+/** One of the week's goal gym sessions on another day than today. */
+export type GoalGiveBackSession = { slot: GoalSessionSlot; date: string; md: string | null; lifts: GoalPlanGymLift[] };
+/** Today holds no goal gym session: the week's goal gym sessions on other days, and the days the team trains this week
+ *  (with their match-day label; null = no match near). The engine works out, by the week rule alone, which sets those
+ *  days cannot hold and whether today is the day they come back. */
+export type GoalGiveBack = { sessions: GoalGiveBackSession[]; weekDays: { date: string; md: string | null }[] };
+
 export type GoalPlanGym = {
   planId: string;
   quality: GoalQuality;
@@ -56,8 +70,15 @@ export type GoalPlanGym = {
   weeksTotal: number;
   labelEN: string;
   labelIS: string;
+  /** Today's goal gym lifts. Empty on a day that only gives back (`giveBack`). */
   lifts: GoalPlanGymLift[];
+  giveBack?: GoalGiveBack;
 };
+
+/** What a lift got on a day: the plan's sets (after a yellow day's halving) and the sets it was given. */
+export type GoalLiftResult = { lift: GoalPlanGymLift; planSets: number; sets: number };
+/** A lift that could not get all its sets on its goal day (`owedSets` were missing), for the week's give-back day. */
+export type GoalOwedLift = { lift: GoalPlanGymLift; owedSets: number; fromSlot: GoalSessionSlot };
 
 const QUALITY_NAME: Record<GoalPlanGym["quality"], { en: string; is: string }> = {
   top_speed: { en: "top speed", is: "hámarkshraði" },
@@ -68,6 +89,9 @@ const QUALITY_NAME: Record<GoalPlanGym["quality"], { en: string; is: string }> =
   explosive: { en: "explosive power", is: "sprengikraftur" },
   strength_power: { en: "strength + power", is: "styrkur + sprengikraftur" },
 };
+
+export const GOAL_GIVE_BACK_EVIDENCE =
+  "Week rule, the player's 8-week goal. A goal lift never gets more sets than the team exercise it takes the place of, and a heavy goal lift never more than the day's heavy reps. A lift that could not get all its sets on the goal day is done again on the week's other heavy day, in place of the matching team exercise and with that exercise's sets, so the plan's weekly work stays inside the heavy days and no session grows. With the weekly volume the same, how it was divided over the days made no difference to strength (Cuthbert 2021; Grgic 2018). Which day gives the sets back is MicroPulse's rule, not from a study.";
 
 export const GOAL_PLAN_GYM_EVIDENCE =
   "The player's 8-week goal plan, session B (gym), placed in the team strength session in pre-season / off-season. Taking the place of the team's matching exercise (not added on top) and power before strength are the coach's rules, not from a study; each lift's numbers and sources are on the goal plan.";
@@ -137,11 +161,196 @@ function setsOf(s: string): number {
   return Number.isFinite(n) && n >= 1 ? Math.round(n) : 1;
 }
 
+/** The reps a set holds: [lower end, middle] of "3-5" → [3, 4]; null for a hold or a line with no number first. */
+function repsRange(reps: string): { low: number; mid: number } | null {
+  if (/\d\s*s\b|sec|hold/i.test(reps)) return null;
+  const m = /^\s*(\d+)(?:\s*[-–]\s*(\d+))?/.exec(reps);
+  if (!m) return null;
+  const low = Number(m[1]);
+  return { low, mid: m[2] ? (low + Number(m[2])) / 2 : low };
+}
+
+/**
+ * A heavy goal lift in the place of the day's heavy lift (its sets were set by the week rule): the day's heavy reps, and
+ * the sets that hold them at the plan's reps a set (to the nearest set). Null when either is not a heavy lift.
+ */
+function heavyFit(base: PrescribedExercise | null, category: ExerciseCategory, planReps: string, ruleReps: number | null): { dayReps: number; sets: number } | null {
+  if (!base || !base.dose.weekRule || base.category !== "COMPOUND_STRENGTH" || category !== "COMPOUND_STRENGTH") return null;
+  const plan = repsRange(planReps);
+  const own = repsRange(base.dose.reps);
+  if (!plan || !own || plan.low > HEAVY_REPS_MAX) return null;
+  // The day's reps by the rule when known (a round cap may have left the team's lift under them), else what the spot holds.
+  const dayReps = ruleReps ?? Math.round(base.dose.sets) * own.low;
+  return { dayReps, sets: Math.max(1, Math.round(dayReps / plan.mid)) };
+}
+
+type MergeArgs = {
+  blocks: SessionBlock[];
+  later: SessionBlock[];
+  lifts: GoalPlanGymLift[];
+  quality: GoalQuality;
+  week: number;
+  /** The plan session a lift belongs to (the give-back day carries lifts of other days' sessions). */
+  slotOf: (lift: GoalPlanGymLift) => GoalSessionSlot;
+  yellow: boolean;
+  isRuledOut: (id: string) => boolean;
+  isPinned: (id: string) => boolean;
+  /** Today's heavy reps by the week rule, when today is a heavy day. */
+  dayHeavyReps?: number | null;
+  /** Give-back day: a lift that cannot go in today is left out (the others still go in), and nothing is ever added:
+   *  a lift only takes the place of a team exercise. */
+  giveBack?: boolean;
+};
+type Merged = { kept: [string, string] } | { lines: string[]; linesIS: string[]; results: GoalLiftResult[] };
+
+/** Places the lifts in the session (each in the place of the matching team exercise) and writes them. */
+function mergeLifts(a: MergeArgs): Merged {
+  const { blocks, later, lifts, yellow, isRuledOut, isPinned } = a;
+  const giveBack = !!a.giveBack;
+  const q = QUALITY_NAME[a.quality];
+
+  // Plan every lift first (all or nothing), then write.
+  type Step = { lift: GoalPlanGymLift; at: { b: number; i: number } | null; id: string; power: boolean };
+  const used = new Set<string>(); // "b:i" already taken by another lift
+  const steps: Step[] = [];
+  // Spots are looked for in today's blocks and in the blocks still to come (indexes past `blocks` are `later`).
+  const pool = [...blocks, ...later];
+  const spareUpper = spareUpperOf(pool);
+  const targets = lifts.map((lift) => targetFor(lift, spareUpper));
+  const spots: Step["at"][] = lifts.map(() => null);
+  // Round by round: every lift's first choice, then every lift's second choice, …
+  for (let tier = 0; tier < Math.max(0, ...targets.map((t) => t.tiers.length)); tier++) {
+    for (let k = 0; k < targets.length; k++) {
+      const match = targets[k].tiers[tier];
+      if (spots[k] || !match) continue;
+      for (let b = 0; b < pool.length && !spots[k]; b++) {
+        for (let i = 0; i < pool[b].exercises.length; i++) {
+          // A spot another goal lift already holds (the goal day's own lift) is never taken twice.
+          if (used.has(`${b}:${i}`) || pool[b].exercises[i].goalPlan || !match(pool[b].exercises[i])) continue;
+          spots[k] = { b, i };
+          used.add(`${b}:${i}`);
+          break;
+        }
+      }
+    }
+  }
+  for (let k = 0; k < lifts.length; k++) {
+    const lift = lifts[k];
+    const t = targets[k];
+    const at = spots[k];
+    if (giveBack && !at) continue; // nothing to take the place of today
+    if (at) {
+      const ex = pool[at.b].exercises[at.i];
+      // A safety swap holds this slot: never replaced.
+      if (ex.isAdaptiveAddition || isPinned(ex.exerciseId)) {
+        if (giveBack) continue;
+        return { kept: ["a safety rule changed that exercise today", "öryggisregla breytti þeirri æfingu í dag"] };
+      }
+    }
+    const id = at && t.keep(pool[at.b].exercises[at.i].exerciseId) ? pool[at.b].exercises[at.i].exerciseId : t.fallbackId;
+    if (isRuledOut(id) || !EXERCISES_BY_ID.has(id)) {
+      if (giveBack) continue;
+      return { kept: ["a safety rule rules one of its lifts out today", "öryggisregla útilokar eina lyftu hennar í dag"] };
+    }
+    steps.push({ lift, at, id, power: t.power });
+  }
+
+  // The day's heavy reps belong to the day's one heavy lift; with two heavy lifts each spot speaks for itself.
+  const heavySpots = pool.flatMap((b) => b.exercises).filter((e) => e.dose.weekRule && e.category === "COMPOUND_STRENGTH").length;
+  const ruleReps = a.dayHeavyReps != null && heavySpots === 1 ? a.dayHeavyReps : null;
+
+  const tag = { en: `8-week goal (${q.en}), week ${a.week}`, is: `8 vikna markmið (${q.is}), vika ${a.week}` };
+  const said = new Map<Step, { en: string; is: string; result: GoalLiftResult }>();
+  const added: { step: Step; ex: PrescribedExercise }[] = [];
+  // The heavy lift is written first: when the day's heavy reps cut a contrast block's rounds, the goal's own jump in
+  // that block then takes the new rounds too. What is said keeps the plan's order.
+  const heavyFirst = [...steps].sort((x, y) => Number(EXERCISES_BY_ID.get(y.id)?.category === "COMPOUND_STRENGTH") - Number(EXERCISES_BY_ID.get(x.id)?.category === "COMPOUND_STRENGTH"));
+  for (const step of heavyFirst) {
+    const lib = EXERCISES_BY_ID.get(step.id)!;
+    const base = step.at ? pool[step.at.b].exercises[step.at.i] : null;
+    const planSets = setsOf(step.lift.sets);
+    const target = yellow ? Math.max(1, Math.ceil(planSets / 2)) : planSets;
+    // Inside the week rule (2026-11-19): a heavy lift in the day's heavy spot gets the sets the day's heavy reps hold
+    // at the plan's reps a set, never more (the old cap counted sets only, so 3 × 6 went into a 3 × 3 spot as 18 reps).
+    const heavy = heavyFit(base, lib.category, step.lift.reps, ruleReps);
+    // Never more sets than the team exercise it takes the place of (2026-11-18): the day's structure sets the volume,
+    // so the session never grows (a 4-set jump squat in a 2-set contrast spot gets 2). Reps, load and rest stay the plan's.
+    const slotSets = base && Number.isFinite(base.dose.sets) && base.dose.sets >= 1 ? Math.round(base.dose.sets) : null;
+    // In a contrast block the rounds are capped (3 in a French contrast), so the lift never does more rounds than the block.
+    const inContrast = step.at != null && pool[step.at.b].type === "FRENCH_CONTRAST";
+    const room = heavy ? (inContrast && slotSets != null ? Math.min(heavy.sets, slotSets) : heavy.sets) : slotSets;
+    // The same on a give-back day: the lift does the spot's sets (never more than the plan's), so the spot is not left
+    // half done and a contrast pair keeps its rounds. That can be a few reps more than were missing.
+    const sets = room != null ? Math.min(target, room) : target;
+    const capped = sets < target && !giveBack;
+    const slot = a.slotOf(step.lift);
+    const why = giveBack
+      ? " · sets the goal day could not hold"
+      : `${capped ? (heavy ? `, ${sets} sets: the day's ${heavy.dayReps} heavy reps` : `, the team's ${sets} sets`) : ""}`;
+    const ex: PrescribedExercise = {
+      exerciseId: lib.id,
+      nameEN: lib.nameEN,
+      nameIS: lib.nameIS,
+      category: lib.category,
+      // The goal's own dose, nothing inherited from the slot (a cluster's intra-set rest or a velocity cap would mix
+      // two prescriptions on one lift).
+      dose: {
+        sets,
+        reps: step.lift.reps.replace(/–/g, "-"),
+        intensity: step.lift.intensity ?? "",
+        // A plan line with no time (the Nordic: the partner's set is the rest) keeps the slot's rest.
+        rest: step.lift.rest ?? base?.dose.rest ?? "2 min",
+        intraRepRestSec: null,
+        cue: step.lift.cue ?? undefined,
+      },
+      goalPlan: { quality: a.quality, week: a.week, slot, ...(giveBack ? { giveBack: true as const } : {}) },
+      modificationReason: `${tag.en}${base && base.exerciseId !== lib.id ? ` — in place of ${base.nameEN}` : base ? "" : " — added"} · the goal's own dose${why}${yellow ? " · yellow day: half the sets" : ""}`,
+    };
+    if (step.at) pool[step.at.b].exercises[step.at.i] = ex;
+    else added.push({ step, ex });
+    // A contrast pair goes round by round: when the week rule's reps cut the heavy lift under the block's rounds, the
+    // team's own exercises in the block follow (a goal lift in the block keeps its own sets).
+    if (step.at && heavy && inContrast && slotSets != null && sets < slotSets && heavy.sets < slotSets) {
+      const blk = pool[step.at.b];
+      blk.exercises = blk.exercises.map((e) => (e.goalPlan || e.dose.sets !== slotSets ? e : { ...e, dose: { ...e.dose, sets } }));
+    }
+    const what = `${lib.nameEN} ${sets} × ${ex.dose.reps}`;
+    const whatIS = `${lib.nameIS || lib.nameEN} ${sets} × ${ex.dose.reps}`;
+    const capEN = !capped ? "" : heavy ? ` (${sets} sets: today holds ${heavy.dayReps} heavy reps by the week rule; the plan says ${step.lift.sets})` : ` (${sets} sets as the team's exercise; the plan says ${step.lift.sets})`;
+    const capIS = !capped ? "" : heavy ? ` (${sets} sett: dagurinn hefur ${heavy.dayReps} þungar endurtekningar eftir vikureglunni; áætlunin segir ${step.lift.sets})` : ` (${sets} sett eins og æfing liðsins; áætlunin segir ${step.lift.sets})`;
+    said.set(step, {
+      en: base && base.exerciseId !== lib.id ? `${what} in place of ${base.nameEN}${capEN}` : base ? `${what}${capEN || (giveBack ? "" : " (the plan's dose)")}` : `${what} (added: nothing in that slot)`,
+      is: base && base.exerciseId !== lib.id ? `${whatIS} í stað ${base.nameIS || base.nameEN}${capIS}` : base ? `${whatIS}${capIS || (giveBack ? "" : " (skammtur áætlunarinnar)")}` : `${whatIS} (bætt við: ekkert í því sæti)`,
+      result: { lift: step.lift, planSets: target, sets },
+    });
+  }
+  const told = steps.map((st) => said.get(st)!);
+  const lines = told.map((t) => t.en);
+  const linesIS = told.map((t) => t.is);
+  const results = told.map((t) => t.result);
+
+  // Lifts with no team exercise to take the place of: power first in the session, the rest after the main lift.
+  if (added.length) {
+    const firstWork = Math.max(0, blocks.findIndex((b) => b.type !== "PREP" && b.type !== "MOBILITY"));
+    const mainAt = blocks.findIndex((b) => b.exercises.some((e) => e.category === "COMPOUND_STRENGTH"));
+    for (const { step, ex } of added) {
+      if (!blocks.length) break;
+      if (step.power) blocks[firstWork].exercises.unshift(ex);
+      else blocks[mainAt >= 0 ? mainAt : firstWork].exercises.push(ex);
+    }
+  }
+
+  // The team's own order stands (a contrast block pairs heavy → jump on purpose); a replaced lift keeps its place.
+  return { lines, linesIS, results };
+}
+
 /**
  * @param isRuledOut  today's safety rules rule this exercise out (banned / not suitable today)
  * @param isPinned    a safety rule put this exercise here (a safety swap) — never replaced
  * @param later       blocks the engine puts in the session after this step (the upper-body block): a lift may take a
  *                    spot in them (mutated in place), never anything else
+ * @param opts        `dayHeavyReps`: today's heavy reps by the week rule (a heavy day); `results`: filled with what each
+ *                    lift got (for the week rule's give-back, which reads another day's frame)
  */
 export function applyGoalPlanGym(
   blocks: SessionBlock[],
@@ -149,6 +358,7 @@ export function applyGoalPlanGym(
   isRuledOut: (id: string) => boolean,
   isPinned: (id: string) => boolean,
   later: SessionBlock[] = [],
+  opts: { dayHeavyReps?: number | null; results?: GoalLiftResult[] } = {},
 ): AppliedAdaptation[] {
   const g = snap.goalPlanGym;
   if (!g || !g.lifts.length) return [];
@@ -181,111 +391,56 @@ export function applyGoalPlanGym(
       : kept("today's structure has no heavy lift", "uppsetning dagsins er án þungrar lyftu");
   }
 
-  // Plan every lift first (all or nothing), then write.
-  type Step = { lift: GoalPlanGymLift; at: { b: number; i: number } | null; id: string; power: boolean };
-  const used = new Set<string>(); // "b:i" already taken by another lift
-  const steps: Step[] = [];
-  // Spots are looked for in today's blocks and in the blocks still to come (indexes past `blocks` are `later`).
-  const pool = [...blocks, ...later];
-  const spareUpper = spareUpperOf(pool);
-  const targets = g.lifts.map((lift) => targetFor(lift, spareUpper));
-  const spots: Step["at"][] = g.lifts.map(() => null);
-  // Round by round: every lift's first choice, then every lift's second choice, …
-  for (let tier = 0; tier < Math.max(...targets.map((t) => t.tiers.length)); tier++) {
-    for (let k = 0; k < targets.length; k++) {
-      const match = targets[k].tiers[tier];
-      if (spots[k] || !match) continue;
-      for (let b = 0; b < pool.length && !spots[k]; b++) {
-        for (let i = 0; i < pool[b].exercises.length; i++) {
-          if (used.has(`${b}:${i}`) || !match(pool[b].exercises[i])) continue;
-          spots[k] = { b, i };
-          used.add(`${b}:${i}`);
-          break;
-        }
-      }
-    }
-  }
-  for (let k = 0; k < g.lifts.length; k++) {
-    const lift = g.lifts[k];
-    const t = targets[k];
-    const at = spots[k];
-    if (at) {
-      const ex = pool[at.b].exercises[at.i];
-      // A safety swap holds this slot: never replaced.
-      if (ex.isAdaptiveAddition || isPinned(ex.exerciseId)) {
-        return kept("a safety rule changed that exercise today", "öryggisregla breytti þeirri æfingu í dag");
-      }
-    }
-    const id = at && t.keep(pool[at.b].exercises[at.i].exerciseId) ? pool[at.b].exercises[at.i].exerciseId : t.fallbackId;
-    if (isRuledOut(id) || !EXERCISES_BY_ID.has(id)) {
-      return kept("a safety rule rules one of its lifts out today", "öryggisregla útilokar eina lyftu hennar í dag");
-    }
-    steps.push({ lift, at, id, power: t.power });
-  }
-
-  const tag = { en: `8-week goal (${q.en}), week ${g.week}`, is: `8 vikna markmið (${q.is}), vika ${g.week}` };
-  const lines: string[] = [];
-  const linesIS: string[] = [];
-  const added: { step: Step; ex: PrescribedExercise }[] = [];
-  for (const step of steps) {
-    const lib = EXERCISES_BY_ID.get(step.id)!;
-    const base = step.at ? pool[step.at.b].exercises[step.at.i] : null;
-    const planSets = setsOf(step.lift.sets);
-    const target = yellow ? Math.max(1, Math.ceil(planSets / 2)) : planSets;
-    // Never more sets than the team exercise it takes the place of (2026-11-18): the day's structure sets the volume,
-    // so the session never grows (a 4-set jump squat in a 2-set contrast spot gets 2). Reps, load and rest stay the plan's.
-    const slotSets = base && Number.isFinite(base.dose.sets) && base.dose.sets >= 1 ? Math.round(base.dose.sets) : null;
-    const sets = slotSets != null ? Math.min(target, slotSets) : target;
-    const capped = sets < target;
-    const ex: PrescribedExercise = {
-      exerciseId: lib.id,
-      nameEN: lib.nameEN,
-      nameIS: lib.nameIS,
-      category: lib.category,
-      // The goal's own dose, nothing inherited from the slot (a cluster's intra-set rest or a velocity cap would mix
-      // two prescriptions on one lift).
-      dose: {
-        sets,
-        reps: step.lift.reps.replace(/–/g, "-"),
-        intensity: step.lift.intensity ?? "",
-        // A plan line with no time (the Nordic: the partner's set is the rest) keeps the slot's rest.
-        rest: step.lift.rest ?? base?.dose.rest ?? "2 min",
-        intraRepRestSec: null,
-        cue: step.lift.cue ?? undefined,
-      },
-      goalPlan: { quality: g.quality, week: g.week, slot },
-      modificationReason: `${tag.en}${base && base.exerciseId !== lib.id ? ` — in place of ${base.nameEN}` : base ? "" : " — added"} · the goal's own dose${capped ? `, the team's ${sets} sets` : ""}${yellow ? " · yellow day: half the sets" : ""}`,
-    };
-    if (step.at) pool[step.at.b].exercises[step.at.i] = ex;
-    else added.push({ step, ex });
-    const what = `${lib.nameEN} ${sets} × ${ex.dose.reps}`;
-    const whatIS = `${lib.nameIS || lib.nameEN} ${sets} × ${ex.dose.reps}`;
-    const capEN = capped ? ` (${sets} sets as the team's exercise; the plan says ${step.lift.sets})` : "";
-    const capIS = capped ? ` (${sets} sett eins og æfing liðsins; áætlunin segir ${step.lift.sets})` : "";
-    lines.push(base && base.exerciseId !== lib.id ? `${what} in place of ${base.nameEN}${capEN}` : base ? `${what}${capEN || " (the plan's dose)"}` : `${what} (added: nothing in that slot)`);
-    linesIS.push(base && base.exerciseId !== lib.id ? `${whatIS} í stað ${base.nameIS || base.nameEN}${capIS}` : base ? `${whatIS}${capIS || " (skammtur áætlunarinnar)"}` : `${whatIS} (bætt við: ekkert í því sæti)`);
-  }
-
-  // Lifts with no team exercise to take the place of: power first in the session, the rest after the main lift.
-  if (added.length) {
-    const firstWork = Math.max(0, blocks.findIndex((b) => b.type !== "PREP" && b.type !== "MOBILITY"));
-    const mainAt = blocks.findIndex((b) => b.exercises.some((e) => e.category === "COMPOUND_STRENGTH"));
-    for (const { step, ex } of added) {
-      if (!blocks.length) break;
-      if (step.power) blocks[firstWork].exercises.unshift(ex);
-      else blocks[mainAt >= 0 ? mainAt : firstWork].exercises.push(ex);
-    }
-  }
-
-  // The team's own order stands (a contrast block pairs heavy → jump on purpose); a replaced lift keeps its place.
+  const merged = mergeLifts({ blocks, later, lifts: g.lifts, quality: g.quality, week: g.week, slotOf: () => slot, yellow, isRuledOut, isPinned, dayHeavyReps: opts.dayHeavyReps });
+  if ("kept" in merged) return kept(...merged.kept);
+  opts.results?.push(...merged.results);
 
   return [{
     ruleId: "GOAL_PLAN_GYM_MERGED",
     triggerEN: trigEN,
     triggerIS: trigIS,
-    actionEN: `The goal's gym session is part of today's session: ${lines.join("; ")}.${yellow ? " Yellow day: half the sets." : ""}`,
-    actionIS: `Salur-æfing markmiðsins er hluti af æfingu dagsins: ${linesIS.join("; ")}.${yellow ? " Gulur dagur: hálf sett." : ""}`,
+    actionEN: `The goal's gym session is part of today's session: ${merged.lines.join("; ")}.${yellow ? " Yellow day: half the sets." : ""}`,
+    actionIS: `Salur-æfing markmiðsins er hluti af æfingu dagsins: ${merged.linesIS.join("; ")}.${yellow ? " Gulur dagur: hálf sett." : ""}`,
     evidence: GOAL_PLAN_GYM_EVIDENCE,
+  }];
+}
+
+/**
+ * The week's give-back day (2026-11-19): a goal lift that could not get all its sets on its goal day is done again
+ * today, in the place of the matching team exercise and with that spot's sets (never more than the plan's own sets for
+ * one session). Nothing is added and no session grows; a lift that cannot go in today (no matching exercise, or a
+ * safety rule holds or rules out the spot) is left out. Green days only: a yellow or red day
+ * takes nothing extra from the goal. Pre-/off-season only, like the goal day itself.
+ */
+export function applyGoalGiveBack(
+  blocks: SessionBlock[],
+  snap: PlayerStrengthSnapshot,
+  owed: GoalOwedLift[],
+  isRuledOut: (id: string) => boolean,
+  isPinned: (id: string) => boolean,
+  later: SessionBlock[] = [],
+  dayHeavyReps: number | null = null,
+): AppliedAdaptation[] {
+  const g = snap.goalPlanGym;
+  if (!g || !owed.length) return [];
+  if (goalSeasonOf(snap) !== "build") return [];
+  if (snap.verdict === "HOLD" || snap.verdict === "RECOVERY" || snap.verdict === "MODIFIED" || snap.verdict === "REDUCED") return [];
+  if (!blocks.some((b) => b.exercises.some((e) => e.category === "COMPOUND_STRENGTH"))) return [];
+  const byLift = new Map(owed.map((o) => [o.lift, o]));
+  const merged = mergeLifts({
+    blocks, later, lifts: owed.map((o) => o.lift), quality: g.quality, week: g.week,
+    slotOf: (lift) => byLift.get(lift)?.fromSlot ?? "B",
+    yellow: false, isRuledOut, isPinned, dayHeavyReps, giveBack: true,
+  });
+  if ("kept" in merged || !merged.lines.length) return [];
+  const q = QUALITY_NAME[g.quality];
+  return [{
+    ruleId: "GOAL_PLAN_GYM_GIVE_BACK",
+    triggerEN: `Week rule, 8-week goal (${q.en}, week ${g.week} of ${g.weeksTotal}): the goal day holds fewer sets than the plan says`,
+    triggerIS: `Vikuregla, 8 vikna markmið (${q.is}, vika ${g.week} af ${g.weeksTotal}): markmiðsdagurinn rúmar færri sett en áætlunin segir`,
+    actionEN: `Done again today, the week's other heavy day, in place of the matching team exercise and with its sets: ${merged.lines.join("; ")}. The session does not grow.`,
+    actionIS: `Gert aftur í dag, á hinum þunga degi vikunnar, í stað samsvarandi æfingar liðsins og með settum hennar: ${merged.linesIS.join("; ")}. Æfingin lengist ekki.`,
+    evidence: GOAL_GIVE_BACK_EVIDENCE,
   }];
 }
 

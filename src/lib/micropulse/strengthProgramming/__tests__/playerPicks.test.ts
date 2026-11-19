@@ -132,8 +132,10 @@ describe("engine", () => {
 
   it("Nordic and Copenhagen are never touched by picks", () => {
     const s = buildStrengthSession(snap({ playerExercisePicks: { bilateral_strength: ["ex_trap_bar_dl"], power_explosive: ["ex_depth_jump"] } }));
+    // The week rule (2026-11-19): Nordic is MD-4's, Copenhagen MD-3's.
     expect(ids(s)).toContain("ex_nordic_curl");
-    expect(ids(s)).toContain("ex_copenhagen");
+    const md3 = buildStrengthSession(snap({ mdContext: "MD-3", playerExercisePicks: { bilateral_strength: ["ex_trap_bar_dl"], power_explosive: ["ex_depth_jump"] } }));
+    expect(ids(md3)).toContain("ex_copenhagen");
   });
 
   it("standard mode ignores picks (the palette does not build a standard session)", () => {

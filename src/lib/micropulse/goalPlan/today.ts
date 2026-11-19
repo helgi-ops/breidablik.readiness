@@ -169,6 +169,11 @@ function candidates(monday: string, cal: TeamCalendar): { days: { date: string; 
   return { days, weekKnown, teamDays };
 }
 
+/** The days the team trains in the week of `iso` (as the placement sees them), each with its match-day label. */
+export function teamDaysOfWeek(iso: string, cal: TeamCalendar): { date: string; md: string | null }[] {
+  return candidates(mondayOf(iso), cal).days;
+}
+
 /** Session B with no match near, by the coach's weekday plan: a strength day can hold the gym lifts in the strength
  *  session; a power day next; unset as before; a light or rest day has no heavy lift, so last. */
 const NO_MATCH_B_RANK: Record<NoMatchDayKind, number> = { strength: 0, power: 1, light: 50, rest: 50 };

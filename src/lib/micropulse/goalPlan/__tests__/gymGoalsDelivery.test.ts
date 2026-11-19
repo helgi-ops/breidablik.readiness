@@ -99,7 +99,7 @@ describe("into the strength session", () => {
   // Week 2: no test blocks, so every block is a lift.
   const START = addDays(MON, -7);
 
-  it("whichever goal day falls today is read, with its slot; other days nothing", () => {
+  it("whichever goal day falls today is read, with its slot; other days hold no goal lifts", () => {
     for (const q of GYM_ONLY_QUALITIES) {
       const plan = buildGoalPlan(input(q));
       const p = placementFor(plan, q, START, MON, cal)!;
@@ -110,7 +110,12 @@ describe("into the strength session", () => {
         expect(g!.week).toBe(2);
       }
       const free = [0, 2, 4].map(day).filter((d) => !p.placed.some((s) => s.date === d));
-      for (const d of free) expect(goalPlanGymFor({ planId: "x", quality: q, plan, startDate: START, todayIso: d, cal })).toBeNull();
+      for (const d of free) {
+        // No lifts of its own; the week's goal days ride along for the week rule's give-back.
+        const g = goalPlanGymFor({ planId: "x", quality: q, plan, startDate: START, todayIso: d, cal });
+        expect(g?.lifts ?? []).toEqual([]);
+        if (g) expect(g.giveBack?.sessions.map((x) => x.date).sort()).toEqual(p.placed.map((x) => x.date).sort());
+      }
     }
   });
 
@@ -118,7 +123,9 @@ describe("into the strength session", () => {
     const plan = buildGoalPlan(input("acceleration"));
     const p = placementFor(plan, "acceleration", START, MON, cal)!;
     const a = p.placed.find((s) => s.slot === "A")!;
-    expect(goalPlanGymFor({ planId: "x", quality: "acceleration", plan, startDate: START, todayIso: a.date, cal })).toBeNull();
+    const onA = goalPlanGymFor({ planId: "x", quality: "acceleration", plan, startDate: START, todayIso: a.date, cal });
+    expect(onA?.lifts ?? []).toEqual([]);
+    expect((onA?.giveBack?.sessions ?? []).every((x) => x.slot === "B")).toBe(true);
   });
 
   it("goal day 1 goes in, takes the place of the team's lifts, and the item carries slot A", () => {

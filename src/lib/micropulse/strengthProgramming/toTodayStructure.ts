@@ -138,7 +138,9 @@ export function strengthSessionToTodayStructure(
         if (note) item.note = note;
         if (ex.dose.velocityLossCap) item.vlCap = ex.dose.velocityLossCap;
         // The goal card reads this to know the plan session's gym part is inside today's session.
-        if (ex.goalPlan) item.goalPlan = { quality: ex.goalPlan.quality, week: ex.goalPlan.week, slot: ex.goalPlan.slot ?? "B" };
+        // Not on a give-back day (week rule, 2026-11-19): those sets belong to another day's plan session, which is
+        // ticked on its own day, so the card must not read today as that session.
+        if (ex.goalPlan && !ex.goalPlan.giveBack) item.goalPlan = { quality: ex.goalPlan.quality, week: ex.goalPlan.week, slot: ex.goalPlan.slot ?? "B" };
         // Stamp the library id + curated safe alternatives so the player can swap
         // this exercise on the Today card (safe options only). Corrective items have
         // no library id, so they carry no swap.

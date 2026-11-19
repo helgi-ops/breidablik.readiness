@@ -125,7 +125,7 @@ export type PrescribedExercise = {
   /** Part of the player's 8-week goal plan, session B (gym), merged into the team session ("One session, one whole",
    *  2026-11-17, goalPlanGym.ts). The goal's dose is the dose: no other extra set lands on it. `slot`: which plan
    *  session (the gym-only goals merge A or B, 2026-11-18); absent = B. */
-  goalPlan?: { quality: import("@/lib/micropulse/goalPlan/types").GoalQuality; week: number; slot?: import("@/lib/micropulse/goalPlan/types").GoalSessionSlot };
+  goalPlan?: { quality: import("@/lib/micropulse/goalPlan/types").GoalQuality; week: number; slot?: import("@/lib/micropulse/goalPlan/types").GoalSessionSlot; giveBack?: true };
   /** Brief sport-science rationale shown in UI tooltip. */
   rationale?: string;
 };
