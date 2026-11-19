@@ -23,6 +23,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MdContext, PlayerStrengthSnapshot, SessionCorrective } from "../strengthProgramming/types";
 import type { PaletteSlots } from "../strengthProgramming/palette";
 import type { MdStructures, NoMatchWeek } from "../strengthProgramming/structures";
+import type { MdRepsPerSet } from "../strengthProgramming/weekRule";
 import type { PlayerExercisePicks, StrengthGoal } from "../strengthProgramming/playerPicks";
 import type { PlayerChoiceAccess } from "../strengthProgramming/types";
 import { loadSprintExposure } from "@/lib/micropulse/sprintExposure/loader";
@@ -70,7 +71,7 @@ export type PlayerContext = {
   /** Stubbed null in Stage 1 (see domains.fetchVbtDecrement). */
   vbtDecrement: number | null;
   teamConfig: Domain<{
-    sport: string | null; seasonPhase: string | null; palette: PaletteSlots; mdStructures: MdStructures; noMatchWeek?: NoMatchWeek;
+    sport: string | null; seasonPhase: string | null; palette: PaletteSlots; mdStructures: MdStructures; noMatchWeek?: NoMatchWeek; mdRepsPerSet?: MdRepsPerSet;
     playerPicks?: PlayerExercisePicks; playerGoal?: StrengthGoal;
     /** The team's send mode + the coach's setting for this player: decides whether the player's choices are used. */
     playerChoiceAccess?: PlayerChoiceAccess;
@@ -169,6 +170,7 @@ export async function buildPlayerContext(
         palette: teamPalette.slots,
         mdStructures: teamPalette.mdStructures,
         ...(Object.keys(teamPalette.noMatchWeek).length > 0 ? { noMatchWeek: teamPalette.noMatchWeek } : {}),
+        ...(Object.keys(teamPalette.mdRepsPerSet).length > 0 ? { mdRepsPerSet: teamPalette.mdRepsPerSet } : {}),
         ...(playerChoices?.picks ? { playerPicks: playerChoices.picks } : {}),
         ...(playerChoices?.goal ? { playerGoal: playerChoices.goal } : {}),
         ...(teamId

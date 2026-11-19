@@ -23,6 +23,7 @@ import { loadPlayerMovementScreens } from "@/lib/micropulse/movementScreen/loade
 import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import { sanitizePaletteSlots, type PaletteSlots } from "../strengthProgramming/palette";
 import { sanitizeMdStructures, sanitizeNoMatchWeek, type MdStructures, type NoMatchWeek } from "../strengthProgramming/structures";
+import { sanitizeMdRepsPerSet, type MdRepsPerSet } from "../strengthProgramming/weekRule";
 import { activeGoal, sanitizePicks, type PlayerExercisePicks, type StrengthGoal } from "../strengthProgramming/playerPicks";
 import { normalizeSendMode, type SendMode } from "../strengthProgramming/sendMode";
 import { resolveWeekPhase } from "@/lib/micropulse/weekSetup/weekPhaseServer";
@@ -63,21 +64,28 @@ export async function fetchTeamContext(sb: SupabaseClient, teamId: string | null
 export async function fetchTeamPalette(
   sb: SupabaseClient,
   teamId: string | null,
-): Promise<{ slots: PaletteSlots; mdStructures: MdStructures; noMatchWeek: NoMatchWeek }> {
-  if (!teamId) return { slots: {}, mdStructures: {}, noMatchWeek: {} };
+): Promise<{ slots: PaletteSlots; mdStructures: MdStructures; noMatchWeek: NoMatchWeek; mdRepsPerSet: MdRepsPerSet }> {
+  if (!teamId) return { slots: {}, mdStructures: {}, noMatchWeek: {}, mdRepsPerSet: {} };
   try {
-    // The weekday plan for weeks without a match (2026-11-17) is read in the same row. Should that column be
-    // missing, the palette and MD setup still load (the weekday plan is then simply unset).
-    let res = await sb.from("team_strength_palette").select("slots, md_structures, no_match_week").eq("team_id", teamId).maybeSingle();
-    if (res.error) res = await sb.from("team_strength_palette").select("slots, md_structures").eq("team_id", teamId).maybeSingle();
-    const row = res.data as { slots?: unknown; md_structures?: unknown; no_match_week?: unknown } | null;
+    // The weekday plan for weeks without a match (2026-11-17) and the reps a set per MD day (2026-11-19) are read in
+    // the same row. Should either column be missing, the palette and MD setup still load (that setting is then unset).
+    type Row = { slots?: unknown; md_structures?: unknown; no_match_week?: unknown; md_reps_per_set?: unknown };
+    const read = async (cols: string) => {
+      const r = await sb.from("team_strength_palette").select(cols).eq("team_id", teamId).maybeSingle();
+      return { error: r.error, row: r.data as Row | null };
+    };
+    let res = await read("slots, md_structures, no_match_week, md_reps_per_set");
+    if (res.error) res = await read("slots, md_structures, no_match_week");
+    if (res.error) res = await read("slots, md_structures");
+    const row = res.row;
     return {
       slots: sanitizePaletteSlots(row?.slots),
       mdStructures: sanitizeMdStructures(row?.md_structures),
       noMatchWeek: sanitizeNoMatchWeek(row?.no_match_week),
+      mdRepsPerSet: sanitizeMdRepsPerSet(row?.md_reps_per_set),
     };
   } catch {
-    return { slots: {}, mdStructures: {}, noMatchWeek: {} };
+    return { slots: {}, mdStructures: {}, noMatchWeek: {}, mdRepsPerSet: {} };
   }
 }
 

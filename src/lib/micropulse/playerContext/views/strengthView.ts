@@ -60,5 +60,7 @@ export function strengthView(ctx: PlayerContext): PlayerStrengthSnapshot {
     ...(ctx.microcycle.data.noMatchNearby ? { noMatchNearby: true as const } : {}),
     // The coach's weekday plan for weeks without a match (used by the engine only with noMatchNearby).
     ...(cfg.noMatchWeek ? { noMatchWeek: cfg.noMatchWeek } : {}),
+    // The coach's reps a set per heavy MD day (the week rule cuts the day's reps into sets by it).
+    ...(cfg.mdRepsPerSet ? { mdRepsPerSet: cfg.mdRepsPerSet } : {}),
   };
 }

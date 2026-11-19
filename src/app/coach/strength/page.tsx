@@ -35,6 +35,7 @@ import StrengthSessionPdf, { type StrengthSessionPdfData } from "@/components/co
 import { useLang } from "@/lib/lang";
 import type { StrengthSession, MdContext, PlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/types";
 import type { PaletteSlot, PaletteSlots } from "@/lib/micropulse/strengthProgramming/palette";
+import { MATCH_WEEK_HEAVY_REPS, REPS_PER_SET_CHOICES, HEAVY_MD_DAYS, setsForReps, type MdRepsPerSet, type RepsPerSet } from "@/lib/micropulse/strengthProgramming/weekRule";
 import { readinessDowngrade, STRUCTURE_LABEL, STRUCTURE_SCHEME, STRUCTURE_DEMAND, STRUCTURE_FAMILY, STRUCTURE_ISO_MODE, NO_MATCH_DAY_LABEL, type StructureKey, type MdStructures, type NoMatchWeek, type NoMatchDayKind } from "@/lib/micropulse/strengthProgramming/structures";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import { ISO_MODE_LABELS, ISO_MODE_CITATION } from "@/lib/micropulse/isometrics/protocols";
@@ -143,6 +144,8 @@ export default function CoachStrengthPage() {
   const [mdStructures, setMdStructures] = useState<MdStructures>({});
   // Weeks without a match: weekday → strength / power / light / rest (2026-11-17). Saved with the structures.
   const [noMatchWeek, setNoMatchWeek] = useState<NoMatchWeek>({});
+  // Reps a set for the heavy lift per heavy MD day (the week rule cuts the day's reps into sets by it). Saved with the structures.
+  const [mdRepsPerSet, setMdRepsPerSet] = useState<MdRepsPerSet>({});
   const [structureOptions, setStructureOptions] = useState<StructureOptionGroup[]>([]);
   const [savingStructures, setSavingStructures] = useState(false);
   const [structuresSaved, setStructuresSaved] = useState(false);
@@ -217,6 +220,7 @@ export default function CoachStrengthPage() {
         setSlotOptions((json.slotOptions ?? []) as SlotOptionGroup[]);
         setMdStructures((json.mdStructures ?? {}) as MdStructures);
         setNoMatchWeek((json.noMatchWeek ?? {}) as NoMatchWeek);
+        setMdRepsPerSet((json.mdRepsPerSet ?? {}) as MdRepsPerSet);
         setStructureOptions((json.structureOptions ?? []) as StructureOptionGroup[]);
       } catch {
         // silent
@@ -530,6 +534,18 @@ export default function CoachStrengthPage() {
     });
   }
 
+  /** Reps a set for a heavy MD day; "" = the method's own. */
+  function setRepsPerSet(md: MdContext, value: string) {
+    setStructuresSaved(false);
+    setMdRepsPerSet((prev) => {
+      const next = { ...prev };
+      const n = Number(value);
+      if ((REPS_PER_SET_CHOICES as readonly number[]).includes(n)) next[md] = n as RepsPerSet;
+      else delete next[md];
+      return next;
+    });
+  }
+
   /** Persist the team MD→structure map. */
   async function saveStructures() {
     if (savingStructures) return;
@@ -542,12 +558,13 @@ export default function CoachStrengthPage() {
       const res = await fetch("/api/coach/team/strength-palette", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ mdStructures, noMatchWeek }),
+        body: JSON.stringify({ mdStructures, noMatchWeek, mdRepsPerSet }),
       });
       if (res.ok) {
         const json = await res.json().catch(() => ({}));
         setMdStructures((json.mdStructures ?? mdStructures) as MdStructures);
         setNoMatchWeek((json.noMatchWeek ?? noMatchWeek) as NoMatchWeek);
+        setMdRepsPerSet((json.mdRepsPerSet ?? mdRepsPerSet) as MdRepsPerSet);
         setStructuresSaved(true);
         setTimeout(() => setStructuresSaved(false), 2500);
       }
@@ -1015,6 +1032,12 @@ export default function CoachStrengthPage() {
                             "Þessi blokk er MICRO-DOSE — styrkur dreifður yfir MD-vikuna (sjálfgefið). Settu aðferð á dagana sem þú vilt; þú getur samt merkt hvaða dag sem er \"Off / hvíld\" til að sleppa æfingu hans. Skiptu blokk yfir á Hefðbundið á Þjálfunarprinsipp flipanum.",
                           )}
                     </p>
+                    <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
+                      {t(
+                        `Heavy reps a week are fixed by the week rule: in season ${MATCH_WEEK_HEAVY_REPS.hold["MD-4"]} on MD-4 and ${MATCH_WEEK_HEAVY_REPS.hold["MD-3"]} on MD-3; pre-season ${MATCH_WEEK_HEAVY_REPS.preseason["MD-4"]} and ${MATCH_WEEK_HEAVY_REPS.preseason["MD-3"]}; MD-5 adds ${MATCH_WEEK_HEAVY_REPS.hold["MD-5"]}. On each heavy day you choose how many reps a set holds; the sets follow. Fewer reps a set means more sets and less fatigue in each set, for the same reps.`,
+                        `Þungar endurtekningar á viku eru fastar í vikureglunni: á keppnistímabili ${MATCH_WEEK_HEAVY_REPS.hold["MD-4"]} á MD-4 og ${MATCH_WEEK_HEAVY_REPS.hold["MD-3"]} á MD-3; á undirbúningstímabili ${MATCH_WEEK_HEAVY_REPS.preseason["MD-4"]} og ${MATCH_WEEK_HEAVY_REPS.preseason["MD-3"]}; MD-5 bætir við ${MATCH_WEEK_HEAVY_REPS.hold["MD-5"]}. Á hverjum þungum degi velur þú hve margar endurtekningar eru í setti; settin fylgja. Færri endurtekningar í setti þýða fleiri sett og minni þreytu í hverju setti, fyrir sömu endurtekningar.`,
+                      )}
+                    </p>
                     <div className="space-y-2">
                       {structureOptions.map((grp) => {
                         const md = grp.md as MdContext;
@@ -1094,6 +1117,35 @@ export default function CoachStrengthPage() {
                                 <span className="font-medium text-slate-500">{t("Scheme", "Skema")}:</span> {scheme(effective)}
                               </div>
                             ) : null}
+                            {/* Reps a set for the day's heavy lift: the week rule fixes the day's reps, this cuts them into sets. */}
+                            {!isRest && HEAVY_MD_DAYS.includes(md) ? (() => {
+                              const chosen = mdRepsPerSet[md] ?? null;
+                              const kind = effective === "french_contrast" ? "french_contrast" : effective === "contrast" ? "contrast" : "lift";
+                              const how = (reps: number | undefined) => {
+                                if (!reps || !chosen) return "";
+                                const sets = setsForReps(reps, chosen, kind);
+                                return `${reps} → ${sets} × ${chosen}${sets * chosen !== reps ? ` (${sets * chosen})` : ""}`;
+                              };
+                              return (
+                                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-14 text-[11px] text-slate-600">
+                                  <label htmlFor={`reps-per-set-${grp.md}`} className="font-medium text-slate-700">{t("Reps a set (heavy lift)", "Endurtekningar í setti (þung lyfta)")}</label>
+                                  <select
+                                    id={`reps-per-set-${grp.md}`}
+                                    value={chosen ?? ""}
+                                    onChange={(e) => setRepsPerSet(md, e.target.value)}
+                                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[12px]"
+                                  >
+                                    <option value="">{t("As the method gives", "Eins og aðferðin gefur")}</option>
+                                    {REPS_PER_SET_CHOICES.map((n) => <option key={n} value={n}>{n}</option>)}
+                                  </select>
+                                  {chosen ? (
+                                    <span>
+                                      {t("In season", "Á keppnistímabili")}: {how(MATCH_WEEK_HEAVY_REPS.hold[md])} · {t("pre-season", "undirbúningstímabil")}: {how(MATCH_WEEK_HEAVY_REPS.preseason[md])}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              );
+                            })() : null}
                             {/* Full family ladder for this day (educational — yellow moves ONE rung). */}
                             {effective && ladderOpenMd === grp.md && (() => {
                               const fam = STRUCTURE_FAMILY[effective];

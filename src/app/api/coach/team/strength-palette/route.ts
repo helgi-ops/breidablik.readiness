@@ -7,11 +7,14 @@
  * POST replaces the palette (validated to eligible ids). Auth: coach token only.
  *
  * Also the structure per MD day (md_structures) and, since 2026-11-17, the weekday plan for weeks without a match
- * (no_match_week: weekday → strength / power / light / rest). Each field saves independently.
+ * (no_match_week: weekday → strength / power / light / rest), and, since 2026-11-19, the reps a set per heavy MD day
+ * (md_reps_per_set: MD-5 / MD-4 / MD-3 → 1–5; the week rule cuts the day's heavy reps into sets by it). Each field
+ * saves independently.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { PALETTE_SLOTS, SLOT_LABEL, exercisesForSlot, sanitizePaletteSlots } from "@/lib/micropulse/strengthProgramming/palette";
+import { HEAVY_MD_DAYS, MATCH_WEEK_HEAVY_REPS, REPS_PER_SET_CHOICES, sanitizeMdRepsPerSet } from "@/lib/micropulse/strengthProgramming/weekRule";
 import { STRUCTURES_ALLOWED_BY_MD, DEFAULT_STRUCTURE_BY_MD, STRUCTURE_LABEL, sanitizeMdStructures, sanitizeNoMatchWeek, noMatchWeekToStore } from "@/lib/micropulse/strengthProgramming/structures";
 
 export const runtime = "nodejs";
@@ -53,25 +56,29 @@ export async function GET(req: NextRequest) {
   const supabase = getSupabase();
   const auth = await getCoachAuth(req, supabase);
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const { data, error } = await supabase.from("team_strength_palette").select("slots, md_structures, no_match_week").eq("team_id", auth.teamId).maybeSingle();
+  const { data, error } = await supabase.from("team_strength_palette").select("slots, md_structures, no_match_week, md_reps_per_set").eq("team_id", auth.teamId).maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  const row = data as { slots?: unknown; md_structures?: unknown; no_match_week?: unknown } | null;
+  const row = data as { slots?: unknown; md_structures?: unknown; no_match_week?: unknown; md_reps_per_set?: unknown } | null;
   const slots = sanitizePaletteSlots(row?.slots);
   const mdStructures = sanitizeMdStructures(row?.md_structures);
   const noMatchWeek = sanitizeNoMatchWeek(row?.no_match_week);
-  return NextResponse.json({ ok: true, slots, slotOptions: slotOptions(), mdStructures, structureOptions: structureOptions(), noMatchWeek });
+  const mdRepsPerSet = sanitizeMdRepsPerSet(row?.md_reps_per_set);
+  // The week rule's numbers ride along so the picker can show how the day's reps turn into sets.
+  const repsPerSetOptions = { days: HEAVY_MD_DAYS, choices: REPS_PER_SET_CHOICES, dayReps: MATCH_WEEK_HEAVY_REPS };
+  return NextResponse.json({ ok: true, slots, slotOptions: slotOptions(), mdStructures, structureOptions: structureOptions(), noMatchWeek, mdRepsPerSet, repsPerSetOptions });
 }
 
 export async function POST(req: NextRequest) {
   const supabase = getSupabase();
   const auth = await getCoachAuth(req, supabase);
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const body = (await req.json().catch(() => ({}))) as { slots?: unknown; mdStructures?: unknown; noMatchWeek?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { slots?: unknown; mdStructures?: unknown; noMatchWeek?: unknown; mdRepsPerSet?: unknown };
   // Merge-friendly: only overwrite the field(s) the caller sent, so the palette UI
   // and the structure UI can save independently.
   const patch: Record<string, unknown> = { team_id: auth.teamId, updated_by: auth.userId, updated_at: new Date().toISOString() };
   if ("slots" in body) patch.slots = sanitizePaletteSlots(body.slots);
   if ("mdStructures" in body) patch.md_structures = sanitizeMdStructures(body.mdStructures);
+  if ("mdRepsPerSet" in body) patch.md_reps_per_set = sanitizeMdRepsPerSet(body.mdRepsPerSet);
   if ("noMatchWeek" in body) {
     // Keep when the days last changed (`since`): goal plans re-place session B by it only from the next week.
     const { data: cur } = await supabase.from("team_strength_palette").select("no_match_week").eq("team_id", auth.teamId).maybeSingle();
@@ -84,5 +91,6 @@ export async function POST(req: NextRequest) {
     slots: patch.slots,
     mdStructures: patch.md_structures,
     noMatchWeek: "no_match_week" in patch ? sanitizeNoMatchWeek(patch.no_match_week) : undefined,
+    mdRepsPerSet: "md_reps_per_set" in patch ? patch.md_reps_per_set : undefined,
   });
 }

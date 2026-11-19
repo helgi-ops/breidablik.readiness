@@ -59,11 +59,43 @@ export const MATCH_WEEK_HEAVY_REPS: Record<WeekRuleSeason, Partial<Record<MdCont
 export const NO_MATCH_WEEK_HEAVY_TOTAL: Record<WeekRuleSeason, number> = { hold: 15, preseason: 21 };
 /** A week without a match: at most three heavy days, never two days in a row. */
 export const NO_MATCH_MAX_HEAVY_DAYS = 3;
+/**
+ * Reps a set, the coach's choice per heavy MD day (2026-11-19). The day's reps are fixed by the rule; this says how
+ * they are cut into sets: 12 reps are 6 × 2 or 3 × 4. Fewer reps a set means less fatigue in each set for the same
+ * reps (a set stopped early loses less bar speed: Sánchez-Medina 2011; Pareja-Blanco 2017). Unset = the method's own.
+ * Persisted in team_strength_palette.md_reps_per_set (jsonb): MD day → 1–5.
+ */
+export const HEAVY_MD_DAYS: MdContext[] = ["MD-5", "MD-4", "MD-3"];
+export const REPS_PER_SET_CHOICES = [1, 2, 3, 4, 5] as const;
+export type RepsPerSet = (typeof REPS_PER_SET_CHOICES)[number];
+export type MdRepsPerSet = Partial<Record<MdContext, RepsPerSet>>;
+
+/** Keep only heavy MD day → 1–5. */
+export function sanitizeMdRepsPerSet(raw: unknown): MdRepsPerSet {
+  const out: MdRepsPerSet = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const md of HEAVY_MD_DAYS) {
+    const v = Number((raw as Record<string, unknown>)[md]);
+    if ((REPS_PER_SET_CHOICES as readonly number[]).includes(v)) out[md] = v as RepsPerSet;
+  }
+  return out;
+}
+
 /** The week's reps are dealt out in threes; a heavy day holds 6 to 15. */
 const REP_STEP = 3;
 const MIN_REPS_PER_HEAVY_DAY = 6;
 const MAX_REPS_PER_HEAVY_DAY = 15;
+/** At most 6 sets of one lift; singles may go to 10 (ten single reps). */
 const MAX_SETS_PER_LIFT = 6;
+const MAX_SETS_OF_SINGLES = 10;
+/** A contrast pair is done for at most 5 rounds: the range the studies used (1–5 a session, Lesinski 2014). */
+export const CONTRAST_MAX_ROUNDS = 5;
+
+/** The day's reps as sets of `perSet`, to the nearest set, inside the cap for that kind of work. */
+export function setsForReps(dayReps: number, perSet: number, kind: "lift" | "contrast" | "french_contrast" = "lift"): number {
+  const cap = kind === "french_contrast" ? FRENCH_CONTRAST_MAX_ROUNDS : kind === "contrast" ? CONTRAST_MAX_ROUNDS : perSet === 1 ? MAX_SETS_OF_SINGLES : MAX_SETS_PER_LIFT;
+  return Math.max(1, Math.min(cap, Math.round(dayReps / Math.max(1, perSet))));
+}
 
 export const WEEK_RULE_EVIDENCE =
   "Week rule. The unit is heavy repetitions a week: with the weekly volume the same, the number of sessions made no difference to strength (Cuthbert 2021; Grgic 2018). How much: 12 heavy reps a week kept strength in season in professional footballers (Rønnestad 2011); 32 a week built it in a pre-season (Helgerud, in Hoff & Helgerud 2004); more sets did not give more strength in trained men (Schoenfeld 2019; Ralston 2017). When: jump and hamstring strength are still down 72 h after a match (Silva 2018) and a heavy session can lower performance for 48 h or longer (Harrison 2019), so heavy work sits on MD-4 and MD-3. Within the set: footballers who stopped at a 15% speed loss improved jump and strength, those who went to 30% did not improve the jump (Pareja-Blanco 2017). How the reps are split between the heavy days is MicroPulse's rule, not from a study.";
@@ -260,42 +292,49 @@ export type WeekRuleApplied = {
   to: number;
   /** How the reps are done: "3 × 3", or "2 × 3 + 2 × 3" with two heavy lifts. */
   as: string;
-  /** A French contrast block was held at its round cap (so `to` is under the day's number). */
-  cappedRounds: boolean;
+  /** A cap held the sets under the day's reps: French contrast rounds (3), contrast rounds (5), or sets of one lift. */
+  capped: "french_contrast" | "contrast" | "sets" | null;
+  /** The coach's reps a set for this day were used (else the method's own). */
+  coachRepsPerSet: number | null;
 };
 
-/** A plain range of reps ("3-5", "3–5"): the rule takes the lower end, so the day's reps are a known number. */
-const REP_RANGE = /^\s*(\d+)\s*[-–]\s*\d+\s*$/;
+/** A plain reps line: one number ("3") or a range ("3-5", "3–5"). Only these take the coach's reps a set; a cluster
+ *  line ("6 × 1 (singles)") is the method's own way of cutting the set and stays. */
+const REP_PLAIN = /^\s*(\d+)\s*(?:[-–]\s*\d+\s*)?$/;
 
 /**
- * Sets today's heavy lower-body reps. The method says how many reps a set holds (the lower end of a range); the sets
- * are the day's reps over that, to the nearest set. In a contrast block (heavy lift → jump, round by round) every
- * exercise of the block does the same number of rounds, so the pairs match; a French contrast block (four exercises a
- * round) takes at most three rounds. Mutates the blocks. Null when the day has no heavy lift.
+ * Sets today's heavy lower-body reps. How many reps a set holds: the coach's choice for the day when there is one,
+ * else the method's (the lower end of a range); the sets are the day's reps over that, to the nearest set. In a
+ * contrast block (heavy lift → jump, round by round) every exercise of the block does the same number of rounds, so
+ * the pairs match: at most five rounds, and three in a French contrast block (four exercises a round). Mutates the
+ * blocks. Null when the day has no heavy lift.
  */
-export function applyWeekRule(blocks: SessionBlock[], dayReps: number): WeekRuleApplied | null {
+export function applyWeekRule(blocks: SessionBlock[], dayReps: number, coachRepsPerSet?: number | null): WeekRuleApplied | null {
   const spots: { b: number; i: number }[] = [];
   blocks.forEach((blk, b) => blk.exercises.forEach((ex, i) => { if (isHeavyLift(ex)) spots.push({ b, i }); }));
   if (!spots.length) return null;
-  const out: WeekRuleApplied = { from: 0, to: 0, as: "", cappedRounds: false };
+  const out: WeekRuleApplied = { from: 0, to: 0, as: "", capped: null, coachRepsPerSet: null };
   const parts: string[] = [];
   spots.forEach((s) => {
     const blk = blocks[s.b];
     const ex = blk.exercises[s.i];
-    const perSet = repsOf(ex.dose.reps) ?? 1;
+    const own = repsOf(ex.dose.reps) ?? 1;
+    const plain = REP_PLAIN.test(ex.dose.reps);
+    const useCoach = plain && coachRepsPerSet != null && coachRepsPerSet >= 1 && coachRepsPerSet <= HEAVY_REPS_MAX;
+    const perSet = useCoach ? Math.round(coachRepsPerSet!) : own;
+    if (useCoach) out.coachRepsPerSet = perSet;
     const contrast = blk.type === "FRENCH_CONTRAST" && spots.filter((x) => x.b === s.b).length === 1;
+    const kind = !contrast ? "lift" : blk.exercises.length >= FRENCH_CONTRAST_MIN_EXERCISES ? "french_contrast" : "contrast";
     // More than one heavy lift in the day: the day's reps are shared between them.
-    let sets = Math.max(1, Math.min(MAX_SETS_PER_LIFT, Math.round(dayReps / spots.length / perSet)));
-    if (contrast && blk.exercises.length >= FRENCH_CONTRAST_MIN_EXERCISES && sets > FRENCH_CONTRAST_MAX_ROUNDS) {
-      sets = FRENCH_CONTRAST_MAX_ROUNDS;
-      out.cappedRounds = true;
-    }
-    out.from += ex.dose.sets * perSet;
+    const share = dayReps / spots.length;
+    const sets = setsForReps(share, perSet, kind);
+    if (sets < Math.round(share / perSet)) out.capped = kind === "lift" ? "sets" : kind;
+    out.from += ex.dose.sets * own;
     out.to += sets * perSet;
     parts.push(`${sets} × ${perSet}`);
     // The set stops at a 20% speed loss (about half the reps the player could do), never a higher loss.
     const cap = ex.dose.velocityLossCap && ex.dose.velocityLossCap <= HEAVY_VELOCITY_LOSS_CAP ? ex.dose.velocityLossCap : HEAVY_VELOCITY_LOSS_CAP;
-    const reps = REP_RANGE.test(ex.dose.reps) ? String(perSet) : ex.dose.reps;
+    const reps = plain ? String(perSet) : ex.dose.reps;
     blk.exercises[s.i] = { ...ex, dose: { ...ex.dose, sets, reps, velocityLossCap: cap, weekRule: true } };
     if (contrast) {
       blk.exercises = blk.exercises.map((e, i) => (i === s.i || e.dose.sets === sets ? e : { ...e, dose: { ...e.dose, sets } }));
@@ -323,15 +362,21 @@ export function weekRuleAudit(args: {
     ? { en: `${noMatch.weekTotal} heavy reps this week on ${noMatch.heavyDates.length} day${noMatch.heavyDates.length === 1 ? "" : "s"}`, is: `${noMatch.weekTotal} þungar endurtekningar í vikunni á ${noMatch.heavyDates.length} ${noMatch.heavyDates.length === 1 ? "degi" : "dögum"}` }
     : { en: `${md} is a heavy day; the week holds ${weekReps} heavy reps on MD-4 and MD-3${md === "MD-5" ? `, and ${matchWeek["MD-5"]} more today because there was no match the days before` : ""}`, is: `${md} er þungur dagur; vikan hefur ${weekReps} þungar endurtekningar á MD-4 og MD-3${md === "MD-5" ? `, og ${matchWeek["MD-5"]} í viðbót í dag því enginn leikur var dagana á undan` : ""}` };
   const was = applied.from === applied.to ? { en: "", is: "" } : { en: ` (the method alone gives ${applied.from})`, is: ` (aðferðin ein gefur ${applied.from})` };
-  const cap = applied.cappedRounds
-    ? { en: ` French contrast takes at most ${FRENCH_CONTRAST_MAX_ROUNDS} rounds, so the day stays short: ${applied.to} of the day's ${dayReps} reps.`, is: ` French contrast er mest ${FRENCH_CONTRAST_MAX_ROUNDS} hringir, svo dagurinn haldist stuttur: ${applied.to} af ${dayReps} endurtekningum dagsins.` }
+  const of = { en: `${applied.to} of the day's ${dayReps} reps`, is: `${applied.to} af ${dayReps} endurtekningum dagsins` };
+  const cap =
+    applied.capped === "french_contrast" ? { en: ` French contrast takes at most ${FRENCH_CONTRAST_MAX_ROUNDS} rounds, so the day stays short: ${of.en}.`, is: ` French contrast er mest ${FRENCH_CONTRAST_MAX_ROUNDS} hringir, svo dagurinn haldist stuttur: ${of.is}.` }
+    : applied.capped === "contrast" ? { en: ` A contrast pair takes at most ${CONTRAST_MAX_ROUNDS} rounds: ${of.en}.`, is: ` Contrast-par er mest ${CONTRAST_MAX_ROUNDS} hringir: ${of.is}.` }
+    : applied.capped === "sets" ? { en: ` One lift takes a limited number of sets: ${of.en}.`, is: ` Ein lyfta fær takmarkaðan fjölda setta: ${of.is}.` }
     : { en: "", is: "" };
+  const who = applied.coachRepsPerSet != null
+    ? { en: `The coach chose ${applied.coachRepsPerSet} rep${applied.coachRepsPerSet === 1 ? "" : "s"} a set for ${md}; the sets follow.`, is: `Þjálfarinn valdi ${applied.coachRepsPerSet} ${applied.coachRepsPerSet === 1 ? "endurtekningu" : "endurtekningar"} í setti á ${md}; settin fylgja.` }
+    : { en: "The method says how many reps a set holds; the sets follow.", is: "Aðferðin ræður endurtekningum í setti; settin fylgja." };
   return {
     ruleId: "WEEK_RULE_HEAVY_REPS",
     triggerEN: `Week rule (${seasonEN}): ${week.en}`,
     triggerIS: `Vikuregla (${seasonIS}): ${week.is}`,
-    actionEN: `Today's heavy lower-body reps: ${applied.to}, as ${applied.as}${was.en}. The method says how many reps a set holds; the sets follow. Each set stops at a 20% speed loss, or at about half the reps you could do. In a contrast block the jumps follow the same number of rounds.${cap.en}`,
-    actionIS: `Þungar endurtekningar neðri líkama í dag: ${applied.to}, sem ${applied.as}${was.is}. Aðferðin ræður endurtekningum í setti; settin fylgja. Hverju setti er hætt við 20% hraðatap, eða við um helming þeirra endurtekninga sem þú gætir gert. Í contrast-blokk fylgja stökkin sama fjölda hringja.${cap.is}`,
+    actionEN: `Today's heavy lower-body reps: ${applied.to}, as ${applied.as}${was.en}. ${who.en} Each set stops at a 20% speed loss, or at about half the reps you could do. In a contrast block the jumps follow the same number of rounds.${cap.en}`,
+    actionIS: `Þungar endurtekningar neðri líkama í dag: ${applied.to}, sem ${applied.as}${was.is}. ${who.is} Hverju setti er hætt við 20% hraðatap, eða við um helming þeirra endurtekninga sem þú gætir gert. Í contrast-blokk fylgja stökkin sama fjölda hringja.${cap.is}`,
     evidence: WEEK_RULE_EVIDENCE,
   };
 }

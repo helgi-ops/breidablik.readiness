@@ -10,7 +10,7 @@ import { applyBlockToSession } from "../blockEmphasis";
 import { sanitizeNoMatchWeek, type StructureKey } from "../structures";
 import {
   FRENCH_CONTRAST_MAX_ROUNDS, HEAVY_VELOCITY_LOSS_CAP, MATCH_WEEK_HEAVY_REPS, NEAR_MATCH_LOAD, NEAR_MATCH_REPS, NEAR_MATCH_SETS,
-  NO_MATCH_WEEK_HEAVY_TOTAL, applyWeekRule, isHeavyLift, matchWeekHeavyReps, noMatchWeekRule, weekRuleSeasonOf,
+  NO_MATCH_WEEK_HEAVY_TOTAL, applyWeekRule, isHeavyLift, matchWeekHeavyReps, noMatchWeekRule, sanitizeMdRepsPerSet, setsForReps, weekRuleSeasonOf,
 } from "../weekRule";
 import type { MdContext, PlayerStrengthSnapshot, PrescribedExercise, SessionBlock } from "../types";
 
@@ -83,11 +83,13 @@ describe("the same reps, whatever the reps a set (the coach's example: 12 reps =
     }
   });
 
-  it("singles and doubles: many short sets, never more than 6 sets of one lift", () => {
+  it("singles and doubles: many short sets; at most 10 sets of singles and 6 of anything longer", () => {
     const singles = oneLiftDay(3, "1");
     expect(applyWeekRule(singles, 6)!.as).toBe("6 × 1");
     const capped = oneLiftDay(3, "1");
-    expect(applyWeekRule(capped, 12)!.as).toBe("6 × 1"); // 12 singles would be 12 sets: held at 6
+    expect(applyWeekRule(capped, 12)).toMatchObject({ as: "10 × 1", capped: "sets" }); // 12 singles would be 12 sets: held at 10
+    const twos = oneLiftDay(3, "2");
+    expect(applyWeekRule(twos, 15)).toMatchObject({ as: "6 × 2", capped: "sets" });
     const doubles = oneLiftDay(3, "2");
     expect(applyWeekRule(doubles, 9)!.as).toBe("5 × 2"); // to the nearest set
   });
@@ -109,6 +111,77 @@ describe("the same reps, whatever the reps a set (the coach's example: 12 reps =
   it("a day with no heavy lift → nothing to set", () => {
     expect(applyWeekRule(oneLiftDay(3, "12 (6+6, 15s mid-set pause)"), 9)).toBeNull();
     expect(applyWeekRule(oneLiftDay(3, "30s hold"), 9)).toBeNull();
+  });
+});
+
+describe("reps a set: the coach's choice per heavy MD day", () => {
+  it("only MD-5 / MD-4 / MD-3 and only 1–5 are kept", () => {
+    expect(sanitizeMdRepsPerSet({ "MD-4": 2, "MD-3": "3", "MD-5": 5, "MD-2": 2, "MD-1": 1 })).toEqual({ "MD-5": 5, "MD-4": 2, "MD-3": 3 });
+    expect(sanitizeMdRepsPerSet({ "MD-4": 0, "MD-3": 6, "MD-5": "x" })).toEqual({});
+    expect(sanitizeMdRepsPerSet(null)).toEqual({});
+    expect(sanitizeMdRepsPerSet([2, 3])).toEqual({});
+  });
+
+  it("the day's reps as sets: 12 = 6 × 2 = 4 × 3 = 3 × 4; singles up to 10 sets; contrast 5 rounds, French contrast 3", () => {
+    expect([2, 3, 4].map((n) => setsForReps(12, n))).toEqual([6, 4, 3]);
+    expect(setsForReps(9, 1)).toBe(9);
+    expect(setsForReps(12, 1)).toBe(10);
+    expect(setsForReps(12, 2, "contrast")).toBe(5);
+    expect(setsForReps(12, 2, "french_contrast")).toBe(3);
+    expect(setsForReps(6, 5)).toBe(1);
+  });
+
+  it("the choice replaces the method's reps a set; the reps line is rewritten", () => {
+    const blocks = oneLiftDay(3, "3-5");
+    const out = applyWeekRule(blocks, 12, 2)!;
+    expect(blocks[0].exercises[0].dose).toMatchObject({ sets: 6, reps: "2" });
+    expect(out).toMatchObject({ to: 12, as: "6 × 2", coachRepsPerSet: 2, capped: null });
+    // Singles: 12 reps would be 12 sets; held at 10, and the line says so.
+    const singles = oneLiftDay(3, "3");
+    expect(applyWeekRule(singles, 12, 1)).toMatchObject({ to: 10, as: "10 × 1", capped: "sets" });
+  });
+
+  it("a method that cuts its own sets (singles in blocks) keeps its line", () => {
+    const blocks = oneLiftDay(4, "6 × 1 (singles)");
+    const out = applyWeekRule(blocks, 12, 2)!;
+    expect(blocks[0].exercises[0].dose.reps).toBe("6 × 1 (singles)");
+    expect(out).toMatchObject({ as: "2 × 6", coachRepsPerSet: null });
+  });
+
+  it("the engine: MD-4 at 2 reps a set → 6 × 2 in pre-season; a day with no choice keeps the method's", () => {
+    const md = { "MD-4": "straight_sets", "MD-3": "straight_sets" } as const;
+    const s4 = buildStrengthSession(snap({ mdContext: "MD-4", mdStructures: md, mdRepsPerSet: { "MD-4": 2 } }))!;
+    expect(heavy(s4).map((e) => [e.dose.sets, e.dose.reps])).toEqual([[6, "2"]]);
+    expect(heavyReps(s4)).toBe(12);
+    expect(rule(s4, "WEEK_RULE_HEAVY_REPS")?.actionEN).toMatch(/12, as 6 × 2.*The coach chose 2 reps a set for MD-4/);
+    expect(rule(s4, "WEEK_RULE_HEAVY_REPS")?.actionIS).toMatch(/Þjálfarinn valdi 2 endurtekningar í setti á MD-4/);
+    const s3 = buildStrengthSession(snap({ mdContext: "MD-3", mdStructures: md, mdRepsPerSet: { "MD-4": 2 } }))!;
+    expect(heavy(s3).map((e) => [e.dose.sets, e.dose.reps])).toEqual([[3, "3"]]);
+    expect(rule(s3, "WEEK_RULE_HEAVY_REPS")?.actionEN).toMatch(/The method says how many reps a set holds/);
+    // In season the same choice gives 9 reps as 5 × 2 (to the nearest set).
+    const hold = buildStrengthSession(snap({ mdContext: "MD-4", seasonPhase: "inseason", mdStructures: md, mdRepsPerSet: { "MD-4": 2 } }))!;
+    expect(heavy(hold).map((e) => [e.dose.sets, e.dose.reps])).toEqual([[5, "2"]]);
+  });
+
+  it("the engine: in a contrast block the rounds follow, five at most; the line says what that leaves", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-4", mdStructures: { "MD-4": "contrast" }, mdRepsPerSet: { "MD-4": 2 } }))!;
+    const block = s.blocks.find((b) => b.type === "FRENCH_CONTRAST")!;
+    expect(new Set(block.exercises.map((e) => e.dose.sets))).toEqual(new Set([5]));
+    expect(heavyReps(s)).toBe(10);
+    expect(rule(s, "WEEK_RULE_HEAVY_REPS")?.actionIS).toMatch(/Contrast-par er mest 5 hringir: 10 af 12 endurtekningum dagsins/);
+  });
+
+  it("a week without a match: a strength day builds as MD-4 and takes the MD-4 choice", () => {
+    const plan = sanitizeNoMatchWeek({ mon: "strength", wed: "power", sat: "strength" });
+    const s = buildStrengthSession(snap({ todayIso: MON, mdContext: "MD-3", noMatchNearby: true, noMatchWeek: plan, mdStructures: { "MD-4": "straight_sets", "MD-3": "contrast" }, mdRepsPerSet: { "MD-4": 2 } }))!;
+    expect(heavy(s).map((e) => e.dose.reps)).toEqual(["2"]);
+    expect(heavyReps(s)).toBeGreaterThanOrEqual(8);
+  });
+
+  it("standard mode ignores the choice", () => {
+    const base = buildStrengthSession(snap({ mdStructures: { "MD-4": "straight_sets" } }), [], { mode: "standard" });
+    const s = buildStrengthSession(snap({ mdStructures: { "MD-4": "straight_sets" }, mdRepsPerSet: { "MD-4": 2 } }), [], { mode: "standard" });
+    expect(all(s).map((e) => [e.exerciseId, e.dose.sets, e.dose.reps])).toEqual(all(base).map((e) => [e.exerciseId, e.dose.sets, e.dose.reps]));
   });
 });
 

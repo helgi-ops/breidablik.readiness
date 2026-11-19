@@ -788,7 +788,8 @@ function buildStrengthSessionCore(
     const season = weekRuleSeasonOf(snap);
     const dayReps = noMatchRule ? noMatchRule.heavyReps : snap.noMatchNearby ? null : matchWeekHeavyReps(snap.mdContext, season);
     if (dayReps != null) {
-      const applied = applyWeekRule(tmpl.blocks, dayReps);
+      // The coach's reps a set for this day, when set (a week without a match builds as MD-4 / MD-3, so it follows).
+      const applied = applyWeekRule(tmpl.blocks, dayReps, snap.mdRepsPerSet?.[snap.mdContext] ?? null);
       if (applied) weekAudit.push(weekRuleAudit({ md: snap.mdContext, season, dayReps, applied, noMatch: noMatchRule }));
     }
     const light = noMatchRule ? weekRuleLightAudit(noMatchRule) : null;

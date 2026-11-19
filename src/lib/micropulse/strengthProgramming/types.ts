@@ -290,6 +290,10 @@ export type PlayerStrengthSnapshot = {
    *  mode lays that method out instead of the built-in template. Absent / default
    *  / other days → the built-in template. Does not apply in standard mode. */
   mdStructures?: import("./structures").MdStructures;
+  /** Reps a set for the heavy lift, per heavy MD day (the coach's choice, weekRule.ts). The week rule fixes the day's
+   *  heavy reps; this cuts them into sets (12 reps = 6 × 2 or 3 × 4). Absent / unset day → the method's own
+   *  (2026-11-19). */
+  mdRepsPerSet?: import("./weekRule").MdRepsPerSet;
   /** The player's own picks from the team list. They go first in their group when the palette fills the session;
    *  safety rules still win. Used only when the player takes part under the build's send mode (see
    *  `playerChoiceAccess`). Absent = no picks (2026-11-17). */
