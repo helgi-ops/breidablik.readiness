@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { buildStrengthSession } from "../index";
 import { applyBlockToSession } from "../blockEmphasis";
 import { sanitizeNoMatchWeek, type StructureKey } from "../structures";
-import { FRENCH_CONTRAST_MAX_ROUNDS, MATCH_WEEK_HEAVY_SETS, NO_MATCH_WEEK_HEAVY_TOTAL, isHeavyLift, matchWeekHeavySets, noMatchWeekRule, weekRuleSeasonOf } from "../weekRule";
+import { FRENCH_CONTRAST_MAX_ROUNDS, HEAVY_VELOCITY_LOSS_CAP, MATCH_WEEK_HEAVY_SETS, NEAR_MATCH_LOAD, NEAR_MATCH_REPS, NEAR_MATCH_SETS, NO_MATCH_WEEK_HEAVY_TOTAL, isHeavyLift, matchWeekHeavySets, noMatchWeekRule, weekRuleSeasonOf } from "../weekRule";
 import type { MdContext, PlayerStrengthSnapshot } from "../types";
 
 const MON = "2026-12-14";
@@ -142,6 +142,78 @@ describe("a week with a match", () => {
     expect(week("preseason", ["MD-4", "MD-3"], "french_contrast")).toBe(6);
     expect(week("preseason", ["MD-5", "MD-4", "MD-3"], "french_contrast")).toBe(8);
     expect(week("inseason", ["MD-4", "MD-3"], "french_contrast")).toBe(5);
+  });
+});
+
+describe("within the set, and close to the match (step 2)", () => {
+  const loaded = (s: S) => all(s).filter((e) => e.category === "BALLISTIC" || e.category === "EXPLOSIVE_OLYMPIC");
+
+  it("heavy days: every heavy lift stops the set at a 20% speed loss, never a higher one", () => {
+    for (const md of ["MD-5", "MD-4", "MD-3"] as MdContext[]) {
+      for (const key of HEAVY_METHODS) {
+        const s = buildStrengthSession(snap({ mdContext: md, mdStructures: { [md]: key } }));
+        for (const e of heavy(s)) {
+          expect(e.dose.velocityLossCap, `${md} ${key}`).toBeTruthy();
+          expect(e.dose.velocityLossCap!).toBeLessThanOrEqual(HEAVY_VELOCITY_LOSS_CAP);
+        }
+        if (heavy(s).length) expect(rule(s, "WEEK_RULE_HEAVY_SETS")?.actionIS).toMatch(/20% hraðatap/);
+      }
+    }
+  });
+
+  it("MD-2 and MD-1: fast work only, 15–20 explosive reps at 30–40%, each set stopped at a 10% speed loss", () => {
+    const jumps = (s: S) => all(s).filter((e) => e.category === "PLYOMETRIC" && e.exerciseId !== "mp_pogo_warmup");
+    for (const md of ["MD-2", "MD-1"] as MdContext[]) {
+      // One loaded lift alone (potentiation cluster): 4 × 4 = 16.
+      const pot = buildStrengthSession(snap({ mdContext: md, mdStructures: { [md]: "potentiation_cluster" } }))!;
+      const [lift, ...rest] = loaded(pot);
+      expect(rest).toEqual([]);
+      expect([lift.dose.sets, lift.dose.reps]).toEqual([NEAR_MATCH_SETS, String(NEAR_MATCH_REPS)]);
+      expect(lift.dose.intensity).toBe(NEAR_MATCH_LOAD);
+      expect(lift.dose.velocityLossCap).toBe(10);
+      expect(rule(pot, "WEEK_RULE_NEAR_MATCH")?.actionEN).toMatch(/4 × 4, 16 explosive reps in all \(the method alone gives 3 × 3\)/);
+      // A loaded lift paired with a jump (power contrast): 3 rounds of 3 + 3 = 18, the pair counted together.
+      const pc = buildStrengthSession(snap({ mdContext: md, mdStructures: { [md]: "power_contrast" } }))!;
+      const block = pc.blocks.find((b) => b.type === "FRENCH_CONTRAST")!;
+      expect(block.exercises.map((e) => [e.dose.sets, e.dose.reps])).toEqual([[3, "3"], [3, "3"]]);
+      expect(loaded(pc)[0].dose.intensity).toBe(NEAR_MATCH_LOAD);
+      expect(loaded(pc)[0].dose.velocityLossCap).toBe(10);
+      expect(rule(pc, "WEEK_RULE_NEAR_MATCH")?.actionIS).toMatch(/3 hringir af 3 \+ 3, hlaðna lyftan og svo stökkið, 18 sprengiendurtekningar alls/);
+      for (const s of [pot, pc]) {
+        const reps = [...loaded(s), ...jumps(s)].reduce((n, e) => n + e.dose.sets * Number(e.dose.reps), 0);
+        expect(reps, md).toBeGreaterThanOrEqual(15);
+        expect(reps, md).toBeLessThanOrEqual(20);
+        expect(heavy(s)).toEqual([]);
+        expect(rule(s, "WEEK_RULE_NEAR_MATCH")?.evidence).toMatch(/Harrison 2019/);
+        expect(rule(s, "WEEK_RULE_NEAR_MATCH")?.actionIS).toMatch(/10% hraðatap/);
+      }
+    }
+  });
+
+  it("a method with no loaded explosive lift is left as it is (isometric primer, the built-in primer)", () => {
+    for (const md of ["MD-2", "MD-1"] as MdContext[]) {
+      const builtIn = buildStrengthSession(snap({ mdContext: md }));
+      expect(rule(builtIn, "WEEK_RULE_NEAR_MATCH")).toBeUndefined();
+      const iso = buildStrengthSession(snap({ mdContext: md, mdStructures: { [md]: "iso_pap_primer" } }));
+      expect(rule(iso, "WEEK_RULE_NEAR_MATCH")).toBeUndefined();
+      const std = buildStrengthSession(snap({ mdContext: md, mdStructures: { [md]: "potentiation_cluster" } }), [], { mode: "standard" });
+      expect(rule(std, "WEEK_RULE_NEAR_MATCH")).toBeUndefined();
+    }
+  });
+
+  it("a yellow day still takes sets off the near-match dose", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-1", verdict: "MODIFIED", mdStructures: { "MD-1": "potentiation_cluster" } }));
+    for (const e of loaded(s)) expect(e.dose.sets).toBeLessThanOrEqual(NEAR_MATCH_SETS);
+  });
+
+  it("a light day in a week without a match takes the same dose", () => {
+    const plan = sanitizeNoMatchWeek({ mon: "strength", wed: "power", thu: "light", sat: "strength" });
+    const methods = { "MD-4": "french_contrast", "MD-3": "contrast", "MD-2": "power_contrast" } as const;
+    for (const i of [1, 3]) { // Tuesday (not in the plan) and Thursday (light)
+      const s = buildStrengthSession(snap({ todayIso: day(i), mdContext: "MD-3", noMatchNearby: true, noMatchWeek: plan, mdStructures: methods }))!;
+      expect(rule(s, "WEEK_RULE_NEAR_MATCH")?.actionEN).toMatch(/18 explosive reps in all/);
+      expect(rule(s, "WEEK_RULE_NEAR_MATCH")?.triggerIS).toMatch(/léttur dagur í viku án leiks/);
+    }
   });
 });
 

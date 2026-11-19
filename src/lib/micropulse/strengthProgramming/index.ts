@@ -50,7 +50,7 @@ import { EXERCISE_LIBRARY as LIBRARY, EXERCISES_BY_ID, getExercise as lookupExer
 import { effectivePool, isPlayerPick, type PlayerExercisePicks } from "./playerPicks";
 import { applyPlayerGoal } from "./playerGoal";
 import { applyGoalPlanGym } from "./goalPlanGym";
-import { applyWeekRule, matchWeekHeavySets, noMatchWeekRule, weekRuleAudit, weekRuleLightAudit, weekRuleSeasonOf, type NoMatchWeekRule } from "./weekRule";
+import { applyNearMatchDose, applyWeekRule, matchWeekHeavySets, nearMatchAudit, noMatchWeekRule, weekRuleAudit, weekRuleLightAudit, weekRuleSeasonOf, type NoMatchWeekRule } from "./weekRule";
 import { takesPart, type SendMode } from "./sendMode";
 import {
   slotForCategory,
@@ -793,6 +793,12 @@ function buildStrengthSessionCore(
     }
     const light = noMatchRule ? weekRuleLightAudit(noMatchRule) : null;
     if (light) weekAudit.push(light);
+    // Close to the match (and a light day in a week without one): the small fast dose, no heavy lift.
+    const noMatchLight = noMatchRule?.kind === "light";
+    if (noMatchLight || (!snap.noMatchNearby && (snap.mdContext === "MD-2" || snap.mdContext === "MD-1"))) {
+      const near = applyNearMatchDose(tmpl.blocks);
+      if (near) weekAudit.push(nearMatchAudit(snap.mdContext, near, noMatchLight));
+    }
   }
 
   const trace = newAdaptationTrace();

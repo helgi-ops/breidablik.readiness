@@ -59,7 +59,7 @@ const MIN_PER_HEAVY_DAY = 2;
 const MAX_PER_HEAVY_DAY = 5;
 
 export const WEEK_RULE_EVIDENCE =
-  "Week rule. The week is the unit: with the weekly volume the same, the number of sessions made no difference to strength (Cuthbert 2021; Grgic 2018). How much: 3 heavy sets a week kept strength in season in professional footballers (Rønnestad 2011); 5–9 a week gave a little more than 5 or fewer and 10 or more is not shown to be better (Ralston 2017; Schoenfeld 2019). When: jump and hamstring strength are still down 72 h after a match (Silva 2018) and a heavy session can lower performance for 48 h or longer (Harrison 2019), so heavy work sits on MD-4 and MD-3. How the sets are split between the heavy days is MicroPulse's rule, not from a study.";
+  "Week rule. The week is the unit: with the weekly volume the same, the number of sessions made no difference to strength (Cuthbert 2021; Grgic 2018). How much: 3 heavy sets a week kept strength in season in professional footballers (Rønnestad 2011); 5–9 a week gave a little more than 5 or fewer and 10 or more is not shown to be better (Ralston 2017; Schoenfeld 2019). When: jump and hamstring strength are still down 72 h after a match (Silva 2018) and a heavy session can lower performance for 48 h or longer (Harrison 2019), so heavy work sits on MD-4 and MD-3. Within the set: footballers who stopped at a 15% speed loss improved jump and strength, those who went to 30% did not improve the jump (Pareja-Blanco 2017). How the sets are split between the heavy days is MicroPulse's rule, not from a study.";
 
 /** The season the rule reads: the season plan's phase when it is on the snapshot, else the week setup's. */
 export function weekRuleSeasonOf(snap: Pick<PlayerStrengthSnapshot, "goalSeason" | "seasonPhase">): WeekRuleSeason {
@@ -151,6 +151,96 @@ export function isHeavyLift(ex: PrescribedExercise): boolean {
   return reps != null && reps <= HEAVY_REPS_MAX;
 }
 
+/**
+ * Within the set. Professional footballers who stopped each squat set at a 15% speed loss improved jump height and
+ * strength; those who went to 30% did not improve the jump, with 65% more reps (Pareja-Blanco 2017). Half the possible
+ * reps is about a 20% loss with little metabolic cost (Sánchez-Medina 2011); 10% against 30% over 8 weeks gave more
+ * jump and sprint gain (Rodríguez-Rosell 2020). A stop at a speed LOSS holds for every lift; a fixed speed in m/s does
+ * not, because the same speed is a different load in each lift (squat 1.00 m/s is about 60% of max, deadlift about
+ * 45–50%: Pareja-Blanco 2017; Benavides-Ubric 2020; Balsalobre-Fernández 2021 advises against fixed speed zones).
+ */
+export const HEAVY_VELOCITY_LOSS_CAP = 20 as const;
+export const NEAR_MATCH_VELOCITY_LOSS_CAP = 10 as const;
+
+/**
+ * Close to the match (MD-2, MD-1, and a light day in a week without a match): a small fast dose, no heavy lift.
+ * A resistance "priming" dose raised performance 6–33 h later; what worked was 15–20 ballistic reps at 30–40% of max
+ * (5 × 4 jump squats at 40%: jump +5% at 24 h and +3% at 48 h; 3 × 5 loaded jumps at 30–40%: +4.2% at 6 h) or at most
+ * 6 reps at 85% or more. 3 × 5 half squats at 30% without a jump did nothing, and high-volume sessions did not help
+ * (Harrison 2019, review of 11 small studies in strong athletes, none footballers). 4 × 4 = 16 reps sits inside
+ * 15–20; the exact split into sets is MicroPulse's rule.
+ */
+export const NEAR_MATCH_SETS = 4;
+export const NEAR_MATCH_REPS = 4;
+export const NEAR_MATCH_LOAD = "30–40% 1RM";
+/** The loaded jumps the 30–40% load line is written for; other explosive lifts keep their own load line. */
+const LOADED_JUMP_IDS = new Set(["ex_trap_bar_jump_squat", "ex_jump_shrug"]);
+const isLoadedExplosive = (ex: PrescribedExercise) => ex.category === "BALLISTIC" || ex.category === "EXPLOSIVE_OLYMPIC";
+
+export const NEAR_MATCH_EVIDENCE =
+  "Week rule, close to the match. A small fast dose 6–33 h before competition raised later performance: 15–20 ballistic reps at 30–40% of max (jump +5% at 24 h, +3% at 48 h), or at most 6 reps at 85% or more; a light lift without a jump did nothing (Harrison 2019, 11 small studies, strong athletes, none footballers). Stopping the set at a 10% speed loss gave more jump and sprint gain than 30% (Rodríguez-Rosell 2020). 4 × 4 (16 reps), or 3 rounds of 3 + 3 with a paired jump (18), is MicroPulse's split of the 15–20 reps.";
+
+export type NearMatchApplied = { from: string; to: string; paired: boolean; reps: number };
+
+/** Paired with a jump, round by round (power contrast): 3 rounds of 3 + 3, so the lift and the jump together stay at
+ *  18 explosive reps, inside the 15–20 that worked. */
+export const NEAR_MATCH_PAIRED_ROUNDS = 3;
+export const NEAR_MATCH_PAIRED_REPS = 3;
+
+/**
+ * Close to the match: the day's loaded explosive lift does 4 × 4 (16 reps), as fast as possible, each set stopped at
+ * a 10% speed loss. When a jump is paired with it in the same block, the pair does 3 rounds of 3 + 3 (18 reps), so the
+ * day's explosive reps stay inside 15–20. Mutates the blocks. Null when the day's method has no loaded explosive lift
+ * (an isometric primer, the built-in iso + box-jump primer): left as it is.
+ */
+export function applyNearMatchDose(blocks: SessionBlock[]): NearMatchApplied | null {
+  for (const blk of blocks) {
+    const i = blk.exercises.findIndex(isLoadedExplosive);
+    if (i < 0) continue;
+    const ex = blk.exercises[i];
+    const from = `${ex.dose.sets} × ${ex.dose.reps}`;
+    const isPairedJump = (e: PrescribedExercise, k: number) => k !== i && e.category === "PLYOMETRIC";
+    const paired = blk.type === "FRENCH_CONTRAST" && blk.exercises.some(isPairedJump);
+    const sets = paired ? NEAR_MATCH_PAIRED_ROUNDS : NEAR_MATCH_SETS;
+    const reps = paired ? NEAR_MATCH_PAIRED_REPS : NEAR_MATCH_REPS;
+    blk.exercises = blk.exercises.map((e, k) => {
+      if (k === i) {
+        return {
+          ...e,
+          dose: {
+            ...e.dose,
+            sets,
+            reps: String(reps),
+            intensity: LOADED_JUMP_IDS.has(e.exerciseId) ? NEAR_MATCH_LOAD : e.dose.intensity,
+            velocityLossCap: NEAR_MATCH_VELOCITY_LOSS_CAP,
+            cue: "As fast as possible on every rep; stop the set when the bar slows by 10%",
+          },
+        };
+      }
+      return paired && isPairedJump(e, k) ? { ...e, dose: { ...e.dose, sets, reps: String(reps) } } : e;
+    });
+    const jumps = paired ? blk.exercises.filter(isPairedJump).length : 0;
+    return { from, to: paired ? `${sets} rounds of ${reps} + ${reps}` : `${sets} × ${reps}`, paired, reps: sets * reps * (1 + jumps) };
+  }
+  return null;
+}
+
+/** The "why" line for a day close to the match. */
+export function nearMatchAudit(md: MdContext, applied: NearMatchApplied, noMatchLight: boolean): AppliedAdaptation {
+  const toIS = applied.paired ? applied.to.replace("rounds of", "hringir af") : applied.to;
+  const was = applied.paired || applied.from === applied.to ? { en: "", is: "" } : { en: ` (the method alone gives ${applied.from})`, is: ` (aðferðin ein gefur ${applied.from})` };
+  const pairEN = applied.paired ? ", the loaded lift then the jump" : "";
+  const pairIS = applied.paired ? ", hlaðna lyftan og svo stökkið" : "";
+  return {
+    ruleId: "WEEK_RULE_NEAR_MATCH",
+    triggerEN: noMatchLight ? "Week rule: a light day in a week without a match" : `Week rule: ${md}, close to the match`,
+    triggerIS: noMatchLight ? "Vikuregla: léttur dagur í viku án leiks" : `Vikuregla: ${md}, nálægt leik`,
+    actionEN: `Fast work only: ${applied.to}${pairEN}, ${applied.reps} explosive reps in all${was.en}. Light load (30–40% of max for loaded jumps), as fast as possible, each set stopped at a 10% speed loss. No heavy lift today.`,
+    actionIS: `Aðeins hröð vinna: ${toIS}${pairIS}, ${applied.reps} sprengiendurtekningar alls${was.is}. Létt þyngd (30–40% af hámarki í hlöðnum hoppum), eins hratt og hægt er, hverju setti hætt við 10% hraðatap. Engin þung lyfta í dag.`,
+    evidence: NEAR_MATCH_EVIDENCE,
+  };
+}
+
 /** A French contrast round is four exercises. The two studies used 3 rounds (Welch 2019) and 3–4 in 50–70 min
  *  sessions (Elbadry 2019); kept at 3 so the day stays short. The cap is MicroPulse's rule. */
 export const FRENCH_CONTRAST_MAX_ROUNDS = 3;
@@ -186,7 +276,9 @@ export function applyWeekRule(blocks: SessionBlock[], daySets: number): WeekRule
     }
     out.from += ex.dose.sets;
     out.to += to;
-    blk.exercises[s.i] = { ...ex, dose: { ...ex.dose, sets: to, weekRule: true } };
+    // The set stops at a 20% speed loss (about half the reps the player could do), never a higher loss.
+    const cap = ex.dose.velocityLossCap && ex.dose.velocityLossCap <= HEAVY_VELOCITY_LOSS_CAP ? ex.dose.velocityLossCap : HEAVY_VELOCITY_LOSS_CAP;
+    blk.exercises[s.i] = { ...ex, dose: { ...ex.dose, sets: to, velocityLossCap: cap, weekRule: true } };
     if (contrast) {
       blk.exercises = blk.exercises.map((e, i) => (i === s.i || e.dose.sets === to ? e : { ...e, dose: { ...e.dose, sets: to } }));
     }
@@ -217,8 +309,8 @@ export function weekRuleAudit(args: {
     ruleId: "WEEK_RULE_HEAVY_SETS",
     triggerEN: `Week rule (${seasonEN}): ${week.en}`,
     triggerIS: `Vikuregla (${seasonIS}): ${week.is}`,
-    actionEN: `Today's heavy lower-body sets: ${what.en}. In a contrast block the jumps follow the same number of rounds.${cap.en}`,
-    actionIS: `Þung sett neðri líkama í dag: ${what.is}. Í contrast-blokk fylgja stökkin sama fjölda hringja.${cap.is}`,
+    actionEN: `Today's heavy lower-body sets: ${what.en}. Each set stops at a 20% speed loss, or at about half the reps you could do. In a contrast block the jumps follow the same number of rounds.${cap.en}`,
+    actionIS: `Þung sett neðri líkama í dag: ${what.is}. Hverju setti er hætt við 20% hraðatap, eða við um helming þeirra endurtekninga sem þú gætir gert. Í contrast-blokk fylgja stökkin sama fjölda hringja.${cap.is}`,
     evidence: WEEK_RULE_EVIDENCE,
   };
 }
