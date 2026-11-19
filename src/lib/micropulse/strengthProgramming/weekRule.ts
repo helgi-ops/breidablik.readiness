@@ -1,22 +1,26 @@
 /**
- * The week rule (2026-11-19) — how much heavy lower-body work a week holds and which days carry it. Pure.
+ * The week rule (2026-11-19) — how many heavy lower-body REPETITIONS a week holds and which days carry them. Pure.
  *
- * Before this rule every day was built on its own: each method brought its own set count (contrast 3, French
- * contrast 2, …) and the week was whatever the days added up to. A week without a match then gave five strength
- * sessions and twice the volume of a match week, with no rule having decided it.
+ * Before this rule every day was built on its own: each method brought its own sets × reps and the week was whatever
+ * the days added up to. A week without a match then gave five strength sessions and twice the volume of a match week,
+ * with no rule having decided it.
  *
- * The rule looks forward only: the day's heavy sets are set from the day's place in the week (the MD day, or the
- * coach's weekday plan when there is no match). It never reads what was done earlier in the week.
+ * The unit is repetitions a week, not sets (the coach's call, 2026-11-19): 12 heavy reps are 6 sets of 2 or 3 sets of
+ * 4. The rule fixes the day's heavy reps; the day's method says how many reps a set holds, and the sets follow. Fewer
+ * reps a set (1–2) means less fatigue in each set for the same reps.
+ *
+ * The rule looks forward only: the day's heavy reps come from the day's place in the week (the MD day, or the coach's
+ * weekday plan when there is no match). It never reads what was done earlier, and no player's past sessions.
  *
  * What comes from research (read in full from `research/`, 2026-11-19):
  *   - The week is the unit. With the weekly volume the same, few or many sessions gave the same strength in
  *     well-trained men (Cuthbert 2021, Table 1: lower body g = 0.061, 95% CI −0.202 to 0.323; Grgic 2018, volume-equated
  *     p = 0.421). Microdosing is the same weekly volume divided, not a smaller one (Cuthbert 2024).
- *   - How much. 3 sets once a week (4RM half squat) kept 1RM, sprint and jump for 12 in-season weeks in professional
- *     footballers; every second week lost 10% (Rønnestad 2011). 8 heavy sets a week (4 × 4 at about 90%, twice a week)
- *     raised the half squat 116 → 176 kg in 8 pre-season weeks (Helgerud, in Hoff & Helgerud 2004, no control group).
- *     5–9 weekly sets per exercise gave a little more strength than 5 or fewer, and 10 or more is not shown to be
- *     better (Ralston 2017). 1, 3 or 5 sets per exercise gave the same squat strength in trained men (Schoenfeld 2019).
+ *   - How much. 12 heavy reps a week (3 × 4RM half squat, once a week) kept 1RM, sprint and jump for 12 in-season weeks
+ *     in professional footballers; every second week lost 10% (Rønnestad 2011). 32 heavy reps a week (4 × 4 at about
+ *     90%, twice a week) raised the half squat 116 → 176 kg in 8 pre-season weeks (Helgerud, in Hoff & Helgerud 2004,
+ *     no control group). More sets did not give more strength in trained men (1, 3 or 5 sets: Schoenfeld 2019), and 10
+ *     or more weekly sets per exercise are not shown to beat 5–9 (Ralston 2017).
  *   - When heavy work is out. Jump, hamstring strength and muscle damage are still off 72 h after a match (Silva 2018,
  *     77 studies); a heavy session can lower performance for 48 h or longer (Harrison 2019); professional teams put the
  *     week's highest load 72 h before the match (Los Arcos 2017). So: heavy on MD-4 and MD-3, and on MD-5 only when
@@ -25,9 +29,9 @@
  *     1–5 a session, most often 2–4, and 3–4 for French contrast (Welch 2019; Elbadry 2019). The rounds here follow
  *     the heavy lift's sets, so the pairs match.
  *
- * What does NOT come from research, and is MicroPulse's rule: how the week's sets are split between the heavy days,
- * the exact number inside the ranges above, and the pattern of a week without a match (at most three heavy days,
- * never two days in a row). No study in the folder tests a split over MD days.
+ * What does NOT come from research, and is MicroPulse's rule: how the week's reps are split between the heavy days,
+ * the exact number between the two anchors above (12 kept, 32 built), and the pattern of a week without a match (at
+ * most three heavy days, never two days in a row). No study in the folder tests a split over MD days.
  */
 
 import { WEEKDAYS, mondayOfIso, noMatchDayFor, type NoMatchDayKind, type NoMatchWeek } from "./structures";
@@ -36,30 +40,33 @@ import type { AppliedAdaptation, MdContext, PlayerStrengthSnapshot, PrescribedEx
 /** Pre-season builds; every other part of the year holds (in season, off-season, not known). */
 export type WeekRuleSeason = "preseason" | "hold";
 
-/** A heavy set = a main two-leg lift done for 6 reps or fewer. */
+/** A heavy lift = a main two-leg lift done for 6 reps or fewer in a set. */
 export const HEAVY_REPS_MAX = 6;
 
 /**
- * Heavy lower-body sets per day in a week with a match. MD-4 is the main day (furthest from the next match and 72 h
+ * Heavy lower-body reps per day in a week with a match. MD-4 is the main day (furthest from the next match and 72 h
  * after the last one), MD-3 the last heavy day (72 h before the match). MD-5 only exists in a week with no match the
  * weekend before: a smaller extra day.
- *   in season:  3 + 2 = 5 a week (7 with MD-5) — above the 3 that kept strength, inside 5–9.
- *   pre-season: 4 + 3 = 7 a week (9 with MD-5) — never above 9.
+ *   in season:  9 + 6 = 15 a week (21 with MD-5) — above the 12 that kept strength.
+ *   pre-season: 12 + 9 = 21 a week (27 with MD-5) — under the 32 that built strength with nothing else in the week.
  */
-export const MATCH_WEEK_HEAVY_SETS: Record<WeekRuleSeason, Partial<Record<MdContext, number>>> = {
-  hold: { "MD-5": 2, "MD-4": 3, "MD-3": 2 },
-  preseason: { "MD-5": 2, "MD-4": 4, "MD-3": 3 },
+export const MATCH_WEEK_HEAVY_REPS: Record<WeekRuleSeason, Partial<Record<MdContext, number>>> = {
+  hold: { "MD-5": 6, "MD-4": 9, "MD-3": 6 },
+  preseason: { "MD-5": 6, "MD-4": 12, "MD-3": 9 },
 };
 
-/** Heavy sets in a week without a match: the same as a match week's MD-4 + MD-3, never more because there are more days. */
-export const NO_MATCH_WEEK_HEAVY_TOTAL: Record<WeekRuleSeason, number> = { hold: 5, preseason: 7 };
+/** Heavy reps in a week without a match: the same as a match week's MD-4 + MD-3, never more because there are more days. */
+export const NO_MATCH_WEEK_HEAVY_TOTAL: Record<WeekRuleSeason, number> = { hold: 15, preseason: 21 };
 /** A week without a match: at most three heavy days, never two days in a row. */
 export const NO_MATCH_MAX_HEAVY_DAYS = 3;
-const MIN_PER_HEAVY_DAY = 2;
-const MAX_PER_HEAVY_DAY = 5;
+/** The week's reps are dealt out in threes; a heavy day holds 6 to 15. */
+const REP_STEP = 3;
+const MIN_REPS_PER_HEAVY_DAY = 6;
+const MAX_REPS_PER_HEAVY_DAY = 15;
+const MAX_SETS_PER_LIFT = 6;
 
 export const WEEK_RULE_EVIDENCE =
-  "Week rule. The week is the unit: with the weekly volume the same, the number of sessions made no difference to strength (Cuthbert 2021; Grgic 2018). How much: 3 heavy sets a week kept strength in season in professional footballers (Rønnestad 2011); 5–9 a week gave a little more than 5 or fewer and 10 or more is not shown to be better (Ralston 2017; Schoenfeld 2019). When: jump and hamstring strength are still down 72 h after a match (Silva 2018) and a heavy session can lower performance for 48 h or longer (Harrison 2019), so heavy work sits on MD-4 and MD-3. Within the set: footballers who stopped at a 15% speed loss improved jump and strength, those who went to 30% did not improve the jump (Pareja-Blanco 2017). How the sets are split between the heavy days is MicroPulse's rule, not from a study.";
+  "Week rule. The unit is heavy repetitions a week: with the weekly volume the same, the number of sessions made no difference to strength (Cuthbert 2021; Grgic 2018). How much: 12 heavy reps a week kept strength in season in professional footballers (Rønnestad 2011); 32 a week built it in a pre-season (Helgerud, in Hoff & Helgerud 2004); more sets did not give more strength in trained men (Schoenfeld 2019; Ralston 2017). When: jump and hamstring strength are still down 72 h after a match (Silva 2018) and a heavy session can lower performance for 48 h or longer (Harrison 2019), so heavy work sits on MD-4 and MD-3. Within the set: footballers who stopped at a 15% speed loss improved jump and strength, those who went to 30% did not improve the jump (Pareja-Blanco 2017). How the reps are split between the heavy days is MicroPulse's rule, not from a study.";
 
 /** The season the rule reads: the season plan's phase when it is on the snapshot, else the week setup's. */
 export function weekRuleSeasonOf(snap: Pick<PlayerStrengthSnapshot, "goalSeason" | "seasonPhase">): WeekRuleSeason {
@@ -68,22 +75,22 @@ export function weekRuleSeasonOf(snap: Pick<PlayerStrengthSnapshot, "goalSeason"
   return String(snap.seasonPhase ?? "").toLowerCase().replace(/[^a-z]/g, "") === "preseason" ? "preseason" : "hold";
 }
 
-/** Today's heavy sets in a week with a match, or null when today is not a heavy day (MD-2, MD-1, the days after). */
-export function matchWeekHeavySets(md: MdContext, season: WeekRuleSeason): number | null {
-  return MATCH_WEEK_HEAVY_SETS[season][md] ?? null;
+/** Today's heavy reps in a week with a match, or null when today is not a heavy day (MD-2, MD-1, the days after). */
+export function matchWeekHeavyReps(md: MdContext, season: WeekRuleSeason): number | null {
+  return MATCH_WEEK_HEAVY_REPS[season][md] ?? null;
 }
 
 export type NoMatchWeekRule = {
   /** What today is built as. A strength / power day beyond the three heavy days, or next to one, becomes light; a
    *  weekday the coach's plan leaves out is light too. */
   kind: NoMatchDayKind;
-  /** Today's heavy sets (a heavy day), else null. */
-  heavySets: number | null;
+  /** Today's heavy reps (a heavy day), else null. */
+  heavyReps: number | null;
   /** Why today is light although the plan says strength / power, or says nothing. */
   lightBecause: "over_three" | "next_to_heavy" | "not_in_plan" | null;
   /** The week's heavy days (ISO dates), in date order. */
   heavyDates: string[];
-  /** The week's heavy sets in all. */
+  /** The week's heavy reps in all. */
   weekTotal: number;
 };
 
@@ -118,22 +125,23 @@ export function noMatchWeekRule(todayIso: string, plan: NoMatchWeek | null | und
     else heavy.push(i);
   }
 
-  // The week's sets over the heavy days, the larger shares to the days taken first (the strength days).
-  const total = NO_MATCH_WEEK_HEAVY_TOTAL[season];
-  const sets = new Map<number, number>();
+  // The week's reps over the heavy days, dealt out in threes, the larger shares to the days taken first (the strength
+  // days). Every heavy day holds at least 6 and at most 15.
+  const steps = Math.round(NO_MATCH_WEEK_HEAVY_TOTAL[season] / REP_STEP);
+  const reps = new Map<number, number>();
   heavy.forEach((i, n) => {
-    const share = Math.floor(total / heavy.length) + (n < total % heavy.length ? 1 : 0);
-    sets.set(i, Math.max(MIN_PER_HEAVY_DAY, Math.min(MAX_PER_HEAVY_DAY, share)));
+    const share = (Math.floor(steps / heavy.length) + (n < steps % heavy.length ? 1 : 0)) * REP_STEP;
+    reps.set(i, Math.max(MIN_REPS_PER_HEAVY_DAY, Math.min(MAX_REPS_PER_HEAVY_DAY, share)));
   });
 
   const k = kinds[today];
   const isHeavy = heavy.includes(today);
   return {
     kind: k === "rest" ? "rest" : isHeavy ? (k as NoMatchDayKind) : "light",
-    heavySets: isHeavy ? sets.get(today)! : null,
+    heavyReps: isHeavy ? reps.get(today)! : null,
     lightBecause: isHeavy || k === "rest" || k === "light" ? null : k == null ? "not_in_plan" : why.get(today) ?? null,
     heavyDates: [...heavy].sort((a, b) => a - b).map((i) => dates[i]),
-    weekTotal: [...sets.values()].reduce((a, b) => a + b, 0),
+    weekTotal: [...reps.values()].reduce((a, b) => a + b, 0),
   };
 }
 
@@ -247,42 +255,53 @@ export const FRENCH_CONTRAST_MAX_ROUNDS = 3;
 const FRENCH_CONTRAST_MIN_EXERCISES = 4;
 
 export type WeekRuleApplied = {
-  /** The day's heavy sets as the method alone gives them, and after the rule. */
+  /** The day's heavy reps as the method alone gives them, and after the rule. */
   from: number;
   to: number;
+  /** How the reps are done: "3 × 3", or "2 × 3 + 2 × 3" with two heavy lifts. */
+  as: string;
   /** A French contrast block was held at its round cap (so `to` is under the day's number). */
   cappedRounds: boolean;
 };
 
+/** A plain range of reps ("3-5", "3–5"): the rule takes the lower end, so the day's reps are a known number. */
+const REP_RANGE = /^\s*(\d+)\s*[-–]\s*\d+\s*$/;
+
 /**
- * Sets today's heavy lower-body sets. In a contrast block (heavy lift → jump, round by round) every exercise of the
- * block takes the same number, so the pairs match; a French contrast block (four exercises a round) takes at most
- * three rounds. Mutates the blocks. Null when the day has no heavy lift.
+ * Sets today's heavy lower-body reps. The method says how many reps a set holds (the lower end of a range); the sets
+ * are the day's reps over that, to the nearest set. In a contrast block (heavy lift → jump, round by round) every
+ * exercise of the block does the same number of rounds, so the pairs match; a French contrast block (four exercises a
+ * round) takes at most three rounds. Mutates the blocks. Null when the day has no heavy lift.
  */
-export function applyWeekRule(blocks: SessionBlock[], daySets: number): WeekRuleApplied | null {
+export function applyWeekRule(blocks: SessionBlock[], dayReps: number): WeekRuleApplied | null {
   const spots: { b: number; i: number }[] = [];
   blocks.forEach((blk, b) => blk.exercises.forEach((ex, i) => { if (isHeavyLift(ex)) spots.push({ b, i }); }));
   if (!spots.length) return null;
-  const out: WeekRuleApplied = { from: 0, to: 0, cappedRounds: false };
-  spots.forEach((s, n) => {
+  const out: WeekRuleApplied = { from: 0, to: 0, as: "", cappedRounds: false };
+  const parts: string[] = [];
+  spots.forEach((s) => {
     const blk = blocks[s.b];
     const ex = blk.exercises[s.i];
+    const perSet = repsOf(ex.dose.reps) ?? 1;
     const contrast = blk.type === "FRENCH_CONTRAST" && spots.filter((x) => x.b === s.b).length === 1;
-    // More than one heavy lift in the day: the day's sets are shared, the first lift takes the odd one.
-    let to = Math.max(1, Math.floor(daySets / spots.length) + (n < daySets % spots.length ? 1 : 0));
-    if (contrast && blk.exercises.length >= FRENCH_CONTRAST_MIN_EXERCISES && to > FRENCH_CONTRAST_MAX_ROUNDS) {
-      to = FRENCH_CONTRAST_MAX_ROUNDS;
+    // More than one heavy lift in the day: the day's reps are shared between them.
+    let sets = Math.max(1, Math.min(MAX_SETS_PER_LIFT, Math.round(dayReps / spots.length / perSet)));
+    if (contrast && blk.exercises.length >= FRENCH_CONTRAST_MIN_EXERCISES && sets > FRENCH_CONTRAST_MAX_ROUNDS) {
+      sets = FRENCH_CONTRAST_MAX_ROUNDS;
       out.cappedRounds = true;
     }
-    out.from += ex.dose.sets;
-    out.to += to;
+    out.from += ex.dose.sets * perSet;
+    out.to += sets * perSet;
+    parts.push(`${sets} × ${perSet}`);
     // The set stops at a 20% speed loss (about half the reps the player could do), never a higher loss.
     const cap = ex.dose.velocityLossCap && ex.dose.velocityLossCap <= HEAVY_VELOCITY_LOSS_CAP ? ex.dose.velocityLossCap : HEAVY_VELOCITY_LOSS_CAP;
-    blk.exercises[s.i] = { ...ex, dose: { ...ex.dose, sets: to, velocityLossCap: cap, weekRule: true } };
+    const reps = REP_RANGE.test(ex.dose.reps) ? String(perSet) : ex.dose.reps;
+    blk.exercises[s.i] = { ...ex, dose: { ...ex.dose, sets, reps, velocityLossCap: cap, weekRule: true } };
     if (contrast) {
-      blk.exercises = blk.exercises.map((e, i) => (i === s.i || e.dose.sets === to ? e : { ...e, dose: { ...e.dose, sets: to } }));
+      blk.exercises = blk.exercises.map((e, i) => (i === s.i || e.dose.sets === sets ? e : { ...e, dose: { ...e.dose, sets } }));
     }
   });
+  out.as = parts.join(" + ");
   return out;
 }
 
@@ -290,27 +309,29 @@ export function applyWeekRule(blocks: SessionBlock[], daySets: number): WeekRule
 export function weekRuleAudit(args: {
   md: MdContext;
   season: WeekRuleSeason;
+  /** The day's heavy reps by the rule (before a French contrast round cap). */
+  dayReps: number;
   applied: WeekRuleApplied;
   noMatch: NoMatchWeekRule | null;
 }): AppliedAdaptation {
-  const { md, season, applied, noMatch } = args;
+  const { md, season, dayReps, applied, noMatch } = args;
   const seasonEN = season === "preseason" ? "pre-season" : "in season";
   const seasonIS = season === "preseason" ? "undirbúningstímabil" : "keppnistímabil";
+  const matchWeek = MATCH_WEEK_HEAVY_REPS[season];
+  const weekReps = (matchWeek["MD-4"] ?? 0) + (matchWeek["MD-3"] ?? 0);
   const week = noMatch
-    ? { en: `${noMatch.weekTotal} heavy sets this week on ${noMatch.heavyDates.length} day${noMatch.heavyDates.length === 1 ? "" : "s"}`, is: `${noMatch.weekTotal} þung sett í vikunni á ${noMatch.heavyDates.length} ${noMatch.heavyDates.length === 1 ? "degi" : "dögum"}` }
-    : { en: `${md} is a heavy day`, is: `${md} er þungur dagur` };
-  const what = applied.from === applied.to
-    ? { en: `${applied.to}, as the method gives`, is: `${applied.to}, eins og aðferðin gefur` }
-    : { en: `${applied.to} (the method alone gives ${applied.from})`, is: `${applied.to} (aðferðin ein gefur ${applied.from})` };
+    ? { en: `${noMatch.weekTotal} heavy reps this week on ${noMatch.heavyDates.length} day${noMatch.heavyDates.length === 1 ? "" : "s"}`, is: `${noMatch.weekTotal} þungar endurtekningar í vikunni á ${noMatch.heavyDates.length} ${noMatch.heavyDates.length === 1 ? "degi" : "dögum"}` }
+    : { en: `${md} is a heavy day; the week holds ${weekReps} heavy reps on MD-4 and MD-3${md === "MD-5" ? `, and ${matchWeek["MD-5"]} more today because there was no match the days before` : ""}`, is: `${md} er þungur dagur; vikan hefur ${weekReps} þungar endurtekningar á MD-4 og MD-3${md === "MD-5" ? `, og ${matchWeek["MD-5"]} í viðbót í dag því enginn leikur var dagana á undan` : ""}` };
+  const was = applied.from === applied.to ? { en: "", is: "" } : { en: ` (the method alone gives ${applied.from})`, is: ` (aðferðin ein gefur ${applied.from})` };
   const cap = applied.cappedRounds
-    ? { en: ` French contrast takes at most ${FRENCH_CONTRAST_MAX_ROUNDS} rounds, so the day stays short.`, is: ` French contrast er mest ${FRENCH_CONTRAST_MAX_ROUNDS} hringir, svo dagurinn haldist stuttur.` }
+    ? { en: ` French contrast takes at most ${FRENCH_CONTRAST_MAX_ROUNDS} rounds, so the day stays short: ${applied.to} of the day's ${dayReps} reps.`, is: ` French contrast er mest ${FRENCH_CONTRAST_MAX_ROUNDS} hringir, svo dagurinn haldist stuttur: ${applied.to} af ${dayReps} endurtekningum dagsins.` }
     : { en: "", is: "" };
   return {
-    ruleId: "WEEK_RULE_HEAVY_SETS",
+    ruleId: "WEEK_RULE_HEAVY_REPS",
     triggerEN: `Week rule (${seasonEN}): ${week.en}`,
     triggerIS: `Vikuregla (${seasonIS}): ${week.is}`,
-    actionEN: `Today's heavy lower-body sets: ${what.en}. Each set stops at a 20% speed loss, or at about half the reps you could do. In a contrast block the jumps follow the same number of rounds.${cap.en}`,
-    actionIS: `Þung sett neðri líkama í dag: ${what.is}. Hverju setti er hætt við 20% hraðatap, eða við um helming þeirra endurtekninga sem þú gætir gert. Í contrast-blokk fylgja stökkin sama fjölda hringja.${cap.is}`,
+    actionEN: `Today's heavy lower-body reps: ${applied.to}, as ${applied.as}${was.en}. The method says how many reps a set holds; the sets follow. Each set stops at a 20% speed loss, or at about half the reps you could do. In a contrast block the jumps follow the same number of rounds.${cap.en}`,
+    actionIS: `Þungar endurtekningar neðri líkama í dag: ${applied.to}, sem ${applied.as}${was.is}. Aðferðin ræður endurtekningum í setti; settin fylgja. Hverju setti er hætt við 20% hraðatap, eða við um helming þeirra endurtekninga sem þú gætir gert. Í contrast-blokk fylgja stökkin sama fjölda hringja.${cap.is}`,
     evidence: WEEK_RULE_EVIDENCE,
   };
 }
@@ -330,8 +351,8 @@ export function weekRuleLightAudit(rule: NoMatchWeekRule): AppliedAdaptation | n
     ruleId: "WEEK_RULE_LIGHT_DAY",
     triggerEN: `Week rule, no match this week: ${en}`,
     triggerIS: `Vikuregla, enginn leikur í vikunni: ${is}`,
-    actionEN: "Built as a light day (fast, light work). A week without a match holds at most three heavy days, never two days in a row, and the same heavy sets as a match week.",
-    actionIS: "Sett upp sem léttur dagur (hröð og létt vinna). Vika án leiks hefur mest þrjá þunga daga, aldrei tvo daga í röð, og sömu þungu settin og leikvika.",
+    actionEN: "Built as a light day (fast, light work). A week without a match holds at most three heavy days, never two days in a row, and the same heavy reps as a match week.",
+    actionIS: "Sett upp sem léttur dagur (hröð og létt vinna). Vika án leiks hefur mest þrjá þunga daga, aldrei tvo daga í röð, og sömu þungu endurtekningarnar og leikvika.",
     evidence: WEEK_RULE_EVIDENCE,
   };
 }

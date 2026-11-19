@@ -76,7 +76,7 @@ describe("the engine", () => {
     // No weekday plan at all → the day is built as before (the MD-3 default).
     const base = buildStrengthSession(snap({ todayIso: addDays(MON, 5), noMatchNearby: true }));
     expect(buildStrengthSession(snap({ todayIso: addDays(MON, 5), noMatchNearby: true, noMatchWeek: {} }))).toEqual(base);
-    expect(rule(base, "WEEK_RULE_HEAVY_SETS")).toBeUndefined();
+    expect(rule(base, "WEEK_RULE_HEAVY_REPS")).toBeUndefined();
     // A weekday the plan leaves out (Saturday) is a light day since the week rule (2026-11-19); before, a full MD-3 session.
     const sat = buildStrengthSession(nm(addDays(MON, 5)))!;
     expect(sat.mdContext).toBe("MD-2");

@@ -50,7 +50,7 @@ import { EXERCISE_LIBRARY as LIBRARY, EXERCISES_BY_ID, getExercise as lookupExer
 import { effectivePool, isPlayerPick, type PlayerExercisePicks } from "./playerPicks";
 import { applyPlayerGoal } from "./playerGoal";
 import { applyGoalPlanGym } from "./goalPlanGym";
-import { applyNearMatchDose, applyWeekRule, matchWeekHeavySets, nearMatchAudit, noMatchWeekRule, weekRuleAudit, weekRuleLightAudit, weekRuleSeasonOf, type NoMatchWeekRule } from "./weekRule";
+import { applyNearMatchDose, applyWeekRule, matchWeekHeavyReps, nearMatchAudit, noMatchWeekRule, weekRuleAudit, weekRuleLightAudit, weekRuleSeasonOf, type NoMatchWeekRule } from "./weekRule";
 import { takesPart, type SendMode } from "./sendMode";
 import {
   slotForCategory,
@@ -654,7 +654,7 @@ function buildStrengthSessionCore(
   // on that MD row belongs to match weeks (the traditional lift days) and is not used here, nor is its volume
   // concentration. Football, individualised modes, no match near and no hand-picked MD day (noMatchNearby) only.
   // The week rule (2026-11-19, weekRule.ts): such a week holds at most three heavy days, never two in a row, and the
-  // same heavy sets as a match week; the other days are light, also a weekday the plan leaves out (it was built as a
+  // same heavy reps as a match week; the other days are light, also a weekday the plan leaves out (it was built as a
   // full MD-3 session before). A team with no weekday plan at all is built as before.
   let noMatchKind: Exclude<NoMatchDayKind, "rest"> | null = null;
   let noMatchRule: NoMatchWeekRule | null = null;
@@ -781,15 +781,15 @@ function buildStrengthSessionCore(
   // load / soreness rules still apply (they are the MD/readiness tuning, not the
   // per-player individualisation).
   // The trace records what the safety rules did, so the palette below can't undo it.
-  // The week rule sets today's heavy lower-body sets from the day's place in the week, before the readiness rules
+  // The week rule sets today's heavy lower-body reps from the day's place in the week, before the readiness rules
   // (which may still take sets off). Individualised modes, football only (basketball has no MD week).
   const weekAudit: AppliedAdaptation[] = [];
   if (individualised && !isBasketball) {
     const season = weekRuleSeasonOf(snap);
-    const daySets = noMatchRule ? noMatchRule.heavySets : snap.noMatchNearby ? null : matchWeekHeavySets(snap.mdContext, season);
-    if (daySets != null) {
-      const applied = applyWeekRule(tmpl.blocks, daySets);
-      if (applied) weekAudit.push(weekRuleAudit({ md: snap.mdContext, season, applied, noMatch: noMatchRule }));
+    const dayReps = noMatchRule ? noMatchRule.heavyReps : snap.noMatchNearby ? null : matchWeekHeavyReps(snap.mdContext, season);
+    if (dayReps != null) {
+      const applied = applyWeekRule(tmpl.blocks, dayReps);
+      if (applied) weekAudit.push(weekRuleAudit({ md: snap.mdContext, season, dayReps, applied, noMatch: noMatchRule }));
     }
     const light = noMatchRule ? weekRuleLightAudit(noMatchRule) : null;
     if (light) weekAudit.push(light);
