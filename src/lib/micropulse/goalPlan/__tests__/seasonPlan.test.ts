@@ -145,7 +145,8 @@ describe("wiring — the season is read when a plan is built and when a plan wit
     const t = read("src/lib/micropulse/goalPlan/todayLoader.ts");
     expect(t.match(/goalSeasonForPlan\(/g)?.length).toBe(3);
     const pr = read("src/lib/micropulse/goalPlan/progressLoader.ts");
-    expect(pr).toMatch(/planHasSessionC\(row\.plan\) \? goalSeasonForTeam\(sb, teamId, until\)/);
+    // Every plan reads the season since 2026-11-20 (the heavy-day rule places the gym sessions in pre-/off-season).
+    expect(pr).toMatch(/goalSeasonForTeam\(sb, teamId, until\)/);
     expect(pr).toMatch(/placedSessionsUpTo\(row\.plan, row\.quality, row\.start_date, until, cal, season\)/);
   });
 });

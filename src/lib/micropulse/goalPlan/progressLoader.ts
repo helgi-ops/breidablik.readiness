@@ -22,9 +22,9 @@ import { GPS_SOURCES } from "./loader";
 import { goalResults, goalResultsForPlans, goalSessionMarks, playerGoalHistoryRows, teamGoalTestCandidates } from "./store";
 import { buildGoalTestDue, inTestWindow, type GoalTestDue } from "./testsDue";
 import { HISTORY_MAX, buildGoalHistoryItem, isHistoryRow, type GoalHistoryItem } from "./history";
-import { addDays, placedSessionsUpTo, planHasSessionC, toTeamDayType, type TeamCalendar } from "./today";
+import { addDays, placedSessionsUpTo, toTeamDayType, type TeamCalendar } from "./today";
 import { goalSeasonForTeam } from "./season";
-import { noMatchWeekSince, sanitizeNoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
+import { noMatchWeekSince, sanitizeMdStructures, sanitizeNoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
 import { RESULT_AFTER_END_DAYS, adherence, effortDays, goalOutcome, gpsContext, type GoalProgress, type GoalResult, type GpsDay, type GpsKind, type GpsMetric } from "./outcome";
 import type { GoalPlanRow } from "./requests";
 import type { GoalQuality } from "./types";
@@ -37,7 +37,7 @@ export async function loadTeamCalendarRange(sb: Sb, teamId: string, from: string
   const [fixtures, plans, palette] = await Promise.all([
     sb.from("match_schedule").select("match_date").eq("team_id", teamId).gte("match_date", from).lte("match_date", to),
     sb.from("week_plans").select("day_date, day_type").eq("team_id", teamId).gte("day_date", from).lte("day_date", to).limit(1000),
-    sb.from("team_strength_palette").select("no_match_week").eq("team_id", teamId).maybeSingle(),
+    sb.from("team_strength_palette").select("no_match_week, md_structures").eq("team_id", teamId).maybeSingle(),
   ]);
   const games = new Set<string>();
   for (const r of (fixtures.data ?? []) as { match_date: string | null }[]) if (r.match_date) games.add(String(r.match_date).slice(0, 10));
@@ -50,11 +50,15 @@ export async function loadTeamCalendarRange(sb: Sb, teamId: string, from: string
     if (t === "game") games.add(d);
   }
   // A read error (e.g. the column not there yet) just means no weekday plan: placement as before.
-  const raw = (palette.data as { no_match_week?: unknown } | null)?.no_match_week;
+  const row = palette.data as { no_match_week?: unknown; md_structures?: unknown } | null;
+  const raw = row?.no_match_week;
   const noMatchWeek = sanitizeNoMatchWeek(raw);
-  if (!Object.keys(noMatchWeek).length) return { days, games: [...games] };
+  // The team's method per MD day: which heavy days have a heavy lift (the heavy-day rule, 2026-11-20).
+  const mdStructures = sanitizeMdStructures(row?.md_structures);
+  const cal: TeamCalendar = { days, games: [...games], ...(Object.keys(mdStructures).length ? { mdStructures } : {}) };
+  if (!Object.keys(noMatchWeek).length) return cal;
   const since = noMatchWeekSince(raw);
-  return since ? { days, games: [...games], noMatchWeek, noMatchWeekSince: since } : { days, games: [...games], noMatchWeek };
+  return since ? { ...cal, noMatchWeek, noMatchWeekSince: since } : { ...cal, noMatchWeek };
 }
 
 /** VALD CMJ jump height as start / retest rows (mean of the test's trials). */
@@ -175,8 +179,8 @@ export async function loadGoalProgress(
     valdGoalResults(sb, row.quality, row.player_id, row.start_date, row.end_date, todayIso),
     loadTeamCalendarRange(sb, teamId, addDays(row.start_date, -11), addDays(until, 11)),
     gpsKind ? gpsDays(sb, row.player_id, gpsKind, addDays(row.start_date, -28), until).catch(() => noGps) : Promise.resolve(noGps),
-    // Session C (out of season only) is due by the same rule as the Today card (season on `until`).
-    planHasSessionC(row.plan) ? goalSeasonForTeam(sb, teamId, until) : Promise.resolve(undefined),
+    // Session C (out of season only) and the heavy-day rule are due by the same rule as the Today card (season on `until`).
+    goalSeasonForTeam(sb, teamId, until),
   ]);
   const results = [...vald, ...coach].sort((a, b) => a.test_date.localeCompare(b.test_date));
   const due = until >= row.start_date ? placedSessionsUpTo(row.plan, row.quality, row.start_date, until, cal, season) : [];

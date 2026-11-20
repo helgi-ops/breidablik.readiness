@@ -109,7 +109,9 @@ export function goalPlanGymFor(args: {
   const week = planWeekOn(startDate, todayIso);
   if (week < 1 || week > PLAN_WEEKS) return null;
   const gymOnly = isGymQuality(quality);
-  const gymSessions = (placementFor(plan, quality, startDate, todayIso, args.cal)?.placed ?? []).filter((p) => gymOnly || p.slot === "B");
+  // Placed as in pre-/off-season ("build"): the only season the lifts go into the strength session (the engine checks
+  // the season itself), so the days match the card's (2026-11-20, the heavy-day rule).
+  const gymSessions = (placementFor(plan, quality, startDate, todayIso, args.cal, "build")?.placed ?? []).filter((p) => gymOnly || p.slot === "B");
   const placed = gymSessions.find((p) => p.date === todayIso) ?? null;
   if (!placed) {
     // No goal gym session today. When the week holds one on another day, the engine may give back today the sets that

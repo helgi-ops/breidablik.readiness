@@ -12,8 +12,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
 import { goalSeasonOf } from "@/lib/micropulse/strengthProgramming/playerGoal";
 import { fetchTeamContext } from "@/lib/micropulse/playerContext/domains";
-import { planHasSessionC } from "./today";
-import { isGymQuality, type GoalPlan, type GoalQuality } from "./types";
+import type { GoalPlan, GoalQuality } from "./types";
 
 type Sb = SupabaseClient;
 
@@ -28,9 +27,11 @@ export async function goalSeasonForTeam(sb: Sb, teamId: string, todayIso: string
   }
 }
 
-/** The season a stored plan's Today card / placement needs: only gym-only goals and plans with a session C read it. */
+/** The season a stored plan's Today card / placement needs. Every plan reads it since 2026-11-20: in pre-/off-season
+ *  the gym sessions go on the heavy days (`gymOnHeavyDays`), so the card, the tick, adherence, the coach's view and
+ *  the strength engine must place the same days. */
 export async function goalSeasonForPlan(
-  sb: Sb, teamId: string, row: { quality: GoalQuality; plan: Pick<GoalPlan, "weeks"> }, todayIso: string,
-): Promise<"build" | "maintain" | undefined> {
-  return isGymQuality(row.quality) || planHasSessionC(row.plan) ? goalSeasonForTeam(sb, teamId, todayIso) : undefined;
+  sb: Sb, teamId: string, _row: { quality: GoalQuality; plan: Pick<GoalPlan, "weeks"> }, todayIso: string,
+): Promise<"build" | "maintain"> {
+  return goalSeasonForTeam(sb, teamId, todayIso);
 }

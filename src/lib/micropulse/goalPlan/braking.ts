@@ -48,7 +48,7 @@ export const BRAKING_METHODS: GoalMethod[] = [
     basis: "trial",
     dose: { en: "2 × 20 min a week in place of the warm-up · 30–60 s between full-effort reps · 2 min between drills", is: "2 × 20 mín á viku í stað upphitunar · 30–60 s milli endurtekninga á fullu · 2 mín milli æfinga" },
     howTo: [
-      { en: "In place of the team warm-up, twice a week, at least 2 days apart (MD+3 and MD-2).", is: "Í stað upphitunar liðsins, tvisvar í viku, minnst 2 dögum á milli (MD+3 og MD-2)." },
+      { en: "In place of the team warm-up, twice a week, at least 2 days apart (MD+3, and MD-3 in pre-season or MD-2 in season).", is: "Í stað upphitunar liðsins, tvisvar í viku, minnst 2 dögum á milli (MD+3, og MD-3 á undirbúningstímabili eða MD-2 á tímabili)." },
       { en: "Cones mark the run-in and the stop or cut point: 5 m in the first weeks, up to 10–20 m later.", is: "Keilur merkja aðhlaupið og stopp- eða beygjustaðinn: 5 m fyrstu vikurnar, upp í 10–20 m síðar." },
       { en: "Over the weeks: stops first, then planned cuts, then cuts on a partner's signal.", is: "Yfir vikurnar: stopp fyrst, svo fyrirfram ákveðnar stefnubreytingar, svo stefnubreytingar eftir merki félaga." },
       { en: "A short cue after every rep: \"slam on the brakes and drop the hips\", \"push the ground away\", \"face where you are going\".", is: "Stutt leiðbeining eftir hverja endurtekningu: „bremsaðu fast og lækkaðu mjaðmirnar\", „ýttu jörðinni frá þér\", „snúðu þér þangað sem þú ert að fara\"." },
@@ -217,7 +217,7 @@ const sessA = (blocks: GoalBlock[], test = false): GoalSession => ({
 const sessB = (blocks: GoalBlock[]): GoalSession => ({
   slot: "B",
   focus: { en: "Braking + landings", is: "Bremsun + lendingar" },
-  when: { en: "In place of the team warm-up, MD-2, at least 2 days after session A.", is: "Í stað upphitunar liðsins, MD-2, minnst 2 dögum eftir æfingu A." },
+  when: { en: "In place of the team warm-up, MD-3 in pre-season and off-season (MD-2 in season), at least 2 days after session A.", is: "Í stað upphitunar liðsins, MD-3 á undirbúnings- og hvíldartímabili (MD-2 á tímabili), minnst 2 dögum eftir æfingu A." },
   minutes: 20,
   blocks,
 });

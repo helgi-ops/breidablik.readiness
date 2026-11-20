@@ -697,6 +697,38 @@ in season". Cause: `inSeason: true` was hard-coded in `loadGoalPlanBase`, so the
   `blockReason`, which does not read the season.
 - **Tests:** `seasonPlan.test.ts`.
 
+## Gym sessions on the heavy days; the goal's lift light and fast near the match (2026-11-20, coach's call)
+
+The week rule puts heavy work on MD-4 / MD-3 and light, fast work on MD-2 / MD-1. The goal plans now follow it.
+
+- **Placement (`goalPlan/today.ts`, `gymOnHeavyDays`):** pre-/off-season ("build") and only from the week of
+  **30 Nov 2026** (`GYM_ON_HEAVY_DAYS_FROM`; earlier weeks keep their days, so ticks already counted stay put). A gym
+  goal session (gym-only A / B; the pitch goals' B) goes on MD-4 → MD-3 → MD-5, the days after a match (MD+2–MD+4)
+  last (`GYM_PREFS`). Gym-only day 2 and braking's B try MD-3 first. **Never MD-2**: with no heavy day free (e.g. matches
+  Wednesday and Saturday) the session is left out that week ("no free day … left out, not made up").
+- **2-day gap exemption:** a session that is all gym lifts (`isAllGymSession`, the same test as the automatic tick) on
+  MD-4 / MD-3 when the team lifts heavy that day (`teamLiftsHeavyOn`: not "rest", and the method is not one of
+  `STRUCTURES_WITHOUT_MAIN_LIFT`) is not an extra session, so the gap does not count for it (`PlacedSession.inTeam`).
+  Never two sessions on one day; a session with pitch work (jumps, braking drills, sprints) keeps the gap; `prevLast`
+  ignores `inTeam` sessions. `loadTeamCalendarRange` now reads `team_strength_palette.md_structures` for this.
+- **One placement everywhere:** every plan reads the season now (`goalSeasonForPlan` → `goalSeasonForTeam`; adherence
+  too), so card, tick, coach view and adherence place the same days; `goalPlanGymFor` places as "build" (the only season
+  it merges in).
+- **Consequences:** a pitch goal can have three days in a row (week of 30 Nov, top speed: C Mon, B Tue inside the team
+  session, A Wed). Gym-only goals get the heavy work the two heavy days hold; the give-back day is mostly MD-5 only.
+  Braking's split squat goes into MD-3 each match week.
+- **Near the match (`strengthProgramming/goalPlanGym.ts` `applyGoalNearMatch`):** on MD-2 / MD-1 (and a light day in a
+  week without a match) a player with a running goal (build season) gets the goal's lift in the team's loaded fast
+  spot, with the day's reps, load and bar-speed zone (`docs/vbt-methods.md`): a loaded jump squat or pull → that lift;
+  a body-weight jump squat → no load, no speed; heavy only → loaded jump squat; technique / youth / braking / Nordic
+  only → no change. Loader: `GoalPlanGym.weekLifts` (`goalWeekLifts`). Tagged `goalPlan.nearMatch`; the card and tick
+  do not read it as the plan session.
+- **Text:** `WHEN.gym_day`, braking's B, the coach's request page, `DAY_RULE_HEAVY` on the card, and a card line when an
+  `inTeam` session is not in today's sent session. `GOAL_CONTENT_VERSION` 2026-11-20.1 (when-text only; golden hashes
+  updated). Running plans keep their stored text; their days move from 30 Nov.
+- **Unchanged:** in season (placement as before), Standard mode, basketball.
+- **Tests:** `heavyDayPlacement.test.ts`, `strengthProgramming/__tests__/nearMatchZone.test.ts`.
+
 ## Next (not built)
 
 - A push to players to tick sessions or book the retest: needs the coach's OK (nothing is sent to players today).

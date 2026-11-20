@@ -361,7 +361,7 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
             </ul>
           ) : null}
           <p className="text-[11px] text-slate-500">
-            {T("Rules place the sessions: never on a match day, the day before or after, a rest or recovery day; at least 2 days apart. The player sees the lighter version on a yellow day and skips it on red.", "Reglur raða æfingunum: aldrei á leikdegi, deginum fyrir eða eftir, hvíldar- eða endurheimtardegi; minnst 2 dagar á milli. Leikmaðurinn sér léttari útgáfu á gulum degi og sleppir henni á rauðum.")}
+            {T("Rules place the sessions: never on a match day, the day before or after, a rest or recovery day; at least 2 days apart. In pre-season and off-season the gym sessions go on the heavy days (MD-4, MD-3) inside the team strength session, never on MD-2. The player sees the lighter version on a yellow day and skips it on red.", "Reglur raða æfingunum: aldrei á leikdegi, deginum fyrir eða eftir, hvíldar- eða endurheimtardegi; minnst 2 dagar á milli. Á undirbúnings- og hvíldartímabili fara salaræfingar á þungu dagana (MD-4, MD-3) inn í styrktaræfingu liðsins, aldrei á MD-2. Leikmaðurinn sér léttari útgáfu á gulum degi og sleppir henni á rauðum.")}
             {data.weekView.weekKnown ? "" : T(" This week's training days are not set, so any day away from a match counts.", " Æfingadagar vikunnar eru ekki settir, svo allir dagar fjarri leik teljast með.")}
           </p>
         </div>

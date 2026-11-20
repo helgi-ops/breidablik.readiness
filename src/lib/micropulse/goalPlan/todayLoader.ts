@@ -13,13 +13,12 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { UNAVAILABLE_STATUS } from "./loader";
 import { GoalPlanError, goalSessionMarks, latestGoalWithPlan, listTeamGoals, markGoalSession, playerCurrentGoal, syncGoalStatuses, type GoalListItem } from "./store";
-import { addDays, buildGoalFinishedCard, buildGoalTodayCard, mondayOf, placementFor, planWeekOn, sessionForColour, toDayColour, type GoalTodayCard, type TeamCalendar } from "./today";
+import { addDays, buildGoalFinishedCard, buildGoalTodayCard, isAllGymSession, mondayOf, placementFor, planWeekOn, sessionForColour, toDayColour, type GoalTodayCard, type TeamCalendar } from "./today";
 import type { GoalPlan, GoalQuality, GoalSessionSlot } from "./types";
 import { goalSeasonForPlan } from "./season";
 import type { GoalPlanStatus } from "./requests";
 import { FINISHED_CARD_DAYS } from "./outcome";
 import { loadGoalProgress, loadTeamCalendarRange } from "./progressLoader";
-import { rxContextOf, withRx } from "./liftRx";
 
 type Sb = SupabaseClient;
 
@@ -142,8 +141,7 @@ export async function tickGoalFromStrengthSession(sb: Sb, args: { playerId: stri
     const slot = inSession.slot;
     const session = row.plan.weeks.find((w) => w.week === week)?.sessions.find((s) => s.slot === slot);
     if (!session) return;
-    const withLifts = withRx({ weeks: [{ sessions: [session] }] }, rxContextOf(row.plan)).weeks[0].sessions[0];
-    if (withLifts.blocks.some((b) => !b.rx?.length)) return; // work left outside the gym: the player ticks it
+    if (!isAllGymSession(row.plan, session)) return; // work left outside the gym: the player ticks it
     const marks = await goalSessionMarks(sb, row.id);
     if (marks.some((m) => m.week === week && m.slot === slot)) return;
     const { data } = await sb.from("v_coach_readiness_today_v8").select("final_color").eq("player_id", args.playerId).eq("entry_date", args.dateIso).limit(1).maybeSingle();

@@ -24,7 +24,7 @@ import { PLAN_WEEKS, QUALITY_LABEL } from "./common";
 import { isGymQuality, type Bi, type GoalBlock, type GoalPlan, type GoalQuality, type GoalSession, type GoalSessionSlot } from "./types";
 import { rxContextOf, withRx, type LiftRx } from "./liftRx";
 import type { Adherence, DueSession, GoalOutcome, SessionMark } from "./outcome";
-import { noMatchDayFor, noMatchMoveFor, type NoMatchDayKind, type NoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
+import { noMatchDayFor, noMatchMoveFor, teamLiftsHeavyOn, type MdStructures, type NoMatchDayKind, type NoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
 
 // ─── Dates ─────────────────────────────────────────────────────────────────
 
@@ -81,6 +81,10 @@ export type TeamCalendar = {
   /** When that plan last changed: it places session B only from the following week, so a week under way keeps its
    *  days (and the ticks already counted stay where they were). Absent = it applies to every week. */
   noMatchWeekSince?: string;
+  /** The team's method per MD day (Structure per MD day): which heavy days really have a heavy lift, so a goal gym
+   *  session can go inside that day's strength session (2026-11-20). Absent = the built-in sessions (MD-4 and MD-3 lift
+   *  heavy). */
+  mdStructures?: MdStructures;
 };
 
 export function toTeamDayType(raw: string | null | undefined): TeamDayType | null {
@@ -138,7 +142,46 @@ const WEEKDAY_PREF: Record<GoalSessionSlot, number[]> = {
 /** Sessions must be at least this many days apart (MicroPulse rule; top speed: 2 days between top-speed days). */
 export const MIN_GAP_DAYS = 2;
 
-export type PlacedSession = { slot: GoalSessionSlot; date: string; md: string | null };
+/**
+ * The goal's gym sessions on the week's heavy days (2026-11-20, the coach's call). Pre-season and off-season, from the
+ * week of 30 Nov 2026 (the weeks before keep the days they had, so ticks already counted stay where they were):
+ *   - A gym goal session (the gym-only goals' two days, the pitch goals' session B) goes on MD-4, then MD-3, then MD-5;
+ *     the days after a match (MD+2 to MD+4) last. Gym-only day 2 and braking's session B on MD-3 first. Never MD-2:
+ *     with no heavy day free the session is left out that week (close to the match the goal's lift comes light and
+ *     fast inside the team session instead, strengthProgramming/goalPlanGym.ts `applyGoalNearMatch`).
+ *   - The 2-day gap does not count for a session that is all gym lifts on MD-4 or MD-3 when the team lifts heavy that
+ *     day: its lifts take the place of the team's, so it is not an extra session. Never two on the same day. A session
+ *     with pitch work (jumps, braking drills, sprints) keeps the gap.
+ * In season, and before that week, the days are placed as before. Which day is which is MicroPulse's rule.
+ */
+export const GYM_ON_HEAVY_DAYS_FROM = "2026-11-30";
+const HEAVY_FIRST = ["MD-4", "MD-3", "MD-5", "MD+2", "MD+3", "MD+4"];
+const HEAVY_SECOND = ["MD-3", "MD-4", "MD-5", "MD+2", "MD+3", "MD+4"];
+const GYM_PREFS: Record<GoalQuality, Partial<Record<GoalSessionSlot, string[]>>> = {
+  top_speed: { B: HEAVY_FIRST },
+  acceleration: { B: HEAVY_FIRST },
+  jump: { B: HEAVY_FIRST },
+  braking: { B: HEAVY_SECOND },
+  max_strength: { A: HEAVY_FIRST, B: HEAVY_SECOND },
+  explosive: { A: HEAVY_FIRST, B: HEAVY_SECOND },
+  strength_power: { A: HEAVY_FIRST, B: HEAVY_SECOND },
+};
+/** A goal gym session: the gym-only goals' days, the pitch goals' session B. */
+export const isGymSlot = (quality: GoalQuality, slot: GoalSessionSlot): boolean => (isGymQuality(quality) ? slot !== "C" : slot === "B");
+/** The week is placed by the heavy-day rule (pre-/off-season, from the week of 30 Nov 2026). */
+export const gymOnHeavyDays = (monday: string, season?: "build" | "maintain"): boolean => season === "build" && monday >= GYM_ON_HEAVY_DAYS_FROM;
+
+/** Every block of the session is a gym lift (it goes into the strength session whole). The same test the automatic
+ *  tick uses (`tickGoalFromStrengthSession`). */
+export function isAllGymSession(plan: GoalPlan, session: GoalSession): boolean {
+  const s = withRx({ weeks: [{ sessions: [session] }] }, rxContextOf(plan)).weeks[0].sessions[0];
+  return s.blocks.length > 0 && s.blocks.every((b) => !!b.rx?.length);
+}
+const allGymSlotsOf = (plan: GoalPlan, quality: GoalQuality, week: number): GoalSessionSlot[] =>
+  (plan.weeks.find((w) => w.week === week)?.sessions ?? []).filter((s) => isGymSlot(quality, s.slot) && isAllGymSession(plan, s)).map((s) => s.slot);
+
+/** `inTeam`: an all-gym session on a heavy day the team lifts on (the 2-day gap did not count for it). */
+export type PlacedSession = { slot: GoalSessionSlot; date: string; md: string | null; inTeam?: true };
 export type WeekPlacement = {
   monday: string;
   placed: PlacedSession[];
@@ -185,8 +228,8 @@ function noMatchRank(quality: GoalQuality, slot: GoalSessionSlot): Record<NoMatc
   return slot === "B" ? NO_MATCH_B_RANK : null;
 }
 
-function rank(quality: GoalQuality, slot: GoalSessionSlot, day: { date: string; md: string | null }, cal?: TeamCalendar): number {
-  const prefs = PREFS[quality][slot] ?? [];
+function rank(quality: GoalQuality, slot: GoalSessionSlot, day: { date: string; md: string | null }, cal?: TeamCalendar, heavyDays = false): number {
+  const prefs = (heavyDays ? GYM_PREFS[quality][slot] : null) ?? PREFS[quality][slot] ?? [];
   const i = day.md ? prefs.indexOf(day.md) : -1;
   if (i >= 0) return i;
   const wd = WEEKDAY_PREF[slot].indexOf(weekdayIdx(day.date));
@@ -212,14 +255,30 @@ export function placeWeek(args: {
   monday: string;
   cal: TeamCalendar;
   prevLast?: string | null;
+  /** The team's season: "build" from the week of 30 Nov 2026 places the gym sessions on the heavy days. */
+  season?: "build" | "maintain";
+  /** The slots whose session is all gym lifts (`isAllGymSession`). */
+  allGym?: GoalSessionSlot[];
 }): WeekPlacement {
   const { days, weekKnown, teamDays } = candidates(args.monday, args.cal);
   const slots = args.slots;
+  const heavyDays = gymOnHeavyDays(args.monday, args.season);
+  const gym = (k: number) => heavyDays && isGymSlot(args.quality, slots[k]);
+  const inTeam = (k: number, day: { md: string | null }) =>
+    gym(k) && (args.allGym ?? []).includes(slots[k]) && teamLiftsHeavyOn(day.md, args.cal.mdStructures);
   let best: { score: number; pick: (number | null)[] } = { score: -Infinity, pick: slots.map(() => null) };
   const pick: (number | null)[] = [];
-  const ok = (date: string) =>
-    (!args.prevLast || Math.abs(daysBetween(args.prevLast, date)) >= MIN_GAP_DAYS) &&
-    pick.every((p) => p == null || Math.abs(daysBetween(days[p].date, date)) >= MIN_GAP_DAYS);
+  const ok = (i: number, d: number) => {
+    const day = days[d];
+    if (gym(i) && day.md === "MD-2") return false; // a gym goal session never on MD-2 (heavy-day rule)
+    const free = inTeam(i, day);
+    if (args.prevLast && !free && Math.abs(daysBetween(args.prevLast, day.date)) < MIN_GAP_DAYS) return false;
+    return pick.every((p, k) => {
+      if (p == null) return true;
+      const gap = Math.abs(daysBetween(days[p].date, day.date));
+      return gap >= MIN_GAP_DAYS || (gap >= 1 && (free || inTeam(k, days[p])));
+    });
+  };
   const walk = (i: number) => {
     if (i === slots.length) {
       // Most sessions placed first; when not all fit, session A (the main work) beats B, B beats C; then the best days.
@@ -228,14 +287,14 @@ export function placeWeek(args: {
         if (p == null) return;
         placedN += 1;
         priority += (slots.length - k) * 1_000;
-        cost += rank(args.quality, slots[k], days[p], args.cal) * (slots.length - k); // earlier slots weigh more
+        cost += rank(args.quality, slots[k], days[p], args.cal, gym(k)) * (slots.length - k); // earlier slots weigh more
       });
       const score = placedN * 100_000 + priority - cost;
       if (score > best.score) best = { score, pick: [...pick] };
       return;
     }
     for (let d = 0; d < days.length; d++) {
-      if (!ok(days[d].date)) continue;
+      if (!ok(i, d)) continue;
       pick.push(d); walk(i + 1); pick.pop();
     }
     pick.push(null); walk(i + 1); pick.pop();
@@ -245,7 +304,7 @@ export function placeWeek(args: {
   const unplaced: GoalSessionSlot[] = [];
   best.pick.forEach((p, k) => {
     if (p == null) unplaced.push(slots[k]);
-    else placed.push({ slot: slots[k], date: days[p].date, md: days[p].md });
+    else placed.push({ slot: slots[k], date: days[p].date, md: days[p].md, ...(inTeam(k, days[p]) ? { inTeam: true as const } : {}) });
   });
   placed.sort((a, b) => a.date.localeCompare(b.date));
   return { monday: args.monday, placed, unplaced, weekKnown, teamDays };
@@ -326,6 +385,17 @@ const cap = (b: Bi): Bi => ({ en: b.en.charAt(0).toUpperCase() + b.en.slice(1), 
 const DAY_RULE: Bi = {
   en: "The days are picked around the team's matches: never on a match day or the day before or after one, and at least 2 days between sessions.",
   is: "Dagarnir eru valdir í kringum leiki liðsins: aldrei á leikdegi né deginum fyrir eða eftir leik, og minnst 2 dagar á milli æfinga.",
+};
+/** Pre-/off-season from the week of 30 Nov 2026 (`gymOnHeavyDays`). */
+const DAY_RULE_HEAVY: Bi = {
+  en: "The days are picked around the team's matches: never on a match day or the day before or after one. Gym sessions go on the heavy days (MD-4, MD-3), inside the team strength session, never on MD-2; other sessions at least 2 days apart.",
+  is: "Dagarnir eru valdir í kringum leiki liðsins: aldrei á leikdegi né deginum fyrir eða eftir leik. Salaræfingar fara á þungu dagana (MD-4, MD-3), inn í styrktaræfingu liðsins, aldrei á MD-2; aðrar æfingar með minnst 2 daga á milli.",
+};
+/** An all-gym session placed inside the team's heavy session (the 2-day gap did not count) that is not in today's
+ *  sent session (the coach sent another mode, or it has not been sent yet). */
+const IN_TEAM_NOT_SENT: Bi = {
+  en: "This session belongs inside the team strength session today. If today's session doesn't hold its lifts, do them in place of the matching team lifts.",
+  is: "Þessi æfing á heima inni í styrktaræfingu liðsins í dag. Ef æfing dagsins er ekki með lyftur hennar, gerðu þær í stað samsvarandi lyftna liðsins.",
 };
 const WEEK_UNSET: Bi = {
   en: "The coach has not set this week's training days yet, so the days are a suggestion around the matches.",
@@ -425,10 +495,12 @@ export function placementFor(plan: GoalPlan, quality: GoalQuality, startDate: st
   const monday = mondayOf(todayIso);
   let prevLast: string | null = null;
   if (week > 1) {
-    const prev = placeWeek({ quality, slots: sessionsOfWeek(plan, week - 1, season).map((s) => s.slot), monday: addDays(monday, -7), cal });
-    prevLast = prev.placed.length ? prev.placed[prev.placed.length - 1].date : null;
+    const prev = placeWeek({ quality, slots: sessionsOfWeek(plan, week - 1, season).map((s) => s.slot), monday: addDays(monday, -7), cal, season, allGym: allGymSlotsOf(plan, quality, week - 1) });
+    // A session inside the team's heavy session is not an extra session: the gap does not count from it.
+    const counted = prev.placed.filter((p) => !p.inTeam);
+    prevLast = counted.length ? counted[counted.length - 1].date : null;
   }
-  return placeWeek({ quality, slots: sessionsOfWeek(plan, week, season).map((s) => s.slot), monday, cal, prevLast });
+  return placeWeek({ quality, slots: sessionsOfWeek(plan, week, season).map((s) => s.slot), monday, cal, prevLast, season, allGym: allGymSlotsOf(plan, quality, week) });
 }
 
 export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null {
@@ -570,13 +642,15 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
     }
   }
 
+  const dayRule = gymOnHeavyDays(placement.monday, input.season) ? DAY_RULE_HEAVY : DAY_RULE;
+  const inTeamNotSent = !!todays?.inTeam && !!today && !today.inSession && today.version !== "skip";
   const facts = (today?.inSession
     ? [weekFact, IN_SESSION_FACT, colourFact]
-    : [weekFact, colourFact ?? unplacedFact ?? DAY_RULE, ...(colourFact && unplacedFact ? [unplacedFact] : []), cLeftOut ? C_LEFT_OUT : null])
+    : [weekFact, inTeamNotSent ? IN_TEAM_NOT_SENT : null, colourFact ?? unplacedFact ?? dayRule, ...(colourFact && unplacedFact ? [unplacedFact] : []), cLeftOut ? C_LEFT_OUT : null])
     .filter((f): f is Bi => !!f).slice(0, 3);
   if (!placement.weekKnown) details.unshift(WEEK_UNSET);
   if (cLeftOut) details.unshift(C_LEFT_OUT);
-  details.unshift(DAY_RULE);
+  details.unshift(dayRule);
 
   return {
     ...base,

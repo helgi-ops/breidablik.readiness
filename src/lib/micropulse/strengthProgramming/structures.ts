@@ -234,6 +234,19 @@ export const REST_DAY = "rest" as const;
 export type RestDay = typeof REST_DAY;
 export const isRestDay = (v: unknown): v is RestDay => v === REST_DAY;
 
+/** Methods with no main two-leg lift (no heavy lift to take a goal's heavy lift's place). Guarded by a test that
+ *  builds every method. */
+export const STRUCTURES_WITHOUT_MAIN_LIFT: ReadonlySet<StructureKey> = new Set<StructureKey>(["power_contrast", "potentiation_cluster", "overcoming_isometric", "iso_pap_primer", "yielding_isometric"]);
+
+/** The team lifts heavy on this MD day: MD-4 or MD-3, not marked rest, and the day's method (or the built-in session)
+ *  has a main lift. Read by the goal placement (goalPlan/today.ts) so a goal gym session goes inside that session. */
+export function teamLiftsHeavyOn(md: string | null, structures: Partial<Record<string, StructureKey | RestDay>> | null | undefined): boolean {
+  if (md !== "MD-4" && md !== "MD-3") return false;
+  const pick = structures?.[md];
+  if (isRestDay(pick)) return false;
+  return !(pick && STRUCTURES_WITHOUT_MAIN_LIFT.has(pick));
+}
+
 /** Persisted shape (team_strength_palette.md_structures jsonb): MD day → method, or "rest" (OFF). */
 export type MdStructures = Partial<Record<MdContext, StructureKey | RestDay>>;
 

@@ -14,6 +14,9 @@ import { SPEED_PLANS } from "@/lib/micropulse/speedMethods";
  *
  * Changed on purpose so far:
  *  - 2026-11-15 jump adult starts: 50–60 foot contacts a session (squat jumps + countermovement jumps added).
+ *  - 2026-11-20 when-text only (GOAL_CONTENT_VERSION 2026-11-20.1): the gym session's day ("heavy gym day, MD-4 else
+ *    MD-3, inside the team strength session" in pre-/off-season) and braking's session B (MD-3 in pre-season). No
+ *    dose, method or source changed.
  *
  * The Programme Library's plans at the intermediate level are pinned too (lota 4 step 2): intermediate IS the plan
  * as it was before levels existed, so adding beginner / advanced must not move a single word of it.
@@ -22,19 +25,19 @@ const h = (x: unknown) => createHash("sha256").update(JSON.stringify(x)).digest(
 const LEFT = { side: "left", asymPct: 12, test: "nordbord", date: null } as const;
 
 const GOLDEN: Record<string, string> = {
-  "accel:youth": "0718167f5e6f8353",
-  "accel:strength_first": "740b8e48d7f578a4",
-  "accel:starts_first": "22ad2c947c9966ff",
-  "accel:balanced": "912ee2c64592ab38",
-  "braking:standard": "03324fe70625e078",
-  "braking:technique_only": "5dd4fb071ea47b3e",
-  "top:build_first:strength": "93b54b94a6f32c3e",
-  "top:build_first:power": "9bedb176b7f20025",
-  "top:build_first:balanced": "82d9c9fcb29efed6",
-  "top:ready:strength": "baa15f789f5f957a",
-  "top:ready:power": "3d5003cd00bc2c0d",
-  "top:ready:balanced": "3f3ecb84ad735deb",
-  "jump:youth": "c17ebaa72a3ad1cd",
+  "accel:youth": "4b3bb21c12d76c79",
+  "accel:strength_first": "742f3afc862dac8b",
+  "accel:starts_first": "58eef02858ee404a",
+  "accel:balanced": "89f90936bb372568",
+  "braking:standard": "3c8d7c27af8bf581",
+  "braking:technique_only": "290532611e00cc94",
+  "top:build_first:strength": "57a5be621d94c2c0",
+  "top:build_first:power": "8383bb6a088d0d26",
+  "top:build_first:balanced": "97bc9bb09f370029",
+  "top:ready:strength": "b5e6295b965cdd38",
+  "top:ready:power": "1a6db213242796b4",
+  "top:ready:balanced": "708f051224b5bda2",
+  "jump:youth": "3e6f4e475804694c",
 };
 
 function current(): Record<string, string> {
@@ -49,26 +52,26 @@ function current(): Record<string, string> {
 const LIBRARY_GOLDEN: Record<string, string> = {
   "lib:acceleration:in_season": "271080b23d826d96",
   "lib:acceleration:pre_season": "9c03e5fc25129599",
-  "lib:acceleration:individual:strength_first": "7dda6a10af717d2e",
-  "lib:acceleration:individual:starts_first": "a6e09c8bff0fc665",
-  "lib:acceleration:individual:balanced": "dddb51f68c742a3d",
-  "lib:acceleration:individual:youth": "d9bd0e818b4c7a03",
+  "lib:acceleration:individual:strength_first": "278628f61ea1c16c",
+  "lib:acceleration:individual:starts_first": "7ce2cfbb26cad982",
+  "lib:acceleration:individual:balanced": "37db776ba165186b",
+  "lib:acceleration:individual:youth": "015566cfd289738d",
   "lib:braking:in_season": "6faad98f63e48d2c",
   "lib:braking:pre_season": "4bec17684ac939c0",
-  "lib:braking:individual:standard": "7eba57c53b958c78",
-  "lib:braking:individual:technique_only": "2bf72d4291c41ec2",
+  "lib:braking:individual:standard": "dfddd3ce100c3b04",
+  "lib:braking:individual:technique_only": "3939a5aeeda0c10d",
   "lib:jump:in_season": "09ac64e93fe0dd44",
   "lib:jump:pre_season": "d8df0f139944f2fe",
-  "lib:jump:individual:combined": "00e5b0381d96d388",
-  "lib:jump:individual:strength_first": "073005c0dee72faa",
-  "lib:jump:individual:fast_jumps": "a7b3e4371c7e779a",
-  "lib:jump:individual:youth": "0e0b439d3483ecbb",
+  "lib:jump:individual:combined": "ddd6353dedea8f42",
+  "lib:jump:individual:strength_first": "3bc083e1c019a487",
+  "lib:jump:individual:fast_jumps": "a84a80e03d4be38e",
+  "lib:jump:individual:youth": "2f04bf3e04d8db34",
   "speed:in_season": "0a0e2a1e7d19fd65",
   "speed:pre_season": "e0c6abe1b0748b65",
   "speed:individual": "bf59f2c0ff662996",
-  "jump:combined": "904d4d520dd37e22",
-  "jump:strength_first": "f6472792f08ffdcb",
-  "jump:fast_jumps": "fbd2bc878fc7d7dc",
+  "jump:combined": "8f973b58a1d7e829",
+  "jump:strength_first": "ea16a1b972dcc90d",
+  "jump:fast_jumps": "b6a1aeee045c021b",
 };
 
 function libraryCurrent(): Record<string, string> {

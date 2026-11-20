@@ -7,7 +7,7 @@ import type { Bi, GoalBlock, GoalBlockReason, GoalPlanInput, GoalQuality, GoalSe
 
 export const GOAL_ENGINE_VERSION = "goal-plan-1";
 /** Bump when a dose, a method or a source changes. A plan approved earlier keeps its frozen copy. */
-export const GOAL_CONTENT_VERSION = "2026-11-18.2";
+export const GOAL_CONTENT_VERSION = "2026-11-20.1";
 
 export const PLAN_WEEKS = 8;
 /** In-season add-on sessions a week (MicroPulse rule, not from a study). */
@@ -178,9 +178,10 @@ export const WHEN: Record<"speed_day" | "gym_day" | "warmup_any" | "off_day", Bi
     en: "In the team warm-up on the team's speed day (MD-3 or MD-4), before the main session.",
     is: "Í upphitun með liðinu á hraðadegi liðsins (MD-3 eða MD-4), á undan aðalæfingunni.",
   },
+  // The heavy-day rule (2026-11-20, goalPlan/today.ts `gymOnHeavyDays`).
   gym_day: {
-    en: "On the team's gym day, at least 2 days after session A, never MD-1.",
-    is: "Á styrktardegi liðsins, minnst 2 dögum eftir æfingu A, aldrei MD-1.",
+    en: "Pre-season and off-season: on the team's heavy gym day (MD-4, else MD-3), inside the team strength session. In season: the team's gym day, at least 2 days after session A. Never MD-2 or MD-1 in pre-season.",
+    is: "Undirbúnings- og hvíldartímabil: á þungum styrktardegi liðsins (MD-4, annars MD-3), inni í styrktaræfingu liðsins. Á tímabili: styrktardagur liðsins, minnst 2 dögum eftir æfingu A. Aldrei MD-2 né MD-1 á undirbúningstímabili.",
   },
   warmup_any: {
     en: "After the team warm-up, early in the session, not MD-1 or MD+1.",
