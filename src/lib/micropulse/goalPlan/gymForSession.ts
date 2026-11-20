@@ -85,6 +85,16 @@ export function gymLiftsOf(plan: GoalPlan, week: number, slot: GoalSessionSlot):
   return lifts.length ? { session, lifts } : null;
 }
 
+/** The goal's gym lifts in one plan week, all its sessions (A, B, C) in order, each kind once. */
+export function goalWeekLifts(plan: GoalPlan, week: number): GoalPlanGymLift[] {
+  const slots = (plan.weeks.find((w) => w.week === week)?.sessions ?? []).map((s) => s.slot);
+  const out: GoalPlanGymLift[] = [];
+  for (const slot of slots) {
+    for (const l of gymLiftsOf(plan, week, slot)?.lifts ?? []) if (!out.some((o) => o.profile === l.profile)) out.push(l);
+  }
+  return out;
+}
+
 /** Today's goal-session gym lifts, or null (no plan running, no gym session today, or it holds no gym lift). */
 export function goalPlanGymFor(args: {
   planId: string;
@@ -104,14 +114,23 @@ export function goalPlanGymFor(args: {
   if (!placed) {
     // No goal gym session today. When the week holds one on another day, the engine may give back today the sets that
     // day cannot hold (week rule, 2026-11-19): it gets those sessions and the week's team days, and decides by rule.
+    // The goal's lifts this week go too (2026-11-20): close to the match (MD-2, MD-1, which the placement never uses)
+    // the engine puts the goal's lift, light and fast, in the day's fast spot. Whether today is such a day, and whether
+    // the team lifts, is the engine's call (it knows the day's method); here only the plan is read.
     const weekDays = teamDaysOfWeek(todayIso, args.cal);
-    if (!weekDays.some((d) => d.date === todayIso)) return null;
-    const sessions = gymSessions.flatMap((p) => {
-      const lifts = gymLiftsOf(plan, week, p.slot)?.lifts ?? [];
-      return lifts.length ? [{ slot: p.slot, date: p.date, md: p.md, lifts }] : [];
-    });
-    if (!sessions.length) return null;
-    return { planId: args.planId, quality, week, weeksTotal: PLAN_WEEKS, labelEN: "", labelIS: "", lifts: [], giveBack: { sessions, weekDays } };
+    const sessions = weekDays.some((d) => d.date === todayIso)
+      ? gymSessions.flatMap((p) => {
+          const lifts = gymLiftsOf(plan, week, p.slot)?.lifts ?? [];
+          return lifts.length ? [{ slot: p.slot, date: p.date, md: p.md, lifts }] : [];
+        })
+      : [];
+    const weekLifts = goalWeekLifts(plan, week);
+    if (!sessions.length && !weekLifts.length) return null;
+    return {
+      planId: args.planId, quality, week, weeksTotal: PLAN_WEEKS, labelEN: "", labelIS: "", lifts: [],
+      ...(sessions.length ? { giveBack: { sessions, weekDays } } : {}),
+      ...(weekLifts.length ? { weekLifts } : {}),
+    };
   }
   const read = gymLiftsOf(plan, week, placed.slot);
   if (!read) return null;

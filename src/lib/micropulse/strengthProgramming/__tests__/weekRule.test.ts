@@ -303,14 +303,16 @@ describe("within the set, and close to the match", () => {
       const [first, ...rest] = loaded(pot);
       expect(rest).toEqual([]);
       expect([first.dose.sets, first.dose.reps]).toEqual([NEAR_MATCH_SETS, String(NEAR_MATCH_REPS)]);
-      expect(first.dose.intensity).toBe(NEAR_MATCH_LOAD);
+      // The day's zone (2026-11-20): MD-2 speed-strength 1.0–1.3 m/s from 40–55%, MD-1 speed from 1.3 m/s at 30–40%.
+      expect(first.dose.intensity).toBe(md === "MD-2" ? "40–55% 1RM · 1.0–1.3 m/s" : "30–40% 1RM · ≥ 1.3 m/s");
       expect(first.dose.velocityLossCap).toBe(10);
       expect(rule(pot, "WEEK_RULE_NEAR_MATCH")?.actionEN).toMatch(/4 × 4, 16 explosive reps in all \(the method alone gives 3 × 3\)/);
       // A loaded lift paired with a jump (power contrast): 3 rounds of 3 + 3 = 18, the pair counted together.
       const pc = buildStrengthSession(snap({ mdContext: md, mdStructures: { [md]: "power_contrast" } }))!;
       const block = pc.blocks.find((b) => b.type === "FRENCH_CONTRAST")!;
       expect(block.exercises.map((e) => [e.dose.sets, e.dose.reps])).toEqual([[3, "3"], [3, "3"]]);
-      expect(loaded(pc)[0].dose.intensity).toBe(NEAR_MATCH_LOAD);
+      // A pull (jump shrug) keeps its own load; the zone's lower end is its floor.
+      expect(loaded(pc)[0].dose.intensity).toBe(`${NEAR_MATCH_LOAD} · ≥ ${md === "MD-2" ? "1.0" : "1.3"} m/s`);
       expect(loaded(pc)[0].dose.velocityLossCap).toBe(10);
       expect(rule(pc, "WEEK_RULE_NEAR_MATCH")?.actionIS).toMatch(/3 hringir af 3 \+ 3, hlaðna lyftan og svo stökkið, 18 sprengiendurtekningar alls/);
       for (const s of [pot, pc]) {

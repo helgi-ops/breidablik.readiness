@@ -45,6 +45,18 @@ on the template exercise as `vbt`. Assigning the plan writes `individual_trainin
 DB vocabulary (`toDbLoadType`: kg → absolute_kg, %1RM → pct_1rm, RPE → rpe_target, velocity → null); before
 this, a plan built with "kg" would have failed the `load_type` check constraint on assign.
 
+**Week rule close to the match (2026-11-20, `strengthProgramming/weekRule.ts`).** Individualised modes, football:
+on MD-2 (and a light day in a week without a match) the day's loaded fast lift gets the speed-strength zone,
+1.0–1.3 m/s, starting at 40–55%; on MD-1 the speed zone, 1.3 m/s or faster, starting at 30–40%. The bounds are
+the custom-template page's `VBT_ZONES` (no new table). Only a lift with a bar takes the whole zone: the loaded
+jump squat. A bar pull keeps its own load and takes the zone's lower end as a floor (a pull moves faster than a
+squat at the same effort, Mann 2015). Dumbbell and kettlebell lifts get no speed. Each set still stops at a 10% speed
+loss. The zone rides on `ExerciseDose.speedZone` → `TodayStructureItem.speedZone`; the player's "All the details"
+shows it in place of the lift's own "No target speed" line, and a block with a zone does not get the coach's block
+card (two speeds on one lift would contradict each other). Sources: Mann 2015 (zones; a coaching article),
+Otero-Esquina 2017 (40–55% squat in season, footballers), Pareja-Blanco 2017 (load–speed equation), Harrison 2019
+(priming dose). No study tested a target speed for loaded jumps or pulls; which day takes which zone is MicroPulse's rule.
+
 Not built: checking measured bar speed after a set, turning a target speed into kg from a player's profile,
 VBT on Custom Programmes, one shared set of velocity zones (four definitions still disagree).
 Descriptive only; never the readiness colour, never a load decision.

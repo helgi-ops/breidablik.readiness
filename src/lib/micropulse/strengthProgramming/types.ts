@@ -61,6 +61,12 @@ export type ExerciseDose = {
   /** The sets were set by the week rule (weekRule.ts): the week's heavy sets are fixed, so the block's extra set
    *  is not added on top. Rides on the dose so it survives the team-list substitution (which keeps the dose). */
   weekRule?: true;
+  /** The day's loaded explosive lift close to the match (weekRule.ts `applyNearMatchDose`): found again after the
+   *  team list and the player's goal have put their own exercise in the spot (`finishNearMatch`). */
+  nearMatch?: true;
+  /** The bar-speed zone the week rule set close to the match (m/s, mean concentric velocity); max null = "or faster".
+   *  Only on a lift with a bar, where a speed can be measured. */
+  speedZone?: { min: number; max: number | null };
 };
 
 /** A canonical exercise in the library. */
@@ -125,7 +131,7 @@ export type PrescribedExercise = {
   /** Part of the player's 8-week goal plan, session B (gym), merged into the team session ("One session, one whole",
    *  2026-11-17, goalPlanGym.ts). The goal's dose is the dose: no other extra set lands on it. `slot`: which plan
    *  session (the gym-only goals merge A or B, 2026-11-18); absent = B. */
-  goalPlan?: { quality: import("@/lib/micropulse/goalPlan/types").GoalQuality; week: number; slot?: import("@/lib/micropulse/goalPlan/types").GoalSessionSlot; giveBack?: true };
+  goalPlan?: { quality: import("@/lib/micropulse/goalPlan/types").GoalQuality; week: number; slot?: import("@/lib/micropulse/goalPlan/types").GoalSessionSlot; giveBack?: true; nearMatch?: true };
   /** Brief sport-science rationale shown in UI tooltip. */
   rationale?: string;
 };

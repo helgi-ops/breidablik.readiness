@@ -49,8 +49,8 @@ import { applyAdaptationRules, newAdaptationTrace, type AdaptationTrace } from "
 import { EXERCISE_LIBRARY as LIBRARY, EXERCISES_BY_ID, getExercise as lookupExercise } from "./exerciseLibrary";
 import { effectivePool, isPlayerPick, type PlayerExercisePicks } from "./playerPicks";
 import { applyPlayerGoal } from "./playerGoal";
-import { applyGoalGiveBack, applyGoalPlanGym, type GoalLiftResult, type GoalOwedLift } from "./goalPlanGym";
-import { applyNearMatchDose, applyWeekRule, matchWeekHeavyReps, nearMatchAudit, noMatchWeekRule, weekRuleAudit, weekRuleLightAudit, weekRuleSeasonOf, type NoMatchWeekRule, type WeekRuleSeason } from "./weekRule";
+import { applyGoalGiveBack, applyGoalNearMatch, applyGoalPlanGym, type GoalLiftResult, type GoalOwedLift } from "./goalPlanGym";
+import { applyNearMatchDose, applyWeekRule, finishNearMatch, matchWeekHeavyReps, nearMatchAudit, nearMatchDayOf, nearMatchLiftOf, noMatchWeekRule, weekRuleAudit, weekRuleLightAudit, weekRuleSeasonOf, type NearMatchDay, type NoMatchWeekRule, type WeekRuleSeason } from "./weekRule";
 import { applyPreventionRule, matchWeekPrevention, noMatchWeekPrevention, preventionAudit } from "./preventionRule";
 import { takesPart, type SendMode } from "./sendMode";
 import {
@@ -671,7 +671,8 @@ function goalGiveBackOwed(snap: PlayerStrengthSnapshot, todayHeavyReps: number |
   for (const d of gb.weekDays) {
     if (goalDates.has(d.date)) continue;
     const day = ruleDayOf(snap, d.date, d.md, season);
-    if (!day || day.reps == null || isRestDay(snap.mdStructures?.[day.md])) continue;
+    // Only a day the team lifts on: the give-back takes the place of team exercises, so a day with no session has none.
+    if (!day || day.reps == null || !ruleFrameFor(snap, day.md, day.reps)) continue;
     if (!best || day.reps > best.reps || (day.reps === best.reps && d.date < best.date)) best = { date: d.date, reps: day.reps };
   }
   if (!best || best.date !== snap.todayIso) return [];
@@ -856,6 +857,9 @@ function buildStrengthSessionCore(
   const season = weekRuleSeasonOf(snap);
   /** Today's heavy reps by the week rule; null = not a heavy day (or the rule does not run: standard, basketball). */
   let todayHeavyReps: number | null = null;
+  /** The near-match day this build is (MD-2 zone or MD-1 zone); null = not a day close to the match. */
+  let nearDay: NearMatchDay | null = null;
+  let finishNear: (() => void) | null = null;
   if (individualised && !isBasketball) {
     const dayReps = noMatchRule ? noMatchRule.heavyReps : snap.noMatchNearby ? null : matchWeekHeavyReps(snap.mdContext, season);
     todayHeavyReps = dayReps;
@@ -869,8 +873,14 @@ function buildStrengthSessionCore(
     // Close to the match (and a light day in a week without one): the small fast dose, no heavy lift.
     const noMatchLight = noMatchRule?.kind === "light";
     if (noMatchLight || (!snap.noMatchNearby && (snap.mdContext === "MD-2" || snap.mdContext === "MD-1"))) {
-      const near = applyNearMatchDose(tmpl.blocks);
-      if (near) weekAudit.push(nearMatchAudit(snap.mdContext, near, noMatchLight));
+      nearDay = nearMatchDayOf(noMatchLight ? "MD-2" : snap.mdContext);
+      const near = applyNearMatchDose(tmpl.blocks, nearDay);
+      if (near) {
+        // Written again at the end of the build, for the lift that is then in the spot (`finishNear`).
+        const said = nearMatchAudit(snap.mdContext, near, noMatchLight, nearMatchLiftOf(tmpl.blocks));
+        weekAudit.push(said);
+        finishNear = () => Object.assign(said, nearMatchAudit(snap.mdContext, near, noMatchLight, nearMatchLiftOf(tmpl.blocks)));
+      }
     }
     // Prevention: Nordic and Copenhagen once a week, each on its own heavy day with the week's reps (never the same
     // eccentric work two days in a row). A team with no weekday plan in a week without a match is left as it was.
@@ -911,6 +921,13 @@ function buildStrengthSessionCore(
     if (owed.length) {
       audit.push(...applyGoalGiveBack(tmpl.blocks, snap, owed, (id) => safetyRulesOut(id, trace), (id) => trace.pinned.has(id), upper ? [upper.block] : [], todayHeavyReps));
     }
+  }
+  // Close to the match: the fast lift's dose is written again for the lift the team list put there (its load line,
+  // and the day's bar-speed zone on a lift with a bar), then a player on an 8-week goal gets the goal's lift there.
+  if (nearDay) {
+    finishNearMatch(tmpl.blocks, nearDay);
+    audit.push(...applyGoalNearMatch(tmpl.blocks, snap, (id) => safetyRulesOut(id, trace), (id) => trace.pinned.has(id), nearDay));
+    finishNear?.();
   }
   if (individualised) {
     audit.push(...applyPlayerGoal(tmpl.blocks, snap, (id) => safetyRulesOut(id, trace), (id) => trace.pinned.has(id)));

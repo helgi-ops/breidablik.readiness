@@ -114,7 +114,9 @@ describe("into the strength session", () => {
         // No lifts of its own; the week's goal days ride along for the week rule's give-back.
         const g = goalPlanGymFor({ planId: "x", quality: q, plan, startDate: START, todayIso: d, cal });
         expect(g?.lifts ?? []).toEqual([]);
-        if (g) expect(g.giveBack?.sessions.map((x) => x.date).sort()).toEqual(p.placed.map((x) => x.date).sort());
+        if (g?.giveBack) expect(g.giveBack.sessions.map((x) => x.date).sort()).toEqual(p.placed.map((x) => x.date).sort());
+        // The goal's lifts this week ride along every day, for the fast lift close to the match (2026-11-20).
+        expect(g?.weekLifts?.length ?? 0, `${q} ${d}`).toBeGreaterThan(0);
       }
     }
   });

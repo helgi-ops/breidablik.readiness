@@ -49,6 +49,9 @@ export type TodayStructureItem = {
   /** Part of the player's 8-week goal plan — "One session, one whole" (2026-11-17). `slot`: the plan session merged
    *  (B for the pitch goals; A or B for the gym-only goals, 2026-11-18). */
   goalPlan?: { quality: string; week: number; slot: "A" | "B" | "C" };
+  /** The bar-speed zone the week rule set close to the match (`ExerciseDose.speedZone`, 2026-11-20): read by the
+   *  player's "All the details" in place of the lift's own speed line. Max null = "or faster". */
+  speedZone?: { min: number; max: number | null };
 };
 
 const GOAL_PLAN_EN: Record<string, string> = {
@@ -114,7 +117,9 @@ export function strengthSessionToTodayStructure(
     .map((b) => ({
       block: (isIS ? b.titleIS : b.titleEN) || b.titleEN || b.titleIS || "Block",
       ...(b.structureId ? { structureId: b.structureId } : {}),
-      ...(vbtCard && blockTakesVbt(b) ? { vbt: vbtCard } : {}),
+      // A block where the week rule set the bar-speed zone shows only that zone: the coach's block method is for the
+      // heavy lifts, and two speeds on one lift would contradict each other.
+      ...(vbtCard && blockTakesVbt(b) && !b.exercises.some((e) => e.dose.speedZone) ? { vbt: vbtCard } : {}),
       items: b.exercises.map((ex) => {
         // The dose "method" line surfaces intensity (RPE / %1RM / %MVC) and any
         // cluster/VBT cue; the modification reason (why this was swapped) rides
@@ -137,10 +142,12 @@ export function strengthSessionToTodayStructure(
         if (methodBits) item.method = methodBits;
         if (note) item.note = note;
         if (ex.dose.velocityLossCap) item.vlCap = ex.dose.velocityLossCap;
+        if (ex.dose.speedZone) item.speedZone = { min: ex.dose.speedZone.min, max: ex.dose.speedZone.max };
         // The goal card reads this to know the plan session's gym part is inside today's session.
         // Not on a give-back day (week rule, 2026-11-19): those sets belong to another day's plan session, which is
         // ticked on its own day, so the card must not read today as that session.
-        if (ex.goalPlan && !ex.goalPlan.giveBack) item.goalPlan = { quality: ex.goalPlan.quality, week: ex.goalPlan.week, slot: ex.goalPlan.slot ?? "B" };
+        // Nor on MD-2 / MD-1 (2026-11-20): the goal's fast lift there is the week rule's light version, not a plan session.
+        if (ex.goalPlan && !ex.goalPlan.giveBack && !ex.goalPlan.nearMatch) item.goalPlan = { quality: ex.goalPlan.quality, week: ex.goalPlan.week, slot: ex.goalPlan.slot ?? "B" };
         // Stamp the library id + curated safe alternatives so the player can swap
         // this exercise on the Today card (safe options only). Corrective items have
         // no library id, so they carry no swap.

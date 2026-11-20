@@ -210,6 +210,15 @@ export type RxItemExtra = { tempo?: RxLine | null; target?: number | null; cut?:
 
 const fmtMs = (v: number) => String(Math.round(v * 100) / 100);
 
+/** The item's bar-speed zone (`TodayStructureItem.speedZone`), or null when absent or not a sane m/s range. */
+function speedZoneOf(raw: unknown): { min: number; max: number | null } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { min, max } = raw as { min?: unknown; max?: unknown };
+  if (typeof min !== "number" || !(min > 0 && min < 3)) return null;
+  if (max == null) return { min, max: null };
+  return typeof max === "number" && max > min && max < 3 ? { min, max } : null;
+}
+
 /**
  * The "All the details" table for one Today item, or null when there is nothing to add (a header, warm-up or
  * mobility, an unknown free-text line, or a line with no load, effort, speed or rest).
@@ -275,6 +284,20 @@ export function rxForTodayItem(raw: unknown, parsed: ParsedTodayLine, block: unk
           else barSpeed.splice(barSpeed.findIndex((x) => x.key === "target") + 1, 0, stop);
         }
       }
+      // Close to the match the week rule sets a bar-speed zone (2026-11-20): it replaces the lift's own speed line
+      // ("No target speed …"). The speed sets the load; the % on the load row is only where to start.
+      const zone = speedZoneOf(item.speedZone);
+      if (target == null && zone) {
+        const lo = zone.min.toFixed(1);
+        const hi = zone.max != null ? zone.max.toFixed(1) : null;
+        const line = { key: "target" as const, line: hi
+          ? sess(`${lo}–${hi} m/s on each rep. Faster: add weight. Slower: take weight off.`, `${isNum(lo)}–${isNum(hi)} m/s í hverri endurtekningu. Hraðar: bættu á. Hægar: taktu af.`)
+          : sess(`${lo} m/s or faster on each rep. Slower: take weight off.`, `${isNum(lo)} m/s eða hraðar í hverri endurtekningu. Hægar: taktu af.`) };
+        barSpeed = barSpeed.filter((x) => x.key !== "none");
+        const i = barSpeed.findIndex((x) => x.key === "target");
+        if (i >= 0) barSpeed[i] = line;
+        else barSpeed.unshift(line);
+      }
     }
   } else {
     // A free-text template line: only an exact library lift with a profile, and only with sets × reps.
@@ -321,6 +344,7 @@ export function rxForPrescribed(ex: PrescribedExercise, vbt: VbtPlayerCard | nul
     method: [ex.dose.intensity, ex.dose.cue].filter(Boolean).join(" · "),
     exerciseId: ex.exerciseId,
     ...(ex.dose.velocityLossCap ? { vlCap: ex.dose.velocityLossCap } : {}),
+    ...(ex.dose.speedZone ? { speedZone: ex.dose.speedZone } : {}),
   };
   return rxForTodayItem(item, { name, setsReps: `${ex.dose.sets}×${ex.dose.reps}`, isHeader: false }, vbt ? { vbt } : {});
 }

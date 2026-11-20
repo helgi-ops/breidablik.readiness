@@ -213,70 +213,185 @@ export const NEAR_MATCH_VELOCITY_LOSS_CAP = 10 as const;
 export const NEAR_MATCH_SETS = 4;
 export const NEAR_MATCH_REPS = 4;
 export const NEAR_MATCH_LOAD = "30–40% 1RM";
-/** The loaded jumps the 30–40% load line is written for; other explosive lifts keep their own load line. */
-const LOADED_JUMP_IDS = new Set(["ex_trap_bar_jump_squat", "ex_jump_shrug"]);
+
+/**
+ * The bar-speed zone of a day close to the match (2026-11-20, the coach's call): MD-2 in the speed-strength zone,
+ * MD-1 in the speed zone, so the bar gets faster and the load lighter as the match comes closer. A light day in a
+ * week without a match is built as MD-2 and takes its zone.
+ *
+ * What comes from research (`research/`):
+ *   - The zones and their names: strength-speed 0.75–1.0 m/s, speed-strength 1.0–1.3 m/s in a squat, starting strength
+ *     from 1.3 m/s (Mann, Ivey & Sayers 2015: a coaching article on American football, not a trial).
+ *   - 1.0–1.3 m/s: professional footballers trained the full squat at 40–55% of max (about 1.28–1.07 m/s) in season,
+ *     once or twice a week for 7 weeks, and raised jump power (Otero-Esquina 2017, in Cormier 2020).
+ *   - 1.3 m/s or faster: 30–40% of max in the squat is about 1.3–1.43 m/s (%1RM = −2.185·v² − 61.53·v + 122.5,
+ *     Pareja-Blanco 2017, professional footballers), the load of the dose that worked the day before competition
+ *     (Harrison 2019).
+ *   - A speed to aim at gave faster reps than "as fast as possible" (Hirsch & Frost 2019: bench press, 13 lifters).
+ *
+ * What does NOT come from research: no study tested a target speed for loaded jumps or pulls; the speeds are from
+ * squat studies. The same speed is a different load in each lift (Balsalobre-Fernández 2021 advises against fixed
+ * zones), so the SPEED decides the load and the % is only where to start. Which day takes which zone is MicroPulse's
+ * rule. The bounds are the ones the custom-template page already uses (`VBT_ZONES`: speed-strength 1.0–1.3, speed
+ * 1.3+), so no new table is added to the ones that already disagree (docs/vbt-methods.md).
+ */
+export type NearMatchDay = "MD-2" | "MD-1";
+export type SpeedZone = { min: number; max: number | null };
+export const NEAR_MATCH_ZONE: Record<NearMatchDay, { nameEN: string; nameIS: string; zone: SpeedZone; load: string }> = {
+  "MD-2": { nameEN: "speed-strength", nameIS: "speed-strength", zone: { min: 1.0, max: 1.3 }, load: "40–55% 1RM" },
+  "MD-1": { nameEN: "speed", nameIS: "speed", zone: { min: 1.3, max: null }, load: "30–40% 1RM" },
+};
+/** The near-match day a build is: MD-1 on MD-1, else MD-2 (MD-2 itself, and a light day in a week without a match). */
+export const nearMatchDayOf = (md: MdContext): NearMatchDay => (md === "MD-1" ? "MD-1" : "MD-2");
+
+/** "1.0–1.3 m/s" / "≥ 1.3 m/s" (no words, so the line reads the same in both languages). */
+export function speedZoneText(z: SpeedZone): string {
+  const f = (n: number) => n.toFixed(1);
+  return z.max == null ? `≥ ${f(z.min)} m/s` : `${f(z.min)}–${f(z.max)} m/s`;
+}
+
+/** The loaded squat-type jump: the lift the squat studies' loads and speeds are closest to. It takes the day's load
+ *  line and the whole zone. */
+export const LOADED_SQUAT_JUMP_IDS = new Set(["ex_trap_bar_jump_squat"]);
+/** Pulls with a bar. A pull moves faster than a squat at the same effort (a hang clean about 1.4 m/s: Mann 2015), so
+ *  for these the zone's lower end is a floor only, and they keep their own load line (a jump shrug 30–40%). */
+export const BAR_PULL_IDS = new Set(["ex_jump_shrug", "ex_hang_high_pull", "ex_mid_thigh_pull_dynamic", "ex_hang_power_clean"]);
 const isLoadedExplosive = (ex: PrescribedExercise) => ex.category === "BALLISTIC" || ex.category === "EXPLOSIVE_OLYMPIC";
 
 export const NEAR_MATCH_EVIDENCE =
-  "Week rule, close to the match. A small fast dose 6–33 h before competition raised later performance: 15–20 ballistic reps at 30–40% of max (jump +5% at 24 h, +3% at 48 h), or at most 6 reps at 85% or more; a light lift without a jump did nothing (Harrison 2019, 11 small studies, strong athletes, none footballers). Stopping the set at a 10% speed loss gave more jump and sprint gain than 30% (Rodríguez-Rosell 2020). 4 × 4 (16 reps), or 3 rounds of 3 + 3 with a paired jump (18), is MicroPulse's split of the 15–20 reps.";
+  "Week rule, close to the match. A small fast dose 6–33 h before competition raised later performance: 15–20 ballistic reps at 30–40% of max (jump +5% at 24 h, +3% at 48 h), or at most 6 reps at 85% or more; a light lift without a jump did nothing (Harrison 2019, 11 small studies, strong athletes, none footballers). Stopping the set at a 10% speed loss gave more jump and sprint gain than 30% (Rodríguez-Rosell 2020). 4 × 4 (16 reps), or 3 rounds of 3 + 3 with a paired jump (18), is MicroPulse's split of the 15–20 reps. Bar speed: the zones are Mann 2015's (speed-strength 1.0–1.3 m/s, speed from 1.3 m/s; a coaching article, not a trial). Professional footballers trained the squat at 40–55% of max (1.07–1.28 m/s) in season and raised jump power (Otero-Esquina 2017); 30–40% in the squat is about 1.3–1.43 m/s (Pareja-Blanco 2017). No study tested a target speed for loaded jumps or pulls, and the same speed is a different load in each lift (Balsalobre-Fernández 2021): the speed decides the load, the % is where to start. Which day takes which zone is MicroPulse's rule.";
 
-export type NearMatchApplied = { from: string; to: string; paired: boolean; reps: number };
+export type NearMatchApplied = { from: string; to: string; paired: boolean; reps: number; day: NearMatchDay };
 
 /** Paired with a jump, round by round (power contrast): 3 rounds of 3 + 3, so the lift and the jump together stay at
  *  18 explosive reps, inside the 15–20 that worked. */
 export const NEAR_MATCH_PAIRED_ROUNDS = 3;
 export const NEAR_MATCH_PAIRED_REPS = 3;
 
+const isPairedJump = (e: PrescribedExercise) => e.category === "PLYOMETRIC";
+/** The lift's sets and reps close to the match: 3 × 3 when a jump is paired with it in a contrast block, else 4 × 4. */
+export function nearMatchSetsReps(blk: SessionBlock, i: number): { sets: number; reps: number; paired: boolean } {
+  const paired = blk.type === "FRENCH_CONTRAST" && blk.exercises.some((e, k) => k !== i && isPairedJump(e));
+  return { sets: paired ? NEAR_MATCH_PAIRED_ROUNDS : NEAR_MATCH_SETS, reps: paired ? NEAR_MATCH_PAIRED_REPS : NEAR_MATCH_REPS, paired };
+}
+
 /**
- * Close to the match: the day's loaded explosive lift does 4 × 4 (16 reps), as fast as possible, each set stopped at
- * a 10% speed loss. When a jump is paired with it in the same block, the pair does 3 rounds of 3 + 3 (18 reps), so the
- * day's explosive reps stay inside 15–20. Mutates the blocks. Null when the day's method has no loaded explosive lift
- * (an isometric primer, the built-in iso + box-jump primer): left as it is.
+ * The near-match dose of one lift on one day. A loaded squat-type jump: the day's load and the whole zone. A pull with
+ * a bar: its own load (a jump shrug 30–40%) and the zone's lower end as a floor. Anything else (dumbbell, kettlebell):
+ * its own load and no bar speed, because no bar is measured.
  */
-export function applyNearMatchDose(blocks: SessionBlock[]): NearMatchApplied | null {
+export function nearMatchDoseFor(ex: PrescribedExercise, day: NearMatchDay, sets: number, reps: number): PrescribedExercise["dose"] {
+  const z = NEAR_MATCH_ZONE[day];
+  const squatJump = LOADED_SQUAT_JUMP_IDS.has(ex.exerciseId);
+  const pull = BAR_PULL_IDS.has(ex.exerciseId);
+  const zone: SpeedZone | null = squatJump ? z.zone : pull ? { min: z.zone.min, max: null } : null;
+  const own = String(ex.dose.intensity ?? "").split(" · ")[0];
+  const load = squatJump ? z.load : ex.exerciseId === "ex_jump_shrug" ? NEAR_MATCH_LOAD : own;
+  const { speedZone: _old, ...rest } = ex.dose;
+  void _old;
+  return {
+    ...rest,
+    sets,
+    reps: String(reps),
+    intensity: zone ? [load, speedZoneText(zone)].filter(Boolean).join(" · ") : load,
+    velocityLossCap: NEAR_MATCH_VELOCITY_LOSS_CAP,
+    cue: !zone
+      ? "As fast as possible on every rep; stop the set when the bar slows by 10%"
+      : zone.max == null
+        ? `Bar speed ${speedZoneText(zone)}: take weight off if it is slower. Stop the set when the bar slows by 10%`
+        : `Bar speed ${speedZoneText(zone)}: add weight if it is faster, take weight off if slower. Stop the set when the bar slows by 10%`,
+    nearMatch: true,
+    ...(zone ? { speedZone: zone } : {}),
+  };
+}
+
+/**
+ * Close to the match: the day's loaded explosive lift does 4 × 4 (16 reps), in the day's bar-speed zone, each set
+ * stopped at a 10% speed loss. When a jump is paired with it in the same block, the pair does 3 rounds of 3 + 3
+ * (18 reps), so the day's explosive reps stay inside 15–20. The lift is marked (`dose.nearMatch`), so it is found again
+ * after the team list has put its own exercise there (`finishNearMatch`). Mutates the blocks. Null when the day's
+ * method has no loaded explosive lift (an isometric primer, the built-in iso + box-jump primer): left as it is.
+ */
+export function applyNearMatchDose(blocks: SessionBlock[], day: NearMatchDay = "MD-1"): NearMatchApplied | null {
   for (const blk of blocks) {
     const i = blk.exercises.findIndex(isLoadedExplosive);
     if (i < 0) continue;
     const ex = blk.exercises[i];
     const from = `${ex.dose.sets} × ${ex.dose.reps}`;
-    const isPairedJump = (e: PrescribedExercise, k: number) => k !== i && e.category === "PLYOMETRIC";
-    const paired = blk.type === "FRENCH_CONTRAST" && blk.exercises.some(isPairedJump);
-    const sets = paired ? NEAR_MATCH_PAIRED_ROUNDS : NEAR_MATCH_SETS;
-    const reps = paired ? NEAR_MATCH_PAIRED_REPS : NEAR_MATCH_REPS;
+    const { sets, reps, paired } = nearMatchSetsReps(blk, i);
     blk.exercises = blk.exercises.map((e, k) => {
-      if (k === i) {
-        return {
-          ...e,
-          dose: {
-            ...e.dose,
-            sets,
-            reps: String(reps),
-            intensity: LOADED_JUMP_IDS.has(e.exerciseId) ? NEAR_MATCH_LOAD : e.dose.intensity,
-            velocityLossCap: NEAR_MATCH_VELOCITY_LOSS_CAP,
-            cue: "As fast as possible on every rep; stop the set when the bar slows by 10%",
-          },
-        };
-      }
-      return paired && isPairedJump(e, k) ? { ...e, dose: { ...e.dose, sets, reps: String(reps) } } : e;
+      if (k === i) return { ...e, dose: nearMatchDoseFor(e, day, sets, reps) };
+      return paired && isPairedJump(e) ? { ...e, dose: { ...e.dose, sets, reps: String(reps) } } : e;
     });
-    const jumps = paired ? blk.exercises.filter(isPairedJump).length : 0;
-    return { from, to: paired ? `${sets} rounds of ${reps} + ${reps}` : `${sets} × ${reps}`, paired, reps: sets * reps * (1 + jumps) };
+    const jumps = paired ? blk.exercises.filter((e, k) => k !== i && isPairedJump(e)).length : 0;
+    return { from, to: paired ? `${sets} rounds of ${reps} + ${reps}` : `${sets} × ${reps}`, paired, reps: sets * reps * (1 + jumps), day };
   }
   return null;
 }
 
-/** The "why" line for a day close to the match. */
-export function nearMatchAudit(md: MdContext, applied: NearMatchApplied, noMatchLight: boolean): AppliedAdaptation {
+/**
+ * After the team list and the player's goal have put their own exercise in the marked spot: the dose is written again
+ * for the lift that is there now (its load line, and a bar speed only when a bar is measured). A spot that no longer
+ * holds a loaded explosive lift (the team list had only a jump for it) keeps that exercise's own reps and load and
+ * gets no bar speed.
+ */
+export function finishNearMatch(blocks: SessionBlock[], day: NearMatchDay): void {
+  for (const blk of blocks) {
+    blk.exercises.forEach((ex, i) => {
+      if (!ex.dose.nearMatch) return;
+      if (!isLoadedExplosive(ex)) {
+        if (ex.dose.speedZone) {
+          const { speedZone: _z, ...rest } = ex.dose;
+          void _z;
+          blk.exercises[i] = { ...ex, dose: rest };
+        }
+        return;
+      }
+      // The sets stay as they are (a yellow day's readiness rule may have taken some off); the reps and the load line
+      // are the near-match dose for the lift that is here now.
+      const { reps } = nearMatchSetsReps(blk, i);
+      blk.exercises[i] = { ...ex, dose: nearMatchDoseFor(ex, day, ex.dose.sets, reps) };
+    });
+  }
+}
+
+/** The bar-speed sentence of the "why" line, for the lift that is in the fast spot at the end of the build. */
+function nearMatchSpeedSay(day: NearMatchDay, lift: PrescribedExercise | null): { en: string; is: string } {
+  const comma = (t: string) => t.replace(/(\d)\.(\d)/g, "$1,$2");
+  const load = lift ? String(lift.dose.intensity ?? "").split(" · ")[0] : "";
+  const loadIS = load.replace("1RM", "af hámarki");
+  const z = lift?.dose.speedZone ?? null;
+  if (lift && z) {
+    const zone = speedZoneText(z);
+    const name = z.max == null && BAR_PULL_IDS.has(lift.exerciseId) ? null : day === "MD-1" ? "Speed" : "Speed-strength";
+    const start = load ? { en: `, starting at about ${load}`, is: `, byrjað um ${loadIS}` } : { en: "", is: "" };
+    return name
+      ? { en: `${name} zone: ${zone}${start.en}; the bar speed sets the load.`, is: `${name} svæði: ${comma(zone)}${start.is}; stangarhraðinn ræður þyngdinni.` }
+      : { en: `Bar speed ${zone} (a pull moves faster than a squat at the same effort)${start.en}; the bar speed sets the load.`, is: `Stangarhraði ${comma(zone)} (tog fer hraðar en hnébeygja við sama átak)${start.is}; stangarhraðinn ræður þyngdinni.` };
+  }
+  if (lift && load && !/^bodyweight/i.test(load)) return { en: `Light load (${load}), as fast as possible.`, is: `Létt þyngd (${loadIS}), eins hratt og hægt er.` };
+  return { en: "As fast as possible.", is: "Eins hratt og hægt er." };
+}
+
+/** The lift in the day's fast spot (`dose.nearMatch`), or null. */
+export function nearMatchLiftOf(blocks: SessionBlock[]): PrescribedExercise | null {
+  return blocks.flatMap((b) => b.exercises).find((e) => e.dose.nearMatch) ?? null;
+}
+
+/** The "why" line for a day close to the match. `lift` = the lift in the fast spot at the end of the build (after the
+ *  team list and the player's goal), so the speed it names is that lift's. */
+export function nearMatchAudit(md: MdContext, applied: NearMatchApplied, noMatchLight: boolean, lift: PrescribedExercise | null = null): AppliedAdaptation {
   const toIS = applied.paired ? applied.to.replace("rounds of", "hringir af") : applied.to;
   const was = applied.paired || applied.from === applied.to ? { en: "", is: "" } : { en: ` (the method alone gives ${applied.from})`, is: ` (aðferðin ein gefur ${applied.from})` };
   const pairEN = applied.paired ? ", the loaded lift then the jump" : "";
   const pairIS = applied.paired ? ", hlaðna lyftan og svo stökkið" : "";
+  const speed = nearMatchSpeedSay(applied.day, lift);
   return {
     ruleId: "WEEK_RULE_NEAR_MATCH",
     triggerEN: noMatchLight ? "Week rule: a light day in a week without a match" : `Week rule: ${md}, close to the match`,
     triggerIS: noMatchLight ? "Vikuregla: léttur dagur í viku án leiks" : `Vikuregla: ${md}, nálægt leik`,
-    actionEN: `Fast work only: ${applied.to}${pairEN}, ${applied.reps} explosive reps in all${was.en}. Light load (30–40% of max for loaded jumps), as fast as possible, each set stopped at a 10% speed loss. No heavy lift today.`,
-    actionIS: `Aðeins hröð vinna: ${toIS}${pairIS}, ${applied.reps} sprengiendurtekningar alls${was.is}. Létt þyngd (30–40% af hámarki í hlöðnum hoppum), eins hratt og hægt er, hverju setti hætt við 10% hraðatap. Engin þung lyfta í dag.`,
+    actionEN: `Fast work only: ${applied.to}${pairEN}, ${applied.reps} explosive reps in all${was.en}. ${speed.en} Each set stopped at a 10% speed loss. No heavy lift today.`,
+    actionIS: `Aðeins hröð vinna: ${toIS}${pairIS}, ${applied.reps} sprengiendurtekningar alls${was.is}. ${speed.is} Hverju setti hætt við 10% hraðatap. Engin þung lyfta í dag.`,
     evidence: NEAR_MATCH_EVIDENCE,
   };
 }

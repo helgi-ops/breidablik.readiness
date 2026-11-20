@@ -33,7 +33,7 @@ import type { AppliedAdaptation, ExerciseCategory, PlayerStrengthSnapshot, Presc
 import { isGymQuality, type GoalQuality, type GoalSessionSlot } from "@/lib/micropulse/goalPlan/types";
 import { EXERCISES_BY_ID } from "./exerciseLibrary";
 import { goalSeasonOf } from "./playerGoal";
-import { HEAVY_REPS_MAX } from "./weekRule";
+import { HEAVY_REPS_MAX, NEAR_MATCH_ZONE, nearMatchDoseFor, speedZoneText, type NearMatchDay } from "./weekRule";
 
 /** The lift profiles a goal plan's gym block is read as (`goalPlan/liftRx.ts`). */
 export type GoalGymProfile = "heavy" | "technique" | "rdl" | "jump_squat" | "pull" | "nordic" | "eccentric" | "squat_fast" | "youth";
@@ -73,6 +73,9 @@ export type GoalPlanGym = {
   /** Today's goal gym lifts. Empty on a day that only gives back (`giveBack`). */
   lifts: GoalPlanGymLift[];
   giveBack?: GoalGiveBack;
+  /** The goal's gym lifts this plan week (all its sessions), on a day without a goal gym session: close to the match
+   *  the engine puts the goal's lift, light and fast, in the day's fast spot (`applyGoalNearMatch`, 2026-11-20). */
+  weekLifts?: GoalPlanGymLift[];
 };
 
 /** What a lift got on a day: the plan's sets (after a yellow day's halving) and the sets it was given. */
@@ -438,9 +441,96 @@ export function applyGoalGiveBack(
     ruleId: "GOAL_PLAN_GYM_GIVE_BACK",
     triggerEN: `Week rule, 8-week goal (${q.en}, week ${g.week} of ${g.weeksTotal}): the goal day holds fewer sets than the plan says`,
     triggerIS: `Vikuregla, 8 vikna markmið (${q.is}, vika ${g.week} af ${g.weeksTotal}): markmiðsdagurinn rúmar færri sett en áætlunin segir`,
-    actionEN: `Done again today, the week's other heavy day, in place of the matching team exercise and with its sets: ${merged.lines.join("; ")}. The session does not grow.`,
-    actionIS: `Gert aftur í dag, á hinum þunga degi vikunnar, í stað samsvarandi æfingar liðsins og með settum hennar: ${merged.linesIS.join("; ")}. Æfingin lengist ekki.`,
+    actionEN: `Also today, the week's other heavy day, in place of the matching team exercise and with its sets: ${merged.lines.join("; ")}. The session does not grow.`,
+    actionIS: `Líka í dag, á hinum þunga degi vikunnar, í stað samsvarandi æfingar liðsins og með settum hennar: ${merged.linesIS.join("; ")}. Æfingin lengist ekki.`,
     evidence: GOAL_GIVE_BACK_EVIDENCE,
+  }];
+}
+
+export const GOAL_NEAR_MATCH_EVIDENCE =
+  "Week rule, the player's 8-week goal close to the match. The goal's heavy work stays on the heavy days (MD-4, MD-3); on MD-2 and MD-1 the goal's own lift comes light and fast, with the day's reps, load and bar speed, in place of the team's loaded fast lift, so nothing is added. A small fast dose 6–33 h before competition raised later performance: 15–20 ballistic reps at 30–40% of max (Harrison 2019, 11 small studies, none in footballers). The bar-speed zones are from squat studies (Mann 2015; Otero-Esquina 2017; Pareja-Blanco 2017); none tested a target speed for loaded jumps or pulls. Putting the goal's lift on these days is MicroPulse's rule (the coach's call, 2026-11-20), not from a study.";
+
+/** The goal's lift close to the match: which library lift, and whether it carries a load (a body-weight jump squat
+ *  does not, and gets no bar speed). Null = no change (a beginner's technique lift, the youth version, or a goal with
+ *  no squat, jump or pull, such as braking's split squat or the Nordic). */
+export function nearMatchGoalLift(weekLifts: GoalPlanGymLift[]): { id: string; loaded: boolean; from: GoalPlanGymLift } | null {
+  if (weekLifts.some((l) => l.profile === "technique" || l.profile === "youth")) return null;
+  const bodyweight = (l: GoalPlanGymLift) => /^bodyweight/i.test(l.intensity ?? "");
+  const fast = weekLifts.find((l) => (l.profile === "jump_squat" && !bodyweight(l)) || l.profile === "pull");
+  if (fast) {
+    const id = fast.profile === "pull" ? (fast.preferId && EXERCISES_BY_ID.has(fast.preferId) ? fast.preferId : "ex_hang_high_pull") : "ex_trap_bar_jump_squat";
+    return { id, loaded: true, from: fast };
+  }
+  const bw = weekLifts.find((l) => l.profile === "jump_squat");
+  if (bw) return { id: "ex_trap_bar_jump_squat", loaded: false, from: bw };
+  // Heavy only: the same movement, light and fast.
+  const heavy = weekLifts.find((l) => l.profile === "heavy" || l.profile === "squat_fast");
+  return heavy ? { id: "ex_trap_bar_jump_squat", loaded: true, from: heavy } : null;
+}
+
+/**
+ * Close to the match (MD-2, MD-1, and a light day in a week without a match; 2026-11-20, the coach's call): a player on
+ * a running 8-week goal gets the goal's lift, light and fast, in the place of the team's loaded fast lift (the spot the
+ * week rule marked `dose.nearMatch`), with that spot's sets and reps and the day's load and bar-speed zone. Nothing is
+ * added. Pre-/off-season only; never on a red day, on a day that holds a goal gym session, in place of a lift a safety
+ * rule put there or rules out, or when the lift is already elsewhere in the session. Runs after `finishNearMatch`.
+ */
+export function applyGoalNearMatch(
+  blocks: SessionBlock[],
+  snap: PlayerStrengthSnapshot,
+  isRuledOut: (id: string) => boolean,
+  isPinned: (id: string) => boolean,
+  day: NearMatchDay,
+): AppliedAdaptation[] {
+  const g = snap.goalPlanGym;
+  if (!g || g.lifts.length || !g.weekLifts?.length) return [];
+  if (goalSeasonOf(snap) !== "build") return [];
+  if (snap.verdict === "HOLD" || snap.verdict === "RECOVERY") return [];
+  const pick = nearMatchGoalLift(g.weekLifts);
+  if (!pick) return [];
+  const lib = EXERCISES_BY_ID.get(pick.id);
+  if (!lib || isRuledOut(lib.id)) return [];
+  let at: { b: number; i: number } | null = null;
+  blocks.forEach((blk, b) => blk.exercises.forEach((e, i) => { if (!at && e.dose.nearMatch) at = { b, i }; }));
+  if (!at) return []; // the day's method has no loaded fast lift (an isometric or built-in primer): left as it is
+  const { b, i } = at as { b: number; i: number };
+  const base = blocks[b].exercises[i];
+  if (base.isAdaptiveAddition || isPinned(base.exerciseId) || base.goalPlan) return [];
+  // Never the same lift twice in one session.
+  if (blocks.some((blk, k) => blk.exercises.some((e, j) => (k !== b || j !== i) && e.exerciseId === lib.id))) return [];
+
+  const shaped: PrescribedExercise = { exerciseId: lib.id, nameEN: lib.nameEN, nameIS: lib.nameIS, category: lib.category, dose: base.dose };
+  const dose: PrescribedExercise["dose"] = pick.loaded
+    ? nearMatchDoseFor(shaped, day, base.dose.sets, Number(base.dose.reps) || 4)
+    : (() => {
+        const { speedZone: _z, velocityLossCap: _v, ...rest } = base.dose;
+        void _z; void _v;
+        return { ...rest, intensity: "Bodyweight", cue: "As fast as possible on every rep" };
+      })();
+  const q = QUALITY_NAME[g.quality];
+  blocks[b].exercises[i] = {
+    ...shaped,
+    dose,
+    goalPlan: { quality: g.quality, week: g.week, nearMatch: true },
+    modificationReason: `8-week goal (${q.en}), week ${g.week} — the goal's lift, light and fast${base.exerciseId !== lib.id ? `, in place of ${base.nameEN}` : ""}`,
+  };
+  const z = NEAR_MATCH_ZONE[day];
+  const what = `${lib.nameEN} ${dose.sets} × ${dose.reps}`;
+  const whatIS = `${lib.nameIS || lib.nameEN} ${dose.sets} × ${dose.reps}`;
+  const zEN = dose.speedZone ? speedZoneText(dose.speedZone) : null;
+  const zIS = zEN?.replace(/(\d)\.(\d)/g, "$1,$2") ?? null;
+  const how = !pick.loaded ? { en: "body weight, as fast as possible", is: "eigin þyngd, eins hratt og hægt er" }
+    : zEN && dose.speedZone?.max == null && day === "MD-2" ? { en: `at least ${zEN.replace("≥ ", "")} bar speed`, is: `minnst ${zIS!.replace("≥ ", "")} stangarhraði` }
+    : zEN ? { en: `${zEN} (${day === "MD-1" ? "speed" : "speed-strength"} zone)`, is: `${zIS} (${day === "MD-1" ? "speed" : "speed-strength"} svæði)` }
+    : { en: `${z.load}, as fast as possible`, is: `${z.load.replace("1RM", "af hámarki")}, eins hratt og hægt er` };
+  const inPlace = base.exerciseId !== lib.id ? { en: ` in place of ${base.nameEN}`, is: ` í stað ${base.nameIS || base.nameEN}` } : { en: "", is: "" };
+  return [{
+    ruleId: "GOAL_PLAN_NEAR_MATCH",
+    triggerEN: `8-week goal: ${q.en}, week ${g.week} of ${g.weeksTotal}, close to the match`,
+    triggerIS: `8 vikna markmið: ${q.is}, vika ${g.week} af ${g.weeksTotal}, nálægt leik`,
+    actionEN: `The goal's lift, light and fast: ${what}${inPlace.en}, ${how.en}. The day's reps, so the session does not grow; the goal's heavy work is on the heavy days.`,
+    actionIS: `Lyfta markmiðsins, létt og hröð: ${whatIS}${inPlace.is}, ${how.is}. Endurtekningar dagsins, svo æfingin lengist ekki; þunga vinna markmiðsins er á þungu dögunum.`,
+    evidence: GOAL_NEAR_MATCH_EVIDENCE,
   }];
 }
 
