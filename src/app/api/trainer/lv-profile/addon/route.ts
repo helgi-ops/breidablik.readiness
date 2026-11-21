@@ -6,35 +6,20 @@
  * Toggles the lv_profile ELITE add-on for one client. This is the trainer's
  * self-service flag — billing is reconciled outside the platform (Stripe /
  * invoice). The flag is what gates the LV-profile data-entry UI.
+ *
+ * The client must be on a team the trainer holds (ADMIN: any team), else 404 —
+ * the flag also unlocks saving LV tests for that client.
  */
 
 import { NextResponse } from "next/server";
-import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
+import { isAuthFailure, requireClientOnTrainerTeam, requireTrainer } from "@/lib/trainer/requireTrainerTeam";
 
 export const runtime = "nodejs";
 
-function env(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
-
-
 export async function POST(req: Request) {
-  const authHeader = req.headers.get("authorization") || "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const sb = getAdmin();
-  const { data: userRes, error: uErr } = await sb.auth.getUser(token);
-  if (uErr || !userRes?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = userRes.user.id;
-
-  const { data: prof } = await sb.from("profiles").select("role").eq("id", userId).maybeSingle();
-  const role = String((prof as { role?: string } | null)?.role ?? "").toUpperCase();
-  if (!(role === "COACH" || role === "ADMIN" || role === "STAFF")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const auth = await requireTrainer(req);
+  if (isAuthFailure(auth)) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const { userId, sb } = auth;
 
   let body: { clientId?: string; enabled?: boolean; notes?: string };
   try {
@@ -44,6 +29,8 @@ export async function POST(req: Request) {
   }
 
   if (!body.clientId) return NextResponse.json({ error: "Missing clientId" }, { status: 400 });
+  const client = await requireClientOnTrainerTeam(auth, body.clientId);
+  if (isAuthFailure(client)) return NextResponse.json({ error: client.error }, { status: client.status });
   const enabled = body.enabled !== false; // default true
 
   const row = {

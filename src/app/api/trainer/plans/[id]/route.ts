@@ -234,6 +234,16 @@ export async function PUT(
 
     // Update prescriptions (exercise tweaks)
     if (body.tweaks && body.tweaks.length > 0) {
+      // A prescription id comes from the request: only edit prescriptions that
+      // sit under THIS plan's sessions, never one from another team's plan.
+      const { data: planSessions, error: sessErr } = await sb
+        .from("individual_training_sessions")
+        .select("id")
+        .eq("plan_id", id);
+      if (sessErr) throw new Error(sessErr.message);
+      const sessionIds = ((planSessions ?? []) as Array<{ id: string }>).map((r) => r.id);
+      if (sessionIds.length === 0) throw new Error("Not found");
+
       for (const tweak of body.tweaks) {
         const rxUpdates: Record<string, unknown> = {};
         if (tweak.sets !== undefined) rxUpdates.sets = tweak.sets;
@@ -248,7 +258,8 @@ export async function PUT(
           const { error: rxErr } = await sb
             .from("individual_training_prescriptions")
             .update(rxUpdates)
-            .eq("id", tweak.prescriptionId);
+            .eq("id", tweak.prescriptionId)
+            .in("session_id", sessionIds);
 
           if (rxErr) throw new Error(rxErr.message);
         }

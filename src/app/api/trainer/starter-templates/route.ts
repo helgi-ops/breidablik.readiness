@@ -6,35 +6,20 @@
  *   DELETE ?assignmentId=…               → cancel an assignment
  *
  * Mirrors /api/coach/pt-explosive but filters to category='starter_template'.
- * No admin gate — every authenticated trainer can browse + assign these.
+ * No admin gate — every authenticated trainer can browse these, and assign
+ * them to a client on a team they hold (ADMIN: any team). Another team's
+ * client answers 404 before anything is deleted, archived or inserted.
  * Lives at a separate URL so the access policies are obvious from the path.
  */
 
 import { NextResponse } from "next/server";
-import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
+import { isAuthFailure, requireClientOnTrainerTeam, requireTrainer } from "@/lib/trainer/requireTrainerTeam";
 
 export const runtime = "nodejs";
 
-function env(n: string) { const v = process.env[n]; if (!v) throw new Error(`Missing ${n}`); return v; }
-
-async function requireTrainer(req: Request) {
-  const auth = req.headers.get("authorization") || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (!token) return { error: "Unauthorized", status: 401 } as const;
-  const sb = getAdmin();
-  const { data: u } = await sb.auth.getUser(token);
-  if (!u?.user?.id) return { error: "Unauthorized", status: 401 } as const;
-  const { data: prof } = await sb.from("profiles").select("role").eq("id", u.user.id).maybeSingle();
-  const role = String((prof as { role?: string } | null)?.role ?? "").toUpperCase();
-  if (!["COACH", "ADMIN", "STAFF"].includes(role)) {
-    return { error: "Forbidden", status: 403 } as const;
-  }
-  return { userId: u.user.id, sb } as const;
-}
-
 export async function GET(req: Request) {
   const a = await requireTrainer(req);
-  if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
+  if (isAuthFailure(a)) return NextResponse.json({ error: a.error }, { status: a.status });
   const { userId, sb } = a;
 
   const [{ data: library }, { data: assignments }] = await Promise.all([
@@ -55,7 +40,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const a = await requireTrainer(req);
-  if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
+  if (isAuthFailure(a)) return NextResponse.json({ error: a.error }, { status: a.status });
   const { userId, sb } = a;
 
   let body: { clientId?: string; programmeKey?: string; level?: string; startDate?: string; notes?: string };
@@ -66,6 +51,11 @@ export async function POST(req: Request) {
   if (!["beginner","intermediate","advanced"].includes(level)) {
     return NextResponse.json({ error: "Invalid level" }, { status: 400 });
   }
+
+  // The client must be on a team this trainer holds. Without this, any trainer
+  // could wipe and replace another team's client's active programme below.
+  const client = await requireClientOnTrainerTeam(a, body.clientId);
+  if (isAuthFailure(client)) return NextResponse.json({ error: client.error }, { status: client.status });
 
   // Ensure it's actually a starter template (not the admin-only Explosive
   // Power library — those require the dedicated admin endpoint).
@@ -101,7 +91,7 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   const a = await requireTrainer(req);
-  if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
+  if (isAuthFailure(a)) return NextResponse.json({ error: a.error }, { status: a.status });
   const { userId, sb } = a;
   const url = new URL(req.url);
   const id = url.searchParams.get("assignmentId");

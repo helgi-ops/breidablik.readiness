@@ -7,13 +7,13 @@
  *   DELETE ?clientId&session_date&exercise_id&set_index → remove one logged set
  *
  * Auth: trainer/coach (COACH/ADMIN/STAFF). Client must be on the trainer's team
- * (coach_teams or profiles.team_id); admins/staff are not team-restricted. The
+ * (coach_teams or profiles.team_id), else 404; only admins are not team-restricted. The
  * velocity data feeds the SAME analytics as GymAware (see fetchVbtSets).
  */
 
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
+import { isAuthFailure, requireTrainerForClient as requireTrainerForClientShared } from "@/lib/trainer/requireTrainerTeam";
 import { fetchVbtSets, computeVbtDashboard } from "@/lib/micropulse/vbtReadiness/fetchVbtSets";
 import { canonicalLift } from "@/lib/client/oneRepMax";
 
@@ -32,35 +32,9 @@ type TrainerAuth =
   | { error: string; status: number };
 
 async function requireTrainerForClient(req: Request, clientId: string): Promise<TrainerAuth> {
-  const token = (req.headers.get("authorization") || "").replace(/^Bearer /, "");
-  if (!token) return { error: "Unauthorized", status: 401 };
-  const sb = getAdmin();
-  const { data: userRes } = await sb.auth.getUser(token);
-  const userId = userRes?.user?.id;
-  if (!userId) return { error: "Unauthorized", status: 401 };
-  const { data: prof } = await sb.from("profiles").select("role, team_id").eq("id", userId).maybeSingle();
-  const role = String((prof as { role?: string } | null)?.role ?? "").toUpperCase();
-  if (!["COACH", "ADMIN", "STAFF"].includes(role)) return { error: "Forbidden", status: 403 };
-
-  const { data: client } = await sb.from("players").select("team_id").eq("id", clientId).maybeSingle();
-  const clientTeam = (client as { team_id?: string | null } | null)?.team_id ?? null;
-  if (!clientTeam) return { error: "Client not found", status: 404 };
-
-  if (role !== "ADMIN" && role !== "STAFF") {
-    const profTeam = (prof as { team_id?: string | null } | null)?.team_id ?? null;
-    let ok = profTeam != null && profTeam === clientTeam;
-    if (!ok) {
-      const { data: ct } = await sb
-        .from("coach_teams")
-        .select("team_id")
-        .eq("coach_id", userId)
-        .eq("team_id", clientTeam)
-        .maybeSingle();
-      ok = !!ct;
-    }
-    if (!ok) return { error: "Client not on your team", status: 403 };
-  }
-  return { userId, sb, teamId: clientTeam };
+  const a = await requireTrainerForClientShared(req, clientId);
+  if (isAuthFailure(a)) return a;
+  return { userId: a.userId, sb: a.sb, teamId: a.clientTeamId };
 }
 
 export async function GET(req: Request) {

@@ -5,45 +5,19 @@
  *   POST                              → create or update a test (body below)
  *   DELETE ?testId=<uuid>             → delete one test
  *
- * Auth: trainer (COACH/ADMIN/STAFF role) — RLS enforces trainer_id = auth.uid().
+ * Auth: trainer (COACH/ADMIN/STAFF role). GET and POST also require the client
+ *   to be on a team the trainer holds (ADMIN: any team), else 404.
  * Addon gate: POST refuses to save a test unless the trainer has flagged
  *   trainer_client_addons (trainer_id, client_id, addon_key='lv_profile',
  *   enabled=true). Use /api/trainer/lv-profile/addon to toggle.
  */
 
 import { NextResponse } from "next/server";
-import { SupabaseClient } from "@supabase/supabase-js";
-import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { isAuthFailure, requireClientOnTrainerTeam, requireTrainer } from "@/lib/trainer/requireTrainerTeam";
 import { computeLvProfile, computeDsi, LV_EXERCISES, type LvDatapoint, type LvExerciseKey } from "@/lib/lvProfile";
 
 export const runtime = "nodejs";
-
-function env(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
-
-
-async function requireTrainer(req: Request): Promise<{ userId: string; sb: SupabaseClient } | { error: string; status: number }> {
-  const auth = req.headers.get("authorization") || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (!token) return { error: "Unauthorized", status: 401 };
-  const sb = getAdmin();
-  const { data: userRes, error: uErr } = await sb.auth.getUser(token);
-  if (uErr || !userRes?.user?.id) return { error: "Unauthorized", status: 401 };
-  const userId = userRes.user.id;
-  const { data: prof } = await sb
-    .from("profiles")
-    .select("role")
-    .eq("id", userId)
-    .maybeSingle();
-  const role = String((prof as { role?: string } | null)?.role ?? "").toUpperCase();
-  if (!(role === "COACH" || role === "ADMIN" || role === "STAFF")) {
-    return { error: "Forbidden", status: 403 };
-  }
-  return { userId, sb };
-}
 
 /**
  * Resolve whether the LV-profile feature is available for this trainer+client.
@@ -104,12 +78,14 @@ async function hasLvAddon(sb: SupabaseClient, trainerId: string, clientId: strin
 /* ─── GET ──────────────────────────────────────────────────────────── */
 export async function GET(req: Request) {
   const auth = await requireTrainer(req);
-  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  if (isAuthFailure(auth)) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const { userId, sb } = auth;
 
   const url = new URL(req.url);
   const clientId = url.searchParams.get("clientId");
   if (!clientId) return NextResponse.json({ error: "Missing clientId" }, { status: 400 });
+  const client = await requireClientOnTrainerTeam(auth, clientId);
+  if (isAuthFailure(client)) return NextResponse.json({ error: client.error }, { status: client.status });
 
   const addonEnabled = await hasLvAddon(sb, userId, clientId);
 
@@ -150,7 +126,7 @@ type PostBody = {
 
 export async function POST(req: Request) {
   const auth = await requireTrainer(req);
-  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  if (isAuthFailure(auth)) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const { userId, sb } = auth;
 
   let body: PostBody;
@@ -161,6 +137,8 @@ export async function POST(req: Request) {
   }
 
   if (!body.clientId) return NextResponse.json({ error: "Missing clientId" }, { status: 400 });
+  const client = await requireClientOnTrainerTeam(auth, body.clientId);
+  if (isAuthFailure(client)) return NextResponse.json({ error: client.error }, { status: client.status });
   if (!body.exerciseKey || !(body.exerciseKey in LV_EXERCISES)) {
     return NextResponse.json({ error: "Invalid exerciseKey" }, { status: 400 });
   }
@@ -239,7 +217,7 @@ export async function POST(req: Request) {
 /* ─── DELETE ───────────────────────────────────────────────────────── */
 export async function DELETE(req: Request) {
   const auth = await requireTrainer(req);
-  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  if (isAuthFailure(auth)) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const { userId, sb } = auth;
 
   const url = new URL(req.url);
