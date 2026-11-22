@@ -24,6 +24,7 @@ import { PLAN_WEEKS, QUALITY_LABEL } from "./common";
 import { isGymQuality, type Bi, type GoalBlock, type GoalPlan, type GoalQuality, type GoalSession, type GoalSessionSlot } from "./types";
 import { rxContextOf, withRx, type LiftRx } from "./liftRx";
 import type { Adherence, DueSession, GoalOutcome, SessionMark } from "./outcome";
+import { IN_SEASON_PAUSE_TEXT } from "./seasonPause";
 import { noMatchDayFor, noMatchMoveFor, teamLiftsHeavyOn, type MdStructures, type NoMatchDayKind, type NoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
 
 // ─── Dates ─────────────────────────────────────────────────────────────────
@@ -430,6 +431,11 @@ export type GoalTodayInput = {
   colour: DayColour | null;
   coachNote: string | null;
   pausedWeek?: number | null;
+  /** Why it is paused (2026-11-22): "in_season" = the competitive season (resumes at the next pre-season);
+   *  "injury" or absent = injured / coming back (the coach restarts it). */
+  pausedReason?: "injury" | "in_season" | null;
+  /** In-season pause: the next pre-season's first day when a saved season plan has it. */
+  nextPreseason?: string | null;
   /** The player's ticks on this plan (lota 4). */
   marks?: SessionMark[];
   /** Today's strength session (coach-sent) holds this plan week's gym lifts (2026-11-17): the slot merged, or true = B. */
@@ -515,6 +521,28 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
     { en: `Sources: ${plan.refs.map((r) => r.short).join(", ")}.`, is: `Heimildir: ${plan.refs.map((r) => r.short).join(", ")}.` },
   ];
   const base = { quality, title, weeksTotal: PLAN_WEEKS, coachNote: input.coachNote, details };
+
+  if (input.status === "paused" && input.pausedReason === "in_season") {
+    // GOAL_PLAN_PAUSED_IN_SEASON: no goal work in season, no separate card session, nothing merged.
+    const w = input.pausedWeek ?? null;
+    const pre = input.nextPreseason ? dayLabel(input.nextPreseason) : null;
+    return {
+      ...base, state: "paused", week: w ?? 0, weekLabel: null,
+      verdict: IN_SEASON_PAUSE_TEXT,
+      facts: [
+        ...(w && w >= 1 ? [{ en: `Paused in week ${w} of ${PLAN_WEEKS}.`, is: `Sett í bið í viku ${w} af ${PLAN_WEEKS}.` }] : []),
+        pre
+          ? { en: `Pre-season starts on ${pre.en} in your coach's season plan.`, is: `Undirbúningstímabilið hefst ${pre.is} samkvæmt tímabilsáætlun þjálfarans.` }
+          : { en: "It resumes when your coach's season plan reaches pre-season.", is: "Planið heldur áfram þegar tímabilsáætlun þjálfarans kemur að undirbúningstímabili." },
+        { en: "In season the team strength session keeps what you built.", is: "Á keppnistímabili heldur styrktaræfing liðsins því sem þú byggðir upp." },
+      ],
+      today: null, thisWeek: [], supervision: null,
+      details: [
+        { en: "Rule: goal plans build in pre-season and off-season and pause in the competitive season (maintenance period). The season comes from the coach's season plan, else the week setup.", is: "Regla: markmiðsplön byggja upp á undirbúnings- og hvíldartímabili og eru í bið á keppnistímabili (viðhaldstímabil). Tímabilið kemur úr tímabilsáætlun þjálfarans, annars vikuuppsetningu." },
+        ...details,
+      ],
+    };
+  }
 
   if (input.status === "paused") {
     const w = input.pausedWeek ?? null;

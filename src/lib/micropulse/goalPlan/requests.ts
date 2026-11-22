@@ -37,6 +37,10 @@ export type GoalPlanRow = {
   /** Set while paused (lota 3): when, and which plan week the player was in. */
   paused_at?: string | null;
   paused_week?: number | null;
+  /** Why it is paused (2026-11-22): injury (coach restarts) or in_season (resumes at the next pre-season). Null = injury. */
+  paused_reason?: "injury" | "in_season" | null;
+  /** The coach restarted the plan in season (logged override): the automatic in-season pause skips it. */
+  season_override_at?: string | null;
   /** Started without the coach's approval (player choices on, 2026-11-17). */
   auto_started?: boolean;
 };

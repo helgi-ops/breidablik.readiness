@@ -26,6 +26,8 @@ import { playerCurrentGoalSynced } from "@/lib/micropulse/goalPlan/todayLoader";
 import { loadPlayerPriority } from "@/lib/micropulse/goalPlan/priorityLoader";
 import { prioritySnapshot } from "@/lib/micropulse/goalPlan/priority";
 import { goalFail, requireGoalPlayer } from "./_shared";
+import { readGoalSeason } from "@/lib/micropulse/goalPlan/season";
+import { pausedReasonOf, startGate } from "@/lib/micropulse/goalPlan/seasonPause";
 import { PLAYER_BLOCK_TEXT, autoStartDate, cleanPlayerNote, isGoalQuality, playerMayWithdraw } from "@/lib/micropulse/goalPlan/requests";
 import { goalsWithoutApprovalFor } from "@/lib/micropulse/strengthProgramming/playerPicksStore";
 import { loadDsiGoalSuggestions } from "@/lib/micropulse/strengthProgramming/loadDsiForTeam";
@@ -50,13 +52,17 @@ export async function GET(req: Request) {
     const sug = autoStart && !open ? dsi.get(playerId) ?? null : null;
     // Only a goal the player can pick right now (not blocked by injury / return / age).
     const dsiSuggestion = sug && eligibility.some((e) => e.quality === sug.goal && !e.blocked) ? sug : null;
+    // In season a new goal starts at the next pre-season (GOAL_PLAN_PAUSED_IN_SEASON); read only when one can start.
+    const gate = autoStart && !open ? startGate(await readGoalSeason(sb, teamId, today(), { withNext: true }), autoStartDate(today())) : null;
     return NextResponse.json({
       ok: true,
       historyCount,
       // The player takes part (three send modes, 2026-11-17): a new goal starts without approval, on this Monday.
       // Not taking part → the sheet shows no goal list (a running or earlier goal still shows).
       autoStart,
-      autoStartDate: autoStart ? autoStartDate(today()) : null,
+      autoStartDate: gate ? gate.start : autoStart ? autoStartDate(today()) : null,
+      // "moved_to_preseason" / "pause_until_preseason": in season, the sheet says the goal starts at pre-season.
+      startGate: gate?.kind ?? null,
       dsiSuggestion,
       eligibility: eligibility.map((e) => ({ quality: e.quality, blocked: e.blocked, blockedText: e.blocked ? PLAYER_BLOCK_TEXT[e.blocked] : null })),
       current: current && {
@@ -64,6 +70,7 @@ export async function GET(req: Request) {
         requestedAt: current.requested_at, startDate: current.start_date, endDate: current.end_date,
         coachNote: current.coach_note,
         pausedWeek: current.status === "paused" ? current.paused_week ?? null : null,
+        pausedReason: pausedReasonOf(current),
         // A decline reason is for the player; a reason for changing the start is the coach's own note.
         declineReason: current.status === "declined" ? current.decision_reason : null,
         autoStarted: !!current.auto_started,

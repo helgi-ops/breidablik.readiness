@@ -15,7 +15,8 @@ import { UNAVAILABLE_STATUS } from "./loader";
 import { GoalPlanError, goalSessionMarks, latestGoalWithPlan, listTeamGoals, markGoalSession, playerCurrentGoal, syncGoalStatuses, type GoalListItem } from "./store";
 import { addDays, buildGoalFinishedCard, buildGoalTodayCard, isAllGymSession, mondayOf, placementFor, planWeekOn, sessionForColour, toDayColour, type GoalTodayCard, type TeamCalendar } from "./today";
 import type { GoalPlan, GoalQuality, GoalSessionSlot } from "./types";
-import { goalSeasonForPlan } from "./season";
+import { goalSeasonForPlan, nextPreseasonFor, readGoalSeason } from "./season";
+import { cardSeasonOf, needsSync, pausedReasonOf, type GoalSeasonRead } from "./seasonPause";
 import type { GoalPlanStatus } from "./requests";
 import { FINISHED_CARD_DAYS } from "./outcome";
 import { loadGoalProgress, loadTeamCalendarRange } from "./progressLoader";
@@ -31,21 +32,29 @@ export async function unavailablePlayerIds(sb: Sb, playerIds: string[]): Promise
   return new Set(((data ?? []) as { player_id: string }[]).map((r) => r.player_id));
 }
 
-/** Coach list with the automatic pause / end applied first. */
-export async function listTeamGoalsSynced(sb: Sb, teamId: string): Promise<GoalListItem[]> {
+/** Coach list with the automatic pause / end / season pause applied first. `season` = the team's season read (the
+ *  route reads it once, with the next pre-season for its banner); absent → read here. */
+export async function listTeamGoalsSynced(sb: Sb, teamId: string, season?: GoalSeasonRead): Promise<GoalListItem[]> {
   const rows = await listTeamGoals(sb, teamId);
-  const approved = rows.filter((r) => r.status === "approved");
-  if (!approved.length) return rows;
-  const synced = await syncGoalStatuses(sb, rows, await unavailablePlayerIds(sb, approved.map((r) => r.player_id)));
+  const toSync = rows.filter(needsSync);
+  if (!toSync.length) return rows;
+  const today = new Date().toISOString().slice(0, 10);
+  const [unavailable, s] = await Promise.all([
+    unavailablePlayerIds(sb, toSync.map((r) => r.player_id)),
+    season ?? readGoalSeason(sb, teamId, today),
+  ]);
+  const synced = await syncGoalStatuses(sb, rows, unavailable, today, s);
   const order: Record<GoalPlanStatus, number> = { requested: 0, paused: 1, approved: 2, declined: 3, cancelled: 3, completed: 3 };
   return synced.sort((a, b) => order[a.status] - order[b.status]);
 }
 
-/** The player's current goal (request screen) with the automatic pause / end applied first. */
+/** The player's current goal (request screen) with the automatic pause / end / season pause applied first. */
 export async function playerCurrentGoalSynced(sb: Sb, playerId: string) {
   const row = await playerCurrentGoal(sb, playerId);
-  if (!row || row.status !== "approved") return row;
-  const [synced] = await syncGoalStatuses(sb, [row], await unavailablePlayerIds(sb, [playerId]));
+  if (!row || !needsSync(row)) return row;
+  const today = new Date().toISOString().slice(0, 10);
+  const [unavailable, season] = await Promise.all([unavailablePlayerIds(sb, [playerId]), readGoalSeason(sb, row.team_id, today)]);
+  const [synced] = await syncGoalStatuses(sb, [row], unavailable, today, season);
   return synced;
 }
 
@@ -62,8 +71,10 @@ export async function loadTeamCalendar(sb: Sb, teamId: string, todayIso: string)
 export async function loadGoalToday(sb: Sb, teamId: string, playerId: string, todayIso: string): Promise<GoalTodayCard | null> {
   const row = await latestGoalWithPlan(sb, playerId, todayIso, FINISHED_CARD_DAYS);
   if (!row || !row.plan || !row.start_date || row.team_id !== teamId) return null;
-  const [synced] = row.status === "approved"
-    ? await syncGoalStatuses(sb, [row], await unavailablePlayerIds(sb, [playerId]), todayIso)
+  // The season is read once: for the sync (pause in season, resume at pre-season) and for the card's placement.
+  const season = needsSync(row) ? await readGoalSeason(sb, teamId, todayIso) : null;
+  const [synced] = season
+    ? await syncGoalStatuses(sb, [row], await unavailablePlayerIds(sb, [playerId]), todayIso, season)
     : [row];
   if (synced.status === "completed") {
     if (!row.end_date || addDays(row.end_date, FINISHED_CARD_DAYS) < todayIso) return null;
@@ -76,25 +87,28 @@ export async function loadGoalToday(sb: Sb, teamId: string, playerId: string, to
   if (synced.status !== "approved" && synced.status !== "paused") return null;
 
   if (synced.status === "paused") {
+    const reason = pausedReasonOf(synced);
     return buildGoalTodayCard({
       quality: row.quality, status: "paused", plan: row.plan, startDate: row.start_date, todayIso,
       cal: { days: {}, games: [] }, colour: null, coachNote: row.coach_note, pausedWeek: synced.paused_week ?? null,
+      pausedReason: reason,
+      nextPreseason: reason === "in_season" ? await nextPreseasonFor(sb, teamId, todayIso) : null,
     });
   }
 
-  const [cal, colourRes, marks, inSession, season] = await Promise.all([
+  const [cal, colourRes, marks, inSession, cardSeason] = await Promise.all([
     loadTeamCalendar(sb, teamId, todayIso),
     sb.from("v_coach_readiness_today_v8").select("final_color").eq("player_id", playerId).eq("entry_date", todayIso).limit(1).maybeSingle(),
     goalSessionMarks(sb, row.id),
     goalGymInTodaySession(sb, playerId, todayIso),
-    goalSeasonForPlan(sb, teamId, { quality: row.quality, plan: row.plan }, todayIso),
+    season ? cardSeasonOf(season) : goalSeasonForPlan(sb, teamId, { quality: row.quality, plan: row.plan }, todayIso),
   ]);
   const colour = toDayColour((colourRes.data as { final_color?: string | null } | null)?.final_color);
   const merged = !!inSession && inSession.quality === row.quality && inSession.week === planWeekOn(row.start_date, todayIso);
   return buildGoalTodayCard({
     quality: row.quality, status: "approved", plan: row.plan, startDate: row.start_date, todayIso, cal, colour, coachNote: row.coach_note, marks,
     gymInSession: merged ? inSession!.slot : false,
-    season,
+    season: cardSeason,
   });
 }
 

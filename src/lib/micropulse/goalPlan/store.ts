@@ -29,10 +29,18 @@ import {
   type GoalPlanStatus,
 } from "./requests";
 import type { GoalPlan, GoalQuality } from "./types";
-import { PLAN_WEEKS } from "./common";
-import { planWeekOn, type SessionVersion } from "./today";
+import type { SessionVersion } from "./today";
 import { parseResultInput, type GoalResult, type SessionMark } from "./outcome";
 import type { GoalPrioritySnapshot } from "./priority";
+import { readGoalSeason } from "./season";
+import {
+  GOAL_PLAN_PAUSED_IN_SEASON,
+  IN_SEASON_PAUSE_REASON,
+  goalSyncAction,
+  startGate,
+  type GoalSeasonRead,
+  type StartGate,
+} from "./seasonPause";
 
 type Sb = SupabaseClient;
 
@@ -45,9 +53,9 @@ export class GoalPlanError extends Error {
 }
 
 const ROW_COLS =
-  "id, team_id, player_id, quality, status, player_note, proposal, plan, engine_version, content_version, start_override, start_date, end_date, coach_note, decision_reason, requested_at, reviewed_at, closed_at, paused_at, paused_week, auto_started";
+  "id, team_id, player_id, quality, status, player_note, proposal, plan, engine_version, content_version, start_override, start_date, end_date, coach_note, decision_reason, requested_at, reviewed_at, closed_at, paused_at, paused_week, paused_reason, season_override_at, auto_started";
 const LIGHT_COLS =
-  "id, team_id, player_id, quality, status, player_note, start_override, start_date, end_date, coach_note, decision_reason, requested_at, reviewed_at, closed_at, paused_at, paused_week, auto_started";
+  "id, team_id, player_id, quality, status, player_note, start_override, start_date, end_date, coach_note, decision_reason, requested_at, reviewed_at, closed_at, paused_at, paused_week, paused_reason, season_override_at, auto_started";
 
 async function logEvent(
   sb: Sb,
@@ -68,38 +76,77 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 
 // ─── Lota 3: automatic pause and end ───────────────────────────────────────
 
-type SyncRow = { id: string; team_id: string; player_id: string; status: GoalPlanStatus; start_date: string | null; end_date: string | null; closed_at?: string | null; paused_at?: string | null; paused_week?: number | null };
+type SyncRow = {
+  id: string; team_id: string; player_id: string; status: GoalPlanStatus; start_date: string | null; end_date: string | null;
+  closed_at?: string | null; paused_at?: string | null; paused_week?: number | null; paused_reason?: string | null; season_override_at?: string | null;
+};
+
+/** Provenance stored on a season pause / resume event: which rule, and the season read it acted on. */
+const seasonDetail = (s: GoalSeasonRead) => ({
+  rule: GOAL_PLAN_PAUSED_IN_SEASON, season: s.season, phase: s.phase, season_source: s.source, next_preseason: s.nextPreseason,
+});
 
 /**
- * Applies the two automatic changes to approved plans, lazily whenever a plan is read:
+ * Applies the automatic changes, lazily whenever a plan is read (rules: `goalSyncAction` in seasonPause.ts):
  *   - the 8 weeks are over (today after `end_date`) → completed;
- *   - the player is marked injured / in rehab / in return-to-train (`unavailable`, read by the caller) → paused,
- *     with the plan week, so the coach can pick it up there. Only a coach restarts it.
- * Optimistic: each update only applies while the row is still "approved". Returns the rows with their new status.
+ *   - the player is marked injured / in rehab / in return-to-train (`unavailable`, read by the caller) → paused
+ *     (injury), with the plan week, so the coach can pick it up there. Only a coach restarts it;
+ *   - in season (`season`, read by the caller for the rows' team) → paused (in_season), unless the coach overrode;
+ *   - paused for the season and pre-season has started → resumes on its own (week 1 after a long break), or switches
+ *     to the injury pause when the player is injured then.
+ * Optimistic: each update only applies while the row is still in the status it was read in. Returns the rows with
+ * their new status. `season` null/absent = not read: no season change (the old behaviour).
  */
-export async function syncGoalStatuses<T extends SyncRow>(sb: Sb, rows: T[], unavailable: Set<string>, today: string = todayIso()): Promise<T[]> {
+export async function syncGoalStatuses<T extends SyncRow>(
+  sb: Sb, rows: T[], unavailable: Set<string>, today: string = todayIso(), season: GoalSeasonRead | null = null,
+): Promise<T[]> {
   const out: T[] = [];
+  const system = { userId: null, role: "system" as const };
   for (const r of rows) {
-    if (r.status !== "approved" || !r.start_date) { out.push(r); continue; }
+    const action = goalSyncAction(r, { unavailable: unavailable.has(r.player_id), season }, today);
     const now = new Date().toISOString();
-    if (r.end_date && today > r.end_date) {
+    if (action.kind === "none") { out.push(r); continue; }
+    if (action.kind === "complete") {
       const { data, error } = await sb.from("player_goal_plans").update({ status: "completed", closed_at: now, updated_at: now })
         .eq("id", r.id).eq("status", "approved").select("id");
       if (error) throw new Error(error.message);
-      if (data?.length) await logEvent(sb, r, "completed", { userId: null, role: "system" }, null, { end_date: r.end_date });
+      if (data?.length) await logEvent(sb, r, "completed", system, null, { end_date: r.end_date });
       out.push({ ...r, status: "completed", closed_at: now });
       continue;
     }
-    if (unavailable.has(r.player_id)) {
-      const week = Math.max(0, Math.min(PLAN_WEEKS, planWeekOn(r.start_date, today)));
-      const { data, error } = await sb.from("player_goal_plans").update({ status: "paused", paused_at: now, paused_week: week, updated_at: now })
+    if (action.kind === "pause") {
+      const { data, error } = await sb.from("player_goal_plans")
+        .update({ status: "paused", paused_at: now, paused_week: action.week, paused_reason: action.reason, updated_at: now })
         .eq("id", r.id).eq("status", "approved").select("id");
       if (error) throw new Error(error.message);
-      if (data?.length) await logEvent(sb, r, "paused", { userId: null, role: "system" }, "Marked injured, in rehab or returning to training.", { week });
-      out.push({ ...r, status: "paused", paused_at: now, paused_week: week });
+      if (data?.length) {
+        await logEvent(sb, r, "paused", system,
+          action.reason === "injury" ? "Marked injured, in rehab or returning to training." : IN_SEASON_PAUSE_REASON,
+          { week: action.week, reason: action.reason, ...(action.reason === "in_season" && season ? seasonDetail(season) : {}) });
+      }
+      out.push({ ...r, status: "paused", paused_at: now, paused_week: action.week, paused_reason: action.reason });
       continue;
     }
-    out.push(r);
+    if (action.kind === "to_injury") {
+      const { data, error } = await sb.from("player_goal_plans").update({ paused_reason: "injury", updated_at: now })
+        .eq("id", r.id).eq("status", "paused").eq("paused_reason", "in_season").select("id");
+      if (error) throw new Error(error.message);
+      if (data?.length) await logEvent(sb, r, "paused", system, "Pre-season started while marked injured, in rehab or returning to training; the coach restarts it.", { reason: "injury", from: "in_season" });
+      out.push({ ...r, paused_reason: "injury" });
+      continue;
+    }
+    // resume
+    const { data, error } = await sb.from("player_goal_plans").update({
+      status: "approved", start_date: action.start, end_date: planEndDate(action.start),
+      paused_at: null, paused_week: null, paused_reason: null, updated_at: now,
+    }).eq("id", r.id).eq("status", "paused").eq("paused_reason", "in_season").select("id");
+    if (error) throw new Error(error.message);
+    if (data?.length) {
+      await logEvent(sb, r, "resumed", system, "Pre-season started: the plan resumes on its own.", {
+        from_week: action.fromWeek, resume_monday: action.resumeMonday, auto: true, ...(season ? seasonDetail(season) : {}),
+      });
+    }
+    out.push({ ...r, status: "approved", start_date: action.start, end_date: planEndDate(action.start), paused_at: null, paused_week: null, paused_reason: null });
   }
   return out;
 }
@@ -136,7 +183,7 @@ export async function createGoalRequest(
     /** Player choices are on for this player (read by the caller): the plan starts without the coach's approval. */
     autoStart?: boolean;
   },
-): Promise<{ id: string; status: "requested" | "approved" }> {
+): Promise<{ id: string; status: "requested" | "approved" | "paused" }> {
   const today = todayIso();
   const [{ base }, prefs] = await Promise.all([
     loadGoalPlanBase(sb, args.teamId, args.playerId, today),
@@ -173,13 +220,15 @@ export async function createGoalRequest(
 async function startGoalByPlayer(
   sb: Sb,
   args: { teamId: string; playerId: string; userId: string; quality: GoalQuality; note: string | null; priority?: GoalPrioritySnapshot | null; input: GoalInput; teamPref: TeamQualityPref; today: string },
-): Promise<{ id: string; status: "approved" }> {
+): Promise<{ id: string; status: "approved" | "paused" }> {
   const d: ApproveDecision = { action: "approve", startDate: autoStartDate(args.today), start: null, reason: null, noteToPlayer: null, level: null };
   const plan = approvedPlan(args.input, args.teamPref, d);
+  const season = await readGoalSeason(sb, args.teamId, args.today, { withNext: true });
+  const gate = startGate(season, d.startDate);
   const now = new Date().toISOString();
   const { data, error } = await sb.from("player_goal_plans").insert({
     team_id: args.teamId, player_id: args.playerId, quality: args.quality, player_note: args.note, proposal: plan,
-    requested_by: args.userId, auto_started: true, ...approvalCols(plan, d, null, now),
+    requested_by: args.userId, auto_started: true, ...gatedApproval(gate, plan, d, null, now),
   }).select("id, team_id, player_id").single();
   if (error) {
     if ((error as { code?: string }).code === "23505") throw new GoalPlanError(409, "You already have a goal open.", "Þú ert nú þegar með opið markmið.");
@@ -189,8 +238,9 @@ async function startGoalByPlayer(
   await logEvent(sb, row, "requested", { userId: args.userId, role: "player" }, null, {
     quality: args.quality, rule_start: plan.start, auto_start: true, ...(args.priority ? { priority: args.priority } : {}),
   });
-  await logApproval(sb, row, { userId: null, role: "system" }, plan, d, args.teamPref, { auto: true });
-  return { id: row.id, status: "approved" };
+  await logApproval(sb, row, { userId: null, role: "system" }, plan, { ...d, startDate: gate.start }, args.teamPref, { auto: true, ...gateExtra(gate, season) });
+  await logSeasonGate(sb, row, gate, season);
+  return { id: row.id, status: gate.kind === "pause_until_preseason" ? "paused" : "approved" };
 }
 
 /**
@@ -331,6 +381,26 @@ const approvalCols = (plan: GoalPlan, d: ApproveDecision, coachUserId: string | 
   coach_note: d.noteToPlayer, decision_reason: d.reason, reviewed_by: coachUserId, reviewed_at: now, updated_at: now,
 });
 
+/**
+ * The season gate on a new plan (GOAL_PLAN_PAUSED_IN_SEASON, 2026-11-22): in season the 8 weeks start on the Monday
+ * of the next pre-season; when no saved season plan says when that is, the plan is approved and paused for the season
+ * (it resumes on its own when pre-season starts). Out of season / season not known: the start as chosen.
+ */
+function gatedApproval(gate: StartGate, plan: GoalPlan, d: ApproveDecision, coachUserId: string | null, now: string) {
+  const cols = approvalCols(plan, { ...d, startDate: gate.start }, coachUserId, now);
+  return gate.kind === "pause_until_preseason"
+    ? { ...cols, status: "paused" as const, paused_at: now, paused_week: 0, paused_reason: "in_season" as const }
+    : cols;
+}
+
+/** The gate's provenance on the approval event, and the pause event when it pauses. */
+async function logSeasonGate(sb: Sb, row: { id: string; team_id: string; player_id: string }, gate: StartGate, season: GoalSeasonRead) {
+  if (gate.kind !== "pause_until_preseason") return;
+  await logEvent(sb, row, "paused", { userId: null, role: "system" }, IN_SEASON_PAUSE_REASON, { week: 0, reason: "in_season", ...seasonDetail(season) });
+}
+const gateExtra = (gate: StartGate, season: GoalSeasonRead): Record<string, unknown> =>
+  gate.kind === "as_chosen" ? {} : { season_gate: { kind: gate.kind, ...(gate.kind === "moved_to_preseason" ? { chosen: gate.chosen, preseason: gate.preseason } : {}), ...seasonDetail(season) } };
+
 async function logApproval(
   sb: Sb, row: { id: string; team_id: string; player_id: string }, actor: { userId: string | null; role: "coach" | "system" },
   plan: GoalPlan, d: ApproveDecision, teamPref: TeamQualityPref, extra: Record<string, unknown> = {},
@@ -385,7 +455,7 @@ export async function loadCoachStartPreview(
 export async function startGoalByCoach(
   sb: Sb,
   args: { teamId: string; playerId: string; coachUserId: string; quality: GoalQuality; body: unknown },
-): Promise<{ id: string; status: "approved" }> {
+): Promise<{ id: string; status: "approved" | "paused" }> {
   const today = todayIso();
   const [{ base }, prefs, open] = await Promise.all([
     loadGoalPlanBase(sb, args.teamId, args.playerId, today),
@@ -401,10 +471,12 @@ export async function startGoalByCoach(
   if (!parsed.ok) throw new GoalPlanError(400, parsed.error);
   const d = parsed.value as ApproveDecision;
   const plan = approvedPlan(input, teamPref, d);
+  const season = await readGoalSeason(sb, args.teamId, today, { withNext: true });
+  const gate = startGate(season, d.startDate);
   const now = new Date().toISOString();
   const { data, error } = await sb.from("player_goal_plans").insert({
     team_id: args.teamId, player_id: args.playerId, quality: args.quality, player_note: null, proposal: plan,
-    requested_by: args.coachUserId, ...approvalCols(plan, d, args.coachUserId, now),
+    requested_by: args.coachUserId, ...gatedApproval(gate, plan, d, args.coachUserId, now),
   }).select("id, team_id, player_id").single();
   if (error) {
     if ((error as { code?: string }).code === "23505") throw new GoalPlanError(409, "This player already has an open goal plan.", "Leikmaðurinn er nú þegar með opið markmiðsplan.");
@@ -413,8 +485,9 @@ export async function startGoalByCoach(
   const row = data as { id: string; team_id: string; player_id: string };
   const actor = { userId: args.coachUserId, role: "coach" as const };
   await logEvent(sb, row, "requested", actor, null, { quality: args.quality, rule_start: rule, by_coach: true, source: "programme_library" });
-  await logApproval(sb, row, actor, plan, d, teamPref);
-  return { id: row.id, status: "approved" };
+  await logApproval(sb, row, actor, plan, { ...d, startDate: gate.start }, teamPref, gateExtra(gate, season));
+  await logSeasonGate(sb, row, gate, season);
+  return { id: row.id, status: gate.kind === "pause_until_preseason" ? "paused" : "approved" };
 }
 
 export async function decideGoal(
@@ -441,12 +514,15 @@ export async function decideGoal(
 
   if (d.action === "approve") {
     const plan = approvedPlan(input, teamPref, d);
-    const { data, error } = await sb.from("player_goal_plans").update(approvalCols(plan, d, args.coachUserId, now))
+    const season = await readGoalSeason(sb, args.teamId, today, { withNext: true });
+    const gate = startGate(season, d.startDate);
+    const { data, error } = await sb.from("player_goal_plans").update(gatedApproval(gate, plan, d, args.coachUserId, now))
       .eq("id", row.id).eq("status", "requested").select("id");
     if (error) throw new Error(error.message);
     if (!data?.length) throw new GoalPlanError(409, "Someone else answered this request first.");
-    await logApproval(sb, row, actor, plan, d, teamPref);
-    return { status: "approved" };
+    await logApproval(sb, row, actor, plan, { ...d, startDate: gate.start }, teamPref, gateExtra(gate, season));
+    await logSeasonGate(sb, row, gate, season);
+    return { status: gate.kind === "pause_until_preseason" ? "paused" : "approved" };
   }
 
   if (d.action === "resume") {
@@ -459,14 +535,26 @@ export async function decideGoal(
     if (d.fromWeek > def && !d.reason) {
       throw new GoalPlanError(400, `After a break of more than ${RESUME_FROM_START_AFTER_DAYS} days the plan restarts from week 1; picking up later needs a reason (at least 5 characters).`);
     }
+    // In season the plan would pause again on the next read: the coach may still restart it (the coach decides last),
+    // with a reason, and the automatic in-season pause then leaves this plan alone (logged override).
+    const season = await readGoalSeason(sb, args.teamId, today);
+    const override = season.season === "maintain";
+    if (override && !d.reason) {
+      throw new GoalPlanError(400, "In season goal plans pause until the next pre-season. To restart it now anyway, write a reason (at least 5 characters).",
+        "Á keppnistímabili eru markmiðsplön í bið fram að næsta undirbúningstímabili. Til að setja planið samt af stað núna, skrifaðu ástæðu (minnst 5 stafir).");
+    }
     const start = resumedStartDate(d.startDate, d.fromWeek);
     const { data, error } = await sb.from("player_goal_plans").update({
-      status: "approved", start_date: start, end_date: planEndDate(start), paused_at: null, paused_week: null,
+      status: "approved", start_date: start, end_date: planEndDate(start), paused_at: null, paused_week: null, paused_reason: null,
+      ...(override ? { season_override_at: now } : {}),
       coach_note: d.noteToPlayer ?? row.coach_note, updated_at: now,
     }).eq("id", row.id).eq("status", "paused").select("id");
     if (error) throw new Error(error.message);
     if (!data?.length) throw new GoalPlanError(409, "This plan changed meanwhile; reload.");
-    await logEvent(sb, row, "resumed", actor, d.reason, { from_week: d.fromWeek, resume_monday: d.startDate, default_week: def });
+    await logEvent(sb, row, "resumed", actor, d.reason, {
+      from_week: d.fromWeek, resume_monday: d.startDate, default_week: def, paused_reason: row.paused_reason ?? "injury",
+      ...(override ? { in_season_override: true, ...seasonDetail(season) } : {}),
+    });
     return { status: "approved" };
   }
 

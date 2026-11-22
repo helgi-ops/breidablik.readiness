@@ -44,6 +44,8 @@ type Current = {
   coachNote: string | null;
   declineReason: string | null;
   pausedWeek?: number | null;
+  /** "in_season" = paused for the competitive season (resumes at pre-season); "injury" = injured / coming back. */
+  pausedReason?: "injury" | "in_season" | null;
   /** Started without the coach's approval (player choices on). */
   autoStarted?: boolean;
   /** A waiting request, or an auto-started plan that has not begun. */
@@ -183,7 +185,7 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
   const [reload, setReload] = React.useState(0);
   const [historyCount, setHistoryCount] = React.useState(0);
   // Player choices on: a new goal starts without approval, on this Monday (server's date).
-  const [autoStart, setAutoStart] = React.useState<{ on: boolean; date: string | null }>({ on: false, date: null });
+  const [autoStart, setAutoStart] = React.useState<{ on: boolean; date: string | null; gate: string | null }>({ on: false, date: null, gate: null });
   const [dsi, setDsi] = React.useState<DsiSuggestion | null>(null);
   const [history, setHistory] = React.useState<GoalHistoryItem[] | null>(null);
   const [historyState, setHistoryState] = React.useState<"closed" | "loading" | "open" | "error">("closed");
@@ -234,7 +236,7 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
         setEligibility((j.eligibility ?? []) as Eligibility[]);
         setCurrent((j.current ?? null) as Current | null);
         setHistoryCount(Number(j.historyCount ?? 0) || 0);
-        setAutoStart({ on: j.autoStart === true, date: typeof j.autoStartDate === "string" ? j.autoStartDate : null });
+        setAutoStart({ on: j.autoStart === true, date: typeof j.autoStartDate === "string" ? j.autoStartDate : null, gate: typeof j.startGate === "string" ? j.startGate : null });
         setDsi((j.dsiSuggestion ?? null) as DsiSuggestion | null);
         setState("ready");
       } catch {
@@ -292,6 +294,8 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
                 <p className="mt-1 text-sm text-slate-700">{T(`Your plan is set. The 8 weeks run ${fmtDate(current.startDate, false)} – ${fmtDate(current.endDate, false)}. Each day's session shows on Today. Your coach sees it.`, `Áætlunin þín er klár. Vikurnar 8 standa ${fmtDate(current.startDate, true)} – ${fmtDate(current.endDate, true)}. Æfing hvers dags birtist á Í dag. Þjálfarinn sér hana.`)}</p>
               ) : current.status === "approved" ? (
                 <p className="mt-1 text-sm text-slate-700">{T(`Your coach said yes. The 8 weeks run ${fmtDate(current.startDate, false)} – ${fmtDate(current.endDate, false)}. Each day's session shows on Today.`, `Þjálfarinn sagði já. Vikurnar 8 standa ${fmtDate(current.startDate, true)} – ${fmtDate(current.endDate, true)}. Æfing hvers dags birtist á Í dag.`)}</p>
+              ) : current.pausedReason === "in_season" ? (
+                <p className="mt-1 text-sm text-slate-700">{T("Goal plans pause in-season (maintenance period). Your plan resumes next pre-season.", "Markmiðsplön eru í bið á keppnistímabili (viðhaldstímabil). Planið heldur áfram næsta undirbúningstímabil.")}</p>
               ) : (
                 <p className="mt-1 text-sm text-slate-700">{T(`Paused${current.pausedWeek ? ` in week ${current.pausedWeek}` : ""} while you are injured or coming back. Your coach restarts it.`, `Í bið${current.pausedWeek ? ` í viku ${current.pausedWeek}` : ""} á meðan meiðsli eða endurkoma standa yfir. Þjálfarinn setur hana aftur af stað.`)}</p>
               )}
@@ -374,7 +378,9 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
                   <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={PLAYER_NOTE_MAX} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
                 </label>
                 {autoStart.on ? (
-                  <p className="text-xs text-slate-500">{T(`What happens next: MicroPulse builds an 8-week plan from your own data (${weekShape(pick).en}). It starts ${autoStart.date ? fmtDate(autoStart.date, false) : "on Monday"}; your coach sees it and can stop it.`, `Hvað gerist næst: MicroPulse býr til 8 vikna áætlun út frá þínum gögnum (${weekShape(pick).is}). Hún byrjar ${autoStart.date ? fmtDate(autoStart.date, true) : "á mánudaginn"}; þjálfarinn sér hana og getur stöðvað hana.`)}</p>
+                  <p className="text-xs text-slate-500">{autoStart.gate === "pause_until_preseason"
+                    ? T(`What happens next: MicroPulse builds an 8-week plan from your own data (${weekShape(pick).en}). Goal plans pause in-season, so it waits and starts when pre-season starts; your coach sees it and can stop it.`, `Hvað gerist næst: MicroPulse býr til 8 vikna áætlun út frá þínum gögnum (${weekShape(pick).is}). Markmiðsplön eru í bið á keppnistímabili, svo hún bíður og byrjar þegar undirbúningstímabilið hefst; þjálfarinn sér hana og getur stöðvað hana.`)
+                    : T(`What happens next: MicroPulse builds an 8-week plan from your own data (${weekShape(pick).en}). It starts ${autoStart.date ? fmtDate(autoStart.date, false) : "on Monday"}${autoStart.gate === "moved_to_preseason" ? " (goal plans pause in-season, so it starts with pre-season)" : ""}; your coach sees it and can stop it.`, `Hvað gerist næst: MicroPulse býr til 8 vikna áætlun út frá þínum gögnum (${weekShape(pick).is}). Hún byrjar ${autoStart.date ? fmtDate(autoStart.date, true) : "á mánudaginn"}${autoStart.gate === "moved_to_preseason" ? " (markmiðsplön eru í bið á keppnistímabili, svo hún byrjar með undirbúningstímabilinu)" : ""}; þjálfarinn sér hana og getur stöðvað hana.`)}</p>
                 ) : (
                   <p className="text-xs text-slate-500">{T(`What happens next: MicroPulse builds an 8-week plan from your own data (${weekShape(pick).en}), and your coach says yes or no.`, `Hvað gerist næst: MicroPulse býr til 8 vikna áætlun út frá þínum gögnum (${weekShape(pick).is}) og þjálfarinn segir já eða nei.`)}</p>
                 )}

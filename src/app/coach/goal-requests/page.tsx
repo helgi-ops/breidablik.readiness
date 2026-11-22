@@ -45,6 +45,7 @@ import {
 import { MEASURE_DEF, PHASE_LABEL, QUALITY_MEASURES, type GoalMeasure, type GoalProgress, type ResultPhase } from "@/lib/micropulse/goalPlan/outcome";
 import { TEST_NEED_LABEL, retestWhen, type GoalTestNeed } from "@/lib/micropulse/goalPlan/testsDue";
 import { coachPriorityText, isPrioritySnapshot } from "@/lib/micropulse/goalPlan/priority";
+import type { GoalSeasonRead } from "@/lib/micropulse/goalPlan/seasonPause";
 import { DEFAULT_LEVEL, LEVEL_BASIS, LEVEL_LABEL, LEVEL_WHO, LEVEL_YOUTH_NOTE, type TrainingLevel } from "@/lib/micropulse/goalPlan/levels";
 
 const QUALITY: Record<GoalQuality, Bi> = {
@@ -103,6 +104,7 @@ export default function GoalRequestsPage() {
   const T = (en: string, is: string) => (isEN ? en : is);
 
   const [items, setItems] = React.useState<ListItem[] | null>(null);
+  const [season, setSeason] = React.useState<GoalSeasonRead | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
   const [sel, setSel] = React.useState<string | null>(null);
   const [reload, setReload] = React.useState(0);
@@ -116,6 +118,7 @@ export default function GoalRequestsPage() {
       if (!res.ok) { setErr(String(j.error ?? res.status)); return; }
       const list = (j.items ?? []) as ListItem[];
       setItems(list);
+      setSeason((j.season ?? null) as GoalSeasonRead | null);
       const fromUrl = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("id") : null;
       setSel((cur) => cur ?? (fromUrl && list.some((i) => i.id === fromUrl) ? fromUrl : list.find((i) => i.status === "requested")?.id ?? list[0]?.id ?? null));
     })();
@@ -154,6 +157,7 @@ export default function GoalRequestsPage() {
         is="svara leikmönnum sem báðu um að bæta einn þátt: reglurnar búa til 8 vikna viðbót út frá gögnum leikmannsins og þú samþykkir, velur annað upphaf (með ástæðu) eða hafnar. Þegar val leikmanna er á (hér fyrir neðan) byrjar áætlunin næsta mánudag án samþykkis; þú sérð hana hér og getur stöðvað hana. Breytir aldrei readiness-litnum eða æfingu dagsins."
       />
       {err ? <p className="text-[13px] text-[#a83e28]">{err}</p> : null}
+      {!err && season ? <SeasonNote season={season} isEN={isEN} /> : null}
 
       {items && items.length === 0 ? (
         <p className="rounded-xl border border-slate-200 bg-white p-4 text-[13px] text-slate-600">
@@ -185,7 +189,7 @@ export default function GoalRequestsPage() {
             ))}
           </ul>
           <div className="min-w-0">
-            {sel ? <ReviewPanel key={`${sel}-${reload}`} id={sel} isEN={isEN} onChanged={() => setReload((n) => n + 1)} /> : null}
+            {sel ? <ReviewPanel key={`${sel}-${reload}`} id={sel} isEN={isEN} season={season} onChanged={() => setReload((n) => n + 1)} /> : null}
           </div>
         </div>
       ) : null}
@@ -195,7 +199,36 @@ export default function GoalRequestsPage() {
   );
 }
 
-function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onChanged: () => void }) {
+/** GOAL_PLAN_PAUSED_IN_SEASON (2026-11-22): what the season means for goal plans, or a prompt to set it. */
+function SeasonNote({ season, isEN }: { season: GoalSeasonRead; isEN: boolean }) {
+  const T = (en: string, is: string) => (isEN ? en : is);
+  if (season.season === "build") return null;
+  if (season.season === "unknown") {
+    return (
+      <p className="rounded-xl border border-[#de9328]/40 bg-[#de9328]/10 px-3 py-2 text-[12.5px] text-slate-800">
+        {T("The season isn't set, so goal plans can't tell pre-season from the competitive season and run as before. ",
+          "Tímabilið er ekki sett, svo markmiðsplön greina ekki undirbúningstímabil frá keppnistímabili og ganga eins og áður. ")}
+        <a href="/coach/periodization-hub" className="font-semibold text-primary underline">{T("Set the season plan", "Settu tímabilsáætlunina")}</a>
+        {T(" so they pause in season and build in pre-season.", " svo þau fari í bið á keppnistímabili og byggi upp á undirbúningstímabili.")}
+      </p>
+    );
+  }
+  return (
+    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[12.5px] text-slate-800">
+      {T("In season: goal plans are paused (maintenance period) and resume on their own at the next pre-season",
+        "Keppnistímabil: markmiðsplön eru í bið (viðhaldstímabil) og halda sjálf áfram næsta undirbúningstímabil")}
+      {season.nextPreseason ? ` (${fmtDate(season.nextPreseason, isEN)})` : ""}
+      {T(". A plan you approve now starts on the Monday of the week it opens.", ". Plan sem þú samþykkir núna hefst mánudag þeirrar viku sem það hefst í.")}
+      {season.nextPreseason ? "" : T(" No saved season plan has the next pre-season yet: a new plan waits until one does.", " Engin vistuð tímabilsáætlun er með næsta undirbúningstímabil enn: nýtt plan bíður þar til hún er komin.")}
+      <span className="block text-[11px] text-slate-500">
+        {T(`Season from ${season.source === "season_plan_block" ? "the season plan's block" : "the week setup"}. Rule: goal plans build in pre-season and off-season only.`,
+          `Tímabil úr ${season.source === "season_plan_block" ? "lotu tímabilsáætlunarinnar" : "vikuuppsetningu"}. Regla: markmiðsplön byggja aðeins upp á undirbúnings- og hvíldartímabili.`)}
+      </span>
+    </p>
+  );
+}
+
+function ReviewPanel({ id, isEN, season, onChanged }: { id: string; isEN: boolean; season: GoalSeasonRead | null; onChanged: () => void }) {
   const L = (b: Bi) => (isEN ? b.en : b.is);
   const T = (en: string, is: string) => (isEN ? en : is);
   const [start, setStart] = React.useState<string | null>(null);
@@ -236,7 +269,10 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
 
   const pausedWeek = Math.max(1, row.paused_week ?? 1);
   const resumeWeek = fromWeek ?? data.resumeDefault ?? 1;
-  const resumeNeedsReason = resumeWeek > (data.resumeDefault ?? 1);
+  const inSeason = season?.season === "maintain";
+  const pausedForSeason = row.status === "paused" && row.paused_reason === "in_season";
+  // Restarting in season is the coach's override: it needs a reason (logged).
+  const resumeNeedsReason = resumeWeek > (data.resumeDefault ?? 1) || inSeason;
 
   const decide = async (action: "approve" | "decline" | "stop" | "resume") => {
     setBusy(true); setMsg(null);
@@ -330,6 +366,15 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
             <button type="button" disabled={busy || !reasonOk} onClick={() => decide("decline")}
               className="rounded-lg border border-slate-300 px-3 py-1.5 text-[13px] font-medium text-slate-700 disabled:opacity-50">{T("Decline", "Hafna")}</button>
           </div>
+          {inSeason ? (
+            <p className="text-[11px] font-medium text-slate-700">
+              {season?.nextPreseason
+                ? T(`In season: the 8 weeks start on the Monday of the week the next pre-season opens (${fmtDate(season.nextPreseason, true)}), not the date above if it is earlier.`,
+                  `Keppnistímabil: vikurnar 8 hefjast mánudag vikunnar sem næsta undirbúningstímabil hefst (${fmtDate(season.nextPreseason, false)}), ekki dagsetningunni að ofan ef hún er fyrr.`)
+                : T("In season, and no saved season plan has the next pre-season yet: the plan is approved and waits, then starts on its own when pre-season starts.",
+                  "Keppnistímabil, og engin vistuð tímabilsáætlun er með næsta undirbúningstímabil enn: planið er samþykkt og bíður, og fer sjálft af stað þegar undirbúningstímabilið hefst.")}
+            </p>
+          ) : null}
           <p className="text-[11px] text-slate-500">{T("The player sees the answer on their request screen, and from the start date each day's session on Today. Nothing is sent (no push).", "Leikmaðurinn sér svarið á beiðnaskjánum og frá upphafsdegi æfingu hvers dags á Today. Ekkert er sent (engin tilkynning).")}</p>
         </div>
       ) : null}
@@ -370,8 +415,11 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
       {row.status === "paused" ? (
         <div className="space-y-3 border-t border-slate-100 pt-3">
           <p className="text-[12.5px] text-slate-800">
-            {T(`Paused in week ${pausedWeek}${row.paused_at ? ` on ${fmtDate(row.paused_at, true)}` : ""}: the player was marked injured, in rehab or returning to training. Only you restart it.`,
-              `Sett í bið í viku ${pausedWeek}${row.paused_at ? ` ${fmtDate(row.paused_at, false)}` : ""}: leikmaðurinn var skráður meiddur, í endurhæfingu eða í endurkomu. Aðeins þú setur hana aftur af stað.`)}
+            {pausedForSeason
+              ? T(`Paused in week ${pausedWeek}${row.paused_at ? ` on ${fmtDate(row.paused_at, true)}` : ""}: the competitive season started (maintenance period). It resumes on its own at the next pre-season${season?.nextPreseason ? ` (${fmtDate(season.nextPreseason, true)})` : ""}.${inSeason ? " To restart it now anyway, write a reason." : ""}`,
+                `Sett í bið í viku ${pausedWeek}${row.paused_at ? ` ${fmtDate(row.paused_at, false)}` : ""}: keppnistímabilið hófst (viðhaldstímabil). Planið heldur sjálft áfram næsta undirbúningstímabil${season?.nextPreseason ? ` (${fmtDate(season.nextPreseason, false)})` : ""}.${inSeason ? " Til að setja það samt af stað núna, skrifaðu ástæðu." : ""}`)
+              : T(`Paused in week ${pausedWeek}${row.paused_at ? ` on ${fmtDate(row.paused_at, true)}` : ""}: the player was marked injured, in rehab or returning to training. Only you restart it.${inSeason ? " In season a restart needs a reason." : ""}`,
+                `Sett í bið í viku ${pausedWeek}${row.paused_at ? ` ${fmtDate(row.paused_at, false)}` : ""}: leikmaðurinn var skráður meiddur, í endurhæfingu eða í endurkomu. Aðeins þú setur hana aftur af stað.${inSeason ? " Á keppnistímabili þarf ástæðu til að setja hana af stað." : ""}`)}
           </p>
           <div className="flex flex-wrap gap-3">
             <label className="block text-[12px] text-slate-700">
@@ -391,7 +439,7 @@ function ReviewPanel({ id, isEN, onChanged }: { id: string; isEN: boolean; onCha
             {T("After a break of more than 21 days the rule restarts from week 1. Picking up later than the suggestion needs a reason.", "Eftir hlé lengra en 21 dagur byrjar reglan aftur í viku 1. Að halda áfram seinna en tillagan segir þarf ástæðu.")}
           </p>
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={500}
-            placeholder={resumeNeedsReason ? T("Why pick up later than the suggestion? (required)", "Af hverju seinna en tillagan? (skylda)") : T("Reason (optional to restart, required to stop)", "Ástæða (valfrjáls til að halda áfram, skylda til að stöðva)")}
+            placeholder={inSeason ? T("Why restart in season? (required, kept in the history)", "Af hverju af stað á keppnistímabili? (skylda, vistað í sögunni)") : resumeNeedsReason ? T("Why pick up later than the suggestion? (required)", "Af hverju seinna en tillagan? (skylda)") : T("Reason (optional to restart, required to stop)", "Ástæða (valfrjáls til að halda áfram, skylda til að stöðva)")}
             className="block w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]" />
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder={T("Note to the player (optional)", "Skilaboð til leikmanns (valfrjálst)")} className="block w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]" />
           <div className="flex flex-wrap gap-2">
