@@ -18,7 +18,7 @@ import type { Bi } from "@/lib/micropulse/load/peakPeriod";
 import type { StrengthSession, SessionBlock, AppliedAdaptation } from "./types";
 import type { BlockGoalKey, SeasonPhaseKey, CoachBlockRule, StrengthMethodKey } from "./seasonPhaseStrength";
 import { strengthForBlockGoal } from "./seasonPhaseStrength";
-import { enforceDayRules } from "./dayRules";
+import { PREVENTION_IDS, enforceDayRules } from "./dayRules";
 import { holdCmjCut } from "./cmjDose";
 import { traditionalLiftDayScale } from "./inSeasonStrengthMode";
 import { SUBPHASE_DOSE_SCALE, subPhaseInfo, type InSeasonSubPhaseKey } from "@/lib/micropulse/periodization/inSeasonSubPhase";
@@ -64,6 +64,19 @@ const SCALE_TYPES: ReadonlySet<SessionBlock["type"]> = new Set(["COMPOUND", "ACC
 
 const CITE = "Issurin 2010 (block periodisation); Cuthbert 2021 (volume distribution); Rønnestad 2011";
 
+/**
+ * The doses the week rule fixes (the coach's call, 2026-11-23):
+ *   - Injury prevention (Nordic 4 × 5, Copenhagen 4 × 6 a side) is the same every week: no block, taper or sub-phase
+ *     changes it.
+ *   - The week rule's heavy reps (15 a week in season, 21 in pre-season) and its near-match dose hold through the
+ *     Realization taper and the in-season sub-phases (15 a week is the maintenance dose, Rønnestad 2011). Only a deload
+ *     week halves the heavy reps, and says so (WEEK_RULE_DELOAD).
+ */
+const isPrevention = (ex: SessionBlock["exercises"][number]) => PREVENTION_IDS.has(ex.exerciseId);
+const isWeekRuleDose = (ex: SessionBlock["exercises"][number]) => !!(ex.dose.weekRule || ex.dose.nearMatch);
+
+export const WEEK_RULE_DELOAD = "WEEK_RULE_DELOAD";
+
 /** Clamp a set count into a sane range so a nudge can never zero-out or balloon a block. */
 const clampSets = (n: number) => Math.max(1, Math.min(6, Math.round(n)));
 
@@ -107,12 +120,16 @@ export function applyBlockToSessionInner(
     : "none";
 
   let changed = 0;
+  const heavyHalved: string[] = [];
   const blocks: SessionBlock[] = session.blocks.map((b) => {
     if (delta === "none" || !VOLUME_TYPES.has(b.type)) return b;
     const exercises = b.exercises.map((ex) => {
+      // Injury prevention is the same every week (2026-11-23).
+      if (isPrevention(ex)) return ex;
+      // The week rule's heavy sets and near-match dose hold, except that a deload halves the heavy sets (2026-11-23).
+      if (isWeekRuleDose(ex) && !(delta === "halve" && ex.dose.weekRule)) return ex;
       // Microdose: never more than +1 set on an exercise. The player's goal already added one (2026-11-17).
-      // Nor on a lift whose sets the week rule set: the week's heavy sets are fixed (2026-11-19).
-      if (delta === "add" && (ex.playerGoal || ex.goalPlan || ex.dose.weekRule || ex.dose.nearMatch)) return ex;
+      if (delta === "add" && (ex.playerGoal || ex.goalPlan)) return ex;
       const before = ex.dose.sets;
       const after =
         delta === "halve" ? clampSets(before / 2)
@@ -120,6 +137,7 @@ export function applyBlockToSessionInner(
         : clampSets(before + 1); // add
       if (after === before) return ex;
       changed += 1;
+      if (ex.dose.weekRule) heavyHalved.push(`${ex.nameEN} ${before} → ${after}`);
       return { ...ex, dose: { ...ex.dose, sets: after } };
     });
     return { ...b, exercises };
@@ -156,6 +174,8 @@ export function applyBlockToSessionInner(
     ? finalBlocks.map((b) => {
         if (!SCALE_TYPES.has(b.type)) return b;
         const exercises = b.exercises.map((ex) => {
+          // The week rule's heavy reps and injury prevention hold through the sub-phases (2026-11-23).
+          if (isPrevention(ex) || isWeekRuleDose(ex)) return ex;
           const after = clampSets(ex.dose.sets * subScale);
           if (after === ex.dose.sets) return ex;
           subScaled += 1;
@@ -167,7 +187,7 @@ export function applyBlockToSessionInner(
 
   const applied: Bi =
     delta === "halve" ? { en: "Deload week — volume cut ~50% across accessory/compound, intensity touches kept.", is: "Niðurtröppunar-vika — magn skorið ~50% á auka/grunnæfingum, ákefðar-snertingar haldast." }
-    : delta === "trim" ? { en: "Realization taper — trimmed a set off accessory/compound; power & contrast kept intact.", is: "Framkvæmdar-taper — tók sett af auka/grunnæfingum; kraftur & kontrast haldast óbreytt." }
+    : delta === "trim" ? { en: "Realization taper — trimmed a set off accessory/compound; power & contrast, the week rule's heavy reps and injury prevention kept intact.", is: "Framkvæmdar-taper — tók sett af auka/grunnæfingum; kraftur & kontrast, þungar endurtekningar vikureglunnar og meiðslavarnir haldast óbreytt." }
     : delta === "add" ? { en: "Accumulation — added a set of hypertrophy/base volume to accessory/compound work.", is: "Uppsöfnun — bætti setti af hypertrophy/grunn-magni á auka/grunnæfingar." }
     : goalKey === "accum" ? { en: "In-season re-accumulation — hold volume, bias compound heavier to rebuild a strength base.", is: "Endur-uppsöfnun á tímabili — haltu magni, þyngdu grunnæfingar til að endurbyggja styrk-grunn." }
     : { en: "Strength–power — the day's default expression; keep bar speed high (velocity-loss cap).", is: "Styrkur–kraftur — sjálfgefin tjáning dagsins; haltu stangarhraða háum (hraðatap-þak)." };
@@ -210,7 +230,16 @@ export function applyBlockToSessionInner(
     evidence: "Cuthbert 2021 — microdose vs traditional maintain strength when weekly volume is EQUATED (not merely fewer days).",
   } : null;
 
-  const extra = [adaptation, equateAudit, subAudit].filter((a): a is AppliedAdaptation => a !== null);
+  const deloadAudit: AppliedAdaptation | null = heavyHalved.length ? {
+    ruleId: WEEK_RULE_DELOAD,
+    triggerEN: "Deload week: the week rule's heavy reps",
+    triggerIS: "Niðurtröppunarvika: þungar endurtekningar vikureglunnar",
+    actionEN: `Heavy sets halved this week (${heavyHalved.join(", ")}). Nordic and Copenhagen stay as every week.`,
+    actionIS: `Þung sett helminguð þessa viku (${heavyHalved.join(", ")}). Nordic og Copenhagen haldast eins og aðrar vikur.`,
+    evidence: "MicroPulse rule (the coach's call, 2026-11-23): a deload halves the week's heavy reps; injury prevention is the same every week. Issurin 2010 (deload in block periodisation).",
+  } : null;
+
+  const extra = [adaptation, deloadAudit, equateAudit, subAudit].filter((a): a is AppliedAdaptation => a !== null);
 
   return {
     ...session,

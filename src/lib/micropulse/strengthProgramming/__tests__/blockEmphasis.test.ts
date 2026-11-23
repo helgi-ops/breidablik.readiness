@@ -216,3 +216,57 @@ describe("applyBlockToSession — the day rule is checked again after the block 
     expect(out.appliedAdaptations.some((a) => a.ruleId === "DAY_RULE_TRIM" && /12 heavy reps/.test(a.triggerEN))).toBe(true);
   });
 });
+
+describe("the week rule's fixed doses hold through the meso layer (the coach's call, 2026-11-23)", () => {
+  const fixed = (): StrengthSession => session([
+    { id: "c", titleEN: "C", titleIS: "C", type: "COMPOUND", exercises: [
+      { exerciseId: "ex_trap_bar_dl", nameEN: "Trap bar deadlift", nameIS: "Trap bar", category: "COMPOUND_STRENGTH", dose: { sets: 4, reps: "3", intensity: "85% 1RM", rest: "3 min", weekRule: true } },
+      { exerciseId: "x_acc", nameEN: "Accessory", nameIS: "Aukaæfing", category: "COMPOUND_STRENGTH", dose: { sets: 4, reps: "8", intensity: "70%", rest: "90s" } },
+    ] },
+    { id: "p", titleEN: "P", titleIS: "P", type: "POSTERIOR", exercises: [
+      { exerciseId: "ex_nordic_curl", nameEN: "Nordic", nameIS: "Nordic", category: "POSTERIOR_CHAIN", dose: { sets: 4, reps: "5", intensity: "BW", rest: "90s" } },
+    ] },
+    { id: "a", titleEN: "A", titleIS: "A", type: "ADDUCTOR", exercises: [
+      { exerciseId: "ex_copenhagen", nameEN: "Copenhagen", nameIS: "Copenhagen", category: "ADDUCTOR", dose: { sets: 4, reps: "6 each side", intensity: "BW", rest: "60s" } },
+    ] },
+  ]);
+  const sets = (s: StrengthSession | null, id: string) => s!.blocks.flatMap((b) => b.exercises).find((e) => e.exerciseId === id)!.dose.sets;
+
+  it("deload: Nordic and Copenhagen stay 4; the week rule's heavy sets halve, with a line; other work halves", () => {
+    const out = applyBlockToSession(fixed(), "deload", "preseason");
+    expect(sets(out, "ex_nordic_curl")).toBe(4);
+    expect(sets(out, "ex_copenhagen")).toBe(4);
+    expect(sets(out, "ex_trap_bar_dl")).toBe(2);
+    expect(sets(out, "x_acc")).toBe(2);
+    const line = out!.appliedAdaptations.find((a) => a.ruleId === "WEEK_RULE_DELOAD")!;
+    expect(line.actionEN).toMatch(/Heavy sets halved this week \(Trap bar deadlift 4 → 2\)\. Nordic and Copenhagen stay as every week\./);
+    expect(line.actionIS).toMatch(/Þung sett helminguð/);
+    expect(line.evidence).toMatch(/MicroPulse rule/);
+  });
+
+  it("Realization: heavy sets and prevention kept; only other work trimmed; no deload line", () => {
+    const out = applyBlockToSession(fixed(), "realize", "competitive");
+    expect(sets(out, "ex_trap_bar_dl")).toBe(4);
+    expect(sets(out, "ex_nordic_curl")).toBe(4);
+    expect(sets(out, "ex_copenhagen")).toBe(4);
+    expect(sets(out, "x_acc")).toBe(3);
+    expect(out!.appliedAdaptations.some((a) => a.ruleId === "WEEK_RULE_DELOAD")).toBe(false);
+  });
+
+  it("pre-season accumulation never adds to prevention or the week rule's sets", () => {
+    const out = applyBlockToSession(fixed(), "accum", "preseason");
+    expect(sets(out, "ex_nordic_curl")).toBe(4);
+    expect(sets(out, "ex_trap_bar_dl")).toBe(4);
+    expect(sets(out, "x_acc")).toBe(5);
+  });
+
+  it("in-season sub-phases (×0.5 congested, ×1.25 re-strength) leave the heavy reps and prevention alone", () => {
+    for (const sub of ["maintain_potentiate", "re_strength", "taper"] as const) {
+      const out = applyBlockToSession(fixed(), "transmute", "competitive", null, sub);
+      expect(sets(out, "ex_trap_bar_dl")).toBe(4);
+      expect(sets(out, "ex_nordic_curl")).toBe(4);
+      expect(sets(out, "ex_copenhagen")).toBe(4);
+    }
+    expect(sets(applyBlockToSession(fixed(), "transmute", "competitive", null, "maintain_potentiate"), "x_acc")).toBe(2);
+  });
+});
