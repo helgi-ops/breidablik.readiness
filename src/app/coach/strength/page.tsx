@@ -39,6 +39,7 @@ import type { PaletteSlot, PaletteSlots } from "@/lib/micropulse/strengthProgram
 import { MATCH_WEEK_HEAVY_REPS, REPS_PER_SET_CHOICES, HEAVY_MD_DAYS, setsForReps, type MdRepsPerSet, type RepsPerSet } from "@/lib/micropulse/strengthProgramming/weekRule";
 import { readinessDowngrade, STRUCTURE_LABEL, STRUCTURE_SCHEME, STRUCTURE_DEMAND, STRUCTURE_FAMILY, STRUCTURE_ISO_MODE, NO_MATCH_DAY_LABEL, type StructureKey, type MdStructures, type NoMatchWeek, type NoMatchDayKind } from "@/lib/micropulse/strengthProgramming/structures";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
+import { CiteRefs } from "@/components/coach/CiteRefs";
 import { ISO_MODE_LABELS, ISO_MODE_CITATION } from "@/lib/micropulse/isometrics/protocols";
 
 // The MD-periodised WEEK planner, folded in here as a second tab. It was the
@@ -675,7 +676,7 @@ export default function CoachStrengthPage() {
                 <span className="font-medium text-slate-700">{lang === "IS" ? strengthPhase.currentBlock.pct1rm.is : strengthPhase.currentBlock.pct1rm.en}</span>
                 <span className="block text-slate-600">{lang === "IS" ? strengthPhase.currentBlock.scheme.is : strengthPhase.currentBlock.scheme.en}</span>
                 <span className="mt-0.5 block text-[11px] text-slate-500">
-                  {strengthPhase.currentBlock.cite}
+                  <CiteRefs text={strengthPhase.currentBlock.cite} is={lang === "IS"} />
                   <span className="mx-1">·</span>
                   <Link href="/coach/periodization-hub?tab=season" className="font-semibold text-[#2740e6] hover:underline">{t("Block map →", "Blokka-kort →")}</Link>
                 </span>

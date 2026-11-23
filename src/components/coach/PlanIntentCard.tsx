@@ -19,6 +19,7 @@ import {
   type Bi, type IntentGoal, type IntentItem, type IntentMode, type IntentSource, type PlanScope,
 } from "@/lib/micropulse/planIntent/vocabulary";
 import type { GridItem, PlanAdvice, PlanRecommendation } from "@/lib/micropulse/planIntent/recommend";
+import { CiteRefs } from "@/components/coach/CiteRefs";
 
 type Intent = { text: string; items: IntentItem[]; unclear: string[]; source: IntentSource; aiItems: IntentItem[] | null; updatedAt: string };
 type Ctx = { start: string; weeks: number; phase: string | null; matchDates: string[]; mas: { withMas: number; squad: number } };
@@ -266,7 +267,7 @@ export default function PlanIntentCard({ scope, start, weeks, blockGoal, phaseHi
                   <ul className="mt-0.5 list-disc pl-4">{[...new Set(ownRules.map((r) => t(r.ownRule)))].map((s) => <li key={s}>{s}</li>)}</ul>
                 </div>
               )}
-              {cites.length > 0 && <p className="text-[11px] text-slate-500">{is ? "Heimildir: " : "Sources: "}{cites.join("; ")}</p>}
+              {cites.length > 0 && <p className="text-[11px] text-slate-500">{is ? "Heimildir: " : "Sources: "}<CiteRefs text={cites.join("; ")} is={is} /></p>}
               <p className="text-[11px] text-slate-500">
                 {data?.intent?.source === "ai"
                   ? (is ? "Gervigreind las aðeins textann í listann hér að ofan; hvert markmið vitnar í orðin þín. Ráðleggingarnar koma úr reglum, ekki frá gervigreindinni." : "AI only read the text into the list above; each goal quotes your words. The advice comes from rules, not from the AI.")

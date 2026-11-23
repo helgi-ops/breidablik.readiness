@@ -11,7 +11,7 @@ import { BRAKING_REFS } from "@/lib/micropulse/goalPlan/braking";
 import { GYM_REFS } from "@/lib/micropulse/goalPlan/gymGoals";
 import { JUMP_REFS } from "@/lib/micropulse/goalPlan/jump";
 import { RX_REFS } from "@/lib/micropulse/goalPlan/liftRx";
-import { RULE_CODE_DIRS, citationsIn } from "../citationScan";
+import { RULE_CODE_DIRS, citationMatches, citationsIn } from "../citationScan";
 import { RULE_REFS, UNRESOLVED_SHORTS, findRefByShort, fullRefsFor, unresolvedReason } from "../ruleRefs";
 
 const ROOT = join(__dirname, "../../../../..");
@@ -87,6 +87,14 @@ describe("rule references", () => {
     const sv = fullRefsFor("Sáez de Villarreal 2009 (56 studies)");
     expect(sv).toHaveLength(1);
     expect(sv[0].ref?.key).toBe("saezdevillarreal2009");
+  });
+
+  it("finds where each citation sits, so the UI can make just that text tappable", () => {
+    const text = "Cormie, McGuigan & Newton 2011; Suchomel 2017 (WL derivatives); Carling (2018) said so. Nov 2026";
+    const got = citationMatches(text);
+    expect(got.map((m) => text.slice(m.index, m.index + m.length))).toEqual(["McGuigan & Newton 2011", "Suchomel 2017", "Carling (2018)"]);
+    expect(got.map((m) => m.short)).toEqual(["McGuigan & Newton 2011", "Suchomel 2017", "Carling 2018"]);
+    expect(findRefByShort(got[0].short)?.key).toBe("cormie2011");
   });
 
   it("the catalogue's references section lists each of its citations in full, or as unresolved", () => {

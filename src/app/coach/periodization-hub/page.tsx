@@ -43,6 +43,7 @@ import { fetchResearchDrills } from "@/lib/micropulse/dayDrillLibraryFetch";
 import { recommendTestingSchedule, testsForBlock, TEST_SHORT, testShortName, AEROBIC_TESTS, DEFAULT_AEROBIC_TEST, isAerobicMode, type TestKey, type AerobicMode } from "@/lib/micropulse/periodization/testingSchedule";
 import FitnessTestCard from "@/components/coach/FitnessTestCard";
 import PlanIntentCard from "@/components/coach/PlanIntentCard";
+import { CiteRefs } from "@/components/coach/CiteRefs";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
 type Bi = { en: string; is: string };
@@ -2015,7 +2016,7 @@ export default function PeriodizationHubPage() {
                     <div className="text-[14px] font-bold text-slate-900">{is ? nowSub.label.is : nowSub.label.en}</div>
                     <div className="text-[13px] text-slate-600">{is ? nowSub.rationale.is : nowSub.rationale.en}</div>
                     <div className="text-[13px] text-slate-600">{is ? nowSub.dose.is : nowSub.dose.en}</div>
-                    <div className="mt-0.5 text-[11px] text-slate-500">{nowSub.cite}</div>
+                    <div className="mt-0.5 text-[11px] text-slate-500"><CiteRefs text={nowSub.cite} is={is} /></div>
                   </div>
                 )}
                 {curScheme && curBlock && (
@@ -2032,7 +2033,7 @@ export default function PeriodizationHubPage() {
                         })}
                       </div>
                     )}
-                    <div className="mt-0.5 text-[11px] text-slate-500">{curScheme.cite}</div>
+                    <div className="mt-0.5 text-[11px] text-slate-500"><CiteRefs text={curScheme.cite} is={is} /></div>
                   </div>
                 )}
               </div>
@@ -2049,7 +2050,7 @@ export default function PeriodizationHubPage() {
                   <p className="mt-1.5 text-[12px] text-slate-500">{is ? "Bæði viðhalda styrk ef vikumagn er jafnt — jafngildur, gagnreyndur kostur, ekki einn „réttur\" (Cuthbert 2021). Microdose dreifir yfir vikuna; hefðbundið þjappar á 1–4 lyftidaga sem þú velur." : "Both maintain strength if weekly volume is equated — an equal, evidence-based choice, not one \"right\" way (Cuthbert 2021). Microdose spreads across the week; traditional concentrates onto the 1–4 lift days you pick."}</p>
                 </div>
               )}
-              <p className="mt-2 text-[11px] text-slate-500">{cfg.cite}. {is ? "Lýsandi / þjálfaramat — micro setur skammtinn á MD-dagana; hreyfir aldrei readiness-litinn." : "Descriptive / coach's call — micro places the dose on MD-days; never the readiness colour."}</p>
+              <p className="mt-2 text-[11px] text-slate-500"><CiteRefs text={cfg.cite} is={is} />. {is ? "Lýsandi / þjálfaramat — micro setur skammtinn á MD-dagana; hreyfir aldrei readiness-litinn." : "Descriptive / coach's call — micro places the dose on MD-days; never the readiness colour."}</p>
             </section>
           </div>
           </>)}
@@ -3192,7 +3193,7 @@ export default function PeriodizationHubPage() {
                   {bt.protocols.length > 0 && (<>
                     <p className="mt-2 text-[13px] font-medium text-slate-700">{is ? bt.when.is : bt.when.en}</p>
                     <ul className="mt-1 space-y-1">
-                      {bt.protocols.map((p) => <li key={p.key} className="text-[12px] text-slate-600"><b className="text-slate-800">{is ? p.name.is : p.name.en}</b> — {is ? p.prescribes.is : p.prescribes.en} <span className="text-slate-500">({p.cite})</span></li>)}
+                      {bt.protocols.map((p) => <li key={p.key} className="text-[12px] text-slate-600"><b className="text-slate-800">{is ? p.name.is : p.name.en}</b> — {is ? p.prescribes.is : p.prescribes.en} <span className="text-slate-500">(<CiteRefs text={p.cite} is={is} />)</span></li>)}
                     </ul>
                   </>)}
                 </section>
@@ -3510,7 +3511,7 @@ export default function PeriodizationHubPage() {
                       <p className="mt-1 text-[12px] text-slate-500">{is
                         ? "Sömu sex þolpróf og á Conditioning. Hraðinn (MAS) hvers leikmanns kemur úr nýjasta hraðaprófi hans, hvaða prófi sem er; mælt MAS gengur fyrir áætlun úr 30-15. Niðurstöður eru skráðar á Conditioning eða á Players-flipanum hér."
                         : "The same six aerobic tests as Conditioning. Each player's speed (MAS) comes from his latest speed test of any kind; a measured MAS beats a 30-15 estimate. Record results on Conditioning or on the Players tab here."}
-                        <span className="text-slate-400"> · {opt.cite}</span></p>
+                        <span className="text-slate-400"> · <CiteRefs text={opt.cite} is={is} /></span></p>
                     </section>
                   );
                 })()}
@@ -3721,7 +3722,7 @@ export default function PeriodizationHubPage() {
                             {tp.protocol.how.map((h, i) => <li key={i} className="text-[11px] text-slate-700">• {is ? h.is : h.en}</li>)}
                           </ul>
                           <p className="mt-1 text-[11px] text-slate-500">{is ? "Taktur" : "Cadence"}: {is ? tp.cadence.is : tp.cadence.en}</p>
-                          <p className="mt-0.5 text-[11px] text-slate-500">{tp.protocol.cite}</p>
+                          <p className="mt-0.5 text-[11px] text-slate-500"><CiteRefs text={tp.protocol.cite} is={is} /></p>
                         </details>
                       );
                     })}
@@ -3738,7 +3739,7 @@ export default function PeriodizationHubPage() {
                   <ul className="mt-2 space-y-2">
                     {allProtocols.map((p) => (
                       <li key={p.key} className="text-[13px] text-slate-700">
-                        <b className="text-slate-900">{is ? p.name.is : p.name.en}</b> — {is ? p.measures.is : p.measures.en} <span className="text-slate-600">→ {is ? p.prescribes.is : p.prescribes.en}</span> <span className="text-slate-500">({p.cite})</span>
+                        <b className="text-slate-900">{is ? p.name.is : p.name.en}</b> — {is ? p.measures.is : p.measures.en} <span className="text-slate-600">→ {is ? p.prescribes.is : p.prescribes.en}</span> <span className="text-slate-500">(<CiteRefs text={p.cite} is={is} />)</span>
                       </li>
                     ))}
                   </ul>
@@ -4297,7 +4298,7 @@ export default function PeriodizationHubPage() {
                     <a href={`/coach/transfer-report`} className="font-semibold text-[#2740e6] hover:underline">{is ? "Mæla" : "Record"} →</a>
                   </div>
                 )}
-                <p className="mt-2 text-[11px] text-slate-500">{preEmphasis.cite}. {is ? "Ráðgefandi — allir fara í gegnum röðina; þetta setur upphafið. Aldrei readiness-liturinn." : "Advisory — everyone runs the sequence; this sets the start. Never the readiness colour."}</p>
+                <p className="mt-2 text-[11px] text-slate-500"><CiteRefs text={preEmphasis.cite} is={is} />.{is ? "Ráðgefandi — allir fara í gegnum röðina; þetta setur upphafið. Aldrei readiness-liturinn." : "Advisory — everyone runs the sequence; this sets the start. Never the readiness colour."}</p>
               </section>
             );
           })()}
@@ -4338,7 +4339,7 @@ export default function PeriodizationHubPage() {
                     <>
                       <p className="mt-1 text-[12px] text-slate-700"><span className="rounded bg-violet-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase text-violet-700">{is ? "rannsóknar-viðmið (enginn VBT)" : "research default (no VBT)"}</span> {is ? player.strengthFallback.quality.is : player.strengthFallback.quality.en}</p>
                       <p className="mt-1 text-[12px] text-slate-700"><b>{is ? player.strengthFallback.pct1rm.is : player.strengthFallback.pct1rm.en}</b> · {is ? player.strengthFallback.velocity.is : player.strengthFallback.velocity.en} · {is ? player.strengthFallback.intent.is : player.strengthFallback.intent.en}</p>
-                      <p className="mt-1 text-[11px] text-slate-500">{player.strengthFallback.cite}</p>
+                      <p className="mt-1 text-[11px] text-slate-500"><CiteRefs text={player.strengthFallback.cite} is={is} /></p>
                     </>
                   ) : <p className="mt-1 text-[12px] text-slate-500">{is ? "Enginn VBT prófíll." : "No VBT profile."}</p>}
                 </div>
@@ -4409,7 +4410,7 @@ export default function PeriodizationHubPage() {
                         <span className="text-slate-400"> (Casamichana 2022)</span>
                       </div>
                     )}
-                    <p className="mt-1 text-[11px] text-slate-500">{wt.cite}</p>
+                    <p className="mt-1 text-[11px] text-slate-500"><CiteRefs text={wt.cite} is={is} /></p>
                   </div>
                 </div>
               );

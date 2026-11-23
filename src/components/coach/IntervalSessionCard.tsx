@@ -11,6 +11,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
+import { CiteRefs } from "@/components/coach/CiteRefs";
 import { buildIntervalSession, HIIT_FORMATS, type HiitFormatId, type MasConfidence } from "@/lib/micropulse/load/intervalSession";
 
 type Resp = { ok: boolean; mas?: { kmh: number; confidence: MasConfidence } | null };
@@ -125,7 +126,7 @@ export default function IntervalSessionCard({ players, playerId }: { players: Ar
 
           <ShowDetails label={{ EN: "How to read this", IS: "Hvernig á að lesa þetta" }}>
             <p className="text-[11px] leading-relaxed text-slate-500">{is ? session.note.is : session.note.en}</p>
-            <p className="mt-1 text-[10px] text-slate-400">{session.cite}</p>
+            <p className="mt-1 text-[10px] text-slate-400"><CiteRefs text={session.cite} is={is} /></p>
           </ShowDetails>
         </div>
       ) : null}

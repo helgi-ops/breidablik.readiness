@@ -17,6 +17,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { formatTeamLabel } from "@/lib/teamLabels";
+import { CiteRefs } from "@/components/coach/CiteRefs";
 import { METHOD_LABELS, blockDays, buildBlockSchedule, type BlockMethod } from "@/lib/micropulse/strengthBlock/upperLowerBlock";
 
 /** Method-aware schedule line for the block panel (upper_lower = 4-day, contrast/french = 3-day full-body). */
@@ -370,7 +371,7 @@ export default function TrainingProgrammePage() {
                           <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{isEN ? "Why these swaps" : "Af hverju þessar breytingar"}</div>
                           <ul className="mt-1 space-y-1">
                             {d.session.appliedAdaptations.map((a, i) => (
-                              <li key={i} className="text-xs text-slate-600">{isEN ? a.actionEN : a.actionIS} <span className="text-slate-400">— {a.evidence}</span></li>
+                              <li key={i} className="text-xs text-slate-600">{isEN ? a.actionEN : a.actionIS} <span className="text-slate-400">— <CiteRefs text={a.evidence} is={!isEN} /></span></li>
                             ))}
                           </ul>
                         </div>

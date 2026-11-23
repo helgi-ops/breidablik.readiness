@@ -16,6 +16,7 @@ import type { BlockGoalKey } from "@/lib/micropulse/strengthProgramming/seasonPh
 import type { SendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
 import { canonicalLift } from "@/lib/client/oneRepMax";
 import CoachReasonPicker, { EMPTY_REASON, isReasonReady, reasonBody, type ReasonValue } from "@/components/coach/CoachReasonPicker";
+import { CiteRefs } from "@/components/coach/CiteRefs";
 
 type LoggedSet = { session_date: string; exercise_name: string; canonical_lift: string | null; rpe: number | null; is_warmup: boolean };
 // Latest-session logged RPEs for a lift → coach-approved load suggestion vs the prescribed RPE.
@@ -237,7 +238,7 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                 <span>{lang === "IS" ? lean.is : lean.en}</span>
               </p>
             )}
-            <p className="mt-1 text-[9px] text-slate-400">{be.cite} · {t("Descriptive — applied on top of MD + readiness tuning; adjust as needed.", "Lýsandi — sett ofan á MD + viðbragðs-stillingu; aðlagaðu eftir þörf.")}</p>
+            <p className="mt-1 text-[9px] text-slate-400"><CiteRefs text={be.cite} is={lang === "IS"} /> ·{t("Descriptive — applied on top of MD + readiness tuning; adjust as needed.", "Lýsandi — sett ofan á MD + viðbragðs-stillingu; aðlagaðu eftir þörf.")}</p>
           </div>
         );
       })()}
@@ -431,7 +432,7 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                       <p className="mt-0.5 text-slate-700">
                         → {lang === "IS" ? a.actionIS : a.actionEN}
                       </p>
-                      <p className="mt-0.5 text-[10px] text-slate-500 italic">{a.evidence}</p>
+                      <p className="mt-0.5 text-[10px] text-slate-500 italic"><CiteRefs text={a.evidence} is={lang === "IS"} /></p>
                     </li>
                   ))}
                 </ul>

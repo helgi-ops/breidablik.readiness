@@ -25,13 +25,19 @@ const NOT_AUTHORS = new Set([
   "Since", "Until", "Yellow", "VERSION", "Library", "Safety", "DSI", "Coach", "Endurgreining", "Breiðabliks",
 ]);
 
-export function citationsIn(text: string): string[] {
-  const out = new Set<string>();
+/** Each citation with where it sits in the text. `length` covers a closing ")" in "Carling (2018)". */
+export function citationMatches(text: string): Array<{ index: number; length: number; short: string }> {
+  const out: Array<{ index: number; length: number; short: string }> = [];
   for (const m of text.matchAll(SHORT_RE)) {
     const s = m[0].replace("(", "");
-    const first = s.split(" ")[0];
-    if (NOT_AUTHORS.has(first)) continue;
-    out.add(s);
+    if (NOT_AUTHORS.has(s.split(" ")[0])) continue;
+    const index = m.index ?? 0;
+    const closes = m[0].includes("(") && text[index + m[0].length] === ")";
+    out.push({ index, length: m[0].length + (closes ? 1 : 0), short: s });
   }
-  return [...out];
+  return out;
+}
+
+export function citationsIn(text: string): string[] {
+  return [...new Set(citationMatches(text).map((m) => m.short))];
 }
