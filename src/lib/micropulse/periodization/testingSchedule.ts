@@ -123,7 +123,7 @@ const aerobicProtocol = (mode: AerobicMode): TestProtocol => {
         { en: "Start ~8 km/h, +0.5 km/h each minute, run to the audio pace; stop when the player can't hold the cone pace.", is: "Byrja ~8 km/klst, +0,5 km/klst á mínútu, halda hljóð-hraða; hætta þegar keilu-hraði næst ekki." },
         { en: "MAS = speed of the last completed stage (km/h).", is: "MAS = hraði síðasta kláraða stigs (km/klst)." },
       ],
-      cite: "Cazorla 1990; di Prampero 1986",
+      cite: "Cazorla 1990 (protocol); Bok & Foster 2021 (field-test validity); di Prampero 1986",
     };
   }
   if (mode !== "ift_30_15") return registryProtocol(mode);

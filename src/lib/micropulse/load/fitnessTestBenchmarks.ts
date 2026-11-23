@@ -10,7 +10,7 @@
  * Pure, no I/O. Descriptive conditioning context — it never touches the readiness colour.
  *
  * Cite: Bangsbo/Iaia/Krustrup 2008 (Yo-Yo) · Buchheit 2008 (30-15 IFT) · Léger 1982 (MSFT) ·
- *       Cazorla/Dupont (VAMEVAL/MAS) · Di Salvo 2007 / Sandford 2019 (max sprint speed) · Pettitt 2016.
+ *       Cazorla/Dupont (VAMEVAL/MAS) · Di Salvo 2007 (max sprint speed) · Berthon 1997 / Bellenger 2015 (timed-run MAS).
  */
 
 import type { Bi } from "./peakPeriod";
@@ -37,7 +37,7 @@ export const FITNESS_BENCHMARKS: Partial<Record<FitnessTestType, FitnessBenchmar
   ift_30_15:    { direction: "higher", developing: 17.0, good: 18.5, elite: 20.5, unit: "km/h", cite: "Buchheit 2008" },
   msft_beep:    { direction: "higher", developing: 10.0, good: 12.0, elite: 13.5, unit: "level",cite: "Léger 1982 / football norms" },
   mas_vameval:  { direction: "higher", developing: 14.5, good: 16.0, elite: 17.5, unit: "km/h", cite: "Cazorla / Dupont 2010" },
-  mas_run_4min: { direction: "higher", developing: 960,  good: 1070, elite: 1170, unit: "m",    cite: "Pettitt 2016 (MAS≈dist/4)" },
+  mas_run_4min: { direction: "higher", developing: 960,  good: 1070, elite: 1170, unit: "m",    cite: "Approx. MAS≈dist/4 (field tests validated at 5 min, Berthon 1997; shorter runs read high, Bellenger 2015)" },
   sprint_max:   { direction: "higher", developing: 30.0, good: 32.0, elite: 34.0, unit: "km/h", cite: "Di Salvo 2007 (position-aware)" },
   // line_drill / suicide_17s are court-conditioning drills with no clean football norm → no band (honest).
 };

@@ -86,8 +86,8 @@ export const PRESCRIPTIONS: Record<PrescriptionKey, Prescription> = {
   ima_cod: {
     quality: { EN: "Change of direction", IS: "Stefnubreytingum" },
     method: {
-      EN: "Add change-of-direction work — cutting drills (45–90°) in both directions, reactive agility to a cue, and deceleration-into-turn patterns.",
-      IS: "Bættu við stefnubreytinga-vinnu — cutting æfingar (45–90°) í báðar áttir, viðbragðs-agility eftir merki og hemlun-inn-í-snúning mynstur.",
+      EN: "Add change-of-direction work — cutting drills at a range of angles (sharp turns included) in both directions, reactive agility to a cue, and deceleration-into-turn patterns.",
+      IS: "Bættu við stefnubreytinga-vinnu — cutting æfingar í ýmsum hornum (líka krappar beygjur) í báðar áttir, viðbragðs-agility eftir merki og hemlun-inn-í-snúning mynstur.",
     },
     cite: "McBurnie 2022; Dos'Santos 2022",
   },

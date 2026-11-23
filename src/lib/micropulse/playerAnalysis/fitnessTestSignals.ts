@@ -6,7 +6,7 @@
  * player with real GPS CS keeps it (GPS-preferred); only test-only players get the estimate.
  *
  * Same construct, one scale: MAS (km/h) → a Critical-Speed estimate via CS ≈ 0.875 × MAS
- * (Pettitt 2016; matches the app's provisional 0.85–0.90 CS↔MAS band). The 30-15 IFT final
+ * (the app's provisional 0.85–0.90 CS↔MAS band, not a published constant; critical speed: Pettitt 2016). The 30-15 IFT final
  * velocity (VIFT) reads higher than a continuous MAS, so it is shrunk to a MAS-equivalent
  * first (Buchheit 2008 — an approximation; the source label carries the provenance).
  * Descriptive conditioning — never touches the readiness colour or the daily decision.
@@ -17,7 +17,7 @@ import { FITNESS_TESTS, isFitnessTestType } from "@/lib/micropulse/load/fitnessT
 import type { AthleteSignalSet } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 
 // Exported so the speed-zone resolver reuses the SAME field-test constants (one source of truth).
-export const CS_FROM_MAS = 0.875;   // Critical Speed as a fraction of MAS (Pettitt 2016)
+export const CS_FROM_MAS = 0.875;   // Critical Speed as a fraction of MAS (app's provisional band; CS concept: Pettitt 2016)
 export const MAS_FROM_VIFT = 0.86;  // continuous-MAS equivalent of the 30-15 VIFT (Buchheit 2008, approx.)
 
 type FtRow = { player_id: string; test_date: string | null; test_type: string | null; result_value: number | null; mas_kmh: number | null };

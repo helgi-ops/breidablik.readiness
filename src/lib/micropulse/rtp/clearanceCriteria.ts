@@ -84,7 +84,7 @@ export function buildRtpCriteria(input: {
   // ── Groin / hip adductor (ForceFrame) ──────────────────────────────────────
   if (input.groinAdductorAsymPct != null) {
     const s = asymmetryStatus(input.groinAdductorAsymPct);
-    c.push({ key: "groin_adductor_asymmetry", domain: "Groin / Adductor", label: "Hip-adductor (groin) strength asymmetry", target: "< 10%", current: fmtPct(input.groinAdductorAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020 · Esteve 2018 (adductor strength)" });
+    c.push({ key: "groin_adductor_asymmetry", domain: "Groin / Adductor", label: "Hip-adductor (groin) strength asymmetry", target: "< 10%", current: fmtPct(input.groinAdductorAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020 · Vigneswaran 2025 (groin asymmetry not linked to injury)" });
   }
 
   // ── Bilateral Jump (CMJ) ───────────────────────────────────────────────────

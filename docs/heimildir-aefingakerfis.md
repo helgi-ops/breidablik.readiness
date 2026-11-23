@@ -13,7 +13,7 @@ VALD-viðmið, endurheimt eftir leik, ísómetrískar æfingar, viðmið í þol
 - Í viðmótinu má smella á stutta tilvísun til að sjá fulla heimild (eða ástæðuna fyrir því að hún er óstaðfest).
 - Kóðinn: `src/lib/micropulse/references/ruleRefs.ts`. Próf passar að hver tilvísun í kóðanum sé hér.
 
-Æfingakerfið: 187 heimildir staðfestar og 8 ekki. Aðrar heimildir: 47 staðfestar og 17 ekki.
+Æfingakerfið: 189 heimildir staðfestar og 8 ekki. Aðrar heimildir: 57 staðfestar og 4 ekki.
 
 ## Heimildir
 
@@ -31,6 +31,7 @@ VALD-viðmið, endurheimt eftir leik, ísómetrískar æfingar, viðmið í þol
 - Benavides-Ubric A, Díez-Fernández DM, Rodríguez-Pérez MA, Ortega-Becerra M, Pareja-Blanco F. Analysis of the Load-Velocity Relationship in Deadlift Exercise. J Sports Sci Med 2020;19(3):452–459. PMID 32874097
 - Berton R, Silva DD, Santos ML, Silva CMP, Tricoli V. Weightlifting derivatives vs. plyometric exercises: effects on unloaded and loaded vertical jumps and sprint performance. PLoS One 2022;17(9):e0274962. doi:10.1371/journal.pone.0274962
 - Bishop C, Turner A, Read P. Effects of inter-limb asymmetries on physical and sports performance: a systematic review. J Sports Sci 2018;36(10):1135–1144. doi:10.1080/02640414.2017.1361894 PMID 28767317
+- Bok D, Foster C. Applicability of Field Aerobic Fitness Tests in Soccer: Which One to Choose? J Funct Morphol Kinesiol 2021;6(3):69. doi:10.3390/jfmk6030069 PMID 34449680
 - Bosquet L, Montpetit J, Arvisais D, Mujika I. Effects of tapering on performance: a meta-analysis. Med Sci Sports Exerc 2007;39(8):1358–1365. doi:10.1249/mss.0b013e31806010e0 PMID 17762369
 - Bourne MN, Duhig SJ, Timmins RG, Williams MD, Opar DA, Al Najjar A, Kerr GK, Shield AJ. Impact of the Nordic hamstring and hip extension exercises on hamstring architecture and morphology: implications for injury prevention. Br J Sports Med 2017;51(5):469–477. doi:10.1136/bjsports-2016-096130 PMID 27660368
 - Bourne MN, Timmins RG, Opar DA, Pizzari T, Ruddy JD, Sims C, Williams MD, Shield AJ. An Evidence-Based Framework for Strengthening Exercises to Prevent Hamstring Injury. Sports Med 2018;48(2):251–267. doi:10.1007/s40279-017-0796-x PMID 29116573
@@ -106,6 +107,7 @@ VALD-viðmið, endurheimt eftir leik, ísómetrískar æfingar, viðmið í þol
 - Krause DA, Boyd MS, Hager AN, Smoyer EC, Thompson AT, Hollman JH. Reliability and accuracy of a goniometer mobile device application for video measurement of the functional movement screen deep squat test. Int J Sports Phys Ther 2015;10(1):37–44. PMID 25709861
 - Krustrup P, Mohr M, Amstrup T, Rysgaard T, Johansen J, Steensberg A, Pedersen PK, Bangsbo J. The yo-yo intermittent recovery test: physiological response, reliability, and validity. Med Sci Sports Exerc 2003;35(4):697–705. doi:10.1249/01.MSS.0000058441.94520.32 PMID 12673156
 - Krzysztofik M, Spieszny M, Trybulski R, Wilk M, Pisz A, Kolinger D, Filip-Stachnik A, Stastny P. Acute Effects of Isometric Conditioning Activity on the Viscoelastic Properties of Muscles and Sprint and Jumping Performance in Handball Players. J Strength Cond Res 2023;37(7):1486–1494. doi:10.1519/JSC.0000000000004404 PMID 36752742
+- Lacome M, Simpson BM, Cholley Y, Lambert P, Buchheit M. Small-Sided Games in Elite Soccer: Does One Size Fit All? Int J Sports Physiol Perform 2018;13(5):568–576. doi:10.1123/ijspp.2017-0214 PMID 28714774
 - Lauder MA, Lake JP. Biomechanical comparison of unilateral and bilateral power snatch lifts. J Strength Cond Res 2008;22(3):653–660. doi:10.1519/JSC.0b013e3181660c89 PMID 18438258
 - Lauersen JB, Andersen TE, Andersen LB. Strength training as superior, dose-dependent and safe prevention of acute and overuse sports injuries: a systematic review, qualitative analysis and meta-analysis. Br J Sports Med 2018;52(24):1557–1563. doi:10.1136/bjsports-2018-099078 PMID 30131332
 - Lesinski M, Muehlbauer T, Büsch D, Granacher U. [Effects of complex training on strength and speed performance in athletes: a systematic review. Effects of complex training on athletic performance]. Sportverletz Sportschaden 2014;28(2):85–107. doi:10.1055/s-0034-1366145 PMID 24599505
@@ -210,9 +212,9 @@ VALD-viðmið, endurheimt eftir leik, ísómetrískar æfingar, viðmið í þol
 Þessar standa í reglunum eins og þær voru skrifaðar. Ekki var hægt að festa þær við eina grein og ekki er giskað á þær. Þú ákveður hvort þeim er skipt út.
 
 - **Bishop 2020**: Athugasemdin í kóðanum gefur J Athl Train 2020;55:1062–1070, sem passar ekki við neina færslu á PubMed. Bishop birti nokkrar greinar um ósamhverfu um 2020 og ekki er skráð hver þeirra er átt við.
-- **Buchheit 2019**: Vitnað í vegna skiptingar í hlaupa- og hreyfidaga; Buchheit skrifaði nokkur verk um þetta um 2019 (sum í bókum) og ekki er skráð hvert er átt við.
+- **Buchheit 2019**: Vitnað í vegna skiptingar í hlaupa- og hreyfidaga og ráða um vöktun; Buchheit skrifaði nokkur verk um þetta um 2019 (sum í bókum) og ekki er skráð hvert er átt við. Þar sem kóðinn sagði að dagur í þröngu rými væri léttur á háhraðahlaupi er nú vitnað í Lacome 2018.
 - **Buchheit 2024**: Vitnað í sem „The 11 Principles of Microcycle Periodization“; engin slík grein fannst á PubMed eða Crossref.
-- **Cazorla 1990**: Frönsk útgáfa um vallarpróf (VAM-Eval) sem PubMed og Crossref skrá ekki; ekki borin saman við frumheimild.
+- **Cazorla 1990**: Frönsk útgáfa um vallarpróf (VAM-Eval) sem PubMed og Crossref skrá ekki. Hún stendur sem uppruni prófsins; réttmæti vallarprófsins vísar nú í Bok & Foster 2021.
 - **Dietz & Peterson 2012**: Bók: Dietz C, Peterson B. Triphasic Training. Bye Dietz Sport Enterprise, 2012. Þjálfunaraðferð, ekki rannsókn; kóðinn nefnir hana sem uppruna aðferðarinnar og segir að hún sé ekki prófuð í rannsóknum.
 - **Epley 1985**: Tafla úr þjálfun (Epley B. Poundage chart. Boyd Epley Workout, 1985), ekki tímaritsgrein. Hún stendur sem uppruni formúlunnar; nákvæmni formúlunnar er prófuð í Mayhew 2008 og García-Ramos 2019.
 - **Gabbett 2017**: Gabbett var meðhöfundur að nokkrum greinum um álagsvöktun 2017 og ekki er skráð hver er átt við. Þekktasta greinin um skammtíma- og langtímaálag er Gabbett 2016.
@@ -226,6 +228,8 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar.
 - Altarriba-Bartes A, Peña J, Vicens-Bordas J, Milà-Villaroel R, Calleja-González J. Post-competition recovery strategies in elite male soccer players. Effects on performance: A systematic review and meta-analysis. PLoS One 2020;15(10):e0240135. doi:10.1371/journal.pone.0240135 PMID 33007044
 - Baar K. Stress Relaxation and Targeted Nutrition to Treat Patellar Tendinopathy. Int J Sport Nutr Exerc Metab 2019;29(4):453–457. doi:10.1123/ijsnem.2018-0231 PMID 30299199
 - Beckham G, Mizuguchi S, Carter C, Sato K, Ramsey M, Lamont H, Hornsby G, Haff G, Stone M. Relationships of isometric mid-thigh pull variables to weightlifting performance. J Sports Med Phys Fitness 2013;53(5):573–581. PMID 23903539
+- Bellenger CR, Fuller JT, Nelson MJ, Hartland M, Buckley JD, Debenedictis TA. Predicting maximal aerobic speed through set distance time-trials. Eur J Appl Physiol 2015;115(12):2593–2598. doi:10.1007/s00421-015-3233-6 PMID 26242778
+- Berthon P, Fellmann N, Bedu M, Beaune B, Dabonneville M, Coudert J, Chamoux A. A 5-min running field test as a measurement of maximal aerobic velocity. Eur J Appl Physiol Occup Physiol 1997;75(3):233–238. doi:10.1007/s004210050153 PMID 9088842
 - Blazevich AJ, Babault N. Post-activation Potentiation Versus Post-activation Performance Enhancement in Humans: Historical Perspective, Underlying Mechanisms, and Current Issues. Front Physiol 2019;10:1359. doi:10.3389/fphys.2019.01359 PMID 31736781
 - Bojsen-Møller J, Magnusson SP, Rasmussen LR, Kjaer M, Aagaard P. Muscle performance during maximal isometric and dynamic contractions is influenced by the stiffness of the tendinous structures. J Appl Physiol (1985) 2005;99(3):986–994. doi:10.1152/japplphysiol.01305.2004 PMID 15860680
 - Brownstein CG, Dent JP, Parker P, Hicks KM, Howatson G, Goodall S, Thomas K. Etiology and Recovery of Neuromuscular Fatigue following Competitive Soccer Match-Play. Front Physiol 2017;8:831. doi:10.3389/fphys.2017.00831 PMID 29118716
@@ -236,8 +240,10 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar.
 - Cook JL, Rio E, Purdam CR, Docking SI. Revisiting the continuum model of tendon pathology: what is its merit in clinical practice and research? Br J Sports Med 2016;50(19):1187–1191. doi:10.1136/bjsports-2015-095422 PMID 27127294
 - Cormack SJ, Newton RU, McGuigan MR. Neuromuscular and endocrine responses of elite players to an Australian rules football match. Int J Sports Physiol Perform 2008;3(3):359–374. doi:10.1123/ijspp.3.3.359 PMID 19211947
 - D'Emanuele S, Maffiuletti NA, Tarperi C, Rainoldi A, Schena F, Boccia G. Rate of Force Development as an Indicator of Neuromuscular Fatigue: A Scoping Review. Front Hum Neurosci 2021;15:701916. doi:10.3389/fnhum.2021.701916 PMID 34305557
+- Delaney JA, Thornton HR, Pryor JF, Stewart AM, Dascombe BJ, Duthie GM. Peak Running Intensity of International Rugby: Implications for Training Prescription. Int J Sports Physiol Perform 2017;12(8):1039–1045. doi:10.1123/ijspp.2016-0469 PMID 27967337
 - DeWeese BH, Suchomel TJ, Serrano AJ, Burton JD, Scruggs SK, Taber CB. Pull from the knee. Strength Cond J 2016;38(1):79–85. doi:10.1519/SSC.0000000000000194
 - Doeven SH, Brink MS, Kosse SJ, Lemmink KAPM. Postmatch recovery of physical performance and biochemical markers in team ball sports: a systematic review. BMJ Open Sport Exerc Med 2018;4(1):e000264. doi:10.1136/bmjsem-2017-000264 PMID 29527320
+- Dos'Santos T, McBurnie A, Thomas C, Jones PA, Harper D. Attacking Agility Actions: Match Play Contextual Applications With Coaching and Technique Guidelines. Strength Cond J 2022;44(5):102–118. doi:10.1519/SSC.0000000000000697
 - Drayton AM, Hamad MJ, Spyrou K. The Time Course of Postmatch Physical Impairments in Professional Soccer: A Systematic Review. J Strength Cond Res 2025;39(11):e1345–e1355. doi:10.1519/JSC.0000000000005252 PMID 40845278
 - Edwards T, Spiteri T, Piggott B, Bonhotal J, Haff GG, Joyce C. Monitoring and Managing Fatigue in Basketball. Sports (Basel) 2018;6(1):19. doi:10.3390/sports6010019 PMID 29910323
 - Goom TS, Malliaras P, Reiman MP, Purdam CR. Proximal Hamstring Tendinopathy: Clinical Aspects of Assessment and Management. J Orthop Sports Phys Ther 2016;46(6):483–493. doi:10.2519/jospt.2016.5986 PMID 27084841
@@ -248,6 +254,7 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar.
 - Ju W, Doran D, Hawkins R, Gómez-Díaz A, Martin-Garcia A, Ade J, Laws A, Evans M, Bradley P. Contextualised peak periods of play in English Premier League matches. Biol Sport 2022;39(4):973–983. doi:10.5114/biolsport.2022.112083
 - Kubo K, Kanehisa H, Fukunaga T. Effects of different duration isometric contractions on tendon elasticity in human quadriceps muscles. J Physiol 2001;536(Pt 2):649–655. doi:10.1111/j.1469-7793.2001.0649c.xd PMID 11600697
 - Kyritsis P, Bahr R, Landreau P, Miladi R, Witvrouw E. Likelihood of ACL graft rupture: not meeting six clinical discharge criteria before return to sport is associated with a four times greater risk of rupture. Br J Sports Med 2016;50(15):946–951. doi:10.1136/bjsports-2015-095908 PMID 27215935
+- Lanza MB, Balshaw TG, Folland JP. Is the joint-angle specificity of isometric resistance training real? And if so, does it have a neural basis? Eur J Appl Physiol 2019;119(11-12):2465–2476. doi:10.1007/s00421-019-04229-z PMID 31522276
 - Léger LA, Lambert J. A maximal multistage 20-m shuttle run test to predict VO2 max. Eur J Appl Physiol Occup Physiol 1982;49(1):1–12. doi:10.1007/BF00428958 PMID 7201922
 - Lum D, Barbosa TM, Joseph R, Balasekaran G. Effects of two isometric strength training methods on jump and sprint performances: a randomized controlled trial. J Sci Sport Exerc 2021;3(2):115–124. doi:10.1007/s42978-020-00095-w
 - Lum D, Comfort P, Oranchuk DJ. Getting stronger without moving an inch: a randomized controlled trial utilizing maximal isometric co-contraction. J Funct Morphol Kinesiol 2026;11(2):221. doi:10.3390/jfmk11020221
@@ -260,7 +267,9 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar.
 - Neyroud D, Kayser B, Place N. Are There Critical Fatigue Thresholds? Aggregated vs. Individual Data. Front Physiol 2016;7:376. doi:10.3389/fphys.2016.00376 PMID 27630575
 - Opar DA, Williams MD, Timmins RG, Hickey J, Duhig SJ, Shield AJ. Eccentric hamstring strength and hamstring injury risk in Australian footballers. Med Sci Sports Exerc 2015;47(4):857–865. doi:10.1249/MSS.0000000000000465 PMID 25137368
 - Petersen J, Thorborg K, Nielsen MB, Budtz-Jørgensen E, Hölmich P. Preventive effect of eccentric training on acute hamstring injuries in men's soccer: a cluster-randomized controlled trial. Am J Sports Med 2011;39(11):2296–2303. doi:10.1177/0363546511419277 PMID 21825112
+- Petridis L, Utczás K, Tróznai Z, Kalabiska I, Pálinkás G, Szabó T. Vertical Jump Performance in Hungarian Male Elite Junior Soccer Players. Res Q Exerc Sport 2019;90(2):251–257. doi:10.1080/02701367.2019.1588934 PMID 30901527
 - Querido SM, Radaelli R, Brito J, Vaz JR, Freitas SR. Analysis of Recovery Methods' Efficacy Applied up to 72 Hours Postmatch in Professional Football: A Systematic Review With Graded Recommendations. Int J Sports Physiol Perform 2022;17(9):1326–1342. doi:10.1123/ijspp.2022-0038 PMID 35961644
+- Quintana-Cepedal M, Vicente-Rodríguez G, Crespo I, Olmedillas H. Is hip adductor or abductor strength in healthy athletes associated with future groin pain? A systematic review and meta-analysis. Br J Sports Med 2025;59(7):501–509. doi:10.1136/bjsports-2024-108836 PMID 39532315
 - Rio E, Kidgell D, Purdam C, Gaida J, Moseley GL, Pearce AJ, Cook J. Isometric exercise induces analgesia and reduces inhibition in patellar tendinopathy. Br J Sports Med 2015;49(19):1277–1283. doi:10.1136/bjsports-2014-094386 PMID 25979840
 - Di Salvo V, Baron R, Tschan H, Calderon Montero FJ, Bachl N, Pigozzi F. Performance characteristics according to playing position in elite soccer. Int J Sports Med 2007;28(3):222–227. doi:10.1055/s-2006-924294 PMID 17024626
 - Schoenfeld BJ, Grgic J, Van Every DW, Plotkin DL. Loading Recommendations for Muscle Strength, Hypertrophy, and Local Endurance: A Re-Examination of the Repetition Continuum. Sports (Basel) 2021;9(2). doi:10.3390/sports9020032 PMID 33671664
@@ -268,27 +277,17 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar.
 - Silbernagel KG, Crossley KM. A Proposed Return-to-Sport Program for Patients With Midportion Achilles Tendinopathy: Rationale and Implementation. J Orthop Sports Phys Ther 2015;45(11):876–886. doi:10.2519/jospt.2015.5885 PMID 26390272
 - Skiba PF, Chidnok W, Vanhatalo A, Jones AM. Modeling the expenditure and reconstitution of work capacity above critical power. Med Sci Sports Exerc 2012;44(8):1526–1532. doi:10.1249/MSS.0b013e3182517a80 PMID 22382171
 - Tam KT, Baar K. Using load to improve tendon/ligament tissue engineering and develop novel treatments for tendinopathy. Matrix Biol 2025;135:39–54. doi:10.1016/j.matbio.2024.12.001
+- Thomas K, Dent J, Howatson G, Goodall S. Etiology and Recovery of Neuromuscular Fatigue after Simulated Soccer Match Play. Med Sci Sports Exerc 2017;49(5):955–964. doi:10.1249/MSS.0000000000001196 PMID 28060035
 - Tillin NA, Bishop D. Factors modulating post-activation potentiation and its effect on performance of subsequent explosive activities. Sports Med 2009;39(2):147–166. doi:10.2165/00007256-200939020-00004 PMID 19203135
 - Tillin NA, Folland JP. Maximal and explosive strength training elicit distinct neuromuscular adaptations, specific to the training stimulus. Eur J Appl Physiol 2014;114(2):365–374. doi:10.1007/s00421-013-2781-x PMID 24292019
+- Vigneswaran A, Serner A, Farooq A, Kipps C, Mosler AB. Is limb asymmetry an intrinsic risk factor for time-loss groin injury in professional male soccer players? Phys Ther Sport 2025;71:53–60. doi:10.1016/j.ptsp.2024.11.008 PMID 39644706
+- Wik EH, McAuliffe S, Read PJ. Examination of Physical Characteristics and Positional Differences in Professional Soccer Players in Qatar. Sports (Basel) 2019;7(1):9. doi:10.3390/sports7010009 PMID 30602694
 
 ### Óstaðfestar tilvísanir (aðrar heimildir)
 
 Þessar standa í reglunum eins og þær voru skrifaðar. Ekki var hægt að festa þær við eina grein og ekki er giskað á þær. Þú ákveður hvort þeim er skipt út.
 
-- **Buchheit 2013**: Buchheit birti nokkrar greinar 2013, þar á meðal yfirlitsgreinina um HIIT með Laursen í tveimur hlutum; ekki er skráð hvaða grein er átt við.
 - **Buchheit 2014**: Buchheit birti nokkrar greinar um fótbolta 2014 (sprettfræði, endurteknir sprettir, hlaup í leik); ekki er skráð hver er átt við.
-- **Delaney 2017**: Delaney birti nokkrar greinar um hámarks hlaupaákefð um 2017 (rugby league, rugby union, fótbolti); ekki er skráð hver er átt við.
-- **Dos'Santos 2022**: Dos'Santos var meðhöfundur að nokkrum greinum 2022 um stefnubreytingar og snúninga í leik; ekki er skráð hver er átt við.
-- **Esteve 2018**: Esteve 2018 fjallar um styrk aðlægra vöðva og fyrri náraverki hjá 303 leikmönnum; hún gefur engin mörk fyrir mun á hægri og vinstri, sem kóðinn vitnar í hana fyrir.
-- **Hägglund 2013**: Hägglund 2013 (UEFA-rannsóknin) sýnir fyrri meiðsli og spyrnufót sem áhættuþætti; hún mælir ekki styrk og styður því ekki lesturinn á styrkbili í nára.
-- **King 2018**: Greinar King frá 2018 um náraverki fjalla um endurhæfingu og hreyfifræði; engin sýnir veikleika aðlægra vöðva sem áhættuþátt, sem kóðinn vitnar í fyrir.
-- **Kotsifaki 2024**: Engin grein eftir Kotsifaki (með Heiderscheit og Buchheit) frá 2024 um styrk í nára fannst á PubMed eða Crossref.
-- **Lanza 2019**: Tvær ólíkar greinar eru nefndar Lanza 2019. Sú með fullum höfundalista (Lanza, Castelli … Cyrino) fannst ekki. Lanza, Balshaw & Folland 2019 (Eur J Appl Physiol, horn liðar) er til en er ekki endilega sú sem átt er við.
-- **Marques & Buchheit 2026**: „Jump Height Lies“, Sport Performance & Science Reports #293. PubMed og Crossref skrá ekki SPSR, svo hún var ekki borin saman við færslu.
-- **Petrigna 2019**: Petrigna 2019 er yfirlit yfir aðferðir í hoppprófum hjá unglingum; hún gefur engin gildi fyrir afl í hoppi í hópíþróttum, sem kóðinn vitnar í hana fyrir.
-- **Pettitt 2016**: Pettitt 2016 fjallar um critical speed úr 3 mínútna hámarksprófi, ekki MAS úr 4 mínútna hlaupi, sem kóðinn vitnar í hana fyrir.
-- **Power 2023**: Engin grein eftir Power frá 2023 um stigvaxandi ísómetrískt álag við sinakvilla fannst á PubMed eða Crossref.
-- **Read 2022**: Engin grein eftir Read frá 2022 með NordBord-viðmiðum fyrir fullorðna karla í fótbolta fannst; næst kemst áreiðanleikarannsókn Bishop o.fl. 2022.
-- **Sandford 2019**: Greinar Sandford frá 2019 fjalla um 800 m og 1500 m hlaupara; engin gefur viðmið um sprettihraða í fótbolta og ekki er skráð hver er átt við.
-- **Thomas 2017**: Tvær greinar frá 2017 passa: Thomas o.fl. (Med Sci Sports Exerc, hermdur leikur) og Brownstein … Thomas (Front Physiol, keppnisleikur). Kóðinn notar „Thomas 2017“ um báðar; ekki er ljóst hvor er átt við hverju sinni.
-- **Toth 2019**: Engin grein eftir Toth frá 2019 um hoppviðmið í unglingafótbolta fannst á PubMed eða Crossref.
+- **Kotsifaki 2024**: Grein fyrir fagfólk (Buchheit, Heiderscheit & Kotsifaki, Aspetar Sports Medicine Journal) sem PubMed og Crossref skrá ekki. Lesturinn á nára vísar nú fyrst í safngreininguna Quintana-Cepedal 2025, sem segir það sama.
+- **Marques & Buchheit 2026**: „Jump Height Lies“, Sport Performance & Science Reports #293. PubMed og Crossref skrá ekki SPSR, svo hún var ekki borin saman við færslu. Hún stendur sem heimild fyrir eigin tölum; ritrýnda leikrannsóknin við hlið hennar er Cormack, Newton & McGuigan 2008.
+- **Power 2023**: Power, Haddad, Wallis & Baar (2023), Journal of Elite Sport Performance: endurhæfingarsíðan fyrir aftanlæri nefnir sömu heimild. PubMed og Crossref skrá ekki tímaritið, svo hún var ekki borin saman við færslu.

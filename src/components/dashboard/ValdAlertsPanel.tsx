@@ -1066,8 +1066,8 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
               )}
               <p className="mt-1 text-[10px] leading-snug text-slate-400">
                 {lang === "IS"
-                  ? `Of gamalt: aftanlæri eftir ${VALD_FLAG_WINDOW_DAYS.nordbordDays} daga, nári eftir ${VALD_FLAG_WINDOW_DAYS.forceframeDays} daga (þjálfunarregla). Styrkmunur: Opar 2015, Hägglund 2013.`
-                  : `Too old: hamstring after ${VALD_FLAG_WINDOW_DAYS.nordbordDays} days, groin after ${VALD_FLAG_WINDOW_DAYS.forceframeDays} days (a coaching rule). Strength gap: Opar 2015, Hägglund 2013.`}
+                  ? `Of gamalt: aftanlæri eftir ${VALD_FLAG_WINDOW_DAYS.nordbordDays} daga, nári eftir ${VALD_FLAG_WINDOW_DAYS.forceframeDays} daga (þjálfunarregla). Styrkur: Opar 2015 (aftanlæri), Quintana-Cepedal 2025 (nári).`
+                  : `Too old: hamstring after ${VALD_FLAG_WINDOW_DAYS.nordbordDays} days, groin after ${VALD_FLAG_WINDOW_DAYS.forceframeDays} days (a coaching rule). Strength: Opar 2015 (hamstring), Quintana-Cepedal 2025 (groin).`}
               </p>
             </div>
           )}

@@ -52,9 +52,9 @@ export const ATHLETE_LEVERS: Record<QualityId, Lever> = {
     cite: "McBurnie 2022",
   },
   work_capacity: {
-    en: "Repeated-sprint and high-intensity interval conditioning raise the high-speed running he can sustain across a match.",
-    is: "Endurteknir sprettir og háákafa-þrekþjálfun hækka háhraðahlaupið sem hann heldur út allan leikinn.",
-    cite: "Buchheit 2013",
+    en: "Repeated-sprint and high-intensity interval conditioning raise running fitness; more high-speed running in matches can follow, but does not always.",
+    is: "Endurteknir sprettir og háákafa-þrekþjálfun auka hlaupaþol; meira háhraðahlaup í leik getur fylgt, en gerir það ekki alltaf.",
+    cite: "Buchheit & Laursen 2013",
   },
   mechanical_power: {
     en: "Build tolerance for high-cost mechanical actions — plyometrics, eccentric/decel work and multidirectional drills raise the density of cuts, accelerations and decelerations he can produce and absorb.",
@@ -62,8 +62,8 @@ export const ATHLETE_LEVERS: Record<QualityId, Lever> = {
     cite: "McBurnie 2022 · Buchheit 2014",
   },
   peak_demands: {
-    en: "Expose him to game-simulation on his own worst-case demands — repeated high-intensity blocks at match peak-load density — so the most intense passages feel routine.",
-    is: "Láttu hann mæta leik-eftirlíkingu á eigin versta-tilfellis kröfum — endurteknar háákafa-lotur á hámarks-álagsþéttleika leiks — svo ákafustu kaflarnir verði vanabundnir.",
+    en: "Expose him to game-simulation on his own worst-case demands — repeated high-intensity blocks at the intensity of the match's most demanding passages — so he is prepared for them.",
+    is: "Láttu hann mæta leik-eftirlíkingu á eigin versta-tilfellis kröfum — endurteknar háákafa-lotur á ákefð erfiðustu kafla leiksins — svo hann sé undirbúinn fyrir þá.",
     cite: "Delaney 2017",
   },
   aerobic_endurance: {

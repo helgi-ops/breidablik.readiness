@@ -25,7 +25,7 @@
  */
 
 export const PHASE_CHANGE_CITATION =
-  "Gathercole et al. 2015 (IJSPP, Table 2 reliability); Marques & Buchheit 2026 (Jump Height Lies)";
+  "Gathercole et al. 2015 (IJSPP, Table 2 reliability); Marques & Buchheit 2026 (Jump Height Lies); Cormack, Newton & McGuigan 2008 (FT:CT)";
 
 /**
  * A change must exceed ~1.5× the metric's typical measurement error (its CV) to

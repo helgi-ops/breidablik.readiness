@@ -135,6 +135,17 @@ describe("rule references", () => {
     expect(findRefByShort("Hernández-Preciado 2018")?.key).toBe("hernandezpreciado2018");
   });
 
+  it("VALD, load, recovery and isometric citations name verified papers (lot 1b)", () => {
+    const all = [...codeCitations(), ...citationsUnder(OTHER_CITATION_SOURCES)];
+    for (const s of ["Read 2022", "Toth 2019", "Petrigna 2019", "Esteve 2018", "Buchheit 2013"]) expect(all).not.toContain(s);
+    const iso = readFileSync(join(ROOT, "src/lib/micropulse/isometrics/protocols.ts"), "utf8");
+    expect(iso).not.toMatch(/Castelli|Cyrino/);
+    expect(findRefByShort("Lanza, Balshaw, Folland (2019)".replace(" (2019)", " 2019"))?.key).toBe("lanza2019");
+    expect(findRefByShort("Quintana-Cepedal 2025")?.key).toBe("quintanacepedal2025");
+    expect(findRefByShort("Hägglund 2013")?.key).toBe("hagglund2013");
+    expect(findRefByShort("Thomas 2017")?.cite).toMatch(/Med Sci Sports Exerc/);
+  });
+
   it("the catalogue's references section lists each of its citations in full, or as unresolved", () => {
     expect(CATALOGUE_REFS).not.toBe("");
     for (const s of citationsIn(RULES_PART)) {

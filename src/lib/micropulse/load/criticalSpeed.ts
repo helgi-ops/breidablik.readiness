@@ -484,7 +484,7 @@ const MAS_ZONES: Array<{ key: string; pct: number; en: string; is: string }> = [
 ];
 const CS_FROM_MAS_LOW = 0.85, CS_FROM_MAS_HIGH = 0.90; // provisional CS band vs MAS
 const REP_SECONDS = [15, 30, 45];                      // rep durations coaches design intervals around
-const FIELD_TEST_CITATION = "Léger & Boucher 1980 (MAS) · Buchheit 2013 (speed-based conditioning) · Pettitt 2016 (CS↔MAS)";
+const FIELD_TEST_CITATION = "Léger & Boucher 1980 (MAS) · Buchheit & Laursen 2013 (speed-based conditioning) · Pettitt 2016 (critical speed)";
 
 export interface FieldTestZone {
   key: string; label: Bi; pct: number; kmh: number; mPerMin: number;

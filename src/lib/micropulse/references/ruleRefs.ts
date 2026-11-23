@@ -193,6 +193,23 @@ export const RULE_REFS: Record<string, GoalRef> = {
   // study; Cormack 2008 is the primary study for FT:CT (2026-11-23).
   edwards2018: { key: "edwards2018", short: "Edwards 2018", cite: "Edwards T, Spiteri T, Piggott B, Bonhotal J, Haff GG, Joyce C. Monitoring and Managing Fatigue in Basketball. Sports (Basel) 2018;6(1):19. doi:10.3390/sports6010019 PMID 29910323", verifiedFrom: "full_text" },
   cormacknewtonmcguigan2008: { key: "cormacknewtonmcguigan2008", short: "Cormack, Newton & McGuigan 2008", cite: "Cormack SJ, Newton RU, McGuigan MR. Neuromuscular and endocrine responses of elite players to an Australian rules football match. Int J Sports Physiol Perform 2008;3(3):359–374. doi:10.1123/ijspp.3.3.359 PMID 19211947", verifiedFrom: "abstract" },
+  // Lot 1b (2026-11-23): VALD, load, recovery and isometric citations. Lanza 2019 is the real joint-angle paper; the
+  // full-author-list "Lanza … Cyrino 2019" shoulder reference in isometrics/protocols.ts matched no record and was replaced.
+  lacome2018: { key: "lacome2018", short: "Lacome 2018", cite: "Lacome M, Simpson BM, Cholley Y, Lambert P, Buchheit M. Small-Sided Games in Elite Soccer: Does One Size Fit All? Int J Sports Physiol Perform 2018;13(5):568–576. doi:10.1123/ijspp.2017-0214 PMID 28714774", verifiedFrom: "abstract" },
+  bokfoster2021: { key: "bokfoster2021", short: "Bok & Foster 2021", cite: "Bok D, Foster C. Applicability of Field Aerobic Fitness Tests in Soccer: Which One to Choose? J Funct Morphol Kinesiol 2021;6(3):69. doi:10.3390/jfmk6030069 PMID 34449680", verifiedFrom: "abstract" },
+  vigneswaran2025: { key: "vigneswaran2025", short: "Vigneswaran 2025", cite: "Vigneswaran A, Serner A, Farooq A, Kipps C, Mosler AB. Is limb asymmetry an intrinsic risk factor for time-loss groin injury in professional male soccer players? Phys Ther Sport 2025;71:53–60. doi:10.1016/j.ptsp.2024.11.008 PMID 39644706", verifiedFrom: "abstract" },
+  quintanacepedal2025: { key: "quintanacepedal2025", short: "Quintana-Cepedal 2025", cite: "Quintana-Cepedal M, Vicente-Rodríguez G, Crespo I, Olmedillas H. Is hip adductor or abductor strength in healthy athletes associated with future groin pain? A systematic review and meta-analysis. Br J Sports Med 2025;59(7):501–509. doi:10.1136/bjsports-2024-108836 PMID 39532315", verifiedFrom: "abstract" },
+  lanza2019: { key: "lanza2019", short: "Lanza 2019", cite: "Lanza MB, Balshaw TG, Folland JP. Is the joint-angle specificity of isometric resistance training real? And if so, does it have a neural basis? Eur J Appl Physiol 2019;119(11-12):2465–2476. doi:10.1007/s00421-019-04229-z PMID 31522276", verifiedFrom: "abstract" },
+  wik2019: { key: "wik2019", short: "Wik 2019", cite: "Wik EH, McAuliffe S, Read PJ. Examination of Physical Characteristics and Positional Differences in Professional Soccer Players in Qatar. Sports (Basel) 2019;7(1):9. doi:10.3390/sports7010009 PMID 30602694", verifiedFrom: "full_text" },
+  thomas2017: { key: "thomas2017", short: "Thomas 2017", cite: "Thomas K, Dent J, Howatson G, Goodall S. Etiology and Recovery of Neuromuscular Fatigue after Simulated Soccer Match Play. Med Sci Sports Exerc 2017;49(5):955–964. doi:10.1249/MSS.0000000000001196 PMID 28060035", verifiedFrom: "abstract" },
+  petridis2019: { key: "petridis2019", short: "Petridis 2019", cite: "Petridis L, Utczás K, Tróznai Z, Kalabiska I, Pálinkás G, Szabó T. Vertical Jump Performance in Hungarian Male Elite Junior Soccer Players. Res Q Exerc Sport 2019;90(2):251–257. doi:10.1080/02701367.2019.1588934 PMID 30901527", verifiedFrom: "abstract" },
+  berthon1997: { key: "berthon1997", short: "Berthon 1997", cite: "Berthon P, Fellmann N, Bedu M, Beaune B, Dabonneville M, Coudert J, Chamoux A. A 5-min running field test as a measurement of maximal aerobic velocity. Eur J Appl Physiol Occup Physiol 1997;75(3):233–238. doi:10.1007/s004210050153 PMID 9088842", verifiedFrom: "abstract" },
+  bellenger2015: { key: "bellenger2015", short: "Bellenger 2015", cite: "Bellenger CR, Fuller JT, Nelson MJ, Hartland M, Buckley JD, Debenedictis TA. Predicting maximal aerobic speed through set distance time-trials. Eur J Appl Physiol 2015;115(12):2593–2598. doi:10.1007/s00421-015-3233-6 PMID 26242778", verifiedFrom: "abstract" },
+  pettitt2016: { key: "pettitt2016", short: "Pettitt 2016", cite: "Pettitt RW. Applying the Critical Speed Concept to Racing Strategy and Interval Training Prescription. Int J Sports Physiol Perform 2016;11(7):842–847. doi:10.1123/ijspp.2016-0001 PMID 27197057", verifiedFrom: "abstract" },
+  hagglund2013: { key: "hagglund2013", short: "Hägglund 2013", cite: "Hägglund M, Waldén M, Ekstrand J. Risk factors for lower extremity muscle injury in professional soccer: the UEFA Injury Study. Am J Sports Med 2013;41(2):327–335. doi:10.1177/0363546512470634 PMID 23263293", verifiedFrom: "abstract" },
+  king2018: { key: "king2018", short: "King 2018", cite: "King E, Franklyn-Miller A, Richter C, O'Reilly E, Doolan M, Moran K, Strike S, Falvey É. Clinical and biomechanical outcomes of rehabilitation targeting intersegmental control in athletic groin pain: prospective cohort of 205 patients. Br J Sports Med 2018;52(16):1054–1062. doi:10.1136/bjsports-2016-097089 PMID 29550754", verifiedFrom: "abstract" },
+  delaney2017: { key: "delaney2017", short: "Delaney 2017", cite: "Delaney JA, Thornton HR, Pryor JF, Stewart AM, Dascombe BJ, Duthie GM. Peak Running Intensity of International Rugby: Implications for Training Prescription. Int J Sports Physiol Perform 2017;12(8):1039–1045. doi:10.1123/ijspp.2016-0469 PMID 27967337", verifiedFrom: "abstract" },
+  dossantos2022: { key: "dossantos2022", short: "Dos'Santos 2022", cite: "Dos'Santos T, McBurnie A, Thomas C, Jones PA, Harper D. Attacking Agility Actions: Match Play Contextual Applications With Coaching and Technique Guidelines. Strength Cond J 2022;44(5):102–118. doi:10.1519/SSC.0000000000000697", verifiedFrom: "record" },
   // Lot 1a (2026-11-23): sources for strength-code citations that named no findable paper; sites reworded to what
   // each paper shows.
   spiering2021: { key: "spiering2021", short: "Spiering 2021", cite: "Spiering BA, Mujika I, Sharp MA, Foulis SA. Maintaining Physical Performance: The Minimal Dose of Exercise Needed to Preserve Endurance and Strength Over Time. J Strength Cond Res 2021;35(5):1449–1458. doi:10.1519/JSC.0000000000003964 PMID 33629972", verifiedFrom: "abstract" },
@@ -254,16 +271,16 @@ export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
     is: "Athugasemdin í kóðanum gefur J Athl Train 2020;55:1062–1070, sem passar ekki við neina færslu á PubMed. Bishop birti nokkrar greinar um ósamhverfu um 2020 og ekki er skráð hver þeirra er átt við.",
   },
   "Buchheit 2019": {
-    en: "Cited for the locomotor/mechanical day framework; Buchheit wrote several pieces on this around 2019 (some in books), and which one is meant is not recorded.",
-    is: "Vitnað í vegna skiptingar í hlaupa- og hreyfidaga; Buchheit skrifaði nokkur verk um þetta um 2019 (sum í bókum) og ekki er skráð hvert er átt við.",
+    en: "Cited for the locomotor/mechanical day framework and for monitoring advice; Buchheit wrote several pieces on this around 2019 (some in books), and which one is meant is not recorded. Where the code said a tight-space day is light on high-speed running, it now cites Lacome 2018.",
+    is: "Vitnað í vegna skiptingar í hlaupa- og hreyfidaga og ráða um vöktun; Buchheit skrifaði nokkur verk um þetta um 2019 (sum í bókum) og ekki er skráð hvert er átt við. Þar sem kóðinn sagði að dagur í þröngu rými væri léttur á háhraðahlaupi er nú vitnað í Lacome 2018.",
   },
   "Buchheit 2024": {
     en: "Cited as \"The 11 Principles of Microcycle Periodization\"; no such paper found on PubMed or Crossref.",
     is: "Vitnað í sem „The 11 Principles of Microcycle Periodization“; engin slík grein fannst á PubMed eða Crossref.",
   },
   "Cazorla 1990": {
-    en: "A French field-test publication (VAM-Eval) that PubMed and Crossref do not index; not checked against the source.",
-    is: "Frönsk útgáfa um vallarpróf (VAM-Eval) sem PubMed og Crossref skrá ekki; ekki borin saman við frumheimild.",
+    en: "A French field-test publication (VAM-Eval) that PubMed and Crossref do not index. It stays as the protocol's origin; the field test's validity now cites Bok & Foster 2021.",
+    is: "Frönsk útgáfa um vallarpróf (VAM-Eval) sem PubMed og Crossref skrá ekki. Hún stendur sem uppruni prófsins; réttmæti vallarprófsins vísar nú í Bok & Foster 2021.",
   },
   "Dietz & Peterson 2012": {
     en: "A book: Dietz C, Peterson B. Triphasic Training. Bye Dietz Sport Enterprise, 2012. A coaching method, not a trial; the code names it as the method's source and says it is not trial-tested.",
@@ -281,73 +298,25 @@ export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
     en: "A book: Lombardi VP. Beginning Weight Training. W.C. Brown, 1989. It stays as the formula's origin; the formula's accuracy is checked in Mayhew 2008 and Garc\u00eda-Ramos 2019.",
     is: "B\u00f3k: Lombardi VP. Beginning Weight Training. W.C. Brown, 1989. H\u00fan stendur sem uppruni form\u00falunnar; n\u00e1kv\u00e6mni form\u00falunnar er pr\u00f3fu\u00f0 \u00ed Mayhew 2008 og Garc\u00eda-Ramos 2019.",
   },
-  "Buchheit 2013": {
-    en: "Buchheit published several 2013 papers, including the two-part HIIT review with Laursen (Part I and Part II); which one this lever means is not recorded.",
-    is: "Buchheit birti nokkrar greinar 2013, þar á meðal yfirlitsgreinina um HIIT með Laursen í tveimur hlutum; ekki er skráð hvaða grein er átt við.",
-  },
   "Buchheit 2014": {
     en: "Buchheit published several 2014 football papers (sprint mechanics, repeated sprints, match running); which one is meant is not recorded.",
     is: "Buchheit birti nokkrar greinar um fótbolta 2014 (sprettfræði, endurteknir sprettir, hlaup í leik); ekki er skráð hver er átt við.",
   },
-  "Delaney 2017": {
-    en: "Delaney published several papers on peak running intensity around 2017 (rugby league, rugby union, soccer); which one this lever means is not recorded.",
-    is: "Delaney birti nokkrar greinar um hámarks hlaupaákefð um 2017 (rugby league, rugby union, fótbolti); ekki er skráð hver er átt við.",
-  },
-  "Dos'Santos 2022": {
-    en: "Dos'Santos co-wrote several 2022 papers on change of direction and turning demands; which one is meant is not recorded.",
-    is: "Dos'Santos var meðhöfundur að nokkrum greinum 2022 um stefnubreytingar og snúninga í leik; ekki er skráð hver er átt við.",
-  },
-  "Esteve 2018": {
-    en: "Esteve 2018 reports preseason adductor squeeze strength and past groin pain in 303 players; it gives no left–right asymmetry thresholds, which the code cites it for.",
-    is: "Esteve 2018 fjallar um styrk aðlægra vöðva og fyrri náraverki hjá 303 leikmönnum; hún gefur engin mörk fyrir mun á hægri og vinstri, sem kóðinn vitnar í hana fyrir.",
-  },
-  "Hägglund 2013": {
-    en: "Hägglund 2013 (UEFA Injury Study) finds previous injury and kicking leg as risk factors; it does not measure strength, so it does not support the groin strength-gap read.",
-    is: "Hägglund 2013 (UEFA-rannsóknin) sýnir fyrri meiðsli og spyrnufót sem áhættuþætti; hún mælir ekki styrk og styður því ekki lesturinn á styrkbili í nára.",
-  },
-  "King 2018": {
-    en: "King's 2018 papers on athletic groin pain cover rehabilitation and biomechanics; none identifies absolute adductor weakness as a risk factor, which the code cites it for.",
-    is: "Greinar King frá 2018 um náraverki fjalla um endurhæfingu og hreyfifræði; engin sýnir veikleika aðlægra vöðva sem áhættuþátt, sem kóðinn vitnar í fyrir.",
-  },
   "Kotsifaki 2024": {
-    en: "No 2024 paper by Kotsifaki (with Heiderscheit and Buchheit) on groin strength was found on PubMed or Crossref.",
-    is: "Engin grein eftir Kotsifaki (með Heiderscheit og Buchheit) frá 2024 um styrk í nára fannst á PubMed eða Crossref.",
-  },
-  "Lanza 2019": {
-    en: "Two different papers are cited as Lanza 2019. The one with the full author list (Lanza, Castelli … Cyrino) was not found. Lanza, Balshaw & Folland 2019 (Eur J Appl Physiol, joint-angle specificity) exists but may not be the one meant.",
-    is: "Tvær ólíkar greinar eru nefndar Lanza 2019. Sú með fullum höfundalista (Lanza, Castelli … Cyrino) fannst ekki. Lanza, Balshaw & Folland 2019 (Eur J Appl Physiol, horn liðar) er til en er ekki endilega sú sem átt er við.",
+    en: "A practitioner piece (Buchheit, Heiderscheit & Kotsifaki, Aspetar Sports Medicine Journal) that PubMed and Crossref do not index. The groin read now leads with the meta-analysis Quintana-Cepedal 2025, which says the same thing.",
+    is: "Grein fyrir fagfólk (Buchheit, Heiderscheit & Kotsifaki, Aspetar Sports Medicine Journal) sem PubMed og Crossref skrá ekki. Lesturinn á nára vísar nú fyrst í safngreininguna Quintana-Cepedal 2025, sem segir það sama.",
   },
   "Marques & Buchheit 2026": {
-    en: "\"Jump Height Lies\", Sport Performance & Science Reports #293. SPSR is not indexed by PubMed or Crossref, so it was not checked against a record.",
-    is: "„Jump Height Lies“, Sport Performance & Science Reports #293. PubMed og Crossref skrá ekki SPSR, svo hún var ekki borin saman við færslu.",
-  },
-  "Petrigna 2019": {
-    en: "Petrigna 2019 reviews jump-test methods in adolescents; it gives no team-sport CMJ power values, which the code cites it for.",
-    is: "Petrigna 2019 er yfirlit yfir aðferðir í hoppprófum hjá unglingum; hún gefur engin gildi fyrir afl í hoppi í hópíþróttum, sem kóðinn vitnar í hana fyrir.",
-  },
-  "Pettitt 2016": {
-    en: "Pettitt 2016 is about critical speed from a 3-minute all-out test, not MAS from a 4-minute run, which the code cites it for.",
-    is: "Pettitt 2016 fjallar um critical speed úr 3 mínútna hámarksprófi, ekki MAS úr 4 mínútna hlaupi, sem kóðinn vitnar í hana fyrir.",
+    en: "\"Jump Height Lies\", Sport Performance & Science Reports #293. SPSR is not indexed by PubMed or Crossref, so it was not checked against a record. It stays as the source of its own numbers; the peer-reviewed match study beside it is Cormack, Newton & McGuigan 2008.",
+    is: "„Jump Height Lies“, Sport Performance & Science Reports #293. PubMed og Crossref skrá ekki SPSR, svo hún var ekki borin saman við færslu. Hún stendur sem heimild fyrir eigin tölum; ritrýnda leikrannsóknin við hlið hennar er Cormack, Newton & McGuigan 2008.",
   },
   "Power 2023": {
-    en: "No 2023 paper by Power on progressive isometric loading for tendinopathy was found on PubMed or Crossref.",
-    is: "Engin grein eftir Power frá 2023 um stigvaxandi ísómetrískt álag við sinakvilla fannst á PubMed eða Crossref.",
-  },
-  "Read 2022": {
-    en: "No 2022 NordBord norm paper by Read for senior male soccer was found; the closest 2022 NordBord paper is a reliability study by Bishop et al.",
-    is: "Engin grein eftir Read frá 2022 með NordBord-viðmiðum fyrir fullorðna karla í fótbolta fannst; næst kemst áreiðanleikarannsókn Bishop o.fl. 2022.",
+    en: "Power, Haddad, Wallis & Baar (2023), Journal of Elite Sport Performance: the hamstring-rehab page names the same source. The journal is not indexed by PubMed or Crossref, so it was not checked against a record.",
+    is: "Power, Haddad, Wallis & Baar (2023), Journal of Elite Sport Performance: endurhæfingarsíðan fyrir aftanlæri nefnir sömu heimild. PubMed og Crossref skrá ekki tímaritið, svo hún var ekki borin saman við færslu.",
   },
   "Sandford 2019": {
-    en: "Sandford's 2019 papers are on 800 m and 1500 m runners; none gives football sprint-speed norms, and which one is meant is not recorded.",
-    is: "Greinar Sandford frá 2019 fjalla um 800 m og 1500 m hlaupara; engin gefur viðmið um sprettihraða í fótbolta og ekki er skráð hver er átt við.",
-  },
-  "Thomas 2017": {
-    en: "Two different 2017 papers fit: Thomas et al. (Med Sci Sports Exerc, simulated match) and Brownstein … Thomas (Front Physiol, competitive match). The code uses \"Thomas 2017\" for both; which is meant in each place is not clear.",
-    is: "Tvær greinar frá 2017 passa: Thomas o.fl. (Med Sci Sports Exerc, hermdur leikur) og Brownstein … Thomas (Front Physiol, keppnisleikur). Kóðinn notar „Thomas 2017“ um báðar; ekki er ljóst hvor er átt við hverju sinni.",
-  },
-  "Toth 2019": {
-    en: "No 2019 paper by Toth on jump norms in junior soccer was found on PubMed or Crossref.",
-    is: "Engin grein eftir Toth frá 2019 um hoppviðmið í unglingafótbolta fannst á PubMed eða Crossref.",
+    en: "Sandford published four 2019 papers on the anaerobic speed reserve, all in middle-distance runners; the ASR idea fits any of them, and which one is meant is not recorded. The football sprint-speed bands no longer cite it.",
+    is: "Sandford birti fjórar greinar 2019 um hraðaforða (anaerobic speed reserve), allar um millivegalengdahlaupara; hugmyndin passar við þær allar og ekki er skráð hver er átt við. Viðmiðin um spretthraða í fótbolta vísa ekki lengur í hana.",
   },
 };
 

@@ -665,9 +665,9 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
       },
     ],
     references: [
-      "Oranchuk, Storey, Nelson, Cronin (2019). Isometric training and long-term adaptations: Effects of muscle length, intensity, and intent. Scand J Med Sci Sports 29(4):484-503. → Joint-angle specificity is real (3-5x stronger transfer at trained angle); train external rotation at 90° elbow, the position used in throwing/hitting acceleration.",
-      "Lum & Barbosa (2019). Brief Review: Effects of Isometric Strength Training on Strength and Dynamic Performance. Int J Sports Physiol Perform 14(2):137-147. → Joint-specific isometrics improve cuff endurance with low joint stress; ideal between throwing sessions when full-ROM resistance work risks overuse.",
-      "Lanza, Castelli, Magalhães, Vitor-Costa, Bertuzzi, Yanagimachi, Cyrino (2019). Isometric strength training increases neuromuscular performance via different neural and morphological adaptations. Eur J Appl Physiol. → 6 wk isometric ER training increased throwing-arm cocking angle force without cuff tendinopathy markers.",
+      "Oranchuk, Storey, Nelson, Cronin (2019). Isometric training and long-term adaptations: Effects of muscle length, intensity, and intent. Scand J Med Sci Sports 29(4):484-503. → Gains are largest near the trained joint angle, and long muscle lengths transfer more widely; so external rotation is trained at 90° elbow, the throwing/hitting position (applied to the shoulder by analogy).",
+      "Lum & Barbosa (2019). Brief Review: Effects of Isometric Strength Training on Strength and Dynamic Performance. Int J Sports Med 40(6):363-375. → Isometric training raises strength and some dynamic performance with little joint movement; using it between throwing sessions is a coaching call (cuff outcomes were not studied).",
+      "Lanza, Balshaw, Folland (2019). Is the joint-angle specificity of isometric resistance training real? And if so, does it have a neural basis? Eur J Appl Physiol 119(11-12):2465-2476. → Strength gains were largest at and near the trained angle (knee extensors, untrained adults); no shoulder or throwing data.",
     ],
   },
 

@@ -4,8 +4,8 @@
  * squad read all apply one rule.
  *
  * The windows and the baseline rule are a coaching rule, not numbers from a study.
- * The jump as a read of neuromuscular state: Claudino 2017. The strength-gap read:
- * Opar 2015 (hamstring), Hägglund 2013 (groin).
+ * The jump as a read of neuromuscular state: Claudino 2017. The strength read:
+ * Opar 2015 (hamstring), Quintana-Cepedal 2025 (groin: lower adductor strength, not the left/right gap).
  */
 
 import type { ValdFlag, ValdFreshnessStatus } from "./types";

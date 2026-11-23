@@ -1,9 +1,10 @@
 /**
  * ABSOLUTE hip-adductor strength read (ForceFrame groin) — the risk-relevant signal.
  *
- * Research (Buchheit, Heiderscheit & Kotsifaki — Aspetar; King 2018): ABSOLUTE hip-adductor
- * weakness is the key modifiable risk factor for time-loss groin injury, while the
- * adductor:abductor ratio and symmetry-only reads show no significant association. So this leads
+ * Research: lower hip-adductor strength is associated with later groin pain (moderate effect),
+ * while the adductor:abductor ratio is not (Quintana-Cepedal 2025, meta-analysis), and left/right
+ * asymmetry was not linked to groin injury (Vigneswaran 2025). Practitioner summary: Buchheit,
+ * Heiderscheit & Kotsifaki (Aspetar). So this leads
  * with absolute adductor strength (per-limb N + the summed/mean), and demotes asymmetry to a
  * secondary read. A player can be perfectly SYMMETRIC and still be absolutely weak (both sides
  * low) — the exact case an asymmetry-only view misses.
@@ -22,7 +23,7 @@ import type { Bi } from "./benchmarks";
 import type { RtpLimbStrengthTest, RtpLimbStrengthEntry } from "@/lib/micropulse/rtp/types";
 
 /** On-surface citation for the absolute-adductor read (mirrors how other signals carry a paper). */
-export const GROIN_STRENGTH_CITATION = "Buchheit/Heiderscheit/Kotsifaki 2024 (Aspetar) · King 2018";
+export const GROIN_STRENGTH_CITATION = "Quintana-Cepedal 2025 (meta-analysis) · Buchheit/Heiderscheit/Kotsifaki 2024 (Aspetar)";
 
 /** Pragmatic "meaningful drop" threshold for isometric adductor strength vs the player's own
  *  baseline. The paper gives the rationale (absolute weakness is the risk factor), not a number,

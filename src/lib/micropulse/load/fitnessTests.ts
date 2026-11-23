@@ -10,7 +10,7 @@
  *
  * Ref: Greinar/Tholpróf-fótbolti-korfubolti-yfirlit.md
  * Cite: Bangsbo/Iaia/Krustrup 2008 (Yo-Yo) · Buchheit 2008 (30-15 IFT) · Léger & Lambert 1982
- *       (20 m MSFT) · Cazorla/Léger (VAMEVAL/UMTT MAS) · Pettitt 2016 (CS↔MAS).
+ *       (20 m MSFT) · Cazorla/Léger (VAMEVAL/UMTT MAS) · Berthon 1997 (timed-run MAS).
  */
 
 import type { Bi } from "./peakPeriod";
@@ -85,7 +85,7 @@ export const FITNESS_TESTS: Record<FitnessTestType, FitnessTestDef> = {
     resultLabel: { en: "Distance in 4 min (m)", is: "Vegalengd á 4 mín (m)" },
     hint: { en: "Go as far as you can in 4 min → MAS = distance ÷ 4.", is: "Farðu eins langt og þú getur á 4 mín → MAS = vegalengd ÷ 4." },
     derive: (d) => ({ masKmh: d > 0 ? r1((d / 4) * 0.06) : null, vo2maxEst: null }),
-    citation: "Pettitt 2016 (CS↔MAS)",
+    citation: "Approximate MAS (5-min field test: Berthon 1997; shorter runs read high: Bellenger 2015)",
   },
   line_drill: {
     key: "line_drill", unit: "s",
@@ -109,7 +109,7 @@ export const FITNESS_TESTS: Record<FitnessTestType, FitnessTestDef> = {
     resultLabel: { en: "Max sprint speed (km/h)", is: "Hámarkshraði (km/klst)" },
     hint: { en: "Flying max sprint → MSS. With MAS gives the Anaerobic Speed Reserve (MSS − MAS).", is: "Flug-hámarkssprettur → MSS. Með MAS gefur Anaerobic Speed Reserve (MSS − MAS)." },
     derive: () => none, // MSS is the result; ASR is computed in criticalSpeed.ts
-    citation: "Sandford 2019 · Buchheit 2013 (ASR)",
+    citation: "Sandford 2019 · Buchheit & Laursen 2013 (ASR)",
   },
 };
 

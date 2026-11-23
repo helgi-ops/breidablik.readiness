@@ -14,8 +14,8 @@ import type { CalType } from "./index";
 //     MD-1 36/40%, non-starters' MD+1 56/56%. Same tracking system in training and match.
 //   Martín-García 2018 (La Liga reserve side, >3 m/s²): MD-4 71–72%, MD-3 62–69%, MD-2 56–61%, compensatory MD+1 80–86%.
 // Mapping onto day-types: Mechanical = the week's biggest acc/dec day, Mixed = mid-week, Activation = MD-1,
-// Top-up = non-starters' MD+1. Locomotive has NO measured value: it comes from Buchheit 2019's framework (a
-// running day is deliberately light on mechanical work), so it is labelled as framework, not measurement.
+// Top-up = non-starters' MD+1. Locomotive has NO measured value: it is a framework value from expert guidance (a
+// running day is deliberately light on mechanical work; no study measures it), so it is labelled as framework.
 // No study reports IMA CoD: it follows the same share as a mechanical-work proxy.
 // These studies DESCRIBE elite teams, they do not prove an optimum (Clemente 2019 says which ratio is best is
 // still unresearched), so each value carries a range in CAL_SHARE_IMA_REF. A week built from these shares
@@ -40,7 +40,7 @@ export const CAL_SHARE_IMA_REF: Record<ImaTrainingDayType, { range: [number, num
   mixed: { range: [0.55, 0.70], evidence: "measured", source: "Stevens 2017; Martín-García 2018" },
   topup: { range: [0.50, 0.85], evidence: "measured", source: "Stevens 2017; Martín-García 2018" },
   activation: { range: [0.33, 0.43], evidence: "measured", source: "Stevens 2017" },
-  locomotive: { range: [0.45, 0.60], evidence: "framework", source: "Buchheit 2019" },
+  locomotive: { range: [0.45, 0.60], evidence: "framework", source: "MicroPulse framework (expert guidance; no study measures a running day)" },
 };
 
 // High-intensity efforts, high-speed running and sprint per day-type, as a share of the player's own match. Same idea as above,
@@ -52,7 +52,7 @@ export const CAL_SHARE_IMA_REF: Record<ImaTrainingDayType, { range: [number, num
 //     2018's biggest day (MD-4): 43%. Mixed = midpoint of MD-3 and MD-2; Activation = MD-1; Top-up = the non-starters;
 //     Locomotive = the biggest day measured, rounded up. No study isolates a dedicated running day, so 45% may be low for a
 //     team that wants more. Mechanical is DERIVED: those MD-4 figures average whole sessions, and a tight-space day is
-//     meant to stay light on HSR (Buchheit 2019), so it sits under Mixed. Five such days sum to 1.40× a match a week,
+//     meant to stay light on HSR (tight small-sided games give little high-speed running, Lacome 2018), so it sits under Mixed. Five such days sum to 1.40× a match a week,
 //     inside the published 0.2-2.3 (Gualtieri 2023; Stevens 1.1, Martín-García 1.7).
 //   Sprint is thin: the only measured per-day figure is Martín-García 2018's biggest day, 45% of a match (>25.2 km/h).
 //     Mechanical = the rate in small-sided games, 6-12% of a match's sprint per minute (Dalen 2019). Mixed and Activation

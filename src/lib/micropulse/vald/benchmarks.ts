@@ -15,12 +15,13 @@
  * never show male-football bands to a women's or basketball player.
  *
  * Sources:
- *  - Male football CMJ: elite male soccer S&C review 2024; Toth 2019 (juniors).
+ *  - Male football CMJ: elite male soccer S&C review 2024; Petridis 2019 (juniors, CMJ ~36-39 cm).
  *  - Female football CMJ ~28.9 cm, IMTP ~21.6 N/kg: pro female soccer norms
  *    (Seraphin 2025).
  *  - RSI-mod scale: NCAA D1 (Sports 2018) — males 0.208-0.704, females 0.135-0.553.
  *  - Male football IMTP ~28-40 N/kg: EFL force-plate norms 2025; Aspetar RTP floor >20.
- *  - Nordic eccentric-hamstring (NordBord) male soccer ~277-404 N/limb (Read 2022).
+ *  - Nordic eccentric-hamstring (NordBord) male soccer ~277-404 N/limb (Wik 2019, Qatar league; the authors
+ *    note these players test weaker than other professional leagues).
  *  - Inter-limb asymmetry: <10% ok / 10-15% watch / >15% concern (Bishop 2020).
  *  - IMTP early force + RFD reference values: Beckham 2013 (n=12 weightlifters —
  *    F100 ~2672 N, F200 ~4044 N, rel F200 ~45 N/kg, RFD 0-100/0-200 ~14300/14000
@@ -119,7 +120,7 @@ const MALE_FOOTBALL: Record<string, MetricSpec> = {
   cmjJumpHeightCm: {
     spec: { dir: "higher", e: 44, g: 39, a: 33 },
     ref: { en: "male football: avg ~34-39, elite >=44 cm", is: "karla-fótbolti: meðal ~34-39, afburða >=44 cm" },
-    citation: "Elite male soccer S&C review 2024; Toth 2019", improve: POWER_TIP,
+    citation: "Elite male soccer S&C review 2024; Petridis 2019 (juniors)", improve: POWER_TIP,
   },
   cmjRsiMod: {
     spec: { dir: "higher", e: 0.6, g: 0.45, a: 0.3 },
@@ -129,12 +130,12 @@ const MALE_FOOTBALL: Record<string, MetricSpec> = {
   cmjRelPeakPowerWkg: {
     spec: { dir: "higher", e: 58, g: 52, a: 45 },
     ref: { en: "indicative male team sport: ~45-60 W/kg", is: "leiðbeinandi karla-hópíþrótt: ~45-60 W/kg" },
-    citation: "Team-sport CMJ power (Petrigna 2019) - indicative", improve: POWER_TIP, indicative: true,
+    citation: "Indicative band - no published football W/kg norm", improve: POWER_TIP, indicative: true,
   },
   nordbordForceN: {
     spec: { dir: "higher", e: 400, g: 340, a: 280 },
     ref: { en: "male football: ~280-400 N per limb", is: "karla-fótbolti: ~280-400 N per fót" },
-    citation: "NordBord senior male soccer norms (Read 2022)", improve: HAMSTRING_TIP,
+    citation: "NordBord professional male soccer (Wik 2019, Qatar league)", improve: HAMSTRING_TIP,
   },
 };
 
@@ -250,7 +251,7 @@ const UNIVERSAL: Record<string, MetricSpec> = {
   groinAsymmetry: {
     spec: { dir: "lower", g: 10, a: 15 },
     ref: { en: "<10% ok, 10-15% watch, >15% concern", is: "<10% í lagi, 10-15% fylgstu með, >15% áhyggjuefni" },
-    citation: "Bishop 2020; Esteve 2018", improve: GROIN_TIP,
+    citation: "Bishop 2020 (asymmetry bands); groin asymmetry was not linked to injury (Vigneswaran 2025)", improve: GROIN_TIP,
   },
   // Ankle plantar-flexion left/right symmetry (ForceFrame). Absolute plantar-flexion strength has
   // no established ForceFrame population norms (protocol / joint-angle dependent), so we grade the
