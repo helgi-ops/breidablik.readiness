@@ -64,6 +64,7 @@ import { enforceDayRules, estimateSessionMinutes } from "./dayRules";
 import { applyCmjDose } from "./cmjDose";
 import { applyTestAddons } from "./testAddons";
 import { asymmetryReviewAudit, asymmetrySwapAllowed, confirmedNote } from "./asymmetryReview";
+import { applyScreenHeavySlot, screenWarmupBlock } from "./screenRules";
 import { buildStructuredBlocks } from "./structureBuilders";
 
 export * from "./types";
@@ -897,6 +898,9 @@ function buildStrengthSessionCore(
   // A left/right gap ≥ 10% not yet confirmed by the coach: logged for review, nothing swapped (brief §4b).
   const asymReview = isBasketball ? null : asymmetryReviewAudit(snap);
   if (asymReview) audit.push(asymReview);
+  // The movement screen (brief §4c): ankle restriction / knees caving on the overhead squat → the heavy two-leg lift
+  // goes split stance / one leg. Before the team list, which then keeps it (pinned) and never puts the old lift back.
+  if (individualised) audit.push(...applyScreenHeavySlot(tmpl.blocks, snap, trace));
 
   // Substitute the coach's team palette into the power/strength slots (individualised
   // mode only). Symmetry chooses uni vs bi lower-body. Runs after adaptation (so the
@@ -1015,7 +1019,11 @@ function buildStrengthSessionCore(
   // set-reduced (like the isometric primer). De-dup vs the ledger emphases: where a
   // corrective corroborates an emphasis the strength blocks already add, keep it and
   // RECORD the corroboration (CONFIRM), don't drop or double-count.
-  const correctives = individualised ? (snap.correctives ?? []) : [];
+  const screenCorrectives = individualised ? (snap.correctives ?? []) : [];
+  // Poor single-leg balance on the screen → a single-leg balance block in the warm-up (brief §4c).
+  const slb = individualised ? screenWarmupBlock(snap, screenCorrectives) : null;
+  if (slb) audit.push(slb.audit);
+  const correctives = slb?.add ? [slb.add, ...screenCorrectives] : screenCorrectives;
   if (!individualised) {
     audit.push({
       ruleId: "STANDARD_MODE",

@@ -68,5 +68,7 @@ export function strengthView(ctx: PlayerContext): PlayerStrengthSnapshot {
     ...(ctx.strengthTests?.data.tests ? { strengthTests: ctx.strengthTests.data.tests } : {}),
     // The coach's asymmetry decision (asymmetryReview.ts), only when there is one.
     ...(ctx.asymmetryReview?.data.review ? { asymmetryReview: ctx.asymmetryReview.data.review } : {}),
+    // Overhead squat / single-leg balance findings (screenRules.ts), only when there is one.
+    ...(ctx.screenFlags?.data.flags ? { screenFlags: ctx.screenFlags.data.flags } : {}),
   };
 }

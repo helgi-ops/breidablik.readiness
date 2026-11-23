@@ -53,6 +53,8 @@ import { fetchStrengthTests } from "../strengthProgramming/testAddonsLoader";
 import type { StrengthTests } from "../strengthProgramming/testAddons";
 import { fetchAsymmetryReview } from "../strengthProgramming/asymmetryReviewStore";
 import type { AsymmetryReview } from "../strengthProgramming/asymmetryReview";
+import { fetchScreenFlags } from "../strengthProgramming/screenRulesLoader";
+import type { ScreenFlags } from "../strengthProgramming/screenRules";
 
 export { strengthView };
 export { assertNoMedicalLeak } from "./wall";
@@ -106,6 +108,8 @@ export type PlayerContext = {
   strengthTests?: Domain<{ tests?: StrengthTests }>;
   /** The coach's newest decision on a left/right asymmetry (asymmetry_reviews, brief §4b). Absent = never reviewed. */
   asymmetryReview?: Domain<{ review?: AsymmetryReview }>;
+  /** Overhead squat / single-leg balance findings that change the session (screenRules.ts, brief §4c). */
+  screenFlags?: Domain<{ flags?: ScreenFlags }>;
 };
 
 export type BuildPlayerContextArgs = {
@@ -168,10 +172,11 @@ export async function buildPlayerContext(
   // The jump test that feeds today's dose: read only on the days it can change (needs today's MD day first).
   // NordBord / ForceFrame tests that can add a prevention set (fresh tests only).
   // The coach's asymmetry decision (a gap swaps the lift only after the coach confirmed it).
-  const [cmjTest, strengthTests, asymmetryReview] = await Promise.all([
+  const [cmjTest, strengthTests, asymmetryReview, screenFlags] = await Promise.all([
     fetchCmjDoseTest(sb, { teamId, playerId, todayIso, md: mdInfo.mdContext }),
     fetchStrengthTests(sb, playerId, todayIso),
     fetchAsymmetryReview(sb, playerId),
+    fetchScreenFlags(sb, playerId, todayIso),
   ]);
 
   const wellnessAvailable =
@@ -246,5 +251,6 @@ export async function buildPlayerContext(
     cmjTest: { data: cmjTest ? { test: cmjTest } : {}, status: statusOf(cmjTest != null) },
     strengthTests: { data: strengthTests ? { tests: strengthTests } : {}, status: statusOf(strengthTests != null) },
     asymmetryReview: { data: asymmetryReview ? { review: asymmetryReview } : {}, status: statusOf(asymmetryReview != null) },
+    screenFlags: { data: screenFlags ? { flags: screenFlags } : {}, status: statusOf(screenFlags != null) },
   };
 }

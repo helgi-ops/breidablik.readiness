@@ -343,6 +343,9 @@ export type PlayerStrengthSnapshot = {
   /** The coach's newest decision on a left/right asymmetry (asymmetry_reviews, brief §4b): "swap" lets the
    *  asymmetry rules swap to one leg at a time for 28 days, "keep" keeps the lift. Absent = not reviewed → no swap. */
   asymmetryReview?: import("./asymmetryReview").AsymmetryReview;
+  /** The latest overhead squat / single-leg balance findings (screenRules.ts, brief §4c), ≤ 56 days old, no pain or
+   *  red flag. Absent = nothing that changes the session. */
+  screenFlags?: import("./screenRules").ScreenFlags;
 };
 
 /** See `PlayerStrengthSnapshot.playerChoiceAccess`. */
