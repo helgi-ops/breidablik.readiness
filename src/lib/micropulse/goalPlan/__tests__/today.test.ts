@@ -53,6 +53,18 @@ describe("day placement", () => {
     expect(p.placed.find((x) => x.slot === "B")).toMatchObject({ date: day(0), md: "MD+2" });
   });
 
+  it("in season MD+2 is a day off (contradiction 10): with no week set it is not a goal day; a set training day is", () => {
+    const unset: TeamCalendar = { days: {}, games: [day(-2), day(5)] };
+    const p = placeWeek({ quality: "braking", slots: ["A", "B"], monday: MON, cal: unset, season: "maintain" });
+    expect(p.placed.every((x) => x.md !== "MD+2")).toBe(true);
+    // Out of season (or no season known) MD+2 is a training day as before.
+    const pre = placeWeek({ quality: "braking", slots: ["A", "B"], monday: MON, cal: unset });
+    expect(pre.placed.find((x) => x.slot === "A")?.md).toBe("MD+2");
+    // The coach set Monday (MD+2) as a training day: their choice, the goal may use it.
+    const set = placeWeek({ quality: "braking", slots: ["A", "B"], monday: MON, cal: saturdayWeek(), season: "maintain" });
+    expect(set.placed.find((x) => x.slot === "A")?.md).toBe("MD+2");
+  });
+
   it("braking: A after the match (MD+2/+3), B on MD-2", () => {
     const p = placeWeek({ quality: "braking", slots: ["A", "B"], monday: MON, cal: saturdayWeek() });
     expect(p.placed.find((x) => x.slot === "A")?.md).toBe("MD+2");

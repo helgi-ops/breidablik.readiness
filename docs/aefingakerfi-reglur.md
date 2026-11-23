@@ -434,10 +434,10 @@ Eftirtöldum ákvörðunum má breyta:
    lengst frá leik), svo í 8 daga viku fellur MD-5 niður og vinna dagsins færist ekki annað. Í landsleikjahléi er
    vikan þung, hlaup, frí, blandað, virkjun. Utan tímabils heldur Mesó sínu hámarki (3, leikir taldir). Dagur sem
    þjálfari festi heldur sér.
-10. **MD+2 er meðhöndlaður á þrjá vegu:**
-    - frí í sjálfvirku röðuninni, Mesó og dagsreglum;
-    - æfing í álagsplani (35%) og periodization-líkani;
-    - markmiðsplan velur MD+2 fyrir æfingu A í hemlun.
+10. ~~**MD+2 er meðhöndlaður á þrjá vegu.**~~ **Lagað 23. nóv.:** MD+2 er frídagur á keppnistímabili, alls staðar.
+    - Álagsplanið og periodization-líkanið segja það. Æfing sem þjálfari setur á MD+2 er val þjálfarans: létt, 35%.
+    - Markmiðsplan á keppnistímabili velur ekki MD+2, nema þjálfari hafi sett æfingu þar í vikuplaninu.
+    - Á undirbúningstímabili og utan tímabils er MD+2 áfram æfingadagur.
 11. **Handsendar æfingar fara út á frídögum.** MD-merkið les ekki frídaga vikuplansins; aðeins sjálfvirkar sendingar
     gera það.
 12. **Handsendar æfingar fylgja aldrei check-in síðar.** 4 vikna blokk er aldrei aðlöguð eftir lit.

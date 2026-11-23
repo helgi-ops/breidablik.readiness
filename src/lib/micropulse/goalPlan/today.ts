@@ -117,6 +117,9 @@ export function mdLabel(iso: string, games: string[]): string | null {
 
 /** Days the add-on never goes on (MicroPulse rule, the same as every plan's safety list). */
 const BANNED_MD = new Set(["MD", "MD-1", "MD+1"]);
+/** In season MD+2 is a day off (INSEASON_MD2_OFF, the coach's rule 2026-11-23): a goal session goes there only when the
+ *  coach has set it as a team training day. */
+const inSeasonOff = (md: string | null, season?: "build" | "maintain") => season === "maintain" && md === "MD+2";
 
 /** Preferred match days per quality and session (best first). Anything else allowed ranks after these. */
 const MID_WEEK = ["MD-3", "MD-4", "MD+3", "MD-5", "MD+4", "MD-2", "MD+2"];
@@ -205,7 +208,7 @@ export type WeekPlacement = {
   teamDays: number;
 };
 
-function candidates(monday: string, cal: TeamCalendar): { days: { date: string; md: string | null }[]; weekKnown: boolean; teamDays: number } {
+function candidates(monday: string, cal: TeamCalendar, season?: "build" | "maintain"): { days: { date: string; md: string | null }[]; weekKnown: boolean; teamDays: number } {
   const dates = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
   // The week counts as set when the coach marked at least one training day; a week with only a GAME or OFF row is not.
   const weekKnown = dates.some((d) => cal.days[d] === "train");
@@ -218,6 +221,7 @@ function candidates(monday: string, cal: TeamCalendar): { days: { date: string; 
     teamDays += 1;
     const md = mdLabel(date, cal.games);
     if (md && BANNED_MD.has(md)) continue;
+    if (!weekKnown && inSeasonOff(md, season)) continue; // a set week's training day on MD+2 is the coach's choice
     days.push({ date, md });
   }
   return { days, weekKnown, teamDays };
@@ -275,7 +279,7 @@ export function placeWeek(args: {
   /** The slots whose session holds a pitch goal's test (`TEST_DAY_PREFS`). */
   testSlots?: GoalSessionSlot[];
 }): WeekPlacement {
-  const { days, weekKnown, teamDays } = candidates(args.monday, args.cal);
+  const { days, weekKnown, teamDays } = candidates(args.monday, args.cal, args.season);
   const slots = args.slots;
   const heavyDays = gymOnHeavyDays(args.monday, args.season);
   const gym = (k: number) => heavyDays && isGymSlot(args.quality, slots[k]);

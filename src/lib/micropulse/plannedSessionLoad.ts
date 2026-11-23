@@ -120,8 +120,8 @@ function baseForOffset(offset: number): Base {
     case 2:
       return {
         band: "light", rpe: 5, durationMin: 55, matchPct: 35, mdType: "mixed",
-        rationaleEN: "Recovery day — light session as the squad rebuilds toward acquisition.",
-        rationaleIS: "Endurheimtardagur — létt æfing meðan hópurinn byggir sig upp.",
+        rationaleEN: "MD+2 is a day off in season (the coach's rule; Buchheit 2023). A session here is the coach's choice — keep it light and regenerative.",
+        rationaleIS: "MD+2 er frídagur á keppnistímabili (regla þjálfarans; Buchheit 2023). Æfing hér er val þjálfarans — höfð létt og endurnærandi.",
       };
     default:
       if (offset <= -5) {
