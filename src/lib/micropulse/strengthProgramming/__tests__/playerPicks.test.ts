@@ -126,7 +126,12 @@ describe("engine", () => {
 
   it("the upper-body pick is used for the pre-season upper block", () => {
     const s = buildStrengthSession(snap({ playerExercisePicks: { upper_body: ["ex_bb_bent_row"] } }));
-    const upper = s!.blocks.find((b) => b.id === "upper-body")!;
+    const upper = s!.blocks.find((b) => b.id === "upper-body");
+    // MD-4's 25-min budget (brief §6) takes the upper-body filler out first; the pick was still the one chosen.
+    if (!upper) {
+      expect(s!.timeTrimmed?.filter((t) => t.role === "upper").map((t) => t.exerciseId)).toContain("ex_bb_bent_row");
+      return;
+    }
     expect(upper.exercises[0].exerciseId).toBe("ex_bb_bent_row");
     expect(upper.exercises[0].playerPick).toBe(true);
   });
@@ -181,7 +186,9 @@ describe("safety rules win over a player's pick", () => {
       playerExercisePicks: { unilateral_strength: ["ex_single_leg_rdl"] },
     }));
     expect(ids(s)).not.toContain("ex_single_leg_rdl");
-    expect(ids(s)).toContain("ex_iso_ham_bridge_long");
+    // The bridge is chosen; MD-4's 25-min budget (brief §6) may then take it out as a C exercise, logged.
+    expect([...ids(s), ...(s!.timeTrimmed ?? []).map((t) => t.exerciseId)]).toContain("ex_iso_ham_bridge_long");
+    expect(s!.timeTrimmed?.some((t) => t.exerciseId === "ex_single_leg_rdl") ?? false).toBe(false);
   });
 });
 

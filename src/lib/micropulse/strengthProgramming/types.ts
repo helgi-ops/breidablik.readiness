@@ -126,6 +126,8 @@ export type PrescribedExercise = {
   isAdaptiveAddition?: boolean;
   /** The player chose this exercise from the team's list (player exercise picks, 2026-11-17). */
   playerPick?: true;
+  /** A new exercise for this player, shown as a light intro in the warm-up (newExercise.ts, brief §6). */
+  newIntro?: true;
   /** One more set because of the player's own strength goal (lota 2, 2026-11-17). */
   playerGoal?: true;
   /** Part of the player's 8-week goal plan, session B (gym), merged into the team session ("One session, one whole",
@@ -166,6 +168,9 @@ export type StrengthSession = {
   templateId: string;
   /** Total estimated session duration in minutes. */
   durationMin: number;
+  /** What MD-4's time budget took out (dayRules.ts TIME_BUDGET_TRIM, brief §6): whole exercises, or one set of B2
+   *  (`sets: 1`, `setOnly`). Absent = nothing trimmed for time. */
+  timeTrimmed?: Array<{ exerciseId: string; sets: number; role: "upper" | "C" | "B2"; setOnly?: true }>;
   /** Whether VBT auto-regulation is active (requires GymAware). */
   vbtAutoRegulated: boolean;
   /** Whether session is in compressed (microdosing) mode for congested weeks. */
@@ -337,6 +342,10 @@ export type PlayerStrengthSnapshot = {
    *  MD-2 (or MD-1 when MD-2 had none) for MD-2 / MD-1. Absent = no test that day, or no ready baseline. Never the
    *  readiness colour. */
   cmjTest?: import("./cmjDose").CmjDoseTest;
+  /** The exercises this player has logged sets for (player_strength_set_log, last 120 days, warm-up sets included),
+   *  read in the same query as the logged 1RMs. Absent = nothing logged: the new-exercise rule stays off
+   *  (newExercise.ts, brief §6). */
+  loggedExerciseIds?: string[];
   /** Fresh NordBord / ForceFrame hip adduction tests with the previous one (testAddons.ts, brief §4b): a drop or a
    *  left/right gap adds one Nordic / Copenhagen set, within the week's cap. Never the readiness colour. */
   strengthTests?: import("./testAddons").StrengthTests;

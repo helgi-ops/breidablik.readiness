@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   DAY_RULES, DAY_RULE_TABLE, DAY_RULE_TIME_NOTE, DAY_RULE_TRIM, DAY_RULE_ZONE, DAY_RULE_COACH_DAY_OFF, MATCH_DAY_RULE,
-  dayCategoryOf, enforceDayRules, everyExerciseHasDayCategory, heavyVelocityLossCapFor, repsOfLine,
+  TIME_BUDGET_EVIDENCE, TIME_BUDGET_TRIM, timeRoles, dayCategoryOf, enforceDayRules, everyExerciseHasDayCategory, heavyVelocityLossCapFor, repsOfLine,
 } from "../dayRules";
 import { EXERCISE_LIBRARY, EXERCISES_BY_ID } from "../exerciseLibrary";
 import { buildStrengthSession } from "..";
@@ -30,6 +30,7 @@ function session(md: MdContext, blocks: SessionBlock[], templateId = "t"): Stren
 const all = (s: StrengthSession | null) => (s?.blocks ?? []).flatMap((b) => b.exercises);
 const find = (s: StrengthSession | null, id: string) => all(s).find((e) => e.exerciseId === id);
 const trims = (s: StrengthSession | null) => (s?.appliedAdaptations ?? []).filter((a) => a.ruleId === DAY_RULE_TRIM);
+const timeLines = (s: StrengthSession | null) => (s?.appliedAdaptations ?? []).filter((a) => a.ruleId === TIME_BUDGET_TRIM);
 const work = (s: StrengthSession | null) => all(s).reduce((a, e) => a + e.dose.sets * Math.max(1, repsOfLine(e.dose.reps)), 0);
 
 describe("the table", () => {
@@ -51,6 +52,12 @@ describe("the table", () => {
     expect(heavyVelocityLossCapFor("MD-4")).toBe(15);
     expect(heavyVelocityLossCapFor("MD-3")).toBe(10);
     expect(heavyVelocityLossCapFor("MD+1")).toBe(20);
+  });
+
+  it("MD+1 points at the existing minutes rule (unchanged); MD-4 names the time trim and the new-exercise intro", () => {
+    expect(DAY_RULES["MD+1"].note?.en).toMatch(/top-up as it is \(the existing minutes rule, md1MinutesTier after Carling 2018/);
+    expect(DAY_RULES["MD+1"].note?.is).toMatch(/óbreyttri/);
+    expect(DAY_RULES["MD-4"].note?.en).toMatch(/TIME_BUDGET_TRIM.*NEW_EXERCISE_INTRO/);
   });
 
   it("every rule is in English and Icelandic", () => {
@@ -122,13 +129,67 @@ describe("MD-4 — max strength + power", () => {
     expect(find(out, "ex_bulgarian_ss")!.dose.sets).toBe(3);
   });
 
-  it("time over 25 + 8 min is said, not trimmed", () => {
+  it("time over 25 min before training: the upper-body filler comes out, last first (TIME_BUDGET_TRIM)", () => {
     const blocks = [blk("COMPOUND", [ex("ex_trap_bar_dl", { sets: 4, reps: "3", intensity: "85% 1RM", rest: "4 min" })]), blk("ACCESSORY", [ex("ex_db_bench_press", { sets: 3, reps: "8", rest: "3 min" }), ex("ex_db_row", { sets: 3, reps: "8", rest: "3 min" })])];
     const out = enforceDayRules(session("MD-4", blocks))!;
-    const note = out.appliedAdaptations.find((a) => a.ruleId === DAY_RULE_TIME_NOTE)!;
-    expect(note.triggerEN).toMatch(/about 33 min \(25 before training \+ 8 after\)/);
-    expect(note.triggerIS).toMatch(/fyrir æfingu/);
-    expect(all(out).map((e) => e.dose.sets)).toEqual([4, 3, 3]);
+    expect(all(out).map((e) => e.exerciseId)).toEqual(["ex_trap_bar_dl"]);
+    expect(out.timeTrimmed).toEqual([{ exerciseId: "ex_db_row", sets: 3, role: "upper" }, { exerciseId: "ex_db_bench_press", sets: 3, role: "upper" }]);
+    const lines = timeLines(out);
+    expect(lines).toHaveLength(2);
+    expect(lines[0].triggerEN).toMatch(/^MD-4 time budget: about 25 min before training with the warm-up and rests \(injury prevention not counted\); estimated at \d+/);
+    expect(lines[0].actionEN).toMatch(/\(upper-body filler\) taken out\.$/);
+    for (const l of lines) { expect(l.triggerIS).toMatch(/Tímarammi MD-4/); expect(l.actionIS).toMatch(/tekin út/); expect(l.evidence).toBe(TIME_BUDGET_EVIDENCE); }
+    expect(TIME_BUDGET_EVIDENCE).toMatch(/MicroPulse/);
+    // Fits now, so no time note.
+    expect(out.appliedAdaptations.some((a) => a.ruleId === DAY_RULE_TIME_NOTE)).toBe(false);
+  });
+
+  it("the order: upper-body filler → C exercise → one set of B2; B1 untouched", () => {
+    const blocks = [
+      blk("COMPOUND", [ex("ex_trap_bar_dl", { sets: 4, reps: "3", intensity: "85% 1RM", rest: "4 min" })]),
+      blk("UNILATERAL", [ex("ex_bulgarian_ss", { sets: 3, reps: "4", intensity: "RPE 7", rest: "2 min" })]),
+      blk("ISO_FINISH", [ex("ex_iso_ham_bridge_long", { sets: 3, reps: "30s", rest: "1 min" })]),
+      blk("ACCESSORY", [ex("ex_db_bench_press", { sets: 2, reps: "8", rest: "2 min" })]),
+    ];
+    expect(timeRoles(blocks).flat()).toEqual(["B1", "B2", "C", "upper"]);
+    const out = enforceDayRules(session("MD-4", blocks))!;
+    expect(out.timeTrimmed?.map((t) => t.role)).toEqual(["upper", "C", "B2"]);
+    expect(find(out, "ex_trap_bar_dl")!.dose.sets).toBe(4);
+    expect(find(out, "ex_bulgarian_ss")!.dose.sets).toBe(2);
+    expect(timeLines(out).at(-1)!.actionEN).toBe("Bulgarian Split Squat: 2 sets (one set of B2 off).".replace("Bulgarian Split Squat", EXERCISES_BY_ID.get("ex_bulgarian_ss")!.nameEN));
+  });
+
+  it("B1 is never cut, injury prevention is not counted and always stays; the coach is told", () => {
+    const blocks = [
+      blk("COMPOUND", [ex("ex_trap_bar_dl", { sets: 6, reps: "2", intensity: "85% 1RM", rest: "5 min" })]),
+      blk("POSTERIOR", [ex("ex_nordic_curl", { sets: 3, reps: "5", rest: "2 min" })]),
+    ];
+    const out = enforceDayRules(session("MD-4", blocks))!;
+    expect(find(out, "ex_trap_bar_dl")!.dose.sets).toBe(6);
+    expect(find(out, "ex_nordic_curl")!.dose.sets).toBe(3);
+    expect(out.timeTrimmed).toBeUndefined();
+    expect(timeLines(out).map((l) => l.actionEN)).toEqual(["Kept: B1 (the heavy lift) is never cut and the injury-prevention work always stays."]);
+    // A short session with prevention: the Nordic alone never pushes it over.
+    const short = enforceDayRules(session("MD-4", [blk("COMPOUND", [ex("ex_trap_bar_dl", { sets: 3, reps: "3", intensity: "85% 1RM", rest: "3 min" })]), blk("POSTERIOR", [ex("ex_nordic_curl", { sets: 3, reps: "5", rest: "4 min" }), ex("ex_copenhagen", { sets: 3, reps: "6 each side", rest: "4 min" })])]));
+    expect(timeLines(short)).toEqual([]);
+  });
+
+  it("runs once: a second pass changes nothing (B2 loses one set at most)", () => {
+    const blocks = [
+      blk("COMPOUND", [ex("ex_trap_bar_dl", { sets: 6, reps: "2", intensity: "85% 1RM", rest: "5 min" })]),
+      blk("UNILATERAL", [ex("ex_bulgarian_ss", { sets: 3, reps: "4", intensity: "RPE 7", rest: "3 min" })]),
+    ];
+    const once = enforceDayRules(session("MD-4", blocks))!;
+    const twice = enforceDayRules(once)!;
+    expect(all(twice)).toEqual(all(once));
+    expect(timeLines(twice)).toEqual(timeLines(once));
+    expect(find(twice, "ex_bulgarian_ss")!.dose.sets).toBe(2);
+  });
+
+  it("only MD-4 and the days that build like it; MD-3 keeps its own minutes note", () => {
+    const blocks = () => [blk("COMPOUND", [ex("ex_trap_bar_dl", { sets: 3, reps: "3", intensity: "80% 1RM", rest: "4 min" })]), blk("ACCESSORY", [ex("ex_db_bench_press", { sets: 3, reps: "8", rest: "3 min" }), ex("ex_db_row", { sets: 3, reps: "8", rest: "3 min" })])];
+    expect(timeLines(enforceDayRules(session("MD-3", blocks())))).toEqual([]);
+    expect(timeLines(enforceDayRules(session("MD+3", blocks()))).length).toBeGreaterThan(0);
   });
 });
 

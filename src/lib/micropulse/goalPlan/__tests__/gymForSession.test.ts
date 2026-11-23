@@ -17,6 +17,7 @@ import { strengthSessionToTodayStructure } from "@/lib/micropulse/strengthProgra
 import { withGoalPlanGym } from "@/lib/micropulse/strengthProgramming/goalPlanGym";
 import type { PaletteSlots } from "@/lib/micropulse/strengthProgramming/palette";
 import type { MdContext, PlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/types";
+import { EXERCISES_BY_ID } from "@/lib/micropulse/strengthProgramming/exerciseLibrary";
 
 const MON = "2026-11-16";
 const day = (i: number) => addDays(MON, i);
@@ -58,6 +59,12 @@ const snap = (over: Partial<PlayerStrengthSnapshot> = {}): PlayerStrengthSnapsho
 });
 type S = ReturnType<typeof buildStrengthSession>;
 const all = (s: S) => (s?.blocks ?? []).flatMap((b) => b.exercises);
+/** The session before MD-4's time budget (brief §6) took anything out: what the merge itself did. */
+const pre = (s: S) => [
+  ...all(s).map((e) => ({ exerciseId: e.exerciseId, category: e.category as string | undefined, sets: e.dose.sets })),
+  ...(s?.timeTrimmed ?? []).filter((t) => !t.setOnly).map((t) => ({ exerciseId: t.exerciseId, category: EXERCISES_BY_ID.get(t.exerciseId)?.category as string | undefined, sets: t.sets })),
+];
+const preSets = (s: S) => pre(s).reduce((n, e) => n + e.sets, 0) + (s?.timeTrimmed ?? []).filter((t) => t.setOnly).reduce((n, t) => n + t.sets, 0);
 const rule = (s: S, id: string) => (s?.appliedAdaptations ?? []).find((a) => a.ruleId === id);
 
 describe("reading session B's gym lifts", () => {
@@ -97,9 +104,9 @@ describe("into the strength session", () => {
       const base = buildStrengthSession(snap({ mdContext: md }));
       const merged = buildStrengthSession(withGoalPlanGym(snap({ mdContext: md }), gym!));
       // Added only when the session has no power exercise to take the place of (MD-4's template has none).
-      const hadPower = all(base).some((e) => POWER.includes(e.category));
-      expect(all(merged).length).toBe(all(base).length + (hadPower ? 0 : 1));
-      expect(all(merged).filter((e) => e.category === "COMPOUND_STRENGTH").length).toBe(all(base).filter((e) => e.category === "COMPOUND_STRENGTH").length);
+      const hadPower = pre(base).some((e) => POWER.includes(e.category ?? ""));
+      expect(pre(merged).length).toBe(pre(base).length + (hadPower ? 0 : 1));
+      expect(pre(merged).filter((e) => e.category === "COMPOUND_STRENGTH").length).toBe(pre(base).filter((e) => e.category === "COMPOUND_STRENGTH").length);
     }
     const s = buildStrengthSession(withGoalPlanGym(snap(), gym!));
     const goal = all(s).filter((e) => e.goalPlan);
@@ -176,7 +183,7 @@ describe("into the strength session", () => {
 
   // 2026-11-18 demo: the plan's 4-set jump squat took a 2-set contrast spot → the session grew 23 → 26 sets.
   it("never more sets than the team exercise it takes the place of: the session never grows", () => {
-    const sets = (s: S) => all(s).reduce((n, e) => n + e.dose.sets, 0);
+    const sets = preSets;
     const pal = { ...PALETTE, power_explosive: ["ex_box_jump", "ex_trap_bar_jump_squat", "ex_mb_rotational_throw"] };
     let cappedSeen = false;
     for (const q of ["acceleration", "top_speed", "jump", "explosive", "max_strength", "strength_power"] as GoalQuality[]) {
@@ -188,7 +195,7 @@ describe("into the strength session", () => {
           const base = buildStrengthSession(snap(o));
           const s = buildStrengthSession(withGoalPlanGym(snap(o), g));
           if (!rule(s, "GOAL_PLAN_GYM_MERGED")) continue;
-          const added = all(s).length - all(base).length;
+          const added = pre(s).length - pre(base).length;
           if (added === 0) expect(sets(s), `${q} ${md} ${key}`).toBeLessThanOrEqual(sets(base));
           for (const e of all(s).filter((x) => x.goalPlan && /the team's \d sets/.test(x.modificationReason ?? ""))) {
             cappedSeen = true;
@@ -220,14 +227,14 @@ describe("into the strength session", () => {
         const base = buildStrengthSession(snap(o));
         const s = buildStrengthSession(withGoalPlanGym(snap(o), g!));
         if (!rule(s, "GOAL_PLAN_GYM_MERGED")) continue;
-        expect(all(s).length, md).toBe(all(base).length);
+        expect(pre(s).length, md).toBe(pre(base).length);
         expect(rule(s, "GOAL_PLAN_GYM_MERGED")!.actionEN).not.toMatch(/added/);
         const split = all(s).find((e) => e.goalPlan)!;
         expect(split.exerciseId).toMatch(/split_squat|_ss$/);
         expect(split.dose.intensity).toBe("Bodyweight or light DBs");
         expect(split.dose.rest).toBe("90s");
-        const upperBase = all(base).filter((e) => e.category === "UPPER_BODY");
-        const upperNow = all(s).filter((e) => e.category === "UPPER_BODY");
+        const upperBase = pre(base).filter((e) => e.category === "UPPER_BODY");
+        const upperNow = pre(s).filter((e) => e.category === "UPPER_BODY");
         if (upperBase.length >= 2) {
           sawUpper = true;
           expect(upperNow.length).toBe(upperBase.length - 1);

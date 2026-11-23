@@ -60,7 +60,8 @@ import {
   type PaletteSlots,
 } from "./palette";
 import { DEFAULT_STRUCTURE_BY_MD, STRUCTURES_ALLOWED_BY_MD, STRUCTURE_LABEL, readinessDowngrade, isRestDay, noMatchDayFor, weekdayOf, NO_MATCH_DAY_MD, NO_MATCH_DAY_LABEL, WEEKDAY_LABEL, type MdStructures, type NoMatchDayKind, type StructureKey } from "./structures";
-import { enforceDayRules, estimateSessionMinutes } from "./dayRules";
+import { alignTimeTrimToGreen, enforceDayRules, estimateSessionMinutes } from "./dayRules";
+import { applyNewExerciseIntro } from "./newExercise";
 import { applyCmjDose } from "./cmjDose";
 import { applyTestAddons } from "./testAddons";
 import { asymmetryReviewAudit, asymmetrySwapAllowed, confirmedNote } from "./asymmetryReview";
@@ -585,20 +586,27 @@ export function buildStrengthSession(
   // A jump test on this week's test day (MD+3 / MD-2 / MD-1) cuts the dose before the day rule (cmjDose.ts, §3).
   const core = (snap: PlayerStrengthSnapshot, keep: boolean) => {
     const built = buildStrengthSessionCore(snap, coachOverrides, opts, keep);
-    return isBasketball ? built : enforceDayRules(applyCmjDose(built, snap.cmjTest));
+    // A new exercise is learnt light first (brief §6): into the MD-4 / light-week warm-up, else held back.
+    return applyNewExerciseIntro(isBasketball ? built : enforceDayRules(applyCmjDose(built, snap.cmjTest)), snap);
   };
-  const s = core(snapIn, false);
+  const s0 = core(snapIn, false);
+  // The MD-4 time trim (brief §6) cuts whole exercises from a long green day; a yellow day (fewer sets) could then keep
+  // what green lost. A yellow day never has an exercise the green day dropped for time (the coach's rule: never more).
+  let greenFull: StrengthSession | null | undefined;
+  const greenOf = () => (greenFull === undefined ? (greenFull = core({ ...snapIn, verdict: "FULL", cmjTest: undefined }, false)) : greenFull);
+  const timed = (x: StrengthSession | null) => (x && !isBasketball && snapIn.verdict && snapIn.verdict !== "FULL" ? alignTimeTrimToGreen(x, greenOf()) : x);
+  const s = timed(s0);
   if (!s || !s.appliedAdaptations.some((a) => a.ruleId === "STRUCTURE_READINESS_DOWNGRADE")) return s;
   // Yellow step-down cap (2026-11-18, coach's call): a yellow day steps the method down one rung only when the lower
   // rung really is lighter. If it would mean more loaded reps, more reps in all, or more exercises than the same day
   // on green (e.g. contrast 3×3 @85% → cluster 2×12 @80%), today's method stays and the yellow set cut lightens it.
   // Loaded reps are counted on their own: dropping the jumps must not buy a heavier main lift.
   // The green build is the plain green day: without the jump-test cut (that cut is itself a yellow dose).
-  const green = core({ ...snapIn, verdict: "FULL", cmjTest: undefined }, false);
+  const green = greenOf();
   if (!green) return s;
   const a = workOf(s), g = workOf(green);
   if (a.loadedReps <= g.loadedReps && a.reps <= g.reps && a.exercises <= g.exercises) return s;
-  const kept = core(snapIn, true);
+  const kept = timed(core(snapIn, true));
   if (!kept) return s;
   const from = s.appliedAdaptations.find((x) => x.ruleId === "STRUCTURE_READINESS_DOWNGRADE");
   kept.appliedAdaptations.push({

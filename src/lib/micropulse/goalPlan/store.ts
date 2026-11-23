@@ -32,6 +32,7 @@ import type { GoalPlan, GoalQuality } from "./types";
 import type { SessionVersion } from "./today";
 import { parseResultInput, type GoalResult, type SessionMark } from "./outcome";
 import type { GoalPrioritySnapshot } from "./priority";
+import { oneMainGoalCheck, type OpenGoal } from "./mainGoalRule";
 import { readGoalSeason } from "./season";
 import {
   GOAL_PLAN_PAUSED_IN_SEASON,
@@ -238,7 +239,7 @@ async function startGoalByPlayer(
   await logEvent(sb, row, "requested", { userId: args.userId, role: "player" }, null, {
     quality: args.quality, rule_start: plan.start, auto_start: true, ...(args.priority ? { priority: args.priority } : {}),
   });
-  await logApproval(sb, row, { userId: null, role: "system" }, plan, { ...d, startDate: gate.start }, args.teamPref, { auto: true, ...gateExtra(gate, season) });
+  await logApproval(sb, row, { userId: null, role: "system" }, plan, { ...d, startDate: gate.start }, args.teamPref, { auto: true, ...gateExtra(gate, season), ...priorityExtra([], row.id, args.quality) });
   await logSeasonGate(sb, row, gate, season);
   return { id: row.id, status: gate.kind === "pause_until_preseason" ? "paused" : "approved" };
 }
@@ -462,7 +463,9 @@ export async function startGoalByCoach(
     loadTeamQualityPrefs(sb, args.teamId),
     openGoalForPlayer(sb, args.teamId, args.playerId),
   ]);
-  if (open) throw new GoalPlanError(409, "This player already has an open goal plan.", "Leikmaðurinn er nú þegar með opið markmiðsplan.");
+  // Brief §6: one main goal at a time (the add-ons for injury prevention are not a goal and always apply).
+  const priority = oneMainGoalCheck(open ? [open] : [], null, args.quality);
+  if (!priority.ok) throw new GoalPlanError(409, priority.en, priority.is);
   const input = { ...base, quality: args.quality };
   const teamPref = prefs[args.quality];
   const rule = ruleStart(input);
@@ -485,7 +488,7 @@ export async function startGoalByCoach(
   const row = data as { id: string; team_id: string; player_id: string };
   const actor = { userId: args.coachUserId, role: "coach" as const };
   await logEvent(sb, row, "requested", actor, null, { quality: args.quality, rule_start: rule, by_coach: true, source: "programme_library" });
-  await logApproval(sb, row, actor, plan, { ...d, startDate: gate.start }, teamPref, gateExtra(gate, season));
+  await logApproval(sb, row, actor, plan, { ...d, startDate: gate.start }, teamPref, { ...gateExtra(gate, season), priority_rule: priority.adaptation });
   await logSeasonGate(sb, row, gate, season);
   return { id: row.id, status: gate.kind === "pause_until_preseason" ? "paused" : "approved" };
 }
@@ -513,6 +516,9 @@ export async function decideGoal(
   const actor = { userId: args.coachUserId, role: "coach" as const };
 
   if (d.action === "approve") {
+    // Brief §6: one main goal at a time. The index holds it too; this says which plan is in the way, in words.
+    const priority = oneMainGoalCheck(await openGoalsForPlayer(sb, args.teamId, row.player_id), row.id, row.quality);
+    if (!priority.ok) throw new GoalPlanError(409, priority.en, priority.is);
     const plan = approvedPlan(input, teamPref, d);
     const season = await readGoalSeason(sb, args.teamId, today, { withNext: true });
     const gate = startGate(season, d.startDate);
@@ -520,7 +526,7 @@ export async function decideGoal(
       .eq("id", row.id).eq("status", "requested").select("id");
     if (error) throw new Error(error.message);
     if (!data?.length) throw new GoalPlanError(409, "Someone else answered this request first.");
-    await logApproval(sb, row, actor, plan, { ...d, startDate: gate.start }, teamPref, gateExtra(gate, season));
+    await logApproval(sb, row, actor, plan, { ...d, startDate: gate.start }, teamPref, { ...gateExtra(gate, season), priority_rule: priority.adaptation });
     await logSeasonGate(sb, row, gate, season);
     return { status: gate.kind === "pause_until_preseason" ? "paused" : "approved" };
   }
@@ -577,6 +583,20 @@ export async function decideGoal(
   await logEvent(sb, row, "stopped", actor, d.reason);
   return { status: "cancelled" };
 }
+
+/** Every open plan of one player (one at most, by the index; read as a list so the priority check sees them all). */
+async function openGoalsForPlayer(sb: Sb, teamId: string, playerId: string): Promise<OpenGoal[]> {
+  const { data, error } = await sb.from("player_goal_plans").select("id, quality, status")
+    .eq("team_id", teamId).eq("player_id", playerId).in("status", OPEN_STATUSES).limit(5);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as OpenGoal[];
+}
+
+/** The priority rule on an approval event (the insert already proved no other plan is open). */
+const priorityExtra = (open: OpenGoal[], planId: string, quality: GoalQuality): Record<string, unknown> => {
+  const c = oneMainGoalCheck(open, planId, quality);
+  return c.ok ? { priority_rule: c.adaptation } : {};
+};
 
 /** Open goal for one player (coach view on Total Player Analysis). */
 export async function openGoalForPlayer(sb: Sb, teamId: string, playerId: string): Promise<{ id: string; quality: GoalQuality; status: GoalPlanStatus } | null> {

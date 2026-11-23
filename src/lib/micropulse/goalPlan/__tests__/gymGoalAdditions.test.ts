@@ -110,7 +110,9 @@ describe("in the strength session", () => {
     expect(heavy.dose.intensity).toBe("80–85% 1RM · 0.55–0.65 m/s");
     expect(heavy.dose.cue).toContain("Bar speed");
     expect(byId(s, "ex_imtp_iso")?.dose.reps).toBe("3s");
-    expect(byId(s, "ex_bulgarian_ss") ?? byId(s, "ex_reverse_lunge")).toBeDefined();
+    // The one-leg lift goes in; MD-4's 25-min budget (brief §6) may then take it out as a C exercise, logged.
+    const oneLeg = ["ex_bulgarian_ss", "ex_reverse_lunge"];
+    expect(byId(s, "ex_bulgarian_ss") ?? byId(s, "ex_reverse_lunge") ?? s?.timeTrimmed?.find((t) => oneLeg.includes(t.exerciseId))).toBeDefined();
     const z = rule(s, "GOAL_PLAN_SPEED_ZONE")!;
     expect(z.triggerEN).toContain("MD-4");
     expect(z.actionEN).toContain("is where to start");

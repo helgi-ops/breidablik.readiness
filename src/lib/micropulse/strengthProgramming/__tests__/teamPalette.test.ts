@@ -175,6 +175,12 @@ describe("team strength palette → buildStrengthSession", () => {
 
   it("football PRE-SEASON → upper body accessory at the end", () => {
     const s = buildStrengthSession(snap({ mdContext: "MD-4" as MdContext, sport: "football", seasonPhase: "preseason", teamPalette: { upper_body: ["ex_db_bench_press"] } }))!;
+    // MD-4's 25-min budget (brief §6) may take the filler out again; then it is logged, not lost silently.
+    const cut = s.timeTrimmed?.find((t) => t.exerciseId === "ex_db_bench_press" && t.role === "upper");
+    if (cut) {
+      expect(audit(s, "TIME_BUDGET_TRIM")).toBe(true);
+      return;
+    }
     expect(allEx(s)).toContain("ex_db_bench_press");
     const titles = s.blocks.map((b) => b.titleEN);
     expect(/upper body \(accessory\)/i.test(titles[titles.length - 1])).toBe(true); // last block

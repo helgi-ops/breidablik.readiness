@@ -35,6 +35,15 @@ export const DAY_RULE_TRIM = "DAY_RULE_TRIM";
 export const DAY_RULE_TIME_NOTE = "DAY_RULE_TIME_NOTE";
 export const DAY_RULE_ZONE = "DAY_RULE_ZONE";
 export const DAY_RULE_COACH_DAY_OFF = "DAY_RULE_COACH_DAY_OFF";
+export const TIME_BUDGET_TRIM = "TIME_BUDGET_TRIM";
+/** MD-4's time budget (brief §6): warm-up and rests included, from `estimateSessionMinutes`. */
+export const MD4_TIME_BUDGET_MIN = 25;
+export const TIME_BUDGET_EVIDENCE =
+  "The coach's MD-4 time budget (UEFA Fitness B weekly plans, 2026-11-22): 25 min before training with the warm-up and " +
+  "rests, + 8 min after. Drop the upper-body filler, then the C exercise, then one set of B2; B1 (the heavy lift) is " +
+  "never cut. The injury-prevention work (Nordic, Copenhagen and the test add-ons) always stays and is counted in the " +
+  "8 min after, not the 25 (MicroPulse's reading of the table). MicroPulse's estimate: sets × (30 s of work + the " +
+  "rest), 6 min warm-up.";
 
 export const DAY_RULES_SOURCE =
   "Day rules from the coach's weekly plans (UEFA Fitness B, Breiðablik, 2026-11-22): the coach's rules, not from a study.";
@@ -52,7 +61,8 @@ export type DayCaps = {
   dropJumpContacts?: number;
   /** Drop height, cm. */
   dropHeightCm?: number;
-  /** Minutes in the gym (shown, not trimmed yet), and after training (MD-4's 8 min). */
+  /** Minutes in the gym, and after training (MD-4's 8 min). Shown on every day; MD-4 (and the days built like it) is
+   *  trimmed to its 25 min by TIME_BUDGET_TRIM (brief §6). */
   minutes?: number;
   minutesAfter?: number;
   /** Velocity-loss cap on loaded lifts, %. */
@@ -87,6 +97,10 @@ const MD4: DayRule = {
     { en: "A new exercise, except as a light warm-up intro", is: "Ný æfing, nema sem létt kynning í upphitun" },
   ],
   bans: {},
+  note: {
+    en: "Over 25 min before training (warm-up and rests in, injury prevention not counted), the upper-body filler goes first, then a C exercise, then one set of B2; B1 is never cut (TIME_BUDGET_TRIM). A new exercise comes in as 2 light warm-up sets first (NEW_EXERCISE_INTRO).",
+    is: "Yfir 25 mín. fyrir æfingu (upphitun og hvíldir með, forvörn ekki talin) fer efri hluta fylling fyrst, svo C æfing, svo eitt sett af B2; B1 er aldrei skorin (TIME_BUDGET_TRIM). Ný æfing kemur fyrst inn sem 2 létt sett í upphitun (NEW_EXERCISE_INTRO).",
+  },
 };
 
 const MD3: DayRule = {
@@ -155,8 +169,8 @@ const MDP1: DayRule = {
   ],
   bans: { heavyLegs: true },
   note: {
-    en: "Players with few minutes keep their MD+1 top-up (the minutes rule: under 30 min or did not play = a real strength session). A small jump dose (≤ 6 contacts) stays.",
-    is: "Leikmenn með fáar mínútur halda MD+1 viðbótinni (mínútureglan: undir 30 mín. eða spilaði ekki = alvöru styrktaræfing). Lítill stökkskammtur (≤ 6 snertingar) helst.",
+    en: "Players with few minutes keep their MD+1 top-up as it is (the existing minutes rule, md1MinutesTier after Carling 2018: under 30 min or did not play = a real strength session); this table does not change it. A small jump dose (≤ 6 contacts) stays.",
+    is: "Leikmenn með fáar mínútur halda MD+1 viðbótinni óbreyttri (mínútureglan sem fyrir er, md1MinutesTier eftir Carling 2018: undir 30 mín. eða spilaði ekki = alvöru styrktaræfing); þessi tafla breytir henni ekki. Lítill stökkskammtur (≤ 6 snertingar) helst.",
   },
 };
 
@@ -257,7 +271,7 @@ const isHeavyMainLift = (ex: PrescribedExercise) =>
   dayCategoryOf(ex) === "heavy" && ex.category === "COMPOUND_STRENGTH" && repsOfLine(ex.dose.reps) > 0 && repsOfLine(ex.dose.reps) <= 6;
 /** Loaded work the near-match dose holds is its own rule (Harrison 2019), left out of the 6-rep caps. */
 const nearMatchDose = (ex: PrescribedExercise) => !!ex.dose.nearMatch || !!ex.goalPlan?.nearMatch;
-const coachOwn = (ex: PrescribedExercise) => /^coach/i.test(ex.modificationReason ?? "");
+export const coachOwn = (ex: PrescribedExercise) => /^coach/i.test(ex.modificationReason ?? "");
 const HEAVY_ECCENTRIC_IDS = new Set(["ex_nordic_curl", "ex_rdl"]);
 const DROP_JUMP_IDS = new Set(["ex_depth_jump"]);
 const LOADED_SQUAT_JUMP_IDS = new Set(["ex_trap_bar_jump_squat"]);
@@ -470,12 +484,18 @@ export function enforceDayRules(session: StrengthSession | null): StrengthSessio
     }
   }
 
-  const kept = blocks.map((b) => ({ ...b, exercises: b.exercises.filter((e) => e.dose.sets > 0) })).filter((b) => b.exercises.length > 0);
+  let kept = blocks.map((b) => ({ ...b, exercises: b.exercises.filter((e) => e.dose.sets > 0) })).filter((b) => b.exercises.length > 0);
+
+  // 8. MD-4's time budget (brief §6): over 25 min → upper-body filler out, then the C exercise, then one set of B2.
+  const timeTrimmed: NonNullable<StrengthSession["timeTrimmed"]> = [];
+  if (md === "MD-4" || rule.sameAs === "MD-4") out.push(...trimForTime(kept, md, session.appliedAdaptations, timeTrimmed));
   const minutes = estimateSessionMinutes(kept);
 
-  // 8. Time: shown, not trimmed (the estimate is rough; the ordered time trim comes later).
+  // 9. Time: shown, not trimmed (the estimate is rough), past the before + after budget. On MD-4 the time trim above
+  //    already said what it cut and what it kept, so this note is left out there once the trim has spoken.
   const budget = (rule.caps.minutes ?? Infinity) + (rule.caps.minutesAfter ?? 0);
-  const timeNoted = session.appliedAdaptations.some((a) => a.ruleId === DAY_RULE_TIME_NOTE);
+  const timeSpoken = [...session.appliedAdaptations, ...out].some((a) => a.ruleId === TIME_BUDGET_TRIM);
+  const timeNoted = timeSpoken || session.appliedAdaptations.some((a) => a.ruleId === DAY_RULE_TIME_NOTE);
   if (minutes > budget && !timeNoted) {
     const split = rule.caps.minutesAfter ? { en: ` (${rule.caps.minutes} before training + ${rule.caps.minutesAfter} after)`, is: ` (${rule.caps.minutes} fyrir æfingu + ${rule.caps.minutesAfter} eftir)` } : { en: "", is: "" };
     out.push({
@@ -489,7 +509,137 @@ export function enforceDayRules(session: StrengthSession | null): StrengthSessio
   }
 
   if (!out.length) return session;
-  return { ...session, blocks: kept, durationMin: minutes, appliedAdaptations: [...session.appliedAdaptations, ...out] };
+  kept = kept.filter((b) => b.exercises.length > 0);
+  const trimmedAll = [...(session.timeTrimmed ?? []), ...timeTrimmed];
+  return { ...session, blocks: kept, durationMin: minutes, appliedAdaptations: [...session.appliedAdaptations, ...out], ...(trimmedAll.length ? { timeTrimmed: trimmedAll } : {}) };
+}
+
+// ─── MD-4 time budget (brief §6) ───────────────────────────────────────────
+
+/** The place of an exercise in the coach's A / B1 / B2 / C layout, for the time trim. */
+export type TimeRole = "warmup" | "coach" | "prevention" | "A" | "B1" | "B2" | "C" | "upper";
+
+/** Injury prevention (with the §4b test add-ons on them): always applies, never trimmed for time. */
+export const PREVENTION_IDS: ReadonlySet<string> = new Set(["ex_nordic_curl", "ex_copenhagen"]);
+const STRENGTH_CATS = new Set<ExerciseCategory>(["COMPOUND_STRENGTH", "UNILATERAL_STRENGTH", "POSTERIOR_CHAIN", "ISOMETRIC_MAX"]);
+
+/**
+ * Roles in session order: the warm-up, a coach's own swap and the injury-prevention work are never trimmed for time;
+ * jumps, throws and fast lifts are A; the first heavy main lift is B1 (else the first strength lift); the next strength
+ * lift is B2; upper-body work is the filler; anything else is C.
+ */
+export function timeRoles(blocks: SessionBlock[]): TimeRole[][] {
+  let b1: [number, number] | null = null;
+  blocks.forEach((b, bi) => b.exercises.forEach((ex, i) => { if (!b1 && !coachOwn(ex) && isHeavyMainLift(ex)) b1 = [bi, i]; }));
+  if (!b1) blocks.forEach((b, bi) => b.exercises.forEach((ex, i) => { if (!b1 && !coachOwn(ex) && STRENGTH_CATS.has(ex.category) && !PREVENTION_IDS.has(ex.exerciseId)) b1 = [bi, i]; }));
+  let b2Taken = false;
+  return blocks.map((b, bi) => b.exercises.map((ex, i): TimeRole => {
+    if (b.type === "PREP" || b.type === "MOBILITY" || ex.category === "MOVEMENT_PREP" || ex.category === "MOBILITY") return "warmup";
+    if (coachOwn(ex)) return "coach";
+    if (PREVENTION_IDS.has(ex.exerciseId)) return "prevention";
+    if (b1 && b1[0] === bi && b1[1] === i) return "B1";
+    if (ex.category === "UPPER_BODY") return "upper";
+    const c = dayCategoryOf(ex);
+    if (c === "plyo" || c === "ballistic" || c === "fast" || c === "med_ball" || c === "sprint") return "A";
+    if (STRENGTH_CATS.has(ex.category) && !b2Taken) { b2Taken = true; return "B2"; }
+    return "C";
+  }));
+}
+
+const B2_SET_MARK = "one set of B2";
+
+/**
+ * A lighter day (yellow) never keeps an exercise the green day dropped for time: when the green build of the same day
+ * took exercises out (`TIME_BUDGET_TRIM`), the upper-body filler and C exercises the green session no longer holds come
+ * out here too. Nothing else changes. Returns the session as it was when green trimmed nothing.
+ */
+export function alignTimeTrimToGreen(session: StrengthSession, green: StrengthSession | null): StrengthSession {
+  if (!green || !green.appliedAdaptations.some((a) => a.ruleId === TIME_BUDGET_TRIM && / taken out\.$/.test(a.actionEN))) return session;
+  const greenIds = new Set(green.blocks.flatMap((b) => b.exercises.map((e) => e.exerciseId)));
+  const roles = timeRoles(session.blocks);
+  const out: AppliedAdaptation[] = [];
+  const removed: NonNullable<StrengthSession["timeTrimmed"]> = [];
+  const blocks = session.blocks.map((b, bi) => ({
+    ...b,
+    exercises: b.exercises.filter((ex, i) => {
+      const r = roles[bi][i];
+      if ((r !== "upper" && r !== "C") || greenIds.has(ex.exerciseId)) return true;
+      removed.push({ exerciseId: ex.exerciseId, sets: ex.dose.sets, role: r });
+      out.push({
+        ruleId: TIME_BUDGET_TRIM,
+        triggerEN: `${session.mdContext} time budget: the green day takes ${ex.nameEN} out for time`,
+        triggerIS: `Tímarammi ${session.mdContext}: grænn dagur tekur ${ex.nameIS || ex.nameEN} út vegna tíma`,
+        actionEN: `${ex.nameEN} taken out here too: a lighter day is never more than a green one.`,
+        actionIS: `${ex.nameIS || ex.nameEN} líka tekin út hér: léttari dagur er aldrei meira en grænn.`,
+        evidence: TIME_BUDGET_EVIDENCE,
+      });
+      return false;
+    }),
+  })).filter((b) => b.exercises.length > 0);
+  if (!out.length) return session;
+  return { ...session, blocks, durationMin: estimateSessionMinutes(blocks), appliedAdaptations: [...session.appliedAdaptations, ...out], timeTrimmed: [...(session.timeTrimmed ?? []), ...removed] };
+}
+
+/** Trims `blocks` in place to the MD-4 budget, in the coach's order. Logs one line per change. Runs once per session:
+ *  the upper-body and C cuts are naturally done after one pass, and B2 loses one set at most (`prior` remembers it). */
+function trimForTime(blocks: SessionBlock[], md: string, prior: AppliedAdaptation[], removed: NonNullable<StrengthSession["timeTrimmed"]>): AppliedAdaptation[] {
+  const out: AppliedAdaptation[] = [];
+  const budget = MD4_TIME_BUDGET_MIN;
+  // The 25 min before training: everything but the injury-prevention work, which has the 8 min after.
+  const est = () => estimateSessionMinutes(blocks
+    .map((b) => ({ ...b, exercises: b.exercises.filter((ex) => !PREVENTION_IDS.has(ex.exerciseId)) }))
+    .filter((b) => b.exercises.length > 0));
+  const start = est();
+  if (start <= budget) return out;
+  const line = (why: Bi, action: Bi): AppliedAdaptation => ({
+    ruleId: TIME_BUDGET_TRIM,
+    triggerEN: `${md} time budget: about ${budget} min before training with the warm-up and rests (injury prevention not counted); ${why.en}`,
+    triggerIS: `Tímarammi ${md}: um ${budget} mín. fyrir æfingu með upphitun og hvíldum (forvörn ekki talin með); ${why.is}`,
+    actionEN: action.en, actionIS: action.is, evidence: TIME_BUDGET_EVIDENCE,
+  });
+  const take = (role: "upper" | "C", label: Bi) => {
+    // Last first, one exercise at a time, until the session fits.
+    for (;;) {
+      if (est() <= budget) return;
+      const roles = timeRoles(blocks);
+      let at: [number, number] | null = null;
+      roles.forEach((rs, bi) => rs.forEach((r, i) => { if (r === role) at = [bi, i]; }));
+      if (!at) return;
+      const [bi, i] = at as [number, number];
+      const before = est();
+      const ex = blocks[bi].exercises[i];
+      blocks[bi].exercises.splice(i, 1);
+      removed.push({ exerciseId: ex.exerciseId, sets: ex.dose.sets, role });
+      out.push(line({ en: `estimated at ${before} min`, is: `metin ${before} mín.` },
+        { en: `${ex.nameEN} (${label.en}) taken out.`, is: `${ex.nameIS || ex.nameEN} (${label.is}) tekin út.` }));
+    }
+  };
+  take("upper", { en: "upper-body filler", is: "efri hluta fylling" });
+  take("C", { en: "C exercise", is: "C æfing" });
+  const b2Done = prior.some((a) => a.ruleId === TIME_BUDGET_TRIM && a.actionEN.includes(B2_SET_MARK));
+  if (est() > budget && !b2Done) {
+    const roles = timeRoles(blocks);
+    let at: [number, number] | null = null;
+    roles.forEach((rs, bi) => rs.forEach((r, i) => { if (r === "B2" && !at) at = [bi, i]; }));
+    if (at) {
+      const [bi, i] = at as [number, number];
+      const ex = blocks[bi].exercises[i];
+      if (ex.dose.sets > 1) {
+        const before = est();
+        blocks[bi].exercises[i] = { ...ex, dose: { ...ex.dose, sets: ex.dose.sets - 1 } };
+        removed.push({ exerciseId: ex.exerciseId, sets: 1, role: "B2", setOnly: true });
+        out.push(line({ en: `estimated at ${before} min`, is: `metin ${before} mín.` },
+          { en: `${ex.nameEN}: ${ex.dose.sets - 1} sets (${B2_SET_MARK} off).`, is: `${ex.nameIS || ex.nameEN}: ${ex.dose.sets - 1} sett (eitt sett af B2 tekið af).` }));
+      }
+    }
+  }
+  const end = est();
+  const noted = prior.some((a) => a.ruleId === TIME_BUDGET_TRIM && /^Kept/.test(a.actionEN));
+  if (end > budget && !noted) {
+    out.push(line({ en: `still estimated at ${end} min`, is: `enn metin ${end} mín.` },
+      { en: "Kept: B1 (the heavy lift) is never cut and the injury-prevention work always stays.", is: "Haldið: B1 (þunga lyftan) er aldrei skorin og meiðslaforvörnin helst alltaf." }));
+  }
+  return out;
 }
 
 /** For the coach's table and tests: the library exercises that have no day category on purpose (warm-up etc.). */
