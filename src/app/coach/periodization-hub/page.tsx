@@ -17,7 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupView from "@/components/coach/WeekSetupView";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
-import { VALD_TRIM_CITE, mondayOfIso, buildMesoPlan, buildMesoBlocks, buildCalendarBlock, seedBlockDays, teamMatchUnitNote, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ValdTrimLift, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
+import { VALD_TRIM_CITE, mondayOfIso, buildMesoPlan, buildMesoBlocks, buildCalendarBlock, seedBlockDays, inSeasonRange, teamMatchUnitNote, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ValdTrimLift, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput, type ExposureInput, type ShapeDirInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { exposuresFromTlyp, shapeDirsFromShape } from "@/lib/micropulse/trainingNeeds";
@@ -771,7 +771,7 @@ export default function PeriodizationHubPage() {
   React.useEffect(() => {
     if (!plan) return;
     const start = mondayOf(blkStart);
-    const seed = seedBlockDays({ unit: blkUnit, startDate: blkStart, numWeeks: MESO_HORIZON, scopeName: isPlayerScope ? player!.name : "__team__", baseOverloadPct: blkBase, stepPct: blkStep, allFixtures: plan.fixtures ?? [], goal: effectiveGoal, deload: blkDeload, hold: blkHold, offseasonStart: plan.phases.find((p) => p.key === "offseason")?.start ?? undefined });
+    const seed = seedBlockDays({ unit: blkUnit, startDate: blkStart, numWeeks: MESO_HORIZON, scopeName: isPlayerScope ? player!.name : "__team__", baseOverloadPct: blkBase, stepPct: blkStep, allFixtures: plan.fixtures ?? [], goal: effectiveGoal, deload: blkDeload, hold: blkHold, offseasonStart: plan.phases.find((p) => p.key === "offseason")?.start ?? undefined, inSeason: inSeasonRange(plan.phases) });
     const sk: Record<string, DayState> = { ...seed.days };
     const ov: Record<string, CalType> = { ...seed.types };
     // FIXTURES ARE THE ONLY SOURCE OF MATCHES. The auto layout seeds only session/off — it never
@@ -819,7 +819,7 @@ export default function PeriodizationHubPage() {
   const calBlock = React.useMemo(() => {
     if (!plan || Object.keys(blkSkeleton).length === 0) return null;
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
-    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeksEff, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [], offseasonStart: offPhaseStart ?? undefined, goal: effectiveGoal, deload: blkDeload, hold: blkHold, camps: campRegions });
+    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeksEff, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [], offseasonStart: offPhaseStart ?? undefined, inSeason: inSeasonRange(plan.phases), goal: effectiveGoal, deload: blkDeload, hold: blkHold, camps: campRegions });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeksEff, blkBase, blkStep, blkScope, selId, blkUnit, effectiveGoal, blkDeload, blkHold, campRegions]);
 

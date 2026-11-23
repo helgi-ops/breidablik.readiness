@@ -549,6 +549,39 @@ test("seedBlockDays: a week with no fixture gets a training week, keeps the rest
   assert.deepEqual(off.types, {});
 });
 
+// Contradiction 9 (coach's call 2026-11-23): in season the block follows the week rule — at most two training days in
+// a row, a match day is not one; the day that goes off is the week rule's pick (MD-5 before MD-4 / MD-3).
+const trainingRuns = (types: string[]) => { let run = 0, max = 0; for (const t of types) { run = t === "rest" || t === "match" ? 0 : run + 1; max = Math.max(max, run); } return max; };
+
+test("buildCalendarBlock in season: never three training days in a row; the 8-day week loses MD-5, not MD-4 / MD-3", () => {
+  const season = { start: "2026-01-01", end: "2026-12-31" };
+  const b = buildCalendarBlock({ unit: UNIT, startDate: "2026-01-05", numWeeks: 6, scopeName: "t", baseOverloadPct: 100, stepPct: 8, inSeason: season });
+  const types = b.weeks.flatMap((w) => w.days.map((d) => d.type));
+  assert.ok(trainingRuns(types) <= 2, `training days in a row = ${trainingRuns(types)}`);
+  // W2: Sat → Sun is an 8-day week. Out of season it is rest, Mechanical (MD-5), Locomotive, Mixed, rest, Activation.
+  assert.deepEqual(b.weeks[1].days.map((d) => d.type), ["rest", "rest", "locomotive", "mixed", "rest", "activation", "match"]);
+  assert.deepEqual(b.weeks[1].days.map((d) => d.md).slice(1, 4), ["MD-5", "MD-4", "MD-3"]);
+  // Out of season the block keeps its own safety (three in a row, matches counted): unchanged.
+  const off = buildCalendarBlock({ unit: UNIT, startDate: "2026-01-05", numWeeks: 6, scopeName: "t", baseOverloadPct: 100, stepPct: 8 });
+  assert.deepEqual(off.weeks[1].days.map((d) => d.type), ["rest", "mechanical", "locomotive", "mixed", "rest", "activation", "match"]);
+  // Only days inside the competitive phase follow the week rule.
+  const later = buildCalendarBlock({ unit: UNIT, startDate: "2026-01-05", numWeeks: 6, scopeName: "t", baseOverloadPct: 100, stepPct: 8, inSeason: { start: "2026-02-01", end: "2026-12-31" } });
+  assert.equal(later.weeks[1].days[1].type, "mechanical");
+});
+
+test("buildCalendarBlock in season: a day the coach pinned is never turned off by the week rule", () => {
+  const b = buildCalendarBlock({ unit: UNIT, startDate: "2026-01-05", numWeeks: 6, scopeName: "t", baseOverloadPct: 100, stepPct: 8, inSeason: { start: "2026-01-01", end: "2026-12-31" }, typeOverrides: { "2026-01-13": "mechanical" } });
+  assert.equal(b.weeks[1].days[1].type, "mechanical");
+});
+
+test("seedBlockDays in season: a week with no match puts the day off before Mixed (never three in a row)", () => {
+  const unit: MatchUnitAbs = { dist: 10000, hsr: 800, load: 1000, accdec: 200, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
+  const common = { unit, scopeName: "t", baseOverloadPct: 100, stepPct: 5, goal: "accum" as const, deload: { weekStart: null, light: true } };
+  const seed = seedBlockDays({ ...common, startDate: "2026-05-04", numWeeks: 6, allFixtures: ["2026-05-03", "2026-06-13"], inSeason: { start: "2026-04-01", end: "2026-10-31" } });
+  const type = (iso: string) => seed.types[iso] ?? seed.days[iso];
+  assert.deepEqual(["2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15", "2026-05-16", "2026-05-17"].map(type), ["mechanical", "locomotive", "off", "mixed", "activation", "off", "off"]);
+});
+
 test("buildCalendarBlock: a held week keeps the full week; a Realization block outside the hold keeps the lighter one", () => {
   const unit: MatchUnitAbs = { dist: 10000, hsr: 800, load: 1000, accdec: 200, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
   const common = { unit, startDate: "2026-05-04", numWeeks: 2, scopeName: "t", baseOverloadPct: 100, stepPct: 5, goal: "realize" as const, matchDates: ["2026-05-09", "2026-05-16"], allFixtures: ["2026-05-02", "2026-05-09", "2026-05-16"] };

@@ -11,7 +11,7 @@
  * client hub types and the server loader types both satisfy it without importing
  * across the client/server boundary.
  */
-import { buildCalendarBlock, deloadWeekIndex, positionGroup } from "./index";
+import { buildCalendarBlock, deloadWeekIndex, inSeasonRange, positionGroup } from "./index";
 import type { Bi, BlockDeload, CalType, CalendarBlock, CalWeek, MatchUnitAbs, RecGoalKey, TeamAverages } from "./index";
 import { standardTrainingDays, weeklyKpiMultiple } from "./plannedVolume";
 import { LIGHT_WEEK_VOL } from "./imaStandard";
@@ -37,6 +37,8 @@ export interface PlayerBlockPlan {
   teamBaseline: { avg: TeamAverages };
   positionBaselines: Array<{ key: number; avg: TeamAverages; label: Bi }>;
   fixtures?: string[];
+  /** The season phases: the competitive one sets where the in-season week rule applies (`inSeasonRange`). */
+  phases?: Array<{ key: string; start: string; end: string }>;
 }
 export interface PlayerBlockOpts {
   blkStart: string;
@@ -219,7 +221,7 @@ export function buildPlayerBlock(plan: PlayerBlockPlan, pl: PlayerBlockPlayer, o
   const block = buildCalendarBlock({
     unit, startDate: opts.blkStart, numWeeks: opts.blkWeeks, scopeName: pl.name, scopePos: pl.position,
     phase: opts.phaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeleton, typeOverrides: opts.typeOverrides,
-    emphasis: { hsr: hsrEmph, mech: mechEmph, dir: steerActive && steer ? steer.dirEmph : undefined }, offseasonStart: opts.offseasonStart, goal: opts.goal, deload: opts.deload, hold: opts.hold, camps: opts.camps,
+    emphasis: { hsr: hsrEmph, mech: mechEmph, dir: steerActive && steer ? steer.dirEmph : undefined }, offseasonStart: opts.offseasonStart, inSeason: inSeasonRange(plan.phases), goal: opts.goal, deload: opts.deload, hold: opts.hold, camps: opts.camps,
     // A held week 1 has to see the match just before the block, as the team calendar does, or it plans a
     // full week of training with no recovery days and sets the peak every other week is scaled against.
     ...(opts.hold && plan.fixtures?.length ? { allFixtures: plan.fixtures } : {}),

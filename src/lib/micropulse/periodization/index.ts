@@ -9,6 +9,7 @@
  * number is sourced from the squad instead of assumptions (his frustration: "built with no data").
  */
 
+import { checkThreeInARow, type WeekRuleDay } from "@/lib/micropulse/weekSetup/weekRules";
 import { CAL_SHARE_HI, CAL_SHARE_HI_REF, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, LIGHT_WEEK_VOL, holdsStandardWeek, type HiEvidence, type HiVar, type ImaTrainingDayType, type ImaVar } from "./imaStandard";
 
 export type Bi = { en: string; is: string };
@@ -750,13 +751,22 @@ export function deloadWeekIndex(startMonday: string, weekStart: string | null, n
 
 /** A week with no match to build towards: the build-up week, on the same day order as the match week. */
 const FREE_WEEK: CalType[] = ["mechanical", "locomotive", "mixed", "rest", "activation", "rest", "rest"];
+/** The same week in season (an international break): never three training days in a row (the week rule,
+ *  `INSEASON_THREE_IN_A_ROW`), so the day off comes before Mixed (coach's call 2026-11-23). */
+const FREE_WEEK_INSEASON: CalType[] = ["mechanical", "locomotive", "rest", "mixed", "activation", "rest", "rest"];
+
+/** The competitive phase as a date range [start, end) — the days the in-season week rule covers. */
+export function inSeasonRange(phases: Array<{ key: string; start: string; end: string }> | null | undefined): { start: string; end: string } | undefined {
+  const c = (phases ?? []).find((p) => p.key === "competitive");
+  return c ? { start: c.start, end: c.end } : undefined;
+}
 
 /** The layout a block starts from before the coach edits it. Same fixtures, goal and hold as the block it seeds, so
  *  every seeded day agrees with what `buildCalendarBlock` computes: a seeded session on a day it rests would count as
  *  forced on, read as Mixed and skip the 3-in-a-row safety. A week with no fixture and under two sessions has nothing
  *  to build towards and would plan empty, so it gets `FREE_WEEK`, keeping the rest after a match (Breiðablik trained
  *  3.8 days in those weeks in 2026). Fixture days are set by the caller. */
-export function seedBlockDays(opts: Pick<Parameters<typeof buildCalendarBlock>[0], "unit" | "startDate" | "numWeeks" | "scopeName" | "baseOverloadPct" | "stepPct" | "goal" | "deload" | "hold" | "offseasonStart"> & { allFixtures: string[] }): { days: Record<string, "off" | "session">; types: Record<string, CalType> } {
+export function seedBlockDays(opts: Pick<Parameters<typeof buildCalendarBlock>[0], "unit" | "startDate" | "numWeeks" | "scopeName" | "baseOverloadPct" | "stepPct" | "goal" | "deload" | "hold" | "offseasonStart" | "inSeason"> & { allFixtures: string[] }): { days: Record<string, "off" | "session">; types: Record<string, CalType> } {
   const start = mondayOfIso(opts.startDate), endIso = addDays(start, opts.numWeeks * 7);
   const matchDates = opts.allFixtures.filter((d) => d >= start && d < endIso);
   const days: Record<string, "off" | "session"> = {}, types: Record<string, CalType> = {};
@@ -765,7 +775,9 @@ export function seedBlockDays(opts: Pick<Parameters<typeof buildCalendarBlock>[0
     const sessions = w.days.filter((d) => d.type !== "rest" && d.type !== "topup" && d.type !== "match").length;
     const free = sessions < 2 && !w.days.some((d) => d.type === "match");
     w.days.forEach((d, i) => {
-      const iso = addDays(w.weekStart, i), fill = free && d.type === "rest" && !justPlayed(iso) ? FREE_WEEK[i] : "rest";
+      const iso = addDays(w.weekStart, i);
+      const inSeason = !!opts.inSeason && iso >= opts.inSeason.start && iso < opts.inSeason.end;
+      const fill = free && d.type === "rest" && !justPlayed(iso) ? (inSeason ? FREE_WEEK_INSEASON : FREE_WEEK)[i] : "rest";
       days[iso] = d.type !== "rest" || fill !== "rest" ? "session" : "off";
       // Past the season the block rotates its own development days, so a filled day stays untyped there.
       if (fill !== "rest" && !(opts.offseasonStart && iso >= opts.offseasonStart)) types[iso] = fill;
@@ -799,6 +811,11 @@ export function buildCalendarBlock(opts: {
    *  each session day is re-typed to a development rotation (Strength / Power / Conditioning / Activation).
    *  Recovery (top-up) and rest days are kept. Omit for a single-phase block. */
   offseasonStart?: string;
+  /** The competitive phase [start, end) (`inSeasonRange(plan.phases)`). Days inside it follow the week rule
+   *  (`INSEASON_THREE_IN_A_ROW`): at most two training days in a row, a match day is not one and ends the run, and
+   *  the day that goes off is the week rule's pick (MD+2, MD-2, then the days furthest from the match). Days outside
+   *  keep the block's own safety (three in a row, matches counted). Omit → the block's safety everywhere. */
+  inSeason?: { start: string; end: string };
   /** Block GOAL — shapes the week (volume scalar, taper depth, roomy-week template, strength scheme).
    *  ADDITIVE: when omitted every goal lever is a no-op, so the block is byte-identical to a goal-less
    *  build. Accumulation = higher volume / gentle taper; Transmutation = balanced / moderate taper;
@@ -939,10 +956,23 @@ export function buildCalendarBlock(opts: {
       devI++;
     }
   }
-  // Safety: never more than 3 sessions (any on-day incl. match/top-up) in a row — scan the whole block.
+  // Safety: never more than 3 sessions (any on-day incl. match/top-up) in a row — scan the whole block. In season
+  // the week rule decides instead (one rule with Week setup, coach's call 2026-11-23): at most two training days in a
+  // row, a match is not one; the day that goes off is the week rule's pick. A day the coach pinned is never turned off.
   const coachPinned = (k: number) => { const iso = addDays(start, k); return onSet.has(iso) || !!ovr[iso]; };
+  const seasonDay = (k: number) => { const iso = addDays(start, k); return !!opts.inSeason && iso >= opts.inSeason.start && iso < opts.inSeason.end; };
+  if (opts.inSeason) {
+    const days: WeekRuleDay[] = [];
+    for (let k = 0; k < total; k++) {
+      if (!seasonDay(k)) continue;
+      days.push({ date: addDays(start, k), kind: dayType[k] === "match" ? "match" : dayType[k] === "rest" ? "off" : "session", editable: dayType[k] !== "match" && !coachPinned(k) });
+    }
+    const fix = days.length ? checkThreeInARow({ days, matchDates: opts.allFixtures?.length ? opts.allFixtures : matchIso, phase: "competitive" }).fix : null;
+    for (const r of fix?.off ?? []) { const k = Math.round((Date.parse(r.date) - firstMs) / DAY); if (k >= 0 && k < total) dayType[k] = "rest"; }
+  }
   let run = 0;
   for (let k = 0; k < total; k++) {
+    if (seasonDay(k)) { run = 0; continue; } // the week rule above covers it
     if (dayType[k] === "rest") { run = 0; continue; }
     run++;
     if (run > 3) { if (dayType[k] !== "match" && !coachPinned(k)) { dayType[k] = "rest"; run = 0; } else run = 3; } // never override a coach-forced/-typed session

@@ -90,7 +90,7 @@ Styrktaræfing dagsins er byggð í `buildStrengthSession` (`SP/index.ts`), í �
 | Fasi vikunnar (`resolveWeekPhase`) | Hver bygging | Fasi þjálfarans á vikunni, annars fasi tímabilsplansins. Keppni telst „inseason“ | — | Þjálfari vistar fasann |
 | Fasar tímabils (`detectSeasonPhases`) | — | Undirbúningstímabil byrjar á dagsetningu þjálfarans, annars 42 dögum fyrir fyrsta leik. Undirbúningstímabil Breiðabliks 2026 byrjar 30. nóv., úr gögnum þjálfarans | — | `season_plans.overrides` |
 | **`INSEASON_MD2_OFF`** (nýtt, 8d487b4) | Sjálfvirka MD-röðunin í Week setup, á keppnistímabili | Dagurinn eftir leik er MD+1 endurheimt, en sunnudagur vikunnar er áfram frí. MD+2 er **frídagur**. MD-1 er aldrei gerður að frídegi. Leikur síðustu tvo daga fyrri viku telur með | MicroPulse-regla; Buchheit 2023 | Þjálfari getur breytt hvaða degi sem er; ekki skráð. Undirbúnings- og utan tímabils: óbreytt |
-| **`INSEASON_THREE_IN_A_ROW`** | Keppnistímabil (eða leikur í vikunni og fasi óþekktur) | Aldrei þrír æfingadagar í röð. Leikdagur er ekki æfing. Leggur til að fækka um frídaga í þessari röð: MD+2, MD-2, MD+3, MD+4, MD-5, MD-6 … MD-3, MD-4 síðast. Vinnan af MD-2 færist á MD-3 og MD-1 | MicroPulse-regla; Buchheit 2023 | **Aðeins ráð.** „Halda planinu“ krefst ástæðu, skráð í `session_fit_override_log` (`week_rule`) |
+| **`INSEASON_THREE_IN_A_ROW`** | Keppnistímabil (eða leikur í vikunni og fasi óþekktur) | Aldrei þrír æfingadagar í röð. Leikdagur er ekki æfing. Gildir líka í Mesó-dagatalinu á keppnistímabili, þar sem dagurinn fer beint í frí (ósamræmi 9). Leggur til að fækka um frídaga í þessari röð: MD+2, MD-2, MD+3, MD+4, MD-5, MD-6 … MD-3, MD-4 síðast. Vinnan af MD-2 færist á MD-3 og MD-1 | MicroPulse-regla; Buchheit 2023 | **Aðeins ráð.** „Halda planinu“ krefst ástæðu, skráð í `session_fit_override_log` (`week_rule`) |
 | **`MISSED_DAY_NOT_SHIFTED`** | MD-3 til MD-1 þegar MD-4 var sendur en ekki kláraður | Bara lína í forskoðun þjálfarans. Misstur dagur er **aldrei** færður eða bætt ofan á annan | MicroPulse-regla; Buchheit 2024 | Sést bara í forskoðun þjálfarans |
 | Vika án leiks (`NO_MATCH_WEEK_DAY`) | Enginn leikur nálægt, vikuplan til | Styrkdagur = MD-4, kraftdagur = MD-3, léttur dagur = MD-2, hvíld = engin æfing | Regla þjálfarans | `team_strength_palette.no_match_week`; færsla eina viku í senn, með Afturkalla |
 | Árekstur í viku án leiks | — | Varar við styrkdegi sem lendir á frídegi og stingur upp á næsta lausa degi | — | Sama |
@@ -429,8 +429,11 @@ Eftirtöldum ákvörðunum má breyta:
 8. ~~**Þétt vika.**~~ **Lagað 23. nóv.:** 2 leikir á 7 dögum, og dagurinn í dag innan þeirra 7 daga. Leikir í
    dag og fram í tímann koma úr dagatali liðsins og teljast alltaf. Leikur sem er búinn telst aðeins ef leikmaðurinn
    spilaði ≥60 mín. Áður taldi kóðinn aðeins leiki með mínútum á 15 daga bili, svo næsti leikur taldist aldrei.
-9. **Tvö „í röð“-hámörk:** Mesó-dagatalið leyfir 3 og telur leiki með. Vikureglan leyfir 2 og telur leiki ekki með.
-   Sjálfvirka röðunin fyrir viku frá sunnudegi til sunnudags fellur á vikureglunni (MD-2 ráðlagt).
+9. ~~**Tvö „í röð“-hámörk.**~~ **Lagað 23. nóv.:** á keppnistímabili fylgir Mesó-dagatalið vikureglunni: mest 2
+   æfingadagar í röð og leikdagur telst ekki með. Frídagurinn er valinn eins og í vikureglunni (MD+2, MD-2, svo dagar
+   lengst frá leik), svo í 8 daga viku fellur MD-5 niður og vinna dagsins færist ekki annað. Í landsleikjahléi er
+   vikan þung, hlaup, frí, blandað, virkjun. Utan tímabils heldur Mesó sínu hámarki (3, leikir taldir). Dagur sem
+   þjálfari festi heldur sér.
 10. **MD+2 er meðhöndlaður á þrjá vegu:**
     - frí í sjálfvirku röðuninni, Mesó og dagsreglum;
     - æfing í álagsplani (35%) og periodization-líkani;
