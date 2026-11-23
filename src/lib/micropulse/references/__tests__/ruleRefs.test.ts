@@ -11,7 +11,7 @@ import { BRAKING_REFS } from "@/lib/micropulse/goalPlan/braking";
 import { GYM_REFS } from "@/lib/micropulse/goalPlan/gymGoals";
 import { JUMP_REFS } from "@/lib/micropulse/goalPlan/jump";
 import { RX_REFS } from "@/lib/micropulse/goalPlan/liftRx";
-import { RULE_CODE_DIRS, citationMatches, citationsIn } from "../citationScan";
+import { OTHER_CITATION_SOURCES, RULE_CODE_DIRS, citationMatches, citationsIn } from "../citationScan";
 import { RULE_REFS, UNRESOLVED_SHORTS, findRefByShort, fullRefsFor, unresolvedReason } from "../ruleRefs";
 
 const ROOT = join(__dirname, "../../../../..");
@@ -33,9 +33,10 @@ function sourceFiles(p: string): string[] {
   });
 }
 
-const codeCitations = (): string[] => [
-  ...new Set(RULE_CODE_DIRS.flatMap((d) => sourceFiles(d)).flatMap((f) => citationsIn(readFileSync(f, "utf8")))),
+const citationsUnder = (dirs: readonly string[]): string[] => [
+  ...new Set(dirs.flatMap((d) => sourceFiles(d)).flatMap((f) => citationsIn(readFileSync(f, "utf8")))),
 ];
+const codeCitations = (): string[] => citationsUnder(RULE_CODE_DIRS);
 
 const openOnes = (shorts: string[]) => shorts.filter((s) => !findRefByShort(s) && !unresolvedReason(s));
 
@@ -49,6 +50,12 @@ describe("rule references", () => {
   it("every short citation in the rule code resolves or is listed as unresolved", () => {
     const shorts = codeCitations();
     expect(shorts.length).toBeGreaterThan(150);
+    expect(openOnes(shorts)).toEqual([]);
+  });
+
+  it("every citation behind VALD, recovery, isometrics, tests, levers and prescriptions resolves or is unresolved", () => {
+    const shorts = citationsUnder(OTHER_CITATION_SOURCES);
+    expect(shorts.length).toBeGreaterThan(60);
     expect(openOnes(shorts)).toEqual([]);
   });
 
@@ -92,9 +99,17 @@ describe("rule references", () => {
   it("finds where each citation sits, so the UI can make just that text tappable", () => {
     const text = "Cormie, McGuigan & Newton 2011; Suchomel 2017 (WL derivatives); Carling (2018) said so. Nov 2026";
     const got = citationMatches(text);
-    expect(got.map((m) => text.slice(m.index, m.index + m.length))).toEqual(["McGuigan & Newton 2011", "Suchomel 2017", "Carling (2018)"]);
-    expect(got.map((m) => m.short)).toEqual(["McGuigan & Newton 2011", "Suchomel 2017", "Carling 2018"]);
+    expect(got.map((m) => text.slice(m.index, m.index + m.length))).toEqual(["Cormie, McGuigan & Newton 2011", "Suchomel 2017", "Carling (2018)"]);
+    expect(got.map((m) => m.short)).toEqual(["Cormie, McGuigan & Newton 2011", "Suchomel 2017", "Carling 2018"]);
     expect(findRefByShort(got[0].short)?.key).toBe("cormie2011");
+  });
+
+  it("reads a full author list as one citation, by its first author", () => {
+    const text = `"Lum, Barbosa, Joseph, Balasekaran (2021). Effects of…" and "Stanley, Peake & Buchheit 2013"`;
+    const got = citationMatches(text);
+    expect(got.map((m) => text.slice(m.index, m.index + m.length))).toEqual(["Lum, Barbosa, Joseph, Balasekaran (2021)", "Stanley, Peake & Buchheit 2013"]);
+    expect(findRefByShort(got[1].short)?.key).toBe("stanley2013");
+    expect(citationsIn("Cite: Aug 2026 and Football, Season 2026")).toEqual([]);
   });
 
   it("the catalogue's references section lists each of its citations in full, or as unresolved", () => {
@@ -106,8 +121,8 @@ describe("rule references", () => {
     }
   });
 
-  it("docs/heimildir-aefingakerfis.md lists every citation in the rule code in full, or as unresolved", () => {
-    for (const s of codeCitations()) {
+  it("docs/heimildir-aefingakerfis.md lists every citation in the rule code and the other sources in full, or as unresolved", () => {
+    for (const s of [...codeCitations(), ...citationsUnder(OTHER_CITATION_SOURCES)]) {
       const ref = findRefByShort(s);
       if (ref) expect(ALL_REFS_DOC).toContain(ref.cite);
       else expect(ALL_REFS_DOC).toContain(`**${unresolvedKey(s)}**`);

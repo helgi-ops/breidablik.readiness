@@ -11,6 +11,7 @@
 
 import * as React from "react";
 import type { ValdTrainingPlan } from "@/lib/micropulse/vald/valdSummary";
+import { CiteRefs } from "@/components/coach/CiteRefs";
 
 const BAND_CHIP: Record<string, string> = {
   below: "bg-[#f6e2dc] text-[#a83e28]",
@@ -44,7 +45,7 @@ export default function ValdTrainingFocus({ plan, is, className = "" }: { plan: 
                 ) : null}
               </div>
               <p className="mt-1 text-[12.5px] text-slate-700"><span className="font-semibold">{is ? "Þjálfa" : "Train"}: </span>{p.lever}</p>
-              <p className="mt-0.5 text-[11px] text-slate-400">{is ? "vs" : "vs"} {p.why} · {p.cite}</p>
+              <p className="mt-0.5 text-[11px] text-slate-400">{is ? "vs" : "vs"} {p.why} · <CiteRefs text={p.cite} is={is} /></p>
             </li>
           ))}
         </ol>

@@ -13,6 +13,7 @@
  */
 
 import * as React from "react";
+import { CiteRefs } from "@/components/coach/CiteRefs";
 import { prescriptionFor, rankGroupFocus, worstGapFor, type FocusMember } from "@/lib/micropulse/trainingPrescriptions";
 
 type Lang = "EN" | "IS";
@@ -112,8 +113,8 @@ export default function TlypTrainingFocus({
                         </div>
                         <div className="text-slate-600">
                           {m(p)}{" "}
-                          <span className="cursor-help text-slate-400 underline decoration-dotted" title={p.cite}>
-                            ({p.cite.split(";")[0].trim()})
+                          <span className="text-slate-400">
+                            (<CiteRefs text={p.cite} is={IS} />)
                           </span>
                         </div>
                       </li>

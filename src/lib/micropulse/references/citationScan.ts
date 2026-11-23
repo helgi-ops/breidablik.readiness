@@ -12,8 +12,26 @@ export const RULE_CODE_DIRS = [
   "src/lib/micropulse/plannedSessionLoad.ts",
 ] as const;
 
+/**
+ * Where else citations reach a coach: the sources behind VALD focus, test benchmarks, recovery, isometric
+ * protocols, development levers and position prescriptions. Same rule as the rule code: each one resolves to
+ * a full reference or is listed as unresolved.
+ */
+export const OTHER_CITATION_SOURCES = [
+  "src/lib/micropulse/vald",
+  "src/lib/micropulse/isometrics",
+  "src/lib/recovery",
+  "src/lib/micropulse/trainingPrescriptions.ts",
+  "src/lib/micropulse/load/fitnessTrend.ts",
+  "src/lib/micropulse/load/fitnessTestBenchmarks.ts",
+  "src/lib/micropulse/playerAnalysis/developmentLevers.ts",
+] as const;
+
 const SHORT_RE =
-  /(?:\p{Lu}[\p{L}]+ de |(?:Los|van der|van|de|di|dos) )?\p{Lu}[\p{L}'’-]+(?: et al\.?)?(?: & \p{Lu}[\p{L}'’-]+)? \(?(?:19|20)\d{2}[ab]?\b/gu;
+  /(?:\p{Lu}[\p{L}]+ de |(?:Los|van der|van|de|di|dos|Di|De|Van|Dos) )?\p{Lu}[\p{L}'’-]+(?: et al\.?)?(?: & \p{Lu}[\p{L}'’-]+)? \(?(?:19|20)\d{2}[ab]?\b/gu;
+
+/** The other authors written before the last one: "Lum, Barbosa, Joseph, " in "Lum, Barbosa, Joseph, Balasekaran (2021)". */
+const AUTHOR_CHAIN_BEFORE = /(?:^|[\s"'(\[`])((?:\p{Lu}[\p{L}'’-]+(?: \p{Lu}[\p{L}'’-]+)?, )+)$/u;
 
 /**
  * Words that sit before a year without being an author: journal abbreviations inside full references
@@ -21,19 +39,30 @@ const SHORT_RE =
  */
 const NOT_AUTHORS = new Set([
   "Med", "Res", "Perform", "Sports", "Sport", "Exerc", "PeerJ", "Kinet", "Physiol", "Psychol", "Health", "ISBS",
-  "Cond", "Football", "One", "Rehabil", "Ther", "Train", "Sci", "Rep", "Open", "Nov", "Oct", "Jan", "Season",
+  "Cond", "Football", "One", "Rehabil", "Ther", "Train", "Sci", "Rep", "Open", "Season",
   "Since", "Until", "Yellow", "VERSION", "Library", "Safety", "DSI", "Coach", "Endurgreining", "Breiðabliks",
+  "Jan", "Feb", "Mar", "March", "Apr", "April", "May", "Jun", "June", "Jul", "July", "Aug", "August", "Sep", "Sept",
+  "September", "Oct", "October", "Nov", "November", "Dec", "December", "EFL", "IJSC",
 ]);
 
-/** Each citation with where it sits in the text. `length` covers a closing ")" in "Carling (2018)". */
+/**
+ * Each citation with where it sits in the text. `length` covers a closing ")" in "Carling (2018)". A full author
+ * list ("Lum, Barbosa, Joseph, Balasekaran (2021)") is one citation; `ruleRefs` reads it by its first author.
+ */
 export function citationMatches(text: string): Array<{ index: number; length: number; short: string }> {
   const out: Array<{ index: number; length: number; short: string }> = [];
   for (const m of text.matchAll(SHORT_RE)) {
-    const s = m[0].replace("(", "");
+    let s = m[0].replace("(", "");
     if (NOT_AUTHORS.has(s.split(" ")[0])) continue;
-    const index = m.index ?? 0;
+    let index = m.index ?? 0;
     const closes = m[0].includes("(") && text[index + m[0].length] === ")";
-    out.push({ index, length: m[0].length + (closes ? 1 : 0), short: s });
+    const end = index + m[0].length + (closes ? 1 : 0);
+    const chain = text.slice(Math.max(0, index - 200), index).match(AUTHOR_CHAIN_BEFORE)?.[1];
+    if (chain && !NOT_AUTHORS.has(chain.split(/[ ,]/)[0])) {
+      index -= chain.length;
+      s = chain + s;
+    }
+    out.push({ index, length: end - index, short: s });
   }
   return out;
 }

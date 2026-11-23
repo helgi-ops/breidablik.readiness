@@ -13,6 +13,7 @@ import { FITNESS_TESTS, FITNESS_TEST_TYPES, type FitnessTestType } from "@/lib/m
 import { classifyFitnessResult, classifyFitness, MAS_BENCHMARK, BAND_LABEL, type FitnessBand } from "@/lib/micropulse/load/fitnessTestBenchmarks";
 import { buildFitnessTrends, type FitnessTrendRead } from "@/lib/micropulse/load/fitnessTrend";
 import ShowDetails from "@/components/common/ShowDetails";
+import { CiteRefs } from "@/components/coach/CiteRefs";
 
 // Colour-NEUTRAL trend glyph (monitoring, not a verdict): a rise/drop is marked, never "good/bad".
 const DIR_GLYPH: Record<string, string> = { up: "▲", down: "▼", stable: "■", insufficient: "·" };
@@ -225,7 +226,7 @@ export default function FitnessTestCard({ players, playerId, defaultType, onSave
                         </span>
                       ) : null}
                       <span className="text-[10px] text-slate-400">
-                        {is ? "mark" : "target"} {c.target} {c.unit} · {c.cite}
+                        {is ? "mark" : "target"} {c.target} {c.unit} · <CiteRefs text={c.cite} is={is} />
                       </span>
                     </div>
                   );

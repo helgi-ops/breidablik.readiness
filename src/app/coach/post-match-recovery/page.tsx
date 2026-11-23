@@ -15,6 +15,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import { formatMatchLabel } from "@/lib/micropulse/matchLabel";
 import VerdictBanner, { type VerdictTone, type ConfidenceLevel, type VerdictDriver } from "@/components/coach/VerdictBanner";
 import RecoveryWatchBanner from "@/components/coach/RecoveryWatchBanner";
+import { CiteRefs } from "@/components/coach/CiteRefs";
 import { PROCESS_LABEL, STATUS_LABEL, type ProcessRead, type ProcessStatus } from "@/lib/recovery/processReads";
 import { nightMatchGuidance } from "@/lib/recovery/nightMatch";
 import { buildExpectedRecoveryCurve, compareToExpected, type Sex, type ProcessKey as CurveProcessKey, type RecoveryCurve, type CurveComparison } from "@/lib/recovery/expectedRecoveryCurve";
@@ -344,7 +345,7 @@ export default function PostMatchRecoveryPage() {
                   <div className="text-sm font-semibold text-indigo-900">{IS ? g.headline.is : g.headline.en}</div>
                 </div>
                 <p className="mt-1 text-[12px] leading-snug text-indigo-900/90">{IS ? g.guidance.is : g.guidance.en}</p>
-                <p className="mt-1 text-[10px] text-indigo-700/80">{IS ? g.evidence.is : g.evidence.en}</p>
+                <p className="mt-1 text-[10px] text-indigo-700/80"><CiteRefs text={IS ? g.evidence.is : g.evidence.en} is={IS} /></p>
               </div>
             );
           })()}

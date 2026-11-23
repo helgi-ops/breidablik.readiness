@@ -13,6 +13,7 @@ import {
   type IsoExercise,
   type IsoPhase,
 } from "@/lib/micropulse/isometrics/protocols";
+import { CiteRefs } from "@/components/coach/CiteRefs";
 
 type Lang = "IS" | "EN";
 
@@ -359,10 +360,10 @@ function ProtocolDetail({ protocol, lang, copy, onBack }: DetailProps) {
         </div>
         <ul className="text-xs text-gray-600 space-y-1">
           {protocol.references.map((ref, i) => (
-            <li key={i}>• {ref}</li>
+            <li key={i}>• <CiteRefs text={ref} is={lang === "IS"} /></li>
           ))}
           {protocol.isoMode && !protocol.references.some((r) => r.includes("Push and Hold")) && (
-            <li>• {ISO_MODE_CITATION}</li>
+            <li>• <CiteRefs text={ISO_MODE_CITATION} is={lang === "IS"} /></li>
           )}
         </ul>
       </div>

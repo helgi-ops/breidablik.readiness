@@ -21,6 +21,7 @@ import IndividualisedPlanCard from "@/components/coach/IndividualisedPlanCard";
 import UnifiedDeficitLedgerCard from "@/components/coach/UnifiedDeficitLedgerCard";
 import StrengthPlanCard from "@/components/coach/StrengthPlanCard";
 import GoalPlanPreviewCard from "@/components/coach/GoalPlanPreviewCard";
+import { CiteRefs } from "@/components/coach/CiteRefs";
 import { QUALITY_BY_ID, type AthleteProfile, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { classifyFitness, fitnessBenchmarkFor, MAS_BENCHMARK, BAND_LABEL, type FitnessClassification } from "@/lib/micropulse/load/fitnessTestBenchmarks";
 import type { PlayerAnalysis } from "@/lib/micropulse/playerAnalysis";
@@ -378,7 +379,7 @@ function ImproveBlock({ items, t, lang }: { items: DevItem[]; t: Strings; lang: 
               <span className="font-semibold">{lang === "IS" ? d.label.is : d.label.en}</span>
               {d.percentile != null ? <span className="ml-1 text-[11px] text-slate-500">({d.percentile}{lang === "IS" ? ". percentíl" : "th %ile"})</span> : null}
               <span className="ml-1">— {lang === "IS" ? d.lever.is : d.lever.en}</span>
-              {d.lever.cite ? <span className="ml-1 text-[11px] italic text-slate-400">{d.lever.cite}</span> : null}
+              {d.lever.cite ? <span className="ml-1 text-[11px] italic text-slate-400"><CiteRefs text={d.lever.cite} is={lang === "IS"} /></span> : null}
             </li>
           ))}
         </ul>
