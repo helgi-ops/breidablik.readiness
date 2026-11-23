@@ -9,6 +9,9 @@
  *   - MD-4 (and the days that build like it) or a light week: the exercise leaves the working blocks and goes into the
  *     warm-up as 2 easy sets ("learn it"). Once the player logs it, it is known and comes back as a working lift.
  *   - Other days (MD-3, MD-2, MD-1, MD+1 …): it is left out, with a line saying when it comes in.
+ *   - The week rule's lifts (the heavy lift, B1, and the fast lift close to the match) are learnt and done the same day
+ *     (the coach's call, 2026-11-23): they stay as the working lift and 2 light intro sets go into the warm-up first, so
+ *     the week's heavy reps and the near-match dose are never lost to this rule.
  *
  * Never touched: the warm-up itself, a coach's own swap (the coach decides last), and the injury-prevention work
  * (Nordic, Copenhagen), which always applies (the priority rule). Pure; runs after the day rules.
@@ -62,7 +65,8 @@ export function applyNewExerciseIntro(session: StrengthSession | null, snap: Pic
 
   const out: AppliedAdaptation[] = [];
   const intros: PrescribedExercise[] = [];
-  const seen = new Set<string>();
+  // An intro already in the session (a second pass) is not added again.
+  const seen = new Set<string>(session.blocks.flatMap((b) => b.exercises).filter((e) => e.newIntro).map((e) => e.exerciseId));
   const blocks = session.blocks.map((b) => ({
     ...b,
     exercises: b.exercises.filter((ex) => {
@@ -71,6 +75,20 @@ export function applyNewExerciseIntro(session: StrengthSession | null, snap: Pic
         triggerEN: `New exercise: ${ex.nameEN} is not in this player's logged sets (last ${NEW_EXERCISE_LOOKBACK_DAYS} days)`,
         triggerIS: `Ný æfing: ${ex.nameIS || ex.nameEN} er ekki í skráðum settum leikmannsins (síðustu ${NEW_EXERCISE_LOOKBACK_DAYS} daga)`,
       };
+      // The week rule's lift: learn it in the warm-up, then do today's working sets (any day).
+      if (ex.dose.weekRule || ex.dose.nearMatch) {
+        if (!seen.has(ex.exerciseId)) {
+          seen.add(ex.exerciseId);
+          intros.push({ ...ex, dose: introDose(ex), newIntro: true, modificationReason: "New exercise: light intro", isAdaptiveAddition: true });
+          out.push({
+            ruleId: NEW_EXERCISE_INTRO, ...trigger,
+            actionEN: `${ex.nameEN} is new: 2 easy sets in the warm-up to learn it first, then today's working sets (the week rule's dose holds).`,
+            actionIS: `${ex.nameIS || ex.nameEN} er ný: 2 auðveld sett í upphitun til að læra hana fyrst, svo vinnusett dagsins (skammtur vikureglunnar heldur).`,
+            evidence: NEW_EXERCISE_EVIDENCE,
+          });
+        }
+        return true;
+      }
       if (intro) {
         if (!seen.has(ex.exerciseId)) {
           seen.add(ex.exerciseId);

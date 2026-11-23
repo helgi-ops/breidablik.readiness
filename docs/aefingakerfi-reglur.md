@@ -325,7 +325,7 @@ Eftirtöldum ákvörðunum má breyta:
 | Regla | Hvað gerist | Heimild |
 |---|---|---|
 | `TIME_BUDGET_TRIM` | Sjá kafla 2 | Regla þjálfarans |
-| **`NEW_EXERCISE_INTRO`** / **`NEW_EXERCISE_HELD`** | Æfing sem ekki hefur verið skráð í 120 daga fer í upphitun á MD-4 eða í hvíldarviku: **2 × 5 við RPE 4–5, 1 mín hvíld**. Aðra daga er henni sleppt. **Óvirk þar til leikmenn skrá sett** (taflan er tóm) | MicroPulse-regla; McHugh 2003 |
+| **`NEW_EXERCISE_INTRO`** / **`NEW_EXERCISE_HELD`** | Æfing sem ekki hefur verið skráð í 120 daga fer í upphitun á MD-4 eða í hvíldarviku: **2 × 5 við RPE 4–5, 1 mín hvíld**. Aðra daga er henni sleppt. Lyfta vikureglunnar (þung á MD-4/MD-3, hröð á MD-2/MD-1) heldur sér: 2 auðveld sett í upphitun og svo vinnusettin. **Óvirk þar til leikmenn skrá sett** (taflan er tóm) | MicroPulse-regla; McHugh 2003 |
 | `GOAL_PRIORITY` | Eitt aðalmarkmið (kafli 7) | — |
 | `MISSED_DAY_NOT_SHIFTED` | Misstur dagur ekki færður (kafli 1) | — |
 | Röð í contrast | Kraftur fyrst, svo styrkur. Undantekning: French contrast byrjar á þungu lyftunni | Regla þjálfarans |
@@ -415,8 +415,9 @@ Eftirtöldum ákvörðunum má breyta:
    - Cluster (3×12 við 80%) er ekki lengur í boði á MD-3. Dagsreglan tók lyftuna alveg út.
    - Gulur leikmaður á MD-3 contrast fór áður niður í cluster og missti styrktarlyftuna. Nú fer hann í ísómetríska
      lyftu.
-5. **Ný æfing og B1:** ný-æfingareglan keyrir á eftir tímaskurðinum. Þung lyfta sem aldrei hefur verið skráð verður
-   upphitun á MD-4, þótt „B1 er aldrei skorin“.
+5. ~~**Ný æfing og B1.**~~ **Lagað 23. nóv.:** lyfta sem vikureglan setti (þunga lyftan á MD-4/MD-3, hraðalyftan á
+   MD-2/MD-1) er aldrei breytt í upphitun þótt hún sé ný. Leikmaðurinn fær 2 auðveld sett í upphitun til að læra hana
+   og svo vinnusett dagsins. Skammtur vikureglunnar heldur. Aðrar nýjar æfingar verða áfram upphitun.
 6. **CMJ-skurður og skipting þjálfarans:** CMJ-skurðurinn sleppir ekki skiptingum þjálfarans, en dagsreglurnar gera
    það.
 7. **`ADDON_CAP`** segir „á viku“ en athugar aðeins æfingu dagsins.
