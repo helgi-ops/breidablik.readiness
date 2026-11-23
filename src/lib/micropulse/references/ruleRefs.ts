@@ -186,6 +186,10 @@ export const RULE_REFS: Record<string, GoalRef> = {
   jaroszgawel2025: { key: "jaroszgawel2025", short: "Jarosz, Gawel & Socha 2025", cite: "Jarosz J, Gawel D, Socha I, Ewertowska P, Wilk M, Lum D, Krzysztofik M. Acute Effects of Isometric Conditioning Activity with Different Set Volumes on Countermovement Jump Performance in Highly Trained Male Volleyball Players. Appl Sci 2025;15(5):2393. doi:10.3390/app15052393", verifiedFrom: "abstract" },
   seraphin2025: { key: "seraphin2025", short: "Seraphin 2025", cite: "Seraphin A, Edson C, Price C, Jones B, Jagielo A, Mullner J. Normative Performance Test Metrics in Professional Female Club Soccer. J Sports Med Allied Health Sci 2025;10(3). doi:10.25035/jsmahs.10.03.01", verifiedFrom: "abstract" },
   cookpurdam2012: { key: "cookpurdam2012", short: "Cook & Purdam 2012", cite: "Cook JL, Purdam C. Is compressive load a factor in the development of tendinopathy? Br J Sports Med 2012;46(3):163–168. doi:10.1136/bjsports-2011-090414 PMID 22113234", verifiedFrom: "abstract" },
+  // Edwards 2018 is the open review in Sports (the reference the blog gives), not the retracted J Strength Cond Res
+  // study; Cormack 2008 is the primary study for FT:CT (2026-11-23).
+  edwards2018: { key: "edwards2018", short: "Edwards 2018", cite: "Edwards T, Spiteri T, Piggott B, Bonhotal J, Haff GG, Joyce C. Monitoring and Managing Fatigue in Basketball. Sports (Basel) 2018;6(1):19. doi:10.3390/sports6010019 PMID 29910323", verifiedFrom: "full_text" },
+  cormacknewtonmcguigan2008: { key: "cormacknewtonmcguigan2008", short: "Cormack, Newton & McGuigan 2008", cite: "Cormack SJ, Newton RU, McGuigan MR. Neuromuscular and endocrine responses of elite players to an Australian rules football match. Int J Sports Physiol Perform 2008;3(3):359–374. doi:10.1123/ijspp.3.3.359 PMID 19211947", verifiedFrom: "abstract" },
 };
 
 /** Other spellings of the same short citation used in the rule text ("et al." is dropped before this is read). */
@@ -213,6 +217,8 @@ const SHORT_ALIASES: Record<string, string> = {
   // A second Lum 2026 paper, named by its author list.
   "Lum, Comfort, Oranchuk 2026": "Lum, Comfort & Oranchuk 2026",
   "Lum 2025": "Lum & Howatson 2025",
+  // Cormack published two 2008 Australian-football papers; the match study is named by its author list.
+  "Cormack, Newton & McGuigan 2008": "Cormack, Newton & McGuigan 2008",
   // A second Jarosz 2025 paper (set volumes), named by its author list.
   "Jarosz, Gawel, Socha, Ewertowska, Wilk, Lum, Krzysztofik 2025": "Jarosz, Gawel & Socha 2025",
 };
@@ -349,10 +355,6 @@ export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
   "Dos'Santos 2022": {
     en: "Dos'Santos co-wrote several 2022 papers on change of direction and turning demands; which one is meant is not recorded.",
     is: "Dos'Santos var meðhöfundur að nokkrum greinum 2022 um stefnubreytingar og snúninga í leik; ekki er skráð hver er átt við.",
-  },
-  "Edwards 2018": {
-    en: "The likely paper (Edwards T et al., J Strength Cond Res 2018, fatigue measures in college basketball) was retracted (J Strength Cond Res 2018;32(12):e57), and its abstract reports FT:CT as not reliable between days (CV 10.9%). The FT:CT fatigue claim needs another source.",
-    is: "Líklegasta greinin (Edwards T o.fl., J Strength Cond Res 2018, þreytumælingar í háskólakörfubolta) hefur verið dregin til baka, og ágrip hennar segir FT:CT óáreiðanlegt milli daga (CV 10,9%). Fullyrðingin um FT:CT og þreytu þarf aðra heimild.",
   },
   "Esteve 2018": {
     en: "Esteve 2018 reports preseason adductor squeeze strength and past groin pain in 303 players; it gives no left–right asymmetry thresholds, which the code cites it for.",

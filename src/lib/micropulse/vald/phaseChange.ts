@@ -130,8 +130,9 @@ export const METRIC_META = {
     label: { en: "mean ecc/con power", is: "meðalafl (niður/upp)" },
     worseClause: { en: "mean power is down vs usual", is: "meðalafl er lægra en venjulega" },
   },
-  // FT:CT — flight-time : contraction-time ratio. Edwards 2018: FT:CT is sensitive
-  // to fatigue in team-sport athletes (whereas drop-jump RSI was not), so we treat
+  // FT:CT — flight-time : contraction-time ratio. Cormack, Newton & McGuigan 2008: FT:CT
+  // was the CMJ measure that fell most clearly after an elite Australian football match
+  // (the review Edwards 2018 also notes drop-jump RSI did not track load), so we treat
   // it as a PRIMARY explosive-quality metric and demote RSI-modified to secondary.
   // Compounds a flight-time term (from jump height, ~sqrt so ~2.6% CV) with
   // contraction time (~7.7%) → conservative ratio CV. Lower ratio = more fatigue.

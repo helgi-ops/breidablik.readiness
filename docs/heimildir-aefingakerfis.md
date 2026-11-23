@@ -13,7 +13,7 @@ VALD-viðmið, endurheimt eftir leik, ísómetrískar æfingar, viðmið í þol
 - Í viðmótinu má smella á stutta tilvísun til að sjá fulla heimild (eða ástæðuna fyrir því að hún er óstaðfest).
 - Kóðinn: `src/lib/micropulse/references/ruleRefs.ts`. Próf passar að hver tilvísun í kóðanum sé hér.
 
-Æfingakerfið: 167 heimildir staðfestar og 28 ekki. Aðrar heimildir: 47 staðfestar og 18 ekki.
+Æfingakerfið: 167 heimildir staðfestar og 28 ekki. Aðrar heimildir: 49 staðfestar og 17 ekki.
 
 ## Heimildir
 
@@ -234,10 +234,12 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar.
 - Comfort P, Dos'Santos T, Beckham GK, Stone MH, Guppy SN, Haff GG. Standardization and methodological considerations for the isometric midthigh pull. Strength Cond J 2019;41(2):57–79. doi:10.1519/SSC.0000000000000433
 - Cook JL, Purdam C. Is compressive load a factor in the development of tendinopathy? Br J Sports Med 2012;46(3):163–168. doi:10.1136/bjsports-2011-090414 PMID 22113234
 - Cook JL, Rio E, Purdam CR, Docking SI. Revisiting the continuum model of tendon pathology: what is its merit in clinical practice and research? Br J Sports Med 2016;50(19):1187–1191. doi:10.1136/bjsports-2015-095422 PMID 27127294
+- Cormack SJ, Newton RU, McGuigan MR. Neuromuscular and endocrine responses of elite players to an Australian rules football match. Int J Sports Physiol Perform 2008;3(3):359–374. doi:10.1123/ijspp.3.3.359 PMID 19211947
 - D'Emanuele S, Maffiuletti NA, Tarperi C, Rainoldi A, Schena F, Boccia G. Rate of Force Development as an Indicator of Neuromuscular Fatigue: A Scoping Review. Front Hum Neurosci 2021;15:701916. doi:10.3389/fnhum.2021.701916 PMID 34305557
 - DeWeese BH, Suchomel TJ, Serrano AJ, Burton JD, Scruggs SK, Taber CB. Pull from the knee. Strength Cond J 2016;38(1):79–85. doi:10.1519/SSC.0000000000000194
 - Doeven SH, Brink MS, Kosse SJ, Lemmink KAPM. Postmatch recovery of physical performance and biochemical markers in team ball sports: a systematic review. BMJ Open Sport Exerc Med 2018;4(1):e000264. doi:10.1136/bmjsem-2017-000264 PMID 29527320
 - Drayton AM, Hamad MJ, Spyrou K. The Time Course of Postmatch Physical Impairments in Professional Soccer: A Systematic Review. J Strength Cond Res 2025;39(11):e1345–e1355. doi:10.1519/JSC.0000000000005252 PMID 40845278
+- Edwards T, Spiteri T, Piggott B, Bonhotal J, Haff GG, Joyce C. Monitoring and Managing Fatigue in Basketball. Sports (Basel) 2018;6(1):19. doi:10.3390/sports6010019 PMID 29910323
 - Goom TS, Malliaras P, Reiman MP, Purdam CR. Proximal Hamstring Tendinopathy: Clinical Aspects of Assessment and Management. J Orthop Sports Phys Ther 2016;46(6):483–493. doi:10.2519/jospt.2016.5986 PMID 27084841
 - Goulart KNO, Coimbra CC, Campos HO, Drummond LR, Ogando PHM, Brown G, Couto BP, Duffield R, Wanner SP. Fatigue and Recovery Time Course After Female Soccer Matches: A Systematic Review And Meta-analysis. Sports Med Open 2022;8(1):72. doi:10.1186/s40798-022-00466-3 PMID 35657571
 - Grindem H, Snyder-Mackler L, Moksnes H, Engebretsen L, Risberg MA. Simple decision rules can reduce reinjury risk by 84% after ACL reconstruction: the Delaware-Oslo ACL cohort study. Br J Sports Med 2016;50(13):804–808. doi:10.1136/bjsports-2016-096031 PMID 27162233
@@ -279,7 +281,6 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar.
 - **Buchheit 2014**: Buchheit birti nokkrar greinar um fótbolta 2014 (sprettfræði, endurteknir sprettir, hlaup í leik); ekki er skráð hver er átt við.
 - **Delaney 2017**: Delaney birti nokkrar greinar um hámarks hlaupaákefð um 2017 (rugby league, rugby union, fótbolti); ekki er skráð hver er átt við.
 - **Dos'Santos 2022**: Dos'Santos var meðhöfundur að nokkrum greinum 2022 um stefnubreytingar og snúninga í leik; ekki er skráð hver er átt við.
-- **Edwards 2018**: Líklegasta greinin (Edwards T o.fl., J Strength Cond Res 2018, þreytumælingar í háskólakörfubolta) hefur verið dregin til baka, og ágrip hennar segir FT:CT óáreiðanlegt milli daga (CV 10,9%). Fullyrðingin um FT:CT og þreytu þarf aðra heimild.
 - **Esteve 2018**: Esteve 2018 fjallar um styrk aðlægra vöðva og fyrri náraverki hjá 303 leikmönnum; hún gefur engin mörk fyrir mun á hægri og vinstri, sem kóðinn vitnar í hana fyrir.
 - **Hägglund 2013**: Hägglund 2013 (UEFA-rannsóknin) sýnir fyrri meiðsli og spyrnufót sem áhættuþætti; hún mælir ekki styrk og styður því ekki lesturinn á styrkbili í nára.
 - **King 2018**: Greinar King frá 2018 um náraverki fjalla um endurhæfingu og hreyfifræði; engin sýnir veikleika aðlægra vöðva sem áhættuþátt, sem kóðinn vitnar í fyrir.

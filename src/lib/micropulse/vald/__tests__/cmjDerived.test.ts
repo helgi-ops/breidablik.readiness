@@ -52,7 +52,7 @@ describe("CV gate applies to the new metrics", () => {
   });
 });
 
-describe("mean-of-repeats (Edwards 2018; Claudino 2017)", () => {
+describe("mean-of-repeats (Claudino 2017)", () => {
   it("aggregates the MEAN of a test's trials, not the best jump", () => {
     const rows = [40, 44, 48].map((v, i) => ({
       rawTestId: "t1",

@@ -44,7 +44,7 @@ import type {
 
 /** Explosive, neurally-driven qualities — a CV-cleared drop here reads NEURAL.
  *  Includes the item-4 refinements: early-phase RFD (neural-drive dominated,
- *  D'Emanuele 2021) and FT:CT (Edwards 2018). */
+ *  D'Emanuele 2021) and FT:CT (Cormack, Newton & McGuigan 2008). */
 const NEURAL_METRICS = new Set<PhaseMetricKey>([
   "peakPower",
   "meanRFD",

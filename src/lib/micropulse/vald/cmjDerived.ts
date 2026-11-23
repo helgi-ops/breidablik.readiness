@@ -4,8 +4,9 @@
  * Pure, side-effect free. Two derivations the CV gate then treats like any other
  * phase metric:
  *
- *  - FT:CT (flight-time : contraction-time). Edwards 2018: FT:CT is fatigue-
- *    sensitive in team-sport athletes. Flight time is recovered from the measured
+ *  - FT:CT (flight-time : contraction-time). Cormack, Newton & McGuigan 2008: FT:CT was
+ *    the CMJ measure that fell most clearly after an elite Australian football
+ *    match. Flight time is recovered from the measured
  *    jump height via the projectile relation h = g·t_f²/8 → t_f = √(8h/g) — the
  *    same relation a jump mat uses to report height — so FT:CT is available from
  *    data already stored, and supersedes it with a directly measured flight time

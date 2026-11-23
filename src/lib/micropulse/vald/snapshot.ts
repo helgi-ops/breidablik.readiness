@@ -167,9 +167,9 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
   );
 
   // ── Derived item-4 metrics, CV-gated like any other phase metric ──────────────
-  // FT:CT (Edwards 2018, PRIMARY explosive-quality metric — RSI-mod is secondary):
+  // FT:CT (Cormack, Newton & McGuigan 2008, PRIMARY explosive-quality metric — RSI-mod is secondary):
   // flight time from the measured jump height (or a measured flight time when
-  // present) over contraction time. Mean-of-repeats basis (Edwards/Claudino): both
+  // present) over contraction time. Mean-of-repeats basis (Claudino 2017): both
   // components are the test's trial mean, so the ratio is too.
   const ftCtOf = (agg: (typeof cmjAggregates)[number] | null | undefined) =>
     agg ? ftCtRatio({ flightTimeMs: agg.metrics.flightTime, jumpHeightCm: agg.metrics.jumpHeight, contractionTimeMs: agg.metrics.timeToTakeoff }) : null;
@@ -270,12 +270,13 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
         source: (latestCmj?.rsi_mod_source as string | null) ?? null,
         available: latestRsiMod != null,
         // Demoted to SECONDARY (item 4): FT:CT is now the primary explosive-quality
-        // read. Edwards 2018 found drop-jump RSI insensitive to fatigue in team-
-        // sport athletes; RSI-modified is kept for continuity, not deleted.
+        // read: after an elite Australian football match FT:CT was the CMJ measure
+        // that fell most clearly (Cormack, Newton & McGuigan 2008). RSI-modified is kept
+        // for continuity, not deleted.
         role: "secondary" as const,
         role_note: {
-          en: "Secondary metric — FT:CT (flight:contraction) is the primary explosive-quality read; RSI-modified may be less fatigue-sensitive in team-sport athletes (Edwards 2018).",
-          is: "Aukamælikvarði — FT:CT (flug:samdráttur) er aðal-sprengikrafts lesturinn; RSI-modified getur verið ónæmara fyrir þreytu hjá hópíþróttafólki (Edwards 2018).",
+          en: "Secondary metric — FT:CT (flight:contraction) is the primary explosive-quality read: after an elite football match it was the jump measure that dropped most clearly (Cormack, Newton & McGuigan 2008). RSI-modified stays for comparison.",
+          is: "Aukamælikvarði — FT:CT (flug:samdráttur) er aðal-sprengikraftslesturinn: eftir leik hjá atvinnumönnum var hann sá hoppmælikvarði sem lækkaði skýrast (Cormack, Newton & McGuigan 2008). RSI-modified er haldið til samanburðar.",
         },
         message:
           latestRsiMod == null
@@ -297,12 +298,12 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
         available: cmjPhaseHasData,
         trial_count: latestCmjTrialCount,
         // The fatigue read compares the MEAN of the session's valid trials, not the
-        // best jump (Edwards 2018; Claudino 2017) — the best jump stays for RTP/
+        // best jump (Claudino 2017) — the best jump stays for RTP/
         // performance display. Item 4.
         mean_of_repeats: true,
         mean_of_repeats_note: {
-          en: "Fatigue comparison uses the mean of this session's trials (not the best jump) — Edwards 2018; Claudino 2017.",
-          is: "Þreytusamanburður notar meðaltal prófanna í þessari lotu (ekki besta stökkið) — Edwards 2018; Claudino 2017.",
+          en: "Fatigue comparison uses the mean of this session's trials (not the best jump) — Claudino 2017.",
+          is: "Þreytusamanburður notar meðaltal prófanna í þessari lotu (ekki besta stökkið) — Claudino 2017.",
         },
         worst_real: cmjPhaseWorst
           ? {
@@ -337,7 +338,7 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
           threshold_percent: r.thresholdPct,
           label: r.label,
         })),
-        citation: "Gathercole et al. 2015; Marques & Buchheit 2026; Claudino et al. 2017; Edwards 2018 (FT:CT, mean-of-repeats); D'Emanuele 2021 (early RFD)",
+        citation: "Gathercole et al. 2015; Marques & Buchheit 2026; Claudino et al. 2017 (mean-of-repeats); Cormack, Newton & McGuigan 2008 (FT:CT); D'Emanuele 2021 (early RFD)",
       },
     },
     nordbord: {
