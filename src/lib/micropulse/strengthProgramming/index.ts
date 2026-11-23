@@ -902,7 +902,7 @@ function buildStrengthSessionCore(
   }
 
   const trace = newAdaptationTrace();
-  const audit = applyAdaptationRules(tmpl.blocks, individualised ? snap : { ...snap, ledgerEmphases: [] }, trace);
+  const audit = applyAdaptationRules(tmpl.blocks, individualised ? snap : { ...snap, ledgerEmphases: [] }, trace, todayHeavyReps);
   audit.unshift(...weekAudit);
   // A missed MD-4 is never made up on MD-3 or later (brief §5): this day was built from its own MD context only.
   const missed = missedDayAudit(snap.todayIso, snap.mdContext, snap.missedDay);

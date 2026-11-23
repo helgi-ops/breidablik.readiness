@@ -114,7 +114,7 @@ Dagsreglurnar eru athugaðar síðast og skera aðeins niður.
 |---|---|---|---|---|---|
 | MD-4 | Hámarksstyrkur + kraftur | 12 þungar endurt. á lyftu; 20 snertingar; **25 mín + 8 eftir** | Ekkert til uppgjafar (verður RPE 8) | **15%** | Trap bar 0,55–0,80 m/s, 2+ endurt. í varasjóði |
 | MD-3 | Hraði + kraftur | **9 hlaðnar fótaendurt.** (þunga lyftan í contrast telur); 30 snertingar; 9 fallhopp; fallhæð ≤30 cm; 15 mín | Nordic, RDL (Copenhagen með eigin þyngd má) | **10%** | Hlaðið ≥0,80, ballísk ≥1,1 m/s (`DAY_RULE_ZONE` setur ≥1,1 á trap-bar hopp) |
-| MD-2 | Viðhald | 6 hlaðnar endurt. (4×4 nálægt leik telst ekki með); 6 snertingar; 20 mín | Markmiðsvinna (nema markmiðslyfta nálægt leik); Nordic, RDL | — | Texti: fætur 0,55–0,70 m/s (**ósamræmi 1**) |
+| MD-2 | Viðhald, aðeins hratt | 6 hlaðnar endurt. (4×4 nálægt leik telst ekki með); 6 snertingar; 20 mín | **Allt þungt**; markmiðsvinna (nema markmiðslyfta nálægt leik); Nordic, RDL | **10%** | Fætur 1,0–1,3 m/s (40–55% 1RM), sama og vikureglan |
 | MD-1 | Virkjun | 6 hlaðnar endurt.; 6 snertingar; 10 mín | Allt þungt; allt eccentrískt (Nordic, RDL, Copenhagen) | 10% | ≥1,1 m/s |
 | MD+1 | Endurheimt + viðhald | 6 snertingar; 30 mín | Þungar fótalyftur, **nema** styrkur fyrir þá sem spiluðu lítið | — | 2–3 endurt. í varasjóði |
 | MD+2 / OFF | Frí | — | Allt, en æfing sem þjálfari valdi er byggð og merkt | — | — |
@@ -330,7 +330,7 @@ Eftirtöldum ákvörðunum má breyta:
 | `MISSED_DAY_NOT_SHIFTED` | Misstur dagur ekki færður (kafli 1) | — |
 | Röð í contrast | Kraftur fyrst, svo styrkur. Undantekning: French contrast byrjar á þungu lyftunni | Regla þjálfarans |
 | RPE-aðlögun | Tillaga á spjaldi þjálfara (+2,5–5% eða −5%). Breytir aldrei æfingunni | Zourdos 2016; Helms 2016 |
-| Mesó-lag | Hvíldarvika: helmingur setta. Lokavika: −1 sett. Uppbygging (undirbúnings/utan tímabils): +1 sett, ekki á markmiðs- eða vikureglulyftur. Undirfasi ×0,5/0,6/1/1,25 | Issurin 2010; Cuthbert 2021; Rønnestad 2011 |
+| Mesó-lag | Hvíldarvika: helmingur setta, líka þungu settin í vikureglunni (`WEEK_RULE_DELOAD`). Lokavika: −1 sett. Uppbygging (undirbúnings/utan tímabils): +1 sett. Undirfasi ×0,5/0,6/1/1,25 á aðra aðalvinnu. **Nordic og Copenhagen breytast aldrei.** Þungu endurtekningarnar breytast ekki í lokaviku, undirfasa eða uppbyggingu | Issurin 2010; Cuthbert 2021; Rønnestad 2011 |
 
 ---
 
@@ -398,12 +398,16 @@ Eftirtöldum ákvörðunum má breyta:
 
 ## C. Ósamræmi sem fannst (þitt að ákveða)
 
-1. **MD-2 hraðatexti:** dagsreglan segir „fætur 0,55–0,70 m/s“ og leyfir þungt, en vikureglan setur 1,0–1,3 m/s og
-   „engin þung lyfta“. Textinn í dagsreglunni ætti líklega að breytast.
-2. **Mesó-lagið breytir föstum skömmtum:**
-   - Hvíldar- og lokavika minnka Nordic 4×5 niður í 2×5, þótt forvörnin eigi að vera föst á viku.
-   - Þær breyta líka þungum endurtekningum vikureglunnar.
-3. **Deficit-skráin telst ekki með:** hún bætir hnébeygjusetti á MD-4 sem telst ekki í þungu endurtekningunum.
+1. ~~**MD-2 hraðatexti.**~~ **Lagað 23. nóv.:** MD-2 er aðeins hraður dagur. Dagsreglan bannar þunga lyftu, hraðatap er
+   mest 10% og textinn er 1,0–1,3 m/s eins og í vikureglunni. Engin leyfð MD-2 aðferð hafði þunga lyftu. Bannið nær
+   aðeins viðbótum, t.d. búlgörsku úr deficit-skránni.
+2. ~~**Mesó-lagið breytir föstum skömmtum.**~~ **Lagað 23. nóv.:**
+   - Nordic og Copenhagen eru eins í hverri viku, óháð blokk, lokaviku eða undirfasa.
+   - Þungu endurtekningarnar og skammtur nálægt leik haldast í lokaviku og undirfasa.
+   - Aðeins hvíldarvika helmingar þungu settin og segir frá því (`WEEK_RULE_DELOAD`).
+3. ~~**Deficit-skráin telst ekki með.**~~ **Lagað 23. nóv.:** á degi þar sem vikureglan setti þungu endurtekningarnar
+   bætir hámarksstyrks-áhersla deficit-skrárinnar engri þungri lyftu við. Hún setur heldur enga lyftu aftur inn sem
+   öryggisregla skipti út. Í staðinn kemur lína um að endurtekningarnar komi úr vikureglunni.
 4. **MD-3 á undirbúningstímabili:** hámarkið er 9 hlaðnar endurtekningar. Vikureglan setur 9 þungar þar, svo hoppin í
    French contrast fara yfir og sett eru skorin.
 5. **Ný æfing og B1:** ný-æfingareglan keyrir á eftir tímaskurðinum. Þung lyfta sem aldrei hefur verið skráð verður

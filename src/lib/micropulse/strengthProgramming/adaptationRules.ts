@@ -191,6 +191,8 @@ export function applyAdaptationRules(
   blocks: SessionBlock[],
   snap: PlayerStrengthSnapshot,
   trace?: AdaptationTrace,
+  /** Today's heavy two-leg reps set by the week rule (weekRule.ts); null/undefined = the rule did not set them. */
+  weekRuleHeavyReps?: number | null,
 ): AppliedAdaptation[] {
   const audit: AppliedAdaptation[] = [];
   const contras = buildContraindications(snap);
@@ -494,7 +496,7 @@ export function applyAdaptationRules(
   // The reconciled deficit ledger (movement screen + VALD + IMA …) can bias the
   // session toward a strength emphasis. Moderate+ confidence only (hints don't
   // reach here — the loader filters). Descriptive; the coach can override.
-  applyLedgerEmphasisRules(blocks, snap, audit, contras, trace);
+  applyLedgerEmphasisRules(blocks, snap, audit, contras, trace, weekRuleHeavyReps ?? null);
 
   return audit;
 }
@@ -517,6 +519,7 @@ function applyLedgerEmphasisRules(
   audit: AppliedAdaptation[],
   contras: ReadonlySet<ContraIndication> | readonly ContraIndication[] = [],
   trace?: AdaptationTrace,
+  weekRuleHeavyReps: number | null = null,
 ): void {
   const emphases = snap.ledgerEmphases ?? [];
   if (!emphases.length || !blocks.length) return;
@@ -536,6 +539,20 @@ function applyLedgerEmphasisRules(
     const specContras = getExercise(spec.id).contraindications ?? [];
     if (specContras.some((c) => contraSet.has(c))) continue;
 
+    // Max strength on a day the week rule set the heavy reps: the week rule's reps are the dose (15 a week in season,
+    // 21 in pre-season). No heavy lift is added on top of them, and none is added back after a safety rule changed
+    // the main lift (the coach's call, 2026-11-23).
+    if (emphasis === "max_strength" && weekRuleHeavyReps != null) {
+      audit.push({
+        ruleId: "LEDGER_EMPHASIS_CONFIRM",
+        triggerEN: `Deficit ledger: ${spec.en} target`,
+        triggerIS: `Halla-bók: ${spec.is} markmið`,
+        actionEN: `Today's heavy reps come from the week rule (${weekRuleHeavyReps}); no heavy lift added on top`,
+        actionIS: `Þungar endurtekningar dagsins koma úr vikureglunni (${weekRuleHeavyReps}); engri þungri lyftu bætt ofan á`,
+        evidence: "Reconciled deficit ledger (movement screen / VALD / IMA) — see Total Player Analysis. The week's heavy reps are the week rule's (MicroPulse rule, 2026-11-23).",
+      });
+      continue;
+    }
     const category = EMPHASIS_CATEGORY[emphasis];
     const already = findExerciseByCategory(blocks, category);
     if (already) {
