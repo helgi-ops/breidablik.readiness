@@ -6,7 +6,8 @@
  *
  * `enforceDayRules` checks a built session against its day AFTER every adaptation and before delivery: on a breach it
  * trims (fewer sets, or the exercise out) and logs `DAY_RULE_TRIM` with the reason. It never adds volume. A coach's
- * own exercise swap is never trimmed (the coach decides last). Runs at the end of `buildStrengthSession` and again
+ * own exercise swap picks the exercise, not the dose (coach's call 2026-11-23, like the CMJ cut): the day's bans and
+ * the time trim leave it in, the dose caps apply to it, and it always keeps at least one set. Runs at the end of `buildStrengthSession` and again
  * after the meso layer (`applyBlockToSession`), which can add a set; a second run on a clean session changes nothing.
  *
  * The coach's calls on 2026-11-22, where the brief's table met rules already live:
@@ -335,8 +336,8 @@ const doseText = (sets: number, reps: string) => `${sets} × ${reps}`;
 
 /**
  * Takes sets off until `count` is at or under `cap`: one set at a time from each exercise in turn (last first, goal-plan
- * work after the rest), so every exercise keeps a set before any is taken out; then out, in the same order. Returns
- * one line per changed exercise.
+ * work after the rest), so every exercise keeps a set before any is taken out; then out, in the same order. A coach's
+ * own swap is never taken out: it keeps one set. Returns one line per changed exercise.
  */
 function trimToCap(
   blocks: SessionBlock[], spots: Spot[], count: (ex: PrescribedExercise) => number, cap: number,
@@ -360,7 +361,8 @@ function trimToCap(
       moved = false;
       for (const s of order) {
         if (total <= cap) break;
-        if (blocks[s.b].exercises[s.i].dose.sets > floor && perSet(s) > 0) { take(s); moved = true; }
+        const ex = blocks[s.b].exercises[s.i];
+        if (ex.dose.sets > (coachOwn(ex) ? Math.max(floor, 1) : floor) && perSet(s) > 0) { take(s); moved = true; }
       }
     }
   }
@@ -368,7 +370,8 @@ function trimToCap(
   spots.forEach((s, k) => {
     const ex = blocks[s.b].exercises[s.i];
     if (ex.dose.sets === before[k]) return;
-    const name = { en: ex.nameEN, is: ex.nameIS || ex.nameEN };
+    const swap = coachOwn(ex);
+    const name = { en: `${ex.nameEN}${swap ? " (coach's swap, kept)" : ""}`, is: `${ex.nameIS || ex.nameEN}${swap ? " (skipting þjálfara, heldur sér)" : ""}` };
     const from = doseText(before[k], ex.dose.reps), to = doseText(ex.dose.sets, ex.dose.reps);
     out.push(trimLine(md, why(start), ex.dose.sets > 0
       ? { en: `${name.en}: ${from} → ${to}.`, is: `${name.is}: ${from} → ${to}.` }
@@ -390,7 +393,9 @@ export function enforceDayRules(session: StrengthSession | null): StrengthSessio
   const out: AppliedAdaptation[] = [];
   const spots = (pred: (ex: PrescribedExercise) => boolean): Spot[] => {
     const r: Spot[] = [];
-    blocks.forEach((b, bi) => b.exercises.forEach((ex, i) => { if (!coachOwn(ex) && pred(ex)) r.push({ b: bi, i, ex }); }));
+    // A coach's own swap is counted and capped like any lift: the coach picks the exercise, the day's caps set the dose
+    // (2026-11-23). Only the bans (step 1) and the time trim (step 8) leave it alone.
+    blocks.forEach((b, bi) => b.exercises.forEach((ex, i) => { if (pred(ex)) r.push({ b: bi, i, ex }); }));
     return r;
   };
 

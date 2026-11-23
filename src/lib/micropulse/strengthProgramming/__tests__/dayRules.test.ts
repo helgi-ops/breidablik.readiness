@@ -364,9 +364,25 @@ describe("the check only takes away", () => {
     }
   });
 
-  it("the coach's own swap is never trimmed (the coach decides last)", () => {
+  it("the coach's own swap stays in (bans skip it) but the day's dose caps apply to it (2026-11-23)", () => {
     const out = enforceDayRules(session("MD-1", [blk("COMPOUND", [ex("ex_back_squat", { sets: 3, reps: "3", intensity: "85% 1RM" }, { modificationReason: "Coach override: wants a heavy primer" })])]));
-    expect(find(out, "ex_back_squat")!.dose.sets).toBe(3);
+    const sq = find(out, "ex_back_squat")!;
+    expect(sq).toBeDefined();
+    expect(sq.dose.sets).toBeGreaterThanOrEqual(1);
+    expect(sq.dose.sets).toBeLessThan(3);
+    const line = out!.appliedAdaptations.find((a) => a.ruleId === "DAY_RULE_TRIM" && /Back squat/i.test(a.actionEN))!;
+    expect(line.actionEN).toMatch(/coach's swap, kept/);
+    expect(line.actionIS).toMatch(/skipting þjálfara/);
+  });
+
+  it("a coach's swap is never taken out by a cap: it keeps one set", () => {
+    const out = enforceDayRules(session("MD-2", [blk("COMPOUND", [ex("ex_front_squat", { sets: 6, reps: "5", intensity: "50% 1RM" }, { modificationReason: "Coach manual swap" })])]));
+    expect(find(out, "ex_front_squat")!.dose.sets).toBe(1);
+  });
+
+  it("a swap to failure stops with 2 reps in reserve", () => {
+    const out = enforceDayRules(session("MD-4", [blk("COMPOUND", [ex("ex_rdl", { sets: 3, reps: "AMRAP", intensity: "AMRAP to failure" }, { modificationReason: "Coach manual swap" })])]));
+    expect(find(out, "ex_rdl")!.dose.intensity).toMatch(/2 reps in reserve/);
   });
 
   it("null and empty sessions pass through", () => {

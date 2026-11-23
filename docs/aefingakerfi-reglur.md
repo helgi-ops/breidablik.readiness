@@ -76,8 +76,9 @@ Styrktaræfing dagsins er byggð í `buildStrengthSession` (`SP/index.ts`), í �
 Í stuttu máli:
 
 - Öryggisreglur vinna yfir lista liðsins, val leikmanns og markmið.
-- Skipting þjálfarans sleppur við tímaskurð og nýju-æfingaregluna. Hún sleppur **ekki** við CMJ-skurðinn (sjá
-  ósamræmi 6).
+- Skipting þjálfarans ræður hvaða æfing er gerð, ekki skammtinum. Hún sleppur við bönn dagsins, tímaskurð og
+  nýju-æfingaregluna. CMJ-skurðurinn og hámörk dagsreglnanna gilda um hana eins og aðrar æfingar, en hún heldur alltaf
+  a.m.k. einu setti.
 
 ---
 
@@ -132,7 +133,8 @@ Dagsreglurnar eru athugaðar síðast og skera aðeins niður.
 9. Tímalína: sýnir tíma, sker ekkert.
 
 Hvernig skorið er: eitt sett í einu, síðasta æfing fyrst, markmiðsvinna síðast. Hver æfing heldur a.m.k. einu setti
-áður en æfing er tekin út. Skiptingar þjálfarans eru aldrei skornar.
+áður en æfing er tekin út. Skipting þjálfarans er aldrei tekin út vegna banns og heldur alltaf a.m.k. einu setti, en
+hámörkin (sett, endurtekningar, stökk, hraðatap) gilda um hana. Línan segir „skipting þjálfara, heldur sér“.
 
 **`TIME_BUDGET_TRIM`** (MD-4, MD-5, MD+3 og MD+4):
 
@@ -418,8 +420,9 @@ Eftirtöldum ákvörðunum má breyta:
 5. ~~**Ný æfing og B1.**~~ **Lagað 23. nóv.:** lyfta sem vikureglan setti (þunga lyftan á MD-4/MD-3, hraðalyftan á
    MD-2/MD-1) er aldrei breytt í upphitun þótt hún sé ný. Leikmaðurinn fær 2 auðveld sett í upphitun til að læra hana
    og svo vinnusett dagsins. Skammtur vikureglunnar heldur. Aðrar nýjar æfingar verða áfram upphitun.
-6. **CMJ-skurður og skipting þjálfarans:** CMJ-skurðurinn sleppir ekki skiptingum þjálfarans, en dagsreglurnar gera
-   það.
+6. ~~**CMJ-skurður og skipting þjálfarans.**~~ **Lagað 23. nóv.:** skipting þjálfarans ræður hvaða æfing er gerð,
+   ekki skammtinum. Hámörk dagsreglnanna gilda nú um hana eins og CMJ-skurðurinn. Bönn dagsins og tímaskurður sleppa
+   henni áfram, og hún heldur alltaf a.m.k. einu setti. Línan segir „skipting þjálfara, heldur sér“.
 7. **`ADDON_CAP`** segir „á viku“ en athugar aðeins æfingu dagsins.
 8. **Þétt vika:** textinn segir „2 leikir á 7 dögum“, en kóðinn telur leiki með ≥60 mín innan ±7 daga.
 9. **Tvö „í röð“-hámörk:** Mesó-dagatalið leyfir 3 og telur leiki með. Vikureglan leyfir 2 og telur leiki ekki með.
