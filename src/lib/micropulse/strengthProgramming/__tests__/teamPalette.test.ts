@@ -21,6 +21,9 @@ const snap = (over: Partial<PlayerStrengthSnapshot> = {}): PlayerStrengthSnapsho
   ...over,
 });
 
+/** The coach confirmed the one-leg swap (brief §4b: an asymmetry swaps only after the coach's tap). */
+const CONFIRMED = { asymmetryReview: { decision: "swap" as const, decidedAt: "2026-09-01" } };
+
 const allEx = (s: ReturnType<typeof buildStrengthSession>) =>
   (s?.blocks ?? []).flatMap((b) => b.exercises.map((e) => e.exerciseId));
 const audit = (s: ReturnType<typeof buildStrengthSession>, id: string) =>
@@ -49,7 +52,8 @@ describe("team strength palette → buildStrengthSession", () => {
   it("an ASYMMETRIC player gets the coach's unilateral pick in the lower-body slot", () => {
     const s = buildStrengthSession(
       snap({
-        codAsymmetryPct: 15, // ≥ 10% → prefer unilateral
+        codAsymmetryPct: 15, // ≥ 10% → prefer unilateral (after the coach's confirm)
+        ...CONFIRMED,
         teamPalette: { bilateral_strength: ["ex_front_squat"], unilateral_strength: ["ex_single_leg_rdl"] },
       }),
     );
@@ -63,9 +67,47 @@ describe("team strength palette → buildStrengthSession", () => {
     // bilateral lift even if that's the only palette pool — the adaptation engine
     // already swapped the main lift to unilateral.
     const s = buildStrengthSession(
-      snap({ codAsymmetryPct: 20, teamPalette: { bilateral_strength: ["ex_front_squat"] } }),
+      snap({ codAsymmetryPct: 20, ...CONFIRMED, teamPalette: { bilateral_strength: ["ex_front_squat"] } }),
     );
     expect(allEx(s)).not.toContain("ex_front_squat");
+  });
+
+  it("ASYMMETRIC but not confirmed by the coach → the two-leg pick stays, logged for review (brief §4b)", () => {
+    const s = buildStrengthSession(
+      snap({ codAsymmetryPct: 15, teamPalette: { bilateral_strength: ["ex_front_squat"], unilateral_strength: ["ex_single_leg_rdl"] } }),
+    );
+    expect(allEx(s)).toContain("ex_front_squat");
+    expect(allEx(s)).not.toContain("ex_single_leg_rdl");
+    expect(audit(s, "PALETTE_SYMMETRY_UNILATERAL")).toBe(false);
+    expect(audit(s, "ASYMMETRY_REVIEW")).toBe(true);
+  });
+
+  it("the coach kept the two-leg lift → it stays, ASYMMETRY_KEPT says when", () => {
+    const s = buildStrengthSession(
+      snap({ valdAsymmetryPct: 18, asymmetryReview: { decision: "keep", decidedAt: "2026-09-05", reason: "kicking leg" }, teamPalette: { bilateral_strength: ["ex_front_squat"], unilateral_strength: ["ex_single_leg_rdl"] } }),
+    );
+    expect(allEx(s)).toContain("ex_front_squat");
+    const kept = s!.appliedAdaptations.find((a) => a.ruleId === "ASYMMETRY_KEPT")!;
+    expect(kept.actionEN).toContain("2026-09-05");
+    expect(kept.actionEN).toContain("kicking leg");
+  });
+
+  it("a confirm older than 28 days is up for review again", () => {
+    const s = buildStrengthSession(
+      snap({ codAsymmetryPct: 15, asymmetryReview: { decision: "swap", decidedAt: "2026-08-01" }, teamPalette: { bilateral_strength: ["ex_front_squat"], unilateral_strength: ["ex_single_leg_rdl"] } }),
+    );
+    expect(allEx(s)).toContain("ex_front_squat");
+    expect(audit(s, "ASYMMETRY_REVIEW")).toBe(true);
+  });
+
+  it("the confirmed swap names who decided and when", () => {
+    const s = buildStrengthSession(
+      snap({ codAsymmetryPct: 15, ...CONFIRMED, teamPalette: { bilateral_strength: ["ex_front_squat"], unilateral_strength: ["ex_single_leg_rdl"] } }),
+    );
+    const a = s!.appliedAdaptations.find((x) => x.ruleId === "PALETTE_SYMMETRY_UNILATERAL")!;
+    expect(a.actionEN).toContain("Coach confirmed the swap on 2026-09-01");
+    expect(a.actionIS).toContain("Þjálfari staðfesti skiptin 2026-09-01");
+    expect(audit(s, "ASYMMETRY_REVIEW")).toBe(false);
   });
 
   it("the injury-prevention posterior block (Nordic) is never palette-substituted", () => {
@@ -81,6 +123,7 @@ describe("team strength palette → buildStrengthSession", () => {
       snap({
         codAsymmetryPct: null, // no IMA
         valdAsymmetryPct: 18,  // VALD NordBord/ForceFrame ≥ 10%
+        ...CONFIRMED,
         teamPalette: { bilateral_strength: ["ex_front_squat"], unilateral_strength: ["ex_single_leg_rdl"] },
       }),
     );
@@ -91,7 +134,7 @@ describe("team strength palette → buildStrengthSession", () => {
 
   it("the more severe of IMA vs VALD wins; both below threshold → bilateral", () => {
     const uni = buildStrengthSession(
-      snap({ codAsymmetryPct: 4, valdAsymmetryPct: 25, teamPalette: { bilateral_strength: ["ex_front_squat"], unilateral_strength: ["ex_single_leg_rdl"] } }),
+      snap({ codAsymmetryPct: 4, valdAsymmetryPct: 25, ...CONFIRMED, teamPalette: { bilateral_strength: ["ex_front_squat"], unilateral_strength: ["ex_single_leg_rdl"] } }),
     );
     expect(allEx(uni)).toContain("ex_single_leg_rdl"); // VALD 25% drives it
     const bi = buildStrengthSession(

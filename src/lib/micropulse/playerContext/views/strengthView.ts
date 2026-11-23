@@ -64,5 +64,9 @@ export function strengthView(ctx: PlayerContext): PlayerStrengthSnapshot {
     ...(cfg.mdRepsPerSet ? { mdRepsPerSet: cfg.mdRepsPerSet } : {}),
     // The jump test that feeds today's dose (cmjDose.ts), only when there is one.
     ...(ctx.cmjTest?.data.test ? { cmjTest: ctx.cmjTest.data.test } : {}),
+    // Fresh NordBord / ForceFrame tests (testAddons.ts), only when there is one.
+    ...(ctx.strengthTests?.data.tests ? { strengthTests: ctx.strengthTests.data.tests } : {}),
+    // The coach's asymmetry decision (asymmetryReview.ts), only when there is one.
+    ...(ctx.asymmetryReview?.data.review ? { asymmetryReview: ctx.asymmetryReview.data.review } : {}),
   };
 }

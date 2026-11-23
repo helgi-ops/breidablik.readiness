@@ -30,6 +30,7 @@ import { positionGroup, positionGroupsForSport } from "@/lib/micropulse/position
 import PlayerStrengthSessionCard from "@/components/coach/PlayerStrengthSessionCard";
 import StrengthSendModePicker from "@/components/coach/StrengthSendModePicker";
 import NoMatchWeekEditor from "@/components/coach/NoMatchWeekEditor";
+import AsymmetryReviewCard from "@/components/coach/AsymmetryReviewCard";
 import { normalizeSendMode, type SendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
 import StrengthSessionPdf, { type StrengthSessionPdfData } from "@/components/coach/StrengthSessionPdf";
 import { useLang } from "@/lib/lang";
@@ -740,6 +741,9 @@ export default function CoachStrengthPage() {
           })}
         </div>
       </section>
+
+      {/* Left/right gaps wait for the coach's one tap before the lift changes (brief §4b). */}
+      <AsymmetryReviewCard lang={lang === "IS" ? "IS" : "EN"} />
 
       {/* 3 — SEND: the day's one action */}
       <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">

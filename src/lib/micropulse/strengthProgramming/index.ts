@@ -62,6 +62,8 @@ import {
 import { DEFAULT_STRUCTURE_BY_MD, STRUCTURES_ALLOWED_BY_MD, STRUCTURE_LABEL, readinessDowngrade, isRestDay, noMatchDayFor, weekdayOf, NO_MATCH_DAY_MD, NO_MATCH_DAY_LABEL, WEEKDAY_LABEL, type MdStructures, type NoMatchDayKind, type StructureKey } from "./structures";
 import { enforceDayRules, estimateSessionMinutes } from "./dayRules";
 import { applyCmjDose } from "./cmjDose";
+import { applyTestAddons } from "./testAddons";
+import { asymmetryReviewAudit, asymmetrySwapAllowed, confirmedNote } from "./asymmetryReview";
 import { buildStructuredBlocks } from "./structureBuilders";
 
 export * from "./types";
@@ -264,7 +266,9 @@ function applyTeamPalette(
   const vald = snap.valdAsymmetryPct ?? null;
   const asym = cod == null && vald == null ? null : Math.max(cod ?? 0, vald ?? 0);
   const asymSource = vald != null && (cod == null || vald >= cod) ? "VALD" : "IMA CoD";
-  const preferUnilateral = asym != null && asym >= PALETTE_UNILATERAL_ASYMMETRY_PCT;
+  // Brief §4b (2026-11-23): the asymmetry picks the one-leg lift only after the coach confirmed it
+  // (asymmetryReview.ts); until then the core logs ASYMMETRY_REVIEW and the two-leg pool is used.
+  const preferUnilateral = asym != null && asym >= PALETTE_UNILATERAL_ASYMMETRY_PCT && asymmetrySwapAllowed(snap);
   // Per-slot "used" set so a second exercise in the same slot takes the coach's next
   // pick (not a duplicate of the first); when the pool is exhausted we leave the
   // template exercise in place. A pick the safety rules rule out is passed over,
@@ -389,8 +393,8 @@ function applyTeamPalette(
       ruleId: "PALETTE_SYMMETRY_UNILATERAL",
       triggerEN: `L/R asymmetry ${asym?.toFixed(0)}% ≥ ${PALETTE_UNILATERAL_ASYMMETRY_PCT}% (${asymSource})`,
       triggerIS: `L/R ósamhverfa ${asym?.toFixed(0)}% ≥ ${PALETTE_UNILATERAL_ASYMMETRY_PCT}% (${asymSource})`,
-      actionEN: "Chose the unilateral lower-body lift from the palette to load the weaker side.",
-      actionIS: "Valdi einhliða neðri-líkama lyftu úr safninu til að hlaða veikari hlið.",
+      actionEN: `Chose the unilateral lower-body lift from the palette to load the weaker side.${confirmedNote(snap).en}`,
+      actionIS: `Valdi einhliða neðri-líkama lyftu úr safninu til að hlaða veikari hlið.${confirmedNote(snap).is}`,
       evidence: "Bishop 2020 — inter-limb asymmetry ≥ ~10-15% is performance/injury-relevant; unilateral work targets the deficit side.",
     });
   }
@@ -890,6 +894,9 @@ function buildStrengthSessionCore(
   const trace = newAdaptationTrace();
   const audit = applyAdaptationRules(tmpl.blocks, individualised ? snap : { ...snap, ledgerEmphases: [] }, trace);
   audit.unshift(...weekAudit);
+  // A left/right gap ≥ 10% not yet confirmed by the coach: logged for review, nothing swapped (brief §4b).
+  const asymReview = isBasketball ? null : asymmetryReviewAudit(snap);
+  if (asymReview) audit.push(asymReview);
 
   // Substitute the coach's team palette into the power/strength slots (individualised
   // mode only). Symmetry chooses uni vs bi lower-body. Runs after adaptation (so the
@@ -926,6 +933,9 @@ function buildStrengthSessionCore(
   if (individualised) {
     audit.push(...applyPlayerGoal(tmpl.blocks, snap, (id) => safetyRulesOut(id, trace), (id) => trace.pinned.has(id)));
   }
+  // NordBord / ForceFrame tests: one extra Nordic (MD-4) / Copenhagen (MD-3) set, after the goal so the week's cap
+  // sees the goal's set (brief §4b).
+  audit.push(...applyTestAddons(tmpl.blocks, snap));
 
   if (noMatchKind) {
     const wd = weekdayOf(snap.todayIso);

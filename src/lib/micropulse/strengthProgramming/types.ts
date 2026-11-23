@@ -337,6 +337,12 @@ export type PlayerStrengthSnapshot = {
    *  MD-2 (or MD-1 when MD-2 had none) for MD-2 / MD-1. Absent = no test that day, or no ready baseline. Never the
    *  readiness colour. */
   cmjTest?: import("./cmjDose").CmjDoseTest;
+  /** Fresh NordBord / ForceFrame hip adduction tests with the previous one (testAddons.ts, brief §4b): a drop or a
+   *  left/right gap adds one Nordic / Copenhagen set, within the week's cap. Never the readiness colour. */
+  strengthTests?: import("./testAddons").StrengthTests;
+  /** The coach's newest decision on a left/right asymmetry (asymmetry_reviews, brief §4b): "swap" lets the
+   *  asymmetry rules swap to one leg at a time for 28 days, "keep" keeps the lift. Absent = not reviewed → no swap. */
+  asymmetryReview?: import("./asymmetryReview").AsymmetryReview;
 };
 
 /** See `PlayerStrengthSnapshot.playerChoiceAccess`. */

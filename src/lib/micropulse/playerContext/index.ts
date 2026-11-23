@@ -49,6 +49,10 @@ import {
 import { strengthView } from "./views/strengthView";
 import { fetchCmjDoseTest } from "../strengthProgramming/cmjDoseLoader";
 import type { CmjDoseTest } from "../strengthProgramming/cmjDose";
+import { fetchStrengthTests } from "../strengthProgramming/testAddonsLoader";
+import type { StrengthTests } from "../strengthProgramming/testAddons";
+import { fetchAsymmetryReview } from "../strengthProgramming/asymmetryReviewStore";
+import type { AsymmetryReview } from "../strengthProgramming/asymmetryReview";
 
 export { strengthView };
 export { assertNoMedicalLeak } from "./wall";
@@ -98,6 +102,10 @@ export type PlayerContext = {
   movementDeficit: Domain<{ ledgerEmphases: string[]; correctives: SessionCorrective[]; correctiveEmphases: string[] }>;
   /** The jump test on this week's test day that feeds today's dose (MD-4/MD-5, MD-2, MD-1 only). Absent = none. */
   cmjTest?: Domain<{ test?: CmjDoseTest }>;
+  /** NordBord + ForceFrame adduction tests inside their freshness windows (testAddons.ts, brief §4b). Absent = none. */
+  strengthTests?: Domain<{ tests?: StrengthTests }>;
+  /** The coach's newest decision on a left/right asymmetry (asymmetry_reviews, brief §4b). Absent = never reviewed. */
+  asymmetryReview?: Domain<{ review?: AsymmetryReview }>;
 };
 
 export type BuildPlayerContextArgs = {
@@ -158,7 +166,13 @@ export async function buildPlayerContext(
   ]);
 
   // The jump test that feeds today's dose: read only on the days it can change (needs today's MD day first).
-  const cmjTest = await fetchCmjDoseTest(sb, { teamId, playerId, todayIso, md: mdInfo.mdContext });
+  // NordBord / ForceFrame tests that can add a prevention set (fresh tests only).
+  // The coach's asymmetry decision (a gap swaps the lift only after the coach confirmed it).
+  const [cmjTest, strengthTests, asymmetryReview] = await Promise.all([
+    fetchCmjDoseTest(sb, { teamId, playerId, todayIso, md: mdInfo.mdContext }),
+    fetchStrengthTests(sb, playerId, todayIso),
+    fetchAsymmetryReview(sb, playerId),
+  ]);
 
   const wellnessAvailable =
     wellness.sleepQuality != null || wellness.muscleSoreness != null ||
@@ -230,5 +244,7 @@ export async function buildPlayerContext(
       status: statusOf(ledgerEmphases.length > 0 || screenCorrectives.correctives.length > 0),
     },
     cmjTest: { data: cmjTest ? { test: cmjTest } : {}, status: statusOf(cmjTest != null) },
+    strengthTests: { data: strengthTests ? { tests: strengthTests } : {}, status: statusOf(strengthTests != null) },
+    asymmetryReview: { data: asymmetryReview ? { review: asymmetryReview } : {}, status: statusOf(asymmetryReview != null) },
   };
 }

@@ -117,6 +117,7 @@ describe("engine", () => {
   it("the symmetry rule still decides the group: an asymmetric player gets their one-leg pick, not their two-leg one", () => {
     const s = buildStrengthSession(snap({
       codAsymmetryPct: 14,
+      asymmetryReview: { decision: "swap", decidedAt: "2026-11-17" }, // the coach confirmed (brief §4b)
       playerExercisePicks: { bilateral_strength: ["ex_back_squat"], unilateral_strength: ["ex_single_leg_rdl"] },
     }));
     expect(ids(s)).toContain("ex_single_leg_rdl");

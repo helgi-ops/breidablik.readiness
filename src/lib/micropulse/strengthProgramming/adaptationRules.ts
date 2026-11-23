@@ -14,6 +14,7 @@
  * Evidence base for each rule is documented in the rule itself.
  */
 
+import { asymmetrySwapAllowed, confirmedNote } from "./asymmetryReview";
 import type {
   SessionBlock,
   PrescribedExercise,
@@ -340,7 +341,9 @@ export function applyAdaptationRules(
   // alternative (Bulgarian SS) and instruct the coach to anchor the
   // weaker side first. Keeps the 20-min budget intact while still
   // delivering the asymmetry-correction stimulus.
-  if (snap.codAsymmetryPct != null && snap.codAsymmetryPct >= 15) {
+  // Brief §4b (2026-11-23): only after the coach confirmed the swap (asymmetryReview.ts); otherwise the core logs
+  // ASYMMETRY_REVIEW and the lift stays.
+  if (snap.codAsymmetryPct != null && snap.codAsymmetryPct >= 15 && asymmetrySwapAllowed(snap)) {
     const swappedDl = swapExercise(blocks, "ex_trap_bar_dl", "ex_bulgarian_ss",
       `Swapped to unilateral — L/R CoD asymmetry ${snap.codAsymmetryPct.toFixed(1)}%. Anchor weaker ${snap.codWeakerSide ?? "?"} side first.`);
     const swappedBackSq = swappedDl
@@ -356,8 +359,8 @@ export function applyAdaptationRules(
         ruleId: "COD_ASYM_MAIN_LIFT_SWAP",
         triggerEN: `L/R CoD asymmetry ${snap.codAsymmetryPct.toFixed(1)}%`,
         triggerIS: `L/R CoD ósamhverfa ${snap.codAsymmetryPct.toFixed(1)}%`,
-        actionEN: `Main lift → Bulgarian split squat (anchor weaker ${snap.codWeakerSide ?? "?"} side first)`,
-        actionIS: `Aðallyfta → Bulgarian split squat (byrja á veikari ${snap.codWeakerSide ?? "?"} fót)`,
+        actionEN: `Main lift → Bulgarian split squat (anchor weaker ${snap.codWeakerSide ?? "?"} side first).${confirmedNote(snap).en}`,
+        actionIS: `Aðallyfta → Bulgarian split squat (byrja á veikari ${snap.codWeakerSide ?? "?"} fót).${confirmedNote(snap).is}`,
         evidence: "Unilateral correction for non-contact injury risk (Bishop 2020).",
       });
     }
