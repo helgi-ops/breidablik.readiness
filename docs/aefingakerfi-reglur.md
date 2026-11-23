@@ -505,10 +505,11 @@ Eftirtöldum ákvörðunum má breyta:
 
 ## Heimildir
 
-Fullar heimildir fyrir stuttu tilvísanirnar í reglunum hér að ofan (sótt og borið saman við ágrip 23. nóv. 2026).
-Sama skrá er í kóðanum: `src/lib/micropulse/references/ruleRefs.ts` (`findRefByShort`). Próf
-(`references/__tests__/ruleRefs.test.ts`) passar að hver tilvísun í þessu skjali sé hér, annaðhvort full eða á
-listanum yfir óstaðfestar.
+Fullar heimildir fyrir stuttu tilvísanirnar í reglunum hér að ofan (sótt og borið saman 23. nóv. 2026). Heimildir
+fyrir allan kóða æfingakerfisins, líka það sem er ekki í þessum lista, eru í
+[`heimildir-aefingakerfis.md`](heimildir-aefingakerfis.md). Sama skrá er í kóðanum:
+`src/lib/micropulse/references/ruleRefs.ts` (`findRefByShort`). Próf (`references/__tests__/ruleRefs.test.ts`)
+passar að hver tilvísun sé skráð, annaðhvort full eða á listanum yfir óstaðfestar.
 
 - Arnason A, Andersen TE, Holme I, Engebretsen L, Bahr R. Prevention of hamstring strains in elite soccer: an intervention study. Scand J Med Sci Sports 2008;18(1):40–48. doi:10.1111/j.1600-0838.2006.00634.x PMID 17355322
 - Bourne MN, Duhig SJ, Timmins RG, Williams MD, Opar DA, Al Najjar A, Kerr GK, Shield AJ. Impact of the Nordic hamstring and hip extension exercises on hamstring architecture and morphology: implications for injury prevention. Br J Sports Med 2017;51(5):469–477. doi:10.1136/bjsports-2016-096130 PMID 27660368
@@ -561,4 +562,4 @@ listanum yfir óstaðfestar.
 - **Comfort 2018**: Comfort birti nokkrar greinar um ísómetrískt mid-thigh pull 2018–2019 og ekki er skráð hver þeirra styður regluna.
 - **Gabbett 2017**: Gabbett var meðhöfundur að nokkrum greinum um álagsvöktun 2017 og ekki er skráð hver er átt við. Þekktasta greinin um skammtíma- og langtímaálag er Gabbett 2016.
 - **Lim 2020**: Engin grein eftir Lim (eða Lim & Childs) frá 2020 um langar ísómetrískar æfingar og sinar fannst. Næst kemst Lim & Wong 2018 (sinakvilli í hnéskeljarsin).
-- **Rønnestad 2023**: Engin grein eftir Rønnestad frá 2023 um örskammta fannst. Rannsóknirnar á örskömmtum í fótbolta eru eftir Cuthbert (rammi 2021, doktorsritgerð 2022); grein Rønnestad um styrk á keppnistímabili er frá 2011.
+- **Rønnestad 2023**: Engin grein eftir Rønnestad frá 2023 um örskammta fannst. Rannsóknirnar á örskömmtum í fótbolta eru eftir Cuthbert (rammi 2024, doktorsritgerð 2022); grein Rønnestad um styrk á keppnistímabili er frá 2011.

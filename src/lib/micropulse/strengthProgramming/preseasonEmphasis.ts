@@ -13,7 +13,7 @@
  * and the emphasis. Advisory — the coach confirms/overrides. Descriptive: never reads or writes the
  * readiness colour, the load target, or the daily decision.
  *
- * Cite: Cormie/Suchomel 2011/2016 (strength underpins power; stronger athletes respond better);
+ * Cite: Cormie 2011; Suchomel 2016 (strength underpins power; stronger athletes respond better);
  *       Mujika & Padilla 2000 (reconditioning); Pareja-Blanco 2017 (velocity autoregulation).
  */
 
@@ -55,7 +55,7 @@ export interface PreseasonThresholds {
 }
 export const DEFAULT_PRESEASON_THRESHOLDS: PreseasonThresholds = { lowPctl: 35, highPctl: 65, highBodyFatPct: 15 };
 
-const CITE = "Cormie/Suchomel 2011/2016; Mujika & Padilla 2000; Pareja-Blanco 2017";
+const CITE = "Cormie 2011; Suchomel 2016; Mujika & Padilla 2000; Pareja-Blanco 2017";
 
 // Ledger-deficit KEYWORDS that flip on the year-round injury-prevention overlay (substring match, so
 // it catches "eccentric_hamstring", "adductor_strength", "asymmetry_…" from the unified quality keys).

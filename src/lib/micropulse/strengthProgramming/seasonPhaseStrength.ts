@@ -5,8 +5,8 @@
  * intensity zone and volume should be, so the same engine expresses hypertrophy→max→power in
  * pre-season, retention in-season, and reconditioning off-season. Advisory; never the readiness colour.
  *
- * Cite: Rønnestad 2011 (in-season maintenance); Mujika & Padilla 2000 (detraining); Cormie/Suchomel
- *       2011/2016 (build sequence); Cuthbert 2021 (volume distribution).
+ * Cite: Rønnestad 2011 (in-season maintenance); Mujika & Padilla 2000 (detraining); Cormie 2011;
+ *       Suchomel 2016 (build sequence); Cuthbert 2021 (volume distribution).
  */
 
 import type { Bi } from "@/lib/micropulse/load/peakPeriod";
@@ -27,7 +27,7 @@ export interface PhaseStrengthConfig {
   cite: string;
 }
 
-const CITE = "Rønnestad 2011; Mujika & Padilla 2000; Cormie/Suchomel 2011/2016; Cuthbert 2021";
+const CITE = "Rønnestad 2011; Mujika & Padilla 2000; Cormie 2011; Suchomel 2016; Cuthbert 2021";
 
 // ───────────────────── Coach-authored rule overrides ─────────────────────
 // The schemes below are evidence-based DEFAULTS. A strength coach can override individual fields
