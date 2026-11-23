@@ -8,7 +8,9 @@ import { join } from "node:path";
 import {
   DAY_RULES, DAY_RULE_TABLE, DAY_RULE_TIME_NOTE, DAY_RULE_TRIM, DAY_RULE_ZONE, DAY_RULE_COACH_DAY_OFF, MATCH_DAY_RULE,
   TIME_BUDGET_EVIDENCE, TIME_BUDGET_TRIM, timeRoles, dayCategoryOf, enforceDayRules, everyExerciseHasDayCategory, heavyVelocityLossCapFor, repsOfLine,
+  zoneNum,
 } from "../dayRules";
+import { NEAR_MATCH_ZONE } from "../weekRule";
 import { EXERCISE_LIBRARY, EXERCISES_BY_ID } from "../exerciseLibrary";
 import { buildStrengthSession } from "..";
 import type { ExerciseDose, MdContext, PrescribedExercise, SessionBlock, StrengthSession } from "../types";
@@ -251,17 +253,30 @@ describe("MD-2 — maintenance", () => {
     expect(all(out)).toEqual(all(s));
   });
 
-  it("trimmed: goal work out (not at the near-match dose), another loaded lift over 6 reps, eccentric out", () => {
+  it("trimmed: a heavy lift out, goal work out (not at the near-match dose), another fast loaded lift over 6 reps, eccentric out", () => {
     const out = enforceDayRules(session("MD-2", [
       blk("COMPOUND", [ex("ex_back_squat", { sets: 3, reps: "3", intensity: "70% 1RM" })]),
+      blk("COMPOUND", [ex("ex_front_squat", { sets: 3, reps: "3", intensity: "50% 1RM" })]),
       blk("UNILATERAL", [ex("ex_bulgarian_ss", { sets: 3, reps: "6 each leg" }, { goalPlan: { quality: "braking", week: 2 } })]),
       blk("POSTERIOR", [ex("ex_nordic_curl", { sets: 2, reps: "5" })]),
       blk("POWER_PRIMER", [ex("ex_box_jump", { sets: 3, reps: "4" })]),
     ]));
+    expect(find(out, "ex_back_squat")).toBeUndefined();
+    expect(trims(out).some((a) => /nothing heavy/.test(a.actionEN) || /nothing heavy/.test(a.triggerEN))).toBe(true);
     expect(find(out, "ex_bulgarian_ss")).toBeUndefined();
     expect(find(out, "ex_nordic_curl")).toBeUndefined();
-    expect(find(out, "ex_back_squat")!.dose.sets * 3).toBeLessThanOrEqual(6);
+    expect(find(out, "ex_front_squat")!.dose.sets * 3).toBeLessThanOrEqual(6);
     expect(find(out, "ex_box_jump")!.dose.sets * 4).toBeLessThanOrEqual(6);
+  });
+
+  it("the table says what the week rule does: fast only, the near-match zone, 10% speed loss, no heavy lift", () => {
+    const r = DAY_RULES["MD-2"];
+    const z = NEAR_MATCH_ZONE["MD-2"];
+    expect(r.intensity.en).toContain(`${zoneNum(z.zone.min)}–${zoneNum(z.zone.max!)} m/s (${z.load})`);
+    expect(r.intensity.en).not.toMatch(/0\.55|0\.70/);
+    expect(r.allowed).not.toContain("heavy");
+    expect(r.bans.heavyLift).toBe(true);
+    expect(r.caps.vlMax).toBe(10);
   });
 
   it("the goal's lift at the near-match dose stays", () => {

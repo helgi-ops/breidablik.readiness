@@ -17,6 +17,9 @@
  *   - Close to the match the week rule's 4 × 4 fast dose (Harrison 2019) is not cut to the table's 6 reps: the caps of
  *     6 apply to any other loaded lift on those days (`dose.nearMatch` is left out of the count).
  *   - MD-4 heavy sets stop at 15% speed loss (was 20%; Pareja-Blanco 2017).
+ *   - MD-2 is fast work only (2026-11-23): no heavy lift, legs 1.0–1.3 m/s as the week rule's near-match zone, sets stop
+ *     at 10% speed loss. The table's earlier "legs 0.55–0.70 m/s" with a heavy lift is gone (it disagreed with the week
+ *     rule's "No heavy lift today").
  *
  * Never reads or writes the readiness colour.
  */
@@ -124,18 +127,19 @@ const MD3: DayRule = {
 const MD2: DayRule = {
   md: "MD-2",
   purpose: { en: "Maintenance", is: "Viðhald" },
-  allowed: ["iso", "upper", "heavy", "plyo"],
-  intensity: { en: "Legs 0.55–0.70 m/s · upper body 2 reps in reserve", is: "Fætur 0,55–0,70 m/s · efri hluti 2 endurtekningar í varasjóði" },
-  caps: { loadedReps: 6, contacts: 6, minutes: 20 },
+  allowed: ["iso", "upper", "fast", "plyo"],
+  intensity: { en: "Legs fast: 1.0–1.3 m/s (40–55% 1RM) · speed loss ≤ 10% · upper body 2 reps in reserve", is: "Fætur hratt: 1,0–1,3 m/s (40–55% 1RM) · hraðatap ≤ 10% · efri hluti 2 endurtekningar í varasjóði" },
+  caps: { loadedReps: 6, contacts: 6, minutes: 20, vlMax: 10 },
   notAllowed: [
+    { en: "Anything heavy", is: "Neitt þungt" },
     { en: "Goal work", is: "Markmiðsvinna" },
     { en: "Jump volume", is: "Stökkmagn" },
     { en: "Eccentric work", is: "Eccentric vinna" },
   ],
-  bans: { goalWork: true, heavyEccentric: true },
+  bans: { goalWork: true, heavyEccentric: true, heavyLift: true },
   note: {
-    en: "The week rule's fast dose close to the match (4 × 4, Harrison 2019) and the goal lift done at that dose stay; the 6-rep cap is for any other loaded lift. A small jump dose (≤ 6 contacts) stays.",
-    is: "Hraðskammtur vikureglunnar nærri leik (4 × 4, Harrison 2019) og markmiðslyfta á þeim skammti haldast; 6 endurtekninga mörkin eiga við aðrar hlaðnar lyftur. Lítill stökkskammtur (≤ 6 snertingar) helst.",
+    en: "Fast work only, no heavy lift (the coach's call, 2026-11-23): the week rule's fast dose close to the match (4 × 4 at 1.0–1.3 m/s, Harrison 2019) and the goal lift done at that dose stay; the 6-rep cap is for any other loaded lift. A small jump dose (≤ 6 contacts) stays.",
+    is: "Aðeins hröð vinna, engin þung lyfta (ákvörðun þjálfara, 2026-11-23): hraðskammtur vikureglunnar nærri leik (4 × 4 við 1,0–1,3 m/s, Harrison 2019) og markmiðslyfta á þeim skammti haldast; 6 endurtekninga mörkin eiga við aðrar hlaðnar lyftur. Lítill stökkskammtur (≤ 6 snertingar) helst.",
   },
 };
 
