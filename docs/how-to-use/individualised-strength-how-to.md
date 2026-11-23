@@ -30,8 +30,8 @@ Every player gets **one** strength session a day. You choose how it's built:
 You set the team default and can override it on any single send. Everything lives
 on **Coach → Strength**.
 
-> **Why one session?** In-season, 15–20 minute micro-doses 3–5×/week preserve
-> strength and power without next-day fatigue (Rønnestad 2023). One coherent,
+> **Why one session?** In-season, 15–20 minute micro-doses 3–5×/week give similar
+> strength gains to 1–2 long sessions and spread the fatigue (Cuthbert 2021). One coherent,
 > individualised session reaches the player instead of two colliding ones.
 
 ### 1. Your team exercise palette
@@ -231,7 +231,7 @@ adaptation engine's own `COD_ASYM_MAIN_LIFT_SWAP`.
 
 ### Evidence base
 
-Rønnestad 2023 (microdosing) · Bishop 2020 (inter-limb asymmetry) · Tufano 2017
+Cuthbert 2021 (microdosing) · Bishop 2020 (inter-limb asymmetry) · Tufano 2017
 (cluster sets) · Cormie 2011 / Liu 2023 (contrast & French contrast) ·
 Pareja-Blanco 2017 (velocity-loss caps) · van Dyk 2019 (Nordic, −51% hamstring) ·
 Harøy 2019 (Copenhagen, −41% groin) · Martin-García 2018 (matchday taper) ·

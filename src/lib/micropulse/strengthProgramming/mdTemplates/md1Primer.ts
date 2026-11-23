@@ -8,10 +8,11 @@
  *   - Cañadas-García 2026 — 79% of pro Spanish soccer S&C coaches prime the
  *     day before a match, isometrics most often (a survey of practice; it
  *     does not test next-day CMJ or sprint).
- *   - Cuenca-Fernández 2024 — Acute iso conditioning improves jump
- *     performance hours-to-days later when load is minimal.
- *   - Comfort 2018 — IMTP recruits high-threshold motor units without
- *     metabolic cost; perfect for MD-1.
+ *   - Harrison 2019 — resistance priming 1-48 h before competition can lift
+ *     some neuromuscular measures (review); isometric-only primers are less
+ *     studied, so the next-day jump benefit is not shown.
+ *   - Lum & Barbosa 2019 — isometrics build strength with less fatigue than
+ *     dynamic work, which is why MD-1 uses them.
  *
  * Structure (~10 min total):
  *   1. Movement prep (3 min, glute activation + pogo)

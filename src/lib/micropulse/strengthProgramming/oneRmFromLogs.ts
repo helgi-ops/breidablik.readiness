@@ -7,7 +7,7 @@
  * Descriptive coaching aid: the working 1RM and kg targets never set the readiness colour or the
  * daily decision (session load stays on session_rpe_entries). Pure, no I/O.
  *
- * Cite: Epley 1985 · Brzycki 1993 · Lombardi 1989 (1RM estimation); Zourdos 2016, Helms 2016 (RIR/RPE).
+ * Cite: Epley 1985 · Brzycki 1993 · Lombardi 1989 (1RM estimation; accuracy: Mayhew 2008, García-Ramos 2019); Zourdos 2016, Helms 2016 (RIR/RPE).
  */
 
 import { computeWorkingOneRm, workingTargetKg, type SetLogRow, type WorkingEntry } from "@/lib/client/workingOneRm";

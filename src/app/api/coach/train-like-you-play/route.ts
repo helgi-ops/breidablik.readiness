@@ -162,7 +162,7 @@ const MICRO_ORDER = ["MD+1", "MD+2", "MD+3", "MD-5", "MD-4", "MD-3", "MD-2", "MD
 // Days whose squad is two populations: players who played the preceding match
 // (recovery) vs those who didn't (compensatory top-up). MD+3 onward re-converge.
 const COHORT_SPLIT_DAYS = new Set(["MD+1", "MD+2"]);
-// Post-match cohort thresholds — tunable references, not rules (Anderson 2016;
+// Post-match cohort thresholds — tunable references, not rules (Anderson 2016b;
 // Hills 2018; Stevens 2017; Nédélec 2012).
 const RECOVERY_MIN_MINUTES = 60; // played a substantial share → recovery
 const TOPUP_MAX_MINUTES = 30;    // played little/none → needs a full top-up

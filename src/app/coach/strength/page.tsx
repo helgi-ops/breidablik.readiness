@@ -14,7 +14,7 @@
  * both list and expanded view — list mode just shows the summary line.
  *
  * Evidence base (research/Microdosing/):
- *   - Rønnestad 2023, Cañadas-García 2026, Vretaros 2022.
+ *   - Cuthbert 2021, Rønnestad 2011, Cañadas-García 2026, Vretaros 2022.
  */
 
 export const dynamic = "force-dynamic";
@@ -1401,11 +1401,11 @@ export default function CoachStrengthPage() {
           </summary>
           <p className="px-2.5 pb-2.5 leading-relaxed">
             {t(
-              "15-20 min sessions 3-5×/week beat 60 min 2×/week for in-season teams (Rønnestad 2023) — " +
-              "they preserve strength + power without next-day fatigue carryover and fit congested calendars. " +
+              "15-20 min sessions 3-5×/week give similar strength gains to 1-2 long sessions when the weekly volume is the same (Cuthbert 2021) — " +
+              "they spread the fatigue across the week and fit congested calendars. " +
               "It's the default; switch any block to traditional (concentrated lift days) in Training principles when the week allows.",
-              "15-20 mín æfingar 3-5×/viku slá 60 mín 2×/viku á keppnistímabili (Rønnestad 2023) — " +
-              "þær halda styrk og krafti án þreytu daginn eftir og henta þéttri leikjadagskrá. " +
+              "15-20 mín æfingar 3-5×/viku gefa svipaða styrkaukningu og 1-2 langar þegar vikumagnið er það sama (Cuthbert 2021) — " +
+              "þær dreifa þreytunni yfir vikuna og henta þéttri leikjadagskrá. " +
               "Þetta er sjálfgefið; skiptu hvaða blokk sem er yfir á hefðbundið (einbeittir lyftidagar) í Þjálfunarprinsipp þegar vikan leyfir.",
             )}
           </p>
@@ -1413,12 +1413,12 @@ export default function CoachStrengthPage() {
       <div className="text-[11px] text-slate-500 leading-relaxed">
         <p>
           {t(
-            "Evidence: Rønnestad 2023 (microdosing), van Dyk 2019 (Nordic), " +
-            "Harøy 2019 (Copenhagen), Pareja-Blanco 2017 (VBT), Comfort 2018 (IMTP), " +
-            "Tufano 2017 (cluster sets), Liu 2023 (French Contrast).",
-            "Heimildir: Rønnestad 2023 (microdosing), van Dyk 2019 (Nordic), " +
-            "Harøy 2019 (Copenhagen), Pareja-Blanco 2017 (VBT), Comfort 2018 (IMTP), " +
-            "Tufano 2017 (cluster sets), Liu 2023 (French Contrast).",
+            "Evidence: Cuthbert 2021 (microdosing), van Dyk 2019 (Nordic), " +
+            "Harøy 2019 (Copenhagen), Pareja-Blanco 2017 (VBT), Lum & Barbosa 2019 (isometrics), " +
+            "Tufano 2017 (cluster sets), Zhao 2025 (French contrast).",
+            "Heimildir: Cuthbert 2021 (microdosing), van Dyk 2019 (Nordic), " +
+            "Harøy 2019 (Copenhagen), Pareja-Blanco 2017 (VBT), Lum & Barbosa 2019 (isometrics), " +
+            "Tufano 2017 (cluster sets), Zhao 2025 (French contrast).",
           )}
         </p>
       </div>

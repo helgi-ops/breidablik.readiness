@@ -15,8 +15,8 @@
  *                (the default MD+1 template — light primer + tendon iso).
  *   - "low"      (< 30 min, or DNP): the player MISSED match load → give a real
  *                strength stimulus so they don't fall behind the week
- *                (Rønnestad 2023 — microdose keeps the non-starter pool from
- *                de-training across congested fixtures).
+ *                (Anderson 2016b — non-starters miss most of the high-speed running
+ *                and sprinting that matches give across a season).
  *
  * Returns null when minutes are unknown (no recent match, or minutes never
  * entered) — the caller then keeps the fixed recovery template. Pure — no IO.

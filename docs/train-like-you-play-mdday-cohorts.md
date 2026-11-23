@@ -15,7 +15,7 @@ post-match days (MD+1, MD+2) blend two cohorts doing deliberately different thin
 - **Players who did not play (or played limited minutes)** do a **compensatory "top-up"
   session** to replace the match stimulus they missed — high load is correct. Non-starters
   otherwise accumulate markedly less weekly load and detrain over a congested block
-  (Anderson 2016; Hills 2018; Stevens 2017).
+  (Anderson 2016b; Hills 2018; Stevens 2017).
 
 Averaged together, MD+1 looks like a failed taper (e.g. **95% of match demand on IMA Decel**)
 when in reality the starters are tapering and the non-starters are topping up. **One bar with

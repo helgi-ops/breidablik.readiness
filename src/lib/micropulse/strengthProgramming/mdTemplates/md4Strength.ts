@@ -6,15 +6,17 @@
  * built around microdosing.
  *
  * Evidence base (research/Microdosing/):
- *   - Rønnestad 2023 — Microdosing strength: 15-20 min sessions 4-5×/week
- *     match or exceed 60 min 2×/week for in-season strength maintenance.
+ *   - Cuthbert 2021 — spreading the week's volume over shorter, more frequent
+ *     sessions gives similar strength gains to 1-2 long ones (meta-analysis:
+ *     no clear difference, not superiority).
+ *   - Rønnestad 2011 — one weekly session held in-season strength in pro soccer.
  *   - Vretaros 2022 — Microdosing of Strength Training in Basketball
  *     During Congested Game Weeks (practical-methodological letter;
  *     basketball, the same congested-week problem as football).
  *   - Cañadas-García 2026 — Resistance priming in pro Spanish soccer (survey
  *     of 24 S&C coaches): 79% prime 24 h before a match, isometrics most used.
- *   - Schoenfeld 2024 — Minimal-Dose Resistance Training: 1-3 hard sets
- *     per muscle per session preserves strength and hypertrophy.
+ *   - Spiering 2021 — strength holds on as little as 1 session a week and
+ *     1 set per exercise, as long as the load stays heavy.
  *
  * Why microdose:
  *   1. Preserves strength + power without next-day fatigue carryover.

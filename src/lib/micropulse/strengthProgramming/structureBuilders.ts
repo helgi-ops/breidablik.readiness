@@ -13,7 +13,7 @@
  * available MD dose when a method places an exercise on a day it isn't dosed for —
  * the taper/readiness adjustment still governs the final load.
  *
- * Evidence: Tufano 2017 (cluster), Cormie 2011 / Liu 2023 (French contrast),
+ * Evidence: Tufano 2017 (cluster), Cormie 2011 / Zhao 2025, Cormier 2022 (French contrast),
  * van Dyk 2019 (Nordic), Harøy 2019 (Copenhagen).
  */
 import type { SessionBlock, PrescribedExercise, MdContext, ExerciseDose } from "./types";
@@ -145,7 +145,7 @@ export function buildStructuredBlocks(key: StructureKey, md: MdContext): Session
   }
 
   // Overcoming isometric — max strength / RFD. Long muscle length + high intent +
-  // high load push against immovable resistance (Oranchuk 2023). A strength-day
+  // high load push against immovable resistance (Oranchuk 2019). A strength-day
   // method; keeps injury-prevention.
   if (key === "overcoming_isometric") {
     const main = prescribe(DEFAULT_ISO, md, {
@@ -161,8 +161,8 @@ export function buildStructuredBlocks(key: StructureKey, md: MdContext): Session
       type: "COMPOUND",
       exercises: [main],
       structureId: sid,
-      noteEN: "Push maximally against an immovable bar/pins at a long muscle length (deep joint angle). 4 × 5s, 2-3 min rest. High intent drives motor-unit recruitment + RFD without joint movement (Oranchuk 2023).",
-      noteIS: "Ýttu af hámarkskrafti gegn óhreyfanlegri stöng/pinnum við langa vöðvalengd (djúpt liðhorn). 4 × 5s, 2-3 mín hvíld. Hár ásetningur eykur virkjun hreyfitauga + RFD án hreyfingar (Oranchuk 2023).",
+      noteEN: "Push maximally against an immovable bar/pins at a long muscle length (deep joint angle). 4 × 5s, 2-3 min rest. High intent drives motor-unit recruitment + RFD without joint movement (Oranchuk 2019).",
+      noteIS: "Ýttu af hámarkskrafti gegn óhreyfanlegri stöng/pinnum við langa vöðvalengd (djúpt liðhorn). 4 × 5s, 2-3 mín hvíld. Hár ásetningur eykur virkjun hreyfitauga + RFD án hreyfingar (Oranchuk 2019).",
     };
     return compact([prep, block, ...prevention]);
   }
@@ -199,7 +199,7 @@ export function buildStructuredBlocks(key: StructureKey, md: MdContext): Session
 
   // Isometric PAP primer — a maximal isometric conditioning activity that
   // potentiates a following explosive set (PAPE). 3 sets × 3×3s max iso, then the
-  // explosive action; effect at 3-6 min (Krzysztofik 2023, Jarosz 2025). Taper day.
+  // explosive action; effect a few minutes later (Krzysztofik 2023: sprint at 4-12 min; Jarosz 2025). Taper day.
   if (key === "iso_pap_primer") {
     const ica = prescribe(DEFAULT_ISO, md, {
       sets: 3, reps: "3 × 3s", intensity: "near-max · explosive intent",
@@ -368,8 +368,8 @@ export function buildStructuredBlocks(key: StructureKey, md: MdContext): Session
     type: "FRENCH_CONTRAST",
     exercises: quad,
     structureId: sid,
-    noteEN: "One complex per round: heavy 3 → 30s → plyo 3 → 30s → loaded jump 3 → 30s → med-ball 4/side. 2-3 rounds (Liu 2023).",
-    noteIS: "Eitt komplex per hring: þung 3 → 30s → plyo 3 → 30s → hlaðið stökk 3 → 30s → med-ball 4/hlið. 2-3 hringir (Liu 2023).",
+    noteEN: "One complex per round: heavy 3 → 30s → plyo 3 → 30s → loaded jump 3 → 30s → med-ball 4/side. 2-3 rounds. Classic French contrast ends with a fast (often assisted) jump; the med-ball finish is a MicroPulse variation (Cormier 2022).",
+    noteIS: "Eitt komplex per hring: þung 3 → 30s → plyo 3 → 30s → hlaðið stökk 3 → 30s → med-ball 4/hlið. 2-3 hringir. Klassískt French contrast endar á hröðu (oft studdu) hoppi; med-ball í lokin er útfærsla MicroPulse (Cormier 2022).",
   };
   return compact([prep, block, ...prevention]) as SessionBlock[];
 }

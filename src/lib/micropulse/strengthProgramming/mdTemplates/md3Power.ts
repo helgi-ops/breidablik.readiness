@@ -8,9 +8,10 @@
  *
  * Evidence base:
  *   - Cormie 2011 — high-velocity work preserves RFD with minimal fatigue.
- *   - Liu 2023 — French Contrast Method for soccer power.
+ *   - Zhao 2025 — French contrast improves sprint and jump (meta-analysis).
  *   - Pareja-Blanco 2017 — 10% velocity loss is the power-preserving cap.
- *   - Rønnestad 2023 — Microdosing across the week beats one big day.
+ *   - Cuthbert 2021 — volume spread across the week gives similar strength
+ *     gains to one big day.
  *
  * Structure (~20 minutes total):
  *   1. Movement prep + plyo primer       (4 min)
@@ -81,11 +82,11 @@ export function buildMd3Power(): SessionBlock[] {
       noteEN:
         "Run as ONE complex per round: heavy squat 3 reps → 30s rest → box jump 3 → " +
         "30s → jump squat 3 → 30s → MB rotational 4/side. Then 3 min between rounds. " +
-        "2 rounds total — power transfer is preserved at lower volume (Rønnestad 2023).",
+        "2 rounds total — strength holds on low volume while the load stays heavy (Spiering 2021).",
       noteIS:
         "Keyra sem EITT komplex per hring: þung squat 3 endur → 30s → box jump 3 → " +
         "30s → jump squat 3 → 30s → MB snúningskast 4/hlið. Svo 3 mín milli hringja. " +
-        "Alls 2 hringir — kraftur helst þrátt fyrir lægra volume (Rønnestad 2023).",
+        "Alls 2 hringir — styrkur helst á litlu magni meðan álagið er þungt (Spiering 2021).",
     },
 
     // 3. Med-ball finisher — 3 min concentric-dominant

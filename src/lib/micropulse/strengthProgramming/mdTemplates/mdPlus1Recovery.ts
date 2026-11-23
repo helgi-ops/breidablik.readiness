@@ -15,10 +15,11 @@
  * Evidence base:
  *   - Carling 2018 — 60 min match exposure = recovery day next
  *   - Nédélec 2012 — Post-match fatigue persists 24–48h
- *   - Howatson & Milak 2009 — Light eccentric work day after exercise
- *     accelerates DOMS recovery vs total rest (active recovery > rest)
- *   - Rønnestad 2023 — Microdose stim for non-starters keeps the
- *     training pool from de-training across congested fixtures
+ *   - Dupuy 2018 — active recovery eases soreness a little (meta-analysis;
+ *     massage helped most)
+ *   - Anderson 2016b — non-starters miss most of the high-speed running and
+ *     sprinting matches give; Rønnestad 2011 — a strength stimulus every
+ *     second week did not hold in-season strength
  *
  * Structure for DNP / non-starters (~15 minutes):
  *   1. Movement prep + mobility flush      (5 min)
@@ -70,10 +71,10 @@ export function buildMdPlus1Recovery(): SessionBlock[] {
       ],
       noteEN:
         "Hip mobility flow + glute activation. ~5 min. Doubles as light " +
-        "movement to flush soreness (Howatson & Milak 2009).",
+        "movement to ease soreness (Dupuy 2018).",
       noteIS:
         "Mjaðmaliðsflæði + glute virkjun. ~5 mín. Tvöfaldast sem létt " +
-        "hreyfing til að flush-a sárindi (Howatson & Milak 2009).",
+        "hreyfing til að draga úr sárindum (Dupuy 2018).",
     },
     {
       id: "mdplus1-explosive-stim",

@@ -61,7 +61,7 @@ const MD_TARGET: Record<string, { lo: number; hi: number }> = {
 };
 // Top-up cohort bands for the post-match days: non-starters replace the match
 // stimulus they missed → roughly match-equivalent load. Tunable reference, not a
-// rule (Anderson 2016; Hills 2018; Stevens 2017). The Recovery cohort uses the
+// rule (Anderson 2016b; Hills 2018; Stevens 2017). The Recovery cohort uses the
 // MD_TARGET bands above (those were designed for recovering players).
 const TOPUP_TARGET: Record<string, { lo: number; hi: number }> = {
   "MD+1": { lo: 80, hi: 110 },
@@ -530,7 +530,7 @@ export default function TrainLikeYouPlayPage() {
                       : "Desirable band = a typical periodization shape (low MD+1 & MD-1, peak mid-week) — a reference, not a rule (Martin-García 2018; Akenhead 2016). ")}
                 <a href="/coach/periodization-hub?tab=plan" className="tlp-noprint font-semibold text-[#2740e6] hover:underline">{IS ? "Breyta í Periodization Hub →" : "Edit in Periodization Hub →"}</a>
               </div>
-              <div className="mt-1 text-[10px] text-slate-400">{IS ? "Hver % = heildar-magn æfingar sem hlutfall af heildar-magni heils leiks (ekki per-90 hraði — það blæs upp stuttar sessionir). MD+1/MD+2 skipt í tvennt: leikmenn sem spiluðu fullan skammt (≥60 mín) eru í endurheimt; allir aðrir (varamenn, takmarkaðar eða engar mínútur) gera „top-up\" til að bæta upp leik-áreitið sem þá vantaði — hvor með sitt æskilegt bil (Anderson 2016; Hills 2018; Nédélec 2012). „!\" = fá úrtök, lítið traust." : "Each % = the session's total volume as a share of a full match's total (not a per-90 rate — that inflates short sessions). MD+1/MD+2 are split in two: players who played a full shift (≥60 min) are recovering; everyone else (subs, limited or no minutes) does a compensatory “top-up” to replace the match stimulus they missed — each against its own desirable band (Anderson 2016; Hills 2018; Nédélec 2012). “!” = few sessions, low confidence."}</div>
+              <div className="mt-1 text-[10px] text-slate-400">{IS ? "Hver % = heildar-magn æfingar sem hlutfall af heildar-magni heils leiks (ekki per-90 hraði — það blæs upp stuttar sessionir). MD+1/MD+2 skipt í tvennt: leikmenn sem spiluðu fullan skammt (≥60 mín) eru í endurheimt; allir aðrir (varamenn, takmarkaðar eða engar mínútur) gera „top-up\" til að bæta upp leik-áreitið sem þá vantaði — hvor með sitt æskilegt bil (Anderson 2016b; Hills 2018; Nédélec 2012). „!\" = fá úrtök, lítið traust." : "Each % = the session's total volume as a share of a full match's total (not a per-90 rate — that inflates short sessions). MD+1/MD+2 are split in two: players who played a full shift (≥60 min) are recovering; everyone else (subs, limited or no minutes) does a compensatory “top-up” to replace the match stimulus they missed — each against its own desirable band (Anderson 2016b; Hills 2018; Nédélec 2012). “!” = few sessions, low confidence."}</div>
             </div>
           )}
 

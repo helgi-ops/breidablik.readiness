@@ -233,8 +233,9 @@ export function applyAdaptationRules(
   }
 
   // ── RULE 2: Sore hamstrings — drop Nordic, swap to long iso ham ──────
-  // Evidence: Nordic adds eccentric load; on sore tissue → swap to iso
-  // long-duration hamstring bridge (Lim 2020).
+  // Nordic adds eccentric load; on sore tissue → swap to iso long-duration hamstring
+  // bridge (coaching call). The bridge does not replace the Nordic's protective effect
+  // (van Dyk 2019), so the Nordic returns when soreness settles.
   if (contras.has("sore_hamstrings") || contras.has("hamstring_injury")) {
     ban("ex_nordic_curl", "ex_b_stance_rdl");
     if (swapExercise(blocks, "ex_nordic_curl", "ex_iso_ham_bridge_long",
@@ -246,7 +247,7 @@ export function applyAdaptationRules(
         triggerIS: "Sárindi í hamstring",
         actionEN: "Nordic curl → Long iso hamstring bridge",
         actionIS: "Nordic curl → Lang iso hamstring bridge",
-        evidence: "Eccentric contraindicated on sore tissue; iso adaptations preserved (Lim 2020).",
+        evidence: "Sore hamstrings: the eccentric Nordic is swapped for an isometric bridge to keep some loading (coaching call). The bridge doesn't replace the Nordic's protective effect (van Dyk 2019); it returns when soreness settles.",
       });
     }
     // Also drop B-stance RDL if present (also hinge-heavy on hamstrings)
@@ -308,7 +309,7 @@ export function applyAdaptationRules(
         triggerIS: `Sprintkraftur −${snap.sprintSpeedDropPct?.toFixed(1)}% vs hámark`,
         actionEN: "Dynamic mid-thigh pull → IMTP (iso, same joint angle)",
         actionIS: "Dynamic mid-thigh pull → IMTP (kyrr, sama liðshorn)",
-        evidence: "Iso preserves RFD stim without max-velocity hamstring risk (Comfort 2018).",
+        evidence: "Isometrics keep an RFD stimulus with less fatigue (Lum & Barbosa 2019); skipping max-velocity work on a slow day spares the hamstrings (coaching call).",
       });
     }
     // Drop depth jump and single-leg box jump (high-velocity SSC)
@@ -501,7 +502,7 @@ export function applyAdaptationRules(
       triggerIS: "Þétt vika — ≥ 2 leikir á 7 dögum",
       actionEN: "Already micro-dosed — keep injury-prevention block (Nordic + Copenhagen) only if time is tight.",
       actionIS: "Nú þegar micro-dosed — haldið meiðslaforvarnar-blokk (Nordic + Copenhagen) ef tíminn er knappur.",
-      evidence: "Microdose 15-20 min preserves strength stim in congested weeks (Rønnestad 2023).",
+      evidence: "Short 15-20 min sessions keep the week's strength work going in congested weeks; spreading volume over more, shorter sessions gives similar strength gains (Cuthbert 2021).",
     });
   }
 

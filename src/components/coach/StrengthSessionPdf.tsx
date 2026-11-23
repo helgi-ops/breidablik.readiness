@@ -86,10 +86,10 @@ export function StrengthSessionPdf({ data }: { data: StrengthSessionPdfData }) {
           engine; the audit trail on each page explains why.
         </Text>
         <Text style={styles.coverEvidence}>
-          Evidence: Rønnestad 2023 (microdosing) · van Dyk 2019 (Nordic, 51%
+          Evidence: Cuthbert 2021 (microdosing) · van Dyk 2019 (Nordic, 51%
           hamstring reduction) · Harøy 2019 (Copenhagen, 41% groin reduction) ·
-          Pareja-Blanco 2017 (VBT) · Tufano 2017 (cluster sets) · Liu 2023
-          (French Contrast) · Comfort 2018 (IMTP) · Bishop 2020 (L/R asymmetry) ·
+          Pareja-Blanco 2017 (VBT) · Tufano 2017 (cluster sets) · Zhao 2025
+          (French contrast) · Lum & Barbosa 2019 (isometrics) · Bishop 2020 (L/R asymmetry) ·
           Malone 2018 (sprint exposure) · Edouard 2019 (sprint speed drop).
         </Text>
       </Page>

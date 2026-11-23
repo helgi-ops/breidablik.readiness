@@ -34,7 +34,7 @@ const ENTRIES: Entry[] = [
     tier: "solid",
     name: { EN: "Estimated 1RM (e1RM)", IS: "Áætlað 1RM (e1RM)" },
     what: { EN: "From a logged set, RIR-aware (RIR = 10 − RPE). Epley is the default; Brzycki/Lombardi available.", IS: "Úr skráðu setti, RIR-meðvitað (RIR = 10 − RPE). Epley sjálfgefið; Brzycki/Lombardi í boði." },
-    basis: { EN: "Epley 1985 · Brzycki 1993 · Lombardi 1989 (standard formulas)", IS: "Epley 1985 · Brzycki 1993 · Lombardi 1989 (staðlaðar formúlur)" },
+    basis: { EN: "Epley 1985 · Brzycki 1993 · Lombardi 1989 (standard formulas; accuracy checked in Mayhew 2008, García-Ramos 2019)", IS: "Epley 1985 · Brzycki 1993 · Lombardi 1989 (staðlaðar formúlur; nákvæmni prófuð í Mayhew 2008, García-Ramos 2019)" },
     file: "src/lib/client/oneRepMaxFormulas.ts",
   },
   {

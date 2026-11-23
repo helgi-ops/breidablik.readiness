@@ -15,13 +15,13 @@
  *
  * Sport-science foundation (research/ folder):
  *   - Cluster sets:        Tufano 2017, Hardee 2012, Pareja-Blanco 2017
- *   - French Contrast:     Liu 2023, Bencivenga 2024, Cormie 2011
- *   - Weightlifting deriv: Suchomel 2017, Comfort 2015/2018
+ *   - French Contrast:     Zhao 2025, Cormier 2022, Cormie 2011
+ *   - Weightlifting deriv: Suchomel 2017, Suchomel 2015
  *   - VBT velocity caps:   Pareja-Blanco 2017, Sánchez-Medina 2011
  *   - Nordic hamstring:    van Dyk 2019 (51% injury reduction)
  *   - Copenhagen adductor: Harøy 2019 (41% groin reduction)
- *   - IMTP RFD:            Comfort 2018, Lake 2018
- *   - Microdosing:         Rønnestad 2023
+ *   - IMTP RFD:            Lum & Barbosa 2019, Tsoukos 2016
+ *   - Microdosing:         Cuthbert 2021, Rønnestad 2011
  *   - Edouard 2019:        Sprint speed drop → hamstring risk
  *   - Malone 2018:         Sprint exposure underload → hamstring risk
  *   - Bishop 2020:         L/R CoD asymmetry → non-contact injury

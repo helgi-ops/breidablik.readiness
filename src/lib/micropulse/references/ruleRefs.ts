@@ -25,6 +25,9 @@ import type { GoalRef } from "@/lib/micropulse/goalPlan/types";
 /** New entries for the rule citations (papers no other registry holds). */
 export const RULE_REFS: Record<string, GoalRef> = {
   anderson2016: { key: "anderson2016", short: "Anderson 2016", cite: "Anderson L, Orme P, Di Michele R, Close GL, Morgans R, Drust B, Morton JP. Quantification of training load during one-, two- and three-game week schedules in professional soccer players from the English Premier League: implications for carbohydrate periodisation. J Sports Sci 2016;34(13):1250–1259. doi:10.1080/02640414.2015.1106574 PMID 26536538", verifiedFrom: "abstract" },
+  // Two 2016 Anderson papers: "Anderson 2016" = game-week schedules (congested weeks); "Anderson 2016b" = load by
+  // starting status (non-starters miss match high-speed running).
+  andersonstarting2016: { key: "andersonstarting2016", short: "Anderson 2016b", cite: "Anderson L, Orme P, Di Michele R, Close GL, Milsom J, Morgans R, Drust B, Morton JP. Quantification of Seasonal-Long Physical Load in Soccer Players With Different Starting Status From the English Premier League: Implications for Maintaining Squad Physical Fitness. Int J Sports Physiol Perform 2016;11(8):1038–1046. doi:10.1123/ijspp.2015-0672 PMID 26915393", verifiedFrom: "abstract" },
   arnason2008: { key: "arnason2008", short: "Arnason 2008", cite: "Arnason A, Andersen TE, Holme I, Engebretsen L, Bahr R. Prevention of hamstring strains in elite soccer: an intervention study. Scand J Med Sci Sports 2008;18(1):40–48. doi:10.1111/j.1600-0838.2006.00634.x PMID 17355322", verifiedFrom: "abstract" },
   balsalobrefernandez2021: { key: "balsalobrefernandez2021", short: "Balsalobre-Fernández 2021", cite: "Balsalobre-Fernández C, Torres-Ronda L. The Implementation of Velocity-Based Training Paradigm for Team Sports: Framework, Technologies, Practical Recommendations and Challenges. Sports (Basel) 2021;9(4). doi:10.3390/sports9040047 PMID 33808302", verifiedFrom: "abstract" },
   bangsbo2008: { key: "bangsbo2008", short: "Bangsbo 2008", cite: "Bangsbo J, Iaia FM, Krustrup P. The Yo-Yo intermittent recovery test : a useful tool for evaluation of physical performance in intermittent sports. Sports Med 2008;38(1):37–51. doi:10.2165/00007256-200838010-00004 PMID 18081366", verifiedFrom: "abstract" },
@@ -190,6 +193,25 @@ export const RULE_REFS: Record<string, GoalRef> = {
   // study; Cormack 2008 is the primary study for FT:CT (2026-11-23).
   edwards2018: { key: "edwards2018", short: "Edwards 2018", cite: "Edwards T, Spiteri T, Piggott B, Bonhotal J, Haff GG, Joyce C. Monitoring and Managing Fatigue in Basketball. Sports (Basel) 2018;6(1):19. doi:10.3390/sports6010019 PMID 29910323", verifiedFrom: "full_text" },
   cormacknewtonmcguigan2008: { key: "cormacknewtonmcguigan2008", short: "Cormack, Newton & McGuigan 2008", cite: "Cormack SJ, Newton RU, McGuigan MR. Neuromuscular and endocrine responses of elite players to an Australian rules football match. Int J Sports Physiol Perform 2008;3(3):359–374. doi:10.1123/ijspp.3.3.359 PMID 19211947", verifiedFrom: "abstract" },
+  // Lot 1a (2026-11-23): sources for strength-code citations that named no findable paper; sites reworded to what
+  // each paper shows.
+  spiering2021: { key: "spiering2021", short: "Spiering 2021", cite: "Spiering BA, Mujika I, Sharp MA, Foulis SA. Maintaining Physical Performance: The Minimal Dose of Exercise Needed to Preserve Endurance and Strength Over Time. J Strength Cond Res 2021;35(5):1449–1458. doi:10.1519/JSC.0000000000003964 PMID 33629972", verifiedFrom: "abstract" },
+  zhao2025: { key: "zhao2025", short: "Zhao 2025", cite: "Zhao Z, Ma Z, Wu C, Zheng X, Liu T, Deng N, Zhou K. The effects of French contrast training on lower limb athletic performance in healthy adults: a systematic review and meta-analysis. Front Physiol 2025;16:1672353. doi:10.3389/fphys.2025.1672353 PMID 40917803", verifiedFrom: "abstract" },
+  cormier2022: { key: "cormier2022", short: "Cormier 2022", cite: "Cormier P, Freitas TT, Loturco I, Turner A, Virgile A, Haff GG, Blazevich AJ, Agar-Newman D, Henneberry M, Baker DG, McGuigan M, Alcaraz PE, Bishop C. Within Session Exercise Sequencing During Programming for Complex Training: Historical Perspectives, Terminology, and Training Considerations. Sports Med 2022;52(10):2371–2389. doi:10.1007/s40279-022-01715-x PMID 35816233", verifiedFrom: "abstract" },
+  tsoukos2016: { key: "tsoukos2016", short: "Tsoukos 2016", cite: "Tsoukos A, Bogdanis GC, Terzis G, Veligekas P. Acute Improvement of Vertical Jump Performance After Isometric Squats Depends on Knee Angle and Vertical Jumping Ability. J Strength Cond Res 2016;30(8):2250–2257. doi:10.1519/JSC.0000000000001328 PMID 26808841", verifiedFrom: "abstract" },
+  swinton2012: { key: "swinton2012", short: "Swinton 2012", cite: "Swinton PA, Stewart AD, Lloyd R, Agouris I, Keogh JW. Effect of load positioning on the kinematics and kinetics of weighted vertical jumps. J Strength Cond Res 2012;26(4):906–913. doi:10.1519/JSC.0b013e31822e589e PMID 22446664", verifiedFrom: "abstract" },
+  behm2016: { key: "behm2016", short: "Behm 2016", cite: "Behm DG, Blazevich AJ, Kay AD, McHugh M. Acute effects of muscle stretching on physical performance, range of motion, and injury incidence in healthy active individuals: a systematic review. Appl Physiol Nutr Metab 2016;41(1):1–11. doi:10.1139/apnm-2015-0235 PMID 26642915", verifiedFrom: "abstract" },
+  dupuy2018: { key: "dupuy2018", short: "Dupuy 2018", cite: "Dupuy O, Douzi W, Theurot D, Bosquet L, Dugué B. An Evidence-Based Approach for Choosing Post-exercise Recovery Techniques to Reduce Markers of Muscle Damage, Soreness, Fatigue, and Inflammation: A Systematic Review With Meta-Analysis. Front Physiol 2018;9:403. doi:10.3389/fphys.2018.00403 PMID 29755363", verifiedFrom: "abstract" },
+  west2011: { key: "west2011", short: "West 2011", cite: "West DJ, Owen NJ, Jones MR, Bracken RM, Cook CJ, Cunningham DJ, Shearer DA, Finn CV, Newton RU, Crewther BT, Kilduff LP. Relationships between force-time characteristics of the isometric midthigh pull and dynamic performance in professional rugby league players. J Strength Cond Res 2011;25(11):3070–3075. doi:10.1519/JSC.0b013e318212dcd5 PMID 21993026", verifiedFrom: "abstract" },
+  appleby2020: { key: "appleby2020", short: "Appleby 2020", cite: "Appleby BB, Cormack SJ, Newton RU. Unilateral and Bilateral Lower-Body Resistance Training Does not Transfer Equally to Sprint and Change of Direction Performance. J Strength Cond Res 2020;34(1):54–64. doi:10.1519/JSC.0000000000003035 PMID 30844983", verifiedFrom: "abstract" },
+  mayhew2008: { key: "mayhew2008", short: "Mayhew 2008", cite: "Mayhew JL, Johnson BD, Lamonte MJ, Lauber D, Kemmler W. Accuracy of prediction equations for determining one repetition maximum bench press in women before and after resistance training. J Strength Cond Res 2008;22(5):1570–1577. doi:10.1519/JSC.0b013e31817b02ad PMID 18714230", verifiedFrom: "abstract" },
+  garciaramos2019: { key: "garciaramos2019", short: "García-Ramos 2019", cite: "García-Ramos A, Barboza-González P, Ulloa-Díaz D, Rodriguez-Perea A, Martinez-Garcia D, Guede-Rojas F, Hinojosa-Riveros H, Chirosa-Ríos LJ, Cuevas-Aburto J, Janicijevic D, Weakley J. Reliability and validity of different methods of estimating the one-repetition maximum during the free-weight prone bench pull exercise. J Sports Sci 2019;37(19):2205–2212. doi:10.1080/02640414.2019.1626071 PMID 31164044", verifiedFrom: "abstract" },
+  lauderlake2008: { key: "lauderlake2008", short: "Lauder & Lake 2008", cite: "Lauder MA, Lake JP. Biomechanical comparison of unilateral and bilateral power snatch lifts. J Strength Cond Res 2008;22(3):653–660. doi:10.1519/JSC.0b013e3181660c89 PMID 18438258", verifiedFrom: "abstract" },
+  hernandezpreciado2018: { key: "hernandezpreciado2018", short: "Hernández-Preciado 2018", cite: "Hernández-Preciado JA, Baz E, Balsalobre-Fernández C, Marchante D, Santos-Concejero J. Potentiation Effects of the French Contrast Method on Vertical Jumping Ability. J Strength Cond Res 2018;32(7):1909–1914. doi:10.1519/JSC.0000000000002437 PMID 29351162", verifiedFrom: "abstract" },
+  limwong2018: { key: "limwong2018", short: "Lim & Wong 2018", cite: "Lim HY, Wong SH. Effects of isometric, eccentric, or heavy slow resistance exercises on pain and function in individuals with patellar tendinopathy: A systematic review. Physiother Res Int 2018;23(4):e1721. doi:10.1002/pri.1721 PMID 29972281", verifiedFrom: "abstract" },
+  martosarregui2026: { key: "martosarregui2026", short: "Martos-Arregui 2026", cite: "Martos-Arregui A, Rojas-Cepero I, Zhang X, García-Ramos A, Rojas-Ruiz FJ, Cepero-González M. Are Asymmetry-Focused Training Interventions More Effective than General Programs in Reducing Interlimb Asymmetries and Improving Athletic Performance? A Systematic Review. Sports Med Open 2026;12(1):156. doi:10.1186/s40798-026-01119-5 PMID 42870065", verifiedFrom: "abstract" },
+  krzysztofik2023: { key: "krzysztofik2023", short: "Krzysztofik 2023", cite: "Krzysztofik M, Spieszny M, Trybulski R, Wilk M, Pisz A, Kolinger D, Filip-Stachnik A, Stastny P. Acute Effects of Isometric Conditioning Activity on the Viscoelastic Properties of Muscles and Sprint and Jumping Performance in Handball Players. J Strength Cond Res 2023;37(7):1486–1494. doi:10.1519/JSC.0000000000004404 PMID 36752742", verifiedFrom: "abstract" },
+  suchomel2019: { key: "suchomel2019", short: "Suchomel 2019", cite: "Suchomel TJ, Wagle JP, Douglas J, Taber CB, Harden M, Haff GG, Stone MH. Implementing Eccentric Resistance Training-Part 1: A Brief Review of Existing Methods. J Funct Morphol Kinesiol 2019;4(2):38. doi:10.3390/jfmk4020038 PMID 33467353", verifiedFrom: "abstract" },
 };
 
 /** Other spellings of the same short citation used in the rule text ("et al." is dropped before this is read). */
@@ -209,7 +231,6 @@ const SHORT_ALIASES: Record<string, string> = {
   // "Lum, Oranchuk, Chen, Kong 2026".
   "Kong 2026": "Lum 2026",
   "de Villarreal 2009": "Sáez de Villarreal 2009",
-  "Lim & Childs 2020": "Lim 2020",
   // "Bangsbo/Krustrup 2008" (Yo-Yo) — the same article as Bangsbo 2008.
   "Krustrup 2008": "Bangsbo 2008",
   // "Lum, Oranchuk," + line break + "Chen, Kong 2026".
@@ -228,10 +249,6 @@ const SHORT_ALIASES: Record<string, string> = {
  * the coach decides whether to replace it. Never resolved by guessing.
  */
 export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
-  "Bencivenga 2024": {
-    en: "No 2024 paper by Bencivenga on French contrast training was found on PubMed or Crossref.",
-    is: "Engin grein eftir Bencivenga frá 2024 um French contrast fannst á PubMed eða Crossref.",
-  },
   "Bishop 2020": {
     en: "The code comment gives J Athl Train 2020;55:1062–1070, which matches no PubMed record. Bishop published several limb-asymmetry papers around 2020; which one is meant is not recorded.",
     is: "Athugasemdin í kóðanum gefur J Athl Train 2020;55:1062–1070, sem passar ekki við neina færslu á PubMed. Bishop birti nokkrar greinar um ósamhverfu um 2020 og ekki er skráð hver þeirra er átt við.",
@@ -248,97 +265,21 @@ export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
     en: "A French field-test publication (VAM-Eval) that PubMed and Crossref do not index; not checked against the source.",
     is: "Frönsk útgáfa um vallarpróf (VAM-Eval) sem PubMed og Crossref skrá ekki; ekki borin saman við frumheimild.",
   },
-  "Comfort 2015": {
-    en: "Comfort co-wrote several 2015 papers on the mid-thigh pull and on pulling derivatives; which one supports the statement is not recorded.",
-    is: "Comfort var meðhöfundur að nokkrum greinum 2015 um mid-thigh pull og togæfingar; ekki er skráð hver styður fullyrðinguna.",
-  },
-  "Comfort 2018": {
-    en: "Comfort published several isometric mid-thigh pull papers in 2018–2019; which one supports the rule is not recorded.",
-    is: "Comfort birti nokkrar greinar um ísómetrískt mid-thigh pull 2018–2019 og ekki er skráð hver þeirra styður regluna.",
-  },
-  "Cuenca-Fernández 2024": {
-    en: "No 2024 paper by Cuenca-Fernández on isometric conditioning and jumping was found.",
-    is: "Engin grein eftir Cuenca-Fernández frá 2024 um ísómetríska upphitun og hopp fannst.",
-  },
-  "DeWeese 2013": {
-    en: "No 2013 paper by DeWeese on the box step-up or sprint push-off was found.",
-    is: "Engin grein eftir DeWeese frá 2013 um uppstig á kassa eða spyrnu í spretti fannst.",
-  },
   "Dietz & Peterson 2012": {
-    en: "A book: Dietz C, Peterson B. Triphasic Training. Bye Dietz Sport Enterprise, 2012. Not a journal paper; not checked against the source.",
-    is: "Bók: Dietz C, Peterson B. Triphasic Training. Bye Dietz Sport Enterprise, 2012. Ekki tímaritsgrein; ekki borin saman við frumheimild.",
+    en: "A book: Dietz C, Peterson B. Triphasic Training. Bye Dietz Sport Enterprise, 2012. A coaching method, not a trial; the code names it as the method's source and says it is not trial-tested.",
+    is: "B\u00f3k: Dietz C, Peterson B. Triphasic Training. Bye Dietz Sport Enterprise, 2012. \u00dej\u00e1lfunara\u00f0fer\u00f0, ekki ranns\u00f3kn; k\u00f3\u00f0inn nefnir hana sem uppruna a\u00f0fer\u00f0arinnar og segir a\u00f0 h\u00fan s\u00e9 ekki pr\u00f3fu\u00f0 \u00ed ranns\u00f3knum.",
   },
   "Epley 1985": {
-    en: "A coaching chart (Epley B. Poundage chart. Boyd Epley Workout, 1985), not a journal paper; the formula is widely reproduced but was not checked against the source.",
-    is: "Tafla úr þjálfun (Epley B. Poundage chart. Boyd Epley Workout, 1985), ekki tímaritsgrein; formúlan er víða endurbirt en var ekki borin saman við frumheimild.",
+    en: "A coaching chart (Epley B. Poundage chart. Boyd Epley Workout, 1985), not a journal paper. It stays as the formula's origin; the formula's accuracy is checked in Mayhew 2008 and Garc\u00eda-Ramos 2019.",
+    is: "Tafla \u00far \u00fej\u00e1lfun (Epley B. Poundage chart. Boyd Epley Workout, 1985), ekki t\u00edmaritsgrein. H\u00fan stendur sem uppruni form\u00falunnar; n\u00e1kv\u00e6mni form\u00falunnar er pr\u00f3fu\u00f0 \u00ed Mayhew 2008 og Garc\u00eda-Ramos 2019.",
   },
   "Gabbett 2017": {
     en: "Gabbett co-wrote several load-monitoring papers in 2017; which one is meant is not recorded. The best-known acute:chronic paper is Gabbett 2016.",
     is: "Gabbett var meðhöfundur að nokkrum greinum um álagsvöktun 2017 og ekki er skráð hver er átt við. Þekktasta greinin um skammtíma- og langtímaálag er Gabbett 2016.",
   },
-  "Helms 2020": {
-    en: "No 2020 paper by Helms on single-leg hinges or asymmetry was found; his 2020 paper is on regulating and monitoring resistance training.",
-    is: "Engin grein eftir Helms frá 2020 um einfóta mjaðmalyftur eða ósamhverfu fannst; grein hans frá 2020 fjallar um stýringu og vöktun styrktarþjálfunar.",
-  },
-  "Howatson & Milak 2009": {
-    en: "Howatson & Milak 2009 is about muscle damage after repeated sprints. It does not compare light work the day after with total rest, which is what the rule cites it for.",
-    is: "Howatson & Milak 2009 fjallar um vöðvaskemmdir eftir endurtekna spretti. Hún ber ekki saman létta vinnu daginn eftir við algera hvíld, sem reglan vitnar í hana fyrir.",
-  },
-  "Krzysztofik 2023": {
-    en: "Krzysztofik's group published several isometric post-activation papers around 2023; which one is meant is not recorded.",
-    is: "Hópur Krzysztofik birti nokkrar greinar um ísómetríska upphitun fyrir sprengikraft um 2023 og ekki er skráð hver er átt við.",
-  },
-  "Lake 2018": {
-    en: "Lake co-wrote several 2018 force-plate papers; none is on an angle-specific isometric primer, and which one is meant is not recorded.",
-    is: "Lake var meðhöfundur að nokkrum greinum 2018 um kraftplötur; engin fjallar um ísómetríska upphitun í tilteknu horni og ekki er skráð hver er átt við.",
-  },
-  "Lim 2020": {
-    en: "No 2020 paper by Lim (or Lim & Childs) on long isometrics and tendons was found. The closest is Lim & Wong 2018 (patellar tendinopathy).",
-    is: "Engin grein eftir Lim (eða Lim & Childs) frá 2020 um langar ísómetrískar æfingar og sinar fannst. Næst kemst Lim & Wong 2018 (sinakvilli í hnéskeljarsin).",
-  },
-  "Liu 2023": {
-    en: "No 2023 paper by Liu on French contrast training in football was found.",
-    is: "Engin grein eftir Liu frá 2023 um French contrast í fótbolta fannst.",
-  },
   "Lombardi 1989": {
-    en: "A book: Lombardi VP. Beginning Weight Training. W.C. Brown, 1989. Not a journal paper; not checked against the source.",
-    is: "Bók: Lombardi VP. Beginning Weight Training. W.C. Brown, 1989. Ekki tímaritsgrein; ekki borin saman við frumheimild.",
-  },
-  "Loturco 2019": {
-    en: "Loturco published several 2019 papers on optimum power loads; which one gives about 20% of 1RM is not recorded.",
-    is: "Loturco birti nokkrar greinar 2019 um álag sem gefur mestan kraft; ekki er skráð hver gefur um 20% af 1RM.",
-  },
-  "McKinlay 2018": {
-    en: "McKinlay 2018 is a plyometric and resistance training study in young footballers; it is not about rotational power or kicking speed, which is what the exercise cites it for.",
-    is: "McKinlay 2018 er rannsókn á hoppum og styrktarþjálfun ungra fótboltamanna; hún fjallar ekki um snúningskraft eða sparkhraða, sem æfingin vitnar í hana fyrir.",
-  },
-  "Oranchuk 2023": {
-    en: "Oranchuk published several 2023 papers; none is clearly the isometric training source the code means.",
-    is: "Oranchuk birti nokkrar greinar 2023; engin þeirra er augljóslega heimildin um ísómetríska þjálfun sem kóðinn á við.",
-  },
-  "Reiman 2014": {
-    en: "Reiman's 2014 papers are on hip examination and femoroacetabular impingement; none is on joint-by-joint mobility before squatting.",
-    is: "Greinar Reiman frá 2014 fjalla um skoðun á mjöðm og klemmu í mjaðmalið; engin fjallar um liðleika lið fyrir lið fyrir hnébeygju.",
-  },
-  "Rønnestad 2023": {
-    en: "No 2023 paper by Rønnestad on microdosing was found. The microdosing work in football is Cuthbert's (framework 2024, thesis 2022); Rønnestad's in-season strength paper is from 2011.",
-    is: "Engin grein eftir Rønnestad frá 2023 um örskammta fannst. Rannsóknirnar á örskömmtum í fótbolta eru eftir Cuthbert (rammi 2024, doktorsritgerð 2022); grein Rønnestad um styrk á keppnistímabili er frá 2011.",
-  },
-  "Schoenfeld 2024": {
-    en: "No 2024 paper by Schoenfeld on minimal-dose resistance training was found.",
-    is: "Engin grein eftir Schoenfeld frá 2024 um lágmarksskammt styrktarþjálfunar fannst.",
-  },
-  "Suchomel & Stone 2017": {
-    en: "No 2017 paper by Suchomel & Stone on the dumbbell or unilateral snatch was found.",
-    is: "Engin grein eftir Suchomel & Stone frá 2017 um snörun með handlóði eða á öðrum fæti fannst.",
-  },
-  "Suchomel 2019": {
-    en: "Suchomel et al. 2019 is a two-part review on eccentric training (Part 1 methods, Part 2 practical recommendations); which part is meant is not recorded.",
-    is: "Suchomel o.fl. 2019 er yfirlitsgrein í tveimur hlutum um eccentric þjálfun (1. hluti aðferðir, 2. hluti ráðleggingar); ekki er skráð hvor hlutinn er átt við.",
-  },
-  "Welch 2019": {
-    en: "No 2019 paper by Welch on French contrast training was found.",
-    is: "Engin grein eftir Welch frá 2019 um French contrast fannst.",
+    en: "A book: Lombardi VP. Beginning Weight Training. W.C. Brown, 1989. It stays as the formula's origin; the formula's accuracy is checked in Mayhew 2008 and Garc\u00eda-Ramos 2019.",
+    is: "B\u00f3k: Lombardi VP. Beginning Weight Training. W.C. Brown, 1989. H\u00fan stendur sem uppruni form\u00falunnar; n\u00e1kv\u00e6mni form\u00falunnar er pr\u00f3fu\u00f0 \u00ed Mayhew 2008 og Garc\u00eda-Ramos 2019.",
   },
   "Buchheit 2013": {
     en: "Buchheit published several 2013 papers, including the two-part HIIT review with Laursen (Part I and Part II); which one this lever means is not recorded.",

@@ -96,7 +96,7 @@ Styrktaræfing dagsins er byggð í `buildStrengthSession` (`SP/index.ts`), í �
 | **`MISSED_DAY_NOT_SHIFTED`** | MD-3 til MD-1 þegar MD-4 var sendur en ekki kláraður | Bara lína í forskoðun þjálfarans. Misstur dagur er **aldrei** færður eða bætt ofan á annan | MicroPulse-regla; Buchheit 2024 | Sést bara í forskoðun þjálfarans |
 | Vika án leiks (`NO_MATCH_WEEK_DAY`) | Enginn leikur nálægt | Styrkdagur = MD-4, kraftdagur = MD-3, léttur dagur = MD-2, hvíld = engin æfing. Dagur sem er ekki stilltur er léttur. Ekkert vikuplan: sjálfgefið plan (mánudagur styrkur, fimmtudagur kraftur, aðrir dagar léttir) og línan `NO_MATCH_DEFAULT_PLAN` | Regla þjálfarans; sjálfgefna planið er MicroPulse-regla | `team_strength_palette.no_match_week`; færsla eina viku í senn, með Afturkalla |
 | Árekstur í viku án leiks | — | Varar við styrkdegi sem lendir á frídegi og stingur upp á næsta lausa degi | — | Sama |
-| MD+1 mínútur (`md1MinutesTier`) | MD+1 | Spilaði ekki eða <30 mín: styrkur (MD-4 sniðmát). 30–59 mín: endurheimt. ≥60 mín: ísómetrískt neðri hluti (2 sett) og ferskur efri hluti. Mínútur óþekktar: föst endurheimt | Carling 2018; Nédélec 2012; Rønnestad 2023 | — |
+| MD+1 mínútur (`md1MinutesTier`) | MD+1 | Spilaði ekki eða <30 mín: styrkur (MD-4 sniðmát). 30–59 mín: endurheimt. ≥60 mín: ísómetrískt neðri hluti (2 sett) og ferskur efri hluti. Mínútur óþekktar: föst endurheimt | Carling 2018; Nédélec 2012; Anderson 2016b | — |
 | Sjálfgefnir hvíldardagar | — | Sniðmát eru til fyrir MD-4, MD-3, MD-2, MD-1 og MD+1. MD+2, MD+3, MD+4, MD-5 og OFF eru hvíld nema þjálfari velji aðferð | — | `team_strength_palette.md_structures` |
 | `DAY_RULE_COACH_DAY_OFF` | MD+2 eða frídagur með æfingu sem þjálfari valdi | Byggt eins og valið var; lína segir frá því | „Þjálfarinn ræður síðast“ | — |
 | Hvíldarvikur (Mesó) | Tímabilsplan | Undirbúningstímabil: hvíldarvika 4. hverja viku (stillanlegt 4/5/6). **Á keppnistímabili engin sjálfvirk hvíldarvika**; létt vika er val þjálfarans (magn ×0,8, ákefð haldið) | Malone 2015; Fessi 2016; Moalla 2021; Issurin 2010 | `season_plans.overrides` |
@@ -194,16 +194,16 @@ Liturinn er notaður hér en ekki reiknaður.
 | Regla | Kveikja | Áhrif | Heimild | Staða |
 |---|---|---|---|---|
 | `INJURY_BLOCK` | Meiðsli / endurhæfing | Engin liðsæfing; endurhæfing | Samstaða um endurkomu | Virk |
-| `SORE_HAM_NORDIC_SWAP` / `_RDL_REMOVE` | Eymsli í aftanlæri | Nordic → löng ísómetrísk brú; RDL út | Lim 2020 | Virk |
+| `SORE_HAM_NORDIC_SWAP` / `_RDL_REMOVE` | Eymsli í aftanlæri | Nordic → löng ísómetrísk brú; RDL út | Mat þjálfara; Nordic: van Dyk 2019 | Virk |
 | `DECEL_BURDEN_NORDIC_REMOVE` / `_DL_SWAP` | ≥3 dagar í röð með hátt hemlunarálag | Nordic út; trap-bar DL → hip thrust | McBurnie 2022 | Virk ef gögn eru til |
-| `SPRINT_DROP_MTP_SWAP` / `_PLYO_REMOVE` | Hámarkshraði **í dag** ≥7% undir eigin viðmiði | MTP → IMTP; fallhopp út | Comfort 2018; Edouard 2019 | **Nánast óvirk:** þarf GPS dagsins fyrir æfingu |
+| `SPRINT_DROP_MTP_SWAP` / `_PLYO_REMOVE` | Hámarkshraði **í dag** ≥7% undir eigin viðmiði | MTP → IMTP; fallhopp út | Lum & Barbosa 2019; Edouard 2019 | **Nánast óvirk:** þarf GPS dagsins fyrir æfingu |
 | `VBT_LOAD_REDUCTION` | Hraðatap ≤ −20% | Létt á aðallyftu | Pareja-Blanco 2017 | **Óvirk:** gögnin eru alltaf tóm |
 | `COD_ASYM_MAIN_LIFT_SWAP` | Ósamhverfa í stefnubreytingum ≥15% **og** þjálfari valdi „skipta“ | Þung tvífóta lyfta → búlgörsk, veikari hlið fyrst | Bishop 2020 | Virk eftir smell þjálfara |
 | `SPRINT_EXPOSURE_UNDERLOAD` | Of lítill sprettur | Bara athugasemd | Malone 2017 | — |
 | `SORE_GROIN_COPENHAGEN_REMOVE` | Eymsli í nára | Copenhagen út | — | Virk |
 | `SORE_LB_DL_SWAP` | Eymsli í mjóbaki | Trap-bar DL → framhnébeygja | Gullett 2009 | Virk |
 | `FOSTER_STRAIN_VOLUME_CUT` | Foster strain ≥6000 (7 dagar) | Fyrsta grunnlyfta, sett × 0,67 | Foster 1998 | Virk með sRPE |
-| `CONGESTED_WEEK_FLAG` | 2 leikir á 7 dögum og dagurinn í dag innan þeirra. Næsti leikur úr dagatalinu telst alltaf; leikur sem er búinn aðeins ef leikmaðurinn spilaði ≥60 mín | Bara athugasemd | Rønnestad 2023 | — |
+| `CONGESTED_WEEK_FLAG` | 2 leikir á 7 dögum og dagurinn í dag innan þeirra. Næsti leikur úr dagatalinu telst alltaf; leikur sem er búinn aðeins ef leikmaðurinn spilaði ≥60 mín | Bara athugasemd | Cuthbert 2021 | — |
 | `LEDGER_EMPHASIS_CONFIRM` / `_ADD` | Áhersla úr deficit-skrá, ekki rauður | +1 sett: hliðarhopp, búlgörsk, Nordic eða hnébeygja eftir flokki | Deficit-skráin | Virk |
 | `PALETTE_SYMMETRY_UNILATERAL` | Ósamhverfa ≥10% **og** „skipta“ | Einfóta lyfta úr lista liðsins | Bishop 2020 | Virk eftir smell |
 | Frívika (send af þjálfara) | 1–21 dagur | Fast sniðmát: styrkur, rólegt hlaup, tempó, hvíld. Endurhæfing helst | Rønnestad 2011; Mujika 2000 | Þjálfari breytir áður en sent er |
@@ -511,6 +511,7 @@ fyrir allan kóða æfingakerfisins, líka það sem er ekki í þessum lista, e
 `src/lib/micropulse/references/ruleRefs.ts` (`findRefByShort`). Próf (`references/__tests__/ruleRefs.test.ts`)
 passar að hver tilvísun sé skráð, annaðhvort full eða á listanum yfir óstaðfestar.
 
+- Anderson L, Orme P, Di Michele R, Close GL, Milsom J, Morgans R, Drust B, Morton JP. Quantification of Seasonal-Long Physical Load in Soccer Players With Different Starting Status From the English Premier League: Implications for Maintaining Squad Physical Fitness. Int J Sports Physiol Perform 2016;11(8):1038–1046. doi:10.1123/ijspp.2015-0672 PMID 26915393
 - Arnason A, Andersen TE, Holme I, Engebretsen L, Bahr R. Prevention of hamstring strains in elite soccer: an intervention study. Scand J Med Sci Sports 2008;18(1):40–48. doi:10.1111/j.1600-0838.2006.00634.x PMID 17355322
 - Bourne MN, Duhig SJ, Timmins RG, Williams MD, Opar DA, Al Najjar A, Kerr GK, Shield AJ. Impact of the Nordic hamstring and hip extension exercises on hamstring architecture and morphology: implications for injury prevention. Br J Sports Med 2017;51(5):469–477. doi:10.1136/bjsports-2016-096130 PMID 27660368
 - Buchheit M, Settembre M, Hader K, McHugh D. Exposures to near-to-maximal speed running bouts during different turnarounds in elite football: association with match hamstring injuries. Biol Sport 2023.
@@ -534,6 +535,7 @@ passar að hver tilvísun sé skráð, annaðhvort full eða á listanum yfir ó
 - Issurin VB. New horizons for the methodology and physiology of training periodization. Sports Med 2010;40(3):189–206. doi:10.2165/11319770-000000000-00000 PMID 20199119
 - Krause DA, Boyd MS, Hager AN, Smoyer EC, Thompson AT, Hollman JH. Reliability and accuracy of a goniometer mobile device application for video measurement of the functional movement screen deep squat test. Int J Sports Phys Ther 2015;10(1):37–44. PMID 25709861
 - Lauersen JB, Andersen TE, Andersen LB. Strength training as superior, dose-dependent and safe prevention of acute and overuse sports injuries: a systematic review, qualitative analysis and meta-analysis. Br J Sports Med 2018;52(24):1557–1563. doi:10.1136/bjsports-2018-099078 PMID 30131332
+- Lum D, Barbosa TM. Brief Review: Effects of Isometric Strength Training on Strength and Dynamic Performance. Int J Sports Med 2019;40(6):363–375. doi:10.1055/a-0863-4539 PMID 30943568
 - Malone JJ, Di Michele R, Morgans R, Burgess D, Morton JP, Drust B. Seasonal training-load quantification in elite English premier league soccer players. Int J Sports Physiol Perform 2015;10(4):489–497. doi:10.1123/ijspp.2014-0352 PMID 25393111
 - Malone S et al. High chronic training loads and exposure to bouts of maximal velocity running reduce injury risk in elite Gaelic football. J Sci Med Sport 2017;20:250–254.
 - Mann JB, Ivey PA, Sayers SP. Velocity-based training in football. Strength Cond J 2015;37(6):52–57. doi:10.1519/SSC.0000000000000177
@@ -559,7 +561,4 @@ passar að hver tilvísun sé skráð, annaðhvort full eða á listanum yfir ó
 
 - **Bishop 2020**: Athugasemdin í kóðanum gefur J Athl Train 2020;55:1062–1070, sem passar ekki við neina færslu á PubMed. Bishop birti nokkrar greinar um ósamhverfu um 2020 og ekki er skráð hver þeirra er átt við.
 - **Buchheit 2024**: Vitnað í sem „The 11 Principles of Microcycle Periodization“; engin slík grein fannst á PubMed eða Crossref.
-- **Comfort 2018**: Comfort birti nokkrar greinar um ísómetrískt mid-thigh pull 2018–2019 og ekki er skráð hver þeirra styður regluna.
 - **Gabbett 2017**: Gabbett var meðhöfundur að nokkrum greinum um álagsvöktun 2017 og ekki er skráð hver er átt við. Þekktasta greinin um skammtíma- og langtímaálag er Gabbett 2016.
-- **Lim 2020**: Engin grein eftir Lim (eða Lim & Childs) frá 2020 um langar ísómetrískar æfingar og sinar fannst. Næst kemst Lim & Wong 2018 (sinakvilli í hnéskeljarsin).
-- **Rønnestad 2023**: Engin grein eftir Rønnestad frá 2023 um örskammta fannst. Rannsóknirnar á örskömmtum í fótbolta eru eftir Cuthbert (rammi 2024, doktorsritgerð 2022); grein Rønnestad um styrk á keppnistímabili er frá 2011.

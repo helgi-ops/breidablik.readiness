@@ -18,7 +18,7 @@ export type PaletteSlot =
 
 // The slots the coach curates and the engine builds from — the "primary" power +
 // lower-body strength lifts, plus isometrics for max-strength/RFD and PAP priming
-// (Oranchuk 2023, Krzysztofik 2023). The injury-prevention posterior/adductor
+// (Oranchuk 2019, Krzysztofik 2023). The injury-prevention posterior/adductor
 // blocks (Nordic van Dyk 2019, Copenhagen Harøy 2019) are NON-NEGOTIABLE and are
 // never palette-driven, so they are deliberately not a slot.
 export const PALETTE_SLOTS: PaletteSlot[] = ["power_explosive", "bilateral_strength", "unilateral_strength", "isometric", "upper_body"];

@@ -27,10 +27,10 @@ export type StructureKey =
   | "cluster_metabolic"      // CLUSTER · metabolic conditioning (Oliver: 4×[5+5], 30s mid-set)
   | "straight_sets"          // one main lift, traditional straight sets
   | "contrast"               // heavy strength paired with a matched plyometric
-  | "french_contrast"        // 4-part complex: heavy → plyo → loaded jump → med-ball (Liu 2023)
+  | "french_contrast"        // 4-part complex: heavy → plyo → loaded jump → med-ball (Cormier 2022; the med-ball 4th slot is our variation)
   | "power_contrast"         // velocity/power contrast: loaded fast lift + plyo (taper days)
   | "potentiation_cluster"   // explosive cluster: fast lift, velocity-based, PAP (taper days)
-  | "overcoming_isometric"   // max-strength/RFD: overcoming iso, long length, high intent (Oranchuk 2023)
+  | "overcoming_isometric"   // max-strength/RFD: overcoming iso, long length, high intent (Oranchuk 2019)
   | "iso_pap_primer"         // isometric conditioning → explosive: PAP primer (Krzysztofik 2023, Jarosz 2025)
   | "yielding_isometric"     // tissue/hypertrophy: yielding (HIMA) long-length holds (Lum 2026, Oranchuk 2019)
   | "supersets"              // time-efficient accumulation: lower+upper pair back-to-back (Robbins 2010)

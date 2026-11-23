@@ -26,7 +26,7 @@
  *     week's highest load 72 h before the match (Los Arcos 2017). So: heavy on MD-4 and MD-3, and on MD-5 only when
  *     there was no match the days before (the MD-5 label already means that, see `fetchMdContextInfo`).
  *   - Contrast rounds. No training study compares numbers of rounds (Lesinski 2014 says so outright); studies used
- *     1–5 a session, most often 2–4, and 3–4 for French contrast (Welch 2019; Elbadry 2019). The rounds here follow
+ *     1–5 a session, most often 2–4, and 3–4 for French contrast (Hernández-Preciado 2018; Elbadry 2019). The rounds here follow
  *     the heavy lift's sets, so the pairs match.
  *
  * What does NOT come from research, and is MicroPulse's rule: how the week's reps are split between the heavy days,
@@ -416,7 +416,7 @@ export function nearMatchAudit(md: MdContext, applied: NearMatchApplied, noMatch
   };
 }
 
-/** A French contrast round is four exercises. The two studies used 3 rounds (Welch 2019) and 3–4 in 50–70 min
+/** A French contrast round is four exercises. The two studies used 3 rounds (Hernández-Preciado 2018) and 3–4 in 50–70 min
  *  sessions (Elbadry 2019); kept at 3 so the day stays short. The cap is MicroPulse's rule. */
 export const FRENCH_CONTRAST_MAX_ROUNDS = 3;
 const FRENCH_CONTRAST_MIN_EXERCISES = 4;

@@ -177,8 +177,8 @@ export function recommendMinutesRecovery(input: MinutesRecoveryInput): MinutesRe
       mdContext: "MD+1", tier, action: "rebuild", protocolSlug: null,
       evidenceTier: "moderate", protectEccentric: false, driver,
       labelEN: "Rebuild (not recovery)", labelIS: "Uppbygging (ekki endurheimt)",
-      whyEN: `Played <${MD1_LOW_MINUTES} min / did not play — missed match load, so MD+1 is a training day, not recovery: give a real strength/running stimulus so they don't fall behind the week (Rønnestad 2023). No recovery protocol assigned.`,
-      whyIS: `Lék <${MD1_LOW_MINUTES} mín / spilaði ekki — missti leikálag, svo MD+1 er æfingadagur, ekki endurheimt: gefðu alvöru styrk/hlaupa-áreiti svo hann dragist ekki aftur úr vikunni (Rønnestad 2023). Ekkert recovery-prótokoll úthlutað.`,
+      whyEN: `Played <${MD1_LOW_MINUTES} min / did not play — missed match load, so MD+1 is a training day, not recovery: give a real strength/running stimulus so they don't fall behind the week (non-starters miss most of the high-speed running matches give, Anderson 2016b). No recovery protocol assigned.`,
+      whyIS: `Lék <${MD1_LOW_MINUTES} mín / spilaði ekki — missti leikálag, svo MD+1 er æfingadagur, ekki endurheimt: gefðu alvöru styrk/hlaupa-áreiti svo hann dragist ekki aftur úr vikunni (varamenn missa af mestu hraðahlaupunum sem leikir gefa, Anderson 2016b). Ekkert recovery-prótokoll úthlutað.`,
       caveatEN: null, caveatIS: null,
     };
   }

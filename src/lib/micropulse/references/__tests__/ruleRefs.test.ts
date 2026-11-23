@@ -72,7 +72,7 @@ describe("rule references", () => {
   it("each new entry has authors, title, journal and the year its short form gives", () => {
     for (const r of Object.values(RULE_REFS)) {
       expect(r.cite).toMatch(/^[^.]+\. .+[.?] .+ \d{4}/);
-      const year = r.short.slice(-4);
+      const year = r.short.replace(/[ab]$/, "").slice(-4);
       expect(r.cite.includes(`${year};`) || r.cite.includes(`ahead of print ${year}`)).toBe(true);
     }
   });
@@ -82,15 +82,14 @@ describe("rule references", () => {
   });
 
   it("reads a rule's citation text in order, with other spellings and unresolved ones", () => {
-    const got = fullRefsFor("Carling 2018; Nédélec 2012; Rønnestad 2023");
-    expect(got.map((g) => g.short)).toEqual(["Carling 2018", "Nédélec 2012", "Rønnestad 2023"]);
+    const got = fullRefsFor("Carling 2018; Nédélec 2012; Dietz & Peterson 2012");
+    expect(got.map((g) => g.short)).toEqual(["Carling 2018", "Nédélec 2012", "Dietz & Peterson 2012"]);
     expect(got[0].ref?.cite).toMatch(/Sports Med 2018;48\(12\):2695–2702/);
     expect(got[2].ref).toBeNull();
-    expect(got[2].unresolved?.en).toMatch(/Cuthbert/);
+    expect(got[2].unresolved?.en).toMatch(/Triphasic/);
     expect(findRefByShort("Mujika 2000")?.key).toBe("mujikapadilla2000");
     expect(findRefByShort("Dos’Santos 2019")?.key).toBe("dossantos2019");
     expect(findRefByShort("Martín-García et al. 2018")?.key).toBe("martingarcia2018");
-    expect(unresolvedReason("Lim & Childs 2020")?.en).toMatch(/Lim & Wong 2018/);
     const sv = fullRefsFor("Sáez de Villarreal 2009 (56 studies)");
     expect(sv).toHaveLength(1);
     expect(sv[0].ref?.key).toBe("saezdevillarreal2009");
@@ -123,6 +122,17 @@ describe("rule references", () => {
     expect(findRefByShort("Cañadas-García 2026")?.key).toBe("canadasgarcia2026");
     expect(findRefByShort("Cook & Purdam 2012")?.key).toBe("cookpurdam2012");
     expect(findRefByShort("Harper 2022")?.key).toBe("harper2022");
+  });
+
+  it("citations that named no findable paper now name one that says what the text says (lot 1a)", () => {
+    const all = [...codeCitations(), ...citationsUnder(OTHER_CITATION_SOURCES), ...citationsIn(RULES_PART)];
+    for (const s of ["Rønnestad 2023", "Liu 2023", "Comfort 2018", "Lake 2018", "Lim 2020", "Lim & Childs 2020", "Howatson & Milak 2009", "Oranchuk 2023", "Welch 2019"]) {
+      expect(all).not.toContain(s);
+    }
+    expect(findRefByShort("Cuthbert 2021")).not.toBeNull();
+    expect(findRefByShort("Spiering 2021")?.key).toBe("spiering2021");
+    expect(findRefByShort("Lim & Wong 2018")?.key).toBe("limwong2018");
+    expect(findRefByShort("Hernández-Preciado 2018")?.key).toBe("hernandezpreciado2018");
   });
 
   it("the catalogue's references section lists each of its citations in full, or as unresolved", () => {

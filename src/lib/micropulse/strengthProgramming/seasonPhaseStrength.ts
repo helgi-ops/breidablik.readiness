@@ -161,7 +161,7 @@ export const STRENGTH_METHODS: StrengthMethod[] = [
   { key: "accentuated_eccentric", label: { en: "Accentuated eccentric", is: "Aukin eccentric-hleðsla" },
     desc: { en: "Extra load on the lowering phase (weight releasers / slow tempo), then a normal concentric — overload the eccentric to drive strength & RFD.", is: "Aukin þyngd í niðurfasa (weight releasers / hægt tempó), svo venjuleg lyfta upp — ofhladdu eccentric til að auka styrk & kraftþróun." }, cite: "Wagle 2017; Suchomel 2019" },
   { key: "oscillatory", label: { en: "Oscillatory reps", is: "Sveiflu-endurtekningar" },
-    desc: { en: "Small, fast partial reps held in one position — trains rate of force development and stiffness.", is: "Litlar, hraðar hluta-endurtekningar í einni stöðu — þjálfar kraftþróun og stífleika." }, cite: "Dietz & Peterson 2012" },
+    desc: { en: "Small, fast partial reps held in one position — the method aims at rate of force development and stiffness (a coaching method, not trial-tested).", is: "Litlar, hraðar hluta-endurtekningar í einni stöðu — aðferðin miðar að kraftþróun og stífleika (þjálfunaraðferð, ekki prófuð í rannsóknum)." }, cite: "Dietz & Peterson 2012" },
   { key: "triphasic", label: { en: "Triphasic", is: "Þrífasa (triphasic)" },
     desc: { en: "Blocks that emphasise each muscle action in turn — eccentric → isometric → concentric — before concurrent power.", is: "Blokkir sem leggja áherslu á hvern vöðvafasa í röð — eccentric → ísómetrískt → concentric — á undan samhliða afli." }, cite: "Dietz & Peterson 2012" },
   { key: "wave", label: { en: "Wave loading", is: "Bylgju-hleðsla" },

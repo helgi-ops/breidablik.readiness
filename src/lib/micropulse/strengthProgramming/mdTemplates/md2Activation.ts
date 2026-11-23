@@ -4,12 +4,13 @@
  * Two days before the match — neural priming, no fatigue induction.
  *
  * Evidence base:
- *   - Cuenca-Fernández 2024 — Acute iso conditioning improves CMJ.
+ *   - Harrison 2019 — resistance priming 1-48 h before competition can lift
+ *     some neuromuscular measures (review; isometric-only primers less studied).
  *   - Cañadas-García 2026 — Pro Spanish soccer S&C coaches prime 24 h (79%)
  *     or 24-48 h (21%) before a match, isometrics most used (a survey of
  *     practice; it does not test whether priming improves performance).
- *   - Comfort 2018 — IMTP wakes high-threshold motor units without
- *     metabolic cost.
+ *   - Lum & Barbosa 2019 — isometrics build strength with less fatigue than
+ *     dynamic work.
  *
  * Structure (~15 minutes total):
  *   1. Movement prep             (3 min)

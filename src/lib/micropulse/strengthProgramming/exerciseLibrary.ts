@@ -58,7 +58,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
       "MD-3": { sets: 1, reps: "5 × 3", intensity: "Bodyweight", rest: "—" },
       "MD-2": { sets: 1, reps: "5 × 2", intensity: "Bodyweight", rest: "—" },
     },
-    evidence: "Joint-by-joint mobility prep improves squat depth and force output (Reiman 2014).",
+    evidence: "Dynamic mobility before lifting raises range of motion for a short while without costing force (Behm 2016).",
   },
   {
     id: "mp_pogo_warmup",
@@ -151,7 +151,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
       },
     },
     alternatives: ["ex_imtp_iso", "ex_hang_power_clean"],
-    evidence: "Mid-thigh pull RFD correlates with sprint and jump performance (Comfort 2015).",
+    evidence: "Isometric mid-thigh pull RFD correlates with 10 m sprint and jump height (West 2011) — a test link, not proof the lift transfers.",
   },
   {
     id: "ex_hang_power_clean",
@@ -196,7 +196,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
       },
     },
     alternatives: ["ex_kb_swing", "ex_hang_power_clean"],
-    evidence: "Full-body unilateral power; lower technical barrier than barbell snatch (Suchomel & Stone 2017).",
+    evidence: "Full-body one-arm power lift; loads the two sides differently from the barbell snatch (Lauder & Lake 2008).",
   },
 
   // ── PLYOMETRICS ────────────────────────────────────────────────────────
@@ -362,7 +362,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
       "MD-2": { sets: 2, reps: "3", intensity: "Bar only", rest: "90s" },
     },
     alternatives: ["ex_jump_shrug", "ex_kb_swing"],
-    evidence: "Optimal-power load ~20% 1RM produces peak power (Loturco 2019).",
+    evidence: "Peak power in the trap-bar jump came at about 20% of back-squat 1RM (Swinton 2012).",
   },
   {
     id: "ex_kb_swing",
@@ -401,7 +401,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
     defaultDosing: {
       "MD-3": { sets: 3, reps: "4 each side", intensity: "4-6 kg", rest: "60s" },
     },
-    evidence: "Rotational power; transfers to CoD and kicking velocity (McKinlay 2018).",
+    evidence: "Trains fast trunk rotation. Transfer to kicking or change of direction is untested.",
   },
   {
     id: "ex_mb_scoop_throw",
@@ -636,7 +636,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
     },
     alternatives: ["ex_single_leg_rdl", "ex_trap_bar_dl"],
     contraindications: ["sore_hamstrings", "hamstring_injury", "lower_back_pain"],
-    evidence: "Single-leg-biased hinge for asymmetry correction (Helms 2020).",
+    evidence: "Single-leg-biased hinge. One-leg, weaker-side-first work narrows left/right gaps more consistently than two-leg work (Martos-Arregui 2026).",
   },
   {
     id: "ex_single_leg_rdl",
@@ -656,7 +656,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
     },
     alternatives: ["ex_b_stance_rdl"],
     contraindications: ["sore_hamstrings", "hamstring_injury"],
-    evidence: "Posterior chain + balance challenge — RTS staple (Helms 2020).",
+    evidence: "Posterior chain + balance challenge — common in return-to-sport programmes (coaching practice).",
   },
   {
     id: "ex_reverse_lunge",
@@ -696,7 +696,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
     },
     alternatives: ["ex_reverse_lunge", "ex_bulgarian_ss"],
     contraindications: ["knee_injury"],
-    evidence: "Single-leg concentric drive at box height — transfers to sprint push-off (DeWeese 2013).",
+    evidence: "Single-leg concentric drive. Step-up training improved sprint acceleration about as much as squats (Appleby 2020); box height matching push-off is a coaching rationale.",
   },
   {
     id: "ex_walking_lunge",
@@ -834,7 +834,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
       "MD+1": { sets: 2, reps: "3s × 1", intensity: "100% MVC", rest: "90s" },
     },
     alternatives: ["ex_iso_squat_90"],
-    evidence: "Joint-angle-specific RFD primer; high neural drive, minimal fatigue (Comfort 2018, Lake 2018).",
+    evidence: "Isometrics build joint-angle-specific strength with less fatigue (Lum & Barbosa 2019); brief maximal efforts can lift jumps minutes later (Tsoukos 2016).",
   },
   {
     id: "ex_iso_squat_90",
@@ -894,7 +894,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
       "MD-4": { sets: 3, reps: "30s", intensity: "70% MVC", rest: "90s" },
     },
     alternatives: ["ex_iso_squat_90"],
-    evidence: "Patellar tendon stiffness adaptation; pain-friendly (Lim & Childs 2020).",
+    evidence: "Pain-friendly in-season option for a sore patellar tendon (Lim & Wong 2018); stiffening the tendon needs heavy loading over weeks.",
   },
   {
     id: "ex_iso_ham_bridge_long",
@@ -913,7 +913,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
       "MD-4": { sets: 3, reps: "30s each side", intensity: "70% MVC", rest: "60s" },
     },
     alternatives: ["ex_nordic_curl"],
-    evidence: "Hamstring tendon adaptation; Nordic alternative when eccentric loading is contraindicated (Lim 2020).",
+    evidence: "Keeps hamstring loading without the eccentric stretch while the Nordic is off. It does not replace the Nordic's protective effect (van Dyk 2019).",
   },
 
   {

@@ -8,13 +8,13 @@
  *
  * Evidence base (research/ folder):
  *   - Cluster sets:        Tufano 2017, Hardee 2012, Pareja-Blanco 2017
- *   - French Contrast:     Cormie 2011, Liu 2023 (French Contrast for soccer)
- *   - Weightlifting deriv: Suchomel 2017, Comfort 2015/2018
+ *   - French Contrast:     Cormie 2011, Zhao 2025, Cormier 2022
+ *   - Weightlifting deriv: Suchomel 2017, Suchomel 2015
  *   - VBT velocity caps:   Pareja-Blanco 2017, Sánchez-Medina 2011
  *   - Nordic hamstring:    van Dyk 2019 (51% hamstring injury reduction)
  *   - Copenhagen adductor: Harøy 2019 (41% groin injury reduction)
- *   - IMTP RFD:            Comfort 2018, Lake 2018
- *   - Microdosing:         Rønnestad 2023 (soccer congested weeks)
+ *   - IMTP RFD:            Lum & Barbosa 2019, Tsoukos 2016
+ *   - Microdosing:         Cuthbert 2021, Rønnestad 2011 (in-season soccer)
  */
 
 /** Position in the microcycle relative to next match. */
@@ -258,7 +258,7 @@ export type PlayerStrengthSnapshot = {
    *  (Carling 2018 — ~60 min match exposure = a recovery day next):
    *    ≥ 60 min  → protective iso lower-body + fresh-tissue upper-body strength;
    *    30–59 min → the measured recovery stim (default MD+1 template);
-   *    < 30 min  → a real strength stimulus (they missed match load, Rønnestad 2023).
+   *    < 30 min  → a real strength stimulus (they missed match load, Anderson 2016b).
    *  Absent / null (no recent match or minutes never entered) → the engine keeps
    *  the fixed recovery template (fully backwards-compatible). */
   lastMatchMinutes?: number | null;

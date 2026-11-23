@@ -4,15 +4,15 @@
  * A player who played a full match absorbed the eccentric lower-body load of
  * the game. The day after, we do NOT add eccentric compound work on top — we
  * give the lower body an ISOMETRIC-only dose (tendon-friendly, low-stress,
- * accelerates DOMS recovery vs total rest — Howatson & Milak 2009) and move the
+ * light movement eases soreness a little — Dupuy 2018) and move the
  * real strength stimulus to the FRESH upper body, appended by the engine from
  * the team palette. "iso á neðri hluta og styrktaræfingar á efri."
  *
  * Evidence base:
  *   - Carling 2018 — ~60 min match exposure = recovery day next
  *   - Nédélec 2012 — post-match fatigue persists 24–48h
- *   - Howatson & Milak 2009 — light work day after > total rest for DOMS
- *   - Lim & Childs 2020 — long isometrics for tendon adaptation, pain-friendly
+ *   - Dupuy 2018 — active recovery eases soreness a little; massage helps most
+ *   - Lim & Wong 2018 — isometrics give short-term tendon pain relief in-season
  *
  * Structure (~10 min): movement prep + mobility flush, then a long-iso lower
  * block (single-leg iso ham bridge + Spanish squat) — no eccentric load, no
@@ -56,10 +56,10 @@ export function buildMdPlus1IsoLower(): SessionBlock[] {
       ],
       noteEN:
         "Hip mobility flow + glute activation. ~5 min. Light movement to flush " +
-        "soreness the day after a full match (Howatson & Milak 2009).",
+        "soreness the day after a full match (Dupuy 2018).",
       noteIS:
         "Mjaðmaliðsflæði + glute virkjun. ~5 mín. Létt hreyfing til að flush-a " +
-        "sárindi daginn eftir heilan leik (Howatson & Milak 2009).",
+        "sárindi daginn eftir heilan leik (Dupuy 2018).",
     },
     {
       id: "mdplus1-iso-lower",

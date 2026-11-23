@@ -2226,8 +2226,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Hver æfingadagur er sýndur sem hlutfall af leikkröfu, borinn saman við „desirable band“ — dæmigerða skipulagsform (lágt MD+1 og MD-1, toppur um miðja viku). Þetta er viðmið, ekki regla — aðlagaðu að þínu módeli (Martín-García 2018; Akenhead 2016). Prósentan er heildarrúmmál æfingarinnar sem hlutfall af heilum leik, ekki per-90 (sem blési upp stuttar æfingar).",
           },
           {
-            en: "On MD+1 and MD+2 the day is split in two: players who played a full shift (≥60 min) are recovering (Recovery), while subs and limited players do a compensatory top-up to replace the match stimulus they missed — each against its own band. This is a nuance most systems miss (Anderson 2016; Hills 2018; Nédélec 2012).",
-            is: "Á MD+1 og MD+2 er dögunum skipt í tvennt: leikmenn sem spiluðu fullan leik (≥60 mín) eru að jafna sig (Recovery), en varamenn og þeir sem spiluðu lítið gera uppbótar-æfingu (Top-up) til að bæta upp leikáreitið sem þeir misstu af — hvor um sig borinn saman við sitt eigið band. Þetta er nákvæmni sem flest kerfi missa af (Anderson 2016; Hills 2018; Nédélec 2012).",
+            en: "On MD+1 and MD+2 the day is split in two: players who played a full shift (≥60 min) are recovering (Recovery), while subs and limited players do a compensatory top-up to replace the match stimulus they missed — each against its own band. This is a nuance most systems miss (Anderson 2016b; Hills 2018; Nédélec 2012).",
+            is: "Á MD+1 og MD+2 er dögunum skipt í tvennt: leikmenn sem spiluðu fullan leik (≥60 mín) eru að jafna sig (Recovery), en varamenn og þeir sem spiluðu lítið gera uppbótar-æfingu (Top-up) til að bæta upp leikáreitið sem þeir misstu af — hvor um sig borinn saman við sitt eigið band. Þetta er nákvæmni sem flest kerfi missa af (Anderson 2016b; Hills 2018; Nédélec 2012).",
           },
         ],
       },
@@ -2857,8 +2857,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "C · The MD+1 / MD+2 split", is: "C · MD+1 / MD+2 skiptingin" },
         body: [
           {
-            en: "MD+1 and MD+2 are split in two, because the day after a match means different things to different players. Players who played a full shift (≥60 min) are recovering — a low day is correct. Everyone else (subs, limited or no minutes) does a compensatory 'top-up' to replace the match stimulus they missed — a higher day is correct. Each half is judged against its own desirable band (Anderson 2016; Hills 2018; Nédélec 2012).",
-            is: "MD+1 og MD+2 eru skipt í tvennt, því dagurinn eftir leik þýðir ólíka hluti fyrir ólíka leikmenn. Leikmenn sem spiluðu fullan skammt (≥60 mín) eru í endurheimt — lágur dagur er réttur. Allir aðrir (varamenn, takmarkaðar eða engar mínútur) gera „top-up“ til að bæta upp leik-áreitið sem þá vantaði — hærri dagur er réttur. Hvor helmingur er metinn gegn sínu eigin æskilega bili (Anderson 2016; Hills 2018; Nédélec 2012).",
+            en: "MD+1 and MD+2 are split in two, because the day after a match means different things to different players. Players who played a full shift (≥60 min) are recovering — a low day is correct. Everyone else (subs, limited or no minutes) does a compensatory 'top-up' to replace the match stimulus they missed — a higher day is correct. Each half is judged against its own desirable band (Anderson 2016b; Hills 2018; Nédélec 2012).",
+            is: "MD+1 og MD+2 eru skipt í tvennt, því dagurinn eftir leik þýðir ólíka hluti fyrir ólíka leikmenn. Leikmenn sem spiluðu fullan skammt (≥60 mín) eru í endurheimt — lágur dagur er réttur. Allir aðrir (varamenn, takmarkaðar eða engar mínútur) gera „top-up“ til að bæta upp leik-áreitið sem þá vantaði — hærri dagur er réttur. Hvor helmingur er metinn gegn sínu eigin æskilega bili (Anderson 2016b; Hills 2018; Nédélec 2012).",
           },
         ],
       },
