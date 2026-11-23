@@ -23,6 +23,7 @@ import {
   blockReason,
   blockedText,
   isYouth,
+  AGE_UNKNOWN_FACT,
   GYM_GOAL_SESSIONS,
   pickStart,
   sessionsPerWeek,
@@ -230,6 +231,7 @@ export function buildGoalPlan(input: GoalPlanInput): GoalPlan {
     contentVersion: GOAL_CONTENT_VERSION,
     sessionsPerWeek: perWeek,
     youthLevel: youth,
+    ...(youth && input.ageYears == null ? { ageUnknown: true as const } : {}),
     supervision: youth ? SUPERVISION.youth : SUPERVISION.adult,
     basis: outOfSeason ? PLAN_BASIS_OUT_OF_SEASON : PLAN_BASIS,
   };
@@ -278,7 +280,7 @@ export function buildGoalPlan(input: GoalPlanInput): GoalPlan {
   }
   let facts = youth
     ? [...p.facts.slice(0, 2), input.ageYears == null
-        ? { en: "Age not on record, so the plan uses the easier level and a coach is there for every session. Add the date of birth to change this.", is: "Aldur ekki skráður, svo áætlunin notar léttara stigið og þjálfari er við hverja æfingu. Skráðu fæðingardag til að breyta því." }
+        ? AGE_UNKNOWN_FACT
         : { en: `Under 18 (${input.ageYears}), so the plan uses the easier level and a coach is there for every session.`, is: `Undir 18 ára (${input.ageYears}), svo áætlunin notar léttara stigið og þjálfari er við hverja æfingu.` }]
     : p.facts.slice(0, 3);
   let limits = p.limits;

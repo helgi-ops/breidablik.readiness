@@ -7,8 +7,8 @@
  *      day, and at least 2 days apart. Each quality has its preferred match days (e.g. top-speed session A on MD-3
  *      or MD-4, braking session A on MD+3). A busy week can leave a session out; it is not made up later.
  *   2. Today's version: the readiness colour is READ (never set). Green or no check-in = the full session;
- *      yellow = the lighter version (no flat-out or sled sprints, hard stops, box drops or tests; the rest at half
- *      the sets); red = skip it.
+ *      yellow = the lighter version (no flat-out or sled sprints, hard stops, box drops or tests; lifts one set off;
+ *      the rest as written); red = skip it.
  *   3. The card copy, layered: verdict → 2–3 plain facts → the session → "behind the plan".
  *
  * The add-on is its own card. It never changes the colour or a load target. In pre-/off-season session B's gym lifts
@@ -20,7 +20,7 @@
  * team's session holds what was built (`season: "maintain"`): nothing is added.
  */
 
-import { PLAN_WEEKS, QUALITY_LABEL } from "./common";
+import { AGE_UNKNOWN_FACT, PLAN_WEEKS, QUALITY_LABEL } from "./common";
 import { isGymQuality, type Bi, type GoalBlock, type GoalPlan, type GoalQuality, type GoalSession, type GoalSessionSlot } from "./types";
 import { rxContextOf, withRx, type LiftRx } from "./liftRx";
 import type { Adherence, DueSession, GoalOutcome, SessionMark } from "./outcome";
@@ -349,10 +349,25 @@ export function isHardBlock(b: GoalBlock): boolean {
 
 export type SessionVersion = "full" | "lighter" | "skip";
 
+/** One set off the leading set count of a dose line ("3 × 5" → "2 × 5", "3" → "2"); a single set stays. */
+export function oneSetOffText(t: string): string {
+  return t.replace(/^(\s*)(\d+)/, (_, a: string, n: string) => `${a}${Math.max(1, Number(n) - 1)}`);
+}
+
+/** A lift block on a yellow day: one set off its dose and its prescription (blocks without a lift are unchanged). */
+export function yellowLift(b: GoalBlock): GoalBlock {
+  if (!b.rx?.length) return b;
+  return {
+    ...b,
+    dose: { en: oneSetOffText(b.dose.en), is: oneSetOffText(b.dose.is) },
+    rx: b.rx.map((r) => ({ ...r, sets: oneSetOffText(r.sets) })),
+  };
+}
+
 export function sessionForColour(s: GoalSession, colour: DayColour | null): { version: SessionVersion; blocks: GoalBlock[]; left: GoalBlock[] } {
   if (colour === "red") return { version: "skip", blocks: [], left: s.blocks };
   if (colour === "yellow") {
-    const keep = s.blocks.filter((b) => !isHardBlock(b));
+    const keep = s.blocks.filter((b) => !isHardBlock(b)).map(yellowLift);
     const left = s.blocks.filter(isHardBlock);
     return keep.length ? { version: "lighter", blocks: keep, left } : { version: "skip", blocks: [], left };
   }
@@ -420,9 +435,11 @@ const WEEK_UNSET: Bi = {
   en: "The coach has not set this week's training days yet, so the days are a suggestion around the matches.",
   is: "Þjálfarinn hefur ekki sett æfingadaga vikunnar enn, svo dagarnir eru tillaga út frá leikjum.",
 };
+// Yellow (2026-11-23, contradictions 16 + 17): hard work out, lifts one set off (the one yellow rule for lifts), the rest
+// as written. It said "the rest at half the sets" while the card only halved the minutes.
 const YELLOW_FACT: Bi = {
-  en: "Yellow check-in today: the lighter version. No flat-out or sled sprints, hard stops, box drops or tests; the rest at half the sets.",
-  is: "Gul innskráning í dag: léttari útgáfa. Engir sprettir á fullu eða með sleða, harðar bremsur, fallhopp né próf; restin með hálfum settum.",
+  en: "Yellow check-in today: the lighter version. No flat-out or sled sprints, hard stops, box drops or tests; lifts one set off; the rest as written.",
+  is: "Gul innskráning í dag: léttari útgáfa. Engir sprettir á fullu eða með sleða, harðar bremsur, fallhopp né próf; lyftur einu setti færri; restin eins og hún er skrifuð.",
 };
 const RED_FACT: Bi = {
   en: "Red check-in today: skip the goal session. It isn't made up later.",
@@ -651,7 +668,8 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
     const inSession = inSlot === s.slot && v.version !== "skip";
     const shown = inSession ? v.blocks.filter((b) => !b.rx?.length) : v.blocks;
     today = {
-      slot: s.slot, name: cap(partName(quality, s.slot)), focus: s.focus, minutes: v.version === "full" ? s.minutes : Math.max(5, Math.round(s.minutes / 2)), version: v.version,
+      slot: s.slot, name: cap(partName(quality, s.slot)), focus: s.focus, // Yellow: the time of the blocks that stay (hard blocks out, the rest as written), not a flat half.
+      minutes: v.version === "full" || !s.blocks.length ? s.minutes : Math.max(5, Math.round((s.minutes * v.blocks.length) / s.blocks.length)), version: v.version,
       blocks: shown.map((b) => ({ what: b.what, dose: b.dose, supervised: b.supervised === true, ...(b.swap?.swapped ? { swapped: true } : {}), ...(b.rx?.length ? { rx: b.rx } : {}) })),
       mark: markOf(s.slot),
       ...(inSession ? { inSession: true as const } : {}),
@@ -697,6 +715,8 @@ export function buildGoalTodayCard(input: GoalTodayInput): GoalTodayCard | null 
   if (!placement.weekKnown) details.unshift(WEEK_UNSET);
   if (cLeftOut) details.unshift(C_LEFT_OUT);
   details.unshift(dayRule);
+  // Built as the youth version for want of a date of birth: first behind the plan, with where it is added.
+  if (plan.ageUnknown) details.unshift(AGE_UNKNOWN_FACT);
 
   return {
     ...base,

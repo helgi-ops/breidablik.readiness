@@ -183,7 +183,7 @@ Liturinn er notaður hér en ekki reiknaður.
 | `CMJ_DROP_NOT_STACKED` | Hoppapróf niðri á degi sem check-in hefur þegar lækkað | Ekki skorið tvisvar |
 | Send æfing fylgir check-in | Sjálfvirk sending, ekkert byrjað | Byggð aftur við check-in, með sama byggi og kl. 09:00 og lit dagsins. **Handsendar æfingar eru aldrei endurbyggðar** |
 | Sniðmát / Custom Programme | Gulur / rauður | Gulur: −1 sett á hverja línu. Rauður: kraft- og aðalblokkir faldar. Hvíldarvika −1 í viðbót. Á æfingu sem þjálfari sendi aðeins ef litur dagsins er verri en sá sem hún var sett upp með (#12) |
-| Markmiðsspjald | Gulur | Erfiðu blokkirnar teknar út og mínútur helmingaðar. Rauður: sleppt |
+| Markmiðsspjald | Gulur | Erfiðu blokkirnar teknar út, lyftur −1 sett, restin óbreytt; mínútur fylgja blokkunum sem eftir eru. Rauður: sleppt |
 
 ---
 
@@ -251,8 +251,8 @@ Eftirtöldum ákvörðunum má breyta:
   sal).
 - **Lengd og æfingar:** 8 vikur, mest 20 mín á æfingu.
   - Markmið í sal: 2 æfingar á viku.
-  - Markmið á velli: 2 á keppnistímabili, 3 utan þess.
-- **Yngri en 18 ára:** fá unglingaplan. Ef aldur vantar fær leikmaðurinn líka unglingaplan.
+  - Markmið á velli: 2 á keppnistímabili, 3 utan þess. Planið er byggt fyrir tímabilið sem það keyrir á (#17).
+- **Yngri en 18 ára:** fá unglingaplan. Ef aldur vantar fær leikmaðurinn líka unglingaplan og planið segir hvar á að skrá fæðingardag.
 - **Lokað fyrir:** óvirka leikmenn, meidda og leikmenn í endurkomuferli.
   - Hámarkshraði er ekki fyrir markverði og ekki utan fótbolta.
 - **Öryggi:** gulur dagur er léttari og rauðum degi er sleppt. Meiðsli setja planið í bið. Aldrei á MD-1 eða MD+1.
@@ -472,10 +472,15 @@ Eftirtöldum ákvörðunum má breyta:
     - Markmiðslyftur: −1 sett (var helmingur).
     - Markmiðsæfing á velli: allt á fullu fer út, óbreytt (textinn er lagaður í #17).
     - CMJ-skurður er annað merki (stökkpróf), ekki gulur, og er óbreyttur.
-17. **Markmiðsplön:**
-    - Plan sem er samþykkt á keppnistímabili er fryst sem 2 æfingar á viku, en keyrir bara á undirbúningstímabili.
-    - Gulur-textinn segir „helmingur setta“ en spjaldið helmingar mínútur.
-    - Leikmaður sem vantar aldur á fær unglingaplan.
+17. ~~**Markmiðsplön**~~ **Lagað 23. nóv.:**
+    - Plan er byggt fyrir tímabilið sem það keyrir á. Byggingar- og viðhaldsfasi (undirbúnings- og utan tímabils)
+      gefa 3 æfingar á viku (`inSeasonFor`). Plan sem er samþykkt á keppnistímabili byrjar á undirbúningstímabili og
+      fær því 3 á viku. Tvö plön sem voru þegar samþykkt með 2 á viku (Breiðablik) eru látin vera.
+    - Gulur dagur: allt á fullu fer út, lyftur missa eitt sett (eina gula reglan, #16), restin eins og hún er skrifuð.
+      Textinn segir það sama og mínúturnar fylgja blokkunum sem eftir eru (var helmingur mínútna).
+    - Aldur óþekktur: leikmaðurinn fær áfram unglingaplanið, en planið segir að fæðingardag vanti, að appið biðji um
+      hann við opnun eða að stjórnandi félagsins skrái hann, og að þá megi hefja nýtt plan (`AGE_UNKNOWN_FACT`, líka
+      efst á spjaldinu). Í dag (23. nóv.) vantar fæðingardag hjá 195 af 277 virkum leikmönnum.
 18. **Ástæður þjálfara eru valfrjálsar á sumum stöðum**, þvert á CLAUDE.md:
     - skipting á æfingu og ósamhverfa;
     - eytt skipting skilur enga sögu eftir.

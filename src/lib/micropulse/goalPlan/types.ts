@@ -193,6 +193,9 @@ export type GoalPlan = {
   sessionsPerWeek: number;
   /** Under 18 or age unknown: easier level, everything hard is supervised. */
   youthLevel: boolean;
+  /** Built as the youth version because no date of birth was on record (2026-11-23): the card and the coach say so,
+   *  and where it is added. Absent on plans built before then. */
+  ageUnknown?: true;
   weeks: GoalWeek[];
   /** Which weeks hold a test, and what counts as real change. */
   tests: { weeks: number[]; what: Bi; change: Bi };

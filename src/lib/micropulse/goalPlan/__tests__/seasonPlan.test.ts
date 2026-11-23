@@ -19,9 +19,9 @@ const PITCH: GoalQuality[] = GOAL_QUALITIES.filter((q) => !isGymQuality(q));
 const GYM: GoalQuality[] = GOAL_QUALITIES.filter((q) => isGymQuality(q));
 
 describe("inSeasonFor — the season a new plan is built for", () => {
-  it("pre-season and off-season (build) → out of season; in season and not known → in season", () => {
+  it("built for the season it runs in: build → out of season; approved in season → runs at pre-season → out of season; not known → in season", () => {
     expect(inSeasonFor("build")).toBe(false);
-    expect(inSeasonFor("maintain")).toBe(true);
+    expect(inSeasonFor("maintain")).toBe(false);
     expect(inSeasonFor("unknown")).toBe(true);
     expect(inSeasonFor(null)).toBe(true);
     expect(inSeasonFor(undefined)).toBe(true);

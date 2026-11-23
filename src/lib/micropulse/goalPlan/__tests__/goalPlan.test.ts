@@ -212,8 +212,12 @@ describe("age gate", () => {
     }
   });
   it("youth facts say why the easier level is used", () => {
-    expect(buildGoalPlan(base({ ageYears: null, quality: "jump" })).facts.some((f) => /date of birth/.test(f.en))).toBe(true);
-    expect(buildGoalPlan(base({ ageYears: 16, quality: "jump" })).facts.some((f) => /Under 18/.test(f.en))).toBe(true);
+    const unknown = buildGoalPlan(base({ ageYears: null, quality: "jump" }));
+    expect(unknown.facts.some((f) => /date of birth/i.test(f.en) && /admin/.test(f.en))).toBe(true);
+    expect(unknown.ageUnknown).toBe(true);
+    const sixteen = buildGoalPlan(base({ ageYears: 16, quality: "jump" }));
+    expect(sixteen.facts.some((f) => /Under 18/.test(f.en))).toBe(true);
+    expect(sixteen.ageUnknown).toBeUndefined();
   });
 });
 

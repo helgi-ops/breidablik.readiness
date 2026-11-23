@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildGoalPlan } from "../index";
 import {
   MIN_GAP_DAYS, addDays, buildGoalTodayCard, daysBetween, isHardBlock, mdLabel, mondayOf, placeWeek, planWeekOn,
-  sessionForColour, toDayColour, type TeamCalendar, type TeamDayType,
+  oneSetOffText, sessionForColour, toDayColour, yellowLift, type TeamCalendar, type TeamDayType,
 } from "../today";
 import { parseDecision, resumeDefaultWeek, resumedStartDate } from "../requests";
 import type { Bi, GoalPlanInput, GoalQuality } from "../types";
@@ -225,5 +225,22 @@ describe("real calendars (Nov 2026 shapes)", () => {
     const c = buildGoalTodayCard({ quality: "jump", status: "approved", plan: planFor("jump"), startDate: MON, todayIso: day(2), cal: off, colour: "green", coachNote: null })!;
     expect(c.verdict.en).toContain("not training");
     expect(c.facts[0].en).not.toContain("match");
+  });
+});
+
+describe("yellow day: one set off each lift (contradiction 17b, 2026-11-23)", () => {
+  it("takes one set off the leading set count; a single set stays", () => {
+    expect(oneSetOffText("3 × 5")).toBe("2 × 5");
+    expect(oneSetOffText("4")).toBe("3");
+    expect(oneSetOffText("1 × 8")).toBe("1 × 8");
+    expect(oneSetOffText("as written")).toBe("as written");
+  });
+  it("a lift block loses one set in dose and prescription; a block without a lift is unchanged", () => {
+    const lift = { title: { en: "Lift", is: "Lyfta" }, dose: { en: "3 × 5", is: "3 × 5" }, rx: [{ sets: "3", reps: "5" }] } as never;
+    const y = yellowLift(lift) as { dose: Bi; rx: { sets: string }[] };
+    expect(y.dose.en).toBe("2 × 5");
+    expect(y.rx[0].sets).toBe("2");
+    const drill = { title: { en: "Drill", is: "Drill" }, dose: { en: "3 × 20 m", is: "3 × 20 m" } } as never;
+    expect(yellowLift(drill)).toBe(drill);
   });
 });

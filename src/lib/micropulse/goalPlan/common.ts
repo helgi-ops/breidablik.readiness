@@ -54,12 +54,14 @@ export function sessionsPerWeek(inSeason: boolean): number {
 }
 
 /**
- * The team's season (`goalSeasonOf`) → is the plan built as the in-season version? Only pre-season and off-season
- * ("build") count as out of season; in season and not known count as in season (2026-11-18: before, every plan was
- * built as the in-season version).
+ * The team's season (`goalSeasonOf`) → is the plan built as the in-season version? It is built for the season it
+ * RUNS in. Pre-season and off-season ("build") run out of season. A plan approved in season ("maintain") never runs
+ * then: it starts at the next pre-season, or waits paused for it (`startGate`), so it is built out of season too
+ * (2026-11-23, contradiction 17: it was frozen as 2 a week and then ran in pre-season, where the rule is 3). Only a
+ * season not known stays the cautious in-season version (2026-11-18: before, every plan was in-season).
  */
 export function inSeasonFor(season: "build" | "maintain" | "unknown" | null | undefined): boolean {
-  return season !== "build";
+  return season !== "build" && season !== "maintain";
 }
 
 const BLOCKED_TEXT: Record<GoalBlockReason, Bi> = {
@@ -192,3 +194,13 @@ export const WHEN: Record<"speed_day" | "gym_day" | "warmup_any" | "off_day", Bi
     is: "Aðeins utan tímabils: þriðja æfing minnst 2 dögum frá hinum.",
   },
 };
+
+/**
+ * No date of birth on record → the youth version (safety first, coach's call 2026-11-23, contradiction 17). Says where
+ * the date is added: the player's app asks for it on opening until it is there (privacy prompt), or the club admin.
+ * The plan is frozen when approved, so a new plan is needed to change it.
+ */
+export const AGE_UNKNOWN_FACT = {
+  en: "Date of birth not on record, so this is the youth version: the easier level and a coach at every session. The player's app asks for it on opening (or the club admin adds it); after that, start a new plan for the player's age.",
+  is: "Fæðingardagur er ekki skráður, svo þetta er unglingaútgáfan: léttara stigið og þjálfari við hverja æfingu. Appið biður leikmanninn um hann við opnun (eða stjórnandi félagsins skráir hann); eftir það má hefja nýtt plan miðað við aldur.",
+} as const;
