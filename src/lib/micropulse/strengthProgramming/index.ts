@@ -60,6 +60,7 @@ import {
   type PaletteSlots,
 } from "./palette";
 import { DEFAULT_STRUCTURE_BY_MD, STRUCTURES_ALLOWED_BY_MD, STRUCTURE_LABEL, readinessDowngrade, isRestDay, noMatchDayFor, weekdayOf, NO_MATCH_DAY_MD, NO_MATCH_DAY_LABEL, WEEKDAY_LABEL, type MdStructures, type NoMatchDayKind, type StructureKey } from "./structures";
+import { enforceDayRules, estimateSessionMinutes } from "./dayRules";
 import { buildStructuredBlocks } from "./structureBuilders";
 
 export * from "./types";
@@ -96,25 +97,8 @@ function pickTemplate(mdContext: MdContext): { id: string; blocks: SessionBlock[
 }
 
 /** Estimate total duration from blocks. */
-function estimateDuration(blocks: SessionBlock[]): number {
-  // Rough heuristic: 5 min PREP, 5-15 min per main block, 5 min MOBILITY.
-  // We compute from exercises × sets, using ~1.5 min per set + rest.
-  let total = 0;
-  for (const block of blocks) {
-    if (block.type === "PREP") total += 6;
-    else if (block.type === "MOBILITY") total += 5;
-    else {
-      for (const ex of block.exercises) {
-        // Time per set ≈ rep duration (~30s) + rest (parsed crudely)
-        const setTime = 0.5; // 30s of work
-        const restMatch = ex.dose.rest.match(/(\d+)\s*(min|s)/i);
-        const restMin = restMatch ? (restMatch[2].toLowerCase().startsWith("m") ? Number(restMatch[1]) : Number(restMatch[1]) / 60) : 1;
-        total += ex.dose.sets * (setTime + restMin);
-      }
-    }
-  }
-  return Math.round(total);
-}
+/** Rough minutes: 6 warm-up, 5 mobility, else sets × (30 s of work + the rest). One implementation (dayRules.ts). */
+const estimateDuration = estimateSessionMinutes;
 
 /** Build the one-line summary surfaced in UI. */
 function buildSummary(
@@ -588,17 +572,24 @@ export function buildStrengthSession(
   coachOverrides: CoachOverride[] = [],
   opts: { mode?: SendMode } = {},
 ): StrengthSession | null {
-  const s = buildStrengthSessionCore(snapIn, coachOverrides, opts, false);
+  // The day rule is checked last, on what would be delivered (dayRules.ts): it only trims, never adds. Football only.
+  // Each build below is checked, so the yellow / green comparison is made on what would really go out.
+  const isBasketball = String(snapIn.sport ?? "").toLowerCase() === "basketball";
+  const core = (snap: PlayerStrengthSnapshot, keep: boolean) => {
+    const built = buildStrengthSessionCore(snap, coachOverrides, opts, keep);
+    return isBasketball ? built : enforceDayRules(built);
+  };
+  const s = core(snapIn, false);
   if (!s || !s.appliedAdaptations.some((a) => a.ruleId === "STRUCTURE_READINESS_DOWNGRADE")) return s;
   // Yellow step-down cap (2026-11-18, coach's call): a yellow day steps the method down one rung only when the lower
   // rung really is lighter. If it would mean more loaded reps, more reps in all, or more exercises than the same day
   // on green (e.g. contrast 3×3 @85% → cluster 2×12 @80%), today's method stays and the yellow set cut lightens it.
   // Loaded reps are counted on their own: dropping the jumps must not buy a heavier main lift.
-  const green = buildStrengthSessionCore({ ...snapIn, verdict: "FULL" }, coachOverrides, opts, false);
+  const green = core({ ...snapIn, verdict: "FULL" }, false);
   if (!green) return s;
   const a = workOf(s), g = workOf(green);
   if (a.loadedReps <= g.loadedReps && a.reps <= g.reps && a.exercises <= g.exercises) return s;
-  const kept = buildStrengthSessionCore(snapIn, coachOverrides, opts, true);
+  const kept = core(snapIn, true);
   if (!kept) return s;
   const from = s.appliedAdaptations.find((x) => x.ruleId === "STRUCTURE_READINESS_DOWNGRADE");
   kept.appliedAdaptations.push({
@@ -651,7 +642,7 @@ function ruleFrameFor(snap: PlayerStrengthSnapshot, md: MdContext, dayReps: numb
   const structured = effective && effective !== dayDefault ? buildStructuredBlocks(effective, md) : null;
   const blocks = structured && structured.length > 0 ? structured : pickTemplate(md)?.blocks ?? null;
   if (!blocks) return null;
-  if (dayReps != null) applyWeekRule(blocks, dayReps, snap.mdRepsPerSet?.[md] ?? null);
+  if (dayReps != null) applyWeekRule(blocks, dayReps, snap.mdRepsPerSet?.[md] ?? null, md);
   return blocks;
 }
 
@@ -865,7 +856,7 @@ function buildStrengthSessionCore(
     todayHeavyReps = dayReps;
     if (dayReps != null) {
       // The coach's reps a set for this day, when set (a week without a match builds as MD-4 / MD-3, so it follows).
-      const applied = applyWeekRule(tmpl.blocks, dayReps, snap.mdRepsPerSet?.[snap.mdContext] ?? null);
+      const applied = applyWeekRule(tmpl.blocks, dayReps, snap.mdRepsPerSet?.[snap.mdContext] ?? null, snap.mdContext);
       if (applied) weekAudit.push(weekRuleAudit({ md: snap.mdContext, season, dayReps, applied, noMatch: noMatchRule }));
     }
     const light = noMatchRule ? weekRuleLightAudit(noMatchRule) : null;

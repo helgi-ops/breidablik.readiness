@@ -228,6 +228,9 @@ describe("power positions take a lift of their own kind (2026-11-17: the structu
     expect(placed.every((e) => e.category === "EXPLOSIVE_OLYMPIC")).toBe(true);
     const inPlyoSpot = placed[powerOf(base).indexOf(plyo)];
     expect(inPlyoSpot.dose.intensity).not.toBe(plyo.dose.intensity);
-    expect(inPlyoSpot.dose.sets).toBe(plyo.dose.sets);
+    // The position's sets, unless MD-2's day rule (≤ 6 loaded reps, 2026-11-22) took some back: the lifts here are loaded.
+    const trimmed = (s?.appliedAdaptations ?? []).some((a) => a.ruleId === "DAY_RULE_TRIM" && a.actionEN.startsWith(inPlyoSpot.nameEN));
+    if (trimmed) expect(inPlyoSpot.dose.sets).toBeLessThan(plyo.dose.sets);
+    else expect(inPlyoSpot.dose.sets).toBe(plyo.dose.sets);
   });
 });

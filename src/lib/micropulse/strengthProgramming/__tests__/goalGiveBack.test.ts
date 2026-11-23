@@ -40,10 +40,12 @@ const WEEK = [{ date: day(0), md: "MD-5" }, { date: day(1), md: "MD-4" }, { date
 const mondayGoal = (lifts: GoalPlanGymLift[]) => gym([], { slot: undefined, giveBack: { sessions: [{ slot: "A", date: day(0), md: "MD-5", lifts }], weekDays: WEEK } });
 
 describe("a heavy goal lift inside the day's heavy reps", () => {
-  it("3 × 6 into a day of 9 heavy reps is 2 × 6, and the pair's jump follows the rounds", () => {
+  it("3 × 6 into a day of 9 heavy reps is 2 × 6, and the pair's jump follows the rounds; MD-3's day rule then holds 9 loaded reps", () => {
     const s = buildStrengthSession(snap({ todayIso: day(2), mdContext: "MD-3", goalPlanGym: gym([heavy("3", "6")], { slot: "B" }) }));
     const lift = goalLifts(s)[0];
-    expect(`${lift.dose.sets} × ${lift.dose.reps}`).toBe("2 × 6");
+    // The week rule rounds 9 / 6 to 2 sets (12 reps); the MD-3 day rule (≤ 9 loaded reps, 2026-11-22) takes one back.
+    expect(`${lift.dose.sets} × ${lift.dose.reps}`).toBe("1 × 6");
+    expect(rule(s, "DAY_RULE_TRIM")!.actionEN).toMatch(/2 × 6 → 1 × 6/);
     expect(all(s).find((e) => e.category === "PLYOMETRIC")!.dose.sets).toBe(2);
     expect(rule(s, "GOAL_PLAN_GYM_MERGED")!.actionEN).toMatch(/2 sets: today holds 9 heavy reps by the week rule; the plan says 3/);
     expect(rule(s, "GOAL_PLAN_GYM_MERGED")!.actionIS).toMatch(/9 þungar endurtekningar eftir vikureglunni/);

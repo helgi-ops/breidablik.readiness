@@ -18,6 +18,7 @@ import type { Bi } from "@/lib/micropulse/load/peakPeriod";
 import type { StrengthSession, SessionBlock, AppliedAdaptation } from "./types";
 import type { BlockGoalKey, SeasonPhaseKey, CoachBlockRule, StrengthMethodKey } from "./seasonPhaseStrength";
 import { strengthForBlockGoal } from "./seasonPhaseStrength";
+import { enforceDayRules } from "./dayRules";
 import { traditionalLiftDayScale } from "./inSeasonStrengthMode";
 import { SUBPHASE_DOSE_SCALE, subPhaseInfo, type InSeasonSubPhaseKey } from "@/lib/micropulse/periodization/inSeasonSubPhase";
 import { sanitizeVbtPrescription, type VbtPrescription } from "@/lib/micropulse/vbtMethods";
@@ -70,6 +71,21 @@ const clampSets = (n: number) => Math.max(1, Math.min(6, Math.round(n)));
  * or unknown goalKey, or a session with no blocks, is returned unchanged (backwards-compatible).
  */
 export function applyBlockToSession(
+  session: StrengthSession | null,
+  goalKey: BlockGoalKey | null,
+  phase: SeasonPhaseKey,
+  override?: CoachBlockRule | null,
+  subPhase?: InSeasonSubPhaseKey | null,
+): StrengthSession | null {
+  const out = applyBlockToSessionInner(session, goalKey, phase, override, subPhase);
+  // The block can add a set: the day rule is checked again on what goes out (dayRules.ts). Football only
+  // (a basketball session is labelled "Strength").
+  if (!out || out === session || out.contextLabel === "Strength") return out;
+  return enforceDayRules(out);
+}
+
+/** The block's own change, before the day rule's check (exported for its tests). */
+export function applyBlockToSessionInner(
   session: StrengthSession | null,
   goalKey: BlockGoalKey | null,
   phase: SeasonPhaseKey,

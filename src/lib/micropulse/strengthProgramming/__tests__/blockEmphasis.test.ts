@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyBlockToSession, playerBlockLean } from "../blockEmphasis";
+import { applyBlockToSession as applyWithDayRule, applyBlockToSessionInner as applyBlockToSession, playerBlockLean } from "../blockEmphasis";
 import type { StrengthSession, SessionBlock } from "../types";
 import type { MdStructures } from "../structures";
 
@@ -200,5 +200,19 @@ describe("applyBlockToSession — coach's bar-speed method", () => {
     expect(a!.blockEmphasis?.vbt).toBeUndefined();
     const b = applyBlockToSession(session([block("COMPOUND", 3)]), "transmute", "competitive", null);
     expect(b!.blockEmphasis?.vbt).toBeUndefined();
+  });
+});
+
+describe("applyBlockToSession — the day rule is checked again after the block (dayRules.ts, 2026-11-22)", () => {
+  it("a set the block adds over MD-4's 12 heavy reps a lift is taken back off, with the reason", () => {
+    const heavy = (sets: number): SessionBlock => ({
+      id: "c", titleEN: "C", titleIS: "C", type: "COMPOUND",
+      exercises: [{ exerciseId: "ex_trap_bar_dl", nameEN: "Trap-bar deadlift", nameIS: "Trap bar", category: "COMPOUND_STRENGTH", dose: { sets, reps: "3", intensity: "85% 1RM", rest: "3 min" } }],
+    });
+    const inner = applyBlockToSession(session([heavy(4)]), "accum", "preseason")!;
+    expect(inner.blocks[0].exercises[0].dose.sets).toBe(5); // the block alone: 5 × 3 = 15
+    const out = applyWithDayRule(session([heavy(4)]), "accum", "preseason")!;
+    expect(out.blocks[0].exercises[0].dose.sets).toBe(4); // 4 × 3 = 12
+    expect(out.appliedAdaptations.some((a) => a.ruleId === "DAY_RULE_TRIM" && /12 heavy reps/.test(a.triggerEN))).toBe(true);
   });
 });

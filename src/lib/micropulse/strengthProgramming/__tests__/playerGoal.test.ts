@@ -277,7 +277,10 @@ describe("season: the extra set is building, so only in pre-season and off-seaso
     const s = buildStrengthSession(snap({ mdContext: "MD-3", noMatchNearby: true, playerStrengthGoal: "stronger" }));
     const [g] = goalEx(s);
     expect(g).toBeDefined();
-    expect(g.dose.sets).toBe(sets(base, g.exerciseId)! + 1);
+    // The goal adds its set; MD-3's day rule (≤ 9 loaded reps, 2026-11-22) takes back what goes over, and says so.
+    const trimmed = (s?.appliedAdaptations ?? []).some((a) => a.ruleId === "DAY_RULE_TRIM" && a.actionEN.startsWith(g.nameEN));
+    expect(g.dose.sets).toBe(sets(base, g.exerciseId)! + (trimmed ? 0 : 1));
+    expect((s?.appliedAdaptations ?? []).some((a) => a.ruleId === "PLAYER_GOAL_APPLIED")).toBe(true);
     // With a match near, MD-3 is still not a "stronger" day.
     expect(goalEx(buildStrengthSession(snap({ mdContext: "MD-3", playerStrengthGoal: "stronger" })))).toEqual([]);
   });

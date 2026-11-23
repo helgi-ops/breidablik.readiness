@@ -457,7 +457,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
     defaultDosing: {
       "MD-4": {
         sets: 5, reps: "3", intensity: "85% 1RM / RPE 8",
-        rest: "3 min", intraRepRestSec: 25, velocityLossCap: 20,
+        rest: "3 min", intraRepRestSec: 25, velocityLossCap: 15,
         cue: "Cluster: 3 reps, 25s pause, repeat as singles within set.",
       },
     },
@@ -481,7 +481,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
     defaultDosing: {
       "MD-4": {
         sets: 5, reps: "3", intensity: "85% 1RM / RPE 8",
-        rest: "3 min", intraRepRestSec: 25, velocityLossCap: 20,
+        rest: "3 min", intraRepRestSec: 25, velocityLossCap: 15,
       },
       "MD-3": {
         sets: 3, reps: "3", intensity: "80% 1RM",
@@ -508,7 +508,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
     defaultDosing: {
       "MD-4": {
         sets: 4, reps: "5", intensity: "75% 1RM / RPE 8",
-        rest: "2-3 min", intraRepRestSec: 20, velocityLossCap: 20,
+        rest: "2-3 min", intraRepRestSec: 20, velocityLossCap: 15,
       },
     },
     alternatives: ["ex_back_squat", "ex_goblet_squat"],
@@ -550,7 +550,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
     isClusterCompatible: true,
     technicalDifficulty: "high",
     defaultDosing: {
-      "MD-4": { sets: 4, reps: "3", intensity: "85% 1RM / RPE 8", rest: "3 min", intraRepRestSec: 25, velocityLossCap: 20, cue: "Cluster singles — brace, then rip off the floor." },
+      "MD-4": { sets: 4, reps: "3", intensity: "85% 1RM / RPE 8", rest: "3 min", intraRepRestSec: 25, velocityLossCap: 15, cue: "Cluster singles — brace, then rip off the floor." },
     },
     alternatives: ["ex_trap_bar_dl", "ex_back_squat", "ex_rdl"],
     contraindications: ["lower_back_pain", "sore_lower_back"],
@@ -570,7 +570,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
     isClusterCompatible: true,
     technicalDifficulty: "moderate",
     defaultDosing: {
-      "MD-4": { sets: 4, reps: "4", intensity: "80% 1RM / RPE 8", rest: "2-3 min", intraRepRestSec: 20, velocityLossCap: 20 },
+      "MD-4": { sets: 4, reps: "4", intensity: "80% 1RM / RPE 8", rest: "2-3 min", intraRepRestSec: 20, velocityLossCap: 15 },
     },
     alternatives: ["ex_back_squat", "ex_front_squat"],
     contraindications: ["knee_injury"],
@@ -1339,3 +1339,39 @@ export function getExercise(id: string): Exercise {
 export function getExercisesByCategory(category: Exercise["category"]): Exercise[] {
   return EXERCISE_LIBRARY.filter((ex) => ex.category === category);
 }
+
+/**
+ * Day-rule category of each library exercise (2026-11-22, `dayRules.ts`): the categories of Helgi's weekly-plan day
+ * rules — heavy | fast | ballistic | plyo | eccentric | iso | upper | med_ball | sprint. null = warm-up, mobility or a
+ * small accessory the day rules don't count. A main lift is "heavy" here; its dose on the day decides whether it is
+ * done heavy or fast (`dayCategoryOf` in dayRules.ts). A test keeps every library id in this list.
+ */
+export type DayCategory = "heavy" | "fast" | "ballistic" | "plyo" | "eccentric" | "iso" | "upper" | "med_ball" | "sprint";
+
+export const DAY_CATEGORY: Record<string, DayCategory | null> = {
+  // Warm-up / mobility / small accessories: not counted.
+  mp_glute_activation: null, mp_hip_mobility: null, mp_pogo_warmup: null, ex_mobility_close: null,
+  ex_banded_glute_med: null, ex_heavy_calf_raise: null,
+  // Loaded explosive lifts.
+  ex_jump_shrug: "ballistic", ex_hang_high_pull: "ballistic", ex_mid_thigh_pull_dynamic: "ballistic",
+  ex_hang_power_clean: "ballistic", ex_db_snatch: "ballistic", ex_trap_bar_jump_squat: "ballistic", ex_kb_swing: "ballistic",
+  // Jumps (contacts are counted from these).
+  ex_box_jump: "plyo", ex_depth_jump: "plyo", ex_broad_jump: "plyo", ex_single_leg_box_jump: "plyo",
+  ex_lateral_bound: "plyo", ex_pogo_hops: "plyo", ex_hurdle_hops: "plyo",
+  // Throws.
+  ex_mb_rotational_throw: "med_ball", ex_mb_scoop_throw: "med_ball", ex_mb_slam: "med_ball", ex_mb_chest_pass: "med_ball",
+  // Main lifts, two legs and one leg.
+  ex_trap_bar_dl: "heavy", ex_back_squat: "heavy", ex_front_squat: "heavy", ex_hip_thrust: "heavy", ex_deadlift: "heavy",
+  ex_ssb_squat: "heavy", ex_belt_squat: "heavy",
+  ex_bulgarian_ss: "heavy", ex_b_stance_rdl: "heavy", ex_single_leg_rdl: "heavy", ex_reverse_lunge: "heavy",
+  ex_step_up: "heavy", ex_walking_lunge: "heavy", ex_ffe_split_squat: "heavy",
+  // Eccentric (Nordic, RDL, Copenhagen).
+  ex_nordic_curl: "eccentric", ex_rdl: "eccentric", ex_copenhagen: "eccentric",
+  // Isometrics.
+  ex_imtp_iso: "iso", ex_iso_squat_90: "iso", ex_iso_split_squat: "iso", ex_spanish_squat: "iso",
+  ex_iso_ham_bridge_long: "iso", ex_wall_sit: "iso", ex_iso_calf: "iso",
+  // Upper body.
+  ex_db_bench_press: "upper", ex_chin_up: "upper", ex_db_row: "upper", ex_landmine_press: "upper", ex_weighted_pushup: "upper",
+  ex_bb_bench_press: "upper", ex_bb_bent_row: "upper", ex_db_shoulder_press: "upper", ex_incline_db_press: "upper",
+  ex_db_push_press: "upper", ex_bb_push_press: "upper", ex_plyo_pushup: "upper", ex_pull_up: "upper", ex_bb_overhead_press: "upper",
+};

@@ -248,8 +248,8 @@ export function buildStructuredBlocks(key: StructureKey, md: MdContext): Session
       type: "COMPOUND",
       exercises: [main],
       structureId: sid,
-      noteEN: "Straight sets: 3 × 3-5, full rest. Stop at 20% velocity loss.",
-      noteIS: "Bein sett: 3 × 3-5, full hvíld. Stopp við 20% velocity drop.",
+      noteEN: "Straight sets: 3 × 3-5, full rest. Stop at the speed loss shown on the lift (15% on MD-4, 10% on MD-3).",
+      noteIS: "Bein sett: 3 × 3-5, full hvíld. Stopp við hraðatapið sem stendur við lyftuna (15% á MD-4, 10% á MD-3).",
     };
     return compact([prep, block, ...prevention]) as SessionBlock[];
   }
@@ -265,13 +265,13 @@ export function buildStructuredBlocks(key: StructureKey, md: MdContext): Session
     > = {
       cluster: {
         titleEN: "Cluster · Mechanical stress (CS2)", titleIS: "Cluster · Vélrænt álag (CS2)",
-        dose: { sets: 3, reps: "12 (6+6, 15s mid-set pause)", intensity: "80% 1RM", rest: "2-3 min", intraRepRestSec: 15, velocityLossCap: 20, cue: "Pause mid-set, then finish strong; stop at 20% velocity loss" },
-        noteEN: "Mechanical-stress cluster (Tufano CS2): 3 × 12 at ~80% 1RM with a 15s pause partway through each set. More force + time-under-tension than a straight set, less fatigue. Stop at 20% velocity loss (Tufano 2017; Davies 2021).",
-        noteIS: "Vélræns-álags cluster (Tufano CS2): 3 × 12 á ~80% 1RM með 15s pásu í miðju hverju setti. Meiri kraftur + tími-undir-álagi en bein sett, minni þreyta. Stopp við 20% velocity drop (Tufano 2017; Davies 2021).",
+        dose: { sets: 3, reps: "12 (6+6, 15s mid-set pause)", intensity: "80% 1RM", rest: "2-3 min", intraRepRestSec: 15, velocityLossCap: 15, cue: "Pause mid-set, then finish strong; stop at 15% velocity loss" },
+        noteEN: "Mechanical-stress cluster (Tufano CS2): 3 × 12 at ~80% 1RM with a 15s pause partway through each set. More force + time-under-tension than a straight set, less fatigue. Stop at 15% velocity loss (MD-4 day rule; Tufano 2017; Davies 2021).",
+        noteIS: "Vélræns-álags cluster (Tufano CS2): 3 × 12 á ~80% 1RM með 15s pásu í miðju hverju setti. Meiri kraftur + tími-undir-álagi en bein sett, minni þreyta. Stopp við 15% hraðatap (dagsregla MD-4; Tufano 2017; Davies 2021).",
       },
       cluster_max_strength: {
         titleEN: "Cluster · Max-strength singles", titleIS: "Cluster · Hámarksstyrkur (einstök)",
-        dose: { sets: 4, reps: "6 × 1 (singles)", intensity: "85-90% 1RM", rest: "1 min between blocks", intraRepRestSec: 12, velocityLossCap: 20, cue: "Every single fast + max intent; 12s between reps keeps each one fresh" },
+        dose: { sets: 4, reps: "6 × 1 (singles)", intensity: "85-90% 1RM", rest: "1 min between blocks", intraRepRestSec: 12, velocityLossCap: 15, cue: "Every single fast + max intent; 12s between reps keeps each one fresh" },
         noteEN: "Heavy max-strength singles (Hansen cluster): 4 sets of 6 × 1 at 85-90% 1RM, 12s between reps, 1 min between sets. Keeps bar speed high on a near-max load — strong neural stimulus, less fatigue than straight singles (Tufano 2017; Davies 2021). A development-day method.",
         noteIS: "Þungar hámarksstyrks-einstök (Hansen cluster): 4 sett af 6 × 1 á 85-90% 1RM, 12s milli enda, 1 mín milli setta. Heldur stangarhraða háum á næstum hámarksálagi — sterk taugaörvun, minni þreyta en bein einstök (Tufano 2017; Davies 2021). Þróunardaga-aðferð.",
       },

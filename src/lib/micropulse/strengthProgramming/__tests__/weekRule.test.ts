@@ -282,15 +282,21 @@ describe("a week with a match", () => {
 describe("within the set, and close to the match", () => {
   const loaded = (s: S) => all(s).filter((e) => e.category === "BALLISTIC" || e.category === "EXPLOSIVE_OLYMPIC");
 
-  it("heavy days: every heavy lift stops the set at a 20% speed loss, never a higher one", () => {
+  it("heavy days: every heavy lift stops the set at the day rule's speed loss — 15% on MD-4 / MD-5, 10% on MD-3 (2026-11-22)", () => {
+    const dayCap: Partial<Record<MdContext, number>> = { "MD-5": 15, "MD-4": 15, "MD-3": 10 };
     for (const md of ["MD-5", "MD-4", "MD-3"] as MdContext[]) {
       for (const key of HEAVY_METHODS) {
         const s = buildStrengthSession(snap({ mdContext: md, mdStructures: { [md]: key } }));
         for (const e of heavy(s)) {
           expect(e.dose.velocityLossCap, `${md} ${key}`).toBeTruthy();
-          expect(e.dose.velocityLossCap!).toBeLessThanOrEqual(HEAVY_VELOCITY_LOSS_CAP);
+          expect(e.dose.velocityLossCap!).toBeLessThanOrEqual(Math.min(HEAVY_VELOCITY_LOSS_CAP, dayCap[md]!));
         }
-        if (heavy(s).length) expect(rule(s, "WEEK_RULE_HEAVY_REPS")?.actionIS).toMatch(/20% hraðatap/);
+        if (heavy(s).length) {
+          const said = rule(s, "WEEK_RULE_HEAVY_REPS")!;
+          const n = Math.min(...heavy(s).map((e) => e.dose.velocityLossCap!));
+          expect(said.actionIS).toMatch(new RegExp(`${n}% hraðatap`));
+          expect(said.actionEN).toMatch(new RegExp(`${n}% speed loss`));
+        }
       }
     }
   });

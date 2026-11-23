@@ -109,11 +109,11 @@ export function buildMd4Strength(): SessionBlock[] {
       type: "COMPOUND",
       exercises: [microdosedMain],
       noteEN:
-        "Cluster: 3 reps → 25s pause → repeat. 3 total sets. Stop at 20% velocity loss " +
+        "Cluster: 3 reps → 25s pause → repeat. 3 total sets. Stop at 15% velocity loss " +
         "(Pareja-Blanco 2017). The ONLY main lift today — rotate between trap-bar DL, " +
         "hip thrust, front squat across the season.",
       noteIS:
-        "Cluster: 3 endur → 25s pása → endurtaka. Alls 3 sett. Stoppa við 20% velocity drop. " +
+        "Cluster: 3 endur → 25s pása → endurtaka. Alls 3 sett. Stoppa við 15% hraðatap. " +
         "EINA aðallyftan í dag — rótera milli trap-bar DL, hip thrust, fram-hnébeygja yfir keppnistímabilið.",
     },
 
