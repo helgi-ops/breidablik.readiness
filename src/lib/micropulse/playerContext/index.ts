@@ -158,7 +158,7 @@ export async function buildPlayerContext(
     fetchInjury(sb, playerId),
     fetchVbtDecrement(sb, playerId, todayIso),
     fetchFoster(sb, playerId, todayIso),
-    fetchCongestion(sb, playerId, todayIso),
+    fetchCongestion(sb, playerId, teamId, todayIso),
     fetchMdContextInfo(sb, teamId, todayIso, args.mdContextOverride ?? null),
     fetchLedgerEmphases(sb, playerId),
     fetchScreenCorrectives(sb, playerId),

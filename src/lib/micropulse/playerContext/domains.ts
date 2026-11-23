@@ -27,6 +27,7 @@ import { sanitizeMdRepsPerSet, type MdRepsPerSet } from "../strengthProgramming/
 import { activeGoal, sanitizePicks, type PlayerExercisePicks, type StrengthGoal } from "../strengthProgramming/playerPicks";
 import { normalizeSendMode, type SendMode } from "../strengthProgramming/sendMode";
 import { resolveWeekPhase } from "@/lib/micropulse/weekSetup/weekPhaseServer";
+import { CONGESTION_PAST_MIN_MINUTES, CONGESTION_SPAN_DAYS, isCongestedWeek } from "../strengthProgramming/congestion";
 
 /** Corrective compensation → the strength emphasis it corroborates (CONFIRM-vs-ADD
  *  de-dup when the strength blocks already emphasise the same quality). */
@@ -519,25 +520,29 @@ export async function fetchFoster(
   }
 }
 
-/** Is this a congested week? ≥2 matches in last/next 7 days. */
+/** Is this a congested week? Two matches in 7 days with today in them: upcoming team fixtures always count, a past
+ *  match only if the player played ≥ 60 min (strengthProgramming/congestion.ts, coach's call 2026-11-23). */
 export async function fetchCongestion(
   sb: SupabaseClient,
   playerId: string,
+  teamId: string | null,
   todayIso: string,
 ): Promise<boolean> {
   try {
-    const start = startOfDayIso(7, todayIso);
+    const span = CONGESTION_SPAN_DAYS - 1;
     const endDate = new Date(`${todayIso}T00:00:00Z`);
-    endDate.setUTCDate(endDate.getUTCDate() + 7);
+    endDate.setUTCDate(endDate.getUTCDate() + span);
     const endIso = endDate.toISOString().slice(0, 10);
-    const { data } = await sb
-      .from("match_player_minutes")
-      .select("match_date, minutes_played")
-      .eq("player_id", playerId)
-      .gte("match_date", start)
-      .lte("match_date", endIso)
-      .gte("minutes_played", 60);
-    return (data?.length ?? 0) >= 2;
+    const [fixtures, played] = await Promise.all([
+      teamId
+        ? sb.from("match_schedule").select("match_date").eq("team_id", teamId).gte("match_date", todayIso).lte("match_date", endIso)
+        : Promise.resolve({ data: [] as { match_date: string }[] }),
+      sb.from("match_player_minutes").select("match_date, minutes_played").eq("player_id", playerId)
+        .gte("match_date", startOfDayIso(span, todayIso)).lt("match_date", todayIso)
+        .gte("minutes_played", CONGESTION_PAST_MIN_MINUTES),
+    ]);
+    const dates = (rows: unknown) => ((rows as { match_date: string | null }[] | null) ?? []).map((r) => r.match_date).filter((d): d is string => !!d);
+    return isCongestedWeek(dates(fixtures.data), dates(played.data), todayIso);
   } catch {
     return false;
   }

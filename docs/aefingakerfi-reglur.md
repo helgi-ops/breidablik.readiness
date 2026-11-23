@@ -201,7 +201,7 @@ Liturinn er notaður hér en ekki reiknaður.
 | `SORE_GROIN_COPENHAGEN_REMOVE` | Eymsli í nára | Copenhagen út | — | Virk |
 | `SORE_LB_DL_SWAP` | Eymsli í mjóbaki | Trap-bar DL → framhnébeygja | Gullett 2009 | Virk |
 | `FOSTER_STRAIN_VOLUME_CUT` | Foster strain ≥6000 (7 dagar) | Fyrsta grunnlyfta, sett × 0,67 | Foster 1998 | Virk með sRPE |
-| `CONGESTED_WEEK_FLAG` | ≥2 leikir með ≥60 mín innan ±7 daga | Bara athugasemd | Rønnestad 2023 | — |
+| `CONGESTED_WEEK_FLAG` | 2 leikir á 7 dögum og dagurinn í dag innan þeirra. Næsti leikur úr dagatalinu telst alltaf; leikur sem er búinn aðeins ef leikmaðurinn spilaði ≥60 mín | Bara athugasemd | Rønnestad 2023 | — |
 | `LEDGER_EMPHASIS_CONFIRM` / `_ADD` | Áhersla úr deficit-skrá, ekki rauður | +1 sett: hliðarhopp, búlgörsk, Nordic eða hnébeygja eftir flokki | Deficit-skráin | Virk |
 | `PALETTE_SYMMETRY_UNILATERAL` | Ósamhverfa ≥10% **og** „skipta“ | Einfóta lyfta úr lista liðsins | Bishop 2020 | Virk eftir smell |
 | Frívika (send af þjálfara) | 1–21 dagur | Fast sniðmát: styrkur, rólegt hlaup, tempó, hvíld. Endurhæfing helst | Rønnestad 2011; Mujika 2000 | Þjálfari breytir áður en sent er |
@@ -426,7 +426,9 @@ Eftirtöldum ákvörðunum má breyta:
 7. ~~**`ADDON_CAP` á viku.**~~ **Lagað 23. nóv.:** aukasett prófsins fer aðeins á forvarnarskammt vikureglunnar (Nordic
    MD-4, Copenhagen MD-3), sem er einn dagur í viku. Nordic á öðrum degi (t.d. í sniðmáti MD-5) fær ekkert aukasett og
    línan segir hvert það fer. Hámarkið +1 á viku heldur því yfir alla vikuna.
-8. **Þétt vika:** textinn segir „2 leikir á 7 dögum“, en kóðinn telur leiki með ≥60 mín innan ±7 daga.
+8. ~~**Þétt vika.**~~ **Lagað 23. nóv.:** 2 leikir á 7 dögum, og dagurinn í dag innan þeirra 7 daga. Leikir í
+   dag og fram í tímann koma úr dagatali liðsins og teljast alltaf. Leikur sem er búinn telst aðeins ef leikmaðurinn
+   spilaði ≥60 mín. Áður taldi kóðinn aðeins leiki með mínútum á 15 daga bili, svo næsti leikur taldist aldrei.
 9. **Tvö „í röð“-hámörk:** Mesó-dagatalið leyfir 3 og telur leiki með. Vikureglan leyfir 2 og telur leiki ekki með.
    Sjálfvirka röðunin fyrir viku frá sunnudegi til sunnudags fellur á vikureglunni (MD-2 ráðlagt).
 10. **MD+2 er meðhöndlaður á þrjá vegu:**

@@ -155,7 +155,9 @@ describe("buildPlayerContext → strengthView (wiring)", () => {
       v_coach_readiness_today_v8: [{ final_color: "green", is_imputed: false }],
       player_injuries: [{ status: "injured" }],
       session_rpe_entries: [{ session_load: 100 }, { session_load: 200 }, { session_load: 300 }],
-      match_player_minutes: [{ match_date: "2026-09-08", minutes_played: 90 }, { match_date: "2026-09-12", minutes_played: 90 }],
+      // Congested (contradiction 8): he played 90 min on 09-08 and the team plays again on 09-12 (fixture list).
+      match_player_minutes: [{ match_date: "2026-09-08", minutes_played: 90 }],
+      match_schedule: [{ match_date: "2026-09-12" }],
       week_plans: [{ day_date: "2026-09-12", day_type: "GAME" }],
     });
     const snap = strengthView(await buildPlayerContext(sb, { playerId: "p1", teamId: "t1", todayIso: "2026-09-11" }));
@@ -163,7 +165,7 @@ describe("buildPlayerContext → strengthView (wiring)", () => {
     expect(snap.verdict).toBe("FULL");
     expect(snap.injuryStatus).toBe("injured");
     expect(snap.mdContext).toBe("MD-1");           // GAME in 1 day
-    expect(snap.isCongestedWeek).toBe(true);       // 2 matches ≥60 min in the ±7d window
+    expect(snap.isCongestedWeek).toBe(true);       // played ≥60 min on 09-08, team plays 09-12
     expect(snap.sport).toBe("football");
     expect(snap.seasonPhase).toBe("inseason");
     expect(snap.codAsymmetryPct).toBe(40);         // |10-6|/10*100
