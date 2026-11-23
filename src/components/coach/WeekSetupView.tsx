@@ -30,6 +30,7 @@ import { TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testing
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import { expectedWeekShape } from "@/lib/micropulse/weekSetup/gameDensity";
 import { macroPhaseForWeek } from "@/lib/micropulse/weekSetup/weekPhase";
+import { matchAnchoredGrid } from "@/lib/micropulse/weekSetup/autoGrid";
 import { checkThreeInARow, dayKindOf, runSignature, type ThreeInARowCheck, type WeekRuleDay } from "@/lib/micropulse/weekSetup/weekRules";
 import WeekRuleCard, { type WeekRuleKeep } from "@/components/coach/WeekRuleCard";
 import type { SportId } from "@/lib/micropulse/sportProfiles";
@@ -293,33 +294,11 @@ function intentFromWeekPlan(dayType: string | null, dayIntent: string | null, fo
 // The Macro season phase covering a week → the Season pill: macroPhaseForWeek (weekSetup/weekPhase.ts), the
 // same rule the strength engine and the player's Today use when the coach saved no phase on the week.
 
-function matchAnchoredIntents(weekStart: string, weekEnd: string, matchDates: (string | undefined)[]): NoMatchIntent[] | null {
-  const inWeek = matchesInWeek(weekStart, weekEnd, matchDates);
-  if (inWeek.length === 0) return null;
-  const set = new Set(inWeek);
-  const nextMatch = (day: string) => inWeek.find((m) => m > day) ?? null;
-  const prevMatch = (day: string) => {
-    for (let i = inWeek.length - 1; i >= 0; i--) if (inWeek[i] < day) return inWeek[i];
-    return null;
-  };
-  return Array.from({ length: 7 }).map((_, i) => {
-    const day = addDays(weekStart, i);
-    if (set.has(day)) return "GAME";
-    const next = nextMatch(day);
-    if (next) {
-      const md = Math.abs(diffDays(day, next));
-      if (md >= 4) return (md - 4) % 2 === 0 ? "FORCE" : "NEURAL_VELOCITY"; // MD-4 force, MD-5 neural…
-      if (md === 3) return "NEURAL_VELOCITY";
-      if (md === 2) return "POLISH_CALM";
-      if (md === 1) return "ACTIVATION";
-    }
-    const prev = prevMatch(day);
-    if (prev && diffDays(day, prev) >= 1 && i !== 6) {
-      const dp = diffDays(day, prev); // days after the last match → the split recovery options
-      return dp === 1 ? "RECOVERY_MD1" : dp === 2 ? "RECOVERY_MD2" : "RECOVERY_PLUS";
-    }
-    return i === 6 ? "OFF" : "FORCE";
-  }) as NoMatchIntent[];
+// Football: the MD taper from the match days (weekSetup/autoGrid.ts). In season MD+2 is a day off and a match in
+// the last two days of the week before counts (INSEASON_MD2_OFF).
+function matchAnchoredIntents(weekStart: string, matchDates: (string | undefined)[], phase: string | null | undefined): { intents: NoMatchIntent[]; notes: { en: string; is: string }[] } | null {
+  const g = matchAnchoredGrid(weekStart, matchDates, phase);
+  return g ? { intents: g.intents as NoMatchIntent[], notes: g.notes } : null;
 }
 
 // Basketball: anchor the week to the game(s) — the day before is a light shootaround, the day after a
@@ -445,6 +424,10 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
   useEffect(() => { if (initialWeekStart) setWeekStart(isoMondayOfISO(initialWeekStart)); }, [initialWeekStart]);
   const [weekType, setWeekType] = useState<WeekType>("NO_MATCH");
   const [seasonPhase, setSeasonPhase] = useState<SeasonPhase | null>(null);
+  // Matches in the last two days before the week (the auto grid reads MD+1 / MD+2 from them).
+  const [prevMatchDates, setPrevMatchDates] = useState<string[]>([]);
+  // What the auto grid's rules did (e.g. MD+2 off in season), shown under the grid's title.
+  const [gridNotes, setGridNotes] = useState<{ en: string; is: string }[]>([]);
   const [matches, setMatches] = useState<MatchInput[]>(DEFAULT_MATCHES);
   // Set when the saved week is anchored to a different match day than the current fixtures
   // (a fixture moved since the week was saved) → prompt a one-click re-anchor.
@@ -733,11 +716,14 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         .from("match_schedule")
         .select("match_date, opponent, is_home, kickoff_time")
         .eq("team_id", tid)
-        .gte("match_date", weekStart)
+        .gte("match_date", addDays(weekStart, -2)) // the last two days before the week: MD+1 / MD+2 (autoGrid.ts)
         .lte("match_date", weekEndISO)
         .order("match_date", { ascending: true });
       if (!alive) return;
-      const found = (sched ?? []) as Array<{ match_date: string; opponent: string | null; is_home: boolean | null; kickoff_time: string | null }>;
+      const schedAll = (sched ?? []) as Array<{ match_date: string; opponent: string | null; is_home: boolean | null; kickoff_time: string | null }>;
+      const found = schedAll.filter((f) => f.match_date >= weekStart);
+      const prevMds = schedAll.filter((f) => f.match_date < weekStart).map((f) => f.match_date);
+      setPrevMatchDates(prevMds);
       const schedPicks = found.slice(0, 2);
       const toInput = (p: (typeof found)[number], id: string): MatchInput => ({
         match_id: id,
@@ -856,13 +842,19 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         setScheduleNote(schedNote);
         const mds = found.map((f) => f.match_date);
         // Basketball anchors the grid to the game (GD), football to the MD taper.
-        const anchored = isBasketball ? bbGameAnchoredIntents(weekStart, weekEndISO, mds) : matchAnchoredIntents(weekStart, weekEndISO, mds);
-        setNoMatchIntents(chooseSeed(anchored ?? (isBasketball ? getDefaultBbIntents() : getDefaultNoMatchIntents())));
+        // Basketball anchors the grid to the game (GD), football to the MD taper (in season MD+2 off).
+        const fb = isBasketball ? null : matchAnchoredIntents(weekStart, [...prevMds, ...mds], weekPhase);
+        const anchored = isBasketball ? bbGameAnchoredIntents(weekStart, weekEndISO, mds) : fb?.intents ?? null;
+        const seeded = chooseSeed(anchored ?? (isBasketball ? getDefaultBbIntents() : getDefaultNoMatchIntents()));
+        // The rule's line shows only when the grid on screen is the auto grid (not the coach's save or the Meso).
+        setGridNotes(anchored && seeded === anchored ? fb?.notes ?? [] : []);
+        setNoMatchIntents(seeded);
       } else {
         // ✅ NO FIXTURE THIS WEEK → NO MATCH. Daily grid: coach save → Meso block → default. In the
         // OFF-SEASON an empty week seeds a development build (reading the Macro phase), not the
         // in-season micro-dose default — so the Meso off-season context reaches Week Setup.
         setWeekType("NO_MATCH");
+        setGridNotes([]);
         setMatches(DEFAULT_MATCHES);
         setScheduleNote(null);
         const noMatchFallback = isBasketball
@@ -1811,6 +1803,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
       n[i] = isTrainingCharacter(c) ? (isTrainingStrength(cur) ? cur : characterDefaultIntent(c)) : characterDefaultIntent(c);
       return n;
     });
+    setGridNotes([]); // the coach changed a day: the auto grid's line no longer describes it
     setOk(null);
   };
   const setStrength = (i: number, character: DayCharacter, v: NoMatchIntent) => {
@@ -2004,17 +1997,25 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
             <div className="mt-0.5 text-[12px] text-[#6b6f76]">{isBasketball
               ? (isIS ? "Æfingarnar eru sjálfgefnar út frá leiknum (GD) — smelltu á dag til að sjá og breyta honum." : "Sessions are seeded from the game (GD) — click a day to view and change it.")
               : (isIS ? "MD-röðunin er sjálfgefin út frá leiknum — smelltu á dag til að sjá og breyta honum." : "The MD ordering is seeded from the match — click a day to view and change it.")}</div>
+            {!isBasketball && gridNotes.map((n) => (
+              <div key={n.en} className="mt-0.5 text-[12px] text-[#1c7a4a]">{isIS ? n.is : n.en}</div>
+            ))}
           </div>
           <div className="flex gap-2">
             {inWeekMatchDates.length > 0 && (
               <button type="button" disabled={busy}
-                onClick={() => { const mds = visibleMatches.map((m) => m.date); const a = isBasketball ? bbGameAnchoredIntents(weekStart, weekEnd, mds) : matchAnchoredIntents(weekStart, weekEnd, mds); if (a) { setNoMatchIntents(a); setOk(null); } }}
+                onClick={() => {
+                  const mds = visibleMatches.map((m) => m.date);
+                  const fb = isBasketball ? null : matchAnchoredIntents(weekStart, [...prevMatchDates, ...mds], seasonPhase);
+                  const a = isBasketball ? bbGameAnchoredIntents(weekStart, weekEnd, mds) : fb?.intents ?? null;
+                  if (a) { setNoMatchIntents(a); setGridNotes(fb?.notes ?? []); setOk(null); }
+                }}
                 className="h-9 rounded-[9px] border border-[#dcd8cc] bg-white px-3.5 text-[12px] font-semibold transition-colors hover:bg-[#faf9f4] disabled:opacity-50">
                 {isBasketball ? (isIS ? "Fylla frá leik (GD)" : "Fill from game (GD)") : (isIS ? "Fylla frá leik (MD)" : "Fill from match (MD)")}
               </button>
             )}
             <button type="button" disabled={busy}
-              onClick={() => { setNoMatchIntents(isBasketball ? getDefaultBbIntents() : getDefaultNoMatchIntents()); setOk(null); }}
+              onClick={() => { setNoMatchIntents(isBasketball ? getDefaultBbIntents() : getDefaultNoMatchIntents()); setGridNotes([]); setOk(null); }}
               className="h-9 rounded-[9px] border border-[#dcd8cc] bg-white px-3.5 text-[12px] font-semibold transition-colors hover:bg-[#faf9f4] disabled:opacity-50">
               {isIS ? "Endurstilla" : "Reset"}
             </button>
