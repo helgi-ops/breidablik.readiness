@@ -11,6 +11,7 @@
  *
  * The coach's calls on 2026-11-22, where the brief's table met rules already live:
  *   - MD-3: the heavy lift that opens a contrast set stays; it counts in the day's 9 loaded reps (no "heavy zone" trim).
+ *     A light loaded jump in the same rounds (≤ 40% of max) counts as jump contacts, not loaded reps (2026-11-23).
  *   - Copenhagen at body weight is not "heavy eccentric": it stays on MD-3 (the prevention rule). Nordic and RDL are.
  *   - Time caps are shown, not trimmed: the time estimate is rough; the ordered time trim comes later (§6).
  *   - Small jump doses stay on MD-2 / MD-1 / MD+1, capped at 6 contacts (MicroPulse's number for "small").
@@ -112,6 +113,7 @@ const MD3: DayRule = {
   allowed: ["fast", "ballistic", "plyo", "sprint"],
   intensity: { en: "Loaded ≥ 0.80 m/s · ballistic ≥ 1.1 m/s · speed loss ≤ 10%", is: "Hlaðið ≥ 0,80 m/s · ballistic ≥ 1,1 m/s · hraðatap ≤ 10%" },
   caps: { loadedReps: 9, contacts: 30, dropJumpContacts: 9, dropHeightCm: 30, minutes: 15, vlMax: 10 },
+  // A light loaded jump in a contrast round (≤ 40% of max) counts in the 30 contacts, not the 9 loaded reps (2026-11-23).
   notAllowed: [
     { en: "Heavy eccentric work (Nordic, RDL)", is: "Þung eccentric vinna (Nordic, RDL)" },
     { en: "Drop jumps over 30 cm or over 9 contacts", is: "Fallstökk yfir 30 cm eða yfir 9 snertingar" },
@@ -119,8 +121,8 @@ const MD3: DayRule = {
   bans: { heavyEccentric: true },
   ballisticZone: { min: 1.1, max: null },
   note: {
-    en: "The heavy lift that opens a contrast set stays and counts in the 9 loaded reps; Copenhagen at body weight stays here (the coach's calls, 2026-11-22).",
-    is: "Þunga lyftan sem opnar contrast-sett helst og telst með í 9 hlöðnum endurtekningum; Copenhagen með eigin líkamsþyngd helst hér (ákvarðanir þjálfara, 2026-11-22).",
+    en: "The heavy lift that opens a contrast set stays and counts in the 9 loaded reps; a light loaded jump in the same rounds (≤ 40% of max) counts as jumps, not loaded reps; Copenhagen at body weight stays here (the coach's calls, 2026-11-22 and 2026-11-23).",
+    is: "Þunga lyftan sem opnar contrast-sett helst og telst með í 9 hlöðnum endurtekningum; létt hlaðið hopp í sömu umferðum (≤ 40% af hámarki) telst sem stökk, ekki hlaðnar endurtekningar; Copenhagen með eigin líkamsþyngd helst hér (ákvarðanir þjálfara, 2026-11-22 og 2026-11-23).",
   },
 };
 
@@ -270,6 +272,21 @@ export function dayCategoryOf(ex: PrescribedExercise): DayCategory | null {
 }
 
 const isLoaded = (c: DayCategory | null) => c === "heavy" || c === "fast" || c === "ballistic";
+
+/** The most load (% of max) a jump in a contrast round can carry and still count as a jump (2026-11-23). */
+export const CONTRAST_JUMP_MAX_PCT = 40;
+/**
+ * A light loaded jump inside a contrast block (e.g. a trap-bar jump squat at 20% after the heavy lift): it follows the
+ * block's rounds and counts as jump contacts, not as loaded reps (the coach's call, 2026-11-23). Without it the MD-3
+ * cap of 9 loaded reps cut the week rule's heavy reps and the jump together.
+ */
+export function isContrastJump(block: SessionBlock, ex: PrescribedExercise): boolean {
+  if (block.type !== "FRENCH_CONTRAST") return false;
+  const c = dayCategoryOf(ex);
+  if (c !== "ballistic" && c !== "fast") return false;
+  const pct = topPct(ex.dose.intensity);
+  return pct != null && pct <= CONTRAST_JUMP_MAX_PCT;
+}
 /** A heavy lift in the week rule's sense (weekRule.ts `isHeavyLift`): a main two-leg lift for 6 reps a set or fewer. */
 const isHeavyMainLift = (ex: PrescribedExercise) =>
   dayCategoryOf(ex) === "heavy" && ex.category === "COMPOUND_STRENGTH" && repsOfLine(ex.dose.reps) > 0 && repsOfLine(ex.dose.reps) <= 6;
@@ -444,7 +461,7 @@ export function enforceDayRules(session: StrengthSession | null): StrengthSessio
   // 5. Loaded reps in all (the near-match dose left out).
   const loaded = rule.caps.loadedReps;
   if (loaded != null) {
-    const ss = spots((ex) => isLoaded(dayCategoryOf(ex)) && !nearMatchDose(ex));
+    const ss = spots((ex) => isLoaded(dayCategoryOf(ex)) && !nearMatchDose(ex)).filter((s) => !isContrastJump(blocks[s.b], s.ex));
     out.push(...trimToCap(blocks, ss, repsOf, loaded, md, (n) => ({ en: `at most ${loaded} loaded leg reps (had ${n})`, is: `mest ${loaded} hlaðnar fótaendurtekningar (voru ${n})` })));
   }
 
@@ -457,7 +474,9 @@ export function enforceDayRules(session: StrengthSession | null): StrengthSessio
   }
   const cCap = rule.caps.contacts;
   if (cCap != null) {
-    const live = spots((ex) => dayCategoryOf(ex) === "plyo").filter((s) => !nearBlocks.has(s.b));
+    // A light loaded jump in a contrast round counts here, as jumps (isContrastJump).
+    const live = spots((ex) => dayCategoryOf(ex) === "plyo" || isLoaded(dayCategoryOf(ex)))
+      .filter((s) => !nearBlocks.has(s.b) && (dayCategoryOf(s.ex) === "plyo" || isContrastJump(blocks[s.b], s.ex)));
     out.push(...trimToCap(blocks, live, contactsOf, cCap, md, (n) => ({ en: `at most ${cCap} jump contacts (had ${n})`, is: `mest ${cCap} stökksnertingar (voru ${n})` })));
   }
   const height = rule.caps.dropHeightCm;

@@ -408,8 +408,13 @@ Eftirtöldum ákvörðunum má breyta:
 3. ~~**Deficit-skráin telst ekki með.**~~ **Lagað 23. nóv.:** á degi þar sem vikureglan setti þungu endurtekningarnar
    bætir hámarksstyrks-áhersla deficit-skrárinnar engri þungri lyftu við. Hún setur heldur enga lyftu aftur inn sem
    öryggisregla skipti út. Í staðinn kemur lína um að endurtekningarnar komi úr vikureglunni.
-4. **MD-3 á undirbúningstímabili:** hámarkið er 9 hlaðnar endurtekningar. Vikureglan setur 9 þungar þar, svo hoppin í
-   French contrast fara yfir og sett eru skorin.
+4. ~~**MD-3 á undirbúningstímabili.**~~ **Lagað 23. nóv.:**
+   - Létt hlaðið hopp í contrast-umferð (≤40% af hámarki) telst nú sem stökksnertingar (mest 30), ekki hlaðnar
+     endurtekningar.
+   - Undirbúningstímabil: 3×3 þungt og 3 umferðir hopp. Keppnistímabil: 2×3 og 2 umferðir.
+   - Cluster (3×12 við 80%) er ekki lengur í boði á MD-3. Dagsreglan tók lyftuna alveg út.
+   - Gulur leikmaður á MD-3 contrast fór áður niður í cluster og missti styrktarlyftuna. Nú fer hann í ísómetríska
+     lyftu.
 5. **Ný æfing og B1:** ný-æfingareglan keyrir á eftir tímaskurðinum. Þung lyfta sem aldrei hefur verið skráð verður
    upphitun á MD-4, þótt „B1 er aldrei skorin“.
 6. **CMJ-skurður og skipting þjálfarans:** CMJ-skurðurinn sleppir ekki skiptingum þjálfarans, en dagsreglurnar gera

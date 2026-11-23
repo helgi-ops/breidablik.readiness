@@ -117,7 +117,9 @@ export const STRUCTURES_ALLOWED_BY_MD: Partial<Record<MdContext, StructureKey[]>
   // where the intent is speed/potentiation, not volume.
   "MD-5": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric", "yielding_isometric", "supersets", "trisets", "cluster_max_strength"],
   "MD-4": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric", "yielding_isometric", "supersets", "trisets", "cluster_max_strength", "cluster_hypertrophy", "cluster_metabolic"],
-  "MD-3": ["french_contrast", "contrast", "cluster", "straight_sets", "power_contrast", "potentiation_cluster", "overcoming_isometric", "iso_pap_primer"],
+  // No "cluster" on MD-3 (2026-11-23): the CS2 cluster is 3 × 12 at 80%, far over the day's 9 loaded reps, so the day
+  // rule took the whole lift out and the player had no strength lift.
+  "MD-3": ["french_contrast", "contrast", "straight_sets", "power_contrast", "potentiation_cluster", "overcoming_isometric", "iso_pap_primer"],
   "MD-2": ["power_contrast", "potentiation_cluster", "iso_pap_primer"],
   "MD-1": ["power_contrast", "potentiation_cluster", "iso_pap_primer"],
   // MD+1 LOW tier only (DNP / <30 min) — a real strength stimulus for the missed

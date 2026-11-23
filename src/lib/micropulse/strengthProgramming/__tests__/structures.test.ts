@@ -160,8 +160,9 @@ describe("readiness downgrade of the method (yellow steps down)", () => {
   it("readinessDowngrade stays within family on MD-3", () => {
     // Strength family steps down through strength/iso, never into velocity.
     expect(readinessDowngrade("french_contrast", "MD-3")).toBe("contrast");
-    expect(readinessDowngrade("contrast", "MD-3")).toBe("cluster");
-    expect(readinessDowngrade("cluster", "MD-3")).toBe("overcoming_isometric");
+    // No cluster on MD-3 since 2026-11-23 (3 × 12 at 80% is over the day's 9 loaded reps): contrast steps to the iso.
+    expect(readinessDowngrade("contrast", "MD-3")).toBe("overcoming_isometric");
+    expect(readinessDowngrade("cluster", "MD-4")).not.toBeNull();
     // Velocity family steps down within velocity, never into straight sets.
     expect(readinessDowngrade("power_contrast", "MD-3")).toBe("iso_pap_primer");
     expect(readinessDowngrade("potentiation_cluster", "MD-3")).toBe("iso_pap_primer");
