@@ -24,9 +24,10 @@ const snap = (md: MdContext, over: Partial<PlayerStrengthSnapshot> = {}): Player
   wellness: { sleepQuality: null, muscleSoreness: null, fatigueEnergy: null, stressMood: null, soreAreas: [] },
   vbtDecrement: null, injuryStatus: "cleared", fosterMonotony: null, fosterStrain: null, isCongestedWeek: false, seasonPhase: "inseason", ...over,
 });
-function ex(id: string, sets: number, extra: Partial<PrescribedExercise> = {}): PrescribedExercise {
+/** The week rule's prevention dose (weekRule) unless `weekRule: false`. */
+function ex(id: string, sets: number, extra: Partial<PrescribedExercise> = {}, weekRule = true): PrescribedExercise {
   const lib = EXERCISES_BY_ID.get(id)!;
-  return { exerciseId: id, nameEN: lib.nameEN, nameIS: lib.nameIS, category: lib.category, dose: { sets, reps: "5", intensity: "BW", rest: "2 min" }, ...extra };
+  return { exerciseId: id, nameEN: lib.nameEN, nameIS: lib.nameIS, category: lib.category, dose: { sets, reps: "5", intensity: "BW", rest: "2 min", ...(weekRule ? { weekRule: true } : {}) }, ...extra };
 }
 const blocks = (...exs: PrescribedExercise[]): SessionBlock[] => [{ id: "b", titleEN: "Main", titleIS: "Aðal", type: "POSTERIOR", exercises: exs }];
 const all = (s: StrengthSession | null) => (s?.blocks ?? []).flatMap((b) => b.exercises);
@@ -122,6 +123,15 @@ describe("applyTestAddons", () => {
     }
   });
 
+  it("ADDON_CAP is weekly: the extra set goes only on the week's prevention dose, not on another day's Nordic", () => {
+    const b = blocks(ex("ex_nordic_curl", 2, {}, false)); // a template's Nordic on MD-5, not the week rule's
+    const out = applyTestAddons(b, snap("MD-5", { strengthTests: nordicDrop }));
+    expect(b[0].exercises[0].dose.sets).toBe(2);
+    expect(out.map((a) => a.ruleId)).toEqual([ADDON_CAP]);
+    expect(out[0].actionEN).toContain("once a week");
+    expect(out[0].actionIS).toContain("einu sinni í viku");
+  });
+
   it("idempotent through the cap: a second pass adds nothing", () => {
     const b = blocks(ex("ex_nordic_curl", 4));
     applyTestAddons(b, snap("MD-4", { strengthTests: nordicDrop }));
@@ -147,6 +157,13 @@ describe("in the engine", () => {
     expect(base).toBeDefined();
     expect(setsOf(withTest, "ex_copenhagen")).toBe(base! + 1);
     expect(rules(withTest)).toContain(FORCEFRAME_ADDON);
+  });
+
+  it("MD-5 with a fresh NordBord drop: no extra set outside the week's Nordic day", () => {
+    const s = buildStrengthSession(snap("MD-5", { strengthTests: { nordbord: nb(340, 400) } }), [], { mode: "individualised" });
+    const plain = buildStrengthSession(snap("MD-5"), [], { mode: "individualised" });
+    expect(setsOf(s, "ex_nordic_curl")).toBe(setsOf(plain, "ex_nordic_curl"));
+    expect(rules(s)).not.toContain(NORDBORD_ADDON);
   });
 
   it("only the prevention exercise changes", () => {

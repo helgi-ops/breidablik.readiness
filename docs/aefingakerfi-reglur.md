@@ -228,7 +228,7 @@ leikmaðurinn fær sent. Undantekning eru vallaræfingar markmiðsplana (kafli 7
 |---|---|---|---|
 | **`NORDBORD_ADDON`** | NordBord ≤14 daga gamalt, fótur ≥10% undir síðasta prófi | **+1 Nordic sett** (337 N sýnt sem viðmið) | Regla þjálfarans 23. nóv. |
 | **`FORCEFRAME_ADDON`** | ForceFrame ≤21 dags, munur ≥10% milli hliða eða fall ≥10% | **+1 Copenhagen sett** | Schaber 2021 |
-| **`ADDON_CAP`** | Æfingin hefur þegar fengið +1 | Ekkert aukasett | — |
+| **`ADDON_CAP`** | Æfingin hefur þegar fengið +1, eða dagurinn er ekki forvarnardagur vikunnar | Ekkert aukasett. Aukasettið fer aðeins á skammt vikureglunnar (einn dagur í viku), svo hámarkið gildir fyrir vikuna | — |
 | **`ASYMMETRY_REVIEW`** / **`ASYMMETRY_KEPT`** | Ósamhverfa ≥10% | Tvífóta lyftan helst, flaggað fyrir þjálfara/sjúkraþjálfara. Ákvörðun **heldur í 28 daga** | Bishop 2020; 28 dagar eru MicroPulse-regla |
 | **`SCREEN_OHS_UNILATERAL`** | Hnébeygjuskimun ≤56 daga: hné inn eða hæll upp | Þung hnébeygja → búlgörsk; trap-bar DL → B-stance RDL. Sömu sett og þyngd | Post 2017; Krause 2015 |
 | **`SCREEN_SLB_WARMUP`** | Lélegt jafnvægi á öðrum fæti | Jafnvægisæfing í upphitun | Ross & Guskiewicz 2005 |
@@ -423,7 +423,9 @@ Eftirtöldum ákvörðunum má breyta:
 6. ~~**CMJ-skurður og skipting þjálfarans.**~~ **Lagað 23. nóv.:** skipting þjálfarans ræður hvaða æfing er gerð,
    ekki skammtinum. Hámörk dagsreglnanna gilda nú um hana eins og CMJ-skurðurinn. Bönn dagsins og tímaskurður sleppa
    henni áfram, og hún heldur alltaf a.m.k. einu setti. Línan segir „skipting þjálfara, heldur sér“.
-7. **`ADDON_CAP`** segir „á viku“ en athugar aðeins æfingu dagsins.
+7. ~~**`ADDON_CAP` á viku.**~~ **Lagað 23. nóv.:** aukasett prófsins fer aðeins á forvarnarskammt vikureglunnar (Nordic
+   MD-4, Copenhagen MD-3), sem er einn dagur í viku. Nordic á öðrum degi (t.d. í sniðmáti MD-5) fær ekkert aukasett og
+   línan segir hvert það fer. Hámarkið +1 á viku heldur því yfir alla vikuna.
 8. **Þétt vika:** textinn segir „2 leikir á 7 dögum“, en kóðinn telur leiki með ≥60 mín innan ±7 daga.
 9. **Tvö „í röð“-hámörk:** Mesó-dagatalið leyfir 3 og telur leiki með. Vikureglan leyfir 2 og telur leiki ekki með.
    Sjálfvirka röðunin fyrir viku frá sunnudegi til sunnudags fellur á vikureglunni (MD-2 ráðlagt).

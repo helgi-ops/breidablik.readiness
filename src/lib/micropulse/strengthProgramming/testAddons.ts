@@ -7,9 +7,12 @@
  *  - FORCEFRAME_ADDON: a ForceFrame hip adduction test (the inner pads) within 21 days with a left/right gap of 10% or
  *    more, or either side 10% or more below the previous test → +1 Copenhagen set where the Copenhagen is (MD-3, the
  *    coach's call: Copenhagen stays on MD-3).
- *  - ADDON_CAP: at most +1 Nordic set and +1 Copenhagen set a week from any source. The week's single extra set is
+ *  - ADDON_CAP: at most +1 Nordic set and +1 Copenhagen set a week from any source. The extra set goes only on the
+ *    week's one prevention dose (the exercise the week rule placed, `dose.weekRule`), which is on one day a week, so
+ *    the cap holds for the week, not just today (2026-11-23, contradiction 7). The week's single extra set is
  *    taken when the player's goal already added one (the strength goal's +1, or a goal plan's Nordic), or when the
- *    exercise already sits above the prevention dose.
+ *    exercise already sits above the prevention dose. On another day with the same exercise (a template's Nordic on
+ *    MD-5, a week with no prevention day) nothing is added and the line says where the extra set goes.
  *
  * The 10% and the windows are MicroPulse's rule, not a study's (the asymmetry 10% is the VALD panel's watch line).
  * Not on a reduced day (yellow / red check-in). Never the readiness colour.
@@ -131,7 +134,14 @@ export function applyTestAddons(blocks: SessionBlock[], snap: PlayerStrengthSnap
         actionIS: `Ekkert auka ${k.name.is} sett í dag: innskráning dagsins minnkaði æfinguna.`, evidence: k.evidence });
       continue;
     }
-    const ex = spots[0];
+    const ex = spots.find((e) => e.dose.weekRule) ?? spots[0];
+    if (!spots.some(fromGoal) && !ex.dose.weekRule) {
+      out.push({ ruleId: ADDON_CAP, triggerEN: k.read.trigger.en, triggerIS: k.read.trigger.is,
+        actionEN: `No extra ${k.name.en} set today: the test's extra set goes on the week's ${k.name.en} day (${k.id === NORDIC_ID ? "MD-4" : "MD-3"} in a match week), once a week, and today is not that day.`,
+        actionIS: `Ekkert auka ${k.name.is} sett í dag: aukasett prófsins fer á ${k.name.is}-dag vikunnar (${k.id === NORDIC_ID ? "MD-4" : "MD-3"} í leikviku), einu sinni í viku, og dagurinn í dag er ekki sá dagur.`,
+        evidence: k.evidence });
+      continue;
+    }
     if (spots.some(fromGoal) || ex.dose.sets > k.base) {
       out.push({ ruleId: ADDON_CAP, triggerEN: k.read.trigger.en, triggerIS: k.read.trigger.is,
         actionEN: `No extra ${k.name.en} set from the test: the week's one extra set is already in (${spots.some(fromGoal) ? "the player's goal" : `${ex.dose.sets} sets, above the ${k.base} of the week rule`}). At most +1 ${k.name.en} set a week from any source.`,
