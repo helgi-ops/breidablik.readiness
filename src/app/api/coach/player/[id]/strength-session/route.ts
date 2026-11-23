@@ -24,7 +24,8 @@ import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolv
 import { withGoalSeason } from "@/lib/micropulse/strengthProgramming/playerGoal";
 import { withGoalPlanGym } from "@/lib/micropulse/strengthProgramming/goalPlanGym";
 import { loadGoalPlanGym } from "@/lib/micropulse/goalPlan/gymLoader";
-import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
+import type { MdContext, PlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/types";
+import { md4DateBefore, type MissedDay } from "@/lib/micropulse/strengthProgramming/missedDay";
 
 export const runtime = "nodejs";
 
@@ -66,6 +67,22 @@ function parseMdOverride(raw: string | null): MdContext | null {
   }
 }
 
+/**
+ * This week's MD-4 session, when the player was sent one and did not do it (no "done", no set logged). Read only
+ * for the coach's preview on MD-3 / MD-2 / MD-1, so the session's audit can say the day was not made up (brief §5).
+ */
+async function loadMissedMd4(supabase: ReturnType<typeof getSupabase>, playerId: string, todayIso: string, md: MdContext): Promise<MissedDay | null> {
+  const date = md4DateBefore(todayIso, md);
+  if (!date) return null;
+  const [sent, done, sets] = await Promise.all([
+    supabase.from("player_today_strength_override").select("player_id", { count: "exact", head: true }).eq("player_id", playerId).eq("entry_date", date),
+    supabase.from("player_strength_completions").select("id", { count: "exact", head: true }).eq("player_id", playerId).eq("entry_date", date),
+    supabase.from("player_strength_set_log").select("id", { count: "exact", head: true }).eq("player_id", playerId).eq("session_date", date),
+  ]);
+  if (sent.error || done.error || sets.error) return null;
+  return (sent.count ?? 0) > 0 && (done.count ?? 0) + (sets.count ?? 0) === 0 ? { md: "MD-4", date } : null;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -104,7 +121,8 @@ export async function GET(
     // The 8-week goal plan's gym session B, when the plan places it today ("one session, one whole", 2026-11-17).
     req.nextUrl.searchParams.get("mode") === "standard" ? Promise.resolve(new Map()) : loadGoalPlanGym(supabase, auth.teamId, todayIso, [playerId]),
   ]);
-  const snapshot = withGoalPlanGym(snapshotIn, goalGym.get(playerId));
+  const missedDay = await loadMissedMd4(supabase, playerId, todayIso, snapshotIn.mdContext);
+  const snapshot: PlayerStrengthSnapshot = withGoalPlanGym(missedDay ? { ...snapshotIn, missedDay } : snapshotIn, goalGym.get(playerId));
 
   // MESO layer — tilt the built (micro) session toward the meso block it sits in. The block is
   // computed ONCE upstream (the Micro-dose page's batch context) and passed as ?block=/?phase= so the
@@ -136,7 +154,7 @@ export async function GET(
       ? await resolveCurrentBlock(supabase, auth.teamId, todayIso)
       : null;
   const built = previewMode === "standard"
-    ? buildStrengthSession(snapshotIn, [], { mode: "standard" })
+    ? buildStrengthSession(missedDay ? { ...snapshotIn, missedDay } : snapshotIn, [], { mode: "standard" })
     : buildStrengthSession(withGoalSeason(snapshot, goalBlock), coachOverrides, { mode: individualMode });
   const session = applyBlockToSession(built, blockGoal, blockPhase, blockOverride, subPhase);
 

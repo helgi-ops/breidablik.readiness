@@ -42,6 +42,8 @@ import { suggestLowerLoadSwap, type SwapSuggestion } from "@/lib/micropulse/pitc
 import { aggregateWarmupCorrectives, type PlayerCorrectives } from "@/lib/micropulse/pitchSession/warmupCorrectives";
 import { aggregateGapDrills, type PlayerGapRecs, type TeamGapDrill } from "@/lib/micropulse/pitchSession/gapDrills";
 import { areaFitForDay, type DaySessionType } from "@/lib/micropulse/pitchSession/dayDrillPicker";
+import WeekRuleCard, { type WeekRuleKeep } from "@/components/coach/WeekRuleCard";
+import type { ThreeInARowCheck } from "@/lib/micropulse/weekSetup/weekRules";
 import type { KpiTarget, LoadKpi } from "@/lib/micropulse/loadPlan";
 import {
   matchTeamConstraintsToDrills,
@@ -1301,6 +1303,8 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   // Week plan → session setup (reads Week Setup: each day's recommended stimulus type +
   // drills). Advisory; clicking a day jumps the builder's MD-day picker to it.
   const [weekPlan, setWeekPlan] = useState<WeekPlanDay[]>([]);
+  // Week rules (brief §5): the planned week's in-season check (never three training days in a row) + the coach's keep.
+  const [weekRule, setWeekRule] = useState<{ check: ThreeInARowCheck; kept: WeekRuleKeep | null; weekStart: string } | null>(null);
   const [selectedWeekDate, setSelectedWeekDate] = useState<string | null>(null);
   // Which week the strip shows: 0 = this week, +1 = next week, … so a coach can page
   // ahead and plan future sessions (the week-plan route already takes a ?date anchor).
@@ -1352,7 +1356,12 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
         const anchorIso = anchor.toISOString().slice(0, 10);
         const res = await fetch(`/api/coach/session-builder/week-plan?date=${anchorIso}`, { headers: { Authorization: `Bearer ${token}` } });
         const json = await res.json().catch(() => ({}));
-        if (!cancelled && res.ok && json.ok) setWeekPlan((json.days ?? []) as WeekPlanDay[]);
+        if (!cancelled && res.ok && json.ok) {
+          setWeekPlan((json.days ?? []) as WeekPlanDay[]);
+          const wr = json.weekRule as { check?: ThreeInARowCheck; kept?: WeekRuleKeep | null } | null;
+          const ws = String(json.weekStart ?? "").slice(0, 10);
+          setWeekRule(wr?.check && !wr.check.ok ? { check: wr.check, kept: wr.kept ?? null, weekStart: ws } : null);
+        }
       } catch { /* panel simply absent */ }
     })();
     return () => { cancelled = true; };
@@ -1594,6 +1603,13 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
           onNextWeek={() => setWeekOffset((o) => o + 1)}
           onThisWeek={() => setWeekOffset(0)}
         />
+      )}
+      {weekRule && (
+        <div className="mt-2">
+          <WeekRuleCard check={weekRule.check} kept={weekRule.kept} lang={lang === "IS" ? "IS" : "EN"} teamId={teamId} weekStart={weekRule.weekStart}
+            canKeep={!!weekRule.weekStart} onKept={(k) => setWeekRule((w) => (w ? { ...w, kept: k } : w))}
+            note={lang === "IS" ? "Vikunni er breytt í Vikuuppsetningu." : "Change the week in Week setup."} />
+        </div>
       )}
 
       {/* ═══ One-sentence verdict + confidence (explainability-first) ═══ */}

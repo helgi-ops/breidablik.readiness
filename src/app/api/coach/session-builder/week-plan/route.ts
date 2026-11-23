@@ -17,6 +17,8 @@ import { dayIdea } from "@/lib/micropulse/dayIdeas";
 import { toDrillPickInput } from "@/lib/micropulse/dayDrillSheet";
 import { pickDrillsForDay, type DrillPickInput, type DaySessionType } from "@/lib/micropulse/pitchSession/dayDrillPicker";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
+import { loadWeekRuleRead } from "@/lib/micropulse/weekSetup/weekRulesServer";
+import { mondayOf } from "@/lib/micropulse/goalPlan/today";
 
 type PlanRow = { day_date: string; week_start: string | null; day_type: string | null; focus: string | null; day_intent: string | null };
 // Full drill row (drill_library.*) — enough to drop straight into the session builder.
@@ -181,5 +183,10 @@ export async function GET(req: NextRequest) {
     return { ...r, dayType: dtype, sessionType: isRecovery ? r.sessionType : (effType ?? r.sessionType), drills, topUpPlayers: split?.topUp ?? null, recoveryPlayers: split?.recovery ?? null, prevMatch: split?.prevMatch ?? null, idea };
   });
 
-  return NextResponse.json({ ok: true, weekStart, days: out });
+  // Week rules (brief §5): the same in-season check Week setup runs on Apply (never three training days in a row),
+  // so Build Session shows it too, with the coach's keep when there is one. Advice only; never blocks a session.
+  let weekRule: Awaited<ReturnType<typeof loadWeekRuleRead>> | null = null;
+  try { weekRule = await loadWeekRuleRead(sb, teamId, mondayOf(weekStart ?? refDate)); } catch { weekRule = null; }
+
+  return NextResponse.json({ ok: true, weekStart, days: out, weekRule: weekRule ? { check: weekRule.check, kept: weekRule.kept } : null });
 }

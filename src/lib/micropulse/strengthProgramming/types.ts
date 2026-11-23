@@ -346,6 +346,9 @@ export type PlayerStrengthSnapshot = {
   /** The latest overhead squat / single-leg balance findings (screenRules.ts, brief §4c), ≤ 56 days old, no pain or
    *  red flag. Absent = nothing that changes the session. */
   screenFlags?: import("./screenRules").ScreenFlags;
+  /** This week's MD-4 session was sent and not done (missedDay.ts, brief §5). Set only by the coach's preview. It
+   *  changes nothing in the session: MD-3 and later keep their own; the audit says so. */
+  missedDay?: import("./missedDay").MissedDay;
 };
 
 /** See `PlayerStrengthSnapshot.playerChoiceAccess`. */

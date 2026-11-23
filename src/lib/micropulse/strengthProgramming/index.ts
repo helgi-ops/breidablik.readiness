@@ -65,6 +65,7 @@ import { applyCmjDose } from "./cmjDose";
 import { applyTestAddons } from "./testAddons";
 import { asymmetryReviewAudit, asymmetrySwapAllowed, confirmedNote } from "./asymmetryReview";
 import { applyScreenHeavySlot, screenWarmupBlock } from "./screenRules";
+import { missedDayAudit } from "./missedDay";
 import { buildStructuredBlocks } from "./structureBuilders";
 
 export * from "./types";
@@ -895,6 +896,9 @@ function buildStrengthSessionCore(
   const trace = newAdaptationTrace();
   const audit = applyAdaptationRules(tmpl.blocks, individualised ? snap : { ...snap, ledgerEmphases: [] }, trace);
   audit.unshift(...weekAudit);
+  // A missed MD-4 is never made up on MD-3 or later (brief §5): this day was built from its own MD context only.
+  const missed = missedDayAudit(snap.todayIso, snap.mdContext, snap.missedDay);
+  if (missed) audit.push(missed);
   // A left/right gap ≥ 10% not yet confirmed by the coach: logged for review, nothing swapped (brief §4b).
   const asymReview = isBasketball ? null : asymmetryReviewAudit(snap);
   if (asymReview) audit.push(asymReview);

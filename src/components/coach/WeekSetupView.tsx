@@ -30,6 +30,8 @@ import { TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testing
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import { expectedWeekShape } from "@/lib/micropulse/weekSetup/gameDensity";
 import { macroPhaseForWeek } from "@/lib/micropulse/weekSetup/weekPhase";
+import { checkThreeInARow, dayKindOf, runSignature, type ThreeInARowCheck, type WeekRuleDay } from "@/lib/micropulse/weekSetup/weekRules";
+import WeekRuleCard, { type WeekRuleKeep } from "@/components/coach/WeekRuleCard";
 import type { SportId } from "@/lib/micropulse/sportProfiles";
 
 // shadcn/ui
@@ -986,6 +988,29 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
     return () => { alive = false; };
   }, [teamId]);
 
+  // Week rules (brief §5): the saved week's in-season check, the days around the week and the fixtures, so the grid
+  // below is checked live (never three training days in a row) and a coach's "keep the plan" shows.
+  // One read per week; kept with its week so another week's read never shows (no reset needed on paging).
+  type WeekRuleRead = { week: string; ctx: { phase: string | null; matchDates: string[]; before: WeekRuleDay[]; after: WeekRuleDay[] } | null; saved: ThreeInARowCheck | null; kept: WeekRuleKeep | null };
+  const [weekRuleRead, setWeekRuleRead] = useState<WeekRuleRead | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!teamId || isBasketball) return;
+      try {
+        const res = await authFetch(`/api/coach/week-rules?team_id=${encodeURIComponent(teamId)}&week=${weekStart}`);
+        const j = await res.json().catch(() => null);
+        if (!alive || !res.ok || !j?.ok) return;
+        setWeekRuleRead({ week: weekStart, ctx: j.context ?? null, saved: (j.check ?? null) as ThreeInARowCheck | null, kept: (j.kept ?? null) as WeekRuleKeep | null });
+      } catch { /* soft — the check just stays off */ }
+    })();
+    return () => { alive = false; };
+  }, [teamId, weekStart, isBasketball, fixtureRev]);
+  const weekRuleThis = weekRuleRead && weekRuleRead.week === weekStart && !isBasketball ? weekRuleRead : null;
+  const weekRuleCtx = weekRuleThis?.ctx ?? null;
+  const weekRuleSaved = weekRuleThis?.saved ?? null;
+  const weekRuleKept = weekRuleThis?.kept ?? null;
+
   // Load declared training camps for the grid markers.
   useEffect(() => {
     let alive = true;
@@ -1313,6 +1338,33 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
     return checks;
   }, [previewDays, isIS]);
 
+  // The grid as it stands (unsaved edits included), checked against the week rule. Break days are days off (Apply
+  // forces them OFF). The phase is the Season pill's, else the saved week's.
+  const weekRuleLive = useMemo<ThreeInARowCheck | null>(() => {
+    if (!weekRuleCtx || isBasketball) return null;
+    const onBreak = (d: string) => teamBreaks.some((b) => b.start_date <= d && d <= b.end_date);
+    const week: WeekRuleDay[] = previewDays.map((d, i) => {
+      const date = addDays(weekStart, i);
+      return { date, kind: onBreak(date) ? "off" : dayKindOf(d.day_type), editable: true };
+    });
+    const mds = [...weekRuleCtx.matchDates, ...visibleMatches.map((m) => (m.date || "").trim()).filter(Boolean)];
+    return checkThreeInARow({ days: [...weekRuleCtx.before, ...week, ...weekRuleCtx.after], matchDates: mds, phase: seasonPhase ?? weekRuleCtx.phase });
+  }, [weekRuleCtx, isBasketball, teamBreaks, previewDays, weekStart, visibleMatches, seasonPhase]);
+  // A keep counts only for the run the coach kept; the grid must match the saved week to keep it.
+  const weekRuleSameAsSaved = !!weekRuleLive && !!weekRuleSaved && runSignature(weekRuleLive) === runSignature(weekRuleSaved);
+  const weekRuleKeptNow = weekRuleSameAsSaved ? weekRuleKept : null;
+  const weekRuleNotes = weekRuleLive && !weekRuleLive.ok && !weekRuleKeptNow ? 1 : 0;
+  function applyWeekRuleFix() {
+    const off = new Set((weekRuleLive?.fix?.off ?? []).map((r) => r.date));
+    if (!off.size) return;
+    const hit = (i: number) => off.has(addDays(weekStart, i));
+    // Same as picking "Off" on the day: the character, its pitch stimulus and the strength focus.
+    setDayCharacters((prev) => prev.map((c, i) => (hit(i) ? "OFF" : c)));
+    setDayStimuli((prev) => prev.map((v, i) => (hit(i) ? null : v)));
+    setNoMatchIntents((prev) => prev.map((v, i) => (hit(i) ? "OFF" : v)) as NoMatchIntent[]);
+    setOk(null);
+  }
+
   async function handleApplyPlan() {
     setApplying(true);
     setError(null);
@@ -1369,6 +1421,9 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
       return;
     }
 
+    // Week rule (brief §5): the saved week's check comes back with the apply — advice only, the week is saved.
+    const wr = (payload as { weekRule?: { check?: ThreeInARowCheck; kept?: WeekRuleKeep | null } | null })?.weekRule;
+    if (wr?.check) { const check = wr.check; setWeekRuleRead((r) => (r && r.week === weekStart ? { ...r, saved: check, kept: wr.kept ?? null } : r)); }
     setOk(isIS ? "Vika var virkjuð ✅ Leikmenn fá nú réttan æfingadag sendan." : "Week activated ✅ Players now receive the right training day.");
     setApplying(false);
   }
@@ -1929,8 +1984,8 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
       <section className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3">
         <p className="m-0 min-w-0 flex-[1_1_480px] text-[17px] font-bold" style={archivo}>
           {verdict}{" "}
-          {microcycleChecks.length > 0
-            ? <span className="text-[#9a6a14]">{microcycleChecks.length} {isIS ? (microcycleChecks.length === 1 ? "athugasemd" : "athugasemdir") : (microcycleChecks.length === 1 ? "note" : "notes")} {isIS ? "í vikuyfirferð." : "in the week review."}</span>
+          {microcycleChecks.length + weekRuleNotes > 0
+            ? <span className="text-[#9a6a14]">{microcycleChecks.length + weekRuleNotes} {isIS ? (microcycleChecks.length + weekRuleNotes === 1 ? "athugasemd" : "athugasemdir") : (microcycleChecks.length + weekRuleNotes === 1 ? "note" : "notes")} {isIS ? "í vikuyfirferð." : "in the week review."}</span>
             : <span className="text-[#1c7a4a]">{isIS ? "Vikuyfirferð í lagi." : "Week review: OK."}</span>}
         </p>
         <div className={`${card} flex items-center gap-3 px-4 py-2`}>
@@ -2149,14 +2204,22 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         <section className={`${card} min-w-0 p-4 md:px-5`}>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-[15px] font-bold" style={archivo}>{t.microTitle}</h2>
-            {microcycleChecks.length === 0 ? (
+            {microcycleChecks.length + weekRuleNotes === 0 ? (
               <span className="rounded-full px-2.5 py-0.5 text-[12px] font-semibold" style={{ background: "rgba(28,122,74,0.1)", color: "#15603a" }}>{t.microOk}</span>
             ) : (
-              <span className="rounded-full px-2.5 py-0.5 text-[12px] font-semibold" style={{ background: "rgba(222,147,40,0.14)", color: "#7a5210" }}>{microcycleChecks.length} {t.microNote}</span>
+              <span className="rounded-full px-2.5 py-0.5 text-[12px] font-semibold" style={{ background: "rgba(222,147,40,0.14)", color: "#7a5210" }}>{microcycleChecks.length + weekRuleNotes} {t.microNote}</span>
             )}
           </div>
           <p className="mt-1 text-[12px] text-[#6b6f76]">{t.microDesc}</p>
-          {microcycleChecks.length === 0 ? (
+          {weekRuleLive && !weekRuleLive.ok && (
+            <div className="mt-2">
+              <WeekRuleCard check={weekRuleLive} kept={weekRuleKeptNow} lang={isIS ? "IS" : "EN"} teamId={teamId} weekStart={weekStart}
+                canKeep={weekRuleSameAsSaved} onUseFix={applyWeekRuleFix}
+                onKept={(k) => setWeekRuleRead((r) => (r && r.week === weekStart ? { ...r, kept: k } : r))}
+                note={weekRuleSameAsSaved ? null : (isIS ? "Virkjaðu vikuna til að geta haldið henni eins og hún er." : "Apply the week to be able to keep it as it is.")} />
+            </div>
+          )}
+          {microcycleChecks.length === 0 && weekRuleNotes === 0 ? (
             <p className="mt-2 text-[13px] text-[#15603a]">{t.microNone}</p>
           ) : (
             <div className="mt-2 grid gap-2">

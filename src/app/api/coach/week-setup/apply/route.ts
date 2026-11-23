@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
 import { authErrorToResponse } from "@/lib/auth/httpError";
+import { loadWeekRuleRead } from "@/lib/micropulse/weekSetup/weekRulesServer";
 
 
 function toISODate(d: Date) {
@@ -34,8 +35,9 @@ function computePlannedLoad(systemKey: string, dayType: string, intensityTarget:
 }
 
 // Hjálpar: tekur day_index hvort sem "1" eða 1 og day_type í uppercase
-function normalizeOverrides(days: any[] | undefined) {
-  const map = new Map<number, any>();
+type DayOverride = { day_index: number; day_type?: string; focus?: string | null; notes?: string | null; day_intent?: string | null };
+function normalizeOverrides(days: Array<Record<string, unknown>> | undefined) {
+  const map = new Map<number, DayOverride>();
   for (const d of days ?? []) {
     const idxRaw = d?.day_index;
     const idx =
@@ -50,7 +52,7 @@ function normalizeOverrides(days: any[] | undefined) {
     const day_type =
       typeof d?.day_type === "string" ? d.day_type.toUpperCase() : d?.day_type;
 
-    map.set(idx, { ...d, day_index: idx, day_type });
+    map.set(idx, { ...d, day_index: idx, day_type } as DayOverride);
   }
   return map;
 }
@@ -59,9 +61,9 @@ export async function POST(req: Request) {
   let supabase;
   try {
     supabase = getSupabase();
-  } catch (e: any) {
+  } catch (e) {
     return NextResponse.json(
-      { error: e?.message ?? "Supabase env vars missing at runtime" },
+      { error: (e as Error)?.message ?? "Supabase env vars missing at runtime" },
       { status: 500 }
     );
   }
@@ -155,5 +157,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: planErr.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  // Week rules (brief §5): in season never three training days in a row. Advice only — the week is already saved;
+  // the coach gets the run, the nearest fix and the choice to keep it (logged with a reason). Never fails the apply.
+  let weekRule: Awaited<ReturnType<typeof loadWeekRuleRead>> | null = null;
+  try { weekRule = await loadWeekRuleRead(supabase, team_id, week_start); } catch { weekRule = null; }
+
+  return NextResponse.json({ ok: true, weekRule });
 }
