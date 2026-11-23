@@ -50,7 +50,7 @@ import { EXERCISE_LIBRARY as LIBRARY, EXERCISES_BY_ID, getExercise as lookupExer
 import { effectivePool, isPlayerPick, type PlayerExercisePicks } from "./playerPicks";
 import { applyPlayerGoal } from "./playerGoal";
 import { applyGoalGiveBack, applyGoalNearMatch, applyGoalPlanGym, type GoalLiftResult, type GoalOwedLift } from "./goalPlanGym";
-import { applyNearMatchDose, applyWeekRule, finishNearMatch, matchWeekHeavyReps, nearMatchAudit, nearMatchDayOf, nearMatchLiftOf, noMatchWeekRule, weekRuleAudit, weekRuleLightAudit, weekRuleSeasonOf, type NearMatchDay, type NoMatchWeekRule, type WeekRuleSeason } from "./weekRule";
+import { applyNearMatchDose, applyWeekRule, finishNearMatch, matchWeekHeavyReps, nearMatchAudit, nearMatchDayOf, nearMatchLiftOf, noMatchWeekRule, weekRuleAudit, weekRuleLightAudit, weekRulePhaseOf, weekRuleSeasonOf, type NearMatchDay, type NoMatchWeekRule, type WeekRuleSeason } from "./weekRule";
 import { applyPreventionRule, matchWeekPrevention, noMatchWeekPrevention, preventionAudit } from "./preventionRule";
 import { takesPart, type SendMode } from "./sendMode";
 import {
@@ -874,7 +874,7 @@ function buildStrengthSessionCore(
     if (dayReps != null) {
       // The coach's reps a set for this day, when set (a week without a match builds as MD-4 / MD-3, so it follows).
       const applied = applyWeekRule(tmpl.blocks, dayReps, snap.mdRepsPerSet?.[snap.mdContext] ?? null, snap.mdContext);
-      if (applied) weekAudit.push(weekRuleAudit({ md: snap.mdContext, season, dayReps, applied, noMatch: noMatchRule }));
+      if (applied) weekAudit.push(weekRuleAudit({ md: snap.mdContext, season, phase: weekRulePhaseOf(snap), dayReps, applied, noMatch: noMatchRule }));
     }
     const light = noMatchRule ? weekRuleLightAudit(noMatchRule) : null;
     if (light) weekAudit.push(light);

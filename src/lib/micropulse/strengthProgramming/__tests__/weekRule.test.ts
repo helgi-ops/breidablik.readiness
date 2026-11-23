@@ -10,7 +10,7 @@ import { applyBlockToSession } from "../blockEmphasis";
 import { sanitizeNoMatchWeek, type StructureKey } from "../structures";
 import {
   FRENCH_CONTRAST_MAX_ROUNDS, HEAVY_VELOCITY_LOSS_CAP, MATCH_WEEK_HEAVY_REPS, NEAR_MATCH_LOAD, NEAR_MATCH_REPS, NEAR_MATCH_SETS,
-  NO_MATCH_WEEK_HEAVY_TOTAL, applyWeekRule, isHeavyLift, matchWeekHeavyReps, noMatchWeekRule, sanitizeMdRepsPerSet, setsForReps, weekRuleSeasonOf,
+  NO_MATCH_WEEK_HEAVY_TOTAL, applyWeekRule, isHeavyLift, matchWeekHeavyReps, noMatchWeekRule, sanitizeMdRepsPerSet, setsForReps, weekRulePhaseOf, weekRuleSeasonOf,
 } from "../weekRule";
 import type { MdContext, PlayerStrengthSnapshot, PrescribedExercise, SessionBlock } from "../types";
 
@@ -69,6 +69,30 @@ describe("the numbers, in repetitions", () => {
     // The season plan's phase wins when it is on the snapshot.
     expect(weekRuleSeasonOf({ seasonPhase: "inseason", goalSeason: { phase: "preseason", blockGoal: null } })).toBe("preseason");
     expect(weekRuleSeasonOf({ seasonPhase: "preseason", goalSeason: { phase: "competitive", blockGoal: null } })).toBe("hold");
+  });
+});
+
+describe("off-season holds like in season, and says so (contradiction 13, coach's call 2026-11-23)", () => {
+  it("the part of the year the line names", () => {
+    expect(weekRulePhaseOf({ seasonPhase: "offseason" })).toBe("offseason");
+    expect(weekRulePhaseOf({ seasonPhase: "Off-season" })).toBe("offseason");
+    expect(weekRulePhaseOf({ seasonPhase: "inseason" })).toBe("inseason");
+    expect(weekRulePhaseOf({ seasonPhase: null })).toBe("inseason");
+    expect(weekRulePhaseOf({ seasonPhase: "inseason", goalSeason: { phase: "offseason", blockGoal: null } })).toBe("offseason");
+    expect(weekRulePhaseOf({ seasonPhase: "offseason", goalSeason: { phase: "competitive", blockGoal: null } })).toBe("inseason");
+  });
+
+  it("off-season: the in-season reps (15 a week), and the line names off-season, not in season", () => {
+    for (const md of ["MD-4", "MD-3"] as MdContext[]) {
+      const s = buildStrengthSession(snap({ mdContext: md, seasonPhase: "offseason", mdStructures: { [md]: "contrast" } }));
+      if (!s || !heavy(s).length) continue;
+      expect(heavyReps(s)).toBe(MATCH_WEEK_HEAVY_REPS.hold[md]);
+      const line = rule(s, "WEEK_RULE_HEAVY_REPS")!;
+      expect(line.triggerEN).toContain("off-season, holds like in season");
+      expect(line.triggerIS).toContain("utan tímabils");
+    }
+    const inSeason = buildStrengthSession(snap({ mdContext: "MD-4", seasonPhase: "inseason", mdStructures: { "MD-4": "contrast" } }))!;
+    expect(rule(inSeason, "WEEK_RULE_HEAVY_REPS")!.triggerEN).toMatch(/Week rule \(in season\)/);
   });
 });
 

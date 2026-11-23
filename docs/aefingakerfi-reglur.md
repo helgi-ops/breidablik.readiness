@@ -157,7 +157,7 @@ Aðeins einstaklingsmiðað, fótbolti. Staðlaður sendiháttur og körfubolti 
 
 | Regla | Hvenær | Hvað gerist | Heimild | Þjálfari |
 |---|---|---|---|---|
-| **`WEEK_RULE_HEAVY_REPS`** | MD-5/-4/-3 í leikviku; þungir dagar í viku án leiks | **Þungar fótaendurtekningar á dag.** Á keppnistímabili: MD-4 **9**, MD-3 **6** (15 á viku). Undirbúningstímabil: MD-4 **12**, MD-3 **9** (21 á viku). MD-5: 6. „Þung lyfta“ = tveggja fóta grunnlyfta með ≤6 endurt. í setti. Sett = endurt. ÷ endurt. í setti; hámark 6 sett (10 fyrir einar). Contrast hámark 5 umferðir, French contrast 3. Tvær þungar lyftur deila endurtekningum dagsins. Hvert sett stöðvast við hraðatap dagsins | Cuthbert 2021; Grgic 2018; Rønnestad 2011; Hoff & Helgerud 2004; Schoenfeld 2019 o.fl. Skiptingin milli daga er MicroPulse-regla | Endurtekningar í setti: `md_reps_per_set` (1–5) |
+| **`WEEK_RULE_HEAVY_REPS`** | MD-5/-4/-3 í leikviku; þungir dagar í viku án leiks | **Þungar fótaendurtekningar á dag.** Á keppnistímabili og utan tímabils: MD-4 **9**, MD-3 **6** (15 á viku); utan tímabils segir línan það. Undirbúningstímabil: MD-4 **12**, MD-3 **9** (21 á viku). MD-5: 6. „Þung lyfta“ = tveggja fóta grunnlyfta með ≤6 endurt. í setti. Sett = endurt. ÷ endurt. í setti; hámark 6 sett (10 fyrir einar). Contrast hámark 5 umferðir, French contrast 3. Tvær þungar lyftur deila endurtekningum dagsins. Hvert sett stöðvast við hraðatap dagsins | Cuthbert 2021; Grgic 2018; Rønnestad 2011; Hoff & Helgerud 2004; Schoenfeld 2019 o.fl. Skiptingin milli daga er MicroPulse-regla | Endurtekningar í setti: `md_reps_per_set` (1–5) |
 | Vika án leiks | Vikuplan til | 15 (keppni) eða 21 (undirbúningur) á viku. **Mest 3 þungir dagar, aldrei tveir í röð.** 6–15 endurt. á dag í 3 endurt. skrefum | Sama | Vikuplan |
 | **`WEEK_RULE_LIGHT_DAY`** | Vika án leiks: 4. þungi dagurinn, við hlið þungs dags, eða utan plans | Verður léttur dagur (skammtur nálægt leik) | Sama | — |
 | **`WEEK_RULE_NEAR_MATCH`** | MD-2, MD-1, léttur dagur | Hlaðna kraftlyftan verður **4×4** við 30–40% 1RM (eða 3 umferðir 3+3 með hoppi). Hvert sett stöðvast við **10%** hraðatap. **Engin þung lyfta.** MD-2: 1,0–1,3 m/s (40–55%). MD-1: ≥1,3 m/s (30–40%) | Harrison 2019; Rodríguez-Rosell 2020; Mann 2015 o.fl. 4×4 og skipting svæða eru MicroPulse-regla | — |
@@ -450,7 +450,10 @@ Eftirtöldum ákvörðunum má breyta:
     línu. Rauður: aðeins upphitun og liðleiki. Lína segir „aðlagað að innskráningu dagsins“. Ekkert er minnkað
     tvisvar: æfing sett upp á gulum degi er ekki minnkuð aftur á gulum degi. Sjálfvirka sendingin er áfram sett upp
     aftur á þjóninum og leiðréttingarsending er óbreytt (`handSentAdjust.ts`).
-13. **Utan tímabils fær vikureglu keppnistímabils** (15 á viku), ekki 21 eins og á undirbúningstímabili.
+13. ~~**Utan tímabils fær vikureglu keppnistímabils**~~ **Lagað 23. nóv.:** þjálfarinn ákvað að utan tímabils haldi
+    15 á viku eins og á keppnistímabili. Markmiðið þar er að stöðva tapið og 15 er yfir þeim 12 sem héldu styrk
+    (Rønnestad 2011). Línan sagði „keppnistímabil“ og segir nú „utan tímabils, heldur eins og á keppnistímabili“
+    (`weekRulePhaseOf`). Sama í textanum á /coach/strength.
 14. **Vika án leiks og án vikuplans:** hver æfingadagur verður fullur MD-3, án vikureglu og forvarnar.
 15. **`buildMesoPlan` setur hvíldarviku 4. hverja viku líka á keppnistímabili**, þvert á regluna „engin sjálfvirk
     hvíldarvika á tímabili“.

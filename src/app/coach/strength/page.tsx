@@ -1045,8 +1045,8 @@ export default function CoachStrengthPage() {
                     </p>
                     <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
                       {t(
-                        `Heavy reps a week are fixed by the week rule: in season ${MATCH_WEEK_HEAVY_REPS.hold["MD-4"]} on MD-4 and ${MATCH_WEEK_HEAVY_REPS.hold["MD-3"]} on MD-3; pre-season ${MATCH_WEEK_HEAVY_REPS.preseason["MD-4"]} and ${MATCH_WEEK_HEAVY_REPS.preseason["MD-3"]}; MD-5 adds ${MATCH_WEEK_HEAVY_REPS.hold["MD-5"]}. On each heavy day you choose how many reps a set holds; the sets follow. Fewer reps a set means more sets and less fatigue in each set, for the same reps.`,
-                        `Þungar endurtekningar á viku eru fastar í vikureglunni: á keppnistímabili ${MATCH_WEEK_HEAVY_REPS.hold["MD-4"]} á MD-4 og ${MATCH_WEEK_HEAVY_REPS.hold["MD-3"]} á MD-3; á undirbúningstímabili ${MATCH_WEEK_HEAVY_REPS.preseason["MD-4"]} og ${MATCH_WEEK_HEAVY_REPS.preseason["MD-3"]}; MD-5 bætir við ${MATCH_WEEK_HEAVY_REPS.hold["MD-5"]}. Á hverjum þungum degi velur þú hve margar endurtekningar eru í setti; settin fylgja. Færri endurtekningar í setti þýða fleiri sett og minni þreytu í hverju setti, fyrir sömu endurtekningar.`,
+                        `Heavy reps a week are fixed by the week rule: in season and off-season ${MATCH_WEEK_HEAVY_REPS.hold["MD-4"]} on MD-4 and ${MATCH_WEEK_HEAVY_REPS.hold["MD-3"]} on MD-3; pre-season ${MATCH_WEEK_HEAVY_REPS.preseason["MD-4"]} and ${MATCH_WEEK_HEAVY_REPS.preseason["MD-3"]}; MD-5 adds ${MATCH_WEEK_HEAVY_REPS.hold["MD-5"]}. On each heavy day you choose how many reps a set holds; the sets follow. Fewer reps a set means more sets and less fatigue in each set, for the same reps.`,
+                        `Þungar endurtekningar á viku eru fastar í vikureglunni: á keppnistímabili og utan tímabils ${MATCH_WEEK_HEAVY_REPS.hold["MD-4"]} á MD-4 og ${MATCH_WEEK_HEAVY_REPS.hold["MD-3"]} á MD-3; á undirbúningstímabili ${MATCH_WEEK_HEAVY_REPS.preseason["MD-4"]} og ${MATCH_WEEK_HEAVY_REPS.preseason["MD-3"]}; MD-5 bætir við ${MATCH_WEEK_HEAVY_REPS.hold["MD-5"]}. Á hverjum þungum degi velur þú hve margar endurtekningar eru í setti; settin fylgja. Færri endurtekningar í setti þýða fleiri sett og minni þreytu í hverju setti, fyrir sömu endurtekningar.`,
                       )}
                     </p>
                     <div className="space-y-2">
@@ -1151,7 +1151,7 @@ export default function CoachStrengthPage() {
                                   </select>
                                   {chosen ? (
                                     <span>
-                                      {t("In season", "Á keppnistímabili")}: {how(MATCH_WEEK_HEAVY_REPS.hold[md])} · {t("pre-season", "undirbúningstímabil")}: {how(MATCH_WEEK_HEAVY_REPS.preseason[md])}
+                                      {t("In season and off-season", "Á keppnistímabili og utan tímabils")}: {how(MATCH_WEEK_HEAVY_REPS.hold[md])} · {t("pre-season", "undirbúningstímabil")}: {how(MATCH_WEEK_HEAVY_REPS.preseason[md])}
                                     </span>
                                   ) : null}
                                 </div>

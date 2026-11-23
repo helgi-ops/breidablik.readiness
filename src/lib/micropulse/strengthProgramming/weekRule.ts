@@ -39,8 +39,13 @@ import { DAY_RULES, zoneNum } from "./dayRules";
 export { zoneNum };
 import type { AppliedAdaptation, MdContext, PlayerStrengthSnapshot, PrescribedExercise, SessionBlock } from "./types";
 
-/** Pre-season builds; every other part of the year holds (in season, off-season, not known). */
+/** Pre-season builds; every other part of the year holds (in season, off-season, not known). Off-season holds like
+ *  in season on purpose (coach's call 2026-11-23): its goal is to stop the loss, and 15 a week is above the 12 that
+ *  kept strength (Rønnestad 2011). */
 export type WeekRuleSeason = "preseason" | "hold";
+
+/** The part of the year the rule's line names (the dose comes from `WeekRuleSeason`). */
+export type WeekRulePhase = "preseason" | "inseason" | "offseason";
 
 /** A heavy lift = a main two-leg lift done for 6 reps or fewer in a set. */
 export const HEAVY_REPS_MAX = 6;
@@ -107,6 +112,13 @@ export function weekRuleSeasonOf(snap: Pick<PlayerStrengthSnapshot, "goalSeason"
   const planned = snap.goalSeason?.phase ?? null;
   if (planned) return planned === "preseason" ? "preseason" : "hold";
   return String(snap.seasonPhase ?? "").toLowerCase().replace(/[^a-z]/g, "") === "preseason" ? "preseason" : "hold";
+}
+
+/** The part of the year for the line: the season plan's phase, else the week setup's; not known = in season. */
+export function weekRulePhaseOf(snap: Pick<PlayerStrengthSnapshot, "goalSeason" | "seasonPhase">): WeekRulePhase {
+  const planned = snap.goalSeason?.phase ?? null;
+  const key = planned ?? String(snap.seasonPhase ?? "").toLowerCase().replace(/[^a-z]/g, "");
+  return key === "preseason" ? "preseason" : key === "offseason" ? "offseason" : "inseason";
 }
 
 /** Today's heavy reps in a week with a match, or null when today is not a heavy day (MD-2, MD-1, the days after). */
@@ -476,14 +488,17 @@ export function applyWeekRule(blocks: SessionBlock[], dayReps: number, coachReps
 export function weekRuleAudit(args: {
   md: MdContext;
   season: WeekRuleSeason;
+  /** Names the part of the year in the line; off-season says it holds like in season. Absent = from `season`. */
+  phase?: WeekRulePhase;
   /** The day's heavy reps by the rule (before a French contrast round cap). */
   dayReps: number;
   applied: WeekRuleApplied;
   noMatch: NoMatchWeekRule | null;
 }): AppliedAdaptation {
   const { md, season, dayReps, applied, noMatch } = args;
-  const seasonEN = season === "preseason" ? "pre-season" : "in season";
-  const seasonIS = season === "preseason" ? "undirbúningstímabil" : "keppnistímabil";
+  const offSeason = season === "hold" && args.phase === "offseason";
+  const seasonEN = season === "preseason" ? "pre-season" : offSeason ? "off-season, holds like in season" : "in season";
+  const seasonIS = season === "preseason" ? "undirbúningstímabil" : offSeason ? "utan tímabils, heldur eins og á keppnistímabili" : "keppnistímabil";
   const matchWeek = MATCH_WEEK_HEAVY_REPS[season];
   const weekReps = (matchWeek["MD-4"] ?? 0) + (matchWeek["MD-3"] ?? 0);
   const week = noMatch
