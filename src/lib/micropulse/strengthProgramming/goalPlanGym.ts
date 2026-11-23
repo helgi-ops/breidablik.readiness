@@ -33,10 +33,11 @@ import type { AppliedAdaptation, ExerciseCategory, PlayerStrengthSnapshot, Presc
 import { isGymQuality, type GoalQuality, type GoalSessionSlot } from "@/lib/micropulse/goalPlan/types";
 import { EXERCISES_BY_ID } from "./exerciseLibrary";
 import { goalSeasonOf } from "./playerGoal";
-import { HEAVY_REPS_MAX, NEAR_MATCH_ZONE, nearMatchDoseFor, speedZoneText, type NearMatchDay } from "./weekRule";
+import { BAR_PULL_IDS, HEAVY_REPS_MAX, LOADED_SQUAT_JUMP_IDS, NEAR_MATCH_ZONE, nearMatchDoseFor, speedZoneText, type NearMatchDay, type SpeedZone } from "./weekRule";
 
-/** The lift profiles a goal plan's gym block is read as (`goalPlan/liftRx.ts`). */
-export type GoalGymProfile = "heavy" | "technique" | "rdl" | "jump_squat" | "pull" | "nordic" | "eccentric" | "squat_fast" | "youth";
+/** The lift profiles a goal plan's gym block is read as (`goalPlan/liftRx.ts`). `iso_pull`, `single_leg`, `drop_jump`:
+ *  the gym-only goals' additions (brief §4a, 2026-11-23). */
+export type GoalGymProfile = "heavy" | "technique" | "rdl" | "jump_squat" | "pull" | "nordic" | "eccentric" | "squat_fast" | "youth" | "iso_pull" | "single_leg" | "drop_jump";
 
 export type GoalPlanGymLift = {
   profile: GoalGymProfile;
@@ -52,6 +53,9 @@ export type GoalPlanGymLift = {
   /** "2–3 min" when the plan says so. */
   rest: string | null;
   cue: string | null;
+  /** The coach's additions (brief §4a): a safety rule (or a safety swap holding the spot) leaves this lift out, and the
+   *  rest of the goal's lifts still go in. Without it, all or nothing. */
+  optional?: true;
 };
 
 /** One of the week's goal gym sessions on another day than today. */
@@ -145,6 +149,20 @@ function targetFor(l: GoalPlanGymLift, spareUpper: PrescribedExercise | null): T
       return { tiers: [(e) => HINGE_FAMILY.has(e.exerciseId)], keep: (id) => id === "ex_rdl", fallbackId: "ex_rdl", power: false };
     case "nordic":
       return { tiers: [(e) => e.exerciseId === "ex_nordic_curl"], keep: (id) => id === "ex_nordic_curl", fallbackId: "ex_nordic_curl", power: false };
+    case "iso_pull":
+      // The team's isometric spot (a mid-thigh pull or a squat hold) when it has one; else after the main lift.
+      return { tiers: [(e) => e.category === "ISOMETRIC_MAX"], keep: (id) => id === "ex_imtp_iso", fallbackId: "ex_imtp_iso", power: false };
+    case "single_leg":
+      // A one-leg lift's spot (not a one-leg hinge); else the second of two upper-body exercises; else after the main lift.
+      return {
+        tiers: [(e) => e.category === "UNILATERAL_STRENGTH" && !HINGE_FAMILY.has(e.exerciseId), (e) => spareUpper != null && e === spareUpper],
+        keep: (id) => SPLIT_FAMILY.has(id),
+        fallbackId: "ex_bulgarian_ss",
+        power: false,
+      };
+    case "drop_jump":
+      // The day's jump spot (a box jump or a drop jump); else first in the session (power first).
+      return { tiers: [(e) => e.category === "PLYOMETRIC"], keep: (id) => id === "ex_depth_jump", fallbackId: "ex_depth_jump", power: true };
     default: // heavy, technique, squat_fast, youth → the main two-leg lift
       return { tiers: [(e) => e.category === "COMPOUND_STRENGTH"], keep: (id) => SQUAT_FAMILY.has(id), fallbackId: "ex_trap_bar_dl", power: false };
   }
@@ -203,8 +221,43 @@ type MergeArgs = {
   /** Give-back day: a lift that cannot go in today is left out (the others still go in), and nothing is ever added:
    *  a lift only takes the place of a team exercise. */
   giveBack?: boolean;
+  /** Today's match day (the speed zones of the gym-only goals). */
+  md?: string | null;
 };
-type Merged = { kept: [string, string] } | { lines: string[]; linesIS: string[]; results: GoalLiftResult[] };
+type ZoneLine = { day: GoalZoneDay; en: string; is: string };
+type Merged = { kept: [string, string] } | { lines: string[]; linesIS: string[]; results: GoalLiftResult[]; zones: ZoneLine[]; leftOut: { en: string; is: string }[] };
+
+// ─── Bar-speed zones on the gym-only goals' lifts (brief §4a, 2026-11-23) ─────────────────────────────────────
+
+/** The day a goal lift's zone is read for: MD-4 is the heavy day, MD-3 the fast day. */
+export type GoalZoneDay = "MD-4" | "MD-3";
+/** The coach's zones, kept as written (UEFA B weekly plan, brief §4a). `heavy` = the bar lift (squat / trap bar),
+ *  `ballistic` = the loaded jump squat (a bar pull takes its lower end as a floor). Strength + power has none in the
+ *  brief, so none here. */
+export const GOAL_SPEED_ZONES: Partial<Record<GoalQuality, Record<GoalZoneDay, { heavy?: SpeedZone; ballistic?: SpeedZone }>>> = {
+  max_strength: { "MD-4": { heavy: { min: 0.55, max: 0.65 } }, "MD-3": { heavy: { min: 0.8, max: 0.9 } } },
+  explosive: { "MD-4": { heavy: { min: 0.8, max: 0.9 }, ballistic: { min: 1.1, max: 1.3 } }, "MD-3": { heavy: { min: 0.8, max: 0.9 }, ballistic: { min: 1.2, max: 1.4 } } },
+};
+
+export const GOAL_SPEED_ZONE_EVIDENCE =
+  "The bar-speed zones are the coach's (UEFA B weekly plan, 2026-11-22), kept as written: Maximal strength 0.55–0.65 m/s on MD-4 and 0.80–0.90 on MD-3; Explosive power 0.80–0.90 m/s and loaded jumps 1.1–1.3 on MD-4, loaded jumps 1.2–1.4 on MD-3. Which zone goes on which day is MicroPulse's rule, not from a study. The plan's % of max stays as the starting weight; with a device the speed decides the weight (Weakley 2021), and players differ by more than 10% at heavy weights (Thompson 2021). In professional footballers' squats 0.80 m/s was about 70% of max and 0.90 about 65% (Pareja-Blanco 2017, Smith machine), so a zone faster than the plan's % takes weight off. No study tested a target speed for loaded jumps or pulls; a pull takes the zone's lower end as a floor only.";
+
+/** The zone day: today's match day when it is MD-4 or MD-3; otherwise (no match near, or another day) the plan
+ *  session's own day — goal day 1 is the heavy day, goal day 2 the fast day. */
+export function goalZoneDay(md: string | null | undefined, slot: GoalSessionSlot): GoalZoneDay {
+  return md === "MD-4" || md === "MD-3" ? md : slot === "A" ? "MD-4" : "MD-3";
+}
+
+/** The zone one written goal lift takes, or null (no bar measured: body weight, one leg, an isometric, a technique
+ *  or youth lift, a goal without zones). */
+export function goalLiftZone(quality: GoalQuality, day: GoalZoneDay, lift: GoalPlanGymLift, exerciseId: string): SpeedZone | null {
+  const z = GOAL_SPEED_ZONES[quality]?.[day];
+  if (!z) return null;
+  if (lift.profile === "heavy" && SQUAT_FAMILY.has(exerciseId)) return z.heavy ?? null;
+  if (lift.profile === "jump_squat" && !/^bodyweight/i.test(lift.intensity ?? "") && LOADED_SQUAT_JUMP_IDS.has(exerciseId)) return z.ballistic ?? null;
+  if ((lift.profile === "pull" || lift.profile === "jump_squat") && BAR_PULL_IDS.has(exerciseId) && z.ballistic) return { min: z.ballistic.min, max: null };
+  return null;
+}
 
 /** Places the lifts in the session (each in the place of the matching team exercise) and writes them. */
 function mergeLifts(a: MergeArgs): Merged {
@@ -216,6 +269,8 @@ function mergeLifts(a: MergeArgs): Merged {
   type Step = { lift: GoalPlanGymLift; at: { b: number; i: number } | null; id: string; power: boolean };
   const used = new Set<string>(); // "b:i" already taken by another lift
   const steps: Step[] = [];
+  const leftOut: { en: string; is: string }[] = [];
+  const skip = (lift: GoalPlanGymLift, en: string, is: string) => leftOut.push({ en: `${lift.nameEN} left out: ${en}`, is: `${lift.nameIS || lift.nameEN} sleppt: ${is}` });
   // Spots are looked for in today's blocks and in the blocks still to come (indexes past `blocks` are `later`).
   const pool = [...blocks, ...later];
   const spareUpper = spareUpperOf(pool);
@@ -247,12 +302,14 @@ function mergeLifts(a: MergeArgs): Merged {
       // A safety swap holds this slot: never replaced.
       if (ex.isAdaptiveAddition || isPinned(ex.exerciseId)) {
         if (giveBack) continue;
+        if (lift.optional) { skip(lift, "a safety rule changed that exercise today", "öryggisregla breytti þeirri æfingu í dag"); continue; }
         return { kept: ["a safety rule changed that exercise today", "öryggisregla breytti þeirri æfingu í dag"] };
       }
     }
     const id = at && t.keep(pool[at.b].exercises[at.i].exerciseId) ? pool[at.b].exercises[at.i].exerciseId : t.fallbackId;
     if (isRuledOut(id) || !EXERCISES_BY_ID.has(id)) {
       if (giveBack) continue;
+      if (lift.optional) { skip(lift, "a safety rule rules it out today", "öryggisregla útilokar hana í dag"); continue; }
       return { kept: ["a safety rule rules one of its lifts out today", "öryggisregla útilokar eina lyftu hennar í dag"] };
     }
     steps.push({ lift, at, id, power: t.power });
@@ -265,6 +322,7 @@ function mergeLifts(a: MergeArgs): Merged {
   const tag = { en: `8-week goal (${q.en}), week ${a.week}`, is: `8 vikna markmið (${q.is}), vika ${a.week}` };
   const said = new Map<Step, { en: string; is: string; result: GoalLiftResult }>();
   const added: { step: Step; ex: PrescribedExercise }[] = [];
+  const zones: ZoneLine[] = [];
   // The heavy lift is written first: when the day's heavy reps cut a contrast block's rounds, the goal's own jump in
   // that block then takes the new rounds too. What is said keeps the plan's order.
   const heavyFirst = [...steps].sort((x, y) => Number(EXERCISES_BY_ID.get(y.id)?.category === "COMPOUND_STRENGTH") - Number(EXERCISES_BY_ID.get(x.id)?.category === "COMPOUND_STRENGTH"));
@@ -287,6 +345,10 @@ function mergeLifts(a: MergeArgs): Merged {
     const sets = room != null ? Math.min(target, room) : target;
     const capped = sets < target && !giveBack;
     const slot = a.slotOf(step.lift);
+    // The gym-only goals' bar-speed zone for the day (brief §4a): shown with the plan's %, which stays the starting weight.
+    const zDay = isGymQuality(a.quality) ? goalZoneDay(a.md, slot) : null;
+    const zone = zDay ? goalLiftZone(a.quality, zDay, step.lift, lib.id) : null;
+    const zText = zone ? speedZoneText(zone) : null;
     const why = giveBack
       ? " · sets the goal day could not hold"
       : `${capped ? (heavy ? `, ${sets} sets: the day's ${heavy.dayReps} heavy reps` : `, the team's ${sets} sets`) : ""}`;
@@ -300,11 +362,14 @@ function mergeLifts(a: MergeArgs): Merged {
       dose: {
         sets,
         reps: step.lift.reps.replace(/–/g, "-"),
-        intensity: step.lift.intensity ?? "",
+        intensity: [step.lift.intensity, zText].filter(Boolean).join(" · "),
         // A plan line with no time (the Nordic: the partner's set is the rest) keeps the slot's rest.
         rest: step.lift.rest ?? base?.dose.rest ?? "2 min",
         intraRepRestSec: null,
-        cue: step.lift.cue ?? undefined,
+        cue: (zone
+          ? [step.lift.cue, zone.max == null ? `Bar speed ${zText}: take weight off if it is slower` : `Bar speed ${zText}: add weight if it is faster, take weight off if slower`].filter(Boolean).join(" · ")
+          : step.lift.cue) ?? undefined,
+        ...(zone ? { speedZone: zone } : {}),
       },
       goalPlan: { quality: a.quality, week: a.week, slot, ...(giveBack ? { giveBack: true as const } : {}) },
       modificationReason: `${tag.en}${base && base.exerciseId !== lib.id ? ` — in place of ${base.nameEN}` : base ? "" : " — added"} · the goal's own dose${why}${yellow ? " · yellow day: half the sets" : ""}`,
@@ -317,8 +382,17 @@ function mergeLifts(a: MergeArgs): Merged {
       const blk = pool[step.at.b];
       blk.exercises = blk.exercises.map((e) => (e.goalPlan || e.dose.sets !== slotSets ? e : { ...e, dose: { ...e.dose, sets } }));
     }
-    const what = `${lib.nameEN} ${sets} × ${ex.dose.reps}`;
-    const whatIS = `${lib.nameIS || lib.nameEN} ${sets} × ${ex.dose.reps}`;
+    const what = `${lib.nameEN} ${sets} × ${ex.dose.reps}${zText ? ` at ${zText}` : ""}`;
+    const whatIS = `${lib.nameIS || lib.nameEN} ${sets} × ${ex.dose.reps}${zText ? ` á ${zText.replace(/(\d)\.(\d)/g, "$1,$2")}` : ""}`;
+    if (zone && zDay) {
+      const zIS = zText!.replace(/(\d)\.(\d)/g, "$1,$2");
+      const floor = zone.max == null;
+      zones.push({
+        day: zDay,
+        en: `${lib.nameEN} ${floor ? `at least ${zText!.replace("≥ ", "")}` : zText}${step.lift.intensity ? ` (the plan's ${step.lift.intensity} is where to start)` : ""}`,
+        is: `${lib.nameIS || lib.nameEN} ${floor ? `minnst ${zIS.replace("≥ ", "")}` : zIS}${step.lift.intensity ? ` (${step.lift.intensity.replace("1RM", "af hámarki")} áætlunarinnar er byrjunarþyngdin)` : ""}`,
+      });
+    }
     const capEN = !capped ? "" : heavy ? ` (${sets} sets: today holds ${heavy.dayReps} heavy reps by the week rule; the plan says ${step.lift.sets})` : ` (${sets} sets as the team's exercise; the plan says ${step.lift.sets})`;
     const capIS = !capped ? "" : heavy ? ` (${sets} sett: dagurinn hefur ${heavy.dayReps} þungar endurtekningar eftir vikureglunni; áætlunin segir ${step.lift.sets})` : ` (${sets} sett eins og æfing liðsins; áætlunin segir ${step.lift.sets})`;
     said.set(step, {
@@ -344,7 +418,7 @@ function mergeLifts(a: MergeArgs): Merged {
   }
 
   // The team's own order stands (a contrast block pairs heavy → jump on purpose); a replaced lift keeps its place.
-  return { lines, linesIS, results };
+  return { lines, linesIS, results, zones, leftOut };
 }
 
 /**
@@ -394,17 +468,40 @@ export function applyGoalPlanGym(
       : kept("today's structure has no heavy lift", "uppsetning dagsins er án þungrar lyftu");
   }
 
-  const merged = mergeLifts({ blocks, later, lifts: g.lifts, quality: g.quality, week: g.week, slotOf: () => slot, yellow, isRuledOut, isPinned, dayHeavyReps: opts.dayHeavyReps });
+  const merged = mergeLifts({ blocks, later, lifts: g.lifts, quality: g.quality, week: g.week, slotOf: () => slot, yellow, isRuledOut, isPinned, dayHeavyReps: opts.dayHeavyReps, md: snap.mdContext });
   if ("kept" in merged) return kept(...merged.kept);
   opts.results?.push(...merged.results);
+  const outEN = merged.leftOut.length ? ` ${merged.leftOut.map((x) => x.en).join("; ")}.` : "";
+  const outIS = merged.leftOut.length ? ` ${merged.leftOut.map((x) => x.is).join("; ")}.` : "";
 
   return [{
     ruleId: "GOAL_PLAN_GYM_MERGED",
     triggerEN: trigEN,
     triggerIS: trigIS,
-    actionEN: `The goal's gym session is part of today's session: ${merged.lines.join("; ")}.${yellow ? " Yellow day: half the sets." : ""}`,
-    actionIS: `Salur-æfing markmiðsins er hluti af æfingu dagsins: ${merged.linesIS.join("; ")}.${yellow ? " Gulur dagur: hálf sett." : ""}`,
+    actionEN: `The goal's gym session is part of today's session: ${merged.lines.join("; ")}.${yellow ? " Yellow day: half the sets." : ""}${outEN}`,
+    actionIS: `Salur-æfing markmiðsins er hluti af æfingu dagsins: ${merged.linesIS.join("; ")}.${yellow ? " Gulur dagur: hálf sett." : ""}${outIS}`,
     evidence: GOAL_PLAN_GYM_EVIDENCE,
+  }, ...zoneAudit(g, merged.zones, snap.mdContext)];
+}
+
+/** One line for the day's bar-speed zones on the goal's lifts (brief §4a). */
+function zoneAudit(g: GoalPlanGym, zones: ZoneLine[], md: string | null | undefined): AppliedAdaptation[] {
+  if (!zones.length) return [];
+  const q = QUALITY_NAME[g.quality];
+  const day = zones[0].day;
+  const byDay = md === "MD-4" || md === "MD-3"
+    ? { en: day, is: day }
+    : {
+        en: `${day === "MD-4" ? "goal day 1, the heavy day" : "goal day 2, the fast day"} (${day}'s zone; ${md ? `today is ${md}` : "no match near"})`,
+        is: `${day === "MD-4" ? "markmiðsdagur 1, þungi dagurinn" : "markmiðsdagur 2, hraði dagurinn"} (svæði ${day}; ${md ? `í dag er ${md}` : "enginn leikur nálægt"})`,
+      };
+  return [{
+    ruleId: "GOAL_PLAN_SPEED_ZONE",
+    triggerEN: `8-week goal: ${q.en}, week ${g.week} of ${g.weeksTotal}, ${byDay.en}`,
+    triggerIS: `8 vikna markmið: ${q.is}, vika ${g.week} af ${g.weeksTotal}, ${byDay.is}`,
+    actionEN: `Bar speed on the goal's lifts: ${zones.map((z) => z.en).join("; ")}. With a device the speed decides the weight.`,
+    actionIS: `Stangarhraði á lyftum markmiðsins: ${zones.map((z) => z.is).join("; ")}. Með mæli ræður hraðinn þyngdinni.`,
+    evidence: GOAL_SPEED_ZONE_EVIDENCE,
   }];
 }
 
@@ -433,11 +530,11 @@ export function applyGoalGiveBack(
   const merged = mergeLifts({
     blocks, later, lifts: owed.map((o) => o.lift), quality: g.quality, week: g.week,
     slotOf: (lift) => byLift.get(lift)?.fromSlot ?? "B",
-    yellow: false, isRuledOut, isPinned, dayHeavyReps, giveBack: true,
+    yellow: false, isRuledOut, isPinned, dayHeavyReps, giveBack: true, md: snap.mdContext,
   });
   if ("kept" in merged || !merged.lines.length) return [];
   const q = QUALITY_NAME[g.quality];
-  return [{
+  return [...zoneAudit(g, merged.zones, snap.mdContext), {
     ruleId: "GOAL_PLAN_GYM_GIVE_BACK",
     triggerEN: `Week rule, 8-week goal (${q.en}, week ${g.week} of ${g.weeksTotal}): the goal day holds fewer sets than the plan says`,
     triggerIS: `Vikuregla, 8 vikna markmið (${q.is}, vika ${g.week} af ${g.weeksTotal}): markmiðsdagurinn rúmar færri sett en áætlunin segir`,

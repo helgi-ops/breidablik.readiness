@@ -35,7 +35,8 @@
  */
 
 import { WEEKDAYS, mondayOfIso, noMatchDayFor, type NoMatchDayKind, type NoMatchWeek } from "./structures";
-import { DAY_RULES } from "./dayRules";
+import { DAY_RULES, zoneNum } from "./dayRules";
+export { zoneNum };
 import type { AppliedAdaptation, MdContext, PlayerStrengthSnapshot, PrescribedExercise, SessionBlock } from "./types";
 
 /** Pre-season builds; every other part of the year holds (in season, off-season, not known). */
@@ -250,9 +251,10 @@ export const NEAR_MATCH_ZONE: Record<NearMatchDay, { nameEN: string; nameIS: str
 /** The near-match day a build is: MD-1 on MD-1, else MD-2 (MD-2 itself, and a light day in a week without a match). */
 export const nearMatchDayOf = (md: MdContext): NearMatchDay => (md === "MD-1" ? "MD-1" : "MD-2");
 
-/** "1.0–1.3 m/s" / "≥ 1.3 m/s" (no words, so the line reads the same in both languages). */
+/** "1.0–1.3 m/s" / "≥ 1.3 m/s" / "0.55–0.65 m/s" (no words, so the line reads the same in both languages). One
+ *  decimal unless the bound needs two (0.55 printed as 0.6 before 2026-11-23). */
 export function speedZoneText(z: SpeedZone): string {
-  const f = (n: number) => n.toFixed(1);
+  const f = zoneNum;
   return z.max == null ? `≥ ${f(z.min)} m/s` : `${f(z.min)}–${f(z.max)} m/s`;
 }
 

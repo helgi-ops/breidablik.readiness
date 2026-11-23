@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { squadDsiThresholds } from "../deriveDsi";
-import { suggestGoalFromDsi, type DsiSuggestionInput } from "../goalSuggestion";
+import { IMTP_SUGGESTION_SOURCE, squadImtpThreshold, suggestGoalFromDsi, type DsiSuggestionInput } from "../goalSuggestion";
 
 // Team ratios 0.70 … 0.95 → lower third ≈ 0.78, upper third ≈ 0.87.
 const squad = squadDsiThresholds([0.7, 0.75, 0.8, 0.82, 0.85, 0.9, 0.95])!;
@@ -62,6 +62,36 @@ describe("when DSI says nothing", () => {
   it("a test older than 12 months", () => {
     expect(suggestGoalFromDsi(player(0.72, { imtpTestDate: "2025-11-01" }), squad, today)).toBeNull();
     expect(suggestGoalFromDsi(player(0.72, { cmjTestDate: "2025-11-17" }), squad, today)?.goal).toBe("explosive"); // exactly 365 days
+  });
+});
+
+describe("the strength test first: mid-thigh pull per kg in the team's lower third (brief §4a)", () => {
+  // Team N/kg 28 … 40 → lower third = 32.
+  const imtpSquad = squadImtpThreshold([28, 30, 32, 34, 36, 38, 40])!;
+
+  it("the cut is the team's lower third, from 4 or more tested", () => {
+    expect(imtpSquad).toEqual({ lower: 32, n: 7 });
+    expect(squadImtpThreshold([30, 32, 34])).toBeNull();
+    expect(squadImtpThreshold([30, null, 32, undefined, 34, 0])).toBeNull();
+  });
+
+  it("a weak pull → Maximal strength, even when the DSI points to Explosive power", () => {
+    const s = suggestGoalFromDsi(player(0.72, { imtpRelNkg: 29.4 }), squad, today, imtpSquad)!;
+    expect(s).toMatchObject({ goal: "max_strength", basis: "imtp", imtpDate: "2026-09-20", cmjDate: "2026-10-01", tested: 7, confidence: "high" });
+    expect(s.reasonEN).toBe("Your mid-thigh pull is 29.4 N per kg of body weight, in the lower third of your team. More strength is the next step.");
+    expect(s.reasonIS).toContain("29,4 N á hvert kg");
+    expect(s.source).toBe(IMTP_SUGGESTION_SOURCE);
+  });
+
+  it("needs only the pull: no jump test, no DSI team read", () => {
+    const s = suggestGoalFromDsi(player(0.72, { cmjPeakForceN: null, cmjTestDate: null, imtpRelNkg: 30 }), null, today, imtpSquad)!;
+    expect(s).toMatchObject({ goal: "max_strength", cmjDate: null });
+  });
+
+  it("a pull in the middle or above → the DSI decides as before; an old pull → nothing", () => {
+    expect(suggestGoalFromDsi(player(0.72, { imtpRelNkg: 35 }), squad, today, imtpSquad)).toMatchObject({ goal: "explosive", basis: "dsi" });
+    expect(suggestGoalFromDsi(player(0.72, { imtpRelNkg: 29, imtpTestDate: "2025-11-01" }), squad, today, imtpSquad)).toBeNull();
+    expect(suggestGoalFromDsi(player(0.72, { imtpRelNkg: 29 }), squad, today, null)?.goal).toBe("explosive");
   });
 });
 

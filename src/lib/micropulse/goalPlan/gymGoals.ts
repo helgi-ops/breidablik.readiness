@@ -28,12 +28,18 @@
  *
  * Start (MicroPulse rule): the strength test first, DSI second, as Suchomel 2020 advises. Under 18 or age unknown →
  * technique-first lifts and body-weight jumps only, whatever the data say.
+ *
+ * The coach's additions (brief §4a, 2026-11-23; GOAL_CONTENT_VERSION 2026-11-23.1): Maximal strength's heavy day also
+ * holds an isometric mid-thigh pull and a one-leg lift; Explosive power's heavy day a fast isometric pull and its second
+ * day low drop jumps (20–30 cm, never higher: the MD-3 day rule). The research doses above stay as they were. The
+ * isometric pull and the one-leg lift doses are MicroPulse's (the coach's), not from a study; the drop jumps use the
+ * jump plan's tested start (Sánchez-Sixto 2021: 20 → 30 cm) and stop at 30 cm.
  */
 
 import { ACCEL_REFS, PULLING_DERIVATIVES } from "./acceleration";
 import { BAND_LABEL, expandWeeks, isYouth, pickStart, weekLabel } from "./common";
 import type { GoalParts } from "./index";
-import { JUMP_BLOCKS, JUMP_REFS } from "./jump";
+import { JUMP_BLOCKS, JUMP_METHODS, JUMP_REFS } from "./jump";
 import type { TrainingLevel } from "./levels";
 import type { Bi, GoalBlock, GoalMethod, GoalPlanInput, GoalRef, GoalSession, GymQuality } from "./types";
 
@@ -82,7 +88,12 @@ export const GYM_REFS: Record<string, GoalRef> = {
   suchomel2017: ACCEL_REFS.suchomel2017,
   garciavalverde2022: ACCEL_REFS.garciavalverde2022,
   marshall2021: JUMP_REFS.marshall2021,
+  sanchezsixto2021: JUMP_REFS.sanchezsixto2021,
+  saezdevillarreal2009: JUMP_REFS.saezdevillarreal2009,
 };
+
+/** The jump plan's drop-jump card, with the gym goal's own dose (low box only). */
+const JUMP_DROP_CARD = JUMP_METHODS.find((m) => m.key === "drop_jumps")!;
 
 // ─── Methods (the coach's library cards and the sources each lift line is checked against) ───────────────────────
 
@@ -135,6 +146,36 @@ export const GYM_METHODS: GoalMethod[] = [
     dose: { en: "Weeks 1 and 8, same test and set-up each time", is: "Vikur 1 og 8, sama próf og uppsetning í hvert sinn" },
     findings: [],
   },
+  {
+    key: "iso_pull",
+    label: { en: "Isometric mid-thigh pull", is: "Kyrrstöðutog frá miðju læri" },
+    summary: { en: "Pull as hard as possible on a bar fixed at mid-thigh: the same position as the strength test, no bar movement.", is: "Togaðu eins fast og hægt er í stöng sem er föst við miðju læri: sama staða og í styrkprófinu, stöngin hreyfist ekki." },
+    basis: "rule",
+    dose: { en: "Maximal strength: 3 × 3–5 s, as hard as possible · Explosive power: 3 × 2 s, as hard and fast as possible · 2 min rest", is: "Hámarksstyrkur: 3 × 3–5 sek, eins fast og hægt er · Sprengikraftur: 3 × 2 sek, eins fast og hratt og hægt er · 2 mín hvíld" },
+    howTo: [
+      { en: "On the heavy day, after the heavy lift. Bar at mid-thigh, back flat, shoulders over the bar, as in the test.", is: "Á þunga deginum, á eftir þungu lyftunni. Stöng við miðju læri, bak beint, axlir yfir stönginni, eins og í prófinu." },
+      { en: "Build to a full pull within about 1 s and hold (strength); or pull as fast as possible from the first moment (power).", is: "Byggðu upp í fullt tog á um 1 sek og haltu (styrkur); eða togaðu eins hratt og hægt er frá fyrsta augnabliki (kraftur)." },
+    ],
+    findings: [],
+    caution: { en: "The coach's addition (2026-11-22). No study behind this plan tested isometric pulls as training; the dose is MicroPulse's.", is: "Viðbót þjálfarans (2026-11-22). Engin rannsókn á bak við þessa áætlun prófaði kyrrstöðutog sem þjálfun; skammturinn er MicroPulse." },
+  },
+  {
+    key: "single_leg_strength",
+    label: { en: "One-leg strength", is: "Styrkur á öðrum fæti" },
+    summary: { en: "A split squat on each leg, with a few reps left in the tank.", is: "Hnébeygja í skrefstöðu á hvorum fæti, með nokkrar endurtekningar eftir." },
+    basis: "rule",
+    dose: { en: "2 × 5–6 each leg, 2–3 reps in reserve, 2 min rest", is: "2 × 5–6 á hvorn fót, 2–3 endurtekningar eftir, 2 mín hvíld" },
+    howTo: [
+      { en: "On the heavy day, after the heavy lift and the isometric pull. Reps in reserve, not bar speed.", is: "Á þunga deginum, á eftir þungu lyftunni og kyrrstöðutoginu. Endurtekningar eftir, ekki stangarhraði." },
+      { en: "Front knee over the middle of the foot; the weaker leg sets the reps.", is: "Fremra hné yfir miðjum fæti; veikari fóturinn ræður endurtekningunum." },
+    ],
+    findings: [],
+    caution: { en: "The coach's addition (2026-11-22). The dose is MicroPulse's, not from a study.", is: "Viðbót þjálfarans (2026-11-22). Skammturinn er MicroPulse, ekki úr rannsókn." },
+  },
+  {
+    ...JUMP_DROP_CARD,
+    dose: { en: "3 × 3 from a 20–30 cm box, never higher (the MD-3 day rule: 30 cm, 9 drop jumps at most)", is: "3 × 3 af 20–30 cm kassa, aldrei hærra (dagsregla MD-3: mest 30 cm og 9 fallhopp)" },
+  },
 ];
 
 // ─── Blocks ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -182,6 +223,34 @@ const bodyJumpSquats = (sets: number, reps = 6): GoalBlock => ({
   what: { en: "Body-weight jump squats", is: "Hnébeygjuhopp með eigin þyngd" },
   dose: { en: `${sets} × ${reps}, body weight, as high as possible`, is: `${sets} × ${reps}, eigin þyngd, eins hátt og hægt er` },
 });
+
+/** The coach's isometric mid-thigh pull (brief §4a): held as hard as possible (strength) or as fast as possible (power). */
+const isoPull = (sets: number, secs: number, fast = false): GoalBlock => ({
+  method: "iso_pull",
+  what: fast ? { en: "Isometric mid-thigh pull, fast", is: "Kyrrstöðutog frá miðju læri, hratt" } : { en: "Isometric mid-thigh pull", is: "Kyrrstöðutog frá miðju læri" },
+  dose: fast
+    ? { en: `Isometric mid-thigh pull ${sets} × ${secs} s, as hard and as fast as possible, 2 min rest`, is: `Kyrrstöðutog frá miðju læri ${sets} × ${secs} sek, eins fast og eins hratt og hægt er, 2 mín hvíld` }
+    : { en: `Isometric mid-thigh pull ${sets} × ${secs} s, as hard as possible, 2 min rest`, is: `Kyrrstöðutog frá miðju læri ${sets} × ${secs} sek, eins fast og hægt er, 2 mín hvíld` },
+});
+
+/** The coach's one-leg lift (brief §4a): reps in reserve, not bar speed. */
+const singleLeg = (sets: number, reps: number): GoalBlock => ({
+  method: "single_leg_strength",
+  what: { en: "One-leg strength", is: "Styrkur á öðrum fæti" },
+  dose: { en: `Bulgarian split squat ${sets} × ${reps} each leg, 2–3 reps in reserve, 2 min rest`, is: `Búlgörsk hnébeygja ${sets} × ${reps} á hvorn fót, 2–3 endurtekningar eftir, 2 mín hvíld` },
+});
+
+/** Low drop jumps (brief §4a): 3 a set, box 20–30 cm, never higher (the MD-3 day rule). */
+const lowDrops = (sets: number, cm: number): GoalBlock => ({
+  method: "drop_jumps",
+  dropJumps: true,
+  contacts: sets * 3,
+  what: { en: "Drop jumps, low box", is: "Fallhopp, lágur kassi" },
+  dose: { en: `Drop jumps ${sets} × 3 from a ${cm} cm box, 2 min rest`, is: `Fallhopp ${sets} × 3 af ${cm} cm kassa, 2 mín hvíld` },
+});
+
+/** Box by power week (Sánchez-Sixto 2021's start, 20 → 30 cm, then held at 30 cm). */
+const DROP_BY_WEEK: Array<[number, number]> = [[2, 20], [3, 20], [3, 25], [3, 30], [3, 30], [3, 30]];
 
 const strengthTest: GoalBlock = {
   method: "strength_test",
@@ -273,13 +342,15 @@ export function maxStrengthWeeks(start: MaxStrengthStart, level: TrainingLevel =
   const beg = level === "beginner";
   const adv = level === "advanced";
   const rows: Wk[] = MAX_STRENGTH_DOSE.map((d, i) => {
+    // The heavy day's two additions (brief §4a): an isometric pull (3 s, then 5 s from week 3) and a one-leg lift.
+    const extra = [isoPull(3, i < 2 ? 3 : 5), singleLeg(2, i < 3 ? 6 : 5)];
     // Beginner: technique first for weeks 1–3, then the lighter end (never above 85%). Advanced: one more heavy-day set from week 2.
-    if (beg && i < 3) return { a: sess("A", i === 0 ? F.test : F.youth, [...(i === 0 ? [strengthTest] : []), technique()]), b: sess("B", F.youth, [technique()]), label: i === 0 ? TEST_START : undefined };
+    if (beg && i < 3) return { a: sess("A", i === 0 ? F.test : F.youth, [...(i === 0 ? [strengthTest] : []), technique(), ...extra]), b: sess("B", F.youth, [technique()]), label: i === 0 ? TEST_START : undefined };
     const aSets = adv && i >= 1 ? String(Number(d.a[0]) + 1) : d.a[0];
     const aPct = beg ? "75–85" : d.a[2];
     const a = heavy(aSets, d.a[1], aPct);
     const b = heavy(d.b[0], d.b[1], d.b[2], "3");
-    return { a: sess("A", i === 0 ? F.test : F.heavyDay, [...(i === 0 ? [strengthTest] : []), a]), b: sess("B", F.lighterDay, [b]), label: i === 0 ? TEST_START : undefined };
+    return { a: sess("A", i === 0 ? F.test : F.heavyDay, [...(i === 0 ? [strengthTest] : []), a, ...extra]), b: sess("B", F.lighterDay, [b]), label: i === 0 ? TEST_START : undefined };
   });
   rows.push({ a: sess("A", F.light, [heavyLight]), b: sess("B", F.light, [heavyLight]), label: EASE });
   rows.push({ a: sess("A", F.test, [strengthTest, heavyLight]), b: sess("B", F.light, [heavyLight]), label: TEST });
@@ -354,14 +425,17 @@ export function explosiveWeeks(start: ExplosiveStart, level: TrainingLevel = "in
     const firstPower = start === "strength_first" ? 3 : 0;
     const bodyOnly = beg && i < firstPower + 2;
     const aSets = adv ? a + 1 : a;
+    // The coach's additions (brief §4a): a fast isometric pull on the heavy day, low drop jumps on the second day (not
+    // in a beginner's body-weight weeks). The box starts at 20 cm in the first power week.
+    const [ds, cm] = DROP_BY_WEEK[i - firstPower];
     return {
-      a: sess("A", testWeek ? F.testPower : F.powerKeep, [...t, bodyOnly ? bodyJumpSquats(aSets, 5) : lightJumpSquats(aSets), keep()]),
-      b: sess("B", F.powerDay, [bodyJumpSquats(adv ? b + 1 : b)]),
+      a: sess("A", testWeek ? F.testPower : F.powerKeep, [...t, bodyOnly ? bodyJumpSquats(aSets, 5) : lightJumpSquats(aSets), keep(), isoPull(3, 2, true)]),
+      b: sess("B", F.powerDay, [bodyJumpSquats(adv ? b + 1 : b), ...(bodyOnly ? [] : [lowDrops(ds, cm)])]),
       label,
     };
   });
-  rows.push({ a: sess("A", F.light, [lightJumpSquats(3), heavyLight]), b: sess("B", F.light, [bodyJumpSquats(3)]), label: EASE });
-  rows.push({ a: sess("A", F.testPower, [cmjTest, lightJumpSquats(3), heavyLight]), b: sess("B", F.light, [bodyJumpSquats(3)]), label: TEST });
+  rows.push({ a: sess("A", F.light, [lightJumpSquats(3), heavyLight]), b: sess("B", F.light, [bodyJumpSquats(3), lowDrops(2, 20)]), label: EASE });
+  rows.push({ a: sess("A", F.testPower, [cmjTest, lightJumpSquats(3), heavyLight]), b: sess("B", F.light, [bodyJumpSquats(3), lowDrops(2, 20)]), label: TEST });
   return weeks8(rows);
 }
 
@@ -461,6 +535,10 @@ const LIMIT_DSI: Bi = {
   en: "No study tested choosing the plan from the strength test and the strength-to-jump ratio (DSI); the DSI cut-offs were never tested in training. That choice is MicroPulse's rule.",
   is: "Engin rannsókn prófaði að velja áætlunina út frá styrkprófi og hlutfalli styrks og stökks (DSI); DSI-mörkin voru aldrei prófuð í þjálfun. Það val er regla MicroPulse.",
 };
+const LIMIT_ADDITIONS: Bi = {
+  en: "The isometric pull, the one-leg lift and the low drop jumps are the coach's additions (2026-11-22). No study behind this plan tested them inside it; their doses are MicroPulse's, except the drop jumps' start (Sánchez-Sixto 2021), stopped at 30 cm.",
+  is: "Kyrrstöðutogið, lyftan á öðrum fæti og lágu fallhoppin eru viðbætur þjálfarans (2026-11-22). Engin rannsókn á bak við þessa áætlun prófaði þær innan hennar; skammtarnir eru MicroPulse, nema byrjun fallhoppanna (Sánchez-Sixto 2021), stöðvuð við 30 cm.",
+};
 const LIMIT_SEQUENCE: Bi = {
   en: "\"Strength first, then power\" is the authors' advice; no study here tested a strength block before a power block against power alone (Marshall 2021).",
   is: "„Styrkur fyrst, svo kraftur\" er ráð höfundanna; engin rannsókn hér prófaði styrkblokk á undan kraftblokk á móti krafti einum (Marshall 2021).",
@@ -516,6 +594,7 @@ export function buildMaxStrengthParts(input: GoalPlanInput): GoalParts {
       LIMIT_MEN,
       { en: "Stronger players jump higher and sprint faster on average, but no study gives a strength level after which more stops helping (Stone 2002).", is: "Sterkari leikmenn stökkva hærra og hlaupa hraðar að jafnaði, en engin rannsókn gefur styrkstig þar sem meiri styrkur hættir að hjálpa (Stone 2002)." },
       LIMIT_DSI,
+      ...(start === "youth" ? [] : [LIMIT_ADDITIONS]),
     ],
     refs: ["cormie2010a", "cuthbert2021", "stone2002", "smilios2013", "suchomel2020"].map((k) => GYM_REFS[k]),
   };
@@ -563,8 +642,9 @@ export function buildExplosiveParts(input: GoalPlanInput): GoalParts {
       { en: "Stronger men tended to gain more from jump squats than weaker men, but the difference was not significant (Cormie 2010b).", is: "Sterkari karlar bættu sig að jafnaði meira af hnébeygjuhoppum en þeir veikari, en munurinn var ekki marktækur (Cormie 2010b)." },
       LIMIT_SEQUENCE,
       LIMIT_DSI,
+      ...(start === "youth" ? [] : [LIMIT_ADDITIONS]),
     ],
-    refs: ["cormie2010a", "cormie2010b", "smilios2013", "cormie2007", "marshall2021", "suchomel2020", "suchomel2017", "garciavalverde2022"].map((k) => GYM_REFS[k]),
+    refs: ["cormie2010a", "cormie2010b", "smilios2013", "cormie2007", "marshall2021", "suchomel2020", "suchomel2017", "garciavalverde2022", ...(start === "youth" ? [] : ["sanchezsixto2021", "saezdevillarreal2009"])].map((k) => GYM_REFS[k]),
   };
 }
 

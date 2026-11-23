@@ -28,7 +28,7 @@ import { SEND_MODE_TEXT, type SendMode } from "@/lib/micropulse/strengthProgramm
 
 type Group = { slot: string; label: { en: string; is: string }; max: number; options: { id: string; nameEN: string; nameIS: string }[] };
 type Goal = { id: string; en: string; is: string; whatEN: string; whatIS: string };
-type Suggestion = { goal: string; reasonEN: string; reasonIS: string; cmjDate: string; imtpDate: string; tested: number; confidence: "high" | "moderate"; source: string };
+type Suggestion = { goal: string; reasonEN: string; reasonIS: string; cmjDate: string | null; imtpDate: string; tested: number; confidence: "high" | "moderate"; source: string; basis?: "imtp" | "dsi" };
 type PlayerRow = {
   id: string;
   name: string;
@@ -284,8 +284,8 @@ export default function PlayerExercisePicksPanel({ isEN }: { isEN: boolean }) {
                             {p.goal ? <span className="block text-slate-800">{goalName(p.goal)}</span> : <span className="text-slate-400">{T("none", "ekkert")}</span>}
                             {p.retiredGoal ? <span className="mt-0.5 block text-[10px] text-slate-400" title={isEN ? p.retiredGoal.en : p.retiredGoal.is}>{T("old goal retired", "gamalt markmið hætt")}</span> : null}
                             {p.suggestion ? (
-                              <span className="mt-0.5 block text-[10px] text-slate-500" title={`${isEN ? p.suggestion.reasonEN : p.suggestion.reasonIS} (${p.suggestion.cmjDate} / ${p.suggestion.imtpDate}, ${p.suggestion.tested} ${T("tested", "prófaðir")}). ${p.suggestion.source}`}>
-                                {T("DSI suggests: ", "DSI bendir á: ")}{dsiGoalName(p.suggestion.goal)}
+                              <span className="mt-0.5 block text-[10px] text-slate-500" title={`${isEN ? p.suggestion.reasonEN : p.suggestion.reasonIS} (${[p.suggestion.cmjDate, p.suggestion.imtpDate].filter(Boolean).join(" / ")}, ${p.suggestion.tested} ${T("tested", "prófaðir")}). ${p.suggestion.source}`}>
+                                {p.suggestion.basis === "imtp" ? T("Pull test suggests: ", "Togpróf bendir á: ") : T("DSI suggests: ", "DSI bendir á: ")}{dsiGoalName(p.suggestion.goal)}
                               </span>
                             ) : null}
                             {p.goalLocked ? <span className="mt-0.5 block text-[10px] font-semibold text-[#de9328]">{T("Locked", "Læst")}</span> : null}
@@ -422,11 +422,11 @@ function GoalEditor({ isEN, player, goals, busy, onSave, onClose }: {
       {player.retiredGoal ? <p className="text-[12px] text-slate-500">{isEN ? player.retiredGoal.en : player.retiredGoal.is}</p> : null}
       {player.suggestion ? (
         <p className="text-[12px] text-slate-600" data-testid="coach-goal-suggestion">
-          <span className="font-semibold">{T("DSI suggests: ", "DSI bendir á: ")}{dsiGoalLabel(player.suggestion.goal, isEN)}</span>
+          <span className="font-semibold">{player.suggestion.basis === "imtp" ? T("Pull test suggests: ", "Togpróf bendir á: ") : T("DSI suggests: ", "DSI bendir á: ")}{dsiGoalLabel(player.suggestion.goal, isEN)}</span>
           {" — "}{isEN ? player.suggestion.reasonEN : player.suggestion.reasonIS}
           <span className="block text-[11px] text-slate-400">
-            {T(`Jump test ${player.suggestion.cmjDate}, pull test ${player.suggestion.imtpDate}; ${player.suggestion.tested} tested on the team; ${player.suggestion.confidence === "high" ? "3+ good tries in both" : "few tries, treat as provisional"}. Rules, not AI.`,
-              `Stökkpróf ${player.suggestion.cmjDate}, togpróf ${player.suggestion.imtpDate}; ${player.suggestion.tested} prófaðir í liðinu; ${player.suggestion.confidence === "high" ? "3+ góðar tilraunir í báðum" : "fáar tilraunir, bráðabirgða"}. Reglur, ekki gervigreind.`)}
+            {T(`${player.suggestion.cmjDate ? `Jump test ${player.suggestion.cmjDate}, pull` : "Pull"} test ${player.suggestion.imtpDate}; ${player.suggestion.tested} tested on the team; ${player.suggestion.confidence === "high" ? (player.suggestion.basis === "imtp" ? "3+ good tries" : "3+ good tries in both") : "few tries, treat as provisional"}. Rules, not AI.`,
+              `${player.suggestion.cmjDate ? `Stökkpróf ${player.suggestion.cmjDate}, togpróf` : "Togpróf"} ${player.suggestion.imtpDate}; ${player.suggestion.tested} prófaðir í liðinu; ${player.suggestion.confidence === "high" ? (player.suggestion.basis === "imtp" ? "3+ góðar tilraunir" : "3+ góðar tilraunir í báðum") : "fáar tilraunir, bráðabirgða"}. Reglur, ekki gervigreind.`)}
           </span>
         </p>
       ) : null}

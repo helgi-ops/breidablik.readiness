@@ -19,6 +19,7 @@
  */
 
 import { EXERCISE_LIBRARY, EXERCISES_BY_ID } from "./exerciseLibrary";
+import { zoneNum } from "./dayRules";
 import type { Exercise, ExerciseCategory, PrescribedExercise } from "./types";
 import { rxForProfile, type LiftRx, type RxBarKey, type RxLine, type RxRowKey, type SessionLiftProfile } from "@/lib/micropulse/goalPlan/liftRx";
 import { readVbtPlayerCard, type VbtPlayerCard } from "@/lib/micropulse/vbtMethods";
@@ -288,8 +289,8 @@ export function rxForTodayItem(raw: unknown, parsed: ParsedTodayLine, block: unk
       // ("No target speed …"). The speed sets the load; the % on the load row is only where to start.
       const zone = speedZoneOf(item.speedZone);
       if (target == null && zone) {
-        const lo = zone.min.toFixed(1);
-        const hi = zone.max != null ? zone.max.toFixed(1) : null;
+        const lo = zoneNum(zone.min);
+        const hi = zone.max != null ? zoneNum(zone.max) : null;
         const line = { key: "target" as const, line: hi
           ? sess(`${lo}–${hi} m/s on each rep. Faster: add weight. Slower: take weight off.`, `${isNum(lo)}–${isNum(hi)} m/s í hverri endurtekningu. Hraðar: bættu á. Hægar: taktu af.`)
           : sess(`${lo} m/s or faster on each rep. Slower: take weight off.`, `${isNum(lo)} m/s eða hraðar í hverri endurtekningu. Hægar: taktu af.`) };

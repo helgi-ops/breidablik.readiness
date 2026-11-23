@@ -20,7 +20,9 @@ import type { GoalGymProfile, GoalPlanGym, GoalPlanGymLift } from "@/lib/micropu
 /** A pull swap names its lift (Programme Library, lota 6). */
 const PULL_ID: Record<string, string> = { jump_shrug: "ex_jump_shrug", hang_high_pull: "ex_hang_high_pull" };
 
-const GYM_PROFILES = new Set<GoalGymProfile>(["heavy", "technique", "rdl", "jump_squat", "pull", "nordic", "eccentric", "squat_fast", "youth"]);
+const GYM_PROFILES = new Set<GoalGymProfile>(["heavy", "technique", "rdl", "jump_squat", "pull", "nordic", "eccentric", "squat_fast", "youth", "iso_pull", "single_leg", "drop_jump"]);
+/** The coach's additions (brief §4a): a safety rule can leave one out without keeping the whole session on the card. */
+const OPTIONAL = new Set<GoalGymProfile>(["iso_pull", "single_leg", "drop_jump"]);
 
 /** The rest line in the engine's own form ("3 min", "90s", "90s–2 min"); null when it gives no time (Nordic: the
  *  partner's set). Seconds were missed before 2026-11-18, so the braking split squat got the default 2 min, not 90 s. */
@@ -44,7 +46,8 @@ function liftOf(b: GoalBlock, rx: LiftRx): GoalPlanGymLift | null {
   // "Bodyweight" is the engine's own word (exerciseLibrary); without it the body-weight jump squats showed no load. The
   // load line is read too (2026-11-18): the braking split squat ("Body weight or light dumbbells") showed no load.
   const sameAs = /the same weight as (last week|last time or less)/i.exec(loadEn)?.[1] ?? null;
-  const intensity = pct ? `${pct}% 1RM`
+  const intensity = profile === "iso_pull" ? "Max effort"
+    : pct ? `${pct}% 1RM`
     : rir ? `RIR ${rir}`
     : ms ? `${ms} m/s`
     : /^Body weight or light dumbbells/.test(loadEn) ? "Bodyweight or light DBs"
@@ -56,8 +59,11 @@ function liftOf(b: GoalBlock, rx: LiftRx): GoalPlanGymLift | null {
   const down = /(\d+) s down/.exec(doseEn)?.[1] ?? null;
   const weaker = /a 4th set on the (left|right) leg/.exec(doseEn)?.[1] ?? null;
   const same = sameAs && intensity !== `Same weight as ${sameAs}` ? sameAs : null;
+  const box = profile === "drop_jump" ? /(\d+) cm box/.exec(doseEn)?.[1] ?? null : null;
   const cue = [
     profile === "jump_squat" || profile === "pull" || profile === "squat_fast" ? "as fast as possible" : null,
+    profile === "iso_pull" ? (/fast as possible/.test(doseEn) ? "pull as hard and as fast as possible" : "build to a full pull, then hold") : null,
+    box ? `box ${box} cm (never above 30 cm)` : null,
     down ? `${down} s down` : null,
     weaker ? `4th set on the ${weaker} leg` : null,
     same ? `same weight as ${same}` : null,
@@ -69,10 +75,11 @@ function liftOf(b: GoalBlock, rx: LiftRx): GoalPlanGymLift | null {
     nameEN: rx.exercise.en,
     nameIS: rx.exercise.is,
     sets: rx.sets,
-    reps: eachLeg ? `${rx.reps} each leg` : rx.reps,
+    reps: eachLeg ? `${rx.reps} each leg` : profile === "iso_pull" ? `${rx.reps}s` : rx.reps,
     intensity,
     rest: restOf(rx.rows.rest?.text.en ?? ""),
     cue,
+    ...(OPTIONAL.has(profile) ? { optional: true as const } : {}),
   };
 }
 

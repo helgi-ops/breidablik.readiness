@@ -140,17 +140,22 @@ describe("the Today card", () => {
     expect(c.verdict.en).toContain("Mon 16 Nov");
   });
 
+  // Week 1 is a test week: its session A (the sprint test) goes on MD-2 (Thu), not MD-3 (brief §4a, TEST_DAY_PREFS).
   it("on the session day: the session in today's version", () => {
-    expect(card(day(2), "green")!.today).toMatchObject({ slot: "A", version: "full" });
-    expect(card(day(2), "red")!.today?.version).toBe("skip");
-    expect(card(day(2), "red")!.verdict.en).toMatch(/^Skip/);
-    expect(card(day(2), null)!.facts.some((f) => f.en.includes("No check-in"))).toBe(true);
+    expect(card(day(3), "green")!.today).toMatchObject({ slot: "A", version: "full" });
+    expect(card(day(3), "red")!.today?.version).toBe("skip");
+    expect(card(day(3), "red")!.verdict.en).toMatch(/^Skip/);
+    expect(card(day(3), null)!.facts.some((f) => f.en.includes("No check-in"))).toBe(true);
+  });
+
+  it("a week without a test keeps session A on MD-3 (Wed)", () => {
+    expect(card(day(9), "green")!.today).toMatchObject({ slot: "A", version: "full" });
   });
 
   it("on another day: says the next one", () => {
     const c = card(day(1), "green")!;
     expect(c.today).toBeNull();
-    expect(c.verdict.en).toContain("Next: Wed");
+    expect(c.verdict.en).toContain("Next: Thu");
     expect(c.facts.length).toBeGreaterThanOrEqual(1);
     expect(c.facts.length).toBeLessThanOrEqual(3);
   });

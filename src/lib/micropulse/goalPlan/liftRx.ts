@@ -31,7 +31,8 @@ export type RxRowKey = "load" | "effort" | "tempo" | "rest" | "warmup" | "progre
 export type RxBarKey = "target" | "stop" | "adjust" | "feedback" | "coach" | "none";
 
 /** `general` = a Today lift with no profile (lota 8): only the session's own lines, nothing filled in. */
-export type LiftProfile = "heavy" | "technique" | "rdl" | "jump_squat" | "pull" | "nordic" | "eccentric" | "squat_fast" | "youth" | "general";
+/** `iso_pull`, `single_leg`, `drop_jump`: the gym-only goals' additions (brief §4a, 2026-11-23). */
+export type LiftProfile = "heavy" | "technique" | "rdl" | "jump_squat" | "pull" | "nordic" | "eccentric" | "squat_fast" | "youth" | "iso_pull" | "single_leg" | "drop_jump" | "general";
 
 /** One lift's full prescription. */
 export type LiftRx = {
@@ -139,6 +140,8 @@ export const RX_REFS: Record<string, GoalRef> = {
   chen2025: BRAKING_REFS.chen2025,
   ishoi2018: SPEED_REFS.ishoi2018,
   cormie2010a: GYM_REFS.cormie2010a,
+  sanchezsixto2021: JUMP_REFS.sanchezsixto2021,
+  saezdevillarreal2009: JUMP_REFS.saezdevillarreal2009,
 };
 
 // ─── Building blocks ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -211,6 +214,13 @@ function profileOf(b: BlockIn, segEn: Segment, index: number, ctx: RxContext): L
       return swap?.option === "jump_shrug" || swap?.option === "hang_high_pull" ? "pull" : "jump_squat";
     case "squat_bar_speed":
       return b.what.en === "Light jump squats" || /jump squats/i.test(b.what.en) ? "jump_squat" : "squat_fast";
+    case "iso_pull":
+      return "iso_pull";
+    case "single_leg_strength":
+      return "single_leg";
+    // The jump plan's drop jumps are pitch work (its session A); only a gym goal's low drop jumps are read as a lift.
+    case "drop_jumps":
+      return isGymQuality(ctx.quality) ? "drop_jump" : null;
     case "heavy_strength": {
       if (/^Squat and lunge/.test(b.what.en)) return "youth";
       if (index > 0 && /^Romanian deadlift/i.test(segEn.name)) return "rdl";
@@ -439,6 +449,61 @@ function youthRx(): Built {
   };
 }
 
+/** The coach's isometric mid-thigh pull (brief §4a). Every line is MicroPulse's: no study behind the plan tested it as training. */
+function isoPullRx(seg: Segment): Built {
+  const fast = /fast as possible/.test(seg.rest);
+  return {
+    rows: {
+      load: M("No weight to add: pull against a bar fixed at mid-thigh height (the same position as the strength test).", "Engin þyngd: togaðu í stöng sem er föst í hæð við miðju læri (sama staða og í styrkprófinu)."),
+      effort: fast
+        ? M("As hard and as fast as possible from the first moment, for the full 2 s.", "Eins fast og eins hratt og hægt er frá fyrsta augnabliki, allar 2 sek.")
+        : M("Build to a full pull within about 1 s and hold it for the whole time.", "Byggðu upp í fullt tog á um 1 sek og haltu því allan tímann."),
+      tempo: M("The bar does not move. Back flat, shoulders over the bar, knees slightly bent, as in the test.", "Stöngin hreyfist ekki. Bak beint, axlir yfir stönginni, hné aðeins bogin, eins og í prófinu."),
+      rest: M("2 min.", "2 mín."),
+      warmup: M("2 pulls at about half and three-quarters effort.", "2 tog á um hálfu og þremur fjórðu átaki."),
+      progression: fast
+        ? M("No change over the weeks: the intent is speed.", "Engin breyting yfir vikurnar: ásetningurinn er hraði.")
+        : M("Longer holds over the weeks (3 → 5 s). The force plates show whether the pull grows.", "Lengri hald yfir vikurnar (3 → 5 sek). Kraftplatan sýnir hvort togið eykst."),
+    },
+    barSpeed: NOT_USED(
+      fast ? "The bar does not move, so a bar-speed device reads nothing. On force plates, the force in the first 0.2 s is the number to watch." : "The bar does not move, so a bar-speed device reads nothing. On force plates, the peak force is the number to watch.",
+      fast ? "Stöngin hreyfist ekki, svo stangarhraðamælir mælir ekkert. Á kraftplötu er krafturinn fyrstu 0,2 sek talan sem fylgst er með." : "Stöngin hreyfist ekki, svo stangarhraðamælir mælir ekkert. Á kraftplötu er hámarkskrafturinn talan sem fylgst er með.",
+    ),
+  };
+}
+
+/** The coach's one-leg lift (brief §4a): reps in reserve, MicroPulse's lines. */
+function singleLegRx(): Built {
+  return {
+    rows: {
+      load: M("A weight the player could lift 2–3 more times on each leg (dumbbells or a bar).", "Þyngd sem leikmaðurinn gæti lyft 2–3 sinnum oftar á hvorum fæti (handlóð eða stöng)."),
+      effort: M("Stop with 2–3 reps left on the weaker leg; the stronger leg does the same reps.", "Hættu með 2–3 endurtekningar eftir á veikari fætinum; sterkari fóturinn gerir jafnmargar."),
+      tempo: M("Down under control, up with intent; front knee over the middle of the foot.", "Stjórnað niður, ákveðið upp; fremra hné yfir miðjum fæti."),
+      rest: M("About 2 min (both legs, then rest).", "Um 2 mín (báðir fætur, svo hvíld)."),
+      warmup: M("1 set with body weight.", "1 sett með eigin þyngd."),
+      progression: M("Add a little weight when both legs do every rep with the knee in line.", "Bættu við smá þyngd þegar báðir fætur gera allar endurtekningar með hnéð í línu."),
+    },
+    barSpeed: NOT_USED("One-leg lift: reps in reserve, not bar speed (the day rule keeps a speed zone only where the device reads the lift).", "Lyfta á öðrum fæti: endurtekningar eftir, ekki stangarhraði (dagsreglan heldur hraðasvæði aðeins þar sem mælirinn les lyftuna)."),
+  };
+}
+
+/** The explosive goal's low drop jumps (brief §4a): the jump plan's tested start, held at 30 cm. */
+function dropJumpRx(seg: Segment): Built {
+  const cm = /(\d+) cm box/.exec(seg.rest)?.[1] ?? "20–30";
+  return {
+    rows: {
+      load: S(`Body weight, box ${cm} cm (never above 30 cm: the MD-3 day rule). Across studies, box height made no clear difference to the gain.`, `Eigin þyngd, kassi ${cm} cm (aldrei yfir 30 cm: dagsregla MD-3). Milli rannsókna skipti hæð kassans ekki skýru máli fyrir bætinguna.`, "saezdevillarreal2009"),
+      effort: M("Every jump as high as possible with a short contact; stop the set when the jumps get lower.", "Hvert hopp eins hátt og hægt er með stuttri snertingu; hættu settinu þegar hoppin lækka."),
+      tempo: S("Step off the box (don't jump off), land on both feet and jump straight up at once.", "Stígðu af kassanum (ekki hoppa af honum), lentu á báðum fótum og hoppaðu strax beint upp.", "sanchezsixto2021"),
+      rest: M("About 2 min.", "Um 2 mín."),
+      warmup: M("A few low pogo jumps first.", "Nokkur lág pogo-hopp fyrst."),
+      progression: S("The box rises from 20 to 30 cm over the first weeks, as the tested programme started, and stays at 30 cm.", "Kassinn hækkar úr 20 í 30 cm fyrstu vikurnar, eins og prófaða áætlunin byrjaði, og helst í 30 cm.", "sanchezsixto2021"),
+      note: M("If the heels slam down or the player sinks deep on landing, go back one box height.", "Ef hælarnir skella niður eða leikmaðurinn sígur djúpt í lendingu, farðu eina kassahæð niður."),
+    },
+    barSpeed: NOT_USED("No bar: watch the jump height and the ground contact instead.", "Engin stöng: fylgstu frekar með hæð hoppsins og snertitímanum."),
+  };
+}
+
 // ─── One block → its lifts ───────────────────────────────────────────────────────────────────────────────────────
 
 /** The lifts in one block, or [] for anything that is not a gym lift (sprints, jumps without load, tests). */
@@ -464,6 +529,9 @@ export function rxForBlock(b: BlockIn, ctx: RxContext): LiftRx[] {
       : profile === "nordic" ? nordicRx()
       : profile === "eccentric" ? eccentricRx()
       : profile === "squat_fast" ? squatFastRx(seg)
+      : profile === "iso_pull" ? isoPullRx(seg)
+      : profile === "single_leg" ? singleLegRx()
+      : profile === "drop_jump" ? dropJumpRx(seg)
       : youthRx();
     out.push({ profile, exercise: { en: cap(nameEn), is: cap(nameIs) }, sets: seg.sets, reps: seg.reps, ...built });
   });
@@ -489,7 +557,7 @@ export function rxForProfile(profile: SessionLiftProfile): Pick<LiftRx, "rows" |
 
 // ─── Order, frequency and sources across a plan ──────────────────────────────────────────────────────────────────
 
-const POWER: LiftProfile[] = ["jump_squat", "pull", "squat_fast"];
+const POWER: LiftProfile[] = ["jump_squat", "pull", "squat_fast", "drop_jump"];
 
 const FREQ_EVIDENCE: Partial<Record<LiftProfile, RxLine>> = {
   heavy: S("Spreading the same weekly sets over more days did no better than fewer days; in season, 1 session a week kept strength for 12 weeks.", "Að dreifa sömu settum vikunnar á fleiri daga gerði ekki betur en færri dagar; á tímabili hélt 1 æfing á viku styrknum í 12 vikur.", "cuthbert2021"),

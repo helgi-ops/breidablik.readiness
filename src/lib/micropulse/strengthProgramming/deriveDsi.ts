@@ -28,6 +28,9 @@ export interface DsiCoverageInput {
    *  12 months); the DSI read itself does not (2026-11-17). */
   cmjTestDate?: string | null;
   imtpTestDate?: string | null;
+  /** IMTP peak force per kg of body weight (VALD's own relative metric), latest test — only the goal suggestion reads it
+   *  (brief §4a, 2026-11-23). */
+  imtpRelNkg?: number | null;
 }
 
 export type DsiCoverage = "full" | "cmj_only" | "imtp_only" | "none";

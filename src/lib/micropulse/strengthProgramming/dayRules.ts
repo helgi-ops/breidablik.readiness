@@ -24,6 +24,9 @@
 import type { AppliedAdaptation, ExerciseCategory, MdContext, PrescribedExercise, SessionBlock, StrengthSession } from "./types";
 import { DAY_CATEGORY, EXERCISES_BY_ID, type DayCategory } from "./exerciseLibrary";
 
+/** A bar-speed bound as text: one decimal unless it needs two ("1.0", "1.3", "0.55"). */
+export const zoneNum = (n: number): string => n.toFixed(2).replace(/(\.\d)0$/, "$1");
+
 export type { DayCategory } from "./exerciseLibrary";
 
 type Bi = { en: string; is: string };
@@ -448,13 +451,13 @@ export function enforceDayRules(session: StrengthSession | null): StrengthSessio
     }
   }
 
-  // 7. The day's bar-speed zone on a loaded squat jump that has none.
+  // 7. The day's bar-speed zone on a loaded squat jump that has none (a body-weight jump has no bar to measure).
   const zone = rule.ballisticZone;
   if (zone) {
-    for (const s of spots((ex) => LOADED_SQUAT_JUMP_IDS.has(ex.exerciseId) && !ex.dose.speedZone && ex.dose.sets > 0)) {
+    for (const s of spots((ex) => LOADED_SQUAT_JUMP_IDS.has(ex.exerciseId) && !ex.dose.speedZone && ex.dose.sets > 0 && !/^body\s*weight/i.test(ex.dose.intensity ?? ""))) {
       const ex = s.ex;
       blocks[s.b].exercises[s.i] = { ...ex, dose: { ...ex.dose, speedZone: zone } };
-      const z = zone.max == null ? `${zone.min.toFixed(1)} m/s or faster` : `${zone.min.toFixed(1)}–${zone.max.toFixed(1)} m/s`;
+      const z = zone.max == null ? `${zoneNum(zone.min)} m/s or faster` : `${zoneNum(zone.min)}–${zoneNum(zone.max)} m/s`;
       const zIs = z.replace(".", ",").replace("or faster", "eða hraðar");
       out.push({
         ruleId: DAY_RULE_ZONE,

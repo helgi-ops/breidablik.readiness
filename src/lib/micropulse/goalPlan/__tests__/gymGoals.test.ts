@@ -179,14 +179,17 @@ describe("gym-only goals: doses", () => {
   });
 });
 
-/** Golden copy (2026-11-18): if a hash changes, the change was meant (bump GOAL_CONTENT_VERSION) or it is a bug. */
+/** Golden copy (2026-11-18): if a hash changes, the change was meant (bump GOAL_CONTENT_VERSION) or it is a bug.
+ *  Changed on purpose: 2026-11-23 (GOAL_CONTENT_VERSION 2026-11-23.1, brief §4a) — Maximal strength's heavy day adds an
+ *  isometric pull and a one-leg lift; Explosive power adds a fast isometric pull and low drop jumps (20–30 cm). Youth
+ *  and Strength + power unchanged. */
 const h = (x: unknown) => createHash("sha256").update(JSON.stringify(x)).digest("hex").slice(0, 16);
 const GOLDEN: Record<string, string> = {
   "max_strength:youth": "364ef5aee50a1b0a",
-  "max_strength:heavy": "a4e399431db5378c",
+  "max_strength:heavy": "fe3aeb20d528fd14",
   "explosive:youth": "c843a6a2edc1d417",
-  "explosive:strength_first": "bce23f9d6cd11a62",
-  "explosive:power": "3b68ac78f301e2c8",
+  "explosive:strength_first": "ab6b5dbe374f1fc2",
+  "explosive:power": "16e435f5c6a23f41",
   "strength_power:youth": "c843a6a2edc1d417",
   "strength_power:strength_led": "baf7fd60e9411004",
   "strength_power:even": "344438b652d72d2e",

@@ -30,7 +30,7 @@ import { QUALITY_WHY, WHY_FOOTER, refShort, whyTitles } from "@/lib/micropulse/g
 
 type Suggestion = { suggested: GoalQuality; view: PriorityView } | null;
 /** The force-plate (DSI) suggestion of a gym goal (goalSuggestion.ts). */
-type DsiSuggestion = { goal: GoalQuality; reasonEN: string; reasonIS: string; cmjDate: string; imtpDate: string; confidence: "high" | "moderate"; source: string };
+type DsiSuggestion = { goal: GoalQuality; reasonEN: string; reasonIS: string; cmjDate: string | null; imtpDate: string; confidence: "high" | "moderate"; source: string; basis?: "imtp" | "dsi" };
 
 type Eligibility = { quality: GoalQuality; blocked: string | null; blockedText: Bi | null };
 type Current = {
@@ -339,8 +339,8 @@ export default function PlayerGoalSheet({ lang, onClose }: { lang?: "IS" | "EN";
                 <p className="text-sm font-semibold text-slate-900">{T("Your force-plate tests suggest: ", "Kraftplötuprófin þín benda á: ")}{L(QUALITY[dsi.goal].label)}</p>
                 <p className="mt-0.5 text-xs text-slate-700">{is ? dsi.reasonIS : dsi.reasonEN}</p>
                 <p className="mt-1 text-[11px] text-slate-500" title={dsi.source}>
-                  {T(`A suggestion from rules, not AI · jump test ${fmtDay(dsi.cmjDate, false)}, pull test ${fmtDay(dsi.imtpDate, false)}${dsi.confidence === "high" ? "" : " · few tries, treat as a first read"} · you choose`,
-                    `Tillaga út frá reglum, ekki gervigreind · stökkpróf ${fmtDay(dsi.cmjDate, true)}, togpróf ${fmtDay(dsi.imtpDate, true)}${dsi.confidence === "high" ? "" : " · fáar tilraunir, fyrsta mat"} · þú velur`)}
+                  {T(`A suggestion from rules, not AI · ${dsi.cmjDate ? `jump test ${fmtDay(dsi.cmjDate, false)}, ` : ""}pull test ${fmtDay(dsi.imtpDate, false)}${dsi.confidence === "high" ? "" : " · few tries, treat as a first read"} · you choose`,
+                    `Tillaga út frá reglum, ekki gervigreind · ${dsi.cmjDate ? `stökkpróf ${fmtDay(dsi.cmjDate, true)}, ` : ""}togpróf ${fmtDay(dsi.imtpDate, true)}${dsi.confidence === "high" ? "" : " · fáar tilraunir, fyrsta mat"} · þú velur`)}
                 </p>
               </div>
             ) : null}
