@@ -5,7 +5,7 @@
  * Evidence base:
  *  - The match is the reference unit; weekly load is expressed as a MULTIPLE of a match, per KPI
  *    (Martín-García et al. 2018 — weekly totals ≈ 3–5× a single match).
- *  - The within-week shape (MD-day %s) is Buchheit 2024's microcycle periodization, reused from
+ *  - The within-week shape (MD-day %s) is MicroPulse's choice (load falls toward the match: Gualtieri 2024; Martín-García 2018 measured MD-4 > MD-3), reused from
  *    `planSessionLoad` (MD-3 peak 85%, MD-4 68%, MD-2 50%, MD-1 32%).
  *  - CRITICAL per-KPI nuance: high-intensity metrics (HSR, sprint distance — GPS) are
  *    CONCENTRATED on the high days (MD-4/MD-3) and taper to near-zero on MD-2/MD-1 — so their WEEKLY
@@ -184,7 +184,7 @@ export function pathwayRampGamma(key: string): number {
   return PATHWAY_RAMP_GAMMA[kpiPathway(key)];
 }
 
-/** The per-day match-fractions (matchPct/100) for a set of MD-days (Buchheit 2024 via planSessionLoad). */
+/** The per-day match-fractions (matchPct/100) for a set of MD-days (MicroPulse's MD-day shares via planSessionLoad). */
 export function dayFractions(mdDays: string[]): number[] {
   const out: number[] = [];
   for (const d of mdDays) { const p = planSessionLoad({ mdDay: d, dayType: null, focus: null }); if (p.applicable) out.push(p.matchPct / 100); }

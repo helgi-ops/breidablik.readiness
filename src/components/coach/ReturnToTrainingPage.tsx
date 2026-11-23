@@ -495,7 +495,7 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
                   body={is
                     ? `Loftið er HANS eigið heilbrigða vikuálag — robust hundraðshluti (85.) af heilbrigðu vikunum hans, leikir meðtaldir${data.baseline.volume > 0 ? ` (${f0(data.baseline.volume)} álag/viku)` : ""}. Aldrei liðsmeðaltal, aldrei ein stök æfing. Byggt á ${data.baseline.builtFromHealthyWeeks} heilbrigðum vikum. Athugið: Gabbett skilgreinir loftið sem getuna sem íþróttin krefst; við nálgumst það sem hans eigin heilbrigða álag — traust nálgun, en ekki alhliða krafa.`
                     : `The ceiling is HIS own healthy weekly load — a robust percentile (85th) of his healthy weeks, matches included${data.baseline.volume > 0 ? ` (${f0(data.baseline.volume)} load/week)` : ""}. Never a squad average, never a single session. Built from ${data.baseline.builtFromHealthyWeeks} healthy weeks. Note: Gabbett defines the ceiling as the load the SPORT demands; we proxy it with his own healthy load — a sound approximation, not the sport-wide requirement.`} />
-                <MethodRow term="ACWR" cite="Gabbett 2017 · Impellizzeri 2020"
+                <MethodRow term="ACWR" cite="Gabbett 2016 · Impellizzeri 2020"
                   body={is
                     ? "Bráða:krónískt álag — hversu stórt stökk vikan er miðað við nýlegt meðaltal. Við höldum vikulegri aukningu hóflegri (~+10%). ACWR lýsir stökk-STÆRÐ / óvönu áreiti — það er EKKI meiðsla-spá."
                     : "Acute:chronic workload — how big a jump the week is vs his recent average. We keep the weekly increase gradual (~+10%). ACWR describes spike SIZE / unfamiliar load — it is NOT an injury predictor."} />
@@ -727,7 +727,7 @@ function QualityCard({ w, floor, ceiling, actual, onOverride, is }: { w: WeekTar
         {w.locked ? (
           <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-500">{is ? `læst · vika ${w.unlockWeek}` : `hold · wk ${w.unlockWeek}`}</span>
         ) : (
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${acwrColor}`} title={is ? "Bráða:krónískt álag (Gabbett 2017) — lýsir stökk-stærð vikunnar, ekki meiðsla-spá." : "Acute:chronic workload (Gabbett 2017) — describes the week's spike size, not an injury prediction."}>ACWR {w.acwr.toFixed(2)}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${acwrColor}`} title={is ? "Bráða:krónískt álag (Gabbett 2016) — lýsir stökk-stærð vikunnar, ekki meiðsla-spá." : "Acute:chronic workload (Gabbett 2016) — describes the week's spike size, not an injury prediction."}>ACWR {w.acwr.toFixed(2)}</span>
         )}
       </div>
       {!w.locked && ceiling <= 0 ? (

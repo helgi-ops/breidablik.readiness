@@ -32,7 +32,7 @@ export const READINESS_LOW_SCORE = 12;
  * PlayerLoad-spike ratio that warrants a *monitor* (yesterday's movement load
  * moderately above the player's own 28-day norm). Framed as spike size /
  * unfamiliar load, never as an injury predictor.
- * Gabbett 2017; Impellizzeri 2020 (ACWR is exposure, not a risk score).
+ * Acute vs chronic idea: Gabbett 2016; Impellizzeri 2020 (ACWR is exposure, not a risk score). The 1.15 line is MicroPulse's choice.
  */
 export const PL_SPIKE_MONITOR = 1.15;
 
@@ -40,7 +40,7 @@ export const PL_SPIKE_MONITOR = 1.15;
  * PlayerLoad-spike ratio that warrants an *alert* — a clear spike well above
  * the personal norm. Also the "unfamiliar load" badge threshold on the
  * dashboard attention row; both must read from THIS constant so they agree.
- * Gabbett 2017.
+ * Acute vs chronic idea: Gabbett 2016; the 1.6 line is MicroPulse's choice (Impellizzeri 2020: not an injury predictor).
  */
 export const PL_SPIKE_ALERT = 1.6;
 
@@ -50,7 +50,7 @@ export const PL_SPIKE_ALERT = 1.6;
  * Composite external-load score at/above which the load picture is "high".
  * (The per-player `concernLevel` enum is computed upstream; this is the numeric
  * anchor used where the raw composite is compared directly.)
- * Gabbett 2017; Buchheit 2024 (multi-signal load synthesis).
+ * The 0.75 cut-off is MicroPulse's choice, not a tested threshold.
  */
 export const COMPOSITE_HIGH_SCORE = 0.75;
 

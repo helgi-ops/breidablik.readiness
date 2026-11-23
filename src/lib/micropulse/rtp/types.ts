@@ -159,7 +159,7 @@ export type RtpLimbStrengthTest = {
   asymmetrySide: string | null;
   /** Involved-vs-uninvolved limb % when the injured side is known (RTP LSI). */
   lsiPct: number | null;
-  /** Bishop 2020 asymmetry status (latest test). */
+  /** Asymmetry status on the common 10–15% flag line (Parkinson 2021) (latest test). */
   status: RtpStatus;
   /** All tests of this type for this player, newest first (incl. the latest). */
   history: RtpLimbStrengthEntry[];

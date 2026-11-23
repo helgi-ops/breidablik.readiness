@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * QuadrantChart — Gabbett 2017 / Vanrenterghem 2017 framework.
+ * QuadrantChart — Vanrenterghem 2017 framework (external load read against internal load).
  *
  * 2x2 chart of external load (X) vs internal cost (Y) over a rolling
  * window. Each athlete is plotted as a dot. Quadrant lines drawn at the

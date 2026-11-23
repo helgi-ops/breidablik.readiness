@@ -9,7 +9,7 @@
  * shareable, cited read plus a plain "to improve" tip — never a pass/fail.
  *
  * MAGNITUDE metrics (jump height, RSI-mod, forces) are sex- and sport-specific,
- * so they are keyed by population. ASYMMETRY (<10% Bishop) and the context-only
+ * so they are keyed by population. ASYMMETRY (<10%, a common flag line — Parkinson 2021) and the context-only
  * metrics are population-independent. Populations without a cited band set (e.g.
  * basketball) grade only the universal metrics and are labelled honestly — we
  * never show male-football bands to a women's or basketball player.
@@ -22,7 +22,7 @@
  *  - Male football IMTP ~28-40 N/kg: EFL force-plate norms 2025; Aspetar RTP floor >20.
  *  - Nordic eccentric-hamstring (NordBord) male soccer ~277-404 N/limb (Wik 2019, Qatar league; the authors
  *    note these players test weaker than other professional leagues).
- *  - Inter-limb asymmetry: <10% ok / 10-15% watch / >15% concern (Bishop 2020).
+ *  - Inter-limb asymmetry: <10% ok / 10-15% watch / >15% concern (a common flag line, not a validated cut-off — Parkinson 2021; no single line fits every test — Read 2021).
  *  - IMTP early force + RFD reference values: Beckham 2013 (n=12 weightlifters —
  *    F100 ~2672 N, F200 ~4044 N, rel F200 ~45 N/kg, RFD 0-100/0-200 ~14300/14000
  *    N/s). Absolute early-force + RFD scale with body mass and are highly
@@ -246,12 +246,12 @@ const UNIVERSAL: Record<string, MetricSpec> = {
   asymmetry: {
     spec: { dir: "lower", g: 10, a: 15 },
     ref: { en: "<10% ok, 10-15% watch, >15% concern", is: "<10% í lagi, 10-15% fylgstu með, >15% áhyggjuefni" },
-    citation: "Bishop 2020", improve: ASYMMETRY_TIP,
+    citation: "Parkinson 2021 (10–15% is a common flag line, not a validated cut-off)", improve: ASYMMETRY_TIP,
   },
   groinAsymmetry: {
     spec: { dir: "lower", g: 10, a: 15 },
     ref: { en: "<10% ok, 10-15% watch, >15% concern", is: "<10% í lagi, 10-15% fylgstu með, >15% áhyggjuefni" },
-    citation: "Bishop 2020 (asymmetry bands); groin asymmetry was not linked to injury (Vigneswaran 2025)", improve: GROIN_TIP,
+    citation: "Parkinson 2021 (10–15% is a common flag line, not a validated cut-off); groin asymmetry was not linked to injury (Vigneswaran 2025)", improve: GROIN_TIP,
   },
   // Ankle plantar-flexion left/right symmetry (ForceFrame). Absolute plantar-flexion strength has
   // no established ForceFrame population norms (protocol / joint-angle dependent), so we grade the
@@ -259,7 +259,7 @@ const UNIVERSAL: Record<string, MetricSpec> = {
   anklePlantarAsymmetry: {
     spec: { dir: "lower", g: 10, a: 15 },
     ref: { en: "<10% ok, 10-15% watch, >15% concern (plantar-flexion L/R symmetry — key after a calf / Achilles / ankle injury)", is: "<10% í lagi, 10-15% fylgstu með, >15% áhyggjuefni (plantar-flexion vinstri/hægri samhverfa — lykill eftir kálfa- / hásina- / ökkla-meiðsli)" },
-    citation: "Bishop 2020", improve: CALF_TIP,
+    citation: "Parkinson 2021 (10–15% is a common flag line, not a validated cut-off)", improve: CALF_TIP,
   },
   // Limb Symmetry Index (involved / uninvolved x 100). The classic return-to-sport
   // gate is >=90%; it needs a known injured side, so it only shows in an RTP context.
@@ -397,7 +397,7 @@ export function benchmarkPopulationNote(pop: PopKey): Bi {
     };
   }
   return {
-    en: `No population reference bands set for ${p.en} yet — showing values, with only asymmetry graded (Bishop 2020).`,
-    is: `Engin hóp-viðmiðsbönd sett fyrir ${p.is} enn — sýni gildi, aðeins ósamhverfa metin (Bishop 2020).`,
+    en: `No population reference bands set for ${p.en} yet — showing values, with only asymmetry graded (against the common 10–15% flag line — Parkinson 2021).`,
+    is: `Engin hóp-viðmiðsbönd sett fyrir ${p.is} enn — sýni gildi, aðeins ósamhverfa metin (miðað við algenga 10–15% flagglínu — Parkinson 2021).`,
   };
 }

@@ -228,7 +228,7 @@ export type PlayerStrengthSnapshot = {
   /** Sprint Exposure band (Malone 2018). */
   sprintExposureBand:
     | "UNDERLOAD" | "WATCH" | "SAFE" | "OVERLOAD" | "INSUFFICIENT_DATA" | null;
-  /** CoD L/R asymmetry % over 14d from IMA (Bishop 2020). */
+  /** CoD L/R asymmetry % over 14d from IMA (MicroPulse's flag). */
   codAsymmetryPct: number | null;
   /** Which leg is weaker for CoD ("L" or "R"). */
   codWeakerSide?: "L" | "R" | null;

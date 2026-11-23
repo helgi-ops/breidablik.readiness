@@ -15,7 +15,7 @@ import { buildRehabRecommendation } from "@/lib/clinical/rehabRecommendations";
 export const runtime = "nodejs";
 
 const IMA_WINDOW_DAYS = 28;
-const ASYMMETRY_FLAG_PCT = 15; // Bishop 2020 — >15% inter-limb asymmetry is meaningful.
+const ASYMMETRY_FLAG_PCT = 15; // >15% is MicroPulse's flag line for GPS turn counts; not tested against injury (Helme 2021).
 
 async function requireCoach(req: NextRequest) {
   const sb: SupabaseClient = getSupabaseServer();
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
   const findingSides = new Set(byCat("clinical_finding").map((f) => f.side).filter((s): s is string => s === "left" || s === "right"));
   const reportedSide = findingSides.size === 1 ? [...findingSides][0] : null;
 
-  // On-pitch IMA change-of-direction L/R over the recent window (Bishop 2020).
+  // On-pitch IMA change-of-direction L/R over the recent window (MicroPulse's flag).
   const since = new Date(Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`) - IMA_WINDOW_DAYS * 86400000)
     .toISOString()
     .slice(0, 10);

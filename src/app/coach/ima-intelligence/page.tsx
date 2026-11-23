@@ -21,9 +21,9 @@
  * Sport-science citations:
  *   - McBurnie 2022: stride / running-mechanics profiles add context GPS
  *     distance alone doesn't show (stride length in sustained running).
- *   - Bishop 2020: L/R asymmetry > 15% on high-intensity CoD = 3× injury
- *     risk multiplier.
- *   - Buchheit 2014: stride norms are individual — per-player baselines
+ *   - L/R asymmetry > 15% on high-intensity CoD is MicroPulse's flag line —
+ *     not tested against injury (Helme 2021: the evidence is weak).
+ *   - Per-player baselines (MicroPulse's choice; no stride study behind it) —
  *     required for meaningful interpretation.
  */
 
@@ -50,7 +50,7 @@ import { longRunBandsTotal, type LongRunBand } from "@/lib/micropulse/longRuns";
 
 const I18N = {
   pageTitle: { EN: "IMA Intelligence", IS: "IMA Intelligence" },
-  citation: { EN: "McBurnie 2022 · Bishop 2020 · Buchheit 2014", IS: "McBurnie 2022 · Bishop 2020 · Buchheit 2014" },
+  citation: { EN: "McBurnie 2022 · Helme 2021 · Green 2023", IS: "McBurnie 2022 · Helme 2021 · Green 2023" },
   subtitle: {
     EN: "Biomechanical view of a training day: short bursts vs long continuous runs, long-run strides vs each player's usual, and left/right balance on hard changes of direction.",
     IS: "Lífaflfræðileg sýn á æfingadag: stutt hlaup á móti löngum samfelldum hlaupum, skref í löngum hlaupum miðað við venju hvers leikmanns, og vinstri/hægri jafnvægi í hörðum stefnubreytingum.",
@@ -102,8 +102,8 @@ const I18N = {
     IS: "vs grunnlína ber skref dagsins í löngum samfelldum hlaupum Á LEIKHRAÐA (18 sek+, 11 km/klst eða hraðar; skokk telst ekki með) saman við 14-daga æfinga-grunnlínu (leikir undanskildir). Innandyra, þar sem hraðinn er óþekktur, telja öll löng hlaup. 100% = típískur dagur. < 70% = léttur. > 150% (og a.m.k. 100 skref) = mun meira samfellt hlaup en venjulega, fylgjast með endurheimt.",
   },
   legend3: {
-    EN: "CoD asymmetry > 15% on high-intensity Change-of-Direction events is a commonly-flagged imbalance associated with injury risk — a risk factor, not a validated predictor (the Bishop evidence is mainly single-leg-jump asymmetry). Flagged when total CoD ≥ 10 efforts.",
-    IS: "CoD ósamhverfa > 15% á háa intensity Change-of-Direction event-um er algengt flöggað ójafnvægi sem er tengt meiðsla-áhættu — áhættuþáttur, ekki staðfest spá (gögn Bishop eru aðallega um stökk-ósamhverfu á einum fæti). Merkt þegar heildar CoD ≥ 10 efforts.",
+    EN: "CoD asymmetry > 15% on high-intensity Change-of-Direction events is MicroPulse's flag line — not a tested injury predictor (asymmetry–injury evidence is weak and comes from strength and jump tests, not GPS turn counts — Helme 2021). Flagged when total CoD ≥ 10 efforts.",
+    IS: "CoD ósamhverfa > 15% á háa intensity Change-of-Direction event-um er flagglína MicroPulse — ekki prófuð spá um meiðsli (tengsl ósamhverfu og meiðsla eru veikt studd og koma úr styrk- og stökkprófum, ekki GPS-snúningum — Helme 2021). Merkt þegar heildar CoD ≥ 10 efforts.",
   },
   legend4: {
     EN: "An asterisk (*) on vs baseline means the comparison is based on only 1 training day in the 14-day window — common right now because most pre-Catapult-fix training days have no IMA data. The baseline strengthens automatically as more post-fix days accumulate.",
@@ -191,7 +191,7 @@ function computeImaVerdict(profile: ImaSessionProfile): ImaVerdict {
   };
 
   // Driver tooltips carry the jargon + paper citation (Gabbett 2016 load-change
-  // framing; Buchheit 2014 individual baselines). No sprint citations: this is
+  // framing; per-player baselines are MicroPulse's choice). No sprint citations: this is
   // sustained-running volume, not sprint exposure.
   const drivers: VerdictDriver[] = spikes
     .slice()
@@ -206,10 +206,10 @@ function computeImaVerdict(profile: ImaSessionProfile): ImaVerdict {
       tip: {
         EN: `${p.long_run_load_strides} strides in long continuous runs at match pace (18 s or more at 11 km/h+, by IMA Free Running run length), ${Math.round(
           p.sprint_vs_baseline_pct ?? 0,
-        )}% of the player's 14-day training-only baseline — a sharp jump in sustained running, not sprinting. Phase extra tempo/conditioning running in rather than spiking it (load-change framing Gabbett 2016; per-player norms Buchheit 2014).`,
+        )}% of the player's 14-day training-only baseline — a sharp jump in sustained running, not sprinting. Phase extra tempo/conditioning running in rather than spiking it (load-change framing Gabbett 2016; read on his own baseline — MicroPulse's choice).`,
         IS: `${p.long_run_load_strides} skref í löngum samfelldum hlaupum á leikhraða (18 sek+ á 11 km/klst+, eftir lengd hlaups í IMA Free Running), ${Math.round(
           p.sprint_vs_baseline_pct ?? 0,
-        )}% af 14-daga æfinga-grunnlínu — snarpt stökk í samfelldu hlaupi, ekki sprettum. Innleiddu auka tempó-/úthaldshlaup smám saman frekar en í einu stökki (álagsbreyting Gabbett 2016; persónulegar norm Buchheit 2014).`,
+        )}% af 14-daga æfinga-grunnlínu — snarpt stökk í samfelldu hlaupi, ekki sprettum. Innleiddu auka tempó-/úthaldshlaup smám saman frekar en í einu stökki (álagsbreyting Gabbett 2016; lesið m.v. hans eigin grunnlínu — val MicroPulse).`,
       },
     }));
 
@@ -948,7 +948,7 @@ function SessionProfileCard({ profile, lang }: { profile: ImaSessionProfile; lan
             />
           </div>
 
-          {/* CoD Profile — L/R per intensity tier (Bishop 2020) */}
+          {/* CoD Profile — L/R per intensity tier (MicroPulse's view) */}
           <CodProfile profile={profile} lang={lang} />
 
           {/* Band distribution stripe */}
@@ -984,8 +984,8 @@ function SessionProfileCard({ profile, lang }: { profile: ImaSessionProfile; lan
 }
 
 // CoD Profile — three rows (low/medium/high) of L/R bars with asymmetry %.
-// Bishop 2020: high-tier asymmetry > 15% is the strongest single predictor of
-// non-contact lower-limb injury. Low/medium asymmetry is more positional
+// High-tier asymmetry > 15% is MicroPulse's flag line (not tested against
+// injury; Helme 2021). Low/medium asymmetry is more positional
 // habit and less actionable, so we colour only the high tier aggressively.
 function CodProfile({ profile, lang }: { profile: ImaSessionProfile; lang: Lang }) {
   const tiers: Array<{
@@ -1233,7 +1233,7 @@ function PlayerRow({
 }
 
 // Per-player 3-tier CoD breakdown. Mirrors the team-level CoD profile but
-// scoped to this player's day. Bishop 2020: only flag high-tier asymmetry
+// scoped to this player's day. MicroPulse's choice: only flag high-tier asymmetry
 // aggressively (low/medium are often positional habit and less actionable).
 function PlayerCodBreakdown({ player, lang }: { player: ImaPlayerDay; lang: Lang }) {
   const tiers: Array<{

@@ -18,7 +18,7 @@
  * acceleration vectors (those need the raw 10 Hz stream). Pure, no I/O. Descriptive load
  * context — it never touches the readiness colour, the load target, or the daily decision.
  *
- * Cite: Buchheit 2014 (IMA) · di Prampero (metabolic cost of accel/decel) · ADI / Gray 2025
+ * Cite: Green 2023 (IMA) · di Prampero (metabolic cost of accel/decel) · ADI / Gray 2025
  * (linear vs multidirectional work).
  */
 
@@ -53,7 +53,7 @@ export const LINEAR_PCTL = 33;
 /** A squad needs at least this many players with a ratio for percentiles to mean anything. */
 export const MIN_SQUAD = 5;
 
-const CITATION = "Buchheit 2014 (IMA) · di Prampero (accel/decel cost) · ADI / Gray 2025 (linear vs multidirectional)";
+const CITATION = "Green 2023 (IMA) · di Prampero (accel/decel cost) · ADI / Gray 2025 (linear vs multidirectional)";
 
 const CAVEAT: Bi = {
   en: "Movement style is the balance of his high-intensity change-of-direction work (IMA clock) against his sustained linear running (long continuous runs of 18 s or more, IMA free-running) — read as a percentile vs the squad. It's a STYLE, not a quality: a linear runner is not worse than a cutter. A proxy from IMA counts + PlayerLoad, not mechanical power W/kg. Descriptive — it never changes the readiness verdict or the daily plan.",

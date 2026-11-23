@@ -99,7 +99,7 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
               : L({ en: `about ${stdTarget.targetPct}% of a match in accelerations, braking, changes of direction`, is: `um ${stdTarget.targetPct}% af leik í hröðun, hemlun, stefnubreytingum` })}
           </span>
         ) : enough.matchPct != null && (
-          <span className="text-xs text-slate-400" title={L({ en: "How big a session this MD-day should be, as a share of a match (Buchheit 2024).", is: "Hve stór æfing þessi MD-dagur á að vera, sem hlutfall af leik (Buchheit 2024)." })}>
+          <span className="text-xs text-slate-400" title={L({ en: "How big a session this MD-day should be, as a share of a match. MicroPulse's planning figure; studies show load falls as the match nears (Martín-García 2018; Gualtieri 2024).", is: "Hve stór æfing þessi MD-dagur á að vera, sem hlutfall af leik. Viðmið MicroPulse; rannsóknir sýna að álag lækkar eftir því sem nær dregur leik (Martín-García 2018; Gualtieri 2024)." })}>
             {L({ en: `day ≈ ${enough.matchPct}% of a match`, is: `dagur ≈ ${enough.matchPct}% af leik` })}
           </span>
         )}

@@ -24,7 +24,7 @@
  *   - Microdosing:         Cuthbert 2021, Rønnestad 2011
  *   - Edouard 2019:        Sprint speed drop → hamstring risk
  *   - Malone 2018:         Sprint exposure underload → hamstring risk
- *   - Bishop 2020:         L/R CoD asymmetry → non-contact injury
+ *   - Helme 2021:          L/R asymmetry–injury link weak (CoD flag is MicroPulse's)
  *   - McBurnie 2022:       Decel burden → eccentric overload
  */
 
@@ -399,7 +399,7 @@ function applyTeamPalette(
       triggerIS: `L/R ósamhverfa ${asym?.toFixed(0)}% ≥ ${PALETTE_UNILATERAL_ASYMMETRY_PCT}% (${asymSource})`,
       actionEN: `Chose the unilateral lower-body lift from the palette to load the weaker side.${confirmedNote(snap).en}`,
       actionIS: `Valdi einhliða neðri-líkama lyftu úr safninu til að hlaða veikari hlið.${confirmedNote(snap).is}`,
-      evidence: "Bishop 2020 — inter-limb asymmetry ≥ ~10-15% is performance/injury-relevant; unilateral work targets the deficit side.",
+      evidence: "Bishop 2023 — a clear link between inter-limb asymmetry and performance or injury is still missing; some evidence that training can shrink the gap. The 10% line is MicroPulse's rule; one-leg work loads the weaker side.",
     });
   }
   return audit;

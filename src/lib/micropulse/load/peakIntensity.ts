@@ -25,7 +25,7 @@
  *     fingerprint averages only the proxies that are present.
  *   - Descriptive context. NEVER feeds the readiness colour, load target, or daily decision.
  *
- * Cite: Buchheit 2014 (IMA) · di Prampero 2015 (metabolic power) · the peak-demands /
+ * Cite: Green 2023 (IMA) · di Prampero 2015 (metabolic power) · the peak-demands /
  *       worst-case-scenario framing (Delaney 2017, "peak locomotor demands").
  */
 
@@ -105,7 +105,7 @@ export const MIN_MATURE_PEAK_SESSIONS = 4;
 export const MIN_PEAK_SESSION_MIN = 20;
 
 const CITATION =
-  "Buchheit 2014 (IMA) · di Prampero 2015 (metabolic power) · Delaney 2017 (peak locomotor demands)";
+  "Green 2023 (IMA) · di Prampero 2015 (metabolic power) · Delaney 2017 (peak locomotor demands)";
 
 const CAVEAT: Bi = {
   en: "This is a peak-intensity FINGERPRINT from session-summary proxies (PlayerLoad/min, peak metabolic power, high-speed-running rate, high-intensity efforts/min) — not a true rolling peak period. A real peak-period power curve (worst 1/3/5-minute window) needs the per-interval Catapult export, which the daily table doesn't hold. Every proxy is read on the player's own norm; missing proxies are shown as no-data, not zero. Descriptive load context — it never changes the readiness verdict or the daily plan.",

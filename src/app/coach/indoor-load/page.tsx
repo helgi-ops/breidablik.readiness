@@ -383,7 +383,7 @@ const PAGE_I18N = {
   dynHighSec: { EN: "Dyn High (sec)", IS: "Dyn High (sek)" },
   indoorMcburnieProxy: { EN: "Indoor McBurnie proxy", IS: "Indoor McBurnie proxy" },
   decelsPerMinDynHigh: { EN: "decels / min Dyn High (healthy", IS: "decels / mín Dyn High (heilbrigt" },
-  acwrTitle: { EN: "ACWR (Gabbett 2017)", IS: "ACWR (Gabbett 2017)" },
+  acwrTitle: { EN: "ACWR (Gabbett 2016)", IS: "ACWR (Gabbett 2016)" },
   acwrSubtitle: { EN: "7d / 28d-week-avg (0.8–1.3 = familiar range)", IS: "7d / 28d-week-avg (0.8–1.3 = venjulegt bil)" },
   // Team status sentence parts
   allReadyToday: { EN: "All players ready for full program today", IS: "Allir leikmenn tilbúnir í fullt prógram í dag" },
@@ -1154,7 +1154,7 @@ export default function CoachIndoorLoadPage() {
                           ? "bg-amber-100 text-amber-800"
                           : "bg-emerald-100 text-emerald-700"
                       }`}
-                      title={`ACWR (Gabbett 2017): ${row.status.acwr.interpretation}`}
+                      title={`ACWR (Gabbett 2016): ${row.status.acwr.interpretation}`}
                     >
                       ACWR {row.status.acwr.value.toFixed(2)}
                     </span>
@@ -1859,7 +1859,7 @@ function MethodologyFooter({ lang }: { lang: Lang }) {
           )}
         </p>
         <p>
-          <strong>ACWR (Acute:Chronic Workload Ratio, Gabbett 2017):</strong>{" "}
+          <strong>ACWR (Acute:Chronic Workload Ratio, Gabbett 2016):</strong>{" "}
           {isEN
             ? "Weekly cumulative player load divided by the 28-day weekly average. 0.8-1.3 = familiar load range — the player is adapted to the current load. A jump above 1.5 is a large, fast load spike — a spike-size signal, not a validated injury predictor (Impellizzeri 2020); what matters is whether the spike is into unfamiliar load."
             : "Vikulegt cumulative player load deilt með 28-day weekly average. 0.8-1.3 = venjulegt álagsbil — leikmaður er aðlagaður núverandi álagi. Hækkun yfir 1.5 er stórt, hratt álagsstökk — merki um STÆRÐ stökks, ekki staðfest meiðsla-spá (Impellizzeri 2020); það sem skiptir máli er hvort stökkið sé inn á óþekkt álag."}

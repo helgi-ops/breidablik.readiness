@@ -947,7 +947,7 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
             </View>
             {pgIdx === imaPages.length - 1 && (
               <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 6 }}>
-                IMA Free Running bands sort each continuous run by how long it lasted, not by speed: short bursts (&lt;12 s) · medium runs (12-24 s) · longest runs (24 s+). &quot;Long 18 s+&quot; = strides in runs of 18 s or more vs the player&apos;s own 14-day baseline - sustained running volume, not sprinting; sprint load comes from GPS. High-intensity CoD asymmetry &gt; 15% = raised injury risk (Bishop 2020).
+                IMA Free Running bands sort each continuous run by how long it lasted, not by speed: short bursts (&lt;12 s) · medium runs (12-24 s) · longest runs (24 s+). &quot;Long 18 s+&quot; = strides in runs of 18 s or more vs the player&apos;s own 14-day baseline - sustained running volume, not sprinting; sprint load comes from GPS. High-intensity CoD asymmetry &gt; 15% is MicroPulse’s flag; not tested against injury (Helme 2021).
               </Text>
             )}
           </View>

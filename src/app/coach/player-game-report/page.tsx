@@ -508,7 +508,7 @@ function FootballGameReport() {
                             <li><b>{IS ? "Stökk" : "Jumps"}</b> — {IS ? "stökk: frákast og lending (skallar, návígi)." : "jumps: take-offs and landings (headers, aerial duels)."}</li>
                             <li><b>{IS ? "Löng hlaup" : "Long runs"}</b> — {IS ? "metrar í hlaupum sem stóðu 18 sek eða lengur. Í leik eru nær öll á leikhraða. Mælir úthaldshlaup, ekki spretti (sprettir koma úr GPS)." : "metres in runs that lasted 18 s or more. In a match almost all are at match pace. It shows sustained running, not sprinting (sprints come from GPS)."}</li>
                           </ul>
-                          <p className="mt-1.5 text-[10px] text-slate-400">{IS ? "Miðað við liðið, hver ás = hlutfallsröð leikmannsins í hópnum. McBurnie 2022, Harper 2022, Buchheit 2014." : "Compared to the squad: each axis is the player's percentile in the group. McBurnie 2022, Harper 2022, Buchheit 2014."}</p>
+                          <p className="mt-1.5 text-[10px] text-slate-400">{IS ? "Miðað við liðið, hver ás = hlutfallsröð leikmannsins í hópnum. McBurnie 2022, Harper 2022, Green 2023." : "Compared to the squad: each axis is the player's percentile in the group. McBurnie 2022, Harper 2022, Green 2023."}</p>
                         </details>
                       </div>
                     )}
@@ -924,7 +924,7 @@ function BasketballGameReport() {
 
               {/* Engine / Driver framing */}
               <div className="pgr-section mb-2 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-[11px] leading-relaxed text-slate-600">
-                <b className="text-violet-700">{is("Stýring (IMA)", "Driver (IMA)")}</b> {is("= hvernig leikmaðurinn hreyfir sig: snöggar hröðunir/hemlanir, stefnubreytingar og stökk — álagið sem stigin ein sýna aldrei. Í körfubolta er þetta lykilmerkið (GPS deyr innandyra).", "= how the player moves: sharp accelerations/decelerations, changes of direction and jumps — the load the box score never shows. In basketball this is the key signal (GPS dies indoors).")} <span className="text-slate-400">(McBurnie 2022, Buchheit 2014)</span>
+                <b className="text-violet-700">{is("Stýring (IMA)", "Driver (IMA)")}</b> {is("= hvernig leikmaðurinn hreyfir sig: snöggar hröðunir/hemlanir, stefnubreytingar og stökk — álagið sem stigin ein sýna aldrei. Í körfubolta er þetta lykilmerkið (GPS deyr innandyra).", "= how the player moves: sharp accelerations/decelerations, changes of direction and jumps — the load the box score never shows. In basketball this is the key signal (GPS dies indoors).")} <span className="text-slate-400">(McBurnie 2022, Green 2023)</span>
               </div>
 
               <div className="mt-4 border-t border-slate-200 pt-2 text-[9px] text-slate-400">

@@ -27,7 +27,7 @@
  *     auto-clears, never sets the readiness colour, and never changes the daily decision —
  *     rules compute, the coach/medical team decides.
  *
- * Cite: Buchheit 2014 (IMA) · McBurnie 2022 (deceleration cost) · Delaney 2017 (worst-case /
+ * Cite: Green 2023 (IMA) · McBurnie 2022 (deceleration cost) · Delaney 2017 (worst-case /
  *       peak locomotor demands).
  */
 
@@ -77,7 +77,7 @@ export const MIN_BASELINE_SESSIONS = 4;
 /** Default recent window (days) in which we look for a re-exposure session. */
 export const DEFAULT_RECENT_DAYS = 14;
 
-const CITATION = "Buchheit 2014 (IMA) · McBurnie 2022 (deceleration) · Delaney 2017 (worst-case demands)";
+const CITATION = "Green 2023 (IMA) · McBurnie 2022 (deceleration) · Delaney 2017 (worst-case demands)";
 
 const CAVEAT: Bi = {
   en: "Change-of-direction load exposure is an IMA proxy (high-intensity COD + deceleration efforts per minute), not true per-cut-angle vectors — those need raw position streams we don't ingest. It reads his recent peak COD/decel session against his own season worst-case, so it answers 'has he been re-loaded with enough cutting/braking to meet a match?' — never a cross-athlete ranking. Descriptive: it informs the clearance checklist, never auto-clears and never touches the readiness verdict.",

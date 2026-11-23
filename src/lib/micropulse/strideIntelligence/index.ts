@@ -10,8 +10,8 @@
  *   2. Stride length — session average (total distance ÷ total strides) plus
  *      stride length in sustained running (distance ÷ strides in runs ≥18 s).
  *      Declining values indicate compensation patterns.
- *   3. L/R Change-of-Direction asymmetry (Bishop 2020) — >15% flag for
- *      injury risk and RTP clearance.
+ *   3. L/R Change-of-Direction asymmetry — >15% is MicroPulse's flag for
+ *      review and RTP clearance (not tested against injury).
  *   4. GPS / IMA mix — share of GPS high-speed distance vs share of IMU load
  *      that came in runs of 18 s or more. A rise means more of his
  *      fast running came in short efforts rather than long runs than usual.
@@ -35,7 +35,7 @@
  * the team is set to indoor or outdoor.
  *
  * References:
- *   - Bishop et al. 2020 — Asymmetry thresholds for screening tests in soccer.
+ *   - Read 2021 — no single asymmetry threshold fits every screening test in soccer.
  *   - Cardinale et al. 2017 — Cadence as NM fatigue indicator in team sport.
  *   - Catapult IMA white paper — Free Running bout detection (bout-duration bands).
  *   - McBurnie et al. 2022 — stride/running mechanics as a within-player read.
@@ -138,9 +138,9 @@ const MIN_COD_EVENTS_FOR_ASYMMETRY = 5;
 //
 // Background: our L/R source is raw IMA band1+2+3 left/right counts (all
 // direction events at low/medium/high intensity). This captures NATURAL
-// dominant-foot bias which makes population-wide thresholds (Bishop 2020 at
-// 9/15/18%) too sensitive — it would flag everyone constantly. The Bishop
-// numbers were derived from explicit cutting-task tests, not raw direction
+// dominant-foot bias which makes fixed thresholds (MicroPulse's lines at
+// 9/15/18%) too sensitive — it would flag everyone constantly. Those
+// numbers were never tested on raw direction
 // events. From real Breiðablik data (May 2026, 17 players) the distribution
 // is: median 19%, p75 23%, p90 28%, p95 34% — so absolute thresholds at
 // 9/15/18% don't fit our metric.
@@ -217,7 +217,7 @@ export function computeStrideMetrics(row: StrideRow): StrideMetrics {
   //  v3 (current): totalDistance / totalStrides.
   //      Coach-friendly average stride length across the session. Normal
   //      range 0.8–1.4 m/stride for field-sport mixed-pace sessions
-  //      (Buchheit 2014). A drop in this metric reflects shorter, more
+  //      (MicroPulse's working range, not from a study). A drop in this metric reflects shorter, more
   //      frequent steps — a known fatigue / running-mechanic compensation
   //      pattern (Mendiguchia 2020). Trends matter more than absolute
   //      values; baseline z-score flags individual decline.

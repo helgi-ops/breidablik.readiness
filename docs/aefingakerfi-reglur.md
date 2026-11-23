@@ -93,7 +93,7 @@ Styrktaræfing dagsins er byggð í `buildStrengthSession` (`SP/index.ts`), í �
 | Fasar tímabils (`detectSeasonPhases`) | — | Undirbúningstímabil byrjar á dagsetningu þjálfarans, annars 42 dögum fyrir fyrsta leik. Undirbúningstímabil Breiðabliks 2026 byrjar 30. nóv., úr gögnum þjálfarans | — | `season_plans.overrides` |
 | **`INSEASON_MD2_OFF`** (nýtt, 8d487b4) | Sjálfvirka MD-röðunin í Week setup, á keppnistímabili | Dagurinn eftir leik er MD+1 endurheimt, en sunnudagur vikunnar er áfram frí. MD+2 er **frídagur**. MD-1 er aldrei gerður að frídegi. Leikur síðustu tvo daga fyrri viku telur með | MicroPulse-regla; Buchheit 2023 | Þjálfari getur breytt hvaða degi sem er; ekki skráð. Undirbúnings- og utan tímabils: óbreytt |
 | **`INSEASON_THREE_IN_A_ROW`** | Keppnistímabil (eða leikur í vikunni og fasi óþekktur) | Aldrei þrír æfingadagar í röð. Leikdagur er ekki æfing. Gildir líka í Mesó-dagatalinu á keppnistímabili, þar sem dagurinn fer beint í frí (ósamræmi 9). Leggur til að fækka um frídaga í þessari röð: MD+2, MD-2, MD+3, MD+4, MD-5, MD-6 … MD-3, MD-4 síðast. Vinnan af MD-2 færist á MD-3 og MD-1 | MicroPulse-regla; Buchheit 2023 | **Aðeins ráð.** „Halda planinu“ krefst ástæðu, skráð í `session_fit_override_log` (`week_rule`) |
-| **`MISSED_DAY_NOT_SHIFTED`** | MD-3 til MD-1 þegar MD-4 var sendur en ekki kláraður | Bara lína í forskoðun þjálfarans. Misstur dagur er **aldrei** færður eða bætt ofan á annan | MicroPulse-regla; Buchheit 2024 | Sést bara í forskoðun þjálfarans |
+| **`MISSED_DAY_NOT_SHIFTED`** | MD-3 til MD-1 þegar MD-4 var sendur en ekki kláraður | Bara lína í forskoðun þjálfarans. Misstur dagur er **aldrei** færður eða bætt ofan á annan | MicroPulse-regla | Sést bara í forskoðun þjálfarans |
 | Vika án leiks (`NO_MATCH_WEEK_DAY`) | Enginn leikur nálægt | Styrkdagur = MD-4, kraftdagur = MD-3, léttur dagur = MD-2, hvíld = engin æfing. Dagur sem er ekki stilltur er léttur. Ekkert vikuplan: sjálfgefið plan (mánudagur styrkur, fimmtudagur kraftur, aðrir dagar léttir) og línan `NO_MATCH_DEFAULT_PLAN` | Regla þjálfarans; sjálfgefna planið er MicroPulse-regla | `team_strength_palette.no_match_week`; færsla eina viku í senn, með Afturkalla |
 | Árekstur í viku án leiks | — | Varar við styrkdegi sem lendir á frídegi og stingur upp á næsta lausa degi | — | Sama |
 | MD+1 mínútur (`md1MinutesTier`) | MD+1 | Spilaði ekki eða <30 mín: styrkur (MD-4 sniðmát). 30–59 mín: endurheimt. ≥60 mín: ísómetrískt neðri hluti (2 sett) og ferskur efri hluti. Mínútur óþekktar: föst endurheimt | Carling 2018; Nédélec 2012; Anderson 2016b | — |
@@ -179,7 +179,7 @@ Liturinn er notaður hér en ekki reiknaður.
 |---|---|---|
 | `STRUCTURE_READINESS_DOWNGRADE` | Gulur | Aðferðin eitt þrep niður, í sömu fjölskyldu og leyfð þann dag. Röð: French contrast > contrast = cluster hámarksstyrkur > cluster > … > bein sett |
 | `STRUCTURE_READINESS_DOWNGRADE_SKIPPED` | Neðra þrepið væri meiri vinna en grænt | Aðferðin helst: „gulur dagur er aldrei meiri vinna en grænn“ |
-| `VERDICT_REDUCED_VOLUME` | Gulur | Eitt sett af hverri lyftu utan upphitunar og liðleika; lína með eitt sett heldur því (23. nóv., sama regla alls staðar). Gabbett 2017; skammturinn er MicroPulse-regla |
+| `VERDICT_REDUCED_VOLUME` | Gulur | Eitt sett af hverri lyftu utan upphitunar og liðleika; lína með eitt sett heldur því (23. nóv., sama regla alls staðar). Æfing löguð að getu dagsins (Greig 2020); skammturinn er MicroPulse-regla |
 | `VERDICT_BLOCK` | Rauður (nema MD+1 með ≥60 mín) | Allt fer nema upphitun og liðleiki. Leiðréttingaræfingar og jafnvægisupphitun haldast |
 | Engar viðbætur | Gulur eða rauður | Ekkert +1 sett frá markmiði eða prófi, ekkert „skilað til baka“. Markmiðslyftur á gulum degi: −1 sett |
 | `CMJ_DROP_NOT_STACKED` | Hoppapróf niðri á degi sem check-in hefur þegar lækkað | Ekki skorið tvisvar |
@@ -198,14 +198,14 @@ Liturinn er notaður hér en ekki reiknaður.
 | `DECEL_BURDEN_NORDIC_REMOVE` / `_DL_SWAP` | ≥3 dagar í röð með hátt hemlunarálag | Nordic út; trap-bar DL → hip thrust | McBurnie 2022 | Virk ef gögn eru til |
 | `SPRINT_DROP_MTP_SWAP` / `_PLYO_REMOVE` | Hámarkshraði **í dag** ≥7% undir eigin viðmiði | MTP → IMTP; fallhopp út | Lum & Barbosa 2019; Edouard 2019 | **Nánast óvirk:** þarf GPS dagsins fyrir æfingu |
 | `VBT_LOAD_REDUCTION` | Hraðatap ≤ −20% | Létt á aðallyftu | Pareja-Blanco 2017 | **Óvirk:** gögnin eru alltaf tóm |
-| `COD_ASYM_MAIN_LIFT_SWAP` | Ósamhverfa í stefnubreytingum ≥15% **og** þjálfari valdi „skipta“ | Þung tvífóta lyfta → búlgörsk, veikari hlið fyrst | Bishop 2020 | Virk eftir smell þjálfara |
+| `COD_ASYM_MAIN_LIFT_SWAP` | Ósamhverfa í stefnubreytingum ≥15% **og** þjálfari valdi „skipta“ | Þung tvífóta lyfta → búlgörsk, veikari hlið fyrst | MicroPulse-regla; engin rannsókn hefur prófað ósamhverfu í GPS-snúningum gegn meiðslum; tengsl ósamhverfu við meiðsli almennt eru óviss (Helme 2021) | Virk eftir smell þjálfara |
 | `SPRINT_EXPOSURE_UNDERLOAD` | Of lítill sprettur | Bara athugasemd | Malone 2017 | — |
 | `SORE_GROIN_COPENHAGEN_REMOVE` | Eymsli í nára | Copenhagen út | — | Virk |
 | `SORE_LB_DL_SWAP` | Eymsli í mjóbaki | Trap-bar DL → framhnébeygja | Gullett 2009 | Virk |
 | `FOSTER_STRAIN_VOLUME_CUT` | Foster strain ≥6000 (7 dagar) | Fyrsta grunnlyfta, sett × 0,67 | Foster 1998 | Virk með sRPE |
 | `CONGESTED_WEEK_FLAG` | 2 leikir á 7 dögum og dagurinn í dag innan þeirra. Næsti leikur úr dagatalinu telst alltaf; leikur sem er búinn aðeins ef leikmaðurinn spilaði ≥60 mín | Bara athugasemd | Cuthbert 2021 | — |
 | `LEDGER_EMPHASIS_CONFIRM` / `_ADD` | Áhersla úr deficit-skrá, ekki rauður | +1 sett: hliðarhopp, búlgörsk, Nordic eða hnébeygja eftir flokki | Deficit-skráin | Virk |
-| `PALETTE_SYMMETRY_UNILATERAL` | Ósamhverfa ≥10% **og** „skipta“ | Einfóta lyfta úr lista liðsins | Bishop 2020 | Virk eftir smell |
+| `PALETTE_SYMMETRY_UNILATERAL` | Ósamhverfa ≥10% **og** „skipta“ | Einfóta lyfta úr lista liðsins | 10% línan er MicroPulse-regla; skýr tengsl ósamhverfu við getu eða meiðsli vantar (Bishop 2023) | Virk eftir smell |
 | Frívika (send af þjálfara) | 1–21 dagur | Fast sniðmát: styrkur, rólegt hlaup, tempó, hvíld. Endurhæfing helst | Rønnestad 2011; Mujika 2000 | Þjálfari breytir áður en sent er |
 
 Annað hlaup og þol (álagsplan, long runs, near-max o.fl.) eru markmið og ráð fyrir þjálfara, ekki það sem
@@ -231,7 +231,7 @@ leikmaðurinn fær sent. Undantekning eru vallaræfingar markmiðsplana (kafli 7
 | **`NORDBORD_ADDON`** | NordBord ≤14 daga gamalt, fótur ≥10% undir síðasta prófi | **+1 Nordic sett** (337 N sýnt sem viðmið) | Regla þjálfarans 23. nóv. |
 | **`FORCEFRAME_ADDON`** | ForceFrame ≤21 dags, munur ≥10% milli hliða eða fall ≥10% | **+1 Copenhagen sett** | Schaber 2021 |
 | **`ADDON_CAP`** | Æfingin hefur þegar fengið +1, eða dagurinn er ekki forvarnardagur vikunnar | Ekkert aukasett. Aukasettið fer aðeins á skammt vikureglunnar (einn dagur í viku), svo hámarkið gildir fyrir vikuna | — |
-| **`ASYMMETRY_REVIEW`** / **`ASYMMETRY_KEPT`** | Ósamhverfa ≥10% | Tvífóta lyftan helst, flaggað fyrir þjálfara/sjúkraþjálfara. Ákvörðun **heldur í 28 daga** | Bishop 2020; 28 dagar eru MicroPulse-regla |
+| **`ASYMMETRY_REVIEW`** / **`ASYMMETRY_KEPT`** | Ósamhverfa ≥10% | Tvífóta lyftan helst, flaggað fyrir þjálfara/sjúkraþjálfara. Ákvörðun **heldur í 28 daga** | 10% línan og 28 dagar eru MicroPulse-regla; skýr tengsl ósamhverfu við getu eða meiðsli vantar (Bishop 2023) |
 | **`SCREEN_OHS_UNILATERAL`** | Hnébeygjuskimun ≤56 daga: hné inn eða hæll upp | Þung hnébeygja → búlgörsk; trap-bar DL → B-stance RDL. Sömu sett og þyngd | Post 2017; Krause 2015 |
 | **`SCREEN_SLB_WARMUP`** | Lélegt jafnvægi á öðrum fæti | Jafnvægisæfing í upphitun | Ross & Guskiewicz 2005 |
 | `CORRECTIVE_MERGED` | Leiðréttingaræfingar úr skimun | Fremsta blokk; ekki minnkuð eftir lit, helst á rauðum degi | — |
@@ -513,6 +513,7 @@ passar að hver tilvísun sé skráð, annaðhvort full eða á listanum yfir ó
 
 - Anderson L, Orme P, Di Michele R, Close GL, Milsom J, Morgans R, Drust B, Morton JP. Quantification of Seasonal-Long Physical Load in Soccer Players With Different Starting Status From the English Premier League: Implications for Maintaining Squad Physical Fitness. Int J Sports Physiol Perform 2016;11(8):1038–1046. doi:10.1123/ijspp.2015-0672 PMID 26915393
 - Arnason A, Andersen TE, Holme I, Engebretsen L, Bahr R. Prevention of hamstring strains in elite soccer: an intervention study. Scand J Med Sci Sports 2008;18(1):40–48. doi:10.1111/j.1600-0838.2006.00634.x PMID 17355322
+- Bishop C, de Keijzer KL, Turner AN, Beato M. Measuring Interlimb Asymmetry for Strength and Power: A Brief Review of Assessment Methods, Data Analysis, Current Evidence, and Practical Recommendations. J Strength Cond Res 2023;37(3):745–750. doi:10.1519/JSC.0000000000004384 PMID 36695841
 - Bourne MN, Duhig SJ, Timmins RG, Williams MD, Opar DA, Al Najjar A, Kerr GK, Shield AJ. Impact of the Nordic hamstring and hip extension exercises on hamstring architecture and morphology: implications for injury prevention. Br J Sports Med 2017;51(5):469–477. doi:10.1136/bjsports-2016-096130 PMID 27660368
 - Buchheit M, Settembre M, Hader K, McHugh D. Exposures to near-to-maximal speed running bouts during different turnarounds in elite football: association with match hamstring injuries. Biol Sport 2023.
 - Carling C, Lacome M, McCall A, Dupont G, Le Gall F, Simpson B, Buchheit M. Monitoring of Post-match Fatigue in Professional Soccer: Welcome to the Real World. Sports Med 2018;48(12):2695–2702. doi:10.1007/s40279-018-0935-z PMID 29740792
@@ -524,11 +525,13 @@ passar að hver tilvísun sé skráð, annaðhvort full eða á listanum yfir ó
 - Fessi MS, Zarrouk N, Di Salvo V, Filetti C, Barker AR, Moalla W. Effects of tapering on physical match activities in professional soccer players. J Sports Sci 2016;34(24):2189–2194. doi:10.1080/02640414.2016.1171891 PMID 27065344
 - Foster C. Monitoring training in athletes with reference to overtraining syndrome. Med Sci Sports Exerc 1998;30(7):1164–1168. doi:10.1097/00005768-199807000-00023 PMID 9662690
 - Gathercole R, Sporer B, Stellingwerff T, Sleivert G. Alternative countermovement-jump analysis to quantify acute neuromuscular fatigue. Int J Sports Physiol Perform 2015;10(1):84–92. doi:10.1123/ijspp.2013-0413 PMID 24912201
+- Greig L, Stephens Hemingway BH, Aspe RR, Cooper K, Comfort P, Swinton PA. Autoregulation in Resistance Training: Addressing the Inconsistencies. Sports Med 2020;50(11):1873–1887. doi:10.1007/s40279-020-01330-8 PMID 32813181
 - Grgic J, Schoenfeld BJ, Davies TB, Lazinica B, Krieger JW, Pedisic Z. Effect of Resistance Training Frequency on Gains in Muscular Strength: A Systematic Review and Meta-Analysis. Sports Med 2018;48(5):1207–1220. doi:10.1007/s40279-018-0872-x PMID 29470825
 - Gullett JC, Tillman MD, Gutierrez GM, Chow JW. A biomechanical comparison of back and front squats in healthy trained individuals. J Strength Cond Res 2009;23(1):284–292. doi:10.1519/JSC.0b013e31818546bb PMID 19002072
 - Hader K, Rumpf MC, Hertzog M, Kilduff LP, Girard O, Silva JR. Monitoring the Athlete Match Response: Can External Load Variables Predict Post-match Acute and Residual Fatigue in Soccer? A Systematic Review with Meta-analysis. Sports Med Open 2019;5(1):48. doi:10.1186/s40798-019-0219-7 PMID 31820260
 - Harøy J, Clarsen B, Wiger EG, Øyen MG, Serner A, Thorborg K, Hölmich P, Andersen TE, Bahr R. The Adductor Strengthening Programme prevents groin problems among male football players: a cluster-randomised controlled trial. Br J Sports Med 2019;53(3):150–157. doi:10.1136/bjsports-2017-098937 PMID 29891614
 - Harrison PW, James LP, McGuigan MR, Jenkins DG, Kelly VG. Resistance Priming to Enhance Neuromuscular Performance in Sport: Evidence, Potential Mechanisms and Directions for Future Research. Sports Med 2019;49(10):1499–1514. doi:10.1007/s40279-019-01136-3 PMID 31203499
+- Helme M, Tee J, Emmonds S, Low C. Does lower-limb asymmetry increase injury risk in sport? A systematic review. Phys Ther Sport 2021;49:204–213. doi:10.1016/j.ptsp.2021.03.001 PMID 33770741
 - Helms ER, Cronin J, Storey A, Zourdos MC. Application of the Repetitions in Reserve-Based Rating of Perceived Exertion Scale for Resistance Training. Strength Cond J 2016;38(4):42–49. doi:10.1519/SSC.0000000000000218 PMID 27531969
 - Hoff J, Helgerud J. Endurance and strength training for soccer players: physiological considerations. Sports Med 2004;34(3):165–180. doi:10.2165/00007256-200434030-00003 PMID 14987126
 - van der Horst N, Smits DW, Petersen J, Goedhart EA, Backx FJ. The preventive effect of the nordic hamstring exercise on hamstring injuries in amateur soccer players: a randomized controlled trial. Am J Sports Med 2015;43(6):1316–1323. doi:10.1177/0363546515574057 PMID 25794868
@@ -559,6 +562,3 @@ passar að hver tilvísun sé skráð, annaðhvort full eða á listanum yfir ó
 
 Þessar standa í reglunum eins og þær voru skrifaðar. Ekki var hægt að festa þær við eina grein og ekki er giskað á þær. Þú ákveður hvort þeim er skipt út.
 
-- **Bishop 2020**: Athugasemdin í kóðanum gefur J Athl Train 2020;55:1062–1070, sem passar ekki við neina færslu á PubMed. Bishop birti nokkrar greinar um ósamhverfu um 2020 og ekki er skráð hver þeirra er átt við.
-- **Buchheit 2024**: Vitnað í sem „The 11 Principles of Microcycle Periodization“; engin slík grein fannst á PubMed eða Crossref.
-- **Gabbett 2017**: Gabbett var meðhöfundur að nokkrum greinum um álagsvöktun 2017 og ekki er skráð hver er átt við. Þekktasta greinin um skammtíma- og langtímaálag er Gabbett 2016.

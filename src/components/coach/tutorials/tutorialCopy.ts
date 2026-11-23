@@ -607,8 +607,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "The HR cross-check (the clever bit)", is: "Púls-krosscheck (klóka atriðið)" },
         body: [
           {
-            en: "HR load (Edwards' summated-heart-rate-zone TRIMP, adapted to Catapult's 8 bands) compared to sRPE. Does the objective heart rate corroborate the subjective RPE? “HR load matches RPE across the squad” is reassurance; a divergence is a flag (someone under- or over-rating the effort). HR is read on the player's own norm, never as an absolute AU comparable to sRPE (Edwards 1993; Buchheit 2024).",
-            is: "Púlsálag (Edwards' summated-heart-rate-zone TRIMP, aðlagað að 8 böndum Catapult) borið saman við sRPE. Staðfestir hlutlægi púlsinn huglæga RPE-ið? „HR load matches RPE across the squad“ er traustvekjandi; frávik er flagg (einhver van- eða ofmetur áreynsluna). HR er lesið á eigin norm leikmannsins, aldrei sem alger AU samanburðarhæfur við sRPE (Edwards 1993; Buchheit 2024).",
+            en: "HR load (Edwards' summated-heart-rate-zone TRIMP, adapted to Catapult's 8 bands) compared to sRPE. Does the objective heart rate corroborate the subjective RPE? “HR load matches RPE across the squad” is reassurance; a divergence is a flag (someone under- or over-rating the effort). HR is read on the player's own norm, never as an absolute AU comparable to sRPE (Edwards 1993; Impellizzeri 2004).",
+            is: "Púlsálag (Edwards' summated-heart-rate-zone TRIMP, aðlagað að 8 böndum Catapult) borið saman við sRPE. Staðfestir hlutlægi púlsinn huglæga RPE-ið? „HR load matches RPE across the squad“ er traustvekjandi; frávik er flagg (einhver van- eða ofmetur áreynsluna). HR er lesið á eigin norm leikmannsins, aldrei sem alger AU samanburðarhæfur við sRPE (Edwards 1993; Impellizzeri 2004).",
           },
           {
             en: "Honest by design: the HR read carries its limits on screen. HR is read only against the player's own norm (band weights, not calibrated %HRmax cuts); %HRmax needs each athlete's HRmax set in OpenField; and only players who wore the belt on skin have HR — the rest are shown as no-data, never zero (the null-vs-zero discipline). It says what it can't measure.",
@@ -643,8 +643,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   "heart-rate-intelligence": {
     title: { en: "How to use Heart Rate Intelligence", is: "Hvernig á að nota Púls-greiningu" },
     intro: {
-      en: "Heart Rate Intelligence is the objective cross-check on the subjective effort rating. sRPE is what the player says the session cost; heart rate is what his heart actually did. This page compares them — on each player's own norm — and when they disagree, the gap itself is the signal. Built on Edwards 1993 and Buchheit 2024. It's a cross-check to investigate, never an injury flag; HR is the aerobic lens only.",
-      is: "Heart Rate Intelligence er hlutlægi krosscheckið á huglæga áreynslumatið. sRPE er það sem leikmaðurinn segir að lotan hafi kostað; púlsinn er það sem hjartað gerði í raun. Þessi síða ber þau saman — á eigin norm hvers leikmanns — og þegar þau stangast á er bilið sjálft merkið. Byggt á Edwards 1993 og Buchheit 2024. Þetta er krosscheck til að skoða, aldrei meiðslamerki; púlsinn er loftháða linsan eingöngu.",
+      en: "Heart Rate Intelligence is the objective cross-check on the subjective effort rating. sRPE is what the player says the session cost; heart rate is what his heart actually did. This page compares them — on each player's own norm — and when they disagree, the gap itself is the signal. Built on Edwards 1993 and Impellizzeri 2004. It's a cross-check to investigate, never an injury flag; HR is the aerobic lens only.",
+      is: "Heart Rate Intelligence er hlutlægi krosscheckið á huglæga áreynslumatið. sRPE er það sem leikmaðurinn segir að lotan hafi kostað; púlsinn er það sem hjartað gerði í raun. Þessi síða ber þau saman — á eigin norm hvers leikmanns — og þegar þau stangast á er bilið sjálft merkið. Byggt á Edwards 1993 og Impellizzeri 2004. Þetta er krosscheck til að skoða, aldrei meiðslamerki; púlsinn er loftháða linsan eingöngu.",
     },
     videoEmbedUrl: HEART_RATE_VIDEO,
     sections: [
@@ -719,8 +719,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "What's coming (v2)", is: "Hvað er á leiðinni (v2)" },
         body: [
           {
-            en: "v1 is the HR-vs-sRPE cross-check. v2 adds HRex (submaximal fitness marker — the most reliable HR measure, Buchheit 2014), HRR (recovery), %HRreserve (comparable across players, Dellal 2012), and conditioning-dose verification (time in the red zone as a T@VO2max proxy). The page names these as “out of scope v1” — all gated by the SWC thresholds from Buchheit 2014.",
-            is: "v1 er HR-vs-sRPE krosscheckið. v2 bætir við HRex (submax form-merki — áreiðanlegasti HR-mælikvarðinn, Buchheit 2014), HRR (endurheimt), %HR-forða (samanburðarhæft milli leikmanna, Dellal 2012), og conditioning-dose staðfestingu (tími í rauða svæðinu sem T@VO2max-proxy). Síðan nefnir þetta sjálf sem „out of scope v1“ — allt gætt með SWC-þröskuldum úr Buchheit 2014.",
+            en: "v1 is the HR-vs-sRPE cross-check. v2 adds HRex (submaximal fitness marker — one of the most useful HR monitoring measures, Buchheit 2014), HRR (recovery), %HRreserve (comparable across players, Dellal 2012), and conditioning-dose verification (time in the red zone as a T@VO2max proxy). The page names these as “out of scope v1” — each read against its own measurement error and smallest worthwhile change, as Buchheit 2014 advises.",
+            is: "v1 er HR-vs-sRPE krosscheckið. v2 bætir við HRex (submax form-merki — einn gagnlegasti HR-mælikvarðinn í vöktun, Buchheit 2014), HRR (endurheimt), %HR-forða (samanburðarhæft milli leikmanna, Dellal 2012), og conditioning-dose staðfestingu (tími í rauða svæðinu sem T@VO2max-proxy). Síðan nefnir þetta sjálf sem „out of scope v1“ — hvert lesið m.v. eigin mæliskekkju og minnstu marktæku breytingu, eins og Buchheit 2014 ráðleggur.",
           },
         ],
       },
@@ -1650,11 +1650,11 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         ],
       },
       {
-        heading: { en: "Change-of-direction asymmetry (Bishop 2020)", is: "Stefnubreytinga-ósamhverfa (Bishop 2020)" },
+        heading: { en: "Change-of-direction asymmetry", is: "Stefnubreytinga-ósamhverfa" },
         body: [
           {
-            en: "Split into three intensity tiers, because asymmetry in hard actions matters more than in easy ones. Only the high-intensity tier is genuinely injury-relevant (thresholds: 9% watch · 15% concern · 18% high). Medium-intensity asymmetry is often just a positional habit; low-intensity is rarely interesting. The card states its own limit: >15% is a commonly-flagged imbalance but a risk factor, not a validated predictor — the evidence is mainly single-leg-jump, not running.",
-            is: "Skipt í þrjú ákefðarþrep, því ósamhverfa í hörðum hreyfingum skiptir meira máli en í rólegum. Aðeins há-ákefðar þrepið er raunverulega meiðslatengt (þröskuldar: 9% fylgjast með · 15% áhyggjur · 18% hátt). Meðalákefðar ósamhverfa er oft bara stöðuvenja; lág-ákefðar er sjaldnast áhugaverð. Kortið segir sín eigin mörk: >15% er algengt flögg en áhættuþáttur, ekki staðfestur forspárþáttur — gögnin eru aðallega um einfættstökk, ekki hlaup.",
+            en: "Split into three intensity tiers, because asymmetry in hard actions matters more than in easy ones. MicroPulse flags only the high-intensity tier (its own lines: 9% watch · 15% concern · 18% high). Medium-intensity asymmetry is often just a positional habit; low-intensity is rarely interesting. The card states its own limit: >15% is a commonly-flagged imbalance not a validated predictor — asymmetry–injury evidence is weak (Helme 2021) and comes from strength and jump tests, not GPS turn counts.",
+            is: "Skipt í þrjú ákefðarþrep, því ósamhverfa í hörðum hreyfingum skiptir meira máli en í rólegum. MicroPulse flaggar aðeins há-ákefðar þrepið (eigin línur: 9% fylgjast með · 15% áhyggjur · 18% hátt). Meðalákefðar ósamhverfa er oft bara stöðuvenja; lág-ákefðar er sjaldnast áhugaverð. Kortið segir sín eigin mörk: >15% er algengt flögg en ekki staðfestur forspárþáttur — tengsl ósamhverfu og meiðsla eru veikt studd (Helme 2021) og koma úr styrk- og stökkprófum, ekki GPS-snúningum.",
           },
         ],
       },
@@ -1734,8 +1734,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Session Shape — the shape of the session", is: "Session Shape — lögun æfingarinnar" },
         body: [
           {
-            en: "One word for the shape of the day (Recovery / short / full) plus four tiles: total strides, strides in long continuous runs (18 s or more) and their share, L/R CoD balance at high intensity, and how many are flagged on high-CoD asymmetry (e.g. 8/19). CoD splits into three intensity tiers — only “High (injury-relevant)” genuinely matters (Bishop 2020). The run-length distribution (short bursts <12 s / medium runs 12–24 s / longest runs ≥24 s) shows the shape: mostly short bursts = typical football play; more long runs = more sustained, tempo-style running. These bands measure how long each run lasted, not speed — they are not sprinting.",
-            is: "Eitt orð um lögun dagsins (Recovery / short / full) auk fjögurra flísa: heildarskref, skref í löngum samfelldum hlaupum (18 sek eða lengri) og hlutfall þeirra, L/R CoD balance í háákefð, og fjöldi flaggaðra á há-CoD ósamhverfu (t.d. 8/19). CoD skiptist í þrjú ákefðarþrep — aðeins „High (injury-relevant)“ skiptir raunverulega máli (Bishop 2020). Dreifingin eftir lengd hlaupa (stutt hlaup <12 sek / meðallöng hlaup 12–24 sek / lengstu hlaupin ≥24 sek) sýnir lögunina: mest stutt hlaup = dæmigerður fótboltaleikur; fleiri löng hlaup = meira samfellt, tempó-hlaup. Böndin mæla hve lengi hvert hlaup stóð, ekki hraða — þetta eru ekki sprettir.",
+            en: "One word for the shape of the day (Recovery / short / full) plus four tiles: total strides, strides in long continuous runs (18 s or more) and their share, L/R CoD balance at high intensity, and how many are flagged on high-CoD asymmetry (e.g. 8/19). CoD splits into three intensity tiers — MicroPulse flags only the “High (injury-relevant)” tier; that label is MicroPulse's, not a tested injury link (Helme 2021). The run-length distribution (short bursts <12 s / medium runs 12–24 s / longest runs ≥24 s) shows the shape: mostly short bursts = typical football play; more long runs = more sustained, tempo-style running. These bands measure how long each run lasted, not speed — they are not sprinting.",
+            is: "Eitt orð um lögun dagsins (Recovery / short / full) auk fjögurra flísa: heildarskref, skref í löngum samfelldum hlaupum (18 sek eða lengri) og hlutfall þeirra, L/R CoD balance í háákefð, og fjöldi flaggaðra á há-CoD ósamhverfu (t.d. 8/19). CoD skiptist í þrjú ákefðarþrep — MicroPulse flaggar aðeins „High (injury-relevant)“ þrepið; merkið er MicroPulse, ekki prófuð tengsl við meiðsli (Helme 2021). Dreifingin eftir lengd hlaupa (stutt hlaup <12 sek / meðallöng hlaup 12–24 sek / lengstu hlaupin ≥24 sek) sýnir lögunina: mest stutt hlaup = dæmigerður fótboltaleikur; fleiri löng hlaup = meira samfellt, tempó-hlaup. Böndin mæla hve lengi hvert hlaup stóð, ekki hraða — þetta eru ekki sprettir.",
           },
         ],
       },
@@ -2244,8 +2244,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "“How to develop him” — game model × movement", is: "„How to develop him“ — leikstíll × hreyfing" },
         body: [
           {
-            en: "At the bottom the page gives a development emphasis per player = your game model (High press / Possession / Direct / Low block / Balanced) times how he moves. It prescribes specific work — repeated-sprint, acceleration mechanics, eccentric braking — each with the player's z-score as evidence, a method and a priority (HIGH/MODERATE). Change the game model and the emphasis changes (Buchheit 2024; Morin 2016; Harper 2019; McBurnie 2022).",
-            is: "Neðst gefur síðan þróunaráherslu á hvern leikmann = leikstíll félagsins (High press / Possession / Direct / Low block / Balanced) margfaldaður með því hvernig hann hreyfir sig. Hún ávísar tiltekinni vinnu — repeated-sprint, hröðunartækni, eccentric-hemlun — hverri með z-skori leikmannsins sem sönnun, aðferð og forgangi (HIGH/MODERATE). Breyttu leikstílnum og áherslan breytist (Buchheit 2024; Morin 2016; Harper 2019; McBurnie 2022).",
+            en: "At the bottom the page gives a development emphasis per player = your game model (High press / Possession / Direct / Low block / Balanced) times how he moves. It prescribes specific work — repeated-sprint, acceleration mechanics, eccentric braking — each with the player's z-score as evidence, a method and a priority (HIGH/MODERATE). Change the game model and the emphasis changes (Taylor 2015; Morin 2016; Harper 2019; McBurnie 2022).",
+            is: "Neðst gefur síðan þróunaráherslu á hvern leikmann = leikstíll félagsins (High press / Possession / Direct / Low block / Balanced) margfaldaður með því hvernig hann hreyfir sig. Hún ávísar tiltekinni vinnu — repeated-sprint, hröðunartækni, eccentric-hemlun — hverri með z-skori leikmannsins sem sönnun, aðferð og forgangi (HIGH/MODERATE). Breyttu leikstílnum og áherslan breytist (Taylor 2015; Morin 2016; Harper 2019; McBurnie 2022).",
           },
           {
             en: "The point of the page: don't under-prepare the body for what the game asks — and when a gap opens, it says who to train harder, on what, and how, in line with how you want to play.",
@@ -2321,8 +2321,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   "hsr-intelligence": {
     title: { en: "How to use HSR Intelligence", is: "Hvernig á að nota HSR Intelligence" },
     intro: {
-      en: "This is the Lite-tier hamstring guard — per-player soft-tissue monitoring built on the GPS metrics every Catapult plan exposes (high-speed running, sprint, max velocity). It's the GPS counterpart to Decel Intelligence: the same published evidence (Malone 2017, Buchheit 2014), different inputs. Its job is to make sure each player gets enough high-speed running before a match — because both too much AND too little are hamstring risks.",
-      is: "Þetta er aftanlærisvörnin á Lite-þrepi — persónulegt eftirlit með mjúkvefjaáhættu byggt á GPS-mælunum sem hver Catapult-áskrift skilar (háhraðahlaup, spretti, hámarkshraði). Hún er GPS-hliðstæða Decel Intelligence: sama ritrýnda sönnun (Malone 2017, Buchheit 2014), önnur inntök. Hlutverk hennar er að tryggja að hver leikmaður fái nóg af háhraðahlaupi fyrir leik — því bæði of mikið OG of lítið er aftanlærisáhætta.",
+      en: "This is the Lite-tier hamstring guard — per-player soft-tissue monitoring built on the GPS metrics every Catapult plan exposes (high-speed running, sprint, max velocity). It's the GPS counterpart to Decel Intelligence: published evidence on top-speed exposure (Malone 2017, Buchheit 2023), different inputs. Its job is to make sure each player gets enough high-speed running before a match — because both too much AND too little are hamstring risks.",
+      is: "Þetta er aftanlærisvörnin á Lite-þrepi — persónulegt eftirlit með mjúkvefjaáhættu byggt á GPS-mælunum sem hver Catapult-áskrift skilar (háhraðahlaup, spretti, hámarkshraði). Hún er GPS-hliðstæða Decel Intelligence: ritrýndar rannsóknir á sprettum nærri hámarkshraða (Malone 2017, Buchheit 2023), önnur inntök. Hlutverk hennar er að tryggja að hver leikmaður fái nóg af háhraðahlaupi fyrir leik — því bæði of mikið OG of lítið er aftanlærisáhætta.",
     },
     videoEmbedUrl: HSR_VIDEO,
     sections: [
@@ -2348,8 +2348,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Three exposures — the heart of the page", is: "Þrjú áreiti — hjarta síðunnar" },
         body: [
           {
-            en: "The page tracks three: HSR (high-speed-running distance above the threshold, with an ACWR of 7d/28d), Sprint (sprint distance, with an ACWR), and MaxV (%MAXV — how close to top speed — plus the count of sessions where ≥95% of max velocity was reached). Each exposure has its own coloured sub-flag in the table (Malone 2017; Buchheit 2014).",
-            is: "Síðan fylgist með þremur: HSR (háhraðahlaupsvegalengd yfir þröskuldi, með ACWR 7d/28d), Sprint (sprettvegalengd, með ACWR), og MaxV (%MAXV — hversu nálægt hámarkshraða — auk fjölda æfinga þar sem ≥95% af hámarkshraða náðist). Hvert áreiti hefur sitt eigið litað undir-flagg í töflunni (Malone 2017; Buchheit 2014).",
+            en: "The page tracks three: HSR (high-speed-running distance above the threshold, with an ACWR of 7d/28d), Sprint (sprint distance, with an ACWR), and MaxV (%MAXV — how close to top speed — plus the count of sessions where ≥95% of max velocity was reached). Each exposure has its own coloured sub-flag in the table (Malone 2017; Buchheit 2023).",
+            is: "Síðan fylgist með þremur: HSR (háhraðahlaupsvegalengd yfir þröskuldi, með ACWR 7d/28d), Sprint (sprettvegalengd, með ACWR), og MaxV (%MAXV — hversu nálægt hámarkshraða — auk fjölda æfinga þar sem ≥95% af hámarkshraða náðist). Hvert áreiti hefur sitt eigið litað undir-flagg í töflunni (Malone 2017; Buchheit 2023).",
           },
         ],
       },
@@ -2388,8 +2388,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Lite tier, same evidence", is: "Lite-þrep, sama sönnun" },
         body: [
           {
-            en: "HSR Intelligence is the GPS-only equivalent of Decel Intelligence. It's built on what every Catapult plan exposes — no inertial data needed — so a Lite club gets real hamstring monitoring. The evidence is the same as Decel's (Malone 2017, Buchheit 2014, published in BJSM): different inputs, same quality. The point: make sure each player gets enough — but not too much — high-speed running before a match, on the Lite tier with the same science as Pro.",
-            is: "HSR Intelligence er GPS-eingöngu jafngildi Decel Intelligence. Hún byggir á því sem hver Catapult-áskrift skilar — engin hröðunarmælagögn þarf — svo Lite-félag fær raunverulegt aftanlæriseftirlit. Sönnunin er sú sama og hjá Decel (Malone 2017, Buchheit 2014, ritrýnt í BJSM): önnur inntök, sömu gæði. Kjarninn: passaðu að hver leikmaður fái nóg — en ekki of mikið — af háhraðahlaupi fyrir leik, á Lite-þrepi með sömu vísindum og Pro.",
+            en: "HSR Intelligence is the GPS-only equivalent of Decel Intelligence. It's built on what every Catapult plan exposes — no inertial data needed — so a Lite club gets real hamstring monitoring. Its evidence is observational studies of high-speed and top-speed exposure (Malone 2017, Buchheit 2023): different inputs from Decel. The point: make sure each player gets enough — but not too much — high-speed running before a match, on the Lite tier with the same science as Pro.",
+            is: "HSR Intelligence er GPS-eingöngu jafngildi Decel Intelligence. Hún byggir á því sem hver Catapult-áskrift skilar — engin hröðunarmælagögn þarf — svo Lite-félag fær raunverulegt aftanlæriseftirlit. Heimildirnar eru athugunarrannsóknir á háhraða- og hámarkshraðahlaupum (Malone 2017, Buchheit 2023): önnur inntök en í Decel. Kjarninn: passaðu að hver leikmaður fái nóg — en ekki of mikið — af háhraðahlaupi fyrir leik, á Lite-þrepi með sömu vísindum og Pro.",
           },
         ],
       },
@@ -2915,8 +2915,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "STEN er stöðluð einkunn 1–10 borin saman við HANS eigin grunnlínu — ekki liðsins. 5–6 er venjulegt; hærra = ferskari en vanalega; lægra = þreyttari. Þannig berðu leikmann saman við sjálfan sig, sanngjarnt (persónulegt norm, Robertson 2017).",
           },
           {
-            en: "RECOVERY / REDUCED counts the days the system recommended easing the load. Several of them — especially with falling readiness — is the pattern that flags accumulating fatigue, long before any single bad day would (Gabbett 2016, Buchheit 2014, Saw 2016). And three trend lines put subjective next to objective: readiness (0–25), STEN (1–10 with the 5–6 baseline marked), and total running distance (Catapult) per session — how he feels beside what he actually did.",
-            is: "RECOVERY / REDUCED telur dagana sem kerfið mælti með minnkuðu álagi. Nokkrir slíkir — sérstaklega með fallandi readiness — er mynstrið sem flaggar uppsafnaðri þreytu, löngu áður en einn slæmur dagur gerði það (Gabbett 2016, Buchheit 2014, Saw 2016). Og þrjár þróunarlínur setja huglægt við hlið hlutlægs: readiness (0–25), STEN (1–10 með 5–6 grunnlínuna merkta), og heildar-hlaupavegalengd (Catapult) per æfingu — hvernig honum líður við hlið þess sem hann raunverulega gerði.",
+            en: "RECOVERY / REDUCED counts the days the system recommended easing the load. Several of them — especially with falling readiness — is the pattern that can point to accumulating fatigue — more telling than any single bad day (Gabbett 2016, Buchheit 2014, Saw 2016). And three trend lines put subjective next to objective: readiness (0–25), STEN (1–10 with the 5–6 baseline marked), and total running distance (Catapult) per session — how he feels beside what he actually did.",
+            is: "RECOVERY / REDUCED telur dagana sem kerfið mælti með minnkuðu álagi. Nokkrir slíkir — sérstaklega með fallandi readiness — er mynstrið sem getur bent á uppsafnaða þreytu — segir meira en einn slæmur dagur (Gabbett 2016, Buchheit 2014, Saw 2016). Og þrjár þróunarlínur setja huglægt við hlið hlutlægs: readiness (0–25), STEN (1–10 með 5–6 grunnlínuna merkta), og heildar-hlaupavegalengd (Catapult) per æfingu — hvernig honum líður við hlið þess sem hann raunverulega gerði.",
           },
         ],
       },
@@ -2928,8 +2928,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Öryggi og tímabil: hvert yfirlit segir á hversu mörgum dögum það byggir. Þróun úr nánast öllum dögum er traust; strjál þróun er flögguð sem slík (no-data ≠ núll). Þú getur víkkað linsuna í 60 eða 90 daga með einum smelli. Og dagleg saga — allar innskráningar sem byggja þróunina, readiness, STEN og aðgerð dagsins, nýjast fyrst — situr undir samfellu: dómurinn og formið koma fyrst, taflan er þarna aðeins þegar þú vilt sannreyna.",
           },
           {
-            en: "The bottom line: a trend says more than a single day — slowly falling readiness, or a run of REDUCED days, is the early signal of accumulating fatigue (Gabbett 2016, Buchheit 2014, Saw 2016). But it's context: today's green / amber / red comes only from today's check-in and load — this page tells you which direction he's heading.",
-            is: "Niðurstaðan: þróun segir meira en einn dagur — hægt fallandi readiness, eða röð REDUCED-daga, er snemm-merki um uppsafnaða þreytu (Gabbett 2016, Buchheit 2014, Saw 2016). En þetta er samhengi: grænt / gult / rautt í dag kemur eingöngu úr innskráningu dagsins og álagi — þessi síða segir þér í hvaða átt hann stefnir.",
+            en: "The bottom line: a trend says more than a single day — slowly falling readiness, or a run of REDUCED days, can point to accumulating fatigue (Gabbett 2016, Buchheit 2014, Saw 2016). But it's context: today's green / amber / red comes only from today's check-in and load — this page tells you which direction he's heading.",
+            is: "Niðurstaðan: þróun segir meira en einn dagur — hægt fallandi readiness, eða röð REDUCED-daga, getur bent á uppsafnaða þreytu (Gabbett 2016, Buchheit 2014, Saw 2016). En þetta er samhengi: grænt / gult / rautt í dag kemur eingöngu úr innskráningu dagsins og álagi — þessi síða segir þér í hvaða átt hann stefnir.",
           },
         ],
       },
@@ -3039,8 +3039,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Hvert benchmark sýnir viðmiðið (regluna) við hliðina á mælingunni, svo liturinn er aldrei ráðgáta. Bilateral jump height (CMJ) er hámarks stökkhæð í tvífætta stökkinu — grunnmælikvarði á sprengikraft neðri líkama; yfir 40 cm stenst viðmiðið. CMJ limb asymmetry er munurinn á vinstri/hægri (|L−R|/meðaltal); yfir ~10% er fylgst með (Bishop 2021) því það tengist meiðslaáhættu og aftur-í-leik.",
           },
           {
-            en: "The CMJ card opens into detail — jump height, RSI-modified (reactive strength: how fast the landing becomes take-off), peak power and asymmetry; the CMJ is the most validated single test for neuromuscular fatigue (Claudino 2017). Change-of-Direction (14d) counts the hard cuts each side over 14 days and the gap; the high-intensity asymmetry is the injury-relevant one (Bishop 2020) — medium/low is usually just a positional habit. Pending tests (e.g. IMTP) show dashes, not zeros; when they arrive they raise confidence in the verdict.",
-            is: "CMJ-kortið opnast í smáatriði — stökkhæð, RSI-modified (viðbragðskraftur: hversu hratt lending verður að fráspyrnu), hámarksafl og ósamhverfa; CMJ er mest staðfesta stakprófið fyrir tauga-vöðva þreytu (Claudino 2017). Change-of-Direction (14d) telur hörðu stefnubreytingarnar hvoru megin síðustu 14 daga og bilið; há-ákefðar ósamhverfan er sú sem tengist meiðslum (Bishop 2020) — miðlungs/lág er oftast bara stöðuvani. Bið-próf (t.d. IMTP) birtast með strikum, ekki núllum; þegar þau koma hækka þau öryggi niðurstöðunnar.",
+            en: "The CMJ card opens into detail — jump height, RSI-modified (reactive strength: how fast the landing becomes take-off), peak power and asymmetry; the CMJ is the most validated single test for neuromuscular fatigue (Claudino 2017). Change-of-Direction (14d) counts the hard cuts each side over 14 days and the gap; MicroPulse flags the high-intensity asymmetry (not tested against injury; Helme 2021) — medium/low is usually just a positional habit. Pending tests (e.g. IMTP) show dashes, not zeros; when they arrive they raise confidence in the verdict.",
+            is: "CMJ-kortið opnast í smáatriði — stökkhæð, RSI-modified (viðbragðskraftur: hversu hratt lending verður að fráspyrnu), hámarksafl og ósamhverfa; CMJ er mest staðfesta stakprófið fyrir tauga-vöðva þreytu (Claudino 2017). Change-of-Direction (14d) telur hörðu stefnubreytingarnar hvoru megin síðustu 14 daga og bilið; MicroPulse flaggar há-ákefðar ósamhverfuna (ekki prófað gegn meiðslum; Helme 2021) — miðlungs/lág er oftast bara stöðuvani. Bið-próf (t.d. IMTP) birtast með strikum, ekki núllum; þegar þau koma hækka þau öryggi niðurstöðunnar.",
           },
         ],
       },
@@ -3237,8 +3237,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Recent load is advice, never a gate", is: "Nýlegt álag er ráðgjöf, aldrei hlið" },
         body: [
           {
-            en: "A card can carry a \"manage load\" note when the player has two or more matches in the last seven days (congestion — Dupont 2010, Carling 2015) or his load has spiked well above his own recent norm (ACWR — Gabbett 2017, read as an unfamiliar spike, not a risk score). That note is a flag for your eye; it never moves him between columns on its own. Availability and state decide the column — load only adds a caution.",
-            is: "Spjald getur borið „stýra álagi“ nótu þegar leikmaður á tvo eða fleiri leiki síðustu sjö daga (þéttleiki — Dupont 2010, Carling 2015) eða álagið hans hefur rokið langt yfir hans eigin nýlegu venju (ACWR — Gabbett 2017, lesið sem óvanalegt stökk, ekki áhættutala). Sú nóta er ábending fyrir augað þitt; hún færir hann aldrei milli dálka ein og sér. Aðgengi og ástand ráða dálkinum — álag bætir aðeins við varúð.",
+            en: "A card can carry a \"manage load\" note when the player has two or more matches in the last seven days (congestion — Dupont 2010, Carling 2015) or his load has spiked well above his own recent norm (ACWR — Gabbett 2016, read as an unfamiliar spike, not a risk score; its link to injury is disputed, Impellizzeri 2020). That note is a flag for your eye; it never moves him between columns on its own. Availability and state decide the column — load only adds a caution.",
+            is: "Spjald getur borið „stýra álagi“ nótu þegar leikmaður á tvo eða fleiri leiki síðustu sjö daga (þéttleiki — Dupont 2010, Carling 2015) eða álagið hans hefur rokið langt yfir hans eigin nýlegu venju (ACWR — Gabbett 2016, lesið sem óvanalegt stökk, ekki áhættutala; tengsl við meiðsli eru umdeild, Impellizzeri 2020). Sú nóta er ábending fyrir augað þitt; hún færir hann aldrei milli dálka ein og sér. Aðgengi og ástand ráða dálkinum — álag bætir aðeins við varúð.",
           },
         ],
       },
@@ -3369,8 +3369,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Movement signature & style", is: "Hreyfi-fingrafar og -stíll" },
         body: [
           {
-            en: "The signature is the IMA clock — our take on the Vector Distribution: which of the twelve directions his high-intensity accelerations, decelerations and cuts point, coloured by mechanical load (the busier the direction, the hotter the bead) and comparable to his position's average. The style card places him on one axis — linear runner ↔ multidirectional — read against the squad and his position. A linear runner isn't worse; it's a description of how he wins his metres, not a quality score. Both are IMA proxies (Buchheit 2014; Gray/ADI), not watts.",
-            is: "Fingrafarið er IMA-klukkan — okkar útgáfa af Vector Distribution: í hvaða af tólf áttunum há-ákafa hröðun, hemlun og stefnubreytingar hans vísa, litað eftir vélrænu álagi (því annasamari sem áttin er, því heitari perlan) og samanburðarhæft við meðaltal stöðunnar hans. Stíl-kortið setur hann á einn ás — línulegur hlaupari ↔ fjölstefnu — lesið m.v. hópinn og stöðuna. Línulegur hlaupari er ekki verri; það lýsir því hvernig hann vinnur metrana sína, ekki gæða-skor. Bæði eru IMA-proxy (Buchheit 2014; Gray/ADI), ekki wött.",
+            en: "The signature is the IMA clock — our take on the Vector Distribution: which of the twelve directions his high-intensity accelerations, decelerations and cuts point, coloured by mechanical load (the busier the direction, the hotter the bead) and comparable to his position's average. The style card places him on one axis — linear runner ↔ multidirectional — read against the squad and his position. A linear runner isn't worse; it's a description of how he wins his metres, not a quality score. Both are IMA proxies (Green 2023; Gray/ADI), not watts.",
+            is: "Fingrafarið er IMA-klukkan — okkar útgáfa af Vector Distribution: í hvaða af tólf áttunum há-ákafa hröðun, hemlun og stefnubreytingar hans vísa, litað eftir vélrænu álagi (því annasamari sem áttin er, því heitari perlan) og samanburðarhæft við meðaltal stöðunnar hans. Stíl-kortið setur hann á einn ás — línulegur hlaupari ↔ fjölstefnu — lesið m.v. hópinn og stöðuna. Línulegur hlaupari er ekki verri; það lýsir því hvernig hann vinnur metrana sína, ekki gæða-skor. Bæði eru IMA-proxy (Green 2023; Gray/ADI), ekki wött.",
           },
         ],
       },

@@ -41,7 +41,7 @@ export const PLAYER_COPY = {
         confidenceNoBaseline: "Grunnlínan þín er enn að byggjast upp — matið verður öruggara með fleiri check-in.",
         caveatLabel: "Fyrirvari",
         caveat: "Þetta er samhengi um reiðu og álagsbreytingu — ekki spá um meiðsli. Álagshlutfall (ACWR) sýnir stærð breytingar, ekki áhættu.",
-        cite: "Gabbett 2017 · persónuleg grunnlína",
+        cite: "Gabbett 2016 · Impellizzeri 2020 · persónuleg grunnlína",
       },
     },
     checkin: {
@@ -216,7 +216,7 @@ export const PLAYER_COPY = {
         confidenceNoBaseline: "Your baseline is still building — the assessment sharpens with more check-ins.",
         caveatLabel: "Caveat",
         caveat: "This is readiness and load-change context — not an injury prediction. The load ratio (ACWR) shows the size of a change, not risk.",
-        cite: "Gabbett 2017 · personal baseline",
+        cite: "Gabbett 2016 · Impellizzeri 2020 · personal baseline",
       },
     },
     checkin: {

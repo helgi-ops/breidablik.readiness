@@ -38,10 +38,10 @@ export const PRESCRIPTIONS: Record<PrescriptionKey, Prescription> = {
   top_speed: {
     quality: { EN: "Top-speed sprinting", IS: "Hámarkshraða-spretti" },
     method: {
-      EN: `Expose to top-speed sprinting at least once a week — flying sprints: ${FLYING_RUN_PHRASE.en}, ${range(FLYING_SPRINT_DOSE.spacingH)} h between sessions. Builds the speed reserve and protects the hamstrings against match sprints.`,
-      IS: `Útsettu fyrir hámarkshraða-spretti minnst einu sinni í viku — fljúgandi sprettir: ${FLYING_RUN_PHRASE.is}, ${range(FLYING_SPRINT_DOSE.spacingH)} klst milli æfinga. Byggir hraða-forða og ver aftanlæri fyrir leik-sprettum.`,
+      EN: `Expose to top-speed sprinting at least once a week — flying sprints: ${FLYING_RUN_PHRASE.en}, ${range(FLYING_SPRINT_DOSE.spacingH)} h between sessions. Builds the speed reserve; in observational studies regular near-top-speed running went with fewer hamstring injuries.`,
+      IS: `Útsettu fyrir hámarkshraða-spretti minnst einu sinni í viku — fljúgandi sprettir: ${FLYING_RUN_PHRASE.is}, ${range(FLYING_SPRINT_DOSE.spacingH)} klst milli æfinga. Byggir hraða-forða; í athugunarrannsóknum fylgdu reglulegum sprettum nærri hámarkshraða færri aftanlærismeiðsli.`,
     },
-    cite: `${FLYING_SPRINT_DOSE.cite}; Malone 2017; Buchheit 2014`,
+    cite: `${FLYING_SPRINT_DOSE.cite}; Malone 2017; Buchheit 2023`,
   },
   fmp_run_high: {
     quality: { EN: "High-speed running", IS: "Háhraðahlaupi" },
@@ -73,7 +73,7 @@ export const PRESCRIPTIONS: Record<PrescriptionKey, Prescription> = {
       EN: "Add acceleration exposure — short sprint starts (5–15 m), resisted accelerations (sled or band) and reactive starts from varied stances.",
       IS: "Bættu við hröðunar-útsetningu — stutta sprettstarta (5–15 m), mótstöðu-hröðun (sleði eða teygja) og viðbragðs-starta úr ýmsum stöðum.",
     },
-    cite: "Buchheit 2014",
+    cite: "Petrakos 2016",
   },
   ima_decel: {
     quality: { EN: "Decelerations & braking", IS: "Hemlun & bremsun" },

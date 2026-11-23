@@ -32,7 +32,7 @@ export type ValdClearance = { compensation: CompensationKey; source: string; det
 
 const round = (n: number) => Math.round(n);
 const ageDaysOf = (iso: string) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000));
-/** Standard limb-symmetry thresholds (Grindem 2016; Bishop 2020). */
+/** Standard limb-symmetry thresholds (Grindem 2016 LSI ≥90%; 10–15% is a common flag line, Parkinson 2021). */
 const asymSeverity = (pct: number): "moderate" | "marked" | null => (pct >= 15 ? "marked" : pct >= 10 ? "moderate" : null);
 
 type FrameRow = { movement_pattern: string | null; body_region: string | null; asymmetry_percent: number | null; test_timestamp: string; is_valid: boolean | null };

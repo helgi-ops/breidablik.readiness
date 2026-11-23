@@ -78,12 +78,12 @@ export type CatapultSessionMetric = {
   imaAccel?: number | null;
   imaDecel?: number | null;
   imaCod?: number | null;
-  /** L/R CoD splits — sum of Left Low + Medium + High counts. Used for Bishop 2020 asymmetry. */
+  /** L/R CoD splits — sum of Left Low + Medium + High counts. Used for the L/R asymmetry %. */
   imaCodLeft?: number | null;
   /** L/R CoD splits — sum of Right Low + Medium + High counts. */
   imaCodRight?: number | null;
-  /** Per-intensity L/R CoD counts (Bishop 2020 — high-intensity asymmetry is
-   *  the injury-relevant signal; low-tier is often a positional habit).
+  /** Per-intensity L/R CoD counts (MicroPulse flags the high-intensity tier;
+   *  low-tier is often a positional habit).
    *  Catapult intensity → numeric band: low=1, medium=2, high=3. */
   imaCodLeftHigh?: number | null;
   imaCodLeftMedium?: number | null;

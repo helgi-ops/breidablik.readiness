@@ -174,7 +174,7 @@ export default function FitnessTestCard({ players, playerId, defaultType, onSave
                 </table>
                 <p className="text-[11px] leading-relaxed text-slate-500">{is ? head.caveat.is : head.caveat.en}</p>
                 <p className="text-[11px] text-slate-500">{is ? "Aðeins breyting umfram dæmigerða skekkju prófsins" : "Only a change beyond the test's typical error"} (SWC ±{head.swcPct}%) {is ? "telst upp/niður." : "counts as up/down."}</p>
-                <p className="mt-1 text-[10px] text-slate-400">Buchheit 2014 · Bangsbo 2008 (field-test reliability / SWC)</p>
+                <p className="mt-1 text-[10px] text-slate-400">Buchheit & Rabbani 2014 · Bangsbo 2008 (field-test sensitivity; SWC % is MicroPulse’s choice)</p>
               </div>
             </ShowDetails>
           </div>

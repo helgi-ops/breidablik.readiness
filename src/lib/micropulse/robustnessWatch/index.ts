@@ -45,7 +45,7 @@ export interface RobustnessMechanicalInput {
   rhieBoutsZ: number | null;
   /** Whether an ACWR/HSR volume flag is already active (RHIE is a modifier only). */
   hasLoadSpike: boolean;
-  /** High-intensity L/R change-of-direction asymmetry %, last 14 days (Bishop 2020). Null if no CoD data. */
+  /** High-intensity L/R change-of-direction asymmetry %, last 14 days (MicroPulse's flag). Null if no CoD data. */
   codAsymmetryHighPct?: number | null;
   /** Dominant foot for the footedness-aware note (Havanecz 2026). Null = not set. */
   dominantFoot?: "left" | "right" | "both" | null;
@@ -92,13 +92,13 @@ export interface RobustnessWatch {
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 const ROBUSTNESS_CITATION =
-  "Gabbett 2017 · Majumdar 2022 · McBurnie 2022 · Saberisani 2025 · Hader 2019 · Neyroud 2016 · Hulin 2014";
+  "Gabbett 2016 · Impellizzeri 2020 · Majumdar 2022 · McBurnie 2022 · Saberisani 2025 · Hader 2019 · Neyroud 2016 · Hulin 2014";
 
 // ── New #5 contributors, in the signalPack SignalContributor shape ──────────
 
-/** High-intensity change-of-direction L/R asymmetry (Bishop 2020 — the injury-relevant tier). Footedness
+/** High-intensity change-of-direction L/R asymmetry (MicroPulse's flag; not tested against injury). Footedness
  *  (Havanecz 2026) is interpretive context, not the threshold: a modest plant-limb lean is normal, the
- *  MAGNITUDE flags. Absolute % (not a personal-z) — flag at the Bishop concern level (≥15%). */
+ *  MAGNITUDE flags. Absolute % (not a personal-z) — flag at MicroPulse's concern line (≥15%). */
 function codAsymmetryContributor(pct: number | null, dominantFoot: "left" | "right" | "both" | null): SignalContributor | null {
   if (pct == null || !Number.isFinite(pct)) return null;
   const flagged = pct >= 15;
@@ -113,12 +113,12 @@ function codAsymmetryContributor(pct: number | null, dominantFoot: "left" | "rig
     counterfactual: flagged
       ? { en: `If his high-intensity L/R cutting came back within ~15% → this clears.`, is: `Ef háákefðar vinstri/hægri skurðir kæmu aftur innan ~15% → þetta hreinsast.` }
       : null,
-    citation: "Bishop 2020 · Havanecz 2026",
+    citation: "Helme 2021 · Havanecz 2026",
     confidence: "moderate",
     severity, flagged,
     detail: {
-      en: `High-intensity CoD L/R asymmetry ${Math.round(pct)}% (last 14d). Flag ≥ 15% (Bishop 2020). Footedness is context, not the threshold (Havanecz 2026 — plant-limb preference makes a modest lean normal).`,
-      is: `Háákefðar CoD vinstri/hægri ósamhverfa ${Math.round(pct)}% (síðustu 14d). Flagg ≥ 15% (Bishop 2020). Ríkjandi fótur er samhengi, ekki þröskuldur (Havanecz 2026 — plant-fótar val gerir hóflegan halla eðlilegan).`,
+      en: `High-intensity CoD L/R asymmetry ${Math.round(pct)}% (last 14d). Flag ≥ 15% is MicroPulse's line; GPS turn-count gaps have not been tested against injury (Helme 2021: asymmetry–injury evidence is weak). Footedness is context, not the threshold (Havanecz 2026 — plant-limb preference makes a modest lean normal).`,
+      is: `Háákefðar CoD vinstri/hægri ósamhverfa ${Math.round(pct)}% (síðustu 14d). Flagg ≥ 15% er lína MicroPulse; munur á snúningum í GPS hefur ekki verið prófaður gegn meiðslum (Helme 2021: tengsl ósamhverfu og meiðsla eru veikt studd). Ríkjandi fótur er samhengi, ekki þröskuldur (Havanecz 2026 — plant-fótar val gerir hóflegan halla eðlilegan).`,
     },
   };
 }
@@ -138,7 +138,7 @@ function runningAsymmetryContributor(z: number | null, pct: number | null): Sign
     counterfactual: flagged
       ? { en: `If his running asymmetry were back within ~1σ of his norm → this clears.`, is: `Ef hlaupa-ósamhverfan væri aftur innan ~1σ af hans venju → þetta hreinsast.` }
       : null,
-    citation: "Bishop 2021 · Buchheit 2024",
+    citation: "Bishop 2021",
     confidence: "moderate",
     severity, flagged,
     detail: {

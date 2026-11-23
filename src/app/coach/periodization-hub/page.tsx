@@ -3229,7 +3229,7 @@ export default function PeriodizationHubPage() {
           )}
 
             {/* PLANNED KPI VOLUME — in-season micro (week) + meso (block), anchored to match demand
-                (Martín-García 2018: weekly load ≈ ×match per KPI; Buchheit 2024 MD-day shape; deload per block). */}
+                (Martín-García 2018: weekly load ≈ ×match per KPI; MicroPulse's MD-day shape, tapering toward the match as in Gualtieri 2024; deload per block). */}
             {(() => {
               const matchKpis = blkScope === "player" && player ? kpiAvgFromUnit(player.matchUnit) : teamKpiAvg(plan.players);
               const days1 = standardTrainingDays(1);          // a standard 1-match week
@@ -3251,7 +3251,7 @@ export default function PeriodizationHubPage() {
                     <p className="text-[15px] font-bold leading-snug text-slate-900">{is
                       ? `Vika ≈ ${wkMult}× leikur í æfingaálagi (+ 1× leikurinn = ${Math.round((wkMult + 1) * 10) / 10}× heildar).`
                       : `A week ≈ ${wkMult}× a match in training load (+ 1× the match = ${Math.round((wkMult + 1) * 10) / 10}× total).`}</p>
-                    <p className="mt-0.5 text-[12px] text-slate-500">{is ? `${blkScope === "player" && player ? player.name : "Liðsmeðaltal"} · leik-miðað per KPI (Martín-García 2018; MD-dagar Buchheit 2024).` : `${blkScope === "player" && player ? player.name : "Team average"} · match-anchored per KPI (Martín-García 2018; MD-day shape Buchheit 2024).`}</p>
+                    <p className="mt-0.5 text-[12px] text-slate-500">{is ? `${blkScope === "player" && player ? player.name : "Liðsmeðaltal"} · leik-miðað per KPI (Martín-García 2018; hlutföll MD-daga eru val MicroPulse).` : `${blkScope === "player" && player ? player.name : "Team average"} · match-anchored per KPI (Martín-García 2018; MD-day shares are MicroPulse's).`}</p>
 
                     {vols.length > 0 ? (
                       <div className="mt-3">

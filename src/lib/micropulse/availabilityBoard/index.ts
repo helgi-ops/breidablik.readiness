@@ -27,7 +27,7 @@
  * Refs: Ardern et al. 2016 (return-to-sport = a clinical decision, medical
  * clearance is the gate); Dupont et al. 2010 & Carling et al. 2015 (two matches
  * per week / congestion raises injury rate and needs load management);
- * Gabbett 2017 (ACWR framed as an *unfamiliar load spike vs the player's own
+ * Gabbett 2016 + Impellizzeri 2020 (ACWR framed as an *unfamiliar load spike vs the player's own
  * recent norm*, not an injury "sweet spot").
  */
 
@@ -107,7 +107,7 @@ export type AvailabilityBoard = {
  *  and load needs managing (Dupont 2010, Carling 2015). */
 const CONGESTION_MATCHES_7D = 2;
 /** ACWR at/above this is an unfamiliar spike vs the player's own recent norm
- *  (Gabbett 2017) — a reason to manage, framed as spike-size, not "risk". */
+ *  (Gabbett 2016; its link to injury is disputed, Impellizzeri 2020) — a reason to manage, framed as spike-size, not "risk". */
 const ACWR_SPIKE = 1.5;
 
 function readinessLabel(c: ReadinessColor): Bilingual {

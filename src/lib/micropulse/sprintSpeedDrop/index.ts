@@ -19,7 +19,7 @@
  *   - Drop% = (reference - today) / reference × 100
  *
  * Bands (evidence-based):
- *   - < 3%   → NORMAL    (within session-to-session noise; Buchheit 2014)
+ *   - < 3%   → NORMAL    (treated as session-to-session noise — MicroPulse's cut-off; GPS top speed needs several sessions to read reliably, Haugen & Buchheit 2016)
  *   - 3–7%   → WATCH     (mild suppression; trend over 3 days matters)
  *   - 7–12%  → CONCERN   (significant CNS / neuromuscular suppression)
  *   - > 12%  → HIGH_RISK (Edouard 2019 / Malone 2018: > 10% drop ≈ 3–4× HS injury risk)

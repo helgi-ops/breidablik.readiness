@@ -1724,14 +1724,14 @@ export default function CoachPage() {
   // today, so the Today page never contradicts Week Setup with a false "rest day".
   const [fixtureCtx, setFixtureCtx] = useState<{ md: string | null; dayType: string | null; intensity: string | null }>({ md: null, dayType: null, intensity: null });
   // High-intensity L/R CoD asymmetry % per player over the last 14 days.
-  // Bishop 2020: > 15% high-tier asymmetry is the strongest predictor of
-  // non-contact lower-limb injury. Surfaced as a chronic-risk chip in the
+  // > 15% high-tier asymmetry is MicroPulse's flag line; GPS turn-count gaps
+  // have not been tested against injury (Helme 2021). Surfaced as a chronic-risk chip in the
   // Decision Summary modal — informational only, NOT a verdict modifier.
   const [playerCodHighAsym, setPlayerCodHighAsym] = useState<Record<string, number>>({});
   // Sprint Speed Drop per player (today vs personal top-3 mean over 28d).
   // Only stored when drop ≥ 3% AND the player has a HSR-meaningful session
   // today AND ≥ 4 reference sessions in the window. Sub-3% is normal noise
-  // (Buchheit 2014). > 10% drop ≈ 3–4× hamstring injury risk (Edouard 2019,
+  // (MicroPulse's cut-off; GPS top speed needs several sessions to read reliably — Haugen & Buchheit 2016). > 10% drop ≈ 3–4× hamstring injury risk (Edouard 2019,
   // Malone 2018). Surfaced as informational chip in DecisionSummaryCard —
   // does NOT modify today's verdict (verdict modulation deferred until
   // 2–3 coaches confirm the rule fits their workflow).
@@ -4165,7 +4165,7 @@ export default function CoachPage() {
   // ── Bulk high-tier CoD asymmetry per player (last 14d) ────────────────
   // Single query returns Left/Right high-intensity CoD totals for every
   // player on the team. We compute the asymmetry % client-side and only
-  // store ones ≥ 15% (Bishop 2020 concern threshold) — the chronic-risk
+  // store ones ≥ 15% (MicroPulse's concern line) — the chronic-risk
   // chip in DecisionSummaryCard renders only when this map has the player.
   useEffect(() => {
     if (!coachVerified || !coachTeamId) {
@@ -4239,7 +4239,7 @@ export default function CoachPage() {
   // for the whole squad. We coalesce max_velocity and max_vel (API sync vs
   // CSV upload write to different columns historically) and gate by HSR ≥
   // SPRINT_HSR_FLOOR — players who didn't sprint today aren't "suppressed".
-  // Only stored when drop ≥ 3% (above session-to-session noise; Buchheit 2014).
+  // Only stored when drop ≥ 3% (MicroPulse's noise cut-off; GPS top speed is noisy session to session — Haugen & Buchheit 2016).
   useEffect(() => {
     if (!coachVerified || !coachTeamId) {
       setPlayerSprintDrop({});
@@ -9358,7 +9358,7 @@ export default function CoachPage() {
                 // Drives the OFF_DAY verdict override in the modal. Week Setup
                 // plan wins over the legacy week_plans value.
                 _team_day_type: effectiveTeamDayType,
-                // Bishop 2020 high-tier L/R CoD asymmetry % over 14d.
+                // High-tier L/R CoD asymmetry % over 14d (MicroPulse's flag).
                 // Only set when ≥ 15% (concern + high zones); informational
                 // chip only — does NOT modify the verdict.
                 _cod_high_asym_pct: playerCodHighAsym[r.player_id] ?? null,

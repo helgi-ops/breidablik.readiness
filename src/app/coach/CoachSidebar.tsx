@@ -462,7 +462,7 @@ export const BASKETBALL_KEEP_LITE_HREFS = new Set<string>([
 ]);
 
 // Pages shown ONLY on Lite tier — Lite-specific equivalents of Premium
-// features. /coach/hsr-intelligence is the Malone 2017 + Buchheit 2014
+// features. /coach/hsr-intelligence is the Malone 2017 + Buchheit 2023
 // counterpart to Decel Intelligence; on Full plans it's redundant with
 // the higher-fidelity Decel page so we hide it.
 export const FULL_HIDDEN_HREFS = new Set<string>([

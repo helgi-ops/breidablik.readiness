@@ -5,7 +5,7 @@ import "server-only";
  *
  * PHASE 0: fuses the data we already ingest with real numbers —
  *   • CMJ force-plate (vald_forcedecks_results, trial-mean per Claudino)
- *   • Change-of-direction high-intensity L/R asymmetry (Bishop 2020)
+ *   • Change-of-direction high-intensity L/R asymmetry (MicroPulse's flag)
  *   • Injury + return-to-training context (buildRttForPlayer, player_injuries)
  * into the shared RtpAssessment shape, with an honest `coverage` banner naming
  * the battery tests still pending ingestion (IMTP / DJ / SLDJ / SLISOSQT).
@@ -43,7 +43,7 @@ type Sb = any;
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : v == null ? null : Number.isFinite(Number(v)) ? Number(v) : null);
 
-// Bishop 2020 L/R asymmetry thresholds (shared with cod-asymmetry route).
+// MicroPulse's L/R CoD asymmetry lines (shared with cod-asymmetry route).
 function asymPct(left: number, right: number): number | null {
   const max = Math.max(left, right);
   if (max <= 0) return null;
@@ -337,7 +337,7 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
 
   // ── Limb strength: NordBord (hamstring) + ForceFrame (groin/adductor…) ──────
   // These devices report L/R peak force directly. Latest test per test-type; the
-  // RTP gate is L/R asymmetry (Bishop 2020) + involved-vs-uninvolved LSI.
+  // RTP gate is L/R asymmetry (common 10–15% flag line, Parkinson 2021) + involved-vs-uninvolved LSI.
   const limbStrength: RtpLimbStrengthTest[] = [];
   // One history entry (a single dated test) from a raw row. Asymmetry recomputed
   // from the raw peak forces (ground truth) — a legacy asymmetry_percent=0 must

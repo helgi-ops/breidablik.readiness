@@ -179,8 +179,8 @@ export default function AsymmetryReviewCard({ lang }: { lang: "IS" | "EN" }) {
             "Munur getur komið af mörgu: sparkfæti, gömlum meiðslum, lélegu prófi. Því breytist æfingin ekki fyrr en þú eða sjúkraþjálfari hafið skoðað. „Einn fótur í einu“ skiptir aðallyftunni í einfóta útgáfu og byrjar á veikari hliðinni; það gildir í 28 daga og leikmaðurinn kemur aftur til yfirferðar ef munurinn er enn til staðar.",
           )}</p>
           <p>{t(
-            "Where the % comes from: the larger of the NordBord / ForceFrame / jump test gap (last 120 days) and the turn-count gap in training (GPS, last 14 days). Bishop 2020: a gap of about 10–15% can matter for performance and injury. The 10% line and the 28 days are MicroPulse's rule.",
-            "Hvaðan % kemur: stærri munurinn af NordBord / ForceFrame / stökkprófi (síðustu 120 dagar) og mun á snúningum á æfingu (GPS, síðustu 14 dagar). Bishop 2020: um 10–15% munur getur skipt máli fyrir getu og meiðsli. 10% línan og 28 dagarnir eru regla MicroPulse.",
+            "Where the % comes from: the larger of the NordBord / ForceFrame / jump test gap (last 120 days) and the turn-count gap in training (GPS, last 14 days). A 10–15% gap is a common flag line (Parkinson 2021), but a clear link to performance or injury is still missing (Bishop 2023). The 10% line and the 28 days are MicroPulse's rule.",
+            "Hvaðan % kemur: stærri munurinn af NordBord / ForceFrame / stökkprófi (síðustu 120 dagar) og mun á snúningum á æfingu (GPS, síðustu 14 dagar). 10–15% munur er algeng flagglína (Parkinson 2021), en skýr tengsl við getu eða meiðsli hafa ekki fundist (Bishop 2023). 10% línan og 28 dagarnir eru regla MicroPulse.",
           )}</p>
         </div>
       )}

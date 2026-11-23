@@ -278,7 +278,7 @@ export const EXERCISE_LIBRARY: Exercise[] = [
     },
     alternatives: ["ex_single_leg_broad_jump"],
     contraindications: ["knee_injury", "ankle_injury"],
-    evidence: "Unilateral plyo; primary tool for L/R power asymmetry (Bishop 2020).",
+    evidence: "Unilateral plyo; one-leg work may shrink an L/R gap — evidence still limited (Bishop 2023).",
   },
   {
     id: "ex_lateral_bound",

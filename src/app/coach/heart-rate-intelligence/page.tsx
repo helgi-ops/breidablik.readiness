@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Coach view — Heart Rate Intelligence (Edwards 1993 · Buchheit 2024).
+ * Coach view — Heart Rate Intelligence (Edwards 1993 · Impellizzeri 2004).
  *
  * The objective cross-check on the subjective sRPE, now that Catapult belt HR flows.
  * Promotes HrLoadCrossCheckCard into a full per-player surface (same shared loader,
@@ -128,8 +128,8 @@ function computeVerdict(reads: PlayerHrRead[], rosterCount: number): Verdict {
         ? { EN: "heart worked harder than the rating", IS: "hjartað vann meira en matið" }
         : { EN: "rated hard but heart stayed low", IS: "mat hátt en hjartað lágt" },
       tip: {
-        EN: `HR idx ${s?.hrLoadIndex ?? "—"} vs sRPE idx ${s?.srpeIndex ?? "—"}, gap ${gapStr(s?.gap)} (>25 = diverging) — Edwards 1993 summated-HR-zone TRIMP, adapted; Buchheit 2024.`,
-        IS: `HR-vísit. ${s?.hrLoadIndex ?? "—"} vs sRPE-vísit. ${s?.srpeIndex ?? "—"}, bil ${gapStr(s?.gap)} (>25 = ósamræmi) — Edwards 1993, aðlagað; Buchheit 2024.`,
+        EN: `HR idx ${s?.hrLoadIndex ?? "—"} vs sRPE idx ${s?.srpeIndex ?? "—"}, gap ${gapStr(s?.gap)} (>25 = diverging) — Edwards 1993 summated-HR-zone TRIMP, adapted; Impellizzeri 2004.`,
+        IS: `HR-vísit. ${s?.hrLoadIndex ?? "—"} vs sRPE-vísit. ${s?.srpeIndex ?? "—"}, bil ${gapStr(s?.gap)} (>25 = ósamræmi) — Edwards 1993, aðlagað; Impellizzeri 2004.`,
       },
     };
   });
@@ -536,7 +536,7 @@ export default function HeartRateIntelligencePage() {
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-semibold text-slate-900">{IS ? "Púls-greining" : "Heart Rate Intelligence"}</h1>
-            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-blue-700">Edwards 1993 · Buchheit 2024</span>
+            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-blue-700">Edwards 1993 · Impellizzeri 2004</span>
           </div>
           <PagePurpose
             en="cross-check effort ratings against what the heart actually did"

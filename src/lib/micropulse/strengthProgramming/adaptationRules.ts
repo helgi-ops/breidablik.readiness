@@ -352,8 +352,8 @@ export function applyAdaptationRules(
   }
 
   // ── RULE 6: CoD L/R asymmetry > 15% — swap main lift to unilateral ───
-  // Evidence: Bishop 2020 — high-tier CoD asymmetry → 3× non-contact
-  // injury risk. In the microdose template there's no standalone
+  // Evidence: none direct — > 15% high-tier CoD asymmetry is MicroPulse's
+  // flag (GPS turn-count gaps not tested against injury; Helme 2021). In the microdose template there's no standalone
   // unilateral block, so we swap the main compound lift to a unilateral
   // alternative (Bulgarian SS) and instruct the coach to anchor the
   // weaker side first. Keeps the 20-min budget intact while still
@@ -378,7 +378,7 @@ export function applyAdaptationRules(
         triggerIS: `L/R CoD ósamhverfa ${snap.codAsymmetryPct.toFixed(1)}%`,
         actionEN: `Main lift → Bulgarian split squat (anchor weaker ${snap.codWeakerSide ?? "?"} side first).${confirmedNote(snap).en}`,
         actionIS: `Aðallyfta → Bulgarian split squat (byrja á veikari ${snap.codWeakerSide ?? "?"} fót).${confirmedNote(snap).is}`,
-        evidence: "Unilateral correction for non-contact injury risk (Bishop 2020).",
+        evidence: "MicroPulse's rule: one-leg work for a high-intensity CoD gap. GPS turn-count gaps have not been tested against injury (Helme 2021).",
       });
     }
   }
@@ -468,7 +468,7 @@ export function applyAdaptationRules(
         triggerIS: checkinWordIS(snap.verdict),
         actionEN: "One set off each lift (a lift of one set stays one set); the warm-up stays.",
         actionIS: "Eitt sett tekið af hverri lyftu (lyfta með eitt sett heldur því); upphitunin helst.",
-        evidence: "Volume modulation matches readiness state (Gabbett 2017). One set off each line is MicroPulse's rule, the same on every surface.",
+        evidence: "Training adjusted to how ready the player says he is (autoregulation, Greig 2020). One set off each line is MicroPulse's rule, the same on every surface.",
       });
     }
   }

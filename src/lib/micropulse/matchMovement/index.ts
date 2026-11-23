@@ -14,7 +14,7 @@
  *     direction, L/R asymmetry, strides in long continuous runs (IMA FR runs ≥18 s,
  *     `ima_fr_ge18_stride_count` — bout-duration bands, not speed/cadence; band edges
  *     are configurable, so tiers are read by run length; see docs/ima-free-running-bands.md). Citations: McBurnie 2022, di Prampero 2015,
- *     Buchheit 2014 norms.
+ *     Gregson 2010 (match-to-match variation; read vs his own match average).
  *   • gps  (Core/Lite) — Lite units capture no IMA, so the fingerprint is built
  *     from GPS movement signals (player load, accel/decel efforts, high-speed +
  *     sprint running, top speed). A GPS movement read, not the inertial driver.

@@ -30,9 +30,9 @@
  *     src/lib/integrations/catapult/freeRunningBands.ts.
  *   - McBurnie 2022: movement/stride profiles add context that GPS
  *     distance alone does not show (used here descriptively).
- *   - Bishop 2020: L/R asymmetry > 15% in high-intensity CoD efforts
- *     is the strongest single predictor of non-contact lower-limb injury.
- *   - Buchheit 2014: stride norms are individual; per-player baseline
+ *   - L/R asymmetry > 15% in high-intensity CoD efforts is MicroPulse's flag;
+ *     not tested against injury (Helme 2021: asymmetry–injury evidence is weak).
+ *   - Per-player baselines (MicroPulse's choice; no stride study behind it):
  *     comparison is required for meaningful interpretation.
  *
  * Pure deterministic. Loader.ts pulls rows from player_external_load_daily
@@ -87,8 +87,8 @@ export type ImaPlayerDay = {
   /** Today's long-run strides at match pace ÷ baseline × 100. null if no baseline. Legacy name. */
   sprint_vs_baseline_pct: number | null;
   // Change of Direction — three-tier breakdown (low / medium / high).
-  // High-intensity asymmetry is the injury-relevant tier (Bishop 2020:
-  // > 15% asymmetry = 3× non-contact injury risk). Low/medium asymmetry
+  // MicroPulse flags the high-intensity tier (
+  // > 15% asymmetry; not tested against injury). Low/medium asymmetry
   // is often a positional habit and less actionable.
   cod_left_low: number;
   cod_right_low: number;
@@ -105,7 +105,7 @@ export type ImaPlayerDay = {
   /** L/R asymmetry % on medium-intensity CoD — null when total < 10. */
   cod_asymmetry_medium_pct: number | null;
   /** L/R asymmetry % on high-intensity CoD — null when total < 10. The
-   *  injury-relevant tier per Bishop 2020. */
+   *  tier MicroPulse flags. */
   cod_asymmetry_pct: number | null;
 };
 
@@ -152,7 +152,7 @@ export type ImaSessionProfile = {
   per_player: ImaPlayerDay[];
 };
 
-/** Asymmetry % using Bishop 2020 formula: |L-R| ÷ max(L,R) × 100. */
+/** Asymmetry % = |L-R| ÷ max(L,R) × 100 (the gap as a % of the larger side). */
 /** "Far more long running than usual": strides in long runs at match pace at ≥150% of the player's own 14-day
  *  training norm AND at least 100 of them (≈230 m at match pace), so a tiny norm can't turn two runs into a spike. */
 export const LONG_RUN_SPIKE_PCT = 150;

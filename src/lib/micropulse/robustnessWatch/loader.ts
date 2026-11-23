@@ -160,7 +160,7 @@ export async function loadRobustnessWatch(
   const rhieVals = inNorm.map((r) => r.rhie_bouts).filter((v): v is number => v != null);
   const rhie = personalZ(rhieVals);
 
-  // High-intensity CoD L/R asymmetry over the last 14 days (Bishop 2020) — an absolute %, not a
+  // High-intensity CoD L/R asymmetry over the last 14 days (MicroPulse's flag) — an absolute %, not a
   // personal-z. Plus the player's dominant foot for the footedness-aware contributor note (Havanecz 2026).
   const codSince = addISO(asOf, -13);
   const codHigh = loadRows.filter((r) => r.date >= codSince).reduce(

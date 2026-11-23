@@ -210,6 +210,23 @@ export const RULE_REFS: Record<string, GoalRef> = {
   king2018: { key: "king2018", short: "King 2018", cite: "King E, Franklyn-Miller A, Richter C, O'Reilly E, Doolan M, Moran K, Strike S, Falvey É. Clinical and biomechanical outcomes of rehabilitation targeting intersegmental control in athletic groin pain: prospective cohort of 205 patients. Br J Sports Med 2018;52(16):1054–1062. doi:10.1136/bjsports-2016-097089 PMID 29550754", verifiedFrom: "abstract" },
   delaney2017: { key: "delaney2017", short: "Delaney 2017", cite: "Delaney JA, Thornton HR, Pryor JF, Stewart AM, Dascombe BJ, Duthie GM. Peak Running Intensity of International Rugby: Implications for Training Prescription. Int J Sports Physiol Perform 2017;12(8):1039–1045. doi:10.1123/ijspp.2016-0469 PMID 27967337", verifiedFrom: "abstract" },
   dossantos2022: { key: "dossantos2022", short: "Dos'Santos 2022", cite: "Dos'Santos T, McBurnie A, Thomas C, Jones PA, Harper D. Attacking Agility Actions: Match Play Contextual Applications With Coaching and Technique Guidelines. Strength Cond J 2022;44(5):102–118. doi:10.1519/SSC.0000000000000697", verifiedFrom: "record" },
+  // Lot 2 (2026-11-23): sources for the Bishop 2020, Gabbett 2017, Buchheit 2014 and Buchheit 2024 sites, one paper per
+  // meaning. "Buchheit 2014" = the HR-monitoring review; the 30-15 IFT paper is "Buchheit & Rabbani 2014".
+  greig2020: { key: "greig2020", short: "Greig 2020", cite: "Greig L, Stephens Hemingway BH, Aspe RR, Cooper K, Comfort P, Swinton PA. Autoregulation in Resistance Training: Addressing the Inconsistencies. Sports Med 2020;50(11):1873–1887. doi:10.1007/s40279-020-01330-8 PMID 32813181", verifiedFrom: "abstract" },
+  gualtieri2024: { key: "gualtieri2024", short: "Gualtieri 2024", cite: "Gualtieri A, Vicens-Bordas J, Rampinini E, Ferrari Bravo D, Beato M. Three-, Four-, and Five-Day Microcycles: The Normality in Professional Football. Int J Sports Physiol Perform 2024;19(10):987–995. doi:10.1123/ijspp.2024-0144 PMID 39069283", verifiedFrom: "abstract" },
+  impellizzeri2004: { key: "impellizzeri2004", short: "Impellizzeri 2004", cite: "Impellizzeri FM, Rampinini E, Coutts AJ, Sassi A, Marcora SM. Use of RPE-based training load in soccer. Med Sci Sports Exerc 2004;36(6):1042–1047. doi:10.1249/01.mss.0000128199.23901.2f PMID 15179175", verifiedFrom: "abstract" },
+  taylor2015: { key: "taylor2015", short: "Taylor 2015", cite: "Taylor J, Macpherson T, Spears I, Weston M. The effects of repeated-sprint training on field-based fitness measures: a meta-analysis of controlled and non-controlled trials. Sports Med 2015;45(6):881–891. doi:10.1007/s40279-015-0324-9 PMID 25790793", verifiedFrom: "abstract" },
+  parkinson2021: { key: "parkinson2021", short: "Parkinson 2021", cite: "Parkinson AO, Apps CL, Morris JG, Barnett CT, Lewis MGC. The Calculation, Thresholds and Reporting of Inter-Limb Strength Asymmetry: A Systematic Review. J Sports Sci Med 2021;20(4):594–617. doi:10.52082/jssm.2021.594 PMID 35321131", verifiedFrom: "abstract" },
+  read2021: { key: "read2021", short: "Read 2021", cite: "Read PJ, McAuliffe S, Bishop C, Oliver JL, Graham-Smith P, Farooq MA. Asymmetry Thresholds for Common Screening Tests and Their Effects on Jump Performance in Professional Soccer Players. J Athl Train 2021;56(1):46–53. doi:10.4085/1062-6050-0013.20 PMID 33264407", verifiedFrom: "abstract" },
+  bishop2023: { key: "bishop2023", short: "Bishop 2023", cite: "Bishop C, de Keijzer KL, Turner AN, Beato M. Measuring Interlimb Asymmetry for Strength and Power: A Brief Review of Assessment Methods, Data Analysis, Current Evidence, and Practical Recommendations. J Strength Cond Res 2023;37(3):745–750. doi:10.1519/JSC.0000000000004384 PMID 36695841", verifiedFrom: "abstract" },
+  helme2021: { key: "helme2021", short: "Helme 2021", cite: "Helme M, Tee J, Emmonds S, Low C. Does lower-limb asymmetry increase injury risk in sport? A systematic review. Phys Ther Sport 2021;49:204–213. doi:10.1016/j.ptsp.2021.03.001 PMID 33770741", verifiedFrom: "abstract" },
+  green2023: { key: "green2023", short: "Green 2023", cite: "Green M, Ward P, Bickley M, Gillett M, O'Boyle A, Drust B. Time to change direction in training load monitoring in elite football? The application of MEMS accelerometers for the evaluation of movement requirements. Sci Med Footb 2023;7(1):15–24. doi:10.1080/24733938.2022.2053337 PMID 35277118", verifiedFrom: "abstract" },
+  gregson2010: { key: "gregson2010", short: "Gregson 2010", cite: "Gregson W, Drust B, Atkinson G, Di Salvo V. Match-to-match variability of high-speed activities in premier league soccer. Int J Sports Med 2010;31(4):237–242. doi:10.1055/s-0030-1247546 PMID 20157871", verifiedFrom: "abstract" },
+  haugenbuchheit2016: { key: "haugenbuchheit2016", short: "Haugen & Buchheit 2016", cite: "Haugen T, Buchheit M. Sprint Running Performance Monitoring: Methodological and Practical Considerations. Sports Med 2016;46(5):641–656. doi:10.1007/s40279-015-0446-0 PMID 26660758", verifiedFrom: "abstract" },
+  buchheitrabbani2014: { key: "buchheitrabbani2014", short: "Buchheit & Rabbani 2014", cite: "Buchheit M, Rabbani A. The 30-15 Intermittent Fitness Test versus the Yo-Yo Intermittent Recovery Test Level 1: relationship and sensitivity to training. Int J Sports Physiol Perform 2014;9(3):522–524. doi:10.1123/ijspp.2012-0335 PMID 23475226", verifiedFrom: "abstract" },
+  buchheit2014: { key: "buchheit2014", short: "Buchheit 2014", cite: "Buchheit M. Monitoring training status with HR measures: do all roads lead to Rome? Front Physiol 2014;5:73. doi:10.3389/fphys.2014.00073 PMID 24578692", verifiedFrom: "abstract" },
+  djaoui2017: { key: "djaoui2017", short: "Djaoui 2017", cite: "Djaoui L, Chamari K, Owen AL, Dellal A. Maximal Sprinting Speed of Elite Soccer Players During Training and Matches. J Strength Cond Res 2017;31(6):1509–1517. doi:10.1519/JSC.0000000000001642 PMID 28538299", verifiedFrom: "abstract" },
+  tomlinwenger2001: { key: "tomlinwenger2001", short: "Tomlin & Wenger 2001", cite: "Tomlin DL, Wenger HA. The relationship between aerobic fitness and recovery from high intensity intermittent exercise. Sports Med 2001;31(1):1–11. doi:10.2165/00007256-200131010-00001 PMID 11219498", verifiedFrom: "abstract" },
   // Lot 1a (2026-11-23): sources for strength-code citations that named no findable paper; sites reworded to what
   // each paper shows.
   spiering2021: { key: "spiering2021", short: "Spiering 2021", cite: "Spiering BA, Mujika I, Sharp MA, Foulis SA. Maintaining Physical Performance: The Minimal Dose of Exercise Needed to Preserve Endurance and Strength Over Time. J Strength Cond Res 2021;35(5):1449–1458. doi:10.1519/JSC.0000000000003964 PMID 33629972", verifiedFrom: "abstract" },
@@ -266,17 +283,13 @@ const SHORT_ALIASES: Record<string, string> = {
  * the coach decides whether to replace it. Never resolved by guessing.
  */
 export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
-  "Bishop 2020": {
-    en: "The code comment gives J Athl Train 2020;55:1062–1070, which matches no PubMed record. Bishop published several limb-asymmetry papers around 2020; which one is meant is not recorded.",
-    is: "Athugasemdin í kóðanum gefur J Athl Train 2020;55:1062–1070, sem passar ekki við neina færslu á PubMed. Bishop birti nokkrar greinar um ósamhverfu um 2020 og ekki er skráð hver þeirra er átt við.",
-  },
   "Buchheit 2019": {
     en: "Cited for the locomotor/mechanical day framework and for monitoring advice; Buchheit wrote several pieces on this around 2019 (some in books), and which one is meant is not recorded. Where the code said a tight-space day is light on high-speed running, it now cites Lacome 2018.",
     is: "Vitnað í vegna skiptingar í hlaupa- og hreyfidaga og ráða um vöktun; Buchheit skrifaði nokkur verk um þetta um 2019 (sum í bókum) og ekki er skráð hvert er átt við. Þar sem kóðinn sagði að dagur í þröngu rými væri léttur á háhraðahlaupi er nú vitnað í Lacome 2018.",
   },
   "Buchheit 2024": {
-    en: "Cited as \"The 11 Principles of Microcycle Periodization\"; no such paper found on PubMed or Crossref.",
-    is: "Vitnað í sem „The 11 Principles of Microcycle Periodization“; engin slík grein fannst á PubMed eða Crossref.",
+    en: "A practitioner report, not a journal paper: Buchheit M and co-authors. The 11 Evidence-Informed and Inferred Principles of Microcycle Periodization in Elite Football. Sport Performance & Science Reports 2024 (no. 218), sportperfsci.com. PubMed and Crossref do not index it. It stays only as the name of the week-review framework; the MD-day load shape now cites Martín-García 2018 and Gualtieri 2024 (load falls toward the match), and the MD-day percentages are MicroPulse's.",
+    is: "Skýrsla fyrir fagfólk, ekki tímaritsgrein: Buchheit M o.fl. The 11 Evidence-Informed and Inferred Principles of Microcycle Periodization in Elite Football. Sport Performance & Science Reports 2024 (nr. 218), sportperfsci.com. PubMed og Crossref skrá hana ekki. Hún stendur aðeins sem nafn á rammanum sem vikuyfirferðin byggir á; lögun álags eftir MD-dögum vísar nú í Martín-García 2018 og Gualtieri 2024 (álag lækkar nær leik) og hlutföll MD-daga eru val MicroPulse.",
   },
   "Cazorla 1990": {
     en: "A French field-test publication (VAM-Eval) that PubMed and Crossref do not index. It stays as the protocol's origin; the field test's validity now cites Bok & Foster 2021.",
@@ -290,17 +303,9 @@ export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
     en: "A coaching chart (Epley B. Poundage chart. Boyd Epley Workout, 1985), not a journal paper. It stays as the formula's origin; the formula's accuracy is checked in Mayhew 2008 and Garc\u00eda-Ramos 2019.",
     is: "Tafla \u00far \u00fej\u00e1lfun (Epley B. Poundage chart. Boyd Epley Workout, 1985), ekki t\u00edmaritsgrein. H\u00fan stendur sem uppruni form\u00falunnar; n\u00e1kv\u00e6mni form\u00falunnar er pr\u00f3fu\u00f0 \u00ed Mayhew 2008 og Garc\u00eda-Ramos 2019.",
   },
-  "Gabbett 2017": {
-    en: "Gabbett co-wrote several load-monitoring papers in 2017; which one is meant is not recorded. The best-known acute:chronic paper is Gabbett 2016.",
-    is: "Gabbett var meðhöfundur að nokkrum greinum um álagsvöktun 2017 og ekki er skráð hver er átt við. Þekktasta greinin um skammtíma- og langtímaálag er Gabbett 2016.",
-  },
   "Lombardi 1989": {
     en: "A book: Lombardi VP. Beginning Weight Training. W.C. Brown, 1989. It stays as the formula's origin; the formula's accuracy is checked in Mayhew 2008 and Garc\u00eda-Ramos 2019.",
     is: "B\u00f3k: Lombardi VP. Beginning Weight Training. W.C. Brown, 1989. H\u00fan stendur sem uppruni form\u00falunnar; n\u00e1kv\u00e6mni form\u00falunnar er pr\u00f3fu\u00f0 \u00ed Mayhew 2008 og Garc\u00eda-Ramos 2019.",
-  },
-  "Buchheit 2014": {
-    en: "Buchheit published several 2014 football papers (sprint mechanics, repeated sprints, match running); which one is meant is not recorded.",
-    is: "Buchheit birti nokkrar greinar um fótbolta 2014 (sprettfræði, endurteknir sprettir, hlaup í leik); ekki er skráð hver er átt við.",
   },
   "Kotsifaki 2024": {
     en: "A practitioner piece (Buchheit, Heiderscheit & Kotsifaki, Aspetar Sports Medicine Journal) that PubMed and Crossref do not index. The groin read now leads with the meta-analysis Quintana-Cepedal 2025, which says the same thing.",

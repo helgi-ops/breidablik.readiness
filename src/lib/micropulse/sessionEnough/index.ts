@@ -23,7 +23,7 @@
  * `frDistance` / `strideHi` are kept for interface stability.
  *
  * Pure, deterministic, IO-free. Rules decide; no AI. Descriptive — NEVER the readiness colour.
- * Day shares: Stevens 2017 + Martín-García 2018 (Acc/Dec/CoD standard); Buchheit 2024 MD-day load
+ * Day shares: Stevens 2017 + Martín-García 2018 (Acc/Dec/CoD standard); load falls toward the match (Gualtieri 2024) per MicroPulse's MD-day load
  * model (via planSessionLoad's matchPct); braking/CoD tissue load Harper 2022; training:match
  * ratios PMC6747517. (Malone 2018 sprint-exposure was cited here before; removed — it is about GPS
  * sprinting, which these IMA long-run metrics are not.)

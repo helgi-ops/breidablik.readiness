@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Coach quadrant view (Gabbett 2017 / Vanrenterghem 2017).
+ * Coach quadrant view (Vanrenterghem 2017; ACWR in the tooltips from Gabbett 2016).
  *
  * Shows every athlete on a 2x2 chart of external load (X = avg distance)
  * vs internal cost (Y = avg sRPE). Quadrants identify:
@@ -119,7 +119,7 @@ export default function CoachQuadrantPage() {
   const [teamSport, setTeamSport] = React.useState<string | null>(null);
 
   // Catapult data tier — drives the Gabbett 2016 (volume axis, Lite) vs
-  // Gabbett 2017 (volume + B2-3 axis, Full) variant selection. Volume axis
+  // MicroPulse's B2-3 add-on (volume + B2-3 axis, Full) variant selection. Volume axis
   // works on every Catapult plan; B2-3 axis adds explosive-effort
   // discrimination for clubs on Premium plans. Defaults to 'lite' until
   // detection completes — same conservative default as CoachShell.
@@ -460,7 +460,7 @@ export default function CoachQuadrantPage() {
       IS: "Hver leikmaður er staðsettur eftir því hve mikið hann hleypur (ytra álag) á móti því hve erfitt það er (innri kostnaður). Efst-hægri = mikið af báðu, svæðið til að fylgjast með.",
     };
 
-    // Drivers = the named injury-risk players. Jargon (ACWR) + Gabbett 2017
+    // Drivers = the named high-load players. Jargon (ACWR) + Gabbett 2016
     // citation lives in each chip's tooltip, never the visible sentence.
     const drivers = risk.slice(0, 6).map(p => {
       const acwrTxt = p.acwr != null ? p.acwr.toFixed(2) : "—";
@@ -469,8 +469,8 @@ export default function CoachQuadrantPage() {
         detail: (IS ? "ofálag" : "high load") as string,
         tone: "concern" as const,
         tip: {
-          EN: `High external load + high internal cost. Acute:chronic workload ratio (ACWR) ${acwrTxt} — above ~1.3 means recent work is outpacing the player's 28-day baseline (Gabbett 2017).`,
-          IS: `Hátt ytra álag + hár innri kostnaður. Bráða:krónísk álagshlutfall (ACWR) ${acwrTxt} — yfir ~1.3 þýðir að nýlegt álag fer fram úr 28-daga grunnlínu leikmanns (Gabbett 2017).`,
+          EN: `High external load + high internal cost. Acute:chronic workload ratio (ACWR) ${acwrTxt} — above ~1.3 means recent work is outpacing the player's 28-day baseline (Gabbett 2016).`,
+          IS: `Hátt ytra álag + hár innri kostnaður. Bráða:krónísk álagshlutfall (ACWR) ${acwrTxt} — yfir ~1.3 þýðir að nýlegt álag fer fram úr 28-daga grunnlínu leikmanns (Gabbett 2016).`,
         },
       };
     });
@@ -485,7 +485,7 @@ export default function CoachQuadrantPage() {
       {/* ── Plain-language verdict banner (explainability-first) ──────────
           Rules, not AI: tone + sentence + named injury-risk players come from
           the same median-split quadrant logic the count grid + scatter use
-          below. Jargon (ACWR + Gabbett 2017) lives in driver tooltips. Gated
+          below. Jargon (ACWR + Gabbett 2016) lives in driver tooltips. Gated
           exactly like the chart content: loaded, no error, non-empty. */}
       {!loading && !error && points.length > 0 && (
         <VerdictBanner
@@ -505,17 +505,17 @@ export default function CoachQuadrantPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-semibold text-slate-900">{qt("pageTitle", lang)}</h1>
             {/* Citation badge — Gabbett 2016 (volume axis only, works on any
-                Catapult plan) on Lite, Gabbett 2017 (volume + B2-3 axis,
-                higher fidelity) on Full. Both papers are co-authored by
-                Tim Gabbett — the 2016 BJSM piece introduced ACWR using
-                total distance + sRPE; the 2017 follow-up added explosive-
-                effort axes for more granular discrimination. */}
+                Catapult plan) on Lite, Gabbett 2016 + MicroPulse's B2-3 add-on (volume + B2-3 axis,
+                higher fidelity) on Full. The B2-3 axis is MicroPulse's choice, not from a paper;
+                the 2016 BJSM piece (Gabbett 2016) set out acute vs chronic load using
+                internal + external load; no 2017 paper added explosive-
+                effort axes — that part is ours. */}
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
               isLite
                 ? "bg-blue-100 text-blue-700"
                 : "bg-emerald-100 text-emerald-700"
             }`}>
-              {isLite ? "Gabbett 2016 · Volume axis" : "Gabbett 2017 · Full axis"}
+              {isLite ? "Gabbett 2016 · Volume axis" : "Gabbett 2016 · Full axis"}
             </span>
             {/* Concept credit, distinct from the axis math above: the quadrant
                 idea of reading load against response ("data everywhere, insight

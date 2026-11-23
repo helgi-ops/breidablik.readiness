@@ -26,7 +26,7 @@ export default function MatchMovementPage() {
           en="This page: how he moved match-to-match — his movement signature + this session's peak demands vs his own norm. For his season physical profile → Power Curve Intelligence. For a shareable per-match stats report → Player Game Report."
           is="Þessi síða: hvernig hann hreyfði sig milli leikja — hreyfi-einkenni + peak-kröfur þessarar æfingar vs hans venja. Fyrir season-prófílinn → Afl-kúrfu greining. Fyrir deilanlega tölu-skýrslu per leik → Leikjaskýrsla leikmanns."
         />
-        <p className="mt-1 text-xs text-slate-500">Buchheit 2014 · McBurnie 2022 · di Prampero 2015</p>
+        <p className="mt-1 text-xs text-slate-500">Green 2023 · Gregson 2010 · McBurnie 2022 · di Prampero 2015</p>
       </div>
       <MatchMovementComparison
         selectedPlayerId={selectedPlayerId}

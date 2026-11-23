@@ -2,13 +2,13 @@
  * Change-of-direction (CoD) L/R asymmetry — shared pure helpers so the API route and the injury
  * early-warning (robustnessWatch) agree on the maths and the footedness interpretation.
  *
- * Bishop 2020: it's the HIGH-INTENSITY L/R asymmetry that is injury-relevant — overall % can hide a
- * serious one-side preference at high effort. Thresholds: 9% watch · 15% concern · 18% high.
+ * MicroPulse reads the HIGH-INTENSITY L/R asymmetry (not tested against injury) — overall % can hide a
+ * serious one-side preference at high effort. MicroPulse's thresholds (not from a study): 9% watch · 15% concern · 18% high.
  *
  * Havanecz 2026 (leg-dominance): CoD FREQUENCY is balanced L/R, but directional LOAD depends on
  * footedness — players prefer the dominant limb as the PLANT limb, so a MODEST directional lean is
  * physiologically expected. Footedness is therefore interpretive CONTEXT, not a new threshold; the
- * Bishop magnitude stays the flag, and the side×footedness link is an interaction, not a simple
+ * magnitude stays the flag, and the side×footedness link is an interaction, not a simple
  * "dominant side higher" rule — so we surface the dominant foot and the favoured side and let the
  * reader judge, rather than hard-coding a direction.
  */
@@ -58,7 +58,7 @@ const SIDE_LABEL: Record<"left" | "right" | "balanced", Bi> = {
 /**
  * Footedness-aware interpretation of the HIGH-intensity CoD asymmetry. Descriptive — names the dominant
  * foot and the favoured side, says a modest lean is expected (plant-limb, Havanecz) so magnitude is what
- * flags (Bishop), and that a large imbalance warrants attention. Not a new threshold.
+ * flags (MicroPulse's rule), and that a large imbalance warrants attention. Not a new threshold.
  */
 export function codFootednessNote(dominantFoot: DominantFoot | null, highLeft: number, highRight: number): Bi {
   const side = favoredSide(highLeft, highRight);
@@ -75,7 +75,7 @@ export function codFootednessNote(dominantFoot: DominantFoot | null, highLeft: n
   const footEn = foot ? `${foot.en}; ` : "dominant foot not set; ";
   const footIs = foot ? `${foot.is}; ` : "ríkjandi fótur óskráður; ";
   return {
-    en: `High-intensity cutting leans ${s.en} (${foot ? footEn : footEn}a modest plant-limb lean is normal — Havanecz 2026). ${flagged ? "The size of the imbalance is the flag (Bishop 2020) — review alongside his footedness." : "Within the normal range; magnitude, not direction, is what would flag."}`,
-    is: `Háákefðar skurðir halla til ${s.is} (${foot ? footIs : footIs}hóflegur plant-fótar halli er eðlilegur — Havanecz 2026). ${flagged ? "Stærð ójafnvægisins er merkið (Bishop 2020) — metið m.t.t. ríkjandi fótar." : "Innan eðlilegra marka; stærð, ekki stefna, myndi flagga."}`,
+    en: `High-intensity cutting leans ${s.en} (${foot ? footEn : footEn}a modest plant-limb lean is normal — Havanecz 2026). ${flagged ? "The size of the imbalance is what MicroPulse flags (not tested against injury) — review alongside his footedness." : "Within the normal range; magnitude, not direction, is what would flag."}`,
+    is: `Háákefðar skurðir halla til ${s.is} (${foot ? footIs : footIs}hóflegur plant-fótar halli er eðlilegur — Havanecz 2026). ${flagged ? "Stærð ójafnvægisins er það sem MicroPulse flaggar (ekki prófað gegn meiðslum) — metið m.t.t. ríkjandi fótar." : "Innan eðlilegra marka; stærð, ekki stefna, myndi flagga."}`,
   };
 }

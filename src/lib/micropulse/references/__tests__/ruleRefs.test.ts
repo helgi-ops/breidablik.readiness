@@ -146,6 +146,16 @@ describe("rule references", () => {
     expect(findRefByShort("Thomas 2017")?.cite).toMatch(/Med Sci Sports Exerc/);
   });
 
+  it("Bishop 2020, Gabbett 2017 and Buchheit 2014 sites name one paper per meaning (lot 2)", () => {
+    const all = [...codeCitations(), ...citationsUnder(OTHER_CITATION_SOURCES), ...citationsIn(RULES_PART)];
+    for (const s of ["Bishop 2020", "Gabbett 2017"]) expect(all).not.toContain(s);
+    expect(findRefByShort("Buchheit 2014")?.key).toBe("buchheit2014");
+    expect(findRefByShort("Buchheit & Rabbani 2014")?.key).toBe("buchheitrabbani2014");
+    expect(findRefByShort("Haugen & Buchheit 2016")?.key).toBe("haugenbuchheit2016");
+    expect(findRefByShort("Bishop 2023")?.key).toBe("bishop2023");
+    expect(unresolvedReason("Buchheit 2024")?.en).toMatch(/Sport Performance & Science Reports/);
+  });
+
   it("the catalogue's references section lists each of its citations in full, or as unresolved", () => {
     expect(CATALOGUE_REFS).not.toBe("");
     for (const s of citationsIn(RULES_PART)) {

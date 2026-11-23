@@ -144,8 +144,8 @@ export default function MovementStyleCard({ players, playerId }: { players: Arra
 
           <p className="text-[11px] text-slate-400">
             {is
-              ? "IMA-klukka + free-running (Buchheit 2014; Gray/ADI línulegt-vs-fjölstefnu). Reglur reikna — ekki AI. Lýsandi — snertir aldrei readiness."
-              : "IMA clock + free-running (Buchheit 2014; Gray/ADI linear-vs-multidirectional). Rules compute — not AI. Descriptive — never touches readiness."}
+              ? "IMA-klukka + free-running (Green 2023; Gray/ADI línulegt-vs-fjölstefnu). Reglur reikna — ekki AI. Lýsandi — snertir aldrei readiness."
+              : "IMA clock + free-running (Green 2023; Gray/ADI linear-vs-multidirectional). Rules compute — not AI. Descriptive — never touches readiness."}
           </p>
         </div>
       ) : null}

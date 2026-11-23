@@ -251,7 +251,7 @@ export default function TrainLikeYouPlayPage() {
     if (players.length === 0) return null;
     // Source paper for each metric so the tooltip can cite it.
     const metricTip: Record<MetricKey, { en: string; is: string }> = {
-      top_speed: { en: "Top sprint speed vs match (Buchheit 2014).", is: "Hámarks-sprett­hraði m.v. leik (Buchheit 2014)." },
+      top_speed: { en: "Top sprint speed vs match (Djaoui 2017).", is: "Hámarks-sprett­hraði m.v. leik (Djaoui 2017)." },
       fmp_run_high: { en: "High-intensity running exposure — Catapult Football Movement Profile, running-high zone (Malone 2017).", is: "Háákefðar-hlaup — Catapult Football Movement Profile, hlaup-há flokkur (Malone 2017)." },
       fmp_dyn_high: { en: "High-intensity dynamic (multi-directional) movement — FMP dynamic-high zone (Malone 2017).", is: "Háákefðar dýnamísk (fjölátta) hreyfing — FMP dýnamísk-há flokkur (Malone 2017)." },
       fmp_dyn_med: { en: "Medium-intensity dynamic movement — FMP dynamic-medium zone (Malone 2017).", is: "Miðlungs-ákefðar dýnamísk hreyfing — FMP dýnamísk-miðl. flokkur (Malone 2017)." },

@@ -78,16 +78,16 @@ export type CccPhase = {
 
 const TABERNER = "Taberner, Allen & Cohen 2019 (BJSM); Taberner et al. 2025 (JOSPT, Part 2)";
 
-// Standard return-to-play criterion thresholds (cited; conservative). Bishop 2020
-// flags inter-limb asymmetry ≥10% as performance/injury-relevant; Grindem 2016 uses
+// Standard return-to-play criterion thresholds (conservative). The 10% / 15% asymmetry lines are
+// the common flag lines, not validated cut-offs (Parkinson 2021); Grindem 2016 uses
 // LSI ≥90% as the symmetry gate; Aspetar/Kotsifaki CPG for the late gates.
 const C_LOAD: CccExitCriterion = { key: "load_tolerance", label: { en: "Tolerated this phase's load band pain-free", is: "Þolir álagsband þessa fasa án verkja" }, threshold: 1, compare: "gte", source: TABERNER };
-const C_ASYM_15: CccExitCriterion = { key: "cmj_asymmetry_pct", label: { en: "CMJ force/impulse asymmetry < 15%", is: "CMJ krafts-/impuls-ósamhverfa < 15%" }, threshold: 15, compare: "lte", source: "Bishop 2020" };
-const C_ASYM_10: CccExitCriterion = { key: "cmj_asymmetry_pct", label: { en: "CMJ force/impulse asymmetry < 10%", is: "CMJ krafts-/impuls-ósamhverfa < 10%" }, threshold: 10, compare: "lte", source: "Bishop 2020" };
+const C_ASYM_15: CccExitCriterion = { key: "cmj_asymmetry_pct", label: { en: "CMJ force/impulse asymmetry < 15%", is: "CMJ krafts-/impuls-ósamhverfa < 15%" }, threshold: 15, compare: "lte", source: "Parkinson 2021 (common flag line)" };
+const C_ASYM_10: CccExitCriterion = { key: "cmj_asymmetry_pct", label: { en: "CMJ force/impulse asymmetry < 10%", is: "CMJ krafts-/impuls-ósamhverfa < 10%" }, threshold: 10, compare: "lte", source: "Parkinson 2021 (common flag line)" };
 const C_IMTP_80: CccExitCriterion = { key: "imtp_lsi_pct", label: { en: "IMTP limb-symmetry ≥ 80%", is: "IMTP útlima-samhverfa ≥ 80%" }, threshold: 80, compare: "gte", source: "Aspetar RTP; Kotsifaki 2023" };
 const C_IMTP_90: CccExitCriterion = { key: "imtp_lsi_pct", label: { en: "IMTP limb-symmetry ≥ 90%", is: "IMTP útlima-samhverfa ≥ 90%" }, threshold: 90, compare: "gte", source: "Grindem 2016; Aspetar RTP" };
 const C_RSI_90: CccExitCriterion = { key: "hop_rsi_lsi_pct", label: { en: "Reactive-strength (hop/RSI) limb-symmetry ≥ 90%", is: "Viðbragðsstyrkur (hopp/RSI) útlima-samhverfa ≥ 90%" }, threshold: 90, compare: "gte", source: "Grindem 2016" };
-const C_NORDIC_15: CccExitCriterion = { key: "nordic_asymmetry_pct", label: { en: "Nordic eccentric asymmetry < 15%", is: "Nordic eccentrísk ósamhverfa < 15%" }, threshold: 15, compare: "lte", source: "van Dyk 2019; Bishop 2020" };
+const C_NORDIC_15: CccExitCriterion = { key: "nordic_asymmetry_pct", label: { en: "Nordic eccentric asymmetry < 15%", is: "Nordic eccentrísk ósamhverfa < 15%" }, threshold: 15, compare: "lte", source: "van Dyk 2019; Parkinson 2021 (common flag line)" };
 
 /** The 5 CCC phases. Bands are fractions of the player's own game load — they rise
  *  from low-volume linear running (High Control) to full, chaotic match exposure

@@ -7,7 +7,7 @@
  * form the clearance checklist; the decision is derived from both. The AI
  * narrative only rephrases these (manifesto: rules decide, AI explains).
  *
- * Thresholds cited inline: Bishop 2020 (limb asymmetry ≥10% concern / ≥15% high),
+ * Thresholds cited inline: limb asymmetry ≥10% concern / ≥15% high — a common flag line, not a validated cut-off (Parkinson 2021; no single line fits every test, Read 2021),
  * Aspetar RTP consensus (bilateral strength / jump floors). Pure + unit-testable.
  */
 
@@ -26,7 +26,7 @@ export const RTP_DOMAINS = [
   "Sport Exposure",
 ] as const;
 
-/** Asymmetry status: <10% PASS, 10–15% CAUTION, >15% FLAG (Bishop 2020). */
+/** Asymmetry status: <10% PASS, 10–15% CAUTION, >15% FLAG (common flag line — Parkinson 2021). */
 export function asymmetryStatus(pct: number | null): RtpStatus {
   if (pct == null) return "NO_DATA";
   if (pct > 15) return "FLAG";
@@ -66,25 +66,25 @@ export function buildRtpCriteria(input: {
   }
   if (input.imtpAsymPct != null) {
     const s = asymmetryStatus(input.imtpAsymPct);
-    c.push({ key: "imtp_asymmetry", domain: "Bilateral Strength", label: "IMTP limb asymmetry", target: "< 10%", current: fmtPct(input.imtpAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020" });
+    c.push({ key: "imtp_asymmetry", domain: "Bilateral Strength", label: "IMTP limb asymmetry", target: "< 10%", current: fmtPct(input.imtpAsymPct), status: s, met: s === "PASS", cite: "Parkinson 2021 (common 10–15% flag line)" });
   }
 
   // ── Unilateral Strength (SLISOSQT) ─────────────────────────────────────────
   if (input.unilateralIsoAsymPct != null) {
     const s = asymmetryStatus(input.unilateralIsoAsymPct);
-    c.push({ key: "unilateral_iso_asymmetry", domain: "Unilateral Strength", label: "Unilateral isometric strength asymmetry", target: "< 10%", current: fmtPct(input.unilateralIsoAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020" });
+    c.push({ key: "unilateral_iso_asymmetry", domain: "Unilateral Strength", label: "Unilateral isometric strength asymmetry", target: "< 10%", current: fmtPct(input.unilateralIsoAsymPct), status: s, met: s === "PASS", cite: "Parkinson 2021 (common 10–15% flag line)" });
   }
 
   // ── Hamstring (NordBord Nordic eccentric) ──────────────────────────────────
   if (input.nordicHamstringAsymPct != null) {
     const s = asymmetryStatus(input.nordicHamstringAsymPct);
-    c.push({ key: "nordic_hamstring_asymmetry", domain: "Hamstring (Nordic)", label: "Nordic eccentric-hamstring asymmetry", target: "< 10%", current: fmtPct(input.nordicHamstringAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020 · van Dyk 2017 (hamstring RTP)" });
+    c.push({ key: "nordic_hamstring_asymmetry", domain: "Hamstring (Nordic)", label: "Nordic eccentric-hamstring asymmetry", target: "< 10%", current: fmtPct(input.nordicHamstringAsymPct), status: s, met: s === "PASS", cite: "Parkinson 2021 (common 10–15% flag line) · van Dyk 2017 (hamstring RTP)" });
   }
 
   // ── Groin / hip adductor (ForceFrame) ──────────────────────────────────────
   if (input.groinAdductorAsymPct != null) {
     const s = asymmetryStatus(input.groinAdductorAsymPct);
-    c.push({ key: "groin_adductor_asymmetry", domain: "Groin / Adductor", label: "Hip-adductor (groin) strength asymmetry", target: "< 10%", current: fmtPct(input.groinAdductorAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020 · Vigneswaran 2025 (groin asymmetry not linked to injury)" });
+    c.push({ key: "groin_adductor_asymmetry", domain: "Groin / Adductor", label: "Hip-adductor (groin) strength asymmetry", target: "< 10%", current: fmtPct(input.groinAdductorAsymPct), status: s, met: s === "PASS", cite: "Parkinson 2021 (common 10–15% flag line) · Vigneswaran 2025 (groin asymmetry not linked to injury)" });
   }
 
   // ── Bilateral Jump (CMJ) ───────────────────────────────────────────────────
@@ -94,7 +94,7 @@ export function buildRtpCriteria(input: {
   }
   if (input.cmjAsymmetryPct != null) {
     const s = asymmetryStatus(input.cmjAsymmetryPct);
-    c.push({ key: "cmj_asymmetry", domain: "Bilateral Jump", label: "CMJ limb asymmetry", target: "< 10%", current: fmtPct(input.cmjAsymmetryPct), status: s, met: s === "PASS", cite: "Bishop 2020" });
+    c.push({ key: "cmj_asymmetry", domain: "Bilateral Jump", label: "CMJ limb asymmetry", target: "< 10%", current: fmtPct(input.cmjAsymmetryPct), status: s, met: s === "PASS", cite: "Parkinson 2021 (common 10–15% flag line)" });
   }
 
   // ── Bilateral Reactive (DJ) ────────────────────────────────────────────────
@@ -106,11 +106,11 @@ export function buildRtpCriteria(input: {
   // ── Unilateral Reactive (SLDJ) — highest clinical weight ───────────────────
   if (input.sldjRsiAsymPct != null) {
     const s = asymmetryStatus(input.sldjRsiAsymPct);
-    c.push({ key: "sldj_rsi_asymmetry", domain: "Unilateral Reactive", label: "SLDJ reactive strength asymmetry", target: "< 10%", current: fmtPct(input.sldjRsiAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020" });
+    c.push({ key: "sldj_rsi_asymmetry", domain: "Unilateral Reactive", label: "SLDJ reactive strength asymmetry", target: "< 10%", current: fmtPct(input.sldjRsiAsymPct), status: s, met: s === "PASS", cite: "Parkinson 2021 (common 10–15% flag line)" });
   }
   if (input.sldjJumpHeightAsymPct != null) {
     const s = asymmetryStatus(input.sldjJumpHeightAsymPct);
-    c.push({ key: "sldj_jumpheight_asymmetry", domain: "Unilateral Reactive", label: "SLDJ jump-height asymmetry", target: "< 10%", current: fmtPct(input.sldjJumpHeightAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020" });
+    c.push({ key: "sldj_jumpheight_asymmetry", domain: "Unilateral Reactive", label: "SLDJ jump-height asymmetry", target: "< 10%", current: fmtPct(input.sldjJumpHeightAsymPct), status: s, met: s === "PASS", cite: "Parkinson 2021 (common 10–15% flag line)" });
   }
   if (input.sldjStiffnessAsymPct != null) {
     const s = input.sldjStiffnessAsymPct;
@@ -121,7 +121,7 @@ export function buildRtpCriteria(input: {
   // ── Movement Control (change of direction + dynamic valgus) ────────────────
   if (input.codHighAsymPct != null) {
     const s = asymmetryStatus(input.codHighAsymPct);
-    c.push({ key: "cod_high_asymmetry", domain: "Movement Control", label: "Change-of-direction asymmetry (high intensity)", target: "< 10%", current: fmtPct(input.codHighAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020" });
+    c.push({ key: "cod_high_asymmetry", domain: "Movement Control", label: "Change-of-direction asymmetry (high intensity)", target: "< 10%", current: fmtPct(input.codHighAsymPct), status: s, met: s === "PASS", cite: "MicroPulse's line for GPS turn counts (not tested against injury)" });
   }
   if (input.valgusSeverity) {
     const sev = input.valgusSeverity;
@@ -143,7 +143,7 @@ export function buildRtpCriteria(input: {
       label: "Change-of-direction load exposure (recent vs his match demand)",
       target: "≥ 90% of his usual COD/deceleration load", current,
       status, met: status === "PASS",
-      cite: "Buchheit 2014 · McBurnie 2022 · Delaney 2017 (worst-case demands)",
+      cite: "Green 2023 · McBurnie 2022 · Delaney 2017 (worst-case demands)",
     });
   }
 

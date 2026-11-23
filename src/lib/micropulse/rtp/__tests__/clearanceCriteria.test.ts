@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { asymmetryStatus, buildRtpCriteria, buildRtpDomains, buildRtpRecommendations, rtpDecision } from "@/lib/micropulse/rtp/clearanceCriteria";
 
-describe("asymmetryStatus (Bishop 2020 boundaries)", () => {
+describe("asymmetryStatus (common 10–15% flag-line boundaries)", () => {
   it("PASS < 10, CAUTION 10–15, FLAG > 15", () => {
     expect(asymmetryStatus(9.9)).toBe("PASS");
     expect(asymmetryStatus(10)).toBe("CAUTION");
@@ -46,7 +46,7 @@ describe("buildRtpCriteria + domains — sample-report numbers", () => {
 });
 
 describe("hamstring (NordBord) + groin (ForceFrame) asymmetry criteria", () => {
-  it("adds hamstring + groin criteria under their own domains, Bishop-graded", () => {
+  it("adds hamstring + groin criteria under their own domains, graded on the common flag line", () => {
     const criteria = buildRtpCriteria({
       cmjJumpHeightCm: null, cmjAsymmetryPct: null, codHighAsymPct: null,
       nordicHamstringAsymPct: 18, groinAdductorAsymPct: 11,

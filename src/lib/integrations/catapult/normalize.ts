@@ -697,7 +697,7 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
   //     direction-event counts, always populated)
   // We match BOTH so we have the raw counts as fallback when the derived
   // parameters return 0. If both match the same data, the sum still works
-  // (zeros don't add anything). For Bishop 2020 asymmetry index.
+  // (zeros don't add anything). For the L/R asymmetry %.
   const codLeftEntries = preferCountLike(
     findMatchingEntries(
       record,
@@ -756,7 +756,7 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
   const impacts = nullIfZero(toInteger(sumEntries(impactEntries)));
   const jumps = nullIfZero(toInteger(sumEntries(jumpEntries)));
 
-  // Per-intensity CoD splits (Bishop 2020 needs intensity-tier asymmetry).
+  // Per-intensity CoD splits (the asymmetry % is read per intensity tier).
   // Catapult exposes these as "IMA CoD Left High/Medium/Low" — canonical
   // form drops spaces so we look for substrings in the canonical key. The
   // raw imaband{1,2,3} numeric form maps band1→low, band2→medium, band3→high.

@@ -77,7 +77,7 @@ const COPY = {
     secNorms: "Persónulegt viðmið",
     secNormsHint: "Hvernig sub-skor dagsins ber af venju leikmanns (Robertson 2017).",
     secLoad: "Æfingaálag",
-    secLoadHint: "Hreyfingaálag í gær á móti rúllandi 28-daga meðaltali (Gabbett 2017).",
+    secLoadHint: "Hreyfingaálag í gær á móti rúllandi 28-daga meðaltali (skammtíma á móti langtíma, Gabbett 2016).",
     secUnfamiliar: "Óvanalegt álag",
     unfamiliarBody: (pct: number, ratio: string) => `Hreyfingaálag í gær var +${pct}% yfir hans 28-daga vana (${ratio}×).`,
     unfamiliarTissue: "Vefir í hættu — vöðva-/sina-þreytu-merki til staðar.",
@@ -92,11 +92,11 @@ const COPY = {
     fatigue: {
       mechanical_fatigue: "Vélrænt — accel/decel + IMA hækkað án samsvarandi PL (McBurnie 2022).",
       metabolic_fatigue: "Efnaskipta — hátt metabolic score án vélræns merkis (di Prampero 2015).",
-      global_fatigue: "Heildar — bæði vélræn og efnaskiptamerki hækkuð (Gabbett 2017).",
+      global_fatigue: "Heildar — bæði vélræn og efnaskiptamerki hækkuð (tvær álagsleiðir, Vanrenterghem 2017).",
     },
     notAvailable: "Ekki til staðar",
     close: "Loka",
-    refs: "Vísanir: Gabbett 2017 (ACWR) · Buchheit 2024 (microcycle) · Robertson 2017 (persónuleg viðmið) · McBurnie 2022 (decel) · di Prampero 2015 (metabolic).",
+    refs: "Vísanir: Gabbett 2016 (ACWR) · Impellizzeri 2020 (takmörk ACWR) · Vanrenterghem 2017 (tvær álagsleiðir) · Robertson 2017 (persónuleg viðmið) · McBurnie 2022 (decel) · di Prampero 2015 (metabolic).",
   },
   EN: {
     title: "How was today's colour computed?",
@@ -106,7 +106,7 @@ const COPY = {
     secNorms: "Personal baseline",
     secNormsHint: "How today's sub-scores compare to his usual (Robertson 2017).",
     secLoad: "Training load",
-    secLoadHint: "His movement load yesterday vs his 28-day rolling mean (Gabbett 2017).",
+    secLoadHint: "His movement load yesterday vs his 28-day rolling mean (acute vs chronic, Gabbett 2016).",
     secUnfamiliar: "Unfamiliar load",
     unfamiliarBody: (pct: number, ratio: string) => `Movement load yesterday was +${pct}% over his 28-day norm (${ratio}×).`,
     unfamiliarTissue: "Tissue at risk — muscle/tendon fatigue signal present.",
@@ -121,11 +121,11 @@ const COPY = {
     fatigue: {
       mechanical_fatigue: "Mechanical — accel/decel + IMA elevated without matching PL (McBurnie 2022).",
       metabolic_fatigue: "Metabolic — high metabolic score without mechanical signature (di Prampero 2015).",
-      global_fatigue: "Whole-system — both mechanical and metabolic signals elevated (Gabbett 2017).",
+      global_fatigue: "Whole-system — both mechanical and metabolic signals elevated (two load pathways, Vanrenterghem 2017).",
     },
     notAvailable: "Not available",
     close: "Close",
-    refs: "References: Gabbett 2017 (ACWR) · Buchheit 2024 (microcycle) · Robertson 2017 (personal norms) · McBurnie 2022 (decel) · di Prampero 2015 (metabolic).",
+    refs: "References: Gabbett 2016 (ACWR) · Impellizzeri 2020 (ACWR limits) · Vanrenterghem 2017 (two load pathways) · Robertson 2017 (personal norms) · McBurnie 2022 (decel) · di Prampero 2015 (metabolic).",
   },
 } as const;
 

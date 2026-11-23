@@ -271,8 +271,8 @@ export default function MovementSignatureCard({ players, playerId }: { players: 
 
           <p className="text-[11px] text-slate-400">
             {is
-              ? "Fjölstefnu-þéttleiki úr IMA (Buchheit 2014) — proxy fyrir Vector Distribution ADI, ekki W/kg. Reglur reikna — ekki AI. Lýsandi — snertir aldrei readiness."
-              : "Multidirectional density from IMA (Buchheit 2014) — a proxy for ADI's Vector Distribution, not W/kg. Rules compute — not AI. Descriptive — never touches readiness."}
+              ? "Fjölstefnu-þéttleiki úr IMA (Green 2023) — proxy fyrir Vector Distribution ADI, ekki W/kg. Reglur reikna — ekki AI. Lýsandi — snertir aldrei readiness."
+              : "Multidirectional density from IMA (Green 2023) — a proxy for ADI's Vector Distribution, not W/kg. Rules compute — not AI. Descriptive — never touches readiness."}
           </p>
         </div>
       ) : null}

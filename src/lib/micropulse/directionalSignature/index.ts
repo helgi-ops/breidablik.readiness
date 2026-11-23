@@ -59,7 +59,7 @@ export function gridShares(grid: ClockGrid | null | undefined): Record<string, n
 // mechanical-LOAD index (AU) — "where does he spend the most change-of-direction work?" — which
 // can differ from where he simply moves most. HONEST: this is an IMA-derived COST proxy in AU, NOT
 // true mechanical power (W/kg) or energy (kJ) per direction — the clock stores event counts, not
-// force; per-direction watts would need the raw 10 Hz stream. Cite Buchheit 2014 (IMA).
+// force; per-direction watts would need the raw 10 Hz stream. Cite Green 2023 (IMA).
 export const MECH_DIR_WEIGHTS = { high: 3, medium: 2, low: 1 } as const;
 
 export type DirectionLoad = { dir: string; loadAU: number; share: number; perMin: number | null };

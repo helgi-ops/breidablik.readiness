@@ -14,7 +14,7 @@
  *  - Needs ≥ 2 comparable tests; one test = "baseline only".
  *
  * Descriptive monitoring ONLY — it never touches the readiness colour, the load target, or the daily
- * decision. Cite: Buchheit 2014 (30-15 IFT reliability), Bangsbo 2008 (Yo-Yo) for the SWC bands.
+ * decision. Cite: Buchheit & Rabbani 2014 (30-15 IFT vs Yo-Yo sensitivity), Bangsbo 2008 (Yo-Yo); the 3% / 5% SWC bands are MicroPulse's choice.
  */
 
 import type { Bi } from "./peakPeriod";

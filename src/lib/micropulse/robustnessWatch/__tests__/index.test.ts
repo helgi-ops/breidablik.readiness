@@ -87,7 +87,7 @@ describe("computeRobustnessWatch — contributors", () => {
     expect(c!.flagged).toBe(false);
   });
 
-  it("adds a flagged CoD-asymmetry contributor at >=15% (Bishop) with footedness context", () => {
+  it("adds a flagged CoD-asymmetry contributor at >=15% (MicroPulse line) with footedness context", () => {
     const r = computeRobustnessWatch(base({
       injury: injury("MODERATE", "high"),
       mechanical: { runningAsymmetryZ: null, runningAsymmetryPct: null, footstrikesZ: null, rhieBoutsZ: null, hasLoadSpike: false, codAsymmetryHighPct: 22, dominantFoot: "right" },

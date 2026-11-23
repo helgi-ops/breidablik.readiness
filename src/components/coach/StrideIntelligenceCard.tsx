@@ -7,7 +7,7 @@
  *   - Cadence (stride rate, strides per minute) with personal-z drift
  *   - Stride length (m/stride) — session average, or stride length in sustained
  *     running (IMA FR efforts ≥18 s = long continuous runs, ima_fr_ge18) when GPS distance exists
- *   - L/R Change-of-Direction asymmetry (Bishop 2020)
+ *   - L/R Change-of-Direction asymmetry (MicroPulse's flag)
  *   - GPS-IMA mix (GPS high-speed share vs IMU load share in runs ≥18 s; was ≥15 s before Nov 2026)
  *
  * IMA Free Running bands are BOUT-DURATION bands, NOT speed/cadence bands —
@@ -195,7 +195,7 @@ const STRIDE_TIPS = {
   strideLength:
     "Metres covered per stride. When GPS distance exists it is stride length in sustained running — distance ÷ strides in long continuous runs (18 s or more, from IMA Free Running run lengths), not sprinting. Otherwise it is the session average (total distance ÷ total strides). A clear drop vs his own baseline suggests fatigue or reduced push-off (McBurnie 2022).",
   asymmetry:
-    "Side-to-side imbalance in high-intensity change-of-direction efforts: |Left − Right| ÷ average %. Bishop 2020 thresholds: <9% normal · 9–15% watch · 15–18% concern · >18% high-tier (≈3× ACL / hamstring injury risk).",
+    "Side-to-side imbalance in high-intensity change-of-direction efforts: |Left − Right| ÷ average %. MicroPulse's lines (not from a study): <9% normal · 9–15% watch · 15–18% concern · >18% high-tier. GPS turn-count gaps have not been tested against injury (Helme 2021).",
   decoupling:
     "GPS high-speed share of distance minus the share of IMU load that came in runs of 18 s or more (IMA Free Running run length, not speed), in percentage points. A rise means more of his fast running came in short efforts rather than long continuous runs than usual. Context only — not a fatigue sign on its own.",
 } as const;
@@ -507,7 +507,7 @@ export default function StrideIntelligenceCard({ playerId, date: dateProp, isKin
       </div>
 
       <div className="mt-2 text-[10px] text-slate-500">
-        Bishop 2020 thresholds: 9% watch · 15% concern · 18% high. Personal-z thresholds: −1σ watch · −1.5σ concern · −2σ high.
+        MicroPulse’s lines (not from a study): 9% watch · 15% concern · 18% high. Personal-z thresholds: −1σ watch · −1.5σ concern · −2σ high.
       </div>
     </div>
   );

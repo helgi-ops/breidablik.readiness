@@ -74,7 +74,7 @@ export default function ReadinessSignalsPage() {
           en="catch who is trending toward a niggle before it happens — the labelled early-warning read beside the readiness colour, plus the cited 'why' signals per player"
           is="grípa hverjir stefna í tognun áður en hún gerist — merkta snemmbúna eftirlitið við hlið áreiðanleika-litarins, ásamt tilvitnuðu 'af hverju' merkjunum per leikmann"
         />
-        <p className="mt-1 text-xs text-slate-500">Gabbett 2017 · Majumdar 2022 · McBurnie 2022 · Hader 2019 · Haller 2023</p>
+        <p className="mt-1 text-xs text-slate-500">Gabbett 2016 · Impellizzeri 2020 · Majumdar 2022 · McBurnie 2022 · Hader 2019 · Haller 2023</p>
         <p className="mt-1 text-[13px] text-slate-500">
           {is
             ? "Lýsandi, eigin-viðmið, tilvitnað og með áreiðanleika — engin ein meiðsla-áhættutala. Situr við hlið litarins og breytir honum aldrei."

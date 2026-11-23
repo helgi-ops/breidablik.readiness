@@ -29,7 +29,7 @@
  * "Maximizing the submaximal"), which needs a standardised repeated submaximal effort
  * the club doesn't run yet. Noted so it isn't confused with this load cross-check.
  *
- * Cite: Edwards 1993 (summated-HR-zone TRIMP, adapted) · Buchheit 2024 (HR monitoring).
+ * Cite: Edwards 1993 (summated-HR-zone TRIMP, adapted) · Impellizzeri 2004 (HR load vs sRPE in football).
  */
 
 /** A plain-language string in both UI languages. */
@@ -228,7 +228,7 @@ export const DIVERGENCE_GAP = 25;
 /** HR baselines below this many belt sessions are immature → confidence capped low. */
 export const MIN_MATURE_HR_SESSIONS = 4;
 
-const CITATION = "Edwards 1993 (summated-HR-zone TRIMP, adapted) · Buchheit 2024 (HR monitoring)";
+const CITATION = "Edwards 1993 (summated-HR-zone TRIMP, adapted) · Impellizzeri 2004 (HR load vs sRPE in football)";
 
 const CAVEAT: Bi = {
   en: "HR load is Edwards' summated-heart-rate-zone method (1993) adapted to Catapult's 8 bands (weights = band order, not calibrated %HRmax cuts), so it's read only on the player's own norm — never as an absolute AU comparable to sRPE. %HRmax needs each athlete's HRmax set in OpenField. Only players who wore the belt on skin have HR; the rest are shown as no-data, not zero.",

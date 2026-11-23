@@ -358,7 +358,7 @@ function buildDayReasons(
  *
  * Example outputs:
  *   "First warning sign 8 days before injury — 1 RED day; ACWR 1.48
- *    above Gabbett 2017 sweet-spot upper bound (1.30); dominant
+ *    above the usual-range upper bound (1.30, Gabbett 2016); dominant
  *    wellness signal: muscle_soreness."
  *   "First warning sign 12 days before injury — 3 YELLOW days; 2
  *    internal:external decoupling alerts (Akubat 2014)."
@@ -400,14 +400,14 @@ function buildWarningSignSentence(
   if (typeof acwr === "number" && acwr >= 1.3) {
     components.push(
       lang === "IS"
-        ? `ACWR ${acwr.toFixed(2)} — yfir efri mörkum Gabbett 2017 sweet-spot (1.30)`
-        : `ACWR ${acwr.toFixed(2)} — above Gabbett 2017 sweet-spot upper bound (1.30)`,
+        ? `ACWR ${acwr.toFixed(2)} — yfir efri mörkum venjulegs bils (1.30, Gabbett 2016) — merki um álagsbreytingu; tengsl við meiðsli eru umdeild`
+        : `ACWR ${acwr.toFixed(2)} — above the usual-range upper bound (1.30, Gabbett 2016) — a load-change watch; its link to injury is disputed`,
     );
   } else if (typeof acwr === "number" && acwr > 0 && acwr < 0.8) {
     components.push(
       lang === "IS"
-        ? `ACWR ${acwr.toFixed(2)} — undir Gabbett 2017 sweet-spot (0.80), undirálag`
-        : `ACWR ${acwr.toFixed(2)} — below Gabbett 2017 sweet-spot (0.80), undertraining`,
+        ? `ACWR ${acwr.toFixed(2)} — undir venjulegu bili (0.80, Gabbett 2016), undirálag`
+        : `ACWR ${acwr.toFixed(2)} — below the usual range (0.80, Gabbett 2016), undertraining`,
     );
   }
   if (decAlerts > 0) {

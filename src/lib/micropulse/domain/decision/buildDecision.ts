@@ -207,7 +207,7 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
   else if (indoorCompositeBand === "heavy") loadSummaryParts.push("Indoor composite in HEAVY band — match-style training load yesterday.");
   if (indoorMcburnieFlag === "red") loadSummaryParts.push("Indoor McBurnie ratio in RED — decel:intensity coupling significantly off.");
   else if (indoorMcburnieFlag === "yellow") loadSummaryParts.push("Indoor McBurnie ratio in YELLOW — decel:intensity coupling outside sweet spot.");
-  if (indoorAcwrFlag === "red") loadSummaryParts.push("Indoor ACWR in RED — acute spike or severe undertraining (Gabbett 2017).");
+  if (indoorAcwrFlag === "red") loadSummaryParts.push("Indoor ACWR in RED — acute spike or severe undertraining (Gabbett 2016).");
   else if (indoorAcwrFlag === "yellow") loadSummaryParts.push("Indoor ACWR in YELLOW — outside the familiar 0.8–1.3 range.");
   if (decelOverallFlag === "red") loadSummaryParts.push(params.decelIntelligence?.summary ?? "Decel Intelligence (McBurnie 2022) overall flag RED — multiple deceleration dimensions out of safe range.");
   else if (decelOverallFlag === "yellow") loadSummaryParts.push(params.decelIntelligence?.summary ?? "Decel Intelligence (McBurnie 2022) overall flag YELLOW — at least one deceleration dimension elevated.");

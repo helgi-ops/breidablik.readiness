@@ -688,10 +688,10 @@ function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }
               alongside McBurnie because both are stride-mechanical signals. */}
           <StrideIntelligenceCard playerId={row.player_id} isKinexon={isKinexon} />
 
-          {/* L/R CoD asymmetry by intensity tier (Bishop 2020). Same IMA CoD
+          {/* L/R CoD asymmetry by intensity tier (MicroPulse's view; not tested against injury). Same IMA CoD
               data as the Stride card's L/R tile, but split into Low/Med/High
               so coaches can see whether the asymmetry sits in the
-              injury-relevant high-intensity tier or just at jog-pace.
+              high-intensity tier or just at jog-pace.
               File renamed to CodAsymCard to dodge the macOS↔Linux case
               mismatch that the original CoDAsymmetryCard.tsx kept tripping. */}
           <CodAsymCard playerId={row.player_id} isKinexon={isKinexon} />

@@ -679,7 +679,7 @@ export default function MatchMovementComparison({
           <p className="mt-2 text-[11px] text-slate-400">
             {isGps
               ? (is ? "Normalíserað per mínútu (hæsti hraði er toppgildi). GPS-hreyfing — ekki IMA driver. Reglur reikna — ekki AI." : "Normalised per minute (top speed is a peak). GPS movement — not the IMA driver. Rules compute — not AI.")
-              : (is ? "Normalíserað per mínútu. Reglur reikna — ekki AI. Buchheit 2014 (persónuleg norm), di Prampero 2015." : "Normalised per minute. Rules compute — not AI. Buchheit 2014 (personal norms), di Prampero 2015.")}
+              : (is ? "Normalíserað per mínútu. Reglur reikna — ekki AI. Gregson 2010 (leikir sveiflast mikið, svo hver leikur er borinn saman við hans venju), di Prampero 2015." : "Normalised per minute. Rules compute — not AI. Gregson 2010 (matches vary a lot, so each is read against his own usual), di Prampero 2015.")}
           </p>
         </ShowDetails>
       </div>

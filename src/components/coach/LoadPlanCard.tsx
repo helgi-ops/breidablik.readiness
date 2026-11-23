@@ -286,7 +286,7 @@ export default function LoadPlanCard({ date, restDay = false }: { date?: string;
               </span>
             )}
             <span className="text-slate-300">·</span>
-            <span title="ACWR = acute:chronic workload ratio (Gabbett 2017)">Recent vs usual load: <strong className={acwrColor}>{plan.teamAcwr != null ? plan.teamAcwr.toFixed(2) : "—"}</strong></span>
+            <span title="ACWR = acute:chronic workload ratio (Gabbett 2016) — a load-change watch; its link to injury is disputed (Impellizzeri 2020)">Recent vs usual load: <strong className={acwrColor}>{plan.teamAcwr != null ? plan.teamAcwr.toFixed(2) : "—"}</strong></span>
             {plan.readinessAdjustPct !== 0 && (
               <>
                 <span className="text-slate-300">·</span>
@@ -392,7 +392,7 @@ export default function LoadPlanCard({ date, restDay = false }: { date?: string;
                     {shownKpis.map((k) => (
                       <th key={k} className="px-2 py-1 text-right" title={KPI_TOOLTIP[k]}>{KPI_COL[k] ?? KPI_LABEL[k]}</th>
                     ))}
-                    <th className="px-2 py-1 text-right" title="ACWR = acute:chronic workload ratio (Gabbett 2017)">ACWR</th>
+                    <th className="px-2 py-1 text-right" title="ACWR = acute:chronic workload ratio (Gabbett 2016) — a load-change watch; its link to injury is disputed (Impellizzeri 2020)">ACWR</th>
                     <th className="px-2 py-1 text-left">Flag</th>
                   </tr>
                 </thead>

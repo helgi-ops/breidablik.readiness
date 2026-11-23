@@ -62,8 +62,8 @@ export function slotForCategory(cat: ExerciseCategory): PaletteSlot | null {
 }
 
 /** L/R asymmetry (%) at or above which the engine prefers a UNILATERAL lower-body
- *  lift (to load the weaker side) over a bilateral one. Bishop 2020 flags ~10-15%
- *  inter-limb asymmetry as performance/injury-relevant. */
+ *  lift (to load the weaker side) over a bilateral one. The 10% line is MicroPulse's rule (10–15% is a common
+ *  flag line, Parkinson 2021; a clear link to performance or injury is missing, Bishop 2023). */
 export const PALETTE_UNILATERAL_ASYMMETRY_PCT = 10;
 
 /** Keep only valid ids that belong to the slot's categories (defensive on save + read). */

@@ -366,7 +366,7 @@ Rules:
 
 Session RPE (Borg CR-10, Foster sRPE):
 - 1-3 easy, 4-6 moderate, 7-8 hard, 9-10 max effort.
-- If trend_rpe = "up" and readiness trend = "down" → flag overload risk (Gabbett 2017 ACWR principle).
+- If trend_rpe = "up" and readiness trend = "down" → flag it as rising effort with falling readiness, worth a check (a coaching rule, not an injury predictor).
 - avg_session_load = avg_rpe × avg_duration_min, arbitrary units. Use when commenting on weekly load.
 
 Strength progression:

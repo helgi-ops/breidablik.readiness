@@ -24,7 +24,7 @@ describe("classifyValdMetric", () => {
     expect(classifyValdMetric("imtpRelForceNkg", 24)!.improve!.en).toMatch(/strength/i);
   });
 
-  it("grades ankle plantar-flexion symmetry (lower is better, Bishop bands)", () => {
+  it("grades ankle plantar-flexion symmetry (lower is better, common flag-line bands)", () => {
     expect(classifyValdMetric("anklePlantarAsymmetry", 6)!.band).toBe("good");     // <10%
     expect(classifyValdMetric("anklePlantarAsymmetry", 12)!.band).toBe("average"); // 10–15%
     expect(classifyValdMetric("anklePlantarAsymmetry", 20)!.band).toBe("below");   // >15%
@@ -46,7 +46,7 @@ describe("classifyValdMetric", () => {
     expect(classifyValdMetric("lsi", 72)!.citation).toMatch(/Grindem|Kyritsis/);
   });
 
-  it("grades asymmetry lower-is-better (Bishop 2020)", () => {
+  it("grades asymmetry lower-is-better (common 10–15% flag line, Parkinson 2021)", () => {
     expect(classifyValdMetric("asymmetry", 6)!.band).toBe("good");
     expect(classifyValdMetric("asymmetry", 12)!.band).toBe("average");
     expect(classifyValdMetric("asymmetry", 18)!.band).toBe("below");

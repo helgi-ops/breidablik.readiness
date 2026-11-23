@@ -30,7 +30,7 @@ export type CatapultTierFeatures = {
   decelIntelligence: boolean;
   /** Indoor Load page (FMP IMA-band driven) */
   indoorLoad: boolean;
-  /** Quadrant View (Gabbett 2017 — needs both axes from same source) */
+  /** Quadrant View (Vanrenterghem 2017 — needs both axes from same source) */
   quadrantView: boolean;
   /** Decel Narrative AI feature (writes prose around McBurnie payload) */
   decelNarrative: boolean;

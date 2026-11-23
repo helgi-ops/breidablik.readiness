@@ -385,8 +385,8 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     ima_accel: row.externalLoad.imaAccel ?? null,
     ima_decel: row.externalLoad.imaDecel ?? null,
     ima_cod: row.externalLoad.imaCod ?? null,
-    // L/R CoD splits per intensity tier (Bishop 2020 — high-intensity asymmetry
-    // is the injury-relevant signal; low-tier is often a positional habit).
+    // L/R CoD splits per intensity tier (MicroPulse flags the high-intensity tier;
+    // low-tier is often a positional habit).
     // When the per-intensity values are unavailable (older payloads, certain
     // Catapult firmwares) we fall back to writing the aggregate into _low so
     // overall asymmetry computation still works downstream.

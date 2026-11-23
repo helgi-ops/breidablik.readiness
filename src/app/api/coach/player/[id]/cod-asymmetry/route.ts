@@ -2,8 +2,8 @@
  * /api/coach/player/[id]/cod-asymmetry
  *
  * Returns L/R Change-of-Direction breakdown by intensity tier (Low / Medium /
- * High) for a single player, summed over the last 14 days. Bishop 2020:
- * high-intensity asymmetry > 15% is the injury-relevant signal — overall %
+ * High) for a single player, summed over the last 14 days. MicroPulse reads
+ * high-intensity asymmetry > 15% as its flag (not tested against injury) — overall %
  * can hide a serious right-side preference at high effort.
  *
  * Pulls from `player_external_load_daily` (source='catapult'):
@@ -162,13 +162,13 @@ export async function GET(
       high: tierStats(totals.lHigh, totals.rHigh),
     },
     // Footedness context (Havanecz 2026) — dominant foot + favoured HIGH-intensity side + an interpretive
-    // note. Interpretation only; Bishop magnitude stays the flag.
+    // note. Interpretation only; the magnitude stays the flag.
     dominantFoot,
     context: {
       favoredSideHigh: favoredSide(totals.lHigh, totals.rHigh),
       note: codFootednessNote(dominantFoot, totals.lHigh, totals.rHigh),
     },
-    /** Bishop 2020 thresholds — exposed so the UI can label its scale. */
+    /** MicroPulse's CoD lines (not from a study) — exposed so the UI can label its scale. */
     thresholds: { watchPct: WATCH_PCT, concernPct: CONCERN_PCT, highPct: HIGH_PCT },
   });
 }

@@ -43,7 +43,7 @@ describe("the read and the hold", () => {
     expect(review.triggerEN).toContain("14% (VALD) (weaker: left)");
     expect(review.triggerIS).toContain("vinstri");
     expect(review.actionIS).toContain("þjálfari staðfestir");
-    expect(review.evidence).toContain("Bishop 2020");
+    expect(review.evidence).toContain("Bishop 2023");
     expect(asymmetryReviewAudit(snap("MD-4", { valdAsymmetryPct: 14, asymmetryReview: { decision: "keep", decidedAt: "2026-11-20" } }))!.ruleId).toBe(ASYMMETRY_KEPT);
     expect(asymmetryReviewAudit(snap("MD-4", { valdAsymmetryPct: 9.9 }))).toBeNull();
     expect(asymmetryReviewAudit(snap("MD-4", { valdAsymmetryPct: 14, asymmetryReview: swap() }))).toBeNull();

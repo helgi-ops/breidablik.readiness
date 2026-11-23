@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Coach view — HSR Intelligence (Malone 2017 + Buchheit 2014).
+ * Coach view — HSR Intelligence (Malone 2017 + Buchheit 2023).
  *
  * The McBurnie-equivalent page for clubs on Lite Catapult plans (no B2-3
  * efforts exposed). Built on three independently-validated sport-science
@@ -11,8 +11,8 @@
  *      per week predict soft-tissue (esp. hamstring) injuries. ACWR
  *      thresholds: >1.5 high risk, <0.8 high risk (under-training paradox).
  *
- *   2. Buchheit & Mendez-Villanueva 2014 — Players who reach ≥95% of their
- *      personal maximum velocity regularly have FEWER hamstring strains.
+ *   2. Buchheit 2023 (elite football) + Malone 2017 (Gaelic football) — reaching >95% of
+ *      personal max speed in training went with fewer (hamstring) injuries (observational).
  *      Players who never approach MaxV are at higher risk of acute injury
  *      when they're forced to (e.g. competitive match).
  *
@@ -56,7 +56,7 @@ type PlayerHsrSnapshot = {
   sprint_acwr: number | null;
   sprint_flag: Flag;
 
-  // Max-V exposure (Buchheit & Mendez-Villanueva 2014)
+  // Max-V exposure (Malone 2017; Buchheit 2023)
   personal_max_v: number | null;      // all-time max in player's history
   recent_max_v: number | null;        // best max_vel in last 28 days
   pct_max_v: number | null;           // recent / personal × 100
@@ -73,7 +73,7 @@ type PlayerHsrSnapshot = {
 
 const HSR_I18N = {
   pageTitle:    { EN: "HSR Intelligence",                IS: "HSR Intelligence" },
-  citation:     { EN: "Malone 2017 · Buchheit 2014",     IS: "Malone 2017 · Buchheit 2014" },
+  citation:     { EN: "Malone 2017 · Buchheit 2023",     IS: "Malone 2017 · Buchheit 2023" },
   subtitle:     {
     EN: "Per-player hamstring/soft-tissue injury monitoring built on the metrics every Catapult plan exposes. The Lite-tier equivalent of Decel Intelligence — same evidence quality (BJSM-published), different inputs.",
     IS: "Eftir-leikmanns greining á hamstring og soft-tissue meiðsla-áhættu byggð á gögnum sem öll Catapult plön exposa. Lite-jafngildi Decel Intelligence — sama vísindagrunnur (BJSM), önnur input.",
@@ -98,8 +98,8 @@ const HSR_I18N = {
 
   helpHeader: { EN: "How to read this", IS: "Hvernig á að lesa þetta" },
   help: {
-    EN: "HSR ACWR >1.5 → soft-tissue injury risk +200% (Malone 2017). HSR ACWR <0.8 with high chronic load → de-training paradox, +130% risk. %MaxV <90% over 28d → max-velocity under-exposure, raises hamstring risk on next acute sprint demand (Buchheit 2014). The combined verdict picks the worst of three flags.",
-    IS: "HSR ACWR >1.5 → soft-tissue meiðsla-áhætta +200% (Malone 2017). HSR ACWR <0.8 með háan chronic load → de-training paradox, +130% áhætta. %MaxV <90% yfir 28d → max-velocity under-exposure, hækkar hamstring-áhættu í næstu acute sprint kröfu (Buchheit 2014). Combined verdict tekur versta af þremur fánum.",
+    EN: "HSR ACWR >1.5 → soft-tissue injury risk +200% (Malone 2017). HSR ACWR <0.8 with high chronic load → de-training paradox, +130% risk. %MaxV <90% over 28d → max-velocity under-exposure; too few near-top-speed runs went with more injuries in observational studies (Malone 2017; Buchheit 2023). The combined verdict picks the worst of three flags.",
+    IS: "HSR ACWR >1.5 → soft-tissue meiðsla-áhætta +200% (Malone 2017). HSR ACWR <0.8 með háan chronic load → de-training paradox, +130% áhætta. %MaxV <90% yfir 28d → of fáir sprettir nærri hámarkshraða; í athugunarrannsóknum fylgdu því fleiri meiðsli (Malone 2017; Buchheit 2023). Combined verdict tekur versta af þremur fánum.",
   },
 
   flagGreen:        { EN: "Healthy",      IS: "Heilbrigt" },
@@ -128,7 +128,7 @@ function dateMinusDays(refIso: string, n: number): string {
 }
 
 // ── Flag thresholds ────────────────────────────────────────────────────
-// Direct from Malone 2017 (HSR/Sprint ACWR) + Buchheit 2014 (MaxV).
+// Cut-offs are MicroPulse's; evidence: Malone 2017 (HSR/Sprint ACWR) + Buchheit 2023 (MaxV exposure).
 
 function hsrAcwrFlag(acwr: number | null, chronic_avg: number): Flag {
   if (acwr == null) return "insufficient";
@@ -152,7 +152,7 @@ function sprintAcwrFlag(acwr: number | null): Flag {
 
 function maxVFlag(pct: number | null, sessionCount: number, daysWithData: number): Flag {
   if (pct == null || daysWithData < 5) return "insufficient";
-  // Buchheit: ≥1 session per week at ≥95% MaxV is the protective dose.
+  // Malone 2017 / Buchheit 2023: ≥95% MaxV exposures in training went with fewer injuries; ≥1 a week is MicroPulse's dose.
   // 28d window → ≥4 such sessions = protected; 0 = under-exposed.
   if (sessionCount === 0 && pct < 90) return "red";   // never close to MaxV
   if (sessionCount < 2 && pct < 92) return "yellow";  // rarely close to MaxV
@@ -234,8 +234,8 @@ function driverTip(r: PlayerHsrSnapshot): { EN: string; IS: string } {
   if (r.pct_max_v != null) parts.push(`%MaxV ${r.pct_max_v.toFixed(0)}% · ${r.high_max_v_sessions_28d} sessions ≥95%`);
   const metrics = parts.join(" · ");
   return {
-    EN: `${metrics} — acute:chronic workload ratio + max-velocity exposure (Malone 2017, Buchheit 2014).`,
-    IS: `${metrics} — acute:chronic workload ratio + max-velocity exposure (Malone 2017, Buchheit 2014).`,
+    EN: `${metrics} — acute:chronic workload ratio + max-velocity exposure (Malone 2017, Buchheit 2023).`,
+    IS: `${metrics} — acute:chronic workload ratio + max-velocity exposure (Malone 2017, Buchheit 2023).`,
   };
 }
 

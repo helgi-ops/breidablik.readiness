@@ -32,7 +32,7 @@
  *   - Descriptive context. NEVER feeds the readiness colour, load target, or daily decision.
  *
  * Cite: di Prampero 2015 (metabolic power) · McBurnie 2022 (deceleration cost) ·
- *       Buchheit 2014 (IMA / inertial movement analysis).
+ *       Green 2023 (IMA / inertial movement analysis).
  */
 
 /** A plain-language string in both UI languages. */
@@ -100,7 +100,7 @@ export const MECH_DEMAND_BAND = 25;
 export const MIN_MATURE_MECH_SESSIONS = 4;
 
 const CITATION =
-  "di Prampero 2015 (metabolic power) · McBurnie 2022 (deceleration cost) · Buchheit 2014 (IMA)";
+  "di Prampero 2015 (metabolic power) · McBurnie 2022 (deceleration cost) · Green 2023 (IMA)";
 
 const CAVEAT: Bi = {
   en: "Mechanical-load intensity is the density of high-cost actions (high-intensity IMA efforts + hard accelerations + decelerations per minute) — a deliberate proxy that mixes count families, so it's read only on the player's own norm, never as an absolute or a cross-athlete ranking. Peak metabolic power (W/kg) needs the Catapult metabolic export; di Prampero's model is contested for absolute accounting in football, so it too is a personal-norm read. Descriptive load context — it never changes the readiness verdict or the daily plan.",

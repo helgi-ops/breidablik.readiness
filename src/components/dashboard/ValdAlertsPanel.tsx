@@ -989,7 +989,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
               <DeviceStrengthGroups keyPrefix="ff" heading="ForceFrame — Nári / aðfærsla" rows={forceframeRows} showMovement groupByTest />
             )}
             <p className="text-[10px] leading-snug text-slate-400">
-              Ósamhverfa reiknuð úr vinstri/hægri hámarkskrafti (Bishop 2020: &lt;10% grænt, 10–15% gult, &gt;15% rautt).
+              Ósamhverfa reiknuð úr vinstri/hægri hámarkskrafti (&lt;10% grænt, 10–15% gult, &gt;15% rautt — algeng flagglína, ekki sannreynd mörk; Parkinson 2021).
               Þessi próf eru sjaldgæfari en CMJ — „latest per player&quot; sýnir nýjasta prófið hjá hverjum.
             </p>
           </div>

@@ -4,7 +4,7 @@
  *   - focus:  a plain-language one-liner of the day's physical focus (phase-aware: in-season pitch stimulus
  *             vs off-/pre-season gym-led development).
  *   - load:   a colour-codable band (low/moderate/high) + estimated duration (min) + sRPE (AU) + % of match,
- *             from `planSessionLoad` (Buchheit 2024). A development fallback covers no-MD (dev) weeks.
+ *             from `planSessionLoad` (MicroPulse's MD-day shares; load falls toward the match, Gualtieri 2024). A development fallback covers no-MD (dev) weeks.
  *   - pitch:  the first ON-PITCH implementation example (small-sided-game area + bout length, or running),
  *             carrying its citation (Hill-Haas 2011; Lacome 2018; López-Fernández 2019). The full list per
  *             day, including the activation / top-up / recovery days, is `pitchIdeasFor` (the PDFs print it).
@@ -84,7 +84,7 @@ const PITCH_DEV: Record<StimulusType, PitchForm[]> = {
 const PITCH_SPECIAL: Record<string, PitchForm[]> = {
   ACTIVATION: [
     { form: { en: "Rondo 5v2 + reaction sprints over 5–10 m", is: "Rondó 5v2 + viðbragðssprettir yfir 5–10 m" }, area: { en: "small, sharp pitch (~30–110 m²/player)", is: "lítið, beitt svæði (~30–110 m²/leikm.)" }, bout: { en: "short rounds · stop while still fresh", is: "stuttar umferðir · hætta meðan leikmenn eru ferskir" }, cite: "Hill-Haas 2011" },
-    { form: { en: "Set pieces + team shape, then a short game at match tempo", is: "Föst leikatriði + liðsuppstilling, svo stuttur leikur á leikhraða" }, area: { en: "half pitch", is: "hálfur völlur" }, bout: { en: "keep it short · the lightest day of the week", is: "hafa það stutt · léttasti dagur vikunnar" }, cite: "Buchheit 2024" },
+    { form: { en: "Set pieces + team shape, then a short game at match tempo", is: "Föst leikatriði + liðsuppstilling, svo stuttur leikur á leikhraða" }, area: { en: "half pitch", is: "hálfur völlur" }, bout: { en: "keep it short · the lightest day before the match", is: "hafa það stutt · léttasti dagurinn fyrir leik" }, cite: "Martín-García 2018" },
   ],
   TOPUP: [
     { form: { en: "Low-minute players: SSG 4v4–5v5 with keepers", is: "Þeir sem spiluðu lítið: fámennur leikur 4v4–5v5 með markvörðum" }, area: { en: "match-like pitch (~100–170 m²/player)", is: "leiklíkt svæði (~100–170 m²/leikm.)" }, bout: { en: "3–5 min bouts · 90–120 s rest", is: "3–5 mín lotur · 90–120 s hvíld" }, cite: "Hill-Haas 2011; Lacome 2018" },

@@ -1057,7 +1057,7 @@ export function buildAttentionList(
       }
     }
 
-    // ── Match-day awareness (Gabbett 2017 + di Prampero 2015 — load spikes
+    // ── Match-day awareness (MicroPulse's rule, not from a study — load spikes
     // following matches are expected and should not fire alert; they're an
     // echo of match exposure, not an unplanned overreach). When detected, we
     // (a) downgrade alert→monitor and (b) annotate the reason with "post-match"

@@ -57,9 +57,9 @@ export const ATHLETE_LEVERS: Record<QualityId, Lever> = {
     cite: "Buchheit & Laursen 2013",
   },
   mechanical_power: {
-    en: "Build tolerance for high-cost mechanical actions — plyometrics, eccentric/decel work and multidirectional drills raise the density of cuts, accelerations and decelerations he can produce and absorb.",
-    is: "Byggðu þol fyrir hákostnaðar-vélrænar aðgerðir — stökkæfingar, eccentrísk/hemlunar-vinna og fjölstefnu-æfingar hækka þéttleika skurða, hröðunar og hemlunar sem hann getur framleitt og tekið á móti.",
-    cite: "McBurnie 2022 · Buchheit 2014",
+    en: "Build tolerance for high-cost mechanical actions — plyometrics, eccentric/decel work and multidirectional drills build the braking and cutting strength he needs to produce and absorb cuts, accelerations and decelerations.",
+    is: "Byggðu þol fyrir hákostnaðar-vélrænar aðgerðir — stökkæfingar, eccentrísk/hemlunar-vinna og fjölstefnu-æfingar byggja upp hemlunar- og skurðarstyrkinn sem hann þarf til að framleiða og taka á móti skurðum, hröðun og hemlun.",
+    cite: "McBurnie 2022 · Harper 2022",
   },
   peak_demands: {
     en: "Expose him to game-simulation on his own worst-case demands — repeated high-intensity blocks at the intensity of the match's most demanding passages — so he is prepared for them.",

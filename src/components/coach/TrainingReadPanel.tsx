@@ -143,8 +143,8 @@ export default function TrainingReadPanel({ lang = "EN" }: { lang?: "IS" | "EN" 
           </p>
           <p className="text-[10.5px] text-slate-400">
             {IS
-              ? "Þróunar-merki, ekki readiness-dómurinn. Buchheit 2024 · Morin 2016 · Harper 2019 · McBurnie 2022."
-              : "A development signal, not the readiness verdict. Buchheit 2024 · Morin 2016 · Harper 2019 · McBurnie 2022."}
+              ? "Þróunar-merki, ekki readiness-dómurinn. Taylor 2015 · Morin 2016 · Harper 2019 · McBurnie 2022."
+              : "A development signal, not the readiness verdict. Taylor 2015 · Morin 2016 · Harper 2019 · McBurnie 2022."}
           </p>
         </div>
       </details>

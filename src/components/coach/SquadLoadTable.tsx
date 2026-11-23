@@ -35,7 +35,7 @@ type Metric = {
   digits: number;
 };
 
-// Football metric set for FULL Catapult plans (Gabbett 2017 — includes
+// Football metric set for FULL Catapult plans (MicroPulse's choice, not from a paper — includes
 // B2-3 explosive-effort columns + Tot Accels/Decels for high-fidelity
 // load discrimination).
 const FOOTBALL_METRICS_FULL: Metric[] = [

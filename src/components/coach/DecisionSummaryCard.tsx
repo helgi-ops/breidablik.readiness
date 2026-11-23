@@ -149,7 +149,7 @@ export type DecisionSummaryRow = {
    *  trend continuity. */
   _team_day_type?: string | null;
   /** High-intensity L/R Change-of-Direction asymmetry % over the last
-   *  14 days (Bishop 2020). Surfaced as a chronic-risk chip in the
+   *  14 days (MicroPulse's flag). Surfaced as a chronic-risk chip in the
    *  Decision Summary modal when ≥ 15% — informational, NOT a verdict
    *  modifier. Coaches use it to decide whether to skip max-effort
    *  cutting drills today; the daily verdict pipeline stays clean. */
@@ -254,7 +254,7 @@ export type DecisionSummaryRow = {
   _indoor_mcburnie_flag?: "green" | "yellow" | "red" | null;
   /** Number of indoor sessions in last 7 days (for context). */
   _indoor_sessions_7d?: number | null;
-  /** Acute:Chronic Workload Ratio (Gabbett 2017). 7d total / 28d weekly avg. Sweet spot 0.8-1.3. */
+  /** Acute:Chronic Workload Ratio (Gabbett 2016). 7d total / 28d weekly avg. Familiar range 0.8-1.3; a load-change watch, not an injury predictor (Impellizzeri 2020). */
   _indoor_acwr_value?: number | null;
   /** ACWR flag: green/yellow/red. */
   _indoor_acwr_flag?: "green" | "yellow" | "red" | null;
@@ -2555,7 +2555,7 @@ const ReadinessLoadDetail: FC<{
                         ? "border-amber-300 bg-amber-50 text-amber-700"
                         : "border-emerald-200 bg-emerald-50 text-emerald-700"
                     }`}
-                    title="Acute:Chronic Workload Ratio (Gabbett 2017). Sweet spot 0.8-1.3; >1.5 = sharp load spike. A workload-management signal, not an injury predictor (Impellizzeri 2020)."
+                    title="Acute:Chronic Workload Ratio (Gabbett 2016). Familiar range 0.8-1.3; >1.5 = sharp load spike. A workload-management signal, not an injury predictor (Impellizzeri 2020)."
                   >
                     <span className="text-[9px] font-semibold uppercase opacity-70">{t("acwrLabel", lang)}</span>
                     <span className="text-lg font-bold tabular-nums">{row._indoor_acwr_value.toFixed(2)}</span>
@@ -2825,7 +2825,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           );
         })()}
 
-        {/* Chronic-risk chip — Bishop 2020 high-tier L/R CoD asymmetry over
+        {/* Chronic-risk chip — MicroPulse's high-tier L/R CoD asymmetry over
             14 days. Informational only (does NOT modify the verdict): coach
             decides whether to swap max-effort cutting drills for unilateral
             work today. We only render when:
@@ -2861,7 +2861,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
                   ? "border-rose-200 bg-rose-50 text-rose-900"
                   : "border-amber-200 bg-amber-50 text-amber-900"
               }`}
-              title="Interlimb asymmetry > 15% is a commonly-flagged imbalance that is associated with injury risk (a risk factor, not a validated predictor — the Bishop/Fort-Vanmeerhaeghe evidence is mainly single-leg-jump asymmetry). 14-day rolling window. Chronic baseline signal — does not change today's verdict, but the coach may consider unilateral work."
+              title="Interlimb asymmetry > 15% is MicroPulse's flag line, not a tested injury predictor (asymmetry–injury evidence is weak and comes from strength and jump tests, not GPS turn counts — Helme 2021). 14-day rolling window. Chronic baseline signal — does not change today's verdict, but the coach may consider unilateral work."
             >
               <span className="mt-0.5 shrink-0">⚠️</span>
               <span>
@@ -2872,7 +2872,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           );
         })()}
 
-        {/* Sprint Speed Drop chip — Edouard 2018 / Buchheit 2014.
+        {/* Sprint Speed Drop chip — Edouard 2018 / Haugen & Buchheit 2016.
             A drop in today's max sprint velocity vs the player's personal
             top-3 mean over 28d signals accumulated fatigue (reduced hamstring/
             horizontal-force capacity) — a fatigue flag, not an injury
@@ -3191,7 +3191,7 @@ const DecisionSummaryCard: FC<{
   // decision. Matches the Daily Briefing "ATTENTION N all clear" count
   // so the two surfaces never contradict each other.
   //
-  // Chronic-risk chips (Bishop 2020 CoD asymmetry, Edouard 2019 sprint
+  // Chronic-risk chips (MicroPulse's CoD asymmetry, Edouard 2019 sprint
   // speed drop, etc.) are INFORMATIONAL — they remain visible on the
   // player cards themselves but do NOT count toward "needs attention"
   // because they don't change the verdict for today's session. A coach

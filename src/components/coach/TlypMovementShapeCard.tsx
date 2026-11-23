@@ -266,8 +266,8 @@ export default function TlypMovementShapeCard({ players, playerId }: { players: 
 
           <p className="text-[11px] text-slate-400">
             {is
-              ? "Fjölstefnu-lögun úr IMA (Buchheit 2014) — leikur (tímabil) vs æfing. Reglur reikna, ekki AI. Lýsandi — snertir aldrei readiness."
-              : "Multidirectional shape from IMA (Buchheit 2014) — games (season) vs training. Rules compute, not AI. Descriptive — never touches readiness."}
+              ? "Fjölstefnu-lögun úr IMA (Green 2023) — leikur (tímabil) vs æfing. Reglur reikna, ekki AI. Lýsandi — snertir aldrei readiness."
+              : "Multidirectional shape from IMA (Green 2023) — games (season) vs training. Rules compute, not AI. Descriptive — never touches readiness."}
           </p>
         </div>
       ) : null}

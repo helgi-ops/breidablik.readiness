@@ -86,7 +86,7 @@ export function asymmetryReviewAudit(snap: PlayerStrengthSnapshot): AppliedAdapt
   const side = a.weaker ? { en: ` (weaker: ${a.weaker === "L" ? "left" : "right"})`, is: ` (veikari: ${a.weaker === "L" ? "vinstri" : "hægri"})` } : { en: "", is: "" };
   const triggerEN = `Left/right gap ${r0(a.pct)}% (${a.source})${side.en}, at or over ${ASYMMETRY_REVIEW_PCT}%`;
   const triggerIS = `Munur vinstri/hægri ${r0(a.pct)}% (${a.source})${side.is}, ${ASYMMETRY_REVIEW_PCT}% eða meira`;
-  const evidence = "Bishop 2020: an inter-limb gap of about 10–15% can matter for performance and injury, and one-leg work targets the weaker side. That the coach or physio looks first, and the decision holds 28 days, is MicroPulse's rule (brief 2026-11-23).";
+  const evidence = "Bishop 2023: a clear link between a side-to-side gap and performance or injury is still missing; some studies show training can shrink the gap. 10–15% is a common flag line (Parkinson 2021). That the coach or physio looks first, and the decision holds 28 days, is MicroPulse's rule (brief 2026-11-23).";
   if (r?.decision === "keep") {
     const d = r.decidedAt.slice(0, 10);
     const en = reasonLabel("asym_keep", r.reason, false);

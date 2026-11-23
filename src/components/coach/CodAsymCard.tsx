@@ -5,8 +5,8 @@
  *
  * Lives in the Decel Intelligence expanded row. Visualises the same IMA CoD
  * data that powers the L/R Asymmetry tile on the Stride Intelligence card,
- * but split by intensity (Low / Medium / High) — Bishop 2020 shows that
- * high-intensity asymmetry is the injury-relevant signal even when the
+ * but split by intensity (Low / Medium / High) — MicroPulse reads
+ * high-intensity asymmetry as its flag (not tested against injury) even when the
  * overall % looks benign.
  *
  * Pulls from /api/coach/player/[id]/cod-asymmetry. Fully read-only;
@@ -123,7 +123,7 @@ export default function CoDAsymmetryCard({
   className?: string;
   /** Kinexon HAS left/right CoD columns, but (1) this club's export leaves them 0
    *  (it records Changes of Orientation instead) and (2) it gives only a total L/R
-   *  count, not the per-intensity-tier split this Bishop read needs — so the empty
+   *  count, not the per-intensity-tier split this read needs — so the empty
    *  state says exactly that, not "no CoD recorded". */
   isKinexon?: boolean;
 }) {
@@ -203,7 +203,7 @@ export default function CoDAsymmetryCard({
             L/R CoD asymmetry · 14 days
           </div>
           <div className="mt-0.5 text-[10.5px] text-slate-500">
-            Bishop 2020 thresholds: {data.thresholds?.watchPct}% watch · {data.thresholds?.concernPct}% concern · {data.thresholds?.highPct}% high. {data.sessionsObserved ?? 0} sessions observed.
+            MicroPulse’s lines (not from a study): {data.thresholds?.watchPct}% watch · {data.thresholds?.concernPct}% concern · {data.thresholds?.highPct}% high. {data.sessionsObserved ?? 0} sessions observed.
           </div>
           {/* Dominant foot — footedness context for the asymmetry (Havanecz 2026). Coach-set; null = not set. */}
           <div className="mt-1.5 flex items-center gap-1.5 text-[10.5px] text-slate-500">
@@ -233,8 +233,8 @@ export default function CoDAsymmetryCard({
         </span>
       </div>
 
-      {/* Per-intensity breakdown. High tier visually emphasised — Bishop 2020:
-          high-intensity asymmetry is the injury-relevant signal; low-intensity
+      {/* Per-intensity breakdown. High tier visually emphasised — MicroPulse's choice:
+          hard cuts are the tier it flags (not tested against injury); low-intensity
           asymmetry is often a positional artefact and less actionable. */}
       <div className="space-y-2">
         <TierRow label="High intensity" stats={tiers.high} emphasis />
@@ -249,9 +249,9 @@ export default function CoDAsymmetryCard({
       )}
 
       <p className="mt-2.5 text-[10.5px] leading-snug text-slate-500">
-        High-intensity L/R asymmetry &gt; 15% is a commonly-flagged imbalance associated
-        with injury risk — a risk factor, not a validated predictor (the Bishop /
-        Fort-Vanmeerhaeghe evidence is mainly single-leg-jump asymmetry). Low-tier
+        High-intensity L/R asymmetry &gt; 15% is MicroPulse’s flag line — not a tested
+        injury predictor (asymmetry–injury evidence is weak, Helme 2021, and comes
+        from strength and jump tests, not GPS turn counts). Low-tier
         imbalance is often a positional habit and less actionable.
       </p>
     </div>
