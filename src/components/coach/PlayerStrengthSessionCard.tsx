@@ -15,6 +15,7 @@ import { LiftRxDetails } from "@/components/trainer/LiftRxTable";
 import type { BlockGoalKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import type { SendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
 import { canonicalLift } from "@/lib/client/oneRepMax";
+import CoachReasonPicker, { EMPTY_REASON, isReasonReady, reasonBody, type ReasonValue } from "@/components/coach/CoachReasonPicker";
 
 type LoggedSet = { session_date: string; exercise_name: string; canonical_lift: string | null; rpe: number | null; is_warmup: boolean };
 // Latest-session logged RPEs for a lift → coach-approved load suggestion vs the prescribed RPE.
@@ -88,6 +89,18 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [applyingIdx, setApplyingIdx] = useState<number | null>(null);
+  // The coach's one-tap reason for a swap / for taking it back (contradiction 18, 2026-11-23).
+  const [swapReason, setSwapReason] = useState<ReasonValue>(EMPTY_REASON);
+  const [clearReason, setClearReason] = useState<ReasonValue>(EMPTY_REASON);
+  const [clearMode, setClearMode] = useState(false);
+  const [swapError, setSwapError] = useState<string | null>(null);
+  const closeSwap = () => {
+    setSwapTarget(null);
+    setSwapReason(EMPTY_REASON);
+    setClearReason(EMPTY_REASON);
+    setClearMode(false);
+    setSwapError(null);
+  };
 
   // Trigger a refetch of the session (used after swap apply / clear)
   const reload = () => setReloadKey((k) => k + 1);
@@ -570,7 +583,8 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                                 position: s.position,
                                 exerciseId: s.suggestedExerciseId,
                                 originalExerciseId: s.currentExerciseId,
-                                notes: `AI: ${s.reason.slice(0, 200)}`,
+                                reasonCode: "ai",
+                                reasonNote: s.reason.slice(0, 200),
                               }),
                             });
                             reload();
@@ -780,7 +794,7 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
             role="dialog"
             aria-modal="true"
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-            onClick={() => setSwapTarget(null)}
+            onClick={() => closeSwap()}
           >
             <div
               className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-lg bg-white p-4 shadow-xl"
@@ -792,7 +806,7 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                 </h3>
                 <button
                   type="button"
-                  onClick={() => setSwapTarget(null)}
+                  onClick={() => closeSwap()}
                   className="text-slate-500 hover:text-slate-900"
                   aria-label={t("Close", "Loka")}
                 >
@@ -815,19 +829,29 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                       `Veldu staðgengil úr ${swapTarget.category.replace(/_/g, " ").toLowerCase()} safninu. Vistað bara fyrir daginn í dag.`,
                     )}
               </p>
+              <div className="mb-3 rounded border border-slate-200 bg-slate-50 p-2">
+                <CoachReasonPicker
+                  kind="swap"
+                  lang={lang === "IS" ? "IS" : "EN"}
+                  value={swapReason}
+                  onChange={setSwapReason}
+                  label={t("Why the swap? (one tap, then pick the exercise)", "Af hverju skipt? (einn smellur, svo velja æfingu)")}
+                />
+              </div>
+              {swapError && <p className="mb-2 text-[11px] text-red-700">{swapError}</p>}
               <ul className="space-y-1">
                 {candidates.map((c) => (
                   <li key={c.id}>
                     <button
                       type="button"
-                      disabled={c.id === swapTarget.originalId}
+                      disabled={c.id === swapTarget.originalId || !isReasonReady(swapReason)}
                       onClick={async () => {
                         try {
                           const sb = getSupabaseClient();
                           const { data: sess } = await sb.auth.getSession();
                           const token = sess?.session?.access_token;
                           if (!token) return;
-                          await fetch(`/api/coach/player/${playerId}/strength-override`, {
+                          const res = await fetch(`/api/coach/player/${playerId}/strength-override`, {
                             method: "POST",
                             headers: {
                               Authorization: `Bearer ${token}`,
@@ -838,12 +862,17 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                               position: swapTarget.position,
                               exerciseId: c.id,
                               originalExerciseId: swapTarget.originalId,
+                              ...reasonBody(swapReason),
                             }),
                           });
-                          setSwapTarget(null);
+                          if (!res.ok) {
+                            setSwapError((await res.json().catch(() => ({}))).error ?? t("Could not save the swap.", "Ekki tókst að vista skiptin."));
+                            return;
+                          }
+                          closeSwap();
                           reload();
                         } catch {
-                          // silent
+                          setSwapError(t("Could not save the swap.", "Ekki tókst að vista skiptin."));
                         }
                       }}
                       className={`w-full rounded border px-2 py-1.5 text-left text-xs transition ${
@@ -882,37 +911,67 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                   )}
                 </p>
               )}
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const sb = getSupabaseClient();
-                      const { data: sess } = await sb.auth.getSession();
-                      const token = sess?.session?.access_token;
-                      if (!token) return;
-                      await fetch(`/api/coach/player/${playerId}/strength-override`, {
-                        method: "DELETE",
-                        headers: {
-                          Authorization: `Bearer ${token}`,
-                          "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                          blockId: swapTarget.blockId,
-                          position: swapTarget.position,
-                        }),
-                      });
-                      setSwapTarget(null);
-                      reload();
-                    } catch {
-                      // silent
-                    }
-                  }}
-                  className="text-xs text-rose-700 hover:text-rose-900 underline"
-                >
-                  {t("Revert to engine choice", "Setja aftur á tillögu kerfis")}
-                </button>
-              </div>
+              {!clearMode ? (
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setClearMode(true)}
+                    className="text-xs text-rose-700 hover:text-rose-900 underline"
+                  >
+                    {t("Revert to engine choice", "Setja aftur á tillögu kerfis")}
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-3 space-y-2 rounded border border-rose-200 bg-rose-50 p-2">
+                  <CoachReasonPicker
+                    kind="swap_clear"
+                    lang={lang === "IS" ? "IS" : "EN"}
+                    value={clearReason}
+                    onChange={setClearReason}
+                    label={t("Why back to the engine's choice? (one tap)", "Af hverju aftur á tillögu kerfis? (einn smellur)")}
+                  />
+                  <div className="flex justify-end gap-3">
+                    <button type="button" onClick={() => setClearMode(false)} className="text-xs text-slate-600 underline">
+                      {t("Cancel", "Hætta við")}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!isReasonReady(clearReason)}
+                      onClick={async () => {
+                        try {
+                          const sb = getSupabaseClient();
+                          const { data: sess } = await sb.auth.getSession();
+                          const token = sess?.session?.access_token;
+                          if (!token) return;
+                          const res = await fetch(`/api/coach/player/${playerId}/strength-override`, {
+                            method: "DELETE",
+                            headers: {
+                              Authorization: `Bearer ${token}`,
+                              "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({
+                              blockId: swapTarget.blockId,
+                              position: swapTarget.position,
+                              ...reasonBody(clearReason),
+                            }),
+                          });
+                          if (!res.ok) {
+                            setSwapError((await res.json().catch(() => ({}))).error ?? t("Could not revert.", "Ekki tókst að setja aftur."));
+                            return;
+                          }
+                          closeSwap();
+                          reload();
+                        } catch {
+                          setSwapError(t("Could not revert.", "Ekki tókst að setja aftur."));
+                        }
+                      }}
+                      className="rounded bg-rose-700 px-2 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                    >
+                      {t("Revert", "Setja aftur")}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );

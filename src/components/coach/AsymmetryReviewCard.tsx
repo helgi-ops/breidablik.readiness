@@ -6,13 +6,16 @@
  * A gap ≥ 10% no longer swaps the lift on its own. Each player with a gap is listed with one tap:
  *   "One leg at a time" → the engine swaps to the one-leg lift for 28 days;
  *   "Keep two-leg"      → the lift stays (e.g. the kicking leg, an old injury the physio knows).
- * Every tap is logged (asymmetry_reviews) and today's automatic session is rebuilt.
+ * Each decision needs the coach's one-tap reason (contradiction 18, 2026-11-23); it is logged (asymmetry_reviews) and
+ * today's automatic session is rebuilt.
  * Layered read: one sentence → the players and their gap → the rule and the study behind "Show details".
  * Never the readiness colour. Renders nothing when no player has a gap.
  */
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import CoachReasonPicker, { EMPTY_REASON, isReasonReady, reasonBody, type ReasonValue } from "@/components/coach/CoachReasonPicker";
+import { reasonLabel } from "@/lib/micropulse/strengthProgramming/coachReasons";
 
 type Item = {
   playerId: string;
@@ -20,7 +23,7 @@ type Item = {
   pct: number;
   source: "VALD" | "IMA CoD";
   weaker: "L" | "R" | null;
-  review: { decision: "swap" | "keep"; decidedAt: string } | null;
+  review: { decision: "swap" | "keep"; decidedAt: string; reason?: string | null } | null;
 };
 
 const accessToken = async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null;
@@ -44,6 +47,13 @@ export default function AsymmetryReviewCard({ lang }: { lang: "IS" | "EN" }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [details, setDetails] = useState(false);
+  const [pending, setPending] = useState<{ playerId: string; decision: "swap" | "keep" } | null>(null);
+  const [reason, setReason] = useState<ReasonValue>(EMPTY_REASON);
+  const pick = (playerId: string, decision: "swap" | "keep") => {
+    setPending({ playerId, decision });
+    setReason(EMPTY_REASON);
+    setError(null);
+  };
 
   const [tick, setTick] = useState(0);
 
@@ -62,9 +72,11 @@ export default function AsymmetryReviewCard({ lang }: { lang: "IS" | "EN" }) {
       const res = await fetch("/api/coach/asymmetry-review", {
         method: "POST",
         headers: { Authorization: `Bearer ${tk}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ playerId: it.playerId, decision, asymPct: it.pct, source: it.source }),
+        body: JSON.stringify({ playerId: it.playerId, decision, asymPct: it.pct, source: it.source, ...reasonBody(reason) }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Failed");
+      setPending(null);
+      setReason(EMPTY_REASON);
       setTick((n) => n + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
@@ -102,6 +114,10 @@ export default function AsymmetryReviewCard({ lang }: { lang: "IS" | "EN" }) {
                   {it.review.decision === "swap"
                     ? t(`One leg at a time since ${it.review.decidedAt.slice(0, 10)}`, `Einn fótur í einu frá ${it.review.decidedAt.slice(0, 10)}`)
                     : t(`Kept two-leg on ${it.review.decidedAt.slice(0, 10)}`, `Haldið á tveimur fótum ${it.review.decidedAt.slice(0, 10)}`)}
+                  {(() => {
+                    const r = reasonLabel(it.review.decision === "swap" ? "asym_swap" : "asym_keep", it.review.reason, is);
+                    return r ? ` · ${r}` : "";
+                  })()}
                 </span>
               )}
             </div>
@@ -109,7 +125,7 @@ export default function AsymmetryReviewCard({ lang }: { lang: "IS" | "EN" }) {
               <button
                 type="button"
                 disabled={busy === it.playerId || it.review?.decision === "swap"}
-                onClick={() => decide(it, "swap")}
+                onClick={() => pick(it.playerId, "swap")}
                 className="rounded-md bg-primary px-3 py-1.5 text-[12px] font-semibold text-primary-foreground disabled:opacity-40"
               >
                 {t("One leg at a time", "Einn fótur í einu")}
@@ -117,12 +133,38 @@ export default function AsymmetryReviewCard({ lang }: { lang: "IS" | "EN" }) {
               <button
                 type="button"
                 disabled={busy === it.playerId || it.review?.decision === "keep"}
-                onClick={() => decide(it, "keep")}
+                onClick={() => pick(it.playerId, "keep")}
                 className="rounded-md border border-slate-300 px-3 py-1.5 text-[12px] font-semibold text-slate-700 disabled:opacity-40"
               >
                 {t("Keep two-leg", "Halda tveimur fótum")}
               </button>
             </div>
+            {pending?.playerId === it.playerId && (
+              <div className="w-full space-y-2 rounded border border-slate-200 bg-slate-50 p-2">
+                <CoachReasonPicker
+                  kind={pending.decision === "swap" ? "asym_swap" : "asym_keep"}
+                  lang={lang}
+                  value={reason}
+                  onChange={setReason}
+                  label={pending.decision === "swap"
+                    ? t("Why one leg at a time? (one tap)", "Af hverju einn fótur í einu? (einn smellur)")
+                    : t("Why keep two-leg? (one tap)", "Af hverju halda tveimur fótum? (einn smellur)")}
+                />
+                <div className="flex justify-end gap-3">
+                  <button type="button" onClick={() => setPending(null)} className="text-[12px] text-slate-600 underline">
+                    {t("Cancel", "Hætta við")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy === it.playerId || !isReasonReady(reason)}
+                    onClick={() => decide(it, pending.decision)}
+                    className="rounded-md bg-primary px-3 py-1.5 text-[12px] font-semibold text-primary-foreground disabled:opacity-40"
+                  >
+                    {t("Save", "Vista")}
+                  </button>
+                </div>
+              </div>
+            )}
           </li>
         ))}
       </ul>

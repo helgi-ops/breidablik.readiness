@@ -4,8 +4,12 @@
  * Persists a coach manual swap of one exercise slot in today's strength
  * session. Applied AFTER the adaptation engine inside buildStrengthSession.
  *
- * POST   — upsert: { blockId, position, exerciseId, notes? }
- * DELETE — clear:  { blockId, position }
+ * POST   — upsert: { blockId, position, exerciseId, originalExerciseId, reasonCode, reasonNote? }
+ * DELETE — clear:  { blockId, position, reasonCode, reasonNote? }
+ *
+ * Every swap and every take-back needs the coach's one-tap reason (coachReasons.ts, contradiction 18, 2026-11-23) and
+ * is appended to strength_session_override_log (who, when, from → to, why). The reason in force is also the row's
+ * `notes`, which the session line shows ("Coach override: …").
  *
  * Auth: coach of the player's team (requireCoachAccessForTeam). Server-only table (service role; RLS on, no
  * browser policies — 20261117180000). Re-swapping a slot keeps the engine's exercise as the original.
@@ -15,6 +19,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
 import { authErrorToResponse } from "@/lib/auth/httpError";
+import { parseCoachReason } from "@/lib/micropulse/strengthProgramming/coachReasons";
 
 export const runtime = "nodejs";
 
@@ -51,7 +56,8 @@ export async function POST(
     position?: number;
     exerciseId?: string;
     originalExerciseId?: string;
-    notes?: string;
+    reasonCode?: string;
+    reasonNote?: string;
     date?: string;
   };
   try {
@@ -66,7 +72,13 @@ export async function POST(
       { status: 400 },
     );
   }
+  const reason = parseCoachReason("swap", body.reasonCode, body.reasonNote);
+  if (!reason.ok) return NextResponse.json({ error: reason.error }, { status: 400 });
   const dateIso = body.date ?? new Date().toISOString().slice(0, 10);
+  const log = (from: string | null) => supabase.from("strength_session_override_log").insert({
+    player_id: playerId, team_id: auth.teamId, override_date: dateIso, block_id: body.blockId, position: body.position,
+    action: "set", from_exercise_id: from, to_exercise_id: body.exerciseId, reason: reason.stored, coach_id: auth.userId,
+  });
 
   // Upsert on (player_id, override_date, block_id, position)
   const { data: existing } = await supabase
@@ -91,12 +103,13 @@ export async function POST(
       .update({
         override_exercise_id: body.exerciseId,
         original_exercise_id: original,
-        notes: body.notes?.trim() || null,
+        notes: reason.stored,
         coach_id: auth.userId,
         updated_at: new Date().toISOString(),
       })
       .eq("id", (existing as { id: string }).id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await log(ex.override_exercise_id);
     return NextResponse.json({ ok: true, action: "updated" });
   }
 
@@ -111,9 +124,10 @@ export async function POST(
       original_exercise_id: body.originalExerciseId,
       override_exercise_id: body.exerciseId,
       coach_id: auth.userId,
-      notes: body.notes?.trim() || null,
+      notes: reason.stored,
     });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await log(body.originalExerciseId);
   return NextResponse.json({ ok: true, action: "inserted" });
 }
 
@@ -127,23 +141,35 @@ export async function DELETE(
   const auth = await authForPlayer(req, supabase, playerId);
   if ("res" in auth) return auth.res;
 
-  let body: { blockId?: string; position?: number; date?: string } = {};
+  let body: { blockId?: string; position?: number; date?: string; reasonCode?: string; reasonNote?: string } = {};
   try {
     body = (await req.json()) as typeof body;
   } catch {
-    // empty body — interpret as "clear ALL overrides for today"
+    // empty body — no reason, refused below
   }
+  // No blockId/position = clear ALL of today's swaps for the player (still with a reason, each one logged).
+  const reason = parseCoachReason("swap_clear", body.reasonCode, body.reasonNote);
+  if (!reason.ok) return NextResponse.json({ error: reason.error }, { status: 400 });
   const dateIso = body.date ?? new Date().toISOString().slice(0, 10);
+  const one = !!body.blockId && typeof body.position === "number";
 
-  let qb = supabase
+  let sel = supabase
     .from("strength_session_overrides")
-    .delete()
+    .select("id, block_id, position, original_exercise_id, override_exercise_id")
     .eq("player_id", playerId)
     .eq("override_date", dateIso);
-  if (body.blockId && typeof body.position === "number") {
-    qb = qb.eq("block_id", body.blockId).eq("position", body.position);
-  }
-  const { error } = await qb;
+  if (one) sel = sel.eq("block_id", body.blockId!).eq("position", body.position!);
+  const { data: rows, error: selErr } = await sel;
+  if (selErr) return NextResponse.json({ error: selErr.message }, { status: 500 });
+  const list = (rows ?? []) as { id: string; block_id: string; position: number; original_exercise_id: string | null; override_exercise_id: string | null }[];
+  if (!list.length) return NextResponse.json({ ok: true, action: "none" });
+
+  const { error } = await supabase.from("strength_session_overrides").delete().in("id", list.map((r) => r.id));
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await supabase.from("strength_session_override_log").insert(list.map((r) => ({
+    player_id: playerId, team_id: auth.teamId, override_date: dateIso, block_id: r.block_id, position: r.position,
+    action: "clear", from_exercise_id: r.override_exercise_id, to_exercise_id: r.original_exercise_id,
+    reason: reason.stored, coach_id: auth.userId,
+  })));
   return NextResponse.json({ ok: true, action: "deleted" });
 }

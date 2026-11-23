@@ -17,6 +17,7 @@
  */
 
 import type { AppliedAdaptation, PlayerStrengthSnapshot } from "./types";
+import { reasonLabel } from "./coachReasons";
 
 export const ASYMMETRY_REVIEW = "ASYMMETRY_REVIEW";
 export const ASYMMETRY_KEPT = "ASYMMETRY_KEPT";
@@ -68,7 +69,9 @@ export function confirmedNote(snap: Pick<PlayerStrengthSnapshot, "asymmetryRevie
   const r = activeReview(snap);
   if (r?.decision !== "swap") return { en: "", is: "" };
   const d = r.decidedAt.slice(0, 10);
-  return { en: ` Coach confirmed the swap on ${d}.`, is: ` Þjálfari staðfesti skiptin ${d}.` };
+  const en = reasonLabel("asym_swap", r.reason, false);
+  const is = reasonLabel("asym_swap", r.reason, true);
+  return { en: ` Coach confirmed the swap on ${d}${en ? ` (${en})` : ""}.`, is: ` Þjálfari staðfesti skiptin ${d}${is ? ` (${is})` : ""}.` };
 }
 
 /**
@@ -86,9 +89,11 @@ export function asymmetryReviewAudit(snap: PlayerStrengthSnapshot): AppliedAdapt
   const evidence = "Bishop 2020: an inter-limb gap of about 10–15% can matter for performance and injury, and one-leg work targets the weaker side. That the coach or physio looks first, and the decision holds 28 days, is MicroPulse's rule (brief 2026-11-23).";
   if (r?.decision === "keep") {
     const d = r.decidedAt.slice(0, 10);
+    const en = reasonLabel("asym_keep", r.reason, false);
+    const is = reasonLabel("asym_keep", r.reason, true);
     return { ruleId: ASYMMETRY_KEPT, triggerEN, triggerIS,
-      actionEN: `Kept the two-leg lift: the coach looked at it on ${d}${r.reason ? ` (${r.reason})` : ""}. Up for review again after ${ASYMMETRY_REVIEW_DAYS} days.`,
-      actionIS: `Tveggja fóta lyftan helst: þjálfari fór yfir þetta ${d}${r.reason ? ` (${r.reason})` : ""}. Aftur til yfirferðar eftir ${ASYMMETRY_REVIEW_DAYS} daga.`,
+      actionEN: `Kept the two-leg lift: the coach looked at it on ${d}${en ? ` (${en})` : ""}. Up for review again after ${ASYMMETRY_REVIEW_DAYS} days.`,
+      actionIS: `Tveggja fóta lyftan helst: þjálfari fór yfir þetta ${d}${is ? ` (${is})` : ""}. Aftur til yfirferðar eftir ${ASYMMETRY_REVIEW_DAYS} daga.`,
       evidence };
   }
   return { ruleId: ASYMMETRY_REVIEW, triggerEN, triggerIS,

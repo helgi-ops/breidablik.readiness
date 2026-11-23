@@ -481,7 +481,15 @@ Eftirtöldum ákvörðunum má breyta:
     - Aldur óþekktur: leikmaðurinn fær áfram unglingaplanið, en planið segir að fæðingardag vanti, að appið biðji um
       hann við opnun eða að stjórnandi félagsins skrái hann, og að þá megi hefja nýtt plan (`AGE_UNKNOWN_FACT`, líka
       efst á spjaldinu). Í dag (23. nóv.) vantar fæðingardag hjá 195 af 277 virkum leikmönnum.
-18. **Ástæður þjálfara eru valfrjálsar á sumum stöðum**, þvert á CLAUDE.md:
-    - skipting á æfingu og ósamhverfa;
-    - eytt skipting skilur enga sögu eftir.
+18. ~~**Ástæður þjálfara eru valfrjálsar á sumum stöðum**~~ **Lagað 23. nóv.:** ástæða með einum smelli er krafin
+    áður en vistað er (`coachReasons.ts`, `CoachReasonPicker`). „Annað“ krefst nokkurra orða. Þjónninn athugar það
+    sama og skilar villu án ástæðu.
+    - Skipting á æfingu: búnaður, eymsli, tækni, ósk leikmanns, annað. Tillaga gervigreindar sem þjálfari samþykkir
+      fær ástæðuna „AI“ með rökum hennar.
+    - Afturköllun skiptingar: ástæðan er farin, mistök, annað.
+    - Ósamhverfa, einn fótur: munur staðfestur, gömul meiðsli, annað. Halda tveimur fótum: sparkfótur, prófið lítur
+      ekki rétt út, sjúkraþjálfari segir í lagi, annað.
+    - Saga: hver skipting, breyting og afturköllun fer í `strength_session_override_log` (hver, hvenær, frá → til,
+      af hverju). Ástæðan birtist á línunni í æfingunni („Coach override: …“) og í línu ósamhverfunnar, á máli
+      lesandans.
 19. **Sjálfgefið tungumál:** handsendar æfingar falla á íslensku, blokk og leiðrétting á ensku. CLAUDE.md segir enska.

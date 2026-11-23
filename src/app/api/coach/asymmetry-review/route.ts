@@ -2,7 +2,8 @@
  * /api/coach/asymmetry-review — the coach's one tap on a left/right asymmetry (strength-day-rules brief §4b).
  *
  *   GET  [?team_id=]                                         → { ok, items } players with a gap ≥ 10% + decision in force
- *   POST { teamId?, playerId, decision: "swap"|"keep", reason? } → append the decision, rebuild today's auto session
+ *   POST { teamId?, playerId, decision: "swap"|"keep", reasonCode, reasonNote? } → append the decision, rebuild today's
+ *        auto session. The one-tap reason is required (coachReasons.ts, contradiction 18, 2026-11-23).
  *
  * A gap no longer swaps the lift on its own: "swap" lets the engine use one leg at a time for 28 days, "keep" keeps
  * the two-leg lift. Every decision is a new row (who, when, %, why). Not a Today writer itself: today's automatic
@@ -14,6 +15,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
 import { loadTeamAsymmetryQueue, recordAsymmetryReview } from "@/lib/micropulse/strengthProgramming/asymmetryReviewStore";
+import { parseCoachReason } from "@/lib/micropulse/strengthProgramming/coachReasons";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -49,12 +51,14 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  let body: { teamId?: string; playerId?: string; decision?: string; reason?: string; asymPct?: number | null; source?: string | null } = {};
+  let body: { teamId?: string; playerId?: string; decision?: string; reasonCode?: string; reasonNote?: string; asymPct?: number | null; source?: string | null } = {};
   try { body = await req.json(); } catch { /* empty */ }
   const ctx = await requireCoachTeam(req, body.teamId ?? null);
   if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
   const decision = body.decision === "swap" || body.decision === "keep" ? body.decision : null;
   if (!body.playerId || !decision) return NextResponse.json({ error: "playerId and decision (swap | keep) are required" }, { status: 400 });
+  const reason = parseCoachReason(decision === "swap" ? "asym_swap" : "asym_keep", body.reasonCode, body.reasonNote);
+  if (!reason.ok) return NextResponse.json({ error: reason.error }, { status: 400 });
 
   const { data: player } = await ctx.sb.from("players").select("id").eq("id", body.playerId).eq("team_id", ctx.teamId).maybeSingle();
   if (!player) return NextResponse.json({ error: "Player not on this team" }, { status: 403 });
@@ -63,7 +67,7 @@ export async function POST(req: Request) {
   const source = body.source === "VALD" || body.source === "IMA CoD" ? body.source : null;
   const res = await recordAsymmetryReview(ctx.sb, {
     teamId: ctx.teamId, playerId: body.playerId, decision, asymPct: pct, source,
-    reason: typeof body.reason === "string" ? body.reason.trim() : null, decidedBy: ctx.userId, todayIso: icelandToday(),
+    reason: reason.stored, decidedBy: ctx.userId, todayIso: icelandToday(),
   });
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: 500 });
   return NextResponse.json({ ok: true, refreshed: res.refreshed });

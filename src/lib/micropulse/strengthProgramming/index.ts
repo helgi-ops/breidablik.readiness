@@ -39,6 +39,7 @@ import type {
   StrengthSession,
 } from "./types";
 import { buildMd4Strength } from "./mdTemplates/md4Strength";
+import { reasonLabel } from "./coachReasons";
 import { buildMd3Power } from "./mdTemplates/md3Power";
 import { buildMd2Activation } from "./mdTemplates/md2Activation";
 import { buildMd1Primer } from "./mdTemplates/md1Primer";
@@ -161,7 +162,7 @@ export type CoachOverride = {
   blockId: string;
   position: number;
   overrideExerciseId: string;
-  /** Optional coach note explaining the swap (shows in UI as the reason). */
+  /** The coach's reason for the swap (`code` or `code: note`, coachReasons.ts; older rows free text). */
   notes?: string | null;
   /** The exercise the coach swapped out (2026-11-17). When given, the swap only applies while that exercise is
    *  still at (blockId, position): a swap made on another MD-day preview, or before the session changed, never
@@ -196,7 +197,7 @@ function applyCoachOverrides(
       category: newEx.category,
       dose: newDose,
       modificationReason: ov.notes?.trim()
-        ? `Coach override: ${ov.notes.trim()}`
+        ? `Coach override: ${reasonLabel("swap", ov.notes, false)}`
         : "Coach manual swap",
       rationale: newEx.evidence,
     };
