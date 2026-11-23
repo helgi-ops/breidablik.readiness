@@ -375,7 +375,7 @@ Daglega líðanarmælingin, CMJ og álagsgögnin kveikja hvert á sínum ási; l
         heading: `Að lesa það fyrr, og minna gróft`,
         body: `Tvær betrumbætur gera lesturinn fyrri og skarpari. Í fyrsta lagi snemmbúinn krafthraði — hversu hratt kraftur rís fyrstu 100–200 millisekúndurnar — fellur á undan stökkhæð og er knúinn af taugadrifi, sem gerir hann að fyrirvara-flaggi fyrir miðlæga þreytu (D'Emanuele, 2021). Hann er mældur sem gluggaður, kraft-normalíseraður halli (aldrei augnabliks-toppur, sem er of hávaðasamur).
 
-Í öðru lagi er flugtíma-á-móti-samdráttartíma hlutfallið (FT:CT) — hversu mikið loft leikmaðurinn fær á hverja ýti-tíma-einingu — næmara fyrir þreytu hjá hópíþróttafólki en hið vinsæla RSI-modified, sem reyndist ónæmt í körfubolta og ruðningi (Edwards, 2018). MicroPulse meðhöndlar nú FT:CT sem aðal-sprengikrafts mælikvarðann og heldur RSI-modified sem aukalestri fremur en að reiða sig á hann. Ekkert af þessu fer framhjá hávaða-hliðinu að ofan — þau erfa það.`,
+Í öðru lagi er flugtíma-á-móti-samdráttartíma hlutfallið (FT:CT) — hversu mikið loft leikmaðurinn fær á hverja ýti-tíma-einingu — næmur þreytumælikvarði hjá hópíþróttafólki: eftir leik hjá atvinnumönnum í ástralskum fótbolta var það eini hoppmælikvarðinn sem lækkaði greinilega, og það var enn lægra daginn eftir (Cormack, Newton og McGuigan, 2008). MicroPulse meðhöndlar nú FT:CT sem aðal-sprengikrafts mælikvarðann og heldur RSI-modified sem aukalestri fremur en að reiða sig á hann. Ekkert af þessu fer framhjá hávaða-hliðinu að ofan — þau erfa það.`,
       },
       {
         heading: `Væntanlega endurheimtarferlið eftir leik`,
@@ -398,6 +398,8 @@ Carroll, T. J., Taylor, J. L., & Gandevia, S. C. (2017). Recovery of central and
 Gathercole, R., Sporer, B., Stellingwerff, T., & Sleivert, G. (2015). Alternative countermovement-jump analysis to quantify acute neuromuscular fatigue. International Journal of Sports Physiology and Performance, 10(1), 84–92. https://doi.org/10.1123/ijspp.2013-0413
 
 Edwards, T., Spiteri, T., Piggott, B., Bonhotal, J., Haff, G. G., & Joyce, C. (2018). Monitoring and managing fatigue in basketball. Sports, 6(1), 19. https://doi.org/10.3390/sports6010019
+
+Cormack, S. J., Newton, R. U., & McGuigan, M. R. (2008). Neuromuscular and endocrine responses of elite players to an Australian rules football match. International Journal of Sports Physiology and Performance, 3(3), 359–374. https://doi.org/10.1123/ijspp.3.3.359
 
 Claudino, J. G., Cronin, J., Mezêncio, B., McMaster, D. T., McGuigan, M., Tricoli, V., Amadio, A. C., & Serrão, J. C. (2017). The countermovement jump to monitor neuromuscular status: A meta-analysis. Journal of Science and Medicine in Sport, 20(4), 397–402. https://doi.org/10.1016/j.jsams.2016.08.011
 
@@ -443,7 +445,7 @@ So every CMJ metric must clear its own measurement noise before it can flag: the
         heading: `Reading it earlier, and less bluntly`,
         body: `Two refinements make the read earlier and sharper. First, early-phase rate of force development — how fast force rises in the first 100–200 milliseconds — drops before jump height and is dominated by neural drive, making it an early-warning flag for central fatigue (D'Emanuele, 2021). It is measured as a windowed, force-normalised slope (never an instantaneous peak, which is too noisy).
 
-Second, the flight-time-to-contraction-time ratio (FT:CT) — how much air the player gets per unit of push time — is more fatigue-sensitive in team-sport athletes than the popular RSI-modified, which was found insensitive in basketball and rugby (Edwards, 2018). MicroPulse now treats FT:CT as the primary explosive-quality metric and keeps RSI-modified as a secondary read rather than leaning on it. None of these bypass the noise gate above — they inherit it.`,
+Second, the flight-time-to-contraction-time ratio (FT:CT) — how much air the player gets per unit of push time — is a sensitive fatigue read in team-sport athletes: after an elite Australian football match it was the only jump measure with a clear drop, and it was still down the next day (Cormack, Newton & McGuigan, 2008). MicroPulse now treats FT:CT as the primary explosive-quality metric and keeps RSI-modified as a secondary read rather than leaning on it. None of these bypass the noise gate above — they inherit it.`,
       },
       {
         heading: `The expected recovery curve after a match`,
@@ -466,6 +468,8 @@ Carroll, T. J., Taylor, J. L., & Gandevia, S. C. (2017). Recovery of central and
 Gathercole, R., Sporer, B., Stellingwerff, T., & Sleivert, G. (2015). Alternative countermovement-jump analysis to quantify acute neuromuscular fatigue. International Journal of Sports Physiology and Performance, 10(1), 84–92. https://doi.org/10.1123/ijspp.2013-0413
 
 Edwards, T., Spiteri, T., Piggott, B., Bonhotal, J., Haff, G. G., & Joyce, C. (2018). Monitoring and managing fatigue in basketball. Sports, 6(1), 19. https://doi.org/10.3390/sports6010019
+
+Cormack, S. J., Newton, R. U., & McGuigan, M. R. (2008). Neuromuscular and endocrine responses of elite players to an Australian rules football match. International Journal of Sports Physiology and Performance, 3(3), 359–374. https://doi.org/10.1123/ijspp.3.3.359
 
 Claudino, J. G., Cronin, J., Mezêncio, B., McMaster, D. T., McGuigan, M., Tricoli, V., Amadio, A. C., & Serrão, J. C. (2017). The countermovement jump to monitor neuromuscular status: A meta-analysis. Journal of Science and Medicine in Sport, 20(4), 397–402. https://doi.org/10.1016/j.jsams.2016.08.011
 
