@@ -508,7 +508,7 @@ function FootballGameReport() {
                             <li><b>{IS ? "Stökk" : "Jumps"}</b> — {IS ? "stökk: frákast og lending (skallar, návígi)." : "jumps: take-offs and landings (headers, aerial duels)."}</li>
                             <li><b>{IS ? "Löng hlaup" : "Long runs"}</b> — {IS ? "metrar í hlaupum sem stóðu 18 sek eða lengur. Í leik eru nær öll á leikhraða. Mælir úthaldshlaup, ekki spretti (sprettir koma úr GPS)." : "metres in runs that lasted 18 s or more. In a match almost all are at match pace. It shows sustained running, not sprinting (sprints come from GPS)."}</li>
                           </ul>
-                          <p className="mt-1.5 text-[10px] text-slate-400">{IS ? "Miðað við liðið, hver ás = hlutfallsröð leikmannsins í hópnum. McBurnie 2022, Harper & McBurnie 2021, Buchheit 2014." : "Compared to the squad: each axis is the player's percentile in the group. McBurnie 2022, Harper & McBurnie 2021, Buchheit 2014."}</p>
+                          <p className="mt-1.5 text-[10px] text-slate-400">{IS ? "Miðað við liðið, hver ás = hlutfallsröð leikmannsins í hópnum. McBurnie 2022, Harper 2022, Buchheit 2014." : "Compared to the squad: each axis is the player's percentile in the group. McBurnie 2022, Harper 2022, Buchheit 2014."}</p>
                         </details>
                       </div>
                     )}

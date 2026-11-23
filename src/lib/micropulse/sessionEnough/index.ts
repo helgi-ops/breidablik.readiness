@@ -24,7 +24,7 @@
  *
  * Pure, deterministic, IO-free. Rules decide; no AI. Descriptive — NEVER the readiness colour.
  * Day shares: Stevens 2017 + Martín-García 2018 (Acc/Dec/CoD standard); Buchheit 2024 MD-day load
- * model (via planSessionLoad's matchPct); braking/CoD tissue load Harper & McBurnie 2021; training:match
+ * model (via planSessionLoad's matchPct); braking/CoD tissue load Harper 2022; training:match
  * ratios PMC6747517. (Malone 2018 sprint-exposure was cited here before; removed — it is about GPS
  * sprinting, which these IMA long-run metrics are not.)
  */
@@ -112,7 +112,7 @@ export const ENOUGH_CITATIONS = [
   "Buchheit et al. 2024 — MD-day load as a share of the match",
   "Martín-García et al. 2018 — load across the microcycle",
   "Stevens et al. 2017 — training load relative to match load (incl. high-speed running per MD-day)",
-  "Harper & McBurnie 2021 — braking / change-of-direction loading",
+  "Harper 2022 — braking / change-of-direction loading",
   "Training:match ratios — PMC6747517",
 ];
 

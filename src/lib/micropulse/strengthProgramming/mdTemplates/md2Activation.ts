@@ -5,8 +5,9 @@
  *
  * Evidence base:
  *   - Cuenca-Fernández 2024 — Acute iso conditioning improves CMJ.
- *   - García-Pinillos 2024 — Pre-match resistance priming improves
- *     next-day performance in pro Spanish soccer (76% adoption).
+ *   - Cañadas-García 2026 — Pro Spanish soccer S&C coaches prime 24 h (79%)
+ *     or 24-48 h (21%) before a match, isometrics most used (a survey of
+ *     practice; it does not test whether priming improves performance).
  *   - Comfort 2018 — IMTP wakes high-threshold motor units without
  *     metabolic cost.
  *

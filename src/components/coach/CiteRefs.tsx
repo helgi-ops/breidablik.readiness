@@ -64,7 +64,9 @@ function CiteChip({ short, label, is }: { short: string; label: string; is: bool
               <span className="text-slate-500">
                 {found.ref.verifiedFrom === "full_text"
                   ? T("Checked against the full paper", "Borið saman við alla greinina")
-                  : T("Checked against the abstract", "Borið saman við ágripið")}
+                  : found.ref.verifiedFrom === "record"
+                    ? T("Checked against the record (no abstract)", "Borið saman við skráningu (ekkert ágrip)")
+                    : T("Checked against the abstract", "Borið saman við ágripið")}
               </span>
             </div>
           </div>

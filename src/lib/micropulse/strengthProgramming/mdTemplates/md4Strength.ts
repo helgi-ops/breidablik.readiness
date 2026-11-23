@@ -8,10 +8,11 @@
  * Evidence base (research/Microdosing/):
  *   - Rønnestad 2023 — Microdosing strength: 15-20 min sessions 4-5×/week
  *     match or exceed 60 min 2×/week for in-season strength maintenance.
- *   - Aedo-Muñoz 2024 — Microdosing of Strength Training in Basketball
- *     During Congested Game Weeks (basketball, applies directly to soccer).
- *   - García-Pinillos 2024 — Resistance priming in pro Spanish soccer:
- *     76% of S&C coaches use short priming sessions.
+ *   - Vretaros 2022 — Microdosing of Strength Training in Basketball
+ *     During Congested Game Weeks (practical-methodological letter;
+ *     basketball, the same congested-week problem as football).
+ *   - Cañadas-García 2026 — Resistance priming in pro Spanish soccer (survey
+ *     of 24 S&C coaches): 79% prime 24 h before a match, isometrics most used.
  *   - Schoenfeld 2024 — Minimal-Dose Resistance Training: 1-3 hard sets
  *     per muscle per session preserves strength and hypertrophy.
  *

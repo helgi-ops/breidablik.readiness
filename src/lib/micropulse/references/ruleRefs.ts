@@ -180,6 +180,12 @@ export const RULE_REFS: Record<string, GoalRef> = {
   lumcomfortoranchuk2026: { key: "lumcomfortoranchuk2026", short: "Lum, Comfort & Oranchuk 2026", cite: "Lum D, Comfort P, Oranchuk DJ. Getting stronger without moving an inch: a randomized controlled trial utilizing maximal isometric co-contraction. J Funct Morphol Kinesiol 2026;11(2):221. doi:10.3390/jfmk11020221", verifiedFrom: "abstract" },
   maeo2018: { key: "maeo2018", short: "Maeo 2018", cite: "Maeo S, Shan X, Otsuka S, Kanehisa H, Kawakami Y. Single-joint eccentric knee extension training preferentially trains the rectus femoris within the quadriceps muscles. Transl Sports Med 2018;1(5):212–220. doi:10.1002/tsm2.38", verifiedFrom: "abstract" },
   tambaar2025: { key: "tambaar2025", short: "Tam & Baar 2025", cite: "Tam KT, Baar K. Using load to improve tendon/ligament tissue engineering and develop novel treatments for tendinopathy. Matrix Biol 2025;135:39–54. doi:10.1016/j.matbio.2024.12.001", verifiedFrom: "abstract" },
+  // The papers that misattributed citations really meant (2026-11-23): the code's own title or journal names them.
+  vretaros2022: { key: "vretaros2022", short: "Vretaros 2022", cite: "Vretaros A. Microdosing of Strength Training in Basketball During Congested Game Weeks: A Practical-Methodological Approach. Academia Letters 2022;5409. doi:10.20935/AL5409", verifiedFrom: "record" },
+  canadasgarcia2026: { key: "canadasgarcia2026", short: "Cañadas-García 2026", cite: "Cañadas-García E, de la Rubia A, Weldon A, González-García J, Giráldez-Costas V, García-Sánchez C. Resistance priming strategies in professional Spanish soccer: a survey study into the practices and perceptions of strength and conditioning coaches. Biol Sport 2026;43:661–670. doi:10.5114/biolsport.2026.156228 PMID 41994355", verifiedFrom: "abstract" },
+  jaroszgawel2025: { key: "jaroszgawel2025", short: "Jarosz, Gawel & Socha 2025", cite: "Jarosz J, Gawel D, Socha I, Ewertowska P, Wilk M, Lum D, Krzysztofik M. Acute Effects of Isometric Conditioning Activity with Different Set Volumes on Countermovement Jump Performance in Highly Trained Male Volleyball Players. Appl Sci 2025;15(5):2393. doi:10.3390/app15052393", verifiedFrom: "abstract" },
+  seraphin2025: { key: "seraphin2025", short: "Seraphin 2025", cite: "Seraphin A, Edson C, Price C, Jones B, Jagielo A, Mullner J. Normative Performance Test Metrics in Professional Female Club Soccer. J Sports Med Allied Health Sci 2025;10(3). doi:10.25035/jsmahs.10.03.01", verifiedFrom: "abstract" },
+  cookpurdam2012: { key: "cookpurdam2012", short: "Cook & Purdam 2012", cite: "Cook JL, Purdam C. Is compressive load a factor in the development of tendinopathy? Br J Sports Med 2012;46(3):163–168. doi:10.1136/bjsports-2011-090414 PMID 22113234", verifiedFrom: "abstract" },
 };
 
 /** Other spellings of the same short citation used in the rule text ("et al." is dropped before this is read). */
@@ -207,6 +213,8 @@ const SHORT_ALIASES: Record<string, string> = {
   // A second Lum 2026 paper, named by its author list.
   "Lum, Comfort, Oranchuk 2026": "Lum, Comfort & Oranchuk 2026",
   "Lum 2025": "Lum & Howatson 2025",
+  // A second Jarosz 2025 paper (set volumes), named by its author list.
+  "Jarosz, Gawel, Socha, Ewertowska, Wilk, Lum, Krzysztofik 2025": "Jarosz, Gawel & Socha 2025",
 };
 
 /**
@@ -214,10 +222,6 @@ const SHORT_ALIASES: Record<string, string> = {
  * the coach decides whether to replace it. Never resolved by guessing.
  */
 export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
-  "Aedo-Muñoz 2024": {
-    en: "The paper with the title the code gives (microdosing strength in basketball during congested weeks) is by Vretaros, Academia Letters 2022, not Aedo-Muñoz 2024.",
-    is: "Greinin með titlinum sem kóðinn gefur (örskammtar í körfubolta í þéttum leikvikum) er eftir Vretaros, Academia Letters 2022, ekki Aedo-Muñoz 2024.",
-  },
   "Bencivenga 2024": {
     en: "No 2024 paper by Bencivenga on French contrast training was found on PubMed or Crossref.",
     is: "Engin grein eftir Bencivenga frá 2024 um French contrast fannst á PubMed eða Crossref.",
@@ -265,14 +269,6 @@ export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
   "Gabbett 2017": {
     en: "Gabbett co-wrote several load-monitoring papers in 2017; which one is meant is not recorded. The best-known acute:chronic paper is Gabbett 2016.",
     is: "Gabbett var meðhöfundur að nokkrum greinum um álagsvöktun 2017 og ekki er skráð hver er átt við. Þekktasta greinin um skammtíma- og langtímaálag er Gabbett 2016.",
-  },
-  "García-Pinillos 2024": {
-    en: "The survey the code describes (resistance priming in professional Spanish soccer) is by Cañadas-García et al., Biol Sport 2026, not García-Pinillos 2024.",
-    is: "Könnunin sem kóðinn lýsir (upphitun með lyftum í spænskum atvinnufótbolta) er eftir Cañadas-García o.fl., Biol Sport 2026, ekki García-Pinillos 2024.",
-  },
-  "Harper & McBurnie 2021": {
-    en: "The closest match is Harper DJ, McBurnie AJ et al., a review of horizontal deceleration in Sports Med 2022 (online 2022), not 2021.",
-    is: "Næst kemst yfirlitsgrein Harper DJ, McBurnie AJ o.fl. um hemlun í Sports Med 2022 (birt á netinu 2022), ekki 2021.",
   },
   "Helms 2020": {
     en: "No 2020 paper by Helms on single-leg hinges or asymmetry was found; his 2020 paper is on regulating and monitoring resistance training.",
@@ -346,10 +342,6 @@ export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
     en: "Buchheit published several 2014 football papers (sprint mechanics, repeated sprints, match running); which one is meant is not recorded.",
     is: "Buchheit birti nokkrar greinar um fótbolta 2014 (sprettfræði, endurteknir sprettir, hlaup í leik); ekki er skráð hver er átt við.",
   },
-  "Cook & Purdam 2009": {
-    en: "The title the code gives (\"Is compressive load a factor in the development of tendinopathy?\", Br J Sports Med 46:163) is Cook & Purdam 2012. Their 2009 paper is \"Is tendon pathology a continuum?\". Which one is meant is not clear.",
-    is: "Titillinn sem kóðinn gefur er grein Cook & Purdam frá 2012. Grein þeirra frá 2009 heitir „Is tendon pathology a continuum?“. Ekki er ljóst hvor er átt við.",
-  },
   "Delaney 2017": {
     en: "Delaney published several papers on peak running intensity around 2017 (rugby league, rugby union, soccer); which one this lever means is not recorded.",
     is: "Delaney birti nokkrar greinar um hámarks hlaupaákefð um 2017 (rugby league, rugby union, fótbolti); ekki er skráð hver er átt við.",
@@ -357,10 +349,6 @@ export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
   "Dos'Santos 2022": {
     en: "Dos'Santos co-wrote several 2022 papers on change of direction and turning demands; which one is meant is not recorded.",
     is: "Dos'Santos var meðhöfundur að nokkrum greinum 2022 um stefnubreytingar og snúninga í leik; ekki er skráð hver er átt við.",
-  },
-  "Edson 2024": {
-    en: "The closest match is Seraphin A, Edson C et al. Normative Performance Test Metrics in Professional Female Club Soccer. J Sports Med Allied Health Sci, published 2025, not 2024.",
-    is: "Næst kemst Seraphin A, Edson C o.fl., viðmið í prófum hjá atvinnukonum í fótbolta, J Sports Med Allied Health Sci, birt 2025, ekki 2024.",
   },
   "Edwards 2018": {
     en: "The likely paper (Edwards T et al., J Strength Cond Res 2018, fatigue measures in college basketball) was retracted (J Strength Cond Res 2018;32(12):e57), and its abstract reports FT:CT as not reliable between days (CV 10.9%). The FT:CT fatigue claim needs another source.",
@@ -373,10 +361,6 @@ export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
   "Hägglund 2013": {
     en: "Hägglund 2013 (UEFA Injury Study) finds previous injury and kicking leg as risk factors; it does not measure strength, so it does not support the groin strength-gap read.",
     is: "Hägglund 2013 (UEFA-rannsóknin) sýnir fyrri meiðsli og spyrnufót sem áhættuþætti; hún mælir ekki styrk og styður því ekki lesturinn á styrkbili í nára.",
-  },
-  "Hernández-Davó 2021": {
-    en: "The title the code gives belongs to Jarosz et al., Applied Sciences 2025 (with Lum and Krzysztofik); no 2021 paper by Hernández-Davó with that title was found.",
-    is: "Titillinn sem kóðinn gefur er á grein Jarosz o.fl., Applied Sciences 2025 (með Lum og Krzysztofik); engin grein eftir Hernández-Davó frá 2021 með þeim titli fannst.",
   },
   "King 2018": {
     en: "King's 2018 papers on athletic groin pain cover rehabilitation and biomechanics; none identifies absolute adductor weakness as a risk factor, which the code cites it for.",
@@ -413,10 +397,6 @@ export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
   "Sandford 2019": {
     en: "Sandford's 2019 papers are on 800 m and 1500 m runners; none gives football sprint-speed norms, and which one is meant is not recorded.",
     is: "Greinar Sandford frá 2019 fjalla um 800 m og 1500 m hlaupara; engin gefur viðmið um sprettihraða í fótbolta og ekki er skráð hver er átt við.",
-  },
-  "Seraphin 2024": {
-    en: "The closest match is Seraphin A, Edson C et al. Normative Performance Test Metrics in Professional Female Club Soccer. J Sports Med Allied Health Sci, published 2025, not 2024.",
-    is: "Næst kemst Seraphin A, Edson C o.fl., viðmið í prófum hjá atvinnukonum í fótbolta, J Sports Med Allied Health Sci, birt 2025, ekki 2024.",
   },
   "Thomas 2017": {
     en: "Two different 2017 papers fit: Thomas et al. (Med Sci Sports Exerc, simulated match) and Brownstein … Thomas (Front Physiol, competitive match). The code uses \"Thomas 2017\" for both; which is meant in each place is not clear.",

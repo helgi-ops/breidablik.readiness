@@ -88,7 +88,7 @@ export const LONG_RUN_DRILL_NOTE: Bi = {
 };
 
 export const MOVEMENT_CITATIONS = [
-  "Harper & McBurnie 2021 — braking and change of direction carry the highest tissue load",
+  "Harper 2022 — braking and change of direction carry the highest tissue load",
   "Gaudino et al. 2014; Casamichana & Castellano 2010 — smaller pitches raise accelerations, braking and turns",
   "Bishop et al. 2020 — reading left vs right (on a drill, the side split mostly follows the drill's design)",
   ...LONG_RUN_CITATIONS,

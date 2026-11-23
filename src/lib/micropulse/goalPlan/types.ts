@@ -44,7 +44,8 @@ export type GoalSport = "football" | "basketball" | "other";
 export type GoalEvidence = "researched" | "partly" | "rule_of_thumb";
 
 /** "full_text" = MicroPulse read the paper; "abstract" = only the abstract or a published summary. */
-export type VerifiedFrom = "full_text" | "abstract";
+/** How a reference was checked: the full paper, its abstract, or only its record (title, authors, journal) when no abstract exists. */
+export type VerifiedFrom = "full_text" | "abstract" | "record";
 
 export type GoalRef = { key: string; short: string; cite: string; verifiedFrom: VerifiedFrom };
 

@@ -26,7 +26,7 @@ export { FLYING_DOSE_LINE, FLYING_RUN_PHRASE, FLYING_REPS_X_ZONE, FLYING_SPRINT_
 // ─── References ───────────────────────────────────────────────────────────
 
 /** "full_text" = MicroPulse read the paper; "abstract" = only the abstract or a published summary. */
-export type VerifiedFrom = "full_text" | "abstract";
+export type VerifiedFrom = "full_text" | "abstract" | "record";
 
 export type SpeedRefKey =
   | "delecluse1997"
@@ -764,6 +764,7 @@ export const SPEED_CAVEATS: Bi[] = [
 export const VERIFIED_LABEL: Record<VerifiedFrom, Bi> = {
   full_text: { en: "full paper read", is: "öll greinin lesin" },
   abstract: { en: "abstract only", is: "aðeins útdráttur" },
+  record: { en: "record only (title, authors, journal)", is: "aðeins skráning (titill, höfundar, tímarit)" },
 };
 
 // ─── Plans ────────────────────────────────────────────────────────────────

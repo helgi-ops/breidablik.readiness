@@ -93,9 +93,9 @@ export const KPI_TAPER_EXPONENT: Partial<Record<WeeklyLoadMetricKey, number>> = 
  * A session loads the body along two distinct routes with DIFFERENT adaptation rates, so they must be
  * progressed differently across a cycle:
  *  - `physiological` — metabolic / cardiovascular stress. Accelerations carry a high METABOLIC cost but
- *    modest mechanical cost (di Prampero; Harper & McBurnie 2021). Adapts relatively fast → ramp linearly.
+ *    modest mechanical cost (di Prampero; Harper 2022). Adapts relatively fast → ramp linearly.
  *  - `biomechanical` — musculoskeletal TISSUE stress (braking forces, eccentric demand). DECELERATIONS
- *    produce the highest ground-reaction forces / loading rates (Harper & McBurnie 2021); HSR & sprint
+ *    produce the highest ground-reaction forces / loading rates (Harper 2022); HSR & sprint
  *    drive hamstring injury risk and matter speed-specifically, not as total load (Duhig 2016; Malone).
  *    Adapts slower and is injury-sensitive → ramp CONSERVATIVELY (convex, stays low early, rises late).
  *  - `volume` — the headline anchors (total distance, PlayerLoad): ramp linearly, carry the ×match bar.
@@ -169,7 +169,7 @@ export const KPI_REENTRY_FLOOR: Partial<Record<WeeklyLoadMetricKey, number>> = {
   imaFrDistance: 0.62,   // IMA long-run distance (runs ≥18 s, ima_fr_ge18) — aerobic running base, NOT HSR
   fmpRunningHigh: 0.62,  // FMP high-speed running
   // Accel/decel are training-dense from day one (SSGs/drills) → start higher than the generic re-entry.
-  // Decel a touch lower than accel — it carries the highest tissue load (Harper & McBurnie 2021).
+  // Decel a touch lower than accel — it carries the highest tissue load (Harper 2022).
   accelB23: 0.62, imaAccel: 0.62,
   decelB23: 0.58, imaDecel: 0.58, imaCod: 0.58,
 };

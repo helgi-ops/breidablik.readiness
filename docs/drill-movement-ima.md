@@ -66,6 +66,6 @@ Player app (added 12 Nov 2026): the player's own drill row (`DrillLoadRow`, via 
 `/api/player/drill-load`) adds "· 2 long runs" to the headline when there is at least one, and "Long runs" +
 "Their strides" under Details with a one-line "jogs included, not hard running" note. Null → nothing shown.
 
-Descriptive only; never the readiness colour. Citations: Harper & McBurnie 2021; McBurnie et al. 2022; Morin et al. 2011; Gaudino et al. 2014;
+Descriptive only; never the readiness colour. Citations: Harper 2022; McBurnie et al. 2022; Morin et al. 2011; Gaudino et al. 2014;
 Casamichana & Castellano 2010; Bishop et al. 2020. Code: `src/lib/micropulse/drillActuals/`
 (`index.ts`, `movementRead.ts`), `normalizeCatapultPeriodStats` in `src/lib/integrations/catapult/normalize.ts`.

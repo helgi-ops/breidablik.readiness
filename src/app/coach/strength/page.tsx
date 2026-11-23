@@ -14,7 +14,7 @@
  * both list and expanded view — list mode just shows the summary line.
  *
  * Evidence base (research/Microdosing/):
- *   - Rønnestad 2023, García-Pinillos 2024, Aedo-Muñoz 2024.
+ *   - Rønnestad 2023, Cañadas-García 2026, Vretaros 2022.
  */
 
 export const dynamic = "force-dynamic";

@@ -5,8 +5,9 @@
  * This is even lighter than MD-2 — we're days closer to the game.
  *
  * Evidence base:
- *   - García-Pinillos 2024 — Pre-match resistance priming: 1-2 min total
- *     iso work the day before match improves next-day CMJ + sprint.
+ *   - Cañadas-García 2026 — 79% of pro Spanish soccer S&C coaches prime the
+ *     day before a match, isometrics most often (a survey of practice; it
+ *     does not test next-day CMJ or sprint).
  *   - Cuenca-Fernández 2024 — Acute iso conditioning improves jump
  *     performance hours-to-days later when load is minimal.
  *   - Comfort 2018 — IMTP recruits high-threshold motor units without

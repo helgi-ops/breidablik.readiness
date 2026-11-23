@@ -17,7 +17,7 @@
  * Sources:
  *  - Male football CMJ: elite male soccer S&C review 2024; Toth 2019 (juniors).
  *  - Female football CMJ ~28.9 cm, IMTP ~21.6 N/kg: pro female soccer norms
- *    (Seraphin/Edson 2024).
+ *    (Seraphin 2025).
  *  - RSI-mod scale: NCAA D1 (Sports 2018) — males 0.208-0.704, females 0.135-0.553.
  *  - Male football IMTP ~28-40 N/kg: EFL force-plate norms 2025; Aspetar RTP floor >20.
  *  - Nordic eccentric-hamstring (NordBord) male soccer ~277-404 N/limb (Read 2022).
@@ -143,12 +143,12 @@ const FEMALE_FOOTBALL: Record<string, MetricSpec> = {
   imtpRelForceNkg: {
     spec: { dir: "higher", e: 28, g: 24, a: 19 },
     ref: { en: "women's football: avg ~19-24, elite >=28 N/kg", is: "kvenna-fótbolti: meðal ~19-24, afburða >=28 N/kg" },
-    citation: "Pro female soccer norms (Seraphin 2024)", improve: STRENGTH_TIP,
+    citation: "Pro female soccer norms (Seraphin 2025)", improve: STRENGTH_TIP,
   },
   cmjJumpHeightCm: {
     spec: { dir: "higher", e: 36, g: 31, a: 25 },
     ref: { en: "women's football: avg ~25-31, elite >=36 cm", is: "kvenna-fótbolti: meðal ~25-31, afburða >=36 cm" },
-    citation: "Pro female soccer norms (Seraphin 2024)", improve: POWER_TIP,
+    citation: "Pro female soccer norms (Seraphin 2025)", improve: POWER_TIP,
   },
   cmjRsiMod: {
     spec: { dir: "higher", e: 0.5, g: 0.38, a: 0.25 },

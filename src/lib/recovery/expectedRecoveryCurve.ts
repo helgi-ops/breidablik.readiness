@@ -16,7 +16,7 @@
  *   Goulart 2022 (Sports Med Open 8:72) — female-soccer fatigue/recovery meta: CMJ trough 12–24h,
  *     sprint down 48h, CK/LDH persist to 72h, perceptual at 12h.
  *   Nédélec 2012 — recovery kinetics / rebound by MD+2–MD+3.
- *   Brownstein/Thomas 2017 (Front Physiol 8:831) — neuromuscular fatigue after soccer (central +
+ *   Brownstein 2017 (Front Physiol 8:831) — neuromuscular fatigue after soccer (central +
  *     peripheral, ~48–72h).
  *   Doeven 2018 (BMJ Open SEM) — CK elevated 24–72h in team ball sports.
  *   McBurnie 2022 — high-intensity decelerations → muscle damage (the dose).

@@ -755,7 +755,7 @@ function ExpectedRecoveryDetail({ curve, comparison, verdict, IS }: {
             </tbody>
           </table>
         </div>
-        <p className="mt-1 text-[9px] text-slate-400">Goulart 2022 · Nédélec 2012 · Brownstein/Thomas 2017 · Doeven 2018 · McBurnie 2022. {IS ? "% = módeluð geta til baka." : "% = modelled capacity back."}</p>
+        <p className="mt-1 text-[9px] text-slate-400">Goulart 2022 · Nédélec 2012 · Brownstein 2017 · Doeven 2018 · McBurnie 2022. {IS ? "% = módeluð geta til baka." : "% = modelled capacity back."}</p>
       </details>
 
       <p className="mt-1.5 text-[9px] text-slate-400">{IS ? curve.caveat.is : curve.caveat.en}</p>

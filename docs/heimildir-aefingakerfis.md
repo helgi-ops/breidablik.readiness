@@ -13,7 +13,7 @@ VALD-viðmið, endurheimt eftir leik, ísómetrískar æfingar, viðmið í þol
 - Í viðmótinu má smella á stutta tilvísun til að sjá fulla heimild (eða ástæðuna fyrir því að hún er óstaðfest).
 - Kóðinn: `src/lib/micropulse/references/ruleRefs.ts`. Próf passar að hver tilvísun í kóðanum sé hér.
 
-Æfingakerfið: 165 heimildir staðfestar og 31 ekki. Aðrar heimildir: 44 staðfestar og 22 ekki.
+Æfingakerfið: 167 heimildir staðfestar og 28 ekki. Aðrar heimildir: 47 staðfestar og 18 ekki.
 
 ## Heimildir
 
@@ -35,6 +35,7 @@ VALD-viðmið, endurheimt eftir leik, ísómetrískar æfingar, viðmið í þol
 - Buchheit M, Laursen PB. High-intensity interval training, solutions to the programming puzzle: Part I: cardiopulmonary emphasis. Sports Med 2013;43(5):313–338. doi:10.1007/s40279-013-0029-x PMID 23539308
 - Buchheit M, Settembre M, Hader K, McHugh D. Exposures to near-to-maximal speed running bouts during different turnarounds in elite football: association with match hamstring injuries. Biol Sport 2023.
 - Buchheit M. The 30-15 intermittent fitness test: accuracy for individualizing interval training of young intermittent sport players. J Strength Cond Res 2008;22(2):365–374. doi:10.1519/JSC.0b013e3181635b2e PMID 18550949
+- Cañadas-García E, de la Rubia A, Weldon A, González-García J, Giráldez-Costas V, García-Sánchez C. Resistance priming strategies in professional Spanish soccer: a survey study into the practices and perceptions of strength and conditioning coaches. Biol Sport 2026;43:661–670. doi:10.5114/biolsport.2026.156228 PMID 41994355
 - Carling C, Lacome M, McCall A, Dupont G, Le Gall F, Simpson B, Buchheit M. Monitoring of Post-match Fatigue in Professional Soccer: Welcome to the Real World. Sports Med 2018;48(12):2695–2702. doi:10.1007/s40279-018-0935-z PMID 29740792
 - Casamichana D, Martín-García A, Díaz AG, Bradley PS, Castellano J. Accumulative weekly load in a professional football team: with special reference to match playing time and game position. Biol Sport 2022;39(1):115–124. doi:10.5114/biolsport.2021.102924 PMID 35173370
 - Chen Y, Tulhongjiang M, Ling T, Feng X, Mi J, Liu R. The optimal training intervention for improving the change of direction performance of adolescent team-sport athletes: a systematic review and network meta-analysis. PeerJ 2025;13:e18971. doi:10.7717/peerj.18971
@@ -177,6 +178,7 @@ VALD-viðmið, endurheimt eftir leik, ísómetrískar æfingar, viðmið í þol
 - Tufano JJ, Brown LE, Haff GG. Theoretical and Practical Aspects of Different Cluster Set Structures: A Systematic Review. J Strength Cond Res 2017;31(3):848–867. doi:10.1519/JSC.0000000000001581 PMID 27465625
 - Vanderka M, Bezák A, Longová K, Krčmár M, Walker S. Use of visual feedback during jump-squat training aids improvement in sport-specific tests in athletes. J Strength Cond Res 2020;34(8):2250–2257. doi:10.1519/JSC.0000000000002634
 - Vanrenterghem J, Nedergaard NJ, Robinson MA, Drust B. Training Load Monitoring in Team Sports: A Novel Framework Separating Physiological and Biomechanical Load-Adaptation Pathways. Sports Med 2017;47(11):2135–2142. doi:10.1007/s40279-017-0714-2 PMID 28283992
+- Vretaros A. Microdosing of Strength Training in Basketball During Congested Game Weeks: A Practical-Methodological Approach. Academia Letters 2022;5409. doi:10.20935/AL5409
 - Wagle JP, Taber CB, Cunanan AJ, Bingham GE, Carroll KM, DeWeese BH, Sato K, Stone MH. Accentuated eccentric loading for training and performance: a review. Sports Med 2017;47(12):2473–2495. doi:10.1007/s40279-017-0755-6
 - Weakley J, Mann B, Banyard H, McLaren S, Scott T, Garcia-Ramos A. Velocity-based training: from theory to application. Strength Cond J 2021;43(2):31–49.
 - Weakley JJS, Till K, Read DB, Roe GAB, Darrall-Jones J, Phibbs PJ, Jones B. The effects of traditional, superset, and tri-set resistance training structures on perceived intensity and physiological responses. Eur J Appl Physiol 2017;117(9):1877–1889. doi:10.1007/s00421-017-3680-3 PMID 28698987
@@ -187,7 +189,6 @@ VALD-viðmið, endurheimt eftir leik, ísómetrískar æfingar, viðmið í þol
 
 Þessar standa í reglunum eins og þær voru skrifaðar. Ekki var hægt að festa þær við eina grein og ekki er giskað á þær. Þú ákveður hvort þeim er skipt út.
 
-- **Aedo-Muñoz 2024**: Greinin með titlinum sem kóðinn gefur (örskammtar í körfubolta í þéttum leikvikum) er eftir Vretaros, Academia Letters 2022, ekki Aedo-Muñoz 2024.
 - **Bencivenga 2024**: Engin grein eftir Bencivenga frá 2024 um French contrast fannst á PubMed eða Crossref.
 - **Bishop 2020**: Athugasemdin í kóðanum gefur J Athl Train 2020;55:1062–1070, sem passar ekki við neina færslu á PubMed. Bishop birti nokkrar greinar um ósamhverfu um 2020 og ekki er skráð hver þeirra er átt við.
 - **Buchheit 2019**: Vitnað í vegna skiptingar í hlaupa- og hreyfidaga; Buchheit skrifaði nokkur verk um þetta um 2019 (sum í bókum) og ekki er skráð hvert er átt við.
@@ -200,8 +201,6 @@ VALD-viðmið, endurheimt eftir leik, ísómetrískar æfingar, viðmið í þol
 - **Dietz & Peterson 2012**: Bók: Dietz C, Peterson B. Triphasic Training. Bye Dietz Sport Enterprise, 2012. Ekki tímaritsgrein; ekki borin saman við frumheimild.
 - **Epley 1985**: Tafla úr þjálfun (Epley B. Poundage chart. Boyd Epley Workout, 1985), ekki tímaritsgrein; formúlan er víða endurbirt en var ekki borin saman við frumheimild.
 - **Gabbett 2017**: Gabbett var meðhöfundur að nokkrum greinum um álagsvöktun 2017 og ekki er skráð hver er átt við. Þekktasta greinin um skammtíma- og langtímaálag er Gabbett 2016.
-- **García-Pinillos 2024**: Könnunin sem kóðinn lýsir (upphitun með lyftum í spænskum atvinnufótbolta) er eftir Cañadas-García o.fl., Biol Sport 2026, ekki García-Pinillos 2024.
-- **Harper & McBurnie 2021**: Næst kemst yfirlitsgrein Harper DJ, McBurnie AJ o.fl. um hemlun í Sports Med 2022 (birt á netinu 2022), ekki 2021.
 - **Helms 2020**: Engin grein eftir Helms frá 2020 um einfóta mjaðmalyftur eða ósamhverfu fannst; grein hans frá 2020 fjallar um stýringu og vöktun styrktarþjálfunar.
 - **Howatson & Milak 2009**: Howatson & Milak 2009 fjallar um vöðvaskemmdir eftir endurtekna spretti. Hún ber ekki saman létta vinnu daginn eftir við algera hvíld, sem reglan vitnar í hana fyrir.
 - **Krzysztofik 2023**: Hópur Krzysztofik birti nokkrar greinar um ísómetríska upphitun fyrir sprengikraft um 2023 og ekki er skráð hver er átt við.
@@ -233,6 +232,7 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar.
 - Burgess KE, Connick MJ, Graham-Smith P, Pearson SJ. Plyometric vs. isometric training influences on tendon properties and muscle output. J Strength Cond Res 2007;21(3):986–989. doi:10.1519/R-20235.1 PMID 17685695
 - Comfort P, Allen M, Graham-Smith P. Comparisons of peak ground reaction force and rate of force development during variations of the power clean. J Strength Cond Res 2011;25(5):1235–1239. doi:10.1519/JSC.0b013e3181d6dc0d PMID 21522071
 - Comfort P, Dos'Santos T, Beckham GK, Stone MH, Guppy SN, Haff GG. Standardization and methodological considerations for the isometric midthigh pull. Strength Cond J 2019;41(2):57–79. doi:10.1519/SSC.0000000000000433
+- Cook JL, Purdam C. Is compressive load a factor in the development of tendinopathy? Br J Sports Med 2012;46(3):163–168. doi:10.1136/bjsports-2011-090414 PMID 22113234
 - Cook JL, Rio E, Purdam CR, Docking SI. Revisiting the continuum model of tendon pathology: what is its merit in clinical practice and research? Br J Sports Med 2016;50(19):1187–1191. doi:10.1136/bjsports-2015-095422 PMID 27127294
 - D'Emanuele S, Maffiuletti NA, Tarperi C, Rainoldi A, Schena F, Boccia G. Rate of Force Development as an Indicator of Neuromuscular Fatigue: A Scoping Review. Front Hum Neurosci 2021;15:701916. doi:10.3389/fnhum.2021.701916 PMID 34305557
 - DeWeese BH, Suchomel TJ, Serrano AJ, Burton JD, Scruggs SK, Taber CB. Pull from the knee. Strength Cond J 2016;38(1):79–85. doi:10.1519/SSC.0000000000000194
@@ -241,6 +241,7 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar.
 - Goom TS, Malliaras P, Reiman MP, Purdam CR. Proximal Hamstring Tendinopathy: Clinical Aspects of Assessment and Management. J Orthop Sports Phys Ther 2016;46(6):483–493. doi:10.2519/jospt.2016.5986 PMID 27084841
 - Goulart KNO, Coimbra CC, Campos HO, Drummond LR, Ogando PHM, Brown G, Couto BP, Duffield R, Wanner SP. Fatigue and Recovery Time Course After Female Soccer Matches: A Systematic Review And Meta-analysis. Sports Med Open 2022;8(1):72. doi:10.1186/s40798-022-00466-3 PMID 35657571
 - Grindem H, Snyder-Mackler L, Moksnes H, Engebretsen L, Risberg MA. Simple decision rules can reduce reinjury risk by 84% after ACL reconstruction: the Delaware-Oslo ACL cohort study. Br J Sports Med 2016;50(13):804–808. doi:10.1136/bjsports-2016-096031 PMID 27162233
+- Jarosz J, Gawel D, Socha I, Ewertowska P, Wilk M, Lum D, Krzysztofik M. Acute Effects of Isometric Conditioning Activity with Different Set Volumes on Countermovement Jump Performance in Highly Trained Male Volleyball Players. Appl Sci 2025;15(5):2393. doi:10.3390/app15052393
 - Jones AM, Vanhatalo A. The 'Critical Power' Concept: Applications to Sports Performance with a Focus on Intermittent High-Intensity Exercise. Sports Med 2017;47(Suppl 1):65–78. doi:10.1007/s40279-017-0688-0 PMID 28332113
 - Ju W, Doran D, Hawkins R, Gómez-Díaz A, Martin-Garcia A, Ade J, Laws A, Evans M, Bradley P. Contextualised peak periods of play in English Premier League matches. Biol Sport 2022;39(4):973–983. doi:10.5114/biolsport.2022.112083
 - Kubo K, Kanehisa H, Fukunaga T. Effects of different duration isometric contractions on tendon elasticity in human quadriceps muscles. J Physiol 2001;536(Pt 2):649–655. doi:10.1111/j.1469-7793.2001.0649c.xd PMID 11600697
@@ -262,6 +263,7 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar.
 - Rio E, Kidgell D, Purdam C, Gaida J, Moseley GL, Pearce AJ, Cook J. Isometric exercise induces analgesia and reduces inhibition in patellar tendinopathy. Br J Sports Med 2015;49(19):1277–1283. doi:10.1136/bjsports-2014-094386 PMID 25979840
 - Di Salvo V, Baron R, Tschan H, Calderon Montero FJ, Bachl N, Pigozzi F. Performance characteristics according to playing position in elite soccer. Int J Sports Med 2007;28(3):222–227. doi:10.1055/s-2006-924294 PMID 17024626
 - Schoenfeld BJ, Grgic J, Van Every DW, Plotkin DL. Loading Recommendations for Muscle Strength, Hypertrophy, and Local Endurance: A Re-Examination of the Repetition Continuum. Sports (Basel) 2021;9(2). doi:10.3390/sports9020032 PMID 33671664
+- Seraphin A, Edson C, Price C, Jones B, Jagielo A, Mullner J. Normative Performance Test Metrics in Professional Female Club Soccer. J Sports Med Allied Health Sci 2025;10(3). doi:10.25035/jsmahs.10.03.01
 - Silbernagel KG, Crossley KM. A Proposed Return-to-Sport Program for Patients With Midportion Achilles Tendinopathy: Rationale and Implementation. J Orthop Sports Phys Ther 2015;45(11):876–886. doi:10.2519/jospt.2015.5885 PMID 26390272
 - Skiba PF, Chidnok W, Vanhatalo A, Jones AM. Modeling the expenditure and reconstitution of work capacity above critical power. Med Sci Sports Exerc 2012;44(8):1526–1532. doi:10.1249/MSS.0b013e3182517a80 PMID 22382171
 - Suchomel TJ, Comfort P, Stone MH. Weightlifting pulling derivatives: rationale for implementation and application. Sports Med 2015;45(6):823–839. doi:10.1007/s40279-015-0314-y PMID 25689955
@@ -275,14 +277,11 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar.
 
 - **Buchheit 2013**: Buchheit birti nokkrar greinar 2013, þar á meðal yfirlitsgreinina um HIIT með Laursen í tveimur hlutum; ekki er skráð hvaða grein er átt við.
 - **Buchheit 2014**: Buchheit birti nokkrar greinar um fótbolta 2014 (sprettfræði, endurteknir sprettir, hlaup í leik); ekki er skráð hver er átt við.
-- **Cook & Purdam 2009**: Titillinn sem kóðinn gefur er grein Cook & Purdam frá 2012. Grein þeirra frá 2009 heitir „Is tendon pathology a continuum?“. Ekki er ljóst hvor er átt við.
 - **Delaney 2017**: Delaney birti nokkrar greinar um hámarks hlaupaákefð um 2017 (rugby league, rugby union, fótbolti); ekki er skráð hver er átt við.
 - **Dos'Santos 2022**: Dos'Santos var meðhöfundur að nokkrum greinum 2022 um stefnubreytingar og snúninga í leik; ekki er skráð hver er átt við.
-- **Edson 2024**: Næst kemst Seraphin A, Edson C o.fl., viðmið í prófum hjá atvinnukonum í fótbolta, J Sports Med Allied Health Sci, birt 2025, ekki 2024.
 - **Edwards 2018**: Líklegasta greinin (Edwards T o.fl., J Strength Cond Res 2018, þreytumælingar í háskólakörfubolta) hefur verið dregin til baka, og ágrip hennar segir FT:CT óáreiðanlegt milli daga (CV 10,9%). Fullyrðingin um FT:CT og þreytu þarf aðra heimild.
 - **Esteve 2018**: Esteve 2018 fjallar um styrk aðlægra vöðva og fyrri náraverki hjá 303 leikmönnum; hún gefur engin mörk fyrir mun á hægri og vinstri, sem kóðinn vitnar í hana fyrir.
 - **Hägglund 2013**: Hägglund 2013 (UEFA-rannsóknin) sýnir fyrri meiðsli og spyrnufót sem áhættuþætti; hún mælir ekki styrk og styður því ekki lesturinn á styrkbili í nára.
-- **Hernández-Davó 2021**: Titillinn sem kóðinn gefur er á grein Jarosz o.fl., Applied Sciences 2025 (með Lum og Krzysztofik); engin grein eftir Hernández-Davó frá 2021 með þeim titli fannst.
 - **King 2018**: Greinar King frá 2018 um náraverki fjalla um endurhæfingu og hreyfifræði; engin sýnir veikleika aðlægra vöðva sem áhættuþátt, sem kóðinn vitnar í fyrir.
 - **Kotsifaki 2024**: Engin grein eftir Kotsifaki (með Heiderscheit og Buchheit) frá 2024 um styrk í nára fannst á PubMed eða Crossref.
 - **Lanza 2019**: Tvær ólíkar greinar eru nefndar Lanza 2019. Sú með fullum höfundalista (Lanza, Castelli … Cyrino) fannst ekki. Lanza, Balshaw & Folland 2019 (Eur J Appl Physiol, horn liðar) er til en er ekki endilega sú sem átt er við.
@@ -292,6 +291,5 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar.
 - **Power 2023**: Engin grein eftir Power frá 2023 um stigvaxandi ísómetrískt álag við sinakvilla fannst á PubMed eða Crossref.
 - **Read 2022**: Engin grein eftir Read frá 2022 með NordBord-viðmiðum fyrir fullorðna karla í fótbolta fannst; næst kemst áreiðanleikarannsókn Bishop o.fl. 2022.
 - **Sandford 2019**: Greinar Sandford frá 2019 fjalla um 800 m og 1500 m hlaupara; engin gefur viðmið um sprettihraða í fótbolta og ekki er skráð hver er átt við.
-- **Seraphin 2024**: Næst kemst Seraphin A, Edson C o.fl., viðmið í prófum hjá atvinnukonum í fótbolta, J Sports Med Allied Health Sci, birt 2025, ekki 2024.
 - **Thomas 2017**: Tvær greinar frá 2017 passa: Thomas o.fl. (Med Sci Sports Exerc, hermdur leikur) og Brownstein … Thomas (Front Physiol, keppnisleikur). Kóðinn notar „Thomas 2017“ um báðar; ekki er ljóst hvor er átt við hverju sinni.
 - **Toth 2019**: Engin grein eftir Toth frá 2019 um hoppviðmið í unglingafótbolta fannst á PubMed eða Crossref.

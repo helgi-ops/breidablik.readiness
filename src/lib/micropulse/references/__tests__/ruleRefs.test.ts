@@ -112,6 +112,19 @@ describe("rule references", () => {
     expect(citationsIn("Cite: Aug 2026 and Football, Season 2026")).toEqual([]);
   });
 
+  it("citations that named the wrong paper now name the one they meant", () => {
+    const all = [...codeCitations(), ...citationsUnder(OTHER_CITATION_SOURCES)];
+    for (const s of ["Aedo-Muñoz 2024", "García-Pinillos 2024", "Seraphin 2024", "Cook & Purdam 2009", "Harper & McBurnie 2021", "Brownstein/Thomas 2017"]) {
+      expect(all).not.toContain(s);
+    }
+    expect(all.some((s) => s.startsWith("Hernández-Davó"))).toBe(false);
+    expect(findRefByShort("Jarosz, Gawel, Socha, Ewertowska, Wilk, Lum, Krzysztofik 2025")?.key).toBe("jaroszgawel2025");
+    expect(findRefByShort("Jarosz 2025")?.key).toBe("jarosz2025");
+    expect(findRefByShort("Cañadas-García 2026")?.key).toBe("canadasgarcia2026");
+    expect(findRefByShort("Cook & Purdam 2012")?.key).toBe("cookpurdam2012");
+    expect(findRefByShort("Harper 2022")?.key).toBe("harper2022");
+  });
+
   it("the catalogue's references section lists each of its citations in full, or as unresolved", () => {
     expect(CATALOGUE_REFS).not.toBe("");
     for (const s of citationsIn(RULES_PART)) {

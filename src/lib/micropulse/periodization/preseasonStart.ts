@@ -17,7 +17,7 @@
  * Citations: Teixeira 2021 (~80/20 training:match); Figueiredo (match as the load unit);
  * Gabbett / Malone (ACWR, progressive loading, controlled re-entry); Foster (sRPE); Vanrenterghem
  * 2017 (physiological vs biomechanical load-adaptation pathways — progress them differently);
- * Harper & McBurnie 2021 (deceleration = highest tissue load); Duhig 2016 (HSR/sprint & hamstring).
+ * Harper 2022 (deceleration = highest tissue load); Duhig 2016 (HSR/sprint & hamstring).
  */
 
 import { weeklyTargetFromMatch, type Bi } from "./index";
@@ -124,8 +124,8 @@ export function preseasonStartRamp(opts: PreseasonStartOpts): PreseasonWeekTarge
     // Oliva-Lozano 2020) × a pathway-specific PROGRESSION: biomechanical/tissue metrics (decel, sprint,
     // HSR, COD, high stride) ramp on a CONSERVATIVE convex curve (γ>1 — stays low early, rises late),
     // physiological/metabolic metrics (accel, distance) ramp linearly, to the same end-of-pre-season
-    // destination. Separates the two load-adaptation pathways (Vanrenterghem 2017; Harper & McBurnie
-    // 2021 — decel = highest tissue load; Duhig 2016 — HSR/sprint & hamstring).
+    // destination. Separates the two load-adaptation pathways (Vanrenterghem 2017; Harper
+    // 2022 — decel = highest tissue load; Duhig 2016 — HSR/sprint & hamstring).
     // Each KPI ramps from its OWN week-1 re-entry FLOOR (fraction of peak) to the shared peak. Aerobic
     // volume (distance) and HSR start HIGH (safe base, built early); high-speed/mechanical keep the generic,
     // conservative re-entry. The floor never pulls a KPI below the coach's week-1 multiple. The biomechanical
