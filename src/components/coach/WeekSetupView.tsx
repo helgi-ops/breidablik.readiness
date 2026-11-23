@@ -1,6 +1,7 @@
 "use client";
 
 import NoMatchWeekCheck from "@/components/coach/NoMatchWeekCheck";
+import PlanIntentCard from "@/components/coach/PlanIntentCard";
 import { authFetch } from "@/lib/client/authFetch";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -1988,6 +1989,11 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           <span className="min-w-6 text-right text-[22px] font-bold tabular-nums" style={archivo}>{intensityTarget}</span>
         </div>
       </section>
+
+      {/* What the coach wants from this week, in their own words → rule-based advice (planIntent/). Football only. */}
+      {!isBasketball && teamId && weekStart && (
+        <div className="mt-5"><PlanIntentCard scope="week" start={weekStart} /></div>
+      )}
 
       {/* 3 — THE WEEK GRID: compact cards (what you decide); click a day to open it below */}
       <section className="mt-5">

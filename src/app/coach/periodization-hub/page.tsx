@@ -42,6 +42,7 @@ import { buildDayDrillSheet } from "@/lib/micropulse/dayDrillSheet";
 import { fetchResearchDrills } from "@/lib/micropulse/dayDrillLibraryFetch";
 import { recommendTestingSchedule, testsForBlock, TEST_SHORT, testShortName, AEROBIC_TESTS, DEFAULT_AEROBIC_TEST, isAerobicMode, type TestKey, type AerobicMode } from "@/lib/micropulse/periodization/testingSchedule";
 import FitnessTestCard from "@/components/coach/FitnessTestCard";
+import PlanIntentCard from "@/components/coach/PlanIntentCard";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
 type Bi = { en: string; is: string };
@@ -2897,6 +2898,12 @@ export default function PeriodizationHubPage() {
               </div>
             )}
           </section>
+
+          {/* What the coach wants from this block, in their own words → rule-based advice (planIntent/). Football, team scope. */}
+          {sel && !isPlayerScope && !isBasketball && selGoal !== "deload" && (
+            <PlanIntentCard scope="block" start={mondayOf(sel.start)} weeks={sel.weeks} blockGoal={selGoal}
+              phaseHint={offPhaseStart && sel.start >= offPhaseStart ? "offseason" : sel.inSeason ? "inseason" : "preseason"} />
+          )}
 
           {plan.phases.length === 0 && <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12px] font-medium text-amber-900">{is ? "⚠ Engir leikir/akkeri í Makró enn — stilltu Makró-lotuna fyrst (undirbúningsdag, leikjaskrá, niðurtröppun). Lotan hér reiknast úr því." : "⚠ No Macro anchors/fixtures yet — set the Macro Cycle first (pre-season date, fixtures, deload cadence). This block is computed from it."}</p>}
 

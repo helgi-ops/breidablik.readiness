@@ -55,6 +55,7 @@ export const AI_WRITE_PATHS = [
   "/api/coach/movement-analysis",
   "/api/coach/notifications/:id/player-message",
   "/api/coach/opponent-player-analysis",
+  "/api/coach/plan-intent",
   "/api/coach/player-analysis",
   "/api/coach/player-game-report/narrative",
   "/api/coach/player-stats/narrative",
