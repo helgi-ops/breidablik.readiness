@@ -16,7 +16,7 @@ export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
 export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load" | "post_match_recovery"
   | "fitness_trend" | "body_comp" | "speed_zones" | "position_fitness" | "strength_1rm" | "strength_phase" | "wearable_recovery"
-  | "ccc_gate" | "load_acwr" | "sprint_speed_drop" | "stride_fatigue" | "session_enough" | "long_run_load" | "near_max_exposure" | "goal_tests";
+  | "ccc_gate" | "load_acwr" | "sprint_speed_drop" | "stride_fatigue" | "session_enough" | "long_run_load" | "near_max_exposure" | "goal_tests" | "cmj_dose";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -1638,4 +1638,60 @@ export function deriveGoalTestsSignal(reads: GoalTestDue[]): CoachSignal {
       is: "Skráðu prófið undir Markmiðsbeiðnir → Framvinda og niðurstaða og áminningin hverfur. Stökkhæð kemur sjálfkrafa úr VALD. Án upphafsprófs og endurprófs fær áætlun enga niðurstöðu, aðeins merktar æfingar. Gluggarnir eru val MicroPulse: upphafspróf í vikum 1–3, endurpróf frá viku 7 til 3 vikum eftir lok.",
     },
   };
+}
+
+// ── cmj_dose: a jump test before the match changed the gym dose (strength-day-rules brief §3) ──
+const CMJ_DOSE_LABEL: Bi = { en: "Jump test before the match", is: "Hoppróf fyrir leik" };
+const CMJ_DOSE_HREF = "/coach/strength";
+
+/** One player whose MD-2 test (or MD-1 test when MD-2 had none) was below his normal range. */
+export type CmjDoseLite = {
+  playerId: string;
+  name: string;
+  rule: "CMJ_DROP_MD2" | "CMJ_DROP_MD1_FALLBACK";
+  /** The test facts (cmjTestFacts): value, % of his usual, today's normal range. */
+  facts: Bi;
+};
+
+const CMJ_DOSE_DID: Record<CmjDoseLite["rule"], Bi> = {
+  CMJ_DROP_MD2: { en: "Gym on MD-2 and MD-1: maintenance and primer only.", is: "Ræktin á MD-2 og MD-1: aðeins viðhald og örvun." },
+  CMJ_DROP_MD1_FALLBACK: { en: "Gym on MD-1: the primer only.", is: "Ræktin á MD-1: aðeins örvunaræfingin." },
+};
+const CMJ_DOSE_CF: Bi = {
+  en: "A jump inside his normal range would have kept the planned session. The readiness colour is not changed by this. Rule: the coach's test days (MD-2, MD-1 when MD-2 is off); range from his last tests and the last match's running (Hader 2019, Gathercole 2015).",
+  is: "Stökk innan eðlilegs bils hefði haldið áætlaðri æfingu. Readiness-liturinn breytist ekki við þetta. Regla: prófdagar þjálfarans (MD-2, MD-1 þegar MD-2 er frí); bil úr síðustu prófum og hlaupum síðasta leiks (Hader 2019, Gathercole 2015).",
+};
+
+/** Team strip: who tested low before the match. Facts, so confidence is high. Advisory; never the readiness colour. */
+export function deriveCmjDoseTeamSignal(reads: CmjDoseLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "cmj_dose", level: "steady", label: CMJ_DOSE_LABEL, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: CMJ_DOSE_HREF };
+  if (!reads.length) return base;
+  const first = (n: string) => n.split(" ")[0];
+  const names = reads.slice(0, 5).map((r) => first(r.name)).join(", ") + (reads.length > 5 ? ` +${reads.length - 5}` : "");
+  return {
+    ...base,
+    level: reads.length >= 3 ? "elevated" : "watch",
+    confidence: "high",
+    why: {
+      en: [`Jump below his normal range: ${names}. Gym before the match is maintenance and primer only.`],
+      is: [`Stökk undir eðlilegu bili: ${names}. Ræktin fyrir leik er aðeins viðhald og örvun.`],
+    },
+    counterfactual: CMJ_DOSE_CF,
+  };
+}
+
+/** One attention-row chip per player whose pre-match test was low. */
+export function derivePlayerCmjDoseSignals(reads: CmjDoseLite[]): PlayerSignal[] {
+  return reads.map((r) => ({
+    playerId: r.playerId,
+    signal: {
+      engine: "cmj_dose" as const,
+      level: "watch" as SignalLevel,
+      label: CMJ_DOSE_LABEL,
+      why: { en: [r.facts.en, CMJ_DOSE_DID[r.rule].en], is: [r.facts.is, CMJ_DOSE_DID[r.rule].is] },
+      confidence: "high" as const,
+      counterfactual: CMJ_DOSE_CF,
+      href: CMJ_DOSE_HREF,
+    },
+  }));
 }

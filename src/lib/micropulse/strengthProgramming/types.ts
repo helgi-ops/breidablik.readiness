@@ -333,6 +333,10 @@ export type PlayerStrengthSnapshot = {
    *  player's own input (picks, strength goal, goal plan gym session) only if the player takes part under the mode of
    *  the build (`sendMode.ts` takesPart). Absent (hand-built snapshots) → the input is used as given. */
   playerChoiceAccess?: PlayerChoiceAccess;
+  /** The jump test on this week's test day that feeds today's dose (cmjDose.ts, brief §3): MD+3 for the heavy day,
+   *  MD-2 (or MD-1 when MD-2 had none) for MD-2 / MD-1. Absent = no test that day, or no ready baseline. Never the
+   *  readiness colour. */
+  cmjTest?: import("./cmjDose").CmjDoseTest;
 };
 
 /** See `PlayerStrengthSnapshot.playerChoiceAccess`. */

@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { getValdAccountState, listValdSyncHistory, listValdUnmatchedAthletes, syncValdData } from "@/lib/integrations/vald";
 import { maskSecret } from "@/lib/integrations/vald/config";
 import { runPersonalBestDetection } from "@/lib/notifications/sendPersonalBestNudge";
+import { refreshAfterJumpTests } from "@/lib/micropulse/strengthProgramming/cmjDoseRefresh";
 
 export const runtime = "nodejs";
 // A one-day sync still re-processes the 3-year NordBord/ForceFrame back-fill: 83–108 s
@@ -72,6 +73,9 @@ export async function POST(req: Request) {
       try {
         await runPersonalBestDetection(getSupabaseServer(), { now: new Date().toISOString(), recencyDays: 14, teamId, writeOnly: true });
       } catch { /* PB detection is non-critical to the sync */ }
+      // Today's jump tests feed today's gym dose and the coach's pre-match line (strength-day-rules §3). After the
+      // response; never blocks or fails the sync.
+      after(() => refreshAfterJumpTests(getSupabaseServer(), teamId, new Intl.DateTimeFormat("en-CA", { timeZone: "Atlantic/Reykjavik" }).format(new Date())));
     }
     return NextResponse.json({ ok: result.status !== "failed", ...result });
   } catch (error) {

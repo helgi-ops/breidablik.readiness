@@ -61,6 +61,7 @@ import {
 } from "./palette";
 import { DEFAULT_STRUCTURE_BY_MD, STRUCTURES_ALLOWED_BY_MD, STRUCTURE_LABEL, readinessDowngrade, isRestDay, noMatchDayFor, weekdayOf, NO_MATCH_DAY_MD, NO_MATCH_DAY_LABEL, WEEKDAY_LABEL, type MdStructures, type NoMatchDayKind, type StructureKey } from "./structures";
 import { enforceDayRules, estimateSessionMinutes } from "./dayRules";
+import { applyCmjDose } from "./cmjDose";
 import { buildStructuredBlocks } from "./structureBuilders";
 
 export * from "./types";
@@ -575,9 +576,10 @@ export function buildStrengthSession(
   // The day rule is checked last, on what would be delivered (dayRules.ts): it only trims, never adds. Football only.
   // Each build below is checked, so the yellow / green comparison is made on what would really go out.
   const isBasketball = String(snapIn.sport ?? "").toLowerCase() === "basketball";
+  // A jump test on this week's test day (MD+3 / MD-2 / MD-1) cuts the dose before the day rule (cmjDose.ts, §3).
   const core = (snap: PlayerStrengthSnapshot, keep: boolean) => {
     const built = buildStrengthSessionCore(snap, coachOverrides, opts, keep);
-    return isBasketball ? built : enforceDayRules(built);
+    return isBasketball ? built : enforceDayRules(applyCmjDose(built, snap.cmjTest));
   };
   const s = core(snapIn, false);
   if (!s || !s.appliedAdaptations.some((a) => a.ruleId === "STRUCTURE_READINESS_DOWNGRADE")) return s;
@@ -585,7 +587,8 @@ export function buildStrengthSession(
   // rung really is lighter. If it would mean more loaded reps, more reps in all, or more exercises than the same day
   // on green (e.g. contrast 3×3 @85% → cluster 2×12 @80%), today's method stays and the yellow set cut lightens it.
   // Loaded reps are counted on their own: dropping the jumps must not buy a heavier main lift.
-  const green = core({ ...snapIn, verdict: "FULL" }, false);
+  // The green build is the plain green day: without the jump-test cut (that cut is itself a yellow dose).
+  const green = core({ ...snapIn, verdict: "FULL", cmjTest: undefined }, false);
   if (!green) return s;
   const a = workOf(s), g = workOf(green);
   if (a.loadedReps <= g.loadedReps && a.reps <= g.reps && a.exercises <= g.exercises) return s;

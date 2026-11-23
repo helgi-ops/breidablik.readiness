@@ -30,6 +30,7 @@ import {
   deriveLongRunLoadTeamSignal, derivePlayerLongRunLoadSignals,
   deriveNearMaxTeamSignal, derivePlayerNearMaxSignals, dropDueWhereSprintSuppressed,
   deriveGoalTestsSignal,
+  deriveCmjDoseTeamSignal, derivePlayerCmjDoseSignals,
   type CoachSignal,
 } from "@/lib/micropulse/coachSignals";
 import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite, loadTeamPositionFitnessLite, loadTeamStrength1rmLite, loadTeamStrengthPhaseLite } from "@/lib/micropulse/coachSignals/newEngineLoads";
@@ -48,6 +49,8 @@ import { loadTeamStrideFatigueSignals } from "@/lib/micropulse/strideLength/sign
 import { loadTeamLongRunLoadSignals } from "@/lib/micropulse/longRuns/signalLoad";
 import { loadTeamNearMaxSignals } from "@/lib/micropulse/nearMaxExposure/signalLoad";
 import { loadTeamGoalTestsDue } from "@/lib/micropulse/goalPlan/progressLoader";
+import { loadTeamCmjDoseReads } from "@/lib/micropulse/strengthProgramming/cmjDoseLoader";
+import { cmjTestFacts } from "@/lib/micropulse/strengthProgramming/cmjDose";
 
 /** A signal with its owner — playerId null = team-level (chip strip), set = per-player (attention row). */
 export type OwnedSignal = CoachSignal & { playerId: string | null };
@@ -72,7 +75,7 @@ export async function computeTeamSignals(sb: SupabaseClient, teamId: string, tod
   const bodyComp = deriveBodyCompSignal(bodyCompLite);
   const speedZones = deriveSpeedZonesSignal(speedZonesLite);
 
-  const [posFitLite, strengthLite, strengthPhaseLite, cccGateReads, acwrReads, sprintDropReads, strideFatigueReads, enoughRead, longRunReads, nearMaxRaw, goalTestReads] = await Promise.all([
+  const [posFitLite, strengthLite, strengthPhaseLite, cccGateReads, acwrReads, sprintDropReads, strideFatigueReads, enoughRead, longRunReads, nearMaxRaw, goalTestReads, cmjDoseReads] = await Promise.all([
     loadTeamPositionFitnessLite(sb, teamId).catch(() => []),
     loadTeamStrength1rmLite(sb, teamId).catch(() => []),
     loadTeamStrengthPhaseLite(sb, teamId).catch(() => ({ phase: null, needBodyComp: 0, total: 0, weeksToOpener: null })),
@@ -84,6 +87,7 @@ export async function computeTeamSignals(sb: SupabaseClient, teamId: string, tod
     loadTeamLongRunLoadSignals(sb, teamId, today).catch(() => []),
     loadTeamNearMaxSignals(sb, teamId, today).catch(() => []),
     loadTeamGoalTestsDue(sb, teamId, today).catch(() => []),
+    loadTeamCmjDoseReads(sb, teamId, today).catch(() => []),
   ]);
   const posFit = derivePositionFitnessSignal(posFitLite);
   const strength1rm = deriveStrength1rmSignal(strengthLite);
@@ -105,6 +109,10 @@ export async function computeTeamSignals(sb: SupabaseClient, teamId: string, tod
   const nearMaxPlayers = derivePlayerNearMaxSignals(nearMaxReads);
   // Player goal plans that need a start test or a retest from the coach (lota 6). Team chip only.
   const goalTests = deriveGoalTestsSignal(goalTestReads);
+  // A jump test before the match (MD-2, or MD-1 when MD-2 was off) below the player's range changed the gym dose (§3).
+  const cmjDoseLite = cmjDoseReads.map((r) => ({ playerId: r.playerId, name: r.name, rule: r.rule, facts: cmjTestFacts(r.test) }));
+  const cmjDose = deriveCmjDoseTeamSignal(cmjDoseLite);
+  const cmjDosePlayers = derivePlayerCmjDoseSignals(cmjDoseLite);
 
   const cccGate = deriveCccGateTeamSignal(cccGateReads);
   const cccGatePlayers = derivePlayerCccGateSignals(cccGateReads);
@@ -152,8 +160,8 @@ export async function computeTeamSignals(sb: SupabaseClient, teamId: string, tod
     });
   }
 
-  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), deriveSessionEnoughSignal(enoughRead), mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase, cccGate, loadAcwr, sprintDrop, strideFatigue, longRunLoad, nearMax, goalTests].map((s) => ({ ...s, playerId: null }));
-  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers, ...cccGatePlayers, ...loadAcwrPlayers, ...sprintDropPlayers, ...strideFatiguePlayers, ...longRunLoadPlayers, ...nearMaxPlayers, ...derivePlayerSessionEnoughSignals(enoughRead)].map((x) => ({ ...x.signal, playerId: x.playerId }));
+  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), deriveSessionEnoughSignal(enoughRead), mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase, cccGate, loadAcwr, sprintDrop, strideFatigue, longRunLoad, nearMax, goalTests, cmjDose].map((s) => ({ ...s, playerId: null }));
+  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers, ...cccGatePlayers, ...loadAcwrPlayers, ...sprintDropPlayers, ...strideFatiguePlayers, ...longRunLoadPlayers, ...nearMaxPlayers, ...cmjDosePlayers, ...derivePlayerSessionEnoughSignals(enoughRead)].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }
 

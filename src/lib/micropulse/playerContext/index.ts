@@ -47,6 +47,8 @@ import {
   fetchLastMatchMinutes,
 } from "./domains";
 import { strengthView } from "./views/strengthView";
+import { fetchCmjDoseTest } from "../strengthProgramming/cmjDoseLoader";
+import type { CmjDoseTest } from "../strengthProgramming/cmjDose";
 
 export { strengthView };
 export { assertNoMedicalLeak } from "./wall";
@@ -94,6 +96,8 @@ export type PlayerContext = {
   /** Minutes in the most recent match before today — the MD+1 recovery-tier read. */
   matchExposure: Domain<{ lastMatchMinutes: number | null; lastMatchDnp: boolean }>;
   movementDeficit: Domain<{ ledgerEmphases: string[]; correctives: SessionCorrective[]; correctiveEmphases: string[] }>;
+  /** The jump test on this week's test day that feeds today's dose (MD-4/MD-5, MD-2, MD-1 only). Absent = none. */
+  cmjTest?: Domain<{ test?: CmjDoseTest }>;
 };
 
 export type BuildPlayerContextArgs = {
@@ -152,6 +156,9 @@ export async function buildPlayerContext(
     fetchLastMatchMinutes(sb, teamId, playerId, todayIso),
     fetchPlayerExercisePicks(sb, playerId, teamId),
   ]);
+
+  // The jump test that feeds today's dose: read only on the days it can change (needs today's MD day first).
+  const cmjTest = await fetchCmjDoseTest(sb, { teamId, playerId, todayIso, md: mdInfo.mdContext });
 
   const wellnessAvailable =
     wellness.sleepQuality != null || wellness.muscleSoreness != null ||
@@ -222,5 +229,6 @@ export async function buildPlayerContext(
       },
       status: statusOf(ledgerEmphases.length > 0 || screenCorrectives.correctives.length > 0),
     },
+    cmjTest: { data: cmjTest ? { test: cmjTest } : {}, status: statusOf(cmjTest != null) },
   };
 }

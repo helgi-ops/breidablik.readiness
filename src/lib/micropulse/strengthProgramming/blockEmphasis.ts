@@ -19,6 +19,7 @@ import type { StrengthSession, SessionBlock, AppliedAdaptation } from "./types";
 import type { BlockGoalKey, SeasonPhaseKey, CoachBlockRule, StrengthMethodKey } from "./seasonPhaseStrength";
 import { strengthForBlockGoal } from "./seasonPhaseStrength";
 import { enforceDayRules } from "./dayRules";
+import { holdCmjCut } from "./cmjDose";
 import { traditionalLiftDayScale } from "./inSeasonStrengthMode";
 import { SUBPHASE_DOSE_SCALE, subPhaseInfo, type InSeasonSubPhaseKey } from "@/lib/micropulse/periodization/inSeasonSubPhase";
 import { sanitizeVbtPrescription, type VbtPrescription } from "@/lib/micropulse/vbtMethods";
@@ -81,7 +82,8 @@ export function applyBlockToSession(
   // The block can add a set: the day rule is checked again on what goes out (dayRules.ts). Football only
   // (a basketball session is labelled "Strength").
   if (!out || out === session || out.contextLabel === "Strength") return out;
-  return enforceDayRules(out);
+  // A jump-test cut (cmjDose.ts) holds: the block does not add its sets back.
+  return enforceDayRules(session ? holdCmjCut(session, out) : out);
 }
 
 /** The block's own change, before the day rule's check (exported for its tests). */

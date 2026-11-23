@@ -62,5 +62,7 @@ export function strengthView(ctx: PlayerContext): PlayerStrengthSnapshot {
     ...(cfg.noMatchWeek ? { noMatchWeek: cfg.noMatchWeek } : {}),
     // The coach's reps a set per heavy MD day (the week rule cuts the day's reps into sets by it).
     ...(cfg.mdRepsPerSet ? { mdRepsPerSet: cfg.mdRepsPerSet } : {}),
+    // The jump test that feeds today's dose (cmjDose.ts), only when there is one.
+    ...(ctx.cmjTest?.data.test ? { cmjTest: ctx.cmjTest.data.test } : {}),
   };
 }
