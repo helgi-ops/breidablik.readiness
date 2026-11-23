@@ -7,6 +7,8 @@ Hér er notað:
 
 - **Regla** er auðkennið sem sést í skránni yfir breytingar (`AppliedAdaptation.ruleId`).
 - **MicroPulse-regla** er regla þjálfarans eða okkar, ekki niðurstaða rannsóknar. Hún er alltaf merkt þannig.
+- **Heimildir** eru aftast: full heimild fyrir hverja stutta tilvísun („Carling 2018“), og listi yfir þær sem ekki
+  tókst að staðfesta.
 - Skrár: `SP/` = `src/lib/micropulse/strengthProgramming/`, `GP/` = `goalPlan/`, `WS/` = `weekSetup/`,
   `PZ/` = `periodization/`.
 
@@ -498,3 +500,65 @@ Eftirtöldum ákvörðunum má breyta:
     leikmaður → lið → enska, eins og áður. Áður féll handsend æfing á íslensku, og blokk og leiðrétting hunsuðu mál
     leikmannsins. Í dag (23. nóv.) hafa 255 af 277 virkum leikmönnum ekki tilkynnt mál og 76 lið ekkert sjálfgefið
     mál, svo íslenskur þjálfari sendir þeim áfram á íslensku.
+
+---
+
+## Heimildir
+
+Fullar heimildir fyrir stuttu tilvísanirnar í reglunum hér að ofan (sótt og borið saman við ágrip 23. nóv. 2026).
+Sama skrá er í kóðanum: `src/lib/micropulse/references/ruleRefs.ts` (`findRefByShort`). Próf
+(`references/__tests__/ruleRefs.test.ts`) passar að hver tilvísun í þessu skjali sé hér, annaðhvort full eða á
+listanum yfir óstaðfestar.
+
+- Arnason A, Andersen TE, Holme I, Engebretsen L, Bahr R. Prevention of hamstring strains in elite soccer: an intervention study. Scand J Med Sci Sports 2008;18(1):40–48. doi:10.1111/j.1600-0838.2006.00634.x PMID 17355322
+- Bourne MN, Duhig SJ, Timmins RG, Williams MD, Opar DA, Al Najjar A, Kerr GK, Shield AJ. Impact of the Nordic hamstring and hip extension exercises on hamstring architecture and morphology: implications for injury prevention. Br J Sports Med 2017;51(5):469–477. doi:10.1136/bjsports-2016-096130 PMID 27660368
+- Buchheit M, Settembre M, Hader K, McHugh D. Exposures to near-to-maximal speed running bouts during different turnarounds in elite football: association with match hamstring injuries. Biol Sport 2023.
+- Carling C, Lacome M, McCall A, Dupont G, Le Gall F, Simpson B, Buchheit M. Monitoring of Post-match Fatigue in Professional Soccer: Welcome to the Real World. Sports Med 2018;48(12):2695–2702. doi:10.1007/s40279-018-0935-z PMID 29740792
+- Claudino JG, Cronin J, Mezêncio B, McMaster DT, McGuigan M, Tricoli V, Amadio AC, Serrão JC. The countermovement jump to monitor neuromuscular status: A meta-analysis. J Sci Med Sport 2017;20(4):397–402. doi:10.1016/j.jsams.2016.08.011 PMID 27663764
+- Cuthbert M, Haff GG, Arent SM, Ripley N, McMahon JJ, Evans M, Comfort P. Effects of variations in resistance training frequency on strength development in well-trained populations and implications for in-season athlete training: a systematic review and meta-analysis. Sports Med 2021;51:1967–1982.
+- Dos'Santos T, McBurnie A, Comfort P, Jones PA. The effects of six-weeks change of direction speed and technique modification training on cutting performance and movement quality in male youth soccer players. Sports 2019;7(9):205. doi:10.3390/sports7090205
+- van Dyk N, Behan FP, Whiteley R. Including the Nordic hamstring exercise in injury prevention programmes halves the rate of hamstring injuries: a systematic review and meta-analysis of 8459 athletes. Br J Sports Med 2019;53(21):1362–1370. doi:10.1136/bjsports-2018-100045 PMID 30808663
+- Edouard P, Mendiguchia J, Guex K, Lahti J, Samozino P, Morin JB. Sprinting: a potential vaccine for hamstring injury? Sport Perform Sci Rep 2019;48:v1.
+- Fessi MS, Zarrouk N, Di Salvo V, Filetti C, Barker AR, Moalla W. Effects of tapering on physical match activities in professional soccer players. J Sports Sci 2016;34(24):2189–2194. doi:10.1080/02640414.2016.1171891 PMID 27065344
+- Foster C. Monitoring training in athletes with reference to overtraining syndrome. Med Sci Sports Exerc 1998;30(7):1164–1168. doi:10.1097/00005768-199807000-00023 PMID 9662690
+- Gathercole R, Sporer B, Stellingwerff T, Sleivert G. Alternative countermovement-jump analysis to quantify acute neuromuscular fatigue. Int J Sports Physiol Perform 2015;10(1):84–92. doi:10.1123/ijspp.2013-0413 PMID 24912201
+- Grgic J, Schoenfeld BJ, Davies TB, Lazinica B, Krieger JW, Pedisic Z. Effect of Resistance Training Frequency on Gains in Muscular Strength: A Systematic Review and Meta-Analysis. Sports Med 2018;48(5):1207–1220. doi:10.1007/s40279-018-0872-x PMID 29470825
+- Gullett JC, Tillman MD, Gutierrez GM, Chow JW. A biomechanical comparison of back and front squats in healthy trained individuals. J Strength Cond Res 2009;23(1):284–292. doi:10.1519/JSC.0b013e31818546bb PMID 19002072
+- Hader K, Rumpf MC, Hertzog M, Kilduff LP, Girard O, Silva JR. Monitoring the Athlete Match Response: Can External Load Variables Predict Post-match Acute and Residual Fatigue in Soccer? A Systematic Review with Meta-analysis. Sports Med Open 2019;5(1):48. doi:10.1186/s40798-019-0219-7 PMID 31820260
+- Harøy J, Clarsen B, Wiger EG, Øyen MG, Serner A, Thorborg K, Hölmich P, Andersen TE, Bahr R. The Adductor Strengthening Programme prevents groin problems among male football players: a cluster-randomised controlled trial. Br J Sports Med 2019;53(3):150–157. doi:10.1136/bjsports-2017-098937 PMID 29891614
+- Harrison PW, James LP, McGuigan MR, Jenkins DG, Kelly VG. Resistance Priming to Enhance Neuromuscular Performance in Sport: Evidence, Potential Mechanisms and Directions for Future Research. Sports Med 2019;49(10):1499–1514. doi:10.1007/s40279-019-01136-3 PMID 31203499
+- Helms ER, Cronin J, Storey A, Zourdos MC. Application of the Repetitions in Reserve-Based Rating of Perceived Exertion Scale for Resistance Training. Strength Cond J 2016;38(4):42–49. doi:10.1519/SSC.0000000000000218 PMID 27531969
+- Hoff J, Helgerud J. Endurance and strength training for soccer players: physiological considerations. Sports Med 2004;34(3):165–180. doi:10.2165/00007256-200434030-00003 PMID 14987126
+- van der Horst N, Smits DW, Petersen J, Goedhart EA, Backx FJ. The preventive effect of the nordic hamstring exercise on hamstring injuries in amateur soccer players: a randomized controlled trial. Am J Sports Med 2015;43(6):1316–1323. doi:10.1177/0363546515574057 PMID 25794868
+- Issurin VB. New horizons for the methodology and physiology of training periodization. Sports Med 2010;40(3):189–206. doi:10.2165/11319770-000000000-00000 PMID 20199119
+- Krause DA, Boyd MS, Hager AN, Smoyer EC, Thompson AT, Hollman JH. Reliability and accuracy of a goniometer mobile device application for video measurement of the functional movement screen deep squat test. Int J Sports Phys Ther 2015;10(1):37–44. PMID 25709861
+- Lauersen JB, Andersen TE, Andersen LB. Strength training as superior, dose-dependent and safe prevention of acute and overuse sports injuries: a systematic review, qualitative analysis and meta-analysis. Br J Sports Med 2018;52(24):1557–1563. doi:10.1136/bjsports-2018-099078 PMID 30131332
+- Malone JJ, Di Michele R, Morgans R, Burgess D, Morton JP, Drust B. Seasonal training-load quantification in elite English premier league soccer players. Int J Sports Physiol Perform 2015;10(4):489–497. doi:10.1123/ijspp.2014-0352 PMID 25393111
+- Malone S et al. High chronic training loads and exposure to bouts of maximal velocity running reduce injury risk in elite Gaelic football. J Sci Med Sport 2017;20:250–254.
+- Mann JB, Ivey PA, Sayers SP. Velocity-based training in football. Strength Cond J 2015;37(6):52–57. doi:10.1519/SSC.0000000000000177
+- McBurnie AJ, Harper DJ, Jones PA, Dos'Santos T. Deceleration training in team sports: another potential 'vaccine' for sports-related injury? Sports Med 2022;52:1–12. doi:10.1007/s40279-021-01583-x
+- McHugh MP. Recent advances in the understanding of the repeated bout effect: the protective effect against muscle damage from a single bout of eccentric exercise. Scand J Med Sci Sports 2003;13(2):88–97. doi:10.1034/j.1600-0838.2003.02477.x PMID 12641640
+- Moalla W, Fessi MS, Nouira S, Mendez-Villanueva A, Di Salvo V, Ahmaidi S. Optimal Pretaper Phase on Physical Match Performance in Professional Soccer. Int J Sports Physiol Perform 2021;16(10):1483–1489. doi:10.1123/ijspp.2020-0334 PMID 33761460
+- Mujika I, Padilla S. Detraining: loss of training-induced physiological and performance adaptations. Part I: short term insufficient training stimulus. Sports Med 2000;30(2):79–87. doi:10.2165/00007256-200030020-00002 PMID 10966148
+- Nédélec M, McCall A, Carling C, Legall F, Berthoin S, Dupont G. Recovery in soccer: part I - post-match fatigue and time course of recovery. Sports Med 2012;42(12):997–1015. doi:10.2165/11635270-000000000-00000 PMID 23046224
+- Ntoumanis N, Ng JYY, Prestwich A, Quested E, Hancox JE, Thøgersen-Ntoumani C, Deci EL, Ryan RM, Lonsdale C, Williams GC. A meta-analysis of self-determination theory-informed intervention studies in the health domain: effects on motivation, health behavior, physical, and psychological health. Health Psychol Rev 2021;15(2):214–244. doi:10.1080/17437199.2020.1718529 PMID 31983293
+- Pareja-Blanco F, Sánchez-Medina L, Suárez-Arrones L, González-Badillo JJ. Effects of velocity loss during resistance training on performance in professional soccer players. Int J Sports Physiol Perform 2017;12(4):512–519. doi:10.1123/ijspp.2016-0170
+- Post EG, Olson M, Trigsted S, Hetzel S, Bell DR. The Reliability and Discriminative Ability of the Overhead Squat Test for Observational Screening of Medial Knee Displacement. J Sport Rehabil 2017;26(1). doi:10.1123/jsr.2015-0178 PMID 27834577
+- Rodríguez-Rosell D, Yáñez-García JM, Mora-Custodio R, Pareja-Blanco F, Ravelo-García AG, Ribas-Serna J, González-Badillo JJ. Velocity-based resistance training: impact of velocity loss in the set on neuromuscular performance and hormonal response. Appl Physiol Nutr Metab 2020;45(8):817–828. doi:10.1139/apnm-2019-0829 PMID 32017598
+- Rønnestad BR, Nymark BS, Raastad T. Effects of in-season strength maintenance training frequency in professional soccer players. J Strength Cond Res 2011.
+- Ross SE, Guskiewicz KM, Yu B. Single-leg jump-landing stabilization times in subjects with functionally unstable ankles. J Athl Train 2005;40(4):298–304. PMID 16404451
+- Sánchez-Sixto A, Harrison AJ, Floría P. Effects of plyometric vs. combined plyometric training on vertical jump biomechanics in female basketball players. J Hum Kinet 2021;77:25–35. doi:10.2478/hukin-2021-0009
+- Schaber M, Guiser Z, Brauer L, Jackson R, Banyasz J, Miletti R, Hassen-Miller A. The Neuromuscular Effects of the Copenhagen Adductor Exercise: A Systematic Review. Int J Sports Phys Ther 2021;16(5):1210–1221. doi:10.26603/001c.27975 PMID 34631242
+- Schoenfeld BJ, Contreras B, Krieger J, Grgic J, Delcastillo K, Belliard R, Alto A. Resistance Training Volume Enhances Muscle Hypertrophy but Not Strength in Trained Men. Med Sci Sports Exerc 2019;51(1):94–103. doi:10.1249/MSS.0000000000001764 PMID 30153194
+- Zourdos MC, Klemp A, Dolan C, Quiles JM, Schau KA, Jo E, Helms E, Esgro B, Duncan S, Garcia Merino S, Blanco R. Novel resistance training-specific rating of perceived exertion scale measuring repetitions in reserve. J Strength Cond Res 2016;30(1):267–275.
+
+### Óstaðfestar tilvísanir
+
+Þessar standa í reglunum eins og þær voru skrifaðar. Ekki var hægt að festa þær við eina grein og ekki er giskað á þær. Þú ákveður hvort þeim er skipt út.
+
+- **Bishop 2020**: Athugasemdin í kóðanum gefur J Athl Train 2020;55:1062–1070, sem passar ekki við neina færslu á PubMed. Bishop birti nokkrar greinar um ósamhverfu um 2020 og ekki er skráð hver þeirra er átt við.
+- **Buchheit 2024**: Vitnað í sem „The 11 Principles of Microcycle Periodization“; engin slík grein fannst á PubMed eða Crossref.
+- **Comfort 2018**: Comfort birti nokkrar greinar um ísómetrískt mid-thigh pull 2018–2019 og ekki er skráð hver þeirra styður regluna.
+- **Gabbett 2017**: Gabbett var meðhöfundur að nokkrum greinum um álagsvöktun 2017 og ekki er skráð hver er átt við. Þekktasta greinin um skammtíma- og langtímaálag er Gabbett 2016.
+- **Lim 2020**: Engin grein eftir Lim (eða Lim & Childs) frá 2020 um langar ísómetrískar æfingar og sinar fannst. Næst kemst Lim & Wong 2018 (sinakvilli í hnéskeljarsin).
+- **Rønnestad 2023**: Engin grein eftir Rønnestad frá 2023 um örskammta fannst. Rannsóknirnar á örskömmtum í fótbolta eru eftir Cuthbert (rammi 2021, doktorsritgerð 2022); grein Rønnestad um styrk á keppnistímabili er frá 2011.
