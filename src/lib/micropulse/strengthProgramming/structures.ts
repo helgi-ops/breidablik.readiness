@@ -398,6 +398,27 @@ export function noMatchMoveFor(iso: string, week: NoMatchWeek | null | undefined
   return wd ? (week?.weeks?.[mondayOfIso(iso)]?.[wd] ?? null) : null;
 }
 
+/**
+ * The weekday plan a team gets when the coach has set none (coach's call 2026-11-23, contradiction 14): Monday a
+ * strength day, Thursday a power day, every other day light. Before, every training day in a week without a match was
+ * a full MD-3 session, with no week rule and no Nordic / Copenhagen. Two heavy days three days apart, so the week rule
+ * and the prevention rule run as in a planned week. Which days is MicroPulse's rule.
+ */
+export const DEFAULT_NO_MATCH_WEEK: Readonly<Record<Weekday, NoMatchDayKind>> = {
+  mon: "strength", tue: "light", wed: "light", thu: "power", fri: "light", sat: "light", sun: "light",
+};
+
+/** True when the coach has set at least one weekday (one-week moves alone are not a plan). */
+export function hasWeekdayPlan(week: NoMatchWeek | null | undefined): boolean {
+  return !!week && WEEKDAYS.some((d) => week[d] != null);
+}
+
+/** The plan the engine builds by: the coach's, else the default with the coach's one-week moves kept. */
+export function effectiveNoMatchWeek(week: NoMatchWeek | null | undefined): { week: NoMatchWeek; isDefault: boolean } {
+  if (hasWeekdayPlan(week)) return { week: week!, isDefault: false };
+  return { week: { ...DEFAULT_NO_MATCH_WEEK, ...(week?.weeks ? { weeks: week.weeks } : {}) }, isDefault: true };
+}
+
 /** What the coach set for this date in a week without a match: that week's move, else the weekday plan; null = unset. */
 export function noMatchDayFor(iso: string, week: NoMatchWeek | null | undefined): NoMatchDayKind | null {
   if (!week) return null;

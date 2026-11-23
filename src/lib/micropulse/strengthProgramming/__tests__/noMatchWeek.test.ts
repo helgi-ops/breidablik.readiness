@@ -72,11 +72,30 @@ describe("the engine", () => {
     expect(Object.values(s.mdStructures ?? {})).not.toContain("rest");
   });
 
-  it("unchanged: a team with no weekday plan, a match near (or a hand-picked day), standard mode, basketball", () => {
-    // No weekday plan at all → the day is built as before (the MD-3 default).
-    const base = buildStrengthSession(snap({ todayIso: addDays(MON, 5), noMatchNearby: true }));
-    expect(buildStrengthSession(snap({ todayIso: addDays(MON, 5), noMatchNearby: true, noMatchWeek: {} }))).toEqual(base);
-    expect(rule(base, "WEEK_RULE_HEAVY_REPS")).toBeUndefined();
+  it("no weekday plan → the default plan (Mon strength, Thu power, other days light), and a line says so (2026-11-23)", () => {
+    const mon = buildStrengthSession(snap({ todayIso: MON, noMatchNearby: true }))!;
+    expect(mon.mdContext).toBe("MD-4");
+    expect(rule(mon, "WEEK_RULE_HEAVY_REPS")).toBeDefined();
+    expect(rule(mon, "NO_MATCH_DEFAULT_PLAN")?.actionEN).toMatch(/Monday strength, Thursday power, other days light/);
+    expect(rule(mon, "NO_MATCH_DEFAULT_PLAN")?.actionIS).toMatch(/sjálfgefnu plani/);
+    const thu = buildStrengthSession(snap({ todayIso: addDays(MON, 3), noMatchNearby: true, noMatchWeek: {} }))!;
+    expect(thu.mdContext).toBe("MD-3");
+    expect(rule(thu, "WEEK_RULE_HEAVY_REPS")).toBeDefined();
+    const tue = buildStrengthSession(snap({ todayIso: addDays(MON, 1), noMatchNearby: true }))!;
+    expect(tue.mdContext).toBe("MD-2");
+    expect(rule(tue, "WEEK_RULE_HEAVY_REPS")).toBeUndefined();
+    // Nordic on the strength day, Copenhagen on the power day, as in a planned week.
+    const prevention = (s: typeof mon) => s.blocks.flatMap((b) => b.exercises).map((e) => e.exerciseId);
+    expect(prevention(mon).some((id) => /nordic/i.test(id))).toBe(true);
+    expect(prevention(thu).some((id) => /copenhagen/i.test(id))).toBe(true);
+    // The coach's plan, once one day is set, replaces the default: no default line.
+    expect(rule(buildStrengthSession(nm(MON))!, "NO_MATCH_DEFAULT_PLAN")).toBeUndefined();
+    // A one-week move with no weekday plan keeps the default for the other days.
+    const moved = buildStrengthSession(snap({ todayIso: addDays(MON, 1), noMatchNearby: true, noMatchWeek: { weeks: { [MON]: { mon: "rest", tue: "strength" } } } }))!;
+    expect(moved.mdContext).toBe("MD-4");
+  });
+
+  it("unchanged: a match near (or a hand-picked day), standard mode, basketball", () => {
     // A weekday the plan leaves out (Saturday) is a light day since the week rule (2026-11-19); before, a full MD-3 session.
     const sat = buildStrengthSession(nm(addDays(MON, 5)))!;
     expect(sat.mdContext).toBe("MD-2");

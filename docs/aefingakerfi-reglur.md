@@ -92,7 +92,7 @@ Styrktaræfing dagsins er byggð í `buildStrengthSession` (`SP/index.ts`), í �
 | **`INSEASON_MD2_OFF`** (nýtt, 8d487b4) | Sjálfvirka MD-röðunin í Week setup, á keppnistímabili | Dagurinn eftir leik er MD+1 endurheimt, en sunnudagur vikunnar er áfram frí. MD+2 er **frídagur**. MD-1 er aldrei gerður að frídegi. Leikur síðustu tvo daga fyrri viku telur með | MicroPulse-regla; Buchheit 2023 | Þjálfari getur breytt hvaða degi sem er; ekki skráð. Undirbúnings- og utan tímabils: óbreytt |
 | **`INSEASON_THREE_IN_A_ROW`** | Keppnistímabil (eða leikur í vikunni og fasi óþekktur) | Aldrei þrír æfingadagar í röð. Leikdagur er ekki æfing. Gildir líka í Mesó-dagatalinu á keppnistímabili, þar sem dagurinn fer beint í frí (ósamræmi 9). Leggur til að fækka um frídaga í þessari röð: MD+2, MD-2, MD+3, MD+4, MD-5, MD-6 … MD-3, MD-4 síðast. Vinnan af MD-2 færist á MD-3 og MD-1 | MicroPulse-regla; Buchheit 2023 | **Aðeins ráð.** „Halda planinu“ krefst ástæðu, skráð í `session_fit_override_log` (`week_rule`) |
 | **`MISSED_DAY_NOT_SHIFTED`** | MD-3 til MD-1 þegar MD-4 var sendur en ekki kláraður | Bara lína í forskoðun þjálfarans. Misstur dagur er **aldrei** færður eða bætt ofan á annan | MicroPulse-regla; Buchheit 2024 | Sést bara í forskoðun þjálfarans |
-| Vika án leiks (`NO_MATCH_WEEK_DAY`) | Enginn leikur nálægt, vikuplan til | Styrkdagur = MD-4, kraftdagur = MD-3, léttur dagur = MD-2, hvíld = engin æfing | Regla þjálfarans | `team_strength_palette.no_match_week`; færsla eina viku í senn, með Afturkalla |
+| Vika án leiks (`NO_MATCH_WEEK_DAY`) | Enginn leikur nálægt | Styrkdagur = MD-4, kraftdagur = MD-3, léttur dagur = MD-2, hvíld = engin æfing. Dagur sem er ekki stilltur er léttur. Ekkert vikuplan: sjálfgefið plan (mánudagur styrkur, fimmtudagur kraftur, aðrir dagar léttir) og línan `NO_MATCH_DEFAULT_PLAN` | Regla þjálfarans; sjálfgefna planið er MicroPulse-regla | `team_strength_palette.no_match_week`; færsla eina viku í senn, með Afturkalla |
 | Árekstur í viku án leiks | — | Varar við styrkdegi sem lendir á frídegi og stingur upp á næsta lausa degi | — | Sama |
 | MD+1 mínútur (`md1MinutesTier`) | MD+1 | Spilaði ekki eða <30 mín: styrkur (MD-4 sniðmát). 30–59 mín: endurheimt. ≥60 mín: ísómetrískt neðri hluti (2 sett) og ferskur efri hluti. Mínútur óþekktar: föst endurheimt | Carling 2018; Nédélec 2012; Rønnestad 2023 | — |
 | Sjálfgefnir hvíldardagar | — | Sniðmát eru til fyrir MD-4, MD-3, MD-2, MD-1 og MD+1. MD+2, MD+3, MD+4, MD-5 og OFF eru hvíld nema þjálfari velji aðferð | — | `team_strength_palette.md_structures` |
@@ -454,7 +454,12 @@ Eftirtöldum ákvörðunum má breyta:
     15 á viku eins og á keppnistímabili. Markmiðið þar er að stöðva tapið og 15 er yfir þeim 12 sem héldu styrk
     (Rønnestad 2011). Línan sagði „keppnistímabil“ og segir nú „utan tímabils, heldur eins og á keppnistímabili“
     (`weekRulePhaseOf`). Sama í textanum á /coach/strength.
-14. **Vika án leiks og án vikuplans:** hver æfingadagur verður fullur MD-3, án vikureglu og forvarnar.
+14. ~~**Vika án leiks og án vikuplans**~~ **Lagað 23. nóv.:** lið sem hefur ekkert vikudagaplan fær sjálfgefið plan
+    (`DEFAULT_NO_MATCH_WEEK`): mánudagur styrkur (MD-4), fimmtudagur sprengikraftur (MD-3), aðrir dagar léttir.
+    Vikureglan og Nordic/Copenhagen gilda þá eins og í skipulagðri viku. Línan `NO_MATCH_DEFAULT_PLAN` segir að
+    sjálfgefna planið hafi verið notað og hvar má setja plan liðsins. Færsla eina viku í senn heldur sér. Um leið og
+    einn dagur er stilltur gildir plan þjálfarans. Í dag (23. nóv.) hefur aðeins Breiðablik (fótbolti) plan.
+    Markmiðsplön (8 vikur) raða enn eftir eigin reglu þegar ekkert plan er til.
 15. **`buildMesoPlan` setur hvíldarviku 4. hverja viku líka á keppnistímabili**, þvert á regluna „engin sjálfvirk
     hvíldarvika á tímabili“.
 16. **Gulur dagur er meðhöndlaður á fimm vegu** eftir leið:

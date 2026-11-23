@@ -15,6 +15,7 @@ import {
   WEEKDAYS,
   WEEKDAY_LABEL,
   NO_MATCH_DAY_LABEL,
+  effectiveNoMatchWeek,
   noMatchDayFor,
   weekdayOf,
   type NoMatchDayKind,
@@ -78,7 +79,8 @@ const kindName = (k: KeyKind): Bi => ({ en: NO_MATCH_DAY_LABEL[k].en.toLowerCase
  * no week_plans row is not judged (the week isn't set up yet). GAME days are never "no match" days.
  */
 export function checkNoMatchWeeks(args: { days: PlannedDay[]; gameDates: string[]; plan: NoMatchWeek }): NoMatchWeekIssue[] {
-  const { plan } = args;
+  // The plan the engine builds by: the coach's, else the default (Mon strength, Thu power; 2026-11-23).
+  const plan = effectiveNoMatchWeek(args.plan).week;
   const games = new Set(args.gameDates);
   for (const d of args.days) if (String(d.dayType ?? "").toUpperCase() === "GAME") games.add(d.date);
 
@@ -135,8 +137,8 @@ export function checkNoMatchWeeks(args: { days: PlannedDay[]; gameDates: string[
       if (unset.length) {
         const u = list(unset.map((t) => short(t.weekday)));
         facts.push(unset.length > 1
-          ? { en: `${u.en} have no day type in the weekday plan, so they build as a standard MD-3 session.`, is: `${u.is} hafa enga tegund í vikuplaninu og verða því venjuleg MD-3 æfing.` }
-          : { en: `${u.en} has no day type in the weekday plan, so it builds as a standard MD-3 session.`, is: `${u.is} hefur enga tegund í vikuplaninu og verður því venjuleg MD-3 æfing.` });
+          ? { en: `${u.en} have no day type in the weekday plan, so they build as light days.`, is: `${u.is} hafa enga tegund í vikuplaninu og verða því léttir dagar.` }
+          : { en: `${u.en} has no day type in the weekday plan, so it builds as a light day.`, is: `${u.is} hefur enga tegund í vikuplaninu og verður því léttur dagur.` });
       }
     }
     for (const l of lost.filter((x) => x.stillInWeek)) {

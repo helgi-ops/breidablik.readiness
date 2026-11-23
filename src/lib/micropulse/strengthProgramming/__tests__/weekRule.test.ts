@@ -433,9 +433,10 @@ describe("a week without a match", () => {
     for (let k = 1; k < nordicDays.length; k++) expect(nordicDays[k] - nordicDays[k - 1]).toBeGreaterThanOrEqual(2);
   });
 
-  it("a team with no weekday plan is built as before", () => {
+  it("a team with no weekday plan gets the default plan (Monday is its strength day, 2026-11-23)", () => {
     const a = buildStrengthSession(snap({ mdContext: "MD-3", noMatchNearby: true }));
-    expect(rule(a, "WEEK_RULE_HEAVY_REPS")).toBeUndefined();
+    expect(rule(a, "NO_MATCH_DEFAULT_PLAN")).toBeDefined();
+    expect(rule(a, "WEEK_RULE_HEAVY_REPS")).toBeDefined();
     expect(rule(a, "WEEK_RULE_LIGHT_DAY")).toBeUndefined();
   });
 });

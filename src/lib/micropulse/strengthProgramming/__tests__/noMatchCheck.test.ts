@@ -29,7 +29,7 @@ describe("checkNoMatchWeeks", () => {
     expect(w.headline.is).toBe("Vika 23. nóv: Mán (styrktardagur) og Mið (sprengikraftsdagur) eru frídagar, svo þær æfingar falla niður.");
     expect(w.facts.map((f) => f.en)).toEqual([
       "Training days that week: Tue, Thu, Sat and Sun.",
-      "Tue has no day type in the weekday plan, so it builds as a standard MD-3 session.",
+      "Tue has no day type in the weekday plan, so it builds as a light day.",
       "The week still has a strength day on Sat.",
     ]);
   });

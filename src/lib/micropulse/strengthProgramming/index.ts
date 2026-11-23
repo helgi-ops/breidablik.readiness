@@ -59,7 +59,7 @@ import {
   type PaletteSlot,
   type PaletteSlots,
 } from "./palette";
-import { DEFAULT_STRUCTURE_BY_MD, STRUCTURES_ALLOWED_BY_MD, STRUCTURE_LABEL, readinessDowngrade, isRestDay, noMatchDayFor, weekdayOf, NO_MATCH_DAY_MD, NO_MATCH_DAY_LABEL, WEEKDAY_LABEL, type MdStructures, type NoMatchDayKind, type StructureKey } from "./structures";
+import { DEFAULT_STRUCTURE_BY_MD, STRUCTURES_ALLOWED_BY_MD, STRUCTURE_LABEL, readinessDowngrade, isRestDay, effectiveNoMatchWeek, noMatchDayFor, weekdayOf, NO_MATCH_DAY_MD, NO_MATCH_DAY_LABEL, WEEKDAY_LABEL, type MdStructures, type NoMatchDayKind, type StructureKey } from "./structures";
 import { alignTimeTrimToGreen, enforceDayRules, estimateSessionMinutes } from "./dayRules";
 import { applyNewExerciseIntro } from "./newExercise";
 import { applyCmjDose } from "./cmjDose";
@@ -733,10 +733,15 @@ function buildStrengthSessionCore(
   // concentration. Football, individualised modes, no match near and no hand-picked MD day (noMatchNearby) only.
   // The week rule (2026-11-19, weekRule.ts): such a week holds at most three heavy days, never two in a row, and the
   // same heavy reps as a match week; the other days are light, also a weekday the plan leaves out (it was built as a
-  // full MD-3 session before). A team with no weekday plan at all is built as before.
+  // full MD-3 session before). A team with no weekday plan gets the default plan (Mon strength, Thu power, other days
+  // light; 2026-11-23), so the week rule and the prevention rule run there too, and a line says so.
   let noMatchKind: Exclude<NoMatchDayKind, "rest"> | null = null;
   let noMatchRule: NoMatchWeekRule | null = null;
+  let noMatchDefaultPlan = false;
   if (individualised && snapIn.noMatchNearby && String(snapIn.sport ?? "").toLowerCase() !== "basketball") {
+    const eff = effectiveNoMatchWeek(snapIn.noMatchWeek);
+    noMatchDefaultPlan = eff.isDefault;
+    snapIn = { ...snapIn, noMatchWeek: eff.week };
     noMatchRule = noMatchWeekRule(snapIn.todayIso, snapIn.noMatchWeek, weekRuleSeasonOf(snapIn));
     const kind = noMatchRule ? noMatchRule.kind : noMatchDayFor(snapIn.todayIso, snapIn.noMatchWeek);
     if (kind === "rest") return null;
@@ -862,6 +867,16 @@ function buildStrengthSessionCore(
   // The week rule sets today's heavy lower-body reps from the day's place in the week, before the readiness rules
   // (which may still take sets off). Individualised modes, football only (basketball has no MD week).
   const weekAudit: AppliedAdaptation[] = [];
+  if (noMatchDefaultPlan && noMatchRule) {
+    weekAudit.push({
+      ruleId: "NO_MATCH_DEFAULT_PLAN",
+      triggerEN: "No match this week and no weekday plan set",
+      triggerIS: "Enginn leikur í vikunni og ekkert vikudagaplan stillt",
+      actionEN: "Built by the default plan: Monday strength, Thursday power, other days light. The coach can set the team's own plan on the strength page (Weeks without a match).",
+      actionIS: "Sett upp eftir sjálfgefnu plani: mánudagur styrkur, fimmtudagur sprengikraftur, aðrir dagar léttir. Þjálfarinn getur sett plan liðsins á styrktarsíðunni (Vikur án leiks).",
+      evidence: "MicroPulse rule (coach's call 2026-11-23): two heavy days three days apart, so the week rule and Nordic / Copenhagen run as in a planned week.",
+    });
+  }
   const season = weekRuleSeasonOf(snap);
   /** Today's heavy reps by the week rule; null = not a heavy day (or the rule does not run: standard, basketball). */
   let todayHeavyReps: number | null = null;
@@ -891,7 +906,7 @@ function buildStrengthSessionCore(
       }
     }
     // Prevention: Nordic and Copenhagen once a week, each on its own heavy day with the week's reps (never the same
-    // eccentric work two days in a row). A team with no weekday plan in a week without a match is left as it was.
+    // eccentric work two days in a row). A team with no weekday plan uses the default plan (above).
     const preventionToday = noMatchRule
       ? noMatchWeekPrevention(snap.todayIso, snap.noMatchWeek, season)
       : snap.noMatchNearby ? null : matchWeekPrevention(snap.mdContext, (d) => isRestDay(snap.mdStructures?.[d]));

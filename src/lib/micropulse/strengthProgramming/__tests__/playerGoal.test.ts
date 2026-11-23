@@ -273,8 +273,9 @@ describe("season: the extra set is building, so only in pre-season and off-seaso
   });
 
   it("no match near, pre-/off-season: every strength session is a goal day (stronger on MD-3)", () => {
-    const base = buildStrengthSession(snap({ mdContext: "MD-3", noMatchNearby: true }));
-    const s = buildStrengthSession(snap({ mdContext: "MD-3", noMatchNearby: true, playerStrengthGoal: "stronger" }));
+    // Tuesday is a power day (MD-3) in the coach's weekday plan (with no plan, the default makes it a light day).
+    const base = buildStrengthSession(snap({ mdContext: "MD-3", noMatchNearby: true, noMatchWeek: { tue: "power" } }));
+    const s = buildStrengthSession(snap({ mdContext: "MD-3", noMatchNearby: true, noMatchWeek: { tue: "power" }, playerStrengthGoal: "stronger" }));
     const [g] = goalEx(s);
     expect(g).toBeDefined();
     // The goal adds its set; MD-3's day rule (≤ 9 loaded reps, 2026-11-22) takes back what goes over, and says so.

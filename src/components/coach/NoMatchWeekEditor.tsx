@@ -12,6 +12,7 @@
 import { useState } from "react";
 import NoMatchWeekCheck from "./NoMatchWeekCheck";
 import {
+  DEFAULT_NO_MATCH_WEEK,
   DEFAULT_STRUCTURE_BY_MD,
   NO_MATCH_DAY_KINDS,
   NO_MATCH_DAY_LABEL,
@@ -65,8 +66,8 @@ export default function NoMatchWeekEditor({
       <div className="text-[11px] font-semibold text-slate-800">{t("Weeks without a match", "Vikur án leiks")}</div>
       <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
         {t(
-          "With no match from 4 days back to 5 days ahead, say what each weekday is. The method comes from the rows above: a strength day uses MD-4, a power day MD-3, a light day MD-2. A day left unset works as before (MD-3).",
-          "Þegar enginn leikur er frá 4 dögum aftur til 5 daga fram, segðu hvað hver vikudagur er. Aðferðin kemur úr línunum hér fyrir ofan: styrktardagur notar MD-4, sprengikraftsdagur MD-3, léttur dagur MD-2. Dagur sem er ekki stilltur virkar eins og áður (MD-3).",
+          "With no match from 4 days back to 5 days ahead, say what each weekday is. The method comes from the rows above: a strength day uses MD-4, a power day MD-3, a light day MD-2. A day left unset is a light day.",
+          "Þegar enginn leikur er frá 4 dögum aftur til 5 daga fram, segðu hvað hver vikudagur er. Aðferðin kemur úr línunum hér fyrir ofan: styrktardagur notar MD-4, sprengikraftsdagur MD-3, léttur dagur MD-2. Dagur sem er ekki stilltur er léttur dagur.",
         )}
       </p>
       <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
@@ -88,7 +89,9 @@ export default function NoMatchWeekEditor({
                 data-testid={`no-match-${d}`}
                 className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-[12px]"
               >
-                <option value="">{t("Not set — as before (MD-3)", "Ekki stillt — eins og áður (MD-3)")}</option>
+                <option value="">{setCount === 0
+                  ? t(`Not set — default: ${L(NO_MATCH_DAY_LABEL[DEFAULT_NO_MATCH_WEEK[d]])}`, `Ekki stillt — sjálfgefið: ${L(NO_MATCH_DAY_LABEL[DEFAULT_NO_MATCH_WEEK[d]])}`)
+                  : t("Not set — light day", "Ekki stillt — léttur dagur")}</option>
                 {NO_MATCH_DAY_KINDS.map((k) => (
                   <option key={k} value={k}>
                     {k === "rest" ? t("Rest — no strength session", "Hvíld — engin styrktaræfing") : `${L(NO_MATCH_DAY_LABEL[k])} (${NO_MATCH_DAY_MD[k]})`}
@@ -103,7 +106,10 @@ export default function NoMatchWeekEditor({
         })}
       </div>
       {setCount === 0 ? (
-        <div className="mt-2 text-[11px] text-slate-500">{t("Nothing set: every strength day in such a week reads as MD-3.", "Ekkert stillt: hver styrktardagur í slíkri viku telst MD-3.")}</div>
+        <div className="mt-2 text-[11px] text-slate-500">{t(
+          "Nothing set: the default plan is used — Monday strength, Thursday power, other days light. Set one day and your plan is used instead.",
+          "Ekkert stillt: sjálfgefna planið gildir — mánudagur styrkur, fimmtudagur sprengikraftur, aðrir dagar léttir. Stilltu einn dag og þitt plan gildir í staðinn.",
+        )}</div>
       ) : null}
       {/* The next 4 weeks against this plan (unsaved edits included): a strength / power day that is a day off. */}
       <NoMatchWeekCheck lang={lang} from={todayIso} days={28} plan={value} />
