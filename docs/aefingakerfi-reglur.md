@@ -182,7 +182,7 @@ Liturinn er notaður hér en ekki reiknaður.
 | Engar viðbætur | Gulur eða rauður | Ekkert +1 sett frá markmiði eða prófi, ekkert „skilað til baka“. Markmiðslyftur á gulum degi: helmingur setta |
 | `CMJ_DROP_NOT_STACKED` | Hoppapróf niðri á degi sem check-in hefur þegar lækkað | Ekki skorið tvisvar |
 | Send æfing fylgir check-in | Sjálfvirk sending, ekkert byrjað | Byggð aftur við check-in, með sama byggi og kl. 09:00 og lit dagsins. **Handsendar æfingar eru aldrei endurbyggðar** |
-| Sniðmát / Custom Programme | Gulur / rauður | Gulur: −1 sett á hverja línu. Rauður: kraft- og aðalblokkir faldar. Hvíldarvika −1 í viðbót. Ekki á æfingu sem þjálfari sendi |
+| Sniðmát / Custom Programme | Gulur / rauður | Gulur: −1 sett á hverja línu. Rauður: kraft- og aðalblokkir faldar. Hvíldarvika −1 í viðbót. Á æfingu sem þjálfari sendi aðeins ef litur dagsins er verri en sá sem hún var sett upp með (#12) |
 | Markmiðsspjald | Gulur | Erfiðu blokkirnar teknar út og mínútur helmingaðar. Rauður: sleppt |
 
 ---
@@ -342,7 +342,8 @@ Eftirtöldum ákvörðunum má breyta:
 
 0. **Daglegt sniðmát frá þjálfara.** Þá er styrktarspjaldið ekki sýnt.
 1. **Æfing sem þjálfari sendi** (`player_today_strength_override`):
-   - Læst; leikmaðurinn getur ekki aðlagað hana eftir lit.
+   - Læst, en aðlagast ef leikmaðurinn skráir sig inn síðar á verri lit (gulur −1 sett, rauður aðeins upphitun og
+     liðleiki; #12). Sjálfvirk æfing er sett upp aftur við innskráningu.
    - Sjálfvirk æfing er falin á frídegi, handsend ekki.
 2. **Prógramm liðsins eða Custom Programme.** Valið eftir liði, MD-degi, lit og fasa.
 3. **Eldri varaleiðir.**
@@ -443,7 +444,12 @@ Eftirtöldum ákvörðunum má breyta:
     leikvikunni (vélin hefur enga æfingu fyrir OFF) og fær línuna `DAY_RULE_COACH_DAY_OFF`: „frídagur í vikuplaninu,
     sent af því þjálfarinn valdi það“. Sendingarglugginn segir það líka. 4 vikna blokk sleppir dögum sem eru OFF
     þegar hún er send og telur þá upp. Sjálfvirka sendingin sendir áfram aldrei á frídegi.
-12. **Handsendar æfingar fylgja aldrei check-in síðar.** 4 vikna blokk er aldrei aðlöguð eftir lit.
+12. ~~**Handsendar æfingar fylgja aldrei check-in síðar.**~~ **Lagað 23. nóv.:** þegar leikmaður skráir sig inn
+    eftir að þjálfari sendi æfingu (einn leikmaður, hópurinn eða 4 vikna blokk) og liturinn er verri en sá sem æfingin
+    var sett upp með, aðlagast hún á „Í dag“. Æfingarnar sem þjálfarinn valdi haldast. Gulur: eitt sett af hverri
+    línu. Rauður: aðeins upphitun og liðleiki. Lína segir „aðlagað að innskráningu dagsins“. Ekkert er minnkað
+    tvisvar: æfing sett upp á gulum degi er ekki minnkuð aftur á gulum degi. Sjálfvirka sendingin er áfram sett upp
+    aftur á þjóninum og leiðréttingarsending er óbreytt (`handSentAdjust.ts`).
 13. **Utan tímabils fær vikureglu keppnistímabils** (15 á viku), ekki 21 eins og á undirbúningstímabili.
 14. **Vika án leiks og án vikuplans:** hver æfingadagur verður fullur MD-3, án vikureglu og forvarnar.
 15. **`buildMesoPlan` setur hvíldarviku 4. hverja viku líka á keppnistímabili**, þvert á regluna „engin sjálfvirk

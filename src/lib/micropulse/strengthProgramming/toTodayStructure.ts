@@ -12,9 +12,9 @@
  * `player_today_strength_override`; PlayerClient reads that structure and feeds
  * it straight into `buildSessionBlocks` — no new rendering code, zero drift.
  *
- * The session is already tuned to today's readiness/signals inside
- * buildStrengthSession, so the player-side readiness set-reduction must NOT be
- * re-applied on top (the caller passes adjust=null for a coach-sent session).
+ * The session is already tuned to the colour it was built with inside
+ * buildStrengthSession. Today adjusts a hand send only when a later check-in is
+ * worse than that colour (handSentAdjust.ts): never the same reduction twice.
  */
 
 import type { StrengthSession, SessionBlock, ExerciseCategory } from "./types";
@@ -74,6 +74,8 @@ export type TodayStructureBlock = {
   /** The coach's bar-speed method (Weakley et al. 2021, Table 5), pre-localised — on the blocks with
    *  main lifts only. PlayerClient renders it via `readVbtPlayerCard`. */
   vbt?: VbtPlayerCard;
+  /** "prep" = warm-up / mobility / corrective (2026-11-23): what a hand send keeps on a red check-in (handSentAdjust.ts). */
+  kind?: "prep";
 };
 
 /**
@@ -98,6 +100,7 @@ export function strengthSessionToTodayStructure(
   const correctiveBlock: TodayStructureBlock[] = (session.correctives?.length)
     ? [{
         block: isIS ? "Corrective (hreyfiskimun)" : "Corrective (movement screen)",
+        kind: "prep",
         items: session.correctives.map((c) => {
           const item: TodayStructureItem = { name: (isIS ? c.nameIS : c.nameEN) || c.nameEN };
           const dose = isIS ? c.doseIS : c.doseEN;
@@ -117,6 +120,7 @@ export function strengthSessionToTodayStructure(
     .map((b) => ({
       block: (isIS ? b.titleIS : b.titleEN) || b.titleEN || b.titleIS || "Block",
       ...(b.structureId ? { structureId: b.structureId } : {}),
+      ...(b.type === "PREP" || b.type === "MOBILITY" ? { kind: "prep" as const } : {}),
       // A block where the week rule set the bar-speed zone shows only that zone: the coach's block method is for the
       // heavy lifts, and two speeds on one lift would contradict each other.
       ...(vbtCard && blockTakesVbt(b) && !b.exercises.some((e) => e.dose.speedZone) ? { vbt: vbtCard } : {}),

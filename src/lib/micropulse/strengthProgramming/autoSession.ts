@@ -29,6 +29,7 @@ import { markRebuilt } from "./sendLog";
 import { asAppLang, sessionLangFor } from "./playerLanguage";
 import { loadGoalPlanGym } from "@/lib/micropulse/goalPlan/gymLoader";
 import type { StrengthSession } from "./types";
+import { levelOfVerdict } from "./handSentAdjust";
 
 /** Team-level inputs, read once per team per day. */
 export type AutoTeamContext = {
@@ -65,8 +66,6 @@ export type AutoSession = {
   readinessLevel: "GREEN" | "YELLOW" | "RED" | null;
 };
 
-const LEVEL_OF_VERDICT = { FULL: "GREEN", MODIFIED: "YELLOW", REDUCED: "YELLOW", RECOVERY: "RED", HOLD: "RED" } as const;
-
 /** Why there is no session to send (the send log names it). */
 export type AutoSkip = { skip: "injured" | "no_session" };
 
@@ -89,7 +88,7 @@ export async function buildAutoSession(
   // MESO layer: tilt toward today's block + apply the coach's authored rule.
   const b = ctx.coachBlock;
   if (b) session = applyBlockToSession(session, b.goalKey, b.phase, ctx.coachRules?.block?.[`${b.goalKey}:${b.phase}`], b.subPhase) ?? session;
-  return { session, readinessLevel: snapshot.verdict ? LEVEL_OF_VERDICT[snapshot.verdict] : null };
+  return { session, readinessLevel: levelOfVerdict(snapshot.verdict) };
 }
 
 export type AutoRefreshResult = "rebuilt" | "not_auto" | "started" | "no_session" | "failed";

@@ -21,6 +21,7 @@ import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { formatSessionForPlayer } from "@/lib/micropulse/strengthProgramming/formatForPlayer";
 import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
 import { offDatesInWeekPlan, withOffDayLine } from "@/lib/micropulse/strengthProgramming/offDaySend";
+import { levelOfVerdict } from "@/lib/micropulse/strengthProgramming/handSentAdjust";
 import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
@@ -238,6 +239,8 @@ export async function POST(
     coachId: auth.userId,
     lang,
     origin: "session",
+    // The colour it was built with: Today adjusts it only when a later check-in is worse (handSentAdjust.ts).
+    readinessLevel: levelOfVerdict(snapshot.verdict),
   });
 
   // Fire-and-forget push (player sees the message immediately too)

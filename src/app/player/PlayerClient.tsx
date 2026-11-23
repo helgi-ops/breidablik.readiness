@@ -1,6 +1,7 @@
 "use client";
 
 import { autoSendPreviewNote } from "@/lib/micropulse/strengthProgramming/autoSendPreview";
+import { handSentAdjustLine, handSentLevel, prepOnly } from "@/lib/micropulse/strengthProgramming/handSentAdjust";
 import { authFetch } from "@/lib/client/authFetch";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
@@ -2256,7 +2257,13 @@ function rebalanceSupportedExerciseBlocks(rawBlocks: any[]): any[] {
 // adjusted). Reuses the canonical buildEnforcedSessionPlan enforcement so the
 // numbers match the rest of the system: GREEN → full, YELLOW → one set off each
 // lift, RED → recovery (hardest blocks dropped).
-type TodayAdjust = { state: "GREEN" | "YELLOW" | "RED" | "GRAY"; setReduction: number; hideHighOutput: boolean };
+type TodayAdjust = {
+  state: "GREEN" | "YELLOW" | "RED" | "GRAY";
+  setReduction: number;
+  hideHighOutput: boolean;
+  /** A coach's hand send on a red check-in after it was sent: warm-up and mobility blocks only (handSentAdjust.ts). */
+  onlyPrep?: boolean;
+};
 const HIGH_OUTPUT_BLOCK = /(primer|ballistic|plyo|explosive|contrast|main force)/i;
 
 function reduceSetsInLine(line: string, by: number): string {
@@ -2333,7 +2340,9 @@ function buildSessionBlocks(
     : [...normalizedBlocks].sort(
         (a, b) => blockSortPriority(String(a?.block ?? "")) - blockSortPriority(String(b?.block ?? ""))
       );
-  const kept = adjust?.hideHighOutput
+  const kept = adjust?.onlyPrep
+    ? prepOnly(sorted)
+    : adjust?.hideHighOutput
     ? sorted.filter((b: Record<string, unknown>) => !HIGH_OUTPUT_BLOCK.test(String(b?.block ?? "")))
     : sorted;
   const hiddenCount = sorted.length - kept.length;
@@ -2494,6 +2503,8 @@ type TodaySessionOpts = {
   coachSentSubtext?: string | null;
   /** Banner title override (automatic sends say "Your coach's plan", not "Sent by your coach"). */
   coachSentTitle?: string | null;
+  /** A coach's hand send adjusted to a later check-in (2026-11-23): the line saying so, shown under the coach banner. */
+  handSentNote?: { level: "YELLOW" | "RED"; text: string } | null;
   /** Before the 09:00 automatic send: says this card is a preview (B, 2026-11-18). Not shown on a coach-sent card. */
   previewNote?: { title: string; text: string } | null;
   /** Keep the coach's authored block order (don't re-sort by priority). */
@@ -3437,7 +3448,19 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
     }
   };
   const workBlocks = useMemo(() => blocks.filter((b) => b.segments.length > 0), [blocks]);
-  if (!workBlocks.length) return null;
+  const handNote = opts.sentByCoach && opts.handSentNote ? { ...opts.handSentNote, ui: bannerFor(opts.handSentNote.level, isIS) } : null;
+  // A red check-in after a hand send that has no warm-up or mobility: nothing is left today, and the card says so
+  // (an empty card would read as "no session sent").
+  if (!workBlocks.length) {
+    return handNote ? (
+      <div className="space-y-2.5">
+        <div className="px-0.5 text-lg font-bold tracking-tight text-zinc-900">{opts.heading?.trim() || (isIS ? "Æfing dagsins" : "Today's session")}</div>
+        <div className="rounded-2xl border border-zinc-200 px-4 py-3 text-[13px] leading-relaxed shadow-sm" style={{ background: handNote.ui.bg, color: handNote.ui.fg }} data-testid="hand-sent-adjust">
+          {handNote.text}
+        </div>
+      </div>
+    ) : null;
+  }
 
   const themeColor = opts.themeColor ?? null;
   const accentColor = themeColor || "#2740e6";
@@ -3533,6 +3556,12 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
                 ? "Þessi æfing kemur í stað æfingar dagsins og er stillt að stöðunni þinni í dag."
                 : "This replaces today's default session and is tuned to how you are today."}
             </div>
+          </div>
+        ) : null}
+        {/* A hand send adjusted to a later check-in: which colour, and what came off (the coach's exercises stay). */}
+        {handNote ? (
+          <div className="border-b border-zinc-200 px-4 py-2.5 text-[13px] leading-relaxed" style={{ background: handNote.ui.bg, color: handNote.ui.fg }} data-testid="hand-sent-adjust">
+            <span aria-hidden>{handNote.ui.icon} </span>{handNote.text}
           </div>
         ) : null}
         {/* Before the 09:00 automatic send: what this card is (a preview), so the 09:00 session is no surprise. */}
@@ -5150,7 +5179,7 @@ export default function PlayerClient() {
           player_id: playerId,
           entry_date: safeDay,
           md_day: ov.md_context ?? null,
-          readiness_level: null, // suppress player-side re-adjustment
+          readiness_level: null, // no template re-adjust; a hand send adjusts by handSentLevel (sent_built_with vs today)
           chosen_variant_id: null,
           locked: true,
           source: "COACH_SENT",
@@ -6661,6 +6690,15 @@ export default function PlayerClient() {
     return readinessToFlag(plan?.readiness_level);
   }, [coachFinalFlag?.final_flag, coachFinalFlag?.final_color, plan?.readiness_level]);
   const ui = useMemo(() => flagUi(normalizeFlag(flag), lang), [flag, lang]);
+  // A coach's hand send checked in on afterwards: the colour Today adjusts it to (null = as sent). Today's canonical
+  // colour only — the same v8 row as `flag` above, never the plan's level (contradiction 12, 2026-11-23).
+  const handSentLevelToday = plan?.source === "COACH_SENT"
+    ? handSentLevel({
+        origin: plan?.sent_origin ?? null,
+        builtWith: plan?.sent_built_with ?? null,
+        todayColour: parseFinalFlag(coachFinalFlag?.final_flag ?? null) ?? parseFinalFlag(coachFinalFlag?.final_color ?? null),
+      })
+    : null;
 
   // ── "Af hverju?" explanation lines ──────────────────────────────────
   const explanationLines: ExplanationLine[] = useMemo(() => {
@@ -8158,14 +8196,23 @@ export default function PlayerClient() {
                     ? exerciseRecommendationContext
                     : null,
                   themeColor: clubThemeColor,
-                  // Coach-sent sessions are already tuned to today inside
-                  // buildStrengthSession — don't re-apply the readiness reduction.
+                  // Coach-sent sessions are already tuned to the colour they were built with. A hand send adjusts
+                  // only when a later check-in is worse (yellow −1 set a line, red warm-up + mobility; 2026-11-23).
                   // A planned deload week drops one extra set on top of any readiness reduction (capped at 2).
-                  adjust: plan?.source === "COACH_SENT" ? null : (() => {
+                  adjust: plan?.source === "COACH_SENT" ? (handSentLevelToday === "YELLOW"
+                    ? { state: "YELLOW", setReduction: 1, hideHighOutput: false }
+                    : handSentLevelToday === "RED" ? { state: "RED", setReduction: 0, hideHighOutput: false, onlyPrep: true } : null) : (() => {
                     const a = computeTodayAdjust(plan?.readiness_level ?? null);
                     return plan?.deload_week ? { ...a, setReduction: Math.min(2, a.setReduction + 1) } : a;
                   })(),
                   sentByCoach: plan?.source === "COACH_SENT",
+                  handSentNote: handSentLevelToday
+                    ? {
+                        level: handSentLevelToday,
+                        text: handSentAdjustLine(handSentLevelToday, lang === "IS",
+                          handSentLevelToday === "RED" && prepOnly(Array.isArray(planStructureForRender) ? planStructureForRender : []).length === 0),
+                      }
+                    : null,
                   ...(plan?.source === "COACH_SENT" && String(plan?.sent_origin ?? "").toLowerCase() === "auto"
                     ? autoSentBanner(plan?.sent_built_with ?? null, Boolean(coachFinalFlag), lang === "IS")
                     : {}),

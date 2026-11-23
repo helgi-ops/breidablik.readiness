@@ -43,8 +43,8 @@ export async function persistTodayStrengthOverride(
     team_id: args.teamId,
     entry_date: args.dateIso,
     md_context: args.session.mdContext,
-    // The colour the session was BUILT with (provenance only). buildStrengthSession is already tuned to it, and
-    // the player's render path never reads this column for a set reduction (it suppresses adjust for coach-sent).
+    // The colour the session was BUILT with. buildStrengthSession is already tuned to it; Today adjusts a hand send
+    // only when a later check-in is worse than this (handSentAdjust.ts, 2026-11-23), so it is never cut twice.
     readiness_level: args.readinessLevel ?? null,
     title: args.title ?? (args.lang === "IS" ? "Styrktaræfing frá þjálfara" : "Coach strength session"),
     description: args.description ?? (args.lang === "IS" ? args.session.summaryIS : args.session.summaryEN) ?? null,

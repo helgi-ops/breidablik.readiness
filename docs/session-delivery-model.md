@@ -12,8 +12,8 @@ The resolver is `fetchStage4Plan` in `src/app/player/PlayerClient.tsx` (~line 45
    today, it becomes the Æfing dagsins card and suppresses the whole strength card below.
    (`PlayerClient.tsx:6331`, `:7286`.)
 2. **Coach-sent strength override** — `player_today_strength_override` (`source = 'coach_sent'`), one row
-   per `(player_id, entry_date)`, locked ("sent = seen"; one exception for `origin = 'auto'`, below), no
-   readiness re-adjust on the player's side. **This is the layer
+   per `(player_id, entry_date)`, locked ("sent = seen"; one exception for `origin = 'auto'`, below). A hand send
+   adjusts on Today only when a later check-in is worse than the colour it was built with (below). **This is the layer
    every explicit coach *send* lands on.** Five entry points write it (see below); the new `origin`
    column records which one, so a surface can name what's on a date.
 3. **Periodised team microdose** — view `v_player_today_microdose_final` re-resolved from the team's
@@ -73,13 +73,22 @@ Every engine-built session (any origin) is built with today's **canonical colour
 a normal day). Until 2026-11-18 this read a column that never existed, so no sent session ever followed readiness.
 Yellow = the method one step down only when that is really lighter (never more loaded reps, reps or exercises
 than green; otherwise today's method) plus fewer sets; red = warm-up and mobility only (no upper-body lift).
-`readiness_level` on the row records the colour the session was built with (provenance; nothing re-adjusts on it).
+`readiness_level` on the row records the colour the session was built with. The automatic send and (since
+2026-11-23) the one-day hand sends store it; the 4-week block stores null (built without a colour).
 
 **The automatic session follows the check-in.** The 09:00 send runs before most check-ins. When the player checks
 in, `refreshAutoSessionAfterCheckin` (`strengthProgramming/autoSession.ts`, the same builder as the cron) rebuilds
 today's row **only if** its origin is `auto` and the player has not started it (no completion, set log or exercise
 swap today). Same row, same origin, no push. Coach sends by hand stay locked. The player's banner says which:
 "Your coach's plan … adjusted to your check-in today" / "… check in and it adjusts".
+
+**A hand send follows a later check-in on Today (2026-11-23).** `strengthProgramming/handSentAdjust.ts`: for origin
+`session`, `bulk`, `block` (or a legacy null), when today's canonical colour is worse than `readiness_level` (null =
+green), Today keeps the coach's exercises and: yellow → one set off each line; red → warm-up and mobility blocks only
+(`kind: "prep"` on the structure since 2026-11-23, else by block title). A line under the coach banner says "Adjusted
+to today's check-in"; a red day on a block day with no warm-up says the session waits. Never twice: a session built
+with yellow is not cut again on yellow. `auto` is rebuilt on the server instead; `corrective` is prep work and is
+left as sent. Nothing is written; the row stays as the coach sent it.
 
 ## Send log (2026-11-18)
 
