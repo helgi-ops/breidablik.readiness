@@ -4,9 +4,10 @@
  */
 import { describe, expect, it } from "vitest";
 import { handSentAdjustLine, handSentLevel, isPrepBlock, levelOfVerdict, prepOnly } from "../handSentAdjust";
+import { yellowOneSetOff } from "../adaptationRules";
 import { strengthSessionToTodayStructure } from "../toTodayStructure";
 import { buildStrengthSession } from "..";
-import type { PlayerStrengthSnapshot } from "../types";
+import type { PlayerStrengthSnapshot, SessionBlock } from "../types";
 
 describe("handSentLevel", () => {
   it("sent before check-in (built without a colour): yellow and red adjust, green does not", () => {
@@ -70,5 +71,29 @@ describe("red day: warm-up and mobility only", () => {
     const prepTypes = s.blocks.filter((b) => b.exercises.length && (b.type === "PREP" || b.type === "MOBILITY")).length;
     expect(structure.filter((b) => b.kind === "prep").length).toBe(prepTypes + (s.correctives?.length ? 1 : 0));
     expect(prepOnly(structure).length).toBeLessThan(structure.length);
+  });
+});
+
+describe("one yellow rule for lifts (contradiction 16, 2026-11-23)", () => {
+  it("the engine takes one set off each lift line; warm-up, mobility and one-set lines stay", () => {
+    const base: PlayerStrengthSnapshot = {
+      playerId: "p1", todayIso: "2026-11-23", mdContext: "MD-4", verdict: "FULL",
+      sprintSpeedDropPct: null, sprintExposureBand: null, codAsymmetryPct: null, decelBurdenBand: null, decelBurdenHighStreakDays: 0,
+      wellness: { sleepQuality: null, muscleSoreness: null, fatigueEnergy: null, stressMood: null, soreAreas: [] },
+      vbtDecrement: null, injuryStatus: "cleared", fosterMonotony: null, fosterStrain: null, isCongestedWeek: false, seasonPhase: "inseason",
+    };
+    const blocks: SessionBlock[] = [
+      { id: "p", titleEN: "Prep", titleIS: "Prep", type: "PREP", exercises: [{ exerciseId: "a", nameEN: "a", nameIS: "a", category: "MOVEMENT_PREP", dose: { sets: 2, reps: "8", intensity: "", rest: "" } }] },
+      { id: "c", titleEN: "C", titleIS: "C", type: "COMPOUND", exercises: [
+        { exerciseId: "b", nameEN: "b", nameIS: "b", category: "COMPOUND_STRENGTH", dose: { sets: 4, reps: "3", intensity: "85%", rest: "3 min" } },
+        { exerciseId: "c", nameEN: "c", nameIS: "c", category: "UPPER_BODY", dose: { sets: 3, reps: "6", intensity: "", rest: "" } },
+        { exerciseId: "d", nameEN: "d", nameIS: "d", category: "ACCESSORY", dose: { sets: 1, reps: "10", intensity: "", rest: "" } },
+      ] },
+    ];
+    expect(yellowOneSetOff(blocks)).toBe(true);
+    expect(blocks.flatMap((b) => b.exercises).map((e) => e.dose.sets)).toEqual([2, 3, 2, 1]);
+    const s = buildStrengthSession({ ...base, verdict: "MODIFIED" })!;
+    const line = s.appliedAdaptations.find((a) => a.ruleId === "VERDICT_REDUCED_VOLUME");
+    if (line) expect(line.actionEN).toMatch(/One set off each lift/);
   });
 });

@@ -12,7 +12,7 @@
  *   - Power before strength: a jump squat / pull goes in the power slot, or first in the session.
  *   - All or nothing: when one of the plan's lifts can't go in (a safety rule rules it out, or a safety swap holds
  *     its slot), nothing is merged and session B stays whole on the goal card.
- *   - Recovery day (red) → nothing merged (the goal card says skip). Yellow → half the sets (the plan's own yellow rule).
+ *   - Recovery day (red) → nothing merged (the goal card says skip). Yellow → one set off (the one yellow rule for lifts, 2026-11-23).
  *   - In season → nothing here; the plan stays its own card.
  *   - Never more than +1 set: the strength goal's extra set and the Accumulation +1 skip a goal-plan exercise.
  *   - The day's structure ("Structure per MD day") is the frame, the goal keeps its own dose (2026-11-17): a goal lift
@@ -330,7 +330,8 @@ function mergeLifts(a: MergeArgs): Merged {
     const lib = EXERCISES_BY_ID.get(step.id)!;
     const base = step.at ? pool[step.at.b].exercises[step.at.i] : null;
     const planSets = setsOf(step.lift.sets);
-    const target = yellow ? Math.max(1, Math.ceil(planSets / 2)) : planSets;
+    // Yellow: one set off, the same rule as every other lift (2026-11-23; was half the sets).
+    const target = yellow ? Math.max(1, planSets - 1) : planSets;
     // Inside the week rule (2026-11-19): a heavy lift in the day's heavy spot gets the sets the day's heavy reps hold
     // at the plan's reps a set, never more (the old cap counted sets only, so 3 × 6 went into a 3 × 3 spot as 18 reps).
     const heavy = heavyFit(base, lib.category, step.lift.reps, ruleReps);
@@ -372,7 +373,7 @@ function mergeLifts(a: MergeArgs): Merged {
         ...(zone ? { speedZone: zone } : {}),
       },
       goalPlan: { quality: a.quality, week: a.week, slot, ...(giveBack ? { giveBack: true as const } : {}) },
-      modificationReason: `${tag.en}${base && base.exerciseId !== lib.id ? ` — in place of ${base.nameEN}` : base ? "" : " — added"} · the goal's own dose${why}${yellow ? " · yellow day: half the sets" : ""}`,
+      modificationReason: `${tag.en}${base && base.exerciseId !== lib.id ? ` — in place of ${base.nameEN}` : base ? "" : " — added"} · the goal's own dose${why}${yellow ? " · yellow day: one set off" : ""}`,
     };
     if (step.at) pool[step.at.b].exercises[step.at.i] = ex;
     else added.push({ step, ex });
@@ -478,8 +479,8 @@ export function applyGoalPlanGym(
     ruleId: "GOAL_PLAN_GYM_MERGED",
     triggerEN: trigEN,
     triggerIS: trigIS,
-    actionEN: `The goal's gym session is part of today's session: ${merged.lines.join("; ")}.${yellow ? " Yellow day: half the sets." : ""}${outEN}`,
-    actionIS: `Salur-æfing markmiðsins er hluti af æfingu dagsins: ${merged.linesIS.join("; ")}.${yellow ? " Gulur dagur: hálf sett." : ""}${outIS}`,
+    actionEN: `The goal's gym session is part of today's session: ${merged.lines.join("; ")}.${yellow ? " Yellow day: one set off each lift." : ""}${outEN}`,
+    actionIS: `Salur-æfing markmiðsins er hluti af æfingu dagsins: ${merged.linesIS.join("; ")}.${yellow ? " Gulur dagur: eitt sett af hverri lyftu." : ""}${outIS}`,
     evidence: GOAL_PLAN_GYM_EVIDENCE,
   }, ...zoneAudit(g, merged.zones, snap.mdContext)];
 }

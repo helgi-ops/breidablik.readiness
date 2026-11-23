@@ -105,6 +105,20 @@ function addExtraSet(
 }
 
 /** Helper — reduce sets on the first exercise of a given category by a ratio. */
+/** Yellow day (rule 11): one set off each lift line outside warm-up / mobility; one-set lines stay. True when anything changed. */
+export function yellowOneSetOff(blocks: SessionBlock[]): boolean {
+  let changed = false;
+  for (const block of blocks) {
+    if (block.type === "PREP" || block.type === "MOBILITY") continue;
+    block.exercises = block.exercises.map((ex) => {
+      if (ex.category === "MOVEMENT_PREP" || ex.category === "MOBILITY" || !(ex.dose.sets > 1)) return ex;
+      changed = true;
+      return { ...ex, dose: { ...ex.dose, sets: ex.dose.sets - 1 }, modificationReason: "One set off: yellow check-in today" };
+    });
+  }
+  return changed;
+}
+
 function reduceVolume(
   blocks: SessionBlock[],
   category: PrescribedExercise["category"],
@@ -441,20 +455,19 @@ export function applyAdaptationRules(
     }
   }
 
-  // ── RULE 11: Verdict = REDUCED/MODIFIED — cut volume 30% ─────────────
+  // ── RULE 11: Verdict = REDUCED/MODIFIED — one set off each line ──────
+  // One yellow rule for lifts everywhere (coach's call 2026-11-23, contradiction 16): one set off each line, the same
+  // as a coach's template or hand send on a yellow day and the goal plan's lifts. Warm-up and mobility are left alone;
+  // a line of one set stays one set. Before: about 30% off the first main lift of three kinds only.
   if (snap.verdict === "REDUCED" || snap.verdict === "MODIFIED") {
-    let changed = false;
-    for (const cat of ["COMPOUND_STRENGTH", "POSTERIOR_CHAIN", "UNILATERAL_STRENGTH"] as const) {
-      if (reduceVolume(blocks, cat, 0.7, "Fewer sets: yellow check-in today")) changed = true;
-    }
-    if (changed) {
+    if (yellowOneSetOff(blocks)) {
       audit.push({
         ruleId: "VERDICT_REDUCED_VOLUME",
         triggerEN: checkinWordEN(snap.verdict),
         triggerIS: checkinWordIS(snap.verdict),
-        actionEN: "About 30% fewer sets on the main lifts.",
-        actionIS: "Um 30% færri settum á aðallyftunum.",
-        evidence: "Volume modulation matches readiness state (Gabbett 2017).",
+        actionEN: "One set off each lift (a lift of one set stays one set); the warm-up stays.",
+        actionIS: "Eitt sett tekið af hverri lyftu (lyfta með eitt sett heldur því); upphitunin helst.",
+        evidence: "Volume modulation matches readiness state (Gabbett 2017). One set off each line is MicroPulse's rule, the same on every surface.",
       });
     }
   }

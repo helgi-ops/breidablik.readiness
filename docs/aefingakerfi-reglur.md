@@ -177,9 +177,9 @@ Liturinn er notaður hér en ekki reiknaður.
 |---|---|---|
 | `STRUCTURE_READINESS_DOWNGRADE` | Gulur | Aðferðin eitt þrep niður, í sömu fjölskyldu og leyfð þann dag. Röð: French contrast > contrast = cluster hámarksstyrkur > cluster > … > bein sett |
 | `STRUCTURE_READINESS_DOWNGRADE_SKIPPED` | Neðra þrepið væri meiri vinna en grænt | Aðferðin helst: „gulur dagur er aldrei meiri vinna en grænn“ |
-| `VERDICT_REDUCED_VOLUME` | Gulur | Fyrsta grunnlyfta, aftanlæri og einfóta: sett × 0,7, a.m.k. 1 (Gabbett 2017) |
+| `VERDICT_REDUCED_VOLUME` | Gulur | Eitt sett af hverri lyftu utan upphitunar og liðleika; lína með eitt sett heldur því (23. nóv., sama regla alls staðar). Gabbett 2017; skammturinn er MicroPulse-regla |
 | `VERDICT_BLOCK` | Rauður (nema MD+1 með ≥60 mín) | Allt fer nema upphitun og liðleiki. Leiðréttingaræfingar og jafnvægisupphitun haldast |
-| Engar viðbætur | Gulur eða rauður | Ekkert +1 sett frá markmiði eða prófi, ekkert „skilað til baka“. Markmiðslyftur á gulum degi: helmingur setta |
+| Engar viðbætur | Gulur eða rauður | Ekkert +1 sett frá markmiði eða prófi, ekkert „skilað til baka“. Markmiðslyftur á gulum degi: −1 sett |
 | `CMJ_DROP_NOT_STACKED` | Hoppapróf niðri á degi sem check-in hefur þegar lækkað | Ekki skorið tvisvar |
 | Send æfing fylgir check-in | Sjálfvirk sending, ekkert byrjað | Byggð aftur við check-in, með sama byggi og kl. 09:00 og lit dagsins. **Handsendar æfingar eru aldrei endurbyggðar** |
 | Sniðmát / Custom Programme | Gulur / rauður | Gulur: −1 sett á hverja línu. Rauður: kraft- og aðalblokkir faldar. Hvíldarvika −1 í viðbót. Á æfingu sem þjálfari sendi aðeins ef litur dagsins er verri en sá sem hún var sett upp með (#12) |
@@ -280,7 +280,7 @@ Eftirtöldum ákvörðunum má breyta:
 **Samruni við styrktaræfinguna** (aðeins á uppbyggingartímabili)
 
 - **`GOAL_PLAN_GYM_MERGED`:** markmiðslyfta **kemur í stað** samsvarandi lyftu liðsins; henni er ekki bætt ofan á.
-  - Aldrei á rauðum degi. Gulur dagur: helmingur setta.
+  - Aldrei á rauðum degi. Gulur dagur: −1 sett (sama regla og aðrar lyftur).
   - Þungu endurtekningarnar eru lagaðar að vikureglunni.
 - **`GOAL_PLAN_SPEED_ZONE`:** svæðin eru í m/s og fara eftir markmiði og degi.
   - Hámarksstyrkur: MD-4 0,55–0,65; MD-3 0,8–0,9.
@@ -464,12 +464,14 @@ Eftirtöldum ákvörðunum má breyta:
     byrjar á keppnistímabili (`inSeasonRange`) fær aldrei sjálfvirka hvíldarviku, eins og í `buildMesoBlocks`. Létt
     vika á tímabili er val þjálfarans. Undirbúningstímabil heldur hvíldarviku 4. hverja viku. PDF-ið segir það í
     athugasemd. Regla sem þegar var ákveðin (6. nóv.), svo ekki spurt.
-16. **Gulur dagur er meðhöndlaður á fimm vegu** eftir leið:
-    - vélin: þrep niður og −30% sett;
-    - sniðmát: −1 sett;
-    - markmiðsspjald: helmingur mínútna;
-    - markmiðslyftur: helmingur setta;
-    - CMJ-skurður: −1 umferð.
+16. ~~**Gulur dagur er meðhöndlaður á fimm vegu**~~ **Lagað 23. nóv.:** ein regla fyrir lyftur á gulum degi: eitt
+    sett af hverri línu. Lína með eitt sett heldur því og upphitun og liðleiki haldast.
+    - Vélin: −1 sett á hverja lyftu (var um 30% af fyrstu lyftu þriggja flokka). Aðferðarþrepið helst, aldrei þyngra
+      en grænn dagur. Nordic og Copenhagen eru líka línur og missa eitt sett á gulum degi.
+    - Sniðmát og handsend æfing (#12): −1 sett á hverja línu, óbreytt.
+    - Markmiðslyftur: −1 sett (var helmingur).
+    - Markmiðsæfing á velli: allt á fullu fer út, óbreytt (textinn er lagaður í #17).
+    - CMJ-skurður er annað merki (stökkpróf), ekki gulur, og er óbreyttur.
 17. **Markmiðsplön:**
     - Plan sem er samþykkt á keppnistímabili er fryst sem 2 æfingar á viku, en keyrir bara á undirbúningstímabili.
     - Gulur-textinn segir „helmingur setta“ en spjaldið helmingar mínútur.

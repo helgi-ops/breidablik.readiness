@@ -128,10 +128,11 @@ describe("into the strength session", () => {
     }
   });
 
-  it("yellow day → half the sets; red day → nothing merged, with a reason", () => {
-    // MD-3: yellow steps French contrast to contrast, which keeps a heavy lift → merged at half the sets.
+  it("yellow day → one set off each lift (the one yellow rule, 2026-11-23); red day → nothing merged, with a reason", () => {
+    // MD-3: yellow steps French contrast to contrast, which keeps a heavy lift → merged with one set off.
     const y = buildStrengthSession(withGoalPlanGym(snap({ mdContext: "MD-3", verdict: "MODIFIED" }), gym!));
-    expect(rule(y, "GOAL_PLAN_GYM_MERGED")?.actionEN).toMatch(/half the sets/);
+    expect(rule(y, "GOAL_PLAN_GYM_MERGED")?.actionEN).toMatch(/one set off each lift/);
+    expect(all(y).filter((e) => e.goalPlan).every((e) => /yellow day: one set off/.test(e.modificationReason ?? ""))).toBe(true);
     // MD-4: yellow steps the cluster to an overcoming isometric (no heavy lift) → B stays on the card, with why.
     const y4 = buildStrengthSession(withGoalPlanGym(snap({ verdict: "MODIFIED" }), gym!));
     expect(all(y4).some((e) => e.goalPlan)).toBe(false);
