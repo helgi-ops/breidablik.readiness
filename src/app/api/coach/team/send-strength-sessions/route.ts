@@ -21,6 +21,7 @@ import { loadCoachOverridesForPlayers, loadPlayerStrengthSnapshot } from "@/lib/
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { formatSessionForPlayer } from "@/lib/micropulse/strengthProgramming/formatForPlayer";
 import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
+import { offDatesInWeekPlan, withOffDayLine } from "@/lib/micropulse/strengthProgramming/offDaySend";
 import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
@@ -179,6 +180,8 @@ export async function POST(req: NextRequest) {
   // Standard mode: the team's authored Custom Programme table + week phase (resolved once). When it
   // covers a player's day we stand aside and let their Today resolution serve it (readiness-reactive).
   const teamCustom = mode === "standard" ? await resolveTeamCustomTable(supabase, auth.teamId, todayIso) : null;
+  // A day off in the week plan: the coach's send still goes out (the coach decides last), and says so (2026-11-23).
+  const offDay = !mdOverride && (await offDatesInWeekPlan(supabase, auth.teamId, [todayIso])).has(todayIso);
 
   const langs = await loadPlayerLanguages(supabase, playerRows.map((r) => r.id));
 
@@ -222,6 +225,7 @@ export async function POST(req: NextRequest) {
       if (coachBlock) {
         session = applyBlockToSession(session, coachBlock.goalKey, coachBlock.phase, coachRules?.block?.[`${coachBlock.goalKey}:${coachBlock.phase}`], coachBlock.subPhase) ?? session;
       }
+      if (offDay) session = withOffDayLine(session);
 
       // Skip silently if the session is empty (e.g. injury, RECOVERY verdict
       // stripped all blocks) — those players are handled via rehab/recovery
@@ -279,5 +283,5 @@ export async function POST(req: NextRequest) {
   const skipped = results.filter((r) => r.status === "skipped").length;
   const failed = results.filter((r) => r.status === "failed").length;
 
-  return NextResponse.json({ sent, skipped, failed, results });
+  return NextResponse.json({ sent, skipped, failed, results, offDay });
 }

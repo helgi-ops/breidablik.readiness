@@ -121,6 +121,15 @@ used to vanish silently. `noMatchCheck.ts` names it (Week setup banner for the w
 send-mode line and the goal plans (even in a week already under way) all follow it. Saving the weekday plan never
 touches saved moves (`noMatchWeekToStore` keeps the stored ones); moves older than a week are pruned.
 
+## A hand send on a day off (2026-11-23)
+
+The 09:00 send never sends on a day the week plan marks OFF. A coach's hand send does (the coach decides last), but
+not silently (`strengthProgramming/offDaySend.ts`): the one-day sends (`session`, `bulk`) build the session for the
+day's place in the match week, add a `DAY_RULE_COACH_DAY_OFF` line ("day off in the week plan, sent because the
+coach chose to") and return `offDay: true`, which the send button / squad send shows. The 4-week `block` leaves out
+the dates that are OFF when it is sent and returns them as `skippedOffDays`. A `?md=` override skips the check (the
+coach set the day by hand). The `corrective` send is unchanged.
+
 ## Collision preview
 
 `GET /api/coach/player/[id]/today-conflicts?dates=…` (admin-aware) returns, for a set of target dates:

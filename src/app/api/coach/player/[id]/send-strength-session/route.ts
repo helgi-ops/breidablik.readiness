@@ -20,6 +20,7 @@ import { loadCoachOverrides, loadPlayerStrengthSnapshot } from "@/lib/micropulse
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { formatSessionForPlayer } from "@/lib/micropulse/strengthProgramming/formatForPlayer";
 import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
+import { offDatesInWeekPlan, withOffDayLine } from "@/lib/micropulse/strengthProgramming/offDaySend";
 import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
@@ -199,6 +200,9 @@ export async function POST(
   if (coachBlock) {
     session = applyBlockToSession(session, coachBlock.goalKey, coachBlock.phase, coachRules?.block?.[`${coachBlock.goalKey}:${coachBlock.phase}`], coachBlock.subPhase) ?? session;
   }
+  // A day off in the week plan: the coach's send still goes out (the coach decides last), and says so (2026-11-23).
+  const offDay = !mdOverride && (await offDatesInWeekPlan(supabase, teamId, [todayIso])).has(todayIso);
+  if (offDay) session = withOffDayLine(session);
 
   let messageBody = formatSessionForPlayer(session, lang, auth.coachName);
   if (body.note?.trim()) {
@@ -244,6 +248,7 @@ export async function POST(
     messageId: (msg as { id: string }).id,
     todayCardApplied: overrideRes.ok,
     mdContext: session.mdContext,
+    offDay,
     durationMin: session.durationMin,
     bodyPreview: messageBody.slice(0, 200),
   });

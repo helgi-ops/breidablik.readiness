@@ -86,7 +86,7 @@ Styrktaræfing dagsins er byggð í `buildStrengthSession` (`SP/index.ts`), í �
 
 | Regla | Hvenær | Hvað gerist | Heimild | Þjálfari / skráning |
 |---|---|---|---|---|
-| MD-merki dagsins (`fetchMdContextInfo`, `playerContext/domains.ts`) | Alltaf | Les leiki og GAME-raðir 4 dögum á undan og 5 á eftir og ákveður MD-daginn. Enginn leikur nálægt: MD-3 | — | Þjálfari getur gefið MD handvirkt í sendingu. **Les ekki frídaga (OFF) úr vikuplaninu** (ósamræmi 11) |
+| MD-merki dagsins (`fetchMdContextInfo`, `playerContext/domains.ts`) | Alltaf | Les leiki og GAME-raðir 4 dögum á undan og 5 á eftir og ákveður MD-daginn. Enginn leikur nálægt: MD-3 | — | Þjálfari getur gefið MD handvirkt í sendingu. Les ekki frídaga (OFF) úr vikuplaninu; handsending á OFF-degi fær línu um það (ósamræmi 11) |
 | Fasi vikunnar (`resolveWeekPhase`) | Hver bygging | Fasi þjálfarans á vikunni, annars fasi tímabilsplansins. Keppni telst „inseason“ | — | Þjálfari vistar fasann |
 | Fasar tímabils (`detectSeasonPhases`) | — | Undirbúningstímabil byrjar á dagsetningu þjálfarans, annars 42 dögum fyrir fyrsta leik. Undirbúningstímabil Breiðabliks 2026 byrjar 30. nóv., úr gögnum þjálfarans | — | `season_plans.overrides` |
 | **`INSEASON_MD2_OFF`** (nýtt, 8d487b4) | Sjálfvirka MD-röðunin í Week setup, á keppnistímabili | Dagurinn eftir leik er MD+1 endurheimt, en sunnudagur vikunnar er áfram frí. MD+2 er **frídagur**. MD-1 er aldrei gerður að frídegi. Leikur síðustu tvo daga fyrri viku telur með | MicroPulse-regla; Buchheit 2023 | Þjálfari getur breytt hvaða degi sem er; ekki skráð. Undirbúnings- og utan tímabils: óbreytt |
@@ -438,8 +438,11 @@ Eftirtöldum ákvörðunum má breyta:
     - Álagsplanið og periodization-líkanið segja það. Æfing sem þjálfari setur á MD+2 er val þjálfarans: létt, 35%.
     - Markmiðsplan á keppnistímabili velur ekki MD+2, nema þjálfari hafi sett æfingu þar í vikuplaninu.
     - Á undirbúningstímabili og utan tímabils er MD+2 áfram æfingadagur.
-11. **Handsendar æfingar fara út á frídögum.** MD-merkið les ekki frídaga vikuplansins; aðeins sjálfvirkar sendingar
-    gera það.
+11. ~~**Handsendar æfingar á frídögum.**~~ **Lagað 23. nóv.:** eins dags sending (einn leikmaður eða hópurinn) á
+    degi sem vikuplanið merkir OFF fer út, því þjálfarinn valdi hana. Hún er sett upp eftir stöðu dagsins í
+    leikvikunni (vélin hefur enga æfingu fyrir OFF) og fær línuna `DAY_RULE_COACH_DAY_OFF`: „frídagur í vikuplaninu,
+    sent af því þjálfarinn valdi það“. Sendingarglugginn segir það líka. 4 vikna blokk sleppir dögum sem eru OFF
+    þegar hún er send og telur þá upp. Sjálfvirka sendingin sendir áfram aldrei á frídegi.
 12. **Handsendar æfingar fylgja aldrei check-in síðar.** 4 vikna blokk er aldrei aðlöguð eftir lit.
 13. **Utan tímabils fær vikureglu keppnistímabils** (15 á viku), ekki 21 eins og á undirbúningstímabili.
 14. **Vika án leiks og án vikuplans:** hver æfingadagur verður fullur MD-3, án vikureglu og forvarnar.

@@ -12,6 +12,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
 import { buildBlockSchedule, mondayOf, type BlockMethod } from "@/lib/micropulse/strengthBlock/upperLowerBlock";
 import { summarizeDeliveryConflicts, type OverrideRow, type CustomWindow } from "@/lib/micropulse/sessionDelivery/conflicts";
+import { offDatesInWeekPlan } from "@/lib/micropulse/strengthProgramming/offDaySend";
 
 export const runtime = "nodejs";
 
@@ -42,7 +43,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     : new Date().toISOString().slice(0, 10);
   const startMonday = mondayOf(start);
 
-  const schedule = buildBlockSchedule(startMonday, lang, method);
+  const fullSchedule = buildBlockSchedule(startMonday, lang, method);
+  // Days the team's week plan marks OFF when the block is sent are left out and named (2026-11-23): the automatic send
+  // never sends on a day off, and a block date the coach did not pick one by one follows the week plan.
+  const offDates = await offDatesInWeekPlan(sb, player.team_id, fullSchedule.map((s) => s.dateIso));
+  const schedule = fullSchedule.filter((s) => !offDates.has(s.dateIso));
+  if (!schedule.length) return NextResponse.json({ ok: false, error: "Every date of the block is a day off in the week plan.", skippedOffDays: [...offDates].sort() }, { status: 400 });
   const rows = schedule.map((s) => ({
     player_id: player.id,
     team_id: player.team_id,
@@ -74,5 +80,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { error } = await sb.from("player_today_strength_override").upsert(rows, { onConflict: "player_id,entry_date" });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true, sent: rows.length, weeks: 4, startDate: startMonday, from: rows[0]?.entry_date, to: rows[rows.length - 1]?.entry_date, replaced: conflicts.overrideCount, supersedesCustom: conflicts.supersedesCustom });
+  return NextResponse.json({ ok: true, sent: rows.length, weeks: 4, startDate: startMonday, from: rows[0]?.entry_date, to: rows[rows.length - 1]?.entry_date, replaced: conflicts.overrideCount, supersedesCustom: conflicts.supersedesCustom, skippedOffDays: [...offDates].sort() });
 }

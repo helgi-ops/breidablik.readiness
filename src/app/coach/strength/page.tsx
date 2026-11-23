@@ -116,7 +116,7 @@ export default function CoachStrengthPage() {
   // Who the bulk strength send goes to: the whole team, a position group, or a hand-picked set.
   const [sendGroup, setSendGroup] = useState<string>("all");
   const [customIds, setCustomIds] = useState<Set<string>>(() => new Set());
-  const [bulkResult, setBulkResult] = useState<{ sent: number; skipped: number; failed: number } | null>(null);
+  const [bulkResult, setBulkResult] = useState<{ sent: number; skipped: number; failed: number; offDay?: boolean } | null>(null);
   const [bulkNote, setBulkNote] = useState("");
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
   // Send mode: the team default (teams.strength_send_mode), overridable per send. Three modes (2026-11-17):
@@ -438,6 +438,7 @@ export default function CoachStrengthPage() {
         sent: Number(json.sent ?? 0),
         skipped: Number(json.skipped ?? 0),
         failed: Number(json.failed ?? 0),
+        offDay: json.offDay === true,
       });
       setBulkNote("");
       setShowBulkConfirm(false);
@@ -940,6 +941,12 @@ export default function CoachStrengthPage() {
                   "(sleppt = off-day, meidd(ur), eða RECOVERY verdict — höndlað annars staðar)",
                 )}
               </span>
+            )}
+            {bulkResult.offDay && (
+              <div className="mt-1 text-amber-800">
+                {t("Today is a day off in the week plan. Sent because you chose to; each session says so.",
+                  "Dagurinn er frídagur í vikuplaninu. Sent af því þú valdir það; hver æfing segir frá því.")}
+              </div>
             )}
           </div>
         )}

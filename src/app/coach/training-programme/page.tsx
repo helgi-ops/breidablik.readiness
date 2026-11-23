@@ -181,9 +181,12 @@ export default function TrainingProgrammePage() {
       const replacedIS = j.replaced ? ` Yfirskrifaði ${j.replaced} þjálfara-senda${j.replaced === 1 ? "n dag" : " daga"}.` : "";
       const supEN = j.supersedesCustom ? " It sits above the player's active Custom Programme on training days." : "";
       const supIS = j.supersedesCustom ? " Hún situr ofan á virku Custom Programme leikmannsins á æfingadögum." : "";
+      const off: string[] = Array.isArray(j.skippedOffDays) ? j.skippedOffDays : [];
+      const offEN = off.length ? ` Left out ${off.length} day${off.length === 1 ? "" : "s"} off in the week plan (${off.join(", ")}).` : "";
+      const offIS = off.length ? ` Sleppti ${off.length} ${off.length === 1 ? "frídegi" : "frídögum"} í vikuplaninu (${off.join(", ")}).` : "";
       setBlockMsg(isEN
-        ? `Sent — ${j.sent} sessions to ${name} (${j.from} → ${j.to}). He can swap any exercise in the app.${replacedEN}${supEN}`
-        : `Sent — ${j.sent} æfingar á ${name} (${j.from} → ${j.to}). Hann getur skipt um hvaða æfingu sem er í appinu.${replacedIS}${supIS}`);
+        ? `Sent — ${j.sent} sessions to ${name} (${j.from} → ${j.to}). The player can swap any exercise in the app.${replacedEN}${supEN}${offEN}`
+        : `Sent — ${j.sent} æfingar á ${name} (${j.from} → ${j.to}). Leikmaðurinn getur skipt um hvaða æfingu sem er í appinu.${replacedIS}${supIS}${offIS}`);
       void loadBlockConflicts();
     } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
     finally { setBlockSending(false); }

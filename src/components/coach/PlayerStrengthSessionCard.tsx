@@ -52,6 +52,8 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
   const [md, setMd] = useState<MdContext | "AUTO">("AUTO");
   const [showAdaptations, setShowAdaptations] = useState(false);
   const [sendStatus, setSendStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  // The day is OFF in the week plan; the send went out because the coach chose it (2026-11-23).
+  const [sentOnOffDay, setSentOnOffDay] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [coachNote, setCoachNote] = useState("");
   const [showNoteBox, setShowNoteBox] = useState(false);
@@ -631,7 +633,14 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                   ? t("Sending…", "Sendi…")
                   : t("📲 Send to player's app", "📲 Senda í app leikmannsins")}
             </button>
-          ) : (
+          ) : null}
+          {!showNoteBox && sendStatus === "sent" && sentOnOffDay ? (
+            <p className="mt-1.5 text-[11px] text-amber-800">
+              {t("Today is a day off in the week plan. Sent because you chose to; the session says so.",
+                "Dagurinn er frídagur í vikuplaninu. Sent af því þú valdir það; æfingin segir frá því.")}
+            </p>
+          ) : null}
+          {!showNoteBox ? null : (
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-indigo-900">
                 {t("Optional note for the player:", "Valfrjáls athugasemd til leikmanns:")}
@@ -691,6 +700,7 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                         return;
                       }
                       setSendStatus("sent");
+                      setSentOnOffDay(json?.offDay === true);
                       setShowNoteBox(false);
                       setCoachNote("");
                     } catch (e) {
