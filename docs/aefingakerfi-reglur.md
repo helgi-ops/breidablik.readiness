@@ -460,8 +460,10 @@ Eftirtöldum ákvörðunum má breyta:
     sjálfgefna planið hafi verið notað og hvar má setja plan liðsins. Færsla eina viku í senn heldur sér. Um leið og
     einn dagur er stilltur gildir plan þjálfarans. Í dag (23. nóv.) hefur aðeins Breiðablik (fótbolti) plan.
     Markmiðsplön (8 vikur) raða enn eftir eigin reglu þegar ekkert plan er til.
-15. **`buildMesoPlan` setur hvíldarviku 4. hverja viku líka á keppnistímabili**, þvert á regluna „engin sjálfvirk
-    hvíldarvika á tímabili“.
+15. ~~**`buildMesoPlan` setur hvíldarviku 4. hverja viku líka á keppnistímabili**~~ **Lagað 23. nóv.:** vika sem
+    byrjar á keppnistímabili (`inSeasonRange`) fær aldrei sjálfvirka hvíldarviku, eins og í `buildMesoBlocks`. Létt
+    vika á tímabili er val þjálfarans. Undirbúningstímabil heldur hvíldarviku 4. hverja viku. PDF-ið segir það í
+    athugasemd. Regla sem þegar var ákveðin (6. nóv.), svo ekki spurt.
 16. **Gulur dagur er meðhöndlaður á fimm vegu** eftir leið:
     - vélin: þrep niður og −30% sett;
     - sniðmát: −1 sett;

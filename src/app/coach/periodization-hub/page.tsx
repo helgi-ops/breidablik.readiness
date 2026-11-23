@@ -694,7 +694,7 @@ export default function PeriodizationHubPage() {
   const blkMatchUnit = blkScope === "player" ? (player?.matchUnit.load.typical ?? plan?.matchLoad ?? null) : (plan?.matchLoad ?? null);
   const mesoPlan: MesoPlan | null = React.useMemo(() => {
     if (!plan || !blkPos || !blkStart) return null;
-    return buildMesoPlan({ startDate: blkStart, numWeeks: blkWeeks, sessionsPerWeek: blkSessions, baseline: blkPos.avg as unknown as TeamAverages, mdShape: plan.mdShape, fixtures: plan.fixtures ?? [], matchUnitLoad: blkMatchUnit, baseOverloadPct: blkBase, stepPct: blkStep, goal: BLK_GOALS[effectiveGoal] });
+    return buildMesoPlan({ startDate: blkStart, numWeeks: blkWeeks, sessionsPerWeek: blkSessions, baseline: blkPos.avg as unknown as TeamAverages, mdShape: plan.mdShape, fixtures: plan.fixtures ?? [], matchUnitLoad: blkMatchUnit, baseOverloadPct: blkBase, stepPct: blkStep, goal: BLK_GOALS[effectiveGoal], inSeason: inSeasonRange(plan.phases) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan, blkPos, blkStart, blkWeeks, blkSessions, blkBase, blkStep, effectiveGoal, blkMatchUnit]);
 

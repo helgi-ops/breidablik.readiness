@@ -476,6 +476,21 @@ test("buildMesoPlan: N weeks, deload every 4th, overload ramps, week type from f
   assert.ok(plan.notes.some((n) => /never a norm|Little & Buchheit/i.test(n.en)));
 });
 
+test("buildMesoPlan: no automatic deload in season (contradiction 15, 2026-11-23)", () => {
+  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, imaCod: null, matchImaCod: null, imaFrDist: null, matchImaFrDist: null, accelHiEff: null, decelHiEff: null, strideHi: null, matchAccelHiEff: null, matchDecelHiEff: null, matchStrideHi: null, rhieBouts: null, runSymmetry: null, metabolicPower: null };
+  const inSeason = { start: "2026-04-10", end: "2026-10-01" };
+  const season = buildMesoPlan({ startDate: "2026-05-04", numWeeks: 8, sessionsPerWeek: 4, baseline: b, matchUnitLoad: 1000, fixtures: [], inSeason });
+  assert.ok(season.weeks.every((w) => !w.isDeload));
+  assert.ok(season.notes.some((n) => /no automatic deload/.test(n.en)));
+  // Pre-season keeps the every-4th deload; a block that runs into the season loses it only from the first season week.
+  const pre = buildMesoPlan({ startDate: "2026-02-02", numWeeks: 8, sessionsPerWeek: 4, baseline: b, matchUnitLoad: 1000, fixtures: [], inSeason });
+  assert.equal(pre.weeks[3].isDeload, true);
+  assert.equal(pre.weeks[7].isDeload, true);
+  assert.ok(!pre.notes.some((n) => /no automatic deload/.test(n.en)));
+  const across = buildMesoPlan({ startDate: "2026-03-23", numWeeks: 8, sessionsPerWeek: 4, baseline: b, matchUnitLoad: 1000, fixtures: [], inSeason });
+  assert.equal(across.weeks[3].isDeload, false); // 13 Apr: in season
+});
+
 test("buildCalendarBlock: reproduces the demo microcycle (Sat/Sun alternation, tight/roomy weeks, ≤3 in a row)", () => {
   const unit = UNIT;
   const b = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 6, scopeName: "Óli Valur", scopePos: "winger", baseOverloadPct: 100, stepPct: 8 });

@@ -487,6 +487,9 @@ export function buildMesoPlan(opts: {
   startDate: string; numWeeks: number; sessionsPerWeek: number; baseline: TeamAverages;
   mdShape?: Record<string, number>; fixtures: string[]; matchUnitLoad: number | null;
   baseOverloadPct?: number; stepPct?: number; goal?: Bi;
+  /** The competitive phase [start, end) (`inSeasonRange`). A week starting inside it never gets the automatic every-4th
+   *  deload (2026-11-23, contradiction 15): in season a light week is the coach's pick, as in `buildMesoBlocks`. */
+  inSeason?: { start: string; end: string } | null;
 }): MesoPlan {
   const numWeeks = Math.max(1, Math.min(8, Math.round(opts.numWeeks)));
   const sessionsPerWeek = Math.max(1, Math.round(opts.sessionsPerWeek));
@@ -500,7 +503,8 @@ export function buildMesoPlan(opts: {
     const wStartMs = Date.parse(weekStart), wEndMs = wStartMs + 7 * 86_400_000;
     const matchesInWeek = fx.filter((m) => m >= wStartMs && m < wEndMs).length;
     const weekType: MatchWeekType = matchesInWeek >= 3 ? "three_game" : matchesInWeek >= 2 ? "two_game" : "normal";
-    const isDeload = (i + 1) % 4 === 0; // planned recovery every 4th week
+    const inSeasonWeek = !!opts.inSeason && weekStart >= opts.inSeason.start && weekStart < opts.inSeason.end;
+    const isDeload = (i + 1) % 4 === 0 && !inSeasonWeek; // planned recovery every 4th week, never automatic in season
     const overloadPct = isDeload ? 60 : Math.min(130, base + step * i);
     const sessions = mdWeekTargets(scaleBaseline(opts.baseline, overloadPct / 100), { mdShape: opts.mdShape, weekType });
     const weeklyLoadTarget = opts.matchUnitLoad != null ? Math.round(opts.matchUnitLoad * baseTmr * (overloadPct / 100)) : null;
@@ -511,7 +515,9 @@ export function buildMesoPlan(opts: {
       sessions, weeklyLoadTarget, tmr, matchesInWeek,
     });
   }
+  const anyInSeason = !!opts.inSeason && weeks.some((w) => w.weekStart >= opts.inSeason!.start && w.weekStart < opts.inSeason!.end);
   const notes: Bi[] = [
+    ...(anyInSeason ? [{ en: "In season there is no automatic deload week: the match-day taper already varies the week, and a light week is the coach's pick (Malone 2015; Fessi 2016).", is: "Á keppnistímabili er engin sjálfvirk niðurtröppunarvika: leikdagatröppunin breytir vikunni nú þegar og létt vika er val þjálfarans (Malone 2015; Fessi 2016)." }] : []),
     { en: "Targets scale from each player's own match unit — a starting point, never a norm to obey (Little & Buchheit).", is: "Álagsmörk skala frá eigin leikviðmiði hvers leikmanns — upphafspunktur, aldrei viðmið til að hlýða í blindni (Little & Buchheit)." },
     { en: "No single \"% of match\": mechanical work over-shoots the match, HSR/sprint fall short — read each axis on its own (Figueiredo).", is: "Ekkert eitt „%-af-leik“: vélrænt fer yfir leikinn, háhraði/sprettur ná ekki — lestu hvern ás sér (Figueiredo)." },
     { en: "Never stack HSR and mechanical work on the same day — protect the posterior chain (Mechanical MD-5 vs Locomotive MD-4).", is: "Aldrei stafla háhraða og vélrænu á sama dag — verndaðu afturkeðjuna (Mechanical MD-5 vs Locomotive MD-4)." },
