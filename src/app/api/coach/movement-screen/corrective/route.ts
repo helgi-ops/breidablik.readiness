@@ -35,6 +35,7 @@ import { REGION_BY_KEY, fieldLabel } from "@/lib/micropulse/movementScreen/visio
 import { getMovementTest } from "@/lib/micropulse/movementScreen/loader";
 import { buildVariableTrends } from "@/lib/micropulse/movementScreen/trend";
 import type { Bi } from "@/lib/micropulse/movementScreen/registry";
+import { sendLangForPlayer } from "@/lib/micropulse/strengthProgramming/playerLanguage";
 
 export const runtime = "nodejs";
 
@@ -278,7 +279,6 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const b = body as { player_id?: string; lang?: string; source?: string; entry_date?: string; selected_slugs?: unknown };
   const playerId = String(b.player_id ?? "");
-  const isEN = b.lang !== "IS";
   const source = b.source === "region" ? "region" : b.source === "screen" ? "screen" : "merged";
   const entryDate = String(b.entry_date ?? new Date().toISOString().slice(0, 10));
   const selectedSlugs = Array.isArray(b.selected_slugs) ? new Set((b.selected_slugs as unknown[]).map(String)) : null;
@@ -286,6 +286,8 @@ export async function POST(req: NextRequest) {
 
   const teamId = await resolvePlayerTeam(ctx, playerId);
   if (!teamId || !(await coachCanAccessTeam(ctx, teamId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // What the player gets: their app language, else the team's, else the coach's UI language, else English (contradiction 19).
+  const isEN = (await sendLangForPlayer(ctx.sb, { playerId, teamId, coachLang: b.lang })) === "EN";
   const custom = await loadCustomCorrectives(ctx.sb, teamId);
 
   // Rebuild the legit prescription SERVER-SIDE from the requested source.

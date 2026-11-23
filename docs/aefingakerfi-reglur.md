@@ -492,4 +492,9 @@ Eftirtöldum ákvörðunum má breyta:
     - Saga: hver skipting, breyting og afturköllun fer í `strength_session_override_log` (hver, hvenær, frá → til,
       af hverju). Ástæðan birtist á línunni í æfingunni („Coach override: …“) og í línu ósamhverfunnar, á máli
       lesandans.
-19. **Sjálfgefið tungumál:** handsendar æfingar falla á íslensku, blokk og leiðrétting á ensku. CLAUDE.md segir enska.
+19. ~~**Sjálfgefið tungumál**~~ **Lagað 23. nóv.:** ein regla fyrir allar sendingar (`sendLangFor`): mál
+    leikmannsins í appinu, annars sjálfgefið mál liðsins, annars mál þjálfarans í viðmótinu, annars enska. Gildir um
+    handsenda æfingu, alla hópinn, 4 vikna blokkina og leiðréttinguna. Sjálfvirka sendingin hefur engan þjálfara:
+    leikmaður → lið → enska, eins og áður. Áður féll handsend æfing á íslensku, og blokk og leiðrétting hunsuðu mál
+    leikmannsins. Í dag (23. nóv.) hafa 255 af 277 virkum leikmönnum ekki tilkynnt mál og 76 lið ekkert sjálfgefið
+    mál, svo íslenskur þjálfari sendir þeim áfram á íslensku.

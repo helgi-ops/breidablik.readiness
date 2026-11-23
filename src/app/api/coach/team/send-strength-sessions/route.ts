@@ -14,7 +14,7 @@
  * Auth: coach token only.
  */
 
-import { loadPlayerLanguages } from "@/lib/micropulse/strengthProgramming/playerLanguage";
+import { loadPlayerLanguages, sendLangFor } from "@/lib/micropulse/strengthProgramming/playerLanguage";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { loadCoachOverridesForPlayers, loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/loader";
@@ -134,12 +134,12 @@ export async function POST(req: NextRequest) {
   // Optional subset (a position group or a hand-picked set). Omitted/empty → the whole team.
   const subset = Array.isArray(body.playerIds) ? body.playerIds.filter((x) => typeof x === "string" && x) : null;
   const mdOverride = parseMdOverride(body.md);
-  // The coach's UI language: the fallback when a player's app language isn't known yet (D, 2026-11-18).
-  const coachLang: "IS" | "EN" = body.lang === "EN" ? "EN" : "IS";
+  // The coach's UI language: a fallback after the player's and the team's language (sendLangFor, contradiction 19).
+  const coachLang = body.lang;
   const note = body.note?.trim().slice(0, 300) ?? "";
 
   // Send mode: the request overrides the team default (teams.strength_send_mode).
-  const { data: teamRow } = await supabase.from("teams").select("strength_send_mode").eq("id", auth.teamId).maybeSingle();
+  const { data: teamRow } = await supabase.from("teams").select("strength_send_mode, default_language").eq("id", auth.teamId).maybeSingle();
   // Three modes (2026-11-17): standard / individualised / individualised + goals (players take part; sendMode.ts).
   const teamDefault = normalizeSendMode((teamRow as { strength_send_mode?: string } | null)?.strength_send_mode);
   const mode: SendMode = isSendMode(body.mode) ? body.mode : teamDefault;
@@ -193,7 +193,7 @@ export async function POST(req: NextRequest) {
   const runPlayer = async (p: { id: string; full_name: string | null; team_id: string }): Promise<SendResult> => {
     const playerName = p.full_name ?? p.id;
     // The message, push and Today card in the language the player uses the app in.
-    const lang = langs.get(p.id) ?? coachLang;
+    const lang = sendLangFor({ player: langs.get(p.id), team: (teamRow as { default_language?: string | null } | null)?.default_language, coach: coachLang });
     try {
       const snapshot = await loadPlayerStrengthSnapshot(supabase, {
         playerId: p.id,

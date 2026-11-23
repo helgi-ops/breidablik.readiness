@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { asAppLang, loadPlayerLanguages, sessionLangFor } from "../playerLanguage";
+import { asAppLang, loadPlayerLanguages, sendLangFor, sessionLangFor } from "../playerLanguage";
 import { strengthSessionToTodayStructure } from "../toTodayStructure";
 import { buildStrengthSession } from "../index";
 import type { PlayerStrengthSnapshot } from "../types";
@@ -58,9 +58,11 @@ describe("wiring", () => {
     expect(rebuild).not.toMatch(/lang: "EN"/);
     expect(rebuild).toMatch(/sessionLangFor\(\(player as \{ app_language/);
   });
-  it("hand sends use the player's language, the coach's only as the fallback", () => {
-    expect(read("src/app/api/coach/team/send-strength-sessions/route.ts")).toMatch(/const lang = langs\.get\(p\.id\) \?\? coachLang;/);
-    expect(read("src/app/api/coach/player/[id]/send-strength-session/route.ts")).toMatch(/loadPlayerLanguages\(supabase, \[playerId\]\)\)\.get\(playerId\) \?\? \(body\.lang === "EN"/);
+  it("every hand send uses the one rule: player → team → coach → English", () => {
+    expect(read("src/app/api/coach/team/send-strength-sessions/route.ts")).toMatch(/sendLangFor\(\{ player: langs\.get\(p\.id\), team: .*default_language, coach: coachLang \}\)/);
+    expect(read("src/app/api/coach/player/[id]/send-strength-session/route.ts")).toMatch(/sendLangForPlayer\(supabase, \{ playerId, teamId: .*coachLang: body\.lang \}\)/);
+    expect(read("src/app/api/coach/player/[id]/send-strength-block/route.ts")).toMatch(/sendLangForPlayer\(sb, \{ playerId: player\.id, teamId: player\.team_id, coachLang: body\.lang \}\)/);
+    expect(read("src/app/api/coach/movement-screen/corrective/route.ts")).toMatch(/sendLangForPlayer\(ctx\.sb, \{ playerId, teamId, coachLang: b\.lang \}\)/);
   });
   it("the app reports its language only when it changed; the route sets only the player's own row", () => {
     const pc = read("src/app/player/PlayerClient.tsx");
@@ -69,5 +71,15 @@ describe("wiring", () => {
     const route = read("src/app/api/player/language/route.ts");
     expect(route).toMatch(/requireAuthedPlayerId\(sb, req\)/);
     expect(route).toMatch(/\.update\(\{ app_language: lang \}\)\.eq\("id", playerId\)/);
+  });
+});
+
+describe("one send-language rule (contradiction 19, 2026-11-23)", () => {
+  it("player → team → coach → English", () => {
+    expect(sendLangFor({ player: "IS", team: "EN", coach: "EN" })).toBe("IS");
+    expect(sendLangFor({ player: null, team: "EN", coach: "IS" })).toBe("EN");
+    expect(sendLangFor({ player: null, team: null, coach: "IS" })).toBe("IS");
+    expect(sendLangFor({ player: null, team: null, coach: undefined })).toBe("EN");
+    expect(sendLangFor({})).toBe("EN");
   });
 });

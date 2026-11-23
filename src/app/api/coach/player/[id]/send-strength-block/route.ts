@@ -13,6 +13,7 @@ import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
 import { buildBlockSchedule, mondayOf, type BlockMethod } from "@/lib/micropulse/strengthBlock/upperLowerBlock";
 import { summarizeDeliveryConflicts, type OverrideRow, type CustomWindow } from "@/lib/micropulse/sessionDelivery/conflicts";
 import { offDatesInWeekPlan } from "@/lib/micropulse/strengthProgramming/offDaySend";
+import { sendLangForPlayer } from "@/lib/micropulse/strengthProgramming/playerLanguage";
 
 export const runtime = "nodejs";
 
@@ -36,7 +37,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const body = (await req.json().catch(() => ({}))) as { startDate?: unknown; lang?: unknown; method?: unknown };
-  const lang: "EN" | "IS" = body.lang === "IS" ? "IS" : "EN";
+  // The player's app language, else the team's, else the coach's UI language, else English (contradiction 19).
+  const lang = await sendLangForPlayer(sb, { playerId: player.id, teamId: player.team_id, coachLang: body.lang });
   const method: BlockMethod = body.method === "contrast" || body.method === "french_contrast" ? body.method : "upper_lower";
   const start = typeof body.startDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.startDate)
     ? body.startDate

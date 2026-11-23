@@ -12,7 +12,7 @@
  * Auth: coach token; player must be on coach's team.
  */
 
-import { loadPlayerLanguages } from "@/lib/micropulse/strengthProgramming/playerLanguage";
+import { sendLangForPlayer } from "@/lib/micropulse/strengthProgramming/playerLanguage";
 import { NextRequest, NextResponse } from "next/server";
 import { isSendMode, normalizeSendMode, type SendMode } from "@/lib/micropulse/strengthProgramming/sendMode";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
@@ -143,9 +143,9 @@ export async function POST(
     // Empty body is fine — fall back to AUTO context
   }
   const mdOverride = parseMdOverride(body.md);
-  // The message, push and Today card in the language the player uses the app in; the coach's UI language until the
-  // player's app has reported one (D, 2026-11-18).
-  const lang: "IS" | "EN" = (await loadPlayerLanguages(supabase, [playerId])).get(playerId) ?? (body.lang === "EN" ? "EN" : "IS");
+  // The message, push and Today card in the player's app language, else the team's, else the coach's UI language,
+  // else English (sendLangFor, contradiction 19, 2026-11-23).
+  const lang = await sendLangForPlayer(supabase, { playerId, teamId: (playerRow as { team_id: string }).team_id, coachLang: body.lang });
 
   const teamId = (playerRow as { team_id: string }).team_id;
   // Send mode: request overrides the team default (teams.strength_send_mode).

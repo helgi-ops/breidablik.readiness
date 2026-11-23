@@ -113,11 +113,12 @@ another layer (e.g. the team programme) gets "Preview … may differ". Layer ord
 
 A sent session is stored in ONE language (`structure`, `title`, `summary`), so it is built in the language the
 player uses the app in: `players.app_language`, reported by the player app (`PUT /api/player/language`, only when it
-changes). Fallbacks when it isn't known yet: the coach's UI language for a hand send (per-player / bulk), the team's
-`default_language` else English for the 09:00 send and the check-in rebuild. Message and push follow the same
-language. A player who switches language later sees today's already-sent session in the old language (swaps match
-the stored block titles, so the row is not rewritten). The movement-screen corrective send keeps the coach's
-language (coach-written text).
+changes). One rule for every send since 2026-11-23 (`sendLangFor`, contradiction 19): the player's app language,
+else the team's `default_language`, else the coach's UI language (hand sends: per-player, bulk, the 4-week block,
+the corrective), else English. The 09:00 send and the check-in rebuild have no coach, so player → team → English.
+Before, a hand send fell back to Icelandic and the block and corrective ignored the player's language. Message and
+push follow the same language. A player who switches language later sees today's already-sent session in the old
+language (swaps match the stored block titles, so the row is not rewritten).
 
 ## Weekday plan vs the week set up (2026-11-18)
 
