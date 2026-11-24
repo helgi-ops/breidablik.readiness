@@ -746,7 +746,7 @@ export async function computeWeeklyTarget(args: {
   };
 }
 
-// Owen (CUPs) + Martin-Garcia distribution presets live in the pure, client-safe module
+// Steep-taper (after Owen) + Martin-Garcia distribution presets live in the pure, client-safe module
 // loadTemplatePresets.ts (so the settings modal can import them without pulling server code).
 export { OWEN_CUPS_TEMPLATE, MARTIN_GARCIA_TEMPLATE, LOAD_TEMPLATE_PRESETS } from "./loadTemplatePresets";
 export type { LoadTemplatePresetKey } from "./loadTemplatePresets";
