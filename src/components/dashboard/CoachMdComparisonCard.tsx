@@ -431,7 +431,7 @@ export default function CoachMdComparisonCard({
         return (
           <div className="px-4 pb-2">
             <p className="text-sm font-semibold leading-snug text-slate-800">{head}.{tail}</p>
-            <p className="mt-0.5 text-[10px] text-slate-400">{isIS ? "Traust" : "Confidence"}: {conf}{hist < 5 ? (isIS ? " · lítið úrtak" : " · small sample — read with caution") : ""}. {isIS ? "Borið við eigin venju liðsins (Robertson 2017, STEN)." : "Vs the squad's own norm (Robertson 2017, STEN)."}</p>
+            <p className="mt-0.5 text-[10px] text-slate-400">{isIS ? "Traust" : "Confidence"}: {conf}{hist < 5 ? (isIS ? " · lítið úrtak" : " · small sample — read with caution") : ""}. {isIS ? "Borið við eigin venju liðsins (STEN; sbr. Robertson 2017)." : "Vs the squad's own norm (STEN; cf. Robertson 2017)."}</p>
           </div>
         );
       })()}

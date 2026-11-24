@@ -3,7 +3,7 @@
  * planned week, returns per-player per-day wellness-class forecasts. Single source for
  * every surface (Week Setup, Load Intelligence). Never reads/writes the canonical verdict.
  *
- * Pipeline (Perri 2021 template, Rossi/Rothschild interpretable-model guidance):
+ * Pipeline (Perri 2021 template, Rossi 2022 per-feature 'why' via SHAP, Rothschild 2024 simple-model finding):
  *  1. Build walk-forward training samples per player (features.ts).
  *  2. Per-player z-score, pool, fit ONE ordinal model (ordinal.ts).
  *  3. Time-split holdout → per-player within-±1 (feeds the confidence gate).

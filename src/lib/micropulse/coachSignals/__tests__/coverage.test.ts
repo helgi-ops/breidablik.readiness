@@ -255,7 +255,9 @@ describe("deriveStrideFatigueTeamSignal (shortened strides in long runs)", () =>
     expect(s.why.en[0]).not.toMatch(/high-cadence|sprint/i);
     expect(s.counterfactual?.en).toMatch(/long continuous runs/i);
     expect(s.counterfactual?.en).not.toMatch(/high-cadence|IMA band/i);
-    expect(s.counterfactual?.en).toMatch(/McBurnie 2022/);
+    // McBurnie 2022 covers braking, not strides: the read is labelled as MicroPulse's own (lot B, 2026-11-24).
+    expect(s.counterfactual?.en).toMatch(/MicroPulse's own read, not a tested fatigue marker/);
+    expect(s.counterfactual?.en).not.toMatch(/McBurnie 2022/);
     expect(s.counterfactual?.en.toLowerCase()).toMatch(/never the readiness colour/);
   });
   it("two or more shortened → elevated", () => {

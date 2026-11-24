@@ -22,7 +22,7 @@
  * sentinel silently treated a MISSING score as "fine", which is exactly the
  * no-data-as-green trap the manifesto forbids. Callers must gate on a real
  * number and treat null as no-data, never as a passing score.
- * Robertson 2017 (personal-norm wellness monitoring).
+ * The 12 line is MicroPulse's choice; traffic-light monitoring: Robertson 2017.
  */
 export const READINESS_LOW_SCORE = 12;
 
@@ -60,7 +60,7 @@ export const COMPOSITE_HIGH_SCORE = 0.75;
  * Minimum move in `total_score` (of 25) for a same-colour day-over-day change
  * to be called a meaningful "better/worse" rather than routine noise. Below
  * this the delta reads "unchanged".
- * Robertson 2017 (smallest worthwhile change in wellness monitoring).
+ * The 3-point line is MicroPulse's choice (smallest-worthwhile-change idea: Rebelo 2026).
  */
 export const DELTA_MEANINGFUL_SCORE = 3;
 
@@ -79,6 +79,6 @@ export const CONFIDENCE_MODERATE_RATIO = 0.5;
  * norm. At or below this the flag stays visible but is tagged "provisional" —
  * the manifesto's "every verdict shows its confidence" applied at the alert
  * level. A RED resting on 5 observations must not read identically to one on 25.
- * Robertson 2017 (personal norms need a stable observation base).
+ * The 10-observation line is MicroPulse's choice; no paper sets this count.
  */
 export const MIN_MATURE_OBS = 10;

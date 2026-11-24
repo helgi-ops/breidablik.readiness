@@ -1275,8 +1275,8 @@ const f1 = (v: number, lang: "en" | "is") => (lang === "is" ? v.toFixed(1).repla
 /** Longest gap first; "never" (null) leads. */
 const byGapDesc = (a: NearMaxLite, b: NearMaxLite) => (b.daysSince ?? Infinity) - (a.daysSince ?? Infinity);
 const NEAR_MAX_EVIDENCE: Bi = {
-  en: "Reaching near top speed regularly is associated with fewer hamstring injuries, and a sudden jump after a long gap raises risk (Malone 2017; Buchheit 2023; Edouard 2019). The 10- and 21-day marks are MicroPulse's, set on Breiðablik's 2026 data. Advisory, never the readiness colour.",
-  is: "Reglulegur sprettur nálægt hámarkshraða tengist færri aftanlærismeiðslum, og snögg aukning eftir langt hlé eykur áhættu (Malone 2017; Buchheit 2023; Edouard 2019). 10 og 21 dags mörkin eru val MicroPulse, stillt á gögn Breiðabliks 2026. Til leiðbeiningar, aldrei readiness-liturinn.",
+  en: "Reaching near top speed regularly is associated with fewer hamstring injuries, and a sudden jump after a long gap is associated with more injuries (Malone 2017; Buchheit 2023; Edouard 2019). The 10- and 21-day marks are MicroPulse's, set on Breiðablik's 2026 data. Advisory, never the readiness colour.",
+  is: "Reglulegur sprettur nálægt hámarkshraða tengist færri aftanlærismeiðslum, og snögg aukning eftir langt hlé tengist fleiri meiðslum (Malone 2017; Buchheit 2023; Edouard 2019). 10 og 21 dags mörkin eru val MicroPulse, stillt á gögn Breiðabliks 2026. Til leiðbeiningar, aldrei readiness-liturinn.",
 };
 
 /**
@@ -1362,7 +1362,7 @@ export function derivePlayerNearMaxSignals(reads: NearMaxLite[]): PlayerSignal[]
  * high-speed or high-cadence bands (mean speed ~12–14 km/h, flat from band 4 up;
  * see docs/ima-free-running-bands.md). So this is stride length in SUSTAINED
  * running, a within-player neuromuscular-fatigue / running-mechanics flag
- * (McBurnie 2022) — not a sprint-mechanics read. Distance needs GPS (outdoor), so
+ * (MicroPulse's own read; McBurnie 2022 covers braking, not strides) — not a sprint-mechanics read. Distance needs GPS (outdoor), so
  * LITE-tier IMA teams get it too; a direct measurement, not imputed.
  */
 export type StrideFatigueLite = {
@@ -1407,8 +1407,8 @@ export function deriveStrideFatigueTeamSignal(reads: StrideFatigueLite[]): Coach
       is: [`${reads.length} með styttri skref í löngum hlaupum vs eigin venju (≥2,5 SD): ${nameList}`],
     },
     counterfactual: {
-      en: "Stride length in long continuous runs (≥18 s) vs each player's own same-session-type norm — a within-player fatigue / running-mechanics flag (McBurnie 2022), compared like-with-like at a 2.5-SD gate. Sustained running, not sprinting. Pair with soreness + the session plan; advisory, never the readiness colour.",
-      is: "Skreflengd í löngum samfelldum hlaupum (≥18 sek) vs eigin venju hvers leikmanns fyrir sömu tegund lotu — merki um þreytu / hlaupatækni innan leikmanns (McBurnie 2022), borið saman eins við eins á 2,5-SD þröskuldi. Samfellt hlaup, ekki sprettir. Berðu saman við strengi + æfingaáætlun; til leiðbeiningar, aldrei readiness-liturinn.",
+      en: "Stride length in long continuous runs (≥18 s) vs each player's own same-session-type norm — a within-player fatigue / running-mechanics flag (MicroPulse's own read, not a tested fatigue marker), compared like-with-like at a 2.5-SD gate. Sustained running, not sprinting. Pair with soreness + the session plan; advisory, never the readiness colour.",
+      is: "Skreflengd í löngum samfelldum hlaupum (≥18 sek) vs eigin venju hvers leikmanns fyrir sömu tegund lotu — merki um þreytu / hlaupatækni innan leikmanns (eigin mælikvarði MicroPulse, ekki prófað þreytumerki), borið saman eins við eins á 2,5-SD þröskuldi. Samfellt hlaup, ekki sprettir. Berðu saman við strengi + æfingaáætlun; til leiðbeiningar, aldrei readiness-liturinn.",
     },
   };
 }
@@ -1425,8 +1425,8 @@ export function derivePlayerStrideFatigueSignals(reads: StrideFatigueLite[]): Pl
       why: { en: [r.reason], is: [r.reasonIs] },
       confidence: strideConf(r.confidence),
       counterfactual: {
-        en: "His strides in long continuous runs are shorter than his own same-session-type norm (McBurnie 2022) — a fatigue / running-mechanics prompt to pair with soreness and the plan; advisory, never the readiness colour.",
-        is: "Skref hans í löngum samfelldum hlaupum eru styttri en eigin venja fyrir sömu tegund lotu (McBurnie 2022) — ábending um þreytu / hlaupatækni til að bera saman við strengi og áætlun; til leiðbeiningar, aldrei readiness-liturinn.",
+        en: "His strides in long continuous runs are shorter than his own same-session-type norm (MicroPulse's own read, not a tested fatigue marker) — a fatigue / running-mechanics prompt to pair with soreness and the plan; advisory, never the readiness colour.",
+        is: "Skref hans í löngum samfelldum hlaupum eru styttri en eigin venja fyrir sömu tegund lotu (eigin mælikvarði MicroPulse, ekki prófað þreytumerki) — ábending um þreytu / hlaupatækni til að bera saman við strengi og áætlun; til leiðbeiningar, aldrei readiness-liturinn.",
       },
       href: STRIDE_FATIGUE_HREF,
     },

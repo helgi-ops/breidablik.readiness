@@ -1,8 +1,8 @@
 /**
  * Robustness watch — the labelled injury early-warning SURFACE (fusion #5).
  *
- * The research is decisive: at ~25-player scale a black-box injury classifier
- * over-flags (Haller 2023: recall 25%, precision 11%, kappa 0.14; Leckey 2024:
+ * The research warns: at ~25-player scale a black-box injury classifier
+ * over-flags (Haller 2023: recall 25%, precision 11%, kappa 0.14; Leckey 2025:
  * clinical relevance "questionable"). So this NEVER ships a single injury
  * probability. It surfaces the SIGNALS — personal-norm, cited, confidence-rated,
  * each with a counterfactual — as a labelled trend read that sits NEXT TO the
@@ -97,7 +97,7 @@ const ROBUSTNESS_CITATION =
 // ── New #5 contributors, in the signalPack SignalContributor shape ──────────
 
 /** High-intensity change-of-direction L/R asymmetry (MicroPulse's flag; not tested against injury). Footedness
- *  (Havanecz 2026) is interpretive context, not the threshold: a modest plant-limb lean is normal, the
+ *  (Havanecz 2026: in U15 players footedness changed side-specific movement load, not turn counts) is interpretive context, not the threshold; the
  *  MAGNITUDE flags. Absolute % (not a personal-z) — flag at MicroPulse's concern line (≥15%). */
 function codAsymmetryContributor(pct: number | null, dominantFoot: "left" | "right" | "both" | null): SignalContributor | null {
   if (pct == null || !Number.isFinite(pct)) return null;
@@ -117,8 +117,8 @@ function codAsymmetryContributor(pct: number | null, dominantFoot: "left" | "rig
     confidence: "moderate",
     severity, flagged,
     detail: {
-      en: `High-intensity CoD L/R asymmetry ${Math.round(pct)}% (last 14d). Flag ≥ 15% is MicroPulse's line; GPS turn-count gaps have not been tested against injury (Helme 2021: asymmetry–injury evidence is weak). Footedness is context, not the threshold (Havanecz 2026 — plant-limb preference makes a modest lean normal).`,
-      is: `Háákefðar CoD vinstri/hægri ósamhverfa ${Math.round(pct)}% (síðustu 14d). Flagg ≥ 15% er lína MicroPulse; munur á snúningum í GPS hefur ekki verið prófaður gegn meiðslum (Helme 2021: tengsl ósamhverfu og meiðsla eru veikt studd). Ríkjandi fótur er samhengi, ekki þröskuldur (Havanecz 2026 — plant-fótar val gerir hóflegan halla eðlilegan).`,
+      en: `High-intensity CoD L/R asymmetry ${Math.round(pct)}% (last 14d). Flag ≥ 15% is MicroPulse's line; GPS turn-count gaps have not been tested against injury (Helme 2021: asymmetry–injury evidence is weak). Footedness is context, not the threshold (Havanecz 2026 — in elite U15 players footedness changed left/right movement load, though not turn counts).`,
+      is: `Háákefðar CoD vinstri/hægri ósamhverfa ${Math.round(pct)}% (síðustu 14d). Flagg ≥ 15% er lína MicroPulse; munur á snúningum í GPS hefur ekki verið prófaður gegn meiðslum (Helme 2021: tengsl ósamhverfu og meiðsla eru veikt studd). Ríkjandi fótur er samhengi, ekki þröskuldur (Havanecz 2026 — hjá U15 úrvalsleikmönnum breytti ríkjandi fótur álagi til vinstri og hægri, en ekki fjölda snúninga).`,
     },
   };
 }
@@ -221,8 +221,8 @@ function cmjTrendContributor(cmj: CmjFatigueRead | null): SignalContributor | nu
     confidence: cmj.confidence,
     severity, flagged,
     detail: {
-      en: `CMJ multi-day slope ${z.toFixed(1)} personal SD across the window${cmj.fatigueType ? `; likely ${cmj.fatigueType} fatigue` : ""}. Flag <= -1σ. Reads the trend, not today's value (Neyroud 2016).`,
-      is: `CMJ þróun ${z.toFixed(1)} eigin SD yfir tímabilið${cmj.fatigueType ? `; líklega ${cmj.fatigueType} þreyta` : ""}. Flagg <= -1σ. Les þróunina, ekki gildi dagsins (Neyroud 2016).`,
+      en: `CMJ multi-day slope ${z.toFixed(1)} personal SD across the window${cmj.fatigueType ? `; likely ${cmj.fatigueType} fatigue` : ""}. Flag <= -1σ. Reads the trend, not today's value (MicroPulse's choice); read per player, as group fatigue thresholds may not fit one player (Neyroud 2016).`,
+      is: `CMJ þróun ${z.toFixed(1)} eigin SD yfir tímabilið${cmj.fatigueType ? `; líklega ${cmj.fatigueType} þreyta` : ""}. Flagg <= -1σ. Les þróunina, ekki gildi dagsins (val MicroPulse); lesið á hvern leikmann, því hópmörk fyrir þreytu passa ekki endilega einum leikmanni (Neyroud 2016).`,
     },
   };
 }
@@ -246,8 +246,8 @@ function cmjRecoveryContributor(cmj: CmjFatigueRead | null): SignalContributor |
     confidence: cmj.confidence,
     severity, flagged,
     detail: {
-      en: `Recovery deficit ${Math.round(d * 100)}% of baseline below the expected curve. Flag >= 5% (elevated) / 10% (high). Expected dip scaled by match HSR (Hader 2019).`,
-      is: `Endurheimtar-halli ${Math.round(d * 100)}% af grunnlínu undir væntri feril. Flagg >= 5% (hækkað) / 10% (hátt). Vænt lækkun skölluð eftir háhraða leiks (Hader 2019).`,
+      en: `Recovery deficit ${Math.round(d * 100)}% of baseline below the expected curve. Flag >= 5% (elevated) / 10% (high). Expected dip scaled by match HSR (MicroPulse's curve; the HSR–jump link was shown at 24 h, Hader 2019).`,
+      is: `Endurheimtar-halli ${Math.round(d * 100)}% af grunnlínu undir væntri feril. Flagg >= 5% (hækkað) / 10% (hátt). Vænt lækkun skölluð eftir háhraða leiks (ferill MicroPulse; tengsl háhraða og stökks sáust við 24 klst, Hader 2019).`,
     },
   };
 }

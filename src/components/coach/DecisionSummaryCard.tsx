@@ -113,8 +113,8 @@ export type DecisionSummaryRow = {
   _today_composite_concern?: "none" | "low" | "moderate" | "high" | null;
   /** Minutes the player was on the pitch in the most recent match (DNP excluded).
    *  When ≥60 AND today is MD+1, the verdict is force-mapped to RECOVERY
-   *  irrespective of the load engine — sport-science consensus
-   *  (Carling 2018, Nédélec 2012, Helsen 2018).
+   *  irrespective of the load engine — MicroPulse's rule (the 60-min line is ours)
+   *  (post-match fatigue lasts days: Nédélec 2012; Silva 2018; Carling 2018).
    *  Populated by the coach dashboard from match_player_minutes; null when
    *  no match data is available. */
   _yesterday_match_minutes?: number | null;
@@ -158,7 +158,7 @@ export type DecisionSummaryRow = {
    *  reference (top-3 mean over 28d). Surfaced as a chip when ≥ 3% drop.
    *  Sport-science background: a > 10% drop signals accumulated fatigue —
    *  sprint-induced fatigue reduces hamstring/horizontal-force capacity
-   *  (Edouard 2018). A fatigue flag, NOT a validated injury multiplier.
+   *  (Edouard 2018, a lab study; the 10% line is MicroPulse's). A fatigue flag, NOT a validated injury multiplier.
    *  Informational chip — coach decides
    *  whether to cap top-end sprint exposure today. Verdict pipeline
    *  unchanged for now (defer hard-rule until 2–3 coaches confirm fit). */
@@ -175,13 +175,13 @@ export type DecisionSummaryRow = {
    *  those are long continuous runs (≥18 s), not sprinting — so the chip only
    *  renders when `_sprint_exposure_source === "gps"` (see below).
    *    (all four lines are MicroPulse's, not from a study)
-   *    UNDERLOAD  (< 50%)    → under-prepared (moderate exposure went with fewer injuries; Malone 2017, observational)
+   *    UNDERLOAD  (< 50%)    → under-prepared (moderate weekly sprint distance went with fewer lower-limb injuries; Malone 2018, observational)
    *    WATCH      (50–80%)   → playable but light
    *    SAFE       (80–180%)  → normal football week
    *    OVERLOAD   (> 180%)   → accumulated spike
    *  Surfaced as a chip in the Decision Summary card and gated into the
    *  "Needs attention" filter. Informational — does NOT modify today's
-   *  verdict (Buchheit 2019: chronic-risk signals should inform, not
+   *  verdict (MicroPulse's design: chronic-risk signals inform, not
    *  override, acute decisions). */
   _sprint_exposure_band?: "UNDERLOAD" | "WATCH" | "SAFE" | "OVERLOAD" | "INSUFFICIENT_DATA" | null;
   /** Exposure ratio (acuteSum7d ÷ matchDayDemand). 1.0 = one match's worth. */
@@ -383,8 +383,8 @@ function applyOverrideGuardrail(
   }
 
   // ── HARD OVERRIDE: 60+ min match yesterday → MD+1 = RECOVERY ───────────
-  // Sport-science consensus (Carling 2018, Nédélec 2012, Helsen 2018):
-  // playing 60+ minutes triggers meaningful 24-72h recovery debt
+  // MicroPulse's rule; post-match fatigue lasts days (Nédélec 2012; Silva 2018; Carling 2018):
+  // playing 60+ minutes (MicroPulse's line; the papers give no minutes cut-off) leaves 24-72h recovery debt
   // (CK + perceived fatigue elevated). MD+1 is recovery regardless of how
   // the load engine reads — coach can still manually override with full
   // knowledge of the trade-off.
@@ -461,7 +461,7 @@ function confidenceToBand(c: number | null | undefined): "High" | "Medium" | "Lo
 
 // ── STEN score helpers ────────────────────────────────────────────────────
 // STEN = (2 × Z) + 5.5 — converts Z-score to 1–10 scale.
-// Thornton et al. (2019): Z ≤ −2 = red flag; Z ≤ −1.5 = yellow flag.
+// Z ≤ −2 = red flag; Z ≤ −1.5 = yellow flag — MicroPulse's lines (Thornton 2019 reviews how to flag meaningful change in monitoring data).
 // STEN bands: 1–2 = Very low, 3–4 = Low, 5–6 = Normal, 7–8 = High, 9–10 = Very high.
 
 function zToSten(z: number): number {
@@ -2408,7 +2408,7 @@ const ReadinessLoadDetail: FC<{
                 {adRatio != null && profileLabel ? (
                   <div
                     className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${profileTone}`}
-                    title="Accel÷Decel ratio from high-intensity efforts. <0.7 = eccentric-dominant (ACL + quadriceps + patellar tendon risk — peak quad activation 161% MVC during deceleration per McBurnie 2022), >1.3 = concentric-dominant (hamstring + glute risk from sprint exposure)."
+                    title="Accel÷Decel ratio from high-intensity efforts. <0.7 = braking-heavy: hard braking can drive quadriceps activation up to 161% MVC and may raise knee (ACL) load (McBurnie 2022). >1.3 = acceleration-heavy. The 0.7 and 1.3 lines are MicroPulse's, not tested injury cut-offs."
                   >
                     <span className="text-[9px] font-semibold uppercase opacity-70">Accel:Decel</span>
                     <span className="text-lg font-bold tabular-nums">{adRatio.toFixed(2)}</span>
@@ -2438,7 +2438,7 @@ const ReadinessLoadDetail: FC<{
                     <div
                       className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${hidBorderCls}`}
                       title={hidFatigue
-                        ? `HID% dropped ${((hidDecline ?? 0) * 100).toFixed(0)}% vs 7-day avg — neuromuscular fatigue signal (Harper et al. 2019). Athlete covers distance but at lower intensity.`
+                        ? `HID% dropped ${((hidDecline ?? 0) * 100).toFixed(0)}% vs 7-day avg — possible fatigue sign (MicroPulse's reading, not from a study). Athlete covers distance but at lower intensity.`
                         : "High-Intensity Distance % — HIR (Band5+Band6) as fraction of total distance. Declining trend signals fatigue."}
                     >
                       <span className="text-[9px] font-semibold uppercase opacity-70 text-slate-400">HID%</span>
@@ -2923,7 +2923,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           return (
             <div
               className={`mt-3 inline-flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${tone}`}
-              title="A > 10% drop in max sprint speed vs personal peak can signal accumulated fatigue — sprint-induced fatigue reduces hamstring force and horizontal-force capacity (Edouard 2018). Treat it as a fatigue flag, not a precise injury-risk figure. Today's max velocity is compared to the top-3 mean over the last 28 days. Sub-3% drops are normal session-to-session noise."
+              title="A > 10% drop in max sprint speed vs personal peak can signal accumulated fatigue — sprint-induced fatigue reduces hamstring force and horizontal-force capacity (Edouard 2018, a lab study; the 10% line is MicroPulse's). Treat it as a fatigue flag, not a precise injury-risk figure. Today's max velocity is compared to the top-3 mean over the last 28 days. Sub-3% drops are normal session-to-session noise."
             >
               <span className="mt-0.5 shrink-0">🏃</span>
               <span>
@@ -2937,10 +2937,10 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           );
         })()}
 
-        {/* Sprint Exposure chip — Malone 2017 volume-side companion to the
+        {/* Sprint Exposure chip — Malone 2018 volume-side companion to the
             Sprint Speed Drop chip above. GPS sprint distance in training (7d)
             vs his average per match. UNDERLOAD (< 50%) leaves players
-            under-prepared (moderate exposure is protective); OVERLOAD
+            under-prepared (moderate exposure went with fewer injuries, observational); OVERLOAD
             (> 180%) is an accumulated spike. Render only when:
               - the numbers are GPS-sourced (_sprint_exposure_source === "gps")
                 — never IMA band 5–8 strides, which are long runs, not sprints
@@ -3035,7 +3035,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           return (
             <div
               className={`mt-3 inline-flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${tone}`}
-              title="GPS sprint distance (sprint_distance, else velocity band 6) summed over training days in the last 7 days, compared with his average sprint distance per match over the last 28 days. Indoor / no-GPS days give no sprint reading and are not counted. Malone 2017 (observational): moderate exposure to top-speed running went with fewer lower-limb injuries than low exposure; the strongest injury signal is large RAPID INCREASES in sprint/HSR, not the level itself (Gabbett 2016). < 50% of one match = under-exposed; > 180% = an accumulated spike (MicroPulse's lines, not from a study)."
+              title="GPS sprint distance (sprint_distance, else velocity band 6) summed over training days in the last 7 days, compared with his average sprint distance per match over the last 28 days. Indoor / no-GPS days give no sprint reading and are not counted. Malone 2018 (observational, one soccer squad): moderate weekly sprint distance went with fewer lower-limb injuries than low, and large week-to-week jumps in sprint/HSR went with more (also Gabbett 2016). < 50% of one match = under-exposed; > 180% = an accumulated spike (MicroPulse's lines, not from a study)."
             >
               <span className="mt-0.5 shrink-0">📊</span>
               <span>
@@ -3098,7 +3098,7 @@ const DecisionSummaryCard: FC<{
 
   // Foster Monotony & Strain per player — single team-wide fetch on
   // mount, computed in memory, indexed by player_id. Surfaces the
-  // Lite-tier overtraining-risk signal (Foster 1998) inside the
+  // Lite-tier monotony & strain signal (Foster 1998: high strain went with illness) inside the
   // per-player modal so coaches don't have to navigate to a separate
   // page to read it. Works on RPE × duration alone — no GPS needed.
   const [fosterByPlayer, setFosterByPlayer] = useState<Map<string, FosterMetrics>>(new Map());
@@ -3199,7 +3199,7 @@ const DecisionSummaryCard: FC<{
   // glancing at the dashboard wants the acute count; chronic context
   // lives on the cards for when they drill into a specific player.
   //
-  // EXCEPTION: Sprint Exposure (Malone 2017, GPS-sourced) is technically a 7-day signal,
+  // EXCEPTION: Sprint Exposure (Malone 2018, GPS-sourced) is technically a 7-day signal,
   // but UNDERLOAD / OVERLOAD bands are actionable TODAY — the coach should
   // add (UNDERLOAD) or cap (OVERLOAD) sprint volume in the current session.
   // WATCH is excluded (50–80% is still close to demand). This keeps the

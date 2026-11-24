@@ -4,12 +4,12 @@
  * Morning RMSSD (root mean square of successive R-R differences) is the
  * parasympathetic recovery index of choice. Single-day HRV is noisy, so we read
  * a 7-DAY ROLLING MEAN against the player's OWN band and flag only when it sits
- * below-band for consecutive days (García-Ortega 2023 meta; Frontiers 2018).
+ * below-band for consecutive days (averaging: Plews 2013, Schneider 2018; the consecutive-day rule is MicroPulse's; HRV in soccer players: García-Ortega 2023 meta).
  *
  * A labelled "recovery trend" (steady / watch / elevated) that sits BESIDE the
  * readiness colour — never merged into it, never a verdict on its own. A companion
  * to the parasympathetic picture: pair with sleep + soreness, don't headline HRV.
- * Descriptive/advisory. Cite: García-Ortega et al. 2023 · Frontiers 2018.
+ * Descriptive/advisory. Cite: Plews 2013 · Schneider 2018 · García-Ortega 2023.
  */
 
 export type Bi = { en: string; is: string };
@@ -22,11 +22,11 @@ export interface HrvDaily {
   restingHr: number | null;     // morning resting HR (bpm), optional companion
 }
 
-/** Meaningful-decrease threshold = 0.5 × baseline SD (HRVrest SWC, Frontiers 2018). */
+/** Meaningful-decrease threshold = 0.5 × baseline SD — the resting-HRV smallest-worthwhile-change line Schneider 2018 uses (after Buchheit 2014); the paper calls the SD fraction an arbitrary choice. */
 export const HRV_SWC_SD_FRACTION = 0.5;
 /** Consecutive below-band days at which a watch becomes elevated. */
 export const HRV_ELEVATED_DAYS = 3;
-export const HRV_CITATION = "García-Ortega et al. 2023 (HRV training meta-analysis) · Frontiers 2018 (HR team-sport framework)";
+export const HRV_CITATION = "Plews 2013 (rolling HRV average) · Schneider 2018 (heart-rate monitoring in team sports) · García-Ortega 2023 (HRV in soccer players, meta-analysis)";
 
 export interface HrvRecoveryRead {
   rolling7: number | null;                                  // latest 7-day rolling-mean RMSSD

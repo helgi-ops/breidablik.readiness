@@ -174,9 +174,9 @@ describe("rule references", () => {
     expect(findRefByShort("Petrakos 2016")?.cite).toMatch(/PMID 26553497/);
   });
 
-  it("every citation in the injury, return-to-play and movement-screen code resolves or is unresolved (app lot A)", () => {
+  it("every citation in the checked app areas resolves or is unresolved (app lots A–B)", () => {
     const shorts = citationsUnder(APP_CITATION_SOURCES);
-    expect(shorts.length).toBeGreaterThan(120);
+    expect(shorts.length).toBeGreaterThan(200);
     expect(openOnes(shorts)).toEqual([]);
   });
 
@@ -194,6 +194,20 @@ describe("rule references", () => {
     expect(findRefByShort("Haller 2023")?.cite).toMatch(/Machine Learning/);
     expect(findRefByShort("Green 2020b")?.cite).toMatch(/hamstring/i);
     expect(findRefByShort("Dubois & Esculier 2020")?.key).toBe("dubois2020");
+  });
+
+  it("lot B: the daily verdict and its signals cite what the papers show", () => {
+    const read = (f: string) => readFileSync(join(ROOT, f), "utf8");
+    const all = citationsUnder(APP_CITATION_SOURCES);
+    // Helsen 2018 (no such recovery paper), Buchheit 2019 (not indexed), "Frontiers 2018" (a journal, not an author).
+    for (const gone of ["Helsen 2018", "Buchheit 2019", "Frontiers 2018", "Leckey 2024", "Buchheit 2026"]) expect(all).not.toContain(gone);
+    // The Sprint Exposure chip measures weekly GPS sprint distance in soccer: Malone 2018's design.
+    expect(read("src/lib/micropulse/sprintExposure/index.ts")).toMatch(/Malone 2018/);
+    expect(read("src/components/coach/DecisionSummaryCard.tsx")).not.toMatch(/Sport-science consensus \(Carling 2018, Nédélec 2012, Helsen 2018\)/);
+    expect(findRefByShort("Schneider 2018")?.cite).toMatch(/Front Physiol 2018;9:639/);
+    expect(findRefByShort("Jiménez-Reyes 2018")?.cite).toMatch(/ahead of print 2018/);
+    expect(findRefByShort("Harper 2022")?.cite).toMatch(/PMID 35643876/);
+    expect(citationsIn("ML, Leckey 2025; SHAP, Rothschild 2024; Fixed 2026-04-29")).toEqual(["Leckey 2025", "Rothschild 2024"]);
   });
 
   it("reads JSX-escaped ampersands as one two-author citation", () => {

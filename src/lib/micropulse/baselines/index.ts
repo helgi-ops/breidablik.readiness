@@ -73,7 +73,7 @@ export const METRIC_DIRECTION: Record<string, MetricDirection> = {
   "load.max_heart_rate":      "higher_is_worse",
 
   // Decoupling (Halson 2014) — internal cost per unit of external work.
-  // Drift upward = paying more biologically for the same work = fatigued.
+  // Drift upward = paying more biologically for the same work = may be fatigued.
   "decoupling.rpe_per_km":         "higher_is_worse",
   "decoupling.hr_per_player_load": "higher_is_worse",
 };
@@ -101,7 +101,7 @@ export const METRIC_SD_FLOOR: Record<string, number> = {
  * Compare today's value against an athlete's personal baseline.
  * Returns the SD-distance and a green/yellow/red flag.
  *
- * Per Robertson 2017, ±1 SD = yellow band, ±2 SD = red band.
+ * Rebelo 2026: ±1 SD is a sensitive line, ±2 SD a conservative one; MicroPulse uses them as yellow / red bands.
  * If status is 'insufficient_data' we never flag (returns 'green' with z=null).
  * If status is 'calibrating' we use wider bands (±1.5 / ±2.5 SD).
  *

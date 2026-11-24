@@ -1,6 +1,6 @@
 /**
- * Previous-injury recency — the strongest, most consistent non-modifiable risk factor
- * across the football ML studies (Majumdar 2022; Rico-González 2023).
+ * Previous-injury recency — a recurring key predictor
+ * in several football ML studies (Majumdar 2022; Rico-González 2023).
  *
  * A decaying CONTEXT flag: recently returned from a time-loss injury → elevated context,
  * shown as a labelled note. It has no counterfactual (you can't un-injure a player), so
@@ -58,10 +58,10 @@ export function injuryRecencyContributor(input: InjuryRecencyInput): SignalContr
   const why: Bi = returned
     ? player
       ? { en: `You came back from injury${bp} ${dEn} — still building your load tolerance back up.`, is: `Þú komst til baka úr meiðslum${bp} ${dIs} — enn að byggja upp álagsþol.` }
-      : { en: `Returned from injury${bp} ${dEn} — prior injury is the strongest risk factor.`, is: `Kom til baka úr meiðslum${bp} ${dIs} — fyrri meiðsli eru sterkasti áhættuþátturinn.` }
+      : { en: `Returned from injury${bp} ${dEn} — prior injury keeps showing up as a risk factor in football studies.`, is: `Kom til baka úr meiðslum${bp} ${dIs} — fyrri meiðsli koma ítrekað fram sem áhættuþáttur í fótboltarannsóknum.` }
     : player
       ? { en: `You were injured${bp} ${dEn} — still building your load tolerance back up.`, is: `Þú meiddist${bp} ${dIs} — enn að byggja upp álagsþol.` }
-      : { en: `Injured${bp} ${dEn} — prior injury is the strongest risk factor.`, is: `Meiddist${bp} ${dIs} — fyrri meiðsli eru sterkasti áhættuþátturinn.` };
+      : { en: `Injured${bp} ${dEn} — prior injury keeps showing up as a risk factor in football studies.`, is: `Meiddist${bp} ${dIs} — fyrri meiðsli koma ítrekað fram sem áhættuþáttur í fótboltarannsóknum.` };
 
   const detail: Bi = {
     en: `Days since last time-loss injury = ${days} (from ${returned ? "return" : "injury"} date). Elevated context ≤${INJURY_RECENCY_WINDOW}d, decaying to ${DECAY_DAYS}d. Context only — no counterfactual, never a colour.`,

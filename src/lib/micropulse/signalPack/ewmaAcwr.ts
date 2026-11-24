@@ -3,9 +3,9 @@
  * (internal sRPE load, deceleration load, high-speed running).
  *
  * EWMA weights recent load and reduces the rolling-average ACWR's known bias
- * (Williams 2017; Majumdar 2022). It's a LENS on the player's own load history, never an
+ * (EWMA for the ACWR proposed by Williams 2017). It's a LENS on the player's own load history, never an
  * independent "risk score". A trigger fires only when the player's OWN ratio exceeds his
- * threshold, and carries the mandatory counterfactual (Saberisani 2025 for the GPS ones).
+ * threshold, and carries the mandatory counterfactual (GPS decel/HSR ratios: Saberisani 2025; the flag lines are MicroPulse's).
  */
 
 import { coverageConfidence, type Bi, type SignalContributor, type Voice } from "./types";
@@ -92,8 +92,8 @@ export function acwrContributor(input: AcwrContributorInput): SignalContributor 
     : null;
 
   const detail: Bi = {
-    en: `EWMA acute:chronic (${input.acuteSpanLabel ?? "7d:28d"}) = ${acwr.acute?.toFixed(0) ?? "—"} ÷ ${acwr.chronic?.toFixed(0) ?? "—"} = ${rx}. Flag ≥${flagAt.toFixed(1)}×, clear ≤${clearAt.toFixed(1)}×. Own-norm; a lens, not a risk score.`,
-    is: `EWMA bráð:langvinnt (${input.acuteSpanLabel ?? "7d:28d"}) = ${acwr.acute?.toFixed(0) ?? "—"} ÷ ${acwr.chronic?.toFixed(0) ?? "—"} = ${rx}. Flagg ≥${flagAt.toFixed(1)}×, hreinsast ≤${clearAt.toFixed(1)}×. Eigin-norm; linsa, ekki áhættutala.`,
+    en: `EWMA acute:chronic (${input.acuteSpanLabel ?? "7d:28d"}) = ${acwr.acute?.toFixed(0) ?? "—"} ÷ ${acwr.chronic?.toFixed(0) ?? "—"} = ${rx}. Flag ≥${flagAt.toFixed(1)}×, clear ≤${clearAt.toFixed(1)}×. MicroPulse's lines; own-norm; a lens, not a risk score.`,
+    is: `EWMA bráð:langvinnt (${input.acuteSpanLabel ?? "7d:28d"}) = ${acwr.acute?.toFixed(0) ?? "—"} ÷ ${acwr.chronic?.toFixed(0) ?? "—"} = ${rx}. Flagg ≥${flagAt.toFixed(1)}×, hreinsast ≤${clearAt.toFixed(1)}×. Mörk MicroPulse; eigin-norm; linsa, ekki áhættutala.`,
   };
 
   return {

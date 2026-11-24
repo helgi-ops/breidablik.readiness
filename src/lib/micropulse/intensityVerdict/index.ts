@@ -37,7 +37,7 @@ const SIGNAL_META: Record<IntensitySignal, { metricKey: string; plain: { EN: str
   hsr: {
     metricKey: "external.high_speed_distance",
     plain: { EN: "high-speed running", IS: "háhraðahlaup" },
-    tooltip: { EN: "High-speed-running distance (Malone 2017).", IS: "Háhraðahlaups-vegalengd (Malone 2017)." },
+    tooltip: { EN: "High-speed-running distance (Malone 2018).", IS: "Háhraðahlaups-vegalengd (Malone 2018)." },
   },
 };
 

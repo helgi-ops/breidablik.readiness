@@ -384,8 +384,8 @@ function PlayerVbtCard({
                                 </div>
                                 <div className="mt-1.5 text-[9px] leading-snug text-zinc-400">
                                   {IS
-                                    ? "Á fastri þyngd er hraði undir hans besta hraðataps-merki um dagsform (Sánchez-Medina & González-Badillo 2011); áætl. 1RM úr álags–hraða prófíl (González-Badillo 2010). Á eigin PB leikmannsins."
-                                    : "At a fixed load, bar speed below his best is the velocity-loss readiness signal (Sánchez-Medina & González-Badillo 2011); est. 1RM from the load–velocity profile (González-Badillo 2010). Against the player's own PB."}
+                                    ? "Á fastri þyngd er hraði undir hans besta lesinn sem merki um þreytu (Sánchez-Medina 2011: hraðatap á fastri þyngd fylgdi þreytu innan æfingar); áætl. 1RM úr álags–hraða prófíl (González-Badillo & Sánchez-Medina 2010). Á eigin PB leikmannsins."
+                                    : "At a fixed load, bar speed below his best is read as a fatigue sign (Sánchez-Medina 2011: speed lost against a fixed load tracked fatigue within a session); est. 1RM from the load–velocity profile (González-Badillo & Sánchez-Medina 2010). Against the player's own PB."}
                                 </div>
                               </td>
                             </tr>

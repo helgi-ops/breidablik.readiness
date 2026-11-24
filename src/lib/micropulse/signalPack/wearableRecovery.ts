@@ -9,7 +9,7 @@
  *
  * No wearable data (player hasn't connected, or no reading in the window) → no signal, never a
  * fabricated 0. Higher-is-better markers (HRV, recovery) flag on a drop; resting HR flags on a
- * rise. Plews 2013 (HRV rolling-baseline) · Buchheit 2014 · Bellenger 2016.
+ * rise. Plews 2013 (HRV rolling-baseline) · Buchheit 2014 · Bellenger 2016 (meta-analysis: resting HRV rises with good adaptation but barely moves with overreaching, so a drop is a prompt to look, not proof of fatigue).
  */
 
 import { coverageConfidence, type Bi, type SignalContributor, type Voice } from "./types";
@@ -158,7 +158,7 @@ export type WearableDailyRow = {
  * Build the contributor input from a player's wearable-daily rows — the SINGLE source
  * of the own-norm math, used by both the team Signal Pack loader and the player's
  * daily recovery card. `recent` = rolling mean of the last 3 readings (a single morning
- * value is noisy; Plews 2013); baseline = mean/SD over the whole window. Context (stress,
+ * value is noisy and Plews 2013 advises averaging; 3 readings is MicroPulse's choice); baseline = mean/SD over the whole window. Context (stress,
  * body battery) is the latest non-null value. Returns null when there are no rows.
  */
 export function buildWearableRecoveryInput(rows: WearableDailyRow[], voice?: Voice): WearableRecoveryInput | null {

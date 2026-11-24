@@ -84,7 +84,7 @@ function resolveRiskFlags(input: DecisionInput): { flags: RiskFlag[]; derived: R
   if (stressBand === "poor") flags.push("high_stress");
 
   // Z-score: flag when athlete is significantly below own baseline
-  // Thresholds: Thornton et al. (2019) — ≤ −1.5 yellow, ≤ −2.0 red
+  // Thresholds (MicroPulse's; see Thornton 2019 on flagging change) — ≤ −1.5 yellow, ≤ −2.0 red
   const zScoreBand = normalizeZScore(input.load?.zScore);
   if (zScoreBand === "poor" || zScoreBand === "moderate") flags.push("low_z");
 

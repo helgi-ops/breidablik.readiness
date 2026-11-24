@@ -1,8 +1,8 @@
 /**
  * Feature build for the Readiness Outlook — pure, from a single player's history.
  *
- * Deliberately few features (Rossi 2022 / Rothschild 2024: a handful dominate; a
- * 200-feature tree overfits at squad scale). Everything is per-player z-scored so a
+ * Deliberately few features (Rothschild 2024: a small subset carried most of the signal; Rossi 2022: chronic load ranked top; a
+ * 200-feature tree may overfit at squad scale — MicroPulse's concern, not a tested result). Everything is per-player z-scored so a
  * pooled ordinal model is fair across players (the paper template).
  *
  * The "planned load for the target day" is the feature that makes this a FORECAST, not

@@ -28,7 +28,7 @@ import {
  *      that log minutes (lowered from the original 60-min threshold
  *      because partial appearances still represent real sprint exposure
  *      and we'd rather over-count match days than under-count them; the
- *      original 60-min rule from Carling 2018 / Nédélec 2012 referred to
+ *      original 60-min rule (MicroPulse's MD+1 recovery line; post-match fatigue per Nédélec 2012) referred to
  *      RECOVERY DECISIONS, not exposure baselining).
  *   3. Fallback: high-sprint days adjacent to a known GAME date are
  *      ignored — we trust week_plans + minutes over heuristics.

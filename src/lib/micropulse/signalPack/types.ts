@@ -2,8 +2,8 @@
  * Explainable Signal Pack — shared types.
  *
  * Each signal is a NAMED, CITED, COUNTERFACTUAL "why" contributor, computed as a simple
- * per-player rolling calculation — NOT a trained model (the assessment is decisive: a
- * classifier over-flags at 25-player scale, Haller 2023 / Leckey 2024). These enrich the
+ * per-player rolling calculation — NOT a trained model (the evidence warns: a
+ * classifier gave many false alarms on 25 players, Haller 2023; small datasets limit ML, Leckey 2025). These enrich the
  * existing layered read; they never overwrite the canonical verdict colour.
  */
 

@@ -7,7 +7,7 @@
  * and classifies the observed jump against it.
  *
  * Grounded:
- *  - Driver is HIGH-SPEED RUNNING (>5.5 m/s), NOT total distance. Hader 2019: per
+ *  - Scaled by HIGH-SPEED RUNNING (>5.5 m/s), NOT total distance. Hader 2019 (pooled correlations): per
  *    100 m of HSR above threshold, CMJ peak power ≈ −0.5% at +24 h (CK +30%); total
  *    distance is not predictive. So the dip scales with the match's HSR metres.
  *  - Time-course: dip greatest 0–48 h, jump still impaired at 72 h, recovered by
@@ -131,7 +131,7 @@ export function recoveryContextLine(
     : label === "ahead" ? "endurheimtist hraðar en áætlað"
     : "endurheimtist samkvæmt áætlun";
   return {
-    en: `${h} h post-match: jump at ${obs}% of baseline — expected ~${lo}–${hi}% for this match's HSR (${hsr} m) → ${verdictEn}. [Hader 2019; Silva 2018]`,
-    is: `${h} klst eftir leik: stökk í ${obs}% af grunnlínu — vænst ~${lo}–${hi}% miðað við háhraða hlaup leiksins (${hsr} m) → ${verdictIs}. [Hader 2019; Silva 2018]`,
+    en: `${h} h post-match: jump at ${obs}% of baseline — expected ~${lo}–${hi}% for this match's HSR (${hsr} m) → ${verdictEn}. [MicroPulse's estimate from Hader 2019 (24 h link) and Silva 2018]`,
+    is: `${h} klst eftir leik: stökk í ${obs}% af grunnlínu — vænst ~${lo}–${hi}% miðað við háhraða hlaup leiksins (${hsr} m) → ${verdictIs}. [mat MicroPulse út frá Hader 2019 (tengsl við 24 klst) og Silva 2018]`,
   };
 }

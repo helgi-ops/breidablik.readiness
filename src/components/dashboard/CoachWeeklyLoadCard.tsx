@@ -495,8 +495,8 @@ export default function CoachWeeklyLoadCard({
               const c = m.band === "high" ? "#a83e28" : m.band === "elevated" ? "#de9328" : "#1c7a4a";
               const bandLabel = m.band === "high" ? (lang === "IS" ? "hátt" : "high") : m.band === "elevated" ? (lang === "IS" ? "hækkað" : "elevated") : (lang === "IS" ? "í lagi" : "ok");
               const why = lang === "IS"
-                ? `Einhæfni (Foster): meðal-dagálag ÷ staðalfrávik yfir vikuna = ${m.value}. Há gildi (>2) = of jöfn vika (lítil hvíld/andstæður) → þreytu-/veikindaáhætta. Strain = heildarálag × einhæfni = ${m.strain.toLocaleString("en-US")}. Merki við hlið álagsins — ekki readiness-liturinn. (Foster 1998)`
-                : `Monotony (Foster): mean daily load ÷ SD across the week = ${m.value}. High (>2) = too-even a week (little rest/contrast) → fatigue/illness risk. Strain = total × monotony = ${m.strain.toLocaleString("en-US")}. A signal beside the load — not the readiness colour. (Foster 1998)`;
+                ? `Einhæfni (Foster): meðal-dagálag ÷ staðalfrávik yfir vikuna = ${m.value}. Há gildi (>2, viðmið MicroPulse) = of jöfn vika (lítil hvíld/andstæður); Foster fann að flest veikindi komu þegar álag (strain) fór yfir eigin mörk íþróttamannsins. Strain = heildarálag × einhæfni = ${m.strain.toLocaleString("en-US")}. Merki við hlið álagsins — ekki readiness-liturinn. (Foster 1998)`
+                : `Monotony (Foster): mean daily load ÷ SD across the week = ${m.value}. High (>2, MicroPulse's line) = too-even a week (little rest/contrast); Foster found most illnesses came when an athlete's strain passed his own threshold. Strain = total × monotony = ${m.strain.toLocaleString("en-US")}. A signal beside the load — not the readiness colour. (Foster 1998)`;
               return (
                 <span className="inline-flex items-center gap-1 text-[10px] font-semibold rounded-full border px-2 py-0.5" style={{ color: c, borderColor: `${c}33`, background: `${c}0d` }} title={why}>
                   <i className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />

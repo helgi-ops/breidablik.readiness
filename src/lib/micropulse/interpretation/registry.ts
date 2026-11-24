@@ -73,7 +73,7 @@ export const REGISTRY: MetricDef[] = [
   {
     key: "ima_decel", dimension: "braking", preferenceRank: 1, unit: "count",
     plain: { EN: "Braking / hard decelerations", IS: "Hemlun / harðar hraðaminnkanir" },
-    tooltip: { EN: "IMA deceleration events — the richest braking signal (Pro S7); McBurnie 2022.", IS: "IMA hemlunar-atburðir — ríkasta hemlunar-merkið (Pro S7); McBurnie 2022." },
+    tooltip: { EN: "IMA deceleration events — MicroPulse's main braking signal (Pro S7); why braking matters: McBurnie 2022.", IS: "IMA hemlunar-atburðir — helsta hemlunar-merki MicroPulse (Pro S7); af hverju hemlun skiptir máli: McBurnie 2022." },
   },
   {
     key: "decel_b2_3_tot_effs_gen2", dimension: "braking", preferenceRank: 2, unit: "count",
@@ -90,12 +90,12 @@ export const REGISTRY: MetricDef[] = [
   {
     key: "velocity_band6_total_efforts_gen2", dimension: "sprint", preferenceRank: 1, unit: "count",
     plain: { EN: "Sprint efforts", IS: "Spretta-átök" },
-    tooltip: { EN: "Number of sprint-band efforts — hamstring-relevant exposure (Malone 2017).", IS: "Fjöldi spretta-átaka — aftanlæris-tengd útsetning (Malone 2017)." },
+    tooltip: { EN: "Number of sprint-band efforts — exposure tied to leg-injury risk in one study (Malone 2017).", IS: "Fjöldi spretta-átaka — útsetning tengd fótameiðslum í einni rannsókn (Malone 2017)." },
   },
   {
     key: "velocity_band5_total_efforts_gen2", dimension: "sprint", preferenceRank: 2, unit: "count",
     plain: { EN: "High-speed efforts", IS: "Háhraða-átök" },
-    tooltip: { EN: "Number of high-speed-running efforts (Malone 2017).", IS: "Fjöldi háhraðahlaups-átaka (Malone 2017)." },
+    tooltip: { EN: "Number of high-speed-running efforts (Malone 2018).", IS: "Fjöldi háhraðahlaups-átaka (Malone 2018)." },
   },
   {
     key: "high_speed_distance", dimension: "sprint", preferenceRank: 3, unit: "m",
@@ -123,7 +123,7 @@ export const REGISTRY: MetricDef[] = [
   {
     key: "metabolic_power", dimension: "metabolic", preferenceRank: 9, contested: true, unit: "W/kg",
     plain: { EN: "Metabolic power", IS: "Efnaskiptaafl" },
-    tooltip: { EN: "di Prampero metabolic power — contested in football; directional only (di Prampero 2015).", IS: "di Prampero efnaskiptaafl — umdeilt í fótbolta; aðeins til viðmiðunar (di Prampero 2015)." },
+    tooltip: { EN: "Metabolic power from speed and acceleration (di Prampero 2015). In football drills the GPS estimate underestimated measured energy cost and its high-power distance was unreliable (Buchheit 2015), so it is directional only.", IS: "Efnaskiptaafl reiknað úr hraða og hröðun (di Prampero 2015). Í fótboltaæfingum vanmat GPS-matið mælda orkunotkun og vegalengd á háu afli var óáreiðanleg (Buchheit 2015), svo það er aðeins til viðmiðunar." },
   },
 
   // ── Internal load ─────────────────────────────────────────────────────────

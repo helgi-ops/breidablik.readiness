@@ -30,6 +30,7 @@ export const OTHER_CITATION_SOURCES = [
 /**
  * The rest of the app, added lot by lot as each area's citations are checked (papers in `appRefs.ts`).
  * Lot A (2026-11-24): injury and return-to-play pages, rehab, movement screen, injury-risk rules.
+ * Lot B (2026-11-24): daily verdict and signals, readiness, monitoring, methodology.
  */
 export const APP_CITATION_SOURCES = [
   "src/app/coach/achilles-tendinopathy",
@@ -69,6 +70,45 @@ export const APP_CITATION_SOURCES = [
   "src/components/coach/AssignRehabModal.tsx",
   "src/components/coach/MovementScreenPdf.tsx",
   "src/components/coach/MovementScreenTpaCard.tsx",
+  "src/components/coach/DecisionSummaryCard.tsx",
+  "src/components/coach/DecisionTraceModal.tsx",
+  "src/lib/micropulse/coachSignals",
+  "src/lib/micropulse/signalPack",
+  "src/lib/micropulse/robustnessWatch",
+  "src/lib/micropulse/robustness",
+  "src/app/methodology",
+  "src/lib/methodologyCaveats.ts",
+  "src/lib/micropulse/attention",
+  "src/lib/micropulse/decision",
+  "src/lib/micropulse/readiness",
+  "src/lib/micropulse/interpretation",
+  "src/lib/micropulse/playerDecision",
+  "src/lib/micropulse/readinessOutlook",
+  "src/lib/micropulse/intensityVerdict",
+  "src/lib/micropulse/loadVerdict",
+  "src/lib/micropulse/sprintSpeedDrop",
+  "src/lib/micropulse/sprintExposure",
+  "src/lib/micropulse/nearMaxExposure",
+  "src/lib/micropulse/cmjFatigue",
+  "src/lib/micropulse/cmjRecovery",
+  "src/lib/micropulse/hrvTrend",
+  "src/lib/micropulse/rpeDiscrepancy",
+  "src/lib/micropulse/rpeExpectation",
+  "src/lib/micropulse/rulesEngine",
+  "src/lib/micropulse/volatility",
+  "src/lib/micropulse/neuralVolatilityIntelligence",
+  "src/lib/micropulse/playerNeuralStatus.ts",
+  "src/lib/micropulse/recoveryWatch",
+  "src/lib/micropulse/wearableRecovery",
+  "src/lib/micropulse/baselines",
+  "src/lib/micropulse/dataQuality.ts",
+  "src/app/coach/readiness-signals",
+  "src/app/coach/quadrant",
+  "src/app/coach/dev-coach-dashboard",
+  "src/app/api/team/decisions",
+  "src/app/api/coach/signals",
+  "src/app/api/coach/player/[id]/robustness-watch",
+  "src/components/dashboard",
 ] as const;
 
 const SHORT_RE =
@@ -87,6 +127,8 @@ const NOT_AUTHORS = new Set([
   "Since", "Until", "Yellow", "VERSION", "Library", "Safety", "DSI", "Coach", "Endurgreining", "Breiðabliks",
   "Jan", "Feb", "Mar", "March", "Apr", "April", "May", "Jun", "June", "Jul", "July", "Aug", "August", "Sep", "Sept",
   "September", "Oct", "October", "Nov", "November", "Dec", "December", "EFL", "IJSC",
+  // Dates and names in comments ("Fixed 2026-04-29", "On 2026-07-20", "Breiðablik 2026 data", "on Lite, Gabbett 2016").
+  "Fixed", "On", "Breiðablik", "Breiðablik's", "Breiðablik’s", "Lite", "ML", "SHAP",
 ]);
 
 /**

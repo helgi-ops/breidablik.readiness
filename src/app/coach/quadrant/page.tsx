@@ -54,8 +54,8 @@ const QUAD_I18N = {
     IS: "(efst-hægri): leikmenn sem bæði keyra mikið og borga mikið innra. Mest meiðslaáhætta — íhuga reduced load í næstu session.",
   },
   decoupledExplain: {
-    EN: "(top-left): players running little but paying a lot internally. Classic early-warning fatigue or illness signal — Halson 2014.",
-    IS: "(efst-vinstri): leikmenn sem keyra lítið en borga mikið. Klassískt early-warning fatigue eða illness merki — Halson 2014.",
+    EN: "(top-left): players running little but paying a lot internally. A possible sign of fatigue — Halson 2014: a gap between internal and external load may reveal fatigue.",
+    IS: "(efst-vinstri): leikmenn sem keyra lítið en borga mikið. Mögulegt merki um þreytu — Halson 2014: misræmi milli innra og ytra álags getur bent til þreytu.",
   },
   peakExplain: {
     EN: "(bottom-right): lots of work, low cost. Well trained — at peak form.",
@@ -505,7 +505,7 @@ export default function CoachQuadrantPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-semibold text-slate-900">{qt("pageTitle", lang)}</h1>
             {/* Citation badge — Gabbett 2016 (volume axis only, works on any
-                Catapult plan) on Lite, Gabbett 2016 + MicroPulse's B2-3 add-on (volume + B2-3 axis,
+                Catapult plan) for the Lite tier; and Gabbett 2016 + MicroPulse's B2-3 add-on (volume + B2-3 axis,
                 higher fidelity) on Full. The B2-3 axis is MicroPulse's choice, not from a paper;
                 the 2016 BJSM piece (Gabbett 2016) set out acute vs chronic load using
                 internal + external load; no 2017 paper added explosive-

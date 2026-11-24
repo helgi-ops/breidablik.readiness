@@ -2,8 +2,8 @@
  * Ordinal proportional-odds logistic regression — pure, dependency-free.
  *
  * This is the interpretable model at the core of the Readiness Outlook (Perri 2021
- * used ordinal regression on load → wellness class; Rossi 2022 / Rothschild 2024 both
- * show a simple linear/ordinal model matches a black-box tree at this scale, so we ship
+ * used ordinal regression on load → wellness class; Rothschild 2024 (endurance athletes) found a
+ * simple linear (LASSO) model did as well as tree ensembles (Rossi 2022's best was a tree), so we ship
  * the interpretable one). The fitted coefficients ARE the "why" — no post-hoc explainer.
  *
  * Model (cumulative logit): for K ordered classes 1..K and feature vector x,

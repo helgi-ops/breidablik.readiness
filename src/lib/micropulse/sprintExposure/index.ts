@@ -20,10 +20,10 @@
  * Sport-science rationale:
  *   - Sprint Speed Drop (Edouard 2018) catches when today's MAX velocity
  *     is below personal peak — a fatigue / mechanical compensation signal.
- *   - Sprint Exposure (Malone 2017) catches when the weekly VOLUME of GPS
+ *   - Sprint Exposure (Malone 2018) catches when the weekly VOLUME of GPS
  *     sprinting is well below what the player meets in a match — an
- *     under-preparation signal. Moderate sprint exposure is protective;
- *     the strongest injury signal is rapid increases (Malone 2017;
+ *     under-preparation signal. Moderate sprint exposure went with fewer injuries;
+ *     large rapid increases went with more (Malone 2018;
  *     Gabbett 2016), hence the spike band at the top.
  *
  * Pure deterministic. Companion loader.ts pulls the rows from
@@ -119,7 +119,7 @@ const CHRONIC_DAYS = 28;
 // We surface match-day demand as soon as 1 match is observed and let the
 // UI flag confidence ("based on 1 match" caveat) so coaches can weight it.
 // Sport-science note: a single match is noisier than a 2-3 match average
-// but still beats no baseline — Buchheit 2019 explicitly recommends
+// but still beats no baseline — MicroPulse's choice (no study cited) is
 // progressive baseline confidence rather than gated thresholds.
 const MIN_MATCH_DAYS = 1;
 const MIN_TRAINING_DAYS_7D = 2;
@@ -141,9 +141,9 @@ const MIN_TRAINING_DAYS_7D = 2;
 //     0.8-1.8× (training delivers roughly one match's worth of sprinting
 //     across the week, give or take).
 //
-// Sport-science anchor: Malone 2017 — low sprint exposure leaves players
-// under-prepared (moderate exposure is protective); rapid increases are the
-// stronger injury signal (Gabbett 2016). The exact thresholds vary by paper.
+// Sport-science anchor: Malone 2018 (observational) — low sprint exposure leaves players
+// under-prepared (moderate exposure went with fewer injuries); rapid increases
+// went with more injuries (Gabbett 2016). The exact thresholds vary by paper.
 //
 // RECALIBRATION NOTE (Nov 2026): these cut-points were first tuned on the
 // old IMA band 5–8 stride numbers (long-run volume, not sprinting). The ratio

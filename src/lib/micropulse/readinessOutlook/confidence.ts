@@ -3,8 +3,8 @@
  *
  * Three inputs (the brief's non-negotiable gate), reusing the app's existing
  * `confidenceBand` thresholds for the final mapping:
- *  1. Baseline maturity — weeks of the club's own data (weak until ~23 weeks: Rossi 2022,
- *     Mandorino 2023).
+ *  1. Baseline maturity — weeks of the club's own data (weak until ~23 weeks, MicroPulse's line; accuracy rose through the season in Rossi 2022;
+ *     Mandorino 2023 — season-long data; ~23 weeks is MicroPulse's reading, not a figure in that paper).
  *  2. Microcycle stability — the weekly pattern must be repeatable for the lag-7 signal
  *     to hold; an erratic schedule is downgraded.
  *  3. Per-player predictability — some players are inherently noisy (Rothschild 2024:

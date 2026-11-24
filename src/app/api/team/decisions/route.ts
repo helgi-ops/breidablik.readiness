@@ -464,7 +464,7 @@ async function fetchVbtDataForPlayers(
  * Bulk-fetch wellness baselines for a list of players, keyed by
  * player_id → metric_key. Used by the injury-risk pipeline to swap
  * the global Likert thresholds (sleep ≤ 2, soreness ≤ 2) for personal
- * z-scores against each player's own 28-day mean+SD (Robertson 2017).
+ * z-scores against each player's own 28-day mean+SD (individual baselines: Rebelo 2026; 28 days is MicroPulse's window).
  *
  * Returns an empty Map when the player has no baseline yet — callers
  * fall through to the global threshold so existing behaviour is

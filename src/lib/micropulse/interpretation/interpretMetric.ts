@@ -4,7 +4,7 @@
  * → z + band + plain language + confidence.
  *
  * WRAPS the existing `flagAgainstBaseline()` (the one place that computes "vs his
- * own norm", Robertson 2017) — does not rebuild it. We only translate its
+ * own norm", Rebelo 2026) — does not rebuild it. We only translate its
  * green/yellow/red flag into the low/normal/high/spike vocabulary the dimension
  * layer uses, and attach the metric's plain label from the registry.
  */

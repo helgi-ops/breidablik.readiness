@@ -72,7 +72,7 @@ export type RecoveryWatchResult = {
 };
 
 const DEFAULT_MIN_MINUTES = 30;
-// Post-match recovery window. By ~MD+4 physical capacity has recovered (Drayton 2025; Silva 2018),
+// Post-match recovery window. Sprint/CoD are back by ~72 h but jump and hamstring strength can still be down at 72 h (Drayton 2025; Silva 2018); MicroPulse ends the window at ~MD+4,
 // so a dip beyond this is not "recovery from that match" — it's a current readiness issue for the
 // normal attention surface, not this watch. Keeps the banner from saying "12 days after the match".
 const DEFAULT_MAX_MD_OFFSET = 4;

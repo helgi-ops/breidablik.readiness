@@ -63,7 +63,7 @@ export function normalizeStress(value: number | null | undefined): WellnessBand 
 export function normalizeZScore(value: number | null | undefined): WellnessBand {
   if (!isFiniteNumber(value)) return "unknown";
   // Z-score: 0 = at own mean; negative = below baseline; more negative = worse
-  // Thresholds based on Thornton et al. (2019), Int J Sports Physiol Perform
+  // Thresholds are MicroPulse's (Thornton 2019 reviews how to flag meaningful change)
   if (value <= DECISION_THRESHOLDS.LOW_Z_RED) return "poor";    // < −2.0 (red flag)
   if (value <= DECISION_THRESHOLDS.LOW_Z_YELLOW) return "moderate"; // −1.5 to −2.0 (yellow flag)
   return "good"; // > −1.5: within acceptable range

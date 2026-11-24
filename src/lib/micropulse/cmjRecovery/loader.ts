@@ -4,7 +4,7 @@
  * Reuses the same source the post-match-recovery / MD-comparison surfaces use: the
  * team's most recent match from `match_schedule`, and each player's high-speed-
  * running distance in that match from `player_external_load_daily` (Catapult). HSR
- * (>5.5 m/s) is the fatigue driver (Hader 2019), NOT total distance.
+ * (>5.5 m/s) tracks post-match fatigue best in the first 24 h (Hader 2019), NOT total distance.
  *
  * Server-side IO only; the modelling itself stays pure in ./index.
  */

@@ -5,9 +5,9 @@
  * `docs/research/cmj-neuromuscular-fatigue-assessment.md`:
  *
  *  1. MULTI-DAY SLOPE — read the trend across several jumps, not today's value
- *     (Neyroud 2016: a universal threshold is an averaging artifact — personal-
- *     norm only; Carroll/Taylor/Gandevia 2017: a still-depressed multi-day
- *     rebound is peripheral, a fast next-day rebound is central). Expressed as a
+ *     (Neyroud 2016: a group fatigue threshold may be an averaging artifact — personal-
+ *     norm only; Carroll 2017: central and peripheral fatigue recover on different clocks (minutes to hours after one bout); reading a still-depressed multi-day
+ *     jump as peripheral and a fast next-day rebound as central is MicroPulse's extension). Expressed as a
  *     personal z so the injury-risk rule can gate on it (`cmjSlopeZ`, negative =
  *     jump trending down vs his own spread).
  *
@@ -16,7 +16,7 @@
  *     Triangulate the three axes MicroPulse already has: CMJ height/power =
  *     peripheral-metabolic (Jiménez-Reyes 2018, r ~ 0.91-0.99 vs lactate/ammonia
  *     within a player); soreness = peripheral-muscular; sleep/stress = central-
- *     autonomic (Amann 2011). Turns "his jump is down" into "his jump is down
+ *     autonomic (MicroPulse's grouping; Amann 2011 shows only that central and peripheral fatigue interact during exercise). Turns "his jump is down" into "his jump is down
  *     BECAUSE X" — the plain "why" the manifesto wants, from data on hand.
  *
  * The expected post-match recovery deficit (Hader 2019 HSR-personalised curve)

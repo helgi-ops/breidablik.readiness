@@ -24,10 +24,10 @@ export const DECISION_THRESHOLDS = {
   HIGH_STRESS_BAD: 2,      // stress/mood ≤ 2 on 1–5 scale (1=very stressed, 5=calm)
   MODERATE_STRESS_BAD: 3,
 
-  // Z-score thresholds — based on Thornton et al. (2019), Int J Sports Physiol Perform
+  // Z-score thresholds — MicroPulse's lines (Thornton 2019, Int J Sports Physiol Perform, reviews how to flag meaningful change)
   // Z = 0 means at own mean; negative = below baseline; lower = worse
-  LOW_Z_YELLOW: -1.5,   // yellow flag threshold (Thornton: −1.5 to −1.99 = yellow flag)
-  LOW_Z_RED: -2.0,      // red flag threshold   (Thornton: < −2 = red flag)
+  LOW_Z_YELLOW: -1.5,   // yellow flag threshold (MicroPulse: −1.5 to −1.99 = yellow flag)
+  LOW_Z_RED: -2.0,      // red flag threshold   (MicroPulse: < −2 = red flag)
 
   HIGH_RISK_SCORE: 0.75,
   MODERATE_RISK_SCORE: 0.5,

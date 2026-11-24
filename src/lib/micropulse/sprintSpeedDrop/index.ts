@@ -41,7 +41,7 @@
  *     2017;20(3):250-254 (PMID 27554923).
  *   - Buchheit 2023: near-to-maximal speed exposures and match hamstring injuries. Biol Sport
  *     2023;40(4):1057-1067 (PMID 37867737).
- *   - Haugen & Buchheit 2016: GPS top-speed measurement (why sub-3% is noise).
+ *   - Haugen & Buchheit 2016: GPS top speed needs several readings to be reliable (the 3% noise cut-off is MicroPulse's).
  *   (Two references listed here before 2026-11-24 — an "Edouard 2019" Med Sci Sports Exerc paper
  *   and a "Malone 2018" J Sci Med Sport 21(8) paper — could not be found on PubMed and were removed.)
  */

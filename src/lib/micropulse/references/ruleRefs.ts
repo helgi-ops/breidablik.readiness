@@ -290,8 +290,12 @@ const SHORT_ALIASES: Record<string, string> = {
 export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
   // Lot A (app citations, 2026-11-24).
   "Buchheit 2025": {
-    en: "Cited for the staged order from return-to-run to full team training; no 2025 Buchheit paper on this is in PubMed or Crossref (likely a practitioner report). It stays as named; the same staged order is also cited to Taberner 2019 on that line.",
-    is: "Vitnað í vegna stigmögnunar frá fyrstu hlaupum til fullrar liðsæfingar; engin grein eftir Buchheit frá 2025 um þetta finnst í PubMed eða Crossref (líklega skýrsla fyrir fagfólk). Hún stendur eins og hún er nefnd; sama röð er líka studd með Taberner 2019 í sömu línu.",
+    en: "Cited for two things: the staged order from return-to-run to full team training, and (on the quadrant page) the idea of reading load against response. No 2025 Buchheit paper on either is in PubMed or Crossref (likely practitioner pieces). It stays as named; the staged order is also cited to Taberner 2019, and the quadrant page says its axes are ACWR, not that piece's.",
+    is: "Vitnað í vegna tveggja atriða: stigmögnunar frá fyrstu hlaupum til fullrar liðsæfingar, og (á fjórðungasíðunni) hugmyndarinnar að lesa álag á móti svörun. Engin grein eftir Buchheit frá 2025 um hvorugt finnst í PubMed eða Crossref (líklega skrif fyrir fagfólk). Hún stendur eins og hún er nefnd; stigmögnunin er líka studd með Taberner 2019 og fjórðungasíðan segir að ásarnir séu ACWR, ekki ásar úr því verki.",
+  },
+  "Edwards 1993": {
+    en: "Edwards S. The Heart Rate Monitor Book (1993) — a book, not an indexed paper; the summated-HR-zone method is widely used, and MicroPulse already labels its use as adapted.",
+    is: "Edwards S. The Heart Rate Monitor Book (1993) — bók, ekki grein í gagnagrunni; púlssvæða-aðferðin er víða notuð og MicroPulse merkir hana þegar sem aðlagaða.",
   },
   "Buchheit 2019": {
     en: "Cited for the locomotor/mechanical day framework and for monitoring advice; Buchheit wrote several pieces on this around 2019 (some in books), and which one is meant is not recorded. Where the code said a tight-space day is light on high-speed running, it now cites Lacome 2018.",

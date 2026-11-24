@@ -111,7 +111,7 @@ export type DailyBriefingCardProps = {
   recentDayTypes?: Record<string, string | null> | null;
   // Per-player wellness baselines from athlete_metric_baselines.
   // Keyed by player_id → metric_key → baseline. Enables personalised
-  // (Robertson 2017) z-score flagging instead of the global ≤2 threshold,
+  // (Rebelo 2026: individual baselines) z-score flagging instead of the global ≤2 threshold,
   // which surfaces false yellows for players whose personal norm is itself
   // ~3/5 (and misses real concern for players whose norm is 4-5/5).
   // Optional — when absent the card falls back to the global threshold.
@@ -224,8 +224,8 @@ const COPY = {
     // global threshold, that drove the flag.
     chipTooltip: {
       personal: (mean: number, sd: number, z: number) =>
-        `Hans venja: ${mean.toFixed(1)}/5 (SD ${sd.toFixed(1)}) — í dag ${z.toFixed(1)} SD frá venju. Heimild: Robertson 2017 (persónuleg viðmið > heildarviðmið).`,
-      noBaseline: "Engin persónuleg venja ennþá — nota heildarviðmið (≤2). Mun batna eftir 7+ skráningar (Robertson 2017).",
+        `Hans venja: ${mean.toFixed(1)}/5 (SD ${sd.toFixed(1)}) — í dag ${z.toFixed(1)} SD frá venju. Heimild: Rebelo 2026 (eigin grunnlína sem viðbót við hópmörk).`,
+      noBaseline: "Engin persónuleg venja ennþá — nota heildarviðmið (≤2). Mun batna eftir 7+ skráningar (lágmark MicroPulse).",
       chronic: (mean: number) =>
         `Hans venja er ${mean.toFixed(1)}/5 — undir 2,5 yfir 28 daga. Það er ekki dagsmál heldur langtíma viðvörun.`,
     },
@@ -334,8 +334,8 @@ const COPY = {
     // Tier B — personal-norm tooltip lines.
     chipTooltip: {
       personal: (mean: number, sd: number, z: number) =>
-        `His usual: ${mean.toFixed(1)}/5 (SD ${sd.toFixed(1)}) — today ${z.toFixed(1)} SD from usual. Source: Robertson 2017 (personal norms beat group thresholds).`,
-      noBaseline: "No personal baseline yet — using group threshold (≤2). Will improve after 7+ check-ins (Robertson 2017).",
+        `His usual: ${mean.toFixed(1)}/5 (SD ${sd.toFixed(1)}) — today ${z.toFixed(1)} SD from usual. Source: Rebelo 2026 (own baseline alongside group cut-offs).`,
+      noBaseline: "No personal baseline yet — using group threshold (≤2). Will improve after 7+ check-ins (MicroPulse's minimum).",
       chronic: (mean: number) =>
         `His usual is ${mean.toFixed(1)}/5 — below 2.5 across 28d. This is a long-term warning, not a today problem.`,
     },
@@ -519,7 +519,7 @@ const DZ_DRIVER_THRESHOLD = 0.5;
 // Fallback global threshold used only when a player has no personal
 // baseline yet (insufficient_data status, < 7 obs). Once their personal
 // baseline is active we use ±1 SD against personal mean instead.
-// Robertson 2017 — personal norms beat group thresholds for wellness.
+// Rebelo 2026 — complement group thresholds with each player's own baseline.
 const WELLNESS_GLOBAL_FALLBACK_THRESHOLD = 2;
 
 // Tier C — chronic-low absolute floor. When a player's *personal mean*
@@ -707,7 +707,7 @@ function computeAttentionConfidence(
     notes.push(lang === "IS" ? "Engin álagsgögn" : "No load data");
   }
 
-  // 5) Personal wellness baselines (Robertson 2017 personal-norm anchor).
+  // 5) Personal wellness baselines (personal-norm anchor, Rebelo 2026).
   const baselineActive = !!baselines && Object.values(baselines).some(
     (b) => b && b.status !== "insufficient_data",
   );
@@ -805,20 +805,20 @@ function composeAttentionExplanation(
   // coach knows it's expected echo rather than an unplanned overreach.
   // Post-match neuromuscular + perceived fatigue persist ~24–72 h, heaviest
   // MD+1 and rebounding by MD+2/MD+3 (Nédélec 2012 / Silva 2018) — so the
-  // coach-facing post-match clauses carry that citation inline.
+  // coach-facing post-match clauses say the high load is the match itself.
   if (item.plSpike != null && item.plSpike >= PL_SPIKE_ALERT) {
     const pct = Math.round((item.plSpike - 1) * 100);
     if (postMatch) {
-      phraseIS.push(`æfingaálag í gær var ${pct}% yfir venjulegu (passar við leikinn — Nédélec 2012)`);
-      phraseEN.push(`yesterday's training load was ${pct}% above usual (matches the game — Nédélec 2012)`);
+      phraseIS.push(`æfingaálag í gær var ${pct}% yfir venjulegu (passar við leikinn)`);
+      phraseEN.push(`yesterday's training load was ${pct}% above usual (matches the game)`);
     } else {
       phraseIS.push(`æfingaálag í gær var ${pct}% yfir venjulegu`);
       phraseEN.push(`yesterday's training load was ${pct}% above usual`);
     }
   } else if (item.composite != null && item.composite >= COMPOSITE_HIGH_SCORE && (item.plSpike == null || item.plSpike < PL_SPIKE_ALERT)) {
     if (postMatch) {
-      phraseIS.push("samanlagt álag síðustu daga er hátt (eðlilegt eftir leik — Nédélec 2012)");
-      phraseEN.push("recent days' combined load is high (expected post-match — Nédélec 2012)");
+      phraseIS.push("samanlagt álag síðustu daga er hátt (eðlilegt eftir leik)");
+      phraseEN.push("recent days' combined load is high (expected post-match)");
     } else {
       phraseIS.push("samanlagt álag síðustu daga er hátt");
       phraseEN.push("recent days' combined load is high");

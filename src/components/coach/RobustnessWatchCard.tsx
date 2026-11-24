@@ -9,8 +9,8 @@
  * Layered read (manifesto): (0) one-sentence verdict, bold + first; (1) 2-3 plain
  * flagged contributors with counterfactuals; (2) raw z-scores / thresholds /
  * citations + provenance behind "Show details". Confidence always. No single
- * injury-probability number — the ML literature is decisive that a classifier
- * over-flags at this squad size (Haller 2023 / Leckey 2024): we surface the
+ * injury-probability number — the ML literature warns that a classifier
+ * gives many false alarms at this squad size (Haller 2023; small datasets: Leckey 2025): we surface the
  * signals, personal-norm + confidence + counterfactual, and let the coach read
  * them. Rules compute; this is not AI.
  *

@@ -63,7 +63,7 @@ type CmjResult = {
  * Per-player CMJ force-time baseline (median of the tests selectCmjBaseline
  * allows, before the selected date). Force-time metrics (RSI-mod, contraction
  * time, peak force) are 2-4x more sensitive to residual neuromuscular fatigue
- * than jump height — Marques et al. / Buchheit 2026, "Jump Height Lies".
+ * than jump height — Marques & Buchheit 2026, "Jump Height Lies".
  */
 type CmjBaseline = {
   jumpHeightCm: number | null;
@@ -370,7 +370,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
 
     // ── Today: the MEAN of each player's trials, not the best jump ────────
     // Claudino 2017 (151 studies): the trial mean is more fatigue-sensitive than
-    // the best trial (~10:1), because averaging shrinks measurement error.
+    // the best trial (the ~10:1 figure is not in the abstract; averaging shrinking noise is our reading).
     const todayRowsByPlayer = new Map<string, TrialMetricRow[]>();
     const sideByPlayer = new Map<string, { side: string | null; mag: number }>();
     for (const row of ((cmjRes.data ?? []) as Array<Record<string, unknown>>)) {
@@ -864,7 +864,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                                 })()}
 
                                 <div className="mt-2 text-[9px] leading-snug text-slate-400">
-                                  Baseline μ = median of the player&apos;s last tests in the past 90 days{base?.days != null ? ` (${base.days} tests)` : ""}, the last within 21 days (a coaching rule). Force-time metrics (RSI-mod, contraction time, peak force) come from VALD /trials and are read on the player&apos;s own norm — they catch residual neuromuscular fatigue jump height alone can miss (Gathercole 2015; Claudino 2017).
+                                  Baseline μ = median of the player&apos;s last tests in the past 90 days{base?.days != null ? ` (${base.days} tests)` : ""}, the last within 21 days (a coaching rule). Force-time metrics (RSI-mod, contraction time, peak force) come from VALD /trials and are read on the player&apos;s own norm — they catch residual neuromuscular fatigue jump height alone can miss (Gathercole 2015).
                                 </div>
                               </td>
                             </tr>
@@ -1314,7 +1314,7 @@ function PhaseRead({ snapshots }: { snapshots: ValdSnapshotRow[] }) {
           <p className="text-[10px] leading-snug text-slate-400">
             A change only flags when it clears the metric&apos;s own measurement noise — the literature CV (Gathercole 2015),
             widened by the player&apos;s own CV, ×1.5. Noisy metrics (RFD) need a bigger move than reliable ones (jump height),
-            so a one-off wobble can&apos;t masquerade as fatigue. Marques &amp; Buchheit 2026; Claudino 2017.
+            so a one-off wobble can&apos;t masquerade as fatigue (the ×1.5 is MicroPulse&apos;s floor). Marques &amp; Buchheit 2026; Claudino 2017.
           </p>
         </div>
       </details>

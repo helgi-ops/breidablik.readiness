@@ -9,8 +9,8 @@
  *
  * Descriptive / advisory only. It never reads or writes the readiness colour, the
  * load target, or the daily decision. No single injury-probability number — the ML
- * literature is decisive that a classifier over-flags at this squad size (Haller
- * 2023 / Leckey 2024); we surface signals + confidence + counterfactual instead.
+ * literature warns that a classifier gives many false alarms at this squad size (Haller
+ * 2023; small datasets limit ML: Leckey 2025); we surface signals + confidence + counterfactual instead.
  */
 
 import { NextRequest, NextResponse } from "next/server";

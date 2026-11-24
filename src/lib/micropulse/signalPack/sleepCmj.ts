@@ -1,8 +1,8 @@
 /**
  * Sleep quality + CMJ jump height / asymmetry as first-read "why" contributors.
  *
- * On the closest 25-player analogue, sleep quality was the #1 injury-associated variable
- * and CMJ jump height top-3 (Haller 2023). All read on the player's OWN norm; no-data
+ * In the closest 25-player study, sleep quality ranked #1 in the injury model's variable importance
+ * and CMJ jump height top-3 (Haller 2023; a weak model with few injuries). All read on the player's OWN norm; no-data
  * (no check-in / no CMJ that window) → no signal, never a fabricated 0.
  */
 

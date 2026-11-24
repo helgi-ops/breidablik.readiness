@@ -1690,8 +1690,8 @@ export default function CoachPage() {
   // MLI + Metabolic Load per player (for Decision Summary enrichment)
   const [playerMli, setPlayerMli] = useState<Record<string, { mli: number | null; band: string | null }>>({});
   // Most recent match minutes per player — feeds the MD+1 hard-recovery
-  // guardrail in DecisionSummaryCard. Carling 2018 / Nédélec 2012 / Helsen
-  // 2018: 60+ minute match triggers 24-72h recovery debt.
+  // guardrail in DecisionSummaryCard. Nédélec 2012 / Silva 2018: match fatigue lasts
+  // 24-72h; the 60+ minute line is MicroPulse's.
   const [playerMatchMinutes, setPlayerMatchMinutes] = useState<
     Record<string, { minutes_played: number; match_date: string }>
   >({});
@@ -1742,10 +1742,10 @@ export default function CoachPage() {
   // Weekly sum of GPS sprint metres (sprint_distance / velocity band 6) vs the
   // player's match-day demand baseline (avg per match over last 28d). Indoor /
   // no-GPS days = no sprint reading (never back-filled from IMA FR bands, which
-  // measure long continuous runs, not sprinting). UNDERLOAD < 50% → 3×
-  // hamstring injury risk; OVERLOAD → accumulated spike. Companion to Sprint
+  // measure long continuous runs, not sprinting). UNDERLOAD < 50% → under-exposed
+  // (MicroPulse's line; in Malone 2018 low weekly sprint distance went with more leg injuries); OVERLOAD → accumulated spike. Companion to Sprint
   // Speed Drop (quality side) — together they form full hamstring-injury
-  // surveillance (Buchheit 2019: monitor both quality + volume).
+  // watch (MicroPulse's pairing of sprint quality + volume; not a tested injury screen).
   // Computed inline against the team-batched query for one round-trip.
   const [playerSprintExposure, setPlayerSprintExposure] = useState<
     Record<string, {
@@ -1786,7 +1786,7 @@ export default function CoachPage() {
     sessions7d: number | null;
   }>>({});
 
-  // Decel Intelligence (McBurnie 2022 4-dimension framework) per player —
+  // Decel Intelligence (MicroPulse's 4-dimension module, built on McBurnie 2022) per player —
   // feeds the verdict pipeline so a player flagged red on
   // /coach/decel-intelligence also shows red on the dashboard.
   const [playerDecelStatus, setPlayerDecelStatus] = useState<Record<string, {
@@ -1993,7 +1993,7 @@ export default function CoachPage() {
         }
       } catch { /* Indoor Load is optional */ }
 
-      // Decel Intelligence (McBurnie 2022 4-dimension framework) per
+      // Decel Intelligence (MicroPulse's 4-dimension module, built on McBurnie 2022) per
       // player — feeds the verdict pipeline so a player flagged red on
       // /coach/decel-intelligence cannot show GREEN on the dashboard.
       // Same fetch pattern as Indoor Load: parallel per-player RPC,
@@ -6906,7 +6906,7 @@ export default function CoachPage() {
           acwrFlag: idx.acwrFlag ?? null,
         };
       })(),
-      // Decel Intelligence (McBurnie 2022 4-dimension overall flag) —
+      // Decel Intelligence (MicroPulse's 4-dimension overall flag, built on McBurnie 2022) —
       // closes the verdict gap with /coach/decel-intelligence. Same
       // pattern as indoorLoad, populated via parallel RPC fetch.
       decelIntelligence: (() => {
@@ -10857,8 +10857,8 @@ export default function CoachPage() {
                       </p>
                       <p className="text-slate-500">
                         {lang === "IS"
-                          ? "Heimildir: Saw o.fl. 2016 (sjálfskráð líðan > hlutlægar mælingar fyrir álagssvörun); Thorpe o.fl. 2017 (dagleg vöktun); Jaspers o.fl. 2017 (álag og líðan)."
-                          : "Sources: Saw et al. 2016 (self-report wellness > objective measures for load response); Thorpe et al. 2017 (daily monitoring); Jaspers et al. 2017 (load & wellness)."}
+                          ? "Heimildir: Saw o.fl. 2016 (sjálfskráð líðan > hlutlægar mælingar fyrir álagssvörun); Thorpe o.fl. 2017 (dagleg vöktun); Jaspers o.fl. 2017 (æfingaálag og form/meiðsli)."
+                          : "Sources: Saw et al. 2016 (self-report wellness > objective measures for load response); Thorpe et al. 2017 (daily monitoring); Jaspers et al. 2017 (training load vs fitness and injury)."}
                       </p>
                       <p className="text-slate-400">
                         {lang === "IS"

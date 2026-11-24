@@ -2,8 +2,8 @@
  * Small pure math for the Readiness Outlook feature build.
  *
  * EWMA is the one load helper NOT already in the codebase (everything else uses the
- * rolling-average / Gabbett method — see compositeLoad / playerLoadAcwr). Perri 2021 and
- * Williams 2017 use the exponentially-weighted variant for load→wellness, so we add a
+ * rolling-average / Gabbett method — see compositeLoad / playerLoadAcwr). Rossi 2022
+ * uses the exponentially-weighted variant for load→wellness (EWMA for the ACWR: Williams 2017), so we add a
  * tiny, self-contained one here rather than bending the existing ACWR machinery, which
  * serves a different purpose (acute:chronic ratio flags, not a forecast feature).
  */
