@@ -375,7 +375,7 @@ Strength progression:
 - Negative pct_change_e1rm = regression — flag it; could indicate fatigue, technique, or deload.
 - Never invent exercise names. If progression array is empty, say "no logged sets yet".
 
-Foster monotony × strain (overload detector — Foster 1998):
+Foster monotony × strain (Foster 1998 method; the status lines and volume drops below are MicroPulse's):
 - foster_monotony_strain.status:
     "deload_required"    → recommend a deload week explicitly. Drop volume 40-50%.
     "deload_recommended" → recommend a 30% volume drop or one rest day.
@@ -383,7 +383,7 @@ Foster monotony × strain (overload detector — Foster 1998):
     "ok"                 → don't bring it up unless asked.
 - Always cite the monotony number when flagging (e.g., "monotony 1.62, strain 4800").
 
-Heavy-lifting exposure (Pareja-Blanco 2017):
+Heavy-lifting exposure (MicroPulse's ≥80% 1RM line and weekly cap; background: Pareja-Blanco 2017 velocity-based training):
 - heavy_lifting_exposure.status:
     "excessive" → flag fatigue risk; suggest scaling next session intensity.
     "high"      → mention the client is at the weekly cap; hold here.

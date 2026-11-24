@@ -8,10 +8,10 @@
  * component is normalised to the player's OWN 28-day baseline (100 = an average
  * session for that player) — the same personal-norm philosophy as the football
  * composite, which is the only defensible comparison (there are no trustworthy
- * normative basketball benchmarks — Power et al. 2022).
+ * normative basketball benchmarks; a review of women's basketball load could not compare the studies — Power et al. 2022).
  *
  * HONEST PROVENANCE (this is intent-adapted, not a literal reproduction):
- *   - Tuttle et al. 2024 uses >3.5 m·s⁻² for accel/decel/CoD and >40 cm for jumps.
+ *   - Tuttle et al. 2024 (review): microsensor studies mostly use >3.5 m·s⁻² for accel/decel/CoD and >40 cm for jumps.
  *     Catapult's daily aggregates do NOT carry those exact cuts. The closest stored
  *     signal is Band 3 = >3.0 m·s⁻² event counts (ima_band3_accel/decel_count,
  *     ima_cod_*_high). Jumps are a raw COUNT with no height (>40 cm height exists
@@ -23,7 +23,7 @@
  *
  * Deliberately NOT modelled (evidence too weak — same as the week model): the ACWR
  * "sweet spot" (Weiss 2017 — "unclear"), normative women's benchmarks (Power 2022),
- * hormonal monitoring (Kamarauskas 2021).
+ * hormonal monitoring (Kamarauskas 2022: salivary testosterone and cortisol showed no clear change across basketball training periods).
  */
 
 /** A plain-language string in both UI languages. */
@@ -92,8 +92,8 @@ export interface BasketballIndoorLoad {
 /**
  * Provisional component weights — NOT calibrated to real basketball data.
  * PlayerLoad is the whole-body volume backbone; high-intensity IMA is the
- * mechanical/decel signal that matters most for indoor injury risk (McBurnie 2022
- * lineage); jumps add the vertical component basketball uniquely loads. Renormalised
+ * mechanical/braking signal (MicroPulse's weighting; why braking load matters: McBurnie 2022
+ * review); jumps add the vertical component basketball uniquely loads. Renormalised
  * over whichever components a player actually has a baseline for.
  */
 export const PROVISIONAL_WEIGHTS = {

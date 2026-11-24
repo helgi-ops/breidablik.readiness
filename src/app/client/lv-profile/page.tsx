@@ -6,8 +6,8 @@
  * For a client who has done a ramp test with their trainer:
  *   - Top card: predicted 1RM ± SEE, V₀, profile classification
  *   - %RM table: kg → %1RM → predicted velocity (m/s) so the client knows
- *     what bar speed to aim for at each load (González-Badillo 2010,
- *     Banyard 2017)
+ *     what bar speed to aim for at each load (González-Badillo & Sánchez-Medina 2010, bench press;
+ *     Banyard 2017: back-squat 1RM was not predicted accurately)
  */
 
 export const dynamic = "force-dynamic";

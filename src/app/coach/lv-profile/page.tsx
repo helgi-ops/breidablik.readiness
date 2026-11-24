@@ -82,8 +82,8 @@ export default function CoachLvProfilePage() {
         </h1>
         <p className="text-sm text-slate-600">
           {lang === "IS"
-            ? "Skráðu rampa-próf (3–5 mælingar) til að spá fyrir um 1RM, V₀ og styrk-/hraðamerki. Byggt á González-Badillo 2010 og Banyard 2017."
-            : "Log a ramp test (3–5 datapoints) to predict 1RM, V₀, and strength/velocity bias. Based on González-Badillo 2010 + Banyard 2017."}
+            ? "Skráðu rampa-próf (3–5 mælingar) til að spá fyrir um 1RM, V₀ og styrk-/hraðamerki. Byggt á González-Badillo & Sánchez-Medina 2010 (bekkpressa: hraði stangar fylgir %1RM vel); varúð frá Banyard 2017: í hnébeygju spáði þessi aðferð ekki nákvæmlega fyrir um 1RM."
+            : "Log a ramp test (3–5 datapoints) to predict 1RM, V₀, and strength/velocity bias. Based on González-Badillo & Sánchez-Medina 2010 (bench press: bar speed tracks %1RM closely); caution from Banyard 2017: in the back squat this method did not predict 1RM accurately."}
         </p>
       </header>
 

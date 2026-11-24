@@ -13,7 +13,7 @@
  *                         sequencing; Beg 3d, Int/Adv 4d)
  *
  * Daily Green/Yellow/Red readiness sub-columns adapt every prescribed set
- * to the player's wellness score on the day (Foster 1998 monotony,
+ * to the player's wellness score on the day (MicroPulse's rule; background: Foster 1998 session-RPE monitoring,
  * Pareja-Blanco 2017 velocity-loss thresholds).
  *
  * Access model:
@@ -108,8 +108,8 @@ export default function PtExplosivePage() {
         </h1>
         <p className="text-sm text-slate-600">
           {lang === "IS"
-            ? "Tvö 12-vikna kerfi (4-fasa PUSH/PULL og 3–4 daga/viku rannsóknarmiðað). Daglegt græn/gul/rauð aðlögun byggð á Foster 1998 og Pareja-Blanco 2017."
-            : "Two 12-week programmes (phase-based PUSH/PULL + 3–4 day/week research-based). Daily Green/Yellow/Red adaptation built on Foster 1998 + Pareja-Blanco 2017."}
+            ? "Tvö 12-vikna kerfi (4-fasa PUSH/PULL og 3–4 daga/viku rannsóknarmiðað). Daglega græn/gul/rauð aðlögunin er regla MicroPulse (bakgrunnur: Foster 1998, álagsvöktun með RPE; Pareja-Blanco 2017, hraðastýrð þjálfun)."
+            : "Two 12-week programmes (phase-based PUSH/PULL + 3–4 day/week research-based). Daily Green/Yellow/Red adaptation is MicroPulse's rule (background: Foster 1998 session-RPE load monitoring; Pareja-Blanco 2017 velocity-based training)."}
         </p>
         <p className="text-xs text-slate-500">
           {lang === "IS"

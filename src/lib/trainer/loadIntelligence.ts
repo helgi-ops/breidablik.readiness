@@ -9,15 +9,15 @@
  *      Detects training overload risk from session-RPE load distribution.
  *      monotony = mean(daily load) / sd(daily load)
  *      strain   = sum(daily load) × monotony
- *      Risk thresholds (Foster 1998 → adapted for PT 7-day windows):
+ *      Thresholds (MicroPulse's lines for PT 7-day windows; the monotony/strain method is Foster 1998):
  *        monotony > 1.5  AND  strain > 4000  → "deload recommended"
  *        monotony > 2.0  OR   strain > 6000  → "deload required"
  *
  *   2. computeHeavyLiftingExposure  (Pareja-Blanco 2017)
- *      Counts working sets at ≥80% 1RM in the window. ≥80% is the velocity
- *      loss threshold zone where strength adaptations dominate over
- *      hypertrophy. Weekly cap ≈ 25 sets across all lifts (loose Pareja-
- *      Blanco / Schoenfeld 2017 synthesis). Returns count, cap, and a
+ *      Counts working sets at ≥80% 1RM in the window. ≥80% is MicroPulse's heavy
+ *      line (Schoenfeld 2017: loads above 60% 1RM gave bigger 1RM gains, with
+ *      similar muscle growth). Weekly cap ≈ 25 sets across all lifts (MicroPulse's cap; not in
+ *      Pareja-Blanco 2017 or Schoenfeld 2017). Returns count, cap, and a
  *      0-1 saturation ratio.
  *
  *   3. forecastPR  (linear regression on e1RM over time)
@@ -109,7 +109,7 @@ export function computeFosterMonotonyStrain(
   };
 }
 
-// ── 2. Heavy-lifting exposure (Pareja-Blanco threshold) ───────────────────
+// ── 2. Heavy-lifting exposure (MicroPulse's ≥80% line) ───────────────────
 
 export type SetForExposure = {
   date: string;
@@ -124,7 +124,7 @@ export type SetForExposure = {
 export type ExposureResult = {
   /** Sets ≥80% 1RM in the window. */
   heavy_sets: number;
-  /** Soft weekly cap from Pareja-Blanco / Schoenfeld synthesis. */
+  /** Soft weekly cap — MicroPulse's number, not from Pareja-Blanco or Schoenfeld. */
   cap: number;
   /** heavy_sets / cap, clamped 0..1.5 */
   saturation: number;

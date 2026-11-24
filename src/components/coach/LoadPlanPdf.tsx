@@ -87,7 +87,7 @@ export async function downloadLoadPlanPdf(
   if (availSet.has("sprint")) legendBits.push("Sprint VB6 = sprint distance (band 6)");
   if (availSet.has("efforts")) legendBits.push("Efforts = combined high-intensity accel + decel count (Core/Lite pods)");
   else if (availSet.has("accel")) legendBits.push("Acc/Dec B2-3 = high-intensity accel/decel (effort bands 2-3); IMA COD = change-of-direction distance");
-  if (availSet.has("imaAccel")) legendBits.push("IMA Acc/Dec = explosive accel/decel counts; CoD = change-of-direction events; Jumps = take-offs/landings (McBurnie 2022)");
+  if (availSet.has("imaAccel")) legendBits.push("IMA Acc/Dec = explosive accel/decel counts; CoD = change-of-direction events (braking load: McBurnie 2022); Jumps = take-offs/landings");
   const moveLegend = legendBits.length ? `${legendBits.join("; ")}.` : "";
   // The SAME explainability paragraphs / bottom line the on-screen card renders.
   const narrative = buildLoadPlanNarrative(plan, readiness?.checkedIn ?? null);

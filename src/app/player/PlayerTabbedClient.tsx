@@ -1575,8 +1575,8 @@ function PlayerTodayRecapPortal({ activeTab, lang, clubThemeColor }: { activeTab
           )}
           {sv && (
             <div>{is
-              ? `Skreflengd = vegalengd ÷ skref í löngum samfelldum hlaupum (18 sek eða lengri, eftir lengd hlaups í IMA — ekki hraða). Borið saman við þína eigin leiki (${sv.historyN}); flaggað við 2,5 staðalfrávik. Girard/Morin 2011.`
-              : `Stride length = distance ÷ strides in long continuous runs (18 s or more, from IMA free-running run length — not speed). Compared to your own matches (${sv.historyN}); flagged at 2.5 SD. Girard/Morin 2011.`}</div>
+              ? `Skreflengd = vegalengd ÷ skref í löngum samfelldum hlaupum (18 sek eða lengri, eftir lengd hlaups í IMA — ekki hraða). Borið saman við þína eigin leiki (${sv.historyN}); flaggað við 2,5 staðalfrávik (viðmið MicroPulse; Girard 2011 og Morin 2011 skoðuðu endurtekna spretti, ekki löng hlaup).`
+              : `Stride length = distance ÷ strides in long continuous runs (18 s or more, from IMA free-running run length — not speed). Compared to your own matches (${sv.historyN}); flagged at 2.5 SD (MicroPulse's line; Girard 2011 and Morin 2011 studied repeated sprints, not long runs).`}</div>
           )}
         </div>
       )}

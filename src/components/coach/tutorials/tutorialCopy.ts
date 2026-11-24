@@ -598,8 +598,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "sRPE = the internal-load number (Foster)", is: "sRPE = innra-álags talan (Foster)" },
         body: [
           {
-            en: "Session-RPE (how hard it felt, 0–10) times duration (min) gives the internal load in AU (Foster 2001). It's the cheapest and most robust load measure — no hardware needed — which is why it's the backbone of readiness. Each submission shows the player's load with an intensity label (moderate/high); total daily load, average RPE and yesterday's load sit up top.",
-            is: "Session-RPE (hversu erfitt það var, 0–10) margfaldað með tímalengd (mín) gefur innra álagið í AU (Foster 2001). Þetta er ódýrasti og traustasti álagsmælikvarðinn — enginn vélbúnaður þarf — og þess vegna er hann burðarás reiðuskorsins. Hver skráning sýnir álag leikmannsins með ákefðar-merki (moderate/high); heildar dagsálag, meðal-RPE og gærdagsins álag efst.",
+            en: "Session-RPE (how hard it felt, 0–10) times duration (min) gives the internal load in AU (Foster 2001). It's a cheap load measure, valid across many kinds of training — no hardware needed — which is why it's the backbone of readiness. Each submission shows the player's load with an intensity label (moderate/high); total daily load, average RPE and yesterday's load sit up top.",
+            is: "Session-RPE (hversu erfitt það var, 0–10) margfaldað með tímalengd (mín) gefur innra álagið í AU (Foster 2001). Þetta er ódýr álagsmælikvarði sem stenst fyrir margs konar þjálfun — enginn vélbúnaður þarf — og þess vegna er hann burðarás reiðuskorsins. Hver skráning sýnir álag leikmannsins með ákefðar-merki (moderate/high); heildar dagsálag, meðal-RPE og gærdagsins álag efst.",
           },
         ],
       },
@@ -674,8 +674,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Falið álag: hjartað vann meira en hann mat lotuna → hugsanlega vanmetin lota; skipuleggðu endurheimt eins og hún hafi verið erfiðari. Lágt hjarta-drif: mat hátt en hjartað hélst lágt → t.d. styrktar-/tækniæfing (lítið þolálag) eða ofmetin áreynsla.",
           },
           {
-            en: "Heart rate captures the aerobic cost; sRPE captures the whole (including anaerobic and psychological). So the gap isn't noise, it's information — hidden load points to anaerobic/under-rated work, low demand to strength work or over-rating (Impellizzeri 2004).",
-            is: "Púlsinn fangar loftháða kostnaðinn; sRPE fangar heildina (líka loftfirrt og sálrænt). Þess vegna er frávikið ekki hávaði heldur upplýsing — falið álag bendir á loftfirrða/vanmetna vinnu, lágt drif á styrktarvinnu eða ofmat (Impellizzeri 2004).",
+            en: "Heart rate mostly shows the aerobic cost; sRPE is a global measure of internal load (Impellizzeri 2004 — in young players the two agreed moderately to strongly). So a gap is worth a look: MicroPulse reads hidden load as possible anaerobic or under-rated work, and low demand as strength work or over-rating.",
+            is: "Púlsinn sýnir mest loftháða kostnaðinn; sRPE er heildarmæling á innra álagi (Impellizzeri 2004 — hjá ungum leikmönnum fóru þau saman í meðallagi til sterkt). Bilið er því þess virði að skoða: MicroPulse les falið álag sem mögulega loftfirrða eða vanmetna vinnu, og lágt drif sem styrktarvinnu eða ofmat.",
           },
         ],
       },
@@ -710,8 +710,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Confidence + honest limits", is: "Vissa + heiðarleg takmörk" },
         body: [
           {
-            en: "A player needs enough belt sessions for a mature baseline AND HRmax set for calibrated %HRmax; thin data = low confidence, stated plainly, never a verdict. And HR is the aerobic/ANS lens only — not fatigue, not performance (Dellal 2012; Achten & Jeukendrup 2003). No belt / no HRmax → no-data, never zero.",
-            is: "Leikmaður þarf nógu margar beltis-lotur fyrir þroskaða grunnlínu OG HRmax stillt fyrir kvarðaða %HRmax; þunn gögn = lítil vissa, sagt hreint út, aldrei sem dómur. Og púlsinn er loftháða/ANS linsan eingöngu — ekki þreyta, ekki afköst (Dellal 2012; Achten & Jeukendrup 2003). Ekkert belti / engin HRmax → no-data, aldrei núll.",
+            en: "A player needs enough belt sessions for a mature baseline AND HRmax set for calibrated %HRmax; thin data = low confidence, stated plainly, never a verdict. And HR is mainly the aerobic/ANS lens — MicroPulse never reads it as a fatigue or performance score (HR as a measure of internal load: Dellal 2012; Achten & Jeukendrup 2003). No belt / no HRmax → no-data, never zero.",
+            is: "Leikmaður þarf nógu margar beltis-lotur fyrir þroskaða grunnlínu OG HRmax stillt fyrir kvarðaða %HRmax; þunn gögn = lítil vissa, sagt hreint út, aldrei sem dómur. Og púlsinn er fyrst og fremst loftháða/ANS linsan — MicroPulse les hann aldrei sem þreytu- eða afkastaskor (púls sem mæling á innra álagi: Dellal 2012; Achten & Jeukendrup 2003). Ekkert belti / engin HRmax → no-data, aldrei núll.",
           },
         ],
       },
@@ -773,8 +773,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Confidence + the honest limits", is: "Vissa + heiðarleg takmörk" },
         body: [
           {
-            en: "It shows how much it beats a naive “assume steady” baseline — small lift means the squad has just been stable, not a strong prediction. Only players with enough of their own history get a forecast (“forecast for N”); the rest are left out, never guessed. And it's load-only: sleep, school/work and life also move wellness (Sansone 2023), so read it as a nudge, not a verdict. It sharpens as the club builds more history.",
-            is: "Það sýnir hversu mikið það slær „giska á óbreytt“ viðmið — lítil framför þýðir að hópurinn hefur einfaldlega verið stöðugur, ekki sterk forspá. Aðeins leikmenn með næga eigin sögu fá spá („spá fyrir N“); hinir eru skildir eftir, aldrei giskað. Og það byggir á álagi einu saman: svefn, skóli/vinna og lífið hreyfa líka við líðan (Sansone 2023), svo lestu sem ábendingu, ekki dóm. Það verður skarpara eftir því sem félagið safnar meiri sögu.",
+            en: "It shows how much it beats a naive “assume steady” baseline — small lift means the squad has just been stable, not a strong prediction. Only players with enough of their own history get a forecast (“forecast for N”); the rest are left out, never guessed. And it's load-only: load explains only part of wellness (Perri 2021) — sleep, school/work and life move it too, so read it as a nudge, not a verdict. It sharpens as the club builds more history.",
+            is: "Það sýnir hversu mikið það slær „giska á óbreytt“ viðmið — lítil framför þýðir að hópurinn hefur einfaldlega verið stöðugur, ekki sterk forspá. Aðeins leikmenn með næga eigin sögu fá spá („spá fyrir N“); hinir eru skildir eftir, aldrei giskað. Og það byggir á álagi einu saman: álag skýrir aðeins hluta af líðan (Perri 2021) — svefn, skóli/vinna og lífið hreyfa líka við henni, svo lestu sem ábendingu, ekki dóm. Það verður skarpara eftir því sem félagið safnar meiri sögu.",
           },
         ],
       },
@@ -841,8 +841,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Microcycle review (Buchheit 2024)", is: "Microcycle-yfirferð (Buchheit 2024)" },
         body: [
           {
-            en: "Once the week is built, an automatic, research-based review checks the shape and flags points — e.g. “move the rest day to MD+2” (a lower overuse-injury rate, Buchheit 2023, 56 team-seasons), or “place heavy eccentric work early, not late” (prolonged muscle damage / soreness). These are explicitly suggestions, not blocks — the coach decides, with the principle and citation shown.",
-            is: "Þegar vikan er byggð fer sjálfvirk, rannsóknabyggð yfirferð yfir lögunina og bendir á atriði — t.d. „færðu frídaginn á MD+2“ (lægri ofnotkunar-meiðslatíðni, Buchheit 2023, 56 lið-tímabil), eða „settu þunga eccentric-vinnu snemma, ekki seint“ (langvarandi vöðvaskaði / eymsli). Þetta eru beinlínis tillögur, ekki hindranir — þjálfarinn ræður, með reglunni og heimildinni sýndri.",
+            en: "Once the week is built, an automatic, research-based review checks the shape and flags points — e.g. “move the rest day to MD+2” (fewer non-contact injuries, clearest with 3 or 7 days between matches — Buchheit 2023b, 56 team-seasons), or “place heavy eccentric work early, not late” (prolonged muscle damage / soreness). These are explicitly suggestions, not blocks — the coach decides, with the principle and citation shown.",
+            is: "Þegar vikan er byggð fer sjálfvirk, rannsóknabyggð yfirferð yfir lögunina og bendir á atriði — t.d. „færðu frídaginn á MD+2“ (færri meiðsli án snertingar, skýrast þegar 3 eða 7 dagar eru milli leikja — Buchheit 2023b, 56 lið-tímabil), eða „settu þunga eccentric-vinnu snemma, ekki seint“ (langvarandi vöðvaskaði / eymsli). Þetta eru beinlínis tillögur, ekki hindranir — þjálfarinn ræður, með reglunni og heimildinni sýndri.",
           },
           {
             en: "Why it matters: this is the input that makes every downstream page fair. It's one of the small set of weekly coach inputs — skip it and the load model can't tell a match from a session and the MD logic breaks. A five-minute weekly setup that gives everything else its context: match days, intent, breaks — and sends each player the right day.",
@@ -957,8 +957,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "What it never does", is: "Hvað það gerir aldrei" },
         body: [
           {
-            en: "Missing data is never treated as “fine”: no check-in, no baseline and no load all read as no-data and are labelled, never quietly counted as green. Injury status comes from the injury log a coach maintains, not from a readiness colour, so a green, fit-feeling player who is actually injured is still pinned in the injured group — and a resolved injury drops off on its own. The colour on every row is the same canonical verdict the player, the report and the export all see, so the whole club is reading one number. And nothing here overrides you: the panel surfaces and explains, you decide. Grounded in Gabbett's monitoring cycle (collect → analyse → communicate → decide) and Robertson 2017 (a player is judged against his own norm, never a generic target).",
-            is: "Gögn sem vantar eru aldrei meðhöndluð sem „í lagi“: ekkert checkin, engin grunnlína og ekkert álag lesast öll sem engin-gögn og eru merkt, aldrei þögult talin græn. Meiðslastaða kemur úr meiðslaskránni sem þjálfari heldur við, ekki úr readiness-lit, svo grænn leikmaður sem líður vel en er í raun meiddur er samt festur í meidda flokknum — og gróið meiðsli dettur af sjálfu sér. Liturinn á hverri línu er sami canonical dómurinn og leikmaðurinn, skýrslan og útflutningurinn sjá öll, svo allur klúbburinn les eina tölu. Og ekkert hér tekur fram fyrir hendurnar á þér: spjaldið sýnir og útskýrir, þú ákveður. Byggt á vöktunarhring Gabbett (safna → greina → miðla → ákveða) og Robertson 2017 (leikmaður er metinn m.v. sína eigin venju, aldrei almennt markmið).",
+            en: "Missing data is never treated as “fine”: no check-in, no baseline and no load all read as no-data and are labelled, never quietly counted as green. Injury status comes from the injury log a coach maintains, not from a readiness colour, so a green, fit-feeling player who is actually injured is still pinned in the injured group — and a resolved injury drops off on its own. The colour on every row is the same canonical verdict the player, the report and the export all see, so the whole club is reading one number. And nothing here overrides you: the panel surfaces and explains, you decide. Grounded in Gabbett's monitoring cycle (collect → analyse → communicate → decide) and Rebelo 2026 (judging each player against his own baseline).",
+            is: "Gögn sem vantar eru aldrei meðhöndluð sem „í lagi“: ekkert checkin, engin grunnlína og ekkert álag lesast öll sem engin-gögn og eru merkt, aldrei þögult talin græn. Meiðslastaða kemur úr meiðslaskránni sem þjálfari heldur við, ekki úr readiness-lit, svo grænn leikmaður sem líður vel en er í raun meiddur er samt festur í meidda flokknum — og gróið meiðsli dettur af sjálfu sér. Liturinn á hverri línu er sami canonical dómurinn og leikmaðurinn, skýrslan og útflutningurinn sjá öll, svo allur klúbburinn les eina tölu. Og ekkert hér tekur fram fyrir hendurnar á þér: spjaldið sýnir og útskýrir, þú ákveður. Byggt á vöktunarhring Gabbett (safna → greina → miðla → ákveða) og Rebelo 2026 (hver leikmaður metinn m.v. eigin grunnlínu).",
           },
         ],
       },
@@ -1125,8 +1125,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "The per-player table (tap the “i” for cut-offs)", is: "Taflan per leikmann (ýttu á „i“ fyrir mörkin)" },
         body: [
           {
-            en: "One row per player, six columns — each with an “i” carrying the exact bands. Load is the day's overall state vs his 28-day norm, blended from five GPS signals. Decel Burden is the braking cost on muscle (weighted toward high-intensity braking). Acc:Dec is the telling one: ECC (heavy braking) points at ACL / quadriceps / patellar-tendon, CON (heavy acceleration) at hamstring / glute — the same “high load” is a different injury conversation by direction. HID% carries a fatigue arrow that only flags when high-speed share drops sharply AND distance stays stable (same ground, top speeds not reached). Res. Decel is 3-day accumulation — it catches the third hard day a single-day view hides. PL Spike is today's PlayerLoad against his 28-day average. Read direction and accumulation, not just size.",
-            is: "Ein röð per leikmann, sex dálkar — hver með „i“ sem ber nákvæmu böndin. Load er heildarstaða dagsins vs 28-daga venju hans, blönduð úr fimm GPS-merkjum. Decel Burden er hemlunar-kostnaðurinn á vöðva (vegið í átt að há-ákefðar hemlun). Acc:Dec er sá afhjúpandi: ECC (mikil hemlun) bendir á ACL / framanlæri / patellar-sin, CON (mikil hröðun) á hamstring / glute — sama „high load“ er ólíkt meiðsla-samtal eftir stefnu. HID% ber þreytuör sem flaggar aðeins þegar háhraða-hlutfall fellur snöggt OG vegalengd helst stöðug (sama vegalengd, toppahraði næst ekki). Res. Decel er 3-daga uppsöfnun — hún grípur þriðja harða daginn sem eins-dags sýn felur. PL Spike er Player Load dagsins á móti 28-daga meðaltali hans. Lestu stefnu og uppsöfnun, ekki bara stærð.",
+            en: "One row per player, six columns — each with an “i” carrying the exact bands. Load is the day's overall state vs his 28-day norm, blended from five GPS signals. Decel Burden is the braking cost on muscle (weighted toward high-intensity braking). Acc:Dec is the telling one: ECC (heavy braking) may raise knee (ACL) load, CON (heavy acceleration) is assumed to load the hamstring / glute (MicroPulse's read) — the same “high load” is a different conversation by direction. HID% carries a fatigue arrow that only flags when high-speed share drops sharply AND distance stays stable (same ground, top speeds not reached). Res. Decel is 3-day accumulation — it catches the third hard day a single-day view hides. PL Spike is today's PlayerLoad against his 28-day average. Read direction and accumulation, not just size.",
+            is: "Ein röð per leikmann, sex dálkar — hver með „i“ sem ber nákvæmu böndin. Load er heildarstaða dagsins vs 28-daga venju hans, blönduð úr fimm GPS-merkjum. Decel Burden er hemlunar-kostnaðurinn á vöðva (vegið í átt að há-ákefðar hemlun). Acc:Dec er sá afhjúpandi: ECC (mikil hemlun) gæti aukið álag á krossband (ACL), CON (mikil hröðun) er talin hlaða aftanlæri / rass (mat MicroPulse) — sama „high load“ er ólíkt samtal eftir stefnu. HID% ber þreytuör sem flaggar aðeins þegar háhraða-hlutfall fellur snöggt OG vegalengd helst stöðug (sama vegalengd, toppahraði næst ekki). Res. Decel er 3-daga uppsöfnun — hún grípur þriðja harða daginn sem eins-dags sýn felur. PL Spike er Player Load dagsins á móti 28-daga meðaltali hans. Lestu stefnu og uppsöfnun, ekki bara stærð.",
           },
         ],
       },
@@ -1134,8 +1134,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "The honesty the page keeps", is: "Heiðarleikinn sem síðan heldur" },
         body: [
           {
-            en: "Every number is the player versus his own 28-day self, never a generic norm. A blank cell is “—” (no pod that day, or a lower Catapult tier that doesn't expose the feed), never a zero. And every flag has a paper behind it — McBurnie 2022 (deceleration mechanics), Harper 2019 (high-intensity fatigue), Harper & Kiely 2018 (braking recovery), Gabbett 2016 (acute:chronic spikes). The numbers tell you where to look; you make the call.",
-            is: "Sérhver tala er leikmaðurinn vs hans eigin 28-daga sjálf, aldrei almennt viðmið. Auður reitur er „—“ (enginn pod þann dag, eða lægri Catapult-pakki sem sýnir ekki gögnin), aldrei núll. Og hvert flagg á sér rannsókn — McBurnie 2022 (hemlunar-líffræði), Harper 2019 (há-ákefðar þreyta), Harper & Kiely 2018 (hemlunar-bati), Gabbett 2016 (bráð:langvinnt topp). Tölurnar segja þér hvar á að horfa; þú tekur ákvörðunina.",
+            en: "Every number is the player versus his own 28-day self, never a generic norm. A blank cell is “—” (no pod that day, or a lower Catapult tier that doesn't expose the feed), never a zero. And every flag names the research on why that signal matters (the cut-offs are MicroPulse's) — McBurnie 2022 (deceleration mechanics), Harper 2019 (fewer hard accels and decels in the 2nd half), Harper & Kiely 2018 (why repeated hard braking builds fatigue), Gabbett 2016 (acute:chronic spikes). The numbers tell you where to look; you make the call.",
+            is: "Sérhver tala er leikmaðurinn vs hans eigin 28-daga sjálf, aldrei almennt viðmið. Auður reitur er „—“ (enginn pod þann dag, eða lægri Catapult-pakki sem sýnir ekki gögnin), aldrei núll. Og hvert flagg vísar í rannsókn á því af hverju merkið skiptir máli (mörkin eru viðmið MicroPulse) — McBurnie 2022 (hemlunar-líffræði), Harper 2019 (færri harðar hraðanir og hemlanir í seinni hálfleik), Harper & Kiely 2018 (af hverju endurtekin hörð hemlun safnar þreytu), Gabbett 2016 (bráð:langvinnt topp). Tölurnar segja þér hvar á að horfa; þú tekur ákvörðunina.",
           },
         ],
       },
@@ -1234,8 +1234,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Hversu mikið hemlunar-álag lenti á vöðvum hans: 65% há-ákefðar decelerations (Band 2–3, < −3 m/s²) + 35% heildar, vs 28-daga baseline. Bönd: low < 0.20, moderate 0.20–0.45, elevated 0.45–0.70, high ≥ 0.70.",
           },
           {
-            en: "Deceleration is the eccentric, tissue-damaging side of load — that's why it's a burden, not just a count. A high player triggers the cohort alert “avoid COD-heavy drills”; it eases back to elevated when his high-intensity braking returns toward norm. Needs the Band 2–3 feed (lower Catapult tiers don't expose it → “—”, never 0). Evidence: Harper & Kiely 2018; McBurnie 2022.",
-            is: "Hemlun er sá eccentric, vefja-skaðandi hluti álags — þess vegna er þetta „burden“, ekki bara talning. Leikmaður í high kveikir cohort-viðvörun „forðastu COD-þungar æfingar“; það lækkar aftur í elevated þegar há-ákefðar hemlun færist að venju. Þarf Band 2–3 gögnin (lægri Catapult-pakkar sýna þau ekki → „—“, aldrei 0). Rannsókn: Harper & Kiely 2018; McBurnie 2022.",
+            en: "Deceleration is the eccentric side of load that can drive fatigue and tissue damage — that's why it's a burden, not just a count. A high player triggers the cohort alert “avoid COD-heavy drills”; it eases back to elevated when his high-intensity braking returns toward norm. Needs the Band 2–3 feed (lower Catapult tiers don't expose it → “—”, never 0). Bands are MicroPulse's; why braking matters: Harper & Kiely 2018; McBurnie 2022.",
+            is: "Hemlun er sá eccentric hluti álags sem getur valdið þreytu og vefjaskaða — þess vegna er þetta „burden“, ekki bara talning. Leikmaður í high kveikir cohort-viðvörun „forðastu COD-þungar æfingar“; það lækkar aftur í elevated þegar há-ákefðar hemlun færist að venju. Þarf Band 2–3 gögnin (lægri Catapult-pakkar sýna þau ekki → „—“, aldrei 0). Böndin eru viðmið MicroPulse; af hverju hemlun skiptir máli: Harper & Kiely 2018; McBurnie 2022.",
           },
         ],
       },
@@ -1243,12 +1243,12 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Acc:Dec — ECC / BAL / CON (which tissue)", is: "Acc:Dec — ECC / BAL / CON (hvaða vefur)" },
         body: [
           {
-            en: "The balance of high-intensity accelerations vs decelerations. ECC (< 0.7, orange) = heavy braking → ACL / quadriceps / patellar-tendon risk (peak quad activation 161% MVC in braking). BAL (0.7–1.3) = even mix. CON (> 1.3, blue) = heavy acceleration → hamstring / glute risk (late-swing sprint).",
-            is: "Jafnvægi há-ákefðar accelerations vs decelerations. ECC (< 0.7, appelsínugult) = mikil hemlun → ACL / framanlæri (quadriceps) / patellar-sin áhætta (peak quad activation 161% MVC í hemlun). BAL (0.7–1.3) = jafnt. CON (> 1.3, blátt) = mikil hröðun → hamstring / glute áhætta (late-swing sprint).",
+            en: "The balance of high-intensity accelerations vs decelerations. ECC (< 0.7, orange) = heavy braking: hard braking can drive quadriceps activation up to 161% MVC and may raise knee (ACL) load. BAL (0.7–1.3) = even mix. CON (> 1.3, blue) = heavy acceleration (a hamstring + glute link is assumed, not from a study).",
+            is: "Jafnvægi há-ákefðar accelerations vs decelerations. ECC (< 0.7, appelsínugult) = mikil hemlun: hörð hemlun getur keyrt virkni framanlærisvöðva upp í 161% af hámarks-kreppu og gæti aukið álag á krossband. BAL (0.7–1.3) = jafnt. CON (> 1.3, blátt) = mikil hröðun (tenging við aftanlæri og rass er ágiskun, ekki úr rannsókn).",
           },
           {
-            en: "The clearest case of why > what: the same “high load” is a different injury conversation by direction. Very low effort counts are a directional hint only (the code floors the denominator at 0.5 to avoid divide-by-zero). Evidence: McBurnie 2022.",
-            is: "Skýrasta dæmið um af hverju > hvað: sama „high load“ er ólíkt meiðsla-samtal eftir stefnu. Mjög fáar efforts eru aðeins vísbending um stefnu (kóðinn setur nefnarann í lágmark 0.5 til að forðast deilingu með núlli). Rannsókn: McBurnie 2022.",
+            en: "The clearest case of why > what: the same “high load” is a different conversation by direction. Very low effort counts are a directional hint only (the code floors the denominator at 0.5 to avoid divide-by-zero). Evidence for the braking side: McBurnie 2022; the 0.7 / 1.3 lines are MicroPulse's.",
+            is: "Skýrasta dæmið um af hverju > hvað: sama „high load“ er ólíkt samtal eftir stefnu. Mjög fáar efforts eru aðeins vísbending um stefnu (kóðinn setur nefnarann í lágmark 0.5 til að forðast deilingu með núlli). Rannsókn fyrir hemlunarhliðina: McBurnie 2022; línurnar 0,7 / 1,3 eru viðmið MicroPulse.",
           },
         ],
       },
@@ -1260,8 +1260,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Hlutfall hlaups sem var háhraða: (Band 5 + Band 6) ÷ heildar (Band 5 ≈ 19.8–25.2, Band 6 > 25.2 km/klst). Ör vs 7-daga meðaltal: ↑ upp ≥ 10%, → innan ±10%, ↓ niður ≥ 10%, ↓↓ niður ≥ 20%.",
           },
           {
-            en: "The fatigue flag fires ONLY when HID% drops ≥ 20% AND total distance is stable — same ground covered, top speeds not reached (the signature of neuromuscular fatigue). A drop on a genuinely light day is not a flag. Ignored when the 7-day HID% is < 0.05 (too little high-speed history). Evidence: Harper 2019.",
-            is: "Þreytuflaggið kviknar AÐEINS þegar HID% fellur ≥ 20% OG heildar-vegalengd er stöðug — sama vegalengd, toppahraði næst ekki (einkenni tauga-vöðva þreytu). Fall á raunverulega léttum degi er ekki flagg. Hunsað þegar 7-daga HID% er < 0.05 (of lítil háhraða-saga). Rannsókn: Harper 2019.",
+            en: "The fatigue flag fires ONLY when HID% drops ≥ 20% AND total distance is stable — same ground covered, top speeds not reached (MicroPulse reads this as possible neuromuscular fatigue). A drop on a genuinely light day is not a flag. Ignored when the 7-day HID% is < 0.05 (too little high-speed history). MicroPulse's rule, not from a study (Harper 2019 only shows hard accelerations and decelerations drop from the 1st to the 2nd half).",
+            is: "Þreytuflaggið kviknar AÐEINS þegar HID% fellur ≥ 20% OG heildar-vegalengd er stöðug — sama vegalengd, toppahraði næst ekki (MicroPulse les þetta sem mögulega tauga-vöðva þreytu). Fall á raunverulega léttum degi er ekki flagg. Hunsað þegar 7-daga HID% er < 0.05 (of lítil háhraða-saga). Regla MicroPulse, ekki úr rannsókn (Harper 2019 sýnir aðeins að hörðum hröðunum og hemlunum fækkar frá fyrri til seinni hálfleiks).",
           },
         ],
       },
@@ -1273,8 +1273,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Ekki bara í dag — hemlunar-álag uppsafnað yfir þrjá daga, vegið í dag ×1.0, í gær ×0.6, fyrir tveimur dögum ×0.3 (0–100+ vísitala). NORMAL < 60, ELEVATED 60–100, CAUTION 100–135, HIGH ≥ 135.",
           },
           {
-            en: "Catches the “third hard day in a row” a single-day view misses — a player can look fine today and still be in CAUTION. It eases after a genuinely low-braking day. Cohort alert: “accumulated decel load (3 days) — recovery priority”. Evidence: eccentric load needs inter-session recovery (Harper & Kiely 2018).",
-            is: "Grípur „þriðja harða daginn í röð“ sem eins-dags sýn missir — leikmaður getur litið vel út í dag og samt verið í CAUTION. Það lækkar eftir raunverulega létt-hemlunar dag. Cohort-viðvörun: „uppsafnað decel-álag (3 dagar) — bati í forgang“. Rannsókn: eccentric álag þarf bata milli æfinga (Harper & Kiely 2018).",
+            en: "Catches the “third hard day in a row” a single-day view misses — a player can look fine today and still be in CAUTION. It eases after a genuinely low-braking day. Cohort alert: “accumulated decel load (3 days) — recovery priority”. The 3-day weights and bands are MicroPulse's; Harper & Kiely 2018 describe how repeated hard braking can build up fatigue and tissue damage (editorial, not a tested rule).",
+            is: "Grípur „þriðja harða daginn í röð“ sem eins-dags sýn missir — leikmaður getur litið vel út í dag og samt verið í CAUTION. Það lækkar eftir raunverulega létt-hemlunar dag. Cohort-viðvörun: „uppsafnað decel-álag (3 dagar) — bati í forgang“. Vægi og bönd 3-daga summunnar eru viðmið MicroPulse; Harper & Kiely 2018 lýsa því hvernig endurtekin hörð hemlun getur hlaðið upp þreytu og vefjaskaða (ritstjórnargrein, ekki prófuð regla).",
           },
         ],
       },
@@ -1286,8 +1286,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Heildar Player Load dagsins ÷ 28-daga meðaltal hans — ein „hversu stór var dagurinn“ margfeldi. grátt < 1.15×, gult 1.15–1.5×, rautt ≥ 1.5×.",
           },
           {
-            en: "The blunt volume check behind the specific columns — read it WITH them: 1.6× + ECC + high decel is a very different day from 1.6× balanced and low-decel. Early-season the 28-day denominator is unstable, so treat spikes as provisional. Evidence: Gabbett 2016.",
-            is: "Einfalda magn-mælingin á bak við sértæku dálkana — lestu hana MEÐ þeim: 1.6× + ECC + high decel er allt annar dagur en 1.6× í jafnvægi og lág-decel. Snemma á tímabili er 28-daga nefnarinn óstöðugur, svo lestu topp sem bráðabirgða. Rannsókn: Gabbett 2016.",
+            en: "The blunt volume check behind the specific columns — read it WITH them: 1.6× + ECC + high decel is a very different day from 1.6× balanced and low-decel. Early-season the 28-day denominator is unstable, so treat spikes as provisional. The cut-offs are MicroPulse's; Gabbett 2016's 1.5 compares a week with the prior 4 weeks, not one day.",
+            is: "Einfalda magn-mælingin á bak við sértæku dálkana — lestu hana MEÐ þeim: 1.6× + ECC + high decel er allt annar dagur en 1.6× í jafnvægi og lág-decel. Snemma á tímabili er 28-daga nefnarinn óstöðugur, svo lestu topp sem bráðabirgða. Mörkin eru viðmið MicroPulse; 1.5 hjá Gabbett 2016 ber viku saman við síðustu 4 vikur, ekki einn dag.",
           },
         ],
       },
@@ -1304,8 +1304,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "What to remember", is: "Það sem á að muna" },
         body: [
           {
-            en: "Player vs his own 28-day self, never a generic norm. “—” = no data, never zero. Direction matters as much as size (ECC vs CON; HID% only flags with stable distance; residual catches accumulation a single day hides). Read top-down: headline → alerts → tiles → table. Every flag has a paper behind it (McBurnie 2022, Harper 2019, Harper & Kiely 2018, Gabbett 2016) — that provenance is the point.",
-            is: "Leikmaður vs hans eigin 28-daga sjálf, aldrei almennt viðmið. „—“ = engin gögn, aldrei núll. Stefna skiptir jafn miklu og stærð (ECC vs CON; HID% flaggar aðeins með stöðugri vegalengd; residual grípur uppsöfnun sem einn dagur felur). Lestu ofan frá: fyrirsögn → viðvaranir → reitir → tafla. Hvert flagg á sér rannsókn (McBurnie 2022, Harper 2019, Harper & Kiely 2018, Gabbett 2016) — sú rekjanleiki er kjarninn.",
+            en: "Player vs his own 28-day self, never a generic norm. “—” = no data, never zero. Direction matters as much as size (ECC vs CON; HID% only flags with stable distance; residual catches accumulation a single day hides). Read top-down: headline → alerts → tiles → table. Every flag names the research on why that signal matters (the cut-offs are MicroPulse's; McBurnie 2022, Harper 2019, Harper & Kiely 2018, Gabbett 2016) — that provenance is the point.",
+            is: "Leikmaður vs hans eigin 28-daga sjálf, aldrei almennt viðmið. „—“ = engin gögn, aldrei núll. Stefna skiptir jafn miklu og stærð (ECC vs CON; HID% flaggar aðeins með stöðugri vegalengd; residual grípur uppsöfnun sem einn dagur felur). Lestu ofan frá: fyrirsögn → viðvaranir → reitir → tafla. Hvert flagg vísar í rannsókn á því af hverju merkið skiptir máli (mörkin eru viðmið MicroPulse; McBurnie 2022, Harper 2019, Harper & Kiely 2018, Gabbett 2016) — sú rekjanleiki er kjarninn.",
           },
         ],
       },
@@ -1316,8 +1316,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
     title: { en: "How to read Monotony & Strain", is: "Hvernig á að lesa Monotony & Strain" },
     videoEmbedUrl: FOSTER_MONOTONY_STRAIN_VIDEO,
     intro: {
-      en: "Per-player overtraining-risk monitoring (Foster 1998). Its whole point is that variability matters as much as volume — a player loading 600 AU every single day carries more risk than one alternating 400/800 for the same total. It reads each player's own last 7 days, so it catches the grind a weekly total hides.",
-      is: "Eftir-leikmanns greining á overtraining-áhættu (Foster 1998). Kjarninn er að breytileiki skiptir jafn miklu og magn — leikmaður sem hleður 600 AU alla daga ber meiri áhættu en sá sem skiptist á 400/800 fyrir sama heildarmagn. Hún les síðustu 7 daga hvers leikmanns, svo hún grípur maukið sem vikutala felur.",
+      en: "Per-player monotony and strain monitoring (Foster 1998: most illnesses came when an athlete's strain passed his own threshold). The idea is that variability matters as well as volume — a player loading 600 AU every single day trains more monotonously than one alternating 400/800 for the same total. It reads each player's own last 7 days, so it catches the grind a weekly total hides.",
+      is: "Eftir-leikmanns vöktun á einhæfni og strain (Foster 1998: flest veikindi komu þegar strain íþróttamanns fór yfir hans eigin mörk). Hugmyndin er að breytileiki skiptir máli, ekki bara magn — leikmaður sem hleður 600 AU alla daga æfir einhæfar en sá sem skiptist á 400/800 fyrir sama heildarmagn. Hún les síðustu 7 daga hvers leikmanns, svo hún grípur maukið sem vikutala felur.",
     },
     sections: [
       {
@@ -1360,8 +1360,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "The limits it keeps", is: "Mörkin sem það heldur" },
         body: [
           {
-            en: "It needs at least two days of load in the window; with only one day, or when every day is identical (standard deviation ≈ 0, the classic Foster divide-by-zero), monotony can't be computed and the row stays blank rather than showing a fake number. Everything is the player's own rolling 7-day window. Evidence: Foster 1998, with AC Milan / Real Madrid 2010s refinements.",
-            is: "Hún þarf a.m.k. tvo daga af álagi í glugganum; með aðeins einum degi, eða þegar allir dagar eru eins (staðalfrávik ≈ 0, klassíska Foster deiling-með-núlli), er ekki hægt að reikna monotony og röðin helst auð frekar en að sýna falska tölu. Allt er eigin 7-daga rúllandi gluggi leikmannsins. Rannsókn: Foster 1998, með AC Milan / Real Madrid betrumbótum 2010-áranna.",
+            en: "It needs at least two days of load in the window; with only one day, or when every day is identical (standard deviation ≈ 0, the classic Foster divide-by-zero), monotony can't be computed and the row stays blank rather than showing a fake number. Everything is the player's own rolling 7-day window. Evidence: the monotony/strain method is Foster 1998; the cut-offs are MicroPulse's.",
+            is: "Hún þarf a.m.k. tvo daga af álagi í glugganum; með aðeins einum degi, eða þegar allir dagar eru eins (staðalfrávik ≈ 0, klassíska Foster deiling-með-núlli), er ekki hægt að reikna monotony og röðin helst auð frekar en að sýna falska tölu. Allt er eigin 7-daga rúllandi gluggi leikmannsins. Rannsókn: monotony/strain aðferðin er úr Foster 1998; mörkin eru viðmið MicroPulse.",
           },
         ],
       },
@@ -1397,8 +1397,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Why HSR, not total distance", is: "Af hverju HSR, ekki heildarvegalengd" },
         body: [
           {
-            en: "Total distance can look completely normal while the fast metres are missing — and it's the repeated high speeds that a match demands and that build tolerance to them. Chronic high-speed exposure is protective (Stares 2018): a player who never trains near match speed is under-prepared for it, whatever his total volume says. Read this as “is he ready for the intensity of Saturday”, separate from how tired he is.",
-            is: "Heildarvegalengd getur litið alveg eðlilega út þótt hröðu metrarnir vanti — og það eru endurteknu háu hraðarnir sem leikur krefst og sem byggja upp þol fyrir þeim. Langvinn háhraða-útsetning er verndandi (Stares 2018): leikmaður sem æfir aldrei nálægt leikhraða er vanbúinn fyrir hann, sama hvað heildarmagnið segir. Lestu þetta sem „er hann tilbúinn fyrir ákefð laugardagsins“, aðskilið frá því hversu þreyttur hann er.",
+            en: "Total distance can look completely normal while the fast metres are missing — and it's the repeated high speeds that a match demands and that build tolerance to them. In Australian football, injury risk was highest when chronic load was low (Stares 2018, observational): a player who never trains near match speed may be under-prepared for it, whatever his total volume says. Read this as “is he ready for the intensity of Saturday”, separate from how tired he is.",
+            is: "Heildarvegalengd getur litið alveg eðlilega út þótt hröðu metrarnir vanti — og það eru endurteknu háu hraðarnir sem leikur krefst og sem byggja upp þol fyrir þeim. Í áströlskum fótbolta var meiðslaáhætta mest þegar langtímaálag var lágt (Stares 2018, athugunarrannsókn): leikmaður sem æfir aldrei nálægt leikhraða getur verið vanbúinn fyrir hann, sama hvað heildarmagnið segir. Lestu þetta sem „er hann tilbúinn fyrir ákefð laugardagsins“, aðskilið frá því hversu þreyttur hann er.",
           },
         ],
       },
@@ -1406,8 +1406,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "The limits it keeps", is: "Mörkin sem það heldur" },
         body: [
           {
-            en: "Everything is the player versus his own match demand, never a squad target — a winger and a centre-back are held to different bars. HSR is GPS V5+V6 (> 19.8 km/h) over the last 7 days including today; no pod or no high-speed data shows “—”, never a 0. Evidence: Buchheit 2018 (the 95% MD-1 preparation rule) and Stares 2018 (chronic high-speed exposure protects against soft-tissue injury).",
-            is: "Allt er leikmaðurinn vs hans eigin leik-krafa, aldrei hóp-markmið — kantmaður og miðvörður eru mældir á ólíkum mörkum. HSR er GPS V5+V6 (> 19,8 km/klst) síðustu 7 daga að deginum í dag meðtöldum; enginn pod eða engin háhraða-gögn sýna „—“, aldrei 0. Rannsókn: Buchheit 2018 (95% MD-1 undirbúnings-reglan) og Stares 2018 (langvinn háhraða-útsetning ver gegn mjúkvefja-meiðslum).",
+            en: "Everything is the player versus his own match demand, never a squad target — a winger and a centre-back are held to different bars. HSR is GPS V5+V6 (> 19.8 km/h) over the last 7 days including today; no pod or no high-speed data shows “—”, never a 0. The 95% MD-1 line is MicroPulse's rule, not from a study. Evidence: Stares 2018 (Australian football: injury risk was highest when chronic load was low; observational).",
+            is: "Allt er leikmaðurinn vs hans eigin leik-krafa, aldrei hóp-markmið — kantmaður og miðvörður eru mældir á ólíkum mörkum. HSR er GPS V5+V6 (> 19,8 km/klst) síðustu 7 daga að deginum í dag meðtöldum; enginn pod eða engin háhraða-gögn sýna „—“, aldrei 0. 95% MD-1 línan er viðmið MicroPulse, ekki úr rannsókn. Rannsókn: Stares 2018 (ástralskur fótbolti: meiðslaáhætta mest þegar langtímaálag var lágt; athugunarrannsókn).",
           },
         ],
       },
@@ -1520,8 +1520,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "How to read it", is: "Hvernig á að lesa hana" },
         body: [
           {
-            en: "The top-left box, “Decoupled”, is the most telling: the player isn't running more than usual but it feels much harder — an early fatigue signal.",
-            is: "Reiturinn efst til vinstri, „Decoupled“, er sá áhugaverðasti: leikmaðurinn hleypur ekki meira en venjulega en finnst það mun erfiðara — snemmbúið þreytumerki.",
+            en: "The top-left box, “Decoupled”, is the most telling: the player isn't running more than usual but it feels much harder — a possible early sign of fatigue (Halson 2014).",
+            is: "Reiturinn efst til vinstri, „Decoupled“, er sá áhugaverðasti: leikmaðurinn hleypur ekki meira en venjulega en finnst það mun erfiðara — mögulegt snemmbúið merki um þreytu (Halson 2014).",
           },
           {
             en: "The dividing lines sit at the squad median, so a player's position is always relative to the day — not a fixed threshold.",
@@ -1537,8 +1537,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Opnaðu hana þegar tölurnar líta eðlilega út en einhver „finnst“ þreyttur — decoupled-reiturinn sést oft áður en nokkur GPS-tala víkur frá venju.",
           },
           {
-            en: "The research behind it: Gabbett (2017) — external versus internal load.",
-            is: "Rannsóknin á bak við hana: Gabbett (2017) — ytra á móti innra álagi.",
+            en: "The research behind it: Gabbett 2016 (internal and external load, read together); Halson 2014 (a gap between the two may reveal fatigue).",
+            is: "Rannsóknirnar á bak við hana: Gabbett 2016 (innra og ytra álag lesið saman); Halson 2014 (misræmi milli þeirra getur bent til þreytu).",
           },
         ],
       },
@@ -1566,8 +1566,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Why indoor numbers look different", is: "Af hverju líta innanhússtölur öðruvísi út" },
         body: [
           {
-            en: "Indoors, distance, high-speed running, sprints, top speed and metabolic power become unreliable (Brown 2016), so they are dropped. Load comes from IMU only: FMP stride bands, player load and deceleration. The score is compared to the player's own indoor baseline (100 = average), not to outdoor sessions or the squad. This is not a hidden detail — the honesty box sits at the top of the page. Requires Pro.",
-            is: "Innanhúss verða vegalengd, háhraðahlaup, spretti, hámarkshraði og metabolic power óáreiðanleg (Brown 2016), svo þeim er sleppt. Álagið kemur eingöngu úr IMU: FMP stride-bönd, player load og hemlun. Skorið er borið saman við eigin innanhúss-grunnlínu leikmannsins (100 = meðaltal), ekki við útiæfingar eða hópinn. Þetta er ekki falið smáatriði — heiðarleikareiturinn stendur efst á síðunni. Krefst Pro.",
+            en: "Indoors GPS has no reliable signal, so distance, high-speed running, sprints, top speed and metabolic power are dropped (Brown 2016 also found GPS metabolic power underestimates field-sport movement even outdoors). Load comes from IMU only: FMP stride bands, player load and deceleration. The score is compared to the player's own indoor baseline (100 = average), not to outdoor sessions or the squad. This is not a hidden detail — the honesty box sits at the top of the page. Requires Pro.",
+            is: "Innanhúss nær GPS ekki áreiðanlegu merki, svo vegalengd, háhraðahlaupi, sprettum, hámarkshraða og metabolic power er sleppt (Brown 2016 sýndi líka að GPS-metabolic power vanmat orkunotkun í hreyfingum íþróttaleikja jafnvel utandyra). Álagið kemur eingöngu úr IMU: FMP stride-bönd, player load og hemlun. Skorið er borið saman við eigin innanhúss-grunnlínu leikmannsins (100 = meðaltal), ekki við útiæfingar eða hópinn. Þetta er ekki falið smáatriði — heiðarleikareiturinn stendur efst á síðunni. Krefst Pro.",
           },
         ],
       },
@@ -1617,8 +1617,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   "decel-intelligence": {
     title: { en: "How to use Decel Intelligence", is: "Hvernig á að nota Decel Intelligence" },
     intro: {
-      en: "This page is really two engines under one roof. The top — Stride Intelligence (IMA Free Running) — is a biomechanical view of the run: cadence, stride length in long continuous runs, asymmetry and sprint exposure (from GPS). The lower half — Decel Intelligence proper (McBurnie 2022) — scores the cost of braking and cutting, which predicts knee and quad load better than running distance. Player Load ACWR sits between them.",
-      is: "Þessi síða er í raun tvær vélar undir sama þaki. Efri hlutinn — Stride Intelligence (IMA Free Running) — er líffræðileg sýn á hlaupið: skreftíðni, skreflengd í löngum hlaupum, ósamhverfa og sprettálag (úr GPS). Neðri hlutinn — Decel Intelligence sjálf (McBurnie 2022) — metur kostnaðinn við að hemla og snúa, sem spáir betur fyrir um álag á hné og framanlæri en hlaupavegalengd. Player Load ACWR situr á milli þeirra.",
+      en: "This page is really two engines under one roof. The top — Stride Intelligence (IMA Free Running) — is a biomechanical view of the run: cadence, stride length in long continuous runs, asymmetry and sprint exposure (from GPS). The lower half — Decel Intelligence proper (MicroPulse's module, built on McBurnie 2022) — scores the cost of braking and cutting, which running distance does not show: hard braking puts high load on the quads and may raise knee (ACL) load. Player Load ACWR sits between them.",
+      is: "Þessi síða er í raun tvær vélar undir sama þaki. Efri hlutinn — Stride Intelligence (IMA Free Running) — er líffræðileg sýn á hlaupið: skreftíðni, skreflengd í löngum hlaupum, ósamhverfa og sprettálag (úr GPS). Neðri hlutinn — Decel Intelligence sjálf (eining MicroPulse, byggð á McBurnie 2022) — metur kostnaðinn við að hemla og snúa, sem hlaupavegalengd sýnir ekki: hörð hemlun leggur mikið álag á framanlæri og gæti aukið álag á krossband. Player Load ACWR situr á milli þeirra.",
     },
     videoEmbedUrl: DECEL_VIDEO,
     sections: [
@@ -1632,7 +1632,7 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         ],
       },
       {
-        heading: { en: "Why a hard decel is a high-cost event (Sideris & Buchheit 2026)", is: "Af hverju hörð hemlun er dýr (Sideris & Buchheit 2026)" },
+        heading: { en: "Why a hard decel is a high-cost event (Sideris et al. 2026)", is: "Af hverju hörð hemlun er dýr (Sideris et al. 2026)" },
         body: [
           {
             en: "A maximal deceleration isn't one brake — it's spread across several foot contacts. The final plant removes the most speed, but the earlier, faster contacts absorb the most energy and carry the highest braking power (energy scales with speed²). The joint doing the work also shifts: the early contacts are knee-dominant, the final plant hip-dominant, the ankle small throughout. That's the mechanistic 'why' behind the braking-load score — and why re-introducing maximal decelerations late in a return-to-training block is a progressive knee-then-hip loading step. (Lab study, n=4 — mechanism only; the pods measure whole-event decel magnitude, not contact-level joint work, so this is context, never a per-player number or injury claim.)",
@@ -1662,17 +1662,17 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Sprint exposure & Player Load ACWR", is: "Sprettálag & Player Load ACWR" },
         body: [
           {
-            en: "Sprint exposure compares the week's GPS sprint metres and sprint efforts in training to his match-day average — roughly 100% means the week is on par with match demand. It needs GPS, so indoor or no-GPS days show “no sprint reading” rather than a guess. Malone 2017: low sprint exposure leaves a player under-prepared, moderate is protective, and the strongest signal is a rapid rise, not the height itself. Player Load ACWR is acute (7-day) over chronic (28-day) load; 0.8–1.3 is steady, over 1.5 is a spike. The card labels it itself: a reference, not a predictor (contested since Impellizzeri 2020).",
-            is: "Sprettálag ber GPS-sprettmetra og sprettátök vikunnar á æfingum saman við leikdagsmeðaltal hans — um 100% þýðir að vikan er á pari við leikkröfu. Það krefst GPS, svo innanhúss- eða GPS-lausir dagar sýna „enginn sprettlestur“ í stað ágiskunar. Malone 2017: lágt sprettálag skilur leikmann eftir vanbúinn, hóflegt er verndandi, og sterkasta merkið er hröð aukning, ekki hæðin sjálf. Player Load ACWR er bráðaálag (7 daga) deilt með langtímaálagi (28 daga); 0,8–1,3 er stöðugt, yfir 1,5 er toppur. Kortið merkir það sjálft: viðmið, ekki forspá (umdeilt frá Impellizzeri 2020).",
+            en: "Sprint exposure compares the week's GPS sprint metres and sprint efforts in training to his match-day average — roughly 100% means the week is on par with match demand. It needs GPS, so indoor or no-GPS days show “no sprint reading” rather than a guess. Malone 2018 (observational, one soccer squad): moderate weekly sprint distance went with fewer leg injuries than too little, and large week-to-week jumps went with more. Player Load ACWR is acute (7-day) over chronic (28-day) load; 0.8–1.3 is steady, over 1.5 is a spike. The card labels it itself: a reference, not a predictor (contested since Impellizzeri 2020).",
+            is: "Sprettálag ber GPS-sprettmetra og sprettátök vikunnar á æfingum saman við leikdagsmeðaltal hans — um 100% þýðir að vikan er á pari við leikkröfu. Það krefst GPS, svo innanhúss- eða GPS-lausir dagar sýna „enginn sprettlestur“ í stað ágiskunar. Malone 2018 (athugunarrannsókn, einn knattspyrnuhópur): hóflegri vikulegri sprett-vegalengd fylgdu færri fótameiðsli en of lítilli, og stór stökk milli vikna fylgdu fleiri. Player Load ACWR er bráðaálag (7 daga) deilt með langtímaálagi (28 daga); 0,8–1,3 er stöðugt, yfir 1,5 er toppur. Kortið merkir það sjálft: viðmið, ekki forspá (umdeilt frá Impellizzeri 2020).",
           },
         ],
       },
       {
-        heading: { en: "The six decel dimensions (McBurnie 2022)", is: "Decel-víddirnar sex (McBurnie 2022)" },
+        heading: { en: "The six decel dimensions (MicroPulse's split, built on McBurnie 2022)", is: "Decel-víddirnar sex (skipting MicroPulse, byggð á McBurnie 2022)" },
         body: [
           {
-            en: "Each has its own threshold, shown on screen. Overload — 28-day braking count vs baseline (red if over 1.5× expected). Underload — 7-day braking vs match demand (red under 50%: under-prepared). Decel:Accel coupling — braking-to-accelerating balance (healthy 0.8–1.2). Decel:Sprint coupling — the primary risk metric, braking vs strides in the longest continuous runs (≥24 s — run length, not speed) on a 1–10 STEN scale (red ≤ 2.5, watch ≤ 3.5). Exposure concentration — share of load on the single heaviest day (red over 30%). Sharp cut load — 7- vs 28-day count of sharp 70–90° cuts, which produce the highest knee load (Dos'Santos 2021).",
-            is: "Hver hefur sinn eigin þröskuld, sýnilegan á skjánum. Overload — 28-daga hemlunarfjöldi á móti grunnlínu (rautt ef yfir 1,5× vænt). Underload — 7-daga hemlun á móti leikkröfu (rautt undir 50%: vanbúinn). Decel:Accel coupling — jafnvægi hemlunar og hröðunar (heilbrigt 0,8–1,2). Decel:Sprint coupling — aðal-áhættumælikvarðinn, hemlun á móti skrefum í lengstu samfelldu hlaupunum (≥24 sek — lengd hlaups, ekki hraði) á 1–10 STEN kvarða (rautt ≤ 2,5, fylgjast með ≤ 3,5). Exposure concentration — hlutfall álags á þyngsta einstaka daginn (rautt yfir 30%). Sharp cut load — 7- á móti 28-daga fjölda snarpra 70–90° skurða, sem framleiða hæsta hnéálagið (Dos'Santos 2021).",
+            en: "Each has its own threshold (MicroPulse's lines, not from a paper), shown on screen. Overload — 28-day braking count vs baseline (red if over 1.5× expected). Underload — 7-day braking vs match demand (red under 50%: under-prepared). Decel:Accel coupling — braking-to-accelerating balance (healthy 0.8–1.2). Decel:Sprint coupling — MicroPulse's main risk read, braking vs strides in the longest continuous runs (≥24 s — run length, not speed) on a 1–10 STEN scale (red ≤ 2.5, watch ≤ 3.5). Exposure concentration — share of load on the single heaviest day (red over 30%). Sharp cut load — 7- vs 28-day count of sharp 70–90° cuts, where, in a lab study, the 90° cut gave the highest knee loads (Dos'Santos 2021b).",
+            is: "Hver hefur sinn eigin þröskuld (línur MicroPulse, ekki úr rannsókn), sýnilegan á skjánum. Overload — 28-daga hemlunarfjöldi á móti grunnlínu (rautt ef yfir 1,5× vænt). Underload — 7-daga hemlun á móti leikkröfu (rautt undir 50%: vanbúinn). Decel:Accel coupling — jafnvægi hemlunar og hröðunar (heilbrigt 0,8–1,2). Decel:Sprint coupling — helsti áhættulestur MicroPulse, hemlun á móti skrefum í lengstu samfelldu hlaupunum (≥24 sek — lengd hlaups, ekki hraði) á 1–10 STEN kvarða (rautt ≤ 2,5, fylgjast með ≤ 3,5). Exposure concentration — hlutfall álags á þyngsta einstaka daginn (rautt yfir 30%). Sharp cut load — 7- á móti 28-daga fjölda snarpra 70–90° skurða, þar sem 90° snúningur gaf mesta hnéálagið í tilraunastofurannsókn (Dos'Santos 2021b).",
           },
         ],
       },
@@ -1915,8 +1915,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Confidence, and Details", is: "Áreiðanleiki, og Nánar" },
         body: [
           {
-            en: "A “low conf · N” tag means the norm still rests on only N of his own matches or big sessions — under 8, it's part squad, so read it as a direction until it settles. Open “Details” for the S&C layer: the exact method (distance ÷ strides in long continuous runs of 18 s or more, from IMA free-running run length — not speed), the flag threshold in metres for his kind of session, how mature the norm is, and the citations (Girard, Micallef & Millet 2011; Morin et al. 2011). The verdict is on top; the maths only appears when you ask for it.",
-            is: "„lítið öryggi · N“ merki þýðir að normið hvílir enn á aðeins N af hans eigin leikjum eða stórum æfingum — undir 8 er það að hluta úr hópnum, svo lestu það sem stefnu þar til það sest. Opnaðu „Nánar“ fyrir S&C-lagið: nákvæmu aðferðina (vegalengd ÷ skref í löngum samfelldum hlaupum, 18 sek eða lengri, eftir lengd hlaups í IMA — ekki hraða), flagg-þröskuldinn í metrum fyrir hans tegund æfingar, hversu þroskað normið er, og heimildirnar (Girard, Micallef & Millet 2011; Morin o.fl. 2011). Dómurinn er efst; reikningurinn birtist aðeins þegar þú biður um hann.",
+            en: "A “low conf · N” tag means the norm still rests on only N of his own matches or big sessions — under 8, it's part squad, so read it as a direction until it settles. Open “Details” for the S&C layer: the exact method (distance ÷ strides in long continuous runs of 18 s or more, from IMA free-running run length — not speed), the flag threshold in metres for his kind of session, how mature the norm is, and the citations (Girard et al. 2011; Morin et al. 2011 — sprint studies, not long runs). The verdict is on top; the maths only appears when you ask for it.",
+            is: "„lítið öryggi · N“ merki þýðir að normið hvílir enn á aðeins N af hans eigin leikjum eða stórum æfingum — undir 8 er það að hluta úr hópnum, svo lestu það sem stefnu þar til það sest. Opnaðu „Nánar“ fyrir S&C-lagið: nákvæmu aðferðina (vegalengd ÷ skref í löngum samfelldum hlaupum, 18 sek eða lengri, eftir lengd hlaups í IMA — ekki hraða), flagg-þröskuldinn í metrum fyrir hans tegund æfingar, hversu þroskað normið er, og heimildirnar (Girard et al. 2011; Morin o.fl. 2011 — sprettrannsóknir, ekki löng hlaup). Dómurinn er efst; reikningurinn birtist aðeins þegar þú biður um hann.",
           },
         ],
       },
@@ -2136,8 +2136,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "The recovery timeline", is: "Endurheimtar-tímalínan" },
         body: [
           {
-            en: "The whole page rests on a known timeline: fatigue peaks the day after a match (MD+1) and should clear within two to three days (Nédélec 2012). So the page tracks each player across MD+1, MD+2 and MD+3 and asks: has he cleared on schedule, or is he still carrying it?",
-            is: "Öll síðan hvílir á þekktri tímalínu: þreytan nær hámarki daginn eftir leik (MD+1) og á að hverfa innan tveggja til þriggja daga (Nédélec 2012). Síðan fylgir því hverjum leikmanni yfir MD+1, MD+2 og MD+3 og spyr: hreinsaðist hann á áætlun, eða ber hann leikinn enn?",
+            en: "The whole page rests on a known timeline: fatigue is high the day after a match (MD+1) and eases over the following days, but full recovery can take more than three days (Nédélec 2012). So the page tracks each player across MD+1, MD+2 and MD+3 and asks: has he bounced back by MicroPulse's check-days, or is he still carrying it?",
+            is: "Öll síðan hvílir á þekktri tímalínu: þreytan er mikil daginn eftir leik (MD+1) og minnkar næstu daga, en full endurheimt getur tekið meira en þrjá daga (Nédélec 2012). Síðan fylgir því hverjum leikmanni yfir MD+1, MD+2 og MD+3 og spyr: náði hann sér fyrir eftirlitsdaga MicroPulse, eða ber hann leikinn enn?",
           },
         ],
       },
@@ -2149,8 +2149,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Fyrir hvern leikmann, hvern dag, eru tveir lestrar. Litaði punkturinn er huglægur — hvernig honum líður, út frá svefni, hörku og orku, borið saman við hans eigin venju. Prósentan fyrir neðan er hlutlæg — CMJ-stökkpróf á móti hans grunnlínu, taugavöðva-sannleikurinn. Líðan að ofan, stökk að neðan.",
           },
           {
-            en: "Both are shown because a player can self-report green yet have a depressed jump — subjective feel recovers before the neuromuscular system does. When the dot says fine but the jump is still down, believe the jump: that gap is a player who thinks he's ready but isn't, and on Gathercole 2015 it is the single most useful signal on the page.",
-            is: "Báðir eru sýndir því leikmaður getur skráð sig grænan en samt verið með lækkað stökk — huglæg líðan jafnar sig á undan taugavöðvakerfinu. Þegar punkturinn segir í lagi en stökkið er enn niðri, trúðu stökkinu: það bil er leikmaður sem heldur að hann sé klár en er það ekki, og samkvæmt Gathercole 2015 er það gagnlegasta merkið á síðunni.",
+            en: "Both are shown because a player can self-report green yet have a depressed jump — the jump measures neuromuscular fatigue directly, which a wellness score does not. When the dot says fine but the jump is still down, believe the jump: that gap is a player who thinks he's ready but may not be. Gathercole 2015 shows the jump can detect this fatigue; treating the gap as the key signal is MicroPulse's read.",
+            is: "Báðir eru sýndir því leikmaður getur skráð sig grænan en samt verið með lækkað stökk — stökkið mælir taugavöðvaþreytu beint, sem líðanarskor gerir ekki. Þegar punkturinn segir í lagi en stökkið er enn niðri, trúðu stökkinu: það bil er leikmaður sem heldur að hann sé klár en er það kannski ekki. Gathercole 2015 sýnir að stökkið getur greint þessa þreytu; að líta á bilið sem lykilmerkið er mat MicroPulse.",
           },
         ],
       },
@@ -2167,8 +2167,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Heavy echo vs likely not post-match", is: "Heavy echo á móti „líklega ekki eftir leik“" },
         body: [
           {
-            en: "The page tells real match fatigue apart from noise. A heavy echo is high mechanical match load — decel-weighted, because high-intensity decelerations best predict muscle damage (McBurnie 2022) — plus still flagged at MD+2. That's genuine lingering fatigue: ease his plan or extend recovery. Contrast “likely not post-match”: flagged, but with low load or few minutes, so it probably isn't from the game — look elsewhere.",
-            is: "Síðan greinir raunverulega leikþreytu frá suði. „Heavy echo“ er mikið vélrænt leikálag — vegið eftir hemlun, því háákefðar hemlanir spá best fyrir um vöðvaskemmdir (McBurnie 2022) — auk þess að vera enn flaggaður á MD+2. Það er raunveruleg viðvarandi þreyta: léttu planið hans eða lengdu endurheimtina. Berðu það saman við „líklega ekki eftir leik“: flaggaður, en með lágt álag eða fáar mínútur, svo það kemur líklega ekki úr leiknum — leitaðu annars staðar.",
+            en: "The page tells real match fatigue apart from noise. A heavy echo is high mechanical match load — decel-weighted, because high-intensity decelerations have been linked to muscle-damage markers after matches (McBurnie 2022) — plus still flagged at MD+2. That's genuine lingering fatigue: ease his plan or extend recovery. Contrast “likely not post-match”: flagged, but with low load or few minutes, so it probably isn't from the game — look elsewhere.",
+            is: "Síðan greinir raunverulega leikþreytu frá suði. „Heavy echo“ er mikið vélrænt leikálag — vegið eftir hemlun, því háákefðar hemlanir hafa verið tengdar við merki um vöðvaskemmd eftir leiki (McBurnie 2022) — auk þess að vera enn flaggaður á MD+2. Það er raunveruleg viðvarandi þreyta: léttu planið hans eða lengdu endurheimtina. Berðu það saman við „líklega ekki eftir leik“: flaggaður, en með lágt álag eða fáar mínútur, svo það kemur líklega ekki úr leiknum — leitaðu annars staðar.",
           },
         ],
       },
@@ -2226,8 +2226,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Hver æfingadagur er sýndur sem hlutfall af leikkröfu, borinn saman við „desirable band“ — dæmigerða skipulagsform (lágt MD+1 og MD-1, toppur um miðja viku). Þetta er viðmið, ekki regla — aðlagaðu að þínu módeli (Martín-García 2018; Akenhead 2016). Prósentan er heildarrúmmál æfingarinnar sem hlutfall af heilum leik, ekki per-90 (sem blési upp stuttar æfingar).",
           },
           {
-            en: "On MD+1 and MD+2 the day is split in two: players who played a full shift (≥60 min) are recovering (Recovery), while subs and limited players do a compensatory top-up to replace the match stimulus they missed — each against its own band. This is a nuance most systems miss (Anderson 2016b; Hills 2018; Nédélec 2012).",
-            is: "Á MD+1 og MD+2 er dögunum skipt í tvennt: leikmenn sem spiluðu fullan leik (≥60 mín) eru að jafna sig (Recovery), en varamenn og þeir sem spiluðu lítið gera uppbótar-æfingu (Top-up) til að bæta upp leikáreitið sem þeir misstu af — hvor um sig borinn saman við sitt eigið band. Þetta er nákvæmni sem flest kerfi missa af (Anderson 2016b; Hills 2018; Nédélec 2012).",
+            en: "On MD+1 and MD+2 the day is split in two: players who played a full shift (≥60 min, MicroPulse's line) are recovering (Recovery), while subs and limited players do a compensatory top-up to replace the match stimulus they missed — each against its own band. Starters and subs end up with different high-intensity load (Anderson 2016b; Hills 2020; Nédélec 2012).",
+            is: "Á MD+1 og MD+2 er dögunum skipt í tvennt: leikmenn sem spiluðu fullan leik (≥60 mín, viðmið MicroPulse) eru að jafna sig (Recovery), en varamenn og þeir sem spiluðu lítið gera uppbótar-æfingu (Top-up) til að bæta upp leikáreitið sem þeir misstu af — hvor um sig borinn saman við sitt eigið band. Byrjunarliðsmenn og varamenn enda með ólíkt há-ákefðar álag (Anderson 2016b; Hills 2020; Nédélec 2012).",
           },
         ],
       },
@@ -2244,8 +2244,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "“How to develop him” — game model × movement", is: "„How to develop him“ — leikstíll × hreyfing" },
         body: [
           {
-            en: "At the bottom the page gives a development emphasis per player = your game model (High press / Possession / Direct / Low block / Balanced) times how he moves. It prescribes specific work — repeated-sprint, acceleration mechanics, eccentric braking — each with the player's z-score as evidence, a method and a priority (HIGH/MODERATE). Change the game model and the emphasis changes (Taylor 2015; Morin 2016; Harper 2019; McBurnie 2022).",
-            is: "Neðst gefur síðan þróunaráherslu á hvern leikmann = leikstíll félagsins (High press / Possession / Direct / Low block / Balanced) margfaldaður með því hvernig hann hreyfir sig. Hún ávísar tiltekinni vinnu — repeated-sprint, hröðunartækni, eccentric-hemlun — hverri með z-skori leikmannsins sem sönnun, aðferð og forgangi (HIGH/MODERATE). Breyttu leikstílnum og áherslan breytist (Taylor 2015; Morin 2016; Harper 2019; McBurnie 2022).",
+            en: "At the bottom the page gives a development emphasis per player = your game model (High press / Possession / Direct / Low block / Balanced) times how he moves. It prescribes specific work — repeated-sprint, acceleration mechanics, eccentric braking — each with the player's z-score as evidence, a method and a priority (HIGH/MODERATE). Change the game model and the emphasis changes (the game-model weighting is MicroPulse's; the methods: Taylor 2015; Morin 2016; Harper 2019; McBurnie 2022).",
+            is: "Neðst gefur síðan þróunaráherslu á hvern leikmann = leikstíll félagsins (High press / Possession / Direct / Low block / Balanced) margfaldaður með því hvernig hann hreyfir sig. Hún ávísar tiltekinni vinnu — repeated-sprint, hröðunartækni, eccentric-hemlun — hverri með z-skori leikmannsins sem sönnun, aðferð og forgangi (HIGH/MODERATE). Breyttu leikstílnum og áherslan breytist (vægi leikstíls er val MicroPulse; aðferðirnar: Taylor 2015; Morin 2016; Harper 2019; McBurnie 2022).",
           },
           {
             en: "The point of the page: don't under-prepare the body for what the game asks — and when a gap opens, it says who to train harder, on what, and how, in line with how you want to play.",
@@ -2298,8 +2298,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "The per-injury forensics", is: "Réttarrannsóknin á hverri meiðsli" },
         body: [
           {
-            en: "Click an injury and you get a full reconstruction of the 14 days before: yellow/red days, decoupling alerts (Akubat 2014), ACWR (7d/28d), prior injuries (180 days), a VALD ForceDecks snapshot, GPS spikes (Buchheit 2010), match congestion (Lago-Peñas 2010), and McBurnie deceleration intelligence. At the top: when the first warning came (“first warning sign N days before”). Every signal carries its own citation — no guesswork.",
-            is: "Smelltu á meiðsli og þú færð fulla endurgerð 14 daganna á undan: gulir/rauðir dagar, ósamræmisviðvaranir (Akubat 2014), ACWR (7d/28d), fyrri meiðsli (180 daga), VALD ForceDecks mynd, GPS-toppa (Buchheit 2010), leikjaþéttleika (Lago-Peñas 2010), og McBurnie decel-mat. Efst stendur hvenær fyrsta viðvörunin kom („first warning sign N days before“). Hvert merki ber sína heimild — engin ágiskun.",
+            en: "Click an injury and you get a full reconstruction of the 14 days before: yellow/red days, decoupling alerts (Akubat 2014), ACWR (7d/28d), prior injuries (180 days), a VALD ForceDecks snapshot, GPS spikes (Duhig 2016), match congestion (Dupont 2010), and McBurnie deceleration intelligence. At the top: when the first warning came (“first warning sign N days before”). Every signal carries its own citation — no guesswork.",
+            is: "Smelltu á meiðsli og þú færð fulla endurgerð 14 daganna á undan: gulir/rauðir dagar, ósamræmisviðvaranir (Akubat 2014), ACWR (7d/28d), fyrri meiðsli (180 daga), VALD ForceDecks mynd, GPS-toppa (Duhig 2016), leikjaþéttleika (Dupont 2010), og McBurnie decel-mat. Efst stendur hvenær fyrsta viðvörunin kom („first warning sign N days before“). Hvert merki ber sína heimild — engin ágiskun.",
           },
           {
             en: "At the bottom, a day-by-day line over every non-green day in the lead-up, with the score, the z-value and the drivers that produced the flag — e.g. “soreness 2/5”, “energy 2/5”, “acute drop Δz”, “sustained low”, “volatility” (Robertson). So you see exactly how the risk built up before the injury.",
@@ -2321,8 +2321,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   "hsr-intelligence": {
     title: { en: "How to use HSR Intelligence", is: "Hvernig á að nota HSR Intelligence" },
     intro: {
-      en: "This is the Lite-tier hamstring guard — per-player soft-tissue monitoring built on the GPS metrics every Catapult plan exposes (high-speed running, sprint, max velocity). It's the GPS counterpart to Decel Intelligence: published evidence on top-speed exposure (Malone 2017, Buchheit 2023), different inputs. Its job is to make sure each player gets enough high-speed running before a match — because both too much AND too little are hamstring risks.",
-      is: "Þetta er aftanlærisvörnin á Lite-þrepi — persónulegt eftirlit með mjúkvefjaáhættu byggt á GPS-mælunum sem hver Catapult-áskrift skilar (háhraðahlaup, spretti, hámarkshraði). Hún er GPS-hliðstæða Decel Intelligence: ritrýndar rannsóknir á sprettum nærri hámarkshraða (Malone 2017, Buchheit 2023), önnur inntök. Hlutverk hennar er að tryggja að hver leikmaður fái nóg af háhraðahlaupi fyrir leik — því bæði of mikið OG of lítið er aftanlærisáhætta.",
+      en: "This is the Lite-tier hamstring guard — per-player soft-tissue monitoring built on the GPS metrics every Catapult plan exposes (high-speed running, sprint, max velocity). It's the GPS counterpart to Decel Intelligence: published evidence on top-speed exposure (Malone 2017, Buchheit 2023), different inputs. Its job is to make sure each player gets enough high-speed running before a match — because both too much and too little top-speed running went with more injuries in observational studies.",
+      is: "Þetta er aftanlærisvörnin á Lite-þrepi — persónulegt eftirlit með mjúkvefjaáhættu byggt á GPS-mælunum sem hver Catapult-áskrift skilar (háhraðahlaup, spretti, hámarkshraði). Hún er GPS-hliðstæða Decel Intelligence: ritrýndar rannsóknir á sprettum nærri hámarkshraða (Malone 2017, Buchheit 2023), önnur inntök. Hlutverk hennar er að tryggja að hver leikmaður fái nóg af háhraðahlaupi fyrir leik — því bæði of miklu og of litlu hámarkshraðahlaupi fylgdu fleiri meiðsli í athugunarrannsóknum.",
     },
     videoEmbedUrl: HSR_VIDEO,
     sections: [
@@ -2366,8 +2366,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Both directions are the risk", is: "Báðar áttir eru áhætta" },
         body: [
           {
-            en: "Ramping up too fast is a spike risk. But ramping down — or rarely reaching top speed — leaves the hamstring under-prepared for match sprints. In one Gaelic football squad both too little and too much top-speed running went with more injuries (Malone 2017, observational). That's why “load dropped off” is flagged alongside “ramping up fast”: this isn't only overload protection, it's under-exposure protection too.",
-            is: "Að rampa upp of hratt er toppáhætta. En að rampa niður — eða ná sjaldan hámarkshraða — skilur aftanlærið eftir vanbúið fyrir spretti leiks. Í einum hópi í gelískum fótbolta fylgdu bæði of litlum og of miklum sprettum á hámarkshraða fleiri meiðsli (Malone 2017, athugunarrannsókn). Þess vegna er „load dropped off“ flaggað við hliðina á „ramping up fast“: þetta er ekki bara ofálagsvörn heldur líka vörn gegn undir-áreiti.",
+            en: "Ramping up too fast is a spike risk. But ramping down — or rarely reaching top speed — may leave the hamstring under-prepared for match sprints. In one Gaelic football squad both too little and too much top-speed running went with more injuries (Malone 2017, observational). That's why “load dropped off” is flagged alongside “ramping up fast”: this isn't only overload protection, it's under-exposure protection too.",
+            is: "Að rampa upp of hratt er toppáhætta. En að rampa niður — eða ná sjaldan hámarkshraða — getur skilið aftanlærið eftir vanbúið fyrir spretti leiks. Í einum hópi í gelískum fótbolta fylgdu bæði of litlum og of miklum sprettum á hámarkshraða fleiri meiðsli (Malone 2017, athugunarrannsókn). Þess vegna er „load dropped off“ flaggað við hliðina á „ramping up fast“: þetta er ekki bara ofálagsvörn heldur líka vörn gegn undir-áreiti.",
           },
           {
             en: "MaxV is the sprint inoculation. Reaching ≥95% of max velocity regularly is what prepares the hamstring for match sprints. The %MAXV over 28 days and the count of ≥95% sessions show whether he has had that exposure — few such sessions means under-prepared for the game's top end, even if total running looks fine.",
@@ -2513,7 +2513,7 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         ],
       },
       {
-        heading: { en: "Reintroducing max decelerations (Sideris & Buchheit 2026)", is: "Að innleiða hámarks-hemlanir aftur (Sideris & Buchheit 2026)" },
+        heading: { en: "Reintroducing max decelerations (Sideris et al. 2026)", is: "Að innleiða hámarks-hemlanir aftur (Sideris et al. 2026)" },
         body: [
           {
             en: "A maximal deceleration is one of the most mechanically costly actions in the game, and the braking is distributed — the early, faster foot contacts absorb the most energy (knee-dominant) and the final plant is hip-dominant. So a hard brake late in the ladder isn't a single box to tick: treat it as a progressive knee-then-hip loading step, building braking tolerance before full-speed change-of-direction under fatigue. (Lab mechanics, n=4 — a rationale for sequencing the load, not a measured per-player metric or an injury threshold; the physio still clears.)",
@@ -2848,8 +2848,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "B · Reading the shape", is: "B · Að lesa lögunina" },
         body: [
           {
-            en: "The desirable band is a typical periodization shape — lowest on MD+1 and MD-1 (recovery and taper), peaking on MD-4 and falling toward the match (MD-3 a step below). It's a reference, not a rule: adjust it to your own model (Martin-García 2018; Akenhead 2016). A bar sitting in its band means the week is shaped as intended; well above or below is where you look.",
-            is: "Æskilega bilið er dæmigert vikuskipulag — lægst á MD+1 og MD-1 (endurheimt og lækkun), hámark á MD-4 og lækkar svo nær leik (MD-3 skrefi neðar). Það er viðmið, ekki regla: aðlagaðu að þínu módeli (Martin-García 2018; Akenhead 2016). Súla í sínu bandi þýðir að vikan er löguð eins og til stóð; vel yfir eða undir er þar sem þú horfir.",
+            en: "The desirable band is a typical periodization shape — lowest on MD+1 and MD-1 (recovery and taper), peaking on MD-4 and falling toward the match (MD-3 a step below). It's a reference, not a rule: adjust it to your own model (Martín-García 2018; Akenhead 2016). A bar sitting in its band means the week is shaped as intended; well above or below is where you look.",
+            is: "Æskilega bilið er dæmigert vikuskipulag — lægst á MD+1 og MD-1 (endurheimt og lækkun), hámark á MD-4 og lækkar svo nær leik (MD-3 skrefi neðar). Það er viðmið, ekki regla: aðlagaðu að þínu módeli (Martín-García 2018; Akenhead 2016). Súla í sínu bandi þýðir að vikan er löguð eins og til stóð; vel yfir eða undir er þar sem þú horfir.",
           },
         ],
       },
@@ -2857,8 +2857,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "C · The MD+1 / MD+2 split", is: "C · MD+1 / MD+2 skiptingin" },
         body: [
           {
-            en: "MD+1 and MD+2 are split in two, because the day after a match means different things to different players. Players who played a full shift (≥60 min) are recovering — a low day is correct. Everyone else (subs, limited or no minutes) does a compensatory 'top-up' to replace the match stimulus they missed — a higher day is correct. Each half is judged against its own desirable band (Anderson 2016b; Hills 2018; Nédélec 2012).",
-            is: "MD+1 og MD+2 eru skipt í tvennt, því dagurinn eftir leik þýðir ólíka hluti fyrir ólíka leikmenn. Leikmenn sem spiluðu fullan skammt (≥60 mín) eru í endurheimt — lágur dagur er réttur. Allir aðrir (varamenn, takmarkaðar eða engar mínútur) gera „top-up“ til að bæta upp leik-áreitið sem þá vantaði — hærri dagur er réttur. Hvor helmingur er metinn gegn sínu eigin æskilega bili (Anderson 2016b; Hills 2018; Nédélec 2012).",
+            en: "MD+1 and MD+2 are split in two, because the day after a match means different things to different players. Players who played a full shift (≥60 min, MicroPulse's line) are recovering — a low day is correct. Everyone else (subs, limited or no minutes) does a compensatory 'top-up' to replace the match stimulus they missed — a higher day is correct. Each half is judged against its own desirable band (Anderson 2016b; Hills 2020; Nédélec 2012).",
+            is: "MD+1 og MD+2 eru skipt í tvennt, því dagurinn eftir leik þýðir ólíka hluti fyrir ólíka leikmenn. Leikmenn sem spiluðu fullan skammt (≥60 mín, viðmið MicroPulse) eru í endurheimt — lágur dagur er réttur. Allir aðrir (varamenn, takmarkaðar eða engar mínútur) gera „top-up“ til að bæta upp leik-áreitið sem þá vantaði — hærri dagur er réttur. Hvor helmingur er metinn gegn sínu eigin æskilega bili (Anderson 2016b; Hills 2020; Nédélec 2012).",
           },
         ],
       },
@@ -2911,8 +2911,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "C · STEN and the fatigue markers", is: "C · STEN og þreytu-merkin" },
         body: [
           {
-            en: "STEN is a standardised 1–10 score against HIS own baseline — not the squad's. 5–6 is usual; higher = fresher than normal; lower = more fatigued. That's how you compare a player to himself, fairly (personal-norm, Robertson 2017).",
-            is: "STEN er stöðluð einkunn 1–10 borin saman við HANS eigin grunnlínu — ekki liðsins. 5–6 er venjulegt; hærra = ferskari en vanalega; lægra = þreyttari. Þannig berðu leikmann saman við sjálfan sig, sanngjarnt (persónulegt norm, Robertson 2017).",
+            en: "STEN is a standardised 1–10 score against HIS own baseline — not the squad's. 5–6 is usual; higher = fresher than normal; lower = more fatigued. That's how you compare a player to himself, fairly (personal norm, Rebelo 2026).",
+            is: "STEN er stöðluð einkunn 1–10 borin saman við HANS eigin grunnlínu — ekki liðsins. 5–6 er venjulegt; hærra = ferskari en vanalega; lægra = þreyttari. Þannig berðu leikmann saman við sjálfan sig, sanngjarnt (persónulegt norm, Rebelo 2026).",
           },
           {
             en: "RECOVERY / REDUCED counts the days the system recommended easing the load. Several of them — especially with falling readiness — is the pattern that can point to accumulating fatigue — more telling than any single bad day (Gabbett 2016, Buchheit 2014, Saw 2016). And three trend lines put subjective next to objective: readiness (0–25), STEN (1–10 with the 5–6 baseline marked), and total running distance (Catapult) per session — how he feels beside what he actually did.",
@@ -2964,8 +2964,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Eitt skor 0–100 — stærra þýðir meiri dag-frá-degi hreyfing — í þremur böndum. Stöðugt (0–32): stöðugt nýlegt snið, auðvelt að skipuleggja, engin aðgerð. Miðlungs (33–65): nokkur skammtíma-sveifla — fylgstu með í dag, engin þörf á að draga úr án fleiri merkja. Há (66–100): áberandi dag-frá-degi breytileiki — þess virði að taka spjall áður en þú hleður þungt; athuga svefn, streitu, harðsperrur.",
           },
           {
-            en: "How it's computed: for each signal, the change from day to day over the last week of check-ins, each signal on its own scale (so a small check-in wobble and a small sleep wobble count the same), averaged into one number. The jargon — Z-score, ΔZ, normalisation (personal-norm, Robertson 2017) — lives behind the compute toggle.",
-            is: "Hvernig reiknað: fyrir hvert merki, breytingin milli daga yfir síðustu vikuna af innskráningum, hvert merki á eigin kvarða (svo lítil innskráningar-sveifla og lítil svefn-sveifla vega jafnt), og meðaltal í eina tölu. Fagmálið — Z-skor, ΔZ, normun (persónulegt norm, Robertson 2017) — er á bak við compute-rofann.",
+            en: "How it's computed: for each signal, the change from day to day over the last week of check-ins, each signal on its own scale (so a small check-in wobble and a small sleep wobble count the same), averaged into one number. The jargon — Z-score, ΔZ, normalisation (personal norm, Rebelo 2026) — lives behind the compute toggle.",
+            is: "Hvernig reiknað: fyrir hvert merki, breytingin milli daga yfir síðustu vikuna af innskráningum, hvert merki á eigin kvarða (svo lítil innskráningar-sveifla og lítil svefn-sveifla vega jafnt), og meðaltal í eina tölu. Fagmálið — Z-skor, ΔZ, normun (persónulegt norm, Rebelo 2026) — er á bak við compute-rofann.",
           },
         ],
       },
@@ -3039,8 +3039,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Hvert benchmark sýnir viðmiðið (regluna) við hliðina á mælingunni, svo liturinn er aldrei ráðgáta. Bilateral jump height (CMJ) er hámarks stökkhæð í tvífætta stökkinu — grunnmælikvarði á sprengikraft neðri líkama; yfir 40 cm stenst viðmiðið. CMJ limb asymmetry er munurinn á vinstri/hægri (|L−R|/meðaltal); yfir ~10% er fylgst með — algeng viðmiðunarlína, ekki prófuð mörk (Parkinson 2021); skýr tengsl við meiðsli hafa ekki sýnt sig (Helme 2021).",
           },
           {
-            en: "The CMJ card opens into detail — jump height, RSI-modified (reactive strength: how fast the landing becomes take-off), peak power and asymmetry; the CMJ is the most validated single test for neuromuscular fatigue (Claudino 2017). Change-of-Direction (14d) counts the hard cuts each side over 14 days and the gap; MicroPulse flags the high-intensity asymmetry (not tested against injury; Helme 2021) — medium/low is usually just a positional habit. Pending tests (e.g. IMTP) show dashes, not zeros; when they arrive they raise confidence in the verdict.",
-            is: "CMJ-kortið opnast í smáatriði — stökkhæð, RSI-modified (viðbragðskraftur: hversu hratt lending verður að fráspyrnu), hámarksafl og ósamhverfa; CMJ er mest staðfesta stakprófið fyrir tauga-vöðva þreytu (Claudino 2017). Change-of-Direction (14d) telur hörðu stefnubreytingarnar hvoru megin síðustu 14 daga og bilið; MicroPulse flaggar há-ákefðar ósamhverfuna (ekki prófað gegn meiðslum; Helme 2021) — miðlungs/lág er oftast bara stöðuvani. Bið-próf (t.d. IMTP) birtast með strikum, ekki núllum; þegar þau koma hækka þau öryggi niðurstöðunnar.",
+            en: "The CMJ card opens into detail — jump height, RSI-modified (reactive strength: how fast the landing becomes take-off), peak power and asymmetry; the CMJ is widely used to monitor neuromuscular fatigue (Claudino 2017). Change-of-Direction (14d) counts the hard cuts each side over 14 days and the gap; MicroPulse flags the high-intensity asymmetry (not tested against injury; Helme 2021) — medium/low is usually just a positional habit. Pending tests (e.g. IMTP) show dashes, not zeros; when they arrive they raise confidence in the verdict.",
+            is: "CMJ-kortið opnast í smáatriði — stökkhæð, RSI-modified (viðbragðskraftur: hversu hratt lending verður að fráspyrnu), hámarksafl og ósamhverfa; CMJ er mikið notað til að fylgjast með tauga-vöðva þreytu (Claudino 2017). Change-of-Direction (14d) telur hörðu stefnubreytingarnar hvoru megin síðustu 14 daga og bilið; MicroPulse flaggar há-ákefðar ósamhverfuna (ekki prófað gegn meiðslum; Helme 2021) — miðlungs/lág er oftast bara stöðuvani. Bið-próf (t.d. IMTP) birtast með strikum, ekki núllum; þegar þau koma hækka þau öryggi niðurstöðunnar.",
           },
         ],
       },
@@ -3237,8 +3237,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Recent load is advice, never a gate", is: "Nýlegt álag er ráðgjöf, aldrei hlið" },
         body: [
           {
-            en: "A card can carry a \"manage load\" note when the player has two or more matches in the last seven days (congestion — Dupont 2010, Carling 2015) or his load has spiked well above his own recent norm (ACWR — Gabbett 2016, read as an unfamiliar spike, not a risk score; its link to injury is disputed, Impellizzeri 2020). That note is a flag for your eye; it never moves him between columns on its own. Availability and state decide the column — load only adds a caution.",
-            is: "Spjald getur borið „stýra álagi“ nótu þegar leikmaður á tvo eða fleiri leiki síðustu sjö daga (þéttleiki — Dupont 2010, Carling 2015) eða álagið hans hefur rokið langt yfir hans eigin nýlegu venju (ACWR — Gabbett 2016, lesið sem óvanalegt stökk, ekki áhættutala; tengsl við meiðsli eru umdeild, Impellizzeri 2020). Sú nóta er ábending fyrir augað þitt; hún færir hann aldrei milli dálka ein og sér. Aðgengi og ástand ráða dálkinum — álag bætir aðeins við varúð.",
+            en: "A card can carry a \"manage load\" note when the player has two or more matches in the last seven days (congestion — Dupont 2010, Carling 2016) or his load has spiked well above his own recent norm (ACWR — Gabbett 2016, read as an unfamiliar spike, not a risk score; its link to injury is disputed, Impellizzeri 2020). That note is a flag for your eye; it never moves him between columns on its own. Availability and state decide the column — load only adds a caution.",
+            is: "Spjald getur borið „stýra álagi“ nótu þegar leikmaður á tvo eða fleiri leiki síðustu sjö daga (þéttleiki — Dupont 2010, Carling 2016) eða álagið hans hefur rokið langt yfir hans eigin nýlegu venju (ACWR — Gabbett 2016, lesið sem óvanalegt stökk, ekki áhættutala; tengsl við meiðsli eru umdeild, Impellizzeri 2020). Sú nóta er ábending fyrir augað þitt; hún færir hann aldrei milli dálka ein og sér. Aðgengi og ástand ráða dálkinum — álag bætir aðeins við varúð.",
           },
         ],
       },
@@ -3274,8 +3274,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Why the same number means different things", is: "Af hverju sama talan þýðir ólíka hluti" },
         body: [
           {
-            en: "Output and physical state are coupled (Modric 2019; high-intensity efforts co-occur with the technical/tactical actions). And output is conditioned by context — opponent level and home/away shape the demands (microcycle contextual variables). So a dip on his green, home matches is a real skill/form signal; a dip that lands only on his amber-red or away-to-top matches is the state and the schedule talking, and a strong number produced while compromised is genuinely excellent. The panel separates the two by comparing his clean matches (green, not away-to-a-top-side) against his own season norm — that comparison is the counterfactual it shows you.",
-            is: "Úttak og líkamlegt ástand eru tengd (Modric 2019; há-ákafa átök fylgja tæknilegu/taktísku aðgerðunum). Og úttak ræðst af samhengi — stig andstæðings og heima/úti móta kröfurnar (örhringrásar-samhengisbreytur). Svo dýfa í grænum heimaleikjum er raunverulegt kunnáttu-/form-merki; dýfa sem lendir aðeins í gulum-rauðum eða úti-gegn-toppi leikjum er ástandið og leikjaprógrammið að tala, og sterk tala framleidd þrátt fyrir skert ástand er raunverulega frábær. Glugginn aðskilur tvennt með því að bera hreina leiki hans (grænn, ekki úti gegn toppliði) saman við hans eigin tímabils-venju — sá samanburður er hvað-ef sem hann sýnir þér.",
+            en: "Match output and running go together (Modric 2019: in one Croatian league, some running measures went with match ratings, differently by position); that his physical state shapes his output is the panel's premise. And output is conditioned by context — opponent level and home/away shape the demands (microcycle contextual variables). So a dip on his green, home matches is a real skill/form signal; a dip that lands only on his amber-red or away-to-top matches is the state and the schedule talking, and a strong number produced while compromised is genuinely excellent. The panel separates the two by comparing his clean matches (green, not away-to-a-top-side) against his own season norm — that comparison is the counterfactual it shows you.",
+            is: "Úttak í leik og hlaup fara saman (Modric 2019: í einni króatískri deild fylgdu sum hlaupagildi leikeinkunn, ólíkt eftir stöðum); að líkamlegt ástand móti úttakið er grunnforsenda gluggans. Og úttak ræðst af samhengi — stig andstæðings og heima/úti móta kröfurnar (örhringrásar-samhengisbreytur). Svo dýfa í grænum heimaleikjum er raunverulegt kunnáttu-/form-merki; dýfa sem lendir aðeins í gulum-rauðum eða úti-gegn-toppi leikjum er ástandið og leikjaprógrammið að tala, og sterk tala framleidd þrátt fyrir skert ástand er raunverulega frábær. Glugginn aðskilur tvennt með því að bera hreina leiki hans (grænn, ekki úti gegn toppliði) saman við hans eigin tímabils-venju — sá samanburður er hvað-ef sem hann sýnir þér.",
           },
         ],
       },
@@ -3311,8 +3311,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "How the fit is built — four layers", is: "Hvernig hæfnin er byggð — fjögur lög" },
         body: [
           {
-            en: "Layer 1, role demand: his position sets which movement qualities matter most — a forward is weighted to sprint and his D′ reserve, a full-back to braking and repeatable engine (Modric 2019). Layer 2, opponent: a low block taxes sustained engine and creation, a high press taxes braking and short-burst reserve. Layer 3, capacity: his own GPS/VALD qualities, ranked as a percentile within his position group. Layer 4, readiness: the canonical morning colour. The fit weights his capacity by the role×opponent demand, then gates it by readiness — the verdict is the worse of the two.",
-            is: "Lag 1, kröfa stöðu: staðan hans ræður hvaða hreyfigæði skipta mestu — framherji er veginn á spretti og D′ forða, bakvörður á hemlun og endurtekna vél (Modric 2019). Lag 2, andstæðingur: lág vörn reynir á viðvarandi vél og sköpun, há pressa á hemlun og skammtíma-forða. Lag 3, geta: hans eigin GPS/VALD gæði, röðuð sem hundraðsröð innan stöðuhóps hans. Lag 4, readiness: canonical morgunliturinn. Hæfnin vegur getu hans eftir kröfu stöðu×andstæðings og hliðar hana svo með readiness — niðurstaðan er sú lakari af tvennu.",
+            en: "Layer 1, role demand: his position sets which movement qualities matter most — a forward is weighted to sprint and his D′ reserve, a full-back to braking and repeatable engine (MicroPulse's weights; in Modric 2019 forwards' sprint distance went with better match ratings). Layer 2, opponent: a low block taxes sustained engine and creation, a high press taxes braking and short-burst reserve. Layer 3, capacity: his own GPS/VALD qualities, ranked as a percentile within his position group. Layer 4, readiness: the canonical morning colour. The fit weights his capacity by the role×opponent demand, then gates it by readiness — the verdict is the worse of the two.",
+            is: "Lag 1, kröfa stöðu: staðan hans ræður hvaða hreyfigæði skipta mestu — framherji er veginn á spretti og D′ forða, bakvörður á hemlun og endurtekna vél (vægi MicroPulse; hjá Modric 2019 fylgdu sprettmetrar framherja betri leikeinkunn). Lag 2, andstæðingur: lág vörn reynir á viðvarandi vél og sköpun, há pressa á hemlun og skammtíma-forða. Lag 3, geta: hans eigin GPS/VALD gæði, röðuð sem hundraðsröð innan stöðuhóps hans. Lag 4, readiness: canonical morgunliturinn. Hæfnin vegur getu hans eftir kröfu stöðu×andstæðings og hliðar hana svo með readiness — niðurstaðan er sú lakari af tvennu.",
           },
         ],
       },
@@ -3492,8 +3492,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             is: "Breyting í hjartslætti er tvíræð ein og sér — hiti, svefn, vökvun, veikindi og uppsöfnuð þreyta hreyfa HRex öll. Lestu það alltaf samhliða æfingafasa, nýlegu álagi og líðan áður en brugðist er við: hækkun í erfiðum kafla er væntanleg, ekki viðvörun.",
           },
           {
-            en: "This is a conditioning capacity read, not a daily readiness signal. It is descriptive and cited (Buchheit 2011; Frontiers 2018) — it never touches the readiness colour or the daily training decision.",
-            is: "Þetta er þrekgeta-lestur, ekki daglegt readiness-merki. Það er lýsandi og tilvitnað (Buchheit 2011; Frontiers 2018) — það snertir aldrei readiness-litinn eða daglegu æfingaákvörðunina.",
+            en: "This is a conditioning capacity read, not a daily readiness signal. It is descriptive and cited (Buchheit 2011; Schneider 2018) — it never touches the readiness colour or the daily training decision.",
+            is: "Þetta er þrekgeta-lestur, ekki daglegt readiness-merki. Það er lýsandi og tilvitnað (Buchheit 2011; Schneider 2018) — það snertir aldrei readiness-litinn eða daglegu æfingaákvörðunina.",
           },
         ],
       },

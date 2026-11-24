@@ -289,6 +289,18 @@ const SHORT_ALIASES: Record<string, string> = {
  */
 export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
   // Lot A (app citations, 2026-11-24).
+  "Sideris 2026": {
+    en: "\"Breaking Down the Brakes\" (maximal 5-m deceleration, lab study of 4 people), Sport Performance & Science Reports #325, 2026. SPSR is not indexed by PubMed or Crossref, so it was not checked against a record; it is used only as mechanism context, never for a number or an injury claim.",
+    is: "„Breaking Down the Brakes“ (hámarks-hemlun á 5 m, rannsóknarstofu-rannsókn á 4 einstaklingum), Sport Performance & Science Reports #325, 2026. PubMed og Crossref skrá ekki SPSR, svo hún var ekki borin saman við færslu; hún er aðeins notuð sem skýring á vélbúnaði, aldrei fyrir tölu eða meiðsla-fullyrðingu.",
+  },
+  "Buchheit 2021": {
+    en: "\"One box-to-box does not fit all — insights from running energetics\" (Buchheit, Vassallo & Waldron), Sport Performance & Science Reports #136, 2021: a modelling study on simulated player profiles. SPSR is not indexed by PubMed or Crossref, so it was not checked against a record; it is used only as the reason to individualise HSR, never for a per-player number or an injury claim.",
+    is: "„One box-to-box does not fit all“ (Buchheit, Vassallo & Waldron), Sport Performance & Science Reports #136, 2021: líkana-rannsókn á hermuðum leikmanna-prófílum. PubMed og Crossref skrá ekki SPSR, svo hún var ekki borin saman við færslu; hún er aðeins notuð sem rök fyrir því að einstaklingsmiða HSR, aldrei fyrir tölu per leikmann eða meiðsla-fullyrðingu.",
+  },
+  "Kubatko 2007": {
+    en: "Kubatko J, Oliver D, Pelton K, Rosenbaum DT. A Starting Point for Analyzing Basketball Statistics. J Quant Anal Sports 2007;3(3) (doi:10.2202/1559-0410.1070). The record exists in Crossref, but the journal is not in PubMed and no abstract could be read, so its content was not checked. It stays as the source of the possession and pace formulas.",
+    is: "Kubatko J, Oliver D, Pelton K, Rosenbaum DT. A Starting Point for Analyzing Basketball Statistics. J Quant Anal Sports 2007;3(3) (doi:10.2202/1559-0410.1070). Greinin er skráð í Crossref en tímaritið er ekki í PubMed og ágripið fékkst ekki, svo innihaldið var ekki staðfest. Hún stendur sem uppruni formúlna fyrir fjölda sókna og leikhraða.",
+  },
   "Catapult 2026": {
     en: "A Catapult company blog post by Niklas Virtanen ('Data as a language'), not a peer-reviewed study; it stays as the source of the design idea but cannot be checked as a paper.",
     is: "Bloggfærsla frá Catapult eftir Niklas Virtanen („Data as a language“), ekki ritrýnd rannsókn; hún stendur sem uppruni hugmyndarinnar en er ekki vísindagrein.",
@@ -298,8 +310,8 @@ export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
     is: "Tvær tækniskýrslur bandaríska sjóhersins, ekki tímaritsgreinar: Hodgdon JA, Beckett MB. Prediction of percent body fat for U.S. Navy men (og women) from body circumferences and height. Naval Health Research Center, San Diego, 1984 (doi:10.21236/ada143890 og doi:10.21236/ada146456). Ekki í PubMed; skýrslurnar finnast í Crossref/DTIC. Hún stendur sem uppruni ummálsformúlu sjóhersins.",
   },
   "Oliver 2004": {
-    en: "Dean Oliver, Basketball on Paper (2004) — a book, not a journal paper; PubMed does not index it. It stays as the source of the 'Four Factors' names only.",
-    is: "Dean Oliver, Basketball on Paper (2004) — bók, ekki tímaritsgrein; PubMed skráir hana ekki. Hún stendur aðeins sem uppruni heitisins „Four Factors“.",
+    en: "Dean Oliver, Basketball on Paper (2004) — a book, not a journal paper; PubMed does not index it. It stays as the source of the 'Four Factors' and the per-possession team ratings it popularised.",
+    is: "Dean Oliver, Basketball on Paper (2004) — bók, ekki tímaritsgrein; PubMed skráir hana ekki. Hún stendur sem uppruni „Four Factors“ og einkunna liða á hverja sókn sem bókin gerði vinsælar.",
   },
   "Cohen 1988": {
     en: "Cohen J, Statistical Power Analysis for the Behavioral Sciences (2nd ed., 1988) — a statistics book, not indexed. It stays as the source of the small/medium/large effect-size words (0.2/0.5/0.8).",

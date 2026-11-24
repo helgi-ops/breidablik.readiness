@@ -30,7 +30,7 @@ export const PLAN_DEFINITIONS: Record<PlanDefinition["key"], PlanDefinition> = {
     monthlyPriceLabel: "€129 / month · 18.900 kr / mán.",
     annualPriceLabel: null,
     targetAudience: ["Lower-division clubs", "Indoor sports without IMU vests", "Clubs on standard Catapult plans", "Academies graduating from Free"],
-    summary: "Standalone sport-science suite built on Gabbett 2016, Malone 2017, Foster 1998, Buchheit 2018 — works on RPE + wellness alone, or RPE + standard Catapult Activity Reports.",
+    summary: "Standalone sport-science suite built on Gabbett 2016, Malone 2017, Foster 1998 — works on RPE + wellness alone, or RPE + standard Catapult Activity Reports.",
     featureKeys: PLAN_FEATURES.LITE,
     sortOrder: 2,
     highlighted: false,

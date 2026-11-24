@@ -13,7 +13,7 @@
  * The trainer types the mean bar velocity (m/s) read off the client's VBT
  * device/app. It feeds the SAME analytics GymAware teams get (shared engine in
  * @/lib/micropulse/vbtReadiness). Explainability-first: verdict → facts → detail.
- * Refs: Sánchez-Medina & González-Badillo (2011); González-Badillo (2010).
+ * Refs: Sánchez-Medina 2011 (with González-Badillo); González-Badillo & Sánchez-Medina 2010.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -341,7 +341,7 @@ export default function VbtPanel({ clients, lang }: VbtPanelProps) {
               </ul>
             )}
             <p className="mt-2 text-[11px] italic text-gray-400">
-              Sánchez-Medina &amp; González-Badillo (2011): velocity loss as a fatigue proxy.
+              Sánchez-Medina 2011 (with González-Badillo): velocity loss as a fatigue proxy.
             </p>
           </>
         )}

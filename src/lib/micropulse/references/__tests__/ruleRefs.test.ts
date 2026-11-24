@@ -174,7 +174,7 @@ describe("rule references", () => {
     expect(findRefByShort("Petrakos 2016")?.cite).toMatch(/PMID 26553497/);
   });
 
-  it("every citation in the checked app areas resolves or is unresolved (app lots A–C)", () => {
+  it("every citation in the checked app areas resolves or is unresolved (app lots A–D)", () => {
     const shorts = citationsUnder(APP_CITATION_SOURCES);
     expect(shorts.length).toBeGreaterThan(200);
     expect(openOnes(shorts)).toEqual([]);
@@ -221,6 +221,21 @@ describe("rule references", () => {
     expect(findRefByShort("Siri 1961")?.cite).toMatch(/Nutrition 1993/);
     expect(findRefByShort("Rønnestad 2011")?.cite).toMatch(/PMID 21873897/);
     expect(unresolvedReason("Catapult 2026")).toBeTruthy();
+  });
+
+  it("lot D: tutorials, PDFs, player app, trainer and pricing cite what the papers show", () => {
+    const all = citationsUnder(APP_CITATION_SOURCES);
+    // No such paper (Hough 2019, Sheward 2010), wrong year (Kamarauskas 2021), wrong paper (Lago-Peñas 2010, Hills
+    // 2018, Carling 2015), a journal (Frontiers 2018) or a feature name read as a citation (Quadrant 2017).
+    for (const gone of ["Hough 2019", "Sheward 2010", "Kamarauskas 2021", "Lago-Peñas 2010", "Hills 2018", "Carling 2015", "Frontiers 2018"]) {
+      expect(all).not.toContain(gone);
+    }
+    expect(all.some((s) => /Quadrant 2017/.test(s))).toBe(false);
+    expect(findRefByShort("Cheung 2003")?.cite).toMatch(/muscle soreness/);
+    expect(findRefByShort("Ripley 2025")?.cite).toMatch(/dynamic strength index/);
+    expect(findRefByShort("Dellal 2012")?.cite).toMatch(/PMID 22130401/);
+    expect(unresolvedReason("Sideris et al. 2026")).toBeTruthy();
+    expect(unresolvedReason("Kubatko et al. 2007")).toBeTruthy();
   });
 
   it("reads JSX-escaped ampersands as one two-author citation", () => {

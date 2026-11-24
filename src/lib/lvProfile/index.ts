@@ -250,7 +250,7 @@ export interface DsiResult {
 
 /**
  * DSI = ballistic peak force ÷ isometric/dynamic peak force.
- * Sheward 2010, Suchomel 2016 — thresholds:
+ * Ripley 2025 (these thresholds), Suchomel 2016 (training emphasis by strength level) — thresholds:
  *   <0.6 → ballistic training (athlete already very strong, lacks rate of force dev)
  *   0.6-0.8 → concurrent strength + ballistic
  *   >0.8 → max strength (athlete can already express force ballistically,
@@ -286,7 +286,7 @@ export function computeDsi(ballisticPeakN: number, isoPeakN: number): DsiResult 
  * Given a working load and a velocity-loss target (e.g., 20% drop within
  * a set), returns the velocity zone the athlete should not cross. Lets the
  * coach prescribe "stop the set when velocity drops below X". Pairs with
- * Banyard 2017 / Pareja-Blanco 2017 protocols.
+ * Banyard 2019 / Pareja-Blanco 2017 velocity-loss protocols.
  */
 export function velocityLossZone(
   startVelocity: number,

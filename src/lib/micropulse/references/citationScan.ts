@@ -32,6 +32,7 @@ export const OTHER_CITATION_SOURCES = [
  * Lot A (2026-11-24): injury and return-to-play pages, rehab, movement screen, injury-risk rules.
  * Lot B (2026-11-24): daily verdict and signals, readiness, monitoring, methodology.
  * Lot C (2026-11-24): load, GPS, periodization, match demands, conditioning (file by file).
+ * Lot D (2026-11-24): tutorials, PDF exports, player app, trainer/VBT, basketball, pricing (the blog follows on approval).
  */
 export const APP_CITATION_SOURCES = [
   "src/app/coach/achilles-tendinopathy",
@@ -306,6 +307,41 @@ export const APP_CITATION_SOURCES = [
   "src/lib/micropulse/weekSetup/weekSessionPlan.ts",
   "src/lib/micropulse/weeklyNarrative/index.ts",
   "src/lib/ssg-intensity.ts",
+  "src/app/api/coach/basketball-kki/route.ts",
+  "src/app/client/lv-profile/page.tsx",
+  "src/app/client/page.tsx",
+  "src/app/coach/CoachSidebar.tsx",
+  "src/app/coach/lv-profile/page.tsx",
+  "src/app/coach/pt-explosive/page.tsx",
+  "src/app/player/PlayerClient.tsx",
+  "src/app/player/PlayerTabbedClient.tsx",
+  "src/app/player/dev-player-dashboard/DevPlayerRPETab.tsx",
+  "src/app/player/playerCopy.ts",
+  "src/app/pricing/page.tsx",
+  "src/components/coach/BasketballGamePlanFit.tsx",
+  "src/components/coach/BasketballSeasonMatchAnalysis.tsx",
+  "src/components/coach/DayDrillsPdfSection.tsx",
+  "src/components/coach/KkiMatchView.tsx",
+  "src/components/coach/LoadPlanPdf.tsx",
+  "src/components/coach/MatchMovementPdf.tsx",
+  "src/components/coach/PeriodizationBlockPdf.tsx",
+  "src/components/coach/PeriodizationHubPdf.tsx",
+  "src/components/coach/StrengthBlockPdf.tsx",
+  "src/components/coach/StrengthSessionPdf.tsx",
+  "src/components/coach/WeekSetupPdf.tsx",
+  "src/components/coach/tutorials/tutorialCopy.ts",
+  "src/components/trainer/PlanBuilder.tsx",
+  "src/components/trainer/PtClientReportPdf.tsx",
+  "src/components/trainer/VbtMethodLibrary.tsx",
+  "src/components/trainer/VbtMethodPicker.tsx",
+  "src/components/trainer/VbtPanel.tsx",
+  "src/lib/lvProfile/index.ts",
+  "src/lib/micropulse/basketballLineups/index.ts",
+  "src/lib/micropulse/basketballStats/winFactors.ts",
+  "src/lib/micropulse/gamePlanFitBasketball/index.ts",
+  "src/lib/micropulse/indoorLoad/basketball.ts",
+  "src/lib/trainer/clientSummary.ts",
+  "src/lib/trainer/loadIntelligence.ts",
 ] as const;
 
 const SHORT_RE =

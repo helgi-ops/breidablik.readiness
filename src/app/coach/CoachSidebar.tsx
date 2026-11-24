@@ -207,8 +207,8 @@ export const teamPlanningLinks: SidebarLink[] = [
 //     Helgi's Explosive Power 12w shows up as a pinned card INSIDE this
 //     page (admin-only) rather than as its own sidebar entry, because
 //     it's just a programme he authored — not a separate sidebar tool.
-//   • Load-Velocity Profile — ELITE per-client add-on (Banyard 2017,
-//     González-Badillo 2010). LV ramp tests + DSI are core to ANY
+//   • Load-Velocity Profile — ELITE per-client add-on (Banyard 2017 — a caution: back-squat 1RM not predicted accurately;
+//     González-Badillo & Sánchez-Medina 2010 — bench press). LV ramp tests + DSI are core to ANY
 //     serious 1-on-1 strength practice.
 //
 // Programme library / Isometric / Recovery deliberately live on the
@@ -252,7 +252,7 @@ export const strengthTrainingLinks: SidebarLink[] = [
   { href: "/coach/strength-hub?tab=custom",   label: { EN: "Custom Training Programmes", IS: "Sérsniðin æfingakerfi" } },
   // The training principles the strength coach sets (per block × MD method day).
   { href: "/coach/strength-hub?tab=rules",    label: { EN: "Training principles",        IS: "Þjálfunarprinsipp" } },
-  // LV Profile = ELITE add-on; ramp-test 1RM prediction (González-Badillo 2010, Banyard 2017).
+  // LV Profile = ELITE add-on; ramp-test 1RM estimate (González-Badillo & Sánchez-Medina 2010, bench press; Banyard 2017 found it inaccurate for the back squat).
   { href: "/coach/strength-hub?tab=profiles", label: { EN: "Load-Velocity Profile", IS: "Kraft-/hraðapróf" } },
   // Players' goal requests (top speed / acceleration / braking / jump): the coach approves the 8-week add-on.
   { href: "/coach/goal-requests",             label: { EN: "Player goal requests",  IS: "Markmiðsbeiðnir leikmanna" }, badgeKey: "goals" },
@@ -445,7 +445,7 @@ function Section({
 // Note: /coach/quadrant is INTENTIONALLY allowed on Lite — it uses the
 // Gabbett 2016 volume-axis variant (total_distance × sRPE) which works
 // fine without B2-3. Only Indoor Load (FMP / IMA bands) and Decel
-// Intelligence (McBurnie 2022 B2-3 cluster) have no useful Lite fallback.
+// Intelligence (MicroPulse's B2-3 braking module, built on McBurnie 2022) have no useful Lite fallback.
 export const LITE_HIDDEN_HREFS = new Set<string>([
   "/coach/indoor-load",
   "/coach/decel-intelligence",
@@ -481,7 +481,7 @@ export const FULL_HIDDEN_HREFS = new Set<string>([
 export const NO_GPS_HIDDEN_HREFS = new Set<string>([
   "/coach/power-curve-intelligence",
   "/coach/hsr-intelligence",
-  // Decel Intelligence is the McBurnie 2022 B2-3 accel/decel cluster — it needs Catapult
+  // Decel Intelligence is MicroPulse's B2-3 accel/decel module (built on McBurnie 2022) — it needs Catapult
   // accel/decel efforts, which a no-GPS indoor team (e.g. a Titan basketball club) never has.
   // Not in BASKETBALL_KEEP_HREFS, so it hides for basketball too; IMA Intelligence stays (adapted).
   "/coach/decel-intelligence",
