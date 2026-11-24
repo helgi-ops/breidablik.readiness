@@ -119,8 +119,12 @@ export const DEFAULT_MD_MICROCYCLE: PeriodizationModel = {
  * stimulus and an emphasised principle: MD-4 Tension (mechanical, reduced spaces, eccentric / 1v1 /
  * finishing), MD-3 Duration (locomotive endurance, larger spaces, longest day), MD-2 Velocity
  * (speed — short high-speed actions, big recoveries), MD-1 Activation (polish / set pieces).
- * Note MD-2 differs from the default (speed vs locomotive) and MD-3 carries a higher volume cap —
- * that divergence is exactly why a coach would select this model.
+ * Note MD-2 differs from the default (speed vs locomotive) — that divergence is exactly why a coach
+ * would select this model.
+ * Load order: Frade's original makes MD-3 (Duration) the week's volume peak. Since 2026-11-24 every
+ * MicroPulse week shape puts the heaviest day on MD-4 (coach's call; Martín-García 2018 measured
+ * MD-4 > MD-3 > MD-2 > MD-1), so here the caps are MD-4 100% and MD-3 70%. The day themes
+ * (Tension / Duration / Velocity / Activation) and load types are Frade's and unchanged.
  */
 export const TACTICAL_PERIODIZATION_MORPHOCYCLE: PeriodizationModel = {
   id: "tactical_periodization",
@@ -128,14 +132,14 @@ export const TACTICAL_PERIODIZATION_MORPHOCYCLE: PeriodizationModel = {
   source: "tactical_periodization",
   days: [
     {
-      mdDay: "MD-4", intendedType: "mechanical", intensityCapPct: 70,
+      mdDay: "MD-4", intendedType: "mechanical", intensityCapPct: 100,
       principleTag: "Tension — reduced spaces, strength / 1v1 / finishing",
-      note: { en: "Tension day — reduced spaces, eccentric / strength, 1v1, finishing. High mechanical, low volume.", is: "Tension-dagur — minnkuð svæði, eccentric / styrkur, 1v1, klárun. Hátt vélrænt, lágt magn." },
+      note: { en: "Tension day — reduced spaces, eccentric / strength, 1v1, finishing. The week's heaviest day (MicroPulse's order; Frade's peak was MD-3).", is: "Tension-dagur — minnkuð svæði, eccentric / styrkur, 1v1, klárun. Þyngsti dagur vikunnar (röð MicroPulse; toppur Frade var MD-3)." },
     },
     {
-      mdDay: "MD-3", intendedType: "locomotive", intensityCapPct: 100,
+      mdDay: "MD-3", intendedType: "locomotive", intensityCapPct: 70,
       principleTag: "Duration — large spaces, collective organisation",
-      note: { en: "Duration day — larger spaces, more continuous 11v11. The week's endurance / volume peak.", is: "Duration-dagur — stærri svæði, samfelldara 11v11. Úthalds- / magntoppur vikunnar." },
+      note: { en: "Duration day — larger spaces, more continuous 11v11. A step below MD-4 in total load.", is: "Duration-dagur — stærri svæði, samfelldara 11v11. Skrefi léttari en MD-4 í heildarálagi." },
     },
     {
       mdDay: "MD-2", intendedType: "speed", intensityCapPct: 55,

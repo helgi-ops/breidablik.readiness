@@ -123,6 +123,10 @@ describe("default model follows the week shape (MD-4 heaviest)", () => {
     const d4 = specForDay(DEFAULT_MD_MICROCYCLE, "MD-4")!;
     const d3 = specForDay(DEFAULT_MD_MICROCYCLE, "MD-3")!;
     expect(d4.intensityCapPct!).toBeGreaterThan(d3.intensityCapPct!);
+    const tp4 = specForDay(TACTICAL_PERIODIZATION_MORPHOCYCLE, "MD-4")!;
+    const tp3 = specForDay(TACTICAL_PERIODIZATION_MORPHOCYCLE, "MD-3")!;
+    expect(tp4.intensityCapPct!).toBeGreaterThan(tp3.intensityCapPct!);
+    expect(tp4.intendedType).toBe("mechanical"); // Frade's Tension day keeps its type
     const target: DayLoadTarget = { band: "high", matchPct: 80, loadAu: 10000 };
     const at90 = (dominantType: BuiltSessionSummary["dominantType"]): BuiltSessionSummary => ({ dominantType, loadAu: 9000, matchPct: 90 });
     const cap = (r: ReturnType<typeof checkSessionFit>) => r.warnings.some((w) => w.kind === "load_overshoot" && w.headline.en.toLowerCase().includes("cap"));
