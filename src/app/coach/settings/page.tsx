@@ -730,7 +730,7 @@ export default function CoachSettingsPage() {
                     <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">GPS NBS 35%</span>
                     <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">Metabolic Load Score 25%</span>
                   </div>
-                  <p className="mt-1.5 text-xs text-zinc-500">Safety nets bump concern up when triggered: Residual MLI (3d mechanical), Residual Decel (3d eccentric), Decel Burden (today), HID% fatigue trend (Harper 2019), Accel:Decel ratio.</p>
+                  <p className="mt-1.5 text-xs text-zinc-500">Safety nets bump concern up when triggered: Residual MLI (3d mechanical), Residual Decel (3d eccentric), Decel Burden (today), HID% fatigue trend (MicroPulse’s rule), Accel:Decel ratio.</p>
                 </div>
                 <div>
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-900/70">GPS NBS sub-layer</div>

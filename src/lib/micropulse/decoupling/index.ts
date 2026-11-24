@@ -2,7 +2,7 @@
  * Internal:External load decoupling (Halson 2014).
  *
  * The same external load (distance, player-load) achieved at higher
- * internal cost (RPE × duration, HR) is the classic early-warning
+ * internal cost (RPE × duration, HR) may reveal fatigue (Halson 2014); MicroPulse reads it as an early-warning
  * signal of cumulative fatigue, sub-clinical illness, or under-recovery.
  *
  * This module computes per-session decoupling ratios and compares them

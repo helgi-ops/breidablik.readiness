@@ -75,7 +75,7 @@ export function codFootednessNote(dominantFoot: DominantFoot | null, highLeft: n
   const footEn = foot ? `${foot.en}; ` : "dominant foot not set; ";
   const footIs = foot ? `${foot.is}; ` : "ríkjandi fótur óskráður; ";
   return {
-    en: `High-intensity cutting leans ${s.en} (${foot ? footEn : footEn}a modest plant-limb lean is normal — Havanecz 2026). ${flagged ? "The size of the imbalance is what MicroPulse flags (not tested against injury) — review alongside his footedness." : "Within the normal range; magnitude, not direction, is what would flag."}`,
-    is: `Háákefðar skurðir halla til ${s.is} (${foot ? footIs : footIs}hóflegur plant-fótar halli er eðlilegur — Havanecz 2026). ${flagged ? "Stærð ójafnvægisins er það sem MicroPulse flaggar (ekki prófað gegn meiðslum) — metið m.t.t. ríkjandi fótar." : "Innan eðlilegra marka; stærð, ekki stefna, myndi flagga."}`,
+    en: `High-intensity cutting leans ${s.en} (${foot ? footEn : footEn}in elite U15 players footedness shifted left/right movement load, though not turn counts — Havanecz 2026). ${flagged ? "The size of the imbalance is what MicroPulse flags (not tested against injury) — review alongside his footedness." : "Within the normal range; magnitude, not direction, is what would flag."}`,
+    is: `Háákefðar skurðir halla til ${s.is} (${foot ? footIs : footIs}hjá U15 úrvalsleikmönnum breytti ríkjandi fótur álagi til vinstri og hægri, en ekki fjölda snúninga — Havanecz 2026). ${flagged ? "Stærð ójafnvægisins er það sem MicroPulse flaggar (ekki prófað gegn meiðslum) — metið m.t.t. ríkjandi fótar." : "Innan eðlilegra marka; stærð, ekki stefna, myndi flagga."}`,
   };
 }

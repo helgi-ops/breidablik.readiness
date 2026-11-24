@@ -24,7 +24,7 @@ type Plan = {
 const fmt = (n: number | null) => (n == null ? "—" : Math.round(n).toLocaleString("en-US"));
 const CAP_TINT: Record<CapReason, string> = { rate: "text-slate-500", acwr: "text-amber-600", ceiling: "text-sky-600" };
 // Hub stance: the plain guardrail is "don't spike the week" (acute-load trend), not an ACWR band —
-// ACWR stays a labelled contested reference only (Teixeira 2021 + the club's "Dismiss ACWR" note).
+// ACWR stays a labelled contested reference only (Impellizzeri 2020 + the club's "Dismiss ACWR" note).
 const CAP_LABEL: Record<CapReason, string> = { rate: "rate", acwr: "held (no spike)", ceiling: "match ceiling" };
 
 /** `playerId` focuses the projection on one player (his baseline → his match ref); `emphasis` biases the
@@ -106,7 +106,7 @@ export default function ProgressiveOverloadCard({ date, weeks = 5, playerId, emp
         <>
           <div className="mb-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-[11px] leading-snug text-sky-800">{plan.note}</div>
           <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
-            <span title="Contested reference only (Teixeira 2021). The plan's guardrails are match demand + the acute-load trend, not an ACWR band.">Team ACWR <span className="text-slate-400">(contested)</span>: <strong className={acwrColor}>{plan.teamAcwr != null ? plan.teamAcwr.toFixed(2) : "—"}</strong></span>
+            <span title="Contested reference only (Impellizzeri 2020). The plan's guardrails are match demand + the acute-load trend, not an ACWR band.">Team ACWR <span className="text-slate-400">(contested)</span>: <strong className={acwrColor}>{plan.teamAcwr != null ? plan.teamAcwr.toFixed(2) : "—"}</strong></span>
             <span className="text-slate-300">·</span>
             <span>Built on {plan.coverage.trainingDays} training days · {plan.coverage.playersWithHistory}/{plan.coverage.totalPlayers} players</span>
             {(holdN > 0 || buildN > 0) && <span className="text-slate-300">·</span>}
@@ -150,7 +150,7 @@ export default function ProgressiveOverloadCard({ date, weeks = 5, playerId, emp
             </table>
           </div>
           <p className="mt-1.5 text-[10px] leading-relaxed text-slate-400">
-            Each cell = the recommended {unit === "week" ? <>per-<strong>week</strong> per-player target (per-session × {spw} training sessions)</> : "per-session per-player target"} for that week; &quot;%m&quot; is vs one match (a week is naturally &gt;100% of a single match). <span className="text-amber-600">held (no spike)</span> = the week was trimmed so acute load doesn&apos;t jump too far past recent load; <span className="text-sky-600">match ceiling</span> = it reached match demand and holds. &quot;%m&quot; = % of the squad&apos;s match reference. Volume ramps faster than high-speed/sprint by design (hamstring exposure). ACWR is shown as a contested reference only — the guardrails are match demand + the acute-load trend (Teixeira 2021).
+            Each cell = the recommended {unit === "week" ? <>per-<strong>week</strong> per-player target (per-session × {spw} training sessions)</> : "per-session per-player target"} for that week; &quot;%m&quot; is vs one match (a week is naturally &gt;100% of a single match). <span className="text-amber-600">held (no spike)</span> = the week was trimmed so acute load doesn&apos;t jump too far past recent load; <span className="text-sky-600">match ceiling</span> = it reached match demand and holds. &quot;%m&quot; = % of the squad&apos;s match reference. Volume ramps faster than high-speed/sprint by design (hamstring exposure). ACWR is shown as a contested reference only — the guardrails are match demand + the acute-load trend (MicroPulse’s choice; ACWR is disputed, Impellizzeri 2020).
           </p>
 
           <button type="button" onClick={() => setShowPlayers((v) => !v)} className="mt-3 text-xs font-medium text-indigo-600 hover:text-indigo-700">

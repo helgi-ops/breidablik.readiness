@@ -9,7 +9,7 @@
  * and the CS/D′ + ASR reads, but NEVER the readiness colour or the daily decision.
  *
  * Ref: Greinar/Tholpróf-fótbolti-korfubolti-yfirlit.md
- * Cite: Bangsbo/Iaia/Krustrup 2008 (Yo-Yo) · Buchheit 2008 (30-15 IFT) · Léger & Lambert 1982
+ * Cite: Bangsbo/Iaia/Krustrup 2008 (Yo-Yo) · Buchheit 2008 (30-15 IFT) · Léger 1982
  *       (20 m MSFT) · Cazorla/Léger (VAMEVAL/UMTT MAS) · Berthon 1997 (timed-run MAS).
  */
 
@@ -69,7 +69,7 @@ export const FITNESS_TESTS: Record<FitnessTestType, FitnessTestDef> = {
     hint: { en: "20 m shuttles at rising speed to exhaustion → MAS from the final running speed.", is: "20 m fram/til baka á stigvaxandi hraða til uppgjafar → MAS úr lokahraðanum." },
     // Running speed at level L = 8 + 0.5·(L−1) km/h ≈ MAS. VO₂max (Léger) needs age → null here.
     derive: (level) => ({ masKmh: level >= 1 ? r1(8 + 0.5 * (Math.floor(level) - 1)) : null, vo2maxEst: null }),
-    citation: "Léger & Lambert 1982",
+    citation: "Léger 1982",
   },
   mas_vameval: {
     key: "mas_vameval", unit: "km/h",

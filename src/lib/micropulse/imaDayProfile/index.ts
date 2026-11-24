@@ -28,7 +28,7 @@
  *     exposure comes from GPS velocity bands, not from this module.
  *     See docs/ima-free-running-bands.md and
  *     src/lib/integrations/catapult/freeRunningBands.ts.
- *   - McBurnie 2022: movement/stride profiles add context that GPS
+ *   - MicroPulse's own read: movement/stride profiles add context that GPS
  *     distance alone does not show (used here descriptively).
  *   - L/R asymmetry > 15% in high-intensity CoD efforts is MicroPulse's flag;
  *     not tested against injury (Helme 2021: asymmetry–injury evidence is weak).

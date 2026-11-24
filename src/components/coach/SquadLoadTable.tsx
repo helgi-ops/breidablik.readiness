@@ -51,7 +51,7 @@ const FOOTBALL_METRICS_FULL: Metric[] = [
 // Football metric set for LITE Catapult plans — drops B2-3 efforts and
 // Tot Accels/Decels (those columns aren't exposed on Lite plans). Adds
 // HSR Distance, Sprint Distance, Sprint Efforts and Max Velocity instead
-// — the highest-evidence injury proxies in the Malone 2017 / Buchheit
+// — running measures tied to leg injuries in observational studies (Malone 2017, Malone 2018) and the Buchheit
 // 2019 hamstring-injury literature when accel/decel data isn't available.
 const FOOTBALL_METRICS_LITE: Metric[] = [
   { key: "totalDistance",              label: "Total Distance (m)",     shortLabel: "Total Dist",  aliases: ["totalDistance", "total_distance"],                                                              digits: 0 },

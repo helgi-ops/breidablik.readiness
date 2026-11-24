@@ -129,16 +129,16 @@ function FitCard({ r, lang }: { r: FitRead; lang: L }) {
 function GamePlanFitExplainer({ is }: { is: boolean }) {
   const layers: { n: string; term: string; def: string }[] = is
     ? [
-        { n: "1", term: "Kröfa stöðu", def: "Staða leikmannsins ræður hvaða hreyfigæði skipta mestu. Framherji er veginn á spretti og loftfirrðan forða; bakvörður á hemlun og endurtekna vél; miðjumaður á viðvarandi vél og stefnubreytingar (Modric o.fl. 2019)." },
+        { n: "1", term: "Kröfa stöðu", def: "Staða leikmannsins ræður hvaða hreyfigæði skipta mestu. Framherji er veginn á spretti og loftfirrðan forða; bakvörður á hemlun og endurtekna vél; miðjumaður á viðvarandi vél og stefnubreytingar. Vægin eru val MicroPulse; í einni króatískri deild fylgdu sprettmetrar framherja og harðar hraðanir miðvarða betri leikeinkunn, og miðjumenn hlupu mest (Modric o.fl. 2019)." },
         { n: "2", term: "Andstæðingur (stíll)", def: "Stíll andstæðingsins breytir kröfunum: lág vörn reynir á viðvarandi vél + sköpun; há pressa á hemlun + skammtíma-forða; beint/skyndisóknir á vél + hemlun. Stíllinn er sjálfkrafa lagður til úr njósn (★), þú getur breytt með einum smelli." },
         { n: "3", term: "Geta hans", def: "Hans eigin GPS/VALD hreyfigæði, röðuð sem hundraðsröð innan stöðuhóps hans (0–100). Fyrir Lite-lið án GPS er þolið metið úr þrekprófum (MAS/VIFT). Talan hægra megin á spjaldinu er samsett geta hans veginn eftir kröfu stöðu×andstæðings." },
-        { n: "4", term: "Readiness", def: "Canonical morgunliturinn (grænn / gulur / rauður) — nákvæmlega sami litur og daglega yfirlitið. Hann hliðar getuna: niðurstaðan er sú lakari af getu og readiness. CMJ ↓% birtist sem auka-merki þegar stökkkraftur er undir 6-vikna venju (Janetzki 2023)." },
+        { n: "4", term: "Readiness", def: "Canonical morgunliturinn (grænn / gulur / rauður) — nákvæmlega sami litur og daglega yfirlitið. Hann hliðar getuna: niðurstaðan er sú lakari af getu og readiness. CMJ ↓% birtist sem auka-merki þegar stökkkraftur er undir 6-vikna venju (viðmið MicroPulse; Janetzki 2023 fann að stökkhæð fylgir sprett- og hröðunargetu)." },
       ]
     : [
-        { n: "1", term: "Role demand", def: "The player's position sets which movement qualities matter most. A forward is weighted to sprint and anaerobic reserve; a full-back to braking and a repeatable engine; a midfielder to sustained engine and change-of-direction (Modric et al. 2019)." },
+        { n: "1", term: "Role demand", def: "The player's position sets which movement qualities matter most. A forward is weighted to sprint and anaerobic reserve; a full-back to braking and a repeatable engine; a midfielder to sustained engine and change-of-direction. These weights are MicroPulse's choice; in one Croatian league, forwards' sprint distance and centre-backs' hard accelerations went with better match ratings, and central midfielders ran the most (Modric et al. 2019)." },
         { n: "2", term: "Opponent (style)", def: "The opponent's style shifts the demands: a low block taxes sustained engine + creation; a high press taxes braking + short-burst reserve; direct/counter taxes engine + braking. The style is auto-suggested from scouting (★); override it with one click." },
         { n: "3", term: "His capacity", def: "His own GPS/VALD movement qualities, ranked as a percentile within his position group (0–100). For Lite teams without GPS, the engine is estimated from fitness tests (MAS/VIFT). The number on the right of the card is his composite capacity weighted by the role×opponent demand." },
-        { n: "4", term: "Readiness", def: "The canonical morning colour (green / amber / red) — the exact colour the Daily Briefing shows. It gates the capacity: the verdict is the worse of capacity and readiness. A CMJ ↓% badge appears when jump power is below the 6-week norm (Janetzki 2023)." },
+        { n: "4", term: "Readiness", def: "The canonical morning colour (green / amber / red) — the exact colour the Daily Briefing shows. It gates the capacity: the verdict is the worse of capacity and readiness. A CMJ ↓% badge appears when jump power is below the 6-week norm (MicroPulse's line; Janetzki 2023 found jump height tracks sprint and acceleration ability)." },
       ];
 
   const verdicts: { chip: string; cls: string; def: string }[] = is
@@ -327,7 +327,7 @@ function FootballGamePlanFit() {
             <p>{L === "IS"
               ? "Þetta er ráðgefandi PLÖNUNAR-linsa — hún velur ekki liðið og snertir aldrei readiness-dóminn né daglegu ákvörðunina. Reglur reikna hæfnina; getan er hundraðsröðuð eftir stöðu (GPS/VALD), readiness er canonical liturinn. Þunn gögn → „ekki nóg til að dæma“, aldrei ágiskun."
               : "This is an advisory PLANNING lens — it never picks the XI and never touches the readiness verdict or the daily decision. Rules compute the fit; capacity is position-percentiled (GPS/VALD), readiness is the canonical colour. Thin data → “not enough to judge”, never a guess."}</p>
-            <p className="mt-1.5 text-slate-400">Bradley &amp; Ade · Modric et al. 2019 · Janetzki et al. 2023.</p>
+            <p className="mt-1.5 text-slate-400">Bradley &amp; Ade 2018 · Modric et al. 2019 · Janetzki et al. 2023.</p>
           </div>
         </>
       )}

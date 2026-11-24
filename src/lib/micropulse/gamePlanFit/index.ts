@@ -10,10 +10,10 @@
  *
  * Scientific basis (every weight cites its paper):
  *  - Bradley & Ade — read physical capacity against the tactical role, not a generic average.
- *  - Modric et al. 2019 (IJERPH 16:4032) — which running quality drives game performance is
+ *  - Modric et al. 2019 (IJERPH 16:4032) — which running quality goes with game rating is
  *    position-specific: forwards sprint (r=0.80); full-backs decel (r=-0.43); centre-backs
  *    HI-accel (r=0.49) + running distance (r=0.42); central mids greatest total distance.
- *  - Janetzki et al. 2023 — CMJ/neuromuscular is the validated readiness marker (V2 input).
+ *  - Janetzki et al. 2023 — of the readiness markers meta-analysed, CMJ height tracked 10 m sprint, not top speed or distance (V2 input).
  */
 
 import { positionGroup } from "@/lib/micropulse/positionStyle";
@@ -34,7 +34,7 @@ export const T = {
   coverageMin: 0.4,     // below this a scored read is capped to LOW confidence (partial data — e.g. Lite aerobic-only)
   possHigh: 55, possLow: 45,   // opponent possession % (mirror opponentReport.T)
   ppdaPress: 1.5,       // opponent PPDA below league - this = high press; above + this = passive/low block
-  // CMJ neuromuscular readiness (Janetzki 2023) — jump height vs own 6-wk norm. Mirrors the
+  // CMJ jump height vs own 6-wk norm (MicroPulse's line; Janetzki 2023: CMJ height tracks sprint/acceleration). Mirrors the
   // app-wide VALD_THRESHOLDS so it agrees with the VALD snapshot.
   cmjModerateDropPct: 5, cmjSevereDropPct: 10, cmjApplyDays: 10,
 };

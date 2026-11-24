@@ -14,7 +14,7 @@
  *   MONOTONY     = mean_load / sd_load
  *   STRAIN       = weekly_load × MONOTONY
  *
- * Thresholds (Foster 1998 + AC Milan / Real Madrid 2010s refinements):
+ * Thresholds (MicroPulse's lines; the monotony/strain method is Foster 1998):
  *   Monotony  ≤ 1.5   safe
  *             1.5–2.0 watch
  *             > 2.0   high overtraining risk

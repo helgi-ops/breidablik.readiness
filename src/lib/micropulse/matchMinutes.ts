@@ -10,7 +10,7 @@
  *
  * Ground truth (HK vs Ægir, 2026-07-10): all four substitutes carry exactly
  * 51.5 min — the entire second half. Atli Þór Gunnarsson: 3,983 m at 3.7%
- * high-speed. A player genuinely playing runs 8–13% high-speed (Bradley 2009).
+ * high-speed. A player genuinely playing runs roughly 8–13% high-speed (MicroPulse's rough band; Bradley 2009 gives EPL high-intensity distances, not this share).
  * He was jogging, not playing. Meanwhile Dagur Ingi — highest high-speed share
  * (12.1%) — has the LOWEST distance (2,848 m): he came on earlier and warmed up
  * less. The contamination is visible in the data, and it is systematic.
@@ -27,7 +27,7 @@
  * a match. This module keeps them apart and makes every verdict say WHY —
  * per the explainability manifesto: a number must carry its own provenance.
  *
- * Refs: Bradley et al. 2009 (high-speed share of match distance);
+ * Refs: Bradley et al. 2009 (EPL high-intensity running distances by position);
  *       Gabbett 2016 (training-load monitoring / ACWR).
  */
 
@@ -39,7 +39,7 @@ export const POD_MATCH_TOLERANCE_MIN = 5;
  * meaningful 24–72h recovery debt (this is what flips MD+1 / MD+2 into a recovery
  * framing). SPORT-AWARE, because the number does not transfer across game lengths:
  *
- *   football   — ≥ 60 min of a 90-min match (Carling 2018, Nédélec 2012, Helsen 2018).
+ *   football   — ≥ 60 min of a 90-min match (MicroPulse's line; post-match fatigue lasts days: Nédélec 2012; Silva 2018; Carling 2018).
  *   basketball — ≥ 24 min of a 40-min FIBA game (~60% of the game, mirroring the
  *                football 60/90 ratio). A 40-min game can NEVER reach 60 min, so
  *                applying football's cut would mislabel every basketball player as

@@ -5,7 +5,7 @@
  * plane (one point per MD day), so the coach sees the taper shape at a glance: MD-4 high
  * volume, MD-1 low-low = a proper taper. Plus a per-session MD-day appropriateness chip.
  *
- * Descriptive load context (Owen 2017) — never the readiness colour or the daily decision.
+ * Descriptive load context (MD taper as in Owen 2017; MD-4 as the peak is MicroPulse's — Owen's peak was MD-3) — never the readiness colour or the daily decision.
  */
 
 import { useEffect, useState } from "react";
@@ -126,8 +126,8 @@ export default function OwenTaperCard({ date }: { date?: string }) {
           ))}
           <div className="pt-1 text-[10px] leading-snug text-slate-400">
             {isEN
-              ? "Each point is a session vs your rolling norm (50 = typical). Owen 2017 — descriptive, never the readiness colour."
-              : "Hver punktur er æfing m.v. þitt rúllandi meðaltal (50 = dæmigert). Owen 2017 — lýsandi, aldrei viðbragðsliturinn."}
+              ? "Each point is a session vs your rolling norm (50 = typical, MicroPulse's scale). Taper idea from Owen 2017 — descriptive, never the readiness colour."
+              : "Hver punktur er æfing m.v. þitt rúllandi meðaltal (50 = dæmigert, kvarði MicroPulse). Niðurtröppun að hætti Owen 2017 — lýsandi, aldrei viðbragðsliturinn."}
           </div>
         </div>
       </div>

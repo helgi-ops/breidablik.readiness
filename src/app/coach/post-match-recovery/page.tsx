@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 /**
  * Post-match recovery board — for one match, every player who played and their
  * canonical readiness colour across MD+1 → MD+N, so the coach sees who rebounded
- * by MD+2 (Nédélec 2012) and who is lagging. Visual, print-friendly.
+ * by MD+2 (MicroPulse's check-day; full recovery can take over 72 h — Nédélec 2012) and who is lagging. Visual, print-friendly.
  */
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
@@ -116,14 +116,14 @@ export default function PostMatchRecoveryPage() {
     none: IS ? "engin skráning" : "no check-in",
     legend: IS ? "Grænn / Gulur / Rauður = canonical readiness þann dag" : "Green / Yellow / Red = canonical readiness that day",
     note: IS
-      ? "Eftir leik er taugavöðva- og upplifuð þreyta þyngst á MD+1 og á að ná sér fyrir MD+2/MD+3 (Nédélec 2012). IMA-álagið er skammturinn — háákefðar hemlanir spá best fyrir um vöðvaskemmd (McBurnie 2022). Hátt IMA-álag + enn flaggaður á MD+2 = raunverulegt þungt bergmál; lágt álag + flaggaður = líklega annað en post-match."
-      : "Post-match neuromuscular + perceived fatigue is heaviest at MD+1 and should rebound by MD+2/MD+3 (Nédélec 2012). IMA load is the \"dose\": high-intensity decelerations best predict muscle damage (McBurnie 2022). High IMA load + still flagged at MD+2 = a genuine heavy echo; low load + flagged = likely something other than post-match.",
+      ? "Eftir leik er taugavöðva- og upplifuð þreyta mikil á MD+1 og minnkar næstu daga, en full endurheimt getur tekið meira en 72 klst (Nédélec 2012; Silva 2018). IMA-álagið er skammturinn — háákefðar hemlanir hafa verið tengdar við merki um vöðvaskemmd eftir leiki (McBurnie 2022). Hátt IMA-álag + enn flaggaður á MD+2 = raunverulegt þungt bergmál; lágt álag + flaggaður = líklega annað en post-match."
+      : "Post-match neuromuscular + perceived fatigue is high at MD+1 and eases over the next days, but full recovery can take more than 72 h (Nédélec 2012; Silva 2018). IMA load is the \"dose\": high-intensity decelerations have been linked to muscle-damage markers after matches (McBurnie 2022). High IMA load + still flagged at MD+2 = a genuine heavy echo; low load + flagged = likely something other than post-match.",
     print: "PDF",
     noData: IS ? "Engin leikgögn." : "No match data.",
     cmjHave: IS ? "objektíf CMJ-mæling skráð á endurheimtardögum" : "objective CMJ measurements logged on recovery days",
     cmjNone: IS
-      ? "Engin CMJ-mæling á MD+1–MD+N. Litur er upplifunar-proxy; CMJ (stökkhæð / RSI-mod vs baseline) er objektíva taugavöðva-mælingin (Nédélec 2012). Bættu ~30 sek ForceDecks-stökki á MD+1 við til að kveikja á þessu laginu."
-      : "No CMJ logged on MD+1–MD+N. Colour is a perceptual proxy; CMJ (jump height / RSI-mod vs baseline) is the objective neuromuscular marker (Nédélec 2012). Add a ~30 s ForceDecks jump on MD+1 to light up this layer.",
+      ? "Engin CMJ-mæling á MD+1–MD+N. Litur er upplifunar-proxy; CMJ (stökkhæð / RSI-mod vs baseline) er hlutlæg taugavöðva-mæling (Claudino 2017). Bættu ~30 sek ForceDecks-stökki á MD+1 við til að kveikja á þessu laginu."
+      : "No CMJ logged on MD+1–MD+N. Colour is a perceptual proxy; CMJ (jump height / RSI-mod vs baseline) is an objective neuromuscular marker (Claudino 2017). Add a ~30 s ForceDecks jump on MD+1 to light up this layer.",
   };
 
   const match = data?.match;
@@ -256,8 +256,8 @@ export default function PostMatchRecoveryPage() {
       tone,
       sentence: { EN: sentenceEN, IS: sentenceIS },
       subtitle: {
-        EN: "Recovery after a match — fatigue peaks the day after and should clear within two to three days (Nédélec 2012).",
-        IS: "Endurheimt eftir leik — þreyta er mest daginn eftir og á að hverfa á tveimur til þremur dögum (Nédélec 2012).",
+        EN: "Recovery after a match — fatigue is high the day after and eases over the following days, but full recovery can take more than three days (Nédélec 2012).",
+        IS: "Endurheimt eftir leik — þreyta er mikil daginn eftir og minnkar næstu daga, en full endurheimt getur tekið meira en þrjá daga (Nédélec 2012).",
       },
       confidence: { level, note: { EN: noteEN, IS: noteIS } },
       drivers,
@@ -399,8 +399,8 @@ export default function PostMatchRecoveryPage() {
             </div>
             <p className="mb-2 text-[11px] leading-snug text-slate-500">
               {IS
-                ? "Litaði punkturinn = readiness-dómur dagsins (huglæg líðan — svefn/harðsperrur/orka — vs hans eigin norm). Prósentan undir = CMJ, objektíf taugavöðva-mæling vs grunnlína. Þau MEGA stangast á: leikmaður getur skráð sig grænan en samt verið með stökk niðri — huglæg líðan jafnar sig á undan taugavöðvakerfinu (Gathercole 2015). Misræmið er merkið. Smelltu á nafn fyrir útskýringu."
-                : "The coloured dot = that day's readiness verdict (subjective wellness — sleep/soreness/energy — vs his own norm). The % below it = CMJ, an objective neuromuscular test vs baseline. They CAN disagree: a player can self-report green yet have a depressed jump — subjective feel recovers before the neuromuscular system does (Gathercole 2015). The gap is the signal. Click a name for the explanation."}
+                ? "Litaði punkturinn = readiness-dómur dagsins (huglæg líðan — svefn/harðsperrur/orka — vs hans eigin norm). Prósentan undir = CMJ, objektíf taugavöðva-mæling vs grunnlína. Þau MEGA stangast á: leikmaður getur skráð sig grænan en samt verið með stökk niðri — stökkið mælir taugavöðvaþreytu beint, sem líðanarskor gerir ekki (Gathercole 2015: CMJ greinir þreytu). Misræmið er merkið. Smelltu á nafn fyrir útskýringu."
+                : "The coloured dot = that day's readiness verdict (subjective wellness — sleep/soreness/energy — vs his own norm). The % below it = CMJ, an objective neuromuscular test vs baseline. They CAN disagree: a player can self-report green yet have a depressed jump — the jump measures neuromuscular fatigue directly, which a wellness score does not (Gathercole 2015: the CMJ detects this fatigue). The gap is the signal. Click a name for the explanation."}
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-[12px]">
@@ -641,20 +641,20 @@ export default function PostMatchRecoveryPage() {
             <div className="mt-2 space-y-2 border-t border-slate-100 pt-2">
               <p><span className="font-semibold text-slate-800">{IS ? "Hvað það mælir. " : "What it measures. "}</span>
                 {IS
-                  ? "Counter-movement jump (CMJ) á kraftplötu (ForceDecks): leikmaður dýfir sér og stekkur hámark. Platan mælir kraftinn sem fæturnir framleiða — objektíf mæling á taugavöðva-getu sem upplifuð líðan getur falið. Leikmaður getur sagst „fínn“ en samt verið með skerta sprengikraft. Gull-staðall á vettvangi (Claudino 2017, Gathercole 2015)."
-                  : "Counter-movement jump (CMJ) on a force plate (ForceDecks): the player dips and jumps maximally; the plate measures the force the legs produce — an objective read on neuromuscular capacity that subjective wellness can hide. A player can report \"fine\" yet have blunted explosive output. The field gold-standard (Claudino 2017, Gathercole 2015)."}</p>
+                  ? "Counter-movement jump (CMJ) á kraftplötu (ForceDecks): leikmaður dýfir sér og stekkur hámark. Platan mælir kraftinn sem fæturnir framleiða — objektíf mæling á taugavöðva-getu sem upplifuð líðan getur falið. Leikmaður getur sagst „fínn“ en samt verið með skerta sprengikraft. Mikið notað til að fylgjast með þreytu (Claudino 2017, Gathercole 2015)."
+                  : "Counter-movement jump (CMJ) on a force plate (ForceDecks): the player dips and jumps maximally; the plate measures the force the legs produce — an objective read on neuromuscular capacity that subjective wellness can hide. A player can report \"fine\" yet have blunted explosive output. Widely used to monitor fatigue (Claudino 2017, Gathercole 2015)."}</p>
               <p><span className="font-semibold text-slate-800">{IS ? "Af hverju MD+2 (frí á MD+1). " : "Why MD+2 (rest on MD+1). "}</span>
                 {IS
-                  ? "Taugavöðva-þreyta er mest daginn eftir leik (MD+1) og á að hreinsast á MD+2–MD+3 (Nédélec 2012). Þar sem MD+1 var frídagur spyr MD+2-prófið beint: náðu fæturnir sér eftir hvíldardag? Ef stökkið er enn niðri þá er það raunverulegt merki um að hann er ekki búinn að jafna sig — ekki bara harðsperrur leikdagsins."
-                  : "Neuromuscular fatigue peaks the day after a match (MD+1) and should clear by MD+2–MD+3 (Nédélec 2012). Because MD+1 was a rest day, the MD+2 test asks directly: did the legs rebound after a day off? If the jump is still down, that's a genuine \"not recovered\" signal — not just match-day soreness."}</p>
+                  ? "Taugavöðva-þreyta er mikil daginn eftir leik (MD+1) og minnkar næstu daga, en full endurheimt getur tekið meira en 72 klst (Nédélec 2012; Silva 2018). Þar sem MD+1 var frídagur spyr MD+2-prófið beint: náðu fæturnir sér eftir hvíldardag? Ef stökkið er enn niðri þá er það raunverulegt merki um að hann er ekki búinn að jafna sig — ekki bara harðsperrur leikdagsins."
+                  : "Neuromuscular fatigue is high the day after a match (MD+1) and eases over the next days, though full recovery can take more than 72 h (Nédélec 2012; Silva 2018). Because MD+1 was a rest day, the MD+2 test asks directly: did the legs rebound after a day off? If the jump is still down, that's a genuine \"not recovered\" signal — not just match-day soreness."}</p>
               <p><span className="font-semibold text-slate-800">{IS ? "Borið saman við HANS eigin grunnlínu. " : "Compared to HIS own baseline. "}</span>
                 {IS
                   ? "Prósentan er vs miðgildi hans eigin CMJ síðustu 42 daga (≥3 gildar mælingar fyrir leik) — persónuleg norm, ekki liðsmeðaltal. „−6%“ þýðir niður vs hans venja, ekki vs aðra. Þannig er stór en stöðugur stökkvari ekki refsað og lítill en þreyttur ekki falinn."
                   : "The % is vs the median of his own CMJ over the last 42 days (≥3 valid pre-match tests) — a personal norm, not a squad average. \"−6%\" means down vs HIS usual, not vs others. So a big but consistent jumper isn't penalised and a smaller but fatigued one isn't hidden."}</p>
               <p><span className="font-semibold text-slate-800">{IS ? "Tvær tölur: hæð og RSI-mod. " : "Two numbers: height and RSI-mod. "}</span>
                 {IS
-                  ? "Stökkhæð er aðal-útkoman. RSI-mod (hæð ÷ snertitími) er næmari á þreytu og dettur FYRR — þreyttur leikmaður heldur hæðinni með því að eyða lengri tíma á jörðinni, svo RSI-mod afhjúpar þreytuna áður en hæðin gerir það (Gathercole 2015). Horfðu á RSI-mod fyrst."
-                  : "Jump height is the headline output. RSI-mod (height ÷ contraction time) is more fatigue-sensitive and drops EARLIER — a tired player preserves height by spending longer on the ground, so RSI-mod exposes fatigue before height does (Gathercole 2015). Watch RSI-mod first."}</p>
+                  ? "Stökkhæð er aðal-útkoman. RSI-mod (hæð ÷ snertitími) getur sýnt þreytu sem hæðin ein missir af — þreyttur leikmaður getur haldið hæðinni með því að eyða lengri tíma á jörðinni (Gathercole 2015: tímabreytur stökksins voru enn breyttar 72 klst eftir erfið hlaup). Horfðu á RSI-mod fyrst."
+                  : "Jump height is the headline output. RSI-mod (height ÷ contraction time) can show fatigue that height alone misses — a tired player can keep his height by spending longer on the ground (Gathercole 2015: jump-timing measures were still changed 72 h after hard running). Watch RSI-mod first."}</p>
               <p><span className="font-semibold text-slate-800">{IS ? "Hvernig á að lesa prósentuna. " : "How to read the %. "}</span>
                 <span className="text-emerald-700 font-medium">{IS ? "innan ±5% = endurheimt (grænt)" : "within ±5% = recovered (green)"}</span>{" · "}
                 <span className="text-amber-700 font-medium">{IS ? "−5% til −10% = fylgjast með (gult)" : "−5% to −10% = monitor (amber)"}</span>{" · "}
@@ -790,8 +790,8 @@ function playerExplanation(p: Player, IS: boolean): string {
   const tierWord = tier === "high" ? (IS ? "hátt" : "high") : tier === "low" ? (IS ? "lágt" : "low") : (IS ? "miðlungs" : "moderate");
   parts.push(tier
     ? (IS
-        ? `Spilaði ${p.minutes} mín með ${tierWord} vélrænt álag í leik (decel-vegið vs liðið — háákefðar hemlanir spá best fyrir um vöðvaskemmd, McBurnie 2022).`
-        : `Played ${p.minutes} min with ${tierWord} mechanical match load (decel-weighted vs the squad — high-intensity decelerations best predict muscle damage, McBurnie 2022).`)
+        ? `Spilaði ${p.minutes} mín með ${tierWord} vélrænt álag í leik (decel-vegið vs liðið — háákefðar hemlanir hafa verið tengdar við merki um vöðvaskemmd, McBurnie 2022).`
+        : `Played ${p.minutes} min with ${tierWord} mechanical match load (decel-weighted vs the squad — high-intensity decelerations have been linked to muscle-damage markers, McBurnie 2022).`)
     : (IS ? `Spilaði ${p.minutes} mín.` : `Played ${p.minutes} min.`));
 
   const md1 = p.colors["MD+1"] ?? "none";
@@ -805,8 +805,8 @@ function playerExplanation(p: Player, IS: boolean): string {
   if (cmjVal != null) {
     const metric = cmj!.rsiPct != null ? "RSI-mod" : (IS ? "stökkhæð" : "jump height");
     parts.push(IS
-      ? `Objektíf CMJ-mæling (${metric}) er ${fmtPct(cmjVal)} vs hans grunnlína — ${cmjDown ? "raunveruleg taugavöðva-þreyta sem upplifuð líðan getur falið" : "innan eðlilegra marka"} (Gathercole 2015).`
-      : `Objective CMJ (${metric}) is ${fmtPct(cmjVal)} vs his baseline — ${cmjDown ? "genuine neuromuscular fatigue that subjective wellness can miss" : "within normal range"} (Gathercole 2015).`);
+      ? `Objektíf CMJ-mæling (${metric}) er ${fmtPct(cmjVal)} vs hans grunnlína — ${cmjDown ? "fall sem bendir til taugavöðvaþreytu, sem líðanarskor mælir ekki" : "innan eðlilegra marka"} (Gathercole 2015).`
+      : `Objective CMJ (${metric}) is ${fmtPct(cmjVal)} vs his baseline — ${cmjDown ? "a drop that points to neuromuscular fatigue, which a wellness score does not measure" : "within normal range"} (Gathercole 2015).`);
   } else if (cmj) {
     // Tested on the recovery day but no usable personal baseline → honest gap.
     parts.push(IS
@@ -830,8 +830,8 @@ function playerExplanation(p: Player, IS: boolean): string {
       : `The colour says recovered, BUT the jump is down ${fmtPct(cmjVal)} — the objective test caught fatigue the wellness score missed. Trust the CMJ: consider easing despite the green.`);
   } else if (p.reboundedByMd2) {
     parts.push(IS
-      ? `Náði sér á áætlun fyrir MD+2 (Nédélec 2012)${cmjVal != null ? ", og stökkið staðfestir það" : ""} — fullt plan í lagi.`
-      : `Recovered on schedule by MD+2 (Nédélec 2012)${cmjVal != null ? ", and the jump confirms it" : ""} — a full session is fine.`);
+      ? `Náði sér fyrir MD+2 (eftirlitsdagur MicroPulse)${cmjVal != null ? ", og stökkið staðfestir það" : ""} — fullt plan í lagi.`
+      : `Recovered by MD+2 (MicroPulse's check-day)${cmjVal != null ? ", and the jump confirms it" : ""} — a full session is fine.`);
   } else if (p.lagging) {
     parts.push(IS
       ? `Enn flaggaður á MD+2 með miðlungs álag${cmjDown ? " — og stökkið staðfestir þreytuna" : ""}. Fylgstu með áður en þú hleður á hann.`

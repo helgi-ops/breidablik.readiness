@@ -32,14 +32,14 @@ function ratio(today: number | null | undefined, baseline: number): number | nul
 }
 
 /**
- * Hader 2019 post-match recovery decay applied to spike ratios when the
+ * Post-match recovery decay (MicroPulse's curve) applied to spike ratios when the
  * "today" row is actually a fallback (no GPS data exists for the requested
  * date — coach is viewing a rest day morning before any training has been
  * uploaded). Without this, a Sunday match with PL 2.18× kept showing as
  * "today's PL 2.18×" through Wed (MD+3) even though the players had two
  * full rest days to recover.
  *
- * Curve approximates Hader 2019 CK / CMJ / HRV recovery after a 90-min
+ * Curve is MicroPulse's own (Hader 2019 gives no recovery curve, only 24 h CK / CMJ links) after a 90-min
  * football match plus contemporary rest-day adaptations:
  *
  *   D+0 (same day)  → 1.00 (no decay — show full spike)
@@ -248,7 +248,7 @@ export function computeResidualDecel(
   return { residualDecel: residual, residualDecelBand: band };
 }
 
-// ── HID% Fatigue Trend (Harper et al. 2019) ────────────────────────────────
+// ── HID% Fatigue Trend (MicroPulse's rule; Harper et al. 2019 = 2nd-half accel/decel drop) ────────────────────────────────
 //
 // Declining HID% (high-intensity distance as fraction of total) with stable
 // total distance signals neuromuscular fatigue — the athlete covers the same
@@ -323,7 +323,7 @@ export function computeCatapultExternalLoadSignals(args: {
   /**
    * Days between args.date and today.date. > 0 when "today" is a fallback
    * row (no GPS uploaded yet for the requested date). Spike ratios get
-   * Hader 2019 decay applied so a Sunday match doesn't keep producing
+   * MicroPulse's post-match decay applied so a Sunday match doesn't keep producing
    * a 2.18× PL spike alert through Wed (MD+3).
    */
   daysSinceData?: number;

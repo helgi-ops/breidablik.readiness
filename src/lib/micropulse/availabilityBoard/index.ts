@@ -25,8 +25,8 @@
  * available), per the explainability-first manifesto.
  *
  * Refs: Ardern et al. 2016 (return-to-sport = a clinical decision, medical
- * clearance is the gate); Dupont et al. 2010 & Carling et al. 2015 (two matches
- * per week / congestion raises injury rate and needs load management);
+ * clearance is the gate); Dupont et al. 2010 & Carling et al. 2016 (two matches
+ * per week / congestion went with a higher injury rate and needs load management);
  * Gabbett 2016 + Impellizzeri 2020 (ACWR framed as an *unfamiliar load spike vs the player's own
  * recent norm*, not an injury "sweet spot").
  */
@@ -104,7 +104,7 @@ export type AvailabilityBoard = {
 
 // ── Thresholds ──────────────────────────────────────────────────────────────
 /** Two matches in a week is the congestion line where recovery debt accrues
- *  and load needs managing (Dupont 2010, Carling 2015). */
+ *  and load needs managing (Dupont 2010, Carling 2016). */
 const CONGESTION_MATCHES_7D = 2;
 /** ACWR at/above this is an unfamiliar spike vs the player's own recent norm
  *  (Gabbett 2016; its link to injury is disputed, Impellizzeri 2020) — a reason to manage, framed as spike-size, not "risk". */

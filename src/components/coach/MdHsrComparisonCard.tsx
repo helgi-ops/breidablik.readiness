@@ -4,13 +4,13 @@
  * MdHsrComparisonCard — periodization helper showing per-player HSR
  * exposure this week vs that player's personal match-day demand.
  *
- * Why it matters: Buchheit 2018 ("Players need to be exposed to the
+ * Why it matters: a common coaching principle ("Players need to be exposed to the
  * speeds they'll be required to run at on match day, repeatedly, in
- * training") + Stares 2018 (chronic high-speed exposure protects
- * against acute injury). Standard periodization rule:
+ * training") + Stares 2018 (Australian football: injury risk was highest when chronic load was low;
+ * observational). MicroPulse's periodization rule:
  *
  *   ≥95% of MD HSR reached by MD-1 → ready for the match
- *   <80% over the cycle             → injury risk on match day
+ *   <80% over the cycle             → under-exposed (MicroPulse's line)
  *
  * Two MD-baseline strategies, picked automatically:
  *
@@ -50,10 +50,10 @@ type Row = {
 
 const I18N = {
   title:    { EN: "MD Comparison — HSR exposure",      IS: "MD Samanburður — HSR exposure" },
-  citation: { EN: "Buchheit 2018 · Stares 2018",       IS: "Buchheit 2018 · Stares 2018" },
+  citation: { EN: "MicroPulse's rule · Stares 2018",       IS: "Viðmið MicroPulse · Stares 2018" },
   subtitle: {
-    EN: "Per-player high-speed running this week vs personal match-day demand. The 95% rule (Buchheit): players who reach ≥95% of their MD HSR by MD-1 enter the match prepared. <80% across the cycle = high acute-injury risk.",
-    IS: "Eftir-leikmanns high-speed running þessa viku miðað við persónulega kröfu á leikdegi. 95%-reglan (Buchheit): leikmenn sem ná ≥95% af leikdags-HSR sínu fyrir MD-1 mæta tilbúnir í leikinn. <80% yfir hringinn = há acute-injury áhætta.",
+    EN: "Per-player high-speed running this week vs personal match-day demand. The 95% line (MicroPulse's rule): players who reach ≥95% of their MD HSR by MD-1 count as prepared. <80% across the cycle = under-exposed (MicroPulse's line, not a proven injury threshold).",
+    IS: "Eftir-leikmanns high-speed running þessa viku miðað við persónulega kröfu á leikdegi. 95%-viðmiðið (regla MicroPulse): leikmenn sem ná ≥95% af leikdags-HSR sínu fyrir MD-1 teljast tilbúnir. <80% yfir hringinn = of lítið háhraðahlaup (viðmið MicroPulse, ekki sannaður meiðslaþröskuldur).",
   },
   strategyMatch:     { EN: "Match-derived baseline",    IS: "Baseline úr leikjum" },
   strategySynthetic: { EN: "Synthetic baseline (top 10% sessions)", IS: "Synthetic baseline (top 10% æfingar)" },
@@ -68,12 +68,12 @@ const I18N = {
     IS: "Heildar high-speed running vegalengd (>19.8 km/h, GPS V5+V6) sem leikmaðurinn safnaði yfir síðustu 7 daga (æfingar + leikir). Inniheldur daginn í dag. Teljarinn í % af MD hlutfallinu.",
   },
   mdBaseTip: {
-    EN: "Player's personal match-day demand — median HSR distance from their own matches (≥30 min played, DNPs excluded). When the player has ≥1 such match in the last 90 days, uses their own match median. Otherwise we fall back to a synthetic baseline from the player's top 10% training sessions (Buchheit 2018 method).",
-    IS: "Persónuleg leikdags-krafa leikmannsins — miðgildi HSR vegalengdar úr hans eigin leikjum (≥30 mín spilaðar, DNP undanskilin). Þegar leikmaðurinn á ≥1 slíkan leik síðustu 90 daga notar kerfið hans eigin leik-miðgildi. Annars föllum við aftur á synthetic baseline úr top 10% æfinga (Buchheit 2018 aðferð).",
+    EN: "Player's personal match-day demand — median HSR distance from their own matches (≥30 min played, DNPs excluded). When the player has ≥1 such match in the last 90 days, uses their own match median. Otherwise we fall back to a synthetic baseline from the player's top 10% training sessions (MicroPulse's fallback).",
+    IS: "Persónuleg leikdags-krafa leikmannsins — miðgildi HSR vegalengdar úr hans eigin leikjum (≥30 mín spilaðar, DNP undanskilin). Þegar leikmaðurinn á ≥1 slíkan leik síðustu 90 daga notar kerfið hans eigin leik-miðgildi. Annars föllum við aftur á synthetic baseline úr top 10% æfinga (varaleið MicroPulse).",
   },
   pctTip: {
-    EN: "HSR 7d ÷ MD baseline × 100. Buchheit 95% rule: players who reach ≥95% of their match-day demand by MD-1 enter the match prepared. Sustained <80% across the cycle = acute injury risk. >110% = consider easing MD-1 to avoid pre-match fatigue.",
-    IS: "HSR 7d ÷ MD baseline × 100. Buchheit 95% reglan: leikmenn sem ná ≥95% af leikdags-kröfu fyrir MD-1 mæta tilbúnir. Viðvarandi <80% yfir hringinn = acute injury risk. >110% = íhuga mýkri MD-1 til að forðast pre-match fatigue.",
+    EN: "HSR 7d ÷ MD baseline × 100. MicroPulse's 95% line: players who reach ≥95% of their match-day demand by MD-1 count as prepared. Sustained <80% across the cycle = under-exposed (not a proven injury threshold). >110% = consider easing MD-1 to avoid pre-match fatigue.",
+    IS: "HSR 7d ÷ MD baseline × 100. 95%-viðmið MicroPulse: leikmenn sem ná ≥95% af leikdags-kröfu fyrir MD-1 teljast tilbúnir. Viðvarandi <80% yfir hringinn = of lítið háhraðahlaup (ekki sannaður meiðslaþröskuldur). >110% = íhuga mýkri MD-1 til að forðast pre-match fatigue.",
   },
   statusTip: {
     EN: "READY 95-110% sweet spot. WATCH 80-95% top up in MD-1. UNDER <80% high injury risk — consider reduced minutes or longer warm-up. OVER >110% modify last session to avoid pre-match fatigue. Status is informational — the coach decides whether to act.",

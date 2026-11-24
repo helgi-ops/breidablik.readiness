@@ -1627,7 +1627,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
             <p className="text-sm font-semibold leading-snug text-slate-800">{head}</p>
             {n > 0 && (
               <p className="mt-0.5 text-[10px] text-slate-500">
-                {isIS ? "Traust" : "Confidence"}: {isIS ? `band byggt á ${n} ${n === 1 ? "lotu" : "lotum"}` : `band from ${n} past ${n === 1 ? "session" : "sessions"}`}{n < 4 ? (isIS ? " · lítið úrtak" : " · small sample") : ""} (Martin-García 2018).
+                {isIS ? "Traust" : "Confidence"}: {isIS ? `band byggt á ${n} ${n === 1 ? "lotu" : "lotum"}` : `band from ${n} past ${n === 1 ? "session" : "sessions"}`}{n < 4 ? (isIS ? " · lítið úrtak" : " · small sample") : ""} (Martín-García 2018).
               </p>
             )}
           </div>

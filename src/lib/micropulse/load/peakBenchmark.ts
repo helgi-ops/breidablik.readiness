@@ -153,8 +153,8 @@ export interface PeakShapeTrack {
 }
 
 const SHAPE_NOTE: Bi = {
-  en: "Peak-period SHAPE from TOTAL distance per window (not HIR) — so it is NOT comparable to Table 2. It shows how his peak-minute rate holds over 3 and 5 min. Elite players lose ~48% of high-intensity running in the minute after the peak (Ju 2022); a steep fall is normal and is partly pacing/tactics, not only fatigue.",
-  is: "Hámarkstímabils-LÖGUN úr HEILDARvegalengd per glugga (ekki HIR) — svo hún er EKKI samanburðarhæf við Töflu 2. Hún sýnir hvernig hámarks-mínútu hraðinn helst yfir 3 og 5 mín. Elite-leikmenn missa ~48% af háákafahlaupi í mínútunni eftir hámarkið (Ju 2022); bratt fall er eðlilegt og er að hluta pacing/taktík, ekki bara þreyta.",
+  en: "Peak-period SHAPE from TOTAL distance per window (not HIR) — so it is NOT comparable to Table 2. It shows how his peak-minute rate holds over 3 and 5 min. In the minute after the peak, elite players ran ~48% less high-intensity distance than their match average (Ju 2022); a steep fall is normal and is partly pacing/tactics, not only fatigue.",
+  is: "Hámarkstímabils-LÖGUN úr HEILDARvegalengd per glugga (ekki HIR) — svo hún er EKKI samanburðarhæf við Töflu 2. Hún sýnir hvernig hámarks-mínútu hraðinn helst yfir 3 og 5 mín. Í mínútunni eftir hámarkið hlupu elite-leikmenn ~48% minni háákafavegalengd en að meðaltali í leiknum (Ju 2022); bratt fall er eðlilegt og er að hluta pacing/taktík, ekki bara þreyta.",
 };
 
 /**

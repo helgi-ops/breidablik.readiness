@@ -4,7 +4,7 @@
  * GET — post-match recovery board for one match: every player who played, their
  * minutes, and their CANONICAL readiness colour (readiness_entries.color — same
  * source as v_coach_readiness_today_v8.final_color) across MD+1, MD+2, MD+3…,
- * so a coach can see who rebounded by MD+2 (Nédélec 2012 expectation) and who is
+ * so a coach can see who rebounded by MD+2 (MicroPulse's check-day; full recovery can take over 72 h — Nédélec 2012) and who is
  * lagging. Defaults to the most recent past match. Coach/staff only.
  *
  * NB: colour comes ONLY from readiness_entries.color — never
@@ -48,8 +48,8 @@ const normColor = (c: unknown): "green" | "yellow" | "red" | null => {
 };
 const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
-// IMA mechanical-load weights. High-intensity decelerations are the primary
-// muscle-damage / fatigue driver post-match, so decel leads the composite
+// IMA mechanical-load weights. High-intensity decelerations are linked to
+// muscle-damage markers (CK) after matches, so decel leads the composite
 // (McBurnie 2022; Harper 2019); accel/CoD/jumps add the rest of the eccentric
 // + landing demand. The composite is z-scored across the players who played,
 // so it reads as a RELATIVE high/mid/low mechanical dose for that match.
@@ -171,7 +171,7 @@ export async function GET(req: NextRequest) {
   // Nédélec's actual recovery marker — quantifies neuromuscular fatigue the
   // player may not feel. Baseline = median jump height in the 42 d before the
   // match (≥3 valid tests); per offset day we compare that day's CMJ to it.
-  // RSI-mod is the more fatigue-sensitive metric (Gathercole 2015) and is
+  // RSI-mod-type timing measures caught fatigue that output alone missed (Gathercole 2015) and are
   // surfaced too. Sparse until MD+1 jump-testing is routine → "—" otherwise.
   type Cmj = { jhPct: number | null; rsiPct: number | null };
   const cmjByKey = new Map<string, Cmj>();

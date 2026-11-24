@@ -538,7 +538,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
     intensityHint: "1 = mjög létt · 10 = mjög erfitt",
     step3: "Skref 3 — Yfirlit & Virkja", step3desc: "Svona mun vikan líta út fyrir leikmenn (þetta er það sem verður sent).",
     microTitle: "Microcycle yfirferð", microOk: "✓ Í lagi", microNote: "ábending",
-    microDesc: "Sjálfvirk yfirferð á vikuhringnum út frá rannsóknum (Buchheit o.fl. 2024). Ábendingar, ekki hindrun.",
+    microDesc: "Sjálfvirk yfirferð á vikuhringnum út frá skýrslu fyrir fagfólk (Buchheit o.fl. 2024). Ábendingar, ekki hindrun.",
     microNone: "Vikuhringurinn fylgir helstu microcycle-reglum — engin ábending.",
     saving: "Vista...", loadingW: "Hleður...", saveWeek: "Vista viku",
     applying: "Virkjar...", activate: "Virkja → senda leikmönnum",
@@ -569,7 +569,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
     intensityHint: "1 = very light · 10 = very hard",
     step3: "Step 3 — Review & Activate", step3desc: "This is how the week will look for players (this is what gets sent).",
     microTitle: "Microcycle review", microOk: "✓ OK", microNote: "note",
-    microDesc: "Automatic review of the microcycle from research (Buchheit et al. 2024). Suggestions, not blocks.",
+    microDesc: "Automatic review of the microcycle from a practitioner report (Buchheit et al. 2024). Suggestions, not blocks.",
     microNone: "The microcycle follows the main principles — no notes.",
     saving: "Saving...", loadingW: "Loading...", saveWeek: "Save week",
     applying: "Activating...", activate: "Activate → send to players",
@@ -1267,8 +1267,8 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
       return f.includes("FORCE") || f.includes("VELOCITY") || f.includes("NEURAL");
     };
 
-    // 1. Rest day at MD+1 — Buchheit 2023: a day off at MD+2 is associated
-    //    with a substantially lower non-contact injury rate (Principle 2).
+    // 1. Rest day at MD+1 — Buchheit 2023b: a day off at MD+2 is associated
+    //    with a lower non-contact injury rate, clearest in 3- and 7-day turnarounds (Principle 2).
     for (const g of gameIdx) {
       if (days[g + 1]?.day_type === "OFF" &&
           (days[g + 2]?.day_type === "TRAIN" || days[g + 2]?.day_type === "RECOVERY")) {
@@ -1276,8 +1276,8 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           id: "rest-md2", tone: "warn",
           title: isIS ? "Hvíldardagur á MD+1" : "Rest day at MD+1",
           body: isIS
-            ? "Frídagurinn er daginn eftir leik. Rannsóknir (Buchheit o.fl. 2023, 56 lið-tímabil) tengja frídag á MD+2 við marktækt lægri tíðni álagsmeiðsla — hópurinn mætir ferskari í fyrstu hörðu æfinguna. Íhugaðu að færa frídaginn á MD+2. (Regla 2)"
-            : "The rest day is the day after the match. Research (Buchheit et al. 2023, 56 team-seasons) links a day off at MD+2 with a markedly lower overuse-injury rate — the squad turns up fresher to the first hard session. Consider moving the rest day to MD+2. (Principle 2)",
+            ? "Frídagurinn er daginn eftir leik. Rannsókn (Buchheit o.fl. 2023b, 56 lið-tímabil) fann að frídegi á MD+2 fylgdu færri meiðsli án snertingar, skýrast þegar 3 eða 7 dagar eru milli leikja. Íhugaðu að færa frídaginn á MD+2. (Regla 2)"
+            : "The rest day is the day after the match. Research (Buchheit et al. 2023b, 56 team-seasons) found a day off at MD+2 went with fewer non-contact injuries, clearest when matches were 3 or 7 days apart. Consider moving the rest day to MD+2. (Principle 2)",
         });
         break;
       }

@@ -11,7 +11,7 @@
  *           spike-size descriptor, NOT a validated injury predictor
  *           (Impellizzeri 2020). The band labels load change, not risk.
  *   1.3–1.5 → WATCH      (elevated trajectory — monitor)
- *   > 1.5  → RISK        (3–5× injury hazard ratio — Hulin 2014)
+ *   > 1.5  → RISK        (Hulin 2014's 3–5× injury risk was at acute > 2× chronic, in cricket bowlers; 1.5 is Gabbett 2016's line)
  *
  * Implementation notes:
  *   - Acute window is 7 days, chronic window is 28 days, both ENDING on

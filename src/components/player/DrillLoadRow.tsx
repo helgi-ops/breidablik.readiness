@@ -86,7 +86,7 @@ export default function DrillLoadRow({ entry, lang, open, onToggle }: {
                   {is
                     ? "Löng hlaup = hlaup sem vara 18 sek eða lengur. Skokk meðtalið, því hraðinn er ekki mældur í hverri drillu – teljast ekki sem hraðahlaup."
                     : "Long runs = runs lasting 18 s or more. Jogs included, as pace isn't measured per drill – they don't count as hard running."}
-                  {" "}<span className="text-zinc-400">(McBurnie et al. 2022)</span>
+                  {" "}<span className="text-zinc-400">(Catapult IMA Free Running)</span>
                 </p>
               )}
             </div>

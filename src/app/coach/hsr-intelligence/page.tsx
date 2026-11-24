@@ -14,13 +14,13 @@
  *
  *   2. Buchheit 2023 (elite football) + Malone 2017 (Gaelic football) — reaching >95% of
  *      personal max speed in training went with fewer (hamstring) injuries (observational).
- *      Under- and over-exposure to top speed both went with more injuries (U-shape, Malone 2017).
+ *      Under- and over-exposure to top speed both went with more injuries (Malone 2017: a U-shaped link).
  *
- *   3. Bowen et al. 2017 (BJSM, elite youth football) — a high acute high-speed distance raised
+ *   3. Bowen et al. 2017 (BJSM, elite youth football) — a high acute high-speed distance went with higher
  *      non-contact injury risk when the chronic load was low, but not when it was high.
  *
  * Not shown to FULL Catapult teams — they have /coach/decel-intelligence
- * (McBurnie 2022 4-dimension framework on B2-3 efforts) instead, which
+ * (MicroPulse's 4-dimension module, built on McBurnie 2022, on B2-3 efforts) instead, which
  * is higher-fidelity for clubs paying for Premium reporting.
  */
 
@@ -127,7 +127,7 @@ function dateMinusDays(refIso: string, n: number): string {
 }
 
 // ── Flag thresholds ────────────────────────────────────────────────────
-// Cut-offs are MicroPulse's; evidence: Malone 2017 (HSR/Sprint ACWR) + Buchheit 2023 (MaxV exposure).
+// Cut-offs are MicroPulse's; evidence: Malone 2018 (large weekly HSR/sprint changes) + Malone 2017, Buchheit 2023 (MaxV exposure).
 
 function hsrAcwrFlag(acwr: number | null, chronic_avg: number): Flag {
   if (acwr == null) return "insufficient";
@@ -233,8 +233,8 @@ function driverTip(r: PlayerHsrSnapshot): { EN: string; IS: string } {
   if (r.pct_max_v != null) parts.push(`%MaxV ${r.pct_max_v.toFixed(0)}% · ${r.high_max_v_sessions_28d} sessions ≥95%`);
   const metrics = parts.join(" · ");
   return {
-    EN: `${metrics} — acute:chronic workload ratio + max-velocity exposure (Malone 2017, Buchheit 2023).`,
-    IS: `${metrics} — acute:chronic workload ratio + max-velocity exposure (Malone 2017, Buchheit 2023).`,
+    EN: `${metrics} — acute:chronic workload ratio (Gabbett 2016) + max-velocity exposure (Malone 2017, Buchheit 2023).`,
+    IS: `${metrics} — hlutfall skammtíma- og langtímaálags (Gabbett 2016) + útsetning fyrir hámarkshraða (Malone 2017, Buchheit 2023).`,
   };
 }
 

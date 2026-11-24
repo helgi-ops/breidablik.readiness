@@ -5,7 +5,7 @@
  * relative to `date` (default: today). Used by the dashboard to populate
  * `_yesterday_match_minutes` + `_yesterday_match_date` fields on the
  * Decision Summary row, which feed the MD+1 hard-recovery guardrail
- * (Carling 2018, Nédélec 2012, Helsen 2018 — 60-min threshold).
+ * (60-min threshold = MicroPulse's line; post-match fatigue lasts days: Nédélec 2012; Silva 2018; Carling 2018).
  *
  * Response: { ok: true, byPlayer: { [playerId]: { minutes_played: number, match_date: string } } }
  */

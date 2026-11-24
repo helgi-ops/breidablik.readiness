@@ -102,7 +102,7 @@ async function buildSummaryInput(
       .limit(3),
     supabase.rpc("get_indoor_load_status", { p_player_id: playerId }),
     supabase.from("players").select("full_name, position, team_id").eq("id", playerId).maybeSingle(),
-    // Dos'Santos 2021 — Sharp Cut Load (proxy via IMA Band 3 decel)
+    // Dos'Santos 2021b — Sharp Cut Load (proxy via IMA Band 3 decel)
     supabase
       .from("v_sharp_cut_hip_er_risk")
       .select("cuts_7d, cuts_28d, cuts_personal_z, cuts_flag")
@@ -404,7 +404,7 @@ async function buildSummaryInput(
 
   // ── Match minutes lookup for the detected match date ──────────────────
   // "High minutes" = enough to carry meaningful 24-72h recovery debt (football:
-  // Carling 2018, Nédélec 2012, Helsen 2018). The threshold is SPORT-AWARE — a
+  // 60 min is MicroPulse's line; post-match fatigue lasts days: Nédélec 2012; Silva 2018; Carling 2018). The threshold is SPORT-AWARE — a
   // 40-min basketball game can never reach football's 60-min cut, so we read the
   // team's sport and scale (see isHighMatchMinutes). We pull this up to the prompt
   // so the AI can frame MD+1 / MD+2 as recovery even when load looks moderate.
@@ -431,7 +431,7 @@ async function buildSummaryInput(
     }
   }
 
-  // ── Hader 2019 post-match recovery forecast ──
+  // ── Post-match recovery forecast (MicroPulse's model; HSR–fatigue link at 24 h: Hader 2019) ──
   // Hader et al. (2019) Sports Med Open meta-analysis (11 studies, 165 athletes):
   // sprint distance >5.5 m/s (≈19.8 km/h, equivalent to Velocity Band 6+) is the
   // single strongest predictor of acute (24h) post-match fatigue. Total distance
@@ -669,7 +669,7 @@ async function buildSummaryInput(
     // Match-day awareness — if today is post-match, load spikes are expected
     // and should be framed as such, not as concerning overreach.
     match_context:    postMatchContext,
-    // Hader 2019 — sprint-distance-derived recovery forecast. Null when not
+    // MicroPulse's sprint-distance recovery forecast (HSR–fatigue link at 24 h: Hader 2019). Null when not
     // post-match or when personal median can't be established (<3 historical
     // matches with sprint data). When non-null, shift_pct is the predicted
     // recovery time delta vs the player's typical match recovery. Positive
@@ -946,7 +946,7 @@ OFF-DAY RULE — CRITICAL:
 MATCH-MINUTES RULE — CRITICAL:
 - match_context.match_minutes_played is the actual minutes the player was on
   the pitch in the match. high_match_minutes = true means he played 60+ min
-  (Carling 2018, Nédélec 2012, Helsen 2018: 60-min threshold for meaningful
+  (60 min is MicroPulse's line, not from a paper; matches leave days of fatigue — Nédélec 2012; Silva 2018 — so 60+ min = meaningful
   24-72h recovery debt — significant CK + perceived fatigue elevation).
 - When high_match_minutes = true AND days_since_match = 1 (MD+1):
     * Default the action recommendation to "recovery session today" or
@@ -963,7 +963,7 @@ MATCH-MINUTES RULE — CRITICAL:
 - When match_minutes_played is null OR < 60, do NOT mention minutes
   specifically — fall back to the standard load + wellness narrative.
 
-RECOVERY FORECAST (Hader 2019) — when present:
+RECOVERY FORECAST (MicroPulse's estimate from match sprint distance; the HSR–fatigue link at 24 h is Hader 2019) — when present:
 - The input may include recovery_forecast (only fires post-match with ≥3 historical
   matches anchoring personal median sprint distance). Fields:
     match_sprint_m            — sprint distance in the just-played match (m)

@@ -8,8 +8,8 @@
  * A velocity drop ≥ 10% from the first-2-set average signals fatigue.
  *
  * References:
- * - Sánchez-Medina & González-Badillo (2011): velocity loss as fatigue proxy
- * - Pareja-Blanco et al. (2017): 20% velocity loss = significant fatigue
+ * - Sánchez-Medina 2011 (with González-Badillo): velocity loss as fatigue proxy
+ * - Pareja-Blanco et al. 2017b: a 20% cap gave similar strength gains to 40% with fewer reps (the 10% flag here is MicroPulse's line)
  */
 
 // ─── Types ──────────────────────────────────────────────────────────────────

@@ -128,8 +128,8 @@ export default function KinexonDecelCard({
 
       <p className="mt-3 text-[10px] leading-snug text-slate-400">
         {isEN
-          ? "Kinexon load/effort signals (Decels Load, Accels Load, Exertions, Mechanical Load) vs the player's own 28-day norm — McBurnie 2022 dimensions on measured load, not event counts. Directional work shows both Changes of Direction (CoD) and Changes of Orientation (CoO), flagged on CoD. L/R CoD asymmetry (per-intensity-tier split) and decel:sprint coupling aren't available here. Descriptive — never the readiness verdict."
-          : "Kinexon álags/átaks-merki (Decels Load, Accels Load, Exertions, Mechanical Load) á móti eigin 28-daga viðmiði — McBurnie 2022 víddir á mældu álagi, ekki atburðatalningu. Stefnuvinna sýnir bæði Changes of Direction (CoD) og Changes of Orientation (CoO), flöggað á CoD. L/R CoD ósamhverfa (eftir ákefðarþrepum) og hemlun:sprettur eru ekki í boði hér. Lýsandi — aldrei readiness-dómur."}
+          ? "Kinexon load/effort signals (Decels Load, Accels Load, Exertions, Mechanical Load) vs the player's own 28-day norm — MicroPulse's decel dimensions (built on McBurnie 2022) on measured load, not event counts. Directional work shows both Changes of Direction (CoD) and Changes of Orientation (CoO), flagged on CoD. L/R CoD asymmetry (per-intensity-tier split) and decel:sprint coupling aren't available here. Descriptive — never the readiness verdict."
+          : "Kinexon álags/átaks-merki (Decels Load, Accels Load, Exertions, Mechanical Load) á móti eigin 28-daga viðmiði — hemlunarvíddir MicroPulse (byggðar á McBurnie 2022) á mældu álagi, ekki atburðatalningu. Stefnuvinna sýnir bæði Changes of Direction (CoD) og Changes of Orientation (CoO), flöggað á CoD. L/R CoD ósamhverfa (eftir ákefðarþrepum) og hemlun:sprettur eru ekki í boði hér. Lýsandi — aldrei readiness-dómur."}
       </p>
     </div>
   );

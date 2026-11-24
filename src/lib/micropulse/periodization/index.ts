@@ -1357,7 +1357,7 @@ const blockGoalAt = (i: number): RecGoalKey => (i === 0 ? "accum" : i % 2 === 1 
  * fixture GAP or international break (≥ `gapDaysForLoad` with no games) is the only in-season window
  * where a real loading block fits, so it follows the build sequence (re-accumulate → transmute).
  * A congested stretch is always Realization (hold freshness). Pre-season keeps the straight build-up.
- * Issurin 2010 (block periodization); Buchheit 2019 / Martín-García 2018 (in-season microcycle).
+ * Issurin 2010 (block periodization); Martín-García 2018 (in-season microcycle).
  */
 export function blockGoalFromSeason(opts: {
   phaseKey: "preseason" | "competitive" | "offseason" | null;

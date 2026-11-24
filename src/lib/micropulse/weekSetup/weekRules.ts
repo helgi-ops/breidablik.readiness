@@ -26,7 +26,7 @@ export const WEEK_RULE_LOG_SOURCE = "week_rule" as const;
 
 export const THREE_IN_A_ROW_EVIDENCE =
   "MicroPulse rule (the coach's in-season plan, 2026-11-22): never three training sessions in a row; a match day is " +
-  "not a session. A day off at MD+2 is linked with a lower non-contact injury rate (Buchheit et al. 2023, 56 " +
+  "not a session. A day off at MD+2 is linked with a lower non-contact injury rate (Buchheit et al. 2023b, 56 " +
   "team-seasons).";
 
 export type WeekRuleDayKind = "session" | "off" | "match";

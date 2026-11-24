@@ -47,7 +47,7 @@ type BuildAthleteDecisionParams = {
     summary?: string | null;
   } | null;
   /**
-   * Decel Intelligence (McBurnie 2022 4-dimension framework) overall
+   * Decel Intelligence (MicroPulse's 4-dimension module, built on McBurnie 2022) overall
    * flag. Aggregates overload exposure, underload risk, decel:accel +
    * decel:sprint coupling, and exposure concentration. Red bumps to
    * RED; yellow bumps to YELLOW. Same severity ladder as
@@ -209,8 +209,8 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
   else if (indoorMcburnieFlag === "yellow") loadSummaryParts.push("Indoor McBurnie ratio in YELLOW — decel:intensity coupling outside sweet spot.");
   if (indoorAcwrFlag === "red") loadSummaryParts.push("Indoor ACWR in RED — acute spike or severe undertraining (Gabbett 2016).");
   else if (indoorAcwrFlag === "yellow") loadSummaryParts.push("Indoor ACWR in YELLOW — outside the familiar 0.8–1.3 range.");
-  if (decelOverallFlag === "red") loadSummaryParts.push(params.decelIntelligence?.summary ?? "Decel Intelligence (McBurnie 2022) overall flag RED — multiple deceleration dimensions out of safe range.");
-  else if (decelOverallFlag === "yellow") loadSummaryParts.push(params.decelIntelligence?.summary ?? "Decel Intelligence (McBurnie 2022) overall flag YELLOW — at least one deceleration dimension elevated.");
+  if (decelOverallFlag === "red") loadSummaryParts.push(params.decelIntelligence?.summary ?? "Decel Intelligence (MicroPulse's module; braking load: McBurnie 2022) overall flag RED — multiple deceleration dimensions past MicroPulse's lines.");
+  else if (decelOverallFlag === "yellow") loadSummaryParts.push(params.decelIntelligence?.summary ?? "Decel Intelligence (MicroPulse's module; braking load: McBurnie 2022) overall flag YELLOW — at least one deceleration dimension elevated.");
   // Stride Intelligence — push every fired driver into the load summary.
   // Severity is captured in the reason string; UI can color-code separately.
   if (params.strideIntel?.reasons?.length) {

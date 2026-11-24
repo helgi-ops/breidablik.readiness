@@ -1,7 +1,7 @@
 /**
  * Kinexon Deceleration Intelligence — pure, side-effect free.
  *
- * The McBurnie 2022 decel framework on a GPS team runs on Band-3 accel/decel
+ * MicroPulse's decel module (built on McBurnie 2022) on a GPS team runs on Band-3 accel/decel
  * event COUNTS. A real indoor Kinexon config often leaves those count bands empty
  * and instead reports the signal as LOAD and high-intensity EFFORT:
  *   - Decels Load  — total eccentric/braking load (the primary dose)
@@ -12,7 +12,7 @@
  *
  * So this computes the same McBurnie dimensions on Kinexon's load signals, each
  * read against the player's OWN 28-day baseline (there are no normative basketball
- * benchmarks — Power 2022). Descriptive external load — never a readiness verdict.
+ * benchmarks; a review of women's basketball load could not pool the studies — Power 2022). Descriptive external load — never a readiness verdict.
  * Deliberately NOT modelled: L/R CoD asymmetry and decel:sprint coupling (the
  * directional-CoD and IMA-Free-Running signals Kinexon doesn't export here).
  */

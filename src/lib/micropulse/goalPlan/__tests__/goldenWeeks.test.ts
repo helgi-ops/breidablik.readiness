@@ -17,6 +17,8 @@ import { SPEED_PLANS } from "@/lib/micropulse/speedMethods";
  *  - 2026-11-20 when-text only (GOAL_CONTENT_VERSION 2026-11-20.1): the gym session's day ("heavy gym day, MD-4 else
  *    MD-3, inside the team strength session" in pre-/off-season) and braking's session B (MD-3 in pre-season). No
  *    dose, method or source changed.
+ *  - 2026-11-24 citation wording only (reference audit lot C): the in-season speed plan's Rønnestad 2011 and
+ *    Gómez-Piqueras 2024 lines now say what each study showed. No dose, method, day or source changed.
  *
  * The Programme Library's plans at the intermediate level are pinned too (lota 4 step 2): intermediate IS the plan
  * as it was before levels existed, so adding beginner / advanced must not move a single word of it.
@@ -66,7 +68,7 @@ const LIBRARY_GOLDEN: Record<string, string> = {
   "lib:jump:individual:strength_first": "3bc083e1c019a487",
   "lib:jump:individual:fast_jumps": "a84a80e03d4be38e",
   "lib:jump:individual:youth": "2f04bf3e04d8db34",
-  "speed:in_season": "0a0e2a1e7d19fd65",
+  "speed:in_season": "ed8729d46bb7b798",
   "speed:pre_season": "e0c6abe1b0748b65",
   "speed:individual": "bf59f2c0ff662996",
   "jump:combined": "8f973b58a1d7e829",

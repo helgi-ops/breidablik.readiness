@@ -12,7 +12,7 @@
  *
  * What decides the verdict depends on the day (DAY_FOCUS): accelerations, braking and changes of direction on
  * Mechanical / Mixed / Activation / Top-up days; high-speed running and sprint distance (GPS velocity bands 5–6 and 6)
- * on Locomotive days, against his own match × the Locomotive share (45/45%, Stevens 2017, Martín-García 2018).
+ * on Locomotive days, against his own match × the Locomotive share (45/45% — MicroPulse's line near the biggest measured days; Stevens 2017, Martín-García 2018).
  *
  * Long runs (IMA Free Running, continuous runs of ≥18 s) are shown, never judged (CONTEXT_ONLY_VARS): the count,
  * the count AT MATCH PACE (11 km/h+, `longRunsMp`), distance and strides. Since 10 Nov 2026 the count no longer
@@ -23,7 +23,7 @@
  * `frDistance` / `strideHi` are kept for interface stability.
  *
  * Pure, deterministic, IO-free. Rules decide; no AI. Descriptive — NEVER the readiness colour.
- * Day shares: Stevens 2017 + Martín-García 2018 (Acc/Dec/CoD standard); load falls toward the match (Gualtieri 2024) per MicroPulse's MD-day load
+ * Day shares: Stevens 2017 + Martín-García 2018 (Acc/Dec as a share of the match; CoD follows the same share, MicroPulse's choice); load falls toward the match (Gualtieri 2024) per MicroPulse's MD-day load
  * model (via planSessionLoad's matchPct); braking/CoD tissue load Harper 2022; training:match
  * ratios PMC6747517. (Malone 2018 sprint-exposure was cited here before; removed — it is about GPS
  * sprinting, which these IMA long-run metrics are not.)
@@ -109,7 +109,7 @@ export const SESSION_SHARE_EXPONENT: Record<EnoughVar, number> = {
 };
 
 export const ENOUGH_CITATIONS = [
-  "Buchheit et al. 2024 — MD-day load as a share of the match",
+  "Buchheit et al. 2024 — microcycle principles (practitioner report; the MD-day shares are MicroPulse's)",
   "Martín-García et al. 2018 — load across the microcycle",
   "Stevens et al. 2017 — training load relative to match load (incl. high-speed running per MD-day)",
   "Harper 2022 — braking / change-of-direction loading",

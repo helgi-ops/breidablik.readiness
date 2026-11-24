@@ -96,7 +96,7 @@ export const HRMAX_CITATION =
  * Age-predicted HRmax — a labelled FALLBACK, never a measured value.
  *  - Tanaka 2001 (208 − 0.7·age) is the modern default: more accurate than the old
  *    Fox 220−age, which overestimates the young and underestimates the old.
- *  - Gulati 2010 (206 − 0.88·age) fits women better (validated in a large female cohort).
+ *  - Gulati 2010 (206 − 0.88·age) fits women better (derived in 5,437 women; the usual formula overestimates women's HRmax).
  * Both are population estimates (SEE ≈ 7–11 bpm), so an observed belt peak — when a
  * genuine maximal effort was captured — should be preferred over this. Returns null
  * for an implausible/absent age rather than fabricating a number.

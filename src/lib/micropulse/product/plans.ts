@@ -41,7 +41,7 @@ export const PLAN_DEFINITIONS: Record<PlanDefinition["key"], PlanDefinition> = {
     monthlyPriceLabel: "€349 / month · 49.990 kr / mán.",
     annualPriceLabel: null,
     targetAudience: ["S&C coaches", "Performance staff", "Top-flight clubs", "Premium Catapult subscribers (B2-3 efforts or IMU bands)"],
-    summary: "Adds Decel Intelligence, Indoor Load, Quadrant 2017 B2-3 axis, Sharp Cut, MPE Recovery — the full McBurnie 2022 stack on top of everything in Lite.",
+    summary: "Adds Decel Intelligence, Indoor Load, the Quadrant view (Vanrenterghem 2017) with a B2-3 axis, Sharp Cut, MPE Recovery — MicroPulse's braking-load tools (built on McBurnie 2022) on top of everything in Lite.",
     featureKeys: PLAN_FEATURES.PRO,
     sortOrder: 3,
     highlighted: true,

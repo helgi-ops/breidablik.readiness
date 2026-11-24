@@ -12,8 +12,8 @@
  * Descriptive planning aid the coach owns (recommend + flag, never block). NEVER the readiness
  * colour, the load target, or the daily decision.
  *
- * Cite: Owen 2017/2024; Martin-Garcia 2018; Buchheit & Lacome; Stevens 2017; Oliva-Lozano;
- *       Gaudino/Casamichana (SSG pitch size → accel/decel vs high-speed load).
+ * Cite: Owen 2017/2024; Martín-García 2018; Buchheit & Lacome; Stevens 2017; Oliva-Lozano;
+ *       Gaudino 2014 (SSG pitch size → accel/decel vs high-speed load).
  */
 
 import type { Bi } from "./peakPeriod";

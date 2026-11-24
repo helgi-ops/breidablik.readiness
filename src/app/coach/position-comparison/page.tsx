@@ -132,11 +132,11 @@ export default function PositionComparisonPage() {
     // Plain-language phrasing per metric for the headline sentence (no jargon),
     // plus the jargon term + citation that lives only in the driver tooltip.
     const PHRASE: Partial<Record<MetricKey, { en: string; is: string; jargonEn: string; jargonIs: string; cite: string }>> = {
-      sprint: { en: "cover the most sprint distance", is: "hlaupa flesta spretti", jargonEn: "Sprint distance (HSR/sprint, Malone 2017)", jargonIs: "Sprettir (HSR/sprettir, Malone 2017)", cite: "Malone 2017" },
-      hsr: { en: "cover the most high-speed distance", is: "hlaupa mest á háhraða", jargonEn: "High-speed running (HSR, Di Salvo 2007)", jargonIs: "Háhraðahlaup (HSR, Di Salvo 2007)", cite: "Di Salvo 2007" },
+      sprint: { en: "cover the most sprint distance", is: "hlaupa flesta spretti", jargonEn: "Sprint distance (HSR/sprint, Malone 2018)", jargonIs: "Sprettir (HSR/sprettir, Malone 2018)", cite: "Malone 2018" },
+      hsr: { en: "cover the most high-speed distance", is: "hlaupa mest á háhraða", jargonEn: "High-speed running (HSR; Di Salvo 2007)", jargonIs: "Háhraðahlaup (HSR; Di Salvo 2007)", cite: "Di Salvo 2007" },
       decel: { en: "absorb the most braking load", is: "taka mesta hemlunarálagið", jargonEn: "Decelerations (Dec / braking, McBurnie 2022)", jargonIs: "Hraðaminnkun (Dec / hemlun, McBurnie 2022)", cite: "McBurnie 2022" },
-      accel: { en: "do the most accelerating", is: "hraða sér oftast upp", jargonEn: "Accelerations (Acc, McBurnie 2022)", jargonIs: "Hröðun (Acc, McBurnie 2022)", cite: "McBurnie 2022" },
-      cod: { en: "change direction the most", is: "breyta oftast um stefnu", jargonEn: "Change of direction (CoD, McBurnie 2022)", jargonIs: "Stefnubreytingar (CoD, McBurnie 2022)", cite: "McBurnie 2022" },
+      accel: { en: "do the most accelerating", is: "hraða sér oftast upp", jargonEn: "Accelerations (Acc) — Harper 2019", jargonIs: "Hröðun (Acc) — Harper 2019", cite: "Harper 2019" },
+      cod: { en: "change direction the most", is: "breyta oftast um stefnu", jargonEn: "Change of direction (CoD) — McBurnie 2022", jargonIs: "Stefnubreytingar (CoD) — McBurnie 2022", cite: "McBurnie 2022" },
       efforts: { en: "rack up the most hard accel/decel efforts", is: "safna flestum ákafa-átökum (hröðun/hemlun)", jargonEn: "Accel & decel efforts (Gen2, McBurnie 2022)", jargonIs: "Hröðunar/hemlunar-átök (Gen2, McBurnie 2022)", cite: "McBurnie 2022" },
       player_load: { en: "carry the most Player Load", is: "bera mesta Player Load", jargonEn: "Player Load (total mechanical work)", jargonIs: "Player Load (heildar vélræn vinna)", cite: "" },
       pl_per_min: { en: "work at the highest intensity", is: "vinna á mestri ákefð", jargonEn: "Player Load per minute (work rate)", jargonIs: "Player Load á mínútu (ákefð)", cite: "" },

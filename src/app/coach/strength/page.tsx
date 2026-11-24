@@ -1401,10 +1401,10 @@ export default function CoachStrengthPage() {
           </summary>
           <p className="px-2.5 pb-2.5 leading-relaxed">
             {t(
-              "15-20 min sessions 3-5×/week give similar strength gains to 1-2 long sessions when the weekly volume is the same (Cuthbert 2021) — " +
+              "15-20 min sessions 3-5×/week (MicroPulse's microdose): shorter, more frequent sessions gave similar strength gains to 1-2 long ones when the weekly volume was the same (Cuthbert 2021) — " +
               "they spread the fatigue across the week and fit congested calendars. " +
               "It's the default; switch any block to traditional (concentrated lift days) in Training principles when the week allows.",
-              "15-20 mín æfingar 3-5×/viku gefa svipaða styrkaukningu og 1-2 langar þegar vikumagnið er það sama (Cuthbert 2021) — " +
+              "15-20 mín æfingar 3-5×/viku (örskammtur MicroPulse): styttri og tíðari æfingar gáfu svipaða styrkaukningu og 1-2 langar þegar vikumagnið var það sama (Cuthbert 2021) — " +
               "þær dreifa þreytunni yfir vikuna og henta þéttri leikjadagskrá. " +
               "Þetta er sjálfgefið; skiptu hvaða blokk sem er yfir á hefðbundið (einbeittir lyftidagar) í Þjálfunarprinsipp þegar vikan leyfir.",
             )}

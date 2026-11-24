@@ -191,9 +191,9 @@ function MetricTile({
 // Single source of truth so REST-DAY and SESSION branches stay in sync.
 const STRIDE_TIPS = {
   cadence:
-    "Stride rate in strides per minute: strides ÷ time in the IMA Free Running bands (bands = how long each continuous run lasted, not speed). Higher = quicker turnover. A clear drop vs his own baseline signals neuromuscular fatigue (Buchheit 2018).",
+    "Stride rate in strides per minute: strides ÷ time in the IMA Free Running bands (bands = how long each continuous run lasted, not speed). Higher = quicker turnover. A clear drop vs his own baseline may point to fatigue (MicroPulse's read; GPS-unit running measures can track neuromuscular function: Buchheit 2018).",
   strideLength:
-    "Metres covered per stride. When GPS distance exists it is stride length in sustained running — distance ÷ strides in long continuous runs (18 s or more, from IMA Free Running run lengths), not sprinting. Otherwise it is the session average (total distance ÷ total strides). A clear drop vs his own baseline suggests fatigue or reduced push-off (McBurnie 2022).",
+    "Metres covered per stride. When GPS distance exists it is stride length in sustained running — distance ÷ strides in long continuous runs (18 s or more, from IMA Free Running run lengths), not sprinting. Otherwise it is the session average (total distance ÷ total strides). A clear drop vs his own baseline may point to fatigue or reduced push-off (MicroPulse's own read, not a tested fatigue marker).",
   asymmetry:
     "Side-to-side imbalance in all change-of-direction efforts (low, medium and high): |Left − Right| ÷ the average of the two, %. Flagged when it jumps above his own 28-day normal (+1σ watch · +1.5σ concern · +2σ high) or sits above 25% watch · 30% concern · 40% high. These lines are MicroPulse's, set on the squad's spread (most players sit near 19%), not from a study. GPS turn-count gaps have not been tested against injury (Helme 2021).",
   decoupling:
@@ -425,7 +425,7 @@ export default function StrideIntelligenceCard({ playerId, date: dateProp, isKin
           <div className="mt-1 text-[11px] leading-snug text-slate-600">{sv.reason}</div>
           <div className="mt-1 text-[10px] text-slate-400">
             {sv.strideLengthM != null && sv.normM != null ? `${sv.strideLengthM} m vs his usual ${sv.normM} m · ` : ""}
-            distance ÷ strides in long continuous runs (18 s+) · vs his own {sv.kind === "match" ? "matches" : "big sessions"} · 2.5 SD · McBurnie 2022, Girard/Morin 2011
+            distance ÷ strides in long continuous runs (18 s+) · vs his own {sv.kind === "match" ? "matches" : "big sessions"} · 2.5 SD · MicroPulse’s read; Girard/Morin 2011
           </div>
         </div>
       )}

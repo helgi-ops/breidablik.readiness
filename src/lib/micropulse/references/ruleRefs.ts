@@ -289,6 +289,34 @@ const SHORT_ALIASES: Record<string, string> = {
  */
 export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
   // Lot A (app citations, 2026-11-24).
+  "Catapult 2026": {
+    en: "A Catapult company blog post by Niklas Virtanen ('Data as a language'), not a peer-reviewed study; it stays as the source of the design idea but cannot be checked as a paper.",
+    is: "Bloggfærsla frá Catapult eftir Niklas Virtanen („Data as a language“), ekki ritrýnd rannsókn; hún stendur sem uppruni hugmyndarinnar en er ekki vísindagrein.",
+  },
+  "Hodgdon & Beckett 1984": {
+    en: "Two US Navy technical reports, not journal papers: Hodgdon JA, Beckett MB. Prediction of percent body fat for U.S. Navy men from body circumferences and height (doi:10.21236/ada143890) and ... for U.S. Navy women ... (doi:10.21236/ada146456). Naval Health Research Center, San Diego, 1984. Not in PubMed; the reports exist in Crossref/DTIC. It stays as the source of the Navy circumference formula.",
+    is: "Tvær tækniskýrslur bandaríska sjóhersins, ekki tímaritsgreinar: Hodgdon JA, Beckett MB. Prediction of percent body fat for U.S. Navy men (og women) from body circumferences and height. Naval Health Research Center, San Diego, 1984 (doi:10.21236/ada143890 og doi:10.21236/ada146456). Ekki í PubMed; skýrslurnar finnast í Crossref/DTIC. Hún stendur sem uppruni ummálsformúlu sjóhersins.",
+  },
+  "Oliver 2004": {
+    en: "Dean Oliver, Basketball on Paper (2004) — a book, not a journal paper; PubMed does not index it. It stays as the source of the 'Four Factors' names only.",
+    is: "Dean Oliver, Basketball on Paper (2004) — bók, ekki tímaritsgrein; PubMed skráir hana ekki. Hún stendur aðeins sem uppruni heitisins „Four Factors“.",
+  },
+  "Cohen 1988": {
+    en: "Cohen J, Statistical Power Analysis for the Behavioral Sciences (2nd ed., 1988) — a statistics book, not indexed. It stays as the source of the small/medium/large effect-size words (0.2/0.5/0.8).",
+    is: "Cohen J, Statistical Power Analysis for the Behavioral Sciences (2. útg., 1988) — tölfræðibók, ekki skráð í PubMed. Hún stendur sem uppruni orðanna lítil/miðlungs/mikil áhrifastærð (0,2/0,5/0,8).",
+  },
+  "StatsBomb 2021": {
+    en: "StatsBomb's own metric glossary / On-Ball Value write-up — a company web page, not a journal paper, so it cannot be checked against a record. It stays as the name of the data provider's metric.",
+    is: "Orðasafn StatsBomb / lýsing á On-Ball Value — vefsíða fyrirtækis, ekki tímaritsgrein, svo ekki er hægt að bera hana saman við færslu. Hún stendur sem heiti á mælikvarða gagnaveitunnar.",
+  },
+  "Bangsbo 2014": {
+    en: "Bangsbo 2014 is a GSSI Sports Science Exchange article (#125), a web publication not indexed in PubMed, so the 85%/65% HRmax match figures could not be checked against a paper; the indexed Bangsbo 2006 review does not give them.",
+    is: "Bangsbo 2014 er grein á vef GSSI (Sports Science Exchange nr. 125), ekki skráð í PubMed, svo ekki tókst að staðfesta 85%/65% HRmax tölurnar í leik; skráða yfirlitsgreinin Bangsbo 2006 gefur þær ekki.",
+  },
+  "Gray 2025": {
+    en: "'ADI / Gray 2025' is coach-education material (Andrew Gray, ADI), not an indexed paper; no matching publication was found, so the linear-vs-multidirectional idea is a practitioner concept, not a study.",
+    is: "„ADI / Gray 2025“ er fræðsluefni fyrir þjálfara (Andrew Gray, ADI), ekki skráð vísindagrein; engin samsvarandi grein fannst, svo línulegt vs. fjölátta er hugmynd úr starfi, ekki rannsókn.",
+  },
   "Buchheit 2025": {
     en: "Cited for two things: the staged order from return-to-run to full team training, and (on the quadrant page) the idea of reading load against response. No 2025 Buchheit paper on either is in PubMed or Crossref (likely practitioner pieces). It stays as named; the staged order is also cited to Taberner 2019, and the quadrant page says its axes are ACWR, not that piece's.",
     is: "Vitnað í vegna tveggja atriða: stigmögnunar frá fyrstu hlaupum til fullrar liðsæfingar, og (á fjórðungasíðunni) hugmyndarinnar að lesa álag á móti svörun. Engin grein eftir Buchheit frá 2025 um hvorugt finnst í PubMed eða Crossref (líklega skrif fyrir fagfólk). Hún stendur eins og hún er nefnd; stigmögnunin er líka studd með Taberner 2019 og fjórðungasíðan segir að ásarnir séu ACWR, ekki ásar úr því verki.",

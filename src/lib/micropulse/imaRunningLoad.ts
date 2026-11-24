@@ -11,7 +11,7 @@
  * in the GPS velocity columns, not here.
  *
  * A sharp week-to-week jump in sustained-running volume is still worth seeing,
- * so this computes the acute:chronic workload ratio (Gabbett 2016 / Williams 2017
+ * so this computes the acute:chronic workload ratio (Gabbett 2016 simple
  * rolling-average method) on ≥18 s run distance as a generic volume-change
  * descriptor, plus a personal z-score of today's session vs the player's recent
  * training days. Do not label the result HSR, sprint or high-intensity load.

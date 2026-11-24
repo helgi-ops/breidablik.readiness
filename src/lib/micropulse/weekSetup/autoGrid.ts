@@ -29,7 +29,7 @@ export const MD2_OFF_RULE = "INSEASON_MD2_OFF" as const;
 
 export const MD2_OFF_EVIDENCE =
   "MicroPulse rule (the coach's in-season plan, 2026-11-23): MD+2 is a day off. A day off at MD+2 is linked with a " +
-  "lower non-contact injury rate (Buchheit et al. 2023, 56 team-seasons).";
+  "lower non-contact injury rate (Buchheit et al. 2023b, 56 team-seasons; clearest in 3- and 7-day turnarounds).";
 
 export type AutoGrid = {
   intents: AutoGridIntent[];
@@ -84,8 +84,8 @@ export function matchAnchoredGrid(weekStart: string, matchDates: (string | null 
 
   const notes: Bi[] = md2Off.length
     ? [{
-      en: "MD+2 is a day off: in season the day 48 h after a match is rest (Buchheit 2023).",
-      is: "MD+2 er frídagur: á keppnistímabili er hvíld 48 klst. eftir leik (Buchheit 2023).",
+      en: "MD+2 is a day off: in season the day 48 h after a match is rest (MicroPulse's rule; a day off at MD+2 went with fewer non-contact injuries, Buchheit 2023b).",
+      is: "MD+2 er frídagur: á keppnistímabili er hvíld 48 klst. eftir leik (regla MicroPulse; frídegi á MD+2 fylgdu færri meiðsli án snertingar, Buchheit 2023b).",
     }]
     : [];
   return { intents, notes };

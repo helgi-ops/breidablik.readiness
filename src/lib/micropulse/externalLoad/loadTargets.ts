@@ -27,8 +27,8 @@
  *                      then apply mesocycle multiplier.
  *
  * References:
- *   - Martin-Garcia et al. 2018 (Barcelona B) — MD-day demand distribution
- *   - Akenhead et al. 2016 — Training:match ratio framework
+ *   - Martín-García et al. 2018 (Barcelona B) — MD-day demand distribution
+ *   - Akenhead et al. 2016 — within-week load incl. accelerations (highest 5 days before the match, lowest the day before)
  *   - Stevens et al. 2017 — Per-KPI demand percentages differ
  */
 
@@ -114,7 +114,7 @@ const DEFAULT_CONFIG: Omit<LoadTargetConfig, "team_id" | "updated_at"> = {
   match_demand_min_minutes: 75,
   // Indoor FMP/IMA keys are merged into the same jsonb template — the compute step
   // iterates over whichever KPI subset is active for the team. Sourced from the pure
-  // presets module (single source, client-safe) — the Martin-Garcia 2018 default.
+  // presets module (single source, client-safe) — the Martín-García 2018 default.
   match_demand_template: MARTIN_GARCIA_TEMPLATE,
   match_demand_overrides: {},
   baseline_exclude_match_days: false,
@@ -760,7 +760,7 @@ export type { LoadTemplatePresetKey } from "./loadTemplatePresets";
  * as_expected / below with a tolerance. Pure; null-safe.
  *
  * Descriptive load context — the flag never touches the readiness colour or the daily decision.
- * Cite: Owen et al. 2017 (mesocycle taper); Martin-Garcia 2018 (the per-MD-day distribution).
+ * Cite: Owen et al. 2017 (mesocycle taper); Martín-García 2018 (the per-MD-day distribution).
  */
 export function flagSessionVsMdBand(
   actual: number | null | undefined,

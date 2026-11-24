@@ -125,10 +125,10 @@ export function recommendSessionForDay(day: WeekPlanDayInput): SessionRecommenda
   // (1) match / day off → no training session.
   if (token.includes("GAME") && !token.includes("PREPARATION")) return out(null, {}, { en: "Match day — no training session.", is: "Leikdagur — engin æfing." });
   if (/\b(OFF|REST)\b/.test(token)) {
-    // MD+2 rule: a FULL day off — squads resting on MD+2 show lower injury rates (Buchheit 2023).
+    // MD+2 rule: a FULL day off — squads resting on MD+2 had fewer non-contact injuries (Buchheit 2023b, observational).
     const isMd2 = /MD\+2/.test(token) || tier === "MD+2";
     return out(null, {}, isMd2
-      ? { en: "MD+2 — full day off. Squads resting on MD+2 show lower injury rates (Buchheit 2023).", is: "MD+2 — heill frídagur. Lið sem hvíla á MD+2 sýna lægri meiðslatíðni (Buchheit 2023)." }
+      ? { en: "MD+2 — full day off. Squads resting on MD+2 had fewer non-contact injuries in one large study (Buchheit 2023b).", is: "MD+2 — heill frídagur. Lið sem hvíldu á MD+2 fengu færri meiðsli án snertingar í einni stórri rannsókn (Buchheit 2023b)." }
       : { en: "Day off.", is: "Frídagur." });
   }
 

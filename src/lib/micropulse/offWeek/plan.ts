@@ -1,8 +1,8 @@
 /**
  * Off-week / holiday MAINTENANCE program — pure, deterministic.
  *
- * A week off is a maintenance micro-block, not a building block (Rønnestad 2011: ~1–2 strength
- * sessions/week + some running retains the pre-break level; Mujika & Padilla 2000: detraining is
+ * A week off is a maintenance micro-block, not a building block (Rønnestad 2011: 1 strength session a week kept pre-season gains over 12 in-season weeks; MicroPulse's off-week dose: ~1–2 strength
+ * sessions/week + some running, meant to hold the pre-break level; Mujika & Padilla 2000: with too little training aerobic fitness drops fast, strength less so — so detraining is
  * avoided, not reversed, in a week). This composes a self-guided multi-day plan a player can do
  * ANYWHERE, OFFLINE — prescriptions are RPE / time / distance / reps only, never GPS- or coach-gated.
  *
@@ -153,9 +153,9 @@ function strengthBlocks(inp: OffWeekInputs): OffWeekBlock[] {
   const hasEcc = def.some((d) => /eccentric|hamstring|nordic/.test(d));
   const hasAdd = def.some((d) => /adductor|groin|copenhagen/.test(d));
   const hasUni = def.some((d) => /unilateral|asymmetr/.test(d));
-  if (hasEcc) blocks.push({ label: { en: "Hamstring (eccentric)", is: "Aftanlæri (eccentric)" }, prescription: { en: "Nordic hamstring 3×5 (slow lower) — van Dyk 2019", is: "Nordic aftanlæri 3×5 (hægt niður) — van Dyk 2019" },
+  if (hasEcc) blocks.push({ label: { en: "Hamstring (eccentric)", is: "Aftanlæri (eccentric)" }, prescription: { en: "Nordic hamstring 3×5 (slow lower; MicroPulse's dose) — van Dyk 2019", is: "Nordic aftanlæri 3×5 (hægt niður; skammtur MicroPulse) — van Dyk 2019" },
     lifts: [{ name: "Nordic hamstring", sets: 3, reps: "5", cue: "controlled" }] });
-  if (hasAdd) blocks.push({ label: { en: "Adductor", is: "Innanlæri" }, prescription: { en: "Copenhagen plank 3×20–30 s/side — Harøy 2019", is: "Copenhagen planki 3×20–30 s/hlið — Harøy 2019" },
+  if (hasAdd) blocks.push({ label: { en: "Adductor", is: "Innanlæri" }, prescription: { en: "Copenhagen plank 3×20–30 s/side (MicroPulse's dose) — Harøy 2019", is: "Copenhagen planki 3×20–30 s/hlið (skammtur MicroPulse) — Harøy 2019" },
     lifts: [{ name: "Copenhagen adduction", sets: 3, reps: "20–30 s/side", cue: "controlled" }] });
   if (hasUni && gymAccess === "gym") blocks.push({ label: { en: "Unilateral / symmetry", is: "Einfætt / samhverfa" }, prescription: { en: "Extra single-leg set on the weaker side (3×8)", is: "Auka einfætt sett á veikari hlið (3×8)" } });
   return blocks;

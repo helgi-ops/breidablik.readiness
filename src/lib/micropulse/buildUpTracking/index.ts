@@ -22,9 +22,9 @@
  * 21-day mark is `coverageConfidence`'s "high". The transition is gated on
  * baseline maturity (visible as confidence), never hidden behind a threshold.
  *
- * Safety ceiling on the ACTUAL climb reuses the RTT / Gabbett (JOSPT 2020) ramp
+ * Safety ceiling on the ACTUAL climb reuses the RTT / Gabbett 2016 / Gabbett 2020 ramp
  * cap: a week whose actual load jumps > ×1.10 over the prior week is flagged as
- * climbing faster than the safe +10%/week, independent of the plan.
+ * climbing faster than the +10%/week ceiling, independent of the plan.
  */
 import type { Bi, CalendarBlock } from "@/lib/micropulse/periodization";
 
@@ -84,7 +84,7 @@ export interface BuildUpInput {
   /** The plan's own confidence (own match unit vs squad-baseline fallback). */
   planConfidence: Confidence | "medium";
   acwr?: BuildUpAcwr | null;
-  /** Safe week-over-week climb ceiling; default 1.10 (Gabbett JOSPT 2020). */
+  /** Week-over-week climb ceiling; default 1.10 (Gabbett 2016: keep weekly rises under 10%). */
   rampRate?: number;
 }
 
@@ -130,7 +130,7 @@ export interface BuildUpAdherence {
   acwr: BuildUpAcwr | null;
 }
 
-const RAMP = 1.1; // Gabbett, JOSPT 2020 — safe +10%/week climb
+const RAMP = 1.1; // +10%/week climb ceiling (Gabbett 2016 advises weekly rises under 10%; Gabbett 2020: progress gradually)
 const ON_LO = 0.85; // adherence band, mirrors loadPlan/plannedVsActual.statusOf
 const ON_HI = 1.15;
 const MIN_MATURE = 8; // playerLoadAcwr MIN_CHRONIC_DAYS_OBSERVED
@@ -243,9 +243,9 @@ export function computeBuildUpAdherence(inp: BuildUpInput): BuildUpAdherence {
   const acwr = phase === "plan_relative" ? null : inp.acwr ?? null;
   const { verdict, facts } = narrate(inp, phase, latest);
   const provenance = [
-    "Plan: periodization block from the player's match unit / squad baseline (Martin-García 2018 taper).",
+    "Plan: periodization block from the player's match unit / squad baseline (Martín-García 2018 taper).",
     "Adherence band 85–115% of plan (planned-vs-actual).",
-    "Safe climb +10%/week (Gabbett, JOSPT 2020 — How Much? How Fast?).",
+    "Climb ceiling +10%/week (Gabbett 2016 advises keeping weekly rises under 10%, from his own rugby data; gradual progression: Gabbett 2020).",
     "ACWR 7:28 rolling (Hulin 2014 / Impellizzeri 2020 — load change, not an injury score).",
     "Drivers (context, no plan target): CoD volume (McBurnie 2022), metabolic power intensity (di Prampero 2015).",
   ];

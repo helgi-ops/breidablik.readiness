@@ -15,12 +15,12 @@
  * Provenance (per the explainability manifesto, every rule carries its source):
  *   Salazar 2020   — external W3>W0>W2>W1; internal peaks in no-game weeks.
  *   Salazar 2025   — short-term (within-microcycle) load distribution across six
- *                    elite-European head coaches; corroborates the MD-relative shape.
+ *                    elite-European head coaches; abstract not checked, so no shape is claimed from it.
  *   Conte 2018     — 1-game weeks carry MORE total load than 2-game weeks;
  *                    starters > bench; bench needs topping up (esp. 2-game).
  *   Power 2024     — congested weeks are tapered; the 3rd game of a 3-game week
  *                    is the heaviest single event.
- *   Paulauskas 2019 — a well-run team moves CHRONIC load ≤10% week-on-week;
+ *   Paulauskas 2019 — in one elite women's basketball season, CHRONIC load moved ≤10% week-on-week;
  *                     the spikes live in acute load, not chronic.
  *
  * Deliberately NOT modelled here (see the task brief): the ACWR 1.0–1.5 "sweet
@@ -178,8 +178,8 @@ export function flagWeekAnomaly(input: WeekAnomalyInput): WeekAnomalyResult {
           driftPct: drift,
           citation: "Paulauskas et al. 2019",
           headline: {
-            en: `Chronic load moved ${up ? "up" : "down"} ${pct1(Math.abs(drift))} on last week — a well-run team keeps this under ~10%.`,
-            is: `Krónískt álag ${up ? "hækkaði" : "lækkaði"} um ${pct1(Math.abs(drift))} frá síðustu viku — vel rekið lið heldur þessu undir ~10%.`,
+            en: `Chronic load moved ${up ? "up" : "down"} ${pct1(Math.abs(drift))} on last week — in a study of elite women's basketball, chronic load moved ≤10% a week, so MicroPulse flags moves over ~10%.`,
+            is: `Krónískt álag ${up ? "hækkaði" : "lækkaði"} um ${pct1(Math.abs(drift))} frá síðustu viku — í rannsókn á úrvalsliðum kvenna í körfubolta breyttist krónískt álag ≤10% á viku, svo MicroPulse merkir breytingar yfir ~10%.`,
           },
         });
       }

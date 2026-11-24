@@ -44,7 +44,7 @@ type TestResp = { ok: boolean; efforts?: TestEffortRow[]; read?: CsTestRead; squ
 
 const CONF_TONE: Record<string, string> = { high: "bg-emerald-100 text-emerald-700", medium: "bg-amber-100 text-amber-800", low: "bg-slate-100 text-slate-500" };
 
-// The 3-min all-out running test protocol (Pettitt/Jamnick/Clark 2012) — one test → CS + D′.
+// The 3-min all-out running test protocol (Pettitt et al. 2012) — one test → CS + D′.
 const MT_STEPS: Array<{ en: string; is: string }> = [
   { en: "Warm up fully — 10–15 min with a few progressive strides.", is: "Hitaðu vel upp — 10–15 mín með nokkrum stigvaxandi strides." },
   { en: "Flat, measured course. Start the Catapult period tag exactly at the start signal.", is: "Sléttur, mældur völlur. Ræstu Catapult period-tag nákvæmlega við startmerki." },

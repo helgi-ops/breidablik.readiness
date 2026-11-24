@@ -6,7 +6,7 @@
  *   - load:   a colour-codable band (low/moderate/high) + estimated duration (min) + sRPE (AU) + % of match,
  *             from `planSessionLoad` (MicroPulse's MD-day shares; load falls toward the match, Gualtieri 2024). A development fallback covers no-MD (dev) weeks.
  *   - pitch:  the first ON-PITCH implementation example (small-sided-game area + bout length, or running),
- *             carrying its citation (Hill-Haas 2011; Lacome 2018; López-Fernández 2019). The full list per
+ *             carrying its citation (Hill-Haas 2011; Lacome 2018; Gaudino 2014). The full list per
  *             day, including the activation / top-up / recovery days, is `pitchIdeasFor` (the PDFs print it).
  *
  * Descriptive only — never the readiness colour. Invents no new sport-science; it composes + labels the
@@ -43,14 +43,14 @@ const FOCUS_SPECIAL: Record<string, Bi> = {
   OFF: { en: "Rest day — passive recovery.", is: "Frídagur — óvirk endurheimt." },
 };
 
-// ── On-pitch implementation examples, IN-SEASON (SSG area + bout; Hill-Haas 2011 areas, Lacome 2018 bouts) ──
+// ── On-pitch implementation examples, IN-SEASON (SSG area + bout; direction from Hill-Haas 2011 and Lacome 2018 — the m² bands and bout lengths are MicroPulse's examples) ──
 const PITCH_INSEASON: Record<StimulusType, PitchForm[]> = {
   mechanical: [{ form: { en: "Small-sided games 3v3–4v4 + change-of-direction drills", is: "Fámennir leikir 3v3–4v4 + stefnubreytinga-drillur" }, area: { en: "tight pitch (~30–90 m²/player)", is: "þröngt svæði (~30–90 m²/leikm.)" }, bout: { en: "3–5 min bouts · 90–120 s rest", is: "3–5 mín lotur · 90–120 s hvíld" }, cite: "Hill-Haas 2011; Lacome 2018" },
     { form: { en: "Duels 1v1 / 2v2 in small boxes, quick restarts", is: "Návígi 1v1 / 2v2 í litlum reitum, hröð endurræsing" }, area: { en: "tight pitch (~30–90 m²/player)", is: "þröngt svæði (~30–90 m²/leikm.)" }, bout: { en: "short reps · full rest between", is: "stuttar endurtekningar · full hvíld á milli" }, cite: "Hill-Haas 2011" },
     { form: { en: "Pressing game 4v4 + 2 neutral players: win the ball back fast", is: "Pressuleikur 4v4 + 2 hlutlausir: vinna boltann hratt aftur" }, area: { en: "tight pitch (~30–90 m²/player)", is: "þröngt svæði (~30–90 m²/leikm.)" }, bout: { en: "3–5 min bouts · 90–120 s rest", is: "3–5 mín lotur · 90–120 s hvíld" }, cite: "Hill-Haas 2011; Lacome 2018" },
   ],
-  locomotive: [{ form: { en: "Large-area SSG 7v7–9v9, or extensive / interval running", is: "Stórsvæðis-leikir 7v7–9v9, eða löng / interval hlaup" }, area: { en: "large / open pitch (~150–400 m²/player)", is: "stórt / opið svæði (~150–400 m²/leikm.)" }, bout: { en: "10–15+ min blocks · high HSR + top speed", is: "10–15+ mín blokkir · hátt háhraðahlaup + hámarkshraði" }, cite: "Hill-Haas 2011; López-Fernández 2019" },
-    { form: { en: "Transition game on a long pitch: counter-attacks over 40–60 m", is: "Umskiptaleikur á löngum velli: skyndisóknir yfir 40–60 m" }, area: { en: "large / open pitch (~150–400 m²/player)", is: "stórt / opið svæði (~150–400 m²/leikm.)" }, bout: { en: "10–15+ min blocks · every attack ends with a run back", is: "10–15+ mín blokkir · hver sókn endar á hlaupi til baka" }, cite: "Hill-Haas 2011; López-Fernández 2019" },
+  locomotive: [{ form: { en: "Large-area SSG 7v7–9v9, or extensive / interval running", is: "Stórsvæðis-leikir 7v7–9v9, eða löng / interval hlaup" }, area: { en: "large / open pitch (~150–400 m²/player)", is: "stórt / opið svæði (~150–400 m²/leikm.)" }, bout: { en: "10–15+ min blocks · high HSR + top speed", is: "10–15+ mín blokkir · hátt háhraðahlaup + hámarkshraði" }, cite: "Hill-Haas 2011; Gaudino 2014" },
+    { form: { en: "Transition game on a long pitch: counter-attacks over 40–60 m", is: "Umskiptaleikur á löngum velli: skyndisóknir yfir 40–60 m" }, area: { en: "large / open pitch (~150–400 m²/player)", is: "stórt / opið svæði (~150–400 m²/leikm.)" }, bout: { en: "10–15+ min blocks · every attack ends with a run back", is: "10–15+ mín blokkir · hver sókn endar á hlaupi til baka" }, cite: "Hill-Haas 2011; Gaudino 2014" },
     { form: { en: "Interval running: 15 s on / 15 s off, or 4 × 4 min", is: "Interval hlaup: 15 s á / 15 s af, eða 4 × 4 mín" }, area: { en: "open space / track", is: "opið svæði / braut" }, bout: { en: "2–3 sets · 3 min between sets", is: "2–3 sett · 3 mín á milli setta" }, cite: "Buchheit & Laursen 2013" },
   ],
   mixed: [{ form: { en: "Match-like SSG 6v6–8v8 / positional games", is: "Leiklíkir leikir 6v6–8v8 / stöðuleikir" }, area: { en: "match-like pitch (~100–170 m²/player)", is: "leiklíkt svæði (~100–170 m²/leikm.)" }, bout: { en: "8–12 min bouts · balanced HSR + accel/decel", is: "8–12 mín lotur · jafnvægi háhraða + hröðun/hemlun" }, cite: "Hill-Haas 2011; Lacome 2018" },
@@ -71,7 +71,7 @@ const PITCH_DEV: Record<StimulusType, PitchForm[]> = {
     { form: { en: "Match-like SSG 6v6–8v8, short bouts", is: "Leiklíkir leikir 6v6–8v8, stuttar lotur" }, area: { en: "match-like pitch (~100–170 m²/player)", is: "leiklíkt svæði (~100–170 m²/leikm.)" }, bout: { en: "8–12 min bouts", is: "8–12 mín lotur" }, cite: "Hill-Haas 2011; Lacome 2018" },
   ],
   locomotive: [{ form: { en: "Extensive or interval running (aerobic base)", is: "Löng eða interval hlaup (loftháður grunnur)" }, area: { en: "open space / track", is: "opið svæði / braut" }, bout: { en: "continuous, or 3–4 min intervals", is: "samfellt, eða 3–4 mín interval" }, cite: "Buchheit & Laursen 2013" },
-    { form: { en: "Large-area SSG 7v7–9v9: running with the ball", is: "Stórsvæðis-leikir 7v7–9v9: hlaup með bolta" }, area: { en: "large / open pitch (~150–400 m²/player)", is: "stórt / opið svæði (~150–400 m²/leikm.)" }, bout: { en: "10–15+ min blocks", is: "10–15+ mín blokkir" }, cite: "Hill-Haas 2011; López-Fernández 2019" },
+    { form: { en: "Large-area SSG 7v7–9v9: running with the ball", is: "Stórsvæðis-leikir 7v7–9v9: hlaup með bolta" }, area: { en: "large / open pitch (~150–400 m²/player)", is: "stórt / opið svæði (~150–400 m²/leikm.)" }, bout: { en: "10–15+ min blocks", is: "10–15+ mín blokkir" }, cite: "Hill-Haas 2011; Gaudino 2014" },
   ],
   technical: [{ form: { en: "Rondos / low-load ball work", is: "Rondó / léttari boltavinna" }, area: { en: "small area", is: "lítið svæði" }, bout: { en: "short, high-touch", is: "stutt, mikil snerting" }, cite: "Hill-Haas 2011" },
     { form: { en: "Passing patterns into a finish, no opposition", is: "Sendingamynstur sem enda á skoti, án mótherja" }, area: { en: "half pitch", is: "hálfur völlur" }, bout: { en: "short reps · low physical load", is: "stuttar endurtekningar · lágt líkamlegt álag" }, cite: "" },
@@ -89,10 +89,10 @@ const PITCH_SPECIAL: Record<string, PitchForm[]> = {
   TOPUP: [
     { form: { en: "Low-minute players: SSG 4v4–5v5 with keepers", is: "Þeir sem spiluðu lítið: fámennur leikur 4v4–5v5 með markvörðum" }, area: { en: "match-like pitch (~100–170 m²/player)", is: "leiklíkt svæði (~100–170 m²/leikm.)" }, bout: { en: "3–5 min bouts · 90–120 s rest", is: "3–5 mín lotur · 90–120 s hvíld" }, cite: "Hill-Haas 2011; Lacome 2018" },
     { form: { en: "Low-minute players: fast runs over 60–80 m after the game", is: "Þeir sem spiluðu lítið: hröð hlaup yfir 60–80 m eftir leikinn" }, area: { en: "open space", is: "opið svæði" }, bout: { en: "a few reps · walk back between", is: "fáar endurtekningar · ganga til baka á milli" }, cite: "" },
-    { form: { en: "Starters: easy jog or bike + mobility", is: "Byrjunarlið: létt skokk eða hjól + liðleiki" }, area: { en: "anywhere", is: "hvar sem er" }, bout: { en: "easy · no hard running", is: "rólegt · engin hörð hlaup" }, cite: "Buchheit 2023" },
+    { form: { en: "Starters: easy jog or bike + mobility", is: "Byrjunarlið: létt skokk eða hjól + liðleiki" }, area: { en: "anywhere", is: "hvar sem er" }, bout: { en: "easy · no hard running", is: "rólegt · engin hörð hlaup" }, cite: "" },
   ],
   RECOVERY: [
-    { form: { en: "Easy jog or bike + mobility", is: "Létt skokk eða hjól + liðleiki" }, area: { en: "anywhere", is: "hvar sem er" }, bout: { en: "easy · no hard running", is: "rólegt · engin hörð hlaup" }, cite: "Buchheit 2023" },
+    { form: { en: "Easy jog or bike + mobility", is: "Létt skokk eða hjól + liðleiki" }, area: { en: "anywhere", is: "hvar sem er" }, bout: { en: "easy · no hard running", is: "rólegt · engin hörð hlaup" }, cite: "" },
     { form: { en: "Light rondo or football tennis", is: "Létt rondó eða fótboltatennis" }, area: { en: "small area", is: "lítið svæði" }, bout: { en: "low intensity · keep it fun", is: "lítil ákefð · hafa það skemmtilegt" }, cite: "" },
   ],
 };

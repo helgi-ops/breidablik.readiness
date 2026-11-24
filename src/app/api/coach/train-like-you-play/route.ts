@@ -163,8 +163,8 @@ const MICRO_ORDER = ["MD+1", "MD+2", "MD+3", "MD-5", "MD-4", "MD-3", "MD-2", "MD
 // Days whose squad is two populations: players who played the preceding match
 // (recovery) vs those who didn't (compensatory top-up). MD+3 onward re-converge.
 const COHORT_SPLIT_DAYS = new Set(["MD+1", "MD+2"]);
-// Post-match cohort thresholds — tunable references, not rules (Anderson 2016b;
-// Hills 2018; Stevens 2017; Nédélec 2012).
+// Post-match cohort thresholds are MicroPulse's tunable lines; the starter/non-starter split follows (Anderson 2016b;
+// Hills 2020; Stevens 2017; Nédélec 2012).
 const RECOVERY_MIN_MINUTES = 60; // played a substantial share → recovery
 const TOPUP_MAX_MINUTES = 30;    // played little/none → needs a full top-up
 type Cohort = "recovery" | "topup" | "partial";
@@ -293,7 +293,7 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => a.name.localeCompare(b.name, "is"));
 
   // ── Microcycle: average training intensity as % of match demand per MD-day ──
-  // (periodization shape — is MD-3 a high day? is MD-1 a taper? Martin-García 2018)
+  // (periodization shape — is MD-3 a high day? is MD-1 a taper? Martín-García 2018)
   type MicroBucket = { sessions: number; sums: Record<string, number>; counts: Record<string, number> };
   const newBucket = (): MicroBucket => ({ sessions: 0, sums: {}, counts: {} });
   const addToBucket = (map: Map<string, MicroBucket>, key: string, r: Record<string, unknown>, demand: Record<string, number | null>) => {

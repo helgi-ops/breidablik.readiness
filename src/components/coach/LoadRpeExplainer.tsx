@@ -42,8 +42,8 @@ const TILES: Tile[] = [
   {
     title: { EN: "HR vs sRPE", IS: "HR vs sRPE" },
     body: {
-      EN: "The objective belt heart-rate cross-check on the subjective rating: when the heart worked much harder than the rating (hidden load) or the reverse (low cardiac demand), the player is flagged. Full detail on the Heart Rate Intelligence page. Cite: Edwards 1993.",
-      IS: "Hlutlægi beltis-púls kross-tékkið á huglæga matið: þegar hjartað vann mun meira en matið (falið álag) eða öfugt (lítið hjarta-drif) er leikmaður flaggaður. Nánar á Púls-greiningarsíðunni. Heimild: Edwards 1993.",
+      EN: "The objective belt heart-rate cross-check on the subjective rating: when the heart worked much harder than the rating (hidden load) or the reverse (low cardiac demand), the player is flagged. Full detail on the Heart Rate Intelligence page. Cite: Edwards 1993 (HR load) · Impellizzeri 2004 (HR load vs the rating).",
+      IS: "Hlutlægi beltis-púls kross-tékkið á huglæga matið: þegar hjartað vann mun meira en matið (falið álag) eða öfugt (lítið hjarta-drif) er leikmaður flaggaður. Nánar á Púls-greiningarsíðunni. Heimild: Edwards 1993 (púlsálag) · Impellizzeri 2004 (púlsálag á móti mati).",
     },
   },
   {

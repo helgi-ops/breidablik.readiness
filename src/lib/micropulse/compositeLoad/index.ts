@@ -124,7 +124,7 @@ export type CompositeLoadInput = {
    */
   accelDecelRatio?: number | null;
 
-  // ── HID% fatigue trend (Harper et al. 2019) ──────────────────────
+  // ── HID% fatigue trend (MicroPulse's rule; Harper et al. 2019 = 2nd-half accel/decel drop) ──────────────────────
 
   /**
    * True when HID% declined ≥20% vs 7-day avg with stable total distance.
@@ -332,7 +332,7 @@ export function computeCompositeLoadConcern(input: CompositeLoadInput): Composit
       );
     } else if (decelBurdenVal != null && decelBurdenVal >= 0.45) {
       escalationReasons.push(
-        "Decel burden is elevated — high-intensity braking actions above normal. Monitor ACL / quadriceps / patellar tendon load (peak quad activation 161% MVC during decel — McBurnie 2022)."
+        "Decel burden is elevated — high-intensity braking actions above normal. Monitor ACL / quadriceps / patellar tendon load (hard braking can drive quad activation up to 161% MVC and may raise ACL load — McBurnie 2022; the patellar-tendon link is not in the paper)."
       );
     }
     if (residualDecelBandLabel === "HIGH") {
@@ -346,10 +346,10 @@ export function computeCompositeLoadConcern(input: CompositeLoadInput): Composit
     }
     if (input.accelDecelRatio != null && input.accelDecelRatio < 0.7) {
       escalationReasons.push(
-        `Accel:Decel ratio ${input.accelDecelRatio.toFixed(2)} — eccentric-dominant session. Elevated ACL + quadriceps + patellar tendon strain risk (decel mid-eccentric foot strike → quad 161% MVC + hamstring −87% co-activation per McBurnie 2022).`
+        `Accel:Decel ratio ${input.accelDecelRatio.toFixed(2)} — eccentric-dominant session. Possible higher ACL load (McBurnie 2022: braking can drive quad activation to 161% MVC with low hamstring activation, −87%, which may raise ACL load; patellar-tendon risk is not in the paper). The 0.7 line is MicroPulse's.`
       );
     }
-    // HID% fatigue trend (Harper et al. 2019)
+    // HID% fatigue trend (MicroPulse's rule; Harper et al. 2019 = 2nd-half accel/decel drop)
     if (input.hidFatigueFlag === true) {
       const declinePctStr = input.hidDeclinePct != null ? `${(input.hidDeclinePct * 100).toFixed(0)}%` : "?";
       escalationReasons.push(

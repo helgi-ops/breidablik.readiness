@@ -36,9 +36,9 @@
  *
  * References:
  *   - Read 2021 — no single asymmetry threshold fits every screening test in soccer.
- *   - Cardinale et al. 2017 — Cadence as NM fatigue indicator in team sport.
+ *   - Cadence as a within-player fatigue read is MicroPulse's working idea (no verified paper backs it).
  *   - Catapult IMA white paper — Free Running bout detection (bout-duration bands).
- *   - McBurnie et al. 2022 — stride/running mechanics as a within-player read.
+ *   - MicroPulse's own read — stride/running mechanics within a player (no study behind it; McBurnie 2022 covers braking, not strides).
  */
 
 export type StrideRow = {
@@ -218,8 +218,8 @@ export function computeStrideMetrics(row: StrideRow): StrideMetrics {
   //      Coach-friendly average stride length across the session. Normal
   //      range 0.8–1.4 m/stride for field-sport mixed-pace sessions
   //      (MicroPulse's working range, not from a study). A drop in this metric reflects shorter, more
-  //      frequent steps — a known fatigue / running-mechanic compensation
-  //      pattern (Mendiguchia 2020). Trends matter more than absolute
+  //      frequent steps — a possible fatigue / running-mechanic compensation
+  //      pattern (MicroPulse's reading; no cited study tests it). Trends matter more than absolute
   //      values; baseline z-score flags individual decline.
   const totalDistForStride = Number(row.totalDistance ?? 0);
   const strideLengthHsr =

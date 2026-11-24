@@ -525,8 +525,8 @@ export async function GET(req: Request) {
           value: `${r.sleep_duration}/5 (${sleepDurText})`,
           severity: "RED",
           explanation:
-            `Leikmaður merkti svefntíma sem ${sleepDurText}. Undir 6 klst reglulega tvöfaldar meiðslaáhættu ` +
-            `(Milewski et al. 2014). Á þessum degi er skynjuð erfiðleiki hærri en venjulega — ` +
+            `Leikmaður merkti svefntíma sem ${sleepDurText}. Í einni rannsókn voru unglingar sem sváfu að jafnaði undir 8 klst um 1,7 sinnum líklegri til að hafa meiðst ` +
+            `(Milewski et al. 2014; tengsl, ekki sönnun). Á þessum degi er skynjuð erfiðleiki hærri en venjulega — ` +
             `plana ætti lægri ákafa eða frí.`,
         });
       } else if (sleepDurSev === "AMBER") {

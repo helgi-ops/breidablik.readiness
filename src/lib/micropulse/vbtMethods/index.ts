@@ -106,12 +106,12 @@ export const VBT_CITE =
   "Weakley J, Mann B, Banyard H, McLaren S, Scott T, García-Ramos A. Velocity-Based Training: From Theory to Application. Strength Cond J 43(2): 31–49, 2021 (Table 5).";
 
 const REF_TABLE5 = "Weakley et al. 2021 — Strength Cond J 43(2):31–49, Table 5";
-const REF_BANYARD = "Banyard et al. 2018 — Comparison of velocity-based and traditional 1RM percent-based training methods. Int J Sports Physiol Perform 14:246–255";
+const REF_BANYARD = "Banyard et al. 2019 — Comparison of velocity-based and traditional 1RM percent-based training methods. Int J Sports Physiol Perform 14:246–255";
 const REF_DORRELL = "Dorrell, Smith & Gee 2020 — Velocity-based vs percentage-based loading on maximal strength and power. J Strength Cond Res 34:46–53";
 const REF_PAREJA_SOCCER = "Pareja-Blanco et al. 2017 — Velocity loss during resistance training in professional soccer players. Int J Sports Physiol Perform 12:512–519";
-const REF_PAREJA_SJMSS = "Pareja-Blanco et al. 2017 — Velocity loss, athletic performance, strength gains and muscle adaptations. Scand J Med Sci Sports 27:724–735";
+const REF_PAREJA_SJMSS = "Pareja-Blanco et al. 2017b — Velocity loss, athletic performance, strength gains and muscle adaptations. Scand J Med Sci Sports 27:724–735";
 const REF_WEAKLEY_2020 = "Weakley et al. 2020 — Velocity loss thresholds: perceptual, metabolic and neuromuscular responses. J Sports Sci 38:477–485";
-const REF_WEAKLEY_2019 = "Weakley et al. 2019 — 10%, 20% and 30% velocity loss thresholds in the back squat. Int J Sports Physiol Perform";
+const REF_WEAKLEY_2019 = "Weakley et al. 2020b — 10%, 20% and 30% velocity loss thresholds in the back squat. Int J Sports Physiol Perform 15:180–188";
 
 /** Bar speed at a one-rep max (V1RM, m/s), Weakley et al. 2021 Table 2 (pooled value per lift). */
 export const V1RM_TABLE2: ReadonlyArray<{ key: string; name: Bi; v1rm: number; smith?: boolean }> = [
@@ -133,8 +133,8 @@ export const VBT_DEVICE_NOTE: Bi = {
 };
 
 export const VL_FATIGUE_NOTE: Bi = {
-  en: "The bigger the allowed speed drop, the more fatigue: 10%, 20% and 30% give step-by-step more fatigue, effort and metabolic stress, and the response is consistent within and between athletes (Weakley et al. 2020).",
-  is: "Því meira hraðatap sem er leyft, því meiri þreyta: 10%, 20% og 30% gefa stigvaxandi þreytu, erfiði og efnaskiptaálag, og svörunin er stöðug hjá sama íþróttamanni og milli manna (Weakley o.fl. 2020).",
+  en: "The bigger the allowed speed drop, the more fatigue: 10%, 20% and 30% give step-by-step more fatigue, effort and metabolic stress, and the responses were much the same when repeated four weeks later (Weakley et al. 2020).",
+  is: "Því meira hraðatap sem er leyft, því meiri þreyta: 10%, 20% og 30% gefa stigvaxandi þreytu, erfiði og efnaskiptaálag, og svörunin var svipuð þegar þetta var endurtekið fjórum vikum síðar (Weakley o.fl. 2020).",
 };
 
 export const LVP_1RM_CAVEAT: Bi = {

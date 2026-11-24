@@ -2,9 +2,9 @@
  * GET /api/coach/stride-length?teamId=…&date=YYYY-MM-DD[&playerId=…]
  *
  * Stride length — "is he still pushing, or just turning his legs over?" Under
- * neuromuscular fatigue an athlete keeps his stride FREQUENCY but loses stride
- * LENGTH; neither GPS distance nor cadence alone can see it, the ratio can
- * (Girard, Micallef & Millet 2011; Morin et al. 2011).
+ * repeated-sprint fatigue stride FREQUENCY and the horizontal push fell (stride
+ * length only trended down); reading stride length in long runs is MicroPulse's check
+ * (Girard et al. 2011; Morin et al. 2011 — sprint studies, not long runs).
  *
  * With ?playerId → one player's verdict. Without → the match-day TEAM view:
  * every active player's verdict for the date, shortened-first.

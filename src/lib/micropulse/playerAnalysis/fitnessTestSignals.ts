@@ -18,7 +18,7 @@ import type { AthleteSignalSet } from "@/lib/micropulse/playerAnalysis/athletePr
 
 // Exported so the speed-zone resolver reuses the SAME field-test constants (one source of truth).
 export const CS_FROM_MAS = 0.875;   // Critical Speed as a fraction of MAS (app's provisional band; CS concept: Pettitt 2016)
-export const MAS_FROM_VIFT = 0.86;  // continuous-MAS equivalent of the 30-15 VIFT (Buchheit 2008, approx.)
+export const MAS_FROM_VIFT = 0.86;  // continuous-MAS equivalent of the 30-15 VIFT (MicroPulse's approximation; 30-15 IFT: Buchheit 2008)
 
 type FtRow = { player_id: string; test_date: string | null; test_type: string | null; result_value: number | null; mas_kmh: number | null };
 

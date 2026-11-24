@@ -51,8 +51,8 @@ export interface PositionFitnessRead {
   /** Anaerobic Speed Reserve (MSS − MAS, km/h) — a CONTEXT read next to the `speed` row (why he
    *  clears/misses the speed line), NOT a pass/fail. Distinct from anaerobic_reserve (D′, metres). */
   asrContext: { asrKmh: number; note: Bi } | null;
-  /** Elite men's match demand for the position — a cited aspiration reference (HI-running > 19.8
-   *  km/h m/match, total distance), NOT the pass/fail. His own HSR metres compare directly. */
+  /** Elite men's match demand for the position — a cited aspiration reference (Bradley 2009 HI-running > 14.4 km/h, not his 19.8
+   *  km/h m/match, total distance), NOT the pass/fail. His own HSR metres (> 19.8) will read lower. */
   eliteMatchDemand: { hiRunningM: number; totalDistanceM: number | null; provisional: boolean; note: Bi } | null;
   confidence: Confidence; citation: string; caveat: Bi;
 }
@@ -60,14 +60,14 @@ export interface PositionFitnessRead {
 // ── Elite (literature) reference values — PROVISIONAL, elite men's football, approximate ranges
 // to confirm; shown as an aspiration next to the relative pass/fail, never as the pass/fail.
 // ONLY max sprinting speed (MSS → the `speed` quality) is cleanly established by position across
-// studies (Di Salvo 2007; Djaoui 2017; Haugen 2014): highest for wide players + forwards, lowest for
+// studies (Djaoui 2017; Haugen 2013): highest for wide players + forwards, lowest for
 // centre-backs and central midfielders. Elite MAS/ASR-by-position are NOT cleanly established, so we
 // do NOT publish a single authoritative number for them — squad/league-relative stays the pass/fail
 // and those rows carry no elite column. Never map ASR (a SPEED reserve, km/h) onto anaerobic_reserve
 // (which is D′, a DISTANCE reserve in metres) — different constructs.
 type EliteRef = { value: number; unit: string };
 const ELITE_REFERENCE: Partial<Record<JuGroup, Partial<Record<QualityId, EliteRef>>>> = {
-  WDP: { speed: { value: 33.5, unit: "km/h" } }, // full-back — top sprinting speed (Di Salvo 2007)
+  WDP: { speed: { value: 33.5, unit: "km/h" } }, // full-back — top sprinting speed (MicroPulse's provisional value; Djaoui 2017: wide players reach the highest)
   WOP: { speed: { value: 33.5, unit: "km/h" } }, // winger — top sprinting speed
   COP: { speed: { value: 32.5, unit: "km/h" } }, // centre-forward — high sprinting speed
   CMP: { speed: { value: 31.5, unit: "km/h" } }, // central mid — lower MSS demand
@@ -75,9 +75,9 @@ const ELITE_REFERENCE: Partial<Record<JuGroup, Partial<Record<QualityId, EliteRe
 };
 
 // ── Elite men's MATCH DEMANDS by position (reference, not the pass/fail) ──
-// Cited elite EPL/La Liga numbers. Bradley 2009 defines high-intensity running as > 19.8 km/h — the
-// SAME HSR threshold MicroPulse uses — so a player's own HSR metres compare to these directly, no
-// rescaling. Surfaced as a labelled aspiration reference; the squad/league bar stays the pass/fail.
+// Cited elite EPL/La Liga numbers. Bradley 2009 counts high-intensity running above 14.4 km/h — NOT the
+// 19.8 km/h HSR line MicroPulse uses — so a player's own HSR metres will read well below these; not a
+// like-for-like comparison. Surfaced as a labelled aspiration reference; the squad/league bar stays the pass/fail.
 // PROVISIONAL: varies by league/season/tracking system — S&C-tunable.
 type EliteMatchDemand = { hiRunningM: number; totalDistanceM: number | null; provisional: true };
 const ELITE_MATCH_DEMAND: Partial<Record<JuGroup, EliteMatchDemand>> = {
@@ -131,8 +131,8 @@ export function buildPositionFitnessRequirements(input: {
   const eliteMatchDemand = emd == null ? null : {
     hiRunningM: emd.hiRunningM, totalDistanceM: emd.totalDistanceM, provisional: emd.provisional,
     note: {
-      en: `Elite men's match demand for a ${roleLabel.en} (reference): ~${emd.hiRunningM.toLocaleString("en")} m high-intensity running per match (> 19.8 km/h, the same line as his HSR)${emd.totalDistanceM ? `, ~${emd.totalDistanceM.toLocaleString("en")} m total` : ""}. Di Salvo 2007 / Bradley 2009 — reference/aspiration, not the pass/fail.`,
-      is: `Elítu leikkrafa fyrir ${roleLabel.is} (viðmið): ~${emd.hiRunningM.toLocaleString("en").replace(/,/g, ".")} m háákefðar-hlaup í leik (> 19,8 km/klst, sama lína og HSR hans)${emd.totalDistanceM ? `, ~${emd.totalDistanceM.toLocaleString("en").replace(/,/g, ".")} m alls` : ""}. Di Salvo 2007 / Bradley 2009 — viðmið/markmið, ekki staðið/fallið.`,
+      en: `Elite men's match demand for a ${roleLabel.en} (reference): ~${emd.hiRunningM.toLocaleString("en")} m high-intensity running per match (above 14.4 km/h in Bradley 2009, a lower line than his 19.8 km/h HSR, so his HSR metres read lower)${emd.totalDistanceM ? `, ~${emd.totalDistanceM.toLocaleString("en")} m total` : ""}. Di Salvo 2007 / Bradley 2009 — reference/aspiration, not the pass/fail.`,
+      is: `Elítu leikkrafa fyrir ${roleLabel.is} (viðmið): ~${emd.hiRunningM.toLocaleString("en").replace(/,/g, ".")} m háákefðar-hlaup í leik (yfir 14,4 km/klst hjá Bradley 2009, lægri lína en 19,8 km/klst HSR hans, svo hans HSR-metrar verða lægri)${emd.totalDistanceM ? `, ~${emd.totalDistanceM.toLocaleString("en").replace(/,/g, ".")} m alls` : ""}. Di Salvo 2007 / Bradley 2009 — viðmið/markmið, ekki staðið/fallið.`,
     } as Bi,
   };
 

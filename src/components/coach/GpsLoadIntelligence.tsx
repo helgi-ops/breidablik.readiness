@@ -226,23 +226,23 @@ export default function GpsLoadIntelligence({
     },
     decelBurden: {
       title: "Decel Burden",
-      body: "Hemlunar-álag á vöðva: 65% há-ákefðar decelerations (Band 2–3, < −3 m/s²) + 35% heildar, vs 28-daga baseline. Bönd: low < 0.20, moderate 0.20–0.45, elevated 0.45–0.70, high ≥ 0.70. Hemlun er eccentric, vefja-skaðandi hlið álags — high lækkar aftur í elevated þegar há-ákefðar hemlun færist að venju. Þarf Band 2–3 gögnin (lægri Catapult-pakkar → „—“, ekki 0). Harper & Kiely 2018; McBurnie 2022.",
+      body: "Hemlunar-álag á vöðva: 65% há-ákefðar decelerations (Band 2–3, < −3 m/s²) + 35% heildar, vs 28-daga baseline. Bönd: low < 0.20, moderate 0.20–0.45, elevated 0.45–0.70, high ≥ 0.70. Hemlun er eccentric, vefja-skaðandi hlið álags — high lækkar aftur í elevated þegar há-ákefðar hemlun færist að venju. Þarf Band 2–3 gögnin (lægri Catapult-pakkar → „—“, ekki 0). Vægi og bönd eru viðmið MicroPulse; af hverju hemlun skiptir máli: Harper & Kiely 2018; McBurnie 2022.",
     },
     accelDecelRatio: {
       title: "Acc:Dec hlutfall",
-      body: "Hlutfall há-ákefðar accelerations vs decelerations. ECC (< 0.7) = mikil hemlun, ACL + framanlæri (quadriceps) + patellar tendon áhætta (peak quad activation 161% MVC í hemlun — McBurnie 2022). BAL (0.7–1.3) = jafnvægi. CON (> 1.3) = mikil hröðun, hamstring + glute áhætta (late-swing sprint). Sama „high load“ er ólíkt meiðsla-samtal eftir stefnu; mjög fáar efforts eru aðeins vísbending um stefnu (nefnari í lágmark 0.5).",
+      body: "Hlutfall há-ákefðar accelerations vs decelerations. ECC (< 0.7) = mikil hemlun: hörð hemlun getur keyrt virkni framanlærisvöðva upp í 161% af hámarks-kreppu og gæti aukið álag á krossband (McBurnie 2022). BAL (0.7–1.3) = jafnvægi. CON (> 1.3) = mikil hröðun (tenging við aftanlæri og rass er ágiskun, ekki úr rannsókn). Mörkin 0.7 og 1.3 eru viðmið MicroPulse, ekki prófuð meiðslamörk. Sama „high load“ er ólíkt meiðsla-samtal eftir stefnu; mjög fáar efforts eru aðeins vísbending um stefnu (nefnari í lágmark 0.5).",
     },
     hidPct: {
       title: "HID% (High-Intensity Distance)",
-      body: "Háhraða-hlutfall: (Band5 + Band6) ÷ heildar (Band5 ≈ 19.8–25.2, Band6 > 25.2 km/klst). Ör vs 7-daga meðaltal: ↑ ≥ 10% upp, → ±10%, ↓ ≥ 10% niður, ↓↓ ≥ 20% niður. Þreytuflagg kviknar AÐEINS þegar HID% fellur ≥ 20% OG heildar-vegalengd er stöðug — sama vegalengd, toppahraði næst ekki. Harper 2019.",
+      body: "Háhraða-hlutfall: (Band5 + Band6) ÷ heildar (Band5 ≈ 19.8–25.2, Band6 > 25.2 km/klst). Ör vs 7-daga meðaltal: ↑ ≥ 10% upp, → ±10%, ↓ ≥ 10% niður, ↓↓ ≥ 20% niður. Þreytuflagg kviknar AÐEINS þegar HID% fellur ≥ 20% OG heildar-vegalengd er stöðug — sama vegalengd, toppahraði næst ekki. Regla MicroPulse, ekki úr rannsókn (Harper 2019 sýnir aðeins að hörðum hröðunum og hemlunum fækkar frá fyrri til seinni hálfleiks).",
     },
     residualDecel: {
       title: "Residual Decel (3 dagar)",
-      body: "Uppsafnað hemlunar-álag síðustu 3 daga, vegið í dag ×1.0, gær ×0.6, fyrir tveimur dögum ×0.3 (0–100+ vísitala). NORMAL < 60, ELEVATED 60–100, CAUTION 100–135, HIGH ≥ 135. Grípur „þriðja harða daginn í röð“ sem eins-dags sýn missir; lækkar eftir raunverulega létt-hemlunar dag. Harper & Kiely 2018.",
+      body: "Uppsafnað hemlunar-álag síðustu 3 daga, vegið í dag ×1.0, gær ×0.6, fyrir tveimur dögum ×0.3 (0–100+ vísitala). NORMAL < 60, ELEVATED 60–100, CAUTION 100–135, HIGH ≥ 135. Grípur „þriðja harða daginn í röð“ sem eins-dags sýn missir; lækkar eftir raunverulega létt-hemlunar dag. Vægi og bönd eru viðmið MicroPulse; Harper & Kiely 2018 lýsa því hvernig endurtekin hörð hemlun getur hlaðið upp þreytu og vefjaskaða (ritstjórnargrein, ekki prófuð regla).",
     },
     plSpike: {
       title: "PL Spike (Player Load)",
-      body: "Heildar Player Load dagsins ÷ HANS EIGIN 28-daga meðaltal. grátt < 1.15×, gult 1.15–1.5×, rautt ≥ 1.5×. Einfalda magn-mælingin á bak við sértæku dálkana — lestu hana MEÐ þeim (1.6× + ECC + high decel ≠ 1.6× í jafnvægi/lág-decel). Snemma á tímabili er nefnarinn óstöðugur → bráðabirgða. Gabbett 2016.",
+      body: "Heildar Player Load dagsins ÷ HANS EIGIN 28-daga meðaltal. grátt < 1.15×, gult 1.15–1.5×, rautt ≥ 1.5×. Einfalda magn-mælingin á bak við sértæku dálkana — lestu hana MEÐ þeim (1.6× + ECC + high decel ≠ 1.6× í jafnvægi/lág-decel). Snemma á tímabili er nefnarinn óstöðugur → bráðabirgða. Mörkin eru viðmið MicroPulse; 1.5 hjá Gabbett 2016 ber viku saman við síðustu 4 vikur, ekki einn dag.",
     },
   } : {
     loadState: {
@@ -251,23 +251,23 @@ export default function GpsLoadIntelligence({
     },
     decelBurden: {
       title: "Decel Burden",
-      body: "Braking load on the muscles: 65% high-intensity decel efforts (Band 2–3, < −3 m/s²) + 35% total, vs his 28-day baseline. Bands: low < 0.20, moderate 0.20–0.45, elevated 0.45–0.70, high ≥ 0.70. Deceleration is the eccentric, tissue-damaging side of load — high eases back to elevated as his high-intensity braking returns to norm. Needs the Band 2–3 feed (lower Catapult tiers → “—”, not 0). Harper & Kiely 2018; McBurnie 2022.",
+      body: "Braking load on the muscles: 65% high-intensity decel efforts (Band 2–3, < −3 m/s²) + 35% total, vs his 28-day baseline. Bands: low < 0.20, moderate 0.20–0.45, elevated 0.45–0.70, high ≥ 0.70. Deceleration is the eccentric, tissue-damaging side of load — high eases back to elevated as his high-intensity braking returns to norm. Needs the Band 2–3 feed (lower Catapult tiers → “—”, not 0). Weights and bands are MicroPulse's; why braking matters: Harper & Kiely 2018; McBurnie 2022.",
     },
     accelDecelRatio: {
       title: "Acc:Dec Ratio",
-      body: "Ratio of high-intensity accelerations vs decelerations. ECC (< 0.7) = heavy braking, ACL + quadriceps + patellar tendon risk (peak quad activation reaches 161% MVC during deceleration — McBurnie 2022). BAL (0.7–1.3) = balanced. CON (> 1.3) = heavy acceleration, hamstring + glute risk (late-swing sprint phase). The same “high load” is a different injury conversation by direction; very low effort counts are a directional hint only (denominator floored at 0.5).",
+      body: "Ratio of high-intensity accelerations vs decelerations. ECC (< 0.7) = heavy braking: hard braking can drive quadriceps activation up to 161% MVC and may raise knee (ACL) load (McBurnie 2022). BAL (0.7–1.3) = balanced. CON (> 1.3) = heavy acceleration (a hamstring + glute link is assumed, not from a study). The 0.7 and 1.3 lines are MicroPulse's, not tested injury cut-offs. The same “high load” is a different injury conversation by direction; very low effort counts are a directional hint only (denominator floored at 0.5).",
     },
     hidPct: {
       title: "HID% (High-Intensity Distance)",
-      body: "High-speed share: (Band5 + Band6) ÷ total (Band5 ≈ 19.8–25.2, Band6 > 25.2 km/h). Arrow vs his 7-day average: ↑ ≥ 10% up, → ±10%, ↓ ≥ 10% down, ↓↓ ≥ 20% down. The fatigue flag fires ONLY when HID% drops ≥ 20% AND total distance is stable — same ground covered, top speeds not reached. Harper 2019.",
+      body: "High-speed share: (Band5 + Band6) ÷ total (Band5 ≈ 19.8–25.2, Band6 > 25.2 km/h). Arrow vs his 7-day average: ↑ ≥ 10% up, → ±10%, ↓ ≥ 10% down, ↓↓ ≥ 20% down. The fatigue flag fires ONLY when HID% drops ≥ 20% AND total distance is stable — same ground covered, top speeds not reached. MicroPulse's rule, not from a study (Harper 2019 only shows hard accelerations and decelerations drop from the 1st to the 2nd half).",
     },
     residualDecel: {
       title: "Residual Decel (3 days)",
-      body: "Braking load accumulated over 3 days, weighted today ×1.0, yesterday ×0.6, two days ago ×0.3 (a 0–100+ index). NORMAL < 60, ELEVATED 60–100, CAUTION 100–135, HIGH ≥ 135. Catches the “third hard day in a row” a single-day view misses; eases after a genuinely low-braking day. Harper & Kiely 2018.",
+      body: "Braking load accumulated over 3 days, weighted today ×1.0, yesterday ×0.6, two days ago ×0.3 (a 0–100+ index). NORMAL < 60, ELEVATED 60–100, CAUTION 100–135, HIGH ≥ 135. Catches the “third hard day in a row” a single-day view misses; eases after a genuinely low-braking day. Weights and bands are MicroPulse's; Harper & Kiely 2018 describe how repeated hard braking can stack up fatigue and tissue damage (an editorial, not a tested rule).",
     },
     plSpike: {
       title: "PL Spike (Player Load)",
-      body: "Today's total Player Load ÷ his OWN 28-day average. grey < 1.15×, amber 1.15–1.5×, red ≥ 1.5×. The blunt volume check behind the specific columns — read it WITH them (1.6× + ECC + high decel ≠ 1.6× balanced/low-decel). Early season the denominator is unstable → provisional. Gabbett 2016.",
+      body: "Today's total Player Load ÷ his OWN 28-day average. grey < 1.15×, amber 1.15–1.5×, red ≥ 1.5×. The blunt volume check behind the specific columns — read it WITH them (1.6× + ECC + high decel ≠ 1.6× balanced/low-decel). Early season the denominator is unstable → provisional. The cut-offs are MicroPulse's; Gabbett 2016's 1.5 compares a week with the prior 4 weeks, not one day.",
     },
   };
 

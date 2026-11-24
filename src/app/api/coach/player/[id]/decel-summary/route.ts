@@ -78,7 +78,7 @@ async function fetchDecelInputs(
     p_player_id: playerId,
   });
 
-  // Sharp Cut Load (Dos'Santos 2021)
+  // Sharp Cut Load (Dos'Santos 2021b)
   const { data: cutData } = await supabase
     .from("v_sharp_cut_hip_er_risk")
     .select("cuts_7d, cuts_28d, cuts_personal_z, cuts_flag")

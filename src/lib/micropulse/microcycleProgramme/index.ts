@@ -16,7 +16,7 @@
  * v_coach_readiness_today_v8.final_color. The day colour below is a PLANNED-load
  * band, clearly distinct from the readiness verdict.
  *
- * Evidence: Martin-García 2018 (microcycle load distribution / MD taper); the
+ * Evidence: Martín-García 2018 (microcycle load distribution / MD taper); the
  * per-day session + its swaps carry their own citations (see strengthProgramming).
  */
 
@@ -215,7 +215,7 @@ export function buildMicrocycleProgramme(input: BuildMicrocycleInput): Microcycl
     }
 
     const provenance = [
-      "planned band ← match_demand_template MD taper (Martin-García 2018)",
+      "planned band ← match_demand_template MD taper (Martín-García 2018)",
       "session ← strengthProgramming.buildStrengthSession (per-day, cited swaps)",
     ];
     if (d.isTodayOrPast) provenance.push("colour eased by readiness_entries.color (read-only; never written)");

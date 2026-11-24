@@ -1112,7 +1112,7 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       // McBurnie 2022 — IMA-based per-band decel counts. Catapult exposes
       // these in the base activity-stats payload under exact keys
       // ima_band1_decel_count / ima_band2_decel_count / ima_band3_decel_count.
-      // Band 3 (>3 m/s²) is the McBurnie-preferred high-intensity input.
+      // Band 3 (>3 m/s²) is MicroPulse's preferred high-intensity input.
       // Verified via debug-fields probe (28 Apr 2026): for Jónatan's 22 Apr
       // session the values were 88 / 24 / 13 respectively — consistent with
       // expected band distribution (more low-intensity, fewer high-intensity).

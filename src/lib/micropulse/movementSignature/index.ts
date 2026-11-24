@@ -8,7 +8,7 @@
  * Engine layer (GPS volume / ACWR).
  *
  * We model four inertial components, each compared to the player's OWN recent
- * norm (personal z-score, Robertson 2017), not an absolute or squad threshold:
+ * norm (personal z-score; individual baselines: Rebelo 2026), not an absolute or squad threshold:
  *   1. multidirectional       — IMA Free Running band 5-8 distance = metres in
  *                               LONG CONTINUOUS RUNS (bouts ≥18 s). The key name
  *                               is legacy (kept for API stability): IMA FR bands

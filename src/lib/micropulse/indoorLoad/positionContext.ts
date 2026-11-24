@@ -32,7 +32,7 @@ export function familyLabel(family: PositionFamily, isEN: boolean): string {
 }
 
 /** One-line descriptive note for a family — how load / perceived effort tends to differ, always
- *  pointing back to the player's own norm. Cited to Zhang et al. 2026. */
+ *  pointing back to the player's own norm. Perceived-effort part cited to Zhang et al. 2026; the movement-load part is MicroPulse's reading. */
 export function positionLoadNote(family: PositionFamily, isEN: boolean): string {
   if (family === "guard") {
     return isEN
@@ -52,6 +52,6 @@ export function positionLoadNote(family: PositionFamily, isEN: boolean): string 
 /** The general interpretive line for the surface's "how to read" panel (cited). */
 export function positionGeneralNote(isEN: boolean): string {
   return isEN
-    ? "Position shapes both movement load and perceived effort: guards accumulate more accel / change-of-direction, bigs more jumps and contacts, and centres tend to report lower RPE and higher well-being than wings and guards (Zhang et al. 2026). That is why every read here is on the player's OWN 28-day norm, never across positions."
-    : "Leikstaða mótar bæði hreyfiálag og upplifað álag: bakverðir safna fleiri hröðunum / stefnubreytingum, miðherjar fleiri stökkum og snertingum, og miðherjar gefa oft lægra RPE og meiri vellíðan en vængir og bakverðir (Zhang et al. 2026). Þess vegna er hver lestur hér á leikmannsins EIGIN 28-daga viðmiðun, aldrei milli leikstaða.";
+    ? "Position shapes perceived effort: in one college study, centres reported lower RPE than forwards and higher well-being than guards (Zhang et al. 2026). Guards tend to log more accel / change-of-direction and bigs more jumps and contacts (MicroPulse's reading, not from that study). That is why every read here is on the player's OWN 28-day norm, never across positions."
+    : "Leikstaða mótar upplifað álag: í einni háskólarannsókn gáfu miðherjar lægra RPE en framherjar og meiri vellíðan en bakverðir (Zhang et al. 2026). Bakverðir safna oft fleiri hröðunum / stefnubreytingum og miðherjar fleiri stökkum og snertingum (lestur MicroPulse, ekki úr þeirri rannsókn). Þess vegna er hver lestur hér á leikmannsins EIGIN 28-daga viðmiðun, aldrei milli leikstaða.";
 }

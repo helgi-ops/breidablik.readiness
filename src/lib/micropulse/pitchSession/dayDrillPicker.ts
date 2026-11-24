@@ -8,7 +8,7 @@
  * TIGHT area (accel/decel, change of direction), mixed sits match-like in between, and a
  * technical/taper day stays small and sharp.
  *
- * Area bands are grounded in the SSG systematic review (Hill-Haas et al. 2011): larger area per
+ * Area bands are grounded in Hill-Haas et al. 2011 (SSG review), Riboli 2020 (area per player) and Lacome 2018 (4v4 = most mechanical work): larger area per
  * player raises locomotor output and high-speed running; smaller area raises mechanical load and
  * technical actions. Descriptive planning aid — the coach still picks; never a verdict.
  */
@@ -59,7 +59,7 @@ export function estimateAreaPerPlayer(totalPlayers: number | null | undefined): 
 /** Categories where pitch AREA per player is the primary lever (open vs tight space). */
 const AREA_DRIVEN = new Set(["possession", "ssg", "transition"]);
 
-/** Ideal area-per-player band (m²) per session type (Hill-Haas 2011). */
+/** Ideal area-per-player band (m²) per session type (MicroPulse's bands; direction from Hill-Haas 2011 and Riboli 2020). */
 const AREA_BAND: Record<DaySessionType, [number, number]> = {
   locomotive: [150, 400], // open space → high-speed running
   mixed: [100, 170], // match-like

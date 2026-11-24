@@ -9,9 +9,9 @@
  * Rules compose; nothing is invented — every number comes from the engine inputs. Descriptive; never
  * the readiness colour. No I/O.
  *
- * Cite: Ju et al. 2022 (contextualised peak periods); Gaudino/Casamichana/Owen 2017 (SSG pitch size →
+ * Cite: Ju et al. 2022 (contextualised peak periods); Gaudino 2014 (SSG pitch size →
  *       load: smaller area = more accel/decel + CoD, larger = more HSR; fewer players = higher
- *       individual involvement); Martín-García 2018 (worst-case / peak demands).
+ *       individual involvement); Martín-García 2018b (worst-case / peak demands).
  */
 
 import type { Bi } from "@/lib/micropulse/load/peakPeriod";
@@ -29,7 +29,7 @@ export interface WcsBrief {
   citation: string;
 }
 
-const CITE = "Ju et al. 2022; Gaudino/Casamichana/Owen 2017 (SSG pitch size → load); Martín-García 2018 (peak demands)";
+const CITE = "Ju et al. 2022; Gaudino 2014 (SSG pitch size → load); Martín-García 2018b (peak demands)";
 
 const r = (n: number | null) => (n == null ? null : Math.round(n));
 

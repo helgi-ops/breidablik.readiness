@@ -11,9 +11,9 @@
  * over; stride length tells you how much GROUND each stride covers — a proxy for
  * force into the floor during his longer runs.
  *
- * The pairing is what makes it useful. Under neuromuscular fatigue an athlete
- * characteristically MAINTAINS stride frequency while stride length SHORTENS: the
- * legs keep spinning, the push weakens (Girard, Micallef & Millet 2011; Morin et
+ * The pairing is what makes it useful. In repeated-sprint studies, fatigue lowered
+ * stride frequency and the horizontal push; stride length only trended down.
+ * MicroPulse reads a weaker push as shorter strides in long runs (Girard et al. 2011; Morin et
  * al. 2011). Cadence alone cannot see this. GPS distance alone cannot see this.
  * The ratio can.
  *
@@ -42,9 +42,9 @@
  * measure reliably. A metric that only works in one context is honest. A metric
  * that pretends to work everywhere is not.
  *
- * Refs: McBurnie et al. 2022 (stride/running-mechanics change as a within-player
- *       fatigue read); Girard, Micallef & Millet 2011 (under fatigue stride length
- *       falls while frequency is preserved); Morin et al. 2011 (stride mechanics &
+ * Refs: MicroPulse's own read (stride/running-mechanics change as a within-player
+ *       fatigue read); Girard et al. 2011 (repeated sprints: stride
+ *       frequency fell, length only trended down); Morin et al. 2011 (stride mechanics &
  *       force output). Applied here to sustained-running strides, not sprinting.
  */
 

@@ -2,8 +2,8 @@
  * Per-MD-day load-distribution PRESETS (pure — no I/O, client-safe).
  *
  * A preset fills the team's match_demand_template with a named directional shape the coach
- * can then tune. Two are shipped: the Martin-Garcia 2018 default (MD-4 peak) and an Owen-style
- * steep taper (MD-4 peak, then a steeper fall to the lowest MD-1 — taper after Owen 2017/2024).
+ * can then tune. Two are shipped: the Martín-García 2018 default (MD-4 peak) and an Owen-style
+ * steep taper (MD-4 peak, then a steeper fall to the lowest MD-1 — taper after Owen 2017).
  * Owen put the peak on MD-3; since 2026-11-24 every MicroPulse week shape puts it on MD-4 (coach's
  * call, Martín-García 2018), so this preset keeps Owen's steeper taper but not his peak day. The
  * papers give no exact per-KPI percentages: the numbers are MicroPulse's and stay editable.
@@ -15,7 +15,7 @@ import type { WeeklyLoadMetricKey } from "./weeklyLoadTypes";
 
 export type MdDayTemplate = Record<string, Partial<Record<WeeklyLoadMetricKey, number>>>;
 
-/** Martin-Garcia 2018 (Barcelona B) — the default distribution (MD-4 the peak training day). */
+/** Martín-García 2018 (Barcelona B) — the default distribution (MD-4 the peak training day). */
 export const MARTIN_GARCIA_TEMPLATE: MdDayTemplate = {
   "MD-5": { totalDistance: 1.10, totalPlayerLoad: 1.10, velocityBand5: 0.80, velocityBand6: 0.50, accelB23: 1.00, decelB23: 1.00, fmpDynamicHigh: 0.70, fmpDynamicMedium: 0.85, fmpRunningHigh: 0.75, imaTotal: 0.90 },
   "MD-4": { totalDistance: 1.15, totalPlayerLoad: 1.15, velocityBand5: 1.00, velocityBand6: 0.70, accelB23: 1.10, decelB23: 1.10, fmpDynamicHigh: 1.00, fmpDynamicMedium: 1.05, fmpRunningHigh: 1.05, imaTotal: 1.10 },
@@ -27,7 +27,7 @@ export const MARTIN_GARCIA_TEMPLATE: MdDayTemplate = {
 };
 
 /** Owen-style steep taper — MD-4 the peak training day (MicroPulse's order), then a steeper fall than
- *  Martin-Garcia to the lowest MD-1 (taper after Owen 2017/2024; Owen's own peak was MD-3). */
+ *  Martin-Garcia to the lowest MD-1 (taper after Owen 2017; Owen's own peak was MD-3). */
 export const OWEN_CUPS_TEMPLATE: MdDayTemplate = {
   "MD-5": { totalDistance: 1.05, totalPlayerLoad: 1.05, velocityBand5: 0.75, velocityBand6: 0.45, accelB23: 0.95, decelB23: 0.95, fmpDynamicHigh: 0.65, fmpDynamicMedium: 0.80, fmpRunningHigh: 0.70, imaTotal: 0.85 },
   "MD-4": { totalDistance: 1.20, totalPlayerLoad: 1.20, velocityBand5: 1.05, velocityBand6: 0.80, accelB23: 1.15, decelB23: 1.15, fmpDynamicHigh: 1.05, fmpDynamicMedium: 1.10, fmpRunningHigh: 1.10, imaTotal: 1.15 },
@@ -44,12 +44,12 @@ export type LoadTemplatePresetKey = "martin_garcia" | "owen_cups";
 export const LOAD_TEMPLATE_PRESETS: Record<LoadTemplatePresetKey, { label: { en: string; is: string }; desc: { en: string; is: string }; template: MdDayTemplate }> = {
   martin_garcia: {
     label: { en: "Martin-Garcia (default)", is: "Martin-Garcia (sjálfgefið)" },
-    desc: { en: "MD-4 the peak training day (Martin-Garcia 2018).", is: "MD-4 er þyngsti æfingadagurinn (Martin-Garcia 2018)." },
+    desc: { en: "MD-4 the peak training day (Martín-García 2018).", is: "MD-4 er þyngsti æfingadagurinn (Martín-García 2018)." },
     template: MARTIN_GARCIA_TEMPLATE,
   },
   owen_cups: {
     label: { en: "Steep taper (after Owen)", is: "Brött niðurtröppun (eftir Owen)" },
-    desc: { en: "MD-4 the peak, then a steeper fall to the lowest MD-1 than the default — taper after Owen 2017/2024 (Owen put the peak on MD-3). Tunable.", is: "MD-4 þyngstur, svo brattari lækkun niður í lægsta MD-1 en sjálfgefið — niðurtröppun eftir Owen 2017/2024 (Owen setti toppinn á MD-3). Stillanlegt." },
+    desc: { en: "MD-4 the peak, then a steeper fall to the lowest MD-1 than the default — taper after Owen 2017 (Owen put the peak on MD-3; how steep is MicroPulse's). Tunable.", is: "MD-4 þyngstur, svo brattari lækkun niður í lægsta MD-1 en sjálfgefið — niðurtröppun eftir Owen 2017 (Owen setti toppinn á MD-3; brattinn er val MicroPulse). Stillanlegt." },
     template: OWEN_CUPS_TEMPLATE,
   },
 };

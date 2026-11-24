@@ -15,7 +15,7 @@
  *   but has no near-full match yet gets the median of squad-mates in the same part of the team, marked as an estimate.
  * Week: training + matches.
  *
- * Stevens 2017 + Martín-García 2018 (Acc/Dec/CoD by day-type); MD-day shares are MicroPulse's (planSessionLoad); load falls toward the match: Gualtieri 2024.
+ * Stevens 2017 + Martín-García 2018 (Acc/Dec share of the match by MD-day; CoD and the day-type mapping are MicroPulse's); MD-day shares are MicroPulse's (planSessionLoad); load falls toward the match: Gualtieri 2024.
  */
 
 import { STARTER_MINUTES, TOPUP_MATCH_PCT, targetShare, type EnoughDayType, type EnoughVar } from "@/lib/micropulse/sessionEnough";

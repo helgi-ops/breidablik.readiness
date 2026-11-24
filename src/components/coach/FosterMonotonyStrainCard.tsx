@@ -14,7 +14,7 @@
  *   MONOTONY     = mean_load / sd_load
  *   STRAIN       = weekly_load × MONOTONY
  *
- * Thresholds (Foster 1998 + AC Milan / Real Madrid 2010s refinements):
+ * Thresholds (MicroPulse's lines; the monotony/strain method is Foster 1998):
  *   Monotony  ≤ 1.5   safe
  *             1.5–2.0 watch
  *             > 2.0   high overtraining risk
@@ -75,12 +75,12 @@ const I18N = {
   monotony:     { EN: "Monotony",        IS: "Monotony" },
   strain:       { EN: "Strain",          IS: "Strain" },
   monotonyTip:  {
-    EN: "Monotony = mean weekly load ÷ standard deviation. Measures how SAME each day's training is. >2.0 means very little day-to-day variation — even at modest volume this raises illness/injury risk (Foster 1998). Coach lever: vary intensity day-to-day, even if total weekly volume stays the same.",
-    IS: "Monotony = meðal-vikuálag ÷ staðalfrávik. Mælir hversu LÍK æfingar eru dag frá degi. >2.0 þýðir mjög lítill breytileiki milli daga — jafnvel í hófi-magni eykur þetta veikinda/meiðsla-áhættu (Foster 1998). Þjálfara-aðgerð: breyta intensity milli daga, jafnvel þótt heildar vikumagn haldist eins.",
+    EN: "Monotony = mean weekly load ÷ standard deviation. Measures how SAME each day's training is. >2.0 (MicroPulse's line) means very little day-to-day variation; Foster 1998 found most illnesses came when an athlete's strain passed his own threshold. Coach lever: vary intensity day-to-day, even if total weekly volume stays the same.",
+    IS: "Monotony = meðal-vikuálag ÷ staðalfrávik. Mælir hversu LÍK æfingar eru dag frá degi. >2.0 (viðmið MicroPulse) þýðir mjög lítill breytileiki milli daga; Foster 1998 fann að flest veikindi komu þegar álag (strain) fór yfir eigin mörk íþróttamannsins. Þjálfara-aðgerð: breyta intensity milli daga, jafnvel þótt heildar vikumagn haldist eins.",
   },
   strainTip:    {
-    EN: "Strain = weekly load × monotony. Combined signal beats either metric alone (Foster 1998). >4000 AU = watch; >6000 AU = illness/injury danger zone. Two players with the same weekly load can have very different strain if one trains evenly and the other has spikes.",
-    IS: "Strain = vikuálag × monotony. Sameinað merki er sterkara en hvor mæling fyrir sig (Foster 1998). >4000 AU = fylgjast með; >6000 AU = veikinda/meiðsla-svæði. Tveir leikmenn með sama vikuálag geta haft mjög ólíkan strain ef annar æfir jafnt en hinn hefur spikes.",
+    EN: "Strain = weekly load × monotony. In Foster 1998 most illnesses were linked to strain. >4000 AU = watch; >6000 AU = danger zone (MicroPulse's lines, not Foster's). Two players with the same weekly load can have very different strain if one trains evenly and the other has spikes.",
+    IS: "Strain = vikuálag × monotony. Hjá Foster 1998 tengdust flest veikindi álaginu (strain). >4000 AU = fylgjast með; >6000 AU = hættusvæði (viðmið MicroPulse, ekki Foster). Tveir leikmenn með sama vikuálag geta haft mjög ólíkan strain ef annar æfir jafnt en hinn hefur spikes.",
   },
   days:         { EN: "Days",            IS: "Dagar" },
   flag:         { EN: "Status",          IS: "Staða" },
@@ -88,8 +88,8 @@ const I18N = {
                   IS: "Engin álagsgögn síðustu 7 daga. Leikmenn þurfa að skrá RPE eftir æfingar, eða þú þarft að hlaða inn Catapult gögnum." },
   helpHeader:   { EN: "How to read",     IS: "Hvernig á að lesa" },
   helpBody:     {
-    EN: "Monotony >2.0 = low day-to-day variability → overtraining risk. Strain >6000 AU = illness/injury danger zone (Foster 1998). The combined signal beats either metric alone.",
-    IS: "Monotony >2.0 = lítill breytileiki milli daga → overtraining-áhætta. Strain >6000 AU = veikinda/meiðsla danger zone (Foster 1998). Saman gefa þessar tvær breytur betra svar en hvor um sig.",
+    EN: "Monotony >2.0 = low day-to-day variability. Strain >6000 AU = danger zone. Both lines are MicroPulse's; Foster 1998 linked most illnesses to strain above each athlete's own threshold.",
+    IS: "Monotony >2.0 = lítill breytileiki milli daga. Strain >6000 AU = hættusvæði. Bæði mörkin eru viðmið MicroPulse; Foster 1998 tengdi flest veikindi við álag (strain) yfir eigin mörkum hvers íþróttamanns.",
   },
   flagSafe:     { EN: "Safe",     IS: "Öruggt" },
   flagWatch:    { EN: "Watch",    IS: "Fylgjast með" },

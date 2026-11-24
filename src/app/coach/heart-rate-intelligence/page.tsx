@@ -878,7 +878,7 @@ export default function HeartRateIntelligencePage() {
                   <strong>{IS ? "Heiðarleg takmörk:" : "Honest limits:"}</strong> {IS ? reads[0]?.read.caveat.is : reads[0]?.read.caveat.en}
                 </p>
                 <p className="mt-2 text-slate-400">
-                  <strong>{IS ? "Tilvitnun:" : "Reference:"}</strong> {reads[0]?.read.citation}. Edwards S. (1993). <em>The Heart Rate Monitor Book.</em> · Buchheit M. (2024), HR monitoring in team sport. · {IS ? "HRmax-áætlun" : "HRmax estimate"}: Tanaka 2001 · Gulati 2010.
+                  <strong>{IS ? "Tilvitnun:" : "Reference:"}</strong> {reads[0]?.read.citation}. Edwards S. (1993). <em>The Heart Rate Monitor Book.</em> · Buchheit M. (2014), Monitoring training status with HR measures. · {IS ? "HRmax-áætlun" : "HRmax estimate"}: Tanaka 2001 · Gulati 2010.
                 </p>
                 <p className="mt-2 text-slate-400">
                   {IS

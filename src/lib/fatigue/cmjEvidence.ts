@@ -9,11 +9,11 @@
  *
  *   NEURAL — a cleared drop in the explosive, neurally-driven qualities (peak
  *   power, RFD, concentric impulse/force). Early RFD is neural-drive dominated and
- *   falls first. [Gathercole 2015; D'Emanuele 2021]
+ *   fell more than max force under fatigue. [D'Emanuele 2021; CMJ power drop: Gathercole 2015]
  *
  *   TISSUE — a cleared lengthening of the time/eccentric qualities (eccentric &
  *   concentric duration, contraction time): an altered jump STRATEGY that outlasts
- *   the height loss — a peripheral/tissue signature. [Gathercole 2015]
+ *   the height loss (Gathercole 2015: timing still changed at 72 h); reading it as peripheral/tissue is MicroPulse's call.
  *
  * Plus the multi-day rebound SHAPE: a fast next-day recovery points neural (central
  * fatigue clears in hours); a jump still depressed at 48–72 h points tissue.

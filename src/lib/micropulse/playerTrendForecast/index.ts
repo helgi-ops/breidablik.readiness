@@ -26,8 +26,8 @@
  *     even if the slope happens to be steep.
  *
  * References:
- *   - Robertson 2017 — wellness Z-score trend windows for fatigue detection.
- *   - Hulin 2014 — multi-day trajectory > single-day spike for injury risk.
+ *   - Rebelo 2026 — individual baselines (the Z-score trend windows are MicroPulse's).
+ *   - Hulin 2014 — load read as a week vs the prior 4 weeks, not a single day (cricket fast bowlers).
  */
 
 export type DailyZ = {

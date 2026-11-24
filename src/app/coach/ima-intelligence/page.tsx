@@ -19,7 +19,7 @@
  * (short bursts vs long runs) matched the captured one.
  *
  * Sport-science citations:
- *   - McBurnie 2022: stride / running-mechanics profiles add context GPS
+ *   - MicroPulse's own read: stride / running-mechanics profiles add context GPS
  *     distance alone doesn't show (stride length in sustained running).
  *   - L/R asymmetry > 15% on high-intensity CoD is MicroPulse's flag line —
  *     not tested against injury (Helme 2021: the evidence is weak).
@@ -895,7 +895,7 @@ function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
                         ? "Heimild: Catapult IMA Free Running (GPS-vegalengd) — mælist aðeins utandyra; innanhúss birtist enginn dómur."
                         : "Source: Catapult IMA Free Running (GPS distance) — measured outdoors only; no verdict indoors."}
                     </div>
-                    <div className="text-slate-400">McBurnie 2022; Girard, Micallef &amp; Millet 2011; Morin o.fl. 2011.</div>
+                    <div className="text-slate-400">Girard et al. 2011; Morin o.fl. 2011.</div>
                   </div>
                 )}
               </div>

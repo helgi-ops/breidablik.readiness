@@ -13,7 +13,7 @@
  * alongside the training phase / load context and wellness; never a standalone
  * verdict. Descriptive/advisory — never the readiness colour.
  *
- * Cite: Buchheit et al. 2011 (PubMed 21656232) · Frontiers 2018 (HR team-sport framework).
+ * Cite: Buchheit et al. 2011 (PubMed 21656232) · Schneider 2018 (HR team-sport framework).
  */
 
 export type Bi = { en: string; is: string };
@@ -28,10 +28,10 @@ export interface HrExTest {
 export type HrExTrend = "improving" | "declining" | "stable" | "mixed" | "insufficient";
 export type Confidence = "low" | "medium" | "high";
 
-/** Smallest worthwhile change: HRex 1%, HRR 7% (Buchheit / Frontiers 2018). */
+/** Smallest worthwhile change: HRex 1%, HRR 7% (Schneider 2018, after Buchheit 2014). */
 export const HREX_SWC_PCT = 1;
 export const HRR_SWC_PCT = 7;
-export const HREX_CITATION = "Buchheit 2011 (submaximal HR, SWC ≈1% HRex / ≈7% HRR; PubMed 21656232) · Frontiers 2018";
+export const HREX_CITATION = "Buchheit 2011 (submaximal HR test; PubMed 21656232) · Schneider 2018 (SWC ≈1% HRex / ≈7% HRR, after Buchheit 2014)";
 
 export interface HrExRead {
   latest: HrExTest | null;

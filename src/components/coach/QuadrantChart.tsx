@@ -31,7 +31,7 @@ export type QuadrantPoint = {
   externalLoad: number;   // X-axis value (e.g. avg total_distance in metres)
   internalCost: number;   // Y-axis value (e.g. avg sRPE = RPE × min)
   acwr?: number | null;   // optional: drives dot size
-  edi?: number | null;    // di Prampero 2015 — intensity density per metre run
+  edi?: number | null;    // intensity density per metre run (energy-cost model: Osgnach 2010 / di Prampero 2015)
   flag?: "green" | "yellow" | "red" | null;
 };
 
@@ -247,7 +247,7 @@ function Tooltip({ x, y, point }: { x: number; y: number; point: QuadrantPoint }
   // Grow box dynamically to fit ACWR + EDI lines
   const w = 230;
   const h = 52 + (hasAcwr ? 14 : 0) + (hasEdi ? 14 : 0);
-  // EDI colour: green ≤ 1.20, yellow 1.20–1.35, orange > 1.35 (di Prampero 2015 thresholds)
+  // EDI colour: green ≤ 1.20, yellow 1.20–1.35, orange > 1.35 (MicroPulse's bands; no paper sets these cut-offs)
   const ediColour = hasEdi
     ? (point.edi! <= 1.20 ? GREEN : point.edi! <= 1.35 ? YELLOW : "#de9328")
     : LIGHT;

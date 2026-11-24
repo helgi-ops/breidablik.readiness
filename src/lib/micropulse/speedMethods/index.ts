@@ -75,7 +75,7 @@ export const SPEED_REFS: Record<SpeedRefKey, SpeedRef> = {
   ishoi2018: { key: "ishoi2018", short: "Ishøi 2018", cite: "Ishøi L, Hölmich P, Aagaard P, Thorborg K, Bandholm T, Serner A. Effects of the Nordic Hamstring exercise on sprint capacity in male football players: a randomized controlled trial. J Sports Sci 2018;36(14):1663–1672. doi:10.1080/02640414.2017.1409609", verifiedFrom: "full_text" },
   lin2026: { key: "lin2026", short: "Lin 2026", cite: "Lin et al. Acute and long-term effects of hip thrust training on athletic performance: a systematic review and meta-analysis. PeerJ 2026.", verifiedFrom: "abstract" },
   haugen2015: { key: "haugen2015", short: "Haugen 2015", cite: "Haugen T et al. Sprint conditioning of junior soccer players: effects of training intensity and technique supervision. PLoS One 2015;10(3):e0121827.", verifiedFrom: "abstract" },
-  ronnestad2011: { key: "ronnestad2011", short: "Rønnestad 2011", cite: "Rønnestad BR, Nymark BS, Raastad T. Effects of in-season strength maintenance training frequency in professional soccer players. J Strength Cond Res 2011.", verifiedFrom: "abstract" },
+  ronnestad2011: { key: "ronnestad2011", short: "Rønnestad 2011", cite: "Rønnestad BR, Nymark BS, Raastad T. Effects of in-season strength maintenance training frequency in professional soccer players. J Strength Cond Res 2011;25(10):2653–2660. PMID 21873897", verifiedFrom: "abstract" },
   seitz2014: { key: "seitz2014", short: "Seitz 2014", cite: "Seitz LB, Reyes A, Tran TT, Sáez de Villarreal E, Haff GG. Increases in lower-body strength transfer positively to sprint performance: a systematic review with meta-analysis. Sports Med 2014;44:1693–1702. doi:10.1007/s40279-014-0227-1 (re-analysed in Sports Med 2022: effect sizes over-estimated).", verifiedFrom: "full_text" },
   weyand2000: { key: "weyand2000", short: "Weyand 2000", cite: "Weyand PG et al. Faster top running speeds are achieved with greater ground forces not more rapid leg movements. J Appl Physiol 2000;89.", verifiedFrom: "abstract" },
   malone2017: { key: "malone2017", short: "Malone 2017", cite: "Malone S, Roe M, Doran DA, Gabbett TJ, Collins K. High chronic training loads and exposure to bouts of maximal velocity running reduce injury risk in elite Gaelic football. J Sci Med Sport 2017;20(3):250–254. doi:10.1016/j.jsams.2016.08.005 PMID 27554923", verifiedFrom: "abstract" },
@@ -326,8 +326,8 @@ export const SPEED_METHODS: SpeedMethod[] = [
       { en: "Keep sets short: stop at about half the reps the player could do. With a bar-speed device: stop when the bar has slowed by about 10–20%.", is: "Haltu settunum stuttum: hættu við um helming þeirra endurtekninga sem leikmaðurinn gæti gert. Með stangarhraðamæli: hættu þegar stöngin hefur hægt á sér um 10–20%." },
     ],
     caution: {
-      en: "Heavy lifting can blunt sprint speed for a day or two (Haugen 2019).",
-      is: "Þungar lyftur geta dregið úr sprettahraða í einn til tvo daga (Haugen 2019).",
+      en: "Heavy lifting can blunt sprint speed for a short while (Haugen 2019); MicroPulse allows a day or two.",
+      is: "Þungar lyftur geta dregið úr sprettahraða í stuttan tíma (Haugen 2019); MicroPulse gerir ráð fyrir einum til tveimur dögum.",
     },
   },
   {
@@ -456,8 +456,8 @@ export const SPEED_METHODS: SpeedMethod[] = [
       {
         ref: "cormier2020",
         text: {
-          en: "In one study of highly trained footballers (Kobal 2017) players got slower after both orders when the programme had no sprinting in it.",
-          is: "Í einni rannsókn á vel þjálfuðum fótboltamönnum (Kobal 2017) urðu leikmenn hægari eftir báðar raðirnar þegar engir sprettir voru í prógramminu.",
+          en: "In one study of elite young footballers (Kobal 2017), with no sprinting in the programme, sprints got slower only when the jumps came before the heavy lift; heavy-then-jump and set-by-set pairs kept their speed.",
+          is: "Í einni rannsókn á ungum úrvalsleikmönnum í fótbolta (Kobal 2017), án spretta í prógramminu, urðu sprettir hægari aðeins þegar hoppin komu á undan þungu lyftunni; þungt-svo-hopp og pörun sett fyrir sett héldu hraðanum.",
         },
       },
       {
@@ -1003,12 +1003,12 @@ function inSeasonPlan(lv: TrainingLevel): SpeedPlan {
         is: "Tvær útgáfur, eftir vikunni þinni í Periodization Hub: venjuleg vika = fljúgandi sprettir í byrjun MD-3; taktísk periodisering = hraðadagur á MD-2.",
       },
       {
-        en: "Strength in the gym on MD-4, once a week: that holds pre-season speed; once every second week does not (Rønnestad 2011).",
-        is: "Styrkur í sal á MD-4, einu sinni í viku: það heldur hraða undirbúningstímabilsins; önnur hver vika gerir það ekki (Rønnestad 2011).",
+        en: "Strength in the gym once a week (MicroPulse puts it on MD-4) kept pre-season strength and sprint speed over 12 in-season weeks; once every second week did not (Rønnestad 2011).",
+        is: "Styrkur í sal einu sinni í viku (MicroPulse setur hann á MD-4) hélt styrk og sprettahraða undirbúningstímabilsins í 12 vikur inn í tímabilið; önnur hver vika gerði það ekki (Rønnestad 2011).",
       },
       {
-        en: "Players who did not play get their sprints on MD+2 (Gómez-Piqueras 2024).",
-        is: "Þeir sem spiluðu ekki fá sína spretti á MD+2 (Gómez-Piqueras 2024).",
+        en: "Players who did not play get their sprints on MD+2 (one club's practice, Gómez-Piqueras 2024).",
+        is: "Þeir sem spiluðu ekki fá sína spretti á MD+2 (vinnulag eins félags, Gómez-Piqueras 2024).",
       },
     ],
     matchDay: 5,

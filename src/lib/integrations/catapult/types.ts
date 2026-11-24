@@ -39,8 +39,8 @@ export type CatapultSessionMetric = {
   /**
    * High-intensity-only decel count (band 3+, >3 m/s²) from Catapult's
    * "Decel B3+ Total # Efforts (Gen 2)" reporting parameter. Preferred by
-   * McBurnie 2022 framework over the combined b2-3 metric because b2
-   * (moderate, 2-3 m/s²) decels are biomechanical noise — only high-intensity
+   * MicroPulse's decel module (built on McBurnie 2022) over the combined b2-3 metric because b2
+   * (moderate, 2-3 m/s²) decels are treated as noise here (MicroPulse's choice) — only high-intensity
    * eccentric loading matches the injury-relevant demand of sprint braking.
    * Falls back to decelB23TotEffsGen2 in McBurnie SQL until populated.
    */
@@ -48,7 +48,7 @@ export type CatapultSessionMetric = {
   /**
    * IMA-based per-band decel counts. Catapult IMU exposes these as
    * ima_band1_decel_count / ima_band2_decel_count / ima_band3_decel_count.
-   * Band 3 = high-intensity (>3 m/s²) — McBurnie 2022 preferred input.
+   * Band 3 = high-intensity (>3 m/s²) — MicroPulse's preferred input (McBurnie 2022 favours individual over fixed thresholds).
    * Discovered 28 Apr 2026 via debug-fields probe when GPS-Gen2 b3 came back
    * empty but IMA band 3 was already in the base payload.
    */

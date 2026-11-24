@@ -32,7 +32,7 @@ export async function loadPrehabFlags(sb: SupabaseClient, playerId: string): Pro
         detail: { en: `${what}${r.injury_date ? ` · since ${r.injury_date}` : ""}`, is: `${what}${r.injury_date ? ` · síðan ${r.injury_date}` : ""}` },
         severity: "priority",
         source: "load",
-        evidence: "Prior injury is the strongest modifiable re-injury risk factor (Green & Pizzari 2017; hamstring / calf reviews).",
+        evidence: "A previous strain is among the strongest risk factors for another one (Green & Pizzari 2017; hamstring / calf reviews).",
       });
     }
   } catch { /* no injuries table row — skip */ }

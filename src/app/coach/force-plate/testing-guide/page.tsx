@@ -138,7 +138,7 @@ const PROTOCOLS: InjuryProtocol[] = [
     ],
     clinical: { EN: "Resisted adduction (squeeze) + palpation of the adductor origin.", IS: "Mótstöðu aðfærsla (kreisting) + þreifing á aðleiðara-upptök." },
     differential: { EN: "Rule out hip (FADIR/FABER), inguinal / sports hernia and pubic-related pain.", IS: "Útiloka mjöðm (FADIR/FABER), nára- / íþrótta-kviðslit og lífbeins-tengda verki." },
-    citation: "Esteve 2020; Serner; Doha/Copenhagen agreement",
+    citation: "Weir 2015 (Doha agreement on groin-pain terms)",
   },
   {
     key: "ankle",

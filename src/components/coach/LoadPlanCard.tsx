@@ -61,7 +61,7 @@ const KPI_LABEL: Record<string, string> = {
 // on hover so the primary label can read plainly (explainability-first §jargon).
 const KPI_TOOLTIP: Record<string, string> = {
   hsr: "HSR = high-speed running (band 5)",
-  ima: "IMA = high-intensity accel/decel/change-of-direction efforts (McBurnie 2022)",
+  ima: "IMA = high-intensity accel/decel/change-of-direction efforts (Green 2023)",
 };
 const TYPE_TINT: Record<string, string> = {
   mechanical: "bg-orange-100 text-orange-800",

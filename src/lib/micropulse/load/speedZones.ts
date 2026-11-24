@@ -13,7 +13,7 @@
  * Descriptive conditioning context ONLY. Like `peakPeriod.ts` / `criticalSpeed.ts` it must NEVER
  * feed the readiness colour, the load target, or the daily decision. Pure, no I/O.
  *
- * Cite: Sandford 2019 (%ASR tiering) · Mendez-Villanueva & Buchheit 2013 (anaerobic speed reserve)
+ * Cite: Sandford 2019 (speed reserve) · Mendez-Villanueva 2013 (speed zones set from MAS and top speed)
  *       · Abt & Lovell 2009 · Hunter et al. 2015 (individualised vs fixed thresholds).
  */
 
@@ -32,8 +32,8 @@ const MAS_PROXY: ReadonlySet<MasSource> = new Set<MasSource>(["vift_shrunk", "cs
  *  can catch a one-off artefact). Below this the GPS MSS is treated as single-session → low. */
 export const MIN_MSS_SESSIONS = 5;
 
-export const DEFAULT_HSR_PCT_ASR = 0;      // HSR floor defaults to MAS (Abt & Lovell 2009; Hunter 2015)
-export const DEFAULT_SPRINT_PCT_ASR = 0.30; // sprint floor defaults to MAS + 0.30·ASR (Sandford 2019)
+export const DEFAULT_HSR_PCT_ASR = 0;      // HSR floor defaults to MAS (MicroPulse's choice; Abt & Lovell 2009 used VT2 speed; Hunter 2015 warns one test alone misclassifies)
+export const DEFAULT_SPRINT_PCT_ASR = 0.30; // sprint floor defaults to MAS + 0.30·ASR (MicroPulse's line)
 
 /** The fixed, league/squad-comparable HSR threshold (Ju 2022) — shown ALONGSIDE the individualised
  *  floor, never instead of it, so a coach can still compare across players. */
@@ -49,11 +49,11 @@ export interface SpeedZones {
   citation: string; caveat: Bi;
 }
 
-const CITATION = "Sandford 2019 (%ASR tiering) · Mendez-Villanueva & Buchheit 2013 (ASR) · Abt & Lovell 2009 · Hunter 2015 (individualised thresholds)";
+const CITATION = "Sandford 2019 (speed reserve) · Mendez-Villanueva 2013 (zones from MAS and top speed) · Abt & Lovell 2009 · Hunter 2015 (individualised thresholds)";
 
 const CAVEAT: Bi = {
-  en: "His own high-speed and sprint lines, individualised from his maximal aerobic speed (MAS) plus his maximal sprint speed (MSS): HSR starts at MAS, sprinting at MAS + 30 % of his speed reserve (Sandford 2019). MSS is measured — a max sprint or GPS top speed — never estimated from an endurance test. The fixed 19.8 km/h line is kept alongside for league comparability. Descriptive conditioning context — it never touches the readiness verdict, the load target or the daily plan.",
-  is: "Hans eigin há­hraða- og sprett­línur, einstaklingsmiðaðar úr hámarks loftháðum hraða (MAS) og hámarks­spretthraða (MSS): há­hraði byrjar við MAS, sprettur við MAS + 30 % af hraðaforðanum (Sandford 2019). MSS er mælt — hámarkssprettur eða GPS-topphraði — aldrei metið úr þolprófi. Fasta 19,8 km/klst línan fylgir með til samanburðar við deildina. Lýsandi samhengi — snertir aldrei readiness-dóminn, álagsmarkið eða dagsáætlunina.",
+  en: "His own high-speed and sprint lines, individualised from his maximal aerobic speed (MAS) plus his maximal sprint speed (MSS): HSR starts at MAS, sprinting at MAS + 30 % of his speed reserve (MicroPulse's line; zones set from MAS and top speed as in Mendez-Villanueva 2013). MSS is measured — a max sprint or GPS top speed — never estimated from an endurance test. The fixed 19.8 km/h line is kept alongside for league comparability. Descriptive conditioning context — it never touches the readiness verdict, the load target or the daily plan.",
+  is: "Hans eigin há­hraða- og sprett­línur, einstaklingsmiðaðar úr hámarks loftháðum hraða (MAS) og hámarks­spretthraða (MSS): há­hraði byrjar við MAS, sprettur við MAS + 30 % af hraðaforðanum (viðmið MicroPulse; svæði út frá MAS og hámarkshraða eins og hjá Mendez-Villanueva 2013). MSS er mælt — hámarkssprettur eða GPS-topphraði — aldrei metið úr þolprófi. Fasta 19,8 km/klst línan fylgir með til samanburðar við deildina. Lýsandi samhengi — snertir aldrei readiness-dóminn, álagsmarkið eða dagsáætlunina.",
 };
 
 const num = (x: number | null | undefined): number | null => (typeof x === "number" && isFinite(x) ? x : null);

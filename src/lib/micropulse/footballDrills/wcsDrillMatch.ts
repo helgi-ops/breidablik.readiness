@@ -9,8 +9,8 @@
  * Descriptive / advisory — the coach picks the drills; this never touches the readiness colour or the
  * daily decision. Null-safe: a missing metric is `null`, never fabricated. No I/O.
  *
- * Cite: Ju et al. 2022 & Martín-García/Casamichana, Owen 2017 (worst-case / peak-period demands);
- *       Gaudino, Casamichana, Owen (SSG pitch size → load: smaller area = more accel/decel + CoD,
+ * Cite: Ju et al. 2022 & Martín-García 2018b (worst-case / peak-period demands);
+ *       Gaudino 2014 (SSG pitch size → load: smaller area = more accel/decel + CoD,
  *       larger = more HSR/sprint; fewer players = higher individual involvement).
  */
 

@@ -26,8 +26,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *
  * References:
  *   - Halson 2014: Monitoring training load to understand fatigue. (Sports Med)
- *   - Schwellnus et al. 2016: How much is too much? (Br J Sports Med) — illness
- *     return-to-train criteria.
+ *   - Schwellnus et al. 2016: How much is too much? (Br J Sports Med) — load and illness risk; asks for ongoing illness monitoring.
+ *     It gives no return-to-train criteria; the auto-clear rules are MicroPulse's.
  */
 
 // TWO PATHS to auto-clear, whichever fires first:

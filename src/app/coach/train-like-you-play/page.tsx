@@ -46,7 +46,7 @@ function flagOf(kind: string | undefined, pct: number | null): Flag {
 
 // Desirable training load per MD-day, as % of match demand — a typical
 // periodization shape (lowest MD+1 & MD-1, peak on MD-4, then falling toward the match). A REFERENCE template
-// (Martin-García 2018; Akenhead 2016), not a per-team rule: the coach adjusts to
+// (Martín-García 2018; Akenhead 2016), not a per-team rule: the coach adjusts to
 // their model. One load-shape regardless of the selected metric — a per-metric ×
 // per-day target grid would be a number wall, against explainability-first.
 const MD_TARGET: Record<string, { lo: number; hi: number }> = {
@@ -61,7 +61,7 @@ const MD_TARGET: Record<string, { lo: number; hi: number }> = {
 };
 // Top-up cohort bands for the post-match days: non-starters replace the match
 // stimulus they missed → roughly match-equivalent load. Tunable reference, not a
-// rule (Anderson 2016b; Hills 2018; Stevens 2017). The Recovery cohort uses the
+// rule (Anderson 2016b; Hills 2020; Stevens 2017). The Recovery cohort uses the
 // MD_TARGET bands above (those were designed for recovering players).
 const TOPUP_TARGET: Record<string, { lo: number; hi: number }> = {
   "MD+1": { lo: 80, hi: 110 },
@@ -252,9 +252,9 @@ export default function TrainLikeYouPlayPage() {
     // Source paper for each metric so the tooltip can cite it.
     const metricTip: Record<MetricKey, { en: string; is: string }> = {
       top_speed: { en: "Top sprint speed vs match (Djaoui 2017).", is: "Hámarks-sprett­hraði m.v. leik (Djaoui 2017)." },
-      fmp_run_high: { en: "High-intensity running exposure — Catapult Football Movement Profile, running-high zone (Malone 2017).", is: "Háákefðar-hlaup — Catapult Football Movement Profile, hlaup-há flokkur (Malone 2017)." },
-      fmp_dyn_high: { en: "High-intensity dynamic (multi-directional) movement — FMP dynamic-high zone (Malone 2017).", is: "Háákefðar dýnamísk (fjölátta) hreyfing — FMP dýnamísk-há flokkur (Malone 2017)." },
-      fmp_dyn_med: { en: "Medium-intensity dynamic movement — FMP dynamic-medium zone (Malone 2017).", is: "Miðlungs-ákefðar dýnamísk hreyfing — FMP dýnamísk-miðl. flokkur (Malone 2017)." },
+      fmp_run_high: { en: "High-intensity running exposure — Catapult Football Movement Profile, running-high zone (Catapult's category).", is: "Háákefðar-hlaup — Catapult Football Movement Profile, hlaup-há flokkur (flokkun Catapult)." },
+      fmp_dyn_high: { en: "High-intensity dynamic (multi-directional) movement — FMP dynamic-high zone (Catapult's category).", is: "Háákefðar dýnamísk (fjölátta) hreyfing — FMP dýnamísk-há flokkur (flokkun Catapult)." },
+      fmp_dyn_med: { en: "Medium-intensity dynamic movement — FMP dynamic-medium zone (Catapult's category).", is: "Miðlungs-ákefðar dýnamísk hreyfing — FMP dýnamísk-miðl. flokkur (flokkun Catapult)." },
       ima_accel: { en: "Acceleration events — inertial movement analysis (Gabbett 2016).", is: "Hröðunar-atburðir — inertial movement analysis (Gabbett 2016)." },
       ima_decel: { en: "Deceleration / braking events — inertial movement analysis (McBurnie 2022).", is: "Hemlunar-atburðir — inertial movement analysis (McBurnie 2022)." },
       ima_cod: { en: "Change-of-direction events — inertial movement analysis (McBurnie 2022).", is: "Stefnubreytingar — inertial movement analysis (McBurnie 2022)." },
@@ -526,11 +526,11 @@ export default function TrainLikeYouPlayPage() {
                       ? `Bil = þitt periodization-módel (${planModel.name}): 80–100% af fyrirhuguðu álagsþaki hvers MD-dags. Top-up varamanna notar leik-jafngildis-bil. `
                       : `Band = your periodization model (${planModel.name}): 80–100% of each MD-day's intended load cap. Non-starter top-up uses a match-equivalent band. `)
                   : (IS
-                      ? "Æskilegt bil = dæmigert vikuskipulag (lágt MD+1 og MD-1, hámark mið-viku) — viðmið, ekki regla (Martin-García 2018; Akenhead 2016). "
-                      : "Desirable band = a typical periodization shape (low MD+1 & MD-1, peak mid-week) — a reference, not a rule (Martin-García 2018; Akenhead 2016). ")}
+                      ? "Æskilegt bil = dæmigert vikuskipulag (lágt MD+1 og MD-1, hámark mið-viku) — viðmið, ekki regla (Martín-García 2018; Akenhead 2016). "
+                      : "Desirable band = a typical periodization shape (low MD+1 & MD-1, peak mid-week) — a reference, not a rule (Martín-García 2018; Akenhead 2016). ")}
                 <a href="/coach/periodization-hub?tab=plan" className="tlp-noprint font-semibold text-[#2740e6] hover:underline">{IS ? "Breyta í Periodization Hub →" : "Edit in Periodization Hub →"}</a>
               </div>
-              <div className="mt-1 text-[10px] text-slate-400">{IS ? "Hver % = heildar-magn æfingar sem hlutfall af heildar-magni heils leiks (ekki per-90 hraði — það blæs upp stuttar sessionir). MD+1/MD+2 skipt í tvennt: leikmenn sem spiluðu fullan skammt (≥60 mín) eru í endurheimt; allir aðrir (varamenn, takmarkaðar eða engar mínútur) gera „top-up\" til að bæta upp leik-áreitið sem þá vantaði — hvor með sitt æskilegt bil (Anderson 2016b; Hills 2018; Nédélec 2012). „!\" = fá úrtök, lítið traust." : "Each % = the session's total volume as a share of a full match's total (not a per-90 rate — that inflates short sessions). MD+1/MD+2 are split in two: players who played a full shift (≥60 min) are recovering; everyone else (subs, limited or no minutes) does a compensatory “top-up” to replace the match stimulus they missed — each against its own desirable band (Anderson 2016b; Hills 2018; Nédélec 2012). “!” = few sessions, low confidence."}</div>
+              <div className="mt-1 text-[10px] text-slate-400">{IS ? "Hver % = heildar-magn æfingar sem hlutfall af heildar-magni heils leiks (ekki per-90 hraði — það blæs upp stuttar sessionir). MD+1/MD+2 skipt í tvennt: leikmenn sem spiluðu fullan skammt (≥60 mín, viðmið MicroPulse) eru í endurheimt; allir aðrir (varamenn, takmarkaðar eða engar mínútur) gera „top-up\" til að bæta upp leik-áreitið sem þá vantaði — hvor með sitt æskilegt bil (Anderson 2016b; Hills 2020; Nédélec 2012). „!\" = fá úrtök, lítið traust." : "Each % = the session's total volume as a share of a full match's total (not a per-90 rate — that inflates short sessions). MD+1/MD+2 are split in two: players who played a full shift (≥60 min, MicroPulse's line) are recovering; everyone else (subs, limited or no minutes) does a compensatory “top-up” to replace the match stimulus they missed — each against its own desirable band (Anderson 2016b; Hills 2020; Nédélec 2012). “!” = few sessions, low confidence."}</div>
             </div>
           )}
 

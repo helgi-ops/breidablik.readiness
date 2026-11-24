@@ -174,7 +174,7 @@ describe("rule references", () => {
     expect(findRefByShort("Petrakos 2016")?.cite).toMatch(/PMID 26553497/);
   });
 
-  it("every citation in the checked app areas resolves or is unresolved (app lots A–B)", () => {
+  it("every citation in the checked app areas resolves or is unresolved (app lots A–C)", () => {
     const shorts = citationsUnder(APP_CITATION_SOURCES);
     expect(shorts.length).toBeGreaterThan(200);
     expect(openOnes(shorts)).toEqual([]);
@@ -208,6 +208,19 @@ describe("rule references", () => {
     expect(findRefByShort("Jiménez-Reyes 2018")?.cite).toMatch(/ahead of print 2018/);
     expect(findRefByShort("Harper 2022")?.cite).toMatch(/PMID 35643876/);
     expect(citationsIn("ML, Leckey 2025; SHAP, Rothschild 2024; Fixed 2026-04-29")).toEqual(["Leckey 2025", "Rothschild 2024"]);
+  });
+
+  it("lot C: load, GPS and match-demand pages cite what the papers show", () => {
+    const all = citationsUnder(APP_CITATION_SOURCES);
+    // Shorts that named no paper, the wrong paper, or a journal instead of an author.
+    for (const gone of ["Bradley & Ade 2016", "Hills 2018", "Haugen 2014", "Carling 2015", "JOSPT 2020", "Micallef & Millet 2011"]) {
+      expect(all).not.toContain(gone);
+    }
+    expect(findRefByShort("Buchheit 2023b")?.cite).toMatch(/To Rest or Not to Rest/);
+    expect(findRefByShort("Martín-García 2018b")?.cite).toMatch(/Most Demanding/);
+    expect(findRefByShort("Siri 1961")?.cite).toMatch(/Nutrition 1993/);
+    expect(findRefByShort("Rønnestad 2011")?.cite).toMatch(/PMID 21873897/);
+    expect(unresolvedReason("Catapult 2026")).toBeTruthy();
   });
 
   it("reads JSX-escaped ampersands as one two-author citation", () => {

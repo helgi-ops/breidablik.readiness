@@ -8,7 +8,7 @@
  *   - Intensity = the RATE / peak of that work (PlayerLoad·min⁻¹ / distance·min⁻¹ /
  *                 %max-speed / HI-accel·min⁻¹) relative to a rolling reference.
  * A session becomes a point in the volume–intensity plane; a week's sessions trace the
- * TAPER SHAPE (MD-4 high volume, MD-1 low on both), Owen's signature microcycle read.
+ * TAPER SHAPE (MD-4 high volume — MicroPulse's peak day; MD-1 low on both, the taper Owen 2017 describes).
  *
  * Each axis is anchored on the best AVAILABLE multimodal metric (PlayerLoad first — itself an
  * accelerometer-derived multi-planar load, exactly Owen's mechanical construct — then a
@@ -21,9 +21,9 @@
  *   - A missing axis is null, never fabricated → quadrant "unknown".
  *   - Descriptive load context. NEVER the readiness colour, the load target, or the daily decision.
  *
- * Cite: Owen et al. 2017 (multi-modal mechanical volume/intensity monitoring; mesocycle taper +
+ * Cite: Owen et al. 2017 (GPS + RPE over a 6-week mesocycle; MD taper +
  *       positional demands) · Owen et al. 2024 (CUPs; between-microcycle variability) ·
- *       Djaoui/Owen 2022 (congestion Acc/Dec by position).
+ *       Djaoui 2022 (Acc/Dec lower in congested periods; no position effect).
  */
 
 import type { Bi } from "./peakPeriod";

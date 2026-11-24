@@ -8,7 +8,7 @@
  * never touches the readiness colour, the load target, or the daily decision (same framing as
  * sessionPlan.ts). Pure, no I/O; returns null (never a fabricated speed) when MAS is missing.
  *
- * Cite: Buchheit & Laursen 2013 (Science and Application of HIIT — format weapons + %MAS zones);
+ * Cite: Buchheit & Laursen 2013 (HIIT programming review, Part I — work/rest formats + intensity as % of MAS);
  * Buchheit 2008 (30-15 IFT / %VIFT). Same zones as periodization/index.ts.
  */
 
@@ -32,7 +32,7 @@ export interface IntervalPrescription {
   note: Bi; confidence: MasConfidence; cite: string;
 }
 
-const CITE = "Buchheit & Laursen 2013 (Science and Application of HIIT); Buchheit 2008 (30-15 IFT)";
+const CITE = "Buchheit & Laursen 2013 (HIIT programming review, Part I); Buchheit 2008 (30-15 IFT)";
 
 // The format weapons — editable starting defaults (the coach adjusts reps/rest to the block).
 export const HIIT_FORMATS: Record<HiitFormatId, HiitFormatDef> = {

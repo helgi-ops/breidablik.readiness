@@ -235,6 +235,6 @@ export function bandsAreTimeBands(rows: FreeRunningBandRow[], bounds?: readonly 
 
 export const LONG_RUN_CITATIONS = [
   "Catapult IMA Free Running: bands are effort-duration bands in seconds (Catapult support, Nov 2026); edges per team/date in team_fr_band_config — docs/ima-free-running-bands.md",
-  "McBurnie et al. 2022 — stride length and high-speed running mechanics",
-  "Morin et al. 2011 — stride length as a component of running speed",
+  "MicroPulse's own read — stride length in long runs (no study tests it as a fatigue marker)",
+  "Morin et al. 2011 — repeated-sprint fatigue weakens the horizontal push (MicroPulse applies stride length to long runs; not tested there)",
 ];

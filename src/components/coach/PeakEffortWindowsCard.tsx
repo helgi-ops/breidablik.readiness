@@ -150,8 +150,8 @@ export default function PeakEffortWindowsCard({
           </table>
           <p className="mt-2 text-[10.5px] leading-snug text-slate-500">
             {is
-              ? "Fastir kaflar (1/3/5 mín) — nálgun á sanna rúllandi hámarkið (sem getur legið á milli tveggja kafla). OpenField gefur ekki enn sannan rúllandi MII-glugga fyrir þessar mælingar. Lýsandi álag — snertir aldrei readiness-litinn. Heimild: McBurnie 2022."
-              : "Fixed bins (1/3/5 min) — an approximation of the true rolling max (which can straddle two bins). OpenField doesn't yet expose a true rolling-max MII interval for these metrics. Descriptive load — never touches the readiness colour. Cite: McBurnie 2022."}
+              ? "Fastir kaflar (1/3/5 mín) — nálgun á sanna rúllandi hámarkið (sem getur legið á milli tveggja kafla). OpenField gefur ekki enn sannan rúllandi MII-glugga fyrir þessar mælingar. Lýsandi álag — snertir aldrei readiness-litinn. Af hverju hemlunarálag skiptir máli: McBurnie 2022."
+              : "Fixed bins (1/3/5 min) — an approximation of the true rolling max (which can straddle two bins). OpenField doesn't yet expose a true rolling-max MII interval for these metrics. Descriptive load — never touches the readiness colour. Why braking load matters: McBurnie 2022."}
           </p>
         </div>
       )}

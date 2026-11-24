@@ -21,8 +21,8 @@
  * Scientific basis:
  *  - Ju et al. 2022 (Biol Sport 39(4):973-983) — peak demands by position: wide players
  *    (winger, full-back) carry the highest peak running; centre-backs the lowest.
- *  - Modric et al. 2019 (IJERPH 16:4032) — which running quality drives game performance is
- *    position-specific (forwards sprint; full-backs decel; centre-backs HI-accel + distance;
+ *  - Modric et al. 2019 (IJERPH 16:4032) — which running quality goes with game rating is
+ *    position-specific (forwards sprint; full-backs: more decels went with a lower rating; centre-backs HI-accel + distance;
  *    central mids greatest total distance).
  *  - Bradley & Ade — read physical capacity against the tactical role, not a generic average.
  */
@@ -35,7 +35,7 @@ type Bi = { en: string; is: string };
 export const ROLE_MODEL_CITATIONS = [
   "Ju et al. 2022 (Biol Sport) — peak demands by position",
   "Modric et al. 2019 (IJERPH) — running <-> game performance, position-specific",
-  "Bradley & Ade 2016 — position- and sub-role-specific physical/tactical demands",
+  "Bradley & Ade 2018 — read high-intensity running against each position's tactical role (commentary)",
 ];
 
 // ── Game-Plan Fit capacity weights (6-group RoleGroup partition) ──────────────
@@ -84,14 +84,14 @@ export const ROLE_DEMAND_FIT: Record<JuGroup, RoleFitModel> = {
         driver: { en: "high top-speed, straight-line, touchline bias", is: "hár topphraði, beinar línur, kant-hneigð" },
         driverAxes: ["speed"],
         output: { en: "goals + assists, xG, successful crosses/dribbles", is: "mörk + stoðsendingar, xG, heppnaðar fyrirgjafir/rekstur" },
-        cite: "Modric 2019 (wide sprint r=0.80) + Ju 2022 (wide = highest peak)",
+        cite: "Modric 2019 (sprint r=0.80 in forwards, not wingers) + Ju 2022 (wide = highest peak)",
       },
       inverted: {
         weights: { speed: 0.9, mechanical_power: 0.9, anaerobic_reserve: 0.9, reactive_power: 0.9, peak_demands: 0.9, robustness: 0.7, aerobic_endurance: 0.6, vbt_power: 0.6 },
         driver: { en: "high CoD/decel, inside-cut bias", is: "mikil stefnubreyting/hemlun, innskurðar-hneigð" },
         driverAxes: ["agility", "speed"],
         output: { en: "goals, xG, shots, key passes", is: "mörk, xG, skot, lykilsendingar" },
-        cite: "Modric 2019 (CoD) + Bradley & Ade 2016 (inside-forward demand)",
+        cite: "Bradley & Ade 2018 (running read by tactical role); CoD weight is MicroPulse's choice",
       },
     },
   },
@@ -104,14 +104,14 @@ export const ROLE_DEMAND_FIT: Record<JuGroup, RoleFitModel> = {
         driver: { en: "repeated up-down, high volume", is: "endurtekið upp-niður, mikið magn" },
         driverAxes: ["volume", "speed"],
         output: { en: "progressive carries, crosses, OBV", is: "framdrifin rekstur, fyrirgjafir, OBV" },
-        cite: "Modric 2019 (full-back decel) + Bradley & Ade 2016 (overlap = CS)",
+        cite: "Bradley & Ade 2018 (running read by tactical role); decel weight is MicroPulse's choice",
       },
       defensive: {
         weights: { aerobic_endurance: 0.9, speed: 0.8, anaerobic_reserve: 0.8, mechanical_power: 0.8, peak_demands: 0.8, robustness: 0.8, reactive_power: 0.7, vbt_power: 0.6 },
         driver: { en: "recovery-run heavy, decel", is: "mikil bakvarðar-hlaup, hemlun" },
         driverAxes: ["volume", "agility"],
         output: { en: "defensive actions, duels", is: "varnaraðgerðir, návígi" },
-        cite: "Modric 2019 (full-back decel r=-0.43)",
+        cite: "MicroPulse's choice; Modric 2019 found more full-back decels went with a lower rating (r=-0.43)",
       },
     },
   },
@@ -131,14 +131,14 @@ export const ROLE_DEMAND_FIT: Record<JuGroup, RoleFitModel> = {
         driver: { en: "lower peak, positional", is: "lægra hámark, staðsetningarlegt" },
         driverAxes: ["volume", "structural"],
         output: { en: "passes, progressive passes, interceptions", is: "sendingar, framdrifnar sendingar, stöðvanir" },
-        cite: "Bradley & Ade 2016 (deep-lying demand)",
+        cite: "Bradley & Ade 2018 (running read by tactical role)",
       },
       advanced: {
         weights: { mechanical_power: 0.8, anaerobic_reserve: 0.8, reactive_power: 0.8, peak_demands: 0.8, aerobic_endurance: 0.8, speed: 0.7, robustness: 0.7, vbt_power: 0.6 },
         driver: { en: "burst + CoD in tight space", is: "sprengja + stefnubreyting í þröngu rými" },
         driverAxes: ["agility", "speed"],
         output: { en: "xG + xA, key passes, shots", is: "xG + xA, lykilsendingar, skot" },
-        cite: "Bradley & Ade 2016 (#10 demand) + Modric 2019 (CoD)",
+        cite: "Bradley & Ade 2018 (running read by tactical role); CoD weight is MicroPulse's choice",
       },
     },
   },
@@ -151,14 +151,14 @@ export const ROLE_DEMAND_FIT: Record<JuGroup, RoleFitModel> = {
         driver: { en: "low volume, jump/aerial", is: "lítið magn, stökk/loft" },
         driverAxes: ["aerial", "structural"],
         output: { en: "progressive passes, pass %, aerial win %", is: "framdrifnar sendingar, sendinga %, loft-vinningar %" },
-        cite: "Ju 2022 (CB lowest peak) + Bradley & Ade 2016 (ball-playing CB)",
+        cite: "Ju 2022 (CB lowest peak) + Bradley & Ade 2018 (running read by tactical role)",
       },
       stopper: {
         weights: { robustness: 1.0, mechanical_power: 0.9, vbt_power: 0.8, speed: 0.7, reactive_power: 0.7, peak_demands: 0.6, aerobic_endurance: 0.6, anaerobic_reserve: 0.6 },
         driver: { en: "short sprints, aerial, physical duels", is: "stuttir sprettir, loft, líkamleg návígi" },
         driverAxes: ["aerial", "speed"],
         output: { en: "duels/aerials won, clearances, blocks", is: "návígi/loft unnin, fráköst, blokkeringar" },
-        cite: "Modric 2019 (CB HI-accel r=0.49) + Bradley & Ade 2016",
+        cite: "Modric 2019 (CB HI-accel r=0.49) + Bradley & Ade 2018",
       },
     },
   },
@@ -171,7 +171,7 @@ export const ROLE_DEMAND_FIT: Record<JuGroup, RoleFitModel> = {
         driver: { en: "short bursts, hold-up, aerial", is: "stuttar sprengjur, halda bolta, loft" },
         driverAxes: ["aerial", "speed"],
         output: { en: "goals, xG, shots, aerials", is: "mörk, xG, skot, loft" },
-        cite: "Bradley & Ade 2016 (target #9) + Ju 2022 (peak output)",
+        cite: "Bradley & Ade 2018 (running read by tactical role) + Ju 2022 (peak output)",
       },
       mobile: {
         weights: { speed: 1.0, anaerobic_reserve: 1.0, mechanical_power: 0.9, peak_demands: 0.9, reactive_power: 0.8, aerobic_endurance: 0.7, robustness: 0.7, vbt_power: 0.6 },

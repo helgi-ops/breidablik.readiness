@@ -10,7 +10,7 @@
  *
  *  1. KPIs progress at DIFFERENT rates. Volume (distance, Player Load) ramps
  *     faster; high-speed running and especially sprint ramp slower with tighter
- *     ceilings (hamstring exposure — Malone 2017, Gabbett 2016); mechanical
+ *     ceilings (large weekly jumps in HSR/sprint went with more leg injuries — Malone 2018, Gabbett 2016); mechanical
  *     (accel/decel) sits in between.
  *  2. ACWR guardrail. Each week's value is capped so the projected acute:chronic
  *     ratio stays <= 1.3 (Gabbett 2016 familiar range), never spiking. The rolling 4-week

@@ -7,7 +7,7 @@ export const maxDuration = 45;
  * Game-Plan Fit board (differentiator #1). Per matchday, per active player: is he
  * physically ready TODAY to execute his ROLE's tactical-physical demands vs THIS
  * opponent? Composes four transparent layers:
- *   1. role demand (position → capacity-axis weights, Modric 2019)
+ *   1. role demand (position → capacity-axis weights — MicroPulse's, informed by Modric 2019)
  *   2. opponent modifier (auto-suggested from the scouting report; coach can override)
  *   3. player capacity (position-percentiled AthleteProfile qualities — GPS/VALD/VBT)
  *   4. readiness (v_coach_readiness_today_v8.final_color)

@@ -117,7 +117,7 @@ export const CATAPULT_PERIOD_METABOLIC_RAW_PARAMETERS = [
 
 // Sprint Count parameters — exact display names from Breiðablik OpenField
 // Reporting_Parameters (confirmed 25 Apr 2026 from settings/parameters page).
-// Used for McBurnie 2022 Decel:Sprint coupling.
+// Used for MicroPulse's Decel:Sprint coupling (built on McBurnie 2022).
 export const CATAPULT_SPRINT_COUNT_PARAMETERS = [
   // PRIMARY — exact display names from OpenField Reporting_Parameters
   "Sprint Efforts",            // → velocity_band6_total_efforts_gen2 (sprint count)

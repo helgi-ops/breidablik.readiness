@@ -88,8 +88,8 @@ export const LONG_RUN_DRILL_NOTE: Bi = {
 };
 
 export const MOVEMENT_CITATIONS = [
-  "Harper 2022 — braking and change of direction carry the highest tissue load",
-  "Gaudino et al. 2014; Casamichana & Castellano 2010 — smaller pitches raise accelerations, braking and turns",
+  "Harper 2022 — hard braking steps carry the highest impact forces, more than cut or turn plant steps",
+  "Gaudino et al. 2014 — smaller pitches raise the number of accelerations, braking and turns; Casamichana & Castellano 2010 — bigger pitches raise running distance, top speed and heart rate",
   "Bishop 2023 — a clear link between a left–right gap and injury or performance is still missing (on a drill, the side split mostly follows the drill's design)",
   ...LONG_RUN_CITATIONS,
 ];

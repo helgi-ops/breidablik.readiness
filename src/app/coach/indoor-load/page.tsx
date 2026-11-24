@@ -11,7 +11,7 @@
  *   - Indoor McBurnie proxy: decel events / minute of FMP Dynamic High
  *   - Recent 7-day cumulative indoor load
  *
- * Reference: McBurnie 2022 indoor adaptation. FMP framework (Catapult OpenField).
+ * Reference: McBurnie 2022 (why braking load matters; the indoor adaptation is MicroPulse's). FMP framework (Catapult OpenField).
  */
 
 export const dynamic = "force-dynamic";
@@ -537,7 +537,7 @@ export default function CoachIndoorLoadPage() {
 
       // Brown 2016 — pull latest session's activity classification + corrected MP
       // for an informational disclosure block. Indoor Composite itself is IMU-only
-      // (designed without MP since Brown 2016 confirms GPS-MP is unreliable indoors)
+      // (designed without MP: Brown 2016 found GPS-MP underestimates field-sport movements even outdoors, and indoors GPS has no signal)
       // so this is purely transparency about the raw vs corrected metabolic power.
       const brownLookup = await sb
         .from("player_external_load_daily")
@@ -903,14 +903,14 @@ export default function CoachIndoorLoadPage() {
             <div>
               <p className="font-medium text-slate-800">{lang === "IS" ? "Hvað er sleppt — og af hverju" : "What's dropped — and why"}</p>
               <p>{lang === "IS"
-                ? "Vegalengd, HSR, sprettir, hámarkshraði, HMLD og metabolic power eru öll GPS- eða GPS-samhengis-háð. Brown (2016) sýndi að GPS-metabolic power er óáreiðanlegt innan-húss, svo þessir mælar eru útilokaðir úr skorinu (sýndir sem samhengi þar sem við á, en fara aldrei inn í composite)."
-                : "Distance, HSR, sprints, top speed, HMLD and metabolic power are all GPS- or GPS-context-derived. Brown (2016) showed GPS metabolic power is unreliable indoors, so these are excluded from the score (shown as context where relevant, but never fed into the composite)."}</p>
+                ? "Vegalengd, HSR, sprettir, hámarkshraði, HMLD og metabolic power eru öll GPS- eða GPS-samhengis-háð. Brown (2016) sýndi að GPS-metabolic power vanmat orkunotkun í hreyfingum íþróttaleikja, jafnvel utandyra, og innanhúss nær GPS ekki merki, svo þessir mælar eru útilokaðir úr skorinu (sýndir sem samhengi þar sem við á, en fara aldrei inn í composite)."
+                : "Distance, HSR, sprints, top speed, HMLD and metabolic power are all GPS- or GPS-context-derived. Brown (2016) showed GPS metabolic power underestimated the energy cost of field-sport movements even outdoors, and GPS has no signal indoors, so these are excluded from the score (shown as context where relevant, but never fed into the composite)."}</p>
             </div>
             <div>
               <p className="font-medium text-slate-800">{lang === "IS" ? "Hvað er notað í staðinn" : "What's used instead"}</p>
               <p>{lang === "IS"
-                ? "FMP (Football Movement Profile) — 7 stride-hraðabönd frá hreyfiskynjaranum sem virka fullkomlega inni; player load (IMU-hröðun); og decel-intelligence (McBurnie 2022): hlutfall hemlana á hverja mínútu af Dynamic High hreyfingu, sem er næmt fyrir tauga-vöðva þreytu."
-                : "FMP (Football Movement Profile) — 7 stride-velocity bands from the inertial sensor that work fully indoors; player load (IMU acceleration); and decel intelligence (McBurnie 2022): decelerations per minute of Dynamic High movement, sensitive to neuromuscular fatigue."}</p>
+                ? "FMP (Football Movement Profile) — 7 stride-hraðabönd frá hreyfiskynjaranum sem virka fullkomlega inni; player load (IMU-hröðun); og decel-intelligence (mælikvarði MicroPulse innanhúss; af hverju hemlun skiptir máli: McBurnie 2022): hlutfall hemlana á hverja mínútu af Dynamic High hreyfingu, hugsað sem þreytumerki (ekki prófað)."
+                : "FMP (Football Movement Profile) — 7 stride-velocity bands from the inertial sensor that work fully indoors; player load (IMU acceleration); and decel intelligence (MicroPulse's indoor measure; why braking matters: McBurnie 2022): decelerations per minute of Dynamic High movement, meant as a fatigue read (not tested)."}</p>
             </div>
             <div>
               <p className="font-medium text-slate-800">{lang === "IS" ? "Hvernig composite-skorið er reiknað" : "How the composite score is computed"}</p>
@@ -931,8 +931,8 @@ export default function CoachIndoorLoadPage() {
                 : "The score gets more reliable as more indoor sessions accumulate in the baseline. Few indoor sessions = lower confidence, shown per player so you know how mature the baseline is."}</p>
             </div>
             <p className="text-xs text-slate-500">{lang === "IS"
-              ? "Heimildir: Brown 2016 (GPS-metabolic power innan-húss), McBurnie 2022 (indoor adaptation), Catapult FMP-rammi. Reglur ákveða; útskýringin lýsir."
-              : "References: Brown 2016 (indoor GPS metabolic power), McBurnie 2022 (indoor adaptation), Catapult FMP framework. Rules decide; this explains."}</p>
+              ? "Heimildir: Brown 2016 (GPS-metabolic power vanmetur hreyfingar íþróttaleikja), McBurnie 2022 (af hverju hemlun skiptir máli; útfærslan innanhúss er MicroPulse), Catapult FMP-rammi. Reglur ákveða; útskýringin lýsir."
+              : "References: Brown 2016 (GPS metabolic power underestimates field-sport movements), McBurnie 2022 (why braking matters; the indoor version is MicroPulse's), Catapult FMP framework. Rules decide; this explains."}</p>
           </div>
         )}
       </div>
@@ -1336,8 +1336,8 @@ export default function CoachIndoorLoadPage() {
                         </dl>
 
                         {/* Brown 2016 — activity classification + corrected MP transparency.
-                            Indoor Composite is intentionally MP-free (since Brown 2016 confirms
-                            GPS-MP is unreliable indoors), but we surface raw vs corrected so
+                            Indoor Composite is intentionally MP-free (Brown 2016: GPS-MP underestimated field-sport movements even outdoors;
+                            indoors GPS has no signal), but we surface raw vs corrected so
                             coaches see the bias if they look at MP elsewhere. */}
                         {row.brown && (
                           <div className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px] text-slate-600">
@@ -1859,7 +1859,7 @@ function MethodologyFooter({ lang }: { lang: Lang }) {
           )}
         </p>
         <p>
-          <strong>ACWR (Acute:Chronic Workload Ratio, Gabbett 2016):</strong>{" "}
+          <strong>ACWR (Acute:Chronic Workload Ratio — Gabbett 2016):</strong>{" "}
           {isEN
             ? "Weekly cumulative player load divided by the 28-day weekly average. 0.8-1.3 = familiar load range — the player is adapted to the current load. A jump above 1.5 is a large, fast load spike — a spike-size signal, not a validated injury predictor (Impellizzeri 2020); what matters is whether the spike is into unfamiliar load."
             : "Vikulegt cumulative player load deilt með 28-day weekly average. 0.8-1.3 = venjulegt álagsbil — leikmaður er aðlagaður núverandi álagi. Hækkun yfir 1.5 er stórt, hratt álagsstökk — merki um STÆRÐ stökks, ekki staðfest meiðsla-spá (Impellizzeri 2020); það sem skiptir máli er hvort stökkið sé inn á óþekkt álag."}
@@ -1912,7 +1912,7 @@ function MethodologyFooter({ lang }: { lang: Lang }) {
             : "Football Movement Profile (Catapult OpenField, IMU-only, engin GPS-þörf), accelerometry IMA Accel/Decel/CoD, Player Load."}
         </p>
         <p className="italic text-slate-500">
-          Reference: McBurnie, Harper, Jones &amp; Dos&apos;Santos 2022 — Deceleration Training in Team Sports.
+          Reference: McBurnie et al. 2022 — Deceleration Training in Team Sports.
           Sports Medicine.
         </p>
       </div>

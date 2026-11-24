@@ -106,8 +106,8 @@ function buildSquadVerdict(profiles: PlayerAssessmentProfile[]): SquadVerdict {
     },
     tone: "watch",
     tip: {
-      EN: `${n} training focus area${n === 1 ? "" : "s"} flagged from weak links (bottom quartile of the age band) or metrics that regressed since the last test. Cohort percentile within ±1.5 yr age band (Robertson 2017, athlete-monitoring framework).`,
-      IS: `${n} þjálfunaráhersl${n === 1 ? "a" : "ur"} flöggu${n === 1 ? "ð" : "ðar"} út frá veikum hlekkjum (neðsti fjórðungur aldursflokks) eða þáttum sem versnuðu frá síðustu mælingu. Hundraðsröðun innan ±1,5 árs aldursflokks (Robertson 2017).`,
+      EN: `${n} training focus area${n === 1 ? "" : "s"} flagged from weak links (bottom quartile of the age band) or metrics that regressed since the last test. Cohort percentile within ±1.5 yr age band (MicroPulse's comparison group).`,
+      IS: `${n} þjálfunaráhersl${n === 1 ? "a" : "ur"} flöggu${n === 1 ? "ð" : "ðar"} út frá veikum hlekkjum (neðsti fjórðungur aldursflokks) eða þáttum sem versnuðu frá síðustu mælingu. Hundraðsröðun innan ±1,5 árs aldursflokks (samanburðarhópur MicroPulse).`,
     },
   }));
 

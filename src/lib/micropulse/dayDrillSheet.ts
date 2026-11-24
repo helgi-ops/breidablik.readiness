@@ -2,7 +2,7 @@
  * Drills for a training day, for print — pure. Two sources side by side, per match-day-relative day:
  *   - research: drills from published studies (`drill_library_public`), each with its citation. A row is
  *               paired to a day type by `day_fit`, set when the row was checked against its paper. The rule:
- *               where the study places the drill on a day of its own week, that day wins (Martín-García 2018);
+ *               where the study places the drill on a day of its own week, that day wins (MicroPulse's rule);
  *               otherwise game size and pitch size per player (Hill-Haas 2011; Riboli 2020). An unverified
  *               row never prints.
  *   - ideas:    the general on-pitch examples from `pitchIdeasFor` (dayIdeas.ts).

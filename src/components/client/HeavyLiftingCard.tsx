@@ -30,7 +30,7 @@ export default function HeavyLiftingCard({ exposure: e, lang }: { exposure: Heav
         <div className={`h-full ${tone.bar} transition-all`} style={{ width: `${Math.min(100, (e.heavy_sets / e.cap) * 100)}%` }} />
       </div>
       <div className={`text-xs ${tone.text}`}>{e.reason}</div>
-      <div className="text-[10px] text-slate-500">≥80% 1RM · Pareja-Blanco 2017</div>
+      <div className="text-[10px] text-slate-500">≥80% 1RM (MicroPulse’s heavy line) · Pareja-Blanco 2017</div>
       <MethodologyLink />
     </div>
   );

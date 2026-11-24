@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Coach view — Load Intelligence v2: McBurnie 2022 Deceleration Module.
+ * Coach view — Load Intelligence v2: MicroPulse's Deceleration Module (built on McBurnie 2022).
  *
- * Surfaces 4 dimensions per player from the McBurnie framework:
+ * Surfaces 4 dimensions per player (MicroPulse's split; the paper has no such framework):
  *   1. Overload exposure (cumulative 28-day vs personal baseline)
  *   2. Underload risk (recent 7-day vs match-day demand)
  *   3. Decel:Sprint coupling — high-intensity decels ÷ GPS sprint efforts
@@ -71,7 +71,7 @@ type McBurnieStatus = {
   computed_at: string;
 };
 
-// Sharp Cut Load (Dos'Santos 2021 — proxy via ima_band3_decel_count)
+// Sharp Cut Load (Dos'Santos 2021b — proxy via ima_band3_decel_count)
 // Fetched from v_sharp_cut_hip_er_risk view; surfaces as 6th McBurnie dim chip.
 type CuttingLoad = {
   cuts_7d: number;
@@ -80,7 +80,7 @@ type CuttingLoad = {
   cuts_flag: "green" | "yellow" | "red" | "insufficient";
 };
 
-// MPE Recovery (Osgnach 2023 — recovery time lengthening = early fatigue)
+// MPE Recovery (Osgnach 2023 — recovery time between hard efforts grew late in matches)
 // Computed client-side from mpe_recovery_avg_s rolling 7d vs personal 28d.
 type MpeRecovery = {
   recent_7d_avg_s: number | null;     // 7d avg of mpe_recovery_avg_s
@@ -156,7 +156,7 @@ export default function CoachDecelIntelligencePage() {
       const players = (roster ?? []) as Array<{ id: string; full_name: string }>;
       if (players.length === 0) { setRows([]); return; }
 
-      // Pull Sharp Cut Load (Dos'Santos 2021) for whole squad in one go
+      // Pull Sharp Cut Load (Dos'Santos 2021b) for whole squad in one go
       // — view already aggregates 7d/28d per player.
       const { data: cuttingRows } = await sb
         .from("v_sharp_cut_hip_er_risk")
@@ -372,8 +372,8 @@ export default function CoachDecelIntelligencePage() {
       const detail = bits.length > 0 ? bits.join("; ") : "high-intensity braking load (band 2-3 decelerations)";
       const detailIs = bitsIs.length > 0 ? bitsIs.join("; ") : "háákefðar hemlunarálag (band 2-3 hraðaminnkanir)";
       return {
-        EN: `${detail}. Eccentric deceleration framework — McBurnie, Harper, Jones & Dos'Santos 2022, Sports Medicine.`,
-        IS: `${detailIs}. Sérvitra (eccentric) hraðaminnkunar-rammi — McBurnie, Harper, Jones & Dos'Santos 2022, Sports Medicine.`,
+        EN: `${detail}. Why braking load matters — McBurnie, Harper, Jones & Dos'Santos 2022, Sports Medicine; the flag lines are MicroPulse's.`,
+        IS: `${detailIs}. Af hverju hemlunarálag skiptir máli — McBurnie, Harper, Jones & Dos'Santos 2022, Sports Medicine; flaggmörkin eru viðmið MicroPulse.`,
       };
     };
 
@@ -477,8 +477,8 @@ export default function CoachDecelIntelligencePage() {
             tutorial="decel-intelligence"
           />
           <p className="text-sm text-muted-foreground">
-            Eccentric deceleration risk profile per player — implementation of the
-            McBurnie, Harper, Jones &amp; Dos'Santos 2022 framework (Sports Medicine).
+            Eccentric deceleration risk profile per player — MicroPulse’s module, built on the
+            McBurnie, Harper, Jones &amp; Dos’Santos 2022 review (Sports Medicine); the dimensions and flag lines are MicroPulse’s.
             5 dimensions: overload, underload, decel:accel coupling, decel:sprint
             coupling, exposure concentration. Neuromuscular capacity (Nordbord,
             ForceFrame, CMJ) lives on the Neuromuscular Fatigue (CMJ) dashboard tab.
@@ -534,18 +534,18 @@ export default function CoachDecelIntelligencePage() {
       {decelSource === "b3plus" && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900">
           <strong>Decel source: GPS Gen-2 high-intensity (b3+).</strong> Fully
-          aligned with McBurnie 2022 — decel:sprint ratios should now compress to
-          a clinically meaningful range (typically 0.5-3.0) where the risk
-          thresholds actually trigger.
+          in line with McBurnie 2022’s focus on high-intensity braking — decel:sprint ratios should now compress to
+          MicroPulse’s working range (typically 0.5-3.0) where its flag
+          lines actually trigger.
         </div>
       )}
       {decelSource === "ima" && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900">
           <strong>Decel source: IMA Band 3 (IMU-based high-intensity).</strong>
-          {" "}Fully aligned with McBurnie 2022 — decel events measured directly
+          {" "}In line with McBurnie 2022’s focus on high-intensity braking — decel events measured directly
           by the pod's accelerometer (works indoor and outdoor, no GPS dependency).
-          Ratios should now sit in the clinically meaningful 0.5-3.0 range where
-          the risk thresholds match the paper's intent.
+          Ratios should now sit in MicroPulse’s working 0.5-3.0 range where
+          its flag lines apply (MicroPulse’s lines; the paper sets none).
         </div>
       )}
 
@@ -567,7 +567,7 @@ export default function CoachDecelIntelligencePage() {
 
       {/* Methodology footer */}
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700">
-        <p className="font-semibold text-slate-900">Methodology — McBurnie 2022 framework</p>
+        <p className="font-semibold text-slate-900">Methodology — MicroPulse’s module, built on McBurnie 2022</p>
         <ul className="mt-2 list-inside list-disc space-y-1">
           <li>
             <strong>Overload:</strong> 28-day cumulative high-intensity decel count (band 2-3, &gt;2 m/s²)
@@ -659,7 +659,7 @@ function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }
           <FlagBadge flag={s?.accel_coupling?.flag ?? "unknown"} label="A:D" />
           <FlagBadge flag={s?.sprint_coupling?.flag ?? "unknown"} label="D:Sprint" />
           <FlagBadge flag={s?.concentration?.flag ?? "unknown"} label="Concentration" />
-          {/* Dos'Santos 2021 — Sharp Cut Load */}
+          {/* Dos'Santos 2021b — Sharp Cut Load */}
           <FlagBadge
             flag={row.cutting?.cuts_flag === "insufficient" ? "unknown" : (row.cutting?.cuts_flag ?? "unknown")}
             label="Sharp Cuts"
@@ -705,7 +705,7 @@ function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }
 
           {/* Sprint Exposure — VOLUME-side companion to Sprint Speed Drop.
               GPS sprint distance in training over the last 7 days vs the
-              player's average per match (28 days; Malone 2017). Indoor /
+              player's average per match (28 days; Malone 2018). Indoor /
               no-GPS days show as "no sprint reading" — never filled from IMA
               Free Running bands (those are long continuous runs, not sprints). */}
           <SprintExposureCard playerId={row.player_id} isKinexon={isKinexon} />
@@ -736,7 +736,7 @@ function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }
               big={`${s.overload.cumulative_28d_count.toFixed(0)} decels`}
               caption={`28-day cumulative · baseline daily ≈ ${s.overload.baseline_daily_mean.toFixed(1)}`}
               hint="Red if cumulative > 1.5× expected total."
-              info="Total high-intensity decelerations (band 2-3, >2 m/s²) over the last 28 days vs the player's personal daily baseline. Catches the player who has been quietly stacking eccentric load. RED when the 28-day total is more than 1.5× their expected total — eccentric tissue load is accumulating faster than recovery (McBurnie 2022)."
+              info="Total high-intensity decelerations (band 2-3, >2 m/s²) over the last 28 days vs the player's personal daily baseline. Catches the player who has been quietly stacking eccentric load. RED when the 28-day total is more than 1.5× their expected total (MicroPulse's line). McBurnie 2022 notes that higher cumulative braking load over 2–4 weeks went with more overuse injury in one study."
             />
             <Detail
               title="Underload"
@@ -744,7 +744,7 @@ function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }
               big={`${s.underload.cumulative_7d_count.toFixed(0)} / ${s.underload.match_day_demand.toFixed(1)}`}
               caption={`7-day exposure / match-day demand · ${s.underload.match_days_observed} match days observed`}
               hint="Red if 7-day < 50% of match demand."
-              info="The player's last 7 days of decel exposure compared with their typical match-day demand. Detraining signal — if a player isn't getting enough decel work in training, they're underprepared for what a match throws at them. RED when 7-day total drops below 50% of match demand. Per McBurnie 2022, peak quad activation reaches 161% of MVC during deceleration; under-prepared exposure leaves the quadriceps under-conditioned for that eccentric load, while reduced hamstring co-activation increases anterior tibial translation — primary risk is ACL, with quadriceps strain and patellar tendon overload as secondary risks."
+              info="The player's last 7 days of decel exposure compared with their typical match-day demand. Detraining signal — if a player isn't getting enough decel work in training, they're underprepared for what a match throws at them. RED when 7-day total drops below 50% of match demand. The 50% line is MicroPulse's. McBurnie 2022 argues for frequent hard-braking practice so players are ready for match braking: braking can drive quadriceps activation up to 161% of MVC, and low hamstring activation may raise ACL load (patellar-tendon risk is not in the paper)."
             />
             <Detail
               title="Decel : Accel Coupling"
@@ -755,8 +755,8 @@ function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }
                   ? `${s.accel_coupling.metric_name} · healthy ${s.accel_coupling.healthy_range}\nASP personal z = ${row.asp.ad_couple_personal_z >= 0 ? "+" : ""}${row.asp.ad_couple_personal_z.toFixed(2)} (${row.asp.ad_couple_personal_z > 0 ? "braking-skewed" : "accel-skewed"} vs personal 28d)`
                   : `${s.accel_coupling.metric_name} · healthy ${s.accel_coupling.healthy_range}`
               }
-              hint="Eccentric:concentric balance. Red if <0.7 or >2.0. ASP personal-z (Osgnach 2023) above 0 means more decel-skewed than the player's own normal pattern."
-              info="Ratio of decelerations to accelerations. Healthy athletes brake roughly as often as they accelerate (0.8–1.2). RED if <0.7 (one-sided, accel-heavy — sprint volume outpacing braking control, raises hamstring strain risk on the sprint side and ACL risk when forced to brake suddenly without preparation). RED if >2.0 (one-sided, brake-heavy — chronic eccentric load on quad and patellar tendon, with cumulative ACL exposure from repeated high-impact braking). The ASP personal-z (Osgnach 2023) catches drift from the player's own pattern even when the absolute ratio still looks fine."
+              hint="Eccentric:concentric balance. Red if <0.7 or >2.0. Personal-z (MicroPulse's; individual profiles rather than fixed lines, as Osgnach 2023 argues) above 0 means more decel-skewed than the player's own normal pattern."
+              info="Ratio of decelerations to accelerations. Healthy athletes brake roughly as often as they accelerate (0.8–1.2). RED if <0.7 (one-sided, accel-heavy — sprint volume outpacing braking control, raises hamstring strain risk on the sprint side and ACL risk when forced to brake suddenly without preparation). RED if >2.0 (one-sided, brake-heavy — chronic eccentric load on quad and patellar tendon, with cumulative ACL exposure from repeated high-impact braking). The personal-z (MicroPulse's; individual profiles rather than fixed lines, as Osgnach 2023 argues) catches drift from the player's own pattern even when the absolute ratio still looks fine."
             />
             <Detail
               title="Decel : Sprint Coupling (GPS)"
@@ -772,7 +772,7 @@ function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }
                   : `Awaiting outdoor GPS days — needs ≥6 outdoor days with sprint efforts in the last 28 to set a personal baseline.`
               }
               hint="Braking vs GPS sprint efforts on outdoor days, on a 1-10 STEN scale vs his own norm (mean 5.5). Red if STEN ≤ 2.5, watch if STEN ≤ 3.5. Indoor days carry no sprint reading and are left out."
-              info="Braking actions (decelerations) relative to GPS sprint efforts (velocity band 6), on outdoor days only — McBurnie 2022 frames deceleration load against sprint exposure. An indoor session has no sprint reading, so it is left out of the ratio and the baseline rather than counted as zero sprints. Flagged on personal-z against his own 28-day norm of outdoor days (at least 6). The internal key is still 'sprint_coupling'."
+              info="Braking actions (decelerations) relative to GPS sprint efforts (velocity band 6), on outdoor days only — the decel:sprint ratio is MicroPulse's; McBurnie 2022 argues hard braking deserves the same monitoring as sprinting. An indoor session has no sprint reading, so it is left out of the ratio and the baseline rather than counted as zero sprints. Flagged on personal-z against his own 28-day norm of outdoor days (at least 6). The internal key is still 'sprint_coupling'."
             />
             <Detail
               title="Exposure Concentration"
@@ -782,7 +782,7 @@ function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }
               hint="Red if peak-day > 30% of monthly volume."
               info="How much of the 28-day decel volume happened on the single peak day. Spread is good, concentration is risky. RED if more than 30% of monthly volume in one day — sudden spike rather than chronic accumulation, which is the classic injury-pattern signature. Look for this when the rest of the week was quiet."
             />
-            {/* Dos'Santos 2021 — Sharp Cut Load (proxy via IMA Band 3 decel count) */}
+            {/* Dos'Santos 2021b — Sharp Cut Load (proxy via IMA Band 3 decel count) */}
             {row.cutting && (
               <Detail
                 title="Sharp Cut Load"
@@ -793,11 +793,11 @@ function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }
                     ? `7d / 28d · personal z = ${row.cutting.cuts_personal_z >= 0 ? "+" : ""}${row.cutting.cuts_personal_z.toFixed(2)}`
                     : "7d / 28d total · awaiting baseline"
                 }
-                hint="Dos'Santos 2021. Proxy via IMA B3 decels. Red if z ≥ 1.5 vs personal 28d distribution. Sharp 70-90° cuts produce highest knee-joint load."
-                info="Sharp 70-90° change-of-direction cuts produce the highest knee-joint load and are the dominant non-contact ACL injury mechanism (Dos'Santos 2021). MicroPulse uses IMA Band 3 deceleration count as a proxy — high IMA decels at high intensity correlate with cutting volume. Personal-z compares the last 7 days against the player's own 28-day distribution. RED if z ≥ 1.5 — meaningfully above their normal cutting load."
+                hint="Dos'Santos 2021b. Proxy via IMA B3 decels. Red if z ≥ 1.5 vs personal 28d distribution. Sharp 70-90° cuts: the 90° cut gave the highest knee loads in a lab study; the z line is MicroPulse's."
+                info="Sharp 70-90° change-of-direction cuts: in a lab study the 90° cut gave the highest knee twisting and knee-valgus loads (vs 45° and 180° turns), loads linked to non-contact ACL injury risk (Dos'Santos 2021b). MicroPulse uses IMA Band 3 deceleration count as a proxy — our assumption that hard braking tracks cutting volume (not tested). Personal-z compares the last 7 days against the player's own 28-day distribution. RED if z ≥ 1.5 — meaningfully above their normal cutting load."
               />
             )}
-            {/* Osgnach 2023 — MPE Recovery Time (recovery lengthening = early fatigue) */}
+            {/* Osgnach 2023 — MPE Recovery Time (recovery between hard efforts grew late in matches) */}
             {row.mpe && (
               <Detail
                 title="MPE Recovery Time"
@@ -812,8 +812,8 @@ function PlayerRow({ row, isKinexon = false }: { row: Row; isKinexon?: boolean }
                     ? `7d avg vs 28d baseline ${row.mpe.baseline_28d_avg_s.toFixed(0)}s · z = ${row.mpe.z_score != null ? (row.mpe.z_score >= 0 ? "+" : "") + row.mpe.z_score.toFixed(2) : "—"}`
                     : "Awaiting baseline"
                 }
-                hint="Osgnach 2023. Inter-MPE recovery time lengthening (positive z) is sharper than HSR drop as a fatigue signal. Red if z ≥ 1.5."
-                info="Average recovery time between Metabolic Power Equivalent (MPE) high-intensity efforts. When this lengthens it means the player needs more rest between bursts — an early-fatigue signal that's sharper than the classic HSR drop because it shows up before raw running output declines (Osgnach 2023). RED if z ≥ 1.5 — recovery is meaningfully longer than the player's own 28-day baseline."
+                hint="Osgnach 2023: recovery time between hard efforts grew from early to late in matches. A positive z is read as a possible fatigue sign (MicroPulse's reading; not compared with HSR in the paper). Red if z ≥ 1.5 (MicroPulse's line)."
+                info="Average recovery time between Metabolic Power Equivalent (MPE) high-intensity efforts. When this lengthens the player is taking more rest between bursts. In Serie B matches the recovery time between hard efforts grew from 26 s in the first 15 min to 37 s in the last 15 min while each effort stayed as hard (Osgnach 2023); MicroPulse reads a rise as a possible fatigue sign (not tested against HSR). RED if z ≥ 1.5 — recovery is meaningfully longer than the player's own 28-day baseline."
               />
             )}
           </div>
