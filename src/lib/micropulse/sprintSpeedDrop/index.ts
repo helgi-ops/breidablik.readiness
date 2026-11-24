@@ -252,7 +252,7 @@ export function buildSprintDropDriverFlag(
  * sub-maximal day. Validated on live Breiðablik — a single-day >7% gate flags
  * ~43% of evaluable player-days (noise), whereas the sustained (3-session-mean)
  * gate below lands at ~8% HIGH / ~within-budget: the signal the brief requires.
- *   - sustainedDropPct > 12 → "high"  (HIGH_RISK band, Edouard 2019 > 10%)
+ *   - sustainedDropPct > 12 → "high"  (HIGH_RISK band — MicroPulse's line; fatigue flag, Edouard 2018)
  *   - 7–12%               → "watch" (team-cluster context only)
  *   - else / no data      → null (silent)
  */

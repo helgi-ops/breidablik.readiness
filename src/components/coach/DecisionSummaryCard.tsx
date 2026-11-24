@@ -3192,7 +3192,7 @@ const DecisionSummaryCard: FC<{
   // decision. Matches the Daily Briefing "ATTENTION N all clear" count
   // so the two surfaces never contradict each other.
   //
-  // Chronic-risk chips (MicroPulse's CoD asymmetry, Edouard 2019 sprint
+  // Chronic-risk chips (MicroPulse's CoD asymmetry, Edouard 2018 sprint
   // speed drop, etc.) are INFORMATIONAL — they remain visible on the
   // player cards themselves but do NOT count toward "needs attention"
   // because they don't change the verdict for today's session. A coach

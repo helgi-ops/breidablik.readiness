@@ -295,9 +295,9 @@ export function applyAdaptationRules(
   }
 
   // ── RULE 4: Sprint Speed Drop > 7% — swap dynamic explosive → iso ────
-  // Evidence: Edouard 2019 — speed drop indicates mechanical fatigue.
-  // Max-velocity work elevates hamstring injury risk; use iso (same joint
-  // angle, no max-velocity demand).
+  // Evidence: Edouard 2018 — sprint fatigue lowered hamstring strength and horizontal force.
+  // With top speed already down, swap to iso (same joint angle, no max-velocity demand).
+  // The 7% line is MicroPulse's.
   if (contras.has("sprint_speed_dropped")) {
     ban("ex_mid_thigh_pull_dynamic", "ex_depth_jump");
     if (swapExercise(blocks, "ex_mid_thigh_pull_dynamic", "ex_imtp_iso",

@@ -1179,8 +1179,9 @@ const kmh = (v: number) => Math.round(v * 10) / 10;
  * HIGH sustained drop or a ≥3 cluster → elevated; a couple of milder sustained
  * drops → watch; a lone milder drop (7–12%) stays steady at team level. Gated on
  * the SUSTAINED (3-session-mean) drop, not a one-off day, so it reflects a real
- * suppression trend. A persistent maximal-velocity drop is one of the strongest
- * hamstring-injury predictors (Edouard 2019; Malone 2018); the chip is advisory
+ * suppression trend. A persistent maximal-velocity drop is read as a fatigue flag
+ * (sprint fatigue lowers hamstring strength and horizontal force — Edouard 2018), not a
+ * tested injury predictor; the chip is advisory
  * — beside the readiness colour, never it.
  */
 export function deriveSprintDropTeamSignal(reads: SprintDropLite[]): CoachSignal {
@@ -1237,8 +1238,8 @@ export function derivePlayerSprintDropSignals(reads: SprintDropLite[]): PlayerSi
         },
         confidence: r.refSessionCount >= 6 ? "high" : "moderate",
         counterfactual: {
-          en: "His max sprint speed is well down on his own peak across recent sessions — the high hamstring-injury-risk band (Edouard 2019). Avoid maximal sprint exposure and investigate; advisory, never the readiness colour.",
-          is: "Hámarks spretthraði hans er vel undir eigin hámarki síðustu æfingar — háa aftanlæris-áhættubandið (Edouard 2019). Forðastu háhraða-sprett og kannaðu nánar; til leiðbeiningar, aldrei readiness-liturinn.",
+          en: "His max sprint speed is well down on his own peak across recent sessions — MicroPulse's largest fatigue flag (sprint fatigue lowers hamstring strength and horizontal force — Edouard 2018); not a tested injury-risk figure. Consider avoiding maximal sprint exposure and investigate; advisory, never the readiness colour.",
+          is: "Hámarks spretthraði hans er vel undir eigin hámarki síðustu æfingar — stærsta þreytumerki MicroPulse (sprettþreyta minnkar styrk aftanlæris og láréttan kraft — Edouard 2018); ekki prófuð meiðslaáhættutala. Íhugaðu að forðast háhraða-sprett og kannaðu nánar; til leiðbeiningar, aldrei readiness-liturinn.",
         },
         href: SPRINT_DROP_HREF,
       },

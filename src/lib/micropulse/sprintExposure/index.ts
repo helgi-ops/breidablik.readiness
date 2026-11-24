@@ -18,7 +18,7 @@
  * payload counts (`noGpsDays7d`) so the UI can say so explicitly.
  *
  * Sport-science rationale:
- *   - Sprint Speed Drop (Edouard 2019) catches when today's MAX velocity
+ *   - Sprint Speed Drop (Edouard 2018) catches when today's MAX velocity
  *     is below personal peak — a fatigue / mechanical compensation signal.
  *   - Sprint Exposure (Malone 2017) catches when the weekly VOLUME of GPS
  *     sprinting is well below what the player meets in a match — an

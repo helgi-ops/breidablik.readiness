@@ -223,7 +223,7 @@ export type PlayerStrengthSnapshot = {
   mdContext: MdContext;
   /** Acute verdict from main decision engine. */
   verdict: "FULL" | "MODIFIED" | "REDUCED" | "RECOVERY" | "HOLD" | null;
-  /** Sprint Speed Drop % today vs personal peak (Edouard 2019). */
+  /** Sprint Speed Drop % today vs personal peak (fatigue flag — Edouard 2018). */
   sprintSpeedDropPct: number | null;
   /** Sprint Exposure band (Malone 2018). */
   sprintExposureBand:

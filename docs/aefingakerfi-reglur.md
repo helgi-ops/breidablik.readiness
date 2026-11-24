@@ -196,7 +196,7 @@ Liturinn er notaður hér en ekki reiknaður.
 | `INJURY_BLOCK` | Meiðsli / endurhæfing | Engin liðsæfing; endurhæfing | Samstaða um endurkomu | Virk |
 | `SORE_HAM_NORDIC_SWAP` / `_RDL_REMOVE` | Eymsli í aftanlæri | Nordic → löng ísómetrísk brú; RDL út | Mat þjálfara; Nordic: van Dyk 2019 | Virk |
 | `DECEL_BURDEN_NORDIC_REMOVE` / `_DL_SWAP` | ≥3 dagar í röð með hátt hemlunarálag | Nordic út; trap-bar DL → hip thrust | McBurnie 2022 | Virk ef gögn eru til |
-| `SPRINT_DROP_MTP_SWAP` / `_PLYO_REMOVE` | Hámarkshraði **í dag** ≥7% undir eigin viðmiði | MTP → IMTP; fallhopp út | Lum & Barbosa 2019; Edouard 2019 | **Nánast óvirk:** þarf GPS dagsins fyrir æfingu |
+| `SPRINT_DROP_MTP_SWAP` / `_PLYO_REMOVE` | Hámarkshraði **í dag** ≥7% undir eigin viðmiði | MTP → IMTP; fallhopp út | Lum & Barbosa 2019; Edouard 2018 | **Nánast óvirk:** þarf GPS dagsins fyrir æfingu |
 | `VBT_LOAD_REDUCTION` | Hraðatap ≤ −20% | Létt á aðallyftu | Pareja-Blanco 2017 | **Óvirk:** gögnin eru alltaf tóm |
 | `COD_ASYM_MAIN_LIFT_SWAP` | Ósamhverfa í stefnubreytingum ≥15% **og** þjálfari valdi „skipta“ | Þung tvífóta lyfta → búlgörsk, veikari hlið fyrst | MicroPulse-regla; engin rannsókn hefur prófað ósamhverfu í GPS-snúningum gegn meiðslum; tengsl ósamhverfu við meiðsli almennt eru óviss (Helme 2021) | Virk eftir smell þjálfara |
 | `SPRINT_EXPOSURE_UNDERLOAD` | Of lítill sprettur | Bara athugasemd | Malone 2017 | — |
@@ -521,7 +521,7 @@ passar að hver tilvísun sé skráð, annaðhvort full eða á listanum yfir ó
 - Cuthbert M, Haff GG, Arent SM, Ripley N, McMahon JJ, Evans M, Comfort P. Effects of variations in resistance training frequency on strength development in well-trained populations and implications for in-season athlete training: a systematic review and meta-analysis. Sports Med 2021;51:1967–1982.
 - Dos'Santos T, McBurnie A, Comfort P, Jones PA. The effects of six-weeks change of direction speed and technique modification training on cutting performance and movement quality in male youth soccer players. Sports 2019;7(9):205. doi:10.3390/sports7090205
 - van Dyk N, Behan FP, Whiteley R. Including the Nordic hamstring exercise in injury prevention programmes halves the rate of hamstring injuries: a systematic review and meta-analysis of 8459 athletes. Br J Sports Med 2019;53(21):1362–1370. doi:10.1136/bjsports-2018-100045 PMID 30808663
-- Edouard P, Mendiguchia J, Guex K, Lahti J, Samozino P, Morin JB. Sprinting: a potential vaccine for hamstring injury? Sport Perform Sci Rep 2019;48:v1.
+- Edouard P, Mendiguchia J, Lahti J, Arnal PJ, Gimenez P, Jiménez-Reyes P, Brughelli M, Samozino P, Morin JB. Sprint Acceleration Mechanics in Fatigue Conditions: Compensatory Role of Gluteal Muscles in Horizontal Force Production and Potential Protection of Hamstring Muscles. Front Physiol 2018;9:1706. doi:10.3389/fphys.2018.01706 PMID 30555346
 - Fessi MS, Zarrouk N, Di Salvo V, Filetti C, Barker AR, Moalla W. Effects of tapering on physical match activities in professional soccer players. J Sports Sci 2016;34(24):2189–2194. doi:10.1080/02640414.2016.1171891 PMID 27065344
 - Foster C. Monitoring training in athletes with reference to overtraining syndrome. Med Sci Sports Exerc 1998;30(7):1164–1168. doi:10.1097/00005768-199807000-00023 PMID 9662690
 - Gathercole R, Sporer B, Stellingwerff T, Sleivert G. Alternative countermovement-jump analysis to quantify acute neuromuscular fatigue. Int J Sports Physiol Perform 2015;10(1):84–92. doi:10.1123/ijspp.2013-0413 PMID 24912201

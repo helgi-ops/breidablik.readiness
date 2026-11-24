@@ -233,7 +233,9 @@ describe("derivePlayerSprintDropSignals (attention-row enrichment)", () => {
     expect(rows[0].playerId).toBe("p1");
     expect(rows[0].signal.level).toBe("elevated");
     expect(rows[0].signal.why.en[0]).toMatch(/Sprint −13\.5% sustained vs peak \(28\.8 vs 33\.3 km\/h, last ~3 sessions\)/);
-    expect(rows[0].signal.counterfactual?.en).toMatch(/Avoid maximal sprint/i);
+    expect(rows[0].signal.counterfactual?.en).toMatch(/avoiding maximal sprint/i);
+    expect(rows[0].signal.counterfactual?.en).toMatch(/Edouard 2018/);
+    expect(rows[0].signal.counterfactual?.en).not.toMatch(/injury-risk band/);
   });
 });
 

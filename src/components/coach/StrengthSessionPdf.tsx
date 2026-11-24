@@ -90,7 +90,7 @@ export function StrengthSessionPdf({ data }: { data: StrengthSessionPdfData }) {
           hamstring reduction) · Harøy 2019 (Copenhagen, 41% groin reduction) ·
           Pareja-Blanco 2017 (VBT) · Tufano 2017 (cluster sets) · Zhao 2025
           (French contrast) · Lum & Barbosa 2019 (isometrics) · Bishop 2023 (L/R asymmetry) ·
-          Malone 2018 (sprint exposure) · Edouard 2019 (sprint speed drop).
+          Malone 2018 (sprint exposure) · Edouard 2018 (sprint speed drop = fatigue).
         </Text>
       </Page>
 
