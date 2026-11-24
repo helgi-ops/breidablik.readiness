@@ -174,7 +174,8 @@ export type DecisionSummaryRow = {
    *  velocity band 6). It used to be IMA Free Running bands 5–8 strides —
    *  those are long continuous runs (≥18 s), not sprinting — so the chip only
    *  renders when `_sprint_exposure_source === "gps"` (see below).
-   *    UNDERLOAD  (< 50%)    → under-prepared (moderate exposure is protective; Malone 2017)
+   *    (all four lines are MicroPulse's, not from a study)
+   *    UNDERLOAD  (< 50%)    → under-prepared (moderate exposure went with fewer injuries; Malone 2017, observational)
    *    WATCH      (50–80%)   → playable but light
    *    SAFE       (80–180%)  → normal football week
    *    OVERLOAD   (> 180%)   → accumulated spike
@@ -3034,7 +3035,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           return (
             <div
               className={`mt-3 inline-flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${tone}`}
-              title="GPS sprint distance (sprint_distance, else velocity band 6) summed over training days in the last 7 days, compared with his average sprint distance per match over the last 28 days. Indoor / no-GPS days give no sprint reading and are not counted. Malone 2017: low sprint exposure leaves players under-prepared (moderate exposure is protective vs lower-limb injury); the strongest injury signal is large RAPID INCREASES in sprint/HSR, not the level itself (Gabbett 2016). < 50% of one match = under-exposed; > 180% = an accumulated spike."
+              title="GPS sprint distance (sprint_distance, else velocity band 6) summed over training days in the last 7 days, compared with his average sprint distance per match over the last 28 days. Indoor / no-GPS days give no sprint reading and are not counted. Malone 2017 (observational): moderate exposure to top-speed running went with fewer lower-limb injuries than low exposure; the strongest injury signal is large RAPID INCREASES in sprint/HSR, not the level itself (Gabbett 2016). < 50% of one match = under-exposed; > 180% = an accumulated spike (MicroPulse's lines, not from a study)."
             >
               <span className="mt-0.5 shrink-0">📊</span>
               <span>

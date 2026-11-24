@@ -79,8 +79,8 @@ export const SprintExposureCard: FC<{ playerId: string; isKinexon?: boolean }> =
     </span>
   ) : null;
   const sourceNote = IS
-    ? "Heimild: GPS sprett-vegalengd (sprint_distance, annars hraðaband 6). Þarf GPS — inniæfingar gefa enga sprett-mælingu og eru aldrei fylltar upp með IMA Free Running böndum (þau mæla löng samfelld hlaup, ekki spretti). Malone 2017: hófleg sprett-útsetning er verndandi og of lítil skilur leikmenn eftir vanbúna; sterkasta meiðsla-merkið eru hröð stökk (Gabbett 2016). Undir 50% af einum leik = of lítið; yfir 180% = snarpur toppur."
-    : "Source: GPS sprint distance (sprint_distance, else velocity band 6). Needs GPS — indoor sessions give no sprint reading and are never filled in from IMA Free Running bands (those measure long continuous runs, not sprinting). Malone 2017: moderate sprint exposure is protective and too little leaves players under-prepared; the strongest injury signal is rapid increases (Gabbett 2016). Under 50% of one match = too little; over 180% = a sharp spike.";
+    ? "Heimild: GPS sprett-vegalengd (sprint_distance, annars hraðaband 6). Þarf GPS — inniæfingar gefa enga sprett-mælingu og eru aldrei fylltar upp með IMA Free Running böndum (þau mæla löng samfelld hlaup, ekki spretti). Malone 2017 (athugunarrannsókn): hóflegum sprettum á hámarkshraða fylgdu færri meiðsli en of litlum; sterkasta meiðsla-merkið eru hröð stökk (Gabbett 2016). Undir 50% af einum leik = of lítið; yfir 180% = snarpur toppur (línur MicroPulse, ekki úr rannsókn)."
+    : "Source: GPS sprint distance (sprint_distance, else velocity band 6). Needs GPS — indoor sessions give no sprint reading and are never filled in from IMA Free Running bands (those measure long continuous runs, not sprinting). Malone 2017 (observational): moderate exposure to top-speed running went with fewer injuries than too little; the strongest injury signal is rapid increases (Gabbett 2016). Under 50% of one match = too little; over 180% = a sharp spike (MicroPulse's lines, not from a study).";
 
   // Not computable — say exactly why, with the no-GPS case first.
   if (payload.band === "INSUFFICIENT_DATA") {

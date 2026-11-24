@@ -79,8 +79,8 @@ export default function TlypTrainingFocus({
           </div>
           <p className="mt-1 text-[12px] leading-snug text-emerald-700/90">
             {IS
-              ? "Allar leikstöður þjálfa á eða yfir leik-kröfu — enginn er undir-undirbúinn (kveikir aðeins ef besta þjálfun fellur undir 50% af leik-kröfu, Malone 2017). Þessi hluti birtir hvern á að þjálfa harðar um leið og gat opnast. Skiptu um grunn (FMP / IMA / GPS) til að skoða aðra mæla."
-              : "Every position is training at or above match demand — nobody is under-prepared (this only fires when best training drops below 50% of match demand, Malone 2017). The panel surfaces who to train harder the moment a gap opens up. Switch basis (FMP / IMA / GPS) to check another set of metrics."}
+              ? "Allar leikstöður þjálfa á eða yfir leik-kröfu — enginn er undir-undirbúinn (kveikir aðeins ef besta þjálfun fellur undir 50% af leik-kröfu — lína MicroPulse, ekki úr rannsókn; of lítil útsetning fylgdi fleiri meiðslum í athugunarrannsókn, Malone 2017). Þessi hluti birtir hvern á að þjálfa harðar um leið og gat opnast. Skiptu um grunn (FMP / IMA / GPS) til að skoða aðra mæla."
+              : "Every position is training at or above match demand — nobody is under-prepared (this only fires when best training drops below 50% of match demand — MicroPulse's line, not from a study; too little exposure went with more injuries in an observational study, Malone 2017). The panel surfaces who to train harder the moment a gap opens up. Switch basis (FMP / IMA / GPS) to check another set of metrics."}
           </p>
         </div>
       ) : (

@@ -133,7 +133,8 @@ function topNMean(xs: number[], n: number): number | null {
   return mean([...xs].sort((a, b) => b - a).slice(0, n));
 }
 
-// Under-exposure thresholds. <50% of match demand = Malone risk zone; top speed
+// Under-exposure thresholds. <50% of match demand = MicroPulse's under-exposure line (Malone 2018
+// found low weekly HSR went with more injuries in one squad; the 50% is ours, not the paper's); top speed
 // rarely exceeds match max, so reaching ≥85% of match max in training is healthy
 // sprint exposure. Comparing best-training to match demand, so no overload end.
 function flagFor(kind: MetricKind, pct: number | null): "under" | "gap" | "ok" | "none" {

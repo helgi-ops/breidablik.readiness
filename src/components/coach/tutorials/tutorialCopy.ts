@@ -2204,8 +2204,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "The principle + verdict", is: "Reglan + niðurstaðan" },
         body: [
           {
-            en: "The verdict says how high the squad trains relative to match demand and how many have an “exposure gap” (e.g. “254% of match load · 0/11 with an exposure gap”). The gap fires only when best training drops below 50% of match demand (Malone 2017). A high % is not overload — it's expected, because events bunch up in drills.",
-            is: "Niðurstaðan segir hversu hátt hópurinn æfir miðað við leikkröfu og hversu margir eru með „exposure gap“ (t.d. „254% of match load · 0/11 með exposure gap“). Gapið kviknar aðeins þegar besta æfing fer undir 50% af leikkröfu (Malone 2017). Há prósenta þýðir ekki ofálag — hún er væntanleg af því atburðir þéttast í æfingum.",
+            en: "The verdict says how high the squad trains relative to match demand and how many have an “exposure gap” (e.g. “254% of match load · 0/11 with an exposure gap”). The gap fires only when best training drops below 50% of match demand — MicroPulse's line, not from a study; too little exposure went with more injuries in an observational study (Malone 2017). A high % is not overload — it's expected, because events bunch up in drills.",
+            is: "Niðurstaðan segir hversu hátt hópurinn æfir miðað við leikkröfu og hversu margir eru með „exposure gap“ (t.d. „254% of match load · 0/11 með exposure gap“). Gapið kviknar aðeins þegar besta æfing fer undir 50% af leikkröfu — lína MicroPulse, ekki úr rannsókn; of lítil útsetning fylgdi fleiri meiðslum í athugunarrannsókn (Malone 2017). Há prósenta þýðir ekki ofálag — hún er væntanleg af því atburðir þéttast í æfingum.",
           },
         ],
       },
@@ -2235,8 +2235,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "The exposure table (per position)", is: "Leikmannataflan (áreiti eftir stöðu)" },
         body: [
           {
-            en: "For each metric and each position the table shows best training as a share of match demand, coloured: green = well trained, amber = gap (50–80%), red = under-trained (<50%). So you see at once who to train harder — and on which metric — the moment a gap opens (Malone 2018; Duhig 2016).",
-            is: "Fyrir hverja vídd og hverja stöðu sýnir taflan bestu æfingu sem hlutfall af leikkröfu, lituð: grænt = vel þjálfað, gult = gap (50–80%), rautt = undir-þjálfað (<50%). Þannig sést strax hvern á að æfa harðar — og á hvaða mælikvarða — um leið og gap opnast (Malone 2018; Duhig 2016).",
+            en: "For each metric and each position the table shows best training as a share of match demand, coloured: green = well trained, amber = gap (50–80%), red = under-trained (<50%). So you see at once who to train harder — and on which metric — the moment a gap opens. The 50% and 80% lines are MicroPulse's, not from a study; low high-speed exposure went with more injuries in one squad (Malone 2018).",
+            is: "Fyrir hverja vídd og hverja stöðu sýnir taflan bestu æfingu sem hlutfall af leikkröfu, lituð: grænt = vel þjálfað, gult = gap (50–80%), rautt = undir-þjálfað (<50%). Þannig sést strax hvern á að æfa harðar — og á hvaða mælikvarða — um leið og gap opnast. 50% og 80% línurnar eru val MicroPulse, ekki úr rannsókn; lítil háhraða-útsetning fylgdi fleiri meiðslum í einum hópi (Malone 2018).",
           },
         ],
       },

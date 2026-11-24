@@ -337,8 +337,8 @@ export default function TrainLikeYouPlayPage() {
         tone: "concern" as VerdictTone,
         tip: worstK
           ? {
-              EN: `${p.name} · best training ${worst.pct}% of match demand on ${META[worstK].en}. ${metricTip[worstK].en} Below ~50% = under-prepared (Malone 2018).`,
-              IS: `${p.name} · besta þjálfun ${worst.pct}% af leik-kröfu í ${META[worstK].is}. ${metricTip[worstK].is} Undir ~50% = vanbúinn (Malone 2018).`,
+              EN: `${p.name} · best training ${worst.pct}% of match demand on ${META[worstK].en}. ${metricTip[worstK].en} Below ~50% = under-prepared — MicroPulse's line, not from a study; low high-speed exposure went with more injuries in one squad (Malone 2018).`,
+              IS: `${p.name} · besta þjálfun ${worst.pct}% af leik-kröfu í ${META[worstK].is}. ${metricTip[worstK].is} Undir ~50% = vanbúinn — lína MicroPulse, ekki úr rannsókn; lítil háhraða-útsetning fylgdi fleiri meiðslum í einum hópi (Malone 2018).`,
             }
           : undefined,
       };
@@ -596,8 +596,8 @@ export default function TrainLikeYouPlayPage() {
 
           <div className="tlp-sec rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 text-[12px] leading-relaxed text-slate-700">
             {IS
-              ? "Byggt á Catapult Football Movement Profile (IMU) — fangar dýnamíska, fjölátta hreyfingu (ekki bara beinan GPS-hraða) og virkar innandyra. Þjálfun á að undirbúa fyrir leik-hreyfimynstrið (Gabbett 2016); undir ~50% af leik-kröfu í háákefðar-flokkunum = aukin áhætta (Malone 2018, Duhig 2016). FMP gefur sína eigin session-lengd, svo per-90 ákefð er reiknanleg þótt GPS-lengd vanti."
-              : "Built on the Catapult Football Movement Profile (IMU) — it captures dynamic, multi-directional movement (not just straight-line GPS speed) and works indoors. Training should prepare for the match movement profile (Gabbett 2016); below ~50% of match demand in the high-intensity categories = elevated risk (Malone 2018, Duhig 2016). FMP carries its own session duration, so per-90 intensity is computable even when GPS duration is missing."}
+              ? "Byggt á Catapult Football Movement Profile (IMU) — fangar dýnamíska, fjölátta hreyfingu (ekki bara beinan GPS-hraða) og virkar innandyra. Þjálfun á að undirbúa fyrir leik-hreyfimynstrið (Gabbett 2016); undir ~50% af leik-kröfu í háákefðar-flokkunum er flaggað sem of lítil útsetning (lína MicroPulse, ekki úr rannsókn; lítil háhraða-útsetning fylgdi fleiri meiðslum í einum knattspyrnuhópi — Malone 2018). FMP gefur sína eigin session-lengd, svo per-90 ákefð er reiknanleg þótt GPS-lengd vanti."
+              : "Built on the Catapult Football Movement Profile (IMU) — it captures dynamic, multi-directional movement (not just straight-line GPS speed) and works indoors. Training should prepare for the match movement profile (Gabbett 2016); below ~50% of match demand in the high-intensity categories is flagged as under-exposed (MicroPulse's line, not from a study; low high-speed exposure went with more injuries in one soccer squad — Malone 2018). FMP carries its own session duration, so per-90 intensity is computable even when GPS duration is missing."}
           </div>
           <div className="text-[9px] text-slate-400">
             MicroPulse · {IS ? `FMP/IMA per-90 · topp-3 æfingar vs ${baseline === "own" ? "eigin leik-kröfu" : "stöðu-kröfu (stöðu-meðaltal)"} · hópað eftir stöðu · leik-krafa = per-90 yfir leiki ≥20 mín (athugið: Pre-session/Progressive overload nota ≥75 mín heila leiki)` : `FMP/IMA per-90 · top-3 training vs ${baseline === "own" ? "own match demand" : "position demand (group average)"} · grouped by position · match demand = per-90 over appearances ≥20 min (note: Pre-session/Progressive overload use ≥75-min full games)`} · Catapult FMP · Gabbett 2016 · Malone 2018 · Duhig 2016
