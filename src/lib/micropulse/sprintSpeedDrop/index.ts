@@ -2,8 +2,9 @@
  * Sprint Speed Drop intelligence.
  *
  * Detects within-player drops in maximal sprint velocity vs personal recent
- * peak. A drop in maximal sprint speed is one of the strongest predictors of
- * subsequent hamstring injury and CNS suppression in field-sport athletes.
+ * peak. A drop in top speed is read as a fatigue flag: sprint-induced fatigue lowered hamstring
+ * strength and horizontal force in a lab study (Edouard 2018). It has not been tested as an injury
+ * predictor, so no band carries a risk multiplier.
  *
  * The signal is computed from `max_velocity` (or `max_vel`) recorded in the
  * Catapult activity report — a metric that ALL Catapult tiers expose, so this
@@ -18,11 +19,12 @@
  *     didn't sprint today aren't "suppressed", they just didn't sprint.
  *   - Drop% = (reference - today) / reference × 100
  *
- * Bands (evidence-based):
+ * Bands (MicroPulse's lines, not from a study):
  *   - < 3%   → NORMAL    (treated as session-to-session noise — MicroPulse's cut-off; GPS top speed needs several sessions to read reliably, Haugen & Buchheit 2016)
  *   - 3–7%   → WATCH     (mild suppression; trend over 3 days matters)
  *   - 7–12%  → CONCERN   (significant CNS / neuromuscular suppression)
- *   - > 12%  → HIGH_RISK (Edouard 2019 / Malone 2018: > 10% drop ≈ 3–4× HS injury risk)
+ *   - > 12%  → HIGH_RISK (largest fatigue flag; regular near-top-speed running went with fewer
+ *              hamstring injuries in observational studies — Malone 2017; Buchheit 2023)
  *
  * Implementation notes:
  *   - Pure function. No IO. Companion loader.ts pulls daily rows from
@@ -33,13 +35,15 @@
  *     the reference is considered stable.
  *
  * References:
- *   - Edouard P et al. Sprint biomechanical deficits and hamstring injury risk
- *     in elite track sprinters. Med Sci Sports Exerc 2019;51(12):2470-2477.
- *   - Malone S et al. Aerobic fitness and player load above 25 km/h are
- *     associated with hamstring injury. J Sci Med Sport 2018;21(8):785-790.
- *   - Buchheit M, Mendez-Villanueva A. Reliability and stability of anthropometric
- *     and performance measures in highly-trained young soccer players. J Sports
- *     Sci 2014;32(13):1271-1278.
+ *   - Edouard 2018: Sprint acceleration mechanics in fatigue conditions. Front Physiol
+ *     2018;9:1706 (PMID 30555346).
+ *   - Malone 2017: maximal velocity exposure and injury in elite Gaelic football. J Sci Med Sport
+ *     2017;20(3):250-254 (PMID 27554923).
+ *   - Buchheit 2023: near-to-maximal speed exposures and match hamstring injuries. Biol Sport
+ *     2023;40(4):1057-1067 (PMID 37867737).
+ *   - Haugen & Buchheit 2016: GPS top-speed measurement (why sub-3% is noise).
+ *   (Two references listed here before 2026-11-24 — an "Edouard 2019" Med Sci Sports Exerc paper
+ *   and a "Malone 2018" J Sci Med Sport 21(8) paper — could not be found on PubMed and were removed.)
  */
 
 export type SprintBand =

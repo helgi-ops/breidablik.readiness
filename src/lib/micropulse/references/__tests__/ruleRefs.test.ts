@@ -156,6 +156,20 @@ describe("rule references", () => {
     expect(unresolvedReason("Buchheit 2024")?.en).toMatch(/Sport Performance & Science Reports/);
   });
 
+  it("overclaimed risk figures are gone and the papers behind them are registered (lot 3)", () => {
+    for (const f of ["src/app/coach/hsr-intelligence/page.tsx", "src/lib/micropulse/coachSignals/index.ts", "src/lib/micropulse/sprintSpeedDrop/index.ts", "src/app/coach/dev-coach-dashboard/DevCoachDashboardClient.tsx"]) {
+      const t = readFileSync(join(ROOT, f), "utf8");
+      expect(t).not.toMatch(/\+200%|\+130%|BJSM-published|3–4× (HS|hamstring)/);
+    }
+    expect(readFileSync(join(ROOT, "src/lib/micropulse/trainingRead/catalogue.ts"), "utf8")).not.toMatch(/Nédélec/);
+    expect(findRefByShort("Edouard 2018")?.cite).toMatch(/Front Physiol 2018;9:1706/);
+    expect(findRefByShort("Saw 2016")?.key).toBe("saw2016");
+    expect(findRefByShort("Bishop 2021")?.cite).toMatch(/Individual Approach/);
+    expect(findRefByShort("Bowen 2017")?.key).toBe("bowen2017");
+    expect(findRefByShort("Buchheit 2023")?.cite).toMatch(/PMID 37867737/);
+    expect(findRefByShort("Petrakos 2016")?.cite).toMatch(/PMID 26553497/);
+  });
+
   it("the catalogue's references section lists each of its citations in full, or as unresolved", () => {
     expect(CATALOGUE_REFS).not.toBe("");
     for (const s of citationsIn(RULES_PART)) {

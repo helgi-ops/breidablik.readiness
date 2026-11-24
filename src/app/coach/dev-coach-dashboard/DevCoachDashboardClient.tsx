@@ -1731,14 +1731,14 @@ export default function CoachPage() {
   // Sprint Speed Drop per player (today vs personal top-3 mean over 28d).
   // Only stored when drop ≥ 3% AND the player has a HSR-meaningful session
   // today AND ≥ 4 reference sessions in the window. Sub-3% is normal noise
-  // (MicroPulse's cut-off; GPS top speed needs several sessions to read reliably — Haugen & Buchheit 2016). > 10% drop ≈ 3–4× hamstring injury risk (Edouard 2019,
-  // Malone 2018). Surfaced as informational chip in DecisionSummaryCard —
+  // (MicroPulse's cut-off; GPS top speed needs several sessions to read reliably — Haugen & Buchheit 2016). A larger drop is a fatigue flag, not a tested
+  // injury-risk figure (Edouard 2018). Surfaced as informational chip in DecisionSummaryCard —
   // does NOT modify today's verdict (verdict modulation deferred until
   // 2–3 coaches confirm the rule fits their workflow).
   const [playerSprintDrop, setPlayerSprintDrop] = useState<
     Record<string, { dropPct: number; todayKmh: number; refKmh: number }>
   >({});
-  // Sprint Exposure per player (Malone 2018 — volume-side hamstring risk).
+  // Sprint Exposure per player (Malone 2018 — weekly sprint volume and lower-limb injury, observational).
   // Weekly sum of GPS sprint metres (sprint_distance / velocity band 6) vs the
   // player's match-day demand baseline (avg per match over last 28d). Indoor /
   // no-GPS days = no sprint reading (never back-filled from IMA FR bands, which
@@ -9363,15 +9363,15 @@ export default function CoachPage() {
                 // chip only — does NOT modify the verdict.
                 _cod_high_asym_pct: playerCodHighAsym[r.player_id] ?? null,
                 // Sprint Speed Drop today vs personal top-3 mean (28d).
-                // Edouard 2019 / Malone 2018 — > 10% drop = elevated hamstring
-                // injury risk. Only set when drop ≥ 3% AND HSR-meaningful
+                // A larger drop = fatigue flag (Edouard 2018), not a tested
+                // injury-risk figure. Only set when drop ≥ 3% AND HSR-meaningful
                 // session today AND ≥ 4 reference sessions exist. Informational
                 // chip only — does NOT modify the verdict (deferred until 2-3
                 // coaches confirm rule fit).
                 _sprint_drop_pct: playerSprintDrop[r.player_id]?.dropPct ?? null,
                 _sprint_today_kmh: playerSprintDrop[r.player_id]?.todayKmh ?? null,
                 _sprint_ref_kmh: playerSprintDrop[r.player_id]?.refKmh ?? null,
-                // Sprint Exposure (Malone 2018 — volume-side hamstring risk).
+                // Sprint Exposure (Malone 2018 — weekly sprint volume and lower-limb injury, observational).
                 // GPS weekly sprint metres vs match-day demand baseline (not IMA FR bands).
                 // Surfaced as chip in DecisionSummaryCard + counts toward
                 // "Needs attention" filter for UNDERLOAD / OVERLOAD bands.

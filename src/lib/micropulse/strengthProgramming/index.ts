@@ -23,7 +23,7 @@
  *   - IMTP RFD:            Lum & Barbosa 2019, Tsoukos 2016
  *   - Microdosing:         Cuthbert 2021, Rønnestad 2011
  *   - Edouard 2019:        Sprint speed drop → hamstring risk
- *   - Malone 2018:         Sprint exposure underload → hamstring risk
+ *   - Malone 2018:         Low sprint exposure → higher lower-limb injury odds (observational)
  *   - Helme 2021:          L/R asymmetry–injury link weak (CoD flag is MicroPulse's)
  *   - McBurnie 2022:       Decel burden → eccentric overload
  */

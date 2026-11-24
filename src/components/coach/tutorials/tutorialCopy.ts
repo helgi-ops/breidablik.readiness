@@ -2366,8 +2366,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Both directions are the risk", is: "Báðar áttir eru áhætta" },
         body: [
           {
-            en: "Ramping up too fast is a spike risk. But ramping down — or rarely reaching top speed — leaves the hamstring under-prepared for match sprints (Malone 2017). Too little high-speed running is as dangerous as too much. That's why “load dropped off” is flagged alongside “ramping up fast”: this isn't only overload protection, it's under-exposure protection too.",
-            is: "Að rampa upp of hratt er toppáhætta. En að rampa niður — eða ná sjaldan hámarkshraða — skilur aftanlærið eftir vanbúið fyrir spretti leiks (Malone 2017). Of lítið háhraðahlaup er jafn hættulegt og of mikið. Þess vegna er „load dropped off“ flaggað við hliðina á „ramping up fast“: þetta er ekki bara ofálagsvörn heldur líka vörn gegn undir-áreiti.",
+            en: "Ramping up too fast is a spike risk. But ramping down — or rarely reaching top speed — leaves the hamstring under-prepared for match sprints. In one Gaelic football squad both too little and too much top-speed running went with more injuries (Malone 2017, observational). That's why “load dropped off” is flagged alongside “ramping up fast”: this isn't only overload protection, it's under-exposure protection too.",
+            is: "Að rampa upp of hratt er toppáhætta. En að rampa niður — eða ná sjaldan hámarkshraða — skilur aftanlærið eftir vanbúið fyrir spretti leiks. Í einum hópi í gelískum fótbolta fylgdu bæði of litlum og of miklum sprettum á hámarkshraða fleiri meiðsli (Malone 2017, athugunarrannsókn). Þess vegna er „load dropped off“ flaggað við hliðina á „ramping up fast“: þetta er ekki bara ofálagsvörn heldur líka vörn gegn undir-áreiti.",
           },
           {
             en: "MaxV is the sprint inoculation. Reaching ≥95% of max velocity regularly is what prepares the hamstring for match sprints. The %MAXV over 28 days and the count of ≥95% sessions show whether he has had that exposure — few such sessions means under-prepared for the game's top end, even if total running looks fine.",
@@ -2594,8 +2594,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "KPI-specific ramp rates (injury-aware)", is: "Ólíkir ramphraðar per KPI (meiðsla-meðvitað)" },
         body: [
           {
-            en: "Not one uniform rate. Volume (distance, Player Load) ramps fastest (+8%/week); high-speed (+5%) and sprint (+4%) ramp slowest with the tightest ceilings — by design, because high-speed running is the hamstring risk (Malone 2017). You build the engine's size faster than its top-end.",
-            is: "Ekki einn samræmdur hraði. Rúmmál (vegalengd, Player Load) rampar hraðast (+8%/viku); háhraðahlaup (+5%) og spretti (+4%) rampa hægast með þrengstu þökin — viljandi, því háhraðahlaup er aftanlærisáhættan (Malone 2017). Þú byggir stærð vélarinnar hraðar en topphraðann hennar.",
+            en: "Not one uniform rate. Volume (distance, Player Load) ramps fastest (+8%/week); high-speed (+5%) and sprint (+4%) ramp slowest with the tightest ceilings — by design, because large, fast rises in high-speed running went with more injuries (Malone 2018). The ramp rates are MicroPulse's. You build the engine's size faster than its top-end.",
+            is: "Ekki einn samræmdur hraði. Rúmmál (vegalengd, Player Load) rampar hraðast (+8%/viku); háhraðahlaup (+5%) og spretti (+4%) rampa hægast með þrengstu þökin — viljandi, því stór og hröð aukning í háhraðahlaupi fylgdi fleiri meiðslum (Malone 2018). Hraði rampanna er val MicroPulse. Þú byggir stærð vélarinnar hraðar en topphraðann hennar.",
           },
         ],
       },
@@ -3035,8 +3035,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "C · The numbers — benchmarks and metric cards", is: "C · Tölurnar — benchmarks og mælikort" },
         body: [
           {
-            en: "Each benchmark shows the target (the rule) next to the measurement, so the colour is never a mystery. Bilateral jump height (CMJ) is peak height in the two-legged jump — a baseline of lower-body explosiveness; above 40 cm meets the target. CMJ limb asymmetry is the left–right difference (|L−R|/avg); above ~10% is watched (Bishop 2021) as it links to injury risk and return-to-play.",
-            is: "Hvert benchmark sýnir viðmiðið (regluna) við hliðina á mælingunni, svo liturinn er aldrei ráðgáta. Bilateral jump height (CMJ) er hámarks stökkhæð í tvífætta stökkinu — grunnmælikvarði á sprengikraft neðri líkama; yfir 40 cm stenst viðmiðið. CMJ limb asymmetry er munurinn á vinstri/hægri (|L−R|/meðaltal); yfir ~10% er fylgst með (Bishop 2021) því það tengist meiðslaáhættu og aftur-í-leik.",
+            en: "Each benchmark shows the target (the rule) next to the measurement, so the colour is never a mystery. Bilateral jump height (CMJ) is peak height in the two-legged jump — a baseline of lower-body explosiveness; above 40 cm meets the target. CMJ limb asymmetry is the left–right difference (|L−R|/avg); above ~10% is watched — a common flag line, not a tested cut-off (Parkinson 2021); a clear link to injury has not been shown (Helme 2021).",
+            is: "Hvert benchmark sýnir viðmiðið (regluna) við hliðina á mælingunni, svo liturinn er aldrei ráðgáta. Bilateral jump height (CMJ) er hámarks stökkhæð í tvífætta stökkinu — grunnmælikvarði á sprengikraft neðri líkama; yfir 40 cm stenst viðmiðið. CMJ limb asymmetry er munurinn á vinstri/hægri (|L−R|/meðaltal); yfir ~10% er fylgst með — algeng viðmiðunarlína, ekki prófuð mörk (Parkinson 2021); skýr tengsl við meiðsli hafa ekki sýnt sig (Helme 2021).",
           },
           {
             en: "The CMJ card opens into detail — jump height, RSI-modified (reactive strength: how fast the landing becomes take-off), peak power and asymmetry; the CMJ is the most validated single test for neuromuscular fatigue (Claudino 2017). Change-of-Direction (14d) counts the hard cuts each side over 14 days and the gap; MicroPulse flags the high-intensity asymmetry (not tested against injury; Helme 2021) — medium/low is usually just a positional habit. Pending tests (e.g. IMTP) show dashes, not zeros; when they arrive they raise confidence in the verdict.",

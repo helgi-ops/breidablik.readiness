@@ -9,8 +9,11 @@
  * BAND, an sRPE target (intensity × duration) and an approximate share of
  * match demand.
  *
- * The mapping follows the evidence-informed microcycle structure
- * (Buchheit et al. 2024, "The 11 Principles of Microcycle Periodization"):
+ * The mapping follows the microcycle structure in a practitioner report
+ * (Buchheit 2024, "The 11 Evidence-Informed and Inferred Principles of Microcycle Periodization in
+ * Elite Football", Sport Perform Sci Rep no. 218 — not a peer-reviewed paper; see UNRESOLVED_SHORTS).
+ * Note: Martín-García 2018 measured MD-4 above MD-3, so "MD-3 the peak" is the report's and
+ * MicroPulse's choice, not a measured fact:
  * a 3-phase microcycle — recovery (MD+1/+2) → acquisition (MD-4/MD-3) →
  * taper (MD-2/MD-1) — with MD-3 the peak training day, MD-4 the mechanical
  * (force / accel-decel) day, and MD-2 the locomotor speed primer.

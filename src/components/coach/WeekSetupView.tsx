@@ -1250,8 +1250,9 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
     });
   }, [previewDays, weekStart, weekEnd, visibleMatches]);
 
-  // Microcycle checks — evidence-informed periodization principles
-  // (Buchheit et al. 2024, "The 11 Principles of Microcycle Periodization").
+  // Microcycle checks — principles from a practitioner report (Buchheit 2024, "The 11
+  // Evidence-Informed and Inferred Principles of Microcycle Periodization in Elite Football",
+  // Sport Perform Sci Rep no. 218; not peer-reviewed).
   // Each check reads the resolved 7-day previewDays array and flags a
   // planned week that drifts from the evidence. Decision-support, not a block.
   const microcycleChecks = useMemo<{ id: string; tone: "warn" | "info"; title: string; body: string }[]>(() => {

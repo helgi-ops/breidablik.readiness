@@ -220,7 +220,8 @@ describe("deriveSprintDropTeamSignal (sustained max-velocity suppression)", () =
     expect(s.engine).toBe("sprint_speed_drop");
     expect(s.href).toBe("/coach/decel-intelligence");
     expect(s.why.en[0]).toMatch(/sustained sprint-speed drop vs personal peak/i);
-    expect(s.counterfactual?.en).toMatch(/Edouard 2019/);
+    expect(s.counterfactual?.en).toMatch(/Edouard 2018/);
+    expect(s.counterfactual?.en).not.toMatch(/3–4×/);
     expect(s.counterfactual?.en.toLowerCase()).toMatch(/never the readiness colour/);
   });
 });

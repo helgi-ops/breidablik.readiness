@@ -142,8 +142,8 @@ function runningAsymmetryContributor(z: number | null, pct: number | null): Sign
     confidence: "moderate",
     severity, flagged,
     detail: {
-      en: `Running asymmetry z ${z.toFixed(1)} vs his own norm${pctStr ? ` (${pctStr})` : ""}. Flag >= +1.5σ. Own-norm; bilateral running asymmetry as an early tissue-overload signal.`,
-      is: `Hlaupa-ósamhverfa z ${z.toFixed(1)} vs eigin venja${pctStr ? ` (${pctStr})` : ""}. Flagg >= +1.5σ. Eigin-norm; ósamhverfa sem snemmbúið álagsmerki.`,
+      en: `Running asymmetry z ${z.toFixed(1)} vs his own norm${pctStr ? ` (${pctStr})` : ""}. Flag >= +1.5σ. Read against his own norm, as asymmetries vary from person to person (Bishop 2021); running asymmetry has not been shown to predict injury (Helme 2021).`,
+      is: `Hlaupa-ósamhverfa z ${z.toFixed(1)} vs eigin venja${pctStr ? ` (${pctStr})` : ""}. Flagg >= +1.5σ. Lesið út frá hans eigin venju, því ósamhverfa er einstaklingsbundin (Bishop 2021); ekki hefur sýnt sig að hlaupa-ósamhverfa spái fyrir um meiðsli (Helme 2021).`,
     },
   };
 }

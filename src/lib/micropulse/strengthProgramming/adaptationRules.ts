@@ -384,7 +384,9 @@ export function applyAdaptationRules(
   }
 
   // ── RULE 7: Sprint Exposure UNDERLOAD — emphasize hamstring work ──────
-  // Evidence: Malone 2018 — underloaded sprint exposure → 3× hamstring risk.
+  // Evidence: Malone 2018 — low weekly sprint / high-speed distance went with higher lower-limb
+  // injury odds than moderate distance (observational, one squad). The paper's ~3× odds were for
+  // large weekly CHANGES, not for underload, so no multiplier is claimed here.
   // Player needs more posterior chain stim, not less.
   if (snap.sprintExposureBand === "UNDERLOAD") {
     // If Nordic was already removed by another rule, skip; else add extra set

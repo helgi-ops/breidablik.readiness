@@ -1,24 +1,23 @@
 "use client";
 
 /**
- * Coach view — HSR Intelligence (Malone 2017 + Buchheit 2023).
+ * Coach view — HSR Intelligence (Malone 2017, Malone 2018, Buchheit 2023).
  *
  * The McBurnie-equivalent page for clubs on Lite Catapult plans (no B2-3
- * efforts exposed). Built on three independently-validated sport-science
- * findings that work on the metrics every Catapult tier exposes:
+ * efforts exposed). Built on three observational findings (associations, not tested risk
+ * figures) that work on the metrics every Catapult tier exposes:
  *
- *   1. Malone et al. 2017 (BJSM) — High-speed running + sprint distance
- *      per week predict soft-tissue (esp. hamstring) injuries. ACWR
- *      thresholds: >1.5 high risk, <0.8 high risk (under-training paradox).
+ *   1. Malone et al. 2018 (J Sci Med Sport, one elite soccer squad) — large weekly changes in
+ *      high-speed and sprint running went with higher lower-limb injury odds; moderate weekly
+ *      distances, a high chronic load and better aerobic fitness went with lower odds. The ACWR
+ *      lines (>1.5 spike, <0.8 drop-off) are MicroPulse's, not from the paper.
  *
  *   2. Buchheit 2023 (elite football) + Malone 2017 (Gaelic football) — reaching >95% of
  *      personal max speed in training went with fewer (hamstring) injuries (observational).
- *      Players who never approach MaxV are at higher risk of acute injury
- *      when they're forced to (e.g. competitive match).
+ *      Under- and over-exposure to top speed both went with more injuries (U-shape, Malone 2017).
  *
- *   3. Bowen et al. 2017 — Combining HSR ACWR with chronic load magnitude
- *      improves prediction over either alone. High-chronic / low-acute
- *      players are protected; high-chronic / high-acute = highest risk.
+ *   3. Bowen et al. 2017 (BJSM, elite youth football) — a high acute high-speed distance raised
+ *      non-contact injury risk when the chronic load was low, but not when it was high.
  *
  * Not shown to FULL Catapult teams — they have /coach/decel-intelligence
  * (McBurnie 2022 4-dimension framework on B2-3 efforts) instead, which
@@ -73,10 +72,10 @@ type PlayerHsrSnapshot = {
 
 const HSR_I18N = {
   pageTitle:    { EN: "HSR Intelligence",                IS: "HSR Intelligence" },
-  citation:     { EN: "Malone 2017 · Buchheit 2023",     IS: "Malone 2017 · Buchheit 2023" },
+  citation:     { EN: "Malone 2017 · Malone 2018 · Buchheit 2023", IS: "Malone 2017 · Malone 2018 · Buchheit 2023" },
   subtitle:     {
-    EN: "Per-player hamstring/soft-tissue injury monitoring built on the metrics every Catapult plan exposes. The Lite-tier equivalent of Decel Intelligence — same evidence quality (BJSM-published), different inputs.",
-    IS: "Eftir-leikmanns greining á hamstring og soft-tissue meiðsla-áhættu byggð á gögnum sem öll Catapult plön exposa. Lite-jafngildi Decel Intelligence — sama vísindagrunnur (BJSM), önnur input.",
+    EN: "Per-player hamstring/soft-tissue injury monitoring built on the metrics every Catapult plan exposes. The Lite-tier equivalent of Decel Intelligence, with different inputs. The studies behind it are observational: they show associations, not a tested risk figure.",
+    IS: "Eftir-leikmanns greining á hamstring og soft-tissue meiðsla-áhættu byggð á gögnum sem öll Catapult plön exposa. Lite-jafngildi Decel Intelligence, með önnur inntök. Rannsóknirnar að baki eru athugunarrannsóknir: þær sýna tengsl, ekki prófaða áhættutölu.",
   },
 
   player:       { EN: "Player",                  IS: "Leikmaður" },
@@ -98,8 +97,8 @@ const HSR_I18N = {
 
   helpHeader: { EN: "How to read this", IS: "Hvernig á að lesa þetta" },
   help: {
-    EN: "HSR ACWR >1.5 → soft-tissue injury risk +200% (Malone 2017). HSR ACWR <0.8 with high chronic load → de-training paradox, +130% risk. %MaxV <90% over 28d → max-velocity under-exposure; too few near-top-speed runs went with more injuries in observational studies (Malone 2017; Buchheit 2023). The combined verdict picks the worst of three flags.",
-    IS: "HSR ACWR >1.5 → soft-tissue meiðsla-áhætta +200% (Malone 2017). HSR ACWR <0.8 með háan chronic load → de-training paradox, +130% áhætta. %MaxV <90% yfir 28d → of fáir sprettir nærri hámarkshraða; í athugunarrannsóknum fylgdu því fleiri meiðsli (Malone 2017; Buchheit 2023). Combined verdict tekur versta af þremur fánum.",
+    EN: "HSR ACWR >1.5 → flagged as a spike: in one soccer squad, large weekly jumps in high-speed running went with higher injury odds (Malone 2018). HSR ACWR <0.8 with a high chronic load → flagged as a drop-off. Both lines are MicroPulse's, not risk figures from a study. %MaxV <90% over 28d → max-velocity under-exposure; too few near-top-speed runs went with more injuries in observational studies (Malone 2017; Buchheit 2023). The combined verdict picks the worst of three flags.",
+    IS: "HSR ACWR >1.5 → flaggað sem toppur: í einum knattspyrnuhópi fylgdu stór vikuleg stökk í háhraðahlaupi meiri meiðslalíkur (Malone 2018). HSR ACWR <0.8 með háan chronic load → flaggað sem fall. Bæði mörkin eru val MicroPulse, ekki áhættutölur úr rannsókn. %MaxV <90% yfir 28d → of fáir sprettir nærri hámarkshraða; í athugunarrannsóknum fylgdu því fleiri meiðsli (Malone 2017; Buchheit 2023). Combined verdict tekur versta af þremur fánum.",
   },
 
   flagGreen:        { EN: "Healthy",      IS: "Heilbrigt" },

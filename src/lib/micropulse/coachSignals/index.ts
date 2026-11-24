@@ -1211,8 +1211,8 @@ export function deriveSprintDropTeamSignal(reads: SprintDropLite[]): CoachSignal
         : `${flagged.length} með viðvarandi sprettfall (7–12%): ${nameList}`],
     },
     counterfactual: {
-      en: "Max sprint speed over the last ~3 sessions vs each player's own recent peak (Edouard 2019; Malone 2018) — a sustained drop >10% carries ~3–4× hamstring-injury risk. Cap top-end sprint exposure; advisory, never the readiness colour.",
-      is: "Hámarks spretthraði síðustu ~3 æfinga vs eigin nýlegt hámark hvers leikmanns (Edouard 2019; Malone 2018) — viðvarandi fall >10% ber ~3–4× aftanlæris-meiðslaáhættu. Takmarkaðu háhraða-sprett; til leiðbeiningar, aldrei readiness-liturinn.",
+      en: "Max sprint speed over the last ~3 sessions vs each player's own recent peak. A sustained drop is a fatigue flag: sprint fatigue lowered hamstring strength and horizontal force in a lab study (Edouard 2018). The 7% and 12% lines are MicroPulse's, not a tested injury-risk figure. Consider capping top-end sprint exposure; advisory, never the readiness colour.",
+      is: "Hámarks spretthraði síðustu ~3 æfinga vs eigin nýlegt hámark hvers leikmanns. Viðvarandi fall er þreytumerki: sprettþreyta minnkaði styrk aftanlæris og láréttan kraft í rannsóknarstofurannsókn (Edouard 2018). 7% og 12% mörkin eru val MicroPulse, ekki prófuð meiðslaáhættutala. Íhugaðu að takmarka háhraða-sprett; til leiðbeiningar, aldrei readiness-liturinn.",
     },
   };
 }

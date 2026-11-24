@@ -298,7 +298,8 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
 
   // ─── IMA Change of Direction L/R splits (Stride Intelligence asymmetry) ───
   // Catapult exports CoD as Left/Right × Low/Medium/High. Sum sides to compute
-  // |L-R|/((L+R)/2)*100 asymmetry index. >15% = MicroPulse's flag (not tested against injury).
+  // |L-R|/((L+R)/2)*100 asymmetry index. Flags at 25/30/40% or a jump vs own normal = MicroPulse's
+  // lines (strideIntelligence), not tested against injury.
   { key: "imaCodLeftHigh", label: "IMA CoD Left High", unit: "count",
     aliases: ["ima cod left high", "ima cod left high count", "ima change of direction left high"] },
   { key: "imaCodLeftMedium", label: "IMA CoD Left Medium", unit: "count",
