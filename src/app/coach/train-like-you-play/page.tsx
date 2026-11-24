@@ -45,7 +45,7 @@ function flagOf(kind: string | undefined, pct: number | null): Flag {
 }
 
 // Desirable training load per MD-day, as % of match demand — a typical
-// periodization shape (lowest MD+1 & MD-1, peak mid-week). A REFERENCE template
+// periodization shape (lowest MD+1 & MD-1, peak on MD-4, then falling toward the match). A REFERENCE template
 // (Martin-García 2018; Akenhead 2016), not a per-team rule: the coach adjusts to
 // their model. One load-shape regardless of the selected metric — a per-metric ×
 // per-day target grid would be a number wall, against explainability-first.
@@ -54,8 +54,8 @@ const MD_TARGET: Record<string, { lo: number; hi: number }> = {
   "MD+2": { lo: 45, hi: 70 },   // re-introduction
   "MD+3": { lo: 70, hi: 95 },   // build
   "MD-5": { lo: 70, hi: 95 },   // build (long weeks)
-  "MD-4": { lo: 85, hi: 110 },  // heaviest day (Today's plan puts MD-4 above MD-3)
-  "MD-3": { lo: 85, hi: 110 },  // high
+  "MD-4": { lo: 85, hi: 110 },  // heaviest day (same order as Today's plan, 2026-11-24)
+  "MD-3": { lo: 70, hi: 95 },   // a step below MD-4
   "MD-2": { lo: 55, hi: 80 },   // moderate, taper begins
   "MD-1": { lo: 35, hi: 55 },   // taper / activation
 };

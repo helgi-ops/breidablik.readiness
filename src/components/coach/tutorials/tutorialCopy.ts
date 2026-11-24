@@ -2848,8 +2848,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "B · Reading the shape", is: "B · Að lesa lögunina" },
         body: [
           {
-            en: "The desirable band is a typical periodization shape — lowest on MD+1 and MD-1 (recovery and taper), peaking mid-week (MD-3/MD-4). It's a reference, not a rule: adjust it to your own model (Martin-García 2018; Akenhead 2016). A bar sitting in its band means the week is shaped as intended; well above or below is where you look.",
-            is: "Æskilega bilið er dæmigert vikuskipulag — lægst á MD+1 og MD-1 (endurheimt og lækkun), hámark mið-viku (MD-3/MD-4). Það er viðmið, ekki regla: aðlagaðu að þínu módeli (Martin-García 2018; Akenhead 2016). Súla í sínu bandi þýðir að vikan er löguð eins og til stóð; vel yfir eða undir er þar sem þú horfir.",
+            en: "The desirable band is a typical periodization shape — lowest on MD+1 and MD-1 (recovery and taper), peaking on MD-4 and falling toward the match (MD-3 a step below). It's a reference, not a rule: adjust it to your own model (Martin-García 2018; Akenhead 2016). A bar sitting in its band means the week is shaped as intended; well above or below is where you look.",
+            is: "Æskilega bilið er dæmigert vikuskipulag — lægst á MD+1 og MD-1 (endurheimt og lækkun), hámark á MD-4 og lækkar svo nær leik (MD-3 skrefi neðar). Það er viðmið, ekki regla: aðlagaðu að þínu módeli (Martin-García 2018; Akenhead 2016). Súla í sínu bandi þýðir að vikan er löguð eins og til stóð; vel yfir eða undir er þar sem þú horfir.",
           },
         ],
       },

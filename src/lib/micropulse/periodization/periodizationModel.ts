@@ -78,6 +78,9 @@ export function labelForOffset(offset: number): string {
  * DEFAULT_MD_MICROCYCLE — the built-in model. Types mirror plannedSessionLoad's per-MD base
  * types exactly (MD-4 mechanical, MD-3 locomotive, MD-2 locomotive, MD-1 mixed, recovery days
  * mixed), so a team that doesn't opt into another model sees the same convention it does today.
+ * Caps follow the same order as plannedSessionLoad: MD-4 the heaviest day (95%), MD-3 a step
+ * below (75%) — coach's call 2026-11-24. The Tactical Periodization preset keeps Frade's own
+ * shape (MD-3 Duration day highest); a custom model keeps the coach's numbers.
  */
 export const DEFAULT_MD_MICROCYCLE: PeriodizationModel = {
   id: "default_md",
@@ -85,12 +88,12 @@ export const DEFAULT_MD_MICROCYCLE: PeriodizationModel = {
   source: "default_md",
   days: [
     {
-      mdDay: "MD-4", intendedType: "mechanical", intensityCapPct: 75,
-      note: { en: "Early-week acquisition — force / accel-decel emphasis.", is: "Megin-álagsdagur snemma í viku — kraftur / accel-decel áhersla." },
+      mdDay: "MD-4", intendedType: "mechanical", intensityCapPct: 95,
+      note: { en: "Heaviest training day, early in the week — force / accel-decel emphasis (load falls toward the match, Martín-García 2018).", is: "Þyngsti æfingadagurinn, snemma í viku — kraftur / accel-decel áhersla (álag lækkar nær leik, Martín-García 2018)." },
     },
     {
-      mdDay: "MD-3", intendedType: "locomotive", intensityCapPct: 95,
-      note: { en: "Peak training day — high-speed running volume.", is: "Þyngsti æfingadagurinn — háhraðahlaup í magni." },
+      mdDay: "MD-3", intendedType: "locomotive", intensityCapPct: 75,
+      note: { en: "Second hard day, a step below MD-4 — high-speed running emphasis.", is: "Annar þungur dagur, skrefi léttari en MD-4 — áhersla á háhraðahlaup." },
     },
     {
       mdDay: "MD-2", intendedType: "locomotive", intensityCapPct: 60,

@@ -108,13 +108,26 @@ describe("load_overshoot", () => {
     expect(r.warnings.some((w) => w.kind === "load_overshoot")).toBe(false);
   });
   it("flags a model intensity-cap breach even when AU is in band", () => {
-    // MD-4 default cap is 75% of a match; AU target high enough that ratio stays in band.
-    const bigTarget: DayLoadTarget = { band: "high", matchPct: 68, loadAu: 10000 };
-    const session: BuiltSessionSummary = { dominantType: "mechanical", loadAu: 9000, matchPct: 90 };
+    // MD-4 default cap is 95% of a match (heaviest day since 2026-11-24); AU target high enough that ratio stays in band.
+    const bigTarget: DayLoadTarget = { band: "very_high", matchPct: 85, loadAu: 10000 };
+    const session: BuiltSessionSummary = { dominantType: "mechanical", loadAu: 9000, matchPct: 105 };
     const r = checkSessionFit({ session, daySpec: md4, dayTarget: bigTarget, modelName: name });
     const w = r.warnings.find((x) => x.kind === "load_overshoot");
     expect(w).toBeTruthy();
     expect(w?.headline.en.toLowerCase()).toContain("cap");
+  });
+});
+
+describe("default model follows the week shape (MD-4 heaviest)", () => {
+  it("MD-4's cap sits above MD-3's, and a session at 90% of a match fits MD-4 but breaches MD-3", () => {
+    const d4 = specForDay(DEFAULT_MD_MICROCYCLE, "MD-4")!;
+    const d3 = specForDay(DEFAULT_MD_MICROCYCLE, "MD-3")!;
+    expect(d4.intensityCapPct!).toBeGreaterThan(d3.intensityCapPct!);
+    const target: DayLoadTarget = { band: "high", matchPct: 80, loadAu: 10000 };
+    const at90 = (dominantType: BuiltSessionSummary["dominantType"]): BuiltSessionSummary => ({ dominantType, loadAu: 9000, matchPct: 90 });
+    const cap = (r: ReturnType<typeof checkSessionFit>) => r.warnings.some((w) => w.kind === "load_overshoot" && w.headline.en.toLowerCase().includes("cap"));
+    expect(cap(checkSessionFit({ session: at90("mechanical"), daySpec: d4, dayTarget: target, modelName: name }))).toBe(false);
+    expect(cap(checkSessionFit({ session: at90("locomotive"), daySpec: d3, dayTarget: target, modelName: name }))).toBe(true);
   });
 });
 
