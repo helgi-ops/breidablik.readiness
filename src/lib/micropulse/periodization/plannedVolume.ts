@@ -5,8 +5,9 @@
  * Evidence base:
  *  - The match is the reference unit; weekly load is expressed as a MULTIPLE of a match, per KPI
  *    (Martín-García et al. 2018 — weekly totals ≈ 3–5× a single match).
- *  - The within-week shape (MD-day %s) is MicroPulse's choice (load falls toward the match: Gualtieri 2024; Martín-García 2018 measured MD-4 > MD-3), reused from
- *    `planSessionLoad` (MD-3 peak 85%, MD-4 68%, MD-2 50%, MD-1 32%).
+ *  - The within-week shape (MD-day %s) is MicroPulse's choice; load falls toward the match (Gualtieri 2024;
+ *    Martín-García 2018 measured MD-4 > MD-3 > MD-2 > MD-1). Reused from `planSessionLoad`
+ *    (MD-4 peak 85%, MD-3 68%, MD-2 50%, MD-1 32%; MD-4 above MD-3 since 2026-11-24).
  *  - CRITICAL per-KPI nuance: high-intensity metrics (HSR, sprint distance — GPS) are
  *    CONCENTRATED on the high days (MD-4/MD-3) and taper to near-zero on MD-2/MD-1 — so their WEEKLY
  *    accumulation is a SMALLER multiple of a match than total distance / PlayerLoad (volume) is

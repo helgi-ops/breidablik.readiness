@@ -12,11 +12,14 @@
  * The mapping follows the microcycle structure in a practitioner report
  * (Buchheit 2024, "The 11 Evidence-Informed and Inferred Principles of Microcycle Periodization in
  * Elite Football", Sport Perform Sci Rep no. 218 — not a peer-reviewed paper; see UNRESOLVED_SHORTS).
- * Note: Martín-García 2018 measured MD-4 above MD-3, so "MD-3 the peak" is the report's and
- * MicroPulse's choice, not a measured fact:
  * a 3-phase microcycle — recovery (MD+1/+2) → acquisition (MD-4/MD-3) →
- * taper (MD-2/MD-1) — with MD-3 the peak training day, MD-4 the mechanical
- * (force / accel-decel) day, and MD-2 the locomotor speed primer.
+ * taper (MD-2/MD-1) — with MD-4 the mechanical (force / accel-decel) day,
+ * MD-3 the locomotive day and MD-2 the locomotor speed primer.
+ *
+ * Size of each day: load falls as the match approaches, so MD-4 is the heaviest
+ * training day and MD-3 a step below it (Martín-García 2018 measured
+ * MD-4 > MD-3 > MD-2 > MD-1 in a professional squad). The report put the peak on
+ * MD-3; the coach chose MD-4 on 2026-11-24. The exact percentages are MicroPulse's.
  *
  * This is decision-support: a starting target the coach adjusts, not a
  * prescription. Readiness modulation is applied separately by the caller.
@@ -104,15 +107,15 @@ function baseForOffset(offset: number): Base {
       };
     case -3:
       return {
-        band: "very_high", rpe: 8, durationMin: 90, matchPct: 85, mdType: "locomotive",
-        rationaleEN: "Main acquisition session — the peak training day of the week.",
-        rationaleIS: "Meginæfing vikunnar — þyngsti æfingadagurinn.",
+        band: "high", rpe: 7, durationMin: 85, matchPct: 68, mdType: "locomotive",
+        rationaleEN: "Second hard day — a step below MD-4, as load falls toward the match (Martín-García 2018).",
+        rationaleIS: "Annar þungur dagur — skrefi léttari en MD-4, því álag lækkar nær leik (Martín-García 2018).",
       };
     case -4:
       return {
-        band: "high", rpe: 7, durationMin: 85, matchPct: 68, mdType: "mechanical",
-        rationaleEN: "Acquisition day — the first hard session of the week, placed early in the microcycle (Principle 7).",
-        rationaleIS: "Megin-álagsdagur — fyrsta þunga æfing vikunnar, snemma í vikuhringnum (Regla 7).",
+        band: "very_high", rpe: 8, durationMin: 90, matchPct: 85, mdType: "mechanical",
+        rationaleEN: "Main acquisition session — the heaviest training day of the week, placed early in the microcycle (Principle 7; Martín-García 2018).",
+        rationaleIS: "Meginæfing vikunnar — þyngsti æfingadagurinn, snemma í vikuhringnum (Regla 7; Martín-García 2018).",
       };
     case 1:
       return {
@@ -270,22 +273,22 @@ function offDayRationale(
     case -3:
       return {
         is:
-          "MD-3 er venjulega meginæfing vikunnar (þyngsta æfingadagurinn). Frídagur hér " +
+          "MD-3 er venjulega annar þungi dagur vikunnar, á eftir MD-4. Frídagur hér " +
           "er ekki hefðbundinn — ef hann er meðvitaður (álagsstjórnun, ferðalag, " +
-          "veikindi í hópnum) er það í lagi, annars vantar megin-álagsdaginn í vikuna." + tailIS,
+          "veikindi í hópnum) er það í lagi, annars hvílir öll vikan á MD-4." + tailIS,
         en:
-          "MD-3 is typically the peak training session of the week. An off-day here " +
+          "MD-3 is typically the second hard day of the week, after MD-4. An off-day here " +
           "is unusual — if it's deliberate (load management, travel, illness) that's " +
-          "fine; otherwise the week is missing its main acquisition day." + tailEN,
+          "fine; otherwise the whole week rests on MD-4." + tailEN,
       };
     case -4:
       return {
         is:
-          "MD-4 er hefðbundinn megin-álagsdagur snemma í viku (Regla 7). " +
+          "MD-4 er hefðbundinn þyngsti dagur vikunnar, snemma í viku (Regla 7). " +
           "Frídagur hér færir megin-álagið nær leik — gættu þess að MD-3 verði ekki of " +
           "þungur." + tailIS,
         en:
-          "MD-4 is the typical early-week acquisition day (Principle 7). Resting " +
+          "MD-4 is typically the heaviest day of the week, early in the microcycle (Principle 7). Resting " +
           "here pushes the main load closer to the match — keep an eye that MD-3 " +
           "doesn't get over-loaded as a result." + tailEN,
       };

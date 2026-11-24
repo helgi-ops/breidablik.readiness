@@ -8,7 +8,7 @@
  *   target[kpi] = (matchPct / 100) × matchRef[kpi] × emphasis(sessionType, kpi)
  *
  *   - matchPct + sessionType come from `planSessionLoad` (the MD-day position in
- *     the microcycle: MD-4 mechanical, MD-3 locomotive peak, MD-2 primer, …).
+ *     the microcycle: MD-4 mechanical and heaviest, MD-3 locomotive, MD-2 primer, …).
  *   - matchRef[kpi] = the squad's average per-player value on its match-level
  *     days (the highest-load days) over the lookback window — a transparent,
  *     data-driven match reference.

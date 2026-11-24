@@ -54,8 +54,8 @@ const MD_TARGET: Record<string, { lo: number; hi: number }> = {
   "MD+2": { lo: 45, hi: 70 },   // re-introduction
   "MD+3": { lo: 70, hi: 95 },   // build
   "MD-5": { lo: 70, hi: 95 },   // build (long weeks)
-  "MD-4": { lo: 85, hi: 110 },  // high
-  "MD-3": { lo: 85, hi: 110 },  // peak load
+  "MD-4": { lo: 85, hi: 110 },  // heaviest day (Today's plan puts MD-4 above MD-3)
+  "MD-3": { lo: 85, hi: 110 },  // high
   "MD-2": { lo: 55, hi: 80 },   // moderate, taper begins
   "MD-1": { lo: 35, hi: 55 },   // taper / activation
 };

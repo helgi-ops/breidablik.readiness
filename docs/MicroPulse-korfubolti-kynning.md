@@ -28,7 +28,7 @@ MicroPulse leysir þetta á öfugan hátt: í stað þess að reyna að laga GPS
 
 ## Vikan í körfubolta er ekki eins og í fótbolta
 
-Fótboltavika hefur einn leik og byggist upp í kringum hann: MD-3 er þyngsti dagurinn, MD-1 er
+Fótboltavika hefur einn leik og byggist upp í kringum hann: MD-4 er þyngsti dagurinn, MD-1 er
 léttur, MD+1 er endurheimt. Öll fótboltakerfi byggja á þessari uppbyggingu.
 
 Körfuboltavika hefur núll til þrjá leiki í óreglulegri röð, og álagsmynstrið er þveröfugt við
