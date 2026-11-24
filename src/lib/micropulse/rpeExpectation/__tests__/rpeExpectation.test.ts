@@ -1,3 +1,4 @@
+import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { describe, it, expect } from "vitest";
 import {
   evaluateRpeExpectation, minutesBucket, isRpeExpectationActionable,
@@ -63,6 +64,19 @@ describe("evaluateRpeExpectation — grid resolution", () => {
     const r = evaluateRpeExpectation({ mdDay: "MD-2", matchMinutes: 90, actualRpe: 2 });
     expect(r.status).toBe("under");
     expect(r.isTopup).toBe(false);
+  });
+});
+
+describe("evaluateRpeExpectation — week shape follows planSessionLoad (MD-4 heaviest)", () => {
+  it("MD-4's band sits above MD-3's, and each holds that day's planned RPE", () => {
+    const [lo4, hi4] = DEFAULT_RPE_BANDS["MD-4"].full!;
+    const [lo3, hi3] = DEFAULT_RPE_BANDS["MD-3"].full!;
+    expect(lo4).toBeGreaterThan(lo3);
+    expect(hi4).toBeGreaterThan(hi3);
+    expect(planSessionLoad({ mdDay: "MD-4", dayType: "TRAINING", focus: null }).rpe).toBeGreaterThanOrEqual(lo4);
+    expect(planSessionLoad({ mdDay: "MD-3", dayType: "TRAINING", focus: null }).rpe).toBeLessThanOrEqual(hi3);
+    expect(evaluateRpeExpectation({ mdDay: "MD-4", matchMinutes: 90, actualRpe: 6 }).status).toBe("under");
+    expect(evaluateRpeExpectation({ mdDay: "MD-3", matchMinutes: 90, actualRpe: 6 }).status).toBe("within");
   });
 });
 

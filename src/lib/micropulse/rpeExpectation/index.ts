@@ -40,16 +40,18 @@ export type RpeBandGrid = Record<string, Partial<Record<MinutesBucket, Band>>>;
 
 /**
  * Default expected-sRPE grid (CR10). Coach-tunable CODE DATA — same pattern as
- * ROLE_DEMAND_FIT: edit here (or pass `bands`) to fit the club's weekly shape. The
- * peak day is NOT hard-coded to MD-3; MD-4/MD-3 default equal, coach sets the peak.
+ * ROLE_DEMAND_FIT: edit here (or pass `bands`) to fit the club's weekly shape. MD-4 is the
+ * heaviest day and MD-3 a step below (coach's call 2026-11-24, matching `planSessionLoad`:
+ * planned RPE 8 on MD-4, 7 on MD-3; load falls toward the match — Martín-García 2018). The bands
+ * themselves are MicroPulse's.
  * The MD+1 / MD+2 minimal & partial cells are the TOP-UP rows for non-starters.
  */
 export const DEFAULT_RPE_BANDS: RpeBandGrid = {
   "MD":   { full: [8, 10], partial: [8, 10] },              // the match (no expectation if didn't play)
   "MD+1": { full: [1, 3],  partial: [4, 6], minimal: [6, 8] }, // players recover; non-players top up
   "MD+2": { full: [4, 6],  partial: [5, 7], minimal: [6, 8] },
-  "MD-4": { full: [6, 8],  partial: [6, 8], minimal: [6, 8] },
-  "MD-3": { full: [6, 8],  partial: [6, 8], minimal: [6, 8] }, // coach sets the peak
+  "MD-4": { full: [7, 9],  partial: [7, 9], minimal: [7, 9] }, // heaviest day (planned RPE 8)
+  "MD-3": { full: [6, 8],  partial: [6, 8], minimal: [6, 8] }, // a step below MD-4 (planned RPE 7)
   "MD-2": { full: [5, 7],  partial: [5, 7], minimal: [5, 7] },
   "MD-1": { full: [2, 4],  partial: [2, 4], minimal: [2, 4] }, // taper
 };
