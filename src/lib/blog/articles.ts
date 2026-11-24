@@ -81,13 +81,13 @@ Ytra álag (external load) er vinnan sem leikmaðurinn vinnur — vegalengd, há
 
 Innra álag (internal load) er líffræðilega og sálræna svörunin við þeirri vinnu — hjartsláttur, laktat, áreynsluskyn, þreyta. Sama ytra álag getur valdið gjörólíku innra álagi hjá tveimur leikmönnum, eða hjá sama leikmanni á ferskum degi vs þreyttum.
 
-session-RPE er mæling á innra álagi. Þar liggur styrkur hennar: hún fangar hvernig líkaminn raunverulega upplifði æfinguna, ekki bara hvað stóð á blaðinu. Impellizzeri o.fl. (2019) árétta að besta myndin fæst þegar innra og ytra álag eru lesin saman — ytra álagið segir hvað var gert, innra álagið hvernig leikmaðurinn réð við það.`,
+session-RPE er mæling á innra álagi. Þar liggur styrkur hennar: hún fangar hvernig líkaminn raunverulega upplifði æfinguna, ekki bara hvað stóð á blaðinu. Impellizzeri o.fl. (2019) skilgreina innra og ytra álag sem tvo mælanlega hluta æfingaálags; lesin saman sýna þau hvað var gert (ytra álag) og hvernig leikmaðurinn réð við það (innra álag).`,
       },
       {
         heading: `4. Réttmæti og áreiðanleiki`,
         body: `Aðferðin er ekki bara þægileg — hún stenst vísindalega skoðun óvenju vel fyrir svo einfalt tæki.
 
-Í fótbolta. Impellizzeri o.fl. (2004), í grein sem varð tímamótaverk, söfnuðu innra álagi úr 479 æfingum og báru session-RPE saman við þrjár hjartsláttar-byggðar álagsaðferðir. Allar einstaklingsbundnar fylgnitölur voru marktækar, á bilinu r = 0,50 til 0,85 (P < 0,01). Niðurstaðan: session-RPE er góður mælikvarði á heildar innra álag fótboltaæfinga — og krefst hvorki búnaðar né kostnaðar.
+Í fótbolta. Impellizzeri o.fl. (2004), í grein sem varð tímamótaverk, söfnuðu innra álagi úr 479 æfingum og báru session-RPE saman við þrjár hjartsláttar-byggðar álagsaðferðir. Allar einstaklingsbundnar fylgnitölur voru marktækar, á bilinu r = 0,50 til 0,85 (P < 0,01). Niðurstaðan: session-RPE er góður mælikvarði á heildar innra álag fótboltaæfinga — og krefst ekki dýrs búnaðar.
 
 Yfirlitið. Í kerfisbundinni yfirferð sinni fóru Haddad o.fl. (2017) yfir bókmenntirnar frá 2001–2016. Þau fundu að 950 rannsóknir höfðu vitnað í upphaflegu Foster-greinina og að 36 rannsóknir höfðu prófað réttmæti og áreiðanleika aðferðarinnar með modified CR-10 kvarðanum. Niðurstaðan staðfesti gott réttmæti, áreiðanleika og innra samræmi session-RPE í fjölda íþrótta og hjá bæði körlum og konum.
 
@@ -95,15 +95,15 @@ Yfirlitið. Í kerfisbundinni yfirferð sinni fóru Haddad o.fl. (2017) yfir bó
       },
       {
         heading: `5. Monotony og strain: þegar álagið sjálft verður áhætta`,
-        body: `Ári fyrir session-RPE greinina hafði Foster (1998) þegar bent á að heildarmagn álags eitt og sér segir ekki alla söguna — dreifing álagsins yfir vikuna skiptir líka máli. Út frá daglegu session-RPE álagi skilgreindi hann tvær stærðir:
+        body: `Áður en session-RPE greinin kom út (2001) hafði Foster (1998) þegar bent á að heildarmagn álags eitt og sér segir ekki alla söguna — dreifing álagsins yfir vikuna skiptir líka máli. Út frá daglegu session-RPE álagi skilgreindi hann tvær stærðir:
 
 Monotony (einhæfni) = meðaltal daglegs álags ÷ staðalfrávik daglegs álags (yfir vikuna). Há monotony þýðir að allir dagar eru svipaðir — engir raunverulegir hvíldardagar, enginn munur á hörðum og léttum.
 
 Strain (álagsstreita) = vikuálag (samtala) × monotony. Þetta refsar fyrir sambland af miklu álagi og lítilli fjölbreytni.
 
-Foster tengdi háa monotony og strain við aukna tíðni veikinda, meiðsla og einkenna ofþjálfunar. Skilaboðin eru einföld og öflug: það er ekki bara hversu mikið þú þjálfar, heldur hvernig þú dreifir því — vika með háu en einhæfu álagi er áhættusamari en vika með sama heildarálagi en skýrum hörðum/léttum sveiflum.
+Foster fann að stór hluti veikinda (algengt merki um ofþjálfun) kom fram þegar íþróttafólk fór yfir eigin álagsþröskulda, einkum tengt strain. Skilaboðin eru einföld og öflug: það er ekki bara hversu mikið þú þjálfar, heldur hvernig þú dreifir því — vika með háu en einhæfu álagi er áhættusamari en vika með sama heildarálagi en skýrum hörðum/léttum sveiflum.
 
-Nýrri rannsóknir styðja dose-response tengsl þessara markara við líkamsástand: hjá atvinnufótboltamönnum tengdust breytingar í vikuálagi, monotony og strain marktækt við breytingar á hámarks-súrefnisupptöku, hámarks loftháðum hraða (MAS) og styrk yfir 10 vikna tímabil (Clemente o.fl. / Nikolaidis o.fl., 2019).`,
+Nýrri rannsóknir benda til einhverra tengsla milli álags og líkamsástands: hjá atvinnufótboltamönnum sem fylgt var eftir í 10 vikur (álag mælt með GPS) tengdist uppsafnað álag breytingum á líkamsástandi — skýrast styrk í hnéréttu — en fylgnin var lítil til mikil, svo álagið eitt og sér skýrði ekki breytingarnar á formi (Clemente o.fl., 2019).`,
       },
       {
         heading: `6. Hvernig á að safna session-RPE rétt`,
@@ -123,11 +123,11 @@ Nýrri rannsóknir styðja dose-response tengsl þessara markara við líkamsás
         heading: `7. Þættir sem hafa áhrif á RPE`,
         body: `RPE er huglægt, og það er bæði styrkur þess og veikleiki. Haddad o.fl. (2017) draga saman þætti sem geta breytt tölunni án þess að ytra álag breytist:
 
-Æfingagerð — millibils- og styrktarþjálfun vs samfellt þol geta gefið ólík RPE fyrir sama innra álag.
+Samsetning æfingar — tíminn sem varið er á hárri ákefð mótar session-RPE meira en lengd æfingarinnar.
 
-Líðan, svefn og streita — þreyttur, illa sofinn eða stressaður leikmaður metur sömu æfingu erfiðari. (Þetta er ekki „skekkja" — það er raunveruleg upplýsing um innra álag.)
+Líðan, svefn og streita — í stuttri, hóflegri áreynslu voru þessir þættir ekki stórir áhrifavaldar á RPE, en þeir gætu skipt meira máli við mikla ákefð. (Þetta er ekki „skekkja" — það er raunveruleg upplýsing um innra álag.)
 
-Umhverfi — hiti, raki og hæð yfir sjávarmáli hækka RPE.
+Umhverfi og aðstæður — hiti, hæð yfir sjávarmáli, tónlist, koffín og fyrirmælin sem gefin eru geta öll hnikað RPE.
 
 Reynsla og persónuleiki — vanari íþróttamenn og ólíkar persónugerðir kvarða áreynslu misjafnt.
 
@@ -141,7 +141,7 @@ Tímasetning og orðalag spurningarinnar — sbr. kafla 6.
 
 Acute:Chronic Workload Ratio (ACWR). session-RPE-byggt álag er algeng undirstaða ACWR — hlutfall bráða- (t.d. 7 daga) á móti krónísku (t.d. 28 daga) álagi — sem hefur verið tengt meiðslaáhættu þegar það rís of hratt (Gabbett, 2016; Hulin o.fl., 2016). Nota ber það sem viðmið, ekki spádóm.
 
-Huglægt vs hlutlægt. Yfirlit Saw o.fl. (2016) á 56 rannsóknum komst að því að huglæg sjálfsmöt (þ.m.t. RPE og líðan) endurspegluðu bráða- og langtímaálag með meiri næmni og samræmi en mörg hlutlæg mælitæki — og að þau bera sjálfstæðar upplýsingar. Session-RPE er því ekki „annars flokks" gögn þegar GPS vantar; það er sinn eigin gildi mælikvarði.`,
+Huglægt vs hlutlægt. Yfirlit Saw o.fl. (2016) á 56 rannsóknum komst að því að huglæg líðanarmöt (skap, streita, endurheimt — RPE sjálft var ekki hluti af yfirlitinu) endurspegluðu bráða- og langtímaálag með meiri næmni og samræmi en mörg hlutlæg mælitæki, og að huglæg og hlutlæg möt fylgdust yfirleitt ekki að. Ásamt réttmætisrannsóknunum hér að ofan þýðir þetta að session-RPE er ekki „annars flokks" gögn þegar GPS vantar; það er gildur mælikvarði í sjálfu sér.`,
       },
       {
         heading: `9. Takmarkanir og varúð`,
@@ -183,7 +183,7 @@ Hulin, B. T., Gabbett, T. J., o.fl. (2016). The acute:chronic workload ratio pre
 
 Halson, S. L. (2014). Monitoring training load to understand fatigue in athletes. Sports Medicine, 44(Suppl 2), S139–S147.
 
-Clemente, F. M., Nikolaidis, P. T., Rosemann, T., & Knechtle, B. (2019). Variations of training load, monotony, and strain and dose–response relationships with maximal aerobic speed, maximal oxygen uptake, and isokinetic strength in professional soccer players. PLoS ONE, 14(2), e0212819.
+Clemente, F. M., Clark, C., Castillo, D., Sarmento, H., Nikolaidis, P. T., Rosemann, T., & Knechtle, B. (2019). Variations of training load, monotony, and strain and dose–response relationships with maximal aerobic speed, maximal oxygen uptake, and isokinetic strength in professional soccer players. PLoS ONE, 14(12), e0225522. https://doi.org/10.1371/journal.pone.0225522
 
 Athugasemd: Heimildir eru settar fram í APA stíl með tenglum í frumheimildir.`,
       },
@@ -225,13 +225,13 @@ External load is the work the athlete performs — distance, high-speed running,
 
 Internal load is the biological and psychological response to that work — heart rate, lactate, perceived exertion, fatigue. The same external load can produce very different internal loads in two players, or in the same player on a fresh day versus a tired one.
 
-session-RPE is a measure of internal load. That is its strength: it captures how the body actually experienced the session, not just what was on paper. Impellizzeri et al. (2019) stress that the best picture comes from reading internal and external load together — the external load tells you what was done, the internal load tells you how the player coped with it.`,
+session-RPE is a measure of internal load. That is its strength: it captures how the body actually experienced the session, not just what was on paper. Impellizzeri et al. (2019) define internal and external load as the two measurable parts of training load; read together, they show what was done (external load) and how the player coped with it (internal load).`,
       },
       {
         heading: `4. Validity and reliability`,
         body: `The method is not just convenient — it stands up to scientific scrutiny unusually well for such a simple tool.
 
-In soccer. Impellizzeri et al. (2004), in what became a landmark study, collected internal load from 479 training sessions and compared session-RPE against three heart-rate-based load methods. Every individual correlation was statistically significant, ranging from r = 0.50 to r = 0.85 (P < 0.01). The conclusion: session-RPE is a good indicator of the global internal load of soccer training — and it requires neither equipment nor cost.
+In soccer. Impellizzeri et al. (2004), in what became a landmark study, collected internal load from 479 training sessions and compared session-RPE against three heart-rate-based load methods. Every individual correlation was statistically significant, ranging from r = 0.50 to r = 0.85 (P < 0.01). The conclusion: session-RPE is a good indicator of the global internal load of soccer training — and it needs no expensive equipment.
 
 The review. In their systematic review, Haddad et al. (2017) surveyed the literature from 2001–2016. They found that 950 studies had cited the original Foster paper and that 36 studies had tested the validity and reliability of the method using the modified CR-10 scale. The verdict confirmed good validity, reliability and internal consistency of session-RPE across many sports and in both men and women.
 
@@ -239,15 +239,15 @@ In resistance training the method also works (Day et al., 2004), with the caveat
       },
       {
         heading: `5. Monotony and strain: when the load itself becomes the risk`,
-        body: `A year before the session-RPE paper, Foster (1998) had already noted that the total volume of load alone does not tell the whole story — how the load is distributed across the week matters too. From daily session-RPE load he defined two quantities:
+        body: `Before the 2001 session-RPE paper, Foster (1998) had already noted that the total volume of load alone does not tell the whole story — how the load is distributed across the week matters too. From daily session-RPE load he defined two quantities:
 
 Monotony = mean daily load ÷ standard deviation of daily load (across the week). High monotony means every day is similar — no real rest days, no contrast between hard and easy.
 
 Strain = weekly load (the sum) × monotony. This penalises the combination of high load and low variety.
 
-Foster linked high monotony and strain to increased rates of illness, injury and overtraining symptoms. The message is simple and powerful: it is not just how much you train, but how you distribute it — a week of high but monotonous load is riskier than a week of the same total load with clear hard/easy swings.
+Foster found that a large share of illnesses (a common marker of overtraining) occurred when athletes went past their own individual training thresholds, mostly related to training strain. The message is simple and powerful: it is not just how much you train, but how you distribute it — a week of high but monotonous load is riskier than a week of the same total load with clear hard/easy swings.
 
-More recent work supports dose–response relationships between these markers and fitness: in professional soccer players, changes in weekly load, monotony and strain were significantly associated with changes in maximal oxygen uptake, maximal aerobic speed (MAS) and strength over a 10-week period (Clemente et al. / Nikolaidis et al., 2019).`,
+More recent work suggests some link between load and fitness: in professional soccer players followed over a 10-week period (load measured with GPS), accumulated load was meaningfully associated with changes in fitness — most clearly knee-extension strength — but the correlations were small to large, so load alone did not explain the fitness changes (Clemente et al., 2019).`,
       },
       {
         heading: `6. How to collect session-RPE properly`,
@@ -267,11 +267,11 @@ More recent work supports dose–response relationships between these markers an
         heading: `7. Factors that influence RPE`,
         body: `RPE is subjective, and that is both its strength and its weakness. Haddad et al. (2017) summarise factors that can change the number without any change in external load:
 
-Exercise mode — interval and resistance training vs continuous endurance can give different RPE for the same internal load.
+Session make-up — time spent at high intensity shapes session-RPE more than session length does.
 
-Wellbeing, sleep and stress — a tired, poorly slept or stressed player rates the same session harder. (This is not "error" — it is real information about internal load.)
+Wellbeing, sleep and stress — in a short sub-maximal effort these were not major drivers of RPE, but they may matter more at high intensity. (This is not "error" — it is real information about internal load.)
 
-Environment — heat, humidity and altitude raise RPE.
+Environment and context — temperature, altitude, music, caffeine and the instructions given can all shift RPE.
 
 Experience and personality — more experienced athletes and different personality types scale effort differently.
 
@@ -285,7 +285,7 @@ This underlines that RPE should be read against each player's own norm, not as a
 
 Acute:Chronic Workload Ratio (ACWR). session-RPE-based load is a common basis for the ACWR — the ratio of acute (e.g. 7-day) to chronic (e.g. 28-day) load — which has been linked to injury risk when it rises too fast (Gabbett, 2016; Hulin et al., 2016). It should be used as a reference, not a prediction.
 
-Subjective vs objective. The review by Saw et al. (2016) of 56 studies found that subjective self-reports (including RPE and wellness) reflected acute and chronic load with greater sensitivity and consistency than many objective tools — and that they carry independent information. session-RPE is therefore not "second-class" data when GPS is missing; it is a valid metric in its own right.`,
+Subjective vs objective. The review by Saw et al. (2016) of 56 studies found that subjective wellbeing measures (mood, stress, recovery — RPE itself was not part of the review) reflected acute and chronic load with greater sensitivity and consistency than many objective tools, and that subjective and objective measures generally did not correlate. Together with the validity studies above, this means session-RPE is not "second-class" data when GPS is missing; it is a valid metric in its own right.`,
       },
       {
         heading: `9. Limitations and caution`,
@@ -327,7 +327,7 @@ Hulin, B. T., Gabbett, T. J., et al. (2016). The acute:chronic workload ratio pr
 
 Halson, S. L. (2014). Monitoring training load to understand fatigue in athletes. Sports Medicine, 44(Suppl 2), S139–S147.
 
-Clemente, F. M., Nikolaidis, P. T., Rosemann, T., & Knechtle, B. (2019). Variations of training load, monotony, and strain and dose–response relationships with maximal aerobic speed, maximal oxygen uptake, and isokinetic strength in professional soccer players. PLoS ONE, 14(2), e0212819.
+Clemente, F. M., Clark, C., Castillo, D., Sarmento, H., Nikolaidis, P. T., Rosemann, T., & Knechtle, B. (2019). Variations of training load, monotony, and strain and dose–response relationships with maximal aerobic speed, maximal oxygen uptake, and isokinetic strength in professional soccer players. PLoS ONE, 14(12), e0225522. https://doi.org/10.1371/journal.pone.0225522
 
 Note: References are formatted in APA style with links to the primary sources.`,
       },
@@ -503,41 +503,41 @@ Note: References are formatted in APA 7th edition style; details verified agains
     sectionsIS: [
       {
         heading: `Útdráttur`,
-        body: `„Líðanarmælingar“ hjá íþróttafólki — stuttir, sjálfsmetnir spurningalistar þar sem iðkendur meta daglega hvernig þeim líður á þáttum á borð við þreytu, svefn, harðsperrur, streitu og skap — eru orðnar eitt útbreiddasta vöktunartæki í afreks- og ungmennaíþróttum. Í þessari grein er farið yfir þær rannsóknir sem liggja að baki notkun þeirra. Heimildir sýna að huglæg sjálfsmatsgildi eru oft næmari fyrir breytingum á æfingaálagi en hlutlægir mælikvarðar sem venjulega eru safnað (Saw, Main og Gastin, 2016), að jafnvel einfaldir eins-atriða kvarðar fylgja álagi með marktækum hætti í hópíþróttum (Jeffries o.fl., 2020), og að skert líðan tengist aukinni meiðslahættu þegar æfingaálag er mikið (Lathlean, Newstead og Gastin, 2023). Einnig er fjallað um þá hagnýtu þætti sem ráða árangri vöktunarkerfis — þátttöku, heiðarleika, hnitmiðun og viðbrögð þjálfara við gögnunum (Saw, Main og Gastin, 2015) — og settar fram gagnreyndar ráðleggingar fyrir fagfólk, með sérstakri skírskotun til knattspyrnu.`,
+        body: `„Líðanarmælingar“ hjá íþróttafólki — stuttir, sjálfsmetnir spurningalistar þar sem iðkendur meta daglega hvernig þeim líður á þáttum á borð við þreytu, svefn, harðsperrur, streitu og skap — eru orðnar eitt útbreiddasta vöktunartæki í afreks- og ungmennaíþróttum. Í þessari grein er farið yfir þær rannsóknir sem liggja að baki notkun þeirra. Heimildir sýna að huglæg sjálfsmatsgildi eru oft næmari fyrir breytingum á æfingaálagi en hlutlægir mælikvarðar sem venjulega eru safnað (Saw, Main og Gastin, 2016), að jafnvel einfaldir eins-atriða kvarðar tengjast álagi í hópíþróttum, þótt tengslin séu oftast lítil til miðlungs (Duignan o.fl., 2020), og að skert líðan tengist aukinni meiðslahættu þegar æfingaálag er mikið (Lathlean, Newstead og Gastin, 2023). Einnig er fjallað um þá hagnýtu þætti sem ráða árangri vöktunarkerfis — þátttöku, heiðarleika, hnitmiðun og viðbrögð þjálfara við gögnunum (Saw, Main og Gastin, 2015) — og settar fram gagnreyndar ráðleggingar fyrir fagfólk, með sérstakri skírskotun til knattspyrnu.`,
       },
       {
         heading: `1. Inngangur`,
         body: `Að stýra jafnvæginu milli æfingaálags og endurheimtar er kjarninn í nútíma íþróttavísindum. Sé álag of lítið er iðkandinn vanbúinn; sé það of mikið án nægrar endurheimtar færist hann nær ofþjálfun, veikindum eða meiðslum. Áskorunin fyrir þjálfara og stoðteymi er sú að innri viðbrögð iðkandans við tilteknu álagi eru mjög einstaklingsbundin og verða ekki lesin áreiðanlega út frá æfingaáætluninni einni saman. Það er þetta bil sem líðanarvöktun er ætlað að brúa.
 
-Líðanarmæling er yfirleitt stuttur spurningalisti sem fylltur er út á hverjum morgni eða fyrir æfingu, þar sem iðkandinn metur nokkra huglæga þætti á stuttum talnakvarða. Áhrifamesta fyrirmyndin á rætur að rekja til Hooper og Mackinnon (1995), sem lögðu til að vakta sjálfsmetna þreytu, streitu, harðsperrur og svefngæði sem hagnýta vísa um ofþjálfun og endurheimt. Afbrigði af þessum „Hooper-kvarða“ eru enn í daglegri notkun þremur áratugum síðar (Clemente o.fl., 2021). Aðdráttaraflið er augljóst: mælingarnar eru ódýrar, fljótlegar, ekki inngripsmiklar og hægt er að safna þeim daglega frá heilum hópi, ólíkt blóðgildum eða prófunum á rannsóknarstofu.
+Líðanarmæling er yfirleitt stuttur spurningalisti sem fylltur er út á hverjum morgni eða fyrir æfingu, þar sem iðkandinn metur nokkra huglæga þætti á stuttum talnakvarða. Áhrifamesta fyrirmyndin á rætur að rekja til Hooper & Mackinnon (1995), sem mæltu með sjálfsmetinni líðan sem hagnýtum vísi um ofþjálfun og endurheimt. Þekktasta form hennar, „Hooper-kvarðinn“ (svefngæði, þreyta, streita og harðsperrur), er enn í daglegri notkun þremur áratugum síðar (Nobari o.fl., 2021). Aðdráttaraflið er augljóst: mælingarnar eru ódýrar, fljótlegar, ekki inngripsmiklar og hægt er að safna þeim daglega frá heilum hópi, ólíkt blóðgildum eða prófunum á rannsóknarstofu.
 
 En mæling er aldrei betri en vísindin að baki henni og aginn við framkvæmdina. Kaflarnir sem á eftir fylgja lýsa því hvað rannsóknir sýna í raun um réttmæti og næmi þessara tækja, tengsl þeirra við meiðsla- og veikindahættu, þá mannlegu þætti sem gera eða brjóta vöktunarkerfi, og hvernig fagfólk getur beitt heimildunum í starfi.`,
       },
       {
         heading: `2. Hvers vegna huglægir mælikvarðar eiga rétt á sér`,
-        body: `Mikilvægasta staka heimildin fyrir líðanarmælingum kemur frá kerfisbundnu yfirliti Saw, Main og Gastin (2016), sem ber hinn hnyttna undirtitil „huglæg sjálfsmatsgildi slá út algenga hlutlæga mælikvarða.“ Með því að draga saman meira en fimmtíu rannsóknir komust höfundarnir að því að huglæg líðan svaraði bráðu og langvinnu æfingaálagi með meira næmi og samkvæmni en margir hlutlægir mælikvarðar á borð við hvíldarpúls, breytileika hjartsláttar, hormónagildi eða frammistöðu í stökkprófum. Það sem mestu skiptir er að huglæg gildi hneigðust til að hreyfast í þá átt sem búast mátti við — versnuðu við bráða aukningu álags og hert æfingatímabil, og bötnuðu þegar álag var minnkað, svo sem á niðurtröppunartímabili.
+        body: `Mikilvægasta staka heimildin fyrir líðanarmælingum kemur frá kerfisbundnu yfirliti Saw, Main & Gastin (2016), sem ber hinn hnyttna undirtitil „huglæg sjálfsmatsgildi slá út algenga hlutlæga mælikvarða.“ Með því að draga saman meira en fimmtíu rannsóknir komust höfundarnir að því að huglæg líðan svaraði bráðu og langvinnu æfingaálagi með meira næmi og samkvæmni en margir hlutlægir mælikvarðar á borð við hvíldarpúls, breytileika hjartsláttar, hormónagildi eða frammistöðu í stökkprófum. Það sem mestu skiptir er að huglæg gildi hneigðust til að hreyfast í þá átt sem búast mátti við — versnuðu við bráða aukningu álags og hert æfingatímabil, og bötnuðu þegar álag var minnkað, svo sem á niðurtröppunartímabili.
 
 Þessi niðurstaða breytti sýninni á sjálfsmat úr „mjúku“ viðbótargagni yfir í sjálfstæða, frumlæga vöktunarrás. Það þýðir ekki að hlutlægir mælikvarðar séu gagnslausir; heldur að vel hannaður huglægur spurningalisti fangar heildarkostnað æfinga — líkamlegan, sálrænan og lífsstílstengdan — með hætti sem enginn einn lífmarkir ræður við (Saw, Main og Gastin, 2016).
 
-Annað kerfisbundið yfirlit, eftir Jeffries og félaga (2020), þrengdi sjónarhornið að hópíþróttum og að þeim mjög stuttu eins-atriða kvörðum sem félög nota í raun — einnar línu mat á þreytu, svefni, harðsperrum, streitu eða skapi. Þeir staðfestu að þessir einföldu mælikvarðar tengjast æfingaálagi, þótt styrkur tengslanna og jafnvel stefna þeirra sé breytileg eftir atriði, íþrótt og samhengi. Þreyta og skynjaðar harðsperrur reyndust næmust fyrir álagi. Hin hagnýta skilaboð eru uppörvandi fyrir tímabundið starfsfólk: hnitmiðun eyðir ekki sjálfkrafa merkinu, en val á atriðum skiptir máli og túlka ber niðurstöður á einstaklingsgrunni fremur en að gera ráð fyrir að þær séu einsleitar yfir allan hópinn (Jeffries o.fl., 2020).`,
+Annað kerfisbundið yfirlit, eftir Duignan og félaga (2020), þrengdi sjónarhornið að hópíþróttum og að þeim mjög stuttu eins-atriða kvörðum sem félög nota í raun — einnar línu mat á þreytu, svefni, harðsperrum, streitu eða skapi. Í 21 rannsókn voru tengsl þessara atriða við æfingaálag allt frá engum upp í mjög mikil, en oftast lítil til miðlungs í stærstu rannsóknunum. Harðsperrur, þreyta, svefngæði, streita og skap voru algengustu atriðin. Hagnýtu skilaboðin: stuttir kvarðar geta borið merki, en val á atriðum skiptir máli, mæligæði þeirra eru enn lítt staðfest, og túlka ber niðurstöður á einstaklingsgrunni fremur en að gera ráð fyrir að þær séu einsleitar yfir allan hópinn (Duignan o.fl., 2020).`,
       },
       {
         heading: `3. Líðan, meiðsli og veikindahætta`,
-        body: `Ef mælingar endurspegluðu einungis hversu þreytt íþróttafólk væri, væri gildi þeirra takmarkað. Sterkari röksemdin er sú að huglæg líðan beri upplýsingar um síðari áhættu. Brink og félagar (2010) fylgdu eftir afreksungmennum í knattspyrnu og sýndu að vöktun streitu og endurheimtar veitti nýja innsýn í aðdraganda meiðsla og veikinda, sem styður þá hugmynd að sállíkamlegt ástand sé forboði áfalla fremur en einungis afleiðing þeirra.
+        body: `Ef mælingar endurspegluðu einungis hversu þreytt íþróttafólk væri, væri gildi þeirra takmarkað. Sterkari röksemdin er sú að huglæg líðan beri upplýsingar um síðari áhættu. Brink og félagar (2010) fylgdu eftir afreksungmennum í knattspyrnu í tvö keppnistímabil: líkamlegt álag (session-RPE) tengdist bæði meiðslum og veikindum, en sálfélagsleg streita og endurheimt (spurningalisti) tengdust veikindum. Það styður þá hugmynd að ástand leikmannsins geti komið á undan áföllum, ekki einungis á eftir þeim.
 
-Nýlega sýndu Lathlean, Newstead og Gastin (2023) hjá afreksungmennum í áströlskum fótbolta að iðkendur sem greindu frá skertri líðan voru í aukinni meiðslahættu, sérstaklega þegar æfingaálag var mikið. Þessi víxlverkun — að líðan móti samband álags og meiðsla — er mikilvæg í starfi: sama erfiða æfingin getur verið vel þolanleg fyrir vel endurheimtan iðkanda en falið í sér hættu fyrir illa endurheimtan. Mæling verður því tæki til að einstaklingsmiða álag, sem bendir á hvaða iðkendur þurfa aðlögun tiltekinn dag fremur en að beita einni reglu yfir allan hópinn (Lathlean, Newstead og Gastin, 2023).
+Nýlega fundu Lathlean, Newstead & Gastin (2023) hjá afreksungmennum í áströlskum fótbolta að iðkendur sem greindu frá skertri líðan voru í aukinni meiðslahættu, sérstaklega þegar æfingaálag var mikið. Þessi víxlverkun — að líðan móti samband álags og meiðsla — er mikilvæg í starfi: sama erfiða æfingin getur verið vel þolanleg fyrir vel endurheimtan iðkanda en falið í sér hættu fyrir illa endurheimtan. Mæling verður því tæki til að einstaklingsmiða álag, sem bendir á hvaða iðkendur þurfa aðlögun tiltekinn dag fremur en að beita einni reglu yfir allan hópinn (Lathlean, Newstead og Gastin, 2023).
 
-Rannsóknir í knattspyrnu sérstaklega styrkja tengslin milli uppsafnaðs álags og skynjaðrar líðanar. Clemente o.fl. (2021) fylgdust með ungum knattspyrnuiðkendum yfir heilt keppnistímabil og greindu frá tengslum milli álagsmælikvarða og líðanargilda, þar sem Hooper-atriðin sveifluðust í takt við kröfur æfingavikunnar. Sambærileg mynstur hafa sést yfir þétt leikjatímabil og í umhverfi ungmennalandsliða, þar sem líðan og sálrænir þættir breytast með ákefð og þéttleika keppni.`,
+Rannsóknir í knattspyrnu sérstaklega styrkja tengslin milli uppsafnaðs álags og skynjaðrar líðanar. Nobari o.fl. (2021) fylgdust vikulega með ungum afreksiðkendum í knattspyrnu yfir heilt keppnistímabil og fundu miðlungs til mjög mikla fylgni milli vikuálags og líðanargilda — harðsperra, þreytu, streitu og Hooper-kvarðans. Sambærileg mynstur hafa sést yfir þétt leikjatímabil og í umhverfi ungmennalandsliða, þar sem líðan og sálrænir þættir breytast með ákefð og þéttleika keppni.`,
       },
       {
         heading: `4. Mannlegu þættirnir sem gera eða brjóta kerfið`,
-        body: `Endurtekinn lærdómur úr heimildunum er sá að sálfræðilegir mæligæði spurningalistans skipta minna máli en hvernig hann er felldur inn í daglegt starf. Í eigindlegri rannsókn sinni á framkvæmd bentu Saw, Main og Gastin (2015) á þá félags- og umhverfisþætti sem ráða því hvort sjálfsmatskerfi virki raunverulega: eignarhald iðkenda á kerfinu, skynjað mikilvægi og trúnaður gagnanna, einfaldleiki og hraði útfyllingar og — umfram allt — hvort iðkendur sjái starfsfólk bregðast við því sem þeir greina frá.
+        body: `Endurtekinn lærdómur úr heimildunum er sá að sálfræðilegir mæligæði spurningalistans skipta minna máli en hvernig hann er felldur inn í daglegt starf. Í eigindlegri viðtalsrannsókn sinni á framkvæmd bentu Saw, Main & Gastin (2015) á tvo hópa þátta sem ráða því hvort sjálfsmatskerfi virki raunverulega: mælinguna sjálfa (hversu aðgengileg hún er og hvenær hún er fyllt út) og félagslega umhverfið í kringum hana (að iðkendur, þjálfarar og starfsfólk séu með, og að iðkendur sjái að svörin skipti máli). Ótti við refsingu og óvissa um hverjir sæju gögnin leiddu til þess að iðkendur héldu sannleikanum eftir.
 
-Nokkrar hagnýtar bilanaleiðir leiða beint af þessu. Langir eða síendurteknir spurningalistar draga úr þátttöku. Þegar iðkendur gruna að svör þeirra verði notuð gegn þeim — til dæmis til að réttlæta að þeir séu teknir úr liði — geta þeir hagrætt svörum sínum í átt að félagslega æskilegum gildum, sem eyðileggur réttmæti gagnanna hljóðlega. Og ef leikmaður greinir frá lélegum svefni eða miklum harðsperrum dag eftir dag án sýnilegrar aðlögunar af hálfu þjálfarateymisins fer æfingin að virðast tilgangslaus og þátttaka hrynur. Saw og félagar (2015) líta á vöktunarkerfið sem tvíátta samskiptatæki, ekki eftirlitstæki; iðkandinn leggur fram heiðarleg gögn og í staðinn nýtir starfsfólkið þau með sýnilegum hætti til að styðja iðkandann.`,
+Nokkrar hagnýtar bilanaleiðir leiða beint af þessu. Langir eða síendurteknir spurningalistar draga úr þátttöku. Þegar iðkendur gruna að svör þeirra verði notuð gegn þeim — til dæmis til að réttlæta að þeir séu teknir úr liði — geta þeir hagrætt svörum sínum í átt að félagslega æskilegum gildum, sem eyðileggur réttmæti gagnanna hljóðlega. Og ef leikmaður greinir frá lélegum svefni eða miklum harðsperrum dag eftir dag án sýnilegrar aðlögunar af hálfu þjálfarateymisins fer æfingin að virðast tilgangslaus og þátttaka hrynur. Í viðtölum Saw og félaga (2015) nefndi starfsfólk fræðslu og endurgjöf sem betri leið til að fá iðkendur með en þrýsting. Hagnýti lærdómurinn er tvíátta samskipti fremur en eftirlit: iðkandinn leggur fram heiðarleg gögn og starfsfólkið nýtir þau með sýnilegum hætti til að styðja hann.`,
       },
       {
         heading: `5. Frá gögnum til ákvarðana`,
-        body: `Að safna gildum er ekki það sama og að nýta þau. Þar sem huglægir mælikvarðar eru breytilegir og mjög einstaklingsbundnir túlkar flest fagfólk breytingu miðað við eigin grunnlínu hvers iðkanda fremur en fastan hópþröskuld. Algeng nálgun er að setja upp hlaupandi einstaklingsmeðaltal og merkja marktæk frávik frá því — til dæmis fall í líðanar-Z-gildi umfram tiltekin mörk — svo athyglinni sé beint að þeim iðkendum þar sem ástand hefur raunverulega breyst (Jeffries o.fl., 2020; Saw, Main og Gastin, 2016).
+        body: `Að safna gildum er ekki það sama og að nýta þau. Þar sem huglægir mælikvarðar eru breytilegir og mjög einstaklingsbundnir túlkar flest fagfólk breytingu miðað við eigin grunnlínu hvers iðkanda fremur en fastan hópþröskuld. Algeng nálgun er að setja upp hlaupandi einstaklingsmeðaltal og merkja marktæk frávik frá því — til dæmis fall í líðanar-Z-gildi umfram tiltekin mörk — svo athyglinni sé beint að þeim iðkendum þar sem ástand hefur raunverulega breyst.
 
 Líðanargögn eru öflugust þegar þau eru lesin samhliða æfingaálagi fremur en ein og sér. Víxlverkunin sem Lathlean og félagar (2023) greindu frá gefur til kynna að hin hagnýta spurning sé ekki einfaldlega „er þessi iðkandi þreyttur?“ heldur „greinir þessi iðkandi frá skertri líðan á sama tíma og álag er mikið?“ Með því að para daglega mælingu við álagsmælikvarða á borð við sRPE (session-RPE) fá starfsmenn einmitt þessa tvívíðu mynd, sem gerir kleift að taka einstaklingsmiðaðar ákvarðanir um hvort auka eigi, halda eða minnka álag hjá tilteknum iðkanda tiltekinn dag.`,
       },
@@ -549,7 +549,7 @@ Líðanargögn eru öflugust þegar þau eru lesin samhliða æfingaálagi fremu
         heading: `7. Hagnýtar ráðleggingar fyrir fagfólk`,
         body: `Þegar þræðirnir eru dregnir saman styðja rannsóknirnar samræmt safn af hagnýtum meginreglum fyrir hvern þann sem heldur úti líðanarmælingum með hópi:
 
-Hafið það stutt. Fáein vel valin eins-atriða gildi (þreyta, svefngæði, harðsperrur, streita og skap) sem hægt er að fylla út á innan við mínútu viðheldur þátttöku en varðveitir samt merkið (Jeffries o.fl., 2020).
+Hafið það stutt. Fáein vel valin eins-atriða gildi (þreyta, svefngæði, harðsperrur, streita og skap) sem hægt er að fylla út á innan við mínútu viðheldur þátttöku en varðveitir samt merkið — vel hönnuð mæling á að ná góðum gögnum með sem minnstu álagi á iðkendur og starfsfólk (Saw, Main og Gastin, 2015).
 
 Samræmið tímasetningu. Safnið á sama tíma á hverjum degi — yfirleitt fyrst að morgni eða við komu — svo gildin séu samanburðarhæf dag frá degi.
 
@@ -557,71 +557,73 @@ Túlkið miðað við einstaklinginn. Notið eigin hlaupandi grunnlínu hvers i�
 
 Lesið líðan með álagi, ekki í staðinn fyrir það. Parið mælinguna við álagsmælikvarða; samspil skertrar líðanar og mikils álags er lykiláhættumerkið (Lathlean, Newstead og Gastin, 2023).
 
-Lokið hringnum. Sýnið iðkendum að svör þeirra leiði til aðgerða. Sýnileg, styðjandi notkun gagnanna er sterkasti einstaki drifkrafturinn að heiðarlegri og viðvarandi þátttöku (Saw, Main og Gastin, 2015).
+Lokið hringnum. Sýnið iðkendum að svör þeirra leiði til aðgerða. Sýnileg, styðjandi notkun gagnanna — fremur en þrýstingur eða refsing — styður heiðarlega og viðvarandi þátttöku (Saw, Main og Gastin, 2015).
 
 Verndið traust. Haldið gögnunum trúnaðarmerktum og forðist að nota þau í refsiskyni, ella versna gæði skráningarinnar hljóðlega (Saw, Main og Gastin, 2015).`,
       },
       {
         heading: `8. Niðurstöður`,
-        body: `Líðanarmælingar hafa áunnið sér sess í vöktun íþróttafólks, ekki vegna þess að þær séu flóknar heldur vegna þess að þær eru næmar, ódýrar og aðgerðatengdar. Rannsóknir sýna að skynjun iðkenda sjálfra á þreytu, svefni, harðsperrum og streitu svarar æfingaálagi að minnsta kosti jafn upplýsandi og margir dýrari hlutlægir mælikvarðar (Saw, Main og Gastin, 2016), að þessi skynjun ber upplýsingar um meiðsla- og veikindahættu (Brink o.fl., 2010; Lathlean, Newstead og Gastin, 2023), og að jafnvel mjög stuttir kvarðar eru gagnlegir þegar þeir eru túlkaðir af skynsemi (Jeffries o.fl., 2020). Gildi þeirra ræðst þó á endanum ekki af spurningalistanum sjálfum heldur af mannlega kerfinu í kringum hann — stuttum í útfyllingu, einstaklingsmiðað túlkuðum, lesnum samhliða álagi og, umfram allt, með sýnilegum hætti notuðum (Saw, Main og Gastin, 2015). Beitt þannig verður einnar mínútu dagleg mæling eitt arðbærasta tækið sem þjálfara- og frammistöðuteymi hefur yfir að ráða.`,
+        body: `Líðanarmælingar hafa áunnið sér sess í vöktun íþróttafólks, ekki vegna þess að þær séu flóknar heldur vegna þess að þær eru næmar, ódýrar og aðgerðatengdar. Rannsóknir sýna að skynjun iðkenda sjálfra á þreytu, svefni, harðsperrum og streitu svarar æfingaálagi að minnsta kosti jafn upplýsandi og margir dýrari hlutlægir mælikvarðar (Saw, Main og Gastin, 2016), að þessi skynjun ber upplýsingar um meiðsla- og veikindahættu (Brink o.fl., 2010; Lathlean, Newstead og Gastin, 2023), og að jafnvel mjög stuttir kvarðar tengjast álagi, þótt tengslin séu oftast hófleg (Duignan o.fl., 2020). Gildi þeirra ræðst þó á endanum ekki af spurningalistanum sjálfum heldur af mannlega kerfinu í kringum hann — stuttum í útfyllingu, einstaklingsmiðað túlkuðum, lesnum samhliða álagi og, umfram allt, með sýnilegum hætti notuðum (Saw, Main og Gastin, 2015). Beitt þannig verður einnar mínútu dagleg mæling eitt arðbærasta tækið sem þjálfara- og frammistöðuteymi hefur yfir að ráða.`,
       },
       {
         heading: `Heimildir`,
         body: `Brink, M. S., Visscher, C., Arends, S., Zwerver, J., Post, W. J., & Lemmink, K. A. P. M. (2010). Monitoring stress and recovery: New insights for the prevention of injuries and illnesses in elite youth soccer players. British Journal of Sports Medicine, 44(11), 809–815. https://doi.org/10.1136/bjsm.2009.069476
 
-Clemente, F. M., Silva, R., Ramirez-Campillo, R., Afonso, J., Mendes, B., & Chen, Y.-S. (2021). Association between training load and well-being measures in young soccer players during a season. International Journal of Environmental Research and Public Health, 18(9), 4451. https://doi.org/10.3390/ijerph18094451
+Nobari, H., Alves, A. R., Haghighi, H., Clemente, F. M., Carlos-Vivas, J., Pérez-Gómez, J., & Ardigò, L. P. (2021). Association between training load and well-being measures in young soccer players during a season. International Journal of Environmental Research and Public Health, 18(9), 4451. https://doi.org/10.3390/ijerph18094451
 
 Hooper, S. L., & Mackinnon, L. T. (1995). Monitoring overtraining in athletes: Recommendations. Sports Medicine, 20(5), 321–327. https://doi.org/10.2165/00007256-199520050-00003
 
-Jeffries, A. C., Wallace, L., Coutts, A. J., McLaren, S. J., McCall, A., & Impellizzeri, F. M. (2020). Single-item self-report measures of team-sport athlete wellbeing and their relationship with training load: A systematic review. Journal of Athletic Training, 55(9), 1010–1019. https://doi.org/10.4085/1062-6050-542.19
+Duignan, C., Doherty, C., Caulfield, B., & Blake, C. (2020). Single-item self-report measures of team-sport athlete wellbeing and their relationship with training load: A systematic review. Journal of Athletic Training, 55(9), 944–953. https://doi.org/10.4085/1062-6050-0528.19
 
-Lathlean, T. J. H., Newstead, S. V., & Gastin, P. B. (2023). Elite junior Australian football players with impaired wellness are at increased injury risk at high loads. Sports Health, 15(3), 361–369. https://doi.org/10.1177/19417381221087245
+Jeffries, A. C., Wallace, L., Coutts, A. J., McLaren, S. J., McCall, A., & Impellizzeri, F. M. (2020). Athlete-reported outcome measures for monitoring training responses: A systematic review of risk of bias and measurement property quality according to the COSMIN guidelines. International Journal of Sports Physiology and Performance, 15(9), 1203–1215. https://doi.org/10.1123/ijspp.2020-0386
+
+Lathlean, T. J. H., Newstead, S. V., & Gastin, P. B. (2023). Elite junior Australian football players with impaired wellness are at increased injury risk at high loads. Sports Health, 15(2), 218–226. https://doi.org/10.1177/19417381221087245
 
 Saw, A. E., Main, L. C., & Gastin, P. B. (2015). Monitoring athletes through self-report: Factors influencing implementation. Journal of Sports Science & Medicine, 14(1), 137–146.
 
 Saw, A. E., Main, L. C., & Gastin, P. B. (2016). Monitoring the athlete training response: Subjective self-reported measures trump commonly used objective measures: A systematic review. British Journal of Sports Medicine, 50(5), 281–291. https://doi.org/10.1136/bjsports-2015-094758
 
-Athugasemd um heimildir: Titlar og heimildaskrá eru hafðir á upprunalegu (ensku) formi eins og venja er í fræðilegri tilvísun. Blaðsíðutal fyrir Lathlean o.fl. (2023) miðast við blaðsíðutal prentaðs heftis; öll önnur atriði voru sannreynd í gögnum útgefenda og PubMed. Heimildir eru settar fram í APA 7. útgáfu stíl.`,
+Athugasemd um heimildir: Titlar og heimildaskrá eru hafðir á upprunalegu (ensku) formi eins og venja er í fræðilegri tilvísun. Heimildaatriði voru yfirfarin í PubMed. Heimildir eru settar fram í APA 7. útgáfu stíl.`,
       },
     ],
     sectionsEN: [
       {
         heading: `Abstract`,
-        body: `Athlete “wellness check-ins” — short, self-reported questionnaires that ask athletes to rate how they feel each day on dimensions such as fatigue, sleep, muscle soreness, stress and mood — have become one of the most widely used monitoring tools in high-performance and youth sport. This article reviews the research underpinning their use. The evidence shows that subjective self-report measures are often more sensitive to changes in training load than routinely collected objective markers (Saw, Main & Gastin, 2016), that even simple single-item scales track meaningfully with load in team sports (Jeffries et al., 2020), and that impaired wellness is associated with elevated injury risk when training loads are high (Lathlean, Newstead & Gastin, 2023). It also examines the practical determinants of a monitoring system’s success — compliance, honesty, brevity and the coach’s response to the data (Saw, Main & Gastin, 2015) — and offers evidence-based recommendations for practitioners, with particular relevance to football.`,
+        body: `Athlete “wellness check-ins” — short, self-reported questionnaires that ask athletes to rate how they feel each day on dimensions such as fatigue, sleep, muscle soreness, stress and mood — have become one of the most widely used monitoring tools in high-performance and youth sport. This article reviews the research underpinning their use. The evidence shows that subjective self-report measures are often more sensitive to changes in training load than routinely collected objective markers (Saw, Main & Gastin, 2016), that even simple single-item scales are related to load in team sports, though mostly weakly to moderately (Duignan et al., 2020), and that impaired wellness is associated with elevated injury risk when training loads are high (Lathlean, Newstead & Gastin, 2023). It also examines the practical determinants of a monitoring system’s success — compliance, honesty, brevity and the coach’s response to the data (Saw, Main & Gastin, 2015) — and offers evidence-based recommendations for practitioners, with particular relevance to football.`,
       },
       {
         heading: `1. Introduction`,
         body: `Managing the balance between training stress and recovery sits at the heart of modern sport science. Load too little and athletes are underprepared; load too much without adequate recovery and they drift toward non-functional overreaching, illness or injury. The challenge for coaches and support staff is that the athlete’s internal response to a given training dose is highly individual and cannot be read reliably from the training plan alone. This is the gap that wellness monitoring aims to fill.
 
-A wellness check-in is typically a brief questionnaire completed each morning or before training, in which the athlete rates several perceptual dimensions on a short numerical scale. The most influential template dates back to Hooper and Mackinnon (1995), who recommended monitoring self-rated fatigue, stress, muscle soreness and sleep quality as practical markers of overtraining and recovery. Variants of this “Hooper index” remain in everyday use three decades later (Clemente et al., 2021). The enduring appeal is obvious: the measures are cheap, fast, non-invasive and can be collected daily from an entire squad, unlike blood markers or laboratory testing.
+A wellness check-in is typically a brief questionnaire completed each morning or before training, in which the athlete rates several perceptual dimensions on a short numerical scale. The most influential template dates back to Hooper & Mackinnon (1995), who recommended self-rated well-being as a practical marker of overtraining and recovery. Its best-known form, the “Hooper index” (sleep quality, fatigue, stress and muscle soreness), remains in everyday use three decades later (Nobari et al., 2021). The enduring appeal is obvious: the measures are cheap, fast, non-invasive and can be collected daily from an entire squad, unlike blood markers or laboratory testing.
 
 Yet a check-in is only as good as the science behind it and the discipline of its implementation. The sections that follow set out what the research actually demonstrates about the validity and sensitivity of these tools, their relationship to injury and illness risk, the human factors that make or break a monitoring programme, and how practitioners can apply the evidence in the field.`,
       },
       {
         heading: `2. Why subjective measures earn their place`,
-        body: `The most important single piece of evidence for wellness check-ins comes from the systematic review by Saw, Main and Gastin (2016), pointedly subtitled “subjective self-reported measures trump commonly used objective measures.” Synthesising more than fifty studies, the authors found that subjective wellbeing generally responded to acute and chronic training load with greater sensitivity and consistency than many objective markers such as resting heart rate variability, hormonal panels or countermovement-jump performance. Crucially, subjective ratings tended to move in the expected direction — worsening with acute increases in load and intensified training, and improving with reduced load such as during a taper.
+        body: `The most important single piece of evidence for wellness check-ins comes from the systematic review by Saw, Main & Gastin (2016), pointedly subtitled “subjective self-reported measures trump commonly used objective measures.” Synthesising more than fifty studies, the authors found that subjective wellbeing generally responded to acute and chronic training load with greater sensitivity and consistency than many objective markers such as resting heart rate variability, hormonal panels or countermovement-jump performance. Crucially, subjective ratings tended to move in the expected direction — worsening with acute increases in load and intensified training, and improving with reduced load such as during a taper.
 
 This finding reframed self-report from a “soft” supplement to hard physiology into a primary monitoring channel in its own right. It does not mean objective measures are worthless; rather, it means a well-designed perceptual questionnaire captures the integrated cost of training — physical, psychological and lifestyle-related — in a way that any single biomarker struggles to match (Saw, Main & Gastin, 2016).
 
-A second systematic review by Jeffries and colleagues (2020) narrowed the focus to team sports and to the very short, single-item scales that clubs actually use in practice — a one-line rating of fatigue, sleep, soreness, stress or mood. They confirmed that these minimalist measures do relate to training load, though the strength and even the direction of the relationship vary by item, sport and context. Fatigue and perceived soreness tended to be the most responsive to load. The practical message is encouraging for time-pressed staff: brevity does not automatically destroy signal, but item selection matters and results should be interpreted at the individual level rather than assumed to be uniform across a squad (Jeffries et al., 2020).`,
+A second systematic review by Duignan and colleagues (2020) narrowed the focus to team sports and to the very short, single-item scales that clubs actually use in practice — a one-line rating of fatigue, sleep, soreness, stress or mood. Across 21 studies, the links between these items and training load ranged from none to very large, but were mostly trivial to moderate in the largest studies. Muscle soreness, fatigue, sleep quality, stress and mood were the items used most often. The practical message: short scales can carry signal, but item selection matters, their measurement properties are still poorly established, and results should be interpreted at the individual level rather than assumed to be uniform across a squad (Duignan et al., 2020).`,
       },
       {
         heading: `3. Wellness, injury and illness risk`,
-        body: `If check-ins only reflected how tired athletes felt, their value would be limited. The stronger justification is that perceptual wellness carries information about downstream risk. Brink and colleagues (2010) followed elite youth soccer players and showed that monitoring stress and recovery yielded new insight into the build-up toward injuries and illnesses, supporting the idea that psychophysiological state is an antecedent of breakdown rather than merely a by-product of it.
+        body: `If check-ins only reflected how tired athletes felt, their value would be limited. The stronger justification is that perceptual wellness carries information about downstream risk. Brink and colleagues (2010) followed elite youth soccer players over two seasons: physical stress (session-RPE load) was related to both injuries and illnesses, while psychosocial stress and recovery (questionnaire) were related to illness. That supports the idea that a player's state can come before a breakdown, not only after it.
 
-More recently, Lathlean, Newstead and Gastin (2023) demonstrated in elite junior Australian football players that athletes reporting impaired wellness were at increased injury risk specifically when training loads were high. This interaction — wellness moderating the load–injury relationship — is important for practice: the same heavy session may be tolerated by a well-recovered athlete and represent a hazard for a poorly recovered one. A check-in therefore becomes a tool for individualising load, flagging which athletes need modification on a given day rather than applying a blanket rule to the group (Lathlean, Newstead & Gastin, 2023).
+More recently, Lathlean, Newstead & Gastin (2023) found in elite junior Australian football players that athletes reporting impaired wellness were at increased injury risk specifically when training loads were high. This interaction — wellness moderating the load–injury relationship — is important for practice: the same heavy session may be tolerated by a well-recovered athlete and represent a hazard for a poorly recovered one. A check-in therefore becomes a tool for individualising load, flagging which athletes need modification on a given day rather than applying a blanket rule to the group (Lathlean, Newstead & Gastin, 2023).
 
-Work in football specifically reinforces the link between accumulated load and perceived wellbeing. Clemente et al. (2021) tracked young soccer players across a season and reported associations between training-load measures and wellness scores, with the Hooper-type items fluctuating in line with the demands of the training week. Similar patterns have been observed across congested fixture periods and in youth national-team environments, where wellness and psychological variables shift with the intensity and density of competition.`,
+Work in football specifically reinforces the link between accumulated load and perceived wellbeing. Nobari et al. (2021) tracked young elite soccer players week by week across a season and found moderate to very large correlations between weekly training load and wellness scores — muscle soreness, fatigue, stress and the Hooper index. Similar patterns have been observed across congested fixture periods and in youth national-team environments, where wellness and psychological variables shift with the intensity and density of competition.`,
       },
       {
         heading: `4. The human factors that make or break a system`,
-        body: `A recurring lesson in the literature is that the psychometrics of the questionnaire matter less than the way it is embedded in daily practice. In their qualitative study of implementation, Saw, Main and Gastin (2015) identified the socio-environmental factors that determine whether a self-report system actually works: athlete buy-in, the perceived relevance and confidentiality of the data, the simplicity and speed of completion, and — above all — whether athletes see staff act on what they report.
+        body: `A recurring lesson in the literature is that the psychometrics of the questionnaire matter less than the way it is embedded in daily practice. In their qualitative interview study of implementation, Saw, Main & Gastin (2015) identified two groups of factors that determine whether a self-report system actually works: the measure itself (how accessible it is and when it is completed) and the social environment around it (buy-in from athletes, coaches and staff, and reinforcement — athletes seeing that their answers matter). Fear of punishment and uncertainty about who could see the data led athletes to hold back the truth.
 
-Several practical failure modes follow directly from this. Long or repetitive questionnaires erode compliance. When athletes suspect their answers will be used punitively — for example to justify dropping them — they may “game” their responses toward socially desirable scores, quietly destroying the data’s validity. And if a player reports poor sleep or high soreness day after day with no visible adjustment from the coaching staff, the exercise comes to feel pointless and completion rates collapse. Saw and colleagues (2015) frame the athlete monitoring system as a two-way communication tool, not a surveillance mechanism; the athlete provides honest data, and in return the staff demonstrably use it to support the athlete.`,
+Several practical failure modes follow directly from this. Long or repetitive questionnaires erode compliance. When athletes suspect their answers will be used punitively — for example to justify dropping them — they may “game” their responses toward socially desirable scores, quietly destroying the data’s validity. And if a player reports poor sleep or high soreness day after day with no visible adjustment from the coaching staff, the exercise comes to feel pointless and completion rates collapse. In the interviews by Saw and colleagues (2015), staff named education and feedback as better routes to buy-in than pressure. The practical reading is a two-way exchange rather than surveillance: the athlete provides honest data, and the staff visibly use it to support the athlete.`,
       },
       {
         heading: `5. From data to decisions`,
-        body: `Collecting scores is not the same as using them. Because perceptual measures are noisy and highly individual, most practitioners interpret change relative to each athlete’s own baseline rather than against a fixed group threshold. A common approach is to establish a rolling personal average and to flag meaningful departures from it — for instance a drop in a wellness Z-score beyond a set band — so that attention is directed to the athletes whose state has genuinely shifted (Jeffries et al., 2020; Saw, Main & Gastin, 2016).
+        body: `Collecting scores is not the same as using them. Because perceptual measures are noisy and highly individual, most practitioners interpret change relative to each athlete’s own baseline rather than against a fixed group threshold. A common approach is to establish a rolling personal average and to flag meaningful departures from it — for instance a drop in a wellness Z-score beyond a set band — so that attention is directed to the athletes whose state has genuinely shifted.
 
 Wellness data are most powerful when read alongside training load rather than in isolation. The interaction reported by Lathlean and colleagues (2023) implies that the actionable question is not simply “is this athlete tired?” but “is this athlete reporting impaired wellness at a time when load is also high?” Pairing a daily check-in with a session-RPE load measure gives staff exactly this two-dimensional picture, allowing individualised decisions about whether to progress, hold or reduce a given athlete’s load on a given day.`,
       },
@@ -633,7 +635,7 @@ Wellness data are most powerful when read alongside training load rather than in
         heading: `7. Practical recommendations for practitioners`,
         body: `Drawing the threads together, the research supports a consistent set of practical principles for anyone running wellness check-ins with a squad:
 
-Keep it short. A handful of well-chosen single items (fatigue, sleep quality, muscle soreness, stress and mood) completed in under a minute preserves compliance while retaining signal (Jeffries et al., 2020).
+Keep it short. A handful of well-chosen single items (fatigue, sleep quality, muscle soreness, stress and mood) completed in under a minute preserves compliance while retaining signal — a well-designed measure should get quality data with minimal burden on athletes and staff (Saw, Main & Gastin, 2015).
 
 Standardise timing. Collect at the same point each day — typically first thing in the morning or on arrival — so scores are comparable day to day.
 
@@ -641,31 +643,33 @@ Interpret against the individual. Use each athlete’s own rolling baseline and 
 
 Read wellness with load, not instead of it. Pair the check-in with a training-load measure; the combination of impaired wellness and high load is the key risk signal (Lathlean, Newstead & Gastin, 2023).
 
-Close the loop. Show athletes that their responses lead to action. Visible, supportive use of the data is the single strongest driver of honest, sustained participation (Saw, Main & Gastin, 2015).
+Close the loop. Show athletes that their responses lead to action. Visible, supportive use of the data — rather than pressure or punishment — supports honest, sustained participation (Saw, Main & Gastin, 2015).
 
 Protect trust. Keep data confidential and avoid using it punitively, or reporting quality will quietly degrade (Saw, Main & Gastin, 2015).`,
       },
       {
         heading: `8. Conclusion`,
-        body: `Wellness check-ins have earned their place in athlete monitoring not because they are sophisticated but because they are sensitive, cheap and actionable. The research shows that athletes’ own perceptions of fatigue, sleep, soreness and stress respond to training load at least as informatively as many costlier objective measures (Saw, Main & Gastin, 2016), that these perceptions carry information about injury and illness risk (Brink et al., 2010; Lathlean, Newstead & Gastin, 2023), and that even very brief scales are useful when interpreted intelligently (Jeffries et al., 2020). Their value, however, is ultimately unlocked not by the questionnaire itself but by the human system around it — brief to complete, individually interpreted, read alongside load, and, above all, visibly acted upon (Saw, Main & Gastin, 2015). Used this way, a one-minute daily check-in becomes one of the highest-return tools available to a coaching and performance staff.`,
+        body: `Wellness check-ins have earned their place in athlete monitoring not because they are sophisticated but because they are sensitive, cheap and actionable. The research shows that athletes’ own perceptions of fatigue, sleep, soreness and stress respond to training load at least as informatively as many costlier objective measures (Saw, Main & Gastin, 2016), that these perceptions carry information about injury and illness risk (Brink et al., 2010; Lathlean, Newstead & Gastin, 2023), and that even very brief scales relate to training load, though mostly modestly (Duignan et al., 2020). Their value, however, is ultimately unlocked not by the questionnaire itself but by the human system around it — brief to complete, individually interpreted, read alongside load, and, above all, visibly acted upon (Saw, Main & Gastin, 2015). Used this way, a one-minute daily check-in becomes one of the highest-return tools available to a coaching and performance staff.`,
       },
       {
         heading: `References`,
         body: `Brink, M. S., Visscher, C., Arends, S., Zwerver, J., Post, W. J., & Lemmink, K. A. P. M. (2010). Monitoring stress and recovery: New insights for the prevention of injuries and illnesses in elite youth soccer players. British Journal of Sports Medicine, 44(11), 809–815. https://doi.org/10.1136/bjsm.2009.069476
 
-Clemente, F. M., Silva, R., Ramirez-Campillo, R., Afonso, J., Mendes, B., & Chen, Y.-S. (2021). Association between training load and well-being measures in young soccer players during a season. International Journal of Environmental Research and Public Health, 18(9), 4451. https://doi.org/10.3390/ijerph18094451
+Nobari, H., Alves, A. R., Haghighi, H., Clemente, F. M., Carlos-Vivas, J., Pérez-Gómez, J., & Ardigò, L. P. (2021). Association between training load and well-being measures in young soccer players during a season. International Journal of Environmental Research and Public Health, 18(9), 4451. https://doi.org/10.3390/ijerph18094451
 
 Hooper, S. L., & Mackinnon, L. T. (1995). Monitoring overtraining in athletes: Recommendations. Sports Medicine, 20(5), 321–327. https://doi.org/10.2165/00007256-199520050-00003
 
-Jeffries, A. C., Wallace, L., Coutts, A. J., McLaren, S. J., McCall, A., & Impellizzeri, F. M. (2020). Single-item self-report measures of team-sport athlete wellbeing and their relationship with training load: A systematic review. Journal of Athletic Training, 55(9), 1010–1019. https://doi.org/10.4085/1062-6050-542.19
+Duignan, C., Doherty, C., Caulfield, B., & Blake, C. (2020). Single-item self-report measures of team-sport athlete wellbeing and their relationship with training load: A systematic review. Journal of Athletic Training, 55(9), 944–953. https://doi.org/10.4085/1062-6050-0528.19
 
-Lathlean, T. J. H., Newstead, S. V., & Gastin, P. B. (2023). Elite junior Australian football players with impaired wellness are at increased injury risk at high loads. Sports Health, 15(3), 361–369. https://doi.org/10.1177/19417381221087245
+Jeffries, A. C., Wallace, L., Coutts, A. J., McLaren, S. J., McCall, A., & Impellizzeri, F. M. (2020). Athlete-reported outcome measures for monitoring training responses: A systematic review of risk of bias and measurement property quality according to the COSMIN guidelines. International Journal of Sports Physiology and Performance, 15(9), 1203–1215. https://doi.org/10.1123/ijspp.2020-0386
+
+Lathlean, T. J. H., Newstead, S. V., & Gastin, P. B. (2023). Elite junior Australian football players with impaired wellness are at increased injury risk at high loads. Sports Health, 15(2), 218–226. https://doi.org/10.1177/19417381221087245
 
 Saw, A. E., Main, L. C., & Gastin, P. B. (2015). Monitoring athletes through self-report: Factors influencing implementation. Journal of Sports Science & Medicine, 14(1), 137–146.
 
 Saw, A. E., Main, L. C., & Gastin, P. B. (2016). Monitoring the athlete training response: Subjective self-reported measures trump commonly used objective measures: A systematic review. British Journal of Sports Medicine, 50(5), 281–291. https://doi.org/10.1136/bjsports-2015-094758
 
-Note on citations: page ranges for the Lathlean et al. (2023) article reflect the print issue pagination; all other bibliographic details were verified against publisher and PubMed records. References are formatted in APA 7th edition style.`,
+Note on citations: bibliographic details were checked against PubMed records. References are formatted in APA 7th edition style.`,
       },
     ],
   },
@@ -766,11 +770,11 @@ Note: References are formatted in APA 7th edition style; details verified agains
         heading: "Hva\u00f0 er ACWR?",
         body: `ACWR er hlutfall milli n\u00fdlegs \u00e1lags (acute, s\u00ed\u00f0ustu 7 dagar) og langt\u00edma\u00e1lags (chronic, s\u00ed\u00f0ustu 28 dagar). Ef hlutfalli\u00f0 er 1.0 \u00fe\u00fd\u00f0ir \u00fea\u00f0 a\u00f0 leikma\u00f0ur er a\u00f0 \u00fej\u00e1lfast \u00e1 sama stigi og hann hefur veri\u00f0 undanfarnar vikur.
 
-Tim Gabbett og samstarfsf\u00f3lk vins\u00e6ldu bili\u00f0 0.8\u20131.3 sem \u201evenjulegt" \u00e1lagsbreytinga-bil. En ACWR er ekki sta\u00f0fest mei\u00f0sla-sp\u00e1 \u2014 n\u00fdrri ranns\u00f3knir (Impellizzeri o.fl. 2020) s\u00fdna a\u00f0 \u00fea\u00f0 er t\u00f6lfr\u00e6\u00f0ilega galla\u00f0 og sp\u00e1ir ekki \u00e1rei\u00f0anlega fyrir um mei\u00f0sli. R\u00e9ttari lesning: ACWR m\u00e6lir ST\u00c6R\u00d0 \u00e1lagsst\u00f6kks. \u00dea\u00f0 sem raunverulega skiptir m\u00e1li fyrir mei\u00f0sli er hvort st\u00f6kki\u00f0 \u00fdtir \u00ed\u00fer\u00f3ttamanninum inn \u00e1 \u00f3\u00feekkt \u00e1lag sem l\u00edkaminn er ekki undirb\u00fainn fyrir (Gabbett & Hulin 2016 \u2014 \u201e\u00fea\u00f0 er ekki \u00e1lagi\u00f0 sj\u00e1lft heldur hvernig \u00fe\u00fa kemst \u00feanga\u00f0").`,
+Tim Gabbett og samstarfsf\u00f3lk vins\u00e6ldu bili\u00f0 0.8\u20131.3 sem \u201evenjulegt" \u00e1lagsbreytinga-bil. En ACWR er ekki sta\u00f0fest mei\u00f0sla-sp\u00e1 \u2014 n\u00fdrri ranns\u00f3knir (Impellizzeri o.fl. 2020) s\u00fdna a\u00f0 \u00fea\u00f0 er t\u00f6lfr\u00e6\u00f0ilega galla\u00f0 og sp\u00e1ir ekki \u00e1rei\u00f0anlega fyrir um mei\u00f0sli. R\u00e9ttari lesning: ACWR m\u00e6lir ST\u00c6R\u00d0 \u00e1lagsst\u00f6kks. \u00dea\u00f0 sem raunverulega skiptir m\u00e1li fyrir mei\u00f0sli er hvort st\u00f6kki\u00f0 \u00fdtir \u00ed\u00fer\u00f3ttamanninum inn \u00e1 \u00f3\u00feekkt \u00e1lag sem l\u00edkaminn er ekki undirb\u00fainn fyrir (Gabbett o.fl. 2016b \u2014 miki\u00f0 \u00e1lag eitt og s\u00e9r veldur ekki mei\u00f0slum; lei\u00f0in \u00feanga\u00f0 skiptir m\u00e1li).`,
       },
       {
         heading: "Hvers vegna load spikes eru h\u00e6ttulegir",
-        body: `Algengasta mei\u00f0slaors\u00f6kin \u00ed h\u00f3p\u00ed\u00fer\u00f3ttum er skyndileg aukning \u00e1 \u00fej\u00e1lfunar\u00e1lagi \u2014 svokalla\u00f0ir load spikes. D\u00e6mi: leikma\u00f0ur kemur af mei\u00f0slum e\u00f0a fr\u00edi og fer beint \u00ed fullrar \u00e6fingar. ACWR hans fer fr\u00e1 0.5 upp \u00ed 1.8 \u00e1 einni viku.
+        body: `Tali\u00f0 er a\u00f0 hr\u00f6\u00f0 og mikil aukning \u00e1 \u00e6finga\u00e1lagi \u2014 svokalla\u00f0ir load spikes \u2014 sk\u00fdri st\u00f3ran hluta snertilausra mj\u00fakvefjamei\u00f0sla \u00ed h\u00f3p\u00ed\u00fer\u00f3ttum (Gabbett 2016). D\u00e6mi: leikma\u00f0ur kemur af mei\u00f0slum e\u00f0a fr\u00edi og fer beint \u00ed fullrar \u00e6fingar. ACWR hans fer fr\u00e1 0.5 upp \u00ed 1.8 \u00e1 einni viku.
 
 \u00deetta \u00e1 ekki bara vi\u00f0 um GPS-\u00e1lag heldur l\u00edka RPE (perceived exertion). MicroPulse reiknar ACWR \u00fat fr\u00e1 b\u00e6\u00f0i GPS acute/chronic load og RPE-g\u00f6gnum til a\u00f0 gefa heildarbynd.`,
       },
@@ -788,6 +792,8 @@ Kerfi\u00f0 flaggar l\u00edka sj\u00e1lfvirkt leikmenn sem eru \u00ed danger zon
         heading: "Heimildir",
         body: `Gabbett, T. J. (2016). The training\u2013injury prevention paradox: Should athletes be training smarter and harder? British Journal of Sports Medicine, 50(5), 273\u2013280. https://doi.org/10.1136/bjsports-2015-095788
 
+Gabbett, T. J., Hulin, B. T., Blanch, P., & Whiteley, R. (2016b). High training workloads alone do not cause sports injuries: How you get there is the real issue. British Journal of Sports Medicine, 50(8), 444–445. https://doi.org/10.1136/bjsports-2015-095567
+
 Hulin, B. T., Gabbett, T. J., Lawson, D. W., Caputi, P., & Sampson, J. A. (2016). The acute:chronic workload ratio predicts injury: High chronic workload may decrease injury risk in elite rugby league players. British Journal of Sports Medicine, 50(4), 231\u2013236. https://doi.org/10.1136/bjsports-2015-094817
 
 Impellizzeri, F. M., Tenan, M. S., Kempton, T., Novak, A., & Coutts, A. J. (2020). Acute:chronic workload ratio: Conceptual issues and fundamental pitfalls. International Journal of Sports Physiology and Performance, 15(6), 907\u2013913. https://doi.org/10.1123/ijspp.2019-0864
@@ -800,11 +806,11 @@ Athugasemd: Heimildir eru settar fram \u00ed APA 7. \u00fatg\u00e1fu st\u00edl; 
         heading: "What is ACWR?",
         body: `ACWR is the ratio between recent workload (acute, last 7 days) and long-term workload (chronic, last 28 days). A ratio of 1.0 means the player is training at the same level they have been over recent weeks.
 
-Tim Gabbett and colleagues popularised the 0.8\u20131.3 band as a "familiar" load-change range. But ACWR is not a validated injury predictor \u2014 later work (Impellizzeri et al. 2020) shows it is statistically flawed and does not reliably forecast injury. The honest reading: ACWR measures the SIZE of a load spike. What actually matters for injury is whether that spike pushes the athlete into unfamiliar load their body isn't prepared for (Gabbett & Hulin 2016 \u2014 "it's not the workload itself, but how you get there").`,
+Tim Gabbett and colleagues popularised the 0.8\u20131.3 band as a "familiar" load-change range. But ACWR is not a validated injury predictor \u2014 later work (Impellizzeri et al. 2020) shows it is statistically flawed and does not reliably forecast injury. The honest reading: ACWR measures the SIZE of a load spike. What actually matters for injury is whether that spike pushes the athlete into unfamiliar load their body isn't prepared for (Gabbett et al. 2016b \u2014 high workloads alone do not cause injuries; how you get there is the real issue).`,
       },
       {
         heading: "Why spikes are dangerous",
-        body: `The most common injury cause in team sports is a sudden increase in training load \u2014 so-called load spikes. Example: a player returns from injury or break and goes straight into full training. Their ACWR goes from 0.5 to 1.8 in one week.
+        body: `Rapid, large increases in training load \u2014 so-called load spikes \u2014 are thought to explain a large share of non-contact soft-tissue injuries in team sports (Gabbett 2016). Example: a player returns from injury or break and goes straight into full training. Their ACWR goes from 0.5 to 1.8 in one week.
 
 This applies not only to GPS load but also RPE (perceived exertion). MicroPulse calculates ACWR from both GPS acute/chronic load and RPE data to provide a complete picture.`,
       },
@@ -821,6 +827,8 @@ The system also automatically flags players in the danger zone and suggests redu
       {
         heading: "References",
         body: `Gabbett, T. J. (2016). The training–injury prevention paradox: Should athletes be training smarter and harder? British Journal of Sports Medicine, 50(5), 273–280. https://doi.org/10.1136/bjsports-2015-095788
+
+Gabbett, T. J., Hulin, B. T., Blanch, P., & Whiteley, R. (2016b). High training workloads alone do not cause sports injuries: How you get there is the real issue. British Journal of Sports Medicine, 50(8), 444–445. https://doi.org/10.1136/bjsports-2015-095567
 
 Hulin, B. T., Gabbett, T. J., Lawson, D. W., Caputi, P., & Sampson, J. A. (2016). The acute:chronic workload ratio predicts injury: High chronic workload may decrease injury risk in elite rugby league players. British Journal of Sports Medicine, 50(4), 231–236. https://doi.org/10.1136/bjsports-2015-094817
 
@@ -859,7 +867,7 @@ Ef \u00fe\u00fa ert me\u00f0 3v3 \u00e1 mj\u00f6g litlum velli (< 50 m\u00b2 per
       },
       {
         heading: "Flatarm\u00e1l per leikmann \u2014 gullna reglan",
-        body: `Systematic review fr\u00e1 Sarmento et al. (2018) s\u00fdndi a\u00f0 gullna sv\u00e6\u00f0i\u00f0 fyrir h\u00e1marks \u00e1lag er 75\u2013150 m\u00b2 per leikmann. Undir 75 m\u00b2 minnkar hlaup\u00e1lag (of \u00fe\u00e9tt), yfir 200 m\u00b2 minnkar intensity vegna \u00feess a\u00f0 a\u00f0ger\u00f0ir ver\u00f0a of dreifar.
+        body: `Kerfisbundin yfirfer\u00f0 Sarmento o.fl. (2018) s\u00fdndi a\u00f0 vallarst\u00e6r\u00f0 og leikmannafj\u00f6ldi eru \u00fe\u00e6r breytur sem mest hafa veri\u00f0 rannsaka\u00f0ar til a\u00f0 st\u00fdra \u00e1lagi \u00ed SSG. Gullna sv\u00e6\u00f0i\u00f0 75\u2013150 m\u00b2 per leikmann er vinnuregla MicroPulse, ekki tala \u00far yfirfer\u00f0inni: undir 75 m\u00b2 minnkar hlaup\u00e1lag (of \u00fe\u00e9tt), yfir 200 m\u00b2 minnkar intensity vegna \u00feess a\u00f0 a\u00f0ger\u00f0ir ver\u00f0a of dreif\u00f0ar.
 
 MicroPulse drill-v\u00e9lsmi\u00f0ja reiknar \u00feetta sj\u00e1lfvirkt: \u00fe\u00fa sl\u00e6r inn leikmannafjolda og vellirst\u00e6r\u00f0 og kerfi\u00f0 gefur estimated %HRmax, hra\u00f0apr\u00f3f\u00edl og \u00e1lagsflokk.`,
       },
@@ -889,7 +897,7 @@ If you run 3v3 on a very small pitch (< 50 m\u00b2 per player), the game becomes
       },
       {
         heading: "Area per player \u2014 the golden rule",
-        body: `A systematic review by Sarmento et al. (2018) showed the sweet spot for maximum load is 75\u2013150 m\u00b2 per player. Below 75 m\u00b2, running load decreases (too congested). Above 200 m\u00b2, intensity drops because actions become too dispersed.
+        body: `A systematic review by Sarmento et al. (2018) found pitch area and player number to be the most-studied levers for changing the load of a small-sided game. The 75\u2013150 m\u00b2 per player sweet spot is MicroPulse's working rule, not a figure from that review: below 75 m\u00b2, running load decreases (too congested); above 200 m\u00b2, intensity drops because actions become too dispersed.
 
 The MicroPulse drill engine calculates this automatically: you enter player count and pitch size and the system gives you estimated %HRmax, speed profile, and load category.`,
       },
@@ -1447,11 +1455,11 @@ Samkeppnisforskotið er ekki að þykjast vita meiri taugavísindi en við gerum
       },
       {
         heading: `Valinn vísindalegur grunnur`,
-        body: `Thomas o.fl. (2017), Frontiers in Physiology — Etiology and Recovery of Neuromuscular Fatigue following Competitive Soccer Match-Play. Leikur dró úr hámarks sjálfráðum krafti, sjálfráðri virkjun og samdráttargetu vöðva; sjálfráð virkjun var áfram skert og sumar mælingar tóku allt að ~48–72 klst.
+        body: `Brownstein o.fl. (2017), Frontiers in Physiology — Etiology and Recovery of Neuromuscular Fatigue following Competitive Soccer Match-Play. Leikur dró úr hámarks sjálfráðum krafti, sjálfráðri virkjun og samdráttargetu vöðva; sjálfráð virkjun og samdráttargeta voru enn skertar eftir 24 klst, styrkurinn tók allt að 48 klst að jafna sig og þreytutilfinning var enn til staðar eftir 72 klst.
 
-Silva o.fl. (2018), Sports Medicine — Acute and Residual Soccer Match-Related Fatigue: A Systematic Review. Endurheimt taugavöðva-, líkamlegra, lífefnafræðilegra og skynrænna mælinga er fjölvíð og fylgir ólíkum tímalínum eftir leik.
+Silva o.fl. (2018), Sports Medicine — Acute and Residual Soccer Match-Related Fatigue: A Systematic Review and Meta-analysis. Endurheimt taugavöðva-, líkamlegra, lífefnafræðilegra og skynrænna mælinga er fjölvíð og fylgir ólíkum tímalínum eftir leik.
 
-Drayton o.fl. (2025), Strength & Conditioning Journal — The Time Course of Postmatch Physical Impairments in Professional Soccer: A Systematic Review. Líkamlegar skerðingar eftir leiki atvinnumanna geta varað í 24–72 klst, og ólíkir eiginleikar jafna sig á ólíkum hraða.
+Drayton o.fl. (2025), Journal of Strength and Conditioning Research — The Time Course of Postmatch Physical Impairments in Professional Soccer: A Systematic Review. Eftir 72 klst höfðu sprettur og stefnubreytingar jafnað sig, en stökkgeta og styrkur aftanlærisvöðva voru enn skert — ólíkir eiginleikar jafna sig á ólíkum hraða.
 
 Taylor, Amann, Duchateau, Meeusen & Rice (2016), Medicine & Science in Sports & Exercise — Neural Contributions to Muscle Fatigue: From the Brain to the Muscle and Back Again. Þreyta felur í sér breytingar á öllum lögum — heila, mænu, hreyfiúttaki, skyninntaki og sjálfvirkri virkni — og blandan fer eftir áreynslugerð.
 
@@ -1601,11 +1609,11 @@ The competitive advantage is not pretending we know more neuroscience than we do
       },
       {
         heading: `Selected scientific basis`,
-        body: `Thomas et al. (2017), Frontiers in Physiology — Etiology and Recovery of Neuromuscular Fatigue following Competitive Soccer Match-Play. Match play reduced maximal voluntary force, voluntary activation and muscle contractile function; voluntary activation stayed impaired and some measures needed up to ~48–72 hours.
+        body: `Brownstein et al. (2017), Frontiers in Physiology — Etiology and Recovery of Neuromuscular Fatigue following Competitive Soccer Match-Play. Match play reduced maximal voluntary force, voluntary activation and muscle contractile function; voluntary activation and contractile function were still down at 24 hours, strength took up to 48 hours to recover, and perceived fatigue was still present at 72 hours.
 
-Silva et al. (2018), Sports Medicine — Acute and Residual Soccer Match-Related Fatigue: A Systematic Review. Recovery of neuromuscular, physical, biochemical and perceptual measures is multidimensional and follows different timelines after a match.
+Silva et al. (2018), Sports Medicine — Acute and Residual Soccer Match-Related Fatigue: A Systematic Review and Meta-analysis. Recovery of neuromuscular, physical, biochemical and perceptual measures is multidimensional and follows different timelines after a match.
 
-Drayton et al. (2025), Strength & Conditioning Journal — The Time Course of Postmatch Physical Impairments in Professional Soccer: A Systematic Review. Physical impairments after professional matches can persist for 24–72 hours, with different qualities recovering at different rates.
+Drayton et al. (2025), Journal of Strength and Conditioning Research — The Time Course of Postmatch Physical Impairments in Professional Soccer: A Systematic Review. By 72 hours sprint and change of direction had recovered, but jump ability and hamstring strength were still impaired — different qualities recover at different rates.
 
 Taylor, Amann, Duchateau, Meeusen & Rice (2016), Medicine & Science in Sports & Exercise — Neural Contributions to Muscle Fatigue: From the Brain to the Muscle and Back Again. Fatigue involves changes at every level — brain, spinal cord, motor output, sensory input and autonomic function — with the mix varying by exercise type.
 
@@ -1657,27 +1665,27 @@ Til eru tvær ólíkar gerðir, og munurinn skiptir máli. Overcoming (líka kal
       },
       {
         heading: `Æfðu fleiri en eitt horn`,
-        body: `Þar sem ísómetrískur styrkur er hornssértækur skilur það eftir göt að æfa aðeins eina stöðu. Hópur Lum (2022) bar saman ísómetríska bekkpressu við eitt liðhorn á móti mörgum og fann að þjálfun við mörg liðhorn, með áherslu á lengri vöðvalengd, gaf betri heildarniðurstöðu, með meiri aukningu í hámarksafli. Í reynd þýðir þetta að velja tvær til þrjár stöður yfir hreyfinguna — fyrir hnébeygju-mynstur t.d. 90° og 120° hnébeygju — í stað þess að hamra á einni.`,
+        body: `Þar sem ísómetrískur styrkur er hornssértækur skilur það eftir göt að æfa aðeins eina stöðu. Hópur Lum (2022) bar saman ísómetríska bekkpressu við eitt liðhorn á móti mörgum hjá softball- og hafnaboltaleikmönnum og fann að báðar leiðir byggðu hámarksstyrk jafn vel, en mörg liðhorn höfðu miðlungs (ekki tölfræðilega marktækt) forskot í hámarksafli í ballistískri armbeygju. Í reynd þýðir þetta að velja tvær til þrjár stöður yfir hreyfinguna — fyrir hnébeygju-mynstur t.d. 90° og 120° hnébeygju — í stað þess að hamra á einni.`,
       },
       {
         heading: `Haltu því inni í prógramminu`,
-        body: `Ísómetríu er stundum skellt á sem stuttri „blokk" og svo sleppt. Rannsókn 2023 sem fylgdi floorball-íþróttafólki yfir 24 vikur bar saman samfellda innleiðingu ísómetrískra hnébeygja við tímabundna á/af nálgun. Samfellt-þjálfaði hópurinn bætti sprett, stökk og styrk meira en þeir sem hjóluðu aðferðina inn og út. Ísómetría hegðar sér síður eins og sjokk og meira eins og fast hráefni: litlir, stöðugir skammtar yfir tímabilið slá einstaka einbeitta útsetningu.`,
+        body: `Ísómetríu er stundum skellt á sem stuttri „blokk" og svo sleppt. Lum o.fl. (2023) fylgdu floorball-íþróttafólki yfir 24 vikur og báru saman samfellda innleiðingu ísómetrískra hnébeygja við tímabundna á/af nálgun. Báðir ísómetríu-hóparnir bættu spretttíma meira en viðmiðunarhópur sem gerði enga ísómetríu, en samfellda hópurinn stóð sig ekki betur en á/af hópurinn í neinni mælingu. Gögnin styðja því að hafa ísómetríu í prógramminu, en sýna ekki enn að samfelld notkun allt árið slái lotubundna notkun.`,
       },
       {
         heading: `Lág-þreytu kosturinn`,
-        body: `Hér verður ísómetría taktískt gagnleg fyrir leikjaþétt lið. Lum og Howatson (2025) létu styrktar-þjálfað íþróttafólk klára samsvarandi lotur af sömu þremur æfingum — bakhnébeygja, réttstöðulyfta (RDL), klofbeygja — gerðar annaðhvort ísómetrískt eða sem þung dýnamísk styrktarþjálfun, og mældu svo sprett, stökk og IMTP eftir 5 mínútur og 24 klst. Þunga dýnamíska lotan olli greinilega meiri lækkun í spretti og kraftútkomu, bæði strax og heilum degi síðar, meðan ísómetríska lotan skildi íþróttafólkið eftir ferskara og með hærri upplifaða endurheimt eftir 24 klst — þrátt fyrir að framleiða meiri heildar kraft-tíma impuls í vinnunni sjálfri. Með öðrum orðum: þú getur hlaðið íþróttamann marktækt án þess að borga fyrir það á leikdegi. Í þungri viku er ísómetrískt styrktaráreiti leið til að halda áfram að þjálfa gæðin en vernda ferskleika.`,
+        body: `Hér verður ísómetría taktískt gagnleg fyrir leikjaþétt lið. Lum & Howatson (2025) létu styrktar-þjálfað íþróttafólk klára samsvarandi lotur af sömu þremur æfingum — bakhnébeygja, réttstöðulyfta (RDL), klofbeygja — gerðar annaðhvort ísómetrískt eða sem þung dýnamísk styrktarþjálfun, og mældu svo sprett, stökk og IMTP eftir 5 mínútur og 24 klst. Þunga dýnamíska lotan olli greinilega meiri lækkun í spretti og kraftútkomu, bæði strax og heilum degi síðar, meðan ísómetríska lotan skildi íþróttafólkið eftir ferskara og með hærri upplifaða endurheimt eftir 24 klst — þrátt fyrir að framleiða meiri heildar kraft-tíma impuls í vinnunni sjálfri. Með öðrum orðum: þú getur hlaðið íþróttamann marktækt án þess að borga fyrir það á leikdegi. Í þungri viku er ísómetrískt styrktaráreiti leið til að halda áfram að þjálfa gæðin en vernda ferskleika.`,
       },
       {
         heading: `Örvun fyrir sprengivinnu`,
-        body: `Ísómetríu má líka nota bráðavirkt, mínútum fyrir frammistöðu, til að örva hana. Lum og félagar (2024) sýndu að lítill skammtur af hámarks ísómetrískum samdráttum jók power-clean útkomu um mínútu síðar, án þess að auka upplifaða áreynslu. Þetta er „post-activation performance enhancement" áhrifin, og það gerir stutt hámarks ísómetrískt tog — t.d. ísómetrískt mid-thigh pull — að ódýrri örvun á undan sprett-, stökk- eða aflþjálfun.`,
+        body: `Ísómetríu má líka nota bráðavirkt, mínútum fyrir frammistöðu, til að örva hana. Lum og félagar (2024) fundu að lítill skammtur af hámarks ísómetrískum samdráttum gaf lítinn til miðlungs ávinning í stangarhraða í power clean um mínútu síðar (meiri en minnsti munur sem skiptir máli, þótt munurinn milli aðstæðna væri ekki tölfræðilega marktækur), án þess að auka upplifaða áreynslu. Þetta er „post-activation performance enhancement" áhrifin, og það gerir stutt hámarks ísómetrískt tog — t.d. ísómetrískt mid-thigh pull — að ódýrri örvun á undan sprett-, stökk- eða aflþjálfun.`,
       },
       {
         heading: `Þú þarft varla búnað`,
-        body: `Ein sláandi nýleg niðurstaða er hversu lítinn búnað þarf. Í rannsókn 2026 gerðu kyrrsetu-fullorðnir hámarks ísómetrískan samsamdrátt hnébeygju- og réttivöðva — í raun að spenna vöðvana fast hvern gegn öðrum, ekkert ytra álag — þrisvar í viku í fjórar vikur. Þeir bættu sig verulega á ísómetrísku mid-thigh pull, timed up-and-go og chair-stand prófi. Áhrifsstærðirnar voru mjög stórar, en þetta var óþjálfaður hópur, svo tölurnar eru þak frekar en yfirfærslu-mat fyrir íþróttafólk. Punkturinn stendur: búnaðarlaus hámarks ísómetría getur byggt nothæfan styrk og getu — einmitt það sem lítið félag, útileikur eða snemma endurhæfing þarf.`,
+        body: `Ein sláandi nýleg niðurstaða er hversu lítinn búnað þarf. Í rannsókn Lum, Comfort & Oranchuk (2026) gerðu kyrrsetu-fullorðnir hámarks ísómetrískan samsamdrátt hnébeygju- og réttivöðva — í raun að spenna vöðvana fast hvern gegn öðrum, ekkert ytra álag — þrisvar í viku í fjórar vikur. Þeir bættu sig verulega á ísómetrísku mid-thigh pull, timed up-and-go og chair-stand prófi. Áhrifsstærðirnar voru mjög stórar, en þetta var óþjálfaður hópur, svo tölurnar eru þak frekar en yfirfærslu-mat fyrir íþróttafólk. Punkturinn stendur: búnaðarlaus hámarks ísómetría getur byggt nothæfan styrk og getu — einmitt það sem lítið félag, útileikur eða snemma endurhæfing þarf.`,
       },
       {
         heading: `Ýta á móti halda: passaðu aðferðina við markmiðið`,
-        body: `Loks eru gerðirnar tvær ekki víxlanlegar. Rannsókn 2026 (within-subject) bar saman að ýta (overcoming) á móti að halda (yielding) yfir sex vikur. Að ýta reyndist betra fyrir styrk; að halda reyndist betra fyrir formfræðilega aðlögun — vöðvaþykkt, sérstaklega í rectus femoris. Báðar juku vöðva. Valreglan er því einföld: gríptu til overcoming ísómetríu þegar markmiðið er hámarkskraftur, og yielding ísómetríu þegar markmiðið er vefur — vöðvavöxtur, sin, eða stýrða álagsþolið sem þú vilt í endurhæfingu.`,
+        body: `Loks eru gerðirnar tvær ekki víxlanlegar. Rannsókn Lum o.fl. (2026) (within-subject) bar saman að ýta (overcoming) á móti að halda (yielding) yfir sex vikur. Að ýta virtist betra fyrir styrk; að halda virtist betra fyrir formfræðilega aðlögun — vöðvaþykkt, sérstaklega í rectus femoris. Báðar juku vöðva. Valreglan er því einföld: gríptu til overcoming ísómetríu þegar markmiðið er hámarkskraftur, og yielding ísómetríu þegar markmiðið er vefur — vöðvavöxtur, sin, eða stýrða álagsþolið sem þú vilt í endurhæfingu.`,
       },
       {
         heading: `Sina-lagið`,
@@ -1711,7 +1719,7 @@ Framvinda. Þar sem útkoman er mælanleg, framþróaðu eftir ásettu átaki og
         heading: `Heimildir`,
         body: `Lum D, Barbosa TM, Joseph R, Balasekaran G. Effects of Two Isometric Strength Training Methods on Jump and Sprint Performances: A Randomized Controlled Trial. J Sci Sport Exerc 2021;3:115–124. doi:10.1007/s42978-020-00095-w
 
-Lum D, Soh SK, Teo CJH, Wong OQH, Lee MJC. Effects of Performing Isometric Bench Press Training at Single Versus Multiple Joint Positions on Strength and Power Performance. Int J Sports Physiol Perform 2022. doi:10.1123/ijspp.2021-0461
+Lum D, Soh SK, Teo CJH, Wong OQH, Lee MJC. Effects of Performing Isometric Bench Press Training at Single Versus Multiple Joint Positions on Strength and Power Performance. Int J Sports Physiol Perform 2022;17(7):1061–1069. doi:10.1123/ijspp.2021-0461
 
 Lum D, Joseph R, Ong KY, Tang JM, Suchomel TJ. Comparing the Effects of Long-Term vs. Periodic Inclusion of Isometric Strength Training on Strength and Dynamic Performances. J Strength Cond Res 2023;37(2):305–314. doi:10.1519/JSC.0000000000004276
 
@@ -1753,27 +1761,27 @@ There are two distinct kinds, and the distinction turns out to matter. Overcomin
       },
       {
         heading: `Train more than one angle`,
-        body: `Because isometric strength is angle-specific, training a single position leaves gaps. Lum's group (2022) compared isometric bench press at a single joint position versus multiple positions and found that training at multiple joint angles, biased toward longer muscle lengths, produced the better all-round result, with greater peak-power improvement. In practice this means picking two or three positions across a movement — for a squat pattern, something like 90° and 120° of knee flexion — rather than hammering one.`,
+        body: `Because isometric strength is angle-specific, training a single position leaves gaps. Lum's group (2022) compared isometric bench press at a single joint position versus multiple positions in softball and baseball athletes and found both built maximal strength equally well, with a moderate (not statistically significant) edge for multiple positions on ballistic push-up peak power. In practice this means picking two or three positions across a movement — for a squat pattern, something like 90° and 120° of knee flexion — rather than hammering one.`,
       },
       {
         heading: `Keep it in the programme`,
-        body: `Isometrics are sometimes bolted on as a short "block" and then dropped. A 2023 study following floorball athletes across 24 weeks compared continuous inclusion of isometric squats against a periodic on-off approach. The continuously-trained group improved sprint, jump and strength more than those who cycled the method in and out. Isometrics behave less like a shock and more like a standing ingredient: small, consistent doses across the season beat occasional concentrated exposure.`,
+        body: `Isometrics are sometimes bolted on as a short "block" and then dropped. Lum et al. (2023) followed floorball athletes across 24 weeks and compared continuous inclusion of isometric squats against a periodic on-off approach. Both isometric groups improved sprint times more than a control group that did no isometric work, but the continuous group did not beat the on-off group on any measure. So the evidence supports keeping isometrics in the programme; it does not yet show that year-round inclusion beats cycling them in blocks.`,
       },
       {
         heading: `The low-fatigue advantage`,
-        body: `This is where isometrics become tactically useful for a fixture-congested team. Lum and Howatson (2025) had resistance-trained athletes complete matched sessions of the same three exercises — back squat, Romanian deadlift, split squat — performed either as isometrics or as heavy dynamic resistance training, then measured sprint, jump and isometric mid-thigh pull at 5 minutes and 24 hours afterward. The heavy dynamic session caused a clearly larger drop in sprint performance and in force output, both immediately and a full day later, while the isometric session left athletes fresher and with higher perceived recovery at 24 hours — despite producing greater total force-time impulse during the work itself. In other words, you can load an athlete meaningfully without paying for it on match day. On a heavy week, an isometric strength stimulus is a way to keep training the quality while protecting freshness.`,
+        body: `This is where isometrics become tactically useful for a fixture-congested team. Lum & Howatson (2025) had resistance-trained athletes complete matched sessions of the same three exercises — back squat, Romanian deadlift, split squat — performed either as isometrics or as heavy dynamic resistance training, then measured sprint, jump and isometric mid-thigh pull at 5 minutes and 24 hours afterward. The heavy dynamic session caused a clearly larger drop in sprint performance and in force output, both immediately and a full day later, while the isometric session left athletes fresher and with higher perceived recovery at 24 hours — despite producing greater total force-time impulse during the work itself. In other words, you can load an athlete meaningfully without paying for it on match day. On a heavy week, an isometric strength stimulus is a way to keep training the quality while protecting freshness.`,
       },
       {
         heading: `Priming before explosive work`,
-        body: `Isometrics can also be used acutely, minutes before a performance, to potentiate it. Lum and colleagues (2024) showed that a small dose of maximal isometric contractions enhanced subsequent power-clean output about a minute later, without adding to perceived exertion. This is the "post-activation performance enhancement" effect, and it makes a brief maximal isometric pull — for example an isometric mid-thigh pull — a low-cost primer ahead of sprint, jump or power training.`,
+        body: `Isometrics can also be used acutely, minutes before a performance, to potentiate it. Lum and colleagues (2024) found that a small dose of maximal isometric contractions gave a small-to-moderate boost in power-clean bar speed about a minute later (larger than the smallest worthwhile change, though not statistically significant between conditions), without adding to perceived exertion. This is the "post-activation performance enhancement" effect, and it makes a brief maximal isometric pull — for example an isometric mid-thigh pull — a low-cost primer ahead of sprint, jump or power training.`,
       },
       {
         heading: `You barely need equipment`,
-        body: `One of the more striking recent findings is how little kit is required. In a 2026 trial, sedentary adults performed maximal isometric co-contraction of the knee flexors and extensors — essentially tensing the muscles hard against each other, no external load at all — three times a week for four weeks. They improved markedly on the isometric mid-thigh pull, a timed up-and-go, and a chair-stand test. The effect sizes were very large, but this was an untrained population, so the numbers are a ceiling rather than a transfer estimate for athletes. The point stands: an equipment-free maximal isometric can build usable strength and capacity, which is exactly what a small club, an away trip, or an early rehab stage needs.`,
+        body: `One of the more striking recent findings is how little kit is required. In a trial by Lum, Comfort & Oranchuk (2026), sedentary adults performed maximal isometric co-contraction of the knee flexors and extensors — essentially tensing the muscles hard against each other, no external load at all — three times a week for four weeks. They improved markedly on the isometric mid-thigh pull, a timed up-and-go, and a chair-stand test. The effect sizes were very large, but this was an untrained population, so the numbers are a ceiling rather than a transfer estimate for athletes. The point stands: an equipment-free maximal isometric can build usable strength and capacity, which is exactly what a small club, an away trip, or an early rehab stage needs.`,
       },
       {
         heading: `Push versus hold: match the method to the goal`,
-        body: `Finally, the two flavours of isometric are not interchangeable. A 2026 within-subject trial compared pushing (overcoming) against holding (yielding) training over six weeks. Pushing tended to be better for strength; holding tended to be better for morphological adaptation — muscle thickness, particularly of the rectus femoris. Both grew muscle. So the selection rule is simple: reach for overcoming isometrics when the target is maximal force, and yielding isometrics when the target is tissue — hypertrophy, tendon, or the controlled-load tolerance you want in rehab.`,
+        body: `Finally, the two flavours of isometric are not interchangeable. A within-subject trial by Lum et al. (2026) compared pushing (overcoming) against holding (yielding) training over six weeks. Pushing tended to be better for strength; holding tended to be better for morphological adaptation — muscle thickness, particularly of the rectus femoris. Both grew muscle. So the selection rule is simple: reach for overcoming isometrics when the target is maximal force, and yielding isometrics when the target is tissue — hypertrophy, tendon, or the controlled-load tolerance you want in rehab.`,
       },
       {
         heading: `The tendon layer`,
@@ -1807,7 +1815,7 @@ In MicroPulse: the isometric protocol library (\`/coach/isometric-protocols\`) a
         heading: `References`,
         body: `Lum D, Barbosa TM, Joseph R, Balasekaran G. Effects of Two Isometric Strength Training Methods on Jump and Sprint Performances: A Randomized Controlled Trial. J Sci Sport Exerc 2021;3:115–124. doi:10.1007/s42978-020-00095-w
 
-Lum D, Soh SK, Teo CJH, Wong OQH, Lee MJC. Effects of Performing Isometric Bench Press Training at Single Versus Multiple Joint Positions on Strength and Power Performance. Int J Sports Physiol Perform 2022. doi:10.1123/ijspp.2021-0461
+Lum D, Soh SK, Teo CJH, Wong OQH, Lee MJC. Effects of Performing Isometric Bench Press Training at Single Versus Multiple Joint Positions on Strength and Power Performance. Int J Sports Physiol Perform 2022;17(7):1061–1069. doi:10.1123/ijspp.2021-0461
 
 Lum D, Joseph R, Ong KY, Tang JM, Suchomel TJ. Comparing the Effects of Long-Term vs. Periodic Inclusion of Isometric Strength Training on Strength and Dynamic Performances. J Strength Cond Res 2023;37(2):305–314. doi:10.1519/JSC.0000000000004276
 

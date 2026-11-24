@@ -32,7 +32,7 @@ export const OTHER_CITATION_SOURCES = [
  * Lot A (2026-11-24): injury and return-to-play pages, rehab, movement screen, injury-risk rules.
  * Lot B (2026-11-24): daily verdict and signals, readiness, monitoring, methodology.
  * Lot C (2026-11-24): load, GPS, periodization, match demands, conditioning (file by file).
- * Lot D (2026-11-24): tutorials, PDF exports, player app, trainer/VBT, basketball, pricing (the blog follows on approval).
+ * Lot D (2026-11-24): tutorials, PDF exports, player app, trainer/VBT, basketball, pricing, and the blog (owner-approved).
  */
 export const APP_CITATION_SOURCES = [
   "src/app/coach/achilles-tendinopathy",
@@ -342,6 +342,7 @@ export const APP_CITATION_SOURCES = [
   "src/lib/micropulse/indoorLoad/basketball.ts",
   "src/lib/trainer/clientSummary.ts",
   "src/lib/trainer/loadIntelligence.ts",
+  "src/lib/blog/articles.ts",
 ] as const;
 
 const SHORT_RE =
@@ -362,6 +363,8 @@ const NOT_AUTHORS = new Set([
   "September", "Oct", "October", "Nov", "November", "Dec", "December", "EFL", "IJSC",
   // Dates and names in comments ("Fixed 2026-04-29", "On 2026-07-20", "Breiðablik 2026 data", "on Lite, Gabbett 2016").
   "Fixed", "On", "Breiðablik", "Breiðablik's", "Breiðablik’s", "Lite", "ML", "SHAP", "Maí", "MAÍ", "Excel",
+  // Blog wording: "Rannsókn 2023" (a study), "J Electromyogr Kinesiol 2020".
+  "Rannsókn", "rannsókn", "Kinesiol",
 ]);
 
 /**

@@ -238,6 +238,16 @@ describe("rule references", () => {
     expect(unresolvedReason("Kubatko et al. 2007")).toBeTruthy();
   });
 
+  it("lot D blog: the published articles cite the right papers", () => {
+    const blog = citationsUnder(["src/lib/blog/articles.ts"]);
+    // Wrong first author (Thomas 2017 = Brownstein 2017, Clemente 2021 = Nobari 2021) or the wrong Gabbett paper.
+    for (const gone of ["Thomas 2017", "Clemente 2021", "Gabbett & Hulin 2016"]) expect(blog).not.toContain(gone);
+    expect(findRefByShort("Nobari 2021")?.cite).toMatch(/Nobari H/);
+    expect(findRefByShort("Clemente 2019b")?.cite).toMatch(/Clemente FM/);
+    expect(findRefByShort("Duignan 2020")?.cite).toMatch(/Single-Item/);
+    expect(findRefByShort("Gabbett 2016b")?.cite).toMatch(/High training workloads alone/);
+  });
+
   it("reads JSX-escaped ampersands as one two-author citation", () => {
     expect(citationsIn("PEACE &amp; LOVE (Dubois &amp; Esculier 2020)")).toEqual(["Dubois & Esculier 2020"]);
   });
