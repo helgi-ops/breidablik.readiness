@@ -69,7 +69,7 @@ const CITATIONS: { label: string; source: string }[] = [
   { label: "Doherty et al. 2017 — Treatment & prevention of acute & recurrent ankle sprain (systematic review)", source: "Br J Sports Med" },
   { label: "Stiell et al. — Ottawa Ankle Rules (rule out fracture)", source: "JAMA / BMJ" },
   { label: "FAAM (Foot & Ankle Ability Measure) + CAIT (Cumberland Ankle Instability Tool)", source: "outcome measures" },
-  { label: "Baar 2019 / Shaw et al. 2017 — Load timing + collagen synthesis nutrition for tendon/ligament (adjunct)", source: "Sports Med / Am J Clin Nutr" },
+  { label: "Baar 2017 / Shaw et al. 2017 — Load timing + collagen synthesis nutrition for tendon/ligament (adjunct)", source: "Sports Med / Am J Clin Nutr" },
 ];
 
 type InjuryRow = { id: string; injury_type: string; severity: string; status: string; injury_date: string; notes: string | null };
@@ -272,7 +272,7 @@ export default function AnkleSprainPage() {
       </p>
       <p className="mt-1 text-xs text-slate-500">
         {isEN ? "Sources: " : "Heimildir: "}
-        PEACE &amp; LOVE (Dubois 2020) · Vuurberg 2018 guideline · Doherty 2017 · Ottawa Ankle Rules · FAAM / CAIT
+        PEACE &amp; LOVE (Dubois &amp; Esculier 2020) · Vuurberg 2018 guideline · Doherty 2017 · Ottawa Ankle Rules · FAAM / CAIT
       </p>
 
       {/* Medical disclaimer — Ottawa + Grade III out of scope */}
@@ -435,7 +435,7 @@ export default function AnkleSprainPage() {
             <StageHead isEN={isEN} title={isEN ? "Stage 1 — Protect & early load" : "Fasi 1 — Vernda & hlaða snemma"} tag={isEN ? "pain/swelling control + ROM" : "verkur/bólga + ROM"}
               goal={isEN ? "control pain and swelling, restore pain-free range and start loading early. Protect briefly (more for Grade II), then move — rest deconditions the ankle." : "stjórna verk og bólgu, endurheimta verkjalaust ferli og byrja hleðslu snemma. Verndaðu stutt (meira fyrir Grade II), hreyfðu svo — hvíld afþjálfar ökklann."} />
             <ExerciseTable rows={S1(grade)} isEN={isEN} />
-            <p className="text-xs text-slate-500">{isEN ? "Source: PEACE & LOVE (Dubois 2020); Vuurberg 2018 guideline." : "Heimild: PEACE & LOVE (Dubois 2020); Vuurberg 2018 leiðbeiningar."}</p>
+            <p className="text-xs text-slate-500">{isEN ? "Source: PEACE & LOVE (Dubois & Esculier 2020); Vuurberg 2018 guideline." : "Heimild: PEACE & LOVE (Dubois & Esculier 2020); Vuurberg 2018 leiðbeiningar."}</p>
             <PainGate isEN={isEN} reported={reported} provocationFull={PROVOCATION_FULL} provocationShort={PROVOCATION_SHORT} />
           </div>
         )}

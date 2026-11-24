@@ -55,7 +55,7 @@ export function ExerciseTable({ rows, isEN }: { rows: Row[]; isEN: boolean }) {
 //   1. Load timing: tendon collagen synthesis saturates after ~10 min of loading
 //      and needs ~6 h to reset — short, frequent bouts beat one long session.
 //   2. Targeted nutrition: hydrolysed collagen / gelatin + vitamin C ~60 min
-//      before loading roughly doubles load-induced collagen synthesis (Shaw 2017).
+//      before loading roughly doubled a blood marker of collagen synthesis (Shaw 2017: 15 g gelatin, 8 healthy men).
 // An ADJUNCT that supports the loading — never a substitute for the load itself.
 export function CollagenSupport({ isEN }: { isEN: boolean }) {
   return (
@@ -81,7 +81,7 @@ export function CollagenSupport({ isEN }: { isEN: boolean }) {
           </thead>
           <tbody>
             {[
-              { i: isEN ? "Hydrolysed collagen or gelatin + vitamin C" : "Hýdrólýserað kollagen eða gelatín + C-vítamín", d: isEN ? "~15 g + ~50 mg vit C, ~60 min before loading" : "~15 g + ~50 mg C-vít, ~60 mín fyrir álag", p: isEN ? "Roughly doubles load-induced collagen synthesis (Shaw 2017). Take before the loading bout so it's available." : "Um það bil tvöfaldar álags-drifna kollagen-nýmyndun (Shaw 2017). Taktu fyrir álag svo það sé til staðar." },
+              { i: isEN ? "Hydrolysed collagen or gelatin + vitamin C" : "Hýdrólýserað kollagen eða gelatín + C-vítamín", d: isEN ? "~15 g + ~50 mg vit C, ~60 min before loading" : "~15 g + ~50 mg C-vít, ~60 mín fyrir álag", p: isEN ? "Roughly doubled a blood marker of collagen synthesis in a small trial (Shaw 2017). Take before the loading bout so it's available." : "Um það bil tvöfaldaði blóðmerki um kollagen-nýmyndun í lítilli rannsókn (Shaw 2017). Taktu fyrir álag svo það sé til staðar." },
               { i: isEN ? "Short, frequent tendon-loading bouts" : "Stutt, tíð sina-álags-lotur", d: isEN ? "~5–10 min of loading · ≥ 6 h between bouts" : "~5–10 mín álag · ≥ 6 klst milli lota", p: isEN ? "Matches the refractory window — more total synthesis than one long session." : "Passar við refractory-gluggann — meiri heildar-nýmyndun en ein löng lota." },
               { i: isEN ? "Adequate protein" : "Nægt prótein", d: isEN ? "1.6–2.2 g/kg/day" : "1,6–2,2 g/kg/dag", p: isEN ? "Substrate for matrix + muscle repair around the tendon." : "Hráefni fyrir matrix + vöðva-viðgerð kringum sinina." },
             ].map((r, i) => (
@@ -96,8 +96,8 @@ export function CollagenSupport({ isEN }: { isEN: boolean }) {
       </div>
       <p className="mt-2 text-xs text-slate-400">
         {isEN
-          ? "Source: Baar 2019 (load, collagen synthesis & nutrition for tendon/ligament); Shaw et al. 2017 (gelatin + vitamin C). Adjunct evidence — the load is the primary stimulus."
-          : "Heimild: Baar 2019 (álag, kollagen-nýmyndun & næring fyrir sin/liðband); Shaw o.fl. 2017 (gelatín + C-vítamín). Stuðnings-gögn — álagið er aðal-áreitið."}
+          ? "Source: Baar 2017 (load timing, from engineered-ligament lab work); Baar 2019 (one-player case report: gelatin + heavy isometric loading); Shaw et al. 2017 (gelatin + vitamin C). Adjunct evidence — the load is the primary stimulus."
+          : "Heimild: Baar 2017 (tímasetning álags, úr tilraunum á ræktuðum liðböndum); Baar 2019 (tilfellalýsing eins leikmanns: gelatín + þungt ísómetrískt álag); Shaw o.fl. 2017 (gelatín + C-vítamín). Stuðnings-gögn — álagið er aðal-áreitið."}
       </p>
     </div>
   );

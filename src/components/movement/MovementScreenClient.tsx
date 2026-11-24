@@ -669,7 +669,7 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
       {/* Full published catalogue — reference, folded in (was a separate tab). */}
       <details className="rounded-xl border border-slate-200 bg-white p-3">
         <summary className="cursor-pointer text-sm font-semibold text-slate-900">{T("Full published catalogue (reference)", "Allur útgefni prófabankinn (til viðmiðunar)")}</summary>
-        <p className="mt-1 text-[11px] text-slate-500">{T("Every published movement-quality assessment (Wijekulasuriya 2025). The picker above lists the ones you can analyse or observe here; the rest are reference only.", "Öll birt hreyfigæða-möt (Wijekulasuriya 2025). Valmyndin að ofan sýnir þau sem þú getur greint eða skoðað hér; hin eru aðeins til viðmiðunar.")}</p>
+        <p className="mt-1 text-[11px] text-slate-500">{T("Movement-quality assessments found in a 2025 review of athletes (Wijekulasuriya 2025). The picker above lists the ones you can analyse or observe here; the rest are reference only.", "Hreyfigæða-möt sem fundust í yfirlitsrannsókn á íþróttafólki 2025 (Wijekulasuriya 2025). Valmyndin að ofan sýnir þau sem þú getur greint eða skoðað hér; hin eru aðeins til viðmiðunar.")}</p>
         <div className="mt-3"><TestCatalogueBrowser /></div>
       </details>
 

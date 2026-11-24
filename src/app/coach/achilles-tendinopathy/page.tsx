@@ -85,8 +85,8 @@ const CITATIONS: { label: string; source: string }[] = [
   { label: "Maffulli et al. — Achilles rupture management (operative vs conservative, percutaneous repair) + functional rehabilitation", source: "rupture-management body of work" },
   { label: "Adjuncts (ESWT / PRP / high-volume / sclerosing) — evidence mixed; clinician-decided, not core to loading rehab", source: "mixed evidence" },
   // ── Tendon-adaptation dosing + nutrition (Baar) — the Achilles is its own track ──
-  { label: "Baar 2017 / 2019 — tendon loading dose (short frequent bouts ~6 h apart) + collagen nutrition; Steffen/Baar 2023 — Achilles ≠ patellar transcriptionally (keep it its own track)", source: "Sports Med / IJSNEM / J Physiol" },
-  { label: "Shaw et al. 2017 — Vitamin C-enriched gelatin ~45 min before loading augments collagen synthesis", source: "Am J Clin Nutr" },
+  { label: "Baar 2017 / 2019 — tendon loading dose (short frequent bouts ~6 h apart) + collagen nutrition; Steffen 2023 — Achilles ≠ patellar transcriptionally (keep it its own track)", source: "Sports Med / IJSNEM / J Physiol" },
+  { label: "Shaw et al. 2017 — Vitamin C-enriched gelatin before loading raised a blood marker of collagen synthesis (8 healthy men; the paper used 1 h, ~45 min is MicroPulse's timing)", source: "Am J Clin Nutr" },
 ];
 
 // Active Achilles-tendinopathy flag (player_injuries — authoritative for RTP/RTT).

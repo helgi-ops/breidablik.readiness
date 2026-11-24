@@ -66,7 +66,7 @@ const CITATIONS: { label: string; source: string }[] = [
   { label: "Thorborg et al. — Adductor squeeze test + HAGOS (Copenhagen Hip & Groin Outcome Score)", source: "Br J Sports Med" },
   { label: "Tyler et al. — Adduction:abduction strength ratio and groin-injury risk", source: "Am J Sports Med" },
   { label: "Weir et al. — Doha agreement on terminology for groin pain in athletes", source: "Br J Sports Med 2015" },
-  { label: "Baar 2019 / Shaw et al. 2017 — Load timing + collagen synthesis nutrition (adjunct)", source: "Sports Med / Am J Clin Nutr" },
+  { label: "Baar 2017 / Shaw et al. 2017 — Load timing + collagen synthesis nutrition (adjunct)", source: "Sports Med / Am J Clin Nutr" },
 ];
 
 type InjuryRow = { id: string; injury_type: string; severity: string; status: string; injury_date: string; notes: string | null };

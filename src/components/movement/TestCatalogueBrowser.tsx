@@ -55,7 +55,7 @@ export default function TestCatalogueBrowser() {
       {/* Intro + the default battery */}
       <div className="rounded-xl border p-4" style={{ borderColor: `${BLUE}22`, background: `${BLUE}08` }}>
         <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: BLUE }}>{T("Standard movement screen", "Stöðluð hreyfiskimun")}</p>
-        <p className="mt-1 text-[12px] text-slate-700">{T(`A broad ${battery.length}-test battery spanning slow-bilateral → slow-unilateral → high-speed-bilateral → high-speed-unilateral — more informative than any single composite score (Wijekulasuriya 2025).`, `Breið ${battery.length}-prófa prófun sem spannar hægt-tvíhliða → hægt-einhliða → háhraði-tvíhliða → háhraði-einhliða — meira upplýsandi en nokkurt stakt samsett skor (Wijekulasuriya 2025).`)}</p>
+        <p className="mt-1 text-[12px] text-slate-700">{T(`A broad ${battery.length}-test battery spanning slow-bilateral → slow-unilateral → high-speed-bilateral → high-speed-unilateral — MicroPulse's choice to cover more than one composite score; the review found assessments vary widely (Wijekulasuriya 2025).`, `Breið ${battery.length}-prófa prófun sem spannar hægt-tvíhliða → hægt-einhliða → háhraði-tvíhliða → háhraði-einhliða — val MicroPulse að ná yfir meira en eitt samsett skor; yfirlitið sýndi að möt eru mjög ólík (Wijekulasuriya 2025).`)}</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {battery.map((x) => <span key={x.slug} className="rounded-lg border px-1.5 py-0.5 text-[11px] font-medium" style={{ borderColor: `${BLUE}55`, color: "#1f2b7a" }}>{L(x.name)}</span>)}
         </div>

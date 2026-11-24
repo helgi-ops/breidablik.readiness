@@ -59,10 +59,10 @@ export type InjuryRiskInput = {
   decelBurdenScore?: number;
   /** Residual Decel band — 3-day accumulated deceleration stress. */
   residualDecelBand?: "NORMAL" | "ELEVATED" | "CAUTION" | "HIGH";
-  /** Accel:decel ratio. <0.7 = eccentric-dominant (ACL / quadriceps / patellar tendon risk — peak quad activation 161% MVC during decel + hamstring −87% co-activation per McBurnie 2022). >1.3 = concentric-dominant (hamstring strain risk on sprint side). */
+  /** Accel:decel ratio. <0.7 = eccentric-dominant (MicroPulse's line; McBurnie 2022 reports braking quad activation up to 161% MVC with low hamstring activation (−87%), which may raise ACL load — patellar-tendon risk is not in the paper). >1.3 = concentric-dominant (MicroPulse's line; the hamstring-strain link is assumed). */
   accelDecelRatio?: number;
 
-  // ── HID% fatigue trend (Harper et al. 2019) ────────────────────────
+  // ── HID% fatigue trend (MicroPulse's rule; Harper et al. 2019 = 2nd-half accel/decel drop) ────────────────────────
 
   /**
    * Relative HID% decline vs 7-day average (0–1 scale).
@@ -72,7 +72,7 @@ export type InjuryRiskInput = {
   /** True when HID% fatigue conditions met (decline ≥20% + stable distance). */
   hidFatigueFlag?: boolean;
 
-  // ── Personal-baseline z-scores (Robertson 2017) ────────────────────
+  // ── Personal-baseline z-scores (MicroPulse's design; cf. Robertson 2017 on traffic-light systems) ────────────────────
   // When present, the rules engine prefers these over the global Likert
   // thresholds (sleepScore ≤ 2, sorenessScore ≤ 2). A player whose
   // personal sleep mean is 4.5 should trigger "POOR_RECOVERY_MARKERS"
@@ -124,15 +124,15 @@ export type InjuryRiskInput = {
   rhieBoutsZ?: number | null;
   /**
    * CMJ multi-day fatigue slope, personal z (NEGATIVE = declining jump
-   * height/power vs his norm). Read the SLOPE, not today's value
-   * (Neyroud 2016). ≤ -1.0σ = neuromuscular-fatigue contributor. Null
+   * height/power vs his norm). Reads the SLOPE (MicroPulse's choice),
+   * per player — group fatigue thresholds may not fit one player (Neyroud 2016). ≤ -1.0σ = neuromuscular-fatigue contributor. Null
    * until a CMJ baseline exists (vald_forcedecks_results).
    */
   cmjSlopeZ?: number | null;
   /**
    * CMJ recovery deficit (0–1): how far observed CMJ sits BELOW the
    * expected post-match recovery curve personalised by match HSR
-   * (Hader 2019 — HSR, not total distance, drives post-match fatigue).
+   * (Hader 2019 — HSR, not total distance, tracks post-match fatigue best, in the first 24 h).
    * ≥ 0.05 elevated, ≥ 0.10 high. Null until a CMJ recovery baseline
    * exists.
    */

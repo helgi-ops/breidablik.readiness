@@ -199,12 +199,12 @@ const INJ_I18N = {
   valdGroin: { EN: "Groin", IS: "Nár" },
   nordbordHeading: { EN: "VALD Nordbord — eccentric hamstring asymmetry", IS: "VALD Nordbord — eccentric hamstring ósamhverfa" },
   nordbordAsymmetry: { EN: "asymmetry", IS: "ósamhverfa" },
-  nordbordOpar: { EN: "Opar 2015 threshold: ≥10% asymmetry → elevated hamstring-injury risk", IS: "Opar 2015 viðmið: ≥10% ósamhverfa → aukin hamstring-meiðsla áhætta" },
-  gpsSpikesHeading: { EN: "GPS spike days (Buchheit 2010)", IS: "GPS spike dagar (Buchheit 2010)" },
+  nordbordOpar: { EN: "MicroPulse line: ≥10% asymmetry is worth a look. Opar 2015 found >10% asymmetry alone did not raise hamstring-injury risk; low eccentric strength did", IS: "Viðmið MicroPulse: ≥10% ósamhverfa er þess virði að skoða. Opar 2015 fann að >10% ósamhverfa ein og sér jók ekki hættu á aftanlærismeiðslum; lítill eccentric styrkur gerði það" },
+  gpsSpikesHeading: { EN: "GPS spike days (Duhig 2016)", IS: "GPS spike dagar (Duhig 2016)" },
   gpsSpikeNone: { EN: "No HSR or sprint-count spikes in window.", IS: "Engar HSR eða sprint spikes í glugganum." },
   gpsSpikeHsr: { EN: "HSR", IS: "HSR" },
   gpsSpikeSprint: { EN: "sprints", IS: "spretti" },
-  matchHeading: { EN: "Match congestion (Lago-Penas 2010)", IS: "Leikja-þéttleiki (Lago-Penas 2010)" },
+  matchHeading: { EN: "Match congestion (Dupont 2010)", IS: "Leikja-þéttleiki (Dupont 2010)" },
   matchInWindow: { EN: "matches in 14d", IS: "leikir á 14d" },
   matchTotalMin: { EN: "total minutes", IS: "samtals mínútur" },
   matchShortestGap: { EN: "shortest gap", IS: "stysta bil" },
@@ -288,10 +288,10 @@ function buildDayReasons(
     }
   }
 
-  // 2. Personal-z ≤ -2 (Robertson 2017 — significant deviation from norm)
+  // 2. Personal-z ≤ -2 (MicroPulse's line for a large drop below his own norm; traffic-light analysis options reviewed in Robertson 2017)
   if (typeof day.z_score === "number" && day.z_score <= -2) {
     reasons.push({
-      label: `z ${day.z_score.toFixed(2)} (${lang === "IS" ? "Robertson" : "Robertson"})`,
+      label: `z ${day.z_score.toFixed(2)} (${lang === "IS" ? "undir eigin viðmiði" : "below own norm"})`,
       tone: "red",
     });
   } else if (typeof day.z_score === "number" && day.z_score <= -1) {
@@ -413,8 +413,8 @@ function buildWarningSignSentence(
   if (decAlerts > 0) {
     components.push(
       lang === "IS"
-        ? `${decAlerts} internal:external decoupling merki (Akubat 2014)`
-        : `${decAlerts} internal:external decoupling ${decAlerts === 1 ? "alert" : "alerts"} (Akubat 2014)`,
+        ? `${decAlerts} internal:external decoupling merki (hlutfallið kemur úr Akubat 2014, þar tengdist það formi, ekki meiðslum)`
+        : `${decAlerts} internal:external decoupling ${decAlerts === 1 ? "alert" : "alerts"} (the ratio comes from Akubat 2014, where it tracked fitness, not injury)`,
     );
   }
   if (dominantSignals.length > 0) {
@@ -861,7 +861,7 @@ function InjuryRow({ injury, playerName, lang, teamId }: { injury: InjuryEvent; 
             );
           })()}
 
-          {/* GPS spike days (Buchheit 2010, Malone 2017) */}
+          {/* GPS spike days (Duhig 2016, Malone 2017) */}
           {(() => {
             const g = (retro as Record<string, unknown> | null)?.gps_spikes as {
               count?: number;
@@ -900,7 +900,7 @@ function InjuryRow({ injury, playerName, lang, teamId }: { injury: InjuryEvent; 
             );
           })()}
 
-          {/* Match congestion (Lago-Penas 2010) */}
+          {/* Match congestion (Dupont 2010) */}
           {(() => {
             const m = (retro as Record<string, unknown> | null)?.match_congestion as {
               matches_in_14d?: number;

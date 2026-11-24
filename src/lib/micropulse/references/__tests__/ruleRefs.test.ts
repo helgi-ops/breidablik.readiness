@@ -11,7 +11,8 @@ import { BRAKING_REFS } from "@/lib/micropulse/goalPlan/braking";
 import { GYM_REFS } from "@/lib/micropulse/goalPlan/gymGoals";
 import { JUMP_REFS } from "@/lib/micropulse/goalPlan/jump";
 import { RX_REFS } from "@/lib/micropulse/goalPlan/liftRx";
-import { OTHER_CITATION_SOURCES, RULE_CODE_DIRS, citationMatches, citationsIn } from "../citationScan";
+import { APP_CITATION_SOURCES, OTHER_CITATION_SOURCES, RULE_CODE_DIRS, citationMatches, citationsIn } from "../citationScan";
+import { APP_REFS } from "../appRefs";
 import { RULE_REFS, UNRESOLVED_SHORTS, findRefByShort, fullRefsFor, unresolvedReason } from "../ruleRefs";
 
 const ROOT = join(__dirname, "../../../../..");
@@ -62,15 +63,18 @@ describe("rule references", () => {
   it("new entries never copy a key or a paper another registry already holds", () => {
     const others: Record<string, { short: string }> = { ...SPEED_REFS, ...ACCEL_REFS, ...BRAKING_REFS, ...JUMP_REFS, ...GYM_REFS, ...RX_REFS };
     const otherShorts = new Set(Object.values(others).map((r) => r.short));
-    for (const [k, r] of Object.entries(RULE_REFS)) {
+    for (const [k, r] of Object.entries({ ...RULE_REFS, ...APP_REFS })) {
       expect(r.key).toBe(k);
       expect(others[k]).toBeUndefined();
       expect(otherShorts.has(r.short)).toBe(false);
     }
+    for (const k of Object.keys(APP_REFS)) expect(RULE_REFS[k]).toBeUndefined();
+    const ruleShorts = new Set(Object.values(RULE_REFS).map((r) => r.short));
+    for (const r of Object.values(APP_REFS)) expect(ruleShorts.has(r.short)).toBe(false);
   });
 
   it("each new entry has authors, title, journal and the year its short form gives", () => {
-    for (const r of Object.values(RULE_REFS)) {
+    for (const r of [...Object.values(RULE_REFS), ...Object.values(APP_REFS)]) {
       expect(r.cite).toMatch(/^[^.]+\. .+[.?] .+ \d{4}/);
       const year = r.short.replace(/[ab]$/, "").slice(-4);
       expect(r.cite.includes(`${year};`) || r.cite.includes(`ahead of print ${year}`)).toBe(true);
@@ -170,6 +174,32 @@ describe("rule references", () => {
     expect(findRefByShort("Petrakos 2016")?.cite).toMatch(/PMID 26553497/);
   });
 
+  it("every citation in the injury, return-to-play and movement-screen code resolves or is unresolved (app lot A)", () => {
+    const shorts = citationsUnder(APP_CITATION_SOURCES);
+    expect(shorts.length).toBeGreaterThan(120);
+    expect(openOnes(shorts)).toEqual([]);
+  });
+
+  it("lot A: wrong papers and overclaims are gone", () => {
+    const read = (f: string) => readFileSync(join(ROOT, f), "utf8");
+    // No "criteria-based RTP battery" by Read 2020 exists; per-region tests cite Taberner 2019 / Read 2021.
+    expect(read("src/lib/micropulse/rtp/testRecommender.ts")).not.toMatch(/criteria-based RTP test battery/);
+    // Opar 2015 found a >10% imbalance did NOT raise hamstring risk.
+    expect(read("src/app/coach/injuries/page.tsx")).not.toMatch(/Opar 2015 threshold|≥10% asymmetry → elevated hamstring/);
+    const all = citationsUnder(APP_CITATION_SOURCES);
+    for (const gone of ["Gore 2022", "Clark 2008", "Lago-Penas 2010", "Aspetar 2014", "Cohen 2019", "Ross 2005"]) {
+      expect(all).not.toContain(gone);
+    }
+    expect(findRefByShort("Robertson 2017")?.cite).toMatch(/Red, Amber, or Green/);
+    expect(findRefByShort("Haller 2023")?.cite).toMatch(/Machine Learning/);
+    expect(findRefByShort("Green 2020b")?.cite).toMatch(/hamstring/i);
+    expect(findRefByShort("Dubois & Esculier 2020")?.key).toBe("dubois2020");
+  });
+
+  it("reads JSX-escaped ampersands as one two-author citation", () => {
+    expect(citationsIn("PEACE &amp; LOVE (Dubois &amp; Esculier 2020)")).toEqual(["Dubois & Esculier 2020"]);
+  });
+
   it("the catalogue's references section lists each of its citations in full, or as unresolved", () => {
     expect(CATALOGUE_REFS).not.toBe("");
     for (const s of citationsIn(RULES_PART)) {
@@ -180,7 +210,7 @@ describe("rule references", () => {
   });
 
   it("docs/heimildir-aefingakerfis.md lists every citation in the rule code and the other sources in full, or as unresolved", () => {
-    for (const s of [...codeCitations(), ...citationsUnder(OTHER_CITATION_SOURCES)]) {
+    for (const s of [...codeCitations(), ...citationsUnder(OTHER_CITATION_SOURCES), ...citationsUnder(APP_CITATION_SOURCES)]) {
       const ref = findRefByShort(s);
       if (ref) expect(ALL_REFS_DOC).toContain(ref.cite);
       else expect(ALL_REFS_DOC).toContain(`**${unresolvedKey(s)}**`);

@@ -172,7 +172,7 @@ const SINGLE_LEG_DROP_JUMP: MovementTest = {
         { id: "moderate", label: { en: "Moderate medial collapse", is: "Miðlægt hrun í meðallagi" }, rule: "visible medial knee travel at contact", severity: "moderate" },
         { id: "marked", label: { en: "Marked valgus collapse", is: "Áberandi valgus-hrun" }, rule: "knee well medial to foot at contact/peak", severity: "marked" },
       ],
-      citation: "Hewett 2005 (knee abduction predicts ACL injury); Padua 2009 (Landing Error Scoring System)",
+      citation: "Hewett 2005 (3D lab knee abduction at landing linked to later ACL injury in 205 female athletes); Padua 2009 (Landing Error Scoring System)",
     },
     {
       variableKey: "knee_valgus_absorption",
@@ -190,7 +190,7 @@ const SINGLE_LEG_DROP_JUMP: MovementTest = {
         { id: "moderate", label: { en: "5–10° drop", is: "5–10° fall" }, rule: "5° <= obliquity < 10°", severity: "moderate" },
         { id: "marked", label: { en: ">10° drop", is: ">10° fall" }, rule: "obliquity >= 10°", severity: "marked" },
       ],
-      citation: "Bramah 2018 (contralateral pelvic drop); Powers 2010 (proximal control of the knee)",
+      citation: "MicroPulse's bands; Bramah 2018 (more pelvic drop in injured runners); Powers 2010 (proximal control of the knee)",
     },
     {
       variableKey: "trunk_lean_frontal",
@@ -208,7 +208,7 @@ const SINGLE_LEG_DROP_JUMP: MovementTest = {
         { id: "moderate", label: { en: "0.15–0.30 SW wobble", is: "0.15–0.30 AB vagg" }, rule: "0.15 <= sway < 0.30", severity: "moderate" },
         { id: "marked", label: { en: ">0.30 SW / correction hop", is: ">0.30 AB / leiðréttingar-hopp" }, rule: "sway >= 0.30 shoulder-widths", severity: "marked" },
       ],
-      citation: "Padua 2009 (LESS — landing stability); Ross 2005 (time to stabilization)",
+      citation: "Padua 2009 (LESS — landing technique; sway bands are MicroPulse's); Ross & Guskiewicz 2005 (time to stabilization)",
     },
     {
       variableKey: "lsi",
@@ -273,7 +273,7 @@ const SINGLE_LEG_DROP_JUMP: MovementTest = {
       lever: { en: "Single-leg balance + landing-stabilisation progression (stick-and-hold landings, then perturbation / eyes-closed balance)", is: "Einfætt jafnvægi + lendingar-stöðgun stigmögnun (festu-og-haltu lendingar, svo truflun / lokuð augu jafnvægi)" },
       strengthEmphasis: "unilateral",
       flag: null,
-      citation: "Padua 2009; Ross 2005",
+      citation: "Padua 2009; Ross & Guskiewicz 2005",
       evidenceGrade: "moderate",
     },
     {
@@ -316,10 +316,10 @@ const SINGLE_LEG_DROP_JUMP: MovementTest = {
     { label: "Padua et al. 2009 — The Landing Error Scoring System (LESS)", source: "Am J Sports Med" },
     { label: "Powers 2010 — The influence of abnormal hip mechanics on knee injury: a biomechanical perspective", source: "J Orthop Sports Phys Ther" },
     { label: "Bramah et al. 2018 — Is there a pathological gait associated with common running injuries? (contralateral pelvic drop)", source: "Am J Sports Med" },
-    { label: "Hewett et al. 2010 — Understanding and preventing ACL injuries: trunk & hip control", source: "Am J Sports Med" },
-    { label: "Ross & Guskiewicz 2005 — Time to stabilization: dynamic postural stability after landing", source: "Clin J Sport Med" },
+    { label: "Hewett et al. 2010 — Understanding and preventing ACL injuries: current biomechanical and epidemiologic considerations (update 2010)", source: "N Am J Sports Phys Ther" },
+    { label: "Ross & Guskiewicz 2005 — Single-leg jump-landing stabilization times are longer with functionally unstable ankles", source: "J Athl Train" },
     { label: "Flanagan & Comyns 2008 — The use of contact time and the reactive strength index", source: "Strength Cond J" },
-    { label: "Grindem et al. 2016 — Simple decision rules reduce reinjury risk after ACL reconstruction", source: "Br J Sports Med" },
+    { label: "Grindem et al. 2016 — Cohort: return ≥9 months and more symmetrical quad strength linked to fewer reinjuries after ACL reconstruction", source: "Br J Sports Med" },
   ],
   evidenceGrade: "strong",
   caveats: [
@@ -335,8 +335,8 @@ const OVERHEAD_SQUAT_ASSESSMENT: MovementTest = {
   name: { en: "Overhead squat assessment", is: "Yfirhöfuð-hnébeygju mat" },
   category: "mobility_screen",
   description: {
-    en: "Bilateral squat with arms overhead — the single most informative movement-quality screen (Clifton 2015). A full movement-chain read (feet/ankles → knees → pelvis/low-back → shoulders/arms → head) from three views. Each checkpoint points to an overactive muscle to release/stretch and an underactive one to strengthen; medial knee displacement (dynamic valgus) is the best-evidenced single output. Movement-quality + corrective screen — NOT an injury-prediction score.",
-    is: "Tvíhliða hnébeygja með hendur yfir höfði — mest upplýsandi hreyfigæða-skimunin (Clifton 2015). Heildar hreyfikeðju-lestur (fætur/ökklar → hné → mjaðmagrind/mjóbak → axlir/armar → höfuð) úr þremur sýnum. Hver checkpoint bendir á of-virkan vöðva til að losa/teygja og van-virkan til að styrkja; miðlæg hné-hliðrun (dynamic valgus) er best studda stak-mælingin. Hreyfigæða- + leiðréttingar-skimun — EKKI meiðsla-spáskor.",
+    en: "Bilateral squat with arms overhead — the deep squat alone tracked the full FMS score in 103 college athletes (Clifton 2015). A full movement-chain read (feet/ankles → knees → pelvis/low-back → shoulders/arms → head) from three views. Each checkpoint points to an overactive muscle to release/stretch and an underactive one to strengthen; medial knee displacement (dynamic valgus) is the best-evidenced single output. Movement-quality + corrective screen — NOT an injury-prediction score.",
+    is: "Tvíhliða hnébeygja með hendur yfir höfði — hnébeygjan ein fylgdi heildar-FMS-skori hjá 103 háskólaíþróttamönnum (Clifton 2015). Heildar hreyfikeðju-lestur (fætur/ökklar → hné → mjaðmagrind/mjóbak → axlir/armar → höfuð) úr þremur sýnum. Hver checkpoint bendir á of-virkan vöðva til að losa/teygja og van-virkan til að styrkja; miðlæg hné-hliðrun (dynamic valgus) er best studda stak-mælingin. Hreyfigæða- + leiðréttingar-skimun — EKKI meiðsla-spáskor.",
   },
   laterality: "bilateral",
   capture: {
@@ -357,7 +357,7 @@ const OVERHEAD_SQUAT_ASSESSMENT: MovementTest = {
     // ── Front (anterior): feet + knees ──
     { key: "feet_turn_out", label: { en: "Feet turn out", is: "Fætur snúast út" }, unit: "band", reliability: "moderate", view: "front", note: { en: "Coach-scored from the front view.", is: "Þjálfari skorar úr framsýn." } },
     { key: "feet_pronation", label: { en: "Feet flatten / pronate (arch collapse)", is: "Fætur fletjast / pronera (ilrist fellur)" }, unit: "band", reliability: "moderate", view: "front", note: { en: "Coach-scored — arch collapse isn't reliable from phone pose.", is: "Þjálfari skorar — ilrist-fall er ekki áreiðanlegt úr síma-pose." } },
-    { key: "knee_valgus", label: { en: "Medial knee displacement / dynamic valgus", is: "Miðlæg hné-hliðrun / dynamic valgus" }, unit: "deg/band", reliability: "robust", view: "front", note: { en: "The headline read — frontal-plane knee angle, both knees. Observational/phone-video MKD is a validated screen output (Post 2017; Krause 2015).", is: "Aðal-lesturinn — framplans hné-horn, báðir hné. Sjónmælt/síma-myndbands MKD er staðfest skimunar-úttak (Post 2017; Krause 2015)." }, extract: { kind: "frontal_knee_valgus", view: "front", phase: "absorption", bands: { moderate: 0.06, marked: 0.12, direction: "higher_worse" } } },
+    { key: "knee_valgus", label: { en: "Medial knee displacement / dynamic valgus", is: "Miðlæg hné-hliðrun / dynamic valgus" }, unit: "deg/band", reliability: "robust", view: "front", note: { en: "The headline read — frontal-plane knee angle, both knees. Observed MKD on the overhead squat is reliable between raters and moderately matches lab-measured knee displacement (Post 2017); phone-video angles are validated only for side-view squat depth (Krause 2015), not this front-view angle.", is: "Aðal-lesturinn — framplans hné-horn, báðir hné. Sjónmat á MKD í hnébeygju með hendur yfir höfði er áreiðanlegt milli matsmanna og samræmist mælingu á rannsóknarstofu að hluta (Post 2017); horn úr síma-myndbandi eru aðeins staðfest fyrir hliðarsýn á dýpt hnébeygju (Krause 2015), ekki þetta framhorn." }, extract: { kind: "frontal_knee_valgus", view: "front", phase: "absorption", bands: { moderate: 0.06, marked: 0.12, direction: "higher_worse" } } },
     { key: "knee_asymmetry", label: { en: "Left/right knee or foot asymmetry", is: "Hægri/vinstri hné- eða fótstöðu ósamhverfa" }, unit: "band", reliability: "moderate", view: "front", note: { en: "Coach-scored L vs R.", is: "Þjálfari skorar V vs H." } },
     // ── Side (lateral): trunk / pelvis / arms / ankle ──
     { key: "forward_lean", label: { en: "Excessive forward trunk lean", is: "Óhóflegur framhalli búks" }, unit: "deg/band", reliability: "moderate", view: "side", extract: { kind: "trunk_lean", view: "side", phase: "absorption", bands: { moderate: 50, marked: 65, direction: "higher_worse" } } },
@@ -373,7 +373,7 @@ const OVERHEAD_SQUAT_ASSESSMENT: MovementTest = {
     { key: "scapular_asymmetry", label: { en: "Shoulder / scapular asymmetry", is: "Axlar- / herðablaða-ósamhverfa" }, unit: "deg/band", reliability: "moderate", view: "back", note: { en: "Shoulder-line tilt (back view) — elevation / asymmetry proxy.", is: "Axlalínu-halli (aftansýn) — lyftu / ósamhverfu vísir." }, extract: { kind: "shoulder_obliquity", view: "back", phase: "absorption", bands: { moderate: 4, marked: 8, direction: "higher_worse" } } },
   ],
   thresholds: [
-    { variableKey: "knee_valgus", citation: "Post 2017 (observational MKD reliability); Krause 2015 (phone-video angle validity); Bell/Padua/Clark 2008–2012", bands: [
+    { variableKey: "knee_valgus", citation: "Post 2017 (observational MKD reliability); Krause 2015 (phone-video sagittal squat angles only, not frontal-plane valgus); Bell 2008; Padua 2012", bands: [
       { id: "ok", label: { en: "Knees track over feet", is: "Hné fylgja fótum" }, rule: "no medial collapse", severity: "ok" },
       { id: "moderate", label: { en: "Knees drift inward", is: "Hné reka inn" }, rule: "visible medial drift", severity: "moderate" },
       { id: "marked", label: { en: "Marked valgus", is: "Áberandi valgus" }, rule: "knees well medial to feet", severity: "marked" } ] },
@@ -397,9 +397,9 @@ const OVERHEAD_SQUAT_ASSESSMENT: MovementTest = {
   rules: [
     { id: "ohsa_valgus", match: { variableKey: "knee_valgus", minSeverity: "moderate" },
       finding: { en: "Medial knee displacement / dynamic valgus", is: "Miðlæg hné-hliðrun / dynamic valgus" },
-      cause: { en: "Weak/underactive hip abductors + external rotators (glute med/max) and/or restricted ankle dorsiflexion; overactive adductors / TFL / lateral gastroc (Bell 2008; Padua 2012; Macrum 2012)", is: "Veikir/van-virkir mjaðma-fráfærar + útsnúningar (glute med/max) og/eða skert ökkla-dorsiflexion; of-virkir adductors / TFL / lateral gastroc (Bell 2008; Padua 2012; Macrum 2012)" },
+      cause: { en: "Weak/underactive hip abductors + external rotators (glute med/max) and/or restricted ankle dorsiflexion; overactive adductors / TFL / lateral gastroc (the ankle and adductor/calf part: Bell 2008; Padua 2012; Macrum 2012 — these squat studies did not find weak hips)", is: "Veikir/van-virkir mjaðma-fráfærar + útsnúningar (glute med/max) og/eða skert ökkla-dorsiflexion; of-virkir adductors / TFL / lateral gastroc (ökkla- og adductor/kálfa-hlutinn: Bell 2008; Padua 2012; Macrum 2012 — þessar hnébeygju-rannsóknir fundu ekki veikar mjaðmir)" },
       lever: { en: "Release adductors/TFL; strengthen hip abd/ER (glute med/max); restore ankle dorsiflexion — the compensation is trainable, so re-screen to confirm the valgus has closed (Bell 2013)", is: "Losa adductors/TFL; styrkja mjaðma-fráfærslu/ER (glute med/max); endurheimta ökkla-dorsiflexion — uppbótin er þjálfanleg, svo endurskima til að staðfesta að valgus hafi lokast (Bell 2013)" },
-      strengthEmphasis: "hip_abductor_er", flag: null, citation: "Bell 2008/2012; Padua 2012; Macrum 2012 (ankle DF); Bell 2013 (trainable)", evidenceGrade: "strong" },
+      strengthEmphasis: "hip_abductor_er", flag: null, citation: "Bell 2008; Padua 2012; Macrum 2012 (ankle DF); Bell 2013 (trainable)", evidenceGrade: "strong" },
     { id: "ohsa_feet_turn_out", match: { variableKey: "feet_turn_out", minSeverity: "moderate" },
       finding: { en: "Feet turn out", is: "Fætur snúast út" },
       cause: { en: "Overactive gastroc/soleus / biceps femoris; underactive medial gastroc / gracilis / popliteus", is: "Of-virkir gastroc/soleus / biceps femoris; van-virkir medial gastroc / gracilis / popliteus" },
@@ -419,7 +419,7 @@ const OVERHEAD_SQUAT_ASSESSMENT: MovementTest = {
       finding: { en: "Excessive forward trunk lean", is: "Óhóflegur framhalli búks" },
       cause: { en: "Overactive soleus/gastroc / hip flexors / abdominals; underactive glutes / erector spinae", is: "Of-virkir soleus/gastroc / hip flexors / kviðvöðvar; van-virkir glutes / erector spinae" },
       lever: { en: "Ankle dorsiflexion + hip-flexor mobility; strengthen glutes + erector spinae (hip thrust / split squat = high Gmax)", is: "Ökkla dorsiflexion + hip-flexor hreyfanleiki; styrkja glutes + erector spinae (hip thrust / split squat = hátt Gmax)" },
-      strengthEmphasis: "mobility", flag: null, citation: "Gmax activation reviews (hip thrust/split squat); Macrum 2012 (ankle DF)", evidenceGrade: "moderate" },
+      strengthEmphasis: "mobility", flag: null, citation: "Gmax activation reviews (hip thrust/split squat); Macrum 2012 (ankle DF → knee valgus; the link to trunk lean is clinical reasoning)", evidenceGrade: "moderate" },
     { id: "ohsa_apt", match: { variableKey: "anterior_pelvic_tilt", minSeverity: "moderate" },
       finding: { en: "Low-back arches (anterior pelvic tilt)", is: "Mjóbak sveigist (anterior pelvic tilt)" },
       cause: { en: "Overactive hip flexors / erector spinae / lat; underactive glutes / hamstrings / core", is: "Of-virkir hip flexors / erector spinae / lat; van-virkir glutes / hamstrings / core" },
@@ -469,21 +469,21 @@ const OVERHEAD_SQUAT_ASSESSMENT: MovementTest = {
   references: [
     // Construct / kinematics
     { label: "Clifton, Grooms & Onate 2015 — Overhead deep-squat performance predicts the overall FMS score", source: "Int J Sports Phys Ther" },
-    { label: "Aleixo et al. 2024 — Deep-squat (FMS) convergent validity, discriminates joint mobility", source: "J Bodyw Mov Ther" },
-    { label: "Heredia et al. 2021 — Lower-extremity kinematics during the overhead deep squat differ by FMS score", source: "J Sports Sci Med" },
+    { label: "Aleixo et al. 2024 — Deep-squat (FMS) score: low convergent validity for joint mobility; did not separate mobility levels", source: "J Bodyw Mov Ther" },
+    { label: "Heredia et al. 2021 — Overhead deep squat: FMS score 3 vs 2/1 differs in squat depth, not in frontal-plane knee motion", source: "J Sports Sci Med" },
     { label: "Hoogenboom et al. 2023 — 3D kinematics/kinetics of the overhead deep squat (normal reference)", source: "Applied Sciences" },
     { label: "Vidal et al. 2018 — Movement screens may measure movement skill as much as dysfunction", source: "Int J Sports Sci Coach" },
     // Reliability of an observational / phone-video read
     { label: "Post et al. 2017 — OHSA reliable & discriminative for observational medial knee displacement", source: "J Sport Rehab" },
-    { label: "Krause et al. 2015 — Mobile goniometer app reliable/accurate for video FMS deep-squat angles", source: "Int J Sports Phys Ther" },
-    { label: "Teyhen et al. 2012 — Test–retest & interrater reliability of the FMS", source: "J Athl Train" },
+    { label: "Krause et al. 2015 — Mobile goniometer app reliable for video FMS deep-squat sagittal angles (hip read ~40° off 3D)", source: "Int J Sports Phys Ther" },
+    { label: "Teyhen et al. 2012 — Test–retest & interrater reliability of the FMS", source: "J Orthop Sports Phys Ther" },
     // Medial knee displacement — causes + trainability
     { label: "Bell, Padua & Clark 2008 — Strength + flexibility profile of excessive medial knee displacement", source: "Arch Phys Med Rehabil" },
     { label: "Padua, Bell & Clark 2012 — Neuromuscular characteristics of medial knee displacement", source: "J Athl Train" },
     { label: "Macrum et al. 2012 — Limiting ankle dorsiflexion changes squat kinematics & muscle activation", source: "J Sport Rehab" },
     { label: "Bell et al. 2013 — 2D/3D knee valgus during squatting reduced after an exercise intervention", source: "J Athl Train" },
     // Injury-prediction caveat
-    { label: "Bonazza et al. 2017 (meta) & Dorrel et al. 2015 (meta) — FMS injury-predictive value is limited", source: "AJSM / Sports Health" },
+    { label: "Bonazza et al. 2017 (meta) — FMS ≤14 linked to higher injury odds, but validity concerns remain; Dorrel et al. 2015 (meta) — FMS predictive validity not supported", source: "AJSM / Sports Health" },
   ],
   evidenceGrade: "strong",
   caveats: [
@@ -529,7 +529,7 @@ const HOP_FOR_DISTANCE: MovementTest = {
         { id: "moderate", label: { en: "85–90%", is: "85–90%" }, rule: "0.85 <= ratio < 0.90", severity: "moderate" },
         { id: "marked", label: { en: "<85%", is: "<85%" }, rule: "ratio < 0.85", severity: "marked" },
       ],
-      citation: "Reid 2007; Grindem 2016 (>=90% LSI RTP threshold)",
+      citation: "Grindem 2016 (>=90% LSI in RTP criteria); Reid 2007 (hop LSI is reliable)",
     },
   ],
   rules: [
@@ -547,12 +547,12 @@ const HOP_FOR_DISTANCE: MovementTest = {
   ],
   references: [
     { label: "Reid et al. 2007 — Hop testing provides a reliable and valid outcome measure", source: "Phys Ther" },
-    { label: "Grindem et al. 2016 — Simple decision rules (incl. ≥90% LSI) reduce reinjury after ACL reconstruction", source: "Br J Sports Med" },
+    { label: "Grindem et al. 2016 — Cohort: fewer reinjuries in those passing RTS rules (incl. ≥90% LSI), not statistically certain", source: "Br J Sports Med" },
     { label: "Wellsandt et al. 2017 — Limb symmetry indexes can overestimate knee function after ACL injury", source: "J Orthop Sports Phys Ther" },
   ],
   evidenceGrade: "strong",
   caveats: [
-    { en: "Evidence grade: STRONG as return-to-play decision support — a limb-symmetry index ≥90% is an evidence-based RTP criterion and passing it reduces reinjury risk (Grindem 2016; Reid 2007). Clearance is still a clinician decision, never the readiness colour.", is: "Sönnunarstig: STERKT sem stuðningur við endurkomu-ákvörðun — útlima-samhverfuvísitala ≥90% er sönnunarbyggt endurkomu-viðmið og að ná því dregur úr endur-meiðsla-áhættu (Grindem 2016; Reid 2007). Heimild er samt klínísk ákvörðun, aldrei readiness-liturinn." },
+    { en: "Evidence grade: STRONG as return-to-play decision support — a limb-symmetry index ≥90% is a widely used RTP criterion; hop tests are reliable (Reid 2007), and in one cohort fewer players who passed these rules re-injured, though the difference was not statistically certain (Grindem 2016, observational). Clearance is still a clinician decision, never the readiness colour.", is: "Sönnunarstig: STERKT sem stuðningur við endurkomu-ákvörðun — útlima-samhverfuvísitala ≥90% er algengt endurkomu-viðmið; hopp-próf eru áreiðanleg (Reid 2007), og í einni hóprannsókn meiddust færri aftur sem stóðust viðmiðin, en munurinn var ekki tölfræðilega öruggur (Grindem 2016). Heimild er samt klínísk ákvörðun, aldrei readiness-liturinn." },
     { en: "LSI can OVERESTIMATE recovery when both legs are deconditioned (the uninvolved limb also weakens) — read it alongside the absolute hop distance, not on its own (Wellsandt 2017).", is: "LSI getur OFMETIÐ bata þegar báðir fætur eru afþjálfaðir (ómeiddi fóturinn veikist líka) — lestu hana ásamt raun-hopplengdinni, ekki eina og sér (Wellsandt 2017)." },
     { en: "Distance from side-view phone video is a moderate-precision estimate — a taped/marked distance is more accurate for a decision.", is: "Lengd úr hliðar-síma-myndbandi er miðlungs-nákvæm áætlun — mæld/merkt lengd er nákvæmari fyrir ákvörðun." },
   ],

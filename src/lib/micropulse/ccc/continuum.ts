@@ -1,6 +1,6 @@
 /**
  * Control-Chaos Continuum (CCC) — a criteria-based, GPS-load-driven return-to-
- * running continuum (Taberner, Allen & Cohen, BJSM 2019; Taberner et al., JOSPT
+ * running continuum (Taberner, Allen & Cohen 2019 (BJSM); Taberner et al., JOSPT
  * 2025). An injured footballer progresses High Control → Moderate Control →
  * Moderate Chaos → High Chaos → Team training, driving running load expressed as
  * a % of the player's OWN game load, with force-plate / symmetry EXIT CRITERIA
@@ -84,10 +84,10 @@ const TABERNER = "Taberner, Allen & Cohen 2019 (BJSM); Taberner et al. 2025 (JOS
 const C_LOAD: CccExitCriterion = { key: "load_tolerance", label: { en: "Tolerated this phase's load band pain-free", is: "Þolir álagsband þessa fasa án verkja" }, threshold: 1, compare: "gte", source: TABERNER };
 const C_ASYM_15: CccExitCriterion = { key: "cmj_asymmetry_pct", label: { en: "CMJ force/impulse asymmetry < 15%", is: "CMJ krafts-/impuls-ósamhverfa < 15%" }, threshold: 15, compare: "lte", source: "Parkinson 2021 (common flag line)" };
 const C_ASYM_10: CccExitCriterion = { key: "cmj_asymmetry_pct", label: { en: "CMJ force/impulse asymmetry < 10%", is: "CMJ krafts-/impuls-ósamhverfa < 10%" }, threshold: 10, compare: "lte", source: "Parkinson 2021 (common flag line)" };
-const C_IMTP_80: CccExitCriterion = { key: "imtp_lsi_pct", label: { en: "IMTP limb-symmetry ≥ 80%", is: "IMTP útlima-samhverfa ≥ 80%" }, threshold: 80, compare: "gte", source: "Aspetar RTP; Kotsifaki 2023" };
-const C_IMTP_90: CccExitCriterion = { key: "imtp_lsi_pct", label: { en: "IMTP limb-symmetry ≥ 90%", is: "IMTP útlima-samhverfa ≥ 90%" }, threshold: 90, compare: "gte", source: "Grindem 2016; Aspetar RTP" };
-const C_RSI_90: CccExitCriterion = { key: "hop_rsi_lsi_pct", label: { en: "Reactive-strength (hop/RSI) limb-symmetry ≥ 90%", is: "Viðbragðsstyrkur (hopp/RSI) útlima-samhverfa ≥ 90%" }, threshold: 90, compare: "gte", source: "Grindem 2016" };
-const C_NORDIC_15: CccExitCriterion = { key: "nordic_asymmetry_pct", label: { en: "Nordic eccentric asymmetry < 15%", is: "Nordic eccentrísk ósamhverfa < 15%" }, threshold: 15, compare: "lte", source: "van Dyk 2019; Parkinson 2021 (common flag line)" };
+const C_IMTP_80: CccExitCriterion = { key: "imtp_lsi_pct", label: { en: "IMTP limb-symmetry ≥ 80%", is: "IMTP útlima-samhverfa ≥ 80%" }, threshold: 80, compare: "gte", source: "Aspetar RTP; Kotsifaki 2023 (expert >80% quad-strength line for return to running — applied to IMTP by MicroPulse)" };
+const C_IMTP_90: CccExitCriterion = { key: "imtp_lsi_pct", label: { en: "IMTP limb-symmetry ≥ 90%", is: "IMTP útlima-samhverfa ≥ 90%" }, threshold: 90, compare: "gte", source: "Grindem 2016 (≥90% line from quad-strength + hop tests — applied to IMTP by MicroPulse); Aspetar RTP" };
+const C_RSI_90: CccExitCriterion = { key: "hop_rsi_lsi_pct", label: { en: "Reactive-strength (hop/RSI) limb-symmetry ≥ 90%", is: "Viðbragðsstyrkur (hopp/RSI) útlima-samhverfa ≥ 90%" }, threshold: 90, compare: "gte", source: "Grindem 2016 (≥90% on hop tests); Kotsifaki 2023 (drop-jump symmetry >90%, expert consensus)" };
+const C_NORDIC_15: CccExitCriterion = { key: "nordic_asymmetry_pct", label: { en: "Nordic eccentric asymmetry < 15%", is: "Nordic eccentrísk ósamhverfa < 15%" }, threshold: 15, compare: "lte", source: "Parkinson 2021 (common flag line); Bourne 2015 (≥15% Nordic gap linked to hamstring injury in rugby; Opar 2015 found no link)" };
 
 /** The 5 CCC phases. Bands are fractions of the player's own game load — they rise
  *  from low-volume linear running (High Control) to full, chaotic match exposure

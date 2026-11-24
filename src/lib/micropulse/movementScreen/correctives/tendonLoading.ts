@@ -40,43 +40,43 @@ export const TENDON_DOSING: { title: Bi; rule: Bi; why: Bi; citation: string } =
     is: "~10 mín sina-álags lotur, 1–3×/dag, með ~6 klst millibili. Tíðni fram yfir lengd.",
   },
   why: {
-    en: "Collagen-synthesis signalling (ERK1/2) plateaus within ~10 min of loading, so longer sessions add little; connective tissue then needs a refractory window before it responds again.",
-    is: "Kollagen-myndunar boð (ERK1/2) ná hámarki innan ~10 mín, svo lengri lotur bæta litlu við; bandvefur þarf svo hvíldarglugga áður en hann svarar aftur.",
+    en: "In lab-grown ligaments, collagen-synthesis signalling (ERK1/2) peaked within ~10 min of loading and the cells did not respond again for up to ~6 h — so longer sessions likely add little. The human dose is an extrapolation.",
+    is: "Í ræktuðum liðböndum á rannsóknarstofu náðu kollagen-boð (ERK1/2) hámarki innan ~10 mín og frumurnar svöruðu ekki aftur í allt að ~6 klst — svo lengri lotur bæta líklega litlu við. Skammturinn fyrir fólk er yfirfærsla.",
   },
-  citation: "Paxton 2012 (Tissue Eng A); Baar 2017 (Sports Med); West 2015 (J Physiol)",
+  citation: "Paxton 2012 (Tissue Eng A, lab-grown ligaments); Baar 2017 (Sports Med); West 2015 (J Physiol, post-exercise serum on lab-grown ligaments)",
 };
 
 // ── 2. Isometric entry + stress relaxation ──
 export const TENDON_ISOMETRIC: { title: Bi; detail: Bi; citation: string } = {
   title: { en: "Isometric entry mode", is: "Ísómetrísk byrjun" },
   detail: {
-    en: "Heavy, sustained isometric / stress-relaxation loading up-regulates the tendon's build program (scleraxis + collagen-I) — the entry loading mode, progressing through the staged-loading protocol.",
-    is: "Þungt, viðvarandi ísómetrískt / stress-relaxation álag eykur uppbyggingar-forrit sinarinnar (scleraxis + kollagen-I) — byrjunar-álagsmátinn, sem stigmagnast gegnum þrepaskiptа álags-prótókollið.",
+    en: "Heavy, sustained isometric / stress-relaxation loading raised the tendon's build markers (scleraxis + collagen-I) more than dynamic loading in a rat pilot study — the entry loading mode, progressing through the staged-loading protocol.",
+    is: "Þungt, viðvarandi ísómetrískt / stress-relaxation álag jók uppbyggingar-merki sinarinnar (scleraxis + kollagen-I) meira en hreyfi-álag í forrannsókn á rottum — byrjunar-álagsmátinn, sem stigmagnast gegnum þrepaskipta álags-prótókollið.",
   },
-  citation: "Steffen 2022 (Matrix Biol); Baar 2019 (IJSNEM); Tam & Baar 2025 (Matrix Biol)",
+  citation: "Steffen 2022 (Matrix Biol, rat pilot); Baar 2019 (IJSNEM); Tam & Baar 2025 (Matrix Biol)",
 };
 
 // ── 3. Collagen nutrition — timing (optional, emerging) ──
 export const TENDON_NUTRITION: { title: Bi; detail: Bi; caveat: Bi; citation: string } = {
   title: { en: "Collagen nutrition timing (consider)", is: "Kollagen-næring tímasetning (íhuga)" },
   detail: {
-    en: "Consider ~15 g gelatin/collagen + vitamin C ~45 min BEFORE a loading bout — the amino-acid bolus must be available during the window (tendon blood flow is low). Avoid caffeine around the loading+nutrition window (it attenuated adaptation).",
-    is: "Íhugaðu ~15 g gelatín/kollagen + C-vítamín ~45 mín FYRIR álags-lotu — amínósýru-skammturinn þarf að vera til staðar á meðan (blóðflæði sinar er lágt). Forðastu koffín í kringum álags+næringar-gluggann (það dró úr aðlögun).",
+    en: "Consider ~15 g gelatin/collagen + vitamin C ~45 min BEFORE a loading bout — the amino-acid bolus must be available during the window (tendon blood flow is low). Avoid caffeine around the loading+nutrition window (high-dose caffeine blunted adaptation in cells and mice).",
+    is: "Íhugaðu ~15 g gelatín/kollagen + C-vítamín ~45 mín FYRIR álags-lotu — amínósýru-skammturinn þarf að vera til staðar á meðan (blóðflæði sinar er lágt). Forðastu koffín í kringum álags+næringar-gluggann (stór koffín-skammtur dró úr aðlögun í frumum og músum).",
   },
   caveat: {
     en: "Emerging (blood-marker) evidence — nutrition guidance, NOT medical advice or a mandate. A sex/hormonal modifier exists (estrogen inhibits collagen cross-linking).",
     is: "Vísbendingar að koma fram (lífvísir) — næringar-leiðbeining, EKKI læknisráð eða skylda. Kynja-/hormóna þáttur er til staðar (estrógen hamlar kollagen-krosstengingu).",
   },
-  citation: "Shaw 2017 (AJCN); Lis & Baar 2019 (IJSNEM); Steffen 2025 (JAP, caffeine); Lee 2015 (JAP, estrogen)",
+  citation: "Shaw 2017 (AJCN); Lis & Baar 2019 (IJSNEM, a trend that did not reach significance); Steffen 2025 (JAP, caffeine — cells and mice); Lee 2015 (JAP, estrogen — engineered-ligament model)",
 };
 
 // ── 4. Per-tendon specificity + intensity ──
 export const TENDON_INTENSITY_NOTE: { detail: Bi; citation: string } = {
   detail: {
-    en: "Intensity is a programmable variable, not one-size-fits-all — and tendons diverge (Achilles vs patellar have similar mechanical gains but different transcriptional responses), so keep per-tendon protocols.",
-    is: "Ákefð er stillanleg breyta, ekki ein-stærð-fyrir-alla — og sinar eru ólíkar (Achilles vs hnéskeljar hafa svipaðan vélrænan ávinning en ólík umritunar-svör), svo haltu prótókollum per sin.",
+    en: "Intensity is a programmable variable, not one-size-fits-all — and tendons diverge (in growing rats, Achilles and patellar tendons gained strength alike but switched on different genes), so per-tendon protocols are a reasonable choice.",
+    is: "Ákefð er stillanleg breyta, ekki ein-stærð-fyrir-alla — og sinar eru ólíkar (í ungum rottum styrktust Achilles- og hnéskeljarsin jafnt en kveiktu á ólíkum genum), svo sér-prótókoll fyrir hverja sin er skynsamlegt val.",
   },
-  citation: "Steffen 2023 (J Physiol); Gilmore 2024 (Sports Med Open)",
+  citation: "Steffen 2023 (J Physiol, growing rats); Gilmore 2024 (Sports Med Open, climbers' finger loading: low and max intensity both worked)",
 };
 
 export const PER_TENDON_NOTE: Record<TendonKey, Bi> = {

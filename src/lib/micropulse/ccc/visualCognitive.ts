@@ -5,9 +5,9 @@
  * A rehab session can be physically chaotic (high accel+decel density) yet entirely
  * PRE-PLANNED: the athlete knows the pattern in advance, so it is pure motor
  * execution with little perceptual-cognitive demand. The return-to-sport literature
- * is clear that the *decision* content is what loads a healing joint and drives
- * re-injury — UNANTICIPATED cutting raises knee valgus / injurious loading vs
- * pre-planned cutting, and neurocognitive / reactive-agility capacity is tied to ACL
+ * suggests the *decision* content adds joint load and may matter for
+ * re-injury — UNANTICIPATED cutting raises knee valgus / rotation moments vs
+ * pre-planned cutting, and neurocognitive / reactive-agility capacity is linked to landing patterns tied to ACL
  * injury and re-injury risk. So the continuum needs a second axis: visual-cognitive
  * decision load, progressed alongside physical chaos.
  *

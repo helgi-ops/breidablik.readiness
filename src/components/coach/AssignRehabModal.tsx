@@ -16,7 +16,7 @@
 // the program reads as a single multi-day rehab block. Existing
 // microdose flow is unaffected because all new fields are nullable.
 //
-// Sport-science basis (Aspetar 2014 RTP framework):
+// Basis: MicroPulse's stages, with return to sport as a continuum alongside rehab (Ardern 2016); the day ranges are MicroPulse's:
 //   Stage 1: Acute (0–3 d) — pain mgmt, ROM, isometric
 //   Stage 2: Sub-acute (3–7 d) — concentric loading
 //   Stage 3: Sport-specific (1–2 wks) — functional drills
@@ -76,7 +76,7 @@ const COPY = {
     endDate: "Til og með",
     programLabel: "Heiti áætlunar (valkvætt)",
     programLabelPlaceholder: "t.d. Hamstring rehab — vika 1",
-    stageLabel: "Stig (valkvætt — Aspetar 2014)",
+    stageLabel: "Stig (valkvætt — skipting MicroPulse; Ardern 2016)",
     stageNone: "— ekkert —",
     stageAcute: "Acute (0–3 dagar)",
     stageSubacute: "Sub-acute (3–7 dagar)",
@@ -106,7 +106,7 @@ const COPY = {
     endDate: "Until",
     programLabel: "Program name (optional)",
     programLabelPlaceholder: "e.g. Hamstring rehab — week 1",
-    stageLabel: "Stage (optional — Aspetar 2014)",
+    stageLabel: "Stage (optional — MicroPulse's stages, Ardern 2016)",
     stageNone: "— none —",
     stageAcute: "Acute (0–3 d)",
     stageSubacute: "Sub-acute (3–7 d)",

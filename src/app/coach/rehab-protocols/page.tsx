@@ -38,7 +38,7 @@ const PROTOCOLS: Protocol[] = [
       EN: "Criteria-based RTP for Grade I–II hamstring strains.",
       IS: "Viðmiðabundin endurkoma við I–II gráðu hamstring-tognun.",
     },
-    source: "Baar 2023",
+    source: "Power 2023",
   },
   {
     href: "/coach/jumpers-knee",

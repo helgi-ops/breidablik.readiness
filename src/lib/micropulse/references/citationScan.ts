@@ -27,8 +27,52 @@ export const OTHER_CITATION_SOURCES = [
   "src/lib/micropulse/playerAnalysis/developmentLevers.ts",
 ] as const;
 
+/**
+ * The rest of the app, added lot by lot as each area's citations are checked (papers in `appRefs.ts`).
+ * Lot A (2026-11-24): injury and return-to-play pages, rehab, movement screen, injury-risk rules.
+ */
+export const APP_CITATION_SOURCES = [
+  "src/app/coach/achilles-tendinopathy",
+  "src/app/coach/adductor-groin",
+  "src/app/coach/ankle-sprain",
+  "src/app/coach/calf-strain",
+  "src/app/coach/hamstring-rehab",
+  "src/app/coach/jumpers-knee",
+  "src/app/coach/low-back",
+  "src/app/coach/injuries",
+  "src/app/coach/rtp",
+  "src/app/coach/return-to-training",
+  "src/app/coach/rehab-protocols",
+  "src/app/coach/movement-screen",
+  "src/app/coach/clinical-reports",
+  "src/app/api/coach/clinical-assessment",
+  "src/app/api/coach/clinical-reports",
+  "src/app/api/coach/corrective-exercises",
+  "src/app/api/coach/movement-analysis",
+  "src/app/api/coach/movement-assessment-form",
+  "src/app/api/coach/movement-region-assessment",
+  "src/app/api/coach/movement-screen",
+  "src/app/api/coach/movement-tests",
+  "src/app/api/coach/rehab-track-progress",
+  "src/app/api/coach/return-to-training",
+  "src/app/api/coach/rtp",
+  "src/lib/micropulse/rtp",
+  "src/lib/micropulse/ccc",
+  "src/lib/micropulse/movementScreen",
+  "src/lib/micropulse/returnToTraining.ts",
+  "src/lib/micropulse/rttForPlayer.ts",
+  "src/lib/micropulse/injuryRisk",
+  "src/components/movement",
+  "src/components/rehab",
+  "src/components/clinical",
+  "src/components/coach/ReturnToTrainingPage.tsx",
+  "src/components/coach/AssignRehabModal.tsx",
+  "src/components/coach/MovementScreenPdf.tsx",
+  "src/components/coach/MovementScreenTpaCard.tsx",
+] as const;
+
 const SHORT_RE =
-  /(?:\p{Lu}[\p{L}]+ de |(?:Los|van der|van|de|di|dos|Di|De|Van|Dos) )?\p{Lu}[\p{L}'’-]+(?: et al\.?)?(?: & \p{Lu}[\p{L}'’-]+)? \(?(?:19|20)\d{2}[ab]?\b/gu;
+  /(?:\p{Lu}[\p{L}]+ de |(?:Los|van der|van|de|di|dos|Di|De|Van|Dos) )?\p{Lu}[\p{L}'’-]+(?: et al\.?)?(?: (?:&|&amp;) \p{Lu}[\p{L}'’-]+)? \(?(?:19|20)\d{2}[ab]?\b/gu;
 
 /** The other authors written before the last one: "Lum, Barbosa, Joseph, " in "Lum, Barbosa, Joseph, Balasekaran (2021)". */
 const AUTHOR_CHAIN_BEFORE = /(?:^|[\s"'(\[`])((?:\p{Lu}[\p{L}'’-]+(?: \p{Lu}[\p{L}'’-]+)?, )+)$/u;
@@ -52,7 +96,7 @@ const NOT_AUTHORS = new Set([
 export function citationMatches(text: string): Array<{ index: number; length: number; short: string }> {
   const out: Array<{ index: number; length: number; short: string }> = [];
   for (const m of text.matchAll(SHORT_RE)) {
-    let s = m[0].replace("(", "");
+    let s = m[0].replace("(", "").replace("&amp;", "&"); // JSX text escapes "&"
     if (NOT_AUTHORS.has(s.split(" ")[0])) continue;
     let index = m.index ?? 0;
     const closes = m[0].includes("(") && text[index + m[0].length] === ")";

@@ -6,8 +6,8 @@
  * is rule-based DECISION SUPPORT for the medical / S&C staff — it recommends tests, it does not clear a
  * player or diagnose. Every battery is cited. Descriptive: it never touches the readiness colour.
  *
- * Cite: Read et al. 2020 (criteria-based RTP test battery); Taberner et al. 2019 (control–chaos
- * continuum); Buckthorpe 2019 (criteria-based ACL RTP); Green et al. 2020 (muscle-injury RTP);
+ * Cite: Read et al. 2020 (CMJ asymmetry persists after ACL reconstruction); Read 2021 (no single asymmetry line fits every test); Taberner et al. 2019 (control–chaos
+ * continuum); Buckthorpe 2019 (criteria-based ACL RTP); Green et al. 2020 (calf strain RTP + recurrence); Green 2020b (hamstring re-injury risk factors);
  * O'Brien/Copenhagen (adductor squeeze); Opar/van Dyk (Nordic eccentric hamstring).
  */
 
@@ -53,14 +53,14 @@ const BATTERY: Record<RtpRegion, RecoTest[]> = {
 };
 
 const CITES: Record<RtpRegion, string[]> = {
-  calf: ["Read 2020", "Taberner 2019", "Green 2020"],
-  hamstring: ["Opar / van Dyk (Nordic)", "Read 2020", "Green 2020"],
-  groin: ["O'Brien / Copenhagen", "Read 2020"],
-  quad: ["Read 2020", "Buckthorpe 2019"],
+  calf: ["Read 2021", "Taberner 2019", "Green 2020"],
+  hamstring: ["Opar / van Dyk (Nordic)", "Taberner 2019", "Green 2020b"],
+  groin: ["O'Brien / Copenhagen", "Taberner 2019"],
+  quad: ["Taberner 2019", "Buckthorpe 2019"],
   knee: ["Buckthorpe 2019 (ACL)", "Read 2020"],
-  ankle: ["Read 2020", "Taberner 2019"],
-  hip: ["Read 2020"],
-  general: ["Read 2020", "Taberner 2019"],
+  ankle: ["Read 2021", "Taberner 2019"],
+  hip: ["Read 2021"],
+  general: ["Read 2021", "Taberner 2019"],
 };
 
 /** Map a free-text body part (EN or IS) to a canonical region. */

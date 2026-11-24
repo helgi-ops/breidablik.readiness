@@ -54,7 +54,7 @@ const COMPENSATIONS: Record<CompensationKey, Compensation> = {
       "iso_side_lying_hip_abduction", "iso_standing_hip_abduction_wall",
       "lateral_step_up", "crossover_step_up", "single_leg_squat", "rotational_single_leg_squat", "goblet_squat_knee_tracking",
     ],
-    citation: "Bell 2008/2012; Padua 2012; Macrum 2012; Bell 2013 (trainable); Ebert/Macadam/Bolgla (%MVIC)",
+    citation: "Bell 2008; Padua 2012; Macrum 2012; Bell 2013 (trainable); Ebert/Macadam/Bolgla (%MVIC)",
   },
   hip_abductor_weakness: {
     key: "hip_abductor_weakness",
@@ -72,14 +72,14 @@ const COMPENSATIONS: Record<CompensationKey, Compensation> = {
       "glute_bridge", "quadruped_hip_extension", "iso_glute_bridge_hold",
       "barbell_hip_thrust", "split_squat", "goblet_squat_counterbalance",
     ],
-    citation: "Gmax activation reviews (hip thrust/split squat); Macrum 2012 (ankle DF)",
+    citation: "Gmax activation reviews (hip thrust/split squat); Macrum 2012 (ankle DF → knee valgus; the link to trunk lean is clinical reasoning)",
   },
   limited_dorsiflexion: {
     key: "limited_dorsiflexion",
     label: { en: "Limited ankle dorsiflexion / squat depth", is: "Skert ökkla-dorsiflexion / hnébeygju-dýpt" },
     priorities: ["ankle_dorsiflexion"],
     slugs: ["smr_calf", "calf_stretch_gastroc", "ankle_df_knee_to_wall", "goblet_squat_counterbalance"],
-    citation: "Macrum 2012 (ankle DF drives valgus/lean)",
+    citation: "Macrum 2012 (restricted ankle DF increased knee valgus in a squat)",
   },
   low_reactive_strength: {
     key: "low_reactive_strength",
@@ -178,8 +178,8 @@ export function compensationLabel(key: CompensationKey): Bi {
 }
 
 const CAVEAT: Bi = {
-  en: "Corrective focus for a trainable movement compensation — re-screen in ~5 weeks to confirm it closed (Bell 2013). This improves movement quality; it is NOT an injury-risk reduction claim (Bonazza 2017; Dorrel 2015). Pain / red flags → clinician.",
-  is: "Leiðréttingar-áhersla á þjálfanlega hreyfi-uppbót — endurskima eftir ~5 vikur til að staðfesta að hún hafi lokast (Bell 2013). Bætir hreyfigæði; er EKKI fullyrðing um minnkun meiðsla-áhættu (Bonazza 2017; Dorrel 2015). Verkur / rauð flögg → klíníker.",
+  en: "Corrective focus for a trainable movement compensation — re-screen in ~5 weeks (MicroPulse's interval) to check it has shrunk — squat valgus fell after 10 sessions over 2–3 weeks (Bell 2013). This improves movement quality; it is NOT an injury-risk reduction claim — movement screens predict injury poorly (Dorrel 2015) and their validity is questioned (Bonazza 2017). Pain / red flags → clinician.",
+  is: "Leiðréttingar-áhersla á þjálfanlega hreyfi-uppbót — endurskima eftir ~5 vikur (bil MicroPulse) til að sjá hvort hún hafi minnkað — valgus í hnébeygju minnkaði eftir 10 æfingar á 2–3 vikum (Bell 2013). Bætir hreyfigæði; er EKKI fullyrðing um minnkun meiðsla-áhættu — hreyfiskimanir spá illa fyrir um meiðsli (Dorrel 2015) og réttmæti þeirra er dregið í efa (Bonazza 2017). Verkur / rauð flögg → klíníker.",
 };
 
 /** Which compensations a set of screen readings implies (deduped). */

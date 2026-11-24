@@ -513,8 +513,8 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
                 )}
                 <MethodRow term={is ? "Röðin (stigmögnun)" : "The order (staging)"} cite="Taberner 2019 · McBurnie 2022 · Buchheit 2025 (return-to-run)"
                   body={is
-                    ? "Við byggjum upp rúmmál og þol fyrst; háhraðahlaup og stefnubreytingar SÍÐAST — þau eru mest endurmeiðsla-hætt. Hvert gæði opnast aðeins þegar það á undan er komið. Buchheit o.fl. (2025) útlista sömu stigmögnun frá return-to-run til fullrar liðsþjálfunar."
-                    : "We rebuild volume and aerobic base first; high-speed running and change-of-direction LAST — they are the most re-injury-prone. Each quality unlocks only after the one before it. Buchheit et al. (2025) frame the same staged progression from return-to-run to full team integration."} />
+                    ? "Við byggjum upp rúmmál og þol fyrst; háhraðahlaup og stefnubreytingar SÍÐAST — þau reyna mest á vefinn sem er að gróa. Hvert gæði opnast aðeins þegar það á undan er komið. Buchheit o.fl. (2025) útlista sömu stigmögnun frá return-to-run til fullrar liðsþjálfunar."
+                    : "We rebuild volume and aerobic base first; high-speed running and change-of-direction LAST — they put the most load on the healing tissue. Each quality unlocks only after the one before it. Buchheit et al. (2025) frame the same staged progression from return-to-run to full team integration."} />
                 <MethodRow term={is ? "Verkjalaus ≠ fullbatnaður" : "Pain-free ≠ recovered"} cite="Buchheit/Heiderscheit/Kotsifaki 2024 (Aspetar)"
                   body={is
                     ? "Breytt hreyfimynstur í stefnubreytingum geta varað eftir að verkur hverfur. Klárun ætti að vega absólút aðlægðarkraft OG fjölstefnu-álagsþol (Control-Chaos Continuum) — ekki verk eða styrk-samhverfu eina saman. Rök, ekki sönnun."
@@ -528,14 +528,14 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
                 {/* Ramp rate — never a silently slower climb. If this player is on
                     the caution rate, the coach sees exactly which factor put him
                     there, and can override it with a logged reason. */}
-                <MethodRow term={is ? "Hraði stigmögnunar" : "Ramp rate"} cite="Gabbett 2020"
+                <MethodRow term={is ? "Hraði stigmögnunar" : "Ramp rate"} cite="Gabbett 2016 · Gabbett 2020"
                   body={data.rampCaution?.active
                     ? (is
-                        ? `Hækkar um 7%/viku í stað 10% — ${data.rampCaution.factors.map((f) => f.is).join("; ")}. Gabbett 2020 varar við að leikmenn með þessa þætti þoli hröð stökk verr. Þetta er varfærin sjálfgefin stilling, ekki spá um meiðsli.`
-                        : `Climbing at 7%/week rather than 10% — ${data.rampCaution.factors.map((f) => f.en).join("; ")}. Gabbett 2020 cautions that players with these factors tolerate rapid increases less well. This is a conservative default, not a prediction.`)
+                        ? `Hækkar um 7%/viku í stað 10% — ${data.rampCaution.factors.map((f) => f.is).join("; ")}. Gabbett 2016 bendir á að aldur og meiðslasaga breyti því hvernig leikmaður þolir sama álag; þættirnir og 7% eru varfærið viðmið MicroPulse. Þetta er varfærin sjálfgefin stilling, ekki spá um meiðsli.`
+                        : `Climbing at 7%/week rather than 10% — ${data.rampCaution.factors.map((f) => f.en).join("; ")}. Gabbett 2016 notes that age and injury history change how a player handles the same load; the factor list and the 7% are MicroPulse's cautious line. This is a conservative default, not a prediction.`)
                     : (is
-                        ? "Hækkar um 10%/viku — engir þættir sem Gabbett 2020 tengir við verri þol gegn hröðum stökkum (fyrri meiðsli á sama svæði, tíð meiðsli, mjög ungur/eldri, þunn saga)."
-                        : "Climbing at the standard 10%/week — none of the factors Gabbett 2020 links to poorer tolerance of rapid increases are present (prior injury to the same area, frequent injuries, very young/older, thin history).")} />
+                        ? "Hækkar um 10%/viku — engir af varúðarþáttum MicroPulse eiga við (fyrri meiðsli á sama svæði, tíð meiðsli, mjög ungur/eldri, þunn saga). Gabbett 2016 bendir á að aldur og meiðslasaga breyti því hvernig leikmaður þolir sama álag."
+                        : "Climbing at the standard 10%/week — none of MicroPulse's caution factors are present (prior injury to the same area, frequent injuries, very young/older, thin history). Gabbett 2016 notes that age and injury history change how a player handles the same load.")} />
                 {data.headInjury && (
                   <MethodRow term={is ? "Höfuðáverki" : "Head injury"} cite="HIA / GRTP"
                     body={is

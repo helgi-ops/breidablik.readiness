@@ -35,7 +35,7 @@ export function evaluateInjuryRiskRules(
   const elevatedAcwr = hasNumber(input.acwr) && (input.acwr as number) >= 1.3;
   const negativeDeltaZ = hasNumber(input.deltaZ) && (input.deltaZ as number) <= -0.25;
 
-  // ── Recovery / soreness — personal-baseline aware (Robertson 2017) ──
+  // ── Recovery / soreness — personal-baseline aware (MicroPulse's design; traffic-light systems reviewed in Robertson 2017) ──
   // Prefer personal z-score when available. When absent, fall back to
   // the global Likert cutoff so existing behaviour is preserved for
   // players without a baseline yet (< 7 obs).
@@ -164,10 +164,10 @@ export function evaluateInjuryRiskRules(
     riskScore += 1;
   }
 
-  // HID% fatigue trend (Harper et al. 2019 meta-analysis)
+  // HID% fatigue trend (MicroPulse's rule — not tested in a study; Harper et al. 2019 only shows high-intensity accel/decel counts drop from 1st to 2nd half)
   // Declining high-intensity distance with stable total distance signals
-  // neuromuscular fatigue — inability to reach high speeds increases
-  // compensatory movement patterns and soft-tissue injury risk.
+  // neuromuscular fatigue (our reading) — any rise in compensatory
+  // movement or soft-tissue injury risk is assumed, not shown.
   if (input.hidFatigueFlag === true) {
     triggeredRules.push("HID_DECLINE_FATIGUE");
     riskScore += 1;
@@ -237,8 +237,8 @@ export function evaluateInjuryRiskRules(
     }
   }
 
-  // CMJ neuromuscular-fatigue trend (Neyroud 2016 — read the multi-day
-  // slope, not today's value). Worse under poor recovery.
+  // CMJ neuromuscular-fatigue trend (multi-day slope is MicroPulse's choice;
+  // Neyroud 2016: group fatigue thresholds may not fit one player). Worse under poor recovery.
   if (hasNumber(input.cmjSlopeZ) && (input.cmjSlopeZ as number) <= -1.0) {
     if (poorRecovery || sorenessPain) {
       triggeredRules.push("CMJ_FATIGUE_TREND_WITH_STRAIN");
@@ -250,7 +250,7 @@ export function evaluateInjuryRiskRules(
   }
 
   // CMJ recovery deficit vs expected post-match curve (Hader 2019 — HSR
-  // drives post-match fatigue). Two-tier by deficit size.
+  // tracks post-match fatigue best, in the first 24 h). Two-tier by deficit size.
   if (hasNumber(input.cmjRecoveryDeficit) && (input.cmjRecoveryDeficit as number) >= 0.10) {
     triggeredRules.push("CMJ_RECOVERY_DEFICIT_HIGH");
     riskScore += 2;

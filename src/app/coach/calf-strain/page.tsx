@@ -69,7 +69,7 @@ const RUNNING: Row[] = [
 
 const CITATIONS: { label: string; source: string }[] = [
   { label: "Green et al. 2022 — Calf muscle strain injuries: a qualitative study of 20 expert clinicians (6-phase management framework)", source: "Sports Medicine — Open 8:10 (CC-BY)" },
-  { label: "Green & Pizzari 2017 — Calf muscle strain injuries in sport: systematic review of risk factors (prior injury strongest; increasing age)", source: "Br J Sports Med" },
+  { label: "Green & Pizzari 2017 — Calf muscle strain injuries in sport: systematic review of risk factors (prior calf strain and older age strongest)", source: "Br J Sports Med" },
   { label: "Dixon 2009 — Gastrocnemius vs soleus: differentiating and managing calf strains", source: "Curr Rev Musculoskelet Med" },
   { label: "Baar 2017 / 2019 — collagen loading dose (short, frequent bouts) applied to the isometric calf loading", source: "Sports Med / IJSNEM" },
 ];

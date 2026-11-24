@@ -276,7 +276,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
               ))}
             </div>
           )}
-          <p className="mt-2 text-[9px] text-slate-400">{T("A trainable compensation should close on re-screen (Bell 2013). Movement quality — not an injury-risk claim.", "Þjálfanleg uppbót á að lokast við endurskimun (Bell 2013). Hreyfigæði — ekki fullyrðing um meiðsla-áhættu.")}</p>
+          <p className="mt-2 text-[9px] text-slate-400">{T("A trainable compensation can shrink with training — check on re-screen (Bell 2013). Movement quality — not an injury-risk claim.", "Þjálfanleg uppbót getur minnkað með þjálfun — athugaðu við endurskimun (Bell 2013). Hreyfigæði — ekki fullyrðing um meiðsla-áhættu.")}</p>
         </div>
       )}
       </>)}

@@ -78,7 +78,7 @@ export function buildRtpCriteria(input: {
   // ── Hamstring (NordBord Nordic eccentric) ──────────────────────────────────
   if (input.nordicHamstringAsymPct != null) {
     const s = asymmetryStatus(input.nordicHamstringAsymPct);
-    c.push({ key: "nordic_hamstring_asymmetry", domain: "Hamstring (Nordic)", label: "Nordic eccentric-hamstring asymmetry", target: "< 10%", current: fmtPct(input.nordicHamstringAsymPct), status: s, met: s === "PASS", cite: "Parkinson 2021 (common 10–15% flag line) · van Dyk 2017 (hamstring RTP)" });
+    c.push({ key: "nordic_hamstring_asymmetry", domain: "Hamstring (Nordic)", label: "Nordic eccentric-hamstring asymmetry", target: "< 10%", current: fmtPct(input.nordicHamstringAsymPct), status: s, met: s === "PASS", cite: "Parkinson 2021 (common 10–15% flag line) · van Dyk 2017 (Nordic strength did not predict hamstring injury)" });
   }
 
   // ── Groin / hip adductor (ForceFrame) ──────────────────────────────────────

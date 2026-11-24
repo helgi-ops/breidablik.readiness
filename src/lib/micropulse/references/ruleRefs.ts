@@ -21,6 +21,7 @@ import { GYM_REFS } from "@/lib/micropulse/goalPlan/gymGoals";
 import { JUMP_REFS } from "@/lib/micropulse/goalPlan/jump";
 import { RX_REFS } from "@/lib/micropulse/goalPlan/liftRx";
 import type { GoalRef } from "@/lib/micropulse/goalPlan/types";
+import { APP_REFS } from "./appRefs";
 
 /** New entries for the rule citations (papers no other registry holds). */
 export const RULE_REFS: Record<string, GoalRef> = {
@@ -287,6 +288,11 @@ const SHORT_ALIASES: Record<string, string> = {
  * the coach decides whether to replace it. Never resolved by guessing.
  */
 export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
+  // Lot A (app citations, 2026-11-24).
+  "Buchheit 2025": {
+    en: "Cited for the staged order from return-to-run to full team training; no 2025 Buchheit paper on this is in PubMed or Crossref (likely a practitioner report). It stays as named; the same staged order is also cited to Taberner 2019 on that line.",
+    is: "Vitnað í vegna stigmögnunar frá fyrstu hlaupum til fullrar liðsæfingar; engin grein eftir Buchheit frá 2025 um þetta finnst í PubMed eða Crossref (líklega skýrsla fyrir fagfólk). Hún stendur eins og hún er nefnd; sama röð er líka studd með Taberner 2019 í sömu línu.",
+  },
   "Buchheit 2019": {
     en: "Cited for the locomotor/mechanical day framework and for monitoring advice; Buchheit wrote several pieces on this around 2019 (some in books), and which one is meant is not recorded. Where the code said a tight-space day is light on high-speed running, it now cites Lacome 2018.",
     is: "Vitnað í vegna skiptingar í hlaupa- og hreyfidaga og ráða um vöktun; Buchheit skrifaði nokkur verk um þetta um 2019 (sum í bókum) og ekki er skráð hvert er átt við. Þar sem kóðinn sagði að dagur í þröngu rými væri léttur á háhraðahlaupi er nú vitnað í Lacome 2018.",
@@ -320,8 +326,8 @@ export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
     is: "„Jump Height Lies“, Sport Performance & Science Reports #293. PubMed og Crossref skrá ekki SPSR, svo hún var ekki borin saman við færslu. Hún stendur sem heimild fyrir eigin tölum; ritrýnda leikrannsóknin við hlið hennar er Cormack, Newton & McGuigan 2008.",
   },
   "Power 2023": {
-    en: "Power, Haddad, Wallis & Baar (2023), Journal of Elite Sport Performance: the hamstring-rehab page names the same source. The journal is not indexed by PubMed or Crossref, so it was not checked against a record.",
-    is: "Power, Haddad, Wallis & Baar (2023), Journal of Elite Sport Performance: endurhæfingarsíðan fyrir aftanlæri nefnir sömu heimild. PubMed og Crossref skrá ekki tímaritið, svo hún var ekki borin saman við færslu.",
+    en: "Power, Haddad, Wallis & Baar (2023), Journal of Elite Sport Performance: the hamstring-rehab page names the same source. The journal is not indexed by PubMed or Crossref, so it was not checked against a record; the DOI the page prints (10.54080/MOMV6327) did not resolve at doi.org when checked.",
+    is: "Power, Haddad, Wallis & Baar (2023), Journal of Elite Sport Performance: endurhæfingarsíðan fyrir aftanlæri nefnir sömu heimild. PubMed og Crossref skrá ekki tímaritið, svo hún var ekki borin saman við færslu; DOI-númerið á síðunni (10.54080/MOMV6327) fannst ekki á doi.org þegar það var prófað.",
   },
   "Sandford 2019": {
     en: "Sandford published four 2019 papers on the anaerobic speed reserve, all in middle-distance runners; the ASR idea fits any of them, and which one is meant is not recorded. The football sprint-speed bands no longer cite it.",
@@ -331,6 +337,7 @@ export const UNRESOLVED_SHORTS: Record<string, { en: string; is: string }> = {
 
 const ALL_REFS: GoalRef[] = [
   ...Object.values(RULE_REFS),
+  ...Object.values(APP_REFS),
   ...Object.values(SPEED_REFS),
   ...Object.values(ACCEL_REFS),
   ...Object.values(BRAKING_REFS),

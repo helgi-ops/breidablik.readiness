@@ -67,11 +67,11 @@ const S4: Row[] = [
 const CITATIONS: { label: string; source: string }[] = [
   { label: "Kongsgaard et al. 2009 — Corticosteroid injections, eccentric decline squat & heavy slow resistance in patellar tendinopathy", source: "Scand J Med Sci Sports" },
   { label: "Silbernagel et al. — Continued sports activity using a pain-monitoring model", source: "Am J Sports Med 2007" },
-  { label: "Rio et al. 2015 — Isometric exercise reduces patellar tendon pain", source: "Br J Sports Med" },
+  { label: "Rio et al. 2015 — Isometric exercise reduced patellar tendon pain for at least 45 min (6 volleyball players)", source: "Br J Sports Med" },
   { label: "Malliaras et al. 2015 — Patellar tendinopathy: clinical diagnosis, load management & staged loading", source: "J Orthop Sports Phys Ther" },
   { label: "Blanch & Gabbett / Taberner — control-chaos continuum (Stage 4 return grading)", source: "Br J Sports Med" },
-  { label: "Baar 2019 — Load, collagen synthesis & nutrition for tendon/ligament (load timing + gelatin protocol)", source: "Sports Med" },
-  { label: "Shaw et al. 2017 — Vitamin C-enriched gelatin ~1 h before loading doubles collagen synthesis", source: "Am J Clin Nutr" },
+  { label: "Baar 2019 — Case report: gelatin + heavy isometric (stress-relaxation) loading in one pro basketball player with patellar tendinopathy", source: "Int J Sport Nutr Exerc Metab" },
+  { label: "Shaw et al. 2017 — Vitamin C-enriched gelatin ~1 h before loading doubled a blood marker of collagen synthesis (8 healthy men)", source: "Am J Clin Nutr" },
 ];
 
 // ── Force-plate readiness for a selected player (Stage 3 objective gate) ──────

@@ -46,8 +46,8 @@ const RUNNING: Row[] = [
 ];
 
 const CITATIONS: { label: string; source: string }[] = [
-  { label: "Maher, Underwood & Buchbinder 2017 — Non-specific low back pain (landmark Lancet LBP series)", source: "Lancet" },
-  { label: "Hayden et al. 2021 — Exercise therapy for chronic low back pain (reduces pain + disability)", source: "Cochrane Database Syst Rev" },
+  { label: "Maher et al. 2017 — Non-specific low back pain (landmark Lancet LBP series)", source: "Lancet" },
+  { label: "Hayden et al. 2021 — Exercise therapy for chronic low back pain (probably reduces pain; effect on function small)", source: "Cochrane Database Syst Rev" },
   { label: "Saragiotto et al. 2016 — Motor-control exercise for chronic LBP (≈ other exercise, > minimal intervention)", source: "Cochrane Database Syst Rev" },
   { label: "McGill — Low Back Disorders (trunk-endurance 'big-3' model; practitioner-standard, cited not reproduced)", source: "Human Kinetics" },
   { label: "Regional interdependence — hip IR + thoracic-spine mobility load-share off the lumbar spine", source: "clinical framework" },
