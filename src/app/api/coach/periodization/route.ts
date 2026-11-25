@@ -12,6 +12,7 @@ import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
 import { mondayOfIso, nextValdTrimLiftLog, type ValdTrimLift } from "@/lib/micropulse/periodization";
 import { isAerobicMode, DEFAULT_AEROBIC_TEST, type AerobicMode } from "@/lib/micropulse/periodization/testingSchedule";
 import { writeWeekSetup } from "@/lib/micropulse/periodization/weekSetupWrite";
+import { guardSeasonWindow } from "@/lib/micropulse/periodization/seasonWindowGuard";
 
 export const runtime = "nodejs";
 
@@ -179,7 +180,9 @@ export async function POST(req: Request) {
   // previously-saved preseasonStart / seasonEnd. Only the keys the caller sends are changed.
   const { data: existing } = await ctx.sb.from("season_plans").select("overrides").eq("team_id", ctx.teamId).eq("season_year", seasonYear).maybeSingle();
   const prevOverrides = ((existing as { overrides?: Record<string, unknown> } | null)?.overrides) ?? {};
-  const mergedOverrides: Record<string, unknown> = { ...prevOverrides, ...(body.overrides ?? {}) };
+  // Another season's window (e.g. last season's end) never enters this season's row (seasonWindowGuard).
+  const incoming = body.overrides ? guardSeasonWindow(seasonYear, body.overrides).patch : {};
+  const mergedOverrides: Record<string, unknown> = { ...prevOverrides, ...incoming };
   // The aerobic test must be one of the six registry tests; anything else keeps the saved choice.
   if (body.overrides && "aerobicTest" in body.overrides && !isAerobicMode(body.overrides.aerobicTest)) {
     if (prevOverrides.aerobicTest !== undefined) mergedOverrides.aerobicTest = prevOverrides.aerobicTest; else delete mergedOverrides.aerobicTest;
