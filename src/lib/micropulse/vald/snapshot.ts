@@ -7,6 +7,7 @@ import { classifyPhaseChange, worstRealChange, type PhaseMetricKey } from "./pha
 import { ftCtRatio, normalizedRfd } from "./cmjDerived";
 import { buildCmjReturnRead, currentValdFlag, selectCmjBaseline, worstValdFlag } from "./flagFreshness";
 import { isHipForceFrameTest } from "./groinStrength";
+import { fetchHipPaddles, isAbductionOnlyRow } from "./hipPaddles";
 
 // CMJ metric key → results column. Trial-averaged per test (Claudino 2017) and,
 // for the phase set, CV-gated before it may flag (Gathercole 2015).
@@ -109,8 +110,14 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
   // Dynamic column list defeats the typed-client inference; cast through unknown.
   const cmjRows = (cmjRes.data ?? []) as unknown as Array<Record<string, unknown>>;
   const latestNord = (nordRes.data ?? [])[0] as Record<string, unknown> | undefined;
-  // The groin flag reads the hip adduction/abduction test only, never an ankle or knee ForceFrame test.
-  const latestForce = ((ffRes.data ?? []) as Array<Record<string, unknown>>).find(isHipForceFrameTest);
+  // The groin flag reads the hip adduction/abduction test only, never an ankle or knee ForceFrame test,
+  // and never a CSV row that is the abduction half alone.
+  const latestForce = ((ffRes.data ?? []) as Array<Record<string, unknown>>).find((r) => isHipForceFrameTest(r) && !isAbductionOnlyRow(r));
+  // An API hip AD/AB row stores the STRONGER pad set, which can be abduction. Groin = adduction,
+  // so read the inner pads from the raw test when the row doesn't name its direction.
+  const groinPads = latestForce && !latestForce.direction
+    ? (await fetchHipPaddles(sb, [latestForce.raw_test_id as string | null])).get(String(latestForce.raw_test_id ?? ""))?.adduction ?? null
+    : null;
 
   // ── Trial averaging (Claudino 2017): one aggregate per TEST = the mean of its
   // valid trials. The latest test is compared against the median of the player's
@@ -213,7 +220,9 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
     VALD_THRESHOLDS.nordbordHighAsymmetryPct
   );
 
-  const latestForceAsym = asymFromPeaks(latestForce?.left_peak_force_n, latestForce?.right_peak_force_n, latestForce?.asymmetry_percent);
+  const latestForceAsym = groinPads && groinPads.leftN != null && groinPads.rightN != null
+    ? asymFromPeaks(groinPads.leftN, groinPads.rightN, null)
+    : asymFromPeaks(latestForce?.left_peak_force_n, latestForce?.right_peak_force_n, latestForce?.asymmetry_percent);
   const ffScored = scoreAsymmetry(
     latestForceAsym,
     VALD_THRESHOLDS.nordbordModerateAsymmetryPct,

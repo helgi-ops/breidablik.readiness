@@ -21,6 +21,8 @@ import { resolveBenchmarkPop } from "@/lib/micropulse/vald/benchmarks";
 import { asymmetryStatus, buildRtpCriteria, buildRtpDomains, buildRtpRecommendations, rtpDecision } from "./clearanceCriteria";
 import { computeCodExposure, type CodExposureRow } from "./codExposure";
 import { codFlag } from "@/lib/micropulse/codAsymmetry";
+import { isHipForceFrameTest } from "@/lib/micropulse/vald/groinStrength";
+import { fetchHipPaddles, type HipPaddles } from "@/lib/micropulse/vald/hipPaddles";
 import type { RtpAssessment, RtpBatteryTest, RtpCmj, RtpCod, RtpImtp, RtpInjury, RtpLimbStrengthEntry, RtpLimbStrengthTest, RtpValgus, RtpValgusSeverity } from "./types";
 
 const BATTERY_LABELS: Record<string, string> = {
@@ -55,7 +57,7 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
   const nowIso = new Date().toISOString();
   const today = nowIso.slice(0, 10);
 
-  const [playerRes, rtt, piRes, ieRes, cmjRes, weightRes, valgusRes, nbRes, ffRes] = await Promise.all([
+  const [playerRes, rtt, piRes, ieRes, cmjRes, valgusRes, nbRes, ffRes] = await Promise.all([
     sb.from("players").select("id, full_name, team_id, position, date_of_birth").eq("id", playerId).maybeSingle(),
     buildRttForPlayer(sb, playerId, teamId, 120),
     sb.from("player_injuries")
@@ -65,13 +67,12 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     sb.from("vald_forcedecks_results")
       .select("raw_test_id, test_timestamp, test_type, jump_height_cm, rsi_mod, rsi_mod_source, peak_power_w, relative_peak_power_w_kg, peak_force_n, time_to_takeoff_ms, concentric_peak_velocity_m_s, rfd_n_s, left_value, right_value, asymmetry_percent, asymmetry_side, is_valid")
       .eq("microplayer_id", playerId).order("test_timestamp", { ascending: false }).limit(60),
-    sb.from("vald_raw_tests").select("payload").eq("test_type", "CMJ").order("test_timestamp", { ascending: false }).limit(1),
     sb.from("rtp_valgus_assessments").select("severity, note, assessment_date").eq("player_id", playerId).order("assessment_date", { ascending: false }).limit(1),
     sb.from("vald_nordbord_results")
       .select("test_timestamp, test_type, left_peak_force_n, right_peak_force_n, asymmetry_percent, asymmetry_side, is_valid")
       .eq("microplayer_id", playerId).order("test_timestamp", { ascending: false }).limit(60),
     sb.from("vald_forceframe_results")
-      .select("test_timestamp, test_type, body_region, movement_pattern, direction, left_peak_force_n, right_peak_force_n, left_avg_force_n, right_avg_force_n, left_max_rfd_n_s, right_max_rfd_n_s, asymmetry_percent, asymmetry_side, is_valid")
+      .select("raw_test_id, test_timestamp, test_type, body_region, movement_pattern, direction, left_peak_force_n, right_peak_force_n, left_avg_force_n, right_avg_force_n, left_max_rfd_n_s, right_max_rfd_n_s, asymmetry_percent, asymmetry_side, is_valid")
       .eq("microplayer_id", playerId).order("test_timestamp", { ascending: false }).limit(60),
   ]);
 
@@ -396,7 +397,21 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     label: /nordic/i.test(type) ? "Nordic hamstring" : `${type} (hamstring)`,
     bodyRegion: "Hamstring",
   }));
-  assembleGroups((ffRes.data ?? []) as Array<Record<string, unknown>>, "forceframe", true, (type, latest) => {
+  // Hip AD/AB from the API is ONE row holding the stronger pad set only; split it into adduction
+  // (inner pads = groin) and abduction (outer pads) from the raw test, so "groin" is always adduction.
+  const ffRows = (ffRes.data ?? []) as Array<Record<string, unknown>>;
+  const hipSplitIds = ffRows.filter((r) => isHipForceFrameTest(r) && !r.direction).map((r) => r.raw_test_id as string | null);
+  const paddles = await fetchHipPaddles(sb, hipSplitIds);
+  const ffExpanded: Array<Record<string, unknown>> = ffRows.flatMap((r) => {
+    const p = !r.direction && isHipForceFrameTest(r) ? paddles.get(String(r.raw_test_id ?? "")) : undefined;
+    if (!p) return [r];
+    const half = (dir: string, h: HipPaddles["adduction"]) => ({
+      ...r, direction: dir, left_peak_force_n: h.leftN, right_peak_force_n: h.rightN,
+      left_avg_force_n: h.avgLeftN, right_avg_force_n: h.avgRightN, asymmetry_percent: null, asymmetry_side: null,
+    });
+    return [half("Adduction", p.adduction), half("Abduction", p.abduction)].filter((h) => h.left_peak_force_n != null || h.right_peak_force_n != null);
+  });
+  assembleGroups(ffExpanded, "forceframe", true, (type, latest) => {
     const region = (latest.body_region as string) ?? (type.split(/[\s/]/)[0] || null);
     const movement = (latest.movement_pattern as string) ?? type;
     const dir = (latest.direction as string) ?? "";
@@ -414,8 +429,12 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
   const groinAdductorAsymPct = limbStrength.find((e) => /groin/i.test(e.label))?.asymmetryPct ?? null;
 
   // ── Body mass (from latest CMJ raw payload weight) ──────────────────────────
-  const weightPayload = (weightRes.data ?? [])[0] as { payload?: { weight?: unknown } } | undefined;
-  const bodyMassKg = num(weightPayload?.payload?.weight);
+  // The player's OWN latest CMJ (by its raw test id) — never the newest CMJ in the whole table.
+  const latestCmjRawId = (cmjRows.find((r) => r.raw_test_id)?.raw_test_id as string | null | undefined) ?? null;
+  const { data: weightRow } = latestCmjRawId
+    ? await sb.from("vald_raw_tests").select("weight:payload->>weight").eq("id", latestCmjRawId).maybeSingle()
+    : { data: null };
+  const bodyMassKg = num((weightRow as { weight?: unknown } | null)?.weight);
 
   // ── Criteria + decision (rules) ─────────────────────────────────────────────
   const sldj = battery.find((b) => b.testType === "SLDJ");

@@ -218,3 +218,18 @@ test("e2e: the groin flag reads the hip test, never a newer ankle ForceFrame tes
   assert.equal(ankleOnly.groinFlag, null);
   assert.equal(ankleOnly.latestForceframeAt, null);
 });
+
+test("e2e: groin = adduction pads, even when the stored row holds the stronger abduction pads", async () => {
+  // Stored L/R = outer pads (abduction, 20% gap); the raw test's inner pads (adduction) are even.
+  const hip = { is_valid: true, raw_test_id: "raw-1", direction: null, test_type: "Hip AD/AB", body_region: "Hip", movement_pattern: "Hip AD/AB - 60", left_peak_force_n: 400, right_peak_force_n: 500, test_timestamp: "2026-11-01T10:00:00Z" };
+  const raw = { id: "raw-1", inL: "380", inR: "385", inAL: null, inAR: null, outL: "400", outR: "500", outAL: null, outAR: null };
+  const snap = await buildValdDailySnapshot("team", "player", "2026-11-06", stubClient({
+    vald_forcedecks_results: [],
+    vald_nordbord_results: [],
+    vald_forceframe_results: [hip],
+    vald_raw_tests: [raw],
+  }));
+  assert.equal(snap.groinFlag, "green");
+  const expl = snap.explanation as { forceframe: { asymmetry_percent: number } };
+  assert.ok(expl.forceframe.asymmetry_percent < 2, `adduction gap expected ~1.3%, got ${expl.forceframe.asymmetry_percent}`);
+});

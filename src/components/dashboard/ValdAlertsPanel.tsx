@@ -991,7 +991,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
               <DeviceStrengthGroups keyPrefix="nb" heading={lang === "IS" ? "NordBord — Aftanlæri (Nordic)" : "NordBord — Hamstring (Nordic)"} rows={nordbordRows} />
             )}
             {forceframeRows.length > 0 && (
-              <DeviceStrengthGroups keyPrefix="ff" heading={lang === "IS" ? "ForceFrame — mjöðm (nári), ökkli o.fl." : "ForceFrame — hip (groin), ankle and others"} rows={forceframeRows} showMovement groupByTest />
+              <DeviceStrengthGroups keyPrefix="ff" heading={lang === "IS" ? "ForceFrame — mjöðm, ökkli o.fl." : "ForceFrame — hip, ankle and others"} rows={forceframeRows} showMovement groupByTest />
             )}
             <p className="text-[10px] leading-snug text-slate-400">
               {lang === "IS"
