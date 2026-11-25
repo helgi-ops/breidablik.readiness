@@ -17,7 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupView from "@/components/coach/WeekSetupView";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
-import { VALD_TRIM_CITE, mondayOfIso, buildMesoPlan, buildMesoBlocks, buildCalendarBlock, inSeasonRange, teamMatchUnitNote, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ValdTrimLift, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
+import { VALD_TRIM_CITE, mondayOfIso, buildMesoPlan, buildCalendarBlock, inSeasonRange, teamMatchUnitNote, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ValdTrimLift, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput, type ExposureInput, type ShapeDirInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { exposuresFromTlyp, shapeDirsFromShape } from "@/lib/micropulse/trainingNeeds";
@@ -51,7 +51,8 @@ import { kpiAvgFromUnit as kpiAvgFromUnitLib, teamKpiAvg as teamKpiAvgLib } from
 import { cleanAssumedGames, GAMES_FROM_NONE, upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, PRE_MIN_BLOCK, PRESEASON_DEFAULT_WEEK1, PRESEASON_DEFAULT_TAPER_PCT, PRESEASON_TAPER_RESEARCH, clampTaperPct } from "@/lib/micropulse/periodization/preseasonWindow";
 import { buildPreseasonProposal } from "@/lib/micropulse/periodization/preseasonProposal";
 import { weekConfirmLabel, type WeekConfirmStatus } from "@/lib/micropulse/weekSetup/confirmation";
-import { mesoSkeleton, mesoBlockCalendar, planDayFromCal, planDaysFromCalWeek, CALTYPE_FOCUS_LABEL, type PlanDay } from "@/lib/micropulse/periodization/mesoWeek";
+import { MESO_HORIZON, mesoSkeleton, planDayFromCal, planDaysFromCalWeek, CALTYPE_FOCUS_LABEL } from "@/lib/micropulse/periodization/mesoWeek";
+import { mesoWeekFor as mesoWeekOf, preseasonInputFor, seasonMesoBlocks, teamCalendarUnit, assumedWeekMove } from "@/lib/micropulse/periodization/mesoSeed";
 import PreseasonReadsFrom from "@/components/coach/PreseasonReadsFrom";
 import { checkThreeInARow, THREE_IN_A_ROW_RULE, type WeekRuleDay } from "@/lib/micropulse/weekSetup/weekRules";
 import { MacroSetupChecklist, MacroFixturesCard, MacroBreaksCard, MacroSetupGate, firstLeagueGame, type MacroFixture } from "@/components/coach/MacroSetupCards";
@@ -101,10 +102,9 @@ const teamKpiAvg = (players: Player[]): Partial<Record<WeeklyLoadMetricKey, numb
 const preAnchorOf = (plan: Plan) => preseasonAnchor({ matchUnits: plan.players.map((p) => p.matchUnit as unknown as LibMatchUnit), matchLoad: plan.matchLoad, matchSrpe: plan.matchSrpe, loadSource: plan.tier.loadSource });
 type DayState = "match" | "session" | "off";
 
-// The meso always seeds a full 6-week skeleton; a smaller cadence (4/5) just RENDERS fewer weeks
-// (the tail is trimmed, not reshuffled), so switching 6→4→5 shows the same block minus the last
+// The meso always seeds a full 6-week skeleton (MESO_HORIZON, periodization/mesoWeek); a smaller cadence (4/5) just
+// RENDERS fewer weeks (the tail is trimmed, not reshuffled), so switching 6→4→5 shows the same block minus the last
 // 1–2 weeks and keeps the coach's day edits.
-const MESO_HORIZON = 6;
 // caltypeFromFocus / CALTYPE_FOCUS_LABEL (focus words ↔ CalType) live in periodization/mesoWeek with the skeleton.
 // Backwards pre-season meso layout (preseasonMeso) + the window (upcomingPreseason) live in
 // periodization/preseasonWindow so the proposal builder and Week Setup use the same split.
@@ -518,13 +518,9 @@ export default function PeriodizationHubPage() {
   // (= block length), so changing the cadence (or, via re-fetch, the anchors) re-flows the whole plan.
   const mesoBlocks: MesoBlock[] = React.useMemo(() => {
     if (!plan || plan.phases.length === 0) return (plan?.blocks as unknown as MesoBlock[]) ?? [];
-    const s = plan.phases[0].start, e = plan.phases[plan.phases.length - 1].end;
-    const curve = (plan.loadCurve ?? []).map((w) => ({ weekStart: w.weekStart, load: w.load, readiness: null }));
-    // TMr divides the team-total weekly loadCurve by the team-total match load (same scale → ~2–5×).
-    // competitiveStart lets the builder make each in-season block fixture-aware (compete vs re-load).
-    const compStart = plan.phases.find((p) => p.key === "competitive")?.start ?? null;
-    const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
-    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart, teamBreaks, offPhaseStart, offStart || null, { blockWeeks: blockLenOv, deloadByStart: blockDeloadOv, fixturesEstimated: plan.fixturesEstimated });
+    // One slicing for the hub and the standalone Week Setup seed (periodization/mesoSeed): the season span by the
+    // cadence + the coach's block maps; competitiveStart makes each in-season block fixture-aware.
+    return seasonMesoBlocks(plan, { cadence, teamBreaks, offseasonStart: offStart || null, blockWeeks: blockLenOv, blockDeload: blockDeloadOv });
   }, [plan, cadence, teamBreaks, offStart, blockLenOv, blockDeloadOv]);
 
   // The block the coach is editing (contains blkStart), and its EFFECTIVE goal = coach override for that
@@ -697,8 +693,7 @@ export default function PeriodizationHubPage() {
     return isPlayerScope && mu
       ? { dist: mu.distance.typical, hsr: mu.hsr.typical, load: mu.load.typical, accdec: ((mu.accel.typical ?? 0) + (mu.decel.typical ?? 0)) || null,
           accHiEff: mu.accHiEff.typical, decHiEff: mu.decHiEff.typical, stride: mu.stride.typical, ...dirFields, rhie: mu.rhie.typical, symmetry: mu.symmetry.typical, metPower: mu.metPower.typical, fr: mu.imaFr?.typical ?? ta?.matchImaFrDist ?? null, cod: mu.imaCod.typical ?? ta?.matchImaCod ?? null, accel: mu.accel.typical, decel: mu.decel.typical }
-      : { dist: ta?.matchDistanceM ?? null, hsr: ta?.matchHsrM ?? null, load: ta?.matchPlayerLoad ?? null, accdec: ((ta?.matchAccel ?? 0) + (ta?.matchDecel ?? 0)) || null,
-          accHiEff: ta?.matchAccelHiEff ?? null, decHiEff: ta?.matchDecelHiEff ?? null, stride: ta?.matchStrideHi ?? null, ...dirFields, rhie: ta?.rhieBouts ?? null, symmetry: ta?.runSymmetry ?? null, metPower: ta?.metabolicPower ?? null, fr: ta?.matchImaFrDist ?? null, cod: ta?.matchImaCod ?? null, accel: ta?.matchAccel ?? null, decel: ta?.matchDecel ?? null };
+      : teamCalendarUnit(ta); // the squad's match unit — the same one the standalone Week Setup seed uses
   }, [isPlayerScope, player, plan]);
   // A full match in Player Load (the KPI tables' near-full unit), named beside the calendar's squad value. sRPE teams have no PL.
   const fullMatchPl = React.useMemo(() => (plan && plan.tier.loadSource !== "srpe" ? teamKpiAvg(plan.players).totalPlayerLoad ?? null : null), [plan]);
@@ -1076,12 +1071,9 @@ export default function PeriodizationHubPage() {
     if (upcomingYear) setPrePsAssumed(next); else setPsAssumed(next);
     setPreDayPick(null);
     if (plan) void (async () => { try { await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: upcomingYear ? preYear : plan.seasonYear, overrides: { preAssumedGames: next } }) }); } catch { /* best-effort */ } })();
-    const p2 = buildPreseasonProposal({ ...input, settingsOverride: { ...input.settingsOverride!, assumedGames: next }, ignoreSavedWeeks: [weekStart] });
-    const w2 = p2?.engine.cal.weeks.find((w) => w.weekStart === weekStart); if (!w2) return;
-    const days = planDaysFromCalWeek(w2);
-    setSavedPlans((prev) => { const o = { ...prev }; for (const d of days) o[d.day_date] = { dayType: d.day_type, focus: d.focus }; return o; });
-    const payload = [{ week_start: w2.weekStart, system_key: w2.isDeload ? "RECOVERY" : "STRENGTH",
-      intensity_target: w2.isDeload ? 3 : Math.max(3, Math.min(9, Math.round(5 + (w2.mult - 1) * 12))), days }];
+    const mv = assumedWeekMove(input, weekStart, next); if (!mv) return;
+    setSavedPlans((prev) => { const o = { ...prev }; for (const d of mv.week.days) o[d.day_date] = { dayType: d.day_type, focus: d.focus }; return o; });
+    const payload = [mv.week];
     setPreDaySave("saving");
     // Awaited, so a caller (Micro's "No game this week") re-reads the week after it is written.
     try { const r = await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ applyWeekSetup: payload }) }); setPreDaySave(r.ok ? "saved" : "err"); } catch { setPreDaySave("err"); }
@@ -1118,13 +1110,10 @@ export default function PeriodizationHubPage() {
   // and saved days. Built here (not only inside the Pre-season tab) so the Micro tab seeds a week from the same plan.
   const preInput = React.useMemo((): Parameters<typeof buildPreseasonProposal>[0] | null => {
     if (!plan) return null;
-    return {
-      phases: plan.phases, today: new Date().toISOString().slice(0, 10), nextFirstFixture: plan.nextFirstFixture, nextFirstFixtureEstimated: plan.nextFirstFixtureEstimated,
-      saved: null, settingsOverride: { sessionsPerWeek: psSessT, week1MatchMultiple: psW1T, week1Kpi: week1KpiT, mesoTail: mesoTailT, taperPct: psTaperT, gamesFrom: psGamesT, assumedGames: psAssumedT },
-      matchUnits: plan.players.map((p) => p.matchUnit as unknown as LibMatchUnit), matchLoad: plan.matchLoad, matchSrpe: plan.matchSrpe, loadSource: plan.tier.loadSource,
-      unit: blkUnit, fixtures: [...(plan.fixtures ?? []), ...(plan.upcomingFixtures ?? [])], camps: campRegions, savedDays: savedPlansT, cadence: preCadenceT, blockWeeks: preBlockWeeksT, blockGoals: preBlockGoalsT, baseOverloadPct: blkBase, stepPct: blkStep,
-      aerobicMode: aerobicTest, hasVald: plan.players.some((p) => p.vald.status != null),
-    };
+    return preseasonInputFor(plan, {
+      today: new Date().toISOString().slice(0, 10), unit: blkUnit, savedDays: savedPlansT, camps: campRegions, cadence: preCadenceT, blockWeeks: preBlockWeeksT, blockGoals: preBlockGoalsT, baseOverloadPct: blkBase, stepPct: blkStep, aerobicMode: aerobicTest,
+      settings: { sessionsPerWeek: psSessT, week1MatchMultiple: psW1T, week1Kpi: week1KpiT, mesoTail: mesoTailT, taperPct: psTaperT, gamesFrom: psGamesT, assumedGames: psAssumedT },
+    });
   }, [plan, psSessT, psW1T, week1KpiT, mesoTailT, psTaperT, psGamesT, psAssumedT, blkUnit, campRegions, savedPlansT, preCadenceT, preBlockWeeksT, preBlockGoalsT, blkBase, blkStep, aerobicTest]);
   const preProp = React.useMemo(() => (preInput ? buildPreseasonProposal(preInput) : null), [preInput]);
 
@@ -1132,30 +1121,7 @@ export default function PeriodizationHubPage() {
   // Pre-season: the pre-season plan's week (with its assumed game). In-season: the Meso block calendar the In-season
   // page builds for the team (block opened at its start, same goal / unload / hold / skeleton). Micro seeds an
   // unsaved week from it; null = the week is outside both (Micro falls back to its match-anchored grid).
-  const mesoWeekFor = (ws: string): { source: "preseason" | "inseason"; days: PlanDay[]; assumedGame: { date: string; coachSet: boolean } | null } | null => {
-    if (!plan || plan.phases.length === 0) return null;
-    const pw = preProp?.weeks.find((w) => w.weekStart === ws);
-    const pcw = preProp?.engine.cal.weeks.find((w) => w.weekStart === ws);
-    if (pw && pcw) return { source: "preseason", days: planDaysFromCalWeek(pcw), assumedGame: pw.assumedGame };
-    const ph = plan.phases.find((p) => p.start <= ws && ws < p.end);
-    if (!ph || ph.key === "preseason") return null;
-    const b = mesoBlocks.find((x) => x.start <= ws && ws < x.end);
-    if (!b) return null;
-    const wkMs = 7 * 86_400_000, bMon = Date.parse(`${mondayOf(b.start)}T00:00:00Z`);
-    const idx = Math.round((Date.parse(`${ws}T00:00:00Z`) - bMon) / wkMs);
-    const toEnd = Math.round((Date.parse(`${b.end}T00:00:00Z`) - bMon) / wkMs);
-    const nWeeks = Math.max(1, Math.min(MESO_HORIZON, toEnd > 0 ? toEnd : cadence));
-    if (idx < 0 || idx >= nWeeks) return null;
-    const goal: "accum" | "transmute" | "realize" = blockGoals[b.start] ?? (b.goalKey && b.goalKey !== "deload" ? b.goalKey : "accum");
-    const bPhase = plan.phases.find((p) => p.start <= b.start && b.start < p.end)?.label ?? { en: "Season block", is: "Tímabils-lota" };
-    const common = { unit: blkUnit, scopeName: "__team__", baseOverloadPct: blkBase, stepPct: blkStep, allFixtures: plan.fixtures ?? [], goal, deload: blockDeloadOf(b), hold: holdsStandardWeek(b.inSeason, goal), offseasonStart: plan.phases.find((p) => p.key === "offseason")?.start ?? undefined, inSeason: inSeasonRange(plan.phases), noAutoMatch: true };
-    const cal = mesoBlockCalendar({
-      seed: { ...common, startDate: b.start, numWeeks: MESO_HORIZON }, savedPlans, teamBreaks,
-      calendar: { ...common, startDate: b.start, numWeeks: nWeeks, scopePos: null, phase: bPhase, camps: campRegions },
-    });
-    const cw = cal.weeks.find((w) => w.weekStart === ws);
-    return cw ? { source: "inseason", days: planDaysFromCalWeek(cw), assumedGame: null } : null;
-  };
+  const mesoWeekFor = (ws: string) => (plan ? mesoWeekOf({ plan, preProp, mesoBlocks, blockGoals, cadence, unit: teamCalendarUnit(plan.teamBaseline?.avg), baseOverloadPct: blkBase, stepPct: blkStep, savedPlans, teamBreaks, camps: campRegions }, ws) : null);
 
   // Week confirmation status (Micro "Confirm week → players") — badges on the Meso week cards.
   const [weekConfirm, setWeekConfirm] = React.useState<Record<string, WeekConfirmStatus>>({});

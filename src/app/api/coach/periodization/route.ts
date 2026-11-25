@@ -121,7 +121,8 @@ export async function GET(req: Request) {
       .eq("team_id", ctx.teamId).not("overrides->>aerobicTest", "is", null).order("season_year", { ascending: false }).limit(5);
     for (const r of (anyRows ?? []) as Array<{ aerobic_test: string | null }>) if (isAerobicMode(r.aerobic_test)) { aerobicTest = r.aerobic_test; break; }
   }
-  return NextResponse.json({ ok: true, plan, deloadCadence, savedWindow, savedWindowNext, weekPlans, aerobicTest: aerobicTest ?? DEFAULT_AEROBIC_TEST, aerobicTestSaved: aerobicTest != null });
+  // teamId: the caller's own team (the one this plan is for) — the standalone Week Setup checks it matches its week.
+  return NextResponse.json({ ok: true, teamId: ctx.teamId, plan, deloadCadence, savedWindow, savedWindowNext, weekPlans, aerobicTest: aerobicTest ?? DEFAULT_AEROBIC_TEST, aerobicTestSaved: aerobicTest != null });
 }
 
 export async function POST(req: Request) {

@@ -35,7 +35,8 @@ import { matchAnchoredGrid } from "@/lib/micropulse/weekSetup/autoGrid";
 import { checkThreeInARow, dayKindOf, runSignature, type ThreeInARowCheck, type WeekRuleDay } from "@/lib/micropulse/weekSetup/weekRules";
 import WeekRuleCard, { type WeekRuleKeep } from "@/components/coach/WeekRuleCard";
 import { weekConfirmLabel, type WeekConfirmStatus } from "@/lib/micropulse/weekSetup/confirmation";
-import type { PlanDay } from "@/lib/micropulse/periodization/mesoWeek";
+import { useStandaloneMesoWeek } from "@/components/coach/useStandaloneMesoWeek";
+import type { MesoWeekSeed } from "@/lib/micropulse/periodization/mesoWeek";
 import type { SportId } from "@/lib/micropulse/sportProfiles";
 
 // shadcn/ui
@@ -418,7 +419,7 @@ type WeekSetupViewProps = {
   /** Act on an assumed (not entered) game in the week: enter it as a friendly, or take the game out of the week. */
   onAssumedGame?: (weekStart: string, date: string, action: "friendly" | "none") => Promise<void>;
 };
-export type MesoWeekSeed = { source: "preseason" | "inseason"; days: PlanDay[]; assumedGame: { date: string; coachSet: boolean } | null };
+export type { MesoWeekSeed };
 
 // Rendered by /coach/week-setup (standalone) and by the Periodization Hub's "Micro Cycle" tab
 // (embedded, with the Macro/Meso spine passed in) — one macro→meso→micro flow.
@@ -441,9 +442,6 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
   // Set when the saved week is anchored to a different match day than the current fixtures
   // (a fixture moved since the week was saved) → prompt a one-click re-anchor.
   const [staleMatchAnchor, setStaleMatchAnchor] = useState<{ was: string | null; now: string | null } | null>(null);
-  // The Meso week (hub): read in loadWeek through a ref so a new function each hub render doesn't reload the week.
-  const mesoWeekRef = useRef(mesoWeek);
-  useEffect(() => { mesoWeekRef.current = mesoWeek; }, [mesoWeek]);
   // An assumed game in the week (pre-season, from "Weekend games from"; not in Fixtures) → banner with two actions.
   const [assumedGame, setAssumedGame] = useState<{ date: string; coachSet: boolean } | null>(null);
   const [assumedBusy, setAssumedBusy] = useState(false);
@@ -481,6 +479,15 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
   // powers the "vs FH" match cards and the provenance pill. Never saved.
   const [matchOpponents, setMatchOpponents] = useState<Record<string, string>>({});
   const [teamId, setTeamId] = useState<string | null>(null);
+  // The Meso week: the hub passes it (live state); the standalone page reads the same plan itself (saved settings).
+  const standaloneMeso = useStandaloneMesoWeek(!mesoWeek, teamId);
+  const mesoFn = mesoWeek ?? standaloneMeso.weekFor ?? undefined;
+  const assumedAction = onAssumedGame ?? (standaloneMeso.weekFor ? standaloneMeso.onAssumedGame : undefined);
+  // The standalone page waits for its plan read before loading the week, so the first week shown is already seeded.
+  const mesoReady = !!mesoWeek || standaloneMeso.ready;
+  // Read in loadWeek through a ref so a new function each hub render doesn't reload the week.
+  const mesoWeekRef = useRef(mesoFn);
+  useEffect(() => { mesoWeekRef.current = mesoFn; }, [mesoFn]);
   // Bumped by a match_schedule realtime event → re-reads the week's fixtures so a match added elsewhere
   // (the Meso calendar, the Fixtures page) appears here live.
   const [fixtureRev, setFixtureRev] = useState(0);
@@ -721,6 +728,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         setLoading(false);
         return;
       }
+      if (!mesoReady) return; // standalone: the Meso plan read is still on its way (stays "loading")
 
       setLoading(true);
       setError(null);
@@ -915,7 +923,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
     return () => {
       alive = false;
     };
-  }, [weekStart, teamId, isBasketball, fixtureRev]);
+  }, [weekStart, teamId, isBasketball, fixtureRev, mesoReady]);
 
   // Live-sync the week's fixtures with match_schedule (the single source of truth) — a match added on the
   // Meso calendar or the Fixtures page in another open tab shows up here without a reload.
@@ -2040,15 +2048,15 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
               ? (isIS ? "Þú settir leikinn á þennan dag á undirbúningssíðunni. Vikan er skipulögð í kringum hann." : "You placed the game on this day on the Pre-season page. The week is planned around it.")
               : (isIS ? "Undirbúningurinn gerir ráð fyrir leik um helgar (reitur „Leikir um helgar frá“). Vikan er skipulögð í kringum hann." : "The pre-season assumes a weekend game (the \"Weekend games from\" field). The week is planned around it.")}
           </p>
-          {onAssumedGame && (
+          {assumedAction && (
             <div className="mt-2 flex flex-wrap gap-2">
               <button type="button" disabled={busy || assumedBusy}
-                onClick={async () => { setAssumedBusy(true); try { await onAssumedGame(weekStart, assumedGame.date, "friendly"); } finally { setAssumedBusy(false); setFixtureRev((v) => v + 1); } }}
+                onClick={async () => { setAssumedBusy(true); try { await assumedAction(weekStart, assumedGame.date, "friendly"); } finally { setAssumedBusy(false); setFixtureRev((v) => v + 1); } }}
                 className="inline-flex h-9 items-center rounded-[8px] bg-[#2740e6] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#1f33c0] disabled:opacity-50">
                 {isIS ? "Skrá sem æfingaleik" : "Enter as a friendly"}
               </button>
               <button type="button" disabled={busy || assumedBusy}
-                onClick={async () => { setAssumedBusy(true); try { await onAssumedGame(weekStart, assumedGame.date, "none"); } finally { setAssumedBusy(false); setFixtureRev((v) => v + 1); } }}
+                onClick={async () => { setAssumedBusy(true); try { await assumedAction(weekStart, assumedGame.date, "none"); } finally { setAssumedBusy(false); setFixtureRev((v) => v + 1); } }}
                 className="inline-flex h-9 items-center rounded-[8px] border border-[#dcd8cc] bg-white px-3 text-[13px] font-semibold text-[#14181c] transition-colors hover:bg-[#faf9f4] disabled:opacity-50">
                 {isIS ? "Enginn leikur þessa viku" : "No game this week"}
               </button>

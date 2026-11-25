@@ -17,6 +17,12 @@ export type PlanDay = {
   day_intent: "GAME" | "OFF" | null;
 };
 
+/** The Meso calendar always seeds a full 6-week skeleton; a block renders its own length within it. */
+export const MESO_HORIZON = 6;
+
+/** The week the Meso pages show, for Micro's seed: week_plans days + the pre-season's assumed game. */
+export type MesoWeekSeed = { source: "preseason" | "inseason"; days: PlanDay[]; assumedGame: { date: string; coachSet: boolean } | null };
+
 const addDays = (iso: string, d: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + d * 86_400_000).toISOString().slice(0, 10);
 
 /** Reverse of the focus label → CalType, so a saved training day reads its stimulus back. Substring match because
