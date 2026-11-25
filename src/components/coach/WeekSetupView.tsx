@@ -36,6 +36,9 @@ import { checkThreeInARow, dayKindOf, runSignature, type ThreeInARowCheck, type 
 import WeekRuleCard, { type WeekRuleKeep } from "@/components/coach/WeekRuleCard";
 import { weekConfirmLabel, weekConfirmShort, type WeekConfirmStatus } from "@/lib/micropulse/weekSetup/confirmation";
 import { useStandaloneMesoWeek } from "@/components/coach/useStandaloneMesoWeek";
+import { useStrengthDelivery } from "@/components/coach/useStrengthDelivery";
+import StrengthDeliveryNote from "@/components/coach/StrengthDeliveryNote";
+import { goalSeasonOfPhase, NO_PROGRAMME, programmeCovers, programmeTitle, STANDARD_FOCUS_NOTE } from "@/lib/micropulse/strengthProgramming/deliveryView";
 import type { MesoWeekSeed } from "@/lib/micropulse/periodization/mesoWeek";
 import type { SportId } from "@/lib/micropulse/sportProfiles";
 
@@ -608,6 +611,14 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
   const [ok, setOk] = useState<string | null>(null);
 
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart]);
+
+  // How the strength reaches the players this week (deliveryView.ts): the team's send mode and, in standard mode, the
+  // Custom Programme's session per MD day. The day cards follow it.
+  const deliveryTeam = (teamId ?? "").trim() || null;
+  const delivery = useStrengthDelivery(deliveryTeam ? weekStart : null, weekStart, deliveryTeam);
+  const deliveryWeek = delivery?.weeks.find((w) => w.weekStart === weekStart) ?? null;
+  // Basketball keeps its own programme titles on the day cards (bbStrengthTitles); this is football's.
+  const deliveryStd = delivery?.mode === "standard" && !isBasketball;
 
   // Scheduled performance tests in this week (shared with the Periodization Hub Testing tab).
   const loadWeekTests = useCallback(async () => {
@@ -1850,6 +1861,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         : isMatchDay ? `${matches[mIdx]?.kickoff_time || ""}${matches[mIdx]?.kickoff_time ? " · " : ""}${matches[mIdx]?.home_away === "A" ? (isIS ? "Úti" : "Away") : (isIS ? "Heima" : "Home")}`
         : !training ? null
         : isBasketball ? (bbStrengthTitles[i] ?? (isIS ? "Engin styrkt.æfing" : "No strength session"))
+        : deliveryStd && deliveryWeek ? `${isIS ? "Styrkur" : "Strength"}: ${programmeTitle(deliveryWeek, mdLabel) ?? (isIS ? "innbyggt sniðmát" : "built-in template")}`
         : `${isIS ? "Styrkur" : "Strength"}: ${strengthLabelOf(strengthValue).split(" / ")[0]}`,
     };
   };
@@ -2031,6 +2043,12 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
             })}
           </div>
         </div>
+      )}
+
+      {/* How the strength reaches the players (the team's send mode); standard: does a Custom Programme cover the week? */}
+      {teamId && <StrengthDeliveryNote delivery={delivery} season={goalSeasonOfPhase(seasonPhase)} is={isIS} className="mt-3" />}
+      {deliveryStd && deliveryWeek && !programmeCovers(deliveryWeek) && (
+        <p className="mt-1.5 rounded-md border border-[#de9328]/40 bg-[#de9328]/10 px-2.5 py-1.5 text-[12px] text-[#7a5210]">⚠ {isIS ? NO_PROGRAMME.is : NO_PROGRAMME.en}</p>
       )}
 
       {/* OK / error banner */}
@@ -2260,15 +2278,24 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
                   <div className="rounded-[9px] border border-[#2740e6]/20 bg-[#2740e6]/5 px-3 py-2 text-[13px] font-medium text-[#1b2da8]" title={isIS ? "Úr virku æfingakerfi (Custom Programme)" : "From the active Custom Programme"}>
                     {bbStrengthTitles[sel.i] ?? (isIS ? "Engin styrktaræfing í kerfinu fyrir þennan vikudag" : "No strength day in the programme for this weekday")}
                   </div>
-                ) : (
+                ) : (<>
+                  {deliveryStd && deliveryWeek && (
+                    <div className="rounded-[9px] border border-[#2740e6]/20 bg-[#2740e6]/5 px-3 py-2 text-[13px] font-medium text-[#1b2da8]" title={isIS ? "Úr æfingakerfi liðsins (Custom Programme)" : "From the team's Custom Programme"}>
+                      {programmeTitle(deliveryWeek, sel.mdLabel)
+                        ?? (programmeCovers(deliveryWeek)
+                          ? (isIS ? "Engin æfing í kerfinu fyrir þennan dag" : "No session in the programme for this day")
+                          : (isIS ? NO_PROGRAMME.is : NO_PROGRAMME.en))}
+                    </div>
+                  )}
                   <label className="flex flex-col gap-1 text-[12px] font-semibold text-[#3a3f45]">
                     {isIS ? "Styrktaráhersla (skammtur leikmanns)" : "Strength focus (per-player dose)"}
                     <select value={sel.strengthValue} onChange={(e) => setStrength(sel.i, sel.character, e.target.value as NoMatchIntent)}
                       className="h-10 rounded-[9px] border border-[#dcd8cc] bg-white px-2.5 text-[14px] text-[#14181c]">
                       {STRENGTH_FOCUS_OPTIONS.map((v) => <option key={v} value={v}>{NO_MATCH_OPTIONS.find((o) => o.value === v)?.label ?? v}</option>)}
                     </select>
+                    {deliveryStd && <span className="text-[11.5px] font-normal text-[#6b6f76]">{isIS ? STANDARD_FOCUS_NOTE.is : STANDARD_FOCUS_NOTE.en}</span>}
                   </label>
-                ))}
+                </>))}
               </>
             )}
             {sel.tests.length > 0 && (

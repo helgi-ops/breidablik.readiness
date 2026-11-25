@@ -51,6 +51,9 @@ import { kpiAvgFromUnit as kpiAvgFromUnitLib, teamKpiAvg as teamKpiAvgLib } from
 import { cleanAssumedGames, GAMES_FROM_NONE, upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, PRE_MIN_BLOCK, PRESEASON_DEFAULT_WEEK1, PRESEASON_DEFAULT_TAPER_PCT, PRESEASON_TAPER_RESEARCH, clampTaperPct } from "@/lib/micropulse/periodization/preseasonWindow";
 import { buildPreseasonProposal } from "@/lib/micropulse/periodization/preseasonProposal";
 import { weekConfirmLabel, type WeekConfirmStatus } from "@/lib/micropulse/weekSetup/confirmation";
+import { NO_PROGRAMME, programmeCovers, programmeTitle } from "@/lib/micropulse/strengthProgramming/deliveryView";
+import { useStrengthDelivery } from "@/components/coach/useStrengthDelivery";
+import StrengthDeliveryNote from "@/components/coach/StrengthDeliveryNote";
 import { MESO_HORIZON, mesoSkeleton, planDayFromCal, planDaysFromCalWeek, CALTYPE_FOCUS_LABEL } from "@/lib/micropulse/periodization/mesoWeek";
 import { mesoWeekFor as mesoWeekOf, preseasonInputFor, seasonMesoBlocks, teamCalendarUnit, assumedWeekMove } from "@/lib/micropulse/periodization/mesoSeed";
 import PreseasonReadsFrom from "@/components/coach/PreseasonReadsFrom";
@@ -1152,6 +1155,13 @@ export default function PeriodizationHubPage() {
     const [txt, cls] = !s ? [is ? "óstaðf." : "not conf.", "text-slate-400"] : s.state === "confirmed" ? [is ? "✓ staðf." : "✓ conf.", "text-[#1c7a4a]"] : [is ? "breytt" : "changed", "text-[#8a5a12]"];
     return <span title={weekConfirmLabel(s, is)} className={`text-[10px] font-semibold ${cls}`}>{txt}</span>;
   };
+  // How the strength is delivered (the team's send mode; standard = the Custom Programme per week) for the weeks the
+  // shown Meso page lists: the pre-season's weeks, or the In-season page's block (deliveryView.ts).
+  const deliveryFrom = tab === "preseason" && preProp?.weeks.length ? preProp.weeks[0].weekStart : tab === "plan" ? mondayOf(blkStart) : null;
+  const deliveryTo = tab === "preseason" && preProp?.weeks.length ? preProp.weeks[preProp.weeks.length - 1].weekStart : tab === "plan" ? isoAdd(mondayOf(blkStart), (MESO_HORIZON - 1) * 7) : null;
+  const delivery = useStrengthDelivery(deliveryFrom, deliveryTo);
+  const deliveryStd = delivery?.mode === "standard";
+  const deliveryWeek = (ws: string) => delivery?.weeks.find((w) => w.weekStart === ws) ?? null;
   const w1SetCount = Object.keys(week1KpiT ?? {}).length + (psW1T !== PRESEASON_DEFAULT_WEEK1 ? 1 : 0);
   const persistWeek1KpiT = persistWeek1Kpi, persistMesoTailT = persistMesoTail;
 
@@ -2441,11 +2451,16 @@ export default function PeriodizationHubPage() {
             );
           })()}
 
+          {/* How the strength reaches the players (the team's send mode): the week cards below follow it. */}
+          {!isBasketball && <StrengthDeliveryNote delivery={delivery} season="build" is={is} />}
+
           {/* One card per pre-season week, grouped under its meso cycle. */}
           {ramp.map((w, i) => {
             const cw = cal.weeks[i];
             const weekMon = cw?.weekStart ?? isoAdd(preStart, i * 7);
-            const sw = strengthWeeks[i];
+            // Standard: the players get the Custom Programme, not the block's scheme — the card shows the programme.
+            const sw = deliveryStd ? undefined : strengthWeeks[i];
+            const dw = deliveryStd ? deliveryWeek(weekMon) : null;
             const heavyByDate = new Map((sw?.days ?? []).map((d) => [d.date, d] as const));
             const weekTests = tests.filter((tp) => tp.weeks.includes(i + 1));
             const weekFx = preFixtures.filter((d) => d >= weekMon && d < isoAdd(weekMon, 7));
@@ -2509,6 +2524,7 @@ export default function PeriodizationHubPage() {
                         <div className="truncate text-[10px] font-semibold" style={{ color: typeColor[d.type] ?? "#64748B" }}>{d.type === "rest" ? "–" : typeName(d.type)}{isMatch && !entered ? "?" : ""}</div>
                         <div className="text-[10px] tabular-nums text-slate-600">{dl != null && d.type !== "rest" ? dl : ""}</div>
                         {heavyByDate.get(isoAdd(cw.weekStart, di)) && <div className="truncate text-[9px] font-semibold text-[#7a5cc4]">{is ? "Lyftingar" : "Gym"} {heavyByDate.get(isoAdd(cw.weekStart, di))!.heavyReps}</div>}
+                        {dw && d.type !== "rest" && programmeTitle(dw, d.md) && <div className="truncate text-[9px] font-semibold text-[#7a5cc4]" title={programmeTitle(dw, d.md)!}>{programmeTitle(dw, d.md)}</div>}
                       </button>
                     ); })}
                   </div>
@@ -2548,6 +2564,17 @@ export default function PeriodizationHubPage() {
                   {prop.weeks[i]?.noGameByCoach && (
                     <p className="mt-1.5 text-[11.5px] text-slate-600">{is ? "Enginn leikur þessa viku (þitt val)." : "No game this week (your choice)."} <button type="button" onClick={() => moveAssumed(cw, undefined)} className="font-semibold text-[#2740e6] hover:underline">{is ? "Fylgja reglunni aftur" : "Follow the rule again"}</button></p>
                   )}
+                  {deliveryStd && !isBasketball && dw && (() => {
+                    const shown = cw.days.map((d) => ({ md: d.md, title: d.type === "rest" ? null : programmeTitle(dw, d.md) })).filter((d) => d.title);
+                    return (
+                      <div className="mt-2 rounded-md border border-[#7a5cc4]/20 bg-[#7a5cc4]/[0.04] px-2.5 py-1.5 text-[11.5px] text-slate-700">
+                        <b className="font-semibold text-[#7a5cc4]">{is ? "Styrkur · Staðlað" : "Strength · Standard"}</b>
+                        {programmeCovers(dw)
+                          ? <> · {dw!.programme!.setName}{shown.length > 0 && <> · {shown.map((d) => `${d.md || (is ? "dagur" : "day")} ${d.title}`).join(" · ")}</>}</>
+                          : <> · <span className="text-[#8a5a12]">{is ? NO_PROGRAMME.is : NO_PROGRAMME.en}</span></>}
+                      </div>
+                    );
+                  })()}
                   {sw && (
                     <div className="mt-2 rounded-md border border-[#7a5cc4]/20 bg-[#7a5cc4]/[0.04] px-2.5 py-1.5 text-[11.5px] text-slate-700">
                       <div>
@@ -3062,6 +3089,9 @@ export default function PeriodizationHubPage() {
               {isPlayerScope && (
                 <p className="mt-1.5 rounded-lg bg-[#2740e6]/[0.06] px-2.5 py-1.5 text-[12px] text-[#2740e6]">{is ? `Leikmanns-umfang (${player?.name}) — þetta er lotan HANS, einstaklingsmiðuð (leik-miðuð, þök/trim/áhersla). Les-only: skiptu í Liðs-umfang til að breyta dagsgerðum.` : `Player scope (${player?.name}) — this is HIS block, individualised (match-anchored, caps/trim/steer). Read-only: switch to Team scope to edit day-types.`}</p>
               )}
+              {!isPlayerScope && !isBasketball && (
+                <StrengthDeliveryNote delivery={delivery} season={offPhaseStart != null && calStart >= offPhaseStart ? "build" : "maintain"} is={is} className="mt-2" />
+              )}
               <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-slate-600">
                 {(["match", "session", "off"] as DayState[]).map((st) => <span key={st} className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px] border border-slate-300" style={{ background: stateBg[st] }} />{stateLbl[st]}</span>)}
                 <span className="h-4 w-px bg-slate-200" />
@@ -3082,6 +3112,7 @@ export default function PeriodizationHubPage() {
                           {wkOff && <span className="mt-0.5 w-fit rounded bg-slate-200 px-1 text-[10px] font-bold text-slate-700">Off-s.</span>}
                           {!wkOff && w?.capNote && <span className="text-[11px] font-semibold text-amber-800">⚑ {is ? "þak" : "cap"}</span>}
                           {confirmMark(isoAdd(calStart, i * 7))}
+                          {deliveryStd && !isPlayerScope && !isBasketball && (() => { const dwk = deliveryWeek(isoAdd(calStart, i * 7)); return dwk && !programmeCovers(dwk) && <span className="text-[10px] font-semibold text-[#8a5a12]" title={is ? NO_PROGRAMME.is : NO_PROGRAMME.en}>⚠ {is ? "ekkert kerfi" : "no programme"}</span>; })()}
                         </div>
                         {Array.from({ length: 7 }, (_, d) => {
                           const iso = isoAdd(calStart, i * 7 + d);
@@ -3108,6 +3139,7 @@ export default function PeriodizationHubPage() {
                                   {cd.fr != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "Vegalengd í löngum samfelldum hlaupum á leikhraða (≥18 sek, 11 km/klst+; IMA Free Running), metrar. Skokk telst ekki með. Ekki sprettir" : "Distance in long continuous runs at match pace (≥18 s, 11 km/h+; IMA Free Running), metres. Jogs do not count. Not sprinting"}>FR {cd.fr} m</span>}
                                   {cd.stride != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "Skref í löngum samfelldum hlaupum á leikhraða (≥18 sek, 11 km/klst+; IMA Free Running), fjöldi. Skokk telst ekki með" : "Strides in long continuous runs at match pace (≥18 s, 11 km/h+; IMA Free Running), count. Jogs do not count"}>{is ? "Skref" : "Stride"} {cd.stride}</span>}
                                   {cd.cod != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "IMA stefnubreytingar, fjöldi" : "IMA CoD (change of direction), count"}>CoD {cd.cod}</span>}
+                                  {deliveryStd && !isPlayerScope && !isBasketball && (() => { const pt = programmeTitle(deliveryWeek(isoAdd(calStart, i * 7)), cd.md); return pt && <span className="w-full truncate text-[10px] font-semibold text-[#55389e]" title={`${is ? "Styrkur (Custom Programme)" : "Strength (Custom Programme)"}: ${pt}`}>{pt}</span>; })()}
                                 </>) : <span className="text-[11px] text-slate-500">—</span>}
                               </button>
                             </div>
