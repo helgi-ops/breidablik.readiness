@@ -17,7 +17,7 @@
 
 import { buildCalendarBlock, sliceByLengths, type Bi, type CalType, type CalendarBlock, type MatchUnit, type MatchUnitAbs } from "./index";
 import { preseasonMatchExposure, defaultPeakMultiple, type PreseasonWeekTarget, type Confidence } from "./preseasonStart";
-import { upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, preseasonSettingsFrom, type PreseasonSavedRow, type PreseasonSettings, type PreseasonWindow, type PreseasonAnchor } from "./preseasonWindow";
+import { upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, preseasonSettingsFrom, type PreseasonSavedRow, type PreseasonSettings, type PreseasonWindow, type PreseasonAnchor, PRESEASON_TAPER_RESEARCH } from "./preseasonWindow";
 import { recommendTestingSchedule, type AerobicMode, type TestPlan } from "./testingSchedule";
 import { fitWeekToTarget } from "./preseasonDayFit";
 import { preseasonBlockForWeeksOut } from "../strengthProgramming/seasonPhaseStrength";
@@ -55,7 +55,7 @@ export type PreseasonProposalInput = {
   /** Ignore the coach's saved choices and days (the "start from scratch" build). */
   fromScratch?: boolean;
   /** Settings to use instead of the saved row (the hub's live state). Saved flags still come from `saved`. */
-  settingsOverride?: Pick<PreseasonSettings, "sessionsPerWeek" | "week1MatchMultiple" | "week1Kpi" | "mesoTail">;
+  settingsOverride?: Pick<PreseasonSettings, "sessionsPerWeek" | "week1MatchMultiple" | "week1Kpi" | "mesoTail" | "taperPct">;
   matchUnits: MatchUnit[];
   matchLoad: number | null;
   matchSrpe: number | null;
@@ -252,11 +252,17 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
       reason: { en: `The pre-season build for ${settings.sessionsPerWeek} sessions a week; high-speed and braking load rise later than distance.`, is: `Uppbygging undirbúnings fyrir ${settings.sessionsPerWeek} æfingar á viku; hraðahlaup og hemlun hækka seinna en vegalengd.` },
       cite: "Teixeira 2021; Vanrenterghem 2017", micropulseLine: true,
     },
-    ...(taperRow ? [{
+    ...(preWeeks >= 3 ? [{
       key: "taper" as const, label: { en: "Week before the opener", is: "Vikan fyrir fyrsta leik" },
-      value: { en: `Light: ${taperRow.multipleOfMatch}× a match`, is: `Létt: ${num(taperRow.multipleOfMatch ?? 0, true)}× leikur` }, source: "rule" as const,
-      reason: { en: "A taper: less volume, speed held, so the players start the season fresh.", is: "Létt vika: minna magn en hraða haldið, svo leikmenn mæti ferskir í fyrsta leik." },
-      cite: "Bosquet 2007; Mujika & Padilla 2003", micropulseLine: false,
+      value: taperRow
+        ? { en: `Light: −${settings.taperPct}% (${taperRow.multipleOfMatch}× a match)`, is: `Létt: −${settings.taperPct}% (${num(taperRow.multipleOfMatch ?? 0, true)}× leikur)` }
+        : { en: "No light week", is: "Engin létt vika" },
+      source: coach(settings.saved.taperPct),
+      reason: {
+        en: `Research: the best taper cuts volume ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% and keeps intensity. The whole week is cut by one factor, so each variable keeps its own share (sprint < high-speed < distance ≤ accelerations).`,
+        is: `Rannsóknir: besta létta vikan sker magn um ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% og heldur ákefð. Öll vikan lækkar um sama hlutfall, svo hver breyta heldur sínu hlutfalli (sprettur < hraðahlaup < vegalengd ≤ hraðanir).`,
+      },
+      cite: "Bosquet 2007; Mujika & Padilla 2003; Clemente 2019c; Gualtieri 2023", micropulseLine: !(settings.saved.taperPct && !input.fromScratch),
     }] : []),
     {
       key: "week1Kpi", label: { en: "Week 1 per variable", is: "Vika 1 á hverja breytu" },

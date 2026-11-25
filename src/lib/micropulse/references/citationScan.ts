@@ -346,7 +346,7 @@ export const APP_CITATION_SOURCES = [
 ] as const;
 
 const SHORT_RE =
-  /(?:\p{Lu}[\p{L}]+ de |(?:Los|van der|van|de|di|dos|Di|De|Van|Dos) )?\p{Lu}[\p{L}'’-]+(?: et al\.?)?(?: (?:&|&amp;) \p{Lu}[\p{L}'’-]+)? \(?(?:19|20)\d{2}[ab]?\b(?![-/]\d{2}(?!\d))/gu; // a year followed by "-04-29" is a date, not a citation
+  /(?:\p{Lu}[\p{L}]+ de |(?:Los|van der|van|de|di|dos|Di|De|Van|Dos) )?\p{Lu}[\p{L}'’-]+(?: et al\.?)?(?: (?:&|&amp;) \p{Lu}[\p{L}'’-]+)? \(?(?:19|20)\d{2}[a-c]?\b(?![-/]\d{2}(?!\d))/gu; // a year followed by "-04-29" is a date, not a citation
 
 /** The other authors written before the last one: "Lum, Barbosa, Joseph, " in "Lum, Barbosa, Joseph, Balasekaran (2021)". */
 const AUTHOR_CHAIN_BEFORE = /(?:^|[\s"'(\[`])((?:\p{Lu}[\p{L}'’-]+(?: \p{Lu}[\p{L}'’-]+)?, )+)$/u;

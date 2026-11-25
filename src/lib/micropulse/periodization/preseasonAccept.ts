@@ -120,6 +120,7 @@ export function planPreseasonAccept(input: AcceptInput): AcceptPlan {
   const overrides: Record<string, unknown> = {
     preseasonSessions: p.settings.sessionsPerWeek,
     preseasonWeek1Mult: p.settings.week1MatchMultiple,
+    preTaperPct: p.settings.taperPct,
     preMesoTail: p.engine.meso.tail,
     blockWeeks: { ...keepIso, ...lens },
   };

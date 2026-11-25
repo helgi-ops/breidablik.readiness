@@ -43,6 +43,8 @@ export const RULE_REFS: Record<string, GoalRef> = {
   carling2018: { key: "carling2018", short: "Carling 2018", cite: "Carling C, Lacome M, McCall A, Dupont G, Le Gall F, Simpson B, Buchheit M. Monitoring of Post-match Fatigue in Professional Soccer: Welcome to the Real World. Sports Med 2018;48(12):2695–2702. doi:10.1007/s40279-018-0935-z PMID 29740792", verifiedFrom: "abstract" },
   casamichana2022: { key: "casamichana2022", short: "Casamichana 2022", cite: "Casamichana D, Martín-García A, Díaz AG, Bradley PS, Castellano J. Accumulative weekly load in a professional football team: with special reference to match playing time and game position. Biol Sport 2022;39(1):115–124. doi:10.5114/biolsport.2021.102924 PMID 35173370", verifiedFrom: "abstract" },
   claudino2017: { key: "claudino2017", short: "Claudino 2017", cite: "Claudino JG, Cronin J, Mezêncio B, McMaster DT, McGuigan M, Tricoli V, Amadio AC, Serrão JC. The countermovement jump to monitor neuromuscular status: A meta-analysis. J Sci Med Sport 2017;20(4):397–402. doi:10.1016/j.jsams.2016.08.011 PMID 27663764", verifiedFrom: "abstract" },
+  // Two Clemente 2019 papers: "Clemente 2019" = weekly load profile (PT/NL); "Clemente 2019c" = training:match ratios ("Clemente 2019b" in appRefs is a third paper).
+  clemente2019c: { key: "clemente2019c", short: "Clemente 2019c", cite: "Clemente FM, Rabbani A, Conte D, Castillo D, Afonso J, Truman Clark CC, Nikolaidis PT, Rosemann T, Knechtle B. Training/Match External Load Ratios in Professional Soccer Players: A Full-Season Study. Int J Environ Res Public Health 2019;16(17):3057. doi:10.3390/ijerph16173057 PMID 31443592", verifiedFrom: "abstract" },
   clemente2019: { key: "clemente2019", short: "Clemente 2019", cite: "Clemente FM, Owen A, Serra-Olivares J, Nikolaidis PT, van der Linden CMI, Mendes B. Characterization of the Weekly External Load Profile of Professional Soccer Teams from Portugal and the Netherlands. J Hum Kinet 2019;66:155–164. doi:10.2478/hukin-2018-0054 PMID 30988849", verifiedFrom: "abstract" },
   contreras2017: { key: "contreras2017", short: "Contreras 2017", cite: "Contreras B, Vigotsky AD, Schoenfeld BJ, Beardsley C, McMaster DT, Reyneke JH, Cronin JB. Effects of a Six-Week Hip Thrust vs. Front Squat Resistance Training Program on Performance in Adolescent Males: A Randomized Controlled Trial. J Strength Cond Res 2017;31(4):999–1008. doi:10.1519/JSC.0000000000001510 PMID 27253835", verifiedFrom: "abstract" },
   cormie2011: { key: "cormie2011", short: "Cormie 2011", cite: "Cormie P, McGuigan MR, Newton RU. Developing maximal neuromuscular power: part 2 - training considerations for improving maximal power production. Sports Med 2011;41(2):125–146. doi:10.2165/11538500-000000000-00000 PMID 21244105", verifiedFrom: "abstract" },
@@ -407,7 +409,7 @@ function norm(s: string): string {
 function canonical(short: string): string {
   const s = norm(short);
   if (SHORT_ALIASES[s]) return norm(SHORT_ALIASES[s]);
-  const list = s.match(/^([^,]+), .* ((?:19|20)\d{2}[ab]?)$/);
+  const list = s.match(/^([^,]+), .* ((?:19|20)\d{2}[a-c]?)$/);
   if (!list) return s;
   const first = `${list[1]} ${list[2]}`;
   return norm(SHORT_ALIASES[first] ?? first);

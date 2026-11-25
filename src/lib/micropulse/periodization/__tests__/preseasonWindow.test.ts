@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   upcomingPreseason, preseasonWeekOf, preseasonMeso, preseasonSettingsFrom, preseasonSettingsForPlan,
-  preseasonForDate, preseasonAnchor, preseasonRamp, PRESEASON_DEFAULT_SESSIONS, PRESEASON_DEFAULT_WEEK1,
+  preseasonForDate, preseasonAnchor, preseasonRamp, PRESEASON_DEFAULT_SESSIONS, PRESEASON_DEFAULT_WEEK1, clampTaperPct,
 } from "../preseasonWindow";
 import { planWeeklyTarget } from "../planWeeklyTarget";
 import { NORMATIVE_MATCH_LOAD } from "../preseasonStart";
@@ -58,7 +58,8 @@ describe("preseasonSettingsFrom", () => {
     const s = preseasonSettingsFrom(null);
     expect(s.sessionsPerWeek).toBe(PRESEASON_DEFAULT_SESSIONS);
     expect(s.week1MatchMultiple).toBe(PRESEASON_DEFAULT_WEEK1);
-    expect(s.saved).toEqual({ sessionsPerWeek: false, week1MatchMultiple: false, week1Kpi: false, mesoTail: false });
+    expect(s.saved).toEqual({ sessionsPerWeek: false, week1MatchMultiple: false, week1Kpi: false, mesoTail: false, taperPct: false });
+    expect(s.taperPct).toBe(40);
   });
   it("keeps the coach's choices, with the hub's clamps", () => {
     const s = preseasonSettingsFrom({ preseasonSessions: 5, preseasonWeek1Mult: 9, preWeek1Kpi: { totalDistance: 20000, velocityBand6: -1 }, preMesoTail: [3] });
@@ -137,19 +138,31 @@ describe("preseasonRamp — the last week before the opener is light (taper)", (
   const a = preseasonAnchor({ matchUnits: [UNIT], matchLoad: 1000, matchSrpe: null, loadSource: "gps" });
   const s = { sessionsPerWeek: 4, week1MatchMultiple: 1.3, week1Kpi: {} };
 
-  it("peaks the week before, then cuts volume 55% and intensity 30% (GOAL_DELOAD.realize)", () => {
+  it("peaks the week before, then cuts the whole week by one factor (default −40%)", () => {
     const r = preseasonRamp(a, null, 8, s);
     expect(r).toHaveLength(8);
     const peak = r[6], taper = r[7];
     expect(taper.taper).toBe(true);
     expect(peak.taper).toBeUndefined();
     expect(Math.max(...r.map((w) => w.multipleOfMatch ?? 0))).toBe(peak.multipleOfMatch);
-    expect(taper.weekIndex).toBe(8);
-    expect(taper.multipleOfMatch).toBeCloseTo((peak.multipleOfMatch ?? 0) * 0.45, 2);
-    expect(taper.byKpi.totalDistance).toBe(Math.round(peak.byKpi.totalDistance! * 0.45));
-    expect(taper.byKpi.velocityBand6).toBe(Math.round(peak.byKpi.velocityBand6! * 0.7));
-    // Speed is held more than volume.
-    expect(taper.byKpi.velocityBand6! / peak.byKpi.velocityBand6!).toBeGreaterThan(taper.byKpi.totalDistance! / peak.byKpi.totalDistance!);
+    expect(taper.multipleOfMatch).toBeCloseTo((peak.multipleOfMatch ?? 0) * 0.6, 2);
+    for (const [k, v] of Object.entries(peak.byKpi)) expect(taper.byKpi[k as keyof typeof taper.byKpi]).toBe(Math.round((v as number) * 0.6));
+  });
+
+  it("each variable keeps its own research share: the order of ×match does not turn round", () => {
+    const r = preseasonRamp(a, null, 8, s);
+    const mk = a.kpi as Record<string, number>;
+    const xm = (w: typeof r[number], k: string) => (w.byKpi as Record<string, number>)[k] / mk[k];
+    const order = (w: typeof r[number]) => Object.keys(w.byKpi).filter((k) => mk[k] > 0).sort((x, y) => xm(w, x) - xm(w, y));
+    expect(order(r[7]).length).toBeGreaterThan(2);
+    expect(order(r[7])).toEqual(order(r[6]));
+  });
+
+  it("the coach's cut is used; 0 = no light week; capped at the research top (60%)", () => {
+    expect(preseasonRamp(a, null, 8, { ...s, taperPct: 50 })[7].multipleOfMatch).toBeCloseTo((preseasonRamp(a, null, 8, s)[6].multipleOfMatch ?? 0) * 0.5, 2);
+    expect(preseasonRamp(a, null, 8, { ...s, taperPct: 0 }).some((w) => w.taper)).toBe(false);
+    expect(clampTaperPct(90)).toBe(60);
+    expect(preseasonSettingsFrom({ preTaperPct: 25 })).toMatchObject({ taperPct: 25, saved: { taperPct: true } });
   });
 
   it("a short pre-season (< 3 weeks) keeps the straight build", () => {

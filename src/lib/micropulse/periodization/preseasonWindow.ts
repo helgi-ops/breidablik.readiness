@@ -10,7 +10,7 @@
 
 import { preseasonStartRamp, NORMATIVE_MATCH_KPI, NORMATIVE_MATCH_LOAD, type LoadAnchor, type PreseasonWeekTarget } from "./preseasonStart";
 import { teamKpiAvg } from "./preseasonKpiMap";
-import { GOAL_DELOAD, type MatchUnit } from "./index";
+import type { MatchUnit } from "./index";
 import type { WeeklyLoadMetricKey } from "../externalLoad/weeklyLoadTypes";
 
 type PhaseLike = { key: string; start: string; end: string; weeks: number };
@@ -82,6 +82,8 @@ export type PreseasonSavedRow = {
   preseasonWeek1Mult?: number | null;
   preWeek1Kpi?: Record<string, number> | null;
   preMesoTail?: number[] | null;
+  /** % cut of the light week before the opener (0 = none). */
+  preTaperPct?: number | null;
 } | null | undefined;
 
 export type PreseasonSettings = {
@@ -89,8 +91,10 @@ export type PreseasonSettings = {
   week1MatchMultiple: number;
   week1Kpi: Record<string, number>;
   mesoTail: number[] | null;
+  /** % cut of the light week before the opener (0 = no light week). */
+  taperPct: number;
   /** Which of the above the coach actually saved (the rest are defaults) — "his choice stands". */
-  saved: { sessionsPerWeek: boolean; week1MatchMultiple: boolean; week1Kpi: boolean; mesoTail: boolean };
+  saved: { sessionsPerWeek: boolean; week1MatchMultiple: boolean; week1Kpi: boolean; mesoTail: boolean; taperPct: boolean };
 };
 
 /** Normalise one saved row to the settings the ramp uses (same clamps the hub applies on load). */
@@ -102,13 +106,15 @@ export function preseasonSettingsFrom(row: PreseasonSavedRow): PreseasonSettings
   if (r.preWeek1Kpi && typeof r.preWeek1Kpi === "object") {
     for (const [k, v] of Object.entries(r.preWeek1Kpi)) if (typeof v === "number" && Number.isFinite(v) && v > 0) kpi[k] = v;
   }
+  const tpOk = typeof r.preTaperPct === "number" && Number.isFinite(r.preTaperPct);
   const tail = Array.isArray(r.preMesoTail) ? r.preMesoTail.filter((n) => typeof n === "number" && Number.isFinite(n)) : [];
   return {
     sessionsPerWeek: sessOk ? (r.preseasonSessions as number) : PRESEASON_DEFAULT_SESSIONS,
     week1MatchMultiple: w1Ok ? Math.max(0.5, Math.min(3, r.preseasonWeek1Mult as number)) : PRESEASON_DEFAULT_WEEK1,
     week1Kpi: kpi,
     mesoTail: tail.length ? tail : null,
-    saved: { sessionsPerWeek: sessOk, week1MatchMultiple: w1Ok, week1Kpi: Object.keys(kpi).length > 0, mesoTail: tail.length > 0 },
+    taperPct: tpOk ? clampTaperPct(r.preTaperPct as number) : PRESEASON_DEFAULT_TAPER_PCT,
+    saved: { sessionsPerWeek: sessOk, week1MatchMultiple: w1Ok, week1Kpi: Object.keys(kpi).length > 0, mesoTail: tail.length > 0, taperPct: tpOk },
   };
 }
 
@@ -195,39 +201,46 @@ export function preseasonAnchor(input: { matchUnits: MatchUnit[]; matchLoad: num
 }
 
 /** The week-by-week pre-season load ramp for a window + the coach's settings. */
-export function preseasonRamp(a: PreseasonAnchor, matchSrpe: number | null, weeks: number, s: Pick<PreseasonSettings, "sessionsPerWeek" | "week1MatchMultiple" | "week1Kpi">): PreseasonWeekTarget[] {
+export function preseasonRamp(a: PreseasonAnchor, matchSrpe: number | null, weeks: number, s: Pick<PreseasonSettings, "sessionsPerWeek" | "week1MatchMultiple" | "week1Kpi"> & { taperPct?: number }): PreseasonWeekTarget[] {
   const n = Math.max(1, Math.round(weeks));
+  const pct = clampTaperPct(s.taperPct ?? PRESEASON_DEFAULT_TAPER_PCT);
   // The last week before the opener is LIGHT (a taper — the coach's call, 2026-11-25): the build peaks the week
-  // before, then the taper week cuts it. Short pre-seasons (< 3 weeks) keep the straight build.
-  const taper = n >= 3;
+  // before, then the taper week cuts it. Short pre-seasons (< 3 weeks) or a 0% cut keep the straight build.
+  const taper = n >= 3 && pct > 0;
   const build = preseasonStartRamp({
     matchTypicalLoad: a.matchLoad, matchKpiAvg: a.kpi, matchSrpeAu: matchSrpe,
     sessionsPerWeek: s.sessionsPerWeek, preseasonWeeks: taper ? n - 1 : n, week1MatchMultiple: s.week1MatchMultiple,
     anchor: a.anchor, week1KpiOverride: s.week1Kpi,
   });
   if (!taper) return build;
-  return [...build, taperWeek(build[build.length - 1], n)];
+  return [...build, taperWeek(build[build.length - 1], n, pct)];
 }
 
-/** Variables on the INTENSITY side of the taper (speed / long runs — held more); the rest are volume. Same split
- *  as the calendar's unload week (hsr/stride → intensity; distance, PlayerLoad, accel/decel, CoD → volume). */
-const TAPER_INTENSITY_KPIS = new Set(["velocityBand5", "velocityBand6", "imaStrideHi", "imaFrDistance"]);
+/** Default cut of the light week before the opener, in % of the peak week: the calendar's standard unload week
+ *  (×0.6, the no-goal deload) — the coach's pick on 2026-11-25. The coach can change it (0 = no light week). */
+export const PRESEASON_DEFAULT_TAPER_PCT = 40;
+/** The research range shown next to it: Bosquet 2007 (meta-analysis) — the best taper cuts training volume by
+ *  41–60% and keeps intensity. The coach's input is capped at the top of that range. */
+export const PRESEASON_TAPER_RESEARCH: [number, number] = [41, 60];
+export function clampTaperPct(v: number): number {
+  return Number.isFinite(v) ? Math.max(0, Math.min(PRESEASON_TAPER_RESEARCH[1], Math.round(v))) : PRESEASON_DEFAULT_TAPER_PCT;
+}
 
-/** The taper week = the peak week cut by the realization taper depth the calendar already uses (GOAL_DELOAD
- *  .realize: volume ×0.45, intensity ×0.70 — Bosquet 2007: cut volume 41–60%, hold intensity; Mujika & Padilla
- *  2003). The pre-season's last block is the realization block, so its taper. */
-export function taperWeek(peak: PreseasonWeekTarget, weekIndex: number): PreseasonWeekTarget {
-  const { vol, int } = GOAL_DELOAD.realize;
-  const r = (v: number | null, f: number) => (v == null ? null : Math.round(v * f));
+/** The taper week = the peak week cut by ONE factor for the whole week. Every variable keeps its own research
+ *  share of the week (sprint < HSR < distance ≈ decel ≤ accel — the training:match ratios of Clemente 2019c and
+ *  Gualtieri 2023 behind KPI_TAPER_EXPONENT), so the taper never turns that order round. */
+export function taperWeek(peak: PreseasonWeekTarget, weekIndex: number, pct = PRESEASON_DEFAULT_TAPER_PCT): PreseasonWeekTarget {
+  const cut = clampTaperPct(pct), f = 1 - cut / 100;
+  const r = (v: number | null) => (v == null ? null : Math.round(v * f));
   const byKpi: Partial<Record<string, number>> = {};
-  for (const [k, v] of Object.entries(peak.byKpi)) if (typeof v === "number") byKpi[k] = Math.round(v * (TAPER_INTENSITY_KPIS.has(k) ? int : vol));
-  const mult = peak.multipleOfMatch == null ? null : Math.round(peak.multipleOfMatch * vol * 100) / 100;
+  for (const [k, v] of Object.entries(peak.byKpi)) if (typeof v === "number") byKpi[k] = Math.round(v * f);
+  const mult = peak.multipleOfMatch == null ? null : Math.round(peak.multipleOfMatch * f * 100) / 100;
   return {
     ...peak, weekIndex, taper: true, multipleOfMatch: mult,
-    weeklyLoadTarget: r(peak.weeklyLoadTarget, vol), perSessionLoad: r(peak.perSessionLoad, vol), sRpeAuTarget: r(peak.sRpeAuTarget, vol), byKpi,
+    weeklyLoadTarget: r(peak.weeklyLoadTarget), perSessionLoad: r(peak.perSessionLoad), sRpeAuTarget: r(peak.sRpeAuTarget), byKpi,
     note: {
-      en: `Week ${weekIndex} — taper before the opener (~${mult}× a match): volume cut ${Math.round((1 - vol) * 100)}%, speed held more (−${Math.round((1 - int) * 100)}%).`,
-      is: `Vika ${weekIndex} — létt vika fyrir fyrsta leik (~${mult}× leik): magn −${Math.round((1 - vol) * 100)}%, hraða haldið betur (−${Math.round((1 - int) * 100)}%).`,
+      en: `Week ${weekIndex} — light week before the opener (~${mult}× a match): the peak week −${cut}%, every variable keeps its own share.`,
+      is: `Vika ${weekIndex} — létt vika fyrir fyrsta leik (~${mult}× leik): toppvikan −${cut}%, hver breyta heldur sínu hlutfalli.`,
     },
   };
 }

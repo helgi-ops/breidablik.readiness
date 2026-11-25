@@ -741,7 +741,7 @@ const GOAL_VOL: Record<RecGoalKey, number> = { accum: 1.10, transmute: 0.95, rea
 // Taper depth on the deload WEEK, per goal: realization cuts volume hardest while HOLDING intensity (the
 // defining feature of a peaking taper), accumulation unloads gently/late. Default (no goal) = 0.6 both
 // (unchanged). Bosquet 2007 (optimal taper ≈ 41–60% volume cut, intensity held); Mujika & Padilla 2003.
-export const GOAL_DELOAD: Record<RecGoalKey, { vol: number; int: number }> = {
+const GOAL_DELOAD: Record<RecGoalKey, { vol: number; int: number }> = {
   accum: { vol: 0.75, int: 0.75 }, transmute: { vol: 0.60, int: 0.60 }, realize: { vol: 0.45, int: 0.70 },
 };
 

@@ -575,7 +575,7 @@ export async function computePlanTarget(
     .from("season_plans").select("overrides")
     .eq("team_id", teamId).eq("season_year", loadedYear)
     .maybeSingle();
-  type Ov = { preseasonStart?: string; seasonEnd?: string; nextPreseasonStart?: string; offseasonWeeks?: number; preseasonWeek1Mult?: number; preseasonSessions?: number; preWeek1Kpi?: Record<string, number> | null; preMesoTail?: number[] | null; stepPct?: number; deloadCadence?: number; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string>; blockGoals?: Record<string, string> };
+  type Ov = { preseasonStart?: string; seasonEnd?: string; nextPreseasonStart?: string; offseasonWeeks?: number; preseasonWeek1Mult?: number; preseasonSessions?: number; preWeek1Kpi?: Record<string, number> | null; preMesoTail?: number[] | null; preTaperPct?: number | null; stepPct?: number; deloadCadence?: number; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string>; blockGoals?: Record<string, string> };
   const ov = (saved as { overrides?: Ov } | null)?.overrides ?? {};
   const plan = await loadPeriodization(sb, {
     teamId,

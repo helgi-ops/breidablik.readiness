@@ -40,7 +40,7 @@ export async function GET(req: Request) {
   const iso = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
   // Coach's saved window (season_plans.overrides) is the default; a query param overrides it live.
   const { data: saved } = await ctx.sb.from("season_plans").select("overrides").eq("team_id", ctx.teamId).eq("season_year", year ?? new Date().getUTCFullYear()).maybeSingle();
-  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number; nextPreseasonStart?: string; offseasonWeeks?: number; offseasonStart?: string; preseasonWeek1Mult?: number; preseasonSessions?: number; stepPct?: number; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string>; blockGoals?: Record<string, "accum" | "transmute" | "realize">; preMesoTail?: number[]; preWeek1Kpi?: Record<string, number> } } | null)?.overrides ?? {};
+  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number; nextPreseasonStart?: string; offseasonWeeks?: number; offseasonStart?: string; preseasonWeek1Mult?: number; preseasonSessions?: number; stepPct?: number; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string>; blockGoals?: Record<string, "accum" | "transmute" | "realize">; preMesoTail?: number[]; preWeek1Kpi?: Record<string, number>; preTaperPct?: number } } | null)?.overrides ?? {};
   const offWeeksParam = Number(sp.get("offWeeks"));
   const plan = await loadPeriodization(ctx.sb, {
     teamId: ctx.teamId, seasonYear: year,
@@ -83,6 +83,8 @@ export async function GET(req: Request) {
     preMesoTail: Array.isArray(ov.preMesoTail) ? ov.preMesoTail : null,
     // Coach's per-KPI week-1 overrides for the pre-season ramp (rest computed from week 1).
     preWeek1Kpi: ov.preWeek1Kpi && typeof ov.preWeek1Kpi === "object" ? ov.preWeek1Kpi : null,
+    // % cut of the light week before the opener (null = the default).
+    preTaperPct: typeof ov.preTaperPct === "number" ? ov.preTaperPct : null,
   };
   // The upcoming pre-season belongs to the season it opens (`plan.nextSeasonYear`), NOT this loaded year.
   // Echo that season's saved pre-season overrides separately so the hub's Pre-season tab reads/writes its
@@ -99,6 +101,7 @@ export async function GET(req: Request) {
       blockGoals: nx.blockGoals ?? {}, blockWeeks: nx.blockWeeks ?? {}, blockDeload: nx.blockDeload ?? {},
       preMesoTail: Array.isArray(nx.preMesoTail) ? nx.preMesoTail : null,
       preWeek1Kpi: nx.preWeek1Kpi && typeof nx.preWeek1Kpi === "object" ? nx.preWeek1Kpi : null,
+      preTaperPct: typeof nx.preTaperPct === "number" ? nx.preTaperPct : null,
     };
   }
   // The team's aerobic test (one of the six registry tests). The loaded season's choice wins; otherwise the

@@ -76,7 +76,7 @@ describe("rule references", () => {
   it("each new entry has authors, title, journal and the year its short form gives", () => {
     for (const r of [...Object.values(RULE_REFS), ...Object.values(APP_REFS)]) {
       expect(r.cite).toMatch(/^[^.]+\. .+[.?] .+ \d{4}/);
-      const year = r.short.replace(/[ab]$/, "").slice(-4);
+      const year = r.short.replace(/[a-c]$/, "").slice(-4);
       expect(r.cite.includes(`${year};`) || r.cite.includes(`ahead of print ${year}`)).toBe(true);
     }
   });

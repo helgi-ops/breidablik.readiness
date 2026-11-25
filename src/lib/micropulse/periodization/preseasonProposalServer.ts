@@ -15,7 +15,7 @@ import type { MatchUnitAbs } from "./index";
 
 /** What the coach changed in the draft (stored in plan_proposals.coach_edits). */
 export type ProposalEdits = {
-  settings?: { preseasonSessions?: number; preseasonWeek1Mult?: number; preWeek1Kpi?: Record<string, number>; preMesoTail?: number[] | null };
+  settings?: { preseasonSessions?: number; preseasonWeek1Mult?: number; preWeek1Kpi?: Record<string, number>; preMesoTail?: number[] | null; preTaperPct?: number };
   days?: Record<string, SavedDay>;
 };
 
