@@ -17,7 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupView from "@/components/coach/WeekSetupView";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
-import { VALD_TRIM_CITE, mondayOfIso, buildMesoPlan, buildMesoBlocks, buildCalendarBlock, seedBlockDays, inSeasonRange, teamMatchUnitNote, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, sliceByLengths, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ValdTrimLift, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
+import { VALD_TRIM_CITE, mondayOfIso, buildMesoPlan, buildMesoBlocks, buildCalendarBlock, seedBlockDays, inSeasonRange, teamMatchUnitNote, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ValdTrimLift, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput, type ExposureInput, type ShapeDirInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { exposuresFromTlyp, shapeDirsFromShape } from "@/lib/micropulse/trainingNeeds";
@@ -47,6 +47,7 @@ import { CiteRefs } from "@/components/coach/CiteRefs";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 import { kpiAvgFromUnit as kpiAvgFromUnitLib, teamKpiAvg as teamKpiAvgLib } from "@/lib/micropulse/periodization/preseasonKpiMap";
 import { upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, PRE_MIN_BLOCK } from "@/lib/micropulse/periodization/preseasonWindow";
+import { buildPreseasonProposal } from "@/lib/micropulse/periodization/preseasonProposal";
 import type { MatchUnit as LibMatchUnit } from "@/lib/micropulse/periodization";
 
 type Bi = { en: string; is: string };
@@ -2134,32 +2135,26 @@ export default function PeriodizationHubPage() {
               </section>
             );
             const preStart = up.start, preWeeks = up.weeks;
-            const preEndMs = Date.parse(`${preStart}T00:00:00Z`) + preWeeks * 7 * 86_400_000;
-            // Normative fallback: a team with NO match data gets reference KPI values (the coach then adjusts
-            // them via the per-KPI week-1 editor). Own data → match_this_season; else → normative (low conf).
-            const pa = preAnchorOf(plan);
-            const tka = pa.kpi, hasOwnKpi = pa.hasOwnKpi;
-            const ramp = preseasonRamp(pa, plan.matchSrpe, preWeeks, { sessionsPerWeek: psSess, week1MatchMultiple: psW1, week1Kpi: week1KpiOv });
+            const hasVald = plan.players.some((p) => p.vald.status != null);
+            // The whole pre-season comes from ONE pure builder (periodization/preseasonProposal) — the same
+            // function "Build pre-season" drafts with — fed the coach's live settings and saved days.
+            const prop = buildPreseasonProposal({
+              phases: plan.phases, today: todayIso, nextFirstFixture: plan.nextFirstFixture, nextFirstFixtureEstimated: plan.nextFirstFixtureEstimated,
+              saved: null, settingsOverride: { sessionsPerWeek: psSess, week1MatchMultiple: psW1, week1Kpi: week1KpiOv, mesoTail },
+              matchUnits: plan.players.map((p) => p.matchUnit as unknown as LibMatchUnit), matchLoad: plan.matchLoad, matchSrpe: plan.matchSrpe, loadSource: plan.tier.loadSource,
+              unit: blkUnit, fixtures: plan.fixtures ?? [], camps: campRegions, savedDays: savedPlans, cadence, baseOverloadPct: blkBase, stepPct: blkStep,
+              aerobicMode: aerobicTest, hasVald,
+            })!;
+            const tka = prop.engine.anchor.kpi, hasOwnKpi = prop.engine.anchor.hasOwnKpi;
+            const ramp = prop.engine.ramp;
             const usesAu = ramp.every((w) => w.weeklyLoadTarget == null);
             const unitLabel = usesAu ? "AU" : "PL";
             const primary = (w: PreseasonWeekTarget) => (usesAu ? w.sRpeAuTarget : w.weeklyLoadTarget) ?? 0;
             const fmtv = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v));
             // All pre-season fixtures are friendlies by definition (a competitive game ends pre-season).
-            const preFixtures = (plan.fixtures ?? []).filter((d) => d >= preStart && Date.parse(`${d}T00:00:00Z`) < preEndMs).sort();
-            // DRAFT-LEVEL day editing: overlay the coach's saved day layout (week_plans) on the auto pre-season
-            // layout so a day toggled on the pre-season card persists and reads back here — the same day-truth
-            // source Week Setup refines. A saved OFF forces rest; a saved TRAIN forces a session.
-            const preOffDays: string[] = [], preOnDays: string[] = [], preTypeOv: Record<string, CalType> = {};
-            for (const [iso, sp] of Object.entries(savedPlans)) {
-              if (iso < preStart || Date.parse(`${iso}T00:00:00Z`) >= preEndMs) continue;
-              if (sp.dayType === "OFF") preOffDays.push(iso);
-              else if (sp.dayType === "TRAIN" || sp.dayType === "RECOVERY") {
-                preOnDays.push(iso);
-                const ct = sp.focus ? caltypeFromFocus(sp.focus) : undefined; // saved stimulus → force that type
-                if (ct) preTypeOv[iso] = ct;
-              }
-            }
-            const cal = buildCalendarBlock({ unit: blkUnit, startDate: preStart, numWeeks: preWeeks, scopeName: "__team__", phase: { en: "Pre-season", is: "Undirbúningur" }, baseOverloadPct: blkBase, stepPct: blkStep, matchDates: preFixtures, offDays: preOffDays, onDays: preOnDays, typeOverrides: preTypeOv, allFixtures: plan.fixtures ?? [], matchExposure: (wi) => preseasonMatchExposure(wi + 1, preWeeks), camps: campRegions });
+            const preFixtures = prop.engine.fixtures;
+            // The coach's saved days (week_plans) are already overlaid: a saved OFF forces rest, a saved TRAIN a session.
+            const cal = prop.engine.cal;
             // Set a pre-season day's day-type directly on the card (draft): Off or a training stimulus
             // (mechanical/locomotive/mixed/activation/top-up). Match days stay fixed to the fixture. Optimistic
             // overlay via savedPlans; persists the whole week to week_plans through the SAME applyWeekSetup path
@@ -2189,9 +2184,7 @@ export default function PeriodizationHubPage() {
               (async () => { try { const r = await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ applyWeekSetup: payload }) }); setPreDaySave(r.ok ? "saved" : "err"); } catch { setPreDaySave("err"); } })();
             };
             const matchLoadUnit = tka.totalPlayerLoad ?? plan.matchLoad; // PL match unit for the budget
-            const hasVald = plan.players.some((p) => p.vald.status != null);
-            const hasGps = plan.tier.loadSource === "gps";
-            const tests = recommendTestingSchedule({ preseasonWeeks: preWeeks, hasGps, hasVald, aerobicMode: aerobicTest });
+            const tests = prop.engine.tests;
             const typeColor: Record<string, string> = { mechanical: "#A83E28", locomotive: "#15603A", mixed: "#1B2DA8", activation: "#475569", topup: "#55389E", match: "#7A4A06", rest: "#64748B" };
             const tint: Record<string, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#F0EAF7", match: "#FBEFDD", rest: "#F8FAFC" };
             const typeName = (t: string): string => t === "mechanical" ? (is ? "Mekanískt" : "Mechanical") : t === "locomotive" ? (is ? "Hlaup" : "Locomotive") : t === "mixed" ? (is ? "Blandað" : "Mixed") : t === "activation" ? (is ? "Virkjun" : "Activation") : t === "topup" ? (is ? "Áfylling" : "Top-up") : t === "match" ? (is ? "Leikur" : "Match") : (is ? "Frí" : "Off");
@@ -2200,16 +2193,11 @@ export default function PeriodizationHubPage() {
             const kpiKeys = ramp.length ? (Object.keys(ramp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad" && ramp.some((w) => w.byKpi[k] != null)) : [];
             // The pre-season MESO CYCLES (Macro owns the lengths; index-keyed so a resize never orphans a
             // later one). Slice the pre-season window with the coach's cadence + per-block length overrides.
-            const preEndIso = up.end ?? new Date(preEndMs).toISOString().slice(0, 10);
-            // Backwards periodization (upcoming pre-season): the coach's game-anchored tail blocks are exact
-            // and the base block flexes. When no tail is set yet, seed it from the auto layout (all blocks
-            // after the first) so the editor opens on the current sequence. In-season keeps the plain slice.
-            const autoPre = sliceByLengths(preStart, preEndIso, cadence, {}, 0);
-            // Backwards editor for ANY season's pre-season (not only the upcoming one). When no tail is set yet,
-            // seed it from the auto layout (all blocks after the first) so the editor opens on the current seq.
-            const effTail = mesoTail ?? autoPre.slice(1).map((b) => Math.max(2, Math.round((Date.parse(`${b.end}T00:00:00Z`) - Date.parse(`${b.start}T00:00:00Z`)) / (7 * 86_400_000))));
-            const preMeso = preseasonMeso(preWeeks, effTail, cadence);
-            const preBlocks = sliceByLengths(preStart, preEndIso, cadence, lensToBlockWeeks(preMeso.lens), 0);
+            const preEndIso = prop.window.end;
+            // Backwards periodization: the coach's game-anchored tail blocks are exact and the base block flexes
+            // (no tail saved → seeded from the auto layout, so the editor opens on the current sequence).
+            const preMeso = prop.engine.meso;
+            const preBlocks = prop.engine.blocks;
             const blockEndExcl = (b: { end: string }) => b.end; // exclusive
             const weeksBetween = (a: string, b: string) => Math.max(1, Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / (7 * 86_400_000)));
             const emphOfBlock = (b: { start: string }) => preseasonBlockForWeeksOut(weeksBetween(b.start, preEndIso));
@@ -2981,7 +2969,6 @@ export default function PeriodizationHubPage() {
               const preStart = up.start;
               // Same anchor + coach settings as the Pre-season tab and Week Setup (one ramp everywhere).
               const pa = preAnchorOf(plan);
-              const tka = pa.kpi;
               const ramp = preseasonRamp(pa, plan.matchSrpe, preWeeks, { sessionsPerWeek: psSess, week1MatchMultiple: psW1, week1Kpi: week1KpiOv });
               if (!ramp.length) return null;
               const usesAu = ramp.every((w) => w.weeklyLoadTarget == null); // srpe-only / normative teams have no PL unit
