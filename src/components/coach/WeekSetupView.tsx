@@ -34,6 +34,8 @@ import { macroPhaseForWeek } from "@/lib/micropulse/weekSetup/weekPhase";
 import { matchAnchoredGrid } from "@/lib/micropulse/weekSetup/autoGrid";
 import { checkThreeInARow, dayKindOf, runSignature, type ThreeInARowCheck, type WeekRuleDay } from "@/lib/micropulse/weekSetup/weekRules";
 import WeekRuleCard, { type WeekRuleKeep } from "@/components/coach/WeekRuleCard";
+import { weekConfirmLabel, type WeekConfirmStatus } from "@/lib/micropulse/weekSetup/confirmation";
+import type { PlanDay } from "@/lib/micropulse/periodization/mesoWeek";
 import type { SportId } from "@/lib/micropulse/sportProfiles";
 
 // shadcn/ui
@@ -410,11 +412,17 @@ type WeekSetupViewProps = {
   onOpenTab?: (tab: "season" | "plan") => void;
   /** Deep-link: when set/changed, jump the editor to the Monday of this date (e.g. from the Pre-season tab). */
   initialWeekStart?: string;
+  /** The week the Meso pages show (Monday ISO → week_plans days + the pre-season's assumed game). Seeds a week that
+   *  has no saved days, so Micro shows what Meso shows. Supplied by the Periodization Hub. */
+  mesoWeek?: (weekStart: string) => MesoWeekSeed | null;
+  /** Act on an assumed (not entered) game in the week: enter it as a friendly, or take the game out of the week. */
+  onAssumedGame?: (weekStart: string, date: string, action: "friendly" | "none") => Promise<void>;
 };
+export type MesoWeekSeed = { source: "preseason" | "inseason"; days: PlanDay[]; assumedGame: { date: string; coachSet: boolean } | null };
 
 // Rendered by /coach/week-setup (standalone) and by the Periodization Hub's "Micro Cycle" tab
 // (embedded, with the Macro/Meso spine passed in) — one macro→meso→micro flow.
-export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOpenTab, initialWeekStart }: WeekSetupViewProps = {}) {
+export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOpenTab, initialWeekStart, mesoWeek, onAssumedGame }: WeekSetupViewProps = {}) {
   const { isAtLeastPro } = usePlan();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -433,6 +441,17 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
   // Set when the saved week is anchored to a different match day than the current fixtures
   // (a fixture moved since the week was saved) → prompt a one-click re-anchor.
   const [staleMatchAnchor, setStaleMatchAnchor] = useState<{ was: string | null; now: string | null } | null>(null);
+  // The Meso week (hub): read in loadWeek through a ref so a new function each hub render doesn't reload the week.
+  const mesoWeekRef = useRef(mesoWeek);
+  useEffect(() => { mesoWeekRef.current = mesoWeek; }, [mesoWeek]);
+  // An assumed game in the week (pre-season, from "Weekend games from"; not in Fixtures) → banner with two actions.
+  const [assumedGame, setAssumedGame] = useState<{ date: string; coachSet: boolean } | null>(null);
+  const [assumedBusy, setAssumedBusy] = useState(false);
+  // Where the shown grid's seed came from when the coach hasn't saved this week: the Meso page's week.
+  const [mesoSeedSource, setMesoSeedSource] = useState<"preseason" | "inseason" | null>(null);
+  // The week's confirmation (Confirm week → players): confirmed / changed since / not confirmed. confirmRev re-reads it.
+  const [confirmStatus, setConfirmStatus] = useState<WeekConfirmStatus | null>(null);
+  const [confirmRev, setConfirmRev] = useState(0);
   // Per-day pitch stimulus (mechanical/locomotive/mixed/technical), 7 entries. Separate
   // axis from noMatchIntents (strength). null = unset / match / off.
   const [dayStimuli, setDayStimuli] = useState<(StimulusType | null)[]>(() => Array.from({ length: 7 }, () => null));
@@ -541,7 +560,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
     microDesc: "Sjálfvirk yfirferð á vikuhringnum út frá skýrslu fyrir fagfólk (Buchheit o.fl. 2024). Ábendingar, ekki hindrun.",
     microNone: "Vikuhringurinn fylgir helstu microcycle-reglum — engin ábending.",
     saving: "Vista...", loadingW: "Hleður...", saveWeek: "Vista viku",
-    applying: "Virkjar...", activate: "Virkja → senda leikmönnum",
+    applying: "Staðfestir...", activate: "Staðfesta viku → leikmenn",
     manualWeek: "Manual vika", autoWeek: "Auto MD vika", editSetup: "← Breyta uppsetningu",
   } : {
     subtitle: "Set up the week. The system sends each player the right training day.",
@@ -572,7 +591,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
     microDesc: "Automatic review of the microcycle from a practitioner report (Buchheit et al. 2024). Suggestions, not blocks.",
     microNone: "The microcycle follows the main principles — no notes.",
     saving: "Saving...", loadingW: "Loading...", saveWeek: "Save week",
-    applying: "Activating...", activate: "Activate → send to players",
+    applying: "Confirming...", activate: "Confirm week → players",
     manualWeek: "Manual week", autoWeek: "Auto MD week", editSetup: "← Edit setup",
   };
 
@@ -592,6 +611,21 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
     if (res.ok && j?.ok) setWeekTests(j.tests ?? []);
   }, [teamId, weekStart]);
   useEffect(() => { void loadWeekTests(); }, [loadWeekTests]);
+
+  // The week's confirmation status (week bar + action bar). Re-read after a save / a confirmation.
+  useEffect(() => {
+    const tid = (teamId ?? "").trim();
+    if (!tid) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await authFetch(`/api/coach/week-setup/confirmation?team_id=${encodeURIComponent(tid)}&from=${weekStart}&to=${weekStart}`);
+        const j = await res.json().catch(() => null) as { ok?: boolean; weeks?: WeekConfirmStatus[] } | null;
+        if (alive) setConfirmStatus(res.ok && j?.ok ? (j.weeks ?? []).find((w) => w.weekStart === weekStart) ?? null : null);
+      } catch { if (alive) setConfirmStatus(null); }
+    })();
+    return () => { alive = false; };
+  }, [teamId, weekStart, confirmRev]);
 
   const visibleMatches = useMemo(() => {
     if (weekType === "ONE_MATCH") return [matches[0] ?? DEFAULT_MATCHES[0]];
@@ -694,7 +728,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
 
       const { data, error } = await supabase
         .from("coach_week_setup")
-        .select("id, team_id, week_start_date, week_type, matches, no_match_intents, season_phase, day_stimuli, updated_at")
+        .select("id, team_id, week_start_date, week_type, matches, no_match_intents, season_phase, day_stimuli, day_characters, updated_at")
         .eq("team_id", tid)
         .eq("week_start_date", weekStart)
         .maybeSingle();
@@ -754,7 +788,17 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         .lte("day_date", weekEndISO);
       if (!alive) return;
       const wpRows = (wp ?? []) as Array<{ day_date: string; day_type: string | null; day_intent: string | null; focus: string | null; updated_at: string | null }>;
-      const wpByDate = new Map(wpRows.map((r) => [r.day_date, r]));
+      // MESO WEEK AS THE SEED (season-setup lota 4): a week with no saved days reads the week the Meso page shows
+      // (pre-season plan / in-season block calendar, hub-supplied) as if Meso had saved it — never stamped as newer
+      // (updated_at null), so the coach's own saved grid still wins. Only real rows count for the stale-anchor check.
+      const mesoSeed = mesoWeekRef.current?.(weekStart) ?? null;
+      const seedRows = wpRows.length > 0
+        ? wpRows
+        : (mesoSeed?.days ?? []).map((d) => ({ day_date: d.day_date, day_type: d.day_type as string | null, day_intent: d.day_intent as string | null, focus: d.focus, updated_at: null as string | null }));
+      setMesoSeedSource(wpRows.length === 0 && seedRows.length > 0 ? mesoSeed!.source : null);
+      const ag = mesoSeed?.assumedGame ?? null;
+      setAssumedGame(ag && !found.some((f) => f.match_date === ag.date) ? ag : null);
+      const wpByDate = new Map(seedRows.map((r) => [r.day_date, r]));
       // LAST EDIT WINS: the Meso (week_plans) and the coach's Week-setup grid (coach_week_setup)
       // both edit this week. Prefer whichever was touched more recently. week_plans.updated_at
       // only bumps when a day's content actually changes (DB trigger), so the Meso's whole-block
@@ -764,7 +808,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
       const coachUpdated = parseMs((data as { updated_at?: string | null } | null)?.updated_at);
       const mesoNewer = wpRows.length > 0 && wpMaxUpdated > coachUpdated;
       // Per-day meso intent (null where the block has no row for that day). Null overall = no block saved.
-      const mesoRaw: (NoMatchIntent | null)[] | null = wpRows.length > 0
+      const mesoRaw: (NoMatchIntent | null)[] | null = seedRows.length > 0
         ? Array.from({ length: 7 }).map((_, i) => {
             const r = wpByDate.get(addDays(weekStart, i));
             return r ? intentFromWeekPlan(r.day_type, r.day_intent, r.focus) : null;
@@ -1109,6 +1153,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
     } catch { /* the week is already saved; fixture sync is best-effort and re-derives on next load */ }
 
     setOk(isIS ? "Vikan var vistuð ✅" : "Week saved ✅");
+    setConfirmRev((v) => v + 1); // a save after a confirmation reads as "changed since confirmed"
     setSaving(false);
     return true;
   }
@@ -1405,6 +1450,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         intensity_target: intensityTarget,
         notes: isManualWeek ? `Manual override ON · WeekType=${weekType}` : `Auto MD ON · WeekType=${weekType}`,
         days: previewDays,
+        confirm: true, // "Confirm week → players": stamps week_setups.confirmed_at / confirmed_by (no notification)
       }),
     });
 
@@ -1418,7 +1464,8 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
     // Week rule (brief §5): the saved week's check comes back with the apply — advice only, the week is saved.
     const wr = (payload as { weekRule?: { check?: ThreeInARowCheck; kept?: WeekRuleKeep | null } | null })?.weekRule;
     if (wr?.check) { const check = wr.check; setWeekRuleRead((r) => (r && r.week === weekStart ? { ...r, saved: check, kept: wr.kept ?? null } : r)); }
-    setOk(isIS ? "Vika var virkjuð ✅ Leikmenn fá nú réttan æfingadag sendan." : "Week activated ✅ Players now receive the right training day.");
+    setOk(isIS ? "Vikan er staðfest ✅ Leikmenn fá nú réttan æfingadag sendan." : "Week confirmed ✅ Players now receive the right training day.");
+    setConfirmRev((v) => v + 1);
     setApplying(false);
   }
 
@@ -1833,7 +1880,16 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         : (isIS ? "Engir leikir fundust í vikunni — vikan er handvirk uppbyggingarvika." : "No games found this week — the week is a manual build week.");
   const weekBreaks = teamBreaks.filter((b) => b.start_date <= weekEnd && b.end_date >= weekStart).length;
   const chip = "inline-flex min-h-9 items-center gap-2 rounded-full border border-[#e3e0d5] bg-[#faf9f4] px-3 text-[12px] text-[#14181c]";
-  const card = "rounded-[14px] border border-[#e3e0d5] bg-white";
+  // The confirmation chip: green when confirmed and unchanged, amber when the week was edited after it.
+  const confirmTone = confirmStatus?.state === "confirmed"
+    ? { borderColor: "rgba(28,122,74,0.35)", background: "rgba(28,122,74,0.08)", color: "#1c7a4a" }
+    : confirmStatus?.state === "changed" ? { borderColor: "rgba(222,147,40,0.4)", background: "rgba(222,147,40,0.08)", color: "#7a5210" } : undefined;
+  const confirmWhy = confirmStatus?.state === "changed"
+    ? (isIS ? "Dagar eða uppsetning vikunnar breyttust eftir staðfestingu — staðfestu aftur til að senda breytingarnar." : "The week's days or setup changed after it was confirmed — confirm again to send the changes.")
+    : confirmStatus?.state === "confirmed"
+      ? (isIS ? "Vikan er staðfest og óbreytt síðan. Leikmenn fá ekki tilkynningu." : "The week is confirmed and unchanged since. Players get no notification.")
+      : (isIS ? "Vikan hefur ekki verið staðfest. „Staðfesta viku → leikmenn“ neðst vistar hana og sendir." : "The week hasn't been confirmed. \"Confirm week → players\" at the bottom saves and sends it.");
+  const card ="rounded-[14px] border border-[#e3e0d5] bg-white";
 
   return (
     <div className={embedded ? "w-full pb-4" : "mx-auto w-full max-w-[1160px] px-5 pb-28 pt-6 md:px-7"} style={{ color: "#14181c" }}>
@@ -1889,6 +1945,14 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
             <span className="text-[#6b6f76]">{isIS ? "Vikugerð" : "Week type"}</span><b>{weekTypeLabel}</b>
             {inWeekMatchDates.length > 0 && <span className="text-[#6b6f76]">{isIS ? "úr" : "from"} <a href="/coach/fixtures" className="text-[#2740e6] hover:underline">{isIS ? "Leikjadagatali" : "Fixtures"}</a></span>}
           </span>
+          <span className={chip} style={confirmTone} title={confirmWhy}>
+            <span className="text-[#6b6f76]">{isIS ? "Staða" : "Status"}</span><b>{weekConfirmLabel(confirmStatus, isIS)}</b>
+          </span>
+          {mesoSeedSource && (
+            <span className={chip} title={isIS ? "Engin vistuð vika — dagarnir koma úr Mesó-síðunni. Staðfestu vikuna til að senda hana." : "No saved week — the days come from the Meso page. Confirm the week to send it."}>
+              <span className="text-[#6b6f76]">{isIS ? "Dagar úr" : "Days from"}</span><b>{mesoSeedSource === "preseason" ? (isIS ? "Mesó: Undirbúningur" : "Meso: Pre-season") : (isIS ? "Mesó: Keppnistímabil" : "Meso: In-season")}</b>
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {rulesSlot && (
@@ -1959,6 +2023,37 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           >
             {t.staleBtn}
           </button>
+        </div>
+      )}
+
+      {/* Assumed game (pre-season): the plan places a game this week ("Weekend games from" / the coach's move) that is
+          not in Fixtures. Enter it as a friendly, or take the game out of the week (the Pre-season page re-flows it). */}
+      {assumedGame && (
+        <div className="mt-4 rounded-[12px] border px-4 py-3 text-[13px]" style={{ borderColor: "rgba(222,147,40,0.4)", background: "rgba(222,147,40,0.08)", color: "#7a5210" }}>
+          <div className="font-semibold">
+            {isIS
+              ? `Áætlaður leikur á ${["mánudag", "þriðjudag", "miðvikudag", "fimmtudag", "föstudag", "laugardag", "sunnudag"][(new Date(`${assumedGame.date}T00:00:00Z`).getUTCDay() + 6) % 7]}, ekki í leikjaskrá`
+              : `Assumed game on ${["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][(new Date(`${assumedGame.date}T00:00:00Z`).getUTCDay() + 6) % 7]}, not in Fixtures`}
+          </div>
+          <p className="mt-1 leading-relaxed text-[#3a3f45]">
+            {assumedGame.coachSet
+              ? (isIS ? "Þú settir leikinn á þennan dag á undirbúningssíðunni. Vikan er skipulögð í kringum hann." : "You placed the game on this day on the Pre-season page. The week is planned around it.")
+              : (isIS ? "Undirbúningurinn gerir ráð fyrir leik um helgar (reitur „Leikir um helgar frá“). Vikan er skipulögð í kringum hann." : "The pre-season assumes a weekend game (the \"Weekend games from\" field). The week is planned around it.")}
+          </p>
+          {onAssumedGame && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" disabled={busy || assumedBusy}
+                onClick={async () => { setAssumedBusy(true); try { await onAssumedGame(weekStart, assumedGame.date, "friendly"); } finally { setAssumedBusy(false); setFixtureRev((v) => v + 1); } }}
+                className="inline-flex h-9 items-center rounded-[8px] bg-[#2740e6] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#1f33c0] disabled:opacity-50">
+                {isIS ? "Skrá sem æfingaleik" : "Enter as a friendly"}
+              </button>
+              <button type="button" disabled={busy || assumedBusy}
+                onClick={async () => { setAssumedBusy(true); try { await onAssumedGame(weekStart, assumedGame.date, "none"); } finally { setAssumedBusy(false); setFixtureRev((v) => v + 1); } }}
+                className="inline-flex h-9 items-center rounded-[8px] border border-[#dcd8cc] bg-white px-3 text-[13px] font-semibold text-[#14181c] transition-colors hover:bg-[#faf9f4] disabled:opacity-50">
+                {isIS ? "Enginn leikur þessa viku" : "No game this week"}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -2278,7 +2373,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
       {/* 6 — STICKY ACTION BAR */}
       <div className={`sticky bottom-0 left-0 right-0 z-20 mt-6 border-t border-[#e3e0d5] py-3 ${embedded ? "px-1" : "-mx-5 px-5 md:-mx-7 md:px-7"}`} style={{ background: "rgba(255,255,255,0.96)", backdropFilter: "blur(6px)" }}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-[13px] text-[#3a3f45]"><b>{weekLabel}</b> · {weekType === "NO_MATCH" && seasonPhase === "offseason" ? "Off-season" : weekType === "NO_MATCH" && seasonPhase === "preseason" ? (isIS ? "Undirbúningur" : "Pre-season") : weekTypeLabel}{sp?.block ? ` · ${isIS ? sp.block.label.is : sp.block.label.en} V${sp.block.week}` : ""}</div>
+          <div className="text-[13px] text-[#3a3f45]"><b>{weekLabel}</b> · {weekType === "NO_MATCH" && seasonPhase === "offseason" ? "Off-season" : weekType === "NO_MATCH" && seasonPhase === "preseason" ? (isIS ? "Undirbúningur" : "Pre-season") : weekTypeLabel}{sp?.block ? ` · ${isIS ? sp.block.label.is : sp.block.label.en} V${sp.block.week}` : ""} · <span style={{ color: confirmStatus?.state === "confirmed" ? "#1c7a4a" : confirmStatus?.state === "changed" ? "#8a5a12" : "#6b6f76" }}>{weekConfirmLabel(confirmStatus, isIS)}</span></div>
           <div className="flex flex-wrap gap-2">
             {weekType === "NO_MATCH" && teamId && <OffWeekProgramButton teamId={teamId} />}
             <button type="button" onClick={() => void handleExportWeekPdf()}

@@ -108,7 +108,7 @@ describe("wiring", () => {
   it("Apply and Build Session's week plan return the check; neither blocks", () => {
     const apply = read("src/app/api/coach/week-setup/apply/route.ts");
     expect(apply).toMatch(/loadWeekRuleRead\(supabase, team_id, week_start\)/);
-    expect(apply).toMatch(/return NextResponse\.json\(\{ ok: true, weekRule \}\)/);
+    expect(apply).toMatch(/return NextResponse\.json\(\{ ok: true, weekRule(, confirmedAt)? \}\)/);
     const plan = read("src/app/api/coach/session-builder/week-plan/route.ts");
     expect(plan).toMatch(/loadWeekRuleRead\(sb, teamId/);
   });

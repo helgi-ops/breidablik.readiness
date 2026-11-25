@@ -70,14 +70,17 @@ export async function POST(req: Request) {
 
   const body = await req.json();
   const { team_id, week_start, system_key, intensity_target, notes, days } = body;
+  // "Confirm week → players" (Micro, lota 4): the same save, plus the week is marked confirmed (when + by whom).
+  const confirm = body?.confirm === true;
 
   if (!team_id || !week_start || !system_key || intensity_target == null) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
   // Debug: sjá hvað UI er að senda inn
+  let coachUserId: string | null = null;
   try {
-    await requireCoachAccessForTeam(supabase, req, team_id);
+    coachUserId = (await requireCoachAccessForTeam(supabase, req, team_id)).coachUserId;
   } catch (err) {
     const auth = authErrorToResponse(err);
     if (auth) return auth;
@@ -157,10 +160,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: planErr.message }, { status: 500 });
   }
 
+  // The confirmation is stamped AFTER the days are written, so a week confirmed now never reads "changed since".
+  let confirmedAt: string | null = null;
+  if (confirm) {
+    // updated_at is set by the DB clock; never stamp the confirmation before the week's last edit (clock skew).
+    const weekEnd = new Date(Date.parse(`${week_start}T00:00:00Z`) + 6 * 86_400_000).toISOString().slice(0, 10);
+    const [{ data: wpEd }, { data: cwEd }] = await Promise.all([
+      supabase.from("week_plans").select("updated_at").eq("team_id", team_id).gte("day_date", week_start).lte("day_date", weekEnd),
+      supabase.from("coach_week_setup").select("updated_at").eq("team_id", team_id).eq("week_start_date", week_start),
+    ]);
+    const lastEdit = [...(wpEd ?? []), ...(cwEd ?? [])].reduce((mx, r) => { const t = Date.parse(String((r as { updated_at?: string | null }).updated_at ?? "")); return Number.isFinite(t) && t > mx ? t : mx; }, 0);
+    confirmedAt = new Date(Math.max(Date.now(), lastEdit + 1)).toISOString();
+    const { error: cErr } = await supabase.from("week_setups")
+      .update({ confirmed_at: confirmedAt, confirmed_by: coachUserId })
+      .eq("team_id", team_id).eq("week_start", week_start);
+    if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 });
+  }
+
   // Week rules (brief §5): in season never three training days in a row. Advice only — the week is already saved;
   // the coach gets the run, the nearest fix and the choice to keep it (logged with a reason). Never fails the apply.
   let weekRule: Awaited<ReturnType<typeof loadWeekRuleRead>> | null = null;
   try { weekRule = await loadWeekRuleRead(supabase, team_id, week_start); } catch { weekRule = null; }
 
-  return NextResponse.json({ ok: true, weekRule });
+  return NextResponse.json({ ok: true, weekRule, confirmedAt });
 }
