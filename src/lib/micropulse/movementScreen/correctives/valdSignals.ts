@@ -32,7 +32,7 @@ export type ValdClearance = { compensation: CompensationKey; source: string; det
 
 const round = (n: number) => Math.round(n);
 const ageDaysOf = (iso: string) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000));
-/** Standard limb-symmetry thresholds (Grindem 2016 LSI ≥90%; 10–15% is a common flag line, Parkinson 2021). */
+/** MicroPulse's lines: 10% moderate, 15% marked (10–15% is a common flag line, not a tested cut-off, Parkinson 2021). Grindem 2016's LSI ≥90% is a knee-surgery return gate, not a screening line. */
 const asymSeverity = (pct: number): "moderate" | "marked" | null => (pct >= 15 ? "marked" : pct >= 10 ? "moderate" : null);
 
 type FrameRow = { movement_pattern: string | null; body_region: string | null; asymmetry_percent: number | null; test_timestamp: string; is_valid: boolean | null };
@@ -116,7 +116,7 @@ export function deriveValdClearances({ frameRow, nordRow, decksRow }: ValdRows):
   if (asymValues.length > 0 && asymValues.every((v) => asymSeverity(v) == null) && !fired.has("limb_asymmetry")) {
     const best = Math.max(...asymValues.map((v) => Math.abs(v)));
     const src = nordRow?.asymmetry_percent != null ? "VALD NordBord" : "VALD ForceDecks";
-    out.push({ compensation: "limb_asymmetry", source: src, detail: { en: `Limb symmetry within norm (≤${round(best)}%)`, is: `Útlima-samhverfa innan viðmiða (≤${round(best)}%)` } });
+    out.push({ compensation: "limb_asymmetry", source: src, detail: { en: `Left/right gap under MicroPulse's 10% line (${round(best)}%)`, is: `Munur vinstri/hægri undir 10% línu MicroPulse (${round(best)}%)` } });
   }
   if (decksRow?.rsi_mod != null && decksRow.rsi_mod >= 0.4 && !fired.has("low_reactive_strength")) {
     out.push({ compensation: "low_reactive_strength", source: "VALD ForceDecks", detail: { en: `CMJ RSI-mod within norm (${decksRow.rsi_mod.toFixed(2)})`, is: `CMJ RSI-mod innan viðmiða (${decksRow.rsi_mod.toFixed(2)})` } });

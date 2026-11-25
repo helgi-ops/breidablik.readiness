@@ -199,7 +199,7 @@ const INJ_I18N = {
   valdGroin: { EN: "Groin", IS: "Nár" },
   nordbordHeading: { EN: "VALD Nordbord — eccentric hamstring asymmetry", IS: "VALD Nordbord — eccentric hamstring ósamhverfa" },
   nordbordAsymmetry: { EN: "asymmetry", IS: "ósamhverfa" },
-  nordbordOpar: { EN: "MicroPulse line: ≥10% asymmetry is worth a look. Opar 2015 found >10% asymmetry alone did not raise hamstring-injury risk; low eccentric strength did", IS: "Viðmið MicroPulse: ≥10% ósamhverfa er þess virði að skoða. Opar 2015 fann að >10% ósamhverfa ein og sér jók ekki hættu á aftanlærismeiðslum; lítill eccentric styrkur gerði það" },
+  nordbordOpar: { EN: "MicroPulse lines: ≥10% amber, ≥15% red. Opar 2015 (Australian football) found >10% asymmetry alone did not raise hamstring-injury risk; low eccentric strength did. Bourne 2015 (rugby union) found ≥15% did, more so for re-injury", IS: "Viðmið MicroPulse: ≥10% gult, ≥15% rautt. Opar 2015 (ástralskur fótbolti) fann að >10% ósamhverfa ein og sér jók ekki hættu á aftanlærismeiðslum; lítill eccentric styrkur gerði það. Bourne 2015 (ruðningur) fann að ≥15% gerði það, frekar fyrir endurmeiðsl" },
   gpsSpikesHeading: { EN: "GPS spike days (Duhig 2016)", IS: "GPS spike dagar (Duhig 2016)" },
   gpsSpikeNone: { EN: "No HSR or sprint-count spikes in window.", IS: "Engar HSR eða sprint spikes í glugganum." },
   gpsSpikeHsr: { EN: "HSR", IS: "HSR" },
@@ -821,7 +821,7 @@ function InjuryRow({ injury, playerName, lang, teamId }: { injury: InjuryEvent; 
             );
           })()}
 
-          {/* VALD Nordbord — eccentric hamstring asymmetry (Opar 2015) */}
+          {/* VALD Nordbord — eccentric hamstring asymmetry (MicroPulse lines 10% / 15%; Opar 2015, Bourne 2015) */}
           {(() => {
             const n = (retro as Record<string, unknown> | null)?.nordbord as {
               test_date?: string;

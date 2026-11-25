@@ -58,12 +58,12 @@ const PROTOCOLS: InjuryProtocol[] = [
         detail: { EN: "Pain-free return to top sprint speed (GPS max velocity) — most re-injuries are at speed.", IS: "Sársaukalaus endurkoma á hámarks-spretthraða (GPS max velocity) — flest endurmeiðsli verða á hraða." } },
     ],
     criteria: [
-      { EN: "Eccentric strength within ~10% of the uninjured leg (NordBord imbalance ≤10–15%).", IS: "Sérvirkur styrkur innan ~10% af óslasaða fæti (NordBord munur ≤10–15%)." },
+      { EN: "Eccentric strength within ~10% of the uninjured leg (NordBord gap ≤10–15%, a common clinic line; also compare with his own pre-injury test).", IS: "Sérvirkur styrkur innan ~10% af óslasaða fæti (NordBord munur ≤10–15%, algeng lína á stofum; berðu líka saman við hans eigið próf fyrir meiðsli)." },
       { EN: "Full pain-free range + pain-free max-velocity sprint.", IS: "Fullt sársaukalaust hreyfisvið + sársaukalaust hámarkshraða-hlaup." },
     ],
     clinical: { EN: "Resisted knee flexion + palpation to localise the lesion.", IS: "Mótstöðu hnébeygja + þreifing til að staðsetja meiðsli." },
     differential: { EN: "Rule out lumbar / sciatic referral (slump, SLR) and a proximal tendon avulsion.", IS: "Útiloka lendar- / settaugar-leiðni (slump, SLR) og nærlæga sina-rifu." },
-    citation: "Opar/Bourne (NordBord); van Dyk 2017; Askling H-test",
+    citation: "Opar 2015; Bourne 2015; van Dyk 2017 (injury-risk studies, not exit tests); Askling H-test",
   },
   {
     key: "quadriceps",
@@ -91,12 +91,12 @@ const PROTOCOLS: InjuryProtocol[] = [
       { device: "ForceDecks", name: { EN: "Single-leg hop battery + CMJ", IS: "Einfóta hopp-röð + CMJ" },
         detail: { EN: "Hop LSI and RSI-modified symmetry — reactive strength and landing control.", IS: "Hopp-LSI og RSI-modified samhverfa — hvarfkraftur og lendingar-stjórn." } },
       { device: "ForceDecks", name: { EN: "IMTP / isometric knee-extension", IS: "IMTP / ísómetrísk hné-rétta" },
-        detail: { EN: "Quadriceps strength limb-symmetry — the strongest re-injury predictor.", IS: "Fjórhöfða-styrks samhverfa — sterkasti endurmeiðsla-forspáþátturinn." } },
+        detail: { EN: "Quadriceps strength limb-symmetry — more even quadriceps strength went with fewer re-injuries (Grindem 2016).", IS: "Fjórhöfða-styrks samhverfa — jafnari fjórhöfðastyrkur fylgdi færri endurmeiðslum (Grindem 2016)." } },
       { device: "Field", name: { EN: "On-field criteria + time", IS: "Vettvangs-viðmið + tími" },
         detail: { EN: "Change-of-direction, agility and sport-specific drills; criteria-based, not time-only.", IS: "Stefnubreytingar, snerpa og íþrótta-sértækar æfingar; viðmiðabundið, ekki bara tími." } },
     ],
     criteria: [
-      { EN: "Quadriceps + hop LSI ≥90% of the uninjured leg (each drops re-injury risk).", IS: "Fjórhöfða- + hopp-LSI ≥90% af óslasaða fæti (hvort um sig lækkar áhættu)." },
+      { EN: "Quadriceps + hop LSI ≥90% of the uninjured leg (Grindem 2016: more even quadriceps strength lowered re-injury; hop symmetry was part of the test battery).", IS: "Fjórhöfða- + hopp-LSI ≥90% af óslasaða fæti (Grindem 2016: jafnari fjórhöfðastyrkur lækkaði endurmeiðsl; hopp-samhverfa var hluti af prófaröðinni)." },
       { EN: "Criteria-based clearance — delaying RTP toward ~9 months markedly lowers re-injury.", IS: "Viðmiðabundin klárun — að seinka RTP að ~9 mánuðum lækkar endurmeiðsli verulega." },
     ],
     clinical: { EN: "Lachman (most sensitive) + anterior drawer + pivot shift.", IS: "Lachman (næmast) + fremri skúffa + pivot shift." },
@@ -134,7 +134,7 @@ const PROTOCOLS: InjuryProtocol[] = [
     ],
     criteria: [
       { EN: "Adductor strength restored to ≥90% of the uninjured side / baseline, pain-free squeeze.", IS: "Aðleiðara-styrkur endurheimtur í ≥90% af óslasaðri hlið / grunngildi, sársaukalaus kreisting." },
-      { EN: "Adduction : abduction ratio ≈ 0.9–1.0 (deficit is a recognised risk marker).", IS: "Aðfærsla : fráfærsla hlutfall ≈ 0.9–1.0 (skortur er þekktur áhættuþáttur)." },
+      { EN: "Adduction : abduction ratio ≈ 0.9–1.0 (Tyler 2001, ice hockey: under 0.8 went with more adductor strains; a meta-analysis found no link for the ratio, only for low adductor strength — Quintana-Cepedal 2025).", IS: "Aðfærsla : fráfærsla hlutfall ≈ 0.9–1.0 (skortur er þekktur áhættuþáttur)." },
     ],
     clinical: { EN: "Resisted adduction (squeeze) + palpation of the adductor origin.", IS: "Mótstöðu aðfærsla (kreisting) + þreifing á aðleiðara-upptök." },
     differential: { EN: "Rule out hip (FADIR/FABER), inguinal / sports hernia and pubic-related pain.", IS: "Útiloka mjöðm (FADIR/FABER), nára- / íþrótta-kviðslit og lífbeins-tengda verki." },
@@ -298,7 +298,7 @@ export default function RtpTestingGuidePage() {
           <li>{isEN ? "Criteria-based, not calendar-based — meet the tests, not just the weeks." : "Viðmiðabundið, ekki dagatals-bundið — uppfylla prófin, ekki bara vikurnar."}</li>
           <li>{isEN ? "Limb symmetry (LSI) ≥90% of the uninjured side is a common strength/hop gate." : "Samhverfa (LSI) ≥90% af óslasaðri hlið er algengt styrk-/hopp-viðmið."}</li>
           <li>{isEN ? "Pain-free at the demand being returned to (sprint speed, jump load, change of direction)." : "Sársaukalaust við það álag sem er verið að fara aftur í (spretthraði, stökk-álag, stefnubreytingar)."}</li>
-          <li>{isEN ? "Re-test against the player's own pre-injury baseline where one exists." : "Endurprófaðu gegn eigin grunngildi leikmannsins fyrir meiðsli þar sem það er til."}</li>
+          <li>{isEN ? "Re-test against the player’s own pre-injury baseline where one exists — the uninjured leg also weakens, so a side-to-side score can look better than it is (Wellsandt 2017)." : "Endurprófaðu gegn eigin grunngildi leikmannsins fyrir meiðsli þar sem það er til."}</li>
         </ul>
       </div>
 

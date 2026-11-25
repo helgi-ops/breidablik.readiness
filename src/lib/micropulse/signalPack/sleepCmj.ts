@@ -142,12 +142,12 @@ export function cmjAsymContributor(input: CmjAsymInput): SignalContributor | nul
     key: "cmj_asym",
     label: { en: "Jump asymmetry", is: "Stökk-ósamhverfa" },
     why, counterfactual,
-    citation: "Haller 2023",
+    citation: "Haller 2023 (monitoring battery); Parkinson 2021 (10–15% common flag line)",
     confidence: testCount >= 3 ? "high" : testCount >= 1 ? "moderate" : "low",
     severity, flagged,
     detail: {
-      en: `CMJ L/R asymmetry ${a.toFixed(0)}% (n=${testCount}). Flag > ${flagAt}%. A within-player L/R comparison.`,
-      is: `CMJ V/H ósamhverfa ${a.toFixed(0)}% (n=${testCount}). Flagg > ${flagAt}%. Samanburður innan leikmanns (V/H).`,
+      en: `CMJ L/R asymmetry ${a.toFixed(0)}% (n=${testCount}). Flag > ${flagAt}%. A within-player L/R comparison. The 10% line is MicroPulse's; a left/right gap has not been shown to predict injury (Helme 2021).`,
+      is: `CMJ V/H ósamhverfa ${a.toFixed(0)}% (n=${testCount}). Flagg > ${flagAt}%. Samanburður innan leikmanns (V/H). 10% línan er MicroPulse; ekki hefur sýnt sig að munur vinstri/hægri spái fyrir um meiðsli (Helme 2021).`,
     },
   };
 }

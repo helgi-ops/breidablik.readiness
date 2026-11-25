@@ -87,8 +87,8 @@ const GROIN_TIP: Bi = {
   is: "Copenhagen Adduction stigvaxandi, stutt í langan arm (Harøy 2019; Ishøi 2016).",
 };
 const ASYMMETRY_TIP: Bi = {
-  en: "Single-leg strength + power on the weaker side to even out limb contribution (Bishop 2018).",
-  is: "Einfætt styrkur + afl á veikari hlið til að jafna framlag útlima (Bishop 2018).",
+  en: "Single-leg strength + power on the weaker side to even out limb contribution (some evidence that training shrinks the gap, too few studies to be sure — Bishop 2023).",
+  is: "Einfætt styrkur + afl á veikari hlið til að jafna framlag útlima (nokkrar vísbendingar um að þjálfun minnki muninn, of fáar rannsóknir til að vera viss — Bishop 2023).",
 };
 const CALF_TIP: Bi = {
   en: "Progressive single-leg calf raises (bent + straight knee) and isometric plantar-flexion holds to rebuild side-to-side strength.",
@@ -255,10 +255,10 @@ const UNIVERSAL: Record<string, MetricSpec> = {
   },
   // Ankle plantar-flexion left/right symmetry (ForceFrame). Absolute plantar-flexion strength has
   // no established ForceFrame population norms (protocol / joint-angle dependent), so we grade the
-  // SYMMETRY — the clinically meaningful, well-cited read after a calf / Achilles / ankle injury.
+  // SYMMETRY — compared with the uninjured side after a calf / Achilles / ankle injury. The 10/15% lines are MicroPulse's; no ForceFrame study gives a plantar-flexion line.
   anklePlantarAsymmetry: {
     spec: { dir: "lower", g: 10, a: 15 },
-    ref: { en: "<10% ok, 10-15% watch, >15% concern (plantar-flexion L/R symmetry — key after a calf / Achilles / ankle injury)", is: "<10% í lagi, 10-15% fylgstu með, >15% áhyggjuefni (plantar-flexion vinstri/hægri samhverfa — lykill eftir kálfa- / hásina- / ökkla-meiðsli)" },
+    ref: { en: "<10% ok, 10-15% watch, >15% concern (plantar-flexion L/R — compare with the uninjured side after a calf / Achilles / ankle injury; MicroPulse's lines)", is: "<10% í lagi, 10-15% fylgstu með, >15% áhyggjuefni (plantar-flexion vinstri/hægri — berðu saman við heilu hliðina eftir kálfa- / hásina- / ökkla-meiðsli; línur MicroPulse)" },
     citation: "Parkinson 2021 (10–15% is a common flag line, not a validated cut-off)", improve: CALF_TIP,
   },
   // Limb Symmetry Index (involved / uninvolved x 100). The classic return-to-sport
@@ -266,7 +266,7 @@ const UNIVERSAL: Record<string, MetricSpec> = {
   lsi: {
     spec: { dir: "higher", e: 100, g: 90, a: 80 },
     ref: { en: "RTP gate: >=90% cleared, 80-90% caution, <80% not ready (involved/uninvolved)", is: "RTP-viðmið: >=90% klárt, 80-90% varúð, <80% ekki tilbúið (veik/heil hlið)" },
-    citation: "Grindem 2016; Kyritsis 2016", improve: HAMSTRING_TIP,
+    citation: "Grindem 2016; Kyritsis 2016 (knee-surgery return tests; the 80% caution line is MicroPulse's)", improve: HAMSTRING_TIP,
   },
   cmjContractionTimeMs: {
     spec: { dir: "context" },

@@ -8,7 +8,7 @@
  * narrative only rephrases these (manifesto: rules decide, AI explains).
  *
  * Thresholds cited inline: limb asymmetry ≥10% concern / ≥15% high — a common flag line, not a validated cut-off (Parkinson 2021; no single line fits every test, Read 2021),
- * Aspetar RTP consensus (bilateral strength / jump floors). Pure + unit-testable.
+ * MicroPulse's bilateral strength / jump floors (Kotsifaki 2023, the Aspetar ACL CPG, asks DJ RSI >1.3 and sets no IMTP / CMJ-height floor). Pure + unit-testable.
  */
 
 import type { RtpCriterion, RtpDomain, RtpStatus } from "./types";
@@ -62,7 +62,7 @@ export function buildRtpCriteria(input: {
   // ── Bilateral Strength (IMTP) ──────────────────────────────────────────────
   if (input.imtpRelNkg != null) {
     const met = input.imtpRelNkg >= 20;
-    c.push({ key: "imtp_strength", domain: "Bilateral Strength", label: "Bilateral isometric strength (IMTP)", target: "> 20 N/kg", current: `${input.imtpRelNkg.toFixed(1)} N/kg`, status: met ? "PASS" : "CAUTION", met, cite: "Aspetar RTP consensus" });
+    c.push({ key: "imtp_strength", domain: "Bilateral Strength", label: "Bilateral isometric strength (IMTP)", target: "> 20 N/kg", current: `${input.imtpRelNkg.toFixed(1)} N/kg`, status: met ? "PASS" : "CAUTION", met, cite: "MicroPulse's floor (no IMTP line in Kotsifaki 2023, the Aspetar ACL CPG)" });
   }
   if (input.imtpAsymPct != null) {
     const s = asymmetryStatus(input.imtpAsymPct);
@@ -90,7 +90,7 @@ export function buildRtpCriteria(input: {
   // ── Bilateral Jump (CMJ) ───────────────────────────────────────────────────
   if (input.cmjJumpHeightCm != null) {
     const met = input.cmjJumpHeightCm >= 40;
-    c.push({ key: "cmj_height", domain: "Bilateral Jump", label: "Bilateral jump height (CMJ)", target: "> 40 cm", current: fmtCm(input.cmjJumpHeightCm), status: met ? "PASS" : "CAUTION", met, cite: "Aspetar RTP consensus (rough floor)" });
+    c.push({ key: "cmj_height", domain: "Bilateral Jump", label: "Bilateral jump height (CMJ)", target: "> 40 cm", current: fmtCm(input.cmjJumpHeightCm), status: met ? "PASS" : "CAUTION", met, cite: "MicroPulse's rough floor (no CMJ-height line in Kotsifaki 2023)" });
   }
   if (input.cmjAsymmetryPct != null) {
     const s = asymmetryStatus(input.cmjAsymmetryPct);
@@ -100,7 +100,7 @@ export function buildRtpCriteria(input: {
   // ── Bilateral Reactive (DJ) ────────────────────────────────────────────────
   if (input.djRsi != null) {
     const met = input.djRsi >= 2.0;
-    c.push({ key: "dj_rsi", domain: "Bilateral Reactive", label: "Bilateral reactive strength (DJ RSI)", target: "> 2.0", current: input.djRsi.toFixed(2), status: met ? "PASS" : "CAUTION", met, cite: "Aspetar RTP consensus (rough floor)" });
+    c.push({ key: "dj_rsi", domain: "Bilateral Reactive", label: "Bilateral reactive strength (DJ RSI)", target: "> 2.0", current: input.djRsi.toFixed(2), status: met ? "PASS" : "CAUTION", met, cite: "MicroPulse's rough floor (Kotsifaki 2023 asks DJ RSI >1.3 double-leg for field sports)" });
   }
 
   // ── Unilateral Reactive (SLDJ) — highest clinical weight ───────────────────
@@ -115,7 +115,7 @@ export function buildRtpCriteria(input: {
   if (input.sldjStiffnessAsymPct != null) {
     const s = input.sldjStiffnessAsymPct;
     const status: RtpStatus = s > 20 ? "FLAG" : s >= 15 ? "CAUTION" : "PASS";
-    c.push({ key: "sldj_stiffness_asymmetry", domain: "Unilateral Reactive", label: "SLDJ active-stiffness asymmetry", target: "< 15%", current: fmtPct(s), status, met: status === "PASS", cite: "RTP consensus" });
+    c.push({ key: "sldj_stiffness_asymmetry", domain: "Unilateral Reactive", label: "SLDJ active-stiffness asymmetry", target: "< 15%", current: fmtPct(s), status, met: status === "PASS", cite: "MicroPulse's line (no verified source sets a stiffness-asymmetry cut-off)" });
   }
 
   // ── Movement Control (change of direction + dynamic valgus) ────────────────

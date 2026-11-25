@@ -19,10 +19,10 @@ export function explainInjuryRiskWhy(triggeredRules: string[]): string[] {
     lines.push("Current loading context may increase risk if full loading continues.");
   }
   if (triggeredRules.includes("VALD_HAMSTRING_RISK")) {
-    lines.push("Hamstring testing suggests elevated asymmetry or force concern.");
+    lines.push("Hamstring test shows a left/right gap of 10% or more (MicroPulse's line; a gap alone did not raise hamstring-injury risk in Opar 2015).");
   }
   if (triggeredRules.includes("VALD_GROIN_RISK")) {
-    lines.push("Groin strength profile suggests additional caution.");
+    lines.push("Groin test shows a left/right gap of 10% or more (MicroPulse's line; a gap was not linked to groin injury in Vigneswaran 2025).");
   }
   if (triggeredRules.includes("VALD_NEUROMUSCULAR_CAUTION")) {
     lines.push("Neuromuscular testing suggests lower explosive readiness.");
@@ -79,8 +79,8 @@ export function explainInjuryRiskDrivers(triggeredRules: string[]): string[] {
   if (triggeredRules.includes("REPEATED_WARNING_DAYS")) drivers.push("Repeated warning days");
   if (triggeredRules.includes("SORENESS_PAIN_FLAG")) drivers.push("Soreness/pain flag");
   if (triggeredRules.includes("GPS_SPIKE_POOR_RECOVERY")) drivers.push("GPS spike under poor recovery");
-  if (triggeredRules.includes("VALD_HAMSTRING_RISK")) drivers.push("Hamstring asymmetry / force concern");
-  if (triggeredRules.includes("VALD_GROIN_RISK")) drivers.push("Groin profile concern");
+  if (triggeredRules.includes("VALD_HAMSTRING_RISK")) drivers.push("Hamstring left/right gap ≥10%");
+  if (triggeredRules.includes("VALD_GROIN_RISK")) drivers.push("Groin left/right gap ≥10%");
   if (triggeredRules.includes("VALD_NEUROMUSCULAR_CAUTION")) drivers.push("Neuromuscular readiness decrement");
   if (triggeredRules.includes("GLOBAL_FATIGUE")) drivers.push("Global fatigue (mechanical + metabolic)");
   if (triggeredRules.includes("RESIDUAL_MLI_HIGH")) drivers.push("High accumulated mechanical load (3-day)");

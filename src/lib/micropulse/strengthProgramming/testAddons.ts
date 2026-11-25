@@ -109,7 +109,7 @@ const fromGoal = (ex: PrescribedExercise) => !!ex.playerGoal || !!ex.goalPlan;
 
 const EVIDENCE = {
   nordic: "NordBord: Timmins 2016 (under 337 N at pre-season went with higher hamstring injury risk; shown as a reference only). The 10% drop vs his own previous test and the +1 set are the coach's rule (2026-11-23), not from a study.",
-  copenhagen: "ForceFrame hip adduction (inner pads). A left/right gap of 10% is the VALD panel's watch line; the 10% drop vs his own previous test and the +1 set on MD-3 are the coach's rule (2026-11-23). Copenhagen strength trials: Schaber 2021 (review).",
+  copenhagen: "ForceFrame hip adduction (inner pads). A left/right gap of 10% is the VALD panel's watch line (a gap in adductor strength was not linked to groin injury, Vigneswaran 2025; low adductor strength was, Quintana-Cepedal 2025); the 10% drop vs his own previous test and the +1 set on MD-3 are the coach's rule (2026-11-23). Copenhagen strength trials: Schaber 2021 (review).",
 };
 
 /**

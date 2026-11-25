@@ -903,7 +903,7 @@ EXTRA SIGNALS YOU MAY USE WHEN PRESENT (lower priority than coach_visible_verdic
 - When cmj_recent is present, you may write specifics. Examples:
     vs_personal = "within" → "today's CMJ at <jump_cm> cm — typical for him (<low>-<high> cm)"
     vs_personal = "below"  → "today's CMJ at <jump_cm> cm dropped below his usual <low>-<high> cm"
-    asymmetry_pct >= 10    → "<asymmetry_pct>% L/R asymmetry on today's jump — flag it"
+    asymmetry_pct >= 10    → "<asymmetry_pct>% L/R asymmetry on today's jump — at or over MicroPulse's 10% watch line, not an injury predictor"
 - Numbers you MAY echo from cmj_recent: jump_cm, rsi_mod, asymmetry_pct,
   personal_range_cm.low, personal_range_cm.high. Nothing else.
 - When cmj_recent is null, the strength-test rules above apply — say

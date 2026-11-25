@@ -13,7 +13,7 @@
  *   • Ottawa Ankle Rules first (rule out fracture); Grade III / gross instability
  *     is out of scope — refer.
  *   • Grade I / II toggle adjusts the early protected phase.
- *   • FAAM outcome; hop + Y-balance LSI ≥ 90% gate for return to agility.
+ *   • FAAM outcome; hop + Y-balance LSI ≥ 90% gate for return to agility (MicroPulse's gate — Tassignon 2019 found no evidence-based ankle-sprain RTS criteria).
  *
  * EDUCATIONAL protocol reference — decisions belong to the treating clinician.
  * Clinical doses in English; the shell is bilingual IS/EN. Nothing here touches
@@ -409,7 +409,7 @@ export default function AnkleSprainPage() {
               {[
                 { h: isEN ? "Load early — don't rest" : "Hlaða snemma — ekki hvíla", b: isEN ? "Early functional loading (PEACE & LOVE) beats immobilisation for Grade I–II. Protect briefly, then move and weight-bear as pain allows." : "Snemmbúin starfræn hleðsla (PEACE & LOVE) slær kyrrsetningu fyrir Grade I–II. Verndaðu stutt, hreyfðu svo og berðu þunga eftir verk." },
                 { h: isEN ? "Balance is the missing pillar" : "Jafnvægi er stoðin sem gleymist", b: isEN ? "Proprioceptive / neuromuscular training is the single biggest lever on re-sprain risk. Start it in Stage 2 and keep it as prevention after return." : "Proprioceptive / taugavöðva-þjálfun er stærsti einstaki þátturinn í endurtognunar-áhættu. Byrjaðu í Fasa 2 og haltu því sem forvörn eftir endurkomu." },
-                { h: isEN ? "Symmetry unlocks agility" : "Samhverfa opnar snerpu", b: isEN ? "Stage 4 cutting waits for hop LSI ≥ 90% and symmetric Y-balance vs the uninjured side." : "Fasi 4 (skurðir) bíður eftir hopp-LSI ≥ 90% og samhverfu Y-jafnvægi vs heilbrigða hlið." },
+                { h: isEN ? "Symmetry unlocks agility" : "Samhverfa opnar snerpu", b: isEN ? "Stage 4 cutting waits for hop LSI ≥ 90% and symmetric Y-balance vs the uninjured side — MicroPulse's gate; no study has yet set a return line after ankle sprain (Tassignon 2019)." : "Fasi 4 (skurðir) bíður eftir hopp-LSI ≥ 90% og samhverfu Y-jafnvægi vs heilbrigða hlið — viðmið MicroPulse; engin rannsókn hefur enn sett endurkomu-línu eftir ökklatognun (Tassignon 2019)." },
                 { h: isEN ? "Track FAAM weekly" : "Fylgstu með FAAM vikulega", b: isEN ? "The Foot & Ankle Ability Measure (0–100%, higher = better). Use CAIT to screen residual instability." : "Foot & Ankle Ability Measure (0–100%, hærra = betra). Notaðu CAIT til að skima óstöðugleika." },
               ].map((c, i) => (
                 <div key={i} className="rounded-lg border border-slate-200 bg-white p-4">
@@ -458,7 +458,7 @@ export default function AnkleSprainPage() {
               goal={isEN ? "restore reactive balance and the spring with progressive hopping — only once pain is controlled and hop/balance symmetry is building." : "endurheimta viðbragðs-jafnvægi og fjöðrun með stigvaxandi hoppi — aðeins þegar verkur er í skefjum og hopp/jafnvægis-samhverfa byggist upp."} />
             <LsiGate isEN={isEN} unitHint={LSI_HINT} metrics={lsiMetrics} />
             <ExerciseTable rows={S3} isEN={isEN} />
-            <p className="text-xs text-slate-500">{isEN ? "Source: neuromuscular / balance progression + hop-test symmetry." : "Heimild: taugavöðva- / jafnvægis-framgangur + hopp-prófa samhverfa."}</p>
+            <p className="text-xs text-slate-500">{isEN ? "Source: neuromuscular / balance progression; the 90% hop / Y-balance gate is MicroPulse's line — no evidence-based ankle-sprain criteria yet (Tassignon 2019); Smith 2021 lists hop and balance tests without a % line." : "Heimild: taugavöðva- / jafnvægis-framgangur; 90% hopp- / Y-jafnvægis-hliðið er viðmið MicroPulse — engin gagnreynd viðmið eftir ökklatognun enn (Tassignon 2019); Smith 2021 telur upp hopp- og jafnvægispróf án %-línu."}</p>
             <PainGate isEN={isEN} reported={reported} provocationFull={PROVOCATION_FULL} provocationShort={PROVOCATION_SHORT} />
           </div>
         )}
@@ -492,7 +492,7 @@ export default function AnkleSprainPage() {
                     { m: "FAAM (0–100%) + CAIT for instability", c: isEN ? "weekly" : "vikulega", w: isEN ? "The ankle outcome score — higher = better. CAIT flags residual instability. The 'are we winning?' number." : "Ökkla-útkomu-skor — hærra = betra. CAIT sýnir eftirstandandi óstöðugleika. 'Erum við að vinna?' talan." },
                     { m: "Loading / single-leg balance pain (VAS 0–10)", c: isEN ? "daily" : "daglega", w: isEN ? "The daily provocation test. Feeds the pain-monitoring gate." : "Daglega provokations-prófið. Fæðir verkja-vöktunar-hliðið." },
                     { m: "Morning stiffness / swelling", c: isEN ? "daily" : "daglega", w: isEN ? "Primary day-to-day marker — must not rise week to week." : "Aðal-daglegi mælikvarðinn — má ekki vaxa milli vikna." },
-                    { m: "Hop-test LSI + Y-balance (SEBT) symmetry", c: isEN ? "before Stage 3/4, then monitoring" : "fyrir Fasa 3/4, svo vöktun", w: isEN ? "Objective gate: hop LSI ≥ 90% and symmetric Y-balance unlock agility / return to sport." : "Hlutlægt hlið: hopp-LSI ≥ 90% og samhverft Y-jafnvægi opna snerpu / endurkomu." },
+                    { m: "Hop-test LSI + Y-balance (SEBT) symmetry", c: isEN ? "before Stage 3/4, then monitoring" : "fyrir Fasa 3/4, svo vöktun", w: isEN ? "Objective gate (MicroPulse's line): hop LSI ≥ 90% and symmetric Y-balance unlock agility / return to sport." : "Hlutlægt hlið (viðmið MicroPulse): hopp-LSI ≥ 90% og samhverft Y-jafnvægi opna snerpu / endurkomu." },
                   ].map((r, i) => (
                     <tr key={i} className="border-b border-slate-100 align-top">
                       <td className="px-3 py-2 font-medium text-slate-900">{r.m}</td>

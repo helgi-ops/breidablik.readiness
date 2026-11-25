@@ -368,7 +368,7 @@ export default function HamstringRehabPage() {
               isEN ? "Isometric LSI ≈ 100% in all three positions" : "Ísometrísk LSI ≈ 100% í öllum þremur stöðum",
               isEN ? "Sprinting >90% max velocity pain-free, no apprehension" : "Spretthlaup >90% hámarkshraða verkjalaust, engin hræðsla",
             ]} />
-            <p className="text-sm italic text-slate-500">{isEN ? "Context: the case-study player returned with a 12–14% Nordic deficit because every other criterion was passed, absolute strength exceeded baseline and was still rising — eccentric asymmetry alone is not predictive of re-injury." : "Samhengi: leikmaðurinn sneri aftur með 12–14% Nordic-halla því öll önnur viðmið stóðust, heildarstyrkur var yfir grunnlínu og enn vaxandi — eccentric-ósamhverfa ein og sér spáir ekki fyrir um endurmeiðsl."}</p>
+            <p className="text-sm italic text-slate-500">{isEN ? "Context: the case-study player returned with a 12–14% Nordic deficit because every other criterion was passed, absolute strength exceeded baseline and was still rising — a remaining eccentric gap did not stop this one player’s return. Studies disagree on whether a gap raises re-injury risk: Bourne 2015 (rugby union) found players with a gap re-injured more." : "Samhengi: leikmaðurinn sneri aftur með 12–14% Nordic-halla því öll önnur viðmið stóðust, heildarstyrkur var yfir grunnlínu og enn vaxandi — eftirstandandi eccentric-munur stöðvaði ekki endurkomu þessa eina leikmanns. Rannsóknum ber ekki saman um hvort munur auki hættu á endurmeiðslum: Bourne 2015 (ruðningur) fann að leikmenn með mun meiddust oftar aftur."}</p>
           </div>
         )}
 
@@ -381,7 +381,7 @@ export default function HamstringRehabPage() {
                 { h: isEN ? "Sprint & game demands" : "Spretta- & leikkröfur", b: isEN ? "≥95% max-velocity exposure, repeated-effort runs, sport-specific chaos on the control-chaos continuum (controlled drills → chaotic game situations)." : "≥95% hámarkshraða, endurtekin átök, íþrótta-sértækt óreiða á stýrða-óreiðu ásnum (stýrð drill → óreiða í leik)." },
                 { h: isEN ? "Final gate" : "Loka-hlið", b: isEN ? "A game-simulation session built on individual worst-case GPS demands before full return to training." : "Leik-hermun byggð á versta-falls GPS-kröfum leikmannsins áður en full endurkoma í æfingar." },
                 { h: isEN ? "Graded return" : "Stigvaxandi endurkoma", b: isEN ? "Reduced minutes first appearance, building over 2–3 weeks (case study: 40 min → 60 min → full)." : "Færri mínútur í fyrstu, byggt upp á 2–3 vikum (40 mín → 60 mín → fullt)." },
-                { h: isEN ? "Re-injury watch" : "Endurmeiðsla-vöktun", b: isEN ? "Monthly testing; act on LSI drift >10–15%, maintain weekly sprint exposure — “sprinting is the vaccine”." : "Mánaðarleg próf; bregstu við LSI-reki >10–15%, haltu vikulegri sprettu — “sprinting is the vaccine”." },
+                { h: isEN ? "Re-injury watch" : "Endurmeiðsla-vöktun", b: isEN ? "Monthly testing; act on LSI drift >10–15% (the case study’s line), maintain weekly sprint exposure — “sprinting is the vaccine”." : "Mánaðarleg próf; bregstu við LSI-reki >10–15% (lína úr tilfellinu), haltu vikulegri sprettu — “sprinting is the vaccine”." },
               ].map((c, i) => (
                 <div key={i} className="rounded-lg border border-slate-200 bg-white p-4">
                   <h3 className="text-sm font-semibold text-violet-700">{c.h}</h3>

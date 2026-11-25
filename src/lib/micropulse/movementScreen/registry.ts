@@ -217,7 +217,7 @@ const SINGLE_LEG_DROP_JUMP: MovementTest = {
         { id: "moderate", label: { en: "10–15% deficit", is: "10–15% halli" }, rule: "10% <= |L-R| <= 15%", severity: "moderate" },
         { id: "marked", label: { en: ">15% deficit", is: ">15% halli" }, rule: "|L-R| > 15%", severity: "marked" },
       ],
-      citation: "Barber-Westin & Noyes 2011; Grindem 2016 (RTP symmetry criteria)",
+      citation: "Barber-Westin & Noyes 2011 (ACL release criteria review); MicroPulse's 10/15% bands — common flag lines, not validated (Parkinson 2021); Kotsifaki 2023 (drop-jump >90% at return to sport, ACL expert consensus)",
     },
   ],
   rules: [
@@ -306,8 +306,8 @@ const SINGLE_LEG_DROP_JUMP: MovementTest = {
       lever: { en: "Unilateral loading biased to the weaker side; re-screen before clearing to full multidirectional load", is: "Einhliða álag með áherslu á veikari hlið; endurskima áður en fullt fjölátta álag er heimilað" },
       strengthEmphasis: "unilateral",
       flag: "rtp",
-      citation: "Grindem 2016; Barber-Westin & Noyes 2011",
-      evidenceGrade: "strong",
+      citation: "Kotsifaki 2023 (drop-jump >90%, ACL expert consensus); Parkinson 2021 (10–15% line not validated)",
+      evidenceGrade: "moderate",
     },
   ],
   references: [
@@ -498,8 +498,8 @@ const HOP_FOR_DISTANCE: MovementTest = {
   name: { en: "Single-leg hop for distance", is: "Einfætt lengdarhopp" },
   category: "hop",
   description: {
-    en: "Maximal single-leg hop, measured per leg. The limb symmetry index (L vs R) is a core return-to-play criterion.",
-    is: "Hámarks einfætt hopp, mælt per fót. Útlima-samhverfuvísitalan (V vs H) er kjarna endurkomu-viðmið.",
+    en: "Maximal single-leg hop, measured per leg. The limb symmetry index (L vs R) is a widely used return-to-play measure; on its own it did not predict re-injury (Grindem 2016).",
+    is: "Hámarks einfætt hopp, mælt per fót. Útlima-samhverfuvísitalan (V vs H) er algengt endurkomu-viðmið; ein og sér spáði hún ekki fyrir um endurmeiðsli (Grindem 2016).",
   },
   laterality: "per_leg",
   capture: {
@@ -529,20 +529,20 @@ const HOP_FOR_DISTANCE: MovementTest = {
         { id: "moderate", label: { en: "85–90%", is: "85–90%" }, rule: "0.85 <= ratio < 0.90", severity: "moderate" },
         { id: "marked", label: { en: "<85%", is: "<85%" }, rule: "ratio < 0.85", severity: "marked" },
       ],
-      citation: "Grindem 2016 (>=90% LSI in RTP criteria); Reid 2007 (hop LSI is reliable)",
+      citation: "Grindem 2016 (>90% on quad strength + four hop tests + two questionnaires together; the hop LSIs alone did not predict re-injury); the 85% line is MicroPulse's; Reid 2007 (hop LSI reliable, but a change under 7–13 points can be noise)",
     },
   ],
   rules: [
     {
       id: "hop_asymmetry",
       match: { variableKey: "lsi", minSeverity: "moderate" },
-      finding: { en: "Hop-distance asymmetry below the return-to-play threshold", is: "Hopplengdar-ósamhverfa undir endurkomu-viðmiði" },
+      finding: { en: "Hop-distance asymmetry below MicroPulse's 90% return-to-play line", is: "Hopplengdar-ósamhverfa undir 90% endurkomu-viðmiði MicroPulse" },
       cause: { en: "Unilateral force/power deficit on the weaker leg", is: "Einhliða kraft/afl halli á veikari fæti" },
       lever: { en: "Unilateral strength + power to the weaker leg; re-test toward >=90% LSI before full clearance", is: "Einhliða styrkur + afl á veikari fót; endurpróf að >=90% LSI áður en full heimild" },
       strengthEmphasis: "unilateral",
       flag: "rtp",
-      citation: "Grindem 2016; Reid 2007",
-      evidenceGrade: "strong",
+      citation: "Grindem 2016 (whole battery, not hop alone); Reid 2007; Wellsandt 2017",
+      evidenceGrade: "moderate",
     },
   ],
   references: [
@@ -550,9 +550,9 @@ const HOP_FOR_DISTANCE: MovementTest = {
     { label: "Grindem et al. 2016 — Cohort: fewer reinjuries in those passing RTS rules (incl. ≥90% LSI), not statistically certain", source: "Br J Sports Med" },
     { label: "Wellsandt et al. 2017 — Limb symmetry indexes can overestimate knee function after ACL injury", source: "J Orthop Sports Phys Ther" },
   ],
-  evidenceGrade: "strong",
+  evidenceGrade: "moderate",
   caveats: [
-    { en: "Evidence grade: STRONG as return-to-play decision support — a limb-symmetry index ≥90% is a widely used RTP criterion; hop tests are reliable (Reid 2007), and in one cohort fewer players who passed these rules re-injured, though the difference was not statistically certain (Grindem 2016, observational). Clearance is still a clinician decision, never the readiness colour.", is: "Sönnunarstig: STERKT sem stuðningur við endurkomu-ákvörðun — útlima-samhverfuvísitala ≥90% er algengt endurkomu-viðmið; hopp-próf eru áreiðanleg (Reid 2007), og í einni hóprannsókn meiddust færri aftur sem stóðust viðmiðin, en munurinn var ekki tölfræðilega öruggur (Grindem 2016). Heimild er samt klínísk ákvörðun, aldrei readiness-liturinn." },
+    { en: "Evidence grade: MODERATE as return-to-play decision support — a limb-symmetry index ≥90% is a widely used RTP criterion; hop tests are reliable (Reid 2007), and in one cohort fewer players who passed these rules re-injured, though the difference was not statistically certain and the hop scores alone did not predict re-injury (Grindem 2016, observational); a meta-analysis found passing such test batteries did not clearly lower overall re-injury (Webster & Hewett 2019). Clearance is still a clinician decision, never the readiness colour.", is: "Sönnunarstig: MIÐLUNGS sem stuðningur við endurkomu-ákvörðun — útlima-samhverfuvísitala ≥90% er algengt endurkomu-viðmið; hopp-próf eru áreiðanleg (Reid 2007), og í einni hóprannsókn meiddust færri aftur sem stóðust viðmiðin, en munurinn var ekki tölfræðilega öruggur og hopp-skorin ein spáðu ekki fyrir um endurmeiðsli (Grindem 2016); safngreining fann ekki skýrt minni endurmeiðsli hjá þeim sem stóðust slík próf (Webster & Hewett 2019). Heimild er samt klínísk ákvörðun, aldrei readiness-liturinn." },
     { en: "LSI can OVERESTIMATE recovery when both legs are deconditioned (the uninvolved limb also weakens) — read it alongside the absolute hop distance, not on its own (Wellsandt 2017).", is: "LSI getur OFMETIÐ bata þegar báðir fætur eru afþjálfaðir (ómeiddi fóturinn veikist líka) — lestu hana ásamt raun-hopplengdinni, ekki eina og sér (Wellsandt 2017)." },
     { en: "Distance from side-view phone video is a moderate-precision estimate — a taped/marked distance is more accurate for a decision.", is: "Lengd úr hliðar-síma-myndbandi er miðlungs-nákvæm áætlun — mæld/merkt lengd er nákvæmari fyrir ákvörðun." },
   ],

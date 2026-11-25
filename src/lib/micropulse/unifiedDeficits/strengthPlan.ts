@@ -38,7 +38,7 @@ const QUALITY_STRENGTH: Partial<Record<QualityKey, Spec>> = {
   limb_asymmetry: {
     emphasis: "unilateral",
     label: { en: "Unilateral loading (weaker side)", is: "Einhliða álag (veikari hlið)" },
-    howTo: { en: "Bias single-leg work to the weaker side (split squat, SL-RDL, step-up); re-test LSI, aim ≥ 90%.", is: "Beindu einfættri vinnu á veikari hlið (klofbeygja, SL-RDL, uppstig); endurmældu LSI, markmið ≥ 90%." },
+    howTo: { en: "Bias single-leg work to the weaker side (split squat, SL-RDL, step-up); re-test LSI, aim ≥ 90% (MicroPulse’s target, borrowed from knee-surgery return tests).", is: "Beindu einfættri vinnu á veikari hlið (klofbeygja, SL-RDL, uppstig); endurmældu LSI, markmið ≥ 90% (markmið MicroPulse, fengið úr endurkomuprófum eftir hnéaðgerð)." },
     vbtNote: { en: "Match velocity between limbs — VBT surfaces the lagging side's output at the same load.", is: "Jafnaðu hraða milli útlima — VBT sýnir minni afköst veikari hliðar við sama álag." },
   },
   decel_mechanics: {

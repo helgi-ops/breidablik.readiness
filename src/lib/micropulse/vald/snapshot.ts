@@ -352,10 +352,10 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
           : nordbordFreshnessStatus === "stale"
           ? oldStrengthMessage("hamstring", nordAgeDays, latestNordAsym, retestNeeded(nordScored.flag, nordbordFreshnessStatus))
           : latestNordAsym >= VALD_THRESHOLDS.nordbordHighAsymmetryPct
-          ? "Hamstring asymmetry is elevated versus recent normal range."
+          ? "Hamstring left/right gap is 15% or more (MicroPulse's red line; a gap alone did not raise risk in Opar 2015)."
           : latestNordAsym >= VALD_THRESHOLDS.nordbordModerateAsymmetryPct
-          ? "Hamstring asymmetry is mildly elevated."
-          : "Hamstring profile is within expected recent range.",
+          ? "Hamstring left/right gap is 10–15% (MicroPulse's watch line)."
+          : "Hamstring left/right gap is under 10%.",
     },
     forceframe: {
       asymmetry_percent: latestForceAsym,
@@ -368,8 +368,8 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
           : forceframeFreshnessStatus === "stale"
           ? oldStrengthMessage("groin", forceAgeDays, latestForceAsym, retestNeeded(ffScored.flag, forceframeFreshnessStatus))
           : latestForceAsym >= VALD_THRESHOLDS.forceframeHighAsymmetryPct
-          ? "ForceFrame groin profile indicates possible adductor readiness concern."
-          : "ForceFrame profile is within expected recent range.",
+          ? "ForceFrame left/right gap is 15% or more (MicroPulse's red line; a gap in hip strength was not linked to groin injury in Vigneswaran 2025)."
+          : "ForceFrame left/right gap is under 15%.",
     },
   };
 

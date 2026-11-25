@@ -579,9 +579,9 @@ export default function DevPlayerVALDTab() {
                 <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 mb-1">Asymmetry</div>
                 <AsymmetryBar pct={latestNBAsym.pct} side={latestNBAsym.side} />
                 <div className="mt-1 text-[10px] text-zinc-400">
-                  {(latestNBAsym.pct ?? 0) < 10 ? "Góð jafnvægi" :
-                   (latestNBAsym.pct ?? 0) < 15 ? "Lítil ójafnvægi — fylgjast með" :
-                   "Marktæk ójafnvægi — athuga"}
+                  {(latestNBAsym.pct ?? 0) < 10 ? "Gott jafnvægi (undir 10%)" :
+                   (latestNBAsym.pct ?? 0) < 15 ? "Lítið ójafnvægi (10–15%, lína MicroPulse) — fylgjast með" :
+                   "Mikið ójafnvægi (15% eða meira, lína MicroPulse) — athuga"}
                 </div>
               </div>
             </div>
@@ -655,9 +655,9 @@ export default function DevPlayerVALDTab() {
                     <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 mb-1">Asymmetry</div>
                     <AsymmetryBar pct={latestAsym.pct} side={latestAsym.side} />
                     <div className="mt-1 text-[10px] text-zinc-400">
-                      {(latestAsym.pct ?? 0) < 10 ? "Góð jafnvægi" :
-                       (latestAsym.pct ?? 0) < 15 ? "Lítil ójafnvægi — fylgjast með" :
-                       "Marktæk ójafnvægi — athuga"}
+                      {(latestAsym.pct ?? 0) < 10 ? "Gott jafnvægi (undir 10%)" :
+                       (latestAsym.pct ?? 0) < 15 ? "Lítið ójafnvægi (10–15%, lína MicroPulse) — fylgjast með" :
+                       "Mikið ójafnvægi (15% eða meira, lína MicroPulse) — athuga"}
                     </div>
                   </div>
                 </div>

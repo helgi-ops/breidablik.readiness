@@ -989,7 +989,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
               <DeviceStrengthGroups keyPrefix="ff" heading="ForceFrame — Nári / aðfærsla" rows={forceframeRows} showMovement groupByTest />
             )}
             <p className="text-[10px] leading-snug text-slate-400">
-              Ósamhverfa reiknuð úr vinstri/hægri hámarkskrafti (&lt;10% grænt, 10–15% gult, &gt;15% rautt — algeng flagglína, ekki sannreynd mörk; Parkinson 2021).
+              Ósamhverfa reiknuð úr vinstri/hægri hámarkskrafti (&lt;10% grænt, 10–15% gult, &gt;15% rautt — línur MicroPulse; algeng flagglína, ekki sannreynd mörk; Parkinson 2021). Munur einn og sér jók ekki hættu á meiðslum í aftanlæri (Opar 2015) né nára (Vigneswaran 2025); lítill styrkur gerði það (Opar 2015, Quintana-Cepedal 2025).
               Þessi próf eru sjaldgæfari en CMJ — „latest per player&quot; sýnir nýjasta prófið hjá hverjum.
             </p>
           </div>
@@ -999,7 +999,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
       {/* ── VALD Injury Alerts card ──────────────────────────────────────── */}
       <div className="rounded-xl border border-slate-100 bg-white shadow-sm">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-          <h3 className="text-sm font-semibold text-slate-800">VALD Injury Alerts</h3>
+          <h3 className="text-sm font-semibold text-slate-800">VALD Test Alerts</h3>
           {!loading && hasInjuryAlerts && (
             <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
               Attention
@@ -1034,13 +1034,13 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
               <InjuryAlertRow
                 color="text-amber-700"
                 dot="bg-amber-400"
-                title="Hamstring concern"
+                title="Hamstring L/R gap ≥10%"
                 names={hamstringConcern.map((s) => s.playerName)}
               />
               <InjuryAlertRow
                 color="text-amber-700"
                 dot="bg-amber-400"
-                title="Groin concern"
+                title="Groin L/R gap ≥10%"
                 names={groinConcern.map((s) => s.playerName)}
               />
             </>

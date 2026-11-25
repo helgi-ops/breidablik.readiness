@@ -16,7 +16,7 @@
  * diagnosis, never the readiness colour. The clinician/physio gates every advance
  * with a logged reason; nothing auto-advances. Implements the papers' METHOD; the
  * figures / Table 1 are NOT reproduced verbatim — bands are our own conservative
- * values, criteria thresholds cite the standard return-to-play literature.
+ * values; the symmetry gates borrow ACL return-to-sport lines (Grindem 2016; Kotsifaki 2023) or are MicroPulse's own, applied to every injury.
  */
 
 import type { Bi } from "@/lib/micropulse/periodization";
@@ -80,12 +80,12 @@ const TABERNER = "Taberner, Allen & Cohen 2019 (BJSM); Taberner et al. 2025 (JOS
 
 // Standard return-to-play criterion thresholds (conservative). The 10% / 15% asymmetry lines are
 // the common flag lines, not validated cut-offs (Parkinson 2021); Grindem 2016 uses
-// LSI ≥90% as the symmetry gate; Aspetar/Kotsifaki CPG for the late gates.
+// >90% across a quad-strength + hop battery (ACL); Kotsifaki 2023 (Aspetar ACL CPG, expert) for the late gates — all moved to other injuries by MicroPulse.
 const C_LOAD: CccExitCriterion = { key: "load_tolerance", label: { en: "Tolerated this phase's load band pain-free", is: "Þolir álagsband þessa fasa án verkja" }, threshold: 1, compare: "gte", source: TABERNER };
 const C_ASYM_15: CccExitCriterion = { key: "cmj_asymmetry_pct", label: { en: "CMJ force/impulse asymmetry < 15%", is: "CMJ krafts-/impuls-ósamhverfa < 15%" }, threshold: 15, compare: "lte", source: "Parkinson 2021 (common flag line)" };
-const C_ASYM_10: CccExitCriterion = { key: "cmj_asymmetry_pct", label: { en: "CMJ force/impulse asymmetry < 10%", is: "CMJ krafts-/impuls-ósamhverfa < 10%" }, threshold: 10, compare: "lte", source: "Parkinson 2021 (common flag line)" };
-const C_IMTP_80: CccExitCriterion = { key: "imtp_lsi_pct", label: { en: "IMTP limb-symmetry ≥ 80%", is: "IMTP útlima-samhverfa ≥ 80%" }, threshold: 80, compare: "gte", source: "Aspetar RTP; Kotsifaki 2023 (expert >80% quad-strength line for return to running — applied to IMTP by MicroPulse)" };
-const C_IMTP_90: CccExitCriterion = { key: "imtp_lsi_pct", label: { en: "IMTP limb-symmetry ≥ 90%", is: "IMTP útlima-samhverfa ≥ 90%" }, threshold: 90, compare: "gte", source: "Grindem 2016 (≥90% line from quad-strength + hop tests — applied to IMTP by MicroPulse); Aspetar RTP" };
+const C_ASYM_10: CccExitCriterion = { key: "cmj_asymmetry_pct", label: { en: "CMJ force/impulse asymmetry < 10%", is: "CMJ krafts-/impuls-ósamhverfa < 10%" }, threshold: 10, compare: "lte", source: "Parkinson 2021 (common flag line); Kotsifaki 2023 (CMJ >90% symmetry at return to sport, ACL expert consensus)" };
+const C_IMTP_80: CccExitCriterion = { key: "imtp_lsi_pct", label: { en: "IMTP limb-symmetry ≥ 80% (MicroPulse's line)", is: "IMTP útlima-samhverfa ≥ 80% (viðmið MicroPulse)" }, threshold: 80, compare: "gte", source: "Kotsifaki 2023 (expert >80% quad-strength and CMJ eccentric-impulse lines for return to running, set without research findings — applied to IMTP by MicroPulse)" };
+const C_IMTP_90: CccExitCriterion = { key: "imtp_lsi_pct", label: { en: "IMTP limb-symmetry ≥ 90% (MicroPulse's line)", is: "IMTP útlima-samhverfa ≥ 90% (viðmið MicroPulse)" }, threshold: 90, compare: "gte", source: "Grindem 2016 (≥90% line from quad-strength + hop tests — applied to IMTP by MicroPulse; no IMTP study sets a return symmetry line)" };
 const C_RSI_90: CccExitCriterion = { key: "hop_rsi_lsi_pct", label: { en: "Reactive-strength (hop/RSI) limb-symmetry ≥ 90%", is: "Viðbragðsstyrkur (hopp/RSI) útlima-samhverfa ≥ 90%" }, threshold: 90, compare: "gte", source: "Grindem 2016 (≥90% on hop tests); Kotsifaki 2023 (drop-jump symmetry >90%, expert consensus)" };
 const C_NORDIC_15: CccExitCriterion = { key: "nordic_asymmetry_pct", label: { en: "Nordic eccentric asymmetry < 15%", is: "Nordic eccentrísk ósamhverfa < 15%" }, threshold: 15, compare: "lte", source: "Parkinson 2021 (common flag line); Bourne 2015 (≥15% Nordic gap linked to hamstring injury in rugby; Opar 2015 found no link)" };
 

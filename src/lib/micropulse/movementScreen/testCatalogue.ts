@@ -360,7 +360,7 @@ export const TEST_OPERATIONAL: Record<string, TestOperational> = {
   sebt_lower: {
     challenges: { en: "Dynamic single-leg reach (anterior / posteromedial / posterolateral, % leg length), each side.", is: "Dýnamísk einfætt teygja (fremri / posteromedial / posterolateral, % fótleggjar), hvor hlið." },
     observations: [
-      o("anterior_asymmetry", "Anterior reach asymmetry (> 4 cm) / low composite", "Fremri teygju-ósamhverfa (> 4 cm) / lágt samsett", "Dynamic single-leg control + ankle DF + hip control", "Dýnamísk einfætt stjórn + ökkla-DF + mjaðma-stjórn", "dynamic_single_leg_control", ["balance", "motor_control", "asymmetry"], ["knee_to_wall", "single_leg_squat"], { sided: true }),
+      o("anterior_asymmetry", "Anterior reach asymmetry (> 4 cm, a basketball cut-off: Plisky 2006) / low composite", "Fremri teygju-ósamhverfa (> 4 cm, körfubolta-viðmið: Plisky 2006) / lágt samsett", "Dynamic single-leg control + ankle DF + hip control", "Dýnamísk einfætt stjórn + ökkla-DF + mjaðma-stjórn", "dynamic_single_leg_control", ["balance", "motor_control", "asymmetry"], ["knee_to_wall", "single_leg_squat"], { sided: true }),
     ],
   },
   trunk_stability_pushup: {

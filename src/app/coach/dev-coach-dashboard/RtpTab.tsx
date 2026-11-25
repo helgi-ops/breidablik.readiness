@@ -185,7 +185,7 @@ const RTP_STAGES: Record<Lang, Array<{ stage: number; label: string; desc: strin
       criteria: [
         "Full snertingaþjálfun með liðinu — 1–5 heilar æfingar áður en leikur",
         "GPS álag: svipuð hreyfimynstur og fyrir meiðsli (hraði, vegalengd, hröðun)",
-        "Isokinetískt kraftpróf: <10% munur milli fóta",
+        "Isokinetískt kraftpróf: <10% munur milli fóta (algeng lína á stofum, ekki prófuð mörk)",
         "Hopppróf: eins fóta hopp ≥90% af heilbrigðum fæti (single, triple, crossover)",
         "Engir verkir í æfingum, styrktarþjálfun eða sprettum",
         "Sálfræðilegt: enginn hikun/ótti í snertingum eða keppnishermi",
@@ -253,7 +253,7 @@ const RTP_STAGES: Record<Lang, Array<{ stage: number; label: string; desc: strin
       criteria: [
         "Full contact training with team — complete 1–5 sessions before match play",
         "GPS load: similar movement profile to pre-injury microcycles (speed, distance, acceleration)",
-        "Isokinetic strength test: <10% bilateral asymmetry",
+        "Isokinetic strength test: <10% bilateral asymmetry (a common clinic line, not a tested cut-off)",
         "Hop tests: single, triple, crossover hop ≥90% of uninjured limb",
         "No pain during training, strengthening, or sprinting",
         "Psychological: no hesitation in contact situations or match simulation",

@@ -64,7 +64,7 @@ const CITATIONS: { label: string; source: string }[] = [
   { label: "Hölmich et al. 1999 — Active physical training for long-standing adductor-related groin pain (RCT)", source: "Lancet" },
   { label: "Serner / Harøy 2019 — Copenhagen Adduction (adductor strengthening & groin-injury prevention)", source: "Br J Sports Med" },
   { label: "Thorborg et al. — Adductor squeeze test + HAGOS (Copenhagen Hip & Groin Outcome Score)", source: "Br J Sports Med" },
-  { label: "Tyler et al. — Adduction:abduction strength ratio and groin-injury risk", source: "Am J Sports Med" },
+  { label: "Tyler et al. 2001 — Adduction:abduction strength ratio and adductor strains (ice hockey)", source: "Am J Sports Med" },
   { label: "Weir et al. — Doha agreement on terminology for groin pain in athletes", source: "Br J Sports Med 2015" },
   { label: "Baar 2017 / Shaw et al. 2017 — Load timing + collagen synthesis nutrition (adjunct)", source: "Sports Med / Am J Clin Nutr" },
 ];
@@ -405,7 +405,7 @@ export default function AdductorGroinPage() {
               {[
                 { h: isEN ? "The squeeze test is the marker" : "Kreistuprófið er mælikvarðinn", b: isEN ? "Adductor squeeze (ball between the knees or ankles) is both the daily provocation test and a strength measure. Track its pain and its symmetry." : "Aðleiðara-kreista (bolti milli hnjáa eða ökkla) er bæði daglega provokations-prófið og styrktarmæling. Fylgstu með verk og samhverfu." },
                 { h: isEN ? "Pain is allowed — within limits" : "Verkur er leyfður — innan marka", b: isEN ? "Continued training is safe up to 5/10 pain that settles by the next morning. Rest deconditions the adductors." : "Áframhaldandi æfing er örugg upp að 5/10 verk sem sjatnar fyrir næsta morgun. Hvíld afþjálfar aðleiðara." },
-                { h: isEN ? "Symmetry unlocks the spring" : "Samhverfa opnar fjöðrunina", b: isEN ? "Stage 3 change-of-direction waits for adductor squeeze LSI ≥ 90% and an adduction:abduction ratio near 1.0." : "Fasi 3 (stefnubreytingar) bíður eftir aðleiðara-kreistu LSI ≥ 90% og aðleiðslu:fráleiðslu hlutfalli nálægt 1.0." },
+                { h: isEN ? "Symmetry unlocks the spring" : "Samhverfa opnar fjöðrunina", b: isEN ? "Stage 3 change-of-direction waits for adductor squeeze LSI ≥ 90% and an adduction:abduction ratio near 1.0 (MicroPulse’s gates)." : "Fasi 3 (stefnubreytingar) bíður eftir aðleiðara-kreistu LSI ≥ 90% og aðleiðslu:fráleiðslu hlutfalli nálægt 1.0 (viðmið MicroPulse)." },
                 { h: isEN ? "Track HAGOS weekly" : "Fylgstu með HAGOS vikulega", b: isEN ? "The Copenhagen Hip & Groin Outcome Score (0–100, higher = better) — the groin outcome measure and the 'are we winning?' number." : "Copenhagen Hip & Groin Outcome Score (0–100, hærra = betra) — nára-útkomu-mælikvarðinn og 'erum við að vinna?' talan." },
               ].map((c, i) => (
                 <div key={i} className="rounded-lg border border-slate-200 bg-white p-4">
@@ -454,7 +454,7 @@ export default function AdductorGroinPage() {
               goal={isEN ? "reload reactive change-of-direction — only once pain is controlled at Stage 2 loads and squeeze symmetry is restored." : "endurhlaða viðbragðs-stefnubreytingar — aðeins þegar verkur er í skefjum við Fasa 2 og kreistu-samhverfa er endurheimt."} />
             <LsiGate isEN={isEN} unitHint={LSI_HINT} metrics={lsiMetrics} />
             <ExerciseTable rows={S3} isEN={isEN} />
-            <p className="text-xs text-slate-500">{isEN ? "Source: change-of-direction progression + adduction:abduction ratio (Tyler)." : "Heimild: stefnubreytinga-framgangur + aðleiðslu:fráleiðslu hlutfall (Tyler)."}</p>
+            <p className="text-xs text-slate-500">{isEN ? "Source: change-of-direction progression + adduction:abduction ratio (Tyler 2001, ice hockey: under 80% went with more adductor strains; a meta-analysis found no link for the ratio, only for low adductor strength — Quintana-Cepedal 2025)." : "Heimild: stefnubreytinga-framgangur + aðleiðslu:fráleiðslu hlutfall (Tyler 2001, íshokkí: undir 80% fylgdi fleiri tognunum í aðleiðara; safngreining fann engin tengsl fyrir hlutfallið, aðeins fyrir lítinn aðleiðarastyrk — Quintana-Cepedal 2025)."}</p>
             <PainGate isEN={isEN} reported={reported} provocationFull={PROVOCATION_FULL} provocationShort={PROVOCATION_SHORT} />
           </div>
         )}
@@ -488,7 +488,7 @@ export default function AdductorGroinPage() {
                     { m: "HAGOS questionnaire (0–100)", c: isEN ? "weekly" : "vikulega", w: isEN ? "The Copenhagen Hip & Groin Outcome Score — higher = better. Track the trend: it's the 'are we winning?' number." : "Copenhagen Hip & Groin Outcome Score — hærra = betra. Fylgstu með þróun: 'erum við að vinna?' talan." },
                     { m: "Adductor squeeze pain (VAS 0–10)", c: isEN ? "daily" : "daglega", w: isEN ? "The standard daily provocation test. Feeds the pain-monitoring gate." : "Staðlaða daglega provokations-prófið. Fæðir verkja-vöktunar-hliðið." },
                     { m: "Morning soreness / stiffness", c: isEN ? "daily" : "daglega", w: isEN ? "Primary day-to-day marker — must not rise week to week." : "Aðal-daglegi mælikvarðinn — má ekki vaxa milli vikna." },
-                    { m: "Adductor squeeze strength LSI + adduction:abduction ratio", c: isEN ? "before Stage 3, then monitoring" : "fyrir Fasa 3, svo vöktun", w: isEN ? "Objective symmetry gate: squeeze LSI ≥ 90% and ratio near 1.0 unlock change-of-direction loading." : "Hlutlægt samhverfu-hlið: kreistu LSI ≥ 90% og hlutfall nálægt 1.0 opna stefnubreytinga-hleðslu." },
+                    { m: "Adductor squeeze strength LSI + adduction:abduction ratio", c: isEN ? "before Stage 3, then monitoring" : "fyrir Fasa 3, svo vöktun", w: isEN ? "Objective symmetry gate: squeeze LSI ≥ 90% and ratio near 1.0 unlock change-of-direction loading (MicroPulse’s gate)." : "Hlutlægt samhverfu-hlið: kreistu LSI ≥ 90% og hlutfall nálægt 1.0 opna stefnubreytinga-hleðslu (viðmið MicroPulse)." },
                   ].map((r, i) => (
                     <tr key={i} className="border-b border-slate-100 align-top">
                       <td className="px-3 py-2 font-medium text-slate-900">{r.m}</td>

@@ -442,7 +442,7 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
             {data.asymmetry.healthyLeftPct != null && <div className="text-slate-400">{is ? "heilbrigt" : "healthy"}: {data.asymmetry.healthyLeftPct}% {is ? "vinstri" : "left"}</div>}
           </div>
           <p className="mt-1 text-[11px] leading-snug text-slate-500">
-            {is ? "Fylgst með — ekki stigmagnað. Eftir einhliða meiðsli getur leikmaður forðast meidda hliðina; markmið er að ná aftur hans eðlilega jafnvægi." : "Monitored, not ramped. After a one-sided injury a player can avoid the injured side; the goal is to restore his normal balance."}
+            {is ? "Fylgst með — ekki stigmagnað. Eftir einhliða meiðsli getur leikmaður forðast meidda hliðina; markmið er að ná aftur hans eðlilega jafnvægi. Flaggað við 12+ stiga frávik frá hans heilbrigða hlutfalli (viðmið MicroPulse, ekki rannsóknar-mörk)." : "Monitored, not ramped. After a one-sided injury a player can avoid the injured side; the goal is to restore his normal balance. Flagged at 12+ points from his healthy split (MicroPulse's line, not a study cut-off)."}
           </p>
         </div>
       )}
