@@ -67,10 +67,10 @@ export default function PreseasonReadsFrom({ is, prop, opener, openerEstimated, 
           !opener || openerEstimated)}
         {row({ en: "Friendlies", is: "Æfingaleikir" }, friendlies.length ? friendlies.map(d).join(", ") : t({ en: "none entered — add them below", is: "engir skráðir — bættu þeim við hér fyrir neðan" }), !friendlies.length)}
         {row({ en: "Weeks without a game", is: "Vikur án leiks" }, games
-          ? t({ en: `a game on the Saturday from ${d(games)}${gamesBy === "first_friendly" ? " (the first friendly)" : ""} (${assumed} weeks); before it a training week of ${sess} sessions`, is: `leikur á laugardegi frá ${d(games)}${gamesBy === "first_friendly" ? " (fyrsta æfingaleik)" : ""} (${assumed} vikur); fyrir þann dag æfingavika með ${sess} æfingum` })
+          ? t({ en: `${sess} sessions a week until ${d(games)}${gamesBy === "first_friendly" ? " (the first friendly)" : ""}, then an assumed Saturday game every week with none entered (${assumed} weeks)`, is: `${sess} æfingar á viku til ${d(games)}${gamesBy === "first_friendly" ? " (fyrsti æfingaleikur)" : ""}, síðan áætlaður laugardagsleikur í hverri viku án skráðs leiks (${assumed} vikur)` })
           : gamesBy === "off"
-            ? t({ en: `a training week of ${sess} sessions (you chose no weekend games)`, is: `æfingavika með ${sess} æfingum (þú valdir enga helgarleiki)` })
-            : t({ en: `a training week of ${sess} sessions — Saturday games start at the first friendly you enter`, is: `æfingavika með ${sess} æfingum — laugardagsleikir byrja á fyrsta æfingaleik sem þú skráir` }))}
+            ? t({ en: `${sess} sessions a week, no assumed games (you chose no weekend games)`, is: `${sess} æfingar á viku, engir áætlaðir leikir (þú valdir enga helgarleiki)` })
+            : t({ en: `${sess} sessions a week. Assumed Saturday games start at the first friendly you enter`, is: `${sess} æfingar á viku. Áætlaðir laugardagsleikir byrja á fyrsta æfingaleik sem þú skráir` }))}
       </dl>
       {prop.gaps.length > 0 && (
         <ul className="mt-2 space-y-0.5 text-[12px] text-[#8a5a10]">{prop.gaps.map((g, i) => <li key={i}>⚠ {t(g)}</li>)}</ul>

@@ -15,7 +15,6 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupView from "@/components/coach/WeekSetupView";
-import PageCrossRef from "@/components/coach/PageCrossRef";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
 import { VALD_TRIM_CITE, mondayOfIso, buildMesoPlan, buildCalendarBlock, inSeasonRange, teamMatchUnitNote, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ValdTrimLift, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
@@ -1396,10 +1395,6 @@ export default function PeriodizationHubPage() {
         en="the whole periodisation spine in one place — Macro cycle (the season) → Meso cycle (the 4–6 week block) → Micro cycle (the week) — generated from this team's own fixtures, load and tests, not a generic template"
         is="öll periodisation-keðjan á einum stað — Makró-lota (tímabilið) → Mesó-lota (4–6 vikna lotan) → Míkró-lota (vikan) — búin til úr eigin leikjum, álagi og prófum liðsins, ekki almennu sniðmáti"
       />
-      <PageCrossRef
-        en="Macro cycle — the season · Meso cycle — the block (calendar + PDF) · Micro cycle — the week (Week Setup, in-place). Demands + Players feed all three. The per-player MD week is in the Training Programme (Æfingavika)."
-        is="Makró-lota — tímabilið · Mesó-lota — lotan (dagatal + PDF) · Míkró-lota — vikan (Vikuuppsetning, innfeld). Kröfur + Leikmenn næra allar þrjár. Per-leikmanns MD-vikan er í Æfingaviku."
-      />
 
       {loading && <div className="mt-4 rounded-lg border bg-white p-6 text-center text-sm text-slate-500">{is ? "Set saman áætlun úr gögnum…" : "Assembling the plan from your data…"}</div>}
       {err && <div className="mt-4 rounded-md border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">{err}</div>}
@@ -1435,7 +1430,7 @@ export default function PeriodizationHubPage() {
             const tabBtn = (t: { key: typeof tab; en: string; is: string; subEn: string; subIs: string }) => (
               <button key={t.key} onClick={() => setTab(t.key)} className={`-mb-px rounded-t-lg border-b-2 px-3 py-1.5 text-left ${tab === t.key ? "border-[#2740e6]" : "border-transparent hover:bg-slate-50"}`}>
                 <span className={`block text-[12px] font-semibold ${tab === t.key ? "text-[#2740e6]" : "text-slate-600"}`}>{is ? t.is : t.en}</span>
-                <span className="block text-[9px] text-slate-400">{is ? t.subIs : t.subEn}</span>
+                <span className="block text-[10.5px] text-slate-500">{is ? t.subIs : t.subEn}</span>
               </button>
             );
             return (
@@ -1454,7 +1449,7 @@ export default function PeriodizationHubPage() {
             <span className="font-semibold text-slate-600">{is ? "Vinnuferli" : "Workflow"}:</span>{" "}
             <b className="text-[#2740e6]">1 {is ? "Liðs-kröfur" : "Team Demands"}</b> <span className="text-slate-400">({is ? "grunnur" : "foundation"})</span> → <b className="text-[#2740e6]">2 {is ? "Makró" : "Macro"}</b> → <b className="text-[#7a5cc4]">3 {is ? "Mesó (undirb. / keppni)" : "Meso (pre-season / in-season)"}</b> → <b className="text-[#1c7a4a]">4 {is ? "Míkró" : "Micro"}</b>
             <span className="text-slate-400"> · {is ? "Leikmenn + Próf næra öll þrepin." : "Players + Testing feed every step."}</span>
-            <span className="mt-0.5 block text-[10.5px] text-slate-400">{is ? "Breyting á einum stað flæðir sjálfkrafa í hinar — ein heimild (season_plans · week_plans · leikir)." : "A change in one place flows to the others automatically — one source (season_plans · week_plans · fixtures)."}</span>
+            <span className="mt-0.5 block text-[11px] text-slate-500">{is ? "Breyting á einum stað flæðir sjálfkrafa í hinar. Vika hvers leikmanns er í Æfingaviku." : "A change in one place flows to the others automatically. Each player's own week is in the Training Programme (Æfingavika)."}</span>
           </div>
 
           {/* SEASON tab */}
@@ -1593,7 +1588,7 @@ export default function PeriodizationHubPage() {
             );
 
             return (<div className="space-y-4">
-          {flowNote(is ? "Leikir · Kröfur (leik-eining)" : "Fixtures · Demands (match unit)", is ? "Mesó · Míkró · Undirbúningur (gegnum season_plans)" : "Meso · Micro · Pre-season (via season_plans)")}
+          {flowNote(is ? "Leikir · Kröfur (leik-eining)" : "Fixtures · Demands (match unit)", is ? "Mesó · Míkró · Undirbúningur" : "Meso · Micro · Pre-season")}
 
           {/* Estimated opener — KSÍ publishes late, so a season with no fixtures yet gets its first game
               estimated from last season (+1 year). Clearly flagged; replaced when real fixtures are added. */}
@@ -2318,7 +2313,7 @@ export default function PeriodizationHubPage() {
             const strengthWeeks = preseasonStrengthWeeks({ weeks: prop.weeks, blocks: prop.blocks, coachRules: coachStrengthRules, mdStructures: teamPalette?.mdStructures ?? null, noMatchWeek: teamPalette?.noMatchWeek ?? null });
             const seqTotal = preBlocks.reduce((s, b) => s + weeksBetween(b.start, blockEndExcl(b)), 0);
             return (<div className="space-y-4">
-          {flowNote(is ? "Makró-fasar · leikir · Kröfur" : "Macro phases · fixtures · Demands", is ? "Vikuuppsetning (week_plans) · Mesó · PDF" : "Week Setup (week_plans) · Meso · PDF")}
+          {flowNote(is ? "Makró-fasar · leikir · Kröfur" : "Macro phases · fixtures · Demands", is ? "Vikuuppsetning · Mesó · PDF" : "Week Setup · Meso · PDF")}
           <PreseasonReadsFrom is={is} prop={prop} opener={plan.nextFirstFixture ?? null} openerEstimated={!!plan.nextFirstFixtureEstimated}
             onOpenMacro={() => setTab("season")} addGame={(date, kind) => writeFixture(date, "upsert", { isFriendly: kind === "friendly" })} />
 
@@ -2978,7 +2973,7 @@ export default function PeriodizationHubPage() {
             const calStart = mondayOf(blkStart);
 
             return (<div className="space-y-4">
-          {flowNote(is ? "Makró-fasar · leikir · álagsferill" : "Macro phases · fixtures · load curve", is ? "Vikuuppsetning (week_plans) · Today · PDF" : "Week Setup (week_plans) · Today · PDF")}
+          {flowNote(is ? "Makró-fasar · leikir · álagsferill" : "Macro phases · fixtures · load curve", is ? "Vikuuppsetning · Today · PDF" : "Week Setup · Today · PDF")}
 
           {/* The in-season rules this page follows (the calendar enforces both; a day you set against them stays, marked ⚠). */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[#1c7a4a]/30 bg-[#1c7a4a]/[0.05] px-3 py-2 text-[12.5px] text-slate-700">
@@ -3064,7 +3059,7 @@ export default function PeriodizationHubPage() {
                 {sel.inSeason && <p className="w-full text-[11px] text-slate-500">{is ? IN_SEASON_DELOAD_NOTE.is : IN_SEASON_DELOAD_NOTE.en}</p>}
               </div>
             )}
-            {wsApplied === "ok" && <p className="mt-2 text-[12px] font-medium text-emerald-700">{is ? "✓ Lotan er komin í Vikuuppsetningu — leikir/æfingar/frí og dagsgerðir skrifaðar á week_plans." : "✓ The block is in Week Setup — matches/sessions/off and day-types written to week_plans."}</p>}
+            {wsApplied === "ok" && <p className="mt-2 text-[12px] font-medium text-emerald-700">{is ? "✓ Lotan er komin í Vikuuppsetningu — leikir, æfingar, frí og dagsgerðir." : "✓ The block is in Week Setup — games, sessions, days off and day types."}</p>}
             {wsApplied === "err" && <p className="mt-2 text-[12px] font-medium text-rose-700">{is ? "Ekki tókst að vista í Vikuuppsetningu." : "Couldn't save to Week Setup."}</p>}
 
             {seasonBlocks.length > 0 && (
@@ -3933,7 +3928,7 @@ export default function PeriodizationHubPage() {
             ];
 
             return (<div className="space-y-4">
-          {flowNote(is ? "Mesó-lota · leik-eining leikmanns" : "Meso block · player match unit", is ? "allar undirbúningsvikur (season_plans) · PDF" : "every pre-season week (season_plans) · PDF")}
+          {flowNote(is ? "Mesó-lota · leik-eining leikmanns" : "Meso block · player match unit", is ? "allar undirbúningsvikur · PDF" : "every pre-season week · PDF")}
 
           {/* 1 — PLAYER BAR: pick once, everything below follows */}
           <section className={`${card} flex flex-wrap items-center gap-x-5 gap-y-3`} aria-label={is ? "Leikmaður" : "Player"}>
