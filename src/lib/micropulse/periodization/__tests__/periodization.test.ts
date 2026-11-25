@@ -1367,3 +1367,25 @@ test("in-season Meso page: noAutoMatch → a block with no entered game gets no 
   // Never three training days in a row in season.
   for (const w of cal.weeks) { let run = 0; for (const d of w.days) { run = d.type === "rest" ? 0 : run + 1; assert.ok(run <= 2); } }
 });
+
+test("buildMesoBlocks FIXTURES_PENDING: only the opener entered → cadence blocks in compete mode, marked provisional", () => {
+  // 2027: pre-season from 30 Nov, the first league game 10 Apr, nothing else entered yet (KSÍ publishes late).
+  const blocks = buildMesoBlocks("2026-11-30", "2027-10-27", [], 6, null, ["2027-01-08", "2027-01-23", "2027-04-10"], "2027-04-10");
+  const comp = blocks.filter((b) => b.inSeason);
+  assert.equal(comp[0].start, "2027-04-10");
+  assert.equal(comp[0].end, "2027-05-17");
+  assert.ok(comp.length >= 4, "the season is sliced in the cadence, not one long 're-load' block");
+  assert.ok(comp.every((b) => b.provisional && b.goalKey === "realize"));
+  assert.ok(blocks.filter((b) => !b.inSeason).every((b) => !b.provisional));
+});
+
+test("buildMesoBlocks: a full fixture list is never provisional, and a mid-season break stays a gap", () => {
+  const fx: string[] = [];
+  for (let d = Date.parse("2026-04-11"); d <= Date.parse("2026-10-24"); d += 7 * 86_400_000) {
+    const iso = new Date(d).toISOString().slice(0, 10);
+    if (iso < "2026-06-01" || iso > "2026-06-21") fx.push(iso); // a three-week break in June
+  }
+  const blocks = buildMesoBlocks("2026-02-02", "2026-10-25", [], 4, null, fx, "2026-04-11");
+  assert.ok(blocks.every((b) => !b.provisional));
+  assert.ok(blocks.some((b) => b.inSeason && b.start === "2026-06-01"), "the June break is its own block");
+});

@@ -1343,6 +1343,9 @@ export type MesoBlock = {
   deloadPinned?: boolean;
   /** True when the coach set this block's length by hand (vs the auto cadence / calendar slice). */
   lengthPinned?: boolean;
+  /** In season, the fixture list isn't entered yet for (part of) this block (FIXTURES_PENDING): the block is the
+   *  cadence slice in compete mode, not a reading of the calendar. It firms up when the games are entered. */
+  provisional?: boolean;
   volumeTargetPct: number | null; flag: Bi | null;
   /** LEADING meso metric — the week expressed in MATCH units (weekly training load ÷ one match's load).
    *  The match is the natural unit of demand; we ramp TMr sensibly, we don't chase an ACWR band. */
@@ -1474,6 +1477,8 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
   const fixedCadence = (a: string, b: string, defaultLen = blockWeeks, startIdx = 0): Array<{ start: string; end: string }> =>
     sliceByLengths(a, b, defaultLen, opts?.blockWeeks, startIdx).map(({ start, end }) => ({ start, end }));
   let spans: Array<{ start: string; end: string; kind?: "holiday" }>;
+  // The Monday from which the in-season fixture list isn't entered yet (FIXTURES_PENDING), else null.
+  let pendingFrom: string | null = null;
   if (!competitiveStart || competitiveStart <= phaseStart) {
     spans = fixedCadence(phaseStart, phaseEnd, blockWeeks, 0);
   } else {
@@ -1489,6 +1494,14 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
     for (let i = 0; i < wk.length;) {
       if (wk[i].fx === 0) { let j = i; while (j < wk.length && wk[j].fx === 0) j++; const run = wk.slice(i, j); if (j - i >= 2 || run.some((x) => x.brk)) run.forEach((x) => (x.gap = true)); i = j; }
       else i++;
+    }
+    // FIXTURES_PENDING (2026-11-25): a game-free run that reaches the season end and is at least one block long is
+    // the fixture list not entered yet (KSÍ publishes late), not a break — a real break sits between games. Those
+    // weeks are sliced in the block cadence like competition (a declared team break stays a gap) and marked
+    // provisional; they firm up when the games are entered.
+    {
+      let t = wk.length; while (t > 0 && wk[t - 1].fx === 0) t--;
+      if (wk.length - t >= blockWeeks) { pendingFrom = wk[t].mon; for (let k = t; k < wk.length; k++) wk[k].gap = wk[k].brk; }
     }
     // Group consecutive weeks by kind; slice competition runs into ~blockWeeks chunks, keep gaps whole.
     const compSpans: Array<{ start: string; end: string }> = [];
@@ -1579,11 +1592,13 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
     const prevGoal = out.length ? out[out.length - 1].goalKey : null;
     // Holiday (Frí) = a full-rest block before the reconditioning build; it reads as a deload/unload.
     let gk: BlockGoalKey; let g: { phase: Bi; goal: Bi };
+    // Fixture list not entered yet for (part of) this in-season block → it reads as compete, like an estimated schedule.
+    const provisional = phaseKey === "competitive" && pendingFrom != null && end > pendingFrom;
     if (isHoliday) {
       gk = "deload";
       g = { phase: { en: "Off-season break", is: "Frí" }, goal: { en: "Holiday — full rest before reconditioning", is: "Frí — full hvíld fyrir enduruppbyggingu" } };
     } else {
-      const rgk = blockGoalFromSeason({ phaseKey, index: phaseLocal, matchesPerWeek, maxGapDays, prevGoal, estimated: opts?.fixturesEstimated });
+      const rgk = blockGoalFromSeason({ phaseKey, index: phaseLocal, matchesPerWeek, maxGapDays, prevGoal, estimated: opts?.fixturesEstimated || provisional });
       gk = rgk; g = GOAL_BY_KEY[rgk];
     }
     const volumeTargetPct = acute != null ? Math.round(Math.min(1.1, Math.max(0.9, chronic && acute ? 1.08 : 1.0)) * 100) : 100;
@@ -1594,7 +1609,7 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
     out.push({
       index: i, phase: g.phase, goal: g.goal, goalKey: gk,
       start, end, weeks: blockWk, deloadWeekStart: inSeason ? (deloadPinned ? deloadPin! : null) : deloadWeekStart, plannedDeloadWeekStart: inSeason ? (deloadPinned ? deloadPin! : null) : plannedDeloadWeekStart, deloadNow, isDeload: deloadNow && !inSeason, inSeason, deloadPinned,
-      lengthPinned: ovWeeks(start, i) != null && !isHoliday, volumeTargetPct, flag,
+      lengthPinned: ovWeeks(start, i) != null && !isHoliday, ...(provisional ? { provisional: true } : {}), volumeTargetPct, flag,
       tmr, loadTrend, acwr, acwrNote: ACWR_CONTESTED,
     });
   }

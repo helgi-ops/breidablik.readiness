@@ -561,10 +561,15 @@ export default function PeriodizationHubPage() {
   // Open the planner on the CURRENT macro block — only when the plan (re)loads, never on a cadence
   // change. (mesoBlocks re-segments with the cadence for the season MAP, but the block the coach is
   // editing stays anchored on blkStart.)
+  // A jump asked for across a season switch ("Open the next season" → its first in-season block) wins once.
+  const jumpBlkRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (mesoBlocks.length === 0) return;
     const today = new Date().toISOString().slice(0, 10);
-    const cur = mesoBlocks.find((b) => b.start <= today && today < b.end) ?? mesoBlocks[0];
+    const want = jumpBlkRef.current;
+    const jump = want ? mesoBlocks.find((b) => b.start <= want && want < b.end) ?? null : null;
+    if (jump) jumpBlkRef.current = null;
+    const cur = jump ?? mesoBlocks.find((b) => b.start <= today && today < b.end) ?? mesoBlocks[0];
     if (cur) setBlkStart(cur.start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan]);
@@ -2889,6 +2894,17 @@ export default function PeriodizationHubPage() {
 
           {/* THE PLAN tab — the block planner (primary) → the season meso map (context) → micro link */}
           {(tab === "plan" || tab === "micro") && plan.phases.length === 0 && <MacroSetupGate is={is} seasonYear={plan.seasonYear} onOpenMacro={() => setTab("season")} />}
+          {/* In-season page, the season is over → the next one: its first block starts at its first league game. */}
+          {tab === "plan" && plan.phases.length > 0 && !isPlayerScope && plan.nextFirstFixture
+            && plan.nextFirstFixture >= new Date().toISOString().slice(0, 10)
+            && (plan.phases.find((p) => p.key === "competitive")?.end ?? "9999-12-31") <= new Date().toISOString().slice(0, 10)
+            && plan.seasonYear + 1 <= new Date().getFullYear() + 1 && (
+            <section className="mb-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+              <p className="text-[15px] font-bold text-slate-900">{is ? `Næsta keppnistímabil (${plan.seasonYear + 1}): fyrsta lotan hefst ${shortDate(plan.nextFirstFixture, is)}` : `Next season (${plan.seasonYear + 1}): the first block starts ${shortDate(plan.nextFirstFixture, is)}`}{plan.nextFirstFixtureEstimated ? (is ? " (áætlað)" : " (estimated)") : ""}</p>
+              <p className="mt-1 text-[13px] text-slate-600">{is ? "Lotan byrjar á fyrsta deildarleiknum. Hún fullmótast þegar leikjaplanið er komið og leikirnir skráðir í Makró." : "The block starts at the first league game. It firms up once the fixture list is out and the games are entered in Macro."}</p>
+              <button type="button" onClick={() => { jumpBlkRef.current = plan.nextFirstFixture!; switchYear(plan.seasonYear + 1); }} className="mt-3 h-9 rounded-lg bg-[#2740e6] px-3 text-[13px] font-semibold text-white hover:brightness-110">{is ? `Opna tímabilið ${plan.seasonYear + 1} →` : `Open the ${plan.seasonYear + 1} season →`}</button>
+            </section>
+          )}
           {tab === "plan" && plan.phases.length > 0 && (() => {
             const GC: Record<BlockGoalKey, string> = { accum: "#2740E6", transmute: "#7A5CC4", realize: "#1C7A4A", deload: "#DE9328" };
             const DAY = 86_400_000;
@@ -2975,13 +2991,31 @@ export default function PeriodizationHubPage() {
             <span className="w-full text-[11px] text-slate-500">{is ? "Dagur sem þú setur gegn reglu helst og fær ⚠." : "A day you set against a rule stays and gets ⚠."} <span className="font-mono">{THREE_IN_A_ROW_RULE} · INSEASON_MD2_OFF</span> · {is ? "MicroPulse-regla" : "MicroPulse rule"}; Buchheit 2023</span>
           </div>
 
+          {/* FIXTURES_PENDING: the fixture list isn't entered past the last game → the blocks from there are provisional. */}
+          {(() => {
+            if (!seasonBlocks.some((b) => b.provisional) || !compStartM) return null;
+            const comp = (plan.fixtures ?? []).filter((d) => d >= compStartM).sort();
+            const last = comp.length ? comp[comp.length - 1] : null;
+            const from = last ? isoAdd(mondayOf(last), 7) : mondayOf(compStartM);
+            const body = isBasketball ? "KKÍ" : "KSÍ";
+            return (
+              <div className="rounded-lg border border-dashed border-[#de9328]/60 bg-[#de9328]/[0.06] px-3 py-2 text-[12.5px] text-slate-700">
+                <b className="text-[#7a4a06]">{is ? `Leikjaplan ${body} ekki komið.` : `The ${body} fixture list isn't in yet.`}</b>{" "}
+                {is
+                  ? `${comp.length} ${comp.length === 1 ? "leikur skráður" : "leikir skráðir"}${last ? ` (síðast ${shortDate(last, is)})` : ""}. Frá viku ${shortDate(from, is)} er enginn leikur skráður, svo lotur sem ná þangað eru bráðabirgða: ${cadence} vikna lotur í keppnistakti (Framkvæmd), án leikja. Þær fullmótast þegar leikirnir eru skráðir.`
+                  : `${comp.length} ${comp.length === 1 ? "game entered" : "games entered"}${last ? ` (last ${shortDate(last, is)})` : ""}. From the week of ${shortDate(from, is)} no game is entered, so the blocks reaching there are provisional: ${cadence}-week blocks in compete mode (Realization), with no games. They firm up once the games are entered.`}{" "}
+                <button type="button" onClick={() => setTab("season")} className="font-semibold text-[#2740e6] hover:underline">{is ? "Skrá leiki í Makró →" : "Enter games in Macro →"}</button>
+              </div>
+            );
+          })()}
+
           {selIsPre && (
             <section className={card}>
               <p className="text-[15px] font-bold text-slate-900">{is ? "Þessi lota er á undirbúningstímabilinu." : "This block is in the pre-season."}</p>
               <p className="mt-1 text-[13px] text-slate-600">{is ? "Undirbúningurinn er skipulagður á síðunni Mesó: Undirbúningur, með reglum undirbúnings (leikdagar, álagsstignun, laugardagsleikir)." : "The pre-season is planned on Meso: Pre-season, with the pre-season rules (game days, load ramp, Saturday games)."}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" onClick={() => setTab("preseason")} className="h-9 rounded-lg bg-[#2740e6] px-3 text-[13px] font-semibold text-white hover:brightness-110">{is ? "Opna Mesó: Undirbúningur →" : "Open Meso: Pre-season →"}</button>
-                {seasonBlocks[0] && <button type="button" onClick={() => setBlkStart((todayB ?? seasonBlocks[0]).start)} className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-700 hover:bg-slate-50">{is ? "Fara á fyrstu keppnislotu" : "Go to the first in-season block"}</button>}
+                {seasonBlocks[0] && <button type="button" onClick={() => setBlkStart((todayB ?? seasonBlocks[0]).start)} className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-700 hover:bg-slate-50">{is ? `Fara á fyrstu keppnislotu (${shortDate(seasonBlocks[0].start, is)})` : `Go to the first in-season block (${shortDate(seasonBlocks[0].start, is)})`}</button>}
               </div>
             </section>
           )}
@@ -2996,6 +3030,7 @@ export default function PeriodizationHubPage() {
                   {goalName(selGoal)}
                   {sel && <span className="text-[15px] font-medium text-slate-500">{shortDate(sel.start, is)} – {shortDate(endIncl(sel), is)} · {sel.weeks} {is ? "vikur" : "weeks"}</span>}
                   {sel && todayB && sel.start === todayB.start && <span className="rounded-full bg-[#a83e28]/10 px-2 py-0.5 text-[11px] font-bold text-[#a83e28]">{is ? "Núverandi" : "Current"}</span>}
+                  {sel?.provisional && <span title={is ? "Leikjaplanið er ekki skráð fyrir þessa lotu — hún fullmótast þegar leikirnir eru skráðir." : "The fixture list isn't entered for this block — it firms up once the games are entered."} className="rounded-full border border-dashed border-[#de9328] px-2 py-0.5 text-[11px] font-bold text-[#7a4a06]">{is ? "Bráðabirgða" : "Provisional"}</span>}
                 </h2>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -3045,9 +3080,9 @@ export default function PeriodizationHubPage() {
                       const l = pctOf(b.start), r = pctOf(b.end);
                       return (
                         <button key={b.index} type="button" onClick={() => setBlkStart(b.start)} aria-pressed={on}
-                          title={`${shortDate(b.start, is)}–${shortDate(endIncl(b), is)} · ${goalName(g)} · ${is ? b.phase.is : b.phase.en}`}
+                          title={`${shortDate(b.start, is)}–${shortDate(endIncl(b), is)} · ${goalName(g)} · ${is ? b.phase.is : b.phase.en}${b.provisional ? (is ? " · bráðabirgða (leikjaplan ekki skráð)" : " · provisional (fixture list not entered)") : ""}`}
                           className="absolute inset-y-0 px-px" style={{ left: `${l}%`, width: `${r - l}%` }}>
-                          <span className={`flex h-full items-center justify-center overflow-hidden rounded-md px-1 text-[11px] font-semibold text-white transition ${on ? "ring-2 ring-slate-900 ring-offset-2" : "opacity-60 hover:opacity-90"}`} style={{ background: GC[g] }}>
+                          <span className={`flex h-full items-center justify-center overflow-hidden rounded-md px-1 text-[11px] font-semibold text-white transition ${b.provisional ? "border-2 border-dashed border-white/80" : ""} ${on ? "ring-2 ring-slate-900 ring-offset-2" : "opacity-60 hover:opacity-90"}`} style={{ background: GC[g] }}>
                             <span className="truncate">{goalName(g)}</span>
                           </span>
                         </button>
