@@ -118,7 +118,7 @@ describe("buildPreseasonProposal — his choice stands, the rule fills the rest"
 
   it("the layered read: one verdict, 2–3 facts, high confidence on own data, no gaps", () => {
     const p = buildPreseasonProposal(base())!;
-    expect(p.verdict.en).toBe("18-week pre-season, 30 Nov → 5 Apr, 5 sessions a week, load from 1.2× to " + p.engine.ramp[17].multipleOfMatch + "× a match.");
+    expect(p.verdict.en).toBe("18-week pre-season, 30 Nov → 5 Apr, 5 sessions a week, load from 1.2× to " + p.engine.ramp[16].multipleOfMatch + "× a match, then a light week before the opener.");
     expect(p.verdict.is).toContain("1,2×");
     expect(p.facts.length).toBeGreaterThanOrEqual(2);
     expect(p.facts.length).toBeLessThanOrEqual(3);
@@ -170,7 +170,6 @@ describe("buildPreseasonProposal — the days add up to the week's plan", () => 
   it("every week: the days (friendly included) sum to the planned total per variable, each with its own multiple", () => {
     const p = buildPreseasonProposal(base())!;
     p.engine.cal.weeks.forEach((w, i) => {
-      if (w.isDeload) return; // the taper week keeps the calendar's own lighter days
       const t = p.engine.ramp[i].byKpi;
       expect(Math.abs(sumAxis(w.days, "dist") - t.totalDistance!)).toBeLessThanOrEqual(7);
       expect(Math.abs(sumAxis(w.days, "hsr") - (t.velocityBand5! + (t.velocityBand6 ?? 0)))).toBeLessThanOrEqual(7);

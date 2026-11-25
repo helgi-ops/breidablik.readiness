@@ -34,6 +34,8 @@ export interface PreseasonWeekTarget {
   sessionCount: number;
   byKpi: Partial<Record<string, number>>;  // per-KPI weekly target (all main variables), scaled by the multiple
   sRpeAuTarget: number | null;             // RPE×min arbitrary-units weekly target
+  /** The light week before the opener (taper): volume cut, intensity held more (preseasonRamp). */
+  taper?: boolean;
   note: Bi;
   anchor: LoadAnchor;
   confidence: Confidence;

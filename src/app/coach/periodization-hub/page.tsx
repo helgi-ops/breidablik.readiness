@@ -2410,6 +2410,7 @@ export default function PeriodizationHubPage() {
                   <span className="text-[15px] font-bold text-slate-900">{is ? "Vika" : "Week"} {i + 1}</span>
                   <button type="button" onClick={openWeek} title={is ? "Opna í Vikuuppsetningu" : "Open in Week Setup"} className="rounded text-[12px] font-medium text-[#2740e6] underline decoration-dotted underline-offset-2 hover:decoration-solid">{shortDate(weekMon, is)}</button>
                   <span className="rounded-full bg-[#2740e6]/10 px-2 py-0.5 text-[11px] font-semibold text-[#2740e6]">×{w.multipleOfMatch} {is ? "leik" : "match"}</span>
+                  {w.taper && <span title={is ? "Létt vika fyrir fyrsta leik: magn −55%, hraða haldið betur (−30%). Bosquet 2007." : "Light week before the opener: volume −55%, speed held more (−30%). Bosquet 2007."} className="rounded-full bg-[#1c7a4a]/10 px-2 py-0.5 text-[11px] font-semibold text-[#1c7a4a]">{is ? "Létt vika" : "Taper"}</span>}
                   {pv > 0 && <span className="text-[13px] font-semibold tabular-nums text-slate-900">{fmtv(pv)} {unitLabel}</span>}
                   {w.perSessionLoad != null && <span className="text-[12px] text-slate-500">≈ {w.perSessionLoad}/{is ? "æf" : "sess"}</span>}
                   {emph && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{PS_LABEL[emph]}</span>}
@@ -3036,7 +3037,7 @@ export default function PeriodizationHubPage() {
                           <span className="mb-1 text-[11px] font-semibold tabular-nums text-slate-700">{v ? fmt(v) : "–"}</span>
                           <div className="w-[72%] rounded-t" style={{ height: h, background: "#2740e6", opacity: v ? 1 : 0.12 }} title={`${is ? "Vika" : "Week"} ${w.weekIndex}: ${v} ${unitLabel} · ×${w.multipleOfMatch} ${is ? "leik" : "match"}`} />
                           <span className="mt-1.5 text-[11px] font-semibold text-slate-600">{is ? "V" : "W"}{w.weekIndex}</span>
-                          <span className="text-[10px] tabular-nums text-slate-400">×{w.multipleOfMatch}</span>
+                          <span className="text-[10px] tabular-nums text-slate-400">×{w.multipleOfMatch}{w.taper ? (is ? " létt" : " taper") : ""}</span>
                         </div>
                       );
                     })}

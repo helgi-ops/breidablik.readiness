@@ -76,7 +76,7 @@ export type PreseasonProposalInput = {
 
 export type ProposalSource = "coach" | "rule";
 export type ProposalChoice = {
-  key: "start" | "length" | "sessionsPerWeek" | "week1MatchMultiple" | "peak" | "week1Kpi" | "blocks" | "days" | "tests";
+  key: "start" | "length" | "sessionsPerWeek" | "week1MatchMultiple" | "peak" | "taper" | "week1Kpi" | "blocks" | "days" | "tests";
   label: Bi;
   value: Bi;
   source: ProposalSource;
@@ -178,8 +178,8 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   const rawCal = calOpts(matchDates, Array.from(new Set([...(input.fixtures ?? []), ...matchDates])).sort());
   // Each week's days sum to the week's planned total, per variable: the friendly counts as it is and the
   // training days share the rest in the calendar's proportions — add a session and the others get lighter.
-  // The calendar's unload week (the taper into the opener) keeps its own lighter days: the ramp has no unload.
-  const cal: CalendarBlock = { ...rawCal, weeks: rawCal.weeks.map((w, i) => (ramp[i] && !w.isDeload ? fitWeekToTarget(w, ramp[i], input.unit).week : w)) };
+  // The taper week (last, light) is fitted to the ramp's taper total like any other week.
+  const cal: CalendarBlock = { ...rawCal, weeks: rawCal.weeks.map((w, i) => (ramp[i] ? fitWeekToTarget(w, ramp[i], input.unit).week : w)) };
 
   // Meso blocks, planned backwards: the coach's tail (nearest the opener) is exact, the base absorbs the rest.
   const cadence = Math.max(2, Math.round(input.cadence));
@@ -218,7 +218,9 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   });
 
   // ─── Provenance: each choice, coach's or the rule's ───
-  const peak = (ramp.length ? ramp[ramp.length - 1].multipleOfMatch : null) ?? defaultPeakMultiple(settings.sessionsPerWeek);
+  // The build's top (the week before the taper); the last week itself is the light taper week.
+  const peak = (ramp.length ? Math.max(...ramp.map((w) => w.multipleOfMatch ?? 0)) || null : null) ?? defaultPeakMultiple(settings.sessionsPerWeek);
+  const taperRow = ramp.find((w) => w.taper) ?? null;
   const coach = (flag: boolean): ProposalSource => (flag && !input.fromScratch ? "coach" : "rule");
   const end = up.end ?? preEndIso;
   const choices: ProposalChoice[] = [
@@ -246,10 +248,16 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
       cite: "Gabbett 2016", micropulseLine: true,
     },
     {
-      key: "peak", label: { en: "Last week's load", is: "Álag síðustu viku" }, value: { en: `${peak}× a match`, is: `${num(peak, true)}× leikur` }, source: "rule",
+      key: "peak", label: { en: "Peak load", is: "Mesta álag" }, value: { en: `${peak}× a match`, is: `${num(peak, true)}× leikur` }, source: "rule",
       reason: { en: `The pre-season build for ${settings.sessionsPerWeek} sessions a week; high-speed and braking load rise later than distance.`, is: `Uppbygging undirbúnings fyrir ${settings.sessionsPerWeek} æfingar á viku; hraðahlaup og hemlun hækka seinna en vegalengd.` },
       cite: "Teixeira 2021; Vanrenterghem 2017", micropulseLine: true,
     },
+    ...(taperRow ? [{
+      key: "taper" as const, label: { en: "Week before the opener", is: "Vikan fyrir fyrsta leik" },
+      value: { en: `Light: ${taperRow.multipleOfMatch}× a match`, is: `Létt: ${num(taperRow.multipleOfMatch ?? 0, true)}× leikur` }, source: "rule" as const,
+      reason: { en: "A taper: less volume, speed held, so the players start the season fresh.", is: "Létt vika: minna magn en hraða haldið, svo leikmenn mæti ferskir í fyrsta leik." },
+      cite: "Bosquet 2007; Mujika & Padilla 2003", micropulseLine: false,
+    }] : []),
     {
       key: "week1Kpi", label: { en: "Week 1 per variable", is: "Vika 1 á hverja breytu" },
       value: settings.saved.week1Kpi && !input.fromScratch ? { en: `${Object.keys(settings.week1Kpi).length} set by you`, is: `${Object.keys(settings.week1Kpi).length} stillt af þér` } : { en: "From the week 1 load", is: "Út frá álagi viku 1" },
@@ -295,8 +303,8 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   // ─── The layered read ───
   const w1 = ramp[0]?.multipleOfMatch ?? settings.week1MatchMultiple;
   const verdict: Bi = {
-    en: `${preWeeks}-week pre-season, ${dEn(preStart)} → ${dEn(end)}, ${settings.sessionsPerWeek} sessions a week, load from ${w1}× to ${peak}× a match.`,
-    is: `${preWeeks} vikna undirbúningur, ${dIs(preStart)} → ${dIs(end)}, ${settings.sessionsPerWeek} æfingar á viku, álag úr ${num(w1, true)}× í ${num(peak, true)}× leik.`,
+    en: `${preWeeks}-week pre-season, ${dEn(preStart)} → ${dEn(end)}, ${settings.sessionsPerWeek} sessions a week, load from ${w1}× to ${peak}× a match${taperRow ? ", then a light week before the opener" : ""}.`,
+    is: `${preWeeks} vikna undirbúningur, ${dIs(preStart)} → ${dIs(end)}, ${settings.sessionsPerWeek} æfingar á viku, álag úr ${num(w1, true)}× í ${num(peak, true)}× leik${taperRow ? ", svo létt vika fyrir fyrsta leik" : ""}.`,
   };
   const testWeeks = Array.from(new Set(testPlans.filter((t) => t.priority === "core" && t.weeks.length < preWeeks).flatMap((t) => t.weeks))).sort((a, b) => a - b);
   const facts: Bi[] = [

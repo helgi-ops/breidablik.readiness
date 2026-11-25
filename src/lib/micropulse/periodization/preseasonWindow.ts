@@ -10,7 +10,7 @@
 
 import { preseasonStartRamp, NORMATIVE_MATCH_KPI, NORMATIVE_MATCH_LOAD, type LoadAnchor, type PreseasonWeekTarget } from "./preseasonStart";
 import { teamKpiAvg } from "./preseasonKpiMap";
-import type { MatchUnit } from "./index";
+import { GOAL_DELOAD, type MatchUnit } from "./index";
 import type { WeeklyLoadMetricKey } from "../externalLoad/weeklyLoadTypes";
 
 type PhaseLike = { key: string; start: string; end: string; weeks: number };
@@ -196,9 +196,38 @@ export function preseasonAnchor(input: { matchUnits: MatchUnit[]; matchLoad: num
 
 /** The week-by-week pre-season load ramp for a window + the coach's settings. */
 export function preseasonRamp(a: PreseasonAnchor, matchSrpe: number | null, weeks: number, s: Pick<PreseasonSettings, "sessionsPerWeek" | "week1MatchMultiple" | "week1Kpi">): PreseasonWeekTarget[] {
-  return preseasonStartRamp({
+  const n = Math.max(1, Math.round(weeks));
+  // The last week before the opener is LIGHT (a taper — the coach's call, 2026-11-25): the build peaks the week
+  // before, then the taper week cuts it. Short pre-seasons (< 3 weeks) keep the straight build.
+  const taper = n >= 3;
+  const build = preseasonStartRamp({
     matchTypicalLoad: a.matchLoad, matchKpiAvg: a.kpi, matchSrpeAu: matchSrpe,
-    sessionsPerWeek: s.sessionsPerWeek, preseasonWeeks: weeks, week1MatchMultiple: s.week1MatchMultiple,
+    sessionsPerWeek: s.sessionsPerWeek, preseasonWeeks: taper ? n - 1 : n, week1MatchMultiple: s.week1MatchMultiple,
     anchor: a.anchor, week1KpiOverride: s.week1Kpi,
   });
+  if (!taper) return build;
+  return [...build, taperWeek(build[build.length - 1], n)];
+}
+
+/** Variables on the INTENSITY side of the taper (speed / long runs — held more); the rest are volume. Same split
+ *  as the calendar's unload week (hsr/stride → intensity; distance, PlayerLoad, accel/decel, CoD → volume). */
+const TAPER_INTENSITY_KPIS = new Set(["velocityBand5", "velocityBand6", "imaStrideHi", "imaFrDistance"]);
+
+/** The taper week = the peak week cut by the realization taper depth the calendar already uses (GOAL_DELOAD
+ *  .realize: volume ×0.45, intensity ×0.70 — Bosquet 2007: cut volume 41–60%, hold intensity; Mujika & Padilla
+ *  2003). The pre-season's last block is the realization block, so its taper. */
+export function taperWeek(peak: PreseasonWeekTarget, weekIndex: number): PreseasonWeekTarget {
+  const { vol, int } = GOAL_DELOAD.realize;
+  const r = (v: number | null, f: number) => (v == null ? null : Math.round(v * f));
+  const byKpi: Partial<Record<string, number>> = {};
+  for (const [k, v] of Object.entries(peak.byKpi)) if (typeof v === "number") byKpi[k] = Math.round(v * (TAPER_INTENSITY_KPIS.has(k) ? int : vol));
+  const mult = peak.multipleOfMatch == null ? null : Math.round(peak.multipleOfMatch * vol * 100) / 100;
+  return {
+    ...peak, weekIndex, taper: true, multipleOfMatch: mult,
+    weeklyLoadTarget: r(peak.weeklyLoadTarget, vol), perSessionLoad: r(peak.perSessionLoad, vol), sRpeAuTarget: r(peak.sRpeAuTarget, vol), byKpi,
+    note: {
+      en: `Week ${weekIndex} — taper before the opener (~${mult}× a match): volume cut ${Math.round((1 - vol) * 100)}%, speed held more (−${Math.round((1 - int) * 100)}%).`,
+      is: `Vika ${weekIndex} — létt vika fyrir fyrsta leik (~${mult}× leik): magn −${Math.round((1 - vol) * 100)}%, hraða haldið betur (−${Math.round((1 - int) * 100)}%).`,
+    },
+  };
 }

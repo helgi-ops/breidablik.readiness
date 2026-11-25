@@ -132,3 +132,27 @@ describe("one pre-season week, one number", () => {
     expect(ps.settings.sessionsPerWeek).toBe(4);
   });
 });
+
+describe("preseasonRamp — the last week before the opener is light (taper)", () => {
+  const a = preseasonAnchor({ matchUnits: [UNIT], matchLoad: 1000, matchSrpe: null, loadSource: "gps" });
+  const s = { sessionsPerWeek: 4, week1MatchMultiple: 1.3, week1Kpi: {} };
+
+  it("peaks the week before, then cuts volume 55% and intensity 30% (GOAL_DELOAD.realize)", () => {
+    const r = preseasonRamp(a, null, 8, s);
+    expect(r).toHaveLength(8);
+    const peak = r[6], taper = r[7];
+    expect(taper.taper).toBe(true);
+    expect(peak.taper).toBeUndefined();
+    expect(Math.max(...r.map((w) => w.multipleOfMatch ?? 0))).toBe(peak.multipleOfMatch);
+    expect(taper.weekIndex).toBe(8);
+    expect(taper.multipleOfMatch).toBeCloseTo((peak.multipleOfMatch ?? 0) * 0.45, 2);
+    expect(taper.byKpi.totalDistance).toBe(Math.round(peak.byKpi.totalDistance! * 0.45));
+    expect(taper.byKpi.velocityBand6).toBe(Math.round(peak.byKpi.velocityBand6! * 0.7));
+    // Speed is held more than volume.
+    expect(taper.byKpi.velocityBand6! / peak.byKpi.velocityBand6!).toBeGreaterThan(taper.byKpi.totalDistance! / peak.byKpi.totalDistance!);
+  });
+
+  it("a short pre-season (< 3 weeks) keeps the straight build", () => {
+    expect(preseasonRamp(a, null, 2, s).some((w) => w.taper)).toBe(false);
+  });
+});
