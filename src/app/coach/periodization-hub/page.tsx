@@ -82,7 +82,7 @@ type MdDemandProfile = { phases: MdDemandBucket[]; days: MdDemandBucket[] };
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes; md: MdDemandProfile };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
-type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; nextFirstFixture?: string | null; nextSeasonYear?: number | null; fixturesEstimated?: boolean; estimatedOpener?: string | null; nextFirstFixtureEstimated?: boolean; imaCalibration?: ImaShareCalibration };
+type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; upcomingFixtures?: string[]; nextFirstFixture?: string | null; nextSeasonYear?: number | null; fixturesEstimated?: boolean; estimatedOpener?: string | null; nextFirstFixtureEstimated?: boolean; imaCalibration?: ImaShareCalibration };
 
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
 const isoAdd = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_400_000).toISOString().slice(0, 10);
@@ -262,6 +262,9 @@ export default function PeriodizationHubPage() {
   // % cut of the light week before the opener (0 = none) — current / upcoming season rows, like week 1 above.
   const [psTaperPct, setPsTaperPct] = React.useState(PRESEASON_DEFAULT_TAPER_PCT);
   const [prePsTaperPct, setPrePsTaperPct] = React.useState(PRESEASON_DEFAULT_TAPER_PCT);
+  // "Weekend games from": assumed weekend games only from this day (null = entered games only).
+  const [psGamesFrom, setPsGamesFrom] = React.useState<string | null>(null);
+  const [prePsGamesFrom, setPrePsGamesFrom] = React.useState<string | null>(null);
   // Game-anchored pre-season meso-cycle tail (lengths of the blocks NEAREST the opener; the base block
   // absorbs the remainder — backwards periodization). null = not set → derive from the auto layout. Used
   // only when `upcomingYear`; the next-year row holds pre-season blocks only, so add/remove never shifts a
@@ -393,7 +396,7 @@ export default function PeriodizationHubPage() {
       viewYearRef.current = (j.plan as Plan).seasonYear;
       setViewYear((j.plan as Plan).seasonYear);
       // Populate the season-window inputs from the saved overrides, once, so they reflect what's stored.
-      const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; offseasonStart?: string | null; preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; stepPct?: number | null; blockGoals?: Record<string, "accum" | "transmute" | "realize">; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string>; preMesoTail?: number[] | null; preWeek1Kpi?: Record<string, number> | null; preTaperPct?: number | null } }).savedWindow;
+      const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; offseasonStart?: string | null; preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; stepPct?: number | null; blockGoals?: Record<string, "accum" | "transmute" | "realize">; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string>; preMesoTail?: number[] | null; preWeek1Kpi?: Record<string, number> | null; preTaperPct?: number | null; preGamesFrom?: string | null } }).savedWindow;
       if (sw && (!didPopulateWindow.current || opts?.repopulate)) {
         didPopulateWindow.current = true;
         if (sw.preseasonStart) setPreStart(sw.preseasonStart);
@@ -403,6 +406,7 @@ export default function PeriodizationHubPage() {
         if (sw.preseasonWeek1Mult != null && Number.isFinite(sw.preseasonWeek1Mult)) setPsWeek1Mult(Math.max(0.5, Math.min(3, sw.preseasonWeek1Mult)));
         if (sw.preseasonSessions === 3 || sw.preseasonSessions === 4 || sw.preseasonSessions === 5 || sw.preseasonSessions === 6) setPsSessions(sw.preseasonSessions);
         if (sw.preTaperPct != null && Number.isFinite(sw.preTaperPct)) setPsTaperPct(clampTaperPct(sw.preTaperPct));
+        setPsGamesFrom(typeof sw.preGamesFrom === "string" ? sw.preGamesFrom : null);
         if (sw.stepPct != null && Number.isFinite(sw.stepPct)) setBlkStep(Math.max(0, Math.min(15, sw.stepPct)));
         if (sw.blockGoals && Object.keys(sw.blockGoals).length) setBlockGoals(sw.blockGoals);
         if (sw.blockWeeks && Object.keys(sw.blockWeeks).length) setBlockLenOv(sw.blockWeeks);
@@ -415,12 +419,13 @@ export default function PeriodizationHubPage() {
       if (carrySeedRef.current) { if (!sw?.preseasonStart) setPreStart(carrySeedRef.current); carrySeedRef.current = ""; }
       // The UPCOMING pre-season's saved overrides live in NEXT season's row — restore them into the separate
       // pre-season store so the Pre-season tab reads/writes that row (survives the rollover; no index clash).
-      const swn = (j as { savedWindowNext?: { preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; blockWeeks?: Record<string, number>; preMesoTail?: number[] | null; preWeek1Kpi?: Record<string, number> | null; preTaperPct?: number | null } | null }).savedWindowNext;
+      const swn = (j as { savedWindowNext?: { preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; blockWeeks?: Record<string, number>; preMesoTail?: number[] | null; preWeek1Kpi?: Record<string, number> | null; preTaperPct?: number | null; preGamesFrom?: string | null } | null }).savedWindowNext;
       if (swn && (!didPopulateNext.current || opts?.repopulate)) {
         didPopulateNext.current = true;
         if (swn.preseasonWeek1Mult != null && Number.isFinite(swn.preseasonWeek1Mult)) setPrePsWeek1Mult(Math.max(0.5, Math.min(3, swn.preseasonWeek1Mult)));
         if (swn.preseasonSessions === 3 || swn.preseasonSessions === 4 || swn.preseasonSessions === 5 || swn.preseasonSessions === 6) setPrePsSessions(swn.preseasonSessions);
         if (swn.preTaperPct != null && Number.isFinite(swn.preTaperPct)) setPrePsTaperPct(clampTaperPct(swn.preTaperPct));
+        setPrePsGamesFrom(typeof swn.preGamesFrom === "string" ? swn.preGamesFrom : null);
         if (swn.blockWeeks && Object.keys(swn.blockWeeks).length) setPreBlockLenOv(swn.blockWeeks);
         if (Array.isArray(swn.preMesoTail) && swn.preMesoTail.length) setNextMesoTail(swn.preMesoTail.filter((n) => Number.isFinite(n)));
         if (swn.preWeek1Kpi && typeof swn.preWeek1Kpi === "object") setNextWeek1Kpi(swn.preWeek1Kpi);
@@ -452,7 +457,7 @@ export default function PeriodizationHubPage() {
     setPreStart(""); setSeasonEnd(""); setOffStart(""); setNextPreStart("");
     setBlockGoals({}); setBlockLenOv({}); setBlockDeloadOv({});
     setNextMesoTail(null); setPreBlockLenOv({}); setCurMesoTail(null); setCurWeek1Kpi({}); setNextWeek1Kpi({});
-    setCadence(4); setBlkStep(5); setPsWeek1Mult(1.3); setPsSessions(4); setPsTaperPct(PRESEASON_DEFAULT_TAPER_PCT);
+    setCadence(4); setBlkStep(5); setPsWeek1Mult(1.3); setPsSessions(4); setPsTaperPct(PRESEASON_DEFAULT_TAPER_PCT); setPsGamesFrom(null);
     nextPreStartRef.current = "";
     void load("", "");
   }, [plan, nextPreStart, offStart, load]);
@@ -564,7 +569,7 @@ export default function PeriodizationHubPage() {
   // inputs so the coach's choice sticks across visits and reaches the server-side plan target.
   const tuningTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   React.useEffect(() => () => { if (tuningTimer.current) clearTimeout(tuningTimer.current); }, []);
-  const persistOverridePatch = React.useCallback((patch: Record<string, number>, year?: number) => {
+  const persistOverridePatch = React.useCallback((patch: Record<string, number | string | null>, year?: number) => {
     if (!plan) return;
     const yr = year ?? plan.seasonYear;
     if (tuningTimer.current) clearTimeout(tuningTimer.current);
@@ -1045,7 +1050,8 @@ export default function PeriodizationHubPage() {
   const preYear = upcomingYear ? plan!.nextSeasonYear! : (plan?.seasonYear ?? 0);
   const psW1 = upcomingYear ? prePsWeek1Mult : psWeek1Mult;   // week-1 ×match for the upcoming pre-season
   const psSess = upcomingYear ? prePsSessions : psSessions;   // sessions/wk for the upcoming pre-season
-  const psTaper = upcomingYear ? prePsTaperPct : psTaperPct;  // % cut of the light week before the opener
+  const psTaper = upcomingYear ? prePsTaperPct : psTaperPct;
+  const psGames = upcomingYear ? prePsGamesFrom : psGamesFrom;  // weekend games assumed from this day  // % cut of the light week before the opener
   const mesoTail = upcomingYear ? nextMesoTail : curMesoTail; // the viewed/upcoming season's game-anchored tail
   const week1KpiOv = upcomingYear ? nextWeek1Kpi : curWeek1Kpi; // the viewed/upcoming season's per-KPI week-1 overrides
   const setPreW1 = (v: number) => {
@@ -1055,6 +1061,10 @@ export default function PeriodizationHubPage() {
   const setPreTaper = (v: number) => {
     if (upcomingYear) { setPrePsTaperPct(v); persistOverridePatch({ preTaperPct: v }, preYear); }
     else { setPsTaperPct(v); persistOverridePatch({ preTaperPct: v }); }
+  };
+  const setPreGames = (v: string | null) => {
+    if (upcomingYear) { setPrePsGamesFrom(v); persistOverridePatch({ preGamesFrom: v }, preYear); }
+    else { setPsGamesFrom(v); persistOverridePatch({ preGamesFrom: v }); }
   };
   const setPreSess = (v: number) => {
     if (upcomingYear) { setPrePsSessions(v); persistOverridePatch({ preseasonSessions: v }, preYear); }
@@ -1087,6 +1097,8 @@ export default function PeriodizationHubPage() {
   const psW1T = dSet ? (dEd?.settings?.preseasonWeek1Mult ?? dSet.week1MatchMultiple) : psW1;
   const psSessT = dSet ? (dEd?.settings?.preseasonSessions ?? dSet.sessionsPerWeek) : psSess;
   const psTaperT = dSet ? (dEd?.settings?.preTaperPct ?? dSet.taperPct ?? PRESEASON_DEFAULT_TAPER_PCT) : psTaper;
+  const dGames = dEd?.settings?.preGamesFrom;
+  const psGamesT = dSet ? (dGames !== undefined ? dGames : (dSet.gamesFrom ?? null)) : psGames;
   const week1KpiT = dSet ? (dEd?.settings?.preWeek1Kpi ?? dSet.week1Kpi) : week1KpiOv;
   const dTail = dEd?.settings?.preMesoTail;
   const mesoTailT = dSet ? (dTail !== undefined ? (dTail && dTail.length ? dTail : null) : dSet.mesoTail) : mesoTail;
@@ -1117,6 +1129,7 @@ export default function PeriodizationHubPage() {
   const setPreW1T = (v: number) => (psDraft ? draftEdit({ settings: { preseasonWeek1Mult: v } }) : setPreW1(v));
   const setPreSessT = (v: number) => (psDraft ? draftEdit({ settings: { preseasonSessions: v } }) : setPreSess(v));
   const setPreTaperT = (v: number) => (psDraft ? draftEdit({ settings: { preTaperPct: v } }) : setPreTaper(v));
+  const setPreGamesT = (v: string | null) => (psDraft ? draftEdit({ settings: { preGamesFrom: v } }) : setPreGames(v));
   const w1SetCount = Object.keys(week1KpiT ?? {}).length + (psW1T !== PRESEASON_DEFAULT_WEEK1 ? 1 : 0);
   const persistWeek1KpiT = (next: Record<string, number>, year: number, isUpcoming: boolean) => (psDraft ? draftEdit({ settings: { preWeek1Kpi: next } }) : persistWeek1Kpi(next, year, isUpcoming));
   const persistMesoTailT = (tail: number[], windowWeeks: number, cad: number, year: number, isUpcoming: boolean) => (psDraft ? draftEdit({ settings: { preMesoTail: tail } }) : persistMesoTail(tail, windowWeeks, cad, year, isUpcoming));
@@ -2203,9 +2216,9 @@ export default function PeriodizationHubPage() {
             // function "Build pre-season" drafts with — fed the coach's live settings and saved days.
             const prop = buildPreseasonProposal({
               phases: plan.phases, today: todayIso, nextFirstFixture: plan.nextFirstFixture, nextFirstFixtureEstimated: plan.nextFirstFixtureEstimated,
-              saved: null, settingsOverride: { sessionsPerWeek: psSessT, week1MatchMultiple: psW1T, week1Kpi: week1KpiT, mesoTail: mesoTailT, taperPct: psTaperT },
+              saved: null, settingsOverride: { sessionsPerWeek: psSessT, week1MatchMultiple: psW1T, week1Kpi: week1KpiT, mesoTail: mesoTailT, taperPct: psTaperT, gamesFrom: psGamesT },
               matchUnits: plan.players.map((p) => p.matchUnit as unknown as LibMatchUnit), matchLoad: plan.matchLoad, matchSrpe: plan.matchSrpe, loadSource: plan.tier.loadSource,
-              unit: blkUnit, fixtures: plan.fixtures ?? [], camps: campRegions, savedDays: savedPlansT, cadence, baseOverloadPct: blkBase, stepPct: blkStep,
+              unit: blkUnit, fixtures: [...(plan.fixtures ?? []), ...(plan.upcomingFixtures ?? [])], camps: campRegions, savedDays: savedPlansT, cadence, baseOverloadPct: blkBase, stepPct: blkStep,
               aerobicMode: aerobicTest, hasVald,
             })!;
             const tka = prop.engine.anchor.kpi, hasOwnKpi = prop.engine.anchor.hasOwnKpi;
@@ -2306,6 +2319,12 @@ export default function PeriodizationHubPage() {
                   <span className="font-normal text-slate-400">{is ? `rannsóknir ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}%` : `research ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}%`}</span>
                 </label>
               )}
+              <label className="flex items-center gap-1.5 font-medium text-slate-600" title={is ? "Vika án skráðs leiks fær áætlaðan helgarleik aðeins frá þessum degi. Óstillt = aðeins leikir úr leikjaskránni." : "A week with no entered game gets an assumed weekend game only from this day. Not set = only the games in the fixture list."}>{is ? "Leikir um helgar frá" : "Weekend games from"}
+                <input type="date" value={psGamesT ?? ""} min={preStart} onChange={(e) => setPreGamesT(/^\d{4}-\d{2}-\d{2}$/.test(e.target.value) ? e.target.value : null)} className="rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
+                {psGamesT
+                  ? <button type="button" onClick={() => setPreGamesT(null)} className="font-normal text-slate-500 underline hover:text-slate-700">{is ? "hreinsa" : "clear"}</button>
+                  : <span className="font-normal text-slate-400">{is ? "ekki stillt — aðeins skráðir leikir" : "not set — entered games only"}</span>}
+              </label>
               <span className="text-[11px] text-slate-400">{is ? "Stillist hér eða í Leikmenn — endurflæðir allar vikur." : "Edit here or in Players — re-flows every week."}</span>
               {preDaySave === "saving" && <span className="text-[11px] text-slate-400">{is ? "Vista…" : "Saving…"}</span>}
               {preDaySave === "saved" && <span className="text-[11px] font-medium text-emerald-700">{is ? "✓ Dagar vistaðir í Vikuuppsetningu" : "✓ Days saved to Week Setup"}</span>}

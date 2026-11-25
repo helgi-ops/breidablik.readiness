@@ -84,6 +84,8 @@ export type PreseasonSavedRow = {
   preMesoTail?: number[] | null;
   /** % cut of the light week before the opener (0 = none). */
   preTaperPct?: number | null;
+  /** Weekend games are assumed in weeks without an entered game from this day on (ISO); unset = entered games only. */
+  preGamesFrom?: string | null;
 } | null | undefined;
 
 export type PreseasonSettings = {
@@ -93,8 +95,10 @@ export type PreseasonSettings = {
   mesoTail: number[] | null;
   /** % cut of the light week before the opener (0 = no light week). */
   taperPct: number;
+  /** From this day (ISO) a week without an entered game gets an assumed weekend game; null = entered games only. */
+  gamesFrom: string | null;
   /** Which of the above the coach actually saved (the rest are defaults) — "his choice stands". */
-  saved: { sessionsPerWeek: boolean; week1MatchMultiple: boolean; week1Kpi: boolean; mesoTail: boolean; taperPct: boolean };
+  saved: { sessionsPerWeek: boolean; week1MatchMultiple: boolean; week1Kpi: boolean; mesoTail: boolean; taperPct: boolean; gamesFrom: boolean };
 };
 
 /** Normalise one saved row to the settings the ramp uses (same clamps the hub applies on load). */
@@ -107,6 +111,7 @@ export function preseasonSettingsFrom(row: PreseasonSavedRow): PreseasonSettings
     for (const [k, v] of Object.entries(r.preWeek1Kpi)) if (typeof v === "number" && Number.isFinite(v) && v > 0) kpi[k] = v;
   }
   const tpOk = typeof r.preTaperPct === "number" && Number.isFinite(r.preTaperPct);
+  const gamesFrom = typeof r.preGamesFrom === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.preGamesFrom) ? r.preGamesFrom : null;
   const tail = Array.isArray(r.preMesoTail) ? r.preMesoTail.filter((n) => typeof n === "number" && Number.isFinite(n)) : [];
   return {
     sessionsPerWeek: sessOk ? (r.preseasonSessions as number) : PRESEASON_DEFAULT_SESSIONS,
@@ -114,7 +119,8 @@ export function preseasonSettingsFrom(row: PreseasonSavedRow): PreseasonSettings
     week1Kpi: kpi,
     mesoTail: tail.length ? tail : null,
     taperPct: tpOk ? clampTaperPct(r.preTaperPct as number) : PRESEASON_DEFAULT_TAPER_PCT,
-    saved: { sessionsPerWeek: sessOk, week1MatchMultiple: w1Ok, week1Kpi: Object.keys(kpi).length > 0, mesoTail: tail.length > 0, taperPct: tpOk },
+    gamesFrom,
+    saved: { sessionsPerWeek: sessOk, week1MatchMultiple: w1Ok, week1Kpi: Object.keys(kpi).length > 0, mesoTail: tail.length > 0, taperPct: tpOk, gamesFrom: gamesFrom != null },
   };
 }
 

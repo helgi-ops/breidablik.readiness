@@ -121,6 +121,7 @@ export function planPreseasonAccept(input: AcceptInput): AcceptPlan {
     preseasonSessions: p.settings.sessionsPerWeek,
     preseasonWeek1Mult: p.settings.week1MatchMultiple,
     preTaperPct: p.settings.taperPct,
+    preGamesFrom: p.settings.gamesFrom,
     preMesoTail: p.engine.meso.tail,
     blockWeeks: { ...keepIso, ...lens },
   };

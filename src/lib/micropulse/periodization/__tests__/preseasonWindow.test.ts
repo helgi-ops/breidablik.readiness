@@ -54,11 +54,18 @@ describe("preseasonWeekOf / preseasonMeso", () => {
 });
 
 describe("preseasonSettingsFrom", () => {
+  it("\"weekend games from\" is an ISO day the coach set, or null", () => {
+    expect(preseasonSettingsFrom({ preGamesFrom: "2027-02-10" }).gamesFrom).toBe("2027-02-10");
+    expect(preseasonSettingsFrom({ preGamesFrom: "2027-02-10" }).saved.gamesFrom).toBe(true);
+    expect(preseasonSettingsFrom({ preGamesFrom: "10 Feb" }).gamesFrom).toBeNull();
+    expect(preseasonSettingsFrom({ preGamesFrom: null }).gamesFrom).toBeNull();
+  });
   it("defaults when nothing is saved, and says so", () => {
     const s = preseasonSettingsFrom(null);
     expect(s.sessionsPerWeek).toBe(PRESEASON_DEFAULT_SESSIONS);
     expect(s.week1MatchMultiple).toBe(PRESEASON_DEFAULT_WEEK1);
-    expect(s.saved).toEqual({ sessionsPerWeek: false, week1MatchMultiple: false, week1Kpi: false, mesoTail: false, taperPct: false });
+    expect(s.saved).toEqual({ sessionsPerWeek: false, week1MatchMultiple: false, week1Kpi: false, mesoTail: false, taperPct: false, gamesFrom: false });
+    expect(s.gamesFrom).toBeNull();
     expect(s.taperPct).toBe(40);
   });
   it("keeps the coach's choices, with the hub's clamps", () => {

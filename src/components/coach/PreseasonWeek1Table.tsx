@@ -129,11 +129,7 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
                 <td className="py-1.5 pr-3 font-medium text-slate-800">{t(r.lab)}{r.mine && <span title={t({ en: "your value", is: "þitt gildi" })} className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-[#2740e6] align-middle" />}</td>
                 <td className="py-1.5 pr-3">
                   <div className="flex items-center gap-1">
-                    {/* Commit on blur / Enter — saving on every key would fight the decimal point. */}
-                    <input key={`${r.k}:${r.w1 ?? ""}`} type="number" step={0.05} min={0} defaultValue={r.w1 ?? ""} aria-label={`${t(r.lab)} — ${t({ en: "week 1", is: "vika 1" })}`}
-                      onBlur={(e) => { const x = Number(e.target.value.replace(",", ".")); if (Number.isFinite(x) && x > 0 && x !== r.w1) commit(r.k, x); }}
-                      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                      className="h-7 w-[4.5rem] rounded border border-slate-300 bg-white px-1.5 tabular-nums" />
+                    <Week1Input value={r.w1} label={`${t(r.lab)} — ${t({ en: "week 1", is: "vika 1" })}`} onCommit={(x) => commit(r.k, x)} />
                     <span className="text-slate-400">×</span>{band(r.w1, r.ref)}
                   </div>
                   <div className="mt-0.5 text-[10.5px] text-slate-400">
@@ -184,5 +180,32 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
         {Object.keys(week1Kpi).length > 0 && <> · <button type="button" onClick={onResetAll} className="font-medium text-slate-600 hover:underline">{t({ en: "All back to the proposal", is: "Allt aftur í tillögu" })}</button></>}
       </div>
     </div>
+  );
+}
+
+// Week-1 input: arrows and typing re-flow the plan ~0.4 s after the last change, Enter / leaving the box at once.
+// While the coach types, the box shows what they typed; otherwise it follows the plan's value (reset, draft reload).
+function Week1Input({ value, label, onCommit }: { value: number | null; label: string; onCommit: (x: number) => void }) {
+  const [txt, setTxt] = React.useState("");
+  const [editing, setEditing] = React.useState(false);
+  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const fire = (v: string) => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    const x = Number(v.replace(",", "."));
+    if (v.trim() !== "" && Number.isFinite(x) && x > 0 && x !== value) onCommit(x);
+  };
+  return (
+    <input type="number" step={0.05} min={0} aria-label={label}
+      value={editing ? txt : (value ?? "")}
+      onFocus={() => { setTxt(value == null ? "" : String(value)); setEditing(true); }}
+      onChange={(e) => {
+        const v = e.target.value; setTxt(v);
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => fire(v), 400);
+      }}
+      onBlur={() => { fire(txt); setEditing(false); }}
+      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+      className="h-7 w-[4.5rem] rounded border border-slate-300 bg-white px-1.5 tabular-nums" />
   );
 }

@@ -756,7 +756,7 @@ export function deloadWeekIndex(startMonday: string, weekStart: string | null, n
 }
 
 /** A week with no match to build towards: the build-up week, on the same day order as the match week. */
-const FREE_WEEK: CalType[] = ["mechanical", "locomotive", "mixed", "rest", "activation", "rest", "rest"];
+export const FREE_WEEK: CalType[] = ["mechanical", "locomotive", "mixed", "rest", "activation", "rest", "rest"];
 /** The same week in season (an international break): never three training days in a row (the week rule,
  *  `INSEASON_THREE_IN_A_ROW`), so the day off comes before Mixed (coach's call 2026-11-23). */
 const FREE_WEEK_INSEASON: CalType[] = ["mechanical", "locomotive", "rest", "mixed", "activation", "rest", "rest"];
@@ -799,6 +799,10 @@ export function buildCalendarBlock(opts: {
    *  instead of the auto Sat/Sun; `offDays` are forced rest; `onDays` force a session where the solver
    *  would have rested (default a Mixed session). The engine fills the day-TYPES + loads around them. */
   matchDates?: string[]; offDays?: string[]; onDays?: string[];
+  /** True: an empty `matchDates` means NO games (weeks without a game are training weeks) instead of the
+   *  auto weekly Sat/Sun friendly. "Build pre-season" uses it — games come from the fixtures and the coach's
+   *  "weekend games from" date only. */
+  noAutoMatch?: boolean;
   /** ALL fixtures (whole season), used ONLY to label the MD day — so a match the day BEFORE the block
    *  (e.g. last Sunday's game) still makes the block's first days read MD+1, MD+2, MD+3, not MD-{far}.
    *  Layout still anchors on matchDates within the block. Falls back to in-block matches when absent. */
@@ -860,7 +864,7 @@ export function buildCalendarBlock(opts: {
   const matchIdxOf = (i: number) => (i % 2 === 0 ? 5 : 6);
   const autoMatch = Array.from({ length: n }, (_, i) => addDays(start, i * 7 + matchIdxOf(i)))
     .filter((iso) => !opts.offseasonStart || iso < opts.offseasonStart);
-  const matchIso = [...new Set((opts.matchDates && opts.matchDates.length ? opts.matchDates : autoMatch).filter(inBlock))].sort();
+  const matchIso = [...new Set((opts.matchDates && (opts.matchDates.length || opts.noAutoMatch) ? opts.matchDates : autoMatch).filter(inBlock))].sort();
   const matchSet = new Set(matchIso);
   // A held block lays its days out across its edges too: the match just before it shapes its first days and
   // the first one after it its last days, or the edge weeks plan a phantom full week / a near-empty week.

@@ -135,7 +135,9 @@ describe("buildPreseasonProposal — a team without data", () => {
     expect(p.window.weeks).toBe(10); // last pre-season's length
     expect(p.gaps.map((g) => g.en).join(" ")).toMatch(/No match data/);
     expect(p.gaps.map((g) => g.en).join(" ")).toMatch(/First competitive game not entered/);
-    expect(p.gaps.map((g) => g.en).join(" ")).toMatch(/No friendlies/);
+    expect(p.gaps.map((g) => g.en).join(" ")).toMatch(/No games in the pre-season/);
+    const q = buildPreseasonProposal(base({ matchUnits: [EMPTY], matchLoad: null, matchSrpe: null, saved: { preGamesFrom: "2027-01-04" }, fixtures: [], nextFirstFixture: null, savedDays: {} }))!;
+    expect(q.gaps.map((g) => g.en).join(" ")).toMatch(/No friendlies entered — the calendar assumes a weekend game in \d+ weeks from/);
   });
 
   it("an estimated opener is named", () => {
@@ -200,18 +202,57 @@ describe("buildPreseasonProposal — the days add up to the week's plan", () => 
     }
   });
 
-  it("friendlies in some weeks: the other weeks still get a training week around an assumed weekend game", () => {
+  it("friendlies in some weeks: the other weeks still get a training week", () => {
     const p = buildPreseasonProposal(base({ savedDays: {} }))!;
     for (const w of p.engine.cal.weeks) expect(w.days.filter((d) => d.type !== "rest" && d.type !== "match").length).toBeGreaterThan(0);
     for (const f of FRIENDLIES) expect(p.weeks.flatMap((w) => w.days).find((d) => d.date === f)!.type).toBe("match");
   });
 
   it("an assumed weekend game labels the days around it, not a fixture months back", () => {
-    const p = buildPreseasonProposal(base({ fixtures: ["2026-10-17", OPENER] }))!;
+    const p = buildPreseasonProposal(base({ fixtures: ["2026-10-17", OPENER], saved: { preseasonSessions: 5, preseasonWeek1Mult: 1.2, preGamesFrom: "2026-11-30" } }))!;
     expect(p.engine.cal.weeks.every((w) => w.days.some((d) => d.type === "match"))).toBe(true);
     for (const w of p.engine.cal.weeks) for (const d of w.days) {
       const n = /^MD[+-](\d+)$/.exec(d.md);
       if (n) expect(Number(n[1])).toBeLessThanOrEqual(6);
     }
+  });
+});
+
+describe("buildPreseasonProposal — games: entered ones always, assumed weekend games only from the coach's date", () => {
+  const matchDays = (p: NonNullable<ReturnType<typeof buildPreseasonProposal>>) => p.weeks.flatMap((w) => w.days).filter((d) => d.type === "match").map((d) => d.date);
+  const savedWith = (preGamesFrom?: string | null) => ({ preseasonSessions: 5, preseasonWeek1Mult: 1.2, preMesoTail: [3, 2], preGamesFrom });
+
+  it("not set → only the entered games; every other week is a training week that carries the week's plan", () => {
+    const p = buildPreseasonProposal(base({ savedDays: {}, saved: savedWith(null) }))!;
+    expect(matchDays(p)).toEqual(FRIENDLIES);
+    expect(p.settings.gamesFrom).toBeNull();
+    for (const w of p.engine.cal.weeks) expect(w.days.filter((d) => d.type !== "rest" && d.type !== "match").length).toBeGreaterThan(0);
+    // A week with no game has no match day to count from → no MD labels.
+    const free = p.engine.cal.weeks.find((w) => !w.days.some((d) => d.type === "match"))!;
+    expect(free.days.every((d) => d.md === "")).toBe(true);
+  });
+
+  it("set → an assumed weekend game in every week without one from that date, none before it", () => {
+    const from = "2027-02-08";
+    const p = buildPreseasonProposal(base({ savedDays: {}, saved: savedWith(from) }))!;
+    const games = matchDays(p);
+    for (const f of FRIENDLIES) expect(games).toContain(f);
+    expect(games.filter((d) => d < from && !FRIENDLIES.includes(d))).toEqual([]);
+    for (const w of p.weeks) if (w.weekStart >= from) expect(w.days.some((d) => d.type === "match")).toBe(true);
+    expect(p.choices.find((c) => c.key === "gamesFrom")?.source).toBe("coach");
+  });
+
+  it("a game in the fixtures wins over a saved training / off day on the same date", () => {
+    const p = buildPreseasonProposal(base({ savedDays: { [FRIENDLIES[0]]: { dayType: "OFF", focus: null } } }))!;
+    const d = p.weeks.flatMap((w) => w.days).find((x) => x.date === FRIENDLIES[0])!;
+    expect(d.type).toBe("match");
+    expect(d.coachSet).toBe(false);
+  });
+
+  it("games after New Year reach the plan when the caller passes them (the loader's upcomingFixtures)", () => {
+    const thisYearOnly = buildPreseasonProposal(base({ savedDays: {}, fixtures: ["2026-10-17"] }))!;
+    expect(matchDays(thisYearOnly)).toEqual([]);
+    const withNext = buildPreseasonProposal(base({ savedDays: {}, fixtures: ["2026-10-17", ...FRIENDLIES, OPENER] }))!;
+    expect(matchDays(withNext)).toEqual(FRIENDLIES);
   });
 });

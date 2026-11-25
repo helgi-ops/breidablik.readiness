@@ -15,7 +15,7 @@ import type { MatchUnitAbs } from "./index";
 
 /** What the coach changed in the draft (stored in plan_proposals.coach_edits). */
 export type ProposalEdits = {
-  settings?: { preseasonSessions?: number; preseasonWeek1Mult?: number; preWeek1Kpi?: Record<string, number>; preMesoTail?: number[] | null; preTaperPct?: number };
+  settings?: { preseasonSessions?: number; preseasonWeek1Mult?: number; preWeek1Kpi?: Record<string, number>; preMesoTail?: number[] | null; preTaperPct?: number; preGamesFrom?: string | null };
   days?: Record<string, SavedDay>;
 };
 
@@ -96,7 +96,8 @@ export async function buildProposalContext(sb: SupabaseClient, teamId: string, o
     phases: plan.phases, today: t, nextFirstFixture: plan.nextFirstFixture, nextFirstFixtureEstimated: plan.nextFirstFixtureEstimated,
     startSetByCoach: !!ov.nextPreseasonStart, saved: savedForBuild,
     matchUnits: plan.players.map((p) => p.matchUnit), matchLoad: plan.matchLoad, matchSrpe: plan.matchSrpe, loadSource: plan.tier.loadSource,
-    unit, fixtures: plan.fixtures ?? [],
+    // This year's games + the ones after New Year up to the next opener (an upcoming pre-season runs over it).
+    unit, fixtures: [...(plan.fixtures ?? []), ...(plan.upcomingFixtures ?? [])],
     camps: ((camps ?? []) as Array<{ start_date: string; end_date: string; load_pct: number; two_a_day: boolean }>).map((c) => ({ start: c.start_date, end: c.end_date, loadPct: c.load_pct, twoADay: c.two_a_day })),
     savedDays: daysForBuild, cadence, baseOverloadPct: 100, stepPct, aerobicMode: aerobic,
     hasVald: plan.players.some((p) => p.vald.status != null),

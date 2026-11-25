@@ -59,6 +59,8 @@ export type PeriodizationPlan = {
   nextSeasonYear: number | null;   // the SEASON the upcoming pre-season leads into (= year of nextFirstFixture).
                                     // The upcoming pre-season's plan is persisted to THAT season_plans row, not
                                     // this year's — so next year's planning survives the calendar rollover.
+  /** Games after this year up to the next season's opener (friendlies included) — the upcoming pre-season's. */
+  upcomingFixtures: string[];
   fixturesEstimated: boolean;      // true when the season has NO fixtures of its own and the opener was
                                     // ESTIMATED from last season (KSÍ publishes late) — corrected once real
                                     // fixtures are added.
@@ -168,6 +170,10 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   // The season the upcoming pre-season leads into = the calendar year of that opener. Its plan belongs in
   // THAT season_plans row (persist/read it there), so next year's planning survives the rollover.
   const nextSeasonYear = nextFirstFixture ? Number(nextFirstFixture.slice(0, 4)) : null;
+  // Every game after this year up to (and including) the next season's opener — the friendlies an upcoming
+  // pre-season that runs over New Year must see (Breiðablik's Jan 2027 friendlies; plan.fixtures stops at Dec 31).
+  const upcomingFixtures = ((nextFxRows ?? []) as Array<{ match_date: string }>).map((r) => r.match_date)
+    .filter((d) => !nextFirstFixture || nextFirstFixtureEstimated || d <= nextFirstFixture).sort();
 
   const matchDates = new Set(fixtures.map((f) => f.date));
 
@@ -543,5 +549,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date), nextFirstFixture, nextSeasonYear, fixturesEstimated, estimatedOpener, nextFirstFixtureEstimated, imaCalibration };
+  return { upcomingFixtures, seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date), nextFirstFixture, nextSeasonYear, fixturesEstimated, estimatedOpener, nextFirstFixtureEstimated, imaCalibration };
 }

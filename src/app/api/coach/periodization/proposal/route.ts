@@ -64,6 +64,8 @@ function cleanEdits(raw: { settings?: Record<string, unknown>; days?: Record<str
   if ([3, 4, 5, 6].includes(Number(s.preseasonSessions))) settings.preseasonSessions = Number(s.preseasonSessions);
   if (Number.isFinite(Number(s.preseasonWeek1Mult)) && s.preseasonWeek1Mult != null) settings.preseasonWeek1Mult = Math.max(0.5, Math.min(3, Number(s.preseasonWeek1Mult)));
   if (s.preTaperPct != null && Number.isFinite(Number(s.preTaperPct))) settings.preTaperPct = clampTaperPct(Number(s.preTaperPct));
+  if (s.preGamesFrom === null) settings.preGamesFrom = null;
+  else if (typeof s.preGamesFrom === "string" && ISO.test(s.preGamesFrom)) settings.preGamesFrom = s.preGamesFrom;
   if (s.preWeek1Kpi && typeof s.preWeek1Kpi === "object") {
     const k: Record<string, number> = {};
     for (const [key, v] of Object.entries(s.preWeek1Kpi as Record<string, unknown>)) if (/^[A-Za-z0-9]+$/.test(key) && Number(v) > 0) k[key] = Math.round(Number(v));
