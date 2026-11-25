@@ -16,7 +16,7 @@
  * Anchored on the team's own near-full match unit (median), the single match-unit the whole hub uses.
  */
 
-import { preseasonStartRamp } from "./preseasonStart";
+import { preseasonForDate, preseasonAnchor, preseasonRamp, type PreseasonSavedRow } from "./preseasonWindow";
 import { kpiVolumes, kpiTaperShare, standardTrainingDays, mesoWeeklyMultiples } from "./plannedVolume";
 import { teamKpiAvg } from "./preseasonKpiMap";
 import { holdsStandardWeek } from "./imaStandard";
@@ -39,16 +39,7 @@ export type PlanWeeklyTarget = {
 
 const DAY = 86_400_000;
 const ms = (iso: string) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
-const addDaysIso = (iso: string, n: number) => new Date(ms(iso) + n * DAY).toISOString().slice(0, 10);
 const weeksBetween = (a: string, b: string) => Math.floor((ms(b) - ms(a)) / (7 * DAY));
-
-/** Which 1-based week of a [start, start+weeks) pre-season window `today` falls in, or null if outside. */
-function preseasonWeekOf(today: string, start: string, weeks: number): number | null {
-  if (today < start) return null;
-  const end = addDaysIso(start, weeks * 7);
-  if (today >= end) return null;
-  return Math.min(weeks, Math.floor((ms(today) - ms(start)) / (7 * DAY)) + 1);
-}
 
 /** Resolve the plan's weekly per-KPI target for `today`. Returns null when there's no match unit to anchor
  *  to (so the caller falls back to the baseline). `matchesThisWeek` is the fixture count for the running
@@ -65,32 +56,26 @@ export function planWeeklyTarget(opts: {
   blockGoals?: Record<string, string> | null;
   /** In-season weekly overload step (% per loading week); defaults to the hub default (5%). */
   stepPct?: number;
+  /** Legacy single-row settings — used only when `savedWindow` is not given. */
   week1MatchMultiple?: number;
   sessionsPerWeek?: number;
+  /** The pre-season the hub plans: same window + coach settings as the hub's Pre-season tab
+   *  (periodization/preseasonWindow). savedWindow = the loaded season's overrides; savedWindowNext = the
+   *  season the upcoming pre-season opens (used when nextSeasonYear ≠ seasonYear). */
+  seasonYear?: number;
+  nextSeasonYear?: number | null;
+  nextFirstFixture?: string | null;
+  savedWindow?: PreseasonSavedRow;
+  savedWindowNext?: PreseasonSavedRow;
   /** Team sport — basketball uses a shorter MD micro-cycle (MD-3 → MD-1). Defaults to football. */
   sport?: string | null;
 }): PlanWeeklyTarget | null {
   const kpi = teamKpiAvg(opts.matchUnits);
   if (Object.keys(kpi).length === 0) return null;
 
-  const pre = opts.phases.find((p) => p.key === "preseason");
   const comp = opts.phases.find((p) => p.key === "competitive");
   const off = opts.phases.find((p) => p.key === "offseason");
   const today = opts.today;
-
-  const preRampWeek = (start: string, weeks: number, w: number): PlanWeeklyTarget => {
-    const row = preseasonStartRamp({
-      matchTypicalLoad: kpi.totalPlayerLoad ?? null, matchKpiAvg: kpi,
-      sessionsPerWeek: opts.sessionsPerWeek ?? 4, preseasonWeeks: weeks,
-      week1MatchMultiple: opts.week1MatchMultiple ?? 1.3, anchor: "match_this_season",
-    })[w - 1];
-    const byKpi: Partial<Record<WeeklyLoadMetricKey, number>> = {};
-    for (const k of Object.keys(row.byKpi) as WeeklyLoadMetricKey[]) byKpi[k] = row.byKpi[k]!;
-    return {
-      phase: "preseason", byKpi, weekIndex: w, totalWeeks: weeks, multipleOfMatch: row.multipleOfMatch,
-      label: { en: `Pre-season — week ${w} of ${weeks}`, is: `Undirbúningur — vika ${w} af ${weeks}` },
-    };
-  };
 
   // 1. In-season — this week's fixture-count-aware KPI volume (each KPI tapered by its own exponent),
   //    scaled by the meso ramp/deload factor for the block week today sits in (loading weeks ramp from
@@ -137,10 +122,27 @@ export function planWeeklyTarget(opts: {
     return { phase: "offseason", byKpi, label: { en: "Off-season — maintenance", is: "Undirbúningshlé — viðhald" } };
   }
 
-  // 3. Pre-season — the historical window (before this season's first fixture)…
-  if (pre) { const w = preseasonWeekOf(today, pre.start, pre.weeks); if (w) return preRampWeek(pre.start, pre.weeks, w); }
-  // …or the UPCOMING one, which starts when the off-season ends (next-pre-season date), reusing its length.
-  if (off) { const upWeeks = Math.max(1, pre?.weeks ?? 10); const w = preseasonWeekOf(today, off.end, upWeeks); if (w) return preRampWeek(off.end, upWeeks, w); }
+  // 3. Pre-season — the same window, coach settings and anchor as the hub (this season's own window while
+  //    it runs; the UPCOMING one — off-season end → next opener — once the off-season has started).
+  const legacy: PreseasonSavedRow = { preseasonSessions: opts.sessionsPerWeek ?? null, preseasonWeek1Mult: opts.week1MatchMultiple ?? null };
+  const cur = opts.savedWindow ?? legacy;
+  const ps = preseasonForDate({
+    phases: opts.phases, seasonYear: opts.seasonYear ?? Number(today.slice(0, 4)), nextSeasonYear: opts.nextSeasonYear ?? null,
+    nextFirstFixture: opts.nextFirstFixture ?? null, today, date: today, savedWindow: cur, savedWindowNext: opts.savedWindowNext ?? cur,
+  });
+  if (ps?.weekIndex) {
+    const a = preseasonAnchor({ matchUnits: opts.matchUnits, matchLoad: null, matchSrpe: null, loadSource: "gps" });
+    const weeks = ps.window.weeks, w = ps.weekIndex;
+    const row = preseasonRamp(a, null, weeks, ps.settings)[w - 1];
+    const byKpi: Partial<Record<WeeklyLoadMetricKey, number>> = {};
+    for (const k of Object.keys(row.byKpi) as WeeklyLoadMetricKey[]) byKpi[k] = row.byKpi[k]!;
+    const ref = a.hasOwnKpi ? "" : " · reference values";
+    const refIs = a.hasOwnKpi ? "" : " · viðmiðunargildi";
+    return {
+      phase: "preseason", byKpi, weekIndex: w, totalWeeks: weeks, multipleOfMatch: row.multipleOfMatch,
+      label: { en: `Pre-season — week ${w} of ${weeks}${ref}`, is: `Undirbúningur — vika ${w} af ${weeks}${refIs}` },
+    };
+  }
 
   return null;
 }

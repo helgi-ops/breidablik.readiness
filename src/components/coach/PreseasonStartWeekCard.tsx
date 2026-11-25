@@ -13,16 +13,22 @@ import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { preseasonStartRamp, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
+import type { LoadAnchor, PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
 import { distributeWeekKpis, type PerDayKpiTarget } from "@/lib/micropulse/periodization/preseasonWeekPlan";
-import { teamKpiAvg } from "@/lib/micropulse/periodization/preseasonKpiMap";
+import { preseasonForDate, preseasonAnchor, preseasonRamp, type PreseasonSavedRow } from "@/lib/micropulse/periodization/preseasonWindow";
 import { recommendTestingSchedule, isAerobicMode, type AerobicMode } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 import type { MatchUnit } from "@/lib/micropulse/periodization";
 
 type Phase = { key: string; start: string; end: string; weeks: number };
 type Player = { playerId: string; name: string; matchUnit: MatchUnit; vald?: { status: string | null } | null };
-type Plan = { phases: Phase[]; matchLoad: number | null; matchSrpe: number | null; tier: { loadSource: "gps" | "srpe" | "none" }; players: Player[]; aerobicTest?: AerobicMode | null };
+type Plan = {
+  seasonYear: number; nextSeasonYear?: number | null; nextFirstFixture?: string | null;
+  phases: Phase[]; matchLoad: number | null; matchSrpe: number | null; tier: { loadSource: "gps" | "srpe" | "none" }; players: Player[];
+  aerobicTest?: AerobicMode | null;
+  /** The coach's saved pre-season choices (loaded season / the season the upcoming pre-season opens). */
+  savedWindow?: PreseasonSavedRow; savedWindowNext?: PreseasonSavedRow;
+};
 
 export type PreseasonTestDue = { name: string; kind: "baseline" | "retest" | "end" | "weekly"; priority: "core" | "recommended" };
 export type PreseasonComputed = { weekIndex: number; preWeeks: number; row: PreseasonWeekTarget; perDay: PerDayKpiTarget[]; tests: PreseasonTestDue[] };
@@ -37,7 +43,8 @@ async function fetchPeriodization(signal: AbortSignal): Promise<Plan | null> {
       const res = await fetch(`/api/coach/periodization`, { headers: { Authorization: `Bearer ${tok}` }, signal });
       const j = await res.json().catch(() => null);
       // The team's chosen aerobic test (Periodization Hub) rides along, so "Testing this week" names it.
-      if (res.ok && j?.ok) return { ...(j.plan as Plan), aerobicTest: isAerobicMode(j.aerobicTest) ? j.aerobicTest : null };
+      // The saved pre-season settings ride along too, so this card shows the hub's own ramp.
+      if (res.ok && j?.ok) return { ...(j.plan as Plan), aerobicTest: isAerobicMode(j.aerobicTest) ? j.aerobicTest : null, savedWindow: j.savedWindow ?? null, savedWindowNext: j.savedWindowNext ?? null };
     } catch {
       if (signal.aborted) return null; // component unmounted — stop
       // otherwise fall through to a retry
@@ -67,15 +74,20 @@ export default function PreseasonStartWeekCard({ teamId, weekStart, intents, onC
   // Weekly target for the pre-season week being edited (stable unless the plan / week changes).
   const info = React.useMemo(() => {
     if (!plan) return null;
-    const pre = plan.phases.find((p) => p.key === "preseason");
-    const preWeeks = Math.max(1, pre?.weeks ?? 6);
-    let weekIndex = 1;
-    if (pre?.start) {
-      const off = Math.floor((Date.parse(`${weekStart}T00:00:00Z`) - Date.parse(`${pre.start}T00:00:00Z`)) / (7 * 86_400_000));
-      weekIndex = Math.min(preWeeks, Math.max(1, off + 1));
-    }
-    const anchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
-    const ramp = preseasonStartRamp({ matchTypicalLoad: plan.matchLoad, matchKpiAvg: teamKpiAvg(plan.players.map((p) => p.matchUnit)), matchSrpeAu: plan.matchSrpe, sessionsPerWeek: 4, preseasonWeeks: preWeeks, anchor });
+    // Same window, coach settings (sessions/week, week-1 ×match, per-KPI week 1) and anchor as the hub's
+    // Pre-season tab — one source (periodization/preseasonWindow).
+    const ps = preseasonForDate({
+      phases: plan.phases, seasonYear: plan.seasonYear, nextSeasonYear: plan.nextSeasonYear, nextFirstFixture: plan.nextFirstFixture,
+      today: new Date().toISOString().slice(0, 10), date: weekStart, savedWindow: plan.savedWindow, savedWindowNext: plan.savedWindowNext,
+    });
+    if (!ps) return null;
+    const preWeeks = ps.window.weeks;
+    // A week tagged pre-season but outside the window clamps to its nearest end (first / last week).
+    const offWk = Math.floor((Date.parse(`${weekStart}T00:00:00Z`) - Date.parse(`${ps.window.start}T00:00:00Z`)) / (7 * 86_400_000));
+    const weekIndex = ps.weekIndex ?? Math.min(preWeeks, Math.max(1, offWk + 1));
+    const a = preseasonAnchor({ matchUnits: plan.players.map((p) => p.matchUnit), matchLoad: plan.matchLoad, matchSrpe: plan.matchSrpe, loadSource: plan.tier.loadSource });
+    const anchor: LoadAnchor = a.anchor;
+    const ramp = preseasonRamp(a, plan.matchSrpe, preWeeks, ps.settings);
     const row = ramp[weekIndex - 1] ?? null;
     return row ? { preWeeks, weekIndex, anchor, ramp, row } : null;
   }, [plan, weekStart]);

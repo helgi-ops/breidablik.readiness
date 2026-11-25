@@ -33,7 +33,7 @@ import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationB
 import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
-import { preseasonStartRamp, preseasonMatchExposure, NORMATIVE_MATCH_KPI, NORMATIVE_MATCH_LOAD, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
+import { preseasonMatchExposure, NORMATIVE_MATCH_KPI, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
 import { weeklyTargetFromMatch } from "@/lib/micropulse/periodization";
 import { upcomingInternationalBreaks, intlBreakKey, type IntlBreak } from "@/lib/micropulse/internationalBreaks";
 import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
@@ -45,6 +45,9 @@ import FitnessTestCard from "@/components/coach/FitnessTestCard";
 import PlanIntentCard from "@/components/coach/PlanIntentCard";
 import { CiteRefs } from "@/components/coach/CiteRefs";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
+import { kpiAvgFromUnit as kpiAvgFromUnitLib, teamKpiAvg as teamKpiAvgLib } from "@/lib/micropulse/periodization/preseasonKpiMap";
+import { upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, PRE_MIN_BLOCK } from "@/lib/micropulse/periodization/preseasonWindow";
+import type { MatchUnit as LibMatchUnit } from "@/lib/micropulse/periodization";
 
 type Bi = { en: string; is: string };
 const IN_SEASON_DELOAD_NOTE: Bi = {
@@ -80,58 +83,14 @@ const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTime
 const isoAdd = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_400_000).toISOString().slice(0, 10);
 const mondayOf = (iso: string) => { const dt = new Date(`${iso}T00:00:00Z`); const dow = (dt.getUTCDay() + 6) % 7; return new Date(dt.getTime() - dow * 86_400_000).toISOString().slice(0, 10); };
 
-// Map a match unit (per-axis typicals) to the weekly-load KPI vocabulary, so the pre-season start
-// ramp can scale every main variable. velocityBand5 = HSR − sprint(band6) when both are present.
-const kpiAvgFromUnit = (mu: MatchUnit): Partial<Record<WeeklyLoadMetricKey, number>> => {
-  const out: Partial<Record<WeeklyLoadMetricKey, number>> = {};
-  if (mu.load.typical != null) out.totalPlayerLoad = mu.load.typical;
-  if (mu.distance.typical != null) out.totalDistance = mu.distance.typical;
-  if (mu.sprint.typical != null) out.velocityBand6 = mu.sprint.typical;
-  if (mu.hsr.typical != null && mu.sprint.typical != null && mu.hsr.typical > mu.sprint.typical) out.velocityBand5 = Math.round(mu.hsr.typical - mu.sprint.typical);
-  if (mu.accel.typical != null) out.accelB23 = mu.accel.typical;
-  if (mu.decel.typical != null) out.decelB23 = mu.decel.typical;
-  if (mu.imaCod.typical != null) out.imaCod = mu.imaCod.typical;
-  // IMA running pair (appended last so the Meso headline columns — the first two keys — don't change).
-  if (mu.imaFr?.typical != null) out.imaFrDistance = mu.imaFr.typical;
-  if (mu.stride?.typical != null) out.imaStrideHi = mu.stride.typical;
-  return out;
-};
+// Match unit → weekly-load KPI vocabulary (with the IMA KPIs). One definition, shared with Week Setup and
+// Weekly Load (periodization/preseasonKpiMap), so the pre-season ramp reads the same numbers everywhere.
+const kpiAvgFromUnit = (mu: MatchUnit): Partial<Record<WeeklyLoadMetricKey, number>> => kpiAvgFromUnitLib(mu as unknown as LibMatchUnit, { ima: true });
 // Team KPI average across players who have a match unit (mean per KPI).
-const teamKpiAvg = (players: Player[]): Partial<Record<WeeklyLoadMetricKey, number>> => {
-  const sums: Partial<Record<WeeklyLoadMetricKey, { s: number; n: number }>> = {};
-  for (const p of players) {
-    const k = kpiAvgFromUnit(p.matchUnit);
-    for (const key of Object.keys(k) as WeeklyLoadMetricKey[]) {
-      const v = k[key]; if (v == null) continue;
-      const acc = sums[key] ?? { s: 0, n: 0 }; acc.s += v; acc.n += 1; sums[key] = acc;
-    }
-  }
-  const out: Partial<Record<WeeklyLoadMetricKey, number>> = {};
-  for (const key of Object.keys(sums) as WeeklyLoadMetricKey[]) { const a = sums[key]!; out[key] = Math.round(a.s / a.n); }
-  return out;
-};
+const teamKpiAvg = (players: Player[]): Partial<Record<WeeklyLoadMetricKey, number>> => teamKpiAvgLib(players.map((p) => p.matchUnit as unknown as LibMatchUnit), { ima: true });
+// The pre-season load anchor (own match unit, else the normative reference) — the same call Week Setup makes.
+const preAnchorOf = (plan: Plan) => preseasonAnchor({ matchUnits: plan.players.map((p) => p.matchUnit as unknown as LibMatchUnit), matchLoad: plan.matchLoad, matchSrpe: plan.matchSrpe, loadSource: plan.tier.loadSource });
 type DayState = "match" | "session" | "off";
-
-/** The pre-season to PLAN FOR, relative to today. `detectSeasonPhases` only ever emits ONE pre-season
- *  (the build-up before THIS season's first fixture — in the past once the season is under way). Once
- *  we're in or past the off-season, the pre-season that matters is the NEXT one, which starts when the
- *  off-season ends (= the coach's next-pre-season date, or the shown off-season horizon). Its length is
- *  computed to the NEXT season's first competitive game (`nextFirstFixture`) when the coach has entered it,
- *  else it reuses the detected pre-season's week count. Returns null when there's no pre-season to plan. */
-function upcomingPreseason(phases: Phase[], todayIso: string, nextFirstFixture?: string | null): { start: string; weeks: number; end?: string } | null {
-  const pre = phases.find((p) => p.key === "preseason");
-  const off = phases.find((p) => p.key === "offseason");
-  if (off && todayIso >= off.start) {
-    // Compute to the real opener when known, else fall back to the detected pre-season length.
-    if (nextFirstFixture && nextFirstFixture > off.end) {
-      const weeks = Math.max(1, Math.round((Date.parse(`${nextFirstFixture}T00:00:00Z`) - Date.parse(`${off.end}T00:00:00Z`)) / (7 * 86_400_000)));
-      return { start: off.end, weeks, end: nextFirstFixture };
-    }
-    return { start: off.end, weeks: Math.max(1, pre?.weeks ?? 10) };
-  }
-  if (pre) return { start: pre.start, weeks: Math.max(1, pre.weeks), end: pre.end };
-  return null;
-}
 
 // The meso always seeds a full 6-week skeleton; a smaller cadence (4/5) just RENDERS fewer weeks
 // (the tail is trimmed, not reshuffled), so switching 6→4→5 shows the same block minus the last
@@ -152,28 +111,8 @@ const caltypeFromFocus = (focus: string): CalType | undefined => {
 // Forward map: a chosen training stimulus → the English label written into week_plans.focus. These exact
 // words round-trip through caltypeFromFocus above, so a day's stimulus set on the Pre-season card reads back.
 const CALTYPE_FOCUS_LABEL: Partial<Record<CalType, string>> = { mechanical: "Mechanical", locomotive: "Locomotive", mixed: "Mixed", activation: "Activation", topup: "Top-up" };
-// Backwards periodization: given the pre-season window length and the coach's game-anchored TAIL blocks
-// (lengths of the meso cycles nearest the opener — e.g. a short power/peaking block that ends ON the first
-// game), lay out every block so the LAST ends at the opener and the FIRST (base) block absorbs the leftover
-// weeks. Tail blocks that would leave < 2 base weeks are dropped from the earliest tail inward. Returns the
-// split so the editor can render the flexible base separately from the coach's exact tail.
-const PRE_MIN_BLOCK = 2, PRE_MAX_BLOCK = 8;
-function preseasonMeso(windowWeeks: number, tail: number[], cadence: number): { lens: number[]; base: number[]; tail: number[] } {
-  const W = Math.max(1, Math.round(windowWeeks));
-  let t = tail.map((n) => Math.max(PRE_MIN_BLOCK, Math.min(PRE_MAX_BLOCK, Math.round(n))));
-  let sumTail = t.reduce((s, n) => s + n, 0);
-  while (t.length && W - sumTail < PRE_MIN_BLOCK) { sumTail -= t[0]; t = t.slice(1); }
-  const baseWeeks = Math.max(0, W - sumTail);
-  const base: number[] = [];
-  if (baseWeeks > 0) {
-    const n = Math.max(1, Math.ceil(baseWeeks / Math.max(2, cadence)));
-    for (let k = 0; k < n; k++) base.push(Math.max(2, cadence));
-    base[0] = baseWeeks - Math.max(2, cadence) * (n - 1); // earliest block absorbs the remainder
-    if (base[0] < PRE_MIN_BLOCK && base.length > 1) { base[1] += base[0]; base.shift(); }
-    if (base.length === 1) base[0] = baseWeeks;           // single base block = all the base weeks
-  }
-  return { lens: [...base, ...t], base, tail: t };
-}
+// Backwards pre-season meso layout (preseasonMeso) + the window (upcomingPreseason) live in
+// periodization/preseasonWindow so the proposal builder and Week Setup use the same split.
 const lensToBlockWeeks = (lens: number[]): Record<string, number> => { const m: Record<string, number> = {}; lens.forEach((n, i) => { m[String(i)] = n; }); return m; };
 // Migrate legacy INDEX-keyed length overrides ("0","1",…) to stable block-START (ISO) keys, using the
 // current derived block list. Block-start is a stable identity the engine resolves positionally
@@ -1233,18 +1172,16 @@ export default function PeriodizationHubPage() {
     const preStart = upPre?.start ?? null;
     if (upPre) {
       const preWeeks = upPre.weeks;
-      const preTkaRaw = teamKpiAvg(plan.players);
-      const preHasOwn = preTkaRaw.totalPlayerLoad != null && Number.isFinite(preTkaRaw.totalPlayerLoad);
-      const preTka = (preHasOwn ? preTkaRaw : (NORMATIVE_MATCH_KPI as unknown as typeof preTkaRaw));
-      const preAnchor: LoadAnchor = preHasOwn ? "match_this_season" : (plan.tier.loadSource === "srpe" && plan.matchSrpe != null ? "srpe_only" : "normative");
-      preRamp = preseasonStartRamp({ matchTypicalLoad: preHasOwn ? (preTkaRaw.totalPlayerLoad ?? plan.matchLoad) : NORMATIVE_MATCH_LOAD, matchKpiAvg: preTka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: preAnchor, week1KpiOverride: week1KpiOv });
+      const pa = preAnchorOf(plan);
+      const preAnchor: LoadAnchor = pa.anchor;
+      preRamp = preseasonRamp(pa, plan.matchSrpe, preWeeks, { sessionsPerWeek: psSess, week1MatchMultiple: psW1, week1Kpi: week1KpiOv });
       if (preRamp.length) {
         const anchorLabel = preAnchor === "match_this_season" ? (is ? "leikir í ár" : "this season's matches") : preAnchor === "srpe_only" ? (is ? "sRPE eingöngu" : "sRPE only") : (is ? "stöðu-viðmið" : "positional norm");
         const conf = preRamp[0].confidence === "high" ? (is ? "há" : "high") : preRamp[0].confidence === "moderate" ? (is ? "miðlungs" : "moderate") : (is ? "lítil" : "low");
         preseasonStart = {
           anchor: anchorLabel, confidence: conf,
           weeks: preRamp.map((w) => ({ weekIndex: w.weekIndex, multiple: w.multipleOfMatch, weeklyLoad: w.weeklyLoadTarget, perSession: w.perSessionLoad, srpe: w.sRpeAuTarget })),
-          week1Kpi: (Object.keys(preRamp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad").map((k) => { const mv = preTka[k]; return { label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, value: preRamp[0].byKpi[k]!, unit: WEEKLY_LOAD_LABELS[k].unit, multiple: mv != null && mv > 0 ? Math.round((preRamp[0].byKpi[k]! / mv) * 100) / 100 : null }; }),
+          week1Kpi: (Object.keys(preRamp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad").map((k) => { const mv = pa.kpi[k]; return { label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, value: preRamp[0].byKpi[k]!, unit: WEEKLY_LOAD_LABELS[k].unit, multiple: mv != null && mv > 0 ? Math.round((preRamp[0].byKpi[k]! / mv) * 100) / 100 : null }; }),
         };
       }
     }
@@ -2200,12 +2137,9 @@ export default function PeriodizationHubPage() {
             const preEndMs = Date.parse(`${preStart}T00:00:00Z`) + preWeeks * 7 * 86_400_000;
             // Normative fallback: a team with NO match data gets reference KPI values (the coach then adjusts
             // them via the per-KPI week-1 editor). Own data → match_this_season; else → normative (low conf).
-            const tkaRaw = teamKpiAvg(plan.players);
-            const hasOwnKpi = tkaRaw.totalPlayerLoad != null && Number.isFinite(tkaRaw.totalPlayerLoad);
-            const tka = (hasOwnKpi ? tkaRaw : (NORMATIVE_MATCH_KPI as unknown as typeof tkaRaw));
-            const preMatchLoad = hasOwnKpi ? (tkaRaw.totalPlayerLoad ?? plan.matchLoad) : NORMATIVE_MATCH_LOAD;
-            const preAnchor: LoadAnchor = hasOwnKpi ? "match_this_season" : (plan.tier.loadSource === "srpe" && plan.matchSrpe != null ? "srpe_only" : "normative");
-            const ramp = preseasonStartRamp({ matchTypicalLoad: preMatchLoad, matchKpiAvg: tka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: preAnchor, week1KpiOverride: week1KpiOv });
+            const pa = preAnchorOf(plan);
+            const tka = pa.kpi, hasOwnKpi = pa.hasOwnKpi;
+            const ramp = preseasonRamp(pa, plan.matchSrpe, preWeeks, { sessionsPerWeek: psSess, week1MatchMultiple: psW1, week1Kpi: week1KpiOv });
             const usesAu = ramp.every((w) => w.weeklyLoadTarget == null);
             const unitLabel = usesAu ? "AU" : "PL";
             const primary = (w: PreseasonWeekTarget) => (usesAu ? w.sRpeAuTarget : w.weeklyLoadTarget) ?? 0;
@@ -3045,9 +2979,10 @@ export default function PeriodizationHubPage() {
               const up = upcomingPreseason(plan.phases, todayIso, plan.nextFirstFixture)!;
               const preWeeks = up.weeks;
               const preStart = up.start;
-              const preAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
-              const tka = teamKpiAvg(plan.players);
-              const ramp = preseasonStartRamp({ matchTypicalLoad: tka.totalPlayerLoad ?? plan.matchLoad, matchKpiAvg: tka, matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSess, preseasonWeeks: preWeeks, week1MatchMultiple: psW1, anchor: preAnchor });
+              // Same anchor + coach settings as the Pre-season tab and Week Setup (one ramp everywhere).
+              const pa = preAnchorOf(plan);
+              const tka = pa.kpi;
+              const ramp = preseasonRamp(pa, plan.matchSrpe, preWeeks, { sessionsPerWeek: psSess, week1MatchMultiple: psW1, week1Kpi: week1KpiOv });
               if (!ramp.length) return null;
               const usesAu = ramp.every((w) => w.weeklyLoadTarget == null); // srpe-only / normative teams have no PL unit
               const primary = (w: PreseasonWeekTarget) => (usesAu ? w.sRpeAuTarget : w.weeklyLoadTarget) ?? 0;

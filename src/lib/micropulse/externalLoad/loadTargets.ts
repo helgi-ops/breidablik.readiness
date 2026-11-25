@@ -570,11 +570,13 @@ export async function computePlanTarget(
   meso = 1,
 ): Promise<{ target_week_total: Partial<Record<WeeklyLoadMetricKey, number | null>>; plan_source: TargetComputation["plan_source"] }> {
   const sb = getSupabaseAdmin();
+  const loadedYear = new Date(`${referenceDate}T00:00:00Z`).getUTCFullYear();
   const { data: saved } = await sb
     .from("season_plans").select("overrides")
-    .eq("team_id", teamId).eq("season_year", new Date(`${referenceDate}T00:00:00Z`).getUTCFullYear())
+    .eq("team_id", teamId).eq("season_year", loadedYear)
     .maybeSingle();
-  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; nextPreseasonStart?: string; offseasonWeeks?: number; preseasonWeek1Mult?: number; preseasonSessions?: number; stepPct?: number; deloadCadence?: number; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string>; blockGoals?: Record<string, string> } } | null)?.overrides ?? {};
+  type Ov = { preseasonStart?: string; seasonEnd?: string; nextPreseasonStart?: string; offseasonWeeks?: number; preseasonWeek1Mult?: number; preseasonSessions?: number; preWeek1Kpi?: Record<string, number> | null; preMesoTail?: number[] | null; stepPct?: number; deloadCadence?: number; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string>; blockGoals?: Record<string, string> };
+  const ov = (saved as { overrides?: Ov } | null)?.overrides ?? {};
   const plan = await loadPeriodization(sb, {
     teamId,
     preseasonStart: ov.preseasonStart ?? null, seasonEnd: ov.seasonEnd ?? null,
@@ -587,13 +589,20 @@ export async function computePlanTarget(
   const wkStart = monday.toISOString().slice(0, 10), wkEnd = sunday.toISOString().slice(0, 10);
   const matchesThisWeek = plan.fixtures.filter((f) => f >= wkStart && f <= wkEnd).length;
 
+  // The upcoming pre-season's choices live on the row of the season it opens (the hub writes them there).
+  let ovNext: Ov | null = null;
+  if (plan.nextSeasonYear != null && plan.nextSeasonYear !== loadedYear) {
+    const { data: savedNext } = await sb.from("season_plans").select("overrides").eq("team_id", teamId).eq("season_year", plan.nextSeasonYear).maybeSingle();
+    ovNext = (savedNext as { overrides?: Ov } | null)?.overrides ?? {};
+  }
+
   // Basketball uses a shorter MD micro-cycle for the in-season weekly target.
   const sport = await resolveTeamSport(sb, teamId);
   const pt = planWeeklyTarget({
     phases: plan.phases, blocks: plan.blocks, matchUnits: plan.players.map((p) => p.matchUnit),
     today: referenceDate, matchesThisWeek,
-    week1MatchMultiple: ov.preseasonWeek1Mult ?? undefined,
-    sessionsPerWeek: ov.preseasonSessions ?? undefined,
+    seasonYear: loadedYear, nextSeasonYear: plan.nextSeasonYear, nextFirstFixture: plan.nextFirstFixture,
+    savedWindow: ov, savedWindowNext: ovNext,
     stepPct: ov.stepPct ?? undefined,
     blockGoals: ov.blockGoals ?? null,
     sport,
