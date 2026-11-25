@@ -145,11 +145,32 @@ describe("preseasonStartRamp", () => {
     expect(player[0].weeklyLoadTarget!).toBeGreaterThan(team[0].weeklyLoadTarget!); // bigger match unit → bigger target
   });
 
-  it("respects a custom week-1 multiple and peak, staying monotonic", () => {
+  it("a custom week 1 moves the whole ramp by the same share — the peak too — staying monotonic", () => {
     const rows = preseasonStartRamp({ matchTypicalLoad: MATCH, sessionsPerWeek: 4, preseasonWeeks: 4, week1MatchMultiple: 1.0, peakMatchMultiple: 3.0, anchor: "match_this_season" });
     expect(rows[0].multipleOfMatch).toBeCloseTo(1.0, 5);
-    expect(rows[rows.length - 1].multipleOfMatch).toBeCloseTo(3.0, 5);
+    expect(rows[rows.length - 1].multipleOfMatch).toBeCloseTo(3.0 * (1.0 / 1.3), 2);
     for (let i = 1; i < rows.length; i++) expect(rows[i].multipleOfMatch!).toBeGreaterThanOrEqual(rows[i - 1].multipleOfMatch!);
+  });
+
+  it("week 1 +10% → every week +10%, the peak included (the user's rule, 2026-11-25)", () => {
+    const kpi = { totalDistance: 10000, velocityBand6: 180, decelB23: 46 };
+    const base = preseasonStartRamp({ matchTypicalLoad: MATCH, matchKpiAvg: kpi, sessionsPerWeek: 4, preseasonWeeks: 8, anchor: "match_this_season" });
+    const up = preseasonStartRamp({ matchTypicalLoad: MATCH, matchKpiAvg: kpi, sessionsPerWeek: 4, preseasonWeeks: 8, week1MatchMultiple: 1.43, anchor: "match_this_season" });
+    for (let i = 0; i < base.length; i++) {
+      expect(up[i].multipleOfMatch! / base[i].multipleOfMatch!).toBeCloseTo(1.1, 1);
+      for (const k of Object.keys(kpi)) expect(up[i].byKpi[k]! / base[i].byKpi[k]!).toBeCloseTo(1.1, 1);
+    }
+  });
+
+  it("a coach's week-1 value for one variable moves only that variable's ramp, peak included", () => {
+    const kpi = { totalDistance: 10000, velocityBand6: 180 };
+    const base = preseasonStartRamp({ matchTypicalLoad: MATCH, matchKpiAvg: kpi, sessionsPerWeek: 4, preseasonWeeks: 8, anchor: "match_this_season" });
+    const td1 = base[0].byKpi.totalDistance! * 1.2;
+    const up = preseasonStartRamp({ matchTypicalLoad: MATCH, matchKpiAvg: kpi, sessionsPerWeek: 4, preseasonWeeks: 8, week1KpiOverride: { totalDistance: td1 }, anchor: "match_this_season" });
+    expect(up[0].byKpi.totalDistance).toBe(Math.round(td1));
+    expect(up[7].byKpi.totalDistance! / base[7].byKpi.totalDistance!).toBeCloseTo(1.2, 2);
+    expect(up[7].byKpi.velocityBand6).toBe(base[7].byKpi.velocityBand6);
+    expect(up[7].multipleOfMatch).toBe(base[7].multipleOfMatch);
   });
 
   it("a single pre-season week stays at the re-entry multiple", () => {

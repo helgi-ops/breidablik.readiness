@@ -3,8 +3,9 @@
 /**
  * Pre-season: week 1 → peak → light week, every variable as × a match beside the research range.
  *
- * The system proposes week 1 (preseasonRamp); the coach changes any variable in × a match and every pre-season
- * week is recomputed from it (saved as the variable's value: × a match × the team's match value). Explainability:
+ * The system proposes week 1 (preseasonRamp); the coach changes any variable in × a match and that variable's
+ * whole ramp — peak and light week included — moves by the same share (saved as the variable's value: × a match
+ * × the team's match value). Explainability:
  * the columns are explained in plain words, every number carries a word mark against the research range
  * (within / above / below), and each variable says what it is and why it starts where it starts (the rules in
  * plannedVolume — KPI_REENTRY_FLOOR; a MicroPulse line, not a research number). Presentation only: no new rule.
@@ -32,7 +33,7 @@ const WHAT: Partial<Record<string, Bi>> = {
   imaTotal: { en: "All hard speed-ups, brakes and turns together.", is: "Allar kröftugar hraðaaukningar, hemlanir og beygjur saman." },
   imaStrideBand6: { en: "Strides in longer continuous runs (12–18 s). Aerobic running base, not fast running.", is: "Skref í lengri samfelldum hlaupum (12–18 s). Hlaupagrunnur, ekki hröð hlaup." },
   imaFrDistance: { en: "Distance in long runs (18 s or more). Aerobic running base, not fast running.", is: "Vegalengd í löngum hlaupum (18 s eða lengur). Hlaupagrunnur, ekki hröð hlaup." },
-  totalPlayerLoad: { en: "The whole week's load in one number. It sets the overall week-1 line the other variables are measured against.", is: "Allt álag vikunnar í einni tölu. Það setur almennu viku-1 línuna sem hinar breyturnar miðast við." },
+  totalPlayerLoad: { en: "The whole week's load in one number. Changing it moves every variable you haven't set yourself by the same share.", is: "Allt álag vikunnar í einni tölu. Ef þú breytir því færast allar breytur sem þú hefur ekki stillt sjálfur um sama hlutfall." },
 };
 
 type Row = { k: string; lab: Bi; unit: string; w1: number | null; w1Raw: number | null; prop: number | null; mine: boolean; pk: number | null; lt: number | null; ref: [number, number] | null };
@@ -109,7 +110,7 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
         <h3 className="text-[13px] font-bold text-slate-800">{t({ en: "Week 1 → peak → light week, every variable", is: "Vika 1 → toppur → létt vika, hver breyta" })}</h3>
         <span className="text-[12px] text-slate-500">{setCount > 0 ? t({ en: `${setCount} set by you · the rest is the system's proposal`, is: `${setCount} stillt af þér · restin tillaga kerfisins` }) : t({ en: "the system's proposal", is: "tillaga kerfisins" })}</span>
       </div>
-      <p className="mt-0.5 text-[12px] text-slate-600">{t({ en: "The system proposes week 1. Change any variable in × a match; every pre-season week is recomputed from week 1.", is: "Kerfið leggur til viku 1. Breyttu hvaða breytu sem er í × leik; allar vikur undirbúningsins reiknast upp á nýtt út frá viku 1." })}</p>
+      <p className="mt-0.5 text-[12px] text-slate-600">{t({ en: "The system proposes week 1. Change any variable in × a match and its whole pre-season moves by the same share: week 1 +10% → every week, the peak and the light week too, +10%.", is: "Kerfið leggur til viku 1. Breyttu hvaða breytu sem er í × leik og allur undirbúningurinn hennar færist um sama hlutfall: vika 1 +10% → allar vikur, líka toppurinn og létta vikan, +10%." })}</p>
 
       <div className="mt-2 overflow-x-auto">
         <table className="w-full min-w-[640px] text-left text-[12px] tabular-nums">
@@ -155,7 +156,7 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
       <ul className="mt-2 space-y-0.5 text-[11.5px] text-slate-600">
         <li><b className="font-semibold text-slate-700">{t({ en: "× a match", is: "× leikur" })}</b> — {t({ en: "the week's total divided by one team match in the same variable. 2× = twice what one match gives.", is: "vikan samanlagt deilt með einum leik liðsins í sömu breytu. 2× = tvöfalt það sem einn leikur gefur." })}</li>
         <li><b className="font-semibold text-slate-700">{t({ en: "Week 1", is: "Vika 1" })}</b> — {t({ en: "a controlled return after the break, below a normal week. Where each variable starts is a MicroPulse line, not a research number.", is: "stýrð endurkoma eftir fríið, undir venjulegri viku. Hvar hver breyta byrjar er lína MicroPulse, ekki rannsóknartala." })}</li>
-        <li><b className="font-semibold text-slate-700">{t({ en: "Peak", is: "Toppur" })}</b> — {t({ en: "the heaviest pre-season week. It may sit above the research range: pre-season builds capacity without competitive games.", is: "þyngsta vika undirbúningsins. Hún má vera yfir rannsóknabilinu: undirbúningur byggir upp þol án keppnisleikja." })}</li>
+        <li><b className="font-semibold text-slate-700">{t({ en: "Peak", is: "Toppur" })}</b> — {t({ en: "the heaviest pre-season week. It moves with week 1 by the same share. It may sit above the research range: pre-season builds capacity without competitive games.", is: "þyngsta vika undirbúningsins. Hún færist með viku 1 um sama hlutfall. Hún má vera yfir rannsóknabilinu: undirbúningur byggir upp þol án keppnisleikja." })}</li>
         {lightW && <li><b className="font-semibold text-slate-700">{t({ en: "Light week", is: "Létt vika" })}</b> — {t({
           en: `the peak week −${taperPct}% ("Light last week −%" above). Every variable drops by the same share and keeps its own weight. Research: a ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% cut in volume, intensity kept.`,
           is: `toppvikan −${taperPct}% („Létt lokavika −%“ hér að ofan). Hver breyta lækkar um sama hlutfall og heldur sínu vægi. Rannsóknir: ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% lækkun á magni, ákefð haldið.`,

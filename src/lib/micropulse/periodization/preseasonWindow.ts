@@ -8,7 +8,7 @@
  * `preseasonStartRamp`, the meso split is the hub's backwards layout. Descriptive — never the readiness colour.
  */
 
-import { preseasonStartRamp, NORMATIVE_MATCH_KPI, NORMATIVE_MATCH_LOAD, type LoadAnchor, type PreseasonWeekTarget } from "./preseasonStart";
+import { preseasonStartRamp, PRESEASON_WEEK1_BASE, NORMATIVE_MATCH_KPI, NORMATIVE_MATCH_LOAD, type LoadAnchor, type PreseasonWeekTarget } from "./preseasonStart";
 import { teamKpiAvg } from "./preseasonKpiMap";
 import type { MatchUnit } from "./index";
 import type { WeeklyLoadMetricKey } from "../externalLoad/weeklyLoadTypes";
@@ -73,7 +73,7 @@ export function preseasonMeso(windowWeeks: number, tail: number[], cadence: numb
 // ─── The coach's saved pre-season choices ────────────────────────────────────
 
 export const PRESEASON_DEFAULT_SESSIONS = 4;
-export const PRESEASON_DEFAULT_WEEK1 = 1.3;
+export const PRESEASON_DEFAULT_WEEK1 = PRESEASON_WEEK1_BASE;
 const SESSION_CHOICES = [3, 4, 5, 6];
 
 /** The overrides keys the pre-season reads (season_plans.overrides, or the API's savedWindow / savedWindowNext). */

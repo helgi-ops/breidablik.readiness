@@ -49,8 +49,9 @@ export interface PreseasonStartOpts {
   preseasonWeeks: number;                                   // number of ramp weeks
   week1MatchMultiple?: number;                              // default ~1.3× (re-entry) — configurable
   peakMatchMultiple?: number;                               // default from weeklyTargetFromMatch preseason
-  /** Coach's WEEK-1 value per KPI (the actual weekly target for week 1). When set for a KPI, the ramp runs
-   *  from that value to the KPI's peak (rest computed from week 1); unset KPIs use the auto re-entry floor. */
+  /** Coach's WEEK-1 value per KPI (the actual weekly target for week 1). When set for a KPI, that KPI's whole
+   *  ramp — peak included — moves by the same share as week 1 (the user's rule, 2026-11-25: raise week 1 by 10%
+   *  → every week of it, the peak too, +10%). Unset KPIs follow the overall week-1 multiple the same way. */
   week1KpiOverride?: Partial<Record<string, number>> | null;
   anchor: LoadAnchor;
 }
@@ -73,6 +74,8 @@ const CONFIDENCE_BY_ANCHOR: Record<LoadAnchor, Confidence> = {
 };
 
 const r0 = (n: number) => Math.round(n);
+/** The proposal's week-1 re-entry (× a match); the coach's week 1 scales the whole ramp against it. */
+export const PRESEASON_WEEK1_BASE = 1.3;
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
@@ -104,9 +107,13 @@ export function defaultPeakMultiple(sessionsPerWeek: number): number {
 export function preseasonStartRamp(opts: PreseasonStartOpts): PreseasonWeekTarget[] {
   const sc = Math.max(1, Math.round(opts.sessionsPerWeek ?? 4));
   const weeks = Math.max(1, Math.round(opts.preseasonWeeks));
-  const week1 = Math.max(0.1, opts.week1MatchMultiple ?? 1.3);
-  // Peak is the build destination; never let it fall below week 1 (guards odd inputs → monotonic).
-  const peak = Math.max(week1, opts.peakMatchMultiple ?? defaultPeakMultiple(sc));
+  const week1 = Math.max(0.1, opts.week1MatchMultiple ?? PRESEASON_WEEK1_BASE);
+  // The proposal's curve runs from the base re-entry (1.3×) to the build destination. The coach's week 1 moves
+  // the WHOLE curve by the same share (user's rule 2026-11-25: week 1 +10% → every week, the peak too, +10%) —
+  // so the week-to-week growth in % stays the proposal's (same progression, Gabbett 2016).
+  const scale0 = week1 / PRESEASON_WEEK1_BASE;
+  const peak0 = Math.max(PRESEASON_WEEK1_BASE, opts.peakMatchMultiple ?? defaultPeakMultiple(sc));
+  const peak = peak0 * scale0;
   const anchor = opts.anchor;
   const confidence = CONFIDENCE_BY_ANCHOR[anchor];
   const kpiKeys = Object.keys(opts.matchKpiAvg ?? {});
@@ -132,20 +139,20 @@ export function preseasonStartRamp(opts: PreseasonStartOpts): PreseasonWeekTarge
     // volume (distance) and HSR start HIGH (safe base, built early); high-speed/mechanical keep the generic,
     // conservative re-entry. The floor never pulls a KPI below the coach's week-1 multiple. The biomechanical
     // pathway still ramps convex in between (Vanrenterghem). Jeong 2011; Teixeira 2021.
-    const w1frac = peak > 0 ? week1 / peak : 0;
+    const w1frac = PRESEASON_WEEK1_BASE / peak0; // the proposal's re-entry (the coach's week 1 scales it below)
     const byKpi: Partial<Record<string, number>> = {};
     for (const k of kpiKeys) {
       const v = opts.matchKpiAvg?.[k];
       if (typeof v !== "number" || !Number.isFinite(v)) continue;
       const share = kpiTaperShare(k);
-      const peakVal = v * peak * share;                                  // end-of-pre-season destination
-      const autoWeek1 = Math.max(kpiReentryFloor(k), w1frac) * peak * v * share; // auto re-entry floor value
-      // Coach's week-1 override for this KPI wins; the rest of the ramp is computed FROM it (week 1 → peak).
-      const ov = opts.week1KpiOverride?.[k];
-      const week1Val = typeof ov === "number" && Number.isFinite(ov) && ov > 0 ? ov : autoWeek1;
-      const top = Math.max(peakVal, week1Val);                           // never ramp downward (override ≥ peak → flat)
+      const peakVal = v * peak0 * share;                                 // the proposal's end-of-pre-season destination
+      const autoWeek1 = Math.max(kpiReentryFloor(k), w1frac) * peak0 * v * share; // the proposal's re-entry value
       const fracK = weeks > 1 ? Math.pow(frac, pathwayRampGamma(k)) : 0;
-      byKpi[k] = r0(week1Val + (top - week1Val) * fracK);
+      const auto = autoWeek1 + (peakVal - autoWeek1) * fracK;            // the proposal's curve for this KPI
+      // The coach's week-1 value for this KPI moves its whole curve by the same share; else the overall week 1 does.
+      const ov = opts.week1KpiOverride?.[k];
+      const scaleK = typeof ov === "number" && Number.isFinite(ov) && ov > 0 && autoWeek1 > 0 ? ov / autoWeek1 : scale0;
+      byKpi[k] = r0(auto * scaleK);
     }
 
     const sRpeAuTarget = opts.matchSrpeAu != null && Number.isFinite(opts.matchSrpeAu)
