@@ -93,3 +93,34 @@ export function distributeWeekKpis(opts: {
     return { dayIndex: i, intent, training: p.training, sharePct: Math.round(share * 100), loadTarget, srpeTarget, byKpi };
   });
 }
+
+/**
+ * The part of a pre-season week's total that the TRAINING days carry. A friendly counts toward the week as a
+ * partial match (`preseasonMatchExposure`: "the partial friendly COUNTS toward the week's load budget; training
+ * fills the remainder"), so each game in the week takes `exposure × one match` off every variable first. Then
+ * `distributeWeekKpis` splits the rest: add a session and the others get lighter, take one out and they carry it.
+ * Never below zero. Pure.
+ */
+export function trainingShareOfWeek(opts: {
+  weeklyLoad: number | null;
+  weeklySrpe: number | null;
+  weeklyKpi: Partial<Record<WeeklyLoadMetricKey, number>>;
+  games: number;
+  exposure: number;
+  matchKpi: Partial<Record<WeeklyLoadMetricKey, number>>;
+  matchLoad: number | null;
+  matchSrpe: number | null;
+}): { weeklyLoad: number | null; weeklySrpe: number | null; weeklyKpi: Partial<Record<WeeklyLoadMetricKey, number>> } {
+  const g = Math.max(0, opts.games) * Math.max(0, opts.exposure);
+  const less = (v: number | null | undefined, m: number | null | undefined) => (v == null ? null : Math.max(0, Math.round(v - g * (m ?? 0))));
+  const weeklyKpi: Partial<Record<WeeklyLoadMetricKey, number>> = {};
+  for (const k of Object.keys(opts.weeklyKpi) as WeeklyLoadMetricKey[]) {
+    const v = less(opts.weeklyKpi[k], opts.matchKpi[k]);
+    if (v != null) weeklyKpi[k] = v;
+  }
+  return {
+    weeklyLoad: less(opts.weeklyLoad, opts.matchKpi.totalPlayerLoad ?? opts.matchLoad),
+    weeklySrpe: less(opts.weeklySrpe, opts.matchSrpe),
+    weeklyKpi,
+  };
+}

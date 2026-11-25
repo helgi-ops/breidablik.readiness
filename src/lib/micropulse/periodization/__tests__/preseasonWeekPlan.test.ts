@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { distributeWeekKpis, profileForIntent } from "../preseasonWeekPlan";
+import { distributeWeekKpis, profileForIntent, trainingShareOfWeek } from "../preseasonWeekPlan";
 
 const WEEKLY_KPI = { totalPlayerLoad: 3000, totalDistance: 60000, velocityBand6: 1800, accelB23: 240, decelB23: 270 };
 const INTENTS = ["FORCE_LIGHT", "FORCE", "NEURAL_VELOCITY", "VELOCITY", "RECOVERY_MD1", "OFF", "OFF"];
@@ -67,5 +67,31 @@ describe("purity boundary", () => {
     for (const bad of ["readiness", "resolveFinalState", "stage4", "athlete_decision", "loadTarget"]) {
       expect(imports.includes(bad)).toBe(false);
     }
+  });
+});
+
+describe("trainingShareOfWeek — the friendly counts, training fills the rest", () => {
+  const MATCH = { totalPlayerLoad: 1000, totalDistance: 10000, velocityBand6: 150, accelB23: 40, decelB23: 45 };
+  const withGame = ["FORCE", "NEURAL_VELOCITY", "OFF", "VELOCITY", "ACTIVATION", "GAME", "RECOVERY_MD1"];
+  const sum = (days: ReturnType<typeof distributeWeekKpis>, k: "totalDistance") => days.reduce((s, d) => s + (d.byKpi[k] ?? 0), 0);
+
+  it("days + the friendly = the week's total, per variable", () => {
+    const share = trainingShareOfWeek({ weeklyLoad: 3000, weeklySrpe: 2000, weeklyKpi: WEEKLY_KPI, games: 1, exposure: 0.6, matchKpi: MATCH, matchLoad: 1000, matchSrpe: 700 });
+    expect(share.weeklyKpi.totalDistance).toBe(54000);
+    expect(share.weeklyKpi.velocityBand6).toBe(1710);
+    expect(share.weeklyLoad).toBe(2400);
+    expect(share.weeklySrpe).toBe(1580);
+    const days = distributeWeekKpis({ intents: withGame, ...share });
+    expect(Math.abs(sum(days, "totalDistance") + 0.6 * 10000 - 60000)).toBeLessThanOrEqual(5);
+  });
+
+  it("no game → nothing taken off; take a session out → the rest carry the same total", () => {
+    const none = trainingShareOfWeek({ weeklyLoad: 3000, weeklySrpe: null, weeklyKpi: WEEKLY_KPI, games: 0, exposure: 0.6, matchKpi: MATCH, matchLoad: 1000, matchSrpe: null });
+    expect(none.weeklyKpi).toEqual(WEEKLY_KPI);
+    const share = trainingShareOfWeek({ weeklyLoad: 3000, weeklySrpe: null, weeklyKpi: WEEKLY_KPI, games: 1, exposure: 0.6, matchKpi: MATCH, matchLoad: 1000, matchSrpe: null });
+    const fewer = [...withGame]; fewer[0] = "OFF";
+    const a = distributeWeekKpis({ intents: withGame, ...share }), b = distributeWeekKpis({ intents: fewer, ...share });
+    expect(Math.abs(sum(a, "totalDistance") - sum(b, "totalDistance"))).toBeLessThanOrEqual(5);
+    expect(b[1].byKpi.totalDistance!).toBeGreaterThan(a[1].byKpi.totalDistance!);
   });
 });

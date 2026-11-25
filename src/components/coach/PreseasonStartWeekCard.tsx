@@ -13,8 +13,8 @@ import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import type { LoadAnchor, PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
-import { distributeWeekKpis, type PerDayKpiTarget } from "@/lib/micropulse/periodization/preseasonWeekPlan";
+import { preseasonMatchExposure, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
+import { distributeWeekKpis, trainingShareOfWeek, type PerDayKpiTarget } from "@/lib/micropulse/periodization/preseasonWeekPlan";
 import { preseasonForDate, preseasonAnchor, preseasonRamp, type PreseasonSavedRow } from "@/lib/micropulse/periodization/preseasonWindow";
 import { recommendTestingSchedule, isAerobicMode, type AerobicMode } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
@@ -89,13 +89,20 @@ export default function PreseasonStartWeekCard({ teamId, weekStart, intents, onC
     const anchor: LoadAnchor = a.anchor;
     const ramp = preseasonRamp(a, plan.matchSrpe, preWeeks, ps.settings);
     const row = ramp[weekIndex - 1] ?? null;
-    return row ? { preWeeks, weekIndex, anchor, ramp, row } : null;
+    return row ? { preWeeks, weekIndex, anchor, ramp, row, matchKpi: a.kpi, matchLoad: a.matchLoad, matchSrpe: plan.matchSrpe } : null;
   }, [plan, weekStart]);
 
   // Per-day split, recomputed live as the coach edits the day-intent grid.
   const perDay = React.useMemo<PerDayKpiTarget[] | null>(() => {
     if (!info || !intents || intents.length === 0) return null;
-    return distributeWeekKpis({ intents, weeklyLoad: info.row.weeklyLoadTarget, weeklySrpe: info.row.sRpeAuTarget, weeklyKpi: info.row.byKpi });
+    // A friendly this week counts toward the total; the training days share what is left (so adding or removing
+    // a session re-splits the same week total).
+    const share = trainingShareOfWeek({
+      weeklyLoad: info.row.weeklyLoadTarget, weeklySrpe: info.row.sRpeAuTarget, weeklyKpi: info.row.byKpi,
+      games: intents.filter((x) => x === "GAME").length, exposure: preseasonMatchExposure(info.weekIndex, info.preWeeks),
+      matchKpi: info.matchKpi, matchLoad: info.matchLoad, matchSrpe: info.matchSrpe,
+    });
+    return distributeWeekKpis({ intents, ...share });
   }, [info, intents]);
 
   // Which tests fall on THIS pre-season week (from the testing schedule) — carried into the week plan/PDF.
@@ -180,7 +187,7 @@ export default function PreseasonStartWeekCard({ teamId, weekStart, intents, onC
       )}
 
       {perDay && perDay.some((d) => d.training) && (
-        <p className="mt-2 text-[10px] text-[#9a9689]">{is ? "Dagsskammtar birtast í reitunum að ofan — summa daganna = vikumarkið; hraða-dagar draga sprett-böndin, kraft-dagar hröðun/hemlun." : "Day doses show in the cells above — the days sum to the weekly target; velocity days pull the sprint bands, force days accel/decel."}</p>
+        <p className="mt-2 text-[10px] text-[#9a9689]">{is ? "Dagsskammtar birtast í reitunum að ofan — dagarnir og æfingaleikurinn leggjast saman í vikumarkið; bætirðu við æfingu léttast hinar. Hraða-dagar draga sprett-böndin, kraft-dagar hröðun/hemlun." : "Day doses show in the cells above — the days plus the friendly add up to the weekly target; add a session and the others get lighter. Velocity days pull the sprint bands, force days accel/decel."}</p>
       )}
 
       <div className="mt-2 flex items-center justify-between gap-2">

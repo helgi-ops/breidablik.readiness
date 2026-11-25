@@ -19,6 +19,7 @@ import { buildCalendarBlock, sliceByLengths, type Bi, type CalType, type Calenda
 import { preseasonMatchExposure, defaultPeakMultiple, type PreseasonWeekTarget, type Confidence } from "./preseasonStart";
 import { upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, preseasonSettingsFrom, type PreseasonSavedRow, type PreseasonSettings, type PreseasonWindow, type PreseasonAnchor } from "./preseasonWindow";
 import { recommendTestingSchedule, type AerobicMode, type TestPlan } from "./testingSchedule";
+import { fitWeekToTarget } from "./preseasonDayFit";
 import { preseasonBlockForWeeksOut } from "../strengthProgramming/seasonPhaseStrength";
 import type { PreseasonEmphasis } from "../strengthProgramming/preseasonEmphasis";
 
@@ -161,11 +162,24 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
       }
     }
   }
-  const cal = buildCalendarBlock({
+  const calOpts = (matchDates: string[], allFixtures: string[]) => buildCalendarBlock({
     unit: input.unit, startDate: preStart, numWeeks: preWeeks, scopeName: "__team__", phase: { en: "Pre-season", is: "Undirbúningur" },
-    baseOverloadPct: input.baseOverloadPct ?? 100, stepPct: input.stepPct ?? 5, matchDates: fixtures, offDays, onDays, typeOverrides: typeOv,
-    allFixtures: input.fixtures ?? [], matchExposure: (wi) => preseasonMatchExposure(wi + 1, preWeeks), camps: input.camps ?? [],
+    baseOverloadPct: input.baseOverloadPct ?? 100, stepPct: input.stepPct ?? 5, matchDates, offDays, onDays, typeOverrides: typeOv,
+    allFixtures, matchExposure: (wi) => preseasonMatchExposure(wi + 1, preWeeks), camps: input.camps ?? [],
   });
+  // Games come from the fixtures. A week with no friendly entered gets the calendar's assumed weekend game
+  // (as when no friendlies exist at all), so it still has a training week around it — not an empty week.
+  // The assumed games also label the days (MD-3, MD+1…), not the last real fixture months back.
+  const autoCal = calOpts([], input.fixtures ?? []);
+  const matchIn = (cal: CalendarBlock) => cal.weeks.flatMap((w) => w.days.map((d, di) => (d.type === "match" ? isoAdd(w.weekStart, di) : null))).filter((d): d is string => d != null);
+  const hasFriendly = (weekStart: string) => fixtures.some((d) => d >= weekStart && d < isoAdd(weekStart, 7));
+  const assumed = matchIn(autoCal).filter((d) => !fixtures.includes(d) && !hasFriendly(isoAdd(preStart, Math.floor((ms(d) - ms(preStart)) / (7 * DAY)) * 7)));
+  const matchDates = [...fixtures, ...assumed].sort();
+  const rawCal = calOpts(matchDates, Array.from(new Set([...(input.fixtures ?? []), ...matchDates])).sort());
+  // Each week's days sum to the week's planned total, per variable: the friendly counts as it is and the
+  // training days share the rest in the calendar's proportions — add a session and the others get lighter.
+  // The calendar's unload week (the taper into the opener) keeps its own lighter days: the ramp has no unload.
+  const cal: CalendarBlock = { ...rawCal, weeks: rawCal.weeks.map((w, i) => (ramp[i] && !w.isDeload ? fitWeekToTarget(w, ramp[i], input.unit).week : w)) };
 
   // Meso blocks, planned backwards: the coach's tail (nearest the opener) is exact, the base absorbs the rest.
   const cadence = Math.max(2, Math.round(input.cadence));

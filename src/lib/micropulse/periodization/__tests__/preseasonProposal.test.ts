@@ -24,6 +24,7 @@ const PHASES: SeasonPhase[] = [
   phase("offseason", "2026-10-25", "2026-11-30", 5),
 ];
 const OPENER = "2027-04-05";
+const addIso = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 const FRIENDLIES = ["2027-01-16", "2027-02-06", "2027-03-13"];
 
 const base = (over: Partial<PreseasonProposalInput> = {}): PreseasonProposalInput => ({
@@ -59,14 +60,21 @@ describe("buildPreseasonProposal — golden: same weeks and days the hub built i
     const blocks = sliceByLengths(up.start, preEndIso, 4, lens, 0);
     const tests = recommendTestingSchedule({ preseasonWeeks: up.weeks, hasGps: true, hasVald: true, aerobicMode: null });
 
-    expect(p.engine.cal).toEqual(cal);
+    // Same weeks and the same friendlies as before. Two deliberate changes since (tests below): a week with no
+    // friendly now gets an assumed weekend game instead of an empty week, and the days are fitted to the week's total.
+    expect(p.engine.cal.weeks.map((w) => w.weekStart)).toEqual(cal.weeks.map((w) => w.weekStart));
+    expect(p.engine.cal.weeks.map((w) => w.mult)).toEqual(cal.weeks.map((w) => w.mult));
+    for (const f of FRIENDLIES) {
+      const at = (c: typeof cal) => { const wi = c.weeks.findIndex((w) => w.weekStart <= f && f < addIso(w.weekStart, 7)); return c.weeks[wi].days[Math.round((Date.parse(f) - Date.parse(c.weeks[wi].weekStart)) / 86_400_000)].type; };
+      expect(at(p.engine.cal)).toBe("match");
+      expect(at(cal)).toBe("match");
+    }
     expect(p.engine.ramp).toEqual(ramp);
     expect(p.engine.meso).toEqual(meso);
     expect(p.engine.blocks).toEqual(blocks);
     expect(p.engine.tests).toEqual(tests);
     expect(p.engine.fixtures).toEqual(FRIENDLIES);
     expect(p.weeks).toHaveLength(up.weeks);
-    expect(p.weeks[0].days.map((d) => d.type)).toEqual(cal.weeks[0].days.map((d) => d.type));
   });
 });
 
@@ -153,5 +161,58 @@ describe("buildPreseasonProposal — provenance", () => {
     const p = buildPreseasonProposal(base({ saved: null }))!;
     expect(p.choices.find((c) => c.key === "sessionsPerWeek")?.micropulseLine).toBe(true);
     expect(p.choices.find((c) => c.key === "week1MatchMultiple")?.micropulseLine).toBe(true);
+  });
+});
+
+describe("buildPreseasonProposal — the days add up to the week's plan", () => {
+  const sumAxis = (days: Array<Record<string, unknown>>, k: string) => days.reduce((t, d) => t + (typeof d[k] === "number" ? (d[k] as number) : 0), 0);
+
+  it("every week: the days (friendly included) sum to the planned total per variable, each with its own multiple", () => {
+    const p = buildPreseasonProposal(base())!;
+    p.engine.cal.weeks.forEach((w, i) => {
+      if (w.isDeload) return; // the taper week keeps the calendar's own lighter days
+      const t = p.engine.ramp[i].byKpi;
+      expect(Math.abs(sumAxis(w.days, "dist") - t.totalDistance!)).toBeLessThanOrEqual(7);
+      expect(Math.abs(sumAxis(w.days, "hsr") - (t.velocityBand5! + (t.velocityBand6 ?? 0)))).toBeLessThanOrEqual(7);
+      expect(Math.abs(sumAxis(w.days, "load") - t.totalPlayerLoad!)).toBeLessThanOrEqual(7);
+    });
+    // Distance and HSR keep their own multiples of a match (not one shared number).
+    const r = p.engine.ramp[0].byKpi;
+    expect(r.totalDistance! / 10000).not.toBeCloseTo((r.velocityBand5! + r.velocityBand6!) / 600, 2);
+  });
+
+  it("take a session out → the other days carry it; add one → they get lighter; the week total holds", () => {
+    const p0 = buildPreseasonProposal(base({ savedDays: {} }))!;
+    const wi = 3, w = p0.engine.cal.weeks[wi];
+    const di = w.days.findIndex((d) => d.type !== "match" && d.type !== "rest");
+    const iso = p0.weeks[wi].days[di].date;
+    const p1 = buildPreseasonProposal(base({ savedDays: { [iso]: { dayType: "OFF", focus: null } } }))!;
+    const w1 = p1.engine.cal.weeks[wi];
+    expect(w1.days[di].type).toBe("rest");
+    expect(Math.abs(sumAxis(w1.days, "dist") - sumAxis(w.days, "dist"))).toBeLessThanOrEqual(7);
+    const other = w.days.findIndex((d, j) => j !== di && d.type !== "match" && d.type !== "rest");
+    expect(w1.days[other].dist!).toBeGreaterThan(w.days[other].dist!);
+    const ri = w.days.findIndex((d) => d.type === "rest");
+    if (ri >= 0) {
+      const p2 = buildPreseasonProposal(base({ savedDays: { [p0.weeks[wi].days[ri].date]: { dayType: "TRAIN", focus: null } } }))!;
+      const w2 = p2.engine.cal.weeks[wi];
+      expect(Math.abs(sumAxis(w2.days, "dist") - sumAxis(w.days, "dist"))).toBeLessThanOrEqual(7);
+      expect(w2.days[other].dist!).toBeLessThan(w.days[other].dist!);
+    }
+  });
+
+  it("friendlies in some weeks: the other weeks still get a training week around an assumed weekend game", () => {
+    const p = buildPreseasonProposal(base({ savedDays: {} }))!;
+    for (const w of p.engine.cal.weeks) expect(w.days.filter((d) => d.type !== "rest" && d.type !== "match").length).toBeGreaterThan(0);
+    for (const f of FRIENDLIES) expect(p.weeks.flatMap((w) => w.days).find((d) => d.date === f)!.type).toBe("match");
+  });
+
+  it("an assumed weekend game labels the days around it, not a fixture months back", () => {
+    const p = buildPreseasonProposal(base({ fixtures: ["2026-10-17", OPENER] }))!;
+    expect(p.engine.cal.weeks.every((w) => w.days.some((d) => d.type === "match"))).toBe(true);
+    for (const w of p.engine.cal.weeks) for (const d of w.days) {
+      const n = /^MD[+-](\d+)$/.exec(d.md);
+      if (n) expect(Number(n[1])).toBeLessThanOrEqual(6);
+    }
   });
 });
