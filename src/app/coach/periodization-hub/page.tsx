@@ -2310,7 +2310,7 @@ export default function PeriodizationHubPage() {
               <span className="text-[12px] text-slate-500">{is ? "hefst" : "starts"} <b className="text-slate-700">{shortDate(preStart, is)}</b> · {preWeeks} {is ? "vikur" : "weeks"} · {up.end && plan.nextFirstFixtureEstimated && up.end === plan.nextFirstFixture ? (is ? "endar á áætluðum fyrsta leik" : "ends at the estimated first game") : (is ? "endar á fyrsta keppnisleik" : "ends at the first competitive game")}</span>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px]">
-              <label className="flex items-center gap-1.5 font-medium text-slate-600">{is ? "Æfingar/viku" : "Sessions/wk"}
+              <label className="flex items-center gap-1.5 font-medium text-slate-600" title={is ? "Ræður fjölda æfingadaga í viku án leiks (3–6). Í viku með leik raðast dagarnir í kringum leikinn." : "Sets the training days in a week without a game (3–6). In a week with a game the days fall around the game."}>{is ? "Æfingar/viku" : "Sessions/wk"}
                 <select value={psSessT} onChange={(e) => { const v = Number(e.target.value); setPreSessT(v); }} className="rounded border border-slate-300 px-1.5 py-0.5">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
               </label>
               {preWeeks >= 3 && (

@@ -757,6 +757,17 @@ export function deloadWeekIndex(startMonday: string, weekStart: string | null, n
 
 /** A week with no match to build towards: the build-up week, on the same day order as the match week. */
 export const FREE_WEEK: CalType[] = ["mechanical", "locomotive", "mixed", "rest", "activation", "rest", "rest"];
+/** The pre-season week with no game, by the coach's sessions a week (the user's rule 2026-11-25: "sessions/wk
+ *  sets the days in a game-free week"). 4 = FREE_WEEK; 5 adds a Saturday main session after Friday's activation
+ *  (the match-week shape without the match); 6 adds Thursday, Sunday off; 3 spreads the three main sessions with
+ *  a day off between. A MicroPulse layout, not a study's. */
+export function freeWeekLayout(sessions: number): CalType[] {
+  const n = Math.max(3, Math.min(6, Math.round(sessions)));
+  if (n === 3) return ["mechanical", "rest", "locomotive", "rest", "mixed", "rest", "rest"];
+  if (n === 5) return ["mechanical", "locomotive", "mixed", "rest", "activation", "mixed", "rest"];
+  if (n === 6) return ["mechanical", "locomotive", "mixed", "locomotive", "activation", "mixed", "rest"];
+  return FREE_WEEK;
+}
 /** The same week in season (an international break): never three training days in a row (the week rule,
  *  `INSEASON_THREE_IN_A_ROW`), so the day off comes before Mixed (coach's call 2026-11-23). */
 const FREE_WEEK_INSEASON: CalType[] = ["mechanical", "locomotive", "rest", "mixed", "activation", "rest", "rest"];

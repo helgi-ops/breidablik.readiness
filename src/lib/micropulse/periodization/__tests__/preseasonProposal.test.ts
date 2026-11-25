@@ -256,3 +256,21 @@ describe("buildPreseasonProposal — games: entered ones always, assumed weekend
     expect(matchDays(withNext)).toEqual(FRIENDLIES);
   });
 });
+
+describe("buildPreseasonProposal — sessions a week set the days in a week without a game", () => {
+  it.each([3, 4, 5, 6])("%i sessions → %i training days in a game-free week; the week total holds", (n) => {
+    const p = buildPreseasonProposal(base({ savedDays: {}, fixtures: ["2026-10-17", OPENER], saved: { preseasonSessions: n, preseasonWeek1Mult: 1.2 } }))!;
+    const wi = 1, w = p.engine.cal.weeks[wi];
+    expect(w.days.some((d) => d.type === "match")).toBe(false);
+    expect(w.days.filter((d) => d.type !== "rest" && d.type !== "match").length).toBe(n);
+    const t = p.engine.ramp[wi].byKpi;
+    expect(Math.abs(w.days.reduce((s, d) => s + (d.dist ?? 0), 0) - t.totalDistance!)).toBeLessThanOrEqual(7);
+  });
+  it("a day the coach set stays as set", () => {
+    const p0 = buildPreseasonProposal(base({ savedDays: {}, fixtures: ["2026-10-17", OPENER], saved: { preseasonSessions: 5 } }))!;
+    const iso = p0.weeks[1].days[0].date;
+    const p = buildPreseasonProposal(base({ savedDays: { [iso]: { dayType: "OFF", focus: null } }, fixtures: ["2026-10-17", OPENER], saved: { preseasonSessions: 5 } }))!;
+    expect(p.weeks[1].days[0].type).toBe("rest");
+    expect(p.weeks[1].days.filter((d) => d.type !== "rest" && d.type !== "match").length).toBe(4);
+  });
+});

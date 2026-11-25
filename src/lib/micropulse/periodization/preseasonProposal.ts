@@ -15,7 +15,7 @@
  * Rules decide; nothing here is AI. Descriptive load planning — never the readiness colour.
  */
 
-import { buildCalendarBlock, sliceByLengths, FREE_WEEK, type Bi, type CalType, type CalendarBlock, type MatchUnit, type MatchUnitAbs } from "./index";
+import { buildCalendarBlock, sliceByLengths, freeWeekLayout, type Bi, type CalType, type CalendarBlock, type MatchUnit, type MatchUnitAbs } from "./index";
 import { preseasonMatchExposure, defaultPeakMultiple, type PreseasonWeekTarget, type Confidence } from "./preseasonStart";
 import { upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, preseasonSettingsFrom, type PreseasonSavedRow, type PreseasonSettings, type PreseasonWindow, type PreseasonAnchor, PRESEASON_TAPER_RESEARCH } from "./preseasonWindow";
 import { recommendTestingSchedule, type AerobicMode, type TestPlan } from "./testingSchedule";
@@ -164,9 +164,9 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
       }
     }
   }
-  const calOpts = (matchDates: string[], allFixtures: string[], noAutoMatch = false, extraOn: string[] = [], extraTy: Record<string, CalType> = {}) => buildCalendarBlock({
+  const calOpts = (matchDates: string[], allFixtures: string[], noAutoMatch = false, extraOn: string[] = [], extraTy: Record<string, CalType> = {}, extraOff: string[] = []) => buildCalendarBlock({
     unit: input.unit, startDate: preStart, numWeeks: preWeeks, scopeName: "__team__", phase: { en: "Pre-season", is: "Undirbúningur" },
-    baseOverloadPct: input.baseOverloadPct ?? 100, stepPct: input.stepPct ?? 5, matchDates, offDays, onDays: [...onDays, ...extraOn], typeOverrides: { ...extraTy, ...typeOv },
+    baseOverloadPct: input.baseOverloadPct ?? 100, stepPct: input.stepPct ?? 5, matchDates, offDays: [...offDays, ...extraOff], onDays: [...onDays, ...extraOn], typeOverrides: { ...extraTy, ...typeOv },
     allFixtures, matchExposure: (wi) => preseasonMatchExposure(wi + 1, preWeeks), camps: input.camps ?? [], noAutoMatch,
   });
   // Games come from the fixtures. From the coach's "weekend games from" date on, a week with no game entered
@@ -182,18 +182,22 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   const matchDates = [...fixtures, ...assumed].sort();
   const allFx = Array.from(new Set([...(input.fixtures ?? []), ...matchDates])).sort();
   const cal0 = calOpts(matchDates, allFx, true);
-  // A week with no game has nothing to build towards and would plan empty: it gets the calendar's existing
-  // no-match week (FREE_WEEK — the build-up week, on the match week's day order), keeping the two days after a
-  // game off and every day the coach set. Its days carry no MD label (there is no match day to count from).
+  // A week with no game has nothing to build towards and would plan empty: it gets the no-match week for the
+  // coach's sessions a week (freeWeekLayout — 4 = the calendar's FREE_WEEK), keeping the two days after a game
+  // off and every day the coach set. Its days carry no MD label (there is no match day to count from).
   const justPlayed = (iso: string) => [1, 2].some((n) => allFx.includes(isoAdd(iso, -n)));
   const freeWeeks = new Set(cal0.weeks.filter((w) => !w.days.some((d) => d.type === "match")).map((w) => w.weekStart));
-  const freeOn: string[] = [], freeTy: Record<string, CalType> = {};
-  for (const ws of freeWeeks) FREE_WEEK.forEach((t, i) => {
+  // The layout's days off are off too (the next game's build-up doesn't add a day), so the week has the coach's number.
+  const freeOn: string[] = [], freeTy: Record<string, CalType> = {}, freeOff: string[] = [];
+  const freeLayout = freeWeekLayout(settings.sessionsPerWeek);
+  for (const ws of freeWeeks) freeLayout.forEach((t, i) => {
     const iso = isoAdd(ws, i);
-    if (t === "rest" || coachDays.has(iso) || justPlayed(iso) || !inWindow(iso)) return;
+    if (coachDays.has(iso) || !inWindow(iso)) return;
+    if (t === "rest") { freeOff.push(iso); return; }
+    if (justPlayed(iso)) return;
     freeOn.push(iso); freeTy[iso] = t;
   });
-  const cal1 = freeOn.length ? calOpts(matchDates, allFx, true, freeOn, freeTy) : cal0;
+  const cal1 = freeOn.length || freeOff.length ? calOpts(matchDates, allFx, true, freeOn, freeTy, freeOff) : cal0;
   const rawCal: CalendarBlock = { ...cal1, weeks: cal1.weeks.map((w) => (freeWeeks.has(w.weekStart) ? { ...w, days: w.days.map((d) => ({ ...d, md: "" })) } : w)) };
   // Each week's days sum to the week's planned total, per variable: the friendly counts as it is and the
   // training days share the rest in the calendar's proportions — add a session and the others get lighter.
@@ -257,7 +261,9 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
     {
       key: "sessionsPerWeek", label: { en: "Sessions a week", is: "Æfingar á viku" }, value: { en: String(settings.sessionsPerWeek), is: String(settings.sessionsPerWeek) },
       source: coach(settings.saved.sessionsPerWeek),
-      reason: settings.saved.sessionsPerWeek && !input.fromScratch ? { en: "Your number.", is: "Þín tala." } : { en: "The default for a pre-season week.", is: "Sjálfgefið fyrir undirbúningsviku." },
+      reason: settings.saved.sessionsPerWeek && !input.fromScratch
+        ? { en: "Your number. It sets the training days in a week without a game.", is: "Þín tala. Hún ræður æfingadögum í viku án leiks." }
+        : { en: "The default for a pre-season week. It sets the training days in a week without a game.", is: "Sjálfgefið fyrir undirbúningsviku. Hún ræður æfingadögum í viku án leiks." },
       micropulseLine: !(settings.saved.sessionsPerWeek && !input.fromScratch),
     },
     {
