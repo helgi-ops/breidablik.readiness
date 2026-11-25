@@ -170,14 +170,14 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
     allFixtures, matchExposure: (wi) => preseasonMatchExposure(wi + 1, preWeeks), camps: input.camps ?? [], noAutoMatch,
   });
   // Games come from the fixtures. From the coach's "weekend games from" date on, a week with no game entered
-  // gets the calendar's assumed weekend game; before it (and when no date is set) a week without a game is a
+  // gets an assumed Saturday game; before it (and when no date is set) a week without a game is a
   // training week. The assumed games also label the days (MD-3, MD+1…). The user's rule, 2026-11-25.
   const gamesFrom = settings.gamesFrom;
-  const autoCal = calOpts([], input.fixtures ?? []);
-  const matchIn = (cal: CalendarBlock) => cal.weeks.flatMap((w) => w.days.map((d, di) => (d.type === "match" ? isoAdd(w.weekStart, di) : null))).filter((d): d is string => d != null);
   const hasFriendly = (weekStart: string) => fixtures.some((d) => d >= weekStart && d < isoAdd(weekStart, 7));
+  // The assumed game is always on the Saturday (the user's rule 2026-11-25), in a week with no game entered.
+  const weekStarts = calOpts([], input.fixtures ?? []).weeks.map((w) => w.weekStart);
   const assumed = gamesFrom
-    ? matchIn(autoCal).filter((d) => d >= gamesFrom && !fixtures.includes(d) && !hasFriendly(isoAdd(preStart, Math.floor((ms(d) - ms(preStart)) / (7 * DAY)) * 7)))
+    ? weekStarts.map((ws) => ({ ws, sat: isoAdd(ws, 5) })).filter(({ ws, sat }) => sat >= gamesFrom && inWindow(sat) && !hasFriendly(ws)).map(({ sat }) => sat)
     : [];
   const matchDates = [...fixtures, ...assumed].sort();
   const allFx = Array.from(new Set([...(input.fixtures ?? []), ...matchDates])).sort();
@@ -327,7 +327,7 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
       value: gamesFrom ? { en: dEn(gamesFrom), is: dIs(gamesFrom) } : { en: "Not set — entered games only", is: "Ekki stillt — aðeins skráðir leikir" },
       source: coach(settings.saved.gamesFrom),
       reason: gamesFrom
-        ? { en: `From ${dEn(gamesFrom)} every week without an entered game gets a weekend game; before it, weeks without a game are training weeks.`, is: `Frá ${dIs(gamesFrom)} fær hver vika án skráðs leiks leik um helgi; fyrir þann dag eru vikur án leiks æfingavikur.` }
+        ? { en: `From ${dEn(gamesFrom)} every week without an entered game gets a game on the Saturday; before it, weeks without a game are training weeks.`, is: `Frá ${dIs(gamesFrom)} fær hver vika án skráðs leiks leik á laugardegi; fyrir þann dag eru vikur án leiks æfingavikur.` }
         : { en: "Only the games in the fixtures. Set a date to add a weekend game every week from it.", is: "Aðeins leikirnir í leikjaskránni. Settu dagsetningu til að fá leik um hverja helgi frá henni." },
     },
     {
@@ -362,14 +362,16 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
     },
   ];
 
+  // Friendlies = the games in the window other than the league opener (it can fall on the window's last day).
+  const friendlyCount = fixtures.filter((f) => f !== input.nextFirstFixture).length;
   // ─── Gaps: named, never guessed ───
   const gaps: Bi[] = [];
   if (!anchor.hasOwnKpi) gaps.push({ en: "No match data of your own yet — the loads are reference values for adult football. Set week 1 per variable, or add GPS.", is: "Engin eigin leikgögn enn — álagið eru viðmiðunargildi fyrir fullorðinsfótbolta. Stilltu viku 1 á hverja breytu eða bættu við GPS." });
   if (!up.end) gaps.push({ en: "First competitive game not entered — the length is last pre-season's.", is: "Fyrsti keppnisleikur ekki skráður — lengdin er lengd síðasta undirbúnings." });
   else if (input.nextFirstFixtureEstimated) gaps.push({ en: `First game is an estimate (${dEn(end)}) — enter the real date and the plan re-flows.`, is: `Fyrsti leikur er áætlaður (${dIs(end)}) — skráðu rétta dagsetningu og planið uppfærist.` });
   const assumedMatches = assumed.length;
-  if (fixtures.length === 0) gaps.push(assumedMatches
-    ? { en: `No friendlies entered — the calendar assumes a weekend game in ${assumedMatches} weeks from ${dEn(gamesFrom!)}. Enter the friendlies and the days re-flow around them.`, is: `Engir æfingaleikir skráðir — dagatalið gerir ráð fyrir leik um helgi í ${assumedMatches} vikum frá ${dIs(gamesFrom!)}. Skráðu æfingaleikina og dagarnir raðast í kringum þá.` }
+  if (friendlyCount === 0) gaps.push(assumedMatches
+    ? { en: `No friendlies entered — the calendar assumes a Saturday game in ${assumedMatches} weeks from ${dEn(gamesFrom!)}. Enter the friendlies and the days re-flow around them.`, is: `Engir æfingaleikir skráðir — dagatalið gerir ráð fyrir leik á laugardegi í ${assumedMatches} vikum frá ${dIs(gamesFrom!)}. Skráðu æfingaleikina og dagarnir raðast í kringum þá.` }
     : { en: "No games in the pre-season: enter the friendlies, or set \"Weekend games from\".", is: "Engir leikir í undirbúningnum: skráðu æfingaleikina eða stilltu „Leikir um helgar frá“." });
 
   // ─── The layered read ───
@@ -384,7 +386,7 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
       ? { en: "Built on your own match load: every week is a multiple of one of your matches.", is: "Byggt á ykkar eigin leikálagi: hver vika er margfeldi af einum leik hjá ykkur." }
       : { en: "No match data yet, so the loads are reference values you adjust.", is: "Engin leikgögn enn, svo álagið eru viðmiðunargildi sem þú lagar." },
     { en: `${blocks.length} blocks: ${choices.find((c) => c.key === "blocks")!.value.en}, ending at the first game.`, is: `${blocks.length} lotur: ${choices.find((c) => c.key === "blocks")!.value.is}, sem enda á fyrsta leik.` },
-    { en: `Testing in week${testWeeks.length === 1 ? "" : "s"} ${testWeeks.join(", ")}${fixtures.length ? `; ${fixtures.length} friendl${fixtures.length === 1 ? "y" : "ies"} in the plan` : ""}${assumedMatches ? `; ${assumedMatches} assumed weekend game${assumedMatches === 1 ? "" : "s"}` : ""}.`, is: `Mælingar í viku ${testWeeks.join(", ")}${fixtures.length ? `; ${fixtures.length} æfingaleik${fixtures.length === 1 ? "ur" : "ir"} í planinu` : ""}${assumedMatches ? `; ${assumedMatches} ${assumedMatches === 1 ? "áætlaður helgarleikur" : "áætlaðir helgarleikir"}` : ""}.` },
+    { en: `Testing in week${testWeeks.length === 1 ? "" : "s"} ${testWeeks.join(", ")}${friendlyCount ? `; ${friendlyCount} friendl${friendlyCount === 1 ? "y" : "ies"} in the plan` : ""}${assumedMatches ? `; ${assumedMatches} assumed Saturday game${assumedMatches === 1 ? "" : "s"}` : ""}.`, is: `Mælingar í viku ${testWeeks.join(", ")}${friendlyCount ? `; ${friendlyCount} æfingaleik${friendlyCount === 1 ? "ur" : "ir"} í planinu` : ""}${assumedMatches ? `; ${assumedMatches} ${assumedMatches === 1 ? "áætlaður laugardagsleikur" : "áætlaðir laugardagsleikir"}` : ""}.` },
   ];
 
   const coachChoices = choices.filter((c) => c.source === "coach").length;

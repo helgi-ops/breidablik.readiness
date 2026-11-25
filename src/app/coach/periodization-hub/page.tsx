@@ -48,10 +48,9 @@ import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/e
 import { kpiAvgFromUnit as kpiAvgFromUnitLib, teamKpiAvg as teamKpiAvgLib } from "@/lib/micropulse/periodization/preseasonKpiMap";
 import { upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, PRE_MIN_BLOCK, PRESEASON_DEFAULT_WEEK1, PRESEASON_DEFAULT_TAPER_PCT, PRESEASON_TAPER_RESEARCH, clampTaperPct } from "@/lib/micropulse/periodization/preseasonWindow";
 import { buildPreseasonProposal } from "@/lib/micropulse/periodization/preseasonProposal";
-import PreseasonProposalPanel, { type PsDraft } from "@/components/coach/PreseasonProposalPanel";
+import PreseasonReadsFrom from "@/components/coach/PreseasonReadsFrom";
 import PlanProposalPanel from "@/components/coach/PlanProposalPanel";
 import PreseasonWeek1Table from "@/components/coach/PreseasonWeek1Table";
-import type { ProposalEdits } from "@/lib/micropulse/periodization/preseasonProposalServer";
 import type { MatchUnit as LibMatchUnit } from "@/lib/micropulse/periodization";
 
 type Bi = { en: string; is: string };
@@ -190,9 +189,6 @@ function ValdTrimControl({ is, lift, onLift, onUndo }: { is: boolean; lift: Vald
   );
 }
 
-// Serialises "Build pre-season" draft edits so they reach the server in the order the coach made them.
-let psDraftQueue: Promise<unknown> = Promise.resolve();
-
 export default function PeriodizationHubPage() {
   const [lang] = useLang();
   const is = lang === "IS";
@@ -285,9 +281,6 @@ export default function PeriodizationHubPage() {
   const [preseasonJumpWeek, setPreseasonJumpWeek] = React.useState<string | undefined>(undefined); // deep-link Pre-season week → Week Setup
   const [preDaySave, setPreDaySave] = React.useState<null | "saving" | "saved" | "err">(null); // pre-season draft day-toggle save status
   const [preDayPick, setPreDayPick] = React.useState<{ weekStart: string; di: number } | null>(null); // pre-season day open in the stimulus picker
-  // "Build pre-season": the open draft (plan_proposals) — while set, the Pre-season tab renders it and edits go to it.
-  const [psDraft, setPsDraft] = React.useState<PsDraft | null>(null);
-  const [psAutoBuild] = React.useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("build") === "1");
   const [blkSkeleton, setBlkSkeleton] = React.useState<Record<string, DayState>>({}); // coach's 6-week day grid
   const [typeOverrides, setTypeOverrides] = React.useState<Record<string, CalType>>({}); // per-day day-type picks
   const [savedPlans, setSavedPlans] = React.useState<Record<string, { dayType: string; focus: string | null }>>({}); // saved week_plans (read-back)
@@ -1089,33 +1082,10 @@ export default function PeriodizationHubPage() {
     (async () => { try { await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: year, overrides: { preWeek1Kpi: next } }) }); } catch { /* best-effort persist */ } })();
   }, [authHeader]);
 
-  // "Build pre-season" draft. While a draft is open the Pre-season tab shows the DRAFT (its settings + days) and
-  // every edit there goes to the draft (plan_proposals.coach_edits) — never to the season row or week_plans —
-  // until the coach presses "Use this plan". The local edit shows at once; the server re-flows the plan.
-  const dEd = psDraft?.coach_edits ?? null;
-  const dSet = psDraft?.proposal.settings ?? null;
-  const psW1T = dSet ? (dEd?.settings?.preseasonWeek1Mult ?? dSet.week1MatchMultiple) : psW1;
-  const psSessT = dSet ? (dEd?.settings?.preseasonSessions ?? dSet.sessionsPerWeek) : psSess;
-  const psTaperT = dSet ? (dEd?.settings?.preTaperPct ?? dSet.taperPct ?? PRESEASON_DEFAULT_TAPER_PCT) : psTaper;
-  const dGames = dEd?.settings?.preGamesFrom;
-  const psGamesT = dSet ? (dGames !== undefined ? dGames : (dSet.gamesFrom ?? null)) : psGames;
-  const week1KpiT = dSet ? (dEd?.settings?.preWeek1Kpi ?? dSet.week1Kpi) : week1KpiOv;
-  const dTail = dEd?.settings?.preMesoTail;
-  const mesoTailT = dSet ? (dTail !== undefined ? (dTail && dTail.length ? dTail : null) : dSet.mesoTail) : mesoTail;
-  const savedPlansT = psDraft ? { ...(psDraft.from_scratch ? {} : savedPlans), ...(dEd?.days ?? {}) } : savedPlans;
-  const draftEdit = React.useCallback((patch: ProposalEdits) => {
-    setPsDraft((d) => d ? { ...d, coach_edits: { settings: { ...(d.coach_edits?.settings ?? {}), ...(patch.settings ?? {}) }, days: { ...(d.coach_edits?.days ?? {}), ...(patch.days ?? {}) } } } : d);
-    psDraftQueue = psDraftQueue.then(async () => {
-      try {
-        const r = await fetch("/api/coach/periodization/proposal", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ action: "edit", ...patch }) });
-        const j = await r.json().catch(() => null) as { ok?: boolean; draft?: PsDraft } | null;
-        if (r.ok && j?.ok && j.draft) { const nd = j.draft; setPsDraft((d) => (d && d.id === nd.id ? { ...d, proposal: nd.proposal, updated_at: nd.updated_at } : d)); }
-        else setPreDaySave("err");
-      } catch { setPreDaySave("err"); }
-    });
-  }, [authHeader]);
-  // After "Use this plan": re-read the saved settings (both season rows) + days + tests, as on first load.
-  const reloadAfterPsAccept = React.useCallback(() => { void load(preStart, seasonEnd, { repopulate: true }); void loadScheduledTests(); }, [load, preStart, seasonEnd, loadScheduledTests]);
+  // The Pre-season tab reads straight from the Macro cycle, the fixtures and the coach's live settings (the user
+  // removed "Build pre-season" 2026-11-25: one plan, no draft beside it). The *T names are the values it renders.
+  const psW1T = psW1, psSessT = psSess, psTaperT = psTaper, psGamesT = psGames;
+  const week1KpiT = week1KpiOv, mesoTailT = mesoTail, savedPlansT = savedPlans;
   // "Build meso": the block maps changed, the dates didn't. "Build macro": the dates may have changed → load the saved ones.
   // Repopulate only sets keys that are present, so clear what the accept may have removed first.
   const reloadAfterMesoAccept = React.useCallback(() => {
@@ -1126,13 +1096,9 @@ export default function PeriodizationHubPage() {
     setPreStart(""); setSeasonEnd(""); setOffStart(""); setNextPreStart(""); nextPreStartRef.current = "";
     void load("", "", { repopulate: true });
   }, [load]);
-  const setPreW1T = (v: number) => (psDraft ? draftEdit({ settings: { preseasonWeek1Mult: v } }) : setPreW1(v));
-  const setPreSessT = (v: number) => (psDraft ? draftEdit({ settings: { preseasonSessions: v } }) : setPreSess(v));
-  const setPreTaperT = (v: number) => (psDraft ? draftEdit({ settings: { preTaperPct: v } }) : setPreTaper(v));
-  const setPreGamesT = (v: string | null) => (psDraft ? draftEdit({ settings: { preGamesFrom: v } }) : setPreGames(v));
+  const setPreW1T = setPreW1, setPreSessT = setPreSess, setPreTaperT = setPreTaper, setPreGamesT = setPreGames;
   const w1SetCount = Object.keys(week1KpiT ?? {}).length + (psW1T !== PRESEASON_DEFAULT_WEEK1 ? 1 : 0);
-  const persistWeek1KpiT = (next: Record<string, number>, year: number, isUpcoming: boolean) => (psDraft ? draftEdit({ settings: { preWeek1Kpi: next } }) : persistWeek1Kpi(next, year, isUpcoming));
-  const persistMesoTailT = (tail: number[], windowWeeks: number, cad: number, year: number, isUpcoming: boolean) => (psDraft ? draftEdit({ settings: { preMesoTail: tail } }) : persistMesoTail(tail, windowWeeks, cad, year, isUpcoming));
+  const persistWeek1KpiT = persistWeek1Kpi, persistMesoTailT = persistMesoTail;
 
   // Day-type editor: MATCHES ARE READ-ONLY HERE. A match belongs to Fixtures (match_schedule)
   // — the meso only reads it (isFixtureDay). Toggling a day changes the TRAINING type (Off /
@@ -2213,7 +2179,7 @@ export default function PeriodizationHubPage() {
             const preStart = up.start, preWeeks = up.weeks;
             const hasVald = plan.players.some((p) => p.vald.status != null);
             // The whole pre-season comes from ONE pure builder (periodization/preseasonProposal) — the same
-            // function "Build pre-season" drafts with — fed the coach's live settings and saved days.
+            // function the server-side builders use — fed the coach's live settings and saved days.
             const prop = buildPreseasonProposal({
               phases: plan.phases, today: todayIso, nextFirstFixture: plan.nextFirstFixture, nextFirstFixtureEstimated: plan.nextFirstFixtureEstimated,
               saved: null, settingsOverride: { sessionsPerWeek: psSessT, week1MatchMultiple: psW1T, week1Kpi: week1KpiT, mesoTail: mesoTailT, taperPct: psTaperT, gamesFrom: psGamesT },
@@ -2239,7 +2205,6 @@ export default function PeriodizationHubPage() {
               const dsel = cw.days[di]; if (dsel.type === "match") return;
               const selIso = isoAdd(cw.weekStart, di); const off = target === "rest";
               const selFocus = off ? (dsel.md || null) : [dsel.md, CALTYPE_FOCUS_LABEL[target] ?? ""].filter(Boolean).join(" ");
-              if (psDraft) { draftEdit({ days: { [selIso]: { dayType: off ? "OFF" : "TRAIN", focus: selFocus } } }); setPreDayPick(null); return; } // draft: nothing reaches week_plans yet
               setSavedPlans((prev) => ({ ...prev, [selIso]: { dayType: off ? "OFF" : "TRAIN", focus: selFocus } }));
               const payload = [{
                 week_start: cw.weekStart,
@@ -2281,8 +2246,8 @@ export default function PeriodizationHubPage() {
             const seqTotal = preBlocks.reduce((s, b) => s + weeksBetween(b.start, blockEndExcl(b)), 0);
             return (<div className="space-y-4">
           {flowNote(is ? "Makró-fasar · leikir · Kröfur" : "Macro phases · fixtures · Demands", is ? "Vikuuppsetning (week_plans) · Mesó · PDF" : "Week Setup (week_plans) · Meso · PDF")}
-          <PreseasonProposalPanel is={is} draft={psDraft} setDraft={setPsDraft} authHeader={authHeader} autoBuild={psAutoBuild}
-            onAccepted={reloadAfterPsAccept} />
+          <PreseasonReadsFrom is={is} prop={prop} opener={plan.nextFirstFixture ?? null} openerEstimated={!!plan.nextFirstFixtureEstimated}
+            onOpenMacro={() => setTab("season")} addGame={(date, kind) => writeFixture(date, "upsert", { isFriendly: kind === "friendly" })} />
 
           {/* Pre-season SETUP — one card: controls, the meso-cycle sequence (built backwards from the opener),
               and the research "why" behind a toggle (explainability: jargon off the primary view). */}
@@ -2296,7 +2261,6 @@ export default function PeriodizationHubPage() {
             const removeTail = (ti: number) => persistMesoTailT(tailVals.filter((_, i) => i !== ti), preWeeks, cadence, preYear, upcomingYear);
             const addTail = () => persistMesoTailT([...tailVals, 3], preWeeks, cadence, preYear, upcomingYear);
             const resetTail = () => {
-              if (psDraft) { draftEdit({ settings: { preMesoTail: [] } }); return; } // draft: [] = back to the rule's layout
               const keptBw = upcomingYear ? {} : Object.fromEntries(Object.entries(blockLenOv).filter(([k]) => !/^\d+$/.test(k)));
               if (upcomingYear) { setNextMesoTail(null); setPreBlockLenOv({}); } else { setCurMesoTail(null); setBlockLenOv(keptBw); }
               (async () => { try { await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: preYear, overrides: { preMesoTail: null, blockWeeks: keptBw } }) }); } catch { /* best-effort */ } })();

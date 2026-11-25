@@ -1,7 +1,7 @@
 /**
  * "Build meso" — the competitive season's blocks as one draft the coach changes, then uses.
  *
- * Same base as "Build pre-season" (plan_proposals, draft → accept): the blocks come from the engine the hub
+ * plan_proposals, draft → accept (the base "Build pre-season" used before it was removed 2026-11-25): the blocks come from the engine the hub
  * already uses (`buildMesoBlocks` — fixture-aware block goals, Issurin 2010 / Martín-García 2018), the coach's
  * saved block lengths, goals and light weeks stand, and the rule fills the rest. Pure: no I/O.
  *

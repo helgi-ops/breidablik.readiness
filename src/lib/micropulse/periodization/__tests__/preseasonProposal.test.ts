@@ -137,7 +137,7 @@ describe("buildPreseasonProposal — a team without data", () => {
     expect(p.gaps.map((g) => g.en).join(" ")).toMatch(/First competitive game not entered/);
     expect(p.gaps.map((g) => g.en).join(" ")).toMatch(/No games in the pre-season/);
     const q = buildPreseasonProposal(base({ matchUnits: [EMPTY], matchLoad: null, matchSrpe: null, saved: { preGamesFrom: "2027-01-04" }, fixtures: [], nextFirstFixture: null, savedDays: {} }))!;
-    expect(q.gaps.map((g) => g.en).join(" ")).toMatch(/No friendlies entered — the calendar assumes a weekend game in \d+ weeks from/);
+    expect(q.gaps.map((g) => g.en).join(" ")).toMatch(/No friendlies entered — the calendar assumes a Saturday game in \d+ weeks from/);
   });
 
   it("an estimated opener is named", () => {
@@ -239,6 +239,8 @@ describe("buildPreseasonProposal — games: entered ones always, assumed weekend
     for (const f of FRIENDLIES) expect(games).toContain(f);
     expect(games.filter((d) => d < from && !FRIENDLIES.includes(d))).toEqual([]);
     for (const w of p.weeks) if (w.weekStart >= from) expect(w.days.some((d) => d.type === "match")).toBe(true);
+    // Assumed games are always on the Saturday.
+    for (const d of games.filter((g) => !FRIENDLIES.includes(g))) expect(new Date(`${d}T00:00:00Z`).getUTCDay()).toBe(6);
     expect(p.choices.find((c) => c.key === "gamesFrom")?.source).toBe("coach");
   });
 

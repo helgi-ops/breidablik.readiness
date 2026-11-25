@@ -811,8 +811,8 @@ export function buildCalendarBlock(opts: {
    *  would have rested (default a Mixed session). The engine fills the day-TYPES + loads around them. */
   matchDates?: string[]; offDays?: string[]; onDays?: string[];
   /** True: an empty `matchDates` means NO games (weeks without a game are training weeks) instead of the
-   *  auto weekly Sat/Sun friendly. "Build pre-season" uses it — games come from the fixtures and the coach's
-   *  "weekend games from" date only. */
+   *  auto weekly Sat/Sun friendly. The pre-season plan uses it — games come from the fixtures and the coach's
+   *  "weekend games from" date (always a Saturday) only. */
   noAutoMatch?: boolean;
   /** ALL fixtures (whole season), used ONLY to label the MD day — so a match the day BEFORE the block
    *  (e.g. last Sunday's game) still makes the block's first days read MD+1, MD+2, MD+3, not MD-{far}.
