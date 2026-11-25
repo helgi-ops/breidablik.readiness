@@ -34,7 +34,7 @@ import { macroPhaseForWeek } from "@/lib/micropulse/weekSetup/weekPhase";
 import { matchAnchoredGrid } from "@/lib/micropulse/weekSetup/autoGrid";
 import { checkThreeInARow, dayKindOf, runSignature, type ThreeInARowCheck, type WeekRuleDay } from "@/lib/micropulse/weekSetup/weekRules";
 import WeekRuleCard, { type WeekRuleKeep } from "@/components/coach/WeekRuleCard";
-import { weekConfirmLabel, type WeekConfirmStatus } from "@/lib/micropulse/weekSetup/confirmation";
+import { weekConfirmLabel, weekConfirmShort, type WeekConfirmStatus } from "@/lib/micropulse/weekSetup/confirmation";
 import { useStandaloneMesoWeek } from "@/components/coach/useStandaloneMesoWeek";
 import type { MesoWeekSeed } from "@/lib/micropulse/periodization/mesoWeek";
 import type { SportId } from "@/lib/micropulse/sportProfiles";
@@ -449,6 +449,8 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
   const [mesoSeedSource, setMesoSeedSource] = useState<"preseason" | "inseason" | null>(null);
   // The week's confirmation (Confirm week → players): confirmed / changed since / not confirmed. confirmRev re-reads it.
   const [confirmStatus, setConfirmStatus] = useState<WeekConfirmStatus | null>(null);
+  // The status of the weeks around the shown one (the week strip on the standalone page), keyed by Monday ISO.
+  const [nearStatuses, setNearStatuses] = useState<Record<string, WeekConfirmStatus>>({});
   const [confirmRev, setConfirmRev] = useState(0);
   // Per-day pitch stimulus (mechanical/locomotive/mixed/technical), 7 entries. Separate
   // axis from noMatchIntents (strength). null = unset / match / off.
@@ -619,17 +621,19 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
   }, [teamId, weekStart]);
   useEffect(() => { void loadWeekTests(); }, [loadWeekTests]);
 
-  // The week's confirmation status (week bar + action bar). Re-read after a save / a confirmation.
+  // The week's confirmation status (week bar + action bar) and the weeks around it (the week strip: the week before,
+  // this one, the next five). One read; re-read after a save / a confirmation.
   useEffect(() => {
     const tid = (teamId ?? "").trim();
     if (!tid) return;
     let alive = true;
     (async () => {
       try {
-        const res = await authFetch(`/api/coach/week-setup/confirmation?team_id=${encodeURIComponent(tid)}&from=${weekStart}&to=${weekStart}`);
+        const res = await authFetch(`/api/coach/week-setup/confirmation?team_id=${encodeURIComponent(tid)}&from=${addDays(weekStart, -7)}&to=${addDays(weekStart, 35)}`);
         const j = await res.json().catch(() => null) as { ok?: boolean; weeks?: WeekConfirmStatus[] } | null;
-        if (alive) setConfirmStatus(res.ok && j?.ok ? (j.weeks ?? []).find((w) => w.weekStart === weekStart) ?? null : null);
-      } catch { if (alive) setConfirmStatus(null); }
+        const map: Record<string, WeekConfirmStatus> = res.ok && j?.ok ? Object.fromEntries((j.weeks ?? []).map((w) => [w.weekStart, w])) : {};
+        if (alive) { setConfirmStatus(map[weekStart] ?? null); setNearStatuses(map); }
+      } catch { if (alive) { setConfirmStatus(null); setNearStatuses({}); } }
     })();
     return () => { alive = false; };
   }, [teamId, weekStart, confirmRev]);
@@ -2003,6 +2007,31 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         )}
       </section>
       {rulesOpen && rulesSlot && <div className="mt-3">{rulesSlot}</div>}
+
+      {/* Week strip (standalone page — in the hub the Meso pages carry these badges): the week before, this one and
+          the next five, each with its confirmation status. Click a week to open it. */}
+      {!embedded && teamId && (
+        <div className="mt-3 overflow-x-auto">
+          <div className="flex min-w-max gap-1.5" role="list" aria-label={isIS ? "Staða vikna" : "Week status"}>
+            {Array.from({ length: 7 }, (_, k) => addDays(weekStart, (k - 1) * 7)).map((ws) => {
+              const st = nearStatuses[ws] ?? null;
+              const on = ws === weekStart;
+              const tone = !st ? "#6b6f76" : st.state === "confirmed" ? "#1c7a4a" : "#8a5a12";
+              let dLabel = ws;
+              try { dLabel = new Intl.DateTimeFormat(isIS ? "is-IS" : "en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${ws}T00:00:00Z`)); } catch { /* keep ISO */ }
+              return (
+                <button key={ws} type="button" role="listitem" disabled={busy || on} aria-current={on ? "true" : undefined}
+                  onClick={() => { setWeekStart(ws); setOk(null); setError(null); }}
+                  title={`${isIS ? "Vika frá" : "Week of"} ${dLabel} — ${weekConfirmLabel(st, isIS)}`}
+                  className={`flex min-w-[104px] flex-col items-start rounded-[10px] border px-3 py-1.5 text-left transition-colors ${on ? "border-[#2740e6] bg-white ring-1 ring-[#2740e6]" : "border-[#e3e0d5] bg-[#faf9f4] hover:bg-white disabled:opacity-60"}`}>
+                  <span className="text-[12px] font-semibold text-[#14181c]">{dLabel}</span>
+                  <span className="text-[11px] font-semibold" style={{ color: tone }}>{weekConfirmShort(st, isIS)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* OK / error banner */}
       {error && (

@@ -44,3 +44,9 @@ export function weekConfirmLabel(s: Pick<WeekConfirmStatus, "state" | "confirmed
   const day = Number.isFinite(d.getTime()) ? (is ? `${d.getDate()}. ${MON_IS[d.getMonth()]}` : `${d.getDate()} ${MON_EN[d.getMonth()]}`) : "";
   return is ? `Staðfest${day ? ` · ${day}` : ""}` : `Confirmed${day ? ` · ${day}` : ""}`;
 }
+
+/** The status in a word, for a narrow week chip (the full words go in its tooltip). */
+export function weekConfirmShort(s: Pick<WeekConfirmStatus, "state"> | null | undefined, is: boolean): string {
+  if (!s || s.state === "unconfirmed") return is ? "Óstaðfest" : "Not confirmed";
+  return s.state === "changed" ? (is ? "Breytt" : "Changed") : (is ? "✓ Staðfest" : "✓ Confirmed");
+}

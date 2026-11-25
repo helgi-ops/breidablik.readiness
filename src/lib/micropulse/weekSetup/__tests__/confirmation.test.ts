@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { weekConfirmLabel, weekConfirmState, weekConfirmStatuses } from "../confirmation";
+import { weekConfirmLabel, weekConfirmShort, weekConfirmState, weekConfirmStatuses } from "../confirmation";
 
 test("weekConfirmState: confirmed, changed after it, never confirmed", () => {
   assert.equal(weekConfirmState(null, ["2026-11-24T10:00:00Z"]), "unconfirmed");
@@ -25,4 +25,10 @@ test("weekConfirmLabel: the words on the badge", () => {
   assert.equal(weekConfirmLabel({ state: "changed", confirmedAt: "2026-11-24T12:00:00Z" }, true), "Breytt frá staðfestingu");
   assert.equal(weekConfirmLabel({ state: "confirmed", confirmedAt: "2026-11-24T12:00:00" }, true), "Staðfest · 24. nóv");
   assert.equal(weekConfirmLabel({ state: "confirmed", confirmedAt: "2026-11-24T12:00:00" }, false), "Confirmed · 24 Nov");
+});
+
+test("weekConfirmShort: one word for the week strip", () => {
+  assert.equal(weekConfirmShort(null, true), "Óstaðfest");
+  assert.equal(weekConfirmShort({ state: "confirmed" }, true), "✓ Staðfest");
+  assert.equal(weekConfirmShort({ state: "changed" }, false), "Changed");
 });
