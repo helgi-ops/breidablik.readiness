@@ -7,7 +7,7 @@ import {
   valdVolumeCap, strengthDefaultForBlock, teamAverages, positionGroup, dataTier,
   classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, hasNoGpsReading, weeklyTargetFromMatch, calibrateImaShares, type ImaShareCalibration,
   type SeasonPhase, type MesoBlock, type WeekLoad, type IntervalZone, type VbtRead, type DataGap,
-  mdOffsetLabel, activeValdTrimLift,
+  mdOffsetLabel, activeValdTrimLift, fixtureIsFriendly,
   type ValdCap, type ValdTrimLift, type StrengthDefault, type TeamAverages, type SessionRow, type Bi, type TierRead, type MatchWeekType, type MatchAxes,
   type PlayerMatchRow, type MatchUnit, type WeekTargetPlan, type MdDemandBucket, type MdDemandProfile,
 } from "./index";
@@ -61,6 +61,10 @@ export type PeriodizationPlan = {
                                     // this year's — so next year's planning survives the calendar rollover.
   /** Games after this year up to the next season's opener (friendlies included) — the upcoming pre-season's. */
   upcomingFixtures: string[];
+  /** The season's entered games with their detail (never the estimated opener) — the Macro tab's games list. */
+  fixtureList: FixtureDetail[];
+  /** The same detail for `upcomingFixtures` (the next season's games already entered). */
+  upcomingFixtureList: FixtureDetail[];
   fixturesEstimated: boolean;      // true when the season has NO fixtures of its own and the opener was
                                     // ESTIMATED from last season (KSÍ publishes late) — corrected once real
                                     // fixtures are added.
@@ -77,7 +81,9 @@ const mondayOf = (iso: string) => {
 };
 const ageDays = (iso: string | null, todayMs: number) => (iso ? Math.round((todayMs - Date.parse(iso)) / 86_400_000) : null);
 
-type SeasonFixture = { date: string; competition: string | null; isHome: boolean | null; isFriendly: boolean | null };
+type SeasonFixture = { date: string; competition: string | null; isHome: boolean | null; isFriendly: boolean | null; opponent?: string | null };
+/** One entered game as the Macro tab lists it. `isFriendly` follows `fixtureIsFriendly` (flag first, label fallback). */
+export type FixtureDetail = { date: string; opponent: string | null; competition: string | null; isFriendly: boolean };
 
 /**
  * A season's date window and fixtures — the input to its macro phases (`detectSeasonPhases`). Shared by the full
@@ -99,10 +105,10 @@ export async function loadSeasonFixtures(
   const yEnd = `${seasonYear}-12-31`;
 
   const { data: fxData } = await sb.from("match_schedule")
-    .select("match_date, competition, is_home, is_friendly").eq("team_id", args.teamId)
+    .select("match_date, opponent, competition, is_home, is_friendly").eq("team_id", args.teamId)
     .gte("match_date", yStart).lte("match_date", yEnd).order("match_date");
-  let fixtures: SeasonFixture[] = ((fxData ?? []) as Array<{ match_date: string; competition: string | null; is_home: boolean | null; is_friendly: boolean | null }>)
-    .map((f) => ({ date: f.match_date, competition: f.competition, isHome: f.is_home, isFriendly: f.is_friendly }));
+  let fixtures: SeasonFixture[] = ((fxData ?? []) as Array<{ match_date: string; opponent: string | null; competition: string | null; is_home: boolean | null; is_friendly: boolean | null }>)
+    .map((f) => ({ date: f.match_date, competition: f.competition, isHome: f.is_home, isFriendly: f.is_friendly, opponent: f.opponent }));
 
   let fixturesEstimated = false;
   let estimatedOpener: string | null = null;
@@ -151,7 +157,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   // The NEXT season's first competitive game (after this year's window): lets the upcoming pre-season be
   // planned all the way to the real opener (e.g. early April next year) instead of a fixed 10 weeks.
   const { data: nextFxRows } = await sb.from("match_schedule")
-    .select("match_date, is_friendly").eq("team_id", args.teamId)
+    .select("match_date, opponent, competition, is_friendly").eq("team_id", args.teamId)
     .gt("match_date", yEnd).order("match_date").limit(20);
   let nextFirstFixture = ((nextFxRows ?? []) as Array<{ match_date: string; is_friendly: boolean | null }>)
     .filter((r) => r.is_friendly !== true).map((r) => r.match_date).sort()[0] ?? null;
@@ -174,6 +180,12 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   // pre-season that runs over New Year must see (Breiðablik's Jan 2027 friendlies; plan.fixtures stops at Dec 31).
   const upcomingFixtures = ((nextFxRows ?? []) as Array<{ match_date: string }>).map((r) => r.match_date)
     .filter((d) => !nextFirstFixture || nextFirstFixtureEstimated || d <= nextFirstFixture).sort();
+  const upcomingSet = new Set(upcomingFixtures);
+  const upcomingFixtureList: FixtureDetail[] = ((nextFxRows ?? []) as Array<{ match_date: string; opponent: string | null; competition: string | null; is_friendly: boolean | null }>)
+    .filter((r) => upcomingSet.has(r.match_date))
+    .map((r) => ({ date: r.match_date, opponent: r.opponent, competition: r.competition, isFriendly: fixtureIsFriendly({ date: r.match_date, competition: r.competition, isFriendly: r.is_friendly }) }));
+  const fixtureList: FixtureDetail[] = fixturesEstimated ? [] : fixtures
+    .map((f) => ({ date: f.date, opponent: f.opponent ?? null, competition: f.competition, isFriendly: fixtureIsFriendly(f) }));
 
   const matchDates = new Set(fixtures.map((f) => f.date));
 
@@ -549,5 +561,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { upcomingFixtures, seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date), nextFirstFixture, nextSeasonYear, fixturesEstimated, estimatedOpener, nextFirstFixtureEstimated, imaCalibration };
+  return { upcomingFixtures, fixtureList, upcomingFixtureList, seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date), nextFirstFixture, nextSeasonYear, fixturesEstimated, estimatedOpener, nextFirstFixtureEstimated, imaCalibration };
 }

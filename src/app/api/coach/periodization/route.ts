@@ -160,8 +160,11 @@ export async function POST(req: Request) {
     const { data: existing } = await ctx.sb.from("match_schedule").select("opponent, competition, is_home, kickoff_time").eq("team_id", ctx.teamId).eq("match_date", f.date).maybeSingle();
     const ex = existing as { opponent?: string | null; competition?: string | null; is_home?: boolean | null; kickoff_time?: string | null } | null;
     const payload: Record<string, unknown> = { team_id: ctx.teamId, match_date: f.date };
-    payload.opponent = has(f.opponent) ? f.opponent!.trim() : (ex?.opponent ?? "Friendly");
-    payload.competition = has(f.competition) ? f.competition!.trim() : (ex?.competition ?? "Friendly");
+    // A new league game (isFriendly false) is labelled as one, never "Friendly" (the label is the fallback
+    // friendly test for rows without a flag).
+    const newLeague = !ex && f.isFriendly === false;
+    payload.opponent = has(f.opponent) ? f.opponent!.trim() : (ex?.opponent ?? (newLeague ? "TBD" : "Friendly"));
+    payload.competition = has(f.competition) ? f.competition!.trim() : (ex?.competition ?? (newLeague ? "League" : "Friendly"));
     payload.is_home = f.isHome != null ? !!f.isHome : (ex?.is_home ?? true);
     if (has(f.kickoff)) payload.kickoff_time = f.kickoff!.trim(); else if (ex?.kickoff_time != null) payload.kickoff_time = ex.kickoff_time;
     // A planner-added fixture is a friendly by default (league games come from Fixtures); the caller can

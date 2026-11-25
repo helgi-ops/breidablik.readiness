@@ -49,6 +49,7 @@ import { kpiAvgFromUnit as kpiAvgFromUnitLib, teamKpiAvg as teamKpiAvgLib } from
 import { upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, PRE_MIN_BLOCK, PRESEASON_DEFAULT_WEEK1, PRESEASON_DEFAULT_TAPER_PCT, PRESEASON_TAPER_RESEARCH, clampTaperPct } from "@/lib/micropulse/periodization/preseasonWindow";
 import { buildPreseasonProposal } from "@/lib/micropulse/periodization/preseasonProposal";
 import PreseasonReadsFrom from "@/components/coach/PreseasonReadsFrom";
+import { MacroSetupChecklist, MacroFixturesCard, MacroBreaksCard, MacroSetupGate, firstLeagueGame, type MacroFixture } from "@/components/coach/MacroSetupCards";
 import PreseasonWeek1Table from "@/components/coach/PreseasonWeek1Table";
 import type { MatchUnit as LibMatchUnit } from "@/lib/micropulse/periodization";
 
@@ -80,7 +81,7 @@ type MdDemandProfile = { phases: MdDemandBucket[]; days: MdDemandBucket[] };
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes; md: MdDemandProfile };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
-type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; upcomingFixtures?: string[]; nextFirstFixture?: string | null; nextSeasonYear?: number | null; fixturesEstimated?: boolean; estimatedOpener?: string | null; nextFirstFixtureEstimated?: boolean; imaCalibration?: ImaShareCalibration };
+type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; upcomingFixtures?: string[]; fixtureList?: MacroFixture[]; upcomingFixtureList?: MacroFixture[]; nextFirstFixture?: string | null; nextSeasonYear?: number | null; fixturesEstimated?: boolean; estimatedOpener?: string | null; nextFirstFixtureEstimated?: boolean; imaCalibration?: ImaShareCalibration };
 
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
 const isoAdd = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_400_000).toISOString().slice(0, 10);
@@ -205,6 +206,11 @@ export default function PeriodizationHubPage() {
   const [nextPreStart, setNextPreStart] = React.useState(""); // coach-set NEXT pre-season start — bounds the off-season by date
   const [offStart, setOffStart] = React.useState("");         // coach-set off-season (reconditioning) START — the days between season end and this are a holiday (Frí)
   const [saved, setSaved] = React.useState(false);
+  const [frameSaving, setFrameSaving] = React.useState(false);
+  // The frame as last saved on the season row — the "unsaved changes" mark compares the inputs to it.
+  const [savedFrame, setSavedFrame] = React.useState<{ preStart: string; seasonEnd: string; offStart: string; nextPreStart: string }>({ preStart: "", seasonEnd: "", offStart: "", nextPreStart: "" });
+  // The "First league game" input; null = untouched (shows the entered first league game).
+  const [leagueDraft, setLeagueDraft] = React.useState<string | null>(null);
   // Refs so `load` can read the latest off-season window without changing its identity (deps).
   const nextPreStartRef = React.useRef(nextPreStart); nextPreStartRef.current = nextPreStart;
   const didPopulateWindow = React.useRef(false);
@@ -214,8 +220,6 @@ export default function PeriodizationHubPage() {
   const [viewYear, setViewYear] = React.useState<number | null>(null);
   const viewYearRef = React.useRef<number | null>(null);
   const carrySeedRef = React.useRef<string>(""); // off-season end carried into a NEW next-season's pre-season start
-  const [friendly, setFriendly] = React.useState("");    // pre-season friendly date to add (MD anchor)
-  const [friendlyKind, setFriendlyKind] = React.useState<"friendly" | "competitive">("friendly"); // tag so friendlies don't start the season
   const [mdPosKey, setMdPosKey] = React.useState<number | null>(null); // position selector for the three-axes + MD-demand cards
   const [mdDaysOpen, setMdDaysOpen] = React.useState(false); // "Show MD-day detail" toggle under the microcycle-demand phases
   // Macro season-map inline block editor: the block (by start ISO) the coach opened to edit goal + length.
@@ -391,6 +395,7 @@ export default function PeriodizationHubPage() {
       const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; offseasonStart?: string | null; preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; stepPct?: number | null; blockGoals?: Record<string, "accum" | "transmute" | "realize">; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string>; preMesoTail?: number[] | null; preWeek1Kpi?: Record<string, number> | null; preTaperPct?: number | null; preGamesFrom?: string | null } }).savedWindow;
       if (sw && (!didPopulateWindow.current || opts?.repopulate)) {
         didPopulateWindow.current = true;
+        setSavedFrame({ preStart: sw.preseasonStart ?? "", seasonEnd: sw.seasonEnd ?? "", offStart: sw.offseasonStart ?? "", nextPreStart: sw.nextPreseasonStart ?? "" });
         if (sw.preseasonStart) setPreStart(sw.preseasonStart);
         if (sw.seasonEnd) setSeasonEnd(sw.seasonEnd);
         if (sw.nextPreseasonStart) setNextPreStart(sw.nextPreseasonStart);
@@ -447,6 +452,7 @@ export default function PeriodizationHubPage() {
     viewYearRef.current = yr; setViewYear(yr);
     didPopulateWindow.current = false; didPopulateNext.current = false;
     setPreStart(""); setSeasonEnd(""); setOffStart(""); setNextPreStart("");
+    setSavedFrame({ preStart: "", seasonEnd: "", offStart: "", nextPreStart: "" }); setLeagueDraft(null);
     setBlockGoals({}); setBlockLenOv({}); setBlockDeloadOv({});
     setNextMesoTail(null); setPreBlockLenOv({}); setCurMesoTail(null); setCurWeek1Kpi({}); setNextWeek1Kpi({});
     setCadence(4); setBlkStep(5); setPsWeek1Mult(1.3); setPsSessions(4); setPsTaperPct(PRESEASON_DEFAULT_TAPER_PCT); setPsGamesFrom(null);
@@ -616,22 +622,35 @@ export default function PeriodizationHubPage() {
     return true;
   };
 
-  async function savePlan() {
-    if (!plan) return;
-    setSaved(false);
-    const res = await fetch("/api/coach/periodization", {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() },
-      body: JSON.stringify({ seasonYear: plan.seasonYear, overrides: overridesPayload(cadence),
-        blocks: mesoBlocks.map((b) => ({ block_index: b.index, phase: b.phase.en, goal: b.goal.en, start_date: b.start, end_date: b.end, is_deload: b.isDeload, targets: { acwr: b.acwr, volumeTargetPct: b.volumeTargetPct } })) }),
-    });
-    setSaved(res.ok);
-  }
+  // The season's first entered league game (never the estimate) — the frame's "First league game" field.
+  const leagueGame = React.useMemo(() => firstLeagueGame(plan?.fixtureList ?? []), [plan]);
+  const frameDirty = preStart !== savedFrame.preStart || seasonEnd !== savedFrame.seasonEnd || offStart !== savedFrame.offStart || nextPreStart !== savedFrame.nextPreStart
+    || (leagueDraft != null && leagueDraft !== (leagueGame?.date ?? ""));
 
-  async function addFriendly() {
-    if (!friendly) return;
-    // Tag a friendly (is_friendly) so detectSeasonPhases does NOT read it as the first competitive fixture.
-    const ok = await writeFixture(friendly, "upsert", { isFriendly: friendlyKind === "friendly" });
-    if (ok) setFriendly("");
+  // MACRO SAVE — the one button: persists the frame, writes a changed first league game into the fixture list
+  // (moving the old one), then re-reads everything so Meso + Micro follow. There is no separate "Apply".
+  async function saveFrame() {
+    if (!plan) return;
+    setSaved(false); setFrameSaving(true);
+    try {
+      const res = await fetch("/api/coach/periodization", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() },
+        body: JSON.stringify({ seasonYear: plan.seasonYear, overrides: overridesPayload(cadence),
+          blocks: mesoBlocks.map((b) => ({ block_index: b.index, phase: b.phase.en, goal: b.goal.en, start_date: b.start, end_date: b.end, is_deload: b.isDeload, targets: { acwr: b.acwr, volumeTargetPct: b.volumeTargetPct } })) }),
+      });
+      if (!res.ok) { const j = await res.json().catch(() => ({})) as { error?: string }; setErr(j.error ?? "Save failed"); return; }
+      setSavedFrame({ preStart, seasonEnd, offStart, nextPreStart });
+      const newLeague = leagueDraft && leagueDraft !== (leagueGame?.date ?? "") ? leagueDraft : null;
+      if (newLeague) {
+        const moved = await writeFixture(newLeague, "upsert", { isFriendly: false, opponent: leagueGame?.opponent ?? undefined, competition: leagueGame?.competition ?? undefined });
+        if (moved && leagueGame) await writeFixture(leagueGame.date, "delete");
+        if (!moved) return;
+      } else {
+        await load(preStart, seasonEnd);
+      }
+      setLeagueDraft(null);
+      setSaved(true);
+    } finally { setFrameSaving(false); }
   }
 
   const player = plan?.players.find((p) => p.playerId === selId) ?? null;
@@ -1532,6 +1551,12 @@ export default function PeriodizationHubPage() {
             </div>
           )}
 
+          {/* 0 — SETUP CHECKLIST: Macro is the one place a season is set up (frame → games → breaks). */}
+          <MacroSetupChecklist is={is} frameSaved={!!savedFrame.preStart && !!savedFrame.seasonEnd} frameDirty={frameDirty}
+            leagueGame={leagueGame?.date ?? null} estimatedOpener={plan.fixturesEstimated ? (plan.estimatedOpener ?? null) : null}
+            friendlies={(plan.fixtureList ?? []).filter((f) => f.isFriendly && (!leagueGame || f.date < leagueGame.date)).length}
+            breaks={teamBreaksFull.length} />
+
           {/* 1 — SEASON FRAME: the controls come first (Macro IS the control; everything below re-flows). */}
           <section className={card}>
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -1553,10 +1578,24 @@ export default function PeriodizationHubPage() {
               <span className="text-[12px] text-slate-500">{is ? "Stilltu þetta fyrst — kortið, Mesó og Míkró endurreiknast." : "Set these first — the map, Meso and Micro all re-flow from them."}</span>
             </div>
             {/* Four date anchors — equal grid columns so they align and never stretch to a helper's width. */}
-            <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-5">
               <label className="flex min-w-0 flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Undirbúningur hefst" : "Pre-season starts"}
                 <input type="date" value={preStart} onChange={(e) => setPreStart(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 px-2.5 text-[13px] font-medium text-slate-900" />
               </label>
+              {(() => {
+                // The first league game ends the pre-season. Editable until it's played; saved with the frame
+                // (written to the fixture list, the old date moved). "Estimated" when only last season's date is known.
+                const played = !!leagueGame && leagueGame.date < new Date().toISOString().slice(0, 10);
+                const est = !leagueGame && plan.fixturesEstimated ? plan.estimatedOpener ?? null : null;
+                return (
+                  <label className="flex min-w-0 flex-col gap-1 text-[12px] font-semibold text-slate-700">
+                    <span className="flex items-center gap-1.5">{is ? "Fyrsti deildarleikur" : "First league game"}{est && leagueDraft == null && <span className="rounded bg-[#de9328]/15 px-1 text-[10px] font-bold uppercase text-[#7a5210]">{is ? "áætlað" : "estimated"}</span>}</span>
+                    <input type="date" value={leagueDraft ?? leagueGame?.date ?? ""} disabled={played} onChange={(e) => setLeagueDraft(e.target.value)}
+                      title={played ? (is ? "Leikinn — breyttu í leikjalistanum" : "Played — change it in the games list") : est ? (is ? `Áætlaður ${shortDate(est, is)} út frá síðasta tímabili` : `Estimated ${shortDate(est, is)} from last season`) : undefined}
+                      className="h-10 w-full rounded-lg border border-slate-300 px-2.5 text-[13px] font-medium text-slate-900 disabled:bg-slate-50 disabled:text-slate-500" />
+                  </label>
+                );
+              })()}
               <label className="flex min-w-0 flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Tímabili lýkur" : "Season ends"}
                 <input type="date" value={seasonEnd} onChange={(e) => setSeasonEnd(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 px-2.5 text-[13px] font-medium text-slate-900" />
               </label>
@@ -1567,8 +1606,8 @@ export default function PeriodizationHubPage() {
                 <input type="date" value={nextPreStart} onChange={(e) => setNextPreStart(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 px-2.5 text-[13px] font-medium text-slate-900" />
               </label>
             </div>
-            <p className="mt-2 text-[11px] leading-snug text-slate-400"><b className="font-semibold text-slate-500">{is ? "Tímabili lýkur" : "Season ends"}</b> {is ? "= lok keppninnar (→ off-season). Undirbúningur endar við fyrsta KEPPNISLEIK í Leikjaskrá — ekki hér (æfingaleikir teljast ekki með)." : "= end of competition (→ off-season). Pre-season ends at the first COMPETITIVE fixture in Fixtures — not here (friendlies don't count)."}</p>
-            {/* Block length + Save/Apply on their own row. */}
+            <p className="mt-2 text-[11px] leading-snug text-slate-400"><b className="font-semibold text-slate-500">{is ? "Tímabili lýkur" : "Season ends"}</b> {is ? "= lok keppninnar (→ off-season). Undirbúningur endar við fyrsta deildarleikinn (æfingaleikir teljast ekki með)." : "= end of competition (→ off-season). Pre-season ends at the first league game (friendlies don't count)."}</p>
+            {/* Block length + the one Save on their own row. */}
             <div className="mt-3 flex flex-wrap items-end gap-x-5 gap-y-2">
               <div className="flex flex-col gap-1">
                 <span className="text-[12px] font-semibold text-slate-700">{is ? "Lotulengd" : "Block length"}</span>
@@ -1579,9 +1618,10 @@ export default function PeriodizationHubPage() {
                 </div>
               </div>
               <span className="pb-2.5 text-[12px] text-slate-600">{is ? `Undirbúningur: ${cadence - 1} uppbyggingarvikur + 1 niðurtröppun · keppni: engin föst` : `Pre-season: ${cadence - 1} build weeks + 1 deload · in-season: none fixed`}</span>
-              <div className="ml-auto flex gap-2">
-                <button onClick={savePlan} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-[13px] font-semibold text-slate-700 hover:bg-slate-50">{saved ? (is ? "✓ Vistað" : "✓ Saved") : (is ? "Vista" : "Save")}</button>
-                <button onClick={() => load(preStart, seasonEnd)} className="h-10 rounded-lg bg-[#2740e6] px-4 text-[13px] font-semibold text-white">{is ? "Uppfæra" : "Apply"}</button>
+              <div className="ml-auto flex items-center gap-2">
+                {frameDirty && <span className="rounded-full bg-[#de9328]/15 px-2 py-0.5 text-[11px] font-semibold text-[#7a5210]">{is ? "Óvistaðar breytingar" : "Unsaved changes"}</span>}
+                {!frameDirty && saved && <span className="text-[12px] font-semibold text-[#1c7a4a]">{is ? "✓ Vistað — Mesó og Míkró lesa þetta" : "✓ Saved — Meso and Micro read this"}</span>}
+                <button onClick={() => void saveFrame()} disabled={frameSaving} className="h-10 rounded-lg bg-[#2740e6] px-4 text-[13px] font-semibold text-white hover:brightness-110 disabled:opacity-60">{frameSaving ? (is ? "Vista…" : "Saving…") : (is ? "Vista" : "Save")}</button>
               </div>
             </div>
             {(() => {
@@ -1597,6 +1637,16 @@ export default function PeriodizationHubPage() {
             })()}
           </section>
 
+          {/* 2 — GAMES + BREAKS: the fixture list and the breaks live here (Meso + Micro only read them). */}
+          <MacroFixturesCard is={is} seasonYear={plan.seasonYear} fixtures={plan.fixtureList ?? []} upcoming={plan.upcomingFixtureList ?? []}
+            nextSeasonYear={plan.nextSeasonYear ?? null} todayIso={todayIso}
+            onAdd={(date, kind, opponent) => writeFixture(date, "upsert", { isFriendly: kind === "friendly", opponent: opponent || undefined })}
+            onRemove={(date) => writeFixture(date, "delete")}
+            onOpenYear={switchYear}
+            importSlot={isBasketball ? <KkiFixturesImport onImported={() => void load(preStart, seasonEnd)} /> : undefined} />
+          <MacroBreaksCard is={is} breaks={teamBreaksFull} onAdd={addBreak} onRemove={removeBreak}
+            hasWindows={["football", "basketball"].includes(String(teamSport ?? "").toLowerCase())} />
+
           {!plan.phases.some((p) => p.key === "preseason" && p.weeks > 0) && (
             <div className="rounded-lg border border-dashed border-[#7a5cc4]/40 bg-[#7a5cc4]/5 px-3 py-2 text-[12px] text-[#4a3a7a]">
               {is
@@ -1608,7 +1658,7 @@ export default function PeriodizationHubPage() {
           {plan.phases.length === 0 || blocks.length === 0 ? (
             <section className={card}>
               <p className="text-[13px] font-semibold text-slate-800">{is ? `Ekkert tímabil enn fyrir ${viewYear ?? plan.seasonYear}.` : `No season yet for ${viewYear ?? plan.seasonYear}.`}</p>
-              <p className="mt-1 text-[13px] text-slate-600">{is ? "Áætlunin er leikja-drifin: bættu við leikjum tímabilsins (fyrsti keppnisleikurinn ræður hvar undirbúningur endar og keppni hefst). Akkerin ein og sér búa ekki til fasa. Bættu við leikjum í Leikjaskrá / „+ Leikur“ hér að neðan — dagsettum á þetta ár." : "The plan is fixtures-driven: add this season's fixtures (the first competitive game sets where pre-season ends and competition begins). The anchors alone don't create phases. Add fixtures in the Fixtures planner / \"+ Fixture\" below — dated in this year."}</p>
+              <p className="mt-1 text-[13px] text-slate-600">{is ? "Áætlunin er leikja-drifin: bættu við leikjum tímabilsins (fyrsti keppnisleikurinn ræður hvar undirbúningur endar og keppni hefst). Akkerin ein og sér búa ekki til fasa. Settu fyrsta deildarleikinn í rammann eða í „Leikir“ hér að ofan og vistaðu." : "The plan is fixtures-driven: add this season's fixtures (the first league game sets where pre-season ends and competition begins). The dates alone don't create phases. Set the first league game in the frame or under \"Games\" above, then save."}</p>
             </section>
           ) : (<>
 
@@ -2736,7 +2786,8 @@ export default function PeriodizationHubPage() {
           })()}
 
           {/* THE PLAN tab — the block planner (primary) → the season meso map (context) → micro link */}
-          {tab === "plan" && (() => {
+          {(tab === "plan" || tab === "micro") && plan.phases.length === 0 && <MacroSetupGate is={is} seasonYear={plan.seasonYear} onOpenMacro={() => setTab("season")} />}
+          {tab === "plan" && plan.phases.length > 0 && (() => {
             const GC: Record<BlockGoalKey, string> = { accum: "#2740E6", transmute: "#7A5CC4", realize: "#1C7A4A", deload: "#DE9328" };
             const DAY = 86_400_000;
             const utc = (iso: string) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
@@ -3175,19 +3226,7 @@ export default function PeriodizationHubPage() {
                 </div>
                 {blkHold && <p className="mt-1.5 text-[12px] text-slate-500">{is ? "Þessi keppnislota heldur staðalvikunni allar vikur: lítil breyting milli lota á keppnistímabili (Malone 2015; Oliveira 2019; athugunarrannsóknir). Stig/viku gildir bara í uppbyggingarlotum (Uppsöfnun, Umbreyting)." : "This competitive block holds the standard week every week: little change between in-season blocks (Malone 2015; Oliveira 2019; observational). Step/wk only applies to build-up blocks (Accumulation, Transmutation)."}</p>}
                 {blkScope === "player" && <p className="mt-1.5 text-[12px] text-slate-500">{is ? `Einstaklingsmiðuð lota (leik-miðuð, þök/trim/áhersla) fyrir leikmann valinn í „Leikmenn“-flipanum${player ? ` (${player.name})` : ""} — les-only (breyttu dagsgerðum í Liðs-umfangi). Skiptu um leikmann í Leikmenn-flipanum.` : `The individualised block (match-anchored, caps/trim/steer) for the player selected in the "Players" tab${player ? ` (${player.name})` : ""} — read-only (edit day-types in Team scope). Change the player in the Players tab.`}</p>}
-                <div className="mt-4 border-t border-slate-100 pt-3">
-                  <div className="text-[12px] font-semibold text-slate-700">{is ? "Bæta leik í leikjaskrá" : "Add a fixture to the schedule"}</div>
-                  <div className="mt-1.5 flex flex-wrap gap-2">
-                    <input type="date" value={friendly} onChange={(e) => setFriendly(e.target.value)} aria-label={is ? "Dagsetning leiks" : "Match date"} className="h-10 min-w-0 flex-1 rounded-lg border border-slate-300 px-2 text-[13px]" />
-                    <select value={friendlyKind} onChange={(e) => setFriendlyKind(e.target.value as "friendly" | "competitive")} aria-label={is ? "Tegund leiks" : "Fixture type"} className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-[13px] font-medium">
-                      <option value="friendly">{is ? "Æfingaleikur" : "Friendly"}</option>
-                      <option value="competitive">{is ? "Keppnisleikur" : "Competitive"}</option>
-                    </select>
-                    <button onClick={addFriendly} disabled={!friendly} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-slate-50 disabled:opacity-40">{is ? "+ Bæta við" : "+ Add"}</button>
-                  </div>
-                  <p className="mt-1 text-[12px] text-slate-500">{is ? "Æfingaleikir teljast EKKI upphaf keppnistímabilsins — þeir eru hluti af undirbúningi. Fyrsti keppnisleikurinn endar undirbúninginn." : "Friendlies do NOT start the competitive season — they stay in pre-season. The first competitive fixture ends pre-season."}</p>
-                  <div className="mt-3"><KkiFixturesImport onImported={() => void load(preStart, seasonEnd)} /></div>
-                </div>
+                <p className="mt-3 border-t border-slate-100 pt-3 text-[12px] text-slate-500">{is ? "Leikir og frí eru sett í Makró-lotu." : "Games and breaks are set in the Macro cycle."}{" "}<button type="button" onClick={() => setTab("season")} className="font-semibold text-[#2740e6] hover:underline">{is ? "Opna Makró →" : "Open Macro →"}</button></p>
               </section>
             </aside>
           </div>
@@ -3341,7 +3380,7 @@ export default function PeriodizationHubPage() {
           })()}
 
           {/* MICRO CYCLE tab — the existing Week Setup, mounted in-place (one macro→meso→micro flow) */}
-          {tab === "micro" && (
+          {tab === "micro" && plan.phases.length > 0 && (
             <WeekSetupView
               embedded
               initialWeekStart={preseasonJumpWeek}
