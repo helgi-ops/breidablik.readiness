@@ -111,7 +111,7 @@ Nýrri rannsóknir benda til einhverra tengsla milli álags og líkamsástands: 
 
 1. Notaðu CR10 kvarðann (0–10) með stöðluðum orðum við tölurnar (0 = hvíld, 10 = hámarks áreynsla), og notaðu sama kvarðann alltaf.
 
-2. Spyrðu ~30 mínútum eftir æfingu. Rannsóknir sýna að RPE tekið strax (5–10 mín) getur litast of mikið af síðasta — sérstaklega hörðu eða léttu — hluta æfingarinnar; um 30 mínútum síðar endurspeglar talan æfinguna í heild betur (Uchida o.fl.; Singh o.fl.). Í sumum greinum (t.d. hnefaleikum) dugar 10 mín, en 30 mín er örugga viðmiðið.
+2. Spyrðu um 30 mínútum eftir æfingu, og alltaf á sama tíma. 30 mínútur er sá tími sem session-RPE hefur jafnan notað (Christen o.fl. 2016). Rannsóknum ber ekki saman um hvort tíminn skipti máli: í styrktarþjálfun var RPE eftir 5 og 10 mínútur annað en eftir 30 mínútur (Singh o.fl. 2007), en hnefaleikarar gáfu sömu tölu eftir 10 og 30 mínútur (Uchida o.fl. 2014), og önnur rannsókn fann engan mun frá 5 mínútum upp í sólarhring (Christen o.fl. 2016). Mestu skiptir að spyrja alltaf á sama tíma.
 
 3. Safnaðu einslega. Leikmenn eiga ekki að heyra svar hvers annars — annars hópast tölurnar saman (félagsleg áhrif).
 
@@ -185,6 +185,12 @@ Halson, S. L. (2014). Monitoring training load to understand fatigue in athletes
 
 Clemente, F. M., Clark, C., Castillo, D., Sarmento, H., Nikolaidis, P. T., Rosemann, T., & Knechtle, B. (2019). Variations of training load, monotony, and strain and dose–response relationships with maximal aerobic speed, maximal oxygen uptake, and isokinetic strength in professional soccer players. PLoS ONE, 14(12), e0225522. https://doi.org/10.1371/journal.pone.0225522
 
+Singh, F., Foster, C., Tod, D., & McGuigan, M. R. (2007). Monitoring different types of resistance training using session rating of perceived exertion. International Journal of Sports Physiology and Performance, 2(1), 34–45. https://pubmed.ncbi.nlm.nih.gov/19255453/
+
+Uchida, M. C., Teixeira, L. F., Godoi, V. J., Marchetti, P. H., Conte, M., Coutts, A. J., & Bacurau, R. F. (2014). Does the timing of measurement alter session-RPE in boxers? Journal of Sports Science & Medicine, 13(1), 59–65. https://pubmed.ncbi.nlm.nih.gov/24570606/
+
+Christen, J., Foster, C., Porcari, J. P., & Mikat, R. P. (2016). Temporal robustness of the session rating of perceived exertion. International Journal of Sports Physiology and Performance, 11(8), 1088–1093. https://pubmed.ncbi.nlm.nih.gov/26999454/
+
 Athugasemd: Heimildir eru settar fram í APA stíl með tenglum í frumheimildir.`,
       },
     ],
@@ -255,7 +261,7 @@ More recent work suggests some link between load and fitness: in professional so
 
 1. Use the CR10 scale (0–10) with standardised verbal anchors (0 = rest, 10 = maximal effort), and always use the same scale.
 
-2. Ask ~30 minutes after the session. Studies show that RPE taken immediately (5–10 min) can be coloured too heavily by the last — especially a hard or easy — portion of the session; about 30 minutes later the number better reflects the session as a whole (Uchida et al.; Singh et al.). In some contexts (e.g. boxing) 10 min suffices, but 30 min is the safe standard.
+2. Ask about 30 minutes after the session, and always at the same time. Thirty minutes is the window session-RPE has traditionally used (Christen et al. 2016). Studies disagree on whether timing matters: in resistance training, RPE at 5 and 10 minutes differed from RPE at 30 minutes (Singh et al. 2007), but boxers gave the same rating at 10 and 30 minutes (Uchida et al. 2014), and another study found no difference anywhere from 5 minutes to 24 hours (Christen et al. 2016). What matters most is asking at the same time every time.
 
 3. Collect it privately. Players should not hear each other's answers — otherwise the numbers cluster together (social influence).
 
@@ -328,6 +334,12 @@ Hulin, B. T., Gabbett, T. J., et al. (2016). The acute:chronic workload ratio pr
 Halson, S. L. (2014). Monitoring training load to understand fatigue in athletes. Sports Medicine, 44(Suppl 2), S139–S147.
 
 Clemente, F. M., Clark, C., Castillo, D., Sarmento, H., Nikolaidis, P. T., Rosemann, T., & Knechtle, B. (2019). Variations of training load, monotony, and strain and dose–response relationships with maximal aerobic speed, maximal oxygen uptake, and isokinetic strength in professional soccer players. PLoS ONE, 14(12), e0225522. https://doi.org/10.1371/journal.pone.0225522
+
+Singh, F., Foster, C., Tod, D., & McGuigan, M. R. (2007). Monitoring different types of resistance training using session rating of perceived exertion. International Journal of Sports Physiology and Performance, 2(1), 34–45. https://pubmed.ncbi.nlm.nih.gov/19255453/
+
+Uchida, M. C., Teixeira, L. F., Godoi, V. J., Marchetti, P. H., Conte, M., Coutts, A. J., & Bacurau, R. F. (2014). Does the timing of measurement alter session-RPE in boxers? Journal of Sports Science & Medicine, 13(1), 59–65. https://pubmed.ncbi.nlm.nih.gov/24570606/
+
+Christen, J., Foster, C., Porcari, J. P., & Mikat, R. P. (2016). Temporal robustness of the session rating of perceived exertion. International Journal of Sports Physiology and Performance, 11(8), 1088–1093. https://pubmed.ncbi.nlm.nih.gov/26999454/
 
 Note: References are formatted in APA style with links to the primary sources.`,
       },
@@ -855,61 +867,77 @@ Note: References are formatted in APA 7th edition style; details verified agains
     sectionsIS: [
       {
         heading: "Af hverju SSG?",
-        body: `Small-sided games eru leikjatengd \u00fej\u00e1lfun \u00fear sem leikmenn \u00fej\u00e1lfast \u00ed minni h\u00f3pum \u00e1 minna sv\u00e6\u00f0i. Ranns\u00f3knir s\u00fdna a\u00f0 SSG \u00fej\u00e1lfa b\u00e6\u00f0i l\u00edkamlega (aerobic/anaerobic) og t\u00e6knilega \u00fe\u00e6tti samtimis \u2014 eitthva\u00f0 sem hef\u00f0bundin \u00fej\u00e1lfun n\u00e6r ekki.
+        body: `Small-sided games eru leikjatengd þjálfun þar sem leikmenn æfa í minni hópum á minna svæði. Þau eru vinsæl af því að þau sameina hlaup og boltavinnu í einni æfingu, og þjálfarinn getur stýrt álaginu með fáum breytum: fjölda leikmanna, vallarstærð, reglum og hvatningu (Hill-Haas o.fl. 2011).
 
-Kosturinn er a\u00f0 leikma\u00f0urinn f\u00e6r miklu fleiri snertingar \u00e1 boltann, fleiri 1v1 a\u00f0st\u00e6\u00f0ur, og h\u00e6rri hjartsl\u00e1ttart\u00ed\u00f0ni en \u00ed 11v11 leik \u00e1 sama t\u00edma.`,
+Leikmaðurinn fær yfirleitt fleiri snertingar á boltann og lendir oftar í 1v1 stöðum en í 11v11 leik á sama tíma.`,
       },
       {
-        heading: "Leikmannafjoldi og \u00e1hrif",
-        body: `F\u00e6rri leikmenn = h\u00e6rra \u00e1lag \u00e1 hvern. 2v2 og 3v3 er n\u00e1l\u00e6gt 90% af HRmax, \u00e1 me\u00f0an 5v5 og 6v6 liggur n\u00e6r 80\u201385% HRmax. En \u00feetta er ekki jafn einfalt og \u00fea\u00f0 hlj\u00f3mar \u2014 flatarm\u00e1l \u00e1 leikmann skiptir miklu m\u00e1li.
+        heading: "Leikmannafjöldi og áhrif",
+        body: `Færri leikmenn og stærra svæði á hvern leikmann hækka yfirleitt ákefðina (Hill-Haas o.fl. 2011). Í einni rannsókn á 20 áhugamönnum var 3v3 á stærri velli með hvatningu þjálfara um 91% af HRmax, en 6v6 á litlum velli án hvatningar um 84% (Rampinini o.fl. 2007). Fjöldi leikmanna, vallarstærð og hvatning þjálfara höfðu öll áhrif.
 
-Ef \u00fe\u00fa ert me\u00f0 3v3 \u00e1 mj\u00f6g litlum velli (< 50 m\u00b2 per leikmann) ver\u00f0ur leikurinn boltahald og stutt sprettir. Ef v\u00f6llurinn er st\u00f3r (> 150 m\u00b2 per leikmann) ver\u00f0a meiri langar hlaup og aerobic \u00e1lag.`,
+Flatarmál á hvern leikmann skiptir líka máli. Þegar svæðið í 5v5 var stækkað úr um 75 í um 275 m² á leikmann jukust hlaup, sprettir, hjartsláttartíðni og RPE (Casamichana & Castellano 2010). Á mjög litlu svæði verður leikurinn meira boltahald í þröngu rými, með minna hlaupi.`,
       },
       {
-        heading: "Flatarm\u00e1l per leikmann \u2014 gullna reglan",
-        body: `Kerfisbundin yfirfer\u00f0 Sarmento o.fl. (2018) s\u00fdndi a\u00f0 vallarst\u00e6r\u00f0 og leikmannafj\u00f6ldi eru \u00fe\u00e6r breytur sem mest hafa veri\u00f0 rannsaka\u00f0ar til a\u00f0 st\u00fdra \u00e1lagi \u00ed SSG. Gullna sv\u00e6\u00f0i\u00f0 75\u2013150 m\u00b2 per leikmann er vinnuregla MicroPulse, ekki tala \u00far yfirfer\u00f0inni: undir 75 m\u00b2 minnkar hlaup\u00e1lag (of \u00fe\u00e9tt), yfir 200 m\u00b2 minnkar intensity vegna \u00feess a\u00f0 a\u00f0ger\u00f0ir ver\u00f0a of dreif\u00f0ar.
+        heading: "Flatarmál á leikmann",
+        body: `Kerfisbundin yfirferð Sarmento o.fl. (2018) sýndi að vallarstærð og leikmannafjöldi eru þær breytur sem mest hafa verið rannsakaðar til að stýra álagi í SSG. Bilið 75–150 m² á leikmann er vinnuregla MicroPulse, ekki tala úr rannsókn: undir um 75 m² minnkar hlaupálagið. Ef markmiðið er að ná hraðhlaupum og sprettum úr leik þarf mun stærra svæði, um 165–320 m² á leikmann eftir því hvort markmenn eru með (Riboli o.fl. 2020).
 
-MicroPulse drill-v\u00e9lsmi\u00f0ja reiknar \u00feetta sj\u00e1lfvirkt: \u00fe\u00fa sl\u00e6r inn leikmannafjolda og vellirst\u00e6r\u00f0 og kerfi\u00f0 gefur estimated %HRmax, hra\u00f0apr\u00f3f\u00edl og \u00e1lagsflokk.`,
+MicroPulse drill-vélsmiðja reiknar þetta sjálfvirkt: þú slærð inn leikmannafjölda og vallarstærð og kerfið gefur estimated %HRmax, hraðaprófíl og álagsflokk.`,
       },
       {
-        heading: "Hagn\u00fdt r\u00e1\u00f0",
-        body: "Viltu h\u00e6rra aerobic \u00e1lag? Auktu vellirst\u00e6r\u00f0ina og minnka\u00f0u leikmannafjolda (3v3 \u00e1 40\u00d730m). Viltu fleiri snertingar og t\u00e6knilegt \u00e1lag? Minnka\u00f0u vellinn og auk leikmannafjolda (5v5 \u00e1 30\u00d720m). Viltu herma eftir leik? 6v6 \u00e1 50\u00d735m er n\u00e1l\u00e6gt raunveruleiknum \u00ed \u00e1lagsformi. Nota\u00f0u MicroPulse SSG reikni\u00e9lina \u00e1 drill flipanum til a\u00f0 sj\u00e1 \u00e1hrif \u00fessara breyta \u00e1\u00f0ur en \u00fe\u00fa hannar \u00e6finguna.",
+        heading: "Hagnýt ráð",
+        body: "Vallarstærðirnar hér eru vinnudæmi MicroPulse, ekki úr rannsókn. Viltu meira hlaup og hærri hjartslátt? Fækkaðu leikmönnum og stækkaðu svæðið á hvern (3v3 á 40×30 m, um 200 m² á leikmann). Viltu meiri vinnu í þröngu rými og minna hlaup? Minnkaðu svæðið á hvern leikmann (5v5 á 30×20 m, um 60 m² á leikmann). Viltu nálgast hlaupin í leik? 6v6 á 50×35 m gefur um 145 m² á leikmann. Það nær heildarvegalengd leiks í leik án markmanna, en ekki hraðhlaupum og sprettum (Riboli o.fl. 2020). Notaðu MicroPulse SSG reiknivélina á drill flipanum til að sjá áhrif þessara breyta áður en þú hannar æfinguna.",
       },
       {
         heading: "Heimildir",
-        body: `Sarmento, H., Clemente, F. M., Harper, L. D., Costa, I. T. da, Owen, A., & Figueiredo, A. J. (2018). Small-sided games in soccer \u2013 a systematic review. International Journal of Performance Analysis in Sport, 18(5), 693\u2013749. https://doi.org/10.1080/24748668.2018.1517288
+        body: `Casamichana, D., & Castellano, J. (2010). Time-motion, heart rate, perceptual and motor behaviour demands in small-sides soccer games: Effects of pitch size. Journal of Sports Sciences, 28(14), 1615–1623. https://doi.org/10.1080/02640414.2010.521168
 
-Athugasemd: Heimildir eru settar fram \u00ed APA 7. \u00fatg\u00e1fu st\u00edl; atri\u00f0i voru sannreynd \u00ed g\u00f6gnum \u00fatgefenda.`,
+Hill-Haas, S. V., Dawson, B., Impellizzeri, F. M., & Coutts, A. J. (2011). Physiology of small-sided games training in football: A systematic review. Sports Medicine, 41(3), 199–220. https://doi.org/10.2165/11539740-000000000-00000
+
+Rampinini, E., Impellizzeri, F. M., Castagna, C., Abt, G., Chamari, K., Sassi, A., & Marcora, S. M. (2007). Factors influencing physiological responses to small-sided soccer games. Journal of Sports Sciences, 25(6), 659–666. https://doi.org/10.1080/02640410600811858
+
+Riboli, A., Coratella, G., Rampichini, S., Cé, E., & Esposito, F. (2020). Area per player in small-sided games to replicate the external load and estimated physiological match demands in elite soccer players. PLOS ONE, 15(9), e0229194. https://doi.org/10.1371/journal.pone.0229194
+
+Sarmento, H., Clemente, F. M., Harper, L. D., Costa, I. T. da, Owen, A., & Figueiredo, A. J. (2018). Small-sided games in soccer – a systematic review. International Journal of Performance Analysis in Sport, 18(5), 693–749. https://doi.org/10.1080/24748668.2018.1517288
+
+Athugasemd: Heimildir eru settar fram í APA 7. útgáfu stíl; atriði voru sannreynd í gögnum útgefenda og PubMed.`,
       },
     ],
     sectionsEN: [
       {
         heading: "Why SSG?",
-        body: `Small-sided games are game-based training where players train in smaller groups on reduced pitch sizes. Research shows SSG train both physical (aerobic/anaerobic) and technical aspects simultaneously \u2014 something traditional training cannot match.
+        body: `Small-sided games are game-based training where players train in smaller groups on reduced pitch sizes. They are popular because they combine running and ball work in one drill, and the coach can steer the load with a few levers: player number, pitch size, rules and encouragement (Hill-Haas et al. 2011).
 
-The advantage is that each player gets far more touches on the ball, more 1v1 situations, and higher heart rates than in 11v11 play over the same time period.`,
+Each player usually gets more touches on the ball and more 1v1 situations than in 11v11 play over the same time.`,
       },
       {
         heading: "Player count and its effects",
-        body: `Fewer players = higher load per player. 2v2 and 3v3 reaches close to 90% HRmax, while 5v5 and 6v6 sits around 80\u201385% HRmax. But it is not as simple as it sounds \u2014 area per player matters significantly.
+        body: `Fewer players and more area per player usually raise the intensity (Hill-Haas et al. 2011). In one study of 20 amateur players, 3v3 on a larger pitch with coach encouragement reached about 91% of HRmax, while 6v6 on a small pitch without encouragement reached about 84% (Rampinini et al. 2007). Player number, pitch size and coach encouragement each had an effect.
 
-If you run 3v3 on a very small pitch (< 50 m\u00b2 per player), the game becomes ball retention with short sprints. If the pitch is large (> 150 m\u00b2 per player), there are more long runs and aerobic load.`,
+Area per player matters too. When the area in 5v5 was increased from about 75 to about 275 m² per player, running, sprints, heart rate and RPE all went up (Casamichana & Castellano 2010). On a very small area the game becomes more ball retention in tight space, with less running.`,
       },
       {
-        heading: "Area per player \u2014 the golden rule",
-        body: `A systematic review by Sarmento et al. (2018) found pitch area and player number to be the most-studied levers for changing the load of a small-sided game. The 75\u2013150 m\u00b2 per player sweet spot is MicroPulse's working rule, not a figure from that review: below 75 m\u00b2, running load decreases (too congested); above 200 m\u00b2, intensity drops because actions become too dispersed.
+        heading: "Area per player",
+        body: `A systematic review by Sarmento et al. (2018) found pitch area and player number to be the most-studied levers for changing the load of a small-sided game. The 75–150 m² per player band is MicroPulse's working rule, not a figure from a study: below about 75 m², running load drops. To reach match levels of high-intensity running and sprinting you need far more space, about 165–320 m² per player depending on whether goalkeepers play (Riboli et al. 2020).
 
 The MicroPulse drill engine calculates this automatically: you enter player count and pitch size and the system gives you estimated %HRmax, speed profile, and load category.`,
       },
       {
         heading: "Practical tips",
-        body: "Want higher aerobic load? Increase pitch size and reduce player count (3v3 on 40\u00d730m). Want more touches and technical load? Shrink the pitch and increase player count (5v5 on 30\u00d720m). Want to simulate match conditions? 6v6 on 50\u00d735m approximates real-match load profile. Use the MicroPulse SSG calculator on the drill tab to preview the effects of these variables before designing your session.",
+        body: "The pitch sizes here are MicroPulse's worked examples, not from a study. Want more running and a higher heart rate? Use fewer players and more area per player (3v3 on 40×30 m, about 200 m² per player). Want more work in tight space and less running? Shrink the area per player (5v5 on 30×20 m, about 60 m² per player). Want to get close to match running? 6v6 on 50×35 m gives about 145 m² per player. That matches match total distance in a game without goalkeepers, but not high-intensity running or sprinting (Riboli et al. 2020). Use the MicroPulse SSG calculator on the drill tab to preview the effects of these variables before designing your session.",
       },
       {
         heading: "References",
-        body: `Sarmento, H., Clemente, F. M., Harper, L. D., Costa, I. T. da, Owen, A., & Figueiredo, A. J. (2018). Small-sided games in soccer – a systematic review. International Journal of Performance Analysis in Sport, 18(5), 693–749. https://doi.org/10.1080/24748668.2018.1517288
+        body: `Casamichana, D., & Castellano, J. (2010). Time-motion, heart rate, perceptual and motor behaviour demands in small-sides soccer games: Effects of pitch size. Journal of Sports Sciences, 28(14), 1615–1623. https://doi.org/10.1080/02640414.2010.521168
 
-Note: References are formatted in APA 7th edition style; details verified against publisher records.`,
+Hill-Haas, S. V., Dawson, B., Impellizzeri, F. M., & Coutts, A. J. (2011). Physiology of small-sided games training in football: A systematic review. Sports Medicine, 41(3), 199–220. https://doi.org/10.2165/11539740-000000000-00000
+
+Rampinini, E., Impellizzeri, F. M., Castagna, C., Abt, G., Chamari, K., Sassi, A., & Marcora, S. M. (2007). Factors influencing physiological responses to small-sided soccer games. Journal of Sports Sciences, 25(6), 659–666. https://doi.org/10.1080/02640410600811858
+
+Riboli, A., Coratella, G., Rampichini, S., Cé, E., & Esposito, F. (2020). Area per player in small-sided games to replicate the external load and estimated physiological match demands in elite soccer players. PLOS ONE, 15(9), e0229194. https://doi.org/10.1371/journal.pone.0229194
+
+Sarmento, H., Clemente, F. M., Harper, L. D., Costa, I. T. da, Owen, A., & Figueiredo, A. J. (2018). Small-sided games in soccer – a systematic review. International Journal of Performance Analysis in Sport, 18(5), 693–749. https://doi.org/10.1080/24748668.2018.1517288
+
+Note: References are formatted in APA 7th edition style; details verified against publisher records and PubMed.`,
       },
     ],
   },

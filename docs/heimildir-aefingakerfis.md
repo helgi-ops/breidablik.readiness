@@ -13,7 +13,7 @@ VALD-viðmið, endurheimt eftir leik, ísómetrískar æfingar, viðmið í þol
 - Í viðmótinu má smella á stutta tilvísun til að sjá fulla heimild (eða ástæðuna fyrir því að hún er óstaðfest).
 - Kóðinn: `src/lib/micropulse/references/ruleRefs.ts`. Próf passar að hver tilvísun í kóðanum sé hér.
 
-Æfingakerfið: 194 heimildir staðfestar og 5 ekki. Aðrar heimildir: 59 staðfestar og 3 ekki. Meiðsli, endurkoma og merki: 246 staðfestar og 13 ekki.
+Æfingakerfið: 194 heimildir staðfestar og 5 ekki. Aðrar heimildir: 59 staðfestar og 3 ekki. Meiðsli, endurkoma og merki: 249 staðfestar og 13 ekki.
 
 ## Heimildir
 
@@ -356,6 +356,7 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar. Kóðinn: `src/lib/mic
 - Carter JR, Ray CA. Sympathetic responses to vestibular activation in humans. Am J Physiol Regul Integr Comp Physiol 2008;294(3):R681–R688. doi:10.1152/ajpregu.00896.2007 PMID 18199586
 - Casamichana D, Castellano J. Time-motion, heart rate, perceptual and motor behaviour demands in small-sides soccer games: effects of pitch size. J Sports Sci 2010;28(14):1615–1623. doi:10.1080/02640414.2010.521168 PMID 21077005
 - Cheung K, Hume P, Maxwell L. Delayed onset muscle soreness: treatment strategies and performance factors. Sports Med 2003;33(2):145–164. doi:10.2165/00007256-200333020-00005 PMID 12617692
+- Christen J, Foster C, Porcari JP, Mikat RP. Temporal Robustness of the Session Rating of Perceived Exertion. Int J Sports Physiol Perform 2016;11(8):1088–1093. doi:10.1123/ijspp.2015-0438 PMID 26999454
 - Clanton TO, Matheny LM, Jarvis HC, Jeronimus AB. Return to play in athletes following ankle injuries. Sports Health 2012;4(6):471–474. doi:10.1177/1941738112463347 PMID 24179584
 - Clifton DR, Grooms DR, Onate JA. Overhead deep squat performance predicts Functional Movement Screen score. Int J Sports Phys Ther 2015;10(5):622–7. PMID 26491612 PMCID PMC4595915
 - Conte D, Kolb N, Scanlan AT, Santolamazza F. Monitoring Training Load and Well-Being During the In-Season Phase in National Collegiate Athletic Association Division I Men's Basketball. Int J Sports Physiol Perform 2018;13(8):1067–1074. doi:10.1123/ijspp.2017-0689 PMID 29431544
@@ -513,6 +514,7 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar. Kóðinn: `src/lib/mic
 - Schwellnus M, Soligard T, Alonso JM, Bahr R, Clarsen B, Dijkstra HP, Gabbett TJ, Gleeson M, Hägglund M, Hutchinson MR, Janse Van Rensburg C, Meeusen R, Orchard JW, Pluim BM, Raftery M, Budgett R, Engebretsen L. How much is too much? (Part 2) International Olympic Committee consensus statement on load in sport and risk of illness. Br J Sports Med 2016;50(17):1043–1052. doi:10.1136/bjsports-2016-096572 PMID 27535991
 - Shaw G, Lee-Barthel A, Ross ML, Wang B, Baar K. Vitamin C-enriched gelatin supplementation before intermittent activity augments collagen synthesis. Am J Clin Nutr 2017;105(1):136–143. doi:10.3945/ajcn.116.138594 PMID 27852613
 - Silbernagel KG, Thomeé R, Eriksson BI, Karlsson J. Continued sports activity, using a pain-monitoring model, during rehabilitation in patients with Achilles tendinopathy: a randomized controlled study. Am J Sports Med 2007;35(6):897–906. doi:10.1177/0363546506298279 PMID 17307888
+- Singh F, Foster C, Tod D, McGuigan MR. Monitoring different types of resistance training using session rating of perceived exertion. Int J Sports Physiol Perform 2007;2(1):34–45. doi:10.1123/ijspp.2.1.34 PMID 19255453
 - Siri WE. Body composition from fluid spaces and density: analysis of methods. In: Brožek J, Henschel A, eds. Techniques for Measuring Body Composition. Washington DC: National Academy of Sciences 1961;223–244. Reprinted in Nutrition 1993;9(5):480–491. PMID 8286893
 - Slimani M, Nikolaidis PT. Anthropometric and physiological characteristics of male soccer players according to their competitive level, playing position and age group: a systematic review. J Sports Med Phys Fitness 2019;59(1):141–163. doi:10.23736/S0022-4707.17.07950-6 PMID 29199782
 - Spencer M, Lawrence S, Rechichi C, Bishop D, Dawson B, Goodman C. Time-motion analysis of elite field hockey, with special reference to repeated-sprint activity. J Sports Sci 2004;22(9):843–850. doi:10.1080/02640410410001716715 PMID 15513278
@@ -532,6 +534,7 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar. Kóðinn: `src/lib/mic
 - Thorpe RT, Atkinson G, Drust B, Gregson W. Monitoring Fatigue Status in Elite Team-Sport Athletes: Implications for Practice. Int J Sports Physiol Perform 2017;12(Suppl 2):S227–S234. doi:10.1123/ijspp.2016-0434 PMID 28095065
 - Tomlin DL, Wenger HA. The relationship between aerobic fitness and recovery from high intensity intermittent exercise. Sports Med 2001;31(1):1–11. doi:10.2165/00007256-200131010-00001 PMID 11219498
 - Tuttle MC, Power CJ, Dalbo VJ, Scanlan AT. Intensity Zones and Intensity Thresholds Used to Quantify External Load in Competitive Basketball: A Systematic Review. Sports Med 2024;54(10):2571–2596. doi:10.1007/s40279-024-02058-5 PMID 38888854
+- Uchida MC, Teixeira LF, Godoi VJ, Marchetti PH, Conte M, Coutts AJ, Bacurau RF. Does the Timing of Measurement Alter Session-RPE in Boxers? J Sports Sci Med 2014;13(1):59–65. PMID 24570606
 - Vanhatalo A, Jones AM, Burnley M. Application of critical power in sport. Int J Sports Physiol Perform 2011;6(1):128–136. doi:10.1123/ijspp.6.1.128 PMID 21487156
 - Verheul J, Nedergaard NJ, Vanrenterghem J, Robinson MA. Measuring biomechanical loads in team sports – from lab to field. Sci Med Footb 2020;4(3):246–252. doi:10.1080/24733938.2019.1709654
 - Vidal AD, Nakajima M, Wu WFW, Becker J. Movement screens: Are we measuring movement dysfunction or movement skill? Int J Sports Sci Coach 2018;13(5):771–778. doi:10.1177/1747954118760225
