@@ -3,8 +3,8 @@
  * The hub's Pre-season tab renders it live from the Macro cycle, the fixtures and the coach's settings (no draft:
  * "Build pre-season" and its accept step were removed 2026-11-25). Nothing here is a new rule: it composes
  *
- *   upcomingPreseason → preseasonMeso + sliceByLengths (backwards from the opener)
- *   → preseasonBlockForWeeksOut (gym emphasis per block) → preseasonRamp (week 1 re-entry → build)
+ *   upcomingPreseason → sliceByLengths (the season row's block lengths — the slicing the strength delivery reads)
+ *   → block goal (the coach's, else blockGoalAt) → preseasonRamp (week 1 re-entry → build)
  *   → buildCalendarBlock (day types, MD labels, loads) → recommendTestingSchedule.
  *
  * "His choice stands": every setting the coach saved (sessions/week, week-1 ×match, per-KPI week 1, the
@@ -15,13 +15,11 @@
  * Rules decide; nothing here is AI. Descriptive load planning — never the readiness colour.
  */
 
-import { buildCalendarBlock, sliceByLengths, freeWeekLayout, type Bi, type CalType, type CalendarBlock, type MatchUnit, type MatchUnitAbs } from "./index";
+import { buildCalendarBlock, sliceByLengths, freeWeekLayout, blockGoalAt, BLOCK_GOAL_LABEL, type BlockGoalKey, type Bi, type CalType, type CalendarBlock, type MatchUnit, type MatchUnitAbs } from "./index";
 import { preseasonMatchExposure, defaultPeakMultiple, type PreseasonWeekTarget, type Confidence } from "./preseasonStart";
-import { upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, preseasonSettingsFrom, type PreseasonSavedRow, type PreseasonSettings, type PreseasonWindow, type PreseasonAnchor, PRESEASON_TAPER_RESEARCH } from "./preseasonWindow";
+import { upcomingPreseason, preseasonMeso, GAMES_FROM_NONE, preseasonAnchor, preseasonRamp, preseasonSettingsFrom, type PreseasonSavedRow, type PreseasonSettings, type PreseasonWindow, type PreseasonAnchor, PRESEASON_TAPER_RESEARCH } from "./preseasonWindow";
 import { recommendTestingSchedule, type AerobicMode, type TestPlan } from "./testingSchedule";
 import { fitWeekToTarget } from "./preseasonDayFit";
-import { preseasonBlockForWeeksOut } from "../strengthProgramming/seasonPhaseStrength";
-import type { PreseasonEmphasis } from "../strengthProgramming/preseasonEmphasis";
 
 const DAY = 86_400_000;
 const ms = (iso: string) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
@@ -71,6 +69,11 @@ export type PreseasonProposalInput = {
   savedDays?: Record<string, SavedDay>;
   /** Meso cadence (4/5/6 weeks) — the length of the base blocks. */
   cadence: number;
+  /** The season row's per-block lengths (overrides.blockWeeks, index- or start-keyed) — the map the strength
+   *  delivery slices the pre-season with. Given → the page shows exactly those blocks. */
+  blockWeeks?: Record<string, number> | null;
+  /** The coach's goal per block (overrides.blockGoals, keyed by the block's start). */
+  blockGoals?: Record<string, string> | null;
   baseOverloadPct?: number;
   stepPct?: number;
   aerobicMode?: AerobicMode | null;
@@ -90,14 +93,17 @@ export type ProposalChoice = {
   micropulseLine?: boolean;
 };
 
-export type ProposalBlock = { index: number; start: string; end: string; weeks: number; emphasis: PreseasonEmphasis | null; source: ProposalSource };
+/** A pre-season meso block: its goal is the coach's (`goalByCoach`) or the build-up order — the block the strength
+ *  sessions are sent from (resolveCurrentBlock reads the same lengths and goals). */
+export type ProposalBlock = { index: number; start: string; end: string; weeks: number; goalKey: BlockGoalKey; goalByCoach: boolean; source: ProposalSource };
 export type ProposalWeek = {
   weekIndex: number;
   weekStart: string;
   /** The calendar week's load multiple and unload flag (what Week Setup's week_setups row carries). */
   mult: number;
   isDeload: boolean;
-  emphasis: PreseasonEmphasis | null;
+  /** The goal of the meso block the week sits in (what the strength sessions are sent as). */
+  goalKey: BlockGoalKey;
   target: PreseasonWeekTarget;
   friendlies: string[];
   /** The assumed game this week (no game entered): its day and whether the coach placed it (else the Saturday rule). */
@@ -119,6 +125,9 @@ export type PreseasonProposal = {
   tests: Array<{ key: string; name: Bi; weeks: number[]; priority: TestPlan["priority"]; cite: string }>;
   gaps: Bi[];
   settings: PreseasonSettings;
+  /** Where the assumed Saturday games start: the coach's date, the first entered friendly (not set), off (the coach
+   *  chose none), or nowhere (not set and no friendly entered). */
+  weekendGames: { from: string | null; by: "coach" | "first_friendly" | "off" | "no_friendly" };
   /** Raw engine pieces the hub renders from (not stored with a draft). */
   engine: { ramp: PreseasonWeekTarget[]; cal: CalendarBlock; meso: { lens: number[]; base: number[]; tail: number[] }; blocks: Array<{ start: string; end: string; index: number }>; tests: TestPlan[]; fixtures: string[]; anchor: PreseasonAnchor };
 };
@@ -128,12 +137,6 @@ const MON_IS = ["jan", "feb", "mar", "apr", "maí", "jún", "júl", "ágú", "se
 const dEn = (iso: string) => `${Number(iso.slice(8, 10))} ${MON_EN[Number(iso.slice(5, 7)) - 1]}`;
 const dIs = (iso: string) => `${Number(iso.slice(8, 10))}. ${MON_IS[Number(iso.slice(5, 7)) - 1]}`;
 const num = (n: number, is: boolean) => (is ? String(n).replace(".", ",") : String(n));
-
-export const EMPHASIS_LABEL: Partial<Record<PreseasonEmphasis, Bi>> = {
-  hypertrophy: { en: "tissue base", is: "vefjagrunnur" },
-  max_strength: { en: "max strength", is: "hámarksstyrkur" },
-  power: { en: "power", is: "afl" },
-};
 
 /** Build the pre-season proposal. Returns null when there's no pre-season to plan (no phases yet). */
 export function buildPreseasonProposal(input: PreseasonProposalInput): PreseasonProposal | null {
@@ -181,7 +184,11 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   // Games come from the fixtures. From the coach's "weekend games from" date on, a week with no game entered
   // gets an assumed Saturday game; before it (and when no date is set) a week without a game is a
   // training week. The assumed games also label the days (MD-3, MD+1…). The user's rule, 2026-11-25.
-  const gamesFrom = settings.gamesFrom;
+  // Not set → from the first entered friendly (the user's rule 2026-11-25); "none" → only the entered games.
+  const firstFriendly = fixtures.find((f) => f !== input.nextFirstFixture) ?? null;
+  const gamesOff = settings.gamesFrom === GAMES_FROM_NONE;
+  const gamesFrom = gamesOff ? null : (settings.gamesFrom ?? firstFriendly);
+  const gamesFromBy: PreseasonProposal["weekendGames"]["by"] = gamesOff ? "off" : settings.gamesFrom ? "coach" : firstFriendly ? "first_friendly" : "no_friendly";
   const hasFriendly = (weekStart: string) => fixtures.some((d) => d >= weekStart && d < isoAdd(weekStart, 7));
   // The assumed game is on the Saturday (the user's rule 2026-11-25), in a week with no game entered. The coach
   // can move it to another day, take it out ("no game this week"), or put one in a week before `gamesFrom`
@@ -262,21 +269,39 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   // The taper week (last, light) is fitted to the ramp's taper total like any other week.
   const cal: CalendarBlock = { ...rawCal, weeks: rawCal.weeks.map((w, i) => (ramp[i] ? fitWeekToTarget(w, ramp[i], input.unit).week : w)) };
 
-  // Meso blocks, planned backwards: the coach's tail (nearest the opener) is exact, the base absorbs the rest.
+  // Meso blocks. With the season row's block lengths (the hub passes them): the SAME slicing the strength delivery
+  // reads (buildMesoBlocks → blockFromPlan) — cadence-long blocks from the pre-season start, the coach's lengths
+  // where he set them; the first block is the base, the rest the editable tail. The user's call 2026-11-25: the
+  // page shows what is delivered. Without them (older callers): planned backwards from the opener.
   const cadence = Math.max(2, Math.round(input.cadence));
-  const autoPre = sliceByLengths(preStart, preEndIso, cadence, {}, 0);
-  const autoTail = autoPre.slice(1).map((b) => Math.max(2, weeksBetween(b.start, b.end)));
-  const tail = settings.mesoTail ?? autoTail;
-  const meso = preseasonMeso(preWeeks, tail, cadence);
-  const lensMap: Record<string, number> = {};
-  meso.lens.forEach((n, i) => { lensMap[String(i)] = n; });
-  const sliced = sliceByLengths(preStart, preEndIso, cadence, lensMap, 0);
-  const tailSource: ProposalSource = settings.saved.mesoTail && !input.fromScratch ? "coach" : "rule";
-  const blocks: ProposalBlock[] = sliced.map((b, i) => ({
-    index: b.index, start: b.start, end: b.end, weeks: weeksBetween(b.start, b.end),
-    emphasis: preseasonBlockForWeeksOut(weeksBetween(b.start, preEndIso)),
-    source: i >= meso.base.length ? tailSource : "rule",
-  }));
+  const rowBw = input.blockWeeks && !input.fromScratch ? input.blockWeeks : null;
+  let sliced: Array<{ start: string; end: string; index: number }>;
+  let meso: { lens: number[]; base: number[]; tail: number[] };
+  if (input.blockWeeks !== undefined) {
+    sliced = sliceByLengths(preStart, preEndIso, cadence, rowBw ?? {}, 0);
+    const lens = sliced.map((b) => weeksBetween(b.start, b.end));
+    meso = { lens, base: lens.slice(0, 1), tail: lens.slice(1) };
+  } else {
+    const autoPre = sliceByLengths(preStart, preEndIso, cadence, {}, 0);
+    const autoTail = autoPre.slice(1).map((b) => Math.max(2, weeksBetween(b.start, b.end)));
+    meso = preseasonMeso(preWeeks, settings.mesoTail ?? autoTail, cadence);
+    const lensMap: Record<string, number> = {};
+    meso.lens.forEach((n, i) => { lensMap[String(i)] = n; });
+    sliced = sliceByLengths(preStart, preEndIso, cadence, lensMap, 0);
+  }
+  const lengthsByCoach = (settings.saved.mesoTail || Object.keys(rowBw ?? {}).length > 0) && !input.fromScratch;
+  const tailSource: ProposalSource = lengthsByCoach ? "coach" : "rule";
+  const goals = input.fromScratch ? {} : (input.blockGoals ?? {});
+  const blocks: ProposalBlock[] = sliced.map((b, i) => {
+    const cg = goals[b.start];
+    const byCoach = cg === "accum" || cg === "transmute" || cg === "realize";
+    return {
+      index: b.index, start: b.start, end: b.end, weeks: weeksBetween(b.start, b.end),
+      goalKey: byCoach ? (cg as BlockGoalKey) : blockGoalAt(i), goalByCoach: byCoach,
+      source: i >= meso.base.length ? tailSource : "rule",
+    };
+  });
+  const goalOfWeek = (weekStart: string): BlockGoalKey => (blocks.find((b) => b.start <= weekStart && weekStart < b.end) ?? blocks[blocks.length - 1]).goalKey;
 
   // Testing schedule (VALD / GPS gated add-ons).
   const testPlans = recommendTestingSchedule({ preseasonWeeks: preWeeks, hasGps: input.loadSource === "gps", hasVald: !!input.hasVald, aerobicMode: input.aerobicMode ?? null });
@@ -287,7 +312,7 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
     const weekStart = cw?.weekStart ?? isoAdd(preStart, i * 7);
     return {
       weekIndex: i + 1, weekStart, mult: cw?.mult ?? 1, isDeload: !!cw?.isDeload,
-      emphasis: preseasonBlockForWeeksOut(preWeeks - i),
+      goalKey: goalOfWeek(weekStart),
       target: w,
       friendlies: fixtures.filter((d) => d >= weekStart && d < isoAdd(weekStart, 7)),
       assumedGame: assumedBy.get(weekStart) ?? null,
@@ -351,11 +376,15 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
     }] : []),
     {
       key: "gamesFrom", label: { en: "Weekend games from", is: "Leikir um helgar frá" },
-      value: gamesFrom ? { en: dEn(gamesFrom), is: dIs(gamesFrom) } : { en: "Not set — entered games only", is: "Ekki stillt — aðeins skráðir leikir" },
+      value: gamesFromBy === "off" ? { en: "None — entered games only", is: "Engir — aðeins skráðir leikir" }
+        : gamesFrom ? (gamesFromBy === "first_friendly" ? { en: `${dEn(gamesFrom)} (first friendly)`, is: `${dIs(gamesFrom)} (fyrsti æfingaleikur)` } : { en: dEn(gamesFrom), is: dIs(gamesFrom) })
+          : { en: "No friendly entered — entered games only", is: "Enginn æfingaleikur skráður — aðeins skráðir leikir" },
       source: coach(settings.saved.gamesFrom),
       reason: gamesFrom
-        ? { en: `From ${dEn(gamesFrom)} every week without an entered game gets a game on the Saturday; before it, weeks without a game are training weeks.`, is: `Frá ${dIs(gamesFrom)} fær hver vika án skráðs leiks leik á laugardegi; fyrir þann dag eru vikur án leiks æfingavikur.` }
-        : { en: "Only the games in the fixtures. Set a date to add a weekend game every week from it.", is: "Aðeins leikirnir í leikjaskránni. Settu dagsetningu til að fá leik um hverja helgi frá henni." },
+        ? { en: `From ${dEn(gamesFrom)} every week without an entered game gets a game on the Saturday; before it, weeks without a game are training weeks.${gamesFromBy === "first_friendly" ? " Not set, so it starts at the first friendly." : ""}`, is: `Frá ${dIs(gamesFrom)} fær hver vika án skráðs leiks leik á laugardegi; fyrir þann dag eru vikur án leiks æfingavikur.${gamesFromBy === "first_friendly" ? " Ekki stillt, svo það byrjar á fyrsta æfingaleik." : ""}` }
+        : gamesFromBy === "off"
+          ? { en: "You chose no weekend games: only the games in the fixtures.", is: "Þú valdir enga helgarleiki: aðeins leikirnir í leikjaskránni." }
+          : { en: "Saturday games start at the first friendly — enter one, or set a date.", is: "Laugardagsleikir byrja á fyrsta æfingaleik — skráðu hann eða settu dagsetningu." },
     },
     {
       key: "week1Kpi", label: { en: "Week 1 per variable", is: "Vika 1 á hverja breytu" },
@@ -366,11 +395,11 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
     },
     {
       key: "blocks", label: { en: "Blocks", is: "Lotur" },
-      value: { en: blocks.map((b) => `${b.weeks} wk ${b.emphasis ? EMPHASIS_LABEL[b.emphasis]?.en ?? "" : ""}`.trim()).join(" → "), is: blocks.map((b) => `${b.weeks} v ${b.emphasis ? EMPHASIS_LABEL[b.emphasis]?.is ?? "" : ""}`.trim()).join(" → ") },
-      source: tailSource,
-      reason: tailSource === "coach"
-        ? { en: "Your blocks nearest the first game; the first block takes the remaining weeks.", is: "Þínar lotur næst fyrsta leik; fyrsta lotan tekur vikurnar sem eftir eru." }
-        : { en: `Planned backwards from the first game in ${cadence}-week blocks: tissue base far out, max strength in the middle, power last.`, is: `Skipulagt aftur á bak frá fyrsta leik í ${cadence} vikna lotum: vefjagrunnur fyrst, hámarksstyrkur í miðjunni, afl síðast.` },
+      value: { en: blocks.map((b) => `${b.weeks} wk ${BLOCK_GOAL_LABEL[b.goalKey].en}`).join(" → "), is: blocks.map((b) => `${b.weeks} v ${BLOCK_GOAL_LABEL[b.goalKey].is}`).join(" → ") },
+      source: tailSource === "coach" || blocks.some((b) => b.goalByCoach) ? "coach" : "rule",
+      reason: tailSource === "coach" || blocks.some((b) => b.goalByCoach)
+        ? { en: "Your block lengths and goals — the same blocks the strength sessions are sent from.", is: "Þínar lotulengdir og markmið — sömu lotur og styrktaræfingarnar eru sendar eftir." }
+        : { en: `${cadence}-week blocks from the start of the pre-season: Accumulation first, then Transmutation and Realization in turn — the same blocks the strength sessions are sent from.`, is: `${cadence} vikna lotur frá upphafi undirbúnings: fyrst Uppsöfnun, svo Umbreyting og Framkvæmd til skiptis — sömu lotur og styrktaræfingarnar eru sendar eftir.` },
       cite: "Issurin 2010",
     },
     {
@@ -398,8 +427,8 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   else if (input.nextFirstFixtureEstimated) gaps.push({ en: `First game is an estimate (${dEn(end)}) — enter the real date and the plan re-flows.`, is: `Fyrsti leikur er áætlaður (${dIs(end)}) — skráðu rétta dagsetningu og planið uppfærist.` });
   const assumedMatches = assumed.length;
   if (friendlyCount === 0) gaps.push(assumedMatches
-    ? { en: `No friendlies entered — the calendar assumes a Saturday game in ${assumedMatches} weeks from ${dEn(gamesFrom!)}. Enter the friendlies and the days re-flow around them.`, is: `Engir æfingaleikir skráðir — dagatalið gerir ráð fyrir leik á laugardegi í ${assumedMatches} vikum frá ${dIs(gamesFrom!)}. Skráðu æfingaleikina og dagarnir raðast í kringum þá.` }
-    : { en: "No games in the pre-season: enter the friendlies, or set \"Weekend games from\".", is: "Engir leikir í undirbúningnum: skráðu æfingaleikina eða stilltu „Leikir um helgar frá“." });
+    ? { en: `No friendlies entered — the calendar assumes a Saturday game in ${assumedMatches} weeks from ${dEn(gamesFrom ?? assumed[0])}. Enter the friendlies and the days re-flow around them.`, is: `Engir æfingaleikir skráðir — dagatalið gerir ráð fyrir leik á laugardegi í ${assumedMatches} vikum frá ${dIs(gamesFrom ?? assumed[0])}. Skráðu æfingaleikina og dagarnir raðast í kringum þá.` }
+    : { en: "No games in the pre-season: enter the friendlies (Saturday games are assumed from the first one), or set \"Weekend games from\".", is: "Engir leikir í undirbúningnum: skráðu æfingaleikina (laugardagsleikir koma frá þeim fyrsta) eða stilltu „Leikir um helgar frá“." });
 
   // ─── The layered read ───
   const w1 = ramp[0]?.multipleOfMatch ?? settings.week1MatchMultiple;
@@ -429,7 +458,7 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
     window: { start: preStart, weeks: preWeeks, end },
     verdict, facts, confidence, choices, weeks, blocks,
     tests: testPlans.map((tp) => ({ key: tp.protocol.key, name: tp.protocol.name, weeks: tp.weeks, priority: tp.priority, cite: tp.protocol.cite })),
-    gaps, settings,
+    gaps, settings, weekendGames: { from: gamesFrom, by: gamesFromBy },
     engine: { ramp, cal, meso, blocks: sliced, tests: testPlans, fixtures, anchor },
   };
 }

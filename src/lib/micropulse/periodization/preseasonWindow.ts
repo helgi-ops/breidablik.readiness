@@ -84,7 +84,8 @@ export type PreseasonSavedRow = {
   preMesoTail?: number[] | null;
   /** % cut of the light week before the opener (0 = none). */
   preTaperPct?: number | null;
-  /** Weekend games are assumed in weeks without an entered game from this day on (ISO); unset = entered games only. */
+  /** Weekend games are assumed in weeks without an entered game from this day on (ISO); "none" = no assumed games;
+   *  unset = from the first entered friendly. */
   preGamesFrom?: string | null;
   /** The coach's per-week assumed game: week Monday (ISO) → day offset 0–6 (Mon–Sun) or null (no game that week). */
   preAssumedGames?: Record<string, number | null> | null;
@@ -97,7 +98,8 @@ export type PreseasonSettings = {
   mesoTail: number[] | null;
   /** % cut of the light week before the opener (0 = no light week). */
   taperPct: number;
-  /** From this day (ISO) a week without an entered game gets an assumed weekend game; null = entered games only. */
+  /** From this day (ISO) a week without an entered game gets an assumed weekend game. `GAMES_FROM_NONE` = the coach
+   *  wants no assumed games; null = not set → from the first entered friendly (the user's rule, 2026-11-25). */
   gamesFrom: string | null;
   /** Week Monday → the day the assumed game is on (0 Mon … 6 Sun), or null = no game that week. A week missing
    *  from the map follows the rule (Saturday from `gamesFrom`). An entered game in the week always wins. */
@@ -105,6 +107,15 @@ export type PreseasonSettings = {
   /** Which of the above the coach actually saved (the rest are defaults) — "his choice stands". */
   saved: { sessionsPerWeek: boolean; week1MatchMultiple: boolean; week1Kpi: boolean; mesoTail: boolean; taperPct: boolean; gamesFrom: boolean; assumedGames: boolean };
 };
+
+/** "Weekend games from" set to none: only the entered games, no assumed Saturday games. */
+export const GAMES_FROM_NONE = "none";
+
+/** A saved "weekend games from": an ISO day, `GAMES_FROM_NONE`, or null (not set). */
+export function cleanGamesFrom(v: unknown): string | null {
+  if (v === GAMES_FROM_NONE) return GAMES_FROM_NONE;
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+}
 
 /** Clean a saved `preAssumedGames` map: ISO Monday keys, values null or an integer 0–6. Anything else is dropped. */
 export function cleanAssumedGames(v: unknown): Record<string, number | null> {
@@ -128,7 +139,7 @@ export function preseasonSettingsFrom(row: PreseasonSavedRow): PreseasonSettings
     for (const [k, v] of Object.entries(r.preWeek1Kpi)) if (typeof v === "number" && Number.isFinite(v) && v > 0) kpi[k] = v;
   }
   const tpOk = typeof r.preTaperPct === "number" && Number.isFinite(r.preTaperPct);
-  const gamesFrom = typeof r.preGamesFrom === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.preGamesFrom) ? r.preGamesFrom : null;
+  const gamesFrom = cleanGamesFrom(r.preGamesFrom);
   const assumedGames = cleanAssumedGames(r.preAssumedGames);
   const tail = Array.isArray(r.preMesoTail) ? r.preMesoTail.filter((n) => typeof n === "number" && Number.isFinite(n)) : [];
   return {

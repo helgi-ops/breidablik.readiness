@@ -13,7 +13,7 @@ import { mondayOfIso, nextValdTrimLiftLog, type ValdTrimLift } from "@/lib/micro
 import { isAerobicMode, DEFAULT_AEROBIC_TEST, type AerobicMode } from "@/lib/micropulse/periodization/testingSchedule";
 import { writeWeekSetup } from "@/lib/micropulse/periodization/weekSetupWrite";
 import { guardSeasonWindow } from "@/lib/micropulse/periodization/seasonWindowGuard";
-import { cleanAssumedGames } from "@/lib/micropulse/periodization/preseasonWindow";
+import { cleanAssumedGames, cleanGamesFrom } from "@/lib/micropulse/periodization/preseasonWindow";
 
 export const runtime = "nodejs";
 
@@ -104,6 +104,8 @@ export async function GET(req: Request) {
       seasonYear: nextYear,
       preseasonWeek1Mult: nx.preseasonWeek1Mult ?? null, preseasonSessions: nx.preseasonSessions ?? null, stepPct: nx.stepPct ?? null,
       blockGoals: nx.blockGoals ?? {}, blockWeeks: nx.blockWeeks ?? {}, blockDeload: nx.blockDeload ?? {},
+      // The next row's meso cadence: the strength delivery slices that pre-season with it.
+      deloadCadence: [4, 5, 6].includes(Number(nx.deloadCadence)) ? Number(nx.deloadCadence) : null,
       preMesoTail: Array.isArray(nx.preMesoTail) ? nx.preMesoTail : null,
       preWeek1Kpi: nx.preWeek1Kpi && typeof nx.preWeek1Kpi === "object" ? nx.preWeek1Kpi : null,
       preTaperPct: typeof nx.preTaperPct === "number" ? nx.preTaperPct : null,
@@ -200,10 +202,11 @@ export async function POST(req: Request) {
   if (body.overrides && "aerobicTest" in body.overrides && !isAerobicMode(body.overrides.aerobicTest)) {
     if (prevOverrides.aerobicTest !== undefined) mergedOverrides.aerobicTest = prevOverrides.aerobicTest; else delete mergedOverrides.aerobicTest;
   }
-  // "Weekend games from" is an ISO day or null (cleared); anything else keeps the saved value.
+  // "Weekend games from" is an ISO day, "none" (no assumed games) or null (cleared → from the first friendly);
+  // anything else keeps the saved value.
   if (body.overrides && "preGamesFrom" in body.overrides) {
     const g = body.overrides.preGamesFrom;
-    if (!(g === null || (typeof g === "string" && /^\d{4}-\d{2}-\d{2}$/.test(g)))) {
+    if (!(g === null || cleanGamesFrom(g) != null)) {
       if (prevOverrides.preGamesFrom !== undefined) mergedOverrides.preGamesFrom = prevOverrides.preGamesFrom; else delete mergedOverrides.preGamesFrom;
     }
   }

@@ -1362,7 +1362,7 @@ const BLOCK_GOALS: Array<{ phase: Bi; goal: Bi }> = [
 const GOAL_BY_KEY: Record<RecGoalKey, { phase: Bi; goal: Bi }> = { accum: BLOCK_GOALS[0], transmute: BLOCK_GOALS[1], realize: BLOCK_GOALS[2] };
 // The block sequence: open with Accumulation, then repeat Transmutation → Realization (Issurin 2010).
 // This is the PRE-SEASON build-up order; in-season the goal follows the fixtures (blockGoalFromSeason).
-const blockGoalAt = (i: number): RecGoalKey => (i === 0 ? "accum" : i % 2 === 1 ? "transmute" : "realize");
+export const blockGoalAt = (i: number): RecGoalKey => (i === 0 ? "accum" : i % 2 === 1 ? "transmute" : "realize");
 
 /**
  * The block goal, fixture-aware — the SAME rule the block-goal recommender uses, applied to the

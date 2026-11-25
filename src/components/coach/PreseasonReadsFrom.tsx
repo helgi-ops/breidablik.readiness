@@ -35,7 +35,8 @@ export default function PreseasonReadsFrom({ is, prop, opener, openerEstimated, 
   const friendlies = prop.engine.fixtures.filter((f) => f !== opener);
   const entered = new Set(prop.engine.fixtures);
   const assumed = prop.weeks.flatMap((w) => w.days).filter((x) => x.type === "match" && !entered.has(x.date) && x.date !== opener).length;
-  const games = prop.settings.gamesFrom;
+  const games = prop.weekendGames.from;
+  const gamesBy = prop.weekendGames.by;
   const sess = prop.settings.sessionsPerWeek;
 
   const row = (label: Bi, value: React.ReactNode, missing = false) => (
@@ -66,8 +67,10 @@ export default function PreseasonReadsFrom({ is, prop, opener, openerEstimated, 
           !opener || openerEstimated)}
         {row({ en: "Friendlies", is: "Æfingaleikir" }, friendlies.length ? friendlies.map(d).join(", ") : t({ en: "none entered — add them below", is: "engir skráðir — bættu þeim við hér fyrir neðan" }), !friendlies.length)}
         {row({ en: "Weeks without a game", is: "Vikur án leiks" }, games
-          ? t({ en: `a game on the Saturday from ${d(games)} (${assumed} weeks); before it a training week of ${sess} sessions`, is: `leikur á laugardegi frá ${d(games)} (${assumed} vikur); fyrir þann dag æfingavika með ${sess} æfingum` })
-          : t({ en: `a training week of ${sess} sessions (set "Weekend games from" below to add Saturday games)`, is: `æfingavika með ${sess} æfingum (stilltu „Leikir um helgar frá“ hér fyrir neðan til að bæta við laugardagsleikjum)` }))}
+          ? t({ en: `a game on the Saturday from ${d(games)}${gamesBy === "first_friendly" ? " (the first friendly)" : ""} (${assumed} weeks); before it a training week of ${sess} sessions`, is: `leikur á laugardegi frá ${d(games)}${gamesBy === "first_friendly" ? " (fyrsta æfingaleik)" : ""} (${assumed} vikur); fyrir þann dag æfingavika með ${sess} æfingum` })
+          : gamesBy === "off"
+            ? t({ en: `a training week of ${sess} sessions (you chose no weekend games)`, is: `æfingavika með ${sess} æfingum (þú valdir enga helgarleiki)` })
+            : t({ en: `a training week of ${sess} sessions — Saturday games start at the first friendly you enter`, is: `æfingavika með ${sess} æfingum — laugardagsleikir byrja á fyrsta æfingaleik sem þú skráir` }))}
       </dl>
       {prop.gaps.length > 0 && (
         <ul className="mt-2 space-y-0.5 text-[12px] text-[#8a5a10]">{prop.gaps.map((g, i) => <li key={i}>⚠ {t(g)}</li>)}</ul>

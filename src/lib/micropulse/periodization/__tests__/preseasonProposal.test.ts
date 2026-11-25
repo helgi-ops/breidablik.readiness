@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildPreseasonProposal, caltypeFromFocus, type PreseasonProposalInput } from "../preseasonProposal";
-import { buildCalendarBlock, sliceByLengths, type CalType, type MatchUnit, type MatchUnitAbs, type SeasonPhase } from "../index";
+import { buildCalendarBlock, buildMesoBlocks, sliceByLengths, type CalType, type MatchUnit, type MatchUnitAbs, type SeasonPhase } from "../index";
 import { preseasonMatchExposure } from "../preseasonStart";
 import { upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp } from "../preseasonWindow";
 import { recommendTestingSchedule } from "../testingSchedule";
@@ -218,14 +218,26 @@ describe("buildPreseasonProposal — the days add up to the week's plan", () => 
   });
 });
 
-describe("buildPreseasonProposal — games: entered ones always, assumed weekend games only from the coach's date", () => {
+describe("buildPreseasonProposal — games: entered ones always, assumed Saturday games from the coach's date, else the first friendly", () => {
   const matchDays = (p: NonNullable<ReturnType<typeof buildPreseasonProposal>>) => p.weeks.flatMap((w) => w.days).filter((d) => d.type === "match").map((d) => d.date);
   const savedWith = (preGamesFrom?: string | null) => ({ preseasonSessions: 5, preseasonWeek1Mult: 1.2, preMesoTail: [3, 2], preGamesFrom });
 
-  it("not set → only the entered games; every other week is a training week that carries the week's plan", () => {
+  it("not set → a Saturday game in every game-free week from the first friendly on, none before it (user's rule 2026-11-25)", () => {
     const p = buildPreseasonProposal(base({ savedDays: {}, saved: savedWith(null) }))!;
-    expect(matchDays(p)).toEqual(FRIENDLIES);
+    const games = matchDays(p);
+    for (const f of FRIENDLIES) expect(games).toContain(f);
+    expect(games.filter((d) => d < FRIENDLIES[0])).toEqual([]);
+    for (const d of games.filter((g) => !FRIENDLIES.includes(g))) expect(new Date(`${d}T00:00:00Z`).getUTCDay()).toBe(6);
+    for (const w of p.weeks) if (w.weekStart > FRIENDLIES[0]) expect(w.days.some((d) => d.type === "match")).toBe(true);
+    expect(p.weekendGames).toEqual({ from: FRIENDLIES[0], by: "first_friendly" });
     expect(p.settings.gamesFrom).toBeNull();
+  });
+
+  it("\"none\" → only the entered games; every other week is a training week that carries the week's plan", () => {
+    const p = buildPreseasonProposal(base({ savedDays: {}, saved: savedWith("none") }))!;
+    expect(matchDays(p)).toEqual(FRIENDLIES);
+    expect(p.weekendGames).toEqual({ from: null, by: "off" });
+    expect(p.choices.find((c) => c.key === "gamesFrom")?.source).toBe("coach");
     for (const w of p.engine.cal.weeks) expect(w.days.filter((d) => d.type !== "rest" && d.type !== "match").length).toBeGreaterThan(0);
     // A week with no game has no match day to count from → no MD labels.
     const free = p.engine.cal.weeks.find((w) => !w.days.some((d) => d.type === "match"))!;
@@ -254,8 +266,9 @@ describe("buildPreseasonProposal — games: entered ones always, assumed weekend
   it("games after New Year reach the plan when the caller passes them (the loader's upcomingFixtures)", () => {
     const thisYearOnly = buildPreseasonProposal(base({ savedDays: {}, fixtures: ["2026-10-17"] }))!;
     expect(matchDays(thisYearOnly)).toEqual([]);
+    expect(thisYearOnly.weekendGames.by).toBe("no_friendly");
     const withNext = buildPreseasonProposal(base({ savedDays: {}, fixtures: ["2026-10-17", ...FRIENDLIES, OPENER] }))!;
-    expect(matchDays(withNext)).toEqual(FRIENDLIES);
+    for (const f of FRIENDLIES) expect(matchDays(withNext)).toContain(f);
   });
 });
 
@@ -360,5 +373,36 @@ describe("buildPreseasonProposal — sessions a week set the days in a week WITH
     const p3 = buildPreseasonProposal(base({ savedDays: {}, saved: { preseasonSessions: 3, preseasonWeek1Mult: 1.2 } }))!;
     // A training camp week keeps the camp's days (the coach entered the camp).
     for (const w of p3.weeks) if (!(w.weekStart <= "2027-02-21" && "2027-02-15" < addIso(w.weekStart, 7))) expect(sess(w)).toBeLessThanOrEqual(3);
+  });
+});
+
+describe("buildPreseasonProposal — the blocks are the ones the strength delivery reads (lota 3, user's call 2026-11-25)", () => {
+  // Breiðablik 2027 shape: start-keyed lengths from Meso, cadence 6, the coach's goal on three blocks.
+  const PH: SeasonPhase[] = [phase("preseason", "2026-11-30", "2027-04-10", 19), phase("competitive", "2027-04-10", "2027-10-26", 28)];
+  const bw = { "2026-11-30": 4, "2026-12-28": 4 };
+  const goals = { "2026-12-28": "accum", "2027-01-25": "transmute", "2027-03-08": "realize" };
+  const p = buildPreseasonProposal(base({ phases: PH, today: "2026-11-25", nextFirstFixture: "2027-04-10", saved: null, savedDays: {}, cadence: 6, blockWeeks: bw, blockGoals: goals, fixtures: ["2027-01-08", "2027-01-23", "2027-04-10"] }))!;
+
+  it("same boundaries and goals as buildMesoBlocks + the coach's goals (what blockFromPlan returns)", () => {
+    const delivered = buildMesoBlocks("2026-11-30", "2027-10-26", [], 6, null, ["2027-04-10"], "2027-04-10", [], null, null, { blockWeeks: bw })
+      .filter((b) => b.start < "2027-04-10")
+      .map((b) => ({ start: b.start, end: b.end, goalKey: (goals as Record<string, string>)[b.start] ?? b.goalKey }));
+    expect(p.blocks.map((b) => ({ start: b.start, end: b.end, goalKey: b.goalKey }))).toEqual(delivered);
+    expect(p.blocks.map((b) => b.start)).toEqual(["2026-11-30", "2026-12-28", "2027-01-25", "2027-03-08"]);
+    expect(p.blocks.map((b) => b.goalByCoach)).toEqual([false, true, true, true]);
+  });
+
+  it("every week carries its block's goal; the editor's tail is the blocks after the first", () => {
+    for (const w of p.weeks) {
+      const b = p.blocks.find((x) => x.start <= w.weekStart && w.weekStart < x.end)!;
+      expect(w.goalKey).toBe(b.goalKey);
+    }
+    expect(p.engine.meso.tail).toEqual(p.blocks.slice(1).map((b) => b.weeks));
+  });
+
+  it("no lengths saved → cadence blocks from the start, goals in the build-up order", () => {
+    const q = buildPreseasonProposal(base({ phases: PH, nextFirstFixture: "2027-04-10", saved: null, savedDays: {}, cadence: 6, blockWeeks: {}, blockGoals: {}, fixtures: [] }))!;
+    expect(q.blocks.map((b) => b.start)).toEqual(["2026-11-30", "2027-01-11", "2027-02-22", "2027-04-05"]);
+    expect(q.blocks.map((b) => b.goalKey)).toEqual(["accum", "transmute", "realize", "transmute"]);
   });
 });

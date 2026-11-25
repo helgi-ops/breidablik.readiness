@@ -32,7 +32,9 @@ import BuildUpTrackingCard from "@/components/coach/BuildUpTrackingCard";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
 import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
-import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
+import { strengthConfigForPhase, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
+import { preseasonStrengthWeeks, schemeHead } from "@/lib/micropulse/strengthProgramming/preseasonStrength";
+import { STRUCTURE_LABEL, sanitizeMdStructures, type MdStructures, type NoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
 import { preseasonMatchExposure, NORMATIVE_MATCH_KPI, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
 import { weeklyTargetFromMatch } from "@/lib/micropulse/periodization";
 import { upcomingInternationalBreaks, intlBreakKey, type IntlBreak } from "@/lib/micropulse/internationalBreaks";
@@ -46,7 +48,7 @@ import PlanIntentCard from "@/components/coach/PlanIntentCard";
 import { CiteRefs } from "@/components/coach/CiteRefs";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 import { kpiAvgFromUnit as kpiAvgFromUnitLib, teamKpiAvg as teamKpiAvgLib } from "@/lib/micropulse/periodization/preseasonKpiMap";
-import { cleanAssumedGames, upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, PRE_MIN_BLOCK, PRESEASON_DEFAULT_WEEK1, PRESEASON_DEFAULT_TAPER_PCT, PRESEASON_TAPER_RESEARCH, clampTaperPct } from "@/lib/micropulse/periodization/preseasonWindow";
+import { cleanAssumedGames, GAMES_FROM_NONE, upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, PRE_MIN_BLOCK, PRESEASON_DEFAULT_WEEK1, PRESEASON_DEFAULT_TAPER_PCT, PRESEASON_TAPER_RESEARCH, clampTaperPct } from "@/lib/micropulse/periodization/preseasonWindow";
 import { buildPreseasonProposal } from "@/lib/micropulse/periodization/preseasonProposal";
 import PreseasonReadsFrom from "@/components/coach/PreseasonReadsFrom";
 import { checkThreeInARow, THREE_IN_A_ROW_RULE, type WeekRuleDay } from "@/lib/micropulse/weekSetup/weekRules";
@@ -255,8 +257,11 @@ export default function PeriodizationHubPage() {
   // season_plans row, so next year's planning survives the calendar rollover and never shares block indices
   // with the current season (the ártal-skörðun fix). Only used when `upcomingYear` (see below); in-season the
   // Pre-season tab falls back to the current-year store unchanged.
-  // Only the setter is used now (the upcoming pre-season's derived blockWeeks is written straight to its row).
-  const [, setPreBlockLenOv] = React.useState<Record<string, number>>({});
+  // The upcoming pre-season's block lengths, goals and cadence (next season's row) — the strength delivery slices
+  // that pre-season with them, so the Pre-season page shows the same blocks.
+  const [preBlockLenOv, setPreBlockLenOv] = React.useState<Record<string, number>>({});
+  const [preBlockGoals, setPreBlockGoals] = React.useState<Record<string, "accum" | "transmute" | "realize">>({});
+  const [preCadence, setPreCadence] = React.useState<number | null>(null);
   const [prePsWeek1Mult, setPrePsWeek1Mult] = React.useState(1.3);
   const [prePsSessions, setPrePsSessions] = React.useState(4);
   // % cut of the light week before the opener (0 = none) — current / upcoming season rows, like week 1 above.
@@ -334,6 +339,20 @@ export default function PeriodizationHubPage() {
         const res = await fetch("/api/coach/team/strength-rules", { headers: { Authorization: await authHeader() } });
         const j = await res.json().catch(() => null);
         if (alive && res.ok && j?.ok) setCoachStrengthRules((j.rules ?? {}) as CoachStrengthRules);
+      } catch { /* defaults win */ }
+    })();
+    return () => { alive = false; };
+  }, [authHeader]);
+  // The team's method per MD day + weekday plan for weeks without a game (team_strength_palette) — what the strength
+  // delivery builds the heavy days from; the Pre-season page shows them per week. null → the engine defaults.
+  const [teamPalette, setTeamPalette] = React.useState<{ mdStructures: MdStructures; noMatchWeek: NoMatchWeek | null } | null>(null);
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/coach/team/strength-palette", { headers: { Authorization: await authHeader() } });
+        const j = await res.json().catch(() => null);
+        if (alive && res.ok && j?.ok) setTeamPalette({ mdStructures: sanitizeMdStructures(j.mdStructures), noMatchWeek: (j.noMatchWeek ?? null) as NoMatchWeek | null });
       } catch { /* defaults win */ }
     })();
     return () => { alive = false; };
@@ -421,7 +440,7 @@ export default function PeriodizationHubPage() {
       if (carrySeedRef.current) { if (!sw?.preseasonStart) setPreStart(carrySeedRef.current); carrySeedRef.current = ""; }
       // The UPCOMING pre-season's saved overrides live in NEXT season's row — restore them into the separate
       // pre-season store so the Pre-season tab reads/writes that row (survives the rollover; no index clash).
-      const swn = (j as { savedWindowNext?: { preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; blockWeeks?: Record<string, number>; preMesoTail?: number[] | null; preWeek1Kpi?: Record<string, number> | null; preTaperPct?: number | null; preGamesFrom?: string | null } | null }).savedWindowNext;
+      const swn = (j as { savedWindowNext?: { preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; blockWeeks?: Record<string, number>; blockGoals?: Record<string, "accum" | "transmute" | "realize">; deloadCadence?: number | null; preMesoTail?: number[] | null; preWeek1Kpi?: Record<string, number> | null; preTaperPct?: number | null; preGamesFrom?: string | null } | null }).savedWindowNext;
       if (swn && (!didPopulateNext.current || opts?.repopulate)) {
         didPopulateNext.current = true;
         if (swn.preseasonWeek1Mult != null && Number.isFinite(swn.preseasonWeek1Mult)) setPrePsWeek1Mult(Math.max(0.5, Math.min(3, swn.preseasonWeek1Mult)));
@@ -429,7 +448,9 @@ export default function PeriodizationHubPage() {
         if (swn.preTaperPct != null && Number.isFinite(swn.preTaperPct)) setPrePsTaperPct(clampTaperPct(swn.preTaperPct));
         setPrePsGamesFrom(typeof swn.preGamesFrom === "string" ? swn.preGamesFrom : null);
         setPrePsAssumed(cleanAssumedGames((swn as { preAssumedGames?: unknown }).preAssumedGames));
-        if (swn.blockWeeks && Object.keys(swn.blockWeeks).length) setPreBlockLenOv(swn.blockWeeks);
+        setPreBlockLenOv(swn.blockWeeks && typeof swn.blockWeeks === "object" ? swn.blockWeeks : {});
+        setPreBlockGoals(swn.blockGoals && typeof swn.blockGoals === "object" ? swn.blockGoals : {});
+        setPreCadence(swn.deloadCadence === 4 || swn.deloadCadence === 5 || swn.deloadCadence === 6 ? swn.deloadCadence : null);
         if (Array.isArray(swn.preMesoTail) && swn.preMesoTail.length) setNextMesoTail(swn.preMesoTail.filter((n) => Number.isFinite(n)));
         if (swn.preWeek1Kpi && typeof swn.preWeek1Kpi === "object") setNextWeek1Kpi(swn.preWeek1Kpi);
       }
@@ -460,7 +481,7 @@ export default function PeriodizationHubPage() {
     setPreStart(""); setSeasonEnd(""); setOffStart(""); setNextPreStart("");
     setSavedFrame({ preStart: "", seasonEnd: "", offStart: "", nextPreStart: "" }); setLeagueDraft(null);
     setBlockGoals({}); setBlockLenOv({}); setBlockDeloadOv({});
-    setNextMesoTail(null); setPreBlockLenOv({}); setCurMesoTail(null); setCurWeek1Kpi({}); setNextWeek1Kpi({});
+    setNextMesoTail(null); setPreBlockLenOv({}); setPreBlockGoals({}); setPreCadence(null); setCurMesoTail(null); setCurWeek1Kpi({}); setNextWeek1Kpi({});
     setCadence(4); setBlkStep(5); setPsWeek1Mult(1.3); setPsSessions(4); setPsTaperPct(PRESEASON_DEFAULT_TAPER_PCT); setPsGamesFrom(null); setPsAssumed({});
     nextPreStartRef.current = "";
     void load("", "");
@@ -1084,6 +1105,17 @@ export default function PeriodizationHubPage() {
     else { setPsGamesFrom(v); persistOverridePatch({ preGamesFrom: v }); }
   };
   const psAssumedT = upcomingYear ? prePsAssumed : psAssumed;
+  // The pre-season's block lengths / goals / cadence — the viewed row's, or next season's row when the pre-season
+  // being planned belongs to it. The same values the strength delivery reads (resolveCurrentBlock).
+  const preBlockWeeksT = upcomingYear ? preBlockLenOv : blockLenOv;
+  const preBlockGoalsT = upcomingYear ? preBlockGoals : blockGoals;
+  const preCadenceT = upcomingYear ? (preCadence ?? cadence) : cadence;
+  // Set (or clear → the build-up order) one pre-season block's goal; saved at once to that row's blockGoals.
+  const setPreseasonGoal = (blockStart: string, g: "accum" | "transmute" | "realize" | null) => {
+    const next = { ...preBlockGoalsT }; if (g) next[blockStart] = g; else delete next[blockStart];
+    if (upcomingYear) setPreBlockGoals(next); else setBlockGoals(next);
+    (async () => { try { await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: preYear, overrides: { blockGoals: next } }) }); } catch { /* best-effort persist */ } })();
+  };
   // Move / remove / restore the assumed game in a pre-season week (no game entered there). The week re-flows around
   // the new game day (its saved days are not read) and is saved whole to week_plans — the same write as a day edit —
   // so Week Setup shows the week the Pre-season page shows.
@@ -1514,15 +1546,6 @@ export default function PeriodizationHubPage() {
             const onBreak = teamBreaks.some((b) => b.start_date <= todayIso && todayIso <= b.end_date);
             const congestedWeek = (plan.congested ?? []).some((c) => mondayOf(c.weekStart) === thisMon);
             const cfg = strengthConfigForPhase(phaseKey, { onBreak, congestedWeek }, coachStrengthRules?.phase?.[phaseKey]);
-            const fxMs = fixtures.map((f) => utc(f)).filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
-            const nextFx = fxMs.find((ms) => ms >= utc(todayIso));
-            const weeksToOpener = phaseKey === "preseason" && nextFx ? Math.round((nextFx - utc(todayIso)) / (7 * DAY)) : null;
-            const psBlock = phaseKey === "preseason" ? preseasonBlockForWeeksOut(weeksToOpener) : null;
-            const PS_BLOCK_LABEL: Record<string, Bi> = {
-              hypertrophy: { en: "Hypertrophy / strength-endurance", is: "Hypertrophy / styrktar-þol" },
-              max_strength: { en: "Max strength", is: "Hámarksstyrkur" },
-              power: { en: "Power / speed", is: "Afl / hraði" },
-            };
             const compEnd = compPhase?.end ?? null;
             const nowSub = compStart && compEnd && todayIso >= compStart && todayIso <= compEnd
               ? classifyInSeasonSubPhase({ weekStart: todayIso, fixtures, breaks: teamBreaks, competitiveEnd: compEnd }) : null;
@@ -2049,13 +2072,6 @@ export default function PeriodizationHubPage() {
               <h2 className={h2}>{is ? "Styrkur núna" : "Strength right now"}</h2>
               <p className="mt-1 text-[13px] font-semibold text-slate-900">{is ? cfg.verdict.is : cfg.verdict.en}</p>
               <p className="mt-0.5 text-[13px] text-slate-600">{is ? cfg.intensity.is : cfg.intensity.en}</p>
-              {psBlock && (
-                <p className="mt-1.5 text-[13px] text-slate-700">
-                  <span className="font-semibold">{is ? "Núverandi blokk" : "Current block"}:</span> {is ? PS_BLOCK_LABEL[psBlock].is : PS_BLOCK_LABEL[psBlock].en}
-                  {weeksToOpener != null && <span className="text-slate-500"> · {is ? `${weeksToOpener} vikur í fyrsta leik` : `${weeksToOpener} weeks to the opener`}</span>}
-                  <span className="text-slate-500"> · {is ? "per-leikmanns upphaf í Leikmenn-flipanum" : "per-player start in the Players tab"}</span>
-                </p>
-              )}
               {cfg.flags.map((f, i) => <p key={i} className="mt-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[12px] font-medium text-amber-900">⚑ {is ? f.is : f.en}</p>)}
               <div className="mt-3 space-y-2">
                 {nowSub && (
@@ -2252,7 +2268,7 @@ export default function PeriodizationHubPage() {
               phases: plan.phases, today: todayIso, nextFirstFixture: plan.nextFirstFixture, nextFirstFixtureEstimated: plan.nextFirstFixtureEstimated,
               saved: null, settingsOverride: { sessionsPerWeek: psSessT, week1MatchMultiple: psW1T, week1Kpi: week1KpiT, mesoTail: mesoTailT, taperPct: psTaperT, gamesFrom: psGamesT, assumedGames: psAssumedT },
               matchUnits: plan.players.map((p) => p.matchUnit as unknown as LibMatchUnit), matchLoad: plan.matchLoad, matchSrpe: plan.matchSrpe, loadSource: plan.tier.loadSource,
-              unit: blkUnit, fixtures: [...(plan.fixtures ?? []), ...(plan.upcomingFixtures ?? [])], camps: campRegions, savedDays: savedPlansT, cadence, baseOverloadPct: blkBase, stepPct: blkStep,
+              unit: blkUnit, fixtures: [...(plan.fixtures ?? []), ...(plan.upcomingFixtures ?? [])], camps: campRegions, savedDays: savedPlansT, cadence: preCadenceT, blockWeeks: preBlockWeeksT, blockGoals: preBlockGoalsT, baseOverloadPct: blkBase, stepPct: blkStep,
               aerobicMode: aerobicTest, hasVald,
             };
             const prop = buildPreseasonProposal(propInput)!;
@@ -2303,19 +2319,18 @@ export default function PeriodizationHubPage() {
             const typeColor: Record<string, string> = { mechanical: "#A83E28", locomotive: "#15603A", mixed: "#1B2DA8", activation: "#475569", topup: "#55389E", match: "#7A4A06", rest: "#64748B" };
             const tint: Record<string, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#F0EAF7", match: "#FBEFDD", rest: "#F8FAFC" };
             const typeName = (t: string): string => t === "mechanical" ? (is ? "Mekanískt" : "Mechanical") : t === "locomotive" ? (is ? "Hlaup" : "Locomotive") : t === "mixed" ? (is ? "Blandað" : "Mixed") : t === "activation" ? (is ? "Virkjun" : "Activation") : t === "topup" ? (is ? "Áfylling" : "Top-up") : t === "match" ? (is ? "Leikur" : "Match") : (is ? "Frí" : "Off");
-            const PS_LABEL: Record<string, string> = { hypertrophy: is ? "Ofvöxtur / styrktar-þol" : "Hypertrophy", max_strength: is ? "Hámarksstyrkur" : "Max strength", power: is ? "Afl / hraði" : "Power" };
+            const goalWord = (g: BlockGoalKey) => (is ? BLOCK_GOAL_LABEL[g].is : BLOCK_GOAL_LABEL[g].en);
             const dows = is ? ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
             const kpiKeys = ramp.length ? (Object.keys(ramp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad" && ramp.some((w) => w.byKpi[k] != null)) : [];
-            // The pre-season MESO CYCLES (Macro owns the lengths; index-keyed so a resize never orphans a
-            // later one). Slice the pre-season window with the coach's cadence + per-block length overrides.
-            const preEndIso = prop.window.end;
-            // Backwards periodization: the coach's game-anchored tail blocks are exact and the base block flexes
-            // (no tail saved → seeded from the auto layout, so the editor opens on the current sequence).
+            // The pre-season MESO CYCLES: the same slicing the strength delivery reads (the row's cadence + per-block
+            // lengths, index-keyed so a resize never orphans a later one). The first block is the base (it flexes);
+            // the coach edits the ones after it.
             const preMeso = prop.engine.meso;
             const preBlocks = prop.engine.blocks;
             const blockEndExcl = (b: { end: string }) => b.end; // exclusive
             const weeksBetween = (a: string, b: string) => Math.max(1, Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / (7 * 86_400_000)));
-            const emphOfBlock = (b: { start: string }) => preseasonBlockForWeeksOut(weeksBetween(b.start, preEndIso));
+            // The strength each week is sent with: the block's goal → scheme, heavy reps a day, the method (lota 3).
+            const strengthWeeks = preseasonStrengthWeeks({ weeks: prop.weeks, blocks: prop.blocks, coachRules: coachStrengthRules, mdStructures: teamPalette?.mdStructures ?? null, noMatchWeek: teamPalette?.noMatchWeek ?? null });
             const seqTotal = preBlocks.reduce((s, b) => s + weeksBetween(b.start, blockEndExcl(b)), 0);
             return (<div className="space-y-4">
           {flowNote(is ? "Makró-fasar · leikir · Kröfur" : "Macro phases · fixtures · Demands", is ? "Vikuuppsetning (week_plans) · Mesó · PDF" : "Week Setup (week_plans) · Meso · PDF")}
@@ -2330,16 +2345,16 @@ export default function PeriodizationHubPage() {
             const tailVals = preMeso.tail;
             const baseLen = preMeso.base.reduce((s, n) => s + n, 0);
             const roomForMore = (baseLen - 3) >= PRE_MIN_BLOCK; // adding a 3-wk block keeps base ≥ 2
-            const setTailLen = (ti: number, v: number) => { const t = [...tailVals]; t[ti] = v; persistMesoTailT(t, preWeeks, cadence, preYear, upcomingYear); };
-            const removeTail = (ti: number) => persistMesoTailT(tailVals.filter((_, i) => i !== ti), preWeeks, cadence, preYear, upcomingYear);
-            const addTail = () => persistMesoTailT([...tailVals, 3], preWeeks, cadence, preYear, upcomingYear);
+            const setTailLen = (ti: number, v: number) => { const t = [...tailVals]; t[ti] = v; persistMesoTailT(t, preWeeks, preCadenceT, preYear, upcomingYear); };
+            const removeTail = (ti: number) => persistMesoTailT(tailVals.filter((_, i) => i !== ti), preWeeks, preCadenceT, preYear, upcomingYear);
+            const addTail = () => persistMesoTailT([...tailVals, 3], preWeeks, preCadenceT, preYear, upcomingYear);
             const resetTail = () => {
               const keptBw = upcomingYear ? {} : Object.fromEntries(Object.entries(blockLenOv).filter(([k]) => !/^\d+$/.test(k)));
               if (upcomingYear) { setNextMesoTail(null); setPreBlockLenOv({}); } else { setCurMesoTail(null); setBlockLenOv(keptBw); }
               (async () => { try { await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: preYear, overrides: { preMesoTail: null, blockWeeks: keptBw } }) }); } catch { /* best-effort */ } })();
             };
             const baseCount = preMeso.base.length;
-            const mesoTailSet = mesoTailT != null;
+            const mesoTailSet = mesoTailT != null || Object.keys(preBlockWeeksT).length > 0;
             return (
           <section className={card}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -2356,11 +2371,16 @@ export default function PeriodizationHubPage() {
                   <span className="font-normal text-slate-400">{is ? `rannsóknir ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}%` : `research ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}%`}</span>
                 </label>
               )}
-              <label className="flex items-center gap-1.5 font-medium text-slate-600" title={is ? "Vika án skráðs leiks fær áætlaðan helgarleik aðeins frá þessum degi. Óstillt = aðeins leikir úr leikjaskránni." : "A week with no entered game gets an assumed weekend game only from this day. Not set = only the games in the fixture list."}>{is ? "Leikir um helgar frá" : "Weekend games from"}
-                <input type="date" value={psGamesT ?? ""} min={preStart} onChange={(e) => setPreGamesT(/^\d{4}-\d{2}-\d{2}$/.test(e.target.value) ? e.target.value : null)} className="rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
-                {psGamesT
-                  ? <button type="button" onClick={() => setPreGamesT(null)} className="font-normal text-slate-500 underline hover:text-slate-700">{is ? "hreinsa" : "clear"}</button>
-                  : <span className="font-normal text-slate-400">{is ? "ekki stillt — aðeins skráðir leikir" : "not set — entered games only"}</span>}
+              <label className="flex items-center gap-1.5 font-medium text-slate-600" title={is ? "Vika án skráðs leiks fær áætlaðan laugardagsleik frá þessum degi. Óstillt = frá fyrsta skráða æfingaleik. „Engir“ = aðeins leikir úr leikjaskránni." : "A week with no entered game gets an assumed Saturday game from this day. Not set = from the first entered friendly. \"None\" = only the games in the fixture list."}>{is ? "Leikir um helgar frá" : "Weekend games from"}
+                <input type="date" value={psGamesT && psGamesT !== GAMES_FROM_NONE ? psGamesT : ""} min={preStart} onChange={(e) => setPreGamesT(/^\d{4}-\d{2}-\d{2}$/.test(e.target.value) ? e.target.value : null)} className="rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
+                {psGamesT === GAMES_FROM_NONE
+                  ? <><span className="font-normal text-slate-500">{is ? "engir — aðeins skráðir leikir" : "none — entered games only"}</span><button type="button" onClick={() => setPreGamesT(null)} className="font-normal text-slate-500 underline hover:text-slate-700">{is ? "frá fyrsta æfingaleik" : "from the first friendly"}</button></>
+                  : <>
+                    {psGamesT
+                      ? <button type="button" onClick={() => setPreGamesT(null)} className="font-normal text-slate-500 underline hover:text-slate-700">{is ? "hreinsa (frá fyrsta æfingaleik)" : "clear (from the first friendly)"}</button>
+                      : <span className="font-normal text-slate-400">{prop.weekendGames.from ? (is ? `ekki stillt — frá fyrsta æfingaleik (${shortDate(prop.weekendGames.from, is)})` : `not set — from the first friendly (${shortDate(prop.weekendGames.from, is)})`) : (is ? "ekki stillt — enginn æfingaleikur skráður" : "not set — no friendly entered")}</span>}
+                    <button type="button" onClick={() => setPreGamesT(GAMES_FROM_NONE)} className="font-normal text-slate-500 underline hover:text-slate-700">{is ? "engir helgarleikir" : "no weekend games"}</button>
+                  </>}
               </label>
               <span className="text-[11px] text-slate-400">{is ? "Stillist hér eða í Leikmenn — endurflæðir allar vikur." : "Edit here or in Players — re-flows every week."}</span>
               {preDaySave === "saving" && <span className="text-[11px] text-slate-400">{is ? "Vista…" : "Saving…"}</span>}
@@ -2384,13 +2404,13 @@ export default function PeriodizationHubPage() {
               <h3 className="text-[13px] font-bold text-slate-800">{is ? "Meso-lotur" : "Meso cycles"}</h3>
               <span className="text-[12px] text-slate-500">{is ? "samtals" : "total"} <b className={`tabular-nums ${seqTotal === preWeeks ? "text-slate-900" : "text-[#de9328]"}`}>{seqTotal}</b> {is ? `af ${preWeeks} vikum` : `of ${preWeeks} weeks`}</span>
             </div>
-            <p className="mt-0.5 text-[12px] text-slate-500">{is ? "Unnið aftur á bak: síðasta lotan endar á fyrsta leik (afl/peaking) og grunn-lotan gleypir afganginn. Bættu við lotum eða breyttu lengd þeirra sem eru næst leiknum." : "Planned backwards: the last block ends at the first game (power/peaking) and the base block absorbs the remainder. Add blocks or change the length of the ones nearest the game."}</p>
+            <p className="mt-0.5 text-[12px] text-slate-500">{is ? "Sömu lotur og styrktaræfingarnar eru sendar eftir. Fyrsta lotan tekur vikurnar sem eftir eru; breyttu lengd hinna, bættu við lotu eða veldu markmið lotu." : "The same blocks the strength sessions are sent from. The first block takes the remaining weeks; change the length of the others, add a block, or pick a block's goal."}</p>
 
             {(
               <div className="mt-3 space-y-1.5">
                 {preBlocks.map((b, bi) => {
                   const bw = weeksBetween(b.start, blockEndExcl(b));
-                  const emph = emphOfBlock(b);
+                  const pb = prop.blocks[bi];
                   const isBase = bi < baseCount;          // the flexible base block(s) — earliest
                   const ti = bi - baseCount;               // index into the coach-controlled tail
                   const endsAtGame = bi === preBlocks.length - 1;
@@ -2398,7 +2418,16 @@ export default function PeriodizationHubPage() {
                     <div key={b.index} className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 ${isBase ? "border-slate-200 bg-slate-50" : "border-[#2740e6]/20 bg-[#2740e6]/[0.03]"}`}>
                       <span className="text-[13px] font-semibold text-slate-800">{is ? "Lota" : "Block"} {b.index + 1}</span>
                       <span className="text-[12px] text-slate-500">{shortDate(b.start, is)}–{shortDate(isoAdd(b.end, -1), is)} · {bw} {is ? "v" : "wk"}</span>
-                      {emph && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{PS_LABEL[emph]}</span>}
+                      {pb && (
+                        <label className="flex items-center gap-1 text-[11px] font-medium text-slate-500" title={is ? "Markmið lotunnar — það sem styrktaræfingarnar eru sendar eftir. Sjálfgefið: Uppsöfnun, svo Umbreyting og Framkvæmd til skiptis (Issurin 2010)." : "The block's goal — what the strength sessions are sent as. Default: Accumulation, then Transmutation and Realization in turn (Issurin 2010)."}>
+                          <select value={pb.goalKey} onChange={(e) => setPreseasonGoal(b.start, e.target.value as "accum" | "transmute" | "realize")} aria-label={is ? "Markmið lotu" : "Block goal"} className="rounded-full border border-[#7a5cc4]/30 bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">
+                            {(["accum", "transmute", "realize"] as const).map((g) => <option key={g} value={g}>{goalWord(g)}</option>)}
+                          </select>
+                          {pb.goalByCoach
+                            ? <button type="button" onClick={() => setPreseasonGoal(b.start, null)} className="font-normal text-slate-400 underline hover:text-slate-600">{is ? "þitt val · fylgja röðinni" : "your choice · follow the order"}</button>
+                            : <span className="font-normal text-slate-400">{is ? "röðin" : "the order"}</span>}
+                        </label>
+                      )}
                       {endsAtGame && <span className="rounded-full bg-[#1c7a4a]/10 px-2 py-0.5 text-[11px] font-semibold text-[#1c7a4a]">{is ? "→ endar á leik" : "→ ends at game"}</span>}
                       {isBase ? (
                         <span className="ml-auto text-[11px] font-medium text-slate-400">{is ? "grunnur (sveigjanlegur)" : "base (flexes)"}</span>
@@ -2446,12 +2475,13 @@ export default function PeriodizationHubPage() {
           {ramp.map((w, i) => {
             const cw = cal.weeks[i];
             const weekMon = cw?.weekStart ?? isoAdd(preStart, i * 7);
-            const emph = preseasonBlockForWeeksOut(preWeeks - i);
+            const sw = strengthWeeks[i];
+            const heavyByDate = new Map((sw?.days ?? []).map((d) => [d.date, d] as const));
             const weekTests = tests.filter((tp) => tp.weeks.includes(i + 1));
             const weekFx = preFixtures.filter((d) => d >= weekMon && d < isoAdd(weekMon, 7));
             const pv = primary(w);
             const blk = preBlocks.find((b) => b.start === weekMon); // this week starts a new meso cycle?
-            const blkEmph = blk ? emphOfBlock(blk) : null;
+            const blkGoal = blk ? prop.blocks.find((x) => x.start === blk.start)?.goalKey ?? null : null;
             // Friendly BUDGET: a pre-season friendly is partial minutes (match-fitness build-up), ramping
             // across pre-season. The partial friendly COUNTS toward the week's target; training fills the
             // remainder (target − friendly). Mirrors the coach's model: 22,000 target − 7,000 friendly = 15,000.
@@ -2475,7 +2505,7 @@ export default function PeriodizationHubPage() {
                 <div className="flex flex-wrap items-center gap-2 pt-1 text-[12px] font-semibold text-slate-500">
                   <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[#7a5cc4]">{is ? "Meso-lota" : "Meso cycle"} {blk.index + 1}</span>
                   <span>{weeksBetween(blk.start, blk.end)} {is ? "vikur" : "weeks"}</span>
-                  {blkEmph && <span className="font-normal text-slate-400">· {PS_LABEL[blkEmph]}</span>}
+                  {blkGoal && <span className="font-normal text-slate-400">· {goalWord(blkGoal)}</span>}
                 </div>
               )}
               <section className={`${card} min-w-0`}>
@@ -2486,7 +2516,7 @@ export default function PeriodizationHubPage() {
                   {w.taper && <span title={is ? "Létt vika fyrir fyrsta leik: magn −55%, hraða haldið betur (−30%). Bosquet 2007." : "Light week before the opener: volume −55%, speed held more (−30%). Bosquet 2007."} className="rounded-full bg-[#1c7a4a]/10 px-2 py-0.5 text-[11px] font-semibold text-[#1c7a4a]">{is ? "Létt vika" : "Taper"}</span>}
                   {pv > 0 && <span className="text-[13px] font-semibold tabular-nums text-slate-900">{fmtv(pv)} {unitLabel}</span>}
                   {w.perSessionLoad != null && <span className="text-[12px] text-slate-500">≈ {w.perSessionLoad}/{is ? "æf" : "sess"}</span>}
-                  {emph && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{PS_LABEL[emph]}</span>}
+                  {sw && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{goalWord(sw.goalKey)}</span>}
                   <button type="button" onClick={openWeek} className="ml-auto text-[12px] font-semibold text-[#2740e6] hover:underline">{is ? "Opna / breyta í Vikuuppsetningu →" : "Open / edit in Week Setup →"}</button>
                 </div>
                 {cw && (
@@ -2507,6 +2537,7 @@ export default function PeriodizationHubPage() {
                         <div className="text-[9px] text-slate-400">{dows[di]}</div>
                         <div className="truncate text-[10px] font-semibold" style={{ color: typeColor[d.type] ?? "#64748B" }}>{d.type === "rest" ? "–" : typeName(d.type)}{isMatch && !entered ? "?" : ""}</div>
                         <div className="text-[10px] tabular-nums text-slate-600">{dl != null && d.type !== "rest" ? dl : ""}</div>
+                        {heavyByDate.get(isoAdd(cw.weekStart, di)) && <div className="truncate text-[9px] font-semibold text-[#7a5cc4]">{is ? "Lyftingar" : "Gym"} {heavyByDate.get(isoAdd(cw.weekStart, di))!.heavyReps}</div>}
                       </button>
                     ); })}
                   </div>
@@ -2545,6 +2576,26 @@ export default function PeriodizationHubPage() {
                   })()}
                   {prop.weeks[i]?.noGameByCoach && (
                     <p className="mt-1.5 text-[11.5px] text-slate-600">{is ? "Enginn leikur þessa viku (þitt val)." : "No game this week (your choice)."} <button type="button" onClick={() => moveAssumed(cw, undefined)} className="font-semibold text-[#2740e6] hover:underline">{is ? "Fylgja reglunni aftur" : "Follow the rule again"}</button></p>
+                  )}
+                  {sw && (
+                    <div className="mt-2 rounded-md border border-[#7a5cc4]/20 bg-[#7a5cc4]/[0.04] px-2.5 py-1.5 text-[11.5px] text-slate-700">
+                      <div>
+                        <b className="font-semibold text-[#7a5cc4]">{is ? "Styrkur" : "Strength"}</b> · {is ? sw.scheme.quality.is : sw.scheme.quality.en} · {is ? sw.scheme.pct1rm.is : sw.scheme.pct1rm.en} · {schemeHead(is ? sw.scheme.scheme.is : sw.scheme.scheme.en)}
+                        {" · "}{sw.days.length
+                          ? <>{is ? "þungar endurtekningar" : "heavy reps"} {sw.days.map((d) => `${d.md} ${d.heavyReps}`).join(" · ")} (<b className="tabular-nums">{sw.weekHeavyReps}</b> {is ? "á viku" : "a week"})</>
+                          : <>{sw.weekHeavyReps} {is ? "þungar endurtekningar á viku" : "heavy reps a week"}</>}
+                      </div>
+                      <details className="mt-0.5 text-[11px] text-slate-500">
+                        <summary className="cursor-pointer select-none font-medium hover:text-slate-700">{is ? "Sýna nánar" : "Show details"}</summary>
+                        <p className="mt-1">{is ? sw.scheme.scheme.is : sw.scheme.scheme.en}</p>
+                        {sw.days.length > 0 && <p className="mt-0.5">{sw.days.map((d) => `${d.md}: ${d.heavyReps} ${is ? "endurt." : "reps"}${d.structure ? ` · ${is ? STRUCTURE_LABEL[d.structure].is : STRUCTURE_LABEL[d.structure].en}` : ""}`).join(" — ")}</p>}
+                        <p className="mt-0.5">{sw.hasGame
+                          ? (is ? "Leikvika: þungu dagarnir eru MD-4 og MD-3 (og MD-5 ef enginn leikur var helgina á undan)." : "Game week: the heavy days are MD-4 and MD-3 (and MD-5 with no game the weekend before).")
+                          : (is ? `Vika án leiks: allt að 3 þungir dagar, aldrei tveir í röð, eftir dagaskipulagi liðsins${sw.defaultPlan ? " (sjálfgefið skipulag — ekkert vistað)" : ""}.` : `Week without a game: up to 3 heavy days, never two in a row, from the team's weekday plan${sw.defaultPlan ? " (the default plan — none saved)" : ""}.`)}
+                          {" "}{is ? `Lotan: ${goalWord(sw.goalKey)}${sw.goalByCoach ? " (þitt val)" : ""}. Sama og sent er til leikmanna.` : `Block: ${goalWord(sw.goalKey)}${sw.goalByCoach ? " (your choice)" : ""}. The same as is sent to the players.`}</p>
+                        <div className="mt-0.5 text-[10.5px]"><CiteRefs text={sw.cite} is={is} /></div>
+                      </details>
+                    </div>
                   )}
                   <p className="mt-1 text-[10.5px] text-slate-400">{is ? "Smelltu á dag til að velja áherslu (mekanískt/hlaup/blandað…) eða frí — uppkast sem vistast strax. Dagsetningin eða tengillinn opnar vikuna í Vikuuppsetningu til að fínstilla." : "Click a day to choose its stimulus (mechanical/locomotive/mixed…) or set it off — a draft that saves instantly. The date or the link opens the week in Week Setup to refine."}</p>
                   </>

@@ -176,3 +176,14 @@ describe("preseasonRamp — the last week before the opener is light (taper)", (
     expect(preseasonRamp(a, null, 2, s).some((w) => w.taper)).toBe(false);
   });
 });
+
+describe("weekend games from: an ISO day, \"none\", or not set", () => {
+  it("keeps none, keeps a day, drops anything else", async () => {
+    const { cleanGamesFrom, preseasonSettingsFrom, GAMES_FROM_NONE } = await import("../preseasonWindow");
+    expect(cleanGamesFrom("none")).toBe(GAMES_FROM_NONE);
+    expect(cleanGamesFrom("2027-01-08")).toBe("2027-01-08");
+    expect(cleanGamesFrom("soon")).toBeNull();
+    expect(preseasonSettingsFrom({ preGamesFrom: "none" }).saved.gamesFrom).toBe(true);
+    expect(preseasonSettingsFrom({}).gamesFrom).toBeNull();
+  });
+});
