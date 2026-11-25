@@ -22,6 +22,8 @@ import { buildStrengthPlan } from "@/lib/micropulse/unifiedDeficits/strengthPlan
 import { loadPlayerMovementScreens } from "@/lib/micropulse/movementScreen/loader";
 import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import { sanitizePaletteSlots, type PaletteSlots } from "../strengthProgramming/palette";
+import { isHipForceFrameTest } from "@/lib/micropulse/vald/groinStrength";
+import { fetchHipPaddles, splitHipRows } from "@/lib/micropulse/vald/hipPaddles";
 import { sanitizeMdStructures, sanitizeNoMatchWeek, type MdStructures, type NoMatchWeek } from "../strengthProgramming/structures";
 import { sanitizeMdRepsPerSet, type MdRepsPerSet } from "../strengthProgramming/weekRule";
 import { activeGoal, sanitizePicks, type PlayerExercisePicks, type StrengthGoal } from "../strengthProgramming/playerPicks";
@@ -253,10 +255,11 @@ export async function fetchCodAsymmetry(
 const VALD_ASYM_WINDOW_DAYS = 120; // VALD tests are infrequent — look back further than IMA.
 
 /** VALD limb asymmetry — the most severe recent test across NordBord (hamstring
- *  L/R), ForceFrame (hip adduction/abduction L/R) and ForceDecks (CMJ jump/landing
+ *  L/R), ForceFrame (newest test; a hip AD/AB test is split into adduction + abduction and the
+ *  worse gap counts) and ForceDecks (CMJ jump/landing
  *  L/R). A second symmetry source for uni/bi so a VALD club without IMA still gets
- *  symmetry-driven lower-body work. Uses the stored asymmetry_percent, else (for
- *  NordBord/ForceFrame) computes it from left/right peak force. Fail-safe: any
+ *  symmetry-driven lower-body work. NordBord/ForceFrame: computed from left/right peak force,
+ *  the stored asymmetry_percent only as a fallback. Fail-safe: any
  *  error / no test → null. */
 export async function fetchValdAsymmetry(
   sb: SupabaseClient,
@@ -264,7 +267,11 @@ export async function fetchValdAsymmetry(
   todayIso: string,
 ): Promise<{ pct: number | null; weakerSide: "L" | "R" | null }> {
   const startIso = startOfDayIso(VALD_ASYM_WINDOW_DAYS - 1, todayIso);
-  const asSide = (s: string | null): "L" | "R" | null => (s === "L" || s === "R" ? s : null);
+  // Stored sides are "left"/"right" (normalizers) — older rows may say "L"/"R".
+  const asSide = (s: string | null): "L" | "R" | null => {
+    const v = String(s ?? "").trim().toLowerCase();
+    return v === "l" || v === "left" ? "L" : v === "r" || v === "right" ? "R" : null;
+  };
   type PS = { pct: number; side: "L" | "R" | null };
   const median = (xs: number[]): number | null => {
     if (!xs.length) return null;
@@ -280,30 +287,43 @@ export async function fetchValdAsymmetry(
   try {
     // NordBord + ForceFrame: isometric peak force is STABLE → the most recent valid
     // test represents the player's current state.
-    const readLR = async (tbl: string): Promise<PS[]> => {
+    // L/R from the raw peak forces first (ground truth: legacy rows can store asymmetry_percent = 0
+    // while L≠R — the same rule as the daily VALD snapshot), the stored value only as a fallback.
+    const lrOf = (r: Record<string, unknown>): PS | null => {
+      const l = Number(r.left_peak_force_n ?? 0) || 0;
+      const rr = Number(r.right_peak_force_n ?? 0) || 0;
+      const mx = Math.max(l, rr);
+      if (mx > 0 && l > 0 && rr > 0) return { pct: Number(((Math.abs(l - rr) / mx) * 100).toFixed(1)), side: l < rr ? "L" : rr < l ? "R" : null };
+      if (r.asymmetry_percent != null && Number.isFinite(Number(r.asymmetry_percent))) {
+        return { pct: Math.abs(Number(r.asymmetry_percent)), side: asSide(r.asymmetry_side as string | null) };
+      }
+      return null;
+    };
+    const readRows = async (tbl: string, cols: string): Promise<Array<Record<string, unknown>>> => {
       const { data } = await sb
         .from(tbl)
-        .select("asymmetry_percent, asymmetry_side, left_peak_force_n, right_peak_force_n, is_valid")
+        .select(cols)
         .eq("microplayer_id", playerId)
         .gte("test_timestamp", startIso)
         .order("test_timestamp", { ascending: false })
         .limit(20);
-      const out: PS[] = [];
-      for (const r of (data ?? []) as Array<{ asymmetry_percent: number | null; asymmetry_side: string | null; left_peak_force_n: number | null; right_peak_force_n: number | null; is_valid: boolean | null }>) {
-        if (r.is_valid === false) continue;
-        if (r.asymmetry_percent != null && Number.isFinite(Number(r.asymmetry_percent))) {
-          out.push({ pct: Math.abs(Number(r.asymmetry_percent)), side: asSide(r.asymmetry_side) });
-          continue;
-        }
-        const l = Number(r.left_peak_force_n ?? 0) || 0;
-        const rr = Number(r.right_peak_force_n ?? 0) || 0;
-        const mx = Math.max(l, rr);
-        if (mx > 0) out.push({ pct: Number(((Math.abs(l - rr) / mx) * 100).toFixed(1)), side: l < rr ? "L" : rr < l ? "R" : null });
-      }
-      return out;
+      return ((data ?? []) as unknown as Array<Record<string, unknown>>).filter((r) => r.is_valid !== false);
     };
-    const nord = await readLR("vald_nordbord_results");
-    const frame = await readLR("vald_forceframe_results");
+    const LR_COLS = "asymmetry_percent, asymmetry_side, left_peak_force_n, right_peak_force_n, is_valid, test_timestamp";
+    const nord = (await readRows("vald_nordbord_results", LR_COLS)).map(lrOf).filter((x): x is PS => x != null);
+
+    // ForceFrame: an API hip AD/AB row stores only the STRONGER pad set (often abduction). Split it
+    // into adduction + abduction from the raw test, then read the worse of the two for the newest
+    // test — so a gap in either hip movement counts, and neither hides behind the other.
+    const ffRows = await readRows("vald_forceframe_results", `${LR_COLS}, raw_test_id, test_type, body_region, movement_pattern, direction`);
+    const pads = await fetchHipPaddles(sb, ffRows.filter((r) => isHipForceFrameTest(r) && !r.direction).map((r) => r.raw_test_id as string | null));
+    const ffSplit = splitHipRows(ffRows, pads, isHipForceFrameTest);
+    const newestFf = ffSplit[0]?.test_timestamp;
+    const frame = ffSplit
+      .filter((r) => r.test_timestamp === newestFf)
+      .map(lrOf)
+      .filter((x): x is PS => x != null)
+      .sort((a, b) => b.pct - a.pct);
 
     // ForceDecks (CMJ): trial-to-trial NOISY (Gathercole/Bishop CV) → use the MEDIAN
     // asymmetry over the window + the majority weaker side, not a single spike.
