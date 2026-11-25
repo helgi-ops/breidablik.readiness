@@ -46,7 +46,7 @@ import PlanIntentCard from "@/components/coach/PlanIntentCard";
 import { CiteRefs } from "@/components/coach/CiteRefs";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 import { kpiAvgFromUnit as kpiAvgFromUnitLib, teamKpiAvg as teamKpiAvgLib } from "@/lib/micropulse/periodization/preseasonKpiMap";
-import { upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, PRE_MIN_BLOCK, PRESEASON_DEFAULT_TAPER_PCT, PRESEASON_TAPER_RESEARCH, clampTaperPct } from "@/lib/micropulse/periodization/preseasonWindow";
+import { upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, PRE_MIN_BLOCK, PRESEASON_DEFAULT_WEEK1, PRESEASON_DEFAULT_TAPER_PCT, PRESEASON_TAPER_RESEARCH, clampTaperPct } from "@/lib/micropulse/periodization/preseasonWindow";
 import { buildPreseasonProposal } from "@/lib/micropulse/periodization/preseasonProposal";
 import PreseasonProposalPanel, { type PsDraft } from "@/components/coach/PreseasonProposalPanel";
 import type { ProposalEdits } from "@/lib/micropulse/periodization/preseasonProposalServer";
@@ -260,6 +260,7 @@ export default function PeriodizationHubPage() {
   // % cut of the light week before the opener (0 = none) — current / upcoming season rows, like week 1 above.
   const [psTaperPct, setPsTaperPct] = React.useState(PRESEASON_DEFAULT_TAPER_PCT);
   const [prePsTaperPct, setPrePsTaperPct] = React.useState(PRESEASON_DEFAULT_TAPER_PCT);
+  const [w1Open, setW1Open] = React.useState(false); // the Week 1 dropdown on the Pre-season tab
   // Game-anchored pre-season meso-cycle tail (lengths of the blocks NEAREST the opener; the base block
   // absorbs the remainder — backwards periodization). null = not set → derive from the auto layout. Used
   // only when `upcomingYear`; the next-year row holds pre-season blocks only, so add/remove never shifts a
@@ -1105,6 +1106,7 @@ export default function PeriodizationHubPage() {
   const setPreW1T = (v: number) => (psDraft ? draftEdit({ settings: { preseasonWeek1Mult: v } }) : setPreW1(v));
   const setPreSessT = (v: number) => (psDraft ? draftEdit({ settings: { preseasonSessions: v } }) : setPreSess(v));
   const setPreTaperT = (v: number) => (psDraft ? draftEdit({ settings: { preTaperPct: v } }) : setPreTaper(v));
+  const w1SetCount = Object.keys(week1KpiT ?? {}).length + (psW1T !== PRESEASON_DEFAULT_WEEK1 ? 1 : 0);
   const persistWeek1KpiT = (next: Record<string, number>, year: number, isUpcoming: boolean) => (psDraft ? draftEdit({ settings: { preWeek1Kpi: next } }) : persistWeek1Kpi(next, year, isUpcoming));
   const persistMesoTailT = (tail: number[], windowWeeks: number, cad: number, year: number, isUpcoming: boolean) => (psDraft ? draftEdit({ settings: { preMesoTail: tail } }) : persistMesoTail(tail, windowWeeks, cad, year, isUpcoming));
 
@@ -2283,9 +2285,11 @@ export default function PeriodizationHubPage() {
               <span className="text-[12px] text-slate-500">{is ? "hefst" : "starts"} <b className="text-slate-700">{shortDate(preStart, is)}</b> · {preWeeks} {is ? "vikur" : "weeks"} · {up.end && plan.nextFirstFixtureEstimated && up.end === plan.nextFirstFixture ? (is ? "endar á áætluðum fyrsta leik" : "ends at the estimated first game") : (is ? "endar á fyrsta keppnisleik" : "ends at the first competitive game")}</span>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px]">
-              <label className="flex items-center gap-1.5 font-medium text-slate-600">{is ? "Vika 1 ×leik" : "Week 1 ×match"}
-                <input type="number" step={0.1} min={0.5} max={3} value={psW1T} onChange={(e) => { const v = Math.max(0.5, Math.min(3, Number(e.target.value) || 1.3)); setPreW1T(v); }} className="w-16 rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
-              </label>
+              <button type="button" onClick={() => setW1Open((v) => !v)} aria-expanded={w1Open} className={`flex items-center gap-1.5 rounded border px-2 py-0.5 font-medium ${w1Open ? "border-[#2740e6] text-[#2740e6]" : "border-slate-300 text-slate-600 hover:border-[#2740e6]/50"}`}>
+                {is ? "Vika 1" : "Week 1"} <b className="tabular-nums text-slate-900">{is ? String(psW1T).replace(".", ",") : psW1T}× {is ? "leik" : "match"}</b>
+                <span className="text-slate-400">{w1SetCount > 0 ? (is ? `· ${w1SetCount} stillt af þér` : `· ${w1SetCount} set by you`) : (is ? "· tillaga kerfisins" : "· system proposal")}</span>
+                <span aria-hidden>{w1Open ? "▴" : "▾"}</span>
+              </button>
               <label className="flex items-center gap-1.5 font-medium text-slate-600">{is ? "Æfingar/viku" : "Sessions/wk"}
                 <select value={psSessT} onChange={(e) => { const v = Number(e.target.value); setPreSessT(v); }} className="rounded border border-slate-300 px-1.5 py-0.5">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
               </label>
@@ -2300,6 +2304,66 @@ export default function PeriodizationHubPage() {
               {preDaySave === "saved" && <span className="text-[11px] font-medium text-emerald-700">{is ? "✓ Dagar vistaðir í Vikuuppsetningu" : "✓ Days saved to Week Setup"}</span>}
               {preDaySave === "err" && <span className="text-[11px] font-medium text-[#a83e28]">{is ? "Vistun mistókst" : "Save failed"}</span>}
             </div>
+
+            {/* Week 1 — the system proposes, the coach can change any variable; every week re-flows from it.
+                Each variable shows the research range for a normal training week (training:match) beside it. */}
+            {w1Open && ramp.length > 0 && (() => {
+              const auto = preseasonRamp(prop.engine.anchor, plan.matchSrpe, preWeeks, { sessionsPerWeek: psSessT, week1MatchMultiple: psW1T, week1Kpi: {}, taperPct: psTaperT })[0];
+              const peakW = ramp.reduce((m, w) => ((w.multipleOfMatch ?? 0) > (m.multipleOfMatch ?? 0) ? w : m), ramp[0]);
+              const xm = (v: number | null | undefined, k: string) => { const mv = (tka as Record<string, number | undefined>)[k]; return v != null && mv != null && mv > 0 ? Math.round((v / mv) * 100) / 100 : null; };
+              const setKpi = (k: string, v: number | null) => { const next = { ...week1KpiT }; if (v == null || !Number.isFinite(v) || v <= 0) delete next[k]; else next[k] = Math.round(v); persistWeek1KpiT(next, preYear, upcomingYear); };
+              return (
+                <div className="mt-3 rounded-lg border border-[#2740e6]/20 bg-[#2740e6]/[0.03] px-3 py-2.5">
+                  <p className="text-[12.5px] text-slate-700"><b className="font-semibold">{is ? "Vika 1 — kerfið leggur til, þú getur breytt." : "Week 1 — the system proposes, you can change it."}</b> {is ? "Breyttu hvaða breytu sem er; allar vikur undirbúningsins reiknast upp á nýtt út frá viku 1." : "Change any variable; every pre-season week is recomputed from week 1."}</p>
+                  <div className="mt-2 overflow-x-auto">
+                    <table className="w-full min-w-[620px] text-left text-[12px] tabular-nums">
+                      <thead className="text-[11px] text-slate-500">
+                        <tr>
+                          <th className="py-1 pr-2 font-medium">{is ? "Breyta" : "Variable"}</th>
+                          <th className="pr-2 font-medium">{is ? "Tillaga kerfisins" : "System proposal"}</th>
+                          <th className="pr-2 font-medium">{is ? "Vika 1 (þitt)" : "Week 1 (yours)"}</th>
+                          <th className="pr-2 font-medium">{is ? "× leikur" : "× a match"}</th>
+                          <th className="pr-2 font-medium" title={is ? "Hve langt undir toppvikunni vika 1 byrjar — lína MicroPulse (Jeong 2011; Teixeira 2021), ekki rannsóknartala." : "How far below the peak week week 1 starts — a MicroPulse line (Jeong 2011; Teixeira 2021), not a research number."}>{is ? "% af toppi" : "% of peak"}</th>
+                          <th className="font-medium">{is ? "Rannsóknir: venjuleg vika" : "Research: a normal week"}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="border-t border-slate-200">
+                          <td className="py-1 pr-2 font-medium text-slate-700">{is ? "Heildarálag (PlayerLoad)" : "Overall load (PlayerLoad)"}{psW1T !== PRESEASON_DEFAULT_WEEK1 && <span title={is ? "þitt gildi" : "your value"} className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-[#2740e6] align-middle" />}</td>
+                          <td className="pr-2 text-slate-500">{is ? String(PRESEASON_DEFAULT_WEEK1).replace(".", ",") : PRESEASON_DEFAULT_WEEK1}× {is ? "leik" : "match"}</td>
+                          <td className="pr-2"><input type="number" step={0.1} min={0.5} max={3} value={psW1T} onChange={(e) => { const v = Math.max(0.5, Math.min(3, Number(e.target.value) || PRESEASON_DEFAULT_WEEK1)); setPreW1T(v); }} className="h-7 w-20 rounded border border-slate-300 bg-white px-1.5" /> <span className="text-slate-400">×</span></td>
+                          <td className="pr-2 font-semibold text-slate-900">{ramp[0].multipleOfMatch}×</td>
+                          <td className="pr-2 text-slate-500">{peakW.multipleOfMatch ? `${Math.round(((ramp[0].multipleOfMatch ?? 0) / peakW.multipleOfMatch) * 100)}%` : "–"}</td>
+                          <td className="text-slate-500">{(() => { const r = kpiTmRefRange("totalPlayerLoad"); return r ? `${r[0]}–${r[1]}×` : "–"; })()}</td>
+                        </tr>
+                        {kpiKeys.map((k) => {
+                          const lab = WEEKLY_LOAD_LABELS[k]; const cur = ramp[0].byKpi[k]; const prop1 = auto.byKpi[k];
+                          if (cur == null) return null;
+                          const mine = week1KpiT[k] != null; const ref = kpiTmRefRange(k); const pk = peakW.byKpi[k];
+                          return (
+                            <tr key={k} className="border-t border-slate-200">
+                              <td className="py-1 pr-2 font-medium text-slate-700">{is ? lab.is : lab.en}{mine && <span title={is ? "þitt gildi" : "your value"} className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-[#2740e6] align-middle" />}</td>
+                              <td className="pr-2 text-slate-500">{prop1 != null ? `${prop1.toLocaleString("en-US")}${lab.unit}` : "–"}</td>
+                              <td className="pr-2"><input type="number" min={0} value={cur} onChange={(e) => setKpi(k, Number(e.target.value))} className="h-7 w-24 rounded border border-slate-300 bg-white px-1.5" />{mine && <button type="button" onClick={() => setKpi(k, null)} className="ml-1 text-[11px] text-slate-400 hover:text-slate-600 hover:underline">{is ? "tillaga" : "proposal"}</button>}</td>
+                              <td className="pr-2 font-semibold text-slate-900">{xm(cur, k) != null ? `${xm(cur, k)}×` : "–"}</td>
+                              <td className="pr-2 text-slate-500">{pk ? `${Math.round((cur / pk) * 100)}%` : "–"}</td>
+                              <td className="text-slate-500">{ref ? `${ref[0]}–${ref[1]}×` : (is ? "engin viðmið" : "no reference")}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    {is
+                      ? "Rannsóknir gefa ekki tölur fyrir viku 1; bilin eru æfing:leikur fyrir venjulega æfingaviku (vika 1 á að vera undir þeim). Hvar vika 1 byrjar miðað við toppinn er lína MicroPulse: vegalengd byrjar hátt (grunnþol), hemlun og sprettir lágt."
+                      : "Research has no week-1 numbers; the ranges are training:match for a normal training week (week 1 should sit below them). Where week 1 starts against the peak is a MicroPulse line: distance starts high (aerobic base), braking and sprints low."}
+                    {Object.keys(week1KpiT).length > 0 && <> · <button type="button" onClick={() => persistWeek1KpiT({}, preYear, upcomingYear)} className="font-medium text-slate-600 hover:underline">{is ? "Allt aftur í tillögu" : "All back to the proposal"}</button></>}
+                  </p>
+                  <div className="mt-1 text-[10.5px] text-slate-500"><CiteRefs text="Clemente 2019c; Gualtieri 2023; Gabbett 2016; Jeong 2011; Teixeira 2021; Vanrenterghem 2017" is={is} /></div>
+                </div>
+              );
+            })()}
 
             {/* Meso-cycle sequence — planned BACKWARDS from the opener. */}
             <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
@@ -2344,29 +2408,6 @@ export default function PeriodizationHubPage() {
                 </div>
               </div>
             )}
-
-            {/* Week-1 per-KPI VALUES — the coach sets week 1; the ramp computes the rest from it. Seeded from
-                the team's match unit, or a NORMATIVE reference when there's no data (then the coach adjusts). */}
-            <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="text-[13px] font-bold text-slate-800">{is ? "Viku-1 breytur" : "Week-1 variables"}</h3>
-              <span className="text-[12px] text-slate-500">{is ? "stilltu viku 1 — restin reiknast þaðan" : "set week 1 — the rest computes from it"}{!hasOwnKpi ? (is ? " · viðmið (engin gögn)" : " · reference (no data)") : ""}</span>
-            </div>
-            {ramp.length > 0 && (
-              <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
-                {kpiKeys.map((k) => {
-                  const lab = WEEKLY_LOAD_LABELS[k]; const w1 = ramp[0].byKpi[k];
-                  if (w1 == null) return null;
-                  const overridden = week1KpiT[k] != null;
-                  return (
-                    <label key={k} className="flex flex-col gap-0.5 text-[11px] font-medium text-slate-600">
-                      <span className="flex items-center gap-1 truncate">{is ? lab.is : lab.en}{overridden && <span title={is ? "handvirkt" : "manual"} className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2740e6]" />}</span>
-                      <input type="number" min={0} value={w1} onChange={(e) => { const v = Number(e.target.value); const next = { ...week1KpiT }; if (!Number.isFinite(v) || v <= 0) delete next[k]; else next[k] = Math.round(v); persistWeek1KpiT(next, preYear, upcomingYear); }} className="h-8 rounded border border-slate-300 px-1.5 text-[13px] tabular-nums" />
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-            <p className="mt-1.5 text-[11px] text-slate-400">{is ? "Blár punktur = handvirkt gildi. Restin af undirbúningnum stigmagnast upp í hámark hverrar breytu út frá viku 1." : "Blue dot = a manual value. The rest of the pre-season ramps each variable up to its peak from week 1."}{Object.keys(week1KpiT).length > 0 && <> · <button type="button" onClick={() => persistWeek1KpiT({}, preYear, upcomingYear)} className="font-medium text-slate-500 hover:text-slate-700 hover:underline">{is ? "Núllstilla" : "Reset"}</button></>}</p>
 
             {/* Research "why" — explainability L2 (jargon + citations behind a toggle, off the primary view). */}
             <details className="mt-3 text-[11.5px] text-slate-500">
