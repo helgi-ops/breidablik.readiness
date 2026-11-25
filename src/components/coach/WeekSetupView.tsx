@@ -449,7 +449,7 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
   const [mesoSeedSource, setMesoSeedSource] = useState<"preseason" | "inseason" | null>(null);
   // The week's confirmation (Confirm week → players): confirmed / changed since / not confirmed. confirmRev re-reads it.
   const [confirmStatus, setConfirmStatus] = useState<WeekConfirmStatus | null>(null);
-  // The status of the weeks around the shown one (the week strip on the standalone page), keyed by Monday ISO.
+  // The status of the weeks around the shown one (the week strip), keyed by Monday ISO.
   const [nearStatuses, setNearStatuses] = useState<Record<string, WeekConfirmStatus>>({});
   const [confirmRev, setConfirmRev] = useState(0);
   // Per-day pitch stimulus (mechanical/locomotive/mixed/technical), 7 entries. Separate
@@ -2008,9 +2008,9 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
       </section>
       {rulesOpen && rulesSlot && <div className="mt-3">{rulesSlot}</div>}
 
-      {/* Week strip (standalone page — in the hub the Meso pages carry these badges): the week before, this one and
-          the next five, each with its confirmation status. Click a week to open it. */}
-      {!embedded && teamId && (
+      {/* Week strip (standalone page and the hub's Micro tab): the week before, this one and the next five, each with
+          its confirmation status. Click a week to open it. */}
+      {teamId && (
         <div className="mt-3 overflow-x-auto">
           <div className="flex min-w-max gap-1.5" role="list" aria-label={isIS ? "Staða vikna" : "Week status"}>
             {Array.from({ length: 7 }, (_, k) => addDays(weekStart, (k - 1) * 7)).map((ws) => {
