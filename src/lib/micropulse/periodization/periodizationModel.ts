@@ -109,7 +109,7 @@ export const DEFAULT_MD_MICROCYCLE: PeriodizationModel = {
     },
     {
       mdDay: "MD+2", intendedType: "mixed", intensityCapPct: 40,
-      note: { en: "Day off in season (the coach's rule; Buchheit 2023). A session here is the coach's choice: light recovery.", is: "Frídagur á keppnistímabili (regla þjálfarans; Buchheit 2023). Æfing hér er val þjálfarans: létt endurheimt." },
+      note: { en: "Day off in season (the coach's rule; Buchheit 2023b). A session here is the coach's choice: light recovery.", is: "Frídagur á keppnistímabili (regla þjálfarans; Buchheit 2023b). Æfing hér er val þjálfarans: létt endurheimt." },
     },
   ],
 };

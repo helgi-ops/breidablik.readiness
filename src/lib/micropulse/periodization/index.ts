@@ -398,7 +398,7 @@ const MD_TYPE_QUALITY: Record<MdDayType, Bi> = {
   mixed: { en: "match-like stimulus, peak overall load", is: "leiklíkt áreiti, hámarks heildarálag" },
   technical: { en: "low physiological load, both dimensions (taper)", is: "lágt lífeðlislegt álag, báðar víddir (niðurtröppun)" },
   restart: { en: "recovery + re-activation (regen for starters)", is: "endurheimt + endurvirkjun (regen fyrir byrjunarlið)" },
-  topup: { en: "bring <30-min players to the weekly target", is: "koma <30-mín leikmönnum í vikumarkið" },
+  topup: { en: "bring <60-min players to the weekly target", is: "koma <60-mín leikmönnum í vikumarkið" },
   match: { en: "the match demand itself", is: "leikkrafan sjálf" },
 };
 // Default %-of-match-demand per MD day (Martín-García 2018) — used only when the team's OWN per-MD
@@ -441,7 +441,7 @@ export function mdWeekTargets(b: TeamAverages, opts?: { mdShape?: Record<string,
     { metric: { en: "Sprint", is: "Sprettur" }, value: km(r0(b.sprintM, m)) },
   ];
   const DAY: Record<string, { mdTag: string; type: MdDayType; targets: MdTargetMetric[]; note?: Bi }> = {
-    restart: { mdTag: "MD+1", type: "restart", targets: mech(mult("MD+1")), note: { en: "Players who played <30 min get a Top-up instead (below).", is: "Leikmenn sem spiluðu <30 mín fá Áfyllingu í staðinn (neðar)." } },
+    restart: { mdTag: "MD+1", type: "restart", targets: mech(mult("MD+1")), note: { en: "Players who played <60 min get a Top-up instead (below).", is: "Leikmenn sem spiluðu <60 mín fá Áfyllingu í staðinn (neðar)." } },
     mech: { mdTag: "MD-5", type: "mechanical", targets: mech(mult("MD-5")) },
     loco: { mdTag: "MD-4", type: "locomotive", targets: loco(mult("MD-4")) },
     mixed: { mdTag: "MD-3", type: "mixed", targets: [...mech(mult("MD-3")).slice(0, 1), ...loco(mult("MD-3")).slice(0, 2)] },
@@ -452,7 +452,7 @@ export function mdWeekTargets(b: TeamAverages, opts?: { mdShape?: Record<string,
       { metric: { en: "Distance (match)", is: "Vegalengd (leik)" }, value: km(b.matchDistanceM ?? b.distanceM) },
       { metric: { en: "Player Load (match)", is: "Player Load (leik)" }, value: (b.matchPlayerLoad ?? b.playerLoad)?.toString() ?? "–" },
     ] },
-    topup: { mdTag: "Top-up", type: "topup", targets: loco(mult("Top-up")), note: { en: "For <30-min players — add toward the match-day locomotor demand.", is: "Fyrir <30-mín leikmenn — bæta upp að leikdags-hlaupakröfu." } },
+    topup: { mdTag: "Top-up", type: "topup", targets: loco(mult("Top-up")), note: { en: "For <60-min players — add toward the match-day locomotor demand.", is: "Fyrir <60-mín leikmenn — bæta upp að leikdags-hlaupakröfu." } },
   };
   // A congested week COLLAPSES the build (Oliveira 2019) — no MD-5/-4/-3; the between-match days are
   // recovery + short match-prep only.
@@ -521,7 +521,7 @@ export function buildMesoPlan(opts: {
     { en: "Targets scale from each player's own match unit — a starting point, never a norm to obey (Little & Buchheit).", is: "Álagsmörk skala frá eigin leikviðmiði hvers leikmanns — upphafspunktur, aldrei viðmið til að hlýða í blindni (Little & Buchheit)." },
     { en: "No single \"% of match\": mechanical work over-shoots the match, HSR/sprint fall short — read each axis on its own (Figueiredo).", is: "Ekkert eitt „%-af-leik“: vélrænt fer yfir leikinn, háhraði/sprettur ná ekki — lestu hvern ás sér (Figueiredo)." },
     { en: "Never stack HSR and mechanical work on the same day — protect the posterior chain (Mechanical MD-5 vs Locomotive MD-4).", is: "Aldrei stafla háhraða og vélrænu á sama dag — verndaðu afturkeðjuna (Mechanical MD-5 vs Locomotive MD-4)." },
-    { en: "<30-min players get a Top-up toward the match unit; readiness gates every day and never raises a light one.", is: "<30-mín leikmenn fá Áfyllingu að leikviðmiðinu; viðbragð stýrir hverjum degi og hækkar aldrei léttan dag." },
+    { en: "<60-min players get a Top-up toward the match unit; readiness gates every day and never raises a light one.", is: "<60-mín leikmenn fá Áfyllingu að leikviðmiðinu; viðbragð stýrir hverjum degi og hækkar aldrei léttan dag." },
     { en: "Descriptive planning — it never sets the readiness colour. The coach decides and overrides.", is: "Lýsandi áætlun — hún setur aldrei readiness-litinn. Þjálfarinn ákveður og hnekkir." },
   ];
   return { goal, startDate: opts.startDate, numWeeks, sessionsPerWeek, matchUnitLoad: opts.matchUnitLoad, weeks, notes };

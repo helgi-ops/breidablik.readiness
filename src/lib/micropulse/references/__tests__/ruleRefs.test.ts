@@ -48,6 +48,20 @@ describe("rule references", () => {
     expect(openOnes(shorts)).toEqual([]);
   });
 
+  it("every short citation in the Periodization Hub rule catalogue resolves or is listed as unresolved", () => {
+    const [hub, hubRefs = ""] = readFileSync(join(ROOT, "docs/periodization-hub-reglur.md"), "utf8").split(HEADING);
+    const shorts = citationsIn(hub);
+    expect(shorts.length).toBeGreaterThan(30);
+    expect(openOnes(shorts)).toEqual([]);
+    // The MD+2 day-off rule cites the rest paper (2023b), never the near-max speed paper (2023).
+    expect(shorts).toContain("Buchheit 2023b");
+    expect(shorts).not.toContain("Buchheit 2023");
+    for (const sh of shorts) {
+      const ref = findRefByShort(sh);
+      if (ref) expect(hubRefs).toContain(ref.cite);
+    }
+  });
+
   it("every short citation in the rule code resolves or is listed as unresolved", () => {
     const shorts = codeCitations();
     expect(shorts.length).toBeGreaterThan(150);

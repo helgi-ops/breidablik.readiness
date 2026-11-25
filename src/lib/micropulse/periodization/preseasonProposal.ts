@@ -231,7 +231,7 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   });
   const cal1a = freeOn.length || freeOff.length ? calOpts(matchDates, allFx, true, freeOn, freeTy, freeOff) : cal0;
   // A week WITH a game: the coach's sessions a week set its training days too (the user's rule 2026-11-25). The
-  // calendar's days around the game are the start; the top-up (only for players under 30 min) isn't counted.
+  // calendar's days around the game are the start; the top-up (only for players under 60 min) isn't counted.
   // Too many → drop Mixed first, then the activation day, then Locomotive, then Mechanical, the day farthest from
   // a game first. Too few → add a Mixed session (the calendar's own forced-session type) on a day off, the one
   // farthest from a game first, never in the two days after a game. A day the coach set is never touched.

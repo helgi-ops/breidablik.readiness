@@ -3010,7 +3010,7 @@ export default function PeriodizationHubPage() {
             <span>{is ? "Alltaf frí á MD+2" : "Always off on MD+2"}</span>
             <span className="text-slate-400">·</span>
             <span>{is ? "Aðeins skráðir leikir (úr Makró)" : "Only entered games (from Macro)"}</span>
-            <span className="w-full text-[11px] text-slate-500">{is ? "Dagur sem þú setur gegn reglu helst og fær ⚠." : "A day you set against a rule stays and gets ⚠."} <span className="font-mono">{THREE_IN_A_ROW_RULE} · INSEASON_MD2_OFF</span> · {is ? "MicroPulse-regla" : "MicroPulse rule"}; Buchheit 2023</span>
+            <span className="w-full text-[11px] text-slate-500">{is ? "Dagur sem þú setur gegn reglu helst og fær ⚠." : "A day you set against a rule stays and gets ⚠."} <span className="font-mono">{THREE_IN_A_ROW_RULE} · INSEASON_MD2_OFF</span> · {is ? "MicroPulse-regla" : "MicroPulse rule"}; Buchheit 2023b</span>
           </div>
 
           {/* FIXTURES_PENDING: the fixture list isn't entered past the last game → the blocks from there are provisional. */}
