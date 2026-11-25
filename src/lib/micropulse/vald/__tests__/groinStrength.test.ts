@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildGroinStrength, findGroinAdductorTest, GROIN_STRENGTH_DROP_PCT } from "../groinStrength";
+import { buildGroinStrength, findGroinAdductorTest, GROIN_STRENGTH_DROP_PCT, isHipForceFrameTest } from "../groinStrength";
 import type { RtpLimbStrengthTest, RtpLimbStrengthEntry } from "@/lib/micropulse/rtp/types";
 
 const entry = (over: Partial<RtpLimbStrengthEntry>): RtpLimbStrengthEntry => ({
@@ -71,5 +71,17 @@ describe("buildGroinStrength", () => {
     const r = buildGroinStrength(groinTest({ history: [entry({})] }));
     expect(r.trend).toBeNull();
     expect(r.verdict.en).toMatch(/no prior test/i);
+  });
+});
+
+describe("isHipForceFrameTest (the groin flag reads the hip test only)", () => {
+  it("accepts the hip adduction/abduction rows VALD sends", () => {
+    expect(isHipForceFrameTest({ test_type: "Hip AD/AB", body_region: "Hip", movement_pattern: "Hip AD/AB - 60" })).toBe(true);
+    expect(isHipForceFrameTest({ test_type: null, body_region: null, movement_pattern: "Hip Adduction · Squeeze" })).toBe(true);
+  });
+  it("rejects ankle, knee and neck ForceFrame tests", () => {
+    expect(isHipForceFrameTest({ test_type: "Ankle Plantar Flexion", body_region: "Ankle", movement_pattern: "Ankle Plantar Flexion - Seated" })).toBe(false);
+    expect(isHipForceFrameTest({ test_type: "Knee Flexion", body_region: "Knee", movement_pattern: null })).toBe(false);
+    expect(isHipForceFrameTest({})).toBe(false);
   });
 });

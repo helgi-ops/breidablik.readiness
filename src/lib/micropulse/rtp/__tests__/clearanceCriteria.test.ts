@@ -110,3 +110,15 @@ describe("rtpDecision edge cases", () => {
     expect(rtpDecision(ok, false)).toMatch(/MEETS MEASURED CRITERIA/);
   });
 });
+
+describe("CoD criterion uses the CoD card's lines (codAsymmetry.ts)", () => {
+  const cod = (pct: number) => buildRtpCriteria({ cmjJumpHeightCm: null, cmjAsymmetryPct: null, codHighAsymPct: pct }).find((c) => c.key === "cod_high_asymmetry")!;
+  it("under 9% pass, 9–15% caution, 15% or more flag", () => {
+    expect(cod(8.9).status).toBe("PASS");
+    expect(cod(9).status).toBe("CAUTION");
+    expect(cod(14.9).status).toBe("CAUTION");
+    expect(cod(15).status).toBe("FLAG");
+    expect(cod(20).status).toBe("FLAG");
+    expect(cod(8.9).target).toBe("< 9%");
+  });
+});

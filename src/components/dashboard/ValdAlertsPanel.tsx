@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { aggregateTrialsByTest, metricSeries, type TrialMetricRow } from "@/lib/micropulse/vald/trialAggregate";
 import { CMJ_BASELINE_RULE, selectCmjBaseline, strengthRetestList, VALD_FLAG_WINDOW_DAYS } from "@/lib/micropulse/vald/flagFreshness";
+import { isHipForceFrameTest } from "@/lib/micropulse/vald/groinStrength";
 import { useLang } from "@/lib/lang";
 
 type Props = {
@@ -574,7 +575,11 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
       .filter((e) => nameByPlayerId.has(e.playerId))
       .map((e) => `${nameByPlayerId.get(e.playerId)} (${lang === "IS" ? `${e.ageDays} d` : `${e.ageDays}d`})`);
   const hamstringRetest = retestNames(nordbordRows, VALD_FLAG_WINDOW_DAYS.nordbordDays);
-  const groinRetest = retestNames(forceframeRows, VALD_FLAG_WINDOW_DAYS.forceframeDays);
+  // Groin = the hip adduction/abduction test only; ankle/knee ForceFrame tests are not a groin retest.
+  const groinRetest = retestNames(
+    forceframeRows.filter((r) => isHipForceFrameTest({ test_type: r.testType, movement_pattern: r.movement })),
+    VALD_FLAG_WINDOW_DAYS.forceframeDays,
+  );
   const hasRetest = hamstringRetest.length > 0 || groinRetest.length > 0;
 
   return (
@@ -979,18 +984,19 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         <div className="rounded-xl border border-slate-100 bg-white shadow-sm">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <h3 className="text-sm font-semibold text-slate-800">NordBord &amp; ForceFrame</h3>
-            <span className="text-[11px] text-slate-400">L/R styrkur &amp; ósamhverfa · latest per player</span>
+            <span className="text-[11px] text-slate-400">{lang === "IS" ? "Styrkur vinstri/hægri og munur · nýjasta próf hvers leikmanns" : "Left/right strength and gap · latest test per player"}</span>
           </div>
           <div className="px-4 py-3 space-y-4">
             {nordbordRows.length > 0 && (
-              <DeviceStrengthGroups keyPrefix="nb" heading="NordBord — Aftanlæri (Nordic)" rows={nordbordRows} />
+              <DeviceStrengthGroups keyPrefix="nb" heading={lang === "IS" ? "NordBord — Aftanlæri (Nordic)" : "NordBord — Hamstring (Nordic)"} rows={nordbordRows} />
             )}
             {forceframeRows.length > 0 && (
-              <DeviceStrengthGroups keyPrefix="ff" heading="ForceFrame — Nári / aðfærsla" rows={forceframeRows} showMovement groupByTest />
+              <DeviceStrengthGroups keyPrefix="ff" heading={lang === "IS" ? "ForceFrame — mjöðm (nári), ökkli o.fl." : "ForceFrame — hip (groin), ankle and others"} rows={forceframeRows} showMovement groupByTest />
             )}
             <p className="text-[10px] leading-snug text-slate-400">
-              Ósamhverfa reiknuð úr vinstri/hægri hámarkskrafti (&lt;10% grænt, 10–15% gult, &gt;15% rautt — línur MicroPulse; algeng flagglína, ekki sannreynd mörk; Parkinson 2021). Munur einn og sér jók ekki hættu á meiðslum í aftanlæri (Opar 2015) né nára (Vigneswaran 2025); lítill styrkur gerði það (Opar 2015, Quintana-Cepedal 2025).
-              Þessi próf eru sjaldgæfari en CMJ — „latest per player&quot; sýnir nýjasta prófið hjá hverjum.
+              {lang === "IS"
+                ? "Munur vinstri og hægri reiknaður úr hámarkskrafti (undir 10% grænt, 10–15% gult, 15% eða meira rautt — línur MicroPulse; algeng flagglína, ekki sannreynd mörk; Parkinson 2021). Munur einn og sér jók ekki hættu á meiðslum í aftanlæri (Opar 2015) né nára (Vigneswaran 2025); lítill styrkur gerði það (Opar 2015, Quintana-Cepedal 2025). Þessi próf eru sjaldgæfari en CMJ, svo hér sést nýjasta prófið hjá hverjum leikmanni."
+                : "Left/right gap worked out from peak force (under 10% green, 10–15% amber, 15% or more red — MicroPulse’s lines; a common flag line, not a validated cut-off; Parkinson 2021). A gap on its own did not raise the risk of hamstring injury (Opar 2015) or groin injury (Vigneswaran 2025); low strength did (Opar 2015, Quintana-Cepedal 2025). These tests are less frequent than CMJ, so this shows each player’s latest test."}
             </p>
           </div>
         </div>

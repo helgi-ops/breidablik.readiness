@@ -5,7 +5,7 @@
  * staged functional loading.
  *
  * Sibling of the tendinopathy / groin modules, sharing the tab shell, Silbernagel
- * pain gate, collagen adjunct and Stage-3 symmetry gate
+ * pain gate, collagen adjunct and Stage-4 symmetry gate
  * (src/components/rehab/tendonLoading.tsx). Ankle-specific:
  *   • This is a LIGAMENT sprain (ATFL ± CFL), not a tendinopathy — early
  *     functional loading beats rest, and BALANCE/proprioception is its own
@@ -40,6 +40,8 @@ const PROVOCATION_SHORT = { en: "loading pain", is: "álags-verkur" };
 const HOP_LSI = { en: "Hop LSI", is: "Hopp LSI" };
 const YBAL = { en: "Y-balance %", is: "Y-jafnvægi %" };
 const LSI_HINT = { en: "involved ÷ uninvolved × 100", is: "meidd ÷ heilbrigð × 100" };
+/** Hop symmetry is built with Stage 3 hopping, so the gate opens Stage 4 (agility / return to sport). */
+const ANKLE_NEXT_WORK = { en: "return-to-sport agility (cutting, pivoting, deceleration)", is: "snerpu fyrir endurkomu (skurði, snúninga, hraðaminnkun)" };
 
 type Tab = "overview" | "s1" | "s2" | "s3" | "s4" | "testing" | "videos";
 type Grade = "I" | "II";
@@ -451,23 +453,23 @@ export default function AnkleSprainPage() {
           </div>
         )}
 
-        {/* ── STAGE 3 ── (LSI gated) */}
+        {/* ── STAGE 3 ── (hop symmetry is built here; the LSI gate sits on Stage 4) */}
         {tab === "s3" && (
           <div className="space-y-4">
             <StageHead isEN={isEN} title={isEN ? "Stage 3 — Proprioception + energy storage" : "Fasi 3 — Proprioception + orkugeymsla"} tag={isEN ? "reintroduce dynamic control" : "endurvekja kvika stjórn"}
               goal={isEN ? "restore reactive balance and the spring with progressive hopping — only once pain is controlled and hop/balance symmetry is building." : "endurheimta viðbragðs-jafnvægi og fjöðrun með stigvaxandi hoppi — aðeins þegar verkur er í skefjum og hopp/jafnvægis-samhverfa byggist upp."} />
-            <LsiGate isEN={isEN} unitHint={LSI_HINT} metrics={lsiMetrics} />
             <ExerciseTable rows={S3} isEN={isEN} />
             <p className="text-xs text-slate-500">{isEN ? "Source: neuromuscular / balance progression; the 90% hop / Y-balance gate is MicroPulse's line — no evidence-based ankle-sprain criteria yet (Tassignon 2019); Smith 2021 lists hop and balance tests without a % line." : "Heimild: taugavöðva- / jafnvægis-framgangur; 90% hopp- / Y-jafnvægis-hliðið er viðmið MicroPulse — engin gagnreynd viðmið eftir ökklatognun enn (Tassignon 2019); Smith 2021 telur upp hopp- og jafnvægispróf án %-línu."}</p>
             <PainGate isEN={isEN} reported={reported} provocationFull={PROVOCATION_FULL} provocationShort={PROVOCATION_SHORT} />
           </div>
         )}
 
-        {/* ── STAGE 4 ── */}
+        {/* ── STAGE 4 ── (LSI gated) */}
         {tab === "s4" && (
           <div className="space-y-4">
             <StageHead isEN={isEN} title={isEN ? "Stage 4 — Return to sport (agility)" : "Fasi 4 — Aftur í íþrótt (snerpa)"} tag={isEN ? "control → chaos" : "stýrt → óreiða"}
               goal={isEN ? "sport-specific cutting, pivoting and deceleration, graded back to full training. Brace/tape early to lower re-sprain risk." : "íþrótta-sértækir skurðir, snúningar og hraðaminnkun, þrepað aftur í fullar æfingar. Spelka/teip snemma til að lækka endurtognun."} />
+            <LsiGate isEN={isEN} unitHint={LSI_HINT} metrics={lsiMetrics} stage={4} nextWork={ANKLE_NEXT_WORK} />
             <ExerciseTable rows={S4} isEN={isEN} />
             <p className="text-xs text-slate-500">{isEN ? "Source: control-chaos continuum; bracing/taping for early return (Doherty/Vuurberg)." : "Heimild: stýrða-óreiðu ásinn; spelka/teip fyrir snemma endurkomu (Doherty/Vuurberg)."}</p>
             <PainGate isEN={isEN} reported={reported} provocationFull={PROVOCATION_FULL} provocationShort={PROVOCATION_SHORT} />
@@ -505,7 +507,7 @@ export default function AnkleSprainPage() {
             </div>
             <div className="rounded-lg border border-slate-200 bg-white p-4">
               <h3 className="text-sm font-semibold text-violet-700">{isEN ? "Hop / balance symmetry gate" : "Hopp / jafnvægis-samhverfu-hlið"}</h3>
-              <div className="mt-2"><LsiGate isEN={isEN} unitHint={LSI_HINT} metrics={lsiMetrics} /></div>
+              <div className="mt-2"><LsiGate isEN={isEN} unitHint={LSI_HINT} metrics={lsiMetrics} stage={4} nextWork={ANKLE_NEXT_WORK} /></div>
             </div>
           </div>
         )}

@@ -13,6 +13,7 @@
 
 import type { RtpCriterion, RtpDomain, RtpStatus } from "./types";
 import type { CodExposureStatus } from "./codExposure";
+import { codFlag, COD_WATCH_PCT } from "@/lib/micropulse/codAsymmetry";
 
 export const RTP_DOMAINS = [
   "Bilateral Strength",
@@ -120,8 +121,11 @@ export function buildRtpCriteria(input: {
 
   // ── Movement Control (change of direction + dynamic valgus) ────────────────
   if (input.codHighAsymPct != null) {
-    const s = asymmetryStatus(input.codHighAsymPct);
-    c.push({ key: "cod_high_asymmetry", domain: "Movement Control", label: "Change-of-direction asymmetry (high intensity)", target: "< 10%", current: fmtPct(input.codHighAsymPct), status: s, met: s === "PASS", cite: "MicroPulse's line for GPS turn counts (not tested against injury)" });
+    // Same CoD lines as the CoD card (codAsymmetry.ts), so the card and the checklist never disagree
+    // on one number: under 9% pass · 9–15% caution · 15% or more flag.
+    const f = codFlag(input.codHighAsymPct);
+    const s: RtpStatus = f === "ok" ? "PASS" : f === "watch" ? "CAUTION" : "FLAG";
+    c.push({ key: "cod_high_asymmetry", domain: "Movement Control", label: "Change-of-direction asymmetry (high intensity)", target: `< ${COD_WATCH_PCT}%`, current: fmtPct(input.codHighAsymPct), status: s, met: s === "PASS", cite: "MicroPulse's line for GPS turn counts (not tested against injury)" });
   }
   if (input.valgusSeverity) {
     const sev = input.valgusSeverity;

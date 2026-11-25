@@ -16,9 +16,12 @@ import { computeMatchUnit, type PlayerMatchRow } from "@/lib/micropulse/periodiz
 import { buildRtpAssessment } from "@/lib/micropulse/rtp/buildRtpAssessment";
 import type { CccReadInput, CccGateValues } from "./bands";
 import type { CccPhaseKey, CccVariable } from "./continuum";
+import { classifyBatteryTestType, type BatteryTestType } from "@/lib/integrations/vald/battery";
 
 const num = (v: unknown): number | null => (v == null || Number.isNaN(Number(v)) ? null : Number(v));
 const MATCH_SOURCES = ["catapult", "manual", "titan", "wimu"];
+/** Battery tests that measure reactive strength (hop / drop jump / rebound) — the C_RSI_90 gate. */
+const REACTIVE_BATTERY_TYPES: ReadonlySet<BatteryTestType> = new Set<BatteryTestType>(["SLDJ", "DJ", "HJ", "SLJ", "CMRJ"]);
 
 type LoadRow = {
   date: string; source?: string | null; player_load: number | null; total_distance: number | null;
@@ -94,7 +97,9 @@ export async function loadCccInput(
     hasForcePlate = !!(rtp.cmj || rtp.imtp || rtp.battery?.length || rtp.limbStrength?.length);
     gateValues.cmj_asymmetry_pct = rtp.cmj?.asymmetryPct ?? null;
     gateValues.imtp_lsi_pct = rtp.imtp?.lsiPct ?? null;
-    const hop = (rtp.battery ?? []).find((t) => t.lsiPct != null);
+    // Reactive-strength gate: hop / drop-jump / rebound tests only. An isometric squat or IMTP
+    // LSI is a strength number, not reactive strength, so it never fills this gate.
+    const hop = (rtp.battery ?? []).find((t) => t.lsiPct != null && REACTIVE_BATTERY_TYPES.has(classifyBatteryTestType(t.testType) ?? "OTHER"));
     gateValues.hop_rsi_lsi_pct = hop?.lsiPct ?? null;
     const nordic = (rtp.limbStrength ?? []).find((t) => t.device === "nordbord");
     gateValues.nordic_asymmetry_pct = nordic?.asymmetryPct ?? null;

@@ -20,6 +20,7 @@ import { batteryMetricMean, BATTERY_CODES, BATTERY_PRIMARY, classifyBatteryTestT
 import { resolveBenchmarkPop } from "@/lib/micropulse/vald/benchmarks";
 import { asymmetryStatus, buildRtpCriteria, buildRtpDomains, buildRtpRecommendations, rtpDecision } from "./clearanceCriteria";
 import { computeCodExposure, type CodExposureRow } from "./codExposure";
+import { codFlag } from "@/lib/micropulse/codAsymmetry";
 import type { RtpAssessment, RtpBatteryTest, RtpCmj, RtpCod, RtpImtp, RtpInjury, RtpLimbStrengthEntry, RtpLimbStrengthTest, RtpValgus, RtpValgusSeverity } from "./types";
 
 const BATTERY_LABELS: Record<string, string> = {
@@ -48,13 +49,6 @@ function asymPct(left: number, right: number): number | null {
   const max = Math.max(left, right);
   if (max <= 0) return null;
   return (Math.abs(left - right) / max) * 100;
-}
-function codFlag(pct: number | null): RtpCod["flag"] {
-  if (pct == null) return "no_data";
-  if (pct >= 18) return "high";
-  if (pct >= 15) return "concern";
-  if (pct >= 9) return "watch";
-  return "ok";
 }
 
 export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: string): Promise<RtpAssessment> {

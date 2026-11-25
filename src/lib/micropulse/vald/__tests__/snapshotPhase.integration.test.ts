@@ -176,7 +176,7 @@ test("e2e: an old strength gap is not today's state, says it needs a new test, a
   const snap = await buildValdDailySnapshot("team", "player", "2026-11-06", stubClient({
     vald_forcedecks_results: [],
     vald_nordbord_results: [strength],
-    vald_forceframe_results: [strength],
+    vald_forceframe_results: [{ ...strength, test_type: "Hip AD/AB", body_region: "Hip", movement_pattern: "Hip AD/AB - 60" }],
   }));
   assert.equal(snap.nordbordFreshnessStatus, "stale");
   assert.equal(snap.hamstringFlag, null);
@@ -198,4 +198,23 @@ test("e2e: a fresh strength gap still flags", async () => {
   assert.equal(snap.overallValdStatus, "red");
   const expl = snap.explanation as { nordbord: { retest_needed: boolean } };
   assert.equal(expl.nordbord.retest_needed, false);
+});
+
+test("e2e: the groin flag reads the hip test, never a newer ankle ForceFrame test", async () => {
+  const hip = { is_valid: true, test_type: "Hip AD/AB", body_region: "Hip", movement_pattern: "Hip AD/AB - 60", left_peak_force_n: 300, right_peak_force_n: 302, test_timestamp: "2026-11-01T10:00:00Z" };
+  const ankle = { is_valid: true, test_type: "Ankle Plantar Flexion", body_region: "Ankle", movement_pattern: "Ankle Plantar Flexion - Seated", left_peak_force_n: 300, right_peak_force_n: 400, test_timestamp: "2026-11-04T10:00:00Z" };
+  const snap = await buildValdDailySnapshot("team", "player", "2026-11-06", stubClient({
+    vald_forcedecks_results: [],
+    vald_nordbord_results: [],
+    vald_forceframe_results: [ankle, hip],
+  }));
+  assert.equal(snap.latestForceframeAt, hip.test_timestamp);
+  assert.equal(snap.groinFlag, "green");
+  const ankleOnly = await buildValdDailySnapshot("team", "player", "2026-11-06", stubClient({
+    vald_forcedecks_results: [],
+    vald_nordbord_results: [],
+    vald_forceframe_results: [ankle],
+  }));
+  assert.equal(ankleOnly.groinFlag, null);
+  assert.equal(ankleOnly.latestForceframeAt, null);
 });

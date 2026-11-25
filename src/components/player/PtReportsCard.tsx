@@ -10,6 +10,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
+/** Colour a left/right gap by its size, on the same lines as the VALD panel (MicroPulse's lines:
+ *  under 10% plain, 10–15% amber, 15% or more red) — a small gap is not a warning. */
+function gapTone(pct: number): string {
+  const p = Math.abs(pct);
+  if (p >= 15) return "text-rose-600";
+  if (p >= 10) return "text-amber-600";
+  return "text-slate-500";
+}
+
 type Metric = { label: string; value: number | string; unit?: string };
 type TestRow = { product?: string; test_type?: string; date?: string | null; metrics?: Metric[]; left_n?: number | null; right_n?: number | null; asymmetry_percent?: number | null; asymmetry_side?: string | null };
 type Extracted = { athlete?: string | null; report_date?: string | null; body_weight_kg?: number | null; tests?: TestRow[] } | null;
@@ -198,7 +207,7 @@ export default function PtReportsCard({ clientId, lang }: { clientId?: string; l
                     <div key={ti} className="text-[11px]">
                       <span className="font-medium text-slate-700">{t.test_type ?? t.product}</span>
                       {t.date ? <span className="text-slate-400"> · {fmtDate(t.date)}</span> : null}
-                      {t.asymmetry_percent != null ? <span className="text-amber-600"> · {is ? "ósamhverfa" : "asym"} {t.asymmetry_percent}%{t.asymmetry_side ? ` ${t.asymmetry_side}` : ""}</span> : null}
+                      {t.asymmetry_percent != null ? <span className={gapTone(t.asymmetry_percent)}> · {is ? "munur V/H" : "L/R gap"} {t.asymmetry_percent}%{t.asymmetry_side ? ` ${t.asymmetry_side}` : ""}</span> : null}
                       <div className="text-slate-500">
                         {(t.metrics ?? []).map((m, mi) => (
                           <span key={mi}>{mi > 0 ? " · " : ""}{m.label} {m.value}{m.unit ? ` ${m.unit}` : ""}</span>

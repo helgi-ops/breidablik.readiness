@@ -6,6 +6,7 @@ import { aggregateTrialsByTest, metricSeries, type TrialMetricRow } from "./tria
 import { classifyPhaseChange, worstRealChange, type PhaseMetricKey } from "./phaseChange";
 import { ftCtRatio, normalizedRfd } from "./cmjDerived";
 import { buildCmjReturnRead, currentValdFlag, selectCmjBaseline, worstValdFlag } from "./flagFreshness";
+import { isHipForceFrameTest } from "./groinStrength";
 
 // CMJ metric key → results column. Trial-averaged per test (Claudino 2017) and,
 // for the phase set, CV-gated before it may flag (Gathercole 2015).
@@ -101,13 +102,15 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
     // table with null CMJ metrics, so filter them out or they pollute the baseline.
     sb.from("vald_forcedecks_results").select(cmjColumns).eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).or("test_type.is.null,test_type.ilike.%cmj%").gte("test_timestamp", baselineDate).lte("test_timestamp", snapshotEnd).order("test_timestamp", { ascending: false }),
     sb.from("vald_nordbord_results").select("*").eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).lte("test_timestamp", snapshotEnd).order("test_timestamp", { ascending: false }).limit(10),
-    sb.from("vald_forceframe_results").select("*").eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).lte("test_timestamp", snapshotEnd).order("test_timestamp", { ascending: false }).limit(10),
+    // Wider window than NordBord: ankle/knee ForceFrame tests share the table and are filtered out below.
+    sb.from("vald_forceframe_results").select("*").eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).lte("test_timestamp", snapshotEnd).order("test_timestamp", { ascending: false }).limit(30),
   ]);
 
   // Dynamic column list defeats the typed-client inference; cast through unknown.
   const cmjRows = (cmjRes.data ?? []) as unknown as Array<Record<string, unknown>>;
   const latestNord = (nordRes.data ?? [])[0] as Record<string, unknown> | undefined;
-  const latestForce = (ffRes.data ?? [])[0] as Record<string, unknown> | undefined;
+  // The groin flag reads the hip adduction/abduction test only, never an ankle or knee ForceFrame test.
+  const latestForce = ((ffRes.data ?? []) as Array<Record<string, unknown>>).find(isHipForceFrameTest);
 
   // ── Trial averaging (Claudino 2017): one aggregate per TEST = the mean of its
   // valid trials. The latest test is compared against the median of the player's

@@ -57,6 +57,13 @@ export type GroinStrengthRead = {
   facts: Bi[];
 };
 
+/** ForceFrame also runs ankle, knee, neck and shoulder tests. Only the hip adduction/abduction test
+ *  speaks to the groin, so the groin flag and the groin retest list read that test alone.
+ *  (Rows carry test_type "Hip AD/AB", body_region "Hip", movement_pattern "Hip AD/AB - 60".) */
+export function isHipForceFrameTest(row: { test_type?: unknown; body_region?: unknown; movement_pattern?: unknown }): boolean {
+  return [row.test_type, row.body_region, row.movement_pattern].some((v) => typeof v === "string" && /\bhip\b|adduct/i.test(v));
+}
+
 /** The ForceFrame adduction ("Squeeze") limb test — labelled "… (groin)" by buildRtpAssessment. */
 export function findGroinAdductorTest(limbStrength: RtpLimbStrengthTest[] | null | undefined): RtpLimbStrengthTest | null {
   if (!limbStrength?.length) return null;

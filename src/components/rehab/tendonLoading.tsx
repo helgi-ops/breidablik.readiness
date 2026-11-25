@@ -103,19 +103,26 @@ export function CollagenSupport({ isEN }: { isEN: boolean }) {
   );
 }
 
-// ── Objective symmetry gate (coach-entered) — Stage 3 unlock ────────────────
+// ── Objective symmetry gate (coach-entered) — unlocks `stage` (default 3) ────
 // Generic over the metrics a module cares about (heel-raise/hop LSI for the
 // Achilles, adductor-squeeze LSI + adduction:abduction ratio for the groin).
 // All metrics on a 0–100% scale; the gate opens when the LOWEST entered metric
-// meets `threshold`. No data is never a pass.
+// meets `threshold`. No data is never a pass. The ankle gate unlocks Stage 4
+// (hop symmetry is built in Stage 3), so the stage and the next work are props.
+const DEFAULT_NEXT_WORK: Bi = { en: "energy-storage loading", is: "orkugeymslu-hleðslu" };
 export function LsiGate({
-  isEN, threshold = 90, metrics, unitHint,
+  isEN, threshold = 90, metrics, unitHint, stage = 3, nextWork = DEFAULT_NEXT_WORK,
 }: {
   isEN: boolean;
   threshold?: number;
   metrics: { label: Bi; value: number | null; onChange: (v: number | null) => void }[];
   unitHint?: Bi;
+  /** The stage this gate unlocks; the player holds at the stage before it. */
+  stage?: number;
+  /** What the player progresses to once the gate opens. */
+  nextWork?: Bi;
 }) {
+  const prev = stage - 1;
   const entered = metrics.map((m) => m.value).filter((v): v is number => v != null);
   const lowest = entered.length ? Math.min(...entered) : null;
 
@@ -123,7 +130,7 @@ export function LsiGate({
   if (lowest == null) {
     banner = (
       <div className="rounded-lg border border-dashed border-amber-400 bg-amber-50/60 p-4 text-sm text-slate-600">
-        🔒 {isEN ? "Stage 3 locked — enter at least one symmetry measure. No data is not a pass." : "Fasi 3 læstur — sláðu inn a.m.k. eina samhverfu-mælingu. Engin gögn er ekki grænt ljós."}
+        🔒 {isEN ? `Stage ${stage} locked — enter at least one symmetry measure. No data is not a pass.` : `Fasi ${stage} læstur — sláðu inn a.m.k. eina samhverfu-mælingu. Engin gögn er ekki grænt ljós.`}
       </div>
     );
   } else {
@@ -133,12 +140,12 @@ export function LsiGate({
       <div className={`rounded-lg border p-4 text-sm ${met ? "border-emerald-300 bg-emerald-50" : "border-amber-400 bg-amber-50"}`}>
         <b className="block text-slate-900">
           {met ? "🔓 " : "🔒 "}
-          {met ? (isEN ? "Stage 3 unlocked — symmetry criterion met" : "Fasi 3 opnaður — samhverfu-viðmið uppfyllt") : (isEN ? "Stage 3 locked — symmetry criterion not met" : "Fasi 3 læstur — samhverfu-viðmið ekki uppfyllt")}
+          {met ? (isEN ? `Stage ${stage} unlocked — symmetry criterion met` : `Fasi ${stage} opnaður — samhverfu-viðmið uppfyllt`) : (isEN ? `Stage ${stage} locked — symmetry criterion not met` : `Fasi ${stage} læstur — samhverfu-viðmið ekki uppfyllt`)}
         </b>
         <span className="mt-1 block text-slate-600">
           {met
-            ? (isEN ? `Lowest measure ${lowest}% ≥ ${threshold}% ✓. Confirm pain is controlled at Stage 2 loads, then progress to energy-storage loading.` : `Lægsta mæling ${lowest}% ≥ ${threshold}% ✓. Staðfestu að verkur sé í skefjum við Fasa 2, haltu svo áfram í orkugeymslu-hleðslu.`)
-            : (isEN ? `Counterfactual: ${lowest}% → needs ≥ ${threshold}% to progress to Stage 3 (${gap} points short). Hold at Stage 2 and keep building symmetry.` : `Gagnstæða: ${lowest}% → þarf ≥ ${threshold}% til að fara í Fasa 3 (${gap} stig undir). Haltu í Fasa 2 og haltu áfram að byggja samhverfu.`)}
+            ? (isEN ? `Lowest measure ${lowest}% ≥ ${threshold}% ✓. Confirm pain is controlled at Stage ${prev} loads, then progress to ${nextWork.en}.` : `Lægsta mæling ${lowest}% ≥ ${threshold}% ✓. Staðfestu að verkur sé í skefjum við Fasa ${prev}, haltu svo áfram í ${nextWork.is}.`)
+            : (isEN ? `Counterfactual: ${lowest}% → needs ≥ ${threshold}% to progress to Stage ${stage} (${gap} points short). Hold at Stage ${prev} and keep building symmetry.` : `Gagnstæða: ${lowest}% → þarf ≥ ${threshold}% til að fara í Fasa ${stage} (${gap} stig undir). Haltu í Fasa ${prev} og haltu áfram að byggja samhverfu.`)}
         </span>
       </div>
     );
