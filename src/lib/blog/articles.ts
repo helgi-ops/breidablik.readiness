@@ -773,20 +773,20 @@ Note: References are formatted in APA 7th edition style; details verified agains
 Tim Gabbett og samstarfsf\u00f3lk vins\u00e6ldu bili\u00f0 0.8\u20131.3 sem \u201evenjulegt" \u00e1lagsbreytinga-bil. En ACWR er ekki sta\u00f0fest mei\u00f0sla-sp\u00e1 \u2014 n\u00fdrri ranns\u00f3knir (Impellizzeri o.fl. 2020) s\u00fdna a\u00f0 \u00fea\u00f0 er t\u00f6lfr\u00e6\u00f0ilega galla\u00f0 og sp\u00e1ir ekki \u00e1rei\u00f0anlega fyrir um mei\u00f0sli. R\u00e9ttari lesning: ACWR m\u00e6lir ST\u00c6R\u00d0 \u00e1lagsst\u00f6kks. \u00dea\u00f0 sem raunverulega skiptir m\u00e1li fyrir mei\u00f0sli er hvort st\u00f6kki\u00f0 \u00fdtir \u00ed\u00fer\u00f3ttamanninum inn \u00e1 \u00f3\u00feekkt \u00e1lag sem l\u00edkaminn er ekki undirb\u00fainn fyrir (Gabbett o.fl. 2016b \u2014 miki\u00f0 \u00e1lag eitt og s\u00e9r veldur ekki mei\u00f0slum; lei\u00f0in \u00feanga\u00f0 skiptir m\u00e1li).`,
       },
       {
-        heading: "Hvers vegna load spikes eru h\u00e6ttulegir",
+        heading: "Hvers vegna sn\u00f6gg \u00e1lagsst\u00f6kk skipta m\u00e1li",
         body: `Tali\u00f0 er a\u00f0 hr\u00f6\u00f0 og mikil aukning \u00e1 \u00e6finga\u00e1lagi \u2014 svokalla\u00f0ir load spikes \u2014 sk\u00fdri st\u00f3ran hluta snertilausra mj\u00fakvefjamei\u00f0sla \u00ed h\u00f3p\u00ed\u00fer\u00f3ttum (Gabbett 2016). D\u00e6mi: leikma\u00f0ur kemur af mei\u00f0slum e\u00f0a fr\u00edi og fer beint \u00ed fullrar \u00e6fingar. ACWR hans fer fr\u00e1 0.5 upp \u00ed 1.8 \u00e1 einni viku.
 
 \u00deetta \u00e1 ekki bara vi\u00f0 um GPS-\u00e1lag heldur l\u00edka RPE (perceived exertion). MicroPulse reiknar ACWR \u00fat fr\u00e1 b\u00e6\u00f0i GPS acute/chronic load og RPE-g\u00f6gnum til a\u00f0 gefa heildarbynd.`,
       },
       {
         heading: "Hvernig nota \u00fej\u00e1lfarar ACWR \u00ed MicroPulse?",
-        body: `\u00c1 coach dashboard s\u00e9st ACWR fyrir hvern leikmann me\u00f0 litak\u00f3\u00f0um: bl\u00e1r (< 0.8, l\u00edti\u00f0 \u00e1lag), gr\u00e6nn (0.8\u20131.3, kj\u00f6rsv\u00e6\u00f0i), gulur (1.3\u20131.5, h\u00e6kka\u00f0), rau\u00f0ur (> 1.5, h\u00e1tt). \u00dej\u00e1lfarar geta s\u00e9\u00f0 trend yfir vikur og brugist vi\u00f0 \u00e1\u00f0ur en \u00e1lag ver\u00f0ur of miki\u00f0.
+        body: `\u00c1 coach dashboard s\u00e9st ACWR fyrir hvern leikmann me\u00f0 litak\u00f3\u00f0um: bl\u00e1r (< 0.8, l\u00edti\u00f0 \u00e1lag), gr\u00e6nn (0.8\u20131.3, svipa\u00f0 og venjulega), gulur (1.3\u20131.5, h\u00e6kka\u00f0), rau\u00f0ur (> 1.5, h\u00e1tt). \u00dej\u00e1lfarar geta s\u00e9\u00f0 trend yfir vikur og brugist vi\u00f0 \u00e1\u00f0ur en \u00e1lag ver\u00f0ur of miki\u00f0.
 
-Kerfi\u00f0 flaggar l\u00edka sj\u00e1lfvirkt leikmenn sem eru \u00ed danger zone og leggur til reduced load e\u00f0a batadag. \u00deetta er s\u00e9rstaklega gagnlegt \u00e1 \u00fe\u00e9ttum leikt\u00edmabilum \u00fear sem bati milli leikja er stutt.`,
+Kerfi\u00f0 merkir l\u00edka sj\u00e1lfvirkt leikmenn me\u00f0 h\u00e1tt hlutfall og leggur til minna \u00e1lag e\u00f0a batadag. \u00dea\u00f0 er \u00e1bending til \u00fej\u00e1lfarans um st\u00f3rt \u00e1lagsst\u00f6kk, ekki mei\u00f0slasp\u00e1. \u00deetta er s\u00e9rstaklega gagnlegt \u00e1 \u00fe\u00e9ttum leikt\u00edmabilum \u00fear sem bati milli leikja er stutt.`,
       },
       {
         heading: "R\u00e1\u00f0leggingar",
-        body: "Aldrei auka viku\u00e1lag um meira en 10% fr\u00e1 viku til viku. Halda ACWR \u00e1 bilinu 0.8\u20131.3 eins og h\u00e6gt er. Nota chronic load sem fitness shield \u2014 leikmenn sem eru vel \u00fej\u00e1lfa\u00f0ir (h\u00e6rra chronic load) \u00feola meira acute \u00e1lag. Fylgjast s\u00e9rstaklega me\u00f0 leikm\u00f6nnum sem koma af mei\u00f0slum e\u00f0a fr\u00edum \u2014 \u00feeir hafa l\u00e6gra chronic load og eru vi\u00f0kv\u00e6mari.",
+        body: "Algeng \u00feumalputtaregla er a\u00f0 auka viku\u00e1lag ekki um meira en um 10% \u00e1 viku (Gabbett 2016). H\u00fan er r\u00e1\u00f0legging, ekki sanna\u00f0 mei\u00f0slamark. For\u00f0ast st\u00f3r og sn\u00f6gg st\u00f6kk: bili\u00f0 0.8\u20131.3 er gagnlegt vi\u00f0mi\u00f0 um hva\u00f0 er venjulegt \u00e1lag fyrir leikmanninn, ekki \u00f6ryggissv\u00e6\u00f0i. Byggja langt\u00edma\u00e1lag upp jafnt og \u00fe\u00e9tt. \u00cd ranns\u00f3kn \u00e1 53 r\u00fagb\u00edleikm\u00f6nnum (Hulin o.fl. 2016) fengu \u00feeir sem h\u00f6f\u00f0u h\u00e6rra langt\u00edma\u00e1lag s\u00ed\u00f0ur mei\u00f0sli \u00feegar \u00e1lagi\u00f0 j\u00f3kst h\u00f3flega, en oftar \u00feegar \u00fea\u00f0 j\u00f3kst skyndilega. Fylgjast s\u00e9rstaklega me\u00f0 leikm\u00f6nnum sem koma af mei\u00f0slum e\u00f0a fr\u00edum \u2014 \u00feeir hafa l\u00e6gra chronic load og eru vi\u00f0kv\u00e6mari.",
       },
       {
         heading: "Heimildir",
@@ -809,20 +809,20 @@ Athugasemd: Heimildir eru settar fram \u00ed APA 7. \u00fatg\u00e1fu st\u00edl; 
 Tim Gabbett and colleagues popularised the 0.8\u20131.3 band as a "familiar" load-change range. But ACWR is not a validated injury predictor \u2014 later work (Impellizzeri et al. 2020) shows it is statistically flawed and does not reliably forecast injury. The honest reading: ACWR measures the SIZE of a load spike. What actually matters for injury is whether that spike pushes the athlete into unfamiliar load their body isn't prepared for (Gabbett et al. 2016b \u2014 high workloads alone do not cause injuries; how you get there is the real issue).`,
       },
       {
-        heading: "Why spikes are dangerous",
+        heading: "Why sudden spikes matter",
         body: `Rapid, large increases in training load \u2014 so-called load spikes \u2014 are thought to explain a large share of non-contact soft-tissue injuries in team sports (Gabbett 2016). Example: a player returns from injury or break and goes straight into full training. Their ACWR goes from 0.5 to 1.8 in one week.
 
 This applies not only to GPS load but also RPE (perceived exertion). MicroPulse calculates ACWR from both GPS acute/chronic load and RPE data to provide a complete picture.`,
       },
       {
         heading: "How coaches use ACWR in MicroPulse",
-        body: `On the coach dashboard, ACWR for each player is shown with color codes: blue (< 0.8, low load), green (0.8\u20131.3, optimal zone), yellow (1.3\u20131.5, elevated), red (> 1.5, high). Coaches can see trends over weeks and respond before load becomes excessive.
+        body: `On the coach dashboard, ACWR for each player is shown with color codes: blue (< 0.8, low load), green (0.8\u20131.3, close to usual), yellow (1.3\u20131.5, elevated), red (> 1.5, high). Coaches can see trends over weeks and respond before load becomes excessive.
 
-The system also automatically flags players in the danger zone and suggests reduced load or recovery days. This is especially useful during congested fixture periods where recovery time between matches is short.`,
+The system also automatically flags players with a high ratio and suggests reduced load or a recovery day. It is a prompt to the coach about a big load jump, not an injury forecast. This is especially useful during congested fixture periods where recovery time between matches is short.`,
       },
       {
         heading: "Key recommendations",
-        body: "Never increase weekly load by more than 10% week-to-week. Keep ACWR between 0.8\u20131.3 as much as possible. Use chronic load as a fitness shield \u2014 well-trained players (higher chronic load) tolerate more acute load. Pay special attention to players returning from injury or breaks \u2014 they have lower chronic load and are more vulnerable.",
+        body: "A common rule of thumb is to raise weekly load by no more than about 10% a week (Gabbett 2016). It is advice, not a proven injury threshold. Avoid big, sudden jumps: the 0.8\u20131.3 band is a useful guide to what is usual load for the player, not a safe zone. Build chronic load steadily. In a study of 53 rugby league players (Hulin et al. 2016), those with higher chronic load had fewer injuries when load rose moderately, but more when it spiked. Pay special attention to players returning from injury or breaks \u2014 they have lower chronic load and are more vulnerable.",
       },
       {
         heading: "References",

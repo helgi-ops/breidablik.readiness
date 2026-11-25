@@ -13,7 +13,7 @@ VALD-viðmið, endurheimt eftir leik, ísómetrískar æfingar, viðmið í þol
 - Í viðmótinu má smella á stutta tilvísun til að sjá fulla heimild (eða ástæðuna fyrir því að hún er óstaðfest).
 - Kóðinn: `src/lib/micropulse/references/ruleRefs.ts`. Próf passar að hver tilvísun í kóðanum sé hér.
 
-Æfingakerfið: 194 heimildir staðfestar og 5 ekki. Aðrar heimildir: 59 staðfestar og 3 ekki. Meiðsli, endurkoma og merki: 245 staðfestar og 13 ekki.
+Æfingakerfið: 194 heimildir staðfestar og 5 ekki. Aðrar heimildir: 59 staðfestar og 3 ekki. Meiðsli, endurkoma og merki: 246 staðfestar og 13 ekki.
 
 ## Heimildir
 
@@ -419,6 +419,7 @@ eru þegar taldar upp hér að ofan eru ekki endurteknar. Kóðinn: `src/lib/mic
 - Hoogenboom BJ, May CJ, Alderink GJ, Thompson BS, Gilmore LA. Three-Dimensional Kinematics and Kinetics of the Overhead Deep Squat in Healthy Adults: A Descriptive Study. Appl Sci 2023;13(12):7285. doi:10.3390/app13127285
 - Hooper SL, Mackinnon LT. Monitoring overtraining in athletes. Recommendations. Sports Med 1995;20(5):321–327. doi:10.2165/00007256-199520050-00003 PMID 8571005
 - Hulin BT, Gabbett TJ, Blanch P, Chapman P, Bailey D, Orchard JW. Spikes in acute workload are associated with increased injury risk in elite cricket fast bowlers. Br J Sports Med 2014;48(8):708–712. doi:10.1136/bjsports-2013-092524 PMID 23962877
+- Hulin BT, Gabbett TJ, Lawson DW, Caputi P, Sampson JA. The acute:chronic workload ratio predicts injury: high chronic workload may decrease injury risk in elite rugby league players. Br J Sports Med 2016;50(4):231–236. doi:10.1136/bjsports-2015-094817 PMID 26511006
 - Hunter F, Bray J, Towlson C, Smith M, Barrett S, Madden J, Abt G, Lovell R. Individualisation of time-motion analysis: a method comparison and case report series. Int J Sports Med 2015;36(1):41–48. doi:10.1055/s-0034-1384547 PMID 25259591
 - Impellizzeri FM, Marcora SM, Coutts AJ. Internal and External Training Load: 15 Years On. Int J Sports Physiol Perform 2019;14(2):270–273. doi:10.1123/ijspp.2018-0935 PMID 30614348
 - Impellizzeri FM, Rampinini E, Coutts AJ, Sassi A, Marcora SM. Use of RPE-based training load in soccer. Med Sci Sports Exerc 2004;36(6):1042–1047. doi:10.1249/01.mss.0000128199.23901.2f PMID 15179175
