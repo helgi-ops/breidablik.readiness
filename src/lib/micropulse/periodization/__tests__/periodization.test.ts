@@ -1349,3 +1349,21 @@ test("an indoor row is a missing GPS reading, a feed with no distance isn't", ()
   assert.equal(hasNoGpsReading(0, 0), false);
   assert.equal(hasNoGpsReading(null, 0), false);
 });
+
+test("in-season Meso page: noAutoMatch → a block with no entered game gets no Sat/Sun game, only training weeks", () => {
+  const unit: MatchUnitAbs = { dist: 10000, hsr: 800, load: 1000, accdec: 200, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
+  const inSeason = { start: "2026-04-10", end: "2026-10-25" };
+  const common = { unit, startDate: "2026-06-01", numWeeks: 3, scopeName: "t", baseOverloadPct: 100, stepPct: 5, goal: "realize" as const, hold: true, deload: { weekStart: null, light: true }, inSeason };
+  // Without the flag the engine invents a weekly game (the old behaviour) …
+  const auto = buildCalendarBlock({ ...common, matchDates: [] });
+  assert.ok(auto.weeks.some((w) => w.days.some((d) => d.type === "match")));
+  // … with it, no game day at all, and the seed fills each week with the in-season training week.
+  const seed = seedBlockDays({ ...common, allFixtures: [], noAutoMatch: true });
+  const sets = { offDays: [] as string[], onDays: [] as string[] };
+  for (const [iso, v] of Object.entries(seed.days)) (v === "off" ? sets.offDays : sets.onDays).push(iso);
+  const cal = buildCalendarBlock({ ...common, matchDates: [], ...sets, typeOverrides: seed.types, noAutoMatch: true });
+  assert.ok(cal.weeks.every((w) => !w.days.some((d) => d.type === "match")));
+  assert.ok(cal.weeks.every((w) => w.days.filter((d) => d.type !== "rest").length >= 3));
+  // Never three training days in a row in season.
+  for (const w of cal.weeks) { let run = 0; for (const d of w.days) { run = d.type === "rest" ? 0 : run + 1; assert.ok(run <= 2); } }
+});

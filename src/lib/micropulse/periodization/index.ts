@@ -783,7 +783,7 @@ export function inSeasonRange(phases: Array<{ key: string; start: string; end: s
  *  forced on, read as Mixed and skip the 3-in-a-row safety. A week with no fixture and under two sessions has nothing
  *  to build towards and would plan empty, so it gets `FREE_WEEK`, keeping the rest after a match (Breiðablik trained
  *  3.8 days in those weeks in 2026). Fixture days are set by the caller. */
-export function seedBlockDays(opts: Pick<Parameters<typeof buildCalendarBlock>[0], "unit" | "startDate" | "numWeeks" | "scopeName" | "baseOverloadPct" | "stepPct" | "goal" | "deload" | "hold" | "offseasonStart" | "inSeason"> & { allFixtures: string[] }): { days: Record<string, "off" | "session">; types: Record<string, CalType> } {
+export function seedBlockDays(opts: Pick<Parameters<typeof buildCalendarBlock>[0], "unit" | "startDate" | "numWeeks" | "scopeName" | "baseOverloadPct" | "stepPct" | "goal" | "deload" | "hold" | "offseasonStart" | "inSeason" | "noAutoMatch"> & { allFixtures: string[] }): { days: Record<string, "off" | "session">; types: Record<string, CalType> } {
   const start = mondayOfIso(opts.startDate), endIso = addDays(start, opts.numWeeks * 7);
   const matchDates = opts.allFixtures.filter((d) => d >= start && d < endIso);
   const days: Record<string, "off" | "session"> = {}, types: Record<string, CalType> = {};

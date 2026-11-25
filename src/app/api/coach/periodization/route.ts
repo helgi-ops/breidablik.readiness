@@ -13,6 +13,7 @@ import { mondayOfIso, nextValdTrimLiftLog, type ValdTrimLift } from "@/lib/micro
 import { isAerobicMode, DEFAULT_AEROBIC_TEST, type AerobicMode } from "@/lib/micropulse/periodization/testingSchedule";
 import { writeWeekSetup } from "@/lib/micropulse/periodization/weekSetupWrite";
 import { guardSeasonWindow } from "@/lib/micropulse/periodization/seasonWindowGuard";
+import { cleanAssumedGames } from "@/lib/micropulse/periodization/preseasonWindow";
 
 export const runtime = "nodejs";
 
@@ -87,6 +88,8 @@ export async function GET(req: Request) {
     preTaperPct: typeof ov.preTaperPct === "number" ? ov.preTaperPct : null,
     // Weekend games assumed from this day (null = entered games only).
     preGamesFrom: typeof ov.preGamesFrom === "string" ? ov.preGamesFrom : null,
+    // The coach's per-week assumed game (week Monday → day 0–6, or null = no game that week).
+    preAssumedGames: cleanAssumedGames((ov as { preAssumedGames?: unknown }).preAssumedGames),
   };
   // The upcoming pre-season belongs to the season it opens (`plan.nextSeasonYear`), NOT this loaded year.
   // Echo that season's saved pre-season overrides separately so the hub's Pre-season tab reads/writes its
@@ -105,6 +108,7 @@ export async function GET(req: Request) {
       preWeek1Kpi: nx.preWeek1Kpi && typeof nx.preWeek1Kpi === "object" ? nx.preWeek1Kpi : null,
       preTaperPct: typeof nx.preTaperPct === "number" ? nx.preTaperPct : null,
       preGamesFrom: typeof nx.preGamesFrom === "string" ? nx.preGamesFrom : null,
+      preAssumedGames: cleanAssumedGames((nx as { preAssumedGames?: unknown }).preAssumedGames),
     };
   }
   // The team's aerobic test (one of the six registry tests). The loaded season's choice wins; otherwise the
@@ -202,6 +206,12 @@ export async function POST(req: Request) {
     if (!(g === null || (typeof g === "string" && /^\d{4}-\d{2}-\d{2}$/.test(g)))) {
       if (prevOverrides.preGamesFrom !== undefined) mergedOverrides.preGamesFrom = prevOverrides.preGamesFrom; else delete mergedOverrides.preGamesFrom;
     }
+  }
+  // The per-week assumed games are cleaned (ISO Monday → 0–6 or null); a bad payload keeps the saved map.
+  if (body.overrides && "preAssumedGames" in body.overrides) {
+    const g = body.overrides.preAssumedGames;
+    if (g && typeof g === "object" && !Array.isArray(g)) mergedOverrides.preAssumedGames = cleanAssumedGames(g);
+    else if (prevOverrides.preAssumedGames !== undefined) mergedOverrides.preAssumedGames = prevOverrides.preAssumedGames; else delete mergedOverrides.preAssumedGames;
   }
   // The VALD-trim lift log is append-only and server-stamped: an `overrides` patch can't rewrite it.
   if (prevOverrides.valdTrimLifts) mergedOverrides.valdTrimLifts = prevOverrides.valdTrimLifts;

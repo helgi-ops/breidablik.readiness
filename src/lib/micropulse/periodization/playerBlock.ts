@@ -68,6 +68,8 @@ export interface PlayerBlockOpts {
   friendlyMatches?: boolean;
   /** Today (ISO). The VALD trim lands on the week containing it; absent, no week is trimmed. */
   asOf?: string;
+  /** Only the given matches: a block with none gets no assumed Sat/Sun game (the hub's in-season Meso page). */
+  noAutoMatch?: boolean;
 }
 /** What the VALD cap did to the week containing `asOf`. `applied` = the numbers were cut; `lifted` = the coach
  *  lifted it (logged with a reason); `deload` = a deep deload week, already under any cap, so nothing added. */
@@ -220,7 +222,7 @@ export function buildPlayerBlock(plan: PlayerBlockPlan, pl: PlayerBlockPlayer, o
   const skeleton = opts.skeletonSets ?? { matchDates: opts.matchDates ?? [] };
   const block = buildCalendarBlock({
     unit, startDate: opts.blkStart, numWeeks: opts.blkWeeks, scopeName: pl.name, scopePos: pl.position,
-    phase: opts.phaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeleton, typeOverrides: opts.typeOverrides,
+    phase: opts.phaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeleton, noAutoMatch: opts.noAutoMatch, typeOverrides: opts.typeOverrides,
     emphasis: { hsr: hsrEmph, mech: mechEmph, dir: steerActive && steer ? steer.dirEmph : undefined }, offseasonStart: opts.offseasonStart, inSeason: inSeasonRange(plan.phases), goal: opts.goal, deload: opts.deload, hold: opts.hold, camps: opts.camps,
     // A held week 1 has to see the match just before the block, as the team calendar does, or it plans a
     // full week of training with no recovery days and sets the peak every other week is scaled against.

@@ -64,7 +64,7 @@ describe("preseasonSettingsFrom", () => {
     const s = preseasonSettingsFrom(null);
     expect(s.sessionsPerWeek).toBe(PRESEASON_DEFAULT_SESSIONS);
     expect(s.week1MatchMultiple).toBe(PRESEASON_DEFAULT_WEEK1);
-    expect(s.saved).toEqual({ sessionsPerWeek: false, week1MatchMultiple: false, week1Kpi: false, mesoTail: false, taperPct: false, gamesFrom: false });
+    expect(s.saved).toEqual({ sessionsPerWeek: false, week1MatchMultiple: false, week1Kpi: false, mesoTail: false, taperPct: false, gamesFrom: false, assumedGames: false });
     expect(s.gamesFrom).toBeNull();
     expect(s.taperPct).toBe(40);
   });

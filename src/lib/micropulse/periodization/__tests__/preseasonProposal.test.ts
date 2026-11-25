@@ -259,6 +259,60 @@ describe("buildPreseasonProposal — games: entered ones always, assumed weekend
   });
 });
 
+describe("buildPreseasonProposal — the coach moves or removes an assumed game per week", () => {
+  const matchDays = (p: NonNullable<ReturnType<typeof buildPreseasonProposal>>) => p.weeks.flatMap((w) => w.days).filter((d) => d.type === "match").map((d) => d.date);
+  const from = "2027-02-08";
+  const saved = (preAssumedGames: Record<string, number | null>) => ({ preseasonSessions: 5, preseasonWeek1Mult: 1.2, preMesoTail: [3, 2], preGamesFrom: from, preAssumedGames });
+  // A week after `from` with no friendly: 15 Feb 2027 (Mon) → Saturday 20 Feb.
+  const WK = "2027-02-22", SAT = "2027-02-27", THU = "2027-02-25";
+
+  it("moved: the game is on the coach's day, not the Saturday, and the days label from it", () => {
+    const p = buildPreseasonProposal(base({ savedDays: {}, saved: saved({ [WK]: 3 }) }))!;
+    const games = matchDays(p);
+    expect(games).toContain(THU);
+    expect(games).not.toContain(SAT);
+    const w = p.weeks.find((x) => x.weekStart === WK)!;
+    expect(w.assumedGame).toEqual({ date: THU, coachSet: true });
+    expect(w.days.find((d) => d.date === "2027-02-24")!.md).toBe("MD-1");
+  });
+
+  it("removed: no game that week, the week is a training week; other weeks keep the Saturday", () => {
+    const p = buildPreseasonProposal(base({ savedDays: {}, saved: saved({ [WK]: null }) }))!;
+    const w = p.weeks.find((x) => x.weekStart === WK)!;
+    expect(w.days.some((d) => d.type === "match")).toBe(false);
+    expect(w.noGameByCoach).toBe(true);
+    expect(w.days.filter((d) => d.type !== "rest").length).toBeGreaterThan(0);
+    expect(matchDays(p)).toContain("2027-03-06");
+  });
+
+  it("a game placed before the weekend-games date counts too", () => {
+    const early = "2026-12-14";
+    const p = buildPreseasonProposal(base({ savedDays: {}, saved: saved({ [early]: 5 }) }))!;
+    expect(matchDays(p)).toContain("2026-12-19");
+    expect(p.weeks.find((x) => x.weekStart === early)!.assumedGame?.coachSet).toBe(true);
+  });
+
+  it("an entered game in the week wins over the coach's assumed game", () => {
+    const fwk = "2027-02-01"; // FRIENDLIES[1] = Sat 6 Feb
+    const p = buildPreseasonProposal(base({ savedDays: {}, saved: saved({ [fwk]: 2 }) }))!;
+    expect(matchDays(p)).not.toContain("2027-02-03");
+    expect(matchDays(p)).toContain(FRIENDLIES[1]);
+  });
+
+  it("the moved game wins over a saved day on that date; ignoreSavedWeeks re-flows the week", () => {
+    const p = buildPreseasonProposal(base({ savedDays: { [THU]: { dayType: "OFF", focus: null }, "2027-02-23": { dayType: "OFF", focus: null } }, saved: saved({ [WK]: 3 }) }))!;
+    expect(p.weeks.flatMap((w) => w.days).find((d) => d.date === THU)!.type).toBe("match");
+    expect(p.weeks.flatMap((w) => w.days).find((d) => d.date === "2027-02-23")!.coachSet).toBe(true);
+    const q = buildPreseasonProposal(base({ savedDays: { "2027-02-23": { dayType: "OFF", focus: null } }, saved: saved({ [WK]: 3 }), ignoreSavedWeeks: [WK] }))!;
+    expect(q.weeks.flatMap((w) => w.days).find((d) => d.date === "2027-02-23")!.coachSet).toBe(false);
+  });
+
+  it("a bad saved map is dropped, never a crash", () => {
+    const p = buildPreseasonProposal(base({ savedDays: {}, saved: { ...saved({}), preAssumedGames: { "2027-02-23": 3, [WK]: 9, nope: 1 } as unknown as Record<string, number | null> } }))!;
+    expect(p.settings.assumedGames).toEqual({});
+  });
+});
+
 describe("buildPreseasonProposal — sessions a week set the days in a week without a game", () => {
   it.each([3, 4, 5, 6])("%i sessions → %i training days in a game-free week; the week total holds", (n) => {
     const p = buildPreseasonProposal(base({ savedDays: {}, fixtures: ["2026-10-17", OPENER], saved: { preseasonSessions: n, preseasonWeek1Mult: 1.2 } }))!;

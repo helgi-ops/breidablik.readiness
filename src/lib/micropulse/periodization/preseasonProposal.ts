@@ -26,6 +26,7 @@ import type { PreseasonEmphasis } from "../strengthProgramming/preseasonEmphasis
 const DAY = 86_400_000;
 const ms = (iso: string) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
 const isoAdd = (iso: string, d: number) => new Date(ms(iso) + d * DAY).toISOString().slice(0, 10);
+const mondayIso = (iso: string) => isoAdd(iso, -((new Date(`${iso.slice(0, 10)}T00:00:00Z`).getUTCDay() + 6) % 7));
 const weeksBetween = (a: string, b: string) => Math.max(1, Math.round((ms(b) - ms(a)) / (7 * DAY)));
 
 // Reverse of the focus label Week Setup writes (week_plans.focus, e.g. "MD-5 Mechanical") → the day type.
@@ -55,7 +56,9 @@ export type PreseasonProposalInput = {
   /** Ignore the coach's saved choices and days (the "start from scratch" build). */
   fromScratch?: boolean;
   /** Settings to use instead of the saved row (the hub's live state). Saved flags still come from `saved`. */
-  settingsOverride?: Pick<PreseasonSettings, "sessionsPerWeek" | "week1MatchMultiple" | "week1Kpi" | "mesoTail" | "taperPct" | "gamesFrom">;
+  settingsOverride?: Pick<PreseasonSettings, "sessionsPerWeek" | "week1MatchMultiple" | "week1Kpi" | "mesoTail" | "taperPct" | "gamesFrom"> & Partial<Pick<PreseasonSettings, "assumedGames">>;
+  /** Weeks (Monday ISO) whose saved days are not read — the week re-flows around a moved / removed assumed game. */
+  ignoreSavedWeeks?: string[];
   matchUnits: MatchUnit[];
   matchLoad: number | null;
   matchSrpe: number | null;
@@ -97,6 +100,10 @@ export type ProposalWeek = {
   emphasis: PreseasonEmphasis | null;
   target: PreseasonWeekTarget;
   friendlies: string[];
+  /** The assumed game this week (no game entered): its day and whether the coach placed it (else the Saturday rule). */
+  assumedGame: { date: string; coachSet: boolean } | null;
+  /** The coach took the game out of this week ("no game this week"). */
+  noGameByCoach: boolean;
   tests: string[];
   days: Array<{ date: string; type: CalType; md: string; label: Bi; load: number | null; coachSet: boolean }>;
 };
@@ -153,8 +160,10 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   const coachDays = new Set<string>();
   const fixtureSet = new Set(input.fixtures ?? []);
   if (!input.fromScratch) {
+    const ignored = new Set(input.ignoreSavedWeeks ?? []);
     for (const [iso, sp] of Object.entries(input.savedDays ?? {})) {
       if (!inWindow(iso)) continue;
+      if (ignored.has(mondayIso(iso))) continue;
       if (fixtureSet.has(iso)) continue; // a game in the fixtures wins over a saved training / off day
       if (sp.dayType === "OFF") { offDays.push(iso); coachDays.add(iso); }
       else if (sp.dayType === "TRAIN" || sp.dayType === "RECOVERY") {
@@ -174,11 +183,27 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   // training week. The assumed games also label the days (MD-3, MD+1…). The user's rule, 2026-11-25.
   const gamesFrom = settings.gamesFrom;
   const hasFriendly = (weekStart: string) => fixtures.some((d) => d >= weekStart && d < isoAdd(weekStart, 7));
-  // The assumed game is always on the Saturday (the user's rule 2026-11-25), in a week with no game entered.
+  // The assumed game is on the Saturday (the user's rule 2026-11-25), in a week with no game entered. The coach
+  // can move it to another day, take it out ("no game this week"), or put one in a week before `gamesFrom`
+  // (`assumedGames`, per week). An entered game in the week always wins.
   const weekStarts = calOpts([], input.fixtures ?? []).weeks.map((w) => w.weekStart);
-  const assumed = gamesFrom
-    ? weekStarts.map((ws) => ({ ws, sat: isoAdd(ws, 5) })).filter(({ ws, sat }) => sat >= gamesFrom && inWindow(sat) && !hasFriendly(ws)).map(({ sat }) => sat)
-    : [];
+  const moves = settings.assumedGames ?? {};
+  const assumedBy = new Map<string, { date: string; coachSet: boolean }>();
+  const noGameWeeks = new Set<string>();
+  for (const ws of weekStarts) {
+    if (hasFriendly(ws)) continue;
+    const mv = Object.prototype.hasOwnProperty.call(moves, ws) ? moves[ws] : undefined;
+    if (mv === null) { noGameWeeks.add(ws); continue; }
+    if (typeof mv === "number") { const d = isoAdd(ws, mv); if (inWindow(d)) assumedBy.set(ws, { date: d, coachSet: true }); continue; }
+    const sat = isoAdd(ws, 5);
+    if (gamesFrom && sat >= gamesFrom && inWindow(sat)) assumedBy.set(ws, { date: sat, coachSet: false });
+  }
+  const assumed = [...assumedBy.values()].map((a) => a.date).sort();
+  // An assumed game wins over a saved day on that date, the same as an entered one.
+  const assumedSet = new Set(assumed);
+  for (const arr of [offDays, onDays]) for (let k = arr.length - 1; k >= 0; k--) if (assumedSet.has(arr[k])) arr.splice(k, 1);
+  for (const k of Object.keys(typeOv)) if (assumedSet.has(k)) { delete typeOv[k]; }
+  for (const k of assumed) coachDays.delete(k);
   const matchDates = [...fixtures, ...assumed].sort();
   const allFx = Array.from(new Set([...(input.fixtures ?? []), ...matchDates])).sort();
   const cal0 = calOpts(matchDates, allFx, true);
@@ -265,6 +290,8 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
       emphasis: preseasonBlockForWeeksOut(preWeeks - i),
       target: w,
       friendlies: fixtures.filter((d) => d >= weekStart && d < isoAdd(weekStart, 7)),
+      assumedGame: assumedBy.get(weekStart) ?? null,
+      noGameByCoach: noGameWeeks.has(weekStart),
       tests: testPlans.filter((tp) => tp.weeks.includes(i + 1)).map((tp) => tp.protocol.key),
       days: (cw?.days ?? []).map((d, di) => {
         const date = isoAdd(weekStart, di);

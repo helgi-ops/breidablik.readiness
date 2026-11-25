@@ -86,6 +86,8 @@ export type PreseasonSavedRow = {
   preTaperPct?: number | null;
   /** Weekend games are assumed in weeks without an entered game from this day on (ISO); unset = entered games only. */
   preGamesFrom?: string | null;
+  /** The coach's per-week assumed game: week Monday (ISO) → day offset 0–6 (Mon–Sun) or null (no game that week). */
+  preAssumedGames?: Record<string, number | null> | null;
 } | null | undefined;
 
 export type PreseasonSettings = {
@@ -97,9 +99,24 @@ export type PreseasonSettings = {
   taperPct: number;
   /** From this day (ISO) a week without an entered game gets an assumed weekend game; null = entered games only. */
   gamesFrom: string | null;
+  /** Week Monday → the day the assumed game is on (0 Mon … 6 Sun), or null = no game that week. A week missing
+   *  from the map follows the rule (Saturday from `gamesFrom`). An entered game in the week always wins. */
+  assumedGames: Record<string, number | null>;
   /** Which of the above the coach actually saved (the rest are defaults) — "his choice stands". */
-  saved: { sessionsPerWeek: boolean; week1MatchMultiple: boolean; week1Kpi: boolean; mesoTail: boolean; taperPct: boolean; gamesFrom: boolean };
+  saved: { sessionsPerWeek: boolean; week1MatchMultiple: boolean; week1Kpi: boolean; mesoTail: boolean; taperPct: boolean; gamesFrom: boolean; assumedGames: boolean };
 };
+
+/** Clean a saved `preAssumedGames` map: ISO Monday keys, values null or an integer 0–6. Anything else is dropped. */
+export function cleanAssumedGames(v: unknown): Record<string, number | null> {
+  const out: Record<string, number | null> = {};
+  if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || new Date(`${k}T00:00:00Z`).getUTCDay() !== 1) continue;
+    if (x === null) out[k] = null;
+    else if (typeof x === "number" && Number.isInteger(x) && x >= 0 && x <= 6) out[k] = x;
+  }
+  return out;
+}
 
 /** Normalise one saved row to the settings the ramp uses (same clamps the hub applies on load). */
 export function preseasonSettingsFrom(row: PreseasonSavedRow): PreseasonSettings {
@@ -112,6 +129,7 @@ export function preseasonSettingsFrom(row: PreseasonSavedRow): PreseasonSettings
   }
   const tpOk = typeof r.preTaperPct === "number" && Number.isFinite(r.preTaperPct);
   const gamesFrom = typeof r.preGamesFrom === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.preGamesFrom) ? r.preGamesFrom : null;
+  const assumedGames = cleanAssumedGames(r.preAssumedGames);
   const tail = Array.isArray(r.preMesoTail) ? r.preMesoTail.filter((n) => typeof n === "number" && Number.isFinite(n)) : [];
   return {
     sessionsPerWeek: sessOk ? (r.preseasonSessions as number) : PRESEASON_DEFAULT_SESSIONS,
@@ -120,7 +138,8 @@ export function preseasonSettingsFrom(row: PreseasonSavedRow): PreseasonSettings
     mesoTail: tail.length ? tail : null,
     taperPct: tpOk ? clampTaperPct(r.preTaperPct as number) : PRESEASON_DEFAULT_TAPER_PCT,
     gamesFrom,
-    saved: { sessionsPerWeek: sessOk, week1MatchMultiple: w1Ok, week1Kpi: Object.keys(kpi).length > 0, mesoTail: tail.length > 0, taperPct: tpOk, gamesFrom: gamesFrom != null },
+    assumedGames,
+    saved: { sessionsPerWeek: sessOk, week1MatchMultiple: w1Ok, week1Kpi: Object.keys(kpi).length > 0, mesoTail: tail.length > 0, taperPct: tpOk, gamesFrom: gamesFrom != null, assumedGames: Object.keys(assumedGames).length > 0 },
   };
 }
 

@@ -91,7 +91,7 @@ Styrktaræfing dagsins er byggð í `buildStrengthSession` (`SP/index.ts`), í �
 | MD-merki dagsins (`fetchMdContextInfo`, `playerContext/domains.ts`) | Alltaf | Les leiki og GAME-raðir 4 dögum á undan og 5 á eftir og ákveður MD-daginn. Enginn leikur nálægt: MD-3 | — | Þjálfari getur gefið MD handvirkt í sendingu. Les ekki frídaga (OFF) úr vikuplaninu; handsending á OFF-degi fær línu um það (ósamræmi 11) |
 | Fasi vikunnar (`resolveWeekPhase`) | Hver bygging | Fasi þjálfarans á vikunni, annars fasi tímabilsplansins. Keppni telst „inseason“ | — | Þjálfari vistar fasann |
 | Fasar tímabils (`detectSeasonPhases`) | — | Undirbúningstímabil byrjar á dagsetningu þjálfarans, annars 42 dögum fyrir fyrsta leik. Undirbúningstímabil Breiðabliks 2026 byrjar 30. nóv., úr gögnum þjálfarans | — | `season_plans.overrides` |
-| **`INSEASON_MD2_OFF`** (nýtt, 8d487b4) | Sjálfvirka MD-röðunin í Week setup, á keppnistímabili | Dagurinn eftir leik er MD+1 endurheimt, en sunnudagur vikunnar er áfram frí. MD+2 er **frídagur**. MD-1 er aldrei gerður að frídegi. Leikur síðustu tvo daga fyrri viku telur með | MicroPulse-regla; Buchheit 2023 | Þjálfari getur breytt hvaða degi sem er; ekki skráð. Undirbúnings- og utan tímabils: óbreytt |
+| **`INSEASON_MD2_OFF`** (nýtt, 8d487b4) | Sjálfvirka MD-röðunin í Week setup, á keppnistímabili | Dagurinn eftir leik er MD+1 endurheimt, en sunnudagur vikunnar er áfram frí. MD+2 er **frídagur**. MD-1 er aldrei gerður að frídegi. Leikur síðustu tvo daga fyrri viku telur með | MicroPulse-regla; Buchheit 2023 | Þjálfari getur breytt hvaða degi sem er; ekki skráð. Gildir hér aðeins á keppnistímabili; Mesó-dagatalið hefur MD+2 frí í öllum fösum (ósamræmi 10) |
 | **`INSEASON_THREE_IN_A_ROW`** | Keppnistímabil (eða leikur í vikunni og fasi óþekktur) | Aldrei þrír æfingadagar í röð. Leikdagur er ekki æfing. Gildir líka í Mesó-dagatalinu á keppnistímabili, þar sem dagurinn fer beint í frí (ósamræmi 9). Leggur til að fækka um frídaga í þessari röð: MD+2, MD-2, MD+3, MD+4, MD-5, MD-6 … MD-3, MD-4 síðast. Vinnan af MD-2 færist á MD-3 og MD-1 | MicroPulse-regla; Buchheit 2023 | **Aðeins ráð.** „Halda planinu“ krefst ástæðu, skráð í `session_fit_override_log` (`week_rule`) |
 | **`MISSED_DAY_NOT_SHIFTED`** | MD-3 til MD-1 þegar MD-4 var sendur en ekki kláraður | Bara lína í forskoðun þjálfarans. Misstur dagur er **aldrei** færður eða bætt ofan á annan | MicroPulse-regla | Sést bara í forskoðun þjálfarans |
 | Vika án leiks (`NO_MATCH_WEEK_DAY`) | Enginn leikur nálægt | Styrkdagur = MD-4, kraftdagur = MD-3, léttur dagur = MD-2, hvíld = engin æfing. Dagur sem er ekki stilltur er léttur. Ekkert vikuplan: sjálfgefið plan (mánudagur styrkur, fimmtudagur kraftur, aðrir dagar léttir) og línan `NO_MATCH_DEFAULT_PLAN` | Regla þjálfarans; sjálfgefna planið er MicroPulse-regla | `team_strength_palette.no_match_week`; færsla eina viku í senn, með Afturkalla |
@@ -440,7 +440,11 @@ Eftirtöldum ákvörðunum má breyta:
 10. ~~**MD+2 er meðhöndlaður á þrjá vegu.**~~ **Lagað 23. nóv.:** MD+2 er frídagur á keppnistímabili, alls staðar.
     - Álagsplanið og periodization-líkanið segja það. Æfing sem þjálfari setur á MD+2 er val þjálfarans: létt, 35%.
     - Markmiðsplan á keppnistímabili velur ekki MD+2, nema þjálfari hafi sett æfingu þar í vikuplaninu.
-    - Á undirbúningstímabili og utan tímabils er MD+2 áfram æfingadagur.
+    - ~~Á undirbúningstímabili og utan tímabils er MD+2 áfram æfingadagur.~~ **Leiðrétt 25. nóv. (val þjálfara):**
+      MD+2 er líka frídagur á undirbúningstímabili. Mesó-dagatalið (báðar Mesó-síðurnar) hefur alltaf gert MD+1
+      áfyllingu og MD+2 frí í öllum fösum, svo dagatalið breytist ekki; regluskráin sagði rangt frá því.
+      Sjálfvirka MD-röðunin í Week setup (`INSEASON_MD2_OFF`) gerir þetta aðeins á keppnistímabili, en frá lotu 4
+      fær Míkró vikuna úr Mesó-dagatalinu og röðunin er þá aðeins varaleið. Æfing sem þjálfari setur á MD+2 helst.
 11. ~~**Handsendar æfingar á frídögum.**~~ **Lagað 23. nóv.:** eins dags sending (einn leikmaður eða hópurinn) á
     degi sem vikuplanið merkir OFF fer út, því þjálfarinn valdi hana. Hún er sett upp eftir stöðu dagsins í
     leikvikunni (vélin hefur enga æfingu fyrir OFF) og fær línuna `DAY_RULE_COACH_DAY_OFF`: „frídagur í vikuplaninu,
