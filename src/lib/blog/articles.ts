@@ -759,12 +759,12 @@ Note: References are formatted in APA 7th edition style; details verified agains
     category: "alagsstjornun",
     author: "MicroPulse",
     audience: "coaches",
-    titleIS: "ACWR og \u00e1lagsstj\u00f3rnun: Hvernig \u00e1 a\u00f0 st\u00fdra \u00fej\u00e1lfunar\u00e1lagi til a\u00f0 koma \u00ed veg fyrir mei\u00f0sli",
-    titleEN: "ACWR and Load Management: How to Manage Training Load to Prevent Injuries",
+    titleIS: "ACWR og \u00e1lagsstj\u00f3rnun: Hva\u00f0 hlutfalli\u00f0 segir og hva\u00f0 ekki",
+    titleEN: "ACWR and Load Management: What the Ratio Tells You and What It Doesn\u2019t",
     summaryIS:
-      "Acute:Chronic Workload Ratio (ACWR) er eitt mikilv\u00e6gasta t\u00f3li\u00f0 \u00ed n\u00fat\u00edma \u00ed\u00fer\u00f3ttum til a\u00f0 meta mei\u00f0slah\u00e6ttu. H\u00e9r er hvernig \u00fej\u00e1lfarar geta n\u00fdtt s\u00e9r ACWR \u00e1 \u00e1hrifa\u00edr\u00edkan h\u00e1tt.",
+      "Acute:Chronic Workload Ratio (ACWR) s\u00fdnir hve st\u00f3rt st\u00f6kk \u00ed \u00e6finga\u00e1lagi er mi\u00f0a\u00f0 vi\u00f0 undanfarnar vikur. \u00dea\u00f0 sp\u00e1ir ekki eitt og s\u00e9r fyrir um mei\u00f0sli. H\u00e9r er hvernig \u00fej\u00e1lfarar geta nota\u00f0 \u00fea\u00f0 til a\u00f0 koma auga \u00e1 sn\u00f6gg \u00e1lagsst\u00f6kk.",
     summaryEN:
-      "The Acute:Chronic Workload Ratio (ACWR) is one of the most important tools in modern sport for assessing injury risk. Here is how coaches can use it effectively.",
+      "The Acute:Chronic Workload Ratio (ACWR) shows how big a jump in training load is compared with recent weeks. On its own it does not predict injury. Here is how coaches can use it to spot sudden load spikes.",
     sectionsIS: [
       {
         heading: "Hva\u00f0 er ACWR?",
