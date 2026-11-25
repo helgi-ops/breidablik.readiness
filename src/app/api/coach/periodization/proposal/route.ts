@@ -1,7 +1,8 @@
 /**
- * /api/coach/periodization/proposal — "Build pre-season / meso / macro" drafts (one table, `scope`). Coach /
- * staff / admin, own team (or an admin's requested team via the shared access helper). Nothing in a draft
- * reaches the plan until accept. `?scope=meso|macro` (default preseason) on every call.
+ * /api/coach/periodization/proposal — "Build meso / macro" drafts (one table, `scope`). Coach / staff / admin,
+ * own team (or an admin's requested team via the shared access helper). Nothing in a draft reaches the plan
+ * until accept. `?scope=meso|macro` on every call (anything else → 400). The pre-season has no draft: the hub's
+ * Pre-season tab reads live from the Macro cycle + fixtures ("Build pre-season" removed 2026-11-25).
  *
  *   meso:  edit { blockWeeks?, blockGoals?, blockDeload? } (keyed by block start); accept writes the coach's
  *          block choices to the season row (the rule values aren't pinned, so fixtures still re-flow them).
@@ -11,10 +12,9 @@
  *   GET                         → the open draft (or null) + the last accepted one's date.
  *   GET  ?preview=1             → also what accepting would write now (counts for the confirm step).
  *   POST { action: "build", fromScratch? }  → build from the rules + team data; replaces the open draft.
- *   POST { action: "edit", settings?, days? } → change the draft (settings / days); the plan re-flows.
- *   POST { action: "accept" }   → write settings + days + tests (today onward; never match / break days;
- *                                  saved days kept unless changed in the draft) and mark accepted.
- *   POST { action: "discard" }  → drop the draft. week_plans is untouched.
+ *   POST { action: "edit", ... } → change the draft; the plan re-flows.
+ *   POST { action: "accept" }   → write the coach's choices and mark accepted.
+ *   POST { action: "discard" }  → drop the draft.
  *
  * Rules decide; no AI. Descriptive planning — never the readiness colour.
  */
@@ -22,8 +22,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
-import { clampTaperPct } from "@/lib/micropulse/periodization/preseasonWindow";
-import { buildProposalContext, acceptPlanFor, writeAcceptPlan, storedProposal, type ProposalEdits } from "@/lib/micropulse/periodization/preseasonProposalServer";
 import { buildMesoContext, mesoSummary, writeMesoAccept } from "@/lib/micropulse/periodization/mesoProposalServer";
 import { buildMacroContext, macroSummary, writeMacroAccept } from "@/lib/micropulse/periodization/macroProposalServer";
 import type { MesoEdits } from "@/lib/micropulse/periodization/mesoProposal";
@@ -32,11 +30,12 @@ import type { MacroEdits } from "@/lib/micropulse/periodization/macroProposal";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-type Scope = "preseason" | "meso" | "macro";
-const scopeOf = (req: Request): Scope => { const s = new URL(req.url).searchParams.get("scope"); return s === "meso" || s === "macro" ? s : "preseason"; };
+type Scope = "meso" | "macro";
+const scopeOf = (req: Request): Scope | null => { const s = new URL(req.url).searchParams.get("scope"); return s === "meso" || s === "macro" ? s : null; };
+const BAD_SCOPE = () => NextResponse.json({ ok: false, error: "scope must be meso or macro" }, { status: 400 });
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
-type DraftRow = { id: string; season_year: number; from_scratch: boolean; proposal: unknown; coach_edits: ProposalEdits | null; updated_at: string; created_at: string };
+type DraftRow = { id: string; season_year: number; from_scratch: boolean; proposal: unknown; coach_edits: unknown; updated_at: string; created_at: string };
 
 function statusOf(msg: string) {
   return msg === "Unauthorized" ? 401 : msg === "Forbidden" ? 403 : /team context/i.test(msg) ? 400 : 500;
@@ -55,38 +54,6 @@ async function openDraft(sb: ReturnType<typeof getSupabaseServer>, teamId: strin
     .eq("team_id", teamId).eq("scope", SCOPE).eq("status", "draft").maybeSingle();
   return (data as DraftRow | null) ?? null;
 }
-
-/** Keep only well-formed edits (sessions 3–6, week 1 0.5–3, positive KPI values, tail lengths 2–8, valid days). */
-function cleanEdits(raw: { settings?: Record<string, unknown>; days?: Record<string, unknown> }): ProposalEdits {
-  const out: ProposalEdits = {};
-  const s = raw.settings ?? {};
-  const settings: NonNullable<ProposalEdits["settings"]> = {};
-  if ([3, 4, 5, 6].includes(Number(s.preseasonSessions))) settings.preseasonSessions = Number(s.preseasonSessions);
-  if (Number.isFinite(Number(s.preseasonWeek1Mult)) && s.preseasonWeek1Mult != null) settings.preseasonWeek1Mult = Math.max(0.5, Math.min(3, Number(s.preseasonWeek1Mult)));
-  if (s.preTaperPct != null && Number.isFinite(Number(s.preTaperPct))) settings.preTaperPct = clampTaperPct(Number(s.preTaperPct));
-  if (s.preGamesFrom === null) settings.preGamesFrom = null;
-  else if (typeof s.preGamesFrom === "string" && ISO.test(s.preGamesFrom)) settings.preGamesFrom = s.preGamesFrom;
-  if (s.preWeek1Kpi && typeof s.preWeek1Kpi === "object") {
-    const k: Record<string, number> = {};
-    for (const [key, v] of Object.entries(s.preWeek1Kpi as Record<string, unknown>)) if (/^[A-Za-z0-9]+$/.test(key) && Number(v) > 0) k[key] = Math.round(Number(v));
-    settings.preWeek1Kpi = k;
-  }
-  if (Array.isArray(s.preMesoTail)) settings.preMesoTail = (s.preMesoTail as unknown[]).map(Number).filter((n) => Number.isFinite(n) && n >= 2 && n <= 8).slice(0, 6);
-  if (Object.keys(settings).length) out.settings = settings;
-  const days: Record<string, { dayType: string; focus: string | null }> = {};
-  for (const [iso, d] of Object.entries(raw.days ?? {})) {
-    const v = d as { dayType?: unknown; focus?: unknown } | null;
-    if (!ISO.test(iso) || !v || !["OFF", "TRAIN"].includes(String(v.dayType))) continue;
-    days[iso] = { dayType: String(v.dayType), focus: typeof v.focus === "string" ? v.focus.slice(0, 80) : null };
-  }
-  if (Object.keys(days).length) out.days = days;
-  return out;
-}
-
-const mergeEdits = (a: ProposalEdits | null, b: ProposalEdits): ProposalEdits => ({
-  settings: { ...(a?.settings ?? {}), ...(b.settings ?? {}) },
-  days: { ...(a?.days ?? {}), ...(b.days ?? {}) },
-});
 
 /** Meso edits: lengths 2–8 weeks, the three goals, light weeks as Mondays; null = back to the rule. */
 function cleanMeso(raw: Record<string, unknown>): MesoEdits {
@@ -122,24 +89,16 @@ function cleanMacro(raw: Record<string, unknown>): MacroEdits {
 }
 
 type AnyCtx = { seasonYear: number; stored: unknown; summary: () => unknown; write: (userId: string) => Promise<string | null> };
-/** Build the draft for a scope (null = nothing to plan). One shape for the three scopes. */
+/** Build the draft for a scope (null = nothing to plan). One shape for both scopes. */
 async function contextFor(sb: ReturnType<typeof getSupabaseServer>, teamId: string, scope: Scope, fromScratch: boolean, edits: unknown): Promise<AnyCtx | null> {
-  if (scope === "meso") {
-    const ctx = await buildMesoContext(sb, teamId, { fromScratch, edits: (edits ?? {}) as MesoEdits });
-    return ctx && { seasonYear: ctx.seasonYear, stored: ctx.proposal, summary: () => mesoSummary(ctx), write: (u) => writeMesoAccept(sb, teamId, u, ctx) };
-  }
   if (scope === "macro") {
     const ctx = await buildMacroContext(sb, teamId, { fromScratch, edits: (edits ?? {}) as MacroEdits });
     return ctx && { seasonYear: ctx.seasonYear, stored: ctx.proposal, summary: () => macroSummary(ctx), write: (u) => writeMacroAccept(sb, teamId, u, ctx) };
   }
-  const opts = { fromScratch, edits: (edits ?? {}) as ProposalEdits };
-  const ctx = await buildProposalContext(sb, teamId, opts);
-  if (!ctx) return null;
-  const plan = () => acceptPlanFor(ctx, opts);
-  return { seasonYear: ctx.seasonYear, stored: storedProposal(ctx.proposal), summary: () => plan().summary, write: (u) => writeAcceptPlan(sb, teamId, u, ctx.seasonYear, plan()) };
+  const ctx = await buildMesoContext(sb, teamId, { fromScratch, edits: (edits ?? {}) as MesoEdits });
+  return ctx && { seasonYear: ctx.seasonYear, stored: ctx.proposal, summary: () => mesoSummary(ctx), write: (u) => writeMesoAccept(sb, teamId, u, ctx) };
 }
 const NOTHING: Record<Scope, string> = {
-  preseason: "No pre-season to plan — set the season dates first.",
   meso: "No season to plan — enter the fixtures first.",
   macro: "No season to plan — enter the fixtures first.",
 };
@@ -148,6 +107,7 @@ export async function GET(req: Request) {
   try {
     const { sb, teamId } = await auth(req);
     const SCOPE = scopeOf(req);
+    if (!SCOPE) return BAD_SCOPE();
     const draft = await openDraft(sb, teamId, SCOPE);
     const { data: last } = await sb.from("plan_proposals").select("accepted_at").eq("team_id", teamId).eq("scope", SCOPE).eq("status", "accepted").order("accepted_at", { ascending: false }).limit(1).maybeSingle();
     let preview = null;
@@ -166,7 +126,8 @@ export async function POST(req: Request) {
   try {
     const { sb, teamId, userId } = await auth(req);
     const SCOPE = scopeOf(req);
-    const body = await req.json().catch(() => ({})) as Record<string, unknown> & { action?: string; fromScratch?: boolean; settings?: Record<string, unknown>; days?: Record<string, unknown> };
+    if (!SCOPE) return BAD_SCOPE();
+    const body = await req.json().catch(() => ({})) as Record<string, unknown> & { action?: string; fromScratch?: boolean };
     const now = new Date().toISOString();
 
     if (body.action === "build") {
@@ -188,8 +149,7 @@ export async function POST(req: Request) {
 
     if (body.action === "edit") {
       const edits: unknown = SCOPE === "meso" ? mergeMeso(draft.coach_edits as MesoEdits | null, cleanMeso(body))
-        : SCOPE === "macro" ? { ...((draft.coach_edits as MacroEdits | null) ?? {}), ...cleanMacro(body) }
-        : mergeEdits(draft.coach_edits, cleanEdits({ settings: body.settings, days: body.days }));
+        : { ...((draft.coach_edits as MacroEdits | null) ?? {}), ...cleanMacro(body) };
       const ctx = await contextFor(sb, teamId, SCOPE, draft.from_scratch, edits);
       if (!ctx) return NextResponse.json({ ok: false, error: NOTHING[SCOPE] }, { status: 400 });
       const { data, error } = await sb.from("plan_proposals").update({ proposal: ctx.stored, coach_edits: edits, updated_at: now })

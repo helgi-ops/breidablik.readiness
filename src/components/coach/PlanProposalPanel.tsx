@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * "Build meso" / "Build macro" — the button + the draft on the hub's Meso and Macro tabs. Same base as "Build
- * pre-season" (plan_proposals, draft → accept, one route with `?scope=`).
+ * "Build meso" / "Build macro" — the button + the draft on the hub's Meso and Macro tabs (plan_proposals,
+ * draft → accept, one route with `?scope=meso|macro`).
  *
  * The system proposes from its existing rules (meso: the fixture-aware block engine; macro: the season-phase
  * dates from the fixtures). The coach's saved choices stand, the rule fills the rest, and the coach changes any

@@ -1,7 +1,7 @@
 /**
- * "Build pre-season" — the whole pre-season proposal from the system's existing rules and the team's own
- * data, as ONE pure function. The hub's Pre-season tab renders it, the proposal route stores it as a draft
- * the coach edits and accepts. Nothing here is a new rule: it composes
+ * The whole pre-season plan from the system's existing rules and the team's own data, as ONE pure function.
+ * The hub's Pre-season tab renders it live from the Macro cycle, the fixtures and the coach's settings (no draft:
+ * "Build pre-season" and its accept step were removed 2026-11-25). Nothing here is a new rule: it composes
  *
  *   upcomingPreseason → preseasonMeso + sliceByLengths (backwards from the opener)
  *   → preseasonBlockForWeeksOut (gym emphasis per block) → preseasonRamp (week 1 re-entry → build)
