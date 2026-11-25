@@ -562,16 +562,43 @@ export default function PeriodizationHubPage() {
   // editing stays anchored on blkStart.)
   // A jump asked for across a season switch ("Open the next season" → its first in-season block) wins once.
   const jumpBlkRef = React.useRef<string | null>(null);
+  // The In-season page opens the next season by itself once, when the shown season is over (see below).
+  const autoNextSeasonRef = React.useRef(false);
+  const lastPlanRef = React.useRef<typeof plan>(null);
   React.useEffect(() => {
-    if (mesoBlocks.length === 0) return;
+    if (!plan || mesoBlocks.length === 0) return;
+    const planChanged = lastPlanRef.current !== plan;
+    lastPlanRef.current = plan;
     const today = new Date().toISOString().slice(0, 10);
+    const at = (d: string) => mesoBlocks.find((b) => b.start <= d && d < b.end) ?? null;
     const want = jumpBlkRef.current;
-    const jump = want ? mesoBlocks.find((b) => b.start <= want && want < b.end) ?? null : null;
-    if (jump) jumpBlkRef.current = null;
-    const cur = jump ?? mesoBlocks.find((b) => b.start <= today && today < b.end) ?? mesoBlocks[0];
+    const jump = want ? at(want) : null;
+    if (jump) { jumpBlkRef.current = null; setBlkStart(jump.start); return; }
+    const comp = plan.phases.find((p) => p.key === "competitive") ?? null;
+    if (tab === "plan" && comp) {
+      // The In-season page starts at the season's first game — never on a pre-season block (user, 2026-11-25):
+      // in season → this week's block; season over and the next one has its opener → open that season once
+      // (a coach who goes back stays there); otherwise → the block of the season's first game.
+      const nextYr = plan.seasonYear + 1;
+      const goNext = today >= comp.end && !!plan.nextFirstFixture && plan.nextFirstFixture >= today
+        && nextYr <= new Date().getFullYear() + 1 && !autoNextSeasonRef.current;
+      const sel = at(blkStart);
+      if (!goNext && sel && sel.start >= comp.start && sel.start < comp.end) return; // already on an in-season block
+      if (today >= comp.start && today < comp.end) { const b = at(today); if (b) { setBlkStart(b.start); return; } }
+      if (goNext) {
+        autoNextSeasonRef.current = true;
+        jumpBlkRef.current = plan.nextFirstFixture ?? null;
+        switchYear(nextYr);
+        return;
+      }
+      const first = at(comp.start);
+      if (first) { setBlkStart(first.start); return; }
+    }
+    if (!planChanged) return; // other tabs: re-anchor only when the plan (re)loads, as before
+    const cur = at(today) ?? mesoBlocks[0];
     if (cur) setBlkStart(cur.start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan]);
+  }, [plan, tab]);
 
   const overridesPayload = React.useCallback((c: number) => ({
     preseasonStart: preStart || undefined, seasonEnd: seasonEnd || undefined, deloadCadence: c,
