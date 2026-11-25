@@ -721,8 +721,6 @@ export async function buildPlayerSource(args: {
       gpsSpike:
         String(args.ydayContext?.intensity ?? "").toUpperCase() !== "OFF" &&
         (toInt(args.ydayContext?.hsr_m) ?? 0) >= 1000,
-      valdHamstringRiskFlag: valdInjurySignals?.hamstringRiskFlag ?? false,
-      valdGroinRiskFlag: valdInjurySignals?.groinRiskFlag ?? false,
       valdNeuromuscularRiskFlag: valdInjurySignals?.neuromuscularRiskFlag ?? false,
       valdReasons: valdInjurySignals?.reasons ?? [],
       globalFatigueFlag,

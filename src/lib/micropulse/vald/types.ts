@@ -28,9 +28,9 @@ export type ValdReadinessAdjustment = {
   explanation: string[];
 };
 
+/** What the VALD snapshot adds to the injury-risk score: the CMJ (neuromuscular) read only.
+ *  NordBord / ForceFrame left/right gaps are not scored (see injuryRisk/rules.ts). */
 export type ValdInjuryRiskSignals = {
-  hamstringRiskFlag: boolean;
-  groinRiskFlag: boolean;
   neuromuscularRiskFlag: boolean;
   reasons: string[];
 };

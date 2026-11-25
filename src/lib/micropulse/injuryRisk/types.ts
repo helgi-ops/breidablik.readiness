@@ -38,8 +38,6 @@ export type InjuryRiskInput = {
   gpsSpike?: boolean;
   matchCongestion?: boolean;
   travelLoad?: boolean;
-  valdHamstringRiskFlag?: boolean;
-  valdGroinRiskFlag?: boolean;
   valdNeuromuscularRiskFlag?: boolean;
   valdReasons?: string[];
   /**

@@ -61,8 +61,6 @@ export function evaluateInjuryRiskRules(
   const sorenessPain = lowSorenessCaution || input.painFlag === true;
   const congestionTravel = input.matchCongestion === true || input.travelLoad === true;
   const gpsSpikeRecovery = input.gpsSpike === true && poorRecovery;
-  const valdHamstring = input.valdHamstringRiskFlag === true;
-  const valdGroin = input.valdGroinRiskFlag === true;
   const valdNeuromuscular = input.valdNeuromuscularRiskFlag === true;
   const strongReadinessDay =
     hasNumber(input.zScore) &&
@@ -117,14 +115,10 @@ export function evaluateInjuryRiskRules(
     triggeredRules.push("GPS_SPIKE_POOR_RECOVERY");
     riskScore += 2;
   }
-  if (valdHamstring) {
-    triggeredRules.push("VALD_HAMSTRING_RISK");
-    riskScore += 2;
-  }
-  if (valdGroin) {
-    triggeredRules.push("VALD_GROIN_RISK");
-    riskScore += 2;
-  }
+  // A NordBord / ForceFrame left/right gap is NOT scored here (removed 2026-11-25, owner's call).
+  // A gap on its own did not raise the risk of hamstring injury (Opar 2015: >10% imbalance, no
+  // added risk; low eccentric strength did) or groin injury (Vigneswaran 2025: hip-strength
+  // asymmetry not associated). The gap stays visible beside the colour (VALD panel, test alerts).
   if (valdNeuromuscular) {
     triggeredRules.push("VALD_NEUROMUSCULAR_CAUTION");
     riskScore += 1;
