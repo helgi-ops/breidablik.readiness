@@ -49,6 +49,7 @@ import { kpiAvgFromUnit as kpiAvgFromUnitLib, teamKpiAvg as teamKpiAvgLib } from
 import { upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, PRE_MIN_BLOCK, PRESEASON_DEFAULT_WEEK1, PRESEASON_DEFAULT_TAPER_PCT, PRESEASON_TAPER_RESEARCH, clampTaperPct } from "@/lib/micropulse/periodization/preseasonWindow";
 import { buildPreseasonProposal } from "@/lib/micropulse/periodization/preseasonProposal";
 import PreseasonProposalPanel, { type PsDraft } from "@/components/coach/PreseasonProposalPanel";
+import PlanProposalPanel from "@/components/coach/PlanProposalPanel";
 import type { ProposalEdits } from "@/lib/micropulse/periodization/preseasonProposalServer";
 import type { MatchUnit as LibMatchUnit } from "@/lib/micropulse/periodization";
 
@@ -1103,6 +1104,16 @@ export default function PeriodizationHubPage() {
   }, [authHeader]);
   // After "Use this plan": re-read the saved settings (both season rows) + days + tests, as on first load.
   const reloadAfterPsAccept = React.useCallback(() => { void load(preStart, seasonEnd, { repopulate: true }); void loadScheduledTests(); }, [load, preStart, seasonEnd, loadScheduledTests]);
+  // "Build meso": the block maps changed, the dates didn't. "Build macro": the dates may have changed → load the saved ones.
+  // Repopulate only sets keys that are present, so clear what the accept may have removed first.
+  const reloadAfterMesoAccept = React.useCallback(() => {
+    setBlockGoals({}); setBlockLenOv({}); setBlockDeloadOv({});
+    void load(preStart, seasonEnd, { repopulate: true });
+  }, [load, preStart, seasonEnd]);
+  const reloadAfterMacroAccept = React.useCallback(() => {
+    setPreStart(""); setSeasonEnd(""); setOffStart(""); setNextPreStart(""); nextPreStartRef.current = "";
+    void load("", "", { repopulate: true });
+  }, [load]);
   const setPreW1T = (v: number) => (psDraft ? draftEdit({ settings: { preseasonWeek1Mult: v } }) : setPreW1(v));
   const setPreSessT = (v: number) => (psDraft ? draftEdit({ settings: { preseasonSessions: v } }) : setPreSess(v));
   const setPreTaperT = (v: number) => (psDraft ? draftEdit({ settings: { preTaperPct: v } }) : setPreTaper(v));
@@ -1398,6 +1409,7 @@ export default function PeriodizationHubPage() {
           </div>
 
           {/* SEASON tab */}
+          {tab === "season" && <PlanProposalPanel scope="macro" is={is} authHeader={authHeader} onAccepted={reloadAfterMacroAccept} />}
           {tab === "season" && (() => {
             // ── Shared derivations for the whole Macro tab ───────────────────────────────────────────
             const GC: Record<BlockGoalKey, string> = { accum: "#2740E6", transmute: "#7A5CC4", realize: "#1C7A4A", deload: "#DE9328" };
@@ -2815,6 +2827,7 @@ export default function PeriodizationHubPage() {
           })()}
 
           {/* THE PLAN tab — the block planner (primary) → the season meso map (context) → micro link */}
+          {tab === "plan" && <PlanProposalPanel scope="meso" is={is} authHeader={authHeader} onAccepted={reloadAfterMesoAccept} />}
           {tab === "plan" && (() => {
             const GC: Record<BlockGoalKey, string> = { accum: "#2740E6", transmute: "#7A5CC4", realize: "#1C7A4A", deload: "#DE9328" };
             const DAY = 86_400_000;
