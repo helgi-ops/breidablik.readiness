@@ -105,7 +105,7 @@ export function CollagenSupport({ isEN }: { isEN: boolean }) {
 
 // ── Objective symmetry gate (coach-entered) — unlocks `stage` (default 3) ────
 // Generic over the metrics a module cares about (heel-raise/hop LSI for the
-// Achilles, adductor-squeeze LSI + adduction:abduction ratio for the groin).
+// Achilles, adductor-squeeze LSI for the groin — the add:abd ratio is not a gate).
 // All metrics on a 0–100% scale; the gate opens when the LOWEST entered metric
 // meets `threshold`. No data is never a pass. The ankle gate unlocks Stage 4
 // (hop symmetry is built in Stage 3), so the stage and the next work are props.

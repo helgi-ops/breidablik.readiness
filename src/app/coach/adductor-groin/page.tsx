@@ -11,7 +11,9 @@
  *   • Isometric squeeze -> Copenhagen Adduction + HSR -> energy-storage /
  *     change-of-direction -> return to sport (cutting + kicking).
  *   • HAGOS outcome; adductor squeeze test as the daily marker.
- *   • Stage 3 gate = adductor squeeze LSI + adduction:abduction ratio ≥ 90%.
+ *   • Stage 3 gate = adductor squeeze LSI ≥ 90% (MicroPulse's line). The adduction:abduction
+ *     ratio is NOT a gate (removed 2026-11-25): a meta-analysis found no link between the ratio
+ *     and groin pain, only for low adductor strength (Quintana-Cepedal 2025).
  *
  * EDUCATIONAL protocol reference — progression decisions belong to the treating
  * clinician. Clinical doses in English; the shell is bilingual IS/EN. Nothing
@@ -19,7 +21,7 @@
  *
  * Sources (research/ + literature): Hölmich 1999 (active-training RCT),
  * Copenhagen Adduction (Serner/Harøy), squeeze test + HAGOS (Thorborg),
- * adduction:abduction ratio (Tyler), Doha agreement (Weir 2015), control-chaos.
+ * adductor strength (Quintana-Cepedal 2025), Doha agreement (Weir 2015), control-chaos.
  */
 
 import React from "react";
@@ -36,8 +38,7 @@ const BREIDABLIK_TEAM_ID = "94b52a06-0b83-48da-8664-639ec3486a0c";
 const PROVOCATION_FULL = { en: "Adductor squeeze test", is: "Aðleiðara-kreistupróf" };
 const PROVOCATION_SHORT = { en: "squeeze pain", is: "kreistu verkur" };
 const SQUEEZE_LSI = { en: "Squeeze LSI", is: "Kreistu LSI" };
-const ADD_ABD = { en: "Adduction:abduction %", is: "Aðleiðsla:fráleiðsla %" };
-const LSI_HINT = { en: "involved ÷ uninvolved × 100 · ratio as %", is: "meidd ÷ heilbrigð × 100 · hlutfall sem %" };
+const LSI_HINT = { en: "involved ÷ uninvolved × 100", is: "meidd ÷ heilbrigð × 100" };
 
 type Tab = "overview" | "s1" | "s2" | "s3" | "s4" | "testing" | "videos";
 
@@ -99,9 +100,8 @@ export default function AdductorGroinPage() {
   const [teamId, setTeamId] = React.useState<string | null>(null);
   const [checkins, setCheckins] = React.useState<{ entry_date: string; provocation_vas: number | null; morning_stiffness_vas: number | null }[]>([]);
 
-  // Stage 3 gate — coach-entered squeeze LSI + adduction:abduction ratio (%).
+  // Stage 3 gate — coach-entered squeeze LSI (%). The adduction:abduction ratio is not a gate.
   const [squeezeLsi, setSqueezeLsi] = React.useState<number | null>(null);
-  const [addAbd, setAddAbd] = React.useState<number | null>(null);
 
   const [injury, setInjury] = React.useState<InjuryRow | null>(null);
   const [injurySeverity, setInjurySeverity] = React.useState<"mild" | "moderate" | "severe">("moderate");
@@ -251,7 +251,6 @@ export default function AdductorGroinPage() {
   );
   const lsiMetrics = [
     { label: SQUEEZE_LSI, value: squeezeLsi, onChange: setSqueezeLsi },
-    { label: ADD_ABD, value: addAbd, onChange: setAddAbd },
   ];
 
   return (
@@ -405,7 +404,7 @@ export default function AdductorGroinPage() {
               {[
                 { h: isEN ? "The squeeze test is the marker" : "Kreistuprófið er mælikvarðinn", b: isEN ? "Adductor squeeze (ball between the knees or ankles) is both the daily provocation test and a strength measure. Track its pain and its symmetry." : "Aðleiðara-kreista (bolti milli hnjáa eða ökkla) er bæði daglega provokations-prófið og styrktarmæling. Fylgstu með verk og samhverfu." },
                 { h: isEN ? "Pain is allowed — within limits" : "Verkur er leyfður — innan marka", b: isEN ? "Continued training is safe up to 5/10 pain that settles by the next morning. Rest deconditions the adductors." : "Áframhaldandi æfing er örugg upp að 5/10 verk sem sjatnar fyrir næsta morgun. Hvíld afþjálfar aðleiðara." },
-                { h: isEN ? "Symmetry unlocks the spring" : "Samhverfa opnar fjöðrunina", b: isEN ? "Stage 3 change-of-direction waits for adductor squeeze LSI ≥ 90% and an adduction:abduction ratio near 1.0 (MicroPulse’s gates)." : "Fasi 3 (stefnubreytingar) bíður eftir aðleiðara-kreistu LSI ≥ 90% og aðleiðslu:fráleiðslu hlutfalli nálægt 1.0 (viðmið MicroPulse)." },
+                { h: isEN ? "Symmetry unlocks the spring" : "Samhverfa opnar fjöðrunina", b: isEN ? "Stage 3 change-of-direction waits for adductor squeeze LSI ≥ 90% (MicroPulse’s gate). Also check adductor strength against the player’s own earlier tests: low adductor strength went with groin pain, the adduction:abduction ratio did not (Quintana-Cepedal 2025)." : "Fasi 3 (stefnubreytingar) bíður eftir aðleiðara-kreistu LSI ≥ 90% (viðmið MicroPulse). Berðu líka aðleiðarastyrk saman við fyrri próf leikmannsins: lítill aðleiðarastyrkur fylgdi náraverkjum, aðleiðslu:fráleiðslu hlutfallið gerði það ekki (Quintana-Cepedal 2025)." },
                 { h: isEN ? "Track HAGOS weekly" : "Fylgstu með HAGOS vikulega", b: isEN ? "The Copenhagen Hip & Groin Outcome Score (0–100, higher = better) — the groin outcome measure and the 'are we winning?' number." : "Copenhagen Hip & Groin Outcome Score (0–100, hærra = betra) — nára-útkomu-mælikvarðinn og 'erum við að vinna?' talan." },
               ].map((c, i) => (
                 <div key={i} className="rounded-lg border border-slate-200 bg-white p-4">
@@ -454,7 +453,7 @@ export default function AdductorGroinPage() {
               goal={isEN ? "reload reactive change-of-direction — only once pain is controlled at Stage 2 loads and squeeze symmetry is restored." : "endurhlaða viðbragðs-stefnubreytingar — aðeins þegar verkur er í skefjum við Fasa 2 og kreistu-samhverfa er endurheimt."} />
             <LsiGate isEN={isEN} unitHint={LSI_HINT} metrics={lsiMetrics} />
             <ExerciseTable rows={S3} isEN={isEN} />
-            <p className="text-xs text-slate-500">{isEN ? "Source: change-of-direction progression + adduction:abduction ratio (Tyler 2001, ice hockey: under 80% went with more adductor strains; a meta-analysis found no link for the ratio, only for low adductor strength — Quintana-Cepedal 2025)." : "Heimild: stefnubreytinga-framgangur + aðleiðslu:fráleiðslu hlutfall (Tyler 2001, íshokkí: undir 80% fylgdi fleiri tognunum í aðleiðara; safngreining fann engin tengsl fyrir hlutfallið, aðeins fyrir lítinn aðleiðarastyrk — Quintana-Cepedal 2025)."}</p>
+            <p className="text-xs text-slate-500">{isEN ? "Source: change-of-direction progression; the 90% squeeze gate is MicroPulse’s line. The adduction:abduction ratio is not a gate: Tyler 2001 (ice hockey) linked a ratio under 80% to adductor strains, but a meta-analysis found no link for the ratio, only for low adductor strength (Quintana-Cepedal 2025)." : "Heimild: stefnubreytinga-framgangur; 90% kreistu-hliðið er viðmið MicroPulse. Aðleiðslu:fráleiðslu hlutfallið er ekki hlið: Tyler 2001 (íshokkí) tengdi hlutfall undir 80% við tognanir í aðleiðara, en safngreining fann engin tengsl fyrir hlutfallið, aðeins fyrir lítinn aðleiðarastyrk (Quintana-Cepedal 2025)."}</p>
             <PainGate isEN={isEN} reported={reported} provocationFull={PROVOCATION_FULL} provocationShort={PROVOCATION_SHORT} />
           </div>
         )}
@@ -488,7 +487,7 @@ export default function AdductorGroinPage() {
                     { m: "HAGOS questionnaire (0–100)", c: isEN ? "weekly" : "vikulega", w: isEN ? "The Copenhagen Hip & Groin Outcome Score — higher = better. Track the trend: it's the 'are we winning?' number." : "Copenhagen Hip & Groin Outcome Score — hærra = betra. Fylgstu með þróun: 'erum við að vinna?' talan." },
                     { m: "Adductor squeeze pain (VAS 0–10)", c: isEN ? "daily" : "daglega", w: isEN ? "The standard daily provocation test. Feeds the pain-monitoring gate." : "Staðlaða daglega provokations-prófið. Fæðir verkja-vöktunar-hliðið." },
                     { m: "Morning soreness / stiffness", c: isEN ? "daily" : "daglega", w: isEN ? "Primary day-to-day marker — must not rise week to week." : "Aðal-daglegi mælikvarðinn — má ekki vaxa milli vikna." },
-                    { m: "Adductor squeeze strength LSI + adduction:abduction ratio", c: isEN ? "before Stage 3, then monitoring" : "fyrir Fasa 3, svo vöktun", w: isEN ? "Objective symmetry gate: squeeze LSI ≥ 90% and ratio near 1.0 unlock change-of-direction loading (MicroPulse’s gate)." : "Hlutlægt samhverfu-hlið: kreistu LSI ≥ 90% og hlutfall nálægt 1.0 opna stefnubreytinga-hleðslu (viðmið MicroPulse)." },
+                    { m: "Adductor squeeze strength LSI + adductor strength vs own earlier tests", c: isEN ? "before Stage 3, then monitoring" : "fyrir Fasa 3, svo vöktun", w: isEN ? "Objective gate: squeeze LSI ≥ 90% unlocks change-of-direction loading (MicroPulse’s gate). Track absolute adductor strength against the player’s own tests — low strength, not the adduction:abduction ratio, went with groin pain (Quintana-Cepedal 2025)." : "Hlutlægt hlið: kreistu LSI ≥ 90% opnar stefnubreytinga-hleðslu (viðmið MicroPulse). Fylgstu með aðleiðarastyrk miðað við fyrri próf leikmannsins — lítill styrkur, ekki aðleiðslu:fráleiðslu hlutfallið, fylgdi náraverkjum (Quintana-Cepedal 2025)." },
                   ].map((r, i) => (
                     <tr key={i} className="border-b border-slate-100 align-top">
                       <td className="px-3 py-2 font-medium text-slate-900">{r.m}</td>

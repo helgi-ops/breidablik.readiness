@@ -526,7 +526,7 @@ const HOP_FOR_DISTANCE: MovementTest = {
       variableKey: "lsi",
       bands: [
         { id: "ok", label: { en: "Symmetric (>=90%)", is: "Samhverft (>=90%)" }, rule: "weaker/stronger >= 0.90", severity: "ok" },
-        { id: "moderate", label: { en: "85–90%", is: "85–90%" }, rule: "0.85 <= ratio < 0.90", severity: "moderate" },
+        { id: "moderate", label: { en: "85–90% (within test noise — retest)", is: "85–90% (innan mæliskekkju — endurprófa)" }, rule: "0.85 <= ratio < 0.90", severity: "moderate" },
         { id: "marked", label: { en: "<85%", is: "<85%" }, rule: "ratio < 0.85", severity: "marked" },
       ],
       citation: "Grindem 2016 (>90% on quad strength + four hop tests + two questionnaires together; the hop LSIs alone did not predict re-injury); the 85% line is MicroPulse's; Reid 2007 (hop LSI reliable, but a change under 7–13 points can be noise)",
@@ -538,7 +538,7 @@ const HOP_FOR_DISTANCE: MovementTest = {
       match: { variableKey: "lsi", minSeverity: "moderate" },
       finding: { en: "Hop-distance asymmetry below MicroPulse's 90% return-to-play line", is: "Hopplengdar-ósamhverfa undir 90% endurkomu-viðmiði MicroPulse" },
       cause: { en: "Unilateral force/power deficit on the weaker leg", is: "Einhliða kraft/afl halli á veikari fæti" },
-      lever: { en: "Unilateral strength + power to the weaker leg; re-test toward >=90% LSI before full clearance", is: "Einhliða styrkur + afl á veikari fót; endurpróf að >=90% LSI áður en full heimild" },
+      lever: { en: "Unilateral strength + power to the weaker leg; re-test toward >=90% LSI before full clearance. A single 85–90% reading can be test noise (Reid 2007: changes under 7–13 points) — confirm on a second day before reading it as a real deficit", is: "Einhliða styrkur + afl á veikari fót; endurpróf að >=90% LSI áður en full heimild. Ein mæling á 85–90% getur verið mæliskekkja (Reid 2007: breyting undir 7–13 stigum) — staðfestu annan dag áður en þú lest hana sem raunverulegan halla" },
       strengthEmphasis: "unilateral",
       flag: "rtp",
       citation: "Grindem 2016 (whole battery, not hop alone); Reid 2007; Wellsandt 2017",

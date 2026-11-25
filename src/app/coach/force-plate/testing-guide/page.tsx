@@ -128,13 +128,13 @@ const PROTOCOLS: InjuryProtocol[] = [
     rehabHref: "/coach/adductor-groin",
     tests: [
       { device: "ForceFrame", name: { EN: "Isometric adductor squeeze", IS: "Ísómetrísk aðleiðara-kreisting" },
-        detail: { EN: "Adduction force each leg + the adduction : abduction ratio. The key groin test.", IS: "Aðfærslu-kraftur hvor fótur + aðfærsla : fráfærsla hlutfall. Lykil nára-prófið." } },
+        detail: { EN: "Adduction force each leg, compared with the player’s own earlier tests. The key groin test.", IS: "Aðfærslu-kraftur hvor fótur, borinn saman við fyrri próf leikmannsins. Lykil nára-prófið." } },
       { device: "ForceFrame", name: { EN: "Hip abduction + rotation", IS: "Mjaðma-fráfærsla + snúningur" },
         detail: { EN: "Surrounding hip strength to balance the adductor load.", IS: "Umliggjandi mjaðmastyrkur til að jafna aðleiðara-álag." } },
     ],
     criteria: [
       { EN: "Adductor strength restored to ≥90% of the uninjured side / baseline, pain-free squeeze.", IS: "Aðleiðara-styrkur endurheimtur í ≥90% af óslasaðri hlið / grunngildi, sársaukalaus kreisting." },
-      { EN: "Adduction : abduction ratio ≈ 0.9–1.0 (Tyler 2001, ice hockey: under 0.8 went with more adductor strains; a meta-analysis found no link for the ratio, only for low adductor strength — Quintana-Cepedal 2025).", IS: "Aðfærsla : fráfærsla hlutfall ≈ 0.9–1.0 (skortur er þekktur áhættuþáttur)." },
+      { EN: "Adductor strength back to the player’s own earlier level (low adductor strength went with groin pain in a meta-analysis — Quintana-Cepedal 2025). The adduction : abduction ratio is shown for context, not as a gate: Tyler 2001 (ice hockey) linked under 0.8 to adductor strains, but the meta-analysis found no link for the ratio.", IS: "Aðleiðarastyrkur aftur á fyrra stig leikmannsins (lítill aðleiðarastyrkur fylgdi náraverkjum í safngreiningu — Quintana-Cepedal 2025). Aðfærsla : fráfærsla hlutfallið er sýnt sem samhengi, ekki sem hlið: Tyler 2001 (íshokkí) tengdi undir 0.8 við tognanir í aðleiðara, en safngreiningin fann engin tengsl fyrir hlutfallið." },
     ],
     clinical: { EN: "Resisted adduction (squeeze) + palpation of the adductor origin.", IS: "Mótstöðu aðfærsla (kreisting) + þreifing á aðleiðara-upptök." },
     differential: { EN: "Rule out hip (FADIR/FABER), inguinal / sports hernia and pubic-related pain.", IS: "Útiloka mjöðm (FADIR/FABER), nára- / íþrótta-kviðslit og lífbeins-tengda verki." },
