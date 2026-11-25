@@ -48,6 +48,8 @@ import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/e
 import { kpiAvgFromUnit as kpiAvgFromUnitLib, teamKpiAvg as teamKpiAvgLib } from "@/lib/micropulse/periodization/preseasonKpiMap";
 import { upcomingPreseason, preseasonMeso, preseasonAnchor, preseasonRamp, PRE_MIN_BLOCK } from "@/lib/micropulse/periodization/preseasonWindow";
 import { buildPreseasonProposal } from "@/lib/micropulse/periodization/preseasonProposal";
+import PreseasonProposalPanel, { type PsDraft } from "@/components/coach/PreseasonProposalPanel";
+import type { ProposalEdits } from "@/lib/micropulse/periodization/preseasonProposalServer";
 import type { MatchUnit as LibMatchUnit } from "@/lib/micropulse/periodization";
 
 type Bi = { en: string; is: string };
@@ -186,6 +188,9 @@ function ValdTrimControl({ is, lift, onLift, onUndo }: { is: boolean; lift: Vald
   );
 }
 
+// Serialises "Build pre-season" draft edits so they reach the server in the order the coach made them.
+let psDraftQueue: Promise<unknown> = Promise.resolve();
+
 export default function PeriodizationHubPage() {
   const [lang] = useLang();
   const is = lang === "IS";
@@ -272,6 +277,9 @@ export default function PeriodizationHubPage() {
   const [preseasonJumpWeek, setPreseasonJumpWeek] = React.useState<string | undefined>(undefined); // deep-link Pre-season week → Week Setup
   const [preDaySave, setPreDaySave] = React.useState<null | "saving" | "saved" | "err">(null); // pre-season draft day-toggle save status
   const [preDayPick, setPreDayPick] = React.useState<{ weekStart: string; di: number } | null>(null); // pre-season day open in the stimulus picker
+  // "Build pre-season": the open draft (plan_proposals) — while set, the Pre-season tab renders it and edits go to it.
+  const [psDraft, setPsDraft] = React.useState<PsDraft | null>(null);
+  const [psAutoBuild] = React.useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("build") === "1");
   const [blkSkeleton, setBlkSkeleton] = React.useState<Record<string, DayState>>({}); // coach's 6-week day grid
   const [typeOverrides, setTypeOverrides] = React.useState<Record<string, CalType>>({}); // per-day day-type picks
   const [savedPlans, setSavedPlans] = React.useState<Record<string, { dayType: string; focus: string | null }>>({}); // saved week_plans (read-back)
@@ -363,7 +371,7 @@ export default function PeriodizationHubPage() {
     (async () => { try { await fetch(`/api/team/settings`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ in_season_strength_mode: m }) }); } catch { /* best-effort persist */ } })();
   };
 
-  const load = React.useCallback(async (preS: string, endS: string) => {
+  const load = React.useCallback(async (preS: string, endS: string, opts?: { repopulate?: boolean }) => {
     setLoading(true); setErr(null);
     try {
       const qs = new URLSearchParams();
@@ -381,7 +389,7 @@ export default function PeriodizationHubPage() {
       setViewYear((j.plan as Plan).seasonYear);
       // Populate the season-window inputs from the saved overrides, once, so they reflect what's stored.
       const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; offseasonStart?: string | null; preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; stepPct?: number | null; blockGoals?: Record<string, "accum" | "transmute" | "realize">; blockWeeks?: Record<string, number>; blockDeload?: Record<string, string>; preMesoTail?: number[] | null; preWeek1Kpi?: Record<string, number> | null } }).savedWindow;
-      if (sw && !didPopulateWindow.current) {
+      if (sw && (!didPopulateWindow.current || opts?.repopulate)) {
         didPopulateWindow.current = true;
         if (sw.preseasonStart) setPreStart(sw.preseasonStart);
         if (sw.seasonEnd) setSeasonEnd(sw.seasonEnd);
@@ -402,7 +410,7 @@ export default function PeriodizationHubPage() {
       // The UPCOMING pre-season's saved overrides live in NEXT season's row — restore them into the separate
       // pre-season store so the Pre-season tab reads/writes that row (survives the rollover; no index clash).
       const swn = (j as { savedWindowNext?: { preseasonWeek1Mult?: number | null; preseasonSessions?: number | null; blockWeeks?: Record<string, number>; preMesoTail?: number[] | null; preWeek1Kpi?: Record<string, number> | null } | null }).savedWindowNext;
-      if (swn && !didPopulateNext.current) {
+      if (swn && (!didPopulateNext.current || opts?.repopulate)) {
         didPopulateNext.current = true;
         if (swn.preseasonWeek1Mult != null && Number.isFinite(swn.preseasonWeek1Mult)) setPrePsWeek1Mult(Math.max(0.5, Math.min(3, swn.preseasonWeek1Mult)));
         if (swn.preseasonSessions === 3 || swn.preseasonSessions === 4 || swn.preseasonSessions === 5 || swn.preseasonSessions === 6) setPrePsSessions(swn.preseasonSessions);
@@ -1058,6 +1066,35 @@ export default function PeriodizationHubPage() {
     if (isUpcoming) setNextWeek1Kpi(next); else setCurWeek1Kpi(next);
     (async () => { try { await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: year, overrides: { preWeek1Kpi: next } }) }); } catch { /* best-effort persist */ } })();
   }, [authHeader]);
+
+  // "Build pre-season" draft. While a draft is open the Pre-season tab shows the DRAFT (its settings + days) and
+  // every edit there goes to the draft (plan_proposals.coach_edits) — never to the season row or week_plans —
+  // until the coach presses "Use this plan". The local edit shows at once; the server re-flows the plan.
+  const dEd = psDraft?.coach_edits ?? null;
+  const dSet = psDraft?.proposal.settings ?? null;
+  const psW1T = dSet ? (dEd?.settings?.preseasonWeek1Mult ?? dSet.week1MatchMultiple) : psW1;
+  const psSessT = dSet ? (dEd?.settings?.preseasonSessions ?? dSet.sessionsPerWeek) : psSess;
+  const week1KpiT = dSet ? (dEd?.settings?.preWeek1Kpi ?? dSet.week1Kpi) : week1KpiOv;
+  const dTail = dEd?.settings?.preMesoTail;
+  const mesoTailT = dSet ? (dTail !== undefined ? (dTail && dTail.length ? dTail : null) : dSet.mesoTail) : mesoTail;
+  const savedPlansT = psDraft ? { ...(psDraft.from_scratch ? {} : savedPlans), ...(dEd?.days ?? {}) } : savedPlans;
+  const draftEdit = React.useCallback((patch: ProposalEdits) => {
+    setPsDraft((d) => d ? { ...d, coach_edits: { settings: { ...(d.coach_edits?.settings ?? {}), ...(patch.settings ?? {}) }, days: { ...(d.coach_edits?.days ?? {}), ...(patch.days ?? {}) } } } : d);
+    psDraftQueue = psDraftQueue.then(async () => {
+      try {
+        const r = await fetch("/api/coach/periodization/proposal", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ action: "edit", ...patch }) });
+        const j = await r.json().catch(() => null) as { ok?: boolean; draft?: PsDraft } | null;
+        if (r.ok && j?.ok && j.draft) { const nd = j.draft; setPsDraft((d) => (d && d.id === nd.id ? { ...d, proposal: nd.proposal, updated_at: nd.updated_at } : d)); }
+        else setPreDaySave("err");
+      } catch { setPreDaySave("err"); }
+    });
+  }, [authHeader]);
+  // After "Use this plan": re-read the saved settings (both season rows) + days + tests, as on first load.
+  const reloadAfterPsAccept = React.useCallback(() => { void load(preStart, seasonEnd, { repopulate: true }); void loadScheduledTests(); }, [load, preStart, seasonEnd, loadScheduledTests]);
+  const setPreW1T = (v: number) => (psDraft ? draftEdit({ settings: { preseasonWeek1Mult: v } }) : setPreW1(v));
+  const setPreSessT = (v: number) => (psDraft ? draftEdit({ settings: { preseasonSessions: v } }) : setPreSess(v));
+  const persistWeek1KpiT = (next: Record<string, number>, year: number, isUpcoming: boolean) => (psDraft ? draftEdit({ settings: { preWeek1Kpi: next } }) : persistWeek1Kpi(next, year, isUpcoming));
+  const persistMesoTailT = (tail: number[], windowWeeks: number, cad: number, year: number, isUpcoming: boolean) => (psDraft ? draftEdit({ settings: { preMesoTail: tail } }) : persistMesoTail(tail, windowWeeks, cad, year, isUpcoming));
 
   // Day-type editor: MATCHES ARE READ-ONLY HERE. A match belongs to Fixtures (match_schedule)
   // — the meso only reads it (isFixtureDay). Toggling a day changes the TRAINING type (Off /
@@ -2140,9 +2177,9 @@ export default function PeriodizationHubPage() {
             // function "Build pre-season" drafts with — fed the coach's live settings and saved days.
             const prop = buildPreseasonProposal({
               phases: plan.phases, today: todayIso, nextFirstFixture: plan.nextFirstFixture, nextFirstFixtureEstimated: plan.nextFirstFixtureEstimated,
-              saved: null, settingsOverride: { sessionsPerWeek: psSess, week1MatchMultiple: psW1, week1Kpi: week1KpiOv, mesoTail },
+              saved: null, settingsOverride: { sessionsPerWeek: psSessT, week1MatchMultiple: psW1T, week1Kpi: week1KpiT, mesoTail: mesoTailT },
               matchUnits: plan.players.map((p) => p.matchUnit as unknown as LibMatchUnit), matchLoad: plan.matchLoad, matchSrpe: plan.matchSrpe, loadSource: plan.tier.loadSource,
-              unit: blkUnit, fixtures: plan.fixtures ?? [], camps: campRegions, savedDays: savedPlans, cadence, baseOverloadPct: blkBase, stepPct: blkStep,
+              unit: blkUnit, fixtures: plan.fixtures ?? [], camps: campRegions, savedDays: savedPlansT, cadence, baseOverloadPct: blkBase, stepPct: blkStep,
               aerobicMode: aerobicTest, hasVald,
             })!;
             const tka = prop.engine.anchor.kpi, hasOwnKpi = prop.engine.anchor.hasOwnKpi;
@@ -2163,6 +2200,7 @@ export default function PeriodizationHubPage() {
               const dsel = cw.days[di]; if (dsel.type === "match") return;
               const selIso = isoAdd(cw.weekStart, di); const off = target === "rest";
               const selFocus = off ? (dsel.md || null) : [dsel.md, CALTYPE_FOCUS_LABEL[target] ?? ""].filter(Boolean).join(" ");
+              if (psDraft) { draftEdit({ days: { [selIso]: { dayType: off ? "OFF" : "TRAIN", focus: selFocus } } }); setPreDayPick(null); return; } // draft: nothing reaches week_plans yet
               setSavedPlans((prev) => ({ ...prev, [selIso]: { dayType: off ? "OFF" : "TRAIN", focus: selFocus } }));
               const payload = [{
                 week_start: cw.weekStart,
@@ -2204,6 +2242,8 @@ export default function PeriodizationHubPage() {
             const seqTotal = preBlocks.reduce((s, b) => s + weeksBetween(b.start, blockEndExcl(b)), 0);
             return (<div className="space-y-4">
           {flowNote(is ? "Makró-fasar · leikir · Kröfur" : "Macro phases · fixtures · Demands", is ? "Vikuuppsetning (week_plans) · Mesó · PDF" : "Week Setup (week_plans) · Meso · PDF")}
+          <PreseasonProposalPanel is={is} draft={psDraft} setDraft={setPsDraft} authHeader={authHeader} autoBuild={psAutoBuild}
+            onAccepted={reloadAfterPsAccept} />
 
           {/* Pre-season SETUP — one card: controls, the meso-cycle sequence (built backwards from the opener),
               and the research "why" behind a toggle (explainability: jargon off the primary view). */}
@@ -2213,16 +2253,17 @@ export default function PeriodizationHubPage() {
             const tailVals = preMeso.tail;
             const baseLen = preMeso.base.reduce((s, n) => s + n, 0);
             const roomForMore = (baseLen - 3) >= PRE_MIN_BLOCK; // adding a 3-wk block keeps base ≥ 2
-            const setTailLen = (ti: number, v: number) => { const t = [...tailVals]; t[ti] = v; persistMesoTail(t, preWeeks, cadence, preYear, upcomingYear); };
-            const removeTail = (ti: number) => persistMesoTail(tailVals.filter((_, i) => i !== ti), preWeeks, cadence, preYear, upcomingYear);
-            const addTail = () => persistMesoTail([...tailVals, 3], preWeeks, cadence, preYear, upcomingYear);
+            const setTailLen = (ti: number, v: number) => { const t = [...tailVals]; t[ti] = v; persistMesoTailT(t, preWeeks, cadence, preYear, upcomingYear); };
+            const removeTail = (ti: number) => persistMesoTailT(tailVals.filter((_, i) => i !== ti), preWeeks, cadence, preYear, upcomingYear);
+            const addTail = () => persistMesoTailT([...tailVals, 3], preWeeks, cadence, preYear, upcomingYear);
             const resetTail = () => {
+              if (psDraft) { draftEdit({ settings: { preMesoTail: [] } }); return; } // draft: [] = back to the rule's layout
               const keptBw = upcomingYear ? {} : Object.fromEntries(Object.entries(blockLenOv).filter(([k]) => !/^\d+$/.test(k)));
               if (upcomingYear) { setNextMesoTail(null); setPreBlockLenOv({}); } else { setCurMesoTail(null); setBlockLenOv(keptBw); }
               (async () => { try { await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: preYear, overrides: { preMesoTail: null, blockWeeks: keptBw } }) }); } catch { /* best-effort */ } })();
             };
             const baseCount = preMeso.base.length;
-            const mesoTailSet = mesoTail != null;
+            const mesoTailSet = mesoTailT != null;
             return (
           <section className={card}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -2231,10 +2272,10 @@ export default function PeriodizationHubPage() {
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px]">
               <label className="flex items-center gap-1.5 font-medium text-slate-600">{is ? "Vika 1 ×leik" : "Week 1 ×match"}
-                <input type="number" step={0.1} min={0.5} max={3} value={psW1} onChange={(e) => { const v = Math.max(0.5, Math.min(3, Number(e.target.value) || 1.3)); setPreW1(v); }} className="w-16 rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
+                <input type="number" step={0.1} min={0.5} max={3} value={psW1T} onChange={(e) => { const v = Math.max(0.5, Math.min(3, Number(e.target.value) || 1.3)); setPreW1T(v); }} className="w-16 rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
               </label>
               <label className="flex items-center gap-1.5 font-medium text-slate-600">{is ? "Æfingar/viku" : "Sessions/wk"}
-                <select value={psSess} onChange={(e) => { const v = Number(e.target.value); setPreSess(v); }} className="rounded border border-slate-300 px-1.5 py-0.5">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+                <select value={psSessT} onChange={(e) => { const v = Number(e.target.value); setPreSessT(v); }} className="rounded border border-slate-300 px-1.5 py-0.5">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
               </label>
               <span className="text-[11px] text-slate-400">{is ? "Stillist hér eða í Leikmenn — endurflæðir allar vikur." : "Edit here or in Players — re-flows every week."}</span>
               {preDaySave === "saving" && <span className="text-[11px] text-slate-400">{is ? "Vista…" : "Saving…"}</span>}
@@ -2297,17 +2338,17 @@ export default function PeriodizationHubPage() {
                 {kpiKeys.map((k) => {
                   const lab = WEEKLY_LOAD_LABELS[k]; const w1 = ramp[0].byKpi[k];
                   if (w1 == null) return null;
-                  const overridden = week1KpiOv[k] != null;
+                  const overridden = week1KpiT[k] != null;
                   return (
                     <label key={k} className="flex flex-col gap-0.5 text-[11px] font-medium text-slate-600">
                       <span className="flex items-center gap-1 truncate">{is ? lab.is : lab.en}{overridden && <span title={is ? "handvirkt" : "manual"} className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2740e6]" />}</span>
-                      <input type="number" min={0} value={w1} onChange={(e) => { const v = Number(e.target.value); const next = { ...week1KpiOv }; if (!Number.isFinite(v) || v <= 0) delete next[k]; else next[k] = Math.round(v); persistWeek1Kpi(next, preYear, upcomingYear); }} className="h-8 rounded border border-slate-300 px-1.5 text-[13px] tabular-nums" />
+                      <input type="number" min={0} value={w1} onChange={(e) => { const v = Number(e.target.value); const next = { ...week1KpiT }; if (!Number.isFinite(v) || v <= 0) delete next[k]; else next[k] = Math.round(v); persistWeek1KpiT(next, preYear, upcomingYear); }} className="h-8 rounded border border-slate-300 px-1.5 text-[13px] tabular-nums" />
                     </label>
                   );
                 })}
               </div>
             )}
-            <p className="mt-1.5 text-[11px] text-slate-400">{is ? "Blár punktur = handvirkt gildi. Restin af undirbúningnum stigmagnast upp í hámark hverrar breytu út frá viku 1." : "Blue dot = a manual value. The rest of the pre-season ramps each variable up to its peak from week 1."}{Object.keys(week1KpiOv).length > 0 && <> · <button type="button" onClick={() => persistWeek1Kpi({}, preYear, upcomingYear)} className="font-medium text-slate-500 hover:text-slate-700 hover:underline">{is ? "Núllstilla" : "Reset"}</button></>}</p>
+            <p className="mt-1.5 text-[11px] text-slate-400">{is ? "Blár punktur = handvirkt gildi. Restin af undirbúningnum stigmagnast upp í hámark hverrar breytu út frá viku 1." : "Blue dot = a manual value. The rest of the pre-season ramps each variable up to its peak from week 1."}{Object.keys(week1KpiT).length > 0 && <> · <button type="button" onClick={() => persistWeek1KpiT({}, preYear, upcomingYear)} className="font-medium text-slate-500 hover:text-slate-700 hover:underline">{is ? "Núllstilla" : "Reset"}</button></>}</p>
 
             {/* Research "why" — explainability L2 (jargon + citations behind a toggle, off the primary view). */}
             <details className="mt-3 text-[11.5px] text-slate-500">

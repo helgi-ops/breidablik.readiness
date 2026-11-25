@@ -184,9 +184,14 @@ export default function PreseasonStartWeekCard({ teamId, weekStart, intents, onC
       )}
 
       <div className="mt-2 flex items-center justify-between gap-2">
-        <Link href="/coach/periodization-hub?tab=players" className="text-[12px] font-semibold hover:underline" style={{ color: "#2740e6" }}>
-          {is ? "Per-leikmaður + breyta →" : "Per-player + edit →"}
-        </Link>
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Link href="/coach/periodization-hub?tab=preseason&build=1" className="text-[12px] font-semibold hover:underline" style={{ color: "#2740e6" }}>
+            {is ? "Setja upp undirbúning →" : "Build pre-season →"}
+          </Link>
+          <Link href="/coach/periodization-hub?tab=players" className="text-[12px] font-semibold hover:underline" style={{ color: "#2740e6" }}>
+            {is ? "Per-leikmaður + breyta →" : "Per-player + edit →"}
+          </Link>
+        </span>
         <span className="text-[9px] text-[#9a9689]">{is ? "Lýsandi — breytir aldrei readiness-litnum" : "Descriptive — never the readiness colour"}</span>
       </div>
     </div>

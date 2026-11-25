@@ -90,6 +90,9 @@ export type ProposalBlock = { index: number; start: string; end: string; weeks: 
 export type ProposalWeek = {
   weekIndex: number;
   weekStart: string;
+  /** The calendar week's load multiple and unload flag (what Week Setup's week_setups row carries). */
+  mult: number;
+  isDeload: boolean;
   emphasis: PreseasonEmphasis | null;
   target: PreseasonWeekTarget;
   friendlies: string[];
@@ -188,7 +191,7 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
     const cw = cal.weeks[i];
     const weekStart = cw?.weekStart ?? isoAdd(preStart, i * 7);
     return {
-      weekIndex: i + 1, weekStart,
+      weekIndex: i + 1, weekStart, mult: cw?.mult ?? 1, isDeload: !!cw?.isDeload,
       emphasis: preseasonBlockForWeeksOut(preWeeks - i),
       target: w,
       friendlies: fixtures.filter((d) => d >= weekStart && d < isoAdd(weekStart, 7)),
@@ -270,7 +273,10 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   if (!anchor.hasOwnKpi) gaps.push({ en: "No match data of your own yet — the loads are reference values for adult football. Set week 1 per variable, or add GPS.", is: "Engin eigin leikgögn enn — álagið eru viðmiðunargildi fyrir fullorðinsfótbolta. Stilltu viku 1 á hverja breytu eða bættu við GPS." });
   if (!up.end) gaps.push({ en: "First competitive game not entered — the length is last pre-season's.", is: "Fyrsti keppnisleikur ekki skráður — lengdin er lengd síðasta undirbúnings." });
   else if (input.nextFirstFixtureEstimated) gaps.push({ en: `First game is an estimate (${dEn(end)}) — enter the real date and the plan re-flows.`, is: `Fyrsti leikur er áætlaður (${dIs(end)}) — skráðu rétta dagsetningu og planið uppfærist.` });
-  if (fixtures.length === 0) gaps.push({ en: "No friendlies entered in the pre-season.", is: "Engir æfingaleikir skráðir í undirbúningnum." });
+  const assumedMatches = weeks.filter((w) => w.days.some((d) => d.type === "match" && !fixtures.includes(d.date))).length;
+  if (fixtures.length === 0) gaps.push(assumedMatches
+    ? { en: `No friendlies entered — the calendar assumes a weekend game in ${assumedMatches} weeks. Enter the friendlies and the days re-flow around them.`, is: `Engir æfingaleikir skráðir — dagatalið gerir ráð fyrir leik um helgi í ${assumedMatches} vikum. Skráðu æfingaleikina og dagarnir raðast í kringum þá.` }
+    : { en: "No friendlies entered in the pre-season.", is: "Engir æfingaleikir skráðir í undirbúningnum." });
 
   // ─── The layered read ───
   const w1 = ramp[0]?.multipleOfMatch ?? settings.week1MatchMultiple;
