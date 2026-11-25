@@ -17,7 +17,7 @@ import { buildAthleteProfile } from "@/lib/micropulse/playerAnalysis/athleteProf
 import { collectDeficits } from "@/lib/micropulse/unifiedDeficits/collect";
 import { recommendPreseasonEmphasis } from "@/lib/micropulse/strengthProgramming/preseasonEmphasis";
 import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
-import { blockFromPlan } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
+import { blockFromPlan, type BlockOverrides } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
 import { strengthConfigForPhase, strengthForBlockGoal, type SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import { deriveDsiForPlayer } from "@/lib/micropulse/strengthProgramming/deriveDsi";
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
     sb.from("season_plans").select("overrides").eq("team_id", teamId).eq("season_year", new Date().getUTCFullYear()).maybeSingle(),
     sb.from("team_settings").select("settings").eq("team_id", teamId).maybeSingle(),
   ]);
-  const ov = (spRes.data as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number } } | null)?.overrides ?? {};
+  const ov = (spRes.data as { overrides?: BlockOverrides & { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number } } | null)?.overrides ?? {};
   const cadence = ([4, 5, 6].includes(Number(ov.deloadCadence)) ? Number(ov.deloadCadence) : 4) as 4 | 5 | 6;
 
   // The strength coach's build rules for this team (sparse override over the evidence-based defaults).
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
 
   // Current meso block (same segmentation as the Hub) → its strength scheme (the meso lane).
   let currentBlock: null | { goalKey: string; blockPhase: SeasonPhaseKey; phaseLabel: { en: string; is: string }; quality: { en: string; is: string }; pct1rm: { en: string; is: string }; scheme: { en: string; is: string }; cite: string; methods: string[]; mode: "microdose" | "traditional" } = null;
-  const curBlk = blockFromPlan(plan, cadence, todayIso);
+  const curBlk = blockFromPlan(plan, cadence, todayIso, [], null, false, ov); // the coach's block edits, as the hub
   // The in-season approach SHOWN = the current block's own mode if set, else the team default.
   let inSeasonMode: "microdose" | "traditional" = teamMode;
   if (curBlk) {

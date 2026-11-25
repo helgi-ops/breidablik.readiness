@@ -9,7 +9,7 @@ import "server-only";
  * Descriptive — no readiness colour, no writes.
  */
 
-import { buildMesoBlocks } from "@/lib/micropulse/periodization";
+import { buildMesoBlocks, BLOCK_GOAL_LABEL } from "@/lib/micropulse/periodization";
 import { loadPeriodization, type PeriodizationPlan } from "@/lib/micropulse/periodization/loader";
 import { classifyInSeasonSubPhase, type InSeasonSubPhaseKey } from "@/lib/micropulse/periodization/inSeasonSubPhase";
 import type { Bi } from "@/lib/micropulse/load/peakPeriod";
@@ -36,19 +36,22 @@ export interface CurrentBlock {
  *  last block keeps its end date (`strict` = false), so the last day of a season still has a block; with
  *  `strict` it doesn't, which lets the caller try next season's plan first (its pre-season starts that day). */
 export function blockFromPlan(
-  plan: Pick<PeriodizationPlan, "phases" | "loadCurve" | "matchLoad" | "matchLoadTeam" | "fixtures">,
+  plan: Pick<PeriodizationPlan, "phases" | "loadCurve" | "matchLoad" | "matchLoadTeam" | "fixtures"> & { fixturesEstimated?: boolean },
   cadence: 4 | 5 | 6,
   todayIso: string,
   breaks: BreakRange[] = [],
   offseasonBuildStart: string | null = null,
   strict = false,
+  coach: BlockOverrides = {},
 ): CurrentBlock | null {
   const { phases } = plan;
   if (!phases.length) return null;
   const compStart = phases.find((p) => p.key === "competitive")?.start ?? null;
   const compEnd = phases.find((p) => p.key === "competitive")?.end ?? null;
   const offStart = phases.find((p) => p.key === "offseason")?.start ?? null;
-  const blocks = buildMesoBlocks(phases[0].start, phases[phases.length - 1].end, plan.loadCurve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures, compStart, breaks, offStart, offseasonBuildStart);
+  const blocks = buildMesoBlocks(phases[0].start, phases[phases.length - 1].end, plan.loadCurve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures, compStart, breaks, offStart, offseasonBuildStart, {
+    blockWeeks: coach.blockWeeks ?? undefined, deloadByStart: coach.blockDeload ?? undefined, fixturesEstimated: plan.fixturesEstimated,
+  });
   const last = blocks[blocks.length - 1];
   const cur = blocks.find((b) => b.start <= todayIso && todayIso < b.end)
     ?? (!strict && last && last.start <= todayIso && todayIso <= last.end ? last : null);
@@ -60,10 +63,21 @@ export function blockFromPlan(
   const subPhase = phase === "competitive" && compEnd
     ? classifyInSeasonSubPhase({ weekStart: todayIso, fixtures: plan.fixtures, breaks, competitiveEnd: compEnd }).key
     : null;
-  return { goalKey: cur.goalKey, phase, label: cur.phase, subPhase };
+  // The coach's goal for this block in the hub (keyed by the block's start) wins over the engine's.
+  const coachGoal = coach.blockGoals?.[cur.start];
+  const goalKey: BlockGoalKey = coachGoal === "accum" || coachGoal === "transmute" || coachGoal === "realize" ? coachGoal : cur.goalKey;
+  return { goalKey, phase, label: coachGoal === goalKey ? BLOCK_GOAL_LABEL[goalKey] : cur.phase, subPhase };
 }
 
-type SeasonOverrides = {
+/** The coach's block edits from the Periodization Hub (season_plans.overrides): per-block length (index- or
+ *  start-keyed), deload-week pins and per-block goal. The hub builds its blocks with these, so delivery does too. */
+export type BlockOverrides = {
+  blockWeeks?: Record<string, number> | null;
+  blockDeload?: Record<string, string> | null;
+  blockGoals?: Record<string, string> | null;
+};
+
+type SeasonOverrides = BlockOverrides & {
   preseasonStart?: string; seasonEnd?: string; deloadCadence?: number;
   nextPreseasonStart?: string; offseasonWeeks?: number; offseasonStart?: string;
 };
@@ -105,12 +119,12 @@ export async function resolveCurrentBlock(sb: Sb, teamId: string, todayIso: stri
     for (const { seasonYear, ov } of seasonPlanCandidates(todayIso, (sp ?? []) as SeasonPlanRow[])) {
       const cadence = ([4, 5, 6].includes(Number(ov.deloadCadence)) ? Number(ov.deloadCadence) : 4) as 4 | 5 | 6;
       const plan = await loadPeriodization(sb, { teamId, seasonYear, preseasonStart: ov.preseasonStart ?? null, seasonEnd: ov.seasonEnd ?? null, nextPreseasonStart: ov.nextPreseasonStart ?? null, offseasonWeeks: ov.offseasonWeeks ?? null });
-      const block = blockFromPlan(plan, cadence, todayIso, breaks, ov.offseasonStart ?? null, true);
+      const block = blockFromPlan(plan, cadence, todayIso, breaks, ov.offseasonStart ?? null, true, ov);
       if (block) return block;
       loaded.push({ plan, cadence, ov });
     }
     for (const { plan, cadence, ov } of loaded) {
-      const block = blockFromPlan(plan, cadence, todayIso, breaks, ov.offseasonStart ?? null);
+      const block = blockFromPlan(plan, cadence, todayIso, breaks, ov.offseasonStart ?? null, false, ov);
       if (block) return block;
     }
     return null;

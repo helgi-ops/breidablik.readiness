@@ -78,6 +78,21 @@ describe("blockFromPlan — a block's end date belongs to the next block (2026-1
     expect(blockFromPlan(plan, 4, last.end)).not.toBeNull();
     expect(blockFromPlan(plan, 4, last.end, [], null, true)).toBeNull();
   });
+
+  it("the coach's block edits from the hub hold: goal (and its label) and block length", () => {
+    const b0 = blocks[0];
+    const mid = addDay(b0.start, 3);
+    const other = (["accum", "transmute", "realize"] as const).find((g) => g !== b0.goalKey)!;
+    const r = blockFromPlan(plan, 4, mid, [], null, false, { blockGoals: { [b0.start]: other } });
+    expect(r!.goalKey).toBe(other);
+    expect(r!.label.en.length).toBeGreaterThan(0);
+    expect(r!.label).not.toEqual(b0.phase);
+    // No edits → the engine's block, as before.
+    expect(blockFromPlan(plan, 4, mid)!.goalKey).toBe(b0.goalKey);
+    // A longer first block: the day after the old boundary still sits in block 0.
+    const longer = blockFromPlan(plan, 4, b0.end, [], null, false, { blockWeeks: { "0": 6 } });
+    expect(longer!.label).toEqual(b0.phase);
+  });
 });
 
 describe("seasonPlanCandidates — which season plan holds today (2026-11-17)", () => {
