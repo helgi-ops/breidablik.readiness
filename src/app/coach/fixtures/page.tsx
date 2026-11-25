@@ -31,7 +31,7 @@ const COPY = {
     competitionPh: "e.g. Besta deild",
     friendly: "Friendly (pre-season)", friendlyHint: "A training game — does NOT start the competitive season.", friendlyBadge: "Friendly",
     compNone: "— Select —", compOther: "Other…", gLeague: "Leagues", gCup: "Cups", gEuro: "European",
-    upcoming: "Upcoming", past: "Recent (played)", none: "No fixtures yet — add the month's games above.",
+    upcoming: "Upcoming", past: "Played this season", none: "No fixtures yet — add the month's games above.",
     del: "Delete", delConfirm: "Delete this fixture?", saving: "Saving…", loading: "Loading…",
     needDate: "Pick a date first.", vs: "vs",
     dateTaken: "There's already a fixture on that date — edit or delete it first.",
@@ -49,7 +49,7 @@ const COPY = {
     competitionPh: "t.d. Besta deild",
     friendly: "Æfingaleikur (undirbúningur)", friendlyHint: "Æfingaleikur — byrjar EKKI keppnistímabilið.", friendlyBadge: "Æfingaleikur",
     compNone: "— Veldu —", compOther: "Annað…", gLeague: "Deildir", gCup: "Bikarkeppnir", gEuro: "Evrópukeppnir",
-    upcoming: "Framundan", past: "Nýlegt (leikið)", none: "Engir leikir enn — bættu við leikjum mánaðarins að ofan.",
+    upcoming: "Framundan", past: "Leikið á tímabilinu", none: "Engir leikir enn — bættu við leikjum mánaðarins að ofan.",
     del: "Eyða", delConfirm: "Eyða þessum leik?", saving: "Vista…", loading: "Hleð…",
     needDate: "Veldu dagsetningu fyrst.", vs: "vs",
     dateTaken: "Það er þegar leikur á þessari dagsetningu — breyttu honum eða eyddu fyrst.",
@@ -191,10 +191,15 @@ export default function FixturesPage() {
 
   async function loadFixtures(tid: string) {
     setLoading(true);
-    // Show recent-past (~45d) for reference plus everything upcoming.
-    const from = new Date();
-    from.setDate(from.getDate() - 45);
-    const fromISO = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}-${String(from.getDate()).padStart(2, "0")}`;
+    // The whole season plus everything upcoming. Season start = the Periodization Hub's (loadSeasonFixtures):
+    // 1 Jan of the current season year, or the saved pre-season start of that season if it is earlier.
+    const year = new Date().getFullYear();
+    let fromISO = `${year}-01-01`;
+    const { data: sp } = await supabase
+      .from("season_plans").select("preseasonStart:overrides->>preseasonStart")
+      .eq("team_id", tid).eq("season_year", year).maybeSingle();
+    const ps = (sp as { preseasonStart?: string | null } | null)?.preseasonStart ?? null;
+    if (ps && /^\d{4}-\d{2}-\d{2}$/.test(ps) && ps < fromISO) fromISO = ps;
     const { data, error: e } = await supabase
       .from("match_schedule")
       .select("id, match_date, opponent, is_home, kickoff_time, competition, is_friendly, goals_for, goals_against")
@@ -438,7 +443,7 @@ export default function FixturesPage() {
           {past.length > 0 ? (
             <div>
               <Separator className="my-2" />
-              <div className="mb-2 text-sm font-semibold text-muted-foreground">{t.past}</div>
+              <div className="mb-2 text-sm font-semibold text-muted-foreground">{t.past} ({past.length})</div>
               <div className="space-y-1">{renderGroup(past, true)}</div>
             </div>
           ) : null}
