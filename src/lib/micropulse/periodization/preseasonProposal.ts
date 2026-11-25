@@ -197,7 +197,40 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
     if (justPlayed(iso)) return;
     freeOn.push(iso); freeTy[iso] = t;
   });
-  const cal1 = freeOn.length || freeOff.length ? calOpts(matchDates, allFx, true, freeOn, freeTy, freeOff) : cal0;
+  const cal1a = freeOn.length || freeOff.length ? calOpts(matchDates, allFx, true, freeOn, freeTy, freeOff) : cal0;
+  // A week WITH a game: the coach's sessions a week set its training days too (the user's rule 2026-11-25). The
+  // calendar's days around the game are the start; the top-up (only for players under 30 min) isn't counted.
+  // Too many → drop Mixed first, then the activation day, then Locomotive, then Mechanical, the day farthest from
+  // a game first. Too few → add a Mixed session (the calendar's own forced-session type) on a day off, the one
+  // farthest from a game first, never in the two days after a game. A day the coach set is never touched.
+  // More days than the 3-in-a-row limit allows is the coach's call (as in a game-free week of 5–6).
+  // A MicroPulse ordering, not a study's.
+  const gap = (iso: string) => Math.min(...matchDates.map((g) => Math.abs(ms(iso) - ms(g)) / DAY));
+  const DROP: CalType[] = ["mixed", "activation", "locomotive", "mechanical"];
+  const gameOn: string[] = [], gameTy: Record<string, CalType> = {}, gameOff: string[] = [];
+  for (const w of cal1a.weeks) {
+    if (freeWeeks.has(w.weekStart) || !w.days.some((d) => d.type === "match")) continue;
+    const day = w.days.map((d, i) => ({ iso: isoAdd(w.weekStart, i), type: d.type }))
+      .filter((d) => inWindow(d.iso) && !coachDays.has(d.iso));
+    const sessions = w.days.filter((d) => d.type !== "rest" && d.type !== "match" && d.type !== "topup").length;
+    const want = settings.sessionsPerWeek;
+    if (sessions > want) {
+      const cand = day.filter((d) => DROP.includes(d.type))
+        .sort((a, b) => DROP.indexOf(a.type) - DROP.indexOf(b.type) || gap(b.iso) - gap(a.iso));
+      for (const d of cand.slice(0, sessions - want)) gameOff.push(d.iso);
+    } else if (sessions < want) {
+      const cand = day.filter((d) => d.type === "rest" && !justPlayed(d.iso) && !matchDates.includes(d.iso))
+        .sort((a, b) => gap(b.iso) - gap(a.iso));
+      const add = cand.slice(0, want - sessions);
+      for (const d of add) { gameOn.push(d.iso); gameTy[d.iso] = "mixed"; }
+      // The coach asked for more days than the 3-in-a-row limit allows: hold the week's sessions as they are, or
+      // the limit would drop the activation day the added one sits next to (the same as a coach-set day).
+      if (add.length) for (const d of day) if (d.type !== "rest" && d.type !== "match") { gameOn.push(d.iso); gameTy[d.iso] = d.type; }
+    }
+  }
+  const cal1 = gameOn.length || gameOff.length
+    ? calOpts(matchDates, allFx, true, [...freeOn, ...gameOn], { ...freeTy, ...gameTy }, [...freeOff, ...gameOff])
+    : cal1a;
   const rawCal: CalendarBlock = { ...cal1, weeks: cal1.weeks.map((w) => (freeWeeks.has(w.weekStart) ? { ...w, days: w.days.map((d) => ({ ...d, md: "" })) } : w)) };
   // Each week's days sum to the week's planned total, per variable: the friendly counts as it is and the
   // training days share the rest in the calendar's proportions — add a session and the others get lighter.
@@ -262,8 +295,8 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
       key: "sessionsPerWeek", label: { en: "Sessions a week", is: "Æfingar á viku" }, value: { en: String(settings.sessionsPerWeek), is: String(settings.sessionsPerWeek) },
       source: coach(settings.saved.sessionsPerWeek),
       reason: settings.saved.sessionsPerWeek && !input.fromScratch
-        ? { en: "Your number. It sets the training days in a week without a game.", is: "Þín tala. Hún ræður æfingadögum í viku án leiks." }
-        : { en: "The default for a pre-season week. It sets the training days in a week without a game.", is: "Sjálfgefið fyrir undirbúningsviku. Hún ræður æfingadögum í viku án leiks." },
+        ? { en: "Your number. It sets the training days in every week (a game week: around the game; a training camp keeps its days).", is: "Þín tala. Hún ræður æfingadögum í hverri viku (leikvika: í kringum leikinn; æfingabúðir halda sínum dögum)." }
+        : { en: "The default for a pre-season week. It sets the training days in every week (a game week: around the game; a training camp keeps its days).", is: "Sjálfgefið fyrir undirbúningsviku. Hún ræður æfingadögum í hverri viku (leikvika: í kringum leikinn; æfingabúðir halda sínum dögum)." },
       micropulseLine: !(settings.saved.sessionsPerWeek && !input.fromScratch),
     },
     {

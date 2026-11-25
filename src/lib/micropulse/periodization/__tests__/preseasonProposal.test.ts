@@ -274,3 +274,35 @@ describe("buildPreseasonProposal — sessions a week set the days in a week with
     expect(p.weeks[1].days.filter((d) => d.type !== "rest" && d.type !== "match").length).toBe(4);
   });
 });
+
+describe("buildPreseasonProposal — sessions a week set the days in a week WITH a game too", () => {
+  const sess = (w: { days: Array<{ type: string }> }) => w.days.filter((d) => !["rest", "match", "topup"].includes(d.type)).length;
+  const friendlyWeek = (p: NonNullable<ReturnType<typeof buildPreseasonProposal>>) => p.weeks.find((w) => w.friendlies.includes("2027-01-16"))!;
+
+  it.each([3, 4, 5])("%i sessions → the friendly's week has %i training days (the top-up not counted), the week total holds", (n) => {
+    const p = buildPreseasonProposal(base({ savedDays: {}, saved: { preseasonSessions: n, preseasonWeek1Mult: 1.2 } }))!;
+    const w = friendlyWeek(p);
+    expect(sess(w)).toBe(n);
+    expect(w.days.find((d) => d.date === "2027-01-16")!.type).toBe("match");
+    const i = w.weekIndex - 1;
+    expect(Math.abs(p.engine.cal.weeks[i].days.reduce((s, d) => s + (d.dist ?? 0), 0) - p.engine.ramp[i].byKpi.totalDistance!)).toBeLessThanOrEqual(7);
+  });
+
+  it("fewer: Mixed goes first; the activation day before the game stays", () => {
+    const p = buildPreseasonProposal(base({ savedDays: {}, saved: { preseasonSessions: 3, preseasonWeek1Mult: 1.2 } }))!;
+    const w = friendlyWeek(p);
+    expect(w.days.some((d) => d.type === "mixed")).toBe(false);
+    expect(w.days.find((d) => d.date === "2027-01-15")!.type).toBe("activation");
+  });
+
+  it("more: never in the two days after a game; no week passes 3 sessions when 3 are set", () => {
+    const p = buildPreseasonProposal(base({ savedDays: {}, saved: { preseasonSessions: 6, preseasonWeek1Mult: 1.2 } }))!;
+    for (const f of FRIENDLIES) for (const k of [1, 2]) {
+      const d = p.weeks.flatMap((w) => w.days).find((x) => x.date === addIso(f, k));
+      if (d) expect(["rest", "topup"]).toContain(d.type);
+    }
+    const p3 = buildPreseasonProposal(base({ savedDays: {}, saved: { preseasonSessions: 3, preseasonWeek1Mult: 1.2 } }))!;
+    // A training camp week keeps the camp's days (the coach entered the camp).
+    for (const w of p3.weeks) if (!(w.weekStart <= "2027-02-21" && "2027-02-15" < addIso(w.weekStart, 7))) expect(sess(w)).toBeLessThanOrEqual(3);
+  });
+});
