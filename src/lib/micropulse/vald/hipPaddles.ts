@@ -49,3 +49,25 @@ export function isAbductionOnlyRow(row: { direction?: unknown; movement_pattern?
   const text = [row.direction, row.movement_pattern].filter((v) => typeof v === "string").join(" ");
   return /abduct|\bpull\b/i.test(text) && !/adduct|squeeze/i.test(text);
 }
+
+/** Direction labels written onto the split rows (read by the RTP groin label and the VALD panel). */
+export const HIP_ADDUCTION = "Adduction";
+export const HIP_ABDUCTION = "Abduction";
+
+/**
+ * Split each API hip AD/AB row (no direction, one stored pad set) into an adduction row and an
+ * abduction row from its raw pads. Rows that are not hip, already carry a direction (CSV), or have
+ * no raw pads pass through unchanged. Order is kept (newest-first stays newest-first).
+ */
+export function splitHipRows(rows: Array<Record<string, unknown>>, paddles: Map<string, HipPaddles>, isHip: (r: Record<string, unknown>) => boolean): Array<Record<string, unknown>> {
+  return rows.flatMap((r) => {
+    const p = !r.direction && isHip(r) ? paddles.get(String(r.raw_test_id ?? "")) : undefined;
+    if (!p) return [r];
+    const half = (dir: string, h: HipPaddles["adduction"]) => ({
+      ...r, direction: dir, left_peak_force_n: h.leftN, right_peak_force_n: h.rightN,
+      left_avg_force_n: h.avgLeftN, right_avg_force_n: h.avgRightN, asymmetry_percent: null, asymmetry_side: null,
+    });
+    return [half(HIP_ADDUCTION, p.adduction), half(HIP_ABDUCTION, p.abduction)]
+      .filter((h) => h.left_peak_force_n != null || h.right_peak_force_n != null);
+  });
+}

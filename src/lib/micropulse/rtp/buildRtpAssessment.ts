@@ -22,7 +22,7 @@ import { asymmetryStatus, buildRtpCriteria, buildRtpDomains, buildRtpRecommendat
 import { computeCodExposure, type CodExposureRow } from "./codExposure";
 import { codFlag } from "@/lib/micropulse/codAsymmetry";
 import { isHipForceFrameTest } from "@/lib/micropulse/vald/groinStrength";
-import { fetchHipPaddles, type HipPaddles } from "@/lib/micropulse/vald/hipPaddles";
+import { fetchHipPaddles, splitHipRows } from "@/lib/micropulse/vald/hipPaddles";
 import type { RtpAssessment, RtpBatteryTest, RtpCmj, RtpCod, RtpImtp, RtpInjury, RtpLimbStrengthEntry, RtpLimbStrengthTest, RtpValgus, RtpValgusSeverity } from "./types";
 
 const BATTERY_LABELS: Record<string, string> = {
@@ -402,15 +402,7 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
   const ffRows = (ffRes.data ?? []) as Array<Record<string, unknown>>;
   const hipSplitIds = ffRows.filter((r) => isHipForceFrameTest(r) && !r.direction).map((r) => r.raw_test_id as string | null);
   const paddles = await fetchHipPaddles(sb, hipSplitIds);
-  const ffExpanded: Array<Record<string, unknown>> = ffRows.flatMap((r) => {
-    const p = !r.direction && isHipForceFrameTest(r) ? paddles.get(String(r.raw_test_id ?? "")) : undefined;
-    if (!p) return [r];
-    const half = (dir: string, h: HipPaddles["adduction"]) => ({
-      ...r, direction: dir, left_peak_force_n: h.leftN, right_peak_force_n: h.rightN,
-      left_avg_force_n: h.avgLeftN, right_avg_force_n: h.avgRightN, asymmetry_percent: null, asymmetry_side: null,
-    });
-    return [half("Adduction", p.adduction), half("Abduction", p.abduction)].filter((h) => h.left_peak_force_n != null || h.right_peak_force_n != null);
-  });
+  const ffExpanded = splitHipRows(ffRows, paddles, isHipForceFrameTest);
   assembleGroups(ffExpanded, "forceframe", true, (type, latest) => {
     const region = (latest.body_region as string) ?? (type.split(/[\s/]/)[0] || null);
     const movement = (latest.movement_pattern as string) ?? type;

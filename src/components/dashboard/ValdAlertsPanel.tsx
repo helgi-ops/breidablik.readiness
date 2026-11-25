@@ -6,6 +6,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { aggregateTrialsByTest, metricSeries, type TrialMetricRow } from "@/lib/micropulse/vald/trialAggregate";
 import { CMJ_BASELINE_RULE, selectCmjBaseline, strengthRetestList, VALD_FLAG_WINDOW_DAYS } from "@/lib/micropulse/vald/flagFreshness";
 import { isHipForceFrameTest } from "@/lib/micropulse/vald/groinStrength";
+import { HIP_ABDUCTION, HIP_ADDUCTION, isAbductionOnlyRow } from "@/lib/micropulse/vald/hipPaddles";
 import { useLang } from "@/lib/lang";
 
 type Props = {
@@ -91,6 +92,8 @@ type DeviceStrengthRow = {
   playerName: string;
   testType: string;
   movement: string | null;
+  /** ForceFrame: "Adduction" / "Abduction" on the server-split hip rows, a CSV direction, or null. */
+  direction: string | null;
   testTimestamp: string;
   leftN: number | null;
   rightN: number | null;
@@ -315,14 +318,22 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         .not("microplayer_id", "is", null)
         .lte("test_timestamp", `${date}T23:59:59`)
         .order("test_timestamp", { ascending: false }).limit(200),
-      // ForceFrame (groin / adductor …) — most recent tests per player, team-wide.
-      supabase
-        .from("vald_forceframe_results")
-        .select("microplayer_id, test_type, movement_pattern, test_timestamp, left_peak_force_n, right_peak_force_n, asymmetry_percent, players!inner(full_name)")
-        .eq("team_id", teamId).eq("is_valid", true)
-        .not("microplayer_id", "is", null)
-        .lte("test_timestamp", `${date}T23:59:59`)
-        .order("test_timestamp", { ascending: false }).limit(200),
+      // ForceFrame — via a server route: a hip AD/AB test is stored as its STRONGER pad set only,
+      // and the raw test that holds adduction (groin) and abduction apart is server-only.
+      (async (): Promise<{ data: Array<Record<string, unknown>> }> => {
+        try {
+          const { data: sess } = await supabase.auth.getSession();
+          const token = sess?.session?.access_token;
+          const r = await fetch(
+            `/api/coach/vald/forceframe-rows?teamId=${encodeURIComponent(teamId)}&date=${encodeURIComponent(date)}`,
+            { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+          );
+          const j = (await r.json()) as { ok?: boolean; rows?: Array<Record<string, unknown>> };
+          return { data: j.ok && Array.isArray(j.rows) ? j.rows : [] };
+        } catch {
+          return { data: [] };
+        }
+      })(),
       supabase
         .from("player_test_personal_bests")
         .select("player_id, metric, value, unit, improvement, achieved_at")
@@ -468,6 +479,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
           playerName: String(player?.full_name ?? "Player"),
           testType: String(row.test_type ?? "Test"),
           movement: withMovement ? ((row.movement_pattern as string | null) ?? null) : null,
+          direction: withMovement ? ((row.direction as string | null) ?? null) : null,
           testTimestamp: String(row.test_timestamp ?? ""),
           leftN, rightN,
           asymPct: a.pct == null ? null : Number(a.pct.toFixed(1)),
@@ -577,7 +589,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
   const hamstringRetest = retestNames(nordbordRows, VALD_FLAG_WINDOW_DAYS.nordbordDays);
   // Groin = the hip adduction/abduction test only; ankle/knee ForceFrame tests are not a groin retest.
   const groinRetest = retestNames(
-    forceframeRows.filter((r) => isHipForceFrameTest({ test_type: r.testType, movement_pattern: r.movement })),
+    forceframeRows.filter((r) => isHipForceFrameTest({ test_type: r.testType, movement_pattern: r.movement }) && !isAbductionOnlyRow({ direction: r.direction, movement_pattern: r.movement })),
     VALD_FLAG_WINDOW_DAYS.forceframeDays,
   );
   const hasRetest = hamstringRetest.length > 0 || groinRetest.length > 0;
@@ -988,10 +1000,10 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
           </div>
           <div className="px-4 py-3 space-y-4">
             {nordbordRows.length > 0 && (
-              <DeviceStrengthGroups keyPrefix="nb" heading={lang === "IS" ? "NordBord — Aftanlæri (Nordic)" : "NordBord — Hamstring (Nordic)"} rows={nordbordRows} />
+              <DeviceStrengthGroups lang={lang} keyPrefix="nb" heading={lang === "IS" ? "NordBord — Aftanlæri (Nordic)" : "NordBord — Hamstring (Nordic)"} rows={nordbordRows} />
             )}
             {forceframeRows.length > 0 && (
-              <DeviceStrengthGroups keyPrefix="ff" heading={lang === "IS" ? "ForceFrame — mjöðm, ökkli o.fl." : "ForceFrame — hip, ankle and others"} rows={forceframeRows} showMovement groupByTest />
+              <DeviceStrengthGroups lang={lang} keyPrefix="ff" heading={lang === "IS" ? "ForceFrame — mjöðm, ökkli o.fl." : "ForceFrame — hip, ankle and others"} rows={forceframeRows} showMovement groupByTest />
             )}
             <p className="text-[10px] leading-snug text-slate-400">
               {lang === "IS"
@@ -1103,15 +1115,24 @@ function AsymCell({ pct, side }: { pct: number | null; side: string | null }) {
  * sorted worst-asymmetry first. A player with more than one test shows a chevron;
  * clicking expands their full history (all tests of that type, newest first).
  */
-function DeviceStrengthGroups({
-  keyPrefix, heading, rows, showMovement, groupByTest,
-}: { keyPrefix: string; heading: string; rows: DeviceStrengthRow[]; showMovement?: boolean; groupByTest?: boolean }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
+/** Group title for a ForceFrame test: the hip test is split into adduction (groin) and abduction. */
+function deviceGroupTitle(testType: string, direction: string | null, is: boolean): string {
+  if (!direction) return testType;
+  if (direction === HIP_ADDUCTION) return `${testType} · ${is ? "aðfærsla (nári)" : "adduction (groin)"}`;
+  if (direction === HIP_ABDUCTION) return `${testType} · ${is ? "fráfærsla" : "abduction"}`;
+  return `${testType} · ${direction}`;
+}
 
-  // Group rows by test type (or one group). Rows arrive newest-first.
+function DeviceStrengthGroups({
+  lang, keyPrefix, heading, rows, showMovement, groupByTest,
+}: { lang: string; keyPrefix: string; heading: string; rows: DeviceStrengthRow[]; showMovement?: boolean; groupByTest?: boolean }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const is = lang === "IS";
+
+  // Group rows by test type + direction (or one group). Rows arrive newest-first.
   const groups = new Map<string, DeviceStrengthRow[]>();
   for (const r of rows) {
-    const key = groupByTest ? r.testType : "";
+    const key = groupByTest ? deviceGroupTitle(r.testType, r.direction, is) : "";
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(r);
   }
@@ -1135,19 +1156,19 @@ function DeviceStrengthGroups({
           <div key={testType || "all"}>
             {groupByTest && (
               <div className="mb-1 text-[11px] font-semibold text-slate-600">
-                {testType} <span className="font-normal text-slate-400">· {players.length} leikmenn</span>
+                {testType} <span className="font-normal text-slate-400">· {players.length} {is ? "leikmenn" : "players"}</span>
               </div>
             )}
             <div className="overflow-x-auto rounded-lg border border-slate-100">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                    <th className="px-3 py-1.5 text-left">Leikmaður</th>
-                    {showMovement && <th className="px-3 py-1.5 text-left">Próf</th>}
-                    <th className="px-3 py-1.5 text-right">Vinstri</th>
-                    <th className="px-3 py-1.5 text-right">Hægri</th>
-                    <th className="px-3 py-1.5 text-right">Ósamhverfa</th>
-                    <th className="px-3 py-1.5 text-right">Dags.</th>
+                    <th className="px-3 py-1.5 text-left">{is ? "Leikmaður" : "Player"}</th>
+                    {showMovement && <th className="px-3 py-1.5 text-left">{is ? "Próf" : "Test"}</th>}
+                    <th className="px-3 py-1.5 text-right">{is ? "Vinstri" : "Left"}</th>
+                    <th className="px-3 py-1.5 text-right">{is ? "Hægri" : "Right"}</th>
+                    <th className="px-3 py-1.5 text-right">{is ? "Munur V/H" : "L/R gap"}</th>
+                    <th className="px-3 py-1.5 text-right">{is ? "Dags." : "Date"}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -1166,7 +1187,7 @@ function DeviceStrengthGroups({
                               {latest.playerName}
                               {hasHistory && (
                                 <span className="rounded-full bg-slate-100 px-1.5 py-px text-[9px] font-semibold text-slate-500">
-                                  {history.length} próf {open ? "▴" : "▾"}
+                                  {history.length} {is ? "próf" : history.length === 1 ? "test" : "tests"} {open ? "▴" : "▾"}
                                 </span>
                               )}
                             </span>
@@ -1180,7 +1201,7 @@ function DeviceStrengthGroups({
                         {open && history.map((h, i) => (
                           <tr key={`${rowKey}:h${i}`} className="bg-slate-50/50 text-slate-500">
                             <td className="px-3 py-1.5 pl-8 text-[11px]">
-                              {i === 0 ? "Nýjasta" : `Próf ${history.length - i}`}
+                              {i === 0 ? (is ? "Nýjasta" : "Latest") : `${is ? "Próf" : "Test"} ${history.length - i}`}
                             </td>
                             {showMovement && <td className="px-3 py-1.5 text-[11px]">{h.movement ?? h.testType}</td>}
                             <td className="px-3 py-1.5 text-right tabular-nums text-[11px]">{h.leftN != null ? `${h.leftN.toFixed(0)} N` : "–"}</td>
