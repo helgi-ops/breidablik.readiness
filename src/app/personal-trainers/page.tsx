@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { PT_SELF_SERVE_PUBLIC } from "@/lib/legal/operator";
 import TrainersLanding from "./TrainersLanding";
 
 const TITLE = "MicroPulse for personal trainers";
@@ -14,5 +16,7 @@ export const metadata: Metadata = {
 };
 
 export default function PersonalTrainersPage() {
+  // Hidden until the practice terms are final (see PT_SELF_SERVE_PUBLIC).
+  if (!PT_SELF_SERVE_PUBLIC) notFound();
   return <TrainersLanding />;
 }

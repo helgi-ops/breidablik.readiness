@@ -16,7 +16,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useLang } from "@/lib/lang";
 import { DataProcessingSummary } from "@/components/legal/DataProcessingSummary";
 import { CURRENT_POLICY_VERSION } from "@/lib/legal/policyVersion";
-import { OPERATOR } from "@/lib/legal/operator";
+import { OPERATOR, OPERATOR_DETAILS_FILLED, PT_SELF_SERVE_PUBLIC } from "@/lib/legal/operator";
 
 export default function PrivacyPage() {
   return (
@@ -81,15 +81,22 @@ function PrivacyInner() {
           : "Processing is carried out under Icelandic Act 90/2018 and Regulation (EU) 2016/679 (GDPR). Contact your club or the MicroPulse operator for further information or data requests."}
       </p>
       <p className="mt-2 text-[12px] leading-relaxed text-zinc-500">
-        {isIS ? "Rekstraraðili MicroPulse" : "MicroPulse is operated by"}: {OPERATOR.name}, {OPERATOR.address} ·{" "}
+        {/* Company name + address only once filled in (no "[…]" placeholders on a public page). */}
+        {OPERATOR_DETAILS_FILLED ? (
+          <>{isIS ? "Rekstraraðili MicroPulse" : "MicroPulse is operated by"}: {OPERATOR.name}, {OPERATOR.address} ·{" "}</>
+        ) : (
+          <>{isIS ? "Hafðu samband" : "Contact"}:{" "}</>
+        )}
         <span className="select-all">{OPERATOR.supportEmail}</span>
       </p>
-      <p className="mt-2 text-[12px] text-zinc-500">
-        {isIS ? "Ertu þjálfari eða rekur stofu?" : "Are you a trainer or run a practice?"}{" "}
-        <Link href="/privacy/practices" className="font-semibold text-primary hover:underline">
-          {isIS ? "Persónuvernd og vinnsla fyrir stofur →" : "Privacy and data processing for practices →"}
-        </Link>
-      </p>
+      {PT_SELF_SERVE_PUBLIC && (
+        <p className="mt-2 text-[12px] text-zinc-500">
+          {isIS ? "Ertu þjálfari eða rekur stofu?" : "Are you a trainer or run a practice?"}{" "}
+          <Link href="/privacy/practices" className="font-semibold text-primary hover:underline">
+            {isIS ? "Persónuvernd og vinnsla fyrir stofur →" : "Privacy and data processing for practices →"}
+          </Link>
+        </p>
+      )}
     </main>
   );
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import { PT_SELF_SERVE_PUBLIC } from "@/lib/legal/operator";
 
 type Sport = "football" | "basketball" | "handball";
 type TeamRow = { id: string; name: string; sport: string | null; gender: string | null };
@@ -297,13 +298,15 @@ function SignupForm() {
               <div className="text-base font-semibold">{t.chooseJoin}</div>
               <p className="mt-1 text-sm text-neutral-600">{t.chooseJoinBody}</p>
             </div>
-            <Link
-              href="/signup/trainer"
-              className="block rounded-3xl border bg-white p-5 shadow-sm transition hover:border-neutral-900"
-            >
-              <div className="text-base font-semibold">{t.chooseTrainer}</div>
-              <p className="mt-1 text-sm text-neutral-600">{t.chooseTrainerBody}</p>
-            </Link>
+            {PT_SELF_SERVE_PUBLIC && (
+              <Link
+                href="/signup/trainer"
+                className="block rounded-3xl border bg-white p-5 shadow-sm transition hover:border-neutral-900"
+              >
+                <div className="text-base font-semibold">{t.chooseTrainer}</div>
+                <p className="mt-1 text-sm text-neutral-600">{t.chooseTrainerBody}</p>
+              </Link>
+            )}
           </div>
         ) : (
         <form onSubmit={onSubmit} className="space-y-4 rounded-3xl border bg-white p-6 shadow-sm">

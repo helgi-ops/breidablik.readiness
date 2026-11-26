@@ -6,12 +6,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { PUBLIC_PATHS } from "../publicPaths";
+import { PT_SELF_SERVE_PATHS, PUBLIC_PATHS } from "../publicPaths";
 import robots from "@/app/robots";
 import sitemap from "@/app/sitemap";
 import { PRACTICE_TERMS } from "@/lib/legal/practiceTerms";
 import { PRACTICE_PRIVACY } from "@/lib/legal/practicePrivacy";
-import { OPERATOR } from "@/lib/legal/operator";
+import { OPERATOR, OPERATOR_DETAILS_FILLED, PT_SELF_SERVE_PUBLIC } from "@/lib/legal/operator";
 
 const APP = path.join(process.cwd(), "src", "app");
 
@@ -22,9 +22,11 @@ describe("public pages", () => {
     }
   });
 
-  it("sitemap lists the trainer page and blog articles", () => {
+  it("sitemap lists the trainer page only while PT self-serve is public, and blog articles always", () => {
     const urls = sitemap().map((e) => e.url);
-    expect(urls.some((u) => u.endsWith("/personal-trainers"))).toBe(true);
+    for (const p of PT_SELF_SERVE_PATHS) {
+      expect(urls.some((u) => u.endsWith(p)), p).toBe(PT_SELF_SERVE_PUBLIC);
+    }
     expect(urls.some((u) => u.includes("/blog/"))).toBe(true);
   });
 
@@ -63,5 +65,38 @@ describe("legal texts", () => {
     const all = JSON.stringify([PRACTICE_TERMS, PRACTICE_PRIVACY]);
     expect(all).toContain(OPERATOR.supportEmail);
     expect(all).toContain(OPERATOR.name);
+  });
+});
+
+describe("PT self-serve gate", () => {
+  it("stays off while the company details are placeholders", () => {
+    // Trainers would otherwise agree to terms naming "[COMPANY NAME]".
+    if (!OPERATOR_DETAILS_FILLED) expect(PT_SELF_SERVE_PUBLIC).toBe(false);
+  });
+
+  it("every PT self-serve route 404s while the gate is off", () => {
+    const entry: Record<string, string> = {
+      "/personal-trainers": "personal-trainers/page.tsx",
+      "/signup/trainer": "signup/trainer/layout.tsx",
+      "/terms": "terms/layout.tsx",
+      "/privacy/practices": "privacy/practices/layout.tsx",
+    };
+    for (const p of PT_SELF_SERVE_PATHS) {
+      const src = readFileSync(path.join(APP, entry[p]), "utf8");
+      expect(src, p).toMatch(/if \(!PT_SELF_SERVE_PUBLIC\) notFound\(\);/);
+    }
+  });
+
+  it("no public page links to a PT self-serve route without the gate", () => {
+    const files = ["home/page.tsx", "pricing/page.tsx", "signup/page.tsx", "privacy/page.tsx", "coach/settings/page.tsx"];
+    for (const f of files) {
+      const src = readFileSync(path.join(APP, f), "utf8");
+      const lines = src.split("\n");
+      lines.forEach((line, i) => {
+        if (!/href="\/(personal-trainers|signup\/trainer|terms|privacy\/practices)"/.test(line)) return;
+        const near = lines.slice(Math.max(0, i - 4), i + 1).join("\n");
+        expect(near, `${f}:${i + 1}`).toContain("PT_SELF_SERVE_PUBLIC");
+      });
+    }
   });
 });

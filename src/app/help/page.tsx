@@ -10,7 +10,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLang, type Lang } from "@/lib/lang";
-import { OPERATOR } from "@/lib/legal/operator";
+import { OPERATOR, PT_SELF_SERVE_PUBLIC } from "@/lib/legal/operator";
 
 type QA = { q: string; a: string };
 
@@ -20,7 +20,7 @@ const TRAINER_HELP: Record<Lang, Array<{ title: string; items: QA[] }>> = {
     {
       title: "Getting started",
       items: [
-        { q: "How do I start?", a: "Sign up at /signup/trainer. Your practice and a demo client are created straight away, and the checklist on your dashboard walks you through the first steps: pick a programme, invite a client, send a first session." },
+        { q: "How do I start?", a: (PT_SELF_SERVE_PUBLIC ? "Sign up at /signup/trainer." : `Write to ${OPERATOR.supportEmail} and we set up your practice.`) + " Your practice and a demo client are created straight away, and the checklist on your dashboard walks you through the first steps: pick a programme, invite a client, send a first session." },
         { q: "How do I invite a client?", a: "On your dashboard, open Invitations and enter the client's name and email. They get an email from your practice with a link to choose a password. If the email can't be sent, the link is shown so you can copy it and send it yourself." },
         { q: "My client didn't get the invitation", a: "Ask them to check spam. Then press Resend next to the invitation, or copy the link and send it by text. An invitation lasts 30 days; Resend opens an expired one again." },
         { q: "What is the demo client?", a: "A sample client with a few weeks of data, so you can see the dashboard working before inviting anyone. It is never counted, reminded or included in reports." },
@@ -61,7 +61,7 @@ const TRAINER_HELP: Record<Lang, Array<{ title: string; items: QA[] }>> = {
     {
       title: "Fyrstu skrefin",
       items: [
-        { q: "Hvernig byrja ég?", a: "Skráðu þig á /signup/trainer. Stofan og prufuviðskiptavinur verða til strax og gátlistinn á stjórnborðinu leiðir þig í gegnum fyrstu skrefin: velja áætlun, bjóða viðskiptavini, senda fyrstu æfingu." },
+        { q: "Hvernig byrja ég?", a: (PT_SELF_SERVE_PUBLIC ? "Skráðu þig á /signup/trainer." : `Skrifaðu á ${OPERATOR.supportEmail} og við setjum stofuna upp.`) + " Stofan og prufuviðskiptavinur verða til strax og gátlistinn á stjórnborðinu leiðir þig í gegnum fyrstu skrefin: velja áætlun, bjóða viðskiptavini, senda fyrstu æfingu." },
         { q: "Hvernig býð ég viðskiptavini?", a: "Á stjórnborðinu opnarðu Boð og slærð inn nafn og netfang. Hann fær tölvupóst frá stofunni þinni með hlekk til að velja lykilorð. Ef ekki tekst að senda póstinn birtist hlekkurinn svo þú getir afritað hann og sent sjálf(ur)." },
         { q: "Viðskiptavinurinn fékk ekki boðið", a: "Biddu hann að skoða ruslpóstinn. Ýttu svo á Senda aftur við boðið, eða afritaðu hlekkinn og sendu í SMS. Boð gildir í 30 daga; Senda aftur opnar útrunnið boð aftur." },
         { q: "Hvað er prufuviðskiptavinurinn?", a: "Sýnisviðskiptavinur með nokkurra vikna gögnum svo þú sjáir stjórnborðið virka áður en þú býður einhverjum. Hann er aldrei talinn með, fær engar áminningar og er ekki í skýrslum." },
@@ -394,6 +394,7 @@ function HelpInner() {
   const a = AUDIENCE_COPY[lang];
   const router = useRouter();
   const forTrainers = useSearchParams().get("for") === "trainers";
+  const trainerLegal = forTrainers && PT_SELF_SERVE_PUBLIC;
   const setAudience = (trainers: boolean) => router.replace(trainers ? "/help?for=trainers" : "/help", { scroll: false });
 
   return (
@@ -476,8 +477,9 @@ function HelpInner() {
       </section>
 
       <nav className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-slate-500">
-        <Link href={forTrainers ? "/terms" : "/pricing"} className="hover:text-slate-900">{forTrainers ? (lang === "IS" ? "Skilmálar" : "Terms") : (lang === "IS" ? "Verð" : "Pricing")}</Link>
-        <Link href={forTrainers ? "/privacy/practices" : "/privacy"} className="hover:text-slate-900">{lang === "IS" ? "Persónuvernd" : "Privacy"}</Link>
+        {/* Practice terms + privacy only once they are public (PT_SELF_SERVE_PUBLIC). */}
+        <Link href={trainerLegal ? "/terms" : "/pricing"} className="hover:text-slate-900">{trainerLegal ? (lang === "IS" ? "Skilmálar" : "Terms") : (lang === "IS" ? "Verð" : "Pricing")}</Link>
+        <Link href={trainerLegal ? "/privacy/practices" : "/privacy"} className="hover:text-slate-900">{lang === "IS" ? "Persónuvernd" : "Privacy"}</Link>
       </nav>
     </main>
   );

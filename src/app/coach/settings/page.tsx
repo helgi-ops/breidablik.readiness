@@ -24,6 +24,7 @@ import MatchdayTemplateSettings from "@/components/admin/MatchdayTemplateSetting
 import RecommendationLogicViewer from "@/components/admin/RecommendationLogicViewer";
 import OverrideHistoryPanel from "@/components/admin/OverrideHistoryPanel";
 import SystemPolicySummary from "@/components/admin/SystemPolicySummary";
+import { PT_SELF_SERVE_PUBLIC } from "@/lib/legal/operator";
 import {
   ORDERED_PLAN_DEFINITIONS,
   getPlanDefinition,
@@ -408,8 +409,12 @@ export default function CoachSettingsPage() {
       {isPt && (
         <div className="flex flex-wrap gap-x-5 gap-y-2 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm">
           <a href="/help?for=trainers" className="font-semibold text-primary hover:underline">Help / Hjálp</a>
-          <a href="/terms" className="text-zinc-600 hover:text-zinc-900">Terms / Skilmálar</a>
-          <a href="/privacy/practices" className="text-zinc-600 hover:text-zinc-900">Privacy / Persónuvernd</a>
+          {PT_SELF_SERVE_PUBLIC && (
+            <>
+              <a href="/terms" className="text-zinc-600 hover:text-zinc-900">Terms / Skilmálar</a>
+              <a href="/privacy/practices" className="text-zinc-600 hover:text-zinc-900">Privacy / Persónuvernd</a>
+            </>
+          )}
         </div>
       )}
 
