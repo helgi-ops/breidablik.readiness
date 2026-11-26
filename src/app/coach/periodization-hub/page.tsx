@@ -66,6 +66,7 @@ import InSeasonVariableTable from "@/components/coach/meso/InSeasonVariableTable
 import { GOAL_BAR, BarSwatch, GameDotLegend, type MesoBar } from "@/components/coach/meso/MesoPrimitives";
 import { MesoWeeksHeader, MesoWeekCollapsed, MesoWeekOpen, type DayChip } from "@/components/coach/meso/MesoWeek";
 import { TmBandChip } from "@/components/coach/meso/VariableTrack";
+import { goToKpiRow } from "@/components/coach/meso/kpiRowLink";
 import { blockVolumeView, inSeasonRuleBreaks, calWeekMultiple, sessionsInWeek, minMax, gamesInRange, gamesInWeek } from "@/lib/micropulse/periodization/inSeasonMesoView";
 import { teamMatchReference } from "@/lib/micropulse/periodization/matchReference";
 import type { MatchUnit as LibMatchUnit } from "@/lib/micropulse/periodization";
@@ -108,6 +109,11 @@ const mondayOf = (iso: string) => { const dt = new Date(`${iso}T00:00:00Z`); con
 // Weekly Load (periodization/preseasonKpiMap), so the pre-season ramp reads the same numbers everywhere.
 const kpiAvgFromUnit = (mu: MatchUnit): Partial<Record<WeeklyLoadMetricKey, number>> => kpiAvgFromUnitLib(mu as unknown as LibMatchUnit, { ima: true });
 // Team KPI average across players who have a match unit (mean per KPI).
+// A week card's variable → its row in the in-season "Load per variable" table (the one place it is set).
+const IN_WEEK_ROW_KPI: Record<string, string> = {
+  load: "totalPlayerLoad", dist: "totalDistance", hsr: "velocityBand5", accdec: "accelB23", acc: "imaAccel",
+  dec: "imaDecel", cod: "imaCod", fr: "imaFrDistance", stride: "imaStrideHi",
+};
 const teamKpiAvg = (players: Player[]): Partial<Record<WeeklyLoadMetricKey, number>> => teamKpiAvgLib(players.map((p) => p.matchUnit as unknown as LibMatchUnit), { ima: true });
 // The pre-season load anchor (own match unit, else the normative reference) — the same call Week Setup makes.
 const preAnchorOf = (plan: Plan) => preseasonAnchor({ matchUnits: plan.players.map((p) => p.matchUnit as unknown as LibMatchUnit), matchLoad: plan.matchLoad, matchSrpe: plan.matchSrpe, loadSource: plan.tier.loadSource });
@@ -2756,9 +2762,10 @@ export default function PeriodizationHubPage() {
                       const pwName = pw === "biomechanical" ? (is ? "vélræn" : "biomechanical") : pw === "physiological" ? (is ? "efnaskipti" : "physiological") : (is ? "rúmmál" : "volume");
                       const title = `${is ? lab.is : lab.en} — ${xmatch != null ? `×${xmatch} leik` : "—"}${ref ? ` · ${is ? "viðmið" : "ref"} ${ref[0]}–${ref[1]}×${over ? (is ? " (yfir — undirbúnings-uppbygging)" : " (above — pre-season build)") : ""}` : ""} · ${pwName}`;
                       return (
-                      <span key={k} className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10.5px] text-slate-600" title={title}><i className="h-1.5 w-1.5 rounded-full" style={{ background: pwDot }} />{xmatch != null && <span className={`font-semibold tabular-nums ${over ? "text-[#de9328]" : "text-slate-900"}`}>×{xmatch}</span>}<span className="text-slate-400">{is ? lab.is : lab.en}</span> <span className="tabular-nums text-slate-500">{val.toLocaleString("en-US")}{lab.unit}</span>{ref && <span className="tabular-nums text-slate-400">· {is ? "rannsóknir" : "research"} {ref[0]}–{ref[1]}×</span>}</span>
+                      <button type="button" key={k} onClick={() => goToKpiRow("pre", k)} className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10.5px] text-slate-600 hover:border-[#2740e6]/50 hover:bg-[#2740e6]/[0.04]" title={`${title} · ${is ? "smelltu til að stilla í töflunni" : "click to set it in the table"}`}><i className="h-1.5 w-1.5 rounded-full" style={{ background: pwDot }} />{xmatch != null && <span className={`font-semibold tabular-nums ${over ? "text-[#de9328]" : "text-slate-900"}`}>×{xmatch}</span>}<span className="text-slate-400">{is ? lab.is : lab.en}</span> <span className="tabular-nums text-slate-500">{val.toLocaleString("en-US")}{lab.unit}</span>{ref && <span className="tabular-nums text-slate-400">· {is ? "rannsóknir" : "research"} {ref[0]}–{ref[1]}×</span>}</button>
                     ); })}
                   </div>
+                  <button type="button" onClick={() => goToKpiRow("pre", "totalPlayerLoad")} className="mt-1.5 text-[11.5px] font-semibold text-[#2740e6] hover:underline">{is ? "Stilltu í töflunni „Álag á hverja breytu“ ↑" : "Set it in the “Load per variable” table ↑"}</button>
                   </details>
                 )}
                 {w.taper && ramp[i - 1] && (() => {
@@ -3551,11 +3558,12 @@ export default function PeriodizationHubPage() {
                         <div className="mt-1.5 grid gap-x-6 gap-y-1 sm:grid-cols-2">
                           {varRows(w).map((r) => (
                             <div key={r.key} className="flex items-center justify-between gap-2 border-b border-[#ece9e2] py-1">
-                              <span className="text-slate-700">{r.label}</span>
+                              <button type="button" onClick={() => goToKpiRow("in", IN_WEEK_ROW_KPI[r.key] ?? "totalPlayerLoad")} className="text-left text-slate-700 underline decoration-[#2740e6]/30 underline-offset-2 hover:text-[#2740e6] hover:decoration-[#2740e6]" title={isPlayerScope ? (is ? "Sjá í töflunni" : "See it in the table") : (is ? "Stilltu í töflunni" : "Set it in the table")}>{r.label}</button>
                               <span className="flex items-center gap-1.5 tabular-nums"><b className="font-semibold text-[#14181c]">{fxN2(r.x)}×</b>{r.ref && <TmBandChip x={r.x} refRange={r.ref} is={is} className="" />}</span>
                             </div>
                           ))}
                         </div>
+                        <button type="button" onClick={() => goToKpiRow("in", "totalPlayerLoad")} className="mt-1.5 text-[11.5px] font-semibold text-[#2740e6] hover:underline">{isPlayerScope ? (is ? "Sjá í töflunni „Álag á hverja breytu“ ↑" : "See it in the “Load per variable” table ↑") : (is ? "Stilltu í töflunni „Álag á hverja breytu“ ↑" : "Set it in the “Load per variable” table ↑")}</button>
                         <p className="mt-1.5 text-[11px] text-slate-500">{is ? "Það sem æfingadagar vikunnar leggja saman, deilt með einum leik í sömu breytu (leikurinn sjálfur ekki talinn). Merki „innan / yfir / undir“ aðeins þar sem breytan fellur beint að rannsóknarbili (æfing:leikur, PMC6747517)." : "What the week's training days add up to, divided by one match in the same variable (the match itself not counted). A within / above / below mark only where the variable maps straight onto a research range (training:match, PMC6747517)."}</p>
                       </details>
                     )}

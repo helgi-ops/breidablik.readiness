@@ -16,6 +16,7 @@ import { CiteRefs } from "@/components/coach/CiteRefs";
 import { kpiTmRefRange, kpiReentryFloor } from "@/lib/micropulse/periodization/plannedVolume";
 import { KPI_GROUPS, kpiGroup, kpiWhatWhy, plainKpiName } from "@/lib/micropulse/periodization/kpiPlainNames";
 import { MultipleInput as Week1Input } from "@/components/coach/meso/MultipleInput";
+import { kpiRowId, kpiTableId } from "@/components/coach/meso/kpiRowLink";
 import { BandOrNone, LegendFilled, LegendLight, LegendOpen, LegendRange, VARIABLE_COLS, VariableGroupHeader, VariableScaleTicks, VariableTrack, trackScaleMax } from "@/components/coach/meso/VariableTrack";
 import { PRESEASON_DEFAULT_WEEK1, PRESEASON_TAPER_RESEARCH } from "@/lib/micropulse/periodization/preseasonWindow";
 import type { PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
@@ -131,7 +132,7 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
   const changed = setCount + (week1Mult !== PRESEASON_DEFAULT_WEEK1 ? 1 : 0);
 
   return (
-    <div className="mt-2 overflow-hidden rounded-2xl border border-[#e3e0d8] bg-white">
+    <div id={kpiTableId("pre")} className="mt-2 overflow-hidden rounded-2xl border border-[#e3e0d8] bg-white">
       {/* Verdict + how it works */}
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#ece9e2] px-5 pb-5 pt-5 sm:px-6">
         <div className="flex min-w-0 max-w-[680px] flex-col gap-1.5">
@@ -148,7 +149,7 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
       </div>
 
       {/* Master: the overall load moves every variable the coach hasn't set */}
-      <div className={`${cols} border-b border-[#ece9e2] bg-[#f8f7f3] px-5 py-5 sm:px-6`}>
+      <div id={kpiRowId("pre", "totalPlayerLoad")} className={`${cols} border-b border-[#ece9e2] bg-[#f8f7f3] px-5 py-5 sm:px-6`}>
         <div className="flex min-w-0 flex-col gap-1">
           <span className="flex items-center gap-1.5 text-[16px] font-bold text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{t({ en: "Overall load", is: "Heildarálag" })}{master.mine && yours}</span>
           <span className="text-[12px] leading-snug text-slate-600">{t({ en: "The whole week in one number (PlayerLoad). Moves every variable you haven't set yourself.", is: "Öll vikan í einni tölu (PlayerLoad). Færir allar breytur sem þú hefur ekki stillt sjálfur." })}</span>
@@ -182,7 +183,7 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
           <div key={g.key} className="px-5 pt-2 sm:px-6">
             <VariableGroupHeader title={t(g.title)} sub={g.preSub.en ? t(g.preSub) : ""} />
             {gr.map((r) => (
-              <div key={r.k} className={`${cols} border-b border-[#f1efe9] py-3 last:border-b-0`}>
+              <div key={r.k} id={kpiRowId("pre", r.k)} className={`${cols} -mx-2 rounded-lg border-b border-[#f1efe9] px-2 py-3 last:border-b-0`}>
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="flex flex-wrap items-center gap-1.5 text-[14px] font-semibold text-[#14181c]">{r.name}{r.mine && yours}</span>
                   {kpiWhatWhy(r.k) && <span className="text-[12px] leading-snug text-slate-600">{t(kpiWhatWhy(r.k)!)}</span>}

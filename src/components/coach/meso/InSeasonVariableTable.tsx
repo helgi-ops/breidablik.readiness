@@ -17,6 +17,7 @@ import type { BlockVolumeView, VariableRow } from "@/lib/micropulse/periodizatio
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 import { BLOCK_KPI_MAX, BLOCK_KPI_MIN, BLOCK_KPI_STEP, hasCalendarDay, type BlockKpiLogEntry } from "@/lib/micropulse/periodization/inSeasonKpiAdjust";
 import { MultipleInput } from "@/components/coach/meso/MultipleInput";
+import { kpiRowId, kpiTableId } from "@/components/coach/meso/kpiRowLink";
 import {
   ARCHIVO, BandOrNone, LegendFilled, LegendLight, LegendOpen, LegendRange, VARIABLE_COLS, VariableGroupHeader, VariableScaleTicks, VariableTrack, trackScaleMax,
 } from "@/components/coach/meso/VariableTrack";
@@ -118,7 +119,7 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
     : t({ en: `All ${numWeeks} weeks of the block are the same${hold ? " (a competitive block holds the standard week)" : ""}.`, is: `Allar ${numWeeks} vikur lotunnar eru eins${hold ? " (keppnislota heldur staðalvikunni)" : ""}.` });
 
   return (
-    <div className="mt-2 overflow-hidden rounded-2xl border border-[#e3e0d8] bg-white">
+    <div id={kpiTableId("in")} className="mt-2 scroll-mt-24 overflow-hidden rounded-2xl border border-[#e3e0d8] bg-white">
       {/* Verdict + the two plain facts */}
       <div className="flex flex-col gap-1.5 border-b border-[#ece9e2] px-5 pb-5 pt-5 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -152,7 +153,7 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
       ) : (<>
         {/* Master: the whole week in one number */}
         {master && (
-          <div className={`${VARIABLE_COLS} border-b border-[#ece9e2] bg-[#f8f7f3] px-5 py-5 sm:px-6`}>
+          <div id={kpiRowId("in", master.key)} className={`${VARIABLE_COLS} border-b border-[#ece9e2] bg-[#f8f7f3] px-5 py-5 sm:px-6`}>
             <div className="flex min-w-0 flex-col gap-1">
               <span className="text-[16px] font-bold text-[#14181c]" style={ARCHIVO}>{t({ en: "Overall load", is: "Heildarálag" })} {editable && master.mine && yours}</span>
               <span className="text-[12px] leading-snug text-slate-600">{t({ en: "The whole week in one number (PlayerLoad).", is: "Öll vikan í einni tölu (PlayerLoad)." })}</span>
@@ -187,7 +188,7 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
             <div key={g.key} className="px-5 pt-2 sm:px-6">
               <VariableGroupHeader title={t(g.title)} sub={g.inSub.en ? t(g.inSub) : ""} />
               {gr.map((r) => (
-                <div key={r.key} className={`${VARIABLE_COLS} border-b border-[#f1efe9] py-3 last:border-b-0`}>
+                <div key={r.key} id={kpiRowId("in", r.key)} className={`${VARIABLE_COLS} -mx-2 rounded-lg border-b border-[#f1efe9] px-2 py-3 last:border-b-0`}>
                   <div className="flex min-w-0 flex-col gap-0.5">
                     <span className="text-[14px] font-semibold text-[#14181c]" title={t(r.label)}>{r.name} {editable && r.mine && yours}</span>
                     {kpiWhat(r.key) && <span className="text-[12px] leading-snug text-slate-600">{t(kpiWhat(r.key)!)}</span>}
