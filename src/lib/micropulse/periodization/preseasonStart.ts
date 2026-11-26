@@ -170,8 +170,8 @@ export function preseasonStartRamp(opts: PreseasonStartOpts): PreseasonWeekTarge
             is: `Vika ${i} — undirbúnings-uppbygging (~${mult}× leik). Endapunktur stigmögnunar.`,
           }
         : {
-            en: `Week ${i} — ramping up (~${mult}× a match). Progressive, ACWR-safe.`,
-            is: `Vika ${i} — stigmögnun (~${mult}× leik). Framsækið, ACWR-öruggt.`,
+            en: `Week ${i} — ramping up (~${mult}× a match). Rises steadily toward the peak.`,
+            is: `Vika ${i} — stigmögnun (~${mult}× leik). Vex jafnt að toppi.`,
           };
 
     rows.push({

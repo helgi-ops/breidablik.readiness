@@ -1,7 +1,7 @@
 import { test } from "vitest";
 import { buildPlayerBlock } from "@/lib/micropulse/periodization/playerBlock";
 import assert from "node:assert/strict";
-import { hasNoGpsReading, teamMatchUnitNote, activeValdTrimLift, nextValdTrimLiftLog, holdsStandardWeek, blockDeloadOf, deloadWeekIndex, detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, seedBlockDays, recommendBlockGoal, blockGoalFromSeason, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
+import { hasNoGpsReading, teamMatchUnitNote, activeValdTrimLift, nextValdTrimLiftLog, holdsStandardWeek, blockDeloadOf, deloadWeekIndex, detectSeasonPhases, buildMesoBlocks, sliceByLengths, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthSchemeFor, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, seedBlockDays, recommendBlockGoal, blockGoalFromSeason, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
 
 // A full Pro (GPS + IMA) match unit — running spine + the mechanical/IMA axis (Acc/Dec B2–3, stride, dir).
 const UNIT: MatchUnitAbs = { dist: 12564, hsr: 988, load: 1184, accdec: 259, accHiEff: 40, decHiEff: 52, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
@@ -278,11 +278,16 @@ test("detectSeasonPhases: coach window overrides auto-detect (Dec start, late-Oc
   assert.match(ph[1].rationale.en, /coach-set end/);
 });
 
-test("strengthDefaultForBlock: research %1RM defaults per phase, with citations", () => {
-  assert.match(strengthDefaultForBlock("Accumulation", false).pct1rm.en, /85–95%/);
-  assert.match(strengthDefaultForBlock("Realization", false).pct1rm.en, /30–60%/);
-  assert.match(strengthDefaultForBlock("Realization", false).cite, /Suchomel|Haff/);
-  assert.match(strengthDefaultForBlock("Transmutation", false).velocity.en, /0\.50–0\.75/);
+test("strengthSchemeFor: the hub's block × phase strength table, with citations", () => {
+  // Same table as the hub's strength section (strengthForBlockGoal): Accumulation depends on the phase.
+  assert.match(strengthSchemeFor("accum", false).pct1rm.en, /65–80%/);
+  assert.match(strengthSchemeFor("accum", false).intent.en, /3–4 × 8–12/);
+  assert.match(strengthSchemeFor("accum", true).pct1rm.en, /80–90%/);
+  assert.equal(strengthSchemeFor("accum", false).velocity, null); // no velocity band claimed outside the research zones
+  assert.match(strengthSchemeFor("realize", false).pct1rm.en, /30–60%/);
+  assert.match(strengthSchemeFor("realize", false).cite, /Suchomel|Haff/);
+  assert.match(strengthSchemeFor("transmute", false).velocity!.en, /0\.50–0\.75/);
+  assert.match(strengthSchemeFor("deload", false).pct1rm.en, /40–50%/);
 });
 
 test("valdVolumeCap: only a recent jump test below own level trims", () => {
@@ -436,6 +441,9 @@ test("mdWeekTargets: MD-anchored days with numbers from the position baseline", 
   assert.equal(tag("MD").type, "match");
   assert.ok(tag("MD").targets.some((t) => /900 m/.test(t.value)));  // match-day HSR baseline
   assert.equal(tag("Top-up").type, "topup");
+  // MD-4 is the heaviest training day by default (load falls toward the match; Martín-García 2018).
+  const dist = (t: string) => parseFloat(tag(t).targets.find((x) => /Distance/.test(x.metric.en))!.value);
+  assert.ok(dist("MD-4") > dist("MD-3"), `MD-4 ${dist("MD-4")} km > MD-3 ${dist("MD-3")} km`);
   // Own-data MD shape overrides the default multiplier (MD-4 locomotive HSR = 260 × 2.0 = 520 m):
   const shaped = mdWeekTargets(b, { mdShape: { "MD-4": 2.0 } });
   const md4Hsr = shaped.find((d) => d.mdTag === "MD-4")!.targets.find((t) => /HSR/.test(t.metric.en))!.value;
@@ -667,7 +675,7 @@ test("buildCalendarBlock: block GOAL reshapes volume/taper/strength and stays ad
   assert.ok(realize.weeks[1].restDays >= accum.weeks[1].restDays, "realize week has ≥ rest of accum week");
   assert.ok(realize.weeks[1].days.filter((d) => d.type !== "rest" && d.type !== "match").length <= 3);
   // (d) Strength scheme migrates with the goal (cited %1RM bands).
-  assert.match(accum.strength!.pct1rm.en, /85–95%/); assert.match(realize.strength!.pct1rm.en, /30–60%/);
+  assert.match(accum.strength!.pct1rm.en, /65–80%/); assert.match(realize.strength!.pct1rm.en, /30–60%/);
   assert.match(transmute.strength!.pct1rm.en, /70–85%/);
   assert.equal(accum.goalKey, "accum"); assert.equal(realize.goalKey, "realize");
   // (e) ADDITIVE GUARD: a goal-less build is byte-identical to goal:undefined, and carries no goal fields.

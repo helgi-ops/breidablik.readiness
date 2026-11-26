@@ -25,7 +25,7 @@ export type DayIdea = { focus: Bi; load: DayIdeaLoad | null; pitch: PitchForm[] 
 const FOCUS_INSEASON: Record<StimulusType, Bi> = {
   mechanical: { en: "Acceleration/deceleration + change-of-direction — mechanical overload in tight space; low HSR (protect the hamstrings).", is: "Hröðun/hemlun + stefnubreytingar — vélrænt yfirálag í þröngu rými; lágt háhraðahlaup (verndar aftanlæri)." },
   locomotive: { en: "High-speed running / running capacity — open-space HSR and top speed.", is: "Háhraðahlaup / hlaupageta — háhraði í opnu rými og hámarkshraði." },
-  mixed: { en: "Match-like mixed stimulus — balanced HSR + accel/decel; the week's biggest session.", is: "Leiklíkt blandað áreiti — jafnvægi háhraða + hröðun/hemlun; stærsta æfing vikunnar." },
+  mixed: { en: "Match-like mixed stimulus — balanced HSR + accel/decel.", is: "Leiklíkt blandað áreiti — jafnvægi háhraða + hröðun/hemlun." },
   technical: { en: "Technical / low-load — sharpen skills, prime without fatigue.", is: "Tæknilegt / lágt álag — skerpa færni, virkja án þreytu." },
 };
 // Plain-language focus, DEVELOPMENT phases (off-/pre-season — the same stimulus value means a gym-led quality)

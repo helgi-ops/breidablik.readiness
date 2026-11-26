@@ -157,16 +157,22 @@ Hér er notað:
 2. ~~**MD+2-reglan vísaði í ranga grein.**~~ **Lagað 25. nóv.:** tilvísunin án „b“ vísar í grein Buchheit og félaga um spretti nálægt
    hámarkshraða; greinin um hvíld á MD+2 er „Buchheit 2023b“. Lagað í hubbnum, `plannedSessionLoad.ts`,
    `periodizationModel.ts` og `aefingakerfi-reglur.md`.
-3. **Hvaða MD-dagur er þyngstur.** `plannedSessionLoad.ts` (álag dagsins, RPE) segir MD-4 þyngstan (85%) og MD-4
-   Mechanical / MD-3 Locomotive. Dagatalið leggur MD-4 sem Locomotive og MD-3 sem Mixed („stærsta æfingin“), og
-   vikutaflan `mdWeekTargets` notar sjálfgefna margfaldara þar sem MD-3 er hæstur (1,15). Ekki breytt.
-4. **Tvær styrktartöflur fyrir Uppsöfnun á undirbúningi.** Hubbinn sýnir `strengthForBlockGoal` (65–80% 1RM,
-   8–12 endurtekningar); athugasemdin neðst á dagatalinu (`STRENGTH_DEFAULTS`) segir hámarksstyrkur 85–95% 1RM.
-   Ekki breytt.
-5. **„ACWR-öruggt“ í texta vikunnar.** Athugasemd í stíganda undirbúnings (`preseasonStartRamp`) segir
-   „Progressive, ACWR-safe“, en hubbinn segir annars að ACWR sé ekki markmið. Ekki breytt.
-6. **Sjálfgefin létt vika fyrir fyrsta leik (40%)** er undir rannsóknabilinu sem er sýnt við hliðina (41–60%). Það er
-   val þjálfarans 25. nóv. og merkt sem MicroPulse-regla; nefnt hér svo það sé meðvitað.
+3. ~~**Hvaða MD-dagur er þyngstur.**~~ **Lagað 26. nóv.:** MD-4 er þyngsti æfingadagurinn alls staðar. Sjálfgefnu
+   margfaldararnir í vikutöflunni (`mdWeekTargets`) eru nú MD-4 1,15 og MD-3 1,1 (voru 1,1 og 1,15), og Mixed er ekki
+   lengur kallaður „stærsta æfingin“ (dagatalið, MD-taflan, hugmyndir dagsins), heldur leiklíkt áreiti með jafnvægi
+   háhraða og vélræns. **Enn opið:** álagstafla dagsins (`plannedSessionLoad.ts`) merkir MD-4 Mechanical og MD-3
+   Locomotive, en dagatalið og vikutaflan leggja MD-4 sem Locomotive og MD-3 sem Mixed. Þjálfarinn hélt tegundunum
+   24. nóv.; bíður ákvörðunar.
+4. ~~**Tvær styrktartöflur fyrir Uppsöfnun á undirbúningi.**~~ **Lagað 26. nóv.:** athugasemdin neðst á dagatalinu og
+   rannsóknarviðmiðið fyrir leikmann án VBT lesa nú sömu töflu og styrkhluti hubbsins (`strengthSchemeFor` →
+   `strengthForBlockGoal`): Uppsöfnun á undirbúningi 65–80% 1RM, 3–4 × 8–12; á keppnistímabili 80–90%, 4–5 × 4–6.
+   Gamla 85–95% taflan er farin. Hraðabil (m/s) er aðeins sýnt fyrir umbreytingu og framkvæmd, þar sem %1RM-bilið
+   passar við rannsóknirnar.
+5. ~~**„ACWR-öruggt“ í texta vikunnar.**~~ **Lagað 26. nóv.:** textinn segir nú „Vex jafnt að toppi“; próf passar að
+   ACWR komi ekki fyrir í textum stígandans.
+6. ~~**Sjálfgefin létt vika fyrir fyrsta leik (40%)**~~ **Lagað 26. nóv.:** við reitinn, í skýringunni og í
+   undirbúningsspjaldinu stendur nú að sjálfgefna 40% sé val þjálfarans, rétt undir rannsóknabilinu 41–60%. Gamla
+   merkið á vikunni („magn −55%, hraða haldið betur −30%“) var úrelt og segir nú að öll vikan lækki um sama hlutfall.
 
 ## Óstaðfestar tilvísanir
 

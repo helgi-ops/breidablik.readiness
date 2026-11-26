@@ -17,7 +17,7 @@
 
 import { buildCalendarBlock, sliceByLengths, freeWeekLayout, blockGoalAt, BLOCK_GOAL_LABEL, type BlockGoalKey, type Bi, type CalType, type CalendarBlock, type MatchUnit, type MatchUnitAbs } from "./index";
 import { preseasonMatchExposure, defaultPeakMultiple, type PreseasonWeekTarget, type Confidence } from "./preseasonStart";
-import { upcomingPreseason, preseasonMeso, GAMES_FROM_NONE, preseasonAnchor, preseasonRamp, preseasonSettingsFrom, type PreseasonSavedRow, type PreseasonSettings, type PreseasonWindow, type PreseasonAnchor, PRESEASON_TAPER_RESEARCH } from "./preseasonWindow";
+import { upcomingPreseason, preseasonMeso, GAMES_FROM_NONE, preseasonAnchor, preseasonRamp, preseasonSettingsFrom, type PreseasonSavedRow, type PreseasonSettings, type PreseasonWindow, type PreseasonAnchor, PRESEASON_TAPER_RESEARCH, PRESEASON_DEFAULT_TAPER_PCT } from "./preseasonWindow";
 import { recommendTestingSchedule, type AerobicMode, type TestPlan } from "./testingSchedule";
 import { fitWeekToTarget } from "./preseasonDayFit";
 
@@ -369,8 +369,8 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
         : { en: "No light week", is: "Engin létt vika" },
       source: coach(settings.saved.taperPct),
       reason: {
-        en: `Research: the best taper cuts volume ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% and keeps intensity. The whole week is cut by one factor, so each variable keeps its own share (sprint < high-speed < distance ≤ accelerations).`,
-        is: `Rannsóknir: besta létta vikan sker magn um ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% og heldur ákefð. Öll vikan lækkar um sama hlutfall, svo hver breyta heldur sínu hlutfalli (sprettur < hraðahlaup < vegalengd ≤ hraðanir).`,
+        en: `Research: the best taper cuts volume ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% and keeps intensity; the default ${PRESEASON_DEFAULT_TAPER_PCT}% is the coach's choice, just below that range. The whole week is cut by one factor, so each variable keeps its own share (sprint < high-speed < distance ≤ accelerations).`,
+        is: `Rannsóknir: besta létta vikan sker magn um ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% og heldur ákefð; sjálfgefna ${PRESEASON_DEFAULT_TAPER_PCT}% er val þjálfarans, rétt undir bilinu. Öll vikan lækkar um sama hlutfall, svo hver breyta heldur sínu hlutfalli (sprettur < hraðahlaup < vegalengd ≤ hraðanir).`,
       },
       cite: "Bosquet 2007; Mujika & Padilla 2003; Clemente 2019c; Gualtieri 2023", micropulseLine: !(settings.saved.taperPct && !input.fromScratch),
     }] : []),

@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 import {
   detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness,
-  valdVolumeCap, strengthDefaultForBlock, teamAverages, positionGroup, dataTier,
+  valdVolumeCap, strengthSchemeFor, teamAverages, positionGroup, dataTier,
   classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, hasNoGpsReading, weeklyTargetFromMatch, calibrateImaShares, type ImaShareCalibration,
   type SeasonPhase, type MesoBlock, type WeekLoad, type IntervalZone, type VbtRead, type DataGap,
   mdOffsetLabel, activeValdTrimLift, fixtureIsFriendly,
@@ -554,7 +554,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
       masEstimated: masLabel?.estimated ?? false, masAgeDays: masAge, aerobicTestAgeDays: aerobicAge, latestTests: tests,
       intervals: intervalSpeedsFromMas(mas?.masKmh ?? null),
       vbt: vbtRead,
-      strengthFallback: vbtRead ? null : (curBlock ? strengthDefaultForBlock(curBlock.phase.en, curBlock.isDeload) : null),
+      strengthFallback: vbtRead ? null : (curBlock ? strengthSchemeFor(curBlock.isDeload ? "deload" : curBlock.goalKey, !!curBlock.inSeason) : null),
       vald,
       matchUnit, weekTargets, recentMinutesAvg: recentMinutesAvgOf(p.id), injuryStatus: injuryStatusByPlayer.get(p.id) ?? null, recentBaseline: recentBaselineOf(p.id),
       gaps: dataReadiness({ hasCsTest, masAgeDays: masAge, masTest: masLabel ? { ...masLabel.label, estimated: masLabel.estimated } : null, aerobicTestAgeDays: aerobicAge, vbtAgeDays: vbtAge, hasValdThisBlock: valdFresh }),

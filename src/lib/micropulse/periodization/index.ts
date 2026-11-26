@@ -10,6 +10,7 @@
  */
 
 import { checkThreeInARow, type WeekRuleDay } from "@/lib/micropulse/weekSetup/weekRules";
+import { strengthForBlockGoal } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { CAL_SHARE_HI, CAL_SHARE_HI_REF, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, LIGHT_WEEK_VOL, holdsStandardWeek, type HiEvidence, type HiVar, type ImaTrainingDayType, type ImaVar } from "./imaStandard";
 
 export type Bi = { en: string; is: string };
@@ -395,15 +396,16 @@ const MD_TYPE_LABEL: Record<MdDayType, Bi> = {
 const MD_TYPE_QUALITY: Record<MdDayType, Bi> = {
   mechanical: { en: "tight-space, high accel/decel — ASD prep", is: "þröngt rými, mikil accel/decel — ASD undirb." },
   locomotive: { en: "open-space, high HSR — running capacity", is: "opið rými, hátt háhraðahlaup — hlaupageta" },
-  mixed: { en: "match-like stimulus, peak overall load", is: "leiklíkt áreiti, hámarks heildarálag" },
+  mixed: { en: "match-like stimulus, balanced HSR + mechanical", is: "leiklíkt áreiti, jafnvægi háhraða og vélræns" },
   technical: { en: "low physiological load, both dimensions (taper)", is: "lágt lífeðlislegt álag, báðar víddir (niðurtröppun)" },
   restart: { en: "recovery + re-activation (regen for starters)", is: "endurheimt + endurvirkjun (regen fyrir byrjunarlið)" },
   topup: { en: "bring <60-min players to the weekly target", is: "koma <60-mín leikmönnum í vikumarkið" },
   match: { en: "the match demand itself", is: "leikkrafan sjálf" },
 };
-// Default %-of-match-demand per MD day (Martín-García 2018) — used only when the team's OWN per-MD
-// shape isn't available. The real shape (mdShape) overrides these when computed from the data.
-const MD_DEFAULT_MULT: Record<string, number> = { "MD-5": 1.0, "MD-4": 1.1, "MD-3": 1.15, "MD-2": 0.6, "MD-1": 0.35, "MD+1": 0.3, "Top-up": 1.0 };
+// Default %-of-match-demand per MD day (Martín-García 2018: MD-4 > MD-3 > MD-2 > MD-1) — used only when the
+// team's OWN per-MD shape isn't available. The real shape (mdShape) overrides these when computed from the data.
+// MD-4 is the heaviest training day (the coach's rule, 2026-11-24; same as plannedSessionLoad).
+const MD_DEFAULT_MULT: Record<string, number> = { "MD-5": 1.0, "MD-4": 1.15, "MD-3": 1.1, "MD-2": 0.6, "MD-1": 0.35, "MD+1": 0.3, "Top-up": 1.0 };
 
 const r0 = (n: number | null, mult: number) => (n == null ? null : Math.round(n * mult));
 const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
@@ -695,7 +697,7 @@ const CAL_LABEL: Record<CalType, Bi> = {
 const CAL_FOCUS: Record<CalType, Bi> = {
   mechanical: { en: "Tight-space accel/decel — mechanical overload; low HSR (protect hamstrings).", is: "Þröngt rými accel/decel — vélrænt yfirálag; lágt háhraðahlaup (verndar aftanlæri)." },
   locomotive: { en: "Open-space running capacity — week's highest HSR block; lower mechanical.", is: "Opið rými, hlaupageta — hæsti háhraða-dagur vikunnar; minna vélrænt." },
-  mixed: { en: "Match-like stimulus — biggest overall session; balanced HSR + mechanical.", is: "Leiklíkt áreiti — stærsta æfing vikunnar; jafnvægi háhraða + vélræns." },
+  mixed: { en: "Match-like stimulus — balanced HSR + mechanical.", is: "Leiklíkt áreiti — jafnvægi háhraða og vélræns." },
   activation: { en: "Primer only — sharpen, don't fatigue. Lowest day.", is: "Aðeins virkjun — skerpa, ekki þreyta. Léttasti dagur." },
   topup: { en: "Compensatory session for <60' players; recovery for starters. Light.", is: "Uppbót fyrir <60' leikmenn; endurheimt fyrir byrjunarlið. Létt." },
   match: { en: "Practice match = the reference unit (100%).", is: "Æfingaleikur = viðmiðunareiningin (100%)." },
@@ -1128,7 +1130,8 @@ export function buildCalendarBlock(opts: {
     { en: "A starting point anchored to the player's data, never a norm to obey (Little & Buchheit). Descriptive — never the readiness colour.", is: "Upphafspunktur festur í gögnum leikmannsins, aldrei viðmið til að hlýða (Little & Buchheit). Lýsandi — aldrei readiness-liturinn." },
   ];
   // When a goal was chosen, attach its gym scheme + a cited note on the volume/taper stance (explainability).
-  const strength = opts.goal ? STRENGTH_DEFAULTS[GOAL_STRENGTH[opts.goal]] : undefined;
+  // The gym line reads the same block × phase table as the hub's strength section (in season when the block starts inside it).
+  const strength = opts.goal ? strengthSchemeFor(opts.goal, !!opts.inSeason && start >= opts.inSeason.start && start < opts.inSeason.end) : undefined;
   if (opts.goal) {
     const gl = BLOCK_GOAL_LABEL[opts.goal];
     const stance: Record<RecGoalKey, Bi> = deloadLight ? {
@@ -1252,32 +1255,27 @@ export function dataTier(has: { ima: boolean; gps: boolean; rpe: boolean }): Tie
 }
 
 // ───────────────────── STRENGTH DEFAULTS (no-VBT teams) ─────────────────────
-export type StrengthDefault = { quality: Bi; pct1rm: Bi; velocity: Bi; intent: Bi; cite: string };
-/** When a team has NO VBT, prescribe strength from the evidence base by %1RM + the mean-velocity a
- *  set should live at + the training intent — per the block goal. Cited from the research library
- *  (VBT, weightlifting-derivative, RFD & PAP folders). Replaces a faked VBT number with an honest default. */
-export const STRENGTH_DEFAULTS: Record<"max_strength" | "strength_power" | "power_speed", StrengthDefault> = {
-  max_strength: { quality: { en: "Max strength", is: "Hámarksstyrkur" }, pct1rm: { en: "85–95% 1RM", is: "85–95% 1RM" }, velocity: { en: "~0.30–0.50 m/s", is: "~0,30–0,50 m/s" }, intent: { en: "3–5 reps, maximal intent, long rest", is: "3–5 endurt., hámarks-áform, löng hvíld" }, cite: "González-Badillo & Sánchez-Medina 2010; Weakley 2021" },
-  strength_power: { quality: { en: "Strength–power", is: "Styrkur–kraftur" }, pct1rm: { en: "70–85% 1RM", is: "70–85% 1RM" }, velocity: { en: "~0.50–0.75 m/s", is: "~0,50–0,75 m/s" }, intent: { en: "explosive concentric, ~10–20% velocity loss cap", is: "sprengikraftur, ~10–20% hraðatap-þak" }, cite: "Cormie, McGuigan & Newton 2011; Pareja-Blanco 2017" },
-  power_speed: { quality: { en: "Power / speed-strength", is: "Kraftur / hraði-styrkur" }, pct1rm: { en: "30–60% 1RM (ballistic / WL derivatives)", is: "30–60% 1RM (kast / lyftinga-afleiður)" }, velocity: { en: ">0.75 m/s", is: ">0,75 m/s" }, intent: { en: "jump/throw or clean/pull derivatives; RFD + PAP potentiation", is: "stökk/kast eða clean/pull afleiður; RFD + PAP" }, cite: "Suchomel 2017 (WL derivatives); Haff & Nimphius 2012 (RFD); Seitz & Haff 2016 (PAP)" },
+export type StrengthDefault = { quality: Bi; pct1rm: Bi; velocity: Bi | null; intent: Bi; cite: string };
+/** Mean-velocity band a set should live at, for the two %1RM zones the velocity research covers
+ *  (strength–power 70–85%, power 30–60%). Used when a team has NO VBT profile, next to the %1RM. */
+const VELOCITY_BAND: Partial<Record<BlockGoalKey, { velocity: Bi; cite: string }>> = {
+  transmute: { velocity: { en: "~0.50–0.75 m/s", is: "~0,50–0,75 m/s" }, cite: "Cormie, McGuigan & Newton 2011; Pareja-Blanco 2017" },
+  realize: { velocity: { en: ">0.75 m/s", is: ">0,75 m/s" }, cite: "Suchomel 2017 (WL derivatives); Haff & Nimphius 2012 (RFD); Seitz & Haff 2016 (PAP)" },
 };
-/** Block goal → gym scheme: accumulation = max-strength base, transmutation = strength–power,
- *  realization = power/speed (ballistic). The quality migrates as the block goal does (Issurin 2010). */
-export const GOAL_STRENGTH: Record<RecGoalKey, keyof typeof STRENGTH_DEFAULTS> = {
-  accum: "max_strength", transmute: "strength_power", realize: "power_speed",
-};
-/** Map a meso block's phase/goal to the strength quality default. */
+/** The gym scheme for a block goal — the SAME block × phase table the hub's strength section shows
+ *  (`strengthForBlockGoal`: pre-season/off-season Accumulation 65–80% 3–4 × 8–12, in-season 80–90% 4–5 × 4–6,
+ *  Transmutation 70–85%, Realization 30–60%), so the calendar note and the no-VBT default never disagree
+ *  with it. Off-season builds like pre-season, so `inSeason` is the only phase switch needed. */
+export function strengthSchemeFor(goal: BlockGoalKey, inSeason: boolean): StrengthDefault {
+  const s = strengthForBlockGoal(goal, inSeason ? "competitive" : "preseason");
+  const v = VELOCITY_BAND[goal];
+  return { quality: s.quality, pct1rm: s.pct1rm, velocity: v?.velocity ?? null, intent: s.scheme, cite: v ? `${s.cite}; ${v.cite}` : s.cite };
+}
 /** The week a calendar for this block should unload: the block's planned deload (or the coach's pin). */
 export function blockDeloadOf(b: Pick<MesoBlock, "deloadWeekStart" | "plannedDeloadWeekStart" | "inSeason"> | null | undefined): BlockDeload | undefined {
   return b ? { weekStart: b.plannedDeloadWeekStart !== undefined ? b.plannedDeloadWeekStart : b.deloadWeekStart, light: !!b.inSeason } : undefined;
 }
 
-export function strengthDefaultForBlock(phaseEn: string, isDeload: boolean): StrengthDefault {
-  if (isDeload) return STRENGTH_DEFAULTS.strength_power; // keep intensity touches, low volume
-  if (/accumulation/i.test(phaseEn)) return STRENGTH_DEFAULTS.max_strength;
-  if (/realization/i.test(phaseEn)) return STRENGTH_DEFAULTS.power_speed;
-  return STRENGTH_DEFAULTS.strength_power; // transmutation
-}
 
 // ───────────────────── VALD readiness-to-load (volume cap) ─────────────────────
 /** A coach's decision to lift the trim for one player's week. Append-only and server-stamped (the audit

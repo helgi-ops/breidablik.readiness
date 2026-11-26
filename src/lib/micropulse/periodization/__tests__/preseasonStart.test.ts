@@ -27,6 +27,11 @@ describe("preseasonStartRamp", () => {
     expect(rows[0].byKpi.accelB23).toBe(auto[0].byKpi.accelB23); // a KPI without an override is unchanged
   });
 
+  it("week notes never present ACWR as a safety claim (it is a contested view, not a target)", () => {
+    const rows = preseasonStartRamp({ matchTypicalLoad: MATCH, sessionsPerWeek: 4, preseasonWeeks: 6, anchor: "match_this_season" });
+    for (const r of rows) expect(`${r.note.en} ${r.note.is}`).not.toMatch(/ACWR/);
+  });
+
   it("ramps monotonically to the peak (build destination) multiple", () => {
     const peak = defaultPeakMultiple(4);
     const rows = preseasonStartRamp({ matchTypicalLoad: MATCH, sessionsPerWeek: 4, preseasonWeeks: 5, anchor: "match_this_season" });
