@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { kpiGroup, kpiWhat, kpiWhatWhy, plainKpiName } from "../kpiPlainNames";
+import { KPI_GROUP_OF, KPI_PLAIN, kpiGroup, kpiWhat, kpiWhatWhy, plainKpiName } from "../kpiPlainNames";
 
 describe("kpiPlainNames", () => {
   it("the pre-season sentence is unchanged (what + why)", () => {
@@ -17,10 +17,20 @@ describe("kpiPlainNames", () => {
     expect(kpiWhat("velocityBand5")?.is).toBe("Hröð hlaup (HSR).");
   });
 
-  it("groups, with an extra map for keys only one tab places", () => {
+  it("groups — both tabs read the same map", () => {
     expect(kpiGroup("velocityBand6")).toBe("speed");
-    expect(kpiGroup("imaStrideHi")).toBe("other");
-    expect(kpiGroup("imaStrideHi", { imaStrideHi: "run" })).toBe("run");
+    expect(kpiGroup("somethingNew")).toBe("other");
+  });
+
+  it("the long-run stride count (imaStrideHi) has a group, a plain name and a sentence in both tabs", () => {
+    expect(kpiGroup("imaStrideHi")).toBe("run");
+    expect(plainKpiName("imaStrideHi", { en: "raw", is: "hrátt" }, true, new Set())).toBe("Skref í löngum hlaupum á leikhraða");
+    expect(kpiWhat("imaStrideHi")?.en).toBe("Strides in long continuous runs at match pace (18 s or more, 11 km/h+). Jogs do not count.");
+    expect(kpiWhatWhy("imaStrideHi")?.is).toBe("Skref í löngum samfelldum hlaupum á leikhraða (18 s eða lengur, 11 km/klst+). Skokk telst ekki með. Hlaupagrunnur, ekki hröð hlaup.");
+  });
+
+  it("every grouped variable has a plain name", () => {
+    for (const k of Object.keys(KPI_GROUP_OF)) expect(KPI_PLAIN[k], k).toBeTruthy();
   });
 
   it("a second source of one action keeps its own label", () => {

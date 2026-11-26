@@ -20,10 +20,6 @@ import {
 
 type Bi = { en: string; is: string };
 
-/** In-season only: the long-run stride count (IMA) sits with running volume. Not in the shared map, so the
- *  pre-season table stays as it was. */
-const IN_SEASON_GROUP_EXTRA = { imaStrideHi: "run" as const };
-
 export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, numWeeks, playerName }: {
   is: boolean;
   view: BlockVolumeView;
@@ -125,7 +121,7 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
 
         {/* Groups */}
         {KPI_GROUPS.map((g) => {
-          const gr = kpiRows.filter((r) => kpiGroup(r.key, IN_SEASON_GROUP_EXTRA) === g.key);
+          const gr = kpiRows.filter((r) => kpiGroup(r.key) === g.key);
           if (!gr.length) return null;
           return (
             <div key={g.key} className="px-5 pt-2 sm:px-6">

@@ -12,7 +12,7 @@ type Bi = { en: string; is: string };
 export type KpiGroupKey = "run" | "speed" | "tissue" | "other";
 
 export const KPI_GROUP_OF: Partial<Record<string, Exclude<KpiGroupKey, "other">>> = {
-  totalDistance: "run", imaFrDistance: "run", imaStrideBand6: "run",
+  totalDistance: "run", imaFrDistance: "run", imaStrideHi: "run", imaStrideBand6: "run",
   velocityBand5: "speed", velocityBand6: "speed",
   accelB23: "tissue", imaAccel: "tissue", decelB23: "tissue", imaDecel: "tissue", imaCod: "tissue", imaTotal: "tissue",
 };
@@ -28,6 +28,7 @@ export const KPI_GROUPS: Array<{ key: KpiGroupKey; title: Bi; preSub: Bi; inSub:
 export const KPI_PLAIN: Partial<Record<string, Bi>> = {
   totalDistance: { en: "Total distance", is: "Heildarvegalengd" },
   imaFrDistance: { en: "Long runs at match pace", is: "Löng hlaup á leikhraða" },
+  imaStrideHi: { en: "Strides in long runs at match pace", is: "Skref í löngum hlaupum á leikhraða" },
   imaStrideBand6: { en: "Long-run strides", is: "Skref í löngum hlaupum" },
   velocityBand5: { en: "High-speed running", is: "Háhraðahlaup" },
   velocityBand6: { en: "Sprint", is: "Sprettir" },
@@ -50,6 +51,7 @@ export const KPI_WHAT: Partial<Record<string, { what: Bi; why?: Bi }>> = {
   imaTotal: { what: { en: "All hard speed-ups, brakes and turns together.", is: "Allar kröftugar hraðaaukningar, hemlanir og beygjur saman." } },
   imaStrideBand6: { what: { en: "Strides in longer continuous runs (12–18 s).", is: "Skref í lengri samfelldum hlaupum (12–18 s)." }, why: { en: "Aerobic running base, not fast running.", is: "Hlaupagrunnur, ekki hröð hlaup." } },
   imaFrDistance: { what: { en: "Distance in long runs (18 s or more).", is: "Vegalengd í löngum hlaupum (18 s eða lengur)." }, why: { en: "Aerobic running base, not fast running.", is: "Hlaupagrunnur, ekki hröð hlaup." } },
+  imaStrideHi: { what: { en: "Strides in long continuous runs at match pace (18 s or more, 11 km/h+). Jogs do not count.", is: "Skref í löngum samfelldum hlaupum á leikhraða (18 s eða lengur, 11 km/klst+). Skokk telst ekki með." }, why: { en: "Aerobic running base, not fast running.", is: "Hlaupagrunnur, ekki hröð hlaup." } },
   totalPlayerLoad: { what: { en: "The whole week's load in one number.", is: "Allt álag vikunnar í einni tölu." }, why: { en: "Changing it moves every variable you haven't set yourself by the same share.", is: "Ef þú breytir því færast allar breytur sem þú hefur ekki stillt sjálfur um sama hlutfall." } },
 };
 
@@ -68,9 +70,9 @@ export function kpiWhat(key: string): Bi | null {
   return { en: close(w.what.en), is: close(w.what.is) };
 }
 
-/** The group a variable sits in. `extra` places keys the shared map lacks (used by one tab only). */
-export function kpiGroup(key: string, extra?: Partial<Record<string, Exclude<KpiGroupKey, "other">>>): KpiGroupKey {
-  return KPI_GROUP_OF[key] ?? extra?.[key] ?? "other";
+/** The group a variable sits in (both tabs read the same map). */
+export function kpiGroup(key: string): KpiGroupKey {
+  return KPI_GROUP_OF[key] ?? "other";
 }
 
 /** The plain name, unless another row already took it (two sources of one action keep their own label). */
