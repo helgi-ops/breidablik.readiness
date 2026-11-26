@@ -431,23 +431,24 @@ test("mdWeekTargets: MD-anchored days with numbers from the position baseline", 
   const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, imaCod: null, matchImaCod: null, imaFrDist: null, matchImaFrDist: null, accelHiEff: null, decelHiEff: null, strideHi: null, matchAccelHiEff: null, matchDecelHiEff: null, matchStrideHi: null, rhieBouts: null, runSymmetry: null, metabolicPower: null };
   const days = mdWeekTargets(b);
   const tag = (t: string) => days.find((d) => d.mdTag === t)!;
-  assert.equal(tag("MD-5").type, "mechanical");   // MD-5 = mechanical (accel/decel/PL)
-  assert.ok(tag("MD-5").targets.some((t) => /Player Load/.test(t.metric.en)));
-  assert.equal(tag("MD-4").type, "locomotive");   // MD-4 = locomotive (HSR/distance/sprint)
-  assert.ok(tag("MD-4").targets.some((t) => /HSR/.test(t.metric.en)));
-  assert.equal(tag("MD-3").type, "mixed");
+  assert.equal(tag("MD-5").type, "mixed");        // MD-5 = mixed
+  assert.equal(tag("MD-4").type, "mechanical");   // MD-4 = mechanical (accel/decel/PL) — the coach's rule
+  assert.ok(tag("MD-4").targets.some((t) => /Player Load/.test(t.metric.en)));
+  assert.equal(tag("MD-3").type, "locomotive");   // MD-3 = locomotive (HSR/distance/sprint)
+  assert.ok(tag("MD-3").targets.some((t) => /HSR/.test(t.metric.en)));
   assert.equal(tag("MD-2").type, "technical");
   assert.equal(tag("MD+1").type, "restart");
   assert.equal(tag("MD").type, "match");
   assert.ok(tag("MD").targets.some((t) => /900 m/.test(t.value)));  // match-day HSR baseline
   assert.equal(tag("Top-up").type, "topup");
   // MD-4 is the heaviest training day by default (load falls toward the match; Martín-García 2018).
-  const dist = (t: string) => parseFloat(tag(t).targets.find((x) => /Distance/.test(x.metric.en))!.value);
-  assert.ok(dist("MD-4") > dist("MD-3"), `MD-4 ${dist("MD-4")} km > MD-3 ${dist("MD-3")} km`);
-  // Own-data MD shape overrides the default multiplier (MD-4 locomotive HSR = 260 × 2.0 = 520 m):
-  const shaped = mdWeekTargets(b, { mdShape: { "MD-4": 2.0 } });
-  const md4Hsr = shaped.find((d) => d.mdTag === "MD-4")!.targets.find((t) => /HSR/.test(t.metric.en))!.value;
-  assert.ok(/520 m/.test(md4Hsr));
+  const pl = (t: string) => Number(tag(t).targets.find((x) => /Player Load/.test(x.metric.en))!.value);
+  assert.equal(pl("MD-4"), Math.round(470 * 1.15)); // MD-4 carries the week's highest default multiplier
+  assert.ok(pl("MD-4") > pl("MD-5"));
+  // Own-data MD shape overrides the default multiplier (MD-3 locomotive HSR = 260 × 2.0 = 520 m):
+  const shaped = mdWeekTargets(b, { mdShape: { "MD-3": 2.0 } });
+  const md3Hsr = shaped.find((d) => d.mdTag === "MD-3")!.targets.find((t) => /HSR/.test(t.metric.en))!.value;
+  assert.ok(/520 m/.test(md3Hsr));
 });
 
 test("congested weeks: classify + collapse the micro (Oliveira 2019)", () => {
@@ -504,10 +505,10 @@ test("buildCalendarBlock: reproduces the demo microcycle (Sat/Sun alternation, t
   const b = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 6, scopeName: "Óli Valur", scopePos: "winger", baseOverloadPct: 100, stepPct: 8 });
   const pat = (w: number) => b.weeks[w].days.map((d) => d.type);
   // The approved demo's exact 6-week structure (Mon→Sun):
-  assert.deepEqual(pat(0), ["mechanical", "locomotive", "mixed", "rest", "activation", "match", "topup"]);       // W1 Sat, roomy
-  assert.deepEqual(pat(1), ["rest", "mechanical", "locomotive", "mixed", "rest", "activation", "match"]);        // W2 Sun, roomy
+  assert.deepEqual(pat(0), ["mixed", "mechanical", "locomotive", "rest", "activation", "match", "topup"]);       // W1 Sat, roomy
+  assert.deepEqual(pat(1), ["rest", "mixed", "mechanical", "locomotive", "rest", "activation", "match"]);        // W2 Sun, roomy
   assert.deepEqual(pat(2), ["topup", "rest", "locomotive", "mixed", "rest", "match", "topup"]);                  // W3 Sat, tight (2 quality)
-  assert.deepEqual(pat(5), ["rest", "locomotive", "rest", "mixed", "rest", "activation", "match"]);              // W6 Sun, deload (extra rest)
+  assert.deepEqual(pat(5), ["rest", "mixed", "rest", "locomotive", "rest", "activation", "match"]);              // W6 Sun, deload (extra rest)
   assert.equal(b.weeks[0].matchDow.en, "Sat"); assert.equal(b.weeks[1].matchDow.en, "Sun");
   assert.equal(b.weeks[5].isDeload, true); assert.ok(b.weeks[5].mult < b.weeks[4].mult);
   // MD labels descend correctly to the match (W1: MECH=MD-5 … ACT=MD-1 … MATCH=MD-0, TOP=MD+1).
@@ -554,7 +555,7 @@ test("seedBlockDays: the seed agrees with the block, so real weeks keep their da
   const untouched = buildCalendarBlock({ ...common, numWeeks: 4, matchDates, allFixtures: fixtures });
   assert.deepEqual(edited.weeks.map((w) => w.days.map((d) => d.type)), untouched.weeks.map((w) => w.days.map((d) => d.type)));
   // A 7-day match week in a held block: the top-up, a rest, Locomotive, Mixed, a rest, Activation, the match.
-  assert.deepEqual(untouched.weeks[0].days.map((d) => d.type), ["rest", "locomotive", "mixed", "rest", "activation", "match", "topup"]);
+  assert.deepEqual(untouched.weeks[0].days.map((d) => d.type), ["rest", "mechanical", "locomotive", "rest", "activation", "match", "topup"]);
   assert.ok(untouched.weeks.every((w) => w.days.filter((d) => d.type === "mixed").length <= 2));
 });
 
@@ -582,14 +583,14 @@ test("buildCalendarBlock in season: never three training days in a row; the 8-da
   const types = b.weeks.flatMap((w) => w.days.map((d) => d.type));
   assert.ok(trainingRuns(types) <= 2, `training days in a row = ${trainingRuns(types)}`);
   // W2: Sat → Sun is an 8-day week. Out of season it is rest, Mechanical (MD-5), Locomotive, Mixed, rest, Activation.
-  assert.deepEqual(b.weeks[1].days.map((d) => d.type), ["rest", "rest", "locomotive", "mixed", "rest", "activation", "match"]);
+  assert.deepEqual(b.weeks[1].days.map((d) => d.type), ["rest", "rest", "mechanical", "locomotive", "rest", "activation", "match"]);
   assert.deepEqual(b.weeks[1].days.map((d) => d.md).slice(1, 4), ["MD-5", "MD-4", "MD-3"]);
   // Out of season the block keeps its own safety (three in a row, matches counted): unchanged.
   const off = buildCalendarBlock({ unit: UNIT, startDate: "2026-01-05", numWeeks: 6, scopeName: "t", baseOverloadPct: 100, stepPct: 8 });
-  assert.deepEqual(off.weeks[1].days.map((d) => d.type), ["rest", "mechanical", "locomotive", "mixed", "rest", "activation", "match"]);
+  assert.deepEqual(off.weeks[1].days.map((d) => d.type), ["rest", "mixed", "mechanical", "locomotive", "rest", "activation", "match"]);
   // Only days inside the competitive phase follow the week rule.
   const later = buildCalendarBlock({ unit: UNIT, startDate: "2026-01-05", numWeeks: 6, scopeName: "t", baseOverloadPct: 100, stepPct: 8, inSeason: { start: "2026-02-01", end: "2026-12-31" } });
-  assert.equal(later.weeks[1].days[1].type, "mechanical");
+  assert.equal(later.weeks[1].days[1].type, "mixed");
 });
 
 test("buildCalendarBlock in season: a day the coach pinned is never turned off by the week rule", () => {
@@ -609,8 +610,8 @@ test("buildCalendarBlock: a held week keeps the full week; a Realization block o
   const unit: MatchUnitAbs = { dist: 10000, hsr: 800, load: 1000, accdec: 200, accHiEff: 40, decHiEff: 50, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
   const common = { unit, startDate: "2026-05-04", numWeeks: 2, scopeName: "t", baseOverloadPct: 100, stepPct: 5, goal: "realize" as const, matchDates: ["2026-05-09", "2026-05-16"], allFixtures: ["2026-05-02", "2026-05-09", "2026-05-16"] };
   const sessions = (hold: boolean) => buildCalendarBlock({ ...common, hold }).weeks[1].days.filter((d) => !["rest", "match"].includes(d.type)).map((d) => d.type);
-  assert.deepEqual(sessions(true), ["locomotive", "mixed", "activation", "topup"]);
-  assert.deepEqual(sessions(false), ["mixed", "activation", "topup"]);
+  assert.deepEqual(sessions(true), ["mechanical", "locomotive", "activation", "topup"]);
+  assert.deepEqual(sessions(false), ["locomotive", "activation", "topup"]);
 });
 
 test("buildCalendarBlock: matchExposure makes a pre-season friendly day read as PARTIAL of a match", () => {
@@ -669,7 +670,7 @@ test("buildCalendarBlock: block GOAL reshapes volume/taper/strength and stays ad
   // (b) Taper depth on the deload (last) week: realize cuts volume hardest (0.45) vs accum (0.75), and realize
   //     HOLDS intensity (hsr) above its volume cut (0.70 int vs 0.45 vol) — the peaking-taper signature.
   assert.equal(realize.weeks[5].mult, 0.45); assert.equal(accum.weeks[5].mult, 0.75);
-  const rzDeload = realize.weeks[5].days.find((d) => d.type !== "rest" && d.type !== "match")!;
+  const rzDeload = realize.weeks[5].days.find((d) => d.type === "locomotive")!;
   assert.ok((rzDeload.hsr! / UNIT.hsr!) > (rzDeload.load! / UNIT.load!), "realize deload holds intensity above its volume cut");
   // (c) Realization's roomy week is fresher: more rest, no more than 3 sessions.
   assert.ok(realize.weeks[1].restDays >= accum.weeks[1].restDays, "realize week has ≥ rest of accum week");

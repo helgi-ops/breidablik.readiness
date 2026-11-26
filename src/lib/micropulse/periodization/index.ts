@@ -444,9 +444,9 @@ export function mdWeekTargets(b: TeamAverages, opts?: { mdShape?: Record<string,
   ];
   const DAY: Record<string, { mdTag: string; type: MdDayType; targets: MdTargetMetric[]; note?: Bi }> = {
     restart: { mdTag: "MD+1", type: "restart", targets: mech(mult("MD+1")), note: { en: "Players who played <60 min get a Top-up instead (below).", is: "Leikmenn sem spiluðu <60 mín fá Áfyllingu í staðinn (neðar)." } },
-    mech: { mdTag: "MD-5", type: "mechanical", targets: mech(mult("MD-5")) },
-    loco: { mdTag: "MD-4", type: "locomotive", targets: loco(mult("MD-4")) },
-    mixed: { mdTag: "MD-3", type: "mixed", targets: [...mech(mult("MD-3")).slice(0, 1), ...loco(mult("MD-3")).slice(0, 2)] },
+    mixed: { mdTag: "MD-5", type: "mixed", targets: [...mech(mult("MD-5")).slice(0, 1), ...loco(mult("MD-5")).slice(0, 2)] },
+    mech: { mdTag: "MD-4", type: "mechanical", targets: mech(mult("MD-4")) },
+    loco: { mdTag: "MD-3", type: "locomotive", targets: loco(mult("MD-3")) },
     tech2: { mdTag: "MD-2", type: "technical", targets: [...mech(mult("MD-2")).slice(0, 1), ...loco(mult("MD-2")).slice(0, 1)] },
     tech1: { mdTag: "MD-1", type: "technical", targets: [...mech(mult("MD-1")).slice(0, 1), ...loco(mult("MD-1")).slice(0, 1)] },
     match: { mdTag: "MD", type: "match", targets: [
@@ -460,7 +460,7 @@ export function mdWeekTargets(b: TeamAverages, opts?: { mdShape?: Record<string,
   // recovery + short match-prep only.
   const order = weekType === "three_game" ? ["restart", "tech1", "match", "topup"]
     : weekType === "two_game" ? ["restart", "tech2", "tech1", "match", "topup"]
-      : ["restart", "mech", "loco", "mixed", "tech2", "tech1", "match", "topup"];
+      : ["restart", "mixed", "mech", "loco", "tech2", "tech1", "match", "topup"];
   return order.map((k) => DAY[k]).map((d) => ({ mdTag: d.mdTag, type: d.type, label: MD_TYPE_LABEL[d.type], quality: MD_TYPE_QUALITY[d.type], targets: d.targets, note: d.note ?? null }));
 }
 
@@ -522,7 +522,7 @@ export function buildMesoPlan(opts: {
     ...(anyInSeason ? [{ en: "In season there is no automatic deload week: the match-day taper already varies the week, and a light week is the coach's pick (Malone 2015; Fessi 2016).", is: "Á keppnistímabili er engin sjálfvirk niðurtröppunarvika: leikdagatröppunin breytir vikunni nú þegar og létt vika er val þjálfarans (Malone 2015; Fessi 2016)." }] : []),
     { en: "Targets scale from each player's own match unit — a starting point, never a norm to obey (Little & Buchheit).", is: "Álagsmörk skala frá eigin leikviðmiði hvers leikmanns — upphafspunktur, aldrei viðmið til að hlýða í blindni (Little & Buchheit)." },
     { en: "No single \"% of match\": mechanical work over-shoots the match, HSR/sprint fall short — read each axis on its own (Figueiredo).", is: "Ekkert eitt „%-af-leik“: vélrænt fer yfir leikinn, háhraði/sprettur ná ekki — lestu hvern ás sér (Figueiredo)." },
-    { en: "Never stack HSR and mechanical work on the same day — protect the posterior chain (Mechanical MD-5 vs Locomotive MD-4).", is: "Aldrei stafla háhraða og vélrænu á sama dag — verndaðu afturkeðjuna (Mechanical MD-5 vs Locomotive MD-4)." },
+    { en: "Never stack HSR and mechanical work on the same day — protect the posterior chain (Mechanical MD-4 vs Locomotive MD-3).", is: "Aldrei stafla háhraða og vélrænu á sama dag — verndaðu afturkeðjuna (Mechanical MD-4 vs Locomotive MD-3)." },
     { en: "<60-min players get a Top-up toward the match unit; readiness gates every day and never raises a light one.", is: "<60-mín leikmenn fá Áfyllingu að leikviðmiðinu; viðbragð stýrir hverjum degi og hækkar aldrei léttan dag." },
     { en: "Descriptive planning — it never sets the readiness colour. The coach decides and overrides.", is: "Lýsandi áætlun — hún setur aldrei readiness-litinn. Þjálfarinn ákveður og hnekkir." },
   ];
@@ -912,15 +912,17 @@ export function buildCalendarBlock(opts: {
   const deloadLight = !!opts.deload?.light;
   // With no unload at the end of the block the ramp peaks in its last week.
   const peakIdx = opts.deload === undefined || deloadIdx === n - 1 ? n - 2 : n - 1;
-  // Build-up templates (evidence-ordered): roomy weeks get Mechanical→Locomotive→Mixed→Off→Activation;
-  // tight weeks compress to Locomotive→Mixed→Off (drop Mechanical + Activation); deload inserts extra rest.
-  const LT: CalType[] = ["mechanical", "locomotive", "mixed", "rest", "activation"];
+  // Build-up templates, counted back from the match (the coach's rule, 2026-11-26: MD-4 Mechanical, MD-3
+  // Locomotive — the same days as Today's planned load, drill fit and the session library): roomy weeks get
+  // MD-5 Mixed → MD-4 Mechanical → MD-3 Locomotive → MD-2 Off → MD-1 Activation; tight weeks compress to
+  // MD-3 Locomotive → MD-2 Mixed → MD-1 Off (drop Mechanical + Activation); deload inserts extra rest.
+  const LT: CalType[] = ["mixed", "mechanical", "locomotive", "rest", "activation"];
   const ST: CalType[] = ["locomotive", "mixed", "rest"];
-  const DLT: CalType[] = ["locomotive", "rest", "mixed", "rest", "activation"];
+  const DLT: CalType[] = ["mixed", "rest", "locomotive", "rest", "activation"];
   // Realization trades quality days for freshness — drop the Mechanical overload day, add rest (3 sessions
   // + 2 rests vs the roomy 4). Same length as LT so the match-alignment math is unchanged; day ORDER is NOT
   // reshuffled (keeps the evidence-ordered microcycle + never-stack-HSR-and-mechanical). Mujika 2003; Issurin 2010.
-  const RT: CalType[] = ["locomotive", "rest", "mixed", "rest", "activation"];
+  const RT: CalType[] = ["mixed", "rest", "locomotive", "rest", "activation"];
   // A held week is the normal week, not a taper, so it keeps LT: four sessions in a 7-day match week. Breiðablik's
   // 2026 1-match weeks: 3.7 training days, about 15 km of running. On the team unit (every match-day row, subs included:
   // 7.8 km) LT gives 15.2 km and fits both; RT gives 10.9 km on three days, none of them a running day. On a player's own
@@ -1116,9 +1118,9 @@ export function buildCalendarBlock(opts: {
     { md: "MD-0", label: CAL_LABEL.match, what: { en: "Reference unit (100%). Alternates Sat / Sun.", is: "Viðmiðunareining (100%). Skiptist Lau / Sun." } },
     { md: "MD+1", label: CAL_LABEL.topup, what: { en: "Light compensatory for <60' players; recovery for starters.", is: "Létt uppbót fyrir <60' leikmenn; endurheimt fyrir byrjunarlið." } },
     { md: "MD+2", label: { en: "Off", is: "Frí" }, what: { en: "Full rest day — 48 h after the match.", is: "Heill frídagur — 48 klst eftir leik." } },
-    { md: "MD-5", label: CAL_LABEL.mechanical, what: { en: "Tight-space accel/decel — mechanical overload.", is: "Þröngt rými accel/decel — vélrænt yfirálag." } },
-    { md: "MD-4", label: CAL_LABEL.locomotive, what: { en: "Highest-HSR running day.", is: "Hæsti háhraða-hlaupadagur." } },
-    { md: "MD-3", label: CAL_LABEL.mixed, what: { en: "Biggest overall session; balanced.", is: "Stærsta æfing; jafnvægi." } },
+    { md: "MD-5", label: CAL_LABEL.mixed, what: { en: "Match-like; balanced HSR + mechanical.", is: "Leiklíkt; jafnvægi háhraða og vélræns." } },
+    { md: "MD-4", label: CAL_LABEL.mechanical, what: { en: "Tight-space accel/decel — mechanical overload; the week's heaviest day.", is: "Þröngt rými accel/decel — vélrænt yfirálag; þyngsti dagur vikunnar." } },
+    { md: "MD-3", label: CAL_LABEL.locomotive, what: { en: "Highest-HSR running day.", is: "Hæsti háhraða-hlaupadagur." } },
     { md: "MD-1", label: CAL_LABEL.activation, what: { en: "Primer — sharpen, don't fatigue.", is: "Virkjun — skerpa, ekki þreyta." } },
   ];
   const notes: Bi[] = [

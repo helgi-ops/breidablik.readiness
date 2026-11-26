@@ -107,7 +107,7 @@ Hér er notað:
 |---|---|---|---|
 | MD-merki | Venjuleg vika: MD+1 og MD+2 eftir leik, svo talið niður MD-N. Lengra en 7 dagar í næsta leik: nær leikur ræður | Owen 2017 | — |
 | Dagar eftir leik | MD+1 = áfylling (endurheimt fyrir byrjunarlið, uppbót fyrir leikmenn undir 60 mín), MD+2 = frí | MicroPulse-regla | — |
-| Dagaröð að leik | Talið aftur frá leik: MD-1 Activation, MD-2 frí, MD-3 Mixed, MD-4 Locomotive, MD-5 Mechanical (þar sem dagar eru til). Þröng vika: Loco · Mixed · frí. Hvíldarvika: Loco · frí · Mixed · frí · Activation. Framkvæmd (ekki staðalvika): Mechanical út, frí inn | Mujika 2003; Issurin 2010; Owen 2017 | Dagur og dagsgerð þjálfara vinnur |
+| Dagaröð að leik | Talið aftur frá leik: MD-1 Activation, MD-2 frí, MD-3 Locomotive, MD-4 Mechanical, MD-5 Mixed (þar sem dagar eru til; regla þjálfarans 26. nóv. 2026, sama og álag dagsins, drillumat og æfingasafnið). Þröng vika: Loco · Mixed · frí. Hvíldarvika: Mixed · frí · Loco · frí · Activation. Framkvæmd (ekki staðalvika): Mechanical út, frí inn | Mujika 2003; Issurin 2010; Owen 2017 | Dagur og dagsgerð þjálfara vinnur |
 | Háhraði og vélrænt aldrei sama dag | Mechanical-dagur = hraðanir/hemlun, lágur háhraði; Locomotive = háhraði og löng hlaup | MicroPulse-regla | — |
 | Hlutfall af leik eftir dagsgerð (`CAL_SHARE`) | Vegalengd / háhraði / Player Load: Mechanical 0,45 / 0,25 / 1,10; Locomotive 0,55 / 0,45 / 0,55; Mixed 0,70 / 0,30 / 0,85; Activation 0,30 / 0,15 / 0,40; Áfylling 0,40 / 0,25 / 0,40 | MicroPulse-regla | — |
 | IMA hraðanir/hemlun/stefnubreytingar (`CAL_SHARE_IMA`) | Mechanical 0,80; Mixed 0,60; Áfylling 0,55; Locomotive 0,50 (rammagildi, ekki mælt); Activation 0,38 | Stevens 2017; Martín-García 2018; Silva 2022 | — |
@@ -160,9 +160,10 @@ Hér er notað:
 3. ~~**Hvaða MD-dagur er þyngstur.**~~ **Lagað 26. nóv.:** MD-4 er þyngsti æfingadagurinn alls staðar. Sjálfgefnu
    margfaldararnir í vikutöflunni (`mdWeekTargets`) eru nú MD-4 1,15 og MD-3 1,1 (voru 1,1 og 1,15), og Mixed er ekki
    lengur kallaður „stærsta æfingin“ (dagatalið, MD-taflan, hugmyndir dagsins), heldur leiklíkt áreiti með jafnvægi
-   háhraða og vélræns. **Enn opið:** álagstafla dagsins (`plannedSessionLoad.ts`) merkir MD-4 Mechanical og MD-3
-   Locomotive, en dagatalið og vikutaflan leggja MD-4 sem Locomotive og MD-3 sem Mixed. Þjálfarinn hélt tegundunum
-   24. nóv.; bíður ákvörðunar.
+   háhraða og vélræns. **Lagað líka 26. nóv. (regla þjálfarans):** MD-4 er Mechanical og MD-3 Locomotive.
+   Dagatalið, Mesó-síðurnar og MD-vikutaflan raða nú MD-5 Mixed · MD-4 Mechanical · MD-3 Locomotive · MD-2 frí ·
+   MD-1 Activation, eins og álag dagsins (`plannedSessionLoad.ts`), drillumat og æfingasafnið gerðu fyrir. Week setup
+   leggur MD-3 til sem hlaupadag.
 4. ~~**Tvær styrktartöflur fyrir Uppsöfnun á undirbúningi.**~~ **Lagað 26. nóv.:** athugasemdin neðst á dagatalinu og
    rannsóknarviðmiðið fyrir leikmann án VBT lesa nú sömu töflu og styrkhluti hubbsins (`strengthSchemeFor` →
    `strengthForBlockGoal`): Uppsöfnun á undirbúningi 65–80% 1RM, 3–4 × 8–12; á keppnistímabili 80–90%, 4–5 × 4–6.
