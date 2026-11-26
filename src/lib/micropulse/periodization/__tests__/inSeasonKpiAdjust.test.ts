@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildCalendarBlock, type CalendarBlock } from "../index";
 import {
-  applyBlockKpiToCalendar, blockKpiRatios, calendarScaleFromRatios, cleanBlockKpi, hasCalendarDay, nextBlockKpiLog, scaleCalWeek,
+  applyBlockKpiToCalendar, blockKpiLogView, blockKpiRatios, calendarScaleFromRatios, cleanBlockKpi, hasCalendarDay, nextBlockKpiLog, scaleCalWeek,
 } from "../inSeasonKpiAdjust";
 import { buildPlannedVolume, inSeasonKpiMultiple } from "../inSeasonStandardWeek";
 import { blockVolumeView } from "../inSeasonMesoView";
@@ -107,6 +107,23 @@ describe("audit log and season guard", () => {
       { block: "2026-07-06", kpi: "velocityBand6", from: null, to: 1, by: "u1", at: "t1" },
     ]);
     expect(nextBlockKpiLog(log, { a: {} }, { a: {} }, "u", "t")).toHaveLength(3);
+  });
+
+  it("the hub's log view keeps good rows, names people (never ids), newest first", () => {
+    const raw = [
+      { block: "2026-06-08", kpi: "totalDistance", from: 1.8, to: 1.9, by: "u1", at: "2026-06-01T10:00:00Z" },
+      { block: "2026-06-08", kpi: "velocityBand5", from: null, to: 1.2, by: "u2", at: "2026-06-02T10:00:00Z" },
+      { block: "not-a-date", kpi: "totalDistance", from: 1, to: 2, by: "u1", at: "2026-06-03T10:00:00Z" },
+      { block: "2026-06-08", kpi: "madeUpKpi", from: 1, to: 2, by: "u1", at: "2026-06-03T10:00:00Z" },
+      null,
+    ];
+    const v = blockKpiLogView(raw, { u1: "Coach A" });
+    expect(v).toEqual([
+      { block: "2026-06-08", kpi: "velocityBand5", from: null, to: 1.2, at: "2026-06-02T10:00:00Z", byName: null },
+      { block: "2026-06-08", kpi: "totalDistance", from: 1.8, to: 1.9, at: "2026-06-01T10:00:00Z", byName: "Coach A" },
+    ]);
+    expect(blockKpiLogView(raw, {}, 1)).toHaveLength(1);
+    expect(blockKpiLogView("nope", {})).toEqual([]);
   });
 
   it("another season's block settings never enter this season's row", () => {

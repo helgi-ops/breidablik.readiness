@@ -39,7 +39,7 @@ import { weeklyTargetFromMatch } from "@/lib/micropulse/periodization";
 import { upcomingInternationalBreaks, intlBreakKey, type IntlBreak } from "@/lib/micropulse/internationalBreaks";
 import { standardTrainingDays, weeklyKpiMultiple, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
 import { buildPlannedVolume, inSeasonWeekMultiple } from "@/lib/micropulse/periodization/inSeasonStandardWeek";
-import { applyBlockKpiToCalendar, blockKpiRatios, calendarScaleFromRatios, cleanBlockKpi, type BlockKpiMap, type CalAxisScale } from "@/lib/micropulse/periodization/inSeasonKpiAdjust";
+import { applyBlockKpiToCalendar, blockKpiRatios, calendarScaleFromRatios, cleanBlockKpi, nextBlockKpiLog, type BlockKpiLogEntry, type BlockKpiMap, type CalAxisScale } from "@/lib/micropulse/periodization/inSeasonKpiAdjust";
 import { mdOffset } from "@/lib/micropulse/periodization/periodizationModel";
 import { buildDayDrillSheet } from "@/lib/micropulse/dayDrillSheet";
 import { fetchResearchDrills } from "@/lib/micropulse/dayDrillLibraryFetch";
@@ -251,6 +251,9 @@ export default function PeriodizationHubPage() {
   // The coach's per-variable standard week per in-season block (× a match), keyed by block start ISO. Persisted in
   // season_plans.overrides.blockKpi; moves the calendar's days, the weekly target and the players' blocks.
   const [blockKpi, setBlockKpi] = React.useState<BlockKpiMap>({});
+  // Their change log (who, when, from → to), newest first; `blockKpiSaved` = what the server holds, to log a save.
+  const [blockKpiLog, setBlockKpiLog] = React.useState<BlockKpiLogEntry[]>([]);
+  const blockKpiSaved = React.useRef<BlockKpiMap>({});
   const [loadCurveKey, setLoadCurveKey] = React.useState(-1); // -1 = Team (whole squad), else a position key
   // Pre-season week-1 starting target + ramp (editable launch pad; coach builds from it).
   const [psWeek1Mult, setPsWeek1Mult] = React.useState(1.3); // week-1 ×match (controlled re-entry)
@@ -436,7 +439,10 @@ export default function PeriodizationHubPage() {
         if (sw.blockGoals && Object.keys(sw.blockGoals).length) setBlockGoals(sw.blockGoals);
         if (sw.blockWeeks && Object.keys(sw.blockWeeks).length) setBlockLenOv(sw.blockWeeks);
         if (sw.blockDeload && Object.keys(sw.blockDeload).length) setBlockDeloadOv(sw.blockDeload);
-        setBlockKpi(cleanBlockKpi((sw as { blockKpi?: unknown }).blockKpi));
+        const savedKpi = cleanBlockKpi((sw as { blockKpi?: unknown }).blockKpi);
+        setBlockKpi(savedKpi); blockKpiSaved.current = savedKpi;
+        const savedLog = (sw as { blockKpiLog?: unknown }).blockKpiLog; // already the hub's view (names, newest first)
+        setBlockKpiLog(Array.isArray(savedLog) ? (savedLog as BlockKpiLogEntry[]).filter((e) => e && typeof e.block === "string" && typeof e.kpi === "string" && typeof e.at === "string") : []);
         if (Array.isArray(sw.preMesoTail) && sw.preMesoTail.length) setCurMesoTail(sw.preMesoTail.filter((n) => Number.isFinite(n)));
         if (sw.preWeek1Kpi && typeof sw.preWeek1Kpi === "object") setCurWeek1Kpi(sw.preWeek1Kpi);
       }
@@ -1070,7 +1076,15 @@ export default function PeriodizationHubPage() {
     setBlockKpi(next);
     if (blockKpiTimer.current) clearTimeout(blockKpiTimer.current);
     blockKpiTimer.current = setTimeout(async () => {
-      try { await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: yr, overrides: { blockKpi: next } }) }); } catch { /* best-effort persist */ }
+      try {
+        const r = await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: yr, overrides: { blockKpi: next } }) });
+        if (!r.ok) return;
+        // The server logged this save the same way (one entry per changed variable); show it at once, by "you".
+        const added = nextBlockKpiLog([], blockKpiSaved.current, next, "", new Date().toISOString())
+          .map((e) => ({ block: e.block, kpi: e.kpi as WeeklyLoadMetricKey, from: e.from, to: e.to, at: e.at, byName: null }));
+        blockKpiSaved.current = next;
+        if (added.length) setBlockKpiLog((prev) => [...added, ...prev]);
+      } catch { /* best-effort persist */ }
     }, 600);
   }, [plan, authHeader, blockKpi]);
   // All length edits write STABLE block-START (ISO) keys (migrating any legacy index keys first), so a
@@ -3287,7 +3301,8 @@ export default function PeriodizationHubPage() {
             {/* The standard week, every variable as × a match beside the research range (mirror of the pre-season
                 "Load per variable" table): the system proposes, the coach sets any variable with − / + for this block. */}
             <InSeasonVariableTable is={is} view={view} oneMatchNote={oneMatchNote} hold={blkHold} numWeeks={blkWeeksEff} playerName={isPlayerScope ? player?.name ?? null : null}
-              onKpi={isPlayerScope ? undefined : (k, x) => setBlockKpiFor(blkStart, k, x)} onResetAll={isPlayerScope ? undefined : () => setBlockKpiFor(blkStart, null, null)} />
+              onKpi={isPlayerScope ? undefined : (k, x) => setBlockKpiFor(blkStart, k, x)} onResetAll={isPlayerScope ? undefined : () => setBlockKpiFor(blkStart, null, null)}
+              changeLog={blockKpiLog.filter((e) => e.block === blkStart)} />
 
             {/* The block's goal (coach's call; the system recommends) and the tests that fit it. */}
             <div className="mt-2 grid min-w-0 items-start gap-6 lg:grid-cols-2">

@@ -14,7 +14,7 @@ import { isAerobicMode, DEFAULT_AEROBIC_TEST, type AerobicMode } from "@/lib/mic
 import { writeWeekSetup } from "@/lib/micropulse/periodization/weekSetupWrite";
 import { guardSeasonWindow } from "@/lib/micropulse/periodization/seasonWindowGuard";
 import { cleanAssumedGames, cleanGamesFrom } from "@/lib/micropulse/periodization/preseasonWindow";
-import { cleanBlockKpi, nextBlockKpiLog } from "@/lib/micropulse/periodization/inSeasonKpiAdjust";
+import { blockKpiLogView, cleanBlockKpi, nextBlockKpiLog } from "@/lib/micropulse/periodization/inSeasonKpiAdjust";
 
 export const runtime = "nodejs";
 
@@ -71,6 +71,14 @@ export async function GET(req: Request) {
   }
   // Echo the saved window so the hub inputs can populate (pre-season start, season end, next pre-season,
   // off-season weeks) instead of starting blank each visit.
+  // The change log of the per-variable settings, with the coach's name (never the user id) — shown in the hub.
+  const kpiLogRaw = (ov as { blockKpiLog?: unknown }).blockKpiLog;
+  const kpiLogBy = Array.isArray(kpiLogRaw) ? [...new Set((kpiLogRaw as Array<{ by?: unknown }>).map((e) => e?.by).filter((x): x is string => typeof x === "string"))] : [];
+  const kpiLogNames: Record<string, string> = {};
+  if (kpiLogBy.length) {
+    const { data: who } = await ctx.sb.from("profiles").select("id, full_name").in("id", kpiLogBy);
+    for (const r of (who ?? []) as Array<{ id: string; full_name: string | null }>) if (r.full_name) kpiLogNames[r.id] = r.full_name;
+  }
   const savedWindow = {
     preseasonStart: ov.preseasonStart ?? null, seasonEnd: ov.seasonEnd ?? null,
     nextPreseasonStart: ov.nextPreseasonStart ?? null, offseasonWeeks: ov.offseasonWeeks ?? null,
@@ -82,6 +90,7 @@ export async function GET(req: Request) {
     blockWeeks: ov.blockWeeks ?? {}, blockDeload: ov.blockDeload ?? {},
     // The coach's per-variable setting per in-season block (× a match), cleaned.
     blockKpi: cleanBlockKpi((ov as { blockKpi?: unknown }).blockKpi),
+    blockKpiLog: blockKpiLogView(kpiLogRaw, kpiLogNames),
     // Game-anchored pre-season meso-cycle lengths (backwards periodization: the tail blocks nearest the
     // opener are exact, the base block absorbs the remainder). Drives the Pre-season meso editor.
     preMesoTail: Array.isArray(ov.preMesoTail) ? ov.preMesoTail : null,

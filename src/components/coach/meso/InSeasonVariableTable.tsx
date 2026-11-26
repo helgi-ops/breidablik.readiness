@@ -15,7 +15,7 @@ import * as React from "react";
 import { KPI_GROUPS, kpiGroup, kpiWhat, plainKpiName } from "@/lib/micropulse/periodization/kpiPlainNames";
 import type { BlockVolumeView, VariableRow } from "@/lib/micropulse/periodization/inSeasonMesoView";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
-import { BLOCK_KPI_MAX, BLOCK_KPI_MIN, BLOCK_KPI_STEP, hasCalendarDay } from "@/lib/micropulse/periodization/inSeasonKpiAdjust";
+import { BLOCK_KPI_MAX, BLOCK_KPI_MIN, BLOCK_KPI_STEP, hasCalendarDay, type BlockKpiLogEntry } from "@/lib/micropulse/periodization/inSeasonKpiAdjust";
 import { MultipleInput } from "@/components/coach/meso/MultipleInput";
 import {
   ARCHIVO, BandOrNone, LegendFilled, LegendLight, LegendOpen, LegendRange, VARIABLE_COLS, VariableGroupHeader, VariableScaleTicks, VariableTrack, trackScaleMax,
@@ -23,7 +23,7 @@ import {
 
 type Bi = { en: string; is: string };
 
-export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, numWeeks, playerName, onKpi, onResetAll }: {
+export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, numWeeks, playerName, onKpi, onResetAll, changeLog = [] }: {
   is: boolean;
   view: BlockVolumeView;
   /** What "one match" is — the team's typical full match, or the player's own. */
@@ -35,6 +35,8 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
   /** Set a variable's standard week for this block (× a match; null = back to the proposal). Absent = read-only. */
   onKpi?: (k: WeeklyLoadMetricKey, x: number | null) => void;
   onResetAll?: () => void;
+  /** This block's setting changes, newest first (who, when, from → to). */
+  changeLog?: BlockKpiLogEntry[];
 }) {
   const t = (b: Bi) => (is ? b.is : b.en);
   const [why, setWhy] = React.useState(false);
@@ -72,6 +74,17 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
       <button type="button" onClick={() => commit(r, r.week + BLOCK_KPI_STEP)} aria-label={`${name} — ${t({ en: "standard week up", is: "staðalvika upp" })}`} className="h-full w-10 shrink-0 text-[17px] text-[#2740e6] hover:bg-[#2740e6]/5">+</button>
     </div>
   );
+  // The change log: the latest change in one plain line, the whole list behind a toggle.
+  const [logOpen, setLogOpen] = React.useState(false);
+  const logName = (k: WeeklyLoadMetricKey) => (k === "totalPlayerLoad" ? t({ en: "Overall load", is: "Heildarálag" }) : plainKpiName(k, WEEKLY_LOAD_LABELS[k], is, new Set<string>()));
+  const logVal = (x: number | null) => (x == null ? t({ en: "proposal", is: "tillaga" }) : `${fx(x)}×`);
+  const logWho = (e: BlockKpiLogEntry) => e.byName ?? t({ en: "you", is: "þú" });
+  const logWhen = (iso: string) => {
+    const d = new Date(iso);
+    if (!Number.isFinite(d.getTime())) return iso.slice(0, 10);
+    return d.toLocaleString(is ? "is-IS" : "en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  };
+  const logLine = (e: BlockKpiLogEntry) => `${logName(e.kpi)}: ${logVal(e.from)} → ${logVal(e.to)}`;
   const yours = <span className="rounded-full bg-[#2740e6]/[0.08] px-1.5 py-0.5 text-[10px] font-semibold text-[#2740e6]">{t({ en: "yours", is: "þitt" })}</span>;
   const value = (r: VariableRow, name: string, big = false) => (
     <div className="flex flex-col gap-0.5">
@@ -122,6 +135,7 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
             ? t({ en: `The standard week is the calendar's own one-match week (${view.trainingDays.join(", ")}; MD+2 and MD-2 off), so the week cards below add up to the same unless a week's games or days differ.`, is: `Staðalvikan er eins leiks vika dagatalsins sjálfs (${view.trainingDays.join(", ")}; frí á MD+2 og MD-2), svo vikuspjöldin hér að neðan leggja saman það sama nema leikir eða dagar vikunnar séu aðrir.` })
             : t({ en: "The week cards below show what the calendar's days add up to, so a week there can sit a little off this standard week.", is: "Vikuspjöldin hér að neðan sýna hvað dagar dagatalsins leggja saman, svo vika þar getur vikið aðeins frá þessari staðalviku." })}</li>
           <li>{weeksLine}</li>
+          {changeLog.length > 0 && <li>{t({ en: "Last change", is: "Síðasta breyting" })}: <b className="font-semibold text-slate-700">{logLine(changeLog[0])}</b> · {logWho(changeLog[0])} · {logWhen(changeLog[0].at)}</li>}
           {editable
             ? <li>{t({ en: "The system proposes each variable; set any of them with − / + for this block. Every week of the block follows — the days in the calendar below, the weekly target and the players' blocks.", is: "Kerfið leggur til hverja breytu; stilltu hvaða breytu sem er með − / + fyrir þessa lotu. Allar vikur lotunnar fylgja — dagarnir í dagatalinu hér að neðan, vikumarkmiðið og lotur leikmanna." })}</li>
             : playerName && <li>{t({ en: "A player's view follows the team's settings; set the variables on the team.", is: "Sýn leikmanns fylgir stillingum liðsins; stilltu breyturnar á liðinu." })}</li>}
@@ -196,6 +210,38 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
             {why ? t({ en: "Hide details & sources", is: "Fela nánar & heimildir" }) : t({ en: "Show details & sources", is: "Sýna nánar & heimildir" })}
           </button>
         </div>
+        {changeLog.length > 0 && (
+          <div className="mt-3 text-[12px] text-slate-600">
+            <button type="button" onClick={() => setLogOpen((v) => !v)} aria-expanded={logOpen} className="font-semibold text-[#2740e6] hover:underline">
+              {logOpen ? t({ en: "Hide change log", is: "Fela breytingaskrá" }) : t({ en: `Show change log (${changeLog.length})`, is: `Sýna breytingaskrá (${changeLog.length})` })}
+            </button>
+            {logOpen && (
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full min-w-[460px] text-[12.5px]">
+                  <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-500">
+                    <th className="py-1 pr-2 font-medium">{t({ en: "When", is: "Hvenær" })}</th>
+                    <th className="px-2 py-1 font-medium">{t({ en: "Variable", is: "Breyta" })}</th>
+                    <th className="px-2 py-1 text-right font-medium">{t({ en: "From", is: "Frá" })}</th>
+                    <th className="px-2 py-1 text-right font-medium">{t({ en: "To", is: "Í" })}</th>
+                    <th className="py-1 pl-2 font-medium">{t({ en: "Who", is: "Hver" })}</th>
+                  </tr></thead>
+                  <tbody>
+                    {changeLog.map((e, i) => (
+                      <tr key={`${e.at}-${e.kpi}-${i}`} className="border-t border-[#ece9e2]">
+                        <td className="py-1.5 pr-2 tabular-nums text-slate-600">{logWhen(e.at)}</td>
+                        <td className="px-2 py-1.5 text-slate-800">{logName(e.kpi)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{logVal(e.from)}</td>
+                        <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-[#14181c]">{logVal(e.to)}</td>
+                        <td className="py-1.5 pl-2 text-slate-600">{logWho(e)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="mt-1.5 text-[11px] text-slate-500">{t({ en: "Every change of this block's settings, kept by the server (it can't be edited). “Proposal” = the system's number, no setting.", is: "Hver breyting á stillingum lotunnar, geymd á þjóninum (ekki hægt að breyta henni). „Tillaga“ = tala kerfisins, engin stilling." })}</p>
+              </div>
+            )}
+          </div>
+        )}
         {why && (
           <div className="mt-3 space-y-3 text-[11.5px] text-slate-600">
             {ramps && rows.length > 0 && (() => {

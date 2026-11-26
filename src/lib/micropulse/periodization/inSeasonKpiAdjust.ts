@@ -147,3 +147,20 @@ export function nextBlockKpiLog(log: unknown, prev: BlockKpiMap, next: BlockKpiM
   }
   return out.slice(-BLOCK_KPI_LOG_MAX);
 }
+
+/** A logged change as the hub shows it: who by name (null = unknown), never the user id. */
+export type BlockKpiLogEntry = { block: string; kpi: WeeklyLoadMetricKey; from: number | null; to: number | null; at: string; byName: string | null };
+
+const numOrNull = (x: unknown): number | null => (typeof x === "number" && Number.isFinite(x) ? x : null);
+
+/** The stored log → what the hub shows: well-formed entries only, names resolved, newest first, at most `limit`. */
+export function blockKpiLogView(log: unknown, names: Record<string, string>, limit = 200): BlockKpiLogEntry[] {
+  if (!Array.isArray(log)) return [];
+  const out: BlockKpiLogEntry[] = [];
+  for (const e of log as Array<Partial<BlockKpiChange>>) {
+    if (!e || typeof e !== "object" || typeof e.block !== "string" || !ISO.test(e.block) || typeof e.at !== "string") continue;
+    if (typeof e.kpi !== "string" || !(e.kpi in WEEKLY_LOAD_LABELS)) continue;
+    out.push({ block: e.block, kpi: e.kpi as WeeklyLoadMetricKey, from: numOrNull(e.from), to: numOrNull(e.to), at: e.at, byName: (typeof e.by === "string" && names[e.by]) || null });
+  }
+  return out.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, Math.max(0, limit));
+}
