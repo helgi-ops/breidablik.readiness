@@ -30,7 +30,10 @@ import type { ValdSlice } from "@/components/coach/ValdAssessmentBlock";
 import BuildUpTrackingCard from "@/components/coach/BuildUpTrackingCard";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
 import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
-import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
+import { downloadPeriodizationHubPdf, preseasonRampPdf } from "@/components/coach/PeriodizationHubPdf";
+import { downloadPeriodizationMacroPdf } from "@/components/coach/PeriodizationMacroPdf";
+import { downloadPeriodizationPreseasonPdf } from "@/components/coach/PeriodizationPreseasonPdf";
+import { preseasonVariableRows } from "@/lib/micropulse/periodization/preseasonVariableRows";
 import { strengthConfigForPhase, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { preseasonStrengthWeeks, schemeHead } from "@/lib/micropulse/strengthProgramming/preseasonStrength";
 import { STRUCTURE_LABEL, sanitizeMdStructures, type MdStructures, type NoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
@@ -992,10 +995,10 @@ export default function PeriodizationHubPage() {
   // Drills by MD day for the PDFs (football): research drills paired to each training day type of the
   // block, beside the general ideas. Never the coach's own library (it follows him across teams). Read at
   // export time; an empty read leaves the ideas.
-  async function dayDrillsFor(block: CalendarBlock) {
+  async function dayDrillsFor(block: CalendarBlock, phase?: "preseason" | "inseason") {
     if (isBasketball || (teamSport != null && teamSport.toLowerCase() !== "football")) return null;
     const mb = mesoBlocks.find((b) => b.start <= block.startDate && block.startDate < b.end);
-    return buildDayDrillSheet({ days: block.weeks.flatMap((w) => w.days), rows: await fetchResearchDrills(await authHeader()), phase: mb && !mb.inSeason ? "preseason" : "inseason" });
+    return buildDayDrillSheet({ days: block.weeks.flatMap((w) => w.days), rows: await fetchResearchDrills(await authHeader()), phase: phase ?? (mb && !mb.inSeason ? "preseason" : "inseason") });
   }
 
   async function exportPlayerBlock() {
@@ -1361,25 +1364,11 @@ export default function PeriodizationHubPage() {
       rhie: tb.rhieBouts, symmetry: tb.runSymmetry, metPower: tb.metabolicPower } : null;
     // Pre-season start + ramp (team) — the controlled re-entry the pack builds from. Uses the coach's
     // current week-1 multiple / sessions from the Players tab, so the PDF matches what they set.
-    let preseasonStart: Parameters<typeof downloadPeriodizationHubPdf>[0]["preseasonStart"] = null;
     let preRamp: PreseasonWeekTarget[] = [];
     const upPre = upcomingPreseason(plan.phases, new Date().toISOString().slice(0, 10), plan.nextFirstFixture);
     const preStart = upPre?.start ?? null;
-    if (upPre) {
-      const preWeeks = upPre.weeks;
-      const pa = preAnchorOf(plan);
-      const preAnchor: LoadAnchor = pa.anchor;
-      preRamp = preseasonRamp(pa, plan.matchSrpe, preWeeks, { sessionsPerWeek: psSess, week1MatchMultiple: psW1, week1Kpi: week1KpiOv, taperPct: psTaper });
-      if (preRamp.length) {
-        const anchorLabel = preAnchor === "match_this_season" ? (is ? "leikir í ár" : "this season's matches") : preAnchor === "srpe_only" ? (is ? "sRPE eingöngu" : "sRPE only") : (is ? "stöðu-viðmið" : "positional norm");
-        const conf = preRamp[0].confidence === "high" ? (is ? "há" : "high") : preRamp[0].confidence === "moderate" ? (is ? "miðlungs" : "moderate") : (is ? "lítil" : "low");
-        preseasonStart = {
-          anchor: anchorLabel, confidence: conf,
-          weeks: preRamp.map((w) => ({ weekIndex: w.weekIndex, multiple: w.multipleOfMatch, weeklyLoad: w.weeklyLoadTarget, perSession: w.perSessionLoad, srpe: w.sRpeAuTarget })),
-          week1Kpi: (Object.keys(preRamp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad").map((k) => { const mv = pa.kpi[k]; return { label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, value: preRamp[0].byKpi[k]!, unit: WEEKLY_LOAD_LABELS[k].unit, multiple: mv != null && mv > 0 ? Math.round((preRamp[0].byKpi[k]! / mv) * 100) / 100 : null }; }),
-        };
-      }
-    }
+    const pa = preAnchorOf(plan);
+    if (upPre) preRamp = preseasonRamp(pa, plan.matchSrpe, upPre.weeks, { sessionsPerWeek: psSess, week1MatchMultiple: psW1, week1Kpi: week1KpiOv, taperPct: psTaper });
     // MD-relative demand profile (whole squad) for the PDF — the same split the Demands tab shows, printed.
     const seasonPl = tb?.playerLoad ?? null;
     const mdRow = (bk: MdDemandBucket) => { const a = bk.avg; return {
@@ -1402,24 +1391,70 @@ export default function PeriodizationHubPage() {
     } : null;
     // Pre-season weekly-load ramp — starts the week off-season ends (no off-season), ramps toward the
     // build, with ALL KPI variables per week. Mirrors the on-screen "Pre-season weekly load — progression".
-    let weeklyLoad: Parameters<typeof downloadPeriodizationHubPdf>[0]["weeklyLoad"] = null;
-    if (preRamp.length) {
-      const usesAu = preRamp.every((w) => w.weeklyLoadTarget == null);
-      const wlTka = teamKpiAvg(plan.players); // match KPI avg → per-KPI ×match in the weekly table
-      // PlayerLoad is the headline bar (weeklyLoadTarget) — drop it from the per-KPI rows so it isn't duplicated.
-      const kpiKeys = (Object.keys(preRamp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad" && preRamp.some((w) => w.byKpi[k] != null));
-      weeklyLoad = {
-        startDate: preStart, unit: usesAu ? "AU" : "PL",
-        weeks: preRamp.map((w) => ({ index: w.weekIndex, mult: w.multipleOfMatch, total: (usesAu ? w.sRpeAuTarget : w.weeklyLoadTarget) ?? null })),
-        kpi: kpiKeys.map((k) => ({ label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, unit: WEEKLY_LOAD_LABELS[k].unit, matchValue: wlTka[k] ?? null, values: preRamp.map((w) => w.byKpi[k] ?? null) })),
-      };
-    }
+    const { preseasonStart, weeklyLoad } = preseasonRampPdf(preRamp, pa.anchor, pa.kpi, teamKpiAvg(plan.players), preStart, is);
     await downloadPeriodizationHubPdf({
       teamName: plan.teamName, seasonYear: plan.seasonYear, generatedAt: new Date().toISOString(), isKinexon, teamUnit, fullMatchPl,
       tier: plan.tier ? { label: plan.tier.label, loadSource: plan.tier.loadSource, confidence: plan.tier.confidence } : null,
       phases: plan.phases.map((ph) => ({ label: ph.label, start: ph.start, end: ph.end, weeks: ph.weeks, matches: ph.matches, rationale: ph.rationale })),
       congested: plan.congested ?? [], baselines, mdDemand, teamAxes: plan.teamBaseline?.axes ?? null, blocks,
       block: calBlock, dayDrills: calBlock ? await dayDrillsFor(calBlock) : null, playerBlocks, mesoPlan, players, preseasonStart, plannedVolume, weeklyLoad,
+    }, is ? "IS" : "EN");
+  }
+
+  // One tab's PDF at a time; the button shows it is working (rendering takes a moment).
+  const [tabPdfBusy, setTabPdfBusy] = React.useState<"macro" | "preseason" | null>(null);
+  const runTabPdf = async (k: "macro" | "preseason", f: () => Promise<void>) => {
+    if (tabPdfBusy) return;
+    setTabPdfBusy(k);
+    try { await f(); } catch (e) { console.error("[pdf]", e); } finally { setTabPdfBusy(null); }
+  };
+  const tabPdfBtn = "h-9 shrink-0 rounded-lg border border-[#2740e6] bg-white px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-40";
+
+  // Macro Cycle tab on its own: phases, blocks (goal + deload / light week), games, breaks, camps, tests.
+  async function exportMacro() {
+    if (!plan) return;
+    const compStart = plan.phases.find((p) => p.key === "competitive")?.start ?? null;
+    const offStartIso = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
+    const phaseOf = (bStart: string): Bi => {
+      const ph = plan.phases.find((p) => p.start <= bStart && bStart < p.end);
+      if (ph) return ph.label;
+      return offStartIso && bStart >= offStartIso ? { en: "Off-season", is: "Off-season" } : compStart && bStart < compStart ? { en: "Pre-season", is: "Undirbúningur" } : { en: "In-season", is: "Keppnistímabil" };
+    };
+    await downloadPeriodizationMacroPdf({
+      teamName: plan.teamName, seasonYear: plan.seasonYear, generatedAt: new Date().toISOString(),
+      tier: plan.tier ? { label: plan.tier.label, loadSource: plan.tier.loadSource, confidence: plan.tier.confidence } : null,
+      phases: plan.phases.map((ph) => ({ label: ph.label, start: ph.start, end: ph.end, weeks: ph.weeks, matches: ph.matches, rationale: ph.rationale })),
+      congested: plan.congested ?? [],
+      firstLeagueGame: leagueGame?.date ?? (plan.fixturesEstimated ? plan.estimatedOpener ?? null : null),
+      fixturesEstimated: !leagueGame && !!plan.fixturesEstimated,
+      blocks: mesoBlocks.map((b) => {
+        const coach = blockGoals[b.start] as BlockGoalKey | undefined;
+        return { index: b.index, phase: phaseOf(b.start), goalKey: coach ?? b.goalKey, goalByCoach: coach != null && coach !== b.goalKey, start: b.start, end: b.end, weeks: b.weeks, inSeason: !!b.inSeason, deloadWeekStart: b.deloadWeekStart, provisional: b.provisional };
+      }),
+      fixtures: [...(plan.fixtureList ?? [])].sort((a, c) => a.date.localeCompare(c.date)),
+      breaks: [...teamBreaksFull].sort((a, c) => a.start_date.localeCompare(c.start_date)).map((b) => ({ start: b.start_date, end: b.end_date, label: b.label })),
+      camps: [...camps].sort((a, c) => a.start_date.localeCompare(c.start_date)).map((c) => ({ start: c.start_date, end: c.end_date, label: c.label, loadPct: c.load_pct, twoADay: c.two_a_day })),
+      tests: [...scheduledTests].sort((a, c) => a.test_date.localeCompare(c.test_date)).map((s) => ({ date: s.test_date, name: testShortName(s.test_key, aerobicTest) })),
+    }, is ? "IS" : "EN");
+  }
+
+  // Meso: Pre-season tab on its own — the same proposal the tab renders (preProp), its variable table and ramp.
+  async function exportPreseason() {
+    if (!plan || !preProp) return;
+    const prop = preProp;
+    const ramp = prop.engine.ramp;
+    const tka = prop.engine.anchor.kpi as Record<string, number | undefined>;
+    const kpiKeys = ramp.length ? (Object.keys(ramp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad" && ramp.some((w) => w.byKpi[k] != null)) : [];
+    const variables = ramp.length ? preseasonVariableRows({
+      ramp, kpiKeys, matchKpi: tka, week1Kpi: week1KpiT, week1Mult: psW1T,
+      proposal: preseasonRamp(prop.engine.anchor, plan.matchSrpe, upcomingPreseason(plan.phases, new Date().toISOString().slice(0, 10), plan.nextFirstFixture)?.weeks ?? prop.weeks.length, { sessionsPerWeek: psSessT, week1MatchMultiple: psW1T, week1Kpi: {}, taperPct: psTaperT })[0],
+    }) : null;
+    const { preseasonStart, weeklyLoad } = preseasonRampPdf(ramp, prop.engine.anchor.anchor, prop.engine.anchor.kpi, prop.engine.anchor.kpi, prop.window.start, is);
+    await downloadPeriodizationPreseasonPdf({
+      teamName: plan.teamName, generatedAt: new Date().toISOString(),
+      opener: plan.nextFirstFixture ?? null, openerEstimated: !!plan.nextFirstFixtureEstimated,
+      prop, baseBlocks: prop.engine.meso.base.length, variables, preseasonStart, weeklyLoad,
+      dayDrills: await dayDrillsFor(prop.engine.cal, "preseason"),
     }, is ? "IS" : "EN");
   }
 
@@ -1668,7 +1703,13 @@ export default function PeriodizationHubPage() {
             );
 
             return (<div className="space-y-4">
-          {flowNote(is ? "Leikir · Kröfur (leik-eining)" : "Fixtures · Demands (match unit)", is ? "Mesó · Míkró · Undirbúningur" : "Meso · Micro · Pre-season")}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-0 flex-1">{flowNote(is ? "Leikir · Kröfur (leik-eining)" : "Fixtures · Demands (match unit)", is ? "Mesó · Míkró · Undirbúningur" : "Meso · Micro · Pre-season")}</div>
+            <button type="button" onClick={() => void runTabPdf("macro", exportMacro)} disabled={tabPdfBusy != null} className={tabPdfBtn}
+              title={is ? "Bara Makró-lotan: fasar, lotur, leikir, hlé og próf (heildar-PDF er efst á síðunni)" : "Just the Macro cycle: phases, blocks, games, breaks and tests (the full-data PDF is at the top of the page)"}>
+              {tabPdfBusy === "macro" ? (is ? "Bý til PDF…" : "Making PDF…") : (is ? "Sækja Makró (PDF)" : "Export Macro (PDF)")}
+            </button>
+          </div>
 
           {/* Estimated opener — KSÍ publishes late, so a season with no fixtures yet gets its first game
               estimated from last season (+1 year). Clearly flagged; replaced when real fixtures are added. */}
@@ -2395,7 +2436,8 @@ export default function PeriodizationHubPage() {
             return (<div className="space-y-4">
           {/* The pre-season at a glance: verdict → 4 facts → week-by-week load + meso cycles (its own provenance chip). */}
           <PreseasonReadsFrom is={is} prop={prop} opener={plan.nextFirstFixture ?? null} openerEstimated={!!plan.nextFirstFixtureEstimated}
-            onOpenMacro={() => setTab("season")} baseBlocks={prop.engine.meso.base.length} />
+            onOpenMacro={() => setTab("season")} baseBlocks={prop.engine.meso.base.length}
+            onExport={() => void runTabPdf("preseason", exportPreseason)} exporting={tabPdfBusy === "preseason"} />
 
           {/* Pre-season SETUP — one card: controls, the meso-cycle sequence (built backwards from the opener),
               and the research "why" behind a toggle (explainability: jargon off the primary view). */}

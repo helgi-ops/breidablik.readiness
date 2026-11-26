@@ -24,7 +24,7 @@ const MON_IS = ["jan", "feb", "mar", "apr", "maí", "jún", "júl", "ágú", "se
 const fmtDate = (iso: string, is: boolean) => (is ? `${Number(iso.slice(8, 10))}. ${MON_IS[Number(iso.slice(5, 7)) - 1]}` : `${Number(iso.slice(8, 10))} ${MON_EN[Number(iso.slice(5, 7)) - 1]}`);
 const addDays = (iso: string, n: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
-export default function PreseasonReadsFrom({ is, prop, opener, openerEstimated, onOpenMacro, baseBlocks = 1 }: {
+export default function PreseasonReadsFrom({ is, prop, opener, openerEstimated, onOpenMacro, baseBlocks = 1, onExport, exporting = false }: {
   is: boolean;
   prop: PreseasonProposal;
   /** The first league game (the season's opener) — null when none is entered. */
@@ -33,6 +33,9 @@ export default function PreseasonReadsFrom({ is, prop, opener, openerEstimated, 
   onOpenMacro: () => void;
   /** How many of the earliest meso cycles are the flexible base (prop.engine.meso.base.length). */
   baseBlocks?: number;
+  /** Download this tab as its own PDF (shown top right when given). */
+  onExport?: () => void;
+  exporting?: boolean;
   /** Kept for callers: adding a game now lives in the setup card (<AddGame>). */
   addGame?: (date: string, kind: "friendly" | "competitive") => Promise<boolean>;
 }) {
@@ -94,8 +97,17 @@ export default function PreseasonReadsFrom({ is, prop, opener, openerEstimated, 
             {" · "}<button type="button" onClick={onOpenMacro} className="font-medium text-[#2740e6] hover:underline">{t({ en: "change in Macro", is: "breyta í Makró" })}</button>
           </p>
         </MesoHeadline>
-        <MesoFlowChip readsLabel={t({ en: "Reads", is: "Les" })} reads={t({ en: "Macro · fixtures · Demands", is: "Makró · leiki · Kröfur" })}
-          flowsLabel={t({ en: "Flows to", is: "Flæðir í" })} flows={t({ en: "Week Setup · PDF", is: "Vikuuppsetningu · PDF" })} />
+        <div className="flex flex-col items-end gap-2">
+          <MesoFlowChip readsLabel={t({ en: "Reads", is: "Les" })} reads={t({ en: "Macro · fixtures · Demands", is: "Makró · leiki · Kröfur" })}
+            flowsLabel={t({ en: "Flows to", is: "Flæðir í" })} flows={t({ en: "Week Setup · PDF", is: "Vikuuppsetningu · PDF" })} />
+          {onExport && (
+            <button type="button" onClick={onExport} disabled={exporting}
+              title={t({ en: "Just the pre-season: load per variable, the weeks, meso cycles, days and tests (the full-data PDF is at the top of the page)", is: "Bara undirbúningurinn: álag á breytu, vikurnar, mesó-lotur, dagar og próf (heildar-PDF er efst á síðunni)" })}
+              className="h-9 rounded-lg border border-[#2740e6] bg-white px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-40">
+              {exporting ? t({ en: "Making PDF…", is: "Bý til PDF…" }) : t({ en: "Export pre-season (PDF)", is: "Sækja undirbúning (PDF)" })}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Four plain facts */}

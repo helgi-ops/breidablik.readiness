@@ -1979,6 +1979,14 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           )}
         </div>
         <div className="flex flex-wrap gap-2">
+          {/* In the hub, the week's PDF sits here too (same place as the Macro / Meso exports); the bottom bar keeps its own. */}
+          {embedded && (
+            <button type="button" onClick={() => void handleExportWeekPdf()}
+              title={isIS ? "Bara þessi vika (heildar-PDF er efst á síðunni)" : "Just this week (the full-data PDF is at the top of the page)"}
+              className="h-10 rounded-[10px] border border-[#2740e6] bg-white px-3.5 text-[13px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">
+              {isIS ? "Sækja viku (PDF)" : "Export week (PDF)"}
+            </button>
+          )}
           {rulesSlot && (
             <button type="button" onClick={() => setRulesOpen((v) => !v)} aria-expanded={rulesOpen}
               className={`h-10 rounded-[10px] border px-3.5 text-[13px] font-semibold ${rulesOpen ? "border-[#14181c] bg-[#14181c] text-white" : "border-[#dcd8cc] bg-white text-[#14181c] hover:bg-[#faf9f4]"}`}>

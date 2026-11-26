@@ -18,6 +18,8 @@ import { Document, Text, View } from "@react-pdf/renderer";
 import { DayDrillsSection } from "@/components/coach/DayDrillsPdfSection";
 import type { DayDrillRow } from "@/lib/micropulse/dayDrillSheet";
 import { teamMatchUnitNote, type MatchAxes, type MatchUnitAbs, type CalendarBlock, type CalType, type CalDay, type MesoPlan, type Bi } from "@/lib/micropulse/periodization/index";
+import type { LoadAnchor, PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
+import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 import { BrandPage, Body, Bullets, C, Card, Chip, FactRow, Provenance, Section, StatGrid, TONE, Table, Verdict, clean, fb, fh, renderPdfBlob, saveBlob, type Tone } from "@/components/pdf/brand";
 
 type Lang = "EN" | "IS";
@@ -110,10 +112,10 @@ const L = {
     foot: "Lýsandi áætlun — setur aldrei readiness-litinn, hnekkir aldrei daglegu ákvörðuninni. Álagsmörk skala frá leikviðmiði (leikmanns: miðgildi næstum-heilla leikja; liðs: meðalleikmaður á leikdegi, með varamönnum) og %-af-leik lögun hvers MD-dags; gagna-festur upphafspunktur, ekki viðmið til að hlýða (Little & Buchheit). Ekkert eitt „%-af-leik“ — vélrænt fer yfir, háhraði/sprettur ná ekki (Figueiredo). Aldrei stafla háhraða + vélrænu sama dag. Vitnar í: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021 · Impellizzeri 2020." },
 } as const;
 
-const shortDate = (iso: string, lang: Lang) => { try { return new Intl.DateTimeFormat(lang === "IS" ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
+export const shortDate = (iso: string, lang: Lang) => { try { return new Intl.DateTimeFormat(lang === "IS" ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
 const km = (m: number | null) => (m == null ? "-" : m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${Math.round(m)}m`);
 
-const nf = (n: number | null) => (n == null ? "-" : Math.round(n).toLocaleString("en-US"));
+export const nf = (n: number | null) => (n == null ? "-" : Math.round(n).toLocaleString("en-US"));
 function domDir(d: { fwd: number; back: number; lat: number } | null, is: boolean): string | null {
   if (!d) return null;
   const m = Math.max(d.fwd, d.back, d.lat);
@@ -134,7 +136,7 @@ function dayIma(d: CalDay, is: boolean, unitStride: number | null): string {
 }
 
 /** Kit text helper: typographic clean-up + the maths glyphs Archivo/Helvetica lack. */
-const tx = (s: unknown) => clean(String(s ?? "").replace(/→/g, "->")).replace(/≈/g, "~").replace(/≥/g, ">=").replace(/≤/g, "<=");
+export const tx = (s: unknown) => clean(String(s ?? "").replace(/→/g, "->")).replace(/≈/g, "~").replace(/≥/g, ">=").replace(/≤/g, "<=");
 /** Calendar day-type → kit tone (row tint + label colour; the day-type word is always printed). Shared
  *  vocabulary with the block PDF — one Top-up, MD-1 Activation, no "Restart". */
 const CAL_TONE: Record<CalType, Tone | null> = { mechanical: "red", locomotive: "green", mixed: "cobalt", activation: "neutral", topup: "rtp", match: "amber", rest: null };
@@ -143,7 +145,7 @@ const strong = (size = 8.5, color: string = C.ink) => [fb(600), { fontSize: size
 
 /** The scheduled block as the demo-format Mon–Sun calendar: rest days as dashes, MD+1 top-up / MD+2 off,
  *  the match on its real weekday, the deload or light week, and the per-session IMA line (tier-gated). */
-function CalWeeks({ block, lang }: { block: CalendarBlock; lang: Lang }) {
+export function CalWeeks({ block, lang }: { block: CalendarBlock; lang: Lang }) {
   const is = lang === "IS";
   const bi = (b: Bi) => tx(is ? b.is : b.en);
   const hasMech = block.unit.accHiEff != null || block.unit.stride != null || block.unit.fr != null || block.unit.cod != null || block.unit.accel != null;
@@ -186,6 +188,92 @@ function CalWeeks({ block, lang }: { block: CalendarBlock; lang: Lang }) {
       {block.unit.stride != null && <Text style={small({ marginTop: 4 })}>{is ? "† skref við leikþak (byggt AÐ leik) · stefna = leikmanns-undirskrift, hallar eftir dagsgerð (vélrænt/virkjun aftur+hlið, hlaup fram)." : "† stride at match ceiling (built TO match) · dir = the player's signature, tilted by day-type (mechanical/activation back+lateral, locomotive forward)."}</Text>}
     </>
   );
+}
+
+export type HubPhaseRow = PeriodizationHubPayload["phases"][number];
+export type HubPreseasonStart = NonNullable<PeriodizationHubPayload["preseasonStart"]>;
+export type HubWeeklyLoad = NonNullable<PeriodizationHubPayload["weeklyLoad"]>;
+
+/** The season map in words: the data tier, every phase with its dates, weeks, games and the reason, and the
+ *  congested weeks. Shared by the full hub PDF and the Macro PDF. */
+export function MacroSection({ tier, phases, congested, lang, title }: { tier: PeriodizationHubPayload["tier"]; phases: HubPhaseRow[]; congested: PeriodizationHubPayload["congested"]; lang: Lang; title?: string }) {
+  const is = lang === "IS"; const bi = (b: Bi) => tx(is ? b.is : b.en); const t = L[lang];
+  return (
+    <Section title={title ?? t.macro}>
+      <Card>
+        {tier && <Body>{tx(t.tier)}{": "}<Text style={fb(600)}>{bi(tier.label)}</Text>{tx(` · ${tier.loadSource === "srpe" ? "sRPE" : tier.loadSource === "gps" ? "GPS" : "-"} · ${t.preConf} ${is ? ({ high: "há", medium: "miðlungs", moderate: "miðlungs", low: "lág" } as Record<string, string>)[tier.confidence] ?? tier.confidence : tier.confidence}`)}</Body>}
+        {phases.map((ph, i) => (
+          <View key={i} wrap={false} style={{ paddingVertical: 4, borderTopWidth: i === 0 && !tier ? 0 : 1, borderTopColor: C.hair, marginTop: i === 0 && tier ? 4 : 0 }}>
+            <Text style={[fb(400), { fontSize: 8.75, lineHeight: 1.4 }]}>
+              <Text style={fb(600)}>{bi(ph.label)}</Text>
+              {tx(` (${shortDate(ph.start, lang)}–${shortDate(ph.end, lang)}, ${ph.weeks}${is ? "v" : "w"}${ph.matches ? `, ${ph.matches} ${is ? "leikir" : "matches"}` : ""}) - ${bi(ph.rationale)}`)}
+            </Text>
+          </View>
+        ))}
+        {congested.length > 0 && <Text style={small({ marginTop: 3 })}>{tx(`${t.congested}: ${congested.map((c) => `${shortDate(c.weekStart, lang)} (${c.matches})`).join(", ")}`)}</Text>}
+      </Card>
+    </Section>
+  );
+}
+
+/** Pre-season week 1 + the ramp (team): × a match, weekly PL, per session, sRPE, and every variable per week.
+ *  Shared by the full hub PDF and the Pre-season PDF. */
+export function PreseasonRampSection({ preseasonStart, weeklyLoad, lang, title }: { preseasonStart: HubPreseasonStart; weeklyLoad: HubWeeklyLoad | null; lang: Lang; title?: string }) {
+  const is = lang === "IS"; const bi = (b: Bi) => tx(is ? b.is : b.en); const t = L[lang];
+  return (
+    <Section title={title ?? `${t.preTitle}${weeklyLoad?.startDate ? ` · ${t.wlStarts} ${shortDate(weeklyLoad.startDate, lang)}` : ""}`} hint={tx(t.preLead)}>
+      <Text style={small({ marginBottom: 4 })}>{`${t.preAnchor}: `}<Text style={fb(600)}>{tx(preseasonStart.anchor)}</Text>{` · ${t.preConf}: ${tx(preseasonStart.confidence)}`}</Text>
+      <View wrap={false}><Table
+        cols={[{ label: t.week, width: 56 }, { label: `×${t.match}`, flex: 1, align: "right" }, { label: `${t.weekly} PL`, width: 80, align: "right", strong: true }, { label: t.preSess, width: 64, align: "right" }, { label: "sRPE AU", width: 70, align: "right" }]}
+        rowTone={(i) => (preseasonStart.weeks[i]?.weekIndex === 1 ? "cobalt" : null)}
+        rows={preseasonStart.weeks.map((w) => [`${t.week} ${w.weekIndex}`, w.multiple == null ? "-" : `${w.multiple}×`, w.weeklyLoad == null ? "-" : nf(w.weeklyLoad), w.perSession == null ? "-" : nf(w.perSession), w.srpe == null ? "-" : nf(w.srpe)])}
+      /></View>
+      {weeklyLoad && weeklyLoad.kpi.length > 0 ? (
+        <View style={{ marginTop: 6 }} wrap={false}>
+          <Text style={[...strong(8.5), { marginBottom: 3 }]}>{t.preKpiWk}</Text>
+          {/* At most 10 week columns per table so the variable names keep room (a 19-week pre-season = two tables). */}
+          {Array.from({ length: Math.ceil(weeklyLoad.weeks.length / 10) }, (_, c) => c * 10).map((from) => (
+            <View key={from} style={{ marginTop: from ? 4 : 0 }}>
+              <Table
+                size={8}
+                cols={[{ label: `KPI (×${t.match})`, flex: 1 }, ...weeklyLoad.weeks.slice(from, from + 10).map((w) => ({ label: `${is ? "V" : "W"}${w.index}`, width: 36, align: "right" as const }))]}
+                rows={weeklyLoad.kpi.map((k) => [
+                  <Text key="k" style={strong(8)}>{bi(k.label)}{k.unit ? <Text style={[fb(400), { color: C.mute }]}>{` (${k.unit})`}</Text> : null}</Text>,
+                  ...k.values.slice(from, from + 10).map((v) => { const mv = k.matchValue; return v == null ? "-" : (mv != null && mv > 0 ? `×${Math.round((v / mv) * 100) / 100}` : nf(v)); }),
+                ])}
+              />
+            </View>
+          ))}
+          <Text style={small({ marginTop: 3 })}>{is ? "Hvert gildi = ×leik (vikuálag ÷ einn leikur af þeirri breytu) — háhraðahlaup vegur nærri heildarvegalengd þótt metrarnir séu fáir (training:match)." : "Each value = ×match (weekly ÷ one match of that KPI) — HSR carries a load near total distance despite few metres (training:match)."}</Text>
+        </View>
+      ) : preseasonStart.week1Kpi.length > 0 ? (
+        <Text style={small({ marginTop: 4 })}>{tx(`${t.preKpi}: ${preseasonStart.week1Kpi.map((k) => `${bi(k.label)} ${k.multiple != null ? `×${k.multiple} ` : ""}${nf(k.value)}${k.unit}`).join(" · ")}`)}</Text>
+      ) : null}
+    </Section>
+  );
+}
+
+// The pre-season ramp as the PDF prints it (week 1 → the light week, every variable per week). One helper for the
+// full-hub PDF and the Pre-season PDF so both print the same rows. kpi = the anchor's match KPIs (week-1 × match);
+// kpiMatch = the match value per variable for the weekly × match table.
+export function preseasonRampPdf(ramp: PreseasonWeekTarget[], anchor: LoadAnchor, kpi: Partial<Record<WeeklyLoadMetricKey, number>>, kpiMatch: Partial<Record<WeeklyLoadMetricKey, number>>, startDate: string | null, is: boolean): { preseasonStart: HubPreseasonStart | null; weeklyLoad: HubWeeklyLoad | null } {
+  if (!ramp.length) return { preseasonStart: null, weeklyLoad: null };
+  const anchorLabel = anchor === "match_this_season" ? (is ? "leikir í ár" : "this season's matches") : anchor === "srpe_only" ? (is ? "sRPE eingöngu" : "sRPE only") : (is ? "stöðu-viðmið" : "positional norm");
+  const conf = ramp[0].confidence === "high" ? (is ? "há" : "high") : ramp[0].confidence === "moderate" ? (is ? "miðlungs" : "moderate") : (is ? "lítil" : "low");
+  const preseasonStart: HubPreseasonStart = {
+    anchor: anchorLabel, confidence: conf,
+    weeks: ramp.map((w) => ({ weekIndex: w.weekIndex, multiple: w.multipleOfMatch, weeklyLoad: w.weeklyLoadTarget, perSession: w.perSessionLoad, srpe: w.sRpeAuTarget })),
+    week1Kpi: (Object.keys(ramp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad").map((k) => { const mv = kpi[k]; return { label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, value: ramp[0].byKpi[k]!, unit: WEEKLY_LOAD_LABELS[k].unit, multiple: mv != null && mv > 0 ? Math.round((ramp[0].byKpi[k]! / mv) * 100) / 100 : null }; }),
+  };
+  const usesAu = ramp.every((w) => w.weeklyLoadTarget == null);
+  // PlayerLoad is the headline bar (weeklyLoadTarget) — drop it from the per-KPI rows so it isn't duplicated.
+  const kpiKeys = (Object.keys(ramp[0].byKpi) as WeeklyLoadMetricKey[]).filter((k) => k !== "totalPlayerLoad" && ramp.some((w) => w.byKpi[k] != null));
+  const weeklyLoad: HubWeeklyLoad = {
+    startDate, unit: usesAu ? "AU" : "PL",
+    weeks: ramp.map((w) => ({ index: w.weekIndex, mult: w.multipleOfMatch, total: (usesAu ? w.sRpeAuTarget : w.weeklyLoadTarget) ?? null })),
+    kpi: kpiKeys.map((k) => ({ label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, unit: WEEKLY_LOAD_LABELS[k].unit, matchValue: kpiMatch[k] ?? null, values: ramp.map((w) => w.byKpi[k] ?? null) })),
+  };
+  return { preseasonStart, weeklyLoad };
 }
 
 function AxisTable({ axis, t, bi }: { axis: MatchAxes["running"]; t: { metric: string; match: string; ceil: string }; bi: (b: Bi) => string }) {
@@ -287,48 +375,10 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
         />
 
         {/* MACRO */}
-        <Section title={t.macro}>
-          <Card>
-            {tier && <Body>{tx(`${t.tier}: `)}<Text style={fb(600)}>{bi(tier.label)}</Text>{tx(` · ${tier.loadSource === "srpe" ? "sRPE" : tier.loadSource === "gps" ? "GPS" : "-"} · conf ${tier.confidence}`)}</Body>}
-            {phases.map((ph, i) => (
-              <View key={i} wrap={false} style={{ paddingVertical: 4, borderTopWidth: i === 0 && !tier ? 0 : 1, borderTopColor: C.hair, marginTop: i === 0 && tier ? 4 : 0 }}>
-                <Text style={[fb(400), { fontSize: 8.75, lineHeight: 1.4 }]}>
-                  <Text style={fb(600)}>{bi(ph.label)}</Text>
-                  {tx(` (${shortDate(ph.start, lang)}–${shortDate(ph.end, lang)}, ${ph.weeks}w${ph.matches ? `, ${ph.matches} matches` : ""}) - ${bi(ph.rationale)}`)}
-                </Text>
-              </View>
-            ))}
-            {congested.length > 0 && <Text style={small({ marginTop: 3 })}>{tx(`${t.congested}: ${congested.map((c) => `${shortDate(c.weekStart, lang)} (${c.matches})`).join(", ")}`)}</Text>}
-          </Card>
-        </Section>
+        <MacroSection tier={tier} phases={phases} congested={congested} lang={lang} />
 
         {/* PRE-SEASON START + RAMP (team) */}
-        {payload.preseasonStart && payload.preseasonStart.weeks.length > 0 && (
-          <Section title={`${t.preTitle}${payload.weeklyLoad?.startDate ? ` · ${t.wlStarts} ${shortDate(payload.weeklyLoad.startDate, lang)}` : ""}`} hint={tx(t.preLead)}>
-            <Text style={small({ marginBottom: 4 })}>{`${t.preAnchor}: `}<Text style={fb(600)}>{tx(payload.preseasonStart.anchor)}</Text>{` · ${t.preConf}: ${tx(payload.preseasonStart.confidence)}`}</Text>
-            <View wrap={false}><Table
-              cols={[{ label: t.week, width: 56 }, { label: `×${t.match}`, flex: 1, align: "right" }, { label: `${t.weekly} PL`, width: 80, align: "right", strong: true }, { label: t.preSess, width: 64, align: "right" }, { label: "sRPE AU", width: 70, align: "right" }]}
-              rowTone={(i) => (payload.preseasonStart!.weeks[i]?.weekIndex === 1 ? "cobalt" : null)}
-              rows={payload.preseasonStart.weeks.map((w) => [`${t.week} ${w.weekIndex}`, w.multiple == null ? "-" : `${w.multiple}×`, w.weeklyLoad == null ? "-" : nf(w.weeklyLoad), w.perSession == null ? "-" : nf(w.perSession), w.srpe == null ? "-" : nf(w.srpe)])}
-            /></View>
-            {payload.weeklyLoad && payload.weeklyLoad.kpi.length > 0 ? (
-              <View style={{ marginTop: 6 }} wrap={false}>
-                <Text style={[...strong(8.5), { marginBottom: 3 }]}>{t.preKpiWk}</Text>
-                <Table
-                  size={8}
-                  cols={[{ label: `KPI (×${t.match})`, flex: 1 }, ...payload.weeklyLoad.weeks.map((w) => ({ label: `${is ? "V" : "W"}${w.index}`, width: 36, align: "right" as const }))]}
-                  rows={payload.weeklyLoad.kpi.map((k) => [
-                    <Text key="k" style={strong(8)}>{bi(k.label)}{k.unit ? <Text style={[fb(400), { color: C.mute }]}>{` (${k.unit})`}</Text> : null}</Text>,
-                    ...k.values.map((v) => { const mv = k.matchValue; return v == null ? "-" : (mv != null && mv > 0 ? `×${Math.round((v / mv) * 100) / 100}` : nf(v)); }),
-                  ])}
-                />
-                <Text style={small({ marginTop: 3 })}>{is ? "Hvert gildi = ×leik (vikuálag ÷ einn leikur af þeirri breytu) — háhraðahlaup vegur nærri heildarvegalengd þótt metrarnir séu fáir (training:match)." : "Each value = ×match (weekly ÷ one match of that KPI) — HSR carries a load near total distance despite few metres (training:match)."}</Text>
-              </View>
-            ) : payload.preseasonStart.week1Kpi.length > 0 ? (
-              <Text style={small({ marginTop: 4 })}>{tx(`${t.preKpi}: ${payload.preseasonStart.week1Kpi.map((k) => `${bi(k.label)} ${k.multiple != null ? `×${k.multiple} ` : ""}${nf(k.value)}${k.unit}`).join(" · ")}`)}</Text>
-            ) : null}
-          </Section>
-        )}
+        {payload.preseasonStart && payload.preseasonStart.weeks.length > 0 && <PreseasonRampSection preseasonStart={payload.preseasonStart} weeklyLoad={payload.weeklyLoad ?? null} lang={lang} />}
 
         {/* PLANNED KPI VOLUME — in-season week + meso (match-anchored, per-KPI tapered) */}
         {payload.plannedVolume && payload.plannedVolume.weekKpis.length > 0 && (() => {

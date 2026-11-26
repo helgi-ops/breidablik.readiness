@@ -13,18 +13,17 @@
 
 import * as React from "react";
 import { CiteRefs } from "@/components/coach/CiteRefs";
-import { kpiTmRefRange, kpiReentryFloor } from "@/lib/micropulse/periodization/plannedVolume";
+import { kpiReentryFloor } from "@/lib/micropulse/periodization/plannedVolume";
+import { preseasonVariableRows, type PreseasonVariableRow as Row } from "@/lib/micropulse/periodization/preseasonVariableRows";
 import { KPI_GROUPS, kpiGroup, kpiWhatWhy, plainKpiName } from "@/lib/micropulse/periodization/kpiPlainNames";
 import { MultipleInput as Week1Input } from "@/components/coach/meso/MultipleInput";
 import { kpiRowId, kpiTableId } from "@/components/coach/meso/kpiRowLink";
 import { BandOrNone, LegendFilled, LegendLight, LegendOpen, LegendRange, VARIABLE_COLS, VariableGroupHeader, VariableScaleTicks, VariableTrack, trackScaleMax } from "@/components/coach/meso/VariableTrack";
 import { PRESEASON_DEFAULT_WEEK1, PRESEASON_TAPER_RESEARCH } from "@/lib/micropulse/periodization/preseasonWindow";
 import type { PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
-import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
+import type { WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
 type Bi = { en: string; is: string };
-
-type Row = { k: string; lab: Bi; unit: string; w1: number | null; w1Raw: number | null; prop: number | null; mine: boolean; pk: number | null; lt: number | null; ref: [number, number] | null };
 
 export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, matchKpi, week1Kpi, week1Mult, taperPct, setCount, onKpi, onWeek1Mult, onResetAll }: {
   is: boolean;
@@ -48,25 +47,10 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
   const [why, setWhy] = React.useState(false);
   const fx = (n: number) => (is ? String(n).replace(".", ",") : String(n));
   const mvOf = (k: string) => { const mv = matchKpi[k]; return mv != null && mv > 0 ? mv : null; };
-  const xm = (v: number | null | undefined, k: string) => { const mv = mvOf(k); return v != null && mv != null ? Math.round((v / mv) * 100) / 100 : null; };
 
-  const last = ramp[ramp.length - 1];
-  const lightW = last.taper ? last : null;
-  const peakW = lightW && ramp.length >= 2 ? ramp[ramp.length - 2] : ramp.reduce((m, w) => ((w.multipleOfMatch ?? 0) > (m.multipleOfMatch ?? 0) ? w : m), ramp[0]);
-  const peakNo = ramp.indexOf(peakW) + 1;
-
-  const rows: Row[] = [
-    ...kpiKeys.filter((k) => mvOf(k) != null && ramp[0].byKpi[k] != null).map((k) => ({
-      k, lab: WEEKLY_LOAD_LABELS[k], unit: WEEKLY_LOAD_LABELS[k].unit,
-      w1: xm(ramp[0].byKpi[k], k), w1Raw: ramp[0].byKpi[k] ?? null, prop: xm(proposal.byKpi[k], k), mine: week1Kpi[k] != null,
-      pk: xm(peakW.byKpi[k], k), lt: lightW ? xm(lightW.byKpi[k], k) : null, ref: kpiTmRefRange(k),
-    })),
-    {
-      k: "totalPlayerLoad", lab: { en: "Overall load (PlayerLoad)", is: "Heildarálag (PlayerLoad)" }, unit: "",
-      w1: ramp[0].multipleOfMatch ?? null, w1Raw: null, prop: PRESEASON_DEFAULT_WEEK1, mine: week1Mult !== PRESEASON_DEFAULT_WEEK1,
-      pk: peakW.multipleOfMatch ?? null, lt: lightW ? lightW.multipleOfMatch ?? null : null, ref: kpiTmRefRange("totalPlayerLoad"),
-    },
-  ];
+  // The rows are the same pure function the pre-season PDF prints (preseasonVariableRows).
+  const { rows, peakNo, lightNo } = preseasonVariableRows({ ramp, kpiKeys, proposal, matchKpi, week1Kpi, week1Mult });
+  const lightW = lightNo != null;
 
   // Week 1 in × a match → the saved value: PlayerLoad = the overall multiple, a variable = × its match value.
   const commit = (k: string, x: number) => {
