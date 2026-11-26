@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { planWeeklyTarget, OFFSEASON_MAINTENANCE_MULT } from "../planWeeklyTarget";
-import { kpiTaperShare } from "../plannedVolume";
+import { kpiTaperShare, standardTrainingDays, weeklyKpiMultiple } from "../plannedVolume";
+import { inSeasonKpiMultiple } from "../inSeasonStandardWeek";
 import type { MatchUnit, SeasonPhase, MesoBlock } from "../index";
 
 const m = (typical: number): { typical: number; peak: number } => ({ typical, peak: typical });
@@ -34,10 +35,19 @@ describe("planWeeklyTarget", () => {
   it("in-season (no blocks) → base fixture-aware weekly volume, each KPI tapered (sprint < distance ×match)", () => {
     const t = planWeeklyTarget({ phases: PHASES, matchUnits: [UNIT], today: "2026-06-01", matchesThisWeek: 1 })!;
     expect(t.phase).toBe("inseason");
-    // distance ≈ 2.35× a match (volume), sprint a smaller multiple
-    expect(t.byKpi.totalDistance! / 10000).toBeCloseTo(2.35, 1);
+    // the calendar's one-match week: distance 1.70× a match, PlayerLoad 2.45×, sprint a smaller multiple
+    expect(t.byKpi.totalDistance! / 10000).toBeCloseTo(1.7, 2);
+    expect(t.byKpi.totalPlayerLoad! / 1000).toBeCloseTo(2.45, 2);
+    expect(t.byKpi.velocityBand5! / 450).toBeCloseTo(1.1, 2);
     expect(t.byKpi.velocityBand6! / 150).toBeLessThan(t.byKpi.totalDistance! / 10000);
     expect(t.label.en).toContain("1-match");
+  });
+
+  it("in-season football target = the calendar week; basketball keeps its MD week", () => {
+    const fb = planWeeklyTarget({ phases: PHASES, matchUnits: [UNIT], today: "2026-06-01", matchesThisWeek: 1 })!;
+    const bb = planWeeklyTarget({ phases: PHASES, matchUnits: [UNIT], today: "2026-06-01", matchesThisWeek: 1, sport: "basketball" })!;
+    expect(fb.byKpi.totalDistance).toBe(Math.round(10000 * inSeasonKpiMultiple("totalDistance", 1)));
+    expect(bb.byKpi.totalDistance).toBe(Math.round(10000 * weeklyKpiMultiple(standardTrainingDays(1, "basketball"), "totalDistance")));
   });
 
   it("in-season applies the meso ramp — a loading block week scales the base volume up (+5%/wk)", () => {

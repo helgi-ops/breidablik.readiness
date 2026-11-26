@@ -2,26 +2,24 @@ import { describe, expect, it } from "vitest";
 import {
   blockVolumeView, calWeekMultiple, gamesInRange, gamesInWeek, inSeasonRuleBreaks, minMax, sessionsInWeek, RULE_MD2, RULE_THREE,
 } from "../inSeasonMesoView";
-import {
-  kpiTmRefRange, kpiVolumes, mesoTotalMultiple, mesoWeeklyMultiples, standardTrainingDays, weeklyKpiMultiple, weeklyTrainingMultiple,
-} from "../plannedVolume";
+import { kpiTmRefRange, kpiVolumes, mesoTotalMultiple, mesoWeeklyMultiples, standardTrainingDays, weeklyTrainingMultiple } from "../plannedVolume";
+import { inSeasonKpiMultiple, inSeasonKpiVolumes, inSeasonWeekMultiple } from "../inSeasonStandardWeek";
 import type { WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
 const MATCH: Partial<Record<WeeklyLoadMetricKey, number>> = { totalPlayerLoad: 900, totalDistance: 10500, velocityBand5: 800, velocityBand6: 220, accelB23: 60, decelB23: 70 };
 
-// The In-season tab's own maths before the mirror (page.tsx), so the view can never drift from it.
+// The In-season tab's maths, written out: the calendar's standard week (inSeasonStandardWeek) × the meso ramp.
 function oldTab(numWeeks: number, stepPct: number, deloadWeek: number | null, light?: boolean) {
-  const days1 = standardTrainingDays(1);
-  const wkMult = weeklyTrainingMultiple(days1);
-  const vols = kpiVolumes(MATCH, days1);
+  const wkMult = inSeasonWeekMultiple(1);
+  const vols = inSeasonKpiVolumes(MATCH, 1);
   const meso = mesoWeeklyMultiples({ numWeeks, baseMultiple: wkMult, stepPct, deloadWeek, light });
   const rampFactor = (w: { multiple: number }) => (wkMult > 0 ? w.multiple / wkMult : 0);
-  const kpiWkMult = (k: WeeklyLoadMetricKey, w: { multiple: number }) => Math.round(weeklyKpiMultiple(days1, k) * rampFactor(w) * 100) / 100;
+  const kpiWkMult = (k: WeeklyLoadMetricKey, w: { multiple: number }) => Math.round(inSeasonKpiMultiple(k, 1) * rampFactor(w) * 100) / 100;
   return { wkMult, vols, meso, blockTotal: mesoTotalMultiple(meso), kpiWkMult, total: Math.round((wkMult + 1) * 10) / 10 };
 }
 
 describe("blockVolumeView", () => {
-  it("gives exactly the numbers the In-season tab showed (hold block)", () => {
+  it("gives the calendar's standard week (hold block)", () => {
     const o = oldTab(4, 0, null);
     const v = blockVolumeView({ matchKpis: MATCH, numWeeks: 4, stepPct: 0, deloadWeek: null });
     expect(v.weekMultiple).toBe(o.wkMult);
@@ -32,11 +30,12 @@ describe("blockVolumeView", () => {
     expect(v.rows.map((r) => r.ref)).toEqual(o.vols.map((x) => kpiTmRefRange(x.key)));
   });
 
-  it("football (no sport, or football) keeps the football week and the research ranges", () => {
+  it("football (no sport, or football) uses the calendar week and the research ranges", () => {
     const none = blockVolumeView({ matchKpis: MATCH, numWeeks: 4, stepPct: 0, deloadWeek: null });
     const fb = blockVolumeView({ matchKpis: MATCH, numWeeks: 4, stepPct: 0, deloadWeek: null, sport: "football" });
     expect(fb.weekMultiple).toBe(none.weekMultiple);
-    expect(fb.trainingDays).toEqual(["MD-4", "MD-3", "MD-2", "MD-1"]);
+    expect(fb.trainingDays).toEqual(["MD-4", "MD-3", "MD-1", "MD+1"]);
+    expect(fb.fromCalendar).toBe(true);
     expect(fb.researchRanges).toBe(true);
     expect(fb.rows.some((r) => r.ref != null)).toBe(true);
   });
@@ -49,6 +48,7 @@ describe("blockVolumeView", () => {
     expect(bb.rows.map((r) => [r.key, r.week, r.weekRaw])).toEqual(kpiVolumes(MATCH, days).map((x) => [x.key, x.multiple, x.weeklyValue]));
     expect(bb.weekMultiple).toBeLessThan(blockVolumeView({ matchKpis: MATCH, numWeeks: 4, stepPct: 0, deloadWeek: null }).weekMultiple);
     expect(bb.researchRanges).toBe(false);
+    expect(bb.fromCalendar).toBe(false);
     expect(bb.rows.every((r) => r.ref == null && r.band == null)).toBe(true);
   });
 

@@ -14,6 +14,7 @@
 import { buildCalendarBlock, deloadWeekIndex, inSeasonRange, positionGroup } from "./index";
 import type { Bi, BlockDeload, CalType, CalendarBlock, CalWeek, MatchUnitAbs, RecGoalKey, TeamAverages } from "./index";
 import { standardTrainingDays, weeklyKpiMultiple } from "./plannedVolume";
+import { inSeasonKpiMultiple, usesCalendarWeek } from "./inSeasonStandardWeek";
 import { LIGHT_WEEK_VOL } from "./imaStandard";
 import type { WeeklyLoadMetricKey } from "../externalLoad/weeklyLoadTypes";
 import type { BuildUpSteer } from "./buildUpSteer";
@@ -141,7 +142,8 @@ function applyValdTrim(block: CalendarBlock, vald: PlayerBlockPlayer["vald"], as
 }
 
 /** Rescale a built block so each axis's PEAK (non-deload) week sums to the team's weekly ×match multiple for
- *  that variable (plannedVolume) — the same model the Meso tab + the Build-up ramp use. One constant factor
+ *  that variable — in season the calendar's standard week (inSeasonStandardWeek), pre-season the MD-share week
+ *  (plannedVolume) — the same model the Meso tab + the Build-up ramp use. One constant factor
  *  per axis keeps the ramp/deload shape and the day-type distribution; only the absolute level changes.
  *  Mutates `block` in place (buildCalendarBlock returns a fresh block, so there is no shared reference). */
 function alignBlockToTeamMultiple(block: CalendarBlock, friendlyMatches: boolean): void {
@@ -150,8 +152,11 @@ function alignBlockToTeamMultiple(block: CalendarBlock, friendlyMatches: boolean
   const matchDays = friendlyMatches ? 0 : block.weeks.reduce((s, w) => s + w.days.filter((d) => d.type === "match").length, 0);
   const perWk = block.weeks.length ? Math.round(matchDays / block.weeks.length) : 0;
   const preDays = standardTrainingDays(perWk); // the team's training-week shape for this congestion
+  // In season (games every week) the team's multiple is the calendar's own standard week (inSeasonStandardWeek),
+  // so the stride axis reads its own variable (long-run strides). Pre-season keeps the MD-share week.
+  const calWeek = usesCalendarWeek(perWk);
   const AXIS_KPI: Record<keyof AxisScale, WeeklyLoadMetricKey> = {
-    dist: "totalDistance", hsr: "velocityBand5", load: "totalPlayerLoad", accdec: "accelB23", stride: "velocityBand6", fr: "imaFrDistance", cod: "imaCod", acc: "imaAccel", dec: "imaDecel",
+    dist: "totalDistance", hsr: "velocityBand5", load: "totalPlayerLoad", accdec: "accelB23", stride: calWeek ? "imaStrideHi" : "velocityBand6", fr: "imaFrDistance", cod: "imaCod", acc: "imaAccel", dec: "imaDecel",
   };
   const trainWeeks = block.weeks.filter((w) => !w.isDeload || w.isLight);
   if (!trainWeeks.length) return;
@@ -160,7 +165,7 @@ function alignBlockToTeamMultiple(block: CalendarBlock, friendlyMatches: boolean
   const peakVol = (sel: (w: CalWeek) => number | null): number => Math.max(0, ...trainWeeks.map((w) => (sel(w) ?? 0) / (w.isLight ? LIGHT_WEEK_VOL : 1)));
   const scaleOf = (axis: keyof AxisScale, pk: number): number => {
     if (!pk || pk <= 0) return 1;
-    const tm = weeklyKpiMultiple(preDays, AXIS_KPI[axis]);
+    const tm = calWeek ? inSeasonKpiMultiple(AXIS_KPI[axis], perWk) : weeklyKpiMultiple(preDays, AXIS_KPI[axis]);
     return Number.isFinite(tm) && tm > 0 ? (tm * 100) / pk : 1; // tm×100 because pct is ×match ×100
   };
   const sc: AxisScale = {

@@ -37,7 +37,8 @@ import { STRUCTURE_LABEL, sanitizeMdStructures, type MdStructures, type NoMatchW
 import { preseasonMatchExposure, NORMATIVE_MATCH_KPI, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
 import { weeklyTargetFromMatch } from "@/lib/micropulse/periodization";
 import { upcomingInternationalBreaks, intlBreakKey, type IntlBreak } from "@/lib/micropulse/internationalBreaks";
-import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
+import { standardTrainingDays, weeklyKpiMultiple, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
+import { buildPlannedVolume, inSeasonWeekMultiple } from "@/lib/micropulse/periodization/inSeasonStandardWeek";
 import { mdOffset } from "@/lib/micropulse/periodization/periodizationModel";
 import { buildDayDrillSheet } from "@/lib/micropulse/dayDrillSheet";
 import { fetchResearchDrills } from "@/lib/micropulse/dayDrillLibraryFetch";
@@ -1275,7 +1276,7 @@ export default function PeriodizationHubPage() {
     const baselines = [plan.teamBaseline, ...plan.positionBaselines].filter((b) => b && b.avg.sessions > 0).map((b) => ({ label: b.label, players: b.avg.players, distanceM: b.avg.distanceM, hsrM: b.avg.hsrM, maxKmh: b.avg.maxKmh, playerLoad: b.avg.playerLoad, accel: b.avg.accel, decel: b.avg.decel, isTeam: b.key === -1 }));
     // Per-player weekly PL target = that player's match unit (the TARGET/ceiling) × the in-season weekly
     // multiple — the planned weekly volume each player ramps TO from their current baseline (MAS = engine).
-    const plWkMult = weeklyTrainingMultiple(standardTrainingDays(1, teamSport));
+    const plWkMult = inSeasonWeekMultiple(1, teamSport);
     const players = plan.players.map((p) => ({ name: p.name, position: p.position, masKmh: p.masKmh, matchUnitLoad: p.matchUnit.load.typical, matchUnitHsr: p.matchUnit.hsr.typical, matchUnitDistance: p.matchUnit.distance.typical, weeklyPlTarget: p.matchUnit.load.typical != null ? Math.round(p.matchUnit.load.typical * plWkMult) : null, baselinePl: p.recentBaseline?.playerLoad ?? null, baselineHsr: p.recentBaseline?.hsrM ?? null, baselineSessions: p.recentBaseline?.sessions ?? 0, nNearFull: p.matchUnit.nNearFull, matchUnitConf: p.matchUnit.confidence, valdCap: p.vald.lift ? null : p.vald.capPct, gaps: p.gaps.filter((g) => g.severity !== "ok").length }));
     const blocks = mesoBlocks.map((b) => ({ phase: b.phase, goal: b.goal, goalKey: b.goalKey, start: b.start, end: b.end, weeks: b.weeks, isDeload: b.isDeload, deloadWeekStart: b.deloadWeekStart, deloadNow: b.deloadNow, tmr: b.tmr, volumeTargetPct: b.volumeTargetPct, flag: b.flag }));
     // The individualised calendar block(s) — one clean page per player. The coach picks the set (Selected /
@@ -4036,8 +4037,7 @@ export default function PeriodizationHubPage() {
           {/* THE WHOLE SQUAD — compare players side by side and pick one (moved here from Meso: In-season 2026-11-26). */}
           {(() => {
             const h2c = "text-[15px] font-bold text-slate-900";
-            const bvDays = standardTrainingDays(1, teamSport);
-            const bvWkMult = weeklyTrainingMultiple(bvDays);
+            const bvWkMult = inSeasonWeekMultiple(1, teamSport);
             const fmtKv = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
             return (
           <details className={card}>
@@ -4045,7 +4045,7 @@ export default function PeriodizationHubPage() {
               <span className={h2c}>{is ? `Allur hópurinn (${plist.length} leikmenn) — bera saman og velja` : `The whole squad (${plist.length} players) — compare and pick`}</span>
               <span className="ml-2 text-[12px] text-slate-500">{is ? "Smelltu á leikmann til að velja hann." : "Click a player to select."}</span>
             </summary>
-            <p className="mt-1 text-[12px] text-slate-500">{is ? "Grunnur (nýleg þjálfun, síð. 28 d — hvar leikmaðurinn er núna) → leik-mark (krafan per leik) → vikumark (áætlað vikuálag, leik-PL × vikumargfeldi ~2,35×)." : "Baseline (recent training, last 28d — where each player is now) → match target (per-match demand) → week target (planned weekly load, match PL × the weekly multiple ~2.35×)."}</p>
+            <p className="mt-1 text-[12px] text-slate-500">{is ? `Grunnur (nýleg þjálfun, síð. 28 d — hvar leikmaðurinn er núna) → leik-mark (krafan per leik) → vikumark (áætlað vikuálag, leik-PL × vikumargfeldi staðalviku ~${String(bvWkMult).replace(".", ",")}×).` : `Baseline (recent training, last 28d — where each player is now) → match target (per-match demand) → week target (planned weekly load, match PL × the standard week's multiple ~${bvWkMult}×).`}</p>
             <div className="mt-3 overflow-x-auto">
               <table className="w-full min-w-[1040px] text-[13px]">
                 <thead><tr className="text-left text-[11px] text-slate-500">

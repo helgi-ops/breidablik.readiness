@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, pathwayRampGamma, PATHWAY_RAMP_GAMMA, kpiTaperShare, matchesPerWeek, kpiTmRefRange } from "../plannedVolume";
+import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, kpiPathway, pathwayRampGamma, PATHWAY_RAMP_GAMMA, kpiTaperShare, matchesPerWeek, kpiTmRefRange } from "../plannedVolume";
+import { buildPlannedVolume, inSeasonWeekMultiple } from "../inSeasonStandardWeek";
 
 describe("standardTrainingDays", () => {
   it("fewer training days as fixture congestion rises", () => {
@@ -185,13 +186,13 @@ describe("buildPlannedVolume", () => {
     expect(bb.weekVolumeMultiple).toBe(weeklyTrainingMultiple(standardTrainingDays(1, "basketball")));
     expect(bb.weekVolumeMultiple).toBeLessThan(fb.weekVolumeMultiple);
     expect(bb.meso[1].trainingMultiple).toBe(Math.round(weeklyTrainingMultiple(standardTrainingDays(2, "basketball")) * 100) / 100);
-    expect(fb.meso[1].trainingMultiple).toBe(Math.round(weeklyTrainingMultiple(standardTrainingDays(2)) * 100) / 100);
+    expect(fb.meso[1].trainingMultiple).toBe(inSeasonWeekMultiple(2)); // football: the calendar's two-game week
   });
 
   it("assembles week + meso with per-KPI tapering and ramp/deload", () => {
     const pv = buildPlannedVolume({ matchKpiAvg: { totalDistance: 10000, velocityBand6: 300 }, numWeeks: 4, stepPct: 10, deloadWeek: 4 })!;
     expect(pv).not.toBeNull();
-    expect(pv.weekVolumeMultiple).toBeCloseTo(2.35, 2);
+    expect(pv.weekVolumeMultiple).toBeCloseTo(2.45, 2); // the calendar's one-match week (PlayerLoad)
     expect(pv.meso).toHaveLength(4);
     expect(pv.meso[3].isDeload).toBe(true);
     // sprint (velocityBand6) ramps from a LOWER base than distance across every week

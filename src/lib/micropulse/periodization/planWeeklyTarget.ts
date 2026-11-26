@@ -7,8 +7,9 @@
  *   - Pre-season  → the controlled re-entry ramp (`preseasonStartRamp`), per-KPI tapered. Week 1 is when
  *                   off-season ends; the ramp climbs from there. Uses the UPCOMING pre-season once the
  *                   season is under way (the historical one is in the past).
- *   - In-season   → `kpiVolumes` for the week's fixture count (match × each KPI's tapered weekly multiple;
- *                   Martín-García 2018 — HSR/sprint accumulate a smaller weekly ×match than distance).
+ *   - In-season   → `inSeasonKpiVolumes` for the week's fixture count: match × each KPI's weekly multiple, which
+ *                   for football is what the rule-compliant calendar week adds up to (MD-4 Mechanical, MD-3
+ *                   Locomotive, MD-1 Activation, MD+1 Top-up; coach's call 2026-11-26), basketball its MD week.
  *   - Off-season  → a light aerobic MAINTENANCE dose (~1.2× a match, per-KPI tapered; Rønnestad 2011 —
  *                   hold the level, don't build; no fixtures to peak for).
  *
@@ -17,7 +18,8 @@
  */
 
 import { preseasonForDate, preseasonAnchor, preseasonRamp, type PreseasonSavedRow } from "./preseasonWindow";
-import { kpiVolumes, kpiTaperShare, standardTrainingDays, mesoWeeklyMultiples } from "./plannedVolume";
+import { kpiTaperShare, mesoWeeklyMultiples } from "./plannedVolume";
+import { inSeasonKpiVolumes } from "./inSeasonStandardWeek";
 import { teamKpiAvg } from "./preseasonKpiMap";
 import { holdsStandardWeek } from "./imaStandard";
 import type { MatchUnit, SeasonPhase, MesoBlock } from "./index";
@@ -77,13 +79,13 @@ export function planWeeklyTarget(opts: {
   const off = opts.phases.find((p) => p.key === "offseason");
   const today = opts.today;
 
-  // 1. In-season — this week's fixture-count-aware KPI volume (each KPI tapered by its own exponent),
+  // 1. In-season — this week's fixture-count-aware KPI volume (the calendar week for that many games),
   //    scaled by the meso ramp/deload factor for the block week today sits in (loading weeks ramp from
   //    the base week by stepPct). A competitive block has no deload unless the coach picked a light week,
   //    ~20% under its ramp (Fessi 2016). A block with no in-season flag keeps its ~60% deload (Gabbett 2016).
   if (comp && today >= comp.start && today < comp.end) {
     const matches = Math.max(0, Math.round(opts.matchesThisWeek ?? 1));
-    const vols = kpiVolumes(kpi, standardTrainingDays(matches, opts.sport));
+    const vols = inSeasonKpiVolumes(kpi, matches, opts.sport);
     if (vols.length === 0) return null;
 
     let factor = 1, weekIdx: number | undefined, blockWeeks: number | undefined, isDeloadWk = false, isLightWk = false, hold = false;

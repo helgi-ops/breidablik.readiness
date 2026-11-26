@@ -5,8 +5,8 @@
  * pre-season "Load per variable" table (PreseasonWeek1Table), read-only: the in-season block holds the standard
  * week (or ramps by Step/wk), so there is no week 1 to set. Per-variable editing is a later, separate decision.
  *
- * Layered read: the verdict (the standard week in × a match) → two plain facts (what one match is; that the week
- * cards below show the calendar's own sum) → the table → the week-by-week table and sources behind a toggle.
+ * Layered read: the verdict (the standard week in × a match) → two plain facts (what one match is; that the
+ * standard week is the calendar's own week, so the week cards add up to the same) → the table → the week-by-week table and sources behind a toggle.
  * Numbers come from blockVolumeView (the same functions the tab always used). Presentation only.
  */
 
@@ -82,7 +82,9 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
         </h3>
         <ul className="max-w-[760px] space-y-0.5 text-[13px] leading-relaxed text-slate-600">
           <li>{t(oneMatchNote)}</li>
-          <li>{t({ en: "The week cards below show what the calendar's days add up to, so a week there can sit a little off this standard week.", is: "Vikuspjöldin hér að neðan sýna hvað dagar dagatalsins leggja saman, svo vika þar getur vikið aðeins frá þessari staðalviku." })}</li>
+          <li>{view.fromCalendar
+            ? t({ en: `The standard week is the calendar's own one-match week (${view.trainingDays.join(", ")}; MD+2 and MD-2 off), so the week cards below add up to the same unless a week's games or days differ.`, is: `Staðalvikan er eins leiks vika dagatalsins sjálfs (${view.trainingDays.join(", ")}; frí á MD+2 og MD-2), svo vikuspjöldin hér að neðan leggja saman það sama nema leikir eða dagar vikunnar séu aðrir.` })
+            : t({ en: "The week cards below show what the calendar's days add up to, so a week there can sit a little off this standard week.", is: "Vikuspjöldin hér að neðan sýna hvað dagar dagatalsins leggja saman, svo vika þar getur vikið aðeins frá þessari staðalviku." })}</li>
           <li>{weeksLine}</li>
         </ul>
       </div>
@@ -190,7 +192,7 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
               );
             })()}
             {!view.researchRanges ? <p>{t({ en: `Basketball's week is shorter than football's: ${view.trainingDays.join(", ")} before a game (${view.trainingDays[0]} heaviest), fewer days with two games a week. Each variable has its own weekly multiple; high-intensity variables add up to a lower multiple than volume because the lighter days hold less of them. The MD-day shares are MicroPulse's. Descriptive plan — never the readiness colour.`, is: `Vika í körfubolta er styttri en í fótbolta: ${view.trainingDays.join(", ")} fyrir leik (${view.trainingDays[0]} þyngst), færri dagar með tvo leiki í viku. Hver breyta hefur sitt eigið vikumargfeldi; ákefðarbreytur safnast í lægra margfeldi en magn því léttari dagarnir bera minna af þeim. Hlutföll MD-daga eru val MicroPulse. Lýsandi áætlun — aldrei readiness-liturinn.` })}</p>
-            : <p>{t({ en: "Each variable has its own weekly multiple: high-speed running and sprints add up to a lower multiple than distance, because training days hold a smaller share of the match in high-speed running than in distance (Stevens 2017). The week undulates around the match, MD-4 heaviest (Martín-García 2018; the MD-day shares are MicroPulse's). Descriptive plan — never the readiness colour.", is: "Hver breyta hefur sitt eigið vikumargfeldi: háhraði og sprettir safnast í lægra margfeldi en vegalengd, því æfingadagar ná minna hlutfalli af leik í háhraða en í vegalengd (Stevens 2017). Vikan bylgjast um leikinn, MD-4 þyngst (Martín-García 2018; hlutföll MD-daga eru val MicroPulse). Lýsandi áætlun — aldrei readiness-liturinn." })}</p>}
+            : <p>{t({ en: `Each variable has its own weekly multiple: high-speed running and sprints add up to a lower multiple than distance, because training days hold a smaller share of the match in high-speed running than in distance (Stevens 2017). The standard week is the calendar's week (${view.trainingDays.join(", ")}): each variable is the sum of its day-type shares over those days, with MD+2 and MD-2 off by the in-season week rule (the day-type shares are MicroPulse's). Descriptive plan — never the readiness colour.`, is: `Hver breyta hefur sitt eigið vikumargfeldi: háhraði og sprettir safnast í lægra margfeldi en vegalengd, því æfingadagar ná minna hlutfalli af leik í háhraða en í vegalengd (Stevens 2017). Staðalvikan er vika dagatalsins (${view.trainingDays.join(", ")}): hver breyta er summa hlutfalla dagsgerðanna þá daga, með frí á MD+2 og MD-2 eftir vikureglu keppnistímabils (hlutföll dagsgerða eru val MicroPulse). Lýsandi áætlun — aldrei readiness-liturinn.` })}</p>}
           </div>
         )}
       </div>

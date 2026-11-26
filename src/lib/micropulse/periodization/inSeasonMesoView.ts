@@ -1,15 +1,13 @@
 /**
  * The In-season Meso tab of the Periodization Hub, as pure reads. Lifted from the tab (page.tsx) so the
  * mirrored layout and its tests share one source. Presentation only: every number comes from the existing
- * functions (plannedVolume, buildCalendarBlock, weekRules); nothing here adds a rule or a threshold.
+ * functions (inSeasonStandardWeek, plannedVolume, buildCalendarBlock, weekRules); nothing here adds a rule or a threshold.
  */
 
 import type { WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 import { checkThreeInARow, type WeekRuleDay } from "@/lib/micropulse/weekSetup/weekRules";
-import {
-  kpiTmRefRange, kpiVolumes, mesoTotalMultiple, mesoWeeklyMultiples, standardTrainingDays, weeklyKpiMultiple, weeklyTrainingMultiple,
-  type KpiVolume, type MesoWeek,
-} from "./plannedVolume";
+import { kpiTmRefRange, mesoTotalMultiple, mesoWeeklyMultiples, type KpiVolume, type MesoWeek } from "./plannedVolume";
+import { inSeasonKpiMultiple, inSeasonKpiVolumes, inSeasonTrainingDayLabels, inSeasonWeekMultiple, usesCalendarWeek } from "./inSeasonStandardWeek";
 import { tmRefBand, type TmBand } from "./matchReference";
 
 type Bi = { en: string; is: string };
@@ -80,17 +78,19 @@ export type BlockVolumeView = {
   weekKpiRaw: (key: WeeklyLoadMetricKey, i: number) => number | null;
   /** The volumes as plannedVolume returns them (raw labels), for the detail table. */
   vols: KpiVolume[];
-  /** The standard week's training days (MD labels) — football MD-4…MD-1, basketball MD-3…MD-1. */
+  /** The standard week's training days (MD labels) — football the calendar's MD-4, MD-3, MD-1, MD+1; basketball MD-3…MD-1. */
   trainingDays: string[];
   /** False for basketball: the published training:match ranges (PMC6747517) are football's, so none is shown. */
   researchRanges: boolean;
+  /** True when the standard week IS the calendar's week (football), so the week cards add up to the same. */
+  fromCalendar: boolean;
 };
 
 /** Basketball has no published in-season training:match range here; the football ranges don't apply. */
 export const isBasketballSport = (sport: string | null | undefined): boolean => String(sport ?? "").toLowerCase() === "basketball";
 
-/** The block's weekly volume — exactly the numbers the In-season tab showed (a standard one-match week, the
- *  meso ramp by `stepPct`, the light/deload week), gathered in one read. */
+/** The block's weekly volume — a standard one-match week (football: what the rule-compliant calendar week adds
+ *  up to, `inSeasonStandardWeek`), the meso ramp by `stepPct`, the light/deload week — gathered in one read. */
 export function blockVolumeView(opts: {
   matchKpis: Partial<Record<WeeklyLoadMetricKey, number>>;
   numWeeks: number;
@@ -100,17 +100,17 @@ export function blockVolumeView(opts: {
   /** Team sport — basketball's week is shorter (standardTrainingDays), and gets no football research range. */
   sport?: string | null;
 }): BlockVolumeView {
-  const days1 = standardTrainingDays(1, opts.sport);
   const researchRanges = !isBasketballSport(opts.sport);
-  const wkMult = weeklyTrainingMultiple(days1);
-  const vols = kpiVolumes(opts.matchKpis, days1);
+  const wkMult = inSeasonWeekMultiple(1, opts.sport);
+  const vols = inSeasonKpiVolumes(opts.matchKpis, 1, opts.sport);
+  const kpiMult = (k: WeeklyLoadMetricKey) => inSeasonKpiMultiple(k, 1, opts.sport);
   const weeks = mesoWeeklyMultiples({ numWeeks: opts.numWeeks, baseMultiple: wkMult, stepPct: opts.stepPct, deloadWeek: opts.deloadWeek, light: opts.light });
   const weeksDiffer = weeks.some((w) => w.multiple !== weeks[0]?.multiple);
   const lightIdx = weeks.findIndex((w) => w.isDeload);
   const peakIdx = weeks.reduce((best, w, i) => (!w.isDeload && (best < 0 || w.multiple > weeks[best].multiple) ? i : best), -1);
   const rampFactor = (w: MesoWeek | undefined) => (w && wkMult > 0 ? w.multiple / wkMult : 0);
-  const weekKpi = (k: WeeklyLoadMetricKey, i: number) => Math.round(weeklyKpiMultiple(days1, k) * rampFactor(weeks[i]) * 100) / 100;
-  const weekKpiRaw = (k: WeeklyLoadMetricKey, i: number) => { const mv = opts.matchKpis[k]; return mv == null ? null : mv * weeklyKpiMultiple(days1, k) * rampFactor(weeks[i]); };
+  const weekKpi = (k: WeeklyLoadMetricKey, i: number) => Math.round(kpiMult(k) * rampFactor(weeks[i]) * 100) / 100;
+  const weekKpiRaw = (k: WeeklyLoadMetricKey, i: number) => { const mv = opts.matchKpis[k]; return mv == null ? null : mv * kpiMult(k) * rampFactor(weeks[i]); };
   const rows: VariableRow[] = vols.map((v) => {
     const ref = researchRanges ? kpiTmRefRange(v.key) : null;
     return {
@@ -125,7 +125,7 @@ export function blockVolumeView(opts: {
     weekMultiple: wkMult,
     totalWithMatch: Math.round((wkMult + 1) * 10) / 10,
     weeks, blockTotal: mesoTotalMultiple(weeks), weeksDiffer, peakIdx, lightIdx, rows, weekKpi, weekKpiRaw, vols,
-    trainingDays: days1, researchRanges,
+    trainingDays: inSeasonTrainingDayLabels(1, opts.sport), researchRanges, fromCalendar: usesCalendarWeek(1, opts.sport),
   };
 }
 
