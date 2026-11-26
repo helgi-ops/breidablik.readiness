@@ -14,28 +14,13 @@
 import * as React from "react";
 import { CiteRefs } from "@/components/coach/CiteRefs";
 import { kpiTmRefRange, kpiReentryFloor } from "@/lib/micropulse/periodization/plannedVolume";
-import { tmRefBand } from "@/lib/micropulse/periodization/matchReference";
+import { KPI_GROUPS, kpiGroup, kpiWhatWhy, plainKpiName } from "@/lib/micropulse/periodization/kpiPlainNames";
+import { BandOrNone, LegendFilled, LegendLight, LegendOpen, LegendRange, VARIABLE_COLS, VariableGroupHeader, VariableScaleTicks, VariableTrack, trackScaleMax } from "@/components/coach/meso/VariableTrack";
 import { PRESEASON_DEFAULT_WEEK1, PRESEASON_TAPER_RESEARCH } from "@/lib/micropulse/periodization/preseasonWindow";
 import type { PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
 type Bi = { en: string; is: string };
-
-/** What each variable is, and why it starts where it starts (plain words; the numbers come from the rules). */
-const WHAT: Partial<Record<string, Bi>> = {
-  totalDistance: { en: "All the running in the week. The aerobic base: built high and early.", is: "Öll hlaup vikunnar. Grunnþolið: byggt hátt og snemma." },
-  velocityBand5: { en: "Fast running (HSR). The base for repeated fast runs: loaded early, but below distance.", is: "Hröð hlaup (HSR). Grunnur fyrir endurtekin hröð hlaup: hlaðið snemma, en undir vegalengd." },
-  velocityBand6: { en: "Sprinting, the fastest running. A careful return.", is: "Sprettir, hraðasta hlaupið. Varfærin endurkoma." },
-  accelB23: { en: "Hard speed-ups. Training is full of them from day one (small games, drills).", is: "Kröftugar hraðaaukningar. Æfingar eru fullar af þeim frá fyrsta degi (spil, æfingar)." },
-  imaAccel: { en: "Hard speed-ups. Training is full of them from day one (small games, drills).", is: "Kröftugar hraðaaukningar. Æfingar eru fullar af þeim frá fyrsta degi (spil, æfingar)." },
-  decelB23: { en: "Hard braking: the biggest strain on muscles and tendons, so it starts a little below speed-ups.", is: "Kröftug hemlun: mesta álagið á vöðva og sinar, svo hún byrjar aðeins undir hraðaaukningum." },
-  imaDecel: { en: "Hard braking: the biggest strain on muscles and tendons, so it starts a little below speed-ups.", is: "Kröftug hemlun: mesta álagið á vöðva og sinar, svo hún byrjar aðeins undir hraðaaukningum." },
-  imaCod: { en: "Hard changes of direction. High strain on tissue, so it starts with braking.", is: "Kröftugar stefnubreytingar. Mikið álag á vefi, svo þær byrja með hemlun." },
-  imaTotal: { en: "All hard speed-ups, brakes and turns together.", is: "Allar kröftugar hraðaaukningar, hemlanir og beygjur saman." },
-  imaStrideBand6: { en: "Strides in longer continuous runs (12–18 s). Aerobic running base, not fast running.", is: "Skref í lengri samfelldum hlaupum (12–18 s). Hlaupagrunnur, ekki hröð hlaup." },
-  imaFrDistance: { en: "Distance in long runs (18 s or more). Aerobic running base, not fast running.", is: "Vegalengd í löngum hlaupum (18 s eða lengur). Hlaupagrunnur, ekki hröð hlaup." },
-  totalPlayerLoad: { en: "The whole week's load in one number. Changing it moves every variable you haven't set yourself by the same share.", is: "Allt álag vikunnar í einni tölu. Ef þú breytir því færast allar breytur sem þú hefur ekki stillt sjálfur um sama hlutfall." },
-};
 
 type Row = { k: string; lab: Bi; unit: string; w1: number | null; w1Raw: number | null; prop: number | null; mine: boolean; pk: number | null; lt: number | null; ref: [number, number] | null };
 
@@ -89,48 +74,16 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
   const reset = (k: string) => (k === "totalPlayerLoad" ? onWeek1Mult(PRESEASON_DEFAULT_WEEK1) : onKpi(k, null));
 
   // Grouped by what the variable loads, in plain names (explainability: no GPS jargon in the primary view).
-  const GROUP_OF: Record<string, "run" | "speed" | "tissue"> = {
-    totalDistance: "run", imaFrDistance: "run", imaStrideBand6: "run",
-    velocityBand5: "speed", velocityBand6: "speed",
-    accelB23: "tissue", imaAccel: "tissue", decelB23: "tissue", imaDecel: "tissue", imaCod: "tissue", imaTotal: "tissue",
-  };
-  const GROUPS: Array<{ key: "run" | "speed" | "tissue" | "other"; title: Bi; sub: Bi }> = [
-    { key: "run", title: { en: "Running volume", is: "Hlaupamagn" }, sub: { en: "the aerobic base — built high and early", is: "grunnþolið — byggt hátt og snemma" } },
-    { key: "speed", title: { en: "Speed", is: "Hraði" }, sub: { en: "fast running — a careful return", is: "hröð hlaup — varfærin endurkoma" } },
-    { key: "tissue", title: { en: "Muscle & tendon", is: "Vöðvar & sinar" }, sub: { en: "speed-ups, braking, turns — the biggest strain", is: "hraðaaukningar, hemlun, beygjur — mesta álagið" } },
-    { key: "other", title: { en: "Other", is: "Annað" }, sub: { en: "", is: "" } },
-  ];
-  const PLAIN: Partial<Record<string, Bi>> = {
-    totalDistance: { en: "Total distance", is: "Heildarvegalengd" },
-    imaFrDistance: { en: "Long runs at match pace", is: "Löng hlaup á leikhraða" },
-    imaStrideBand6: { en: "Long-run strides", is: "Skref í löngum hlaupum" },
-    velocityBand5: { en: "High-speed running", is: "Háhraðahlaup" },
-    velocityBand6: { en: "Sprint", is: "Sprettir" },
-    accelB23: { en: "Hard speed-ups", is: "Kröftugar hraðaaukningar" }, imaAccel: { en: "Hard speed-ups", is: "Kröftugar hraðaaukningar" },
-    decelB23: { en: "Hard braking", is: "Kröftug hemlun" }, imaDecel: { en: "Hard braking", is: "Kröftug hemlun" },
-    imaCod: { en: "Changes of direction", is: "Stefnubreytingar" },
-    imaTotal: { en: "All hard actions", is: "Allar kröftugar aðgerðir" },
-  };
   const used = new Set<string>();
-  const nameOf = (r: Row): string => {
-    const plain = PLAIN[r.k] ? t(PLAIN[r.k]!) : null;
-    const n = plain && !used.has(plain) ? plain : t(r.lab); // two sources of one action keep their own label
-    used.add(n); return n;
-  };
+  const nameOf = (r: Row): string => plainKpiName(r.k, r.lab, is, used);
   const master = rows.find((r) => r.k === "totalPlayerLoad")!;
   const kpiRows = rows.filter((r) => r.k !== "totalPlayerLoad").map((r) => ({ ...r, name: nameOf(r) }));
 
   // The scale every track shares: 0× → the largest number on the page (at least 4×), so rows compare.
-  const scaleMax = Math.max(4, Math.ceil(Math.max(...rows.flatMap((r) => [r.w1 ?? 0, r.pk ?? 0, r.lt ?? 0, r.ref?.[1] ?? 0]))));
-  const pos = (x: number) => `${Math.max(0, Math.min(100, (x / scaleMax) * 100))}%`;
-  const ticks = Array.from({ length: scaleMax + 1 }, (_, i) => i);
+  const scaleMax = trackScaleMax(rows.flatMap((r) => [r.w1, r.pk, r.lt, r.ref?.[1]]));
 
   // Read against research — always a word, never a colour alone.
-  const band = (x: number | null, ref: [number, number] | null) => {
-    if (x == null) return null;
-    if (ref == null) return <span className="text-[10px] text-slate-500">{t({ en: "no reference", is: "engin viðmið" })}</span>;
-    return <TmBandChip x={x} refRange={ref} is={is} className="" />;
-  };
+  const band = (x: number | null, ref: [number, number] | null) => <BandOrNone x={x} refRange={ref} is={is} />;
   const startRule = (k: string) => {
     if (k === "totalPlayerLoad") return t({ en: `Proposal ${fx(PRESEASON_DEFAULT_WEEK1)}× a match.`, is: `Tillaga ${fx(PRESEASON_DEFAULT_WEEK1)}× leik.` });
     const f = kpiReentryFloor(k);
@@ -139,22 +92,13 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
       : t({ en: "Follows the overall week-1 line.", is: "Fylgir almennu viku-1 línunni." });
   };
 
-  const cols = "grid grid-cols-1 items-center gap-3 md:grid-cols-[minmax(180px,1.3fr)_190px_minmax(220px,2fr)_150px] md:gap-5";
+  const cols = VARIABLE_COLS;
 
   // Week 1 → peak on the shared scale: research range shaded, the build as a bar, the three weeks as marks.
-  const track = (r: Row) => {
-    const lo = Math.min(r.w1 ?? 0, r.pk ?? 0), hi = Math.max(r.w1 ?? 0, r.pk ?? 0);
-    return (
-      <div className="relative h-10" role="img" aria-label={`${t({ en: "Week 1", is: "Vika 1" })} ${r.w1 != null ? fx(r.w1) : "–"}×, ${t({ en: "peak", is: "toppur" })} ${r.pk != null ? fx(r.pk) : "–"}×${lightW ? `, ${t({ en: "light week", is: "létt vika" })} ${r.lt != null ? fx(r.lt) : "–"}×` : ""}${r.ref ? `; ${t({ en: "research", is: "rannsóknir" })} ${fx(r.ref[0])}–${fx(r.ref[1])}×` : ""}`}>
-        <div className="absolute inset-x-0 top-[17px] h-1.5 rounded-full bg-[#ece9e2]" />
-        {r.ref && <div className="absolute top-2 h-6 rounded-md bg-[#1c7a4a]/[0.14]" style={{ left: pos(r.ref[0]), width: `calc(${pos(r.ref[1])} - ${pos(r.ref[0])})` }} />}
-        {r.w1 != null && r.pk != null && <div className="absolute top-[17px] h-1.5 rounded-full bg-[#2740e6]/35" style={{ left: pos(lo), width: `calc(${pos(hi)} - ${pos(lo)})` }} />}
-        {lightW && r.lt != null && <div className="absolute top-[30px] h-2.5 w-2.5 -translate-x-1/2 rotate-45 bg-[#8a919c]" style={{ left: pos(r.lt) }} />}
-        {r.w1 != null && <div className="absolute top-[13px] h-3.5 w-3.5 -translate-x-1/2 rounded-full border-[3px] border-[#2740e6] bg-white" style={{ left: pos(r.w1) }} />}
-        {r.pk != null && <div className="absolute top-[13px] h-3.5 w-3.5 -translate-x-1/2 rounded-full bg-[#2740e6] ring-2 ring-white" style={{ left: pos(r.pk) }} />}
-      </div>
-    );
-  };
+  const track = (r: Row) => (
+    <VariableTrack scaleMax={scaleMax} refRange={r.ref} open={r.w1} filled={r.pk} light={lightW ? r.lt : null}
+      ariaLabel={`${t({ en: "Week 1", is: "Vika 1" })} ${r.w1 != null ? fx(r.w1) : "–"}×, ${t({ en: "peak", is: "toppur" })} ${r.pk != null ? fx(r.pk) : "–"}×${lightW ? `, ${t({ en: "light week", is: "létt vika" })} ${r.lt != null ? fx(r.lt) : "–"}×` : ""}${r.ref ? `; ${t({ en: "research", is: "rannsóknir" })} ${fx(r.ref[0])}–${fx(r.ref[1])}×` : ""}`} />
+  );
   const nums = (r: Row) => (
     <div className="flex flex-col gap-1 text-[12px] text-slate-600">
       <span>{t({ en: "Peak", is: "Toppur" })} <b className="text-[14px] tabular-nums text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{r.pk != null ? `${fx(r.pk)}×` : "–"}</b> {band(r.pk, r.ref)}</span>
@@ -218,35 +162,28 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
           <span>{t({ en: "Variable", is: "Breyta" })}</span>
           <span>{t({ en: "Week 1 · yours to change", is: "Vika 1 · þú breytir" })}</span>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-[18px] rounded-[3px] bg-[#1c7a4a]/[0.18]" />{t({ en: "Research range", is: "Rannsóknabil" })}</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-2 border-[#2740e6] bg-white" />{t({ en: "Week 1", is: "Vika 1" })}</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#2740e6]" />{t({ en: `Peak · wk ${peakNo}`, is: `Toppur · v ${peakNo}` })}</span>
-            {lightW && <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rotate-45 bg-[#8a919c]" />{t({ en: `Light · wk ${ramp.length}`, is: `Létt · v ${ramp.length}` })}</span>}
+            <LegendRange label={t({ en: "Research range", is: "Rannsóknabil" })} />
+            <LegendOpen label={t({ en: "Week 1", is: "Vika 1" })} />
+            <LegendFilled label={t({ en: `Peak · wk ${peakNo}`, is: `Toppur · v ${peakNo}` })} />
+            {lightW && <LegendLight label={t({ en: `Light · wk ${ramp.length}`, is: `Létt · v ${ramp.length}` })} />}
           </div>
           <span>{t({ en: "vs research", is: "miðað við rannsóknir" })}</span>
         </div>
-        <div className={`${cols} mt-1 font-mono text-[10px] text-slate-500`}>
-          <span /><span />
-          <div className="flex justify-between">{ticks.map((i) => <span key={i}>{i}×</span>)}</div>
-          <span />
-        </div>
+        <VariableScaleTicks scaleMax={scaleMax} />
       </div>
 
       {/* Groups */}
-      {GROUPS.map((g) => {
-        const gr = kpiRows.filter((r) => (GROUP_OF[r.k] ?? "other") === g.key);
+      {KPI_GROUPS.map((g) => {
+        const gr = kpiRows.filter((r) => kpiGroup(r.k) === g.key);
         if (!gr.length) return null;
         return (
           <div key={g.key} className="px-5 pt-2 sm:px-6">
-            <div className="flex flex-wrap items-baseline gap-2.5 border-b border-[#ece9e2] pb-1.5 pt-3.5">
-              <span className="text-[13px] font-bold uppercase tracking-[0.02em] text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{t(g.title)}</span>
-              {g.sub.en && <span className="text-[12px] text-slate-600">{t(g.sub)}</span>}
-            </div>
+            <VariableGroupHeader title={t(g.title)} sub={g.preSub.en ? t(g.preSub) : ""} />
             {gr.map((r) => (
               <div key={r.k} className={`${cols} border-b border-[#f1efe9] py-3 last:border-b-0`}>
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="flex flex-wrap items-center gap-1.5 text-[14px] font-semibold text-[#14181c]">{r.name}{r.mine && yours}</span>
-                  {WHAT[r.k] && <span className="text-[12px] leading-snug text-slate-600">{t(WHAT[r.k]!)}</span>}
+                  {kpiWhatWhy(r.k) && <span className="text-[12px] leading-snug text-slate-600">{t(kpiWhatWhy(r.k)!)}</span>}
                 </div>
                 <div className="flex flex-col gap-1">{stepper(r, r.name)}{sub(r)}</div>
                 {track(r)}
@@ -320,12 +257,5 @@ function Week1Input({ value, label, onCommit, big = false }: { value: number | n
   );
 }
 
-/** Where a weekly ×match lands against the research training:match range — always a word, never a colour alone.
- *  Shared with the in-season "weekly volume" table in the Periodization Hub. */
-export function TmBandChip({ x, refRange, is, className = "ml-1" }: { x: number | null | undefined; refRange: [number, number] | null | undefined; is: boolean; className?: string }) {
-  const k = tmRefBand(x, refRange);
-  if (k == null) return null;
-  const txt = k === "in" ? (is ? "innan" : "within") : k === "above" ? (is ? "yfir" : "above") : (is ? "undir" : "below");
-  const cls = k === "in" ? "bg-[#1c7a4a]/12 text-[#15603a]" : k === "above" ? "bg-[#de9328]/16 text-[#7a4a06]" : "bg-[#eeece6] text-slate-600";
-  return <span className={`${className} rounded px-1.5 py-px text-[10px] font-semibold ${cls}`}>{txt}</span>;
-}
+/** Kept here for callers; lives with the shared variable-table pieces. */
+export { TmBandChip } from "@/components/coach/meso/VariableTrack";

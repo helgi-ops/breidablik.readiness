@@ -37,7 +37,7 @@ import { STRUCTURE_LABEL, sanitizeMdStructures, type MdStructures, type NoMatchW
 import { preseasonMatchExposure, NORMATIVE_MATCH_KPI, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
 import { weeklyTargetFromMatch } from "@/lib/micropulse/periodization";
 import { upcomingInternationalBreaks, intlBreakKey, type IntlBreak } from "@/lib/micropulse/internationalBreaks";
-import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, kpiVolumes, mesoWeeklyMultiples, mesoTotalMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
+import { standardTrainingDays, weeklyTrainingMultiple, weeklyKpiMultiple, buildPlannedVolume, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
 import { mdOffset } from "@/lib/micropulse/periodization/periodizationModel";
 import { buildDayDrillSheet } from "@/lib/micropulse/dayDrillSheet";
 import { fetchResearchDrills } from "@/lib/micropulse/dayDrillLibraryFetch";
@@ -56,9 +56,13 @@ import StrengthDeliveryNote from "@/components/coach/StrengthDeliveryNote";
 import { MESO_HORIZON, mesoSkeleton, planDayFromCal, planDaysFromCalWeek, CALTYPE_FOCUS_LABEL } from "@/lib/micropulse/periodization/mesoWeek";
 import { mesoWeekFor as mesoWeekOf, preseasonInputFor, seasonMesoBlocks, teamCalendarUnit, assumedWeekMove } from "@/lib/micropulse/periodization/mesoSeed";
 import PreseasonReadsFrom, { AddGame } from "@/components/coach/PreseasonReadsFrom";
-import { checkThreeInARow, THREE_IN_A_ROW_RULE, type WeekRuleDay } from "@/lib/micropulse/weekSetup/weekRules";
+import { THREE_IN_A_ROW_RULE } from "@/lib/micropulse/weekSetup/weekRules";
 import { MacroSetupChecklist, MacroFixturesCard, MacroBreaksCard, MacroSetupGate, firstLeagueGame, type MacroFixture } from "@/components/coach/MacroSetupCards";
-import PreseasonWeek1Table, { TmBandChip } from "@/components/coach/PreseasonWeek1Table";
+import PreseasonWeek1Table from "@/components/coach/PreseasonWeek1Table";
+import InSeasonBlockSummary from "@/components/coach/meso/InSeasonBlockSummary";
+import InSeasonVariableTable from "@/components/coach/meso/InSeasonVariableTable";
+import { GOAL_BAR, BarSwatch, GameDotLegend, type MesoBar } from "@/components/coach/meso/MesoPrimitives";
+import { blockVolumeView, inSeasonRuleBreaks, calWeekMultiple, sessionsInWeek, minMax, gamesInRange, gamesInWeek } from "@/lib/micropulse/periodization/inSeasonMesoView";
 import { teamMatchReference } from "@/lib/micropulse/periodization/matchReference";
 import type { MatchUnit as LibMatchUnit } from "@/lib/micropulse/periodization";
 
@@ -3015,21 +3019,8 @@ export default function PeriodizationHubPage() {
             const todayB = seasonBlocks.find((b) => b.start <= todayIso && todayIso < b.end) ?? null;
             // In-season rules on the shown block: a training day the coach set against them keeps (their call)
             // but is marked. MD+2 = a session two days after a match; three in a row = INSEASON_THREE_IN_A_ROW.
-            const ruleBreaks = new Map<string, Bi>();
             const inS = inSeasonRange(plan.phases);
-            if (calBlock && !isPlayerScope && inS) {
-              const fx = plan.fixtures ?? [];
-              const rDays: WeekRuleDay[] = [];
-              calBlock.weeks.forEach((w) => w.days.forEach((d, i) => {
-                const iso = isoAdd(w.weekStart, i);
-                if (iso < inS.start || iso >= inS.end) return;
-                rDays.push({ date: iso, kind: d.type === "match" ? "match" : d.type === "rest" ? "off" : "session", editable: false });
-                if (d.type !== "rest" && d.type !== "match" && fx.includes(isoAdd(iso, -2)) && !fx.includes(isoAdd(iso, -1)))
-                  ruleBreaks.set(iso, { en: "Against the rule (your choice): MD+2 is a day off in season", is: "Gegn reglu (þitt val): MD+2 er frídagur á keppnistímabili" });
-              }));
-              for (const run of checkThreeInARow({ days: rDays, matchDates: fx, phase: "competitive" }).runs)
-                for (const d of run.days) if (!ruleBreaks.has(d.date)) ruleBreaks.set(d.date, { en: "Against the rule (your choice): three training days in a row", is: "Gegn reglu (þitt val): þrjár æfingar í röð" });
-            }
+            const ruleBreaks = calBlock && !isPlayerScope && inS ? inSeasonRuleBreaks(calBlock.weeks, plan.fixtures ?? [], inS) : new Map<string, Bi>();
             const selGoal: BlockGoalKey = sel ? ((blockGoals[sel.start] as BlockGoalKey | undefined) ?? sel.goalKey) : effectiveGoal;
             // Block strip — every block positioned by DATE on one axis (same approach as the Macro map).
             const d0 = seasonBlocks.length ? utc(mondayOf(seasonBlocks[0].start)) : 0;
@@ -3064,9 +3055,306 @@ export default function PeriodizationHubPage() {
             const dash = (n: number | null) => (n == null ? "—" : n.toLocaleString("en-US"));
             const calStart = mondayOf(blkStart);
 
-            return (<div className="space-y-4">
-          {flowNote(is ? "Makró-fasar · leikir · álagsferill" : "Macro phases · fixtures · load curve", is ? "Vikuuppsetning · Today · PDF" : "Week Setup · Today · PDF")}
+            // ── The mirror of Meso: Pre-season (summary → Setup → week by week). Every number below comes from the
+            // reads this tab always used (blockVolumeView = the old inline maths; the calendar block's own week sums).
+            const view = blockVolumeView({
+              matchKpis: blkScope === "player" && player ? kpiAvgFromUnit(player.matchUnit) : teamKpiAvg(plan.players),
+              numWeeks: blkWeeks, stepPct: blkStepEff, deloadWeek: blkMesoDeload.deloadWeek, light: blkMesoDeload.light,
+            });
+            const oneMatchNote: Bi = blkScope === "player" && player
+              ? { en: `One match = ${player.name}'s typical full match. ${player.matchUnit.windowNote.en}`, is: `Einn leikur = dæmigerður heill leikur ${player.name}. ${player.matchUnit.windowNote.is}` }
+              : teamMatchReference(plan.players.map((p) => p.matchUnit)).note;
+            const fxN = (n: number) => (is ? String(n).replace(".", ",") : String(n));
+            const calWeeks = Array.from({ length: blkWeeks }, (_, i) => mesoCalBlock?.weeks[i] ?? null);
+            const weekMults = calWeeks.map((w) => calWeekMultiple(w));
+            const sessMM = minMax(calWeeks.map((w) => (w ? sessionsInWeek(w) : null)));
+            const loadMM = minMax(weekMults);
+            const allFx = plan.fixtures ?? [];
+            const blockGames = sel ? gamesInRange(allFx, sel.start, sel.end) : [];
+            const lightWeekNo = sel?.deloadWeekStart ? Math.round((utc(sel.deloadWeekStart) - utc(calStart)) / (7 * DAY)) + 1 : null;
+            const btn = "h-9 rounded-lg border border-[#d9d5cc] bg-white px-3 text-[13px] font-medium text-[#14181c] hover:bg-slate-50 disabled:opacity-40";
+            const h3 = "text-[13px] font-bold text-slate-800";
 
+            return (<div className="space-y-4">
+          {selIsPre && (
+            <section className="rounded-2xl border border-[#e3e0d8] bg-white px-5 py-5 sm:px-7">
+              <p className="text-[16px] font-bold text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{is ? "Þessi lota er á undirbúningstímabilinu." : "This block is in the pre-season."}</p>
+              <p className="mt-1 text-[13px] text-slate-600">{is ? "Undirbúningurinn er skipulagður á síðunni Mesó: Undirbúningur, með reglum undirbúnings (leikdagar, álagsstignun, laugardagsleikir)." : "The pre-season is planned on Meso: Pre-season, with the pre-season rules (game days, load ramp, Saturday games)."}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={() => setTab("preseason")} className="h-9 rounded-lg bg-[#2740e6] px-3 text-[13px] font-semibold text-white hover:brightness-110">{is ? "Opna Mesó: Undirbúningur →" : "Open Meso: Pre-season →"}</button>
+                {seasonBlocks[0] && <button type="button" onClick={() => setBlkStart((todayB ?? seasonBlocks[0]).start)} className={btn}>{is ? `Fara á fyrstu keppnislotu (${shortDate(seasonBlocks[0].start, is)})` : `Go to the first in-season block (${shortDate(seasonBlocks[0].start, is)})`}</button>}
+              </div>
+            </section>
+          )}
+
+          {/* 1 — THE BLOCK AT A GLANCE: verdict → four facts → the block's weeks → the season to pick another block. */}
+          {!selIsPre && (
+          <InSeasonBlockSummary
+            eyebrow={`${sel ? (is ? sel.phase.is : sel.phase.en) : (is ? "Keppnistímabil" : "In-season")} ${plan.seasonYear}${sel ? ` · ${is ? `Lota ${selIdx + 1} af ${seasonBlocks.length}` : `Block ${selIdx + 1} of ${seasonBlocks.length}`}` : ""}`}
+            title={sel ? (is ? `${sel.weeks} vikna lota — ${goalName(selGoal)}` : `${sel.weeks}-week block — ${goalName(selGoal)}`) : (is ? "Veldu lotu" : "Pick a block")}
+            subLine={sel && (
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-slate-600">
+                <span>{shortDate(sel.start, is)} → {shortDate(endIncl(sel), is)}</span>
+                {todayB && sel.start === todayB.start && <span className="rounded-full bg-[#a83e28]/10 px-2 py-0.5 text-[11px] font-bold text-[#a83e28]">{is ? "Núverandi" : "Current"}</span>}
+                {sel.provisional && <span title={is ? "Leikjaplanið er ekki skráð fyrir þessa lotu — hún fullmótast þegar leikirnir eru skráðir." : "The fixture list isn't entered for this block — it firms up once the games are entered."} className="rounded-full border border-dashed border-[#de9328] px-2 py-0.5 text-[11px] font-bold text-[#7a4a06]">{is ? "Bráðabirgða" : "Provisional"}</span>}
+                {isPlayerScope && <span className="rounded-full bg-[#2740e6]/[0.08] px-2 py-0.5 text-[11px] font-semibold text-[#2740e6]">{is ? `Leikmaður: ${player?.name} · aðeins til sýnis` : `Player: ${player?.name} · read-only`}</span>}
+                <span className="w-full text-[13px]">{is ? sel.goal.is : sel.goal.en}</span>
+              </p>
+            )}
+            actions={<>
+              <button type="button" onClick={() => prevB && setBlkStart(prevB.start)} disabled={!prevB} aria-label={is ? "Fyrri lota" : "Previous block"} className={btn}>‹ {is ? "Fyrri" : "Prev"}</button>
+              <button type="button" onClick={() => nextB && setBlkStart(nextB.start)} disabled={!nextB} aria-label={is ? "Næsta lota" : "Next block"} className={btn}>{is ? "Næsta" : "Next"} ›</button>
+              {todayB && sel && sel.start !== todayB.start && <button type="button" onClick={() => setBlkStart(todayB.start)} className="h-9 rounded-lg px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">{is ? "Fara á núverandi" : "Go to current"}</button>}
+              <button onClick={exportBlock} disabled={!mesoCalBlock} className="h-9 rounded-lg border border-[#2740e6] bg-white px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-40" title={isPlayerScope ? (is ? `Lotan hans ${player?.name ?? ""} (heildar-PDF er efst á síðunni)` : `${player?.name ?? "His"} block (the full-data PDF is at the top of the page)`) : (is ? "Bara þessa lotu (heildar-PDF er efst á síðunni)" : "Just this block (the full-data PDF is at the top of the page)")}>{is ? "Sækja lotu (PDF)" : "Export block (PDF)"}</button>
+              {!isPlayerScope && <button onClick={applyToWeekSetup} disabled={!calBlock || wsBusy} className="h-9 rounded-lg bg-[#2740e6] px-3 text-[13px] font-semibold text-white hover:bg-[#1e34c0] disabled:opacity-40" title={is ? "Dagarnir vistast sjálfkrafa við hverja breytingu — þetta vistar strax núna" : "Days auto-save on every change — this saves now immediately"}>{wsBusy ? (is ? "Vista…" : "Saving…") : wsApplied === "ok" ? (is ? "✓ Vistað" : "✓ Saved") : (is ? "Vista núna" : "Save now")}</button>}
+            </>}
+            status={<>
+              {wsApplied === "ok" && <p className="text-[12px] font-medium text-emerald-700">{is ? "✓ Lotan er komin í Vikuuppsetningu — leikir, æfingar, frí og dagsgerðir." : "✓ The block is in Week Setup — games, sessions, days off and day types."}</p>}
+              {wsApplied === "err" && <p className="text-[12px] font-medium text-rose-700">{is ? "Ekki tókst að vista í Vikuuppsetningu." : "Couldn't save to Week Setup."}</p>}
+            </>}
+            flow={{ readsLabel: is ? "Les" : "Reads", reads: is ? "Makró-fasa · leiki · álagsferil" : "Macro phases · fixtures · load curve", flowsLabel: is ? "Flæðir í" : "Flows to", flows: is ? "Vikuuppsetningu · Today · PDF" : "Week Setup · Today · PDF" }}
+            tiles={sel ? [
+              { label: is ? "Æfingar / viku" : "Sessions / week", value: sessMM ? (sessMM[0] === sessMM[1] ? sessMM[0] : `${sessMM[0]}–${sessMM[1]}`) : "—", sub: is ? "aldrei 3 í röð · frí á MD+2" : "never 3 in a row · off on MD+2" },
+              { label: is ? "Vikuálag (× leikur)" : "Week load (× a match)", value: loadMM ? (loadMM[0] === loadMM[1] ? `${fxN(loadMM[0])}×` : `${fxN(loadMM[0])}–${fxN(loadMM[1])}×`) : "—", sub: is ? `dagarnir lagðir saman · staðalvika ${fxN(view.weekMultiple)}×` : `the days added up · standard week ${fxN(view.weekMultiple)}×` },
+              { label: sel.inSeason ? (is ? "Létt vika" : "Light week") : (is ? "Niðurtröppunarvika" : "Deload week"), value: lightWeekNo != null ? `${is ? "Vika" : "Week"} ${lightWeekNo}` : (is ? "Engin" : "None"), sub: sel.deloadWeekStart ? `${shortDate(sel.deloadWeekStart, is)}${sel.inSeason ? (is ? " · magn ~−20%, ákefð haldið" : " · volume ~−20%, intensity kept") : ""}` : (is ? "veldu í Uppsetningu ef þarf" : "pick one in Setup if needed"), warn: !!goalRec?.deloadNow },
+              { label: is ? "Leikir" : "Games", value: blockGames.length, sub: blockGames.length ? blockGames.map((d) => shortDate(d, is)).join(" · ") : (is ? "enginn skráður" : "none entered"), warn: !!sel.provisional || blockGames.length === 0 },
+            ] : []}
+            barsTitle={is ? "Vikuálag lotunnar" : "The block's weekly load"}
+            legend={<>
+              <BarSwatch color={GOAL_BAR[selGoal]} label={goalName(selGoal)} />
+              {calWeeks.some((w) => w?.isDeload) && <BarSwatch color={GOAL_BAR.deload} label={sel?.inSeason ? (is ? "Létt vika" : "Light week") : (is ? "Niðurtröppun" : "Deload")} />}
+              <GameDotLegend label={is ? "Leikur" : "Game"} />
+            </>}
+            bars={sel && weekMults.some((x) => x != null) ? calWeeks.map((w, i): MesoBar => {
+              const mon = w?.weekStart ?? isoAdd(calStart, i * 7);
+              const g = gamesInWeek(allFx, mon);
+              const x = weekMults[i];
+              return {
+                key: mon, value: x ?? 0, color: w?.isDeload ? GOAL_BAR.deload : GOAL_BAR[selGoal], label: x != null ? `${fxN(x)}×` : "",
+                title: `${is ? "Vika" : "Week"} ${i + 1} · ${shortDate(mon, is)}${x != null ? ` · ${fxN(x)}×` : ""}${w ? ` · ${is ? w.intent.is : w.intent.en}` : ""}`,
+                weekNo: i + 1, game: g.length ? "entered" : null, gameTitle: g.length ? `${is ? "Leikur" : "Game"} · ${g.map((d) => shortDate(d, is)).join(", ")}` : "",
+              };
+            }) : []}
+            barsNote={is ? "Súla = það sem æfingadagar vikunnar leggja saman, sem margfeldi af einum leik (leikurinn sjálfur ekki talinn)." : "A bar = what the week's training days add up to, as a multiple of one match (the match itself not counted)."}
+            strip={seasonBlocks.length > 0 && (
+              <div className="mt-2 border-t border-[#ece9e2] pt-4">
+                <h3 className="text-[14px] font-semibold text-[#14181c]">{is ? "Lotur tímabilsins" : "The season's blocks"}</h3>
+                <div className="mt-2 overflow-x-auto">
+                  <div className="relative min-w-[720px]">
+                    <div className="relative h-5">
+                      {monthMarks.map((m, i) => <span key={i} className="absolute top-0 whitespace-nowrap pl-1 text-[11px] font-semibold capitalize text-slate-500" style={{ left: `${m.pct}%` }}>{m.label}</span>)}
+                    </div>
+                    <div className="relative h-11">
+                      {seasonBlocks.map((b) => {
+                        const g: BlockGoalKey = (blockGoals[b.start] as BlockGoalKey | undefined) ?? b.goalKey;
+                        const on = sel?.start === b.start;
+                        const l = pctOf(b.start), r = pctOf(b.end);
+                        return (
+                          <button key={b.index} type="button" onClick={() => setBlkStart(b.start)} aria-pressed={on}
+                            title={`${shortDate(b.start, is)}–${shortDate(endIncl(b), is)} · ${goalName(g)} · ${is ? b.phase.is : b.phase.en}${b.provisional ? (is ? " · bráðabirgða (leikjaplan ekki skráð)" : " · provisional (fixture list not entered)") : ""}`}
+                            className="absolute inset-y-0 px-px" style={{ left: `${l}%`, width: `${r - l}%` }}>
+                            <span className={`flex h-full items-center justify-center overflow-hidden rounded-md px-1 text-[11px] font-semibold text-white transition ${b.provisional ? "border-2 border-dashed border-white/80" : ""} ${on ? "ring-2 ring-slate-900 ring-offset-2" : "opacity-60 hover:opacity-90"}`} style={{ background: GC[g] }}>
+                              <span className="truncate">{goalName(g)}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+                        {monthMarks.map((m, i) => <div key={i} className="absolute inset-y-0 w-px bg-white/50" style={{ left: `${m.pct}%` }} />)}
+                        {todayPct != null && <div className="absolute -bottom-1 -top-1 w-0.5 -translate-x-1/2 bg-[#a83e28]" style={{ left: `${todayPct}%` }} />}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p className="mt-2 text-[12px] text-slate-600">{is ? "Smelltu á lotu til að skipuleggja hana. Rauða línan er í dag. Lengd lotanna kemur úr Makró." : "Click a block to plan it. The red line is today. Block lengths come from Macro."}{" "}<button type="button" onClick={() => setTab("season")} className="font-medium text-[#2740e6] hover:underline">{is ? "breyta í Makró" : "change in Macro"}</button>{compStartM && mesoBlocks.some(isPreBlock) && <> · {is ? "Undirbúningslotur eru á síðunni" : "Pre-season blocks are on"} <button type="button" onClick={() => setTab("preseason")} className="font-semibold text-[#2740e6] hover:underline">{is ? "Mesó: Undirbúningur →" : "Meso: Pre-season →"}</button></>}</p>
+              </div>
+            )}
+            warnings={[
+              ...(() => {
+                // FIXTURES_PENDING: the fixture list isn't entered past the last game → the blocks from there are provisional.
+                if (!seasonBlocks.some((b) => b.provisional) || !compStartM) return [];
+                const comp = allFx.filter((d) => d >= compStartM).sort();
+                const last = comp.length ? comp[comp.length - 1] : null;
+                const from = last ? isoAdd(mondayOf(last), 7) : mondayOf(compStartM);
+                const body = isBasketball ? "KKÍ" : "KSÍ";
+                return [<span key="fx"><b>{is ? `Leikjaplan ${body} ekki komið.` : `The ${body} fixture list isn't in yet.`}</b>{" "}
+                  <span className="font-normal">{is
+                    ? `${comp.length} ${comp.length === 1 ? "leikur skráður" : "leikir skráðir"}${last ? ` (síðast ${shortDate(last, is)})` : ""}. Frá viku ${shortDate(from, is)} er enginn leikur skráður, svo lotur sem ná þangað eru bráðabirgða: ${cadence} vikna lotur í keppnistakti (Framkvæmd), án leikja. Þær fullmótast þegar leikirnir eru skráðir.`
+                    : `${comp.length} ${comp.length === 1 ? "game entered" : "games entered"}${last ? ` (last ${shortDate(last, is)})` : ""}. From the week of ${shortDate(from, is)} no game is entered, so the blocks reaching there are provisional: ${cadence}-week blocks in compete mode (Realization), with no games. They firm up once the games are entered.`}</span>{" "}
+                  <button type="button" onClick={() => setTab("season")} className="font-semibold text-[#2740e6] hover:underline">{is ? "Skrá leiki í Makró →" : "Enter games in Macro →"}</button></span>];
+              })(),
+              ...(sel?.flag ? [<span key="flag">{is ? sel.flag.is : sel.flag.en}</span>] : []),
+              ...(goalRec?.deloadNow ? [<span key="fatigue">{activeBlock?.inSeason ? (is ? "Þreytumerki — íhugaðu létta viku (markmiðið helst)." : "Fatigue signal — consider a light week (the goal is unchanged).") : (is ? "Þreytumerki — færðu niðurtröppunar-vikuna framar (markmiðið helst)." : "Fatigue signal — pull the deload week forward (the goal is unchanged).")}</span>] : []),
+            ]}
+          />
+          )}
+
+          {/* What the coach wants from this block, in their own words → rule-based advice (planIntent/). Football, team scope. */}
+          {sel && !isPlayerScope && !isBasketball && selGoal !== "deload" && (
+            <PlanIntentCard scope="block" start={mondayOf(sel.start)} weeks={sel.weeks} blockGoal={selGoal}
+              phaseHint={offPhaseStart && sel.start >= offPhaseStart ? "offseason" : sel.inSeason ? "inseason" : "preseason"} />
+          )}
+
+          {plan.phases.length === 0 && <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12px] font-medium text-amber-900">{is ? "⚠ Engir leikir/akkeri í Makró enn — stilltu Makró-lotuna fyrst (undirbúningsdag, leikjaskrá, niðurtröppun). Lotan hér reiknast úr því." : "⚠ No Macro anchors/fixtures yet — set the Macro Cycle first (pre-season date, fixtures, deload cadence). This block is computed from it."}</p>}
+
+          {/* 2 — SETUP: the block's controls → the standard week per variable → the goal and tests → the measured
+              load behind a toggle (jargon — TMr, ACWR — off the primary view). */}
+          {!selIsPre && (
+          <section className="flex flex-col gap-4 rounded-2xl border border-[#e3e0d8] bg-white px-5 pb-6 pt-5 sm:px-7">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-[16px] font-bold text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{is ? "Uppsetning" : "Setup"}</h2>
+              <span className="flex flex-wrap items-center gap-3 text-[12px] text-slate-600">
+                {autoSave && <span className={`font-medium ${autoSave === "err" ? "text-[#a83e28]" : autoSave === "saving" ? "text-slate-500" : "text-emerald-700"}`}>{autoSave === "saving" ? (is ? "Vista…" : "Saving…") : autoSave === "err" ? (is ? "⚠ Vistun mistókst" : "⚠ Save failed") : (is ? "✓ Vistað sjálfkrafa" : "✓ Saved automatically")}</span>}
+                <span>{is ? "Hver breyting endurreiknar vikur lotunnar" : "Every change re-plans the block's weeks"}</span>
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {sel && sel.phase.en !== "Off-season break" ? (<>
+                <div className="flex min-w-0 flex-col gap-1.5">
+                  <label htmlFor="is-length" className="text-[12px] font-medium text-slate-700">{is ? "Lotulengd" : "Block length"}{sel.lengthPinned && <span className="ml-1.5 rounded-full bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#2740e6]">{is ? "stillt" : "set"}</span>}</label>
+                  <select id="is-length" value={blockLenOv[String(sel.index)] ?? blockLenOv[sel.start] ?? ""} onChange={(e) => setBlockLength(sel.start, e.target.value === "" ? null : Number(e.target.value))} className="h-11 rounded-lg border border-[#d6d3cc] bg-white px-3 text-[14px]">
+                    <option value="">{is ? `Sjálfgefið (${cadence}v)` : `Auto (${cadence}w)`}</option>
+                    {[2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} {is ? "vikur" : "weeks"}</option>)}
+                  </select>
+                  <span className="text-[11px] text-slate-600">{is ? "Sjálfgefið úr Makró — hnekktu þar sem þarf" : "Auto from Macro — override where it matters"}</span>
+                </div>
+                <div className="flex min-w-0 flex-col gap-1.5">
+                  <label htmlFor="is-light" className="text-[12px] font-medium text-slate-700">{sel.inSeason ? (is ? "Létt vika" : "Light week") : (is ? "Niðurtröppunarvika" : "Deload week")}{sel.deloadPinned && <span className="ml-1.5 rounded-full bg-[#de9328]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#8a5a10]">{is ? "fest" : "pinned"}</span>}</label>
+                  <select id="is-light" value={blockDeloadOv[sel.start] ?? ""} onChange={(e) => setBlockDeload(sel.start, e.target.value || null)} className="h-11 rounded-lg border border-[#d6d3cc] bg-white px-3 text-[14px]">
+                    <option value="">{sel.inSeason ? (is ? "Engin (sjálfgefið)" : "None (default)") : is ? `Sjálfgefið${sel.deloadWeekStart && !sel.deloadPinned ? ` (${shortDate(sel.deloadWeekStart, is)})` : ""}` : `Auto${sel.deloadWeekStart && !sel.deloadPinned ? ` (${shortDate(sel.deloadWeekStart, is)})` : ""}`}</option>
+                    {Array.from({ length: sel.weeks }, (_, w) => isoAdd(sel.start, w * 7)).map((mon) => <option key={mon} value={mon}>{is ? "Vika" : "Week of"} {shortDate(mon, is)}</option>)}
+                  </select>
+                  <span className="text-[11px] text-slate-600">{sel.inSeason ? (is ? "Engin sjálfvirk — magn ~−20%, ákefð haldið" : "None automatic — volume ~−20%, intensity kept") : (is ? "Magn ~−40% í niðurtröppun" : "Volume ~−40% in a deload")}</span>
+                </div>
+              </>) : <div className="hidden sm:block lg:col-span-2" />}
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <label htmlFor="is-step" className="text-[12px] font-medium text-slate-700">{is ? "Stig/viku %" : "Step/wk %"}</label>
+                <input id="is-step" type="number" min={0} max={15} value={blkStep} onChange={(e) => { const v = Math.max(0, Math.min(15, Number(e.target.value) || 0)); setBlkStep(v); persistOverridePatch({ stepPct: v }); }} className="h-11 rounded-lg border border-[#d6d3cc] bg-white px-3 text-[14px] tabular-nums" />
+                <span className="text-[11px] text-slate-600">{blkHold ? (is ? "Haldið: keppnislota heldur staðalvikunni" : "Held: a competitive block keeps the standard week") : (is ? "Bara í uppbyggingarlotum" : "Build-up blocks only")}</span>
+              </div>
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <label htmlFor="is-scope" className="text-[12px] font-medium text-slate-700">{is ? "Umfang" : "Scope"}</label>
+                <select id="is-scope" value={blkScope} onChange={(e) => setBlkScope(e.target.value as typeof blkScope)} className="h-11 rounded-lg border border-[#d6d3cc] bg-white px-3 text-[14px]"><option value="team">{is ? "Lið" : "Team"}</option><option value="player">{is ? `Leikmaður: ${player?.name ?? ""}` : `Player: ${player?.name ?? ""}`}</option></select>
+                <span className="text-[11px] text-slate-600">{is ? "Leikmaður valinn í Leikmenn-flipanum" : "The player picked in the Players tab"}</span>
+              </div>
+            </div>
+            {(sel?.inSeason || blkHold || blkScope === "player") && (
+              <ul className="space-y-0.5 text-[12px] text-slate-600">
+                {sel?.inSeason && <li>{is ? IN_SEASON_DELOAD_NOTE.is : IN_SEASON_DELOAD_NOTE.en}</li>}
+                {blkHold && <li>{is ? "Þessi keppnislota heldur staðalvikunni allar vikur: lítil breyting milli lota á keppnistímabili (Malone 2015; Oliveira 2019; athugunarrannsóknir). Stig/viku gildir bara í uppbyggingarlotum (Uppsöfnun, Umbreyting)." : "This competitive block holds the standard week every week: little change between in-season blocks (Malone 2015; Oliveira 2019; observational). Step/wk only applies to build-up blocks (Accumulation, Transmutation)."}</li>}
+                {blkScope === "player" && <li>{is ? `Einstaklingsmiðuð lota (leik-miðuð, þök/trim/áhersla) fyrir leikmann valinn í „Leikmenn“-flipanum${player ? ` (${player.name})` : ""} — les-only (breyttu dagsgerðum í Liðs-umfangi). Skiptu um leikmann í Leikmenn-flipanum.` : `The individualised block (match-anchored, caps/trim/steer) for the player selected in the "Players" tab${player ? ` (${player.name})` : ""} — read-only (edit day-types in Team scope). Change the player in the Players tab.`}</li>}
+              </ul>
+            )}
+            <details className="text-[12px] text-slate-600">
+              <summary className="cursor-pointer select-none font-medium text-slate-600 hover:text-slate-800">{is ? "Fleiri stillingar (upphaf, vikur, grunn-álag)" : "More block settings (start, weeks, base load)"}</summary>
+              <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <label className="flex min-w-0 flex-col gap-1.5 text-[12px] font-medium text-slate-700">{is ? "Upphaf" : "Start"}<input type="date" value={blkStart} onChange={(e) => setBlkStart(e.target.value)} className="h-11 rounded-lg border border-[#d6d3cc] bg-white px-3 text-[14px] font-normal tabular-nums" /></label>
+                <div className="flex min-w-0 flex-col gap-1.5 text-[12px] font-medium text-slate-700">{is ? "Vikur (úr Makró)" : "Weeks (from Macro)"}<div className="flex h-11 items-center rounded-lg border border-[#e3e0d8] bg-[#f8f7f3] px-3 text-[14px] font-normal text-slate-700">{blkWeeks}{!activeBlock?.inSeason && <span className="ml-1 text-[12px] text-slate-500">· {is ? "niðurtr. hverja" : "deload every"} {cadence}</span>}</div></div>
+                <label className="flex min-w-0 flex-col gap-1.5 text-[12px] font-medium text-slate-700">{is ? "Grunn-álag %" : "Base overload %"}<input type="number" min={80} max={130} value={blkBase} onChange={(e) => setBlkBase(Number(e.target.value))} className="h-11 rounded-lg border border-[#d6d3cc] bg-white px-3 text-[14px] font-normal tabular-nums" /></label>
+              </div>
+              <p className="mt-2">{is ? "Leikir og frí eru sett í Makró-lotu." : "Games and breaks are set in the Macro cycle."}{" "}<button type="button" onClick={() => setTab("season")} className="font-semibold text-[#2740e6] hover:underline">{is ? "Opna Makró →" : "Open Macro →"}</button></p>
+            </details>
+
+            {/* The standard week, every variable as × a match beside the research range (read-only mirror of the
+                pre-season "Load per variable" table). */}
+            <InSeasonVariableTable is={is} view={view} oneMatchNote={oneMatchNote} hold={blkHold} numWeeks={blkWeeks} playerName={isPlayerScope ? player?.name ?? null : null} />
+
+            {/* The block's goal (coach's call; the system recommends) and the tests that fit it. */}
+            <div className="mt-2 grid min-w-0 items-start gap-6 lg:grid-cols-2">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className={h3}>{is ? "Markmið lotunnar" : "Block goal"}</h3>
+                  {sel && blockGoals[sel.start] && blockGoals[sel.start] !== sel.goalKey && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-900">{is ? "Yfirtekið af þjálfara" : "Coach override"}</span>}
+                </div>
+                {goalRec && (
+                  <p className="mt-1 text-[13px] text-slate-700">
+                    {is ? "Ráðlagt" : "Recommended"}: <b className="text-slate-900">{goalName(goalRec.goal)}</b>
+                    <span className={`ml-2 rounded px-1.5 py-0.5 text-[11px] font-semibold ${recTint(goalRec.confidence)}`}>{is ? "vissa" : "confidence"}: {goalRec.confidence}</span>
+                  </p>
+                )}
+                <div role="radiogroup" aria-label={is ? "Markmið lotu" : "Block goal"} className="mt-3 grid grid-cols-3 gap-1.5">
+                  {(["accum", "transmute", "realize"] as const).map((g) => {
+                    const on = effectiveGoal === g;
+                    return (
+                      <button key={g} type="button" role="radio" aria-checked={on} onClick={() => setBlockGoal(g)}
+                        className={`flex min-h-[48px] flex-col items-center justify-center rounded-lg px-1 text-center text-[12px] font-bold ${on ? "text-white" : "border border-[#d9d5cc] bg-white text-slate-800 hover:bg-slate-50"}`}
+                        style={on ? { background: GC[g] } : undefined}>
+                        {goalName(g)}
+                        {goalRec?.goal === g && <span className={`text-[10px] font-semibold ${on ? "text-white/85" : "text-[#1B2DA8]"}`}>{is ? "ráðlagt" : "recommended"}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                {goalRec && effectiveGoal !== goalRec.goal && (
+                  <button type="button" onClick={() => setBlockGoal(goalRec.goal as "accum" | "transmute" | "realize")} className="mt-2 h-9 rounded-lg border border-[#2740e6] bg-white px-3 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">{is ? `Nota ráðlagt (${BLOCK_GOAL_LABEL[goalRec.goal].is})` : `Use recommended (${BLOCK_GOAL_LABEL[goalRec.goal].en})`}</button>
+                )}
+                {goalRec && (<>
+                  <ul className="mt-2 list-disc space-y-0.5 pl-5 text-[13px] text-slate-700">
+                    {goalRec.reasons.slice(0, 3).map((r, i) => <li key={i}>{is ? r.is : r.en}</li>)}
+                  </ul>
+                  <p className="mt-1.5 text-[12px] text-slate-600">{is ? "Annar kostur" : "Alternative"}: <b>{goalName(goalRec.alternative.goal)}</b> — {is ? goalRec.alternative.when.is : goalRec.alternative.when.en}</p>
+                  <p className="mt-1.5 text-[11px] text-slate-500">{is ? "Val á lotu-markmiði er þjálfaramat — þetta er grundaður sjálfgefinn kostur úr eigin leikjum + álagi liðsins, ekki fyrirmæli (Issurin 2010; Little & Buchheit). Ekki sjálfvirkt sett." : "Block-goal choice is a coaching judgment — a grounded default from the team's own fixtures + load, not a mandate (Issurin 2010; Little & Buchheit). Not auto-applied."}</p>
+                </>)}
+              </div>
+
+              {sel && bt && (bt.protocols.length > 0 || blockScheduled.length > 0) && (
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className={h3}>{is ? "Próf í lotunni" : "Testing in this block"}</h3>
+                    <a href="?tab=testing" onClick={(e) => { e.preventDefault(); setTab("testing"); }} className="ml-auto text-[12px] font-semibold text-[#2740e6] hover:underline">{is ? "Skipuleggja →" : "Schedule →"}</a>
+                  </div>
+                  {blockScheduled.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {blockScheduled.map((s) => <span key={s.id} className="inline-flex items-center gap-1.5 rounded-full bg-[#1C7A4A] px-2 py-0.5 text-[12px] font-semibold text-white"><span className="h-2 w-2 rotate-45 bg-white" />{shortDate(s.test_date, is)} · {is ? testShortName(s.test_key, aerobicTest).is : testShortName(s.test_key, aerobicTest).en}</span>)}
+                    </div>
+                  ) : <p className="mt-1 text-[12px] text-slate-500">{is ? "Engin próf skráð í þessari lotu." : "No tests scheduled in this block."}</p>}
+                  {bt.protocols.length > 0 && (<>
+                    <p className="mt-2 text-[13px] font-medium text-slate-700">{is ? bt.when.is : bt.when.en}</p>
+                    <ul className="mt-1 space-y-1">
+                      {bt.protocols.map((p) => <li key={p.key} className="text-[12px] text-slate-600"><b className="text-slate-800">{is ? p.name.is : p.name.en}</b> — {is ? p.prescribes.is : p.prescribes.en} <span className="text-slate-500">(<CiteRefs text={p.cite} is={is} />)</span></li>)}
+                    </ul>
+                  </>)}
+                </div>
+              )}
+            </div>
+
+            {/* Measured load (TMr, acute trend, ACWR) — sport-science terms, so behind a toggle. */}
+            {sel && (
+              <details className="text-[12px] text-slate-600">
+                <summary className="cursor-pointer select-none font-semibold text-[#2740e6] hover:underline">{is ? "Sýna mælt álag lotunnar (TMr, bráðaálag)" : "Show the block's measured load (TMr, acute load)"}</summary>
+                <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div title={is ? "Vikuálag sem margfeldi af einu leikálagi (TMr)" : "Weekly load as a multiple of one match (TMr)"}>
+                    <div className="text-[12px] font-semibold text-slate-500">{is ? "Vikuálag / leik (TMr)" : "Week ÷ match (TMr)"}</div>
+                    <div className="text-[20px] font-bold text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{sel.tmr != null ? `${sel.tmr}×` : "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-[12px] font-semibold text-slate-500">{is ? "Magn-mark" : "Volume target"}</div>
+                    <div className="text-[20px] font-bold text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{sel.volumeTargetPct != null ? `${sel.volumeTargetPct}%` : "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-[12px] font-semibold text-slate-500">{is ? "Bráðaálag" : "Acute load"}</div>
+                    <div className="text-[15px] font-bold text-[#14181c]">{trendWord(sel.loadTrend)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[12px] font-semibold text-slate-500">{sel.inSeason ? (is ? "Létt vika" : "Light week") : (is ? "Niðurtröppunarvika" : "Deload week")}</div>
+                    <div className="text-[15px] font-bold text-[#14181c]">{sel.deloadWeekStart ? shortDate(sel.deloadWeekStart, is) : sel.inSeason ? (is ? "Engin" : "None") : "—"}{sel.deloadNow && !sel.inSeason && <span className="ml-1 text-[12px] font-semibold text-amber-800">{is ? "· færð framar" : "· pulled fwd"}</span>}</div>
+                  </div>
+                </div>
+                <p className="mt-2 text-[12px] text-slate-500">{blkHold
+                  ? (is ? "Leikurinn er einingin: TMr = vikuálag ÷ eitt leikálag. Keppnislota heldur staðalvikunni; við lesum bráðaálags-þróun + viðbragð — ekki ACWR-band." : "The match is the unit: TMr = weekly load ÷ one match's load. A competitive block holds the standard week; we read the acute-load trend + readiness — not an ACWR band.")
+                  : (is ? "Leikurinn er einingin: TMr = vikuálag ÷ eitt leikálag. Við röppum TMr skynsamlega og lesum bráðaálags-þróun + viðbragð — ekki ACWR-band." : "The match is the unit: TMr = weekly load ÷ one match's load. We ramp TMr sensibly and read the acute-load trend + readiness — not an ACWR band.")}{(() => { const n = teamMatchUnitNote(plan.matchLoad, fullMatchPl, plan.tier.loadSource === "srpe" ? "AU" : "PL"); return n && <> {is ? n.is : n.en}</>; })()}</p>
+                {sel.acwr != null && (
+                  <details className="mt-1">
+                    <summary className="cursor-pointer py-1 text-[12px] text-slate-500 hover:text-slate-700">{is ? `ACWR ${sel.acwr} — umdeilt viðmið` : `ACWR ${sel.acwr} — contested view`}</summary>
+                    <p className="mt-0.5 text-[12px] text-slate-500">{is ? sel.acwrNote.is : sel.acwrNote.en}</p>
+                  </details>
+                )}
+              </details>
+            )}
+          </section>
+          )}
+          {blkPopulated.length > 0 && !selIsPre && (
+          <div className="flex flex-col gap-4">
           {/* The in-season rules this page follows (the calendar enforces both; a day you set against them stays, marked ⚠). */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[#1c7a4a]/30 bg-[#1c7a4a]/[0.05] px-3 py-2 text-[12.5px] text-slate-700">
             <b className="text-slate-900">{is ? "Reglur keppnistímabils:" : "In-season rules:"}</b>
@@ -3077,125 +3365,6 @@ export default function PeriodizationHubPage() {
             <span>{is ? "Aðeins skráðir leikir (úr Makró)" : "Only entered games (from Macro)"}</span>
             <span className="w-full text-[11px] text-slate-500">{is ? "Dagur sem þú setur gegn reglu helst og fær ⚠." : "A day you set against a rule stays and gets ⚠."} <span className="font-mono">{THREE_IN_A_ROW_RULE} · INSEASON_MD2_OFF</span> · {is ? "MicroPulse-regla" : "MicroPulse rule"}; Buchheit 2023b</span>
           </div>
-
-          {/* FIXTURES_PENDING: the fixture list isn't entered past the last game → the blocks from there are provisional. */}
-          {(() => {
-            if (!seasonBlocks.some((b) => b.provisional) || !compStartM) return null;
-            const comp = (plan.fixtures ?? []).filter((d) => d >= compStartM).sort();
-            const last = comp.length ? comp[comp.length - 1] : null;
-            const from = last ? isoAdd(mondayOf(last), 7) : mondayOf(compStartM);
-            const body = isBasketball ? "KKÍ" : "KSÍ";
-            return (
-              <div className="rounded-lg border border-dashed border-[#de9328]/60 bg-[#de9328]/[0.06] px-3 py-2 text-[12.5px] text-slate-700">
-                <b className="text-[#7a4a06]">{is ? `Leikjaplan ${body} ekki komið.` : `The ${body} fixture list isn't in yet.`}</b>{" "}
-                {is
-                  ? `${comp.length} ${comp.length === 1 ? "leikur skráður" : "leikir skráðir"}${last ? ` (síðast ${shortDate(last, is)})` : ""}. Frá viku ${shortDate(from, is)} er enginn leikur skráður, svo lotur sem ná þangað eru bráðabirgða: ${cadence} vikna lotur í keppnistakti (Framkvæmd), án leikja. Þær fullmótast þegar leikirnir eru skráðir.`
-                  : `${comp.length} ${comp.length === 1 ? "game entered" : "games entered"}${last ? ` (last ${shortDate(last, is)})` : ""}. From the week of ${shortDate(from, is)} no game is entered, so the blocks reaching there are provisional: ${cadence}-week blocks in compete mode (Realization), with no games. They firm up once the games are entered.`}{" "}
-                <button type="button" onClick={() => setTab("season")} className="font-semibold text-[#2740e6] hover:underline">{is ? "Skrá leiki í Makró →" : "Enter games in Macro →"}</button>
-              </div>
-            );
-          })()}
-
-          {selIsPre && (
-            <section className={card}>
-              <p className="text-[15px] font-bold text-slate-900">{is ? "Þessi lota er á undirbúningstímabilinu." : "This block is in the pre-season."}</p>
-              <p className="mt-1 text-[13px] text-slate-600">{is ? "Undirbúningurinn er skipulagður á síðunni Mesó: Undirbúningur, með reglum undirbúnings (leikdagar, álagsstignun, laugardagsleikir)." : "The pre-season is planned on Meso: Pre-season, with the pre-season rules (game days, load ramp, Saturday games)."}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" onClick={() => setTab("preseason")} className="h-9 rounded-lg bg-[#2740e6] px-3 text-[13px] font-semibold text-white hover:brightness-110">{is ? "Opna Mesó: Undirbúningur →" : "Open Meso: Pre-season →"}</button>
-                {seasonBlocks[0] && <button type="button" onClick={() => setBlkStart((todayB ?? seasonBlocks[0]).start)} className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-700 hover:bg-slate-50">{is ? `Fara á fyrstu keppnislotu (${shortDate(seasonBlocks[0].start, is)})` : `Go to the first in-season block (${shortDate(seasonBlocks[0].start, is)})`}</button>}
-              </div>
-            </section>
-          )}
-
-          {/* 1 — WHICH BLOCK: navigator + the season strip (choose first, then plan) */}
-          <section className={card}>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-              <div className="min-w-0 flex-[1_1_320px]">
-                <div className="text-[12px] font-semibold text-slate-500">{sel ? (is ? `Lota ${selIdx + 1} af ${seasonBlocks.length}` : `Block ${selIdx + 1} of ${seasonBlocks.length}`) : (is ? "Lota" : "Block")}{sel ? ` · ${is ? sel.phase.is : sel.phase.en}` : ""}</div>
-                <h2 className="mt-0.5 flex flex-wrap items-center gap-2 text-[20px] font-bold text-slate-900">
-                  <span className="inline-block h-3 w-3 rounded-[3px]" style={{ background: GC[selGoal] }} />
-                  {goalName(selGoal)}
-                  {sel && <span className="text-[15px] font-medium text-slate-500">{shortDate(sel.start, is)} – {shortDate(endIncl(sel), is)} · {sel.weeks} {is ? "vikur" : "weeks"}</span>}
-                  {sel && todayB && sel.start === todayB.start && <span className="rounded-full bg-[#a83e28]/10 px-2 py-0.5 text-[11px] font-bold text-[#a83e28]">{is ? "Núverandi" : "Current"}</span>}
-                  {sel?.provisional && <span title={is ? "Leikjaplanið er ekki skráð fyrir þessa lotu — hún fullmótast þegar leikirnir eru skráðir." : "The fixture list isn't entered for this block — it firms up once the games are entered."} className="rounded-full border border-dashed border-[#de9328] px-2 py-0.5 text-[11px] font-bold text-[#7a4a06]">{is ? "Bráðabirgða" : "Provisional"}</span>}
-                </h2>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => prevB && setBlkStart(prevB.start)} disabled={!prevB} aria-label={is ? "Fyrri lota" : "Previous block"} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40">‹ {is ? "Fyrri" : "Prev"}</button>
-                <button type="button" onClick={() => nextB && setBlkStart(nextB.start)} disabled={!nextB} aria-label={is ? "Næsta lota" : "Next block"} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40">{is ? "Næsta" : "Next"} ›</button>
-                {todayB && sel && sel.start !== todayB.start && <button type="button" onClick={() => setBlkStart(todayB.start)} className="h-10 rounded-lg px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">{is ? "Fara á núverandi" : "Go to current"}</button>}
-                <span className="mx-1 hidden h-6 w-px bg-slate-200 sm:block" />
-                <button onClick={exportBlock} disabled={!mesoCalBlock} className="h-10 rounded-lg border border-[#2740e6] bg-white px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-40" title={isPlayerScope ? (is ? `Lotan hans ${player?.name ?? ""} (heildar-PDF er efst á síðunni)` : `${player?.name ?? "His"} block (the full-data PDF is at the top of the page)`) : (is ? "Bara þessa lotu (heildar-PDF er efst á síðunni)" : "Just this block (the full-data PDF is at the top of the page)")}>{is ? "Sækja lotu (PDF)" : "Export block (PDF)"}</button>
-                {!isPlayerScope && <button onClick={applyToWeekSetup} disabled={!calBlock || wsBusy} className="h-10 rounded-lg bg-[#2740e6] px-3 text-[13px] font-semibold text-white hover:bg-[#1e34c0] disabled:opacity-40" title={is ? "Dagarnir vistast sjálfkrafa við hverja breytingu — þetta vistar strax núna" : "Days auto-save on every change — this saves now immediately"}>{wsBusy ? (is ? "Vista…" : "Saving…") : wsApplied === "ok" ? (is ? "✓ Vistað" : "✓ Saved") : (is ? "Vista núna" : "Save now")}</button>}
-              </div>
-            </div>
-            {/* Per-block overrides — length + deload-week pin. Auto by default; the coach shapes a block
-                where it matters (the server plan target reads the same overrides). */}
-            {sel && sel.phase.en !== "Off-season break" && (
-              <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-3">
-                <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{is ? "Lotulengd" : "Block length"}
-                  <select value={blockLenOv[String(sel.index)] ?? blockLenOv[sel.start] ?? ""} onChange={(e) => setBlockLength(sel.start, e.target.value === "" ? null : Number(e.target.value))} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
-                    <option value="">{is ? `Sjálfgefið (${cadence}v)` : `Auto (${cadence}w)`}</option>
-                    {[2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} {is ? "vikur" : "weeks"}</option>)}
-                  </select>
-                  {sel.lengthPinned && <span className="rounded-full bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#2740e6]">{is ? "stillt" : "set"}</span>}
-                </label>
-                <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">{sel.inSeason ? (is ? "Létt vika" : "Light week") : (is ? "Niðurtröppunarvika" : "Deload week")}
-                  <select value={blockDeloadOv[sel.start] ?? ""} onChange={(e) => setBlockDeload(sel.start, e.target.value || null)} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
-                    <option value="">{sel.inSeason ? (is ? "Engin (sjálfgefið)" : "None (default)") : is ? `Sjálfgefið${sel.deloadWeekStart && !sel.deloadPinned ? ` (${shortDate(sel.deloadWeekStart, is)})` : ""}` : `Auto${sel.deloadWeekStart && !sel.deloadPinned ? ` (${shortDate(sel.deloadWeekStart, is)})` : ""}`}</option>
-                    {Array.from({ length: sel.weeks }, (_, w) => isoAdd(sel.start, w * 7)).map((mon) => <option key={mon} value={mon}>{is ? "Vika" : "Week of"} {shortDate(mon, is)}</option>)}
-                  </select>
-                  {sel.deloadPinned && <span className="rounded-full bg-[#de9328]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#de9328]">{is ? "fest" : "pinned"}</span>}
-                </label>
-                <span className="text-[11px] text-slate-400">{is ? "Sjálfvirkt sjálfgefið — hnekktu þar sem þarf." : "Auto by default — override where it matters."}</span>
-                {sel.inSeason && <p className="w-full text-[11px] text-slate-500">{is ? IN_SEASON_DELOAD_NOTE.is : IN_SEASON_DELOAD_NOTE.en}</p>}
-              </div>
-            )}
-            {wsApplied === "ok" && <p className="mt-2 text-[12px] font-medium text-emerald-700">{is ? "✓ Lotan er komin í Vikuuppsetningu — leikir, æfingar, frí og dagsgerðir." : "✓ The block is in Week Setup — games, sessions, days off and day types."}</p>}
-            {wsApplied === "err" && <p className="mt-2 text-[12px] font-medium text-rose-700">{is ? "Ekki tókst að vista í Vikuuppsetningu." : "Couldn't save to Week Setup."}</p>}
-
-            {seasonBlocks.length > 0 && (
-              <div className="mt-4 overflow-x-auto">
-                <div className="relative min-w-[720px]">
-                  <div className="relative h-5">
-                    {monthMarks.map((m, i) => <span key={i} className="absolute top-0 whitespace-nowrap pl-1 text-[11px] font-semibold capitalize text-slate-500" style={{ left: `${m.pct}%` }}>{m.label}</span>)}
-                  </div>
-                  <div className="relative h-11">
-                    {seasonBlocks.map((b) => {
-                      const g: BlockGoalKey = (blockGoals[b.start] as BlockGoalKey | undefined) ?? b.goalKey;
-                      const on = sel?.start === b.start;
-                      const l = pctOf(b.start), r = pctOf(b.end);
-                      return (
-                        <button key={b.index} type="button" onClick={() => setBlkStart(b.start)} aria-pressed={on}
-                          title={`${shortDate(b.start, is)}–${shortDate(endIncl(b), is)} · ${goalName(g)} · ${is ? b.phase.is : b.phase.en}${b.provisional ? (is ? " · bráðabirgða (leikjaplan ekki skráð)" : " · provisional (fixture list not entered)") : ""}`}
-                          className="absolute inset-y-0 px-px" style={{ left: `${l}%`, width: `${r - l}%` }}>
-                          <span className={`flex h-full items-center justify-center overflow-hidden rounded-md px-1 text-[11px] font-semibold text-white transition ${b.provisional ? "border-2 border-dashed border-white/80" : ""} ${on ? "ring-2 ring-slate-900 ring-offset-2" : "opacity-60 hover:opacity-90"}`} style={{ background: GC[g] }}>
-                            <span className="truncate">{goalName(g)}</span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                    <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-                      {monthMarks.map((m, i) => <div key={i} className="absolute inset-y-0 w-px bg-white/50" style={{ left: `${m.pct}%` }} />)}
-                      {todayPct != null && <div className="absolute -bottom-1 -top-1 w-0.5 -translate-x-1/2 bg-[#a83e28]" style={{ left: `${todayPct}%` }} />}
-                    </div>
-                  </div>
-                </div>
-                <p className="mt-2 text-[12px] text-slate-500">{is ? "Smelltu á lotu til að skipuleggja hana. Rauða línan er í dag. Lengd lotanna kemur úr Makró." : "Click a block to plan it. The red line is today. Block lengths come from Macro."}{compStartM && mesoBlocks.some(isPreBlock) && <> {is ? "Undirbúningslotur eru á síðunni" : "Pre-season blocks are on"} <button type="button" onClick={() => setTab("preseason")} className="font-semibold text-[#2740e6] hover:underline">{is ? "Mesó: Undirbúningur →" : "Meso: Pre-season →"}</button></>}</p>
-              </div>
-            )}
-          </section>
-
-          {/* What the coach wants from this block, in their own words → rule-based advice (planIntent/). Football, team scope. */}
-          {sel && !isPlayerScope && !isBasketball && selGoal !== "deload" && (
-            <PlanIntentCard scope="block" start={mondayOf(sel.start)} weeks={sel.weeks} blockGoal={selGoal}
-              phaseHint={offPhaseStart && sel.start >= offPhaseStart ? "offseason" : sel.inSeason ? "inseason" : "preseason"} />
-          )}
-
-          {plan.phases.length === 0 && <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12px] font-medium text-amber-900">{is ? "⚠ Engir leikir/akkeri í Makró enn — stilltu Makró-lotuna fyrst (undirbúningsdag, leikjaskrá, niðurtröppun). Lotan hér reiknast úr því." : "⚠ No Macro anchors/fixtures yet — set the Macro Cycle first (pre-season date, fixtures, deload cadence). This block is computed from it."}</p>}
-
-          {blkPopulated.length > 0 && !selIsPre && (
-          <div className="flex flex-col gap-4">
 
             {/* 2 — THE CALENDAR: one grid, full width (single column so the whole week is visible). */}
             <section className={`${card} min-w-0`}>
@@ -3331,223 +3500,9 @@ export default function PeriodizationHubPage() {
                 </details>
               )}
             </section>
-
-            {/* The pre-season weekly ramp lives on Meso: Pre-season (one place per phase). */}
-
-            {/* 3 — PANEL BELOW THE CALENDAR: goal → numbers → testing → settings, tiled in two columns. */}
-            <aside className="grid min-w-0 items-start gap-4 lg:grid-cols-2">
-              <section className={card}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className={h2}>{is ? "Markmið lotunnar" : "Block goal"}</h2>
-                  {sel && blockGoals[sel.start] && blockGoals[sel.start] !== sel.goalKey && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-900">{is ? "Yfirtekið af þjálfara" : "Coach override"}</span>}
-                </div>
-                {goalRec && (
-                  <p className="mt-1 text-[13px] text-slate-700">
-                    {is ? "Ráðlagt" : "Recommended"}: <b className="text-slate-900">{goalName(goalRec.goal)}</b>
-                    <span className={`ml-2 rounded px-1.5 py-0.5 text-[11px] font-semibold ${recTint(goalRec.confidence)}`}>{is ? "vissa" : "confidence"}: {goalRec.confidence}</span>
-                  </p>
-                )}
-                <div role="radiogroup" aria-label={is ? "Markmið lotu" : "Block goal"} className="mt-3 grid grid-cols-3 gap-1.5">
-                  {(["accum", "transmute", "realize"] as const).map((g) => {
-                    const on = effectiveGoal === g;
-                    return (
-                      <button key={g} type="button" role="radio" aria-checked={on} onClick={() => setBlockGoal(g)}
-                        className={`flex min-h-[48px] flex-col items-center justify-center rounded-lg px-1 text-center text-[12px] font-bold ${on ? "text-white" : "border border-slate-300 bg-white text-slate-800 hover:bg-slate-50"}`}
-                        style={on ? { background: GC[g] } : undefined}>
-                        {goalName(g)}
-                        {goalRec?.goal === g && <span className={`text-[10px] font-semibold ${on ? "text-white/85" : "text-[#1B2DA8]"}`}>{is ? "ráðlagt" : "recommended"}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-                {goalRec && effectiveGoal !== goalRec.goal && (
-                  <button type="button" onClick={() => setBlockGoal(goalRec.goal as "accum" | "transmute" | "realize")} className="mt-2 h-9 rounded-lg border border-[#2740e6] bg-white px-3 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">{is ? `Nota ráðlagt (${BLOCK_GOAL_LABEL[goalRec.goal].is})` : `Use recommended (${BLOCK_GOAL_LABEL[goalRec.goal].en})`}</button>
-                )}
-                {goalRec?.deloadNow && <p className="mt-2 flex items-center gap-1.5 rounded-lg bg-amber-100 px-2.5 py-1.5 text-[12px] font-semibold text-amber-900"><span className="inline-block h-3 w-2 rounded-sm" style={{ background: "#DE9328" }} />{activeBlock?.inSeason ? (is ? "Þreytumerki — íhugaðu létta viku (markmiðið helst)." : "Fatigue signal — consider a light week (the goal is unchanged).") : (is ? "Þreytumerki — færðu niðurtröppunar-vikuna framar (markmiðið helst)." : "Fatigue signal — pull the deload week forward (the goal is unchanged).")}</p>}
-                {goalRec && (<>
-                  <ul className="mt-2 list-disc space-y-0.5 pl-5 text-[13px] text-slate-700">
-                    {goalRec.reasons.slice(0, 3).map((r, i) => <li key={i}>{is ? r.is : r.en}</li>)}
-                  </ul>
-                  <p className="mt-1.5 text-[12px] text-slate-600">{is ? "Annar kostur" : "Alternative"}: <b>{goalName(goalRec.alternative.goal)}</b> — {is ? goalRec.alternative.when.is : goalRec.alternative.when.en}</p>
-                  <p className="mt-1.5 text-[11px] text-slate-500">{is ? "Val á lotu-markmiði er þjálfaramat — þetta er grundaður sjálfgefinn kostur úr eigin leikjum + álagi liðsins, ekki fyrirmæli (Issurin 2010; Little & Buchheit). Ekki sjálfvirkt sett." : "Block-goal choice is a coaching judgment — a grounded default from the team's own fixtures + load, not a mandate (Issurin 2010; Little & Buchheit). Not auto-applied."}</p>
-                </>)}
-              </section>
-
-              {sel && (
-                <section className={card}>
-                  <h2 className={h2}>{is ? "Álag lotunnar" : "Block load"}</h2>
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    <div title={is ? "Vikuálag sem margfeldi af einu leikálagi (TMr)" : "Weekly load as a multiple of one match (TMr)"}>
-                      <div className="text-[12px] font-semibold text-slate-500">{is ? "Vikuálag / leik (TMr)" : "Week ÷ match (TMr)"}</div>
-                      <div className="text-[20px] font-bold text-slate-900">{sel.tmr != null ? `${sel.tmr}×` : "—"}</div>
-                    </div>
-                    <div>
-                      <div className="text-[12px] font-semibold text-slate-500">{is ? "Magn-mark" : "Volume target"}</div>
-                      <div className="text-[20px] font-bold text-slate-900">{sel.volumeTargetPct != null ? `${sel.volumeTargetPct}%` : "—"}</div>
-                    </div>
-                    <div>
-                      <div className="text-[12px] font-semibold text-slate-500">{is ? "Bráðaálag" : "Acute load"}</div>
-                      <div className="text-[15px] font-bold text-slate-900">{trendWord(sel.loadTrend)}</div>
-                    </div>
-                    <div>
-                      <div className="text-[12px] font-semibold text-slate-500">{sel.inSeason ? (is ? "Létt vika" : "Light week") : (is ? "Niðurtröppunarvika" : "Deload week")}</div>
-                      <div className="text-[15px] font-bold text-slate-900">{sel.deloadWeekStart ? shortDate(sel.deloadWeekStart, is) : sel.inSeason ? (is ? "Engin" : "None") : "—"}{sel.deloadNow && !sel.inSeason && <span className="ml-1 text-[12px] font-semibold text-amber-800">{is ? "· færð framar" : "· pulled fwd"}</span>}</div>
-                    </div>
-                  </div>
-                  {sel.flag && <p className="mt-2 rounded-lg bg-amber-100 px-2.5 py-1.5 text-[12px] font-semibold text-amber-900">{is ? sel.flag.is : sel.flag.en}</p>}
-                  <p className="mt-2 text-[12px] text-slate-600">{is ? sel.goal.is : sel.goal.en}</p>
-                  <p className="mt-1.5 text-[12px] text-slate-500">{blkHold
-                    ? (is ? "Leikurinn er einingin: TMr = vikuálag ÷ eitt leikálag. Keppnislota heldur staðalvikunni; við lesum bráðaálags-þróun + viðbragð — ekki ACWR-band." : "The match is the unit: TMr = weekly load ÷ one match's load. A competitive block holds the standard week; we read the acute-load trend + readiness — not an ACWR band.")
-                    : (is ? "Leikurinn er einingin: TMr = vikuálag ÷ eitt leikálag. Við röppum TMr skynsamlega og lesum bráðaálags-þróun + viðbragð — ekki ACWR-band." : "The match is the unit: TMr = weekly load ÷ one match's load. We ramp TMr sensibly and read the acute-load trend + readiness — not an ACWR band.")}{(() => { const n = teamMatchUnitNote(plan.matchLoad, fullMatchPl, plan.tier.loadSource === "srpe" ? "AU" : "PL"); return n && <> {is ? n.is : n.en}</>; })()}</p>
-                  {sel.acwr != null && (
-                    <details className="mt-1">
-                      <summary className="cursor-pointer py-1 text-[12px] text-slate-500 hover:text-slate-700">{is ? `ACWR ${sel.acwr} — umdeilt viðmið` : `ACWR ${sel.acwr} — contested view`}</summary>
-                      <p className="mt-0.5 text-[12px] text-slate-500">{is ? sel.acwrNote.is : sel.acwrNote.en}</p>
-                    </details>
-                  )}
-                </section>
-              )}
-
-              {sel && bt && (bt.protocols.length > 0 || blockScheduled.length > 0) && (
-                <section className={card}>
-                  <div className="flex items-center gap-2">
-                    <h2 className={h2}>{is ? "Próf í lotunni" : "Testing in this block"}</h2>
-                    <a href="?tab=testing" onClick={(e) => { e.preventDefault(); setTab("testing"); }} className="ml-auto text-[12px] font-semibold text-[#2740e6] hover:underline">{is ? "Skipuleggja →" : "Schedule →"}</a>
-                  </div>
-                  {blockScheduled.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {blockScheduled.map((s) => <span key={s.id} className="inline-flex items-center gap-1.5 rounded-full bg-[#1C7A4A] px-2 py-0.5 text-[12px] font-semibold text-white"><span className="h-2 w-2 rotate-45 bg-white" />{shortDate(s.test_date, is)} · {is ? testShortName(s.test_key, aerobicTest).is : testShortName(s.test_key, aerobicTest).en}</span>)}
-                    </div>
-                  ) : <p className="mt-1 text-[12px] text-slate-500">{is ? "Engin próf skráð í þessari lotu." : "No tests scheduled in this block."}</p>}
-                  {bt.protocols.length > 0 && (<>
-                    <p className="mt-2 text-[13px] font-medium text-slate-700">{is ? bt.when.is : bt.when.en}</p>
-                    <ul className="mt-1 space-y-1">
-                      {bt.protocols.map((p) => <li key={p.key} className="text-[12px] text-slate-600"><b className="text-slate-800">{is ? p.name.is : p.name.en}</b> — {is ? p.prescribes.is : p.prescribes.en} <span className="text-slate-500">(<CiteRefs text={p.cite} is={is} />)</span></li>)}
-                    </ul>
-                  </>)}
-                </section>
-              )}
-
-              <section className={card}>
-                <h2 className={h2}>{is ? "Stillingar lotu" : "Block settings"}</h2>
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Upphaf" : "Start"}<input type="date" value={blkStart} onChange={(e) => setBlkStart(e.target.value)} className="h-10 rounded-lg border border-slate-300 px-2 text-[13px] font-medium" /></label>
-                  <div className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Vikur (úr Makró)" : "Weeks (from Macro)"}<div className="flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-[13px] font-medium text-slate-700">{blkWeeks}{!activeBlock?.inSeason && <span className="ml-1 text-[12px] font-normal text-slate-500">· {is ? "niðurtr. hverja" : "deload every"} {cadence}</span>}</div></div>
-                  <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Grunn-álag %" : "Base overload %"}<input type="number" min={80} max={130} value={blkBase} onChange={(e) => setBlkBase(Number(e.target.value))} className="h-10 rounded-lg border border-slate-300 px-2 text-[13px] font-medium" /></label>
-                  <label className="flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Stig/viku %" : "Step/wk %"}<input type="number" min={0} max={15} value={blkStep} onChange={(e) => { const v = Math.max(0, Math.min(15, Number(e.target.value) || 0)); setBlkStep(v); persistOverridePatch({ stepPct: v }); }} className="h-10 rounded-lg border border-slate-300 px-2 text-[13px] font-medium" /></label>
-                  <label className="col-span-2 flex flex-col gap-1 text-[12px] font-semibold text-slate-700">{is ? "Umfang" : "Scope"}<select value={blkScope} onChange={(e) => setBlkScope(e.target.value as typeof blkScope)} className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-[13px] font-medium"><option value="team">{is ? "Lið" : "Team"}</option><option value="player">{is ? `Leikmaður: ${player?.name ?? ""}` : `Player: ${player?.name ?? ""}`}</option></select></label>
-                </div>
-                {blkHold && <p className="mt-1.5 text-[12px] text-slate-500">{is ? "Þessi keppnislota heldur staðalvikunni allar vikur: lítil breyting milli lota á keppnistímabili (Malone 2015; Oliveira 2019; athugunarrannsóknir). Stig/viku gildir bara í uppbyggingarlotum (Uppsöfnun, Umbreyting)." : "This competitive block holds the standard week every week: little change between in-season blocks (Malone 2015; Oliveira 2019; observational). Step/wk only applies to build-up blocks (Accumulation, Transmutation)."}</p>}
-                {blkScope === "player" && <p className="mt-1.5 text-[12px] text-slate-500">{is ? `Einstaklingsmiðuð lota (leik-miðuð, þök/trim/áhersla) fyrir leikmann valinn í „Leikmenn“-flipanum${player ? ` (${player.name})` : ""} — les-only (breyttu dagsgerðum í Liðs-umfangi). Skiptu um leikmann í Leikmenn-flipanum.` : `The individualised block (match-anchored, caps/trim/steer) for the player selected in the "Players" tab${player ? ` (${player.name})` : ""} — read-only (edit day-types in Team scope). Change the player in the Players tab.`}</p>}
-                <p className="mt-3 border-t border-slate-100 pt-3 text-[12px] text-slate-500">{is ? "Leikir og frí eru sett í Makró-lotu." : "Games and breaks are set in the Macro cycle."}{" "}<button type="button" onClick={() => setTab("season")} className="font-semibold text-[#2740e6] hover:underline">{is ? "Opna Makró →" : "Open Macro →"}</button></p>
-              </section>
-            </aside>
           </div>
           )}
 
-            {/* THE BLOCK'S WEEKLY VOLUME — in-season, measured against one match per variable (Martín-García 2018,
-                Stevens 2017: training as a share of the match per KPI; the weekly multiples and MD-day shape are
-                MicroPulse's, tapering toward the match as in Gualtieri 2024). Layered read: verdict (the week in ×match)
-                → what "one match" is + whether the weeks differ → one table with the research range → week by week
-                only when the weeks actually differ. Numbers unchanged — presentation only. */}
-            {(() => {
-              const matchKpis = blkScope === "player" && player ? kpiAvgFromUnit(player.matchUnit) : teamKpiAvg(plan.players);
-              const days1 = standardTrainingDays(1);          // a standard 1-match week
-              const wkMult = weeklyTrainingMultiple(days1);   // VOLUME multiple (e=1) — the headline ×match
-              const vols = kpiVolumes(matchKpis, days1);      // per-KPI, each tapered by its own exponent
-              const meso = mesoWeeklyMultiples({ numWeeks: blkWeeks, baseMultiple: wkMult, stepPct: blkStepEff, ...blkMesoDeload });
-              const blockTotal = mesoTotalMultiple(meso);
-              const weeksDiffer = meso.some((w) => w.multiple !== meso[0]?.multiple);
-              const headKeys = (Object.keys(matchKpis) as WeeklyLoadMetricKey[]).slice(0, 2); // 1-2 headline KPIs for the week-by-week table
-              const fmtK = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
-              const fx = (n: number) => (is ? String(n).replace(".", ",") : String(n));
-              // Per-KPI meso multiple: the KPI's OWN tapered weekly ×match, scaled by the week's ramp/deload
-              // factor (w.multiple ÷ base). So HSR/sprint ramp from a lower base than distance across the block.
-              const rampFactor = (w: { multiple: number }) => (wkMult > 0 ? w.multiple / wkMult : 0);
-              const kpiWkMult = (k: WeeklyLoadMetricKey, w: { multiple: number }) => Math.round(weeklyKpiMultiple(days1, k) * rampFactor(w) * 100) / 100;
-              const mesoKpi = (k: WeeklyLoadMetricKey, w: { multiple: number }) => { const mv = matchKpis[k]; return mv == null ? null : mv * weeklyKpiMultiple(days1, k) * rampFactor(w); };
-              // What "one match" is — the team's typical full match, or the selected player's own.
-              const ref = blkScope === "player" && player
-                ? { en: `One match = ${player.name}'s typical full match. ${player.matchUnit.windowNote.en}`, is: `Einn leikur = dæmigerður heill leikur ${player.name}. ${player.matchUnit.windowNote.is}` }
-                : teamMatchReference(plan.players.map((p) => p.matchUnit)).note;
-              const weeksLine = weeksDiffer
-                ? (is ? "Vikurnar í lotunni eru ólíkar (stígandi, létt vika eða niðurtröppun) — sjá viku fyrir viku hér að neðan." : "The weeks in this block differ (a ramp, a light week or a deload) — see week by week below.")
-                : (is ? `Allar ${blkWeeks} vikur lotunnar eru eins${blkHold ? " (keppnislota heldur staðalvikunni)" : ""}.` : `All ${blkWeeks} weeks of the block are the same${blkHold ? " (a competitive block holds the standard week)" : ""}.`);
-              return (
-                <details className="mt-4" open>
-                  <summary className="cursor-pointer py-1 text-[13px] font-bold text-[#2740e6]">{is ? "Vikumagn lotunnar — miðað við einn leik" : "The block's weekly volume — measured against one match"}</summary>
-                  <div className="mt-2 rounded-xl border border-slate-200 bg-white p-4">
-                    <p className="text-[15px] font-bold leading-snug text-slate-900">{is
-                      ? `Æfingavikan ≈ ${fx(wkMult)}× leikur (+ leikurinn sjálfur = ${fx(Math.round((wkMult + 1) * 10) / 10)}×).`
-                      : `The training week ≈ ${wkMult}× a match (+ the match itself = ${Math.round((wkMult + 1) * 10) / 10}×).`}</p>
-                    <ul className="mt-1.5 space-y-0.5 text-[12.5px] text-slate-600">
-                      <li>{is ? ref.is : ref.en}</li>
-                      <li>{weeksLine}</li>
-                    </ul>
-
-                    {vols.length > 0 ? (
-                      <div className="mt-3 overflow-x-auto">
-                        <table className="w-full min-w-[520px] text-[12.5px]">
-                          <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
-                            <th className="py-1 pr-2 font-medium">{is ? "Breyta" : "Variable"}</th>
-                            <th className="py-1 px-2 text-right font-medium">{is ? "Einn leikur" : "One match"}</th>
-                            <th className="py-1 px-2 text-right font-medium">× {is ? "leikur" : "a match"}</th>
-                            <th className="py-1 px-2 text-right font-medium">{is ? "Vikan" : "The week"}</th>
-                            <th className="py-1 pl-2 font-medium">{is ? "Rannsóknir (æfing:leikur)" : "Research (training:match)"}</th>
-                          </tr></thead>
-                          <tbody>
-                            {vols.map((v) => { const rr = kpiTmRefRange(v.key); return (
-                              <tr key={v.key} className="border-t border-slate-100">
-                                <td className="py-1.5 pr-2 text-slate-700">{is ? v.label.is : v.label.en}</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums text-slate-500">{fmtK(v.matchValue)}{v.unit}</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums text-slate-700">{fx(v.multiple)}×</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums font-semibold text-slate-900">{fmtK(v.weeklyValue)}{v.unit}</td>
-                                <td className="py-1.5 pl-2 text-slate-600">{rr ? <>{fx(rr[0])}–{fx(rr[1])}×<TmBandChip x={v.multiple} refRange={rr} is={is} /></> : (is ? "engin viðmið" : "no reference")}</td>
-                              </tr>
-                            ); })}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : <p className="mt-2 text-[12px] text-amber-700">{is ? "Ekkert leikvið (GPS) enn — sýni sRPE-álag annars staðar." : "No GPS match unit yet — sRPE load is shown elsewhere."}</p>}
-
-                    {/* What the columns mean — visible, no click (same wording as the pre-season table). */}
-                    <ul className="mt-2 space-y-0.5 text-[11.5px] text-slate-600">
-                      <li><b className="font-semibold text-slate-700">{is ? "× leikur" : "× a match"}</b> — {is ? "vikan samanlagt deilt með einum leik í sömu breytu. 2× = tvöfalt það sem einn leikur gefur." : "the week's total divided by one match in the same variable. 2× = twice what one match gives."}</li>
-                      <li><b className="font-semibold text-slate-700">{is ? "Rannsóknir" : "Research"}</b> — {is ? "æfing:leikur í venjulegri æfingaviku á keppnistímabili (training:match, PMC6747517). Merkið segir hvort talan er innan, yfir eða undir bilinu." : "training:match in a normal in-season training week (training:match, PMC6747517). The mark says whether the number is within, above or below the range."}</li>
-                    </ul>
-
-                    {weeksDiffer && (
-                      <details className="mt-3" open>
-                        <summary className="cursor-pointer text-[12px] font-semibold text-[#2740e6]">{is ? `Viku fyrir viku — ${blkWeeks} vikur` : `Week by week — ${blkWeeks} weeks`}</summary>
-                        <div className="mt-1.5 overflow-x-auto">
-                          <table className="w-full text-[12.5px]">
-                            <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
-                              <th className="py-1 pr-2 font-medium">{is ? "Vika" : "Week"}</th><th className="py-1 px-2 text-right font-medium" title={is ? "Rúmmál (vegalengd/PlayerLoad)" : "Volume (distance/PlayerLoad)"}>× {is ? "leikur" : "a match"}</th>
-                              {headKeys.map((k) => <th key={k} className="py-1 px-2 text-right font-medium">{is ? WEEKLY_LOAD_LABELS[k].is : WEEKLY_LOAD_LABELS[k].en} <span className="normal-case text-slate-300">(× {is ? "leikur" : "a match"})</span></th>)}
-                            </tr></thead>
-                            <tbody>
-                              {meso.map((w) => (
-                                <tr key={w.weekIndex} className="border-t border-slate-100">
-                                  <td className="py-1.5 pr-2 text-slate-700">{is ? "Vika" : "Wk"} {w.weekIndex}{w.isDeload ? <span className="ml-1 rounded bg-[#de9328]/15 px-1 py-0.5 text-[9px] font-semibold uppercase text-[#8a5a10]">{w.isLight ? (is ? "létt" : "light") : is ? "niður" : "deload"}</span> : null}</td>
-                                  <td className="py-1.5 px-2 text-right tabular-nums font-semibold text-slate-900">{fx(w.multiple)}×</td>
-                                  {headKeys.map((k) => { const val = mesoKpi(k, w); return <td key={k} className="py-1.5 px-2 text-right tabular-nums text-slate-600">{val == null ? "–" : <><span className="font-semibold text-slate-800">{fx(kpiWkMult(k, w))}×</span> <span className="text-slate-400">{fmtK(val)}{WEEKLY_LOAD_LABELS[k].unit}</span></>}</td>; })}
-                                </tr>
-                              ))}
-                              <tr className="border-t-2 border-slate-300 font-semibold">
-                                <td className="py-1.5 pr-2">{is ? "Lotan alls" : "Block total"}</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums text-slate-900">{fx(blockTotal)}×</td>
-                                {headKeys.map((k) => { const mv = matchKpis[k]; const totMult = Math.round(meso.reduce((s2, w) => s2 + kpiWkMult(k, w), 0) * 100) / 100; const tot = meso.reduce((s2, w) => s2 + (mesoKpi(k, w) ?? 0), 0); return <td key={k} className="py-1.5 px-2 text-right tabular-nums text-slate-700">{mv == null ? "–" : <><span className="font-semibold text-slate-900">{fx(totMult)}×</span> <span className="text-slate-400">{fmtK(tot)}{WEEKLY_LOAD_LABELS[k].unit}</span></>}</td>; })}
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      </details>
-                    )}
-                    <p className="mt-2 text-[10px] text-slate-500">{is ? "Hver breyta hefur sitt eigið vikumargfeldi: háhraði og sprettir safnast í lægra margfeldi en vegalengd, því æfingadagar ná minna hlutfalli af leik í háhraða en í vegalengd (Stevens 2017). Vikan bylgjast um leikinn, MD-4 þyngst (Martín-García 2018; hlutföll MD-daga eru val MicroPulse). Lýsandi áætlun — aldrei readiness-liturinn." : "Each variable has its own weekly multiple: high-speed running and sprints add up to a lower multiple than distance, because training days hold a smaller share of the match in high-speed running than in distance (Stevens 2017). The week undulates around the match, MD-4 heaviest (Martín-García 2018; the MD-day shares are MicroPulse's). Descriptive plan — never the readiness colour."}</p>
-                  </div>
-                </details>
-              );
-            })()}
           {/* 4 — MESO → MICRO handoff */}
           <section className={`${card} flex flex-wrap items-center gap-3`}>
             <div className="min-w-0 flex-[1_1_320px]">
