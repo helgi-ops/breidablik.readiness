@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * TransferReportPdf — the Breiðablik-branded performance dossier for a departing
- * player, for the receiving club's performance staff. The masthead carries the club
- * logo; the read is explainability-first:
+ * TransferReportPdf — the club-branded performance dossier for a departing
+ * player, for the receiving club's performance staff. The masthead carries the coach's
+ * own club name + logo (from teams, see clubBrand.ts); the read is explainability-first:
  *   layer 0  the labelled AI summary (<AiBox>) — or, without AI, a rule-written line
  *            on what the window covers
  *   layer 1  identity strip + the AI physical / game read, strengths and watch points
@@ -26,13 +26,13 @@ import type { TransferDossier, DossierSection, Confidence, ClockPoint } from "@/
 import { DIRECTIONS } from "@/lib/micropulse/directionalSignature";
 import type { TransferAiSummary } from "@/lib/micropulse/transferReport/ai";
 import type { RadarMetric, TrendBar } from "@/components/coach/PlayerGameReportCharts";
+import type { ClubBrand } from "@/lib/club/clubBrand";
 
 type Lang = "EN" | "IS";
 export type TransferRadar = { engine: RadarMetric[]; driver: RadarMetric[] } | null;
 export type TrendSeries = { bars: TrendBar[]; avg: number | null };
 export type TransferTrends = { distance: TrendSeries; hsr: TrendSeries; sprint: TrendSeries } | null;
 
-const LOGO = "/breidablik-ubk-vector-logo.png";
 
 /** Confidence chip — tone + the word (colour is never the only signal). */
 const CONF: Record<Confidence, { tone: Tone; en: string; is: string }> = {
@@ -43,23 +43,40 @@ const CONF: Record<Confidence, { tone: Tone; en: string; is: string }> = {
 };
 
 const T = {
-  EN: { dossier: "Performance Dossier", prepared: "Prepared by Breiðablik UBK Performance", window: "window", sessions: "sessions", matches: "matches",
+  EN: { dossier: "Performance Dossier", window: "window", sessions: "sessions", matches: "matches",
     pos: "Position", age: "Age", height: "Height", weight: "Weight", aiNote: "Written from the numbers below - cites the data, decides nothing",
     strengths: "Strengths", watch: "Watch points", details: "Details", overview: "What this dossier covers",
     covers: (s: number, m: number, d: number) => `${s} sessions and ${m} matches over a ${d}-day window.`,
     coversBody: "Each section opens with its one-line read and the supporting facts; the raw numbers follow in a compact table. Confidence chips show how much data sits behind each section.",
     source: "Source / how to read",
     note: "Descriptive performance export - never a readiness verdict, injury judgement or availability decision.",
-    foot: "Descriptive performance export shared by Breiðablik UBK as part of an agreed transfer. Figures are session/test aggregates over the window; they never encode a readiness verdict, an injury judgement, or an availability decision. Source signals: Catapult (GPS/IMA), VALD ForceDecks, GymAware (VBT), match records and fitness tests." },
-  IS: { dossier: "Frammistöðuskýrsla", prepared: "Unnið af Breiðablik UBK Performance", window: "tímabil", sessions: "lotur", matches: "leikir",
+    foot: "Figures are session/test aggregates over the window; they never encode a readiness verdict, an injury judgement, or an availability decision. Source signals: Catapult (GPS/IMA), VALD ForceDecks, GymAware (VBT), match records and fitness tests." },
+  IS: { dossier: "Frammistöðuskýrsla", window: "tímabil", sessions: "lotur", matches: "leikir",
     pos: "Staða", age: "Aldur", height: "Hæð", weight: "Þyngd", aiNote: "Skrifað úr tölunum að neðan - vitnar í gögnin, ákveður ekkert",
     strengths: "Styrkleikar", watch: "Athuga", details: "Nánar", overview: "Hvað skýrslan nær yfir",
     covers: (s: number, m: number, d: number) => `${s} lotur og ${m} leikir á ${d} daga tímabili.`,
     coversBody: "Hver kafli byrjar á einnar línu lestri og stuðningsatriðum; hráu tölurnar fylgja í þéttri töflu. Vissu-merkin sýna hversu mikil gögn liggja að baki hverjum kafla.",
     source: "Uppruni / hvernig á að lesa",
     note: "Lýsandi frammistöðu-útflutningur - aldrei readiness-dómur, meiðslamat eða ákvörðun um leikhæfi.",
-    foot: "Lýsandi frammistöðu-útflutningur, deilt af Breiðablik UBK sem hluti af samþykktum félagaskiptum. Tölur eru samtölur lota/prófa á tímabilinu; þær fela aldrei í sér readiness-dóm, meiðslamat eða ákvörðun um leikhæfi. Uppsprettur: Catapult (GPS/IMA), VALD ForceDecks, GymAware (VBT), leikjaskrár og þolpróf." },
+    foot: "Tölur eru samtölur lota/prófa á tímabilinu; þær fela aldrei í sér readiness-dóm, meiðslamat eða ákvörðun um leikhæfi. Uppsprettur: Catapult (GPS/IMA), VALD ForceDecks, GymAware (VBT), leikjaskrár og þolpróf." },
 } as const;
+
+/** The lines that name the club: "Prepared by ..." and the opening of the footer (the coach's own club). */
+const CLUB_LINES = {
+  EN: {
+    prepared: (c: string) => (c ? `Prepared by ${c} Performance` : "Prepared by the club's performance staff"),
+    footLead: (c: string) => `Descriptive performance export shared by ${c || "the club"} as part of an agreed transfer.`,
+  },
+  IS: {
+    prepared: (c: string) => (c ? `Unnið af ${c} Performance` : "Unnið af frammistöðuteymi félagsins"),
+    footLead: (c: string) => `Lýsandi frammistöðu-útflutningur, deilt af ${c || "félaginu"} sem hluti af samþykktum félagaskiptum.`,
+  },
+} as const;
+
+/** ASCII file-name part: "Breiðablik" -> "Breidablik". */
+const fileSlug = (x: string) =>
+  x.replace(/[ðÐ]/g, "d").replace(/[þÞ]/g, "th").replace(/[æÆ]/g, "ae").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 const svgText = (size: number, w: 400 | 600 = 400) => ({ ...fb(w), fontSize: size });
 
@@ -68,13 +85,13 @@ function ConfChip({ c, lang }: { c: Confidence; lang: Lang }) {
   return <Chip text={lang === "IS" ? cc.is : cc.en} tone={cc.tone} />;
 }
 
-/** Kit-style masthead with the club logo on the left (the kit's Masthead has no image slot). */
-function LogoMasthead({ title, kicker, subtitle, byline, chip }: { title: string; kicker: string; subtitle: string; byline: string; chip: ReactNode }) {
+/** Kit-style masthead with the coach's club logo on the left, when set (the kit's Masthead has no image slot). */
+function LogoMasthead({ logoUrl, title, kicker, subtitle, byline, chip }: { logoUrl: string | null; title: string; kicker: string; subtitle: string; byline: string; chip: ReactNode }) {
   const tt = clean(title);
   return (
     <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 12, marginBottom: 12, paddingBottom: 11, borderBottomWidth: 1, borderBottomColor: C.rule }}>
       {/* eslint-disable-next-line jsx-a11y/alt-text */}
-      <Image src={LOGO} style={{ width: 46, height: 47 }} />
+      {logoUrl ? <Image src={logoUrl} style={{ width: 46, height: 47, objectFit: "contain" }} /> : null}
       <View style={{ flex: 1 }}>
         <Text style={[fb(600), { fontSize: 8, letterSpacing: 1.1, color: C.cobalt, marginBottom: 4 }]}>{clean(kicker).toUpperCase()}</Text>
         <Text style={[fh(800), { fontSize: tt.length > 30 ? 20 : 26, lineHeight: 1.05, letterSpacing: -0.5 }]}>{tt}</Text>
@@ -256,20 +273,22 @@ function SectionBlock({ sec, lang, clock }: { sec: DossierSection; lang: Lang; c
   );
 }
 
-export function TransferDoc({ dossier, ai, radar, trends, lang }: { dossier: TransferDossier; ai: TransferAiSummary | null; radar: TransferRadar; trends: TransferTrends; lang: Lang }) {
+export function TransferDoc({ dossier, ai, radar, trends, lang, club }: { dossier: TransferDossier; ai: TransferAiSummary | null; radar: TransferRadar; trends: TransferTrends; lang: Lang; club: ClubBrand }) {
   const t = T[lang];
+  const cl = CLUB_LINES[lang];
   const id = dossier.identity;
   const w = dossier.window;
   const sub = [id.position, id.ageYears != null ? `${id.ageYears} ${lang === "IS" ? "ára" : "yrs"}` : null, `${w.start} - ${w.end}`, `${w.days}-${lang === "IS" ? "daga" : "day"} ${t.window}`].filter(Boolean).join(" · ");
   const hasAiDetail = !!(ai && (ai.physicalProfile || ai.gameProfile || ai.strengths?.length || ai.watchPoints?.length));
   return (
-    <Document title={`${id.name} - ${t.dossier}`} author="Breiðablik UBK · MicroPulse">
-      <BrandPage doc={t.dossier} context={`${id.name} · Breiðablik UBK`} note={t.note}>
+    <Document title={`${id.name} - ${t.dossier}`} author={[club.name, "MicroPulse"].filter(Boolean).join(" · ")}>
+      <BrandPage doc={t.dossier} context={[id.name, club.name].filter(Boolean).join(" · ")} note={t.note}>
         <LogoMasthead
+          logoUrl={club.logoUrl}
           kicker={t.dossier}
           title={id.name}
           subtitle={sub}
-          byline={`${t.prepared} · ${w.sessions} ${t.sessions} · ${w.matches} ${t.matches}`}
+          byline={`${cl.prepared(club.name)} · ${w.sessions} ${t.sessions} · ${w.matches} ${t.matches}`}
           chip={<ConfChip c={dossier.overallConfidence} lang={lang} />}
         />
 
@@ -323,14 +342,16 @@ export function TransferDoc({ dossier, ai, radar, trends, lang }: { dossier: Tra
 
         <Card style={{ marginTop: 4 }}>
           <Label>{t.source}</Label>
-          <Provenance>{t.foot}</Provenance>
+          <Provenance>{`${cl.footLead(club.name)} ${t.foot}`}</Provenance>
         </Card>
       </BrandPage>
     </Document>
   );
 }
 
-export async function downloadTransferReportPdf(dossier: TransferDossier, ai: TransferAiSummary | null, radar: TransferRadar, trends: TransferTrends, lang: Lang) {
-  const blob = await renderPdfBlob(() => <TransferDoc dossier={dossier} ai={ai} radar={radar} trends={trends} lang={lang} />);
-  saveBlob(blob, `${dossier.identity.name.replace(/\s+/g, "-")}-Breidablik-performance-dossier.pdf`);
+export async function downloadTransferReportPdf(dossier: TransferDossier, ai: TransferAiSummary | null, radar: TransferRadar, trends: TransferTrends, lang: Lang, club: ClubBrand) {
+  const render = (c: ClubBrand) => renderPdfBlob(() => <TransferDoc dossier={dossier} ai={ai} radar={radar} trends={trends} lang={lang} club={c} />);
+  // A logo that can't be read (wrong format, removed file) must not block the report: retry without it.
+  const blob = await render(club).catch((e) => { if (!club.logoUrl) throw e; return render({ ...club, logoUrl: null }); });
+  saveBlob(blob, [fileSlug(dossier.identity.name), fileSlug(club.name), "performance-dossier"].filter(Boolean).join("-") + ".pdf");
 }

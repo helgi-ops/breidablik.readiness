@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * KsiReportPdf — the Breiðablik-branded KSÍ (federation call-up) dossier, ONE PAGE (block) PER
+ * KsiReportPdf — the club-branded KSÍ (federation call-up) dossier, ONE PAGE (block) PER
  * PLAYER, styled with the shared MicroPulse PDF kit (src/components/pdf/brand.tsx):
  * club masthead + key numbers → AI summary (labelled AI) → KSÍ's two explicit questions
  * (injuries/factors, individual strength/prevention programme) → athletic radar (squad
  * percentile) → per-session trends → peak demands → daily breakdown table (may flow onto a
- * second page; its header repeats).
+ * second page; its header repeats). The masthead shows the coach's own club (name + logo
+ * from teams, see clubBrand.ts), never a hardcoded crest.
  *
  * Coach text is sanitised of arrows / emoji / U+2212 so the Helvetica fallback never breaks.
  * Descriptive export — never a readiness colour or availability decision. The coach downloads
@@ -15,6 +16,7 @@
 
 import { Document, Text, View, Image, Svg, Polygon, Line, Circle, Rect } from "@react-pdf/renderer";
 import { AiBox, BrandPage, Body, C, Card, Chip, Provenance, Section, StatGrid, Table, clean, fb, fh, renderPdfBlob, saveBlob } from "@/components/pdf/brand";
+import type { ClubBrand } from "@/lib/club/clubBrand";
 
 type Lang = "EN" | "IS";
 export type KsiPdfRadarAxis = { key: string; labelIs: string; labelEn: string; unit: string; value: number; pct: number | null };
@@ -34,7 +36,6 @@ export type KsiPdfPlayer = {
   peakDemands?: Array<{ windowMin: number; distance: number | null; hsr: number | null }>;
 };
 
-const LOGO = "/breidablik-ubk-vector-logo.png";
 
 /** Fallback-safe: Helvetica can't render arrows / emoji / minus-sign. */
 const wa = (s: string): string =>
@@ -105,7 +106,7 @@ function TrendBars({ days, get, label, avgText, peakText }: { days: KsiPdfDay[];
 const T = {
   IS: {
     doc: "KSÍ-skýrsla", eyebrow: "KSÍ – ÁLAGS- OG STÖÐUSKÝRSLA", window: "tímabil", sessions: "lotur",
-    prepared: "Unnið af", club: "Breiðablik", generated: "útbúið",
+    prepared: "Unnið af", generated: "útbúið",
     keySess: "Lotur", keyDist: "Vegalengd", keyMax: "Hám.hraði", keyHsr: "Háhraði", keyPl: "Álag (PL)",
     keyMatches: "Leikir", keyMinutes: "Mínútur",
     trends: "Þróun per lotu", trendsHint: "Hver súla = ein lota. Brotalína = meðaltal tímabilsins.", avg: "meðaltal", peakw: "hæst",
@@ -124,7 +125,7 @@ const T = {
   },
   EN: {
     doc: "KSÍ report", eyebrow: "KSÍ – LOAD & STATUS REPORT", window: "window", sessions: "sessions",
-    prepared: "Prepared by", club: "Breiðablik", generated: "generated",
+    prepared: "Prepared by", generated: "generated",
     keySess: "Sessions", keyDist: "Distance", keyMax: "Top speed", keyHsr: "High-speed", keyPl: "Load (PL)",
     keyMatches: "Matches", keyMinutes: "Minutes",
     trends: "Per-session trend", trendsHint: "Each bar = one session. Dashed line = the window average.", avg: "avg", peakw: "peak",
@@ -143,12 +144,12 @@ const T = {
   },
 } as const;
 
-/** Club masthead: Breiðablik crest + the kit's masthead typography (the kit Masthead has no logo slot). */
-function ClubMasthead({ kicker, title, subtitle, byline, chips }: { kicker: string; title: string; subtitle: string; byline: string; chips: string[] }) {
+/** Club masthead: the coach's club logo (when set) + the kit's masthead typography (the kit Masthead has no logo slot). */
+function ClubMasthead({ logoUrl, kicker, title, subtitle, byline, chips }: { logoUrl: string | null; kicker: string; title: string; subtitle: string; byline: string; chips: string[] }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12, paddingBottom: 11, borderBottomWidth: 1, borderBottomColor: C.rule }}>
       {/* eslint-disable-next-line jsx-a11y/alt-text */}
-      <Image src={LOGO} style={{ width: 44, height: 45 }} />
+      {logoUrl ? <Image src={logoUrl} style={{ width: 44, height: 45, objectFit: "contain" }} /> : null}
       <View style={{ flex: 1 }}>
         <Text style={[fb(600), { fontSize: 8, letterSpacing: 1.1, color: C.cobalt, marginBottom: 4 }]}>{clean(kicker).toUpperCase()}</Text>
         <Text style={[fh(800), { fontSize: title.length > 26 ? 22 : 28, lineHeight: 1.05, letterSpacing: -0.6 }]}>{clean(title)}</Text>
@@ -172,19 +173,20 @@ function NoteCard({ title, src, text }: { title: string; src: string; text: stri
   );
 }
 
-function PlayerPage({ p, from, to, lang, preparedBy, generated }: { p: KsiPdfPlayer; from: string; to: string; lang: Lang; preparedBy: string | null; generated: string }) {
+function PlayerPage({ p, from, to, lang, preparedBy, generated, club }: { p: KsiPdfPlayer; from: string; to: string; lang: Lang; preparedBy: string | null; generated: string; club: ClubBrand }) {
   const t = T[lang];
   const avg = (get: (d: KsiPdfDay) => number) => (p.days.length ? p.days.reduce((a, d) => a + get(d), 0) / p.days.length : 0);
   const peak = (get: (d: KsiPdfDay) => number) => (p.days.length ? Math.max(0, ...p.days.map(get)) : 0);
   const r = (label: string, flex = 1) => ({ label, flex, align: "right" as const });
   return (
-    <BrandPage doc={t.doc} context={`${p.full_name} · ${t.club}`} note={t.foot}>
+    <BrandPage doc={t.doc} context={[p.full_name, club.name].filter(Boolean).join(" · ")} note={t.foot}>
       <ClubMasthead
+        logoUrl={club.logoUrl}
         kicker={t.eyebrow}
         title={p.full_name}
         subtitle={`${from} - ${to}  ·  ${p.sessions} ${t.sessions}`}
-        byline={`${t.prepared} ${preparedBy ?? t.club} · ${t.club} · ${t.generated} ${generated}`}
-        chips={[t.club, "KSÍ"]}
+        byline={[(preparedBy || club.name) ? `${t.prepared} ${preparedBy || club.name}` : null, preparedBy && club.name ? club.name : null, `${t.generated} ${generated}`].filter(Boolean).join(" · ")}
+        chips={[club.name, "KSÍ"].filter(Boolean)}
       />
 
       <View style={{ marginBottom: 10 }}>
@@ -270,12 +272,14 @@ function PlayerPage({ p, from, to, lang, preparedBy, generated }: { p: KsiPdfPla
   );
 }
 
-export function KsiDoc({ players, from, to, lang, preparedBy }: { players: KsiPdfPlayer[]; from: string; to: string; lang: Lang; preparedBy: string | null }) {
+export function KsiDoc({ players, from, to, lang, preparedBy, club }: { players: KsiPdfPlayer[]; from: string; to: string; lang: Lang; preparedBy: string | null; club: ClubBrand }) {
   const generated = new Date().toISOString().slice(0, 10);
-  return <Document>{players.map((p, i) => <PlayerPage key={i} p={p} from={from} to={to} lang={lang} preparedBy={preparedBy} generated={generated} />)}</Document>;
+  return <Document>{players.map((p, i) => <PlayerPage key={i} p={p} from={from} to={to} lang={lang} preparedBy={preparedBy} generated={generated} club={club} />)}</Document>;
 }
 
-export async function downloadKsiReportPdf(players: KsiPdfPlayer[], from: string, to: string, lang: Lang, preparedBy: string | null = null) {
-  const blob = await renderPdfBlob(() => <KsiDoc players={players} from={from} to={to} lang={lang} preparedBy={preparedBy} />);
+export async function downloadKsiReportPdf(players: KsiPdfPlayer[], from: string, to: string, lang: Lang, preparedBy: string | null, club: ClubBrand) {
+  const render = (c: ClubBrand) => renderPdfBlob(() => <KsiDoc players={players} from={from} to={to} lang={lang} preparedBy={preparedBy} club={c} />);
+  // A logo that can't be read (wrong format, removed file) must not block the report: retry without it.
+  const blob = await render(club).catch((e) => { if (!club.logoUrl) throw e; return render({ ...club, logoUrl: null }); });
   saveBlob(blob, `KSI-skyrsla-${players.length === 1 ? players[0].full_name.replace(/\s+/g, "-") : "lid"}-${to}.pdf`);
 }

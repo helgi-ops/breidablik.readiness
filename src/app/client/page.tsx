@@ -21,15 +21,14 @@ import AICoachCard from "@/components/player/AICoachCard";
 import ClientVacationBanner from "@/components/player/ClientVacationBanner";
 import ClientNudges from "@/components/player/ClientNudges";
 import ExerciseInfo from "@/components/exercise/ExerciseInfo";
-import { decideToday, type DecisionTone } from "@/lib/client/todayDecision";
+import { decideToday, weekdayName, type DecisionTone } from "@/lib/client/todayDecision";
 import { isSeasonPhase, SEASON_PHASE_SPEC } from "@/lib/client/seasonPhase";
 import { buildSessionBlocks } from "@/lib/client/sessionGrouping";
 
-/** Localised weekday name from an ISO index (1=Mon..7=Sun). */
-function weekdayName(iso: number, lang: string): string {
-  const IS = ["Mánudagur", "Þriðjudagur", "Miðvikudagur", "Fimmtudagur", "Föstudagur", "Laugardagur", "Sunnudagur"];
-  const EN = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-  return (lang === "IS" ? IS : EN)[iso - 1] ?? "";
+/** Whole days from today (this device's date) to a YYYY-MM-DD date. */
+function daysFromToday(dateIso: string): number {
+  const todayIso = new Date().toLocaleDateString("en-CA");
+  return Math.round((Date.parse(`${dateIso}T00:00:00Z`) - Date.parse(`${todayIso}T00:00:00Z`)) / 86_400_000);
 }
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -65,6 +64,11 @@ type TodayResp = {
     weekday_index?: number | null;
     rest_day: boolean;
     next_session_label: string | null;
+    next_session_weekday?: number | null;
+    /** "custom" = the trainer's own plan (sessions can be moved); "starter" = a starter programme. */
+    plan_source?: "starter" | "custom";
+    upcoming_start?: string | null;
+    completed?: boolean;
     moved_from?: string | null;
     moved_to?: string | null;
     weeks_per_phase?: number;
@@ -96,6 +100,8 @@ type TodayResp = {
       source: "plan" | "default";
     } | null;
   } | null;
+  /** A plan that starts later (only set when there's nothing for today). */
+  upcoming_plan?: { name: string; start_date: string } | null;
   readinessToday: { id: string; total_score: number | null; color: string | null } | null;
   session_logged_today?: boolean;
   load?: { ratio: number | null; confidence: "low" | "medium" | "high" };
@@ -164,12 +170,18 @@ export default function ClientTodayPage() {
   const readinessDone = !!data.readinessToday;
   const ex = data.explosive;
   const hasBlocks = !!ex && ex.blocks.length > 0;
+  // Moving a session only works on the trainer's own plan (not starter programmes).
+  const canMove = ex?.plan_source === "custom";
+  const upcomingStart = ex?.upcoming_start ?? data.upcoming_plan?.start_date ?? null;
   const decision = decideToday({
     checkinOn,
     checkedIn: readinessDone,
+    upcoming: upcomingStart ? { startDate: upcomingStart, daysUntil: daysFromToday(upcomingStart) } : null,
+    completed: !!ex?.completed,
     session: ex
       ? {
           restDay: ex.rest_day,
+          nextSessionWeekday: ex.next_session_weekday ?? null,
           matchDay: !!ex.is_match_day,
           daysToGame: ex.days_to_game ?? null,
           readiness: ex.readiness
@@ -238,10 +250,12 @@ export default function ClientTodayPage() {
         <h2 className="font-display text-[26px] font-extrabold leading-tight tracking-tight text-slate-900">{decision.headline[L]}</h2>
         <p className="mt-1 text-sm text-slate-700">{decision.why[L]}</p>
         {decision.fosterCited && (
-          <>
-            <div className="mt-1 text-[10px] text-slate-500">Foster 1998 · sRPE × duration · 7-day rolling</div>
+          <details className="mt-1.5 text-[11px] text-slate-500">
+            <summary className="cursor-pointer select-none">{lang === "IS" ? "Sýna nánar" : "Show details"}</summary>
+            {decision.detail && <div className="mt-1">{decision.detail}</div>}
+            <div className="mt-1 text-[10px]">Foster 1998 · sRPE × duration · 7-day rolling</div>
             <MethodologyLink />
-          </>
+          </details>
         )}
         {/* Hidden when check-in is off for this client. */}
         {checkinOn && !readinessDone && (
@@ -263,7 +277,7 @@ export default function ClientTodayPage() {
           <div>
             <div className="text-xs font-semibold text-slate-500">
               {ex.rest_day
-                ? `${lang === "IS" ? "Næsta æfing" : "Next session"}${ex.next_session_label ? ` · ${ex.next_session_label}` : ""}`
+                ? `${lang === "IS" ? "Næsta æfing" : "Next session"}${ex.next_session_weekday ? ` · ${weekdayName(ex.next_session_weekday, lang)}` : ""}`
                 : (() => {
                     const wpp = ex.weeks_per_phase ?? 3;
                     const total = wpp * (ex.total_phases ?? 4);
@@ -377,8 +391,9 @@ export default function ClientTodayPage() {
             </Link>
           )}
 
-          {/* Move today's session to another day when life gets in the way. */}
-          {(!ex.rest_day || ex.moved_to) && (
+          {/* Move today's session to another day when life gets in the way
+              (the trainer's own plan only — starter programmes can't be moved). */}
+          {canMove && (!ex.rest_day || ex.moved_to) && (
             <ClientMoveSessionButton
               lang={L}
               movedTo={ex.moved_to ?? null}
@@ -390,19 +405,22 @@ export default function ClientTodayPage() {
 
           {/* Closed loop — retest / test nudges. Stale tests = retest; lifts
               with a %1RM but no test yet = test to unlock target weights. */}
+          {/* The trainer records strength tests, so the nudge says to ask them
+              (and opens the chat) rather than sending the client to a page
+              they can't act on. */}
           {(ex.retest_due?.length || ex.needs_test?.length) ? (
-            <Link href="/client/lv-profile" className="block rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 hover:bg-emerald-100">
+            <Link href="/client/chat" className="block rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 hover:bg-emerald-100">
               {ex.retest_due && ex.retest_due.length > 0 ? (
                 <div className="text-[12px] text-emerald-900">
                   <span className="font-semibold">{lang === "IS" ? "Tími á endurprófi" : "Time to retest"}:</span>{" "}
                   {ex.retest_due.join(", ")}
-                  <span className="text-emerald-700"> — {lang === "IS" ? "uppfærðu 1RM svo þyngdir haldist réttar." : "update your 1RM so target weights stay accurate."}</span>
+                  <span className="text-emerald-700"> — {lang === "IS" ? "biddu þjálfarann um nýtt próf svo þyngdirnar haldist réttar →" : "ask your trainer for a new test so target weights stay accurate →"}</span>
                 </div>
               ) : (
                 <div className="text-[12px] text-emerald-900">
-                  <span className="font-semibold">{lang === "IS" ? "Taktu styrktarpróf" : "Run a strength test"}:</span>{" "}
+                  <span className="font-semibold">{lang === "IS" ? "Biddu þjálfarann um styrkpróf" : "Ask your trainer for a strength test"}:</span>{" "}
                   {ex.needs_test!.join(", ")}
-                  <span className="text-emerald-700"> — {lang === "IS" ? "til að fá raun-þyngdir í stað prósenta." : "to get real target weights instead of percentages."}</span>
+                  <span className="text-emerald-700"> — {lang === "IS" ? "þá færðu þyngdir í kílóum í stað prósenta →" : "then you get target weights in kg instead of percentages →"}</span>
                 </div>
               )}
             </Link>
@@ -415,13 +433,16 @@ export default function ClientTodayPage() {
       ) : null}
 
       {/* A session moved away can leave today empty; keep the undo reachable. */}
-      {ex?.moved_to && !hasBlocks && (
+      {canMove && ex?.moved_to && !hasBlocks && (
         <ClientMoveSessionButton lang={L} movedTo={ex.moved_to} movedFrom={ex.moved_from ?? null} endDate={null} onChanged={() => { void load(); }} />
       )}
 
       {!ex?.rest_day && corrective}
 
       {/* Session-logged and weekly recap prompts sit below the session. */}
+      {/* hasSessionToday stays false here on purpose: the session card above
+          already carries the Start button, so a second "session today" banner
+          would repeat it. The banner is for screens without the session card. */}
       <ClientNudges lang={L} hasSessionToday={false} sessionLoggedToday={!!data.session_logged_today} />
 
       <MomentumCard lang={L} compact />
@@ -437,8 +458,8 @@ export default function ClientTodayPage() {
           can hide it per client (read-only, no loads). */}
       <ClientProgrammeOverview lang={L} />
 
-      {/* Move any of my sessions, either direction. */}
-      <ClientMoveSessionControl lang={L} onChanged={() => { void load(); }} />
+      {/* Move any of my sessions, either direction (the trainer's own plan only). */}
+      {canMove && <ClientMoveSessionControl lang={L} onChanged={() => { void load(); }} />}
 
       {/* Everything else, one line each. */}
       <nav aria-label={lang === "IS" ? "Meira" : "More"} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">

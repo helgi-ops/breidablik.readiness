@@ -1,10 +1,54 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
+import { sendTransactionalEmail } from "@/lib/email/sendTransactionalEmail";
+import { buildClientInviteEmail } from "@/lib/email/clientInviteEmail";
 
-function env(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
+const INVITE_DAYS = 30;
+
+function inviteUrl(token: string) {
+  // /invite/client/[token] (NOT the legacy /signup?invite=… path, which went through the
+  // coach signup form and created the account with role=COACH — 2026-05-14). The dedicated
+  // page handles signup + accept inline and writes role=PLAYER throughout.
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.micropulse.is";
+  return `${baseUrl}/invite/client/${token}`;
+}
+
+/** A pending invitation past its expiry is shown (and treated) as expired. */
+function effectiveStatus(row: { status: string; expires_at: string | null }, now = Date.now()) {
+  if (row.status === "pending" && row.expires_at && new Date(row.expires_at).getTime() < now) return "expired";
+  return row.status;
+}
+
+type InviteRow = { id: string; token: string; client_email: string; client_name: string | null; expires_at: string };
+
+/**
+ * Email the invitation to the client, from the practice, replies to the trainer.
+ * Never throws: when email isn't configured or the provider refuses, the trainer is told
+ * and copies the link instead.
+ */
+async function emailInvite(sb: SupabaseClient, teamId: string, userId: string, invite: InviteRow, lang: "EN" | "IS") {
+  try {
+    const [{ data: team }, { data: prof }, { data: u }] = await Promise.all([
+      sb.from("teams").select("name").eq("id", teamId).maybeSingle(),
+      sb.from("profiles").select("full_name").eq("id", userId).maybeSingle(),
+      sb.auth.admin.getUserById(userId),
+    ]);
+    const email = buildClientInviteEmail({
+      lang,
+      clientName: invite.client_name,
+      practiceName: String((team as { name?: string } | null)?.name ?? ""),
+      trainerName: (prof as { full_name?: string | null } | null)?.full_name ?? null,
+      acceptUrl: inviteUrl(invite.token),
+      expiresAt: new Date(invite.expires_at),
+    });
+    await sendTransactionalEmail({ to: invite.client_email, ...email, replyTo: u?.user?.email ?? undefined });
+    return { emailed: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[client-invite] email not sent", invite.id, msg);
+    return { emailed: false as const, emailError: msg.startsWith("Missing env") ? "not_configured" : "send_failed" };
+  }
 }
 
 
@@ -63,7 +107,9 @@ export async function GET(req: Request) {
       .order("created_at", { ascending: false });
 
     if (error) throw new Error(error.message);
-    return NextResponse.json({ invitations: data ?? [] });
+    const now = Date.now();
+    const invitations = ((data ?? []) as Array<{ status: string; expires_at: string | null }>).map((r) => ({ ...r, status: effectiveStatus(r, now) }));
+    return NextResponse.json({ invitations });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     const status = msg === "Unauthorized" ? 401 : msg === "Forbidden" ? 403 : 500;
@@ -83,7 +129,9 @@ export async function POST(req: Request) {
       clientEmail: string;
       clientName?: string;
       notes?: string;
+      lang?: string;
     };
+    const lang = body?.lang === "IS" ? "IS" : "EN";
 
     if (!clientEmail || !clientEmail.includes("@")) {
       return NextResponse.json({ error: "Valid email required" }, { status: 400 });
@@ -92,14 +140,19 @@ export async function POST(req: Request) {
     // Check for existing pending invitation
     const { data: existing } = await sb
       .from("client_invitations")
-      .select("id")
+      .select("id, status, expires_at")
       .eq("team_id", teamId)
       .eq("client_email", clientEmail.toLowerCase().trim())
       .eq("status", "pending")
       .maybeSingle();
 
     if (existing) {
-      return NextResponse.json({ error: "Pending invitation already exists for this email" }, { status: 409 });
+      const ex = existing as { id: string; status: string; expires_at: string | null };
+      if (effectiveStatus(ex) !== "expired") {
+        return NextResponse.json({ error: "Pending invitation already exists for this email — use Resend" }, { status: 409 });
+      }
+      // The old one ran out: close it and make a fresh one.
+      await sb.from("client_invitations").update({ status: "expired" }).eq("id", ex.id);
     }
 
     const { data: invite, error } = await sb
@@ -116,18 +169,53 @@ export async function POST(req: Request) {
 
     if (error) throw new Error(error.message);
 
-    // Build invite URL. We point at /invite/client/[token] (NOT the legacy
-    // /signup?invite=… path which routes through the coach signup form and
-    // would create the new account with role=COACH — that's exactly how
-    // Aníta Rut ended up as a coach on 2026-05-14). The dedicated page
-    // handles signup + accept inline and writes role=PLAYER throughout.
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.micropulse.is";
-    const signupUrl = `${baseUrl}/invite/client/${invite.token}`;
+    const sent = await emailInvite(sb, teamId, userId, invite as InviteRow, lang);
+    return NextResponse.json({ invitation: invite, signupUrl: inviteUrl(invite.token), ...sent });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    const status = msg === "Unauthorized" ? 401 : msg === "Forbidden" ? 403 : 500;
+    return NextResponse.json({ error: msg }, { status });
+  }
+}
 
-    return NextResponse.json({
-      invitation: invite,
-      signupUrl,
-    });
+/* ── PATCH: resend (?id=) — revives an expired invitation for another 30 days ── */
+
+export async function PATCH(req: Request) {
+  try {
+    const { userId, teamId } = await requireCoach(req);
+    const sb = getAdmin();
+    const inviteId = new URL(req.url).searchParams.get("id");
+    if (!inviteId) return NextResponse.json({ error: "Invitation id required" }, { status: 400 });
+    const body = (await req.json().catch(() => ({}))) as { lang?: string };
+    const lang = body?.lang === "IS" ? "IS" : "EN";
+
+    const { data: row } = await sb
+      .from("client_invitations")
+      .select("id, token, client_email, client_name, status, expires_at")
+      .eq("id", inviteId)
+      .eq("team_id", teamId)
+      .maybeSingle();
+    const inv = row as (InviteRow & { status: string }) | null;
+    if (!inv) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (inv.status === "accepted" || inv.status === "revoked") {
+      return NextResponse.json({ error: `Invitation is ${inv.status}` }, { status: 400 });
+    }
+
+    let invite: InviteRow = inv;
+    if (effectiveStatus(inv) === "expired") {
+      const expiresAt = new Date(Date.now() + INVITE_DAYS * 86400000).toISOString();
+      const { data: revived, error } = await sb
+        .from("client_invitations")
+        .update({ status: "pending", expires_at: expiresAt, updated_at: new Date().toISOString() })
+        .eq("id", inv.id)
+        .select("id, token, client_email, client_name, expires_at")
+        .single();
+      if (error) throw new Error(error.message);
+      invite = revived as InviteRow;
+    }
+
+    const sent = await emailInvite(sb, teamId, userId, invite, lang);
+    return NextResponse.json({ ok: true, signupUrl: inviteUrl(invite.token), expiresAt: invite.expires_at, ...sent });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     const status = msg === "Unauthorized" ? 401 : msg === "Forbidden" ? 403 : 500;
@@ -139,7 +227,7 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const { userId, teamId } = await requireCoach(req);
+    const { teamId } = await requireCoach(req);
     const sb = getAdmin();
     const url = new URL(req.url);
     const inviteId = url.searchParams.get("id");

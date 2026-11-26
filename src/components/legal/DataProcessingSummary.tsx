@@ -8,6 +8,12 @@
  * GDPR (health/performance data = special category, Art. 9). It is NOT a
  * substitute for a lawyer-reviewed privacy policy — the club/operator should
  * have it reviewed before relying on it in production.
+ *
+ * Two variants: "club" (players at a club — the original text, unchanged so no
+ * player is re-asked) and "pt" (clients of a personal trainer: no GPS/Catapult,
+ * the trainer and their practice see it). The PT text describes narrower
+ * processing than the club text existing PT clients agreed to, so it does not
+ * bump CURRENT_POLICY_VERSION.
  */
 
 type Lang = "IS" | "EN";
@@ -51,8 +57,36 @@ const T = {
   },
 } as const;
 
-export function DataProcessingSummary({ lang, isMinor = false }: { lang: Lang; isMinor?: boolean }) {
-  const t = T[lang];
+/** Clients of a personal trainer (the /client app). */
+const T_PT = {
+  IS: {
+    ...T.IS,
+    whatItems: [
+      "Líðan og check-in — svefn, þreyta, harðsperrur og annað sem þú svarar.",
+      "Æfingarnar þínar — sett, þyngdir, endurtekningar og áreynsla (RPE).",
+      "Líkamsþyngd, skýrslur sem þú eða þjálfarinn hleður upp, skilaboð og verkir sem þú skráir í leiðréttingaræfingum.",
+    ],
+    whyText:
+      "Svo þjálfarinn þinn geti skipulagt og stillt æfingarnar, og svo appið geti lagað æfingu dagsins að líðan þinni. Reglur ráða, útskýringar fylgja.",
+    whoText:
+      "Þjálfarinn þinn og stofan hans. MicroPulse vinnur gögnin fyrir hönd stofunnar. Gögnin eru ekki seld og ekki deilt með öðrum án sérstaks samþykkis þíns.",
+  },
+  EN: {
+    ...T.EN,
+    whatItems: [
+      "Wellness & check-ins — sleep, fatigue, soreness and anything else you answer.",
+      "Your training — sets, weights, reps and perceived effort (RPE).",
+      "Body weight, reports you or your trainer upload, messages, and pain you report in corrective exercises.",
+    ],
+    whyText:
+      "So your trainer can plan and adjust your training, and so the app can fit today's session to how you feel. Rules decide, explanations follow.",
+    whoText:
+      "Your trainer and their practice. MicroPulse processes the data on the practice's behalf. Your data is not sold and not shared with anyone else without your specific consent.",
+  },
+} as const;
+
+export function DataProcessingSummary({ lang, isMinor = false, variant = "club" }: { lang: Lang; isMinor?: boolean; variant?: "club" | "pt" }) {
+  const t = variant === "pt" ? T_PT[lang] : T[lang];
   return (
     <div className="space-y-3 text-sm leading-relaxed text-zinc-700">
       <section>

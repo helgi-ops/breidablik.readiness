@@ -24,6 +24,7 @@ import MatchdayTemplateSettings from "@/components/admin/MatchdayTemplateSetting
 import RecommendationLogicViewer from "@/components/admin/RecommendationLogicViewer";
 import OverrideHistoryPanel from "@/components/admin/OverrideHistoryPanel";
 import SystemPolicySummary from "@/components/admin/SystemPolicySummary";
+import { PT_SELF_SERVE_PUBLIC } from "@/lib/legal/operator";
 import {
   ORDERED_PLAN_DEFINITIONS,
   getPlanDefinition,
@@ -80,6 +81,9 @@ export default function CoachSettingsPage() {
   // ("training-load only, no check-in") instead of the club GPS wording. The
   // toggle logic is identical; only the copy changes.
   const [isPt, setIsPt] = useState<boolean>(false);
+  // Club-only sections (GPS, Catapult, sport, load monitoring, decision-rule workspace) are
+  // hidden for personal-trainer practices. Club teams render exactly as before.
+  const showClub = !isPt;
   // Intro set-ramp (PT practice): first 2 weeks of a programme cap at 2 sets.
   const [introSetRamp, setIntroSetRamp] = useState<boolean>(false);
   const [introRampLoading, setIntroRampLoading] = useState(false);
@@ -401,15 +405,28 @@ export default function CoachSettingsPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
 
+      {/* Practices reach help, terms and privacy from here (the phone's bottom bar has no room). */}
+      {isPt && (
+        <div className="flex flex-wrap gap-x-5 gap-y-2 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm">
+          <a href="/help?for=trainers" className="font-semibold text-primary hover:underline">Help / Hjálp</a>
+          {PT_SELF_SERVE_PUBLIC && (
+            <>
+              <a href="/terms" className="text-zinc-600 hover:text-zinc-900">Terms / Skilmálar</a>
+              <a href="/privacy/practices" className="text-zinc-600 hover:text-zinc-900">Privacy / Persónuvernd</a>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── Elite: Club branding for PWA ──────────────────────────────────── */}
       {/* ── GPS Provider ───────────────────────────────────────────────── */}
-      <GpsProviderSettings teamId={teamId} />
+      {showClub && <GpsProviderSettings teamId={teamId} />}
 
       {/* ── Notifications (coach morning digest opt-in) ───────────────────── */}
       <CoachNotificationSettings />
 
       {/* ── Sport Type ────────────────────────────────────────────────── */}
-      {teamId && (
+      {teamId && showClub && (
         <section className="rounded-2xl border bg-white p-5 shadow-sm">
           <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Sport / Íþrótt</div>
           <h2 className="mt-1 text-lg font-semibold text-zinc-950">
@@ -645,7 +662,7 @@ export default function CoachSettingsPage() {
       )}
 
       {/* ── Load monitoring mode (Auto / Indoor / Outdoor) ───────────── */}
-      {teamId && (
+      {teamId && showClub && (
         <section className="rounded-2xl border bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-3">
             <div>
@@ -762,11 +779,13 @@ export default function CoachSettingsPage() {
         <AutoSendRecoveryMessageSettings teamId={teamId} />
       )}
 
-      {/* ── Catapult data tier (Lite Mode) — visible to all teams ──────── */}
-      {teamId && (
+      {/* ── Catapult data tier (Lite Mode) — visible to all club teams ──── */}
+      {teamId && showClub && (
         <CatapultDataTierSettings teamId={teamId} />
       )}
 
+      {/* ── Decision-rule workspace (team policy, matchday templates, protected players) — clubs only ── */}
+      {showClub && (<>
       <section className="rounded-2xl border bg-gradient-to-b from-white to-zinc-50 p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -906,6 +925,7 @@ export default function CoachSettingsPage() {
           </div>
         </div>
       </section>
+      </>)}
     </div>
   );
 }

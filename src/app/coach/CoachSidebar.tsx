@@ -229,14 +229,15 @@ const ptStrengthLinks: SidebarLink[] = [
 const ptAdminLinks: SidebarLink[] = [
   { href: "/coach?tab=invitations",  label: { EN: "Invitations",   IS: "Boð" } },
   { href: "/coach/settings",         label: { EN: "Settings",      IS: "Stillingar" } },
+  { href: "/help?for=trainers",      label: { EN: "Help",          IS: "Hjálp" } },
 ];
 
 // PT Communication links — same as team-side communicationLinks but WITHOUT
-// "Team Page". The /team page is football-team facing (squad roster, fixtures,
-// team-wide notes) and irrelevant to a 1-on-1 personal trainer relationship.
+// "Team Page" (football-team facing) and WITHOUT "Messages" (/coach/messages
+// edits the flag messages shared by every team — a club admin tool, not a
+// 1-on-1 conversation). Conversations is the trainer's chat with clients.
 const ptCommunicationLinks: SidebarLink[] = [
   { href: "/coach/conversations", label: { EN: "Conversations", IS: "Samtöl" } },
-  { href: "/coach/messages",      label: { EN: "Messages",      IS: "Skilaboð" } },
 ];
 
 // Strength surfaces split into TWO hubs by job (coach decision 2026-10-13):

@@ -7,6 +7,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { PT_SELF_SERVE_PUBLIC } from "@/lib/legal/operator";
 
 type Lang = "IS" | "EN";
 
@@ -290,6 +291,7 @@ export default function HomeLanding() {
               <a href="#explain" className="hover:text-white">{t.nav.explain}</a>
               <a href="#product" className="hover:text-white">{t.nav.product}</a>
               <Link href="/pricing" className="hover:text-white">{t.nav.pricing}</Link>
+              {PT_SELF_SERVE_PUBLIC && <Link href="/personal-trainers" className="hover:text-white">{lang === "IS" ? "Einkaþjálfarar" : "Personal trainers"}</Link>}
               <Link href="/blog" className="hover:text-white">{t.nav.blog}</Link>
             </nav>
 
@@ -323,6 +325,7 @@ export default function HomeLanding() {
                   <a key={item.href} href={item.href} className="rounded-xl px-3 py-2.5 hover:bg-white/10 hover:text-white" onClick={() => setMobileMenuOpen(false)}>{item.label}</a>
                 ))}
                 <Link href="/pricing" className="rounded-xl px-3 py-2.5 hover:bg-white/10 hover:text-white" onClick={() => setMobileMenuOpen(false)}>{t.nav.pricing}</Link>
+                {PT_SELF_SERVE_PUBLIC && <Link href="/personal-trainers" className="rounded-xl px-3 py-2.5 hover:bg-white/10 hover:text-white" onClick={() => setMobileMenuOpen(false)}>{lang === "IS" ? "Einkaþjálfarar" : "Personal trainers"}</Link>}
                 <Link href="/blog" className="rounded-xl px-3 py-2.5 hover:bg-white/10 hover:text-white" onClick={() => setMobileMenuOpen(false)}>{t.nav.blog}</Link>
                 <div className="mt-2 flex gap-2 border-t border-white/10 pt-3">
                   <Link href="/login" className="flex-1 rounded-xl border border-white/25 bg-white/5 px-4 py-2 text-center text-sm text-white transition hover:bg-white/10">{t.auth.signIn}</Link>
@@ -339,10 +342,15 @@ export default function HomeLanding() {
               <h1 className="text-4xl font-semibold tracking-tight text-white md:text-[3.5rem] md:leading-[1.08]">{t.hero.title}</h1>
               <p className="mt-6 text-lg text-white/85">{t.hero.sub}</p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link href="/login" className="rounded-2xl bg-blue-600 px-6 py-3 font-medium text-white transition hover:bg-blue-700">{t.hero.primary}</Link>
+                <Link href="/signup" className="rounded-2xl bg-blue-600 px-6 py-3 font-medium text-white transition hover:bg-blue-700">{t.hero.primary}</Link>
                 <Link href="/pricing#demo" className="rounded-2xl border border-white/25 bg-white/5 px-6 py-3 text-white transition hover:bg-white/10">{t.hero.secondary}</Link>
               </div>
               <p className="mt-8 text-sm text-white/70">{t.hero.trust}</p>
+              {PT_SELF_SERVE_PUBLIC && (
+                <Link href="/personal-trainers" className="mt-3 inline-block text-sm font-medium text-white/90 underline-offset-4 hover:underline">
+                  {lang === "IS" ? "Einkaþjálfari? Sjáðu MicroPulse fyrir einkaþjálfara →" : "Personal trainer? See MicroPulse for personal trainers →"}
+                </Link>
+              )}
             </div>
             <div className="flex justify-center">
               <VideoPosterCard onPlay={() => setVideoOpen(true)} label={t.hero.watch} className="max-w-[480px] border-white/20" />
@@ -495,7 +503,7 @@ export default function HomeLanding() {
           <h2 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">{t.cta.title}</h2>
           <p className="mt-4 text-lg text-neutral-400">{t.cta.body}</p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link href="/login" className="rounded-2xl bg-blue-600 px-6 py-3 text-white transition hover:bg-blue-700">{t.cta.primary}</Link>
+            <Link href="/signup" className="rounded-2xl bg-blue-600 px-6 py-3 text-white transition hover:bg-blue-700">{t.cta.primary}</Link>
             <button onClick={() => setVideoOpen(true)} className="rounded-2xl border border-white/20 bg-white/10 px-6 py-3 text-white transition hover:bg-white/15">{t.cta.secondary}</button>
           </div>
           <div className="mt-12 flex flex-wrap justify-center gap-6 border-t border-white/10 pt-8 text-sm">
@@ -503,6 +511,9 @@ export default function HomeLanding() {
             <Link href="/#platform" className="text-neutral-400 hover:text-white">{t.footer.features}</Link>
             <Link href="/blog" className="text-neutral-400 hover:text-white">{t.footer.blog}</Link>
             <Link href="/methodology" className="text-neutral-400 hover:text-white">{t.footer.methodology}</Link>
+            {PT_SELF_SERVE_PUBLIC && <Link href="/personal-trainers" className="text-neutral-400 hover:text-white">{lang === "IS" ? "Einkaþjálfarar" : "Personal trainers"}</Link>}
+            <Link href="/help" className="text-neutral-400 hover:text-white">{lang === "IS" ? "Hjálp" : "Help"}</Link>
+            <Link href="/privacy" className="text-neutral-400 hover:text-white">{lang === "IS" ? "Persónuvernd" : "Privacy"}</Link>
           </div>
         </div>
       </section>

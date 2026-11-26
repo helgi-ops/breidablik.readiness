@@ -19,6 +19,8 @@ export type TodayDecision = {
   tone: DecisionTone;
   /** Foster deload verdict — carries its citation on screen. */
   fosterCited?: boolean;
+  /** The technical reason behind a plain-language verdict (shown behind "Show details"). */
+  detail?: string;
   /** Check-in comes before the verdict. */
   needsCheckin?: boolean;
 };
@@ -26,8 +28,14 @@ export type TodayDecision = {
 export type DecisionInput = {
   checkinOn: boolean;
   checkedIn: boolean;
+  /** A plan that hasn't started yet (starter assignment or the trainer's own plan). */
+  upcoming?: { startDate: string; daysUntil: number } | null;
+  /** The starter programme has run its full length. */
+  completed?: boolean;
   session: {
     restDay: boolean;
+    /** ISO weekday (1=Mon..7=Sun) of the next session, on a rest day. */
+    nextSessionWeekday?: number | null;
     matchDay: boolean;
     daysToGame: number | null;
     readiness: {
@@ -46,14 +54,72 @@ export type DecisionInput = {
 
 const round1 = (n: number) => n.toFixed(1);
 
+const WEEKDAY_EN = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const WEEKDAY_IS = ["Mánudagur", "Þriðjudagur", "Miðvikudagur", "Fimmtudagur", "Föstudagur", "Laugardagur", "Sunnudagur"];
+/** "á mánudag" — the form used after "á" in a sentence. */
+const WEEKDAY_IS_ON = ["mánudag", "þriðjudag", "miðvikudag", "fimmtudag", "föstudag", "laugardag", "sunnudag"];
+
+/** Localised weekday name from an ISO index (1=Mon..7=Sun). */
+export function weekdayName(iso: number, lang: string): string {
+  return (lang === "IS" ? WEEKDAY_IS : WEEKDAY_EN)[iso - 1] ?? "";
+}
+
+function isoWeekdayOf(dateIso: string): number {
+  const d = new Date(`${dateIso}T00:00:00Z`).getUTCDay();
+  return d === 0 ? 7 : d;
+}
+
+/** "Monday" / "á mánudag" within a week, else the date ("4 December" / "4. desember"). */
+function whenStarts(startDate: string, daysUntil: number): Bi {
+  if (daysUntil <= 1) return { EN: "tomorrow", IS: "á morgun" };
+  if (daysUntil <= 6) {
+    const wd = isoWeekdayOf(startDate);
+    return { EN: `on ${WEEKDAY_EN[wd - 1]}`, IS: `á ${WEEKDAY_IS_ON[wd - 1]}` };
+  }
+  const d = new Date(`${startDate}T00:00:00Z`);
+  const fmt = (loc: string) => {
+    try { return d.toLocaleDateString(loc, { day: "numeric", month: "long", timeZone: "UTC" }); }
+    catch { return startDate; }
+  };
+  return { EN: `on ${fmt("en-GB")}`, IS: `${fmt("is-IS")}` };
+}
+
 export function decideToday(i: DecisionInput): TodayDecision {
   const s = i.session;
+
+  if (i.upcoming) {
+    const when = whenStarts(i.upcoming.startDate, i.upcoming.daysUntil);
+    return {
+      label: null,
+      headline: { EN: `Your plan starts ${when.EN}`, IS: `Áætlunin byrjar ${when.IS}` },
+      why: {
+        EN: "Your trainer has set it up. Your first session will show here that day.",
+        IS: "Þjálfarinn þinn hefur sett hana upp. Fyrsta æfingin birtist hér þann dag.",
+      },
+      tone: "neutral",
+    };
+  }
+
+  if (i.completed) {
+    return {
+      label: null,
+      headline: { EN: "Programme finished", IS: "Áætluninni er lokið" },
+      why: {
+        EN: "Well done. Your trainer will set up what comes next. Log your own workout meanwhile if you train.",
+        IS: "Vel gert. Þjálfarinn þinn setur upp næsta skref. Skráðu þína eigin æfingu á meðan ef þú æfir.",
+      },
+      tone: "good",
+    };
+  }
 
   if (!s) {
     return {
       label: null,
-      headline: { EN: "No session planned", IS: "Engin æfing á dagskrá" },
-      why: { EN: "Nothing is prescribed today. Log your own workout if you train.", IS: "Ekkert er fyrirskrifað í dag. Skráðu þína eigin æfingu ef þú æfir." },
+      headline: { EN: "Your trainer is setting up your plan", IS: "Þjálfarinn þinn er að setja upp áætlunina" },
+      why: {
+        EN: "Your sessions will show here as soon as it's ready. Log your own workout meanwhile if you train.",
+        IS: "Æfingarnar birtast hér um leið og hún er tilbúin. Skráðu þína eigin æfingu á meðan ef þú æfir.",
+      },
       tone: "neutral",
     };
   }
@@ -68,10 +134,17 @@ export function decideToday(i: DecisionInput): TodayDecision {
   }
 
   if (s.restDay) {
+    const wd = s.nextSessionWeekday ?? null;
+    const next: Bi = wd
+      ? { EN: ` Next session: ${WEEKDAY_EN[wd - 1]}.`, IS: ` Næsta æfing er á ${WEEKDAY_IS_ON[wd - 1]}.` }
+      : { EN: "", IS: "" };
     return {
       label: null,
       headline: { EN: "Rest day", IS: "Hvíldardagur" },
-      why: { EN: "Take it easy today. Recovery is part of the work.", IS: "Hvíldu vel í dag. Endurheimt er hluti af æfingunni." },
+      why: {
+        EN: `Take it easy today. Recovery is part of the work.${next.EN}`,
+        IS: `Hvíldu vel í dag. Endurheimt er hluti af æfingunni.${next.IS}`,
+      },
       tone: "neutral",
     };
   }
@@ -116,11 +189,20 @@ export function decideToday(i: DecisionInput): TodayDecision {
     return {
       label: { EN: "Load high", IS: "Mikið álag" },
       headline: required
-        ? { EN: "Deload needed", IS: "Deload nauðsynlegt" }
-        : { EN: "Deload recommended", IS: "Mælt með deload" },
-      why: { EN: i.fosterReason, IS: i.fosterReason },
+        ? { EN: "Take a lighter week", IS: "Taktu léttari viku" }
+        : { EN: "A lighter few days will help", IS: "Léttari dagar myndu hjálpa" },
+      why: required
+        ? {
+            EN: "Your last 7 days were hard and almost the same every day. Do fewer sets this week and keep the technique sharp.",
+            IS: "Síðustu 7 dagar voru erfiðir og nánast eins á hverjum degi. Gerðu færri sett í vikunni og haltu tækninni góðri.",
+          }
+        : {
+            EN: "Your last 7 days were hard with little variation. Ease off a little so you keep making progress.",
+            IS: "Síðustu 7 dagar voru erfiðir og lítil tilbreyting. Slakaðu aðeins á svo framfarirnar haldi áfram.",
+          },
       tone: required ? "bad" : "warn",
       fosterCited: true,
+      detail: i.fosterReason,
     };
   }
 

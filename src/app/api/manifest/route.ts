@@ -122,6 +122,10 @@ export async function GET(req: NextRequest) {
   // identity (id, start_url, shortcuts) targets the /client surface that
   // the PT-client PWA actually uses.
   if (role === "client") {
+    // The client app is EN by default, IS when ?lang=IS or the browser prefers Icelandic.
+    const langParam = (req.nextUrl.searchParams.get("lang") ?? "").toUpperCase();
+    const prefersIs = /^is\b/i.test((req.headers.get("accept-language") ?? "").trim());
+    const is = langParam === "IS" || (langParam !== "EN" && prefersIs);
     const baseName = manifest.name;
     const clientName =
       baseName === "MicroPulse" ? "MicroPulse PT" : `${baseName} PT`;
@@ -134,27 +138,23 @@ export async function GET(req: NextRequest) {
       name: clientName,
       short_name: clientShort,
       start_url: "/client",
-      description: "Æfing dagsins, þyngdarskráning, RPE og framvinda — allt á einum stað.",
+      lang: is ? "is" : "en",
+      description: is
+        ? "Æfing dagsins, skráning setta og framvinda — allt á einum stað."
+        : "Today's session, set logging and your progress — all in one place.",
       shortcuts: [
         {
-          name: "Skrá æfingu",
-          short_name: "Skrá",
-          description: "Þyngd, endurt. og RPE per sett",
+          name: is ? "Skrá æfingu" : "Log session",
+          short_name: is ? "Skrá" : "Log",
+          description: is ? "Þyngd og endurtekningar á hvert sett" : "Weight and reps for every set",
           url: "/client/log",
           icons: manifest.icons.slice(0, 1).map((i) => ({ src: i.src, sizes: "192x192" })),
         },
         {
-          name: "Framvinda",
-          short_name: "Framvinda",
-          description: "e1RM línurit og PR",
+          name: is ? "Framvinda" : "Progress",
+          short_name: is ? "Framvinda" : "Progress",
+          description: is ? "Met og þróun styrks" : "Personal bests and strength over time",
           url: "/client/progression",
-          icons: manifest.icons.slice(0, 1).map((i) => ({ src: i.src, sizes: "192x192" })),
-        },
-        {
-          name: "LV próf",
-          short_name: "LV",
-          description: "Kraft-/hraðapróf og %RM tafla",
-          url: "/client/lv-profile",
           icons: manifest.icons.slice(0, 1).map((i) => ({ src: i.src, sizes: "192x192" })),
         },
       ],
@@ -215,6 +215,8 @@ export async function GET(req: NextRequest) {
     headers: {
       "Content-Type": "application/manifest+json",
       "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+      // The client manifest follows the browser language.
+      ...(role === "client" ? { Vary: "Accept-Language" } : {}),
     },
   });
 }
