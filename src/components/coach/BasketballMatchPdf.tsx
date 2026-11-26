@@ -1,15 +1,21 @@
 "use client";
 
 /**
- * BasketballMatchPdf — the single-game InStat read as a downloadable PDF: the AI
- * game summary (how it went + what decided it) followed by the numbers it reasons
- * from — Four Factors, per-quarter, how we scored (playtypes + efficiency), shot
- * zones, opponent players and lineups. AI is labelled AS AI and cites the data;
- * descriptive — never touches readiness. WinAnsi/Helvetica (Icelandic-safe): ASCII
- * hyphen only, no arrows / ticks / U+2212.
+ * BasketballMatchPdf — the single-game InStat read as a downloadable PDF.
+ *
+ * Explainability-first layered read (docs/explainability-first.md):
+ *   Page 1  the AI game summary (labelled AI) → 2-3 plain rule facts (margin, shooting,
+ *           ball security) → the AI game read (what decided it, flow, players, takeaways).
+ *   Page 2  the numbers it reasons from — Four Factors, per quarter, how we scored
+ *           (playtypes + efficiency), shot map and zones, opponent players, lineups.
+ *
+ * Styling comes from the shared MicroPulse PDF kit (src/components/pdf/brand.tsx).
+ * AI is labelled AS AI and cites the data; descriptive — never touches readiness.
  */
 
-import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
+import { Document, Text, View } from "@react-pdf/renderer";
+import { AiBox, BrandPage, Bullets, C, Cols, FactRow, Label, Section, StatGrid, Table, TONE, Verdict, clean, fb, fh, n1, pc, renderPdfBlob, saveBlob } from "@/components/pdf/brand";
+import type { Tone } from "@/components/pdf/brand";
 import { shotLabel, zoneLabel, type Lang } from "@/lib/micropulse/basketballStats/shotLabels";
 
 type MA = { m: number | null; a: number | null };
@@ -38,154 +44,239 @@ export type BasketballAiSummary = {
   takeaways?: string[];
 };
 
-const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6";
-const clean = (s: unknown) => String(s ?? "").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—−]/g, "-").replace(/[▲▼✓→]/g, "");
 const maS = (c: MA) => (c.m == null && c.a == null ? "-" : `${c.m ?? 0}-${c.a ?? 0}`);
-const pct = (v: number | null | undefined) => (v == null ? "-" : `${v.toFixed(1)}%`);
-const d1 = (v: number | null | undefined) => (v == null ? "-" : v.toFixed(1));
-
-const st = StyleSheet.create({
-  page: { paddingTop: 26, paddingBottom: 34, paddingHorizontal: 34, fontSize: 9.5, fontFamily: "Helvetica", color: INK, lineHeight: 1.4 },
-  kicker: { fontSize: 8, color: COBALT, fontFamily: "Helvetica-Bold", letterSpacing: 0.8, marginBottom: 3 },
-  h1: { fontSize: 16, fontFamily: "Helvetica-Bold" },
-  sub: { fontSize: 10, color: MUTE, marginTop: 2, marginBottom: 8 },
-  vbox: { borderWidth: 1, borderColor: "#c9d0f7", backgroundColor: "#eef0fb", borderRadius: 4, padding: 9, marginBottom: 9 },
-  vlabel: { fontSize: 8, color: COBALT, fontFamily: "Helvetica-Bold", letterSpacing: 0.6, marginBottom: 2 },
-  h2: { fontSize: 11, fontFamily: "Helvetica-Bold", marginTop: 10, marginBottom: 3 },
-  h3: { fontSize: 8, color: COBALT, fontFamily: "Helvetica-Bold", letterSpacing: 0.6, marginTop: 6, marginBottom: 2 },
-  para: { fontSize: 9.5, color: "#222", marginBottom: 2 },
-  li: { flexDirection: "row", marginBottom: 1.5 },
-  bullet: { width: 10, fontFamily: "Helvetica-Bold" },
-  liTxt: { flex: 1, color: "#222" },
-  twoCol: { flexDirection: "row", gap: 14 },
-  col: { flex: 1 },
-  row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: LINE, paddingVertical: 1.6 },
-  cL: { flex: 1, color: "#333" },
-  cR: { width: 130, textAlign: "right", fontFamily: "Helvetica-Bold" },
-  ffRow: { flexDirection: "row", marginTop: 3 },
-  ffCell: { flex: 1 },
-  ffLbl: { fontSize: 7.5, color: MUTE, fontFamily: "Helvetica-Bold" },
-  ffVal: { fontSize: 12, fontFamily: "Helvetica-Bold" },
-  ffOpp: { fontSize: 8, color: MUTE },
-  pRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: LINE, paddingVertical: 1.6 },
-  pName: { flex: 1 }, pNum: { width: 40, textAlign: "right", fontFamily: "Helvetica-Bold" }, pShot: { width: 60, textAlign: "right", color: "#333" },
-  foot: { position: "absolute", bottom: 18, left: 34, right: 34, fontSize: 7.5, color: MUTE, borderTopWidth: 1, borderTopColor: LINE, paddingTop: 4 },
-});
+const ma = (r: { made: number; att: number }) => `${r.made}-${r.att}`;
+const fgp = (v: number | null) => (v == null ? "-" : `${v}%`);
+const signed = (v: number | null | undefined, d = 1) => (v == null ? "-" : `${v > 0 ? "+" : ""}${Number.isInteger(v) ? v : v.toFixed(d)}`);
 
 const T = {
-  EN: { kicker: "SINGLE MATCH ANALYSIS - INSTAT", ai: "AI - READS THE NUMBERS, DECIDES NOTHING", overview: "OVERVIEW", decided: "What decided it", flow: "How it flowed", ourPl: "Our key players", oppThreat: "Opponent threats", takeaways: "Takeaways", ff: "Four Factors (us vs opponent)", byQ: "By quarter", scored: "How we scored", playtypes: "FG playtypes", eff: "Offensive-efficiency types", zones: "Shot zones", opp: "Opponent players", lineups: "Lineups (net +/-)", min: "Min", pts: "Pts", us: "Us", them: "Opp", foot: "InStat single-game read. The AI summary is AI-generated from these numbers, is labelled as such, and decides nothing - it never changes a readiness verdict." },
-  IS: { kicker: "STAKUR LEIKUR - INSTAT", ai: "AI - LES TOLUR, AKVEDUR EKKERT", overview: "YFIRLIT", decided: "Hvad red urslitum", flow: "Framvinda leiksins", ourPl: "Okkar lyklar", oppThreat: "Haettulegastir hja andstaedingi", takeaways: "Laerdomar", ff: "Four Factors (vid vs andstaedingur)", byQ: "Eftir leikhluta", scored: "Hvernig vid skorudum", playtypes: "Soknartegundir", eff: "Soknargerd (efficiency)", zones: "Skotsvaedi", opp: "Andstaedingur - leikmenn", lineups: "Fimmundir (net +/-)", min: "Min", pts: "Stig", us: "Vid", them: "Andst.", foot: "InStat stakur-leiks lestur. AI-samantektin er gerd af gervigreind ur thessum tolum, merkt sem slik og akvedur ekkert - breytir aldrei readiness-domi." },
+  EN: {
+    doc: "Single match", kicker: "Single match analysis · InStat", ai: "READS THE NUMBERS - DECIDES NOTHING", read: "AI GAME READ - WRITTEN FROM THE NUMBERS ON PAGE 2",
+    win: "Win", loss: "Loss", draw: "Draw", ourTeam: "Our team",
+    margin: "Final margin", result: "Result", ffWon: (n: number, of: number) => `we won ${n} of ${of} Four Factors`, by: (n: number) => `by ${n}`, efg: "Shooting (eFG%)", tov: "Turnovers (TO%)", oppShort: "Opponent",
+    gameRead: "How the game was decided", decided: "What decided it", flow: "How it flowed", ourPl: "Our key players", oppThreat: "Opponent threats", takeaways: "Takeaways",
+    numbers: "The numbers", numbersHint: "Everything the summary above was written from.",
+    ff: "Four Factors (us vs opponent)", ffHint: "eFG% = shooting adjusted for threes · TO% = turnovers per possession · OREB% = offensive rebounds · FTF = free throws per shot · PPP = points per possession.",
+    byQ: "By quarter", scored: "How we scored", playtypes: "FG playtypes", eff: "Offensive-efficiency types", playType: "Play type", type: "Type", madeAtt: "Made-att",
+    map: "Shot map (paint / mid-range / 3PT)", zones: "Shot zones", zone: "Zone", region: "Region",
+    opp: "Opponent players", player: "Player", lineups: "Lineups (net +/-)", lineupsHint: "By minutes on court, with the score while each unit played.", lineup: "Lineup", score: "Score",
+    min: "Min", pts: "Pts", us: "Us", them: "Opp",
+    foot: "InStat single-game read. The AI summary is AI-generated from these numbers, is labelled as such, and decides nothing - it never changes a readiness verdict.",
+  },
+  IS: {
+    doc: "Stakur leikur", kicker: "Stakur leikur · InStat", ai: "LES TÖLURNAR - ÁKVEÐUR EKKERT", read: "AI-LESTUR - SKRIFAÐUR ÚT FRÁ TÖLUNUM Á BLS. 2",
+    win: "Sigur", loss: "Tap", draw: "Jafntefli", ourTeam: "Okkar lið",
+    margin: "Munur í lokin", result: "Úrslit", ffWon: (n: number, of: number) => `unnum ${n} af ${of} Four Factors`, by: (n: number) => `með ${n} stigum`, efg: "Skotnýting (eFG%)", tov: "Tapaðir boltar (TO%)", oppShort: "Andstæðingur",
+    gameRead: "Hvað réð úrslitum leiksins", decided: "Hvað réð úrslitum", flow: "Framvinda leiksins", ourPl: "Okkar lykilmenn", oppThreat: "Hættulegastir hjá andstæðingi", takeaways: "Lærdómar",
+    numbers: "Tölurnar", numbersHint: "Allt sem samantektin hér að ofan byggir á.",
+    ff: "Four Factors (við vs andstæðingur)", ffHint: "eFG% = skotnýting leiðrétt fyrir þristum · TO% = tapaðir boltar á sókn · OREB% = sóknarfráköst · FTF = vítaskot á skot · PPP = stig á sókn.",
+    byQ: "Eftir leikhlutum", scored: "Hvernig við skoruðum", playtypes: "Sóknartegundir", eff: "Sóknargerð (efficiency)", playType: "Sóknartegund", type: "Tegund", madeAtt: "Hitt-reynt",
+    map: "Skotkort (teigur / miðsvæði / þristar)", zones: "Skotsvæði", zone: "Svæði", region: "Svæði",
+    opp: "Andstæðingur - leikmenn", player: "Leikmaður", lineups: "Fimmur (net +/-)", lineupsHint: "Eftir mínútum á velli, með stöðuna á meðan hver fimma spilaði.", lineup: "Fimma", score: "Staða",
+    min: "Mín", pts: "Stig", us: "Við", them: "Andst.",
+    foot: "InStat-lestur á stökum leik. AI-samantektin er gerð af gervigreind úr þessum tölum, merkt sem slík og ákveður ekkert - breytir aldrei readiness-dómi.",
+  },
 } as const;
+
+const regionName = (k: "paint" | "mid" | "three", lang: Lang) =>
+  k === "paint" ? (lang === "IS" ? "Teigur" : "Paint") : k === "mid" ? (lang === "IS" ? "Miðsvæði" : "Mid-range") : (lang === "IS" ? "Þristar" : "3PT");
+
+/** "Name - note" list used for both key players and opponent threats. */
+function NamedList({ title, items }: { title: string; items: { name: string; note: string }[] }) {
+  return (
+    <View>
+      <Label color={C.cobalt}>{title}</Label>
+      {items.map((p, i) => (
+        <Text key={i} style={[fb(400), { fontSize: 8.75, lineHeight: 1.45, marginBottom: 2 }]}>
+          <Text style={fb(600)}>{clean(p.name)}</Text>{p.note ? ` - ${clean(p.note)}` : ""}
+        </Text>
+      ))}
+    </View>
+  );
+}
 
 function Doc({ data, ai, lang }: { data: BasketballMatchPdfData; ai: BasketballAiSummary | null; lang: Lang }) {
   const t = T[lang];
   const m = data.match;
-  const title = `${clean(m.ownName ?? (lang === "IS" ? "Okkar lid" : "Our team"))} ${m.ownPoints ?? "-"} - ${m.oppPoints ?? "-"} ${clean(m.opponent ?? "-")}`;
+  const own = clean(m.ownName ?? t.ourTeam);
+  const opp = clean(m.opponent ?? "-");
+  const title = `${own} ${m.ownPoints ?? "-"} - ${m.oppPoints ?? "-"} ${opp}`;
   const q = data.quarters;
+  const ff = data.fourFactors;
+  const diff = m.ownPoints != null && m.oppPoints != null ? m.ownPoints - m.oppPoints : null;
+  const resTone: Tone = diff == null ? "neutral" : diff > 0 ? "green" : diff < 0 ? "red" : "amber";
+  const resWord = diff == null ? null : diff > 0 ? t.win : diff < 0 ? t.loss : t.draw;
+
+  // Layer 1 — plain rule facts straight from the box score / Four Factors.
+  const facts: { value: string; label: string; sub?: string; tone?: Tone }[] = [];
+  if (diff != null) facts.push({ value: signed(diff), label: t.margin, sub: `${resWord} ${m.ownPoints}-${m.oppPoints}`, tone: resTone });
+  if (ff?.own.efgPct != null) facts.push({ value: pc(ff.own.efgPct), label: t.efg, sub: `${t.oppShort} ${pc(ff.opp.efgPct)}` });
+  if (ff?.own.toPct != null) facts.push({ value: pc(ff.own.toPct), label: t.tov, sub: `${t.oppShort} ${pc(ff.opp.toPct)}` });
+
+  // Layer 0 (rule) when there is no AI headline: result + how many Four Factors we won.
+  const ffCmp = ff ? ([["efgPct", 1], ["toPct", -1], ["orebPct", 1], ["ftf", 1]] as const).filter(([k]) => ff.own[k] != null && ff.opp[k] != null) : [];
+  const ffWon = ff ? ffCmp.filter(([k, dir]) => (ff.own[k]! - ff.opp[k]!) * dir > 0).length : 0;
+  const ruleHead = resWord ? `${resWord}${diff ? ` ${t.by(Math.abs(diff))}` : ""}${ffCmp.length ? ` - ${t.ffWon(ffWon, ffCmp.length)}` : ""}.` : null;
+
+  const hasRead = !!(ai && (ai.decisiveFactors?.length || ai.quarterFlow || ai.keyPlayers?.length || ai.opponentThreats?.length || ai.takeaways?.length));
+  const tac = data.tacticalShots;
+  const hasScored = !!(tac && (tac.playtypes.length || tac.efficiency.length));
+  const regions = data.courtRegions ?? [];
+  const zones = data.shotZones?.team ?? [];
+  const nQ = q ? Math.max(q.own.length, q.opp.length) : 0;
+  const shotCols = (first: string) => [{ label: first, flex: 1 }, { label: t.madeAtt, width: 54, align: "right" as const }, { label: "FG%", width: 44, align: "right" as const, strong: true }];
+
   return (
-    <Document>
-      <Page size="A4" style={st.page}>
-        <Text style={st.kicker}>{t.kicker}</Text>
-        <Text style={st.h1}>{title}</Text>
-        <Text style={st.sub}>{clean(m.date ?? "")}</Text>
-
-        {ai ? (
-          <>
-            <Text style={st.kicker}>{t.ai}</Text>
-            {ai.headline ? <View style={st.vbox}><Text style={st.vlabel}>{t.overview}</Text><Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold" }}>{clean(ai.headline)}</Text>{ai.summary ? <Text style={{ fontSize: 9.5, color: "#333", marginTop: 4 }}>{clean(ai.summary)}</Text> : null}</View> : (ai.summary ? <View style={st.vbox}><Text style={st.vlabel}>{t.overview}</Text><Text style={{ fontSize: 9.5, color: "#333" }}>{clean(ai.summary)}</Text></View> : null)}
-
-            {ai.decisiveFactors && ai.decisiveFactors.length ? (
-              <><Text style={st.h2}>{t.decided}</Text>
-                {ai.decisiveFactors.map((f, i) => (
-                  <View key={i} style={st.li}><Text style={st.bullet}>{"•"}</Text><Text style={st.liTxt}><Text style={{ fontFamily: "Helvetica-Bold" }}>{clean(f.factor)}: </Text>{clean(f.detail)}</Text></View>
-                ))}
-              </>
-            ) : null}
-
-            {ai.quarterFlow ? (<><Text style={st.h2}>{t.flow}</Text><Text style={st.para}>{clean(ai.quarterFlow)}</Text></>) : null}
-
-            {(ai.keyPlayers?.length || ai.opponentThreats?.length) ? (
-              <View style={st.twoCol}>
-                <View style={st.col}><Text style={st.h3}>{t.ourPl}</Text>{(ai.keyPlayers ?? []).map((p, i) => <View key={i} style={st.li}><Text style={st.bullet}>{"•"}</Text><Text style={st.liTxt}><Text style={{ fontFamily: "Helvetica-Bold" }}>{clean(p.name)}</Text>{p.note ? ` - ${clean(p.note)}` : ""}</Text></View>)}</View>
-                <View style={st.col}><Text style={st.h3}>{t.oppThreat}</Text>{(ai.opponentThreats ?? []).map((p, i) => <View key={i} style={st.li}><Text style={st.bullet}>{"•"}</Text><Text style={st.liTxt}><Text style={{ fontFamily: "Helvetica-Bold" }}>{clean(p.name)}</Text>{p.note ? ` - ${clean(p.note)}` : ""}</Text></View>)}</View>
-              </View>
-            ) : null}
-
-            {ai.takeaways && ai.takeaways.length ? (<><Text style={st.h2}>{t.takeaways}</Text>{ai.takeaways.map((x, i) => <View key={i} style={st.li}><Text style={st.bullet}>{"•"}</Text><Text style={st.liTxt}>{clean(x)}</Text></View>)}</>) : null}
-          </>
+    <Document title={`${title} - InStat`} author="MicroPulse">
+      <BrandPage
+        doc={t.doc}
+        context={`${own} vs ${opp}`}
+        title={title}
+        kicker={t.kicker}
+        subtitle={clean(m.date ?? "")}
+        chips={[...(resWord ? [{ text: resWord, tone: resTone }] : []), { text: "InStat" }]}
+        note={t.foot}
+      >
+        {ai && (ai.headline || ai.summary) ? (
+          <AiBox label={t.ai} headline={ai.headline} body={ai.summary} />
+        ) : ruleHead ? (
+          <Verdict tone={resTone} label={t.result} headline={ruleHead} />
         ) : null}
 
-        {data.fourFactors ? (
-          <><Text style={st.h2}>{t.ff}</Text>
-            <View style={st.ffRow}>
-              {([["eFG%", "efgPct", true], ["TO%", "toPct", true], ["OREB%", "orebPct", true], ["FTF", "ftf", true], ["PPP", "ppp", false]] as const).map(([lbl, key, isPct]) => (
-                <View key={lbl} style={st.ffCell}>
-                  <Text style={st.ffLbl}>{lbl}</Text>
-                  <Text style={st.ffVal}>{isPct ? pct(data.fourFactors!.own[key]) : d1(data.fourFactors!.own[key])}</Text>
-                  <Text style={st.ffOpp}>{t.them} {isPct ? pct(data.fourFactors!.opp[key]) : d1(data.fourFactors!.opp[key])}</Text>
+        {facts.length ? <FactRow facts={facts} /> : null}
+
+        {hasRead && ai ? (
+          <Section title={t.gameRead}>
+            <AiBox label={t.read}>
+              {ai.decisiveFactors?.length ? (
+                <View style={{ marginTop: 8 }}>
+                  <Label color={C.cobalt}>{t.decided}</Label>
+                  <Bullets split items={ai.decisiveFactors.map((f) => `${clean(f.factor)} - ${clean(f.detail)}`)} />
                 </View>
-              ))}
+              ) : null}
+              {ai.quarterFlow ? (
+                <View style={{ marginTop: 6 }} wrap={false}>
+                  <Label color={C.cobalt}>{t.flow}</Label>
+                  <Text style={[fb(400), { fontSize: 8.75, lineHeight: 1.45 }]}>{clean(ai.quarterFlow)}</Text>
+                </View>
+              ) : null}
+              {ai.keyPlayers?.length || ai.opponentThreats?.length ? (
+                <View style={{ marginTop: 6 }} wrap={false}>
+                  <Cols gap={14}>
+                    {ai.keyPlayers?.length ? <NamedList title={t.ourPl} items={ai.keyPlayers} /> : null}
+                    {ai.opponentThreats?.length ? <NamedList title={t.oppThreat} items={ai.opponentThreats} /> : null}
+                  </Cols>
+                </View>
+              ) : null}
+              {ai.takeaways?.length ? (
+                <View style={{ marginTop: 6 }}>
+                  <Label color={C.cobalt}>{t.takeaways}</Label>
+                  <Bullets items={ai.takeaways} />
+                </View>
+              ) : null}
+            </AiBox>
+          </Section>
+        ) : null}
+
+        {/* ── Layer 2: the numbers ── */}
+        <Section title={t.numbers} hint={t.numbersHint} break={!!ai} mt={0}>
+          {ff ? (
+            <View wrap={false} style={{ marginBottom: 10 }}>
+              <Label>{t.ff}</Label>
+              <StatGrid
+                cols={5}
+                items={([["eFG%", "efgPct", true], ["TO%", "toPct", true], ["OREB%", "orebPct", true], ["FTF", "ftf", true], ["PPP", "ppp", false]] as const).map(([lbl, key, isPct]) => ({
+                  label: lbl,
+                  value: isPct ? pc(ff.own[key]) : n1(ff.own[key]),
+                  sub: `${t.them} ${isPct ? pc(ff.opp[key]) : n1(ff.opp[key])}`,
+                }))}
+              />
+              <Text style={[fb(400), { fontSize: 7.5, color: C.mute, marginTop: 4, lineHeight: 1.35 }]}>{t.ffHint}</Text>
             </View>
-          </>
-        ) : null}
+          ) : null}
 
-        {q ? (
-          <><Text style={st.h2}>{t.byQ}</Text>
-            <View style={st.row}><Text style={st.cL}>{t.us}</Text><Text style={st.cR}>{q.own.map((x) => d1(x)).join("   ")}</Text></View>
-            <View style={st.row}><Text style={st.cL}>{t.them}</Text><Text style={st.cR}>{q.opp.map((x) => d1(x)).join("   ")}</Text></View>
-          </>
-        ) : null}
+          {q && nQ ? (
+            <View wrap={false} style={{ marginBottom: 10 }}>
+              <Label>{t.byQ}</Label>
+              <Table
+                cols={[{ label: "", flex: 1.4 }, ...Array.from({ length: nQ }, (_, i) => ({ label: i < 4 ? `Q${i + 1}` : `OT${i - 3}`, flex: 1, align: "right" as const }))]}
+                rows={[[t.us, ...Array.from({ length: nQ }, (_, i) => n1(q.own[i]))], [t.them, ...Array.from({ length: nQ }, (_, i) => n1(q.opp[i]))]]}
+              />
+            </View>
+          ) : null}
 
-        {data.tacticalShots && (data.tacticalShots.playtypes.length || data.tacticalShots.efficiency.length) ? (
-          <><Text style={st.h2}>{t.scored}</Text>
-            {data.tacticalShots.playtypes.length ? (<><Text style={st.h3}>{t.playtypes}</Text>{data.tacticalShots.playtypes.slice(0, 8).map((r) => (
-              <View key={r.key} style={st.row}><Text style={st.cL}>{clean(shotLabel(r.key, lang))}</Text><Text style={st.cR}>{r.made}-{r.att}{r.pct != null ? `  ${r.pct}%` : ""}</Text></View>
-            ))}</>) : null}
-            {data.tacticalShots.efficiency.length ? (<><Text style={st.h3}>{t.eff}</Text>{data.tacticalShots.efficiency.map((r) => (
-              <View key={r.key} style={st.row}><Text style={st.cL}>{clean(shotLabel(r.key, lang))}</Text><Text style={st.cR}>{r.made}-{r.att}{r.pct != null ? `  ${r.pct}%` : ""}</Text></View>
-            ))}</>) : null}
-          </>
-        ) : null}
+          {hasScored && tac ? (
+            <View style={{ marginBottom: 10 }}>
+              <Label>{t.scored}</Label>
+              <Cols>
+                {tac.playtypes.length ? (
+                  <View wrap={false}>
+                    <Text style={[fh(700), { fontSize: 10, marginBottom: 4 }]}>{t.playtypes}</Text>
+                    <Table cols={shotCols(t.playType)} rows={tac.playtypes.slice(0, 8).map((r) => [clean(shotLabel(r.key, lang)), ma(r), fgp(r.pct)])} />
+                  </View>
+                ) : null}
+                {tac.efficiency.length ? (
+                  <View wrap={false}>
+                    <Text style={[fh(700), { fontSize: 10, marginBottom: 4 }]}>{t.eff}</Text>
+                    <Table cols={shotCols(t.type)} rows={tac.efficiency.map((r) => [clean(shotLabel(r.key, lang)), ma(r), fgp(r.pct)])} />
+                  </View>
+                ) : null}
+              </Cols>
+            </View>
+          ) : null}
 
-        {data.courtRegions && data.courtRegions.length ? (
-          <><Text style={st.h2}>{lang === "IS" ? "Skotkort (teigur / midsvaedi / thristar)" : "Shot map (paint / mid-range / 3PT)"}</Text>{data.courtRegions.map((r) => (
-            <View key={r.key} style={st.row}><Text style={st.cL}>{r.key === "paint" ? (lang === "IS" ? "Teigur" : "Paint") : r.key === "mid" ? (lang === "IS" ? "Midsvaedi" : "Mid-range") : (lang === "IS" ? "Thristar" : "3PT")}</Text><Text style={st.cR}>{r.made}-{r.att}{r.pct != null ? `  ${r.pct}%` : ""}</Text></View>
-          ))}</>
-        ) : null}
-
-        {data.shotZones && data.shotZones.team.length ? (
-          <><Text style={st.h2}>{t.zones}</Text>{data.shotZones.team.map((z) => (
-            <View key={z.key} style={st.row}><Text style={st.cL}>{clean(zoneLabel(z.key, lang))}</Text><Text style={st.cR}>{z.made}-{z.att}{z.pct != null ? `  ${z.pct}%` : ""}</Text></View>
-          ))}</>
-        ) : null}
+          {regions.length || zones.length ? (
+            <View style={{ marginBottom: 10 }} wrap={false}>
+              <Cols>
+                {regions.length ? (
+                  <View>
+                    <Label>{t.map}</Label>
+                    <Table cols={shotCols(t.region)} rows={regions.map((r) => [regionName(r.key, lang), ma(r), fgp(r.pct)])} />
+                  </View>
+                ) : null}
+                {zones.length ? (
+                  <View>
+                    <Label>{t.zones}</Label>
+                    <Table cols={shotCols(t.zone)} rows={zones.map((z) => [clean(zoneLabel(z.key, lang)), ma(z), fgp(z.pct)])} />
+                  </View>
+                ) : null}
+              </Cols>
+            </View>
+          ) : null}
+        </Section>
 
         {data.oppPlayers && data.oppPlayers.players.length ? (
-          <><Text style={st.h2}>{t.opp}{data.oppPlayers.team ? ` - ${clean(data.oppPlayers.team)}` : ""}</Text>
-            <View style={[st.pRow, { borderBottomWidth: 0 }]}><Text style={[st.pName, { color: MUTE }]}>{lang === "IS" ? "Leikmadur" : "Player"}</Text><Text style={[st.pNum, { color: MUTE, fontFamily: "Helvetica" }]}>{t.pts}</Text><Text style={[st.pShot, { color: MUTE }]}>FG</Text><Text style={[st.pShot, { color: MUTE }]}>3PT</Text></View>
-            {[...data.oppPlayers.players].sort((a, b) => (b.points ?? 0) - (a.points ?? 0)).map((p, i) => (
-              <View key={i} style={st.pRow}><Text style={st.pName}>{clean(p.name)}</Text><Text style={st.pNum}>{p.points ?? "-"}</Text><Text style={st.pShot}>{maS(p.fg)}</Text><Text style={st.pShot}>{maS(p.threePt)}</Text></View>
-            ))}
-          </>
+          <Section wrap={data.oppPlayers.players.length > 18} title={`${t.opp}${data.oppPlayers.team ? ` - ${clean(data.oppPlayers.team)}` : ""}`}>
+            <Table
+              cols={[{ label: t.player, flex: 1 }, { label: t.min, width: 44, align: "right" }, { label: t.pts, width: 44, align: "right", strong: true }, { label: "FG", width: 56, align: "right" }, { label: "3PT", width: 56, align: "right" }]}
+              rows={[...data.oppPlayers.players].sort((a, b) => (b.points ?? 0) - (a.points ?? 0)).map((p) => [clean(p.name), p.minutes != null ? n1(p.minutes) : "-", p.points != null ? String(p.points) : "-", maS(p.fg), maS(p.threePt)])}
+            />
+          </Section>
         ) : null}
 
         {data.lineups && data.lineups.length ? (
-          <><Text style={st.h2}>{t.lineups}</Text>{[...data.lineups].sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0)).slice(0, 10).map((l, i) => (
-            <View key={i} style={st.row}><Text style={st.cL}>{clean(l.players.join(", "))}</Text><Text style={[st.cR, { color: (l.plusMinus ?? 0) > 0 ? "#1c7a4a" : (l.plusMinus ?? 0) < 0 ? "#a83e28" : INK }]}>{l.minutes != null ? `${l.minutes.toFixed(1)}m` : "-"}   {l.pointsFor ?? "-"}-{l.pointsAgainst ?? "-"}   {l.plusMinus == null ? "" : `${l.plusMinus > 0 ? "+" : ""}${l.plusMinus}`}</Text></View>
-          ))}</>
+          <Section wrap={false} title={t.lineups} hint={t.lineupsHint}>
+            <Table
+              cols={[{ label: t.lineup, flex: 1 }, { label: t.min, width: 44, align: "right" }, { label: t.score, width: 60, align: "right" }, { label: "+/-", width: 48, align: "right" }]}
+              rows={[...data.lineups].sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0)).slice(0, 10).map((l) => {
+                const pmTone: Tone = (l.plusMinus ?? 0) > 0 ? "green" : (l.plusMinus ?? 0) < 0 ? "red" : "neutral";
+                return [
+                  clean(l.players.join(", ")),
+                  l.minutes != null ? `${l.minutes.toFixed(1)}m` : "-",
+                  `${l.pointsFor ?? "-"}-${l.pointsAgainst ?? "-"}`,
+                  <Text key="pm" style={[fh(700), { fontSize: 9, color: TONE[pmTone].text, textAlign: "right" }]}>{l.plusMinus == null ? "-" : signed(l.plusMinus)}</Text>,
+                ];
+              })}
+            />
+          </Section>
         ) : null}
-
-        <Text style={st.foot} fixed>{t.foot}</Text>
-      </Page>
+      </BrandPage>
     </Document>
   );
 }
 
 export async function downloadBasketballMatchPdf(data: BasketballMatchPdfData, ai: BasketballAiSummary | null, lang: Lang) {
-  const blob = await pdf(<Doc data={data} ai={ai} lang={lang} />).toBlob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
+  const blob = await renderPdfBlob(() => <Doc data={data} ai={ai} lang={lang} />);
   const base = clean(`${data.match.ownName ?? "team"}-${data.match.opponent ?? "game"}-${data.match.date ?? ""}`).replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "") || "match";
-  a.href = url; a.download = `${base}-instat.pdf`;
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
+  saveBlob(blob, `${base}-instat.pdf`);
 }

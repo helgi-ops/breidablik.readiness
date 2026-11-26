@@ -102,3 +102,15 @@ Note: `globals.css` currently only has the cobalt primary as an oklch approximat
 during a partial "Phase 1". Lota A should replace it with the exact `#2740e6` and add the full palette
 + fonts above. English is the default UI language (see Languages); explainability rules still apply to
 every restyled surface — a re-skin must not hide the verdict → confidence → "behind the numbers" read.
+
+## PDF exports
+
+Every `@react-pdf/renderer` export uses the shared kit in [`src/components/pdf/brand.tsx`](src/components/pdf/brand.tsx)
+(design tokens above, Archivo/Geist from `public/fonts/pdf`, Helvetica fallback). Don't add a new PDF with its own
+`StyleSheet` colours or `Font.register`.
+
+- Every page is a `<BrandPage>` (running header + footer with page numbers); masthead (`title`) on the first page only.
+- Layered read in print: `<Verdict>` (rule-based) or `<AiBox>` (anything AI-written — always labelled) first →
+  `<FactRow>` (2–3 plain facts) → `<Table>` / `<StatGrid>` detail later. Status colour only via `TONE`, always with the word.
+- Download with `renderPdfBlob` + `saveBlob` (or `downloadPdf`) so the font fallback works.
+- Never set `lineHeight` on a `<Page>` style (react-pdf 4.3 then drops `fixed` header/footer). Keep the footer `note` to one line.

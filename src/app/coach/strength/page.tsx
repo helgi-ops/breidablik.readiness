@@ -24,7 +24,7 @@ import { useEffect, useMemo, useState, Suspense } from "react";
 import nextDynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { pdf } from "@react-pdf/renderer";
+import { renderPdfBlob, saveBlob } from "@/components/pdf/brand";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { positionGroup, positionGroupsForSport } from "@/lib/micropulse/positionStyle";
 import PlayerStrengthSessionCard from "@/components/coach/PlayerStrengthSessionCard";
@@ -577,7 +577,7 @@ export default function CoachStrengthPage() {
   }
 
   /** Fetch the prescribed session for every player in parallel, then build
-   *  the team PDF locally with @react-pdf/renderer and trigger a download. */
+   *  the team PDF locally (shared PDF kit) and trigger a download. */
   async function buildAndDownloadPdf() {
     if (pdfBuilding) return;
     setPdfBuilding(true);
@@ -611,15 +611,9 @@ export default function CoachStrengthPage() {
         mdContextRequested: pdfMdContext === "AUTO" ? "Auto-detected" : pdfMdContext,
         sessions: results,
       };
-      const blob = await pdf(<StrengthSessionPdf data={data} />).toBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `MicroPulse-Strength-${teamName.replace(/\s+/g, "_")}-${todayIso}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      // Shared PDF kit: brand fonts with a Helvetica fallback, same filename as before.
+      const blob = await renderPdfBlob(() => <StrengthSessionPdf data={data} />);
+      saveBlob(blob, `MicroPulse-Strength-${teamName.replace(/\s+/g, "_")}-${todayIso}.pdf`);
     } finally {
       setPdfBuilding(false);
     }

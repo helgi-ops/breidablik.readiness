@@ -6,12 +6,18 @@
  * A printable PDF of a movement-screen report — the same layered read the app
  * shows on screen: (0) verdict, (1) plain facts + confidence, (2) checkpoints by
  * view (auto-measured / coach-scored / not captured), the interpretation rules
- * that fired (finding → cause → lever, cited), references and honest caveats.
+ * that fired (finding → cause → lever, cited), the corrective plan, references
+ * and honest caveats.
  *
  * Screening/training only — never a diagnosis, never the readiness colour. Rules
  * recommend; the coach/clinician decides. Language follows the app toggle.
+ * Styling comes from the shared MicroPulse PDF kit (src/components/pdf/brand.tsx).
  */
-import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
+import { Document, Text, View } from "@react-pdf/renderer";
+import {
+  BrandPage, Body, Bullets, C, Card, Chip, KeyValues, Label, Provenance, Section, Status, Table, Verdict,
+  clean, fb, fh, renderPdfBlob, saveBlob, type Tone,
+} from "@/components/pdf/brand";
 import type { Bi } from "@/lib/micropulse/movementScreen/registry";
 import { STRENGTH_EMPHASIS_LABEL } from "@/lib/micropulse/movementScreen/interpret";
 import type { CheckpointView, ScreenReport } from "@/lib/micropulse/movementScreen/report";
@@ -20,39 +26,15 @@ import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/corrective
 
 export type MovementScreenPdfMeta = { testName: string; playerName: string; date: string };
 
-const TONE = { ok: "#1c7a4a", caution: "#de9328", alert: "#a83e28" } as const;
-const CONF = { high: "#1c7a4a", moderate: "#de9328", low: "#a83e28" } as const;
-const SEV: Record<string, string> = { ok: "#6d6858", mild: "#6d6858", moderate: "#de9328", marked: "#a83e28" };
+const REPORT_TONE: Record<ScreenReport["tone"], Tone> = { ok: "green", caution: "amber", alert: "red" };
+const CONF_TONE: Record<ScreenReport["confidence"], Tone> = { high: "green", moderate: "amber", low: "red" };
+const SEV_TONE: Record<string, Tone> = { ok: "neutral", mild: "neutral", moderate: "amber", marked: "red" };
 const VIEW_ORDER: CheckpointView[] = ["front", "side", "back", "other"];
 
-const s = StyleSheet.create({
-  page: { padding: 32, fontSize: 9, fontFamily: "Helvetica", color: "#221f18", lineHeight: 1.35 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", borderBottomWidth: 1, borderBottomColor: "#d5cfbe", paddingBottom: 6, marginBottom: 10 },
-  title: { fontSize: 15, fontFamily: "Helvetica-Bold" },
-  sub: { fontSize: 9, color: "#6d6858", marginTop: 2 },
-  conf: { fontSize: 9, fontFamily: "Helvetica-Bold" },
-  redFlag: { backgroundColor: "#f6e4df", borderRadius: 3, padding: 8, fontSize: 10, color: "#a83e28", marginBottom: 10 },
-  verdict: { fontSize: 13, fontFamily: "Helvetica-Bold", marginBottom: 6 },
-  fact: { fontSize: 10, color: "#3a352c", marginBottom: 2 },
-  confNote: { fontSize: 8, color: "#6d6858", marginTop: 4, marginBottom: 12 },
-  sectionTitle: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#565044", textTransform: "uppercase", marginBottom: 4, marginTop: 6 },
-  viewTitle: { fontSize: 8, fontFamily: "Helvetica-Bold", color: "#8b8676", textTransform: "uppercase", marginTop: 5, marginBottom: 2 },
-  cpRow: { flexDirection: "row", alignItems: "baseline", marginBottom: 1.5, gap: 5 },
-  cpSrc: { fontSize: 7, color: "#a9a493", width: 30 },
-  cpLabel: { fontSize: 9, color: "#3a352c", flex: 1 },
-  cpValue: { fontSize: 8, color: "#8b8676", width: 52, textAlign: "right" },
-  cpStatus: { fontSize: 9, fontFamily: "Helvetica-Bold", width: 96, textAlign: "right" },
-  legend: { fontSize: 7, color: "#a9a493", marginTop: 4 },
-  reading: { borderWidth: 1, borderColor: "#e6e1d4", borderRadius: 3, padding: 6, marginBottom: 5 },
-  rFinding: { fontSize: 10, fontFamily: "Helvetica-Bold", color: "#221f18" },
-  rGrade: { fontSize: 7, color: "#8b8676" },
-  rCause: { fontSize: 8, color: "#565044", marginTop: 2 },
-  rLever: { fontSize: 8, color: "#221f18", marginTop: 2 },
-  rCite: { fontSize: 7, color: "#a9a493", marginTop: 2 },
-  ref: { fontSize: 7, color: "#8b8676", marginBottom: 1.5 },
-  caveat: { fontSize: 7.5, color: "#6d6858", marginBottom: 2 },
-  footer: { position: "absolute", bottom: 18, left: 32, right: 32, flexDirection: "row", justifyContent: "space-between", fontSize: 7, color: "#a9a493", borderTopWidth: 1, borderTopColor: "#e6e1d4", paddingTop: 6 },
-});
+/** Section heading (same look as the kit's <Section title>) — used where the heading must stay glued to its first card. */
+function SectionTitle({ children }: { children: string }) {
+  return <Text style={[fh(700), { fontSize: 13, letterSpacing: -0.1, marginBottom: 6 }]}>{clean(children)}</Text>;
+}
 
 function MovementScreenDoc({ report, meta, isEN }: { report: ScreenReport; meta: MovementScreenPdfMeta; isEN: boolean }) {
   const L = (b: Bi) => (isEN ? b.en : b.is);
@@ -64,132 +46,150 @@ function MovementScreenDoc({ report, meta, isEN }: { report: ScreenReport; meta:
     front: T("front", "framan-"), side: T("side", "hliðar-"), back: T("back", "aftan-"), other: T("another", "aðra "),
   };
   const usedViews = VIEW_ORDER.filter((v) => report.checkpoints.some((c) => c.view === v));
+  const toneWord: Record<ScreenReport["tone"], string> = { ok: T("Looks good", "Lítur vel út"), caution: T("Worth working on", "Þess virði að vinna í"), alert: T("Needs attention", "Þarf athygli") };
+  const confWord = `${report.confidence} ${T("confidence", "vissa")}`;
+  const plan = prescribeCorrectives(report.readings);
 
   return (
     <Document>
-      <Page size="A4" style={s.page}>
-        <View style={s.header}>
-          <View>
-            <Text style={s.title}>{meta.testName}</Text>
-            <Text style={s.sub}>{meta.playerName ? `${meta.playerName} · ` : ""}{meta.date}</Text>
-          </View>
-          <Text style={[s.conf, { color: CONF[report.confidence] }]}>{report.confidence}</Text>
-        </View>
-
+      <BrandPage
+        doc={T("Movement screen", "Hreyfiskimun")}
+        context={meta.playerName || undefined}
+        kicker={T("Movement screen", "Hreyfiskimun")}
+        title={meta.testName}
+        subtitle={`${meta.playerName ? `${meta.playerName} · ` : ""}${meta.date}`}
+        chips={[
+          { text: confWord, tone: CONF_TONE[report.confidence] },
+          ...(report.rtpFlag ? [{ text: T("Re-screen before return-to-play", "Endurskima fyrir endurkomu"), tone: "rtp" as Tone }] : []),
+        ]}
+        note={`${T("MicroPulse · Movement screen · screening/training only — not a diagnosis", "MicroPulse · Hreyfiskimun · aðeins skimun/þjálfun — ekki greining")} · ${meta.date}`}
+      >
+        {/* Layer 0 + 1 — verdict, plain facts, confidence */}
         {report.redFlag ? (
-          <Text style={s.redFlag}>⚑ {report.redFlagNote ? L(report.redFlagNote) : T("Refer to a clinician.", "Vísaðu til klíníkers.")}</Text>
+          <Verdict
+            tone="red"
+            label={T("Red flag", "Rautt flagg")}
+            headline={report.redFlagNote ? L(report.redFlagNote) : T("Refer to a clinician.", "Vísaðu til klíníkers.")}
+          />
         ) : (
           <>
-            <Text style={[s.verdict, { color: TONE[report.tone] }]}>{L(report.verdict)}</Text>
-            {report.facts.map((f, i) => <Text key={i} style={s.fact}>· {L(f)}</Text>)}
-            <Text style={s.confNote}>
-              {report.confidence} {T("confidence", "vissa")} — {L(report.confidenceNote)}
-            </Text>
+            <Verdict tone={REPORT_TONE[report.tone]} label={toneWord[report.tone]} headline={L(report.verdict)} confidence={confWord} />
+            {report.facts.length ? (
+              <Card style={{ marginBottom: 10 }}>
+                <Bullets items={report.facts.map(L)} size={9.25} />
+                <Provenance>{`${confWord} — ${L(report.confidenceNote)}`}</Provenance>
+              </Card>
+            ) : (
+              <Provenance>{`${confWord} — ${L(report.confidenceNote)}`}</Provenance>
+            )}
           </>
         )}
 
-        {/* Checkpoints by view */}
+        {/* Layer 2 — checkpoints by view */}
         {report.checkpoints.length > 0 && (
-          <View wrap={false}>
-            <Text style={s.sectionTitle}>{T("Checkpoints by view", "Checkpoints eftir sýn")}</Text>
-            {usedViews.map((view) => (
-              <View key={view}>
-                <Text style={s.viewTitle}>{viewLabel[view]}</Text>
-                {report.checkpoints.filter((c) => c.view === view).map((c, i) => {
-                  const u = c.unit === "band" ? "" : c.unit.replace("/band", "");
-                  const statusText = c.status === "flagged" ? (c.bandLabel ? L(c.bandLabel) : c.severity ?? "")
-                    : c.status === "normal" ? T("within normal", "innan eðlilegs")
-                    : c.source === "pose" ? T(`needs ${viewWord[c.view]} clip`, `vantar ${viewWord[c.view]}myndband`) : T("coach to score", "þjálfari skorar");
-                  const color = c.status === "flagged" ? (c.severity ? SEV[c.severity] : "#de9328") : c.status === "normal" ? "#1c7a4a" : "#a9a493";
-                  return (
-                    <View key={`${c.variableKey}|${c.leg ?? ""}|${i}`} style={s.cpRow}>
-                      <Text style={s.cpSrc}>{c.source === "pose" ? T("auto", "sjálfv.") : T("coach", "þjálf.")}</Text>
-                      <Text style={s.cpLabel}>{L(c.label)}{c.leg && c.leg !== "both" ? ` (${c.leg})` : ""}</Text>
-                      <Text style={s.cpValue}>{c.value == null ? "" : `${c.value}${u ? " " + u : ""}`}</Text>
-                      <Text style={[s.cpStatus, { color }]}>{statusText}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            ))}
-            <Text style={s.legend}>{T("auto = measured from video · coach = coach-scored · a missing view / score reads as “needs … clip” or “coach to score”.", "sjálfv. = mælt úr myndbandi · þjálf. = þjálfari skorar · sýn/skor sem vantar birtist sem „vantar … myndband“ eða „þjálfari skorar“.")}</Text>
-          </View>
+          <Section title={T("Checkpoints by view", "Checkpoints eftir sýn")}>
+            {usedViews.map((view) => {
+              const rows = report.checkpoints.filter((c) => c.view === view);
+              return (
+                <View key={view} wrap={false} style={{ marginBottom: 7 }}>
+                  <Label>{viewLabel[view]}</Label>
+                  <Table
+                    dense
+                    cols={[
+                      { label: T("Source", "Uppruni"), width: 44 },
+                      { label: T("Checkpoint", "Atriði"), flex: 1 },
+                      { label: T("Value", "Gildi"), width: 60, align: "right" },
+                      { label: T("Status", "Staða"), width: 118, align: "right" },
+                    ]}
+                    rows={rows.map((c) => {
+                      const u = c.unit === "band" ? "" : c.unit.replace("/band", "");
+                      const statusText = c.status === "flagged" ? (c.bandLabel ? L(c.bandLabel) : c.severity ?? "")
+                        : c.status === "normal" ? T("within normal", "innan eðlilegs")
+                        : c.source === "pose" ? T(`needs ${viewWord[c.view]} clip`, `vantar ${viewWord[c.view]}myndband`) : T("coach to score", "þjálfari skorar");
+                      const status = c.status === "flagged"
+                        ? <Status key="st" tone={c.severity ? SEV_TONE[c.severity] ?? "amber" : "amber"} text={statusText} size={8} />
+                        : c.status === "normal"
+                          ? <Status key="st" tone="green" text={statusText} size={8} />
+                          : <Text key="st" style={[fb(400), { fontSize: 8, color: C.faint, textAlign: "right" }]}>{clean(statusText)}</Text>;
+                      return [
+                        <Text key="src" style={[fb(400), { fontSize: 7.5, color: C.mute }]}>{c.source === "pose" ? T("auto", "sjálfv.") : T("coach", "þjálf.")}</Text>,
+                        <Text key="l" style={[fb(400), { fontSize: 8.75 }]}>{clean(`${L(c.label)}${c.leg && c.leg !== "both" ? ` (${c.leg})` : ""}`)}</Text>,
+                        c.value == null ? "" : `${c.value}${u ? " " + u : ""}`,
+                        status,
+                      ];
+                    })}
+                  />
+                </View>
+              );
+            })}
+            <Provenance>{T("auto = measured from video · coach = coach-scored · a missing view / score reads as “needs … clip” or “coach to score”.", "sjálfv. = mælt úr myndbandi · þjálf. = þjálfari skorar · sýn/skor sem vantar birtist sem „vantar … myndband“ eða „þjálfari skorar“.")}</Provenance>
+          </Section>
         )}
 
-        {/* Interpretation */}
+        {/* Interpretation — finding → likely cause → lever, cited */}
         {report.readings.length > 0 && (
-          <View>
-            <Text style={s.sectionTitle}>{T("Interpretation", "Túlkun")}</Text>
+          <Section>
             {report.readings.map((r, i) => (
-              <View key={i} style={s.reading} wrap={false}>
-                <Text style={s.rFinding}>{L(r.finding)}{r.leg ? ` (${r.leg})` : ""}  <Text style={s.rGrade}>[{r.evidenceGrade}]</Text></Text>
-                <Text style={s.rCause}>{T("likely", "líklega")}: {L(r.cause)}</Text>
-                <Text style={s.rLever}>{L(STRENGTH_EMPHASIS_LABEL[r.strengthEmphasis])}: {L(r.lever)}</Text>
-                <Text style={s.rCite}>{r.citation}</Text>
+              <View key={i} wrap={false}>
+                {i === 0 ? <SectionTitle>{T("Interpretation", "Túlkun")}</SectionTitle> : null}
+              <Card pad={10} style={{ marginBottom: 6 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                  <Text style={[fb(600), { fontSize: 10, flex: 1, lineHeight: 1.3 }]}>{clean(`${L(r.finding)}${r.leg ? ` (${r.leg})` : ""}`)}</Text>
+                  <Chip text={r.evidenceGrade} />
+                </View>
+                <KeyValues
+                  labelWidth={92}
+                  rows={[
+                    [T("likely", "líklega"), <Text key="c" style={[fb(400), { fontSize: 8.75, flex: 1, lineHeight: 1.4 }]}>{clean(L(r.cause))}</Text>],
+                    [L(STRENGTH_EMPHASIS_LABEL[r.strengthEmphasis]), <Text key="l" style={[fb(600), { fontSize: 8.75, flex: 1, lineHeight: 1.4 }]}>{clean(L(r.lever))}</Text>],
+                  ]}
+                />
+                <Provenance>{r.citation}</Provenance>
+              </Card>
               </View>
             ))}
-          </View>
+          </Section>
         )}
 
         {/* Corrective plan */}
-        {(() => {
-          const p = prescribeCorrectives(report.readings);
-          if (!p) return null;
-          return (
-            <View>
-              <Text style={s.sectionTitle}>{T("Corrective plan", "Leiðréttingar-áætlun")}</Text>
-              <Text style={s.rCause}>
-                {T("Priority", "Áhersla")}: {p.priorities.map((x) => L(x.label)).join(" · ")}
-                {"   ·   "}{T(`re-screen in ~${Math.round(p.reScreenInDays / 7)} wks`, `endurskima ~${Math.round(p.reScreenInDays / 7)} vikur`)}
-              </Text>
-              {p.phases.map((grp) => (
-                <View key={grp.phase} style={{ marginTop: 3 }} wrap={false}>
-                  <Text style={s.viewTitle}>{L(grp.label)}</Text>
-                  {grp.items.map((e) => (
-                    <View key={e.slug} style={s.cpRow}>
-                      <Text style={s.cpLabel}>{L(e.name)}{e.mvic ? ` (${L(MVIC_BAND_LABEL[e.mvic.band])})` : ""}</Text>
-                      <Text style={s.cpValue}>{L(e.dose)}</Text>
-                    </View>
-                  ))}
-                </View>
-              ))}
-              <Text style={[s.caveat, { marginTop: 3 }]}>{L(p.caveat)}</Text>
+        {plan ? (
+          <Section>
+            <View wrap={false}>
+              <SectionTitle>{T("Corrective plan", "Leiðréttingar-áætlun")}</SectionTitle>
+              <Body size={8.75} color={C.mute}>
+                {`${T("Priority", "Áhersla")}: ${plan.priorities.map((x) => L(x.label)).join(" · ")}   ·   ${T(`re-screen in ~${Math.round(plan.reScreenInDays / 7)} wks`, `endurskima ~${Math.round(plan.reScreenInDays / 7)} vikur`)}`}
+              </Body>
             </View>
-          );
-        })()}
+            {plan.phases.map((grp) => (
+              <Card key={grp.phase} pad={9} style={{ marginTop: 6 }} wrap={grp.items.length > 14}>
+                <Label color={C.cobalt}>{L(grp.label)}</Label>
+                <KeyValues rows={grp.items.map((e) => [`${L(e.name)}${e.mvic ? ` (${L(MVIC_BAND_LABEL[e.mvic.band])})` : ""}`, L(e.dose)] as [string, string])} />
+              </Card>
+            ))}
+            <Provenance>{L(plan.caveat)}</Provenance>
+          </Section>
+        ) : null}
 
         {/* References */}
         {report.references.length > 0 && (
-          <View>
-            <Text style={s.sectionTitle}>{T("References", "Heimildir")}</Text>
-            {report.references.map((ref, i) => <Text key={i} style={s.ref}>· {ref.label}{ref.source ? ` — ${ref.source}` : ""}</Text>)}
-          </View>
+          <Section title={T("References", "Heimildir")}>
+            {report.references.map((ref, i) => <Provenance key={i}>{`${ref.label}${ref.source ? ` — ${ref.source}` : ""}`}</Provenance>)}
+          </Section>
         )}
 
         {/* Caveats */}
-        <View>
-          <Text style={s.sectionTitle}>{T("Caveats", "Fyrirvarar")}</Text>
-          {report.caveats.map((c, i) => <Text key={i} style={s.caveat}>· {L(c)}</Text>)}
-        </View>
-
-        <View style={s.footer} fixed>
-          <Text>{T("MicroPulse · Movement screen · screening/training only — not a diagnosis", "MicroPulse · Hreyfiskimun · aðeins skimun/þjálfun — ekki greining")}</Text>
-          <Text>{meta.date}</Text>
-        </View>
-      </Page>
+        <Section title={T("Caveats", "Fyrirvarar")} wrap={false}>
+          <Bullets items={report.caveats.map(L)} size={8} />
+        </Section>
+      </BrandPage>
     </Document>
   );
 }
 
 export async function downloadMovementScreenPdf(report: ScreenReport, meta: MovementScreenPdfMeta, isEN: boolean) {
-  const blob = await pdf(<MovementScreenDoc report={report} meta={meta} isEN={isEN} />).toBlob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
+  const blob = await renderPdfBlob(() => <MovementScreenDoc report={report} meta={meta} isEN={isEN} />);
   const safe = (str: string) => str.replace(/\s+/g, "-").replace(/[^\w.\-]+/g, "");
-  a.href = url;
-  a.download = `MicroPulse-MovementScreen-${safe(meta.playerName || "player")}-${meta.date}.pdf`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  saveBlob(blob, `MicroPulse-MovementScreen-${safe(meta.playerName || "player")}-${meta.date}.pdf`);
 }
 
 export default MovementScreenDoc;

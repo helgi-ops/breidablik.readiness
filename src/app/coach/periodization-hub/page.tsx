@@ -55,7 +55,7 @@ import { useStrengthDelivery } from "@/components/coach/useStrengthDelivery";
 import StrengthDeliveryNote from "@/components/coach/StrengthDeliveryNote";
 import { MESO_HORIZON, mesoSkeleton, planDayFromCal, planDaysFromCalWeek, CALTYPE_FOCUS_LABEL } from "@/lib/micropulse/periodization/mesoWeek";
 import { mesoWeekFor as mesoWeekOf, preseasonInputFor, seasonMesoBlocks, teamCalendarUnit, assumedWeekMove } from "@/lib/micropulse/periodization/mesoSeed";
-import PreseasonReadsFrom from "@/components/coach/PreseasonReadsFrom";
+import PreseasonReadsFrom, { AddGame } from "@/components/coach/PreseasonReadsFrom";
 import { checkThreeInARow, THREE_IN_A_ROW_RULE, type WeekRuleDay } from "@/lib/micropulse/weekSetup/weekRules";
 import { MacroSetupChecklist, MacroFixturesCard, MacroBreaksCard, MacroSetupGate, firstLeagueGame, type MacroFixture } from "@/components/coach/MacroSetupCards";
 import PreseasonWeek1Table from "@/components/coach/PreseasonWeek1Table";
@@ -283,6 +283,7 @@ export default function PeriodizationHubPage() {
   const [preseasonJumpWeek, setPreseasonJumpWeek] = React.useState<string | undefined>(undefined); // deep-link Pre-season week → Week Setup
   const [preDaySave, setPreDaySave] = React.useState<null | "saving" | "saved" | "err">(null); // pre-season draft day-toggle save status
   const [preDayPick, setPreDayPick] = React.useState<{ weekStart: string; di: number } | null>(null); // pre-season day open in the stimulus picker
+  const [preOpenWeeks, setPreOpenWeeks] = React.useState<Record<string, boolean>>({}); // pre-season week cards open/closed (week Monday → open)
   const [blkSkeleton, setBlkSkeleton] = React.useState<Record<string, DayState>>({}); // coach's 6-week day grid
   const [typeOverrides, setTypeOverrides] = React.useState<Record<string, CalType>>({}); // per-day day-type picks
   const [savedPlans, setSavedPlans] = React.useState<Record<string, { dayType: string; focus: string | null }>>({}); // saved week_plans (read-back)
@@ -1380,7 +1381,14 @@ export default function PeriodizationHubPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold text-slate-900">{is ? "Tímabilsskipulag" : "Periodization Hub"}</h1>
+        <h1 className="text-[28px] font-bold tracking-[-0.02em] text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{is ? "Tímabilsskipulag" : "Periodization Hub"}</h1>
+        {/* Data tier — every club gets a plan; hardware only adds detail + confidence (the unlock is on hover). */}
+        {plan?.tier && !loading && (
+          <span title={plan.tier.unlock ? `↑ ${is ? plan.tier.unlock.is : plan.tier.unlock.en}` : undefined} className="inline-flex h-6 items-center gap-1.5 rounded-full border border-[#e2e0da] bg-white px-2.5 text-[12px] text-slate-600">
+            <span className={`h-1.5 w-1.5 rounded-full ${String(plan.tier.confidence).toLowerCase() === "high" ? "bg-[#1c7a4a]" : String(plan.tier.confidence).toLowerCase() === "low" ? "bg-[#a83e28]" : "bg-[#de9328]"}`} />
+            {is ? plan.tier.label.is : plan.tier.label.en} · {plan.tier.loadSource === "gps" ? "GPS" : plan.tier.loadSource === "srpe" ? "sRPE" : "—"} · {is ? "vissa" : "confidence"} {plan.tier.confidence}
+          </span>
+        )}
         {plan && !loading && (
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {/* Which players get an individualised block in the PDF. Default = the selected one (light export). */}
@@ -1428,18 +1436,6 @@ export default function PeriodizationHubPage() {
 
       {plan && !loading && (
         <div className="mt-4 space-y-4">
-          {/* TIER — every club gets a plan; hardware only adds detail + confidence */}
-          {plan.tier && (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px]">
-              <span className="rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{is ? "gagnastig" : "data tier"}</span>
-              <span className="font-semibold text-slate-800">{is ? plan.tier.label.is : plan.tier.label.en}</span>
-              <span className="text-slate-400">·</span>
-              <span className="text-slate-600">{is ? "álagsferill úr" : "load curve from"} {plan.tier.loadSource === "gps" ? (is ? "GPS ytra álagi" : "GPS external load") : plan.tier.loadSource === "srpe" ? "sRPE (RPE×mín)" : "—"}</span>
-              <span className="ml-auto text-[10px] uppercase tracking-wide text-slate-400">{is ? "vissa" : "conf"}: {plan.tier.confidence}</span>
-              {plan.tier.unlock && <span className="w-full text-[11px] text-slate-500">↑ {is ? plan.tier.unlock.is : plan.tier.unlock.en}</span>}
-            </div>
-          )}
-
           {/* TABS — grouped: the PLAN (the macro→meso→micro spine, in order) and the INPUTS that feed it.
               The grouping + the workflow strip below make the order and the single-source propagation legible. */}
           {(() => {
@@ -1454,30 +1450,31 @@ export default function PeriodizationHubPage() {
               { key: "players", en: "Players", is: "Leikmenn", subEn: "individualisation", subIs: "einstaklingsmiðun" },
               { key: "testing", en: "Testing", is: "Próf", subEn: "when to test", subIs: "hvenær á að mæla" },
             ] as const;
-            const tabBtn = (t: { key: typeof tab; en: string; is: string; subEn: string; subIs: string }) => (
-              <button key={t.key} onClick={() => setTab(t.key)} className={`-mb-px rounded-t-lg border-b-2 px-3 py-1.5 text-left ${tab === t.key ? "border-[#2740e6]" : "border-transparent hover:bg-slate-50"}`}>
-                <span className={`block text-[12px] font-semibold ${tab === t.key ? "text-[#2740e6]" : "text-slate-600"}`}>{is ? t.is : t.en}</span>
-                <span className="block text-[10.5px] text-slate-500">{is ? t.subIs : t.subEn}</span>
-              </button>
-            );
+            const stepNo: Partial<Record<typeof tab, number>> = { season: 1, preseason: 2, plan: 2, micro: 3 };
+            const tabBtn = (t: { key: typeof tab; en: string; is: string; subEn: string; subIs: string }) => {
+              const on = tab === t.key; const no = stepNo[t.key];
+              return (
+                <button key={t.key} type="button" onClick={() => setTab(t.key)} aria-current={on ? "page" : undefined} title={is ? t.subIs : t.subEn}
+                  className={`inline-flex h-10 items-center gap-2 rounded-lg px-3 text-[13px] ${on ? "bg-[#2740e6] font-semibold text-white" : "font-medium text-slate-600 hover:bg-slate-50"}`}>
+                  {no != null && <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full font-mono text-[11px] ${on ? "bg-white/20 text-white" : "bg-[#f1f0ec] text-slate-600"}`}>{no}</span>}
+                  {is ? t.is : t.en}
+                </button>
+              );
+            };
             return (
-              <div className="flex flex-wrap items-stretch gap-1 border-b border-slate-200">
-                <span className="self-end pb-2 pr-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-[#2740e6]/70">{is ? "Áætlun" : "Plan"}</span>
-                {planTabs.map(tabBtn)}
-                <span className="mx-1.5 my-1 w-px self-stretch bg-slate-200" aria-hidden="true"></span>
-                <span className="self-end pb-2 pr-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-slate-400">{is ? "Inntak" : "Inputs"}</span>
-                {inputTabs.map(tabBtn)}
-              </div>
+              <nav aria-label={is ? "Hlutar tímabilsskipulags" : "Periodization sections"} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#e2e0da] bg-white p-1.5">
+                <div className="flex flex-wrap gap-1"
+                  title={is ? "Vinnuferli: Makró → Mesó → Míkró. Breyting á einum stað flæðir sjálfkrafa í hinar." : "Workflow: Macro → Meso → Micro. A change in one place flows to the others automatically."}>
+                  {planTabs.map(tabBtn)}
+                </div>
+                <div className="flex flex-wrap items-center gap-1 border-l border-[#e8e6e0] pl-3"
+                  title={is ? "Inntak sem nærir öll þrepin. Liðs-kröfur eru grunnurinn." : "Inputs that feed every step. Team Demands is the foundation."}>
+                  <span className="pr-1 font-mono text-[10px] uppercase tracking-[0.08em] text-slate-500">{is ? "Inntak" : "Inputs"}</span>
+                  {inputTabs.map(tabBtn)}
+                </div>
+              </nav>
             );
           })()}
-
-          {/* Workflow + propagation strip — the order the coach works in, and the promise that one edit flows. */}
-          <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-[11.5px] leading-relaxed text-slate-500">
-            <span className="font-semibold text-slate-600">{is ? "Vinnuferli" : "Workflow"}:</span>{" "}
-            <b className="text-[#2740e6]">1 {is ? "Liðs-kröfur" : "Team Demands"}</b> <span className="text-slate-400">({is ? "grunnur" : "foundation"})</span> → <b className="text-[#2740e6]">2 {is ? "Makró" : "Macro"}</b> → <b className="text-[#7a5cc4]">3 {is ? "Mesó (undirb. / keppni)" : "Meso (pre-season / in-season)"}</b> → <b className="text-[#1c7a4a]">4 {is ? "Míkró" : "Micro"}</b>
-            <span className="text-slate-400"> · {is ? "Leikmenn + Próf næra öll þrepin." : "Players + Testing feed every step."}</span>
-            <span className="mt-0.5 block text-[11px] text-slate-500">{is ? "Breyting á einum stað flæðir sjálfkrafa í hinar. Vika hvers leikmanns er í Æfingaviku." : "A change in one place flows to the others automatically. Each player's own week is in the Training Programme (Æfingavika)."}</span>
-          </div>
 
           {/* SEASON tab */}
           {tab === "season" && (() => {
@@ -2323,8 +2320,8 @@ export default function PeriodizationHubPage() {
             const moveAssumed = (cw: typeof cal.weeks[number], val: number | null | undefined) => moveAssumedWeek(propInput, cw.weekStart, val);
             const matchLoadUnit = tka.totalPlayerLoad ?? plan.matchLoad; // PL match unit for the budget
             const tests = prop.engine.tests;
-            const typeColor: Record<string, string> = { mechanical: "#A83E28", locomotive: "#15603A", mixed: "#1B2DA8", activation: "#475569", topup: "#55389E", match: "#7A4A06", rest: "#64748B" };
-            const tint: Record<string, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#F0EAF7", match: "#FBEFDD", rest: "#F8FAFC" };
+            const typeColor: Record<string, string> = { mechanical: "#A83E28", locomotive: "#15603A", mixed: "#1B2DA8", activation: "#475569", topup: "#0E5E6E", match: "#7A4A06", rest: "#64748B" };
+            const tint: Record<string, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#E2F0F2", match: "#FBEFDD", rest: "#F8FAFC" };
             const typeName = (t: string): string => t === "mechanical" ? (is ? "Mekanískt" : "Mechanical") : t === "locomotive" ? (is ? "Hlaup" : "Locomotive") : t === "mixed" ? (is ? "Blandað" : "Mixed") : t === "activation" ? (is ? "Virkjun" : "Activation") : t === "topup" ? (is ? "Áfylling" : "Top-up") : t === "match" ? (is ? "Leikur" : "Match") : (is ? "Frí" : "Off");
             const goalWord = (g: BlockGoalKey) => (is ? BLOCK_GOAL_LABEL[g].is : BLOCK_GOAL_LABEL[g].en);
             const dows = is ? ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -2340,9 +2337,9 @@ export default function PeriodizationHubPage() {
             const strengthWeeks = preseasonStrengthWeeks({ weeks: prop.weeks, blocks: prop.blocks, coachRules: coachStrengthRules, mdStructures: teamPalette?.mdStructures ?? null, noMatchWeek: teamPalette?.noMatchWeek ?? null });
             const seqTotal = preBlocks.reduce((s, b) => s + weeksBetween(b.start, blockEndExcl(b)), 0);
             return (<div className="space-y-4">
-          {flowNote(is ? "Makró-fasar · leikir · Kröfur" : "Macro phases · fixtures · Demands", is ? "Vikuuppsetning · Mesó · PDF" : "Week Setup · Meso · PDF")}
+          {/* The pre-season at a glance: verdict → 4 facts → week-by-week load + meso cycles (its own provenance chip). */}
           <PreseasonReadsFrom is={is} prop={prop} opener={plan.nextFirstFixture ?? null} openerEstimated={!!plan.nextFirstFixtureEstimated}
-            onOpenMacro={() => setTab("season")} addGame={(date, kind) => writeFixture(date, "upsert", { isFriendly: kind === "friendly" })} />
+            onOpenMacro={() => setTab("season")} baseBlocks={prop.engine.meso.base.length} />
 
           {/* Pre-season SETUP — one card: controls, the meso-cycle sequence (built backwards from the opener),
               and the research "why" behind a toggle (explainability: jargon off the primary view). */}
@@ -2363,36 +2360,48 @@ export default function PeriodizationHubPage() {
             const baseCount = preMeso.base.length;
             const mesoTailSet = mesoTailT != null || Object.keys(preBlockWeeksT).length > 0;
             return (
-          <section className={card}>
+          <section className="flex flex-col gap-4 rounded-2xl border border-[#e3e0d8] bg-white px-5 pb-6 pt-5 sm:px-7">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className={h2}>{is ? "Undirbúningur — uppsetning" : "Pre-season setup"}</h2>
-              <span className="text-[12px] text-slate-500">{is ? "hefst" : "starts"} <b className="text-slate-700">{shortDate(preStart, is)}</b> · {preWeeks} {is ? "vikur" : "weeks"} · {up.end && plan.nextFirstFixtureEstimated && up.end === plan.nextFirstFixture ? (is ? "endar á áætluðum fyrsta leik" : "ends at the estimated first game") : (is ? "endar á fyrsta keppnisleik" : "ends at the first competitive game")}</span>
+              <h2 className="text-[16px] font-bold text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{is ? "Uppsetning" : "Setup"}</h2>
+              <span className="flex flex-wrap items-center gap-3 text-[12px] text-slate-600">
+                {preDaySave === "saving" && <span>{is ? "Vista…" : "Saving…"}</span>}
+                {preDaySave === "saved" && <span className="font-medium text-emerald-700">{is ? "✓ Dagar vistaðir í Vikuuppsetningu" : "✓ Days saved to Week Setup"}</span>}
+                {preDaySave === "err" && <span className="font-medium text-[#a83e28]">{is ? "Vistun mistókst" : "Save failed"}</span>}
+                <span>{is ? `Hver breyting endurflæðir allar ${preWeeks} vikurnar · líka í Leikmönnum` : `Every change re-flows all ${preWeeks} weeks · also editable in Players`}</span>
+              </span>
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px]">
-              <label className="flex items-center gap-1.5 font-medium text-slate-600" title={is ? "Ræður fjölda æfingadaga í hverri viku (3–6). Í leikviku raðast þeir í kringum leikinn og aldrei á tvo daga eftir leik; áfylling fyrir <60 mín leikmenn telst ekki með. Æfingabúðir halda sínum dögum." : "Sets the training days in every week (3–6). In a game week they fall around the game and never in the two days after it; the top-up for <60-min players isn't counted. A training camp keeps its days."}>{is ? "Æfingar/viku" : "Sessions/wk"}
-                <select value={psSessT} onChange={(e) => { const v = Number(e.target.value); setPreSessT(v); }} className="rounded border border-slate-300 px-1.5 py-0.5">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
-              </label>
-              {preWeeks >= 3 && (
-                <label className="flex items-center gap-1.5 font-medium text-slate-600" title={is ? `Síðasta vika fyrir fyrsta leik = toppvikan mínus þetta hlutfall. 0 = engin létt vika. Rannsóknir: ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% (Bosquet 2007); sjálfgefið ${PRESEASON_DEFAULT_TAPER_PCT}% er val þjálfarans, rétt undir bilinu.` : `The last week before the opener = the peak week minus this share. 0 = no light week. Research: ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% (Bosquet 2007); the default ${PRESEASON_DEFAULT_TAPER_PCT}% is the coach's choice, just below that range.`}>{is ? "Létt lokavika −%" : "Light last week −%"}
-                  <input type="number" step={5} min={0} max={PRESEASON_TAPER_RESEARCH[1]} value={psTaperT} onChange={(e) => setPreTaperT(clampTaperPct(Number(e.target.value)))} className="w-14 rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
-                  <span className="font-normal text-slate-400">{is ? `rannsóknir ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% · sjálfgefið ${PRESEASON_DEFAULT_TAPER_PCT}% er val þjálfarans` : `research ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% · default ${PRESEASON_DEFAULT_TAPER_PCT}% is the coach's choice`}</span>
-                </label>
-              )}
-              <label className="flex items-center gap-1.5 font-medium text-slate-600" title={is ? "Vika án skráðs leiks fær áætlaðan laugardagsleik frá þessum degi. Óstillt = frá fyrsta skráða æfingaleik. „Engir“ = aðeins leikir úr leikjaskránni." : "A week with no entered game gets an assumed Saturday game from this day. Not set = from the first entered friendly. \"None\" = only the games in the fixture list."}>{is ? "Leikir um helgar frá" : "Weekend games from"}
-                <input type="date" value={psGamesT && psGamesT !== GAMES_FROM_NONE ? psGamesT : ""} min={preStart} onChange={(e) => setPreGamesT(/^\d{4}-\d{2}-\d{2}$/.test(e.target.value) ? e.target.value : null)} className="rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
-                {psGamesT === GAMES_FROM_NONE
-                  ? <><span className="font-normal text-slate-500">{is ? "engir — aðeins skráðir leikir" : "none — entered games only"}</span><button type="button" onClick={() => setPreGamesT(null)} className="font-normal text-slate-500 underline hover:text-slate-700">{is ? "frá fyrsta æfingaleik" : "from the first friendly"}</button></>
-                  : <>
-                    {psGamesT
-                      ? <button type="button" onClick={() => setPreGamesT(null)} className="font-normal text-slate-500 underline hover:text-slate-700">{is ? "hreinsa (frá fyrsta æfingaleik)" : "clear (from the first friendly)"}</button>
-                      : <span className="font-normal text-slate-400">{prop.weekendGames.from ? (is ? `ekki stillt — frá fyrsta æfingaleik (${shortDate(prop.weekendGames.from, is)})` : `not set — from the first friendly (${shortDate(prop.weekendGames.from, is)})`) : (is ? "ekki stillt — enginn æfingaleikur skráður" : "not set — no friendly entered")}</span>}
-                    <button type="button" onClick={() => setPreGamesT(GAMES_FROM_NONE)} className="font-normal text-slate-500 underline hover:text-slate-700">{is ? "engir helgarleikir" : "no weekend games"}</button>
-                  </>}
-              </label>
-              <span className="text-[11px] text-slate-400">{is ? "Stillist hér eða í Leikmenn — endurflæðir allar vikur." : "Edit here or in Players — re-flows every week."}</span>
-              {preDaySave === "saving" && <span className="text-[11px] text-slate-400">{is ? "Vista…" : "Saving…"}</span>}
-              {preDaySave === "saved" && <span className="text-[11px] font-medium text-emerald-700">{is ? "✓ Dagar vistaðir í Vikuuppsetningu" : "✓ Days saved to Week Setup"}</span>}
-              {preDaySave === "err" && <span className="text-[11px] font-medium text-[#a83e28]">{is ? "Vistun mistókst" : "Save failed"}</span>}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="flex min-w-0 flex-col gap-1.5" title={is ? "Ræður fjölda æfingadaga í hverri viku (3–6). Í leikviku raðast þeir í kringum leikinn og aldrei á tvo daga eftir leik; áfylling fyrir <60 mín leikmenn telst ekki með. Æfingabúðir halda sínum dögum." : "Sets the training days in every week (3–6). In a game week they fall around the game and never in the two days after it; the top-up for <60-min players isn't counted. A training camp keeps its days."}>
+                <label htmlFor="ps-sessions" className="text-[12px] font-medium text-slate-700">{is ? "Æfingar á viku" : "Sessions per week"}</label>
+                <select id="ps-sessions" value={psSessT} onChange={(e) => { const v = Number(e.target.value); setPreSessT(v); }} className="h-11 rounded-lg border border-[#d6d3cc] bg-white px-3 text-[14px]">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+                <span className="text-[11px] text-slate-600">{is ? "Aldrei á tveimur dögum eftir leik" : "Never in the two days after a game"}</span>
+              </div>
+              {preWeeks >= 3 ? (
+                <div className="flex min-w-0 flex-col gap-1.5" title={is ? `Síðasta vika fyrir fyrsta leik = toppvikan mínus þetta hlutfall. 0 = engin létt vika. Rannsóknir: ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% (Bosquet 2007); sjálfgefið ${PRESEASON_DEFAULT_TAPER_PCT}% er val þjálfarans, rétt undir bilinu.` : `The last week before the opener = the peak week minus this share. 0 = no light week. Research: ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% (Bosquet 2007); the default ${PRESEASON_DEFAULT_TAPER_PCT}% is the coach's choice, just below that range.`}>
+                  <label htmlFor="ps-taper" className="text-[12px] font-medium text-slate-700">{is ? "Létt lokavika" : "Light last week"}</label>
+                  <div className="flex h-11 items-center gap-1.5 rounded-lg border border-[#d6d3cc] bg-white px-3 focus-within:border-[#2740e6]">
+                    <span className="text-[14px] text-slate-500">−</span>
+                    <input id="ps-taper" type="number" step={5} min={0} max={PRESEASON_TAPER_RESEARCH[1]} value={psTaperT} onChange={(e) => setPreTaperT(clampTaperPct(Number(e.target.value)))} className="min-w-0 flex-1 border-0 bg-transparent text-[14px] tabular-nums outline-none" />
+                    <span className="text-[14px] text-slate-500">%</span>
+                  </div>
+                  <span className="text-[11px] text-slate-600">{is ? `Rannsóknir ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% (Bosquet 2007) · sjálfgefið ${PRESEASON_DEFAULT_TAPER_PCT}%` : `Research ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% (Bosquet 2007) · default ${PRESEASON_DEFAULT_TAPER_PCT}%`}</span>
+                </div>
+              ) : <div className="hidden lg:block" />}
+              <div className="flex min-w-0 flex-col gap-1.5" title={is ? "Vika án skráðs leiks fær áætlaðan laugardagsleik frá þessum degi. Óstillt = frá fyrsta skráða æfingaleik. „Engir“ = aðeins leikir úr leikjaskránni." : "A week with no entered game gets an assumed Saturday game from this day. Not set = from the first entered friendly. \"None\" = only the games in the fixture list."}>
+                <label htmlFor="ps-weekend" className="text-[12px] font-medium text-slate-700">{is ? "Helgarleikir frá" : "Weekend games from"}</label>
+                <input id="ps-weekend" type="date" value={psGamesT && psGamesT !== GAMES_FROM_NONE ? psGamesT : ""} min={preStart} onChange={(e) => setPreGamesT(/^\d{4}-\d{2}-\d{2}$/.test(e.target.value) ? e.target.value : null)} className="h-11 rounded-lg border border-[#d6d3cc] bg-white px-3 text-[14px] tabular-nums" />
+                <span className="flex flex-wrap gap-x-2 text-[11px] text-slate-600">
+                  {psGamesT === GAMES_FROM_NONE
+                    ? <><span>{is ? "Engir — aðeins skráðir leikir" : "None — entered games only"}</span><button type="button" onClick={() => setPreGamesT(null)} className="font-semibold text-[#2740e6] hover:underline">{is ? "frá fyrsta æfingaleik" : "from the first friendly"}</button></>
+                    : <>
+                      {psGamesT
+                        ? <button type="button" onClick={() => setPreGamesT(null)} className="font-semibold text-[#2740e6] hover:underline">{is ? "Hreinsa (frá fyrsta æfingaleik)" : "Clear (from the first friendly)"}</button>
+                        : <span>{prop.weekendGames.from ? (is ? `Frá fyrsta æfingaleik · ${shortDate(prop.weekendGames.from, is)}` : `From the first friendly · ${shortDate(prop.weekendGames.from, is)}`) : (is ? "Enginn æfingaleikur skráður" : "No friendly entered")}</span>}
+                      <button type="button" onClick={() => setPreGamesT(GAMES_FROM_NONE)} className="font-semibold text-[#2740e6] hover:underline">{is ? "Engir helgarleikir" : "No weekend games"}</button>
+                    </>}
+                </span>
+              </div>
+              <AddGame is={is} addGame={(date, kind) => writeFixture(date, "upsert", { isFriendly: kind === "friendly" })} />
             </div>
 
             {/* Week 1 → peak → light week, every variable as × a match beside the research range. The system
@@ -2481,7 +2490,28 @@ export default function PeriodizationHubPage() {
           {/* How the strength reaches the players (the team's send mode): the week cards below follow it. */}
           {!isBasketball && <StrengthDeliveryNote delivery={delivery} season="build" is={is} />}
 
-          {/* One card per pre-season week, grouped under its meso cycle. */}
+          {/* WEEK BY WEEK — one row per week, grouped under its meso cycle; a row opens into the full week card.
+              Default open: the week holding today (else week 1). Layered read: the row is the glance, the card the
+              detail, the per-variable chips sit behind their own toggle (they are in the table above too). */}
+          {(() => {
+            const allMons = ramp.map((_, k) => cal.weeks[k]?.weekStart ?? isoAdd(preStart, k * 7));
+            const curIdx = Math.max(0, allMons.findIndex((m) => m <= todayIso && todayIso < isoAdd(m, 7)));
+            const isOpen = (m: string, k: number) => preOpenWeeks[m] ?? k === curIdx;
+            const anyClosed = allMons.some((m, k) => !isOpen(m, k));
+            const legend: Array<[string, string]> = [["mechanical", typeName("mechanical")], ["locomotive", typeName("locomotive")], ["mixed", typeName("mixed")], ["activation", typeName("activation")], ["topup", typeName("topup")], ["match", is ? "Leikur" : "Game"]];
+            return (
+              <div className="flex flex-wrap items-end justify-between gap-3 pt-2">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <h2 className="text-[22px] font-bold tracking-[-0.01em] text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{is ? "Vika fyrir viku" : "Week by week"}</h2>
+                  <p className="text-[13px] text-slate-600">{is ? "Smelltu á dag til að velja áherslu eða frí — vistast sem uppkast í Vikuuppsetningu. Smelltu á viku til að opna hana." : "Click a day to set its stimulus or take it off — saves as a draft to Week Setup. Click a week to open it."}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-[12px] text-slate-600">
+                  {legend.map(([k, lab]) => <span key={k} className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: k === "match" ? "#de9328" : typeColor[k] }} />{lab}</span>)}
+                  <button type="button" onClick={() => setPreOpenWeeks(Object.fromEntries(allMons.map((m) => [m, anyClosed])))} className="h-9 rounded-lg border border-[#d9d5cc] bg-white px-3 text-[13px] font-medium text-[#14181c] hover:bg-slate-50">{anyClosed ? (is ? "Opna allar" : "Expand all") : (is ? "Loka öllum" : "Collapse all")}</button>
+                </div>
+              </div>
+            );
+          })()}
           {ramp.map((w, i) => {
             const cw = cal.weeks[i];
             const weekMon = cw?.weekStart ?? isoAdd(preStart, i * 7);
@@ -2511,30 +2541,49 @@ export default function PeriodizationHubPage() {
             const dayLoad = (d: CalDay) => d.load == null ? null : d.type === "match" ? d.load : Math.round(d.load * dayScale);
             // Open this week in Week Setup — the coach SEES the recommended day-by-day load there and can EDIT it.
             const openWeek = () => { setPreseasonJumpWeek(weekMon); setTab("micro"); };
+            const curIdx = Math.max(0, ramp.findIndex((_, k) => { const m = cal.weeks[k]?.weekStart ?? isoAdd(preStart, k * 7); return m <= todayIso && todayIso < isoAdd(m, 7); }));
+            const weekOpen = preOpenWeeks[weekMon] ?? i === curIdx;
+            const toggleWeek = () => setPreOpenWeeks((o) => ({ ...o, [weekMon]: !weekOpen }));
             return (
               <React.Fragment key={i}>
               {blk && (
-                <div className="flex flex-wrap items-center gap-2 pt-1 text-[12px] font-semibold text-slate-500">
-                  <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[#7a5cc4]">{is ? "Meso-lota" : "Meso cycle"} {blk.index + 1}</span>
-                  <span>{weeksBetween(blk.start, blk.end)} {is ? "vikur" : "weeks"}</span>
-                  {blkGoal && <span className="font-normal text-slate-400">· {goalWord(blkGoal)}</span>}
+                <div className="flex flex-wrap items-center gap-2.5 px-1 pt-3">
+                  <span className={`rounded-full px-3 py-1 text-[12px] font-semibold ${blkGoal === "realize" ? "border border-[#b9dcc8] bg-[#e4f1ea] text-[#15603a]" : blk.index < prop.engine.meso.base.length ? "border border-dashed border-[#9aa8f2] bg-[#eef0fd] text-[#1b2da8]" : "border border-[#c3cbf6] bg-[#eef0fd] text-[#1b2da8]"}`}>{is ? "Lota" : "Block"} {blk.index + 1}{blk.index < prop.engine.meso.base.length ? (is ? " · grunnur" : " · base") : ""}</span>
+                  {blkGoal && <span className="text-[13px] font-semibold text-[#14181c]">{goalWord(blkGoal)}</span>}
+                  <span className="text-[13px] text-slate-600">{shortDate(blk.start, is)} – {shortDate(isoAdd(blk.end, -1), is)} · {weeksBetween(blk.start, blk.end)} {is ? "vikur" : "weeks"}</span>
+                  <span className="h-px min-w-[40px] flex-1 bg-[#e3e0d8]" />
                 </div>
               )}
-              <section className={`${card} min-w-0`}>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                  <span className="text-[15px] font-bold text-slate-900">{is ? "Vika" : "Week"} {i + 1}</span>
-                  <button type="button" onClick={openWeek} title={is ? "Opna í Vikuuppsetningu" : "Open in Week Setup"} className="rounded text-[12px] font-medium text-[#2740e6] underline decoration-dotted underline-offset-2 hover:decoration-solid">{shortDate(weekMon, is)}</button>
-                  <span className="rounded-full bg-[#2740e6]/10 px-2 py-0.5 text-[11px] font-semibold text-[#2740e6]">×{w.multipleOfMatch} {is ? "leik" : "match"}</span>
+              {!weekOpen ? (
+              <section className="min-w-0 overflow-hidden rounded-[14px] border border-[#e3e0d8] bg-white">
+                <button type="button" onClick={toggleWeek} aria-expanded={false} className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-4 px-4 py-3 text-left hover:bg-[#faf9f6] md:grid-cols-[120px_170px_minmax(200px,1fr)_auto_20px]">
+                  <span className="flex flex-col"><span className="text-[16px] font-bold text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{is ? "Vika" : "Week"} {i + 1}</span><span className="text-[12px] text-slate-600">{shortDate(weekMon, is)}{w.taper ? (is ? " · létt vika" : " · light week") : ""}</span></span>
+                  <span className="flex flex-col">
+                    {w.multipleOfMatch != null && <span className="text-[15px] font-bold tabular-nums text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{w.multipleOfMatch}× <span className="font-sans text-[12px] font-medium text-slate-600">{is ? "leikur" : "a match"}</span></span>}
+                    <span className="text-[12px] text-slate-600">{pv > 0 ? `${fmtv(pv)} ${unitLabel}` : ""}{w.perSessionLoad != null ? ` · ${w.perSessionLoad}/${is ? "æfingu" : "session"}` : ""}</span>
+                  </span>
+                  <span className="hidden grid-cols-7 gap-1 md:grid">
+                    {(cw?.days ?? []).map((d, di) => { const off = d.type === "rest"; const isM = d.type === "match"; const dl = dayLoad(d);
+                      return <span key={di} title={`${dows[di]} · ${typeName(d.type)}${dl != null && !off ? ` · ${dl} PL` : ""}`} className="flex h-[22px] items-center justify-center rounded-[5px] font-mono text-[10px] font-semibold" style={off ? { background: "#f4f2ec", color: "#8a919c" } : { background: isM ? "#de9328" : typeColor[d.type] ?? "#64748B", color: "#fff" }}>{off ? "" : typeName(d.type).slice(0, 1)}</span>; })}
+                  </span>
+                  <span className="justify-self-end">{confirmBadge(weekMon)}</span>
+                  <svg className="hidden md:block" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f5661" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+                </button>
+              </section>
+              ) : (
+              <section className="min-w-0 overflow-hidden rounded-[14px] border border-[#e3e0d8] bg-white px-5 pb-4 pt-4">
+                <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
+                  <button type="button" onClick={toggleWeek} aria-expanded={true} className="inline-flex items-center gap-1.5 text-[20px] font-bold text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{is ? "Vika" : "Week"} {i + 1}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f5661" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 15l-6-6-6 6" /></svg></button>
+                  <button type="button" onClick={openWeek} title={is ? "Opna í Vikuuppsetningu" : "Open in Week Setup"} className="text-[13px] text-slate-600 underline decoration-dotted underline-offset-2 hover:text-[#2740e6]">{shortDate(weekMon, is)}</button>
+                  {w.multipleOfMatch != null && <span className="text-[16px] font-bold tabular-nums text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{w.multipleOfMatch}× <span className="font-sans text-[12px] font-medium text-slate-600">{is ? "leikur" : "a match"}</span></span>}
                   {w.taper && <span title={is ? "Létt vika fyrir fyrsta leik: toppvikan lækkuð, öll vikan um sama hlutfall og ákefð haldið. Bosquet 2007." : "Light week before the opener: the peak week cut, the whole week by one share, intensity kept. Bosquet 2007."} className="rounded-full bg-[#1c7a4a]/10 px-2 py-0.5 text-[11px] font-semibold text-[#1c7a4a]">{is ? "Létt vika" : "Taper"}</span>}
-                  {pv > 0 && <span className="text-[13px] font-semibold tabular-nums text-slate-900">{fmtv(pv)} {unitLabel}</span>}
-                  {w.perSessionLoad != null && <span className="text-[12px] text-slate-500">≈ {w.perSessionLoad}/{is ? "æf" : "sess"}</span>}
-                  {sw && <span className="rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5cc4]">{goalWord(sw.goalKey)}</span>}
+                  {(pv > 0 || w.perSessionLoad != null) && <span className="text-[13px] text-slate-600">{pv > 0 && <b className="font-semibold tabular-nums text-[#14181c]">{fmtv(pv)} {unitLabel}</b>}{w.perSessionLoad != null && <> · ≈ {w.perSessionLoad} {is ? "á æfingu" : "per session"}</>}</span>}
                   {confirmBadge(weekMon)}
-                  <button type="button" onClick={openWeek} className="ml-auto text-[12px] font-semibold text-[#2740e6] hover:underline">{is ? "Opna / breyta í Vikuuppsetningu →" : "Open / edit in Week Setup →"}</button>
+                  <button type="button" onClick={openWeek} className="ml-auto text-[13px] font-semibold text-[#2740e6] hover:underline">{is ? "Opna í Vikuuppsetningu →" : "Open in Week Setup →"}</button>
                 </div>
                 {cw && (
                   <>
-                  <div className="mt-2.5 grid grid-cols-7 gap-1">
+                  <div className="mt-3 grid grid-cols-7 gap-1.5">
                     {cw.days.map((d, di) => { const dl = dayLoad(d); const isMatch = d.type === "match";
                       // An ENTERED game is fixed to its fixture — clicking opens Week Setup. An assumed game and every
                       // other day open the picker right here: move/remove the assumed game, or Off / a training type.
@@ -2546,12 +2595,13 @@ export default function PeriodizationHubPage() {
                           ? `${dows[di]} · ${is ? "áætlaður leikur (ekki í leikjaskrá)" : "assumed game (not in the fixture list)"} — ${is ? "smelltu til að færa eða taka út" : "click to move or remove it"}`
                           : `${dows[di]} · ${typeName(d.type)}${dl != null && d.type !== "rest" ? ` · ${dl} PL` : ""} — ${is ? "smelltu til að velja áherslu eða frí" : "click to choose the stimulus or set off"}`;
                       return (
-                      <button key={di} type="button" onClick={() => entered ? openWeek() : setPreDayPick(open ? null : { weekStart: cw.weekStart, di })} title={title} aria-label={title} aria-expanded={isMatch ? undefined : open} className={`min-w-0 cursor-pointer rounded-md border px-1 py-1.5 text-center transition-shadow hover:ring-2 hover:ring-[#2740e6]/30 focus:outline-none focus:ring-2 focus:ring-[#2740e6]/40 ${open ? "ring-2 ring-[#2740e6]/50" : ""}`} style={{ background: tint[d.type] ?? "#F8FAFC", borderColor: `${typeColor[d.type] ?? "#CBD5E1"}33` }}>
-                        <div className="text-[9px] text-slate-400">{dows[di]}</div>
-                        <div className="truncate text-[10px] font-semibold" style={{ color: typeColor[d.type] ?? "#64748B" }}>{d.type === "rest" ? "–" : typeName(d.type)}{isMatch && !entered ? "?" : ""}</div>
-                        <div className="text-[10px] tabular-nums text-slate-600">{dl != null && d.type !== "rest" ? dl : ""}</div>
-                        {heavyByDate.get(isoAdd(cw.weekStart, di)) && <div className="truncate text-[9px] font-semibold text-[#7a5cc4]">{is ? "Lyftingar" : "Gym"} {heavyByDate.get(isoAdd(cw.weekStart, di))!.heavyReps}</div>}
-                        {dw && d.type !== "rest" && programmeTitle(dw, d.md) && <div className="truncate text-[9px] font-semibold text-[#7a5cc4]" title={programmeTitle(dw, d.md)!}>{programmeTitle(dw, d.md)}</div>}
+                      <button key={di} type="button" onClick={() => entered ? openWeek() : setPreDayPick(open ? null : { weekStart: cw.weekStart, di })} title={title} aria-label={title} aria-expanded={isMatch ? undefined : open} className={`relative flex min-h-[92px] min-w-0 cursor-pointer flex-col items-start gap-0.5 overflow-hidden rounded-[10px] px-2.5 pb-2.5 pt-3 text-left transition-shadow hover:ring-2 hover:ring-[#2740e6]/30 focus:outline-none focus:ring-2 focus:ring-[#2740e6]/40 ${d.type === "rest" ? "border border-dashed border-[#d9d5cc] bg-white" : "border border-transparent"} ${open ? "ring-2 ring-[#2740e6]/50" : ""}`} style={d.type === "rest" ? undefined : { background: tint[d.type] ?? "#F8FAFC", boxShadow: isMatch ? "inset 0 0 0 1px #de9328" : undefined }}>
+                        {d.type !== "rest" && <span className="absolute inset-x-0 top-0 h-1" style={{ background: isMatch ? "#de9328" : typeColor[d.type] ?? "#64748B" }} />}
+                        <span className="text-[11px] text-slate-500">{dows[di]}</span>
+                        <span className="max-w-full truncate text-[12px] font-semibold" style={{ color: typeColor[d.type] ?? "#64748B" }}>{d.type === "rest" ? (is ? "Frí" : "Off") : typeName(d.type)}{isMatch && !entered ? "?" : ""}</span>
+                        <span className="text-[15px] font-bold tabular-nums text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{dl != null && d.type !== "rest" ? dl : "–"}</span>
+                        {heavyByDate.get(isoAdd(cw.weekStart, di)) && <span className="max-w-full truncate rounded-full bg-[#2740e6]/[0.08] px-1.5 py-px text-[10px] font-semibold text-[#2740e6]">{is ? "Lyftingar" : "Gym"} {heavyByDate.get(isoAdd(cw.weekStart, di))!.heavyReps}</span>}
+                        {dw && d.type !== "rest" && programmeTitle(dw, d.md) && <span className="max-w-full truncate rounded-full bg-[#2740e6]/[0.08] px-1.5 py-px text-[10px] font-semibold text-[#2740e6]" title={programmeTitle(dw, d.md)!}>{programmeTitle(dw, d.md)}</span>}
                       </button>
                     ); })}
                   </div>
@@ -2594,8 +2644,8 @@ export default function PeriodizationHubPage() {
                   {deliveryStd && !isBasketball && dw && (() => {
                     const shown = cw.days.map((d) => ({ md: d.md, title: d.type === "rest" ? null : programmeTitle(dw, d.md) })).filter((d) => d.title);
                     return (
-                      <div className="mt-2 rounded-md border border-[#7a5cc4]/20 bg-[#7a5cc4]/[0.04] px-2.5 py-1.5 text-[11.5px] text-slate-700">
-                        <b className="font-semibold text-[#7a5cc4]">{is ? "Styrkur · Staðlað" : "Strength · Standard"}</b>
+                      <div className="mt-3 rounded-[10px] bg-[#f8f7f3] px-3.5 py-2.5 text-[13px] text-slate-600">
+                        <b className="font-semibold text-[#14181c]">{is ? "Styrkur · Staðlað" : "Strength · Standard"}</b>
                         {programmeCovers(dw)
                           ? <> · {dw!.programme!.setName}{shown.length > 0 && <> · {shown.map((d) => `${d.md || (is ? "dagur" : "day")} ${d.title}`).join(" · ")}</>}</>
                           : <> · <span className="text-[#8a5a12]">{is ? NO_PROGRAMME.is : NO_PROGRAMME.en}</span></>}
@@ -2603,15 +2653,15 @@ export default function PeriodizationHubPage() {
                     );
                   })()}
                   {sw && (
-                    <div className="mt-2 rounded-md border border-[#7a5cc4]/20 bg-[#7a5cc4]/[0.04] px-2.5 py-1.5 text-[11.5px] text-slate-700">
+                    <div className="mt-3 rounded-[10px] bg-[#f8f7f3] px-3.5 py-2.5 text-[13px] text-slate-600">
                       <div>
-                        <b className="font-semibold text-[#7a5cc4]">{is ? "Styrkur" : "Strength"}</b> · {is ? sw.scheme.quality.is : sw.scheme.quality.en} · {is ? sw.scheme.pct1rm.is : sw.scheme.pct1rm.en} · {schemeHead(is ? sw.scheme.scheme.is : sw.scheme.scheme.en)}
+                        <b className="font-semibold text-[#14181c]">{is ? "Styrkur" : "Strength"}</b> · {is ? sw.scheme.quality.is : sw.scheme.quality.en} · {is ? sw.scheme.pct1rm.is : sw.scheme.pct1rm.en} · {schemeHead(is ? sw.scheme.scheme.is : sw.scheme.scheme.en)}
                         {" · "}{sw.days.length
                           ? <>{is ? "þungar endurtekningar" : "heavy reps"} {sw.days.map((d) => `${d.md} ${d.heavyReps}`).join(" · ")} (<b className="tabular-nums">{sw.weekHeavyReps}</b> {is ? "á viku" : "a week"})</>
                           : <>{sw.weekHeavyReps} {is ? "þungar endurtekningar á viku" : "heavy reps a week"}</>}
                       </div>
-                      <details className="mt-0.5 text-[11px] text-slate-500">
-                        <summary className="cursor-pointer select-none font-medium hover:text-slate-700">{is ? "Sýna nánar" : "Show details"}</summary>
+                      <details className="mt-1 text-[12px] text-slate-600">
+                        <summary className="cursor-pointer select-none font-semibold text-[#2740e6] hover:underline">{is ? "Sýna æfinguna" : "Show the session"}</summary>
                         <p className="mt-1">{is ? sw.scheme.scheme.is : sw.scheme.scheme.en}</p>
                         {sw.days.length > 0 && <p className="mt-0.5">{sw.days.map((d) => `${d.md}: ${d.heavyReps} ${is ? "endurt." : "reps"}${d.structure ? ` · ${is ? STRUCTURE_LABEL[d.structure].is : STRUCTURE_LABEL[d.structure].en}` : ""}`).join(" — ")}</p>}
                         <p className="mt-0.5">{sw.hasGame
@@ -2622,20 +2672,31 @@ export default function PeriodizationHubPage() {
                       </details>
                     </div>
                   )}
-                  <p className="mt-1 text-[10.5px] text-slate-400">{is ? "Smelltu á dag til að velja áherslu (mekanískt/hlaup/blandað…) eða frí — uppkast sem vistast strax. Dagsetningin eða tengillinn opnar vikuna í Vikuuppsetningu til að fínstilla." : "Click a day to choose its stimulus (mechanical/locomotive/mixed…) or set it off — a draft that saves instantly. The date or the link opens the week in Week Setup to refine."}</p>
                   </>
                 )}
                 {/* Friendly budget — the partial match counts toward the week; training fills the remainder. */}
                 {weekFx.length > 0 && (
-                  <div className="mt-2 rounded-md border border-[#de9328]/30 bg-[#de9328]/5 px-2.5 py-1.5 text-[11.5px] text-slate-700">
-                    <b className="font-semibold text-[#9a6514]">{is ? "Æfingaleikur" : "Friendly"}</b> ~{mins} {is ? "mín" : "min"} {is ? "telur inn í vikumarkið" : "counts toward the week"}
-                    {friendlyPL != null && <> : <b className="tabular-nums">{friendlyPL.toLocaleString("en-US")}</b> PL</>}{friendlyTD != null && <> / <b className="tabular-nums">{friendlyTD.toLocaleString("en-US")}</b> m</>}
-                    {" → "}{is ? "æfingar" : "training"} ≈ <b className="tabular-nums">{trainingPL != null ? trainingPL.toLocaleString("en-US") : "–"}</b> PL{trainingTD != null && <> / <b className="tabular-nums">{trainingTD.toLocaleString("en-US")}</b> m</>}
-                    {trainingPL != null && <span className="text-slate-500"> ({Math.round(trainingPL / w.sessionCount)}/{is ? "æf" : "sess"})</span>}
-                    <span className="mt-0.5 block text-[10.5px] text-slate-400">{is ? `Vikumark ${w.weeklyLoadTarget != null ? w.weeklyLoadTarget.toLocaleString("en-US") + " PL" : "–"}. Leikmenn spila hluta leiks í undirbúningi — hlutfallið rís yfir tímabilið (Buchheit/Gabbett).` : `Week target ${w.weeklyLoadTarget != null ? w.weeklyLoadTarget.toLocaleString("en-US") + " PL" : "–"}. Players play partial minutes in pre-season — the share ramps across pre-season (Buchheit/Gabbett).`}</span>
+                  <div className="mt-3 flex flex-col gap-2 rounded-[10px] bg-[#fbf6ec] px-3.5 py-3 text-[13px] text-slate-600">
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span><b className="font-semibold text-[#14181c]">{is ? "Æfingaleikur" : "Friendly"} {weekFx.map((d) => shortDate(d, is)).join(", ")} · ~{mins} {is ? "mín" : "min"}</b> {is ? "telur inn í vikumarkið" : "counts toward the week"}</span>
+                      {w.weeklyLoadTarget != null && <span>{is ? "Vikumark" : "Week target"} <b className="font-semibold tabular-nums text-[#14181c]">{w.weeklyLoadTarget.toLocaleString("en-US")} PL</b></span>}
+                    </div>
+                    {friendlyPL != null && trainingPL != null && w.weeklyLoadTarget != null && w.weeklyLoadTarget > 0 && (
+                      <div className="flex h-3 overflow-hidden rounded-full bg-[#ece9e2]" role="img" aria-label={`${is ? "Æfingaleikur" : "Friendly"} ${friendlyPL} PL, ${is ? "æfingar" : "training"} ${trainingPL} PL ${is ? "af" : "of"} ${w.weeklyLoadTarget} PL`}>
+                        <span className="h-full bg-[#de9328]" style={{ width: `${Math.min(100, (friendlyPL / w.weeklyLoadTarget) * 100)}%` }} />
+                        <span className="h-full bg-[#2740e6]" style={{ width: `${Math.min(100, (trainingPL / w.weeklyLoadTarget) * 100)}%` }} />
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-4 text-[12px]">
+                      <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-[#de9328]" />{is ? "Leikur" : "Friendly"} {friendlyPL != null ? friendlyPL.toLocaleString("en-US") : "–"} PL{friendlyTD != null && <> · {friendlyTD.toLocaleString("en-US")} m</>}</span>
+                      <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-[#2740e6]" />{is ? "Æfingar" : "Training"} {trainingPL != null ? trainingPL.toLocaleString("en-US") : "–"} PL{trainingTD != null && <> · {trainingTD.toLocaleString("en-US")} m</>}{trainingPL != null && <> ({Math.round(trainingPL / w.sessionCount)}/{is ? "æfingu" : "session"})</>}</span>
+                    </div>
+                    <span className="text-[11px] text-slate-500">{is ? "Leikmenn spila hluta leiks í undirbúningi — hlutfallið rís yfir tímabilið (Buchheit/Gabbett)." : "Players play partial minutes in pre-season — the share ramps across pre-season (Buchheit/Gabbett)."}</span>
                   </div>
                 )}
                 {kpiKeys.length > 0 && (
+                  <details className="mt-3 text-[12px]">
+                  <summary className="cursor-pointer select-none font-semibold text-[#2740e6] hover:underline">{is ? "Sýna álag á hverja breytu" : "Show load per variable"}</summary>
                   <div className="mt-2 flex flex-wrap gap-1">
                     {kpiKeys.map((k) => { const lab = WEEKLY_LOAD_LABELS[k]; const val = w.byKpi[k]; if (val == null) return null; const pw = kpiPathway(k); const pwDot = pw === "biomechanical" ? "#a83e28" : pw === "physiological" ? "#2740e6" : "#94a3b8";
                       // Impact-weighted read: each KPI as its OWN ×match multiple (weekly ÷ one match of that KPI).
@@ -2648,6 +2709,7 @@ export default function PeriodizationHubPage() {
                       <span key={k} className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10.5px] text-slate-600" title={title}><i className="h-1.5 w-1.5 rounded-full" style={{ background: pwDot }} />{xmatch != null && <span className={`font-semibold tabular-nums ${over ? "text-[#de9328]" : "text-slate-900"}`}>×{xmatch}</span>}<span className="text-slate-400">{is ? lab.is : lab.en}</span> <span className="tabular-nums text-slate-500">{val.toLocaleString("en-US")}{lab.unit}</span>{ref && <span className="tabular-nums text-slate-400">· {is ? "rannsóknir" : "research"} {ref[0]}–{ref[1]}×</span>}</span>
                     ); })}
                   </div>
+                  </details>
                 )}
                 {w.taper && ramp[i - 1] && (() => {
                   // The light week before the opener: the research behind it, visible (not only in a tooltip).
@@ -2663,12 +2725,14 @@ export default function PeriodizationHubPage() {
                   );
                 })()}
                 {(weekTests.length > 0 || weekFx.length > 0) && (
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
-                    {weekTests.map((tp) => <span key={tp.protocol.key} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700" title={is ? tp.protocol.name.is : tp.protocol.name.en}>{is ? testShortName(tp.protocol.key, aerobicTest).is : testShortName(tp.protocol.key, aerobicTest).en}</span>)}
-                    {weekFx.map((d) => <span key={d} className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">{is ? "Æfingaleikur" : "Friendly"} {shortDate(d, is)}</span>)}
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[12px]">
+                    {weekTests.length > 0 && <span className="mr-0.5 text-slate-600">{is ? "Próf þessa viku:" : "Test this week:"}</span>}
+                    {weekTests.map((tp) => <span key={tp.protocol.key} className="rounded-full bg-[#1c7a4a]/10 px-2.5 py-0.5 font-semibold text-[#15603a]" title={is ? tp.protocol.name.is : tp.protocol.name.en}>{is ? testShortName(tp.protocol.key, aerobicTest).is : testShortName(tp.protocol.key, aerobicTest).en}</span>)}
+                    {weekFx.map((d) => <span key={d} className="rounded-full bg-[#de9328]/15 px-2.5 py-0.5 font-semibold text-[#7a4a06]">{is ? "Æfingaleikur" : "Friendly"} {shortDate(d, is)}</span>)}
                   </div>
                 )}
               </section>
+              )}
               </React.Fragment>
             );
           })}
@@ -2993,8 +3057,8 @@ export default function PeriodizationHubPage() {
             const stateBg: Record<DayState, string> = { match: "#1C7A4A", session: "#2740E6", off: "#F1F5F9" };
             const stateInk: Record<DayState, string> = { match: "#FFFFFF", session: "#FFFFFF", off: "#475569" };
             const stateLbl: Record<DayState, string> = { match: is ? "Leikur" : "Match", session: is ? "Æfing" : "Session", off: is ? "Frí" : "Off" };
-            const typeColor: Record<string, string> = { mechanical: "#A83E28", locomotive: "#15603A", mixed: "#1B2DA8", activation: "#475569", topup: "#55389E", match: "#7A4A06", rest: "#64748B" };
-            const tint: Record<string, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#F0EAF7", match: "#FBEFDD", rest: "#FFFFFF" };
+            const typeColor: Record<string, string> = { mechanical: "#A83E28", locomotive: "#15603A", mixed: "#1B2DA8", activation: "#475569", topup: "#0E5E6E", match: "#7A4A06", rest: "#64748B" };
+            const tint: Record<string, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#E2F0F2", match: "#FBEFDD", rest: "#FFFFFF" };
             const typeName = (t: string): string => t === "mechanical" ? (is ? "Mekanískt" : "Mechanical") : t === "locomotive" ? (is ? "Hlaup" : "Locomotive") : t === "mixed" ? (is ? "Blandað" : "Mixed") : t === "activation" ? (is ? "Virkjun" : "Activation") : t === "topup" ? (is ? "Áfylling" : "Top-up") : t === "match" ? (is ? "Leikur" : "Match") : "";
             const dash = (n: number | null) => (n == null ? "—" : n.toLocaleString("en-US"));
             const calStart = mondayOf(blkStart);

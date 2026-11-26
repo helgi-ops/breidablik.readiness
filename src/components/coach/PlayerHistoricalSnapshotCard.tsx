@@ -129,20 +129,14 @@ export default function PlayerHistoricalSnapshotCard({ teamId }: { teamId?: stri
     if (!data) return;
     setDownloadingPdf(true);
     try {
-      const [{ pdf }, { PlayerSnapshotPdfDocument }] = await Promise.all([
-        import("@react-pdf/renderer"),
+      // Lazy: the PDF kit (and @react-pdf/renderer) only load when the coach asks for the PDF.
+      const [{ renderPdfBlob, saveBlob }, { PlayerSnapshotPdfDocument }] = await Promise.all([
+        import("@/components/pdf/brand"),
         import("./PlayerSnapshotPdf"),
       ]);
-      const blob = await pdf(<PlayerSnapshotPdfDocument data={data} />).toBlob();
-      const url = URL.createObjectURL(blob);
+      const blob = await renderPdfBlob(() => <PlayerSnapshotPdfDocument data={data} />);
       const safeName = (data.player.full_name ?? "player").replace(/[^\p{L}\p{N}_-]+/gu, "_");
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `player-snapshot-${safeName}-${data.date}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      saveBlob(blob, `player-snapshot-${safeName}-${data.date}.pdf`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to generate PDF.");
     } finally {

@@ -2,12 +2,16 @@
 
 /**
  * LoadPlanPdf — builds and downloads a pre-session "Today's Load Target" PDF
- * from the deterministic load plan (and the optional AI narrative). Mirrors the
- * Post-Training report styling.
+ * from the deterministic load plan. Explainability-first: the bottom line (the
+ * SAME sentence as the on-screen card) first, then the plain facts (readiness
+ * check-ins, the headline targets), the "why" paragraphs, then the raw tables.
+ *
+ * Styling + download: shared MicroPulse PDF kit (src/components/pdf/brand.tsx).
  */
 
-import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
+import { Document, Text } from "@react-pdf/renderer";
 import { buildLoadPlanNarrative, buildLoadPlanBottomLine } from "@/lib/micropulse/loadPlan/narrative";
+import { BrandPage, Body, Bullets, C, Card, FactRow, Label, Provenance, Section, Status, TONE, Table, Verdict, clean, fb, fh, renderPdfBlob, saveBlob, toneOf } from "@/components/pdf/brand";
 
 type KpiTarget = { kpi: string; target: number | null; matchRef: number | null; pctOfMatch: number | null };
 export type LoadPlanForPdf = {
@@ -36,52 +40,30 @@ const LABEL: Record<string, string> = {
   totalDistance: "Total distance (m)", playerLoad: "Player Load", hsr: "High-speed distance (m)",
   sprint: "Sprint distance (m)", accel: "Accelerations (B2-3)", decel: "Decelerations (B2-3)", ima: "Long-run distance (m)",
 };
-const fmt = (n: number | null | undefined) => (n == null ? "—" : Math.round(n).toLocaleString("en-US"));
-
-const s = StyleSheet.create({
-  page: { paddingTop: 28, paddingHorizontal: 28, paddingBottom: 44, fontSize: 10, color: "#221f18", fontFamily: "Helvetica" },
-  brandRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8, paddingBottom: 6, borderBottom: "2 solid #4F46E5" },
-  brand: { fontSize: 12, fontWeight: 700, color: "#4F46E5", letterSpacing: 0.5 },
-  brandMeta: { fontSize: 8, color: "#a9a493" },
-  bottomLine: { borderLeft: "4 solid #4F46E5", backgroundColor: "#EEF2FF", paddingVertical: 6, paddingHorizontal: 8, marginBottom: 10, fontSize: 11, fontWeight: 700, color: "#1E1B4B" },
-  footer: { position: "absolute", bottom: 18, left: 28, right: 28, flexDirection: "row", justifyContent: "space-between", borderTop: "1 solid #e6e1d4", paddingTop: 6, fontSize: 7.5, color: "#a9a493" },
-  h1: { fontSize: 15, fontWeight: 700, marginBottom: 2 },
-  sub: { fontSize: 10, color: "#8b8676", marginBottom: 12 },
-  sectionTitle: { fontSize: 11, fontWeight: 700, marginBottom: 6, paddingBottom: 3, borderBottom: "1 solid #e6e1d4", marginTop: 10 },
-  row: { flexDirection: "row" },
-  tHead: { flexDirection: "row", backgroundColor: "#efece2" },
-  tRow: { flexDirection: "row", borderTop: "1 solid #e6e1d4" },
-  tRowAlt: { flexDirection: "row", borderTop: "1 solid #e6e1d4", backgroundColor: "#f7f5ef" },
-  para: { fontSize: 9.5, color: "#565044", lineHeight: 1.5, marginBottom: 4 },
-  badge: { fontSize: 10, fontWeight: 700, color: "#1E3A8A" },
-});
+const fmt = (n: number | null | undefined) => (n == null ? "-" : Math.round(n).toLocaleString("en-US"));
+/** Kit text helper: typographic clean-up + the maths glyphs Archivo/Helvetica lack. */
+const tx = (s: unknown) => clean(String(s ?? "").replace(/→/g, "->")).replace(/≈/g, "~").replace(/≥/g, ">=").replace(/≤/g, "<=");
 
 type AttentionPlayer = { player_id: string; name: string; color: string; score: number | null; acwr: number | null; reason: string | null; drivers?: string[] };
 type ReadinessSummary = { green: number; yellow: number; red: number; checkedIn: number; rosterWithGps: number };
 
-export async function downloadLoadPlanPdf(
-  plan: LoadPlanForPdf,
-  topAttention: AttentionPlayer[] = [],
-  readiness: ReadinessSummary | null = null,
-  restDay = false,
-) {
+// Capability-aware value columns: only the KPIs the club actually captures.
+// Core/Lite send the combined "efforts"; Pro sends the accel/decel split + IMA
+// distance; an indoor (basketball) team has no GPS at all and sends the IMA
+// counts (accel/decel/CoD/jumps). Drives both the header and the per-player rows
+// so no team gets empty columns.
+const PDF_COL_LABEL: Record<string, string> = {
+  totalDistance: "Dist (m)", hsr: "HSR VB5", sprint: "Sprint VB6", playerLoad: "P.Load",
+  accel: "Acc B2-3", decel: "Dec B2-3", efforts: "Efforts", ima: "IMA COD",
+  imaAccel: "IMA Acc", imaDecel: "IMA Dec", imaCod: "CoD", jumps: "Jumps",
+};
+const PDF_COL_ORDER = ["totalDistance", "hsr", "sprint", "playerLoad", "accel", "decel", "efforts", "ima", "imaAccel", "imaDecel", "imaCod", "jumps"];
+
+function LoadPlanDoc({ plan, topAttention, readiness, restDay }: { plan: LoadPlanForPdf; topAttention: AttentionPlayer[]; readiness: ReadinessSummary | null; restDay: boolean }) {
   const p = plan.planned;
-  // Capability-aware value columns: only the KPIs the club actually captures.
-  // Core/Lite send the combined "efforts"; Pro sends the accel/decel split + IMA
-  // distance; an indoor (basketball) team has no GPS at all and sends the IMA
-  // counts (accel/decel/CoD/jumps). Drives both the header and the per-player rows
-  // so no team gets empty columns.
-  const PDF_COL_LABEL: Record<string, string> = {
-    totalDistance: "Dist (m)", hsr: "HSR VB5", sprint: "Sprint VB6", playerLoad: "P.Load",
-    accel: "Acc B2-3", decel: "Dec B2-3", efforts: "Efforts", ima: "IMA COD",
-    imaAccel: "IMA Acc", imaDecel: "IMA Dec", imaCod: "CoD", jumps: "Jumps",
-  };
-  const PDF_COL_ORDER = ["totalDistance", "hsr", "sprint", "playerLoad", "accel", "decel", "efforts", "ima", "imaAccel", "imaDecel", "imaCod", "jumps"];
+  const team = plan.teamName ?? "Team";
   const availSet = new Set(plan.availableKpis ?? PDF_COL_ORDER);
   const valueKeys = PDF_COL_ORDER.filter((k) => availSet.has(k));
-  // Fixed widths: Player 22%, ACWR 8%, Flag 10% → the rest split across value cols.
-  const NAME_W = 22, ACWR_W = 8, FLAG_W = 10;
-  const colW = `${((100 - NAME_W - ACWR_W - FLAG_W) / Math.max(1, valueKeys.length)).toFixed(2)}%`;
   const legendBits: string[] = [];
   if (availSet.has("hsr")) legendBits.push("HSR VB5 = high-speed running (velocity band 5)");
   if (availSet.has("sprint")) legendBits.push("Sprint VB6 = sprint distance (band 6)");
@@ -93,194 +75,179 @@ export async function downloadLoadPlanPdf(
   const narrative = buildLoadPlanNarrative(plan, readiness?.checkedIn ?? null);
   const bottomLine = buildLoadPlanBottomLine(plan, readiness?.red ?? null);
   const generatedAt = new Date().toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const subtitle = `${team} · ${plan.sessionDate}${restDay ? " · REST DAY (no training load planned)" : p.applicable ? ` · ${p.mdLabel ?? "training day"} · ${p.loadType.toUpperCase()} · ${p.matchPct}% of match` : " · recent-load baseline (no match-week set)"}`;
+  const showTargets = !restDay && (plan.hasTargets ?? p.applicable);
+  const tgt = (k: string) => plan.targets.find((x) => x.kpi === k);
+  const headKpis = ["playerLoad", "totalDistance", "hsr"].map(tgt).filter((x): x is KpiTarget => !!x && x.target != null);
 
-  const blob = await pdf(
+  return (
     <Document>
-      <Page size="A4" style={s.page}>
-        {/* Brand header */}
-        <View style={s.brandRow} fixed>
-          <Text style={s.brand}>MicroPulse</Text>
-          <Text style={s.brandMeta}>Pre-Session Report</Text>
-        </View>
-
-        <Text style={s.h1}>Today&apos;s Load Target</Text>
-        <Text style={s.sub}>
-          {(plan.teamName ?? "Team")} · {plan.sessionDate}
-          {restDay ? " · REST DAY (no training load planned)" : p.applicable ? ` · ${p.mdLabel ?? "training day"} · ${p.loadType.toUpperCase()} · ${p.matchPct}% of match` : " · recent-load baseline (no match-week set)"}
-        </Text>
-
+      <BrandPage
+        doc="Pre-session report"
+        context={team}
+        kicker="Pre-session report"
+        title="Today's Load Target"
+        subtitle={subtitle}
+        chips={restDay ? [{ text: "Rest day" }] : p.applicable ? [{ text: p.mdLabel ?? "Training day" }, { text: p.loadType, tone: "cobalt" }] : [{ text: "Recent-load baseline" }]}
+        note={`MicroPulse · ${team} · generated ${generatedAt}`}
+      >
+        {/* Layer 0 — the bottom line */}
         {restDay ? (
-          <View style={{ borderLeft: "4 solid #8b8676", backgroundColor: "#efece2", paddingVertical: 6, paddingHorizontal: 8, marginBottom: 10 }}>
-            <Text style={{ fontSize: 11, fontWeight: 700, color: "#221f18", marginBottom: 2 }}>Rest day — no training load planned.</Text>
-            <Text style={[s.para, { marginBottom: 0 }]}>Marked as a rest day, so no load targets are prescribed. Use today for recovery; the readiness check-ins below still flag anyone to keep an eye on.</Text>
-          </View>
-        ) : plan.hasTargets ? <Text style={s.bottomLine}>{bottomLine}</Text> : null}
+          <Verdict tone="neutral" label="Rest day" headline="Rest day - no training load planned." body="Marked as a rest day, so no load targets are prescribed. Use today for recovery; the readiness check-ins below still flag anyone to keep an eye on." />
+        ) : plan.hasTargets ? (
+          <Verdict
+            tone="neutral"
+            label={plan.mode === "recent_baseline" ? "Recent-load baseline" : `${p.mdLabel ?? "Training day"} · ${p.matchPct}% of match`}
+            headline={tx(bottomLine)}
+            confidence={`${plan.coverage.playersWithHistory}/${plan.coverage.totalPlayers} players with history · ${plan.coverage.distinctDates} days in ${plan.coverage.windowDays}d`}
+          />
+        ) : null}
 
-        {/* Footer — generated stamp + page numbers, on every page */}
-        <View style={s.footer} fixed>
-          <Text>MicroPulse · {plan.teamName ?? "Team"} · generated {generatedAt}</Text>
-          <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} / ${totalPages}`} />
-        </View>
+        {/* Layer 1 — readiness + headline targets */}
+        {readiness && (
+          <FactRow
+            facts={[
+              { value: String(readiness.checkedIn), label: "Checked in", sub: `${readiness.rosterWithGps} on the GPS roster` },
+              { value: String(readiness.green), label: "GREEN", sub: "ready", tone: "green" },
+              { value: String(readiness.yellow), label: "YELLOW", sub: "modify", tone: "amber" },
+              { value: String(readiness.red), label: "RED", sub: "recovery", tone: "red" },
+            ]}
+          />
+        )}
+        {showTargets && headKpis.length > 0 && (
+          <FactRow facts={headKpis.map((k) => ({ value: fmt(k.target), label: `${LABEL[k.kpi] ?? k.kpi} / player`, sub: k.pctOfMatch != null ? `${k.pctOfMatch}% of match (${fmt(k.matchRef)})` : undefined }))} />
+        )}
 
-        {(readiness || topAttention.length > 0) && (
+        {/* Readiness-adjusted prescription — mirrors the on-screen amber box. */}
+        {showTargets && plan.readinessAdjustPct !== 0 && plan.adjustedTargets?.length ? (
+          <Card tone="amber" style={{ marginBottom: 10 }}>
+            <Label color={C.amberText}>{`After the ${plan.readinessAdjustPct}% readiness trim - prescribe today`}</Label>
+            <Body color={C.amberText}>{tx(plan.adjustedTargets.filter((t) => t.target != null).map((t) => `${LABEL[t.kpi] ?? t.kpi} ${fmt(t.target)}`).join(" · "))}</Body>
+          </Card>
+        ) : null}
+
+        {restDay ? null : !showTargets ? (
+          <Section title="Why no targets">
+            <Body>{tx(p.rationaleEN)}</Body>
+          </Section>
+        ) : (
           <>
-            <Text style={s.sectionTitle}>
-              Top attention today{readiness ? ` — ${readiness.checkedIn} checked in (${readiness.green} green, ${readiness.yellow} yellow, ${readiness.red} red)` : ""}
-            </Text>
-            {topAttention.length === 0 ? (
-              <Text style={s.para}>No flagged check-ins — squad is broadly green.</Text>
-            ) : (
-              topAttention.slice(0, 20).map((a) => (
-                <View key={a.player_id} style={{ marginBottom: 4 }}>
-                  <Text style={{ fontSize: 10, fontWeight: 700, color: a.color === "red" ? "#8c3221" : "#7c5210" }}>
-                    {a.name}  ·  {a.color.toUpperCase()}{a.score != null ? `  ·  readiness ${a.score}/25` : ""}
-                  </Text>
-                  {a.drivers && a.drivers.length > 0 ? (
-                    a.drivers.map((d, i) => (
-                      <Text key={i} style={{ fontSize: 9, color: "#565044", marginLeft: 10, lineHeight: 1.35 }}>— {d}</Text>
-                    ))
-                  ) : (
-                    <Text style={{ fontSize: 9, color: "#565044", marginLeft: 10 }}>{a.reason ?? ""}</Text>
-                  )}
-                </View>
-              ))
-            )}
+            {/* The "why" — the SAME paragraphs shown on the page. */}
+            <Section title="Why this target">
+              {plan.mode === "recent_baseline" && plan.baselineNote ? <Body color={C.cobalt}>{tx(plan.baselineNote)}</Body> : null}
+              <Text style={[fb(400), { fontSize: 9, lineHeight: 1.45, marginTop: 3, marginBottom: 3 }]}>
+                <Text style={fb(600)}>{`Session ${plan.mode === "recent_baseline" ? "emphasis" : "type"}: ${plan.mode === "recent_baseline" ? "mixed" : p.loadType}`}</Text>
+                {tx(
+                  (plan.mode === "recent_baseline" && plan.recentLean?.lean ? ` · recent squad lean: ${plan.recentLean.lean}` : "") +
+                  (plan.mode !== "recent_baseline" ? ` · band ${p.band} · sRPE ${p.sessionLoad} AU (RPE ${p.rpe} × ${p.durationMin} min)` : "") +
+                  (plan.mode === "recent_baseline" && plan.targetSrpe != null ? ` · target sRPE ${plan.targetSrpe} AU (RPE ~${plan.targetRpe} × ${plan.targetDurationMin} min)` : "") +
+                  (plan.teamAcwr != null ? ` · Team ACWR ${plan.teamAcwr.toFixed(2)}` : "") +
+                  (plan.readinessAdjustPct !== 0 ? ` · Readiness suggests ${plan.readinessAdjustPct}%` : ""),
+                )}
+              </Text>
+              {narrative.map((para, i) => <Body key={i} mt={3}>{tx(para)}</Body>)}
+            </Section>
           </>
         )}
 
-        {restDay ? null : !(plan.hasTargets ?? p.applicable) ? (
-          <Text style={s.para}>{p.rationaleEN}</Text>
-        ) : (
+        {/* Short tables are kept whole (wrap={false}): the kit Table's fixed header otherwise repeats
+            alone on the next page when only the card's bottom edge spills over. */}
+        {/* Top attention — named exceptions (canonical readiness colour + its word) */}
+        {(readiness || topAttention.length > 0) && (
+          <Section
+            title="Top attention today"
+            hint={readiness ? `${readiness.checkedIn} checked in (${readiness.green} green, ${readiness.yellow} yellow, ${readiness.red} red)` : undefined}
+          >
+            {topAttention.length === 0 ? (
+              <Body>No flagged check-ins - squad is broadly green.</Body>
+            ) : (
+              <Table
+                cols={[{ label: "Player", width: 120 }, { label: "Verdict", width: 66 }, { label: "Readiness", width: 54, align: "right" }, { label: "Why", flex: 1 }]}
+                rows={topAttention.slice(0, 20).map((a) => {
+                  const tone = toneOf(a.color);
+                  return [
+                    tx(a.name),
+                    <Status key="s" tone={tone} text={a.color.toUpperCase()} size={8} />,
+                    a.score != null ? `${a.score}/25` : "-",
+                    a.drivers && a.drivers.length > 0
+                      ? <Bullets key="d" items={a.drivers.map(tx)} size={8} />
+                      : <Text key="r" style={[fb(400), { fontSize: 8, lineHeight: 1.35 }]}>{tx(a.reason ?? "")}</Text>,
+                  ];
+                })}
+              />
+            )}
+          </Section>
+        )}
+
+        {showTargets && (
           <>
-            {plan.mode === "recent_baseline" && plan.baselineNote ? (
-              <Text style={[s.para, { color: "#075985" }]}>{plan.baselineNote}</Text>
-            ) : null}
-            <Text style={s.sectionTitle}>Per-player targets{plan.mode === "recent_baseline" ? " (recent-load baseline)" : " (anchored to match demand)"}</Text>
-            <View>
-              <View style={s.tHead}>
-                <Text style={{ width: "46%", padding: 4, fontWeight: 700 }}>Metric</Text>
-                <Text style={{ width: "27%", padding: 4, textAlign: "right", fontWeight: 700 }}>Target / player</Text>
-                <Text style={{ width: "27%", padding: 4, textAlign: "right", fontWeight: 700 }}>% of match (ref)</Text>
-              </View>
-              {plan.targets.map((t, i) => (
-                <View key={t.kpi} style={i % 2 === 0 ? s.tRow : s.tRowAlt}>
-                  <Text style={{ width: "46%", padding: 4 }}>{LABEL[t.kpi] ?? t.kpi}</Text>
-                  <Text style={{ width: "27%", padding: 4, textAlign: "right", fontWeight: 700 }}>{fmt(t.target)}</Text>
-                  <Text style={{ width: "27%", padding: 4, textAlign: "right" }}>{t.pctOfMatch != null ? `${t.pctOfMatch}% (${fmt(t.matchRef)})` : "—"}</Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Chip line — mirrors the on-screen card's status line. */}
-            <Text style={[s.para, { marginTop: 8 }]}>
-              <Text style={{ fontWeight: 700 }}>Session {plan.mode === "recent_baseline" ? "emphasis" : "type"}: {plan.mode === "recent_baseline" ? "mixed" : p.loadType}</Text>
-              {plan.mode === "recent_baseline" && plan.recentLean?.lean ? ` · recent squad lean: ${plan.recentLean.lean}` : ""}
-              {plan.mode !== "recent_baseline" ? ` · band ${p.band} · sRPE ${p.sessionLoad} AU (RPE ${p.rpe} × ${p.durationMin} min)` : ""}
-              {plan.mode === "recent_baseline" && plan.targetSrpe != null ? ` · target sRPE ${plan.targetSrpe} AU (RPE ~${plan.targetRpe} × ${plan.targetDurationMin} min)` : ""}
-              {plan.teamAcwr != null ? ` · Team ACWR ${plan.teamAcwr.toFixed(2)}` : ""}
-              {plan.readinessAdjustPct !== 0 ? ` · Readiness suggests ${plan.readinessAdjustPct}%` : ""}
-            </Text>
-
-            {/* Readiness-adjusted prescription callout — mirrors the on-screen amber box. */}
-            {plan.readinessAdjustPct !== 0 && plan.adjustedTargets?.length ? (
-              <View style={{ borderLeft: "3 solid #cb8420", paddingLeft: 8, marginTop: 2, marginBottom: 2 }}>
-                <Text style={[s.para, { color: "#7c5210" }]}>
-                  After the {plan.readinessAdjustPct}% readiness trim — prescribe today: {plan.adjustedTargets.filter((t) => t.target != null).map((t) => `${LABEL[t.kpi] ?? t.kpi} ${fmt(t.target)}`).join(" · ")}.
-                </Text>
-              </View>
-            ) : null}
-
-            {/* Explainability — the SAME paragraphs shown on the page. */}
-            <View style={{ marginTop: 4 }}>
-              {narrative.map((para, i) => <Text key={i} style={[s.para, { marginBottom: 3 }]}>{para}</Text>)}
-            </View>
+            <Section wrap={false} title={`Per-player targets${plan.mode === "recent_baseline" ? " (recent-load baseline)" : " (anchored to match demand)"}`}>
+              <Table
+                cols={[{ label: "Metric", flex: 1.7 }, { label: "Target / player", flex: 1, align: "right", strong: true }, { label: "% of match (ref)", flex: 1, align: "right" }]}
+                rows={plan.targets.map((t) => [LABEL[t.kpi] ?? t.kpi, fmt(t.target), t.pctOfMatch != null ? `${t.pctOfMatch}% (${fmt(t.matchRef)})` : "-"])}
+              />
+            </Section>
 
             {/* Leading in — last sessions before today */}
             {plan.recentSessions.length > 0 ? (
-              <>
-                <Text style={s.sectionTitle}>Leading in — last {plan.recentSessions.length} session{plan.recentSessions.length === 1 ? "" : "s"} (per player)</Text>
-                <View>
-                  <View style={s.tHead}>
-                    <Text style={{ width: "28%", padding: 4, fontWeight: 700 }}>Date</Text>
-                    <Text style={{ width: "24%", padding: 4, textAlign: "right", fontWeight: 700 }}>Player Load</Text>
-                    <Text style={{ width: "24%", padding: 4, textAlign: "right", fontWeight: 700 }}>Distance (m)</Text>
-                    <Text style={{ width: "24%", padding: 4, textAlign: "right", fontWeight: 700 }}>HSR (m)</Text>
-                  </View>
-                  {plan.recentSessions.map((rs, i) => (
-                    <View key={rs.date} style={i % 2 === 0 ? s.tRow : s.tRowAlt}>
-                      <Text style={{ width: "28%", padding: 4 }}>{rs.date}{rs.isPeak ? "  · peak/match" : ""}</Text>
-                      <Text style={{ width: "24%", padding: 4, textAlign: "right", fontWeight: 700 }}>{fmt(rs.playerLoad)}</Text>
-                      <Text style={{ width: "24%", padding: 4, textAlign: "right" }}>{fmt(rs.totalDistance)}</Text>
-                      <Text style={{ width: "24%", padding: 4, textAlign: "right" }}>{fmt(rs.hsr)}</Text>
-                    </View>
-                  ))}
-                </View>
-                <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 4, lineHeight: 1.4 }}>
-                  Per-player team means on the squad&apos;s last training days before this session (oldest first). &quot;Peak/match&quot; marks a highest-load (≈ match) day. This is the trajectory today&apos;s target sits on top of.
-                </Text>
-              </>
+              <Section wrap={false} title={`Leading in - last ${plan.recentSessions.length} session${plan.recentSessions.length === 1 ? "" : "s"} (per player)`}>
+                <Table
+                  cols={[{ label: "Date", flex: 1.2 }, { label: "Player Load", flex: 1, align: "right", strong: true }, { label: "Distance (m)", flex: 1, align: "right" }, { label: "HSR (m)", flex: 1, align: "right" }]}
+                  rows={plan.recentSessions.map((rs) => [`${rs.date}${rs.isPeak ? "  · peak/match" : ""}`, fmt(rs.playerLoad), fmt(rs.totalDistance), fmt(rs.hsr)])}
+                  rowTone={(i) => (plan.recentSessions[i]?.isPeak ? "neutral" : null)}
+                />
+                <Provenance>{`Per-player team means on the squad's last training days before this session (oldest first). "Peak/match" marks a highest-load (~ match) day. This is the trajectory today's target sits on top of.`}</Provenance>
+              </Section>
             ) : null}
 
             {plan.recentAvg ? (
-              <>
-                <Text style={s.sectionTitle}>Every metric — target vs match demand vs recent average</Text>
-                <View>
-                  <View style={s.tHead}>
-                    <Text style={{ width: "40%", padding: 4, fontWeight: 700 }}>Metric</Text>
-                    <Text style={{ width: "20%", padding: 4, textAlign: "right", fontWeight: 700 }}>Target</Text>
-                    <Text style={{ width: "13%", padding: 4, textAlign: "right", fontWeight: 700 }}>% match</Text>
-                    <Text style={{ width: "13%", padding: 4, textAlign: "right", fontWeight: 700 }}>Match ref</Text>
-                    <Text style={{ width: "14%", padding: 4, textAlign: "right", fontWeight: 700 }}>Recent avg</Text>
-                  </View>
-                  {plan.targets.map((t, i) => (
-                    <View key={t.kpi} style={i % 2 === 0 ? s.tRow : s.tRowAlt}>
-                      <Text style={{ width: "40%", padding: 4 }}>{LABEL[t.kpi] ?? t.kpi}</Text>
-                      <Text style={{ width: "20%", padding: 4, textAlign: "right", fontWeight: 700 }}>{fmt(t.target)}</Text>
-                      <Text style={{ width: "13%", padding: 4, textAlign: "right" }}>{t.pctOfMatch != null ? `${t.pctOfMatch}%` : "—"}</Text>
-                      <Text style={{ width: "13%", padding: 4, textAlign: "right" }}>{fmt(t.matchRef)}</Text>
-                      <Text style={{ width: "14%", padding: 4, textAlign: "right" }}>{fmt(plan.recentAvg?.[t.kpi] ?? null)}</Text>
-                    </View>
-                  ))}
-                </View>
-              </>
+              <Section wrap={false} title="Every metric - target vs match demand vs recent average">
+                <Table
+                  cols={[{ label: "Metric", flex: 2 }, { label: "Target", flex: 1, align: "right", strong: true }, { label: "% match", flex: 0.7, align: "right" }, { label: "Match ref", flex: 0.8, align: "right" }, { label: "Recent avg", flex: 0.8, align: "right" }]}
+                  rows={plan.targets.map((t) => [LABEL[t.kpi] ?? t.kpi, fmt(t.target), t.pctOfMatch != null ? `${t.pctOfMatch}%` : "-", fmt(t.matchRef), fmt(plan.recentAvg?.[t.kpi] ?? null)])}
+                />
+              </Section>
             ) : null}
 
-            <Text style={s.sectionTitle}>Per-player targets — every metric</Text>
-            <View>
-              <View style={[s.tHead, { fontSize: 7 }]}>
-                <Text style={{ width: `${NAME_W}%`, padding: 3, fontWeight: 700 }}>Player</Text>
-                {valueKeys.map((k) => <Text key={k} style={{ width: colW, padding: 3, textAlign: "right", fontWeight: 700 }}>{PDF_COL_LABEL[k]}</Text>)}
-                <Text style={{ width: `${ACWR_W}%`, padding: 3, textAlign: "right", fontWeight: 700 }}>ACWR</Text>
-                <Text style={{ width: `${FLAG_W}%`, padding: 3, fontWeight: 700 }}>Flag</Text>
-              </View>
-              {plan.perPlayer.map((pp, i) => {
-                const v = pp as unknown as Record<string, number | null>;
-                return (
-                <View key={pp.name + i} style={[i % 2 === 0 ? s.tRow : s.tRowAlt, { fontSize: 7 }]}>
-                  <Text style={{ width: `${NAME_W}%`, padding: 3 }}>{pp.name}</Text>
-                  {valueKeys.map((k) => <Text key={k} style={{ width: colW, padding: 3, textAlign: "right" }}>{fmt(v[k])}</Text>)}
-                  <Text style={[{ width: `${ACWR_W}%`, padding: 3, textAlign: "right" }, pp.acwr != null && pp.acwr >= 1.3 ? { color: "#a83e28", fontWeight: 700 } : pp.acwr != null && pp.acwr < 0.8 ? { color: "#b0700f" } : {}]}>{pp.acwr != null ? pp.acwr.toFixed(2) : "—"}</Text>
-                  <Text style={{ width: `${FLAG_W}%`, padding: 3 }}>{pp.flag === "reduce" ? "reduce" : pp.flag === "build" ? "build" : "—"}</Text>
-                </View>
-                );
-              })}
-            </View>
+            <Section title="Per-player targets - every metric">
+              <Table
+                size={7.25}
+                dense
+                cols={[
+                  { label: "Player", flex: 2.2 },
+                  ...valueKeys.map((k) => ({ label: PDF_COL_LABEL[k], flex: 1, align: "right" as const })),
+                  { label: "ACWR", flex: 0.8, align: "right" },
+                  { label: "Flag", flex: 0.9 },
+                ]}
+                rows={plan.perPlayer.map((pp) => {
+                  const v = pp as unknown as Record<string, number | null>;
+                  const hi = pp.acwr != null && pp.acwr >= 1.3, lo = pp.acwr != null && pp.acwr < 0.8;
+                  return [
+                    tx(pp.name),
+                    ...valueKeys.map((k) => fmt(v[k])),
+                    <Text key="a" style={[hi ? fh(700) : fb(400), { fontSize: 7.25, textAlign: "right", color: hi ? TONE.red.text : lo ? TONE.amber.text : C.ink }]}>{pp.acwr != null ? pp.acwr.toFixed(2) : "-"}</Text>,
+                    <Text key="f" style={[fb(pp.flag === "reduce" || pp.flag === "build" ? 600 : 400), { fontSize: 7.25, color: pp.flag === "reduce" ? TONE.red.text : pp.flag === "build" ? TONE.amber.text : C.ink }]}>{pp.flag === "reduce" ? "reduce" : pp.flag === "build" ? "build" : "-"}</Text>,
+                  ];
+                })}
+              />
+            </Section>
 
-            <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 8, lineHeight: 1.4 }}>
-              {moveLegend ? `${moveLegend} ` : ""}Targets = match reference × {p.matchPct}% (the microcycle day&apos;s share of match demand) re-weighted by session type. Match reference = the squad&apos;s average on its {plan.matchDaysUsed} highest-load days over the last ~17 weeks. ACWR = acute(7d) ÷ chronic(28d) Player Load; 0.8–1.3 ≈ a load change within the familiar range — a spike-size context for scaling, not an injury predictor (Gabbett 2016; not validated for injury risk — Impellizzeri 2020).
-            </Text>
+            <Provenance>
+              {tx(`${moveLegend ? `${moveLegend} ` : ""}Targets = match reference × ${p.matchPct}% (the microcycle day's share of match demand) re-weighted by session type. Match reference = the squad's average on its ${plan.matchDaysUsed} highest-load days over the last ~17 weeks. ACWR = acute(7d) ÷ chronic(28d) Player Load; 0.8–1.3 ≈ a load change within the familiar range — a spike-size context for scaling, not an injury predictor (Gabbett 2016; not validated for injury risk — Impellizzeri 2020).`)}
+            </Provenance>
           </>
         )}
-      </Page>
-    </Document>,
-  ).toBlob();
+      </BrandPage>
+    </Document>
+  );
+}
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `load-target-${plan.sessionDate}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+export async function downloadLoadPlanPdf(
+  plan: LoadPlanForPdf,
+  topAttention: AttentionPlayer[] = [],
+  readiness: ReadinessSummary | null = null,
+  restDay = false,
+) {
+  const blob = await renderPdfBlob(() => <LoadPlanDoc plan={plan} topAttention={topAttention} readiness={readiness} restDay={restDay} />);
+  saveBlob(blob, `load-target-${plan.sessionDate}.pdf`);
 }

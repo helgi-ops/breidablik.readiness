@@ -1,6 +1,15 @@
 "use client";
 
-import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
+/**
+ * SessionPdf — the planned training session (drills × sets) as a PDF. Explainability-first:
+ * the plan-vs-history verdict and the headline totals come first, then how each variable sits
+ * against this MD-day's history band, then the drill table. Icelandic (as the screen it comes from).
+ *
+ * Styling + download: shared MicroPulse PDF kit (src/components/pdf/brand.tsx).
+ */
+
+import { Document, Text, View } from "@react-pdf/renderer";
+import { BrandPage, C, FactRow, Provenance, Section, StatGrid, Status, TONE, Table, Verdict, clean, fb, fh, renderPdfBlob, saveBlob, type Tone } from "@/components/pdf/brand";
 
 type Drill = {
   id: string;
@@ -58,82 +67,6 @@ export type SessionPdfData = {
   mdPlayerCount?: number;
 };
 
-const styles = StyleSheet.create({
-  page: { padding: 28, fontSize: 10, color: "#221f18", fontFamily: "Helvetica" },
-  header: { marginBottom: 12, paddingBottom: 10, borderBottom: "2 solid #e6e1d4" },
-  h1: { fontSize: 18, fontWeight: 700, marginBottom: 4 },
-  metaRow: { flexDirection: "row", gap: 14, fontSize: 10, color: "#6d6858", marginTop: 2 },
-  metaLabel: { color: "#a9a493", fontSize: 8, textTransform: "uppercase", marginBottom: 1 },
-  metaValue: { fontSize: 11, fontWeight: 700, color: "#221f18" },
-
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: "#565044",
-    textTransform: "uppercase",
-    marginBottom: 6,
-    marginTop: 10,
-  },
-
-  // Totals
-  totalsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 4 },
-  tile: {
-    borderWidth: 1,
-    borderColor: "#DBEAFE",
-    backgroundColor: "#EFF6FF",
-    borderRadius: 4,
-    padding: "6 8",
-    width: "23.5%",
-  },
-  tileBig: { width: "48.8%" },
-  tileLabel: { fontSize: 7, color: "#3B82F6", textTransform: "uppercase", marginBottom: 2 },
-  tileValue: { fontSize: 12, fontWeight: 700, color: "#1E3A8A" },
-  tileValueBig: { fontSize: 16, fontWeight: 700, color: "#1E3A8A" },
-
-  // Drills table
-  table: { borderWidth: 1, borderColor: "#e6e1d4", borderRadius: 3, marginTop: 4 },
-  tHead: { flexDirection: "row", backgroundColor: "#efece2" },
-  tRow: { flexDirection: "row", borderTopWidth: 1, borderTopColor: "#e6e1d4" },
-  cellH: { padding: "5 6", fontSize: 8, fontWeight: 700, color: "#8b8676", textTransform: "uppercase" },
-  cell: { padding: "5 6", fontSize: 9, color: "#3a352c" },
-  idxCol: { width: 22 },
-  nameCol: { flex: 1 },
-  smallCol: { width: 34, textAlign: "right" },
-  setsCol: { width: 28, textAlign: "center" },
-
-  // Comparison table
-  cmpRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderTopWidth: 1,
-    borderTopColor: "#efece2",
-    padding: "5 8",
-  },
-  cmpRowOk: { backgroundColor: "#eaf3ec" },
-  cmpRowLow: { backgroundColor: "#faf1de" },
-  cmpRowHigh: { backgroundColor: "#f8e9e3" },
-  cmpIcon: { width: 14, fontSize: 10, fontWeight: 700 },
-  cmpIconOk: { color: "#16653d" },
-  cmpIconLow: { color: "#9a6410" },
-  cmpIconHigh: { color: "#8c3221" },
-  cmpLabel: { flex: 1, fontSize: 9, color: "#3a352c" },
-  cmpValue: { width: 50, textAlign: "right", fontSize: 9, fontWeight: 700 },
-  cmpBand: { width: 90, textAlign: "right", fontSize: 7, color: "#8b8676" },
-
-  footer: {
-    position: "absolute",
-    bottom: 18,
-    left: 28,
-    right: 28,
-    fontSize: 7,
-    color: "#a9a493",
-    textAlign: "center",
-    borderTopWidth: 1,
-    borderTopColor: "#e6e1d4",
-    paddingTop: 6,
-  },
-});
-
 const CATEGORY_LABELS: Record<string, string> = {
   possession: "Possession",
   ssg: "SSG",
@@ -144,180 +77,160 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: "Annað",
 };
 
+/** Plan-vs-history status → kit tone + the word (colour is never the only signal). */
+const STATUS: Record<SessionPdfPlanMetric["status"], { tone: Tone; word: string }> = {
+  ok: { tone: "green", word: "Innan bils" },
+  low: { tone: "amber", word: "Undir sögu" },
+  high: { tone: "red", word: "Yfir sögu" },
+  none: { tone: "neutral", word: "Engin saga" },
+};
+
+/** Local building block: plan value vs history band. The kit <Bar> paints the value over the band,
+ *  so here the band is the full-height tint and the value a thinner bar inside it (both readable). */
+function PlanBar({ value, low, high, color }: { value: number; low: number; high: number; color: string }) {
+  const max = Math.max(high, value, 1) * 1.15;
+  const p = (v: number) => `${Math.max(0, Math.min(100, (v / max) * 100))}%`;
+  return (
+    <View style={{ height: 10, backgroundColor: C.track, borderRadius: 2, position: "relative", justifyContent: "center" }}>
+      {high > low ? <View style={{ position: "absolute", left: p(low), width: `${Math.max(0, Math.min(100, ((high - low) / max) * 100))}%`, top: 0, bottom: 0, backgroundColor: C.cobaltEdge, borderRadius: 1 }} /> : null}
+      <View style={{ width: value > 0 ? p(value) : 0, minWidth: value > 0 ? 2 : 0, height: 4, backgroundColor: color, borderRadius: 2 }} />
+    </View>
+  );
+}
+
 function fmt(v: number | null | undefined, digits = 0): string {
-  if (v == null || Number.isNaN(Number(v))) return "–";
+  if (v == null || Number.isNaN(Number(v))) return "-";
   return Number(v).toFixed(digits);
 }
 
 export function SessionPdfDocument({ data }: { data: SessionPdfData }) {
+  const md = data.mdDay || "MD";
+  const pm = data.planningMetrics;
+  const high = pm.filter((m) => m.status === "high");
+  const low = pm.filter((m) => m.status === "low");
+  const ok = pm.filter((m) => m.status === "ok");
+  const rated = high.length + low.length + ok.length;
+  // Layer 0 — rule-based verdict straight from the already-computed comparison rows.
+  const verdict: { tone: Tone; label: string; headline: string; body?: string } =
+    rated === 0
+      ? { tone: "neutral", label: "Áætlun", headline: `${data.items.length} drillur · ${fmt(data.totals.duration_min)} mín · ${fmt(data.totals.player_load)} Player Load.`, body: pm.length ? `Engin ${md}-saga til samanburðar enn.` : undefined }
+      : high.length === 0 && low.length === 0
+        ? { tone: "green", label: "Innan bils", headline: `Æfingin er innan ${md}-sögunnar í öllum ${ok.length} breytum.` }
+        : {
+            tone: high.length ? "red" : "amber",
+            label: high.length ? "Yfir sögu" : "Undir sögu",
+            headline: `${high.length + low.length} af ${rated} breytum utan ${md}-sögunnar.`,
+            body: [high.length ? `Yfir: ${high.map((m) => m.label).join(", ")}.` : "", low.length ? `Undir: ${low.map((m) => m.label).join(", ")}.` : ""].filter(Boolean).join(" "),
+          };
+
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.h1}>{data.sessionName || "Æfing"}</Text>
-          <View style={styles.metaRow}>
-            <View>
-              <Text style={styles.metaLabel}>Dagsetning</Text>
-              <Text style={styles.metaValue}>{data.date}</Text>
-            </View>
-            {data.mdDay && (
-              <View>
-                <Text style={styles.metaLabel}>MD-dagur</Text>
-                <Text style={styles.metaValue}>{data.mdDay}</Text>
-              </View>
-            )}
-            <View>
-              <Text style={styles.metaLabel}>Drillur</Text>
-              <Text style={styles.metaValue}>{data.items.length}</Text>
-            </View>
-            {data.mdSessionCount != null && (
-              <View>
-                <Text style={styles.metaLabel}>Liðs-saga</Text>
-                <Text style={styles.metaValue}>{data.mdSessionCount} æf.</Text>
-              </View>
-            )}
-          </View>
-        </View>
+      <BrandPage
+        doc="Æfingaáætlun"
+        context={data.mdDay ? `${data.date} · ${data.mdDay}` : data.date}
+        kicker="Æfingaáætlun"
+        title={data.sessionName || "Æfing"}
+        subtitle={`${data.date}${data.mdDay ? ` · ${data.mdDay}` : ""}`}
+        chips={[
+          { text: `${data.items.length} drillur` },
+          ...(data.mdDay ? [{ text: `MD-dagur: ${data.mdDay}`, tone: "cobalt" as const }] : []),
+          ...(data.mdSessionCount != null ? [{ text: `Liðs-saga: ${data.mdSessionCount} æf.` }] : []),
+        ]}
+        note={`MicroPulse · Session plan · ${data.date}`}
+      >
+        <Verdict
+          tone={verdict.tone}
+          label={verdict.label}
+          headline={verdict.headline}
+          body={verdict.body}
+          confidence={data.mdSessionCount != null ? `Saga: ${data.mdSessionCount} æfingar á ${md}` : undefined}
+        />
 
-        {/* Totals */}
-        <Text style={styles.sectionTitle}>Áætlað heildar-load</Text>
-        <View style={styles.totalsWrap}>
-          <View style={[styles.tile, styles.tileBig]}>
-            <Text style={styles.tileLabel}>Player Load</Text>
-            <Text style={styles.tileValueBig}>{fmt(data.totals.player_load, 0)}</Text>
-          </View>
-          <View style={[styles.tile, styles.tileBig]}>
-            <Text style={styles.tileLabel}>Duration</Text>
-            <Text style={styles.tileValueBig}>{fmt(data.totals.duration_min, 0)} mín</Text>
-          </View>
-          <View style={styles.tile}>
-            <Text style={styles.tileLabel}>Distance</Text>
-            <Text style={styles.tileValue}>{fmt(data.totals.distance_m, 0)} m</Text>
-          </View>
-          <View style={styles.tile}>
-            <Text style={styles.tileLabel}>Vel B5</Text>
-            <Text style={styles.tileValue}>{fmt(data.totals.vel_b5, 0)} m</Text>
-          </View>
-          <View style={styles.tile}>
-            <Text style={styles.tileLabel}>Vel B6</Text>
-            <Text style={styles.tileValue}>{fmt(data.totals.vel_b6, 0)} m</Text>
-          </View>
-          <View style={styles.tile}>
-            <Text style={styles.tileLabel}>PL / mín</Text>
-            <Text style={styles.tileValue}>
-              {data.avgPlPerMin != null ? data.avgPlPerMin.toFixed(2) : "–"}
-            </Text>
-          </View>
-          <View style={styles.tile}>
-            <Text style={styles.tileLabel}>Accel B2-3</Text>
-            <Text style={styles.tileValue}>{fmt(data.totals.accel_b23, 0)}</Text>
-          </View>
-          <View style={styles.tile}>
-            <Text style={styles.tileLabel}>Decel B2-3</Text>
-            <Text style={styles.tileValue}>{fmt(data.totals.decel_b23, 0)}</Text>
-          </View>
-        </View>
+        {/* Layer 1 — the headline totals */}
+        <FactRow
+          facts={[
+            { value: fmt(data.totals.player_load, 0), label: "Player Load", sub: "Áætlað heildar-load" },
+            { value: `${fmt(data.totals.duration_min, 0)} mín`, label: "Lengd" },
+            { value: `${fmt(data.totals.distance_m, 0)} m`, label: "Vegalengd" },
+          ]}
+        />
 
-        {/* Drills table */}
-        <Text style={styles.sectionTitle}>Drillur</Text>
-        <View style={styles.table}>
-          <View style={styles.tHead}>
-            <Text style={[styles.cellH, styles.idxCol]}>#</Text>
-            <Text style={[styles.cellH, styles.nameCol]}>Nafn</Text>
-            <Text style={[styles.cellH, styles.setsCol]}>Sett</Text>
-            <Text style={[styles.cellH, styles.smallCol]}>PL</Text>
-            <Text style={[styles.cellH, styles.smallCol]}>Mín</Text>
-            <Text style={[styles.cellH, styles.smallCol]}>Dist</Text>
-            <Text style={[styles.cellH, styles.smallCol]}>Acc B2-3</Text>
-            <Text style={[styles.cellH, styles.smallCol]}>Dec B2-3</Text>
-          </View>
-          {data.items.map((it, i) => {
-            const d = it.drill;
-            const pl = (d.player_load ?? 0) * it.sets;
-            const dur = (d.duration_min ?? 0) * it.sets;
-            const dist = (d.distance_m ?? 0) * it.sets;
-            const accB23 = (d.accel_b23 ?? 0) * it.sets;
-            const decB23 = (d.decel_b23 ?? 0) * it.sets;
-            return (
-              <View key={i} style={styles.tRow}>
-                <Text style={[styles.cell, styles.idxCol]}>{i + 1}</Text>
-                <View style={[styles.cell, styles.nameCol]}>
-                  <Text style={{ fontSize: 9, fontWeight: 700 }}>{d.drill_name}</Text>
-                  <Text style={{ fontSize: 7, color: "#8b8676", marginTop: 1 }}>
-                    {CATEGORY_LABELS[d.category] ?? d.category}
-                    {d.drill_format ? ` · ${d.drill_format}` : ""}
-                    {d.reps ? ` · ${d.reps}` : ""}
-                  </Text>
-                </View>
-                <Text style={[styles.cell, styles.setsCol]}>{it.sets}×</Text>
-                <Text style={[styles.cell, styles.smallCol]}>{fmt(pl, 0)}</Text>
-                <Text style={[styles.cell, styles.smallCol]}>{fmt(dur, 0)}</Text>
-                <Text style={[styles.cell, styles.smallCol]}>{fmt(dist, 0)}</Text>
-                <Text style={[styles.cell, styles.smallCol]}>{d.accel_b23 != null ? fmt(accB23, 0) : "–"}</Text>
-                <Text style={[styles.cell, styles.smallCol]}>{d.decel_b23 != null ? fmt(decB23, 0) : "–"}</Text>
-              </View>
-            );
-          })}
-        </View>
-
-        {/* MD Comparison */}
-        {data.planningMetrics.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>Breytur vs {data.mdDay} saga</Text>
-            <View style={{ borderWidth: 1, borderColor: "#e6e1d4", borderRadius: 3 }}>
-              {data.planningMetrics.map((m, i) => {
-                const rowStyle =
-                  m.status === "ok"
-                    ? styles.cmpRowOk
-                    : m.status === "low"
-                    ? styles.cmpRowLow
-                    : m.status === "high"
-                    ? styles.cmpRowHigh
-                    : {};
-                const iconStyle =
-                  m.status === "ok"
-                    ? styles.cmpIconOk
-                    : m.status === "low"
-                    ? styles.cmpIconLow
-                    : m.status === "high"
-                    ? styles.cmpIconHigh
-                    : {};
-                const icon =
-                  m.status === "ok" ? "✓" : m.status === "high" ? "!" : m.status === "low" ? "↓" : "–";
+        {/* Plan vs this MD-day's history band */}
+        {pm.length > 0 && (
+          <Section title={`Breytur vs ${data.mdDay} saga`} hint="Mjó stika = áætlað gildi; ljósblátt svæði = sögulegt bil fyrir þennan MD-dag.">
+            <View style={{ backgroundColor: C.card, borderWidth: 1, borderColor: C.rule, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+              {pm.map((m, i) => {
+                const st = STATUS[m.status];
                 return (
-                  <View key={i} style={[styles.cmpRow, rowStyle]}>
-                    <Text style={[styles.cmpIcon, iconStyle]}>{icon}</Text>
-                    <Text style={styles.cmpLabel}>{m.label}</Text>
-                    <Text style={[styles.cmpValue, iconStyle]}>
-                      {m.sessionValue > 0 ? m.sessionValue.toFixed(m.decimals) : "–"}
-                    </Text>
-                    <Text style={styles.cmpBand}>
-                      saga: {m.low.toFixed(m.decimals)}–{m.high.toFixed(m.decimals)}
-                    </Text>
+                  <View key={i} wrap={false} style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 5, borderBottomWidth: i < pm.length - 1 ? 1 : 0, borderBottomColor: C.hair }}>
+                    <Text style={[fb(600), { width: 120, fontSize: 8.75 }]}>{clean(m.label)}</Text>
+                    <Text style={[fh(700), { width: 52, fontSize: 10, textAlign: "right", color: TONE[st.tone].text }]}>{m.sessionValue > 0 ? m.sessionValue.toFixed(m.decimals) : "-"}</Text>
+                    <View style={{ flex: 1 }}>
+                      <PlanBar value={m.sessionValue} low={m.low} high={m.high} color={m.status === "none" ? C.ink : TONE[st.tone].fill} />
+                    </View>
+                    <Text style={[fb(400), { width: 86, fontSize: 7.5, color: C.mute, textAlign: "right" }]}>{`saga: ${m.low.toFixed(m.decimals)}-${m.high.toFixed(m.decimals)}`}</Text>
+                    <View style={{ width: 68, alignItems: "flex-end" }}><Status tone={st.tone} text={st.word} size={7.75} /></View>
                   </View>
                 );
               })}
             </View>
-          </>
+          </Section>
         )}
 
-        <Text style={styles.footer}>
-          MicroPulse · Session plan · {data.date}
-        </Text>
-      </Page>
+        {/* Layer 2 — all totals + the drill table */}
+        <Section title="Áætlað heildar-load">
+          <StatGrid
+            items={[
+              { label: "Player Load", value: fmt(data.totals.player_load, 0) },
+              { label: "Duration", value: `${fmt(data.totals.duration_min, 0)} mín` },
+              { label: "Distance", value: `${fmt(data.totals.distance_m, 0)} m` },
+              { label: "PL / mín", value: data.avgPlPerMin != null ? data.avgPlPerMin.toFixed(2) : "-" },
+              { label: "Vel B5", value: `${fmt(data.totals.vel_b5, 0)} m` },
+              { label: "Vel B6", value: `${fmt(data.totals.vel_b6, 0)} m` },
+              { label: "Accel B2-3", value: fmt(data.totals.accel_b23, 0) },
+              { label: "Decel B2-3", value: fmt(data.totals.decel_b23, 0) },
+            ]}
+          />
+        </Section>
+
+        <Section title="Drillur">
+          <Table
+            cols={[
+              { label: "#", width: 18 },
+              { label: "Nafn", flex: 1 },
+              { label: "Sett", width: 30, align: "center" },
+              { label: "PL", width: 38, align: "right", strong: true },
+              { label: "Mín", width: 34, align: "right" },
+              { label: "Dist", width: 42, align: "right" },
+              { label: "Acc B2-3", width: 44, align: "right" },
+              { label: "Dec B2-3", width: 44, align: "right" },
+            ]}
+            rows={data.items.map((it, i) => {
+              const d = it.drill;
+              return [
+                String(i + 1),
+                <View key="n">
+                  <Text style={[fb(600), { fontSize: 8.75 }]}>{clean(d.drill_name)}</Text>
+                  <Text style={[fb(400), { fontSize: 7.25, color: C.mute, marginTop: 1 }]}>
+                    {clean(`${CATEGORY_LABELS[d.category] ?? d.category}${d.drill_format ? ` · ${d.drill_format}` : ""}${d.reps ? ` · ${d.reps}` : ""}`)}
+                  </Text>
+                </View>,
+                `${it.sets}×`,
+                fmt((d.player_load ?? 0) * it.sets, 0),
+                fmt((d.duration_min ?? 0) * it.sets, 0),
+                fmt((d.distance_m ?? 0) * it.sets, 0),
+                d.accel_b23 != null ? fmt(d.accel_b23 * it.sets, 0) : "-",
+                d.decel_b23 != null ? fmt(d.decel_b23 * it.sets, 0) : "-",
+              ];
+            })}
+          />
+          <Provenance>Gildi í töflu = gildi drillu × fjöldi setta. Saga = bil liðsins á sama MD-degi.</Provenance>
+        </Section>
+      </BrandPage>
     </Document>
   );
 }
 
 export async function downloadSessionPdf(data: SessionPdfData, filename: string) {
-  const blob = await pdf(<SessionPdfDocument data={data} />).toBlob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  saveBlob(await renderPdfBlob(() => <SessionPdfDocument data={data} />), filename);
 }

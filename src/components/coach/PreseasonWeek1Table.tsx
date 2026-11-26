@@ -57,7 +57,7 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
   onResetAll: () => void;
 }) {
   const t = (b: Bi) => (is ? b.is : b.en);
-  const [why, setWhy] = React.useState(true);
+  const [why, setWhy] = React.useState(false);
   const fx = (n: number) => (is ? String(n).replace(".", ",") : String(n));
   const mvOf = (k: string) => { const mv = matchKpi[k]; return mv != null && mv > 0 ? mv : null; };
   const xm = (v: number | null | undefined, k: string) => { const mv = mvOf(k); return v != null && mv != null ? Math.round((v / mv) * 100) / 100 : null; };
@@ -87,13 +87,51 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
   };
   const reset = (k: string) => (k === "totalPlayerLoad" ? onWeek1Mult(PRESEASON_DEFAULT_WEEK1) : onKpi(k, null));
 
+  // Grouped by what the variable loads, in plain names (explainability: no GPS jargon in the primary view).
+  const GROUP_OF: Record<string, "run" | "speed" | "tissue"> = {
+    totalDistance: "run", imaFrDistance: "run", imaStrideBand6: "run",
+    velocityBand5: "speed", velocityBand6: "speed",
+    accelB23: "tissue", imaAccel: "tissue", decelB23: "tissue", imaDecel: "tissue", imaCod: "tissue", imaTotal: "tissue",
+  };
+  const GROUPS: Array<{ key: "run" | "speed" | "tissue" | "other"; title: Bi; sub: Bi }> = [
+    { key: "run", title: { en: "Running volume", is: "Hlaupamagn" }, sub: { en: "the aerobic base — built high and early", is: "grunnþolið — byggt hátt og snemma" } },
+    { key: "speed", title: { en: "Speed", is: "Hraði" }, sub: { en: "fast running — a careful return", is: "hröð hlaup — varfærin endurkoma" } },
+    { key: "tissue", title: { en: "Muscle & tendon", is: "Vöðvar & sinar" }, sub: { en: "speed-ups, braking, turns — the biggest strain", is: "hraðaaukningar, hemlun, beygjur — mesta álagið" } },
+    { key: "other", title: { en: "Other", is: "Annað" }, sub: { en: "", is: "" } },
+  ];
+  const PLAIN: Partial<Record<string, Bi>> = {
+    totalDistance: { en: "Total distance", is: "Heildarvegalengd" },
+    imaFrDistance: { en: "Long runs at match pace", is: "Löng hlaup á leikhraða" },
+    imaStrideBand6: { en: "Long-run strides", is: "Skref í löngum hlaupum" },
+    velocityBand5: { en: "High-speed running", is: "Háhraðahlaup" },
+    velocityBand6: { en: "Sprint", is: "Sprettir" },
+    accelB23: { en: "Hard speed-ups", is: "Kröftugar hraðaaukningar" }, imaAccel: { en: "Hard speed-ups", is: "Kröftugar hraðaaukningar" },
+    decelB23: { en: "Hard braking", is: "Kröftug hemlun" }, imaDecel: { en: "Hard braking", is: "Kröftug hemlun" },
+    imaCod: { en: "Changes of direction", is: "Stefnubreytingar" },
+    imaTotal: { en: "All hard actions", is: "Allar kröftugar aðgerðir" },
+  };
+  const used = new Set<string>();
+  const nameOf = (r: Row): string => {
+    const plain = PLAIN[r.k] ? t(PLAIN[r.k]!) : null;
+    const n = plain && !used.has(plain) ? plain : t(r.lab); // two sources of one action keep their own label
+    used.add(n); return n;
+  };
+  const master = rows.find((r) => r.k === "totalPlayerLoad")!;
+  const kpiRows = rows.filter((r) => r.k !== "totalPlayerLoad").map((r) => ({ ...r, name: nameOf(r) }));
+
+  // The scale every track shares: 0× → the largest number on the page (at least 4×), so rows compare.
+  const scaleMax = Math.max(4, Math.ceil(Math.max(...rows.flatMap((r) => [r.w1 ?? 0, r.pk ?? 0, r.lt ?? 0, r.ref?.[1] ?? 0]))));
+  const pos = (x: number) => `${Math.max(0, Math.min(100, (x / scaleMax) * 100))}%`;
+  const ticks = Array.from({ length: scaleMax + 1 }, (_, i) => i);
+
   // Read against research — always a word, never a colour alone.
   const band = (x: number | null, ref: [number, number] | null) => {
-    if (x == null || ref == null) return null;
+    if (x == null) return null;
+    if (ref == null) return <span className="text-[10px] text-slate-500">{t({ en: "no reference", is: "engin viðmið" })}</span>;
     const k = x < ref[0] ? "below" : x > ref[1] ? "above" : "in";
     const txt = k === "in" ? t({ en: "within", is: "innan" }) : k === "above" ? t({ en: "above", is: "yfir" }) : t({ en: "below", is: "undir" });
-    const cls = k === "in" ? "bg-[#1c7a4a]/10 text-[#1c7a4a]" : k === "above" ? "bg-[#de9328]/15 text-[#8a5a10]" : "bg-slate-100 text-slate-600";
-    return <span className={`ml-1 rounded px-1 py-px text-[10px] font-semibold ${cls}`}>{txt}</span>;
+    const cls = k === "in" ? "bg-[#1c7a4a]/12 text-[#15603a]" : k === "above" ? "bg-[#de9328]/16 text-[#7a4a06]" : "bg-[#eeece6] text-slate-600";
+    return <span className={`rounded px-1.5 py-px text-[10px] font-semibold ${cls}`}>{txt}</span>;
   };
   const startRule = (k: string) => {
     if (k === "totalPlayerLoad") return t({ en: `Proposal ${fx(PRESEASON_DEFAULT_WEEK1)}× a match.`, is: `Tillaga ${fx(PRESEASON_DEFAULT_WEEK1)}× leik.` });
@@ -102,82 +140,156 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
       ? t({ en: `Starts at no less than ${Math.round(f * 100)}% of the peak week.`, is: `Byrjar í minnst ${Math.round(f * 100)}% af toppvikunni.` })
       : t({ en: "Follows the overall week-1 line.", is: "Fylgir almennu viku-1 línunni." });
   };
-  const th = "pr-3 font-medium align-bottom";
+
+  const cols = "grid grid-cols-1 items-center gap-3 md:grid-cols-[minmax(180px,1.3fr)_190px_minmax(220px,2fr)_150px] md:gap-5";
+
+  // Week 1 → peak on the shared scale: research range shaded, the build as a bar, the three weeks as marks.
+  const track = (r: Row) => {
+    const lo = Math.min(r.w1 ?? 0, r.pk ?? 0), hi = Math.max(r.w1 ?? 0, r.pk ?? 0);
+    return (
+      <div className="relative h-10" role="img" aria-label={`${t({ en: "Week 1", is: "Vika 1" })} ${r.w1 != null ? fx(r.w1) : "–"}×, ${t({ en: "peak", is: "toppur" })} ${r.pk != null ? fx(r.pk) : "–"}×${lightW ? `, ${t({ en: "light week", is: "létt vika" })} ${r.lt != null ? fx(r.lt) : "–"}×` : ""}${r.ref ? `; ${t({ en: "research", is: "rannsóknir" })} ${fx(r.ref[0])}–${fx(r.ref[1])}×` : ""}`}>
+        <div className="absolute inset-x-0 top-[17px] h-1.5 rounded-full bg-[#ece9e2]" />
+        {r.ref && <div className="absolute top-2 h-6 rounded-md bg-[#1c7a4a]/[0.14]" style={{ left: pos(r.ref[0]), width: `calc(${pos(r.ref[1])} - ${pos(r.ref[0])})` }} />}
+        {r.w1 != null && r.pk != null && <div className="absolute top-[17px] h-1.5 rounded-full bg-[#2740e6]/35" style={{ left: pos(lo), width: `calc(${pos(hi)} - ${pos(lo)})` }} />}
+        {lightW && r.lt != null && <div className="absolute top-[30px] h-2.5 w-2.5 -translate-x-1/2 rotate-45 bg-[#8a919c]" style={{ left: pos(r.lt) }} />}
+        {r.w1 != null && <div className="absolute top-[13px] h-3.5 w-3.5 -translate-x-1/2 rounded-full border-[3px] border-[#2740e6] bg-white" style={{ left: pos(r.w1) }} />}
+        {r.pk != null && <div className="absolute top-[13px] h-3.5 w-3.5 -translate-x-1/2 rounded-full bg-[#2740e6] ring-2 ring-white" style={{ left: pos(r.pk) }} />}
+      </div>
+    );
+  };
+  const nums = (r: Row) => (
+    <div className="flex flex-col gap-1 text-[12px] text-slate-600">
+      <span>{t({ en: "Peak", is: "Toppur" })} <b className="text-[14px] tabular-nums text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{r.pk != null ? `${fx(r.pk)}×` : "–"}</b> {band(r.pk, r.ref)}</span>
+      {lightW && <span>{t({ en: "Light", is: "Létt" })} <b className="text-[14px] tabular-nums text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{r.lt != null ? `${fx(r.lt)}×` : "–"}</b> {band(r.lt, r.ref)}</span>}
+    </div>
+  );
+  // − [typed value] + : 0.05× a step; typing still works (Week1Input).
+  const stepper = (r: Row, name: string, big = false) => {
+    const step = (dir: 1 | -1) => { if (r.w1 == null) return; commit(r.k, Math.max(0.05, Math.round((r.w1 + dir * 0.05) * 100) / 100)); };
+    return (
+      <div className={`flex items-center overflow-hidden rounded-[10px] border bg-white ${big || r.mine ? "border-[#2740e6]" : "border-[#d9d5cc]"} ${big ? "h-11" : "h-10"}`}>
+        <button type="button" onClick={() => step(-1)} aria-label={`${name} — ${t({ en: "week 1 down", is: "vika 1 niður" })}`} className="h-full w-10 shrink-0 text-[17px] text-[#2740e6] hover:bg-[#2740e6]/5">−</button>
+        <Week1Input value={r.w1} label={`${name} — ${t({ en: "week 1", is: "vika 1" })}`} onCommit={(x) => commit(r.k, x)} big={big} />
+        <span className={`pr-1 font-bold text-[#14181c] ${big ? "text-[18px]" : "text-[16px]"}`} style={{ fontFamily: "var(--font-archivo, inherit)" }}>×</span>
+        <button type="button" onClick={() => step(1)} aria-label={`${name} — ${t({ en: "week 1 up", is: "vika 1 upp" })}`} className="h-full w-10 shrink-0 text-[17px] text-[#2740e6] hover:bg-[#2740e6]/5">+</button>
+      </div>
+    );
+  };
+  const sub = (r: Row) => (
+    <span className="text-[11px] text-slate-600">
+      {r.w1Raw != null && <>{r.w1Raw.toLocaleString("en-US")}{r.unit}</>}
+      {r.mine
+        ? <>{r.w1Raw != null && " · "}{r.prop != null && <button type="button" onClick={() => reset(r.k)} className="font-semibold text-[#2740e6] underline">{t({ en: "proposal", is: "tillaga" })} {fx(r.prop)}×</button>}</>
+        : <>{r.w1Raw != null && " · "}{t({ en: "system proposal", is: "tillaga kerfisins" })}</>}
+    </span>
+  );
+  const yours = <span className="rounded-full bg-[#2740e6]/[0.08] px-1.5 py-0.5 text-[10px] font-semibold text-[#2740e6]">{t({ en: "yours", is: "þitt" })}</span>;
+  const changed = setCount + (week1Mult !== PRESEASON_DEFAULT_WEEK1 ? 1 : 0);
 
   return (
-    <div className="mt-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-[13px] font-bold text-slate-800">{t({ en: "Week 1 → peak → light week, every variable", is: "Vika 1 → toppur → létt vika, hver breyta" })}</h3>
-        <span className="text-[12px] text-slate-500">{setCount > 0 ? t({ en: `${setCount} set by you · the rest is the system's proposal`, is: `${setCount} stillt af þér · restin tillaga kerfisins` }) : t({ en: "the system's proposal", is: "tillaga kerfisins" })}</span>
-      </div>
-      <p className="mt-0.5 text-[12px] text-slate-600">{t({ en: "The system proposes week 1. Change any variable in × a match and its whole pre-season moves by the same share: week 1 +10% → every week, the peak and the light week too, +10%.", is: "Kerfið leggur til viku 1. Breyttu hvaða breytu sem er í × leik og allur undirbúningurinn hennar færist um sama hlutfall: vika 1 +10% → allar vikur, líka toppurinn og létta vikan, +10%." })}</p>
-
-      <div className="mt-2 overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left text-[12px] tabular-nums">
-          <thead className="text-[11px] text-slate-500">
-            <tr>
-              <th className={`py-1 ${th}`}>{t({ en: "Variable (× a match)", is: "Breyta (× leikur)" })}</th>
-              <th className={th}>{t({ en: "Week 1 (yours to change)", is: "Vika 1 (þú breytir)" })}</th>
-              <th className={th}>{t({ en: `Week ${peakNo} (peak)`, is: `Vika ${peakNo} (toppur)` })}</th>
-              {lightW && <th className={th}>{t({ en: `Week ${ramp.length} (light)`, is: `Vika ${ramp.length} (létt)` })}</th>}
-              <th className="font-medium align-bottom">{t({ en: "Research (training:match)", is: "Rannsóknir (æfing:leikur)" })}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.k} className={`border-t border-slate-200 align-top ${r.k === "totalPlayerLoad" ? "bg-slate-50/70" : ""}`}>
-                <td className="py-1.5 pr-3 font-medium text-slate-800">{t(r.lab)}{r.mine && <span title={t({ en: "your value", is: "þitt gildi" })} className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-[#2740e6] align-middle" />}</td>
-                <td className="py-1.5 pr-3">
-                  <div className="flex items-center gap-1">
-                    <Week1Input value={r.w1} label={`${t(r.lab)} — ${t({ en: "week 1", is: "vika 1" })}`} onCommit={(x) => commit(r.k, x)} />
-                    <span className="text-slate-400">×</span>{band(r.w1, r.ref)}
-                  </div>
-                  <div className="mt-0.5 text-[10.5px] text-slate-400">
-                    {r.w1Raw != null && <>{r.w1Raw.toLocaleString("en-US")}{r.unit} · </>}
-                    {r.mine
-                      ? <>{t({ en: "your value", is: "þitt gildi" })}{r.prop != null && <> · {t({ en: "proposal", is: "tillaga" })} {fx(r.prop)}× · <button type="button" onClick={() => reset(r.k)} className="font-medium text-[#2740e6] hover:underline">{t({ en: "back to proposal", is: "aftur í tillögu" })}</button></>}</>
-                      : t({ en: "system proposal", is: "tillaga kerfisins" })}
-                  </div>
-                </td>
-                <td className="py-1.5 pr-3"><span className="font-semibold text-slate-900">{r.pk != null ? `${fx(r.pk)}×` : "–"}</span>{band(r.pk, r.ref)}</td>
-                {lightW && <td className="py-1.5 pr-3"><span className="font-semibold text-slate-900">{r.lt != null ? `${fx(r.lt)}×` : "–"}</span>{band(r.lt, r.ref)}</td>}
-                <td className="py-1.5 text-slate-600">{r.ref ? `${fx(r.ref[0])}–${fx(r.ref[1])}×` : t({ en: "no reference", is: "engin viðmið" })}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="mt-2 overflow-hidden rounded-2xl border border-[#e3e0d8] bg-white">
+      {/* Verdict + how it works */}
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#ece9e2] px-5 pb-5 pt-5 sm:px-6">
+        <div className="flex min-w-0 max-w-[680px] flex-col gap-1.5">
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[#2740e6]">{t({ en: "Load per variable", is: "Álag á hverja breytu" })}</span>
+          <h3 className="text-[22px] font-bold leading-tight tracking-[-0.01em] text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{t({ en: "Set week 1 — the whole ramp follows", is: "Stilltu viku 1 — allur rampurinn fylgir" })}</h3>
+          <p className="text-[14px] leading-relaxed text-slate-600">{t({ en: "Every number is ", is: "Hver tala er " })}<b className="text-[#14181c]">{t({ en: "× a match", is: "× leikur" })}</b>{t({ en: ": the week's total ÷ one team match in that variable. Change week 1 and the peak and light week move by the same share.", is: ": vikan samanlagt ÷ einn leikur liðsins í þeirri breytu. Breyttu viku 1 og toppurinn og létta vikan færast um sama hlutfall." })}</p>
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <span className={`inline-flex h-7 items-center rounded-full px-3 text-[12px] font-semibold ${changed > 0 ? "bg-[#2740e6]/[0.08] text-[#2740e6]" : "bg-[#f1efe9] text-slate-600"}`}>
+            {changed > 0 ? t({ en: `${changed} set by you · the rest follows the proposal`, is: `${changed} stillt af þér · restin fylgir tillögunni` }) : t({ en: "The system's proposal", is: "Tillaga kerfisins" })}
+          </span>
+          {changed > 0 && <button type="button" onClick={() => { onResetAll(); if (week1Mult !== PRESEASON_DEFAULT_WEEK1) onWeek1Mult(PRESEASON_DEFAULT_WEEK1); }} className="h-9 rounded-lg border border-[#d9d5cc] bg-white px-3 text-[13px] font-medium text-[#14181c] hover:bg-slate-50">{t({ en: "All back to the proposal", is: "Allt aftur í tillögu" })}</button>}
+        </div>
       </div>
 
-      {/* What the columns mean + how to read the marks — visible, no click. */}
-      <ul className="mt-2 space-y-0.5 text-[11.5px] text-slate-600">
-        <li><b className="font-semibold text-slate-700">{t({ en: "× a match", is: "× leikur" })}</b> — {t({ en: "the week's total divided by one team match in the same variable. 2× = twice what one match gives.", is: "vikan samanlagt deilt með einum leik liðsins í sömu breytu. 2× = tvöfalt það sem einn leikur gefur." })}</li>
-        <li><b className="font-semibold text-slate-700">{t({ en: "Week 1", is: "Vika 1" })}</b> — {t({ en: "a controlled return after the break, below a normal week. Where each variable starts is a MicroPulse line, not a research number.", is: "stýrð endurkoma eftir fríið, undir venjulegri viku. Hvar hver breyta byrjar er lína MicroPulse, ekki rannsóknartala." })}</li>
-        <li><b className="font-semibold text-slate-700">{t({ en: "Peak", is: "Toppur" })}</b> — {t({ en: "the heaviest pre-season week. It moves with week 1 by the same share. It may sit above the research range: pre-season builds capacity without competitive games.", is: "þyngsta vika undirbúningsins. Hún færist með viku 1 um sama hlutfall. Hún má vera yfir rannsóknabilinu: undirbúningur byggir upp þol án keppnisleikja." })}</li>
-        {lightW && <li><b className="font-semibold text-slate-700">{t({ en: "Light week", is: "Létt vika" })}</b> — {t({
-          en: `the peak week −${taperPct}% ("Light last week −%" above). Every variable drops by the same share and keeps its own weight. Research: a ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% cut in volume, intensity kept.`,
-          is: `toppvikan −${taperPct}% („Létt lokavika −%“ hér að ofan). Hver breyta lækkar um sama hlutfall og heldur sínu vægi. Rannsóknir: ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% lækkun á magni, ákefð haldið.`,
-        })}</li>}
-        <li><b className="font-semibold text-slate-700">{t({ en: "Research", is: "Rannsóknir" })}</b> — {t({ en: "training:match in a normal in-season training week. The mark shows where each number lands: ", is: "æfing:leikur í venjulegri æfingaviku á keppnistímabili. Merkið sýnir hvar talan lendir: " })}
-          <b className="text-[#1c7a4a]">{t({ en: "within", is: "innan" })}</b> {t({ en: "the range,", is: "bilsins," })} <b className="text-[#8a5a10]">{t({ en: "above", is: "yfir" })}</b> {t({ en: "(on purpose in the peak week),", is: "(viljandi í toppviku)," })} <b className="text-slate-600">{t({ en: "below", is: "undir" })}</b> {t({ en: "(on purpose in week 1).", is: "(viljandi í viku 1)." })}</li>
-      </ul>
+      {/* Master: the overall load moves every variable the coach hasn't set */}
+      <div className={`${cols} border-b border-[#ece9e2] bg-[#f8f7f3] px-5 py-5 sm:px-6`}>
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="flex items-center gap-1.5 text-[16px] font-bold text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{t({ en: "Overall load", is: "Heildarálag" })}{master.mine && yours}</span>
+          <span className="text-[12px] leading-snug text-slate-600">{t({ en: "The whole week in one number (PlayerLoad). Moves every variable you haven't set yourself.", is: "Öll vikan í einni tölu (PlayerLoad). Færir allar breytur sem þú hefur ekki stillt sjálfur." })}</span>
+        </div>
+        <div className="flex flex-col gap-1">{stepper(master, t({ en: "Overall load", is: "Heildarálag" }), true)}{sub(master)}</div>
+        {track(master)}
+        {nums(master)}
+      </div>
 
-      {/* What each variable is, and why it starts where it starts. */}
-      <button type="button" onClick={() => setWhy((v) => !v)} aria-expanded={why} className="mt-2 text-[12px] font-semibold text-[#2740e6] hover:underline">
-        {why ? t({ en: "Hide what each variable is", is: "Fela útskýringar á breytunum" }) : t({ en: "Show what each variable is", is: "Sýna útskýringar á breytunum" })}
-      </button>
-      {why && (
-        <dl className="mt-1 grid gap-x-4 gap-y-1 text-[11.5px] text-slate-600 sm:grid-cols-2">
-          {rows.map((r) => (
-            <div key={r.k} className="min-w-0">
-              <dt className="inline font-semibold text-slate-700">{t(r.lab)}: </dt>
-              <dd className="inline">{WHAT[r.k] ? t(WHAT[r.k]!) : ""} {startRule(r.k)}</dd>
+      {/* Legend + the shared scale */}
+      <div className="hidden px-5 pt-3.5 sm:px-6 md:block">
+        <div className={`${cols} items-end text-[11px] text-slate-600`}>
+          <span>{t({ en: "Variable", is: "Breyta" })}</span>
+          <span>{t({ en: "Week 1 · yours to change", is: "Vika 1 · þú breytir" })}</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-[18px] rounded-[3px] bg-[#1c7a4a]/[0.18]" />{t({ en: "Research range", is: "Rannsóknabil" })}</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-2 border-[#2740e6] bg-white" />{t({ en: "Week 1", is: "Vika 1" })}</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#2740e6]" />{t({ en: `Peak · wk ${peakNo}`, is: `Toppur · v ${peakNo}` })}</span>
+            {lightW && <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rotate-45 bg-[#8a919c]" />{t({ en: `Light · wk ${ramp.length}`, is: `Létt · v ${ramp.length}` })}</span>}
+          </div>
+          <span>{t({ en: "vs research", is: "miðað við rannsóknir" })}</span>
+        </div>
+        <div className={`${cols} mt-1 font-mono text-[10px] text-slate-500`}>
+          <span /><span />
+          <div className="flex justify-between">{ticks.map((i) => <span key={i}>{i}×</span>)}</div>
+          <span />
+        </div>
+      </div>
+
+      {/* Groups */}
+      {GROUPS.map((g) => {
+        const gr = kpiRows.filter((r) => (GROUP_OF[r.k] ?? "other") === g.key);
+        if (!gr.length) return null;
+        return (
+          <div key={g.key} className="px-5 pt-2 sm:px-6">
+            <div className="flex flex-wrap items-baseline gap-2.5 border-b border-[#ece9e2] pb-1.5 pt-3.5">
+              <span className="text-[13px] font-bold uppercase tracking-[0.02em] text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{t(g.title)}</span>
+              {g.sub.en && <span className="text-[12px] text-slate-600">{t(g.sub)}</span>}
             </div>
-          ))}
-        </dl>
-      )}
-      <div className="mt-1.5 text-[10.5px] text-slate-500">
-        <CiteRefs text="Clemente 2019c; Gualtieri 2023; Bosquet 2007; Mujika & Padilla 2003; Jeong 2011; Teixeira 2021; Harper 2022" is={is} />
-        {Object.keys(week1Kpi).length > 0 && <> · <button type="button" onClick={onResetAll} className="font-medium text-slate-600 hover:underline">{t({ en: "All back to the proposal", is: "Allt aftur í tillögu" })}</button></>}
+            {gr.map((r) => (
+              <div key={r.k} className={`${cols} border-b border-[#f1efe9] py-3 last:border-b-0`}>
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="flex flex-wrap items-center gap-1.5 text-[14px] font-semibold text-[#14181c]">{r.name}{r.mine && yours}</span>
+                  {WHAT[r.k] && <span className="text-[12px] leading-snug text-slate-600">{t(WHAT[r.k]!)}</span>}
+                </div>
+                <div className="flex flex-col gap-1">{stepper(r, r.name)}{sub(r)}</div>
+                {track(r)}
+                {nums(r)}
+              </div>
+            ))}
+          </div>
+        );
+      })}
+
+      {/* The plain why stays visible; the column definitions, start rules and sources sit behind the toggle. */}
+      <div className="mt-3 border-t border-[#ece9e2] bg-[#f8f7f3] px-5 pb-5 pt-4 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-[760px] text-[12px] leading-relaxed text-slate-600">{t({ en: "Week 1 sits low on purpose (a controlled return); the peak may sit above the range on purpose (pre-season builds capacity without league games). Research = training:match in a normal in-season week.", is: "Vika 1 er lág viljandi (stýrð endurkoma); toppurinn má vera yfir bilinu viljandi (undirbúningur byggir upp þol án deildarleikja). Rannsóknir = æfing:leikur í venjulegri viku á keppnistímabili." })}</p>
+          <button type="button" onClick={() => setWhy((v) => !v)} aria-expanded={why} className="h-9 rounded-lg px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">
+            {why ? t({ en: "Hide details & sources", is: "Fela nánar & heimildir" }) : t({ en: "Show details & sources", is: "Sýna nánar & heimildir" })}
+          </button>
+        </div>
+        {why && (
+          <div className="mt-3 space-y-3 text-[11.5px] text-slate-600">
+            <ul className="space-y-0.5">
+              <li><b className="font-semibold text-slate-700">{t({ en: "Week 1", is: "Vika 1" })}</b> — {t({ en: "a controlled return after the break, below a normal week. Where each variable starts is a MicroPulse line, not a research number.", is: "stýrð endurkoma eftir fríið, undir venjulegri viku. Hvar hver breyta byrjar er lína MicroPulse, ekki rannsóknartala." })}</li>
+              <li><b className="font-semibold text-slate-700">{t({ en: "Peak", is: "Toppur" })}</b> — {t({ en: "the heaviest pre-season week. It moves with week 1 by the same share.", is: "þyngsta vika undirbúningsins. Hún færist með viku 1 um sama hlutfall." })}</li>
+              {lightW && <li><b className="font-semibold text-slate-700">{t({ en: "Light week", is: "Létt vika" })}</b> — {t({
+                en: `the peak week −${taperPct}% ("Light last week" above). Every variable drops by the same share and keeps its own weight. Research: a ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% cut in volume, intensity kept.`,
+                is: `toppvikan −${taperPct}% („Létt lokavika“ hér að ofan). Hver breyta lækkar um sama hlutfall og heldur sínu vægi. Rannsóknir: ${PRESEASON_TAPER_RESEARCH[0]}–${PRESEASON_TAPER_RESEARCH[1]}% lækkun á magni, ákefð haldið.`,
+              })}</li>}
+            </ul>
+            <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+              {[master, ...kpiRows].map((r) => (
+                <div key={r.k} className="min-w-0">
+                  <dt className="inline font-semibold text-slate-700">{t(r.lab)}: </dt>
+                  <dd className="inline">{startRule(r.k)}{r.ref ? ` ${t({ en: "Research", is: "Rannsóknir" })} ${fx(r.ref[0])}–${fx(r.ref[1])}×.` : ""}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="text-[10.5px] text-slate-500">
+              <CiteRefs text="Clemente 2019c; Gualtieri 2023; Bosquet 2007; Mujika & Padilla 2003; Jeong 2011; Teixeira 2021; Harper 2022; PMC6747517" is={is} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -185,7 +297,7 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
 
 // Week-1 input: arrows and typing re-flow the plan ~0.4 s after the last change, Enter / leaving the box at once.
 // While the coach types, the box shows what they typed; otherwise it follows the plan's value (reset, draft reload).
-function Week1Input({ value, label, onCommit }: { value: number | null; label: string; onCommit: (x: number) => void }) {
+function Week1Input({ value, label, onCommit, big = false }: { value: number | null; label: string; onCommit: (x: number) => void; big?: boolean }) {
   const [txt, setTxt] = React.useState("");
   const [editing, setEditing] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -206,6 +318,6 @@ function Week1Input({ value, label, onCommit }: { value: number | null; label: s
       }}
       onBlur={() => { fire(txt); setEditing(false); }}
       onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-      className="h-7 w-[4.5rem] rounded border border-slate-300 bg-white px-1.5 tabular-nums" />
+      className={`h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-right font-bold tabular-nums text-[#14181c] outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${big ? "text-[18px]" : "text-[16px]"}`} style={{ fontFamily: "var(--font-archivo, inherit)" }} />
   );
 }

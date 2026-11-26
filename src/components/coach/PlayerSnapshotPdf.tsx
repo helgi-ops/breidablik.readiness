@@ -5,17 +5,22 @@
  * ──────────────────
  * Renders a one/two-page PDF summary of a player's daily snapshot.
  * Given the Snapshot JSON returned by /api/coach/player-snapshot, produces
- * a printable coach report covering:
- *   - Header: player, date, overall risk badge
- *   - KPI tiles: ACWR, Readiness, Daily load, Avg RPE
- *   - Risk analysis: narrative summary, drivers, recommendations
- *   - Session RPE entries
- *   - Wellness / readiness breakdown
- *   - GPS / external load blocks
- *   - Context (week plan, session_type_mix)
+ * a printable coach report in the explainability-first order:
+ *   0  Masthead (player, date, overall risk chip) → rule-based risk verdict
+ *   1  Three plain facts: readiness, daily load, average RPE
+ *      → risk drivers + recommended actions
+ *   2  Behind the numbers: load ratio (ACWR, acute/chronic), session RPE entries,
+ *      wellness breakdown, GPS / external load blocks, context (week plan)
+ *
+ * Styling comes from the shared MicroPulse PDF kit (src/components/pdf/brand.tsx).
+ * The readiness band is printed exactly as the snapshot API returns it (never re-derived).
  */
 
-import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { Document, Text, View } from "@react-pdf/renderer";
+import {
+  BrandPage, Body, C, Card, FactRow, Label, Provenance, Section, StatGrid, Status, Table, Verdict, clean, fb, toneOf,
+  type Tone,
+} from "@/components/pdf/brand";
 
 type RiskDriver = {
   key: string;
@@ -76,133 +81,8 @@ export type PlayerSnapshotPdfData = {
   context: { week_plan: Record<string, unknown> | null };
 };
 
-const styles = StyleSheet.create({
-  page: { padding: 28, fontSize: 10, color: "#221f18", fontFamily: "Helvetica" },
-
-  // Header
-  header: { marginBottom: 12, paddingBottom: 10, borderBottom: "2 solid #e6e1d4" },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  h1: { fontSize: 18, fontWeight: 700, marginBottom: 2 },
-  subtitle: { fontSize: 10, color: "#6d6858" },
-  badge: {
-    fontSize: 9,
-    fontWeight: 700,
-    padding: "4 8",
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  badgeHigh: { backgroundColor: "#f1d3c8", color: "#72291c", borderColor: "#d68e77" },
-  badgeElevated: { backgroundColor: "#f3e0b4", color: "#7c5210", borderColor: "#e0b257" },
-  badgeLow: { backgroundColor: "#d3e8da", color: "#145233", borderColor: "#82bf98" },
-
-  // Section title
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: "#565044",
-    textTransform: "uppercase",
-    marginBottom: 6,
-    marginTop: 12,
-  },
-
-  // KPI tiles
-  tilesRow: { flexDirection: "row", gap: 6, marginBottom: 4 },
-  tile: {
-    borderWidth: 1,
-    borderRadius: 4,
-    padding: "6 8",
-    flex: 1,
-  },
-  tileSlate: { borderColor: "#e6e1d4", backgroundColor: "#f7f5ef" },
-  tileGreen: { borderColor: "#b0d6bd", backgroundColor: "#eaf3ec" },
-  tileAmber: { borderColor: "#e0b257", backgroundColor: "#faf1de" },
-  tileRed: { borderColor: "#d68e77", backgroundColor: "#f8e9e3" },
-  tileLabel: { fontSize: 7, color: "#8b8676", textTransform: "uppercase", marginBottom: 2 },
-  tileValue: { fontSize: 16, fontWeight: 700, color: "#221f18" },
-  tileBand: { fontSize: 7, color: "#8b8676", marginTop: 2 },
-
-  // Narrative / body text
-  bodyText: { fontSize: 10, color: "#3a352c", lineHeight: 1.4, marginBottom: 4 },
-
-  // Risk analysis
-  riskBox: {
-    borderWidth: 1,
-    borderRadius: 4,
-    padding: 8,
-    marginTop: 4,
-    marginBottom: 6,
-  },
-  riskBoxHigh: { borderColor: "#d68e77", backgroundColor: "#f8e9e3" },
-  riskBoxElevated: { borderColor: "#e0b257", backgroundColor: "#faf1de" },
-  riskSummary: { fontSize: 10, color: "#221f18", fontWeight: 700, marginBottom: 6 },
-
-  driverRow: {
-    borderWidth: 1,
-    borderColor: "#e6e1d4",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 3,
-    padding: 6,
-    marginBottom: 4,
-  },
-  driverHead: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
-  driverLabel: { fontSize: 9, fontWeight: 700, color: "#221f18" },
-  driverValue: { fontSize: 9, fontWeight: 700, color: "#565044" },
-  driverExplanation: { fontSize: 8.5, color: "#565044", lineHeight: 1.35 },
-
-  // Recommendations
-  recBox: {
-    borderWidth: 1,
-    borderColor: "#e6e1d4",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 3,
-    padding: 6,
-    marginTop: 4,
-  },
-  recTitle: { fontSize: 8, fontWeight: 700, color: "#8b8676", textTransform: "uppercase", marginBottom: 4 },
-  recItem: { fontSize: 8.5, color: "#3a352c", marginBottom: 2, lineHeight: 1.35 },
-
-  // Wellness grid
-  grid3: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
-  gridCell: {
-    width: "32.5%",
-    borderWidth: 1,
-    borderColor: "#e6e1d4",
-    backgroundColor: "#f7f5ef",
-    borderRadius: 3,
-    padding: "4 6",
-    marginBottom: 4,
-  },
-  gridLabel: { fontSize: 7, color: "#8b8676", textTransform: "uppercase", marginBottom: 1 },
-  gridValue: { fontSize: 11, fontWeight: 700, color: "#221f18" },
-
-  // RPE entry
-  rpeItem: {
-    borderWidth: 1,
-    borderColor: "#e6e1d4",
-    borderRadius: 3,
-    padding: 6,
-    marginBottom: 4,
-  },
-  rpeTop: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
-  rpeTitle: { fontSize: 10, fontWeight: 700, color: "#221f18" },
-  rpeMeta: { fontSize: 8, color: "#8b8676" },
-
-  footer: {
-    position: "absolute",
-    bottom: 18,
-    left: 28,
-    right: 28,
-    fontSize: 7,
-    color: "#a9a493",
-    textAlign: "center",
-    borderTopWidth: 1,
-    borderTopColor: "#e6e1d4",
-    paddingTop: 6,
-  },
-});
-
 function fmtNum(v: number | null | undefined, digits = 0): string {
-  if (v == null || !Number.isFinite(Number(v))) return "–";
+  if (v == null || !Number.isFinite(Number(v))) return "-";
   return Number(v).toFixed(digits);
 }
 
@@ -229,276 +109,217 @@ function loadBandLabel(b: PlayerSnapshotPdfData["summary"]["load_band"]): string
   if (b === "MEDIUM") return "Moderate";
   if (b === "LIGHT") return "Light";
   if (b === "VERY_LIGHT") return "Very light";
-  return "—";
+  return "-";
 }
 
-function acwrTileStyle(band: PlayerSnapshotPdfData["summary"]["acwr_band"]) {
-  if (band === "RISK") return styles.tileRed;
-  if (band === "CAUTION") return styles.tileAmber;
-  if (band === "OPTIMAL") return styles.tileGreen;
-  return styles.tileSlate;
+function acwrTone(band: PlayerSnapshotPdfData["summary"]["acwr_band"]): Tone | undefined {
+  if (band === "RISK") return "red";
+  if (band === "CAUTION") return "amber";
+  if (band === "OPTIMAL") return "green";
+  return undefined;
 }
 
-function readinessTileStyle(band: PlayerSnapshotPdfData["summary"]["readiness_band"]) {
-  if (band === "RED") return styles.tileRed;
-  if (band === "AMBER") return styles.tileAmber;
-  if (band === "GREEN") return styles.tileGreen;
-  return styles.tileSlate;
+/** Readiness band exactly as the API returns it (GREEN / AMBER / RED) — never re-derived here. */
+function readinessTone(band: PlayerSnapshotPdfData["summary"]["readiness_band"]): Tone | undefined {
+  return band ? toneOf(band) : undefined;
 }
+
+const SLEEP_HOURS: Record<number, string> = { 1: "<5", 2: "5-6", 3: "6-7", 4: "7-8", 5: "8+" };
+const of5 = (v: number | null | undefined) => (v != null ? `${v}/5` : "-");
 
 export function PlayerSnapshotPdfDocument({ data }: { data: PlayerSnapshotPdfData }) {
   const sev = data.risk_analysis.overallSeverity;
-  const badgeStyle =
-    sev === "HIGH" ? styles.badgeHigh : sev === "ELEVATED" ? styles.badgeElevated : styles.badgeLow;
+  const sevTone: Tone = sev === "HIGH" ? "red" : sev === "ELEVATED" ? "amber" : "green";
   const badgeLabel = sev === "HIGH" ? "Há áhætta" : sev === "ELEVATED" ? "Aukin aðgát" : "Lág áhætta";
-
-  const riskBoxStyle =
-    sev === "HIGH" ? styles.riskBoxHigh : sev === "ELEVATED" ? styles.riskBoxElevated : null;
+  const name = data.player.full_name ?? "-";
+  const s = data.summary;
+  const rd = data.readiness;
+  const rTone = readinessTone(s.readiness_band);
 
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerRow}>
-            <View>
-              <Text style={styles.h1}>{data.player.full_name ?? "—"}</Text>
-              <Text style={styles.subtitle}>
-                {data.player.position ?? "—"} {"  ·  "}Dagsetning: {data.date}
-              </Text>
-            </View>
-            <Text style={[styles.badge, badgeStyle]}>{badgeLabel}</Text>
-          </View>
-        </View>
+      <BrandPage
+        doc="Player snapshot"
+        context={name}
+        kicker="Daily snapshot"
+        title={name}
+        subtitle={`${data.player.position ?? "-"}  ·  Dagsetning: ${data.date}`}
+        chips={[{ text: badgeLabel, tone: sevTone }]}
+        note={`MicroPulse · Player daily snapshot · ${name} · ${data.date}`}
+      >
+        {/* Layer 0 — the rule-based risk verdict */}
+        <Verdict
+          tone={sevTone}
+          label={`Áhættugreining · ${badgeLabel}`}
+          headline={data.risk_analysis.summary}
+          confidence={`${data.risk_analysis.drivers.length} áhættuþættir · ${s.rpe_count} RPE · ${rd ? "readiness skráð" : "engin readiness færsla"}`}
+        />
 
-        {/* KPI tiles */}
-        <Text style={styles.sectionTitle}>Yfirlit</Text>
-        <View style={styles.tilesRow}>
-          <View style={[styles.tile, acwrTileStyle(data.summary.acwr_band)]}>
-            <Text style={styles.tileLabel}>ACWR</Text>
-            <Text style={styles.tileValue}>{fmtNum(data.summary.acwr, 2)}</Text>
-            <Text style={styles.tileBand}>{data.summary.acwr_band ?? "N/A"}</Text>
-          </View>
-          <View style={[styles.tile, readinessTileStyle(data.summary.readiness_band)]}>
-            <Text style={styles.tileLabel}>Readiness</Text>
-            <Text style={styles.tileValue}>
-              {data.summary.readiness_total != null ? `${data.summary.readiness_total}%` : "—"}
-            </Text>
-            <Text style={styles.tileBand}>
-              {data.summary.readiness_band ?? "No entry"}
-              {data.summary.readiness_total_raw != null ? ` · ${data.summary.readiness_total_raw}/25` : ""}
-            </Text>
-          </View>
-          <View style={[styles.tile, styles.tileSlate]}>
-            <Text style={styles.tileLabel}>Daily load (sRPE)</Text>
-            <Text style={styles.tileValue}>
-              {data.summary.daily_rpe_load_total > 0 ? data.summary.daily_rpe_load_total : "—"}
-            </Text>
-            <Text style={styles.tileBand}>{loadBandLabel(data.summary.load_band)}</Text>
-          </View>
-          <View style={[styles.tile, styles.tileSlate]}>
-            <Text style={styles.tileLabel}>Avg RPE ({data.summary.rpe_count})</Text>
-            <Text style={styles.tileValue}>{fmtNum(data.summary.avg_rpe, 1)}</Text>
-            <Text style={styles.tileBand}>
-              Acute 7d: {fmtNum(data.summary.acute_load_7d, 0)} · Chronic 28d: {fmtNum(data.summary.chronic_load_28d, 0)}
-            </Text>
-          </View>
-        </View>
+        {/* Layer 1 — the plain facts */}
+        <FactRow
+          facts={[
+            {
+              value: s.readiness_total != null ? `${s.readiness_total}%` : "-",
+              label: "Readiness check-in",
+              sub: `${s.readiness_band ? `Score band ${s.readiness_band}` : "No entry"}${s.readiness_total_raw != null ? ` · ${s.readiness_total_raw}/25` : ""}`,
+              tone: rTone,
+            },
+            {
+              value: s.daily_rpe_load_total > 0 ? String(s.daily_rpe_load_total) : "-",
+              label: "Daily load (sRPE)",
+              sub: loadBandLabel(s.load_band),
+            },
+            {
+              value: fmtNum(s.avg_rpe, 1),
+              label: `Avg RPE (${s.rpe_count})`,
+              sub: "Scale 1-10",
+            },
+          ]}
+        />
 
-        {/* Risk analysis */}
-        <Text style={styles.sectionTitle}>Áhættugreining</Text>
-        <View style={[styles.riskBox, riskBoxStyle || styles.tileSlate]}>
-          <Text style={styles.riskSummary}>{data.risk_analysis.summary}</Text>
-
+        <Section title="Áhættuþættir">
           {data.risk_analysis.drivers.length > 0 ? (
-            <>
-              {data.risk_analysis.drivers.map((d) => (
-                <View key={d.key} style={styles.driverRow}>
-                  <View style={styles.driverHead}>
-                    <Text style={styles.driverLabel}>
-                      {d.severity === "RED" ? "[RED] " : "[AMBER] "}
-                      {d.label}
-                    </Text>
-                    <Text style={styles.driverValue}>{d.value}</Text>
+            data.risk_analysis.drivers.map((d) => {
+              const tone: Tone = d.severity === "RED" ? "red" : "amber";
+              return (
+                <Card key={d.key} style={{ marginBottom: 5, borderLeftWidth: 3, borderLeftColor: tone === "red" ? C.red : C.amber }} pad={9}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 7, flex: 1 }}>
+                      <Status tone={tone} text={d.severity} size={7.5} />
+                      <Text style={[fb(600), { fontSize: 9.5, flex: 1 }]}>{clean(d.label)}</Text>
+                    </View>
+                    <Text style={[fb(600), { fontSize: 9, color: C.mute }]}>{clean(d.value)}</Text>
                   </View>
-                  <Text style={styles.driverExplanation}>{d.explanation}</Text>
-                </View>
-              ))}
-            </>
+                  <Body size={8.5} color={C.mute}>{d.explanation}</Body>
+                </Card>
+              );
+            })
           ) : (
-            <Text style={styles.bodyText}>Engir áhættuþættir greindir fyrir þennan dag.</Text>
+            <Body color={C.mute}>Engir áhættuþættir greindir fyrir þennan dag.</Body>
           )}
 
           {data.risk_analysis.recommendations.length > 0 ? (
-            <View style={styles.recBox}>
-              <Text style={styles.recTitle}>Tillögur að aðgerðum</Text>
+            <Card style={{ marginTop: 3 }}>
+              <Label color={C.cobalt}>Tillögur að aðgerðum</Label>
               {data.risk_analysis.recommendations.map((r, i) => (
-                <Text key={i} style={styles.recItem}>
-                  → {r}
-                </Text>
+                <View key={i} wrap={false} style={{ flexDirection: "row", gap: 6, marginTop: 3 }}>
+                  <Text style={[fb(600), { fontSize: 8.75, color: C.cobalt, width: 10 }]}>{`${i + 1}.`}</Text>
+                  <Text style={[fb(400), { fontSize: 8.75, lineHeight: 1.45, flex: 1 }]}>{clean(r)}</Text>
+                </View>
               ))}
-            </View>
+            </Card>
           ) : null}
-        </View>
+        </Section>
 
-        {/* Session RPE entries */}
-        <Text style={styles.sectionTitle}>Session RPE entries</Text>
-        {data.rpe.entries.length === 0 ? (
-          <Text style={styles.bodyText}>Engar RPE færslur fyrir þennan dag.</Text>
-        ) : (
-          data.rpe.entries.map((e) => (
-            <View key={e.id} style={styles.rpeItem}>
-              <View style={styles.rpeTop}>
-                <Text style={styles.rpeTitle}>
-                  {sessionTypeLabel(e.session_type)}
-                  {e.session_name ? ` · ${e.session_name}` : ""}
-                </Text>
-                <Text style={styles.rpeMeta}>
-                  {e.duration_minutes} mín · RPE {e.rpe} · Load {e.session_load}
-                </Text>
-              </View>
-              <Text style={styles.rpeMeta}>
-                Skráð: {new Date(e.submitted_at).toLocaleString("is-IS")}
-                {e.source ? ` · src: ${e.source}` : ""}
-              </Text>
-              {e.notes ? <Text style={[styles.rpeMeta, { fontStyle: "italic", marginTop: 2 }]}>“{e.notes}”</Text> : null}
-            </View>
-          ))
-        )}
+        {/* Layer 2 — behind the numbers */}
+        <Section title="Álag · load ratio" hint="ACWR = acute (7-day) load ÷ chronic (28-day) load. A context number for spikes, not an injury predictor.">
+          <StatGrid
+            cols={3}
+            items={[
+              { label: "ACWR", value: fmtNum(s.acwr, 2), sub: s.acwr_band ?? "N/A", tone: acwrTone(s.acwr_band) },
+              { label: "Acute 7d", value: fmtNum(s.acute_load_7d, 0), sub: "AU" },
+              { label: "Chronic 28d", value: fmtNum(s.chronic_load_28d, 0), sub: "AU" },
+            ]}
+          />
+        </Section>
 
-        {/* Wellness / readiness */}
-        <Text style={styles.sectionTitle}>Readiness / wellness</Text>
-        {data.readiness ? (
-          <>
-            <View style={styles.grid3}>
-              <View style={styles.gridCell}>
-                <Text style={styles.gridLabel}>Total (raw 5–25)</Text>
-                <Text style={styles.gridValue}>{fmtNum(data.readiness.total_score, 0)}</Text>
-              </View>
-              <View style={styles.gridCell}>
-                <Text style={styles.gridLabel}>Sleep quality</Text>
-                <Text style={styles.gridValue}>
-                  {data.readiness.sleep_quality != null ? `${data.readiness.sleep_quality}/5` : "—"}
-                </Text>
-              </View>
-              <View style={styles.gridCell}>
-                <Text style={styles.gridLabel}>Sleep duration</Text>
-                <Text style={styles.gridValue}>
-                  {data.readiness.sleep_duration != null
-                    ? `${data.readiness.sleep_duration}/5 (${
-                        ({ 1: "<5", 2: "5–6", 3: "6–7", 4: "7–8", 5: "8+" } as Record<number, string>)[
-                          Number(data.readiness.sleep_duration)
-                        ] ?? ""
-                      } klst)`
-                    : "—"}
-                </Text>
-              </View>
-              <View style={styles.gridCell}>
-                <Text style={styles.gridLabel}>Fatigue / energy</Text>
-                <Text style={styles.gridValue}>
-                  {data.readiness.fatigue_energy != null ? `${data.readiness.fatigue_energy}/5` : "—"}
-                </Text>
-              </View>
-              <View style={styles.gridCell}>
-                <Text style={styles.gridLabel}>Stress / mood</Text>
-                <Text style={styles.gridValue}>
-                  {data.readiness.stress_mood != null ? `${data.readiness.stress_mood}/5` : "—"}
-                </Text>
-              </View>
-              <View style={styles.gridCell}>
-                <Text style={styles.gridLabel}>Muscle soreness</Text>
-                <Text style={styles.gridValue}>
-                  {data.readiness.muscle_soreness != null ? `${data.readiness.muscle_soreness}/5` : "—"}
-                </Text>
-              </View>
-            </View>
-            {data.readiness.notes ? (
-              <Text style={[styles.bodyText, { fontStyle: "italic", marginTop: 4 }]}>
-                Athugasemd: “{data.readiness.notes}”
-              </Text>
-            ) : null}
-          </>
-        ) : (
-          <Text style={styles.bodyText}>Engin readiness færsla fyrir þennan dag.</Text>
-        )}
+        <Section title="Session RPE entries">
+          {data.rpe.entries.length === 0 ? (
+            <Body color={C.mute}>Engar RPE færslur fyrir þennan dag.</Body>
+          ) : (
+            <Table
+              cols={[
+                { label: "Session", flex: 2.4 },
+                { label: "Mín", width: 34, align: "right" },
+                { label: "RPE", width: 30, align: "right" },
+                { label: "Load", width: 40, align: "right", strong: true },
+                { label: "Skráð", width: 92 },
+                { label: "Src", width: 52 },
+              ]}
+              rows={data.rpe.entries.map((e) => [
+                <View key="s">
+                  <Text style={[fb(600), { fontSize: 8.5 }]}>{clean(`${sessionTypeLabel(e.session_type)}${e.session_name ? ` · ${e.session_name}` : ""}`)}</Text>
+                  {e.notes ? <Text style={[fb(400), { fontSize: 7.75, color: C.mute, marginTop: 1.5, lineHeight: 1.35 }]}>{clean(`"${e.notes}"`)}</Text> : null}
+                </View>,
+                String(e.duration_minutes),
+                String(e.rpe),
+                String(e.session_load),
+                new Date(e.submitted_at).toLocaleString("is-IS"),
+                e.source ?? "-",
+              ])}
+            />
+          )}
+        </Section>
 
-        {/* GPS / external load */}
+        <Section title="Readiness / wellness" wrap={false}>
+          {rd ? (
+            <>
+              <StatGrid
+                cols={3}
+                items={[
+                  { label: "Total (raw 5-25)", value: fmtNum(rd.total_score, 0) },
+                  { label: "Sleep quality", value: of5(rd.sleep_quality) },
+                  {
+                    label: "Sleep duration",
+                    value: rd.sleep_duration != null ? `${rd.sleep_duration}/5 (${SLEEP_HOURS[Number(rd.sleep_duration)] ?? ""} klst)` : "-",
+                  },
+                  { label: "Fatigue / energy", value: of5(rd.fatigue_energy) },
+                  { label: "Stress / mood", value: of5(rd.stress_mood) },
+                  { label: "Muscle soreness", value: of5(rd.muscle_soreness) },
+                ]}
+              />
+              {rd.notes ? <Body size={8.75} color={C.mute} mt={5}>{`Athugasemd: "${rd.notes}"`}</Body> : null}
+            </>
+          ) : (
+            <Body color={C.mute}>Engin readiness færsla fyrir þennan dag.</Body>
+          )}
+        </Section>
+
         {data.external_load.length > 0 ? (
-          <>
-            <Text style={styles.sectionTitle}>GPS / external load (Catapult)</Text>
+          <Section title="GPS / external load (Catapult)">
             {data.external_load.map((row, i) => {
               const n = (k: string) => {
                 const v = row[k];
                 return v == null ? null : Number(v);
               };
-              const src = (row.source as string | null) ?? "—";
+              const src = (row.source as string | null) ?? "-";
               return (
-                <View key={i} style={{ marginBottom: 4 }}>
-                  <Text style={[styles.gridLabel, { marginBottom: 2 }]}>Source: {src}</Text>
-                  <View style={styles.grid3}>
-                    <View style={styles.gridCell}>
-                      <Text style={styles.gridLabel}>Total dist (m)</Text>
-                      <Text style={styles.gridValue}>{fmtNum(n("total_distance"), 0)}</Text>
-                    </View>
-                    <View style={styles.gridCell}>
-                      <Text style={styles.gridLabel}>Player load</Text>
-                      <Text style={styles.gridValue}>{fmtNum(n("total_player_load"), 0)}</Text>
-                    </View>
-                    <View style={styles.gridCell}>
-                      <Text style={styles.gridLabel}>HSR (vb5+vb6)</Text>
-                      <Text style={styles.gridValue}>{fmtNum(n("high_speed_distance"), 0)}</Text>
-                    </View>
-                    <View style={styles.gridCell}>
-                      <Text style={styles.gridLabel}>Sprint (vb6) m</Text>
-                      <Text style={styles.gridValue}>{fmtNum(n("velocity_band6_total_distance"), 0)}</Text>
-                    </View>
-                    <View style={styles.gridCell}>
-                      <Text style={styles.gridLabel}>Accels</Text>
-                      <Text style={styles.gridValue}>{fmtNum(n("tot_as"), 0)}</Text>
-                    </View>
-                    <View style={styles.gridCell}>
-                      <Text style={styles.gridLabel}>Decels</Text>
-                      <Text style={styles.gridValue}>{fmtNum(n("tot_ds"), 0)}</Text>
-                    </View>
-                    <View style={styles.gridCell}>
-                      <Text style={styles.gridLabel}>Accel B2-3</Text>
-                      <Text style={styles.gridValue}>{fmtNum(n("accel_b2_3_tot_effs_gen2"), 0)}</Text>
-                    </View>
-                    <View style={styles.gridCell}>
-                      <Text style={styles.gridLabel}>Decel B2-3</Text>
-                      <Text style={styles.gridValue}>{fmtNum(n("decel_b2_3_tot_effs_gen2"), 0)}</Text>
-                    </View>
-                    <View style={styles.gridCell}>
-                      <Text style={styles.gridLabel}>IMA total</Text>
-                      <Text style={styles.gridValue}>{fmtNum(n("ima_total"), 0)}</Text>
-                    </View>
-                  </View>
+                <View key={i} wrap={false} style={{ marginBottom: 6 }}>
+                  <Label>{`Source: ${src}`}</Label>
+                  <StatGrid
+                    cols={3}
+                    items={[
+                      { label: "Total dist (m)", value: fmtNum(n("total_distance"), 0) },
+                      { label: "Player load", value: fmtNum(n("total_player_load"), 0) },
+                      { label: "HSR (vb5+vb6)", value: fmtNum(n("high_speed_distance"), 0) },
+                      { label: "Sprint (vb6) m", value: fmtNum(n("velocity_band6_total_distance"), 0) },
+                      { label: "Accels", value: fmtNum(n("tot_as"), 0) },
+                      { label: "Decels", value: fmtNum(n("tot_ds"), 0) },
+                      { label: "Accel B2-3", value: fmtNum(n("accel_b2_3_tot_effs_gen2"), 0) },
+                      { label: "Decel B2-3", value: fmtNum(n("decel_b2_3_tot_effs_gen2"), 0) },
+                      { label: "IMA total", value: fmtNum(n("ima_total"), 0) },
+                    ]}
+                  />
                 </View>
               );
             })}
-          </>
+          </Section>
         ) : null}
 
-        {/* Context */}
         {data.context.week_plan ? (
-          <>
-            <Text style={styles.sectionTitle}>Samhengi / week setup</Text>
-            <Text style={styles.bodyText}>
-              Day type:{" "}
-              {String((data.context.week_plan as { day_type?: string }).day_type ?? "—")}
-            </Text>
-          </>
+          <Section title="Samhengi / week setup">
+            <Body>{`Day type: ${String((data.context.week_plan as { day_type?: string }).day_type ?? "-")}`}</Body>
+          </Section>
         ) : null}
 
-        {/* Footer */}
-        <Text
-          style={styles.footer}
-          render={({ pageNumber, totalPages }) =>
-            `MicroPulse · Player daily snapshot · ${data.player.full_name ?? "—"} · ${data.date} · Page ${pageNumber}/${totalPages}`
-          }
-          fixed
-        />
-      </Page>
+        {/* Closing card — how to read / source */}
+        <Card style={{ marginTop: 4 }}>
+          <Label>Source / how to read</Label>
+          <Provenance>
+            Áhættugreining (risk analysis) is rule-computed from the day&apos;s check-in, session RPE (sRPE = RPE x minutes, Foster) and the acute:chronic load ratio - no AI. Score band = the zone of the wellness check-in score (raw 5-25); the day&apos;s readiness verdict colour (each player vs his own norm) lives on the Daily Briefing. ACWR is spike-size context, not an injury predictor (Gabbett 2016, Impellizzeri 2020).
+          </Provenance>
+        </Card>
+      </BrandPage>
     </Document>
   );
 }

@@ -3,21 +3,26 @@
 /**
  * PlayerStatsPdf — PDF exports for the two Player Season Analysis views.
  *
- *  - downloadPlayerRoleReportPdf: the StatsBomb single-player read (role, summary,
- *    strengths, development, per-90 percentile table). AI prose labelled if present.
- *  - downloadPlayerSeasonTablePdf: the Wyscout squad table (one row per player, the
- *    same season football + physical columns shown on screen).
+ *  - downloadPlayerRoleReportPdf: the StatsBomb single-player read. Layered read
+ *    (docs/explainability-first.md): summary first (AI-labelled when AI-written) → 2-3 plain
+ *    facts (top strength, main development area, sample) → strengths / development →
+ *    the per-90 percentile table.
+ *  - downloadPlayerSeasonTablePdf: the Wyscout squad table (landscape; one row per player,
+ *    the same season football + physical columns shown on screen).
  *
  * Presentation-only: numbers are rule-computed upstream, prose is AI-phrased + labelled;
- * the caller passes already-localised strings. Descriptive — never the readiness colour
- * or the daily decision. WinAnsi/Helvetica (Icelandic-safe): no arrows / ticks / U+2212.
+ * the caller passes already-localised strings. Styling comes from the shared PDF kit
+ * (src/components/pdf/brand.tsx). Descriptive — never the readiness colour or the daily decision.
  */
 
-import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
+import { Document, Text, View } from "@react-pdf/renderer";
+import { AiBox, Bar, BrandPage, Bullets, C, Card, Cols, FactRow, Provenance, Section, Table, TONE, Verdict, clean, fb, fh, renderPdfBlob, saveBlob } from "@/components/pdf/brand";
+import type { Col, Tone } from "@/components/pdf/brand";
 
 type Lang = "EN" | "IS";
 
-const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6", GREEN = "#1c7a4a", AMBER = "#a86a12";
+/** Percentile → tone: top quartile green, bottom quartile red, else cobalt. The number is always printed. */
+const pTone = (p: number | null): Tone => (p == null ? "neutral" : p >= 75 ? "green" : p <= 25 ? "red" : "cobalt");
 
 // ── Single-player role report (StatsBomb) ────────────────────────────────────
 export type RoleReportPayload = {
@@ -34,112 +39,119 @@ export type RoleReportPayload = {
   gkNote?: string | null;
 };
 
-const rr = StyleSheet.create({
-  page: { paddingTop: 26, paddingBottom: 34, paddingHorizontal: 34, fontSize: 9.5, fontFamily: "Helvetica", color: INK, lineHeight: 1.4 },
-  kicker: { fontSize: 8, color: COBALT, fontFamily: "Helvetica-Bold", letterSpacing: 0.8, marginBottom: 3 },
-  h1: { fontSize: 19, fontFamily: "Helvetica-Bold" },
-  sub: { fontSize: 10, color: MUTE, marginTop: 2 },
-  byline: { fontSize: 8, color: MUTE, fontFamily: "Helvetica-Oblique", marginTop: 3, marginBottom: 8 },
-  vbox: { borderWidth: 1, borderColor: "#c9d0f7", backgroundColor: "#eef0fb", borderRadius: 4, padding: 9, marginBottom: 9 },
-  vlabel: { fontSize: 8, color: COBALT, fontFamily: "Helvetica-Bold", letterSpacing: 0.6, marginBottom: 2 },
-  vtxt: { fontSize: 10.5, color: "#222" },
-  h2: { fontSize: 11, fontFamily: "Helvetica-Bold", marginTop: 9, marginBottom: 3 },
-  para: { fontSize: 9.5, color: "#222", marginBottom: 3 },
-  bullet: { fontSize: 9, color: "#333", marginBottom: 1.5 },
-  row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: LINE, paddingVertical: 2 },
-  cM: { flex: 1, color: "#333" },
-  cCat: { width: 120, color: MUTE },
-  cV: { width: 54, textAlign: "right", color: "#333" },
-  cP: { width: 40, textAlign: "right", fontFamily: "Helvetica-Bold" },
-  foot: { marginTop: 12, paddingTop: 7, borderTopWidth: 1, borderTopColor: LINE, fontSize: 7.5, color: MUTE, lineHeight: 1.5 },
-});
-
 const RL = {
-  EN: { kicker: "PLAYER SEASON ANALYSIS", prepared: "Prepared for the coaching staff · MicroPulse",
-    ai: "AI-written from the numbers — cites the data, decides nothing",
+  EN: { kicker: "PLAYER SEASON ANALYSIS", doc: "Player analysis", prepared: "Prepared for the coaching staff · MicroPulse",
+    ai: "AI-written from the numbers — cites the data, decides nothing", aiShort: "WRITTEN FROM THE NUMBERS - DECIDES NOTHING", aiChip: "AI-phrased",
     role: "Role", min: "min", of: "vs squad", players: "players",
     summary: "Summary", strengths: "Strengths", development: "Development areas",
-    numbers: "Per 90 · percentile vs squad", metric: "Metric", value: "Per 90", pctl: "%ile",
+    topStrength: "Top strength", topDev: "Main development area", sample: "Minutes played", sampleSub: (n: number) => `ranked vs ${n} squad players`,
+    pctOf: (p: number) => `${p}th percentile in the squad`,
+    note: "Descriptive context - percentiles vs his own squad (per 90). Rules compute; AI prose is labelled. Never touches readiness.",
+    numbers: "Per 90 · percentile vs squad", metric: "Metric", category: "Area", value: "Per 90", pctl: "%ile",
     method: "Descriptive context only — it never changes the readiness colour, load, or the daily decision. Percentiles rank this player within his own squad (per-90); they describe what happened, they do not predict. Low minutes = a small sample.",
     signals: "Signals: StatsBomb per-90 season stats. Rules compute the percentiles; any prose is AI-phrased and coach-overridable." },
-  IS: { kicker: "LEIKMANNA-TÍMABILSGREINING", prepared: "Unnið fyrir þjálfarateymið · MicroPulse",
-    ai: "AI skrifaði úr tölunum — vitnar í gögnin, ákveður ekkert",
+  IS: { kicker: "LEIKMANNA-TÍMABILSGREINING", doc: "Leikmannagreining", prepared: "Unnið fyrir þjálfarateymið · MicroPulse",
+    ai: "AI skrifaði úr tölunum — vitnar í gögnin, ákveður ekkert", aiShort: "SKRIFAÐ ÚR TÖLUNUM - ÁKVEÐUR EKKERT", aiChip: "AI-orðað",
     role: "Hlutverk", min: "mín", of: "vs lið", players: "leikmenn",
     summary: "Samantekt", strengths: "Styrkleikar", development: "Þróunar-svæði",
-    numbers: "Á 90 · percentíl vs lið", metric: "Mæling", value: "Á 90", pctl: "pctl",
+    topStrength: "Helsti styrkleiki", topDev: "Helsta þróunarsvæði", sample: "Mínútur spilaðar", sampleSub: (n: number) => `raðað vs ${n} leikmenn liðsins`,
+    pctOf: (p: number) => `${p}. percentíll í liðinu`,
+    note: "Lýsandi samhengi - percentíl vs eigið lið (á 90). Reglur reikna; AI-texti er merktur. Snertir aldrei readiness.",
+    numbers: "Á 90 · percentíl vs lið", metric: "Mæling", category: "Svið", value: "Á 90", pctl: "pctl",
     method: "Aðeins lýsandi samhengi — breytir aldrei readiness-litnum, álagi né daglegu ákvörðuninni. Percentíl raða leikmanni innan síns liðs (á 90); þau lýsa því sem gerðist, þau spá ekki. Fáar mínútur = lítið úrtak.",
     signals: "Uppspretta: StatsBomb á-90 tímabils-tölur. Reglur reikna percentílin; texti er AI-orðaður og þjálfari getur hnekkt." },
 } as const;
 
-const fnum = (v: number | null): string => (v == null ? "—" : Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1));
+const fnum = (v: number | null): string => (v == null ? "-" : Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1));
+
+/** Strengths / development card. Prose is AI when aiGenerated → it carries an inline AI pill. */
+function ListCard({ title, tone, prose, ai, items, lang }: { title: string; tone: Tone; prose?: string; ai: boolean; items: Array<{ label: string; percentile: number | null }>; lang: Lang }) {
+  return (
+    <Card style={{ borderTopWidth: 3, borderTopColor: TONE[tone].fill }}>
+      <Text style={[fh(700), { fontSize: 11.5, color: TONE[tone].text, marginBottom: 4 }]}>{title}</Text>
+      {prose ? (
+        <View style={{ flexDirection: "row", gap: 5, alignItems: "flex-start", marginBottom: 5 }}>
+          {ai ? <Text style={[fb(700), { backgroundColor: C.cobalt, color: "#ffffff", fontSize: 6.5, paddingHorizontal: 3, paddingVertical: 1, borderRadius: 2, letterSpacing: 0.5, marginTop: 1.5 }]}>AI</Text> : null}
+          <Text style={[fb(400), { flex: 1, fontSize: 8.75, lineHeight: 1.45 }]}>{clean(prose)}</Text>
+        </View>
+      ) : null}
+      {items.length ? <Bullets tone={tone} items={items.map((m) => `${m.label}${m.percentile != null ? ` (${m.percentile}${lang === "IS" ? "." : "th"})` : ""}`)} /> : null}
+    </Card>
+  );
+}
 
 function RoleReportDoc({ payload, lang }: { payload: RoleReportPayload; lang: Lang }) {
   const t = RL[lang];
   const sub = [payload.role ? `${t.role}: ${payload.role}` : null, payload.minutes != null ? `${Math.round(payload.minutes)} ${t.min}` : null, `${payload.poolSize} ${t.players} ${t.of}`].filter(Boolean).join(" · ");
   const pr = payload.prose;
+  const name = clean(payload.playerName);
+  const topS = [...payload.strengths].sort((a, b) => (b.percentile ?? -1) - (a.percentile ?? -1))[0];
+  const topW = [...payload.weaknesses].sort((a, b) => (a.percentile ?? 101) - (b.percentile ?? 101))[0];
+  const facts: { value: string; label: string; sub?: string; tone?: Tone }[] = [];
+  if (topS) facts.push({ value: topS.percentile != null ? String(topS.percentile) : "-", label: `${t.topStrength}: ${clean(topS.label)}`, sub: topS.percentile != null ? t.pctOf(topS.percentile) : undefined, tone: "green" });
+  if (topW) facts.push({ value: topW.percentile != null ? String(topW.percentile) : "-", label: `${t.topDev}: ${clean(topW.label)}`, sub: topW.percentile != null ? t.pctOf(topW.percentile) : undefined, tone: "amber" });
+  if (payload.minutes != null) facts.push({ value: String(Math.round(payload.minutes)), label: t.sample, sub: t.sampleSub(payload.poolSize) });
+
+  const hasS = !!(pr?.strengths || payload.strengths.length);
+  const hasD = !!(pr?.development || payload.weaknesses.length);
+
   return (
-    <Document>
-      <Page size="A4" style={rr.page}>
-        <Text style={rr.kicker}>{t.kicker}</Text>
-        <Text style={rr.h1}>{payload.playerName}</Text>
-        <Text style={rr.sub}>{sub}</Text>
-        <Text style={rr.byline}>{t.prepared}{payload.aiGenerated ? ` · AI · ${t.ai}` : ""}</Text>
-
+    <Document title={`${name} - ${t.doc}`} author="MicroPulse">
+      <BrandPage
+        doc={t.doc}
+        context={name}
+        title={name}
+        kicker={t.kicker}
+        subtitle={`${sub} · ${t.prepared}`}
+        chips={[...(payload.role ? [{ text: payload.role, tone: "cobalt" as Tone }] : []), ...(payload.aiGenerated ? [{ text: t.aiChip, tone: "cobalt" as Tone }] : [])]}
+        note={t.note}
+      >
         {pr?.summary ? (
-          <View style={rr.vbox}><Text style={rr.vlabel}>{t.summary}</Text><Text style={rr.vtxt}>{pr.summary}</Text></View>
+          payload.aiGenerated ? (
+            <AiBox label={`${t.summary.toUpperCase()} · ${t.aiShort}`} headline={pr.summary} cites={t.ai} />
+          ) : (
+            <Verdict label={t.summary} headline={pr.summary} />
+          )
         ) : payload.gkNote ? (
-          <View style={rr.vbox}><Text style={rr.vtxt}>{payload.gkNote}</Text></View>
+          <Verdict label={t.summary} headline={payload.gkNote} />
         ) : null}
 
-        {(pr?.strengths || payload.strengths.length) ? (
-          <View wrap={false}>
-            <Text style={[rr.h2, { color: GREEN }]}>{t.strengths}</Text>
-            {pr?.strengths ? <Text style={rr.para}>{pr.strengths}</Text> : null}
-            {payload.strengths.map((m, i) => <Text key={i} style={rr.bullet}>{m.label}{m.percentile != null ? ` (${m.percentile}${lang === "IS" ? "." : "th"})` : ""}</Text>)}
-          </View>
-        ) : null}
+        {facts.length ? <FactRow facts={facts} /> : null}
 
-        {(pr?.development || payload.weaknesses.length) ? (
-          <View wrap={false}>
-            <Text style={[rr.h2, { color: AMBER }]}>{t.development}</Text>
-            {pr?.development ? <Text style={rr.para}>{pr.development}</Text> : null}
-            {payload.weaknesses.map((m, i) => <Text key={i} style={rr.bullet}>{m.label}{m.percentile != null ? ` (${m.percentile}${lang === "IS" ? "." : "th"})` : ""}</Text>)}
+        {hasS || hasD ? (
+          <View wrap={false} style={{ marginBottom: 10 }}>
+            <Cols gap={8}>
+              {hasS ? <ListCard title={t.strengths} tone="green" prose={pr?.strengths} ai={payload.aiGenerated} items={payload.strengths} lang={lang} /> : null}
+              {hasD ? <ListCard title={t.development} tone="amber" prose={pr?.development} ai={payload.aiGenerated} items={payload.weaknesses} lang={lang} /> : null}
+            </Cols>
           </View>
         ) : null}
 
         {payload.metrics.length ? (
-          <View>
-            <Text style={rr.h2}>{t.numbers}</Text>
-            <View style={rr.row}>
-              <Text style={[rr.cM, { fontFamily: "Helvetica-Bold", color: INK }]}>{t.metric}</Text>
-              <Text style={[rr.cCat, { fontFamily: "Helvetica-Bold", color: INK }]}></Text>
-              <Text style={[rr.cV, { fontFamily: "Helvetica-Bold", color: INK }]}>{t.value}</Text>
-              <Text style={[rr.cP, { color: INK }]}>{t.pctl}</Text>
-            </View>
-            {payload.metrics.map((m, i) => (
-              <View style={rr.row} key={i} wrap={false}>
-                <Text style={rr.cM}>{m.label}</Text>
-                <Text style={rr.cCat}>{m.category}</Text>
-                <Text style={rr.cV}>{fnum(m.value)}</Text>
-                <Text style={rr.cP}>{m.percentile ?? "—"}</Text>
-              </View>
-            ))}
-          </View>
+          <Section title={t.numbers}>
+            <Table
+              dense
+              cols={[{ label: t.metric, flex: 1 }, { label: t.category, width: 120 }, { label: t.value, width: 54, align: "right" }, { label: "", width: 90 }, { label: t.pctl, width: 36, align: "right" }]}
+              rows={payload.metrics.map((m) => [
+                clean(m.label),
+                <Text key="c" style={[fb(400), { fontSize: 8.5, color: C.mute }]}>{clean(m.category)}</Text>,
+                fnum(m.value),
+                <View key="b" style={{ paddingLeft: 10 }}><Bar value={m.percentile ?? 0} max={100} color={TONE[pTone(m.percentile)].fill} height={5} /></View>,
+                <Text key="p" style={[fh(700), { fontSize: 8.75, color: m.percentile == null ? C.faint : TONE[pTone(m.percentile)].text, textAlign: "right" }]}>{m.percentile != null ? String(m.percentile) : "-"}</Text>,
+              ])}
+            />
+          </Section>
         ) : null}
 
-        <Text style={rr.foot}>{t.method}{"\n"}{t.signals}</Text>
-      </Page>
+        <Provenance>{`${t.method} ${t.signals}`}</Provenance>
+      </BrandPage>
     </Document>
   );
 }
 
 export async function downloadPlayerRoleReportPdf(payload: RoleReportPayload, lang: Lang) {
-  const blob = await pdf(<RoleReportDoc payload={payload} lang={lang} />).toBlob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = `player-analysis-${payload.playerName.replace(/\s+/g, "-")}.pdf`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const blob = await renderPdfBlob(() => <RoleReportDoc payload={payload} lang={lang} />);
+  saveBlob(blob, `player-analysis-${payload.playerName.replace(/\s+/g, "-")}.pdf`);
 }
 
 // ── Squad table (Wyscout) ────────────────────────────────────────────────────
@@ -151,62 +163,50 @@ export type SeasonTablePayload = {
   rows: Array<{ name: string; position: string | null; cells: string[] }>;
 };
 
-const st = StyleSheet.create({
-  page: { paddingTop: 24, paddingBottom: 30, paddingHorizontal: 26, fontSize: 8.5, fontFamily: "Helvetica", color: INK, lineHeight: 1.35 },
-  kicker: { fontSize: 8, color: COBALT, fontFamily: "Helvetica-Bold", letterSpacing: 0.8, marginBottom: 3 },
-  h1: { fontSize: 16, fontFamily: "Helvetica-Bold" },
-  sub: { fontSize: 9, color: MUTE, marginTop: 2, marginBottom: 8 },
-  hrow: { flexDirection: "row", borderBottomWidth: 1.2, borderBottomColor: "#c9cfd8", paddingBottom: 3, marginBottom: 1 },
-  row: { flexDirection: "row", borderBottomWidth: 0.6, borderBottomColor: LINE, paddingVertical: 2.5 },
-  name: { width: 150, fontFamily: "Helvetica-Bold", color: INK },
-  pos: { width: 30, color: MUTE },
-  cell: { flex: 1, textAlign: "right", color: "#333" },
-  hName: { width: 150, fontFamily: "Helvetica-Bold", color: INK },
-  hPos: { width: 30, fontFamily: "Helvetica-Bold", color: INK },
-  hCell: { flex: 1, textAlign: "right", fontFamily: "Helvetica-Bold", color: INK },
-  foot: { marginTop: 12, paddingTop: 7, borderTopWidth: 1, borderTopColor: LINE, fontSize: 7.5, color: MUTE, lineHeight: 1.5 },
-});
-
 const STL = {
-  EN: { kicker: "PLAYER SEASON ANALYSIS", player: "Player", season: "Season",
+  EN: { kicker: "PLAYER SEASON ANALYSIS", doc: "Squad season table", note: "Descriptive season output - never changes the readiness colour, load, or the daily decision.", player: "Player", pos: "Pos", season: "Season", players: "players", prepared: "Prepared for the coaching staff · MicroPulse",
     method: "Descriptive season output — it never changes the readiness colour, load, or the daily training decision. Football stats are the imported Wyscout/StatsBomb season totals; the physical columns are the MicroPulse GPS/IMA season output for the same players." },
-  IS: { kicker: "LEIKMANNA-TÍMABILSGREINING", player: "Leikmaður", season: "Tímabil",
+  IS: { kicker: "LEIKMANNA-TÍMABILSGREINING", doc: "Tímabilstafla liðsins", note: "Lýsandi tímabils-afköst - breytir aldrei readiness-litnum, álagi né daglegu ákvörðuninni.", player: "Leikmaður", pos: "Staða", season: "Tímabil", players: "leikmenn", prepared: "Unnið fyrir þjálfarateymið · MicroPulse",
     method: "Lýsandi tímabils-afköst — breytir aldrei readiness-litnum, álagi né daglegu ákvörðuninni. Fótbolta-tölur eru innfluttar Wyscout/StatsBomb tímabils-heildir; líkamlegu dálkarnir eru MicroPulse GPS/IMA tímabils-afköst sömu leikmanna." },
 } as const;
 
 function SeasonTableDoc({ payload, lang }: { payload: SeasonTablePayload; lang: Lang }) {
   const t = STL[lang];
+  const n = payload.headers.length;
+  const size = n > 14 ? 7.25 : n > 10 ? 7.75 : 8.5;
+  // Whole-word wrapping only (no hyphenation), so a column must fit its longest header word
+  // and its widest value: share the width in proportion to that (min 4 characters).
+  const want = (h: string, j: number) => Math.max(4, ...clean(h).split(/\s+/).map((w) => w.length), ...payload.rows.map((r) => clean(r.cells[j] ?? "").length + 1));
+  const cols: Col[] = [{ label: t.player, width: 128 }, { label: t.pos, width: 30 }, ...payload.headers.map((h, j) => ({ label: h, flex: want(h, j), align: "right" as const }))];
   return (
-    <Document>
-      <Page size="A4" orientation="landscape" style={st.page}>
-        <Text style={st.kicker}>{t.kicker}</Text>
-        <Text style={st.h1}>{payload.title}</Text>
-        <Text style={st.sub}>{t.season} {payload.season} · {payload.rows.length} {lang === "IS" ? "leikmenn" : "players"}</Text>
-
-        <View style={st.hrow}>
-          <Text style={st.hName}>{t.player}</Text>
-          <Text style={st.hPos}></Text>
-          {payload.headers.map((h, i) => <Text key={i} style={st.hCell}>{h}</Text>)}
-        </View>
-        {payload.rows.map((r, i) => (
-          <View style={st.row} key={i} wrap={false}>
-            <Text style={st.name}>{r.name}</Text>
-            <Text style={st.pos}>{r.position ?? ""}</Text>
-            {r.cells.map((c, j) => <Text key={j} style={st.cell}>{c}</Text>)}
-          </View>
-        ))}
-
-        <Text style={st.foot}>{payload.note}{"\n"}{t.method}</Text>
-      </Page>
+    <Document title={`${clean(payload.title)} - ${payload.season}`} author="MicroPulse">
+      <BrandPage
+        orientation="landscape"
+        doc={t.doc}
+        context={`${t.season} ${payload.season}`}
+        title={payload.title}
+        kicker={t.kicker}
+        subtitle={`${t.season} ${payload.season} · ${payload.rows.length} ${t.players} · ${t.prepared}`}
+        note={t.note}
+      >
+        <Table
+          dense
+          size={size}
+          cols={cols}
+          rows={payload.rows.map((r) => [
+            clean(r.name),
+            <Text key="p" style={[fb(400), { fontSize: size, color: C.mute }]}>{clean(r.position ?? "")}</Text>,
+            ...r.cells.map((c) => clean(c)),
+          ])}
+        />
+        <Provenance>{payload.note}</Provenance>
+        <Provenance>{t.method}</Provenance>
+      </BrandPage>
     </Document>
   );
 }
 
 export async function downloadPlayerSeasonTablePdf(payload: SeasonTablePayload, lang: Lang) {
-  const blob = await pdf(<SeasonTableDoc payload={payload} lang={lang} />).toBlob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = `player-season-table-${payload.season}.pdf`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const blob = await renderPdfBlob(() => <SeasonTableDoc payload={payload} lang={lang} />);
+  saveBlob(blob, `player-season-table-${payload.season}.pdf`);
 }

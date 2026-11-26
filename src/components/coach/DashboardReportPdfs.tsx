@@ -3,266 +3,192 @@
  * heavy @react-pdf/renderer engine is NOT in the coach landing's First Load JS. Imported LAZILY (dynamic
  * import) from the download handlers. Self-contained: shared consts/types come from their libs, the
  * data-shape types are type-only imports from the dashboard, and the small formatters are local copies.
+ *
+ * Look + layered read come from the shared PDF kit (src/components/pdf/brand.tsx):
+ *   layer 0  <Verdict>  — the day's rule-based verdict, first and boldest
+ *   layer 1  <FactRow>  — the 2-4 plain facts behind it (named players, key numbers)
+ *   layer 2  tables     — per-player raw numbers, GPS / IMA jargon on later pages
+ * Readiness colours are printed exactly as the data carries them (readinessStatus / readinessFlag),
+ * never re-derived here. Nothing in these reports is AI-generated.
  */
-import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
+import { Document, Text, View } from "@react-pdf/renderer";
+import {
+  BrandPage, Bullets, C, Card, Cols, FactRow, Label, Provenance, Section, StatGrid, Status, TONE, Table, Verdict,
+  clean, fb, fh, renderPdfBlob, saveBlob, toneOf,
+  type Col, type Tone,
+} from "@/components/pdf/brand";
 import type { ImaPlayerDay } from "@/lib/micropulse/imaDayProfile";
 import { PVA_KPIS, PVA_LABEL, type PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import { SessionEnoughPdfPage } from "@/components/coach/SessionEnoughPdf";
-import { renderPdfBlob } from "@/components/pdf/brand";
 import type {
   ReadinessRiskReportData,
   ReadinessRiskReportPlayer,
   PostTrainingReportData,
-  PostTrainingReportPlayer,
 } from "@/app/coach/dev-coach-dashboard/DevCoachDashboardClient";
 
+const DASH = "-";
+
 // Small formatters (local copies — kept tiny and dependency-free so this module stays self-contained).
-function scoreFmt(x: number | null) { return x == null ? "—" : String(x); }
-function numFmt(x: number | null, digits = 2) { return x == null ? "—" : x.toFixed(digits); }
-function confidenceFmt(x: number | null) { if (x == null) return "—"; return x <= 1 ? `${Math.round(x * 100)}%` : `${Math.round(x)}%`; }
-function acwrFmt(x: number | null) { return x == null ? "—" : x.toFixed(2); }
+function scoreFmt(x: number | null) { return x == null ? DASH : String(x); }
+function numFmt(x: number | null, digits = 2) { return x == null ? DASH : x.toFixed(digits); }
+function confidenceFmt(x: number | null) { if (x == null) return DASH; return x <= 1 ? `${Math.round(x * 100)}%` : `${Math.round(x)}%`; }
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-const reportStyles = StyleSheet.create({
-  page: { padding: 28, fontSize: 10, color: "#221f18", fontFamily: "Helvetica" },
-  header: { marginBottom: 14, paddingBottom: 10, borderBottom: "2 solid #e6e1d4" },
-  h1: { fontSize: 18, fontWeight: 700, marginBottom: 4 },
-  headerMeta: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
-  headerMetaText: { fontSize: 10, color: "#6d6858" },
-  muted: { color: "#8b8676", fontSize: 9 },
-  // Player card
-  playerCard: { marginBottom: 14, border: "1 solid #d5cfbe", borderRadius: 6, overflow: "hidden" },
-  playerHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: "8 10", backgroundColor: "#f7f5ef" },
-  playerName: { fontSize: 13, fontWeight: 700 },
-  badgeYellow: { fontSize: 11, fontWeight: 700, color: "#7c5210", backgroundColor: "#f3e0b4", padding: "2 8", borderRadius: 4 },
-  badgeRed: { fontSize: 11, fontWeight: 700, color: "#72291c", backgroundColor: "#f1d3c8", padding: "2 8", borderRadius: 4 },
-  // Coach action box
-  actionBoxRecovery: { backgroundColor: "#f1d3c8", padding: "8 10", borderBottom: "1 solid #e6b6a6" },
-  actionBoxModified: { backgroundColor: "#f3e0b4", padding: "8 10", borderBottom: "1 solid #e9c983" },
-  actionBoxFull: { backgroundColor: "#d3e8da", padding: "8 10", borderBottom: "1 solid #b0d6bd" },
-  actionLabel: { fontSize: 9, fontWeight: 700, color: "#8b8676", marginBottom: 2, textTransform: "uppercase" },
-  actionTextRecovery: { fontSize: 12, fontWeight: 700, color: "#72291c" },
-  actionTextModified: { fontSize: 12, fontWeight: 700, color: "#7c5210" },
-  actionTextFull: { fontSize: 12, fontWeight: 700, color: "#145233" },
-  actionNote: { fontSize: 9, color: "#6d6858", marginTop: 2 },
-  // Body sections
-  cardBody: { padding: "8 10" },
-  sectionLabel: { fontSize: 9, fontWeight: 700, color: "#8b8676", textTransform: "uppercase", marginBottom: 4, marginTop: 6 },
-  reasonItem: { fontSize: 10, color: "#3a352c", marginBottom: 3, paddingLeft: 8 },
-  // Injury risk
-  injuryRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
-  injuryLabelLow: { fontSize: 10, fontWeight: 700, color: "#145233", backgroundColor: "#d3e8da", padding: "1 6", borderRadius: 3 },
-  injuryLabelModerate: { fontSize: 10, fontWeight: 700, color: "#7c5210", backgroundColor: "#f3e0b4", padding: "1 6", borderRadius: 3 },
-  injuryLabelHigh: { fontSize: 10, fontWeight: 700, color: "#72291c", backgroundColor: "#f1d3c8", padding: "1 6", borderRadius: 3 },
-  injuryRec: { fontSize: 9, color: "#565044", marginBottom: 2, paddingLeft: 8 },
-  // Reference table
-  refTableWrap: { marginTop: 8, borderTop: "1 solid #e6e1d4", paddingTop: 6 },
-  refTableLabel: { fontSize: 8, color: "#a9a493", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 },
-  table: { border: "1 solid #e6e1d4", borderRadius: 3 },
-  tHead: { flexDirection: "row", backgroundColor: "#efece2" },
-  tRow: { flexDirection: "row", borderTop: "1 solid #e6e1d4" },
-  cellH: { flex: 1, padding: "3 4", fontSize: 8, fontWeight: 700, color: "#8b8676" },
-  cell: { flex: 1, padding: "3 4", fontSize: 8, color: "#565044" },
-  // Footer
-  footerBar: { marginTop: 12, paddingTop: 8, borderTop: "1 solid #e6e1d4", flexDirection: "row", justifyContent: "space-between" },
-  footerCount: { fontSize: 10 },
-  footerGreen: { color: "#145233", fontWeight: 700 },
-  footerYellow: { color: "#7c5210", fontWeight: 700 },
-  footerRed: { color: "#72291c", fontWeight: 700 },
-});
+// ══ Readiness-risk report ═══════════════════════════════════════════════════
 
-function coachAction(mode: "full" | "modified" | "recovery"): { boxStyle: any; textStyle: any; title: string; note: string } {
-  if (mode === "recovery") return {
-    boxStyle: reportStyles.actionBoxRecovery,
-    textStyle: reportStyles.actionTextRecovery,
-    title: "RECOVERY — Do not train today",
-    note: "Athlete's body is under significant stress. Rest or light recovery work only.",
-  };
-  if (mode === "modified") return {
-    boxStyle: reportStyles.actionBoxModified,
-    textStyle: reportStyles.actionTextModified,
-    title: "REDUCE LOAD — Modified session",
-    note: "Reduce intensity or volume. Monitor closely during training.",
-  };
-  return {
-    boxStyle: reportStyles.actionBoxFull,
-    textStyle: reportStyles.actionTextFull,
-    title: "FULL PARTICIPATION — Monitor closely",
-    note: "Can train normally. Flag is precautionary — keep an eye on this player.",
-  };
-}
+const ACTION: Record<ReadinessRiskReportPlayer["ateSessionMode"], { tone: Tone; title: string; note: string }> = {
+  recovery: { tone: "red", title: "RECOVERY - Do not train today", note: "Athlete's body is under significant stress. Rest or light recovery work only." },
+  modified: { tone: "amber", title: "REDUCE LOAD - Modified session", note: "Reduce intensity or volume. Monitor closely during training." },
+  full: { tone: "green", title: "FULL PARTICIPATION - Monitor closely", note: "Can train normally. Flag is precautionary - keep an eye on this player." },
+};
+const INJURY_TONE: Record<ReadinessRiskReportPlayer["injuryRiskLevel"], Tone> = { LOW: "green", MODERATE: "amber", HIGH: "red" };
+/** The player's readiness colour as the data carries it (YELLOW → amber swatch, word stays YELLOW). */
+const readinessTone = (s: ReadinessRiskReportPlayer["readinessStatus"]): Tone => (s === "RED" ? "red" : "amber");
 
-function injuryBadgeStyle(level: "LOW" | "MODERATE" | "HIGH") {
-  if (level === "HIGH") return reportStyles.injuryLabelHigh;
-  if (level === "MODERATE") return reportStyles.injuryLabelModerate;
-  return reportStyles.injuryLabelLow;
+const REF_COLS: Col[] = [
+  { label: "Wellness score", align: "center" },
+  { label: "Sleep (1-5)", align: "center" },
+  { label: "Load ratio", align: "center" },
+  { label: "HRV", align: "center" },
+  { label: "Load index", align: "center" },
+  { label: "vs. baseline", align: "center" },
+];
+
+function RiskPlayerCard({ p }: { p: ReadinessRiskReportPlayer }) {
+  const action = ACTION[p.ateSessionMode];
+  const at = TONE[action.tone];
+  const reasons = p.why.length ? p.why : ["No specific reasons available."];
+  const injRecs = p.injuryRecommendation.length ? p.injuryRecommendation : ["Continue with planned load and routine monitoring."];
+  const flips = (p.counterfactuals ?? []).slice(0, 2);
+  return (
+    <Card style={{ marginBottom: 10 }}>
+      {/* Name + readiness colour */}
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <Text style={[fh(700), { fontSize: 14, flex: 1 }]}>{clean(p.name)}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Text style={[fb(400), { fontSize: 7.75, color: C.mute }]}>{`Score ${scoreFmt(p.score)}  ·  Confidence ${confidenceFmt(p.confidence)}`}</Text>
+          <Status tone={readinessTone(p.readinessStatus)} text={p.readinessStatus} size={9} />
+        </View>
+      </View>
+
+      {/* Coach action — prominent */}
+      <View style={{ backgroundColor: at.tint, borderWidth: 1, borderColor: at.edge, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 9 }}>
+        <Label color={at.text}>Today&apos;s recommendation</Label>
+        <Text style={[fh(700), { fontSize: 12, color: at.text, marginTop: 1 }]}>{action.title}</Text>
+        <Text style={[fb(400), { fontSize: 8.75, color: C.ink, marginTop: 2 }]}>{action.note}</Text>
+      </View>
+
+      <Cols gap={16}>
+        <View>
+          <Label>Why this player is flagged</Label>
+          <Bullets items={reasons} size={8.75} />
+          {flips.length ? (
+            <View style={{ marginTop: 3 }}>
+              <Label>What would change the colour</Label>
+              <Bullets items={flips.map((f) => f.descriptionEN)} size={8.25} />
+            </View>
+          ) : null}
+        </View>
+        <View>
+          <Label>Injury risk</Label>
+          <View style={{ marginTop: 1, marginBottom: 4 }}>
+            <Status tone={INJURY_TONE[p.injuryRiskLevel]} text={p.injuryRiskLevel} size={9} />
+          </View>
+          <Bullets items={injRecs} size={8.5} />
+        </View>
+      </Cols>
+
+      {/* Reference numbers — compact, for staff use */}
+      <View style={{ marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: C.hair }}>
+        <Label color={C.faint}>Reference data (staff)</Label>
+        <Table
+          dense
+          size={8}
+          cols={REF_COLS}
+          rows={[[
+            scoreFmt(p.checkInScore),
+            p.sleepScore != null ? `${p.sleepScore}/5` : DASH,
+            p.acwr != null ? numFmt(p.acwr) : DASH,
+            p.hrv != null ? numFmt(p.hrv) : DASH,
+            p.zScore != null ? numFmt(p.zScore) : DASH,
+            p.deltaZ != null ? numFmt(p.deltaZ) : DASH,
+          ]]}
+        />
+      </View>
+    </Card>
+  );
 }
 
 function ReadinessRiskReportDocument({ data }: { data: ReadinessRiskReportData }) {
-  const playersPerPage = 2;
-  const flaggedPages: ReadinessRiskReportPlayer[][] = [];
-  for (let i = 0; i < data.flaggedPlayers.length; i += playersPerPage) {
-    flaggedPages.push(data.flaggedPlayers.slice(i, i + playersPerPage));
-  }
-  if (flaggedPages.length === 0) flaggedPages.push([]);
+  const { green, yellow, red } = data.summary;
+  const total = green + yellow + red;
+  const flagged = data.flaggedPlayers;
+  const tone: Tone = red > 0 ? "red" : yellow > 0 ? "amber" : "green";
+  const byMode = (m: ReadinessRiskReportPlayer["ateSessionMode"]) => flagged.filter((p) => p.ateSessionMode === m).map((p) => p.name);
+  const recovery = byMode("recovery");
+  const modified = byMode("modified");
+  const headline = flagged.length === 0
+    ? "No players require attention today."
+    : `${flagged.length} of ${total} players need attention today.`;
+  const body = [
+    `${red} at risk (RED), ${yellow} to monitor (YELLOW), ${green} ready (GREEN).`,
+    recovery.length ? `Recovery only: ${recovery.join(", ")}.` : "",
+    modified.length ? `Reduced load: ${modified.join(", ")}.` : "",
+  ].filter(Boolean).join(" ");
 
   return (
-    <Document>
-      {flaggedPages.map((pagePlayers, pageIdx) => (
-        <Page key={`risk-report-page-${pageIdx}`} size="A4" style={reportStyles.page}>
-          {/* Header — only on first page */}
-          {pageIdx === 0 && (
-            <View style={reportStyles.header}>
-              <Text style={reportStyles.h1}>Daily Readiness Report</Text>
-              <View style={reportStyles.headerMeta}>
-                <Text style={reportStyles.headerMetaText}>{data.teamName || "—"}</Text>
-                <Text style={reportStyles.headerMetaText}>{data.date}</Text>
-              </View>
-              <Text style={reportStyles.muted}>
-                Players requiring attention: {data.flaggedPlayers.length} of {data.summary.green + data.summary.yellow + data.summary.red}
-              </Text>
-            </View>
-          )}
+    <Document title={`Daily Readiness Report - ${data.date}`} author="MicroPulse">
+      <BrandPage
+        doc="Readiness report"
+        context={data.teamName || undefined}
+        title="Daily Readiness Report"
+        kicker={data.teamName || undefined}
+        subtitle={`${data.date}  ·  Players requiring attention: ${flagged.length} of ${total}`}
+        note="Colour = today's readiness verdict (each player vs his own norm). Recommendation = suggested session mode."
+      >
+        <Verdict
+          tone={tone}
+          label={red > 0 ? "At risk" : yellow > 0 ? "Monitor" : "Ready"}
+          headline={headline}
+          body={body}
+        />
+        <FactRow
+          facts={[
+            { value: String(green), label: "Ready", sub: "GREEN - train as planned", tone: "green" },
+            { value: String(yellow), label: "Monitor", sub: "YELLOW - watch or modify", tone: "amber" },
+            { value: String(red), label: "At risk", sub: "RED - recovery focus", tone: "red" },
+          ]}
+        />
 
-          {/* Player cards */}
-          {pagePlayers.length ? (
-            pagePlayers.map((p, i) => {
-              const action = coachAction(p.ateSessionMode);
-              const reasons = p.why.length ? p.why : ["No specific reasons available."];
-              const injRecs = p.injuryRecommendation.length ? p.injuryRecommendation : ["Continue with planned load and routine monitoring."];
-              return (
-                <View key={`${p.name}-${pageIdx}-${i}`} style={reportStyles.playerCard}>
-                  {/* Player name + status */}
-                  <View style={reportStyles.playerHeader}>
-                    <Text style={reportStyles.playerName}>{p.name}</Text>
-                    <Text style={p.readinessStatus === "RED" ? reportStyles.badgeRed : reportStyles.badgeYellow}>
-                      {p.readinessStatus === "RED" ? "🔴 RED" : "🟡 YELLOW"}
-                    </Text>
-                  </View>
-
-                  {/* Coach action — prominent */}
-                  <View style={action.boxStyle}>
-                    <Text style={reportStyles.actionLabel}>Today&apos;s recommendation</Text>
-                    <Text style={action.textStyle}>{action.title}</Text>
-                    <Text style={reportStyles.actionNote}>{action.note}</Text>
-                  </View>
-
-                  {/* Reasons */}
-                  <View style={reportStyles.cardBody}>
-                    <Text style={reportStyles.sectionLabel}>Why this player is flagged</Text>
-                    {reasons.map((r, idx) => (
-                      <Text key={`${p.name}-reason-${idx}`} style={reportStyles.reasonItem}>• {r}</Text>
-                    ))}
-
-                    {/* Injury risk */}
-                    <Text style={reportStyles.sectionLabel}>Injury risk</Text>
-                    <View style={reportStyles.injuryRow}>
-                      <Text style={injuryBadgeStyle(p.injuryRiskLevel)}>{p.injuryRiskLevel}</Text>
-                    </View>
-                    {injRecs.map((r, idx) => (
-                      <Text key={`${p.name}-injrec-${idx}`} style={reportStyles.injuryRec}>• {r}</Text>
-                    ))}
-
-                    {/* Reference numbers — compact, for staff use */}
-                    <View style={reportStyles.refTableWrap}>
-                      <Text style={reportStyles.refTableLabel}>Reference data</Text>
-                      <View style={reportStyles.table}>
-                        <View style={reportStyles.tHead}>
-                          <Text style={reportStyles.cellH}>Wellness score</Text>
-                          <Text style={reportStyles.cellH}>Sleep (1–5)</Text>
-                          <Text style={reportStyles.cellH}>Load ratio</Text>
-                          <Text style={reportStyles.cellH}>HRV</Text>
-                          <Text style={reportStyles.cellH}>Load index</Text>
-                          <Text style={reportStyles.cellH}>vs. baseline</Text>
-                        </View>
-                        <View style={reportStyles.tRow}>
-                          <Text style={reportStyles.cell}>{scoreFmt(p.checkInScore)}</Text>
-                          <Text style={reportStyles.cell}>{p.sleepScore != null ? `${p.sleepScore}/5` : "—"}</Text>
-                          <Text style={reportStyles.cell}>{p.acwr != null ? numFmt(p.acwr) : "—"}</Text>
-                          <Text style={reportStyles.cell}>{p.hrv != null ? numFmt(p.hrv) : "—"}</Text>
-                          <Text style={reportStyles.cell}>{p.zScore != null ? numFmt(p.zScore) : "—"}</Text>
-                          <Text style={reportStyles.cell}>{p.deltaZ != null ? numFmt(p.deltaZ) : "—"}</Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              );
-            })
+        <Section title="Players requiring attention" hint="Each card: the colour, today's recommendation, the plain reasons, injury risk, then the raw numbers.">
+          {flagged.length ? (
+            flagged.map((p, i) => <RiskPlayerCard key={`${p.name}-${i}`} p={p} />)
           ) : (
-            <Text style={reportStyles.muted}>No players requiring attention today.</Text>
+            <Card><Text style={[fb(400), { fontSize: 9, color: C.mute }]}>No players requiring attention today.</Text></Card>
           )}
+        </Section>
 
-          {/* Footer summary — last page only */}
-          {pageIdx === flaggedPages.length - 1 && (
-            <View style={reportStyles.footerBar}>
-              <Text style={reportStyles.footerCount}>
-                Team status:{"  "}
-                <Text style={reportStyles.footerGreen}>● {data.summary.green} ready</Text>
-                {"   "}
-                <Text style={reportStyles.footerYellow}>● {data.summary.yellow} monitor</Text>
-                {"   "}
-                <Text style={reportStyles.footerRed}>● {data.summary.red} at risk</Text>
-              </Text>
-              <Text style={reportStyles.muted}>Page {pageIdx + 1} / {flaggedPages.length}</Text>
-            </View>
-          )}
-        </Page>
-      ))}
+        {/* Team status — closing summary line */}
+        <View wrap={false} style={{ flexDirection: "row", alignItems: "center", gap: 14, marginTop: 2, paddingTop: 8, borderTopWidth: 1, borderTopColor: C.rule }}>
+          <Text style={[fb(600), { fontSize: 9 }]}>Team status:</Text>
+          <Status tone="green" text={`${green} ready`} />
+          <Status tone="amber" text={`${yellow} monitor`} />
+          <Status tone="red" text={`${red} at risk`} />
+        </View>
+      </BrandPage>
     </Document>
   );
 }
 
-// ── Post-Training GPS Report PDF ──────────────────────────────
-const postStyles = StyleSheet.create({
-  page: { padding: 28, fontSize: 10, color: "#221f18", fontFamily: "Helvetica" },
-  h1: { fontSize: 15, fontWeight: 700, marginBottom: 4 },
-  subtitle: { fontSize: 10, color: "#8b8676", marginBottom: 14 },
-  section: { marginBottom: 14 },
-  sectionTitle: { fontSize: 11, fontWeight: 700, marginBottom: 6, paddingBottom: 3, borderBottom: "1 solid #e6e1d4" },
-  summaryRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
-  summaryBox: { flex: 1, border: "1 solid #e6e1d4", borderRadius: 4, padding: 6, alignItems: "center" },
-  summaryVal: { fontSize: 13, fontWeight: 700 },
-  summaryLabel: { fontSize: 8, color: "#8b8676", marginTop: 2 },
-  table: { border: "1 solid #d5cfbe", borderRadius: 4, overflow: "hidden" },
-  tHead: { flexDirection: "row", backgroundColor: "#efece2" },
-  tRow: { flexDirection: "row", borderTop: "1 solid #e6e1d4" },
-  tRowAlt: { flexDirection: "row", borderTop: "1 solid #e6e1d4", backgroundColor: "#f7f5ef" },
-  colName: { width: "18%", padding: 4, fontSize: 9 },
-  colPos: { width: "8%", padding: 4, fontSize: 9, color: "#8b8676" },
-  colFlag: { width: "8%", padding: 4, fontSize: 9, textAlign: "center" },
-  colMetric: { width: "9%", padding: 4, fontSize: 9, textAlign: "right" },
-  colPct: { width: "7%", padding: 4, fontSize: 9, textAlign: "right" },
-  colAttn: { width: "9%", padding: 4, fontSize: 9, textAlign: "center" },
-  // RPE-specific table columns
-  colRpeName: { width: "19%", padding: 4, fontSize: 9 },
-  colRpePos: { width: "7%", padding: 4, fontSize: 9, color: "#8b8676" },
-  colRpeScore: { width: "9%", padding: 4, fontSize: 9, textAlign: "center" },
-  colRpeDesc: { width: "12%", padding: 4, fontSize: 9 },
-  colRpeDur: { width: "11%", padding: 4, fontSize: 9, textAlign: "right" },
-  colRpeLoad: { width: "12%", padding: 4, fontSize: 9, textAlign: "right" },
-  colRpeBand: { width: "18%", padding: 4, fontSize: 9 },
-  hdr: { fontWeight: 700 },
-  attnAlert: { color: "#a83e28", fontWeight: 700 },
-  attnMonitor: { color: "#b0700f", fontWeight: 700 },
-  attnOk: { color: "#1c7a4a" },
-  flagRed: { color: "#a83e28", fontWeight: 700 },
-  flagYellow: { color: "#b0700f", fontWeight: 700 },
-  flagGreen: { color: "#1c7a4a" },
-  alertBox: { marginBottom: 6, padding: 6, border: "1 solid #d68e77", borderRadius: 4, backgroundColor: "#f8e9e3" },
-  alertName: { fontWeight: 700, marginBottom: 2 },
-  alertLine: { color: "#5c2318", fontSize: 9 },
-  monitorBox: { marginBottom: 6, padding: 6, border: "1 solid #e9c983", borderRadius: 4, backgroundColor: "#faf1de" },
-  monitorName: { fontWeight: 700, marginBottom: 2 },
-  monitorLine: { color: "#66450f", fontSize: 9 },
-});
+// ══ Post-training report ════════════════════════════════════════════════════
 
 function numFmt2(v: number | null, digits = 0): string {
-  if (v == null) return "—";
+  if (v == null) return DASH;
   return v.toFixed(digits);
 }
 
 function pctFmt(v: number | null): string {
-  if (v == null) return "—";
+  if (v == null) return DASH;
   const s = Math.round(v);
   return (s >= 0 ? "+" : "") + s + "%";
 }
@@ -280,7 +206,7 @@ function rpeInterpretation(avgRpe: number | null, submittedCount: number, totalP
     return `Upplifun liðsins á æfingunni var létt (meðal RPE ${score}). Liðið var vel á sig komið og þoldi æfinguna vel án mikillar fyrirhafnar. (${sub})`;
   }
   if (avgRpe <= 6) {
-    return `Upplifun liðsins á æfingunni var í meðallagi (meðal RPE ${score}). Líkamlegt álag var hóflegt — góð jafnvægisæfing milli álags og hvíldar. (${sub})`;
+    return `Upplifun liðsins á æfingunni var í meðallagi (meðal RPE ${score}). Líkamlegt álag var hóflegt - góð jafnvægisæfing milli álags og hvíldar. (${sub})`;
   }
   if (avgRpe <= 7.9) {
     return `Upplifun liðsins á æfingunni var erfið (meðal RPE ${score}). Líkamlegt álag var hátt. Mikilvægt er að tryggja góða hvíld og næringaruppbót fyrir næstu æfingu. (${sub})`;
@@ -292,7 +218,7 @@ function rpeInterpretation(avgRpe: number | null, submittedCount: number, totalP
 }
 
 function rpeScoreLabel(rpe: number | null): string {
-  if (rpe == null) return "—";
+  if (rpe == null) return DASH;
   if (rpe <= 2) return "Very easy";
   if (rpe <= 4) return "Easy";
   if (rpe <= 6) return "Moderate";
@@ -300,26 +226,54 @@ function rpeScoreLabel(rpe: number | null): string {
   if (rpe <= 9) return "Very hard";
   return "Maximal";
 }
+const rpeTone = (rpe: number | null): Tone => (rpe != null && rpe >= 9 ? "red" : rpe != null && rpe >= 7 ? "amber" : "green");
 
 function rpeLoadBand(sessionLoad: number | null): string {
-  if (sessionLoad == null) return "—";
+  if (sessionLoad == null) return DASH;
   if (sessionLoad < 200) return "Very light  (<200)";
-  if (sessionLoad < 400) return "Light  (200–399)";
-  if (sessionLoad < 600) return "Moderate  (400–599)";
-  if (sessionLoad < 800) return "Hard  (600–799)";
-  return "Very hard  (≥800)";
+  if (sessionLoad < 400) return "Light  (200-399)";
+  if (sessionLoad < 600) return "Moderate  (400-599)";
+  if (sessionLoad < 800) return "Hard  (600-799)";
+  return "Very hard  (800+)";
 }
 
-function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) {
-  const PLAYERS_PER_PAGE = 30;
+/** % of the 4-week average → tone + the word printed next to it (colour is never the only signal). */
+const loadTone = (pct: number | null): Tone => (pct == null ? "neutral" : pct <= 110 ? "green" : pct <= 140 ? "amber" : "red");
+const loadWord = (pct: number | null) => (pct == null ? DASH : pct <= 90 ? "below norm" : pct <= 110 ? "in line" : pct <= 140 ? "above norm" : "well above");
 
+const PVA_TONE: Record<PvaStatus, Tone> = { on: "green", over: "amber", under: "amber", well_over: "red", well_under: "red", na: "neutral" };
+const PVA_WORD: Record<PvaStatus, string> = { on: "on plan", over: "over", under: "under", well_over: "well over", well_under: "well under", na: DASH };
+
+/** Coloured number for dense tables — the band meaning is spelled out in the legend under the table. */
+function Num({ v, tone, bold = true }: { v: string; tone?: Tone | null; bold?: boolean }) {
+  return <Text style={[fb(bold ? 600 : 400), { fontSize: 8, color: tone && tone !== "neutral" ? TONE[tone].text : C.ink, textAlign: "right" }]}>{clean(v)}</Text>;
+}
+function StatusCell({ tone, text, size = 8 }: { tone: Tone; text: string; size?: number }) {
+  return text === DASH ? <Text style={[fb(400), { fontSize: size, color: C.mute }]}>{DASH}</Text> : <Status tone={tone} text={text} size={size} />;
+}
+
+const GPS_COLS: Col[] = [
+  { label: "Leikmaður", flex: 1 },
+  { label: "Staða", width: 40 },
+  { label: "Pre", width: 60 },
+  { label: "Dist", width: 44, align: "right" },
+  { label: "%28D", width: 38, align: "right" },
+  { label: "HSD", width: 40, align: "right" },
+  { label: "%28D", width: 38, align: "right" },
+  { label: "PL", width: 40, align: "right" },
+  { label: "%28D", width: 38, align: "right" },
+  { label: "PL/min", width: 40, align: "right" },
+  { label: "Ac B2-3", width: 42, align: "right" },
+  { label: "De B2-3", width: 42, align: "right" },
+  { label: "Vmax", width: 36, align: "right" },
+  { label: "ACWR", width: 36, align: "right" },
+  { label: "Signal", width: 64, align: "center" },
+];
+const ATTN_TONE: Record<string, Tone> = { ALERT: "red", MONITOR: "amber", OK: "green" };
+
+function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) {
   // GPS page only shows players who actually have GPS data
   const gpsPlayers = data.players.filter((p) => p.totalDistance != null);
-  const pages: PostTrainingReportPlayer[][] = [];
-  for (let i = 0; i < gpsPlayers.length; i += PLAYERS_PER_PAGE) {
-    pages.push(gpsPlayers.slice(i, i + PLAYERS_PER_PAGE));
-  }
-  if (pages.length === 0) pages.push([]);
 
   const alerts = data.players.filter((p) => p.attentionFlag === "ALERT");
   const monitors = data.players.filter((p) => p.attentionFlag === "MONITOR");
@@ -329,25 +283,16 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
   const interpretText = rpeInterpretation(data.rpeTeamAvg, data.rpeSubmissionCount, data.players.length);
 
   // IMA / stride page — sorted by long-run strides desc. `sprint_strides` is a legacy field name:
-  // it holds strides in IMA Free Running runs of 18 s+ (ima_fr_ge18; bout-duration bands,
+  // it holds strides in IMA Free Running runs ≥18 s (ima_fr_ge18; bout-duration bands,
   // docs/ima-free-running-bands.md) — sustained running, NOT sprinting.
   const ima = data.ima;
   const imaPlayers: ImaPlayerDay[] = ima
     ? [...ima.per_player].filter((p) => p.total_strides > 0).sort((a, b) => b.sprint_strides - a.sprint_strides)
     : [];
-  const imaPages: ImaPlayerDay[][] = [];
-  for (let i = 0; i < imaPlayers.length; i += PLAYERS_PER_PAGE) {
-    imaPages.push(imaPlayers.slice(i, i + PLAYERS_PER_PAGE));
-  }
 
-  // Load explainability — verdict, colour and an interpretation paragraph.
+  // Load explainability — verdict, tone and an interpretation paragraph.
   const ls = data.loadSummary;
   const plPct = ls.pl.pctAvg;
-  const recentColor =
-    plPct == null ? "#8b8676"
-      : plPct <= 110 ? "#1c7a4a"
-      : plPct <= 140 ? "#b0700f"
-      : "#a83e28";
   const recentBand =
     plPct == null ? null
       : plPct <= 90 ? "below the recent norm"
@@ -362,18 +307,18 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
         + ". "
         + (ls.spikePlayers.length === 0
           ? "No player exceeded their usual load."
-          : `${ls.spikePlayers.length} player${ls.spikePlayers.length === 1 ? "" : "s"} ran above their usual.`);
+          : `${plural(ls.spikePlayers.length, "player")} ran above their usual.`);
   // Detailed interpretation that walks through every number on the card.
-  const fmtInt = (n: number | null) => (n == null ? "—" : Math.round(n).toLocaleString("en-US"));
+  const fmtInt = (n: number | null) => (n == null ? DASH : Math.round(n).toLocaleString("en-US"));
   const loadInterpretation = (() => {
     if (plPct == null) return "";
     const parts: string[] = [];
     parts.push(
-      `Player Load is the total accelerometer-derived mechanical work the squad absorbed today — the sum of every player's load. Today's team total of ${fmtInt(ls.pl.today)} is ${plPct}% of the ${fmtInt(ls.pl.avg)} the squad averages on a training day across the last 4 weeks, i.e. ${recentBand}.`,
+      `Player Load is the total accelerometer-derived mechanical work the squad absorbed today - the sum of every player's load. Today's team total of ${fmtInt(ls.pl.today)} is ${plPct}% of the ${fmtInt(ls.pl.avg)} the squad averages on a training day across the last 4 weeks, i.e. ${recentBand}.`,
     );
     if (ls.pl.pctMatch != null) {
       parts.push(
-        `Measured against a typical match — the squad's single highest-load day in that window (≈ ${fmtInt(ls.pl.peak)}) — today reached ${ls.pl.pctMatch}% of match demand, so the session was ${ls.pl.pctMatch >= 90 ? "essentially match-level" : ls.pl.pctMatch >= 60 ? "a substantial fraction of a game" : "well below match intensity"}.`,
+        `Measured against a typical match - the squad's single highest-load day in that window (~ ${fmtInt(ls.pl.peak)}) - today reached ${ls.pl.pctMatch}% of match demand, so the session was ${ls.pl.pctMatch >= 90 ? "essentially match-level" : ls.pl.pctMatch >= 60 ? "a substantial fraction of a game" : "well below match intensity"}.`,
       );
     }
     const dParts: string[] = [];
@@ -381,20 +326,20 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
     if (ls.hsd.pctAvg != null) dParts.push(`high-speed distance ${fmtInt(ls.hsd.today)} m (${ls.hsd.pctAvg}% of average)`);
     if (dParts.length) {
       parts.push(
-        `Breaking that down, the squad covered ${dParts.join(" and ")} — total distance reflects running volume while high-speed distance (the top sprint bands) reflects intensity, so you can see whether today's load came from doing more or from running faster.`,
+        `Breaking that down, the squad covered ${dParts.join(" and ")} - total distance reflects running volume while high-speed distance (the top sprint bands) reflects intensity, so you can see whether today's load came from doing more or from running faster.`,
       );
     }
     if (ls.distribution.total > 0) {
       parts.push(
-        `Player-by-player against each athlete's own 4-week norm: ${ls.distribution.above} ran ≥30% above their usual, ${ls.distribution.elevated} were mildly elevated, ${ls.distribution.inLine} were in line and ${ls.distribution.below} below — so the team number ${ls.distribution.above > 0 ? "is not uniform; the spikes below are the ones carrying it" : "reflects a broadly even session"}.`,
+        `Player-by-player against each athlete's own 4-week norm: ${ls.distribution.above} ran 30% or more above their usual, ${ls.distribution.elevated} were mildly elevated, ${ls.distribution.inLine} were in line and ${ls.distribution.below} below - so the team number ${ls.distribution.above > 0 ? "is not uniform; the spikes below are the ones carrying it" : "reflects a broadly even session"}.`,
       );
     }
     parts.push(
       plPct <= 110
-        ? "Overall this was a routine day — standard recovery applies, and only the individuals flagged below need watching."
+        ? "Overall this was a routine day - standard recovery applies, and only the individuals flagged below need watching."
         : plPct <= 140
         ? "This is a manageable mid-week stimulus, but stack it carefully: avoid a second high day back-to-back and keep an eye on the flagged players."
-        : "This is a clear team-level spike — prioritise recovery (sleep, nutrition, a lighter next session) and review the flagged players before the next hard day to avoid an acute:chronic overshoot.",
+        : "This is a clear team-level spike - prioritise recovery (sleep, nutrition, a lighter next session) and review the flagged players before the next hard day to avoid an acute:chronic overshoot.",
     );
     return parts.join(" ");
   })();
@@ -403,581 +348,403 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
   const watchTomorrow = data.players.filter((p) => p.attentionFlag === "ALERT" || p.attentionFlag === "MONITOR");
   const rttReturning = (data.rttSummary ?? []).filter((p) => p.currentlyInjured || p.started);
   const rttOver = rttReturning.filter((p) => p.thisWeek?.status === "over");
+  const pva = data.plannedVsActual && data.plannedVsActual.hasPlan ? data.plannedVsActual : null;
+
+  const verdictTone = loadTone(plPct);
+  const verdictLabel = plPct == null ? "No baseline" : plPct <= 90 ? "Below norm" : plPct <= 110 ? "In line" : plPct <= 140 ? "Above norm" : "Well above norm";
+  const watchNames = watchTomorrow.length === 0
+    ? "No one flagged - routine recovery."
+    : `${watchTomorrow.slice(0, 8).map((p) => p.name).join(", ")}${watchTomorrow.length > 8 ? ` +${watchTomorrow.length - 8} more` : ""}`;
+
+  const facts: { value: string; label: string; sub?: string; tone?: Tone }[] = [
+    {
+      value: plPct != null ? `${plPct}%` : DASH,
+      label: "Player Load vs 4-week avg",
+      sub: plPct == null ? "No GPS baseline" : ls.pl.pctMatch != null ? `${loadWord(plPct)} · ${ls.pl.pctMatch}% of a typical match` : loadWord(plPct),
+      tone: verdictTone,
+    },
+    {
+      value: String(watchTomorrow.length),
+      label: "Watch tomorrow",
+      sub: watchNames,
+      tone: alerts.length ? "red" : monitors.length ? "amber" : "green",
+    },
+    {
+      value: data.rpeTeamAvg != null ? numFmt2(data.rpeTeamAvg, 1) : DASH,
+      label: "Team RPE (avg)",
+      sub: `${data.rpeTeamAvg != null ? `${rpeScoreLabel(data.rpeTeamAvg)} · ` : ""}${data.rpeSubmissionCount}/${data.players.length} submitted`,
+    },
+  ];
+  if (rttReturning.length > 0) {
+    facts.push({
+      value: String(rttReturning.length),
+      label: "Return-to-training",
+      sub: rttOver.length > 0 ? `${rttOver.length} over their recommended ramp (${rttOver.map((p) => p.name).join(", ")})` : "All within their recommended ramp",
+      tone: rttOver.length > 0 ? "red" : "rtp",
+    });
+  }
+
+  const subtitle = `${data.teamName} · ${data.sessionDate} · ${data.mdDay} · ${data.players.length} players`;
+  const note = "Rule-computed from GPS, RPE and IMA data - no AI. Pre = the player's readiness colour that day.";
+  const pageProps = { doc: "Post-training report", context: `${data.teamName} · ${data.sessionDate}`, note, orientation: "landscape" as const };
 
   return (
-    <Document>
-      {/* ══ Page 1: Internal Load — RPE ══ */}
-      <Page size="A4" orientation="landscape" style={postStyles.page}>
-        {/* Header */}
-        <View style={postStyles.section}>
-          <Text style={postStyles.h1}>Post-Training Report</Text>
-          <Text style={postStyles.subtitle}>
-            {data.teamName} · {data.sessionDate} · {data.mdDay} · {data.players.length} players
-          </Text>
-        </View>
+    <Document title={`Post-Training Report - ${data.sessionDate}`} author="MicroPulse">
+      {/* ══ Page 1: the day — verdict, facts, who to watch, load detail, plan, RTT, RPE ══ */}
+      <BrandPage {...pageProps} title="Post-Training Report" kicker={data.mdDay} subtitle={subtitle}>
+        <Verdict
+          tone={verdictTone}
+          label={verdictLabel}
+          headline={loadVerdict}
+          body={pva ? `Against the plan: ${pva.summary}` : undefined}
+          confidence={`${ls.distribution.total} players with GPS · ${data.rpeSubmissionCount}/${data.players.length} RPE`}
+        />
+        <FactRow facts={facts} />
 
-        {/* ── Day summary — the whole day in three lines ── */}
-        <View style={[postStyles.section, { backgroundColor: "#eef2ff", border: "1 solid #c7d2fe", borderRadius: 4, padding: 10 }]} wrap={false}>
-          <Text style={postStyles.sectionTitle}>Day summary</Text>
-          <Text style={{ fontSize: 9.5, color: "#565044", lineHeight: 1.5, marginBottom: 3 }}>
-            <Text style={{ fontWeight: 700 }}>Load vs plan: </Text>
-            {data.plannedVsActual && data.plannedVsActual.hasPlan ? data.plannedVsActual.summary : loadVerdict}
-          </Text>
-          <Text style={{ fontSize: 9.5, color: "#565044", lineHeight: 1.5, marginBottom: rttReturning.length > 0 ? 3 : 0 }}>
-            <Text style={{ fontWeight: 700 }}>Watch tomorrow: </Text>
-            {watchTomorrow.length === 0
-              ? "no one flagged — routine recovery."
-              : `${watchTomorrow.length} player${watchTomorrow.length === 1 ? "" : "s"} — ${watchTomorrow.slice(0, 8).map((p) => p.name).join(", ")}${watchTomorrow.length > 8 ? ` +${watchTomorrow.length - 8} more` : ""}.`}
-          </Text>
-          {rttReturning.length > 0 && (
-            <Text style={{ fontSize: 9.5, color: "#565044", lineHeight: 1.5 }}>
-              <Text style={{ fontWeight: 700 }}>Return-to-training: </Text>
-              {`${rttReturning.length} player${rttReturning.length === 1 ? "" : "s"}`}
-              {rttOver.length > 0 ? ` — ${rttOver.length} over their recommended ramp (${rttOver.map((p) => p.name).join(", ")}).` : " — all within their recommended ramp."}
-            </Text>
-          )}
-        </View>
+        {/* Attention flags — named exceptions, plain reasons */}
+        {(alerts.length > 0 || monitors.length > 0) && (
+          <Section title={`Who to watch - ${alerts.length} ALERT · ${monitors.length} MONITOR`}>
+            <Table
+              cols={[
+                { label: "Player", width: 170 },
+                { label: "Pos", width: 40 },
+                { label: "Signal", width: 80 },
+                { label: "Why", flex: 1 },
+              ]}
+              rowTone={(i) => (i < alerts.length ? "red" : "amber")}
+              rows={[...alerts, ...monitors].map((p) => [
+                p.name,
+                p.position,
+                <Status key="s" tone={p.attentionFlag === "ALERT" ? "red" : "amber"} text={p.attentionFlag} size={8} />,
+                p.attentionReason.join("; ") || DASH,
+              ])}
+            />
+          </Section>
+        )}
 
-        {/* ── Explainability — session load overview (top of report) ── */}
-        <View style={[postStyles.section, { backgroundColor: "#f7f5ef", border: "1 solid #e6e1d4", borderRadius: 4, padding: 10 }]}>
-          <Text style={postStyles.sectionTitle}>Session Load — Explainability</Text>
-          <Text style={{ fontSize: 11, fontWeight: 700, color: recentColor, lineHeight: 1.4, marginBottom: 4 }}>
-            {loadVerdict}
-          </Text>
+        {/* ── Session load — the numbers behind the verdict ── */}
+        <Section title="Session load - behind the verdict" hint="Team totals today vs the prior 4 weeks and vs a typical match.">
           {loadInterpretation ? (
-            <Text style={{ fontSize: 9.5, color: "#565044", lineHeight: 1.5, marginBottom: 8 }}>{loadInterpretation}</Text>
+            <Text style={[fb(400), { fontSize: 9, lineHeight: 1.5, color: C.ink, marginBottom: 7 }]}>{clean(loadInterpretation)}</Text>
           ) : null}
-
-          {/* Metric breakdown — today vs 4-week average vs typical match */}
-          <View style={postStyles.table}>
-            <View style={postStyles.tHead}>
-              <Text style={[{ width: "34%", padding: 4, fontSize: 9 }, postStyles.hdr]}>Metric</Text>
-              <Text style={[{ width: "18%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Today</Text>
-              <Text style={[{ width: "18%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>4-wk avg</Text>
-              <Text style={[{ width: "15%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>% of avg</Text>
-              <Text style={[{ width: "15%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>% of match</Text>
-            </View>
-            {([
-              ["Team Player Load", ls.pl, 0],
-              ["Total Distance (m)", ls.dist, 0],
-              ["High-Speed Distance (m)", ls.hsd, 0],
-            ] as Array<[string, typeof ls.pl, number]>).map(([label, m], i) => {
-              const c = m.pctAvg == null ? "#221f18" : m.pctAvg <= 110 ? "#1c7a4a" : m.pctAvg <= 140 ? "#b0700f" : "#a83e28";
-              return (
-                <View key={label} style={i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt}>
-                  <Text style={{ width: "34%", padding: 4, fontSize: 9, fontWeight: 700 }}>{label}</Text>
-                  <Text style={{ width: "18%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(m.today, 0)}</Text>
-                  <Text style={{ width: "18%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(m.avg, 0)}</Text>
-                  <Text style={[{ width: "15%", padding: 4, fontSize: 9, textAlign: "right", fontWeight: 700 }, { color: c }]}>{m.pctAvg != null ? `${m.pctAvg}%` : "—"}</Text>
-                  <Text style={{ width: "15%", padding: 4, fontSize: 9, textAlign: "right" }}>{m.pctMatch != null ? `${m.pctMatch}%` : "—"}</Text>
-                </View>
-              );
-            })}
-          </View>
+          <Table
+            cols={[
+              { label: "Metric", flex: 1 },
+              { label: "Today", width: 90, align: "right" },
+              { label: "4-wk avg", width: 90, align: "right" },
+              { label: "% of avg", width: 70, align: "right", strong: true },
+              { label: "Read", width: 100, align: "center" },
+              { label: "% of match", width: 80, align: "right" },
+            ]}
+            rows={([
+              ["Team Player Load", ls.pl],
+              ["Total Distance (m)", ls.dist],
+              ["High-Speed Distance (m)", ls.hsd],
+            ] as Array<[string, typeof ls.pl]>).map(([label, m]) => [
+              label,
+              numFmt2(m.today, 0),
+              numFmt2(m.avg, 0),
+              m.pctAvg != null ? `${m.pctAvg}%` : DASH,
+              <StatusCell key="r" tone={loadTone(m.pctAvg)} text={loadWord(m.pctAvg)} />,
+              m.pctMatch != null ? `${m.pctMatch}%` : DASH,
+            ])}
+          />
 
           {/* Player distribution vs each player's own 4-week norm */}
           {ls.distribution.total > 0 && (
-            <Text style={{ fontSize: 9, color: "#565044", marginTop: 6 }}>
-              Players vs their own 4-week norm ({ls.distribution.total} with GPS):{" "}
-              <Text style={{ color: "#a83e28", fontWeight: 700 }}>{ls.distribution.above} above (≥130%)</Text> ·{" "}
-              <Text style={{ color: "#b0700f" }}>{ls.distribution.elevated} elevated</Text> ·{" "}
-              <Text style={{ color: "#1c7a4a" }}>{ls.distribution.inLine} in line</Text> ·{" "}
-              {ls.distribution.below} below
-            </Text>
+            <View style={{ marginTop: 8 }} wrap={false}>
+              <Label>{`Players vs their own 4-week norm (${ls.distribution.total} with GPS)`}</Label>
+              <StatGrid
+                cols={4}
+                items={[
+                  { label: "Above (130%+)", value: String(ls.distribution.above), tone: "red" },
+                  { label: "Elevated", value: String(ls.distribution.elevated), tone: "amber" },
+                  { label: "In line", value: String(ls.distribution.inLine), tone: "green" },
+                  { label: "Below", value: String(ls.distribution.below) },
+                ]}
+              />
+            </View>
           )}
 
           {/* Spiking players (named) */}
           {ls.spikePlayers.length > 0 && (
-            <Text style={{ fontSize: 9, color: "#8c3221", marginTop: 6, lineHeight: 1.4 }}>
-              Spikes (above their usual): {ls.spikePlayers.slice(0, 10).map((p) => {
+            <Text style={[fb(400), { fontSize: 8.75, color: TONE.red.text, marginTop: 7, lineHeight: 1.45 }]}>
+              <Text style={fb(600)}>Spikes (above their usual): </Text>
+              {clean(ls.spikePlayers.slice(0, 10).map((p) => {
                 const parts: string[] = [];
                 if (p.plPct != null) parts.push(`+${Math.round(p.plPct)}% PL`);
                 if (p.distPct != null && p.distPct >= 30) parts.push(`+${Math.round(p.distPct)}% dist`);
                 if (p.acwr != null && p.acwr >= 1.5) parts.push(`ACWR ${p.acwr.toFixed(2)}`);
                 return `${p.name}${parts.length ? ` (${parts.join(", ")})` : ""}`;
-              }).join(" · ")}{ls.spikePlayers.length > 10 ? ` +${ls.spikePlayers.length - 10} more` : ""}
+              }).join(" · ") + (ls.spikePlayers.length > 10 ? ` +${ls.spikePlayers.length - 10} more` : ""))}
             </Text>
           )}
 
-          <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 6, lineHeight: 1.4 }}>
-            Baselines use the team total for each metric over the prior 4 weeks (catapult/manual GPS). &quot;4-wk avg&quot; = mean of prior session days; &quot;match&quot; = the highest team-load day in the window (matches are a team&apos;s peak-load days). A player spike = Player Load ≥30% above their own 4-week average, or ACWR ≥ 1.5 (Gabbett 2016 acute:chronic ceiling).
-          </Text>
-        </View>
+          <Provenance>
+            Baselines use the team total for each metric over the prior 4 weeks (catapult/manual GPS). &quot;4-wk avg&quot; = mean of prior session days; &quot;match&quot; = the highest team-load day in the window (matches are a team&apos;s peak-load days). A player spike = Player Load 30% or more above their own 4-week average, or ACWR 1.5 or higher (Gabbett 2016 acute:chronic ceiling).
+          </Provenance>
+        </Section>
 
         {/* ── Planned vs Actual — did the session hit the recommendation? ── */}
-        {data.plannedVsActual && data.plannedVsActual.hasPlan && (() => {
-          const pva = data.plannedVsActual;
-          const pvaColor = (st: PvaStatus) =>
-            st === "on" ? "#1c7a4a" : st === "over" || st === "under" ? "#b0700f" : st === "well_over" || st === "well_under" ? "#a83e28" : "#a9a493";
-          return (
-            <View style={[postStyles.section, { backgroundColor: "#F5F3FF", border: "1 solid #DDD6FE", borderRadius: 4, padding: 10 }]} wrap={false}>
-              <Text style={postStyles.sectionTitle}>Planned vs Actual — did we hit the recommendation?</Text>
-              <Text style={{ fontSize: 9, color: "#4C1D95", marginBottom: 2 }}>
-                Plan: {pva.mode === "microcycle" && pva.mdLabel ? `${pva.mdLabel} · ${pva.loadType} · ${pva.matchPct}% of match` : "recent-load baseline (mixed)"}
-                {pva.readinessAdjustPct !== 0 ? ` · readiness-adjusted ${pva.readinessAdjustPct}%` : ""}
-              </Text>
-              <Text style={{ fontSize: 9.5, color: "#565044", lineHeight: 1.5, marginBottom: 8 }}>{pva.summary}</Text>
-
-              {/* Team-level: planned vs actual per KPI */}
-              <View style={postStyles.table}>
-                <View style={postStyles.tHead}>
-                  <Text style={[{ width: "40%", padding: 4, fontSize: 9 }, postStyles.hdr]}>Metric (per player)</Text>
-                  <Text style={[{ width: "20%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Planned</Text>
-                  <Text style={[{ width: "20%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Actual</Text>
-                  <Text style={[{ width: "20%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>% of plan</Text>
-                </View>
-                {pva.team.map((t, i) => (
-                  <View key={t.kpi} style={i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt}>
-                    <Text style={{ width: "40%", padding: 4, fontSize: 9, fontWeight: 700 }}>{PVA_LABEL[t.kpi]}</Text>
-                    <Text style={{ width: "20%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(t.planned, 0)}</Text>
-                    <Text style={{ width: "20%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(t.actual, 0)}</Text>
-                    <Text style={[{ width: "20%", padding: 4, fontSize: 9, textAlign: "right", fontWeight: 700 }, { color: pvaColor(t.status) }]}>{t.pctOfPlan != null ? `${t.pctOfPlan}%` : "—"}</Text>
-                  </View>
-                ))}
-              </View>
-              <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 5, lineHeight: 1.4 }}>
-                Planned = the pre-session recommendation for this date (per player), readiness-adjusted. On plan = 85–115% (green); 116–140% or 60–84% = elevated/reduced (amber); &gt;140% or &lt;60% = well off plan (red).
-              </Text>
-            </View>
-          );
-        })()}
+        {pva && (
+          <Section title="Planned vs Actual - did we hit the recommendation?" wrap={false}>
+            <Text style={[fb(600), { fontSize: 8.75, color: C.cobalt, marginBottom: 2 }]}>
+              {clean(`Plan: ${pva.mode === "microcycle" && pva.mdLabel ? `${pva.mdLabel} · ${pva.loadType} · ${pva.matchPct}% of match` : "recent-load baseline (mixed)"}${pva.readinessAdjustPct !== 0 ? ` · readiness-adjusted ${pva.readinessAdjustPct}%` : ""}`)}
+            </Text>
+            <Text style={[fb(400), { fontSize: 9, lineHeight: 1.5, marginBottom: 6 }]}>{clean(pva.summary)}</Text>
+            <Table
+              cols={[
+                { label: "Metric (per player)", flex: 1 },
+                { label: "Planned", width: 100, align: "right" },
+                { label: "Actual", width: 100, align: "right" },
+                { label: "% of plan", width: 80, align: "right", strong: true },
+                { label: "Read", width: 100, align: "center" },
+              ]}
+              rows={pva.team.map((t) => [
+                PVA_LABEL[t.kpi],
+                numFmt2(t.planned, 0),
+                numFmt2(t.actual, 0),
+                t.pctOfPlan != null ? `${t.pctOfPlan}%` : DASH,
+                <StatusCell key="s" tone={PVA_TONE[t.status]} text={PVA_WORD[t.status]} />,
+              ])}
+            />
+            <Provenance>
+              Planned = the pre-session recommendation for this date (per player), readiness-adjusted. On plan = 85-115% (green); 116-140% or 60-84% = elevated/reduced (amber); &gt;140% or &lt;60% = well off plan (red).
+            </Provenance>
+          </Section>
+        )}
 
         {/* ── Return-to-training — how each returning player's ramp is going ── */}
         {data.rttSummary && data.rttSummary.length > 0 && (
-          <View style={[postStyles.section, { backgroundColor: "#f7f5ef", border: "1 solid #e6e1d4", borderRadius: 4, padding: 10 }]} wrap={false}>
-            <Text style={postStyles.sectionTitle}>Return-to-training — how the ramp is going</Text>
-            <View style={postStyles.table}>
-              <View style={postStyles.tHead}>
-                <Text style={[{ width: "30%", padding: 4, fontSize: 9 }, postStyles.hdr]}>Player</Text>
-                <Text style={[{ width: "24%", padding: 4, fontSize: 9 }, postStyles.hdr]}>RTP stage</Text>
-                <Text style={[{ width: "15%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Week load</Text>
-                <Text style={[{ width: "15%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Recommended</Text>
-                <Text style={[{ width: "16%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>vs ramp</Text>
-              </View>
-              {data.rttSummary.map((p, i) => {
-                const stColor = p.thisWeek?.status === "over" ? "#a83e28" : p.thisWeek?.status === "under" ? "#a9a493" : "#1c7a4a";
+          <Section title="Return-to-training - how the ramp is going" wrap={false}>
+            <Table
+              cols={[
+                { label: "Player", flex: 1 },
+                { label: "RTP stage", width: 170 },
+                { label: "Week load", width: 90, align: "right" },
+                { label: "Recommended", width: 90, align: "right" },
+                { label: "vs ramp", width: 120, align: "center" },
+              ]}
+              rows={data.rttSummary.map((p) => {
                 const vs = !p.thisWeek
-                  ? (p.started ? "—" : "not started")
+                  ? (p.started ? DASH : "not started")
                   : p.thisWeek.status === "over" ? `+${p.thisWeek.deltaPct}% over`
                   : p.thisWeek.status === "under" ? `${p.thisWeek.deltaPct}%${p.thisWeek.inProgress ? " so far" : " under"}`
                   : "on plan";
+                const vsTone: Tone = p.thisWeek?.status === "over" ? "red" : p.thisWeek?.status === "on" ? "green" : "neutral";
                 const stage = p.rtpStatus ? `${p.rtpStatus.replace(/_/g, " ")} · ${p.rtpStage ?? 0}/5` : (p.currentlyInjured ? "injured" : "returned");
-                return (
-                  <View key={p.playerId} style={i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt}>
-                    <Text style={{ width: "30%", padding: 4, fontSize: 9, fontWeight: 700 }}>{p.name}</Text>
-                    <Text style={{ width: "24%", padding: 4, fontSize: 9 }}>{stage}</Text>
-                    <Text style={{ width: "15%", padding: 4, fontSize: 9, textAlign: "right" }}>{p.thisWeek ? numFmt2(p.thisWeek.loadActual, 0) : "—"}</Text>
-                    <Text style={{ width: "15%", padding: 4, fontSize: 9, textAlign: "right" }}>{p.thisWeek ? numFmt2(p.thisWeek.loadTarget, 0) : "—"}</Text>
-                    <Text style={[{ width: "16%", padding: 4, fontSize: 9, textAlign: "right", fontWeight: 700 }, { color: stColor }]}>{vs}</Text>
-                  </View>
-                );
+                return [
+                  p.name,
+                  <Status key="st" tone="rtp" text={stage} size={8.25} />,
+                  p.thisWeek ? numFmt2(p.thisWeek.loadActual, 0) : DASH,
+                  p.thisWeek ? numFmt2(p.thisWeek.loadTarget, 0) : DASH,
+                  vs === DASH || vsTone === "neutral" ? vs : <Status key="vs" tone={vsTone} text={vs} size={8.25} />,
+                ];
               })}
-            </View>
-            <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 5, lineHeight: 1.4 }}>
+            />
+            <Provenance>
               Week load = his actual weekly player load this plan week; Recommended = the graded ramp target. Over the ramp is the signal to ease off; under is usually fine (a partial week reads &quot;so far&quot;). See each player&apos;s return-to-training page for the full plan and the evidence.
-            </Text>
-          </View>
+            </Provenance>
+          </Section>
         )}
 
-        {/* Per-player: planned vs actual adherence */}
-        {data.plannedVsActual && data.plannedVsActual.hasPlan && data.plannedVsActual.players.length > 0 && (() => {
-          const pva = data.plannedVsActual;
-          const pvaColor = (st: PvaStatus) =>
-            st === "on" ? "#1c7a4a" : st === "over" || st === "under" ? "#b0700f" : st === "well_over" || st === "well_under" ? "#a83e28" : "#a9a493";
-          const pctCell = (kpi: typeof PVA_KPIS[number], pp: typeof pva.players[number], w: string) => {
-            const c = pp.byKpi[kpi];
-            return <Text key={kpi} style={[{ width: w, padding: 3, fontSize: 8, textAlign: "right", fontWeight: 700 }, { color: pvaColor(c.status) }]}>{c.pctOfPlan != null ? `${c.pctOfPlan}%` : "—"}</Text>;
-          };
+        {/* ── Internal load — RPE ── */}
+        <Section title="Innri álag - Session RPE">
+          <StatGrid
+            cols={3}
+            items={[
+              { label: "Meðal RPE liðsins", value: data.rpeTeamAvg != null ? numFmt2(data.rpeTeamAvg, 1) : DASH },
+              { label: "Heildar session load", value: data.rpeTotalLoad != null ? numFmt2(data.rpeTotalLoad, 0) : DASH },
+              { label: "Leikmenn skildu inn", value: `${data.rpeSubmissionCount} / ${data.players.length}` },
+            ]}
+          />
+          <Card style={{ marginTop: 6 }}>
+            <Text style={[fb(400), { fontSize: 9.5, lineHeight: 1.5 }]}>{clean(interpretText)}</Text>
+            <Provenance>Session Load = RPE x Mínútur (AU). Flokkur: &lt;200 Very light · 200-399 Light · 400-599 Moderate · 600-799 Hard · 800+ Very hard</Provenance>
+          </Card>
+        </Section>
+
+        <Section title="RPE eftir leikmann (raðað eftir RPE, hæst fyrst)">
+          <Table
+            cols={[
+              { label: "Leikmaður", flex: 1 },
+              { label: "Staða", width: 60 },
+              { label: "RPE", width: 50, align: "center", strong: true },
+              { label: "Lýsing", width: 90 },
+              { label: "Tímalengd (mín)", width: 90, align: "right" },
+              { label: "Session Load", width: 80, align: "right" },
+              { label: "", width: 14 },
+              { label: "Session Load flokkur", width: 140 },
+            ]}
+            rows={rpeTablePlayers.map((p) => [
+              p.name,
+              p.position,
+              p.rpeSubmitted ? numFmt2(p.rpe, 1) : DASH,
+              p.rpeSubmitted ? <Status key="d" tone={rpeTone(p.rpe)} text={rpeScoreLabel(p.rpe)} size={8.25} /> : DASH,
+              p.rpeSubmitted ? numFmt2(p.durationMinutes, 0) : DASH,
+              p.rpeSubmitted ? numFmt2(p.sessionLoad, 0) : DASH,
+              "",
+              p.rpeSubmitted ? rpeLoadBand(p.sessionLoad) : "Ekki skilað",
+            ])}
+          />
+        </Section>
+
+        {/* Per-player: planned vs actual adherence (raw % grid — later in the read) */}
+        {pva && pva.players.length > 0 && (() => {
           // Capability-aware columns: Core/Lite has no IMA (accel/ima) — it sends
           // the combined "efforts" instead. Show what the club actually captures.
           const SHORT: Record<string, string> = { playerLoad: "P.Load", totalDistance: "Dist", hsr: "HSR", sprint: "Sprint", accel: "Accel", ima: "IMA", efforts: "Efforts" };
           const moveKpis: Array<typeof PVA_KPIS[number]> = pva.availableKpis.includes("efforts") ? ["efforts"] : ["accel", "ima"];
           const ppCols: Array<typeof PVA_KPIS[number]> = ["playerLoad", "totalDistance", "hsr", "sprint", ...moveKpis];
-          const ppColW = `${Math.round(78 / ppCols.length)}%`;
           return (
-            <View style={postStyles.section}>
-              <Text style={postStyles.sectionTitle}>Planned vs Actual — per player (% of plan)</Text>
-              <View style={postStyles.table}>
-                <View style={postStyles.tHead}>
-                  <Text style={[{ width: "22%", padding: 3, fontSize: 8 }, postStyles.hdr]}>Player</Text>
-                  {ppCols.map((k) => <Text key={k} style={[{ width: ppColW, padding: 3, fontSize: 8, textAlign: "right" }, postStyles.hdr]}>{SHORT[k]}</Text>)}
-                </View>
-                {pva.players.map((pp, i) => (
-                  <View key={pp.player_id + i} style={i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt}>
-                    <Text style={{ width: "22%", padding: 3, fontSize: 8, fontWeight: 700 }}>{pp.name}</Text>
-                    {ppCols.map((k) => pctCell(k, pp, ppColW))}
-                  </View>
-                ))}
-              </View>
-              <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 5, lineHeight: 1.4 }}>
-                Each cell = the player&apos;s actual for that metric as a % of their own readiness-adjusted target. Green 85–115% (on plan), amber 60–84% / 116–140%, red &lt;60% / &gt;140%. A dash means no target or no capture for that metric.
-              </Text>
-            </View>
+            <Section title="Planned vs Actual - per player (% of plan)">
+              <Table
+                dense
+                size={8}
+                cols={[{ label: "Player", flex: 1.4 }, ...ppCols.map((k): Col => ({ label: SHORT[k], flex: 1, align: "right" }))]}
+                rows={pva.players.map((pp) => [
+                  pp.name,
+                  ...ppCols.map((k) => {
+                    const c = pp.byKpi[k];
+                    return <Num key={k} v={c.pctOfPlan != null ? `${c.pctOfPlan}%` : DASH} tone={PVA_TONE[c.status]} />;
+                  }),
+                ])}
+              />
+              <Provenance>
+                Each cell = the player&apos;s actual for that metric as a % of their own readiness-adjusted target. On plan 85-115% (green), elevated/reduced 60-84% / 116-140% (amber), well off plan &lt;60% / &gt;140% (red). A dash means no target or no capture for that metric.
+              </Provenance>
+            </Section>
           );
         })()}
-
-        {/* RPE summary boxes */}
-        <View style={postStyles.section}>
-          <Text style={postStyles.sectionTitle}>Innri álag — Session RPE</Text>
-          <View style={postStyles.summaryRow}>
-            <View style={postStyles.summaryBox}>
-              <Text style={postStyles.summaryVal}>{data.rpeTeamAvg != null ? numFmt2(data.rpeTeamAvg, 1) : "—"}</Text>
-              <Text style={postStyles.summaryLabel}>Meðal RPE liðsins</Text>
-            </View>
-            <View style={postStyles.summaryBox}>
-              <Text style={postStyles.summaryVal}>{data.rpeTotalLoad != null ? numFmt2(data.rpeTotalLoad, 0) : "—"}</Text>
-              <Text style={postStyles.summaryLabel}>Heildar session load</Text>
-            </View>
-            <View style={postStyles.summaryBox}>
-              <Text style={postStyles.summaryVal}>{data.rpeSubmissionCount} / {data.players.length}</Text>
-              <Text style={postStyles.summaryLabel}>Leikmenn skildu inn</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Interpretation text */}
-        <View style={[postStyles.section, { backgroundColor: "#f7f5ef", border: "1 solid #e6e1d4", borderRadius: 4, padding: 10 }]}>
-          <Text style={{ fontSize: 10, color: "#221f18", lineHeight: 1.5 }}>{interpretText}</Text>
-          <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 6 }}>
-            Session Load = RPE x Mínútur (AU). Flokkur: &lt;200 Very light · 200-399 Light · 400-599 Moderate · 600-799 Hard · &gt;=800 Very hard
-          </Text>
-        </View>
-
-        {/* Per-player RPE table (sorted by RPE desc) */}
-        <View style={postStyles.section}>
-          <Text style={postStyles.sectionTitle}>RPE eftir leikmann (raðað eftir RPE, hæst fyrst)</Text>
-          <View style={postStyles.table}>
-            <View style={postStyles.tHead}>
-              <Text style={[postStyles.colRpeName, postStyles.hdr]}>Leikmaður</Text>
-              <Text style={[postStyles.colRpePos, postStyles.hdr]}>Staða</Text>
-              <Text style={[postStyles.colRpeScore, postStyles.hdr]}>RPE</Text>
-              <Text style={[postStyles.colRpeDesc, postStyles.hdr]}>Lýsing</Text>
-              <Text style={[postStyles.colRpeDur, postStyles.hdr]}>Tímalengd (mín)</Text>
-              <Text style={[postStyles.colRpeLoad, postStyles.hdr]}>Session Load</Text>
-              <Text style={[postStyles.colRpeBand, postStyles.hdr]}>Session Load flokkur</Text>
-            </View>
-            {rpeTablePlayers.map((p, i) => {
-              const rowStyle = i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt;
-              const rpeNumStyle = p.rpe != null && p.rpe >= 9 ? postStyles.attnAlert : p.rpe != null && p.rpe >= 7 ? postStyles.attnMonitor : postStyles.attnOk;
-              return (
-                <View key={p.name + "-rpe"} style={rowStyle}>
-                  <Text style={postStyles.colRpeName}>{p.name}</Text>
-                  <Text style={postStyles.colRpePos}>{p.position}</Text>
-                  <Text style={[postStyles.colRpeScore, rpeNumStyle]}>{p.rpeSubmitted ? numFmt2(p.rpe, 1) : "—"}</Text>
-                  <Text style={[postStyles.colRpeDesc, rpeNumStyle]}>{p.rpeSubmitted ? rpeScoreLabel(p.rpe) : "—"}</Text>
-                  <Text style={postStyles.colRpeDur}>{p.rpeSubmitted ? numFmt2(p.durationMinutes, 0) : "—"}</Text>
-                  <Text style={postStyles.colRpeLoad}>{p.rpeSubmitted ? numFmt2(p.sessionLoad, 0) : "—"}</Text>
-                  <Text style={postStyles.colRpeBand}>{p.rpeSubmitted ? rpeLoadBand(p.sessionLoad) : "Ekki skilað"}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-      </Page>
+      </BrandPage>
 
       {/* ══ Did we do enough? — session IMA vs match demand (Vector Pro football; skipped otherwise) ══ */}
       <SessionEnoughPdfPage enough={data.enough} teamName={data.teamName} sessionDate={data.sessionDate} />
 
-      {/* ══ Page 2: External Load — GPS ══ */}
-      <Page size="A4" orientation="landscape" style={postStyles.page}>
-        <View style={postStyles.section}>
-          <Text style={postStyles.h1}>Post-Training Report — GPS (Catapult)</Text>
-          <Text style={postStyles.subtitle}>
-            {data.teamName} · {data.sessionDate} · {data.mdDay} · {gpsPlayers.length} players with GPS data
-          </Text>
-        </View>
+      {/* ══ External Load — GPS ══ */}
+      <BrandPage {...pageProps}>
+        <Section title="GPS (Catapult) - external load" hint={`${data.teamName} · ${data.sessionDate} · ${data.mdDay} · ${gpsPlayers.length} players with GPS data`} mt={0}>
+          <Label>Ytra álag - liðsmeðaltal</Label>
+          <StatGrid
+            cols={6}
+            items={[
+              { label: "Total Dist (m)", value: numFmt2(data.teamAvg.totalDistance, 0) },
+              { label: "HSD (m)", value: numFmt2(data.teamAvg.hsd, 0) },
+              { label: "Player Load", value: numFmt2(data.teamAvg.playerLoad, 1) },
+              { label: "Accel B2-3", value: numFmt2(data.teamAvg.accelB23, 0) },
+              { label: "Decel B2-3", value: numFmt2(data.teamAvg.decelB23, 0) },
+              { label: "Max Vel (m/s)", value: numFmt2(data.teamAvg.maxVelocity, 1) },
+            ]}
+          />
+        </Section>
 
-        {/* GPS team averages */}
-        <View style={postStyles.section}>
-          <Text style={postStyles.sectionTitle}>Ytra álag — liðsmeðaltal</Text>
-          <View style={postStyles.summaryRow}>
-            <View style={postStyles.summaryBox}>
-              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.totalDistance, 0)}</Text>
-              <Text style={postStyles.summaryLabel}>Total Dist (m)</Text>
-            </View>
-            <View style={postStyles.summaryBox}>
-              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.hsd, 0)}</Text>
-              <Text style={postStyles.summaryLabel}>HSD (m)</Text>
-            </View>
-            <View style={postStyles.summaryBox}>
-              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.playerLoad, 1)}</Text>
-              <Text style={postStyles.summaryLabel}>Player Load</Text>
-            </View>
-            <View style={postStyles.summaryBox}>
-              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.accelB23, 0)}</Text>
-              <Text style={postStyles.summaryLabel}>Accel B2-3</Text>
-            </View>
-            <View style={postStyles.summaryBox}>
-              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.decelB23, 0)}</Text>
-              <Text style={postStyles.summaryLabel}>Decel B2-3</Text>
-            </View>
-            <View style={postStyles.summaryBox}>
-              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.maxVelocity, 1)}</Text>
-              <Text style={postStyles.summaryLabel}>Max Vel (m/s)</Text>
-            </View>
-          </View>
-        </View>
+        <Section title="GPS gögn eftir leikmann (raðað eftir heildar vegalengd)" hint="%28D = today vs the player's own 28-day average. Signal = the post-session attention flag (who to watch is on page 1).">
+          <Table
+            dense
+            size={8}
+            cols={GPS_COLS}
+            rows={gpsPlayers.map((p) => [
+              p.name,
+              p.position,
+              p.readinessFlag === "—" ? DASH : <Status key="f" tone={toneOf(p.readinessFlag)} text={p.readinessFlag} size={7.75} />,
+              numFmt2(p.totalDistance, 0),
+              pctFmt(p.totalDistancePct),
+              numFmt2(p.hsd, 0),
+              pctFmt(p.hsdPct),
+              numFmt2(p.playerLoad, 1),
+              pctFmt(p.playerLoadPct),
+              numFmt2(p.playerLoadPerMin, 2),
+              numFmt2(p.accelB23, 0),
+              numFmt2(p.decelB23, 0),
+              numFmt2(p.maxVelocity, 1),
+              numFmt2(p.acwr, 2),
+              <Status key="a" tone={ATTN_TONE[p.attentionFlag] ?? "neutral"} text={p.attentionFlag} size={7.75} />,
+            ])}
+          />
+        </Section>
+      </BrandPage>
 
-        {/* Attention flags */}
-        {(alerts.length > 0 || monitors.length > 0) && (
-          <View style={postStyles.section}>
-            <Text style={postStyles.sectionTitle}>
-              Attention — {alerts.length} ALERT · {monitors.length} MONITOR
-            </Text>
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <View style={{ flex: 1 }}>
-                {alerts.map((p) => (
-                  <View key={p.name + "-alert"} style={postStyles.alertBox}>
-                    <Text style={postStyles.alertName}>! {p.name} ({p.position})</Text>
-                    {p.attentionReason.map((line, i) => (
-                      <Text key={i} style={postStyles.alertLine}>· {line}</Text>
-                    ))}
-                  </View>
-                ))}
+      {/* ══ Biomechanical Load — IMA / Stride ══ */}
+      {ima && imaPlayers.length > 0 && (
+        <BrandPage {...pageProps}>
+          <Section title="IMA (Stride) - biomechanical load" hint={`${data.teamName} · ${data.sessionDate} · ${data.mdDay} · ${ima.player_count} players captured`} mt={0}>
+            <Verdict tone="neutral" label="Session shape" headline={ima.session_headline} />
+            <Cols gap={10}>
+              <View>
+                <Label>Lífaflfræðilegt álag - liðsyfirlit</Label>
+                <StatGrid
+                  cols={2}
+                  items={[
+                    { label: "Total strides", value: numFmt2(ima.team_total_strides, 0) },
+                    { label: "Strides in long runs (≥18 s)", value: `${numFmt2(ima.team_sprint_strides, 0)} (${Math.round(ima.pct_sprint)}%)` },
+                    { label: "L/R CoD balance (high)", value: `${ima.team_cod_high_left} L / ${ima.team_cod_high_right} R${ima.team_cod_asymmetry_pct != null ? ` · ${Math.round(ima.team_cod_asymmetry_pct)}%` : ""}` },
+                    { label: "High-CoD asym. flagged", value: `${ima.players_high_cod_flagged} / ${ima.player_count}`, tone: ima.players_high_cod_flagged > 0 ? "red" : undefined },
+                  ]}
+                />
               </View>
-              <View style={{ flex: 1 }}>
-                {monitors.map((p) => (
-                  <View key={p.name + "-monitor"} style={postStyles.monitorBox}>
-                    <Text style={postStyles.monitorName}>~ {p.name} ({p.position})</Text>
-                    {p.attentionReason.map((line, i) => (
-                      <Text key={i} style={postStyles.monitorLine}>· {line}</Text>
-                    ))}
-                  </View>
-                ))}
+              <View>
+                <Label>Strides by run length (team)</Label>
+                <StatGrid
+                  cols={3}
+                  items={[
+                    { label: "Short bursts (<12 s)", value: `${Math.round(ima.pct_low)}%` },
+                    { label: "Medium runs (12-24 s)", value: `${Math.round(ima.pct_mid)}%` },
+                    { label: "Longest runs (≥24 s)", value: `${Math.round(ima.pct_high)}%` },
+                  ]}
+                />
               </View>
-            </View>
-          </View>
-        )}
+            </Cols>
+          </Section>
 
-        {/* Player GPS table — first GPS page */}
-        <View style={postStyles.section}>
-          <Text style={postStyles.sectionTitle}>GPS gögn eftir leikmann (raðað eftir heildar vegalengd)</Text>
-          <View style={postStyles.table}>
-            <View style={postStyles.tHead}>
-              <Text style={[postStyles.colName, postStyles.hdr]}>Leikmaður</Text>
-              <Text style={[postStyles.colPos, postStyles.hdr]}>Staða</Text>
-              <Text style={[postStyles.colFlag, postStyles.hdr]}>Pre</Text>
-              <Text style={[postStyles.colMetric, postStyles.hdr]}>Dist</Text>
-              <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
-              <Text style={[postStyles.colMetric, postStyles.hdr]}>HSD</Text>
-              <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
-              <Text style={[postStyles.colMetric, postStyles.hdr]}>PL</Text>
-              <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
-              <Text style={[postStyles.colMetric, postStyles.hdr]}>PL/min</Text>
-              <Text style={[postStyles.colMetric, postStyles.hdr]}>Ac B2-3</Text>
-              <Text style={[postStyles.colMetric, postStyles.hdr]}>De B2-3</Text>
-              <Text style={[postStyles.colMetric, postStyles.hdr]}>Vmax</Text>
-              <Text style={[postStyles.colMetric, postStyles.hdr]}>ACWR</Text>
-              <Text style={[postStyles.colAttn, postStyles.hdr]}>Signal</Text>
-            </View>
-            {(pages[0] ?? []).map((p, i) => {
-              const rowStyle = i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt;
-              const flagStyle = p.readinessFlag === "RED" ? postStyles.flagRed : p.readinessFlag === "YELLOW" ? postStyles.flagYellow : postStyles.flagGreen;
-              const attnStyle = p.attentionFlag === "ALERT" ? postStyles.attnAlert : p.attentionFlag === "MONITOR" ? postStyles.attnMonitor : postStyles.attnOk;
-              return (
-                <View key={p.name} style={rowStyle}>
-                  <Text style={postStyles.colName}>{p.name}</Text>
-                  <Text style={postStyles.colPos}>{p.position}</Text>
-                  <Text style={[postStyles.colFlag, flagStyle]}>{p.readinessFlag}</Text>
-                  <Text style={postStyles.colMetric}>{numFmt2(p.totalDistance, 0)}</Text>
-                  <Text style={postStyles.colPct}>{pctFmt(p.totalDistancePct)}</Text>
-                  <Text style={postStyles.colMetric}>{numFmt2(p.hsd, 0)}</Text>
-                  <Text style={postStyles.colPct}>{pctFmt(p.hsdPct)}</Text>
-                  <Text style={postStyles.colMetric}>{numFmt2(p.playerLoad, 1)}</Text>
-                  <Text style={postStyles.colPct}>{pctFmt(p.playerLoadPct)}</Text>
-                  <Text style={postStyles.colMetric}>{numFmt2(p.playerLoadPerMin, 2)}</Text>
-                  <Text style={postStyles.colMetric}>{numFmt2(p.accelB23, 0)}</Text>
-                  <Text style={postStyles.colMetric}>{numFmt2(p.decelB23, 0)}</Text>
-                  <Text style={postStyles.colMetric}>{numFmt2(p.maxVelocity, 1)}</Text>
-                  <Text style={postStyles.colMetric}>{numFmt2(p.acwr, 2)}</Text>
-                  <Text style={[postStyles.colAttn, attnStyle]}>{p.attentionFlag}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-      </Page>
-
-      {/* ── GPS overflow pages if many players ── */}
-      {pages.slice(1).map((pagePlayers, pgIdx) => (
-        <Page key={"pt-page-" + (pgIdx + 3)} size="A4" orientation="landscape" style={postStyles.page}>
-          <Text style={postStyles.h1}>Post-Training Report — GPS (cont.) · {data.sessionDate}</Text>
-          <View style={[postStyles.section, { marginTop: 8 }]}>
-            <View style={postStyles.table}>
-              <View style={postStyles.tHead}>
-                <Text style={[postStyles.colName, postStyles.hdr]}>Leikmaður</Text>
-                <Text style={[postStyles.colPos, postStyles.hdr]}>Staða</Text>
-                <Text style={[postStyles.colFlag, postStyles.hdr]}>Pre</Text>
-                <Text style={[postStyles.colMetric, postStyles.hdr]}>Dist</Text>
-                <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
-                <Text style={[postStyles.colMetric, postStyles.hdr]}>HSD</Text>
-                <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
-                <Text style={[postStyles.colMetric, postStyles.hdr]}>PL</Text>
-                <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
-                <Text style={[postStyles.colMetric, postStyles.hdr]}>PL/min</Text>
-                <Text style={[postStyles.colMetric, postStyles.hdr]}>Ac B2-3</Text>
-                <Text style={[postStyles.colMetric, postStyles.hdr]}>De B2-3</Text>
-                <Text style={[postStyles.colMetric, postStyles.hdr]}>Vmax</Text>
-                <Text style={[postStyles.colMetric, postStyles.hdr]}>ACWR</Text>
-                <Text style={[postStyles.colAttn, postStyles.hdr]}>Signal</Text>
-              </View>
-              {pagePlayers.map((p, i) => {
-                const rowStyle = i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt;
-                const flagStyle = p.readinessFlag === "RED" ? postStyles.flagRed : p.readinessFlag === "YELLOW" ? postStyles.flagYellow : postStyles.flagGreen;
-                const attnStyle = p.attentionFlag === "ALERT" ? postStyles.attnAlert : p.attentionFlag === "MONITOR" ? postStyles.attnMonitor : postStyles.attnOk;
-                return (
-                  <View key={p.name} style={rowStyle}>
-                    <Text style={postStyles.colName}>{p.name}</Text>
-                    <Text style={postStyles.colPos}>{p.position}</Text>
-                    <Text style={[postStyles.colFlag, flagStyle]}>{p.readinessFlag}</Text>
-                    <Text style={postStyles.colMetric}>{numFmt2(p.totalDistance, 0)}</Text>
-                    <Text style={postStyles.colPct}>{pctFmt(p.totalDistancePct)}</Text>
-                    <Text style={postStyles.colMetric}>{numFmt2(p.hsd, 0)}</Text>
-                    <Text style={postStyles.colPct}>{pctFmt(p.hsdPct)}</Text>
-                    <Text style={postStyles.colMetric}>{numFmt2(p.playerLoad, 1)}</Text>
-                    <Text style={postStyles.colPct}>{pctFmt(p.playerLoadPct)}</Text>
-                    <Text style={postStyles.colMetric}>{numFmt2(p.playerLoadPerMin, 2)}</Text>
-                    <Text style={postStyles.colMetric}>{numFmt2(p.accelB23, 0)}</Text>
-                    <Text style={postStyles.colMetric}>{numFmt2(p.decelB23, 0)}</Text>
-                    <Text style={postStyles.colMetric}>{numFmt2(p.maxVelocity, 1)}</Text>
-                    <Text style={postStyles.colMetric}>{numFmt2(p.acwr, 2)}</Text>
-                    <Text style={[postStyles.colAttn, attnStyle]}>{p.attentionFlag}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        </Page>
-      ))}
-
-      {/* ══ Page: Biomechanical Load — IMA / Stride ══ */}
-      {ima && imaPages.length > 0 && imaPages.map((pagePlayers, pgIdx) => (
-        <Page key={"pt-ima-" + pgIdx} size="A4" orientation="landscape" style={postStyles.page}>
-          <View style={postStyles.section}>
-            <Text style={postStyles.h1}>
-              Post-Training Report — IMA (Stride){pgIdx > 0 ? " (frh.)" : ""}
-            </Text>
-            <Text style={postStyles.subtitle}>
-              {data.teamName} · {data.sessionDate} · {data.mdDay} · {ima.player_count} players captured · {ima.session_headline}
-            </Text>
-          </View>
-
-          {/* Team summary boxes — only on the first IMA page */}
-          {pgIdx === 0 && (
-            <>
-              <View style={postStyles.section}>
-                <Text style={postStyles.sectionTitle}>Lífaflfræðilegt álag — liðsyfirlit</Text>
-                <View style={postStyles.summaryRow}>
-                  <View style={postStyles.summaryBox}>
-                    <Text style={postStyles.summaryVal}>{numFmt2(ima.team_total_strides, 0)}</Text>
-                    <Text style={postStyles.summaryLabel}>Total strides</Text>
-                  </View>
-                  <View style={postStyles.summaryBox}>
-                    <Text style={postStyles.summaryVal}>{numFmt2(ima.team_sprint_strides, 0)} ({Math.round(ima.pct_sprint)}%)</Text>
-                    <Text style={postStyles.summaryLabel}>Strides in long runs (18 s+)</Text>
-                  </View>
-                  <View style={postStyles.summaryBox}>
-                    <Text style={postStyles.summaryVal}>
-                      {ima.team_cod_high_left} L / {ima.team_cod_high_right} R{ima.team_cod_asymmetry_pct != null ? ` · ${Math.round(ima.team_cod_asymmetry_pct)}%` : ""}
-                    </Text>
-                    <Text style={postStyles.summaryLabel}>L/R CoD balance (high)</Text>
-                  </View>
-                  <View style={postStyles.summaryBox}>
-                    <Text style={postStyles.summaryVal}>{ima.players_high_cod_flagged} / {ima.player_count}</Text>
-                    <Text style={postStyles.summaryLabel}>High-CoD asym. flagged</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={postStyles.section}>
-                <Text style={postStyles.sectionTitle}>Band dreifing (lið)</Text>
-                <View style={postStyles.summaryRow}>
-                  <View style={postStyles.summaryBox}>
-                    <Text style={postStyles.summaryVal}>{Math.round(ima.pct_low)}%</Text>
-                    <Text style={postStyles.summaryLabel}>Short bursts (&lt;12 s)</Text>
-                  </View>
-                  <View style={postStyles.summaryBox}>
-                    <Text style={postStyles.summaryVal}>{Math.round(ima.pct_mid)}%</Text>
-                    <Text style={postStyles.summaryLabel}>Medium runs (12-24 s)</Text>
-                  </View>
-                  <View style={postStyles.summaryBox}>
-                    <Text style={postStyles.summaryVal}>{Math.round(ima.pct_high)}%</Text>
-                    <Text style={postStyles.summaryLabel}>Longest runs (24 s+)</Text>
-                  </View>
-                </View>
-              </View>
-            </>
-          )}
-
-          {/* Per-player IMA table */}
-          <View style={postStyles.section}>
-            <Text style={postStyles.sectionTitle}>Strides per player (sorted by strides in long runs 18 s+)</Text>
-            <View style={postStyles.table}>
-              <View style={postStyles.tHead}>
-                <Text style={[{ width: "20%", padding: 4, fontSize: 9 }, postStyles.hdr]}>Leikmaður</Text>
-                <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Total</Text>
-                <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>&lt;12 s</Text>
-                <Text style={[{ width: "9%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>12-24 s</Text>
-                <Text style={[{ width: "9%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>24 s+</Text>
-                <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Long 18 s+</Text>
-                <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>vs grunnl.</Text>
-                <Text style={[{ width: "12%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>CoD L/R (há)</Text>
-                <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>CoD ósamh.</Text>
-              </View>
-              {pagePlayers.map((p, i) => {
-                const rowStyle = i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt;
+          <Section title="Strides per player (sorted by strides in long runs ≥18 s)">
+            <Table
+              dense
+              size={8}
+              cols={[
+                { label: "Player", flex: 1 },
+                { label: "Total", width: 60, align: "right" },
+                { label: "<12 s", width: 60, align: "right" },
+                { label: "12-24 s", width: 56, align: "right" },
+                { label: "≥24 s", width: 56, align: "right" },
+                { label: "Long ≥18 s", width: 66, align: "right", strong: true },
+                { label: "vs usual", width: 62, align: "right" },
+                { label: "CoD L/R (há)", width: 74, align: "right" },
+                { label: "CoD ósamh.", width: 66, align: "right" },
+              ]}
+              rows={imaPlayers.map((p) => {
                 const vs = p.sprint_vs_baseline_pct;
-                const vsStyle = vs == null ? {} : vs > 150 ? { color: "#a83e28", fontWeight: 700 } : vs > 120 ? { color: "#b0700f" } : {};
                 const asym = p.cod_asymmetry_pct;
-                const asymStyle = asym != null && asym > 15 ? { color: "#a83e28", fontWeight: 700 } : {};
-                return (
-                  <View key={p.player_id} style={rowStyle}>
-                    <Text style={{ width: "20%", padding: 4, fontSize: 9 }}>{p.full_name}</Text>
-                    <Text style={{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(p.total_strides, 0)}</Text>
-                    <Text style={{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(p.low_strides, 0)}</Text>
-                    <Text style={{ width: "9%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(p.mid_strides, 0)}</Text>
-                    <Text style={{ width: "9%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(p.high_strides, 0)}</Text>
-                    <Text style={{ width: "10%", padding: 4, fontSize: 9, textAlign: "right", fontWeight: 700 }}>{numFmt2(p.sprint_strides, 0)}</Text>
-                    <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, vsStyle]}>{vs == null ? "—" : `${Math.round(vs)}%`}</Text>
-                    <Text style={{ width: "12%", padding: 4, fontSize: 9, textAlign: "right" }}>{p.cod_left_high} / {p.cod_right_high}</Text>
-                    <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, asymStyle]}>{asym == null ? "—" : `${Math.round(asym)}%`}</Text>
-                  </View>
-                );
+                return [
+                  p.full_name,
+                  numFmt2(p.total_strides, 0),
+                  numFmt2(p.low_strides, 0),
+                  numFmt2(p.mid_strides, 0),
+                  numFmt2(p.high_strides, 0),
+                  numFmt2(p.sprint_strides, 0),
+                  <Num key="v" v={vs == null ? DASH : `${Math.round(vs)}%`} tone={vs == null ? null : vs > 150 ? "red" : vs > 120 ? "amber" : null} bold={vs != null && vs > 150} />,
+                  `${p.cod_left_high} / ${p.cod_right_high}`,
+                  <Num key="a" v={asym == null ? DASH : `${Math.round(asym)}%`} tone={asym != null && asym > 15 ? "red" : null} bold={asym != null && asym > 15} />,
+                ];
               })}
-            </View>
-            {pgIdx === imaPages.length - 1 && (
-              <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 6 }}>
-                IMA Free Running bands sort each continuous run by how long it lasted, not by speed: short bursts (&lt;12 s) · medium runs (12-24 s) · longest runs (24 s+). &quot;Long 18 s+&quot; = strides in runs of 18 s or more vs the player&apos;s own 14-day baseline - sustained running volume, not sprinting; sprint load comes from GPS. High-intensity CoD asymmetry &gt; 15% is MicroPulse’s flag; not tested against injury (Helme 2021).
-              </Text>
-            )}
-          </View>
-        </Page>
-      ))}
+            />
+            <Provenance>
+              {`IMA Free Running bands sort each continuous run by how long it lasted, not by speed: short bursts (<12 s) · medium runs (12-24 s) · longest runs (≥24 s); band edges are set in OpenField and read per session. "Long ≥18 s" = strides in runs of 18 s or more vs the player's own 14-day baseline (red above 150%, amber above 120%) - sustained running volume, not sprinting; sprint load comes from GPS. High-intensity CoD asymmetry above 15% is MicroPulse’s flag; not tested against injury (Helme 2021).`}
+            </Provenance>
+          </Section>
+        </BrandPage>
+      )}
     </Document>
   );
 }
 
-
-function triggerPdfDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
 /** Render + download the readiness-risk report. Lazy entry point (keeps @react-pdf out of First Load JS). */
 export async function downloadReadinessRiskReportPdf(data: ReadinessRiskReportData) {
-  const blob = await pdf(<ReadinessRiskReportDocument data={data} />).toBlob();
-  triggerPdfDownload(blob, `readiness-risk-report-${data.date}.pdf`);
+  const blob = await renderPdfBlob(() => <ReadinessRiskReportDocument data={data} />);
+  saveBlob(blob, `readiness-risk-report-${data.date}.pdf`);
 }
 
 /** Render + download the post-training report. Lazy entry point. */
 export async function downloadPostTrainingReportPdf(data: PostTrainingReportData, sessionDate: string) {
-  // Brand fonts are registered here because the "Did we do enough?" page uses the shared PDF kit.
   const blob = await renderPdfBlob(() => <PostTrainingReportDocument data={data} />);
-  triggerPdfDownload(blob, `post-training-report-${sessionDate}.pdf`);
+  saveBlob(blob, `post-training-report-${sessionDate}.pdf`);
 }

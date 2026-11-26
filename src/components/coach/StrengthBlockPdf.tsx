@@ -1,23 +1,23 @@
 /**
- * One-page PDF of the 4-week block — a backup / hand-out for players not on the app, built from the
- * SAME block data the app sends (blockDays / blockDayMatrix), so paper matches the app. The header
- * carries a method-specific how-to (straight-sets / Contrast / French Contrast) so the coach and player
+ * PDF of the 4-week block — a backup / hand-out for players not on the app, built from the
+ * SAME block data the app sends (blockDays / blockDayMatrix), so paper matches the app. The top carries
+ * the method-specific how-to (straight-sets / Contrast / French Contrast) so the coach and player
  * can run it off paper. Descriptive coaching template — the coach owns the loads.
+ * Exercise order is exactly the engine's (power before strength in the power methods).
+ *
+ * Styling: shared MicroPulse PDF kit (src/components/pdf/brand.tsx).
  */
 
-import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
-import { BLOCK_LABELS, BLOCK_LABELS_IS, METHOD_LABELS, blockDays, blockDayMatrix, type BlockDayKey, type BlockMethod } from "@/lib/micropulse/strengthBlock/upperLowerBlock";
+import { Document, Text, View } from "@react-pdf/renderer";
+import { BLOCK_LABELS, BLOCK_LABELS_IS, METHOD_LABELS, blockDays, blockDayMatrix, type BlockMethod } from "@/lib/micropulse/strengthBlock/upperLowerBlock";
+import { BrandPage, C, FactRow, Provenance, Section, Table, Verdict, clean, fb, fh, renderPdfBlob, saveBlob } from "@/components/pdf/brand";
 
 type Lang = "EN" | "IS";
 
-const INK = "#14181c", MUTE = "#5b6472", FAINT = "#8b8f98", LINE = "#e6e2d8", LINESOFT = "#efece3";
-const ACCENT: Record<BlockDayKey, string> = {
-  push: "#2740e6", quad: "#c47d14", pull: "#1c7a4a", hinge: "#7a5cc4",
-  fbpush: "#2740e6", fbpull: "#1c7a4a", combo: "#7a5cc4",
-};
-const MAINBG = "rgba(39,64,230,0.06)";
+/** Kit text helper: typographic clean-up + the maths glyphs Archivo/Helvetica lack. */
+const tx = (s: unknown) => clean(String(s ?? "").replace(/→/g, "->")).replace(/≈/g, "~").replace(/≥/g, ">=").replace(/≤/g, "<=");
 
-// Method-specific header how-to — the explanation a coach/player runs the session from.
+// Method-specific how-to — the explanation a coach/player runs the session from.
 const METHOD_BLURB: Record<BlockMethod, Record<Lang, string>> = {
   upper_lower: {
     EN: "Straight sets — finish all sets of a lift before the next. Main lifts (shaded) climb in load each week as reps drop; accessories use double progression (add load once you hit the top reps).",
@@ -28,8 +28,8 @@ const METHOD_BLURB: Record<BlockMethod, Record<Lang, string>> = {
     IS: "Contrast pör: ein þung styrktarlyfta (A1) beint í sprengikraft / plyo (A2) ÁN hvíldar á milli — þunga lyftan getur hjálpað A2 að verða kraftmeiri, og parið þjálfar styrk og hraða í einu. Hvíldu 2–5 mín eftir parið og endurtaktu (3–6 settur). Hver A2 rep með hámarks ásetningi; stoppaðu settuna ef hraðinn dettur.",
   },
   french_contrast: {
-    EN: "French Contrast complex: the four exercises run back-to-back as ONE set — A1 heavy → A2 plyometric → A3 loaded jump → A4 reactive — with only 15–30 sec between; the idea is that the heavy lift helps the fast moves that follow. Rest 3–5 min after A4, then repeat (3–5 sets). The most complete and most demanding power method — it needs a strength base underneath it.",
-    IS: "French Contrast flétta: æfingarnar fjórar gerðar samfellt sem EIN setta — A1 þungt → A2 plyo → A3 hlaðið stökk → A4 viðbragð — með aðeins 15–30 sek á milli; hugmyndin er að þunga lyftan hjálpi hröðu æfingunum sem fylgja. Hvíldu 3–5 mín eftir A4 og endurtaktu (3–5 settur). Fullkomnasta og kröfuharðasta kraftaðferðin — hún þarf styrktargrunn undir sér.",
+    EN: "French Contrast complex: the four exercises run back-to-back as ONE set — A1 heavy, A2 plyometric, A3 loaded jump, A4 reactive — with only 15–30 sec between; the idea is that the heavy lift helps the fast moves that follow. Rest 3–5 min after A4, then repeat (3–5 sets). The most complete and most demanding power method — it needs a strength base underneath it.",
+    IS: "French Contrast flétta: æfingarnar fjórar gerðar samfellt sem EIN setta — A1 þungt, A2 plyo, A3 hlaðið stökk, A4 viðbragð — með aðeins 15–30 sek á milli; hugmyndin er að þunga lyftan hjálpi hröðu æfingunum sem fylgja. Hvíldu 3–5 mín eftir A4 og endurtaktu (3–5 settur). Fullkomnasta og kröfuharðasta kraftaðferðin — hún þarf styrktargrunn undir sér.",
   },
 };
 
@@ -53,38 +53,14 @@ const isPrimary = (role: string) => role === "main" || role === "heavy";
 
 const L = {
   EN: { prepared: "Prepared for the player · MicroPulse", prog: "Weekly progression", progMain: "main lifts", progHeavy: "heavy lift (A1)",
-    ex: "Exercise", rest: "Rest",
+    ex: "Exercise", rest: "Rest", how: "How to perform", week: "Week", days: "The sessions", daysHint: "Shaded rows are the primary lift. Each cell = sets × reps, with the target effort (RPE) under it.",
+    note: "Descriptive — the coach owns the loads. Deload the week after the block.",
     foot: "Descriptive — the coach owns the loads. RPE = reps in reserve (RPE 8 ≈ 2 left). Deload the week after the block. Issurin 2010 (block overload) · Cormie 2011 (strength before power) · Dietz (French contrast) · van Dyk 2019 (Nordic) · Helms 2016 (RPE)." },
   IS: { prepared: "Unnið fyrir leikmann · MicroPulse", prog: "Vikuleg framvinda", progMain: "aðal-lyftur", progHeavy: "þung lyfta (A1)",
-    ex: "Æfing", rest: "Hvíld",
+    ex: "Æfing", rest: "Hvíld", how: "Hvernig á að framkvæma", week: "Vika", days: "Æfingarnar", daysHint: "Skyggðar línur eru aðal-lyftan. Hver reitur = settur × reps, með markálag (RPE) undir.",
+    note: "Lýsandi — þjálfari á álagið. Niðurtröppun vikuna eftir blokkina.",
     foot: "Lýsandi — þjálfari á álagið. RPE = reps eftir (RPE 8 ≈ 2 eftir). Niðurtröppun vikuna eftir blokkina. Issurin 2010 (blokk-álag) · Cormie 2011 (styrkur á undan krafti) · Dietz (French contrast) · van Dyk 2019 (Nordic) · Helms 2016 (RPE)." },
 } as const;
-
-const s = StyleSheet.create({
-  page: { padding: 28, fontSize: 9, fontFamily: "Helvetica", color: INK },
-  h1: { fontSize: 17, fontFamily: "Helvetica-Bold" },
-  sub: { fontSize: 8.5, color: MUTE, marginTop: 3 },
-  meta: { fontSize: 8.5, color: MUTE, marginTop: 2 },
-  blurb: { marginTop: 8, borderWidth: 1, borderColor: LINE, borderRadius: 6, padding: 8, backgroundColor: MAINBG },
-  blurbTitle: { fontSize: 8, fontFamily: "Helvetica-Bold", color: "#2740e6", textTransform: "uppercase", letterSpacing: 0.4 },
-  blurbBody: { fontSize: 8.5, color: INK, marginTop: 3, lineHeight: 1.4 },
-  progWrap: { flexDirection: "row", gap: 8, marginTop: 12 },
-  pcell: { flex: 1, borderWidth: 1, borderColor: LINE, borderRadius: 6, padding: 7 },
-  pweek: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#2740e6", textTransform: "uppercase", letterSpacing: 0.4 },
-  pname: { fontSize: 9, fontFamily: "Helvetica-Bold", marginTop: 1 },
-  pscheme: { fontSize: 12, fontFamily: "Helvetica-Bold", marginTop: 3 },
-  pmeta: { fontSize: 7.5, color: MUTE, marginTop: 1 },
-  day: { marginTop: 14, breakInside: "avoid" },
-  dayhead: { flexDirection: "row", alignItems: "center", gap: 6, borderLeftWidth: 4, paddingLeft: 6, marginBottom: 4 },
-  dfocus: { fontSize: 12, fontFamily: "Helvetica-Bold" },
-  th: { flexDirection: "row", borderBottomWidth: 1, borderColor: INK, paddingBottom: 3 },
-  thc: { fontSize: 7, fontFamily: "Helvetica-Bold", color: FAINT, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "center" },
-  row: { flexDirection: "row", borderBottomWidth: 1, borderColor: LINESOFT, paddingVertical: 4, alignItems: "center" },
-  cell: { fontSize: 8.5, textAlign: "center" },
-  exname: { fontSize: 9, fontFamily: "Helvetica-Bold" },
-  extag: { fontSize: 6.5, color: FAINT, textTransform: "uppercase", letterSpacing: 0.3, marginTop: 1 },
-  foot: { marginTop: 14, fontSize: 7, color: MUTE, lineHeight: 1.4, borderTopWidth: 1, borderColor: LINE, paddingTop: 8 },
-});
 
 function BlockDoc({ lang, playerName, startDate, method }: { lang: Lang; playerName?: string | null; startDate?: string | null; method: BlockMethod }) {
   const t = L[lang];
@@ -97,76 +73,77 @@ function BlockDoc({ lang, playerName, startDate, method }: { lang: Lang; playerN
   // Headline progression: the first day's first lift (upper_lower = main lift, power = heavy A1).
   const mainWeeks = blockDayMatrix(days[0]?.dayKey ?? "push", lang, method).exercises[0]?.weeks ?? [];
   const progLabel = `${t.prog} — ${method === "upper_lower" ? t.progMain : t.progHeavy}`;
+  const subtitle = `${methodLbl} · ${playerName ? `${playerName} · ` : ""}${startDate ? `${lang === "IS" ? "Byrjar" : "Starts"} ${startDate} · ` : ""}${t.prepared}`;
 
   return (
     <Document>
-      <Page size="A4" style={s.page}>
-        <Text style={s.h1}>{TITLE[method][lang]}</Text>
-        <Text style={s.sub}>{methodLbl} · {playerName ? `${playerName} · ` : ""}{startDate ? `${lang === "IS" ? "Byrjar" : "Starts"} ${startDate} · ` : ""}{t.prepared}</Text>
-        <Text style={s.meta}>{metaLine}</Text>
+      <BrandPage
+        doc={lang === "IS" ? "Styrktarblokk" : "Strength block"}
+        context={playerName ?? undefined}
+        kicker={methodLbl}
+        title={TITLE[method][lang]}
+        subtitle={subtitle}
+        note={t.note}
+      >
+        {/* Layer 0 — what this block is and how to run it */}
+        <Verdict tone="neutral" label={`${t.how} · ${methodLbl}`} headline={tx(metaLine)} body={tx(METHOD_BLURB[method][lang])} />
 
-        <View style={s.blurb}>
-          <Text style={s.blurbTitle}>{lang === "IS" ? "Hvernig á að framkvæma" : "How to perform"} · {methodLbl}</Text>
-          <Text style={s.blurbBody}>{METHOD_BLURB[method][lang]}</Text>
-        </View>
+        {/* Layer 1 — the weekly progression of the headline lift */}
+        <Section title={tx(progLabel)} mt={2}>
+          <FactRow
+            facts={[0, 1, 2, 3].map((i) => ({
+              value: mainWeeks[i] ? `${mainWeeks[i].sets}×${mainWeeks[i].reps}` : "-",
+              label: `${t.week} ${i + 1} · ${labels[i]}`,
+              sub: mainWeeks[i]?.rpe ?? "",
+            }))}
+          />
+        </Section>
 
-        <Text style={[s.pweek, { marginTop: 14 }]}>{progLabel}</Text>
-        <View style={s.progWrap}>
-          {[0, 1, 2, 3].map((i) => (
-            <View key={i} style={s.pcell}>
-              <Text style={s.pweek}>{lang === "IS" ? "Vika" : "Week"} {i + 1}</Text>
-              <Text style={s.pname}>{labels[i]}</Text>
-              <Text style={s.pscheme}>{mainWeeks[i] ? `${mainWeeks[i].sets}×${mainWeeks[i].reps}` : "—"}</Text>
-              <Text style={s.pmeta}>{mainWeeks[i]?.rpe ?? ""}</Text>
-            </View>
-          ))}
-        </View>
-
-        {days.map(({ dayKey }) => {
-          const m = blockDayMatrix(dayKey, lang, method);
-          const accent = ACCENT[dayKey];
-          return (
-            <View key={dayKey} style={s.day} wrap={false}>
-              <View style={[s.dayhead, { borderLeftColor: accent }]}>
-                <Text style={[s.dfocus, { color: accent }]}>{m.focus}</Text>
-              </View>
-              <View style={s.th}>
-                <Text style={[s.thc, { flex: 1, textAlign: "left" }]}>{t.ex}</Text>
-                {[1, 2, 3, 4].map((w) => <Text key={w} style={[s.thc, { width: 62 }]}>{lang === "IS" ? "V" : "W"}{w}</Text>)}
-                <Text style={[s.thc, { width: 48 }]}>{t.rest}</Text>
-              </View>
-              {m.exercises.map((ex, i) => (
-                <View key={i} style={[s.row, isPrimary(ex.role) ? { backgroundColor: MAINBG } : {}]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.exname}>{ex.name}</Text>
-                    <Text style={[s.extag, isPrimary(ex.role) ? { color: accent } : {}]}>{ROLE_TAG[ex.role]?.[lang] ?? ex.role}</Text>
-                  </View>
-                  {ex.weeks.map((wk, j) => (
-                    <Text key={j} style={[s.cell, { width: 62 }]}>{wk.sets}×{wk.reps}{"\n"}<Text style={{ color: MUTE, fontSize: 7 }}>{wk.rpe}</Text></Text>
-                  ))}
-                  <Text style={[s.cell, { width: 48, color: MUTE }]}>{ex.rest}</Text>
+        {/* Layer 2 — the full day tables */}
+        <Section title={t.days} hint={t.daysHint} mt={0}>
+          {days.map(({ dayKey, dayName }, di) => {
+            const m = blockDayMatrix(dayKey, lang, method);
+            return (
+              <View key={dayKey} wrap={false} style={{ marginBottom: 9 }}>
+                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, borderLeftWidth: 3, borderLeftColor: C.cobalt, paddingLeft: 6, marginBottom: 4 }}>
+                  <Text style={[fb(600), { fontSize: 7.5, letterSpacing: 0.8, color: C.cobalt }]}>{`${lang === "IS" ? "DAGUR" : "DAY"} ${di + 1} · ${clean(dayName).toUpperCase()}`}</Text>
+                  <Text style={[fh(700), { fontSize: 11.5 }]}>{tx(m.focus)}</Text>
                 </View>
-              ))}
-            </View>
-          );
-        })}
+                <Table
+                  cols={[
+                    { label: t.ex, flex: 1 },
+                    ...[1, 2, 3, 4].map((w) => ({ label: `${lang === "IS" ? "V" : "W"}${w} · ${labels[w - 1]}`, width: 70, align: "center" as const })),
+                    { label: t.rest, width: 48, align: "center" },
+                  ]}
+                  rowTone={(i) => (isPrimary(m.exercises[i]?.role ?? "") ? "cobalt" : null)}
+                  rows={m.exercises.map((ex) => [
+                    <View key="n">
+                      <Text style={[fb(600), { fontSize: 9 }]}>{tx(ex.name)}</Text>
+                      <Text style={[fb(600), { fontSize: 6.75, letterSpacing: 0.5, color: isPrimary(ex.role) ? C.cobalt : C.faint, marginTop: 1 }]}>{clean(ROLE_TAG[ex.role]?.[lang] ?? ex.role).toUpperCase()}</Text>
+                    </View>,
+                    ...ex.weeks.map((wk, j) => (
+                      <View key={j} style={{ alignItems: "center" }}>
+                        <Text style={[fh(700), { fontSize: 9.5 }]}>{`${wk.sets}×${wk.reps}`}</Text>
+                        <Text style={[fb(400), { fontSize: 7, color: C.mute }]}>{tx(wk.rpe)}</Text>
+                      </View>
+                    )),
+                    <Text key="r" style={[fb(400), { fontSize: 8, color: C.mute, textAlign: "center" }]}>{tx(ex.rest)}</Text>,
+                  ])}
+                />
+              </View>
+            );
+          })}
+        </Section>
 
-        <Text style={s.foot}>{t.foot}</Text>
-      </Page>
+        <Provenance>{tx(t.foot)}</Provenance>
+      </BrandPage>
     </Document>
   );
 }
 
 export async function downloadStrengthBlockPdf(opts: { playerName?: string | null; startDate?: string | null; method?: BlockMethod }, lang: Lang) {
   const method = opts.method ?? "upper_lower";
-  const blob = await pdf(<BlockDoc lang={lang} playerName={opts.playerName} startDate={opts.startDate} method={method} />).toBlob();
-  const url = URL.createObjectURL(blob);
+  const blob = await renderPdfBlob(() => <BlockDoc lang={lang} playerName={opts.playerName} startDate={opts.startDate} method={method} />);
   const slug = method === "french_contrast" ? "french-contrast" : method === "contrast" ? "contrast" : "upper-lower";
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${slug}-block${opts.playerName ? `-${opts.playerName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}` : ""}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  saveBlob(blob, `${slug}-block${opts.playerName ? `-${opts.playerName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}` : ""}.pdf`);
 }

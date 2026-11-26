@@ -4,15 +4,21 @@
  * PlayerProfilePdf — the written Total Player Analysis profile as a coach-facing PDF,
  * modelled on the hand-made Player-profile article.
  *
- * Layered read: header → PROFILE verdict box → the written read (footballer / athlete /
- * cross / role & fit) → footballer strengths & limitations → athlete qualities table →
- * "how to improve the weak areas" → footer. Presentation-only: every number is
- * rule-computed upstream and the prose is AI-phrased + labelled; the caller passes
- * already-localised strings. PERFORMANCE ONLY — never the readiness colour or a medical
- * read. WinAnsi/Helvetica (Icelandic-safe): no arrows / ticks / U+2212.
+ * Layered read: masthead → PROFILE line (AI box when AI-written) → footballer strengths &
+ * limitations → the written read (footballer / athlete / cross / role & fit) → athlete
+ * qualities table → "how to improve the weak areas" → VALD numbers → method & signals.
+ * Presentation-only: every number is rule-computed upstream and the prose is AI-phrased +
+ * labelled; the caller passes already-localised strings. PERFORMANCE ONLY — never the
+ * readiness colour or a medical read.
+ *
+ * Styling comes from the shared MicroPulse PDF kit (src/components/pdf/brand.tsx).
  */
 
-import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
+import { Document, Text, View } from "@react-pdf/renderer";
+import {
+  AiBox, BrandPage, Body, C, Card, KeyValues, Label, Provenance, Section, Status, Table, Verdict,
+  TONE, clean, fb, fh, renderPdfBlob, saveBlob, type Tone,
+} from "@/components/pdf/brand";
 
 type Lang = "EN" | "IS";
 
@@ -51,73 +57,71 @@ export type PlayerProfilePdfPayload = {
   } | null;
 };
 
-const BAND_COLOR: Record<string, string> = {
-  elite: "#2740e6", good: "#1c7a4a", average: "#a86a12", below: "#a83e28", context: "#6b7280", na: "#6b7280",
-};
-
-const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6", GREEN = "#1c7a4a", AMBER = "#a86a12";
-
-const s = StyleSheet.create({
-  page: { paddingTop: 26, paddingBottom: 34, paddingHorizontal: 34, fontSize: 9.5, fontFamily: "Helvetica", color: INK, lineHeight: 1.4 },
-  kicker: { fontSize: 8, color: COBALT, fontFamily: "Helvetica-Bold", letterSpacing: 0.8, marginBottom: 3 },
-  h1: { fontSize: 19, fontFamily: "Helvetica-Bold" },
-  sub: { fontSize: 10, color: MUTE, marginTop: 2 },
-  byline: { fontSize: 8, color: MUTE, fontFamily: "Helvetica-Oblique", marginTop: 3, marginBottom: 8 },
-  vbox: { borderWidth: 1, borderColor: "#c9d0f7", backgroundColor: "#eef0fb", borderRadius: 4, padding: 9, marginBottom: 9 },
-  vlabel: { fontSize: 8, color: COBALT, fontFamily: "Helvetica-Bold", letterSpacing: 0.6, marginBottom: 2 },
-  vtxt: { fontSize: 12, fontFamily: "Helvetica-Bold", color: INK },
-  h2: { fontSize: 11, fontFamily: "Helvetica-Bold", marginTop: 9, marginBottom: 3 },
-  para: { fontSize: 9.5, color: "#222", marginBottom: 2 },
-  colWrap: { flexDirection: "row", marginTop: 4 },
-  col: { flex: 1, paddingRight: 8 },
-  colLabel: { fontSize: 8, fontFamily: "Helvetica-Bold", letterSpacing: 0.5, marginBottom: 2 },
-  bullet: { fontSize: 9, color: "#333", marginBottom: 1.5 },
-  row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: LINE, paddingVertical: 2 },
-  cQ: { flex: 1, color: "#333" },
-  cVal: { width: 96, textAlign: "right", color: "#333" },
-  cPct: { width: 42, textAlign: "right", fontFamily: "Helvetica-Bold" },
-  cRead: { width: 66, textAlign: "right", color: MUTE },
-  imp: { fontSize: 9, color: "#222", marginBottom: 3 },
-  foot: { marginTop: 12, paddingTop: 7, borderTopWidth: 1, borderTopColor: LINE, fontSize: 7.5, color: MUTE, lineHeight: 1.5 },
-  // VALD
-  vNote: { fontSize: 8, color: MUTE, marginBottom: 3 },
-  cmpRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: LINE, paddingVertical: 1.5 },
-  cmpQ: { flex: 1, color: "#333" },
-  cmpVal: { width: 84, textAlign: "right", color: "#333", fontFamily: "Helvetica-Bold" },
-  cmpBand: { width: 92, textAlign: "right", fontFamily: "Helvetica-Bold" },
-  gWrap: { flexDirection: "row", flexWrap: "wrap", marginTop: 4 },
-  gCard: { width: "50%", paddingRight: 8, marginBottom: 5 },
-  gTitle: { fontSize: 9, fontFamily: "Helvetica-Bold", color: INK },
-  gDate: { fontSize: 7.5, color: MUTE, marginBottom: 1.5 },
-  gRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 0.8 },
-  gK: { fontSize: 8, color: MUTE },
-  gV: { fontSize: 8, color: "#222", fontFamily: "Helvetica-Bold" },
-});
+/** VALD band → kit tone (elite = cobalt, good = green, average = amber, below = red). */
+const BAND_TONE: Record<string, Tone> = { elite: "cobalt", good: "green", average: "amber", below: "red", context: "neutral", na: "neutral" };
+/** Athlete-quality read → kit tone. */
+const VERDICT_TONE: Record<string, Tone> = { strength: "green", weakness: "amber", neutral: "neutral", no_data: "neutral" };
 
 const L = {
   EN: { kicker: "PLAYER PROFILE", prepared: "Prepared for the coaching staff · MicroPulse",
-    ai: "AI-written from the numbers — cites the data, decides nothing",
+    ai: "AI-written from the numbers - cites the data, decides nothing",
     profile: "PROFILE", footballer: "As a footballer", athlete: "As an athlete", cross: "Reading across the two",
     roleFit: "Role & fit", strengths: "STRENGTHS", limitations: "LIMITATIONS",
+    written: "The written read", aiWritten: "AI-written from the numbers below. Rules computed every percentile.",
     qualities: "Athlete qualities", quality: "Quality", value: "Value", pctl: "%ile", read: "Read",
     improve: "How to improve the weak areas", within: "percentiles within squad / position",
-    verdicts: { strength: "strength", weakness: "weak", neutral: "on par", no_data: "—" } as Record<string, string>,
+    verdicts: { strength: "strength", weakness: "weak", neutral: "on par", no_data: "-" } as Record<string, string>,
+    howTo: "How to read this profile",
     method: "Two separate reads — as a footballer and as an athlete — never blended into one score. Percentiles rank the player within his own squad / position group and describe what the data shows; they do not predict. PERFORMANCE ONLY: nothing here is the readiness colour, load decision, or a medical/injury judgement — asymmetry is a robustness quality, and the medical read stays in the RTP module.",
-    signals: "Signals: StatsBomb/Wyscout per-90 (footballer) + GPS / VALD force plates / VBT (athlete). Rules compute the percentiles and the development levers; any prose is AI-phrased and coach-overridable." },
+    signals: "Signals: StatsBomb/Wyscout per-90 (footballer) + GPS / VALD force plates / VBT (athlete). Rules compute the percentiles and the development levers; any prose is AI-phrased and coach-overridable.",
+    foot: "Performance only - never the readiness colour, a load decision or a medical read." },
   IS: { kicker: "LEIKMANNAPRÓFÍLL", prepared: "Unnið fyrir þjálfarateymið · MicroPulse",
-    ai: "AI skrifaði úr tölunum — vitnar í gögnin, ákveður ekkert",
+    ai: "AI skrifaði úr tölunum - vitnar í gögnin, ákveður ekkert",
     profile: "PRÓFÍLL", footballer: "Sem fótboltamaður", athlete: "Sem íþróttamaður", cross: "Lesið þvert á ásana",
     roleFit: "Hlutverk og notkun", strengths: "STYRKLEIKAR", limitations: "TAKMARKANIR",
+    written: "Skriflegur lestur", aiWritten: "AI skrifaði úr tölunum hér að neðan. Reglur reiknuðu öll percentíl.",
     qualities: "Íþrótta-eiginleikar", quality: "Eiginleiki", value: "Gildi", pctl: "pctl", read: "Lestur",
     improve: "Hvernig má bæta veiku svæðin", within: "percentíl innan liðs / stöðu",
-    verdicts: { strength: "styrkur", weakness: "veikt", neutral: "í meðallagi", no_data: "—" } as Record<string, string>,
+    verdicts: { strength: "styrkur", weakness: "veikt", neutral: "í meðallagi", no_data: "-" } as Record<string, string>,
+    howTo: "Hvernig á að lesa prófílinn",
     method: "Tveir aðskildir lestrar — sem fótboltamaður og sem íþróttamaður — aldrei blandað í eina einkunn. Percentíl raða leikmanni innan síns liðs / stöðu og lýsa því sem gögnin sýna; þau spá ekki. FRAMMISTAÐA EINGÖNGU: ekkert hér er readiness-liturinn, álags-ákvörðun né læknis-/meiðsla-mat — ósamhverfa er styrkleikamerki og læknis-lesturinn er áfram í RTP-modúlinu.",
-    signals: "Uppspretta: StatsBomb/Wyscout per-90 (fótbolti) + GPS / VALD kraftplötur / VBT (íþrótt). Reglur reikna percentílin og æfingaleiðirnar; texti er AI-orðaður og þjálfari getur hnekkt." },
+    signals: "Uppspretta: StatsBomb/Wyscout per-90 (fótbolti) + GPS / VALD kraftplötur / VBT (íþrótt). Reglur reikna percentílin og æfingaleiðirnar; texti er AI-orðaður og þjálfari getur hnekkt.",
+    foot: "Frammistaða eingöngu - aldrei readiness-liturinn, álags-ákvörðun né læknismat." },
 } as const;
 
 function bio(p: PlayerProfilePdfPayload, lang: Lang): string {
   const parts = [p.position, p.minutes != null ? `${Math.round(p.minutes)} ${lang === "IS" ? "mín" : "min"}` : null, L[lang].within].filter(Boolean);
   return parts.join(" · ");
+}
+
+const ord = (pct: number | null, lang: Lang) => (pct != null ? ` (${pct}${lang === "IS" ? "." : "th"})` : "");
+
+/** A short list of metric labels with their percentile, under a dot + word heading. */
+function MetricList({ title, tone, items, lang }: { title: string; tone: Tone; items: Array<{ label: string; percentile: number | null }>; lang: Lang }) {
+  return (
+    <Card style={{ flex: 1 }}>
+      <View style={{ marginBottom: 5 }}><Status tone={tone} text={title} size={8} /></View>
+      {items.length ? items.map((m, i) => (
+        <View key={i} wrap={false} style={{ flexDirection: "row", justifyContent: "space-between", gap: 8, paddingVertical: 2.5, borderBottomWidth: i < items.length - 1 ? 1 : 0, borderBottomColor: C.hair }}>
+          <Text style={[fb(400), { fontSize: 8.75, flex: 1 }]}>{clean(m.label)}</Text>
+          {m.percentile != null ? <Text style={[fh(700), { fontSize: 8.75, color: TONE[tone].text }]}>{`${m.percentile}${lang === "IS" ? "." : "th"}`}</Text> : null}
+        </View>
+      )) : <Body color={C.mute}>-</Body>}
+    </Card>
+  );
+}
+
+/** Numbered lever line: bold lead, plain detail, small cite. */
+function Lever({ lead, text, cite }: { lead: string; text: string; cite?: string }) {
+  return (
+    <View wrap={false} style={{ paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: C.hair }}>
+      <Text style={[fb(600), { fontSize: 9, lineHeight: 1.35 }]}>{clean(lead)}</Text>
+      <Text style={[fb(400), { fontSize: 8.75, lineHeight: 1.45, marginTop: 1 }]}>
+        {clean(text)}
+        {cite ? <Text style={{ color: C.mute, fontSize: 7.75 }}>{`  [${clean(cite)}]`}</Text> : null}
+      </Text>
+    </View>
+  );
 }
 
 export function Doc({ payload, lang }: { payload: PlayerProfilePdfPayload; lang: Lang }) {
@@ -126,141 +130,142 @@ export function Doc({ payload, lang }: { payload: PlayerProfilePdfPayload; lang:
   const sections: Array<[string, string | undefined]> = [
     [t.footballer, n?.footballerRead], [t.athlete, n?.athleteRead], [t.cross, n?.crossRead], [t.roleFit, n?.roleFit],
   ];
-  const fb = payload.footballer;
+  const written = sections.filter(([, body]) => body && body.trim());
+  const fbl = payload.footballer;
   const ath = payload.athlete;
+  const profileLine = n?.profile ?? payload.headline;
+  const vald = payload.vald;
   return (
     <Document>
-      <Page size="A4" style={s.page}>
-        <Text style={s.kicker}>{t.kicker}</Text>
-        <Text style={s.h1}>{payload.playerName}</Text>
-        <Text style={s.sub}>{bio(payload, lang)}</Text>
-        <Text style={s.byline}>{t.prepared}{payload.aiGenerated ? ` · AI · ${t.ai}` : ""}</Text>
+      <BrandPage
+        doc={lang === "IS" ? "Leikmannaprófíll" : "Player profile"}
+        context={payload.playerName}
+        kicker={t.kicker}
+        title={payload.playerName}
+        subtitle={`${bio(payload, lang)}\n${t.prepared}`}
+        chips={[...(fbl?.role ? [{ text: fbl.role }] : []), ...(payload.aiGenerated ? [{ text: "AI", tone: "cobalt" as Tone }] : [])]}
+        note={`${t.prepared} · ${t.foot}`}
+      >
+        {/* Layer 0 — the one-line profile. AI-written → labelled AI box; otherwise a plain profile line. */}
+        {profileLine ? (
+          payload.aiGenerated ? (
+            <AiBox label={t.ai.toUpperCase()} headline={profileLine} />
+          ) : (
+            <Verdict tone="neutral" label={t.profile} headline={profileLine} />
+          )
+        ) : null}
 
-        {(n?.profile ?? payload.headline) ? (
-          <View style={s.vbox}>
-            <Text style={s.vlabel}>{t.profile}</Text>
-            <Text style={s.vtxt}>{n?.profile ?? payload.headline}</Text>
+        {/* Layer 1 — footballer strengths & limitations */}
+        {fbl && (fbl.strengths.length > 0 || fbl.weaknesses.length > 0) ? (
+          <View wrap={false} style={{ flexDirection: "row", gap: 8, marginBottom: 10 }}>
+            <MetricList title={t.strengths} tone="green" items={fbl.strengths} lang={lang} />
+            <MetricList title={t.limitations} tone="amber" items={fbl.weaknesses} lang={lang} />
           </View>
         ) : null}
 
-        {sections.map(([label, body]) => (body && body.trim() ? (
-          <View key={label} wrap={false}>
-            <Text style={s.h2}>{label}</Text>
-            <Text style={s.para}>{body}</Text>
-          </View>
-        ) : null))}
-
-        {fb && (fb.strengths.length > 0 || fb.weaknesses.length > 0) ? (
-          <View wrap={false} style={s.colWrap}>
-            <View style={s.col}>
-              <Text style={[s.colLabel, { color: GREEN }]}>{t.strengths}</Text>
-              {fb.strengths.length ? fb.strengths.map((m, i) => (
-                <Text key={i} style={s.bullet}>{m.label}{m.percentile != null ? ` (${m.percentile}${lang === "IS" ? "." : "th"})` : ""}</Text>
-              )) : <Text style={s.bullet}>—</Text>}
-            </View>
-            <View style={s.col}>
-              <Text style={[s.colLabel, { color: AMBER }]}>{t.limitations}</Text>
-              {fb.weaknesses.length ? fb.weaknesses.map((m, i) => (
-                <Text key={i} style={s.bullet}>{m.label}{m.percentile != null ? ` (${m.percentile}${lang === "IS" ? "." : "th"})` : ""}</Text>
-              )) : <Text style={s.bullet}>—</Text>}
-            </View>
-          </View>
+        {/* The written read — AI-phrased prose stays inside a labelled AI box */}
+        {written.length ? (
+          <Section title={t.written} hint={payload.aiGenerated ? t.aiWritten : undefined}>
+            {payload.aiGenerated ? (
+              <AiBox label={t.ai.toUpperCase()}>
+                {written.map(([label, body]) => (
+                  <View key={label} wrap={false} style={{ marginTop: 7 }}>
+                    <Label color={C.cobalt}>{label}</Label>
+                    <Body size={9.25}>{body ?? ""}</Body>
+                  </View>
+                ))}
+              </AiBox>
+            ) : (
+              written.map(([label, body]) => (
+                <View key={label} wrap={false} style={{ marginBottom: 7 }}>
+                  <Label color={C.cobalt}>{label}</Label>
+                  <Body size={9.25}>{body ?? ""}</Body>
+                </View>
+              ))
+            )}
+          </Section>
         ) : null}
 
+        {/* Layer 2 — athlete qualities */}
         {ath && ath.qualities.length ? (
-          <View wrap={false}>
-            <Text style={[s.h2, { color: COBALT }]}>{t.qualities}</Text>
-            <View style={s.row}>
-              <Text style={[s.cQ, { fontFamily: "Helvetica-Bold", color: INK }]}>{t.quality}</Text>
-              <Text style={[s.cVal, { fontFamily: "Helvetica-Bold", color: INK }]}>{t.value}</Text>
-              <Text style={[s.cPct, { color: INK }]}>{t.pctl}</Text>
-              <Text style={[s.cRead, { fontFamily: "Helvetica-Bold" }]}>{t.read}</Text>
-            </View>
-            {ath.qualities.map((q, i) => (
-              <View style={s.row} key={i}>
-                <Text style={s.cQ}>{q.label}</Text>
-                <Text style={s.cVal}>{q.value}{q.unit ? ` ${q.unit}` : ""}</Text>
-                <Text style={s.cPct}>{q.percentile ?? "—"}</Text>
-                <Text style={s.cRead}>{t.verdicts[q.verdict] ?? q.verdict}</Text>
-              </View>
-            ))}
-          </View>
+          <Section title={t.qualities} wrap={false}>
+            <Table
+              cols={[
+                { label: t.quality, flex: 2 },
+                { label: t.value, width: 96, align: "right" },
+                { label: t.pctl, width: 42, align: "right", strong: true },
+                { label: t.read, width: 82, align: "right" },
+              ]}
+              rows={ath.qualities.map((q) => [
+                q.label,
+                `${q.value}${q.unit ? ` ${q.unit}` : ""}`,
+                q.percentile != null ? String(q.percentile) : "-",
+                q.verdict === "no_data" ? "-" : <Status key="r" tone={VERDICT_TONE[q.verdict] ?? "neutral"} text={t.verdicts[q.verdict] ?? q.verdict} size={8} />,
+              ])}
+            />
+          </Section>
         ) : null}
 
         {payload.development.length ? (
-          <View>
-            <Text style={[s.h2, { color: AMBER }]}>{t.improve}</Text>
-            {payload.development.map((d, i) => (
-              <Text key={i} style={s.imp}>
-                <Text style={{ fontFamily: "Helvetica-Bold" }}>{d.label}{d.percentile != null ? ` (${d.percentile}${lang === "IS" ? "." : "th"})` : ""}: </Text>
-                {d.lever}{d.cite ? ` [${d.cite}]` : ""}
-              </Text>
-            ))}
-          </View>
+          <Section title={t.improve} wrap={payload.development.length > 4}>
+            <Card pad={10} wrap={payload.development.length > 4}>
+              {payload.development.map((d, i) => (
+                <Lever key={i} lead={`${d.label}${ord(d.percentile, lang)}`} text={d.lever} cite={d.cite} />
+              ))}
+            </Card>
+          </Section>
         ) : null}
 
-        {payload.vald && (payload.vald.groups.length > 0 || payload.vald.compare.length > 0) ? (
-          <View>
-            <Text style={[s.h2, { color: COBALT }]}>{payload.vald.title}</Text>
-            {payload.vald.note ? <Text style={s.vNote}>{payload.vald.note}</Text> : null}
-            {payload.vald.compare.length ? (
-              <View wrap={false}>
-                <Text style={[s.colLabel, { color: INK, marginBottom: 1 }]}>{payload.vald.compareTitle}</Text>
-                {payload.vald.compare.map((c, i) => (
-                  <View style={s.cmpRow} key={i}>
-                    <Text style={s.cmpQ}>{c.label}</Text>
-                    <Text style={s.cmpVal}>{c.value}</Text>
-                    <Text style={[s.cmpBand, { color: BAND_COLOR[c.band] ?? MUTE }]}>{c.read}</Text>
-                  </View>
-                ))}
+        {vald && (vald.groups.length > 0 || vald.compare.length > 0) ? (
+          <Section title={vald.title} hint={vald.note || undefined}>
+            {vald.compare.length ? (
+              <View wrap={false} style={{ marginBottom: 8 }}>
+                <Label>{vald.compareTitle}</Label>
+                <Table
+                  dense
+                  cols={[{ label: t.quality, flex: 2 }, { label: t.value, width: 90, align: "right", strong: true }, { label: t.read, width: 120, align: "right" }]}
+                  rows={vald.compare.map((c) => [c.label, c.value, <Status key="b" tone={BAND_TONE[c.band] ?? "neutral"} text={c.read} size={8} />])}
+                />
               </View>
             ) : null}
-            <View style={s.gWrap}>
-              {payload.vald.groups.map((g, gi) => (
-                <View style={s.gCard} key={gi} wrap={false}>
-                  <Text style={s.gTitle}>{g.title}</Text>
-                  {g.date ? <Text style={s.gDate}>{g.date}</Text> : null}
-                  {g.rows.map(([k, v], ri) => (
-                    <View style={s.gRow} key={ri}>
-                      <Text style={s.gK}>{k}</Text>
-                      <Text style={s.gV}>{v}</Text>
-                    </View>
-                  ))}
-                </View>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              {vald.groups.map((g, gi) => (
+                <Card key={gi} pad={9} style={{ width: "49.2%" }}>
+                  <Text style={[fh(700), { fontSize: 10 }]}>{clean(g.title)}</Text>
+                  {g.date ? <Text style={[fb(400), { fontSize: 7.5, color: C.mute, marginBottom: 3 }]}>{clean(g.date)}</Text> : null}
+                  <KeyValues rows={g.rows} />
+                </Card>
               ))}
             </View>
-            {payload.vald.trainingFocus && (payload.vald.trainingFocus.priorities.length > 0 || payload.vald.trainingFocus.verdict) ? (
-              <View wrap={false} style={{ marginTop: 4 }}>
-                <Text style={[s.colLabel, { color: COBALT, marginBottom: 1 }]}>{payload.vald.trainingFocus.title}</Text>
-                <Text style={[s.para, { fontFamily: "Helvetica-Bold" }]}>{payload.vald.trainingFocus.verdict}</Text>
-                {payload.vald.trainingFocus.priorities.map((p, i) => (
-                  <Text key={i} style={s.imp}>
-                    <Text style={{ fontFamily: "Helvetica-Bold" }}>{i + 1}. {p.quality} ({p.value}, {p.bandLabel}): </Text>
-                    {p.lever} [{p.cite}]
-                  </Text>
+            {vald.trainingFocus && (vald.trainingFocus.priorities.length > 0 || vald.trainingFocus.verdict) ? (
+              <Card style={{ marginTop: 8 }} wrap={vald.trainingFocus.priorities.length > 6}>
+                <Label color={C.cobalt}>{vald.trainingFocus.title}</Label>
+                {vald.trainingFocus.verdict ? <Text style={[fh(700), { fontSize: 11, lineHeight: 1.3, marginBottom: 2 }]}>{clean(vald.trainingFocus.verdict)}</Text> : null}
+                {vald.trainingFocus.priorities.map((p, i) => (
+                  <Lever key={i} lead={`${i + 1}. ${p.quality} (${p.value}, ${p.bandLabel})`} text={p.lever} cite={p.cite} />
                 ))}
-                {payload.vald.trainingFocus.strengths.length ? (
-                  <Text style={s.vNote}>{payload.vald.trainingFocus.strengthsLabel}: {payload.vald.trainingFocus.strengths.join(", ")}</Text>
+                {vald.trainingFocus.strengths.length ? (
+                  <Body size={8.25} color={C.mute} mt={4}>{`${vald.trainingFocus.strengthsLabel}: ${vald.trainingFocus.strengths.join(", ")}`}</Body>
                 ) : null}
-              </View>
+              </Card>
             ) : null}
-            {payload.vald.footnote ? <Text style={s.vNote}>{payload.vald.footnote}</Text> : null}
-          </View>
+            {vald.footnote ? <Provenance>{vald.footnote}</Provenance> : null}
+          </Section>
         ) : null}
 
-        <Text style={s.foot}>{t.method}{"\n"}{t.signals}</Text>
-      </Page>
+        {/* Closing card — how to read / sources */}
+        <Card style={{ marginTop: 6 }}>
+          <Label>{t.howTo}</Label>
+          <Provenance>{t.method}</Provenance>
+          <Provenance>{t.signals}</Provenance>
+        </Card>
+      </BrandPage>
     </Document>
   );
 }
 
 export async function downloadPlayerProfilePdf(payload: PlayerProfilePdfPayload, lang: Lang) {
-  const blob = await pdf(<Doc payload={payload} lang={lang} />).toBlob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
+  const blob = await renderPdfBlob(() => <Doc payload={payload} lang={lang} />);
   const slug = payload.playerName.replace(/\s+/g, "-");
-  a.download = `player-profile-${slug}.pdf`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  saveBlob(blob, `player-profile-${slug}.pdf`);
 }
