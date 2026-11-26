@@ -26,7 +26,7 @@ export function guardSeasonWindow(seasonYear: number, patch: Record<string, unkn
   for (const k of ["seasonEnd", "offseasonStart"]) { const v = iso(k); if (v && v < yearStart) drop(k); }
   { const v = iso("preseasonStart"); if (v && (v < floorPrev || v > yearEnd)) drop("preseasonStart"); }
   { const v = iso("nextPreseasonStart"); if (v && v < floorThis) drop("nextPreseasonStart"); }
-  for (const k of ["blockGoals", "blockWeeks", "blockDeload"]) {
+  for (const k of ["blockGoals", "blockWeeks", "blockDeload", "blockKpi"]) {
     const m = out[k];
     if (!m || typeof m !== "object" || Array.isArray(m)) continue;
     const kept: Record<string, unknown> = {};

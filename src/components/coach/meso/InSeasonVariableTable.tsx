@@ -2,8 +2,9 @@
 
 /**
  * In-season: the block's standard week, every variable as × a match beside the research range. The mirror of the
- * pre-season "Load per variable" table (PreseasonWeek1Table), read-only: the in-season block holds the standard
- * week (or ramps by Step/wk), so there is no week 1 to set. Per-variable editing is a later, separate decision.
+ * pre-season "Load per variable" table (PreseasonWeek1Table): the system proposes each variable's standard week
+ * (the calendar's own week) and the coach can set any of them with − / + for this block (inSeasonKpiAdjust). The
+ * whole block follows — the calendar's days, every week's ramp, the weekly target and the players' blocks.
  *
  * Layered read: the verdict (the standard week in × a match) → two plain facts (what one match is; that the
  * standard week is the calendar's own week, so the week cards add up to the same) → the table → the week-by-week table and sources behind a toggle.
@@ -13,14 +14,16 @@
 import * as React from "react";
 import { KPI_GROUPS, kpiGroup, kpiWhat, plainKpiName } from "@/lib/micropulse/periodization/kpiPlainNames";
 import type { BlockVolumeView, VariableRow } from "@/lib/micropulse/periodization/inSeasonMesoView";
-import { WEEKLY_LOAD_LABELS } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
+import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
+import { BLOCK_KPI_MAX, BLOCK_KPI_MIN, BLOCK_KPI_STEP, hasCalendarDay } from "@/lib/micropulse/periodization/inSeasonKpiAdjust";
+import { MultipleInput } from "@/components/coach/meso/MultipleInput";
 import {
   ARCHIVO, BandOrNone, LegendFilled, LegendLight, LegendOpen, LegendRange, VARIABLE_COLS, VariableGroupHeader, VariableScaleTicks, VariableTrack, trackScaleMax,
 } from "@/components/coach/meso/VariableTrack";
 
 type Bi = { en: string; is: string };
 
-export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, numWeeks, playerName }: {
+export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, numWeeks, playerName, onKpi, onResetAll }: {
   is: boolean;
   view: BlockVolumeView;
   /** What "one match" is — the team's typical full match, or the player's own. */
@@ -29,6 +32,9 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
   hold: boolean;
   numWeeks: number;
   playerName: string | null;
+  /** Set a variable's standard week for this block (× a match; null = back to the proposal). Absent = read-only. */
+  onKpi?: (k: WeeklyLoadMetricKey, x: number | null) => void;
+  onResetAll?: () => void;
 }) {
   const t = (b: Bi) => (is ? b.is : b.en);
   const [why, setWhy] = React.useState(false);
@@ -51,10 +57,32 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
   const master = rows.find((r) => r.key === "totalPlayerLoad") ?? null;
   const kpiRows = rows.filter((r) => r.key !== "totalPlayerLoad").map((r) => ({ ...r, name: plainKpiName(r.key, r.label, is, used) }));
 
-  const value = (r: VariableRow, big = false) => (
+  const editable = !!onKpi;
+  const setCount = rows.filter((r) => r.mine).length;
+  const commit = (r: VariableRow, x: number) => {
+    const v = Math.round(Math.max(BLOCK_KPI_MIN, Math.min(BLOCK_KPI_MAX, x)) * 100) / 100;
+    onKpi?.(r.key, Math.abs(v - r.proposal) < 0.005 ? null : v); // back on the proposal = no setting
+  };
+  // − [typed value] + : 0.05× a step, the same control as the pre-season table.
+  const stepper = (r: VariableRow, name: string, big = false) => (
+    <div className={`flex items-center overflow-hidden rounded-[10px] border bg-white ${big || r.mine ? "border-[#2740e6]" : "border-[#d9d5cc]"} ${big ? "h-11" : "h-10"}`}>
+      <button type="button" onClick={() => commit(r, r.week - BLOCK_KPI_STEP)} aria-label={`${name} — ${t({ en: "standard week down", is: "staðalvika niður" })}`} className="h-full w-10 shrink-0 text-[17px] text-[#2740e6] hover:bg-[#2740e6]/5">−</button>
+      <MultipleInput value={r.week} label={`${name} — ${t({ en: "standard week", is: "staðalvika" })}`} onCommit={(x) => commit(r, x)} big={big} />
+      <span className={`pr-1 font-bold text-[#14181c] ${big ? "text-[18px]" : "text-[16px]"}`} style={ARCHIVO}>×</span>
+      <button type="button" onClick={() => commit(r, r.week + BLOCK_KPI_STEP)} aria-label={`${name} — ${t({ en: "standard week up", is: "staðalvika upp" })}`} className="h-full w-10 shrink-0 text-[17px] text-[#2740e6] hover:bg-[#2740e6]/5">+</button>
+    </div>
+  );
+  const yours = <span className="rounded-full bg-[#2740e6]/[0.08] px-1.5 py-0.5 text-[10px] font-semibold text-[#2740e6]">{t({ en: "yours", is: "þitt" })}</span>;
+  const value = (r: VariableRow, name: string, big = false) => (
     <div className="flex flex-col gap-0.5">
-      <span className={`font-bold tabular-nums text-[#14181c] ${big ? "text-[20px]" : "text-[17px]"}`} style={ARCHIVO}>{fx(r.week)}×</span>
-      <span className="text-[11px] text-slate-600">{fmtK(r.weekRaw)}{r.unit} · {t({ en: "one match", is: "einn leikur" })} {fmtK(r.matchValue)}{r.unit}</span>
+      {editable ? stepper(r, name, big) : <span className={`font-bold tabular-nums text-[#14181c] ${big ? "text-[20px]" : "text-[17px]"}`} style={ARCHIVO}>{fx(r.week)}×</span>}
+      <span className="text-[11px] text-slate-600">
+        {fmtK(r.weekRaw)}{r.unit} · {t({ en: "one match", is: "einn leikur" })} {fmtK(r.matchValue)}{r.unit}
+        {editable && (r.mine
+          ? <> · <button type="button" onClick={() => onKpi?.(r.key, null)} className="font-semibold text-[#2740e6] underline">{t({ en: "proposal", is: "tillaga" })} {fx(r.proposal)}×</button></>
+          : <> · {t({ en: "system proposal", is: "tillaga kerfisins" })}</>)}
+      </span>
+      {editable && r.mine && !hasCalendarDay(r.key) && <span className="text-[11px] text-slate-500">{t({ en: "Moves the weekly target; sprints have no day number of their own.", is: "Færir vikumarkmiðið; sprettir hafa enga eigin dagstölu." })}</span>}
     </div>
   );
   const nums = (r: VariableRow) => (
@@ -75,7 +103,15 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
     <div className="mt-2 overflow-hidden rounded-2xl border border-[#e3e0d8] bg-white">
       {/* Verdict + the two plain facts */}
       <div className="flex flex-col gap-1.5 border-b border-[#ece9e2] px-5 pb-5 pt-5 sm:px-6">
-        <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[#2740e6]">{t({ en: "Load per variable", is: "Álag á hverja breytu" })}{playerName ? ` · ${playerName}` : ""}</span>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[#2740e6]">{t({ en: "Load per variable", is: "Álag á hverja breytu" })}{playerName ? ` · ${playerName}` : ""}</span>
+          {editable && setCount > 0 && (
+            <span className="flex items-center gap-2 text-[12px] text-slate-600">
+              {yours}{t({ en: `${setCount} set by you`, is: `${setCount} stillt af þér` })}
+              <button type="button" onClick={onResetAll} className="h-8 rounded-lg px-2 font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">{t({ en: "Back to the proposal", is: "Aftur í tillögu" })}</button>
+            </span>
+          )}
+        </div>
         <h3 className="text-[22px] font-bold leading-tight tracking-[-0.01em] text-[#14181c]" style={ARCHIVO}>
           {t({ en: `The standard week ≈ ${fx(view.weekMultiple)}× a match`, is: `Staðalvikan ≈ ${fx(view.weekMultiple)}× leikur` })}
           <span className="ml-2 font-sans text-[14px] font-medium text-slate-600">{t({ en: `+ the match itself = ${fx(view.totalWithMatch)}×`, is: `+ leikurinn sjálfur = ${fx(view.totalWithMatch)}×` })}</span>
@@ -86,6 +122,9 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
             ? t({ en: `The standard week is the calendar's own one-match week (${view.trainingDays.join(", ")}; MD+2 and MD-2 off), so the week cards below add up to the same unless a week's games or days differ.`, is: `Staðalvikan er eins leiks vika dagatalsins sjálfs (${view.trainingDays.join(", ")}; frí á MD+2 og MD-2), svo vikuspjöldin hér að neðan leggja saman það sama nema leikir eða dagar vikunnar séu aðrir.` })
             : t({ en: "The week cards below show what the calendar's days add up to, so a week there can sit a little off this standard week.", is: "Vikuspjöldin hér að neðan sýna hvað dagar dagatalsins leggja saman, svo vika þar getur vikið aðeins frá þessari staðalviku." })}</li>
           <li>{weeksLine}</li>
+          {editable
+            ? <li>{t({ en: "The system proposes each variable; set any of them with − / + for this block. Every week of the block follows — the days in the calendar below, the weekly target and the players' blocks.", is: "Kerfið leggur til hverja breytu; stilltu hvaða breytu sem er með − / + fyrir þessa lotu. Allar vikur lotunnar fylgja — dagarnir í dagatalinu hér að neðan, vikumarkmiðið og lotur leikmanna." })}</li>
+            : playerName && <li>{t({ en: "A player's view follows the team's settings; set the variables on the team.", is: "Sýn leikmanns fylgir stillingum liðsins; stilltu breyturnar á liðinu." })}</li>}
         </ul>
       </div>
 
@@ -96,10 +135,10 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
         {master && (
           <div className={`${VARIABLE_COLS} border-b border-[#ece9e2] bg-[#f8f7f3] px-5 py-5 sm:px-6`}>
             <div className="flex min-w-0 flex-col gap-1">
-              <span className="text-[16px] font-bold text-[#14181c]" style={ARCHIVO}>{t({ en: "Overall load", is: "Heildarálag" })}</span>
+              <span className="text-[16px] font-bold text-[#14181c]" style={ARCHIVO}>{t({ en: "Overall load", is: "Heildarálag" })} {editable && master.mine && yours}</span>
               <span className="text-[12px] leading-snug text-slate-600">{t({ en: "The whole week in one number (PlayerLoad).", is: "Öll vikan í einni tölu (PlayerLoad)." })}</span>
             </div>
-            {value(master, true)}
+            {value(master, t({ en: "Overall load", is: "Heildarálag" }), true)}
             <VariableTrack scaleMax={scaleMax} refRange={master.ref} open={open(master)} filled={filled(master)} light={master.light} ariaLabel={aria(master, t({ en: "Overall load", is: "Heildarálag" }))} />
             {nums(master)}
           </div>
@@ -131,10 +170,10 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
               {gr.map((r) => (
                 <div key={r.key} className={`${VARIABLE_COLS} border-b border-[#f1efe9] py-3 last:border-b-0`}>
                   <div className="flex min-w-0 flex-col gap-0.5">
-                    <span className="text-[14px] font-semibold text-[#14181c]" title={t(r.label)}>{r.name}</span>
+                    <span className="text-[14px] font-semibold text-[#14181c]" title={t(r.label)}>{r.name} {editable && r.mine && yours}</span>
                     {kpiWhat(r.key) && <span className="text-[12px] leading-snug text-slate-600">{t(kpiWhat(r.key)!)}</span>}
                   </div>
-                  {value(r)}
+                  {value(r, r.name)}
                   <VariableTrack scaleMax={scaleMax} refRange={r.ref} open={open(r)} filled={filled(r)} light={r.light} ariaLabel={aria(r, r.name)} />
                   {nums(r)}
                 </div>

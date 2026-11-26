@@ -20,6 +20,7 @@
 import { preseasonForDate, preseasonAnchor, preseasonRamp, type PreseasonSavedRow } from "./preseasonWindow";
 import { kpiTaperShare, mesoWeeklyMultiples } from "./plannedVolume";
 import { inSeasonKpiVolumes } from "./inSeasonStandardWeek";
+import { blockKpiRatios, type BlockKpiMap } from "./inSeasonKpiAdjust";
 import { teamKpiAvg } from "./preseasonKpiMap";
 import { holdsStandardWeek } from "./imaStandard";
 import type { MatchUnit, SeasonPhase, MesoBlock } from "./index";
@@ -71,6 +72,9 @@ export function planWeeklyTarget(opts: {
   savedWindowNext?: PreseasonSavedRow;
   /** Team sport — basketball uses a shorter MD micro-cycle (MD-3 → MD-1). Defaults to football. */
   sport?: string | null;
+  /** The coach's per-variable settings per in-season block (season_plans.overrides.blockKpi): a set variable's
+   *  target moves by the same share as the coach moved its standard week (inSeasonKpiAdjust). */
+  blockKpi?: BlockKpiMap | null;
 }): PlanWeeklyTarget | null {
   const kpi = teamKpiAvg(opts.matchUnits);
   if (Object.keys(kpi).length === 0) return null;
@@ -102,7 +106,8 @@ export function planWeeklyTarget(opts: {
     }
 
     const byKpi: Partial<Record<WeeklyLoadMetricKey, number>> = {};
-    for (const v of vols) byKpi[v.key] = Math.round(v.weeklyValue * factor);
+    const coach = block ? blockKpiRatios(opts.blockKpi?.[block.start], opts.sport) : {};
+    for (const v of vols) byKpi[v.key] = Math.round(v.weeklyValue * factor * (coach[v.key] ?? 1));
     const pct = Math.round(factor * 100);
     const label = isLightWk
       ? { en: `In-season — ${matches}-match week · light week (${pct}%)`, is: `Keppni — ${matches} leikja vika · létt vika (${pct}%)` }

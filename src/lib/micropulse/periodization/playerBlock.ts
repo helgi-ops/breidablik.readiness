@@ -15,6 +15,7 @@ import { buildCalendarBlock, deloadWeekIndex, inSeasonRange, positionGroup } fro
 import type { Bi, BlockDeload, CalType, CalendarBlock, CalWeek, MatchUnitAbs, RecGoalKey, TeamAverages } from "./index";
 import { standardTrainingDays, weeklyKpiMultiple } from "./plannedVolume";
 import { inSeasonKpiMultiple, usesCalendarWeek } from "./inSeasonStandardWeek";
+import { scaleCalWeek, type CalAxisScale } from "./inSeasonKpiAdjust";
 import { LIGHT_WEEK_VOL } from "./imaStandard";
 import type { WeeklyLoadMetricKey } from "../externalLoad/weeklyLoadTypes";
 import type { BuildUpSteer } from "./buildUpSteer";
@@ -71,6 +72,9 @@ export interface PlayerBlockOpts {
   asOf?: string;
   /** Only the given matches: a block with none gets no assumed Sat/Sun game (the hub's in-season Meso page). */
   noAutoMatch?: boolean;
+  /** The coach's per-variable setting for this block (inSeasonKpiAdjust), applied after the team alignment so
+   *  the player's block moves by the same share as the team calendar. */
+  kpiScale?: CalAxisScale;
 }
 /** What the VALD cap did to the week containing `asOf`. `applied` = the numbers were cut; `lifted` = the coach
  *  lifted it (logged with a reason); `deload` = a deep deload week, already under any cap, so nothing added. */
@@ -93,30 +97,9 @@ const MIN_SAMPLE = 4;
 
 type AxisScale = Record<"dist" | "hsr" | "load" | "accdec" | "stride" | "fr" | "cod" | "acc" | "dec", number>;
 
-/** Scale one week's training days + its running totals per axis. Match and rest days stay as they are. */
+/** Scale one week's training days + its running totals per axis (one factor for both hard speed-ups and braking). */
 function scaleWeek(w: CalWeek, sc: AxisScale): void {
-  for (const d of w.days) {
-    if (d.type === "match" || d.type === "rest") continue;
-    if (d.dist != null) d.dist = Math.round((d.dist * sc.dist) / 10) * 10;
-    if (d.hsr != null) d.hsr = Math.round((d.hsr * sc.hsr) / 5) * 5;
-    if (d.load != null) d.load = Math.round(d.load * sc.load);
-    if (d.accHiEff != null) d.accHiEff = Math.round(d.accHiEff * sc.accdec);
-    if (d.decHiEff != null) d.decHiEff = Math.round(d.decHiEff * sc.accdec);
-    if (d.stride != null) d.stride = Math.round(d.stride * sc.stride);
-    if (d.fr != null) d.fr = Math.round((d.fr * sc.fr) / 10) * 10;
-    if (d.cod != null) d.cod = Math.round(d.cod * sc.cod);
-    if (d.accel != null) d.accel = Math.round(d.accel * sc.acc);
-    if (d.decel != null) d.decel = Math.round(d.decel * sc.dec);
-  }
-  if (w.pctRunning != null) w.pctRunning = Math.round(w.pctRunning * sc.dist);
-  if (w.pctHsr != null) w.pctHsr = Math.round(w.pctHsr * sc.hsr);
-  if (w.pctMech != null) w.pctMech = Math.round(w.pctMech * sc.load);
-  if (w.pctAccDec23 != null) w.pctAccDec23 = Math.round(w.pctAccDec23 * sc.accdec);
-  if (w.pctStride != null) w.pctStride = Math.round(w.pctStride * sc.stride);
-  if (w.pctFr != null) w.pctFr = Math.round(w.pctFr * sc.fr);
-  if (w.pctCod != null) w.pctCod = Math.round(w.pctCod * sc.cod);
-  if (w.pctAccel != null) w.pctAccel = Math.round(w.pctAccel * sc.acc);
-  if (w.pctDecel != null) w.pctDecel = Math.round(w.pctDecel * sc.dec);
+  scaleCalWeek(w, { dist: sc.dist, hsr: sc.hsr, load: sc.load, accHi: sc.accdec, decHi: sc.accdec, stride: sc.stride, fr: sc.fr, cod: sc.cod, acc: sc.acc, dec: sc.dec });
 }
 
 /** Apply the VALD cap to the week containing `asOf`. It runs AFTER alignment, because alignment rescales every
@@ -242,6 +225,7 @@ export function buildPlayerBlock(plan: PlayerBlockPlan, pl: PlayerBlockPlayer, o
   try {
     alignBlockToTeamMultiple(block, !!opts.friendlyMatches);
   } catch { /* alignment is advisory; keep the raw block on any surprise */ }
+  if (opts.kpiScale) for (const w of block.weeks) scaleCalWeek(w, opts.kpiScale);
 
   const valdTrim = applyValdTrim(block, pl.vald, opts.asOf);
 

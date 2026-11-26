@@ -14,6 +14,7 @@ import { isAerobicMode, DEFAULT_AEROBIC_TEST, type AerobicMode } from "@/lib/mic
 import { writeWeekSetup } from "@/lib/micropulse/periodization/weekSetupWrite";
 import { guardSeasonWindow } from "@/lib/micropulse/periodization/seasonWindowGuard";
 import { cleanAssumedGames, cleanGamesFrom } from "@/lib/micropulse/periodization/preseasonWindow";
+import { cleanBlockKpi, nextBlockKpiLog } from "@/lib/micropulse/periodization/inSeasonKpiAdjust";
 
 export const runtime = "nodejs";
 
@@ -79,6 +80,8 @@ export async function GET(req: Request) {
     // Per-block overrides keyed by block start ISO — sparse, merge-friendly.
     blockGoals: ov.blockGoals ?? {},
     blockWeeks: ov.blockWeeks ?? {}, blockDeload: ov.blockDeload ?? {},
+    // The coach's per-variable setting per in-season block (× a match), cleaned.
+    blockKpi: cleanBlockKpi((ov as { blockKpi?: unknown }).blockKpi),
     // Game-anchored pre-season meso-cycle lengths (backwards periodization: the tail blocks nearest the
     // opener are exact, the base block absorbs the remainder). Drives the Pre-season meso editor.
     preMesoTail: Array.isArray(ov.preMesoTail) ? ov.preMesoTail : null,
@@ -216,6 +219,16 @@ export async function POST(req: Request) {
     const g = body.overrides.preAssumedGames;
     if (g && typeof g === "object" && !Array.isArray(g)) mergedOverrides.preAssumedGames = cleanAssumedGames(g);
     else if (prevOverrides.preAssumedGames !== undefined) mergedOverrides.preAssumedGames = prevOverrides.preAssumedGames; else delete mergedOverrides.preAssumedGames;
+  }
+  // The per-variable in-season settings are cleaned, and every change is logged (server-stamped, append-only:
+  // an `overrides` patch can't rewrite the log).
+  if (prevOverrides.blockKpiLog) mergedOverrides.blockKpiLog = prevOverrides.blockKpiLog;
+  else delete mergedOverrides.blockKpiLog;
+  if ("blockKpi" in incoming) {
+    const prevKpi = cleanBlockKpi(prevOverrides.blockKpi), nextKpi = cleanBlockKpi(incoming.blockKpi);
+    mergedOverrides.blockKpi = nextKpi;
+    const log = nextBlockKpiLog(prevOverrides.blockKpiLog, prevKpi, nextKpi, ctx.userId, new Date().toISOString());
+    if (log.length) mergedOverrides.blockKpiLog = log;
   }
   // The VALD-trim lift log is append-only and server-stamped: an `overrides` patch can't rewrite it.
   if (prevOverrides.valdTrimLifts) mergedOverrides.valdTrimLifts = prevOverrides.valdTrimLifts;

@@ -138,16 +138,25 @@ export function buildPlannedVolume(opts: {
   matchesByWeek?: number[];
   /** Team sport — basketball keeps its shorter MD week (standardTrainingDays). Defaults to football. */
   sport?: string | null;
+  /** The coach's per-variable setting as a share of the proposal (inSeasonKpiAdjust.blockKpiRatios). */
+  kpiRatio?: Partial<Record<WeeklyLoadMetricKey, number>>;
 }): PlannedVolume | null {
   const matches = Math.max(0, Math.round(opts.matches ?? 1));
-  const weekKpis = inSeasonKpiVolumes(opts.matchKpiAvg, matches, opts.sport);
+  const ratio = (k: WeeklyLoadMetricKey) => opts.kpiRatio?.[k] ?? 1;
+  const weekKpis = inSeasonKpiVolumes(opts.matchKpiAvg, matches, opts.sport).map((v) => {
+    const r = ratio(v.key);
+    if (r === 1) return v;
+    const multiple = Math.round(v.multiple * r * 100) / 100;
+    return { ...v, multiple, weeklyValue: Math.round(v.matchValue * multiple) };
+  });
   if (weekKpis.length === 0) return null;
-  const wkMult = inSeasonWeekMultiple(matches, opts.sport);
+  const plRatio = ratio("totalPlayerLoad"); // the headline is PlayerLoad, so the coach's PlayerLoad moves the weeks
+  const wkMult = Math.round(inSeasonWeekMultiple(matches, opts.sport) * plRatio * 100) / 100;
   const meso = mesoWeeklyMultiples({ numWeeks: opts.numWeeks, baseMultiple: wkMult, stepPct: opts.stepPct, deloadWeek: opts.deloadWeek, light: opts.light });
   const headKpis = (Object.keys(opts.matchKpiAvg) as WeeklyLoadMetricKey[]).filter((k) => opts.matchKpiAvg[k] != null).slice(0, opts.headKpiCount ?? 2);
   const factor = (w: MesoWeek) => (wkMult > 0 ? w.multiple / wkMult : 0);
   const cell = (k: WeeklyLoadMetricKey, w: MesoWeek): PlannedVolumeKpiCell => {
-    const mv = opts.matchKpiAvg[k] ?? 0, m = inSeasonKpiMultiple(k, matches, opts.sport);
+    const mv = opts.matchKpiAvg[k] ?? 0, m = inSeasonKpiMultiple(k, matches, opts.sport) * ratio(k);
     return { key: k, multiple: Math.round(m * factor(w) * 100) / 100, value: Math.round(mv * m * factor(w)) };
   };
   // Per-week congestion: when matchesByWeek is given, re-cost each week's TRAINING for that week's game
@@ -157,7 +166,7 @@ export function buildPlannedVolume(opts: {
     const mi = opts.matchesByWeek?.[w.weekIndex - 1];
     const factor = wkMult > 0 ? w.multiple / wkMult : 0; // this week's progression (ramp/deload) factor
     const trainingMultiple = mi != null
-      ? Math.round(inSeasonWeekMultiple(mi, opts.sport) * factor * 100) / 100
+      ? Math.round(inSeasonWeekMultiple(mi, opts.sport) * plRatio * factor * 100) / 100
       : w.multiple;
     const totalMultiple = mi != null ? Math.round((trainingMultiple + mi) * 100) / 100 : undefined;
     return { weekIndex: w.weekIndex, isDeload: w.isDeload, isLight: w.isLight, volMultiple: w.multiple, trainingMultiple, matches: mi, totalMultiple, kpi: headKpis.map((k) => cell(k, w)) };

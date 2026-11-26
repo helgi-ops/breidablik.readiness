@@ -43,6 +43,7 @@ import { sumBandsBetween } from "@/lib/integrations/catapult/freeRunningBands";
 import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
 import { planWeeklyTarget } from "@/lib/micropulse/periodization/planWeeklyTarget";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
+import { cleanBlockKpi } from "@/lib/micropulse/periodization/inSeasonKpiAdjust";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -606,6 +607,7 @@ export async function computePlanTarget(
     stepPct: ov.stepPct ?? undefined,
     blockGoals: ov.blockGoals ?? null,
     sport,
+    blockKpi: cleanBlockKpi((ov as { blockKpi?: unknown }).blockKpi),
   });
   const target: Partial<Record<WeeklyLoadMetricKey, number | null>> = {};
   for (const key of activeMetrics) {

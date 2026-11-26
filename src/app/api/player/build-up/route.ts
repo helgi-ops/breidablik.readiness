@@ -17,6 +17,8 @@ import { buildPlayerBlock, pickActiveBlock } from "@/lib/micropulse/periodizatio
 import { blockDeloadOf, holdsStandardWeek } from "@/lib/micropulse/periodization";
 import { loadBuildUpActuals } from "@/lib/micropulse/buildUpTracking/loader";
 import { computeBuildUpAdherence } from "@/lib/micropulse/buildUpTracking";
+import { blockKpiRatios, calendarScaleFromRatios, cleanBlockKpi } from "@/lib/micropulse/periodization/inSeasonKpiAdjust";
+import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
 export const runtime = "nodejs";
 
@@ -53,6 +55,9 @@ export async function GET(req: Request) {
     // Pre-season matches are friendlies — exclude them from the training-week alignment target (so the
     // player sees the same aligned block the coach does, never a friendly-reduced one).
     const winIsPreseason = plan.phases.find((ph) => ph.start <= win.blkStart && win.blkStart < ph.end)?.key === "preseason";
+    // The coach's per-variable setting for this block (in-season − / +), so the player's block moves with the team's.
+    const kpiSet = cleanBlockKpi((spRow as { overrides?: { blockKpi?: unknown } } | null)?.overrides?.blockKpi)[win.blkStart];
+    const kpiScale = kpiSet ? calendarScaleFromRatios(blockKpiRatios(kpiSet, await resolveTeamSport(sb, teamId))) : undefined;
     const built = buildPlayerBlock(plan, player, {
       blkStart: win.blkStart,
       blkWeeks: win.blkWeeks,
@@ -63,6 +68,7 @@ export async function GET(req: Request) {
       hold: holdsStandardWeek(activeMb?.inSeason, goal),
       friendlyMatches: winIsPreseason,
       asOf,
+      kpiScale,
     });
 
     const actuals = await loadBuildUpActuals(sb, {

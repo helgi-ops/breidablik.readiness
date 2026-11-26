@@ -8,6 +8,7 @@ import type { WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLo
 import { checkThreeInARow, type WeekRuleDay } from "@/lib/micropulse/weekSetup/weekRules";
 import { kpiTmRefRange, mesoTotalMultiple, mesoWeeklyMultiples, type KpiVolume, type MesoWeek } from "./plannedVolume";
 import { inSeasonKpiMultiple, inSeasonKpiVolumes, inSeasonTrainingDayLabels, inSeasonWeekMultiple, usesCalendarWeek } from "./inSeasonStandardWeek";
+import type { BlockKpiSet } from "./inSeasonKpiAdjust";
 import { tmRefBand, type TmBand } from "./matchReference";
 
 type Bi = { en: string; is: string };
@@ -58,6 +59,10 @@ export type VariableRow = {
   light: number | null;
   ref: [number, number] | null;
   band: TmBand | null;
+  /** The system's proposal for the standard week (× a match) — what `week` is when the coach set nothing. */
+  proposal: number;
+  /** The coach set this variable for the block (− / +). */
+  mine: boolean;
 };
 
 export type BlockVolumeView = {
@@ -99,11 +104,19 @@ export function blockVolumeView(opts: {
   light?: boolean;
   /** Team sport — basketball's week is shorter (standardTrainingDays), and gets no football research range. */
   sport?: string | null;
+  /** The coach's per-variable setting for this block (inSeasonKpiAdjust), × a match. Unset = the proposal. */
+  kpiSet?: BlockKpiSet | null;
 }): BlockVolumeView {
   const researchRanges = !isBasketballSport(opts.sport);
-  const wkMult = inSeasonWeekMultiple(1, opts.sport);
-  const vols = inSeasonKpiVolumes(opts.matchKpis, 1, opts.sport);
-  const kpiMult = (k: WeeklyLoadMetricKey) => inSeasonKpiMultiple(k, 1, opts.sport);
+  const set = opts.kpiSet ?? {};
+  const propOf = (k: WeeklyLoadMetricKey) => inSeasonKpiMultiple(k, 1, opts.sport);
+  const kpiMult = (k: WeeklyLoadMetricKey) => set[k] ?? propOf(k);
+  // The headline is PlayerLoad (the calendar's overall load), so the coach's PlayerLoad sets the weeks too.
+  const wkMult = set.totalPlayerLoad ?? inSeasonWeekMultiple(1, opts.sport);
+  const vols = inSeasonKpiVolumes(opts.matchKpis, 1, opts.sport).map((v) => {
+    const m = set[v.key];
+    return m == null ? v : { ...v, multiple: m, weeklyValue: Math.round(v.matchValue * m) };
+  });
   const weeks = mesoWeeklyMultiples({ numWeeks: opts.numWeeks, baseMultiple: wkMult, stepPct: opts.stepPct, deloadWeek: opts.deloadWeek, light: opts.light });
   const weeksDiffer = weeks.some((w) => w.multiple !== weeks[0]?.multiple);
   const lightIdx = weeks.findIndex((w) => w.isDeload);
@@ -119,6 +132,7 @@ export function blockVolumeView(opts: {
       peak: weeksDiffer && peakIdx >= 0 ? weekKpi(v.key, peakIdx) : null,
       light: lightIdx >= 0 ? weekKpi(v.key, lightIdx) : null,
       ref, band: tmRefBand(v.multiple, ref),
+      proposal: propOf(v.key), mine: set[v.key] != null,
     };
   });
   return {
