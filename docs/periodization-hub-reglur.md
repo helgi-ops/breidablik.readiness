@@ -1,6 +1,6 @@
 # Reglur Periodization Hub (MicroPulse)
 
-Staða 25. nóv. 2026 (eftir 2f95a92). Listinn nær yfir allt sem ákveður hvernig tímabilið er skipulagt í
+Staða 26. nóv. 2026 (eftir 171c9bd). Listinn nær yfir allt sem ákveður hvernig tímabilið er skipulagt í
 Periodization Hub: Makró (tímabilið), Mesó (lotur, undirbúningur og keppnistímabil), Míkró (vikan og dagurinn)
 og það sem hubbinn sýnir um styrk. Reglur sem byggja styrktaræfingu dagsins eru í
 [`aefingakerfi-reglur.md`](aefingakerfi-reglur.md); hér er aðeins sá hluti sem hubbinn sjálfur ræður.
@@ -149,7 +149,7 @@ Hér er notað:
 
 ---
 
-## C. Ósamræmi sem fannst (þitt að ákveða)
+## C. Ósamræmi sem fannst og hvernig það var lagað
 
 1. ~~**Áfylling á MD+1: 30 eða 60 mín.**~~ **Lagað 25. nóv.:** útreikningurinn (`STARTER_MINUTES = 60`) og
    dagatalið sögðu 60; vikutaflan og Mesó-athugasemdirnar sögðu 30. Textinn segir nú „undir 60 mín“. Styrktarþrep
