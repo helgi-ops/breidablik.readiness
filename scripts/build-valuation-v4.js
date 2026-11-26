@@ -641,7 +641,8 @@ const doc = new Document({
   }],
 });
 
-const outDir = "/sessions/dazzling-trusting-mayer/mnt/breidablik-readiness/public/docs";
+// Internal memo — never write it under public/ (served to anyone).
+const outDir = path.join(__dirname, "..", "docs", "internal");
 if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
 Packer.toBuffer(doc).then((buffer) => {
