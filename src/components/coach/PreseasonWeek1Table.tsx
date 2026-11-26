@@ -98,6 +98,7 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
   // Week 1 → peak on the shared scale: research range shaded, the build as a bar, the three weeks as marks.
   const track = (r: Row) => (
     <VariableTrack scaleMax={scaleMax} refRange={r.ref} open={r.w1} filled={r.pk} light={lightW ? r.lt : null}
+      onSet={(x) => commit(r.k, x)} setOn="open" fmt={(x) => `${fx(x)}×`} setLabel={`${r.k === "totalPlayerLoad" ? t({ en: "Overall load", is: "Heildarálag" }) : plainKpiName(r.k, r.lab, is, new Set<string>())} — ${t({ en: "week 1", is: "vika 1" })}`}
       ariaLabel={`${t({ en: "Week 1", is: "Vika 1" })} ${r.w1 != null ? fx(r.w1) : "–"}×, ${t({ en: "peak", is: "toppur" })} ${r.pk != null ? fx(r.pk) : "–"}×${lightW ? `, ${t({ en: "light week", is: "létt vika" })} ${r.lt != null ? fx(r.lt) : "–"}×` : ""}${r.ref ? `; ${t({ en: "research", is: "rannsóknir" })} ${fx(r.ref[0])}–${fx(r.ref[1])}×` : ""}`} />
   );
   const nums = (r: Row) => (
@@ -136,7 +137,7 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
         <div className="flex min-w-0 max-w-[680px] flex-col gap-1.5">
           <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[#2740e6]">{t({ en: "Load per variable", is: "Álag á hverja breytu" })}</span>
           <h3 className="text-[22px] font-bold leading-tight tracking-[-0.01em] text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{t({ en: "Set week 1 — the whole ramp follows", is: "Stilltu viku 1 — allur rampurinn fylgir" })}</h3>
-          <p className="text-[14px] leading-relaxed text-slate-600">{t({ en: "Every number is ", is: "Hver tala er " })}<b className="text-[#14181c]">{t({ en: "× a match", is: "× leikur" })}</b>{t({ en: ": the week's total ÷ one team match in that variable. Change week 1 and the peak and light week move by the same share.", is: ": vikan samanlagt ÷ einn leikur liðsins í þeirri breytu. Breyttu viku 1 og toppurinn og létta vikan færast um sama hlutfall." })}</p>
+          <p className="text-[14px] leading-relaxed text-slate-600">{t({ en: "Every number is ", is: "Hver tala er " })}<b className="text-[#14181c]">{t({ en: "× a match", is: "× leikur" })}</b>{t({ en: ": the week's total ÷ one team match in that variable. Change week 1 (− / +, or drag the white dot) and the peak and light week move by the same share.", is: ": vikan samanlagt ÷ einn leikur liðsins í þeirri breytu. Breyttu viku 1 (− / + eða dragðu hvíta hringinn) og toppurinn og létta vikan færast um sama hlutfall." })}</p>
         </div>
         <div className="flex flex-col items-end gap-2">
           <span className={`inline-flex h-7 items-center rounded-full px-3 text-[12px] font-semibold ${changed > 0 ? "bg-[#2740e6]/[0.08] text-[#2740e6]" : "bg-[#f1efe9] text-slate-600"}`}>
