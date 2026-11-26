@@ -5,7 +5,7 @@ import { fetchAllPages } from "@/lib/supabasePaginate";
 import {
   detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness,
   valdVolumeCap, strengthSchemeFor, teamAverages, positionGroup, dataTier,
-  classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, hasNoGpsReading, weeklyTargetFromMatch, calibrateImaShares, type ImaShareCalibration,
+  classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, NEAR_FULL_MIN_MINUTES, hasNoGpsReading, weeklyTargetFromMatch, calibrateImaShares, type ImaShareCalibration,
   type SeasonPhase, type MesoBlock, type WeekLoad, type IntervalZone, type VbtRead, type DataGap,
   mdOffsetLabel, activeValdTrimLift, fixtureIsFriendly,
   type ValdCap, type ValdTrimLift, type StrengthDefault, type TeamAverages, type SessionRow, type Bi, type TierRead, type MatchWeekType, type MatchAxes,
@@ -50,6 +50,8 @@ export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages; axes
 type RawSession = SessionRow & { pid: string | null; clock: ClockGrid | null; date: string };
 export type PeriodizationPlan = {
   seasonYear: number; generatedAt: string; teamName: string;
+  /** Set when this season has no match on GPS yet and "one match" was read from that earlier season instead. */
+  matchUnitSeason: number | null;
   phases: SeasonPhase[]; blocks: MesoBlock[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline;
   tier: TierRead; mdShape: Record<string, number>; nextWeekType: MatchWeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null;
   congested: Array<{ weekStart: string; matches: number }>; players: PlayerPeriodization[];
@@ -204,10 +206,19 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   // decelerations), not Catapult IMA (ima_accel/ima_decel) — pulled too so the
   // accel/decel baseline populates for a Kinexon team (ima_* stay null there).
   type Raw = { date: string; player_load: number | null; total_distance: number | null; velocity_band5_total_distance: number | null; velocity_band6_total_distance: number | null; ima_accel: number | null; ima_decel: number | null; accelerations: number | null; decelerations: number | null; player_load_per_minute: number | null; max_velocity: number | null; ima_clock_gen2: ClockGrid | null; player_id: string | null; accel_b2_3_tot_effs_gen2: number | null; decel_b2_3_tot_effs_gen2: number | null; ima_fr_ge18_stride_count: number | null; ima_fr_band58_total_distance: number | null; ima_fr_ge18_mp_total_distance: number | null; ima_fr_ge18_mp_stride_count: number | null; ima_cod_left_high: number | null; ima_cod_left_medium: number | null; ima_cod_left_low: number | null; ima_cod_right_high: number | null; ima_cod_right_medium: number | null; ima_cod_right_low: number | null; rhie_bouts: number | null; running_symmetry: number | null; metabolic_power: number | null };
+  const DAILY_COLS = "date, player_id, player_load, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_accel, ima_decel, accelerations, decelerations, player_load_per_minute, max_velocity, ima_clock_gen2, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_ge18_stride_count, ima_fr_band58_total_distance, ima_fr_ge18_mp_total_distance, ima_fr_ge18_mp_stride_count, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, rhie_bouts, running_symmetry, metabolic_power";
   const daily = await fetchAllPages<Raw>((from, to) =>
-    sb.from("player_external_load_daily").select("date, player_id, player_load, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_accel, ima_decel, accelerations, decelerations, player_load_per_minute, max_velocity, ima_clock_gen2, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_ge18_stride_count, ima_fr_band58_total_distance, ima_fr_ge18_mp_total_distance, ima_fr_ge18_mp_stride_count, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, rhie_bouts, running_symmetry, metabolic_power")
+    sb.from("player_external_load_daily").select(DAILY_COLS)
       .eq("team_id", args.teamId).gte("date", yStart).lte("date", yEnd).order("date").range(from, to));
   const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  // One match-date GPS row → the player's match row (the near-full-match unit reads these).
+  const matchRowOf = (r: Raw): PlayerMatchRow => {
+    const gps = (v: unknown) => (hasNoGpsReading(num(r.player_load), num(r.total_distance)) ? null : num(v));
+    const v5 = gps(r.velocity_band5_total_distance), v6 = gps(r.velocity_band6_total_distance);
+    return { date: r.date, minutes: null, load: num(r.player_load), hsr: v5 != null || v6 != null ? (v5 ?? 0) + (v6 ?? 0) : null, sprint: v6, distance: gps(r.total_distance), accel: num(r.ima_accel) ?? gps(r.accelerations), decel: num(r.ima_decel) ?? gps(r.decelerations),
+      accHiEff: gps(r.accel_b2_3_tot_effs_gen2), decHiEff: gps(r.decel_b2_3_tot_effs_gen2), stride: longRunLoadStrides(r), rhie: num(r.rhie_bouts), symmetry: num(r.running_symmetry), metPower: num(r.metabolic_power),
+      imaCod: imaCodTotal(r as unknown as Record<string, unknown>), imaFr: gps(longRunLoadMetres(r)) };
+  };
   let dataStart: string | null = null, dataEnd: string | null = null;
   let hasGps = false, hasIma = false;
   // Keep each session with its player_id + clock so we can bucket by position AFTER the roster loads.
@@ -242,9 +253,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     });
     if (r.player_id && matchDates.has(r.date)) {
       const arr = matchRowByPlayer.get(r.player_id) ?? [];
-      arr.push({ date: r.date, minutes: null, load: num(r.player_load), hsr, sprint: v6, distance: gps(r.total_distance), accel: num(r.ima_accel) ?? gps(r.accelerations), decel: num(r.ima_decel) ?? gps(r.decelerations),
-        accHiEff: gps(r.accel_b2_3_tot_effs_gen2), decHiEff: gps(r.decel_b2_3_tot_effs_gen2), stride: strideHi, rhie: num(r.rhie_bouts), symmetry: num(r.running_symmetry), metPower: num(r.metabolic_power),
-        imaCod: imaCodTotal(r as unknown as Record<string, unknown>), imaFr: imaFrDist });
+      arr.push(matchRowOf(r));
       matchRowByPlayer.set(r.player_id, arr);
     }
   }
@@ -473,6 +482,33 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   }
   for (const [pid, rows] of matchRowByPlayer) for (const r of rows) r.minutes = minutesByKey.get(`${pid}|${r.date}`) ?? r.minutes;
 
+  // A season with no near-full match on GPS yet for anyone (planning next season before it starts, or only a
+  // few friendlies played): "one match" = last season's matches too, so every ×match table keeps its reference.
+  // Team-wide only — once anyone has a near-full match this season, nothing changes. Only the match unit reads
+  // them; the load curve, recent minutes and baselines stay this season's. The plan says which season it used.
+  let matchUnitSeason: number | null = null;
+  if (ids.length && ![...matchRowByPlayer.values()].some((rows) => rows.some((r) => (r.minutes ?? 0) >= NEAR_FULL_MIN_MINUTES))) {
+    const py = seasonYear - 1;
+    const { data: pfx } = await sb.from("match_schedule").select("match_date").eq("team_id", args.teamId).gte("match_date", `${py}-01-01`).lte("match_date", `${py}-12-31`);
+    const pDates = [...new Set(((pfx ?? []) as Array<{ match_date: string | null }>).map((r) => r.match_date).filter((d): d is string => !!d))];
+    if (pDates.length) {
+      const [prevDaily, prevMins] = await Promise.all([
+        fetchAllPages<Raw>((from, to) => sb.from("player_external_load_daily").select(DAILY_COLS).eq("team_id", args.teamId).in("date", pDates).order("date").range(from, to)),
+        fetchAllPages<{ player_id: string; match_date: string; minutes_played: number | null }>((from, to) =>
+          sb.from("match_player_minutes").select("player_id, match_date, minutes_played").eq("team_id", args.teamId).in("match_date", pDates).range(from, to)),
+      ]);
+      const prevMinByKey = new Map<string, number>();
+      for (const m of prevMins) if (m.player_id && m.match_date && m.minutes_played != null) prevMinByKey.set(`${m.player_id}|${m.match_date}`, m.minutes_played);
+      for (const r of prevDaily) {
+        if (!r.date || !r.player_id) continue;
+        const row = matchRowOf(r);
+        row.minutes = prevMinByKey.get(`${r.player_id}|${r.date}`) ?? null;
+        const arr = matchRowByPlayer.get(r.player_id) ?? []; arr.push(row); matchRowByPlayer.set(r.player_id, arr);
+      }
+      if ([...matchRowByPlayer.values()].some((rows) => rows.some((r) => (r.minutes ?? 0) >= NEAR_FULL_MIN_MINUTES))) matchUnitSeason = py;
+    }
+  }
+
   // ── Per-team IMA day-type calibration (calendar Acc/Dec/CoD shares) ──────────────────────────────
   // Team median per TRAINING day (≥6 players) vs the team's near-full-match (≥80 min) median.
   const medianOf = (xs: number[]): number | null => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
@@ -561,5 +597,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { upcomingFixtures, fixtureList, upcomingFixtureList, seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date), nextFirstFixture, nextSeasonYear, fixturesEstimated, estimatedOpener, nextFirstFixtureEstimated, imaCalibration };
+  return { upcomingFixtures, fixtureList, upcomingFixtureList, seasonYear, matchUnitSeason, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date), nextFirstFixture, nextSeasonYear, fixturesEstimated, estimatedOpener, nextFirstFixtureEstimated, imaCalibration };
 }

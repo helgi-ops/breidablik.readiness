@@ -98,7 +98,7 @@ type MdDemandProfile = { phases: MdDemandBucket[]; days: MdDemandBucket[] };
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes; md: MdDemandProfile };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
-type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; upcomingFixtures?: string[]; fixtureList?: MacroFixture[]; upcomingFixtureList?: MacroFixture[]; nextFirstFixture?: string | null; nextSeasonYear?: number | null; fixturesEstimated?: boolean; estimatedOpener?: string | null; nextFirstFixtureEstimated?: boolean; imaCalibration?: ImaShareCalibration };
+type Plan = { seasonYear: number; matchUnitSeason?: number | null; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[]; upcomingFixtures?: string[]; fixtureList?: MacroFixture[]; upcomingFixtureList?: MacroFixture[]; nextFirstFixture?: string | null; nextSeasonYear?: number | null; fixturesEstimated?: boolean; estimatedOpener?: string | null; nextFirstFixtureEstimated?: boolean; imaCalibration?: ImaShareCalibration };
 
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
 const isoAdd = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_400_000).toISOString().slice(0, 10);
@@ -3104,9 +3104,15 @@ export default function PeriodizationHubPage() {
               matchKpis: blkScope === "player" && player ? kpiAvgFromUnit(player.matchUnit) : teamKpiAvg(plan.players),
               numWeeks: blkWeeksEff, stepPct: blkStepEff, deloadWeek: blkMesoDeload.deloadWeek, light: blkMesoDeload.light, sport: teamSport, kpiSet: blockKpi[blkStart],
             });
-            const oneMatchNote: Bi = blkScope === "player" && player
+            const oneMatchBase: Bi = blkScope === "player" && player
               ? { en: `One match = ${player.name}'s typical full match. ${player.matchUnit.windowNote.en}`, is: `Einn leikur = dæmigerður heill leikur ${player.name}. ${player.matchUnit.windowNote.is}` }
               : teamMatchReference(plan.players.map((p) => p.matchUnit)).note;
+            // No match on GPS this season yet → the loader read "one match" from last season; say so.
+            const muSeason = plan.matchUnitSeason ?? null;
+            const oneMatchNote: Bi = muSeason == null ? oneMatchBase : {
+              en: `${oneMatchBase.en} No match on GPS in ${plan.seasonYear} yet, so one match is taken from the ${muSeason} season.`,
+              is: `${oneMatchBase.is} Enginn leikur með GPS ${plan.seasonYear} enn, svo einn leikur er tekinn af tímabilinu ${muSeason}.`,
+            };
             const fxN = (n: number) => (is ? String(n).replace(".", ",") : String(n));
             const calWeeks = Array.from({ length: blkWeeksEff }, (_, i) => mesoCalBlock?.weeks[i] ?? null);
             const weekMults = calWeeks.map((w) => calWeekMultiple(w));
