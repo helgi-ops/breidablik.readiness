@@ -80,7 +80,14 @@ export type BlockVolumeView = {
   weekKpiRaw: (key: WeeklyLoadMetricKey, i: number) => number | null;
   /** The volumes as plannedVolume returns them (raw labels), for the detail table. */
   vols: KpiVolume[];
+  /** The standard week's training days (MD labels) — football MD-4…MD-1, basketball MD-3…MD-1. */
+  trainingDays: string[];
+  /** False for basketball: the published training:match ranges (PMC6747517) are football's, so none is shown. */
+  researchRanges: boolean;
 };
+
+/** Basketball has no published in-season training:match range here; the football ranges don't apply. */
+export const isBasketballSport = (sport: string | null | undefined): boolean => String(sport ?? "").toLowerCase() === "basketball";
 
 /** The block's weekly volume — exactly the numbers the In-season tab showed (a standard one-match week, the
  *  meso ramp by `stepPct`, the light/deload week), gathered in one read. */
@@ -90,8 +97,11 @@ export function blockVolumeView(opts: {
   stepPct: number;
   deloadWeek: number | null;
   light?: boolean;
+  /** Team sport — basketball's week is shorter (standardTrainingDays), and gets no football research range. */
+  sport?: string | null;
 }): BlockVolumeView {
-  const days1 = standardTrainingDays(1);
+  const days1 = standardTrainingDays(1, opts.sport);
+  const researchRanges = !isBasketballSport(opts.sport);
   const wkMult = weeklyTrainingMultiple(days1);
   const vols = kpiVolumes(opts.matchKpis, days1);
   const weeks = mesoWeeklyMultiples({ numWeeks: opts.numWeeks, baseMultiple: wkMult, stepPct: opts.stepPct, deloadWeek: opts.deloadWeek, light: opts.light });
@@ -102,7 +112,7 @@ export function blockVolumeView(opts: {
   const weekKpi = (k: WeeklyLoadMetricKey, i: number) => Math.round(weeklyKpiMultiple(days1, k) * rampFactor(weeks[i]) * 100) / 100;
   const weekKpiRaw = (k: WeeklyLoadMetricKey, i: number) => { const mv = opts.matchKpis[k]; return mv == null ? null : mv * weeklyKpiMultiple(days1, k) * rampFactor(weeks[i]); };
   const rows: VariableRow[] = vols.map((v) => {
-    const ref = kpiTmRefRange(v.key);
+    const ref = researchRanges ? kpiTmRefRange(v.key) : null;
     return {
       key: v.key, label: v.label, unit: v.unit, matchValue: v.matchValue,
       week: v.multiple, weekRaw: v.weeklyValue,
@@ -115,6 +125,7 @@ export function blockVolumeView(opts: {
     weekMultiple: wkMult,
     totalWithMatch: Math.round((wkMult + 1) * 10) / 10,
     weeks, blockTotal: mesoTotalMultiple(weeks), weeksDiffer, peakIdx, lightIdx, rows, weekKpi, weekKpiRaw, vols,
+    trainingDays: days1, researchRanges,
   };
 }
 

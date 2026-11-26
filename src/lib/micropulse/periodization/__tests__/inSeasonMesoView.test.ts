@@ -32,6 +32,26 @@ describe("blockVolumeView", () => {
     expect(v.rows.map((r) => r.ref)).toEqual(o.vols.map((x) => kpiTmRefRange(x.key)));
   });
 
+  it("football (no sport, or football) keeps the football week and the research ranges", () => {
+    const none = blockVolumeView({ matchKpis: MATCH, numWeeks: 4, stepPct: 0, deloadWeek: null });
+    const fb = blockVolumeView({ matchKpis: MATCH, numWeeks: 4, stepPct: 0, deloadWeek: null, sport: "football" });
+    expect(fb.weekMultiple).toBe(none.weekMultiple);
+    expect(fb.trainingDays).toEqual(["MD-4", "MD-3", "MD-2", "MD-1"]);
+    expect(fb.researchRanges).toBe(true);
+    expect(fb.rows.some((r) => r.ref != null)).toBe(true);
+  });
+
+  it("basketball uses the basketball week (MD-3 → MD-1) and shows no football research range", () => {
+    const bb = blockVolumeView({ matchKpis: MATCH, numWeeks: 4, stepPct: 0, deloadWeek: null, sport: "Basketball" });
+    const days = standardTrainingDays(1, "basketball");
+    expect(bb.trainingDays).toEqual(["MD-3", "MD-2", "MD-1"]);
+    expect(bb.weekMultiple).toBe(weeklyTrainingMultiple(days));
+    expect(bb.rows.map((r) => [r.key, r.week, r.weekRaw])).toEqual(kpiVolumes(MATCH, days).map((x) => [x.key, x.multiple, x.weeklyValue]));
+    expect(bb.weekMultiple).toBeLessThan(blockVolumeView({ matchKpis: MATCH, numWeeks: 4, stepPct: 0, deloadWeek: null }).weekMultiple);
+    expect(bb.researchRanges).toBe(false);
+    expect(bb.rows.every((r) => r.ref == null && r.band == null)).toBe(true);
+  });
+
   it("a hold block: weeks the same, no peak, no light week", () => {
     const v = blockVolumeView({ matchKpis: MATCH, numWeeks: 4, stepPct: 0, deloadWeek: null });
     expect(v.weeksDiffer).toBe(false);

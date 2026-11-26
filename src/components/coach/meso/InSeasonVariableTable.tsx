@@ -113,7 +113,7 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
             <span>{t({ en: "Variable", is: "Breyta" })}</span>
             <span>{t({ en: "The standard week", is: "Staðalvikan" })}</span>
             <div className="flex flex-wrap items-center gap-3">
-              <LegendRange label={t({ en: "Research range", is: "Rannsóknabil" })} />
+              {view.researchRanges && <LegendRange label={t({ en: "Research range", is: "Rannsóknabil" })} />}
               {ramps ? <><LegendOpen label={t({ en: "Week 1", is: "Vika 1" })} /><LegendFilled label={t({ en: `Peak · wk ${peakNo}`, is: `Toppur · v ${peakNo}` })} /></>
                 : <LegendFilled label={t({ en: "Standard week", is: "Staðalvika" })} />}
               {hasLight && <LegendLight label={`${lightWord} · ${t({ en: `wk ${lightNo}`, is: `v ${lightNo}` })}`} />}
@@ -151,7 +151,9 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
         <div className="flex flex-wrap items-center justify-between gap-3">
           <ul className="max-w-[760px] space-y-0.5 text-[12px] leading-relaxed text-slate-600">
             <li><b className="font-semibold text-slate-700">{t({ en: "× a match", is: "× leikur" })}</b> — {t({ en: "the week's total divided by one match in the same variable. 2× = twice what one match gives.", is: "vikan samanlagt deilt með einum leik í sömu breytu. 2× = tvöfalt það sem einn leikur gefur." })}</li>
-            <li><b className="font-semibold text-slate-700">{t({ en: "Research", is: "Rannsóknir" })}</b> — {t({ en: "training:match in a normal in-season training week (training:match, PMC6747517). The mark says whether the number is within, above or below the range.", is: "æfing:leikur í venjulegri æfingaviku á keppnistímabili (training:match, PMC6747517). Merkið segir hvort talan er innan, yfir eða undir bilinu." })}</li>
+            <li><b className="font-semibold text-slate-700">{t({ en: "Research", is: "Rannsóknir" })}</b> — {view.researchRanges
+              ? t({ en: "training:match in a normal in-season training week (training:match, PMC6747517). The mark says whether the number is within, above or below the range.", is: "æfing:leikur í venjulegri æfingaviku á keppnistímabili (training:match, PMC6747517). Merkið segir hvort talan er innan, yfir eða undir bilinu." })
+              : t({ en: "the published training:match ranges are from football, so none is shown for basketball.", is: "birtu æfing:leikur-bilin eru úr fótbolta, svo ekkert er sýnt fyrir körfubolta." })}</li>
           </ul>
           <button type="button" onClick={() => setWhy((v) => !v)} aria-expanded={why} className="h-9 rounded-lg px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">
             {why ? t({ en: "Hide details & sources", is: "Fela nánar & heimildir" }) : t({ en: "Show details & sources", is: "Sýna nánar & heimildir" })}
@@ -191,7 +193,8 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
                 </div>
               );
             })()}
-            <p>{t({ en: "Each variable has its own weekly multiple: high-speed running and sprints add up to a lower multiple than distance, because training days hold a smaller share of the match in high-speed running than in distance (Stevens 2017). The week undulates around the match, MD-4 heaviest (Martín-García 2018; the MD-day shares are MicroPulse's). Descriptive plan — never the readiness colour.", is: "Hver breyta hefur sitt eigið vikumargfeldi: háhraði og sprettir safnast í lægra margfeldi en vegalengd, því æfingadagar ná minna hlutfalli af leik í háhraða en í vegalengd (Stevens 2017). Vikan bylgjast um leikinn, MD-4 þyngst (Martín-García 2018; hlutföll MD-daga eru val MicroPulse). Lýsandi áætlun — aldrei readiness-liturinn." })}</p>
+            {!view.researchRanges ? <p>{t({ en: `Basketball's week is shorter than football's: ${view.trainingDays.join(", ")} before a game (${view.trainingDays[0]} heaviest), fewer days with two games a week. Each variable has its own weekly multiple; high-intensity variables add up to a lower multiple than volume because the lighter days hold less of them. The MD-day shares are MicroPulse's. Descriptive plan — never the readiness colour.`, is: `Vika í körfubolta er styttri en í fótbolta: ${view.trainingDays.join(", ")} fyrir leik (${view.trainingDays[0]} þyngst), færri dagar með tvo leiki í viku. Hver breyta hefur sitt eigið vikumargfeldi; ákefðarbreytur safnast í lægra margfeldi en magn því léttari dagarnir bera minna af þeim. Hlutföll MD-daga eru val MicroPulse. Lýsandi áætlun — aldrei readiness-liturinn.` })}</p>
+            : <p>{t({ en: "Each variable has its own weekly multiple: high-speed running and sprints add up to a lower multiple than distance, because training days hold a smaller share of the match in high-speed running than in distance (Stevens 2017). The week undulates around the match, MD-4 heaviest (Martín-García 2018; the MD-day shares are MicroPulse's). Descriptive plan — never the readiness colour.", is: "Hver breyta hefur sitt eigið vikumargfeldi: háhraði og sprettir safnast í lægra margfeldi en vegalengd, því æfingadagar ná minna hlutfalli af leik í háhraða en í vegalengd (Stevens 2017). Vikan bylgjast um leikinn, MD-4 þyngst (Martín-García 2018; hlutföll MD-daga eru val MicroPulse). Lýsandi áætlun — aldrei readiness-liturinn." })}</p>}
           </div>
         )}
       </div>

@@ -1275,7 +1275,7 @@ export default function PeriodizationHubPage() {
     const baselines = [plan.teamBaseline, ...plan.positionBaselines].filter((b) => b && b.avg.sessions > 0).map((b) => ({ label: b.label, players: b.avg.players, distanceM: b.avg.distanceM, hsrM: b.avg.hsrM, maxKmh: b.avg.maxKmh, playerLoad: b.avg.playerLoad, accel: b.avg.accel, decel: b.avg.decel, isTeam: b.key === -1 }));
     // Per-player weekly PL target = that player's match unit (the TARGET/ceiling) × the in-season weekly
     // multiple — the planned weekly volume each player ramps TO from their current baseline (MAS = engine).
-    const plWkMult = weeklyTrainingMultiple(standardTrainingDays(1));
+    const plWkMult = weeklyTrainingMultiple(standardTrainingDays(1, teamSport));
     const players = plan.players.map((p) => ({ name: p.name, position: p.position, masKmh: p.masKmh, matchUnitLoad: p.matchUnit.load.typical, matchUnitHsr: p.matchUnit.hsr.typical, matchUnitDistance: p.matchUnit.distance.typical, weeklyPlTarget: p.matchUnit.load.typical != null ? Math.round(p.matchUnit.load.typical * plWkMult) : null, baselinePl: p.recentBaseline?.playerLoad ?? null, baselineHsr: p.recentBaseline?.hsrM ?? null, baselineSessions: p.recentBaseline?.sessions ?? 0, nNearFull: p.matchUnit.nNearFull, matchUnitConf: p.matchUnit.confidence, valdCap: p.vald.lift ? null : p.vald.capPct, gaps: p.gaps.filter((g) => g.severity !== "ok").length }));
     const blocks = mesoBlocks.map((b) => ({ phase: b.phase, goal: b.goal, goalKey: b.goalKey, start: b.start, end: b.end, weeks: b.weeks, isDeload: b.isDeload, deloadWeekStart: b.deloadWeekStart, deloadNow: b.deloadNow, tmr: b.tmr, volumeTargetPct: b.volumeTargetPct, flag: b.flag }));
     // The individualised calendar block(s) — one clean page per player. The coach picks the set (Selected /
@@ -1337,7 +1337,7 @@ export default function PeriodizationHubPage() {
     // Planned KPI volume (week + meso), match-anchored + per-KPI tapered — team scope, with head-KPI labels.
     // Per-week match count from fixtures → the meso's weekly TOTAL is congestion-aware week by week.
     const pvMatchesByWeek = matchesPerWeek(blkStart, blkWeeksEff, plan.fixtures ?? []);
-    const pv = buildPlannedVolume({ matchKpiAvg: teamKpiAvg(plan.players), numWeeks: blkWeeksEff, stepPct: blkStepEff, ...blkMesoDeload, matchesByWeek: pvMatchesByWeek });
+    const pv = buildPlannedVolume({ matchKpiAvg: teamKpiAvg(plan.players), numWeeks: blkWeeksEff, stepPct: blkStepEff, ...blkMesoDeload, matchesByWeek: pvMatchesByWeek, sport: teamSport });
     const plannedVolume = pv ? {
       weekVolumeMultiple: pv.weekVolumeMultiple,
       matches: pv.matches, weekTotalMultiple: pv.weekTotalMultiple,
@@ -3054,7 +3054,7 @@ export default function PeriodizationHubPage() {
             // reads this tab always used (blockVolumeView = the old inline maths; the calendar block's own week sums).
             const view = blockVolumeView({
               matchKpis: blkScope === "player" && player ? kpiAvgFromUnit(player.matchUnit) : teamKpiAvg(plan.players),
-              numWeeks: blkWeeksEff, stepPct: blkStepEff, deloadWeek: blkMesoDeload.deloadWeek, light: blkMesoDeload.light,
+              numWeeks: blkWeeksEff, stepPct: blkStepEff, deloadWeek: blkMesoDeload.deloadWeek, light: blkMesoDeload.light, sport: teamSport,
             });
             const oneMatchNote: Bi = blkScope === "player" && player
               ? { en: `One match = ${player.name}'s typical full match. ${player.matchUnit.windowNote.en}`, is: `Einn leikur = dæmigerður heill leikur ${player.name}. ${player.matchUnit.windowNote.is}` }
@@ -3356,17 +3356,19 @@ export default function PeriodizationHubPage() {
             const isOpen = (m: string, k: number) => inOpenWeeks[m] ?? k === curIdx;
             const anyClosed = mons.some((m, k) => !isOpen(m, k));
             const proTier = plan?.tier?.tier === "pro";
-            const PL_REF = plan.tier.loadSource === "gps" ? kpiTmRefRange("totalPlayerLoad") : null;
+            // The research ranges are football's (PMC6747517): none for basketball.
+            const refOf = (k: string) => (isBasketball ? null : kpiTmRefRange(k));
+            const PL_REF = plan.tier.loadSource === "gps" ? refOf("totalPlayerLoad") : null;
             // The calendar's week sums per variable (each as × one match; the match itself not counted). A research
             // chip only where the variable maps one-to-one onto a research range.
             const varRows = (w: CalWeek): Array<{ key: string; label: string; x: number; ref: [number, number] | null }> => ([
               { key: "load", v: w.pctMech, label: is ? "Heildarálag (Player Load)" : "Overall load (Player Load)", ref: PL_REF },
-              { key: "dist", v: w.pctRunning, label: is ? "Vegalengd" : "Distance", ref: kpiTmRefRange("totalDistance") },
+              { key: "dist", v: w.pctRunning, label: is ? "Vegalengd" : "Distance", ref: refOf("totalDistance") },
               { key: "hsr", v: w.pctHsr, label: is ? "Háhraðahlaup" : "High-speed running", ref: null },
               { key: "accdec", v: w.pctAccDec23, label: is ? "Kröftugar hraðaaukningar + hemlanir" : "Hard accelerations + braking", ref: null },
               { key: "acc", v: w.pctAccel ?? null, label: is ? "Hraðaaukningar" : "Accelerations", ref: null },
               { key: "dec", v: w.pctDecel ?? null, label: is ? "Hemlanir" : "Braking", ref: null },
-              { key: "cod", v: w.pctCod ?? null, label: is ? "Stefnubreytingar" : "Changes of direction", ref: proTier ? kpiTmRefRange("imaCod") : null },
+              { key: "cod", v: w.pctCod ?? null, label: is ? "Stefnubreytingar" : "Changes of direction", ref: proTier ? refOf("imaCod") : null },
               { key: "fr", v: w.pctFr ?? null, label: is ? "Löng samfelld hlaup (vegalengd)" : "Long continuous runs (distance)", ref: null },
               { key: "stride", v: w.pctStride, label: is ? "Skref í löngum hlaupum" : "Strides in long runs", ref: null },
             ] as Array<{ key: string; v: number | null; label: string; ref: [number, number] | null }>)
@@ -4034,7 +4036,7 @@ export default function PeriodizationHubPage() {
           {/* THE WHOLE SQUAD — compare players side by side and pick one (moved here from Meso: In-season 2026-11-26). */}
           {(() => {
             const h2c = "text-[15px] font-bold text-slate-900";
-            const bvDays = standardTrainingDays(1);
+            const bvDays = standardTrainingDays(1, teamSport);
             const bvWkMult = weeklyTrainingMultiple(bvDays);
             const fmtKv = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
             return (
@@ -4238,7 +4240,7 @@ export default function PeriodizationHubPage() {
             const microMon = (() => { const d = new Date(blkStart + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); })();
             const microWk = (() => { const mb = buildCalendarBlock({ unit: microUnit, startDate: microMon, numWeeks: 2, scopeName: player.name, scopePos: player.position, baseOverloadPct: 100 }); return mb.weeks[1] ?? mb.weeks[0]; })();
             const microDays = (microWk?.days ?? []).map((d) => ({ md: d.md, type: d.type, o: mdOffset(d.md) ?? 99 })).filter((d) => d.o >= -4 && d.o <= -1).sort((a, b) => a.o - b.o);
-            const days: Array<{ md: string; type: CalType }> = microDays.length ? microDays.map((d) => ({ md: d.md, type: d.type })) : standardTrainingDays(1).map((md) => ({ md, type: "mixed" as CalType }));
+            const days: Array<{ md: string; type: CalType }> = microDays.length ? microDays.map((d) => ({ md: d.md, type: d.type })) : standardTrainingDays(1, teamSport).map((md) => ({ md, type: "mixed" as CalType }));
             const TYPE_LABEL: Partial<Record<CalType, { en: string; is: string }>> = { mechanical: { en: "mech", is: "vélrænt" }, locomotive: { en: "loco", is: "hlaup" }, mixed: { en: "mixed", is: "blandað" }, activation: { en: "prime", is: "virkjun" }, rest: { en: "rest", is: "hvíld" }, topup: { en: "top-up", is: "áfylling" } };
             // These are TRAINING days (the match is a separate column). In-season the official weekly target
             // (the "Weekly target" card) = the match itself + a readiness-gated TRAINING increment, so the

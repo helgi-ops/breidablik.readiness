@@ -278,9 +278,11 @@ export function buildPlannedVolume(opts: {
    *  When given, each week's training multiple is recomputed for THAT week's game count and the total adds
    *  the games — a congested week reads HIGHER. When absent, every week uses the single `matches`. */
   matchesByWeek?: number[];
+  /** Team sport — basketball's week is shorter (standardTrainingDays). Defaults to football. */
+  sport?: string | null;
 }): PlannedVolume | null {
   const matches = Math.max(0, Math.round(opts.matches ?? 1));
-  const days = standardTrainingDays(matches);
+  const days = standardTrainingDays(matches, opts.sport);
   const weekKpis = kpiVolumes(opts.matchKpiAvg, days);
   if (weekKpis.length === 0) return null;
   const wkMult = weeklyTrainingMultiple(days);
@@ -298,7 +300,7 @@ export function buildPlannedVolume(opts: {
     const mi = opts.matchesByWeek?.[w.weekIndex - 1];
     const factor = wkMult > 0 ? w.multiple / wkMult : 0; // this week's progression (ramp/deload) factor
     const trainingMultiple = mi != null
-      ? Math.round(weeklyTrainingMultiple(standardTrainingDays(mi)) * factor * 100) / 100
+      ? Math.round(weeklyTrainingMultiple(standardTrainingDays(mi, opts.sport)) * factor * 100) / 100
       : w.multiple;
     const totalMultiple = mi != null ? Math.round((trainingMultiple + mi) * 100) / 100 : undefined;
     return { weekIndex: w.weekIndex, isDeload: w.isDeload, isLight: w.isLight, volMultiple: w.multiple, trainingMultiple, matches: mi, totalMultiple, kpi: headKpis.map((k) => cell(k, w)) };

@@ -178,6 +178,16 @@ describe("mesoWeeklyMultiples", () => {
 });
 
 describe("buildPlannedVolume", () => {
+  it("basketball: the shorter basketball week, also per congested week", () => {
+    const K = { totalDistance: 10000, velocityBand6: 300 };
+    const fb = buildPlannedVolume({ matchKpiAvg: K, numWeeks: 3, stepPct: 0, matchesByWeek: [1, 2, 1] })!;
+    const bb = buildPlannedVolume({ matchKpiAvg: K, numWeeks: 3, stepPct: 0, matchesByWeek: [1, 2, 1], sport: "basketball" })!;
+    expect(bb.weekVolumeMultiple).toBe(weeklyTrainingMultiple(standardTrainingDays(1, "basketball")));
+    expect(bb.weekVolumeMultiple).toBeLessThan(fb.weekVolumeMultiple);
+    expect(bb.meso[1].trainingMultiple).toBe(Math.round(weeklyTrainingMultiple(standardTrainingDays(2, "basketball")) * 100) / 100);
+    expect(fb.meso[1].trainingMultiple).toBe(Math.round(weeklyTrainingMultiple(standardTrainingDays(2)) * 100) / 100);
+  });
+
   it("assembles week + meso with per-KPI tapering and ramp/deload", () => {
     const pv = buildPlannedVolume({ matchKpiAvg: { totalDistance: 10000, velocityBand6: 300 }, numWeeks: 4, stepPct: 10, deloadWeek: 4 })!;
     expect(pv).not.toBeNull();
