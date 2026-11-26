@@ -99,7 +99,7 @@ export default function ClientProfilePage() {
       </div>
 
       {/* Daily reminders — opt-in push so the athlete re-engages. */}
-      <EnableRemindersCard />
+      <EnableRemindersCard lang={lang === "IS" ? "IS" : "EN"} />
 
       {/* Body-composition trend (read-only; renders only if a practitioner recorded a measurement). */}
       <PlayerBodyCompositionCard />
@@ -189,6 +189,12 @@ export default function ClientProfilePage() {
           />
         </div>
       )}
+
+      {/* Privacy and contact, so a client can always find who handles their data. */}
+      <div className="flex flex-wrap gap-x-5 gap-y-1 px-1 pt-2 text-xs text-slate-500">
+        <a href="/privacy?for=client" className="hover:text-slate-800">{lang === "IS" ? "Persónuvernd" : "Privacy"}</a>
+        <a href="/client/chat" className="hover:text-slate-800">{lang === "IS" ? "Spurningar? Skrifaðu þjálfaranum" : "Questions? Message your trainer"}</a>
+      </div>
     </div>
   );
 }

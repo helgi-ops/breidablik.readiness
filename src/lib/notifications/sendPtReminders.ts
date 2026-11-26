@@ -16,8 +16,55 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isSubscriptionGone, sendWebPush } from "@/lib/push/webPush";
 import { resolveProgrammeSlot } from "@/lib/trainer/programmeSchedule";
+import { isDemoClient } from "@/lib/trainer/demoClient";
+import { asAppLang, type AppLang } from "@/lib/micropulse/strengthProgramming/playerLanguage";
 
-type Sub = { id: string; player_id: string; endpoint: string; p256dh: string; auth: string };
+type Sub = { id: string; player_id: string; endpoint: string; p256dh: string; auth: string; lang: AppLang };
+
+type PtTeamRow = { team_type: string; default_language?: string | null };
+type PtPlayerRow = { id: string; is_demo?: boolean | null; app_language?: string | null; teams: PtTeamRow | PtTeamRow[] | null };
+
+/**
+ * The language a reminder is written in: the client's app language when the app has
+ * reported one, else the practice's default language, else English.
+ */
+export function reminderLang(row: Pick<PtPlayerRow, "app_language" | "teams">): AppLang {
+  const team = Array.isArray(row.teams) ? row.teams[0] : row.teams;
+  return asAppLang(row.app_language) ?? asAppLang(team?.default_language) ?? "EN";
+}
+
+/** "You have a session today" push text. */
+export function ptSessionReminderText(lang: AppLang): { title: string; body: string } {
+  return lang === "IS"
+    ? { title: "Æfing í dag", body: "Þú átt æfingu í dag 🏋️ — opnaðu hana og skráðu settin." }
+    : { title: "Session today", body: "You have a session today 🏋️ — open it and log your sets." };
+}
+
+/** Weekly recap push text (only sent when they trained). */
+export function ptWeeklyRecapText(lang: AppLang, sessions: number, tonnageKg: number): { title: string; body: string } {
+  const kg = Math.round(tonnageKg).toLocaleString(lang === "IS" ? "is-IS" : "en-GB");
+  if (lang === "IS") {
+    const s = `${sessions} ${sessions === 1 ? "æfing" : "æfingar"}`;
+    return { title: "Vikan þín", body: tonnageKg > 0 ? `${s} · ${kg} kg lyft. Flott vinna 💪` : `${s}. Flott vinna 💪` };
+  }
+  const s = `${sessions} ${sessions === 1 ? "session" : "sessions"}`;
+  return { title: "Your week", body: tonnageKg > 0 ? `${s} · ${kg} kg lifted. Great work 💪` : `${s}. Great work 💪` };
+}
+
+/**
+ * The players a PT reminder may go to: clients of a personal-trainer team, never the
+ * seeded demo client (players.is_demo — it has no account, but stay explicit).
+ */
+export function ptReminderPlayerIds(rows: PtPlayerRow[]): Set<string> {
+  return new Set(
+    rows
+      .filter((p) => {
+        const tt = Array.isArray(p.teams) ? p.teams[0]?.team_type : p.teams?.team_type;
+        return tt === "personal_trainer" && !isDemoClient(p);
+      })
+      .map((p) => p.id),
+  );
+}
 
 /** Active PT-client subscriptions, one per player (latest first). */
 async function ptSubscriptions(sb: SupabaseClient): Promise<Sub[]> {
@@ -26,23 +73,18 @@ async function ptSubscriptions(sb: SupabaseClient): Promise<Sub[]> {
     .select("id, player_id, endpoint, p256dh, auth, is_active, updated_at")
     .eq("is_active", true)
     .order("updated_at", { ascending: false });
-  const subs = (subRows ?? []) as Array<Sub & { is_active: boolean }>;
+  const subs = (subRows ?? []) as Array<Omit<Sub, "lang"> & { is_active: boolean }>;
   if (subs.length === 0) return [];
 
   // Keep only players that belong to a personal-trainer team.
   const playerIds = Array.from(new Set(subs.map((s) => s.player_id)));
   const { data: playerRows } = await sb
     .from("players")
-    .select("id, team_id, teams!inner(team_type)")
+    .select("id, team_id, is_demo, app_language, teams!inner(team_type, default_language)")
     .in("id", playerIds);
-  const ptPlayers = new Set(
-    ((playerRows ?? []) as Array<{ id: string; teams: { team_type: string } | { team_type: string }[] }>)
-      .filter((p) => {
-        const tt = Array.isArray(p.teams) ? p.teams[0]?.team_type : p.teams?.team_type;
-        return tt === "personal_trainer";
-      })
-      .map((p) => p.id),
-  );
+  const rows = (playerRows ?? []) as PtPlayerRow[];
+  const ptPlayers = ptReminderPlayerIds(rows);
+  const langOf = new Map(rows.map((r) => [r.id, reminderLang(r)]));
 
   const seen = new Set<string>();
   const out: Sub[] = [];
@@ -50,7 +92,7 @@ async function ptSubscriptions(sb: SupabaseClient): Promise<Sub[]> {
     if (!ptPlayers.has(s.player_id) || seen.has(s.player_id)) continue;
     if (!s.endpoint || !s.p256dh || !s.auth) continue;
     seen.add(s.player_id);
-    out.push({ id: s.id, player_id: s.player_id, endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth });
+    out.push({ id: s.id, player_id: s.player_id, endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth, lang: langOf.get(s.player_id) ?? "EN" });
   }
   return out;
 }
@@ -163,7 +205,7 @@ export async function sendPtSessionReminders(sb: SupabaseClient, today: string):
     targeted += 1;
     if (!(await reserve(sb, sub.player_id, today, "session"))) { dup += 1; continue; }
     const ok = await push(sb, sub, {
-      title: "MicroPulse", body: "Þú átt æfingu í dag 🏋️ — smelltu til að skrá hana.",
+      ...ptSessionReminderText(sub.lang),
       url: "/client/log", type: "pt_session", date_key: today,
     });
     if (ok) sent += 1; else failed += 1;
@@ -192,10 +234,7 @@ export async function sendPtWeeklyRecap(sb: SupabaseClient, today: string): Prom
     targeted += 1;
     if (!(await reserve(sb, sub.player_id, lastMonday, "weekly"))) { dup += 1; continue; }
     const tonnage = Math.round(lw.reduce((s, r) => s + (r.weight_kg ?? 0) * (r.reps ?? 0), 0));
-    const body = tonnage > 0
-      ? `Vikan þín: ${sessions} æfingar · ${tonnage.toLocaleString()} kg lyft. Flott vinna 💪`
-      : `Vikan þín: ${sessions} æfingar. Flott vinna 💪`;
-    const ok = await push(sb, sub, { title: "MicroPulse", body, url: "/client/progression", type: "pt_weekly", date_key: lastMonday });
+    const ok = await push(sb, sub, { ...ptWeeklyRecapText(sub.lang, sessions, tonnage), url: "/client/progression", type: "pt_weekly", date_key: lastMonday });
     if (ok) sent += 1; else failed += 1;
   }
   return { targeted, sent, skippedDuplicate: dup, failed };

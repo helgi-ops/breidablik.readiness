@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { clientDisplayName } from "@/lib/trainer/demoClient";
 
 type Lang = "IS" | "EN";
 type Bi = { EN: string; IS: string };
@@ -21,7 +22,7 @@ export type AttentionFlag = {
   ifThen?: Bi;
   confidence?: Bi;
 };
-export type AttentionClient = { id: string; name: string; flags: AttentionFlag[]; topSeverity: number };
+export type AttentionClient = { id: string; name: string; isDemo?: boolean; flags: AttentionFlag[]; topSeverity: number };
 
 const ROW_NOTE_CODES = new Set(["no_checkin", "retest_due"]);
 export const isCardFlag = (code: string) => !ROW_NOTE_CODES.has(code);
@@ -74,7 +75,12 @@ export default function TrainerAttentionList({
                 <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${urgent ? "bg-red-600" : "bg-amber-500"}`} />
                 <span>{flag.title[lang]}</span>
               </div>
-              <h3 className="font-display text-xl font-bold leading-tight text-slate-900">{client.name}</h3>
+              <h3 className="flex flex-wrap items-center gap-2 font-display text-xl font-bold leading-tight text-slate-900">
+                {clientDisplayName(client, lang)}
+                {client.isDemo && (
+                  <span className="rounded-full bg-slate-200 px-2 py-0.5 font-sans text-[10px] font-semibold uppercase tracking-wide text-slate-700">Demo</span>
+                )}
+              </h3>
               <p className="text-[15px] text-slate-900">{flag.why[lang]}</p>
               {flag.ifThen && (
                 <p className="rounded-[10px] bg-slate-100 px-3 py-2.5 text-[13px] text-slate-700">{flag.ifThen[lang]}</p>

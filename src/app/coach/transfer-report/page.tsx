@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
  *
  * A coach picks a player and a window (default 120 days) and gets a layered
  * on-screen read — VALD, VBT, GPS, IMA, Games + worst-case match demands, and
- * fitness tests — plus a Breiðablik-branded PDF and an optional labelled AI
+ * fitness tests — plus a club-branded PDF (the coach's own club name + logo) and an optional labelled AI
  * summary for the receiving club. The coach downloads and shares it themselves;
  * the app transmits nothing. Descriptive — it never touches the readiness colour,
  * the load target, or the daily decision. Includes inactive players on purpose
@@ -19,6 +19,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { downloadTransferReportPdf, type TransferRadar, type TransferTrends } from "@/components/coach/TransferReportPdf";
+import { fetchMyClubBrand, resolveClubBrand, type ClubBrand } from "@/lib/club/clubBrand";
 import { ProfileRadar, MatchTrendBars, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
 import type { TransferDossier, DossierSection, Confidence, ClockPoint } from "@/lib/micropulse/transferReport";
 import type { TransferAiSummary } from "@/lib/micropulse/transferReport/ai";
@@ -166,6 +167,10 @@ export default function TransferReportPage() {
   const [xlsxBusy, setXlsxBusy] = React.useState(false);
   const [zipBusy, setZipBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+  const [club, setClub] = React.useState<ClubBrand | null>(null);
+
+  // The coach's own club name + logo for the PDF header.
+  React.useEffect(() => { void fetchMyClubBrand(getSupabaseClient()).then(setClub).catch(() => setClub(null)); }, []);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
 
@@ -267,8 +272,8 @@ export default function TransferReportPage() {
   const downloadPdf = React.useCallback(async () => {
     if (!dossier) return;
     setPdfBusy(true);
-    try { await downloadTransferReportPdf(dossier, ai, radar, trends, is ? "IS" : "EN"); } finally { setPdfBusy(false); }
-  }, [dossier, ai, radar, trends, is]);
+    try { await downloadTransferReportPdf(dossier, ai, radar, trends, is ? "IS" : "EN", club ?? resolveClubBrand(null)); } finally { setPdfBusy(false); }
+  }, [dossier, ai, radar, trends, is, club]);
 
   // Stream a server-built file (Excel / ZIP) behind the same auth gate, then save it locally.
   const downloadFile = React.useCallback(async (path: string, setBusy: (b: boolean) => void) => {
@@ -291,8 +296,8 @@ export default function TransferReportPage() {
     <div className="mx-auto max-w-5xl px-4 py-6">
       <h1 className="text-2xl font-bold text-slate-900">{is ? "Félagaskipta-skýrsla" : "Player Transfer Report"}</h1>
       <PagePurpose
-        en="A departing player's full performance picture for the receiving club — GPS load and worst-case match demands, IMA, force plates (VALD), VBT, games and fitness tests over the last months — with a Breiðablik-branded PDF and an optional AI summary. Descriptive; it never encodes a readiness or availability decision."
-        is="Heildarmynd af frammistöðu leikmanns sem er að fara — GPS-álag og kröfuharðustu leikkaflar, IMA, kraftplötur (VALD), VBT, leikir og þolpróf síðustu mánuði — með Breiðabliks-merktri PDF og valfrjálsri AI-samantekt. Lýsandi; felur aldrei í sér readiness- eða leikhæfis-ákvörðun."
+        en="A departing player's full performance picture for the receiving club — GPS load and worst-case match demands, IMA, force plates (VALD), VBT, games and fitness tests over the last months — with a PDF carrying your club's logo and an optional AI summary. Descriptive; it never encodes a readiness or availability decision."
+        is="Heildarmynd af frammistöðu leikmanns sem er að fara — GPS-álag og kröfuharðustu leikkaflar, IMA, kraftplötur (VALD), VBT, leikir og þolpróf síðustu mánuði — með PDF merktri félaginu þínu og valfrjálsri AI-samantekt. Lýsandi; felur aldrei í sér readiness- eða leikhæfis-ákvörðun."
       />
 
       <details className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
@@ -300,7 +305,7 @@ export default function TransferReportPage() {
         <div className="mt-2 space-y-1.5 text-[13px] leading-relaxed text-slate-600">
           <p>{is ? "Skýrslan safnar saman öllum frammistöðugögnum leikmannsins yfir valið tímabil: GPS (vegalengd, háhraðahlaup, sprettir, hámarkshraði, PlayerLoad), kröfuharðustu leikkafla (WCS), IMA (hröðun/hemlun/stefnubreytingar), VALD kraftplötur, VBT úr ræktinni, leiki og þolpróf, auk stöðu-percentíla." : "The report gathers all of the player's performance data over the chosen window: GPS (distance, high-speed running, sprints, top speed, PlayerLoad), worst-case match demands (WCS), IMA (accel/decel/change-of-direction), VALD force plates, gym VBT, games and fitness tests, plus position percentiles."}</p>
           <p>{is ? "Hver kafli sýnir vissu-merki (hversu mikil gögn liggja að baki). „Sýna tölur“ opnar hráar töflur." : "Each section shows a confidence chip (how much data backs it). \"Show details\" opens the raw tables."}</p>
-          <p>{is ? "Þú hleður niður PDF (með Breiðabliks-lógói) og sendir hana sjálf/ur — kerfið sendir ekkert út. Deildu aðeins með samþykki leikmanns sem hluta af félagaskiptum." : "You download the PDF (with the Breiðablik logo) and send it yourself — the app transmits nothing. Only share it with the player's consent, as part of the transfer."}</p>
+          <p>{is ? "Þú hleður niður PDF (með merki félagsins) og sendir hana sjálf/ur — kerfið sendir ekkert út. Deildu aðeins með samþykki leikmanns sem hluta af félagaskiptum." : "You download the PDF (with your club's logo) and send it yourself — the app transmits nothing. Only share it with the player's consent, as part of the transfer."}</p>
         </div>
       </details>
 

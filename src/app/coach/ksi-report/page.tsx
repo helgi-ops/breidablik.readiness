@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { downloadKsiReportPdf, type KsiPdfPlayer } from "@/components/coach/KsiReportPdf";
+import { fetchMyClubBrand, resolveClubBrand, type ClubBrand } from "@/lib/club/clubBrand";
 
 type Day = {
   date: string; duration_min: number; total_distance: number; hsr: number; sprint: number;
@@ -116,6 +117,10 @@ export default function KsiReportPage() {
   const [loaded, setLoaded] = useState(false);
   const [notes, setNotes] = useState<Record<string, NoteDraft>>({}); // per-player KSÍ note drafts
   const [preparedBy, setPreparedBy] = useState<string | null>(null);
+  const [club, setClub] = useState<ClubBrand | null>(null);
+
+  // The coach's own club name + logo for the report header.
+  useEffect(() => { void fetchMyClubBrand(getSupabaseClient()).then(setClub).catch(() => setClub(null)); }, []);
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -173,11 +178,11 @@ export default function KsiReportPage() {
           aiSummary: d?.aiSummary || undefined,
         };
       });
-      await downloadKsiReportPdf(pdfPlayers, from, to, IS ? "IS" : "EN", preparedBy);
+      await downloadKsiReportPdf(pdfPlayers, from, to, IS ? "IS" : "EN", preparedBy, club ?? resolveClubBrand(null));
     } catch (e) {
       setErr(e instanceof Error ? e.message : "PDF error");
     } finally { setPdfBusy(false); }
-  }, [chosen, notes, from, to, IS, preparedBy]);
+  }, [chosen, notes, from, to, IS, preparedBy, club]);
 
   function toggle(id: string) {
     setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -368,7 +373,7 @@ export default function KsiReportPage() {
             <div>
               <div className="text-lg font-bold text-slate-900">{t.title}</div>
               <div className="text-xs text-slate-500">{t.intro}</div>
-              {preparedBy && <div className="mt-0.5 text-[11px] text-slate-400">{t.prepared} {preparedBy} · Breiðablik</div>}
+              {preparedBy && <div className="mt-0.5 text-[11px] text-slate-400">{t.prepared} {preparedBy}{club?.name ? ` · ${club.name}` : ""}</div>}
             </div>
             <div className="text-right text-[11px] text-slate-500">
               <div>{t.period}: <b className="text-slate-700">{from} → {to}</b></div>

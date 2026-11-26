@@ -8,6 +8,10 @@
  *
  * Only renders when the page is running in standalone / PWA display mode so it
  * doesn't clutter the desktop browser view.
+ *
+ * Personal-trainer practices get their own tabs (Clients, Programmes, Chat,
+ * Settings) in EN/IS — the club tabs (players, week setup, team) mean nothing
+ * to a 1-on-1 trainer. Club teams keep exactly the tabs they had.
  */
 
 import { useEffect, useState } from "react";
@@ -33,6 +37,15 @@ function usePwaMode(): boolean {
 }
 
 /* ── Icons ──────────────────────────────────────────────────────────────── */
+
+function IconGear({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+    </svg>
+  );
+}
 
 type IconProps = { active: boolean };
 
@@ -173,11 +186,21 @@ const TABS: Tab[] = [
   },
 ];
 
+function ptTabs(lang: "EN" | "IS"): Tab[] {
+  const is = lang === "IS";
+  return [
+    { href: "/coach", label: is ? "Viðskiptavinir" : "Clients", Icon: IconTeam, matchPrefixes: ["/coach"] },
+    { href: "/coach/programme-library", label: is ? "Æfingakerfi" : "Programmes", Icon: IconCalendar, matchPrefixes: ["/coach/programme-library", "/coach/plan-builder", "/coach/starter-templates", "/coach/custom-templates", "/coach/my-exercises"] },
+    { href: "/coach/conversations", label: is ? "Spjall" : "Chat", Icon: IconChat, matchPrefixes: ["/coach/conversations"] },
+    { href: "/coach/settings", label: is ? "Stillingar" : "Settings", Icon: IconGear, matchPrefixes: ["/coach/settings"] },
+  ];
+}
+
 /**
  * Determine which tab is active. For /coach we require an exact match because
  * every coach path is a prefix of /coach.
  */
-function activeTabIndex(pathname: string): number {
+function activeTabIndex(pathname: string, TABS: Tab[]): number {
   // Exact /coach wins
   if (pathname === "/coach") return 0;
   // Longest matching prefix (other than /coach itself) wins
@@ -197,13 +220,15 @@ function activeTabIndex(pathname: string): number {
 
 /* ── Component ──────────────────────────────────────────────────────────── */
 
-export default function CoachPwaBottomNav() {
+export default function CoachPwaBottomNav({ isPt = false, lang = "EN" }: { isPt?: boolean; lang?: "EN" | "IS" }) {
   const isPwa = usePwaMode();
   const pathname = usePathname() ?? "";
 
   if (!isPwa) return null;
 
-  const active = activeTabIndex(pathname);
+  const tabs = isPt ? ptTabs(lang) : TABS;
+  const active = activeTabIndex(pathname, tabs);
+  const activeText = isPt ? "text-primary" : "text-green-700";
 
   return (
     <>
@@ -218,7 +243,7 @@ export default function CoachPwaBottomNav() {
         aria-label="Coach navigation"
       >
         <div className="flex">
-          {TABS.map((tab, i) => {
+          {tabs.map((tab, i) => {
             const isActive = i === active;
             const Icon = tab.Icon;
             return (
@@ -226,14 +251,14 @@ export default function CoachPwaBottomNav() {
                 key={tab.href}
                 href={tab.href}
                 className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
-                  isActive ? "text-green-700" : "text-zinc-400"
+                  isActive ? activeText : "text-zinc-400"
                 }`}
                 aria-current={isActive ? "page" : undefined}
               >
                 <Icon active={isActive} />
                 <span
-                  className={`text-[9px] font-semibold tracking-wide ${
-                    isActive ? "text-green-700" : "text-zinc-400"
+                  className={`${isPt ? "text-[10px]" : "text-[9px]"} font-semibold tracking-wide ${
+                    isActive ? activeText : "text-zinc-400"
                   }`}
                 >
                   {tab.label}

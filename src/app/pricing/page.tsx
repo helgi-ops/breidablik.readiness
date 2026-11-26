@@ -662,6 +662,18 @@ export default function PricingPage() {
                 </a>
               </div>
 
+              {/* Personal trainers have their own (free, early-access) offer. */}
+              <Link
+                href="/personal-trainers"
+                className="mt-5 flex items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-neutral-800 hover:bg-primary/10"
+              >
+                <span>
+                  <span className="font-semibold">{lang === "IS" ? "Einkaþjálfari eða styrktarþjálfari?" : "Personal trainer or S&C coach?"}</span>{" "}
+                  {lang === "IS" ? "Frítt á meðan á prufutíma stendur." : "Free while in early access."}
+                </span>
+                <span className="shrink-0 font-semibold text-primary">→</span>
+              </Link>
+
               <div className="mt-6 flex flex-wrap gap-2 text-xs text-neutral-600">
                 {t.hero.chips.map((c) => (
                   <span key={c} className="rounded-full border bg-white px-3 py-1">

@@ -51,6 +51,33 @@ describe("decideToday", () => {
   });
 
   it("no programme says so plainly", () => {
-    expect(decideToday({ ...base, session: null }).headline.EN).toBe("No session planned");
+    expect(decideToday({ ...base, session: null }).headline.EN).toBe("Your trainer is setting up your plan");
+  });
+
+  it("a plan that starts later says when, before anything else", () => {
+    // 2026-11-30 is a Monday.
+    const d = decideToday({ ...base, session: null, upcoming: { startDate: "2026-11-30", daysUntil: 3 } });
+    expect(d.headline.EN).toBe("Your plan starts on Monday");
+    expect(d.headline.IS).toBe("Áætlunin byrjar á mánudag");
+    expect(decideToday({ ...base, upcoming: { startDate: "2026-11-28", daysUntil: 1 } }).headline.EN).toBe("Your plan starts tomorrow");
+    expect(decideToday({ ...base, upcoming: { startDate: "2026-12-14", daysUntil: 17 } }).headline.EN).toBe("Your plan starts on 14 December");
+  });
+
+  it("a finished programme says so", () => {
+    expect(decideToday({ ...base, completed: true }).headline.EN).toBe("Programme finished");
+  });
+
+  it("a rest day names the next session", () => {
+    const d = decideToday({ ...base, session: { ...session, restDay: true, nextSessionWeekday: 3 } });
+    expect(d.why.EN).toContain("Next session: Wednesday.");
+    expect(d.why.IS).toContain("Næsta æfing er á miðvikudag.");
+  });
+
+  it("deload is in plain words; the technical reason goes behind details", () => {
+    const d = decideToday({ ...base, fosterStatus: "deload_required", fosterReason: "Monotony 2.10 · strain 6400 — high overload risk." });
+    expect(d.headline.EN).toBe("Take a lighter week");
+    expect(d.why.EN).not.toContain("Monotony");
+    expect(d.detail).toContain("Monotony 2.10");
+    expect(d.fosterCited).toBe(true);
   });
 });

@@ -9,6 +9,100 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { sessionNeedsMfa } from "@/lib/auth/mfaClient";
 import MfaChallenge from "@/components/auth/MfaChallenge";
+import { useLang } from "@/lib/lang";
+
+const LOGIN_COPY = {
+  EN: {
+    loading: "Loading…",
+    titleSignin: "Sign in",
+    titleSignup: "Create account",
+    titleReset: "Reset password",
+    subSignin: "Sign in to MicroPulse.",
+    subSignup: "Joining a team? Create your player account with email and password.",
+    subReset: "Enter your email and we'll send you a reset link.",
+    keepLoggedIn: "Keep me logged in",
+    fullName: "Full name",
+    gender: "Gender",
+    male: "Male",
+    female: "Female",
+    genderHint: "Pick a gender to see the right sport and team.",
+    sport: "Sport",
+    pickSport: "Choose a sport…",
+    football: "Football",
+    basketball: "Basketball",
+    handball: "Handball",
+    sportHint: "Pick a sport to see the right team.",
+    team: "Team",
+    fromInvite: "From invite link",
+    pickTeam: "Choose a team…",
+    noCoach: "⚠️ No coach has joined this team yet. A coach has to sign up before players can.",
+    hasCoach: "✓ A coach has joined — you can sign up.",
+    email: "Email",
+    emailPlaceholder: "name@example.com",
+    password: "Password",
+    passwordHint: "At least 6 characters.",
+    working: "Working…",
+    submitSignin: "Sign in",
+    submitSignup: "Create account",
+    submitReset: "Send reset link",
+    toSignin: "I have an account → Sign in",
+    toSignup: "Player joining a team → Create account",
+    toReset: "Forgot password?",
+    newAccount: "New to MicroPulse? Start a practice or a club →",
+    errGender: "Choose a gender before creating the account.",
+    errSport: "Choose a sport before creating the account.",
+    errTeam: "Choose a team before creating the account.",
+    errNoCoach: "No coach has joined this team. A coach has to sign up first.",
+    msgConfirm: "Check your email to confirm the account. Your coach has to approve you before you get access.",
+    msgReset: "We've emailed you a link to reset your password.",
+    errUnexpected: "Something went wrong.",
+  },
+  IS: {
+    loading: "Hleð…",
+    titleSignin: "Innskráning",
+    titleSignup: "Nýskráning",
+    titleReset: "Endurstilla lykilorð",
+    subSignin: "Skráðu þig inn í MicroPulse.",
+    subSignup: "Ertu að ganga í lið? Búðu til leikmannaaðgang með netfangi og lykilorði.",
+    subReset: "Sláðu inn netfang og við sendum endurstillingarhlekk.",
+    keepLoggedIn: "Halda mér innskráðum",
+    fullName: "Fullt nafn",
+    gender: "Kyn",
+    male: "Karl",
+    female: "Kona",
+    genderHint: "Veldu kyn til að sjá rétt sport og lið.",
+    sport: "Sport",
+    pickSport: "Veldu sport…",
+    football: "Fótbolti",
+    basketball: "Körfubolti",
+    handball: "Handbolti",
+    sportHint: "Veldu sport til að sjá rétt lið.",
+    team: "Lið",
+    fromInvite: "Frá boðslink",
+    pickTeam: "Veldu lið…",
+    noCoach: "⚠️ Enginn þjálfari er skráður hjá þessu liði enn. Þjálfari þarf að skrá sig áður en leikmaður getur skráð sig.",
+    hasCoach: "✓ Þjálfari er skráður — skráning leyfð.",
+    email: "Netfang",
+    emailPlaceholder: "nafn@domain.com",
+    password: "Lykilorð",
+    passwordHint: "A.m.k. 6 stafir.",
+    working: "Vinn...",
+    submitSignin: "Skrá inn",
+    submitSignup: "Búa til aðgang",
+    submitReset: "Senda endurstillingu",
+    toSignin: "Ég á aðgang → Innskráning",
+    toSignup: "Leikmaður að ganga í lið → Búa til aðgang",
+    toReset: "Gleymt lykilorð?",
+    newAccount: "Nýr hjá MicroPulse? Stofnaðu stofu eða félag →",
+    errGender: "Veldu kyn áður en þú býrð til aðgang.",
+    errSport: "Veldu sport áður en þú býrð til aðgang.",
+    errTeam: "Veldu lið áður en þú býrð til aðgang.",
+    errNoCoach: "Þjálfari er ekki skráður hjá þessu liði. Þjálfari þarf að skrá sig fyrst.",
+    msgConfirm: "Athugaðu póstinn þinn til að staðfesta aðganginn. Þjálfari þarf að samþykkja skráningu þína áður en þú færð aðgang.",
+    msgReset: "Við sendum þér tölvupóst með hlekk til að endurstilla lykilorð.",
+    errUnexpected: "Óvænt villa.",
+  },
+} as const;
 
 type Mode = "signin" | "signup" | "reset";
 type Gender = "M" | "F";
@@ -112,6 +206,8 @@ export default function LoginInner() {
       ? "handball"
       : "";
 
+  const [lang, setLang] = useLang();
+  const L = LOGIN_COPY[lang];
   const [mode, setMode] = useState<Mode>("signin");
   // True while an account with an authenticator app still owes its code. The landing page is worked out after the
   // code, because before it the profile cannot be read once two-step sign-in is enforced.
@@ -381,19 +477,19 @@ export default function LoginInner() {
 
       if (mode === "signup") {
         if (!gender) {
-          setErr("Veldu kyn áður en þú býrð til aðgang.");
+          setErr(L.errGender);
           return;
         }
         if (!sport) {
-          setErr("Veldu sport áður en þú býrð til aðgang.");
+          setErr(L.errSport);
           return;
         }
         if (!teamId) {
-          setErr("Veldu lið áður en þú býrð til aðgang.");
+          setErr(L.errTeam);
           return;
         }
         if (!teamHasCoach) {
-          setErr("Þjálfari er ekki skráður hjá þessu liði. Þjálfari þarf að skrá sig fyrst.");
+          setErr(L.errNoCoach);
           return;
         }
 
@@ -417,7 +513,7 @@ export default function LoginInner() {
         if (error) throw error;
 
         if (!data.session) {
-          setMsg("Athugaðu póstinn þinn til að staðfesta aðganginn. Þjálfari þarf að samþykkja skráningu þína áður en þú færð aðgang.");
+          setMsg(L.msgConfirm);
         } else {
           const landingPath = await getLandingPath();
           const nextIsPlayerFlow = next === "/player" || next === "/player/checkin" || next === "/team";
@@ -436,11 +532,11 @@ export default function LoginInner() {
         });
         if (error) throw error;
 
-        setMsg("Við sendum þér tölvupóst með hlekk til að endurstilla lykilorð.");
+        setMsg(L.msgReset);
         return;
       }
     } catch (e: any) {
-      setErr(e?.message ?? "Óvænt villa.");
+      setErr(e?.message ?? L.errUnexpected);
     } finally {
       setLoading(false);
     }
@@ -462,21 +558,35 @@ export default function LoginInner() {
   if (checkingSession) {
     return (
       <div style={{ maxWidth: 420, margin: "40px auto", padding: 16, textAlign: "center", opacity: 0.6 }}>
-        <p>Hleð…</p>
+        <p>{L.loading}</p>
       </div>
     );
   }
 
   return (
     <div style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>
-        {mode === "signin" ? "Innskráning" : mode === "signup" ? "Nýskráning" : "Endurstilla lykilorð"}
-      </h1>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>
+          {mode === "signin" ? L.titleSignin : mode === "signup" ? L.titleSignup : L.titleReset}
+        </h1>
+        <div style={{ display: "flex", border: "1px solid #ddd", borderRadius: 8, overflow: "hidden", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+          {(["EN", "IS"] as const).map((l) => (
+            <button
+              key={l}
+              type="button"
+              onClick={() => setLang(l)}
+              style={{ padding: "6px 10px", border: "none", cursor: "pointer", background: lang === l ? "#14181c" : "transparent", color: lang === l ? "#fff" : "#6b7280" }}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <p style={{ opacity: 0.8, marginBottom: 16 }}>
-        {mode === "signin" && "Skráðu þig inn til að gera daily check-in."}
-        {mode === "signup" && "Búðu til aðgang með email og lykilorði."}
-        {mode === "reset" && "Sláðu inn email og við sendum endurstillingarhlekk."}
+        {mode === "signin" && L.subSignin}
+        {mode === "signup" && L.subSignup}
+        {mode === "reset" && L.subReset}
       </p>
 
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 10 }}>
@@ -487,27 +597,27 @@ export default function LoginInner() {
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
             />
-            <span>Keep me logged in</span>
+            <span>{L.keepLoggedIn}</span>
           </label>
         )}
 
         {mode === "signup" && (
           <>
             <label style={{ display: "grid", gap: 6 }}>
-              <span>Fullt nafn</span>
+              <span>{L.fullName}</span>
               <input
                 type="text"
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Fullt nafn"
+                placeholder={L.fullName}
                 style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
               />
             </label>
 
             {/* Gender — hidden when invite locked */}
             {!teamInviteLocked && <div style={{ display: "grid", gap: 6 }}>
-              <span>Kyn</span>
+              <span>{L.gender}</span>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   type="button"
@@ -528,7 +638,7 @@ export default function LoginInner() {
                     flex: 1,
                   }}
                 >
-                  Karl
+                  {L.male}
                 </button>
 
                 <button
@@ -549,16 +659,16 @@ export default function LoginInner() {
                     flex: 1,
                   }}
                 >
-                  Kona
+                  {L.female}
                 </button>
               </div>
-              <small style={{ opacity: 0.7 }}>Veldu kyn til að sjá rétt sport og lið.</small>
+              <small style={{ opacity: 0.7 }}>{L.genderHint}</small>
             </div>}
 
             {/* Sport (after gender) — hidden when invite locked */}
             {!teamInviteLocked && gender && (
               <label style={{ display: "grid", gap: 6 }}>
-                <span>Sport</span>
+                <span>{L.sport}</span>
                 <select
                   required
                   value={sport ?? ""}
@@ -570,35 +680,35 @@ export default function LoginInner() {
                   }}
                   style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
                 >
-                  <option value="">Veldu sport…</option>
-                  <option value="football">Fótbolti</option>
-                  <option value="basketball">Körfubolti</option>
-                  <option value="handball">Handbolti</option>
+                  <option value="">{L.pickSport}</option>
+                  <option value="football">{L.football}</option>
+                  <option value="basketball">{L.basketball}</option>
+                  <option value="handball">{L.handball}</option>
                 </select>
-                <small style={{ opacity: 0.7 }}>Veldu sport til að sjá rétt lið.</small>
+                <small style={{ opacity: 0.7 }}>{L.sportHint}</small>
               </label>
             )}
 
             {/* Team — locked when from invite link, otherwise dropdown */}
             {teamInviteLocked ? (
               <label style={{ display: "grid", gap: 6 }}>
-                <span>Lið</span>
+                <span>{L.team}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 8, border: "1px solid #b0d6bd", background: "#eaf3ec" }}>
                   <span style={{ color: "#16653d" }}>✓</span>
                   <span style={{ fontWeight: 600, color: "#145233" }}>{teamInviteTeamName ?? "..."}</span>
-                  <span style={{ marginLeft: "auto", fontSize: 12, color: "#47a06f" }}>Frá boðslink</span>
+                  <span style={{ marginLeft: "auto", fontSize: 12, color: "#47a06f" }}>{L.fromInvite}</span>
                 </div>
               </label>
             ) : gender && sport && (
               <label style={{ display: "grid", gap: 6 }}>
-                <span>Lið</span>
+                <span>{L.team}</span>
                 <select
                   required
                   value={teamId}
                   onChange={(e) => { setTeamId(e.target.value); setTeamHasCoach(null); }}
                   style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
                 >
-                  <option value="">Veldu lið…</option>
+                  <option value="">{L.pickTeam}</option>
                   {teams.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.name}
@@ -607,12 +717,12 @@ export default function LoginInner() {
                 </select>
                 {teamId && teamHasCoach === false && (
                   <div style={{ background: "#faf1de", border: "1px solid #e0b257", padding: "8px 10px", borderRadius: 8, fontSize: 13 }}>
-                    ⚠️ Enginn þjálfari er skráður hjá þessu liði enn. Þjálfari þarf að skrá sig áður en leikmaður getur skráð sig.
+                    {L.noCoach}
                   </div>
                 )}
                 {teamId && teamHasCoach === true && (
                   <div style={{ background: "#eaf3ec", border: "1px solid #b0d6bd", padding: "8px 10px", borderRadius: 8, fontSize: 13 }}>
-                    ✓ Þjálfari er skráður — skráning leyfð.
+                    {L.hasCoach}
                   </div>
                 )}
               </label>
@@ -621,20 +731,20 @@ export default function LoginInner() {
         )}
 
         <label style={{ display: "grid", gap: 6 }}>
-          <span>Email</span>
+          <span>{L.email}</span>
           <input
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="nafn@domain.com"
+            placeholder={L.emailPlaceholder}
             style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
           />
         </label>
 
         {mode !== "reset" && (
           <label style={{ display: "grid", gap: 6 }}>
-            <span>Lykilorð</span>
+            <span>{L.password}</span>
             <input
               type="password"
               required
@@ -644,7 +754,7 @@ export default function LoginInner() {
               minLength={6}
               style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
             />
-            <small style={{ opacity: 0.7 }}>A.m.k. 6 stafir.</small>
+            <small style={{ opacity: 0.7 }}>{L.passwordHint}</small>
           </label>
         )}
 
@@ -674,12 +784,12 @@ export default function LoginInner() {
           }}
         >
           {loading
-            ? "Vinn..."
+            ? L.working
             : mode === "signin"
-            ? "Skrá inn"
+            ? L.submitSignin
             : mode === "signup"
-            ? "Búa til aðgang"
-            : "Senda endurstillingu"}
+            ? L.submitSignup
+            : L.submitReset}
         </button>
       </form>
 
@@ -693,7 +803,7 @@ export default function LoginInner() {
             }}
             style={{ background: "transparent", border: "none", textDecoration: "underline", cursor: "pointer" }}
           >
-            Ég á aðgang → Innskráning
+            {L.toSignin}
           </button>
         )}
 
@@ -706,7 +816,7 @@ export default function LoginInner() {
             }}
             style={{ background: "transparent", border: "none", textDecoration: "underline", cursor: "pointer" }}
           >
-            Nýr notandi → Búa til aðgang
+            {L.toSignup}
           </button>
         )}
 
@@ -720,15 +830,15 @@ export default function LoginInner() {
             }}
             style={{ background: "transparent", border: "none", textDecoration: "underline", cursor: "pointer" }}
           >
-            Gleymt lykilorð?
+            {L.toReset}
           </button>
         )}
 
         <a
-          href="/signup/create-team"
-          style={{ textDecoration: "underline", color: "#0f766e" }}
+          href="/signup"
+          style={{ textDecoration: "underline", color: "#2740e6" }}
         >
-          Stofna nýtt félag →
+          {L.newAccount}
         </a>
       </div>
     </div>

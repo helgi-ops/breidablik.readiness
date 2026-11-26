@@ -49,7 +49,7 @@ async function authedFetch(path: string, init?: RequestInit) {
   });
 }
 
-export default function PlayerPrivacyConsentPrompt() {
+export default function PlayerPrivacyConsentPrompt({ variant = "club" }: { variant?: "club" | "pt" } = {}) {
   const [lang] = useLang();
   const isIS = lang === "IS";
   const [status, setStatus] = useState<Status>("loading");
@@ -217,11 +217,11 @@ export default function PlayerPrivacyConsentPrompt() {
         <p className="mt-1 text-sm leading-relaxed text-zinc-600">{intro}</p>
 
         <div className="mt-3">
-          <DataProcessingSummary lang={isIS ? "IS" : "EN"} isMinor={minor} />
+          <DataProcessingSummary lang={isIS ? "IS" : "EN"} isMinor={minor} variant={variant} />
         </div>
 
         <a
-          href="/privacy"
+          href={variant === "pt" ? "/privacy?for=client" : "/privacy"}
           target="_blank"
           rel="noopener noreferrer"
           className="mt-3 inline-block text-[13px] font-semibold text-[#2740e6] hover:underline"

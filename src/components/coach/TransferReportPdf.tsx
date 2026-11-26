@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * TransferReportPdf — the Breiðablik-branded performance dossier for a departing
- * player, for the receiving club's performance staff. Header carries the club
- * logo; each section is a layered read (headline -> facts -> a compact table),
+ * TransferReportPdf — the club-branded performance dossier for a departing
+ * player, for the receiving club's performance staff. Header carries the coach's
+ * own club name + logo (from teams, see clubBrand.ts); each section is a layered read (headline -> facts -> a compact table),
  * with a per-section confidence chip and an optional labelled AI summary at the
  * top. WinAnsi/Helvetica (Icelandic-safe): no arrows / ticks / U+2212.
  *
@@ -16,6 +16,7 @@ import type { TransferDossier, DossierSection, Confidence, ClockPoint } from "@/
 import { DIRECTIONS } from "@/lib/micropulse/directionalSignature";
 import type { TransferAiSummary } from "@/lib/micropulse/transferReport/ai";
 import type { RadarMetric, TrendBar } from "@/components/coach/PlayerGameReportCharts";
+import type { ClubBrand } from "@/lib/club/clubBrand";
 
 type Lang = "EN" | "IS";
 export type TransferRadar = { engine: RadarMetric[]; driver: RadarMetric[] } | null;
@@ -24,7 +25,6 @@ export type TransferTrends = { distance: TrendSeries; hsr: TrendSeries; sprint: 
 
 const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6";
 const GREEN = "#1c7a4a", AMBER = "#de9328";
-const LOGO = "/breidablik-ubk-vector-logo.png";
 
 const s = StyleSheet.create({
   page: { paddingTop: 24, paddingBottom: 34, paddingHorizontal: 32, fontSize: 9.5, fontFamily: "Helvetica", color: INK, lineHeight: 1.4 },
@@ -65,15 +65,32 @@ const CONF: Record<Confidence, { color: string; en: string; is: string }> = {
 };
 
 const T = {
-  EN: { dossier: "Performance Dossier", prepared: "Prepared by Breiðablik UBK Performance", window: "window", sessions: "sessions", matches: "matches",
+  EN: { dossier: "Performance Dossier", window: "window", sessions: "sessions", matches: "matches",
     pos: "Position", age: "Age", height: "Height", weight: "Weight", ai: "AI SUMMARY", aiNote: "Written from the numbers below — cites the data, decides nothing",
     strengths: "Strengths", watch: "Watch points", details: "Details",
-    foot: "Descriptive performance export shared by Breiðablik UBK as part of an agreed transfer. Figures are session/test aggregates over the window; they never encode a readiness verdict, an injury judgement, or an availability decision. Source signals: Catapult (GPS/IMA), VALD ForceDecks, GymAware (VBT), match records and fitness tests." },
-  IS: { dossier: "Frammistöðuskýrsla", prepared: "Unnið af Breiðablik UBK Performance", window: "tímabil", sessions: "lotur", matches: "leikir",
+    foot: "Figures are session/test aggregates over the window; they never encode a readiness verdict, an injury judgement, or an availability decision. Source signals: Catapult (GPS/IMA), VALD ForceDecks, GymAware (VBT), match records and fitness tests." },
+  IS: { dossier: "Frammistöðuskýrsla", window: "tímabil", sessions: "lotur", matches: "leikir",
     pos: "Staða", age: "Aldur", height: "Hæð", weight: "Þyngd", ai: "AI SAMANTEKT", aiNote: "Skrifað úr tölunum að neðan — vitnar í gögnin, ákveður ekkert",
     strengths: "Styrkleikar", watch: "Athuga", details: "Nánar",
-    foot: "Lýsandi frammistöðu-útflutningur, deilt af Breiðablik UBK sem hluti af samþykktum félagaskiptum. Tölur eru samtölur lota/prófa á tímabilinu; þær fela aldrei í sér readiness-dóm, meiðslamat eða ákvörðun um leikhæfi. Uppsprettur: Catapult (GPS/IMA), VALD ForceDecks, GymAware (VBT), leikjaskrár og þolpróf." },
+    foot: "Tölur eru samtölur lota/prófa á tímabilinu; þær fela aldrei í sér readiness-dóm, meiðslamat eða ákvörðun um leikhæfi. Uppsprettur: Catapult (GPS/IMA), VALD ForceDecks, GymAware (VBT), leikjaskrár og þolpróf." },
 } as const;
+
+/** The lines that name the club: "Prepared by …" and the opening of the footer. */
+const CLUB_LINES = {
+  EN: {
+    prepared: (c: string) => (c ? `Prepared by ${c} Performance` : "Prepared by the club's performance staff"),
+    footLead: (c: string) => `Descriptive performance export shared by ${c || "the club"} as part of an agreed transfer.`,
+  },
+  IS: {
+    prepared: (c: string) => (c ? `Unnið af ${c} Performance` : "Unnið af frammistöðuteymi félagsins"),
+    footLead: (c: string) => `Lýsandi frammistöðu-útflutningur, deilt af ${c || "félaginu"} sem hluti af samþykktum félagaskiptum.`,
+  },
+} as const;
+
+/** ASCII file-name part: "Breiðablik" -> "Breidablik". */
+const fileSlug = (x: string) =>
+  x.replace(/[ðÐ]/g, "d").replace(/[þÞ]/g, "th").replace(/[æÆ]/g, "ae").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 function Chip({ c, lang }: { c: Confidence; lang: Lang }) {
   const cc = CONF[c];
@@ -251,8 +268,9 @@ function SectionBlock({ sec, lang, clock }: { sec: DossierSection; lang: Lang; c
   );
 }
 
-export function TransferDoc({ dossier, ai, radar, trends, lang }: { dossier: TransferDossier; ai: TransferAiSummary | null; radar: TransferRadar; trends: TransferTrends; lang: Lang }) {
+export function TransferDoc({ dossier, ai, radar, trends, lang, club }: { dossier: TransferDossier; ai: TransferAiSummary | null; radar: TransferRadar; trends: TransferTrends; lang: Lang; club: ClubBrand }) {
   const t = T[lang];
+  const cl = CLUB_LINES[lang];
   const id = dossier.identity;
   const w = dossier.window;
   return (
@@ -260,7 +278,7 @@ export function TransferDoc({ dossier, ai, radar, trends, lang }: { dossier: Tra
       <Page size="A4" style={s.page}>
         <View style={s.head}>
           {/* eslint-disable-next-line jsx-a11y/alt-text */}
-          <Image src={LOGO} style={s.logo} />
+          {club.logoUrl ? <Image src={club.logoUrl} style={s.logo} /> : null}
           <View style={{ flex: 1 }}>
             <Text style={s.eyebrow}>{t.dossier.toUpperCase()}</Text>
             <Text style={s.h1}>{id.name}</Text>
@@ -268,7 +286,7 @@ export function TransferDoc({ dossier, ai, radar, trends, lang }: { dossier: Tra
           </View>
           <Chip c={dossier.overallConfidence} lang={lang} />
         </View>
-        <Text style={s.byline}>{t.prepared} · {w.sessions} {t.sessions} · {w.matches} {t.matches}</Text>
+        <Text style={s.byline}>{cl.prepared(club.name)} · {w.sessions} {t.sessions} · {w.matches} {t.matches}</Text>
 
         <View style={s.idstrip}>
           <View style={s.idcell}><Text style={s.idlabel}>{t.pos}</Text><Text style={s.idval}>{id.position ?? "—"}</Text></View>
@@ -304,18 +322,20 @@ export function TransferDoc({ dossier, ai, radar, trends, lang }: { dossier: Tra
 
         {dossier.sections.map((sec) => <SectionBlock key={sec.id} sec={sec} lang={lang} clock={sec.id === "ima-clock" ? dossier.imaClock : null} />)}
 
-        <Text style={s.foot}>{t.foot}</Text>
+        <Text style={s.foot}>{`${cl.footLead(club.name)} ${t.foot}`}</Text>
       </Page>
     </Document>
   );
 }
 
-export async function downloadTransferReportPdf(dossier: TransferDossier, ai: TransferAiSummary | null, radar: TransferRadar, trends: TransferTrends, lang: Lang) {
-  const blob = await pdf(<TransferDoc dossier={dossier} ai={ai} radar={radar} trends={trends} lang={lang} />).toBlob();
+export async function downloadTransferReportPdf(dossier: TransferDossier, ai: TransferAiSummary | null, radar: TransferRadar, trends: TransferTrends, lang: Lang, club: ClubBrand) {
+  const render = (c: ClubBrand) => pdf(<TransferDoc dossier={dossier} ai={ai} radar={radar} trends={trends} lang={lang} club={c} />).toBlob();
+  // A logo that can't be read (wrong format, removed file) must not block the report: retry without it.
+  const blob = await render(club).catch((e) => { if (!club.logoUrl) throw e; return render({ ...club, logoUrl: null }); });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${dossier.identity.name.replace(/\s+/g, "-")}-Breidablik-performance-dossier.pdf`;
+  a.download = [fileSlug(dossier.identity.name), fileSlug(club.name), "performance-dossier"].filter(Boolean).join("-") + ".pdf";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

@@ -4,8 +4,8 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
 
-type Lang = "IS" | "EN";
 type Sport = "football" | "basketball" | "handball";
 type TeamRow = { id: string; name: string; sport: string | null; gender: string | null };
 
@@ -41,10 +41,15 @@ const COPY = {
     },
     success: "Account created. Check your email to verify and complete sign in.",
     successSession: "Account created. Head to the coach dashboard to get started.",
-    inviteTitle: "Coaches join a team by invitation",
-    inviteBody: "Ask a coach on the team to send you an invitation link. Starting a new team instead? You can create one here.",
-    inviteCreate: "Create a new team",
     inviteInvalid: "This invitation was not found or is no longer active. Ask the team for a new one.",
+    chooseTitle: "Get started with MicroPulse",
+    chooseSubtitle: "Pick the option that fits you.",
+    chooseClub: "Create a club",
+    chooseClubBody: "Set up a football, basketball or handball team. 14-day Pro trial.",
+    chooseJoin: "Join a team",
+    chooseJoinBody: "Coaches join an existing team with an invitation link from a coach on that team.",
+    chooseTrainer: "I'm a personal trainer / S&C coach",
+    chooseTrainerBody: "Your own practice: invite clients and send them sessions. Ready in under 10 minutes.",
   },
   IS: {
     brand: "MicroPulse",
@@ -77,22 +82,27 @@ const COPY = {
     },
     success: "Aðgangur búinn til. Athugaðu póstinn þinn til að staðfesta og klára innskráningu.",
     successSession: "Aðgangur búinn til. Farðu á þjálfarasvæðið til að byrja.",
-    inviteTitle: "Þjálfarar tengjast liði með boði",
-    inviteBody: "Biddu þjálfara liðsins að senda þér boðshlekk. Ætlarðu að stofna nýtt lið? Þú getur gert það hér.",
-    inviteCreate: "Stofna nýtt lið",
     inviteInvalid: "Boðið fannst ekki eða er ekki lengur virkt. Biddu liðið um nýtt boð.",
+    chooseTitle: "Byrjaðu með MicroPulse",
+    chooseSubtitle: "Veldu það sem á við þig.",
+    chooseClub: "Stofna félag",
+    chooseClubBody: "Settu upp fótbolta-, körfubolta- eða handboltalið. 14 daga Pro prufa.",
+    chooseJoin: "Ganga í lið",
+    chooseJoinBody: "Þjálfarar ganga í lið sem er til með boðshlekk frá þjálfara liðsins.",
+    chooseTrainer: "Ég er einkaþjálfari / styrktarþjálfari",
+    chooseTrainerBody: "Þín eigin stofa: bjóddu viðskiptavinum og sendu þeim æfingar. Tilbúið á innan við 10 mínútum.",
   },
 };
 
 function SignupForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const presetTeamId = searchParams.get("team_id") ?? "";
   const presetSport  = (searchParams.get("sport") ?? "") as Sport | "";
   const coachInviteToken = searchParams.get("coach_invite") ?? "";
   const teamInviteToken = searchParams.get("team_invite") ?? "";
   // A coach joins an existing team only with an invitation. The database enforces this (handle_new_user);
-  // the page just explains it. Team-less signups land on "create a new team".
+  // the page just explains it. Without an invitation the page shows the three ways in:
+  // create a club, join a team (by invitation), or start a personal-trainer practice.
   const hasInvite = Boolean(coachInviteToken || teamInviteToken);
 
   // Backward-compat: pre-May-2026 PT client invitations emitted URLs of the
@@ -104,23 +114,12 @@ function SignupForm() {
   useEffect(() => {
     if (legacyClientInvite) {
       router.replace(`/invite/client/${encodeURIComponent(legacyClientInvite)}`);
-    } else if (!hasInvite && !presetTeamId) {
-      router.replace("/signup/create-team");
     }
-  }, [legacyClientInvite, hasInvite, presetTeamId, router]);
+  }, [legacyClientInvite, router]);
 
-  const [lang, setLang] = useState<Lang>("IS");
+  // Shared language preference (mp_lang; EN by default) — same toggle as the rest of the app.
+  const [lang, setLang] = useLang();
   const t = COPY[lang];
-
-  // Sync with home page language preference
-  useEffect(() => {
-    const saved = typeof window !== "undefined" ? window.localStorage.getItem("mp_lang") : null;
-    if (saved === "IS" || saved === "EN") setLang(saved);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") window.localStorage.setItem("mp_lang", lang);
-  }, [lang]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -264,8 +263,8 @@ function SignupForm() {
         <div className="mb-6 flex items-start justify-between">
           <div>
             <div className="text-sm font-medium text-neutral-500">{t.brand}</div>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight">{t.title}</h1>
-            <p className="mt-2 text-sm text-neutral-600">{t.subtitle}</p>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight">{hasInvite ? t.title : t.chooseTitle}</h1>
+            <p className="mt-2 text-sm text-neutral-600">{hasInvite ? t.subtitle : t.chooseSubtitle}</p>
           </div>
           <div className="mt-1 flex shrink-0 overflow-hidden rounded-lg border text-xs font-semibold">
             <button
@@ -286,14 +285,24 @@ function SignupForm() {
         </div>
 
         {!hasInvite ? (
-          <div className="space-y-3 rounded-3xl border bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">{t.inviteTitle}</h2>
-            <p className="text-sm text-neutral-600">{t.inviteBody}</p>
+          <div className="space-y-3">
             <Link
               href="/signup/create-team"
-              className="block w-full rounded-2xl bg-neutral-900 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-neutral-700"
+              className="block rounded-3xl border bg-white p-5 shadow-sm transition hover:border-neutral-900"
             >
-              {t.inviteCreate}
+              <div className="text-base font-semibold">{t.chooseClub}</div>
+              <p className="mt-1 text-sm text-neutral-600">{t.chooseClubBody}</p>
+            </Link>
+            <div className="rounded-3xl border bg-white p-5 shadow-sm">
+              <div className="text-base font-semibold">{t.chooseJoin}</div>
+              <p className="mt-1 text-sm text-neutral-600">{t.chooseJoinBody}</p>
+            </div>
+            <Link
+              href="/signup/trainer"
+              className="block rounded-3xl border bg-white p-5 shadow-sm transition hover:border-neutral-900"
+            >
+              <div className="text-base font-semibold">{t.chooseTrainer}</div>
+              <p className="mt-1 text-sm text-neutral-600">{t.chooseTrainerBody}</p>
             </Link>
           </div>
         ) : (

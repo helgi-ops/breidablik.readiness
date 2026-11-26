@@ -9,12 +9,13 @@
  *
  *   GET    ?player_id=…           — list reports (coach) / own reports (player)
  *   POST   multipart              — { player_id?, file, title?, source?, report_date? }
- *   DELETE { id }                 — remove file + record
+ *   DELETE { id }                 — remove file + record (a client: only their own uploads)
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { canDeleteReport } from "@/lib/pt/reportAccess";
 
 export const runtime = "nodejs";
 
@@ -70,7 +71,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await ctx.sb
     .from("pt_client_reports")
-    .select("id, title, source, report_date, file_name, file_size, file_path, extracted, extracted_status, created_at")
+    .select("id, title, source, report_date, file_name, file_size, file_path, extracted, extracted_status, created_at, uploaded_by")
     .eq("player_id", target.playerId)
     .order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -78,7 +79,8 @@ export async function GET(req: NextRequest) {
   // Short-lived signed URLs (private bucket).
   const reports = await Promise.all(((data ?? []) as Array<Record<string, unknown>>).map(async (r) => {
     const { data: signed } = await ctx.sb.storage.from("pt-reports").createSignedUrl(String(r.file_path), 3600);
-    return { ...r, file_path: undefined, url: signed?.signedUrl ?? null };
+    const can_delete = canDeleteReport(ctx, { uploaded_by: (r.uploaded_by as string | null) ?? null });
+    return { ...r, file_path: undefined, uploaded_by: undefined, can_delete, url: signed?.signedUrl ?? null };
   }));
   return NextResponse.json({ ok: true, reports });
 }
@@ -132,14 +134,18 @@ export async function DELETE(req: NextRequest) {
   const id = String(body?.id ?? "");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  const { data: rec } = await ctx.sb.from("pt_client_reports").select("id, player_id, file_path").eq("id", id).maybeSingle();
-  const row = rec as { id?: string; player_id?: string; file_path?: string } | null;
+  const { data: rec } = await ctx.sb.from("pt_client_reports").select("id, player_id, file_path, uploaded_by").eq("id", id).maybeSingle();
+  const row = rec as { id?: string; player_id?: string; file_path?: string; uploaded_by?: string | null } | null;
   if (!row?.id) return NextResponse.json({ error: "Not found", status: 404 }, { status: 404 });
 
   // Authorise: player owns it, or coach has access to the report's player.
   const target = await resolveTarget(ctx, row.player_id ?? null);
   if ("error" in target) return NextResponse.json({ error: target.error }, { status: target.status });
   if (target.playerId !== row.player_id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // A client deletes only their own uploads, never the trainer's.
+  if (!canDeleteReport(ctx, { uploaded_by: row.uploaded_by ?? null })) {
+    return NextResponse.json({ error: "Only your trainer can delete this report" }, { status: 403 });
+  }
 
   if (row.file_path) await ctx.sb.storage.from("pt-reports").remove([row.file_path]);
   const { error } = await ctx.sb.from("pt_client_reports").delete().eq("id", id);

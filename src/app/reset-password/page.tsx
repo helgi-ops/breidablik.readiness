@@ -7,15 +7,42 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { sessionNeedsMfa } from "@/lib/auth/mfaClient";
 import MfaChallenge from "@/components/auth/MfaChallenge";
+import { useLang } from "@/lib/lang";
+
+const COPY = {
+  EN: {
+    checking: "Checking your link…",
+    moment: "One moment.",
+    invalid: "This link is invalid or has expired. Ask for a new one from the sign-in page.",
+    title: "Set a new password",
+    label: "New password",
+    placeholder: "At least 6 characters",
+    saving: "Saving…",
+    save: "Save new password",
+  },
+  IS: {
+    checking: "Staðfesti hlekk…",
+    moment: "Augnablik.",
+    invalid: "Ógildur eða útrunninn hlekkur. Biddu um nýjan á innskráningarsíðunni.",
+    title: "Settu nýtt lykilorð",
+    label: "Nýtt lykilorð",
+    placeholder: "A.m.k. 6 stafir",
+    saving: "Vista...",
+    save: "Vista nýtt lykilorð",
+  },
+} as const;
 
 export default function ResetPasswordPage() {
   const router = useRouter();
+  const [lang] = useLang();
+  const t = COPY[lang];
 
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [needsCode, setNeedsCode] = useState(false);
+  const [invalid, setInvalid] = useState(false);
 
   // Establish the recovery session, however the user arrived here.
   useEffect(() => {
@@ -59,7 +86,7 @@ export default function ResetPasswordPage() {
 
     // Nothing established a session within a moment → the link is invalid/expired.
     const timer = setTimeout(() => {
-      if (active && !settled) setError((e) => e ?? "Ógildur eða útrunninn hlekkur.");
+      if (active && !settled) setInvalid(true);
     }, 3000);
 
     return () => { active = false; sub.subscription.unsubscribe(); clearTimeout(timer); };
@@ -103,27 +130,28 @@ export default function ResetPasswordPage() {
   if (!ready) {
     return (
       <div style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
-        <h1>Staðfesti hlekk…</h1>
-        <p>Augnablik.</p>
-        {error && <p style={{ color: "red" }}>{error}</p>}
+        <h1>{t.checking}</h1>
+        <p>{t.moment}</p>
+        {(error || invalid) && <p style={{ color: "#a83e28" }}>{error ?? t.invalid}</p>}
+        {invalid && <p><a href="/login" style={{ textDecoration: "underline" }}>/login</a></p>}
       </div>
     );
   }
 
   return (
     <div style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700 }}>Settu nýtt lykilorð</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 700 }}>{t.title}</h1>
 
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 10, marginTop: 16 }}>
         <label style={{ display: "grid", gap: 6 }}>
-          <span>Nýtt lykilorð</span>
+          <span>{t.label}</span>
           <input
             type="password"
             required
             minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="A.m.k. 6 stafir"
+            placeholder={t.placeholder}
             style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
           />
         </label>
@@ -146,7 +174,7 @@ export default function ResetPasswordPage() {
             fontWeight: 700,
           }}
         >
-          {loading ? "Vista..." : "Vista nýtt lykilorð"}
+          {loading ? t.saving : t.save}
         </button>
       </form>
     </div>

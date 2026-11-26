@@ -3,6 +3,23 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
+import { inviteReturnPath } from "@/lib/auth/inviteReturn";
+
+const COPY = {
+  EN: {
+    title: "Signing you in…",
+    body: "Taking you to the right place.",
+    back: "Back to sign in",
+    unknownRole: "This account has no known role. Contact your coach or support.",
+  },
+  IS: {
+    title: "Staðfesti aðgang…",
+    body: "Tek þig á rétt svæði.",
+    back: "Til baka í innskráningu",
+    unknownRole: "Óþekkt role í profiles. Á að vera coach, player eða stjórnandi.",
+  },
+} as const;
 
 function utcYYYYMMDD(): string {
   const d = new Date();
@@ -18,7 +35,7 @@ async function isCheckinDone(userId: string): Promise<boolean> {
     .eq("id", userId)
     .maybeSingle();
 
-  const playerIdFromProfile = (profile as any)?.player_id as string | null;
+  const playerIdFromProfile = (profile as { player_id?: string | null } | null)?.player_id ?? null;
   const candidatePlayerIds = [playerIdFromProfile, userId].filter(Boolean) as string[];
 
   for (const pid of candidatePlayerIds) {
@@ -40,6 +57,9 @@ export default function RedirectInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const next = sp.get("next") || "";
+  const [lang] = useLang();
+  const t = COPY[lang];
+  const unknownRole = t.unknownRole;
 
   const [error, setError] = React.useState<string | null>(null);
 
@@ -58,6 +78,10 @@ export default function RedirectInner() {
 
       if (userErr) return setError(userErr.message);
       if (!user) return router.replace("/login");
+
+      // Came from an invitation link: finish it there, whatever the role.
+      const invite = inviteReturnPath(next);
+      if (invite) return router.replace(invite);
 
       const { data: profile, error: profErr } = await supabase
         .from("profiles")
@@ -83,7 +107,7 @@ export default function RedirectInner() {
           .select("team_type")
           .eq("id", profile.team_id)
           .maybeSingle();
-        isPtClient = String((team as any)?.team_type ?? "").toLowerCase() === "personal_trainer";
+        isPtClient = String((team as { team_type?: string | null } | null)?.team_type ?? "").toLowerCase() === "personal_trainer";
       }
 
       if (next) {
@@ -110,19 +134,19 @@ export default function RedirectInner() {
         return router.replace(done ? "/player" : "/player/checkin");
       }
 
-      setError("Óþekkt role í profiles. Á að vera coach, player eða stjórnandi.");
+      setError(unknownRole);
     }
 
     go();
     return () => {
       mounted = false;
     };
-  }, [router, next]);
+  }, [router, next, unknownRole]);
 
   return (
     <div style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
-      <h1 style={{ fontSize: 18, fontWeight: 700 }}>Staðfesti aðgang…</h1>
-      <p style={{ opacity: 0.8 }}>Tek þig á rétt svæði.</p>
+      <h1 style={{ fontSize: 18, fontWeight: 700 }}>{t.title}</h1>
+      <p style={{ opacity: 0.8 }}>{t.body}</p>
 
       {error ? (
         <div style={{ marginTop: 12, background: "#f8e9e3", border: "1px solid #e6b6a6", padding: 10, borderRadius: 8 }}>
@@ -132,7 +156,7 @@ export default function RedirectInner() {
               onClick={() => router.replace("/login")}
               style={{ background: "transparent", border: "none", textDecoration: "underline", cursor: "pointer" }}
             >
-              Til baka í innskráningu
+              {t.back}
             </button>
           </div>
         </div>
