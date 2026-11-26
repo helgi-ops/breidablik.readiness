@@ -74,6 +74,10 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
       <button type="button" onClick={() => commit(r, r.week + BLOCK_KPI_STEP)} aria-label={`${name} — ${t({ en: "standard week up", is: "staðalvika upp" })}`} className="h-full w-10 shrink-0 text-[17px] text-[#2740e6] hover:bg-[#2740e6]/5">+</button>
     </div>
   );
+  // The blue dot drags too (team view, and only when the weeks hold one value — a ramp's dot is its peak).
+  const dragProps = (r: VariableRow, name: string) => (editable && !ramps
+    ? { onSet: (x: number) => commit(r, x), step: BLOCK_KPI_STEP, min: BLOCK_KPI_MIN, fmt: (x: number) => `${fx(x)}×`, setLabel: `${name} — ${t({ en: "standard week", is: "staðalvika" })}` }
+    : {});
   // The change log: the latest change in one plain line, the whole list behind a toggle.
   const [logOpen, setLogOpen] = React.useState(false);
   const logName = (k: WeeklyLoadMetricKey) => (k === "totalPlayerLoad" ? t({ en: "Overall load", is: "Heildarálag" }) : plainKpiName(k, WEEKLY_LOAD_LABELS[k], is, new Set<string>()));
@@ -137,7 +141,7 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
           <li>{weeksLine}</li>
           {changeLog.length > 0 && <li>{t({ en: "Last change", is: "Síðasta breyting" })}: <b className="font-semibold text-slate-700">{logLine(changeLog[0])}</b> · {logWho(changeLog[0])} · {logWhen(changeLog[0].at)}</li>}
           {editable
-            ? <li>{t({ en: "The system proposes each variable; set any of them with − / + for this block. Every week of the block follows — the days in the calendar below, the weekly target and the players' blocks.", is: "Kerfið leggur til hverja breytu; stilltu hvaða breytu sem er með − / + fyrir þessa lotu. Allar vikur lotunnar fylgja — dagarnir í dagatalinu hér að neðan, vikumarkmiðið og lotur leikmanna." })}</li>
+            ? <li>{t({ en: "The system proposes each variable; set any of them with − / + or by dragging its blue dot, for this block. Every week of the block follows — the days in the calendar below, the weekly target and the players' blocks.", is: "Kerfið leggur til hverja breytu; stilltu hvaða breytu sem er með − / + eða með því að draga bláa punktinn, fyrir þessa lotu. Allar vikur lotunnar fylgja — dagarnir í dagatalinu hér að neðan, vikumarkmiðið og lotur leikmanna." })}</li>
             : playerName && <li>{t({ en: "A player's view follows the team's settings; set the variables on the team.", is: "Sýn leikmanns fylgir stillingum liðsins; stilltu breyturnar á liðinu." })}</li>}
         </ul>
       </div>
@@ -153,7 +157,7 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
               <span className="text-[12px] leading-snug text-slate-600">{t({ en: "The whole week in one number (PlayerLoad).", is: "Öll vikan í einni tölu (PlayerLoad)." })}</span>
             </div>
             {value(master, t({ en: "Overall load", is: "Heildarálag" }), true)}
-            <VariableTrack scaleMax={scaleMax} refRange={master.ref} open={open(master)} filled={filled(master)} light={master.light} ariaLabel={aria(master, t({ en: "Overall load", is: "Heildarálag" }))} />
+            <VariableTrack scaleMax={scaleMax} refRange={master.ref} open={open(master)} filled={filled(master)} light={master.light} ariaLabel={aria(master, t({ en: "Overall load", is: "Heildarálag" }))} {...dragProps(master, t({ en: "Overall load", is: "Heildarálag" }))} />
             {nums(master)}
           </div>
         )}
@@ -188,7 +192,7 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
                     {kpiWhat(r.key) && <span className="text-[12px] leading-snug text-slate-600">{t(kpiWhat(r.key)!)}</span>}
                   </div>
                   {value(r, r.name)}
-                  <VariableTrack scaleMax={scaleMax} refRange={r.ref} open={open(r)} filled={filled(r)} light={r.light} ariaLabel={aria(r, r.name)} />
+                  <VariableTrack scaleMax={scaleMax} refRange={r.ref} open={open(r)} filled={filled(r)} light={r.light} ariaLabel={aria(r, r.name)} {...dragProps(r, r.name)} />
                   {nums(r)}
                 </div>
               ))}

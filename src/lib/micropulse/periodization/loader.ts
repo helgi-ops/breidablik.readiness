@@ -211,6 +211,23 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     sb.from("player_external_load_daily").select(DAILY_COLS)
       .eq("team_id", args.teamId).gte("date", yStart).lte("date", yEnd).order("date").range(from, to));
   const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  // One GPS row → a session row (team + position baselines read these).
+  const sessionOf = (r: Raw, isMatch: boolean): RawSession => {
+    const gps = (v: unknown) => (hasNoGpsReading(num(r.player_load), num(r.total_distance)) ? null : num(v));
+    const v5 = gps(r.velocity_band5_total_distance), v6 = gps(r.velocity_band6_total_distance);
+    return {
+      isMatch, date: r.date,
+      distanceM: gps(r.total_distance), hsrM: v5 != null || v6 != null ? (v5 ?? 0) + (v6 ?? 0) : null, sprintM: v6,
+      maxKmh: gps(r.max_velocity), playerLoad: num(r.player_load), plPerMin: num(r.player_load_per_minute),
+      accel: num(r.ima_accel) ?? gps(r.accelerations), decel: num(r.ima_decel) ?? gps(r.decelerations), pid: r.player_id, clock: r.ima_clock_gen2 ?? null,
+      // Long runs (≥18 s) count as load only at match pace (11 km/h+; jogs are not a target): strides and metres
+      // in long runs at match pace, all long runs only when the pace is unknown (longRuns/longRunLoad*).
+      accelHiEff: gps(r.accel_b2_3_tot_effs_gen2), decelHiEff: gps(r.decel_b2_3_tot_effs_gen2), strideHi: longRunLoadStrides(r),
+      rhieBouts: num(r.rhie_bouts), runSymmetry: num(r.running_symmetry), metabolicPower: num(r.metabolic_power),
+      imaCod: imaCodTotal(r as unknown as Record<string, unknown>),
+      imaFrDist: gps(longRunLoadMetres(r)),
+    };
+  };
   // One match-date GPS row → the player's match row (the near-full-match unit reads these).
   const matchRowOf = (r: Raw): PlayerMatchRow => {
     const gps = (v: unknown) => (hasNoGpsReading(num(r.player_load), num(r.total_distance)) ? null : num(v));
@@ -233,24 +250,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     if (dataEnd === null || r.date > dataEnd) dataEnd = r.date;
     if (typeof r.player_load === "number" && r.player_load > 0) { hasGps = true; gpsLoad.push({ date: r.date, load: r.player_load }); if (r.player_id) gpsLoadByPid.push({ date: r.date, load: r.player_load, pid: r.player_id }); }
     if (r.ima_accel != null || r.accelerations != null) hasIma = true;
-    const noGps = hasNoGpsReading(num(r.player_load), num(r.total_distance));
-    const gps = (v: unknown) => (noGps ? null : num(v));
-    const v5 = gps(r.velocity_band5_total_distance), v6 = gps(r.velocity_band6_total_distance);
-    // Long runs (≥18 s) count as load only at match pace (11 km/h+; jogs are not a target): strides and metres
-    // in long runs at match pace, all long runs only when the pace is unknown (longRuns/longRunLoad*).
-    const strideHi = longRunLoadStrides(r);
-    const imaFrDist = gps(longRunLoadMetres(r));
-    const hsr = v5 != null || v6 != null ? (v5 ?? 0) + (v6 ?? 0) : null;
-    rawSessions.push({
-      isMatch: matchDates.has(r.date), date: r.date,
-      distanceM: gps(r.total_distance), hsrM: hsr, sprintM: v6,
-      maxKmh: gps(r.max_velocity), playerLoad: num(r.player_load), plPerMin: num(r.player_load_per_minute),
-      accel: num(r.ima_accel) ?? gps(r.accelerations), decel: num(r.ima_decel) ?? gps(r.decelerations), pid: r.player_id, clock: r.ima_clock_gen2 ?? null,
-      accelHiEff: gps(r.accel_b2_3_tot_effs_gen2), decelHiEff: gps(r.decel_b2_3_tot_effs_gen2), strideHi,
-      rhieBouts: num(r.rhie_bouts), runSymmetry: num(r.running_symmetry), metabolicPower: num(r.metabolic_power),
-      imaCod: imaCodTotal(r as unknown as Record<string, unknown>),
-      imaFrDist,
-    });
+    rawSessions.push(sessionOf(r, matchDates.has(r.date)));
     if (r.player_id && matchDates.has(r.date)) {
       const arr = matchRowByPlayer.get(r.player_id) ?? [];
       arr.push(matchRowOf(r));
@@ -487,6 +487,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   // Team-wide only — once anyone has a near-full match this season, nothing changes. Only the match unit reads
   // them; the load curve, recent minutes and baselines stay this season's. The plan says which season it used.
   let matchUnitSeason: number | null = null;
+  const prevMatchSessions: RawSession[] = [];
   if (ids.length && ![...matchRowByPlayer.values()].some((rows) => rows.some((r) => (r.minutes ?? 0) >= NEAR_FULL_MIN_MINUTES))) {
     const py = seasonYear - 1;
     const { data: pfx } = await sb.from("match_schedule").select("match_date").eq("team_id", args.teamId).gte("match_date", `${py}-01-01`).lte("match_date", `${py}-12-31`);
@@ -501,12 +502,24 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
       for (const m of prevMins) if (m.player_id && m.match_date && m.minutes_played != null) prevMinByKey.set(`${m.player_id}|${m.match_date}`, m.minutes_played);
       for (const r of prevDaily) {
         if (!r.date || !r.player_id) continue;
+        prevMatchSessions.push(sessionOf(r, true));
         const row = matchRowOf(r);
         row.minutes = prevMinByKey.get(`${r.player_id}|${r.date}`) ?? null;
         const arr = matchRowByPlayer.get(r.player_id) ?? []; arr.push(row); matchRowByPlayer.set(r.player_id, arr);
       }
       if ([...matchRowByPlayer.values()].some((rows) => rows.some((r) => (r.minutes ?? 0) >= NEAR_FULL_MIN_MINUTES))) matchUnitSeason = py;
     }
+  }
+  // Same season, no match-day GPS at all: the team calendar's "one match" (the squad's match-day mean) comes from
+  // last season's match days too, so the week cards and the week-load tile add up instead of showing "—".
+  if (matchUnitSeason != null && teamAvg.matchSessions === 0 && prevMatchSessions.length) {
+    const prev = teamAverages(prevMatchSessions, null);
+    Object.assign(teamAvg, {
+      matchSessions: prev.matchSessions, matchDistanceM: prev.matchDistanceM, matchHsrM: prev.matchHsrM, matchPlayerLoad: prev.matchPlayerLoad,
+      matchSprintM: prev.matchSprintM, matchAccel: prev.matchAccel, matchDecel: prev.matchDecel, matchImaCod: prev.matchImaCod, matchImaFrDist: prev.matchImaFrDist,
+      matchAccelHiEff: prev.matchAccelHiEff, matchDecelHiEff: prev.matchDecelHiEff, matchStrideHi: prev.matchStrideHi,
+    });
+    teamBaseline.axes = matchAxisTargets(teamAvg);
   }
 
   // ── Per-team IMA day-type calibration (calendar Acc/Dec/CoD shares) ──────────────────────────────
