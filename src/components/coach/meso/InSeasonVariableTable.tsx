@@ -74,9 +74,10 @@ export default function InSeasonVariableTable({ is, view, oneMatchNote, hold, nu
       <button type="button" onClick={() => commit(r, r.week + BLOCK_KPI_STEP)} aria-label={`${name} — ${t({ en: "standard week up", is: "staðalvika upp" })}`} className="h-full w-10 shrink-0 text-[17px] text-[#2740e6] hover:bg-[#2740e6]/5">+</button>
     </div>
   );
-  // The blue dot drags too (team view, and only when the weeks hold one value — a ramp's dot is its peak).
-  const dragProps = (r: VariableRow, name: string) => (editable && !ramps
-    ? { onSet: (x: number) => commit(r, x), step: BLOCK_KPI_STEP, min: BLOCK_KPI_MIN, fmt: (x: number) => `${fx(x)}×`, setLabel: `${name} — ${t({ en: "standard week", is: "staðalvika" })}` }
+  // The standard-week dot drags too (team view): the filled dot when the weeks hold one value, the open one
+  // (week 1 = the standard week) when the block ramps or has a light week — the peak follows by the same ratio.
+  const dragProps = (r: VariableRow, name: string) => (editable
+    ? { onSet: (x: number) => commit(r, x), setOn: (ramps ? "open" : "filled") as "open" | "filled", step: BLOCK_KPI_STEP, min: BLOCK_KPI_MIN, fmt: (x: number) => `${fx(x)}×`, setLabel: `${name} — ${t({ en: "standard week", is: "staðalvika" })}` }
     : {});
   // The change log: the latest change in one plain line, the whole list behind a toggle.
   const [logOpen, setLogOpen] = React.useState(false);
