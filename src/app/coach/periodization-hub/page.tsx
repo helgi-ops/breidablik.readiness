@@ -16,7 +16,7 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupView from "@/components/coach/WeekSetupView";
 import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
-import { VALD_TRIM_CITE, mondayOfIso, buildMesoPlan, buildCalendarBlock, inSeasonRange, teamMatchUnitNote, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ValdTrimLift, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
+import { VALD_TRIM_CITE, mondayOfIso, buildMesoPlan, buildCalendarBlock, inSeasonRange, teamMatchUnitNote, blockDeloadOf, deloadWeekIndex, holdsStandardWeek, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, CAL_SHARE, CAL_SHARE_IMA, CAL_SHARE_IMA_REF, compareImaNormToReference, type ValdTrimLift, type ImaNormStatus, type ImaShareCalibration, type ImaVar, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalWeek, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput, type ExposureInput, type ShapeDirInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { exposuresFromTlyp, shapeDirsFromShape } from "@/lib/micropulse/trainingNeeds";
@@ -62,6 +62,8 @@ import PreseasonWeek1Table from "@/components/coach/PreseasonWeek1Table";
 import InSeasonBlockSummary from "@/components/coach/meso/InSeasonBlockSummary";
 import InSeasonVariableTable from "@/components/coach/meso/InSeasonVariableTable";
 import { GOAL_BAR, BarSwatch, GameDotLegend, type MesoBar } from "@/components/coach/meso/MesoPrimitives";
+import { MesoWeeksHeader, MesoWeekCollapsed, MesoWeekOpen, type DayChip } from "@/components/coach/meso/MesoWeek";
+import { TmBandChip } from "@/components/coach/meso/VariableTrack";
 import { blockVolumeView, inSeasonRuleBreaks, calWeekMultiple, sessionsInWeek, minMax, gamesInRange, gamesInWeek } from "@/lib/micropulse/periodization/inSeasonMesoView";
 import { teamMatchReference } from "@/lib/micropulse/periodization/matchReference";
 import type { MatchUnit as LibMatchUnit } from "@/lib/micropulse/periodization";
@@ -289,6 +291,7 @@ export default function PeriodizationHubPage() {
   const [preDaySave, setPreDaySave] = React.useState<null | "saving" | "saved" | "err">(null); // pre-season draft day-toggle save status
   const [preDayPick, setPreDayPick] = React.useState<{ weekStart: string; di: number } | null>(null); // pre-season day open in the stimulus picker
   const [preOpenWeeks, setPreOpenWeeks] = React.useState<Record<string, boolean>>({}); // pre-season week cards open/closed (week Monday → open)
+  const [inOpenWeeks, setInOpenWeeks] = React.useState<Record<string, boolean>>({}); // in-season week cards open/closed (week Monday → open)
   const [blkSkeleton, setBlkSkeleton] = React.useState<Record<string, DayState>>({}); // coach's 6-week day grid
   const [typeOverrides, setTypeOverrides] = React.useState<Record<string, CalType>>({}); // per-day day-type picks
   const [savedPlans, setSavedPlans] = React.useState<Record<string, { dayType: string; focus: string | null }>>({}); // saved week_plans (read-back)
@@ -1185,12 +1188,6 @@ export default function PeriodizationHubPage() {
     const s = weekConfirm[ws] ?? null;
     const tone = !s ? "border-slate-200 bg-white text-slate-500" : s.state === "confirmed" ? "border-[#1c7a4a]/30 bg-[#1c7a4a]/10 text-[#1c7a4a]" : "border-[#de9328]/40 bg-[#de9328]/10 text-[#8a5a12]";
     return <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${tone}`}>{weekConfirmLabel(s, is)}</span>;
-  };
-  // The same status, short, for the narrow week column of the In-season calendar (full words in the tooltip).
-  const confirmMark = (ws: string) => {
-    const s = weekConfirm[ws] ?? null;
-    const [txt, cls] = !s ? [is ? "óstaðf." : "not conf.", "text-slate-400"] : s.state === "confirmed" ? [is ? "✓ staðf." : "✓ conf.", "text-[#1c7a4a]"] : [is ? "breytt" : "changed", "text-[#8a5a12]"];
-    return <span title={weekConfirmLabel(s, is)} className={`text-[10px] font-semibold ${cls}`}>{txt}</span>;
   };
   // How the strength is delivered (the team's send mode; standard = the Custom Programme per week) for the weeks the
   // shown Meso page lists: the pre-season's weeks, or the In-season page's block (deliveryView.ts).
@@ -3000,8 +2997,6 @@ export default function PeriodizationHubPage() {
             const GC: Record<BlockGoalKey, string> = { accum: "#2740E6", transmute: "#7A5CC4", realize: "#1C7A4A", deload: "#DE9328" };
             const DAY = 86_400_000;
             const utc = (iso: string) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
-            const card = "rounded-xl border border-slate-200 bg-white p-4 sm:p-5";
-            const h2 = "text-[15px] font-bold text-slate-900";
             const goalName = (g: BlockGoalKey) => (is ? BLOCK_GOAL_LABEL[g].is : BLOCK_GOAL_LABEL[g].en);
             const todayIso = new Date().toISOString().slice(0, 10);
             const endIncl = (b: { end: string }) => isoAdd(b.end, -1);
@@ -3353,125 +3348,177 @@ export default function PeriodizationHubPage() {
             )}
           </section>
           )}
-          {blkPopulated.length > 0 && !selIsPre && (
-          <div className="flex flex-col gap-4">
-          {/* The in-season rules this page follows (the calendar enforces both; a day you set against them stays, marked ⚠). */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[#1c7a4a]/30 bg-[#1c7a4a]/[0.05] px-3 py-2 text-[12.5px] text-slate-700">
-            <b className="text-slate-900">{is ? "Reglur keppnistímabils:" : "In-season rules:"}</b>
-            <span>{is ? "Aldrei þrjár æfingar í röð" : "Never three sessions in a row"}</span>
-            <span className="text-slate-400">·</span>
-            <span>{is ? "Alltaf frí á MD+2" : "Always off on MD+2"}</span>
-            <span className="text-slate-400">·</span>
-            <span>{is ? "Aðeins skráðir leikir (úr Makró)" : "Only entered games (from Macro)"}</span>
-            <span className="w-full text-[11px] text-slate-500">{is ? "Dagur sem þú setur gegn reglu helst og fær ⚠." : "A day you set against a rule stays and gets ⚠."} <span className="font-mono">{THREE_IN_A_ROW_RULE} · INSEASON_MD2_OFF</span> · {is ? "MicroPulse-regla" : "MicroPulse rule"}; Buchheit 2023b</span>
-          </div>
+          {/* 3 — WEEK BY WEEK: the mirror of the pre-season week cards. One row per week (the glance); a row opens
+              into the week (the days, the rule breaks, the strength, the load per variable behind a toggle). */}
+          {blkPopulated.length > 0 && !selIsPre && (() => {
+            const mons = Array.from({ length: blkWeeks }, (_, i) => mesoCalBlock?.weeks[i]?.weekStart ?? isoAdd(calStart, i * 7));
+            const curIdx = Math.max(0, mons.findIndex((m) => m <= todayIso && todayIso < isoAdd(m, 7)));
+            const isOpen = (m: string, k: number) => inOpenWeeks[m] ?? k === curIdx;
+            const anyClosed = mons.some((m, k) => !isOpen(m, k));
+            const proTier = plan?.tier?.tier === "pro";
+            const PL_REF = plan.tier.loadSource === "gps" ? kpiTmRefRange("totalPlayerLoad") : null;
+            // The calendar's week sums per variable (each as × one match; the match itself not counted). A research
+            // chip only where the variable maps one-to-one onto a research range.
+            const varRows = (w: CalWeek): Array<{ key: string; label: string; x: number; ref: [number, number] | null }> => ([
+              { key: "load", v: w.pctMech, label: is ? "Heildarálag (Player Load)" : "Overall load (Player Load)", ref: PL_REF },
+              { key: "dist", v: w.pctRunning, label: is ? "Vegalengd" : "Distance", ref: kpiTmRefRange("totalDistance") },
+              { key: "hsr", v: w.pctHsr, label: is ? "Háhraðahlaup" : "High-speed running", ref: null },
+              { key: "accdec", v: w.pctAccDec23, label: is ? "Kröftugar hraðaaukningar + hemlanir" : "Hard accelerations + braking", ref: null },
+              { key: "acc", v: w.pctAccel ?? null, label: is ? "Hraðaaukningar" : "Accelerations", ref: null },
+              { key: "dec", v: w.pctDecel ?? null, label: is ? "Hemlanir" : "Braking", ref: null },
+              { key: "cod", v: w.pctCod ?? null, label: is ? "Stefnubreytingar" : "Changes of direction", ref: proTier ? kpiTmRefRange("imaCod") : null },
+              { key: "fr", v: w.pctFr ?? null, label: is ? "Löng samfelld hlaup (vegalengd)" : "Long continuous runs (distance)", ref: null },
+              { key: "stride", v: w.pctStride, label: is ? "Skref í löngum hlaupum" : "Strides in long runs", ref: null },
+            ] as Array<{ key: string; v: number | null; label: string; ref: [number, number] | null }>)
+              .filter((r) => r.v != null).map((r) => ({ key: r.key, label: r.label, x: Math.round(r.v!) / 100, ref: r.ref }));
+            const fxN2 = (n: number) => (is ? String(n).replace(".", ",") : String(n));
+            return (<>
+              <MesoWeeksHeader is={is} anyClosed={anyClosed} onToggleAll={() => setInOpenWeeks(Object.fromEntries(mons.map((m) => [m, anyClosed])))}
+                intro={isPlayerScope
+                  ? (is ? `Lotan hans ${player?.name ?? ""}, einstaklingsmiðuð. Aðeins til sýnis — breyttu dögum í Liðs-umfangi.` : `${player?.name ?? "The player"}'s own block, individualised. Read-only — edit the days in Team scope.`)
+                  : (is ? "Efri rönd dags: Frí ↔ Æfing (vistast sjálfkrafa í Vikuuppsetningu; leikir koma úr Makró). Smelltu á daginn til að breyta dagsgerð. Smelltu á viku til að opna hana." : "Top strip of a day: Off ↔ Session (auto-saves to Week Setup; games come from Macro). Click the day to change its type. Click a week to open it.")} />
 
-            {/* 2 — THE CALENDAR: one grid, full width (single column so the whole week is visible). */}
-            <section className={`${card} min-w-0`}>
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <h2 className={h2}>{is ? "Dagatal lotunnar" : "Block calendar"}</h2>
-                {autoSave && (
-                  <span className={`ml-auto text-[12px] font-semibold ${autoSave === "err" ? "text-rose-700" : autoSave === "saving" ? "text-slate-500" : "text-emerald-700"}`}>
-                    {autoSave === "saving" ? (is ? "Vista…" : "Saving…") : autoSave === "err" ? (is ? "⚠ Vistun mistókst" : "⚠ Save failed") : (is ? "✓ Vistað sjálfkrafa" : "✓ Saved automatically")}
-                  </span>
-                )}
+              {/* The in-season rules this page follows (a day set against them stays, marked ⚠). */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[#1c7a4a]/30 bg-[#1c7a4a]/[0.05] px-3 py-2 text-[12.5px] text-slate-700">
+                <b className="text-slate-900">{is ? "Reglur keppnistímabils:" : "In-season rules:"}</b>
+                <span>{is ? "Aldrei þrjár æfingar í röð" : "Never three sessions in a row"}</span>
+                <span className="text-slate-400">·</span>
+                <span>{is ? "Alltaf frí á MD+2" : "Always off on MD+2"}</span>
+                <span className="text-slate-400">·</span>
+                <span>{is ? "Aðeins skráðir leikir (úr Makró)" : "Only entered games (from Macro)"}</span>
+                <span className="w-full text-[11px] text-slate-500">{is ? "Dagur sem þú setur gegn reglu helst og fær ⚠." : "A day you set against a rule stays and gets ⚠."} <span className="font-mono">{THREE_IN_A_ROW_RULE} · INSEASON_MD2_OFF</span> · {is ? "MicroPulse-regla" : "MicroPulse rule"}; Buchheit 2023b</span>
               </div>
-              <p className="mt-1 text-[13px] text-slate-600">{is ? "Efri hluti dags: smelltu til að skipta Frí ↔ Æfing (vistast sjálfkrafa í Vikuuppsetningu; leikir koma úr Leikjaskrá). Neðri hluti: dagsgerð + Player Load sem kerfið reiknar — smelltu til að breyta deginum." : "Top of a day: click to toggle Off ↔ Session (auto-saves to Week Setup; matches come from Fixtures). Bottom: the day-type + Player Load the system computes — click to edit the day."}</p>
-              {isPlayerScope && (
-                <p className="mt-1.5 rounded-lg bg-[#2740e6]/[0.06] px-2.5 py-1.5 text-[12px] text-[#2740e6]">{is ? `Leikmanns-umfang (${player?.name}) — þetta er lotan HANS, einstaklingsmiðuð (leik-miðuð, þök/trim/áhersla). Les-only: skiptu í Liðs-umfang til að breyta dagsgerðum.` : `Player scope (${player?.name}) — this is HIS block, individualised (match-anchored, caps/trim/steer). Read-only: switch to Team scope to edit day-types.`}</p>
-              )}
               {!isPlayerScope && !isBasketball && (
-                <StrengthDeliveryNote delivery={delivery} season={offPhaseStart != null && calStart >= offPhaseStart ? "build" : "maintain"} is={is} className="mt-2" />
+                <StrengthDeliveryNote delivery={delivery} season={offPhaseStart != null && calStart >= offPhaseStart ? "build" : "maintain"} is={is} />
               )}
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-slate-600">
-                {(["match", "session", "off"] as DayState[]).map((st) => <span key={st} className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px] border border-slate-300" style={{ background: stateBg[st] }} />{stateLbl[st]}</span>)}
-                <span className="h-4 w-px bg-slate-200" />
-                {["mechanical", "locomotive", "mixed", "activation", "topup"].map((t) => <span key={t} className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px]" style={{ background: tint[t], boxShadow: `inset 0 0 0 1.5px ${typeColor[t]}` }} />{typeName(t)}</span>)}
-              </div>
-              <div className="mt-3 overflow-x-auto">
-                <div className="grid min-w-[620px] gap-1.5" style={{ gridTemplateColumns: "64px repeat(7, minmax(0, 1fr))" }}>
-                  <div />
-                  {dows.map((d) => <div key={d} className="pb-0.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">{d}</div>)}
-                  {Array.from({ length: blkWeeks }, (_, i) => {
-                    const w = mesoCalBlock?.weeks[i] ?? null;
-                    const wkOff = offPhaseStart != null && isoAdd(calStart, i * 7) >= offPhaseStart;
-                    return (
-                      <React.Fragment key={i}>
-                        <div className="flex flex-col justify-center pr-1" title={wkOff ? (is ? "Off-season þróunarvika" : "Off-season development week") : w ? `${is ? w.intent.is : w.intent.en}${w.capNote ? ` — ${is ? w.capNote.is : w.capNote.en}` : ""}` : undefined}>
-                          <span className="text-[13px] font-bold text-slate-900">{is ? "V" : "W"}{i + 1}</span>
-                          {w && <span className={`text-[11px] font-bold ${w.isDeload ? "text-[#9A5B06]" : "text-[#1B2DA8]"}`}>{w.isLight ? (is ? "létt" : "light") : w.isDeload ? (is ? "niðurtr." : "deload") : `×${w.mult.toFixed(2)}`}</span>}
-                          {wkOff && <span className="mt-0.5 w-fit rounded bg-slate-200 px-1 text-[10px] font-bold text-slate-700">Off-s.</span>}
-                          {!wkOff && w?.capNote && <span className="text-[11px] font-semibold text-amber-800">⚑ {is ? "þak" : "cap"}</span>}
-                          {confirmMark(isoAdd(calStart, i * 7))}
-                          {deliveryStd && !isPlayerScope && !isBasketball && (() => { const dwk = deliveryWeek(isoAdd(calStart, i * 7)); return dwk && !programmeCovers(dwk) && <span className="text-[10px] font-semibold text-[#8a5a12]" title={is ? NO_PROGRAMME.is : NO_PROGRAMME.en}>⚠ {is ? "ekkert kerfi" : "no programme"}</span>; })()}
-                        </div>
-                        {Array.from({ length: 7 }, (_, d) => {
-                          const iso = isoAdd(calStart, i * 7 + d);
+              {!isPlayerScope && (() => { const n = teamMatchUnitNote(blkUnit.load, fullMatchPl); return n && <p className="px-1 text-[12px] text-slate-600">{is ? `Leikdagurinn: ${n.is} Æfingadagarnir skalast frá fyrri tölunni.` : `The match day: ${n.en} Training days scale from the first number.`}</p>; })()}
+
+              {mons.map((mon, i) => {
+                const w = mesoCalBlock?.weeks[i] ?? null;
+                const wkOff = offPhaseStart != null && mon >= offPhaseStart;
+                const open = isOpen(mon, i);
+                const toggle = () => setInOpenWeeks((o) => ({ ...o, [mon]: !open }));
+                const openInWeekSetup = () => { setPreseasonJumpWeek(mon); setTab("micro"); };
+                const x = calWeekMultiple(w);
+                const dwk = deliveryStd && !isPlayerScope && !isBasketball ? deliveryWeek(mon) : null;
+                const noProg = !!dwk && !programmeCovers(dwk);
+                const isos = Array.from({ length: 7 }, (_, d) => isoAdd(mon, d));
+                const breaks = isos.filter((iso) => ruleBreaks.has(iso));
+                const wkGames = gamesInWeek(allFx, mon);
+                const wkTests = scheduledTests.filter((s) => s.test_date >= mon && s.test_date < isoAdd(mon, 7));
+                const intentTxt = wkOff ? (is ? "Þróunarvika utan tímabils" : "Off-season development week") : w ? (is ? w.intent.is : w.intent.en) : "";
+                const chips: DayChip[] = isos.map((iso, d) => {
+                  const cd = w?.days[d] ?? null;
+                  const type = cd?.type ?? ((blkSkeleton[iso] ?? "off") === "match" ? "match" : "rest");
+                  return { type, title: `${dows[d]} · ${type === "rest" ? (is ? "Frí" : "Off") : typeName(type)}${cd && cd.type !== "rest" && cd.load != null ? ` · PL ${dash(cd.load)}` : ""}${ruleBreaks.has(iso) ? " · ⚠" : ""}` };
+                });
+                const badge = (
+                  <span className="flex flex-wrap items-center justify-end gap-1.5">
+                    {breaks.length > 0 && <span className="rounded-full bg-[#de9328]/15 px-2 py-0.5 text-[11px] font-semibold text-[#7a4a06]">⚠ {breaks.length} {is ? "gegn reglu" : "against a rule"}</span>}
+                    {noProg && <span className="text-[11px] font-semibold text-[#8a5a12]" title={is ? NO_PROGRAMME.is : NO_PROGRAMME.en}>⚠ {is ? "ekkert kerfi" : "no programme"}</span>}
+                    {confirmBadge(mon)}
+                  </span>
+                );
+                if (!open) return (
+                  <MesoWeekCollapsed key={mon} is={is} weekNo={i + 1} onOpen={toggle} days={chips} badge={badge}
+                    dateLine={<>{shortDate(mon, is)}{w?.isLight ? (is ? " · létt vika" : " · light week") : w?.isDeload ? (is ? " · niðurtröppun" : " · deload") : ""}</>}
+                    load={x} loadSub={<>{intentTxt}{w?.capNote && !wkOff ? <span className="text-[#8a5a10]"> · ⚑ {is ? "þak" : "cap"}</span> : null}</>} />
+                );
+                return (
+                  <MesoWeekOpen key={mon} is={is} weekNo={i + 1} onClose={toggle} load={x}
+                    date={<button type="button" onClick={openInWeekSetup} title={is ? "Opna í Vikuuppsetningu" : "Open in Week Setup"} className="text-[13px] text-slate-600 underline decoration-dotted underline-offset-2 hover:text-[#2740e6]">{shortDate(mon, is)}</button>}
+                    extras={<>
+                      {intentTxt && <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${w?.isDeload ? "bg-[#de9328]/15 text-[#7a4a06]" : wkOff ? "bg-slate-200 text-slate-700" : "bg-[#2740e6]/[0.08] text-[#1b2da8]"}`}>{intentTxt}</span>}
+                      {wkGames.map((g) => <span key={g} className="inline-flex items-center gap-1.5 rounded-full bg-[#de9328]/15 px-2 py-0.5 text-[11px] font-semibold text-[#7a4a06]"><span className="h-2 w-2 rounded-full bg-[#de9328]" />{is ? "Leikur" : "Game"} {shortDate(g, is)}</span>)}
+                      {wkTests.map((s) => <span key={s.id} className="inline-flex items-center gap-1.5 rounded-full bg-[#1C7A4A] px-2 py-0.5 text-[11px] font-semibold text-white"><span className="h-2 w-2 rotate-45 bg-white" />{shortDate(s.test_date, is)} · {is ? testShortName(s.test_key, aerobicTest).is : testShortName(s.test_key, aerobicTest).en}</span>)}
+                      {badge}
+                    </>}
+                    right={<button type="button" onClick={openInWeekSetup} className="ml-auto text-[13px] font-semibold text-[#2740e6] hover:underline">{is ? "Opna í Vikuuppsetningu →" : "Open in Week Setup →"}</button>}>
+                    {w?.capNote && !wkOff && <p className="mt-1.5 text-[12px] text-[#8a5a10]">⚑ {is ? w.capNote.is : w.capNote.en}</p>}
+                    <div className="mt-3 overflow-x-auto">
+                      <div className="grid min-w-[560px] grid-cols-7 gap-1.5">
+                        {isos.map((iso, d) => {
                           const st: DayState = blkSkeleton[iso] ?? "off";
                           const cd = w?.days[d] ?? null;
                           const isToday = iso === todayIso;
-                          const ima = cd && cd.type !== "rest" ? imaLine(cd, is, plan?.tier?.tier === "pro") : "";
+                          const ima = cd && cd.type !== "rest" ? imaLine(cd, is, proTier) : "";
                           const ro = isPlayerScope; // player scope is read-only (edit the structure in Team scope)
+                          const pt = dwk && cd && cd.type !== "rest" ? programmeTitle(dwk, cd.md) : null;
                           return (
-                            <div key={d} className={`flex min-w-0 flex-col overflow-hidden rounded-lg border ${isToday ? "border-[#a83e28] ring-1 ring-[#a83e28]" : "border-slate-200"} ${wkOff ? "opacity-90" : ""}`}>
-                              <button type="button" onClick={ro ? undefined : () => cycleDay(iso)} disabled={ro} title={`${shortDate(iso, is)} — ${stateLbl[st]}${st === "match" ? (is ? " (úr Leikjaskrá)" : " (from Fixtures)") : ""}${ro ? (is ? " · les-only (breyttu í Liðs-umfangi)" : " · read-only (edit in Team scope)") : ""}`}
-                                className={`flex min-h-[30px] items-center justify-between gap-1 px-1.5 text-[12px] font-semibold ${ro ? "cursor-default" : ""}`} style={{ background: stateBg[st], color: stateInk[st] }}>
-                                <span className="tabular-nums">{new Date(`${iso}T00:00:00Z`).getUTCDate()}</span>
-                                <span className="truncate text-[11px]">{stateLbl[st]}</span>
+                            <div key={iso} className={`flex min-w-0 flex-col overflow-hidden rounded-[10px] border ${isToday ? "border-[#a83e28] ring-1 ring-[#a83e28]" : cd?.type === "rest" || !cd ? "border-dashed border-[#d9d5cc]" : "border-transparent"}`}>
+                              <button type="button" onClick={ro ? undefined : () => cycleDay(iso)} disabled={ro} title={`${shortDate(iso, is)} — ${stateLbl[st]}${st === "match" ? (is ? " (úr Leikjaskrá)" : " (from Fixtures)") : ""}${ro ? (is ? " · les-only (breyttu í Liðs-umfangi)" : " · read-only (edit in Team scope)") : (st === "match" ? "" : is ? " · smelltu: Frí ↔ Æfing" : " · click: Off ↔ Session")}`}
+                                className={`flex min-h-[26px] items-center justify-between gap-1 px-2 text-[11px] font-semibold ${ro ? "cursor-default" : ""}`} style={{ background: st === "match" ? "#de9328" : stateBg[st], color: stateInk[st] }}>
+                                <span>{dows[d]} <span className="tabular-nums">{new Date(`${iso}T00:00:00Z`).getUTCDate()}</span></span>
+                                <span className="truncate">{stateLbl[st]}</span>
                               </button>
-                              <button type="button" onClick={ro ? undefined : () => setDayModal(iso)} disabled={ro} className={`flex min-h-[40px] flex-col items-start justify-center px-1.5 py-1 text-left ${ro ? "cursor-default" : "hover:brightness-95"}`}
-                                style={{ background: cd ? tint[cd.type] : "#FFFFFF" }}
+                              <button type="button" onClick={ro ? undefined : () => setDayModal(iso)} disabled={ro} className={`flex min-h-[78px] flex-col items-start gap-0.5 px-2 pb-2 pt-1.5 text-left ${ro ? "cursor-default" : "hover:brightness-95"}`}
+                                style={{ background: cd && cd.type !== "rest" ? tint[cd.type] : "#FFFFFF" }}
                                 title={!cd || cd.type === "rest" ? (ro ? (is ? "Les-only — breyttu dagsgerð í Liðs-umfangi" : "Read-only — change the day-type in Team scope") : (is ? "Smelltu til að breyta dagsgerð" : "Click to change the day-type")) : `${is ? cd.label.is : cd.label.en} · PL ${dash(cd.load)}${ima ? ` · ${ima}` : ""}`}>
                                 {cd && cd.type !== "rest" ? (<>
                                   {ruleBreaks.has(iso) && <span className="w-full truncate rounded bg-[#de9328]/20 px-1 text-[10px] font-bold text-[#7a4a06]" title={is ? ruleBreaks.get(iso)!.is : ruleBreaks.get(iso)!.en}>⚠ {is ? "gegn reglu" : "against rule"}</span>}
-                                  <span className="w-full truncate text-[12px] font-bold" style={{ color: typeColor[cd.type] }}>{typeName(cd.type)}</span>
-                                  <span className="text-[11px] tabular-nums text-slate-600">{dash(cd.load)}</span>
-                                  {(cd.accel != null || cd.decel != null) && <span className="text-[10px] tabular-nums text-slate-500" title={plan?.tier?.tier === "pro" ? (is ? "IMA hröðun / hemlun, fjöldi" : "IMA accelerations / decelerations, count") : (is ? "Hröðun / hemlun (GPS), fjöldi" : "Accelerations / decelerations (GPS), count")}>Acc/Dec {cd.accel ?? "–"}/{cd.decel ?? "–"}</span>}
+                                  <span className="w-full truncate text-[12px] font-semibold" style={{ color: typeColor[cd.type] }}>{typeName(cd.type)}</span>
+                                  <span className="text-[15px] font-bold tabular-nums text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{dash(cd.load)}</span>
+                                  {(cd.accel != null || cd.decel != null) && <span className="text-[10px] tabular-nums text-slate-500" title={proTier ? (is ? "IMA hröðun / hemlun, fjöldi" : "IMA accelerations / decelerations, count") : (is ? "Hröðun / hemlun (GPS), fjöldi" : "Accelerations / decelerations (GPS), count")}>Acc/Dec {cd.accel ?? "–"}/{cd.decel ?? "–"}</span>}
                                   {cd.fr != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "Vegalengd í löngum samfelldum hlaupum á leikhraða (≥18 sek, 11 km/klst+; IMA Free Running), metrar. Skokk telst ekki með. Ekki sprettir" : "Distance in long continuous runs at match pace (≥18 s, 11 km/h+; IMA Free Running), metres. Jogs do not count. Not sprinting"}>FR {cd.fr} m</span>}
                                   {cd.stride != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "Skref í löngum samfelldum hlaupum á leikhraða (≥18 sek, 11 km/klst+; IMA Free Running), fjöldi. Skokk telst ekki með" : "Strides in long continuous runs at match pace (≥18 s, 11 km/h+; IMA Free Running), count. Jogs do not count"}>{is ? "Skref" : "Stride"} {cd.stride}</span>}
                                   {cd.cod != null && <span className="text-[10px] tabular-nums text-slate-500" title={is ? "IMA stefnubreytingar, fjöldi" : "IMA CoD (change of direction), count"}>CoD {cd.cod}</span>}
-                                  {deliveryStd && !isPlayerScope && !isBasketball && (() => { const pt = programmeTitle(deliveryWeek(isoAdd(calStart, i * 7)), cd.md); return pt && <span className="w-full truncate text-[10px] font-semibold text-[#55389e]" title={`${is ? "Styrkur (Custom Programme)" : "Strength (Custom Programme)"}: ${pt}`}>{pt}</span>; })()}
-                                </>) : <span className="text-[11px] text-slate-500">—</span>}
+                                  {pt && <span className="max-w-full truncate rounded-full bg-[#2740e6]/[0.08] px-1.5 py-px text-[10px] font-semibold text-[#2740e6]" title={`${is ? "Styrkur (Custom Programme)" : "Strength (Custom Programme)"}: ${pt}`}>{pt}</span>}
+                                </>) : <span className="text-[12px] text-slate-500">{is ? "Frí" : "Off"}</span>}
                               </button>
                             </div>
                           );
                         })}
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-              </div>
-              {!isPlayerScope && (() => { const n = teamMatchUnitNote(blkUnit.load, fullMatchPl); return n && <p className="mt-3 text-[12px] font-medium text-slate-700">{is ? `Leikreiturinn: ${n.is} Æfingadagarnir skalast frá fyrri tölunni.` : `The Match cell: ${n.en} Training days scale from the first number.`}</p>; })()}
-              <p className="mt-3 text-[12px] text-slate-500">{is ? "Talan = Player Load; „FR“ = vegalengd í löngum samfelldum hlaupum (≥18 sek, IMA Free Running, metrar) og „Skref“ = skref í löngum hlaupum (≥18 sek, IMA Free Running) fylgja hlaupa-ásnum — ekki sprettir (sprettir = GPS); „CoD“ = IMA stefnubreytingar og „Acc/Dec“ = hröðun/hemlun (IMA á Pro) fylgja vélræna ásnum — þar sem gögnin eru til. " + (blkHold ? "Keppnislota heldur staðalvikunni, ekkert þrep milli vikna; hvert mæligildi við leikþak (⚑ sýnir hvað heldur vikunni)." : "Vikuálagið er stigvaxandi per mæligildi (magn hækkar hraðar en háhraði; hvert við leikþak — ⚑ sýnir hvað heldur vikunni).") + " Lýsandi — upphafspunktur, ekki viðmið. Á keppnistímabili mest 2 æfingar í röð og frí á MD+2; utan þess aldrei fleiri en 3 í röð. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021." : "The number = Player Load; \"FR\" = distance in long continuous runs (≥18 s, IMA Free Running, metres) and \"Stride\" = strides in long runs (≥18 s, IMA Free Running) follow the running axis — not sprinting (sprint = GPS); \"CoD\" = IMA change of direction and \"Acc/Dec\" = accelerations/decelerations (IMA on Pro) follow the mechanical axis — where the feed carries them. " + (blkHold ? "A competitive block holds the standard week, no step between weeks; each KPI ceilings at match (⚑ shows what held the week)." : "Weekly overload ramps per-KPI (volume climbs faster than HSR; each ceilings at match — ⚑ shows what held the week).") + " Descriptive — a starting point, not a norm. In season at most 2 sessions in a row and off on MD+2; outside it never more than 3 in a row. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021."}</p>
-              {(() => {
-                const pct = (x: number) => Math.round(x * 100);
-                const std = CAL_SHARE_IMA;
-                const cal = plan.imaCalibration;
-                const own = cal?.ownVars ?? [];
-                const [lo, hi] = CAL_SHARE_IMA_REF.mechanical.range;
-                const name: Record<ImaVar, string> = { accel: "Acc", decel: "Dec", cod: "CoD" };
-                const cmp = cal ? compareImaNormToReference(cal).mechanical : {};
-                const list = (s: ImaNormStatus) => own.filter((k) => cmp[k] === s).map((k) => name[k]).join(", ");
-                const above = list("above"), below = list("below");
-                const rangeTxt = `${pct(lo)}–${pct(hi)}%`;
-                const verdict = is
-                  ? (!above && !below ? `innan birta bilsins ${rangeTxt}` : `${[above && `${above} yfir`, below && `${below} undir`].filter(Boolean).join(" og ")} birta bilinu ${rangeTxt}`)
-                  : (!above && !below ? `inside the published ${rangeTxt}` : `${[above && `${above} above`, below && `${below} below`].filter(Boolean).join(" and ")} the published ${rangeTxt}`);
-                return (
-                  <div className="mt-1 space-y-0.5 text-[12px] text-slate-500">
-                    <p>{is
-                      ? `Acc/Dec/CoD-markmið fylgja birtum rannsóknum: stærsti dagur um ${pct(std.mechanical.accel)}% af leik, miðja vikunnar um ${pct(std.mixed.accel)}%, hlaupadagur um ${pct(std.locomotive.accel)}%, dagurinn fyrir leik um ${pct(std.activation.accel)}%. Vikustigun bætist ofan á.`
-                      : `Acc/Dec/CoD targets follow published research: biggest day about ${pct(std.mechanical.accel)}% of a match, mid-week about ${pct(std.mixed.accel)}%, running day about ${pct(std.locomotive.accel)}%, day before about ${pct(std.activation.accel)}%. Weekly progression comes on top.`}</p>
-                    {cal && own.length > 0 && (
-                      <p>{is
-                        ? `Stærstu dagar liðsins ykkar ná ${own.map((k) => `${pct(cal.shares.mechanical[k])}%`).join(" / ")} af leik (${own.map((k) => name[k]).join("/")}): ${verdict}. Byggt á ${cal.nDays} æfingadögum og ${cal.nMatchRows} heilum leikframmistöðum.`
-                        : `Your team's biggest days reach ${own.map((k) => `${pct(cal.shares.mechanical[k])}%`).join(" / ")} of a match (${own.map((k) => name[k]).join("/")}): ${verdict}. Based on ${cal.nDays} training days and ${cal.nMatchRows} near-full match appearances.`}</p>
+                      </div>
+                    </div>
+                    {breaks.length > 0 && (
+                      <ul className="mt-2 space-y-0.5 text-[12px] font-medium text-[#7a4a06]">
+                        {breaks.map((iso) => <li key={iso}>⚠ {dows[isos.indexOf(iso)]} {shortDate(iso, is)}: {is ? ruleBreaks.get(iso)!.is : ruleBreaks.get(iso)!.en}</li>)}
+                      </ul>
                     )}
-                  </div>
+                    {(w?.isLight || w?.isDeload) && sel?.inSeason && <p className="mt-2 text-[12px] text-slate-600">{is ? IN_SEASON_DELOAD_NOTE.is : IN_SEASON_DELOAD_NOTE.en}</p>}
+                    {dwk && w && (() => {
+                      const shown = w.days.map((d) => ({ md: d.md, title: d.type === "rest" ? null : programmeTitle(dwk, d.md) })).filter((d) => d.title);
+                      return (
+                        <div className="mt-3 rounded-[10px] bg-[#f8f7f3] px-3.5 py-2.5 text-[13px] text-slate-600">
+                          <b className="font-semibold text-[#14181c]">{is ? "Styrkur · Staðlað" : "Strength · Standard"}</b>
+                          {programmeCovers(dwk)
+                            ? <> · {dwk.programme!.setName}{shown.length > 0 && <> · {shown.map((d) => `${d.md || (is ? "dagur" : "day")} ${d.title}`).join(" · ")}</>}</>
+                            : <> · <span className="text-[#8a5a12]">{is ? NO_PROGRAMME.is : NO_PROGRAMME.en}</span></>}
+                        </div>
+                      );
+                    })()}
+                    {w && varRows(w).length > 0 && (
+                      <details className="mt-3 text-[12px] text-slate-600">
+                        <summary className="cursor-pointer select-none font-semibold text-[#2740e6] hover:underline">{is ? "Sýna álag á hverja breytu" : "Show load per variable"}</summary>
+                        <div className="mt-1.5 grid gap-x-6 gap-y-1 sm:grid-cols-2">
+                          {varRows(w).map((r) => (
+                            <div key={r.key} className="flex items-center justify-between gap-2 border-b border-[#ece9e2] py-1">
+                              <span className="text-slate-700">{r.label}</span>
+                              <span className="flex items-center gap-1.5 tabular-nums"><b className="font-semibold text-[#14181c]">{fxN2(r.x)}×</b>{r.ref && <TmBandChip x={r.x} refRange={r.ref} is={is} className="" />}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="mt-1.5 text-[11px] text-slate-500">{is ? "Það sem æfingadagar vikunnar leggja saman, deilt með einum leik í sömu breytu (leikurinn sjálfur ekki talinn). Merki „innan / yfir / undir“ aðeins þar sem breytan fellur beint að rannsóknarbili (æfing:leikur, PMC6747517)." : "What the week's training days add up to, divided by one match in the same variable (the match itself not counted). A within / above / below mark only where the variable maps straight onto a research range (training:match, PMC6747517)."}</p>
+                      </details>
+                    )}
+                    {w && w.days.some((d) => d.type !== "rest" && imaLine(d, is, proTier)) && (
+                      <details className="mt-1 text-[12px] text-slate-600">
+                        <summary className="cursor-pointer select-none font-semibold text-[#2740e6] hover:underline">{is ? "Sýna vélræn / IMA smáatriði" : "Show mechanical / IMA detail"}</summary>
+                        <ul className="mt-1.5 space-y-0.5 text-slate-700">
+                          {w.days.map((d, di) => ({ d, di })).filter(({ d }) => d.type !== "rest").map(({ d, di }) => (
+                            <li key={di} className="tabular-nums"><span className="text-slate-500">{is ? d.dow.is : d.dow.en} {d.md}</span> · <b style={{ color: typeColor[d.type] }}>{typeName(d.type)}</b> — {imaLine(d, is, proTier) || (is ? "engin IMA-gögn" : "no IMA data")}</li>
+                          ))}
+                        </ul>
+                        <p className="mt-1 text-[11px] text-slate-500">{is ? "Mechanical-dagar hlaða Acc/Dec Band 2–3; Locomotive-dagar hlaða háhraða (GPS) + löng samfelld hlaup — aldrei á sama degi (Buchheit; aftanlæris-vernd)." : "Mechanical days load Acc/Dec Band 2–3; Locomotive days load HSR (GPS) + long continuous runs — never the same day (Buchheit; hamstring protection)."}</p>
+                      </details>
+                    )}
+                  </MesoWeekOpen>
                 );
-              })()}
-              <details className="mt-3">
-                <summary className="cursor-pointer py-1 text-[13px] font-semibold text-[#2740e6]">{is ? "Hvað þýða dagsgerðirnar?" : "What the day-types mean"}</summary>
+              })}
+
+              {/* What the day types and the numbers mean — reference text, behind one toggle. */}
+              <details className="rounded-[14px] border border-[#e3e0d8] bg-white px-5 py-3">
+                <summary className="cursor-pointer select-none text-[13px] font-semibold text-[#2740e6]">{is ? "Hvað þýða dagsgerðirnar og tölurnar?" : "What the day types and numbers mean"}</summary>
                 <ul className="mt-1.5 space-y-1 text-[13px] text-slate-700">
                   <li><b style={{ color: typeColor.mechanical }}>{typeName("mechanical")}</b> — {is ? "þröngt rými, mikil accel/decel — ASD undirb. (lágt háhraðahlaup)." : "tight-space, high accel/decel — ASD prep (low HSR)."}</li>
                   <li><b style={{ color: typeColor.locomotive }}>{typeName("locomotive")}</b> — {is ? "opið rými, hæsti háhraði — hlaupageta." : "open-space, highest HSR — running capacity."}</li>
@@ -3480,6 +3527,34 @@ export default function PeriodizationHubPage() {
                   <li><b style={{ color: typeColor.topup }}>{typeName("topup")}</b> — {is ? "koma <60′ leikmönnum í vikumarkið; endurheimt fyrir byrjunarlið." : "bring <60′ players to the weekly target; recovery for starters."}</li>
                   <li><b style={{ color: typeColor.match }}>{typeName("match")}</b> — {is ? "leikkrafan sjálf (viðmiðunareiningin, 100%)." : "the match demand itself (the reference unit, 100%)."} · <b className="text-slate-600">{is ? "Frí" : "Off"}</b> — {is ? "heill frídagur." : "full rest day."}</li>
                 </ul>
+                <p className="mt-2 text-[12px] text-slate-500">{is ? "Talan = Player Load; „FR“ = vegalengd í löngum samfelldum hlaupum (≥18 sek, IMA Free Running, metrar) og „Skref“ = skref í löngum hlaupum (≥18 sek, IMA Free Running) fylgja hlaupa-ásnum — ekki sprettir (sprettir = GPS); „CoD“ = IMA stefnubreytingar og „Acc/Dec“ = hröðun/hemlun (IMA á Pro) fylgja vélræna ásnum — þar sem gögnin eru til. " + (blkHold ? "Keppnislota heldur staðalvikunni, ekkert þrep milli vikna; hvert mæligildi við leikþak (⚑ sýnir hvað heldur vikunni)." : "Vikuálagið er stigvaxandi per mæligildi (magn hækkar hraðar en háhraði; hvert við leikþak — ⚑ sýnir hvað heldur vikunni).") + " Lýsandi — upphafspunktur, ekki viðmið. Á keppnistímabili mest 2 æfingar í röð og frí á MD+2; utan þess aldrei fleiri en 3 í röð. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021." : "The number = Player Load; \"FR\" = distance in long continuous runs (≥18 s, IMA Free Running, metres) and \"Stride\" = strides in long runs (≥18 s, IMA Free Running) follow the running axis — not sprinting (sprint = GPS); \"CoD\" = IMA change of direction and \"Acc/Dec\" = accelerations/decelerations (IMA on Pro) follow the mechanical axis — where the feed carries them. " + (blkHold ? "A competitive block holds the standard week, no step between weeks; each KPI ceilings at match (⚑ shows what held the week)." : "Weekly overload ramps per-KPI (volume climbs faster than HSR; each ceilings at match — ⚑ shows what held the week).") + " Descriptive — a starting point, not a norm. In season at most 2 sessions in a row and off on MD+2; outside it never more than 3 in a row. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021."}</p>
+            {(() => {
+              const pct = (x: number) => Math.round(x * 100);
+              const std = CAL_SHARE_IMA;
+              const cal = plan.imaCalibration;
+              const own = cal?.ownVars ?? [];
+              const [lo, hi] = CAL_SHARE_IMA_REF.mechanical.range;
+              const name: Record<ImaVar, string> = { accel: "Acc", decel: "Dec", cod: "CoD" };
+              const cmp = cal ? compareImaNormToReference(cal).mechanical : {};
+              const list = (s: ImaNormStatus) => own.filter((k) => cmp[k] === s).map((k) => name[k]).join(", ");
+              const above = list("above"), below = list("below");
+              const rangeTxt = `${pct(lo)}–${pct(hi)}%`;
+              const verdict = is
+                ? (!above && !below ? `innan birta bilsins ${rangeTxt}` : `${[above && `${above} yfir`, below && `${below} undir`].filter(Boolean).join(" og ")} birta bilinu ${rangeTxt}`)
+                : (!above && !below ? `inside the published ${rangeTxt}` : `${[above && `${above} above`, below && `${below} below`].filter(Boolean).join(" and ")} the published ${rangeTxt}`);
+              return (
+                <div className="mt-1 space-y-0.5 text-[12px] text-slate-500">
+                  <p>{is
+                    ? `Acc/Dec/CoD-markmið fylgja birtum rannsóknum: stærsti dagur um ${pct(std.mechanical.accel)}% af leik, miðja vikunnar um ${pct(std.mixed.accel)}%, hlaupadagur um ${pct(std.locomotive.accel)}%, dagurinn fyrir leik um ${pct(std.activation.accel)}%. Vikustigun bætist ofan á.`
+                    : `Acc/Dec/CoD targets follow published research: biggest day about ${pct(std.mechanical.accel)}% of a match, mid-week about ${pct(std.mixed.accel)}%, running day about ${pct(std.locomotive.accel)}%, day before about ${pct(std.activation.accel)}%. Weekly progression comes on top.`}</p>
+                  {cal && own.length > 0 && (
+                    <p>{is
+                      ? `Stærstu dagar liðsins ykkar ná ${own.map((k) => `${pct(cal.shares.mechanical[k])}%`).join(" / ")} af leik (${own.map((k) => name[k]).join("/")}): ${verdict}. Byggt á ${cal.nDays} æfingadögum og ${cal.nMatchRows} heilum leikframmistöðum.`
+                      : `Your team's biggest days reach ${own.map((k) => `${pct(cal.shares.mechanical[k])}%`).join(" / ")} of a match (${own.map((k) => name[k]).join("/")}): ${verdict}. Based on ${cal.nDays} training days and ${cal.nMatchRows} near-full match appearances.`}</p>
+                  )}
+                </div>
+              );
+            })()}
                 <p className="mt-1.5 text-[12px] text-slate-500">{is
                   ? "Acc/Dec/CoD-viðmiðin: rannsóknirnar lýsa því hvað úrvalslið gera, þær sanna ekki hvað er best. Þess vegna eru markmiðin miðgildi innan bils, hlutfall af leik liðsins sjálfs, því tölur milli mælitækja eru ekki sambærilegar. Hlaupadagurinn byggir á ráðleggingum Buchheit fyrir fagfólk, ekki mælingum, og engin rannsókn mælir IMA CoD beint, svo það fylgir sama hlutfalli. Stevens 2017 · Martín-García 2018 · Clemente 2019 · Silva 2022."
                   : "The Acc/Dec/CoD reference: these studies describe what elite teams do, they do not prove what is best. So each target is a midpoint inside a range, as a share of your own match, because counts from different devices are not comparable. The running day rests on Buchheit's practitioner guidance rather than measurement, and no study measures IMA CoD directly, so it follows the same share. Stevens 2017 · Martín-García 2018 · Clemente 2019 · Silva 2022."}</p>
@@ -3488,30 +3563,15 @@ export default function PeriodizationHubPage() {
                   : "High-speed running and the hard accelerations and braking follow the same idea. The running day is set at about 45% of a match at high speed, MicroPulse's line near the biggest training days measured, but no study isolates a pure running day, so a team that wants more can go higher. Sprint targets are the least certain, only the biggest day is measured. Stevens 2017 · Martín-García 2018 · Dalen 2019 · Gualtieri 2023."}</p>
                 <p className="mt-1.5 text-[12px] text-slate-500">Issurin 2010 (block periodisation) · Owen 2017 (positional mesocycle, MD taper) · Oliveira 2019 (congested-week variants) · Oliveira 2021 (ACWR/monotony on sRPE+HSR) · Teixeira 2021 (monitoring) · Martín-García 2018 (%-of-match-demand). {is ? "Lýsandi — aldrei readiness-liturinn." : "Descriptive — never the readiness colour."}</p>
               </details>
-              {mesoCalBlock && (mesoCalBlock.unit.accHiEff != null || mesoCalBlock.unit.stride != null || mesoCalBlock.unit.fr != null || mesoCalBlock.unit.cod != null || mesoCalBlock.unit.accel != null) && (
-                <details className="mt-1">
-                  <summary className="cursor-pointer py-1 text-[13px] font-semibold text-[#2740e6]">{is ? "Sýna vélrænt / IMA (Acc/Dec, Acc·Dec B2–3, skref og vegal. í löngum hlaupum, stefnubr., stefna)" : "Show mechanical/IMA detail (Acc/Dec, Acc·Dec B2–3, long-run strides + distance, CoD, direction)"}</summary>
-                  <ul className="mt-1.5 space-y-0.5 text-[12px] text-slate-700">
-                    {mesoCalBlock.weeks.flatMap((w) => w.days.map((d, i) => ({ d, i, wi: w.index })).filter(({ d }) => d.type !== "rest")).map(({ d, i, wi }) => (
-                      <li key={`${wi}-${i}`} className="tabular-nums"><span className="text-slate-500">{is ? "V" : "W"}{wi + 1} {is ? d.dow.is : d.dow.en} {d.md}</span> · <b style={{ color: typeColor[d.type] }}>{typeName(d.type)}</b> — {imaLine(d, is, plan?.tier?.tier === "pro") || (is ? "engin IMA-gögn" : "no IMA data")}</li>
-                    ))}
-                  </ul>
-                  <p className="mt-1 text-[12px] text-slate-500">{is ? "Mechanical-dagar hlaða Acc/Dec Band 2–3; Locomotive-dagar hlaða háhraða (GPS) + löng samfelld hlaup — aldrei á sama degi (Buchheit; aftanlæris-vernd)." : "Mechanical days load Acc/Dec Band 2–3; Locomotive days load HSR (GPS) + long continuous runs — never the same day (Buchheit; hamstring protection)."}</p>
-                </details>
-              )}
-            </section>
-          </div>
-          )}
 
-          {/* 4 — MESO → MICRO handoff */}
-          <section className={`${card} flex flex-wrap items-center gap-3`}>
-            <div className="min-w-0 flex-[1_1_320px]">
-              <h2 className={h2}>{is ? "Næst: vikan" : "Next: the week"}</h2>
-              <p className="mt-0.5 text-[13px] text-slate-600">{is ? "Dagarnir hér vistast í Vikuuppsetningu — vikan birtist dag-fyrir-dag í Míkró-lotu flipanum." : "The days here save to Week Setup — the week appears day by day in the Micro Cycle tab."}</p>
-            </div>
-            <button onClick={() => setTab("micro")} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-slate-50">{is ? "Míkró-lota (vikan) →" : "Micro Cycle (the week) →"}</button>
-            <a href="/coach/training-programme" className="inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-[#2740e6] hover:bg-slate-50">{is ? "Æfingavika (per leikmann) →" : "Training Programme (per player) →"}</a>
-          </section>
+              {/* Next: the week, day by day (Micro) and per player (Training Programme). */}
+              <div className="flex flex-wrap items-center gap-3 px-1 text-[13px] text-slate-600">
+                <span>{is ? "Dagarnir hér vistast í Vikuuppsetningu." : "The days here save to Week Setup."}</span>
+                <button type="button" onClick={() => setTab("micro")} className="font-semibold text-[#2740e6] hover:underline">{is ? "Míkró-lota (vikan) →" : "Micro Cycle (the week) →"}</button>
+                <a href="/coach/training-programme" className="font-semibold text-[#2740e6] hover:underline">{is ? "Æfingavika (per leikmann) →" : "Training Programme (per player) →"}</a>
+              </div>
+            </>);
+          })()}
 
             </div>);
           })()}
