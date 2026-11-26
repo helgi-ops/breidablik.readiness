@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  blockVolumeView, calWeekMultiple, gamesInRange, gamesInWeek, inSeasonRuleBreaks, minMax, sessionsInWeek, RULE_MD2,
+  blockVolumeView, calWeekMultiple, gamesInRange, gamesInWeek, inSeasonRuleBreaks, minMax, sessionsInWeek, RULE_MD2, RULE_THREE,
 } from "../inSeasonMesoView";
 import {
   kpiTmRefRange, kpiVolumes, mesoTotalMultiple, mesoWeeklyMultiples, standardTrainingDays, weeklyKpiMultiple, weeklyTrainingMultiple,
@@ -96,6 +96,36 @@ describe("inSeasonRuleBreaks", () => {
 
   it("an empty block has no marks", () => {
     expect(inSeasonRuleBreaks([], [], season).size).toBe(0);
+  });
+
+  it("marks three training days in a row (every day of the run)", () => {
+    // Mon–Wed sessions, Thu off, Fri activation, Sat match (13 June), Sun off.
+    const r = inSeasonRuleBreaks(wk(["mixed", "locomotive", "mechanical", "rest", "activation", "match", "rest"]), ["2026-06-13"], season);
+    expect(r.get("2026-06-08")).toEqual(RULE_THREE);
+    expect(r.get("2026-06-09")).toEqual(RULE_THREE);
+    expect(r.get("2026-06-10")).toEqual(RULE_THREE);
+    expect(r.has("2026-06-12")).toBe(false);
+  });
+
+  it("two in a row is fine, and a match breaks a run", () => {
+    expect(inSeasonRuleBreaks(wk(["mixed", "locomotive", "rest", "mechanical", "activation", "match", "rest"]), ["2026-06-13"], season).size).toBe(0);
+    expect(inSeasonRuleBreaks(wk(["rest", "rest", "mechanical", "activation", "match", "mixed", "rest"]), ["2026-06-12"], season).size).toBe(0);
+  });
+
+  it("a run across two weeks is marked", () => {
+    const two = [
+      { weekStart: "2026-06-08", days: ["rest", "rest", "rest", "rest", "rest", "mixed", "mechanical"].map((type) => ({ type })) },
+      { weekStart: "2026-06-15", days: ["locomotive", "rest", "rest", "rest", "rest", "rest", "rest"].map((type) => ({ type })) },
+    ];
+    const r = inSeasonRuleBreaks(two, [], season);
+    expect([...r.keys()].sort()).toEqual(["2026-06-13", "2026-06-14", "2026-06-15"]);
+  });
+
+  it("MD+2 wins when a day breaks both rules", () => {
+    // Match Sat 6 June → Mon 8 is MD+2; Mon–Wed is also three in a row.
+    const r = inSeasonRuleBreaks(wk(["mixed", "locomotive", "mechanical", "rest", "rest", "rest", "rest"]), ["2026-06-06"], season);
+    expect(r.get("2026-06-08")).toEqual(RULE_MD2);
+    expect(r.get("2026-06-09")).toEqual(RULE_THREE);
   });
 });
 

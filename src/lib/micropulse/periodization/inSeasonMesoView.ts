@@ -29,11 +29,13 @@ type RuleWeek = { weekStart: string; days: Array<{ type: string }> };
 export function inSeasonRuleBreaks(weeks: RuleWeek[], fixtures: string[], inSeason: { start: string; end: string } | null): Map<string, Bi> {
   const out = new Map<string, Bi>();
   if (!inSeason) return out;
+  // Every shown day counts as part of the plan: checkThreeInARow only reports runs that touch an editable day, so
+  // marking them editable: false (as this used to) hid every three-in-a-row mark. Only `.runs` is read here.
   const rDays: WeekRuleDay[] = [];
   weeks.forEach((w) => w.days.forEach((d, i) => {
     const iso = addDays(w.weekStart, i);
     if (iso < inSeason.start || iso >= inSeason.end) return;
-    rDays.push({ date: iso, kind: d.type === "match" ? "match" : d.type === "rest" ? "off" : "session", editable: false });
+    rDays.push({ date: iso, kind: d.type === "match" ? "match" : d.type === "rest" ? "off" : "session", editable: true });
     if (d.type !== "rest" && d.type !== "match" && fixtures.includes(addDays(iso, -2)) && !fixtures.includes(addDays(iso, -1))) out.set(iso, RULE_MD2);
   }));
   for (const run of checkThreeInARow({ days: rDays, matchDates: fixtures, phase: "competitive" }).runs)
